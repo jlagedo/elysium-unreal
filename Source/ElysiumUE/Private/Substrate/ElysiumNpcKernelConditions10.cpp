@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelConditions10Shared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -31,9 +32,6 @@ namespace
 	// Unit-prefixed: the module builds adaptive-unity and anonymous namespaces are merged.
 
 	// --- Retail's `Disposition_t` ----------------------------------------------------------------
-	constexpr int32 GCond10_D_ER = 0;
-	constexpr int32 GCond10_D_HT = 1;
-	constexpr int32 GCond10_D_FR = 2;
 	constexpr int32 GCond10_D_LI = 3;
 	constexpr int32 GCond10_D_NU = 4;
 
@@ -79,27 +77,6 @@ namespace
 	// `GetLastSharedCondition()` (slot 409, `0x1027ee00`) — `return 0x77;`.
 	constexpr int32 GCond10LastSharedCondition = 0x77;
 
-	// `m_afMemory`'s top bit, the one the three `TaskFail` species arms clear
-	// (`10379077`/`10380536`/`103ba376`: `AND dword ptr [ESI + 0x5d8c],0x7fffffff`).
-	constexpr uint32 GCond10MemoryTopBit = 0x80000000u;
-
-	// `CNPC_VChangBros::TaskFail`'s write, `0x15d` (`1036d20a MOV dword ptr [ESI+0x5c54],0x15d`).
-	constexpr int32 GCond10ChangBrosFailSchedule = 0x15d;
-
-	// The failure-code window both the AsianVampire and the ChangBros arms gate on:
-	// `if (0xb < code && code < 0x10)`, i.e. 12..15 (`103623ca` / `1036d20a`).
-	constexpr int32 GCond10PathFailFirst = 0xc;
-	constexpr int32 GCond10PathFailLast = 0xf;
-
-	// `m_eThrowableObjectMode` values 3 and 4, the MingXiao arm's motor case (`103940a5`), and the
-	// 180.0 the motor's steering is reset to (`0x43340000`).
-	constexpr int32 GCond10ThrowModeMotorA = 3;
-	constexpr int32 GCond10ThrowModeMotorB = 4;
-	constexpr float GCond10MingXiaoSteeringYaw = 180.f;
-
-	// `m_NPCState == 2` — retail's COMBAT ordinal (`10379063 CMP dword ptr [ESI+0x5cc0],0x2`).
-	constexpr int32 GCond10NpcStateCombat = 2;
-
 	// `slot 532`'s reason bits, the jump table at `0x10290604` covering `param_1 - 1` in `[0,7]`.
 	constexpr int32 GCond10Slot532Bit1 = 1;
 	constexpr int32 GCond10Slot532Bit2 = 2;
@@ -135,16 +112,6 @@ namespace
 	constexpr float GCond10WeaponScaleSeed = 1.0f;
 	constexpr float GCond10WeaponScaleThreshold = 0.0f;
 
-	// The 0.75 s ignore-collision re-arm the Hengeyokai and Tzimisce arms pass to `0x102c43b0`
-	// (`103805a6` / `103ba3e6`, `PUSH 0x3f400000`).
-	constexpr float GCond10PickupReuseDelay = 0.75f;
-
-	double Cond10Now(const FElysiumNpc& Npc)
-	{
-		// `gpGlobals->curtime`, `*(float*)(DAT_1070b228 + 0xc)`.
-		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
-	}
-
 	// `CBaseEntity::GetDebugName()` (`0x1000b5cd`): `m_iName` when set, the classname otherwise,
 	// the empty string for a null pointer on either.
 	FString Cond10DebugName(const FElysiumEntity* Entity)
@@ -169,21 +136,6 @@ namespace
 		return Npc.Dialogue.bInDialog || Npc.IsTalking(Now);
 	}
 
-	// `m_NPCState` in RETAIL's ordinals — the same mapping family Sounds recovered from
-	// `0x1026e3e0`'s table.
-	int32 Cond10RetailNpcState(EElysiumNpcState State)
-	{
-		switch (State)
-		{
-		case EElysiumNpcState::Idle:     return 1;
-		case EElysiumNpcState::Combat:   return 2;
-		case EElysiumNpcState::Alert:    return 3;
-		case EElysiumNpcState::Scripted: return 4;
-		case EElysiumNpcState::Prone:    return 6;
-		case EElysiumNpcState::Dead:     return 7;
-		default:                         return 0;
-		}
-	}
 }
 
 // =================================================================================================
@@ -217,13 +169,13 @@ int32 FElysiumNpc::BaseCombatCharacterIRelationType(const FElysiumEntity* Candid
 	// through this tail — the Troika body's own two null tests are what produce `D_ER`.
 	if (Candidate == nullptr)
 	{
-		return GCond10_D_ER;
+		return NpcKernelConditions10Shared::GCond10_D_ER;
 	}
 	const FString Classname = Candidate->Def != nullptr ? Candidate->Def->Classname : FString();
 	switch (Relationships.Resolve(Candidate->Handle, Classname))
 	{
-	case EElysiumRelationship::Hate:  return GCond10_D_HT;
-	case EElysiumRelationship::Fear:  return GCond10_D_FR;
+	case EElysiumRelationship::Hate:  return NpcKernelConditions10Shared::GCond10_D_HT;
+	case EElysiumRelationship::Fear:  return NpcKernelConditions10Shared::GCond10_D_FR;
 	case EElysiumRelationship::Like:  return GCond10_D_LI;
 	default:                          return GCond10_D_NU;
 	}
@@ -238,11 +190,11 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 	// (all four of them) changes nothing for null and everything for the arms after it.
 	if (Candidate == static_cast<FElysiumEntity*>(this))
 	{
-		return GCond10_D_ER;
+		return NpcKernelConditions10Shared::GCond10_D_ER;
 	}
 	if (Candidate == nullptr)
 	{
-		return GCond10_D_ER;
+		return NpcKernelConditions10Shared::GCond10_D_ER;
 	}
 
 	// `10299dc4`: `EBX = candidate->m_pNPC (+0x9c)`. The value is kept live all the way to the
@@ -262,15 +214,15 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 			// `10299e51`: `this->vtable[0x650](player)` — slot 404 again, VIRTUALLY, so a cop asks
 			// its own species body about its own closest player. Terminates because a player has no
 			// `+0x9c` and therefore never re-enters this arm.
-			if (IRelationType(ClosestPlayer) == GCond10_D_HT)
+			if (IRelationType(ClosestPlayer) == NpcKernelConditions10Shared::GCond10_D_HT)
 			{
-				return GCond10_D_HT;
+				return NpcKernelConditions10Shared::GCond10_D_HT;
 			}
 			// `10299e8e`: `this->vtable[0x2a0]()` — slot **168**, the Troika line's mutable
 			// `GetEnemy` WITH the last-enemy fallback, not slot 167.
 			if (GetEnemy() == ClosestPlayer)
 			{
-				return GCond10_D_HT;
+				return NpcKernelConditions10Shared::GCond10_D_HT;
 			}
 		}
 	}
@@ -288,13 +240,13 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 		if (TheirBoss != nullptr)
 		{
 			// `10299ee4` then `10299ef3`: the same pair as arm A — slot 404 virtually, then slot 168.
-			if (IRelationType(TheirBoss) == GCond10_D_HT)
+			if (IRelationType(TheirBoss) == NpcKernelConditions10Shared::GCond10_D_HT)
 			{
-				return GCond10_D_HT;
+				return NpcKernelConditions10Shared::GCond10_D_HT;
 			}
 			if (GetEnemy() == TheirBoss)
 			{
-				return GCond10_D_HT;
+				return NpcKernelConditions10Shared::GCond10_D_HT;
 			}
 		}
 	}
@@ -317,15 +269,15 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 	}
 	// `10299f5a`: the BOSS's slot 404 toward the candidate, virtually.
 	int32 Answer = MyBoss->IRelationType(Candidate);
-	if (Answer == GCond10_D_HT)
+	if (Answer == NpcKernelConditions10Shared::GCond10_D_HT)
 	{
-		return GCond10_D_HT;
+		return NpcKernelConditions10Shared::GCond10_D_HT;
 	}
 	// `10299f6b`: the boss's `vtable +0x29c` — slot **167**, the CONST `GetEnemy` with no
 	// last-enemy fallback. The asymmetry against arms A and B (which use `+0x2a0`) is retail's.
 	if (static_cast<const FElysiumNpc*>(MyBoss)->GetEnemy() == Candidate)
 	{
-		return GCond10_D_HT;
+		return NpcKernelConditions10Shared::GCond10_D_HT;
 	}
 	// `10299f77`: a candidate that is not an NPC stops here with the BOSS's answer.
 	if (CandidateNpc == nullptr)
@@ -337,107 +289,17 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 	// relation toward my boss, not the boss's toward the candidate; the checklist's walk says "the
 	// answer is the BOSS's slot 0x650 toward the target", which holds only for a non-NPC candidate.
 	Answer = CandidateNpc->IRelationType(MyBossEntity);
-	if (Answer == GCond10_D_HT)
+	if (Answer == NpcKernelConditions10Shared::GCond10_D_HT)
 	{
-		return GCond10_D_HT;
+		return NpcKernelConditions10Shared::GCond10_D_HT;
 	}
 	// `10299f8f`: the candidate's `vtable +0x2a0` — slot 168 again, the mutable overload.
 	if (CandidateNpc->GetEnemy() == MyBossEntity)
 	{
-		return GCond10_D_HT;
+		return NpcKernelConditions10Shared::GCond10_D_HT;
 	}
 	// `10299fa5`: `MOV EAX,EDI`.
 	return Answer;
-}
-
-int32 FElysiumNpc::CopIRelationType(FElysiumEntity* Candidate)
-{
-	// `CNPC_VCop::IRelationType` (`0x10372b70`), 170 bytes — three arms in front of the Troika body.
-
-	// `10372b76`: a null candidate answers `D_NO`/`D_ER` 0 here rather than reaching the base.
-	if (Candidate == nullptr)
-	{
-		return GCond10_D_ER;
-	}
-
-	// `10372b84`: the cop class's SHARED provoker handle `DAT_1093ac3c` and its expiry
-	// `_DAT_1093aca8`, written by `CNPC_VCop::OnSeeEntity`'s stamp (`0x10370560`, family Senses10)
-	// and read here and by `CNPC_VCop::DrawDebugGeometryOverlays`. One grudge for every cop in the
-	// map, which is why it is a file static in family Senses10 and reached through its accessors.
-	if (World != nullptr)
-	{
-		const FElysiumEntity* const Suspect = World->Resolve(CopSuspectHandle());
-		if (Suspect == Candidate && Cond10Now(*this) < CopSuspectExpiry())
-		{
-			return GCond10_D_HT;
-		}
-	}
-
-	// `10372bc6`: the candidate's player record (`+0xa8`). Both words are real on `FElysiumPlayer`;
-	// a non-player candidate answers false / 0, which is retail's null-`+0xa8` arm.
-	// `0x1017f8d0` is `curtime < player->m_flHeightenedAlertExpireTimer` (`+0x1d1c`).
-	if (PlayerHeightenedAlert(Candidate))
-	{
-		return GCond10_D_HT;
-	}
-	// `0x1017f770` is `player->m_iCopsInPursuitCount` (`+0x1d10`), and the test is `> 0`.
-	if (PlayerCopsInPursuitCount(Candidate) > 0)
-	{
-		return GCond10_D_HT;
-	}
-
-	// `10372c0a`: the DIRECT thunk to `CAI_BaseNPCTroika::IRelationType`.
-	return TroikaIRelationType(Candidate);
-}
-
-int32 FElysiumNpc::HunterIRelationType(FElysiumEntity* Candidate)
-{
-	// `CNPC_VHunter::IRelationType` (`0x10388bb0`), 109 bytes — the cop arm minus BOTH player-side
-	// tests. A hunter's extra hostility comes only from the one shared timed grudge.
-	if (Candidate == nullptr)                                            // 10388bb6
-	{
-		return GCond10_D_ER;
-	}
-	if (World != nullptr)
-	{
-		// `DAT_1093b650` / `_DAT_1093b658`, written only by `0x10387fd0` and read by nothing but
-		// this body.
-		const FElysiumEntity* const Suspect = World->Resolve(HunterSuspectHandle());
-		if (Suspect == Candidate && Cond10Now(*this) < HunterSuspectExpiry())   // 10388bf0
-		{
-			return GCond10_D_HT;
-		}
-	}
-	return TroikaIRelationType(Candidate);                               // 10388c1a
-}
-
-int32 FElysiumNpc::PedestrianIRelationType(FElysiumEntity* Candidate)
-{
-	// `CNPC_VPedestrian::IRelationType` (`0x103a2930`), 58 bytes.
-	if (Candidate == nullptr)                                            // 103a2936
-	{
-		return GCond10_D_ER;
-	}
-	// `103a2946`: the candidate's `+0x9c` carrying `D_INSANE` (`m_bfAINPCFlags2 & 0x20000`) answers
-	// `D_FR` WITHOUT consulting the relationship table at all.
-	const FElysiumNpc* const CandidateNpc = Candidate->AsNpc();
-	if (CandidateNpc != nullptr && CandidateNpc->NpcFlags.Has(EElysiumNpcFlag2::D_INSANE))
-	{
-		return GCond10_D_FR;
-	}
-	return TroikaIRelationType(Candidate);                               // 103a2960
-}
-
-int32 FElysiumNpc::YukieIRelationType(FElysiumEntity* Candidate)
-{
-	// `CNPC_VYukie::IRelationType` (`0x103dd880`), 20 bytes, read off the LISTING: `MOV EAX,[ESP+4]
-	// / TEST EAX,EAX / JNZ` then `RET 0x4` with `EAX` still holding the null — so a null candidate
-	// answers 0, `D_ER`. Anything else is `JMP 0x10001adc`, a tail jump to the Troika body.
-	if (Candidate == nullptr)
-	{
-		return GCond10_D_ER;
-	}
-	return TroikaIRelationType(Candidate);
 }
 
 // =================================================================================================
@@ -812,7 +674,7 @@ void FElysiumNpc::BlacklistPickupTarget(const FElysiumEntityHandle& BlacklistTar
 	// anything: the target is SHUNNED for twenty seconds, and the release is the separate
 	// `FINDING_BODY` clear on the next line of the caller.
 	SpeciesBlacklistedEntities.Add(
-		FSpeciesBlacklistEntry{ BlacklistTarget, Cond10Now(*this) + SpeciesBlacklistSeconds });
+		FSpeciesBlacklistEntry{ BlacklistTarget, NpcKernelConditions10Shared::Cond10Now(*this) + SpeciesBlacklistSeconds });
 }
 
 void FElysiumNpc::SetIgnoreCollisionExpiry(float DelaySeconds)
@@ -825,7 +687,7 @@ void FElysiumNpc::SetIgnoreCollisionExpiry(float DelaySeconds)
 	// **SEAM** for `GetIgnoreCollisionEntity()` (`CBaseAnimating`): this runtime carries the TIMER
 	// (`IgnoreCollisionUntil`) and no ignored ENTITY, so the gate is "the timer is armed", which is
 	// the same question for every body that ever armed it.
-	const double Now = Cond10Now(*this);
+	const double Now = NpcKernelConditions10Shared::Cond10Now(*this);
 	if (IgnoreCollisionUntil <= 0.0)
 	{
 		return;
@@ -835,149 +697,6 @@ void FElysiumNpc::SetIgnoreCollisionExpiry(float DelaySeconds)
 	{
 		IgnoreCollisionUntil = static_cast<double>(TNumericLimits<float>::Max());
 	}
-}
-
-void FElysiumNpc::AsianVampireTaskFail(int32 Reason)
-{
-	// `CNPC_VAsianVampire::TaskFail` (`0x10362390`), 117 bytes, of which the scope-trace push is
-	// most. `103623c5`: `if (0xb < code && code < 0x10) m_bPathBlocked = 1;`.
-	if (Reason >= GCond10PathFailFirst && Reason <= GCond10PathFailLast)
-	{
-		bSpeciesPathBlocked = true;                                      // +0x66d4
-	}
-}
-
-void FElysiumNpc::ChangBrosTaskFail(int32 Reason)
-{
-	// `CNPC_VChangBros::TaskFail` (`0x1036d1d0`), shared by `CNPC_VChangBrosBlade` and
-	// `CNPC_VChangBrosClaw`. The same 12..15 gate as the AsianVampire arm, but the write is
-	// `m_failSchedule` (`+0x5c54`) `= 0x15d` rather than the path-blocked flag.
-	if (Reason >= GCond10PathFailFirst && Reason <= GCond10PathFailLast)
-	{
-		Schedule.FailScheduleOverride = GCond10ChangBrosFailSchedule;
-	}
-}
-
-void FElysiumNpc::GargoyleTaskFail(int32 Reason)
-{
-	// `CNPC_VGargoyle::TaskFail` (`0x10379060`), 77 bytes.
-	(void)Reason;
-
-	// `10379063`: in COMBAT with `TASK_FAILED` (0x5c) standing as an INTERRUPT condition
-	// (`0x10269d30`, not the plain `HasCondition`), clear the top bit of `m_afMemory`.
-	if (Cond10RetailNpcState(Mind.State()) == GCond10NpcStateCombat
-		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
-			EElysiumNpcCond::TaskFailed))
-	{
-		ScheduleHost.MemoryBits &= ~GCond10MemoryTopBit;                 // 10379077
-	}
-
-	// **CORRECTION.** The checklist's walk records `1037908c CALL 0x10006613` as reached with a
-	// `this` that "has no visible prior assignment in the decompile (likely a lost this alias rather
-	// than a confirmed retail bug — needs an asm check before this arm is ported)". The asm check:
-	// `0x10379040` is FOUR instructions (`MOV EAX,[ECX+0x14b8] / SHR EAX,4 / AND AL,1 / RET`) and
-	// never writes `ECX`, so `ECX` still holds `this` from `10379081`. There is no bug. The two
-	// bodies are plain `m_bfAINPCFlags` accessors: `0x10379040` reads bit `0x10` and `0x10379000`
-	// writes it — `FINDING_BODY`.
-	if (NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY))                     // 10379083, 0x10379040
-	{
-		NpcFlags.Clear(EElysiumNpcFlag::FINDING_BODY);                   // 1037908e, 0x10379000(this, 0)
-	}
-
-	SpeciesShunnedFindCount = 0;                                         // 1037909a, m_iShunnedFindPillar
-}
-
-void FElysiumNpc::HengeyokaiTaskFail(int32 Reason)
-{
-	// `CNPC_VHengeyokai::TaskFail` (`0x10380510`), 130 bytes.
-	(void)Reason;
-
-	if (Cond10RetailNpcState(Mind.State()) == GCond10NpcStateCombat
-		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
-			EElysiumNpcCond::TaskFailed))
-	{
-		ScheduleHost.MemoryBits &= ~GCond10MemoryTopBit;                 // 10380536
-	}
-
-	// `10380548`: `0x10381be0` is `(m_bfAINPCFlags >> 4) & 1` — `FINDING_BODY`, NOT a species word.
-	if (NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY))
-	{
-		BlacklistPickupTarget(SpeciesPickupTarget);                      // 0x10382970
-		NpcFlags.Clear(EElysiumNpcFlag::FINDING_BODY);                   // 0x10381ba0(this, 0)
-	}
-
-	// `1038057c`: `0x10381c80` is `(m_bfAINPCFlags >> 5) & 1` — `CARRYING_BODY`. The arm runs when
-	// it is CLEAR.
-	if (!NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY))
-	{
-		SetIgnoreCollisionExpiry(GCond10PickupReuseDelay);               // 0x102c43b0(this, 0.75)
-		SpeciesPickupTarget = FElysiumEntityHandle::Invalid();           // m_hPickupTarget = -1
-	}
-
-	SpeciesShunnedFindCount = 0;                                         // m_iShunnedFindFish +0x6678
-}
-
-void FElysiumNpc::TzimisceTaskFail(int32 Reason)
-{
-	// `CNPC_VTzimisce::TaskFail` (`0x103ba350`), 130 bytes — the Hengeyokai arm with its own words.
-	// `0x103be090` / `0x103be130` / `0x103be050` are byte-identical to the Hengeyokai's trio and are
-	// the same two `m_bfAINPCFlags` bits.
-	(void)Reason;
-
-	if (Cond10RetailNpcState(Mind.State()) == GCond10NpcStateCombat
-		&& ElysiumSchedule::HasInterruptCondition(Schedule, *this, Cognition.Conditions,
-			EElysiumNpcCond::TaskFailed))
-	{
-		ScheduleHost.MemoryBits &= ~GCond10MemoryTopBit;                 // 103ba376
-	}
-
-	if (NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY))                     // 0x103be090
-	{
-		BlacklistPickupTarget(SpeciesPickupTarget);                      // 0x103bf200
-		NpcFlags.Clear(EElysiumNpcFlag::FINDING_BODY);                   // 0x103be050(this, 0)
-	}
-	if (!NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY))                   // 0x103be130
-	{
-		SetIgnoreCollisionExpiry(GCond10PickupReuseDelay);
-		SpeciesPickupTarget = FElysiumEntityHandle::Invalid();           // m_hPickupTarget +0x6670
-	}
-
-	SpeciesShunnedFindCount = 0;                                         // m_iShunnedFindBody +0x66b8
-}
-
-void FElysiumNpc::MingXiaoTaskFail(int32 Reason)
-{
-	// `CNPC_VMingXiao::TaskFail` (`0x10394090`), 88 bytes: a switch on `m_eThrowableObjectMode`
-	// (`+0x673c`).
-	(void)Reason;
-
-	if (SpeciesThrowableObjectMode == GCond10ThrowModeMotorA
-		|| SpeciesThrowableObjectMode == GCond10ThrowModeMotorB)
-	{
-		// `103940a5`: `0x102e0a60(m_pMotor, 0x43340000)` — `m_pMotor->+0x1c = 180.0`, the same
-		// steering reset the Troika `TaskFail` body itself makes, which is why the port's
-		// `ResetSteering()` (already `0x102e0a60`'s body) carries the constant rather than taking it.
-		static_assert(GCond10MingXiaoSteeringYaw == 180.f, "0x43340000 is 180.0f");
-		if (Motor != nullptr)
-		{
-			Motor->ResetSteering();
-		}
-		return;
-	}
-
-	// **CORRECTION.** `0x10398d90` is `m_eThrowableObjectMode = arg` and nothing else; the
-	// checklist's walk calls it "clear the throwable prop". The default arm therefore sets the MODE
-	// to 0 and then releases the handle.
-	SpeciesThrowableObjectMode = 0;                                      // 0x10398d90(this, 0)
-	SpeciesThrowObject = FElysiumEntityHandle::Invalid();                // m_hThrowObject +0x6718
-}
-
-void FElysiumNpc::SheriffManTaskFail(int32 Reason)
-{
-	// `CNPC_VSheriffMan::TaskFail` (`0x103b0290`), 100 bytes, of which the whole is the scope-trace
-	// push/pop and the chain to the base. The recovered fact is the ABSENCE of an arm: once the
-	// Troika body is ported, the sheriff needs only correct dispatch.
-	(void)Reason;
 }
 
 // =================================================================================================
@@ -1105,7 +824,7 @@ FString FElysiumNpc::BuildConditionDebugString(const TCHAR* Message, int32 Inden
 		Nav = NavDebugPair();
 	}
 
-	const double Now = Cond10Now(*this);
+	const double Now = NpcKernelConditions10Shared::Cond10Now(*this);
 
 	// `1028dbd6`: which of the three format strings.
 	if (TraceRing != 0)

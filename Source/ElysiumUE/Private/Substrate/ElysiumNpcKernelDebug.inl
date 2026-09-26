@@ -78,10 +78,6 @@ static void EmitOverlayLine(const TCHAR* RetailCall, const FVector& StartUnits,
 static void EmitOverlayText(const TCHAR* RetailCall, const FVector& OriginUnits,
 	const FString& Text);
 
-/** `NDebugOverlay::EntityBounds` (`0x10142e20`) — the whole-entity box `CBaseEntity::DrawBBoxOverlay`
- *  draws, which `CNPC_VWerewolf#620` recolours. */
-void EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B, int32 A) const;
-
 // --- The two id spaces `ConditionName` and `TaskName` translate through --------------------------
 //
 // `CAI_ClassScheduleIdSpace` is four `CAI_LocalIdSpace`s in a row — schedules at `+0x00`, tasks at
@@ -133,38 +129,12 @@ static const TCHAR* GlobalTaskName(int32 GlobalTaskId);
  *  `.rdata` (`0x105cd454`..`0x105cd62c`, plus `0x1058b0a0` for id 0x73). */
 static const TCHAR* ShortConditionNameTable(int32 ConditionId);
 
-// --- Slot 408 `GetShortConditionName`: one port method and a species table -----------------------
+// --- Slot 408 `GetShortConditionName` -----------------------------------------------------------
 //
 // Four retail bodies fill slot 408. `CAI_BaseNPC`'s (`0x1027ede0`) forwards to the table above, and
-// three species prepend a contiguous block of their OWN ids above the base's 0x76 and fall through
-// to that same forward for everything else. So this is one method plus a data table, not four
-// methods; `ElysiumNpcKernelClass::OverrideOf(RetailClass(), 408)` picks the row.
-
-/** One row of retail's slot-408 species table. */
-struct FShortConditionSpecies
-{
-	// The census class this row came from (`docs/vtmb/npc-kernel/slots.md`).
-	const TCHAR* RetailClass = nullptr;
-	// The retail body that fills slot 408 for it, `0x10……`; checkable against `slots.md`.
-	const TCHAR* Body = nullptr;
-	// Whether the body pushes a scope trace around itself before answering. Only
-	// `CNPC_VWerewolf`'s does (`g_ScopeTraceStack` + `m_iName`), and it pops it on every arm.
-	bool bScopeTraced = false;
-	// The first condition id the block covers — 0x77 on all three, the id straight above the base
-	// table's last.
-	int32 FirstId = 0x77;
-	// The block, in id order. `Names[i]` is the short name for `FirstId + i`.
-	const TCHAR* const* Names = nullptr;
-	int32 NameCount = 0;
-};
-
-/** The table: the three census classes that override slot 408. */
-static const FShortConditionSpecies* ShortConditionSpeciesRows(int32& OutCount);
-
-/** The row for a retail class name, or null when no row carries it. */
-static const FShortConditionSpecies* ShortConditionSpeciesOf(const TCHAR* InRetailClass);
-/** Slot 408's species body: `SpeciesClass`'s block of names, else the base body directly. */
-const TCHAR* SpeciesShortConditionName(const TCHAR* SpeciesClass, int32 ConditionId);
+// three species (`CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle`, `CNPC_VWerewolf`) prepend a contiguous
+// block of their OWN ids from 0x77, straight above the base's 0x76, and fall through to that same
+// forward for everything else; each block is its class's own override (story 5 step 4).
 
 // --- Slot 76 `DrawDebugStatOverlays`: three bodies, one slot ---------------------------------------
 //
@@ -181,23 +151,11 @@ void BaseDrawDebugStatOverlays();
  *  expression/gesture dump proper. Slot 76 takes this arm only for an NPC that has a dialogue. */
 void TroikaDrawDebugStatOverlays();
 
-/** `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) — `"Dist to player: %.3f"` then
- *  `0x102775e0`. Thirty-six bytes, and the tail call is to the BASE and not to the Troika line. */
-void BossDrawDebugStatOverlays();
-/** `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`) — the body of
- *  `FElysiumNpcWerewolf::DrawDebugStatOverlays`, chaining the boss body directly. */
-void WerewolfDrawDebugStatOverlaysSlot();
-
 // --- The remaining bodies -------------------------------------------------------------------------
 
 /** `CAI_BaseNPC::GetSchedulingErrorName` (`0x101a6660`) — slot 451's BASE body,
  *  `return s_CAI_BaseNPC_10594820;`. The Troika line's own (`0x101aa7b0`) fills the slot. */
 static const TCHAR* BaseSchedulingErrorName();
-
-/** `CNPC_VTzimisce::GetEventName` (`0x103bdd10`) — slot 241's only species override. Answers the
- *  fixed name for anim-event ids 2..8 and null for everything else, which is the caller's signal to
- *  fall through to `CBaseAnimating::GetEventName`. */
-static const TCHAR* TzimisceEventName(int32 EventId);
 
 /** `CAI_BaseNPC::DrawDebugGeometryOverlays` (`0x10275760`) — slot 123's sdk-tier base body: eight
  *  `m_debugOverlays` arms in retail's order, then the pathfinder's overlays and the entity's. */
@@ -217,14 +175,6 @@ bool IsBaseNpcTroika() const;
  *  either: the hint's own two words are passed in. Returns the next free line. */
 static int32 HintDrawDebugTextOverlays(int32 EntityTextLine, int32 DebugOverlayBits, int32 HintType,
 	double NextUseTime, double Now);
-
-/** `CNPC_VWerewolf::DrawBBoxOverlay` (`0x103d5050`) — slot 620, introduced by `CNPC_VWerewolf`
- *  alone: the body of `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual. */
-void WerewolfDrawBBoxOverlay();
-
-/** `CNPC_VWerewolf::DrawDebugHullAtPoint` (`0x103d4820`) — the hull box plus one line, at a point.
- *  `RET 0x10`: a `Vector` by value and one more dword, the overlay duration. */
-void DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const;
 
 // --- The seams these bodies read through ----------------------------------------------------------
 

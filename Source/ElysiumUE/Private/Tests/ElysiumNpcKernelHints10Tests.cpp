@@ -5,6 +5,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
@@ -35,12 +37,13 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Npc = nullptr;
 
-		FHints10Fixture()
-			: World([]
+		// `RetailClass` is the class the NPC is built as: a species body is driven on its own class.
+		explicit FHints10Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+			: World([RetailClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("hints10_kernel"), 4141);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpc(TEXT("guard"), FVector::ZeroVector, TEXT("npc_VHumanCombatant"));
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, RetailClass);
 					return Builder;
 				}())
 		{
@@ -137,10 +140,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHints10ManBatTest,
 	"Elysium.Substrate.NpcKernelHints10.ManBatValidateHintType", GHints10TestFlags)
 bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 {
-	FHints10Fixture F;
+	FHints10Fixture F(TEXT("CNPC_VManBat"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
+		return false;
+	}
+	FElysiumNpcManBat* Bat = ElysiumTestAsSpecies<FElysiumNpcManBat>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VManBat"), Bat))
+	{
 		return false;
 	}
 
@@ -151,7 +159,7 @@ bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 		static_cast<int64>(FElysiumNpc::HintObfuscationFold(0u)),
 		static_cast<int64>(0xfa0b0e5cu));
 	TestEqual(TEXT("the whole descramble takes the zero word to 0xbb258278"),
-		static_cast<int64>(FElysiumNpc::ManBatHintMode(0u)),
+		static_cast<int64>(FElysiumNpcManBat::ManBatHintMode(0u)),
 		static_cast<int64>(0xbb258278u));
 
 	// The descramble is a BIJECTION over the ladder's masked bits, so every mode 1..8 has exactly
@@ -167,59 +175,59 @@ bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 	for (const FModeWord& Row : ModeWords)
 	{
 		TestEqual(FString::Printf(TEXT("word 0x%08x descrambles to mode %u"), Row.Word, Row.Mode),
-			static_cast<int64>(FElysiumNpc::ManBatHintMode(Row.Word)), static_cast<int64>(Row.Mode));
+			static_cast<int64>(FElysiumNpcManBat::ManBatHintMode(Row.Word)), static_cast<int64>(Row.Mode));
 	}
 
 	// `1038e48b CMP [EBX + 0x5dc],0x4e20 / JNZ 0x1038e5b3` — anything but 20000 refuses before the
 	// scrambled word is even read.
 	FElysiumNpc::FHintWords Wrong = Hints10MakeHint(19999);
-	TestFalse(TEXT("a hint type other than 20000 refuses"), F.Npc->ManBatValidateHintType(Wrong));
+	TestFalse(TEXT("a hint type other than 20000 refuses"), Bat->ManBatValidateHintType(Wrong));
 
 	// The five templates. Driven through `ManBatHintName` directly, because the mode is the output of
 	// a 12-instruction descramble and a test that fixed the scrambled word would be asserting the
 	// descramble twice.
 	TestEqual(TEXT("mode 1 is the raw literal, with no index"),
-		FElysiumNpc::ManBatHintName(1, 7), FString(TEXT("ManBat Landpoint")));
+		FElysiumNpcManBat::ManBatHintName(1, 7), FString(TEXT("ManBat Landpoint")));
 	TestEqual(TEXT("mode 2 is the divepoint format"),
-		FElysiumNpc::ManBatHintName(2, 7), FString(TEXT("ManBat Divepoint 7")));
+		FElysiumNpcManBat::ManBatHintName(2, 7), FString(TEXT("ManBat Divepoint 7")));
 	TestEqual(TEXT("mode 4 shares it"),
-		FElysiumNpc::ManBatHintName(4, 7), FString(TEXT("ManBat Divepoint 7")));
+		FElysiumNpcManBat::ManBatHintName(4, 7), FString(TEXT("ManBat Divepoint 7")));
 	TestEqual(TEXT("mode 3 is the bottom variant"),
-		FElysiumNpc::ManBatHintName(3, 2), FString(TEXT("ManBat Divepoint 2 Bottom")));
+		FElysiumNpcManBat::ManBatHintName(3, 2), FString(TEXT("ManBat Divepoint 2 Bottom")));
 	TestEqual(TEXT("mode 8 is the script node"),
-		FElysiumNpc::ManBatHintName(8, 3), FString(TEXT("ManBat Script Node 3")));
+		FElysiumNpcManBat::ManBatHintName(8, 3), FString(TEXT("ManBat Script Node 3")));
 	// `1038e4cb JA 0x1038e51b` and the jump-table entries for 5, 6 and 7, which all point at the
 	// default label.
 	TestEqual(TEXT("mode 5 takes the default"),
-		FElysiumNpc::ManBatHintName(5, 1), FString(TEXT("ManBat 1")));
+		FElysiumNpcManBat::ManBatHintName(5, 1), FString(TEXT("ManBat 1")));
 	TestEqual(TEXT("mode 6 takes the default"),
-		FElysiumNpc::ManBatHintName(6, 1), FString(TEXT("ManBat 1")));
+		FElysiumNpcManBat::ManBatHintName(6, 1), FString(TEXT("ManBat 1")));
 	TestEqual(TEXT("mode 7 takes the default"),
-		FElysiumNpc::ManBatHintName(7, 1), FString(TEXT("ManBat 1")));
+		FElysiumNpcManBat::ManBatHintName(7, 1), FString(TEXT("ManBat 1")));
 	TestEqual(TEXT("mode 0 wraps above 7 through the DEC and takes the default"),
-		FElysiumNpc::ManBatHintName(0, 9), FString(TEXT("ManBat 9")));
+		FElysiumNpcManBat::ManBatHintName(0, 9), FString(TEXT("ManBat 9")));
 	TestEqual(TEXT("mode 9 takes it too"),
-		FElysiumNpc::ManBatHintName(9, 9), FString(TEXT("ManBat 9")));
+		FElysiumNpcManBat::ManBatHintName(9, 9), FString(TEXT("ManBat 9")));
 
 	// The whole body, end to end. Mode 3, index 4 -> `"ManBat Divepoint 4 Bottom"`.
-	F.Npc->ManBatHintModeWord = 0xbb2782f9u;
-	F.Npc->ManBatHintIndex = 4;
+	Bat->ManBatHintModeWord = 0xbb2782f9u;
+	Bat->ManBatHintIndex = 4;
 	FElysiumNpc::FHintWords Hint = Hints10MakeHint(20000);
 	Hint.Name = TEXT("ManBat Divepoint 4 Bottom");
 	TestTrue(TEXT("the built name matches the hint's own name"),
-		F.Npc->ManBatValidateHintType(Hint));
+		Bat->ManBatValidateHintType(Hint));
 	// `1038e598 __strcmpi` — case-insensitive over the whole string.
 	Hint.Name = TEXT("manbat divepoint 4 BOTTOM");
-	TestTrue(TEXT("the compare is case-insensitive"), F.Npc->ManBatValidateHintType(Hint));
+	TestTrue(TEXT("the compare is case-insensitive"), Bat->ManBatValidateHintType(Hint));
 	Hint.Name = TEXT("ManBat Divepoint 4 Bottomx");
-	TestFalse(TEXT("a longer name does not match"), F.Npc->ManBatValidateHintType(Hint));
+	TestFalse(TEXT("a longer name does not match"), Bat->ManBatValidateHintType(Hint));
 	Hint.Name = TEXT("ManBat Divepoint 5 Bottom");
-	TestFalse(TEXT("a different index does not match"), F.Npc->ManBatValidateHintType(Hint));
+	TestFalse(TEXT("a different index does not match"), Bat->ManBatValidateHintType(Hint));
 	// The group gate is the BASE body's, not this one's: the ManBat arm never reads `+0x470`.
 	Hint.Name = TEXT("ManBat Divepoint 4 Bottom");
 	Hint.GroupMask = 0;
 	TestTrue(TEXT("the ManBat arm never consults the hint group mask"),
-		F.Npc->ManBatValidateHintType(Hint));
+		Bat->ManBatValidateHintType(Hint));
 
 	// `1038e556 JNZ` — the EMPTY-template arm never compares strings: it loads the hint's name
 	// POINTER into `EAX` and tests it for zero at `1038e5a0`, so an unnamed hint matches and a named
@@ -228,7 +236,7 @@ bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 	for (uint32 Mode = 0; Mode <= 9; ++Mode)
 	{
 		TestFalse(FString::Printf(TEXT("mode %u never builds an empty name"), Mode),
-			FElysiumNpc::ManBatHintName(Mode, 0).IsEmpty());
+			FElysiumNpcManBat::ManBatHintName(Mode, 0).IsEmpty());
 	}
 	return true;
 }
@@ -241,10 +249,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHints10EndEntityTest,
 	"Elysium.Substrate.NpcKernelHints10.HintEndEntity", GHints10TestFlags)
 bool FElysiumNpcKernelHints10EndEntityTest::RunTest(const FString&)
 {
-	FHints10Fixture F;
+	FHints10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
+		return false;
+	}
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Wolf))
+	{
 		return false;
 	}
 
@@ -253,7 +266,7 @@ bool FElysiumNpcKernelHints10EndEntityTest::RunTest(const FString&)
 	FElysiumNpc::FHintWords Hint = Hints10MakeHint(15000);
 	Hint.HintIndex = 11;
 	TestEqual(TEXT("an empty cache falls through to FindHintEndEntity, which answers the hint"),
-		F.Npc->GetHintEndEntity(Hint), 11);
+		Wolf->GetHintEndEntity(Hint), 11);
 
 	// A cache row whose HINT word matches but whose cached handle does not resolve is SKIPPED by the
 	// loop guard, not answered — `103d63d5` increments the cursor and keeps walking. With no hint
@@ -263,17 +276,17 @@ bool FElysiumNpcKernelHints10EndEntityTest::RunTest(const FString&)
 	FElysiumNpc::FWerewolfHintGroundpoint Row;
 	Row.CachedEndEntity = 5;
 	Row.HintNode = 11;
-	F.Npc->WerewolfHintGroundpoints.Add(Row);
+	Wolf->WerewolfHintGroundpoints.Add(Row);
 	TestEqual(TEXT("a cache row whose handle does not resolve is skipped, not answered"),
-		F.Npc->GetHintEndEntity(Hint), 11);
+		Wolf->GetHintEndEntity(Hint), 11);
 
 	// `103d6650` — a null hint answers `DAT_1070d1b0/b4/b8`, which `staticinit_101370b0` zeroes.
-	TestEqual(TEXT("a null hint answers vec3_origin"), F.Npc->GetHintEndpoint(nullptr),
+	TestEqual(TEXT("a null hint answers vec3_origin"), Wolf->GetHintEndpoint(nullptr),
 		FVector::ZeroVector);
 	// The crash guard: retail dereferences the end entity unchecked. With no hint store the end
 	// entity never resolves, so the same value is answered.
 	TestEqual(TEXT("an unresolvable end entity answers vec3_origin rather than faulting"),
-		F.Npc->GetHintEndpoint(&Hint), FVector::ZeroVector);
+		Wolf->GetHintEndpoint(&Hint), FVector::ZeroVector);
 	return true;
 }
 
@@ -285,10 +298,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHints10ForwardHintTest,
 	"Elysium.Substrate.NpcKernelHints10.ForwardHintForHint", GHints10TestFlags)
 bool FElysiumNpcKernelHints10ForwardHintTest::RunTest(const FString&)
 {
-	FHints10Fixture F;
+	FHints10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
+		return false;
+	}
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Wolf))
+	{
 		return false;
 	}
 
@@ -298,30 +316,30 @@ bool FElysiumNpcKernelHints10ForwardHintTest::RunTest(const FString&)
 	for (const int32 Type : Exempt)
 	{
 		TestTrue(FString::Printf(TEXT("0x%x is exempt"), Type),
-			FElysiumNpc::IsForwardHintExemptType(Type));
+			FElysiumNpcWerewolf::IsForwardHintExemptType(Type));
 	}
 	// The corrected reading: `0x3aa2` is NOT in the jump table, and neither are the three gaps below
 	// it. The checklist walk's "0x3a9f-0x3aaa" run would have made all four exempt.
 	TestFalse(TEXT("0x3aa2 is NOT exempt — the corrected reading"),
-		FElysiumNpc::IsForwardHintExemptType(0x3aa2));
-	TestFalse(TEXT("0x3a9a is not exempt"), FElysiumNpc::IsForwardHintExemptType(0x3a9a));
-	TestFalse(TEXT("0x3a9b is not exempt"), FElysiumNpc::IsForwardHintExemptType(0x3a9b));
-	TestFalse(TEXT("0x3a9d is not exempt"), FElysiumNpc::IsForwardHintExemptType(0x3a9d));
-	TestFalse(TEXT("0x3a9e is not exempt"), FElysiumNpc::IsForwardHintExemptType(0x3a9e));
+		FElysiumNpcWerewolf::IsForwardHintExemptType(0x3aa2));
+	TestFalse(TEXT("0x3a9a is not exempt"), FElysiumNpcWerewolf::IsForwardHintExemptType(0x3a9a));
+	TestFalse(TEXT("0x3a9b is not exempt"), FElysiumNpcWerewolf::IsForwardHintExemptType(0x3a9b));
+	TestFalse(TEXT("0x3a9d is not exempt"), FElysiumNpcWerewolf::IsForwardHintExemptType(0x3a9d));
+	TestFalse(TEXT("0x3a9e is not exempt"), FElysiumNpcWerewolf::IsForwardHintExemptType(0x3a9e));
 
 	// `103d70dd` — an exempt hint is handed straight back.
 	FElysiumNpc::FHintWords Exempted = Hints10MakeHint(0x3a9c);
 	Exempted.HintIndex = 21;
 	TestEqual(TEXT("an exempt hint is returned unchanged"),
-		F.Npc->GetForwardHintForHint(Exempted), 21);
+		Wolf->GetForwardHintForHint(Exempted), 21);
 
 	// `103d7176` — the global hint list is empty here, so the loop runs to its end and the body
 	// answers the null cursor after warning. That is retail's own no-match arm, not a refusal.
 	FElysiumNpc::FHintWords Other = Hints10MakeHint(0x3aab);
 	Other.HintIndex = 22;
-	TestTrue(TEXT("the global hint list seam answers nothing"), F.Npc->GlobalHintList().IsEmpty());
+	TestTrue(TEXT("the global hint list seam answers nothing"), Wolf->GlobalHintList().IsEmpty());
 	TestEqual(TEXT("a non-exempt hint with no partner answers null"),
-		F.Npc->GetForwardHintForHint(Other), static_cast<int32>(INDEX_NONE));
+		Wolf->GetForwardHintForHint(Other), static_cast<int32>(INDEX_NONE));
 	return true;
 }
 
@@ -333,73 +351,78 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHints10TeleportHintTest,
 	"Elysium.Substrate.NpcKernelHints10.IsValidTeleportHint", GHints10TestFlags)
 bool FElysiumNpcKernelHints10TeleportHintTest::RunTest(const FString&)
 {
-	FHints10Fixture F;
+	FHints10Fixture F(TEXT("CNPC_VWerewolf"));
 	if (F.Npc == nullptr)
 	{
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	const double Now = F.Npc->World != nullptr ? F.Npc->World->NowSeconds() : 0.0;
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Wolf))
+	{
+		return false;
+	}
+	const double Now = Wolf->World != nullptr ? Wolf->World->NowSeconds() : 0.0;
 
 	// The exclusion set, `103d83c8`..`103d8430` — six `CMP`s.
 	for (int32 Type = 0x3aa3; Type <= 0x3aa8; ++Type)
 	{
 		TestTrue(FString::Printf(TEXT("0x%x is excluded"), Type),
-			FElysiumNpc::IsTeleportHintExcludedType(Type));
+			FElysiumNpcWerewolf::IsTeleportHintExcludedType(Type));
 	}
-	TestFalse(TEXT("0x3aa2 is not excluded"), FElysiumNpc::IsTeleportHintExcludedType(0x3aa2));
-	TestFalse(TEXT("0x3aa9 is not excluded"), FElysiumNpc::IsTeleportHintExcludedType(0x3aa9));
+	TestFalse(TEXT("0x3aa2 is not excluded"), FElysiumNpcWerewolf::IsTeleportHintExcludedType(0x3aa2));
+	TestFalse(TEXT("0x3aa9 is not excluded"), FElysiumNpcWerewolf::IsTeleportHintExcludedType(0x3aa9));
 
 	// Gate 1 — a null hint.
-	TestFalse(TEXT("a null hint refuses"), F.Npc->IsValidTeleportHint(nullptr, Now));
+	TestFalse(TEXT("a null hint refuses"), Wolf->IsValidTeleportHint(nullptr, Now));
 
-	// A hint that passes every gate. `0x2774` is the one type the base dispatcher accepts outright,
-	// so the slot-566 gate (gate 4) is satisfied without a cover object; the NPC's group mask
-	// defaults to every group.
-	FElysiumNpc::FHintWords Good = Hints10MakeHint(0x2774);
+	// A hint that passes every gate. Slot 566 (gate 4) is VIRTUAL, so on a werewolf it is
+	// `CNPC_VWerewolf`'s own row, which accepts 15000..15018 except 15007; 15000 satisfies it
+	// without a cover object. The NPC's group mask defaults to every group.
+	FElysiumNpc::FHintWords Good = Hints10MakeHint(15000);
 	Good.HintIndex = 31;
-	F.Npc->WerewolfHintFlags = 0;
+	Wolf->WerewolfHintFlags = 0;
 	TestTrue(TEXT("a hint that passes every gate is valid, because the endpoint seam answers "
 				  "'not script-hidden', which is the admitting value"),
-		F.Npc->IsValidTeleportHint(&Good, Now));
+		Wolf->IsValidTeleportHint(&Good, Now));
 
 	// Gate 2 — `field_0x66e8 & 4`.
-	F.Npc->WerewolfHintFlags = 0x4;
+	Wolf->WerewolfHintFlags = 0x4;
 	TestFalse(TEXT("bit 0x4 of the Werewolf flag word refuses"),
-		F.Npc->IsValidTeleportHint(&Good, Now));
-	F.Npc->WerewolfHintFlags = 0;
+		Wolf->IsValidTeleportHint(&Good, Now));
+	Wolf->WerewolfHintFlags = 0;
 
 	// Gate 3 — `IsHintUnusable` (`0x102d14c0`), family Hints' three-arm rule. `m_iDisabled` is its
 	// first arm.
 	FElysiumNpc::FHintWords Disabled = Good;
 	Disabled.Disabled = 1;
 	TestFalse(TEXT("a disabled hint refuses through IsHintUnusable"),
-		F.Npc->IsValidTeleportHint(&Disabled, Now));
+		Wolf->IsValidTeleportHint(&Disabled, Now));
 
 	// Gate 4 — slot 566. `0x2773` is not an accepted type.
 	FElysiumNpc::FHintWords BadType = Good;
 	BadType.HintType = 0x2773;
 	TestFalse(TEXT("a type slot 566 refuses refuses here too"),
-		F.Npc->IsValidTeleportHint(&BadType, Now));
+		Wolf->IsValidTeleportHint(&BadType, Now));
 
 	// Gate 6 — `hint->+0x470 == 1` AND `field_0x66e8 & 0x40`. Note the EQUALITY compare against 1 on
 	// the same word gate 4 treats as a bit set: retail's own asymmetry.
 	FElysiumNpc::FHintWords GroupOne = Good;
 	GroupOne.GroupMask = 1;
-	F.Npc->WerewolfHintFlags = 0x40;
+	Wolf->WerewolfHintFlags = 0x40;
 	TestFalse(TEXT("group word 1 with flag 0x40 refuses"),
-		F.Npc->IsValidTeleportHint(&GroupOne, Now));
+		Wolf->IsValidTeleportHint(&GroupOne, Now));
 	FElysiumNpc::FHintWords GroupTwo = Good;
 	GroupTwo.GroupMask = 2;
 	TestTrue(TEXT("group word 2 with the same flag admits — the compare is for equality with 1"),
-		F.Npc->IsValidTeleportHint(&GroupTwo, Now));
-	F.Npc->WerewolfHintFlags = 0;
+		Wolf->IsValidTeleportHint(&GroupTwo, Now));
+	Wolf->WerewolfHintFlags = 0;
 
 	// Gate 7 — the endpoint's `m_bScriptHidden`, NEGATED. `0x100b5190` is a seven-byte getter of
 	// `+0xf4`, which the checklist walk calls an "entity-busy/occupied test"; the corrected reading
 	// is asserted by the seam answering the ADMITTING value.
 	TestFalse(TEXT("the endpoint seam answers 'not script-hidden'"),
-		F.Npc->HintEndEntityScriptHidden(31));
+		Wolf->HintEndEntityScriptHidden(31));
 	return true;
 }
 

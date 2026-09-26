@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelDamageShared.h"
 
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntityWorld.h"
@@ -30,8 +31,6 @@
 
 namespace
 {
-	// Retail's `.rdata`, one line per constant. Distances are SOURCE units.
-	constexpr float DamageZero = ElysiumNpcTunables::Zero;
 	constexpr double DamageBleedFloor = ElysiumNpcTunables::OneDouble;
 	constexpr float GearDamage = ElysiumNpcTunables::Hundredth;   // SDK 2013's HITGROUP_GEAR damage
 	constexpr float HeavyDamageThreshold = 20.0f; // _DAT_1044eb0c — `IsHeavyDamage`'s only number
@@ -48,11 +47,7 @@ namespace
 	// `CAI_BaseNPC::TraceAttack`'s own bit masks and ids.
 	constexpr uint32 DmgShock = 0x100u;           // the one bit that suppresses the bleed
 	constexpr int32 HitGroupGeneric = 0;
-	constexpr int32 HitGroupHead = 1;
 	constexpr int32 HitGroupGear = 10;
-	// The two bits `CNPC_VSheriffMan::KillSheriff` raises on its active weapon.
-	constexpr uint32 EffectNoDraw = 0x20u;        // m_fEffects |= 0x20
-	constexpr uint32 SolidNotSolid = 0x4u;        // AddSolidFlags(4)
 	// `CAI_BaseNPC::GiveAmmo`'s cue and its parameters.
 	constexpr const TCHAR* AmmoPickupSound = TEXT("weapons/misc/ammo_pickup.wav");
 	constexpr float AmmoPickupVolume = 1.0f;      // 0x3f800000
@@ -64,9 +59,6 @@ namespace
 	// `0x102b8c40`'s schedule id and its selector-trace line.
 	constexpr int32 TookDamageSchedule = 0x8a;
 	constexpr int32 TookDamageTraceLine = 0x5f8b;
-	// `CNPC_VAndreiBlood::SelectIdealState`'s trace tag. The base writes 1, `CNPC_VAnimal` 5,
-	// `CNPC_VHengeyokai` 0x13 and `CNPC_VHunter` 0x17 (`docs/vtmb/npc-kernel/layout.md` +0x1b38).
-	constexpr int32 AndreiIdealStateSelector = 4;
 
 	// The combined `DMG_` bits every body in this family reads: the packet's own word OR'd with the
 	// descriptor's `m_bdmgTypes` when there is a descriptor, and the packet's alone when there is
@@ -112,7 +104,7 @@ float FElysiumNpc::HitGroupDamageScaleCvar(int32 HitGroup) const
 	// defaults are UNRECOVERED. Retail's inlined read is
 	// `if (cvar->IsCommand()) 0.0f else cvar->m_flValue`; an unconstructed cvar answers 0.0f.
 	(void)HitGroup;
-	return DamageZero;
+	return NpcKernelDamageShared::DamageZero;
 }
 
 bool FElysiumNpc::TraceAttackEvadeCheck(const FElysiumDmg* Dmg) const
@@ -285,17 +277,6 @@ int32 FElysiumNpc::HitboxSetCount() const
 	return 0;
 }
 
-bool FElysiumNpc::TestOneHitbox(int32 HitboxSetIndex, const FVector& RayStartUnits,
-	const FVector& RayEndUnits, uint32 Mask) const
-{
-	// SEAM for `thunk_FUN_10399ef0(ray, mask, trace, studiohdr, hitboxset, bonecache)`.
-	(void)HitboxSetIndex;
-	(void)RayStartUnits;
-	(void)RayEndUnits;
-	(void)Mask;
-	return false;
-}
-
 bool FElysiumNpc::CandidateIsStandable(const FElysiumEntity* Candidate) const
 {
 	// SEAM for slot 164 `IsStandable` on ANOTHER entity. `CBaseEntity::IsStandable`
@@ -313,23 +294,6 @@ bool FElysiumNpc::CandidateIsStandable(const FElysiumEntity* Candidate) const
 	return true;
 }
 
-float FElysiumNpc::MingXiaoThrowCvar(int32 Which) const
-{
-	// SEAM for `DAT_1093bbcc` (0, the quadratic term), `DAT_1093bc14` (1, the constant term) and
-	// `DAT_1093b9fc` (2, the Z term) of `0x103990c0`'s throw speed. All three pointer cells live
-	// past `.data`'s raw size and no corpus function constructs them: UNRECOVERED, all answer 0.0f.
-	(void)Which;
-	return DamageZero;
-}
-
-int32 FElysiumNpc::ZombieGibAmmoTypeCvar(int32 Which) const
-{
-	// SEAM for `DAT_10940404` (0) and `DAT_1094044c` (1) — `CNPC_VZombie::TraceAttack`'s two
-	// cvar-backed forced ammo types. UNRECOVERED; both answer 0, an unconstructed cvar's own answer.
-	(void)Which;
-	return 0;
-}
-
 bool FElysiumNpc::HasPlayerControllerObject() const
 {
 	// SEAM for `this->vtable+0x184` — `CNPC_VPlayerController`'s stored controller object. No word
@@ -342,30 +306,6 @@ const TCHAR* FElysiumNpc::TookLifeEventSource()
 	return TEXT("CNPC_VPlayerController::Event_TookLife");
 }
 
-const TCHAR* FElysiumNpc::SummonEmitterBoneName()
-{
-	return TEXT("Bip01_R_Hand");
-}
-
-void FElysiumNpc::HideAndUnsolidifyWeapon(const FElysiumEntityHandle& Weapon)
-{
-	// SEAM for `m_fEffects |= 0x20` (EF_NODRAW), `AddSolidFlags(4)` (FSOLID_NOT_SOLID) and
-	// `CBaseEntity::Relink` on the weapon. No `FElysiumEntity` word stands for either mask.
-	FHideAndUnsolidifyCall Call;
-	Call.Entity = Weapon;
-	Call.EffectBits = EffectNoDraw;
-	Call.SolidBits = SolidNotSolid;
-	HideAndUnsolidifyCalls.Add(Call);
-}
-
-int32 FElysiumNpc::AoeTraceAttackResultCode(const FElysiumEntity* Victim) const
-{
-	// SEAM for the victim's own vtable `+0x50c`, whose answer picks the AOE impact sound. No body
-	// here; 0 selects the default id `0x79`.
-	(void)Victim;
-	return 0;
-}
-
 // =================================================================================================
 // Slot 576 `0x10266630` / slot 577 `0x10266660` — `IsLightDamage` / `IsHeavyDamage`.
 // =================================================================================================
@@ -375,7 +315,7 @@ bool FElysiumNpc::IsLightDamage(float Damage, int32 DamageBits)
 	// 0x10266630, the whole body: `return 0.0f < damage`. STRICTLY greater — a zero-damage hit is
 	// not light damage. The `int` second argument (retail's `bitsDamageType`) is not read.
 	(void)DamageBits;
-	return DamageZero < Damage;
+	return NpcKernelDamageShared::DamageZero < Damage;
 }
 
 bool FElysiumNpc::IsHeavyDamage(float Damage, int32 DamageBits)
@@ -433,46 +373,6 @@ int32 FElysiumNpc::DamageDecal(int32 DamageBits, int32 GameMaterial)
 // Slot 615 `0x102ad0c0` — `CanBeSetOnFire`, and `0x1037c420`, `CNPC_VGhoulCroucher`'s override.
 // =================================================================================================
 
-const FElysiumNpc::FCanBeSetOnFireSpecies* FElysiumNpc::CanBeSetOnFireSpeciesRows(int32& OutCount)
-{
-	// `CNPC_VGhoulCroucher` is the ONLY class in the family tree that replaces the Troika body:
-	// `vtmb_slot 615` lists `CAI_BaseNPCTroika#615` plus 55 inheritors on `0x102ad0c0` and this one
-	// on `0x1037c420`.
-	static const FCanBeSetOnFireSpecies Rows[] = {
-		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037c420"), /*bRefusesWhileSpawnBurning*/ true },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FCanBeSetOnFireSpecies* FElysiumNpc::CanBeSetOnFireSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	int32 Count = 0;
-	const FCanBeSetOnFireSpecies* Rows = CanBeSetOnFireSpeciesRows(Count);
-	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	return nullptr;
-}
-
-bool FElysiumNpc::GhoulCroucherCanBeSetOnFire()
-{
-	// `0x1037c420`, the body of `FElysiumNpcGhoulCroucher::CanBeSetOnFire`: it refuses outright while
-	// the authored `on_fire` keyfield (`m_bSpawnBurning`, +0x6665) is set — a croucher that spawned
-	// burning cannot be set on fire again. Anything else is a direct call into `thunk_FUN_102ad0c0`.
-	if (bGhoulSpawnBurning)
-	{
-		return false;
-	}
-	return FElysiumNpc::CanBeSetOnFire();
-}
-
 bool FElysiumNpc::CanBeSetOnFire()
 {
 	// `0x102ad0c0`, the Troika line, two arms and nothing else (`CNPC_VGhoulCroucher` overrides it,
@@ -493,107 +393,6 @@ bool FElysiumNpc::CanBeSetOnFire()
 // Argument layout recovered from the LISTING (`RET 0xc`, args at `ESP+0x60/0x64/0x68`): the
 // decompiler lost them to `unaff_retaddr` / `unaff_EBP`.
 // =================================================================================================
-
-const FElysiumNpc::FTraceAttackSpecies* FElysiumNpc::TraceAttackSpeciesRows(int32& OutCount)
-{
-	static const FTraceAttackSpecies Rows[] = {
-		{ TEXT("CNPC_VWerewolf"), TEXT("0x103ccbf0"), ETraceAttackPrologue::ZeroAmmoType },
-		{ TEXT("CNPC_VZombie"), TEXT("0x103e0430"), ETraceAttackPrologue::ZombieGib },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FTraceAttackSpecies* FElysiumNpc::TraceAttackSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	int32 Count = 0;
-	const FTraceAttackSpecies* Rows = TraceAttackSpeciesRows(Count);
-	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	return nullptr;
-}
-
-bool FElysiumNpc::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeaponIsMelee,
-	int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutShouldGib, int32& OutAmmoType)
-{
-	// 0x103e0430, verbatim. Both cvars are read FIRST, unconditionally, before either arm:
-	//     first  = DAT_10940404->IsCommand() ? 0 : DAT_10940404->m_nValue;
-	//     second = DAT_1094044c->IsCommand() ? 0 : DAT_1094044c->m_nValue;
-	// then
-	//     if (trace->hitgroup == 1) { shouldGib = 1; forced = second; }
-	//     else { shouldGib = 0;
-	//            if (!attacker || !attacker->activeWeapon) return;      // no force at all
-	//            forced = first;                                        // the swap is in the test
-	//            if ((activeWeapon->GetCapabilities() & 0x18000) == 0) return; }
-	//     SetDamageType(info, forced);
-	// Note the ORDER of the else arm: `iStack_4 = iStack_8` (second := first) is executed as part of
-	// the capability test's own expression, so the FIRST cvar is what a qualifying melee hit forces
-	// and the SECOND is what a head hit forces.
-	OutShouldGib = (HitGroup == HitGroupHead);
-	if (OutShouldGib)
-	{
-		OutAmmoType = SecondCvarAmmoType;
-		return true;
-	}
-	if (!bAttackerWeaponIsMelee)
-	{
-		return false;
-	}
-	OutAmmoType = FirstCvarAmmoType;
-	return true;
-}
-
-void FElysiumNpc::WerewolfTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
-{
-	// `0x103ccbf0`, the body of `FElysiumNpcWerewolf::TraceAttack`: `thunk_FUN_101c2a50(info, 0)` —
-	// zero the packet's damage-type word — then the base body `0x10266780` directly. Nothing else.
-	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
-	if (Info == nullptr || InTrace == nullptr)
-	{
-		return;   // the port's one refusal: retail would have dereferenced both
-	}
-	Info->DamageBits = 0;
-	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
-}
-
-void FElysiumNpc::ZombieTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
-{
-	// `0x103e0430`, the body of `FElysiumNpcZombie::TraceAttack`: the gib prologue, then the base
-	// body `0x10266780` directly.
-	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
-	FElysiumTraceHit* Trace = static_cast<FElysiumTraceHit*>(InTrace);
-	if (Info == nullptr || Trace == nullptr)
-	{
-		return;   // the port's one refusal: retail would have dereferenced both
-	}
-	// 0x103e0430. `m_hAttacker`'s active weapon's capability mask is the melee test.
-	const FElysiumEntity* Attacker =
-		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
-	const FElysiumCombatCharacter* AttackerChar =
-		Attacker != nullptr ? Attacker->AsCombatCharacter() : nullptr;
-	// SEAM: the weapon capability mask (`+0x5a0`) is story 29d's. Retail's test is
-	// `(weapon->GetCapabilities() & 0x18000) != 0` — the same melee-block capability the
-	// player block resolver uses (`docs/vtmb/combat-and-damage.md` -> "Weapon and input
-	// surface"). Without that accessor the melee arm cannot open, so a non-head hit forces
-	// no ammo type, which is retail's own `goto LAB_103e04dc`.
-	const bool bMelee = AttackerChar != nullptr && false;
-	bool bShouldGib = false;
-	int32 Forced = 0;
-	if (ZombieTraceAttackPrologue(Trace->HitGroup, bMelee, ZombieGibAmmoTypeCvar(0),
-			ZombieGibAmmoTypeCvar(1), bShouldGib, Forced))
-	{
-		Info->DamageBits = static_cast<uint32>(Forced);
-	}
-	bZombieShouldGib = bShouldGib;
-	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
-}
 
 void FElysiumNpc::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
 {
@@ -690,7 +489,7 @@ void FElysiumNpc::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTra
 		//    `m_fNoDamageDecal` and skips the blood, the bleed AND the flinch is still run after.
 		//    The comparison is `m_iHealth - damage > 0` read off `TEST AH,0x41 / JNP`.
 		bool bSkipBleed = false;
-		if (Trace->HitGroup == HitGroupHead)
+		if (Trace->HitGroup == NpcKernelDamageShared::HitGroupHead)
 		{
 			const double Survived = static_cast<double>(Health) - Tested;
 			if (Survived > 0.0)
@@ -748,7 +547,7 @@ void FElysiumNpc::TraceBleed(void* InDmg, const FVector& DirUnits, void* InTrace
 	// 2. The descriptor's word 1 — its AUTHORED base damage, not the applied result — is what the
 	//    noise table is keyed on (`(float)*(int *)(param_1 + 4)`), and a zero refuses.
 	const float BaseDamage = static_cast<float>(Dmg->BaseDamage);
-	if (BaseDamage == DamageZero)
+	if (BaseDamage == NpcKernelDamageShared::DamageZero)
 	{
 		return;
 	}
@@ -974,51 +773,6 @@ int32 FElysiumNpc::GiveAmmo(int32 Count, int32 AmmoIndex, bool bSuppressSound)
 // (`CNPC_VHengeyokai`), byte-identical bodies.
 // =================================================================================================
 
-const FElysiumNpc::FDamageFlinchSpecies* FElysiumNpc::DamageFlinchSpeciesRows(int32& OutCount)
-{
-	// `vtmb_slot 292` lists 254 classes; exactly two of them replace
-	// `CBaseCombatCharacter::DamageFlinch` with a gate, and both use the same mask.
-	static const FDamageFlinchSpecies Rows[] = {
-		{ TEXT("CNPC_VGargoyle"), TEXT("0x10378cb0"), ElysiumDamage::FirearmMask },
-		{ TEXT("CNPC_VHengeyokai"), TEXT("0x103802a0"), ElysiumDamage::FirearmMask },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FDamageFlinchSpecies* FElysiumNpc::DamageFlinchSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	int32 Count = 0;
-	const FDamageFlinchSpecies* Rows = DamageFlinchSpeciesRows(Count);
-	// The class's own row (story 5 step 3: a subclass inherits its base's C++ override).
-	for (int32 i = 0; i < Count; ++i)
-	{
-		if (InRetailClass != nullptr && FCString::Strcmp(Rows[i].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[i];
-		}
-	}
-	return nullptr;
-}
-
-bool FElysiumNpc::DamageFlinchSuppressed(uint32 CombinedBits, float Magnitude, uint32 SuppressMask)
-{
-	// The two bodies, verbatim:
-	//     bits = dmg ? (dmg->m_bdmgTypes | info[0xe]) : info[0xe];
-	//     if ((bits & 0x4000002) != 0) return;                      // no flinch at all
-	//     mag = dmg ? dmg->GetDmg() : (float)info[0xc];
-	//     if (mag != 0.0f) CBaseCombatCharacter::DamageFlinch(...);
-	// `0x4000002` is `DMG_BULLET | DMG_BUCKSHOT`, which is exactly `ElysiumDamage::FirearmMask`:
-	// a Gargoyle and a Hengeyokai do not flinch from gunfire. The magnitude test is an EXACT
-	// inequality against 0.0, not a threshold.
-	if ((CombinedBits & SuppressMask) != 0)
-	{
-		return true;
-	}
-	return Magnitude == DamageZero;
-}
-
 bool FElysiumNpc::SuppressesDamageFlinch(const FElysiumDmg& Dmg) const
 {
 	// The Troika line flinches on every hit, as it always has. `CNPC_VGargoyle` (`0x10378cb0`) and
@@ -1026,20 +780,6 @@ bool FElysiumNpc::SuppressesDamageFlinch(const FElysiumDmg& Dmg) const
 	// it is the port's seam for their slot-292 `DamageFlinch` bodies.
 	(void)Dmg;
 	return false;
-}
-
-bool FElysiumNpc::SpeciesSuppressesDamageFlinch(const TCHAR* SpeciesClass, const FElysiumDmg& Dmg) const
-{
-	// The two species bodies' gate, off the class's own row. The port's commit path hands the flinch
-	// a resolved descriptor rather than a packet, so the combined bits are the descriptor's own and
-	// the magnitude is the committed damage — which is what `CVDmg_t::GetDmg` answers once `Apply`
-	// has run.
-	const FDamageFlinchSpecies* Row = DamageFlinchSpeciesOf(SpeciesClass);
-	if (Row == nullptr)
-	{
-		return false;
-	}
-	return DamageFlinchSuppressed(Dmg.DmgMask, static_cast<float>(Dmg.GetDmg()), Row->SuppressMask);
 }
 
 // =================================================================================================
@@ -1062,31 +802,4 @@ int32 FElysiumNpc::CacheDamagePosition()
 	//    shape map; the mind transition trace carries the same account.
 	(void)TookDamageTraceLine;
 	return TookDamageSchedule;
-}
-
-// =================================================================================================
-// `0x1035d150` — `CNPC_VAndreiBlood::SelectIdealState` (slot 461).
-// =================================================================================================
-
-EElysiumNpcState FElysiumNpc::CNPC_VAndreiBlood_vfunc461()
-{
-	// Twenty-five bytes: stamp the trace selector, then answer 1 or 2.
-	//     this->field_0x1b38 = 4;
-	//     return (m_bActivated != 0) + 1;
-	// Retail's `NPC_STATE_IDLE` is 1 and `NPC_STATE_ALERT` is 2.
-	SelectIdealStateSelector = AndreiIdealStateSelector;
-	return bAndreiActivated ? EElysiumNpcState::Alert : EElysiumNpcState::Idle;
-}
-
-// =================================================================================================
-// `0x103c67f0` — `CNPC_VVampireBoss`'s attack-recency test.
-// =================================================================================================
-
-bool FElysiumNpc::LastAttackTimeElapsed(float ThresholdSeconds) const
-{
-	// `elapsed = curtime - m_flLastAttackTime (+0x5d9c); return threshold < elapsed;`
-	// STRICTLY greater — the listing's second `FCOMP` returns 0 in the low byte on equality.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const double Elapsed = Now - LastAttackTime;
-	return static_cast<double>(ThresholdSeconds) < Elapsed;
 }

@@ -56,10 +56,6 @@ int32 TranslatedActivity = 0;
 // `bInChoreoScene`. The census calls it "unbound"; `layout.md` names it, and this is the member.
 bool bCutsceneForceLOD = false;
 
-// +0x6710 m_iSeveredTentacleMask (`CNPC_VMingXiao`) — the body-submodel mask `BodyGroup` copies into
-// `m_nBody` when its cvar is at the default. A species word above the shape map's band.
-int32 SeveredTentacleMask = 0;
-
 // --- `CBaseAnimatingOverlay`'s gesture-layer table (+0x0730 … +0x07c3) --------------------------
 //
 // Four records of 0x30 bytes from +0x0734, with `m_bNoFlinch` at +0x0730 just before them. This is
@@ -341,15 +337,6 @@ TArray<FExtraAnimationModelRequest> ExtraAnimationModels;
 // both bodies above test. Not a seam: this runtime's player entity is the one the world names.
 bool OwnerIsThePlayer() const;
 
-// `CNPC_VMingXiao::BodyGroup` `0x10398800` — writes `m_nBody` (+0x067c) from the severed-tentacle
-// mask or from its own cvar. Three arms, in retail's order.
-void BodyGroup();
-
-// The cvar `BodyGroup` reads (`DAT_1093bb14`, through `ConVar::IsCommand()` and `m_nValue`):
-// `debug_tentacle_mask`, shipped "-1", the arm that takes the tentacle mask.
-bool BodyGroupCvarIsCommand() const;
-int32 BodyGroupCvarValue() const;
-
 // `0x102b8a10` — gate `COND_ENEMY_DEAD` (0x58), then answer retail schedule number 8 only when the
 // body authors a sequence for activity 0x61. Retail stamps its selector trace (+0x1b30 the source
 // file, +0x1b34 line 0x5f20) on the way out; the shape map calls that word ABSENT because this
@@ -402,6 +389,3 @@ FString ScriptCustomMoveSequenceName() const;
 // than respelt; what this adds is the reset arm and the translation.
 void SetIdealActivity(int32 Activity);
 
-// `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — slot 259's camera body, an EMPTY body that
-// swallows every animation event: the body of `FElysiumNpcCamera::HandleAnimEvent`.
-bool CameraHandleAnimEvent(const struct FElysiumAnimEvent& Event);

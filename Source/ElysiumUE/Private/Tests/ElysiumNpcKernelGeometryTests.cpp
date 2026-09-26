@@ -10,6 +10,10 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -250,7 +254,7 @@ bool FElysiumNpcKernelGeometrySetSizeTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slot 337 `GetUsedHullBits` — `0x1029a050` and its fourteen species rows
+// Slot 337 `GetUsedHullBits` — `0x1029a050` and its fourteen species classes
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryHullBitsTest,
@@ -276,7 +280,7 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 		F.Troika->GetUsedHullBits(), 1);
 
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). CNPC_VCop is
-	// not one of slot 337's fourteen species rows below and its base chain replaces nothing there
+	// not one of slot 337's fourteen species classes below and its base chain replaces nothing there
 	// (`docs/vtmb/npc-kernel/slots.md`), so a real cop runs the Troika line's body.
 	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
 	TestTrue(TEXT("npc_VCop's census class is CNPC_VCop — its factory builds it"),
@@ -290,60 +294,62 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 		F.Rat->GetUsedHullBits(), 0x80001);
 
 	// THE CORRECTION. The decompiled C shows the three Tzimisce bodies as bare forwards with no
-	// species bit; the listing shows `OR AH,<imm>`, a byte-wide OR into bits 8..15.
+	// species bit; the listing shows `OR AH,<imm>`, a byte-wide OR into bits 8..15. Each row is a
+	// class's own slot-337 override (story 5 step 4); every class stands through its factory.
 	struct FExpected
 	{
 		const TCHAR* Class;
 		const TCHAR* Body;
-		int32 Bits;
-		bool bReplaces;
+		int32 Answer;
 	};
 	static const FExpected Expected[] =
 	{
-		{ TEXT("CNPC_VTzimisce"),         TEXT("0x103b9160"), 0x0400,   false },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c1cb0"), 0x0800,   false },
-		{ TEXT("CNPC_VTzimisceRunner"),   TEXT("0x103c3cb0"), 0x2000,   false },
-		{ TEXT("CNPC_VMingXiao"),         TEXT("0x10392a50"), 0x38000,  false },
-		{ TEXT("CNPC_VScurrying"),        TEXT("0x103ac4e0"), 0x80000,  false },
-		{ TEXT("CNPC_VRat"),              TEXT("0x103ac4e0"), 0x80000,  false },
-		{ TEXT("CNPC_VCamera"),           TEXT("0x10368e80"), 0x80,     true },
-		{ TEXT("CNPC_VCameraSecurity"),   TEXT("0x10368e80"), 0x80,     true },
-		{ TEXT("CNPC_VGargoyle"),         TEXT("0x10378680"), 0x4000,   true },
-		{ TEXT("CNPC_VHengeyokai"),       TEXT("0x1037fb20"), 0x40001,  true },
-		{ TEXT("CNPC_VManBat"),           TEXT("0x1038b100"), 0x100000, true },
-		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039c480"), 0x38000,  true },
-		{ TEXT("CNPC_VSheriffMan"),       TEXT("0x103ae840"), 0x200000, true },
-		{ TEXT("CNPC_VWerewolf"),         TEXT("0x103cab50"), 0x1000,   true },
+		// --- The OR-onto-the-base shape: the Troika line's 1 plus the class's bit ---
+		{ TEXT("CNPC_VTzimisce"),         TEXT("0x103b9160"), 0x0401 },
+		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c1cb0"), 0x0801 },
+		{ TEXT("CNPC_VTzimisceRunner"),   TEXT("0x103c3cb0"), 0x2001 },
+		{ TEXT("CNPC_VMingXiao"),         TEXT("0x10392a50"), 0x38001 },
+		{ TEXT("CNPC_VScurrying"),        TEXT("0x103ac4e0"), 0x80001 },
+		{ TEXT("CNPC_VRat"),              TEXT("0x103ac4e0"), 0x80001 },
+		// --- The bare-constant shape: no call up the chain, so bit 0 is absent unless the constant has it ---
+		{ TEXT("CNPC_VCamera"),           TEXT("0x10368e80"), 0x80 },
+		{ TEXT("CNPC_VCameraSecurity"),   TEXT("0x10368e80"), 0x80 },
+		{ TEXT("CNPC_VGargoyle"),         TEXT("0x10378680"), 0x4000 },
+		{ TEXT("CNPC_VHengeyokai"),       TEXT("0x1037fb20"), 0x40001 },
+		{ TEXT("CNPC_VManBat"),           TEXT("0x1038b100"), 0x100000 },
+		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039c480"), 0x38000 },
+		{ TEXT("CNPC_VSheriffMan"),       TEXT("0x103ae840"), 0x200000 },
+		{ TEXT("CNPC_VWerewolf"),         TEXT("0x103cab50"), 0x1000 },
 	};
 
-	int32 RowCount = 0;
-	FElysiumNpc::UsedHullBitsSpeciesRows(RowCount);
-	TestEqual(TEXT("slot 337's table carries every species override in the census"),
-		RowCount, static_cast<int32>(UE_ARRAY_COUNT(Expected)));
-
-	for (const FExpected& Row : Expected)
+	FElysiumNpcWorldBuilder Builder(TEXT("hull_bits_species"), 405);
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Expected); ++Index)
 	{
-		const FElysiumNpc::FUsedHullBitsSpecies* Found =
-			FElysiumNpc::UsedHullBitsSpeciesOf(Row.Class);
-		if (!TestNotNull(*FString::Printf(TEXT("%s has a slot 337 row"), Row.Class), Found))
+		Builder.AddNpcOfClass(*FString::Printf(TEXT("hb%d"), Index),
+			FVector(400.f * (Index + 1), 0.f, 0.f), Expected[Index].Class);
+	}
+	FElysiumNpcWorldFixture World(MoveTemp(Builder));
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Expected); ++Index)
+	{
+		const FExpected& Row = Expected[Index];
+		FElysiumNpc* Npc = World.Npc(*FString::Printf(TEXT("hb%d"), Index));
+		if (!TestNotNull(*FString::Printf(TEXT("%s stood through its factory"), Row.Class), Npc))
 		{
 			continue;
 		}
-		TestEqual(*FString::Printf(TEXT("%s's bits"), Row.Class), Found->Bits, Row.Bits);
-		TestEqual(*FString::Printf(TEXT("%s replaces rather than ORs"), Row.Class),
-			Found->bReplaces, Row.bReplaces);
-		// The census cross-check: the row's address is the one `slots.md` records.
 		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
-		if (TestNotNull(*FString::Printf(TEXT("%s is in the census"), Row.Class), Cls))
-		{
-			TestEqual(*FString::Printf(TEXT("%s's slot 337 body"), Row.Class),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 337)), FString(Row.Body));
-		}
+		TestTrue(*FString::Printf(TEXT("%s answers its own census row"), Row.Class),
+			Cls != nullptr && Npc->RetailClass() == Cls);
+		TestEqual(*FString::Printf(TEXT("%s's slot 337 answer"), Row.Class), Npc->GetUsedHullBits(),
+			Row.Answer);
+		// The census cross-check: the override's address is the one `slots.md` records.
+		TestEqual(*FString::Printf(TEXT("%s's slot 337 body"), Row.Class),
+			FString(ElysiumNpcKernelClass::BodyOf(Cls, 337)), FString(Row.Body));
 	}
 
-	// A class with no row answers the Troika line's 1 and nothing else.
+	// A class the census gives no slot-337 override answers the Troika line's 1 and nothing else.
 	TestNull(TEXT("CNPC_VHumanCombatant does not replace slot 337"),
-		FElysiumNpc::UsedHullBitsSpeciesOf(TEXT("CNPC_VHumanCombatant")));
+		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 337));
 	return true;
 }
 
@@ -503,10 +509,10 @@ bool FElysiumNpcKernelGeometryStandingOnPlayerTest::RunTest(const FString&)
 	TestEqual(TEXT("two 32x32 footprints admit 45.25 units of separation"), Limit, 45.2548, 0.001);
 
 	TestTrue(TEXT("just inside the sum of half-diagonals overlaps"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector,
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector,
 			FVector(Limit - 0.1, 0.0, 0.0), Mins, Maxs, Mins, Maxs));
 	TestFalse(TEXT("just outside it does not"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector,
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector,
 			FVector(Limit + 0.1, 0.0, 0.0), Mins, Maxs, Mins, Maxs));
 
 	// The boundary itself, and it has to be built exactly or it is not the boundary. Retail's
@@ -525,31 +531,38 @@ bool FElysiumNpcKernelGeometryStandingOnPlayerTest::RunTest(const FString&)
 	const FVector ExactMins(-1.5, -2.0, 0.0);
 	const FVector ExactMaxs(1.5, 2.0, 72.0);
 	TestFalse(TEXT("exactly at the limit is not an overlap — the compare is strictly less"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector, FVector(5.0, 0.0, 0.0),
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector, FVector(5.0, 0.0, 0.0),
 			ExactMins, ExactMaxs, ExactMins, ExactMaxs));
 	TestTrue(TEXT("and one ulp inside it is"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector,
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector,
 			FVector(std::nextafter(5.0, 0.0), 0.0, 0.0), ExactMins, ExactMaxs,
 			ExactMins, ExactMaxs));
 	TestFalse(TEXT("and one ulp outside it is not"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector,
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector,
 			FVector(std::nextafter(5.0, 10.0), 0.0, 0.0), ExactMins, ExactMaxs,
 			ExactMins, ExactMaxs));
 
 	// Z is not read at all: a body 1000 units overhead still "stands on" the player in XY.
 	TestTrue(TEXT("the test is 2-D — Z separation is never measured"),
-		FElysiumNpc::StandingOnPlayerOverlap(FVector::ZeroVector, FVector(0.f, 0.f, 1000.f),
+		FElysiumNpcAsianVampire::StandingOnPlayerOverlap(FVector::ZeroVector, FVector(0.f, 0.f, 1000.f),
 			Mins, Maxs, Mins, Maxs));
 
 	// The body: the subject is `m_hClosestPlayer`, not `GetEnemy()`, and no closest player is
 	// retail's own `return false`.
-	FGeometryFixture F;
-	if (!TestNotNull(TEXT("the guard spawned"), F.Guard))
+	FElysiumNpcWorldFixture World([]
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("geometry_standing"), 29131u);
+		Builder.AddNpcOfClass(TEXT("asian"), FVector::ZeroVector, TEXT("CNPC_VAsianVampire"));
+		return Builder;
+	}());
+	FElysiumNpcAsianVampire* Asian = World.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
+	if (!TestNotNull(TEXT("the AsianVampire spawned"), Asian))
 	{
 		return false;
 	}
-	F.Guard->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
-	TestFalse(TEXT("no closest player answers false"), F.Guard->StandingOnPlayer());
+	FElysiumNpcWorldFixture::Quiet({ Asian });
+	Asian->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
+	TestFalse(TEXT("no closest player answers false"), Asian->StandingOnPlayer());
 	return true;
 }
 
@@ -565,53 +578,63 @@ bool FElysiumNpcKernelGeometryFakeHullTest::RunTest(const FString&)
 	const FVector AMin(0.f, 0.f, 0.f);
 	const FVector AMax(10.f, 10.f, 10.f);
 	TestTrue(TEXT("a contained box overlaps"),
-		FElysiumNpc::BoxesOverlap(AMin, AMax, FVector(1.f, 1.f, 1.f), FVector(2.f, 2.f, 2.f)));
+		FElysiumNpcWerewolf::BoxesOverlap(AMin, AMax, FVector(1.f, 1.f, 1.f), FVector(2.f, 2.f, 2.f)));
 	TestTrue(TEXT("a shared face overlaps — every comparison is inclusive"),
-		FElysiumNpc::BoxesOverlap(AMin, AMax, FVector(10.f, 0.f, 0.f), FVector(20.f, 10.f, 10.f)));
+		FElysiumNpcWerewolf::BoxesOverlap(AMin, AMax, FVector(10.f, 0.f, 0.f), FVector(20.f, 10.f, 10.f)));
 	TestFalse(TEXT("a gap on X does not"),
-		FElysiumNpc::BoxesOverlap(AMin, AMax, FVector(11.f, 0.f, 0.f), FVector(20.f, 10.f, 10.f)));
+		FElysiumNpcWerewolf::BoxesOverlap(AMin, AMax, FVector(11.f, 0.f, 0.f), FVector(20.f, 10.f, 10.f)));
 	TestFalse(TEXT("a gap on Z does not either"),
-		FElysiumNpc::BoxesOverlap(AMin, AMax, FVector(0.f, 0.f, -20.f), FVector(10.f, 10.f, -1.f)));
+		FElysiumNpcWerewolf::BoxesOverlap(AMin, AMax, FVector(0.f, 0.f, -20.f), FVector(10.f, 10.f, -1.f)));
 
 	// The activity map: 1 -> 0x7a, 3 -> 0x7b, and everything else — INCLUDING 2 — -> 0x79.
-	TestEqual(TEXT("class 0 answers 0x79"), FElysiumNpc::FakeHullKnockbackActivity(0), 0x79);
-	TestEqual(TEXT("class 1 answers 0x7a"), FElysiumNpc::FakeHullKnockbackActivity(1), 0x7a);
+	TestEqual(TEXT("class 0 answers 0x79"), FElysiumNpcWerewolf::FakeHullKnockbackActivity(0), 0x79);
+	TestEqual(TEXT("class 1 answers 0x7a"), FElysiumNpcWerewolf::FakeHullKnockbackActivity(1), 0x7a);
 	TestEqual(TEXT("class 2 answers 0x79, not a fourth activity"),
-		FElysiumNpc::FakeHullKnockbackActivity(2), 0x79);
-	TestEqual(TEXT("class 3 answers 0x7b"), FElysiumNpc::FakeHullKnockbackActivity(3), 0x7b);
+		FElysiumNpcWerewolf::FakeHullKnockbackActivity(2), 0x79);
+	TestEqual(TEXT("class 3 answers 0x7b"), FElysiumNpcWerewolf::FakeHullKnockbackActivity(3), 0x7b);
 
-	FGeometryFixture F;
-	if (!TestNotNull(TEXT("the guard spawned"), F.Guard))
+	// `0x103d93b0` is `CNPC_VWerewolf::UpdateFakeHull`: it runs on a werewolf.
+	FElysiumNpcWorldFixture World([]
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("geometry_fakehull"), 29131u);
+		Builder.AddNpcOfClass(TEXT("wolf"), FVector(0.f, 0.f, 0.f), TEXT("CNPC_VWerewolf"));
+		Builder.AddNpc(TEXT("other"), FVector(300.f, 0.f, 0.f));
+		return Builder;
+	}());
+	FElysiumNpcWerewolf* Wolf = World.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpc* Other = World.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the werewolf spawned"), Wolf) || !TestNotNull(TEXT("the other spawned"), Other))
 	{
 		return false;
 	}
+	FElysiumNpcWorldFixture::Quiet({ Wolf, Other });
 
 	// No enemy: the cache is RESET to `vec3_origin` and nothing else happens. This is the arm that
 	// disarms the next call, because the next call's gate is "is the cache still zero".
-	F.Guard->WerewolfFakeHullPosUnits = FVector(1.f, 2.f, 3.f);
-	F.Guard->UpdateFakeHull(10.0);
+	Wolf->WerewolfFakeHullPosUnits = FVector(1.f, 2.f, 3.f);
+	Wolf->UpdateFakeHull(10.0);
 	TestTrue(TEXT("no enemy resets the fake-hull cache to vec3_origin"),
-		F.Guard->WerewolfFakeHullPosUnits.IsNearlyZero());
-	TestEqual(TEXT("and pushes no damage"), F.Guard->FakeHullSeams.DamagePushes, 0);
+		Wolf->WerewolfFakeHullPosUnits.IsNearlyZero());
+	TestEqual(TEXT("and pushes no damage"), Wolf->FakeHullSeams.DamagePushes, 0);
 
 	// The bone seam: with an enemy the body asks for `Bip01`; with none it does not.
-	const int32 BoneCallsBefore = F.Guard->BoneWorldPositionCalls;
-	F.Guard->UpdateFakeHull(11.0);
+	const int32 BoneCallsBefore = Wolf->BoneWorldPositionCalls;
+	Wolf->UpdateFakeHull(11.0);
 	TestEqual(TEXT("with no enemy the Bip01 lookup is never reached"),
-		F.Guard->BoneWorldPositionCalls, BoneCallsBefore);
+		Wolf->BoneWorldPositionCalls, BoneCallsBefore);
 
 	// The damage gate is strict and one second wide.
-	F.Guard->WerewolfFakeHullPushTime = 10.0;
+	Wolf->WerewolfFakeHullPushTime = 10.0;
 	TestFalse(TEXT("exactly one second later is NOT past the gate"), 10.0 + 1.0 < 11.0);
 	TestTrue(TEXT("a hair over one second is"), 10.0 + 1.0 < 11.0001);
 
 	// The seams all answer the recovered refusal.
 	TestEqual(TEXT("the debug-hull cvar is werewolf_show_debug, shipped 0"),
-		F.Guard->FakeHullDebugCvar(), 0);
+		Wolf->FakeHullDebugCvar(), 0);
 	const FVector Point(5.f, 6.f, 7.f);
 	TestTrue(TEXT("CalcNearestPoint answers the point unchanged"),
-		F.Guard->NearestPointOnEntity(F.Other, Point).Equals(Point, 0.001));
-	TestTrue(TEXT("and the ask is recorded"), F.Guard->FakeHullSeams.NearestPointCalls > 0);
+		Wolf->NearestPointOnEntity(Other, Point).Equals(Point, 0.001));
+	TestTrue(TEXT("and the ask is recorded"), Wolf->FakeHullSeams.NearestPointCalls > 0);
 	return true;
 }
 
@@ -623,55 +646,67 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryScatterTest,
 	"Elysium.Substrate.NpcKernelGeometry.Scatter", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 {
-	FGeometryFixture F;
-	if (!TestNotNull(TEXT("the guard spawned"), F.Guard)
-		|| !TestNotNull(TEXT("the other spawned"), F.Other))
+	// A MingXiao head, one of its tentacles and a second tentacle that moves: the bodies are the
+	// head's (`0x10397e00`, `0x103998d0`) and the tentacle's (`0x1039ef90`), run on their classes.
+	FElysiumNpcWorldFixture World([]
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("geometry_scatter"), 29131u);
+		Builder.AddNpcOfClass(TEXT("head"), FVector(0.f, 0.f, 0.f), TEXT("CNPC_VMingXiao"));
+		Builder.AddNpcOfClass(TEXT("tentacle"), FVector(300.f, 0.f, 0.f), TEXT("CNPC_VMingXiaoTentacle"));
+		Builder.AddNpcOfClass(TEXT("moved"), FVector(600.f, 0.f, 0.f), TEXT("CNPC_VMingXiaoTentacle"));
+		return Builder;
+	}());
+	FElysiumNpcMingXiao* Head = World.NpcAs<FElysiumNpcMingXiao>(TEXT("head"));
+	FElysiumNpcMingXiaoTentacle* Tentacle = World.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("tentacle"));
+	FElysiumNpcMingXiaoTentacle* MovedTentacle = World.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("moved"));
+	if (!TestNotNull(TEXT("the head spawned"), Head) || !TestNotNull(TEXT("the tentacle spawned"), Tentacle)
+		|| !TestNotNull(TEXT("the moved tentacle spawned"), MovedTentacle))
 	{
 		return false;
 	}
+	FElysiumNpcWorldFixture::Quiet({ Head, Tentacle, MovedTentacle });
 
 	// `FUN_1039ef90`: condition 0x78 and `m_vecScatterCenter`, both on the NOTIFIED tentacle.
-	F.Guard->NotifyScatterCenter(F.Other, FVector(254.f, 0.f, 0.f));
+	Head->NotifyScatterCenter(Tentacle, FVector(254.f, 0.f, 0.f));
 	TestTrue(TEXT("the notified tentacle takes condition 0x78"),
-		F.Other->Cognition.Conditions.Has(
+		Tentacle->Cognition.Conditions.Has(
 			static_cast<EElysiumNpcCond>(FElysiumNpc::ScatterNoticeCondition)));
 	TestTrue(TEXT("and the scatter centre, in Source units"),
-		F.Other->TentacleScatterCenterUnits.Equals(
+		Tentacle->TentacleScatterCenterUnits.Equals(
 			FVector(254.f / ElysiumMove::U, 0.f, 0.f), 0.001));
 	TestFalse(TEXT("the notifier takes neither"),
-		F.Guard->Cognition.Conditions.Has(
+		Head->Cognition.Conditions.Has(
 			static_cast<EElysiumNpcCond>(FElysiumNpc::ScatterNoticeCondition)));
-	TestTrue(TEXT("the unrecovered global event is counted"), F.Guard->ScatterNoticeEvents > 0);
+	TestTrue(TEXT("the unrecovered global event is counted"), Head->ScatterNoticeEvents > 0);
 
 	// `FUN_10397e00`: a null `param_1` is retail's first test and does nothing.
-	const int32 EventsBefore = F.Guard->ScatterNoticeEvents;
-	F.Guard->NotifyOwnedCopiesOfOwnerMove(nullptr);
+	const int32 EventsBefore = Head->ScatterNoticeEvents;
+	Head->NotifyOwnedCopiesOfOwnerMove(nullptr);
 	TestEqual(TEXT("a null moved entity notifies nobody"),
-		F.Guard->ScatterNoticeEvents, EventsBefore);
+		Head->ScatterNoticeEvents, EventsBefore);
 
 	// With `m_rhSeveredTentacles` empty the six-entry walk notifies nobody either.
-	F.Guard->NotifyOwnedCopiesOfOwnerMove(F.Other);
+	Head->NotifyOwnedCopiesOfOwnerMove(Tentacle);
 	TestEqual(TEXT("an empty severed-tentacle array notifies nobody"),
-		F.Guard->ScatterNoticeEvents, EventsBefore);
+		Head->ScatterNoticeEvents, EventsBefore);
 
 	// One severed tentacle, and it is NOT the moved entity: it is told where the moved one is.
-	F.Other->TentacleScatterCenterUnits = FVector::ZeroVector;
-	F.Guard->SeveredTentacles[2] = F.Other->Handle;
-	F.Guard->Origin = FVector(700.f, 0.f, 0.f);
-	FElysiumNpc* Moved = F.Phone;
-	if (TestNotNull(TEXT("the payphone stands in for the moved tentacle"), Moved))
+	Tentacle->TentacleScatterCenterUnits = FVector::ZeroVector;
+	Head->SeveredTentacles[2] = Tentacle->Handle;
+	Head->Origin = FVector(700.f, 0.f, 0.f);
+	FElysiumNpc* Moved = MovedTentacle;
 	{
-		F.Guard->NotifyOwnedCopiesOfOwnerMove(Moved);
+		Head->NotifyOwnedCopiesOfOwnerMove(Moved);
 		TestTrue(TEXT("the survivor is told where the MOVED entity is, not where the owner is"),
-			F.Other->TentacleScatterCenterUnits.Equals(Moved->Origin / ElysiumMove::U, 0.001));
+			Tentacle->TentacleScatterCenterUnits.Equals(Moved->Origin / ElysiumMove::U, 0.001));
 	}
 
 	// And the moved entity is skipped when it is itself in the array.
-	F.Guard->SeveredTentacles[2] = F.Other->Handle;
-	F.Other->TentacleScatterCenterUnits = FVector::ZeroVector;
-	F.Guard->NotifyOwnedCopiesOfOwnerMove(F.Other);
+	Head->SeveredTentacles[2] = Tentacle->Handle;
+	Tentacle->TentacleScatterCenterUnits = FVector::ZeroVector;
+	Head->NotifyOwnedCopiesOfOwnerMove(Tentacle);
 	TestTrue(TEXT("a tentacle is never told to scatter away from itself"),
-		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
+		Tentacle->TentacleScatterCenterUnits.IsNearlyZero());
 
 	// --- `0x103998d0`'s gate ---------------------------------------------------------------------
 	//
@@ -679,63 +714,63 @@ bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 	const FVector Forward(1.f, 0.f, 0.f);
 	const double LimitCm = 128.0 * ElysiumMove::U;
 	TestTrue(TEXT("dead ahead and inside 128 units passes"),
-		FElysiumNpc::ScatterTentacleGate(FVector(LimitCm - 1.0, 0.0, 0.0), Forward));
+		FElysiumNpcMingXiao::ScatterTentacleGate(FVector(LimitCm - 1.0, 0.0, 0.0), Forward));
 	TestTrue(TEXT("exactly 128 units passes — the flag mask keeps the equal case"),
-		FElysiumNpc::ScatterTentacleGate(FVector(LimitCm, 0.0, 0.0), Forward));
+		FElysiumNpcMingXiao::ScatterTentacleGate(FVector(LimitCm, 0.0, 0.0), Forward));
 	TestFalse(TEXT("past 128 units does not"),
-		FElysiumNpc::ScatterTentacleGate(FVector(LimitCm + 1.0, 0.0, 0.0), Forward));
+		FElysiumNpcMingXiao::ScatterTentacleGate(FVector(LimitCm + 1.0, 0.0, 0.0), Forward));
 
 	// THE CORRECTION: the dot floor is 0.25, so 60 degrees off centre (dot 0.5) passes and 80
 	// degrees (dot 0.17) does not. Read as a float the cell is 0.0 and both would pass.
 	TestTrue(TEXT("60 degrees off centre passes the 0.25 dot floor"),
-		FElysiumNpc::ScatterTentacleGate(
+		FElysiumNpcMingXiao::ScatterTentacleGate(
 			FVector(100.0 * FMath::Cos(PI / 3.0), 100.0 * FMath::Sin(PI / 3.0), 0.0), Forward));
 	TestFalse(TEXT("80 degrees off centre does NOT — which a 0.0 floor would have admitted"),
-		FElysiumNpc::ScatterTentacleGate(
+		FElysiumNpcMingXiao::ScatterTentacleGate(
 			FVector(100.0 * FMath::Cos(PI * 80.0 / 180.0),
 				100.0 * FMath::Sin(PI * 80.0 / 180.0), 0.0), Forward));
 	TestFalse(TEXT("directly behind does not"),
-		FElysiumNpc::ScatterTentacleGate(FVector(-100.0, 0.0, 0.0), Forward));
+		FElysiumNpcMingXiao::ScatterTentacleGate(FVector(-100.0, 0.0, 0.0), Forward));
 
 	// Z is not multiplied by anything: the dot is 2-D, so a tentacle straight overhead inside the
 	// range is judged only by its XY bearing.
 	TestTrue(TEXT("the dot is 2-D — Z does not enter it"),
-		FElysiumNpc::ScatterTentacleGate(FVector(100.0, 0.0, 100.0), Forward));
+		FElysiumNpcMingXiao::ScatterTentacleGate(FVector(100.0, 0.0, 100.0), Forward));
 
 	// The body's three word gates, each measured on its own.
-	F.Other->TentaclePhase = 2;
-	F.Other->ScheduleHost.ForcedSchedule = static_cast<int32>(0x163);
-	F.Other->TentacleScatterCenterUnits = FVector::ZeroVector;
-	F.Guard->Origin = FVector::ZeroVector;
-	F.Other->Origin = FVector(100.f, 0.f, 0.f);
-	F.Guard->Forward = FVector(1.f, 0.f, 0.f);
-	F.Guard->FUN_103998d0(F.Other);
+	Tentacle->TentaclePhase = 2;
+	Tentacle->ScheduleHost.ForcedSchedule = static_cast<int32>(0x163);
+	Tentacle->TentacleScatterCenterUnits = FVector::ZeroVector;
+	Head->Origin = FVector::ZeroVector;
+	Tentacle->Origin = FVector(100.f, 0.f, 0.f);
+	Head->Forward = FVector(1.f, 0.f, 0.f);
+	Head->FUN_103998d0(Tentacle);
 	TestTrue(TEXT("forced schedule 0x163 refuses the scatter"),
-		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
+		Tentacle->TentacleScatterCenterUnits.IsNearlyZero());
 
-	F.Other->ScheduleHost.ForcedSchedule = static_cast<int32>(0x165);
-	F.Guard->FUN_103998d0(F.Other);
+	Tentacle->ScheduleHost.ForcedSchedule = static_cast<int32>(0x165);
+	Head->FUN_103998d0(Tentacle);
 	TestTrue(TEXT("forced schedule 0x165 refuses it too"),
-		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
+		Tentacle->TentacleScatterCenterUnits.IsNearlyZero());
 
-	F.Other->ScheduleHost.ForcedSchedule = ElysiumScheduleId::None;
-	F.Other->TentaclePhase = 1;
-	F.Guard->FUN_103998d0(F.Other);
+	Tentacle->ScheduleHost.ForcedSchedule = ElysiumScheduleId::None;
+	Tentacle->TentaclePhase = 1;
+	Head->FUN_103998d0(Tentacle);
 	TestTrue(TEXT("m_ePhase must be exactly 2"),
-		F.Other->TentacleScatterCenterUnits.IsNearlyZero());
+		Tentacle->TentacleScatterCenterUnits.IsNearlyZero());
 
-	F.Other->TentaclePhase = 2;
-	F.Guard->FUN_103998d0(F.Other);
+	Tentacle->TentaclePhase = 2;
+	Head->FUN_103998d0(Tentacle);
 	TestTrue(TEXT("every gate open scatters the tentacle away from the BOSS's origin"),
-		F.Other->TentacleScatterCenterUnits.Equals(F.Guard->Origin / ElysiumMove::U, 0.001));
+		Tentacle->TentacleScatterCenterUnits.Equals(Head->Origin / ElysiumMove::U, 0.001));
 
 	// `m_vecForward` is retail's cached basis and nothing in this runtime writes it, so the cone
 	// gate refuses until a sense pass fills it — the recovered refusal, stated.
-	F.Guard->Forward = FVector::ZeroVector;
-	F.Other->TentacleScatterCenterUnits = FVector(9.f, 9.f, 9.f);
-	F.Guard->FUN_103998d0(F.Other);
+	Head->Forward = FVector::ZeroVector;
+	Tentacle->TentacleScatterCenterUnits = FVector(9.f, 9.f, 9.f);
+	Head->FUN_103998d0(Tentacle);
 	TestTrue(TEXT("an unwritten m_vecForward closes the cone"),
-		F.Other->TentacleScatterCenterUnits.Equals(FVector(9.f, 9.f, 9.f), 0.001));
+		Tentacle->TentacleScatterCenterUnits.Equals(FVector(9.f, 9.f, 9.f), 0.001));
 	return true;
 }
 

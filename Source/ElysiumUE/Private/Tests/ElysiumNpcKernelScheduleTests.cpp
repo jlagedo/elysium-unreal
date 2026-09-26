@@ -4,6 +4,7 @@
 
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -776,7 +777,7 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 	Builder.AddNpc(TEXT("leader"), FVector(200.0, 0.0, 0.0), TEXT("npc_VSabbatLeader"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
-	FElysiumNpc* Leader = Fixture.Npc(TEXT("leader"));
+	FElysiumNpcSabbatLeader* Leader = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("leader"));
 	FElysiumNpcWorldFixture::Quiet({ Guard, Leader });
 	if (Guard == nullptr || Leader == nullptr)
 	{

@@ -6,6 +6,14 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcBaseBoss.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -61,11 +69,11 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(0x4651, FVector(100.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4651, FVector(100.0, 0.0, 0.0)));   // the tie
 		TestEqual(TEXT("SelectCenterNode takes the nearest 0x4651 and keeps the first of a tie"),
-			FElysiumNpc::SelectCenterNodeRule(Nodes, Player), 2);
+			FElysiumNpcSheriffMan::SelectCenterNodeRule(Nodes, Player), 2);
 		TArray<FElysiumNpc::FHintWords> NoCentre;
 		NoCentre.Add(MakeNode(0x4653, FVector(10.0, 0.0, 0.0)));
 		TestEqual(TEXT("and answers null when the map authors no centre node"),
-			FElysiumNpc::SelectCenterNodeRule(NoCentre, Player), (int32)INDEX_NONE);
+			FElysiumNpcSheriffMan::SelectCenterNodeRule(NoCentre, Player), (int32)INDEX_NONE);
 	}
 
 	// `SelectLedgeNode` `0x103b0ab0`: type 0x4653, and the reference point is retail's `char`
@@ -76,9 +84,9 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(0x4653, FVector(900.0, 0.0, 0.0)));   // near the NPC at x=1000
 		Nodes.Add(MakeNode(0x4651, FVector(0.0, 0.0, 0.0)));     // a centre node, never picked
 		TestEqual(TEXT("SelectLedgeNode('\\0') measures from the player"),
-			FElysiumNpc::SelectLedgeNodeRule(Nodes, Player), 0);
+			FElysiumNpcSheriffMan::SelectLedgeNodeRule(Nodes, Player), 0);
 		TestEqual(TEXT("SelectLedgeNode(non-zero) measures from the NPC"),
-			FElysiumNpc::SelectLedgeNodeRule(Nodes, FVector(1000.0, 0.0, 0.0)), 1);
+			FElysiumNpcSheriffMan::SelectLedgeNodeRule(Nodes, FVector(1000.0, 0.0, 0.0)), 1);
 	}
 
 	// `SelectTeleportArchway` `0x103a9540`: type 0x3e82, flat distance at or past
@@ -89,14 +97,14 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(0x3e82, FVector(-20.0, 0.0, 0.0)));            // inside 24 units: rejected
 		Nodes.Add(MakeNode(0x3e82, FVector(0.0, 200.0 * U, 0.0)));        // 90 degrees off
 		Nodes.Add(MakeNode(0x3e82, FVector(-2000.0 * U, 0.0, 0.0)));      // straight ahead, far
-		const int32 Pick = FElysiumNpc::SelectTeleportArchwayRule(Nodes, Player, 0.f);
+		const int32 Pick = FElysiumNpcSabbatLeader::SelectTeleportArchwayRule(Nodes, Player, 0.f);
 		TestEqual(TEXT("SelectTeleportArchway scores by yaw alone, so distance never breaks a tie"),
 			Pick, 2);
 
 		TArray<FElysiumNpc::FHintWords> TooClose;
 		TooClose.Add(MakeNode(0x3e82, FVector(23.0 * U, 0.0, 0.0)));
 		TestEqual(TEXT("and a node inside 24.0 units (_DAT_104c3cbc) is refused"),
-			FElysiumNpc::SelectTeleportArchwayRule(TooClose, Player, 0.f), (int32)INDEX_NONE);
+			FElysiumNpcSabbatLeader::SelectTeleportArchwayRule(TooClose, Player, 0.f), (int32)INDEX_NONE);
 	}
 
 	// `SelectDiveOutPoint` `0x103a9ad0`: type 0x3e85, flat distance at or past
@@ -111,13 +119,13 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		// loses on yaw outright, which is the whole of what the additive score means. The archway
 		// picker, which scores on yaw alone, would have taken the other one.
 		TestEqual(TEXT("SelectDiveOutPoint adds the yaw delta to the flat distance"),
-			FElysiumNpc::SelectDiveOutPointRule(Nodes, Player, 0.f), 2);
+			FElysiumNpcSabbatLeader::SelectDiveOutPointRule(Nodes, Player, 0.f), 2);
 		// And with the distance term removed it does: the same two positions typed as archways.
 		TArray<FElysiumNpc::FHintWords> Archways;
 		Archways.Add(MakeNode(0x3e82, FVector(-100.0 * U, 0.0, 0.0)));
 		Archways.Add(MakeNode(0x3e82, FVector(0.0, 60.0 * U, 0.0)));
 		TestEqual(TEXT("where the archway picker, scoring on yaw alone, takes the aligned one"),
-			FElysiumNpc::SelectTeleportArchwayRule(Archways, Player, 0.f), 0);
+			FElysiumNpcSabbatLeader::SelectTeleportArchwayRule(Archways, Player, 0.f), 0);
 	}
 
 	// `SelectDiveInPoint` `0x103a9760`: `SelectDiveOutPoint` plus the leader's own distance gate
@@ -130,11 +138,11 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		// Leader 500 cm behind the player on -X, so the player direction is +X.
 		const FVector Self(-500.0, 0.0, 0.0);
 		TestEqual(TEXT("SelectDiveInPoint refuses a node in the player's hemisphere"),
-			FElysiumNpc::SelectDiveInPointRule(Nodes, Player, 0.f, Self), 0);
+			FElysiumNpcSabbatLeader::SelectDiveInPointRule(Nodes, Player, 0.f, Self), 0);
 
 		// 45 units is 114.3 cm; a leader 100 cm from the player never walks the list.
 		TestEqual(TEXT("and answers null outright when the leader is inside 45.0 units of the player"),
-			FElysiumNpc::SelectDiveInPointRule(Nodes, Player, 0.f, FVector(-100.0, 0.0, 0.0)),
+			FElysiumNpcSabbatLeader::SelectDiveInPointRule(Nodes, Player, 0.f, FVector(-100.0, 0.0, 0.0)),
 			(int32)INDEX_NONE);
 	}
 
@@ -162,7 +170,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(0x4653, FVector(-300.0, 0.0, 10.0)));
 
 		const FElysiumNpc::FTeleportNodePick Pick =
-			FElysiumNpc::SelectTeleportNodeSheriffRule(Nodes, Player, 0.f, &AlwaysClear);
+			FElysiumNpcSheriffMan::SelectTeleportNodeSheriffRule(Nodes, Player, 0.f, &AlwaysClear);
 		TestEqual(TEXT("SelectTeleportNode(Sheriff) takes the aligned node"), Pick.Index, 1);
 		// score = |yaw|/180 * 0.4 + min(dist, 1000 units)/1000 units * 0.6.
 		const float Expected = (1000.0f / (1000.0f * U)) * 0.6f;
@@ -170,14 +178,14 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(Pick.Score, Expected, 1e-4f));
 
 		const FElysiumNpc::FTeleportNodePick Refused =
-			FElysiumNpc::SelectTeleportNodeSheriffRule(Nodes, Player, 0.f, &NeverClear);
+			FElysiumNpcSheriffMan::SelectTeleportNodeSheriffRule(Nodes, Player, 0.f, &NeverClear);
 		TestEqual(TEXT("and PositionClearForTeleport is a gate, not a tiebreak"), Refused.Index,
 			(int32)INDEX_NONE);
 
 		TArray<FElysiumNpc::FHintWords> TooClose;
 		TooClose.Add(MakeNode(17000, FVector(-99.0 * U, 0.0, 0.0)));
 		TestEqual(TEXT("a node inside DAT_104c6124 = 100.0 units is refused before the gate"),
-			FElysiumNpc::SelectTeleportNodeSheriffRule(TooClose, Player, 0.f, &AlwaysClear).Index,
+			FElysiumNpcSheriffMan::SelectTeleportNodeSheriffRule(TooClose, Player, 0.f, &AlwaysClear).Index,
 			(int32)INDEX_NONE);
 	}
 
@@ -189,11 +197,11 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(17000, FVector(-400.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4269, FVector(-4000.0, 0.0, 0.0)));
 		TestEqual(TEXT("SelectTeleportNode(Andrei) nearest arm"),
-			FElysiumNpc::SelectTeleportNodeAndreiRule(Nodes, Player, false, &AlwaysClear), 1);
+			FElysiumNpcAndreiBlood::SelectTeleportNodeAndreiRule(Nodes, Player, false, &AlwaysClear), 1);
 		TestEqual(TEXT("SelectTeleportNode(Andrei) farthest arm, the same list"),
-			FElysiumNpc::SelectTeleportNodeAndreiRule(Nodes, Player, true, &AlwaysClear), 2);
+			FElysiumNpcAndreiBlood::SelectTeleportNodeAndreiRule(Nodes, Player, true, &AlwaysClear), 2);
 		TestEqual(TEXT("and the clearance gate refuses both arms"),
-			FElysiumNpc::SelectTeleportNodeAndreiRule(Nodes, Player, true, &NeverClear),
+			FElysiumNpcAndreiBlood::SelectTeleportNodeAndreiRule(Nodes, Player, true, &NeverClear),
 			(int32)INDEX_NONE);
 	}
 
@@ -212,11 +220,11 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 			return P.X < -1000.0 ? 2 : 4;
 		};
 		TestEqual(TEXT("SelectTeleportNode(Chang) prefers the player's sector over the nearest"),
-			FElysiumNpc::SelectTeleportNodeChangRule(Nodes, Player, &AlwaysClear, SectorOf), 1);
+			FElysiumNpcChangBros::SelectTeleportNodeChangRule(Nodes, Player, &AlwaysClear, SectorOf), 1);
 
 		auto NoMatch = [](const FVector&) -> int32 { return 4; };
 		TestEqual(TEXT("and falls back to the plain nearest when no sector matches"),
-			FElysiumNpc::SelectTeleportNodeChangRule(Nodes, Player, &AlwaysClear, NoMatch), 0);
+			FElysiumNpcChangBros::SelectTeleportNodeChangRule(Nodes, Player, &AlwaysClear, NoMatch), 0);
 	}
 
 	// `CNPC_VAsianVampire::SelectLedgeNode` `0x103615c0` — the only selector that never asks for a
@@ -227,9 +235,9 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 		Nodes.Add(MakeNode(0x4653, FVector(900.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4653, FVector(200.0, 0.0, 0.0)));
 		TestEqual(TEXT("SelectLedgeNode(Asian) measures from the NPC's own origin"),
-			FElysiumNpc::SelectLedgeNodeAsianRule(Nodes, FVector::ZeroVector, &AlwaysClear), 2);
+			FElysiumNpcAsianVampire::SelectLedgeNodeAsianRule(Nodes, FVector::ZeroVector, &AlwaysClear), 2);
 		TestEqual(TEXT("and the DAT_104a9320 = 150.0 clearance is a gate on every candidate"),
-			FElysiumNpc::SelectLedgeNodeAsianRule(Nodes, FVector::ZeroVector, &NeverClear),
+			FElysiumNpcAsianVampire::SelectLedgeNodeAsianRule(Nodes, FVector::ZeroVector, &NeverClear),
 			(int32)INDEX_NONE);
 	}
 
@@ -245,11 +253,18 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_clearance"), 4242);
 	Builder.AddNpc(TEXT("andrei"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
 	Builder.AddNpc(TEXT("human"), FVector::ZeroVector, TEXT("npc_VHuman"));
+	// Each rule on its own class, all standing where Andrei does.
+	Builder.AddNpcOfClass(TEXT("sheriff"), FVector::ZeroVector, TEXT("CNPC_VSheriffMan"));
+	Builder.AddNpcOfClass(TEXT("asian"), FVector::ZeroVector, TEXT("CNPC_VAsianVampire"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Andrei = Fixture.Npc(TEXT("andrei"));
+	FElysiumNpcAndreiBlood* Andrei = Fixture.NpcAs<FElysiumNpcAndreiBlood>(TEXT("andrei"));
 	FElysiumNpc* Human = Fixture.Npc(TEXT("human"));
-	FElysiumNpcWorldFixture::Quiet({ Andrei, Human });
-	if (Andrei == nullptr || Human == nullptr)
+	FElysiumNpcSheriffMan* Sheriff = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
+	FElysiumNpcAsianVampire* Asian = Fixture.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	FElysiumNpcWorldFixture::Quiet({ Andrei, Human, Sheriff, Asian, Chang });
+	if (Andrei == nullptr || Human == nullptr || Sheriff == nullptr || Asian == nullptr || Chang == nullptr)
 	{
 		AddError(TEXT("the fixture did not stand both NPCs"));
 		return false;
@@ -272,25 +287,28 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 		Andrei->PositionClearForTeleportAndrei(FVector(300.0 + 101.0 * U, 0.0, 0.0), Clearance));
 
 	// `CNPC_VSheriffMan::PositionClearForTeleport` `0x103b0c70`: the same two terms plus the player.
-	Andrei->SheriffLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
+	Sheriff->Origin = FVector::ZeroVector;
+	Sheriff->SheriffLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
 	TestTrue(TEXT("the Sheriff rule accepts a clear spot with no player"),
-		Andrei->PositionClearForTeleportSheriff(FVector(300.0, 0.0, 0.0), Clearance));
+		Sheriff->PositionClearForTeleportSheriff(FVector(300.0, 0.0, 0.0), Clearance));
 
 	// `CNPC_VAsianVampire::PositionClearForTeleport` `0x103629d0`: both distances are FLAT, so a
 	// spot directly overhead is clear however close it is vertically. That is the one thing that
 	// separates it from the other three.
+	Asian->Origin = FVector::ZeroVector;
 	TestTrue(TEXT("the Asian rule is flat: a spot straight above is clear"),
-		Andrei->PositionClearForTeleportAsian(FVector(300.0, 0.0, 5000.0), Clearance));
+		Asian->PositionClearForTeleportAsian(FVector(300.0, 0.0, 5000.0), Clearance));
 	TestFalse(TEXT("and a spot inside the flat clearance is not"),
-		Andrei->PositionClearForTeleportAsian(FVector(150.0, 0.0, 5000.0), Clearance));
+		Asian->PositionClearForTeleportAsian(FVector(150.0, 0.0, 5000.0), Clearance));
 
 	// `CNPC_VChangBros::PositionClearForTeleport` `0x1036d350`: the squad walk is unreachable
 	// because `ConnectedSquad()` answers nothing, so the recovered two-term head is the live half.
-	Andrei->ChangLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
+	Chang->Origin = FVector::ZeroVector;
+	Chang->ChangLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
 	TestTrue(TEXT("the Chang rule accepts a clear spot with no squad"),
-		Andrei->PositionClearForTeleportChang(FVector(300.0, 0.0, 0.0), Clearance));
+		Chang->PositionClearForTeleportChang(FVector(300.0, 0.0, 0.0), Clearance));
 	TestFalse(TEXT("and its squad seam refuses nothing, which is what an empty squad answers"),
-		Andrei->SquadPositionTaken(FVector(300.0, 0.0, 0.0), Clearance));
+		Chang->SquadPositionTaken(FVector(300.0, 0.0, 0.0), Clearance));
 
 	// No dispatcher: the four are non-virtual per-class methods in retail (no vtable slot), each
 	// called by its own selector (story 5 step 3). The Andrei rule, as `npc_VAndreiBlood` builds it.
@@ -311,9 +329,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsArenaTest,
 bool FElysiumNpcKernelPositionsArenaTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_arena"), 7);
-	Builder.AddNpc(TEXT("chang"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("chang"));
+	FElysiumNpcChangBros* Npc = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	if (Npc == nullptr)
 	{
@@ -352,11 +370,11 @@ bool FElysiumNpcKernelPositionsArenaTest::RunTest(const FString&)
 		Npc->GetSector(FVector(0.0, 0.0, 199.0 * U)), 1);
 
 	// `SectorIsInPit` `0x1036b6b0` — `0 < s && s < 3`.
-	TestFalse(TEXT("sector 0 is not the pit"), FElysiumNpc::SectorIsInPit(0));
-	TestTrue(TEXT("sector 1 is"), FElysiumNpc::SectorIsInPit(1));
-	TestTrue(TEXT("sector 2 is"), FElysiumNpc::SectorIsInPit(2));
-	TestFalse(TEXT("sector 3 is not"), FElysiumNpc::SectorIsInPit(3));
-	TestFalse(TEXT("sector 4 is not"), FElysiumNpc::SectorIsInPit(4));
+	TestFalse(TEXT("sector 0 is not the pit"), FElysiumNpcChangBros::SectorIsInPit(0));
+	TestTrue(TEXT("sector 1 is"), FElysiumNpcChangBros::SectorIsInPit(1));
+	TestTrue(TEXT("sector 2 is"), FElysiumNpcChangBros::SectorIsInPit(2));
+	TestFalse(TEXT("sector 3 is not"), FElysiumNpcChangBros::SectorIsInPit(3));
+	TestFalse(TEXT("sector 4 is not"), FElysiumNpcChangBros::SectorIsInPit(4));
 
 	// `GetTeleportPosition` `0x1036d270` — the claim expires `_DAT_104ada04 = 3.0` seconds after it
 	// was stamped, and that window is what stops the other brother taking the same spot.
@@ -371,7 +389,7 @@ bool FElysiumNpcKernelPositionsArenaTest::RunTest(const FString&)
 
 	// `IsUnreachable` `0x1036e6f0`: one of the two in the pit and the other on the ledge.
 	TestTrue(TEXT("pit versus sector 3 is unreachable both ways"),
-		FElysiumNpc::SectorIsInPit(1) && !FElysiumNpc::SectorIsInPit(3));
+		FElysiumNpcChangBros::SectorIsInPit(1) && !FElysiumNpcChangBros::SectorIsInPit(3));
 
 	return true;
 }
@@ -383,9 +401,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsFloorHeightsTest,
 bool FElysiumNpcKernelPositionsFloorHeightsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_heights"), 11);
-	Builder.AddNpc(TEXT("sheriff"), FVector(0.0, 0.0, 500.0), TEXT("npc_VAndreiBlood"));
+	Builder.AddNpcOfClass(TEXT("sheriff"), FVector(0.0, 0.0, 500.0), TEXT("CNPC_VSheriffMan"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("sheriff"));
+	FElysiumNpcSheriffMan* Npc = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	if (Npc == nullptr)
 	{
@@ -447,19 +465,19 @@ bool FElysiumNpcKernelPositionsGeometryTest::RunTest(const FString&)
 	const FVector B(100.0, 0.0, 0.0);
 
 	TestEqual(TEXT("a degenerate segment answers 0.0, not the distance to its endpoint"),
-		FElysiumNpc::DistToSegment(A, A, FVector(0.0, 50.0, 0.0)), 0.f);
+		FElysiumNpcChangBros::DistToSegment(A, A, FVector(0.0, 50.0, 0.0)), 0.f);
 	TestTrue(TEXT("a point before the segment takes the |p - a| arm"),
-		FMath::IsNearlyEqual(FElysiumNpc::DistToSegment(A, B, FVector(-30.0, 40.0, 0.0)),
+		FMath::IsNearlyEqual(FElysiumNpcChangBros::DistToSegment(A, B, FVector(-30.0, 40.0, 0.0)),
 			50.f, 1e-3f));
 	TestTrue(TEXT("a point past it takes the |p - b| arm"),
-		FMath::IsNearlyEqual(FElysiumNpc::DistToSegment(A, B, FVector(130.0, 40.0, 0.0)),
+		FMath::IsNearlyEqual(FElysiumNpcChangBros::DistToSegment(A, B, FVector(130.0, 40.0, 0.0)),
 			50.f, 1e-3f));
 	TestTrue(TEXT("and a point beside it takes the projection"),
-		FMath::IsNearlyEqual(FElysiumNpc::DistToSegment(A, B, FVector(50.0, 40.0, 0.0)),
+		FMath::IsNearlyEqual(FElysiumNpcChangBros::DistToSegment(A, B, FVector(50.0, 40.0, 0.0)),
 			40.f, 1e-3f));
 
 	// `EnemyCouldSeeHull`'s candidate blend, `0x10366510`.
-	const FElysiumNpc::FEnemySightCandidates Candidates = FElysiumNpc::EnemySightCandidatesOf(
+	const FElysiumNpc::FEnemySightCandidates Candidates = FElysiumNpcBaseBoss::EnemySightCandidatesOf(
 		FVector(0.0, 0.0, 0.0), FVector(10.0, 20.0, 30.0), FVector(1.0, 2.0, 3.0), 7.f);
 	TestEqual(TEXT("the min corner is the box mins minus the extents"), Candidates.MinCm,
 		FVector(-1.0, -2.0, -3.0));
@@ -474,10 +492,10 @@ bool FElysiumNpcKernelPositionsGeometryTest::RunTest(const FString&)
 	const FVector Right(0.0, 1.0, 0.0);
 	const FVector Up(0.0, 0.0, 1.0);
 	TestEqual(TEXT("activity 0x106 subtracts the right term"),
-		FElysiumNpc::TzimisceAimOffset(FVector::ZeroVector, Fwd, Right, Up, 2.f, 3.f, 5.f, false),
+		FElysiumNpcTzimisce::TzimisceAimOffset(FVector::ZeroVector, Fwd, Right, Up, 2.f, 3.f, 5.f, false),
 		FVector(2.0, -3.0, 5.0));
 	TestEqual(TEXT("activity 0x107 adds it"),
-		FElysiumNpc::TzimisceAimOffset(FVector::ZeroVector, Fwd, Right, Up, 2.f, 3.f, 5.f, true),
+		FElysiumNpcTzimisce::TzimisceAimOffset(FVector::ZeroVector, Fwd, Right, Up, 2.f, 3.f, 5.f, true),
 		FVector(2.0, 3.0, 5.0));
 
 	return true;
@@ -671,14 +689,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsTeleportTest,
 bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_teleport"), 13);
-	Builder.AddNpc(TEXT("wolf"), FVector::ZeroVector, TEXT("npc_VHuman"));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
 	Builder.AddNpc(TEXT("swarm"), FVector(10.0, 0.0, 0.0), TEXT("npc_VRat"));
+	Builder.AddNpcOfClass(TEXT("sheriff"), FVector(0.0, 400.0, 0.0), TEXT("CNPC_VSheriffMan"));
 	Builder.WireOutput(TEXT("wolf"), TEXT("OnTeleportOut"), TEXT("outcount"));
 	Builder.AddCounter(TEXT("outcount"));
 	Builder.WireOutput(TEXT("wolf"), TEXT("OnTeleportIn"), TEXT("incount"));
 	Builder.AddCounter(TEXT("incount"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Wolf = Fixture.Npc(TEXT("wolf"));
+	FElysiumNpcWerewolf* Wolf = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpcSheriffMan* Sheriff = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
+	if (!TestNotNull(TEXT("the SheriffMan spawned"), Sheriff))
+	{
+		return false;
+	}
 	FElysiumNpc* Swarm = Fixture.Npc(TEXT("swarm"));
 	FElysiumNpcWorldFixture::Quiet({ Wolf, Swarm });
 	if (Wolf == nullptr || Swarm == nullptr)
@@ -723,16 +747,16 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 
 	// The sound gate is `DAT_1093f73c` `werewolf_show_debug`, shipped "0": the arm that plays nothing.
 	TestFalse(TEXT("the ww_tele wav gate is werewolf_show_debug, shipped 0, and refuses"),
-		FElysiumNpc::WerewolfTeleportSoundConVar());
+		FElysiumNpcWerewolf::WerewolfTeleportSoundConVar());
 
 	// `KillTeleportBats` `0x103b0560`: the handle is invalidated whether or not it resolved.
-	Wolf->SheriffTeleportSwarm = Swarm->Handle;
-	Wolf->KillTeleportBats();
+	Sheriff->SheriffTeleportSwarm = Swarm->Handle;
+	Sheriff->KillTeleportBats();
 	TestFalse(TEXT("KillTeleportBats invalidates m_hTeleportSwarm"),
-		Wolf->SheriffTeleportSwarm.IsSet());
-	Wolf->KillTeleportBats();
+		Sheriff->SheriffTeleportSwarm.IsSet());
+	Sheriff->KillTeleportBats();
 	TestFalse(TEXT("and is idempotent on an already-dead handle"),
-		Wolf->SheriffTeleportSwarm.IsSet());
+		Sheriff->SheriffTeleportSwarm.IsSet());
 
 	// `UpdateConditionCanTeleport` `0x103cc0d0`: the condition is CLEARED at the top of every pass —
 	// 29c's one-line walk had that backwards — and set only at the end. `IsViewable()` (slot 163) is
@@ -745,7 +769,7 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 	TestFalse(TEXT("and the IsViewable gate stops the pass, so it is never set back"),
 		Wolf->Cognition.Conditions.Has(EElysiumNpcCond::CanTeleport));
 	TestEqual(TEXT("its delay threshold is werewolf_teleport_out_time, shipped 4.0"),
-		FElysiumNpc::WerewolfTeleportDelayConVar(), 4.f);
+		FElysiumNpcWerewolf::WerewolfTeleportDelayConVar(), 4.f);
 
 	return true;
 }
@@ -758,9 +782,29 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_seams"), 3);
 	Builder.AddNpc(TEXT("npc"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VWerewolf"));
+	Builder.AddNpcOfClass(TEXT("tzim"), FVector(800.0, 0.0, 0.0), TEXT("CNPC_VTzimisce"));
+	Builder.AddNpcOfClass(TEXT("sheriff"), FVector(0.0, 400.0, 0.0), TEXT("CNPC_VSheriffMan"));
+	Builder.AddNpcOfClass(TEXT("asian"), FVector(0.0, 800.0, 0.0), TEXT("CNPC_VAsianVampire"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector(0.0, 1200.0, 0.0), TEXT("CNPC_VChangBros"));
+	Builder.AddNpcOfClass(TEXT("sabbat"), FVector(0.0, 1600.0, 0.0), TEXT("CNPC_VSabbatLeader"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
-	FElysiumNpcWorldFixture::Quiet({ Npc });
+	FElysiumNpcAndreiBlood* Npc = Fixture.NpcAs<FElysiumNpcAndreiBlood>(TEXT("npc"));
+	FElysiumNpcWerewolf* Wolf = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpcTzimisce* Tzim = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("tzim"));
+	FElysiumNpcSheriffMan* SheriffNpc = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
+	FElysiumNpcAsianVampire* AsianNpc = Fixture.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
+	FElysiumNpcChangBros* ChangNpc = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	FElysiumNpcSabbatLeader* SabbatNpc = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("sabbat"));
+	if (SheriffNpc == nullptr || AsianNpc == nullptr || ChangNpc == nullptr || SabbatNpc == nullptr)
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("the werewolf spawned"), Wolf) || !TestNotNull(TEXT("the Tzimisce spawned"), Tzim))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Npc, Wolf, Tzim });
 	FElysiumPlayer* Player = Fixture.Player();
 	if (Npc == nullptr || Player == nullptr)
 	{
@@ -774,49 +818,51 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	TArray<int32> NodeIds;
 	Npc->GatherHintNodes(Nodes, NodeIds);
 	TestEqual(TEXT("the global hint list answers empty"), Nodes.Num(), 0);
-	TestEqual(TEXT("SelectCenterNode answers null"), Npc->SelectCenterNode(), (int32)INDEX_NONE);
-	TestEqual(TEXT("SelectLedgeNode answers null"), Npc->SelectLedgeNode(false), (int32)INDEX_NONE);
-	TestEqual(TEXT("SelectLedgeNodeAsian answers null"), Npc->SelectLedgeNodeAsian(),
+	TestEqual(TEXT("SelectCenterNode answers null"), SheriffNpc->SelectCenterNode(), (int32)INDEX_NONE);
+	TestEqual(TEXT("SelectLedgeNode answers null"), SheriffNpc->SelectLedgeNode(false), (int32)INDEX_NONE);
+	TestEqual(TEXT("SelectLedgeNodeAsian answers null"), AsianNpc->SelectLedgeNodeAsian(),
 		(int32)INDEX_NONE);
-	TestEqual(TEXT("SelectTeleportArchway answers null"), Npc->SelectTeleportArchway(),
+	TestEqual(TEXT("SelectTeleportArchway answers null"), SabbatNpc->SelectTeleportArchway(),
 		(int32)INDEX_NONE);
-	TestEqual(TEXT("SelectDiveInPoint answers null"), Npc->SelectDiveInPoint(), (int32)INDEX_NONE);
-	TestEqual(TEXT("SelectDiveOutPoint answers null"), Npc->SelectDiveOutPoint(), (int32)INDEX_NONE);
-	TestEqual(TEXT("SelectTeleportNodeSheriff answers null"), Npc->SelectTeleportNodeSheriff(),
+	TestEqual(TEXT("SelectDiveInPoint answers null"), SabbatNpc->SelectDiveInPoint(), (int32)INDEX_NONE);
+	TestEqual(TEXT("SelectDiveOutPoint answers null"), SabbatNpc->SelectDiveOutPoint(), (int32)INDEX_NONE);
+	const FVector SheriffCacheBefore = SheriffNpc->SheriffLastTeleportPosition;
+	const double ChangStampBefore = ChangNpc->ChangLastTeleportTime;
+	TestEqual(TEXT("SelectTeleportNodeSheriff answers null"), SheriffNpc->SelectTeleportNodeSheriff(),
 		(int32)INDEX_NONE);
 	TestEqual(TEXT("SelectTeleportNodeAndrei answers null"), Npc->SelectTeleportNodeAndrei(),
 		(int32)INDEX_NONE);
-	TestEqual(TEXT("SelectTeleportNodeChang answers null"), Npc->SelectTeleportNodeChang(),
+	TestEqual(TEXT("SelectTeleportNodeChang answers null"), ChangNpc->SelectTeleportNodeChang(),
 		(int32)INDEX_NONE);
 
 	// And the caches those two would have written are untouched — the named divergence from retail,
 	// which dereferences its null winner instead.
 	TestEqual(TEXT("a null winner leaves the Sheriff's cached position alone"),
-		Npc->SheriffLastTeleportPosition, FVector::ZeroVector);
-	TestEqual(TEXT("and the Chang brothers' stamp alone"), Npc->ChangLastTeleportTime, 0.0);
+		SheriffNpc->SheriffLastTeleportPosition, SheriffCacheBefore);
+	TestEqual(TEXT("and the Chang brothers' stamp alone"), ChangNpc->ChangLastTeleportTime, ChangStampBefore);
 
 	// The navigator's node query, and the cache `GetNearestNodeToPlayer` keeps in front of it. The
 	// cache is keyed on ZERO, not -1, so a permanent miss re-queries every interval and never
 	// latches.
 	TestEqual(TEXT("the navigator's nearest-node query answers retail's miss value"),
 		Npc->NavNearestNodeTo(FVector::ZeroVector), -1);
-	TestEqual(TEXT("GetNearestNodeToPlayer therefore answers 0"), Npc->GetNearestNodeToPlayer(), 0);
+	TestEqual(TEXT("GetNearestNodeToPlayer therefore answers 0"), Wolf->GetNearestNodeToPlayer(), 0);
 	TestTrue(TEXT("and stamps its refresh clock even on the miss"),
-		Npc->NearestNodeToPlayerRefreshedAt >= 0.0);
+		Wolf->NearestNodeToPlayerRefreshedAt >= 0.0);
 
 	// The sight seams.
 	TestFalse(TEXT("the enemy view cone answers false"),
-		FElysiumNpc::EnemyInViewCone(*Npc, FVector::ZeroVector));
+		FElysiumNpcBaseBoss::EnemyInViewCone(*Npc, FVector::ZeroVector));
 	TestFalse(TEXT("werewolf_disregard_player_vision ships 0 and closes the Werewolf's gate"),
-		FElysiumNpc::WerewolfSightConVar());
+		FElysiumNpcWerewolf::WerewolfSightConVar());
 	TestFalse(TEXT("so its EnemyCouldSeeHull refuses without tracing"),
-		Npc->EnemyCouldSeeHullWerewolf(FVector::ZeroVector, true, false, FVector::ZeroVector));
+		Wolf->EnemyCouldSeeHullWerewolf(FVector::ZeroVector, true, false, FVector::ZeroVector));
 	FVector Mins;
 	FVector Maxs;
 	TestFalse(TEXT("the hitbox surrounding box answers nothing, so the hull box is used"),
 		Npc->ComputeHitboxSurroundingBox(Mins, Maxs));
 	TestFalse(TEXT("and with no committed enemy the boss body refuses"),
-		Npc->EnemyCouldSeeHull(FVector::ZeroVector, true, false, FVector::ZeroVector));
+		Wolf->EnemyCouldSeeHull(FVector::ZeroVector, true, false, FVector::ZeroVector));
 
 	// `FUN_102c5570`'s falloff, whose argument class is unrecovered but whose arms are not.
 	TestEqual(TEXT("a non-positive divisor leaves the scale at 1.0"),
@@ -830,29 +876,29 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	// The three `CNPC_VTzimisce` aim cvars: up `tzimisce_claw_left_z` 40, right
 	// `tzimisce_claw_left_y` 25, forward `tzimisce_claw_left_x` 0.
 	TestEqual(TEXT("aim cvar 0 is tzimisce_claw_left_z, shipped 40"),
-		FElysiumNpc::TzimisceAimConVar(0), 40.f);
+		FElysiumNpcTzimisce::TzimisceAimConVar(0), 40.f);
 	TestEqual(TEXT("aim cvar 1 is tzimisce_claw_left_y, shipped 25"),
-		FElysiumNpc::TzimisceAimConVar(1), 25.f);
+		FElysiumNpcTzimisce::TzimisceAimConVar(1), 25.f);
 	TestEqual(TEXT("aim cvar 2 is tzimisce_claw_left_x, shipped 0"),
-		FElysiumNpc::TzimisceAimConVar(2), 0.f);
+		FElysiumNpcTzimisce::TzimisceAimConVar(2), 0.f);
 	// `0x103bfd80`, reached by SCHED_VTZIMISCE_CLAW_LEFT_ATTACK / _RIGHT_ATTACK: the
 	// nonzero defaults must be converted before they offset the centimetre source point.
 	const FVector SrcCm(5.0, 6.0, 7.0);
 	FVector Aim = FVector::ZeroVector;
-	Npc->Angles = FVector::ZeroVector;
-	Npc->ActivityNumber = 0x106;
+	Tzim->Angles = FVector::ZeroVector;
+	Tzim->ActivityNumber = 0x106;
 	TestTrue(TEXT("ACT_CLAW_LEFT takes the offset origin"),
-		Npc->WeaponShootPositionTzimisce(SrcCm, Aim));
+		Tzim->WeaponShootPositionTzimisce(SrcCm, Aim));
 	TestTrue(TEXT("its default offsets are -63.5 cm right and 101.6 cm up"),
 		Aim.Equals(SrcCm + FVector(0.0, -63.5, 101.6), 1e-4));
-	Npc->ActivityNumber = 0x107;
+	Tzim->ActivityNumber = 0x107;
 	TestTrue(TEXT("ACT_CLAW_RIGHT takes the offset origin"),
-		Npc->WeaponShootPositionTzimisce(SrcCm, Aim));
+		Tzim->WeaponShootPositionTzimisce(SrcCm, Aim));
 	TestTrue(TEXT("its default offsets are +63.5 cm right and 101.6 cm up"),
 		Aim.Equals(SrcCm + FVector(0.0, 63.5, 101.6), 1e-4));
 	// The forward default is zero; give it a value to cover conversion on the third axis too.
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftX, 10.f);
-	Npc->WeaponShootPositionTzimisce(SrcCm, Aim);
+	Tzim->WeaponShootPositionTzimisce(SrcCm, Aim);
 	TestTrue(TEXT("a live 10-unit forward offset adds 25.4 cm"),
 		Aim.Equals(SrcCm + FVector(25.4, 63.5, 101.6), 1e-4));
 	ElysiumNpcTunables::ResetConVars();
@@ -860,13 +906,13 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftZ, 0.f);
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::TzimisceClawLeftY, 0.f);
 	Aim = FVector(1.0, 2.0, 3.0);
-	Npc->ActivityNumber = 0x105;
+	Tzim->ActivityNumber = 0x105;
 	TestFalse(TEXT("an activity outside 0x106/0x107 falls through to the base shoot position"),
-		Npc->WeaponShootPositionTzimisce(FVector::ZeroVector, Aim));
+		Tzim->WeaponShootPositionTzimisce(FVector::ZeroVector, Aim));
 	TestEqual(TEXT("and leaves the output untouched"), Aim, FVector(1.0, 2.0, 3.0));
-	Npc->ActivityNumber = 0x106;
+	Tzim->ActivityNumber = 0x106;
 	TestTrue(TEXT("and 0x106 takes the override"),
-		Npc->WeaponShootPositionTzimisce(FVector(5.0, 6.0, 7.0), Aim));
+		Tzim->WeaponShootPositionTzimisce(FVector(5.0, 6.0, 7.0), Aim));
 	TestEqual(TEXT("which, with all three cvars at zero, is the source point itself"), Aim,
 		FVector(5.0, 6.0, 7.0));
 	ElysiumNpcTunables::ResetConVars();

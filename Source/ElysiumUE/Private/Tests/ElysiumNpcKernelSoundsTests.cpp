@@ -8,6 +8,7 @@
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcManBat.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -767,12 +768,18 @@ bool FElysiumNpcKernelSoundsStopLoopingTest::RunTest(const FString&)
 			F.World.Services.StopEntitySoundRequests[0].Value, 1);
 	}
 
-	// `FUN_10390040` (`0x10390040`), eight bytes: `*(bool*)(this + 0x66b8) = false`.
-	F.Npc->bHasPlayedFlyBySound = true;
-	F.Npc->ClearHasPlayedFlyBySound();
-	TestFalse(TEXT("the fly-by latch is cleared"), F.Npc->bHasPlayedFlyBySound);
-	F.Npc->ClearHasPlayedFlyBySound();
-	TestFalse(TEXT("...and clearing it twice is the same write"), F.Npc->bHasPlayedFlyBySound);
+	// `FUN_10390040` (`0x10390040`, `CNPC_VManBat`), eight bytes: `*(bool*)(this + 0x66b8) = false`.
+	FSoundsFixture BatF(TEXT("npc_VManBat"));
+	FElysiumNpcManBat* Bat = ElysiumTestAsSpecies<FElysiumNpcManBat>(BatF.Npc);
+	if (!TestNotNull(TEXT("the ManBat spawned"), Bat))
+	{
+		return false;
+	}
+	Bat->bHasPlayedFlyBySound = true;
+	Bat->ClearHasPlayedFlyBySound();
+	TestFalse(TEXT("the fly-by latch is cleared"), Bat->bHasPlayedFlyBySound);
+	Bat->ClearHasPlayedFlyBySound();
+	TestFalse(TEXT("...and clearing it twice is the same write"), Bat->bHasPlayedFlyBySound);
 	return true;
 }
 

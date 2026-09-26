@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelDebugShared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -30,29 +31,9 @@ namespace
 	// Unit-prefixed because the module builds adaptive-unity and this anonymous namespace is
 	// regularly merged with others.
 
-	// The open capture, or empty. Game-thread only, like the rest of the substrate.
-	TArray<FElysiumNpc::FDebugLine> GNpcKernelDebugCapture;
-	bool GNpcKernelDebugCapturing = false;
-
 	const TCHAR* const GNpcKernelDebugChannelDevMsg = TEXT("DevMsg");
 	const TCHAR* const GNpcKernelDebugChannelMsg = TEXT("Msg");
 	const TCHAR* const GNpcKernelDebugChannelEntityText = TEXT("EntityText");
-	const TCHAR* const GNpcKernelDebugChannelOverlay = TEXT("Overlay");
-
-	void GNpcKernelDebugRecord(const TCHAR* Channel, const TCHAR* Retail, FString&& Text,
-		int32 Line)
-	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("[%s] %s"), Channel, *Text);
-		if (GNpcKernelDebugCapturing)
-		{
-			FElysiumNpc::FDebugLine Row;
-			Row.Channel = Channel;
-			Row.Retail = Retail;
-			Row.Text = MoveTemp(Text);
-			Row.Line = Line;
-			GNpcKernelDebugCapture.Add(MoveTemp(Row));
-		}
-	}
 
 	// Source units out of the port's centimetres. Retail's overlay arguments are all source units,
 	// and reproducing a box half-extent of 5 as 12.7 would hide the recovered constant.
@@ -238,33 +219,6 @@ namespace
 		TEXT("Ground"), TEXT("Jump"), TEXT("Fly"), TEXT("Climb") };
 	const TCHAR* const GNpcKernelDebugNavTypeNone = TEXT("None");
 	const TCHAR* const GNpcKernelDebugNavTypeUnknown = TEXT("**UNKNOWN**");
-
-	// `CNPC_VMingXiao#408` (`0x103951d0`), ids 0x77..0x7e — `0x10647194` down to `0x10647178`.
-	const TCHAR* const GNpcKernelDebugMingXiaoShort[] = {
-		TEXT("xfr"), TEXT("xfl"), TEXT("xmr"), TEXT("xml"),
-		TEXT("xbr"), TEXT("xbl"), TEXT("xsp"), TEXT("xmh") };
-
-	// `CNPC_VMingXiaoTentacle#408` (`0x1039ece0`), ids 0x77..0x79 — `0x1064a42c`, `0x1064a430`,
-	// `0x1064a434`. Note the ADDRESSES ascend here where every other block descends.
-	const TCHAR* const GNpcKernelDebugTentacleShort[] = {
-		TEXT("tfl"), TEXT("tsc"), TEXT("tpe") };
-
-	// `CNPC_VWerewolf#408` (`0x103d0640`), ids 0x77..0x7b — `0x106623d0` down to `0x106623c0`.
-	const TCHAR* const GNpcKernelDebugWerewolfShort[] = {
-		TEXT("ww0"), TEXT("ww1"), TEXT("ww2"), TEXT("ww3"), TEXT("ww4") };
-
-	// `CNPC_VTzimisce::GetEventName` (`0x103bdd10`), anim-event ids 2..8. The body `strcpy`s the
-	// literal into the caller's buffer; ids outside the range fall through to
-	// `CBaseAnimating::GetEventName`, which is what a null answer means here.
-	const TCHAR* const GNpcKernelDebugTzimisceEventNames[] = {
-		TEXT("START_IDLE"),      // 2, 0x1065c87c
-		TEXT("START_FIDGET"),    // 3, 0x1065c86c
-		TEXT("START_RUN"),       // 4, 0x1065c860
-		TEXT("START_LANDHARD"),  // 5, 0x1065c84c
-		TEXT("START_ATTACK"),    // 6, 0x1065c83c
-		TEXT("START_ATTACKBIG"), // 7, 0x1065c828
-		TEXT("START_POUNCE"),    // 8, 0x1065c818
-	};
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -273,20 +227,20 @@ namespace
 
 void FElysiumNpc::BeginDebugCapture()
 {
-	GNpcKernelDebugCapture.Reset();
-	GNpcKernelDebugCapturing = true;
+	NpcKernelDebugShared::GNpcKernelDebugCapture.Reset();
+	NpcKernelDebugShared::GNpcKernelDebugCapturing = true;
 }
 
 TArray<FElysiumNpc::FDebugLine> FElysiumNpc::EndDebugCapture()
 {
-	GNpcKernelDebugCapturing = false;
-	return MoveTemp(GNpcKernelDebugCapture);
+	NpcKernelDebugShared::GNpcKernelDebugCapturing = false;
+	return MoveTemp(NpcKernelDebugShared::GNpcKernelDebugCapture);
 }
 
 void FElysiumNpc::EmitDevMsg(const TCHAR* RetailFormat, const FString& Text)
 {
 	// Retail's `DevMsg(fmt, …)`. `ReportAIState` is the only body in this family that uses it.
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelDevMsg, RetailFormat, CopyTemp(Text), INDEX_NONE);
+	NpcKernelDebugShared::GNpcKernelDebugRecord(GNpcKernelDebugChannelDevMsg, RetailFormat, CopyTemp(Text), INDEX_NONE);
 }
 
 void FElysiumNpc::EmitDebugMsg(const TCHAR* RetailFormat, const FString& Text)
@@ -296,7 +250,7 @@ void FElysiumNpc::EmitDebugMsg(const TCHAR* RetailFormat, const FString& Text)
 	// runtime has no counterpart for, so the write is unconditional here — a stated divergence, and
 	// the only one in this family: retail's gate decides WHETHER a developer sees the line, never
 	// what the line says or in what order the arms ran.
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelMsg, RetailFormat, CopyTemp(Text), INDEX_NONE);
+	NpcKernelDebugShared::GNpcKernelDebugRecord(GNpcKernelDebugChannelMsg, RetailFormat, CopyTemp(Text), INDEX_NONE);
 }
 
 void FElysiumNpc::EmitEntityText(int32 Line, const TCHAR* RetailFormat, const FString& Text)
@@ -304,13 +258,13 @@ void FElysiumNpc::EmitEntityText(int32 Line, const TCHAR* RetailFormat, const FS
 	// Retail's `DAT_1070b22c`+0x8c — `IVEngineServer::AddEntityTextOverlay(edictIndex, line, 0,
 	// 255, 255, 255, 255, text)` followed by `0x101434b0`. The colour is white and opaque on every
 	// call site in this family, so it is not carried.
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelEntityText, RetailFormat, CopyTemp(Text), Line);
+	NpcKernelDebugShared::GNpcKernelDebugRecord(GNpcKernelDebugChannelEntityText, RetailFormat, CopyTemp(Text), Line);
 }
 
 void FElysiumNpc::EmitOverlayBox(const TCHAR* RetailCall, const FVector& OriginUnits,
 	const FVector& MinsUnits, const FVector& MaxsUnits, int32 R, int32 G, int32 B, int32 A)
 {
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelOverlay, RetailCall,
+	NpcKernelDebugShared::GNpcKernelDebugRecord(NpcKernelDebugShared::GNpcKernelDebugChannelOverlay, RetailCall,
 		FString::Printf(TEXT("%s mins=%s maxs=%s rgba=(%d %d %d %d)"),
 			*GNpcKernelDebugUnitVec(OriginUnits), *GNpcKernelDebugUnitVec(MinsUnits),
 			*GNpcKernelDebugUnitVec(MaxsUnits), R, G, B, A),
@@ -321,7 +275,7 @@ void FElysiumNpc::EmitOverlayBoxDirection(const TCHAR* RetailCall, const FVector
 	const FVector& MinsUnits, const FVector& MaxsUnits, const FVector& Direction, int32 R, int32 G,
 	int32 B, int32 A)
 {
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelOverlay, RetailCall,
+	NpcKernelDebugShared::GNpcKernelDebugRecord(NpcKernelDebugShared::GNpcKernelDebugChannelOverlay, RetailCall,
 		FString::Printf(TEXT("%s mins=%s maxs=%s dir=%s rgba=(%d %d %d %d)"),
 			*GNpcKernelDebugUnitVec(OriginUnits), *GNpcKernelDebugUnitVec(MinsUnits),
 			*GNpcKernelDebugUnitVec(MaxsUnits), *GNpcKernelDebugUnitVec(Direction), R, G, B, A),
@@ -331,7 +285,7 @@ void FElysiumNpc::EmitOverlayBoxDirection(const TCHAR* RetailCall, const FVector
 void FElysiumNpc::EmitOverlayLine(const TCHAR* RetailCall, const FVector& StartUnits,
 	const FVector& EndUnits, int32 R, int32 G, int32 B, bool bNoDepthTest)
 {
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelOverlay, RetailCall,
+	NpcKernelDebugShared::GNpcKernelDebugRecord(NpcKernelDebugShared::GNpcKernelDebugChannelOverlay, RetailCall,
 		FString::Printf(TEXT("%s -> %s rgb=(%d %d %d) nodepth=%d"),
 			*GNpcKernelDebugUnitVec(StartUnits), *GNpcKernelDebugUnitVec(EndUnits), R, G, B,
 			bNoDepthTest ? 1 : 0),
@@ -341,16 +295,9 @@ void FElysiumNpc::EmitOverlayLine(const TCHAR* RetailCall, const FVector& StartU
 void FElysiumNpc::EmitOverlayText(const TCHAR* RetailCall, const FVector& OriginUnits,
 	const FString& Text)
 {
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelOverlay, RetailCall,
+	NpcKernelDebugShared::GNpcKernelDebugRecord(NpcKernelDebugShared::GNpcKernelDebugChannelOverlay, RetailCall,
 		FString::Printf(TEXT("%s \"%s\""), *GNpcKernelDebugUnitVec(OriginUnits), *Text),
 		INDEX_NONE);
-}
-
-void FElysiumNpc::EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B,
-	int32 A) const
-{
-	GNpcKernelDebugRecord(GNpcKernelDebugChannelOverlay, RetailCall,
-		FString::Printf(TEXT("%s rgba=(%d %d %d %d)"), *DebugString(), R, G, B, A), INDEX_NONE);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -471,79 +418,16 @@ const TCHAR* FElysiumNpc::ShortConditionNameTable(int32 ConditionId)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 408 `GetShortConditionName` — one method and a species table.
+// Slot 408 `GetShortConditionName`.
 // -------------------------------------------------------------------------------------------------
-
-const FElysiumNpc::FShortConditionSpecies* FElysiumNpc::ShortConditionSpeciesRows(int32& OutCount)
-{
-	// All three bodies are the same shape: a switch over a contiguous block starting at 0x77 — the
-	// id straight above the base table's last — and a `default:` that forwards to
-	// `CAI_BaseNPC::GetShortConditionName` (`thunk_FUN_1027ede0`). Only the werewolf's wraps the
-	// whole thing in a scope-trace push, which it pops on EVERY arm including the forward.
-	static const FShortConditionSpecies GRows[] = {
-		{ TEXT("CNPC_VMingXiao"), TEXT("0x103951d0"), false, 0x77,
-			GNpcKernelDebugMingXiaoShort, UE_ARRAY_COUNT(GNpcKernelDebugMingXiaoShort) },
-		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039ece0"), false, 0x77,
-			GNpcKernelDebugTentacleShort, UE_ARRAY_COUNT(GNpcKernelDebugTentacleShort) },
-		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d0640"), true, 0x77,
-			GNpcKernelDebugWerewolfShort, UE_ARRAY_COUNT(GNpcKernelDebugWerewolfShort) },
-	};
-	OutCount = UE_ARRAY_COUNT(GRows);
-	return GRows;
-}
-
-const FElysiumNpc::FShortConditionSpecies* FElysiumNpc::ShortConditionSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	int32 Count = 0;
-	const FShortConditionSpecies* Rows = ShortConditionSpeciesRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (FCString::Strcmp(Rows[Index].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[Index];
-		}
-	}
-	return nullptr;
-}
 
 const TCHAR* FElysiumNpc::GetShortConditionName(int32 ConditionId)
 {
 	// slot 408, `CAI_BaseNPC::GetShortConditionName` `0x1027ede0` — sixteen bytes:
 	//     thunk_FUN_1027e7f0(param_1); return;
-	// `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` and `CNPC_VWerewolf` override this method on their
-	// C++ classes (story 5 step 3); each answers its own block through `SpeciesShortConditionName`,
-	// whose miss is a direct call back into this body.
+	// `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` and `CNPC_VWerewolf` override this method with
+	// their own blocks of names (story 5 step 4), each missing into a direct call to this body.
 	return ShortConditionNameTable(ConditionId);
-}
-
-const TCHAR* FElysiumNpc::SpeciesShortConditionName(const TCHAR* SpeciesClass, int32 ConditionId)
-{
-	// The body of `0x103951d0` / `0x1039ece0` / `0x103d0640`: the class's own block of names, then
-	// `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	const FShortConditionSpecies* Species = ShortConditionSpeciesOf(SpeciesClass);
-	if (Species != nullptr)
-	{
-		// `CNPC_VWerewolf`'s scope-trace push, `g_ScopeTraceStack[depth] = { "CNPC_VWerewolf::
-		// GetShortConditionName", m_iName ? m_iName : "", "" }` then `++depth`, popped on every
-		// arm. The port has no scope-trace stack; the push is recorded so the arm is visible and
-		// the entity it names is the one retail names.
-		if (Species->bScopeTraced)
-		{
-			UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("%s::GetShortConditionName %s"),
-				Species->RetailClass, TargetName.IsEmpty() ? TEXT("") : *TargetName);
-		}
-		const int32 Offset = ConditionId - Species->FirstId;
-		if (Offset >= 0 && Offset < Species->NameCount)
-		{
-			return Species->Names[Offset];
-		}
-	}
-	return FElysiumNpc::GetShortConditionName(ConditionId);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -643,23 +527,6 @@ const TCHAR* FElysiumNpc::DebugGetClassName()
 	// buffer is always there. Reproduced by answering the empty string rather than null when the
 	// def carries no classname.
 	return Def != nullptr ? *Def->Classname : TEXT("");
-}
-
-const TCHAR* FElysiumNpc::TzimisceEventName(int32 EventId)
-{
-	// `CNPC_VTzimisce::GetEventName` `0x103bdd10`, slot 241's only species override. Retail's
-	// signature is `void GetEventName(char* out, animevent_t* event)` and each arm `strcpy`s its
-	// literal into `out`; ids outside 2..8 tail into `CBaseAnimating::GetEventName`.
-	//
-	// Named `TzimisceEventName` and NOT `GetEventName`: slot 241's Troika-line body (`0x1008c170`)
-	// is still a generated stub owned by a later story, and it is what holds the `GetEventName`
-	// name. When that body lands it dispatches here for `CNPC_VTzimisce`.
-	const int32 Offset = EventId - 2;
-	if (Offset >= 0 && Offset < UE_ARRAY_COUNT(GNpcKernelDebugTzimisceEventNames))
-	{
-		return GNpcKernelDebugTzimisceEventNames[Offset];
-	}
-	return nullptr;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -912,24 +779,6 @@ void FElysiumNpc::BaseDrawDebugStatOverlays()
 	}
 }
 
-void FElysiumNpc::BossDrawDebugStatOverlays()
-{
-	// `0x10366290`, thirty-six bytes and all of `CNPC_VBaseBoss#76`:
-	//
-	//     Msg("Dist to player: %.3f", *(float *)(this + 0x6264));
-	//     JMP CAI_BaseNPC::DrawDebugStatOverlays;     // 0x102775e0, a TAIL call
-	//
-	// The tail call is to the BASE body and not to `CAI_BaseNPCTroika`'s, so a boss never gets the
-	// expression/gesture dump even when it has a dialogue. That is the recovered dispatch and it is
-	// reproduced.
-	//
-	// `+0x6264` is `FElysiumNpcMemory::ClosestPlayerDistanceCm` in the shape map; retail's word is
-	// SOURCE units, so the print divides.
-	EmitDebugMsg(TEXT("Dist to player: %.3f"), FString::Printf(TEXT("Dist to player: %.3f"),
-		Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U));
-	BaseDrawDebugStatOverlays();
-}
-
 void FElysiumNpc::DrawDebugStatOverlays()
 {
 	// slot 76, `CAI_BaseNPCTroika::DrawDebugStatOverlays` `0x1029c010`. `CNPC_VBaseBoss`
@@ -944,31 +793,6 @@ void FElysiumNpc::DrawDebugStatOverlays()
 		return;
 	}
 	TroikaDrawDebugStatOverlays();
-}
-
-void FElysiumNpc::WerewolfDrawDebugStatOverlaysSlot()
-{
-	// `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`), the body of
-	// `FElysiumNpcWerewolf::DrawDebugStatOverlays`: it PREPENDS two lines, CHAINS
-	// `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) directly, then APPENDS the zone word, the
-	// five conditions, the door state, the hint dump and the schedule stack.
-	TArray<FString> Lines;
-	WerewolfDrawDebugStatOverlays(Lines);
-	// `103d51ee`: the two prepended lines come out FIRST, then the boss body runs, then the rest.
-	// `WerewolfDrawDebugStatOverlays` builds the whole list in retail's order; the chain point is
-	// here, between line 2 and line 3.
-	for (int32 Index = 0; Index < Lines.Num(); ++Index)
-	{
-		if (Index == 2)
-		{
-			BossDrawDebugStatOverlays();
-		}
-		EmitDebugMsg(TEXT("%s"), Lines[Index]);
-	}
-	if (Lines.Num() < 3)
-	{
-		BossDrawDebugStatOverlays();
-	}
 }
 
 void FElysiumNpc::TroikaDrawDebugStatOverlays()

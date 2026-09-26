@@ -6,6 +6,17 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcRat.h"
+#include "Substrate/ElysiumNpcDog.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -184,47 +195,36 @@ bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 	// (0x1129, 0x112e) band and +0x44 outside it. The SEAM answers 0 for every field, so the case
 	// stands the record to prove which offset each arm reaches.
 	auto Field = [](int32 Offset) { return Offset == 0x48 ? 7.0f : 3.0f; };
-	TestEqual(TEXT("mingxiao 0x112a reads +0x48"), FElysiumNpc::MaxYawSpeedMingXiao(0x112a, Field),
+	TestEqual(TEXT("mingxiao 0x112a reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112a, Field),
 		7.0f);
-	TestEqual(TEXT("mingxiao 0x112d reads +0x48"), FElysiumNpc::MaxYawSpeedMingXiao(0x112d, Field),
+	TestEqual(TEXT("mingxiao 0x112d reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112d, Field),
 		7.0f);
-	TestEqual(TEXT("mingxiao 0x1129 reads +0x44"), FElysiumNpc::MaxYawSpeedMingXiao(0x1129, Field),
+	TestEqual(TEXT("mingxiao 0x1129 reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x1129, Field),
 		3.0f);
-	TestEqual(TEXT("mingxiao 0x112e reads +0x44"), FElysiumNpc::MaxYawSpeedMingXiao(0x112e, Field),
+	TestEqual(TEXT("mingxiao 0x112e reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112e, Field),
 		3.0f);
 	TestEqual(TEXT("and through the SEAM every arm answers 0"),
-		FElysiumNpc::MaxYawSpeedMingXiao(0x112a, ZeroTuning), 0.0f);
+		FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112a, ZeroTuning), 0.0f);
 
-	// The species table, every row by name with its retail address. Keyed by class name, not by
-	// row index. `CAI_BaseHumanoid#516` (`0x102624b0`) and the three generic classes' `0x1035a810`
-	// / `0x1035b080` / `0x1035be80` have no instance and no row since 0019 story 5 step 1.
-	int32 Count = 0;
-	const FElysiumNpc::FMaxYawSpeedSpecies* Rows = FElysiumNpc::MaxYawSpeedSpeciesRows(Count);
+	// The slot-516 overrides, each its class's own (story 5 step 4), by name with its retail
+	// address. `CAI_BaseHumanoid#516` (`0x102624b0`) and the three generic classes' `0x1035a810` /
+	// `0x1035b080` / `0x1035be80` have no instance since 0019 story 5 step 1.
 	const TCHAR* Expected[][2] = {
 		{ TEXT("CNPC_VDog"), TEXT("0x10374130") },
 		{ TEXT("CNPC_VMingXiao"), TEXT("0x10394930") },
 		{ TEXT("CNPC_VTzimisce"), TEXT("0x103ba020") },
 		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d0a30") },
-		{ TEXT("CAI_BaseNPC"), TEXT("0x10280bb0") },
 	};
-	TestEqual(TEXT("the table carries exactly the expected rows"), Count,
-		static_cast<int32>(UE_ARRAY_COUNT(Expected)));
 	for (const TCHAR* const (&Row)[2] : Expected)
 	{
-		const FElysiumNpc::FMaxYawSpeedSpecies* Found = nullptr;
-		for (int32 Index = 0; Index < Count; ++Index)
-		{
-			if (FCString::Strcmp(Rows[Index].RetailClass, Row[0]) == 0)
-			{
-				Found = &Rows[Index];
-			}
-		}
-		if (TestNotNull(*FString::Printf(TEXT("%s has a slot-516 row"), Row[0]), Found))
-		{
-			TestEqual(*FString::Printf(TEXT("%s's slot-516 body"), Row[0]), FString(Found->Body516),
-				FString(Row[1]));
-		}
+		TestEqual(*FString::Printf(TEXT("%s's slot-516 body"), Row[0]),
+			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Row[0]), 516)),
+			FString(Row[1]));
 	}
+	// Every other class runs the Troika line's own `0x10297ce0`, which replaces `CAI_BaseNPC`'s
+	// `0x10280bb0` for the whole line.
+	TestEqual(TEXT("the Troika line's slot-516 body"),
+		FString(ElysiumNpcKernelClass::SlotRow(516)->Address), FString(TEXT("0x10297ce0")));
 	return true;
 }
 
@@ -234,13 +234,17 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_yaw"), 4302);
 	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpcOfClass(TEXT("dog"), FVector(300.0, 0.0, 0.0), TEXT("CNPC_VDog"));
+	Builder.AddNpcOfClass(TEXT("tzimisce"), FVector(600.0, 0.0, 0.0), TEXT("CNPC_VTzimisce"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
-	if (!TestNotNull(TEXT("guard"), Guard))
+	FElysiumNpcDog* Dog = Fixture.NpcAs<FElysiumNpcDog>(TEXT("dog"));
+	FElysiumNpcTzimisce* Tzim = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("tzimisce"));
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("dog"), Dog) || !TestNotNull(TEXT("tzimisce"), Tzim))
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Guard });
+	FElysiumNpcWorldFixture::Quiet({ Guard, Dog, Tzim });
 
 	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm by arm on the activity word (+0x0fec).
 	Guard->ActivityNumber = 0x3b;
@@ -299,31 +303,29 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 		Guard->MaxYawSpeedTurningArm(TEXT("0x1093c9fc")), 1.0f);
 	Guard->ScheduleHost.MemoryBits &= ~0x2000u;
 
-	// `CNPC_VDog` `0x10374130` and `CNPC_VTzimisce` `0x103ba020` replace the ladder wholesale. The
-	// guard is neither, so the two are driven directly — a species table row is a behaviour, not a
-	// type, and the behaviour is what is under test.
-	Guard->ActivityNumber = 0x13;
-	TestEqual(TEXT("the Dog's ACT_RUN is 40, not 160"), Guard->MaxYawSpeedDog(), 40.0f);
-	Guard->ActivityNumber = 0x3b;
-	TestEqual(TEXT("the Dog's 0x3b is 30"), Guard->MaxYawSpeedDog(), 30.0f);
-	Guard->ActivityNumber = 9;
-	TestEqual(TEXT("the Dog has no walk arm and answers 45"), Guard->MaxYawSpeedDog(), 45.0f);
+	// `CNPC_VDog` `0x10374130` and `CNPC_VTzimisce` `0x103ba020` replace the ladder wholesale; each
+	// is its class's slot, driven on an NPC of that class.
+	Dog->ActivityNumber = 0x13;
+	TestEqual(TEXT("the Dog's ACT_RUN is 40, not 160"), Dog->MaxYawSpeed(), 40.0f);
+	Dog->ActivityNumber = 0x3b;
+	TestEqual(TEXT("the Dog's 0x3b is 30"), Dog->MaxYawSpeed(), 30.0f);
+	Dog->ActivityNumber = 9;
+	TestEqual(TEXT("the Dog has no walk arm and answers 45"), Dog->MaxYawSpeed(), 45.0f);
 	// The Dog's idle arm has NO state gate in front of it, so it is the one place this suite can
 	// reach `0x10923e84` directly: with `TurningAnimsEnabled()` false it is consulted, and it is
 	// `debug_turning_speed`, shipped "90".
-	Guard->ActivityNumber = 1;
-	TestEqual(TEXT("the Dog's idle arm answers debug_turning_speed's 90"),
-		Guard->MaxYawSpeedDog(), 90.0f);
-	Guard->ActivityNumber = 5;
-	TestEqual(TEXT("0x5 takes the same arm"), Guard->MaxYawSpeedDog(), 90.0f);
-	Guard->ActivityNumber = 1;
-	TestEqual(TEXT("the Tzimisce's ACT_IDLE is 5"), Guard->MaxYawSpeedTzimisce(), 5.0f);
-	Guard->ActivityNumber = 0xfc;
-	TestEqual(TEXT("0xfc takes the same arm"), Guard->MaxYawSpeedTzimisce(), 5.0f);
-	Guard->ActivityNumber = 0x13;
-	TestEqual(TEXT("the Tzimisce's ACT_RUN is 30"), Guard->MaxYawSpeedTzimisce(), 30.0f);
-	Guard->ActivityNumber = 9;
-	TestEqual(TEXT("and its default is 11, not 45"), Guard->MaxYawSpeedTzimisce(), 11.0f);
+	Dog->ActivityNumber = 1;
+	TestEqual(TEXT("the Dog's idle arm answers debug_turning_speed's 90"), Dog->MaxYawSpeed(), 90.0f);
+	Dog->ActivityNumber = 5;
+	TestEqual(TEXT("0x5 takes the same arm"), Dog->MaxYawSpeed(), 90.0f);
+	Tzim->ActivityNumber = 1;
+	TestEqual(TEXT("the Tzimisce's ACT_IDLE is 5"), Tzim->MaxYawSpeed(), 5.0f);
+	Tzim->ActivityNumber = 0xfc;
+	TestEqual(TEXT("0xfc takes the same arm"), Tzim->MaxYawSpeed(), 5.0f);
+	Tzim->ActivityNumber = 0x13;
+	TestEqual(TEXT("the Tzimisce's ACT_RUN is 30"), Tzim->MaxYawSpeed(), 30.0f);
+	Tzim->ActivityNumber = 9;
+	TestEqual(TEXT("and its default is 11, not 45"), Tzim->MaxYawSpeed(), 11.0f);
 	return true;
 }
 
@@ -383,41 +385,48 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorIgnoreCollisionTest,
 	"Elysium.Substrate.NpcKernelMotor.IgnoreCollision", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorIgnoreCollisionTest::RunTest(const FString&)
 {
-	// The species table, every row by name with its retail addresses.
-	int32 Count = 0;
-	const FElysiumNpc::FIgnoreCollisionSpecies* Rows =
-		FElysiumNpc::IgnoreCollisionSpeciesRows(Count);
-	TestEqual(TEXT("seven classes add an arm to slot 68 or 69"), Count, 7);
-	TestEqual(TEXT("the Gargoyle replaces 69 only"), FString(Rows[0].RetailClass),
-		FString(TEXT("CNPC_VGargoyle")));
-	TestEqual(TEXT("with no 68 body"), FString(Rows[0].Body68), FString());
-	TestEqual(TEXT("and 69 at 0x10379490"), FString(Rows[0].Body69),
-		FString(TEXT("0x10379490")));
-	TestEqual(TEXT("the Hengeyokai's 69"), FString(Rows[1].Body69), FString(TEXT("0x10380f90")));
-	TestEqual(TEXT("MingXiao's 69"), FString(Rows[2].Body69), FString(TEXT("0x10396fd0")));
-	TestEqual(TEXT("the tentacle replaces both"), FString(Rows[3].Body68),
-		FString(TEXT("0x1039eb50")));
-	TestEqual(TEXT("and its 69"), FString(Rows[3].Body69), FString(TEXT("0x1039eb90")));
-	TestEqual(TEXT("the Rat replaces 68 only"), FString(Rows[4].Body68),
-		FString(TEXT("0x103ad6d0")));
-	TestEqual(TEXT("with no 69 body"), FString(Rows[4].Body69), FString());
-	TestEqual(TEXT("the Tzimisce's 69"), FString(Rows[5].Body69), FString(TEXT("0x103bfa00")));
-	TestEqual(TEXT("the Werewolf replaces both"), FString(Rows[6].Body68),
-		FString(TEXT("0x103d9ab0")));
-	TestEqual(TEXT("and its 69"), FString(Rows[6].Body69), FString(TEXT("0x103d9ba0")));
+	// The seven classes that add an arm in front of the Troika bodies of slot 68 or 69, each its
+	// class's own override (story 5 step 4), by name with its retail addresses.
+	const TCHAR* Expected[][3] = {
+		{ TEXT("CNPC_VGargoyle"), nullptr, TEXT("0x10379490") },
+		{ TEXT("CNPC_VHengeyokai"), nullptr, TEXT("0x10380f90") },
+		{ TEXT("CNPC_VMingXiao"), nullptr, TEXT("0x10396fd0") },
+		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039eb50"), TEXT("0x1039eb90") },
+		{ TEXT("CNPC_VRat"), TEXT("0x103ad6d0"), nullptr },
+		{ TEXT("CNPC_VTzimisce"), nullptr, TEXT("0x103bfa00") },
+		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d9ab0"), TEXT("0x103d9ba0") },
+	};
+	for (const TCHAR* const (&Row)[3] : Expected)
+	{
+		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row[0]);
+		for (int32 Arm = 0; Arm < 2; ++Arm)
+		{
+			const int32 Slot = 68 + Arm;
+			if (Row[1 + Arm] != nullptr)
+			{
+				TestEqual(*FString::Printf(TEXT("%s's slot-%d body"), Row[0], Slot),
+					FString(ElysiumNpcKernelClass::BodyOf(Cls, Slot)), FString(Row[1 + Arm]));
+			}
+			else
+			{
+				TestNull(*FString::Printf(TEXT("%s does not replace slot %d"), Row[0], Slot),
+					ElysiumNpcKernelClass::OverrideOf(Cls, Slot));
+			}
+		}
+	}
 
 	// `CNPC_VGargoyle::NavIgnoreCollision` `0x10379490`'s three `FClassnameIs` compares, which use
 	// `__strcmpi` and so are case-insensitive.
-	TestTrue(TEXT("prop_dynamic"), FElysiumNpc::GargoyleIgnoresClassname(TEXT("prop_dynamic")));
+	TestTrue(TEXT("prop_dynamic"), FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("prop_dynamic")));
 	TestTrue(TEXT("PROP_DYNAMIC — the compare is case-insensitive"),
-		FElysiumNpc::GargoyleIgnoresClassname(TEXT("PROP_DYNAMIC")));
-	TestTrue(TEXT("func_brush"), FElysiumNpc::GargoyleIgnoresClassname(TEXT("func_brush")));
+		FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("PROP_DYNAMIC")));
+	TestTrue(TEXT("func_brush"), FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("func_brush")));
 	TestTrue(TEXT("func_door_rotating"),
-		FElysiumNpc::GargoyleIgnoresClassname(TEXT("func_door_rotating")));
+		FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("func_door_rotating")));
 	TestFalse(TEXT("func_door is NOT one of the three"),
-		FElysiumNpc::GargoyleIgnoresClassname(TEXT("func_door")));
+		FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("func_door")));
 	TestFalse(TEXT("prop_physics is not either"),
-		FElysiumNpc::GargoyleIgnoresClassname(TEXT("prop_physics")));
+		FElysiumNpcGargoyle::GargoyleIgnoresClassname(TEXT("prop_physics")));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_collide"), 4303);
 	Builder.AddNpc(TEXT("guard"));
@@ -426,7 +435,7 @@ bool FElysiumNpcKernelMotorIgnoreCollisionTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
 	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
-	FElysiumNpc* Rat = Fixture.Npc(TEXT("rat"));
+	FElysiumNpcRat* Rat = Fixture.NpcAs<FElysiumNpcRat>(TEXT("rat"));
 	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("other"), Other)
 		|| !TestNotNull(TEXT("rat"), Rat))
 	{
@@ -572,9 +581,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorNavigatorTest,
 bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_nav"), 4305);
-	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CNPC_VHengeyokai"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcHengeyokai* Guard = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("guard"));
 	if (!TestNotNull(TEXT("guard"), Guard))
 	{
 		return false;
@@ -704,7 +713,16 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	// `CNPC_VWerewolf::GetGroundpoint` `0x103d6a40`. With no hull table and no trace the body lands
 	// on retail's own no-hit arm, which answers `DAT_10713de0/de4/de8` — and `staticinit_101371a0`
 	// fills all three with `0x7f7fffff`, so that fallback is **`vec3_invalid`, not `vec3_origin`**.
-	const FVector Ground = Guard->GetGroundpoint(FVector(100.0, 100.0, 100.0));
+	FElysiumNpcWorldBuilder WolfBuilder(TEXT("npc_kernel_motor_groundpoint"), 4306);
+	WolfBuilder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
+	FElysiumNpcWorldFixture WolfFixture(MoveTemp(WolfBuilder));
+	FElysiumNpcWerewolf* Wolf = WolfFixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	if (!TestNotNull(TEXT("the werewolf spawned"), Wolf))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Wolf });
+	const FVector Ground = Wolf->GetGroundpoint(FVector(100.0, 100.0, 100.0));
 	TestEqual(TEXT("GetGroundpoint answers retail's no-hit fallback, vec3_invalid"),
 		static_cast<float>(Ground.X), 3.4028234663852886e+38f);
 	TestEqual(TEXT("in all three terms"), static_cast<float>(Ground.Z),
@@ -804,12 +822,21 @@ bool FElysiumNpcKernelMotorDoorTest::RunTest(const FString&)
 	// spawnable `npc_*` is none of them.
 	TestFalse(TEXT("an ordinary NPC is not a cine actor"), Guard->BlockedIsNoOp());
 
-	// `0x1039aaf0` / `0x1039ab10` — `m_bBlockedByFriend`'s setter and getter.
-	TestFalse(TEXT("blocked-by-friend starts clear"), Guard->BlockedByFriend());
-	Guard->SetBlockedByFriend(true);
-	TestTrue(TEXT("and takes what it is given"), Guard->BlockedByFriend());
-	Guard->SetBlockedByFriend(false);
-	TestFalse(TEXT("and back"), Guard->BlockedByFriend());
+	// `0x1039aaf0` / `0x1039ab10` — `CNPC_VMingXiao`'s `m_bBlockedByFriend` setter and getter.
+	FElysiumNpcWorldBuilder MingBuilder(TEXT("npc_kernel_motor_blocked"), 4307);
+	MingBuilder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
+	FElysiumNpcWorldFixture MingFixture(MoveTemp(MingBuilder));
+	FElysiumNpcMingXiao* Ming = MingFixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	if (!TestNotNull(TEXT("the Ming Xiao spawned"), Ming))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Ming });
+	TestFalse(TEXT("blocked-by-friend starts clear"), Ming->BlockedByFriend());
+	Ming->SetBlockedByFriend(true);
+	TestTrue(TEXT("and takes what it is given"), Ming->BlockedByFriend());
+	Ming->SetBlockedByFriend(false);
+	TestFalse(TEXT("and back"), Ming->BlockedByFriend());
 	return true;
 }
 
@@ -819,59 +846,44 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorJumpChainTest,
 	"Elysium.Substrate.NpcKernelMotor.JumpChain", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorJumpChainTest::RunTest(const FString&)
 {
-	// The `SetupJump` species table, both rows by name with the constant each was read from.
-	int32 Count = 0;
-	const FElysiumNpc::FSetupJumpSpecies* Rows = FElysiumNpc::SetupJumpSpeciesRows(Count);
-	TestEqual(TEXT("two SetupJump species"), Count, 2);
-	const FElysiumNpc::FSetupJumpSpecies* Asian =
-		FElysiumNpc::SetupJumpSpeciesOf(TEXT("CNPC_VAsianVampire"));
-	const FElysiumNpc::FSetupJumpSpecies* Sheriff =
-		FElysiumNpc::SetupJumpSpeciesOf(TEXT("CNPC_VSheriffMan"));
-	TestNotNull(TEXT("the AsianVampire row"), Asian);
-	TestNotNull(TEXT("the SheriffMan row"), Sheriff);
-	if (Asian != nullptr)
-	{
-		TestEqual(TEXT("0x10361a70 rises 100"), Asian->Rise, 100.0f);
-		TestEqual(TEXT("from _DAT_104a9310"), FString(Asian->RiseConstant),
-			FString(TEXT("_DAT_104a9310")));
-		TestEqual(TEXT("at 0x10361a70"), FString(Asian->Body), FString(TEXT("0x10361a70")));
-	}
-	if (Sheriff != nullptr)
-	{
-		TestEqual(TEXT("0x103b1300 rises 400"), Sheriff->Rise, 400.0f);
-		TestEqual(TEXT("from _DAT_104c614c"), FString(Sheriff->RiseConstant),
-			FString(TEXT("_DAT_104c614c")));
-	}
-	TestNull(TEXT("nobody else has a row"),
-		FElysiumNpc::SetupJumpSpeciesOf(TEXT("CNPC_VChangBros")));
-	TestNotNull(TEXT("rows"), Rows);
-
+	// The two `SetupJump` species, each its class's own body (story 5 step 4): `0x10361a70` rises
+	// 100 (`_DAT_104a9310`) and `0x103b1300` rises 400 (`_DAT_104c614c`). Neither rise is observable
+	// while the hint-origin seam refuses every commit, which is what the gates below pin.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_jump"), 4308);
-	Builder.AddNpc(TEXT("guard"));
+	// The AsianVampire's jump chain, with the SheriffMan and the ChangBros whose setup bodies sit
+	// beside it.
+	Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CNPC_VAsianVampire"));
+	Builder.AddNpcOfClass(TEXT("sheriff"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VSheriffMan"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector(800.0, 0.0, 0.0), TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcAsianVampire* Guard = Fixture.NpcAs<FElysiumNpcAsianVampire>(TEXT("guard"));
+	FElysiumNpcSheriffMan* SheriffNpc = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
+	FElysiumNpcChangBros* ChangNpc = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	FElysiumPlayer* Player = Fixture.Player();
-	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("player"), Player))
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("sheriff"), SheriffNpc)
+		|| !TestNotNull(TEXT("chang"), ChangNpc) || !TestNotNull(TEXT("player"), Player))
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Guard });
+	FElysiumNpcWorldFixture::Quiet({ Guard, SheriffNpc, ChangNpc });
 
 	// `SetupJump` and `SetupSuperJump` both take a float gate and do NOTHING at 0.0.
-	const int32 CommitsBefore = Guard->MotorSeams.SetupJumpCommits;
+	const int32 CommitsBefore = Guard->MotorSeams.SetupJumpCommits
+		+ SheriffNpc->MotorSeams.SetupJumpCommits + ChangNpc->MotorSeams.SetupJumpCommits;
 	Guard->AsianVampireSetupJump(0.0f);
-	Guard->SheriffManSetupJump(0.0f);
-	Guard->SetupSuperJump(0.0f);
-	TestEqual(TEXT("neither setup ran at a zero gate"), Guard->MotorSeams.SetupJumpCommits,
-		CommitsBefore);
+	SheriffNpc->SheriffManSetupJump(0.0f);
+	ChangNpc->SetupSuperJump(0.0f);
+	TestEqual(TEXT("neither setup ran at a zero gate"), Guard->MotorSeams.SetupJumpCommits
+		+ SheriffNpc->MotorSeams.SetupJumpCommits + ChangNpc->MotorSeams.SetupJumpCommits, CommitsBefore);
 	// With the gate open they still refuse: the hint store carries no origins, and retail would
 	// dereference a null `m_pHintNode` here rather than check it.
 	Guard->AsianVampireSetupJump(1.0f);
-	Guard->SheriffManSetupJump(1.0f);
-	Guard->SetupSuperJump(1.0f);
-	TestEqual(TEXT("and neither commits while the hint-origin seam refuses"),
-		Guard->MotorSeams.SetupJumpCommits, CommitsBefore);
-	TestEqual(TEXT("so the three jump words are untouched"), Guard->JumpHeight, 0.f);
+	SheriffNpc->SheriffManSetupJump(1.0f);
+	ChangNpc->SetupSuperJump(1.0f);
+	TestEqual(TEXT("and neither commits while the hint-origin seam refuses"), Guard->MotorSeams.SetupJumpCommits
+		+ SheriffNpc->MotorSeams.SetupJumpCommits + ChangNpc->MotorSeams.SetupJumpCommits, CommitsBefore);
+	TestEqual(TEXT("so the three jump words are untouched"),
+		Guard->JumpHeight + SheriffNpc->JumpHeight + ChangNpc->JumpHeight, 0.f);
 	FVector HintOrigin(1.0, 2.0, 3.0);
 	TestFalse(TEXT("the hint-origin seam refuses"),
 		Guard->NavHintNodeOrigin(0, HintOrigin));
@@ -953,8 +965,14 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_species"), 4309);
 	Builder.AddNpc(TEXT("leader"), FVector::ZeroVector, TEXT("npc_VSabbatLeader"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector(0.0, 400.0, 0.0), TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Leader = Fixture.Npc(TEXT("leader"));
+	FElysiumNpcSabbatLeader* Leader = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("leader"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	if (!TestNotNull(TEXT("chang"), Chang))
+	{
+		return false;
+	}
 	FElysiumPlayer* Player = Fixture.Player();
 	if (!TestNotNull(TEXT("leader"), Leader) || !TestNotNull(TEXT("player"), Player))
 	{
@@ -998,18 +1016,17 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	Leader->SetJumpVelocityTowardPlayer();
 	TestEqual(TEXT("no closest player, no solve"), Leader->MotorSeams.JumpArcSolves, SolvesAfter);
 
-	// `CNPC_VChangBros::CheckForJumpAttack` `0x1036c8d0`. The leader is not a ChangBros, so the
-	// behaviour is driven directly: `m_ChangType != 0` refuses outright, and the sector seam answers
+	// `CNPC_VChangBros::CheckForJumpAttack` `0x1036c8d0`. On a ChangBros: `m_ChangType != 0` refuses outright, and the sector seam answers
 	// 4 — the value that CLOSES the gate.
-	Leader->ChangType = 1;
-	TestFalse(TEXT("a non-zero ChangType refuses"), Leader->CheckForJumpAttack());
-	Leader->ChangType = 0;
-	Leader->Senses.Memory.ClosestPlayer = Player->Handle;
-	TestEqual(TEXT("the sector seam answers 4"), Leader->ChangBrosSector(FVector::ZeroVector), 4);
+	Chang->ChangType = 1;
+	TestFalse(TEXT("a non-zero ChangType refuses"), Chang->CheckForJumpAttack());
+	Chang->ChangType = 0;
+	Chang->Senses.Memory.ClosestPlayer = Player->Handle;
+	TestEqual(TEXT("the sector seam answers 4"), Chang->ChangBrosSector(FVector::ZeroVector), 4);
 	TestFalse(TEXT("so the jump attack is refused rather than allowed on a guess"),
-		Leader->CheckForJumpAttack());
-	Leader->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-	TestFalse(TEXT("and with no closest player it refuses too"), Leader->CheckForJumpAttack());
+		Chang->CheckForJumpAttack());
+	Chang->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
+	TestFalse(TEXT("and with no closest player it refuses too"), Chang->CheckForJumpAttack());
 	return true;
 }
 
@@ -1020,10 +1037,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorTranslateGoalTest,
 bool FElysiumNpcKernelMotorTranslateGoalTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_goal"), 4310);
-	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CNPC_VTzimisce"));
 	Builder.AddNpc(TEXT("enemy"), FVector(300.0, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcTzimisce* Guard = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("guard"));
 	FElysiumNpc* Enemy = Fixture.Npc(TEXT("enemy"));
 	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("enemy"), Enemy))
 	{

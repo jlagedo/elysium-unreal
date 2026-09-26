@@ -10,6 +10,11 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcHunter.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcCameraSecurity.h"
+#include "Substrate/ElysiumNpcScurrying.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
@@ -828,7 +833,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		TestFalse(TEXT("...not even a plainly-visible NPC (its own eyes are never consulted)"),
 			F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
 		TestFalse(TEXT("0x10369fb0 and its cone answers the camera's, which is false with no link"),
-			F.Guard->CameraSecurityFInViewCone(F.Player));
+			ElysiumTestAsSpecies<FElysiumNpcCameraSecurity>(F.Guard)->CameraSecurityFInViewCone(F.Player));
 	}
 
 	// --- `CNPC_VTzimisce#201` (`0x103ba290`) ------------------------------------------------------
@@ -883,15 +888,15 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
 		F.Guard->OnSeeEntity(F.Player);
 		TestTrue(TEXT("0x10370560 the cop stamps DAT_1093ac3c with the hated player"),
-			FElysiumNpc::CopSuspectHandle() == F.Player->Handle);
+			FElysiumNpcCop::CopSuspectHandle() == F.Player->Handle);
 		TestTrue(TEXT("...and _DAT_1093aca8 is curtime + 30.0"),
-			FElysiumNpc::CopSuspectExpiry() > 0.0);
+			FElysiumNpcCop::CopSuspectExpiry() > 0.0);
 		// The cop's stamp is guarded on the seen entity carrying a player record; the hunter's is NOT.
 		FElysiumNpc::ResetSpeciesSuspectGlobals();
 		F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
 		F.Guard->OnSeeEntity(F.Other);
 		TestFalse(TEXT("0x10370560 the cop's stamp needs a +0xa8 player record"),
-			FElysiumNpc::CopSuspectHandle().IsSet());
+			FElysiumNpcCop::CopSuspectHandle().IsSet());
 	}
 	{
 		FSenses10Fixture F(TEXT("CNPC_VHunter"));
@@ -912,13 +917,13 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		FElysiumNpc::ResetSpeciesSuspectGlobals();
 		F.Guard->OnSeeEntity(F.Other);
 		TestTrue(TEXT("0x10387fd0 the hunter's twin has NO such guard"),
-			FElysiumNpc::HunterSuspectHandle() == F.Other->Handle);
+			FElysiumNpcHunter::HunterSuspectHandle() == F.Other->Handle);
 		// `10371aea`: with the far byte SET neither stamps.
 		FElysiumNpc::ResetSpeciesSuspectGlobals();
 		F.Guard->Senses.Memory.bPlayerInOuterBand = true;
 		F.Guard->OnSeeEntity(F.Other);
 		TestFalse(TEXT("0x103887d4 the far byte set skips the stamp on both twins"),
-			FElysiumNpc::HunterSuspectHandle().IsSet());
+			FElysiumNpcHunter::HunterSuspectHandle().IsSet());
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
 	}
 
@@ -981,52 +986,53 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10ScurryingTest,
 	"Elysium.Substrate.NpcKernelSenses10.Scurrying", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10ScurryingTest::RunTest(const FString&)
 {
-	FSenses10Fixture F;
-	if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+	FSenses10Fixture F(TEXT("CNPC_VScurrying"));
+	FElysiumNpcScurrying* Rat = ElysiumTestAsSpecies<FElysiumNpcScurrying>(F.Guard);
+	if (Rat == nullptr || F.Other == nullptr || F.Player == nullptr)
 	{
 		AddError(TEXT("no fixture"));
 		return false;
 	}
 	// `103acac0`: a null target answers false.
 	TestFalse(TEXT("0x103acac4 a null target answers false"),
-		F.Guard->ScurryingShouldDetect(nullptr));
+		Rat->ScurryingShouldDetect(nullptr));
 
 	// `103acad4`: the distance must be STRICTLY below `m_flDetectionDistance`.
-	F.Guard->ScurryingDetectionDistanceUnits = 500.f;
+	Rat->ScurryingDetectionDistanceUnits = 500.f;
 	F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
 	TestTrue(TEXT("0x103acb0a inside m_flDetectionDistance a target is detected"),
-		F.Guard->ScurryingShouldDetect(F.Other));
+		Rat->ScurryingShouldDetect(F.Other));
 	F.Other->Origin = FVector(Senses10Cm(600.f), 0.0, 0.0);
-	TestFalse(TEXT("...and outside it is not"), F.Guard->ScurryingShouldDetect(F.Other));
+	TestFalse(TEXT("...and outside it is not"), Rat->ScurryingShouldDetect(F.Other));
 	F.Other->Origin = FVector(Senses10Cm(500.f), 0.0, 0.0);
 	TestFalse(TEXT("...and the compare is STRICT, so exactly at the distance is not"),
-		F.Guard->ScurryingShouldDetect(F.Other));
+		Rat->ScurryingShouldDetect(F.Other));
 
-	// `103acb3c`: `m_fMustDetect` rejects a PLAYER target unless COND 0x5a or 0x6f stands, and
+	// `103acb3d`: `m_fMustDetect` rejects a PLAYER target unless COND 0x5a or 0x6f stands, and
 	// admits any non-player unconditionally.
-	F.Guard->bScurryingMustDetect = true;
+	Rat->bScurryingMustDetect = true;
 	F.Player->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
-	F.Guard->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x5a));
-	F.Guard->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x6f));
+	Rat->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x5a));
+	Rat->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x6f));
 	TestFalse(TEXT("0x103ad0a0 m_fMustDetect refuses an unseen player"),
-		F.Guard->ScurryingShouldDetect(F.Player));
-	F.Guard->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x5a));
+		Rat->ScurryingShouldDetect(F.Player));
+	Rat->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x5a));
 	TestTrue(TEXT("...and admits one under COND 0x5a SEE_PLAYER"),
-		F.Guard->ScurryingShouldDetect(F.Player));
+		Rat->ScurryingShouldDetect(F.Player));
 	F.Other->Origin = FVector(Senses10Cm(100.f), 0.0, 0.0);
 	TestTrue(TEXT("...and admits any non-player whatever the conditions"),
-		F.Guard->ScurryingShouldDetect(F.Other));
+		Rat->ScurryingShouldDetect(F.Other));
 
 	// `103acbb0` / `103acbd0`: with no AI network the node search fails and the MARCH is the arm
 	// taken — which still produces a destination, away from the threat.
 	FVector Destination = FVector::ZeroVector;
 	const FVector ThreatCm = FVector(Senses10Cm(100.f), 0.0, 0.0);
 	TestTrue(TEXT("0x103acbd0 the march answers a destination on a clear trace"),
-		F.Guard->ScurryingFindFleeDestination(ThreatCm, 300.f, &Destination));
+		Rat->ScurryingFindFleeDestination(ThreatCm, 300.f, &Destination));
 	TestTrue(TEXT("...and it leads AWAY from the threat"), Destination.X < 0.0);
 	// `103acd34`: with no out-vector the body still answers 1.
 	TestTrue(TEXT("...and with no out-vector it still answers 1"),
-		F.Guard->ScurryingFindFleeDestination(ThreatCm, 300.f, nullptr));
+		Rat->ScurryingFindFleeDestination(ThreatCm, 300.f, nullptr));
 	// `103acd0c`: a distance at or below `_DAT_104454c0` (1.0) gives up at once on a blocked trace.
 	return true;
 }
@@ -1049,6 +1055,11 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Guard);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Wolf))
+	{
+		return false;
+	}
 
 	FElysiumNpc::FHintWords Hint;
 	Hint.bValid = true;
@@ -1059,58 +1070,58 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 
 	// --- `0x103d68d0` `GetHintTargetGroundpoint` --------------------------------------------------
 	// The hit answers the row's `+0x14` — the TARGET groundpoint, not the hint's own `+0x08`.
-	F.Guard->WerewolfHintGroundpoints.Reset();
+	Wolf->WerewolfHintGroundpoints.Reset();
 	FElysiumNpc::FWerewolfHintGroundpoint Row;
 	Row.HintNode = 7;
 	Row.GroundpointUnits = FVector(11.0, 22.0, 33.0);
-	F.Guard->WerewolfHintGroundpoints.Add(Row);
+	Wolf->WerewolfHintGroundpoints.Add(Row);
 	TestEqual(TEXT("0x103d6939 the scan answers the row's target groundpoint"),
-		F.Guard->GetHintTargetGroundpoint(Hint), FVector(11.0, 22.0, 33.0));
+		Wolf->GetHintTargetGroundpoint(Hint), FVector(11.0, 22.0, 33.0));
 	// `103d698c`: a MISS still answers a point — the `GetGroundpoint` fallback, not a refusal.
 	FElysiumNpc::FHintWords Missing = Hint;
 	Missing.HintIndex = 99;
-	const FVector Fallback = F.Guard->GetHintTargetGroundpoint(Missing);
+	const FVector Fallback = Wolf->GetHintTargetGroundpoint(Missing);
 	TestFalse(TEXT("0x103d69ad a miss still answers a point rather than refusing"),
 		Fallback.ContainsNaN());
 
 	// --- `0x103d7210` `GetForwardYawForHint` ------------------------------------------------------
 	// **Read off the listing**: the tail is a single-step WRAP against `_DAT_10450568` (360.0), not
 	// a selection — `103d7347` subtracts above it and `103d737a` adds below zero.
-	const float Yaw = F.Guard->GetForwardYawForHint(Hint);
+	const float Yaw = Wolf->GetForwardYawForHint(Hint);
 	TestTrue(TEXT("0x103d7347 the answer is wrapped into [0, 360]"), Yaw >= 0.f && Yaw <= 360.f);
 	// `103d7328`: types `0x3aa3` and `0x3aa5` DISCARD the computed yaw and take the hint's own.
 	FElysiumNpc::FHintWords OwnYaw = Hint;
 	OwnYaw.HintType = 0x3aa3;
 	TestEqual(TEXT("0x103d7328 type 0x3aa3 takes the hint's own slot-219 yaw"),
-		F.Guard->GetForwardYawForHint(OwnYaw), 45.f);
+		Wolf->GetForwardYawForHint(OwnYaw), 45.f);
 	OwnYaw.HintType = 0x3aa5;
-	TestEqual(TEXT("...and so does 0x3aa5"), F.Guard->GetForwardYawForHint(OwnYaw), 45.f);
+	TestEqual(TEXT("...and so does 0x3aa5"), Wolf->GetForwardYawForHint(OwnYaw), 45.f);
 
 	// --- `0x103d7710` `InitializeHintData` --------------------------------------------------------
 	// The build runs only while the count is zero, and the exponent test is what decides a fallback.
 	// `FLT_MAX` (`vec3_invalid`) PASSES the `0x7f800000` test and is stored — the surprising half.
 	TestTrue(TEXT("0x103d7a1e FLT_MAX passes the 0x7f800000 exponent test"),
-		FElysiumNpc::IsGroundpointExponentValid(FVector(MAX_flt, MAX_flt, MAX_flt)));
+		FElysiumNpcWerewolf::IsGroundpointExponentValid(FVector(MAX_flt, MAX_flt, MAX_flt)));
 	TestFalse(TEXT("...and an infinity does not"),
-		FElysiumNpc::IsGroundpointExponentValid(
+		FElysiumNpcWerewolf::IsGroundpointExponentValid(
 			FVector(std::numeric_limits<double>::infinity(), 0.0, 0.0)));
-	const FElysiumNpc::FWerewolfHintGroundpoint Built = F.Guard->InitializeHintDataRow(Hint);
+	const FElysiumNpc::FWerewolfHintGroundpoint Built = Wolf->InitializeHintDataRow(Hint);
 	TestEqual(TEXT("0x103d7817 the row carries the hint it was built from"), Built.HintNode, 7);
-	F.Guard->WerewolfHintGroundpoints.Reset();
-	F.Guard->InitializeHintData();
+	Wolf->WerewolfHintGroundpoints.Reset();
+	Wolf->InitializeHintData();
 	TestEqual(TEXT("0x103d77fa with no hint chain the array stays empty"),
-		F.Guard->WerewolfHintGroundpoints.Num(), 0);
-	F.Guard->WerewolfHintGroundpoints.Add(Row);
-	F.Guard->InitializeHintData();
+		Wolf->WerewolfHintGroundpoints.Num(), 0);
+	Wolf->WerewolfHintGroundpoints.Add(Row);
+	Wolf->InitializeHintData();
 	TestEqual(TEXT("0x103d77e8 and a non-zero count makes the build a no-op"),
-		F.Guard->WerewolfHintGroundpoints.Num(), 1);
+		Wolf->WerewolfHintGroundpoints.Num(), 1);
 
 	// --- `0x103d7dc0` / `0x103d8060`, the two twins -----------------------------------------------
 	// `103d7dfa`: an INVALID hint is false for both.
 	FElysiumNpc::FHintWords Invalid;
 	TestFalse(TEXT("0x103d7dfa a null hint is false"),
-		F.Guard->IsValidRandomMoveHint(Invalid, 10.0));
-	TestFalse(TEXT("0x103d8113 ...for the move twin too"), F.Guard->IsValidMoveHint(Invalid, 10.0));
+		Wolf->IsValidRandomMoveHint(Invalid, 10.0));
+	TestFalse(TEXT("0x103d8113 ...for the move twin too"), Wolf->IsValidMoveHint(Invalid, 10.0));
 
 	// `103d7f4c`: the random-move twin's always-false set — and note `0x3aa3` is IN it, where the
 	// move twin refuses `0x3aa3` and `0x3aa9` by name. The two sets differ in membership AND sense.
@@ -1119,45 +1130,45 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 		FElysiumNpc::FHintWords Typed = Hint;
 		Typed.HintType = Type;
 		TestFalse(*FString::Printf(TEXT("0x103d7f4c random-move type 0x%x is always false"), Type),
-			F.Guard->IsValidRandomMoveHint(Typed, 10.0));
+			Wolf->IsValidRandomMoveHint(Typed, 10.0));
 	}
 	// `103d820c`: `0x3aa5` on the MOVE twin needs `m_DoorState` to be exactly 2 — so it is NOT
 	// always false there.
 	FElysiumNpc::FHintWords DoorHint = Hint;
 	DoorHint.HintType = 0x3aa5;
-	F.Guard->WerewolfDoorState = 1;
+	Wolf->WerewolfDoorState = 1;
 	TestFalse(TEXT("0x103d820c the move twin refuses 0x3aa5 with m_DoorState != 2"),
-		F.Guard->IsValidMoveHint(DoorHint, 10.0));
-	F.Guard->WerewolfDoorState = 2;
-	TestTrue(TEXT("...and admits it at exactly 2"), F.Guard->IsValidMoveHint(DoorHint, 10.0));
+		Wolf->IsValidMoveHint(DoorHint, 10.0));
+	Wolf->WerewolfDoorState = 2;
+	TestTrue(TEXT("...and admits it at exactly 2"), Wolf->IsValidMoveHint(DoorHint, 10.0));
 
 	// `103d81a5`: the move twin's `0x3aa8` needs `HasCondition(0x77)` SET; the random-move twin's
 	// does not.
 	FElysiumNpc::FHintWords JumpHint = Hint;
 	JumpHint.HintType = 0x3aa8;
-	F.Guard->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x77));
+	Wolf->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x77));
 	TestFalse(TEXT("0x103d81b2 the move twin refuses 0x3aa8 without COND 0x77"),
-		F.Guard->IsValidMoveHint(JumpHint, 10.0));
+		Wolf->IsValidMoveHint(JumpHint, 10.0));
 
 	// `103d7ea8`: the random-move twin's `0x3a9a` group is true while the last-seen elapsed time is
 	// below `_DAT_10452dc4` (2.0 s).
 	FElysiumNpc::FHintWords RandomHint = Hint;
 	RandomHint.HintType = 0x3a9a;
-	F.Guard->WerewolfLastSeenTime = 10.0;
+	Wolf->WerewolfLastSeenTime = 10.0;
 	TestTrue(TEXT("0x103d7ed8 within 2.0 s of the last sighting the hint is valid"),
-		F.Guard->IsValidRandomMoveHint(RandomHint, 11.0));
+		Wolf->IsValidRandomMoveHint(RandomHint, 11.0));
 	TestFalse(TEXT("...and past it the node-zone arm refuses with no node graph"),
-		F.Guard->IsValidRandomMoveHint(RandomHint, 20.0));
+		Wolf->IsValidRandomMoveHint(RandomHint, 20.0));
 
 	// --- `0x103cb920` `CheckStuck` ----------------------------------------------------------------
 	// Every exit but the teleport ends in `SetHullSizeSmall(1)`, and with the probes reporting
 	// CLEAR the body takes the not-stuck arm.
-	F.Guard->bIsUsingSmallHull = false;
-	F.Guard->WerewolfTeleportOutCalls = 0;
-	F.Guard->WerewolfCheckStuck();
+	Wolf->bIsUsingSmallHull = false;
+	Wolf->WerewolfTeleportOutCalls = 0;
+	Wolf->WerewolfCheckStuck();
 	TestTrue(TEXT("0x103cbf1c every non-teleport exit ends in SetHullSizeSmall(1)"),
-		F.Guard->bIsUsingSmallHull);
-	TestEqual(TEXT("...and a clear probe does not teleport"), F.Guard->WerewolfTeleportOutCalls, 0);
+		Wolf->bIsUsingSmallHull);
+	TestEqual(TEXT("...and a clear probe does not teleport"), Wolf->WerewolfTeleportOutCalls, 0);
 	return true;
 }
 

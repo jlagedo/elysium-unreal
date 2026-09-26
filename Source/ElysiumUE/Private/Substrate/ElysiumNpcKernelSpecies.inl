@@ -52,23 +52,6 @@
 // bodies below say where retail's float arithmetic is reproduced on it.
 int32 ActiveRunnerCount = 0;   // +0x66b8 CNPC_VAndreiBlood::m_iActiveRunnerCount (datamap)
 int32 AndreiKillCount = 0;     // +0x66bc CNPC_VAndreiBlood::m_iKillCount (datamap)
-int32 AndreiHitMax = 0;        // +0x66dc CNPC_VAndreiBlood::m_iHitMax (datamap)
-
-// `CNPC_VBaseBoss::m_BlacklistedEntities`, `+0x665c` with its allocation count at `+0x6660`, grow
-// size at `+0x6664`, element count at `+0x6668` and the `CUtlMemory` element mirror at `+0x666c`.
-// Rows are the 8-byte `{EHANDLE, float expiry}` pair family **Bosses** already declared as
-// `FBlacklistedEntity` for `CNPC_VHengeyokai`'s copy at `+0x66a4`; that struct is reused rather
-// than restated. Werewolf locks a hint in it and MingXiao skips a thrown object for 20 s.
-TArray<FBlacklistedEntity> BossBlacklist;
-
-// `CNPC_VBach`'s fire gate — the one-shot arm slot 606 keeps around `COND_ENEMY_OCCLUDED`.
-bool bBachFireOccluded = false;   // +0x66a3 CNPC_VBach::m_bFireOccluded (datamap)
-
-// `CNPC_VMingXiaoTentacle`'s cached coordinate point — the three floats the head writes onto a
-// severed tentacle when it re-aims it. `+0x668c` is `CNPC_VMingXiao::m_rhProxies` on the HEAD
-// (family Squad's `Proxies`) and `CNPC_VTzimisce::m_ePathMode` on a Tzimisce (family Motor's
-// `PathMode`); the tentacle is a third class at the same offset. SOURCE units, as retail stores it.
-FVector TentacleCoordinatePosUnits = FVector::ZeroVector;   // +0x668c/+0x6690/+0x6694 (walked)
 
 /** One row of `CNPC_VNewscaster`'s two story queues — a fixed-stride `0x28` record whose first word
  *  is the story's name and whose `+0x04`/`+0x08` pair, walked in steps of 8 up to `0x20`, are the
@@ -97,44 +80,10 @@ struct FNewscasterStory
 	int32 SelectedVersion = INDEX_NONE;
 };
 
-// The two queues and their cursors. `CNPC_VNewscaster` has no datamap in the corpus, so every name
-// here is WALKED off the bodies that touch it (`0x103a0270`, `0x103a0670`, `0x103a0ab0`,
-// `0x103a0d50`, `0x103a0ff0`) and says so.
-TArray<FNewscasterStory> NewscasterMainStories;   // +0x665c, count +0x6668 (walked)
-TArray<FNewscasterStory> NewscasterSideStories;   // +0x6670, count +0x667c (walked)
-int32 NewscasterPlayingSide = 0;                  // +0x668c — non-zero selects the SIDE queue (walked)
-int32 NewscasterMainCursor = INDEX_NONE;          // +0x6684 (walked)
-int32 NewscasterSideCursor = INDEX_NONE;          // +0x6688 (walked)
-bool bNewscasterStoryActive = false;              // +0x6690, cleared by the teardown (walked)
-
-// `CNPC_VTzimisce`'s own words. `m_hPickupTarget` (+0x6670) and `m_vecPickupTargetPos` (+0x6674)
-// are family **Motor**'s `PickupTarget`/`PickupTargetPos`; `m_hPhysicsAnimlink` (+0x6684) is family
-// **Damage**'s `TzimiscePhysicsAnimlink`. All three are read through their owners here.
-int32 TzimiscePickupGrabBone = INDEX_NONE;   // +0x6680 m_iPickupTargetGrabBone (datamap)
-double TzimisceBodyTimer = 0.0;              // +0x66a4 m_flBodyTimer (datamap), an absolute stamp
-bool bTzimisceDidFakeThrow = false;          // +0x66b4 m_bDidFakeThrow (datamap)
-// `+0x6690` with allocation count `+0x6694`, grow size `+0x6698`, element count `+0x669c` and the
-// element mirror `+0x66a0` — the SAME `CUtlVector<{EHANDLE, float}>` shape as the boss blacklist
-// above, written a second time on a different class at a different offset.
-TArray<FBlacklistedEntity> TzimisceBlacklist;
-
-// `CNPC_VTzimisceHeadClaw`'s slow stamp. `+0x6678` is `CNPC_VTzimisceRunner::m_hPotentialEnemy`,
-// `CNPC_VZombie::m_iZombieAIType` and `CNPC_VManBat::m_flFlapTimer` on three other species.
-double HeadClawSlowedExpire = 0.0;   // +0x6678 CNPC_VTzimisceHeadClaw::m_flSlowedExpire (datamap)
-
-// `CNPC_VTzimisceRunner`'s own two.
-FElysiumEntityHandle RunnerPotentialEnemy;   // +0x6678 m_hPotentialEnemy (datamap)
-bool bRunnerDeathNoticeProcessed = false;    // +0x6671 m_bDeathNoticeProcessed (datamap)
-
 // `CNPC_VZombie::m_iZombieAIType` — a mapper keyvalue (`ZombieAIType`) whose setter rerolls the
 // value 4 into a random 1..3 and side-effects four of the seven values.
 int32 ZombieAiType = 0;   // +0x6678 CNPC_VZombie::m_iZombieAIType (datamap, key ZombieAIType)
 
-// `CNPC_VWerewolf`'s frame-memoised chase cache. `m_DoorState` (+0x6680) is family **Hints**'
-// `WerewolfDoorState` and is read through it. No datamap names these; they are walked off
-// `0x103d9c90`.
-int32 WerewolfChaseFrame = INDEX_NONE;                        // +0x6670 (walked)
-FVector WerewolfChasePosUnits = FVector::ZeroVector;          // +0x6674/+0x6678/+0x667c (walked)
 // `+0x6684` / `+0x6688` are `m_hRotDoor1` / `m_hRotDoor2`, which family **Misc** declares off
 // `0x103cade0` (the zone opener that FILLS them). `0x103d1e50` is the READER of the same pair and
 // goes through Misc's members rather than standing a second copy.
@@ -142,18 +91,6 @@ FVector WerewolfChasePosUnits = FVector::ZeroVector;          // +0x6674/+0x6678
 // --- The seams this family stands ------------------------------------------------------------------
 //
 // Each answers NOTHING and names the retail call it stands for. Nothing below invents a value.
-
-/** SEAM for `(**(code **)(*DAT_1070b22c + 0x1e0))()` — the ENGINE FRAME NUMBER `0x103d9c90`
- *  memoises its chase position on. This runtime's clock is `FElysiumEntityWorld::NowSeconds()` and
- *  carries no frame counter at all.
- *
- *  **NAMED DECISION**: this answers `INDEX_NONE`, and the body reads that as "the stamp can never
- *  match", so the cache is ALWAYS STALE and the position is recomputed on every call. Retail calls
- *  the body at most once per frame per NPC, so recomputing per call is retail's own answer at
- *  retail's own call rate; answering a CONSTANT frame instead would freeze the cache after its
- *  first fill and hand every later caller a stale point, which is the one behaviour retail never
- *  has. The word `+0x6670` is still written, so a frame counter arriving later needs no other edit. */
-int32 EngineFrameNumber() const;
 
 /** SEAM for `thunk_FUN_1025de90(coord, this)` reached through slot 602's SPECIES arm
  *  (`0x103c1b10`, `0x103c3ab0`). Family **TroikaHelpers** already stands this exact retail body as
@@ -163,23 +100,6 @@ int32 EngineFrameNumber() const;
 /** `(**(code **)(*DAT_10924a1c + 4))()` and `DAT_10924a1c[10]` — the melee-range ConVar
  *  (`debug_melee_advance_combatmove_dist`, "100") the species slot-602 bodies threshold
  *  `m_flEnemyDist` against, read through TroikaHelpers' `MeleeRangeUnits()`. */
-
-/** SEAM for `thunk_FUN_1039ede0(this)` — the MingXiao HEAD a `CNPC_VMingXiaoTentacle` forwards its
- *  slots 21, 22 and 23 to. Family **Motor** already stands the same retail call
- *  (`ElysiumNpcKernelMotor.cpp:543`) and found the tentacle proxy chain absent; this answers null,
- *  which is retail's "no companion" arm and the one that forwards nothing. */
-FElysiumEntity* MingXiaoTentacleHead() const;
-
-/** SEAM for `thunk_FUN_10397dd0(head, this, param)` — `CNPC_VMingXiao`'s per-tentacle notice, which
- *  family **Damage** declared as the body that resets `m_flSpitAttackTimer`. Records the forward so
- *  the three slots can be told apart, and reaches nothing. */
-int32 TentacleHeadForwards = 0;
-
-/** The three ConVars `CNPC_VTzimisce`'s slot 488 reads before firing `SPI_DIES` — `DAT_1093cf94`
- *  `tzimisce_voice_pitch` "100", `DAT_1093cfdc` `tzimisce_voice_attn` "65" (`+0x2c` ints) and
- *  `DAT_1093cebc` `tzimisce_voice_volume` "1" (`+0x28`, handed over as the float's dword). Answers
- *  true for indices 0..2; any other index answers false and 0. */
-bool TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutArgument) const;
 
 /** SEAM for `thunk_FUN_10289ee0(this, 1)` — `RestartIdealActivity(1)`, which
  *  `CNPC_VTzimisceRunner`'s slot 588 calls UNCONDITIONALLY where the base override
@@ -270,121 +190,10 @@ bool SpeciesSlot600(FElysiumEntity* Enemy, bool& OutAnswer);
 // The naming is 29c's overlay target verbatim, so the ledger's `hand:` claim is checkable. A body
 // whose retail name IS recovered says so in its definition comment; none of these has one.
 
-/** `0x1035e920` — `CNPC_VAndreiBlood`: may another runner be made? */
-bool FUN_1035e920() const;
-
-/** `0x1035e950` — `CNPC_VAndreiBlood`: roll `m_iHitMax`. */
-void FUN_1035e950();
-
-/** `0x1035fd40` / `0x103bd270` — `CNPC_VAnimal`'s and `CNPC_VTzimisce`'s slot 482: standalone
- *  copies that never call the base and keep a SCRIPT-state body's answer. */
-int32 FUN_1035fd40(bool bDisregardState, int32 InterruptLevel);
-int32 FUN_103bd270(bool bDisregardState, int32 InterruptLevel);
-
-/** `0x103662d0` / `0x10366400` / `0x10366490` — `CNPC_VBaseBoss::m_BlacklistedEntities`'s add,
- *  test-and-expire and index-of. */
-void FUN_103662d0(const FElysiumEntityHandle& Entity, float Seconds);
-bool FUN_10366400(const FElysiumEntity* Candidate);
-int32 FUN_10366490(const FElysiumEntity* Candidate) const;
-
-/** `0x1036c7f0` — `CNPC_VChangBros::SetChangType`, a plain setter over family Squad's `ChangType`. */
-void FUN_1036c7f0(int32 InChangType);
-
-/** `0x1039ef90` — `CNPC_VMingXiaoTentacle`: cache a coordinate point and raise condition 0x78. */
-void FUN_1039ef90(const FVector& PositionUnits);
-
-/** `0x103a0d50` / `0x103a0ff0` — `CNPC_VNewscaster`'s story-queue teardown and debug listing. */
-void FUN_103a0d50();
-int32 FUN_103a0ff0(int32 FirstLine, TArray<FString>& OutLines) const;
-
-/** `0x103be0b0` / `0x103be150` — `CNPC_VTzimisce`'s `CARRYING_BODY` latch and its timer read. */
-void FUN_103be0b0(bool bCarrying);
-bool FUN_103be150() const;
-
-/** `0x103be3d0` — `CNPC_VTzimisce`'s nearest-forearm grab-bone search. */
-bool FUN_103be3d0(FElysiumEntity* InTarget);
-
-/** `0x103be8e0` — `CNPC_VTzimisce`: is the pickup target close enough to grab? */
-bool FUN_103be8e0(FElysiumEntity* InTarget);
-
-/** `0x103bea90` / `0x103bef20` — `CNPC_VTzimisce`'s physics-animlink release and attach. */
-void FUN_103bea90(FElysiumEntity* AimTarget);
-bool FUN_103bef20(FElysiumEntity* InTarget, int32 ElementKey);
-
-/** `0x103bf200` / `0x103bf330` / `0x103bf3c0` — `CNPC_VTzimisce`'s own blacklist triple. */
-void FUN_103bf200(const FElysiumEntityHandle& Entity);
-bool FUN_103bf330(const FElysiumEntity* Candidate);
-int32 FUN_103bf3c0(const FElysiumEntity* Candidate) const;
-
-/** `0x103bf560` — `CNPC_VTzimisce`: release the motor's yaw hold. */
-void FUN_103bf560();
-
-/** `0x103c1ad0` / `0x103c1b10` — `CNPC_VTzimisceHeadClaw`'s slots 601 and 602. */
-void FUN_103c1ad0(FElysiumEntity* Enemy);
-bool FUN_103c1b10();
-
-/** `0x103c19e0` / `0x103c1a60` — `CNPC_VTzimisceHeadClaw`'s slots 599 and 600. */
-bool FUN_103c19e0(FElysiumEntity* Enemy);
-bool FUN_103c1a60(FElysiumEntity* Enemy);
-
-/** `0x103c24a0` — `CNPC_VTzimisceHeadClaw`: is the slow window armed? */
-bool FUN_103c24a0() const;
-
-/** `0x103c3960` / `0x103c39e0` / `0x103c3a70` / `0x103c3ab0` / `0x103c3fd0` —
- *  `CNPC_VTzimisceRunner`'s slots 599, 600, 601, 602 and 588. */
-bool FUN_103c3960(FElysiumEntity* Enemy);
-bool FUN_103c39e0(FElysiumEntity* Enemy);
-void FUN_103c3a70(FElysiumEntity* Enemy);
-bool FUN_103c3ab0();
-void FUN_103c3fd0();
-
 /** `0x10376b70` / `0x10376ba0` — `CNPC_VFrenzyShadow`'s slots 599 and 600. */
 bool FUN_10376b70(FElysiumEntity* Enemy);
 bool FUN_10376ba0(FElysiumEntity* Enemy);
 
-/** `0x10379ef0` / `0x10379f20` — `CNPC_VGargoyle`'s slots 599 and 600. */
-bool FUN_10379ef0(FElysiumEntity* Enemy);
-bool FUN_10379f20(FElysiumEntity* Enemy);
-
-/** `0x103dd900` — `CNPC_VYukie`'s slot 600. */
-bool FUN_103dd900(FElysiumEntity* Enemy);
-
-/** `0x10364280` — `CNPC_VBach`'s slot 606. `Arg` is the base body's own argument, passed straight
- *  through on the delegating arm and read by nothing in the gate. */
-int32 FUN_10364280(int32 Arg);
-
-/** `0x103661f0` — `CNPC_VBach`'s slot-609 gate. `CNPC_VBatSwarm` (`0x10367740`) and
- *  `CNPC_VSheriffSwarm` (`0x103b26f0`) carry byte-identical copies; neither class has an
- *  instance. */
-bool FUN_103661f0(bool bArg);
-
-/** `0x103d1e50` — `CNPC_VWerewolf`: are the two door halves near enough to count as shut? */
-bool FUN_103d1e50() const;
-
-/** `0x103d9c90` — `CNPC_VWerewolf`'s frame-memoised chase position. SOURCE units out. */
-void FUN_103d9c90(FVector& OutPositionUnits);
-
 /** `0x103e0980` — `CNPC_VZombie::SetZombieAIType`. */
 void FUN_103e0980(int32 InZombieAiType);
 
-/** `0x103e1080` — `CNPC_VZombie`'s slot 510, `bool ShouldPlayFloatSound()`; tails into the
- *  CAI_BaseNPC body `BaseShouldPlayFloatSound`. */
-bool FUN_103e1080();
-
-/** `0x103e12c0` / `0x103e12f0` — `CNPC_VZombie`'s slots 25 and 26, both firing
- *  `m_OnAttackedVictim` (`+0x66e8`) with no base forward. */
-void FUN_103e12c0(FElysiumEntity* Victim);
-void FUN_103e12f0(FElysiumEntity* Victim);
-
-/** `0x1039e800` / `0x1039e830` / `0x1039e860` — `CNPC_VMingXiaoTentacle`'s slots 21, 22 and 23. */
-void FUN_1039e800(FElysiumEntity* Arg);
-void FUN_1039e830(FElysiumEntity* Arg);
-void FUN_1039e860(FElysiumEntity* Arg);
-
-/** `0x103b9180` / `0x103b92a0` — `CNPC_VTzimisce`'s slots 593 and 488. */
-void FUN_103b9180();
-void FUN_103b92a0();
-
-/** `0x103681d0` / `0x103682f0` — `CNPC_VCamera`'s empty slots 497 and 506. */
-void FUN_103681d0();
-void FUN_103682f0();

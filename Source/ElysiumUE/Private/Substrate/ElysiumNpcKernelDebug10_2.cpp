@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelDebug10_2Shared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -25,10 +26,8 @@ namespace
 	// Unit-prefixed: adaptive unity merges anonymous namespaces.
 
 	// --- `m_debugOverlays` bits, with the instruction that tests each ------------------------------
-	constexpr int32 GDebug10_2BitText = 0x1;              // 0x10372f0b `TEST byte [+0x224],0x1`
 	constexpr int32 GDebug10_2BitViewCones = 0x400000;    // 0x1029ca59
 	constexpr int32 GDebug10_2BitCollisionBox = 0x1000;   // 0x1029cb39 `TEST AH,0x10`
-	constexpr int32 GDebug10_2BitWeaponRings = 0x20000000;// 0x1029cd68
 
 	// --- The ConVars this file gates on, every one shipping 0 --------------------------------------
 	constexpr ElysiumNpcTunables::EConVar GDebug10_2CvEnemyBody =
@@ -45,8 +44,6 @@ namespace
 	constexpr TCHAR GDebug10_2BoxAngles[] = TEXT("NDebugOverlay::BoxAngles");
 	constexpr TCHAR GDebug10_2BoxDirection[] = TEXT("NDebugOverlay::BoxDirection");
 	constexpr TCHAR GDebug10_2Line[] = TEXT("NDebugOverlay::Line");
-	constexpr TCHAR GDebug10_2Text[] = TEXT("NDebugOverlay::Text");
-	constexpr TCHAR GDebug10_2Circle[] = TEXT("NDebugOverlay::Circle");
 	constexpr TCHAR GDebug10_2ViewCone[] = TEXT("0x1029c4a0");
 
 	// --- The census addresses slot 123 dispatches on -----------------------------------------------
@@ -85,19 +82,13 @@ namespace
 	constexpr float GDebug10_2CriminalLiftUnits = 16.f;     // _DAT_10451ad0
 	constexpr float GDebug10_2SupernaturalLiftUnits = 12.f; // _DAT_1044faa4
 	constexpr float GDebug10_2BlockedLiftUnits = 20.f;      // _DAT_1044eb0c
-	constexpr float GDebug10_2CopLabelLiftUnits = 8.f;      // _DAT_1045597c
 	constexpr float GDebug10_2UnarmedFarUnits = 2000.f;     // 0x44fa0000
 	constexpr float GDebug10_2UnarmedNearUnits = 0.f;
 	constexpr float GDebug10_2RingHeightUnits = 32.f;       // 0x42000000
-	constexpr float GDebug10_2MingXiaoRingHeightUnits = 8.f;// 0x41000000
 	constexpr float GDebug10_2HintLeanYawDegrees = 43.f;    // 0x422c0000 / 0xc22c0000
 	constexpr float GDebug10_2RelationRadiusUnits = 4096.f; // 0x45800000
 	// `tr.fraction`'s "nothing was hit" value.
 	constexpr double GDebug10_2TraceClearFraction = ElysiumNpcTunables::OneDouble;
-
-	// The four MingXiao ring radii, in SOURCE units, in the order `0x10399d40` draws them. These are
-	// the reason the body is worth porting at all: they are the recovered range bands.
-	constexpr float GDebug10_2MingXiaoRadiiUnits[] = { 100.f, 150.f, 200.f, 300.f };
 
 	// The three cone constants `0x1029ca50` pushes as its third argument to `0x1029c4a0`: 0.0, 2.0
 	// and 4.0, as raw float bit patterns in the listing.
@@ -111,18 +102,6 @@ namespace
 	constexpr int32 GDebug10_2HintTypeLean = 0x27d8;
 	constexpr int32 GDebug10_2HintTypeC = 0x283c;
 	constexpr int32 GDebug10_2HintTypeD = 0x283d;
-
-	// `CNPC_VCop#123`'s five relationship labels, read out of `.rdata`.
-	constexpr TCHAR GDebug10_2CopLabelHate[] = TEXT("D_HT");     // 0x105cc520
-	constexpr TCHAR GDebug10_2CopLabelFear[] = TEXT("D_FR");     // 0x105cc518
-	constexpr TCHAR GDebug10_2CopLabelLike[] = TEXT("D_LI");     // 0x105cc510
-	constexpr TCHAR GDebug10_2CopLabelNeutral[] = TEXT("D_NU");  // 0x105cc508
-	constexpr TCHAR GDebug10_2CopLabelError[] = TEXT("D_ER");    // 0x10636728
-	constexpr TCHAR GDebug10_2CopSuspect[] = TEXT(" Suspect");   // 0x10636750
-	constexpr TCHAR GDebug10_2CopAlert[] = TEXT(" Alert");       // 0x10636748
-	constexpr TCHAR GDebug10_2CopCount[] = TEXT(" Count%d");     // 0x1063673c
-	constexpr TCHAR GDebug10_2CopPursuit[] = TEXT(" Pursuit");   // 0x10636730
-	constexpr TCHAR GDebug10_2CopTally[] = TEXT("  %d  %d");     // 0x1063671c
 
 	constexpr TCHAR GDebug10_2BlockedBy[] = TEXT("Blocked by %s"); // 0x105d8b44
 	constexpr TCHAR GDebug10_2UnknownName[] = TEXT("**UNKNOWN**"); // 0x105477a4
@@ -414,7 +393,7 @@ void FElysiumNpc::TroikaDrawDebugGeometryOverlays()
 	// third argument after the radius, and `CNPC_VMingXiao#123` settles it — its four values are the
 	// recovered range bands 100/150/200/300 and its `0x41000000` is a constant 8.0 beside them. So
 	// `0x42000000` is the ring HEIGHT and the max/min are the radii.
-	if ((DebugOverlays & GDebug10_2BitWeaponRings) != 0)
+	if ((DebugOverlays & NpcKernelDebug10_2Shared::GDebug10_2BitWeaponRings) != 0)
 	{
 		float FarUnits = 0.f;
 		float NearUnits = 0.f;
@@ -426,10 +405,10 @@ void FElysiumNpc::TroikaDrawDebugGeometryOverlays()
 			NearUnits = GDebug10_2UnarmedNearUnits;
 		}
 		const FVector OriginUnits = Origin / ElysiumMove::U;
-		EmitOverlayText(GDebug10_2Circle, OriginUnits,
+		EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Circle, OriginUnits,
 			FString::Printf(TEXT("axis=(1.0 0.0 0.0) r=%.1f h=%.1f rgba=(255 255 32 128)"),
 				NearUnits, GDebug10_2RingHeightUnits));
-		EmitOverlayText(GDebug10_2Circle, OriginUnits,
+		EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Circle, OriginUnits,
 			FString::Printf(TEXT("axis=(1.0 0.0 0.0) r=%.1f h=%.1f rgba=(128 128 16 128)"),
 				FarUnits, GDebug10_2RingHeightUnits));
 	}
@@ -569,99 +548,6 @@ void FElysiumNpc::TroikaDrawDebugGeometryOverlays()
 	BaseDrawDebugGeometryOverlays();
 }
 
-void FElysiumNpc::VCopDrawDebugGeometryOverlays()
-{
-	// `0x10372f00`, 1,020 bytes. Debug-only, but the arms are the recovered statement of what a cop
-	// knows about the player: the shared timed grudge, the heightened-alert window, the pursuit
-	// count and its own pursuit target, all rendered as one label above its head.
-	//
-	// Gates, in order: `m_debugOverlays & 1`, then `m_hClosestPlayer` must RESOLVE, then the
-	// collision OBB must not be degenerate. Each failure jumps straight to the Troika tail.
-	if ((DebugOverlays & GDebug10_2BitText) != 0)
-	{
-		const FElysiumEntity* const Player =
-			World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;
-		FVector ObbMins = FVector::ZeroVector;
-		FVector ObbMaxs = FVector::ZeroVector;
-		const bool bHasObb = CollisionObbExtentsUnits(ObbMins, ObbMaxs);
-		const bool bDegenerate = !bHasObb
-			|| (ObbMins.X == ObbMaxs.X && ObbMins.Y == ObbMaxs.Y && ObbMins.Z == ObbMaxs.Z);
-		if (Player != nullptr && !bDegenerate)
-		{
-			// The label sits `(maxs.z - mins.z) + 8.0` above `GetAbsOrigin()`.
-			const float LiftUnits = (ObbMaxs.Z - ObbMins.Z) + GDebug10_2CopLabelLiftUnits;
-			FVector LabelUnits = Origin / ElysiumMove::U;
-			LabelUnits.Z += LiftUnits;
-
-			FString Label;
-			switch (IRelationType(const_cast<FElysiumEntity*>(Player)))
-			{
-			case 1:
-				// The `D_HT` arm re-runs the TROIKA `IRelationType` (`0x10299da0`) first and throws
-				// the answer away — an artefact of the species override calling its own base, and
-				// reproduced only as this comment because it writes nothing.
-				Label = GDebug10_2CopLabelHate;
-				if (CopSuspectIs(Player))
-				{
-					Label += GDebug10_2CopSuspect;
-				}
-				if (PlayerHeightenedAlert(Player))
-				{
-					Label += GDebug10_2CopAlert;
-				}
-				{
-					const int32 Pursuers = PlayerCopsInPursuitCount(Player);
-					if (Pursuers > 0)
-					{
-						// Retail asks `0x1017f770` a SECOND time for the printed number, after the
-						// `> 0` test; one read is the same answer.
-						Label += FString::Printf(GDebug10_2CopCount, Pursuers);
-					}
-				}
-				if (CopPursuitPlayer() == Player)
-				{
-					Label += GDebug10_2CopPursuit;
-				}
-				break;
-			case 2: Label = GDebug10_2CopLabelFear; break;
-			case 3: Label = GDebug10_2CopLabelLike; break;
-			case 4: Label = GDebug10_2CopLabelNeutral; break;
-			default: Label = GDebug10_2CopLabelError; break;
-			}
-
-			// `"  %d  %d"` with two further cop-class statics, `DAT_1093acac` and `DAT_1093acb0`.
-			// SEAM: neither is stood here and neither has a writer in this band; both read 0.
-			Label += FString::Printf(GDebug10_2CopTally, 0, 0);
-			EmitOverlayText(GDebug10_2Text, LabelUnits, Label);
-		}
-	}
-
-	// The Troika body ALWAYS runs, whichever gate turned the label off.
-	TroikaDrawDebugGeometryOverlays();
-}
-
-void FElysiumNpc::MingXiaoDrawDebugGeometryOverlays()
-{
-	// `0x10399d40`, 328 bytes. Gated on `m_debugOverlays & 0x20000000` — the WEAPON-RING bit, not
-	// bit 0 like its siblings — so MingXiao's bands and the Troika body's two weapon rings appear
-	// together and are meant to be read against each other.
-	//
-	// Four rings about `(1, 0, 0)` at 100, 150, 200 and 300 source units, height 8.0, colour
-	// (255, 32, 32) at alpha 128, no depth test, duration 0. The four radii are the recovered range
-	// bands and are the reason to port the body at all.
-	if ((DebugOverlays & GDebug10_2BitWeaponRings) != 0)
-	{
-		const FVector OriginUnits = Origin / ElysiumMove::U;
-		for (const float RadiusUnits : GDebug10_2MingXiaoRadiiUnits)
-		{
-			EmitOverlayText(GDebug10_2Circle, OriginUnits,
-				FString::Printf(TEXT("axis=(1.0 0.0 0.0) r=%.1f h=%.1f rgba=(255 32 32 128)"),
-					RadiusUnits, GDebug10_2MingXiaoRingHeightUnits));
-		}
-	}
-	TroikaDrawDebugGeometryOverlays();
-}
-
 // -------------------------------------------------------------------------------------------------
 // `CAI_BaseNPCTroika::NPCThinkDebugPre` — `0x10292500`.
 // -------------------------------------------------------------------------------------------------
@@ -779,7 +665,7 @@ void FElysiumNpc::TroikaNPCThinkDebugPre()
 				World != nullptr ? World->Resolve(Senses.Memory.EnemyOccluder) : nullptr;
 			const FString Name = Occluder != nullptr
 				? GDebug10_2DebugName(Occluder) : FString(GDebug10_2UnknownName);
-			EmitOverlayText(GDebug10_2Text, LabelUnits,
+			EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Text, LabelUnits,
 				FString::Printf(GDebug10_2BlockedBy, *Name));
 		}
 	}

@@ -72,10 +72,6 @@ FString VSoundGroupName;       // +0x00c0 m_iszVSoundGroup — `"Werewolf"`, NUL
 // another class (`+0x6664` alone is `CNPCMaker::m_flSpawnFrequency`, `CNPC_VCop::m_hPursuitPlayer`
 // and six more).
 
-int32 ModeIndexTentacleToGrub = 0;   // +0x6664 CNPC_VMingXiaoTentacle
-int32 ModeIndexGrub = 0;             // +0x6668 CNPC_VMingXiaoTentacle
-int32 ModeIndexGrubToProxy = 0;      // +0x666c CNPC_VMingXiaoTentacle
-
 // --- The recorded request ------------------------------------------------------------------------
 
 /** The engine entry one precache request goes through. Retail reaches four different functions and
@@ -234,29 +230,9 @@ FString CharTemplateModelName() const;
 // the Tzimisce Runner, the Werewolf and the Zombie; **last** for `CNPC_VTzimisce`; and **after its
 // own model fallback** for `CNPC_VMingXiaoTentacle`.
 
-void AndreiBloodPrecache();           // 0x1035cb90
-void AsianVampirePrecache();          // 0x10360bc0
-void BachPrecache();                  // 0x103637b0
-void ChangBrosPrecache();             // 0x1036ae60 — and the Blade and Claw forms
-void GargoylePrecache();              // 0x10378470
-void GhoulCroucherPrecache();         // 0x1037b1a0
-void HengeyokaiPrecache();            // 0x1037f960
-void ManBatPrecache();                // 0x1038aec0
-void MingXiaoPrecache();              // 0x10392660
-void MingXiaoTentaclePrecache();      // 0x1039c220
-void NewscasterPrecache();            // 0x103a03e0
-void SabbatLeaderPrecache();          // 0x103a6ab0
-void SheriffManPrecache();            // 0x103ae540
-void TzimiscePrecache();              // 0x103b8fa0
-void TzimisceHeadClawPrecache();      // 0x103c1400
-void TzimisceRunnerPrecache();        // 0x103c31e0
-void WerewolfPrecache();              // 0x103cb2a0
-void ZombiePrecache();                // 0x103df120
-
 // --- The slot-104 arm story 29c-1 ported and left unwired ----------------------------------------
 //
 // The body is family **Lifecycle**'s and is CALLED, not re-recovered. Slot 104 was a generated stub
 // when it landed, so nothing ran it; this arm is the wiring, plus the tail `CameraPrecacheModel`'s
 // own comment names as "a later story's" — which is this one.
 
-void CameraPrecache();                // 0x103689c0 — CNPC_VCamera / …Security, via `CameraPrecacheModel`

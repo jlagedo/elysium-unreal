@@ -93,30 +93,6 @@ void BaseOnLooked();
 
 // --- Slot 472 `OnSeeEntity`: the two species arms and their class statics -------------------------
 
-/** `CNPC_VCop::OnSeeEntity` (`0x10371ae0`) and `CNPC_VHunter::OnSeeEntity` (`0x103887d0`), the two
- *  54-byte twins. Each stamps its OWN class-static suspect pair and then runs the Troika body
- *  (`0x102b3e00`) unconditionally. The cop's stamp (`0x10370560`) is guarded on the seen entity
- *  carrying a player record at `+0xa8`; the hunter's (`0x10387fd0`) is NOT — recorded because it is
- *  the only difference between them. */
-void CopOnSeeEntity(FElysiumEntity* Seen);
-void HunterOnSeeEntity(FElysiumEntity* Seen);
-
-/** The four class-static cells the two arms write and three other bodies read: `DAT_1093ac3c` /
- *  `_DAT_1093aca8` (the cop's shared provoker handle and its expiry) and `DAT_1093b650` /
- *  `_DAT_1093b658` (the hunter's). They are STATIC IN RETAIL — every cop in the map shares one
- *  grudge — so they are file statics here too, reached through these accessors rather than copied
- *  per NPC. Family **Debug10**'s `CopSuspectIs` and family **Conditions10**'s two slot-404 species
- *  arms are the readers; this family is the writer. The window is 30 seconds. */
-static constexpr float SpeciesSuspectWindowSeconds = ElysiumNpcTunables::Thirty;
-static FElysiumEntityHandle CopSuspectHandle();
-static double CopSuspectExpiry();
-static FElysiumEntityHandle HunterSuspectHandle();
-static double HunterSuspectExpiry();
-/** `0x10370560` and `0x10387fd0` themselves — the two stamps, so a test can drive them directly.
- *  Both are reset by `ResetSpeciesSuspectGlobals`, which exists because a process-lifetime static
- *  outlives a headless world and retail's own lifetime is the process too. */
-void StampCopSuspect(FElysiumEntity* Seen);
-void StampHunterSuspect(FElysiumEntity* Seen);
 static void ResetSpeciesSuspectGlobals();
 
 // --- Slot 478 `BestEnemy`: the arbitration words and the one species arm -------------------------
@@ -168,10 +144,6 @@ bool bFrenzyShadowFailedGrapple = false;   // +0x6668
  *       `5` (-30.0). **SEAM**: the `CVStatList_t` join by retail list TYPE does not exist on this
  *       sheet, so the stat reads not-5 and the offset is not applied. */
 FVector ShootEnemyAimPoint(const FVector& ShootPositionCm);
-
-/** `CNPC_VMingXiao::GetShootEnemyDir` (`0x10395d00`), slot 574's one species arm: the base body with
- *  `_DAT_1044eb0c` (**20.0** Source units) added to the aim point's Z before the subtraction. */
-FVector MingXiaoGetShootEnemyDir(const FVector& ShootPositionCm, int32 A, int32 B);
 
 // --- Slot 562 `WeaponLOSCondition`: the player-in-line-of-fire test ------------------------------
 
@@ -339,78 +311,24 @@ void RestoreNormalHull();
 FVector HullMinsUnits(bool bSmall) const;
 FVector HullMaxsUnits(bool bSmall) const;
 
-// =================================================================================================
-// SpeciesSenses10 — the ten species-line rows
-// =================================================================================================
-
 // --- `CNPC_VCameraSecurity` (slots 201 and 363) --------------------------------------------------
-
-/** `CNPC_VCameraSecurity::FVisible` (`0x10369ff0`) and `::FInViewCone` (`0x10369fb0`). Both REPLACE
- *  the body they override outright: a security-camera NPC never consults its own eyes. `FVisible`
- *  answers true only for a candidate carrying a player record when the link resolves and the
- *  camera's full sight test (`0x1020cd00`) passes; `FInViewCone` answers true only for the same
- *  candidate shape when the camera's CONE test alone (`0x1020cc60`) passes. A missing link is false
- *  for both. */
-bool CameraSecurityFVisible(FElysiumEntity* Candidate);
-bool CameraSecurityFInViewCone(FElysiumEntity* Candidate);
 
 /** SEAM for `CSecCamera::CanSee` (`0x1020cd00`) and `CSecCamera::InViewCone` (`0x1020cc60`), the two
  *  tests the camera itself performs — the enabled byte `+0x7d8`, the 2-D distance against the far
  *  radius `+0x794` and the near radius `+0x790` (`0x1020cd30`), the cone dot against `+0x798`, and a
- *  `0x4091` trace whose fraction must equal `_DAT_10449280` (**1.0**). `FElysiumNpc::ResolveSecCameraLink`
+ *  `0x4091` trace whose fraction must equal `_DAT_10449280` (**1.0**). `FElysiumNpcCameraSecurity::ResolveSecCameraLink`
  *  (family Dialogue, `0x10369e70`) is the link; the camera entity carries none of those five words
  *  on this substrate, so both answer **false** — which is retail's answer for a camera that is
  *  switched off, and the arm that leaves a security NPC blind rather than omniscient. */
 bool SecCameraCanSee(const FElysiumEntity* Camera, const FElysiumEntity* Target) const;
 bool SecCameraInViewCone(const FElysiumEntity* Camera, const FElysiumEntity* Target) const;
 
-// --- `CNPC_VTzimisce` and `CNPC_VZombie` (slot 201) ----------------------------------------------
-
-/** `CNPC_VTzimisce::FVisible` (`0x103ba290`), 30 bytes: the Troika base with the FOURTH argument
- *  FORCED to `0`, whatever the caller supplied. That is the whole override, and it is observable. */
-bool TzimisceFVisible(FElysiumEntity* Candidate, int32 Mask, FElysiumEntity* Blocker, int32 Arg4);
-
-/** `CNPC_VZombie::FVisible` (`0x103e0bc0`): ONE arm in front of the Troika base — a candidate that
- *  IS this zombie's current enemy is answered by the obfuscate test `0x10146a80` (discipline stat 8
- *  at or above 1 AND the entity's `+0x14dc` cloak byte) rather than by sight — and the same
- *  fourth-argument clamp for everything else. */
-bool ZombieFVisible(FElysiumEntity* Candidate, int32 Mask, FElysiumEntity* Blocker, int32 Arg4);
-
 // --- `CNPC_VBach` (slot 566) ---------------------------------------------------------------------
 //
-// `CNPC_VBach::FValidateHintType` (`0x10365800`) lands as a ROW of family Hints' slot-566 species
-// table (`EHintTypeRule::InRangeOrBase`), not as a method here — see `ElysiumNpcKernelHints.inl`.
+// `CNPC_VBach::FValidateHintType` (`0x10365800`) is `FElysiumNpcBach`'s own override (story 5
+// step 4): 17000..17005 outright, every other type falling through into the Troika body.
 
 // --- `CNPC_VScurrying` ---------------------------------------------------------------------------
-
-/** `CNPC_VScurrying::m_flDetectionDistance` (`+0x6690`), `m_fIgnoreNosferatu` (`+0x6694`) and
- *  `m_fMustDetect` (`+0x6695`) — shape rows with no port producer until now. They are this family's
- *  words because `ScurryingShouldDetect` is their only reader. SOURCE units on the distance, as the
- *  authored keyvalue is. */
-float ScurryingDetectionDistanceUnits = 0.f;   // +0x6690
-bool bScurryingIgnoreNosferatu = false;        // +0x6694
-bool bScurryingMustDetect = false;             // +0x6695
-
-/** `0x103acac0` — the Scurrying detection test. Four arms in retail's order; see the definition. */
-bool ScurryingShouldDetect(const FElysiumEntity* Target) const;
-
-/** `0x103ad0f0` — "is this target's character template `Player_Nosferatu`". The port's sheet carries
- *  the clan on the player, so this is the whole recovered rule for a player target and answers false
- *  for everything else, which is retail's. */
-static bool IsNosferatuTemplate(const FElysiumEntity& Target);
-
-/** `0x103ad0a0` — the must-detect gate: true for any target that is NOT a player, and for a player
- *  only while `COND_SEE_PLAYER` (`0x5a`) or COND `0x6f` stands. */
-bool ScurryingMustDetectAdmits(const FElysiumEntity& Target) const;
-
-/** `0x103acba0` — the Scurrying flee-destination search. Two halves: a node jitter when the
- *  navigator finds a node within 30000 units, and a hull-traced march away from the threat when it
- *  does not. **SEAM**: no node graph stands here, so the node search always fails and the MARCH is
- *  the arm taken — which is retail's own answer for a map with no AI network, and it is the arm
- *  that still produces a destination. `OutCm` is written only on success, exactly as retail writes
- *  its out-vector only when one was passed. */
-bool ScurryingFindFleeDestination(const FVector& ThreatPosCm, float DistanceUnits,
-	FVector* OutDestinationCm);
 
 /** SEAM for `0x102edae0` — "the nearest navigator node to `pos` within `radius`". No AI network
  *  stands here; answers false, which is the failure arm above. */
@@ -423,83 +341,7 @@ bool IsAreaClear(const FVector& PositionCm, int32 Mask) const;
 
 // --- `CNPC_VWerewolf` ----------------------------------------------------------------------------
 
-/** `CNPC_VWerewolf::CheckStuck` (`0x103cb920`), 1,558 bytes. Gated on slot 0x28c; probe 1 is the
- *  navigator hull trace, and the two halves below it are the CLEAR re-probe and the BLOCKED
- *  escalation. See the definition for every arm. **SEAM**: the hull sweeps are the navigator's and
- *  do not exist here, so the probes answer CLEAR — retail's own not-stuck answer — and the body's
- *  observable tail (`SetHullSizeSmall(1)`) still runs, which is what every exit but the teleport
- *  does. */
-void WerewolfCheckStuck();
-
 // `SetHullSizeSmall(bForce)` (`0x10273180`) — the tail every `CheckStuck` exit but the teleport ends
 // in — is family **Motor10**'s body and is declared in `ElysiumNpcKernelMotor10.inl`. Dispatched
 // here, not re-ported.
 
-/** SEAM for `CNPC_VWerewolf::TeleportOut` — the third-probe escape. Counted; the teleport itself is
- *  family Positions' `PositionAtHint` story. */
-int32 WerewolfTeleportOutCalls = 0;
-
-/** `CNPC_VWerewolf::GetHintTargetGroundpoint` (`0x103d68d0`) — the TARGET variant of family Hints'
- *  `GetHintGroundpoint` (`0x103d6770`): a linear scan of `m_HintData` (`+0x6714`, count `+0x6720`,
- *  stride `0x48`) comparing the ENTITY POINTER at element `+0x04`, answering the Vector at element
- *  `+0x14` — the TARGET groundpoint, not `+0x08`'s own groundpoint — and on a miss `DevWarning`ing
- *  and falling back to `GetGroundpoint(GetHintEndpoint(hint))`. So a miss still answers a point.
- *  SOURCE units, as family Hints' twin is. */
-FVector GetHintTargetGroundpoint(const FHintWords& Hint) const;
-
-/** SEAM for `CNPC_VWerewolf::GetHintEndpoint` (the hint's END entity's origin). It resolves through
- *  family Hints' `FindHintEndEntity` (`0x103d6520`), which is a real recovered walk over a hint
- *  store that does not exist yet, so it answers the hint's own origin and names what it stands for.
- *
- *  This family's companion seam for `GetForwardHintForHint` is GONE: story 29d, family **Hints10**
- *  landed `0x103d7090` itself (`ElysiumNpcKernelHints10.cpp`), so `GetForwardYawForHint` now calls
- *  the real body — which answers null when no partner hint of type `0x3a9c` shares this hint's end
- *  entity, and the yaw is then measured from the hint's own origin, the same fallback this seam
- *  produced. */
-FVector GetHintEndpointUnits(const FHintWords& Hint) const;
-
-/** `CNPC_VWerewolf::GetForwardYawForHint` (`0x103d7210`). The working direction is seeded with
- *  `vec3_invalid` (`DAT_10713de0`…), then overwritten by `endOrigin - forwardOrigin` normalised and
- *  converted to a yaw through `0x101d2c70`; the hint TYPE then adjusts it. **Recovered from the
- *  listing, because the decompiler lost the `float10` return storage and both tails read alike**:
- *  the final compare is against `_DAT_10450568` = **360.0** and it is a WRAP, not a selection — see
- *  the definition. */
-float GetForwardYawForHint(const FHintWords& Hint) const;
-
-/** `CNPC_VWerewolf::InitializeHintData` (`0x103d7710`), 1,178 bytes — the one-shot build of the
- *  `+0x6714` array, which runs only while `+0x6720` is zero. It walks the global hint chain
- *  (`DAT_10925450`, `+0x18` next) and per hint stores the hint, its end-entity handle, its own
- *  groundpoint and its TARGET groundpoint, writing the forward yaw back through the hint's own
- *  angles and falling back to the raw origin / raw endpoint when a groundpoint fails the
- *  `0x7f800000` exponent test. **SEAM**: the global hint chain is family Hints' `HintWords` seam and
- *  resolves nothing, so the array stays empty — retail's own answer for a map with no hints — and
- *  the per-hint rule is exercised through `InitializeHintDataRow`. */
-void InitializeHintData();
-
-/** One row of the build above, applied to one hint. Separated so the recovered per-hint rule is
- *  testable while the chain that feeds it is a seam. */
-FWerewolfHintGroundpoint InitializeHintDataRow(const FHintWords& Hint) const;
-
-/** Retail's `(bits & 0x7f800000) == 0x7f800000` validity test on each component of a groundpoint —
- *  an infinity or a NaN exponent, which is what `vec3_invalid` (`FLT_MAX`) is NOT, so a `FLT_MAX`
- *  groundpoint passes this test and is stored. Recorded because it is the surprising half. */
-static bool IsGroundpointExponentValid(const FVector& PointUnits);
-
-/** Slot 566 `FValidateHintType` applied to a hint whose WORDS are already in hand. Retail passes the
- *  `CAI_Hint*` itself (`vtable +0x8d8`), and both bodies below call it that way; the node-index entry
- *  `FValidateHintTypeNode` re-resolves through the hint-store seam, which resolves nothing — so these
- *  two bodies would refuse at the gate rather than reaching their own type ladders. This hands the
- *  words the caller already has to the virtual slot. */
-bool ValidateHintTypeForWords(const FHintWords& Hint) const;
-
-/** `CNPC_VWerewolf::IsValidRandomMoveHint` (`0x103d7dc0`) and `::IsValidMoveHint` (`0x103d8060`) —
- *  the two 520-byte twins whose type sets differ in BOTH membership and sense. `Now` is the
- *  substrate clock; the cooldown list is family Species' `FUN_10366400`. */
-bool IsValidRandomMoveHint(const FHintWords& Hint, double Now);
-bool IsValidMoveHint(const FHintWords& Hint, double Now);
-
-/** `m_iRandomMoveHintNodeZone` (`+0x670c`) — the node zone the random-move arm requires the cached
- *  nearest node's `+0x94` to equal. **SEAM**: no node graph, so `0x103d0ad0` answers "no node" and
- *  the arm refuses, which is retail's own answer when the cache is empty. */
-int32 RandomMoveHintNodeZone = 0;
-bool CachedNearestNodeZone(int32& OutZone) const;

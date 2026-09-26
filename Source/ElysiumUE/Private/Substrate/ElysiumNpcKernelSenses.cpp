@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelSensesShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -34,23 +35,9 @@ namespace
 	// `FInAimCone` a firing test and not a seeing test.
 	constexpr double GAimConeDotFloor = 0.994;
 
-	// `_DAT_1047a3b0` = 85.0f, also a single-reader cell: the payphone's MANHATTAN distance limit,
-	// in SOURCE units.
-	constexpr float GPayphoneManhattanLimitUnits = 85.0f;
-
 	// `_DAT_104563b0` = 4096.0f, compared against a SQUARED distance — so the occlusion edge trips
 	// once the enemy has moved 64 Source units from where it was when sight was lost.
 	constexpr float GEnemyWentOccludedDistanceSqUnits = 4096.0f;
-
-	// `_DAT_10449280` = 1.0 (a double) — the engine's CLEAR trace fraction.
-	constexpr float GSensesTraceClearFraction = 1.0f;
-
-	// `_DAT_104454c4` = 0.0f, the image's shared zero: `EffectiveVisionDistanceCm`'s floor and the
-	// `!= 0.0` test on the prone-dialog ray's squared length.
-	constexpr float GSharedZero = 0.0f;
-
-	// `_DAT_1044f02c` = 1.5f — Yukie's melee-range multiplier.
-	constexpr float GYukieMeleeRangeScale = 1.5f;
 
 	// `_DAT_10454110` = 5.0f and `_DAT_1044eb0c` = 20.0f — `OnDoorBlocked`'s two retry windows. The
 	// 5.0 cell is also the detected-attack window.
@@ -89,40 +76,17 @@ namespace
 	constexpr int32 GAlternateAiModeOpening = 2;
 	constexpr int32 GAlternateAiModeBlocked = 3;
 
-	// `CSecureType`'s scramble, verbatim from `0x1042fde0` / `0x1028ea60` and its reader pair
-	// `0x1042fe90` / `0x103a2e30`. Two different XOR immediates on the two sides (`0x0ae8746f`
-	// writing, `0x0ce9f66a` reading) is not a transcription slip — the listing has both.
-	constexpr uint32 GSecureHashXor = 0x7e92476fu;
-	constexpr uint32 GSecureHashMaskA = 0xa0086435u;
-	constexpr uint32 GSecureHashXorA = 0x4814ade7u;
-	constexpr uint32 GSecureHashAddA = 0x8c4b7d1fu;
-	constexpr uint32 GSecureHashXorB = 0x16066412u;
-	constexpr uint32 GSecureHashMaskB = 0x5ff79bcau;
-	constexpr uint32 GSecureStoreMask = 0x068d8635u;
 	constexpr uint32 GSecureStoreXorWrite = 0x0ae8746fu;
-	constexpr uint32 GSecureStoreXorRead = 0x0ce9f66au;
-	constexpr uint32 GSecureStoreAdd = 0x0ffa91d8u;
-	constexpr uint32 GSecureStoreMask2 = 0x197279cau;
-	constexpr uint32 GSecureStoreXorTail = 0xa641cacdu;
 
 	// `0x1042fde0`, the hash `0x1028ea60` runs the level through before scrambling it.
 	uint32 SecureHash(uint32 Value)
 	{
-		const uint32 Folded = Value ^ GSecureHashXor;
+		const uint32 Folded = Value ^ NpcKernelSensesShared::GSecureHashXor;
 		return Folded
-			^ (((((Folded & GSecureHashMaskA) ^ GSecureHashXorA) + GSecureHashAddA)
-				^ GSecureHashXorB) & GSecureHashMaskB);
+			^ (((((Folded & NpcKernelSensesShared::GSecureHashMaskA) ^ NpcKernelSensesShared::GSecureHashXorA) + NpcKernelSensesShared::GSecureHashAddA)
+				^ NpcKernelSensesShared::GSecureHashXorB) & NpcKernelSensesShared::GSecureHashMaskB);
 	}
 
-	// `0x1042fe90`, its inverse, which `CNPC_VPedestrian::vfunc461` (`0x103a2e30`) applies to the
-	// unscrambled word.
-	uint32 SecureUnhash(uint32 Value)
-	{
-		return Value
-			^ ((((Value & GSecureHashMaskA) ^ GSecureHashXorA) + GSecureHashAddA)
-				^ GSecureHashXorB) & GSecureHashMaskB
-			^ GSecureHashXor;
-	}
 }
 
 // =================================================================================================
@@ -459,108 +423,6 @@ bool FElysiumNpc::IsHintViewable(const FHintWords& Hint)
 }
 
 // =================================================================================================
-// Slot 45 — the two species `PassesFindEntityFOVTrace` bodies
-// =================================================================================================
-
-bool FElysiumNpc::PayphonePassesFindEntityFovTrace(const FElysiumEntity& Other) const
-{
-	// `0x101aaf80`, `CPayphone#45`, 165 bytes. **There is no cone and no trace.**
-	//
-	//     d = |other.EyePosition() - EyePosition()| summed per component   (MANHATTAN, not Euclidean)
-	//     if (d >= 85.0) return false;                                     (_DAT_1047a3b0)
-	//     return AABBOverlap(myOBB, otherOBB);                             (0x10240250)
-	//
-	// `0x10240250` is six comparisons — `otherMax >= myMin && otherMin <= myMax` per axis — which
-	// is a box intersection, not a field-of-view test. 29c's walk calls it "the actual FOV cone
-	// test"; the body is `FLD/FCOMP` pairs on the two OBBs and nothing else.
-	//
-	// The slot's `Vector, Vector, int` tail is IGNORED by this body: only the entity argument is
-	// read. The payphone is an NPC that answers "is someone standing at me", which is what the
-	// classname is for.
-	const float DistanceUnits = static_cast<float>(
-		(FMath::Abs(EyePosition().X - Other.EyePosition().X)
-			+ FMath::Abs(EyePosition().Y - Other.EyePosition().Y)
-			+ FMath::Abs(EyePosition().Z - Other.EyePosition().Z)) / ElysiumMove::U);
-	if (!(DistanceUnits < GPayphoneManhattanLimitUnits))
-	{
-		return false;
-	}
-	// `m_Collision` slots +4 / +8 on both entities. Family **Motor**'s `RetailCollisionExtents` is
-	// the seam for them and answers false with both boxes zeroed; retail's six comparisons over two
-	// zero boxes anchored at the same place would answer TRUE, so refusing on the seam is this
-	// port's choice and is stated: an unmeasurable box does not overlap.
-	FVector MyMins = FVector::ZeroVector;
-	FVector MyMaxs = FVector::ZeroVector;
-	FVector OtherMins = FVector::ZeroVector;
-	FVector OtherMaxs = FVector::ZeroVector;
-	if (!RetailCollisionExtents(*this, MyMins, MyMaxs)
-		|| !RetailCollisionExtents(Other, OtherMins, OtherMaxs))
-	{
-		return false;
-	}
-	const FVector MyOriginUnits = Origin / ElysiumMove::U;
-	const FVector OtherOriginUnits = Other.Origin / ElysiumMove::U;
-	const FVector A0 = MyOriginUnits + MyMins;
-	const FVector A1 = MyOriginUnits + MyMaxs;
-	const FVector B0 = OtherOriginUnits + OtherMins;
-	const FVector B1 = OtherOriginUnits + OtherMaxs;
-	return B1.X >= A0.X && B0.X <= A1.X && B1.Y >= A0.Y && B0.Y <= A1.Y
-		&& B1.Z >= A0.Z && B0.Z <= A1.Z;
-}
-
-bool FElysiumNpc::ProneDialogPassesFindEntityFovTrace(const FVector& FromCm, const FVector& ToCm,
-	int32 Mask, bool& bOutRayIsValid) const
-{
-	// `0x103a4bb0`, `CNPC_ProneDialog#45`, 306 bytes, almost all of it filling an engine `Ray_t`:
-	//
-	//     delta = to - from
-	//     ray.m_IsRay = (delta.LengthSquared() != 0.0)          (_DAT_104454c4, a byte at +0x?? )
-	//     ray.m_IsSwept = 1; every other field zero
-	//     enginetrace->TraceRay(&ray, mask, this, &tr)          ((*DAT_1070b254 + 8))
-	//     return tr.m_pEnt == this || (tr.m_pEnt == NULL && tr.fraction == 1.0);
-	//
-	// So the answer is "the ray from `from` toward `to` reaches ME, or reaches nothing at all".
-	// `_DAT_10449280` is 1.0 as a double and is the engine's CLEAR fraction.
-	//
-	// **SEAM**: this runtime's embodiment answers `QueryLineOfSight(from, to)` — clear or blocked —
-	// and reports NO hit entity, so the `tr.m_pEnt == this` arm has no source and only the
-	// clear-segment arm can answer true. Named: `IElysiumEmbodiment::QueryLineOfSight` is the
-	// retail `TraceRay` this stands for, and `tr.m_pEnt` is the word it does not carry.
-	const FVector Delta = ToCm - FromCm;
-	bOutRayIsValid = Delta.SizeSquared() != GSharedZero;
-	(void)Mask;
-	const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr)
-	{
-		// A headless world traces nothing, which is the CLEAR arm — `fraction == 1.0`, no entity.
-		return GSensesTraceClearFraction == 1.0f;
-	}
-	return Embodiment->QueryLineOfSight(FromCm, ToCm);
-}
-
-// =================================================================================================
-// `CNPC_VCameraSecurity#468` — `QuerySeeEntity`, `0x1036a030`
-// =================================================================================================
-
-bool FElysiumNpc::CameraSecurityQuerySeeEntity(const FElysiumEntity& Candidate) const
-{
-	// `0x1036a030`, 18 bytes, and the WHOLE body is `return *(int*)(param_1 + 0xa8) != 0;`.
-	//
-	// `+0x00a8` is `CBaseEntity::m_pPlayer` (`npc-kernel/layout.md`), the self-downcast cache the
-	// `CBasePlayer` constructor fills — so the test is "the candidate is the player", and the
-	// security camera's sense admission is exactly that and nothing else. It does NOT chain the
-	// base Troika `QuerySeeEntity` (`0x102b38b0`); 29c's walk says it adds a gate "on top of" the
-	// base, and there is no call in the 18 bytes.
-	//
-	// Its own base `CNPC_VCamera` fills slot 468 with nothing of its own, so the security camera is
-	// the only class in the family whose sight is player-only.
-	//
-	// `FElysiumEntity` carries no self-downcast cache, so "is the player" is spelled the way every
-	// other ported body in this runtime spells it: the world's one player handle.
-	return World != nullptr && Candidate.Handle == World->PlayerHandle();
-}
-
-// =================================================================================================
 // The `CNPC_VWerewolf` / `CNPC_VYukie` stealth-gate trio — `0x103cb810`, `0x103ddaa0`, `0x103ddaf0`
 // =================================================================================================
 
@@ -590,104 +452,6 @@ bool FElysiumNpc::SpeciesStealthSenseGate(const FElysiumEntity* Candidate) const
 	return true;
 }
 
-bool FElysiumNpc::WerewolfFVisible(const FElysiumEntity* Candidate,
-	FElysiumEntityHandle* OutBlocker)
-{
-	// `0x103cb810`, `CNPC_VWerewolf#201`, 185 bytes of which 120 is the scope trace.
-	//
-	//     if (candidate != NULL) {
-	//         if (!ignore_senses && !(ignore_player && candidate->m_pPlayer)) return true;
-	//         if (ppBlocker) *ppBlocker = NULL;
-	//     }
-	//     return false;
-	//
-	// **The werewolf has no visibility test.** No range, no cone, no trace, no `m_pSenses` — a live
-	// candidate that the two debug ConVars do not veto is visible, full stop. That is what makes
-	// the Hollywood chase work and it is not a stub: 185 bytes, seven real callers, and the base
-	// slot-201 body it replaces (`0x102b4630`) is 700-odd bytes of exactly the checks it drops.
-	//
-	// The NULL-candidate arm does NOT write the blocker; only the vetoed arm does. Retail's
-	// asymmetry, kept.
-	if (Candidate == nullptr)
-	{
-		return false;
-	}
-	if (SpeciesStealthSenseGate(Candidate))
-	{
-		return true;
-	}
-	if (OutBlocker != nullptr)
-	{
-		*OutBlocker = FElysiumEntityHandle();
-	}
-	return false;
-}
-
-bool FElysiumNpc::YukieFInViewCone(const FElysiumEntity* Candidate) const
-{
-	// `0x103ddaa0`, `CNPC_VYukie#363`, 58 bytes: the gate and a literal `1`. Yukie has no view
-	// cone at all — the base body it replaces (`0x102b4540`) is the follower/cone chain.
-	return SpeciesStealthSenseGate(Candidate);
-}
-
-bool FElysiumNpc::YukieFVisible(const FElysiumEntity* Candidate, FElysiumEntityHandle* OutBlocker)
-{
-	// `0x103ddaf0`, `CNPC_VYukie#201`, 109 bytes. The same gate as the werewolf, but the success
-	// arm CHAINS rather than answering true:
-	//
-	//     return slot594(candidate, param_2, NULL, 0) != 0;     // vtable +0x948, 0x102b4760
-	//
-	// and the blocker is zeroed on BOTH veto arms (`npc_ignore_senses` and `npc_ignore_player`),
-	// never on a null candidate. Slot 594 is story 29d's row and is a declared stub here, so the
-	// chain answers what the stub answers and the gate above it is the recovered half.
-	if (Candidate == nullptr)
-	{
-		return false;
-	}
-	if (SpeciesStealthSenseGate(Candidate))
-	{
-		return Slot594(const_cast<FElysiumEntity*>(Candidate), 0, nullptr, 0);
-	}
-	if (OutBlocker != nullptr)
-	{
-		*OutBlocker = FElysiumEntityHandle();
-	}
-	return false;
-}
-
-// =================================================================================================
-// `CNPC_VYukie#602` — the melee-leave decision, `0x103dda10`
-// =================================================================================================
-
-bool FElysiumNpc::YukieShouldLeaveMelee()
-{
-	// `0x103dda10`, 103 bytes:
-	//
-	//     if (!HasUsableRangedWeapon())                             // slot 308, vtable +0x4d0
-	//         return (2 * meleeRange) * 1.5 <= m_flEnemyDist;       // _DAT_1044f02c, +0x6268
-	//     return m_flMeleeMustLeaveTimer <= curtime;                // +0x6074
-	//
-	// Retail spells the first compare as `(a < b) != (a == b)`, which is the FPU flag pair for
-	// `a <= b`; the second is `!(curtime < timer)`, the same relation the other way round. Both are
-	// `<=`, not `<`.
-	//
-	// The melee range is `DAT_10924a1c` read as `IsCommand() ? 0.0 : +0x28` — family
-	// **TroikaHelpers**' `MeleeRangeUnits`, `debug_melee_advance_combatmove_dist` "100".
-	//
-	// Against the Troika line (`FElysiumNpc::Slot602`) this body drops FOUR terms: the
-	// `m_bfNPCFrenziedFlags & 2` gate, the follower-boss gate, the attack-coordinator null test and
-	// the coordinator's own `holds-me` tail. Yukie leaves melee on distance or on the clock alone.
-	//
-	// Dispatched by `FElysiumNpcYukie::Slot602` since story 5 step 3.
-	if (!HasUsableRangedWeapon())
-	{
-		const float RangeUnits = 2.0f * MeleeRangeUnits() * GYukieMeleeRangeScale;
-		return RangeUnits <= ScheduleHost.EnemyDistUnits;
-	}
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return MeleeMustLeaveTimer <= Now;
-}
-
 // =================================================================================================
 // The two witness-record setters — `0x1028ea60` and `0x1028eb30`
 // =================================================================================================
@@ -698,20 +462,8 @@ uint32 FElysiumNpc::EncodeWitnessedLevel(uint32 Level)
 	//     h = hash(level);
 	//     stored = (((h & 0x068d8635) ^ 0x0ae8746f) + 0x0ffa91d8) & 0x197279ca ^ h ^ 0xa641cacd;
 	const uint32 Hashed = SecureHash(Level);
-	return ((((Hashed & GSecureStoreMask) ^ GSecureStoreXorWrite) + GSecureStoreAdd)
-		& GSecureStoreMask2) ^ Hashed ^ GSecureStoreXorTail;
-}
-
-uint32 FElysiumNpc::DecodeWitnessedLevel(uint32 Stored)
-{
-	// `CNPC_VPedestrian::vfunc461` (`0x103a2e30`) reading it back:
-	//     h = (((stored & 0x068d8635) ^ 0x0ce9f66a) + 0x0ffa91d8) & 0x197279ca ^ stored ^ 0xa641cacd;
-	//     level = unhash(h);
-	// **The write XORs with `0x0ae8746f` and the read with `0x0ce9f66a`.** Both immediates are in
-	// their listings; they are not the same constant mistyped.
-	const uint32 Hashed = ((((Stored & GSecureStoreMask) ^ GSecureStoreXorRead) + GSecureStoreAdd)
-		& GSecureStoreMask2) ^ Stored ^ GSecureStoreXorTail;
-	return SecureUnhash(Hashed);
+	return ((((Hashed & NpcKernelSensesShared::GSecureStoreMask) ^ GSecureStoreXorWrite) + NpcKernelSensesShared::GSecureStoreAdd)
+		& NpcKernelSensesShared::GSecureStoreMask2) ^ Hashed ^ NpcKernelSensesShared::GSecureStoreXorTail;
 }
 
 void FElysiumNpc::RecordCriminalWitness(int32 Level, const FVector& AtCm,
@@ -868,67 +620,6 @@ void FElysiumNpc::OnDoorBlocked(FElysiumEntity& Door)
 		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 		AlternateAiExpireTime = Now + static_cast<double>(GDoorAlternateAiWindowSeconds);
 	}
-}
-
-// =================================================================================================
-// `CNPC_VWerewolf::ShouldPursueEnemy` — `0x103cf5f0`
-// =================================================================================================
-
-float FElysiumNpc::WerewolfPursueElapsedLimitSeconds()
-{
-	// `DAT_1093f8ec`, read as `vfunc1() ? _DAT_104454c4 : +0x28`: `werewolf_pursuit_unseen_time` "3.0".
-	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfPursuitUnseenTime);
-}
-
-float FElysiumNpc::WerewolfPursuePlayerDistLimitUnits()
-{
-	// `DAT_1093d574`, the same shape: `werewolf_pursuit_distance` "800".
-	return ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfPursuitDistance);
-}
-
-bool FElysiumNpc::WerewolfShouldPursueEnemy() const
-{
-	// `0x103cf5f0`, 292 bytes with the scope trace. The recovered shape:
-	//
-	//     if (!(m_bfWerewolfHintFlags (+0x66e8) & 4)) {
-	//         elapsed = curtime - +0x66ec;  if (elapsed < 0.0) elapsed = 0.0;
-	//         if (convarA > elapsed)                       -> fall through to true
-	//         else if (convarB > m_flPlayerDist (+0x6264))  -> fall through to true
-	//         else return false;
-	//     }
-	//     return true;
-	//
-	// **Both gates must fail before the werewolf gives up**, and the flag bit skips the test
-	// outright. The elapsed clamp is `if (elapsed < 0.0) elapsed = 0.0` — `_DAT_104454c4`, the
-	// shared zero — which only matters on the pass after `+0x66ec` is stamped into the future.
-	//
-	// `+0x66e8` is family **Hints**' `WerewolfHintFlags` and `+0x66ec` is family **Lifecycle**'s
-	// `WerewolfUnhideStamp` (`ScriptUnhide` stamps it with `curtime`), so the elapsed term is "how
-	// long since the werewolf was last un-hidden by a script".
-	//
-	// As shipped (3.0 s, 800 units) a werewolf keeps pursuing for three seconds after an unhide,
-	// and after that while the player is inside 800 units.
-	constexpr uint32 WerewolfFlagSkipPursueTest = 0x4u;
-	if ((WerewolfHintFlags & WerewolfFlagSkipPursueTest) == WerewolfFlagSkipPursueTest)
-	{
-		return true;
-	}
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	float Elapsed = static_cast<float>(Now - WerewolfUnhideStamp);
-	if (Elapsed < GSharedZero)
-	{
-		Elapsed = GSharedZero;
-	}
-	if (WerewolfPursueElapsedLimitSeconds() > Elapsed)
-	{
-		return true;
-	}
-	const float PlayerDistUnits = Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U;
-	if (WerewolfPursuePlayerDistLimitUnits() > PlayerDistUnits)
-	{
-		return true;
-	}
-	return false;
 }
 
 // =================================================================================================

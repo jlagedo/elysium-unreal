@@ -80,33 +80,12 @@ int32 SelectIdealStateDisciplineStripCalls = 0;
 bool HuntConVarIsCommand = false;
 float HuntConVarRawWord = 0.f;
 
-/** `CNPC_VDog`'s snarl-arm pair, `0x103743c0` at `103746b5`: `+0x6680 = +0x667c` then
- *  `+0x6678 = gpGlobals->curtime`. SEAM: `CNPC_VDog` carries no datamap in the corpus and no
- *  reader of either offset is recovered, so the source word `+0x667c` answers 0 and the snapshot
- *  records only that the arm ran. The stamp itself is real. */
-float DogSnarlSourceWord = 0.f;    // `+0x667c`, unrecovered
-float DogSnarlPrevValue = 0.f;     // `+0x6680`
-double DogSnarlTime = 0.0;         // `+0x6678`
-
-/** `CNPC_VBach::m_bCanFightYet` (`+0x66a8`). Default 0, so Bach snaps ALERT/COMBAT back. */
-bool bCanFightYet = false;
-/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
-bool bSabbatLeaderActivated = false;
-/** `CNPC_VCop::m_bWasEverInCombat` (`+0x6670`). */
-bool bWasEverInCombat = false;
 // `CNPC_VCop`'s census byte `+0x6672` is NOT declared here: family SaveRestore10 already stands
 // it as `bCopCountedSecond`, and `CNPC_VCop::OnStateChange` (`0x10371c20`) gates its decrement of
 // `DAT_1093acb0` on that same word.
 /** Process-wide cop census `DAT_1093acb0`. Last writer wins; never restored. */
 static int32 CopCensusCount();
 static void SetCopCensusCount(int32 Value);
-
-/** Map name `gpGlobals->mapname` as the 12-byte compare in `0x10387380` reads it. Tests set
- *  `World->MapName()`; this override is for a fixture that has no world map name. */
-FString SelectIdealStateMapNameOverride;
-
-/** `0x103871c0` (shared holster/draw) call count from Cop's OnStateChange tails. */
-int32 CopHolsterDrawCalls = 0;
 
 /** SEAM for the crime level of the player's active weapon — `0x102517e0` resolves the weapon's
  *  record and `CNPC_VPedestrian::vfunc461` (`0x103a2e30`) reads it at `weaponData +0x3c4`. This
@@ -131,34 +110,10 @@ int32 TroikaSelectIdealState();
  *  typed `SelectIdealState()` records its answer and converts it. */
 virtual int32 SelectIdealStateRetail();
 
-/** The species SelectIdealState bodies, each the `SelectIdealStateRetail` override of its class. */
-int32 AndreiBloodSelectIdealStateRetail();
 int32 HumanSelectIdealState();
 int32 AnimalSelectIdealState();
-int32 HumanCombatPatrolSelectIdealState();
-int32 SabbatLeaderSelectIdealState();
-int32 TzimisceSelectIdealState();
-int32 DogSelectIdealState();
-int32 Guard1SelectIdealState();
-int32 PedestrianSelectIdealState();
-int32 ZombieSelectIdealState();
-int32 CopSelectIdealState();
-int32 WerewolfSelectIdealState();
 
 /** `FUN_103723f0` — `CNPC_VCop::vfunc461`'s idle/alert pre-pass, its only caller. Answers retail
  *  `2` when it takes the arm and `0` when it does not. */
 int32 CopSelectIdealStatePrePass();
 
-/** `CNPC_VCamera::PreSelectIdealState` (`0x10368f80`) / `CNPC_VDog::PreSelectIdealState`
- *  (`0x10374d80`). Reached from slot 460's species prologue. */
-int32 CameraPreSelectIdealState();
-int32 DogPreSelectIdealState();
-void DogCombatShortCircuit();   // `0x10374e50`
-
-/** `CNPC_VBach::OnStateChange` (`0x103639b0`) and `CNPC_VCop::OnStateChange` (`0x10371c20`).
- *  Bach returns true when it snapped back (the Troika body must not run). */
-bool BachOnStateChange(int32 OldRetail, int32 NewRetail);
-void CopOnStateChange(int32 OldRetail, int32 NewRetail);
-/** `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`)'s weapon half, the tail both of Cop's
- *  arms chain. Unconditional — it carries no census class list. */
-void CopHumanCombatantOnStateChange(int32 NewRetail);

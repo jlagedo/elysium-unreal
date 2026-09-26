@@ -1,4 +1,6 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelGeometryShared.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -27,10 +29,6 @@ namespace
 	// `_DAT_1044bef8` = 0.25f. `BodyTarget`'s anchor drop: the fraction of the centre-to-origin
 	// delta subtracted from the bounds centre to get the point the blend starts at.
 	constexpr float GBodyTargetAnchorFraction = 0.25f;
-
-	// The pooled half, read by both of this family's bodies that need one — `BodyTarget`'s plain
-	// midpoint arm and `StandingOnPlayer`'s half-diagonal.
-	constexpr float GRetailHalf = ElysiumNpcTunables::Half;
 
 	// `BodyTarget`'s two noise draws, `RandomFloat(0, 0.5)` twice (`PUSH 0x3f000000; PUSH 0x0`). The
 	// arm adds BOTH, so the blend parameter spans 0..1 with a triangular distribution rather than
@@ -70,55 +68,11 @@ namespace
 	// The pooled 1.0f, read twice as a CLEAR trace fraction (`ResolveStandingOnHead`) and once as a
 	// one-second interval (`UpdateFakeHull`'s damage gate).
 	constexpr float GGeometryTraceClearFraction = ElysiumNpcTunables::One;
-	constexpr double GFakeHullPushIntervalSeconds = static_cast<double>(ElysiumNpcTunables::One);
 
 	// `0x202400b` — the trace mask both of `ResolveStandingOnHead`'s hull traces use, the same one
 	// family Motor records for `CheckOnGround`, `ValidateNavGoal` and `GetGroundpoint`.
 	constexpr int32 GStandingOnHeadTraceMask = 0x202400b;
 
-	// `_DAT_10462914` = 1.25f — `UpdateFakeHull` scales the hull's own mins and maxs by it before it
-	// builds the box around the `Bip01` bone point.
-	constexpr float GFakeHullExtentScale = 1.25f;
-
-	// `_DAT_10457f5c` = 500.0f — the force scale on the damage packet, applied to the bone point's
-	// movement since the previous call. SOURCE units.
-	constexpr float GFakeHullForceScale = 500.0f;
-
-	// The packet `UpdateFakeHull` builds: `CTakeDamageInfo(this, this, 20.0, 1, 0, 0, -1)` with
-	// `0x41a00000` = 20.0 as the scalar, then `0x101c2a10(2)`, `0x101c2b10(1)` and `0x101c2a50(1.0)`.
-	constexpr float GFakeHullDamage = 20.0f;
-
-	// The three knockback activities slot 323's classification picks between (`0x79` default, `0x7a`
-	// for class 1, `0x7b` for class 3) and the bone `UpdateFakeHull` measures.
-	constexpr int32 GFakeHullActivityDefault = 0x79;
-	constexpr int32 GFakeHullActivityClassOne = 0x7a;
-	constexpr int32 GFakeHullActivityClassThree = 0x7b;
-	const TCHAR* const GFakeHullBoneName = TEXT("Bip01");
-
-	// `CPayphone::vfunc193`'s one bone name, `s_Phone_bone_01_1059537c`.
-	const TCHAR* const GPayphoneBoneName = TEXT("Phone_bone_01");
-
-	// `_DAT_1046dcd0` = 128.0f SOURCE units — the range gate on `CoordinateTroops`' severed-tentacle
-	// scatter. Compared against the LENGTH `VectorNormalize` answers, inclusively (`AND EAX,0x4100`
-	// keeps both the below and the equal flags).
-	constexpr float GScatterRangeUnits = 128.0f;
-
-	// `_DAT_10449260`, a **DOUBLE** (`1039997d  FCOMP double ptr [0x10449260]`) = 0.25. The 2-D dot
-	// floor on the same gate: a 75.5-degree half-angle in front of `m_vecForward`. Read as a float
-	// the cell is 0.0 and the gate becomes the whole forward half-plane.
-	constexpr double GScatterForwardDotFloor = 0.25;
-
-	// The two forced-schedule ids `0x103998d0` refuses to scatter a tentacle out of. What each one
-	// IS is not a fact of this family's rows; they are carried by number, as retail compares them.
-	constexpr int32 GScatterRefusedScheduleA = 0x163;
-	constexpr int32 GScatterRefusedScheduleB = 0x165;
-
-	// `m_ePhase` (+0x6670) must read exactly this before a severed tentacle will scatter.
-	constexpr int32 GScatterRequiredPhase = 2;
-
-	// `m_rhSeveredTentacles` is a fixed SIX-entry array in retail and both scatter bodies walk all
-	// six unconditionally (`iVar4 = 6; do { … } while (--iVar4)`).
-	constexpr int32 GSeveredTentacleCount = 6;
 }
 
 // =================================================================================================
@@ -134,28 +88,6 @@ FVector FElysiumNpc::EyePosition() const
 	// this method on its C++ class (story 5 step 3). `CAI_BaseHumanoid` (`0x1025e8e0`) has no
 	// instance (its arm was deleted by story 5 step 1); `CBaseCineCam`, `CBasePlayer` and
 	// `CItemContainerLock` are not NPC classes.
-	return FElysiumCombatCharacter::EyePosition();
-}
-
-FVector FElysiumNpc::PayphoneEyePosition() const
-{
-	// `CPayphone::vfunc193` `0x101aae60`, 95 bytes, the body of `FElysiumNpcPayphone::EyePosition`:
-	//
-	//     bone = LookupBone("Phone_bone_01");
-	//     if (bone == -1) { return CAISound::FUN_100b4b40(this, out); }
-	//     GetBonePosition02(bone, &pos, &ang);
-	//     return pos;
-	//
-	// The bone's own world position, with NO view offset added and the angles thrown away. The
-	// payphone's "eye" is its handset, which is what a dialogue camera and a `LookAtEntityEye` aim
-	// at. `npc_payphone` is both a census classname and a registered spawn leaf, so this body is
-	// reachable from a map.
-	FVector BoneCm = FVector::ZeroVector;
-	if (BoneWorldPosition(GPayphoneBoneName, BoneCm))
-	{
-		return BoneCm;
-	}
-	// `LookupBone` answered -1 — retail's own direct call into the base body `0x100b4b40`.
 	return FElysiumCombatCharacter::EyePosition();
 }
 
@@ -233,7 +165,7 @@ FVector FElysiumNpc::BodyTargetBlend(const FVector& AnchorCm, const FVector& Eye
 
 	// `10278b56`: `Anchor + Span * _DAT_104454d0` — the plain midpoint between the lowered centre
 	// and the eye.
-	return AnchorCm + Span * GRetailHalf;
+	return AnchorCm + Span * NpcKernelGeometryShared::GRetailHalf;
 }
 
 FVector FElysiumNpc::BodyTarget(const FVector& /*PosSrc*/, bool bNoisy, bool bAimAtEyeExactly)
@@ -297,56 +229,8 @@ void FElysiumNpc::SetSize(const FVector& InSizeCm)
 }
 
 // =================================================================================================
-// Slot 337 — `GetUsedHullBits`, `0x1029a050` and its seven species replacements
+// Slot 337 — `GetUsedHullBits`, `0x1029a050`
 // =================================================================================================
-
-const FElysiumNpc::FUsedHullBitsSpecies* FElysiumNpc::UsedHullBitsSpeciesRows(int32& OutCount)
-{
-	// Every class in the `CAI_BaseNPC` census that fills slot 337 with something other than
-	// `CAI_BaseNPCTroika::GetUsedHullBits`. The three Tzimisce rows are the ones the decompiled C
-	// gets wrong: it shows a bare forward with no bit added, and the listing shows `OR AH,<imm>` —
-	// a byte-wide OR into bits 8..15, which is `| 0x400`, `| 0x800` and `| 0x2000`.
-	static const FUsedHullBitsSpecies Rows[] =
-	{
-		// --- The OR-onto-the-base shape ---
-		{ TEXT("CNPC_VTzimisce"),         TEXT("0x103b9160"), 0x0400,   false },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c1cb0"), 0x0800,   false },
-		{ TEXT("CNPC_VTzimisceRunner"),   TEXT("0x103c3cb0"), 0x2000,   false },
-		{ TEXT("CNPC_VMingXiao"),         TEXT("0x10392a50"), 0x38000,  false },
-		{ TEXT("CNPC_VScurrying"),        TEXT("0x103ac4e0"), 0x80000,  false },
-		{ TEXT("CNPC_VRat"),              TEXT("0x103ac4e0"), 0x80000,  false },
-		// --- The answer-a-bare-constant shape: no call up the chain, so bit 0 is NOT set ---
-		{ TEXT("CNPC_VCamera"),           TEXT("0x10368e80"), 0x80,     true },
-		{ TEXT("CNPC_VCameraSecurity"),   TEXT("0x10368e80"), 0x80,     true },
-		{ TEXT("CNPC_VGargoyle"),         TEXT("0x10378680"), 0x4000,   true },
-		{ TEXT("CNPC_VHengeyokai"),       TEXT("0x1037fb20"), 0x40001,  true },
-		{ TEXT("CNPC_VManBat"),           TEXT("0x1038b100"), 0x100000, true },
-		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039c480"), 0x38000,  true },
-		{ TEXT("CNPC_VSheriffMan"),       TEXT("0x103ae840"), 0x200000, true },
-		{ TEXT("CNPC_VWerewolf"),         TEXT("0x103cab50"), 0x1000,   true },
-	};
-	OutCount = UE_ARRAY_COUNT(Rows);
-	return Rows;
-}
-
-const FElysiumNpc::FUsedHullBitsSpecies* FElysiumNpc::UsedHullBitsSpeciesOf(
-	const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	int32 Count = 0;
-	const FUsedHullBitsSpecies* Rows = UsedHullBitsSpeciesRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (FCString::Strcmp(Rows[Index].RetailClass, InRetailClass) == 0)
-		{
-			return &Rows[Index];
-		}
-	}
-	return nullptr;
-}
 
 int32 FElysiumNpc::GetUsedHullBits()
 {
@@ -363,28 +247,9 @@ int32 FElysiumNpc::GetUsedHullBits()
 	// three deep and every rung adds the same bit.
 	int32 Bits = BaseCombatCharacterHullBits;
 
-	// Twelve species classes override this method on their C++ classes (story 5 step 3) through
-	// `SpeciesUsedHullBits`.
+	// Twelve species classes override this method (story 5 step 4): five OR a bit onto this answer
+	// and seven replace it with a bare constant.
 	return Bits;
-}
-
-int32 FElysiumNpc::SpeciesUsedHullBits(const TCHAR* SpeciesBody)
-{
-	// The body of a species class's `GetUsedHullBits` override, read off its row of
-	// `UsedHullBitsSpeciesRows` by the retail body address. `bReplaces`: seven species answer a bare
-	// `return <imm>` and never call up, so bit 0 is absent from their answer. The other five call the
-	// Troika body `0x1029a050` directly and OR onto its 1.
-	int32 Count = 0;
-	const FUsedHullBitsSpecies* Rows = UsedHullBitsSpeciesRows(Count);
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		if (FCString::Strcmp(Rows[Index].Body, SpeciesBody) == 0)
-		{
-			return Rows[Index].bReplaces ? Rows[Index].Bits
-				: (FElysiumNpc::GetUsedHullBits() | Rows[Index].Bits);
-		}
-	}
-	return FElysiumNpc::GetUsedHullBits();
 }
 
 // =================================================================================================
@@ -620,267 +485,6 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 }
 
 // =================================================================================================
-// `CNPC_VAsianVampire::StandingOnPlayer`, `0x10362730`
-// =================================================================================================
-
-bool FElysiumNpc::StandingOnPlayerOverlap(const FVector& MyOriginCm, const FVector& OtherOriginCm,
-	const FVector& MyMinsCm, const FVector& MyMaxsCm, const FVector& OtherMinsCm,
-	const FVector& OtherMaxsCm)
-{
-	// `10362730`'s tail. Retail builds three 2-D lengths with `sqrtf` and compares one against the
-	// sum of the other two, each scaled by `_DAT_104454d0` (0.5):
-	//
-	//     sqrtf((o.x-m.x)^2 + (o.y-m.y)^2)
-	//       <   sqrt((oMax.x-oMin.x)^2 + (oMax.y-oMin.y)^2) * 0.5
-	//         + sqrt((mMax.x-mMin.x)^2 + (mMax.y-mMin.y)^2) * 0.5
-	//
-	// The two right-hand terms are HALF-DIAGONALS of the XY footprints, not radii: for a 32x32 hull
-	// that is 22.6 units, not 16. So the test admits a diagonal overlap a circle of the box's
-	// half-width would refuse, and the comparison is STRICTLY less — exactly touching is not
-	// standing on.
-	const double Separation = FVector2D(OtherOriginCm.X - MyOriginCm.X,
-		OtherOriginCm.Y - MyOriginCm.Y).Size();
-	const double OtherHalfDiagonal = FVector2D(OtherMaxsCm.X - OtherMinsCm.X,
-		OtherMaxsCm.Y - OtherMinsCm.Y).Size() * GRetailHalf;
-	const double MyHalfDiagonal = FVector2D(MyMaxsCm.X - MyMinsCm.X,
-		MyMaxsCm.Y - MyMinsCm.Y).Size() * GRetailHalf;
-	return Separation < OtherHalfDiagonal + MyHalfDiagonal;
-}
-
-bool FElysiumNpc::StandingOnPlayer() const
-{
-	// `0x10362730`, 383 bytes, retail-named. The scope-trace pair is the outer 100 of them.
-	//
-	// The subject is `m_hClosestPlayer` (`+0x628c`), the sense pass's cache, NOT `GetEnemy()` — an
-	// asian vampire standing on a player it is not fighting still answers true.
-	const FElysiumNpcMemory& Mem = Senses.Memory;
-	FElysiumEntity* Player = (Mem.ClosestPlayer.IsSet() && World)
-		? World->Resolve(Mem.ClosestPlayer) : nullptr;
-	if (Player == nullptr)
-	{
-		// `thunk_FUN_100290c0` answered null — retail falls straight to the `return false` tail.
-		return false;
-	}
-
-	FVector PlayerMinsUnits = FVector::ZeroVector;
-	FVector PlayerMaxsUnits = FVector::ZeroVector;
-	FVector MyMinsUnits = FVector::ZeroVector;
-	FVector MyMaxsUnits = FVector::ZeroVector;
-	// `piVar14[0x9c]` is the player's `m_Collision` and `this->m_Collision` is `+0x270`; slots 4 and
-	// 8 on each are the OBB mins and maxs. Family Motor's extents seam is the same absent collision
-	// property and answers both as zero, which collapses both half-diagonals to zero and makes the
-	// test "are the two origins at exactly the same XY point" — the conservative refusal, stated.
-	RetailCollisionExtents(*Player, PlayerMinsUnits, PlayerMaxsUnits);
-	RetailCollisionExtents(*this, MyMinsUnits, MyMaxsUnits);
-
-	return StandingOnPlayerOverlap(Origin, Player->Origin, MyMinsUnits * ElysiumMove::U,
-		MyMaxsUnits * ElysiumMove::U, PlayerMinsUnits * ElysiumMove::U,
-		PlayerMaxsUnits * ElysiumMove::U);
-}
-
-// =================================================================================================
-// `CNPC_VWerewolf::UpdateFakeHull`, `0x103d93b0`
-// =================================================================================================
-
-bool FElysiumNpc::BoxesOverlap(const FVector& AMin, const FVector& AMax, const FVector& BMin,
-	const FVector& BMax)
-{
-	// `FUN_10240250`, verbatim and in retail's order: X max, X min, Y max, Y min, Z max, Z min.
-	// Every comparison is inclusive (`>=` / `<=`), so two boxes that share a face overlap.
-	return BMax.X >= AMin.X && BMin.X <= AMax.X
-		&& BMax.Y >= AMin.Y && BMin.Y <= AMax.Y
-		&& BMax.Z >= AMin.Z && BMin.Z <= AMax.Z;
-}
-
-int32 FElysiumNpc::FakeHullKnockbackActivity(int32 DirectionClass)
-{
-	// `103d971e`..`103d973c`: `EBP = 0x79` before the test, `DEC EAX; JZ -> 0x7a`,
-	// `SUB EAX,2; JNZ -> keep 0x79`, else `0x7b`. So class 1 answers `0x7a`, class 3 answers `0x7b`
-	// and everything else — including 2 — answers `0x79`.
-	switch (DirectionClass)
-	{
-	case 1:  return GFakeHullActivityClassOne;
-	case 3:  return GFakeHullActivityClassThree;
-	default: return GFakeHullActivityDefault;
-	}
-}
-
-int32 FElysiumNpc::FakeHullDebugCvar() const
-{
-	// `DAT_1093f73c` `+0x2c`: `werewolf_show_debug`, shipped "0", which closes the debug draw.
-	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug);
-}
-
-FElysiumEntity* FElysiumNpc::FakeHullPushTarget() const
-{
-	// SEAM for `GetEnemy()->+0xa8`. **Unrecovered** which field that is. Slot 167 (`+0x29c`) is the
-	// CONST `GetEnemy`, which is the one this body dispatches.
-	return GetEnemy();
-}
-
-FVector FElysiumNpc::NearestPointOnEntity(const FElysiumEntity* /*Entity*/,
-	const FVector& PointCm) const
-{
-	// SEAM for `CollisionProperty::CalcNearestPoint` (`0x100dd000`): rotate the point into the
-	// collideable's space, clamp it into `[m_vecMins, m_vecMaxs]` (`0x1013c8c0`), rotate back.
-	++FakeHullSeams.NearestPointCalls;
-	return PointCm;
-}
-
-int32 FElysiumNpc::PushedEntityDirectionClass(FElysiumEntity* Pushed, const FVector& DeltaCm) const
-{
-	// Slot 323 (`0x10344dd0`), dispatched on the PUSHED entity, not on this one.
-	++FakeHullSeams.DirectionClassCalls;
-	if (FElysiumNpc* PushedNpc = Pushed ? Pushed->AsNpc() : nullptr)
-	{
-		return PushedNpc->Slot323(DeltaCm);
-	}
-	return 0;
-}
-
-bool FElysiumNpc::PushedEntityKnockback(FElysiumEntity* Pushed, int32 Activity)
-{
-	// Slot 320 `PlayerKnockbackReaction(CBaseCombatCharacter*, Activity)`, also on the pushed
-	// entity, with THIS npc as the attacker argument.
-	++FakeHullSeams.KnockbackCalls;
-	FakeHullSeams.LastKnockbackActivity = Activity;
-	if (FElysiumNpc* PushedNpc = Pushed ? Pushed->AsNpc() : nullptr)
-	{
-		return PushedNpc->PlayerKnockbackReaction(this, Activity);
-	}
-	return false;
-}
-
-void FElysiumNpc::PushFakeHullDamage(FElysiumEntity* /*Pushed*/, float /*Damage*/,
-	const FVector& ForceUnits, const FVector& /*PositionUnits*/)
-{
-	// SEAM for `CBaseEntity::TakeDamage`. The FORCE and the POSITION are the recovered halves and
-	// the ledger carries them; this runtime's damage path (`ElysiumDamage::Apply`) needs a
-	// `FElysiumDmg` descriptor and a dice context a geometry body has no source for.
-	++FakeHullSeams.DamagePushes;
-	FakeHullSeams.LastDamageForceUnits = ForceUnits;
-}
-
-void FElysiumNpc::UpdateFakeHull(double Now)
-{
-	// `0x103d93b0`, 1,202 bytes, retail-named. The scope-trace pair is the outer 110.
-	//
-	// The word this whole body maintains is `+0x66dc` — the world position of the `Bip01` bone as of
-	// the previous call — and the ONE cell it compares against is `DAT_1070d1b0`, which is
-	// `vec3_origin`. So the three reads of that cell mean three different things and the body only
-	// makes sense once that is settled:
-	//
-	//   * `103d949c` uses it as the INPUT vector of a `VectorTransform`, which makes the answer the
-	//     translation column of the `Bip01` bone's local matrix — i.e. the bone's own point.
-	//   * `103d9431` writes it into the cache, which RESETS the cache to zero.
-	//   * `103d94c0` compares it against the cache, which asks "is the cache still zero?".
-	const FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();
-	if (Enemy == nullptr)
-	{
-		// No enemy: reset the cache and stop. The werewolf's fake hull only exists while it has
-		// something to shoulder out of the way.
-		WerewolfFakeHullPosUnits = FVector::ZeroVector;
-		return;
-	}
-
-	// `103d9459`..`103d94a6`: `LookupBone("Bip01")`, `GetModelPtr(-1)`, `GetBoneTransform(bone, m)`,
-	// then `VectorTransform(vec3_origin, studiohdr->bone[bone] + 0x58, local)` followed by
-	// `VectorTransform(local, m, world)`. Two transforms, and the first one's input is the zero
-	// vector, so the whole chain is "where is the `Bip01` bone in the world".
-	FVector BonePosCm = FVector::ZeroVector;
-	const bool bHaveBone = BoneWorldPosition(GFakeHullBoneName, BonePosCm);
-	const FVector BonePosUnits = BonePosCm / ElysiumMove::U;
-
-	// `103d94c0`..`103d94fa`: three exact float compares of `vec3_origin` against the cache, and the
-	// overlap test runs ONLY when at least one component differs — i.e. only when the cache is
-	// non-zero, which is only on the second and later calls after an enemy appeared. The first call
-	// after every reset does nothing but fill the cache.
-	const bool bCacheArmed = WerewolfFakeHullPosUnits != FVector::ZeroVector;
-	if (bCacheArmed)
-	{
-		// `103d9500`: the debug hull draw, behind `!cvar->IsCommand() && cvar->m_nValue != 0`.
-		if (FakeHullDebugCvar() != 0)
-		{
-			++FakeHullSeams.DebugHullDraws;
-		}
-
-		// `103d953d`..`103d95fe`: the hull table's mins and maxs for `m_eHull` (`+0x1568`), each
-		// scaled by `_DAT_10462914` (1.25) and added to the BONE point — not to the origin. A fake
-		// hull, a quarter larger than the real one, hung off the pelvis.
-		FVector HullMinsUnits = FVector::ZeroVector;
-		FVector HullMaxsUnits = FVector::ZeroVector;
-		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMinsUnits, HullMaxsUnits);
-		const FVector FakeMinUnits = HullMinsUnits * GFakeHullExtentScale + BonePosUnits;
-		const FVector FakeMaxUnits = HullMaxsUnits * GFakeHullExtentScale + BonePosUnits;
-
-		// `103d9604`..`103d963d`: the enemy's `m_Collision` slot `+0x3c` (its world-space
-		// surrounding bounds) against that box, through `FUN_10240250`.
-		FVector EnemyMinsUnits = FVector::ZeroVector;
-		FVector EnemyMaxsUnits = FVector::ZeroVector;
-		RetailCollisionExtents(*Enemy, EnemyMinsUnits, EnemyMaxsUnits);
-
-		if (BoxesOverlap(FakeMinUnits, FakeMaxUnits, EnemyMinsUnits, EnemyMaxsUnits))
-		{
-			ApplyFakeHullPush(BonePosUnits, Now);
-		}
-	}
-
-	// `103d982f`: the cache is written on EVERY path that got an enemy, overlap or not. A failed
-	// bone lookup leaves the point at zero, which resets the cache and disarms the next call —
-	// retail's own behaviour with no `Bip01`.
-	WerewolfFakeHullPosUnits = bHaveBone ? BonePosUnits : FVector::ZeroVector;
-}
-
-void FElysiumNpc::ApplyFakeHullPush(const FVector& BonePosUnits, double Now)
-{
-	// `103d9643`..`103d9829`, the overlap arm of `0x103d93b0`.
-	//
-	// The delta is how far the BONE moved since the previous call, not how far the NPC moved: an
-	// animation that swings the pelvis pushes, and a werewolf standing still inside its enemy does
-	// not.
-	const FVector DeltaUnits = BonePosUnits - WerewolfFakeHullPosUnits;
-
-	// `103d968e`: the body asks slot 167 for the enemy a SECOND time and then reads a pointer out of
-	// it at `+0xa8`. That pointer, not the enemy, is what is offset, classified, knocked back and
-	// damaged.
-	FElysiumEntity* Pushed = FakeHullPushTarget();
-	if (Pushed == nullptr)
-	{
-		return;
-	}
-
-	// `103d96a2`: `CalcNearestPoint(bonePos)` on the pushed entity's collision property. The out
-	// vector is seeded with `vec3_origin` first, which is dead — the callee writes all three words.
-	const FVector NearestCm = NearestPointOnEntity(Pushed, BonePosUnits * ElysiumMove::U);
-
-	// `103d96b7`..`103d9712`: the direction is from MY `WorldSpaceCenter()` (slot 192) to the pushed
-	// entity's `GetAbsOrigin()` (slot 217), and it is handed to slot 323 **before** it is
-	// normalised — the `VectorNormalize` at `103d9723` runs after the call and its result is
-	// discarded (`FSTP ST0`), so it is dead code that the classifier never sees.
-	const FVector DirectionCm = Pushed->Origin - SpeciesWorldSpaceCenter();
-	const int32 DirectionClass = PushedEntityDirectionClass(Pushed, DirectionCm);
-	const int32 Activity = FakeHullKnockbackActivity(DirectionClass);
-	PushedEntityKnockback(Pushed, Activity);
-
-	// `103d974d`: the damage is rate-limited to once a second by `+0x66f4` against
-	// `gpGlobals->curtime`, and the gate is strict — `stamp + 1.0 < curtime`. The knockback above is
-	// NOT rate-limited; only the damage is.
-	if (!(WerewolfFakeHullPushTime + GFakeHullPushIntervalSeconds < Now))
-	{
-		return;
-	}
-
-	// `103d976c`..`103d981c`: `CTakeDamageInfo(this, this, 20.0, 1, 0, 0, -1)`, then the sub-type
-	// writes `2` and `1`, the force is the bone delta scaled by `_DAT_10457f5c` (500), the position
-	// is the nearest point, the scale is 1.0, and `TakeDamage` is called on the pushed entity.
-	// **The attacker and the inflictor are both `this`**, so a werewolf shouldering an object
-	// credits itself with the damage.
-	PushFakeHullDamage(Pushed, GFakeHullDamage, DeltaUnits * GFakeHullForceScale,
-		NearestCm / ElysiumMove::U);
-	WerewolfFakeHullPushTime = Now;
-}
-
-// =================================================================================================
 // `CNPC_VMingXiao`'s two severed-tentacle scatter notices
 // =================================================================================================
 
@@ -903,111 +507,3 @@ void FElysiumNpc::NotifyScatterCenter(FElysiumEntity* Tentacle, const FVector& P
 	TentacleNpc->TentacleScatterCenterUnits = PositionCm / ElysiumMove::U;
 }
 
-void FElysiumNpc::NotifyOwnedCopiesOfOwnerMove(FElysiumEntity* Moved)
-{
-	// `FUN_10397e00`, 100 bytes. `this` is the OWNER `CNPC_VMingXiao` and `Moved` is the tentacle
-	// that moved — `0x1039ef60` above it resolves the pair that way round.
-	if (Moved == nullptr)
-	{
-		// `if (param_1 != 0)` is the whole of retail's first test.
-		return;
-	}
-
-	// The position handed out is `Moved`'s own (`(**(code **)(*param_1 + 0x364))()`), read ONCE per
-	// surviving tentacle inside the loop rather than hoisted — 29c's walk reads it as "this
-	// entity's own position", and the listing's receiver is `param_1`.
-	const FVector MovedOriginCm = Moved->Origin;
-
-	// `m_rhSeveredTentacles[6]` (`+0x66a8`, family Squad's member), walked all six unconditionally.
-	for (int32 Index = 0; Index < GSeveredTentacleCount; ++Index)
-	{
-		if (!SeveredTentacles[Index].IsSet() || World == nullptr)
-		{
-			continue;
-		}
-		FElysiumEntity* Other = World->Resolve(SeveredTentacles[Index]);
-		if (Other == nullptr || Other == Moved)
-		{
-			// Retail's two guards: the handle resolved to something, and it is not `param_1`
-			// itself. A tentacle is never told to scatter away from where it already is.
-			continue;
-		}
-		NotifyScatterCenter(Other, MovedOriginCm);
-	}
-}
-
-void FElysiumNpc::NotifyOwnerOfMyMove()
-{
-	// `FUN_1039ef60`, 22 bytes: resolve `m_hMingXiao` (`+0x665c`) and, when it is live, run the walk
-	// above ON THE OWNER. This is how the body is entered; nothing calls `0x10397e00` directly.
-	FElysiumEntity* Owner = (TentacleMingXiao.IsSet() && World)
-		? World->Resolve(TentacleMingXiao) : nullptr;
-	if (FElysiumNpc* OwnerNpc = Owner ? Owner->AsNpc() : nullptr)
-	{
-		OwnerNpc->NotifyOwnedCopiesOfOwnerMove(this);
-	}
-}
-
-bool FElysiumNpc::ScatterTentacleGate(const FVector& DeltaCm, const FVector& Forward)
-{
-	// `10399919`..`10399988`. The delta is normalised IN PLACE and the length `VectorNormalize`
-	// answers is the range test, so the dot that follows is against a UNIT direction.
-	FVector Direction = DeltaCm;
-	const double LengthCm = Direction.Size();
-	Direction.Normalize();
-
-	// `FCOMP [0x1046dcd0]` with `AND EAX,0x4100; JZ skip` — the mask keeps both the "below" and the
-	// "equal" flags, so the range gate is inclusive at exactly 128 Source units.
-	if (!(LengthCm <= GScatterRangeUnits * ElysiumMove::U))
-	{
-		return false;
-	}
-
-	// `1039996b`..`10399988`: `dir.y * m_vecForward[1] + dir.x * m_vecForward[0]`, a **2-D** dot —
-	// Z is not multiplied by anything — compared against the DOUBLE `_DAT_10449260` = 0.25 with
-	// `TEST AH,0x5; JNP skip`, which proceeds at or above. A 75.5-degree half-angle in front.
-	const double Dot = Direction.X * Forward.X + Direction.Y * Forward.Y;
-	return Dot >= GScatterForwardDotFloor;
-}
-
-void FElysiumNpc::FUN_103998d0(FElysiumEntity* Tentacle)
-{
-	// `0x103998d0`, 212 bytes — `CNPC_VMingXiao::CoordinateTroops`'s severed-tentacle half.
-	// `CoordinateTroops` (`0x10399610`) runs it on ONE tentacle per call, walking
-	// `m_iCoordinateTentacleID` (`+0x6740`) 0..5 and wrapping, so the whole set is coordinated over
-	// six calls rather than every call.
-	FElysiumNpc* TentacleNpc = Tentacle ? Tentacle->AsNpc() : nullptr;
-	if (TentacleNpc == nullptr)
-	{
-		return;
-	}
-
-	// `103998db`..`103998fe`: three gates on the tentacle's own words, all three before anything is
-	// measured. `m_iForcedSchedule` (`+0x65c8`) is `FElysiumNpcScheduleHost::ForcedSchedule` in this
-	// runtime, which carries a registered schedule id; the two refused numbers are retail's and are
-	// compared as numbers.
-	const int32 ForcedSchedule = static_cast<int32>(TentacleNpc->ScheduleHost.ForcedSchedule);
-	if (ForcedSchedule == GScatterRefusedScheduleA || ForcedSchedule == GScatterRefusedScheduleB)
-	{
-		return;
-	}
-	if (TentacleNpc->TentaclePhase != GScatterRequiredPhase)
-	{
-		return;
-	}
-
-	// `10399904`..`10399931`: the delta is the TENTACLE's origin minus mine.
-	const FVector DeltaCm = TentacleNpc->Origin - Origin;
-
-	// `m_vecForward` (`+0x6290`) is `FElysiumNpc::Forward`, retail's cached facing basis. Nothing in
-	// this runtime writes it yet (the shape map says so: "this runtime recomputes it per query"), so
-	// the cone gate takes its refusal arm until a sense pass fills it.
-	if (!ScatterTentacleGate(DeltaCm, Forward))
-	{
-		return;
-	}
-
-	// `1039998a`: the centre handed over is MY origin — the tentacle is told to scatter away from
-	// the boss, which is the opposite receiver from `0x10397e00`'s.
-	NotifyScatterCenter(TentacleNpc, Origin);
-}

@@ -43,24 +43,24 @@ AsianVampireSetupJump	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cp
 AsianVampireTaskFail	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	FElysiumNpcAsianVampire	CNPC_VAsianVampire	FElysiumNpcAsianVampire	collapse:TaskFail	4g	-
 AsianVampireTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTranslate19.cpp	FElysiumNpcAsianVampire	CNPC_VAsianVampire	FElysiumNpcAsianVampire	collapse:TranslateScheduleRetail	4g	-
 AtCrosswalkNode	field	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-AttachPickupAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai,CNPC_VManBat	FElysiumNpcHengeyokai	move	4g	-
-AttachPickupAnimlinkFor	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
+AttachPickupAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai,CNPC_VManBat	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
+AttachPickupAnimlinkFor	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
 AttackIdleLongerThan	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 AuthoredHearing	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 AuthoredVision	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 BachClearWord	field	ElysiumNpcKernelAnim10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
-BachFailStamp	field	ElysiumNpcKernelAnim10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
-BachGatherAttackConditions	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	collapse:GatherAttackConditions	4g	-
+BachFailStamp	field	ElysiumNpcKernelAnim10.inl	-	FElysiumNpcBach	-	-	collapse:merge	4c	a second carrier of the retail word BachNextHolyLightTime carries; merged into it (fields-step4.tsv)
+BachGatherAttackConditions	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	move	4g	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 BachLastGrenadeTime	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 BachNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcBach	-	FElysiumNpcBach	collapse:NPCInit	4g	-
 BachNextHolyLightTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 BachNextShieldTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 BachNextWeaponSwitchTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
-BachOnStateChange	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	FElysiumNpcBach	-	FElysiumNpcBach	collapse:OnStateChange	4g	-
+BachOnStateChange	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 BachPrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	collapse:Precache	4g	-
 BachRangeAttack1Conditions	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	move	4g	-
 BachRangeAttack2Conditions	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	move	4g	-
-BachRepositionTimer	field	ElysiumNpcKernelCombat10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
+BachRepositionTimer	field	ElysiumNpcKernelCombat10.inl	-	FElysiumNpcBach	-	-	collapse:merge	4c	a second carrier of the retail word BachNextHolyLightTime carries; merged into it (fields-step4.tsv)
 BachSelectScheduleRangedCombat	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	collapse:SelectScheduleRangedCombat	4g	-
 BachShieldTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 BachTeleportDistanceUnits	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
@@ -160,7 +160,7 @@ CheckForJumpCondition	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelS
 CheckForTeleport	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
 CheckForUnited	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
 CheckJumpPathToHintNode	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
-CheckStuck	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cpp	FElysiumNpcWerewolf	CNPC_VSabbatLeader	FElysiumNpcWerewolf	move	4e	-
+CheckStuck	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cpp	FElysiumNpcWerewolf	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	`CNPC_VSabbatLeader::CheckStuck` `0x103ab580`; the Werewolf's TaskFail reaches its own `0x103cb920` (WerewolfCheckStuck) through thunk `0x10012d46` (story 5 step 4 correction)
 ChooseMeleeAttackSequenceSeam	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 ClassScheduleIdSpace	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 ClearBodyEmitterNames	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
@@ -176,7 +176,7 @@ ComfortSound	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSounds10.cpp	-	(ba
 CommitSetupJump	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
 ComponentFactoryRefusals	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 ComponentFactoryRows	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-ComputeHitboxSurroundingBox	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
+ComputeHitboxSurroundingBox	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	-	FElysiumNpc	stay:troika api	-	a seam for a base engine call (the navigator network's nearest node, `CBaseAnimating::ComputeHitboxSurroundingBox`) or a base word (`m_Collision` solid flags +0x02b4); the Werewolf is its one species caller
 ConditionName	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelDebug.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
 ConnectedSquad	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 CoordinateTentacleId	field	ElysiumNpcKernelSquad.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
@@ -187,13 +187,13 @@ CopHumanCombatantOnStateChange	method	ElysiumNpcKernelState19.inl	ElysiumNpcKern
 CopIRelationType	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	collapse:IRelationType	4f	-
 CopNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcCop	-	FElysiumNpcCop	collapse:NPCInit	4f	-
 CopOnSeeEntity	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	collapse:OnSeeEntity	4f	-
-CopOnStateChange	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	FElysiumNpcCop	-	FElysiumNpcCop	collapse:OnStateChange	4f	-
+CopOnStateChange	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 CopPursuitHandle	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	-
 CopPursuitPlayer	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	move	4f	-
 CopSecondCensus	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	-
 CopSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	collapse:SelectIdealStateRetail	4f	-
 CopSelectIdealStatePrePass	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	FElysiumNpcCop	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-CopSlot597Prologue	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	FElysiumNpcCop	-	FElysiumNpcCop	collapse:Slot597	4f	-
+CopSlot597Prologue	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 CopSuspectExpiry	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	-
 CopSuspectHandle	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	-
 CopSuspectIs	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	move	4f	-
@@ -201,15 +201,15 @@ CopTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTran
 CopUpdateOnRemove	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	collapse:UpdateOnRemove	4f	-
 CowerAnimOffset	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 CreateCorpse	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_VZombie	FElysiumNpc	stay:virtual surface	-	species override it
-CreateEntityCalls	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
+CreateEntityCalls	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcVampire	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 CreateNamedEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-CreateNamedEntity	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
+CreateNamedEntity	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 CreatePhysAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 CreateVPhysics	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSenses10.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
 CurrentRetailActivityId	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 CurrentSpotIndex	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-DamageFlinchSpeciesOf	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
-DamageFlinchSpeciesRows	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	CNPC_VGargoyle	FElysiumNpcVampire	move	4g	-
+DamageFlinchSpeciesOf	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	-	collapse:table	4g	rows became the Gargoyle/Hengeyokai override bodies
+DamageFlinchSpeciesRows	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	CNPC_VGargoyle	-	collapse:table	4g	rows became the Gargoyle/Hengeyokai override bodies
 DamageFlinchSuppressed	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
 DeathSound	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSounds.cpp	-	(base code),CNPC_VCamera,CNPC_VTzimisce	FElysiumNpc	stay:virtual surface	-	species override it
 DecodeWitnessedLevel	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcPedestrian	CNPC_VPedestrian	FElysiumNpcPedestrian	move	4f	-
@@ -221,7 +221,7 @@ DialogRecipient	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika
 DialogUpkeepTick	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcPayphone	-	FElysiumNpcPayphone	move	4d	-
 DialogUpkeepTicks	field	ElysiumNpcKernelSpeciesLifecycle10.inl	-	FElysiumNpcPayphone	-	FElysiumNpcPayphone	move	4d	-
 Dialogue	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-DispatchVictimHitReaction	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcGargoyle	-	FElysiumNpcGargoyle	move	4g	-
+DispatchVictimHitReaction	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcGargoyle	-	FElysiumNpc	stay:troika api	-	the slot-266 dispatch on the victim (`OnVictimHitByMe`'s tail), a base seam with its counter; the Gargoyle is its one species caller
 DistToHintCenterLine2D	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	-
 DistToHintCenterLine2DSqr	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 DistToHintCenterLine2D_3	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	-
@@ -236,7 +236,7 @@ DogSnarlSourceWord	field	ElysiumNpcKernelState19.inl	-	FElysiumNpcDog	-	FElysium
 DogSnarlTime	field	ElysiumNpcKernelState19.inl	-	FElysiumNpcDog	-	FElysiumNpcDog	move	4d	-
 DogTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTranslate19.cpp	FElysiumNpcDog	CNPC_VDog	FElysiumNpcDog	collapse:TranslateScheduleRetail	4d	-
 DrawDebugHullAtPoint	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
-EIdealStateSpecies	type	ElysiumNpcKernelConditions.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
+EIdealStateSpecies	type	ElysiumNpcKernelConditions.inl	-	-	-	-	collapse:table	4c	the rule enum of the collapsed slot-461 bodies (Camera, MingXiao, MingXiaoTentacle overrides)
 EffectsWord	field	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 EmitDebugMsg	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 EmitEntityText	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
@@ -246,11 +246,11 @@ EmitOverlayEntityBounds	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.c
 EmitOverlayLine	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 EmitOverlayText	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 EmitterCalls	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-EmitterKillCalls	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
+EmitterKillCalls	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcVampireBoss	-	FElysiumNpc	stay:troika api	-	the kill counter of the base emitter seam (`KillNamedEmitter` stays with `CreateNamedEmitter`/`StartNamedEmitter`)
 EndSlowEntity	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-EnemyCouldSeeHull	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	CNPC_VBaseBoss,CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
+EnemyCouldSeeHull	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	CNPC_VBaseBoss,CNPC_VWerewolf	FElysiumNpcBaseBoss	move	4e	`CNPC_VBaseBoss::EnemyCouldSeeHull` `0x10366510`, which the Werewolf's slot 617 calls directly: a BaseBoss body
 EnemyCouldSeeHullWerewolf	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
-EnemyInViewCone	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
+EnemyInViewCone	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcBaseBoss	move	4e	the view-cone seam `CNPC_VBaseBoss::EnemyCouldSeeHull` `0x10366510` asks per candidate point: moves with its BaseBoss caller
 EnemyMemory	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 EnemySightCandidatesOf	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcBaseBoss	CNPC_VBaseBoss	FElysiumNpcBaseBoss	move	4e	-
 EnemySightPredicate	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
@@ -258,7 +258,7 @@ EnemySightings	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by mo
 EnergyBallSpawnPoint	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcChangBros	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 EngineFrameNumber	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 EnterGrappleState	method	ElysiumNpc.h	ElysiumNpc.cpp	-	(base code),CNPC_VGhoulCroucher,CPayphone	FElysiumNpc	stay:virtual surface	-	species override it
-EntityDrawBBoxOverlay	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
+EntityDrawBBoxOverlay	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	FElysiumNpcWerewolf	-	FElysiumNpc	stay:troika api	-	the seam for `CBaseEntity::DrawBBoxOverlay`, base API beside `EntityDrawDebugGeometryOverlays`/`EntityDrawDebugTextOverlays`; the Werewolf's slot 620 is its one species caller
 EntityVelocityUnits	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 Event_Killed	method	ElysiumNpcKernelSlots.inl	-	-	(base code),CNPC_VFrenzyShadow,CNPC_VGargoyle,CNPC_VHengeyokai,CNPC_VManBat,CNPC_VMingXiao,CNPC_VMingXiaoTentacle,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw	FElysiumNpc	stay:virtual surface	-	species override it
 Event_KilledSpecies	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	-	CNPC_VFrenzyShadow	FElysiumNpc	deferred:7	-	CNPC_VFrenzyShadow body
@@ -267,30 +267,30 @@ Event_TookLifeSpecies	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.
 ExpressionMapResets	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcTzimisce	-	FElysiumNpcTzimisce	move	4e	-
 ExtendedBlockedByFriendTimer	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 EyePosition	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
-FCanBeSetOnFireSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FDamageFlinchSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
+FCanBeSetOnFireSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	collapse:table	4c	a record-only table: CNPC_VGhoulCroucher's override already owns 0x1037c420; the census answers the body
+FDamageFlinchSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	collapse:table	4c	the Gargoyle/Hengeyokai overrides call FElysiumNpcVampire::DamageFlinchSuppressed with the firearm mask
 FElysiumNpc	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-FHandleInteractionSpecies	type	ElysiumNpcKernelDialogue.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FHintTypeSpecies	type	ElysiumNpcKernelHints.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FIgnoreCollisionSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
+FHandleInteractionSpecies	type	ElysiumNpcKernelDialogue.inl	-	-	-	-	collapse:table	4c	both fills answer false: FElysiumNpcHuman's override is `return false`, the Sabbat leader's calls it directly
+FHintTypeSpecies	type	ElysiumNpcKernelHints.inl	-	-	-	-	collapse:table	4c	the row type of the collapsed slot-566 table
+FIgnoreCollisionSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	collapse:table	4c	a record-only table: the slot-68/69 overrides own their arms; the census answers them
 FInViewCone	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelClosure.cpp	-	(base code),CNPC_VCameraSecurity	FElysiumNpc	stay:virtual surface	-	species override it
-FJumpTunableSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FMaxYawSpeedSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FPickupSpecies	type	ElysiumNpcKernelBosses.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FSetupJumpSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FShortConditionSpecies	type	ElysiumNpcKernelDebug.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FSpeciesBlacklistEntry	type	ElysiumNpcKernelConditions10.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FSpeciesSlotRow	type	ElysiumNpcKernelSpecies.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FSquadSlotSpecies	type	ElysiumNpcKernelSquad.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FTookLifeSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
-FTraceAttackSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
+FJumpTunableSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpc	stay:data-query table	4c	rows are the Troika line, CAI_BaseNPC and the deferred CAI_TestHull; the Troika tunables read them
+FMaxYawSpeedSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	collapse:table	4c	a record-only table: the slot-516 overrides own their bodies; the census answers them
+FPickupSpecies	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:data-query table	4c	the row type of FElysiumNpcVampire's Hengeyokai/ManBat pickup table (one body pair, two sibling rows)
+FSetupJumpSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	-	collapse:table	4c	each SetupJump body reads its own rise constant
+FShortConditionSpecies	type	ElysiumNpcKernelDebug.inl	-	-	-	-	collapse:table	4c	each slot-408 override holds its own block of names
+FSpeciesBlacklistEntry	type	ElysiumNpcKernelConditions10.inl	-	-	-	FElysiumNpc	stay:data-query table	4c	the element type of SpeciesBlacklistedEntities, which the cross-branch BlacklistPickupTarget writes
+FSpeciesSlotRow	type	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	deferred:7	4c	only the controller line's 599/600 and the Fleshpile maker's 139/617 rows remain (steps 7, 8)
+FSquadSlotSpecies	type	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpc	stay:data-query table	4c	the id-space row type: each species override holds its own; the Troika method reads the deferred rows
+FTookLifeSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	deferred:7	4c	all three rows are the controller line (CNPC_VFrenzyShadow, CNPC_VPlayerController, CNPC_VWolfMorph)
+FTraceAttackSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	-	collapse:table	4c	a record-only table: the Werewolf/Zombie overrides already own their prologues; the census answers the bodies
 FUN_102c43b0	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 FUN_102e0f90	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	FElysiumNpcTzimisce	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 FUN_1035e920	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcAndreiBlood	CNPC_VAndreiBlood	FElysiumNpcAndreiBlood	move	4g	-
 FUN_1035e950	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcAndreiBlood	CNPC_VAndreiBlood	FElysiumNpcAndreiBlood	move	4g	-
 FUN_1035fd40	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcAnimal	CNPC_VAnimal	FElysiumNpcAnimal	collapse:CanPlaySequence	4d	-
 FUN_10364280	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	collapse:Slot606	4g	-
-FUN_103661f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	collapse:Slot609	4g	-
+FUN_103661f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	move	4g	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 FUN_103662d0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBaseBoss	CNPC_VBaseBoss	FElysiumNpcBaseBoss	move	4e	-
 FUN_10366400	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBaseBoss	CNPC_VBaseBoss	FElysiumNpcBaseBoss	move	4e	-
 FUN_10366490	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBaseBoss	CNPC_VBaseBoss	FElysiumNpcBaseBoss	move	4e	-
@@ -299,10 +299,10 @@ FUN_103682f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FEl
 FUN_1036c7f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
 FUN_10376b70	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	-	CNPC_VFrenzyShadow	FElysiumNpc	deferred:7	-	CNPC_VFrenzyShadow body
 FUN_10376ba0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	-	CNPC_VFrenzyShadow	FElysiumNpc	deferred:7	-	CNPC_VFrenzyShadow body
-FUN_10379ef0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:Slot599	4g	-
+FUN_10379ef0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	move	4g	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 FUN_10379f20	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:Slot600	4g	-
 FUN_103822a0	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
-FUN_10385cf0	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHuman	CNPC_VHuman	FElysiumNpcHuman	collapse:Slot601	4f	-
+FUN_10385cf0	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHuman	CNPC_VHuman	FElysiumNpcHuman	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 FUN_1038b370	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
 FUN_1038bec0	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
 FUN_10396dc0	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
@@ -332,12 +332,12 @@ FUN_103bf200	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FEly
 FUN_103bf330	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	-
 FUN_103bf3c0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	-
 FUN_103bf560	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	-
-FUN_103c19e0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceHeadClaw	CNPC_VTzimisceHeadClaw	FElysiumNpcTzimisceHeadClaw	collapse:Slot599	4e	-
+FUN_103c19e0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceHeadClaw	CNPC_VTzimisceHeadClaw	FElysiumNpcTzimisceHeadClaw	move	4e	slot 599's body with the retail argument (the enemy); the generated slot takes an int, so the override adapts (`GetEnemy()`) and the body stays an own helper
 FUN_103c1a60	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceHeadClaw	CNPC_VTzimisceHeadClaw	FElysiumNpcTzimisceHeadClaw	collapse:Slot600	4e	-
 FUN_103c1ad0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceHeadClaw	CNPC_VTzimisceHeadClaw	FElysiumNpcTzimisceHeadClaw	collapse:Slot601	4e	-
 FUN_103c1b10	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcBaseBoss	CNPC_VTzimisceHeadClaw	FElysiumNpcBaseBoss	move	4e	-
 FUN_103c24a0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcTzimisceHeadClaw	CNPC_VTzimisceHeadClaw	FElysiumNpcTzimisceHeadClaw	move	4e	-
-FUN_103c3960	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceRunner	CNPC_VTzimisceRunner	FElysiumNpcTzimisceRunner	collapse:Slot599	4e	-
+FUN_103c3960	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceRunner	CNPC_VTzimisceRunner	FElysiumNpcTzimisceRunner	move	4e	slot 599's body with the retail argument (the enemy, cached into m_hPotentialEnemy); the generated slot takes an int, so the override adapts and the body stays an own helper
 FUN_103c39e0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceRunner	CNPC_VTzimisceRunner	FElysiumNpcTzimisceRunner	collapse:Slot600	4e	-
 FUN_103c3a70	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceRunner	CNPC_VTzimisceRunner	FElysiumNpcTzimisceRunner	collapse:Slot601	4e	-
 FUN_103c3ab0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	FElysiumNpcTzimisceRunner	CNPC_VTzimisceRunner	FElysiumNpcTzimisceRunner	collapse:Slot602	4e	-
@@ -349,7 +349,7 @@ FUN_103e0980	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	-	C
 FUN_103e1080	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	collapse:ShouldPlayFloatSound	4d	-
 FUN_103e12c0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	move	4d	-
 FUN_103e12f0	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcZombie	CNPC_VZombie	FElysiumNpcZombie	collapse:Slot26	4d	-
-FUsedHullBitsSpecies	type	ElysiumNpcKernelGeometry.inl	-	-	-	-	investigate	4c	a row type follows its accessors' collapse or survival
+FUsedHullBitsSpecies	type	ElysiumNpcKernelGeometry.inl	-	-	-	-	collapse:table	4c	the row type of the collapsed slot-337 table
 FValidateHintType	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelHints10.cpp	-	(base code),CNPC_VDog,CNPC_VSabbatLeader,CNPC_VTzimisce,CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
 FValidateHintTypeSpecies	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
 FVisible	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSenses10.cpp	-	(base code),CNPC_VCameraSecurity,CNPC_VTzimisce,CNPC_VZombie	FElysiumNpc	stay:virtual surface	-	species override it
@@ -373,7 +373,7 @@ FindNearestPedestal	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cp
 FindPickupTargetGrabBone	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
 FindShootAtHintNode	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 FireGlobalActsOutput	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-FireWerewolfZoneTrigger	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
+FireWerewolfZoneTrigger	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpcWerewolf	move	4e	the seam for `trigger_werewolf_zone`'s slot 251 as the Werewolf's zone body calls it; its only caller and its counter are the Werewolf's
 Flag2Removals	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcTzimisceRunner	-	FElysiumNpcTzimisceRunner	move	4e	-
 FlapActivityOf	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 FlapActivityRows	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
@@ -396,7 +396,7 @@ FrenzyShadowTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcK
 GargoyleCanKnockback	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcGargoyle	-	FElysiumNpcGargoyle	move	4g	-
 GargoyleDoingGibDeath	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcGargoyle	-	FElysiumNpcGargoyle	move	4g	-
 GargoyleHitsPillar	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	move	4g	-
-GargoyleIgnoresClassname	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:NavIgnoreCollision	4g	-
+GargoyleIgnoresClassname	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	move	4g	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 GargoyleNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcGargoyle	-	FElysiumNpcGargoyle	collapse:NPCInit	4g	-
 GargoyleOnScheduleChange	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:OnScheduleChange	4g	-
 GargoyleOnVictimHitByMe	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:OnVictimHitByMe	4g	-
@@ -413,7 +413,7 @@ GargoyleTouch	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpec
 GargoyleTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTranslate19.cpp	FElysiumNpcGargoyle	CNPC_VGargoyle	FElysiumNpcGargoyle	collapse:TranslateScheduleRetail	4g	-
 GatherAttackConditions	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelClosure.cpp	-	(base code),CNPC_VBach,CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
 GatherConditions	method	ElysiumNpcKernelSlots.inl	-	-	(base code),CNPC_VAndreiBlood,CNPC_VBach,CNPC_VChangBros,CNPC_VDog,CNPC_VFrenzyShadow,CNPC_VGargoyle,CNPC_VGhoulCroucher,CNPC_VHengeyokai,CNPC_VMingXiao,CNPC_VMingXiaoTentacle,CNPC_VPedestrian,CNPC_VSabbatLeader,CNPC_VScurrying,CNPC_VSheriffMan,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw,CNPC_VTzimisceRunner,CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
-GatherHintNodes	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
+GatherHintNodes	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcVampireBoss	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 GetBestSeeUnknown	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelClosure.cpp	-	-	FElysiumNpc	stay:virtual surface	-	species override it
 GetClassScheduleIdSpace	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelEntityChain.cpp	-	CNPC_VBrujah,CNPC_VCamera,CNPC_VChangBros,CNPC_VChangBrosBlade,CNPC_VChangBrosClaw,CNPC_VCop,CNPC_VDog,CNPC_VFrenzyShadow,CNPC_VGargoyle,CNPC_VVampire	FElysiumNpc	stay:virtual surface	-	species override it
 GetCurrHealthPercent	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
@@ -461,15 +461,15 @@ GhoulTouchBurnDamage	field	ElysiumNpcKernelSpeciesLifecycle10.inl	-	FElysiumNpcG
 GhoulTouchBurnIntervalSeconds	field	ElysiumNpcKernelSpeciesLifecycle10.inl	-	FElysiumNpcGhoulCroucher	-	FElysiumNpcGhoulCroucher	move	4f	-
 GiveBaseFightingItems	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelCombat10.cpp	-	(base code),CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
 GiveNamedFightingItem	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-GlobalHintList	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
-Guard1BuildScheduleTestBits	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	collapse:BuildScheduleTestBits	4f	-
+GlobalHintList	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcWerewolf	-	FElysiumNpc	stay:troika api	-	the port's accessor for the global hint list (`g_pHintList` walk), base API; the Werewolf is its one species caller
+Guard1BuildScheduleTestBits	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	move	4f	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 Guard1HatePlayer	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	-	CNPC_VGuard1	FElysiumNpcGuard1	move	4f	its free-function user State19_2Guard1LawArm moves with Guard1's state-change pre-step
 Guard1NPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	collapse:NPCInit	4f	-
 Guard1SelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	collapse:SelectIdealStateRetail	4f	-
-Guard1StateChangePreStep	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	collapse:OnStateChange	4f	-
+Guard1StateChangePreStep	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 Guard1TranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTranslate19.cpp	FElysiumNpcGuard1	CNPC_VGuard1	FElysiumNpcGuard1	collapse:TranslateScheduleRetail	4f	-
 HandleAnimEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	(base code),CNPC_VCamera,CNPC_VDog,CNPC_VGargoyle,CNPC_VHengeyokai,CNPC_VManBat,CNPC_VMingXiao,CNPC_VSabbatLeader,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw,CNPC_VTzimisceRunner,CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
-HandleInteractionSpeciesOf	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcHuman	-	FElysiumNpcHuman	move	4f	-
+HandleInteractionSpeciesOf	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcHuman	-	-	collapse:table	4f	the row became FElysiumNpcHuman::HandleInteraction's body
 HandleInteractionSpeciesRows	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
 HasDialogSuppressFlag	method	ElysiumNpc.h	-	-	CPayphone	FElysiumNpc	stay:troika api	-	FElysiumNpcDialogue reads it for every NPC
 HasPathQueries	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
@@ -485,7 +485,7 @@ HeadDirection3D	method	ElysiumNpcKernelSlots.inl	-	-	CCineNPC,CNPCMaker,CNPCMake
 HealthPercentLostSinceRecord	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 HealthToPercent	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelCombat10.cpp	-	(base code),CNPC_VMingXiao	FElysiumNpc	stay:virtual surface	-	species override it
 HearingSensitivity	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelClosure.cpp	-	-	FElysiumNpc	stay:virtual surface	-	species override it
-HeightenedAlertDurationCvar	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcCop	-	FElysiumNpcCop	move	4f	-
+HeightenedAlertDurationCvar	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcCop	-	FElysiumNpc	stay:troika api	-	the seam for the base ConVar `debug_heightened_alert_expire_time` (`DAT_10725f74`) the police arm `0x1017f9c0` reads; base API
 HengeyokaiBlacklist	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
 HengeyokaiCarryFormBit	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
 HengeyokaiDrawDebugTextOverlays	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	collapse:DrawDebugTextOverlays	4g	-
@@ -513,7 +513,7 @@ HideAndUnsolidifyWeapon	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage
 HintActivityForType	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
 HintComparePosition	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	CNPC_VTzimisce	FElysiumNpc	stay:troika body	-	Troika navigator helpers 0x102e0f90/0x102eee40 call it
 HintEndEntityScriptHidden	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
-HintObfuscationFold	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
+HintObfuscationFold	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcManBat	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 HintTypeSpeciesFallsThroughToBase	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
 HintTypeSpeciesOf	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
 HintTypeSpeciesRows	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
@@ -530,7 +530,7 @@ HullMinsUnits	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-
 HumanCombatPatrolSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	FElysiumNpcHumanCombatant	-	FElysiumNpcHumanCombatant	move	4f	-
 HumanCombatantBuildScheduleTestBits	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	FElysiumNpcHumanCombatant	CNPC_VHumanCombatant	FElysiumNpcHumanCombatant	collapse:BuildScheduleTestBits	4f	-
 HumanCombatantNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcHumanCombatant	CNPC_VHumanCombatant	FElysiumNpcHumanCombatant	move	4f	-
-HumanHandleInteraction	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcHuman	CNPC_VHuman	FElysiumNpcHuman	move	4f	-
+HumanHandleInteraction	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcHuman	CNPC_VHuman	-	collapse:HandleInteraction	4f	inlined into FElysiumNpcHuman::HandleInteraction; SabbatLeader calls FElysiumNpcHuman::HandleInteraction directly
 HumanNpcEarlyTranslateActivity	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	FElysiumNpcHuman	CNPC_VHuman	FElysiumNpcHuman	move	4f	-
 HumanSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 HumanSelectScheduleRangedCombat	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	FElysiumNpcHuman	CNPC_VHuman	FElysiumNpcHuman	move	4f	-
@@ -566,13 +566,13 @@ InputSetRelationship	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:tro
 InstallScheduleRetail	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 InterestingPlaceGroupMask	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 InventoryDestroys	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-InventoryFindByClassname	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
+InventoryFindByClassname	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	FElysiumNpcWerewolf	-	FElysiumNpc	stay:troika api	-	`CBaseCombatCharacter::Inventory_Find`, base API; the Werewolf is its only species caller, the Troika-line fighting-item bodies' cases read it too
 InvestigateMode	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 InvestigateModeCombat	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 IsAlive	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelLifecycle.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
 IsAreaClear	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp,ElysiumNpcKernelSenses10_2.cpp	FElysiumNpcScurrying	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 IsBusyWithDiscipline	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:virtual surface	-	species override it
-IsCarriedBreakable	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
+IsCarriedBreakable	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
 IsDisturbed	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	FElysiumNpcGhoulCroucher	CNPC_VGhoulCroucher	FElysiumNpcGhoulCroucher	move	4f	-
 IsEntityBlacklisted	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
 IsForwardHintExemptType	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
@@ -603,11 +603,11 @@ JumpOrigin	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving
 JumpPathSector	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcChangBros	-	FElysiumNpcChangBros	move	4g	-
 JumpTarget	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 JumpTunableSpeciesOf	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::GetMaxJumpSpeed, FElysiumNpc::IsJumpLegal, FElysiumNpc::StepHeight
-JumpTunableSpeciesRows	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
+JumpTunableSpeciesRows	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:data-query table	4c	no introduced species row: the Troika line, CAI_BaseNPC and the deferred CAI_TestHull
 KernelHullTrace	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 KillBodyEmitters	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 KillCenterEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
-KillNamedEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
+KillNamedEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampireBoss	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 KillSheriff	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcSheriffMan	CNPC_VSheriffMan	FElysiumNpcSheriffMan	move	4g	-
 KillTeleportBats	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcSheriffMan	CNPC_VSheriffMan	FElysiumNpcSheriffMan	move	4g	-
 LasombraCanSeekCover	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcLasombra	(base code),CNPC_VLasombra	FElysiumNpcLasombra	collapse:CanSeekCover	4g	-
@@ -649,8 +649,8 @@ ManBatHudEmitter	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcManBat	-	F
 ManBatMoveGoalNodeId	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 ManBatMoveGoalNodeMode	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 ManBatNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcManBat	-	FElysiumNpcManBat	collapse:NPCInit	4g	-
-ManBatPhysicsAnimlink	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
-ManBatPickupTarget	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
+ManBatPhysicsAnimlink	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcManBat	move	4g	a CNPC_VManBat datamap word: it lives on its declaring class (fields-step4.tsv); the shared pickup-animlink helpers reach it through a typed ManBat instance
+ManBatPickupTarget	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcManBat	move	4g	a CNPC_VManBat datamap word: it lives on its declaring class (fields-step4.tsv); the shared pickup-animlink helpers reach it through a typed ManBat instance
 ManBatPlayerEmitter	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 ManBatPrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	collapse:Precache	4g	-
 ManBatReleaseSlowedEntity	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
@@ -693,13 +693,13 @@ MingXiaoOnChangeActivity	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacin
 MingXiaoPedestalAimPoint	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 MingXiaoPedestalCvar	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 MingXiaoPhysicsAnimlink	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
-MingXiaoPickupCooldownA	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
-MingXiaoPickupCooldownB	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
+MingXiaoPickupCooldownA	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4c	a second carrier of the retail word MingXiaoAttackTimers[4] carries; merged into it (fields-step4.tsv)
+MingXiaoPickupCooldownB	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4c	a second carrier of the retail word MingXiaoAttackTimers[5] carries; merged into it (fields-step4.tsv)
 MingXiaoPickupSavedForward	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 MingXiaoPickupTargetPos	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 MingXiaoPlaybackScalar	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 MingXiaoPrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	collapse:Precache	4e	-
-MingXiaoProxyReadyTimer	field	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
+MingXiaoProxyReadyTimer	field	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpcMingXiao	move	4e	a CNPC_VMingXiao datamap word: it lives on its declaring class (fields-step4.tsv); its users are the head's bodies
 MingXiaoProxySlots	field	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 MingXiaoRegrowTimerCount	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcMingXiao	move	4e	array bound of MingXiao's own Save/Restore words
 MingXiaoRegrowTimers	field	ElysiumNpcKernelSaveRestore10.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
@@ -708,10 +708,10 @@ MingXiaoRestore	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRes
 MingXiaoSave	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	collapse:Save	4e	-
 MingXiaoSelectScheduleRangedCombat	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	collapse:SelectScheduleRangedCombat	4e	-
 MingXiaoSeveredTentacleMask	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
-MingXiaoSpitAttackTimer	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
+MingXiaoSpitAttackTimer	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiao	move	4e	a CNPC_VMingXiao datamap word: it lives on its declaring class (fields-step4.tsv); the head's spit timer
 MingXiaoTaskFail	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	collapse:TaskFail	4e	-
 MingXiaoTentacleCache	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
-MingXiaoTentacleCompanion	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	collapse:CanStandOn	4d	-
+MingXiaoTentacleCompanion	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	the seam for `thunk_FUN_1039ede0`, a retail callee of slot 166 `0x1039ebd0`, not the override's body: it stays an own helper
 MingXiaoTentacleHead	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies2.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
 MingXiaoTentacleId	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 MingXiaoTentacleOnRestore	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	collapse:OnRestore	4d	-
@@ -740,7 +740,7 @@ MotorCancelLinkFacing	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp
 MotorSeams	field	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 MotorYawHalfTurn	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 MoveDistance	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-MoveGoalNodeId	field	ElysiumNpcKernelSchedule.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
+MoveGoalNodeId	field	ElysiumNpcKernelSchedule.inl	-	FElysiumNpcManBat	-	-	collapse:merge	4c	a second carrier of the retail word ManBatMoveGoalNodeId carries; merged into it (fields-step4.tsv)
 MoveHintNode	field	ElysiumNpcKernelHints.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 MoveProbeFloorDrop	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 MovedPosition	field	ElysiumNpcKernelMotor.inl	-	FElysiumNpcAsianVampire	-	FElysiumNpcAsianVampire	move	4g	-
@@ -748,12 +748,12 @@ MovedTimeStamp	field	ElysiumNpcKernelMotor.inl	-	FElysiumNpcAsianVampire	-	FElys
 NPCInit	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelLifecycle19.cpp	-	(base code),CNPC_VAndreiBlood,CNPC_VAsianVampire,CNPC_VBach,CNPC_VCamera,CNPC_VChangBros,CNPC_VChangBrosBlade,CNPC_VChangBrosClaw,CNPC_VCop,CNPC_VFrenzyShadow,CNPC_VGargoyle,CNPC_VGhoulCroucher,CNPC_VGuard1,CNPC_VHengeyokai,CNPC_VHumanCombatant,CNPC_VManBat,CNPC_VNewscaster,CNPC_VPedestrian,CNPC_VPlaceholder,CNPC_VPlayerController,CNPC_VSabbatLeader,CNPC_VSheriffMan,CNPC_VTaxiDriver,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw,CNPC_VVampireBoss,CNPC_VWerewolf,CNPC_VWolfMorph,CNPC_VYukie,CNPC_VZombie,CPayphone	FElysiumNpc	stay:virtual surface	-	species override it
 NPCThink	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_VAndreiBlood,CNPC_VAsianVampire,CNPC_VCamera,CNPC_VChangBros,CNPC_VFrenzyShadow,CNPC_VGhoulCroucher,CNPC_VMingXiao,CNPC_VNewscaster,CNPC_VPlayerController,CNPC_VSheriffMan,CNPC_VTzimisce,CNPC_VVampireBoss,CNPC_VWerewolf,CNPC_VZombie	FElysiumNpc	stay:virtual surface	-	species override it
 NPC_EarlyTranslateActivity	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelAnim10.cpp	-	(base code),CNPC_VDog,CNPC_VHengeyokai,CNPC_VHuman,CNPC_VTzimisce,CNPC_VTzimisceRunner	FElysiumNpc	stay:virtual surface	-	species override it
-NavAllHintNodes	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
+NavAllHintNodes	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcVampireBoss	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 NavHintNodeOrigin	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NavHintNodeType	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NavIgnoreCollision	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelMotor.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
 NavIsGoalActive	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-NavNearestNodeTo	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
+NavNearestNodeTo	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpc	stay:troika api	-	a seam for a base engine call (the navigator network's nearest node, `CBaseAnimating::ComputeHitboxSurroundingBox`) or a base word (`m_Collision` solid flags +0x02b4); the Werewolf is its one species caller
 NavOnNavFailed	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcHengeyokai	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 NavStopMoving	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NavigationGoalClears	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -764,7 +764,7 @@ NavigatorUnreachableMarks	field	ElysiumNpcKernelSenses.inl	-	-	-	FElysiumNpc	sta
 NearestNavigatorNode	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10_2.cpp	FElysiumNpcScurrying	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 NearestNodeToPlayer	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 NearestNodeToPlayerRefreshedAt	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
-NearestPointOnEntity	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
+NearestPointOnEntity	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpcWerewolf	move	4e	the seam for `CalcNearestPoint` `0x100dd000` as `CNPC_VWerewolf::UpdateFakeHull` `0x103d93b0` calls it; its only caller and its seam counter are the Werewolf's
 NeverThinkSentinel	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NewscasterDrawDebugTextOverlays	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	FElysiumNpcNewscaster	CNPC_VNewscaster	FElysiumNpcNewscaster	collapse:DrawDebugTextOverlays	4d	-
 NewscasterMainCursor	field	ElysiumNpcKernelSpecies.inl	-	FElysiumNpcNewscaster	-	FElysiumNpcNewscaster	move	4d	-
@@ -781,8 +781,8 @@ NewscasterUpdateOnRemove	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKern
 NextAttackTime	field	ElysiumNpcKernelConditions.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NextCrosswalkUpdateTime	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NextPedInteractTime	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-NodeGraphHullIndex	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
-NotifyOwnedCopiesOfOwnerMove	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiao,CNPC_VMingXiaoTentacle	FElysiumNpcMingXiaoTentacle	move	4d	-
+NodeGraphHullIndex	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	FElysiumNpcVampire	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
+NotifyOwnedCopiesOfOwnerMove	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiao,CNPC_VMingXiaoTentacle	FElysiumNpcMingXiao	move	4e	`0x10397e00` walks the head's owned copies and runs ON the head; the tentacle's `0x1039ef60` reaches it through a typed head
 NotifyOwnerOfMyMove	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiaoTentacle	FElysiumNpcMingXiaoTentacle	move	4d	-
 NotifyScatterCenter	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 NpcBody	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -793,7 +793,7 @@ NpcInitThinkFunction	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLife
 NpcInitTime	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 NpcStateFlags	method	ElysiumNpc.h	ElysiumNpc.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 NpcStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-NthHintOfType	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	FElysiumNpcChangBros	-	FElysiumNpcChangBros	move	4g	-
+NthHintOfType	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	FElysiumNpcChangBros	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 OccludedDelay	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 OccludedDelayCover	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 OccludedDelayNormal	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -821,7 +821,7 @@ OverrideMove	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelMotor.cpp	-	(base 
 PainSound	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSounds10.cpp	-	(base code),CNPC_VCamera,CNPC_VTzimisce	FElysiumNpc	stay:virtual surface	-	species override it
 ParticleEmitters	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
 PassesFindEntityFOVTrace	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_ProneDialog,CPayphone	FElysiumNpc	stay:virtual surface	-	species override it
-PathMode	field	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
+PathMode	field	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcTzimisce	move	4g	a CNPC_VTzimisce datamap word: it lives on its declaring class (fields-step4.tsv); Hengeyokai's walked +0x6680 m_ePathMode (not in its datamap) splits off to its own member; moves in 4g, when the Hengeyokai bodies that walk +0x6680 move and take their own member
 PayphoneAddSceneEvent	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	move	4d	-
 PayphoneCanTalk	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	collapse:CanTalk	4d	-
 PayphoneEyePosition	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	collapse:EyePosition	4d	-
@@ -834,7 +834,7 @@ PayphoneNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle
 PayphonePassesFindEntityFovTrace	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	move	4d	-
 PayphoneSpeechSoundFlags	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	move	4d	-
 PayphoneThink	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	move	4d	-
-PayphoneThinkPass	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcPayphone	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
+PayphoneThinkPass	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcPayphone	(base code)	FElysiumNpcPayphone	collapse:Think	4d	the body of FElysiumNpcPayphone::Think: `CPayphone::vfunc431` replaces the Troika NPCThink; it carries no species address of its own
 PayphoneUseCaps	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcPayphone	CPayphone	FElysiumNpcPayphone	move	4d	-
 PedestalTaskForSide	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 PedestrianBuildScheduleTestBits	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	FElysiumNpcPedestrian	CNPC_VPedestrian	FElysiumNpcPedestrian	collapse:BuildScheduleTestBits	4f	-
@@ -852,9 +852,9 @@ PedestrianWeaponCrimeLevel	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpc	s
 PhysicsTraceEntityCalls	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 PhysicsTraceEntityManBat	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
 PickupGrabBoneNames	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
-PickupSpecies	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
-PickupSpeciesOf	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
-PickupSpeciesRows	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
+PickupSpecies	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
+PickupSpeciesOf	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
+PickupSpeciesRows	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
 PickupTarget	field	ElysiumNpcKernelMotor.inl	-	FElysiumNpcTzimisce	-	FElysiumNpcTzimisce	move	4e	-
 PickupTargetPos	field	ElysiumNpcKernelMotor.inl	-	FElysiumNpcTzimisce	-	FElysiumNpcTzimisce	move	4e	-
 PlCriminalAttack	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -893,12 +893,12 @@ PrecacheLog	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika a
 PrescheduleThink	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_VCamera	FElysiumNpc	stay:virtual surface	-	species override it
 ProneDialogPassesFindEntityFovTrace	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcProneDialog	CNPC_ProneDialog	FElysiumNpcProneDialog	move	4f	-
 ProteanTransformStartTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
-Proxies	field	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-ProxyReadyTimer	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiaoTentacle	FElysiumNpcMingXiaoTentacle	move	4d	-
-ProxySlotIndexOf	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
+Proxies	field	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpcMingXiao	move	4e	a CNPC_VMingXiao datamap word: it lives on its declaring class (fields-step4.tsv); tentacle bodies reach the head's through its typed handle
+ProxyReadyTimer	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiaoTentacle	FElysiumNpcMingXiao	move	4e	`FUN_10397b40` has no caller and reads the head's words (`m_flProxyReadyTimer` +0x66a4, `m_rhProxies` +0x66a8, `m_rbProxyRegistered` +0x6684): a CNPC_VMingXiao body and word
+ProxySlotIndexOf	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiao	move	4e	`FUN_10397b40` has no caller and reads the head's words (`m_flProxyReadyTimer` +0x66a4, `m_rhProxies` +0x66a8, `m_rbProxyRegistered` +0x6684): a CNPC_VMingXiao body and word
 PushEntityCalls	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 PushFakeHullDamage	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
-PushedEntityDirectionClass	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
+PushedEntityDirectionClass	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpcWerewolf	move	4e	the seam for slot 323 on the pushed entity as `UpdateFakeHull` `0x103d93b0` calls it; its only caller and its seam counter are the Werewolf's
 PushedEntityKnockback	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 QuerySeeEntity	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSenses10.cpp	-	(base code),CNPC_VCameraSecurity	FElysiumNpc	stay:virtual surface	-	species override it
 RagdollBonePosition	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	CNPC_VHengeyokai	FElysiumNpc	stay:shared helper	-	cross-branch callers; a sibling cannot call a species member
@@ -907,7 +907,7 @@ RandomMoveHintNodeZone	field	ElysiumNpcKernelSenses10.inl	-	FElysiumNpcWerewolf	
 RangedDisciplineGate	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 RangedWeaponPrePass	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 RatCreateLocalNavigator	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcRat	CNPC_VRat	FElysiumNpcRat	collapse:CreateLocalNavigator	4d	-
-RatIgnoredGlobalEntity	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcRat	-	FElysiumNpcRat	collapse:ShouldIgnoreCollision	4d	-
+RatIgnoredGlobalEntity	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcRat	-	FElysiumNpcRat	move	4d	the seam for `thunk_FUN_101cda50`, a retail callee of slot 68 `0x103ad6d0`, not the override's body: it stays an own helper
 ReadyForUnited	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
 RecordHealthPercent	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 RecordPlayerHealth	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	-
@@ -915,8 +915,8 @@ RecordScheduleEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:virt
 Relationships	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 ReleaseHintNode	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 ReleaseMotorHintYaw	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-ReleasePickupAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai,CNPC_VManBat	FElysiumNpcHengeyokai	move	4g	-
-ReleasePickupAnimlinkFor	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
+ReleasePickupAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai,CNPC_VManBat	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
+ReleasePickupAnimlinkFor	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
 RemoveBaseFightingItems	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelCombat10.cpp	-	(base code),CNPC_VWerewolf	FElysiumNpc	stay:virtual surface	-	species override it
 RemoveCopInPursuit	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	FElysiumNpcCop	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 RemoveExtraAnimationModels	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_VPlayerController	FElysiumNpc	deferred:7	-	CNPC_VPlayerController body
@@ -928,7 +928,7 @@ RemovedEntities	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika a
 ReplayDeferredScriptedOrder	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 ReportSearchTimer	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
 ResetSequenceInfo	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-ResetSpeciesSuspectGlobals	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
+ResetSpeciesSuspectGlobals	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpc	stay:shared helper	4c	not a class table: resets the Cop and Hunter class statics (two sibling lines) for headless worlds
 ResolveDialogPartner	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	FElysiumNpcPayphone	-	FElysiumNpcPayphone	move	4d	-
 ResolveLinkActivity	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	(base code),CNPC_VHengeyokai	FElysiumNpc	stay:troika body	-	Troika navigation callers
 ResolveLoadout	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -963,7 +963,7 @@ SabbatLastSplashTime	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcSabbat
 SabbatLastWaterLevel	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 SabbatLeaderHandleInteraction	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	collapse:HandleInteraction	4g	-
 SabbatLeaderJumpBloodBalance	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
-SabbatLeaderLastSplashTime	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
+SabbatLeaderLastSplashTime	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	-	collapse:merge	4c	a second carrier of the retail word SabbatLastSplashTime carries; merged into it (fields-step4.tsv)
 SabbatLeaderNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	collapse:NPCInit	4g	-
 SabbatLeaderOkToInterruptForMelee	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	collapse:OkToInterruptForMelee	4g	-
 SabbatLeaderOnVictimHitByMe	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	collapse:OnVictimHitByMe	4g	-
@@ -971,7 +971,7 @@ SabbatLeaderPrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPreca
 SabbatLeaderRoarAttackCount	field	ElysiumNpcKernelMisc.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 SabbatLeaderRouteFailCount	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 SabbatLeaderSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19_2.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	collapse:SelectIdealStateRetail	4g	-
-SabbatLeaderTaskFail	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	collapse:TaskFail	4g	-
+SabbatLeaderTaskFail	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	a gate or prologue the override combines with its direct base call (the override's control flow is retail's); the body stays an own helper
 SabbatLeaderTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelTranslate19.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	collapse:TranslateScheduleRetail	4g	-
 SabbatLeaderUpdateBloodSplash	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcSabbatLeader	CNPC_VSabbatLeader	FElysiumNpcSabbatLeader	move	4g	-
 Save	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelSaveRestore10.cpp	-	(base code),CNPC_VMingXiao,CNPC_VMingXiaoTentacle,CNPC_VTzimisceHeadClaw	FElysiumNpc	stay:virtual surface	-	species override it
@@ -1045,9 +1045,9 @@ SetActivity	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelAnim10.cpp	-	(base 
 SetAttackExtents	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 SetBlockedByFriend	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 SetBodyEmitterName	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
-SetCarriedBreakable	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
+SetCarriedBreakable	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	-	FElysiumNpcVampire	move	4g	the Hengeyokai/ManBat pickup-animlink pair (`0x10382670`/`0x1038f430`, `0x10382400`/`0x1038f790`), one body written twice and ported as one table-driven body: it stands on their common base and each arm reaches its class's words through a typed instance
 SetCarriedRagdollHeld	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	CNPC_VHengeyokai	FElysiumNpcHengeyokai	move	4g	-
-SetDefaultExpression	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	collapse:OnStateChange	4e	-
+SetDefaultExpression	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	the seam for `LookupExpressionIndex` + `0x103b9f90`, a callee of slot 463 `0x103ba2c0`, not the override's body: it stays an own helper
 SetDefaultEyeOffset	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 SetDistLook	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 SetFlapActivity	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcManBat	(base code),CNPC_VManBat	FElysiumNpcManBat	move	4g	-
@@ -1069,12 +1069,12 @@ SetState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	(base 
 SetTarget	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 SetTeleportHint	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
 SetupJumpRise	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cpp	FElysiumNpcVampireBoss	CNPC_VAsianVampire	FElysiumNpcVampireBoss	move	4g	-
-SetupJumpSpeciesOf	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
+SetupJumpSpeciesOf	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcSheriffMan	-	-	collapse:table	4g	FElysiumNpcSheriffMan::SheriffManSetupJump reads GMotorTailSheriffJumpRise directly
 SetupJumpSpeciesRows	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
 SetupSuperJump	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
-SeverTentacle	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CAI_BaseNPCTroika	FElysiumNpc	stay:troika body	-	retail CAI_BaseNPCTroika
-SeveredTentacleMask	field	ElysiumNpcKernelAnim.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
-SeveredTentacles	field	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
+SeverTentacle	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses2.cpp	FElysiumNpcMingXiao	CAI_BaseNPCTroika	FElysiumNpcMingXiao	move	4e	the seam for `0x10397930`, CNPC_VMingXiao's sever (its only callers are the head's bodies); it writes the head's `m_rhProxies`/`m_rhSeveredTentacles`
+SeveredTentacleMask	field	ElysiumNpcKernelAnim.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4c	a second carrier of the retail word MingXiaoSeveredTentacleMask carries; merged into it (fields-step4.tsv)
+SeveredTentacles	field	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpcMingXiao	move	4e	a CNPC_VMingXiao datamap word: it lives on its declaring class (fields-step4.tsv); tentacle bodies reach the head's through its typed handle
 SeveredTentaclesCanStandOn	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
 SheriffCenterFloorZ	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
 SheriffLastTeleportPosition	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
@@ -1125,7 +1125,7 @@ Slot606	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	(ba
 Slot609	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	(base code),CNPC_VBach	FElysiumNpc	stay:virtual surface	-	species override it
 SlowedExpire	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
 SnapToAnimationPoint	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	-
-SolidFlagsWord	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
+SolidFlagsWord	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcWerewolf	-	FElysiumNpc	stay:troika api	-	a seam for a base engine call (the navigator network's nearest node, `CBaseAnimating::ComputeHitboxSurroundingBox`) or a base word (`m_Collision` solid flags +0x02b4); the Werewolf is its one species caller
 SolveJumpArc	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 SolveThrowImpulse	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	FElysiumNpcHengeyokai	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 Spawn	method	ElysiumNpc.h	ElysiumNpc.cpp	-	(base code),CCineNPC,CNPC_VAndreiBlood,CNPC_VAnimal,CNPC_VAsianVampire,CNPC_VBach,CNPC_VCamera,CNPC_VChangBros,CNPC_VCop,CNPC_VDog,CNPC_VFrenzyShadow,CNPC_VGhoulCroucher,CNPC_VGuard1,CNPC_VHengeyokai,CNPC_VHuman,CNPC_VHumanCombatant,CNPC_VHunter,CNPC_VLasombra,CNPC_VManBat,CNPC_VMingXiao,CNPC_VMingXiaoTentacle,CNPC_VPedestrian,CNPC_VPlayerController,CNPC_VRat,CNPC_VSabbatLeader,CNPC_VScurrying,CNPC_VSheriffMan,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw,CNPC_VTzimisceRunner,CNPC_VVampire,CNPC_VWerewolf,CNPC_VYukie,CNPC_VZombie,CPayphone	FElysiumNpc	stay:virtual surface	-	species override it
@@ -1140,11 +1140,11 @@ SpeakSoundConcept	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.c
 SpeciesBlacklistSeconds	field	ElysiumNpcKernelConditions10.inl	-	-	-	FElysiumNpc	stay:shared helper	-	read by the cross-branch BlacklistPickupTarget
 SpeciesBlacklistedEntities	field	ElysiumNpcKernelConditions10.inl	-	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::BlacklistPickupTarget
 SpeciesFValidateHintType	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	-	CNPC_VTzimisce	-	collapse:FValidateHintType	4c	class table: rows become override bodies
-SpeciesFootstepAnimEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	-	collapse:HandleAnimEvent	4c	class table: rows become override bodies
+SpeciesFootstepAnimEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:shared helper	4c	one body four sibling lines share (Hengeyokai, MingXiao, HeadClaw, Runner) over the ElysiumFootsteps species data (footsteps.md 1.7), not a kernel class table
 SpeciesIRelationType	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	CNPC_VPlayerController	FElysiumNpc	deferred:7	-	CNPC_VPlayerController body
 SpeciesIdealStateRetail	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	-	-	-	collapse:SelectIdealStateRetail	4c	class table: rows become override bodies
 SpeciesNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::NPCInit
-SpeciesPickupTarget	field	ElysiumNpcKernelConditions10.inl	-	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::HengeyokaiTaskFail, FElysiumNpc::TzimisceTaskFail
+SpeciesPickupTarget	field	ElysiumNpcKernelConditions10.inl	-	-	-	-	collapse:split	4c	one member for CNPC_VHengeyokai +0x6664 (HengeyokaiPickupTarget) and CNPC_VTzimisce +0x6670 (PickupTarget); each TaskFail arm reads its own
 SpeciesSelectSchedule	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:data-query table	-	read by <header:ElysiumNpcAndreiBlood.h>, <header:ElysiumNpcCamera.h>, <header:ElysiumNpcManBat.h>
 SpeciesShortConditionName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	CNPC_VMingXiao	-	collapse:GetShortConditionName	4c	class table: rows become override bodies
 SpeciesShunWindowSeconds	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::HengeyokaiNPCInit, FElysiumNpc::TzimisceNPCInit
@@ -1156,21 +1156,21 @@ SpeciesSlotRowOf	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	
 SpeciesSlotRows	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::SpeciesSlotRowOf
 SpeciesSquadSlotName	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	-	collapse:SquadSlotName	4c	class table: rows become override bodies
 SpeciesStealthSenseGate	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	-	CNPC_VWerewolf	FElysiumNpc	stay:shared helper	-	cross-branch callers; a sibling cannot call a species member
-SpeciesSuppressesDamageFlinch	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	FElysiumNpcVampire	move	4g	-
+SpeciesSuppressesDamageFlinch	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	FElysiumNpcVampire	-	-	collapse:SuppressesDamageFlinch	4g	inlined into the Gargoyle/Hengeyokai overrides; the shared gate DamageFlinchSuppressed stays on FElysiumNpcVampire
 SpeciesSuspectWindowSeconds	field	ElysiumNpcKernelSenses10.inl	-	FElysiumNpcHumanCombatant	-	FElysiumNpcHumanCombatant	move	4f	-
-SpeciesThrowObject	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
+SpeciesThrowObject	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	-	collapse:merge	4c	a second carrier of the retail word MingXiaoThrowObject carries; merged into it (fields-step4.tsv)
 SpeciesThrowableObjectMode	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
 SpeciesUsedHullBits	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	-	(base code)	-	collapse:GetUsedHullBits	4c	class table: rows become override bodies
 SpeciesVocalize	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	-	-	FElysiumNpc	deferred:7	-	the controller-line rows stay until step 7; introduced rows collapse into their hook overrides
 SpeciesWorldSpaceCenter	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	FElysiumNpcWerewolf	(base code)	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::ApplyFakeHullPush
-SpitAttackTimer	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiaoTentacle	FElysiumNpcMingXiaoTentacle	move	4d	-
+SpitAttackTimer	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcMingXiaoTentacle	CNPC_VMingXiaoTentacle	FElysiumNpcMingXiao	move	4e	`0x10397dd0` has no caller and writes only the head's `m_flSpitAttackTimer` (+0x66c0): a CNPC_VMingXiao body
 SquadDisconnected	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 SquadMember	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	FElysiumNpcChangBros	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 SquadMemberCount	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	FElysiumNpcChangBros	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-SquadMembers	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcChangBros	-	FElysiumNpcChangBros	move	4g	-
-SquadPositionTaken	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcChangBros	-	FElysiumNpcChangBros	move	4g	-
-SquadSlotSpeciesOf	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:data-query table	-	read by FElysiumNpc::SpeciesSquadSlotName, FElysiumNpc::SquadSlotName
-SquadSlotSpeciesRows	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
+SquadMembers	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcChangBros	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
+SquadPositionTaken	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	FElysiumNpcChangBros	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
+SquadSlotSpeciesOf	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:data-query table	-	the Troika method's lookup of the deferred rows (step 7)
+SquadSlotSpeciesRows	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:data-query table	4c	shrunk to the Troika line and the three deferred controller-line rows (step 7)
 SquadWord	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
 StampCopSuspect	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	FElysiumNpcCop	CNPC_VCop	FElysiumNpcCop	move	4f	-
 StampHunterSuspect	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	FElysiumNpcHunter	CNPC_VHunter	FElysiumNpcHunter	move	4f	-
@@ -1190,7 +1190,7 @@ StartSummonEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp
 StartTaskSlot442	method	ElysiumNpcKernelSlots.inl	-	-	(base code),CNPC_VAndreiBlood,CNPC_VAnimal,CNPC_VAsianVampire,CNPC_VBach,CNPC_VChangBros,CNPC_VCop,CNPC_VDog,CNPC_VFrenzyShadow,CNPC_VGargoyle,CNPC_VGhoulCroucher,CNPC_VHengeyokai,CNPC_VHuman,CNPC_VManBat,CNPC_VMingXiao,CNPC_VMingXiaoTentacle,CNPC_VSabbatGunman,CNPC_VSabbatLeader,CNPC_VScurrying,CNPC_VSheriffMan,CNPC_VTaxiDriver,CNPC_VTzimisce,CNPC_VTzimisceHeadClaw,CNPC_VTzimisceRunner,CNPC_VVampireBoss,CNPC_VWerewolf,CNPC_VZombie	FElysiumNpc	stay:virtual surface	-	species override it
 StartTouchSpecies	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	-	CNPC_VGhoulCroucher	FElysiumNpc	stay:data-query table	-	read by <header:ElysiumNpcGhoulCroucher.h>, FElysiumNpc::BaseEntityStartTouch, FElysiumNpc::OnTouchStart
 StatTemplate	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-StateChangeExpressionName	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	collapse:OnStateChange	4e	-
+StateChangeExpressionName	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	the state -> expression-name map slot 463 `0x103ba2c0` asks; a helper of the override, not its body
 StationaryForTooLong	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor2.cpp	FElysiumNpcAsianVampire	CNPC_VAsianVampire	FElysiumNpcAsianVampire	move	4g	-
 StepHeight	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelMotor.cpp	-	(base code),CAI_TestHull	FElysiumNpc	stay:virtual surface	-	species override it
 StoreArenaCenter	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcChangBros	CNPC_VChangBros	FElysiumNpcChangBros	move	4g	-
@@ -1216,7 +1216,7 @@ TeleportOut	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	
 TentacleCoordinatePosUnits	field	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpcMingXiaoTentacle	move	4d	CNPC_VMingXiaoTentacle word; its only reader FUN_1039ef90 moves
 TentacleHeadForwards	field	ElysiumNpcKernelSpecies.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
 TentacleMingXiao	field	ElysiumNpcKernelGeometry.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
-TentaclePhase	field	ElysiumNpcKernelGeometry.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
+TentaclePhase	field	ElysiumNpcKernelGeometry.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiaoTentacle	move	4d	a CNPC_VMingXiaoTentacle datamap word: it lives on its declaring class (fields-step4.tsv); the head's 0x103998d0 reads it on a typed tentacle
 TentacleScatterCenterUnits	field	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika reader	-	written by NotifyScatterCenter, a Troika notification
 TestHitboxes	method	ElysiumNpcKernelSlots.inl	-	-	CNPC_VMingXiao	FElysiumNpc	stay:virtual surface	-	species override it
 TestHitboxesMingXiao	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
@@ -1226,7 +1226,7 @@ ThinkSet	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	
 ThrowGrenade	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcBach	CNPC_VBach	FElysiumNpcBach	move	4g	-
 ThrowModel	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcManBat	CNPC_VManBat	FElysiumNpcManBat	move	4g	-
 ThrowableObjectMode	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	FElysiumNpcMingXiao	CNPC_VMingXiao	FElysiumNpcMingXiao	move	4e	-
-TookLifeSpeciesOf	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	-	-	-	collapse:table	4c	class table: rows become override bodies
+TookLifeSpeciesOf	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	-	-	FElysiumNpc	deferred:7	4c	all three rows are the controller line
 TookLifeSpeciesRows	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cpp	-	CNPC_VPlayerController	FElysiumNpc	deferred:7	-	CNPC_VPlayerController body
 TouchSpecies	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	-	CNPC_VGargoyle	FElysiumNpc	stay:data-query table	-	read by <header:ElysiumNpcGargoyle.h>, FElysiumNpc::BaseEntityTouch
 TraceAttack	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelDamage.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
@@ -1258,7 +1258,7 @@ TuningZombieGrappleReadyInterval	method	ElysiumNpcKernelLifecycle19.inl	ElysiumN
 TurningAnimsEnabled	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 TypedStatSet	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 TypedStatValue	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	(base code)	FElysiumNpc	stay:troika body	-	retail (base code)
-TypedStatValueOf	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
+TypedStatValueOf	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcSabbatLeader	-	FElysiumNpc	stay:troika api	-	a seam for base engine code (entity creation, the particle system, the global CAI_Hint list, the squad object, the stat sheet, the node graph, a utility hash); the species bodies are its callers, it stays with the base API
 TzimisceAimConVar	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	-
 TzimisceAimOffset	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	FElysiumNpcTzimisce	CNPC_VTzimisce	FElysiumNpcTzimisce	move	4e	-
 TzimisceBlacklist	field	ElysiumNpcKernelSpecies.inl	-	FElysiumNpcTzimisce	-	FElysiumNpcTzimisce	move	4e	-
@@ -1330,7 +1330,7 @@ VampireBossMonsterModelName	field	ElysiumNpcKernelSaveRestore10.inl	-	FElysiumNp
 VampireBossNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcVampireBoss	-	FElysiumNpcVampireBoss	move	4g	-
 VampireBossRestore	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 VampireBossSpawnBodyEmitters	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
-VictimHitReactionDispatches	field	ElysiumNpcKernelMisc.inl	-	FElysiumNpcGargoyle	-	FElysiumNpcGargoyle	move	4g	-
+VictimHitReactionDispatches	field	ElysiumNpcKernelMisc.inl	-	FElysiumNpcGargoyle	-	FElysiumNpc	stay:troika api	-	the slot-266 dispatch on the victim (`OnVictimHitByMe`'s tail), a base seam with its counter; the Gargoyle is its one species caller
 WaitForTransformation	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcVampireBoss	CNPC_VVampireBoss	FElysiumNpcVampireBoss	move	4g	-
 WeaponBlockedByFriendTimer	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 WeaponScareTime	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
@@ -1344,7 +1344,7 @@ WerewolfDrawBBoxOverlay	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.
 WerewolfDrawDebugStatOverlays	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 WerewolfDrawDebugStatOverlaysSlot	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	collapse:DrawDebugStatOverlays	4e	-
 WerewolfExertHvySound	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	collapse:ExertHvySound	4e	-
-WerewolfFVisible	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	collapse:FVisible	4e	-
+WerewolfFVisible	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcWerewolf	CNPC_VWerewolf	FElysiumNpcWerewolf	move	4e	slot 201's body with the retail blocker out-handle; the generated slot's blocker is an entity, so the override adapts and the body stays an own helper
 WerewolfFakeHullPosUnits	field	ElysiumNpcKernelGeometry.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 WerewolfFakeHullPushTime	field	ElysiumNpcKernelGeometry.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 WerewolfFieldOfViewRadians	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
@@ -1403,11 +1403,11 @@ WithinPickupFacingCone	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.
 Witness	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 WorldSpaceCenter	method	ElysiumNpcKernelSlots.inl	ElysiumNpcKernelClosure.cpp	-	(base code)	FElysiumNpc	stay:virtual surface	-	species override it
 WriteIdealStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-YukieEnterMelee	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:Slot599	4f	-
+YukieEnterMelee	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 YukieFInViewCone	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	move	4f	-
-YukieFVisible	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:FVisible	4f	-
+YukieFVisible	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 YukieIRelationType	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:IRelationType	4f	-
-YukieLeaveMelee	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:Slot601	4f	-
+YukieLeaveMelee	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	move	4f	the override adapts the generated slot's arguments (converted state ids, GetEnemy(), a blocker out-handle, an ignored argument) to this body's retail ones, so the body stays an own helper the override calls
 YukieNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	FElysiumNpcYukie	-	FElysiumNpcYukie	collapse:NPCInit	4f	-
 YukieShouldLeaveMelee	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	FElysiumNpcYukie	CNPC_VYukie	FElysiumNpcYukie	collapse:Slot602	4f	-
 ZombieAiType	field	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	deferred:8	-	the zombie maker reads it (ElysiumNpcMaker.h)
@@ -1428,7 +1428,7 @@ ZombieTranslateSchedule	method	ElysiumNpcKernelTranslate19.inl	ElysiumNpcKernelT
 bAggressiveAnims	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 bAndreiActivated	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcAndreiBlood	-	FElysiumNpcAndreiBlood	move	4g	-
 bAsianVampirePathBlocked	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcAsianVampire	-	FElysiumNpcAsianVampire	move	4g	-
-bAsianVampireSuppressRanged	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcAsianVampire	-	FElysiumNpcAsianVampire	move	4g	-
+bAsianVampireSuppressRanged	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcAsianVampire	-	-	collapse:merge	4c	a second carrier of the retail word bSuppressRanged carries; merged into it (fields-step4.tsv)
 bBachCamperFlag	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 bBachFireOccluded	field	ElysiumNpcKernelSpecies.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
 bBachMovementSpot	field	ElysiumNpcKernelTranslate19.inl	-	FElysiumNpcBach	-	FElysiumNpcBach	move	4g	-
@@ -1445,7 +1445,7 @@ bForceNpcCheck	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by mo
 bGhoulSpawnBurning	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcGhoulCroucher	-	FElysiumNpcGhoulCroucher	move	4f	-
 bGhoulSpawnDisturbed	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcGhoulCroucher	-	FElysiumNpcGhoulCroucher	move	4f	-
 bGoToIdleState	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
-bGuard1HatesPlayer	field	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
+bGuard1HatesPlayer	field	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpcGuard1	move	4f	a CNPC_VGuard1 datamap word: it lives on its declaring class (fields-step4.tsv); every user is a Guard1 body
 bHasPlayedFlyBySound	field	ElysiumNpcKernelSounds.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 bHasVPhysicsObject	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 bHeavyBodyTarget	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika reader	-	read by PreTranslatePredicate's activity predicates (step 11)
@@ -1462,7 +1462,7 @@ bKeepSound	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika api	-	
 bLeaningLeft	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika api	-	used by moving species bodies
 bLinkedCameraBound	field	ElysiumNpcKernelDialogue.inl	-	FElysiumNpcCameraSecurity	-	FElysiumNpcCameraSecurity	move	4d	-
 bManBatHasScaredMinions	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
-bManBatPickupTargetBreakable	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcHengeyokai	move	4g	-
+bManBatPickupTargetBreakable	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcHengeyokai	-	FElysiumNpcManBat	move	4g	a CNPC_VManBat datamap word: it lives on its declaring class (fields-step4.tsv); the shared pickup-animlink helpers reach it through a typed ManBat instance
 bManBatReachedMoveGoal	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 bManBatTeleportRequested	field	ElysiumNpcKernelBosses.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
 bMingXiaoHasTransformed	field	ElysiumNpcKernelDamage.inl	-	FElysiumNpcMingXiao	-	FElysiumNpcMingXiao	move	4e	-
@@ -1474,11 +1474,11 @@ bPedestrianCorpseThinkStopped	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysium
 bPedestrianFirstThink	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcPedestrian	-	FElysiumNpcPedestrian	move	4f	-
 bPlayerAttackedMe	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcAnimal	move	4d	CNPC_VAnimal datamap word (+0x6660); nothing in the port reads it yet
 bPlayerScreechConeBit	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcManBat	-	FElysiumNpcManBat	move	4g	-
-bProxyRegistered	field	ElysiumNpcKernelLifecycle.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiaoTentacle	move	4d	-
+bProxyRegistered	field	ElysiumNpcKernelLifecycle.inl	-	FElysiumNpcMingXiaoTentacle	-	FElysiumNpcMingXiao	move	4e	`FUN_10397b40` has no caller and reads the head's words (`m_flProxyReadyTimer` +0x66a4, `m_rhProxies` +0x66a8, `m_rbProxyRegistered` +0x6684): a CNPC_VMingXiao body and word
 bRandomHint	field	ElysiumNpcKernelHints.inl	-	FElysiumNpcWerewolf	-	FElysiumNpcWerewolf	move	4e	-
 bSabbatDiving	field	ElysiumNpcKernelSpeciesMisc10.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 bSabbatLeaderActivated	field	ElysiumNpcKernelState19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
-bSabbatLeaderDiving	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
+bSabbatLeaderDiving	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	-	collapse:merge	4c	a second carrier of the retail word bSabbatDiving carries; merged into it (fields-step4.tsv)
 bSabbatLeaderLargeSplash	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 bSabbatLeaderLastAttackWasNova	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
 bSabbatLeaderParticleSpawned	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSabbatLeader	-	FElysiumNpcSabbatLeader	move	4g	-
@@ -1489,7 +1489,7 @@ bSheriffActivated	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSheriffMan	
 bSheriffDead	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
 bSheriffLedgeHeightStored	field	ElysiumNpcKernelPositions.inl	-	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
 bSheriffTeleporting	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcSheriffMan	-	FElysiumNpcSheriffMan	move	4g	-
-bSpeciesPathBlocked	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcAsianVampire	-	FElysiumNpcAsianVampire	move	4g	-
+bSpeciesPathBlocked	field	ElysiumNpcKernelConditions10.inl	-	FElysiumNpcAsianVampire	-	-	collapse:merge	4c	a second carrier of the retail word bAsianVampirePathBlocked carries; merged into it (fields-step4.tsv)
 bSuppressRanged	field	ElysiumNpcKernelSchedule.inl	-	FElysiumNpcAsianVampire	-	FElysiumNpcAsianVampire	move	4g	-
 bTaxiFirstThink	field	ElysiumNpcKernelLifecycle19.inl	-	FElysiumNpcTaxiDriver	-	FElysiumNpcTaxiDriver	move	4f	-
 bTzimisceDidFakeThrow	field	ElysiumNpcKernelSpecies.inl	-	FElysiumNpcTzimisce	-	FElysiumNpcTzimisce	move	4e	-

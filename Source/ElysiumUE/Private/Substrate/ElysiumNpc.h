@@ -460,12 +460,6 @@ public:
 	// guard's weapon away. Public so a fixture can drive the edge without a whole think.
 	void PumpStateChange();
 
-	// The holster/draw switch of the slot-463 bodies that carry one (`CNPC_VHumanCombatant`
-	// `0x103871c0` and `CNPC_VGuard1`'s copy `0x1037d020`), taking the NEW state exactly as retail's
-	// second argument does. Only those classes' `OnStateChange` overrides call it (story 5 step 3);
-	// public so a fixture can state a transition without driving the whole decision pass.
-	void ApplyStateWeaponVisibility(EElysiumNpcState NewState);
-
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now, bool bReduced);
 
@@ -1193,8 +1187,9 @@ public:
 	 * authored classname builds (story 5 step 2). Null for a bare `FElysiumNpc`, the Troika line
 	 * itself, which no classname builds.
 	 *
-	 * The species dispatch still reads it (355 of the 29c-1 band's bodies are one behaviour written
-	 * once per species) until step 3 turns those arms into overrides.
+	 * Species behaviour is reached through overrides (story 5 step 3) and lives on the species
+	 * classes (step 4). What still reads this: retail's own `RTDynamicCast` type tests, the census
+	 * lookups, and the class-keyed data queries `story-5/decisions-step3.json` lists.
 	 */
 	const FElysiumNpcClass* RetailClass() const;
 
@@ -1204,6 +1199,22 @@ public:
 	// `RetailClass()` is `CNPC_VVampireBoss` or below, `CNPC_VBaseBoss` or below, … The chain walk a
 	// species body's "am I one of these" arm performs, so no body compares classnames by hand.
 	bool IsRetailClass(const TCHAR* RetailClassName) const;
+
+	// This NPC as species class `T` (`Substrate/ElysiumNpc<X>.h`), or null: the typed view a body
+	// takes of ANOTHER instance whose species words it reads (a tentacle's head, a pickup helper's
+	// ManBat). It tests the C++ class's own census row, never the test latch, so a non-null answer
+	// is always an object of class `T`: the species tree mirrors retail's (story 5 step 2).
+	template <class T>
+	T* AsSpecies()
+	{
+		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<T*>(this) : nullptr;
+	}
+	template <class T>
+	const T* AsSpecies() const
+	{
+		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<const T*>(this) : nullptr;
+	}
+	bool OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const;
 
 	// --- The retail vtable surface (`docs/vtmb/npc-kernel/signatures.md`) -------------------------
 	//
@@ -1275,7 +1286,9 @@ public:
 	#include "Substrate/ElysiumNpcKernelMaintain19.inl"
 	#include "Substrate/ElysiumNpcKernelTroikaHelpers.inl"
 
-private:
+// Protected, not private: the species classes (`Substrate/ElysiumNpc<X>.h`) are the retail
+// subclasses of this line, and their bodies reach the Troika state as retail's do (story 5 step 4).
+protected:
 	// --- Think(), phase by phase, in `NPCThink`'s (`0x10292de0`) order ---------------------------
 	//
 	// A phase that ends the PASS is not a phase that ends the THINK. Only `IsInert`, the

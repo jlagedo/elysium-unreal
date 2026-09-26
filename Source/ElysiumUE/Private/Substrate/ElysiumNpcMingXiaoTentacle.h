@@ -5,12 +5,16 @@
 // `CNPC_VMingXiaoTentacle` (primary vtable `0x104bdea4`), built by `npc_VMingXiaoTentacle` factory
 // `0x1039af30`.
 //
-// Story 5 step 2 stands the class so the classname's factory builds the retail class and the class
-// answers its own census row. Its overrides and own datamap words still sit on `FElysiumNpc` and
-// move here in steps 3-4 (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`).
+// The classname's factory builds this class and it answers its own census row (story 5 step 2). Its
+// slot overrides, own bodies, own datamap words and their bindings live here (steps 3-4,
+// `docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`); the words a Troika body still
+// reads stay on `FElysiumNpc` until step 11.
 class FElysiumNpcMingXiaoTentacle : public FElysiumNpc
 {
 public:
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VMingXiaoTentacle");
+
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void Slot21(FElysiumEntity* Attacker) override;
 	virtual void Slot22(FElysiumEntity* Attacker) override;
@@ -29,4 +33,68 @@ public:
 	virtual const TCHAR* GetShortConditionName(int32 ConditionId) override;
 	virtual int32 GetUsedHullBits() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+
+	// +0x6660 m_iTentacleID (`CNPC_VMingXiaoTentacle`): the tentacle's own index, which the head
+	// (`CNPC_VMingXiao::m_iTentacleID` +0x6674, -1 on the head) reads through the tentacle.
+	int32 TentacleId = 0;
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	// From `ElysiumNpcKernelGeometry.inl`.
+	/** `+0x665c CNPC_VMingXiaoTentacle::m_hMingXiao` — the owner `0x1039ede0` resolves before it can
+	 *  notify the owner's other severed tentacles. Family Bosses owns `+0x665c` as
+	 *  `CNPC_VBaseBoss::m_BlacklistedEntities`; same situation as `m_vecScatterCenter` above. */
+	FElysiumEntityHandle TentacleMingXiao;
+	/** `0x1039ef60` — that entry point, so the owner walk can be entered the way retail enters it. */
+	void NotifyOwnerOfMyMove();
+
+
+	// From `ElysiumNpcKernelLifecycle19.inl`.
+	/** `DAT_1093bd34` — Ming Xiao tentacle cached handle, invalidated on restore. */
+	static FElysiumEntityHandle& MingXiaoTentacleCache();
+
+	// From `ElysiumNpcKernelMotor.inl`.
+	// +0x6688 `CNPC_VMingXiaoTentacle::m_bIgnoreCollision` — the tentacle's own gate on slots 68 and 69
+	// (`0x1039eb50`, `0x1039eb90`).
+	bool bIgnoreCollisionSpecies = false;
+	/** `thunk_FUN_1039ede0(this)` — `CNPC_VMingXiaoTentacle`'s companion/head entity, which its slot 166
+	 *  excludes from the standable test. **SEAM**: the tentacle proxy chain is the Squad family's
+	 *  `Proxies[6]` and nothing links a head to it yet; answers null. */
+	FElysiumEntity* MingXiaoTentacleCompanion() const;
+
+	// From `ElysiumNpcKernelPrecache10.inl`.
+	int32 ModeIndexTentacleToGrub = 0;   // +0x6664 CNPC_VMingXiaoTentacle
+	int32 ModeIndexGrub = 0;             // +0x6668 CNPC_VMingXiaoTentacle
+	int32 ModeIndexGrubToProxy = 0;      // +0x666c CNPC_VMingXiaoTentacle
+
+	/** `+0x6674 CNPC_VMingXiaoTentacle::m_flPhaseExpireTimer` — the tentacle's phase deadline. */
+	double MingXiaoTentaclePhaseExpireTimer = 0.0;
+
+	// From `ElysiumNpcKernelSpecies.inl`.
+	// `CNPC_VMingXiaoTentacle`'s cached coordinate point — the three floats the head writes onto a
+	// severed tentacle when it re-aims it. `+0x668c` is `CNPC_VMingXiao::m_rhProxies` on the HEAD
+	// (family Squad's `Proxies`) and `CNPC_VTzimisce::m_ePathMode` on a Tzimisce (family Motor's
+	// `PathMode`); the tentacle is a third class at the same offset. SOURCE units, as retail stores it.
+	FVector TentacleCoordinatePosUnits = FVector::ZeroVector;   // +0x668c/+0x6690/+0x6694 (walked)
+	/** SEAM for `thunk_FUN_1039ede0(this)` — the MingXiao HEAD a `CNPC_VMingXiaoTentacle` forwards its
+	 *  slots 21, 22 and 23 to. Family **Motor** already stands the same retail call
+	 *  (`ElysiumNpcKernelMotor.cpp:543`) and found the tentacle proxy chain absent; this answers null,
+	 *  which is retail's "no companion" arm and the one that forwards nothing. */
+	FElysiumEntity* MingXiaoTentacleHead() const;
+	/** SEAM for `thunk_FUN_10397dd0(head, this, param)` — `CNPC_VMingXiao`'s per-tentacle notice, which
+	 *  family **Damage** declared as the body that resets `m_flSpitAttackTimer`. Records the forward so
+	 *  the three slots can be told apart, and reaches nothing. */
+	int32 TentacleHeadForwards = 0;
+	/** `0x1039ef90` — `CNPC_VMingXiaoTentacle`: cache a coordinate point and raise condition 0x78. */
+	void FUN_1039ef90(const FVector& PositionUnits);
+	/** `0x1039e800` / `0x1039e830` / `0x1039e860` — `CNPC_VMingXiaoTentacle`'s slots 21, 22 and 23. */
+	void FUN_1039e800(FElysiumEntity* Arg);
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	// From `ElysiumNpcKernelGeometry.inl`.
+	/** `+0x6670 CNPC_VMingXiaoTentacle::m_ePhase` — the phase word `0x103998d0` requires to read 2
+	 *  before it will scatter a tentacle. What the OTHER phase values mean is **unrecovered**; only the
+	 *  2 is a fact of this family's rows. */
+	int32 TentaclePhase = 0;
 };

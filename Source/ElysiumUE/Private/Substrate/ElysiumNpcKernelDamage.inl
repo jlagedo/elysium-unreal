@@ -109,45 +109,6 @@ int32 TakeDamageMode = 2;
 static FVector& DeathThrowImpulse();
 static void ResetDeathThrowImpulse();
 
-// `CNPC_VVampireBoss`'s gore words — the per-body-region emitter names and the four live emitters.
-FString BodyEmitterNames[4];                 // +0x6684 m_pBodyEmitterNames[4] (datamap, string_t)
-FElysiumEntityHandle ParticleEmitters[4];    // +0x66a0 m_hParticleEmitters[4] (datamap)
-
-// `CNPC_VChangBros`'s single centre emitter.
-FElysiumEntityHandle ChangCenterEmitter;     // +0x66f4 m_hCenterEmitter (datamap)
-
-// `CNPC_VAndreiBlood`'s two emitter handles. Both are WALKED words past the datamap's last row
-// (`m_iHitMax` +0x66dc): `0x1035e1a0` owns `+0x66e0` and `0x1035e3c0` owns `+0x66e4`, read off the
-// listing (`MOV EAX, dword ptr [ESI + 0x66e0]`). 29b declared neither.
-FElysiumEntityHandle AndreiBloodEmitter;     // +0x66e0 (walked)
-FElysiumEntityHandle AndreiSummonEmitter;    // +0x66e4 (walked)
-bool bAndreiActivated = false;               // +0x66cc m_bActivated (datamap)
-
-// `CNPC_VBach`'s grenade cooldown and the byte its throw clears.
-double BachLastGrenadeTime = 0.0;            // +0x6680 m_flLastGrenadeTime, an absolute stamp
-bool bBachCamperFlag = false;                // +0x66a0 m_bCamperFlag (datamap)
-
-// `CNPC_VGhoulCroucher`'s authored `on_fire` keyfield, the one word its `CanBeSetOnFire` reads.
-bool bGhoulSpawnBurning = false;             // +0x6665 m_bSpawnBurning (datamap, KEY on_fire)
-
-// `CNPC_VZombie`'s gib latch. Retail writes the byte at `&m_bShouldGib + 1`, one past the datamap
-// row — `0x103e0430` raises and clears `+0x66e1` and nothing in layers 0–9 reads `+0x66e0` itself.
-// Carried as the one observable bit under the datamap's name, with the off-by-one recorded.
-bool bZombieShouldGib = false;               // +0x66e1 (`&m_bShouldGib + 1`, walked)
-
-// `CNPC_VMingXiao`'s words this family touches and family Bosses did not declare.
-bool bMingXiaoHasTransformed = false;        // +0x6678 m_bHasTransformed (datamap)
-double MingXiaoSpitAttackTimer = 0.0;        // +0x66c0 m_flSpitAttackTimer (datamap)
-double MingXiaoPickupCooldownA = 0.0;        // +0x66d4, `param_1[0x19b5]` in `0x10396bc0`
-double MingXiaoPickupCooldownB = 0.0;        // +0x66d8, `param_1[0x19b6]` in `0x10396bc0`
-FVector MingXiaoPickupTargetPos = FVector::ZeroVector;    // +0x6720 m_vecPickupTargetPos, SOURCE
-FVector MingXiaoPickupSavedForward = FVector::ZeroVector;  // +0x672c m_vecPickupSavedForward
-FElysiumEntityHandle MingXiaoPhysicsAnimlink;              // +0x6738 m_hPhysicsAnimlink (datamap)
-
-// `CNPC_VTzimisce`'s link handle. Family Motor owns `m_hPickupTarget` (+0x6670) and `m_ePathMode`
-// (+0x668c); `+0x6684` is this family's, read and cleared by `0x103bf170`.
-FElysiumEntityHandle TzimiscePhysicsAnimlink;   // +0x6684 m_hPhysicsAnimlink (datamap)
-
 // `CNPC_VAndreiBlood`'s `SelectIdealState` tag. The port's mind transition trace does not carry
 // retail's `{selector, file, line}` triple — the shape map calls `+0x1b38` ABSENT — so the one word
 // `0x1035d150` writes is kept here so the arm is measurable.
@@ -259,11 +220,6 @@ struct FEmitterCall
 	int32 EffectId = INDEX_NONE;
 };
 TArray<FEmitterCall> EmitterCalls;
-/** How many times a kill/stop body was ASKED. Retail's emitter words are `EHANDLE`s to entities and
- *  nothing in this substrate creates an emitter ENTITY, so every one of them resolves dead and every
- *  kill body takes its guarded arm — which is retail's own behaviour for a dead handle. The counter
- *  is what lets a test say the body ran and took that arm rather than silently doing nothing. */
-int32 EmitterKillCalls = 0;
 /** Create + (optionally) attach + start, in retail's order. Answers the index into `EmitterCalls`,
  *  or `INDEX_NONE` when the name is empty — retail's own "no name configured" refusal. */
 int32 CreateNamedEmitter(const FString& Name, const FVector& PositionUnits, int32 AttachMode,
@@ -284,8 +240,6 @@ void RemoveNamedEntity(const FElysiumEntityHandle& Entity);
  *  exposes no hitbox table to the kernel; `HitboxSetCount` answers 0, which takes retail's own
  *  "fewer than 7 hitbox sets" refusal, and `TestOneHitbox` answers false. */
 int32 HitboxSetCount() const;
-bool TestOneHitbox(int32 HitboxSetIndex, const FVector& RayStartUnits, const FVector& RayEndUnits,
-	uint32 Mask) const;
 
 /** SEAM for `CBaseEntity::IsStandable` (vtable `+0x290`, slot 164) on ANOTHER entity — the fallback
  *  `CNPC_VMingXiao`'s slot-166 override takes once the candidate is neither a proxy nor a severed
@@ -317,15 +271,6 @@ struct FHideAndUnsolidifyCall
 	uint32 EffectBits = 0;    // 0x20, EF_NODRAW
 	uint32 SolidBits = 0;     // 0x4, FSOLID_NOT_SOLID
 };
-TArray<FHideAndUnsolidifyCall> HideAndUnsolidifyCalls;
-void HideAndUnsolidifyWeapon(const FElysiumEntityHandle& Weapon);
-
-/** SEAM for `CVDmg_t::Apply`'s AOE sound pick: the victim's own vtable `+0x50c`, whose answer
- *  `CausePlayerAOEDamage` switches its impact sound id on, and `+0x500`, which plays it. Neither
- *  slot has a body in this substrate. `+0x50c` answers 0, which selects the default id `0x79`, and
- *  the chosen id is recorded rather than played — the CHOICE is what is recovered. */
-int32 AoeTraceAttackResultCode(const FElysiumEntity* Victim) const;
-TArray<int32> AoeImpactSounds;
 
 // --- The bodies ---------------------------------------------------------------------------------
 
@@ -341,197 +286,10 @@ TArray<int32> AoeImpactSounds;
  *  trace carries the same account. */
 int32 CacheDamagePosition();
 
-/** `0x1035d150` — `CNPC_VAndreiBlood`'s slot-461 `SelectIdealState`. Writes the trace selector tag
- *  4 (the base writes 1, `CNPC_VAnimal` 5, `CNPC_VHengeyokai` 0x13, `CNPC_VHunter` 0x17) and
- *  answers `NPC_STATE_ALERT` (2) when `m_bActivated` is set, else `NPC_STATE_IDLE` (1). Slot 461's
- *  Troika body is story 29e's, so this species arm lands under its retail name. */
-EElysiumNpcState CNPC_VAndreiBlood_vfunc461();
-
-/** `0x103c7230` — `CNPC_VVampireBoss::CausePlayerAOEDamage(const Vector& centreUnits, float radius)`.
- *  Only with a live `m_hClosestPlayer` and only when its origin is strictly inside `radius` of the
- *  centre: trace from the centre to the player with `CTraceFilterWorldOnly` and mask 1, build a
- *  `CVDmg_t` through `CVDmg_t::Set(1, 0x40, (int)distanceSquared)` — family LETHAL, `DMG_BLAST`,
- *  and the damage input is the SQUARED distance, which is retail's own arithmetic and not a slip —
- *  dispatch it at the player with `DispatchTraceAttack`, then pick an impact sound off the result
- *  of the player's own vtable `+0x50c`: 0x79 by default, 0x7a on 1, 0x7b on 3, played through its
- *  `+0x500`. */
-void CausePlayerAOEDamage(const FVector& CentreUnits, float RadiusUnits);
-
-/** `0x103c6eb0` — `CNPC_VVampireBoss::ClearBodyEmitterNames`: all four `m_pBodyEmitterNames`
- *  entries to the null string, unconditionally. */
-void ClearBodyEmitterNames();
-
-/** `0x103c6df0` — `CNPC_VVampireBoss::SetBodyEmitterName(int region, string_t name)`. One store,
- *  no bound check — retail indexes the four-entry array with the caller's word as given. */
-void SetBodyEmitterName(int32 Region, const FString& Name);
-
-/** `0x103c7010` — `CNPC_VVampireBoss::SpawnBodyEmitter(int region, CBaseEntity* attachTo)`.
- *  Answers nothing when `attachTo` is null or the region's name is unset; otherwise creates the
- *  named emitter and either one-shots it on ITSELF when the region is 3 (`+0x3cc(this, 1)`) or
- *  attaches it at `attachTo` (`+0x3cc(this, 2, attachTo)`). Note retail never STARTS it here —
- *  `+0x3c4` is not called — unlike every other emitter body in this family. */
-int32 SpawnBodyEmitter(int32 Region, const FElysiumEntityHandle& AttachTo);
-
-/** `0x103c7150` — `CNPC_VVampireBoss::KillBodyEmitters`: walk all four `m_hParticleEmitters`, and
- *  for each that still resolves call its stop (`+0x3c8`) then `thunk_FUN_100fbbb0(entity, 0.1)`,
- *  the 0.1 s fade-and-remove. The handles are NOT cleared. */
-void KillBodyEmitters();
-
-/** `0x1036e8c0` — `CNPC_VChangBros::KillCenterEmitter`: the same stop-then-0.1 s-fade pair on the
- *  single `m_hCenterEmitter` (+0x66f4), and it too leaves the handle standing. */
-void KillCenterEmitter();
-
-/** `0x103ab110` — `CNPC_VSabbatLeader::SpawnBloodPoolEmitter(string_t name, CBaseEntity* orient)`.
- *  Takes this NPC's own origin (slot 217, `+0x364`), replaces its Z either with `orient`'s origin Z
- *  when one is given or with `thunk_FUN_101d08e0(origin, z)`'s answer when it is not — retail's
- *  floor-drop lookup — creates the named emitter there and starts it (`+0x3c4`). The create's
- *  failure arm dereferences a null pointer in retail; this port refuses instead and says so. */
-void SpawnBloodPoolEmitter(const FString& Name, const FElysiumEntity* OrientTo);
-
-/** `0x1035e1a0` — `CNPC_VAndreiBlood::StartBloodEmitter(string_t name)` and `0x1035e3c0` —
- *  `StartSummonEmitter`. ONE body written twice: refuse a null name; release the previously cached
- *  handle (`thunk_FUN_101cd940`) and set it to -1 if it still resolves; create the named emitter at
- *  this NPC's origin; store the new handle (or -1 on failure); then attach and start it. The whole
- *  of the difference is the word the handle lives in and the attach: the BLOOD arm parents the
- *  emitter to this entity (`thunk_FUN_100faf60`) and the SUMMON arm attaches it at the bone
- *  `Bip01_R_Hand` (`+0x3cc(this, 2, name)`). Both then call `+0x3c4`. */
-void StartBloodEmitter(const FString& Name);
-void StartSummonEmitter(const FString& Name);
-
-/** The bone the summon emitter attaches at, `s_Bip01_R_Hand_1053ec20`. */
-static const TCHAR* SummonEmitterBoneName();
-
-/** `0x1036dd20` — `CNPC_VChangBros::SpawnEnergyBall`. Builds a spawn point by taking the muzzle
- *  attachment's basis (slot 219, `+0x36c` -> `AngleVectors` `0x10139610`) and pushing this NPC's
- *  origin along it by the retail offset triple `(_DAT_104ada24, _DAT_104ada28, _DAT_104ada2c)` =
- *  `(50, 40, -10)` — forward 50, right 40, up -10 — then creates `item_w_chang_energy_ball` there
- *  and, only when `m_hClosestPlayer` resolves, fires it at that player through the projectile's own
- *  `+0x5d0` with speed `DAT_104ada30` = 800. */
-FElysiumEntityHandle SpawnEnergyBall();
 /** The pure spawn-point rule, so the offsets are measurable without a world. `Forward`, `Right` and
  *  `Up` are the muzzle attachment's basis and `OriginUnits` this NPC's origin, both SOURCE units. */
 static FVector EnergyBallSpawnPoint(const FVector& OriginUnits, const FVector& FwdAxis,
 	const FVector& RightAxis, const FVector& UpAxis);
-
-/** `0x103b10f0` — `CNPC_VSheriffMan::KillSheriff`. Two halves, in order. First: find the entities
- *  named `logic_zap_player` and `sheriff`, RTTI-cast the first to `CLogicRelay`, and fire its
- *  `Trigger` input **only when BOTH resolve** — the named `sheriff` is a presence test and nothing
- *  more, it is never used. Second: take this NPC's active weapon and, if it has one, raise
- *  `m_fEffects |= 0x20` (`EF_NODRAW`) and add solid flag `4` (`FSOLID_NOT_SOLID`) to its collision
- *  before relinking it — the sword goes invisible and non-solid rather than being removed. */
-void KillSheriff();
-
-/** `0x103c67f0` — `CNPC_VVampireBoss`'s "has it been longer than this since I last attacked".
- *  `curtime - m_flLastAttackTime (+0x5d9c) > Threshold`, strictly. 29c named the target
- *  `FElysiumNpc::LastAttackTime`, which is already the NAME OF THE MEMBER 29b declared for
- *  `+0x5d9c`; the body lands under the elapsed-form name instead and the report says so. */
-bool LastAttackTimeElapsed(float ThresholdSeconds) const;
-
-/** `0x103990c0` — `CNPC_VMingXiao`'s throw release, the largest body in this family (1,074 bytes).
- *  In retail's order: remove and clear `m_hPhysicsAnimlink` (+0x6738) if it resolves; then, ONLY
- *  with a live enemy (slot 167), take the held object's centre (`+0x370`), solve a lead point at
- *  the enemy through `thunk_FUN_102c36d0` with the gravity cvar `DAT_1093bbcc`, add the enemy's own
- *  per-frame position delta (`piVar7[0xa0..0xa2] - piVar7[0x9d..0x9f]`) scaled by `_DAT_104454d0`
- *  = 0.5 to the lead's Z, take the yaw of the lead direction and — when `UTIL_AngleDiff` against
- *  this NPC's own yaw leaves the `[-20, +20]` cone — re-aim the XY at exactly `yaw -/+ 20` degrees,
- *  normalize, then scale by a speed that is `1000.0` when
- *  `DAT_1093bc14 + DAT_1093bbcc * distanceSquared` is at or below `_DAT_10447ee0` = 1000 and that
- *  same sum otherwise, with `DAT_1093b9fc * distanceSquared` added to the Z afterwards. It applies
- *  the result through the ragdoll element (`+0x428`) or the physics object (`+0xa0` then `+0x9c`),
- *  and then — unconditionally, on EVERY path including the no-enemy one — clears `m_hThrowObject`
- *  (+0x6718), re-arms the collision ignore at 0.75 s and sets the throwable mode to 0.
- *
- *  The three `DAT_1093…` cvar cells live past `.data`'s raw size and no corpus function constructs
- *  them, so their names and defaults are **unrecovered**; the seam below answers 0.0f, which is an
- *  unconstructed cvar's own answer and which makes the speed take the `<= 1000` arm. */
-void LaunchRagdollTowardTarget();
-/** SEAM for `DAT_1093bbcc` (the gravity/quadratic term), `DAT_1093bc14` (the constant term) and
- *  `DAT_1093b9fc` (the Z term) of that speed. **Unrecovered**; all answer 0.0f. */
-float MingXiaoThrowCvar(int32 Which) const;
-/** The pure speed rule, so the two arms are measurable: `Quadratic * DistSq + Constant`, answering
- *  1000.0 when that sum is at or below 1000.0 and the sum itself otherwise. */
-static float MingXiaoThrowSpeed(float DistanceSquared, float Quadratic, float Constant);
-
-/** `0x103937d0` — `CNPC_VMingXiao`'s melee/throw swing task. 29c mapped three distinct retail
- *  bodies onto the one target name `MingXiaoThrowAttack`; they are three behaviours and land as
- *  three methods. This one: reset the navigator's path (`thunk_FUN_102e0b40(m_pNavigator)`), resolve
- *  `m_hMeleeWeapon`'s owner (+0xa0), run the pre-attack hook (`+0x610`), and TaskFail `0x1f` when
- *  there is no active weapon. Otherwise ask the weapon for the activity that matches the requested
- *  one (`+0x5a4`), run `+0x5e0`, and choose a melee sequence through slot 331; a refusal or a
- *  negative activity fails the task (`thunk_FUN_10289ee0`) and a success sets the activity
- *  (`+0x4dc`). Either way it then stamps `m_rflAttackTimers[tentacle]` (+0x66c4) with
- *  `curtime + FUN_103983d0(...)` — family Bosses owns both that array and that curve. */
-void MingXiaoThrowAttack(int32 TaskId, int32 Tentacle, TFunctionRef<float(int32)> TuningField);
-
-/** `0x10396bc0` — `CNPC_VMingXiao`'s pickup search, `SelectSchedule`'s grab arm. Answers 0 unless
- *  `m_hThrowObject` (+0x6718) is DEAD and both `curtime >= +0x66d4` and `curtime >= +0x66d8`; then
- *  it clears condition 9, draws `RandomInt` against the tuning record's `+8` cell and, only on a
- *  draw below it, runs family Bosses' pedestal search (`0x10398b20`) and stores its answer. With a
- *  live object it starts ignoring that object's collision, sets the throwable mode to 1, stamps the
- *  selector trace with line `0xbc3` and answers schedule `0x167`; otherwise 0. */
-int32 MingXiaoFindThrowObject(int32 PedestalCvarDraw, int32 PedestalCvarCeiling);
-
-/** `0x10398fd0` — `CNPC_VMingXiao`'s throw cleanup, which is `0x103990c0`'s tail on its own: remove
- *  and clear `m_hPhysicsAnimlink`, clear `m_hThrowObject`, re-arm the 0.75 s collision ignore and
- *  set the throwable mode to 0. */
-void MingXiaoThrowCleanup();
-
-/** `0x103bf170` — `CNPC_VTzimisce`'s pickup release. 29c named the target `VGargoyleGibCleanup` on
- *  the strength of the offset shapes and flagged it unconfirmed; the offsets settle it the other
- *  way — `+0x6670` is `CNPC_VTzimisce::m_hPickupTarget` (family Motor's `PickupTarget`) and
- *  `+0x6684` its `m_hPhysicsAnimlink`, and `thunk_FUN_103be0b0` is the Tzimisce `CARRYING_BODY`
- *  flag write. The name is kept so the overlay row matches. Body, in order: clear the pickup target
- *  to -1; re-arm the collision ignore at 0.75 s; resolve, remove and clear the link handle —
- *  **`UTIL_Remove` is called even when the handle does NOT resolve**, on a null pointer, which is
- *  retail's own unguarded call; then clear the carrying-body flag. */
-void VGargoyleGibCleanup();
-
-/** `0x10365860` — `CNPC_VBach::ThrowGrenade(const char* targetName, float force)`. Gated on
- *  `curtime - m_flLastGrenadeTime (+0x6680) >= 5.0` (`_DAT_10454110`). Then: find the named entity
- *  and, only if it exists, stamp `m_flLastGrenadeTime` with curtime, create an
- *  `item_w_grenade_frag` at that entity's origin, set `m_takedamage = 2`, `m_iHealth = 1` and clear
- *  its touch function, initialise its physics if it has none (a failure `Msg`es
- *  `"No physics data for grenade"` and removes it), take the target's FORWARD vector, apply
- *  `forward * force` as a velocity with zero angular velocity, arm both its own `+0x7c` word and
- *  `m_flNextThink` at `curtime + 3.0 (+0.01)` and clear `m_bCamperFlag` (+0x66a0). */
-void ThrowGrenade(const FString& GrenadeTargetName, float Force);
-
-/** `0x1038f2c0` — `CNPC_VManBat::ThrowModel(const char* model, const char* parentName)`, named by
- *  its own `DevMsg` literal `"ManBat is throwing model %s"`. Creates a `prop_physics` at this NPC's
- *  origin without spawning it, sets its model, spawns it, looks a bone up by the SAME string, makes
- *  a corpse-shaped ragdoll from it (`thunk_FUN_10157da0`), removes the template prop, then arms the
- *  ragdoll's think at `curtime + 20.0` (`_DAT_1044eb0c`), optionally parents/owns it to `parentName`
- *  and finally attaches it through family Bosses' ManBat animlink arm before storing its handle in
- *  `m_hPickupTarget` (+0x668c, Bosses' `ManBatPickupTarget`). */
-bool ThrowModel(const FString& ModelName, const FString& ThrowParentName);
-
-/** `0x10397dd0` — `CNPC_VMingXiao`: reset `m_flSpitAttackTimer` (+0x66c0) to 0, **only when both
- *  parameters are non-null**. Retail's two parameters are never read for anything else, so the
- *  presence test is the whole of the condition and is reproduced as a pair of bools. */
-void SpitAttackTimer(bool bFirstParamSet, bool bSecondParamSet);
-
-/** `0x10398d90` — `m_eThrowableObjectMode = value` (+0x673c, family Bosses' member). Thirteen
- *  bytes; three of this family's bodies and three of Bosses' call it. */
-void ThrowableObjectMode(int32 Mode);
-
-/** `0x10397000` — `CNPC_VMingXiao`'s slot-166 `CanStandOn(CBaseEntity*)` override. 29c named the
- *  target `FElysiumNpc::SeveredTentacles`, which is ALREADY family Squad's member array for
- *  `m_rhSeveredTentacles` (+0x66a8); the body lands under the fuller name and the report says so.
- *  Walks indices 0..5 of BOTH `m_rhProxies`
- *  (+0x668c) and `m_rhSeveredTentacles` (+0x66a8) — family Squad's two arrays, read through their
- *  owner — testing each RESOLVED entity pointer against the candidate, and answers FALSE on the
- *  first match. On a full miss a non-null candidate is asked its own `IsStandable` (slot 164) and a
- *  false there answers false; a NULL candidate skips that test and answers TRUE. Slot 166's
- *  Troika-line body is family Motor's `CanStandOn`, which this does not call. */
-bool SeveredTentaclesCanStandOn(const FElysiumEntity* Candidate) const;
-
-/** `0x10399fe0` — `CNPC_VMingXiao`'s slot-100 `TestHitboxes` override. Refuses without a model,
- *  without `m_bHasTransformed` (+0x6678) and with fewer than 7 hitbox sets; then tests hitbox set 0
- *  and, on a miss, sets 1..6 — each gated by family Bosses' `IsTentacleConnected(index)`
- *  (`0x10398000`), whose index runs 0..6 across seven iterations while the set index advances by
- *  `0xc` from `0xc` to `0x48`. Slot 100's Troika body is generated, so this species arm lands under
- *  its own name and the report says so. */
-bool TestHitboxesMingXiao(const FVector& RayStartUnits, const FVector& RayEndUnits, uint32 Mask);
 
 /** `0x10376ae0`, `0x10376b10`, `0x10376b50` and `0x103a4950` — the `CNPC_VFrenzyShadow` /
  *  `CNPC_VPlayerController` line's four damage-and-death slot arms. Each fills a slot whose
@@ -570,83 +328,11 @@ TArray<FControllerAiEvent> ControllerAiEvents;
 /** The retail literal `Event_TookLife` tags its dispatch with, `s_CNPC_VPlayerController__Event_To_1064bcc0`. */
 static const TCHAR* TookLifeEventSource();
 
-// --- The species tables -------------------------------------------------------------------------
-
-/** One row of slot 141's (`TraceAttack`) species table: the census class, the retail body that
- *  fills the slot for it, and what that body does BEFORE it falls into the Troika line. Every arm
- *  in the table delegates to `0x10266780` in the end — the species bodies are prologues. */
-enum class ETraceAttackPrologue : uint8
-{
-	None,          // the Troika line's own body, `0x10266780`
-	ZeroAmmoType,  // `0x103ccbf0`: `SetAmmoType(info, 0)`
-	ZombieGib      // `0x103e0430`: pick the gib latch and force a cvar-driven ammo type
-};
-struct FTraceAttackSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	ETraceAttackPrologue Prologue = ETraceAttackPrologue::None;
-};
-static const FTraceAttackSpecies* TraceAttackSpeciesRows(int32& OutCount);
-static const FTraceAttackSpecies* TraceAttackSpeciesOf(const TCHAR* InRetailClass);
-/** `CNPC_VWerewolf::TraceAttack` (`0x103ccbf0`) and `CNPC_VZombie::TraceAttack` (`0x103e0430`) — the
- *  bodies of their classes' overrides: the prologue, then the base body directly. */
-void WerewolfTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace);
-void ZombieTraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace);
-
-/** `0x103e0430` — `CNPC_VZombie`'s prologue as a pure rule, so both arms are measurable. The gib
- *  latch is raised when the hitgroup is 1 (a head hit) and cleared otherwise; a non-head hit only
- *  forces an ammo type when the attacker's active weapon's capability mask intersects `0x18000`
- *  (the melee-block capability), and the type forced is the SECOND cvar for a head hit and the
- *  FIRST for a qualifying melee one. Answers whether an ammo type is forced. */
-static bool ZombieTraceAttackPrologue(int32 HitGroup, bool bAttackerWeaponIsMelee,
-	int32 FirstCvarAmmoType, int32 SecondCvarAmmoType, bool& OutShouldGib, int32& OutAmmoType);
-
-/** SEAM for `DAT_10940404` and `DAT_1094044c` — the two cvar-backed ammo-type cells
- *  `CNPC_VZombie::TraceAttack` reads. Both pointer cells live past `.data`'s raw size and no corpus
- *  function constructs them: **unrecovered**, and both answer 0, which is an unconstructed cvar's
- *  own answer. */
-int32 ZombieGibAmmoTypeCvar(int32 Which) const;
-
-/** One row of slot 615's (`CanBeSetOnFire`) species table. `CNPC_VGhoulCroucher` is the only class
- *  in the family tree that replaces the Troika body. */
-struct FCanBeSetOnFireSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	// True where the species refuses outright while its `m_bSpawnBurning` keyfield is set, ahead of
-	// the Troika body's condition and timer test.
-	bool bRefusesWhileSpawnBurning = false;
-};
-static const FCanBeSetOnFireSpecies* CanBeSetOnFireSpeciesRows(int32& OutCount);
-static const FCanBeSetOnFireSpecies* CanBeSetOnFireSpeciesOf(const TCHAR* InRetailClass);
-
-/** One row of slot 292's (`DamageFlinch`) species table — the two classes that gate the generic
- *  flinch. `CNPC_VGargoyle`'s `0x10378cb0` and `CNPC_VHengeyokai`'s `0x103802a0` are BYTE-IDENTICAL:
- *  suppress the flinch entirely when `(dmg->m_bdmgTypes | info.m_bitsDamageType)` intersects
- *  `0x4000002` — `DMG_BULLET | DMG_BUCKSHOT`, which is exactly `ElysiumDamage::FirearmMask` — and
- *  skip a hit whose magnitude is exactly zero; otherwise call the base body. */
-struct FDamageFlinchSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	uint32 SuppressMask = 0;
-};
-static const FDamageFlinchSpecies* DamageFlinchSpeciesRows(int32& OutCount);
-static const FDamageFlinchSpecies* DamageFlinchSpeciesOf(const TCHAR* InRetailClass);
-
-/** The gate itself, as the two species bodies spell it, so it can be measured without a world.
- *  `Magnitude` is `CVDmg_t::GetDmg()` when the packet carries a descriptor and `m_flDamage` when it
- *  does not — retail's own two-armed read. */
-static bool DamageFlinchSuppressed(uint32 CombinedDamageBits, float Magnitude, uint32 SuppressMask);
+// --- The flinch hook, and the deferred controller line's slot-300 table ----------------------------
 
 /** `FElysiumCombatCharacter::StartDamageFlinch`'s NPC hook: whether this class suppresses the generic
  *  flinch for this descriptor. The Troika line answers false; the two species that do override it. */
 virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
-/** The Gargoyle/Hengeyokai slot-292 gate off `SpeciesClass`'s own row. */
-bool SpeciesSuppressesDamageFlinch(const TCHAR* SpeciesClass, const FElysiumDmg& Dmg) const;
-/** `CNPC_VGhoulCroucher::CanBeSetOnFire` (`0x1037c420`) — the body of the class's override. */
-bool GhoulCroucherCanBeSetOnFire();
 
 /** One row of slot 300's (`Event_TookLife`) species table — the three classes of the
  *  `CNPC_VPlayerController` line that share `0x103a4950`. */
@@ -657,3 +343,9 @@ struct FTookLifeSpecies
 };
 static const FTookLifeSpecies* TookLifeSpeciesRows(int32& OutCount);
 static const FTookLifeSpecies* TookLifeSpeciesOf(const TCHAR* InRetailClass);
+
+/** How many times a kill/stop body was ASKED. Retail's emitter words are `EHANDLE`s to entities and
+ *  nothing in this substrate creates an emitter ENTITY, so every one of them resolves dead and every
+ *  kill body takes its guarded arm — which is retail's own behaviour for a dead handle. The counter
+ *  is what lets a test say the body ran and took that arm rather than silently doing nothing. */
+int32 EmitterKillCalls = 0;

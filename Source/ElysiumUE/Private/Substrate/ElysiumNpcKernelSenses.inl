@@ -67,12 +67,6 @@ static uint32 DoorBlockFlags(const FElysiumEntity& Door);
 void SetDoorNextTryTime(FElysiumEntity& Door, double At);
 int32 DoorNextTryWrites = 0;
 
-/** `DAT_1093f8ec` and `DAT_1093d574` — the two ConVar objects `CNPC_VWerewolf::ShouldPursueEnemy`
- *  (`0x103cf5f0`) thresholds on, each read `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`:
- *  `werewolf_pursuit_unseen_time` "3.0" and `werewolf_pursuit_distance` "800". */
-static float WerewolfPursueElapsedLimitSeconds();
-static float WerewolfPursuePlayerDistLimitUnits();
-
 // --- Non-slot bodies ------------------------------------------------------------------------------
 
 /** `0x10027020`, `CAISound#168` and 17 more — the BASE line's `CBaseEntity* GetEnemy()`, whose
@@ -98,56 +92,11 @@ static bool AimConeAdmits(const FVector& OriginCm, const FVector& TargetCm, cons
  *  otherwise viewable exactly when `m_nHintType == 13`. */
 static bool IsHintViewable(const FHintWords& Hint);
 
-/** `0x101aaf80`, `CPayphone#45` — the payphone's `PassesFindEntityFOVTrace`. **No cone and no
- *  trace**, whatever 29c's walk says: the MANHATTAN distance between the two `EyePosition()`s
- *  against `_DAT_1047a3b0` = **85.0** Source units, and under it a six-term AABB overlap of the two
- *  entities' OBBs (`0x10240250`). Both arguments of the slot's `Vector, Vector, int` tail are
- *  ignored by the body. */
-bool PayphonePassesFindEntityFovTrace(const FElysiumEntity& Other) const;
-
-/** `0x103a4bb0`, `CNPC_ProneDialog#45` — the prone-dialog body. A ray from `FromCm` toward `ToCm`
- *  with the caller's mask; the answer is TRUE only when the trace hit THIS NPC, or hit nothing at
- *  all with `fraction == _DAT_10449280` (**1.0**). The `!= 0.0` squared-length byte retail packs
- *  into the ray request is the engine's "this ray has a direction" flag and is carried as
- *  `bOutRayIsValid` so the degenerate case is visible rather than silently equal. */
-bool ProneDialogPassesFindEntityFovTrace(const FVector& FromCm, const FVector& ToCm, int32 Mask,
-	bool& bOutRayIsValid) const;
-
-/** `0x1036a030`, `CNPC_VCameraSecurity#468` — `QuerySeeEntity`. The WHOLE body is
- *  `return candidate->m_pPlayer != NULL` (`+0x00a8`, `CBaseEntity`'s self-downcast cache, which is
- *  non-null on exactly the player). It chains nothing: a security camera sees the player and
- *  nothing else. Not static because `FElysiumEntity` carries no self-downcast cache — "is the
- *  player" is `Handle == World->PlayerHandle()` here, and the world comes off this NPC. */
-bool CameraSecurityQuerySeeEntity(const FElysiumEntity& Candidate) const;
-
 /** The gate `CNPC_VWerewolf::FVisible` (`0x103cb810`), `CNPC_VYukie::FVisible` (`0x103ddaf0`) and
  *  `CNPC_VYukie::FInViewCone` (`0x103ddaa0`) share, in retail's order: a null candidate fails;
  *  `DAT_10924fba` (`npc_ignore_senses`) set fails; `DAT_10924fb9` (`npc_ignore_player`) set AND the
  *  candidate being the player fails. Nothing else. */
 bool SpeciesStealthSenseGate(const FElysiumEntity* Candidate) const;
-
-/** `0x103cb810`, `CNPC_VWerewolf#201` — `FVisible`. The gate above, then **`true`
- *  unconditionally**: a werewolf has no range check, no cone and no line of sight. On refusal it
- *  zeroes the blocker out-parameter, which is retail's own write. */
-bool WerewolfFVisible(const FElysiumEntity* Candidate, FElysiumEntityHandle* OutBlocker);
-
-/** `0x103ddaa0`, `CNPC_VYukie#363` — `FInViewCone(CBaseEntity*)`. The gate and nothing else: Yukie
- *  has no view cone. */
-bool YukieFInViewCone(const FElysiumEntity* Candidate) const;
-
-/** `0x103ddaf0`, `CNPC_VYukie#201` — `FVisible`. The gate, and on success the base check through
- *  vtable `+0x948` (slot 594, `0x102b4760`, story 29d) rather than the werewolf's unconditional
- *  true. The refusal arm zeroes the blocker only on the `npc_ignore_player` branch and on the
- *  `npc_ignore_senses` branch, not on a null candidate — retail's own asymmetry. */
-bool YukieFVisible(const FElysiumEntity* Candidate, FElysiumEntityHandle* OutBlocker);
-
-/** `0x103dda10`, `CNPC_VYukie#602` — Yukie's replacement for the melee-leave decision the Troika
- *  line answers at `FElysiumNpc::Slot602`. Two arms on slot 308 `HasUsableRangedWeapon()` (vtable
- *  `+0x4d0`): with no ranged weapon, leave when `2 * meleeRange * 1.5` (`_DAT_1044f02c`) is
- *  **`<=`** `m_flEnemyDist`; with one, leave when `m_flMeleeMustLeaveTimer` has expired. No
- *  frenzy gate, no follower-boss gate and no attack coordinator — the four terms the Troika body
- *  spends its first half on are simply gone. */
-bool YukieShouldLeaveMelee();
 
 /** `0x1028ea60` — the CRIMINAL witness record, written whole: the witnessed level (obfuscated into
  *  `+0x6364`), the three-float location (`+0x6380`) and the offender handle (`+0x638c`, or `-1`
@@ -167,7 +116,6 @@ void RecordSupernaturalWitness(int32 Level, const FVector& AtCm, const FElysiumE
  *  checkable, while the port's own `FElysiumNpcWitnessChannel::Level` carries the plain number —
  *  the obfuscation is anti-tamper, not behaviour, and nothing the bytecode runs can observe it. */
 static uint32 EncodeWitnessedLevel(uint32 Level);
-static uint32 DecodeWitnessedLevel(uint32 Stored);
 
 /** `+0x6360` and `+0x6361`, the two bytes `0x1028ea60` writes beside the scrambled level.
  *  **RECOVERED RETAIL DEFECT**: the listing (`1028ea72` `MOV DL,[ESP+0x8]`, `1028eaa9`
@@ -182,11 +130,6 @@ uint8 CriminalWitnessByte6361 = 0;
  *  handler) forwards to it when the door that hit this NPC is the one it was opening. Seven arms,
  *  in retail's order, at the definition. */
 void OnDoorBlocked(FElysiumEntity& Door);
-
-/** `0x103cf5f0`, `CNPC_VWerewolf::ShouldPursueEnemy`. `m_DoorState`-adjacent flag word `+0x66e8`
- *  bit 2 (`& 4`) skips the whole test; otherwise BOTH of two independent gates must fail before a
- *  werewolf gives up the chase. */
-bool WerewolfShouldPursueEnemy() const;
 
 /** `0x10270180` — the occlusion-EDGE state machine behind `m_bEnemyWentOccluded` (`+0x5bc5`) and
  *  `m_vecEnemyWentOccluded` (`+0x5bc8`). Three arms on (enemy, bHaveLos), none of which is a

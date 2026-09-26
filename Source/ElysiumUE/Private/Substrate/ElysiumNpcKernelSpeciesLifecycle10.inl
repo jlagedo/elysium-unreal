@@ -89,73 +89,6 @@
 // (`CNPC_VSheriffMan::Restore`'s).
 
 // -------------------------------------------------------------------------------------------------
-// `CPayphone::NPCThink` — slot 431, `0x101aabf0`.
-// -------------------------------------------------------------------------------------------------
-
-/** `m_hDialogPartner` (`+0x0fe8`), as an ENTITY HANDLE.
- *
- *  **SEAM, and it answers nothing.** This runtime carries the dialogue partner as the open session
- *  (`FElysiumNpcDialogue::bInDialog` plus the talk-end stamp), which is the reading family Anim's
- *  `HasLiveDialogPartner()` and family Sounds' `IsInDialog` both already made — a boolean, not a
- *  handle. `CPayphone::NPCThink` is the first body in the kernel that needs the partner as an
- *  entity, because it reads two of the partner's own animation words off it, so the handle is
- *  declared here at its retail offset with no writer. Nothing in this runtime assigns it, so a
- *  payphone takes retail's own no-partner arm — which is the admitting arm: a payphone standing
- *  alone idles and re-thinks on the 0.25 s clock, exactly as retail's does. */
-FElysiumEntityHandle DialogPartner;   // +0x0fe8 m_hDialogPartner (SEAM: no writer)
-
-/** The partner resolved live, or null. Retail's test is the three-part EHANDLE validity check
- *  (`index & 0x1fff`, serial `>> 0xd`, non-null record) at `101aac0b`..`101aac2c`. */
-FElysiumEntity* ResolveDialogPartner() const;
-
-/** SEAM for `FUN_102c1400` (`0x102c1400`), the dialogue upkeep tick both payphone arms run. It is a
- *  237-instruction body of its own — the scene-entity release, `FinishTalking` when the talk
- *  finished, the queued-line pump, the disposition switch to schedule `0xf1` and
- *  `CDialog::ShowPlayerChoices` — and it is **not one of this family's rows**. Counted here so the
- *  payphone's call ORDER (tick before the activity mirror, tick before the idle) is assertable, and
- *  named so the day it is walked the call site is already correct. */
-int32 DialogUpkeepTicks = 0;
-void DialogUpkeepTick();
-
-/** How many payphone passes took the mirror arm and how many took the idle arm. */
-int32 PayphoneMirrorPasses = 0;
-int32 PayphoneIdlePasses = 0;
-
-/** `CPayphone::vfunc431` (`0x101aabf0`), slot 431 — the WHOLE think for a payphone. It does not call
- *  `CAI_BaseNPCTroika::NPCThink` at any point, so a payphone runs no schedule, no senses and no
- *  motor: it is an NPC whose entire behaviour is to copy its dialogue partner's pose.
- *
- *  Retail, in the listing's order:
- *    1. slot 250 `StudioFrameAdvance(0.0)`, its float return discarded (`101aabf8` then
- *       `101aac07 FSTP ST0`).
- *    2. If `m_hDialogPartner` (`+0x0fe8`) resolves live:
- *         a. the dialogue upkeep tick `0x102c1400`, UNCONDITIONALLY;
- *         b. if the partner's `m_IdealActivity` (`+0xff0`) differs from mine:
- *              `SetIdealActivity(theirs)`; `m_nSequence` (`+0x6f0`) =
- *              `SelectWeightedSequence(theirs, -1)`; `ResetSequenceInfo()` (`0x10090950`);
- *         c. ALWAYS `m_flCycle` (`+0x6f8`) = the partner's `m_flCycle`;
- *         d. `m_flNextThink` = curtime + `_DAT_10450aa4` (**0.01 s**).
- *       and RETURNS — nothing below runs.
- *    3. Otherwise: `if (IsInDialog())` the same tick; then `SetIdealActivity(1)` (`ACT_IDLE`)
- *       UNCONDITIONALLY; then `m_flNextThink` = curtime + `_DAT_1044bef8` (**0.25 s**).
- *
- *  Note (b) versus (c): the sequence is re-selected only on an activity CHANGE, but the cycle is
- *  copied on every pass. That is what makes the mirror frame-accurate, and it is why the arm needs
- *  a 0.01 s clock.
- *
- *  Always answers true: the payphone body owns the whole pass. */
-bool PayphoneThink();
-/** `FElysiumNpcPayphone::Think`'s body: the inert gate, then `PayphoneThink` (story 5 step 3). */
-void PayphoneThinkPass();
-
-/** `_DAT_10450aa4` — **0.01f**, read at file offset `0x450aa4` of the pinned `vampire.dll`. */
-static constexpr double PayphoneMirrorThinkSeconds = 0.009999999776482582;
-/** `_DAT_1044bef8` — **0.25f**, read at file offset `0x44bef8`. */
-static constexpr double PayphoneIdleThinkSeconds = 0.25;
-/** `101aac9c PUSH 0x1` — `ACT_IDLE`. */
-static constexpr int32 PayphoneIdleActivity = 1;
-
-// -------------------------------------------------------------------------------------------------
 // Slots 174 `StartTouch` and 175 `Touch` — the `CBaseEntity` bodies and their two species arms.
 // -------------------------------------------------------------------------------------------------
 //
@@ -207,60 +140,9 @@ virtual void TouchSpecies(FElysiumEntity* Other);
  *  by a test. */
 virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override;
 
-/** `CNPC_VGhoulCroucher::StartTouch` (`0x1037bf60`), `CNPC_VGhoulCroucher#174`. Retail, in order:
- *
- *    1. `CBaseEntity::StartTouch(other)` — the base body FIRST.
- *    2. `if (other && other->m_pPlayer (+0xa8)) OnDisturbed(other);`
- *       `else if (other->field_0x94) OnDisturbed(other);`
- *       i.e. **the toucher is the player, or the toucher is an NPC**. `+0x94` is `CBaseEntity`'s
- *       cached `CAI_BaseNPC*` (families Conditions and Damage both already read it that way).
- *       **Retail's bug, and this port's one crash guard:** the `else` branch is entered with
- *       `other == NULL` too (`1037bfd9 XOR EBX,EBX / JMP 0x1037bfe7`, and `1037bfe7 MOV EAX,[EDI +
- *       0x94]` dereferences the null `EDI`). A null toucher faults in retail. This port refuses the
- *       arm instead — no `FElysiumEntityWorld` path can produce a null toucher, so the divergence is
- *       unreachable, and it is named rather than reproduced.
- *    3. `if (m_bSpawnBurning (+0x6665) && the toucher IS the player && m_flNextTouchBurnTime
- *       (+0x666c) < curtime)`: restamp `m_flNextTouchBurnTime = curtime + _DAT_1044ffd0` (**5.0 s**)
- *       and `BurnPlayer(player, 5.0f)`.
- *       The compare is `FLD curtime / FCOMP [+0x666c] / AND EAX,0x4100 / JNZ skip`, so the arm runs
- *       only when curtime is STRICTLY greater. Note the player term reuses the `+0xa8` pointer
- *       resolved in step 2 — a toucher that entered step 2 through the `+0x94` (NPC) arm carries a
- *       null one and cannot burn.
- *
- *  The 5.0 here is against the **10.0** of this class's own `OnVictimHitByMe` (`0x1037be80`
- *  `PUSH 0x41200000`): standing in the ghoul's fire hurts half as much as being hit by it. */
-void GhoulCroucherStartTouch(FElysiumEntity* Other);
-
-/** `m_flNextTouchBurnTime` (`+0x666c`, `CNPC_VGhoulCroucher`) — the touch-burn re-arm stamp. */
-double GhoulNextTouchBurnTime = 0.0;
-
-/** `_DAT_1044ffd0` — **5.0**, a DOUBLE, read at file offset `0x44ffd0`. */
-static constexpr double GhoulTouchBurnIntervalSeconds = 5.0;
-/** `1037c028 PUSH 0x40a00000` — the touch burn's damage, **5.0**, against the **10.0**
- *  (`0x41200000`) this class's own `OnVictimHitByMe` (`0x1037be80`) passes to the same body. */
-static constexpr float GhoulTouchBurnDamage = 5.0f;
-
 // `CNPC_VGhoulCroucher::BurnPlayer` (`0x1037c090`) itself is family **SpeciesMisc10**'s
-// `FElysiumNpc::BurnPlayer(FElysiumEntity*, float)`, landed for the slot-24 caller. It is CALLED
+// `FElysiumNpcGhoulCroucher::BurnPlayer(FElysiumEntity*, float)`, landed for the slot-24 caller. It is CALLED
 // here, not restated — this row's contribution is the amount and the re-arm stamp above.
-
-/** `CNPC_VGargoyle::Touch` (`0x1037a270`), `CNPC_VGargoyle#175` — the gargoyle's pillar damage.
- *
- *  Retail, in order:
- *    1. `FClassnameIs(other, "pillar")`, else `FClassnameIs(other, "central_pillar")`. Both are the
- *       case-insensitive whole-name compare (`__strcmpi`), because neither literal carries the
- *       trailing `*` the compare would honour as a prefix. This is the SAME predicate this class's
- *       slot-24 body uses, and family Misc's `GargoyleHitsPillar` already carries it — it is called
- *       here, not restated.
- *    2. On a match: a `CVDmg_t` with `SetSrc(this)`, `Set(1, 0x80, 10)` — family **Lethal**,
- *       `m_bdmgTypes` **`DMG_CLUB`**, `m_iDiceAmt` **10** — and `m_iToHitSuccesses` (`+0x0c`) forced
- *       to **1**; wrapped by `0x101c26d0` into a `CTakeDamageInfo` with **inflictor = the pillar**,
- *       **attacker = the gargoyle**, damage 1.0 and ammo type -1; then slot **142** `OnTakeDamage`
- *       dispatched **ON THE PILLAR** (`1037a3c1 CALL dword ptr [EDX + 0x238]`, `ECX = ESI`).
- *    3. BOTH paths end with `CBaseEntity::Touch(other)`.
- *
- *  The inflictor being the pillar itself rather than the gargoyle is retail's, and is reproduced. */
-void GargoyleTouch(FElysiumEntity* Other);
 
 /** One slot-142 dispatch the gargoyle made at a pillar. **SEAM:** a `pillar` is not an NPC in this
  *  runtime, so there is no `OnTakeDamage` to reach on most of them; the packet is recorded whole and
@@ -275,15 +157,6 @@ struct FGargoylePillarHit
 	float Damage = 0.f;                   // the packet's scalar
 	bool bDispatched = false;             // the pillar carried a slot 142 to reach
 };
-TArray<FGargoylePillarHit> GargoylePillarHits;
-
-/** `1037a38c PUSH 0x1` / `1037a385 PUSH 0x80` / `1037a383 PUSH 0xa` and `1037a3ab MOV [..],0x1`. */
-static constexpr int32 GargoylePillarDamageFamily = 1;        // EElysiumDmgFamily::Lethal
-static constexpr uint32 GargoylePillarDamageTypes = 0x80u;    // DMG_CLUB
-static constexpr int32 GargoylePillarDiceAmount = 10;
-static constexpr int32 GargoylePillarToHitSuccesses = 1;
-/** `1037a3a0 PUSH 0x3f800000` — the packet's damage scalar, **1.0**. */
-static constexpr float GargoylePillarDamageScale = 1.0f;
 
 // -------------------------------------------------------------------------------------------------
 // Slot 463 `OnStateChange` — the `CNPC_VGuard1` and `CNPC_VHunter` pre-steps.
@@ -294,90 +167,11 @@ static constexpr float GargoylePillarDamageScale = 1.0f;
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`). Called from the classes' `OnStateChange`
 // overrides (story 5 step 3).
 
-/** `CNPC_VHunter::m_hPursuitPlayer` (`+0x6664`, datamap — `ElysiumNpcKernelShape.cpp`). Distinct
- *  from `CNPC_VCop`'s word at the same offset, which family Debug10 reaches through
- *  `CopPursuitPlayer()`; the same offset means a different thing per species, which is the rule 29b
- *  recorded for everything above `+0x665c`. */
-FElysiumEntityHandle HunterPursuitPlayer;
-
-/** How many times the acquire and release arms ran. The COUNT itself is the player's — retail's
- *  `+0x1d14` is a word on `CBasePlayer` and this runtime carries it as
- *  `FElysiumPoliceState::HuntersInPursuit`. `FUN_1017f7b0` (`0x1017f7b0`) and `FUN_1017f830`
- *  (`0x1017f830`) are already ported by family **Conditions** as the static
- *  `FElysiumNpc::OnHunterPursuitStart(FElysiumPlayer&)` / `OnHunterPursuitStop(FElysiumPlayer&)`
- *  pair, with that family's own receiver correction; this family CALLS them. These two are the
- *  Hunter arm's own tally, so a case can say which arm fired without reading the shared counter. */
-int32 HunterPursuitStarts = 0;
-int32 HunterPursuitStops = 0;
-
-/** `FUN_10388c40` (`0x10388c40`), the Hunter's relationship write. Its whole body is
- *  `InputSetRelationship(this, "player D_HT 10", 0)` — the literal at `0x1063bc28`, `'player D_HT
- *  10'` with SPACES, i.e. the three-token grammar this runtime's `InputSetRelationship` already
- *  parses.
- *
- *  It is `CNPC_VGuard1`'s `0x1037e2d0` MINUS the `+0x6660` latch byte, and that byte is the only
- *  difference between the two 20-byte bodies. `0x1037e2d0` is family **SpeciesMisc10**'s
- *  `Guard1HatePlayer()` (it has six other callers in `vfunc461`), so the Guard1 arm calls that and
- *  this stands only for the Hunter's. */
-void HunterHatePlayer();
-
-/** How many times either relationship write above was made FROM this family's slot-463 pre-step. */
-int32 PlayerHateRelationshipSets = 0;
-
-/** `'player D_HT 10'` (`0x1063bc28`). */
-static const TCHAR* PlayerHateRelationshipSpec();
-
-/** `CNPC_VGuard1::OnStateChange` (`0x1037d020`)'s pre-step, UNCONDITIONALLY and with no reference
- *  to either state: `if (GetEnemy() && GetEnemy()->m_pPlayer) 0x1037e2d0(this)`. `GetEnemy()` is
- *  dispatched TWICE (`1037d026`, `1037d034`) and retail does not cache it; both calls are made here
- *  because a species override of slot 167 could answer differently between them. */
-void Guard1StateChangePreStep();
-
-/** `CNPC_VHunter::OnStateChange` (`0x10388880`)'s pre-step, two independent arms in this order:
- *    1. `if (GetEnemy() && GetEnemy() && GetEnemy()->m_pPlayer && NewState == 2)` —
- *       `0x10388c40(this)` (the relationship, no latch), `OnHunterPursuitStart(player)`, then
- *       `m_hPursuitPlayer = player`'s own handle.
- *    2. `if (OldState == 2 && m_hPursuitPlayer resolves live && its m_pPlayer != 0)` —
- *       `m_hPursuitPlayer` = invalid, then `OnHunterPursuitStop(player)`, IN THAT ORDER (the clear
- *       is `1038891e`, the release after it).
- *  State 2 is `COMBAT`. Both arms can fire on the same call, and retail evaluates arm 2 against the
- *  handle arm 1 may just have written. */
-void HunterStateChangePreStep(EElysiumNpcState OldState, EElysiumNpcState NewState);
-
 /** `CAI_BaseNPC::FUN_101a67e0` (`0x101a67e0`), vtable `+0x29c` = slot **167** — `GetEnemy()`. The
  *  whole body resolves `m_hEnemy` through the global entity table and answers null when the handle
  *  is stale. Declared here because this family is the first to need it by name and because the
  *  checklist's two walks call it a door reference; it is `Senses.Memory.Enemy` resolved. */
 FElysiumEntity* GetEnemyEntity() const;
-
-// -------------------------------------------------------------------------------------------------
-// Slot 127 `Restore` — the two species arms family SaveRestore10 left routed to the base.
-// -------------------------------------------------------------------------------------------------
-
-/** `CNPC_VAndreiBlood::Restore` (`0x1035cf80`), `CNPC_VAndreiBlood#127`. A scope-trace push, a bare
- *  `CNPC_VVampireBoss::Restore(archive)` and a pop: **no restore-time datum of its own**. Every
- *  sibling boss writes something here and Andrei writes nothing, which is a fact rather than an
- *  unwalked body — the listing has exactly one `CALL` between the frame pushes (`1035cfd4`) and the
- *  base's `EAX` survives to the `RET 0x4` unchanged, so the answer is the base's too. */
-int32 AndreiBloodRestore(void* Archive);
-
-/** `CNPC_VChangBros::Restore` (`0x1036b170`), shared by `CNPC_VChangBros`, `CNPC_VChangBrosBlade`
- *  and `CNPC_VChangBrosClaw`. `CNPC_VVampireBoss::Restore` first and ITS answer is kept
- *  (`1036b1e3 MOV EDI,EAX` … `1036b210 MOV EAX,EDI`), then four writes in the listing's order:
- *    `m_fJumpGravity` (`+0x64b8`) = `_DAT_104ada44` (**2.3f**);
- *    `SetBodyEmitterName(0, "chang_powerup_emitter")`;
- *    `SetBodyEmitterName(1, "chang_powerup_emitter")`;
- *    `SetBodyEmitterName(2, "chang_spine_emitter")`.
- *  The gravity store is issued between the `FLD` and the first `SetBodyEmitterName` call
- *  (`1036b1ce FLD` / `1036b1db FSTP float ptr [ESI + 0x64b8]` / `1036b1e5 CALL`), so it lands
- *  first. */
-int32 ChangBrosRestore(void* Archive);
-
-/** `_DAT_104ada44` — **2.3f**, read at file offset `0x4ada44`. */
-static constexpr float ChangBrosJumpGravity = 2.3f;
-/** `0x10630e54` and `0x10630e3c`, the two emitter-name literals. */
-static const TCHAR* ChangPowerupEmitterName();
-static const TCHAR* ChangSpineEmitterName();
 
 // -------------------------------------------------------------------------------------------------
 // The two destructors.
@@ -389,38 +183,7 @@ static const TCHAR* ChangSpineEmitterName();
  *  recovered fact (one for Andrei, five for the Werewolf) and is what a case asserts. */
 int32 OutputListDestroys = 0;
 
-/** `CNPC_VAndreiBlood::Destructor` (`0x1035cd00`). Retail, in order:
- *    1. Restore its own vftable and the secondary one at `+0x19b0` (a C++ artifact; nothing a
- *       program can observe, and nothing this port has).
- *    2. Under a `"CNPC_VAndreiBlood::Destructor"` scope frame: `UTIL_Remove` (`0x101cd940`) the
- *       blood emitter at **`+0x66e0`** and then the summon emitter at **`+0x66e4`**, each only when
- *       the handle resolves live, and write `0xffffffff` back to each after its removal.
- *       **Retail writes the invalid handle only on the arm it removed on**, not unconditionally.
- *    3. Destroy `m_OnTransformComplete` (`+0x6664`).
- *    4. Tail-jump to `~CAI_BaseNPCTroika` (`0x1028d610`).
- *  Step 2 is the whole observable body: Andrei's blood pieces do not outlive him. */
-void DestroyAndreiBlood();
-
 /** `DAT_1093fac4`, the process-wide debug word `~CNPC_VWerewolf` forces back to 0 before it sets
  *  the `werewolf_show_debug` ConVar (`ElysiumNpcTunables::EConVar::WerewolfShowDebug`) to 0. */
 static int32& WerewolfShowDebug();
 
-/** `CNPC_VWerewolf::~CNPC_VWerewolf` (`0x103ca7c0`). Retail, in order:
- *    1. The two vftable restores (not portable, not observable).
- *    2. Under the scope frame: `DAT_1093fac4 = 0`, then `werewolf_show_debug`'s ConVar slot 4
- *       (`SetValue`) with 0. The ONE thing outside this object the body touches.
- *    3. Destroy five outputs in this order: `m_OnTeleportIn`, `m_OnTeleportOut`,
- *       `m_OnFinishCrushAnimation`, `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.
- *    4. Walk the hint-data vector (`+0x6714`, count `+0x6720`, stride **0x48**) BACKWARDS from
- *       `count - 1`, destroying each record with `0x103dc5b0`; zero the count; then `0x103dc220`
- *       over the vector.
- *    5. The `CUtlMemory` teardowns of the `+0x6714`, `+0x668c` and `+0x665c` blocks, each under a
- *       "grow size is not -1" test (allocator only).
- *    6. `~CAI_BaseNPCTroika`.
- *  `+0x6714`/`+0x6720` is the array family Hints carries as `WerewolfHintGroundpoints`, so step 4 is
- *  a real clear here and the backwards walk is the recovered order rather than a `Reset()`. */
-void DestroyWerewolf();
-
-/** How many hint-data records the destructor above tore down, and in what order they were visited.
- *  Retail walks descending; the list records the index of each visit so the ORDER is assertable. */
-TArray<int32> WerewolfHintTeardownOrder;

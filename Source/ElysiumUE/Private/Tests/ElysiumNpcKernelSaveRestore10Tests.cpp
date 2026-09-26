@@ -6,6 +6,12 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
+#include "Substrate/ElysiumNpcNewscaster.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -428,8 +434,8 @@ bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
-		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Fix->Species);
+		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
 		{
 			N.MingXiaoRegrowTimers[Index] = Index == 3 ? FloatMax : 5.0;
 		}
@@ -449,7 +455,7 @@ bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
+		FElysiumNpcMingXiaoTentacle& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix->Species);
 		N.MingXiaoTentaclePhaseExpireTimer = 0.0;
 		N.Save(nullptr);
 		TestEqual(TEXT("the tentacle's phase stamp round-trips at mode 3"),
@@ -464,7 +470,7 @@ bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
+		FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(Fix->Species);
 		N.HeadClawSlowedExpire = 0.0;
 		N.Save(nullptr);
 		TestEqual(TEXT("the head claw's slow stamp round-trips at mode 3"), N.HeadClawSlowedExpire, 0.0);
@@ -538,13 +544,13 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
-		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Fix->Species);
+		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
 		{
 			N.MingXiaoRegrowTimers[Index] = Sentinel;
 		}
 		TestEqual(TEXT("the MingXiao restore answers the base's result"), N.Restore(nullptr), 1);
-		for (int32 Index = 0; Index < FElysiumNpc::MingXiaoRegrowTimerCount; ++Index)
+		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
 		{
 			TestEqual(FString::Printf(TEXT("regrow timer %d decodes to FLT_MAX"), Index),
 				N.MingXiaoRegrowTimers[Index], FElysiumNpc::SaveStampFloatMax());
@@ -559,7 +565,7 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
+		FElysiumNpcMingXiaoTentacle& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix->Species);
 		N.MingXiaoTentaclePhaseExpireTimer = Sentinel;
 		N.Restore(nullptr);
 		TestEqual(TEXT("the tentacle's phase stamp decodes to 0.0"),
@@ -574,7 +580,7 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
+		FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(Fix->Species);
 		N.HeadClawSlowedExpire = Sentinel;
 		N.Restore(nullptr);
 		TestEqual(TEXT("the head claw's slow stamp decodes to 0.0"), N.HeadClawSlowedExpire, 0.0);
@@ -588,7 +594,7 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix->Species;
+		FElysiumNpcVampireBoss& N = *ElysiumTestAsSpecies<FElysiumNpcVampireBoss>(Fix->Species);
 		N.VampireBossMonsterModelName = TEXT("models/monster.mdl");
 		N.VampireBossMonsterClassname = TEXT("npc_VSomethingElse");
 		N.BodyEmitterNames[0] = TEXT("blood_emitter");
@@ -674,29 +680,29 @@ bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix.Species;
-		FElysiumNpc::CopAliveCensus() = 3;
-		FElysiumNpc::CopSecondCensus() = 2;
+		FElysiumNpcCop& N = *ElysiumTestAsSpecies<FElysiumNpcCop>(Fix.Species);
+		FElysiumNpcCop::CopAliveCensus() = 3;
+		FElysiumNpcCop::CopSecondCensus() = 2;
 		N.bCopCountedAlive = true;
 		N.bCopCountedSecond = true;
 		N.UpdateOnRemove();
-		TestEqual(TEXT("a counted cop decrements the live census"), FElysiumNpc::CopAliveCensus(), 2);
-		TestEqual(TEXT("and the second census"), FElysiumNpc::CopSecondCensus(), 1);
+		TestEqual(TEXT("a counted cop decrements the live census"), FElysiumNpcCop::CopAliveCensus(), 2);
+		TestEqual(TEXT("and the second census"), FElysiumNpcCop::CopSecondCensus(), 1);
 		TestFalse(TEXT("m_bCountedAlive is cleared"), N.bCopCountedAlive);
 		TestFalse(TEXT("and so is its twin at +0x6672"), N.bCopCountedSecond);
 		// The guard is what keeps a second removal from driving the census negative.
 		N.UpdateOnRemove();
-		TestEqual(TEXT("an uncounted cop decrements nothing"), FElysiumNpc::CopAliveCensus(), 2);
-		TestEqual(TEXT("nor the second census"), FElysiumNpc::CopSecondCensus(), 1);
+		TestEqual(TEXT("an uncounted cop decrements nothing"), FElysiumNpcCop::CopAliveCensus(), 2);
+		TestEqual(TEXT("nor the second census"), FElysiumNpcCop::CopSecondCensus(), 1);
 		// Only the first byte set: the two arms are independent.
 		N.bCopCountedAlive = true;
 		N.UpdateOnRemove();
-		TestEqual(TEXT("only the live census moves"), FElysiumNpc::CopAliveCensus(), 1);
-		TestEqual(TEXT("the second is untouched"), FElysiumNpc::CopSecondCensus(), 1);
+		TestEqual(TEXT("only the live census moves"), FElysiumNpcCop::CopAliveCensus(), 1);
+		TestEqual(TEXT("the second is untouched"), FElysiumNpcCop::CopSecondCensus(), 1);
 	}
 	// Zeroed after the cop's world is torn down, so nothing its teardown does survives the case.
-	FElysiumNpc::CopAliveCensus() = 0;
-	FElysiumNpc::CopSecondCensus() = 0;
+	FElysiumNpcCop::CopAliveCensus() = 0;
+	FElysiumNpcCop::CopSecondCensus() = 0;
 
 	// `CNPC_VMingXiao::UpdateOnRemove` `0x10391230` — the throwable drop, gated on the mode.
 	{
@@ -705,7 +711,7 @@ bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix.Species;
+		FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Fix.Species);
 		N.MingXiaoThrowableObjectMode = 2;
 		const int32 ChainBefore = N.InterestingPlaceReleases;
 		N.UpdateOnRemove();
@@ -723,7 +729,7 @@ bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& N = *Fix.Species;
+		FElysiumNpcNewscaster& N = *ElysiumTestAsSpecies<FElysiumNpcNewscaster>(Fix.Species);
 		const int32 ChainBefore = N.InterestingPlaceReleases;
 		N.UpdateOnRemove();
 		TestEqual(TEXT("the newscaster arm chains the Troika body"),
@@ -737,13 +743,12 @@ bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		Fix.Troika->bCopCountedAlive = true;
-		FElysiumNpc::CopAliveCensus() = 5;
+		FElysiumNpcCop::CopAliveCensus() = 5;
 		Fix.Troika->UpdateOnRemove();
 		TestEqual(TEXT("the bare Troika line takes the Troika body, not the CNPC_VCop arm"),
-			FElysiumNpc::CopAliveCensus(), 5);
+			FElysiumNpcCop::CopAliveCensus(), 5);
 	}
-	FElysiumNpc::CopAliveCensus() = 0;
+	FElysiumNpcCop::CopAliveCensus() = 0;
 	return true;
 }
 

@@ -9,7 +9,8 @@
 
 // Story 29c-1, family **Squad** — the squad and follower surface of `order.md` layers 0–9.
 //
-// 74 rows: the 57 slot-546 `SquadSlotName` bodies (one method plus a species table, below), the
+// 74 rows: the 57 slot-546 `SquadSlotName` bodies (the Troika method, the deferred rows' table below, and
+// each species' own id-space row in its override), the
 // squad join/leave/share/vacate set, the follower pair, and the `CNPC_VChangBros` /
 // `CNPC_VMingXiao` coordination helpers. The walked prose is `docs/vtmb/npc-ai/social.md`.
 //
@@ -127,7 +128,7 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 546 `SquadSlotName` — one port method and a species table.
+// Slot 546 `SquadSlotName` — the Troika method and the deferred rows' table.
 // -------------------------------------------------------------------------------------------------
 //
 // Every row was read from the decompiled C, not from a summary. All 56 species bodies are
@@ -159,61 +160,20 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 
 namespace
 {
-	// The census classes that override slot 546, less the classes with no instance (`population.md`
-	// § "NPC classes with no instance"), whose rows carry no port code (`CNPC_ProneDialog` shares
-	// `CNPC_VHumanCombatant`'s, `CNPC_VCameraSecurity` shares `CNPC_VCamera`'s, `CNPC_VRat` shares
-	// `CNPC_VScurrying`'s and `CNPC_VPlayerController` shares `CNPC_VVampire`'s), plus the Troika
-	// line, which carries no id space at all. Columns: the retail class, the body that fills slot
-	// 546 for it (checkable against `docs/vtmb/npc-kernel/slots.md`) and its own
-	// `CAI_ClassScheduleIdSpace`. The three range fields take the struct's defaults, which ARE the
-	// recovered state every one of the 56 spaces was left in by `0x102ea090(isRoot = false)`.
+	// The slot-546 rows no C++ class carries yet: the Troika line, which carries no id space at
+	// all, and the controller line (`CNPC_VFrenzyShadow`, `CNPC_VPlayerController` sharing
+	// `CNPC_VVampire`'s body and space, `CNPC_VWolfMorph`), deferred to the controller fold (step 7).
+	// Every introduced species holds its own row in its `SquadSlotName` override (story 5 step 4).
+	// Columns: the retail class, the body that fills slot 546 for it (checkable against
+	// `docs/vtmb/npc-kernel/slots.md`) and its own `CAI_ClassScheduleIdSpace`. The three range
+	// fields take the struct's defaults, which ARE the recovered state every one of the 56 spaces
+	// was left in by `0x102ea090(isRoot = false)`.
 	constexpr FElysiumNpc::FSquadSlotSpecies GNpcKernelSquadSlotSpecies[] = {
 		// The Troika line itself: `CAI_BaseNPC::SquadSlotName` looks the id up directly.
 		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x101a6c00"), TEXT("") },
-		{ TEXT("CNPC_ProneDialog"), TEXT("0x10386c80"), TEXT("0x1093b47c") },
-		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035c460"), TEXT("0x1093a470") },
-		{ TEXT("CNPC_VAnimal"), TEXT("0x1035edb0"), TEXT("0x1093a4f4") },
-		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10360610"), TEXT("0x1093a578") },
-		{ TEXT("CNPC_VBach"), TEXT("0x10362df0"), TEXT("0x1093a608") },
-		{ TEXT("CNPC_VBrujah"), TEXT("0x10367a10"), TEXT("0x1093a788") },
-		{ TEXT("CNPC_VCamera"), TEXT("0x10368550"), TEXT("0x1093a7bc") },
-		{ TEXT("CNPC_VCameraSecurity"), TEXT("0x10368550"), TEXT("0x1093a7bc") },
-		{ TEXT("CNPC_VChangBros"), TEXT("0x1036a3f0"), TEXT("0x1093aa70") },
-		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036ecf0"), TEXT("0x1093a8d8") },
-		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036f4f0"), TEXT("0x1093aa10") },
-		{ TEXT("CNPC_VCop"), TEXT("0x10370ad0"), TEXT("0x1093ac40") },
-		{ TEXT("CNPC_VDog"), TEXT("0x103736d0"), TEXT("0x1093ad64") },
 		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x10375440"), TEXT("0x1093ae28") },
-		{ TEXT("CNPC_VGargoyle"), TEXT("0x10377cd0"), TEXT("0x1093b038") },
-		{ TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037a950"), TEXT("0x1093b0e0") },
-		{ TEXT("CNPC_VGuard1"), TEXT("0x1037c800"), TEXT("0x1093b1b4") },
-		{ TEXT("CNPC_VHengeyokai"), TEXT("0x1037ea60"), TEXT("0x1093b27c") },
-		{ TEXT("CNPC_VHuman"), TEXT("0x10384200"), TEXT("0x1093b3c4") },
-		{ TEXT("CNPC_VHumanCombatPatrol"), TEXT("0x103878b0"), TEXT("0x1093b580") },
-		{ TEXT("CNPC_VHumanCombatant"), TEXT("0x10386c80"), TEXT("0x1093b47c") },
-		{ TEXT("CNPC_VHunter"), TEXT("0x10388200"), TEXT("0x1093b5e8") },
-		{ TEXT("CNPC_VLasombra"), TEXT("0x10388f80"), TEXT("0x1093b680") },
-		{ TEXT("CNPC_VManBat"), TEXT("0x10389f50"), TEXT("0x1093b89c") },
-		{ TEXT("CNPC_VMingXiao"), TEXT("0x10391390"), TEXT("0x1093bacc") },
-		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039b230"), TEXT("0x1093bd80") },
-		{ TEXT("CNPC_VPedestrian"), TEXT("0x103a1fa0"), TEXT("0x1093bffc") },
-		{ TEXT("CNPC_VPlaceholder"), TEXT("0x103a3c50"), TEXT("0x1093c08c") },
 		{ TEXT("CNPC_VPlayerController"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") },
-		{ TEXT("CNPC_VRat"), TEXT("0x103abd40"), TEXT("0x1093c4e0") },
-		{ TEXT("CNPC_VSabbatGunman"), TEXT("0x103a5240"), TEXT("0x1093c1d8") },
-		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a5e50"), TEXT("0x1093c3d4") },
-		{ TEXT("CNPC_VScurrying"), TEXT("0x103abd40"), TEXT("0x1093c4e0") },
-		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103adcb0"), TEXT("0x1093c568") },
-		{ TEXT("CNPC_VTaxiDriver"), TEXT("0x103b3170"), TEXT("0x1093c7f0") },
-		{ TEXT("CNPC_VTzimisce"), TEXT("0x103b70f0"), TEXT("0x1093ccc4") },
-		{ TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c0c90"), TEXT("0x1093d1ac") },
-		{ TEXT("CNPC_VTzimisceRunner"), TEXT("0x103c2a60"), TEXT("0x1093d224") },
-		{ TEXT("CNPC_VVampire"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") },
-		{ TEXT("CNPC_VVampireBoss"), TEXT("0x103c5270"), TEXT("0x1093d30c") },
-		{ TEXT("CNPC_VWerewolf"), TEXT("0x103c8ed0"), TEXT("0x1093d6d4") },
 		{ TEXT("CNPC_VWolfMorph"), TEXT("0x103dc950"), TEXT("0x1094028c") },
-		{ TEXT("CNPC_VYukie"), TEXT("0x103dd1f0"), TEXT("0x10940314") },
-		{ TEXT("CNPC_VZombie"), TEXT("0x103de4d0"), TEXT("0x109403e0") },
 	};
 }
 
@@ -297,23 +257,16 @@ const TCHAR* FElysiumNpc::GlobalSquadSlotName(int32 GlobalId)
 }
 
 // slot 546 0x101a6c00 `const char* SquadSlotName(int)`. Thirty-eight species classes override it
-// on their C++ classes (story 5 step 3) through `SpeciesSquadSlotName`; the rest inherit one of
-// those. The controller line (`CNPC_VFrenzyShadow` `0x10375440`, `CNPC_VWolfMorph` `0x103dc950`,
-// `CNPC_VPlayerController` sharing `CNPC_VVampire`'s `0x103c4a80`) stays a census arm until the
-// controller fold (step 7): only a test-latched Troika-line instance reaches it.
+// with their own id-space row (story 5 step 4); the rest inherit one of those. The controller line
+// (`CNPC_VFrenzyShadow` `0x10375440`, `CNPC_VWolfMorph` `0x103dc950`, `CNPC_VPlayerController`
+// sharing `CNPC_VVampire`'s `0x103c4a80`) stays a table arm until the controller fold (step 7):
+// only a test-latched Troika-line instance reaches it.
 const TCHAR* FElysiumNpc::SquadSlotName(int32 SlotEn)
 {
 	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546);
 	const FSquadSlotSpecies* Species =
 		Override != nullptr ? SquadSlotSpeciesOf(Override->Class) : nullptr;
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(Species, SlotEn));
-}
-
-const TCHAR* FElysiumNpc::SpeciesSquadSlotName(const TCHAR* SpeciesClass, int32 SlotEn)
-{
-	// The body of a species class's `SquadSlotName` override: the id is mapped through the class's
-	// own `CAI_ClassScheduleIdSpace` (its row of `GNpcKernelSquadSlotSpecies`), then named.
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(SquadSlotSpeciesOf(SpeciesClass), SlotEn));
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -326,12 +279,6 @@ const TCHAR* FElysiumNpc::SpeciesSquadSlotName(const TCHAR* SpeciesClass, int32 
 bool FElysiumNpc::InitSquad()
 {
 	return InitSquadLine(/*bCameraArm*/ false);
-}
-
-bool FElysiumNpc::CameraInitSquad()
-{
-	// `CNPC_VCamera::InitSquad` `0x10369bd0`, the body of `FElysiumNpcCamera::InitSquad`.
-	return InitSquadLine(/*bCameraArm*/ true);
 }
 
 bool FElysiumNpc::InitSquadLine(bool bCameraArm)
@@ -453,109 +400,6 @@ void FElysiumNpc::VacateSquadSlot()
 	}
 	ClearSquadSlotOccupied(Squad, MySquadSlot);
 	MySquadSlot = INDEX_NONE;
-}
-
-FElysiumNpc* FElysiumNpc::GetOtherBrother() const
-{
-	// 0x1036e2f0 `CNPC_VChangBros::GetOtherBrother`: with `m_iSquadDisconnected < 1` and a live
-	// `m_pSquad`, walk `0..NumMembers()` re-reading `NumMembers()` every iteration, `RTDynamicCast`
-	// each member to `CNPC_VChangBros` and answer the first one that is not me. Else 0.
-	if (ScheduleHost.SquadDisconnected >= 1)
-	{
-		return nullptr;
-	}
-	const void* Squad = ConnectedSquad();
-	if (Squad == nullptr)
-	{
-		return nullptr;
-	}
-	for (int32 Index = 0; Index < SquadMemberCount(Squad); ++Index)
-	{
-		FElysiumEntity* Member = SquadMember(Squad, Index);
-		if (Member == nullptr)
-		{
-			continue;
-		}
-		FElysiumNpc* Brother = Member->AsNpc();
-		// The RTTI cast, as the chain walk this runtime dispatches species by.
-		if (Brother != nullptr && Brother != this
-			&& Brother->IsRetailClass(TEXT("CNPC_VChangBros")))
-		{
-			return Brother;
-		}
-	}
-	return nullptr;
-}
-
-bool FElysiumNpc::ReadyForUnited() const
-{
-	// 0x1036e820 `CNPC_VChangBros::ReadyForUnited`: `GetCurSchedule()` (`0x1028a150`) and its
-	// schedule id (`CAI_Schedule+0x00`) against 0x15a or 0x15b, false when there is no schedule.
-	//
-	// The port's schedule set does not carry the two ChangBros `UNITED` programs yet — the
-	// comparison is retail's and nothing in `int32` numbers 0x15a/0x15b — so this
-	// answers false until they are registered. Not a stub: the two numbers ARE the rule.
-	if (!Schedule.IsRunning())
-	{
-		return false;
-	}
-	const int32 Number =
-		IdSpace(EElysiumIdCategory::Schedule)->GlobalToLocal(Schedule.Current);
-	return Number == 0x15a || Number == 0x15b;
-}
-
-FElysiumEntity* FElysiumNpc::SelectUnitedNode() const
-{
-	// 0x1036d100 `CNPC_VChangBros::SelectUnitedNode`: walk the global hint list from
-	// `DAT_10925450` following `+0x5d8`, count the nodes whose `m_nHintType` (`+0x5dc`) is 18000,
-	// and return the FIRST for `m_ChangType == 0`, the SECOND for `m_ChangType == 1` (the arm is
-	// `type == 1 && count > 0`, so it is the match after the first). Any other `m_ChangType` walks
-	// the whole list and answers 0.
-	if (ChangType == 0)
-	{
-		return NthHintOfType(18000, 0);
-	}
-	if (ChangType == 1)
-	{
-		return NthHintOfType(18000, 1);
-	}
-	return nullptr;
-}
-
-void FElysiumNpc::CoordinateTroops()
-{
-	// 0x10399610 `CNPC_VMingXiao::CoordinateTroops`, one index per call:
-	//
-	//   id = m_iCoordinateTentacleID
-	//   if (m_rhSeveredTentacles[id] resolves) 0x103998d0(this, tentacle)
-	//   if (m_rhProxies[id]          resolves) 0x103999f0(this, proxy)
-	//   if (++m_iCoordinateTentacleID > 5) m_iCoordinateTentacleID = 0
-	//
-	// The index advance and the wrap at 5 are this body; the two per-troop arms are rows of their
-	// own and are NOT ported here:
-	//   * `0x103998d0` — the severed tentacle's re-aim: skip when its schedule is 0x163/0x165 or
-	//     its state is not 2, then a distance and a 2-D dot against `+0x6290/+0x6294` before
-	//     `0x1039ef90(tentacle, myOrigin)`;
-	//   * `0x103999f0` — the proxy pair's swap: `0x1039aaf0(x, 0)` on both, then two
-	//     distance/dot tests against the enemy that re-arm one of them with `0x1039aaf0(x, 1)`.
-	// Both are asked here and answer nothing, as the handle seam does.
-	const int32 Id = CoordinateTentacleId;
-	if (Id >= 0 && Id < static_cast<int32>(UE_ARRAY_COUNT(SeveredTentacles)) && World != nullptr)
-	{
-		if (World->Resolve(SeveredTentacles[Id]) != nullptr)
-		{
-			// 0x103998d0, unported.
-		}
-		if (World->Resolve(Proxies[Id]) != nullptr)
-		{
-			// 0x103999f0, unported.
-		}
-	}
-	CoordinateTentacleId = Id + 1;
-	if (CoordinateTentacleId > 5)
-	{
-		CoordinateTentacleId = 0;
-	}
 }
 
 void FElysiumNpc::AlertNearbyAlly(FElysiumEntity* Attacker)

@@ -4,7 +4,16 @@
 // datamap replay (`research/ghidra/types/datamap_records-vampire.dll.json`; CBaseEntity 0x10552e18,
 // CBaseToggle 0x1059b6f0, CBaseAnimating 0x1054cd70, CBaseCombatCharacter 0x1061664c, CAI_BaseNPC
 // 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8,
-// CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8).
+// CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
+// CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach
+// 0x1062d22c, CNPC_VCameraSecurity 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88,
+// CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
+// CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra 0x10640600, CNPC_VManBat
+// 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle 0x106474f0, CNPC_VPedestrian
+// 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying 0x1064f480, CNPC_VSheriffMan
+// 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130, CNPC_VTzimisceHeadClaw
+// 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418, CNPC_VWerewolf
+// 0x1065f4e0, CNPC_VZombie 0x10664090).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
@@ -19,6 +28,35 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumSheetFields.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcAnimal.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcCameraSecurity.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcGuard1.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcHunter.h"
+#include "Substrate/ElysiumNpcLasombra.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
+#include "Substrate/ElysiumNpcPedestrian.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcScurrying.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcTaxiDriver.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
+#include "Substrate/ElysiumNpcTzimisceRunner.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcZombie.h"
+
+#include <type_traits>
 
 namespace ElysiumNpcKernelBindings
 {
@@ -1288,6 +1326,942 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
 	}
 
+	void AddAndreiBloodSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_iActiveRunnerCount"), &FElysiumNpc::ActiveRunnerCount,
+			EElysiumField::Save);  // +0x66b8 int
+		ElysiumAddClassField(D, TEXT("m_iKillCount"), &FElysiumNpc::AndreiKillCount,
+			EElysiumField::Save);  // +0x66bc int
+		ElysiumAddClassField(D, TEXT("m_vLastTeleportPosition"),
+			&FElysiumNpcAndreiBlood::AndreiLastTeleportPosition, EElysiumField::Save);  // +0x66c0 vector
+		ElysiumAddClassField(D, TEXT("m_bActivated"), &FElysiumNpcAndreiBlood::bAndreiActivated,
+			EElysiumField::Save);  // +0x66cc bool
+		ElysiumAddClassField(D, TEXT("m_iHitMax"), &FElysiumNpcAndreiBlood::AndreiHitMax,
+			EElysiumField::Save);  // +0x66dc int
+		// NOT SAVED +0x66cd m_bDead (bool) — no port member (the species shape map's ABSENT row
+		// says why)
+		// NOT SAVED +0x66ce m_bTriggerUnhide (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66d0 m_fTeleportWaitStartTime (time) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x66d4 m_bForceTeleport (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66d8 m_iHitCounter (int) — no port member (the species shape map's ABSENT
+		// row says why)
+	}
+
+	void AddAnimalFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("friendship_level"),
+			&FElysiumNpcAnimal::AnimalFriendshipLevel, EElysiumField::Save);  // +0x6664 m_iFriendshipLevel
+		ElysiumAddClassField(D, TEXT("warn_range"), &FElysiumNpcAnimal::AnimalWarnRangeUnits,
+			EElysiumField::Save);  // +0x6668 m_flWarnRange
+		ElysiumAddClassField(D, TEXT("conflict_range"),
+			&FElysiumNpcAnimal::AnimalConflictRangeUnits, EElysiumField::Save);  // +0x666c m_flConflictRange
+	}
+
+	void AddAnimalSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bPlayerAttackedMe"), &FElysiumNpcAnimal::bPlayerAttackedMe,
+			EElysiumField::Save);  // +0x6660 bool
+		// NOT SAVED +0x665c m_iPlayerFriendshipState (int) — no port member (the species shape
+		// map's ABSENT row says why)
+	}
+
+	void AddAsianVampireSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		static_assert(std::extent_v<decltype(FElysiumNpcAsianVampire::LastJumpPosition)> == 2,
+			"m_vLastJumpPosition has 2 elements");
+		ElysiumAddClassFieldVia<FElysiumNpcAsianVampire>(D, TEXT("m_vLastJumpPosition[0]"),
+			[](auto& E) -> auto&{ return E.LastJumpPosition[0]; }, EElysiumField::Save);  // +0x66b8[0] vector
+		ElysiumAddClassFieldVia<FElysiumNpcAsianVampire>(D, TEXT("m_vLastJumpPosition[1]"),
+			[](auto& E) -> auto&{ return E.LastJumpPosition[1]; }, EElysiumField::Save);  // +0x66b8[1] vector
+		ElysiumAddClassField(D, TEXT("m_iLastJumpPositionIdx"),
+			&FElysiumNpcAsianVampire::LastJumpPositionIdx, EElysiumField::Save);  // +0x66d0 int
+		ElysiumAddClassField(D, TEXT("m_bPathBlocked"),
+			&FElysiumNpcAsianVampire::bAsianVampirePathBlocked, EElysiumField::Save);  // +0x66d4 bool
+		ElysiumAddClassField(D, TEXT("m_fMovedTimeStamp"),
+			&FElysiumNpcAsianVampire::MovedTimeStamp, EElysiumField::Save);  // +0x66d8 float
+		ElysiumAddClassField(D, TEXT("m_vMovedPosition"), &FElysiumNpcAsianVampire::MovedPosition,
+			EElysiumField::Save);  // +0x66dc vector
+		ElysiumAddClassField(D, TEXT("m_bSuppressRanged"),
+			&FElysiumNpcAsianVampire::bSuppressRanged, EElysiumField::Save);  // +0x66e8 bool
+	}
+
+	void AddBachSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_flLastGrenadeTime"), &FElysiumNpcBach::BachLastGrenadeTime,
+			EElysiumField::Save);  // +0x6680 time
+		ElysiumAddClassField(D, TEXT("m_flShieldTime"), &FElysiumNpcBach::BachShieldTime,
+			EElysiumField::Save);  // +0x6684 time
+		ElysiumAddClassField(D, TEXT("m_flNextShieldTime"), &FElysiumNpcBach::BachNextShieldTime,
+			EElysiumField::Save);  // +0x6688 time
+		ElysiumAddClassField(D, TEXT("m_flNextWeaponSwitchTime"),
+			&FElysiumNpcBach::BachNextWeaponSwitchTime, EElysiumField::Save);  // +0x668c time
+		ElysiumAddClassField(D, TEXT("m_flNextHolyLightTime"),
+			&FElysiumNpcBach::BachNextHolyLightTime, EElysiumField::Save);  // +0x6690 time
+		ElysiumAddClassField(D, TEXT("m_iBachTeleportState"), &FElysiumNpcBach::BachTeleportState,
+			EElysiumField::Save);  // +0x669c int
+		ElysiumAddClassField(D, TEXT("m_bCamperFlag"), &FElysiumNpcBach::bBachCamperFlag,
+			EElysiumField::Save);  // +0x66a0 bool
+		ElysiumAddClassField(D, TEXT("m_bFireOccluded"), &FElysiumNpcBach::bBachFireOccluded,
+			EElysiumField::Save);  // +0x66a3 bool
+		ElysiumAddClassField(D, TEXT("m_bShieldActive"), &FElysiumNpcBach::bBachShieldActive,
+			EElysiumField::Save);  // +0x66a5 bool
+		ElysiumAddClassField(D, TEXT("m_bMovementSpot"), &FElysiumNpcBach::bBachMovementSpot,
+			EElysiumField::Save);  // +0x66a7 bool
+		ElysiumAddClassField(D, TEXT("m_bCanFightYet"), &FElysiumNpcBach::bCanFightYet,
+			EElysiumField::Save);  // +0x66a8 bool
+		// NOT SAVED +0x6664 m_vecLastOccludeOrigin (vector) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x6670 m_flOccludeEnterTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6674 m_iWasOccluded (int) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x6678 m_iReusedOccludeCount (int) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x667c m_iGrenadeActive (int) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x6694 m_flWarningTime (time) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x6698 m_flSkipToWarningTime (float) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66a1 m_bBachInStartingPosition (bool) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x66a2 m_bSkipToWarning (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddCameraSecurityFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("linked_camera"),
+			&FElysiumNpcCameraSecurity::LinkedCameraName, EElysiumField::Save);  // +0x6660 m_iszLinkedCamera
+	}
+
+	void AddChangBrosSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_ChangType"), &FElysiumNpcChangBros::ChangType,
+			EElysiumField::Save);  // +0x66b8 int
+		ElysiumAddClassField(D, TEXT("m_vLastTeleportPosition"),
+			&FElysiumNpcChangBros::ChangLastTeleportPosition, EElysiumField::Save);  // +0x66bc vector
+		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
+			&FElysiumNpcChangBros::ChangLastTeleportTime, EElysiumField::Save);  // +0x66c8 time
+		ElysiumAddClassField(D, TEXT("m_fLastJumpTime"), &FElysiumNpcChangBros::LastJumpTime,
+			EElysiumField::Save);  // +0x66cc time
+		ElysiumAddClassField(D, TEXT("m_fFacingTime"), &FElysiumNpcChangBros::FacingTime,
+			EElysiumField::Save);  // +0x66d0 time
+		ElysiumAddClassField(D, TEXT("m_vArenaCenter"), &FElysiumNpcChangBros::ChangArenaCenter,
+			EElysiumField::Save);  // +0x66dc vector
+		ElysiumAddClassField(D, TEXT("m_bCenterStored"), &FElysiumNpcChangBros::bChangCenterStored,
+			EElysiumField::Save);  // +0x66e8 bool
+		ElysiumAddClassField(D, TEXT("m_fLastUnitedAttackTime"),
+			&FElysiumNpcChangBros::ChangLastUnitedAttackTime, EElysiumField::Save);  // +0x66ec time
+		ElysiumAddClassField(D, TEXT("m_hCenterEmitter"),
+			&FElysiumNpcChangBros::ChangCenterEmitter, EElysiumField::Save);  // +0x66f4 ehandle
+		// NOT SAVED +0x66d4 m_fUnitedTime (time) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x66d8 m_bEnergyBallSpawned (float) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66f0 m_fEnergyChargeTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddCopSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hPursuitPlayer"), &FElysiumNpcCop::CopPursuitHandle,
+			EElysiumField::Save);  // +0x6664 ehandle
+		ElysiumAddClassField(D, TEXT("m_bWasEverInCombat"), &FElysiumNpcCop::bWasEverInCombat,
+			EElysiumField::Save);  // +0x6670 bool
+		ElysiumAddClassField(D, TEXT("m_bCountedAlive"), &FElysiumNpcCop::bCopCountedAlive,
+			EElysiumField::Save);  // +0x6671 bool
+		// NOT SAVED +0x6668 m_eOldPlayerRelationType (int) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x666c m_iOldPlayerRelationPriority (int) — no port member (the species shape
+		// map's ABSENT row says why)
+	}
+
+	void AddGargoyleSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hPillarTarget"),
+			&FElysiumNpcGargoyle::GargoylePillarTarget, EElysiumField::Save);  // +0x667c ehandle
+		ElysiumAddClassField(D, TEXT("m_iShunnedFindPillar"),
+			&FElysiumNpcGargoyle::GargoyleShunnedFindPillar, EElysiumField::Save);  // +0x6680 int
+		ElysiumAddClassField(D, TEXT("m_iDoingGibDeath"),
+			&FElysiumNpcGargoyle::GargoyleDoingGibDeath, EElysiumField::Save);  // +0x6684 int
+		ElysiumAddClassField(D, TEXT("m_iCanKnockback"),
+			&FElysiumNpcGargoyle::GargoyleCanKnockback, EElysiumField::Save);  // +0x6688 int
+	}
+
+	void AddGhoulCroucherFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("disturbed"), &FElysiumNpcGhoulCroucher::bGhoulSpawnDisturbed,
+			EElysiumField::Save);  // +0x6664 m_bSpawnDisturbed
+		ElysiumAddClassField(D, TEXT("on_fire"), &FElysiumNpcGhoulCroucher::bGhoulSpawnBurning,
+			EElysiumField::Save);  // +0x6665 m_bSpawnBurning
+	}
+
+	void AddGhoulCroucherSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bWasDisturbed"), &FElysiumNpcGhoulCroucher::bWasDisturbed,
+			EElysiumField::Save);  // +0x6666 bool
+		ElysiumAddClassField(D, TEXT("m_bUnawareExited"),
+			&FElysiumNpcGhoulCroucher::bUnawareExited, EElysiumField::Save);  // +0x6667 bool
+		ElysiumAddClassField(D, TEXT("m_nUnawareType"), &FElysiumNpcGhoulCroucher::UnawareType,
+			EElysiumField::Save);  // +0x6668 int
+		ElysiumAddClassField(D, TEXT("m_flNextTouchBurnTime"),
+			&FElysiumNpcGhoulCroucher::GhoulNextTouchBurnTime, EElysiumField::Save);  // +0x666c time
+		ElysiumAddClassField(D, TEXT("m_hBurningParticle"),
+			&FElysiumNpcGhoulCroucher::BurningParticle, EElysiumField::Save);  // +0x6670 ehandle
+	}
+
+	void AddGuard1SaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_fHatesPlayer"), &FElysiumNpcGuard1::bGuard1HatesPlayer,
+			EElysiumField::Save);  // +0x6660 bool
+	}
+
+	void AddHengeyokaiSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
+			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
+		ElysiumAddClassField(D, TEXT("m_hPickupTarget"),
+			&FElysiumNpcHengeyokai::HengeyokaiPickupTarget, EElysiumField::Save);  // +0x6664 ehandle
+		ElysiumAddClassField(D, TEXT("m_iPickupTargetGrabBone"),
+			&FElysiumNpcHengeyokai::HengeyokaiPickupTargetGrabBone, EElysiumField::Save);  // +0x6668 int
+		ElysiumAddClassField(D, TEXT("m_flFishTimer"), &FElysiumNpc::HengeyokaiFishTimer,
+			EElysiumField::Save);  // +0x666c time
+		ElysiumAddClassField(D, TEXT("m_flShunnedFishTimer"),
+			&FElysiumNpcHengeyokai::HengeyokaiShunnedFishTimer, EElysiumField::Save);  // +0x6670 time
+		ElysiumAddClassField(D, TEXT("m_iShunnedFindFish"),
+			&FElysiumNpcHengeyokai::HengeyokaiShunnedFindFish, EElysiumField::Save);  // +0x6678 int
+		ElysiumAddClassField(D, TEXT("m_bJustFoundFish"),
+			&FElysiumNpcHengeyokai::bHengeyokaiJustFoundFish, EElysiumField::Save);  // +0x667c bool
+		ElysiumAddClassField(D, TEXT("m_bDidFakeThrow"), &FElysiumNpc::bHengeyokaiDidFakeThrow,
+			EElysiumField::Save);  // +0x667d bool
+		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
+			&FElysiumNpcHengeyokai::HengeyokaiPickupTargetPos, EElysiumField::Save);  // +0x6684 position
+		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
+			&FElysiumNpcHengeyokai::HengeyokaiPhysicsAnimlink, EElysiumField::Save);  // +0x6690 ehandle
+		ElysiumAddClassField(D, TEXT("m_bInSharkForm"),
+			&FElysiumNpcHengeyokai::bHengeyokaiInSharkForm, EElysiumField::Save);  // +0x6694 bool
+		// NOT SAVED +0x6674 m_flTaskFailTimer (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddHunterSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hPursuitPlayer"), &FElysiumNpcHunter::HunterPursuitPlayer,
+			EElysiumField::Save);  // +0x6664 ehandle
+	}
+
+	void AddLasombraSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_flCoverDisableOverride"),
+			&FElysiumNpcLasombra::LasombraCoverDisableOverride, EElysiumField::Save);  // +0x6664 float
+	}
+
+	void AddManBatSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bReachedMoveGoal"),
+			&FElysiumNpcManBat::bManBatReachedMoveGoal, EElysiumField::Save);  // +0x6664 bool
+		ElysiumAddClassField(D, TEXT("m_iMoveGoalNodeMode"),
+			&FElysiumNpcManBat::ManBatMoveGoalNodeMode, EElysiumField::Save);  // +0x6668 custom
+		ElysiumAddClassField(D, TEXT("m_iMoveGoalNodeID"),
+			&FElysiumNpcManBat::ManBatMoveGoalNodeId, EElysiumField::Save);  // +0x6674 int
+		ElysiumAddClassField(D, TEXT("m_flFlapTimer"), &FElysiumNpcManBat::ManBatFlapTimer,
+			EElysiumField::Save);  // +0x6678 time
+		ElysiumAddClassField(D, TEXT("m_flFlyTimer"), &FElysiumNpcManBat::ManBatFlyTimer,
+			EElysiumField::Save);  // +0x667c time
+		ElysiumAddClassField(D, TEXT("m_hSlowedEntity"), &FElysiumNpcManBat::ManBatSlowedEntity,
+			EElysiumField::Save);  // +0x6680 ehandle
+		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"), &FElysiumNpcManBat::ManBatSlowedExpire,
+			EElysiumField::Save);  // +0x6684 time
+		ElysiumAddClassField(D, TEXT("m_pFlyNode"), &FElysiumNpcManBat::ManBatFlyNode,
+			EElysiumField::Save);  // +0x6688 classptr
+		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcManBat::ManBatPickupTarget,
+			EElysiumField::Save);  // +0x668c ehandle
+		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
+			&FElysiumNpcManBat::ManBatPhysicsAnimlink, EElysiumField::Save);  // +0x6690 ehandle
+		ElysiumAddClassField(D, TEXT("m_bPickupTargetBreakable"),
+			&FElysiumNpcManBat::bManBatPickupTargetBreakable, EElysiumField::Save);  // +0x6694 bool
+		ElysiumAddClassField(D, TEXT("m_hFlyByTarget"), &FElysiumNpcManBat::ManBatFlyByTarget,
+			EElysiumField::Save);  // +0x66ac ehandle
+		ElysiumAddClassField(D, TEXT("m_bHasScaredMinions"),
+			&FElysiumNpcManBat::bManBatHasScaredMinions, EElysiumField::Save);  // +0x66b0 bool
+		ElysiumAddClassField(D, TEXT("m_bHasPlayedFlyBySound"),
+			&FElysiumNpcManBat::bHasPlayedFlyBySound, EElysiumField::Save);  // +0x66b8 bool
+		// NOT SAVED +0x6698 m_iMaxScriptNode (int) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x66b4 m_flCoastTimer (time) — no port member (the species shape map's ABSENT
+		// row says why)
+	}
+
+	void AddMingXiaoSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::Proxies)> == 6,
+			"m_rhProxies has 6 elements");
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::SeveredTentacles)> == 6,
+			"m_rhSeveredTentacles has 6 elements");
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoAttackTimers)> == 6,
+			"m_rflAttackTimers has 6 elements");
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoRegrowTimers)> == 6,
+			"m_rflRegrowTimers has 6 elements");
+		ElysiumAddClassField(D, TEXT("m_iTentacleID"), &FElysiumNpcMingXiao::MingXiaoTentacleId,
+			EElysiumField::Save);  // +0x6674 int
+		ElysiumAddClassField(D, TEXT("m_bHasTransformed"),
+			&FElysiumNpcMingXiao::bMingXiaoHasTransformed, EElysiumField::Save);  // +0x6678 bool
+		ElysiumAddClassField(D, TEXT("m_hMeleeWeapon"), &FElysiumNpcMingXiao::MingXiaoMeleeWeapon,
+			EElysiumField::Save);  // +0x667c ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[0]"),
+			[](auto& E) -> auto&{ return E.Proxies[0]; }, EElysiumField::Save);  // +0x668c[0] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[1]"),
+			[](auto& E) -> auto&{ return E.Proxies[1]; }, EElysiumField::Save);  // +0x668c[1] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[2]"),
+			[](auto& E) -> auto&{ return E.Proxies[2]; }, EElysiumField::Save);  // +0x668c[2] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[3]"),
+			[](auto& E) -> auto&{ return E.Proxies[3]; }, EElysiumField::Save);  // +0x668c[3] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[4]"),
+			[](auto& E) -> auto&{ return E.Proxies[4]; }, EElysiumField::Save);  // +0x668c[4] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhProxies[5]"),
+			[](auto& E) -> auto&{ return E.Proxies[5]; }, EElysiumField::Save);  // +0x668c[5] ehandle
+		ElysiumAddClassField(D, TEXT("m_flProxyReadyTimer"),
+			&FElysiumNpcMingXiao::MingXiaoProxyReadyTimer, EElysiumField::Save);  // +0x66a4 time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[0]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[0]; }, EElysiumField::Save);  // +0x66a8[0] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[1]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[1]; }, EElysiumField::Save);  // +0x66a8[1] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[2]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[2]; }, EElysiumField::Save);  // +0x66a8[2] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[3]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[3]; }, EElysiumField::Save);  // +0x66a8[3] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[4]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[4]; }, EElysiumField::Save);  // +0x66a8[4] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[5]"),
+			[](auto& E) -> auto&{ return E.SeveredTentacles[5]; }, EElysiumField::Save);  // +0x66a8[5] ehandle
+		ElysiumAddClassField(D, TEXT("m_flSpitAttackTimer"),
+			&FElysiumNpcMingXiao::MingXiaoSpitAttackTimer, EElysiumField::Save);  // +0x66c0 time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[0]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[0]; }, EElysiumField::Save);  // +0x66c4[0] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[1]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[1]; }, EElysiumField::Save);  // +0x66c4[1] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[2]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[2]; }, EElysiumField::Save);  // +0x66c4[2] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[3]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[3]; }, EElysiumField::Save);  // +0x66c4[3] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[4]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[4]; }, EElysiumField::Save);  // +0x66c4[4] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[5]"),
+			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[5]; }, EElysiumField::Save);  // +0x66c4[5] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[0]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[0]; }, EElysiumField::Save);  // +0x66f4[0] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[1]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[1]; }, EElysiumField::Save);  // +0x66f4[1] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[2]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[2]; }, EElysiumField::Save);  // +0x66f4[2] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[3]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[3]; }, EElysiumField::Save);  // +0x66f4[3] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[4]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[4]; }, EElysiumField::Save);  // +0x66f4[4] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[5]"),
+			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[5]; }, EElysiumField::Save);  // +0x66f4[5] time
+		ElysiumAddClassField(D, TEXT("m_iConnectedTentacleCount"),
+			&FElysiumNpcMingXiao::MingXiaoConnectedTentacleCount, EElysiumField::Save);  // +0x670c int
+		ElysiumAddClassField(D, TEXT("m_iSeveredTentacleMask"),
+			&FElysiumNpcMingXiao::MingXiaoSeveredTentacleMask, EElysiumField::Save);  // +0x6710 int
+		ElysiumAddClassField(D, TEXT("m_hThrowObject"), &FElysiumNpcMingXiao::MingXiaoThrowObject,
+			EElysiumField::Save);  // +0x6718 ehandle
+		ElysiumAddClassField(D, TEXT("m_eThrowingTentacle"),
+			&FElysiumNpcMingXiao::MingXiaoThrowingTentacle, EElysiumField::Save);  // +0x671c int
+		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
+			&FElysiumNpcMingXiao::MingXiaoPickupTargetPos, EElysiumField::Save);  // +0x6720 vector
+		ElysiumAddClassField(D, TEXT("m_vecPickupSavedForward"),
+			&FElysiumNpcMingXiao::MingXiaoPickupSavedForward, EElysiumField::Save);  // +0x672c vector
+		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
+			&FElysiumNpcMingXiao::MingXiaoPhysicsAnimlink, EElysiumField::Save);  // +0x6738 ehandle
+		ElysiumAddClassField(D, TEXT("m_eThrowableObjectMode"),
+			&FElysiumNpcMingXiao::MingXiaoThrowableObjectMode, EElysiumField::Save);  // +0x673c int
+		ElysiumAddClassField(D, TEXT("m_iCoordinateTentacleID"),
+			&FElysiumNpcMingXiao::CoordinateTentacleId, EElysiumField::Save);  // +0x6740 int
+		ElysiumAddClassField(D, TEXT("m_bBlockedByFriend"), &FElysiumNpcMingXiao::bBlockedByFriend,
+			EElysiumField::Save);  // +0x6750 bool
+		// NOT SAVED +0x6670 m_hParentMingZhao (ehandle) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6680 m_hRangedWeapon (ehandle) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6684 m_rbProxyRegistered (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66dc m_rflHitPoints (float) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x6714 m_eLastLostTentacle (int) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6744 m_bPlayedDeathAnim (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6748 m_flIdealRange (float) — no port member (the species shape map's ABSENT
+		// row says why)
+		// NOT SAVED +0x674c m_flChargeReadyTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddMingXiaoTentacleSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hMingXiao"),
+			&FElysiumNpcMingXiaoTentacle::TentacleMingXiao, EElysiumField::Save);  // +0x665c ehandle
+		ElysiumAddClassField(D, TEXT("m_iTentacleID"), &FElysiumNpcMingXiaoTentacle::TentacleId,
+			EElysiumField::Save);  // +0x6660 int
+		ElysiumAddClassField(D, TEXT("m_iModeIndexTentacleToGrub"),
+			&FElysiumNpcMingXiaoTentacle::ModeIndexTentacleToGrub, EElysiumField::Save);  // +0x6664 int
+		ElysiumAddClassField(D, TEXT("m_iModeIndexGrub"),
+			&FElysiumNpcMingXiaoTentacle::ModeIndexGrub, EElysiumField::Save);  // +0x6668 int
+		ElysiumAddClassField(D, TEXT("m_iModeIndexGrubToProxy"),
+			&FElysiumNpcMingXiaoTentacle::ModeIndexGrubToProxy, EElysiumField::Save);  // +0x666c int
+		ElysiumAddClassField(D, TEXT("m_ePhase"), &FElysiumNpcMingXiaoTentacle::TentaclePhase,
+			EElysiumField::Save);  // +0x6670 int
+		ElysiumAddClassField(D, TEXT("m_flPhaseExpireTimer"),
+			&FElysiumNpcMingXiaoTentacle::MingXiaoTentaclePhaseExpireTimer, EElysiumField::Save);  // +0x6674 time
+		ElysiumAddClassField(D, TEXT("m_bIgnoreCollision"),
+			&FElysiumNpcMingXiaoTentacle::bIgnoreCollisionSpecies, EElysiumField::Save);  // +0x6688 bool
+		ElysiumAddClassField(D, TEXT("m_vecScatterCenter"),
+			&FElysiumNpc::TentacleScatterCenterUnits, EElysiumField::Save);  // +0x668c vector
+		// NOT SAVED +0x6678 m_flFailedEvadeTimer (time) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x667c m_flUpdateEvadeTimer (time) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6680 m_flHideReadyTimer (time) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6684 m_flIgnoreCollisionTimer (time) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x6698 m_bHitGroundSound (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x6699 m_bPlayedDeathAnim (bool) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddPedestrianFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("level_reset_type"),
+			&FElysiumNpcPedestrian::PedestrianLevelResetType, EElysiumField::Save);  // +0x667c m_eLevelResetType
+	}
+
+	void AddPedestrianSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_vecPreDeathMins"),
+			&FElysiumNpcPedestrian::PedestrianPreDeathMinsUnits, EElysiumField::Save);  // +0x6660 vector
+		ElysiumAddClassField(D, TEXT("m_vecPreDeathMaxs"),
+			&FElysiumNpcPedestrian::PedestrianPreDeathMaxsUnits, EElysiumField::Save);  // +0x666c vector
+		ElysiumAddClassField(D, TEXT("m_bFirstThink"),
+			&FElysiumNpcPedestrian::bPedestrianFirstThink, EElysiumField::Save);  // +0x6678 bool
+	}
+
+	void AddSabbatLeaderSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bJumping"), &FElysiumNpc::bJumping, EElysiumField::Save);  // +0x6498 bool
+		ElysiumAddClassField(D, TEXT("m_bActivated"),
+			&FElysiumNpcSabbatLeader::bSabbatLeaderActivated, EElysiumField::Save);  // +0x66b8 bool
+		ElysiumAddClassField(D, TEXT("m_RouteFailCount"),
+			&FElysiumNpcSabbatLeader::SabbatLeaderRouteFailCount, EElysiumField::Save);  // +0x66bc int
+		ElysiumAddClassField(D, TEXT("m_FailureType"), &FElysiumNpcSabbatLeader::FailureType,
+			EElysiumField::Save);  // +0x66c0 int
+		ElysiumAddClassField(D, TEXT("m_nLastWaterLevel"),
+			&FElysiumNpcSabbatLeader::SabbatLastWaterLevel, EElysiumField::Save);  // +0x66c4 int
+		ElysiumAddClassField(D, TEXT("m_fLastSplashTime"),
+			&FElysiumNpcSabbatLeader::SabbatLastSplashTime, EElysiumField::Save);  // +0x66c8 time
+		ElysiumAddClassField(D, TEXT("m_LastPlayerHealth"),
+			&FElysiumNpcSabbatLeader::SabbatLastPlayerHealth, EElysiumField::Save);  // +0x66cc int
+		ElysiumAddClassField(D, TEXT("m_bTrackPlayer"),
+			&FElysiumNpcSabbatLeader::bSabbatLeaderTrackPlayer, EElysiumField::Save);  // +0x66d4 bool
+		ElysiumAddClassField(D, TEXT("m_bDiving"), &FElysiumNpcSabbatLeader::bSabbatDiving,
+			EElysiumField::Save);  // +0x66d5 bool
+		ElysiumAddClassField(D, TEXT("m_bLargeSplashSpawned"),
+			&FElysiumNpcSabbatLeader::bSabbatLeaderLargeSplash, EElysiumField::Save);  // +0x66d6 bool
+		ElysiumAddClassField(D, TEXT("m_JumpBloodBalanceCount"),
+			&FElysiumNpcSabbatLeader::SabbatLeaderJumpBloodBalance, EElysiumField::Save);  // +0x66d8 int
+		ElysiumAddClassField(D, TEXT("m_RoarAttackCount"),
+			&FElysiumNpcSabbatLeader::SabbatLeaderRoarAttackCount, EElysiumField::Save);  // +0x66e0 int
+		ElysiumAddClassField(D, TEXT("m_bParticleSpawned"),
+			&FElysiumNpcSabbatLeader::bSabbatLeaderParticleSpawned, EElysiumField::Save);  // +0x66e4 bool
+		ElysiumAddClassField(D, TEXT("m_bLastAttackWasNova"),
+			&FElysiumNpcSabbatLeader::bSabbatLeaderLastAttackWasNova, EElysiumField::Save);  // +0x66e5 bool
+		// NOT SAVED +0x66dc m_fWarningFinishTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddScurryingFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("detection_distance"),
+			&FElysiumNpcScurrying::ScurryingDetectionDistanceUnits, EElysiumField::Save);  // +0x6690 m_flDetectionDistance
+		ElysiumAddClassField(D, TEXT("ignore_nosferatu"),
+			&FElysiumNpcScurrying::bScurryingIgnoreNosferatu, EElysiumField::Save);  // +0x6694 m_fIgnoreNosferatu
+		ElysiumAddClassField(D, TEXT("must_detect"), &FElysiumNpcScurrying::bScurryingMustDetect,
+			EElysiumField::Save);  // +0x6695 m_fMustDetect
+		ElysiumAddClassField(D, TEXT("fright_distance"),
+			&FElysiumNpcScurrying::ScurryingFrightDistanceUnits, EElysiumField::Save);  // +0x6698 m_flFrightDistance
+		ElysiumAddClassField(D, TEXT("fright_duration"),
+			&FElysiumNpcScurrying::ScurryingFrightDurationSeconds, EElysiumField::Save);  // +0x669c m_flFrightDurationSeconds
+	}
+
+	void AddSheriffManSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hTeleportSwarm"),
+			&FElysiumNpcSheriffMan::SheriffTeleportSwarm, EElysiumField::Save);  // +0x66d0 ehandle
+		ElysiumAddClassField(D, TEXT("m_vLastTeleportPosition"),
+			&FElysiumNpcSheriffMan::SheriffLastTeleportPosition, EElysiumField::Save);  // +0x66d4 vector
+		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
+			&FElysiumNpcSheriffMan::SheriffLastTeleportTime, EElysiumField::Save);  // +0x66e0 time
+		ElysiumAddClassField(D, TEXT("m_bTeleporting"),
+			&FElysiumNpcSheriffMan::bSheriffTeleporting, EElysiumField::Save);  // +0x66e4 bool
+		ElysiumAddClassField(D, TEXT("m_bDead"), &FElysiumNpcSheriffMan::bSheriffDead,
+			EElysiumField::Save);  // +0x66e5 bool
+		ElysiumAddClassField(D, TEXT("m_bActivated"), &FElysiumNpcSheriffMan::bSheriffActivated,
+			EElysiumField::Save);  // +0x66e6 bool
+		// NOT SAVED +0x66f0 m_fTeleportSpeed (float) — no port member (the species shape map's
+		// ABSENT row says why)
+		// NOT SAVED +0x66f4 m_fTeleportStartTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddTaxiDriverSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bFirstThink"), &FElysiumNpcTaxiDriver::bTaxiFirstThink,
+			EElysiumField::Save);  // +0x6660 bool
+	}
+
+	void AddTzimisceSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
+			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
+		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcTzimisce::PickupTarget,
+			EElysiumField::Save);  // +0x6670 ehandle
+		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
+			&FElysiumNpcTzimisce::PickupTargetPos, EElysiumField::Save);  // +0x6674 position
+		ElysiumAddClassField(D, TEXT("m_iPickupTargetGrabBone"),
+			&FElysiumNpcTzimisce::TzimiscePickupGrabBone, EElysiumField::Save);  // +0x6680 int
+		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
+			&FElysiumNpcTzimisce::TzimiscePhysicsAnimlink, EElysiumField::Save);  // +0x6684 ehandle
+		ElysiumAddClassField(D, TEXT("m_bHeavyBodyTarget"), &FElysiumNpc::bHeavyBodyTarget,
+			EElysiumField::Save);  // +0x6688 bool
+		ElysiumAddClassField(D, TEXT("m_bFirstEnemy"), &FElysiumNpcTzimisce::bTzimisceFirstEnemy,
+			EElysiumField::Save);  // +0x6689 bool
+		ElysiumAddClassField(D, TEXT("m_ePathMode"), &FElysiumNpcTzimisce::PathMode,
+			EElysiumField::Save);  // +0x668c int
+		ElysiumAddClassField(D, TEXT("m_flBodyTimer"), &FElysiumNpcTzimisce::TzimisceBodyTimer,
+			EElysiumField::Save);  // +0x66a4 time
+		ElysiumAddClassField(D, TEXT("m_flPounceCheckTimer"),
+			&FElysiumNpcTzimisce::TzimiscePounceCheckTimer, EElysiumField::Save);  // +0x66ac time
+		ElysiumAddClassField(D, TEXT("m_flShunnedBodyTimer"),
+			&FElysiumNpcTzimisce::TzimisceShunnedBodyTimer, EElysiumField::Save);  // +0x66b0 time
+		ElysiumAddClassField(D, TEXT("m_bDidFakeThrow"),
+			&FElysiumNpcTzimisce::bTzimisceDidFakeThrow, EElysiumField::Save);  // +0x66b4 bool
+		ElysiumAddClassField(D, TEXT("m_iShunnedFindBody"),
+			&FElysiumNpcTzimisce::TzimisceShunnedFindBody, EElysiumField::Save);  // +0x66b8 int
+		ElysiumAddClassField(D, TEXT("m_bJustFoundBody"),
+			&FElysiumNpcTzimisce::bTzimisceJustFoundBody, EElysiumField::Save);  // +0x66bc bool
+		// NOT SAVED +0x66a8 m_flTaskFailTimer (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddTzimisceHeadClawSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_hSlowedEntity"),
+			&FElysiumNpcTzimisceHeadClaw::HeadClawSlowedEntity, EElysiumField::Save);  // +0x6674 ehandle
+		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"),
+			&FElysiumNpcTzimisceHeadClaw::HeadClawSlowedExpire, EElysiumField::Save);  // +0x6678 time
+	}
+
+	void AddTzimisceRunnerSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bDeathNoticeProcessed"),
+			&FElysiumNpcTzimisceRunner::bRunnerDeathNoticeProcessed, EElysiumField::Save);  // +0x6671 bool
+		ElysiumAddClassField(D, TEXT("m_hPotentialEnemy"),
+			&FElysiumNpcTzimisceRunner::RunnerPotentialEnemy, EElysiumField::Save);  // +0x6678 ehandle
+	}
+
+	void AddVampireBossFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("MorphModel"),
+			&FElysiumNpcVampireBoss::VampireBossMorphModelName, EElysiumField::Save);  // +0x667c m_MorphModelName
+	}
+
+	void AddVampireBossSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		static_assert(std::extent_v<decltype(FElysiumNpcVampireBoss::BodyEmitterNames)> == 4,
+			"m_pBodyEmitterNames has 4 elements");
+		static_assert(std::extent_v<decltype(FElysiumNpcVampireBoss::ParticleEmitters)> == 4,
+			"m_hParticleEmitters has 4 elements");
+		ElysiumAddClassField(D, TEXT("m_bJumping"), &FElysiumNpc::bJumping, EElysiumField::Save);  // +0x6498 bool
+		ElysiumAddClassField(D, TEXT("m_vJumpOrigin"), &FElysiumNpc::JumpOrigin,
+			EElysiumField::Save);  // +0x649c vector
+		ElysiumAddClassField(D, TEXT("m_vJumpTarget"), &FElysiumNpc::JumpTarget,
+			EElysiumField::Save);  // +0x64a8 vector
+		ElysiumAddClassField(D, TEXT("m_fJumpHeight"), &FElysiumNpc::JumpHeight,
+			EElysiumField::Save);  // +0x64b4 float
+		ElysiumAddClassField(D, TEXT("m_fJumpGravity"), &FElysiumNpc::JumpGravity,
+			EElysiumField::Save);  // +0x64b8 float
+		ElysiumAddClassField(D, TEXT("m_pMonsterModelName"),
+			&FElysiumNpcVampireBoss::VampireBossMonsterModelName, EElysiumField::Save);  // +0x6680 string
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_pBodyEmitterNames[0]"),
+			[](auto& E) -> auto&{ return E.BodyEmitterNames[0]; }, EElysiumField::Save);  // +0x6684[0] string
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_pBodyEmitterNames[1]"),
+			[](auto& E) -> auto&{ return E.BodyEmitterNames[1]; }, EElysiumField::Save);  // +0x6684[1] string
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_pBodyEmitterNames[2]"),
+			[](auto& E) -> auto&{ return E.BodyEmitterNames[2]; }, EElysiumField::Save);  // +0x6684[2] string
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_pBodyEmitterNames[3]"),
+			[](auto& E) -> auto&{ return E.BodyEmitterNames[3]; }, EElysiumField::Save);  // +0x6684[3] string
+		ElysiumAddClassField(D, TEXT("m_HealthPercentRecord"),
+			&FElysiumNpcVampireBoss::BossHealthPercentRecord, EElysiumField::Save);  // +0x6698 float
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_hParticleEmitters[0]"),
+			[](auto& E) -> auto&{ return E.ParticleEmitters[0]; }, EElysiumField::Save);  // +0x66a0[0] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_hParticleEmitters[1]"),
+			[](auto& E) -> auto&{ return E.ParticleEmitters[1]; }, EElysiumField::Save);  // +0x66a0[1] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_hParticleEmitters[2]"),
+			[](auto& E) -> auto&{ return E.ParticleEmitters[2]; }, EElysiumField::Save);  // +0x66a0[2] ehandle
+		ElysiumAddClassFieldVia<FElysiumNpcVampireBoss>(D, TEXT("m_hParticleEmitters[3]"),
+			[](auto& E) -> auto&{ return E.ParticleEmitters[3]; }, EElysiumField::Save);  // +0x66a0[3] ehandle
+		ElysiumAddClassField(D, TEXT("m_hTransformPartner"),
+			&FElysiumNpcVampireBoss::TransformPartner, EElysiumField::Save);  // +0x66b0 ehandle
+		// NOT SAVED +0x669c m_fTaskStartTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
+	void AddWerewolfSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_DoorState"), &FElysiumNpcWerewolf::WerewolfDoorState,
+			EElysiumField::Save);  // +0x6680 int
+		ElysiumAddClassField(D, TEXT("m_pTeleportHint"), &FElysiumNpcWerewolf::TeleportHintNode,
+			EElysiumField::Save);  // +0x66b0 classptr
+		ElysiumAddClassField(D, TEXT("m_pLastUsedTeleportHint"),
+			&FElysiumNpcWerewolf::WerewolfLastUsedTeleportHint, EElysiumField::Save);  // +0x66b4 classptr
+		ElysiumAddClassField(D, TEXT("m_pMoveHint"), &FElysiumNpcWerewolf::MoveHintNode,
+			EElysiumField::Save);  // +0x66bc classptr
+		ElysiumAddClassField(D, TEXT("m_pLastUsedMoveHint"),
+			&FElysiumNpcWerewolf::WerewolfLastUsedMoveHint, EElysiumField::Save);  // +0x66c0 classptr
+		ElysiumAddClassField(D, TEXT("m_pBreakHint"), &FElysiumNpcWerewolf::WerewolfBreakHintNode,
+			EElysiumField::Save);  // +0x66c4 classptr
+		ElysiumAddClassField(D, TEXT("m_bRandomHint"), &FElysiumNpcWerewolf::bRandomHint,
+			EElysiumField::Save);  // +0x66c8 bool
+		ElysiumAddClassField(D, TEXT("m_flTimeTeleportedOut"),
+			&FElysiumNpcWerewolf::WerewolfTimeTeleportedOut, EElysiumField::Save);  // +0x66f0 time
+	}
+
+	void AddZombieFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcZombie::bZombieShouldRagdoll,
+			EElysiumField::Save);  // +0x6675 m_bShouldRagdoll
+		ElysiumAddClassField(D, TEXT("ZombieAIType"), &FElysiumNpc::ZombieAiType,
+			EElysiumField::Save);  // +0x6678 m_iZombieAIType
+		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcZombie::ZombieRemoveDistUnits,
+			EElysiumField::Save);  // +0x66dc m_flRemoveDist
+	}
+
+	void AddZombieSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_iNeedsCrawlOutOfGround"),
+			&FElysiumNpcZombie::bZombieNeedsCrawlOutOfGround, EElysiumField::Save);  // +0x667c bool
+		ElysiumAddClassField(D, TEXT("m_flGrappleReadyTimer"),
+			&FElysiumNpcZombie::ZombieGrappleReadyTimer, EElysiumField::Save);  // +0x66d8 time
+		// NOT SAVED +0x6680 m_vecDeathForceVector (vector) — no port member (the species shape
+		// map's ABSENT row says why)
+		// NOT SAVED +0x66e0 m_bShouldGib (bool) — no port member (the species shape map's ABSENT
+		// row says why)
+	}
+
+	bool AddSpeciesFields(FElysiumClassDesc& D, const TCHAR* RetailClass)
+	{
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VAndreiBlood")) == 0)
+		{
+			AddAndreiBloodSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VAnimal")) == 0)
+		{
+			AddAnimalFields(D);
+			AddAnimalSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VAsianVampire")) == 0)
+		{
+			AddAsianVampireSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VBach")) == 0)
+		{
+			AddBachSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VCameraSecurity")) == 0)
+		{
+			AddCameraSecurityFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VChangBros")) == 0)
+		{
+			AddChangBrosSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VCop")) == 0)
+		{
+			AddCopSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VGargoyle")) == 0)
+		{
+			AddGargoyleSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VGhoulCroucher")) == 0)
+		{
+			AddGhoulCroucherFields(D);
+			AddGhoulCroucherSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VGuard1")) == 0)
+		{
+			AddGuard1SaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VHengeyokai")) == 0)
+		{
+			AddHengeyokaiSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VHunter")) == 0)
+		{
+			AddHunterSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VLasombra")) == 0)
+		{
+			AddLasombraSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VManBat")) == 0)
+		{
+			AddManBatSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VMingXiao")) == 0)
+		{
+			AddMingXiaoSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VMingXiaoTentacle")) == 0)
+		{
+			AddMingXiaoTentacleSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VPedestrian")) == 0)
+		{
+			AddPedestrianFields(D);
+			AddPedestrianSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VSabbatLeader")) == 0)
+		{
+			AddSabbatLeaderSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VScurrying")) == 0)
+		{
+			AddScurryingFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VSheriffMan")) == 0)
+		{
+			AddSheriffManSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VTaxiDriver")) == 0)
+		{
+			AddTaxiDriverSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VTzimisce")) == 0)
+		{
+			AddTzimisceSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VTzimisceHeadClaw")) == 0)
+		{
+			AddTzimisceHeadClawSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VTzimisceRunner")) == 0)
+		{
+			AddTzimisceRunnerSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VVampireBoss")) == 0)
+		{
+			AddVampireBossFields(D);
+			AddVampireBossSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VWerewolf")) == 0)
+		{
+			AddWerewolfSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VZombie")) == 0)
+		{
+			AddZombieFields(D);
+			AddZombieSaveFields(D);
+			return true;
+		}
+		return false;
+	}
+
 	namespace
 	{
 	const TCHAR* const GBaseEntityOutputs[] =
@@ -1508,6 +2482,100 @@ namespace ElysiumNpcKernelBindings
 		TEXT("PlayOneOffSound"),
 	};
 
+	const TCHAR* const GAndreiBloodInputFuncs[] =
+	{
+		TEXT("TriggerCombat"),
+	};
+
+	const TCHAR* const GBachInputFuncs[] =
+	{
+		TEXT("GrenadeEnter"),
+		TEXT("GrenadeExit"),
+		TEXT("SignalVulnerable"),
+	};
+
+	const TCHAR* const GGargoyleOutputs[] =
+	{
+		TEXT("OnGibDeath"),
+	};
+
+	const TCHAR* const GGhoulCroucherOutputs[] =
+	{
+		TEXT("OnDisturbed"),
+		TEXT("OnDisturbedByPlayer"),
+	};
+
+	const TCHAR* const GHengeyokaiInputFuncs[] =
+	{
+		TEXT("StartTransformation"),
+	};
+
+	const TCHAR* const GLasombraInputFuncs[] =
+	{
+		TEXT("DisableCover"),
+	};
+
+	const TCHAR* const GManBatInputFuncs[] =
+	{
+		TEXT("ManBatFlyBegin"),
+		TEXT("ManBatStun"),
+	};
+
+	const TCHAR* const GMingXiaoInputFuncs[] =
+	{
+		TEXT("StartTransformation"),
+	};
+
+	const TCHAR* const GSabbatLeaderInputFuncs[] =
+	{
+		TEXT("StartTransformation"),
+	};
+
+	const TCHAR* const GSheriffManOutputs[] =
+	{
+		TEXT("OnFinishTransformation"),
+	};
+
+	const TCHAR* const GSheriffManInputFuncs[] =
+	{
+		TEXT("StartAttacking"),
+		TEXT("StartTransformation"),
+	};
+
+	const TCHAR* const GVampireBossOutputs[] =
+	{
+		TEXT("OnTransformComplete"),
+	};
+
+	const TCHAR* const GVampireBossInputFuncs[] =
+	{
+		TEXT("TransformModel"),
+	};
+
+	const TCHAR* const GWerewolfOutputs[] =
+	{
+		TEXT("OnBeginCrushAnimation"),
+		TEXT("OnConditionDeathTriggered"),
+		TEXT("OnFinishCrushAnimation"),
+		TEXT("OnTeleportIn"),
+		TEXT("OnTeleportOut"),
+	};
+
+	const TCHAR* const GWerewolfInputFuncs[] =
+	{
+		TEXT("ToggleDoorState"),
+	};
+
+	const TCHAR* const GZombieOutputs[] =
+	{
+		TEXT("OnAttackedVictim"),
+	};
+
+	const TCHAR* const GZombieInputFuncs[] =
+	{
+		TEXT("SetZombieAIType"),
+	};
+
 	}
 
 	TConstArrayView<const TCHAR*> Outputs(EClass Class)
@@ -1532,6 +2600,60 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GConversationPlaceOutputs);
 			case EClass::NpcMakerZombie:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::AndreiBlood:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Animal:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::AsianVampire:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Bach:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::CameraSecurity:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::ChangBros:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Cop:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Gargoyle:
+				return MakeArrayView(GGargoyleOutputs);
+			case EClass::GhoulCroucher:
+				return MakeArrayView(GGhoulCroucherOutputs);
+			case EClass::Guard1:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Hengeyokai:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Hunter:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Lasombra:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::ManBat:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::MingXiao:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::MingXiaoTentacle:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Pedestrian:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::SabbatLeader:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Scurrying:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::SheriffMan:
+				return MakeArrayView(GSheriffManOutputs);
+			case EClass::TaxiDriver:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Tzimisce:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::TzimisceHeadClaw:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::TzimisceRunner:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::VampireBoss:
+				return MakeArrayView(GVampireBossOutputs);
+			case EClass::Werewolf:
+				return MakeArrayView(GWerewolfOutputs);
+			case EClass::Zombie:
+				return MakeArrayView(GZombieOutputs);
 			default:
 				return MakeArrayView(GNpcOutputs);
 		}
@@ -1559,6 +2681,60 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GConversationPlaceInputFuncs);
 			case EClass::NpcMakerZombie:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::AndreiBlood:
+				return MakeArrayView(GAndreiBloodInputFuncs);
+			case EClass::Animal:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::AsianVampire:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Bach:
+				return MakeArrayView(GBachInputFuncs);
+			case EClass::CameraSecurity:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::ChangBros:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Cop:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Gargoyle:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::GhoulCroucher:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Guard1:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Hengeyokai:
+				return MakeArrayView(GHengeyokaiInputFuncs);
+			case EClass::Hunter:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Lasombra:
+				return MakeArrayView(GLasombraInputFuncs);
+			case EClass::ManBat:
+				return MakeArrayView(GManBatInputFuncs);
+			case EClass::MingXiao:
+				return MakeArrayView(GMingXiaoInputFuncs);
+			case EClass::MingXiaoTentacle:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Pedestrian:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::SabbatLeader:
+				return MakeArrayView(GSabbatLeaderInputFuncs);
+			case EClass::Scurrying:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::SheriffMan:
+				return MakeArrayView(GSheriffManInputFuncs);
+			case EClass::TaxiDriver:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::Tzimisce:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::TzimisceHeadClaw:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::TzimisceRunner:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::VampireBoss:
+				return MakeArrayView(GVampireBossInputFuncs);
+			case EClass::Werewolf:
+				return MakeArrayView(GWerewolfInputFuncs);
+			case EClass::Zombie:
+				return MakeArrayView(GZombieInputFuncs);
 			default:
 				return MakeArrayView(GNpcInputFuncs);
 		}
@@ -1586,6 +2762,60 @@ namespace ElysiumNpcKernelBindings
 				return {10, 0, 6, 3, 0};
 			case EClass::NpcMakerZombie:
 				return {3, 0, 0, 0, 0};
+			case EClass::AndreiBlood:
+				return {0, 0, 0, 1, 5};
+			case EClass::Animal:
+				return {3, 0, 0, 0, 1};
+			case EClass::AsianVampire:
+				return {0, 0, 0, 0, 7};
+			case EClass::Bach:
+				return {0, 0, 0, 3, 11};
+			case EClass::CameraSecurity:
+				return {1, 0, 0, 0, 0};
+			case EClass::ChangBros:
+				return {0, 0, 0, 0, 9};
+			case EClass::Cop:
+				return {0, 0, 0, 0, 3};
+			case EClass::Gargoyle:
+				return {0, 0, 1, 0, 4};
+			case EClass::GhoulCroucher:
+				return {2, 0, 2, 0, 5};
+			case EClass::Guard1:
+				return {0, 0, 0, 0, 1};
+			case EClass::Hengeyokai:
+				return {0, 0, 0, 1, 11};
+			case EClass::Hunter:
+				return {0, 0, 0, 0, 1};
+			case EClass::Lasombra:
+				return {0, 0, 0, 1, 1};
+			case EClass::ManBat:
+				return {0, 0, 0, 2, 14};
+			case EClass::MingXiao:
+				return {0, 0, 0, 1, 39};
+			case EClass::MingXiaoTentacle:
+				return {0, 0, 0, 0, 9};
+			case EClass::Pedestrian:
+				return {1, 0, 0, 0, 3};
+			case EClass::SabbatLeader:
+				return {0, 0, 0, 1, 14};
+			case EClass::Scurrying:
+				return {5, 0, 0, 0, 0};
+			case EClass::SheriffMan:
+				return {0, 0, 1, 2, 6};
+			case EClass::TaxiDriver:
+				return {0, 0, 0, 0, 1};
+			case EClass::Tzimisce:
+				return {0, 0, 0, 0, 14};
+			case EClass::TzimisceHeadClaw:
+				return {0, 0, 0, 0, 2};
+			case EClass::TzimisceRunner:
+				return {0, 0, 0, 0, 2};
+			case EClass::VampireBoss:
+				return {1, 0, 1, 1, 16};
+			case EClass::Werewolf:
+				return {0, 0, 5, 1, 8};
+			case EClass::Zombie:
+				return {3, 0, 1, 1, 2};
 			default:
 				return {37, 3, 24, 34, 198};
 		}

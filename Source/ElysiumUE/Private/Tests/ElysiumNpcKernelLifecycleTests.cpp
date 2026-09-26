@@ -7,6 +7,10 @@
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcCamera.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -318,30 +322,42 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 	N.bHidden = false;
 	N.ScriptOwner = FElysiumEntityHandle::Invalid();
 
-	// `CNPC_VWerewolf::ScriptUnhide` (0x103d4a20): stamp then three zeroes.
-	N.WerewolfMorphTimerA = 5.f;
-	N.WerewolfMorphTimerB = 6.f;
-	N.WerewolfMorphTimerC = 7.f;
-	N.WerewolfUnhideStamp = 0.0;
-	N.WerewolfScriptUnhideTail(123.0);
-	TestEqual(TEXT("+0x66ec takes curtime"), N.WerewolfUnhideStamp, 123.0);
-	TestEqual(TEXT("+0x66a4 is zeroed"), N.WerewolfMorphTimerA, 0.f);
-	TestEqual(TEXT("+0x66d4 is zeroed"), N.WerewolfMorphTimerB, 0.f);
-	TestEqual(TEXT("+0x66d8 is zeroed"), N.WerewolfMorphTimerC, 0.f);
+	// `CNPC_VWerewolf::ScriptUnhide` (0x103d4a20): stamp then three zeroes, on a werewolf.
+	FLifecycleFixture WolfFix(TEXT("npc_VWerewolf"));
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(WolfFix.Npc);
+	if (!TestNotNull(TEXT("the werewolf spawned"), Wolf))
+	{
+		return false;
+	}
+	Wolf->WerewolfMorphTimerA = 5.f;
+	Wolf->WerewolfMorphTimerB = 6.f;
+	Wolf->WerewolfMorphTimerC = 7.f;
+	Wolf->WerewolfUnhideStamp = 0.0;
+	Wolf->WerewolfScriptUnhideTail(123.0);
+	TestEqual(TEXT("+0x66ec takes curtime"), Wolf->WerewolfUnhideStamp, 123.0);
+	TestEqual(TEXT("+0x66a4 is zeroed"), Wolf->WerewolfMorphTimerA, 0.f);
+	TestEqual(TEXT("+0x66d4 is zeroed"), Wolf->WerewolfMorphTimerB, 0.f);
+	TestEqual(TEXT("+0x66d8 is zeroed"), Wolf->WerewolfMorphTimerC, 0.f);
 
 	// `CNPC_VGhoulCroucher::ScriptUnhide` (0x1037c2f0): the handle is NOT cleared — retail only
-	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing.
-	N.BurningParticle = N.Handle;
-	N.GhoulCroucherScriptUnhideTail();
-	TestTrue(TEXT("m_hBurningParticle survives its own unhide"), N.BurningParticle.IsSet());
-	N.BurningParticle = FElysiumEntityHandle::Invalid();
-	N.GhoulCroucherScriptUnhideTail();   // the unset arm writes nothing and must not fault
-	TestFalse(TEXT("and an unset handle is an ordinary no-op"), N.BurningParticle.IsSet());
+	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing. On a ghoul.
+	FLifecycleFixture GhoulFix(TEXT("npc_VGhoulCroucher"));
+	FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulFix.Npc);
+	if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul))
+	{
+		return false;
+	}
+	Ghoul->BurningParticle = Ghoul->Handle;
+	Ghoul->GhoulCroucherScriptUnhideTail();
+	TestTrue(TEXT("m_hBurningParticle survives its own unhide"), Ghoul->BurningParticle.IsSet());
+	Ghoul->BurningParticle = FElysiumEntityHandle::Invalid();
+	Ghoul->GhoulCroucherScriptUnhideTail();   // the unset arm writes nothing and must not fault
+	TestFalse(TEXT("and an unset handle is an ordinary no-op"), Ghoul->BurningParticle.IsSet());
 
 	// The Troika tail alone touches none of the werewolf words: they are the werewolf tail's.
-	N.WerewolfUnhideStamp = -1.0;
-	N.TroikaScriptUnhideTail();
-	TestEqual(TEXT("the Troika tail keeps +0x66ec"), N.WerewolfUnhideStamp, -1.0);
+	Wolf->WerewolfUnhideStamp = -1.0;
+	Wolf->TroikaScriptUnhideTail();
+	TestEqual(TEXT("the Troika tail keeps +0x66ec"), Wolf->WerewolfUnhideStamp, -1.0);
 	return true;
 }
 
@@ -529,10 +545,10 @@ bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 
 	// `CNPC_VCamera::Precache` (0x103689c0) — the model-key fallback.
 	TestEqual(TEXT("an authored camera model is kept"),
-		FElysiumNpc::CameraPrecacheModel(TEXT("models/camera.mdl")),
+		FElysiumNpcCamera::CameraPrecacheModel(TEXT("models/camera.mdl")),
 		FString(TEXT("models/camera.mdl")));
 	TestEqual(TEXT("an empty one falls back to models/null.mdl"),
-		FElysiumNpc::CameraPrecacheModel(FString()), FString(TEXT("models/null.mdl")));
+		FElysiumNpcCamera::CameraPrecacheModel(FString()), FString(TEXT("models/null.mdl")));
 
 	// The species row is reachable by retail class name. story 5 step 2: `npc_VCamera`'s factory
 	// builds `CNPC_VCamera` (population.md), so the classname resolves to the same row.
@@ -836,35 +852,33 @@ bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 		N.HasNonDefaultVelocity());
 	N.Velocity = FVector::ZeroVector;
 
-	// The two unaware tables (0x1037b870 / 0x1037b890) — the INDEXING is recovered, the contents are
-	// not. Both answer 0 through the named seam and neither faults on any index.
-	N.UnawareType = 3;
-	TestEqual(TEXT("UnawareTableA answers its seam"), N.UnawareTableA(), 0);
-	TestEqual(TEXT("UnawareTableB answers its seam"), N.UnawareTableB(), 0);
+	// The two unaware tables (0x1037b870 / 0x1037b890, `CNPC_VGhoulCroucher`) — the INDEXING is
+	// recovered, the contents are not. Both answer 0 through the named seam and neither faults on any
+	// index.
+	{
+		FLifecycleFixture GhoulFix(TEXT("npc_VGhoulCroucher"));
+		FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulFix.Npc);
+		if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul))
+		{
+			return false;
+		}
+		Ghoul->UnawareType = 3;
+		TestEqual(TEXT("UnawareTableA answers its seam"), Ghoul->UnawareTableA(), 0);
+		TestEqual(TEXT("UnawareTableB answers its seam"), Ghoul->UnawareTableB(), 0);
+	}
 	TestEqual(TEXT("and the seam is the same for both, by name"),
-		FElysiumNpc::UnawareTableEntry(TEXT("DAT_1063abcc"), 3),
-		FElysiumNpc::UnawareTableEntry(TEXT("DAT_1063abdc"), 3));
+		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abcc"), 3),
+		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abdc"), 3));
 
 	// The werewolf search timer — a STATIC pair, shared by every instance rather than per NPC. That
 	// is the recovered fact, and this is what asserts it: the report passes its argument through and
 	// leaves the elapsed count behind for anybody.
-	FElysiumNpc::StartSearchTimer();
+	FElysiumNpcWerewolf::StartSearchTimer();
 	TestTrue(TEXT("ReportSearchTimer passes its argument through"),
-		FElysiumNpc::ReportSearchTimer(true));
-	TestFalse(TEXT("whatever it is"), FElysiumNpc::ReportSearchTimer(false));
+		FElysiumNpcWerewolf::ReportSearchTimer(true));
+	TestFalse(TEXT("whatever it is"), FElysiumNpcWerewolf::ReportSearchTimer(false));
 	TestTrue(TEXT("and leaves the elapsed cycles in the shared pair"),
 		FElysiumNpc::SearchTimerElapsedCycles() != 0 || true);
-
-	// `FUN_10397b40` — the proxy gate. A null argument, a cooldown that has not expired and a slot
-	// that does not resolve each answer false, in retail's order.
-	TestFalse(TEXT("a null proxy answers false"), N.ProxyReadyTimer(nullptr, 100.0));
-	N.MingXiaoProxyReadyTimer = 500.0;
-	TestFalse(TEXT("a cooldown that has not expired answers false"), N.ProxyReadyTimer(&N, 100.0));
-	N.MingXiaoProxyReadyTimer = 0.0;
-	// The slot index is a SEAM answering INDEX_NONE, so the third arm always refuses today.
-	TestEqual(TEXT("the proxy slot seam answers nothing"), N.ProxySlotIndexOf(&N), INDEX_NONE);
-	TestFalse(TEXT("so a proxy whose slot does not resolve answers false"),
-		N.ProxyReadyTimer(&N, 1000.0));
 	return true;
 }
 
@@ -886,6 +900,34 @@ bool FElysiumNpcKernelLifecycleMotorResetTest::RunTest(const FString&)
 	Fix.Npc->Gravity = 4.f;
 	Fix.Npc->MotorResetToDefault();
 	TestEqual(TEXT("from above as well as below"), Fix.Npc->Gravity, 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleMingXiaoProxyGateTest,
+	"Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate", GLifecycleTestFlags)
+bool FElysiumNpcKernelLifecycleMingXiaoProxyGateTest::RunTest(const FString&)
+{
+	// `FUN_10397b40` is a `CNPC_VMingXiao` body over the head's own words, so it runs on a head.
+	FElysiumNpcWorldBuilder Builder(TEXT("lifecycle_proxygate"), 29140u);
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	if (!TestNotNull(TEXT("the head spawned"), Ming))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Ming });
+
+	// `FUN_10397b40` — the proxy gate. A null argument, a cooldown that has not expired and a slot
+	// that does not resolve each answer false, in retail's order.
+	TestFalse(TEXT("a null proxy answers false"), Ming->ProxyReadyTimer(nullptr, 100.0));
+	Ming->MingXiaoProxyReadyTimer = 500.0;
+	TestFalse(TEXT("a cooldown that has not expired answers false"), Ming->ProxyReadyTimer(Ming, 100.0));
+	Ming->MingXiaoProxyReadyTimer = 0.0;
+	// The slot index is a SEAM answering INDEX_NONE, so the third arm always refuses today.
+	TestEqual(TEXT("the proxy slot seam answers nothing"), Ming->ProxySlotIndexOf(Ming), INDEX_NONE);
+	TestFalse(TEXT("so a proxy whose slot does not resolve answers false"),
+		Ming->ProxyReadyTimer(Ming, 1000.0));
 	return true;
 }
 

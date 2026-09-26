@@ -20,11 +20,6 @@
 
 float HengeyokaiFishTimer = 0.f;         // +0x666c CNPC_VHengeyokai::m_flFishTimer
 bool bHengeyokaiDidFakeThrow = false;    // +0x667d CNPC_VHengeyokai::m_bDidFakeThrow
-float LasombraCoverDisableOverride = 0.f;  // +0x6664 CNPC_VLasombra::m_flCoverDisableOverride
-int32 SabbatLeaderRoarAttackCount = 0;   // +0x66e0 CNPC_VSabbatLeader::m_RoarAttackCount
-float ManBatSlowedExpire = 0.f;          // +0x6684 CNPC_VManBat::m_flSlowedExpire
-FElysiumEntityHandle WerewolfRotDoor1;   // +0x6684 CNPC_VWerewolf::m_hRotDoor1
-FElysiumEntityHandle WerewolfRotDoor2;   // +0x6688 CNPC_VWerewolf::m_hRotDoor2
 
 // --- The `CAI_StandoffBehavior` words slots 4 and 26 touch ----------------------------------------
 //
@@ -77,19 +72,6 @@ static bool StandoffVfunc28();
 static bool StandoffSchedulesLoaded();
 
 // --- Slot 24 `OnVictimHitByMe` — the Troika line and four species bodies ------------------------
-//
-// The Troika line (`0x1029f8d0`) is `OnVictimHitByMe` itself. `CNPC_VGargoyle`, `CNPC_VSabbatLeader`,
-// `CNPC_VZombie` and `CNPC_VGhoulCroucher` override it on their C++ classes (story 5 step 3) with these
-// bodies; only the Zombie and the GhoulCroucher call the Troika body (directly).
-void GargoyleOnVictimHitByMe(FElysiumEntity* Victim);        // `0x1037a450`
-void SabbatLeaderOnVictimHitByMe(FElysiumEntity* Victim);    // `0x103ab4a0`
-void ZombieOnVictimHitByMe(FElysiumEntity* Victim);          // `0x103e1280`
-void GhoulCroucherOnVictimHitByMe(FElysiumEntity* Victim);   // `0x1037be80`
-
-/** `CNPC_VGargoyle::OnVictimHitByMe` (`0x1037a450`)'s classname filter, as a pure function so the
- *  two names it matches are assertable without an entity. `FClassnameIs` semantics: case-insensitive
- *  and a trailing `*` is a prefix match — neither of these two carries one. */
-static bool GargoyleHitsPillar(const FString& Classname);
 
 /** **SEAM** for `thunk_FUN_1028b160(&this->field_0x6028)` (`0x1028b160`), the whole Troika-line body
  *  of slot 24: five 12-byte `MeleeMoveRecord_t` entries at `+0x6028` zeroed in one loop. `+0x6028`
@@ -97,14 +79,6 @@ static bool GargoyleHitsPillar(const FString& Classname);
  *  retained draw — so the clear is counted and nothing is written. */
 void ClearMeleeMoveRecords();
 int32 MeleeMoveRecordClears = 0;
-
-/** **SEAM** for `victim->vtable[+0x428]` (slot 266), the reaction `CNPC_VGargoyle`'s slot 24
- *  dispatches ON THE VICTIM (`MOV ECX,ESI` at `0x1037a54a`, `this` as the one argument). The victim
- *  is a `pillar` / `central_pillar` prop, not an NPC, and slot 266 is declared on `FElysiumNpc`
- *  alone here, so a non-NPC victim is counted and nothing is dispatched. An NPC victim takes the
- *  real `Slot266()`. **Unrecovered:** what a pillar's class fills slot 266 with. */
-void DispatchVictimHitReaction(FElysiumEntity* Victim);
-int32 VictimHitReactionDispatches = 0;
 
 // --- Slot 590 `OkToInterruptForMelee` and slot 592 `CanSeekCover` ---------------------------------
 
@@ -120,17 +94,6 @@ int32 VictimHitReactionDispatches = 0;
  *
  *  Retail name unrecovered; named for what the body answers. */
 bool OkToDisturb() const;
-/** `CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`) — the body of the class's override. */
-bool SabbatLeaderOkToInterruptForMelee();
-/** `CNPC_VLasombra::vfunc592` (`0x103893c0`) — the body of `FElysiumNpcLasombra::CanSeekCover`. */
-bool LasombraCanSeekCover();
-
-// --- The per-species threshold answers -----------------------------------------------------------
-
-/** `CNPC_VBach::vfunc553` (`0x10364500`) and `::vfunc554` (`0x10364550`) — slots 553/554
- *  `RangeAttack1Conditions` / `RangeAttack2Conditions`. One shape, one differing answer. */
-int32 BachRangeAttack1Conditions(float Dot, float DistUnits) const;
-int32 BachRangeAttack2Conditions(float Dot, float DistUnits) const;
 
 // --- The component factories, slots 424–430 -------------------------------------------------------
 //
@@ -160,8 +123,6 @@ struct FComponentFactory
  *  (`CNPC_VRat`'s local navigator). */
 static const FComponentFactory* ComponentFactoryRows(int32& OutCount);
 
-/** `CNPC_VRat::vfunc428` (`0x103ad6a0`) — the body of `FElysiumNpcRat::CreateLocalNavigator`. */
-void* RatCreateLocalNavigator();
 /** The retail body of the factory asked last — the row of `ComponentFactoryRows` it names. */
 const TCHAR* LastComponentFactoryBody = nullptr;
 
@@ -178,46 +139,6 @@ int32 FirstRefusedComponentSlot = INDEX_NONE;
  *  Family **Bosses**' `CallFormBit` seam stood for this and now forwards to it. */
 void FormBit(bool bSet);
 
-/** `0x10381ca0` — the read half of the pair above: has `m_flFishTimer` (`+0x666c`) reached curtime?
- *  NAMED `FormBitTimerExpired`, not 29c's `FormBit`: that name is the setter's, and one method
- *  cannot be both a `void(bool)` and a `bool()`. */
-bool FormBitTimerExpired() const;
-
-/** `CNPC_VYukie::vfunc599` (`0x103dd8b0`) — the species body at slot 599, `EnterMelee`. Unlike the
- *  Troika line (family **TroikaHelpers**' `Slot599`) it has NO gates at all: the global melee event
- *  fires, `m_bInMelee` goes true and `m_flMeleeMustLeaveTimer` takes
- *  `curtime + RandomFloat(22.5, 45.0)`. 29c's target named the data member `MeleeMustLeaveTimer`;
- *  renamed here because that member is 29b's and this is the body that writes it. */
-bool YukieEnterMelee();
-
-/** `0x103dd9a0` — the species body at slot 601 for `CNPC_VYukie`, `LeaveMelee`. The Troika line's
- *  `0x102b5880` without the attack-coordinator release. Renamed from 29c's `MeleeCanEnterTimer` for
- *  the same reason as above. */
-void YukieLeaveMelee();
-
-/** `0x1038f290` — is `CNPC_VManBat`'s slow effect still running? `m_flSlowedExpire` (`+0x6684`)
- *  strictly above `_DAT_1044fab0`, the shared `0.0` DOUBLE (`docs/vtmb/footsteps.md:319`, the
- *  2-D speed gate). A flag test spelled as a float compare, not a deadline against curtime. */
-bool SlowedExpire() const;
-
-/** `CNPC_VChangBros::StoreArenaCenter` (`0x1036e400`) — walk the global `CAI_Hint` list for the
- *  first node of type `0x4651`, take its origin into `m_vArenaCenter` (`+0x66dc`, family
- *  **Positions**' `ChangArenaCenter`) and raise `m_bCenterStored` (`+0x66e8`). */
-void StoreArenaCenter();
-
-/** `0x103cade0` — `CNPC_VWerewolf`'s zone opener. Dispatches slot 251 on every entity whose
- *  TARGETNAME is `trigger_werewolf_zone`, then caches the `rotdoor1` / `rotdoor2` entities in
- *  `m_hRotDoor1` / `m_hRotDoor2` (`+0x6684` / `+0x6688`). Name inferred from the three hardcoded map
- *  entity names; the retail name is unrecovered. */
-void TriggerWerewolfZone();
-
-/** **SEAM** for `zone->vtable[+0x3ec]` (slot 251) on a `trigger_werewolf_zone` entity. On the
- *  `CAI_BaseNPC` line slot 251 is `IsActivityFinished`, but a trigger is a different hierarchy
- *  sharing the index and the census does not carry its table — so what this fires is
- *  **unrecovered**. Counted, and nothing is dispatched. */
-void FireWerewolfZoneTrigger(FElysiumEntity& Zone);
-int32 WerewolfZoneTriggerFires = 0;
-
 /** `CBaseCombatCharacter::GetExpressionEventParams` (`0x10014ba0`) — the base slot 347 body the
  *  Troika override forwards every event but `1` to. Fully recovered, so it is ported rather than
  *  seamed. */
@@ -227,3 +148,11 @@ bool CombatCharacterExpressionEventParams(int32 Event, TCHAR* OutName, float* Ou
 /** The `Q_strncpy(buffer, "Knockback", 0x40)` both slot-347 bodies open their event-1 arm with —
  *  retail's fixed 64-character buffer, so the port's copy is bounded the same way. */
 static constexpr int32 ExpressionEventNameChars = 0x40;
+
+/** **SEAM** for `victim->vtable[+0x428]` (slot 266), the reaction `CNPC_VGargoyle`'s slot 24
+ *  dispatches ON THE VICTIM (`MOV ECX,ESI` at `0x1037a54a`, `this` as the one argument). The victim
+ *  is a `pillar` / `central_pillar` prop, not an NPC, and slot 266 is declared on `FElysiumNpc`
+ *  alone here, so a non-NPC victim is counted and nothing is dispatched. An NPC victim takes the
+ *  real `Slot266()`. **Unrecovered:** what a pillar's class fills slot 266 with. */
+void DispatchVictimHitReaction(FElysiumEntity* Victim);
+int32 VictimHitReactionDispatches = 0;

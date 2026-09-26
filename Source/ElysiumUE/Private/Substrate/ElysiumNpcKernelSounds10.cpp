@@ -23,6 +23,7 @@
 // is the recovered half: the concept, the channel, the volume and the fifth argument.
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelSounds10Shared.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
@@ -49,7 +50,6 @@ namespace
 	const TCHAR* const GSounds10ConceptDeath = TEXT("Death");                       // 0x105d8c30
 	const TCHAR* const GSounds10ConceptTargetSuspect = TEXT("Target_Suspect");      // 0x105d8c38
 	const TCHAR* const GSounds10ConceptIdleCalm = TEXT("Idle_Calm");                // 0x105d8c60
-	const TCHAR* const GSounds10ConceptPain = TEXT("Pain");                         // 0x105d8c6c
 	const TCHAR* const GSounds10ConceptFearStart = TEXT("Fear_Start");              // 0x105d8c74
 	const TCHAR* const GSounds10ConceptTargetLost = TEXT("Target_Lost");            // 0x105d8c84
 	const TCHAR* const GSounds10ConceptTargetReacquired = TEXT("Target_Reacquired");// 0x105d8c94
@@ -62,7 +62,6 @@ namespace
 	const TCHAR* const GSounds10ConceptUpset = TEXT("Upset");                       // 0x105d8cfc
 	const TCHAR* const GSounds10ConceptTargetGiveUp = TEXT("Target_GiveUp");        // 0x105d8d04
 	const TCHAR* const GSounds10ConceptFloat = TEXT("Float");                       // 0x105d8d14
-	const TCHAR* const GSounds10ConceptExertHeavy = TEXT("Exert_Heavy");            // 0x1057a1a0
 	const TCHAR* const GSounds10ConceptExertLight = TEXT("Exert_Light");            // 0x1057a1b0
 
 	// Source's `CHAN_VOICE`. Every hook in this family passes `2` as `0x101f5950`'s third argument.
@@ -71,8 +70,6 @@ namespace
 	constexpr float GSounds10Volume = 1.0f;
 	// `0x3fa00000`, the fifth argument on sixteen of the seventeen Troika hooks.
 	constexpr float GSounds10Attenuation = 1.25f;
-	// Both `CNPC_VWerewolf` arms push a literal `0` where the Troika body pushes `0x3fa00000`.
-	constexpr float GSounds10WerewolfAttenuation = 0.0f;
 
 	// `CAI_BaseNPCTroika::FUN_102944c0` (slot 493) `1029450a`: `RandomInt(0, 99) < 0x19`.
 	constexpr int32 GSounds10LostEnemyRollMax = 99;
@@ -340,13 +337,7 @@ void FElysiumNpc::IdleSound()
 // to the base.
 void FElysiumNpc::PainSound()
 {
-	SpeakSoundConcept(GSounds10ConceptPain, GSounds10Attenuation);
-}
-
-// The species arm above, `FElysiumNpcWerewolf::PainSound`'s body (story 5 step 3).
-void FElysiumNpc::WerewolfPainSound()
-{
-	SpeakSoundConcept(GSounds10ConceptPain, GSounds10WerewolfAttenuation);
+	SpeakSoundConcept(NpcKernelSounds10Shared::GSounds10ConceptPain, GSounds10Attenuation);
 }
 
 // `CAI_BaseNPCTroika::FUN_10294400` (`0x10294400`), slot 492 `FearSound`. 138 bytes, concept
@@ -434,13 +425,7 @@ void FElysiumNpc::IdleAgitatedSound()
 // scope-trace frame, with `0` as the fifth argument. It does not chain to the base.
 void FElysiumNpc::ExertHvySound()
 {
-	SpeakSoundConcept(GSounds10ConceptExertHeavy, GSounds10Attenuation);
-}
-
-// The species arm above, `FElysiumNpcWerewolf::ExertHvySound`'s body (story 5 step 3).
-void FElysiumNpc::WerewolfExertHvySound()
-{
-	SpeakSoundConcept(GSounds10ConceptExertHeavy, GSounds10WerewolfAttenuation);
+	SpeakSoundConcept(NpcKernelSounds10Shared::GSounds10ConceptExertHeavy, GSounds10Attenuation);
 }
 
 // `CAI_BaseNPCTroika::FUN_10294ab0` (`0x10294ab0`), slot 501 `ExertLightSound`. 138 bytes, concept

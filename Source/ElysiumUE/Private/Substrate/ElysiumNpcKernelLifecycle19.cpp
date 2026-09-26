@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelLifecycle19Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -23,19 +24,12 @@
 namespace
 {
 	constexpr int32 GLifecycle19Slot420 = 420;
-	constexpr uint32 GFlOnGround = 1u;
 	constexpr float GFltMax = 3.402823466e+38f;
 
 	bool GLifecycle19InNpcInit = false;
 	int32 GLifecycle19NodeGraphHull = 0;
 	int32 GLifecycle19NodeIndexErrors = 0;
 	FElysiumEntityHandle GLifecycle19FleshpileAndrei;
-	FElysiumEntityHandle GLifecycle19MingXiaoTentacle;
-
-	double Lifecycle19Now(const FElysiumNpc& Npc)
-	{
-		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
-	}
 
 	bool Lifecycle19IsNoneSentinel(const FString& Authored)
 	{
@@ -105,11 +99,6 @@ FElysiumEntityHandle& FElysiumNpc::FleshpileAndreiSingleton()
 	return GLifecycle19FleshpileAndrei;
 }
 
-FElysiumEntityHandle& FElysiumNpc::MingXiaoTentacleCache()
-{
-	return GLifecycle19MingXiaoTentacle;
-}
-
 const TCHAR* FElysiumNpc::NpcInitThinkFunction()
 {
 	return TEXT("0x10273aa0");
@@ -132,7 +121,7 @@ void FElysiumNpc::ThinkSet(const TCHAR* Function, double Delay)
 	}
 	if (Delay != 0.0)
 	{
-		ArmThinkAt(Lifecycle19Now(*this) + Delay);
+		ArmThinkAt(NpcKernelLifecycle19Shared::Lifecycle19Now(*this) + Delay);
 	}
 }
 
@@ -279,22 +268,6 @@ void FElysiumNpc::SpawnEquipLoadout()
 	TryOne(AdditionalEquipment);
 }
 
-void FElysiumNpc::HideActiveWeaponIfAny()
-{
-	// `1038714a CALL GetActiveWeapon` / `TEST EAX,EAX / JZ` / `MOV EDX,[EAX]; JMP [EDX+0x108]` —
-	// slot 66 `Hide` on the ACTIVE WEAPON, not on this NPC. A null weapon returns with nothing
-	// written. `FElysiumWeapon::Hide` is the same body family State19 already dispatches from
-	// `CopHumanCombatantOnStateChange`, so it is called rather than counted.
-	FElysiumItem* const Active = Inventory.Active(*this);
-	FElysiumWeapon* const Weapon = Active != nullptr ? Active->AsWeapon() : nullptr;
-	if (Weapon == nullptr)
-	{
-		return;                                                          // 1038714f JZ
-	}
-	++HideActiveWeaponCalls;
-	Weapon->Hide(this);                                                  // 1038715f JMP [+0x108]
-}
-
 namespace
 {
 	// `0x101e8c50` / `0x101e8c70` / `0x101e8c30` / `0x101e8bf0` are NOT cvars: each is a seven-byte
@@ -431,48 +404,6 @@ void FElysiumNpc::ValidateRestoredInterestingPlace()
 	CurrentSpotIndex = INDEX_NONE;                                       // 10299be2
 }
 
-void FElysiumNpc::WerewolfRearm()
-{
-	// `0x103cac20`, run from BOTH `CNPC_VWerewolf::NPCInit` and `CNPC_VWerewolf::OnRestore`.
-	const double Now = Lifecycle19Now(*this);
-	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());    // 103cac2a
-	Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();        // 103cac32 +0x628c
-	WerewolfMorphTimerA = 0.f;                                           // 103cac38 +0x66a4
-	bWerewolfTaskFailed = false;                                         // 103cac3e +0x66a1
-	WerewolfSnapWordA = 0;                                               // 103cac44 +0x66a8
-	bWerewolfPlayFrustration = false;                                    // 103cac4a +0x66a9
-	WerewolfMorphTimerB = 0.f;                                           // 103cac50 +0x66d4
-	WerewolfMorphTimerC = 0.f;                                           // 103cac56 +0x66d8
-	WerewolfFakeHullPosUnits = FVector::ZeroVector;                      // 103cac62/6e/7a vec3_origin
-	// `+0x66ec` is ONE retail word carried twice in this port (`WerewolfUnhideStamp` from family
-	// Lifecycle, `WerewolfLastSeenTime` from family Positions). Both take the stamp so the two
-	// copies cannot disagree; collapsing them is the owning families' to do.
-	WerewolfUnhideStamp = Now;                                           // 103cac89 +0x66ec
-	WerewolfLastSeenTime = Now;
-	WerewolfFakeHullPushTime = Now;                                      // 103cac9f +0x66f4
-	WerewolfMoveHintSearchStart = 0;                                     // 103caca5 +0x66b8 (NULL)
-	WerewolfWord66ac = 0;                                                // 103cacab +0x66ac (NULL)
-	WerewolfHintNodeCacheA = INDEX_NONE;                                 // 103cacb1 +0x6708
-	RandomMoveHintNodeZone = INDEX_NONE;                                 // 103cacb7 +0x670c
-	WerewolfHintFlags = 0;                                               // 103cacbd +0x66e8
-	WerewolfWord66f8 = 0;                                                // 103cacc3 +0x66f8
-	WerewolfWord66fc = 0;                                                // 103cacc9 +0x66fc
-	NearestNodeToPlayerRefreshedAt = 0.0;                                // 103caccf +0x6700
-	NearestNodeToPlayer = 0;                                             // 103cacd5 +0x6704
-	// The teleport-distance floor. BOTH writes are `+=` (`103cad59` / `103cad6d` are `FADD`/`FSTP`),
-	// neither word is in the datamap, and the body runs from `NPCInit` AND `OnRestore`: retail
-	// defect 2, the floor grows with every load. The first term is the hull's horizontal half-extent
-	// (`0x102d6100` mins / `0x102d6120` maxs, `_DAT_104454d0` = 0.5), which this runtime answers
-	// through `HullMinsUnits`/`HullMaxsUnits` — a seam that is zero until a hull table stands.
-	const FVector HullMins = HullMinsUnits(false);                       // 103cace2 0x102d6100
-	const FVector HullMaxs = HullMaxsUnits(false);                       // 103cacf6 0x102d6120
-	const float HalfX = static_cast<float>(HullMaxs.X - (HullMaxs.X + HullMins.X) * HullCentreHalf);
-	const float HalfY = static_cast<float>(HullMaxs.Y - (HullMins.Y + HullMaxs.Y) * HullCentreHalf);
-	WerewolfTeleportDistanceA += FMath::Sqrt(HalfX * HalfX + HalfY * HalfY);   // 103cad59 +0x66cc
-	WerewolfTeleportDistanceB +=
-		static_cast<float>(FMath::Sqrt(WerewolfTeleportFloorSquare));    // 103cad6d +0x66d0
-}
-
 // =================================================================================================
 // `0x10273390` — `CAI_BaseNPC::NPCInit`
 // =================================================================================================
@@ -558,7 +489,7 @@ void FElysiumNpc::BaseNPCInit()
 	++BaseInitTailCalls;
 	// `1027359x`: `m_pfnUse = &LAB_10004da9`, a retail member-function pointer. This runtime
 	// dispatches `Use` through the entity's own virtual, so there is no pointer word to write.
-	const double Now = Lifecycle19Now(*this);
+	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	if (Now <= MapFirstSecond)
 	{
 		ThinkSet(NpcInitThinkFunction(), 0.0);                           // 10273aa0
@@ -613,7 +544,7 @@ void FElysiumNpc::TroikaNPCInit()
 	Senses.ResetListenClock();                                           // 1029a0fb +0x63d0 = 0
 	// `1029a101`: `m_pfnTouch = &LAB_1000cb76`, a retail member-function pointer with no port word.
 	BaseNPCInit();                                                       // 1029a10b -> 10273390
-	const double Now = Lifecycle19Now(*this);
+	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	Senses.Memory.bPlayerInPvs = true;
 	Senses.Memory.bPlayerLos = true;
 	Senses.Memory.PlayerPvsLastClearTime = Now;
@@ -836,7 +767,7 @@ void FElysiumNpc::BaseStartNPC()
 	}
 	else
 	{
-		Flags &= ~GFlOnGround;                                           // 10273b97 RemoveFlag(1)
+		Flags &= ~NpcKernelLifecycle19Shared::GFlOnGround;                                           // 10273b97 RemoveFlag(1)
 		++FloorDropSkipped;
 	}
 	if (!Target.IsEmpty())
@@ -857,7 +788,7 @@ void FElysiumNpc::BaseStartNPC()
 		}
 	}
 	InitSquad();                                                         // slot 545
-	const double Now = Lifecycle19Now(*this);
+	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	if (Now <= MapFirstSecond)
 	{
 		ThinkSet(StartNpcThinkFunction(), 0.0);
@@ -886,7 +817,7 @@ void FElysiumNpc::TroikaStartNPC()
 	ThinkSet(StartNpcThinkFunction(), 0.0);                              // re-arm
 	SetFollowerBossByAuthoredName(FollowerBossName);                     // 102c44e0
 	SetFollowerType(FollowerType);                                       // 102c4680
-	Senses.SetClosestPlayer(*this, Lifecycle19Now(*this));               // 10293a80
+	Senses.SetClosestPlayer(*this, NpcKernelLifecycle19Shared::Lifecycle19Now(*this));               // 10293a80
 }
 
 void FElysiumNpc::StartNPC()
@@ -894,91 +825,6 @@ void FElysiumNpc::StartNPC()
 	// `CNPC_VCamera` (`0x10369930`) and `CNPC_VTzimisce` (`0x103b9270`) override slot 422 on their
 	// C++ classes (story 5 step 3).
 	TroikaStartNPC();
-}
-
-void FElysiumNpc::CameraStartNPC()
-{
-	// `0x10369930` — replacement, not a chain. Drop-to-floor only when the model is `null.mdl`.
-	FString ModelName = Model;
-	if (ModelName.IsEmpty())
-	{
-		ModelName = TEXT("");
-	}
-	if (ModelName.Equals(TEXT("models/null.mdl"), ESearchCase::IgnoreCase))
-	{
-		// `10369994 CALL [EDX + 0x804]` is slot 513 `CapabilitiesGet`, `TEST AL,0x4` — the same
-		// capability bit the base body tests, NOT a solid-flags read.
-		const int32 MoveType = GetMoveType();
-		const uint32 Caps = static_cast<uint32>(CapabilitiesGet());
-		const bool bSkipDrop = MoveType == 5 || MoveType == 6
-			|| (Caps & CapabilityNoFloorDrop) != 0
-			|| (static_cast<uint32>(SpawnFlags) & SpawnFlagNoFloorDrop) != 0;
-		if (!bSkipDrop)
-		{
-			FVector OriginUnits = Origin / ElysiumMove::U;
-			const bool bHit = MoveProbeFloorDrop(OriginUnits);
-			if (!bHit)
-			{
-				++FloorDropWarnings;
-				UE_LOG(LogElysiumNpcEnt, Warning,
-					TEXT("NPC %s stuck in wall--level design error"),   // 105cc558
-					Def != nullptr ? *Def->Classname : TEXT(""));
-			}
-			Origin = OriginUnits * ElysiumMove::U;
-			++FloorDropPerformed;
-		}
-		else
-		{
-			Flags &= ~GFlOnGround;
-			++FloorDropSkipped;
-		}
-	}
-	if (!Target.IsEmpty())                                               // gated m_target != 0
-	{
-		FElysiumEntity* Found = World != nullptr ? World->FindByName(Target) : nullptr;
-		ScheduleHost.GoalEnt = Found != nullptr ? Found->Handle : FElysiumEntityHandle();
-		if (Found == nullptr)
-		{
-			UE_LOG(LogElysiumNpcEnt, Warning,
-				TEXT("ReadyNPC()--%s couldn't find target %s"),        // 10369a58 105cc528
-				Def != nullptr ? *Def->Classname : TEXT(""), *Target);
-		}
-		else
-		{
-			SetState(1);
-			InstallScheduleRetail(StartNpcGoalEntityRetailId, false);
-		}
-	}
-	InitSquad();
-	const double Now = Lifecycle19Now(*this);
-	if (Now <= MapFirstSecond)
-	{
-		ThinkSet(StartNpcThinkFunction(), 0.0);
-		const float Jitter = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
-			.FRandRange(StartNpcDelayMin, StartNpcDelayMax);
-		ArmThinkAt(Now + static_cast<double>(Jitter));
-	}
-	else
-	{
-		ThinkSet(StartNpcThinkFunction(), 0.0);
-		ArmThinkAt(Now);
-	}
-	ScriptArrivalActivity = static_cast<int32>(0xffffffff);
-	ScriptArrivalSequence.Reset();
-	if ((static_cast<uint32>(SpawnFlags) & SpawnFlagPreAimed) != 0)
-	{
-		SetState(1);
-		SetActivity(1);
-		InstallScheduleRetail(StartNpcAmbushRetailId, false);
-	}
-	ThinkSet(StartNpcThinkFunction(), 0.0);                              // final re-arm, no stamp
-}
-
-void FElysiumNpc::TzimisceStartNPC()
-{
-	TroikaStartNPC();                                                    // 1029a8b0
-	ThinkSet(StartNpcThinkFunction(), 0.0);                              // redundant re-arm
-	++TzimisceStartNpcRearms;
 }
 
 // =================================================================================================
@@ -1090,7 +936,7 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	{
 		++NodeIndexErrorCount();                                         // always OOB: no node array
 	}
-	const double Now = Lifecycle19Now(*this);
+	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	ScheduleHost.ShootAtHintNode = 0;
 	const float Jitter = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
 		.FRandRange(ShootAtHintRearmMin, ShootAtHintRearmMax);
@@ -1115,68 +961,3 @@ void FElysiumNpc::OnRestore(bool bFromLoad)
 	TroikaOnRestore(bFromLoad);
 }
 
-void FElysiumNpc::MingXiaoTentacleOnRestore(bool bFromLoad)
-{
-	TroikaOnRestore(bFromLoad);
-	MingXiaoTentacleCache() = FElysiumEntityHandle::Invalid();            // DAT_1093bd34 = -1
-}
-
-void FElysiumNpc::PedestrianOnRestore(bool bFromLoad)
-{
-	TroikaOnRestore(bFromLoad);
-	if (!bFromLoad)
-	{
-		return;
-	}
-	if (PedestrianLevelResetType == 2)
-	{
-		return;
-	}
-	if (!IsAlive() && PedestrianLevelResetType != 0)
-	{
-		return;
-	}
-	if (bHidden)                                                         // 100b5190
-	{
-		return;
-	}
-	++InventoryDestroys;
-	if (!IsAlive())
-	{
-		// `0x101cf390` with pre-death mins/maxs at +0x6660/+0x666c. No collision OBB
-		// member on this leaf; the two vectors are the restored words.
-		(void)PedestrianPreDeathMinsUnits;
-		(void)PedestrianPreDeathMaxsUnits;
-	}
-	NPCInit();                                                           // slot 420
-	ClearFollowerBossName();                                             // 102c4430 ""
-	Origin = InitialPosition;                                            // 101cf5c0 +0x62a8
-	Angles = InitialAngles;                                              // 103a264e slot 64 +0x62b4
-	// `103a26b4`–`103a27ff`: the collision block. `SetSolidFlags(0)`, then two `AddSolidFlags` of
-	// the CURRENT 16-bit word (`+0x2b4`) ORed with `1` and then `0x40`, then `SetSolid(SOLID_BBOX)`.
-	// SEAM: family Motor10's solid record is what this substrate has for a collision property, and
-	// it reproduces retail's read-OR-pass-back-and-OR-again shape.
-	RetailSolidFlags = 0;                                                // 103a26b4
-	RetailSolidFlags |= (RetailSolidFlags & 0xffffu) | 1u;               // 103a2726
-	RetailSolidFlags |= (RetailSolidFlags & 0xffffu) | 0x40u;            // 103a2798
-	RetailSolidType = 2;                                                 // 103a27ff SOLID_BBOX
-	++RetailSolidSets;
-	SetMoveType(4, 0);                                                   // 103a2816 slot 93
-	SetHullSizeNormal(false);                                            // 103a2820 10273070
-	++RestoreRelinkCalls;                                                // 103a2826 CBaseEntity::Relink
-	CreateVPhysics();                                                    // 103a2832 slot 223
-}
-
-void FElysiumNpc::TzimisceRunnerOnRestore(bool bFromLoad)
-{
-	TroikaOnRestore(bFromLoad);
-	SetAttackExtents(FVector(RunnerAttackExtentX, RunnerAttackExtentY, RunnerAttackExtentZ)
-		* ElysiumMove::U);
-	++Flag2Removals;                                                     // RemoveFlag2(4)
-}
-
-void FElysiumNpc::WerewolfOnRestore(bool bFromLoad)
-{
-	TroikaOnRestore(bFromLoad);
-	WerewolfRearm();                                                     // 103cac20
-}

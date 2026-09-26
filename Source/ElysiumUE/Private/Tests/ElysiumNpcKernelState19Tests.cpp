@@ -8,6 +8,14 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcPedestrian.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcGuard1.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcCamera.h"
+#include "Substrate/ElysiumNpcBach.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -220,7 +228,7 @@ bool FElysiumNpcKernelState19BachOnStateChangeTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcBach& N = *ElysiumTestAsSpecies<FElysiumNpcBach>(F.Guard);
 	N.bCanFightYet = false;
 	N.SetState(2);
 	TestEqual(TEXT("103639b0 snaps COMBAT back to idle while m_bCanFightYet is 0"),
@@ -241,7 +249,7 @@ bool FElysiumNpcKernelState19SabbatLeaderTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcSabbatLeader& N = *ElysiumTestAsSpecies<FElysiumNpcSabbatLeader>(F.Guard);
 	N.bSabbatLeaderActivated = false;
 	TestEqual(TEXT("103a7450 unactivated leader is IDLE"),
 		N.SelectIdealStateRetail(), 1);
@@ -263,7 +271,7 @@ bool FElysiumNpcKernelState19HumanHuntTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcHuman& N = *ElysiumTestAsSpecies<FElysiumNpcHuman>(F.Guard);
 	N.WriteNpcStateRetail(2);
 	N.HuntConVarIsCommand = false;
 	N.HuntConVarRawWord = 1.f;
@@ -284,7 +292,7 @@ bool FElysiumNpcKernelState19CameraPreSelectTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcCamera& N = *ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Guard);
 	// The camera's own first think may already have run this body and left the tag at 9, so the
 	// tag is cleared first: the assertion below then sees this call's write and not the think's.
 	N.SelectIdealStateSelector = 0;
@@ -347,7 +355,7 @@ bool FElysiumNpcKernelState19Guard1Test::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcGuard1& N = *ElysiumTestAsSpecies<FElysiumNpcGuard1>(F.Guard);
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `1037d2a4`: the arm needs the closest player to BE that channel's offender. With no offender
@@ -421,7 +429,7 @@ bool FElysiumNpcKernelState19CopTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcCop& N = *ElysiumTestAsSpecies<FElysiumNpcCop>(F.Guard);
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `103723f0`: every test is the BARE form, so the pre-pass answers with no program installed.
@@ -488,7 +496,7 @@ bool FElysiumNpcKernelState19TzimisceTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcTzimisce& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisce>(F.Guard);
 
 	// `103bd6c4`: NEW_ENEMY alone from idle — the base pairs it with SEE_ENEMY, this body does not.
 	TestEqual(TEXT("103bd690 0xd42 idle NEW_ENEMY -> COMBAT"),
@@ -548,7 +556,7 @@ bool FElysiumNpcKernelState19PedestrianTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcPedestrian& N = *ElysiumTestAsSpecies<FElysiumNpcPedestrian>(F.Guard);
 	N.Senses.Memory.ClosestPlayer = F.Player->Handle;
 
 	// `103a3450`: the flee state re-states itself with no test at all.

@@ -7,6 +7,15 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcHunter.h"
+#include "Substrate/ElysiumNpcHumanCombatant.h"
+#include "Substrate/ElysiumNpcGuard1.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -301,7 +310,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FS
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcAndreiBlood& N = *ElysiumTestAsSpecies<FElysiumNpcAndreiBlood>(Fix.Species);
 
 	// The census row: `CNPC_VAndreiBlood#127` is `0x1035cf80`, and family SaveRestore10's arm table
 	// now names this body rather than routing the row to the base.
@@ -358,7 +367,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FStr
 		{
 			continue;
 		}
-		FElysiumNpc& N = *Fix.Species;
+		FElysiumNpcChangBros& N = *ElysiumTestAsSpecies<FElysiumNpcChangBros>(Fix.Species);
 		N.VampireBossMonsterModelName = TEXT("models/character/monster/chang.mdl");
 		N.JumpGravity = 0.f;
 		N.BodyEmitterNames[0] = FString();
@@ -398,12 +407,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10PayphoneThin
 bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString&)
 {
 	FSpeciesLifecycle10Fixture Fix(TEXT("CPayphone"));
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species)
+	FElysiumNpcPayphone* Phone = ElysiumTestAsSpecies<FElysiumNpcPayphone>(Fix.Species);
+	if (!TestNotNull(TEXT("the subject spawned as a payphone"), Phone)
 		|| !TestNotNull(TEXT("the control spawned"), Fix.Troika))
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcPayphone& N = *Phone;
 	FElysiumNpc* Partner = Fix.World.Npc(TEXT("partner"));
 	if (!TestNotNull(TEXT("the partner spawned"), Partner))
 	{
@@ -475,14 +485,10 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 	TestEqual(TEXT("an unchanged activity does not re-select the sequence"), N.SequenceNumber, 4242);
 	TestEqual(TEXT("but the cycle is copied again"), N.SequenceCycle, 0.5f);
 
-	// The control: the bare Troika line, `CAI_BaseNPCTroika` with no species class over it.
-	// Its think is the Troika line's, not `FElysiumNpcPayphone::Think`: a pass leaves the payphone
-	// counters alone.
-	const int32 TroikaIdle = Fix.Troika->PayphoneIdlePasses;
-	const int32 TroikaMirror = Fix.Troika->PayphoneMirrorPasses;
-	Fix.Troika->Think();
-	TestTrue(TEXT("the bare Troika line control never takes the payphone arm"),
-		Fix.Troika->PayphoneIdlePasses == TroikaIdle && Fix.Troika->PayphoneMirrorPasses == TroikaMirror);
+	// The control: the bare Troika line, `CAI_BaseNPCTroika` with no species class over it. Its
+	// think is the Troika line's, not `FElysiumNpcPayphone::Think`, and it carries no payphone words.
+	TestNull(TEXT("the bare Troika line control is not a payphone"),
+		Fix.Troika->AsSpecies<FElysiumNpcPayphone>());
 	return true;
 }
 
@@ -502,7 +508,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest::RunTest(const FStri
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcGhoulCroucher& N = *ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(Fix.Species);
 	FElysiumPlayer* Player = Fix.World.Player();
 	FElysiumNpc* OtherNpc = Fix.World.Npc(TEXT("partner"));
 	FElysiumEntity* Prop = Fix.Entity(TEXT("notapillar"));
@@ -579,7 +585,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest::RunTest(const FStri
 	// The touch burn is 5.0; this class's own `OnVictimHitByMe` (`0x1037be80`) pushes 0x41200000 =
 	// 10.0 to the SAME body. Standing in the ghoul's fire hurts half as much as being hit by it.
 	TestEqual(TEXT("the touch burn is 5.0, against OnVictimHitByMe's 10.0"),
-		FElysiumNpc::GhoulTouchBurnDamage, 5.0f);
+		FElysiumNpcGhoulCroucher::GhoulTouchBurnDamage, 5.0f);
 	return true;
 }
 
@@ -598,7 +604,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest::RunTest(const FString
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcGargoyle& N = *ElysiumTestAsSpecies<FElysiumNpcGargoyle>(Fix.Species);
 	FElysiumEntity* Pillar = Fix.Entity(TEXT("pillar1"));
 	FElysiumEntity* Central = Fix.Entity(TEXT("pillar2"));
 	FElysiumEntity* Prop = Fix.Entity(TEXT("notapillar"));
@@ -619,11 +625,11 @@ bool FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest::RunTest(const FString
 
 	// The classname filter is the SAME predicate this class's slot-24 body uses; family Misc's
 	// `GargoyleHitsPillar` is called, not restated.
-	TestTrue(TEXT("pillar matches"), FElysiumNpc::GargoyleHitsPillar(TEXT("pillar")));
-	TestTrue(TEXT("central_pillar matches"), FElysiumNpc::GargoyleHitsPillar(TEXT("central_pillar")));
-	TestTrue(TEXT("the compare is case-insensitive"), FElysiumNpc::GargoyleHitsPillar(TEXT("PILLAR")));
+	TestTrue(TEXT("pillar matches"), FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("pillar")));
+	TestTrue(TEXT("central_pillar matches"), FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("central_pillar")));
+	TestTrue(TEXT("the compare is case-insensitive"), FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("PILLAR")));
 	TestFalse(TEXT("and whole-name: neither literal carries a trailing star"),
-		FElysiumNpc::GargoyleHitsPillar(TEXT("pillar_broken")));
+		FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("pillar_broken")));
 
 	// A non-pillar toucher: no packet, and the base body still runs.
 	N.GargoylePillarHits.Reset();
@@ -659,11 +665,9 @@ bool FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest::RunTest(const FString
 	N.TouchSpecies(Central);
 	TestEqual(TEXT("central_pillar takes the same packet"), N.GargoylePillarHits.Num(), 2);
 
-	// The control.
-	Fix.Troika->GargoylePillarHits.Reset();
+	// The control: the bare Troika line has no pillar arm and none of the Gargoyle's words.
+	TestNull(TEXT("the bare Troika line is no Gargoyle"), Fix.Troika->AsSpecies<FElysiumNpcGargoyle>());
 	Fix.Troika->TouchSpecies(Pillar);
-	TestEqual(TEXT("the bare Troika line touching a pillar does nothing to it"),
-		Fix.Troika->GargoylePillarHits.Num(), 0);
 	return true;
 }
 
@@ -682,7 +686,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcGuard1& N = *ElysiumTestAsSpecies<FElysiumNpcGuard1>(Fix.Species);
 	FElysiumNpc* OtherNpc = Fix.World.Npc(TEXT("partner"));
 	if (!TestNotNull(TEXT("another NPC stands"), OtherNpc))
 	{
@@ -719,7 +723,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 	TestTrue(TEXT("and the +0x6660 latch is raised — Guard1's body writes it, the Hunter's does not"),
 		N.bGuard1HatesPlayer);
 	TestEqual(TEXT("the literal is 0x1063bc28, 'player D_HT 10' with spaces"),
-		FString(FElysiumNpc::PlayerHateRelationshipSpec()), FString(TEXT("player D_HT 10")));
+		FString(FElysiumNpcHunter::PlayerHateRelationshipSpec()), FString(TEXT("player D_HT 10")));
 
 	// The arm is UNCONDITIONAL on the states: retail tests neither `param_1` nor `param_2` for it.
 	N.PlayerHateRelationshipSets = 0;
@@ -739,7 +743,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 	{
 		return false;
 	}
-	FElysiumNpc& Combatant = *CombatantFix.Species;
+	FElysiumNpcHumanCombatant& Combatant = *ElysiumTestAsSpecies<FElysiumNpcHumanCombatant>(CombatantFix.Species);
 	Combatant.Senses.Memory.Enemy = Combatant.World->PlayerHandle();
 	Combatant.PlayerHateRelationshipSets = 0;
 	Combatant.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
@@ -758,7 +762,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcHunter& N = *ElysiumTestAsSpecies<FElysiumNpcHunter>(Fix.Species);
 	FElysiumNpc* OtherNpc = Fix.World.Npc(TEXT("partner"));
 	if (!TestNotNull(TEXT("another NPC stands"), OtherNpc))
 	{
@@ -780,37 +784,35 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 	N.Senses.Memory.Enemy = OtherNpc->Handle;
 	N.HunterPursuitStarts = 0;
 	N.PlayerHateRelationshipSets = 0;
-	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestEqual(TEXT("an enemy that is not the player does not start a pursuit"),
 		N.HunterPursuitStarts, 0);
 
 	N.Senses.Memory.Enemy = N.World->PlayerHandle();
-	N.bGuard1HatesPlayer = false;
-	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
+	N.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 	TestEqual(TEXT("the player as enemy but NewState != COMBAT does not start a pursuit"),
 		N.HunterPursuitStarts, 0);
 
-	N.HunterStateChangePreStep(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
+	N.OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Combat);
 	TestEqual(TEXT("entering COMBAT on the player starts the pursuit"), N.HunterPursuitStarts, 1);
 	TestEqual(TEXT("and 0x10388c40 sets the relationship — WITHOUT the Guard1 latch byte"),
 		N.PlayerHateRelationshipSets, 1);
-	TestFalse(TEXT("the Hunter's body does not write +0x6660"), N.bGuard1HatesPlayer);
 	TestTrue(TEXT("m_hPursuitPlayer (+0x6664) caches the player"),
 		N.HunterPursuitPlayer == N.World->PlayerHandle());
 	TestEqual(TEXT("the player-side refcount rose"), Player->Police.HuntersInPursuit, 1);
 
 	// Arm 2: leaving COMBAT releases it. The clear comes first, the release second.
 	N.HunterPursuitStops = 0;
-	N.HunterStateChangePreStep(EElysiumNpcState::Alert, EElysiumNpcState::Idle);
+	N.OnStateChange(EElysiumNpcState::Alert, EElysiumNpcState::Idle);
 	TestEqual(TEXT("an OldState that is not COMBAT does not release"), N.HunterPursuitStops, 0);
 
-	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
+	N.OnStateChange(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
 	TestEqual(TEXT("leaving COMBAT releases the pursuit"), N.HunterPursuitStops, 1);
 	TestFalse(TEXT("and m_hPursuitPlayer is cleared"), N.HunterPursuitPlayer.IsSet());
 	TestEqual(TEXT("the player-side refcount fell back"), Player->Police.HuntersInPursuit, 0);
 
 	// A second release with no cached player does nothing: the handle term gates it.
-	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
+	N.OnStateChange(EElysiumNpcState::Combat, EElysiumNpcState::Idle);
 	TestEqual(TEXT("a release with no cached pursuit does nothing"), N.HunterPursuitStops, 1);
 	TestEqual(TEXT("so the refcount does not go negative here"),
 		Player->Police.HuntersInPursuit, 0);
@@ -818,7 +820,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 	// Both arms can fire on one call — retail evaluates arm 2 against the handle arm 1 just wrote.
 	N.HunterPursuitStarts = 0;
 	N.HunterPursuitStops = 0;
-	N.HunterStateChangePreStep(EElysiumNpcState::Combat, EElysiumNpcState::Combat);
+	N.OnStateChange(EElysiumNpcState::Combat, EElysiumNpcState::Combat);
 	TestEqual(TEXT("COMBAT -> COMBAT acquires..."), N.HunterPursuitStarts, 1);
 	TestEqual(TEXT("...and releases on the same call, which is retail's own order"),
 		N.HunterPursuitStops, 1);
@@ -843,12 +845,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodD
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest::RunTest(const FString&)
 {
-	FSpeciesLifecycle10Fixture Fix;
+	FSpeciesLifecycle10Fixture Fix(TEXT("CNPC_VAndreiBlood"));
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcAndreiBlood& N = *ElysiumTestAsSpecies<FElysiumNpcAndreiBlood>(Fix.Species);
 	FElysiumEntity* Blood = Fix.Entity(TEXT("bloodemitter"));
 	FElysiumEntity* Summon = Fix.Entity(TEXT("summonemitter"));
 	if (!TestNotNull(TEXT("the blood emitter stands"), Blood)
@@ -891,12 +893,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10WerewolfDest
 	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.DestroyWerewolf", GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10WerewolfDestroyTest::RunTest(const FString&)
 {
-	FSpeciesLifecycle10Fixture Fix;
+	FSpeciesLifecycle10Fixture Fix(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
 	{
 		return false;
 	}
-	FElysiumNpc& N = *Fix.Species;
+	FElysiumNpcWerewolf& N = *ElysiumTestAsSpecies<FElysiumNpcWerewolf>(Fix.Species);
 
 	// The one thing outside the object the body touches: `DAT_1093fac4` and the `werewolf_show_debug`
 	// ConVar behind it, both driven to 0.

@@ -30,6 +30,17 @@ _Recovered 2026-09-13, story 29b-0._
   scalar deleting destructor is slot 5.
 - Overloaded virtuals sit in reverse declaration order (MSVC): `KeyValue` 108–110, `CanStandOn`
   165/166, `GetEnemy` 167/168, `AddFacingTarget` 517–519.
+- A species offset names a word only together with its declaring class. Past `CAI_BaseNPCTroika`'s
+  last word each species line lays out its own: `+0x6664` is `CNPC_VAnimal::m_iFriendshipLevel`,
+  `CNPC_VCop::m_hPursuitPlayer`, `CNPC_VHunter::m_hPursuitPlayer`,
+  `CNPC_VHengeyokai::m_hPickupTarget` and more; `+0x6690` is Bach's `m_flNextHolyLightTime`,
+  Scurrying's `m_flDetectionDistance` and the Hengeyokai/ManBat `m_hPhysicsAnimlink`. Since 0019
+  story 5 step 4 the port binds species rows by `(declaring class, offset)`
+  (`Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp`) on the class that declares them. Descendants
+  inherit through the descriptor chain, and a sibling never sees another sibling's row. Some
+  species datamaps re-declare a Troika word, for example Hengeyokai's and Tzimisce's `+0x6458
+  m_flIgnoreCollisionTimer` and the VampireBoss line's jump words `+0x6498`..`+0x64b8`. Those are
+  bound as shadows on the inherited storage.
 
 **Unrecovered:** nothing.
 
@@ -5568,6 +5579,11 @@ one of `0x160`, `0x161` or `0x162` resolved through `0x102cc1f0`: `DevWarning` `
 The rest is unconditional, in order: `SetHullSizeSmall(1)`, `ClearMoveHint`, `ClearTeleportHint`,
 `m_pBreakHint` (`+0x66c4`) = 0, `+0x66a4` = 0, `+0x66a1` = 1, the Troika base `0x1029adb0`,
 `CheckStuck(NULL)`, `+0x66e8` = 0, `+0x6708` = `-1`, `+0x670c` = `-1`.
+
+**CORRECTION (story 5 step 4).** The `CheckStuck` call at `103ce904` is thunk `0x10012d46`, which
+lands on the werewolf's own `CNPC_VWerewolf::CheckStuck` (`0x103cb920`, `senses.md` §
+`WerewolfCheckStuck`). The port had called `CNPC_VSabbatLeader::CheckStuck` (`0x103ab580`); moving
+each body onto its class exposed it.
 
 **`HasPath`**: 120 of its 138 bytes are the scope-trace frame that supplies the name; the body is ONE
 call, `0x102ee380(m_pNavigator (+0x5d34), &start, &end)`. **The two navigator-cache stamps the

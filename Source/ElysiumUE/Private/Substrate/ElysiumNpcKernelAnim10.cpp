@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelAnim10Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -12,8 +13,8 @@
 #include "Visual/ElysiumActionTables.h"
 
 // Story 29d, families **Anim10** and **SpeciesAnim10** — activity, sequence, pose and model.
-// `ElysiumNpcKernelAnim10_2.cpp` carries `MaintainEyeDirection`, the three melee selectors and the
-// zombie idle gate. The walked prose is `docs/vtmb/npc-ai/shape.md`.
+// The three melee selectors and the zombie idle gate moved to their species classes (story 5
+// step 4). The walked prose is `docs/vtmb/npc-ai/shape.md`.
 //
 // Every body below is retail's, arm by arm, in retail's order, with the `0x10……` address on the line
 // that carries it. The standing fact of this family: **an activity id is state, not a picture.** The
@@ -30,28 +31,12 @@ namespace
 	// Spelled once, as every other family in this band spells them: the port stands no retail
 	// activity table (family Hints' `RestartIdealActivityId` records why).
 	constexpr int32 GAnim10ActReset = 0;            // ACT_RESET
-	constexpr int32 GAnim10ActIdle = 1;             // ACT_IDLE
 	constexpr int32 GAnim10ActTransition = 2;       // ACT_TRANSITION — `SetActivity`'s second refusal
-	constexpr int32 GAnim10ActFidget = 3;           // ACT_FIDGET
-	constexpr int32 GAnim10ActAim = 5;              // the armed-idle the human body rewrites 1 into
 	constexpr int32 GAnim10ActCover = 6;            // ACT_COVER
-	constexpr int32 GAnim10ActWalk = 9;             // ACT_WALK
-	constexpr int32 GAnim10ActRun = 0x13;           // ACT_RUN
-	constexpr int32 GAnim10ActWalkAim = 0x11;       // ACT_WALK_AIM
-	constexpr int32 GAnim10ActRunAim = 0x15;        // ACT_RUN_AIM
-	constexpr int32 GAnim10ActWalkRelaxed = 0x16;   // the aggressive-clear rewrite of ACT_WALK
-	constexpr int32 GAnim10ActRunRelaxed = 0x17;    // ... and of ACT_RUN
 	constexpr int32 GAnim10ActReloadFast = 0x55;    // ACT_RELOAD_FAST
-	constexpr int32 GAnim10ActDisposition = 0xf1;   // ACT_DISPOSITION
 	constexpr int32 GAnim10ActRunFrenzy = 0xf17;    // ACT_RUN_FRENZY
 	constexpr int32 GAnim10ActHuntWalk = 0x1115;    // ACT_HUNT_WALK
 	constexpr int32 GAnim10ActCombatMove = 0x1121;  // ACT_COMBATMOVE
-
-	// The six aggressive-set rewrites of `0x103854f0`, as pairs.
-	constexpr int32 GAnim10AggressivePairs[][2] = {
-		{ 0x3b, 0x3d }, { 0x3c, 0x3e }, { 0x9d, 0x9f },
-		{ 0x9e, 0xa0 }, { 0xa1, 0xa3 }, { 0xa2, 0xa4 },
-	};
 
 	// The Troika `SetActivity` families. `0x1093`..`0x1096` is the idle-fidget set and
 	// `0x1115`..`0x1117` the hunt-walk set; the request that ENTERS each arm is the family's first
@@ -61,54 +46,28 @@ namespace
 	constexpr int32 GAnim10ActHuntSetFirst = 0x1115;
 	constexpr int32 GAnim10ActHuntSetLast = 0x1117;
 
-	// The Hengeyokai's two carry activities and the Tzimisce's four body-carry variants.
-	constexpr int32 GAnim10ActPickupLightIdle = 0x128;   // 296
-	constexpr int32 GAnim10ActPickupLightCarry = 0x129;  // 297
-	constexpr int32 GAnim10ActIdleBody = 0xfc;           // 252, `m_bHeavyBodyTarget` NON-zero
-	constexpr int32 GAnim10ActIdleBodyL = 0xfd;          // 253, `m_bHeavyBodyTarget` ZERO
-	constexpr int32 GAnim10ActWalkBody = 0xfe;           // 254
-	constexpr int32 GAnim10ActWalkBodyL = 0xff;          // 255
-
-	// The Tzimisce runner's four variants, and the head claw's one.
-	constexpr int32 GAnim10ActTzIdle2 = 0x1134;    // 4404
-	constexpr int32 GAnim10ActTzFidget2 = 0x1135;  // 4405
-	constexpr int32 GAnim10ActTzWalk2 = 0x1136;    // 4406
-	constexpr int32 GAnim10ActTzRun2 = 0x1137;     // 4407
-
 	// --- The bit masks --------------------------------------------------------------------------
 	//
 	// `m_bfNPCFrenziedFlags` (+0x5b84). `0x40` is the frenzy gait and `0x20` the hurried one;
 	// `0x200` is the bit the human body treats as "aggressive, whatever the state says".
 	constexpr uint32 GAnim10FrenziedRunFrenzy = 0x40;
 	constexpr uint32 GAnim10FrenziedRunGait = 0x20;
-	constexpr uint32 GAnim10FrenziedForceAggressive = 0x200;
 
 	// `CapabilitiesGet()` (slot 513). `0x8000000` gates BOTH Troika delegates and `0x40` is the
 	// human body's no-aim-gait bit.
 	constexpr int32 GAnim10CapCoverAndReload = 0x8000000;
-	constexpr int32 GAnim10CapNoAimGait = 0x40;
 
 	// `m_afMemory` (+0x5d8c). Bit 1 (`0x2`) turns the Troika body's `ACT_IDLE` into a cover
 	// delegate; bit 27 (`0x8000000`) is the human body's own aggressive override.
 	constexpr uint32 GAnim10MemoryCoverIdle = 0x2;
-	constexpr uint32 GAnim10MemoryAggressive = 0x8000000;
-
-	// The active weapon's `+0x19c` NODRAW bit, which makes the human body treat an armed NPC as
-	// unarmed, and its slot-360 (`+0x5a0`) ranged-aim bits.
-	constexpr uint32 GAnim10WeaponNoDraw = 0x40;
-	constexpr uint32 GAnim10WeaponRangedAim = 0x6000;
 
 	// `m_bfAINPCFlags` (+0x14b8) `0x20 CARRYING_BODY` — the form bit BOTH `0x10381c80` and
 	// `0x103be130` probe, and `0x10000 FORCE_RELAXED_ANIMS`.
 	// `m_bfAINPCFlags2` (+0x14bc) `0x400 MOVE_FACE_ENEMY` and `0x80000 D_MILDLY_CRAZY`.
 
 	// --- The ConVars, rows of the tunables table (0019/4), every one read at its `+0x2c` int --------
-	using EAnim10ConVar = ElysiumNpcTunables::EConVar;
-	constexpr EAnim10ConVar GAnim10CvGait = EAnim10ConVar::DebugForceAnim;             // 0x10295590's gait override
-	constexpr EAnim10ConVar GAnim10CvAggressive = EAnim10ConVar::DebugAllowMoveFacing; // 0x103854f0's combat-aggression
-	constexpr EAnim10ConVar GAnim10CvAlert = EAnim10ConVar::DebugAlertAggressive;      // ... for m_NPCState 3
-	constexpr EAnim10ConVar GAnim10CvHunt = EAnim10ConVar::DebugHuntingAggressive;     // ... for m_NPCState 0xb
-	constexpr EAnim10ConVar GAnim10CvHitBuildup = EAnim10ConVar::NpcHitBuildupAmount;  // slot 326's buildup ceiling
+	constexpr NpcKernelAnim10Shared::EAnim10ConVar GAnim10CvGait = NpcKernelAnim10Shared::EAnim10ConVar::DebugForceAnim;             // 0x10295590's gait override
+	constexpr NpcKernelAnim10Shared::EAnim10ConVar GAnim10CvHitBuildup = NpcKernelAnim10Shared::EAnim10ConVar::NpcHitBuildupAmount;  // slot 326's buildup ceiling
 
 	// The gait override's two live values.
 	constexpr int32 GAnim10GaitForceRun = 1;
@@ -196,23 +155,6 @@ namespace
 		return Record != nullptr && Record->Ba == ElysiumReactions::KnockbackUnconditionalMarker;
 	}
 
-	// Retail's `m_NPCState` ordinals, the same table families Anim, Conditions and Sounds carry.
-	// **The retail enum is wider than this runtime's vocabulary** — 5, 6, 8, 9, 0xa, 0xb, 0xc, 0xd
-	// and 0xe have no `EElysiumNpcState` member — so the arms of `0x1029e750` that name them are
-	// ported and UNREACHABLE. Named at the body.
-	int32 Anim10RetailNpcState(EElysiumNpcState State)
-	{
-		switch (State)
-		{
-		case EElysiumNpcState::Idle:     return 1;
-		case EElysiumNpcState::Combat:   return 2;
-		case EElysiumNpcState::Alert:    return 3;
-		case EElysiumNpcState::Scripted: return 4;
-		case EElysiumNpcState::Prone:    return 6;
-		case EElysiumNpcState::Dead:     return 7;
-		default:                         return 0;
-		}
-	}
 }
 
 // =================================================================================================
@@ -297,16 +239,6 @@ int32 FElysiumNpc::HitBuildupConVarValue()
 	// ceiling: `npc_hit_buildup_amount`, "2". `FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow` is
 	// the player-side reading of the same ConVar (`docs/vtmb/combat-and-damage.md`).
 	return ElysiumNpcTunables::ConVarInt(GAnim10CvHitBuildup);
-}
-
-uint32 FElysiumNpc::ActiveWeaponDrawFlags() const
-{
-	// The active weapon's `+0x19c`, whose bit `0x40 NODRAW` makes `0x103854f0` treat an armed body as
-	// unarmed. SEAM: no port member carries the weapon's draw flags — the port's weapon state is the
-	// item catalogue row, which has no such word — so this answers 0, the arm in which the weapon
-	// DOES draw and the aggressive decision tree runs. Answering `0x40` would clear
-	// `m_bAggressiveAnims` for every armed body and make the whole tree unreachable.
-	return 0u;
 }
 
 bool FElysiumNpc::EntityUnselectable() const
@@ -438,8 +370,8 @@ void FElysiumNpc::SetActivityAndSequence(int32 Activity, int32 Sequence, int32 T
 		//    cycle carry, which is what keeps a footfall in phase across a gait change.
 		const bool bSameSequenceLooped =
 			static_cast<float>(Sequence) == static_cast<float>(SequenceNumber) && bSequenceLoopedOnce;
-		const bool bOldIsGait = ActivityNumber == GAnim10ActWalk || ActivityNumber == GAnim10ActRun;
-		const bool bNewIsGait = Activity == GAnim10ActWalk || Activity == GAnim10ActRun;
+		const bool bOldIsGait = ActivityNumber == NpcKernelAnim10Shared::GAnim10ActWalk || ActivityNumber == NpcKernelAnim10Shared::GAnim10ActRun;
+		const bool bNewIsGait = Activity == NpcKernelAnim10Shared::GAnim10ActWalk || Activity == NpcKernelAnim10Shared::GAnim10ActRun;
 		if (!bSameSequenceLooped && !(bOldIsGait && bNewIsGait))
 		{
 			SequenceCycle = 0.f;   // +0x06f8 m_flCycle
@@ -643,9 +575,9 @@ void FElysiumNpc::TroikaSetActivity(int32 Activity)
 		}
 		if (NpcFlags.HasFrenzied(GAnim10FrenziedRunGait))
 		{
-			if (ActivityNumber != GAnim10ActRun)
+			if (ActivityNumber != NpcKernelAnim10Shared::GAnim10ActRun)
 			{
-				BaseSetActivity(GAnim10ActRun);
+				BaseSetActivity(NpcKernelAnim10Shared::GAnim10ActRun);
 			}
 			return;
 		}
@@ -700,51 +632,6 @@ void FElysiumNpc::TroikaSetActivity(int32 Activity)
 	BaseSetActivity(Activity);
 }
 
-void FElysiumNpc::TzimisceHeadClawSetActivity(int32 Activity)
-{
-	// `CNPC_VTzimisceHeadClaw::SetActivity` `0x103c1cd0`, 55 bytes. ONE rewrite in front of the
-	// Troika body: request 9 `ACT_WALK` with a non-null slot 167 `GetEnemy` becomes `0x1136
-	// ACT_TZ_WALK2`. Request 9 WITHOUT an enemy, and every other request, forwards unchanged.
-	if (Activity == GAnim10ActWalk && GetEnemy() != nullptr)   // vtable +0x29c
-	{
-		TroikaSetActivity(GAnim10ActTzWalk2);   // the direct `thunk_FUN_10295750`
-		return;
-	}
-	TroikaSetActivity(Activity);
-}
-
-void FElysiumNpc::TzimisceRunnerSetActivity(int32 Activity)
-{
-	// `CNPC_VTzimisceRunner::SetActivity` `0x103c3d80`, 110 bytes. A five-entry request remap in
-	// front of the Troika body, gated on the form byte `+0x6672` being non-zero, tested in retail's
-	// own order — 1, 9, 0x13, 3, 0xf1 — and NOT in numeric order.
-	int32 Request = Activity;
-	if (bTzimisceRunnerForm)
-	{
-		if (Activity == GAnim10ActIdle)
-		{
-			Request = GAnim10ActTzIdle2;
-		}
-		else if (Activity == GAnim10ActWalk)
-		{
-			Request = GAnim10ActTzWalk2;
-		}
-		else if (Activity == GAnim10ActRun)
-		{
-			Request = GAnim10ActTzRun2;
-		}
-		else if (Activity == GAnim10ActFidget)
-		{
-			Request = GAnim10ActTzFidget2;
-		}
-		else if (Activity == GAnim10ActDisposition)
-		{
-			Request = GAnim10ActTzIdle2;
-		}
-	}
-	TroikaSetActivity(Request);
-}
-
 // =================================================================================================
 // Slot 375 `NPC_EarlyTranslateActivity` — one slot, six retail bodies.
 // =================================================================================================
@@ -766,14 +653,14 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	const int32 Gait = ElysiumNpcTunables::ConVarInt(GAnim10CvGait);
 	if (Gait == GAnim10GaitForceRun)
 	{
-		if (Request == GAnim10ActWalk || Request == GAnim10ActHuntWalk)
+		if (Request == NpcKernelAnim10Shared::GAnim10ActWalk || Request == GAnim10ActHuntWalk)
 		{
-			Request = GAnim10ActRun;
+			Request = NpcKernelAnim10Shared::GAnim10ActRun;
 		}
 	}
-	else if (Gait == GAnim10GaitForceWalk && Request == GAnim10ActRun)
+	else if (Gait == GAnim10GaitForceWalk && Request == NpcKernelAnim10Shared::GAnim10ActRun)
 	{
-		Request = GAnim10ActWalk;
+		Request = NpcKernelAnim10Shared::GAnim10ActWalk;
 	}
 
 	// 2. The frenzy word. Bit 0x40 wins outright over bit 0x20 — they are an `else if` in retail, not
@@ -781,8 +668,8 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	bool bRewroteGait = false;
 	if (NpcFlags.HasFrenzied(GAnim10FrenziedRunFrenzy))
 	{
-		if (Request == GAnim10ActRunRelaxed || Request == GAnim10ActWalk || Request == GAnim10ActRun
-			|| Request == GAnim10ActWalkRelaxed || Request == GAnim10ActHuntWalk
+		if (Request == NpcKernelAnim10Shared::GAnim10ActRunRelaxed || Request == NpcKernelAnim10Shared::GAnim10ActWalk || Request == NpcKernelAnim10Shared::GAnim10ActRun
+			|| Request == NpcKernelAnim10Shared::GAnim10ActWalkRelaxed || Request == GAnim10ActHuntWalk
 			|| Request == GAnim10ActCombatMove)
 		{
 			Request = GAnim10ActRunFrenzy;
@@ -791,10 +678,10 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	}
 	else if (NpcFlags.HasFrenzied(GAnim10FrenziedRunGait))
 	{
-		if (Request == GAnim10ActHuntWalk || Request == GAnim10ActWalk
-			|| Request == GAnim10ActWalkRelaxed || Request == GAnim10ActCombatMove)
+		if (Request == GAnim10ActHuntWalk || Request == NpcKernelAnim10Shared::GAnim10ActWalk
+			|| Request == NpcKernelAnim10Shared::GAnim10ActWalkRelaxed || Request == GAnim10ActCombatMove)
 		{
-			Request = GAnim10ActRun;
+			Request = NpcKernelAnim10Shared::GAnim10ActRun;
 			bRewroteGait = true;
 		}
 	}
@@ -803,9 +690,9 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	//    of those arms `goto LAB_10295655` past this test. UNOBSERVABLE, because 3 is in neither
 	//    rewrite set, so a request that reaches step 2 as 3 leaves it as 3 either way. Recorded and
 	//    reproduced because the listing says so.
-	if (!bRewroteGait && Request == GAnim10ActFidget)
+	if (!bRewroteGait && Request == NpcKernelAnim10Shared::GAnim10ActFidget)
 	{
-		Request = GAnim10ActIdle;
+		Request = NpcKernelAnim10Shared::GAnim10ActIdle;
 	}
 
 	// 4. BOTH delegates sit under capability bit `0x8000000`, and each RETURNS the delegate's answer
@@ -819,7 +706,7 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 			return GetReloadActivity(CurrentHintPointer());   // slot 570, vtable +0x8e8
 		}
 		if (Request == GAnim10ActCover
-			|| (Request == GAnim10ActIdle
+			|| (Request == NpcKernelAnim10Shared::GAnim10ActIdle
 				&& (ScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0))
 		{
 			return GetCoverActivity(CurrentHintPointer());    // slot 569, vtable +0x8e4
@@ -836,228 +723,6 @@ int32 FElysiumNpc::BaseCombatCharacterNpcEarlyTranslateActivity(int32 Activity) 
 	// SEAM: it is not an NPC-kernel row and no census class below `CAI_BaseNPCTroika` overrides it;
 	// it answers the activity UNCHANGED, which is the identity every recovered caller relies on.
 	return Activity;
-}
-
-int32 FElysiumNpc::DogNpcEarlyTranslateActivity(int32 Activity)
-{
-	// `CNPC_VDog::NPC_EarlyTranslateActivity` `0x10374ad0`, 21 bytes. ONE early return the Troika
-	// base never sees: retail preserves `ACT_FIDGET` by returning with `EAX` still holding the
-	// request. Everything else forwards to `0x10295590`.
-	if (Activity == GAnim10ActFidget)
-	{
-		return Activity;
-	}
-	return TroikaNpcEarlyTranslateActivity(Activity);   // the direct thunk `0x10295590`
-}
-
-int32 FElysiumNpc::HengeyokaiNpcEarlyTranslateActivity(int32 Activity)
-{
-	// `CNPC_VHengeyokai::NPC_EarlyTranslateActivity` `0x10381b50`, 61 bytes.
-	if (HengeyokaiCarryFormBit())
-	{
-		if (Activity == GAnim10ActIdle)
-		{
-			return GAnim10ActPickupLightIdle;
-		}
-		if (Activity == GAnim10ActWalk || Activity == GAnim10ActRun)
-		{
-			return GAnim10ActPickupLightCarry;
-		}
-	}
-	// Every other request, and the whole bit-clear case, tail-calls the HUMAN body — not the Troika
-	// one — which itself chains the Troika pre-translate.
-	return HumanNpcEarlyTranslateActivity(Activity);
-}
-
-bool FElysiumNpc::HengeyokaiCarryFormBit() const
-{
-	// `thunk_FUN_10381c80(this)` — `m_bfAINPCFlags` (`+0x14b8`) bit 5, `0x20 CARRYING_BODY`.
-	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
-}
-
-bool FElysiumNpc::TzimisceCarryFormBit() const
-{
-	// `thunk_FUN_103be130(this)` — the SAME `+0x14b8` bit 5 on `CNPC_VTzimisce`.
-	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
-}
-
-int32 FElysiumNpc::HumanNpcEarlyTranslateActivity(int32 Activity)
-{
-	// `CNPC_VHuman::NPC_EarlyTranslateActivity` `0x103854f0`, 565 bytes, slot 375 for 39 census
-	// classes. The armed/alert decision tree, then the rewrites.
-	int32 Request = Activity;
-
-	// 1. Capability bit 0x40 removes aim from a gait request.
-	if ((CapabilitiesGet() & GAnim10CapNoAimGait) != 0)
-	{
-		if (Request == GAnim10ActWalkAim)
-		{
-			Request = GAnim10ActWalk;
-		}
-		else if (Request == GAnim10ActRunAim)
-		{
-			Request = GAnim10ActRun;
-		}
-	}
-
-	// 2. No active weapon, or one whose `+0x19c` carries `0x40 NODRAW`: `m_bAggressiveAnims` is
-	//    CLEARED and the request goes straight to the Troika pre-translate, skipping BOTH rewrite
-	//    blocks. Retail calls `GetActiveWeapon()` twice here; the second call is what reads `+0x19c`.
-	const FElysiumEntity* Weapon = ActiveWeaponEntity();
-	if (Weapon == nullptr || (ActiveWeaponDrawFlags() & GAnim10WeaponNoDraw) == GAnim10WeaponNoDraw)
-	{
-		bAggressiveAnims = false;
-		return TroikaNpcEarlyTranslateActivity(Request);
-	}
-
-	// 3. The decision tree, in retail's own nesting. The OUTER test is a four-term OR: the aggressive
-	//    arm is taken only when capability `0x40` is set AND the ConVar `debug_allow_move_facing`
-	//    (`DAT_10924f74`, ships 1) is non-zero AND `m_bfAINPCFlags2` carries `0x400 MOVE_FACE_ENEMY`.
-	const bool bCombatAggressive = (CapabilitiesGet() & GAnim10CapNoAimGait) != 0
-		&& ElysiumNpcTunables::ConVarInt(GAnim10CvAggressive) != 0
-		&& NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY);
-	if (bCombatAggressive)
-	{
-		bAggressiveAnims = true;
-	}
-	else if (NpcFlags.Has(EElysiumNpcFlag::FORCE_RELAXED_ANIMS))
-	{
-		// `m_bfAINPCFlags & 0x10000` wins over everything below it.
-		bAggressiveAnims = false;
-	}
-	else if (NpcFlags.HasFrenzied(GAnim10FrenziedForceAggressive))
-	{
-		// `m_bfNPCFrenziedFlags & 0x200` skips the state ladder entirely and sets the flag.
-		bAggressiveAnims = true;
-	}
-	else
-	{
-		// The state ladder. Retail CLEARS the flag first and then decides, which is why a state
-		// outside {2, 3, 0xb} leaves it clear.
-		bAggressiveAnims = false;
-		const int32 State = Anim10RetailNpcState(Mind.State());
-		if (State == 2)
-		{
-			bAggressiveAnims = true;
-		}
-		else if (State == 3 || State == 0xb)
-		{
-			// **THE POLARITY, read at the listing.** `goto LAB_10385611` — which leaves the flag
-			// CLEAR — requires `(probe != 0 || cv[0xb] == 0) && (m_afMemory & 0x8000000) == 0`, i.e.
-			// the ConVar is dead or zero AND the memory bit is clear. So the flag is SET when the
-			// ConVar is live and non-zero, OR `m_afMemory` carries `0x8000000`. The pack-07 walk had
-			// this arm inverted; the body wins.
-			const int32 StateConVar = State == 3
-				? ElysiumNpcTunables::ConVarInt(GAnim10CvAlert)   // `debug_alert_aggressive`, 0
-				: ElysiumNpcTunables::ConVarInt(GAnim10CvHunt);   // `debug_hunting_aggressive`, 1
-			const bool bMemory =
-				(ScheduleHost.MemoryBits & GAnim10MemoryAggressive) != 0;
-			if (StateConVar != 0 || bMemory)
-			{
-				bAggressiveAnims = true;
-			}
-		}
-	}
-
-	// 4. Aggressive CLEAR rewrites the two gaits into their relaxed forms — through the Troika body,
-	//    not by returning directly.
-	if (!bAggressiveAnims)
-	{
-		if (Request == GAnim10ActWalk)
-		{
-			return TroikaNpcEarlyTranslateActivity(GAnim10ActWalkRelaxed);
-		}
-		if (Request == GAnim10ActRun)
-		{
-			return TroikaNpcEarlyTranslateActivity(GAnim10ActRunRelaxed);
-		}
-		return TroikaNpcEarlyTranslateActivity(Request);
-	}
-
-	// 5. Aggressive SET. `ACT_IDLE` becomes the armed idle ONLY when there is an active weapon whose
-	//    slot 360 answer carries `0x6000`; retail re-fetches the weapon twice here too, and a null
-	//    one falls out of the switch rather than taking the rewrite.
-	if (Request == GAnim10ActIdle)
-	{
-		if (ActiveWeaponEntity() != nullptr
-			&& (ActiveWeaponCapabilityWord() & GAnim10WeaponRangedAim) != 0)
-		{
-			return TroikaNpcEarlyTranslateActivity(GAnim10ActAim);
-		}
-		return TroikaNpcEarlyTranslateActivity(Request);
-	}
-	for (const int32(&Pair)[2] : GAnim10AggressivePairs)
-	{
-		if (Request == Pair[0])
-		{
-			return TroikaNpcEarlyTranslateActivity(Pair[1]);
-		}
-	}
-	// 6. Everything else falls to the Troika pre-translate unchanged.
-	return TroikaNpcEarlyTranslateActivity(Request);
-}
-
-int32 FElysiumNpc::TzimisceNpcEarlyTranslateActivity(int32 Activity)
-{
-	// `CNPC_VTzimisce::NPC_EarlyTranslateActivity` `0x103bde40`, 102 bytes.
-	if (TzimisceCarryFormBit())
-	{
-		// **The polarity is the ZERO test**: `m_bHeavyBodyTarget` CLEAR takes the `_L` variants
-		// (0xfd / 0xff) and SET takes the plain ones (0xfc / 0xfe). The generated table's
-		// `BodySideLeft` comment read it the other way round; the listing's `CMP byte, 0` is what
-		// this follows, and the generator's comment is corrected with it.
-		if (!bHeavyBodyTarget)
-		{
-			if (Activity == GAnim10ActIdle)
-			{
-				return GAnim10ActIdleBodyL;
-			}
-			if (Activity == GAnim10ActWalk || Activity == GAnim10ActRun)
-			{
-				return GAnim10ActWalkBodyL;
-			}
-		}
-		else
-		{
-			if (Activity == GAnim10ActIdle)
-			{
-				return GAnim10ActIdleBody;
-			}
-			if (Activity == GAnim10ActWalk || Activity == GAnim10ActRun)
-			{
-				return GAnim10ActWalkBody;
-			}
-		}
-	}
-	return TroikaNpcEarlyTranslateActivity(Activity);   // the direct `thunk_FUN_10295590`
-}
-
-int32 FElysiumNpc::TzimisceRunnerNpcEarlyTranslateActivity(int32 Activity)
-{
-	// `CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity` `0x103c3e10`, 82 bytes. It chains the Troika
-	// body FIRST and only then remaps the TRANSLATED activity, so it is a POST-PASS on the base's
-	// answer and not a replacement — which is exactly why its slot-310 twin `0x103c3d80` remaps the
-	// REQUEST instead and the two look alike but are not.
-	int32 Translated = TroikaNpcEarlyTranslateActivity(Activity);
-	if (bTzimisceRunnerForm)
-	{
-		switch (Translated)
-		{
-		case GAnim10ActIdle:
-		case GAnim10ActDisposition:
-			Translated = GAnim10ActTzIdle2;
-			break;
-		case GAnim10ActFidget:
-			return GAnim10ActTzFidget2;
-		case GAnim10ActWalk:
-			return GAnim10ActTzWalk2;
-		case GAnim10ActRun:
-			return GAnim10ActTzRun2;
-		default:
-			break;
-		}
-	}
-	return Translated;
 }
 
 // =================================================================================================
@@ -1259,7 +924,7 @@ int32 FElysiumNpc::Slot359(FElysiumEntity* Observer)
 	// The `m_NPCState` switch. **Six of its cases name retail states this runtime's
 	// `EElysiumNpcState` has no member for** — 5, 8, 9, 0xa, 0xb, 0xd and 0xe — so those arms are
 	// ported and UNREACHABLE until the state vocabulary widens. Named, not dropped.
-	switch (Anim10RetailNpcState(Mind.State()))
+	switch (NpcKernelAnim10Shared::Anim10RetailNpcState(Mind.State()))
 	{
 	case 2:
 	case 0xb:
@@ -1347,7 +1012,7 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 		return (ScheduleHost.MemoryBits & GAnim10MemoryCoverIdle) != 0;
 	case ENpcPredicate::NoAimGait:
 		// `0x103854f0` step 1: capability bit `0x40`.
-		return (const_cast<FElysiumNpc*>(this)->CapabilitiesGet() & GAnim10CapNoAimGait) != 0;
+		return (const_cast<FElysiumNpc*>(this)->CapabilitiesGet() & NpcKernelAnim10Shared::GAnim10CapNoAimGait) != 0;
 	case ENpcPredicate::ArmedAlert:
 		// `0x103854f0`'s whole decision tree, answered as the ONE flag it writes. The flag is the
 		// branch: every rewrite below it reads `m_bAggressiveAnims` and nothing else.
@@ -1363,7 +1028,7 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 	case ENpcPredicate::RangedAimCapable:
 		// `0x103854f0` step 5: the active weapon's slot-360 answer carries `0x6000`.
 		return ActiveWeaponEntity() != nullptr
-			&& (ActiveWeaponCapabilityWord() & GAnim10WeaponRangedAim) != 0;
+			&& (ActiveWeaponCapabilityWord() & NpcKernelAnim10Shared::GAnim10WeaponRangedAim) != 0;
 	case ENpcPredicate::LaughIdleFlagged:
 		// `m_bfAINPCFlags2 & 0x80000` — the Troika CLASS-translation's laugh-idle gate, the same bit
 		// slot 359 reads as `D_MILDLY_CRAZY`.

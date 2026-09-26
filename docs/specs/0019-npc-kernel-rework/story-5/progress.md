@@ -1,16 +1,28 @@
-# Story 5 — step 4 in progress (4a committed)
+# Story 5 — step 4 accepted, awaiting its commit
 
-**Step 4 (species bodies, words and bindings) started 2026-09-26.** Packet 4a (records and checker,
-no C++) lands as its own commit: [packets/4a-preflight.md](packets/4a-preflight.md),
-[moves-step4.tsv](moves-step4.tsv) (1,504 rows), [fields-step4.tsv](fields-step4.tsv) (248 datamap
-records), [decisions-step4.json](decisions-step4.json). `--check step4` is PENDING with both
-manifests matching; `--check step3` now reads the accepted step-3 tree `21bb56cf`. Evidence root:
-`$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step4/` (draft tools, inventories).
+**Step 4 (species bodies, words and bindings), 2026-09-26.** 4a landed as its own commit
+(`9f087e42`). Packets 4b–4i form one uncommitted change on `0019-5-class-tree`, recorded in
+[packets/4-species-bodies-words-bindings.md](packets/4-species-bodies-words-bindings.md) (with the
+[4b](packets/4b-generator-and-bindings.md) and [4c](packets/4c-carriers-and-relocation.md) records),
+[moves-step4.tsv](moves-step4.tsv), [fields-step4.tsv](fields-step4.tsv),
+[decisions-step4.json](decisions-step4.json), [expectations/step-4.json](expectations/step-4.json)
+and [acceptance-step4.json](acceptance-step4.json). Manifest phase 4, revision
+`step-4-species-bodies-words-bindings`.
 
-Next: 4b (generator, class-qualified species shape map, species bindings) through 4i, all in one
-commit. Open for the owner: the rats' detection/fright bodies have no port caller (Scurrying
-`GatherConditions` `0x103ac500` and `StartTask` `0x103ac740` are story-8 residue); step 4 binds the
-keys and asserts the bodies directly unless the step is widened.
+Outcome: every introduced species' bodies, words and datamap bindings live on its own class. The
+class-keyed tables became override bodies (six survivors hold only Troika or deferred rows), and the
+tutorial rats' eight keys land through `Construct`. Retail corrections: the MingXiao proxy gate, the
+Werewolf `TaskFail` → own `CheckStuck`, the Scurrying flee march, and the merged and split carriers.
+
+Validation on the final tree: build green; **1,270 Substrate + 14 Content + 1 PlayerWorld**, zero
+failures; `test_delta` against step 3's final gate passes with 107 reviewed expectations; five
+generator checks, pytest (142) and `kernel_migration --check step0/1/2/factories/step3/step4` pass.
+Map smoke (`sp_tutorial_1`, `ch_fishmarket_1`, `sp_giovanni_2b`, `hw_warrens_4`, `sm_pawnshop_1`)
+shows no Elysium errors. It ran before the last two-word move; that move changed no behaviour, and
+the full gate reran afterwards. Combat was not driven in game.
+
+Carried forward: the Scurrying callers `0x103ac500`/`0x103ac740` (story 8 pass I); deferred homes and
+the surviving tables until steps 7-10; step 5 renames the two `Base*` helpers.
 
 ## Step 3 (accepted, `21bb56cf`)
 

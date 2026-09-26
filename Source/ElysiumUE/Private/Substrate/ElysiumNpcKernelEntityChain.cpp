@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelEntityChainShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
@@ -37,9 +38,6 @@ namespace
 	// regularly merged with others.
 	// ---------------------------------------------------------------------------------------------
 
-	// `_DAT_104454c4` — the image's shared `0.0f` (1,328 readers, no writer;
-	// `docs/vtmb/npc-ai/shape.md` § slot 568).
-	constexpr float GChainZero = 0.0f;
 	// `_DAT_104454c0` — the image's shared `1.0f` (`docs/vtmb/animation_and_movers.md` line 659
 	// reads the same word as `1.0f`; `docs/vtmb/npc-ai/shape.md` line 1029 "clamped up to
 	// `_DAT_104454c0 = 1.0`").
@@ -97,11 +95,6 @@ namespace
 	// retail returns the caller's own pointer, so there is no such place and the port answers null
 	// too. Declared for readability at the one site.
 
-	// The `CPayphone#612` speech sound flags.
-	constexpr int32 GChainPayphoneFlagsFinal = 0xa80;
-	constexpr int32 GChainPayphoneFlagsNotFinal = 0xe80;
-	// `CPayphone#35`'s capability bitmask.
-	constexpr int32 GChainPayphoneUseCaps = 0x2f;
 	// `0x10182a90`'s fixed "over threshold" answer.
 	constexpr int32 GChainClosestNpcOverThreshold = 0x264;
 
@@ -329,27 +322,13 @@ void FElysiumNpc::FireGlobalActsOutput(int32 RecordOffset)
 	UnrecoveredChainCalls.Add(FString::Printf(TEXT("0x1023dcd0+0x%x FireOutput"), RecordOffset));
 }
 
-bool FElysiumNpc::HeightenedAlertDurationCvar(float& OutSeconds) const
-{
-	// `DAT_10725f74` is **`debug_heightened_alert_expire_time`** — recovered by joining this walk to
-	// `docs/vtmb/player-entity.md` § "Law, Masquerade and world response", which names the ConVar
-	// this body's timer is scheduled from.
-	//
-	// **SEAM**: the kernel stands no ConVar table, so `IsCommand()` answers true and retail's own
-	// `_DAT_104454c4` = 0.0 arm runs — the alert expires the instant it is armed. That is the
-	// recovered refusal and not a chosen duration; the DURATION lives in `Substrate/ElysiumLaw.h`'s
-	// own copy of the same cvar.
-	OutSeconds = GChainZero;
-	return false;
-}
-
 bool FElysiumNpc::SpawnResponseCopsDelayCvars(float& OutLow, float& OutHigh) const
 {
 	// SEAM for `DAT_10725894` (the high bound) and `DAT_107257bc` (the low bound). Both NAMES
 	// **unrecovered**. Retail's `IsCommand()` arms write literal `0` and `_DAT_104454c4` = 0.0, so
 	// the draw is over an empty range.
-	OutLow = GChainZero;
-	OutHigh = GChainZero;
+	OutLow = NpcKernelEntityChainShared::GChainZero;
+	OutHigh = NpcKernelEntityChainShared::GChainZero;
 	return false;
 }
 
@@ -566,14 +545,14 @@ float FElysiumNpc::Slot135(float Interval)
 	{
 		return Interval;
 	}
-	if (!(Interval > GChainZero && Rebound.MoveDoneTime > GChainZero
-		&& Rebound.StartTime > GChainZero && Rebound.StartTime < Rebound.MoveDoneTime
-		&& Rebound.Duration > GChainZero))
+	if (!(Interval > NpcKernelEntityChainShared::GChainZero && Rebound.MoveDoneTime > NpcKernelEntityChainShared::GChainZero
+		&& Rebound.StartTime > NpcKernelEntityChainShared::GChainZero && Rebound.StartTime < Rebound.MoveDoneTime
+		&& Rebound.Duration > NpcKernelEntityChainShared::GChainZero))
 	{
 		return Interval;
 	}
 	float T = (Interval + Rebound.LocalTime) - Rebound.StartTime;
-	if (T <= GChainZero)
+	if (T <= NpcKernelEntityChainShared::GChainZero)
 	{
 		return Interval;
 	}
@@ -920,42 +899,6 @@ float FElysiumNpc::LastAiThink() const
 	// Lifecycle's `LastUpdateThink` / `LastNormalThink` / `LastMoveThink`. This runtime carries the
 	// word as `FElysiumNpcScheduleHost::LastAI`.
 	return static_cast<float>(ScheduleHost.LastAI);
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CPayphone` — three species bodies on a class this runtime's NPC leaf does not stand.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::PayphoneAddSceneEvent(const void* Scene, const void* Event)
-{
-	// 0x101aad90, `CPayphone#286` — the body is `return;` with both parameters ignored. Only
-	// `CPayphone` fills slot 286 with it, so `default:void` does not formally apply and it lands as
-	// a body: a payphone swallows every choreographed-scene event instead of queueing it the way
-	// `CBaseFlex::AddSceneEvent` (family Anim's `AddSceneEventBase`) would.
-	(void)Scene;
-	(void)Event;
-}
-
-int32 FElysiumNpc::PayphoneSpeechSoundFlags() const
-{
-	// 0x101aadb0, `CPayphone#612`. Slot 612 is the speech sound FLAGS the line emitter
-	// (`0x102c0520`) passes to `EmitSound` (`docs/vtmb/npc-kernel/signatures.md` slot 612).
-	//
-	//   bDialogQueIsFinal set   -> 0xa80
-	//   bDialogQueIsFinal clear -> 0xe80
-	//
-	// Note the sign against the Troika line's own body (`0x102c04b0`), which returns `0x680` when
-	// the flag is CLEAR and the partner is live: the payphone's two answers differ by `0x400` in the
-	// opposite direction, so a payphone's LAST line is the quiet one and the Troika line's is not.
-	return Dialogue.bDialogQueIsFinal ? GChainPayphoneFlagsFinal : GChainPayphoneFlagsNotFinal;
-}
-
-int32 FElysiumNpc::PayphoneUseCaps(FElysiumEntity* Other)
-{
-	// 0x101aa950, `CPayphone#35` — `return CanTalk(other) ? 0x2f : 0;`. The whole mask behind one
-	// virtual: slot 295 (`+0x49c`), which is family 29d's `CanTalk`. `-(c != 0) & 0x2f` is the
-	// compiler's branchless spelling of that conditional and nothing more.
-	return CanTalk(Other) ? GChainPayphoneUseCaps : 0;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1313,7 +1256,7 @@ void FElysiumNpc::SetSpawnResponseCops(int32 Level, FElysiumEntity* Source, cons
 		// behavioural difference.
 		const float Delay = (High > Low)
 			? ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(Low, High)
-			: GChainZero;
+			: NpcKernelEntityChainShared::GChainZero;
 		const float Now = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f;
 		SpawnResponseCopsTimer = Delay + Now;
 	}
@@ -1462,4 +1405,18 @@ void FElysiumNpc::RememberScaredNpc(int32 Priority, FElysiumEntity* Npc)
 	// the NPC instead and says so.
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Scared NPC: %d (dist: unrecovered +0x6264)"),
 		Npc->Handle.Index);
+}
+
+bool FElysiumNpc::HeightenedAlertDurationCvar(float& OutSeconds) const
+{
+	// `DAT_10725f74` is **`debug_heightened_alert_expire_time`** — recovered by joining this walk to
+	// `docs/vtmb/player-entity.md` § "Law, Masquerade and world response", which names the ConVar
+	// this body's timer is scheduled from.
+	//
+	// **SEAM**: the kernel stands no ConVar table, so `IsCommand()` answers true and retail's own
+	// `_DAT_104454c4` = 0.0 arm runs — the alert expires the instant it is armed. That is the
+	// recovered refusal and not a chosen duration; the DURATION lives in `Substrate/ElysiumLaw.h`'s
+	// own copy of the same cvar.
+	OutSeconds = NpcKernelEntityChainShared::GChainZero;
+	return false;
 }

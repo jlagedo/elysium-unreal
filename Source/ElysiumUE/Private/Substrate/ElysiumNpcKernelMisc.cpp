@@ -35,9 +35,6 @@ namespace
 	// readers, bound to the tunables table.
 	constexpr float GMiscZeroFloat = ElysiumNpcTunables::Zero;
 	constexpr float GMiscOneFloat = ElysiumNpcTunables::One;
-	constexpr double GMiscHalfDouble = ElysiumNpcTunables::HalfDouble;
-	constexpr float GMiscYawHigh = ElysiumNpcTunables::OneTwenty;
-	constexpr double GMiscZeroDouble = ElysiumNpcTunables::ZeroDouble;
 
 	// `m_bfAINPCFlags` (+0x14b8) bit `0x20`, the carry bit `0x10381c00` toggles.
 	constexpr EElysiumNpcFlag GMiscCarryingBody = EElysiumNpcFlag::CARRYING_BODY;
@@ -50,13 +47,6 @@ namespace
 	// `CNPC_VHengeyokai`'s fish-timer draw, `0x40a00000` / `0x41000000` at `0x10381c00`.
 	constexpr float GMiscFishTimerMin = 5.f;
 	constexpr float GMiscFishTimerMax = 8.f;
-
-	// `CNPC_VYukie`'s two melee draws: `0x41b40000` / `0x42340000` at `0x103dd8b0` and
-	// `0x40a00000` / `0x41200000` at `0x103dd9a0`.
-	constexpr float GMiscYukieMustLeaveMin = 22.5f;
-	constexpr float GMiscYukieMustLeaveMax = 45.f;
-	constexpr float GMiscYukieCanEnterMin = 5.f;
-	constexpr float GMiscYukieCanEnterMax = 10.f;
 
 	// `CAI_StandoffBehavior::vfunc26`'s three literals, in retail's own write order.
 	constexpr float GMiscStandoffAim5c = 5.f;       // 0x40a00000 -> this+0x5c
@@ -75,22 +65,6 @@ namespace
 	// The two conditions slot 592 reads, by retail number.
 	constexpr EElysiumNpcCond GMiscCoverEnemyOccluded = EElysiumNpcCond::EnemyOccluded;      // 0x48
 	constexpr EElysiumNpcCond GMiscCoverCanRangeAttack1 = EElysiumNpcCond::CanRangeAttack1;  // 0x4f
-
-	// `CNPC_VBach`'s two answers per slot, and the shared refusal.
-	constexpr int32 GMiscBachRange1Answer = 0x4f;   // COND_CAN_RANGE_ATTACK1
-	constexpr int32 GMiscBachRange2Answer = 0x50;   // COND_CAN_RANGE_ATTACK2
-	constexpr int32 GMiscBachRefusal = 0x61;        // COND_NOT_FACING_ATTACK
-
-	// `CNPC_VSabbatLeader`'s melee-interrupt exception activity (`0x103ab400`).
-	constexpr int32 GMiscSabbatLeaderMeleeActivity = 0x1141;
-
-	// The hint type `CNPC_VChangBros::StoreArenaCenter` walks the global hint list for.
-	constexpr int32 GMiscArenaCenterHintType = 0x4651;
-
-	// The three hardcoded map entity names `0x103cade0` carries.
-	const TCHAR* const GMiscWerewolfZoneName = TEXT("trigger_werewolf_zone");
-	const TCHAR* const GMiscRotDoor1Name = TEXT("rotdoor1");
-	const TCHAR* const GMiscRotDoor2Name = TEXT("rotdoor2");
 
 	// `s_Knockback_1056bdcc`, the one expression-event name in the image.
 	const TCHAR* const GMiscKnockbackEventName = TEXT("Knockback");
@@ -443,19 +417,6 @@ void* FElysiumNpc::CreateLocalNavigator()
 	return nullptr;
 }
 
-void* FElysiumNpc::RatCreateLocalNavigator()
-{
-	// `CNPC_VRat::vfunc428` `0x103ad6a0`, the body of `FElysiumNpcRat::CreateLocalNavigator`: the
-	// SAME SIZE as the base's (`operator new(0x20)`) with a different constructor (`0x103ad540`). A
-	// rat's local navigator is a different type of the same shape, which is why the size alone does
-	// not identify the row.
-	//
-	// SEAM: `+0x5d38` is folded into the same motor seam as the base body's.
-	LastComponentFactoryBody = TEXT("0x103ad6a0");
-	++ComponentFactoryRefusals;
-	return nullptr;
-}
-
 void* FElysiumNpc::CreateNavigator()
 {
 	// `0x1027cf90`, slot 429: `operator new(0x68)` then `thunk_FUN_102eca50(p, this)`.
@@ -580,21 +541,6 @@ bool FElysiumNpc::OkToDisturb() const
 	return const_cast<FElysiumNpc*>(this)->IsAlive();
 }
 
-bool FElysiumNpc::SabbatLeaderOkToInterruptForMelee()
-{
-	// `CNPC_VSabbatLeader::OkToInterruptForMelee` (`0x103ab400`), the body of
-	// `FElysiumNpcSabbatLeader::OkToInterruptForMelee`. Scope trace stripped:
-	//     if (m_Activity (+0xfec) != 0x1141) return CAI_BaseNPCTroika::OkToInterruptForMelee();
-	//     return true;
-	// An exception, not a replacement: activity `0x1141` is always interruptible for the Sabbat
-	// leader and everything else is a direct call into the Troika line.
-	if (ActivityNumber != GMiscSabbatLeaderMeleeActivity)
-	{
-		return FElysiumNpc::OkToInterruptForMelee();
-	}
-	return true;
-}
-
 bool FElysiumNpc::OkToInterruptForMelee()
 {
 	// `CAI_BaseNPCTroika::OkToInterruptForMelee` `0x1029f940` (`CNPC_VSabbatLeader` overrides it,
@@ -632,27 +578,6 @@ bool FElysiumNpc::OkToInterruptForMelee()
 // -------------------------------------------------------------------------------------------------
 // Slot 592 `CanSeekCover` — `0x102953e0`, plus `CNPC_VLasombra`'s `0x103893c0`.
 // -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpc::LasombraCanSeekCover()
-{
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-
-	// `CNPC_VLasombra::vfunc592` (`0x103893c0`), the body of `FElysiumNpcLasombra::CanSeekCover`:
-	//     if (curtime < m_flCoverDisableOverride (+0x6664)) return true;   // NOT false
-	//     return CAI_BaseNPCTroika::CanSeekCover();
-	//
-	// **29c's walk has the polarity backwards** ("returns false while curtime is before
-	// m_flCoverDisableOverride"). The body returns the FPU flag word for `curtime < override` on
-	// that arm, i.e. TRUE — `CONCAT22(..., (curtime<ovr)<<8 | ...)` puts the comparison result in
-	// AL. The field name reads as a disable, but the arm it guards is the permissive one: while the
-	// override stands, a Lasombra may always seek cover without consulting the Troika rule.
-	// Corrected here and in the walked paragraph.
-	if (Now < static_cast<double>(LasombraCoverDisableOverride))
-	{
-		return true;
-	}
-	return FElysiumNpc::CanSeekCover();   // `0x102953e0`, direct
-}
 
 bool FElysiumNpc::CanSeekCover()
 {
@@ -693,15 +618,6 @@ bool FElysiumNpc::CanSeekCover()
 // Slot 24 `OnVictimHitByMe` — `0x1029f8d0` and its four species bodies.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::GargoyleHitsPillar(const FString& Classname)
-{
-	// The two `FClassnameIs` compares of `0x1037a450`, which are `__strcmpi` (case-insensitive) and
-	// accept a trailing `*` as a prefix match — neither `"pillar"` nor `"central_pillar"` carries
-	// one, so both are whole-name compares.
-	return Classname.Equals(TEXT("pillar"), ESearchCase::IgnoreCase)
-		|| Classname.Equals(TEXT("central_pillar"), ESearchCase::IgnoreCase);
-}
-
 void FElysiumNpc::ClearMeleeMoveRecords()
 {
 	// SEAM for `thunk_FUN_1028b160(&this->field_0x6028)` (`0x1028b160`): five iterations of three
@@ -709,23 +625,6 @@ void FElysiumNpc::ClearMeleeMoveRecords()
 	// offset is `ELYSIUM_NPC_WORD_ABSENT` in the shape map, so the clear is counted and no word is
 	// written. This is the ENTIRE Troika-line body of slot 24.
 	++MeleeMoveRecordClears;
-}
-
-void FElysiumNpc::DispatchVictimHitReaction(FElysiumEntity* Victim)
-{
-	// SEAM for `victim->vtable[+0x428](this)` — slot 266 dispatched ON THE VICTIM (`MOV ECX,ESI` at
-	// `0x1037a54a`, the Gargoyle as the one pushed argument). On the `CAI_BaseNPC` line slot 266 is
-	// the flinch-record clear (`0x100997f0`, family **EntityChain**'s `Slot266`), but the victim
-	// here is a `pillar` prop from a different hierarchy that shares the index, and the census does
-	// not carry its table — so what a pillar does with it is **unrecovered**.
-	++VictimHitReactionDispatches;
-	if (Victim != nullptr)
-	{
-		if (FElysiumNpc* VictimNpc = Victim->AsNpc())
-		{
-			VictimNpc->Slot266();
-		}
-	}
 }
 
 void FElysiumNpc::OnVictimHitByMe(FElysiumEntity* Victim)
@@ -736,115 +635,6 @@ void FElysiumNpc::OnVictimHitByMe(FElysiumEntity* Victim)
 	// method on their C++ classes (story 5 step 3).
 	(void)Victim;
 	ClearMeleeMoveRecords();
-}
-
-void FElysiumNpc::GargoyleOnVictimHitByMe(FElysiumEntity* Victim)
-{
-	// `CNPC_VGargoyle::OnVictimHitByMe` `0x1037a450`. The control flow inverts twice, so read the
-	// listing's jump targets rather than the nesting: the two early `JZ 0x1037a547` on a
-	// pointer-identity hit and the two `SETZ` tails all land on the DISPATCH, and the only path that
-	// reaches `0x1037a552` (the return) is "neither name matched". So:
-	//
-	//     if (classname is "pillar" or "central_pillar") victim->vtable[+0x428](this);
-	//     // and NOTHING otherwise — not even the base body.
-	//
-	// **29c's walk has this inverted** ("skips the base hit reaction when the victim's classname is
-	// pillar ... otherwise calls it"). Corrected here and in the walked paragraph.
-	//
-	// Note what this override does NOT do: it never calls the Troika line, so a Gargoyle's melee move
-	// records are never cleared. That is retail's, not an omission here.
-	const FString Classname = Victim != nullptr && Victim->Def != nullptr
-		? Victim->Def->Classname : FString();
-	if (GargoyleHitsPillar(Classname))
-	{
-		DispatchVictimHitReaction(Victim);
-	}
-}
-
-void FElysiumNpc::SabbatLeaderOnVictimHitByMe(FElysiumEntity* Victim)
-{
-	// `CNPC_VSabbatLeader::OnVictimHitByMe` `0x103ab4a0`, scope trace stripped:
-	//     ent = resolve(m_hClosestPlayer);                 // +0x628c, index & 0x1fff,
-	//                                                      // generation >> 0xd
-	//     if (ent == param_1 && --m_RoarAttackCount < 0) m_RoarAttackCount = 0;
-	//
-	// The decrement is INSIDE the condition's second term, so it happens only when the victim is the
-	// tracked player; the clamp is a separate test on the decremented value. It also does NOT call
-	// the Troika line — the base's record clear does not run for a Sabbat leader.
-	const FElysiumEntity* Closest = World != nullptr && Senses.Memory.ClosestPlayer.IsSet()
-		? World->Resolve(Senses.Memory.ClosestPlayer)
-		: nullptr;
-	if (Closest != nullptr && Closest == Victim)
-	{
-		--SabbatLeaderRoarAttackCount;
-		if (SabbatLeaderRoarAttackCount < 0)
-		{
-			SabbatLeaderRoarAttackCount = 0;
-		}
-	}
-}
-
-void FElysiumNpc::ZombieOnVictimHitByMe(FElysiumEntity* Victim)
-{
-	// `CNPC_VZombie::OnVictimHitByMe` `0x103e1280`, and the ORDER is the fact:
-	//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);          // base FIRST
-	//     FireOutput(&m_OnAttackedVictim (+0x66e8), param_1, this, 0);// output SECOND
-	// The only species arm that keeps the base body.
-	FElysiumNpc::OnVictimHitByMe(Victim);   // `0x1029f8d0`, direct
-	if (Victim != nullptr)
-	{
-		FireOutput(FName(TEXT("OnAttackedVictim")), Victim->Handle);
-	}
-}
-
-void FElysiumNpc::GhoulCroucherOnVictimHitByMe(FElysiumEntity* Victim)
-{
-	// `CNPC_VGhoulCroucher::OnVictimHitByMe` `0x1037be80`, story 29d family SpeciesMisc10:
-	//     player = param_1 ? param_1->+0xa8 : 0;                  // the PLAYER downcast cache
-	//     if (m_bSpawnBurning (+0x6665) && player) BurnPlayer(player, 10.0);
-	//     CAI_BaseNPCTroika::OnVictimHitByMe(this, param_1);      // ALWAYS, unlike the Gargoyle
-	//                                                             // and SabbatLeader arms
-	// `1037bf3c` pushes `0x41200000` = **10.0** as the burn damage.
-	if (bGhoulSpawnBurning && Victim != nullptr && World != nullptr
-		&& Victim->Handle == World->PlayerHandle())
-	{
-		BurnPlayer(Victim, 10.f);
-	}
-	FElysiumNpc::OnVictimHitByMe(Victim);   // `0x1029f8d0`, direct
-}
-
-// -------------------------------------------------------------------------------------------------
-// The per-species threshold answers.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::BachRangeAttack1Conditions(float Dot, float DistUnits) const
-{
-	// `CNPC_VBach::vfunc553` `0x10364500`, slot 553 `RangeAttack1Conditions(flDot, flDist)`:
-	//     if (flDot >= (float)_DAT_10449270) return 0x4f;          // 0.5, a DOUBLE in .rdata
-	//     if (flDist <= _DAT_1044f00c) return 0x4f;                // 120.0f
-	//     return 0x61;
-	//
-	// **It is an OR, not an AND**, and that is the shipped oddity: Bach can range-attack whenever he
-	// is roughly facing the target OR the target is inside 120 units, where the ordinary shape would
-	// require both. `0x4f` is `COND_CAN_RANGE_ATTACK1` and `0x61` is `COND_NOT_FACING_ATTACK`; note
-	// that a target that is merely too far answers "not facing", which is the wrong refusal and is
-	// retail's.
-	//
-	// The listing settles both polarities: `FCOMP double [0x10449270]` with `TEST AH,0x5 / JP` is
-	// `>=` (equal takes the accept), and `AND EAX,0x4100 / JZ` on the second is `>` (equal takes the
-	// accept there too).
-	return (static_cast<double>(Dot) >= GMiscHalfDouble || DistUnits <= GMiscYawHigh)
-		? GMiscBachRange1Answer : GMiscBachRefusal;
-}
-
-int32 FElysiumNpc::BachRangeAttack2Conditions(float Dot, float DistUnits) const
-{
-	// `CNPC_VBach::vfunc554` `0x10364550`, slot 554 `RangeAttack2Conditions(flDot, flDist)`. The
-	// SAME two thresholds in the same order; only the accepted answer differs — `0x50`
-	// (`COND_CAN_RANGE_ATTACK2`) instead of `0x4f`. One behaviour written twice, which is why the
-	// gate is not restated.
-	return BachRangeAttack1Conditions(Dot, DistUnits) == GMiscBachRange1Answer
-		? GMiscBachRange2Answer : GMiscBachRefusal;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -882,158 +672,23 @@ void FElysiumNpc::FormBit(bool bSet)
 	HengeyokaiFishTimer = static_cast<float>(Now) + Draw;
 }
 
-bool FElysiumNpc::FormBitTimerExpired() const
-{
-	// `0x10381ca0` — the whole body is `return m_flFishTimer (+0x666c) <= gpGlobals->curtime`. The
-	// read half of the pair above; `0x10381c00` is the only writer of `+0x666c` this story found.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return static_cast<double>(HengeyokaiFishTimer) <= Now;
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CNPC_VYukie`'s melee pair — slots 599 and 601.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpc::YukieEnterMelee()
-{
-	// `CNPC_VYukie::vfunc599` `0x103dd8b0`, the whole body:
-	//     (*DAT_10924edc)->vfunc1();                                    // the global melee event
-	//     m_bInMelee = 1;                                               // +0x6078
-	//     m_flMeleeMustLeaveTimer = RandomFloat(22.5f, 45.0f) + curtime; // +0x6074
-	//     return true;
-	//
-	// Against family **TroikaHelpers**' `Slot599` (the Troika line, `0x102b5650`) this is the whole
-	// species difference: **Yukie has no gates at all**. No frenzy bit, no follower boss, no
-	// can-enter timer, no range term, no height term, no attack coordinator — she always enters
-	// melee, and her must-leave window (22.5–45 s) is three times the Troika line's (7.5–15 s).
-	//
-	// `(*DAT_10924edc)->vfunc1()` is the same global event object families Bosses and TroikaHelpers
-	// already count through `MeleeEventFires`; the same counter is incremented rather than a second
-	// one stood beside it.
-	++MeleeEventFires;
-	bInMelee = true;
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	MeleeMustLeaveTimer = Now + static_cast<double>(
-		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
-			.FRandRange(GMiscYukieMustLeaveMin, GMiscYukieMustLeaveMax));
-	return true;
-}
-
-void FElysiumNpc::YukieLeaveMelee()
-{
-	// `0x103dd9a0`, `CNPC_VYukie#601`, the whole body:
-	//     (*DAT_10924edc)->vfunc1();                                     // the global melee event
-	//     m_bInMelee = 0;                                                // +0x6078
-	//     if (HasUsableRangedWeapon())                                   // slot 308 (+0x4d0)
-	//         m_flMeleeCanEnterTimer = RandomFloat(5.0f, 10.0f) + curtime;  // +0x6070
-	//
-	// The Troika line's `0x102b5880` with its LAST line dropped: there is no attack-coordinator
-	// release. Everything before it — the event, the clear, the gated re-arm and both draw bounds —
-	// is identical. So Yukie enters melee unconditionally and, on the way out, never gives a
-	// coordinator slot back, because she never took one.
-	//
-	// Slot 308 `HasUsableRangedWeapon` (`0x10336d70`) is still a generated stub answering false, so
-	// the timer arm is not reached today; it is wired, not inlined.
-	++MeleeEventFires;
-	bInMelee = false;
-	if (HasUsableRangedWeapon())
-	{
-		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-		MeleeCanEnterTimer = Now + static_cast<double>(
-			ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
-				.FRandRange(GMiscYukieCanEnterMin, GMiscYukieCanEnterMax));
-	}
-}
-
 // -------------------------------------------------------------------------------------------------
 // The three remaining species bodies.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::SlowedExpire() const
+void FElysiumNpc::DispatchVictimHitReaction(FElysiumEntity* Victim)
 {
-	// `0x1038f290` — the whole body is `return (float)_DAT_1044fab0 < m_flSlowedExpire (+0x6684)`.
-	//
-	// `_DAT_1044fab0` is the shared `0.0` DOUBLE (`docs/vtmb/footsteps.md` § the 2-D speed gate), so
-	// this is a compare against ZERO and NOT against curtime: `m_flSlowedExpire` is read here as a
-	// FLAG spelled as a float, not as a deadline. A body that read it as a deadline would answer the
-	// opposite for every ManBat whose slow has not been armed.
-	return static_cast<double>(ManBatSlowedExpire) > GMiscZeroDouble;
-}
-
-void FElysiumNpc::StoreArenaCenter()
-{
-	// `CNPC_VChangBros::StoreArenaCenter` `0x1036e400` (name recovered by `NameFromStrings` at
-	// `0x106313a0`), scope trace stripped:
-	//     node = DAT_10925450;                                   // the global CAI_Hint list head
-	//     if (!node) return;
-	//     while (node->m_nHintType (+0x5dc) != 0x4651) {
-	//         node = node->next (+0x5d8);
-	//         if (!node) return;                                 // no write at all
-	//     }
-	//     pos = node->vtable[+0x364]();                          // GetAbsOrigin
-	//     m_vArenaCenter = pos;                                  // +0x66dc, three floats
-	//     m_bCenterStored = 1;                                   // +0x66e8
-	//
-	// Both writes are inside the found arm: a map with no `0x4651` hint leaves `m_bCenterStored`
-	// false and the centre at whatever it was, which is what the Chang fight's own guard reads.
-	//
-	// The walk is exactly family **Squad**'s `NthHintOfType(type, 0)` seam — the global hint list,
-	// the same next link and the same type word — so that accessor is asked rather than a second
-	// walk stood beside it. It answers null (no hint store carries hint types here), so this takes
-	// retail's "fell off the end" arm and writes nothing.
-	const FElysiumEntity* Node = NthHintOfType(GMiscArenaCenterHintType, 0);
-	if (Node == nullptr)
+	// SEAM for `victim->vtable[+0x428](this)` — slot 266 dispatched ON THE VICTIM (`MOV ECX,ESI` at
+	// `0x1037a54a`, the Gargoyle as the one pushed argument). On the `CAI_BaseNPC` line slot 266 is
+	// the flinch-record clear (`0x100997f0`, family **EntityChain**'s `Slot266`), but the victim
+	// here is a `pillar` prop from a different hierarchy that shares the index, and the census does
+	// not carry its table — so what a pillar does with it is **unrecovered**.
+	++VictimHitReactionDispatches;
+	if (Victim != nullptr)
 	{
-		return;
+		if (FElysiumNpc* VictimNpc = Victim->AsNpc())
+		{
+			VictimNpc->Slot266();
+		}
 	}
-	ChangArenaCenter = Node->Origin;
-	bChangCenterStored = true;
-}
-
-void FElysiumNpc::FireWerewolfZoneTrigger(FElysiumEntity& Zone)
-{
-	// SEAM for `zone->vtable[+0x3ec]()` — slot 251. On the `CAI_BaseNPC` line slot 251 is
-	// `IsActivityFinished` (`0x10272900`), but a `trigger_werewolf_zone` is a different hierarchy
-	// sharing the index and the census carries no table for it, so what this fires is
-	// **unrecovered**. Counted; nothing is dispatched.
-	(void)Zone;
-	++WerewolfZoneTriggerFires;
-}
-
-void FElysiumNpc::TriggerWerewolfZone()
-{
-	// `0x103cade0`, in order:
-	//     for (e = FindEntityByName(NULL, "trigger_werewolf_zone"); e;
-	//          e = FindEntityByName(e, "trigger_werewolf_zone"))
-	//         e->vtable[+0x3ec]();
-	//     d1 = dynamic_cast<CFuncMoveLinear*>(FindEntityByName(NULL, "rotdoor1", this, this));
-	//     m_hRotDoor1 = d1 ? d1->GetRefEHandle() : INVALID_EHANDLE;    // +0x6684
-	//     d2 = dynamic_cast<CFuncMoveLinear*>(FindEntityByName(NULL, "rotdoor2", this, this));
-	//     m_hRotDoor2 = d2 ? d2->GetRefEHandle() : INVALID_EHANDLE;    // +0x6688
-	//
-	// `0x100f7380` compares `entity+0x11c` (`m_iName`), not `+0x26c` (`m_iClassname`), so the zone
-	// sweep is by TARGETNAME — three hardcoded map names, which is why this body has no keyfield and
-	// no parameter. The two door lookups go through the five-argument form (`0x100f7770`, the one
-	// that understands `!self` / `!activator`), passing `this` as both the searching entity and the
-	// activator.
-	//
-	// The RTTI cast is load-bearing: an entity named `rotdoor1` that is NOT a `CFuncMoveLinear`
-	// stores the INVALID handle rather than itself, so a mis-typed map disarms the door instead of
-	// crashing later. Reproduced as a name lookup plus a refusal, with the class test itself
-	// **unrecovered** — this runtime has no `CFuncMoveLinear` leaf to test against, so any entity
-	// carrying the name is accepted and the comment says so.
-	//
-	// Retail name unrecovered; named from the entity names it carries.
-	if (World == nullptr)
-	{
-		return;
-	}
-	World->ForEachNamed(GMiscWerewolfZoneName, [this](FElysiumEntity& Zone)
-	{
-		FireWerewolfZoneTrigger(Zone);
-	});
-	const FElysiumEntity* Door1 = World->FindByName(GMiscRotDoor1Name);
-	WerewolfRotDoor1 = Door1 != nullptr ? Door1->Handle : FElysiumEntityHandle::Invalid();
-	const FElysiumEntity* Door2 = World->FindByName(GMiscRotDoor2Name);
-	WerewolfRotDoor2 = Door2 != nullptr ? Door2->Handle : FElysiumEntityHandle::Invalid();
 }

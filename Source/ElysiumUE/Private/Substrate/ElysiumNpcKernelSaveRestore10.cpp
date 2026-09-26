@@ -41,10 +41,6 @@ namespace
 	const TCHAR* const GLeaveInterestingPlaceReason =
 		TEXT("Leaving interesting place (UpdateOnRemove)");
 
-	// `s_npc_VVampireBoss_1065e8dc` — the literal `CNPC_VVampireBoss::Restore` resets
-	// `m_pszMonsterClassname` (`+0x6694`) to.
-	const TCHAR* const GVampireBossDefaultClassname = TEXT("npc_VVampireBoss");
-
 	// `CBaseCombatCharacter::Save`'s answer. Retail's `ISave` chain answers a non-zero "wrote
 	// something" for every entity that has a datamap, and `CAI_BaseNPC::Save` returns it verbatim.
 	// CHOSEN as 1 rather than recovered: the chain body is not an NPC-kernel row and the corpus does
@@ -105,11 +101,6 @@ namespace
 		return Table;
 	}
 
-	// `DAT_1093acac` and `DAT_1093acb0`, the two process-wide cop censuses. File statics because
-	// retail's are file statics — the same shape family Lifecycle gave the Werewolf's shared
-	// `rdtsc` pair.
-	int32 GCopAliveCensus = 0;
-	int32 GCopSecondCensus = 0;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -549,47 +540,6 @@ int32 FElysiumNpc::Save(void* Archive)
 	return TroikaSave(Archive);
 }
 
-int32 FElysiumNpc::MingXiaoSave(void* Archive)
-{
-	// `CNPC_VMingXiao::Save` `0x10395f80`. `pfVar2 = m_rflRegrowTimers; iVar1 = 6; do { encode(p, 4);
-	// ++p; } while (--iVar1);` — ascending, mode 4, then the Troika body, then the identical
-	// descending-count/ascending-pointer decode loop over the SAME six.
-	//
-	// Mode 4 is the fact: an exactly-`FLT_MAX` regrow timer is a tentacle that will never regrow,
-	// and without the sentinel retail's `FIELD_TIME` rebase on load would shift it.
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampEncode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	const int32 Result = TroikaSave(Archive);   // the Troika body, directly
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	return Result;
-}
-
-int32 FElysiumNpc::MingXiaoTentacleSave(void* Archive)
-{
-	// `CNPC_VMingXiaoTentacle::Save` `0x1039ed50` — one field, `m_flPhaseExpireTimer` (`+0x6674`),
-	// at mode 3 around the Troika body.
-	SaveStampEncode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	const int32 Result = TroikaSave(Archive);
-	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	return Result;
-}
-
-int32 FElysiumNpc::TzimisceHeadClawSave(void* Archive)
-{
-	// `CNPC_VTzimisceHeadClaw::Save` `0x103c2810` — `m_flSlowedExpire` (`+0x6678`, family Species'
-	// `HeadClawSlowedExpire`) at mode 3 around the Troika body. This is the same slow stamp
-	// `0x103c2230` gates its teardown on.
-	SaveStampEncode(HeadClawSlowedExpire, ESaveStampMode::Zero);
-	const int32 Result = TroikaSave(Archive);
-	SaveStampDecode(HeadClawSlowedExpire, ESaveStampMode::Zero);
-	return Result;
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 127 `Restore`.
 // -------------------------------------------------------------------------------------------------
@@ -640,50 +590,6 @@ int32 FElysiumNpc::Restore(void* Archive)
 {
 	// Slot 127, the same prologue shape as slot 126.
 	return TroikaRestore(Archive);
-}
-
-int32 FElysiumNpc::MingXiaoRestore(void* Archive)
-{
-	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base FIRST, then the six regrow timers decoded
-	// ascending at mode 4. The decode twin of `0x10395f80`.
-	const int32 Result = TroikaRestore(Archive);
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	return Result;
-}
-
-int32 FElysiumNpc::MingXiaoTentacleRestore(void* Archive)
-{
-	// `CNPC_VMingXiaoTentacle::vfunc127` `0x1039eda0`.
-	const int32 Result = TroikaRestore(Archive);
-	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	return Result;
-}
-
-int32 FElysiumNpc::TzimisceHeadClawRestore(void* Archive)
-{
-	// `CNPC_VTzimisceHeadClaw::vfunc127` `0x103c2860`.
-	const int32 Result = TroikaRestore(Archive);
-	SaveStampDecode(HeadClawSlowedExpire, ESaveStampMode::Zero);
-	return Result;
-}
-
-int32 FElysiumNpc::VampireBossRestore(void* Archive)
-{
-	// `CNPC_VVampireBoss::Restore` `0x103c5910`, inside a scope-trace frame (`"CNPC_VVampireBoss::
-	// Restore"` at `0x1065ec00`) this runtime does not stand. The three writes are in the listing's
-	// order: `103c5972` the model name, `103c597c` `ClearBodyEmitterNames`, `103c5981` the
-	// classname literal.
-	//
-	// It is a post-load reset, not a restore: a boss that was saved mid-transformation comes back
-	// wearing its default model name and its default classname, whatever the archive held.
-	const int32 Result = TroikaRestore(Archive);
-	VampireBossMonsterModelName.Reset();   // m_pMonsterModelName +0x6680 := 0
-	ClearBodyEmitterNames();               // 0x103c6eb0, family Damage's
-	VampireBossMonsterClassname = GVampireBossDefaultClassname;   // +0x6694
-	return Result;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -764,66 +670,6 @@ void FElysiumNpc::UpdateOnRemove()
 {
 	// Slot 180. `CNPC_VCop`, `CNPC_VMingXiao` and `CNPC_VNewscaster` override it on their C++ classes
 	// (story 5 step 3); `CCineNPC`'s `0x101a7140` is `FElysiumScriptedSequence`'s.
-	TroikaUpdateOnRemove();
-}
-
-int32& FElysiumNpc::CopAliveCensus()
-{
-	return GCopAliveCensus;
-}
-
-int32& FElysiumNpc::CopSecondCensus()
-{
-	return GCopSecondCensus;
-}
-
-void FElysiumNpc::CopUpdateOnRemove()
-{
-	// `CNPC_VCop::UpdateOnRemove` `0x10371a90`, instruction for instruction off the listing — the
-	// decompiled C mis-renders the two census bytes as `this+1`.
-	//
-	//     10371a90  MOV DL, [ECX + 0x6671]        ; m_bCountedAlive
-	//     10371a96  XOR AL, AL
-	//     10371a9a  JZ  ...  / DEC [0x1093acac]
-	//     10371aa2  MOV DL, [ECX + 0x6672]        ; READ before the first byte is cleared
-	//     10371aa8  MOV [ECX + 0x6671], AL
-	//     10371ab0  JZ  ...  / DEC [0x1093acb0]
-	//     10371ab8  MOV [ECX + 0x6672], AL
-	//     10371abe  JMP CAI_BaseNPCTroika::UpdateOnRemove
-	const bool bWasCountedAlive = bCopCountedAlive;
-	if (bWasCountedAlive)
-	{
-		--CopAliveCensus();
-	}
-	const bool bWasCountedSecond = bCopCountedSecond;
-	bCopCountedAlive = false;
-	if (bWasCountedSecond)
-	{
-		--CopSecondCensus();
-	}
-	bCopCountedSecond = false;
-	// The tail jump is a CALL to the Troika body, not a re-dispatch.
-	TroikaUpdateOnRemove();
-}
-
-void FElysiumNpc::MingXiaoUpdateOnRemove()
-{
-	// `CNPC_VMingXiao::vfunc180` `0x10391230` — `if (m_eThrowableObjectMode +0x673c)
-	// thunk_FUN_10398fd0(this);` then the Troika body ALWAYS. Without the drop the thrown prop
-	// outlives the boss.
-	if (MingXiaoThrowableObjectMode != 0)
-	{
-		MingXiaoThrowCleanup();   // 0x10398fd0, family Damage's
-	}
-	TroikaUpdateOnRemove();
-}
-
-void FElysiumNpc::NewscasterUpdateOnRemove()
-{
-	// `CNPC_VNewscaster::vfunc180` `0x103a03a0` — `thunk_FUN_103a0d50(this)` then the Troika body.
-	// `0x103a0d50` is family Species' `FUN_103a0d50`: the two story queues torn down row by row and
-	// the story-active byte cleared.
-	FUN_103a0d50();
 	TroikaUpdateOnRemove();
 }
 

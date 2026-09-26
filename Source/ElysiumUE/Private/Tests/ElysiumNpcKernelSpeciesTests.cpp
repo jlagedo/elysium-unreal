@@ -12,6 +12,20 @@
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
+#include "Substrate/ElysiumNpcTzimisceRunner.h"
+#include "Substrate/ElysiumNpcYukie.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcCamera.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
+#include "Substrate/ElysiumNpcNewscaster.h"
+#include "Substrate/ElysiumNpcAnimal.h"
+#include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -52,6 +66,18 @@ namespace
 		FElysiumNpc* Animal = nullptr;
 		FElysiumNpc* Andrei = nullptr;
 		FElysiumNpc* Cop = nullptr;
+		FElysiumNpcZombie* Zombie = nullptr;
+		FElysiumNpcNewscaster* Newscaster = nullptr;
+		FElysiumNpcMingXiaoTentacle* Tentacle = nullptr;
+		FElysiumNpcTzimisceRunner* TypedRunner = nullptr;
+		FElysiumNpcTzimisceHeadClaw* HeadClaw = nullptr;
+		FElysiumNpcTzimisce* Tzimisce = nullptr;
+		FElysiumNpcWerewolf* Werewolf = nullptr;
+		FElysiumNpcGargoyle* Gargoyle = nullptr;
+		FElysiumNpcYukie* Yukie = nullptr;
+		FElysiumNpcBach* Bach = nullptr;
+		FElysiumNpcChangBros* Chang = nullptr;
+		FElysiumNpcAndreiBlood* TypedAndrei = nullptr;
 
 		FSpeciesFixture()
 			: World(Build())
@@ -60,7 +86,20 @@ namespace
 			Animal = World.Npc(TEXT("animal"));
 			Andrei = World.Npc(TEXT("andrei"));
 			Cop = World.Npc(TEXT("cop"));
-			FElysiumNpcWorldFixture::Quiet({ Runner, Animal, Andrei, Cop });
+			Zombie = World.NpcAs<FElysiumNpcZombie>(TEXT("zombie"));
+			Newscaster = World.NpcAs<FElysiumNpcNewscaster>(TEXT("newscaster"));
+			Tentacle = World.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("tentacle"));
+			TypedRunner = World.NpcAs<FElysiumNpcTzimisceRunner>(TEXT("runner"));
+			HeadClaw = World.NpcAs<FElysiumNpcTzimisceHeadClaw>(TEXT("headclaw"));
+			Tzimisce = World.NpcAs<FElysiumNpcTzimisce>(TEXT("tzimisce"));
+			Werewolf = World.NpcAs<FElysiumNpcWerewolf>(TEXT("werewolf"));
+			Gargoyle = World.NpcAs<FElysiumNpcGargoyle>(TEXT("gargoyle"));
+			Yukie = World.NpcAs<FElysiumNpcYukie>(TEXT("yukie"));
+			Bach = World.NpcAs<FElysiumNpcBach>(TEXT("bach"));
+			Chang = World.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+			TypedAndrei = World.NpcAs<FElysiumNpcAndreiBlood>(TEXT("andrei"));
+			FElysiumNpcWorldFixture::Quiet({ Runner, Animal, Andrei, Cop, Zombie, Newscaster, Tentacle,
+				HeadClaw, Tzimisce, Werewolf, Gargoyle, Yukie, Bach, Chang });
 		}
 
 		static FElysiumNpcWorldBuilder Build()
@@ -70,6 +109,16 @@ namespace
 			Builder.AddNpc(TEXT("animal"), FVector(200.0, 0.0, 0.0), TEXT("npc_VAnimal"));
 			Builder.AddNpc(TEXT("andrei"), FVector(400.0, 0.0, 0.0), TEXT("npc_VAndreiBlood"));
 			Builder.AddNpc(TEXT("cop"), FVector(600.0, 0.0, 0.0), TEXT("npc_VCop"));
+			Builder.AddNpc(TEXT("zombie"), FVector(800.0, 0.0, 0.0), TEXT("npc_VZombie"));
+			Builder.AddNpcOfClass(TEXT("newscaster"), FVector(1000.0, 0.0, 0.0), TEXT("CNPC_VNewscaster"));
+			Builder.AddNpcOfClass(TEXT("tentacle"), FVector(1200.0, 0.0, 0.0), TEXT("CNPC_VMingXiaoTentacle"));
+			Builder.AddNpcOfClass(TEXT("headclaw"), FVector(1400.0, 0.0, 0.0), TEXT("CNPC_VTzimisceHeadClaw"));
+			Builder.AddNpcOfClass(TEXT("tzimisce"), FVector(1600.0, 0.0, 0.0), TEXT("CNPC_VTzimisce"));
+			Builder.AddNpcOfClass(TEXT("werewolf"), FVector(1800.0, 0.0, 0.0), TEXT("CNPC_VWerewolf"));
+			Builder.AddNpcOfClass(TEXT("gargoyle"), FVector(2000.0, 0.0, 0.0), TEXT("CNPC_VGargoyle"));
+			Builder.AddNpcOfClass(TEXT("yukie"), FVector(2200.0, 0.0, 0.0), TEXT("CNPC_VYukie"));
+			Builder.AddNpcOfClass(TEXT("bach"), FVector(2400.0, 0.0, 0.0), TEXT("CNPC_VBach"));
+			Builder.AddNpcOfClass(TEXT("chang"), FVector(2600.0, 0.0, 0.0), TEXT("CNPC_VChangBros"));
 			return Builder;
 		}
 	};
@@ -376,7 +425,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesBlacklistsTest,
 bool FElysiumNpcKernelSpeciesBlacklistsTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Boss = Fixture.Runner;
+	FElysiumNpcTzimisce* Boss = Fixture.Tzimisce;
 	FElysiumNpc* A = Fixture.Animal;
 	FElysiumNpc* B = Fixture.Andrei;
 	if (Boss == nullptr || A == nullptr || B == nullptr)
@@ -452,7 +501,10 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	FSpeciesFixture Fixture;
 	FElysiumNpc* Npc = Fixture.Runner;
 	FElysiumNpc* Enemy = Fixture.Animal;
-	if (Npc == nullptr || Enemy == nullptr)
+	FElysiumNpcTzimisceRunner* Runner = Fixture.TypedRunner;
+	FElysiumNpcTzimisceHeadClaw* Claw = Fixture.HeadClaw;
+	if (Npc == nullptr || Enemy == nullptr || !TestNotNull(TEXT("the runner"), Runner)
+		|| !TestNotNull(TEXT("the head claw"), Claw))
 	{
 		return false;
 	}
@@ -472,8 +524,10 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 		Npc->FUN_10376b70(Enemy));
 	TestTrue(TEXT("and sets m_bInMelee"), Npc->bInMelee);
 	TestEqual(TEXT("having fired the global melee event once"), Npc->MeleeEventFires, 1);
-	TestTrue(TEXT("0x10379ef0 (CNPC_VGargoyle 599) is the same body"), Npc->FUN_10379ef0(Enemy));
-	TestEqual(TEXT("so the event count is 2"), Npc->MeleeEventFires, 2);
+	Fixture.Gargoyle->bInMelee = false;
+	Fixture.Gargoyle->MeleeEventFires = 0;
+	TestTrue(TEXT("0x10379ef0 (CNPC_VGargoyle 599) is the same body"), Fixture.Gargoyle->FUN_10379ef0(Enemy));
+	TestEqual(TEXT("so it fires the event once too"), Fixture.Gargoyle->MeleeEventFires, 1);
 	// Neither arms a leave timer — the recovered difference from the Troika line.
 	Npc->MeleeMustLeaveTimer = 0.0;
 	Npc->FUN_10376b70(Enemy);
@@ -483,8 +537,9 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	Npc->MeleeEventFires = 0;
 	TestTrue(TEXT("0x10376ba0 (CNPC_VFrenzyShadow 600) always accepts"), Npc->FUN_10376ba0(Enemy));
 	TestTrue(TEXT("and sets m_bInMelee"), Npc->bInMelee);
-	TestTrue(TEXT("0x10379f20 (CNPC_VGargoyle 600) is the same body"), Npc->FUN_10379f20(Enemy));
-	TestEqual(TEXT("two events"), Npc->MeleeEventFires, 2);
+	Fixture.Gargoyle->MeleeEventFires = 0;
+	TestTrue(TEXT("0x10379f20 (CNPC_VGargoyle 600) is the same body"), Fixture.Gargoyle->Slot600(Enemy));
+	TestEqual(TEXT("one event each"), Npc->MeleeEventFires + Fixture.Gargoyle->MeleeEventFires, 2);
 	// Already in melee is NOT a refusal for these two — the Troika line's re-entry guard is gone.
 	TestTrue(TEXT("and a body already in melee still accepts"), Npc->FUN_10376ba0(Enemy));
 
@@ -492,98 +547,99 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// `MeleeCoordinatorAdmits599` is family TroikaHelpers' seam and answers false with no
 	// coordinator object, so the body takes its refusal arm — which is retail's own answer for a
 	// coordinator with no free slot.
-	Npc->bInMelee = true;
-	Npc->MeleeEventFires = 0;
+	Claw->bInMelee = true;
+	Claw->MeleeEventFires = 0;
 	TestFalse(TEXT("0x103c19e0 refuses when the coordinator seam refuses"),
-		Npc->FUN_103c19e0(Enemy));
-	TestFalse(TEXT("and clears m_bInMelee on the way out"), Npc->bInMelee);
-	TestEqual(TEXT("firing no melee event"), Npc->MeleeEventFires, 0);
+		Claw->FUN_103c19e0(Enemy));
+	TestFalse(TEXT("and clears m_bInMelee on the way out"), Claw->bInMelee);
+	TestEqual(TEXT("firing no melee event"), Claw->MeleeEventFires, 0);
 
 	// --- `CNPC_VTzimisceRunner` 599: the same, plus the potential-enemy cache -------------------
-	Npc->RunnerPotentialEnemy = FElysiumEntityHandle();
-	Npc->bInMelee = true;
-	TestFalse(TEXT("0x103c3960 refuses on the same seam"), Npc->FUN_103c3960(Enemy));
-	TestFalse(TEXT("and clears m_bInMelee"), Npc->bInMelee);
+	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
+	Runner->bInMelee = true;
+	TestFalse(TEXT("0x103c3960 refuses on the same seam"), Runner->FUN_103c3960(Enemy));
+	TestFalse(TEXT("and clears m_bInMelee"), Runner->bInMelee);
 	// **The cache is written on the REFUSING arm too** — the one slot-599 body in the family that
 	// reads its argument at all.
 	TestTrue(TEXT("but m_hPotentialEnemy was cached anyway"),
-		Npc->RunnerPotentialEnemy == Enemy->Handle);
-	Npc->FUN_103c3960(nullptr);
-	TestFalse(TEXT("and a null argument clears it"), Npc->RunnerPotentialEnemy.IsSet());
+		Runner->RunnerPotentialEnemy == Enemy->Handle);
+	Runner->FUN_103c3960(nullptr);
+	TestFalse(TEXT("and a null argument clears it"), Runner->RunnerPotentialEnemy.IsSet());
 
 	// --- slot 600's head-claw / runner pair: the event fires BEFORE the decision ----------------
-	Npc->bInMelee = false;
-	Npc->MeleeEventFires = 0;
-	TestFalse(TEXT("0x103c1a60 refuses on the coordinator seam"), Npc->FUN_103c1a60(Enemy));
+	Claw->bInMelee = false;
+	Claw->MeleeEventFires = 0;
+	TestFalse(TEXT("0x103c1a60 refuses on the coordinator seam"), Claw->Slot600(Enemy));
 	TestEqual(TEXT("but the global melee event fired anyway — it is unconditional and first"),
-		Npc->MeleeEventFires, 1);
+		Claw->MeleeEventFires, 1);
 	// An NPC ALREADY in melee skips the request and is taken back OUT — the guard is on the way in.
-	Npc->bInMelee = true;
-	TestFalse(TEXT("and a body already in melee answers false"), Npc->FUN_103c1a60(Enemy));
-	TestFalse(TEXT("and is cleared, because the clear is outside the guard"), Npc->bInMelee);
+	Claw->bInMelee = true;
+	TestFalse(TEXT("and a body already in melee answers false"), Claw->Slot600(Enemy));
+	TestFalse(TEXT("and is cleared, because the clear is outside the guard"), Claw->bInMelee);
 
-	Npc->RunnerPotentialEnemy = FElysiumEntityHandle();
-	Npc->MeleeEventFires = 0;
-	Npc->bInMelee = false;
-	TestFalse(TEXT("0x103c39e0 refuses the same way"), Npc->FUN_103c39e0(Enemy));
-	TestEqual(TEXT("with the event fired first"), Npc->MeleeEventFires, 1);
-	TestTrue(TEXT("and m_hPotentialEnemy cached"), Npc->RunnerPotentialEnemy == Enemy->Handle);
+	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
+	Runner->MeleeEventFires = 0;
+	Runner->bInMelee = false;
+	TestFalse(TEXT("0x103c39e0 refuses the same way"), Runner->Slot600(Enemy));
+	TestEqual(TEXT("with the event fired first"), Runner->MeleeEventFires, 1);
+	TestTrue(TEXT("and m_hPotentialEnemy cached"), Runner->RunnerPotentialEnemy == Enemy->Handle);
 
 	// --- `CNPC_VYukie` 600: not a melee body at all ---------------------------------------------
 	// `ActiveWeaponCapabilityWord()` is family Motor's seam and answers 0, so the `0x18000` gate is
 	// closed and the whole body refuses without writing anything.
-	Npc->bInMelee = false;
-	Npc->MeleeMustLeaveTimer = 0.0;
-	Npc->MeleeEventFires = 0;
+	Fixture.Yukie->bInMelee = false;
+	Fixture.Yukie->MeleeMustLeaveTimer = 0.0;
+	Fixture.Yukie->MeleeEventFires = 0;
 	TestFalse(TEXT("0x103dd900 refuses without the weapon capability bits"),
-		Npc->FUN_103dd900(Enemy));
-	TestFalse(TEXT("writing no latch"), Npc->bInMelee);
-	TestEqual(TEXT("no flee window"), Npc->MeleeMustLeaveTimer, 0.0);
-	TestEqual(TEXT("and no event"), Npc->MeleeEventFires, 0);
+		Fixture.Yukie->Slot600(Enemy));
+	TestFalse(TEXT("writing no latch"), Fixture.Yukie->bInMelee);
+	TestEqual(TEXT("no flee window"), Fixture.Yukie->MeleeMustLeaveTimer, 0.0);
+	TestEqual(TEXT("and no event"), Fixture.Yukie->MeleeEventFires, 0);
 
 	// --- slot 601: the release pair --------------------------------------------------------------
-	Npc->bInMelee = true;
-	Npc->MeleeEventFires = 0;
-	Npc->MeleeCoordinatorReleases = 0;
-	Npc->FUN_103c1ad0(Enemy);
-	TestFalse(TEXT("0x103c1ad0 leaves melee"), Npc->bInMelee);
-	TestEqual(TEXT("firing the event"), Npc->MeleeEventFires, 1);
+	Claw->bInMelee = true;
+	Claw->MeleeEventFires = 0;
+	Claw->MeleeCoordinatorReleases = 0;
+	Claw->Slot601(Enemy);
+	TestFalse(TEXT("0x103c1ad0 leaves melee"), Claw->bInMelee);
+	TestEqual(TEXT("firing the event"), Claw->MeleeEventFires, 1);
 	TestEqual(TEXT("and releasing the coordinator slot UNGUARDED"),
-		Npc->MeleeCoordinatorReleases, 1);
+		Claw->MeleeCoordinatorReleases, 1);
 
-	Npc->bInMelee = true;
-	Npc->RunnerPotentialEnemy = Enemy->Handle;
-	Npc->MeleeCoordinatorReleases = 0;
-	Npc->FUN_103c3a70(Enemy);
-	TestFalse(TEXT("0x103c3a70 leaves melee"), Npc->bInMelee);
+	Runner->bInMelee = true;
+	Runner->RunnerPotentialEnemy = Enemy->Handle;
+	Runner->MeleeCoordinatorReleases = 0;
+	Runner->Slot601(Enemy);
+	TestFalse(TEXT("0x103c3a70 leaves melee"), Runner->bInMelee);
 	TestFalse(TEXT("and CLEARS m_hPotentialEnemy — the runner's matched set"),
-		Npc->RunnerPotentialEnemy.IsSet());
-	TestEqual(TEXT("still releasing the slot"), Npc->MeleeCoordinatorReleases, 1);
+		Runner->RunnerPotentialEnemy.IsSet());
+	TestEqual(TEXT("still releasing the slot"), Runner->MeleeCoordinatorReleases, 1);
 
 	// --- slot 602: the far arm only ---------------------------------------------------------------
 	// `MeleeRangeUnits()` answers `debug_melee_advance_combatmove_dist`'s 100, so the doubled range
 	// is 200, and `MeleeCoordinatorHasRoom()` answers false — so past 200 units the first arm wins.
-	Npc->ScheduleHost.EnemyDistUnits = 500.f;
+	Claw->ScheduleHost.EnemyDistUnits = 500.f;
+	Runner->ScheduleHost.EnemyDistUnits = 500.f;
 	TestTrue(TEXT("0x103c1b10 leaves melee when out of double range and the coordinator is full"),
-		Npc->FUN_103c1b10());
-	TestTrue(TEXT("0x103c3ab0 is the byte-identical twin"), Npc->FUN_103c3ab0());
+		Claw->FUN_103c1b10());
+	TestTrue(TEXT("0x103c3ab0 is the byte-identical twin"), Runner->Slot602());
 	// At zero distance the first arm's `0 < 0` fails and the body falls through to
 	// `MeleeCoordinatorHoldsMe()`, which answers true for a coordinator that holds nobody.
-	Npc->ScheduleHost.EnemyDistUnits = 0.f;
+	Claw->ScheduleHost.EnemyDistUnits = 0.f;
 	TestTrue(TEXT("and at zero distance it falls through to 'the coordinator does not hold me'"),
-		Npc->FUN_103c1b10());
+		Claw->FUN_103c1b10());
 
 	// A spawned runner's slots ARE its bodies: `FElysiumNpcTzimisceRunner` overrides all four.
-	Npc->bInMelee = true;
-	Npc->RunnerPotentialEnemy = Enemy->Handle;
-	TestFalse(TEXT("a runner's slot 599 is the refusing coordinator arm"), Npc->Slot599(0));
-	TestFalse(TEXT("which cleared m_bInMelee"), Npc->bInMelee);
-	Npc->bInMelee = true;
-	Npc->RunnerPotentialEnemy = Enemy->Handle;
-	Npc->Slot601(Enemy);
-	TestFalse(TEXT("a runner's slot 601 forgets m_hPotentialEnemy"), Npc->RunnerPotentialEnemy.IsSet());
-	Npc->ScheduleHost.EnemyDistUnits = 0.f;
-	TestTrue(TEXT("and its slot 602 falls through to 'the coordinator does not hold me'"), Npc->Slot602());
+	Runner->bInMelee = true;
+	Runner->RunnerPotentialEnemy = Enemy->Handle;
+	TestFalse(TEXT("a runner's slot 599 is the refusing coordinator arm"), Runner->Slot599(0));
+	TestFalse(TEXT("which cleared m_bInMelee"), Runner->bInMelee);
+	Runner->bInMelee = true;
+	Runner->RunnerPotentialEnemy = Enemy->Handle;
+	Runner->Slot601(Enemy);
+	TestFalse(TEXT("a runner's slot 601 forgets m_hPotentialEnemy"), Runner->RunnerPotentialEnemy.IsSet());
+	Runner->ScheduleHost.EnemyDistUnits = 0.f;
+	TestTrue(TEXT("and its slot 602 falls through to 'the coordinator does not hold me'"), Runner->Slot602());
 	// The animal has no melee body of its own and no deferred row either.
 	if (Fixture.Animal != nullptr)
 	{
@@ -603,7 +659,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesBachGatesTest,
 bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Npc = Fixture.Runner;
+	FElysiumNpcBach* Npc = Fixture.Bach;
 	if (Npc == nullptr)
 	{
 		return false;
@@ -618,26 +674,26 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	// --- `0x10364280`: without the condition the flag is CLEARED and 0 is answered ---------------
 	Npc->bBachFireOccluded = true;
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
-	TestEqual(TEXT("no COND_ENEMY_OCCLUDED answers 0"), Npc->FUN_10364280(0), 0);
+	TestEqual(TEXT("no COND_ENEMY_OCCLUDED answers 0"), Npc->Slot606(0), 0);
 	TestFalse(TEXT("and clears m_bFireOccluded"), Npc->bBachFireOccluded);
 
 	// --- with the condition, the FIRST pass only arms -------------------------------------------
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
-	TestEqual(TEXT("the first pass with the condition still answers 0"), Npc->FUN_10364280(0), 0);
+	TestEqual(TEXT("the first pass with the condition still answers 0"), Npc->Slot606(0), 0);
 	TestTrue(TEXT("but arms m_bFireOccluded"), Npc->bBachFireOccluded);
 
 	// --- the SECOND pass delegates to the Troika body --------------------------------------------
 	// `FElysiumNpc::Slot606` is family TroikaHelpers'; the gate's job is to reach it.
 	const int32 Base = Npc->FElysiumNpc::Slot606(0);
-	TestEqual(TEXT("the second pass delegates to the base slot 606"), Npc->FUN_10364280(0), Base);
+	TestEqual(TEXT("the second pass delegates to the base slot 606"), Npc->Slot606(0), Base);
 	TestTrue(TEXT("and leaves the flag armed"), Npc->bBachFireOccluded);
 
 	// --- the hysteresis is RE-PAID every time the condition drops --------------------------------
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
-	TestEqual(TEXT("dropping the condition answers 0"), Npc->FUN_10364280(0), 0);
+	TestEqual(TEXT("dropping the condition answers 0"), Npc->Slot606(0), 0);
 	TestFalse(TEXT("and disarms"), Npc->bBachFireOccluded);
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
-	TestEqual(TEXT("so the next sighting arms again rather than firing"), Npc->FUN_10364280(0), 0);
+	TestEqual(TEXT("so the next sighting arms again rather than firing"), Npc->Slot606(0), 0);
 
 	// --- slot 609: the state gate ----------------------------------------------------------------
 	// Only retail states 4 (`NPC_STATE_SCRIPT`) and 0xc admit the base hint search; every other
@@ -672,7 +728,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCanPlaySequenceTest,
 bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Animal = Fixture.Animal;
+	FElysiumNpcAnimal* Animal = ElysiumTestAsSpecies<FElysiumNpcAnimal>(Fixture.Animal);
 	if (Animal == nullptr)
 	{
 		return false;
@@ -695,22 +751,29 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	// body is neither NONE (0) nor IDLE (1), its ideal is not IDLE, and it is not an ALERT (3) body
 	// asked with an interrupt level of at least 1.
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
-	TestEqual(TEXT("a combat body refuses a sequence"), Animal->FUN_1035fd40(false, 0), 0);
-	TestEqual(TEXT("and the Tzimisce copy answers the same"), Animal->FUN_103bd270(false, 0), 0);
+	TestEqual(TEXT("a combat body refuses a sequence"), Animal->CanPlaySequence(false, 0), 0);
+	FElysiumNpcTzimisce* Tzim = Fixture.Tzimisce;
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzim))
+	{
+		return false;
+	}
+	Tzim->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
+	TestEqual(TEXT("and the Tzimisce copy answers the same"), Tzim->CanPlaySequence(false, 0), 0);
 	TestEqual(TEXT("and so does the base"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
 
-	TestEqual(TEXT("disregarding state admits it"), Animal->FUN_1035fd40(true, 0), 1);
+	TestEqual(TEXT("disregarding state admits it"), Animal->CanPlaySequence(true, 0), 1);
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Idle);
-	TestEqual(TEXT("an idle body admits it"), Animal->FUN_1035fd40(false, 0), 1);
+	TestEqual(TEXT("an idle body admits it"), Animal->CanPlaySequence(false, 0), 1);
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
-	TestEqual(TEXT("an alert body refuses at interrupt level 0"), Animal->FUN_1035fd40(false, 0), 0);
-	TestEqual(TEXT("but admits at level 1"), Animal->FUN_1035fd40(false, 1), 1);
+	TestEqual(TEXT("an alert body refuses at interrupt level 0"), Animal->CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("but admits at level 1"), Animal->CanPlaySequence(false, 1), 1);
 
 	// **The one difference: retail state 4 (SCRIPT).** The species copies keep the answer; the base
 	// refuses. Through the slot, a spawned `npc_VAnimal` runs its own copy.
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
-	TestEqual(TEXT("a SCRIPT-state animal's copy admits a sequence"), Animal->FUN_1035fd40(false, 0), 1);
-	TestEqual(TEXT("and so does the Tzimisce copy"), Animal->FUN_103bd270(false, 0), 1);
+	TestEqual(TEXT("a SCRIPT-state animal's copy admits a sequence"), Animal->CanPlaySequence(false, 0), 1);
+	Tzim->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
+	TestEqual(TEXT("and so does the Tzimisce copy"), Tzim->CanPlaySequence(false, 0), 1);
 	TestEqual(TEXT("where the base refuses it"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
 	TestEqual(TEXT("and the slot answers the animal's own copy"), Animal->CanPlaySequence(false, 0), 1);
 	return true;
@@ -725,9 +788,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesTzimisceCarryTest,
 bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Npc = Fixture.Runner;
+	FElysiumNpcTzimisce* Npc = Fixture.Tzimisce;
+	FElysiumNpcTzimisceHeadClaw* Claw = Fixture.HeadClaw;
 	FElysiumNpc* Body = Fixture.Animal;
-	if (Npc == nullptr || Body == nullptr)
+	if (Npc == nullptr || Body == nullptr || !TestNotNull(TEXT("the head claw"), Claw))
 	{
 		return false;
 	}
@@ -813,15 +877,15 @@ bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 		Npc->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
 
 	// --- `0x103c24a0`: strictly greater, against ZERO and not against curtime --------------------
-	Npc->HeadClawSlowedExpire = 0.0;
-	TestFalse(TEXT("an unarmed slow window answers false"), Npc->FUN_103c24a0());
-	Npc->HeadClawSlowedExpire = 1.0;
-	TestTrue(TEXT("an armed one answers true"), Npc->FUN_103c24a0());
+	Claw->HeadClawSlowedExpire = 0.0;
+	TestFalse(TEXT("an unarmed slow window answers false"), Claw->FUN_103c24a0());
+	Claw->HeadClawSlowedExpire = 1.0;
+	TestTrue(TEXT("an armed one answers true"), Claw->FUN_103c24a0());
 	// **And it keeps answering true long after the stamp is in the past** — the predicate is
 	// `0.0 < m_flSlowedExpire`, never `curtime < m_flSlowedExpire`, so only a write back to zero
 	// clears it.
 	Fixture.World.Advance(Now + 100.0);
-	TestTrue(TEXT("and still answers true 100 seconds past the stamp"), Npc->FUN_103c24a0());
+	TestTrue(TEXT("and still answers true 100 seconds past the stamp"), Claw->FUN_103c24a0());
 	return true;
 }
 
@@ -834,7 +898,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWerewolfTest,
 bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Npc = Fixture.Runner;
+	FElysiumNpcWerewolf* Npc = Fixture.Werewolf;
 	FElysiumNpc* DoorA = Fixture.Animal;
 	FElysiumNpc* DoorB = Fixture.Andrei;
 	if (Npc == nullptr || DoorA == nullptr || DoorB == nullptr)
@@ -902,9 +966,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesZombieTest,
 bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Npc = Fixture.Runner;
+	// `0x103e0980` is `CNPC_VZombie::SetZombieAIType`: asked on a real zombie (story 5 step 4; it
+	// had run on a Tzimisce runner).
+	FElysiumNpcZombie* Zombie = Fixture.Zombie;
+	FElysiumNpc* Npc = Zombie;
 	FElysiumNpc* Victim = Fixture.Animal;
-	if (Npc == nullptr || Victim == nullptr)
+	if (Npc == nullptr || Victim == nullptr || !TestNotNull(TEXT("the zombie spawned"), Zombie))
 	{
 		return false;
 	}
@@ -928,24 +995,24 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	for (int32 Type : { 2, 3, 5, 6 })
 	{
 		FSpeciesFixture Fresh;
-		if (Fresh.Runner == nullptr)
+		if (Fresh.Zombie == nullptr)
 		{
 			continue;
 		}
-		Fresh.Runner->FUN_103e0980(Type);
+		Fresh.Zombie->FUN_103e0980(Type);
 		TestTrue(*FString::Printf(TEXT("ZombieAIType %d pushes a scripted order"), Type),
-			Fresh.Runner->GetMind().IsStateChangeForced());
+			Fresh.Zombie->GetMind().IsStateChangeForced());
 	}
 	for (int32 Type : { 0, 1, 7 })
 	{
 		FSpeciesFixture Fresh;
-		if (Fresh.Runner == nullptr)
+		if (Fresh.Zombie == nullptr)
 		{
 			continue;
 		}
-		Fresh.Runner->FUN_103e0980(Type);
+		Fresh.Zombie->FUN_103e0980(Type);
 		TestFalse(*FString::Printf(TEXT("ZombieAIType %d does not"), Type),
-			Fresh.Runner->GetMind().IsStateChangeForced());
+			Fresh.Zombie->GetMind().IsStateChangeForced());
 	}
 
 	// --- slots 25 and 26: the same output from two vtable entries, no base forward ---------------
@@ -957,18 +1024,18 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	// Both fire `m_OnAttackedVictim`; the wiring is what a mapper sees, so the counter is the read.
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("zombie"), 29132u);
-		Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VTzimisceRunner"));
+		Builder.AddNpc(TEXT("zombie"), FVector::ZeroVector, TEXT("npc_VZombie"));
 		Builder.AddCounter(TEXT("victims"));
 		Builder.WireOutput(TEXT("zombie"), TEXT("OnAttackedVictim"), TEXT("victims"));
 		FElysiumNpcWorldFixture World(MoveTemp(Builder));
-		FElysiumNpc* Zombie = World.Npc(TEXT("zombie"));
-		FElysiumNpcWorldFixture::Quiet({ Zombie });
-		if (Zombie != nullptr)
+		FElysiumNpcZombie* Wired = World.NpcAs<FElysiumNpcZombie>(TEXT("zombie"));
+		FElysiumNpcWorldFixture::Quiet({ Wired });
+		if (TestNotNull(TEXT("the wired zombie spawned"), Wired))
 		{
-			Zombie->FUN_103e12c0(Victim);
+			Wired->FUN_103e12c0(Victim);
 			World.World.Tick(World.World.NowSeconds() + 0.1);
 			TestEqual(TEXT("slot 25 fires OnAttackedVictim"), World.Counter(TEXT("victims")), 1.f);
-			Zombie->FUN_103e12f0(Victim);
+			Wired->Slot26(Victim);
 			World.World.Tick(World.World.NowSeconds() + 0.1);
 			TestEqual(TEXT("and slot 26 fires the SAME output"),
 				World.Counter(TEXT("victims")), 2.f);
@@ -976,26 +1043,26 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	}
 
 	// --- slot 510: the frequency write happens FIRST and on every call ---------------------------
-	Npc->FloatSoundFrequency = 0;
-	ElysiumMiscFlags::Set(Npc->MiscFlags, 0x1u);   // unconscious — the second gate
-	TestFalse(TEXT("an unconscious zombie plays no float sound"), Npc->FUN_103e1080());
+	Zombie->FloatSoundFrequency = 0;
+	ElysiumMiscFlags::Set(Zombie->MiscFlags, 0x1u);   // unconscious — the second gate
+	TestFalse(TEXT("an unconscious zombie plays no float sound"), Zombie->ShouldPlayFloatSound());
 	TestEqual(TEXT("but m_iFloatSoundFrequency was set to 9 before any gate ran"),
-		Npc->FloatSoundFrequency, 9);
+		Zombie->FloatSoundFrequency, 9);
 
-	Npc->FloatSoundFrequency = 0;
-	ElysiumMiscFlags::Clear(Npc->MiscFlags, 0x1u);
-	Npc->NpcFlags.Set(EElysiumNpcFlag::SLEEPING);
-	TestFalse(TEXT("a SLEEPING zombie plays none either"), Npc->FUN_103e1080());
-	TestEqual(TEXT("and the frequency is still written"), Npc->FloatSoundFrequency, 9);
-	Npc->NpcFlags.Clear(EElysiumNpcFlag::SLEEPING);
+	Zombie->FloatSoundFrequency = 0;
+	ElysiumMiscFlags::Clear(Zombie->MiscFlags, 0x1u);
+	Zombie->NpcFlags.Set(EElysiumNpcFlag::SLEEPING);
+	TestFalse(TEXT("a SLEEPING zombie plays none either"), Zombie->ShouldPlayFloatSound());
+	TestEqual(TEXT("and the frequency is still written"), Zombie->FloatSoundFrequency, 9);
+	Zombie->NpcFlags.Clear(EElysiumNpcFlag::SLEEPING);
 
 	// With no closest player it refuses; with one, past `Float_Sound_Info` row 3 (250 Source units)
 	// it refuses too. The full gate order and the direct base tail are `WiredSlot510…`'s.
-	Npc->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
-	TestFalse(TEXT("with no closest player it refuses"), Npc->FUN_103e1080());
-	Npc->Senses.Memory.ClosestPlayer = Victim->Handle;
-	Npc->Senses.Memory.ClosestPlayerDistanceCm = 251.f * ElysiumMove::U;
-	TestFalse(TEXT("and with one it refuses beyond the row-3 distance, 250 units"), Npc->FUN_103e1080());
+	Zombie->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
+	TestFalse(TEXT("with no closest player it refuses"), Zombie->ShouldPlayFloatSound());
+	Zombie->Senses.Memory.ClosestPlayer = Victim->Handle;
+	Zombie->Senses.Memory.ClosestPlayerDistanceCm = 251.f * ElysiumMove::U;
+	TestFalse(TEXT("and with one it refuses beyond the row-3 distance, 250 units"), Zombie->ShouldPlayFloatSound());
 	return true;
 }
 
@@ -1008,8 +1075,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesFleshpileTest,
 bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Andrei = Fixture.Andrei;
-	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpcAndreiBlood* Andrei = Fixture.TypedAndrei;
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);
 	if (Andrei == nullptr || Runner == nullptr)
 	{
 		return false;
@@ -1146,8 +1213,9 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 		TestEqual(TEXT("0x1034c8e0 decrements the live-runner count"),
 			Owner->ActiveRunnerCount, 1);
 		TestEqual(TEXT("and counts the kill"), Owner->AndreiKillCount, 1);
+		FElysiumNpcTzimisceRunner* ChildRunner = Child->AsSpecies<FElysiumNpcTzimisceRunner>();
 		TestTrue(TEXT("marking the runner so it cannot be counted twice"),
-			Child->bRunnerDeathNoticeProcessed);
+			ChildRunner != nullptr && ChildRunner->bRunnerDeathNoticeProcessed);
 
 		// The once-only flag is what stops a corpse re-notified from being counted again.
 		Fleshpile->FUN_1034c8e0(Child);
@@ -1173,7 +1241,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesNewscasterTest,
 bool FElysiumNpcKernelSpeciesNewscasterTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
-	FElysiumNpc* Npc = Fixture.Runner;
+	FElysiumNpcNewscaster* Npc = Fixture.Newscaster;
 	FElysiumNpc* Scene = Fixture.Animal;
 	if (Npc == nullptr || Scene == nullptr)
 	{
@@ -1262,30 +1330,41 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_Crow"), 197));
 
 	// --- `0x1036c7f0`: the ChangBros setter writes family Squad's word ---------------------------
-	Npc->ChangType = 0;
-	Npc->FUN_1036c7f0(3);
-	TestEqual(TEXT("0x1036c7f0 writes m_ChangType"), Npc->ChangType, 3);
+	Fixture.Chang->ChangType = 0;
+	Fixture.Chang->FUN_1036c7f0(3);
+	TestEqual(TEXT("0x1036c7f0 writes m_ChangType"), Fixture.Chang->ChangType, 3);
 	// It is a PLAIN setter — no clamp, no validation.
-	Npc->FUN_1036c7f0(-9);
-	TestEqual(TEXT("verbatim, with no clamp"), Npc->ChangType, -9);
+	Fixture.Chang->FUN_1036c7f0(-9);
+	TestEqual(TEXT("verbatim, with no clamp"), Fixture.Chang->ChangType, -9);
 
+	FElysiumNpcMingXiaoTentacle* Tentacle = Fixture.Tentacle;
+	FElysiumNpcTzimisce* Tzim = Fixture.Tzimisce;
+	FElysiumNpcTzimisceRunner* Runner = Fixture.TypedRunner;
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzim) || !TestNotNull(TEXT("the runner spawned"), Runner))
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("the tentacle spawned"), Tentacle))
+	{
+		return false;
+	}
 	// --- `0x1039ef90`: the tentacle's cached coordinate point and condition 0x78 ------------------
 	const EElysiumNpcCond Cond0x78 = static_cast<EElysiumNpcCond>(0x78);
-	Npc->Cognition.Conditions.Clear(Cond0x78);
-	Npc->FUN_1039ef90(FVector(7.0, 8.0, 9.0));
+	Tentacle->Cognition.Conditions.Clear(Cond0x78);
+	Tentacle->FUN_1039ef90(FVector(7.0, 8.0, 9.0));
 	TestTrue(TEXT("0x1039ef90 raises condition 0x78 — unnamed in the recovered vocabulary"),
-		Npc->Cognition.Conditions.Has(Cond0x78));
-	TestEqual(TEXT("and caches the three floats"), Npc->TentacleCoordinatePosUnits,
+		Tentacle->Cognition.Conditions.Has(Cond0x78));
+	TestEqual(TEXT("and caches the three floats"), Tentacle->TentacleCoordinatePosUnits,
 		FVector(7.0, 8.0, 9.0));
 
 	// --- slots 21, 22 and 23: three slots, one body, and the head seam answers null ---------------
-	Npc->TentacleHeadForwards = 0;
-	Npc->FUN_1039e800(Other);
-	Npc->FUN_1039e830(Other);
-	Npc->FUN_1039e860(Other);
-	TestEqual(TEXT("all three tentacle slots ask for the head"), Npc->TentacleHeadForwards, 3);
+	Tentacle->TentacleHeadForwards = 0;
+	Tentacle->FUN_1039e800(Other);
+	Tentacle->Slot22(Other);
+	Tentacle->Slot23(Other);
+	TestEqual(TEXT("all three tentacle slots ask for the head"), Tentacle->TentacleHeadForwards, 3);
 	TestNull(TEXT("and the seam answers null, so nothing is forwarded"),
-		Npc->MingXiaoTentacleHead());
+		Tentacle->MingXiaoTentacleHead());
 	const FElysiumNpcClass* TentacleClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiaoTentacle"));
 	TestEqual(TEXT("CNPC_VMingXiaoTentacle's slot 21 is 0x1039e800"),
 		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
@@ -1295,18 +1374,18 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 23)), FString(TEXT("0x1039e860")));
 
 	// --- `0x103b9180`, slot 593: the base first, then five literals ------------------------------
-	Npc->TargetLeadMin = 999.f;
-	Npc->TargetLeadMax = 999.f;
-	Npc->TargetLeadCurrentWeight = 999.f;
-	Npc->TargetLeadPredictedWeight = 999.f;
-	Npc->TargetLeadWeightScale = 999.f;
-	Npc->FUN_103b9180();
-	TestEqual(TEXT("slot 593 writes m_flTargetLeadMin 0.01"), Npc->TargetLeadMin, 0.01f, 1.0e-06f);
-	TestEqual(TEXT("m_flTargetLeadMax 1.0"), Npc->TargetLeadMax, 1.0f, 1.0e-06f);
-	TestEqual(TEXT("m_flTargetLeadCurrentWeight 50"), Npc->TargetLeadCurrentWeight, 50.f, 1.0e-06f);
-	TestEqual(TEXT("m_flTargetLeadPredictedWeight 50"), Npc->TargetLeadPredictedWeight, 50.f,
+	Tzim->TargetLeadMin = 999.f;
+	Tzim->TargetLeadMax = 999.f;
+	Tzim->TargetLeadCurrentWeight = 999.f;
+	Tzim->TargetLeadPredictedWeight = 999.f;
+	Tzim->TargetLeadWeightScale = 999.f;
+	Tzim->Slot593();
+	TestEqual(TEXT("slot 593 writes m_flTargetLeadMin 0.01"), Tzim->TargetLeadMin, 0.01f, 1.0e-06f);
+	TestEqual(TEXT("m_flTargetLeadMax 1.0"), Tzim->TargetLeadMax, 1.0f, 1.0e-06f);
+	TestEqual(TEXT("m_flTargetLeadCurrentWeight 50"), Tzim->TargetLeadCurrentWeight, 50.f, 1.0e-06f);
+	TestEqual(TEXT("m_flTargetLeadPredictedWeight 50"), Tzim->TargetLeadPredictedWeight, 50.f,
 		1.0e-06f);
-	TestEqual(TEXT("and m_flTargetLeadWeightScale 0.01"), Npc->TargetLeadWeightScale, 0.01f,
+	TestEqual(TEXT("and m_flTargetLeadWeightScale 0.01"), Tzim->TargetLeadWeightScale, 0.01f,
 		1.0e-06f);
 
 	// `CScriptedTarget::Spawn` (`0x1034d6e0`) is on a class no map stands and carries no port body.
@@ -1323,24 +1402,24 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 
 	// --- `0x103c3fd0`, slot 588: the base's IsActivityFinished gate is GONE ----------------------
 	// The restart is unconditional; `RestartIdealActivityId` is family Hints' seam and records it.
-	Npc->FUN_103c3fd0();
+	Runner->Slot588();
 	TestEqual(TEXT("a runner's slot 588 is 0x103c3fd0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 588)), FString(TEXT("0x103c3fd0")));
-	Npc->Slot588();   // `FElysiumNpcTzimisceRunner::Slot588`, the same body through the slot
+		FString(ElysiumNpcKernelClass::BodyOf(Runner->RetailClass(), 588)), FString(TEXT("0x103c3fd0")));
+	Runner->Slot588();   // `FElysiumNpcTzimisceRunner::Slot588`, the same body through the slot
 
 	// --- `0x103b92a0`, slot 488: the three voice ConVars, then the event -------------------------
 	int32 Argument = -1;
 	TestTrue(TEXT("SPI_DIES argument 0 is tzimisce_voice_pitch"),
-		Npc->TzimisceDeathScriptArgument(0, Argument));
+		Tzim->TzimisceDeathScriptArgument(0, Argument));
 	TestEqual(TEXT("shipped 100"), Argument, 100);
-	TestTrue(TEXT("argument 1 is tzimisce_voice_attn"), Npc->TzimisceDeathScriptArgument(1, Argument));
+	TestTrue(TEXT("argument 1 is tzimisce_voice_attn"), Tzim->TzimisceDeathScriptArgument(1, Argument));
 	TestEqual(TEXT("shipped 65"), Argument, 65);
-	TestTrue(TEXT("argument 2 is tzimisce_voice_volume"), Npc->TzimisceDeathScriptArgument(2, Argument));
+	TestTrue(TEXT("argument 2 is tzimisce_voice_volume"), Tzim->TzimisceDeathScriptArgument(2, Argument));
 	TestEqual(TEXT("handed over as 1.0f's dword"), static_cast<uint32>(Argument), 0x3f800000u);
-	Npc->FUN_103b92a0();   // fires the recorded event; the tail call is slot 487's
+	Tzim->DeathSound();   // fires the recorded event; the tail call is slot 487's
 
 	// --- `0x103bf560`: the motor yaw release ------------------------------------------------------
-	Npc->FUN_103bf560();   // reaches family Hints' ReleaseMotorHintYaw seam
+	Tzim->FUN_103bf560();   // reaches family Hints' ReleaseMotorHintYaw seam
 	return true;
 }
 
@@ -1368,7 +1447,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot21Test,
 bool FElysiumNpcKernelSpeciesWiredSlot21Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
-	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpcMingXiaoTentacle* Tentacle = ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Tentacle == nullptr || Cop == nullptr)
 	{
@@ -1385,12 +1464,12 @@ bool FElysiumNpcKernelSpeciesWiredSlot21Test::RunTest(const FString&)
 	TestFalse(TEXT("and raises no COND_BEING_ATTACKED — the base body did not run"),
 		Tentacle->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
 
-	Cop->TentacleHeadForwards = 0;
 	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
 	Cop->Slot21(nullptr);
 	TestTrue(TEXT("slot 21 on a plain Troika NPC raises COND_BEING_ATTACKED"),
 		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
-	TestEqual(TEXT("and asks no head"), Cop->TentacleHeadForwards, 0);
+	TestNull(TEXT("and it is no tentacle, so it asks no head"),
+		Cop->AsSpecies<FElysiumNpcMingXiaoTentacle>());
 	return true;
 }
 
@@ -1399,7 +1478,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot22Test,
 bool FElysiumNpcKernelSpeciesWiredSlot22Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
-	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpcMingXiaoTentacle* Tentacle = ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Tentacle == nullptr || Cop == nullptr)
 	{
@@ -1427,7 +1506,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot23Test,
 bool FElysiumNpcKernelSpeciesWiredSlot23Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
-	FElysiumNpc* Tentacle = Fixture.Species;
+	FElysiumNpcMingXiaoTentacle* Tentacle = ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Tentacle == nullptr || Cop == nullptr)
 	{
@@ -1602,7 +1681,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot488Test,
 bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
-	FElysiumNpc* Tzimisce = Fixture.Species;
+	FElysiumNpcTzimisce* Tzimisce = ElysiumTestAsSpecies<FElysiumNpcTzimisce>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Tzimisce == nullptr || Cop == nullptr)
 	{
@@ -1641,7 +1720,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot497Test,
 bool FElysiumNpcKernelSpeciesWiredSlot497Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
-	FElysiumNpc* Camera = Fixture.Species;
+	FElysiumNpcCamera* Camera = ElysiumTestAsSpecies<FElysiumNpcCamera>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Camera == nullptr || Cop == nullptr)
 	{
@@ -1668,7 +1747,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot506Test,
 bool FElysiumNpcKernelSpeciesWiredSlot506Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
-	FElysiumNpc* Camera = Fixture.Species;
+	FElysiumNpcCamera* Camera = ElysiumTestAsSpecies<FElysiumNpcCamera>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Camera == nullptr || Cop == nullptr)
 	{
@@ -1704,7 +1783,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot510Test,
 bool FElysiumNpcKernelSpeciesWiredSlot510Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VZombie"));
-	FElysiumNpc* Zombie = Fixture.Species;
+	FElysiumNpcZombie* Zombie = ElysiumTestAsSpecies<FElysiumNpcZombie>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Zombie == nullptr || Cop == nullptr)
 	{
@@ -1774,7 +1853,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot588Test,
 bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
-	FElysiumNpc* Runner = Fixture.Runner;   // a REAL `npc_VTzimisceRunner`
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);   // a REAL `npc_VTzimisceRunner`
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Runner == nullptr || Cop == nullptr)
 	{
@@ -1802,7 +1881,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot593Test,
 bool FElysiumNpcKernelSpeciesWiredSlot593Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
-	FElysiumNpc* Tzimisce = Fixture.Species;
+	FElysiumNpcTzimisce* Tzimisce = ElysiumTestAsSpecies<FElysiumNpcTzimisce>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Tzimisce == nullptr || Cop == nullptr)
 	{
@@ -1843,7 +1922,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot599Test,
 bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
-	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Runner == nullptr || Cop == nullptr)
 	{
@@ -1890,7 +1969,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot600Test,
 bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
-	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Runner == nullptr || Cop == nullptr)
 	{
@@ -1921,7 +2000,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot601Test,
 bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
-	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Runner == nullptr || Cop == nullptr)
 	{
@@ -1958,7 +2037,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot602Test,
 bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
-	FElysiumNpc* Runner = Fixture.Runner;
+	FElysiumNpcTzimisceRunner* Runner = ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Fixture.Runner);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Runner == nullptr || Cop == nullptr)
 	{
@@ -1988,7 +2067,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredYukieMeleeTest,
 bool FElysiumNpcKernelSpeciesWiredYukieMeleeTest::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VYukie"));
-	FElysiumNpc* Yukie = Fixture.Species;
+	FElysiumNpcYukie* Yukie = ElysiumTestAsSpecies<FElysiumNpcYukie>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Yukie == nullptr || Cop == nullptr)
 	{
@@ -2038,7 +2117,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot606Test,
 bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));
-	FElysiumNpc* Bach = Fixture.Species;
+	FElysiumNpcBach* Bach = ElysiumTestAsSpecies<FElysiumNpcBach>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Bach == nullptr || Cop == nullptr)
 	{
@@ -2050,7 +2129,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 	// `0xaa` at once. Bach's `0x10364280` arms `m_bFireOccluded` and answers 0 on the FIRST pass and
 	// only then delegates — so the two answers differ on pass one and agree on pass two, which is
 	// what proves the delegation is a DIRECT call into the base and not a second dispatch.
-	for (FElysiumNpc* Npc : { Bach, Cop })
+	for (FElysiumNpc* Npc : std::initializer_list<FElysiumNpc*>{ Bach, Cop })
 	{
 		Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
 		Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyUnreachable);
@@ -2067,7 +2146,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 	// The base's own side effect proves the destination: the Troika body's `FORCED_OCCLUDE` arm
 	// CLEARS the flag. Bach's first pass (the HasCondition gate, then the flag write) returns before
 	// the base, so the flag survives it; the second pass reaches the base, which clears it.
-	for (FElysiumNpc* Npc : { Bach, Cop })
+	for (FElysiumNpc* Npc : std::initializer_list<FElysiumNpc*>{ Bach, Cop })
 	{
 		Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyUnreachable);
 		Npc->NpcFlags.Set(EElysiumNpcFlag::FORCED_OCCLUDE);
@@ -2096,7 +2175,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot609Test,
 bool FElysiumNpcKernelSpeciesWiredSlot609Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));
-	FElysiumNpc* Bach = Fixture.Species;
+	FElysiumNpcBach* Bach = ElysiumTestAsSpecies<FElysiumNpcBach>(Fixture.Species);
 	FElysiumNpc* Cop = Fixture.Troika;
 	if (Bach == nullptr || Cop == nullptr)
 	{

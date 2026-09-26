@@ -41,39 +41,6 @@
 // tail answers "not that entity" for every candidate.
 FElysiumEntityHandle IgnoreCollisionEntity;
 
-// +0x6750 `CNPC_VMingXiao::m_bBlockedByFriend` — the one-field state `0x1039aaf0` writes and
-// `0x1039ab10` reads. Census name only; no other retail body in layers 0–9 touches it.
-bool bBlockedByFriend = false;
-
-// +0x66cc `CNPC_VChangBros::m_fLastJumpTime` (`FIELD_TIME`) — the stamp `CheckForJumpAttack`
-// (`0x1036c8d0`) measures both itself and every squad sibling against. An absolute curtime stamp,
-// carried as double like every other stamp in this runtime.
-double LastJumpTime = 0.0;
-
-// +0x66b8 `CNPC_VAsianVampire::m_vLastJumpPosition[2]` (six floats) and +0x66d0
-// `m_iLastJumpPositionIdx` — the two-entry ring `IsPosNearStoredJumpPositions` (`0x103618a0`) walks.
-// SOURCE units, as every retail position word here is.
-FVector LastJumpPosition[2] = { FVector::ZeroVector, FVector::ZeroVector };
-int32 LastJumpPositionIdx = 0;
-
-// +0x66d8 `CNPC_VAsianVampire::m_fMovedTimeStamp` and +0x66dc `m_vMovedPosition` — the stationary
-// watchdog `UpdateMovedTimeStamp` (`0x10362540`) stamps and `StationaryForTooLong` (`0x10362670`)
-// reads. The stamp is an absolute curtime, the position SOURCE units.
-double MovedTimeStamp = 0.0;
-FVector MovedPosition = FVector::ZeroVector;
-
-// `CNPC_VTzimisce`'s pickup triple, read by its slot 410 `TranslateNavGoalPosition` (`0x103bf580`):
-// +0x6670 `m_hPickupTarget`, +0x6674 `m_vecPickupTargetPos` (SOURCE units) and +0x668c
-// `m_ePathMode`. Note the offsets: `m_ePathMode` is the HIGHEST of the three, not the lowest — the
-// ledger's one-line walk of that body has the triple in the wrong order.
-FElysiumEntityHandle PickupTarget;
-FVector PickupTargetPos = FVector::ZeroVector;
-int32 PathMode = 0;
-
-// +0x6688 `CNPC_VMingXiaoTentacle::m_bIgnoreCollision` — the tentacle's own gate on slots 68 and 69
-// (`0x1039eb50`, `0x1039eb90`).
-bool bIgnoreCollisionSpecies = false;
-
 // The CURRENT activity number every fill of slot 516 switches on is +0x0fec `m_Activity`, which the
 // **Positions** family declares as `ActivityNumber`; the yaw ladders below read that member rather
 // than a second copy of the same word. The Facing family carries the IDEAL one beside it
@@ -171,10 +138,6 @@ bool NavGoalPosition(FVector& OutGoalUnits) const;
  *  retail identity is **unrecovered**. */
 bool NavLinkActivity(int32& OutActivity) const;
 
-/** `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s cancel of the motor's queued facing/link
- *  state. **SEAM**: shares the Facing family's finding that this mover keeps no facing queue. */
-void MotorCancelLinkFacing();
-
 /** `FUN_1029f6c0` — resolve a `CAI_Node` through the navigator's node array (`nav+0x2c`, count at
  *  `[0]`, entries at `[1]`) using the index the argument's route step carries, and answer
  *  `node+0xa0`. **SEAM**: there is no node graph; answers 0, which is retail's own answer for a
@@ -207,8 +170,11 @@ bool MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 ProbeFlags)
  *  entity. */
 struct FKernelHullTrace
 {
-	float Fraction = 1.f;                  // trace_t +0x?? — 1.0 is "nothing in the way"
+	float Fraction = 1.f;                  // trace_t +0x2c — 1.0 is "nothing in the way"
 	FElysiumEntityHandle HitEntity;        // trace_t::m_pEnt
+	FVector PlaneNormal = FVector::ZeroVector;  // trace_t +0x18 plane.normal
+	bool bAllSolid = false;                // trace_t +0x36 allsolid
+	bool bStartSolid = false;              // trace_t +0x37 startsolid
 };
 bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const FVector& HullMins,
 	const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const;
@@ -245,10 +211,6 @@ static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMin
  *  2 is recovered; this runtime stands no derived-type word at all, so it answers 0 and every one of
  *  those gates falls through. What each remaining bit MEANS is **unrecovered**. */
 static int32 RetailDerivedType(const FElysiumEntity& Entity);
-
-/** `CBaseEntity::GetFlags2()` bit 3 — the second flag word `CNPC_VWerewolf`'s two collision-ignore
- *  overrides test. **SEAM**: `FElysiumEntity::Flags` is the first word only; answers 0. */
-static uint32 RetailFlags2(const FElysiumEntity& Entity);
 
 /** `CBaseEntity::IsStandable()` (slot 164, `0x100b50a0`) — solid flag `0x10` clear, then move type
  *  1 / 6 / 2, else `thunk_FUN_100b5110`. **SEAM**: this substrate carries no solid flags and no
@@ -324,36 +286,6 @@ static float RetailYawConVarValue(const TCHAR* Address);
 
 // --- The species helpers the jump chain calls out to ---------------------------------------------
 
-/** `CNPC_VChangBros::GetSector(pos)` — the sector id `CheckForJumpAttack` compares against 4 for
- *  both the player and itself. **SEAM**: this substrate has no sector partition; answers 4, which
- *  is the value that CLOSES the gate, so the jump attack is refused rather than allowed on a guess. */
-int32 ChangBrosSector(const FVector& PositionUnits) const;
-
-/** `thunk_FUN_102c4cc0(this, out, from, to)` — retail's jump-arc solver, which
- *  `SetJumpVelocityTowardPlayer` (`0x103aad40`) feeds the lead position and then assigns straight to
- *  `SetAbsVelocity`. **SEAM**: no solver here; answers false and the velocity is left alone. */
-bool SolveJumpArc(const FVector& FromUnits, const FVector& ToUnits, FVector& OutVelocityUnits) const;
-
-/** `thunk_FUN_102c4e80(this)` — the commit every `SetupJump`/`SetupSuperJump` ends on, which takes
- *  the three jump words this family has just written and starts the leap. **SEAM**: records that
- *  the commit was reached and starts nothing. */
-void CommitSetupJump();
-
-/** `CNPC_VAsianVampire::PositionClearForTeleport(pos, 150.0)` (`_DAT_104a9320`) — the clearance test
- *  `SelectJumpbaseNode` filters hint nodes with. **SEAM**: answers false, so the search finds no
- *  node rather than choosing one blind. */
-bool PositionClearForTeleport(const FVector& PositionUnits, float RadiusUnits) const;
-
-/** `CNPC_VAsianVampire::AddHintToStoredJumpPositions(hint)` — the ring write that pairs with
- *  `IsPosNearStoredJumpPositions`. Ported: it stores the hint's origin at `m_iLastJumpPositionIdx`
- *  and advances the index modulo 2. The hint's ORIGIN is the seam. */
-void AddHintToStoredJumpPositions(int32 HintNode);
-
-/** `CNPC_VVampireBoss::DistToHintCenterLine2D_2(hint, pos)` — the squared 2-D distance from a
- *  position to a hint's centre line that `PlayerInNoJumpZone` (`0x103a9e70`) thresholds at 100.0.
- *  **SEAM**: no hint geometry here; answers false and the zone test finds nobody inside. */
-bool DistToHintCenterLine2DSqr(int32 HintNode, const FVector& PositionUnits, float& OutSqr) const;
-
 /** The claimed hint node's type word (`CAI_Hint+0x5dc m_nHintType`) and its origin. `HintNode` is a
  *  bare index in this runtime and no store carries hint types or positions yet — the Squad family
  *  records the same gap on the global hint list — so both answer nothing. */
@@ -363,16 +295,6 @@ bool NavHintNodeOrigin(int32 HintNode, FVector& OutOriginUnits) const;
 /** The global `CAI_Hint` list (`DAT_10925450`, next link `+0x5d8`) that `PlayerInNoJumpZone` and
  *  `SelectJumpbaseNode` walk end to end. **SEAM**: answers an empty list. */
 bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
-
-/** `thunk_FUN_1039ede0(this)` — `CNPC_VMingXiaoTentacle`'s companion/head entity, which its slot 166
- *  excludes from the standable test. **SEAM**: the tentacle proxy chain is the Squad family's
- *  `Proxies[6]` and nothing links a head to it yet; answers null. */
-FElysiumEntity* MingXiaoTentacleCompanion() const;
-
-/** `thunk_FUN_101cda50()` — the fixed global entity `CNPC_VRat::ShouldIgnoreCollision` compares
- *  against. **SEAM**, and its retail identity is **unrecovered**: the body takes no argument and
- *  reads a global; answers null. */
-FElysiumEntity* RatIgnoredGlobalEntity() const;
 
 /** `CBaseAnimating::IsIgnoreCollisionEntity(other)` (`0x1008be20`) — the tail of both
  *  collision-ignore chains: `m_hIgnoreCollisionEntity` resolved and compared against the candidate. */
@@ -413,40 +335,8 @@ bool OnObstructingDoorBase(float& InOutMoveGoalMaxDistance, int32 DoorState, flo
  *  the whole of the recovered behaviour. */
 bool BlockedIsNoOp() const;
 
-/** `0x1039aaf0` / `0x1039ab10` — `CNPC_VMingXiao::m_bBlockedByFriend`'s setter and getter. */
-void SetBlockedByFriend(bool bBlocked);
-bool BlockedByFriend() const;
-
-/** `CNPC_VChangBros::CheckForJumpAttack` `0x1036c8d0`. */
-bool CheckForJumpAttack();
-
-/** `CNPC_VSabbatLeader::CheckStuck` `0x103ab580`. */
-void CheckStuck();
-
-/** `CNPC_VWerewolf::GetGroundpoint` `0x103d6a40`. */
-FVector GetGroundpoint(const FVector& PointUnits) const;
-
-/** `CNPC_VAsianVampire::GetJumpSchedule` `0x10362430`. */
-int32 GetJumpSchedule() const;
-
-/** `CNPC_VAsianVampire::IsPosNearStoredJumpPositions` `0x103618a0`. */
-bool IsPosNearStoredJumpPositions(const FVector& PositionUnits) const;
-
 /** `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — the base line's single constant. */
 static float MaxYawSpeedBase();
-
-/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` — the tuning record's +0x48 in the 0x112a–0x112d band
- *  and +0x44 elsewhere, read through the record seam. */
-static float MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField);
-
-/** `CNPC_VDog::MaxYawSpeed` `0x10374130` and `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020` — the two
- *  species that replace the Troika ladder wholesale rather than adding an arm to it. Both take the
- *  same "turning" arm at `m_afMemory & 0x2000`; that arm is shared with the Troika body and lives in
- *  `MaxYawSpeedTurningArm` below. */
-float MaxYawSpeedDog();
-/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own words: the body of its override. */
-float MingXiaoMaxYawSpeed();
-float MaxYawSpeedTzimisce();
 
 /** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
  *  `m_afMemory & 0x2000` (AT_COVER_HINT) is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0.
@@ -458,88 +348,25 @@ float MaxYawSpeedTurningArm(const TCHAR* ConVarAddress);
  *  before they diverge (`0x1029afc0` and `0x1029b180`, arms 1–3). */
 bool IgnoreCollisionSharedHead(const FElysiumEntity* Other) const;
 
-/** `CNPC_VGargoyle::NavIgnoreCollision` `0x10379490`'s classname filter, as a pure function so the
- *  three names it matches are assertable without an entity. */
-static bool GargoyleIgnoresClassname(const FString& Classname);
-
 /** `CAI_Navigator::OnNavFailed`'s activity resolution, `FUN_1027a6c0` `0x1027a6c0`: the link's
  *  cached activity when the link is valid and not -1, else 1 (`ACT_IDLE`). */
 int32 ResolveLinkActivity() const;
 
-/** `FUN_10382d20` `0x10382d20` — the other half of the same unrecovered link object: cancel the
- *  motor's queued facing/link state with -1. */
-void ClearLinkActivity();
-
 /** `FUN_102bf7e0` `0x102bf7e0` — stop an active goal, then set `m_bShouldMove` unconditionally.
  *  Target is 29c's best guess at the retail name; the body is exact. */
 void ResumeScheduledMove();
-
-/** `CNPC_VAsianVampire::SelectJumpbaseNode` `0x10361730` — nearest teleport-clear hint of type
- *  18000, then remember it. */
-int32 SelectJumpbaseNode();
-
-/** `CNPC_VSabbatLeader::SetJumpVelocityTowardPlayer` `0x103aad40`. */
-void SetJumpVelocityTowardPlayer();
-
-/** `CNPC_VSabbatLeader::PlayerInNoJumpZone` `0x103a9e70`. */
-bool PlayerInNoJumpZone() const;
-
-/** `CNPC_VAsianVampire::SetupJump` `0x10361a70` (rise constant 100.0) and `CNPC_VSheriffMan::SetupJump`
- *  `0x103b1300` (400.0) — non-virtual per-class methods sharing one behaviour, `SetupJumpRise`. */
-void AsianVampireSetupJump(float Enabled);
-void SheriffManSetupJump(float Enabled);
-void SetupJumpRise(float Enabled, float Rise);
-
-/** `CNPC_VChangBros::SetupSuperJump` `0x1036e160`. */
-void SetupSuperJump(float Enabled);
-
-/** `CNPC_VAsianVampire::StationaryForTooLong` `0x10362670` and `UpdateMovedTimeStamp` `0x10362540`. */
-bool StationaryForTooLong() const;
-void UpdateMovedTimeStamp();
-
-/** `CNPC_VTzimisce::vfunc410` `0x103bf580` — the species branch of slot 410. Slot 410's own body is
- *  the base `0x101a6420` and remains the generator's. */
-bool TranslateNavGoalPositionTzimisce(const FVector& GoalUnits, FVector& OutGoalUnits) const;
 
 /** `CAI_BaseNPC::IsJumpLegal`'s shared geometry helper `FUN_10280790` `0x10280790`, as a pure
  *  function of the three points and the three thresholds, so both fills of slot 521 are one body. */
 static bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
 	const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance);
 
-// --- The species tables --------------------------------------------------------------------------
+// --- The movement-tunables table ----------------------------------------------------------------
 //
 // Every row carries the retail class it came from AND the retail address of the body, so a reader
-// can check it against `docs/vtmb/npc-kernel/slots.md`.
-
-/** Slot 516 `MaxYawSpeed`: the classes that replace the Troika ladder, and with what. */
-struct FMaxYawSpeedSpecies
-{
-	const TCHAR* RetailClass;
-	const TCHAR* Body516;
-};
-static const FMaxYawSpeedSpecies* MaxYawSpeedSpeciesRows(int32& OutCount);
-
-/** Slots 68/69 `ShouldIgnoreCollision` / `NavIgnoreCollision`: the species that add an arm in front
- *  of the Troika bodies, with the address of each arm. An empty string means the class does not
- *  replace that slot. */
-struct FIgnoreCollisionSpecies
-{
-	const TCHAR* RetailClass;
-	const TCHAR* Body68;
-	const TCHAR* Body69;
-};
-static const FIgnoreCollisionSpecies* IgnoreCollisionSpeciesRows(int32& OutCount);
-
-/** The two `SetupJump` species and their rise constant, read out of `.rdata`. */
-struct FSetupJumpSpecies
-{
-	const TCHAR* RetailClass;
-	const TCHAR* Body;
-	const TCHAR* RiseConstant;
-	float Rise;
-};
-static const FSetupJumpSpecies* SetupJumpSpeciesRows(int32& OutCount);
-static const FSetupJumpSpecies* SetupJumpSpeciesOf(const TCHAR* InRetailClass);
+// can check it against `docs/vtmb/npc-kernel/slots.md`. The species answers of slots 68/69, 516 and
+// the `SetupJump` rises are their classes' own overrides (story 5 step 4); this table's rows are the
+// Troika line, the non-Troika branch and the debug hull, which the Troika bodies read.
 
 /** Slots 521/522/523 `IsJumpLegal` / `StepHeight` / `GetMaxJumpSpeed`: the movement tunables, one
  *  row per class that answers them differently from the Troika line. */

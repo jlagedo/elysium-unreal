@@ -40,11 +40,6 @@ int32 IdealActivityNumber = 0;
 // activity change. No visual layer reads it yet.
 int32 MotionTrail = 0;
 
-// +0x66d0 m_fFacingTime (`CNPC_VChangBros`) — the curtime stamp `UpdateFacingTimer` resets, and the
-// clock `GetFacingTimeToTeleport`'s answer is measured against. Carried as double like every other
-// stamp in this runtime.
-double FacingTime = 0.0;
-
 // --- The `CAI_Motor` facing seam ----------------------------------------------------------------
 //
 // `m_pMotor` (+0x5d44) is `ELYSIUM_NPC_WORD_CHAIN(0x5d44, "FElysiumScriptedCharacter::Motor")`, and
@@ -141,14 +136,6 @@ static FTurnActivityPick TurnActivityTroikaLadder(float YawDelta,
 // same way; they fold in steps 9 and 8.
 
 // --- Slot 465's species half --------------------------------------------------------------------
-//
-// `CAI_BaseNPCTroika::OnChangeActivity` `0x10295a60` is `return;` — 29c's verdict, and the body the
-// generator emits for slot 465. `CNPC_VMingXiao`, `CNPC_VSabbatGunman` and `CNPC_VWerewolf` override
-// it on their C++ classes (story 5 step 3) with these bodies, each ending in a direct call into the
-// Troika body. `CNPC_Crow#465` (`0x10357b30`) carries no port body: no map stands that class.
-void MingXiaoOnChangeActivity(int32 Activity);       // `0x103947b0`
-void SabbatGunmanOnChangeActivity(int32 Activity);   // `0x103a56f0`
-void WerewolfOnChangeActivity(int32 Activity);       // `0x103d5f60`
 
 // `CNPC_VSabbatGunman::OnChangeActivity` `0x103a56f0`'s pick, as a pure function of its three
 // species convars (`DAT_1093c104` speed threshold, `DAT_1093c14c` trail id, `DAT_1093c1f4`
@@ -159,8 +146,6 @@ struct FMotionTrailPick
 	int32 MotionTrail = 0;
 	float PlaybackScalar = 0.f;
 };
-static FMotionTrailPick SabbatGunmanMotionTrail(float GroundSpeed, float SpeedThreshold,
-	int32 TrailId, float TrailScalar);
 
 // `CNPC_VMingXiao::OnChangeActivity` `0x103947b0`'s playback scalar, as a pure function of the
 // activity, the discipline gate (`0x10398870`, which the oracle names "+0x6674"), the tentacle
@@ -171,8 +156,6 @@ struct FMingXiaoPlayback
 	bool bWalkOrRun = false;      // the activity was ACT_WALK (9) or ACT_RUN (0x13)
 	bool bSecondWriteSkipped = false;  // the gated ACT 0x4b arm writes once and leaves early
 };
-static FMingXiaoPlayback MingXiaoPlaybackScalar(int32 Activity, bool bDisciplineArm,
-	int32 TentacleCount, TFunctionRef<float(int32)> TuningField);
 
 // --- The facing readers and writers that fill no slot -------------------------------------------
 
@@ -180,11 +163,3 @@ static FMingXiaoPlayback MingXiaoPlaybackScalar(int32 Activity, bool bDiscipline
 void ClearFacingTarget();
 // `CAI_BaseNPC::FacingIdeal` `0x10278c80`.
 bool FacingIdeal() const;
-// `CNPC_VChangBros::GetFacingTimeToTeleport` `0x1036dc60`.
-float GetFacingTimeToTeleport() const;
-// `CNPC_VAndreiBlood::FacePlayerAdvance` `0x1035e5f0`.
-void FacePlayerAdvance();
-// `CNPC_VSabbatLeader::PlayerIsFacingMe` `0x103aaf50`.
-bool PlayerIsFacingMe() const;
-// `CNPC_VChangBros::UpdateFacingTimer` `0x1036d600`.
-void UpdateFacingTimer();

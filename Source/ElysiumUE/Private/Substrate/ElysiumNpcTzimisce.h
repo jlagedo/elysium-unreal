@@ -4,12 +4,16 @@
 
 // `CNPC_VTzimisce` (primary vtable `0x104cb934`), built by `npc_VTzimisce` factory `0x103b6bf0`.
 //
-// Story 5 step 2 stands the class so the classname's factory builds the retail class and the class
-// answers its own census row. Its overrides and own datamap words still sit on `FElysiumNpc` and
-// move here in steps 3-4 (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`).
+// The classname's factory builds this class and it answers its own census row (story 5 step 2). Its
+// slot overrides, own bodies, own datamap words and their bindings live here (steps 3-4,
+// `docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`); the words a Troika body still
+// reads stay on `FElysiumNpc` until step 11.
 class FElysiumNpcTzimisce : public FElysiumNpcBaseBoss
 {
 public:
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VTzimisce");
+
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
 	virtual void DeathSound() override;
@@ -35,4 +39,131 @@ public:
 	virtual void JustMadeSound() override;
 	virtual void IdleSound() override;
 	virtual void PainSound() override;
+
+	// +0x66b8 m_iShunnedFindBody (`CNPC_VTzimisce`): its own shunned-find counter, written by
+	// `NPCInit` (`0x103b91d0`) and `TaskFail` (`0x103ba350`).
+	int32 TzimisceShunnedFindBody = 0;
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	/** `thunk_FUN_103be130(this)` — `CNPC_VTzimisce`'s carry-body probe, the same `+0x14b8` bit 5. */
+	bool TzimisceCarryFormBit() const;
+
+	// From `ElysiumNpcKernelConditions.inl`.
+	/** `CNPC_VTzimisce::vfunc463`'s expression map (`0x103ba2c0` + `0x103b9f50`): the retail state to
+	 *  one of `PTR_s_normal_10653120`'s four names. Null for a state the switch does not name, which is
+	 *  the arm that writes nothing. Pure, so the map is drivable with no NPC at all. */
+	static const TCHAR* StateChangeExpressionName(EElysiumNpcState NewState);
+	/** SEAM for `CBaseCombatCharacter::LookupExpressionIndex` + `0x103b9f90(this, index, 1.0)`. There is
+	 *  no `SetExpression` in this runtime (the script API lists it as a stub), so this records the NAME
+	 *  in `DefExpression` and blends nothing. `BlendSeconds` is retail's own `1.0`. */
+	void SetDefaultExpression(const TCHAR* ExpressionName, float BlendSeconds);
+
+	// From `ElysiumNpcKernelDamage.inl`.
+	// `CNPC_VTzimisce`'s link handle. Family Motor owns `m_hPickupTarget` (+0x6670) and `m_ePathMode`
+	// (+0x668c); `+0x6684` is this family's, read and cleared by `0x103bf170`.
+	FElysiumEntityHandle TzimiscePhysicsAnimlink;   // +0x6684 m_hPhysicsAnimlink (datamap)
+	/** `0x103bf170` — `CNPC_VTzimisce`'s pickup release. 29c named the target `VGargoyleGibCleanup` on
+	 *  the strength of the offset shapes and flagged it unconfirmed; the offsets settle it the other
+	 *  way — `+0x6670` is `CNPC_VTzimisce::m_hPickupTarget` (family Motor's `PickupTarget`) and
+	 *  `+0x6684` its `m_hPhysicsAnimlink`, and `thunk_FUN_103be0b0` is the Tzimisce `CARRYING_BODY`
+	 *  flag write. The name is kept so the overlay row matches. Body, in order: clear the pickup target
+	 *  to -1; re-arm the collision ignore at 0.75 s; resolve, remove and clear the link handle —
+	 *  **`UTIL_Remove` is called even when the handle does NOT resolve**, on a null pointer, which is
+	 *  retail's own unguarded call; then clear the carrying-body flag. */
+	void VGargoyleGibCleanup();
+
+	// From `ElysiumNpcKernelDebug.inl`.
+	/** `CNPC_VTzimisce::GetEventName` (`0x103bdd10`) — slot 241's only species override. Answers the
+	 *  fixed name for anim-event ids 2..8 and null for everything else, which is the caller's signal to
+	 *  fall through to `CBaseAnimating::GetEventName`. */
+	static const TCHAR* TzimisceEventName(int32 EventId);
+
+	/** `CNPC_VTzimisce`'s carry bit (`0x103be130`) — the gate on the `Body - …` line's latch. **SEAM**:
+	 *  the body has no verdict row and no port counterpart; answers false, so the latch never updates
+	 *  and the two globals keep whatever the last Tzimisce put there. */
+	bool TzimisceIsCarryingBody() const;
+
+	// From `ElysiumNpcKernelHints.inl`.
+	/** `0x103bfa50` — `CNPC_VTzimisce`'s two-group hint pick (14000 vs 14001 within 200 units, nearer
+	 *  wins, loser released with a 0.5 s reuse delay). NAMED for what it does: the generic
+	 *  `FindHintNode` above is a different behaviour that happens to share 29c's target name. */
+	int32 SelectTzimisceHintNode(const FElysiumEntity* Anchor);
+	/** SEAM for `0x103bfc20`, the usability check `SelectTzimisceHintNode` applies to its winner before
+	 *  choosing between the two schedule ids. Answers false. */
+	bool IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const;
+
+	// From `ElysiumNpcKernelLifecycle19.inl`.
+	/** `CNPC_VTzimisce` species words. `PickupTarget` / `PathMode` / `SpeciesShunnedFindCount` exist. */
+	bool bTzimisceFirstEnemy = false;            // +0x6689
+	bool bTzimisceJustFoundBody = false;         // +0x66bc
+	double TzimiscePounceCheckTimer = 0.0;       // +0x66ac
+	double TzimisceShunnedBodyTimer = 0.0;       // +0x66b0
+	int32 TzimisceStartNpcRearms = 0;
+	int32 ExpressionMapResets = 0;           // `0x103b9f50`
+
+	// From `ElysiumNpcKernelMotor.inl`.
+	// `CNPC_VTzimisce`'s pickup triple, read by its slot 410 `TranslateNavGoalPosition` (`0x103bf580`):
+	// +0x6670 `m_hPickupTarget`, +0x6674 `m_vecPickupTargetPos` (SOURCE units) and +0x668c
+	// `m_ePathMode`. Note the offsets: `m_ePathMode` is the HIGHEST of the three, not the lowest — the
+	// ledger's one-line walk of that body has the triple in the wrong order.
+	FElysiumEntityHandle PickupTarget;
+	FVector PickupTargetPos = FVector::ZeroVector;
+	/** `CNPC_VTzimisce::vfunc410` `0x103bf580` — the species branch of slot 410. Slot 410's own body is
+	 *  the base `0x101a6420` and remains the generator's. */
+	bool TranslateNavGoalPositionTzimisce(const FVector& GoalUnits, FVector& OutGoalUnits) const;
+
+	// From `ElysiumNpcKernelPositions.inl`.
+	/** `CNPC_VTzimisce::vfunc389` `0x103bfd80`. The generated `Weapon_ShootPosition` keeps the Troika
+	 *  line's body (`0x103338c0`, another family's row); this is the species branch beside it. False
+	 *  means the activity is neither `0x106` nor `0x107` and the base answer stands. */
+	bool WeaponShootPositionTzimisce(const FVector& SrcCm, FVector& OutCm) const;
+	/** The pure form: `Src` offset along the body basis by the three scaled terms, with the RIGHT term
+	 *  SUBTRACTED for activity `0x106` and ADDED for `0x107` — which is the only difference between the
+	 *  two arms. */
+	static FVector TzimisceAimOffset(const FVector& SrcCm, const FVector& Forward, const FVector& Right,
+		const FVector& Up, float ForwardScale, float RightScale, float UpScale, bool bAddRight);
+	/** The three `ConVar`s the override scales the basis by — 0 `DAT_1093cbac` (up,
+	 *  `tzimisce_claw_left_z` "40"), 1 `DAT_1093cbf4` (right, `tzimisce_claw_left_y` "25"), 2
+	 *  `DAT_1093cc3c` (forward, `tzimisce_claw_left_x` "0"). */
+	static float TzimisceAimConVar(int32 Which);
+
+	// From `ElysiumNpcKernelSpecies.inl`.
+	// `CNPC_VTzimisce`'s own words. `m_hPickupTarget` (+0x6670) and `m_vecPickupTargetPos` (+0x6674)
+	// are family **Motor**'s `PickupTarget`/`PickupTargetPos`; `m_hPhysicsAnimlink` (+0x6684) is family
+	// **Damage**'s `TzimiscePhysicsAnimlink`. All three are read through their owners here.
+	int32 TzimiscePickupGrabBone = INDEX_NONE;   // +0x6680 m_iPickupTargetGrabBone (datamap)
+	double TzimisceBodyTimer = 0.0;              // +0x66a4 m_flBodyTimer (datamap), an absolute stamp
+	bool bTzimisceDidFakeThrow = false;          // +0x66b4 m_bDidFakeThrow (datamap)
+	// `+0x6690` with allocation count `+0x6694`, grow size `+0x6698`, element count `+0x669c` and the
+	// element mirror `+0x66a0` — the SAME `CUtlVector<{EHANDLE, float}>` shape as the boss blacklist
+	// above, written a second time on a different class at a different offset.
+	TArray<FBlacklistedEntity> TzimisceBlacklist;
+	/** The three ConVars `CNPC_VTzimisce`'s slot 488 reads before firing `SPI_DIES` — `DAT_1093cf94`
+	 *  `tzimisce_voice_pitch` "100", `DAT_1093cfdc` `tzimisce_voice_attn` "65" (`+0x2c` ints) and
+	 *  `DAT_1093cebc` `tzimisce_voice_volume` "1" (`+0x28`, handed over as the float's dword). Answers
+	 *  true for indices 0..2; any other index answers false and 0. */
+	bool TzimisceDeathScriptArgument(int32 SingletonIndex, int32& OutArgument) const;
+	/** `0x103be0b0` / `0x103be150` — `CNPC_VTzimisce`'s `CARRYING_BODY` latch and its timer read. */
+	void FUN_103be0b0(bool bCarrying);
+	bool FUN_103be150() const;
+	/** `0x103be3d0` — `CNPC_VTzimisce`'s nearest-forearm grab-bone search. */
+	bool FUN_103be3d0(FElysiumEntity* InTarget);
+	/** `0x103be8e0` — `CNPC_VTzimisce`: is the pickup target close enough to grab? */
+	bool FUN_103be8e0(FElysiumEntity* InTarget);
+	/** `0x103bea90` / `0x103bef20` — `CNPC_VTzimisce`'s physics-animlink release and attach. */
+	void FUN_103bea90(FElysiumEntity* AimTarget);
+	bool FUN_103bef20(FElysiumEntity* InTarget, int32 ElementKey);
+	/** `0x103bf200` / `0x103bf330` / `0x103bf3c0` — `CNPC_VTzimisce`'s own blacklist triple. */
+	void FUN_103bf200(const FElysiumEntityHandle& Entity);
+	bool FUN_103bf330(const FElysiumEntity* Candidate);
+	int32 FUN_103bf3c0(const FElysiumEntity* Candidate) const;
+	/** `0x103bf560` — `CNPC_VTzimisce`: release the motor's yaw hold. */
+	void FUN_103bf560();
+
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	// From `ElysiumNpcKernelMotor.inl`.
+	int32 PathMode = 0;
 };

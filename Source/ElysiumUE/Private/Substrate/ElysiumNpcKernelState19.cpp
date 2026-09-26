@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelState19Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
@@ -19,9 +20,6 @@
 
 namespace
 {
-
-
-	int32 GState19CopCensus = 0;
 
 	EElysiumNpcState State19TypedFromRetail(int32 RetailId, EElysiumNpcState Fallback)
 	{
@@ -48,11 +46,6 @@ namespace
 			Npc.Schedule, Npc, Npc.Cognition.Conditions, Cond);
 	}
 
-	bool State19HasCondition(const FElysiumNpc& Npc, EElysiumNpcCond Cond)
-	{
-		return Npc.Cognition.Conditions.Has(Cond);
-	}
-
 	/** Slot 474 `GetBestSound`. On the Troika line that is `0x102b4520` = `&m_BestSound`, so it
 	 *  never answers null; the type word retail reads at `CSound +0x4` is this runtime's
 	 *  `FElysiumGameSoundEvent::TypeMask`, and the two numberings are the same SOUND_* bits
@@ -60,17 +53,6 @@ namespace
 	const FElysiumGameSoundEvent* State19BestSound(FElysiumNpc& Npc)
 	{
 		return static_cast<const FElysiumGameSoundEvent*>(Npc.GetBestSound());
-	}
-
-	// Retail additionally stamps `m_SelectIdealStateTrace`'s `__FILE__`/`__LINE__` pair
-	// (`+0x1b3c`/`+0x1b40`) at every one of these sites. The shape map calls that pair ABSENT; the
-	// mind's transition trace carries the same account, so only the retail LINE is recorded here,
-	// as the arm's name.
-	void State19StampIdeal(FElysiumNpc& Npc, int32 RetailId, int32 Line)
-	{
-		Npc.WriteIdealStateRetail(RetailId);
-		Npc.RecordScheduleEvent(FString::Printf(TEXT("SelectIdealState :%d -> %d"),
-			Line, RetailId));
 	}
 
 	int32 State19Rand99(FElysiumNpc& Npc)
@@ -82,12 +64,12 @@ namespace
 
 int32 FElysiumNpc::CopCensusCount()
 {
-	return GState19CopCensus;
+	return NpcKernelState19Shared::GState19CopCensus;
 }
 
 void FElysiumNpc::SetCopCensusCount(int32 Value)
 {
-	GState19CopCensus = Value;
+	NpcKernelState19Shared::GState19CopCensus = Value;
 }
 
 int32 FElysiumNpc::NpcStateRetail() const
@@ -149,7 +131,7 @@ int32 FElysiumNpc::BasePreSelectIdealState()
 	SelectIdealStateSelector = 1;
 	if (SquadDisconnected < 1 && SquadWord() != 0
 		&& (NpcStateRetail() == 1 || NpcStateRetail() == 3)
-		&& State19HasCondition(*this, EElysiumNpcCond::NewEnemy)
+		&& NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::NewEnemy)
 		&& GetEnemy() != nullptr)
 	{
 		FElysiumEntity* const Parent = World != nullptr ? World->Resolve(MoveParent) : nullptr;
@@ -183,21 +165,21 @@ int32 FElysiumNpc::BaseSelectIdealState()
 		if (State19HasInterrupt(*this, EElysiumNpcCond::NewEnemy)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::SeeEnemy))
 		{
-			State19StampIdeal(*this, 2, 0x136a);
+			NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x136a);
 			break;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::LightDamage))
 		{
 			Cognition.bCondTookDamage = false;
 			++SelectIdealStateMotorResets;
-			State19StampIdeal(*this, 3, 0x1373);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x1373);
 			break;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HeavyDamage))
 		{
 			Cognition.bCondTookDamage = false;
 			++SelectIdealStateMotorResets;
-			State19StampIdeal(*this, 3, 0x137c);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x137c);
 			break;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearDanger)
@@ -221,18 +203,18 @@ int32 FElysiumNpc::BaseSelectIdealState()
 			{
 				break;
 			}
-			State19StampIdeal(*this, 3, 0x1397);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x1397);
 			break;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::Smell))
 		{
-			State19StampIdeal(*this, 3, 0x139e);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x139e);
 		}
 		break;
 	case 2:
 		if (GetEnemy() == nullptr)
 		{
-			State19StampIdeal(*this, 3, 0x13cc);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x13cc);
 			// `105cc04c`, the one string all five no-enemy-combat arms share.
 			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s ***Combat state with no enemy!"),
 				*DebugString());
@@ -243,13 +225,13 @@ int32 FElysiumNpc::BaseSelectIdealState()
 		if (State19HasInterrupt(*this, EElysiumNpcCond::NewEnemy)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::SeeEnemy))
 		{
-			State19StampIdeal(*this, 2, 0x13ac);
+			NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x13ac);
 			break;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearDanger)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::HearCombat))
 		{
-			State19StampIdeal(*this, 3, 0x13b2);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x13b2);
 			// `1026f8d1`: the ideal state is written BEFORE the sound is fetched, so this arm
 			// promotes whether or not slot 474 answers; only the motor park is conditional.
 			if (State19BestSound(*this) != nullptr)
@@ -266,7 +248,7 @@ int32 FElysiumNpc::BaseSelectIdealState()
 		}
 		if (ShouldGoToIdleState())
 		{
-			State19StampIdeal(*this, 1, 0x13c0);
+			NpcKernelState19Shared::State19StampIdeal(*this, 1, 0x13c0);
 		}
 		break;
 	case 4:
@@ -280,7 +262,7 @@ int32 FElysiumNpc::BaseSelectIdealState()
 		}
 		return IdealStateRetail();
 	case 7:
-		State19StampIdeal(*this, 7, 0x13dd);
+		NpcKernelState19Shared::State19StampIdeal(*this, 7, 0x13dd);
 		break;
 	default:
 		return IdealStateRetail();
@@ -308,7 +290,7 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 				++SelectIdealStateSlot495Calls;
 				SurprisedSound();
 			}
-			State19StampIdeal(*this, 2, 0x44f7);
+			NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x44f7);
 			return 2;
 		}
 		if (!bNoAlertState)
@@ -316,25 +298,25 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 			if (State19HasInterrupt(*this, EElysiumNpcCond::LightDamage))
 			{
 				Cognition.bCondTookDamage = false;
-				State19StampIdeal(*this, 3, 0x451b);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x451b);
 				return 3;
 			}
 			if (State19HasInterrupt(*this, EElysiumNpcCond::HeavyDamage))
 			{
 				Cognition.bCondTookDamage = false;
-				State19StampIdeal(*this, 3, 0x4522);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4522);
 				return 3;
 			}
 		}
-		if (State19HasCondition(*this, EElysiumNpcCond::SupernaturalFleeLevel))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::SupernaturalFleeLevel))
 		{
-			State19StampIdeal(*this, 8, 0x452b);
+			NpcKernelState19Shared::State19StampIdeal(*this, 8, 0x452b);
 			NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);
 			return 8;
 		}
-		if (State19HasCondition(*this, EElysiumNpcCond::CriminalFleeLevel))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::CriminalFleeLevel))
 		{
-			State19StampIdeal(*this, 8, 0x4532);
+			NpcKernelState19Shared::State19StampIdeal(*this, 8, 0x4532);
 			NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);
 			return 8;
 		}
@@ -347,28 +329,28 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 				|| State19HasInterrupt(*this, EElysiumNpcCond::HearDanger)
 				|| State19HasInterrupt(*this, EElysiumNpcCond::HearPlayer))
 			{
-				State19StampIdeal(*this, 3, 0x453e);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x453e);
 				return 3;
 			}
 			if (State19HasInterrupt(*this, EElysiumNpcCond::HearCombat)
 				|| State19HasInterrupt(*this, EElysiumNpcCond::HearBulletImpact))
 			{
-				State19StampIdeal(*this, 3, 0x4545);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4545);
 				return 3;
 			}
 			if (State19HasInterrupt(*this, EElysiumNpcCond::HearWorld))
 			{
-				State19StampIdeal(*this, 3, 0x454b);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x454b);
 				return 3;
 			}
 			if (State19HasInterrupt(*this, EElysiumNpcCond::HearFlinch))
 			{
-				State19StampIdeal(*this, 3, 0x4551);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4551);
 				return 3;
 			}
 			if (State19HasInterrupt(*this, EElysiumNpcCond::DetectedAttack))
 			{
-				State19StampIdeal(*this, 3, 0x4557);
+				NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4557);
 				return 3;
 			}
 		}
@@ -377,18 +359,18 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 		if (State19HasInterrupt(*this, EElysiumNpcCond::NewEnemy)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::SeeEnemy))
 		{
-			State19StampIdeal(*this, 2, 0x4562);
+			NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x4562);
 			return 2;
 		}
-		if (State19HasCondition(*this, EElysiumNpcCond::SupernaturalFleeLevel))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::SupernaturalFleeLevel))
 		{
-			State19StampIdeal(*this, 8, 0x456b);
+			NpcKernelState19Shared::State19StampIdeal(*this, 8, 0x456b);
 			NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);
 			return 8;
 		}
-		if (State19HasCondition(*this, EElysiumNpcCond::CriminalFleeLevel))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::CriminalFleeLevel))
 		{
-			State19StampIdeal(*this, 8, 0x4573);
+			NpcKernelState19Shared::State19StampIdeal(*this, 8, 0x4573);
 			NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);
 			return 8;
 		}
@@ -396,44 +378,44 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 			|| State19HasInterrupt(*this, EElysiumNpcCond::SeeUnknown)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::IgnoreUnknown))
 		{
-			State19StampIdeal(*this, 3, 0x457c);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x457c);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearDanger)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::HearPlayer))
 		{
-			State19StampIdeal(*this, 3, 0x4585);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4585);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearCombat)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::HearBulletImpact))
 		{
-			State19StampIdeal(*this, 3, 0x458e);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x458e);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearWorld))
 		{
-			State19StampIdeal(*this, 3, 0x4596);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x4596);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::InvestigateSound))
 		{
-			State19StampIdeal(*this, 3, 0x459d);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x459d);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::HearFlinch))
 		{
-			State19StampIdeal(*this, 3, 0x45a4);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x45a4);
 			return 3;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::DetectedAttack))
 		{
-			State19StampIdeal(*this, 3, 0x45ab);
+			NpcKernelState19Shared::State19StampIdeal(*this, 3, 0x45ab);
 			return 3;
 		}
 		if (ShouldGoToIdleState())
 		{
-			State19StampIdeal(*this, 1, 0x45b1);
+			NpcKernelState19Shared::State19StampIdeal(*this, 1, 0x45b1);
 			return 1;
 		}
 		break;
@@ -449,25 +431,25 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 		}
 		break;
 	case 8:
-		State19StampIdeal(*this, 8, 0x45dd);
+		NpcKernelState19Shared::State19StampIdeal(*this, 8, 0x45dd);
 		return 8;
 	case 0xb:
 		if (State19HasInterrupt(*this, EElysiumNpcCond::NewEnemy)
 			|| State19HasInterrupt(*this, EElysiumNpcCond::SeeEnemy))
 		{
-			State19StampIdeal(*this, 2, 0x45be);
+			NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x45be);
 			return 2;
 		}
 		if (State19HasInterrupt(*this, EElysiumNpcCond::DetectedAttack))
 		{
-			State19StampIdeal(*this, 0xb, 0x45c4);
+			NpcKernelState19Shared::State19StampIdeal(*this, 0xb, 0x45c4);
 			return 0xb;
 		}
 		break;
 	case 0xe:
-		if (State19HasCondition(*this, EElysiumNpcCond::LightDamage)
-			|| State19HasCondition(*this, EElysiumNpcCond::HeavyDamage)
-			|| State19HasCondition(*this, EElysiumNpcCond::RepeatedDamage))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::LightDamage)
+			|| NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::HeavyDamage)
+			|| NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::RepeatedDamage))
 		{
 			Cognition.bCondTookDamage = false;
 			FElysiumEntity* const Enemy = GetEnemy();
@@ -475,18 +457,18 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 				? World->Resolve(Senses.Memory.LastDamageAttacker) : nullptr;
 			if (Attacker == Enemy)
 			{
-				State19StampIdeal(*this, 2, 0x45f0);
+				NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x45f0);
 				return 2;
 			}
 		}
-		if (State19HasCondition(*this, EElysiumNpcCond::DetectedAttack))
+		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::DetectedAttack))
 		{
 			FElysiumEntity* const Enemy = GetEnemy();
 			FElysiumEntity* const Attacker = World != nullptr
 				? World->Resolve(Senses.Memory.DetectedAttackAttacker) : nullptr;
 			if (Attacker == Enemy)
 			{
-				State19StampIdeal(*this, 2, 0x45f9);
+				NpcKernelState19Shared::State19StampIdeal(*this, 2, 0x45f9);
 				return 2;
 			}
 		}
@@ -501,15 +483,6 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 // Slot 461 dispatcher.
 // =================================================================================================
 
-int32 FElysiumNpc::AndreiBloodSelectIdealStateRetail()
-{
-	// `CNPC_VAndreiBlood::vfunc461`'s typed answer (family Damage's `CNPC_VAndreiBlood_vfunc461`),
-	// written back as retail 2 or 1 and answered: the body of `FElysiumNpcAndreiBlood`'s override.
-	const EElysiumNpcState Andrei = CNPC_VAndreiBlood_vfunc461();
-	Mind.WriteIdealStateRetail(Andrei == EElysiumNpcState::Alert ? 2 : 1);
-	return IdealStateRetail();
-}
-
 int32 FElysiumNpc::SelectIdealStateRetail()
 {
 	// Slot 461 on the Troika line (`0x102ad660`). The species bodies are overrides of this method on
@@ -522,173 +495,4 @@ EElysiumNpcState FElysiumNpc::SelectIdealState()
 {
 	LastSelectIdealStateRetail = SelectIdealStateRetail();
 	return State19TypedFromRetail(LastSelectIdealStateRetail, Mind.IdealState());
-}
-
-// =================================================================================================
-// Slot 460 species — Camera `0x10368f80`, Dog `0x10374d80` / `0x10374e50`.
-// =================================================================================================
-
-int32 FElysiumNpc::CameraPreSelectIdealState()
-{
-	SelectIdealStateSelector = 9;
-	if (SquadDisconnected < 1 && SquadWord() != 0)
-	{
-		if (State19HasCondition(*this, EElysiumNpcCond::NewEnemy)
-			|| NpcFlags.Has(EElysiumNpcFlag2::SQUAD_NEW_ENEMY))
-		{
-			NpcFlags.Clear(EElysiumNpcFlag2::SQUAD_NEW_ENEMY);
-			if (GetEnemy() != nullptr)
-			{
-				++SelectIdealStateSquadNewEnemyCalls;
-			}
-		}
-	}
-	State19StampIdeal(*this, 3, 0x19c);
-	return 3;
-}
-
-void FElysiumNpc::DogCombatShortCircuit()
-{
-	Slot596(World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr);
-	State19StampIdeal(*this, 2, 0x52a);
-	Slot600(GetEnemy());
-	if (SquadDisconnected < 1 && SquadWord() != 0 && GetEnemy() != nullptr)
-	{
-		++SelectIdealStateSquadNewEnemyCalls;
-	}
-}
-
-int32 FElysiumNpc::DogPreSelectIdealState()
-{
-	if (State19HasCondition(*this, EElysiumNpcCond::DogCombatLatch)
-		|| State19HasCondition(*this, EElysiumNpcCond::DogCombatLatch2))
-	{
-		DogCombatShortCircuit();
-		return IdealStateRetail();
-	}
-	if (State19HasCondition(*this, EElysiumNpcCond::DogAlertSound))
-	{
-		State19StampIdeal(*this, 3, 0x517);
-		return FElysiumNpc::PreSelectIdealStateRetail();   // 0x102ad340, direct
-	}
-	if (State19HasCondition(*this, EElysiumNpcCond::DogIdleFromAlert)
-		&& IdealStateRetail() == 3)
-	{
-		State19StampIdeal(*this, 1, 0x51d);
-	}
-	return FElysiumNpc::PreSelectIdealStateRetail();   // 0x102ad340, direct
-}
-
-bool FElysiumNpc::BachOnStateChange(int32 OldRetail, int32 NewRetail)
-{
-	if (!bCanFightYet && (NewRetail == 2 || NewRetail == 3))
-	{
-		SetState(OldRetail);
-		return true;
-	}
-	return false;
-}
-
-void FElysiumNpc::CopOnStateChange(int32 OldRetail, int32 NewRetail)
-{
-	FElysiumEntity* const Enemy = GetEnemy();
-	if (Enemy != nullptr && NewRetail == 2)
-	{
-		Slot597(Enemy, 10);
-	}
-	if (OldRetail == 2)
-	{
-		// `10371c69`: the pursuit release. `0x1017f6e0` is the counter half — it DECREMENTS the
-		// pursued player's `+0x1d10`, and on the zero crossing runs `0x10370630` and `0x1017f9c0`.
-		// `CopSlot597Prologue` (family SpeciesMisc10) is the matching increment; without this the
-		// counter only ever goes up.
-		if (FElysiumEntity* const Pursuit = CopPursuitPlayer())
-		{
-			Slot598(Pursuit);
-			CopPursuitHandle = FElysiumEntityHandle::Invalid();
-			RemoveCopInPursuit();
-		}
-		if (Enemy != nullptr)
-		{
-			Slot598(Enemy);
-		}
-	}
-	switch (NewRetail)
-	{
-	case 2:
-		bWasEverInCombat = true;
-		break;
-	case 3:
-		if (FElysiumItem* const Active = Inventory.Active(*this))
-		{
-			if (FElysiumWeapon* const Weapon = Active->AsWeapon())
-			{
-				Weapon->Unhide(this);
-			}
-		}
-		[[fallthrough]];
-	case 1:
-	case 8:
-		if (Enemy != nullptr)
-		{
-			Slot598(Enemy);
-		}
-		// `10371d32`: `m_bWasEverInCombat` AND a closest player that actually resolves. Retail
-		// jumps past the call on every failed term — it never dispatches slot 598 with null here.
-		if (bWasEverInCombat)
-		{
-			if (FElysiumEntity* const Closest = World != nullptr
-				? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr)
-			{
-				Slot598(Closest);
-			}
-		}
-		break;
-	default:
-		break;
-	}
-	if (NewRetail == 1)
-	{
-		SetForceFrequentThink(false);
-		CopHumanCombatantOnStateChange(NewRetail);
-	}
-	else
-	{
-		// `10371dd4`: the census decrement is gated on `+0x6672`, family SaveRestore10's
-		// `bCopCountedSecond` — the same word, not a second copy of it.
-		if (bCopCountedSecond)
-		{
-			--GState19CopCensus;
-			bCopCountedSecond = false;
-		}
-		SetForceFrequentThink(true);
-		CopHumanCombatantOnStateChange(NewRetail);
-	}
-}
-
-// `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`), the shared tail BOTH of `0x10371c20`'s
-// arms chain with `(old, new)` — read from the listing (`10371db3 CMP EBP,0x1` then `PUSH EBP`),
-// because the C mis-renders the idle tail's argument as the literal 1. Its weapon half is
-// UNCONDITIONAL, the same switch `FElysiumNpc::ApplyStateWeaponVisibility` carries. The Troika body
-// under it is run by `FElysiumNpcCop::OnStateChange`'s own tail, so only the weapon half lands here.
-void FElysiumNpc::CopHumanCombatantOnStateChange(int32 NewRetail)
-{
-	++CopHolsterDrawCalls;
-	FElysiumItem* const Active = Inventory.Active(*this);
-	FElysiumWeapon* const Weapon = Active != nullptr ? Active->AsWeapon() : nullptr;
-	if (Weapon == nullptr)
-	{
-		// `103871d1` / `103871f6`: both arms are guarded by `GetActiveWeapon()`.
-		return;
-	}
-	if (NewRetail == 1)
-	{
-		// `+0x108` — `CBaseEntity::Hide` (slot 66, `0x1009d2a0`).
-		Weapon->Hide(this);
-	}
-	else if (NewRetail == 2 || NewRetail == 3 || NewRetail == 0xb)
-	{
-		// `+0x10c` — `Unhide`.
-		Weapon->Unhide(this);
-	}
 }

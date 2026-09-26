@@ -6,6 +6,7 @@
 #include "ElysiumOverlayStack.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -673,23 +674,27 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_misc"), 5108);
 	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector(300.0, 0.0, 0.0), TEXT("CNPC_VMingXiao"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	TestNotNull(TEXT("the guard spawned"), Guard);
-	if (Guard == nullptr)
+	TestNotNull(TEXT("the Ming Xiao spawned"), Ming);
+	if (Guard == nullptr || Ming == nullptr)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Guard });
+	FElysiumNpcWorldFixture::Quiet({ Guard, Ming });
 
-	// `BodyGroup` `0x10398800`, three arms. The cvar is a seam whose NAME and DEFAULT are
-	// unrecovered; it answers "not a command, value -1", which is the arm that takes the mask.
-	TestFalse(TEXT("the body-group cvar seam is a real convar"), Guard->BodyGroupCvarIsCommand());
-	TestEqual(TEXT("standing at retail's negative default"), Guard->BodyGroupCvarValue(), -1);
-	Guard->SeveredTentacleMask = 6;
-	Guard->NpcBody = 99;
-	Guard->BodyGroup();
-	TestEqual(TEXT("so m_nBody takes the severed-tentacle mask"), Guard->NpcBody, 6);
+	// `BodyGroup` `0x10398800` (`CNPC_VMingXiao`), three arms. The cvar is a seam whose NAME and
+	// DEFAULT are unrecovered; it answers "not a command, value -1", which is the arm that takes the
+	// mask.
+	TestFalse(TEXT("the body-group cvar seam is a real convar"), Ming->BodyGroupCvarIsCommand());
+	TestEqual(TEXT("standing at retail's negative default"), Ming->BodyGroupCvarValue(), -1);
+	Ming->MingXiaoSeveredTentacleMask = 6;
+	Ming->NpcBody = 99;
+	Ming->BodyGroup();
+	TestEqual(TEXT("so m_nBody takes the severed-tentacle mask"), Ming->NpcBody, 6);
 
 	// Slots 59/60/61 — the choreo latches. `m_bCutsceneForceLOD` is gated on the scene entity's own
 	// +0x57d byte, which is a seam answering false, so the LOD byte is never touched.

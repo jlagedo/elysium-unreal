@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 3,
-  "revision": "step-3-species-dispatch",
+  "phase": 4,
+  "revision": "step-4-species-bodies-words-bindings",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -22,12 +22,12 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "f662e5ca65a9043e94ff32a2c86cc2dfbe0a0d6d93e5f1919415eeb80a6c805f"
+      "sha256": "c930f7adfd244176390c0bd126f49740aad7d438c945044e572a3f5554a9b472"
     },
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "3f9c4bcf7e385519edc5fb8813e7458af6071ebaa2de348eacb1fa43b52ae528"
+      "sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22"
     },
     "stub_registry": {
       "root": "repo",
@@ -81,7 +81,7 @@
     "Full controller/maker/director/hull participation and lifecycle folds remain steps 7-10."
   ],
   "factory_evidence": "docs/vtmb/npc-ai/population.md#step-0-factory-boundary-replay-2026-09-24",
-  "acceptance": "step-3-passed",
+  "acceptance": "step-4-passed",
   "history": {
     "step0": {
       "commit": "aa1c3c86b8684c4760e1dd506d114a0a260fb225",
@@ -132,6 +132,21 @@
       "commit": "21bb56cf1e58f61d0d8e13581474a766e3533006",
       "acceptance": "acceptance-step3.json",
       "note": "--check step3 reads this tree once it is recorded (step 4 started)"
+    },
+    "step4_pins": {
+      "note": "pins refreshed by step 4: ElysiumNpcClasses.cpp registers each introduced species' own datamap rows (generated AddSpeciesFields) and its pending INPUT seams on the abstract retail descriptors; kernel_verdicts.tsv retargets its overlay rows onto the species classes the bodies moved to (283 rows, same addresses and verdicts)",
+      "refreshed": {
+        "registry": {
+          "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
+          "previous_sha256": "3f9c4bcf7e385519edc5fb8813e7458af6071ebaa2de348eacb1fa43b52ae528",
+          "sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22"
+        },
+        "verdicts": {
+          "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+          "previous_sha256": "f662e5ca65a9043e94ff32a2c86cc2dfbe0a0d6d93e5f1919415eeb80a6c805f",
+          "sha256": "c930f7adfd244176390c0bd126f49740aad7d438c945044e572a3f5554a9b472"
+        }
+      }
     }
   },
   "step1_packets": {
@@ -167,13 +182,13 @@
   },
   "step4_packets": {
     "4a": "accepted",
-    "4b": "pending",
-    "4c": "pending",
-    "4d": "pending",
-    "4e": "pending",
-    "4f": "pending",
-    "4g": "pending",
-    "4h": "pending",
-    "4i": "pending"
+    "4b": "accepted",
+    "4c": "accepted",
+    "4d": "accepted",
+    "4e": "accepted",
+    "4f": "accepted",
+    "4g": "accepted",
+    "4h": "accepted",
+    "4i": "accepted"
   }
 }

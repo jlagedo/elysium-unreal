@@ -5,13 +5,22 @@
 // `CNPC_VTaxiDriver` (primary vtable `0x104c8a14`), built by `npc_VTaxiDriver` factory
 // `0x103b2ed0`.
 //
-// Story 5 step 2 stands the class so the classname's factory builds the retail class and the class
-// answers its own census row. Its overrides and own datamap words still sit on `FElysiumNpc` and
-// move here in steps 3-4 (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`).
+// The classname's factory builds this class and it answers its own census row (story 5 step 2). Its
+// slot overrides, own bodies, own datamap words and their bindings live here (steps 3-4,
+// `docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`); the words a Troika body still
+// reads stay on `FElysiumNpc` until step 11.
 class FElysiumNpcTaxiDriver : public FElysiumNpcHuman
 {
 public:
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VTaxiDriver");
+
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	// From `ElysiumNpcKernelLifecycle19.inl`.
+	bool bTaxiFirstThink = false;
 };

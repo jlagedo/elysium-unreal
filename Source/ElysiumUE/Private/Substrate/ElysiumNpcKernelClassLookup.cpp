@@ -148,6 +148,11 @@ bool FElysiumNpc::IsRetailClass(const TCHAR* RetailClassName) const
 	return ElysiumNpcKernelClass::DerivesFrom(RetailClass(), RetailClassName);
 }
 
+bool FElysiumNpc::OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const
+{
+	return ElysiumNpcKernelClass::DerivesFrom(OwnRetailClass(), RetailClassName);
+}
+
 // --- The two hull words -------------------------------------------------------------------------
 
 void FElysiumNpc::ApplyRetailHulls()

@@ -5,6 +5,11 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcVampire.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -55,16 +60,16 @@ bool FElysiumNpcKernelBossesGrabBoneTest::RunTest(const FString&)
 {
 	// The bone table is retail's `PTR_s_Bone01_1063bd88`, read from the image: two names and an
 	// empty string that stops the walk.
-	const TCHAR* const* Names = FElysiumNpc::PickupGrabBoneNames();
+	const TCHAR* const* Names = FElysiumNpcHengeyokai::PickupGrabBoneNames();
 	TestEqual(TEXT("the first bone is Bone01"), FString(Names[0]), FString(TEXT("Bone01")));
 	TestEqual(TEXT("the second bone is Bone04"), FString(Names[1]), FString(TEXT("Bone04")));
 	TestNull(TEXT("the table ends after two names"), Names[2]);
 
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_grabbone"), 0x29c1b055);
-	Builder.AddNpc(TEXT("boss"), FVector(0.0, 0.0, 0.0));
+	Builder.AddNpcOfClass(TEXT("boss"), FVector(0.0, 0.0, 0.0), TEXT("CNPC_VHengeyokai"));
 	Builder.AddNpc(TEXT("body"), FVector(100.0 * U, 0.0, 25.0 * U));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcHengeyokai* Boss = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("boss"));
 	FElysiumNpc* Body = Fixture.Npc(TEXT("body"));
 	FElysiumNpcWorldFixture::Quiet({ Boss, Body });
 	if (Boss == nullptr || Body == nullptr)
@@ -101,27 +106,27 @@ bool FElysiumNpcKernelBossesFacingConeTest::RunTest(const FString&)
 	// both edges. The delta is in THIS world's axes, whose Y is the negated Source one, so a +X
 	// delta is yaw 0 and a -Y (port) delta is yaw +90.
 	TestTrue(TEXT("dead ahead is inside the cone"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 0.f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 0.f));
 	TestTrue(TEXT("exactly +20 is inside"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), -20.f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), -20.f));
 	TestTrue(TEXT("exactly -20 is inside"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 20.f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 20.f));
 	TestFalse(TEXT("just past +20 is outside"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), -20.5f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), -20.5f));
 	TestFalse(TEXT("just past -20 is outside"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 20.5f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 20.5f));
 	// The wrap: a yaw of 350 against a delta of yaw 0 is a difference of +10, not -350.
 	TestTrue(TEXT("the angle wrap keeps 350 vs 0 inside the cone"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 350.f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(100.0, 0.0, 0.0), 350.f));
 	// A 90-degree-abeam target is outside.
 	TestFalse(TEXT("abeam is outside"),
-		FElysiumNpc::WithinPickupFacingCone(FVector(0.0, -100.0, 0.0), 0.f));
+		FElysiumNpcHengeyokai::WithinPickupFacingCone(FVector(0.0, -100.0, 0.0), 0.f));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_cone"), 0x29c1b056);
-	Builder.AddNpc(TEXT("boss"));
+	Builder.AddNpcOfClass(TEXT("boss"), FVector::ZeroVector, TEXT("CNPC_VHengeyokai"));
 	Builder.AddNpc(TEXT("other"), FVector(0.0, 500.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcHengeyokai* Boss = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("boss"));
 	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
 	FElysiumNpcWorldFixture::Quiet({ Boss, Other });
 	if (Boss == nullptr || Other == nullptr)
@@ -145,13 +150,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesPickupSpeciesTest,
 bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 {
 	int32 Count = 0;
-	const FElysiumNpc::FPickupSpecies* Rows = FElysiumNpc::PickupSpeciesRows(Count);
+	const FElysiumNpc::FPickupSpecies* Rows = FElysiumNpcHengeyokai::PickupSpeciesRows(Count);
 	TestEqual(TEXT("two species carry the pickup chain"), Count, 2);
 
 	// Every row by NAME, with the two retail bodies, the carrier bone, the `m_hPickupTarget` offset
 	// and the collision-ignore re-arm the release passes to `0x102c43b0`.
 	const FElysiumNpc::FPickupSpecies* Heng =
-		FElysiumNpc::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
+		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
 	if (Heng == nullptr)
 	{
 		AddError(TEXT("CNPC_VHengeyokai has no pickup row"));
@@ -168,7 +173,7 @@ bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 		0.0001f);
 	TestFalse(TEXT("Hengeyokai does not restore the breakable latch"), Heng->bRestoresBreakable);
 
-	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpc::PickupSpeciesOf(TEXT("CNPC_VManBat"));
+	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VManBat"));
 	if (Bat == nullptr)
 	{
 		AddError(TEXT("CNPC_VManBat has no pickup row"));
@@ -185,8 +190,8 @@ bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 
 	// A species with no row of its own and no boss ancestor.
 	TestNull(TEXT("CNPC_VWerewolf carries no pickup row"),
-		FElysiumNpc::PickupSpeciesOf(TEXT("CNPC_VWerewolf")));
-	TestNull(TEXT("a null class carries no pickup row"), FElysiumNpc::PickupSpeciesOf(nullptr));
+		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VWerewolf")));
+	TestNull(TEXT("a null class carries no pickup row"), FElysiumNpcVampire::PickupSpeciesOf(nullptr));
 	return true;
 }
 
@@ -195,94 +200,96 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesPickupChainTest,
 bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_pickup"), 0x29c1b057);
-	Builder.AddNpc(TEXT("boss"));
+	// The two classes whose one body retail writes twice, each running its own copy.
+	Builder.AddNpcOfClass(TEXT("heng"), FVector::ZeroVector, TEXT("CNPC_VHengeyokai"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(0.0, 400.0 * U, 0.0), TEXT("CNPC_VManBat"));
 	Builder.AddNpc(TEXT("body"), FVector(200.0 * U, 0.0, 0.0));
 	Builder.AddNpc(TEXT("aim"), FVector(600.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcHengeyokai* Heng2 = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("heng"));
+	FElysiumNpcManBat* Bat2 = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpc* Body = Fixture.Npc(TEXT("body"));
 	FElysiumNpc* Aim = Fixture.Npc(TEXT("aim"));
-	FElysiumNpcWorldFixture::Quiet({ Boss, Body, Aim });
-	if (Boss == nullptr || Body == nullptr || Aim == nullptr)
+	FElysiumNpcWorldFixture::Quiet({ Heng2, Bat2, Body, Aim });
+	if (Heng2 == nullptr || Bat2 == nullptr || Body == nullptr || Aim == nullptr)
 	{
-		AddError(TEXT("fixture did not stand three NPCs"));
+		AddError(TEXT("fixture did not stand the Hengeyokai, the ManBat and two NPCs"));
 		return false;
 	}
 	const FElysiumNpc::FPickupSpecies* Heng =
-		FElysiumNpc::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
-	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpc::PickupSpeciesOf(TEXT("CNPC_VManBat"));
+		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
+	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VManBat"));
 
-	// No row: nothing runs at all. That is the answer for every classname this runtime registers,
-	// since neither `npc_VHengeyokai` nor `npc_VManBat` is one of them.
+	// No row: nothing runs at all.
 	TestFalse(TEXT("a class with no pickup row attaches nothing"),
-		Boss->AttachPickupAnimlinkFor(nullptr, Body, 0));
+		Heng2->AttachPickupAnimlinkFor(nullptr, Body, 0));
 
 	// The attach arms both stop at `CreatePhysAnimlink`, the first seam: retail's
 	// "CreateNoSpawn failed" arm, which returns false before writing a single word.
 	TestFalse(TEXT("Hengeyokai's attach stops at the phys_animlink seam"),
-		Boss->AttachPickupAnimlinkFor(Heng, Body, 0));
+		Heng2->AttachPickupAnimlinkFor(Heng, Body, 0));
 	TestFalse(TEXT("ManBat's attach stops at the same seam"),
-		Boss->AttachPickupAnimlinkFor(Bat, Body, 0));
+		Bat2->AttachPickupAnimlinkFor(Bat, Body, 0));
 	TestFalse(TEXT("no animlink handle was written"),
-		Boss->HengeyokaiPhysicsAnimlink.IsSet() || Boss->ManBatPhysicsAnimlink.IsSet());
+		Heng2->HengeyokaiPhysicsAnimlink.IsSet() || Bat2->ManBatPhysicsAnimlink.IsSet());
 	TestFalse(TEXT("and neither carry flag was raised"),
-		Boss->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
-	TestEqual(TEXT("and family Misc's FormBit was never asked"), Boss->FormBitCalls, 0);
+		Heng2->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY) || Bat2->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+	TestEqual(TEXT("and family Misc's FormBit was never asked"), Heng2->FormBitCalls + Bat2->FormBitCalls, 0);
 
 	// The release arms run to the end whatever the seams answer, and what they CLEAR is the
 	// recovered half. Hengeyokai's tail is `0x10381c00(this, false)` — family **Misc**'s `FormBit`,
 	// which landed this wave, so the bit now really moves. The point of this block is that the
 	// Hengeyokai chain does not write `CARRYING_BODY` itself: the write is `FormBit`'s, and the two
 	// counters are what say the call was made and with which arm.
-	Boss->HengeyokaiPickupTarget = Body->Handle;
-	Boss->HengeyokaiPhysicsAnimlink = Body->Handle;
-	Boss->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
+	Heng2->HengeyokaiPickupTarget = Body->Handle;
+	Heng2->HengeyokaiPhysicsAnimlink = Body->Handle;
+	Heng2->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
 	// `0x10381c00`'s FALSE arm touches neither species word, so both must survive the release —
 	// a cleared carry leaves the fish timer standing wherever the last pickup left it.
-	Boss->HengeyokaiFishTimer = 1234.f;
-	Boss->bHengeyokaiDidFakeThrow = true;
-	Boss->ReleasePickupAnimlinkFor(Heng, Aim);
+	Heng2->HengeyokaiFishTimer = 1234.f;
+	Heng2->bHengeyokaiDidFakeThrow = true;
+	Heng2->ReleasePickupAnimlinkFor(Heng, Aim);
 	TestFalse(TEXT("Hengeyokai's m_hPhysicsAnimlink is cleared"),
-		Boss->HengeyokaiPhysicsAnimlink.IsSet());
+		Heng2->HengeyokaiPhysicsAnimlink.IsSet());
 	TestFalse(TEXT("Hengeyokai's m_hPickupTarget is cleared"),
-		Boss->HengeyokaiPickupTarget.IsSet());
-	TestEqual(TEXT("FormBit (0x10381c00) was asked exactly once"), Boss->FormBitCalls, 1);
-	TestFalse(TEXT("with the false arm"), Boss->bLastFormBitArm);
+		Heng2->HengeyokaiPickupTarget.IsSet());
+	TestEqual(TEXT("FormBit (0x10381c00) was asked exactly once"), Heng2->FormBitCalls, 1);
+	TestFalse(TEXT("with the false arm"), Heng2->bLastFormBitArm);
 	TestFalse(TEXT("and that call is what cleared CARRYING_BODY"),
-		Boss->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+		Heng2->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
 	TestEqual(TEXT("0x10381c00's false arm leaves m_flFishTimer standing"),
-		Boss->HengeyokaiFishTimer, 1234.f, 0.0001f);
-	TestTrue(TEXT("and leaves m_bDidFakeThrow standing"), Boss->bHengeyokaiDidFakeThrow);
+		Heng2->HengeyokaiFishTimer, 1234.f, 0.0001f);
+	TestTrue(TEXT("and leaves m_bDidFakeThrow standing"), Heng2->bHengeyokaiDidFakeThrow);
 
 	// The TRUE arm, which the attach half takes and which the seams above stop this fixture from
 	// reaching through `AttachPickupAnimlinkFor`. Driven directly so the three writes `0x10381c00`
 	// makes are all measured: the flag, `m_flFishTimer = curtime + RandomFloat(5, 8)` and the
 	// `m_bDidFakeThrow` clear.
 	const double Now = Fixture.World.NowSeconds();
-	Boss->bHengeyokaiDidFakeThrow = true;
-	Boss->FormBit(true);
+	Heng2->bHengeyokaiDidFakeThrow = true;
+	Heng2->FormBit(true);
 	TestTrue(TEXT("0x10381c00's true arm raises CARRYING_BODY"),
-		Boss->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
-	TestFalse(TEXT("and clears m_bDidFakeThrow"), Boss->bHengeyokaiDidFakeThrow);
+		Heng2->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+	TestFalse(TEXT("and clears m_bDidFakeThrow"), Heng2->bHengeyokaiDidFakeThrow);
 	TestTrue(TEXT("and stamps m_flFishTimer inside curtime + [5, 8]"),
-		Boss->HengeyokaiFishTimer >= static_cast<float>(Now) + 5.f
-			&& Boss->HengeyokaiFishTimer <= static_cast<float>(Now) + 8.f);
+		Heng2->HengeyokaiFishTimer >= static_cast<float>(Now) + 5.f
+			&& Heng2->HengeyokaiFishTimer <= static_cast<float>(Now) + 8.f);
 
 	// ManBat: the same two clears, and `CARRYING_BODY` cleared by its OWN one-bit body
 	// (`0x1038f600`) rather than through `0x10381c00`. That asymmetry between the two species is the
 	// recovered fact, and `FormBitCalls` not moving is what proves this arm did not borrow it.
-	Boss->ManBatPickupTarget = Body->Handle;
-	Boss->ManBatPhysicsAnimlink = Body->Handle;
-	Boss->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
-	Boss->HengeyokaiFishTimer = 4321.f;
-	Boss->ReleasePickupAnimlinkFor(Bat, nullptr);
-	TestFalse(TEXT("ManBat's m_hPhysicsAnimlink is cleared"), Boss->ManBatPhysicsAnimlink.IsSet());
-	TestFalse(TEXT("ManBat's m_hPickupTarget is cleared"), Boss->ManBatPickupTarget.IsSet());
+	Bat2->ManBatPickupTarget = Body->Handle;
+	Bat2->ManBatPhysicsAnimlink = Body->Handle;
+	Bat2->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
+	Bat2->HengeyokaiFishTimer = 4321.f;
+	Bat2->ReleasePickupAnimlinkFor(Bat, nullptr);
+	TestFalse(TEXT("ManBat's m_hPhysicsAnimlink is cleared"), Bat2->ManBatPhysicsAnimlink.IsSet());
+	TestFalse(TEXT("ManBat's m_hPickupTarget is cleared"), Bat2->ManBatPickupTarget.IsSet());
 	TestFalse(TEXT("ManBat clears CARRYING_BODY through 0x1038f600"),
-		Boss->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+		Bat2->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
 	TestEqual(TEXT("and never asks FormBit, so the Hengeyokai fish timer is untouched"),
-		Boss->FormBitCalls, 1);
-	TestEqual(TEXT("m_flFishTimer is not the ManBat arm's to write"), Boss->HengeyokaiFishTimer,
+		Bat2->FormBitCalls, 0);
+	TestEqual(TEXT("m_flFishTimer is not the ManBat arm's to write"), Bat2->HengeyokaiFishTimer,
 		4321.f, 0.0001f);
 	return true;
 }
@@ -300,27 +307,27 @@ bool FElysiumNpcKernelBossesBlacklistTest::RunTest(const FString&)
 	// are the same body over two stores, so this one rule is both.
 	TArray<FElysiumNpc::FBlacklistedEntity> Store;
 	TestFalse(TEXT("INDEX_NONE answers false"),
-		FElysiumNpc::BlacklistTestAndExpire(Store, INDEX_NONE, 0.0));
+		FElysiumNpcHengeyokai::BlacklistTestAndExpire(Store, INDEX_NONE, 0.0));
 
 	Store.Add(MakeBlacklistRow(10.0));
 	Store.Add(MakeBlacklistRow(20.0));
 	Store.Add(MakeBlacklistRow(30.0));
 	TestTrue(TEXT("curtime strictly before the expiry holds"),
-		FElysiumNpc::BlacklistTestAndExpire(Store, 1, 19.9));
+		FElysiumNpcHengeyokai::BlacklistTestAndExpire(Store, 1, 19.9));
 	TestEqual(TEXT("and nothing was removed"), Store.Num(), 3);
 	TestFalse(TEXT("curtime exactly at the expiry does NOT hold"),
-		FElysiumNpc::BlacklistTestAndExpire(Store, 1, 20.0));
+		FElysiumNpcHengeyokai::BlacklistTestAndExpire(Store, 1, 20.0));
 	TestEqual(TEXT("the expired row was removed"), Store.Num(), 2);
 	TestEqual(TEXT("by SWAP with the last row, not an ordered erase"), Store[1].ExpiresAt, 30.0,
 		0.0001);
 
 	// The member form over `CNPC_VHengeyokai::m_BlacklistedEntities`.
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_blacklist"), 0x29c1b058);
-	Builder.AddNpc(TEXT("boss"));
+	Builder.AddNpcOfClass(TEXT("boss"), FVector::ZeroVector, TEXT("CNPC_VHengeyokai"));
 	Builder.AddNpc(TEXT("fish"), FVector(100.0 * U, 0.0, 0.0));
 	Builder.AddNpc(TEXT("other"), FVector(200.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcHengeyokai* Boss = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("boss"));
 	FElysiumNpc* Fish = Fixture.Npc(TEXT("fish"));
 	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
 	FElysiumNpcWorldFixture::Quiet({ Boss, Fish, Other });
@@ -503,7 +510,7 @@ bool FElysiumNpcKernelBossesMeleeReleaseTest::RunTest(const FString&)
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_melee"), 0x29c1b05a);
 	Builder.AddNpc(TEXT("andrei"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Andre = Fixture.Npc(TEXT("andrei"));
+	FElysiumNpcHuman* Andre = Fixture.NpcAs<FElysiumNpcHuman>(TEXT("andrei"));
 	FElysiumNpcWorldFixture::Quiet({ Andre });
 	if (Andre == nullptr)
 	{
@@ -537,7 +544,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesFlapActivityTest,
 bool FElysiumNpcKernelBossesFlapActivityTest::RunTest(const FString&)
 {
 	int32 Count = 0;
-	const FElysiumNpc::FFlapActivity* Rows = FElysiumNpc::FlapActivityRows(Count);
+	const FElysiumNpc::FFlapActivity* Rows = FElysiumNpcManBat::FlapActivityRows(Count);
 	TestEqual(TEXT("four bodies, one behaviour"), Count, 4);
 
 	// Every row by its retail address, with the activity it makes ideal and the duration it stamps.
@@ -551,7 +558,7 @@ bool FElysiumNpcKernelBossesFlapActivityTest::RunTest(const FString&)
 	};
 	for (const FExpect& E : Expected)
 	{
-		const FElysiumNpc::FFlapActivity* Row = FElysiumNpc::FlapActivityOf(E.Body);
+		const FElysiumNpc::FFlapActivity* Row = FElysiumNpcManBat::FlapActivityOf(E.Body);
 		if (Row == nullptr)
 		{
 			AddError(FString::Printf(TEXT("%s has no flap row"), E.Body));
@@ -560,12 +567,12 @@ bool FElysiumNpcKernelBossesFlapActivityTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s's activity"), E.Body), Row->Activity, E.Activity);
 		TestEqual(FString::Printf(TEXT("%s's duration"), E.Body), Row->Seconds, E.Seconds, 0.0001f);
 	}
-	TestNull(TEXT("an address with no row"), FElysiumNpc::FlapActivityOf(TEXT("0x10000000")));
+	TestNull(TEXT("an address with no row"), FElysiumNpcManBat::FlapActivityOf(TEXT("0x10000000")));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_flap"), 0x29c1b05b);
-	Builder.AddNpc(TEXT("bat"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector::ZeroVector, TEXT("CNPC_VManBat"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Bat = Fixture.Npc(TEXT("bat"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpcWorldFixture::Quiet({ Bat });
 	if (Bat == nullptr)
 	{
@@ -573,7 +580,7 @@ bool FElysiumNpcKernelBossesFlapActivityTest::RunTest(const FString&)
 		return false;
 	}
 	const double Now = Fixture.World.NowSeconds();
-	const FElysiumNpc::FFlapActivity* Row = FElysiumNpc::FlapActivityOf(TEXT("0x1038e640"));
+	const FElysiumNpc::FFlapActivity* Row = FElysiumNpcManBat::FlapActivityOf(TEXT("0x1038e640"));
 	Bat->SetFlapActivity(Row->Activity, Row->Seconds);
 	TestEqual(TEXT("m_IdealActivity took the row's activity"), Bat->IdealActivityNumber, 0x22);
 	TestEqual(TEXT("m_flFlapTimer is curtime + the row's duration"), Bat->ManBatFlapTimer,
@@ -590,9 +597,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesObstacleProbeTest,
 bool FElysiumNpcKernelBossesObstacleProbeTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_probe"), 0x29c1b05c);
-	Builder.AddNpc(TEXT("bat"), FVector(10.0 * U, 0.0, 0.0));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(10.0 * U, 0.0, 0.0), TEXT("CNPC_VManBat"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Bat = Fixture.Npc(TEXT("bat"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpcWorldFixture::Quiet({ Bat });
 	if (Bat == nullptr)
 	{
@@ -618,7 +625,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesFlightVelocityTest,
 bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_flight"), 0x29c1b05d);
-	Builder.AddNpc(TEXT("bat"), FVector(500.0 * U, 0.0, 0.0));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(500.0 * U, 0.0, 0.0), TEXT("CNPC_VManBat"));
 	Builder.AddNpc(TEXT("node"), FVector(520.0 * U, 0.0, 0.0));
 	// Retail asks slot 158 `IsAlive` of ANY entity; this runtime declares it only on the NPC leaf,
 	// so the body's liveness helper has two arms. A PROP fly-by target exercises the non-NPC one
@@ -626,7 +633,7 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("flyby"), FVector(900.0 * U, 0.0, 0.0));
 	Builder.AddNpc(TEXT("flybynpc"), FVector(900.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Bat = Fixture.Npc(TEXT("bat"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpc* Node = Fixture.Npc(TEXT("node"));
 	FElysiumEntity* FlyBy = Fixture.World.FindByName(TEXT("flyby"));
 	FElysiumNpcWorldFixture::Quiet({ Bat, Node });
@@ -751,7 +758,7 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 	Bat->ManBatFlyNode = FElysiumEntityHandle::Invalid();
 	Bat->ManBatMoveGoalNodeMode = 6;
 	Bat->FUN_1038b370(0.1f, Out);                      // stamps the watch at this position
-	FElysiumNpc::FManBatStationaryWatch& Watch = FElysiumNpc::ManBatStationaryWatch();
+	FElysiumNpc::FManBatStationaryWatch& Watch = FElysiumNpcManBat::ManBatStationaryWatch();
 	TestEqual(TEXT("the watchdog stamped my position, in source units"), Watch.PositionUnits.X,
 		500.0, 0.001);
 	Watch.SinceTime -= 1.0;                            // more than 0.5 s ago
@@ -799,10 +806,10 @@ bool FElysiumNpcKernelBossesTraceFilterTest::RunTest(const FString&)
 		FElysiumNpc::RetailNameMatches(FString(), TEXT("")));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_filter"), 0x29c1b05e);
-	Builder.AddNpc(TEXT("bat"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector::ZeroVector, TEXT("CNPC_VManBat"));
 	Builder.AddNpc(TEXT("victim"), FVector(100.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Bat = Fixture.Npc(TEXT("bat"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
 	FElysiumNpcWorldFixture::Quiet({ Bat, Victim });
 	if (Bat == nullptr || Victim == nullptr)
@@ -828,10 +835,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesMingXiaoSelectorTest,
 bool FElysiumNpcKernelBossesMingXiaoSelectorTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_mxsel"), 0x29c1b05f);
-	Builder.AddNpc(TEXT("ming"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
 	Builder.AddNpc(TEXT("thrown"), FVector(100.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpc* Thrown = Fixture.Npc(TEXT("thrown"));
 	FElysiumNpcWorldFixture::Quiet({ Ming, Thrown });
 	if (Ming == nullptr || Thrown == nullptr)
@@ -868,11 +875,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesMingXiaoRatesTest,
 bool FElysiumNpcKernelBossesMingXiaoRatesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_mxrate"), 0x29c1b060);
-	Builder.AddNpc(TEXT("ming"));
-	Builder.AddNpc(TEXT("tentacle"), FVector(50.0 * U, 0.0, 0.0));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
+	Builder.AddNpcOfClass(TEXT("tentacle"), FVector(50.0 * U, 0.0, 0.0), TEXT("CNPC_VMingXiao"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
-	FElysiumNpc* Tentacle = Fixture.Npc(TEXT("tentacle"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	FElysiumNpcMingXiao* Tentacle = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("tentacle"));
 	FElysiumNpcWorldFixture::Quiet({ Ming, Tentacle });
 	if (Ming == nullptr || Tentacle == nullptr)
 	{
@@ -941,10 +948,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesMingXiaoAttackGateTest,
 bool FElysiumNpcKernelBossesMingXiaoAttackGateTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_mxgate"), 0x29c1b061);
-	Builder.AddNpc(TEXT("ming"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
 	Builder.AddNpc(TEXT("thrown"), FVector(100.0 * U, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpc* Thrown = Fixture.Npc(TEXT("thrown"));
 	FElysiumNpcWorldFixture::Quiet({ Ming, Thrown });
 	if (Ming == nullptr || Thrown == nullptr)
@@ -1031,9 +1038,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesMingXiaoThrowCurveTest,
 bool FElysiumNpcKernelBossesMingXiaoThrowCurveTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_mxthrow"), 0x29c1b062);
-	Builder.AddNpc(TEXT("ming"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpcWorldFixture::Quiet({ Ming });
 	if (Ming == nullptr)
 	{
@@ -1109,40 +1116,40 @@ bool FElysiumNpcKernelBossesPedestalSideTest::RunTest(const FString&)
 	// it through and the HEIGHT is the only thing under test: (50, 100) normalizes to a forward dot
 	// of 0.447, inside `[-0.17, 0.5]`.
 	TestFalse(TEXT("65 units of height difference closes it"),
-		FElysiumNpc::PedestalTaskForSide(FVector(50.0, 100.0, 65.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(50.0, 100.0, 65.0), Fwd, Right, true, true, Task));
 	TestTrue(TEXT("exactly 64 units is still inside"),
-		FElysiumNpc::PedestalTaskForSide(FVector(50.0, 100.0, 64.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(50.0, 100.0, 64.0), Fwd, Right, true, true, Task));
 
 	// The forward band: the NORMALIZED 2-D direction dotted with forward must be in [-0.17, 0.5].
 	// Dead ahead is 1.0 and refused; abeam is 0.0 and admitted.
 	TestFalse(TEXT("dead ahead is past the 0.5 ceiling"),
-		FElysiumNpc::PedestalTaskForSide(FVector(100.0, 0.0, 0.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(100.0, 0.0, 0.0), Fwd, Right, true, true, Task));
 	TestFalse(TEXT("dead behind is under the -0.17 floor"),
-		FElysiumNpc::PedestalTaskForSide(FVector(-100.0, 0.0, 0.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(-100.0, 0.0, 0.0), Fwd, Right, true, true, Task));
 
 	// Abeam to the +Y side: right-dot is positive, so tentacle 4.
 	Task = -1;
 	TestTrue(TEXT("abeam to the right is admitted"),
-		FElysiumNpc::PedestalTaskForSide(FVector(0.0, 100.0, 0.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(0.0, 100.0, 0.0), Fwd, Right, true, true, Task));
 	TestEqual(TEXT("and takes tentacle 4"), Task, 4);
 	// Abeam to the -Y side: right-dot is negative, so tentacle 5.
 	Task = -1;
 	TestTrue(TEXT("abeam to the left is admitted"),
-		FElysiumNpc::PedestalTaskForSide(FVector(0.0, -100.0, 0.0), Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(0.0, -100.0, 0.0), Fwd, Right, true, true, Task));
 	TestEqual(TEXT("and takes tentacle 5"), Task, 5);
 
 	// A severed tentacle closes its own side and does NOT fall through to the other.
 	Task = -1;
 	TestFalse(TEXT("a severed tentacle 4 closes the right side"),
-		FElysiumNpc::PedestalTaskForSide(FVector(0.0, 100.0, 0.0), Fwd, Right, false, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(0.0, 100.0, 0.0), Fwd, Right, false, true, Task));
 	TestFalse(TEXT("a severed tentacle 5 closes the left side"),
-		FElysiumNpc::PedestalTaskForSide(FVector(0.0, -100.0, 0.0), Fwd, Right, true, false, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector(0.0, -100.0, 0.0), Fwd, Right, true, false, Task));
 
 	// A zero delta normalizes to zero rather than NaN (retail's `1 / (FLT_EPSILON + len)`), the
 	// forward dot is 0 — inside the band — and the right dot's `<= 0` arm takes tentacle 5.
 	Task = -1;
 	TestTrue(TEXT("a candidate on top of me is admitted, not a NaN"),
-		FElysiumNpc::PedestalTaskForSide(FVector::ZeroVector, Fwd, Right, true, true, Task));
+		FElysiumNpcMingXiao::PedestalTaskForSide(FVector::ZeroVector, Fwd, Right, true, true, Task));
 	TestEqual(TEXT("and the r == 0 edge takes tentacle 5"), Task, 5);
 	return true;
 }
@@ -1152,14 +1159,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesPedestalSearchTest,
 bool FElysiumNpcKernelBossesPedestalSearchTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_pedestal"), 0x29c1b063);
-	Builder.AddNpc(TEXT("ming"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("Pedestal_far"), FVector(200.0 * U, 0.0, 0.0));
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("Pedestal_near"), FVector(80.0 * U, 0.0, 0.0));
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("Pedestal_toofar"), FVector(300.0 * U, 0.0, 0.0));
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("Column_near"), FVector(40.0 * U, 0.0, 0.0));
 	Builder.AddEntity(TEXT("prop_physics"), TEXT("Pedestal_high"), FVector(30.0 * U, 0.0, 90.0 * U));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpcWorldFixture::Quiet({ Ming });
 	if (Ming == nullptr)
 	{
@@ -1224,13 +1231,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesSeamsTest,
 bool FElysiumNpcKernelBossesSeamsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("bosses_seams"), 0x29c1b064);
-	Builder.AddNpc(TEXT("boss"), FVector(100.0 * U, 200.0 * U, 300.0 * U));
+	Builder.AddNpcOfClass(TEXT("boss"), FVector(100.0 * U, 200.0 * U, 300.0 * U), TEXT("CNPC_VMingXiao"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(500.0 * U, 200.0 * U, 300.0 * U), TEXT("CNPC_VManBat"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
-	FElysiumNpcWorldFixture::Quiet({ Boss });
-	if (Boss == nullptr)
+	FElysiumNpcMingXiao* Boss = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("boss"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
+	FElysiumNpcWorldFixture::Quiet({ Boss, Bat });
+	if (Boss == nullptr || Bat == nullptr)
 	{
-		AddError(TEXT("fixture did not stand the NPC"));
+		AddError(TEXT("fixture did not stand the Ming Xiao and the ManBat"));
 		return false;
 	}
 	// Each of these answers NOTHING, and the refusal is retail's own arm, not a convenience.
@@ -1243,18 +1252,18 @@ bool FElysiumNpcKernelBossesSeamsTest::RunTest(const FString&)
 	FVector BonePos(1.0, 1.0, 1.0);
 	TestFalse(TEXT("the named-bone world position answers false"),
 		Boss->RagdollBonePosition(Boss, TEXT("Bone01"), BonePos));
-	TestFalse(TEXT("the carried breakable read answers false"), Boss->IsCarriedBreakable(Boss));
+	TestFalse(TEXT("the carried breakable read answers false"), Bat->IsCarriedBreakable(Boss));
 	// NOT a seam any more: family Species landed `0x10366400` over `CNPC_VBaseBoss`'s own
 	// `m_BlacklistedEntities` (+0x665c), so this is the real walk — false here because nothing has
 	// been blacklisted, not because the store is missing.
 	TestFalse(TEXT("CNPC_VBaseBoss's blacklist answers false for an unlisted entity"),
 		Boss->BossBlacklistHolds(Boss));
 	TestNull(TEXT("the ManBat move-goal hint search answers null"),
-		Boss->ManBatFindMoveGoalHint(20000, 15000.f));
+		Bat->ManBatFindMoveGoalHint(20000, 15000.f));
 	TestFalse(TEXT("the navigator reachability probe answers false"),
-		Boss->NavigatorCanReach(FVector::ZeroVector));
+		Bat->NavigatorCanReach(FVector::ZeroVector));
 	TestEqual(TEXT("the ManBat acceleration cvar is manbat_delta's shipped 600"),
-		Boss->ManBatAccelerationCvar(), 600.f, 0.0001f);
+		Bat->ManBatAccelerationCvar(), 600.f, 0.0001f);
 
 	// `SolveThrowImpulse` leaves its impulse exactly as it found it.
 	FVector Impulse(1.0, 2.0, 3.0);
@@ -1263,7 +1272,8 @@ bool FElysiumNpcKernelBossesSeamsTest::RunTest(const FString&)
 
 	// The two unit conversions the family's bodies depend on.
 	Boss->Velocity = FVector(254.0, 0.0, 0.0);
-	TestEqual(TEXT("m_vecAbsVelocity answers source units"), Boss->AbsVelocityUnits().X, 100.0,
+	Bat->Velocity = FVector(254.0, 0.0, 0.0);
+	TestEqual(TEXT("m_vecAbsVelocity answers source units"), Bat->AbsVelocityUnits().X, 100.0,
 		0.001);
 	TestEqual(TEXT("and so does the entity velocity read"),
 		Boss->EntityVelocityUnits(*Boss).X, 100.0, 0.001);

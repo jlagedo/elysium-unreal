@@ -12,17 +12,8 @@ void SetSchedule(int32 RawRetailId, bool bForce);
 /** `TaskMovementComplete` (`0x10273ec0`), including all four task-status arms. */
 void TaskMovementComplete();
 
-/** `CNPC_VSabbatLeader::TaskFail` (`0x103a9400`). True means its flip path returned without the
- *  Troika chain and the caller must stop. */
-bool SabbatLeaderTaskFail(int32 Reason);
-
 // Slot 435's Troika body and its four species tails. The public virtual remains the one dispatcher.
 void TroikaOnScheduleChange(int32 NewSchedule);
-/** Slot 435's species bodies, each its class's `OnScheduleChange` override's body (story 5 step 3). */
-void GargoyleOnScheduleChange(int32 NewSchedule);     // `0x10378fc0`
-void HengeyokaiOnScheduleChange(int32 NewSchedule);   // `0x10383090`
-void TzimisceOnScheduleChange(int32 NewSchedule);     // `0x103bf610`
-void WerewolfOnScheduleChange(int32 NewSchedule);     // `0x103ced10`
 
 virtual double ScheduleTime() const override;
 

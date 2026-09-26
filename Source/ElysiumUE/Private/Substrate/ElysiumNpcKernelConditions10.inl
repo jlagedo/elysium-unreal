@@ -53,31 +53,6 @@
  *  reassigned at `10299f84`. */
 int32 TroikaIRelationType(FElysiumEntity* Candidate);
 
-/** `CNPC_VCop::IRelationType` (`0x10372b70`), 170 bytes — three arms in front of the Troika body:
- *  a null candidate answers `D_ER` outright, the cop class's shared timed grudge answers `D_HT`,
- *  and a player candidate answers `D_HT` on `m_flHeightenedAlertExpireTimer` or a non-zero
- *  `m_iCopsInPursuitCount`. Reached by every placed `npc_VCop` since story 5 step 2 registered
- *  the classname as `CNPC_VCop` (factory `0x103704f0`); before, the census gave the class no
- *  classname and a cop took the Troika line. */
-int32 CopIRelationType(FElysiumEntity* Candidate);
-
-/** `CNPC_VHunter::IRelationType` (`0x10388bb0`), 109 bytes — the cop arm minus both player-side
- *  tests: a null candidate answers `D_ER`, the hunter class's own static grudge answers `D_HT`, and
- *  everything else defers. A hunter's extra hostility comes only from that one shared timer. */
-int32 HunterIRelationType(FElysiumEntity* Candidate);
-
-/** `CNPC_VPedestrian::IRelationType` (`0x103a2930`), 58 bytes — a null candidate answers `D_ER`,
- *  a candidate whose NPC carries `D_INSANE` (`m_bfAINPCFlags2 & 0x20000`) answers `D_FR` WITHOUT
- *  consulting the relationship table at all, and everything else defers. Pedestrians fear the
- *  insane, and dialogue and the flee schedules read that through slot 404. */
-int32 PedestrianIRelationType(FElysiumEntity* Candidate);
-
-/** `CNPC_VYukie::IRelationType` (`0x103dd880`), 20 bytes, read off the LISTING because the C hides
- *  the return: the candidate is loaded into `EAX`, a null one `RET`s with `EAX` still holding that
- *  null (so `D_ER`), and anything else tail-jumps to the Troika body unchanged. The whole species
- *  override is the null guard. */
-int32 YukieIRelationType(FElysiumEntity* Candidate);
-
 /** `CBaseCombatCharacter::IRelationType` — the relationship-table tail the Troika body ends at, and
  *  the same store family **Senses10**'s `IRelationTypeOf` reads. Kept as one named arm so both
  *  readers cannot drift. */
@@ -109,66 +84,12 @@ bool IsUnconsciousMiscFlag() const;
 // `0x1029adb0` directly and UNCONDITIONALLY: each is its class's `TaskFail` override (story 5
 // step 3), which runs the arm below and then `FElysiumNpc::TaskFail`.
 
-/** `CNPC_VAsianVampire::TaskFail` (`0x10362390`) — on failure codes 12..15 (`0xb < code && code <
- *  0x10`) it sets `m_bPathBlocked` (`+0x66d4`) and nothing else. */
-void AsianVampireTaskFail(int32 Reason);
-
-/** `CNPC_VChangBros::TaskFail` (`0x1036d1d0`), shared by `CNPC_VChangBrosBlade` and
- *  `CNPC_VChangBrosClaw` — the same 12..15 gate, but the write is `m_failSchedule` (`+0x5c54`) =
- *  `0x15d`. */
-void ChangBrosTaskFail(int32 Reason);
-
-/** `CNPC_VGargoyle::TaskFail` (`0x10379060`) — in combat with `TASK_FAILED` standing as an
- *  interrupt it clears the top bit of `m_afMemory`; then, when `FINDING_BODY` stands, it clears
- *  `FINDING_BODY`; then `m_iShunnedFindPillar` (`+0x6680`) = 0. */
-void GargoyleTaskFail(int32 Reason);
-
-/** `CNPC_VHengeyokai::TaskFail` (`0x10380510`) — the memory-bit clear, then the blacklist-and-drop
- *  pair on `FINDING_BODY`, then the ignore-collision re-arm on `!CARRYING_BODY`, then
- *  `m_iShunnedFindFish` (`+0x6678`) = 0. */
-void HengeyokaiTaskFail(int32 Reason);
-
-/** `CNPC_VMingXiao::TaskFail` (`0x10394090`) — switches on `m_eThrowableObjectMode` (`+0x673c`):
- *  modes 3 and 4 reset the motor's steering to 180.0 and touch nothing else; every other mode sets
- *  the mode to 0 and releases `m_hThrowObject` (`+0x6718`). */
-void MingXiaoTaskFail(int32 Reason);
-
-/** `CNPC_VSheriffMan::TaskFail` (`0x103b0290`) — apart from the scope-trace bookkeeping the whole
- *  body is the chain to the base. The recovered fact is the ABSENCE of an arm, and it is ported so
- *  a test can prove the sheriff adds nothing. */
-void SheriffManTaskFail(int32 Reason);
-
-/** `CNPC_VTzimisce::TaskFail` (`0x103ba350`) — the Hengeyokai's arm with its own words:
- *  `m_iShunnedFindBody` (`+0x66b8`) and its own `m_FailedPickupTargets` blacklist. */
-void TzimisceTaskFail(int32 Reason);
-
 // --- The species words those arms write ---------------------------------------------------------
 //
 // Every one of these is a SPECIES-ONLY datamap member with no row in this runtime's shape map,
 // carried on the combined NPC until story 5 step 4 moves it to its species class. Each is the one
 // word its species would have, named for the retail field, so the write is observable.
 
-/** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`). Written by `0x10362390` on failure codes
- *  12..15; its readers are the AsianVampire's own schedule selector, which this band does not own,
- *  so nothing reads it here yet. */
-bool bSpeciesPathBlocked = false;
-
-/** The three `m_iShunnedFind*` counters — `CNPC_VGargoyle::m_iShunnedFindPillar` (`+0x6680`),
- *  `CNPC_VHengeyokai::m_iShunnedFindFish` (`+0x6678`) and `CNPC_VTzimisce::m_iShunnedFindBody`
- *  (`+0x66b8`). Three retail fields, ONE word here: a spawned NPC is exactly one of those three
- *  species, so the three can never be live at once and a per-species word would be three names for
- *  the same storage. */
-int32 SpeciesShunnedFindCount = 0;
-
-/** `CNPC_VHengeyokai::m_hPickupTarget` (`+0x6664`) and `CNPC_VTzimisce::m_hPickupTarget`
- *  (`+0x6670`) — the same field under two offsets, for the same reason. */
-FElysiumEntityHandle SpeciesPickupTarget;
-
-/** `CNPC_VMingXiao::m_hThrowObject` (`+0x6718`) and `m_eThrowableObjectMode` (`+0x673c`).
- *  `0x10398d90` is `m_eThrowableObjectMode = arg` and nothing else — it is the MODE setter, not a
- *  prop release, which is this family's correction to the checklist's walk. */
-FElysiumEntityHandle SpeciesThrowObject;
-int32 SpeciesThrowableObjectMode = 0;
 
 /** `0x10382970` (Hengeyokai, `m_BlacklistedEntities` at `+0x66a4`) and `0x103bf200` (Tzimisce,
  *  `m_FailedPickupTargets` at `+0x6690`) — byte-identical `CUtlVector<BlacklistedEntity_t>` appends

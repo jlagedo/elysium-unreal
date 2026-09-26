@@ -4,6 +4,8 @@
 
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -158,7 +160,7 @@ bool FElysiumNpcKernelTranslate19WerewolfTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcWerewolf& N = *ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Guard);
 	// `103d5e00`: all three of the werewolf's rows. `0x43 SCHED_FAIL` is one of them, so a
 	// werewolf never runs the base FAIL program.
 	TestEqual(TEXT("103d5e00 0x43 FAIL -> 0x15c"), N.TranslateScheduleRetail(0x43), 0x15c);
@@ -224,7 +226,7 @@ bool FElysiumNpcKernelTranslate19SpeciesTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Guard;
+	FElysiumNpcHengeyokai& N = *ElysiumTestAsSpecies<FElysiumNpcHengeyokai>(F.Guard);
 	N.HengeyokaiSkin = 1;
 	const int32 ThawsBefore = N.HengeyokaiThawCalls;
 	N.TranslateScheduleRetail(0x5b);

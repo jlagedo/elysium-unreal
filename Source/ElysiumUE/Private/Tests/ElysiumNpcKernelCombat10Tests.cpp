@@ -10,6 +10,13 @@
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -314,13 +321,18 @@ bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString
 	{
 		return false;
 	}
+	FElysiumNpcMingXiao* MingXiao = ElysiumTestAsSpecies<FElysiumNpcMingXiao>(F.Fighter);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VMingXiao"), MingXiao))
+	{
+		return false;
+	}
 	Wound(*F.Fighter);
 	// `10397250`: the limb loop folds one extra contribution in per ATTACHED limb. This runtime
 	// stands no severable limbs (`0x10398000` answers false for all six), so the arm equals the base
 	// — retail's own answer for an intact boss.
 	TestEqual(TEXT("0x103970d0 with every limb absent the arm equals the base"),
-		F.Fighter->HealthToPercent(), 75);
-	TestFalse(TEXT("0x10398000 stands no limb"), F.Fighter->MingXiaoLimbPresent(0));
+		MingXiao->HealthToPercent(), 75);
+	TestFalse(TEXT("0x10398000 stands no limb"), ElysiumTestAsSpecies<FElysiumNpcMingXiao>(F.Fighter)->MingXiaoLimbPresent(0));
 	return true;
 }
 
@@ -332,26 +344,31 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10CurrHealthPercentTest,
 	"Elysium.Substrate.NpcKernelCombat10.GetCurrHealthPercent", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10CurrHealthPercentTest::RunTest(const FString&)
 {
-	FCombat10Fixture F;
+	FCombat10Fixture F(TEXT("CNPC_VVampireBoss"));
 	if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
 	{
 		return false;
 	}
-	F.Fighter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
-	F.Fighter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 5);
-	F.Fighter->RecomputeSheet();
+	FElysiumNpcVampireBoss* Boss = ElysiumTestAsSpecies<FElysiumNpcVampireBoss>(F.Fighter);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VVampireBoss"), Boss))
+	{
+		return false;
+	}
+	Boss->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
+	Boss->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 5);
+	Boss->RecomputeSheet();
 
 	// `103c68db` reads stat `0x0f` FIRST (the numerator) and `103c694d` stat `0x11` SECOND (the
 	// divisor), so the answer is the DAMAGE fraction — the complement of `HealthToPercent`.
 	TestEqual(TEXT("0x103c6830 answers stat0xf / stat0x11, the damage fraction"),
-		F.Fighter->GetCurrHealthPercent(), 0.25f, 1e-5f);
+		Boss->GetCurrHealthPercent(), 0.25f, 1e-5f);
 
 	// `103c6964`: the guard is `ABS(cap) > 1e-05` on the DIVISOR — the decompiler's
 	// `(a < eps) == (a == eps)` idiom — and the refusal answer is `_DAT_104454c4` = 0.0.
-	F.Fighter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 0);
-	F.Fighter->RecomputeSheet();
+	Boss->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 0);
+	Boss->RecomputeSheet();
 	TestEqual(TEXT("...a zero cap takes the divide-by-zero guard and answers _DAT_104454c4"),
-		F.Fighter->GetCurrHealthPercent(), 0.0f);
+		Boss->GetCurrHealthPercent(), 0.0f);
 	return true;
 }
 
@@ -430,6 +447,11 @@ bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const F
 	{
 		return false;
 	}
+	FElysiumNpcWerewolf* Werewolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Fighter);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Werewolf))
+	{
+		return false;
+	}
 	// The census's classname side: retail's factory `0x103c8760` builds `CNPC_VWerewolf` from
 	// `npc_VWerewolf` (story 5 step 2; the proximity census gave the class no classname).
 	TestTrue(TEXT("npc_VWerewolf resolves to CNPC_VWerewolf"),
@@ -439,22 +461,22 @@ bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const F
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")), 304));
 
-	F.Fighter->MiscFlags = 0;
+	Werewolf->MiscFlags = 0;
 	// `103cca32`: the arm consults NEITHER base gate. An ARMED werewolf still gets its claws, which
 	// is the whole difference from the base.
 	F.Arm(GCombat10Katana);
-	F.Fighter->GiveBaseFightingItems();
+	Werewolf->GiveBaseFightingItems();
 	TestTrue(TEXT("0x103cc9b0 the werewolf is given item_w_werewolf_attacks"),
-		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
+		Werewolf->InventoryFindByClassname(GCombat10WerewolfAttacks));
 	TestFalse(TEXT("...and never item_w_fists"),
-		F.Fighter->InventoryFindByClassname(GCombat10Fists));
+		Werewolf->InventoryFindByClassname(GCombat10Fists));
 	TestTrue(TEXT("...and misc flag 0x10 is set"),
-		ElysiumMiscFlags::Has(F.Fighter->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems));
+		ElysiumMiscFlags::Has(Werewolf->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems));
 
 	// `103cca32` again: a body that ALREADY carries the item is refused.
-	const int32 Before = F.Fighter->Inventory.Num();
-	F.Fighter->GiveBaseFightingItems();
-	TestEqual(TEXT("...Inventory_Find refuses a second grant"), F.Fighter->Inventory.Num(), Before);
+	const int32 Before = Werewolf->Inventory.Num();
+	Werewolf->GiveBaseFightingItems();
+	TestEqual(TEXT("...Inventory_Find refuses a second grant"), Werewolf->Inventory.Num(), Before);
 	// The Troika base body (fists) is `GiveBaseFightingItems`' own case, on the bare Troika line.
 	return true;
 }
@@ -469,24 +491,29 @@ bool FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest::RunTest(const
 	{
 		return false;
 	}
-	F.Fighter->MiscFlags = 0;
-	F.Fighter->GiveBaseFightingItems();
+	FElysiumNpcWerewolf* Werewolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Fighter);
+	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Werewolf))
+	{
+		return false;
+	}
+	Werewolf->MiscFlags = 0;
+	Werewolf->GiveBaseFightingItems();
 	TestTrue(TEXT("the claws are carried"),
-		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
+		Werewolf->InventoryFindByClassname(GCombat10WerewolfAttacks));
 
 	// `103ccb32`: the same `0x10` gate as the base, with the werewolf's own classname.
-	F.Fighter->RemoveBaseFightingItems();
+	Werewolf->RemoveBaseFightingItems();
 	TestFalse(TEXT("0x103cca80 the werewolf's claws are removed"),
-		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
+		Werewolf->InventoryFindByClassname(GCombat10WerewolfAttacks));
 	TestFalse(TEXT("...and the flag is cleared"),
-		ElysiumMiscFlags::Has(F.Fighter->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems));
+		ElysiumMiscFlags::Has(Werewolf->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems));
 
 	// With the flag clear it is a no-op, exactly as the base is.
-	F.Fighter->GiveBaseFightingItems();
-	ElysiumMiscFlags::Clear(F.Fighter->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems);
-	F.Fighter->RemoveBaseFightingItems();
+	Werewolf->GiveBaseFightingItems();
+	ElysiumMiscFlags::Clear(Werewolf->MiscFlags, FElysiumNpc::MiscFlagBaseFightingItems);
+	Werewolf->RemoveBaseFightingItems();
 	TestTrue(TEXT("...and with the flag clear nothing is removed"),
-		F.Fighter->InventoryFindByClassname(GCombat10WerewolfAttacks));
+		Werewolf->InventoryFindByClassname(GCombat10WerewolfAttacks));
 	return true;
 }
 
@@ -1112,7 +1139,7 @@ bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Fighter;
+	FElysiumNpcHuman& N = *ElysiumTestAsSpecies<FElysiumNpcHuman>(F.Fighter);
 
 	// The named dispatch case: `0x10386560` is `CNPC_VHuman`'s slot-605 body, shared by the ~38
 	// vtables of the human line. `CNPC_VCop` inherits it through `CNPC_VHumanCombatant` ->
@@ -1201,7 +1228,7 @@ bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& A = *Asian.Fighter;
+		FElysiumNpcAsianVampire& A = *ElysiumTestAsSpecies<FElysiumNpcAsianVampire>(Asian.Fighter);
 		A.Cognition.Conditions.Reset();
 
 		// `103621c2`: the ONE divergence from the Troika base — COND `0x3c` answers **0xf0**, not
@@ -1229,7 +1256,7 @@ bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Fighter;
+	FElysiumNpcAsianVampire& N = *ElysiumTestAsSpecies<FElysiumNpcAsianVampire>(F.Fighter);
 	N.Cognition.Conditions.Reset();
 
 	// `10362210`: COND `0x5f` with neither `0x2f` nor `0x63` answers 0xf0 — and this body offers
@@ -1274,20 +1301,20 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Fighter;
+	FElysiumNpcBach& N = *ElysiumTestAsSpecies<FElysiumNpcBach>(F.Fighter);
 	TestNotNull(TEXT("CNPC_VBach overrides slot 605"),
 		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach")), 605));
 	N.Cognition.Conditions.Reset();
 
 	// `103642f6`: COND `0x7b` — a Bach-line condition above the base registrar's `0x76`, carried by
 	// NUMBER because no recovered table names it. It stamps `+0x6690` and answers 0x15a.
-	N.BachRepositionTimer = 0.0;
+	N.BachNextHolyLightTime = 0.0;
 	N.Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7b));
 	TestEqual(TEXT("0x103642f0 COND 0x7b answers 0x15a"), N.SelectScheduleRangedCombat(0), 0x15a);
 	// `curtime` is the fixture's clock, which stands at the NPC's first think: `NPCInit`
 	// (`0x1029a0b0`) arms that think a tenth of a second after Activate rather than at Activate.
 	TestEqual(TEXT("...and stamps +0x6690 with curtime + _DAT_10463584 (15.0)"),
-		N.BachRepositionTimer, FElysiumNpcWorldFixture::FirstThinkSeconds + 15.0, 1e-4);
+		N.BachNextHolyLightTime, FElysiumNpcWorldFixture::FirstThinkSeconds + 15.0, 1e-4);
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x7b));
 
 	// `10364355`: with NO weapon, COND `0x7a` answers 0x158 and COND `0x79` answers 0x159.
@@ -1362,7 +1389,7 @@ bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& M = *MingXiao.Fighter;
+		FElysiumNpcMingXiao& M = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(MingXiao.Fighter);
 		ArmLoaded(MingXiao);
 
 		// `103967d6`: arm 1 is the human's.
@@ -1383,7 +1410,7 @@ bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& H = *Human.Fighter;
+		FElysiumNpcHuman& H = *ElysiumTestAsSpecies<FElysiumNpcHuman>(Human.Fighter);
 		ArmLoaded(Human);
 		H.bInMelee = false;
 		H.Cognition.Conditions.Set(EElysiumNpcCond::WeaponThroughWall);
@@ -1397,7 +1424,7 @@ bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Fighter;
+	FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(F.Fighter);
 	ArmLoaded(F);
 	N.bInMelee = false;
 
@@ -1432,7 +1459,7 @@ bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Fighter;
+	FElysiumNpcSheriffMan& N = *ElysiumTestAsSpecies<FElysiumNpcSheriffMan>(F.Fighter);
 	TestNotNull(TEXT("CNPC_VSheriffMan overrides slot 605"),
 		ElysiumNpcKernelClass::OverrideOf(
 			ElysiumNpcKernelClass::Find(TEXT("CNPC_VSheriffMan")), 605));

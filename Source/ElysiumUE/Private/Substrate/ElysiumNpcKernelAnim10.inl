@@ -9,8 +9,8 @@
 // through.
 //
 // The definitions are in `Substrate/ElysiumNpcKernelAnim10.cpp` (activity, sequence, pose and
-// model) and `Substrate/ElysiumNpcKernelAnim10_2.cpp` (the three melee selectors and the zombie
-// idle gate). The tests are `Tests/ElysiumNpcKernelAnim10Tests.cpp`. The walked prose is
+// model); the three melee selectors and the zombie idle gate are their species classes' own
+// (story 5 step 4). The tests are `Tests/ElysiumNpcKernelAnim10Tests.cpp`. The walked prose is
 // `docs/vtmb/npc-ai/shape.md` § "Story 29d, families Anim10 and SpeciesAnim10".
 //
 // --- What this family is -------------------------------------------------------------------------
@@ -149,15 +149,6 @@ void BaseMaintainActivity();
  *  `0x1115`-`0x1117` families forwards to `BaseSetActivity` unchanged. */
 void TroikaSetActivity(int32 Activity);
 
-/** `CNPC_VTzimisceHeadClaw::SetActivity` (`0x103c1cd0`). ONE arm in front of the Troika body:
- *  request 9 `ACT_WALK` with a non-null slot 167 `GetEnemy` becomes `0x1136 ACT_TZ_WALK2`. */
-void TzimisceHeadClawSetActivity(int32 Activity);
-
-/** `CNPC_VTzimisceRunner::SetActivity` (`0x103c3d80`). A five-entry request remap in front of the
- *  Troika body, gated on the form byte `+0x6672` being non-zero and tested in retail's order
- *  1, 9, 0x13, 3, 0xf1. With the byte clear every request forwards unchanged. */
-void TzimisceRunnerSetActivity(int32 Activity);
-
 /** `+0x6672`, `CNPC_VTzimisceRunner`'s form byte. Both its slot-310 remap and its slot-375 post-pass
  *  read it and nothing in this runtime writes it; declared by offset and retail class, as family
  *  Precache10 declares `CNPC_VMingXiaoTentacle`'s three model indices. */
@@ -246,46 +237,6 @@ int32 NavigatorActivityNotices = 0;
  *       delegates to slot 569 with `m_pHintNode`. Each RETURNS the delegate's answer.
  *    5. otherwise `CBaseCombatCharacter::NPC_EarlyTranslateActivity`. */
 int32 TroikaNpcEarlyTranslateActivity(int32 Activity);
-
-/** `CNPC_VDog::NPC_EarlyTranslateActivity` (`0x10374ad0`), 21 bytes. Retail preserves
- *  `3 ACT_FIDGET` by returning with `EAX` still holding the request — one early return the Troika
- *  base never sees — and forwards every other activity to `0x10295590`. */
-int32 DogNpcEarlyTranslateActivity(int32 Activity);
-
-/** `CNPC_VHengeyokai::NPC_EarlyTranslateActivity` (`0x10381b50`). Under the carry-form bit, request
- *  1 returns `0x128` and 9 or `0x13` return `0x129`, each immediately; everything else tail-calls
- *  the HUMAN body `0x103854f0`, which itself chains the Troika one. */
-int32 HengeyokaiNpcEarlyTranslateActivity(int32 Activity);
-
-/** `CNPC_VHuman::NPC_EarlyTranslateActivity` (`0x103854f0`), 565 bytes and 39 census classes — the
- *  armed/alert decision tree, then the rewrites. See the definition for the arm-by-arm walk; the one
- *  thing to carry here is that `m_bAggressiveAnims` (`+0x6410`) is written on FOUR different paths
- *  and every later rewrite reads it. */
-int32 HumanNpcEarlyTranslateActivity(int32 Activity);
-
-/** `CNPC_VTzimisce::NPC_EarlyTranslateActivity` (`0x103bde40`). Under the carry-body flag bit, a
- *  ZERO `m_bHeavyBodyTarget` gives `0xfd` / `0xff` and a non-zero one `0xfc` / `0xfe`. */
-int32 TzimisceNpcEarlyTranslateActivity(int32 Activity);
-
-/** `CNPC_VTzimisceRunner::NPC_EarlyTranslateActivity` (`0x103c3e10`). Chains the Troika body FIRST
- *  and only then remaps the TRANSLATED activity under a non-zero `+0x6672`, so it is a POST-PASS on
- *  the base's answer and not a replacement: 1 and `0xf1` become `0x1134`, 3 `0x1135`, 9 `0x1136`,
- *  `0x13` `0x1137`. */
-int32 TzimisceRunnerNpcEarlyTranslateActivity(int32 Activity);
-
-/** `thunk_FUN_10381c80(this)` — `CNPC_VHengeyokai`'s carry-form probe, `m_bfAINPCFlags` (`+0x14b8`)
- *  bit `0x20 CARRYING_BODY`. Not a seam: the port carries the word. */
-bool HengeyokaiCarryFormBit() const;
-
-/** The active weapon's `+0x19c` word, whose bit `0x40 NODRAW` makes `0x103854f0` treat an armed NPC
- *  as unarmed. **SEAM**: no port member carries the weapon's draw flags — the port's weapon state is
- *  the item's own catalogue row — so this answers 0, the arm in which the weapon DOES draw and the
- *  decision tree runs. Answering `0x40` instead would clear `m_bAggressiveAnims` for every armed
- *  body and make the whole tree unreachable. */
-uint32 ActiveWeaponDrawFlags() const;
-
-/** `thunk_FUN_103be130(this)` — `CNPC_VTzimisce`'s carry-body probe, the same `+0x14b8` bit 5. */
-bool TzimisceCarryFormBit() const;
 
 /** `CBaseCombatCharacter::NPC_EarlyTranslateActivity(activity)` — the chain tail every arm above
  *  ends in. **SEAM**: `CBaseCombatCharacter`'s own body is not an NPC-kernel row and no class in the
@@ -402,43 +353,9 @@ bool EntityUnselectable() const;
 // `FElysiumNpc::SelectScheduleMeleeCombat` (`ElysiumNpcKernelSchedule.cpp`) and
 // `FElysiumNpc::ShouldPlayIdleSound` (`ElysiumNpcKernelSounds.cpp`).
 
-/** `CNPC_VHuman::SelectScheduleMeleeCombat` (`0x10385e40`), 1,449 bytes, slot 604 for **34** census
- *  classes — the single most-inherited melee selector in the game. It REPLACES the Troika body
- *  `0x102b6c30` wholesale and never chains it. Every return also stamps the selector trace
- *  (`+0x1b30` the source file, `+0x1b34` the line), which this runtime records through
- *  `RecordScheduleEvent`. */
-int32 SelectScheduleMeleeCombatHuman();
-
 // `thunk_FUN_102b7370(this)` — `SelectDoorObstructionSchedule`, the first of the two offers the
 // human body's common tail makes and the ONLY one MingXiao's makes. `FElysiumNpc::
 // SelectDoorObstructionSchedule` (`ElysiumNpc.cpp`) already IS that body and answers an
 // `int32`; the two selectors call it and convert through `ElysiumScheduleNumber`,
 // rather than a second reading being stood beside it.
-
-/** `CNPC_VMingXiao::SelectScheduleMeleeCombat` (`0x10396050`), 1,522 bytes. The same skeleton as the
- *  human's with FOUR stated differences: the distance is tested BEFORE the roll; the common tail
- *  offers only `0x102b7370`; an extra `COND 0x48 ENEMY_OCCLUDED` arm opens it; and there is no
- *  `COND 0x0d SHOULD_BLOCK` arm at all. */
-int32 SelectScheduleMeleeCombatMingXiao();
-
-/** `CNPC_VBach::SelectScheduleMeleeCombat` (`0x10364080`), 395 bytes. A weapon-discipline prologue —
- *  Bach must be holding the right gun or the right sword for the condition he is in — and then the
- *  HUMAN body, with a `+0x6444` clear and a forced `0x159` when that answered zero. */
-int32 SelectScheduleMeleeCombatBach();
-
-/** `+0x6690` — the curtime stamp `CNPC_VBach`'s condition-0x7b arm writes
- *  (`curtime + _DAT_10463584`, 15.0f). No reader is recovered; declared by offset so the write is
- *  assertable. */
-double BachFailStamp = 0.0;
-
-/** `+0x6444` — the word Bach's fall-through clears unless `m_NPCState` is 4 or 0xc. No reader is
- *  recovered either; same treatment. */
-int32 BachClearWord = 0;
-
-/** `CNPC_VZombie::vfunc509` (`0x103e0fa0`), slot 509's zombie arm. It REPLACES the Troika body
- *  `0x10294040` wholesale — no dialog refusal, no state test, no `SF_NPC_GAG` — and its own arms are
- *  the targetable byte, a live dialog partner, `IsBusyWithDiscipline`, then a weight of 999 that
- *  drops to 20 (a 1-in-21 roll) when the running schedule's local id is `0x12f`, in which case the
- *  float-sound arm is SKIPPED. */
-bool ShouldPlayIdleSoundZombie();
 

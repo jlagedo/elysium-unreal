@@ -1,0 +1,48 @@
+{
+ "schema_version": 1,
+ "scope": "step-4-species-bodies-words-bindings",
+ "base_commit": "9f087e42",
+ "reports": {
+  "Elysium.Substrate": "E:/elysium-work/reports/tests/20260926T101143.169890Z-elysium-substrate",
+  "Elysium.Content": "E:/elysium-work/reports/tests/20260926T101333.647964Z-elysium-content",
+  "Elysium.PlayerWorld": "E:/elysium-work/reports/tests/20260926T101358.943745Z-elysium-playerworld"
+ },
+ "results": {
+  "Elysium.Substrate": 1270,
+  "Elysium.Content": 14,
+  "Elysium.PlayerWorld": 1,
+  "failed": 0,
+  "expectations_consumed": 107
+ },
+ "artifacts": {
+  "delta": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4/gate/delta.json",
+   "sha256": "408bce67db8b0d15aa6cf6ffb3f451b3c2ce0fc813be8fafbcd3780c64bd22e7"
+  },
+  "runtime": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4/gate/runtime-results.json",
+   "sha256": "bf2bd64bb03e1e61b0fb77beac0fa0a09474c3590d2fc71772e7d7fc97e86dbf"
+  },
+  "cheap_checks": {
+   "path": "E:/elysium-work/research/npc-kernel/story-5/step4/gate/checks.json",
+   "sha256": "eebfc0c103838b82fa3cb0f8250ed5e66fb13f8203e721f569cff5e245e92771"
+  }
+ },
+ "smoke": {
+  "path": "E:/elysium-work/research/npc-kernel/story-5/step4/smoke.json",
+  "sha256": "3afa0bedad0909c0048f95d6df98d9664f8d83270d6bba3bf39f9362739fd628",
+  "maps": [
+   "sp_tutorial_1",
+   "ch_fishmarket_1",
+   "sp_giovanni_2b",
+   "hw_warrens_4",
+   "sm_pawnshop_1"
+  ]
+ },
+ "records": {
+  "moves": "moves-step4.tsv",
+  "fields": "fields-step4.tsv",
+  "decisions": "decisions-step4.json",
+  "expectations": "expectations/step-4.json"
+ }
+}

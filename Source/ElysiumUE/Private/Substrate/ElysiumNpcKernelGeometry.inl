@@ -51,32 +51,11 @@
  *  sees until then. */
 FVector SizeCm = FVector::ZeroVector;
 
-/** `+0x66dc`/`+0x66e0`/`+0x66e4` — `CNPC_VWerewolf`'s cached fake-hull point, the world position of
- *  the `Bip01` bone as of the previous `UpdateFakeHull`. The retail NAME is **unrecovered**: the
- *  word is not in `CNPC_VWerewolf`'s datamap and no corpus body declares it. SOURCE units, because
- *  the whole body is. */
-FVector WerewolfFakeHullPosUnits = FVector::ZeroVector;
-
-/** `+0x66f4` — the stamp `UpdateFakeHull` writes after it pushes damage, so the push repeats at
- *  most once a second. Also not in the datamap; the retail NAME is **unrecovered**. An absolute
- *  curtime stamp, carried as double like every other stamp on this struct. */
-double WerewolfFakeHullPushTime = 0.0;
-
 /** `+0x668c CNPC_VMingXiaoTentacle::m_vecScatterCenter` — the point a severed tentacle is told to
  *  scatter away from. Family **Squad** owns `+0x668c` as `CNPC_VMingXiao::m_rhProxies[6]` and
  *  family **Bosses** owns it as `CNPC_VManBat::m_hPickupTarget`; this is a THIRD species' word at
  *  the same offset, so it stands beside them rather than replacing either. SOURCE units. */
 FVector TentacleScatterCenterUnits = FVector::ZeroVector;
-
-/** `+0x665c CNPC_VMingXiaoTentacle::m_hMingXiao` — the owner `0x1039ede0` resolves before it can
- *  notify the owner's other severed tentacles. Family Bosses owns `+0x665c` as
- *  `CNPC_VBaseBoss::m_BlacklistedEntities`; same situation as `m_vecScatterCenter` above. */
-FElysiumEntityHandle TentacleMingXiao;
-
-/** `+0x6670 CNPC_VMingXiaoTentacle::m_ePhase` — the phase word `0x103998d0` requires to read 2
- *  before it will scatter a tentacle. What the OTHER phase values mean is **unrecovered**; only the
- *  2 is a fact of this family's rows. */
-int32 TentaclePhase = 0;
 
 // --- Slot 193 `EyePosition`, and its species override --------------------------------------------
 
@@ -93,9 +72,6 @@ int32 TentaclePhase = 0;
  *
  *  CENTIMETRES, because every caller of `EyePosition()` in this runtime is. */
 virtual FVector EyePosition() const override;
-
-/** `CPayphone::vfunc193` (`0x101aae60`) — the body of `FElysiumNpcPayphone::EyePosition`. */
-FVector PayphoneEyePosition() const;
 
 /** SEAM for `CBaseAnimating::LookupBone(name)` + `CBaseAnimating::GetBonePosition02(bone, &pos,
  *  &ang)` — the pair `CPayphone::vfunc193` runs — and, with the local offset already folded in, for
@@ -150,23 +126,6 @@ FVector SpeciesWorldSpaceCenter() const;
 // stores are the body.
 
 // --- Slot 337 `GetUsedHullBits` ------------------------------------------------------------------
-
-/** One row of slot 337's species table. `bReplaces` is the difference between the two shapes retail
- *  uses: `CAI_BaseNPC`/`CAI_BaseNPCTroika` and the Tzimisce/Rat/MingXiao line call the base body
- *  and OR a bit onto its answer, while seven species answer a bare constant and never call up.
- *  `Body` is the retail address, so a row can be checked against `npc-kernel/slots.md`. */
-struct FUsedHullBitsSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	int32 Bits = 0;
-	bool bReplaces = false;
-};
-static const FUsedHullBitsSpecies* UsedHullBitsSpeciesRows(int32& OutCount);
-static const FUsedHullBitsSpecies* UsedHullBitsSpeciesOf(const TCHAR* InRetailClass);
-/** Slot 337's species body: the row for retail body `SpeciesBody`, ORed onto the Troika body unless it
- *  replaces it. */
-int32 SpeciesUsedHullBits(const TCHAR* SpeciesBody);
 
 /** `CBaseCombatCharacter::GetUsedHullBits` (`0x10341710`), the bottom of the chain: a scope-trace
  *  pair and `return 1`. `CAI_BaseNPC` (`0x10270820`) ORs `0x1` onto it and `CAI_BaseNPCTroika`
@@ -228,43 +187,7 @@ static FVector StandingOnHeadDiagonal(int32 DiagonalRoll);
  *  clear, the origin. */
 void ResolveStandingOnHead(float IntervalSeconds);
 
-// --- `CNPC_VAsianVampire::StandingOnPlayer` (`0x10362730`) ---------------------------------------
-
-/** The body: is the closest player's collision box overlapping mine in XY? Retail compares the 2-D
- *  distance between the two origins against `0.5 * |playerMaxs.xy - playerMins.xy|` plus
- *  `0.5 * |myMaxs.xy - myMins.xy|` — the two half-diagonals of the XY footprints, NOT their radii,
- *  and `_DAT_104454d0` is 0.5. Answers false with no closest player, which is retail's own arm. */
-bool StandingOnPlayer() const;
-
-/** The rule behind it, so the threshold is measurable without a world. All four extents are the
- *  collideable's OBB mins/maxs in CENTIMETRES; only X and Y are read. */
-static bool StandingOnPlayerOverlap(const FVector& MyOriginCm, const FVector& OtherOriginCm,
-	const FVector& MyMinsCm, const FVector& MyMaxsCm, const FVector& OtherMinsCm,
-	const FVector& OtherMaxsCm);
-
 // --- `CNPC_VWerewolf::UpdateFakeHull` (`0x103d93b0`) ---------------------------------------------
-
-/** `FUN_10240250` — the axis-aligned box overlap the werewolf's fake hull is tested with, verbatim:
- *  true iff `BMax >= AMin` and `BMin <= AMax` on all three axes, with the comparisons in retail's
- *  order (X max, X min, Y max, Y min, Z max, Z min) and every one of them inclusive. */
-static bool BoxesOverlap(const FVector& AMin, const FVector& AMax, const FVector& BMin,
-	const FVector& BMax);
-
-/** `UpdateFakeHull`'s activity pick: slot 323 (`vtable +0x50c`) classifies the direction from my
- *  `WorldSpaceCenter()` to the pushed entity's origin, and its answer selects the knockback
- *  activity handed to slot 320. 1 answers `0x7a`, 3 answers `0x7b`, anything else `0x79`. */
-static int32 FakeHullKnockbackActivity(int32 DirectionClass);
-
-/** `0x103d93b0`. `Now` is `gpGlobals->curtime` (`DAT_1070b228 + 0xc`), which every stamp on this
- *  struct is measured in. */
-void UpdateFakeHull(double Now);
-
-/** `0x103d93b0`'s overlap arm (`103d9643`..`103d9829`), split out because it is a body of its own:
- *  offset the pushed entity, classify the direction, pick the knockback activity, and — behind a
- *  one-second gate that the knockback is NOT behind — push damage. `BonePosUnits` is the `Bip01`
- *  point this call measured, in SOURCE units, and the delta against `m_vecFakeHullPos` is what
- *  becomes the force. */
-void ApplyFakeHullPush(const FVector& BonePosUnits, double Now);
 
 /** What `UpdateFakeHull`'s seams were asked, so a test can prove the body reached each one and that
  *  the refusal was the recovered one. Read by the test suite and by nothing else. */
@@ -278,72 +201,8 @@ struct FFakeHullSeamLedger
 	int32 DamagePushes = 0;         // `CBaseEntity::TakeDamage` past the one-second gate
 	FVector LastDamageForceUnits = FVector::ZeroVector;
 };
-mutable FFakeHullSeamLedger FakeHullSeams;
-
-/** SEAM for `CBaseEntity::GetEnemy()->+0xa8` — the entity `UpdateFakeHull` actually pushes, which
- *  is NOT the enemy itself: the body asks slot 167 for the enemy, tests the overlap against the
- *  ENEMY's collision box, then reads a pointer out of the enemy at `+0xa8` and offsets, classifies
- *  and damages THAT. `+0xa8` is in no datamap in the corpus and no body in layers 0–9 writes it, so
- *  which field it is is **unrecovered**. Answers the enemy itself, which is what a null `+0xa8`
- *  would make retail dereference — stated rather than guessed, and the ledger records the ask. */
-FElysiumEntity* FakeHullPushTarget() const;
-
-/** SEAM for `CollisionProperty::CalcNearestPoint` (`0x100dd000`) — the nearest point on an entity's
- *  OBB to a world point, which becomes the damage POSITION. No collision property here; answers the
- *  point unchanged, which is `CalcNearestPoint`'s own answer for a point already inside the box. */
-FVector NearestPointOnEntity(const FElysiumEntity* Entity, const FVector& PointCm) const;
-
-/** SEAM for slot 323 (`0x10344dd0`, `int vfunc323(const Vector&)`) and slot 320
- *  (`PlayerKnockbackReaction(CBaseCombatCharacter*, Activity)`) dispatched on the PUSHED entity.
- *  Both slots exist on this leaf and are 29e's stubs; when the pushed entity is an NPC they are
- *  called for real and when it is not they record and answer 0 / false. */
-int32 PushedEntityDirectionClass(FElysiumEntity* Pushed, const FVector& DeltaCm) const;
-bool PushedEntityKnockback(FElysiumEntity* Pushed, int32 Activity);
-
-/** SEAM for `CBaseEntity::TakeDamage(CTakeDamageInfo)` with the packet `UpdateFakeHull` builds:
- *  20 damage, type `1`, sub-type `2`, `0x101c2b10(1)`, scale 1.0, a force of
- *  `(bonePos - m_vecFakeHullPos) * 500` and a position of the nearest point. This runtime's damage
- *  path is `ElysiumDamage::Apply`, which needs a `FElysiumDmg` descriptor and a dice context a
- *  kernel geometry body has no source for; the force and the position are the recovered halves and
- *  are what the ledger records. */
-void PushFakeHullDamage(FElysiumEntity* Pushed, float Damage, const FVector& ForceUnits,
-	const FVector& PositionUnits);
-
-/** The `DAT_1093f73c` cvar `UpdateFakeHull` gates its `DrawDebugHullAtPoint` on
- *  (`!cvar->IsCommand() && cvar->m_nValue != 0`, retail's inlined `ConVar::GetInt`):
- *  `werewolf_show_debug`, shipped "0", which closes the draw. */
-int32 FakeHullDebugCvar() const;
 
 // --- `CNPC_VMingXiao`'s two severed-tentacle scatter notices -------------------------------------
-
-/** `FUN_10397e00` — one severed tentacle moved; tell the owner's OTHER severed tentacles where it
- *  is. Walks `m_rhSeveredTentacles[6]` (`+0x66a8`, family **Squad**'s member), skips an unresolved
- *  handle and skips `Moved` itself, and hands each survivor `Moved`'s own `GetAbsOrigin()`. A null
- *  `Moved` does nothing, which is retail's first test.
- *
- *  The name is 29c's overlay target. `0x1039ef60` is the entry point above it: it resolves the
- *  moved tentacle's `m_hMingXiao` (`+0x665c`) and calls this ON THE OWNER, which is why the scatter
- *  centre handed out is the MOVED entity's position and not this NPC's. */
-void NotifyOwnedCopiesOfOwnerMove(FElysiumEntity* Moved);
-
-/** `0x1039ef60` — that entry point, so the owner walk can be entered the way retail enters it. */
-void NotifyOwnerOfMyMove();
-
-/** `FUN_103998d0` — `CNPC_VMingXiao::CoordinateTroops`'s severed-tentacle half, which the same
- *  overlay row names. Named by address because the behaviour is not the one above: it scatters ONE
- *  tentacle away from ME, and only when every gate holds —
- *
- *    * the tentacle's `m_iForcedSchedule` (`+0x65c8`) is neither `0x163` nor `0x165`;
- *    * its `m_ePhase` (`+0x6670`) is exactly 2;
- *    * the distance from me to it is at most `_DAT_1046dcd0` = 128 Source units;
- *    * the 2-D dot of the unit direction with `m_vecForward` (`+0x6290`) is at least
- *      `_DAT_10449260`, which is a **DOUBLE** and reads **0.25** — read as a float that cell is
- *      0.0 and the gate would admit the whole forward half-plane. */
-void FUN_103998d0(FElysiumEntity* Tentacle);
-
-/** The gate above as a pure rule, so the 128 and the 0.25 are measurable without a world.
- *  `DeltaCm` is the tentacle's origin minus mine; `Forward` is `m_vecForward`. */
-static bool ScatterTentacleGate(const FVector& DeltaCm, const FVector& Forward);
 
 /** `FUN_1039ef90` — the notice itself: fire the global melee-ish event at `DAT_10924a6c + 4`, set
  *  condition `0x78` on the notified tentacle and write `m_vecScatterCenter` (`+0x668c`). The

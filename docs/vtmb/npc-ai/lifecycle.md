@@ -796,6 +796,12 @@ byte (`+0x6684 + slot`) is already 1 answers **true at once**; otherwise the six
 a slot counts when its handle resolves live **or** its registered byte is set — and only a count of
 **zero** registers this slot and answers true. One proxy at a time.
 
+**CORRECTION (story 5 step 4).** The index-back test reads `this+0x66a8`, which is
+`m_rhSeveredTentacles`, not `m_rhProxies`, and the slot index is the argument's own
+`CNPC_VMingXiaoTentacle::m_iTentacleID` (`+0x6660`), which the port had read as a seam answering
+nothing. `FUN_10397a50`, which stamps `m_flProxyReadyTimer` from `Event_Killed`, takes a PROXY — a
+`CNPC_VMingXiao`, whose own id is `+0x6674` — not a tentacle.
+
 `CNPC_VWerewolf::StartSearchTimer` (`0x103d1ca0`) stamps `rdtsc` into `DAT_1093d638`/`DAT_1093d63c`
 and `ReportSearchTimer` (`0x103d1d60`) reads `rdtsc` again, subtracts the pair **in place** so the
 statics hold the elapsed cycles, and passes its second argument through unchanged. The pair is a

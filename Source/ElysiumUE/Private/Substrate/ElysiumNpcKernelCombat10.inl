@@ -92,37 +92,7 @@ struct FTypedStatWrite
 };
 TArray<FTypedStatWrite> TypedStatWrites;
 
-// --- Slot 348 `HealthToPercent` and its species arm ----------------------------------------------
-
-/** `CNPC_VMingXiao::vfunc348` (`0x103970d0`), slot 348's one species arm: the base formula with a
- *  loop `i = 0..5` over `0x10398000(this, i)` folding one extra contribution in per true result —
- *  the regrown-limb count. Declared here and dispatched from the slot body. */
-int32 MingXiaoHealthToPercent();
-
-/** SEAM for `CNPC_VMingXiao::0x10398000(this, i)` — "is limb `i` (0..5) still attached". No port
- *  system stands Ming Xiao's severable limbs, so this answers **false** for every index, which
- *  leaves the arm equal to the base formula — retail's own answer for an intact boss. */
-bool MingXiaoLimbPresent(int32 LimbIndex) const;
-
-/** `CNPC_VVampireBoss::GetCurrHealthPercent` (`0x103c6830`), 356 bytes, no slot. The COMPLEMENT of
- *  `HealthToPercent`: `stat0xf / stat0x11` as a float, guarded by `ABS(cap) > 1e-05`
- *  (`_DAT_104ce8c0`) on the DIVISOR — the decompiler's `(a < eps) == (a == eps)` idiom resolves to
- *  `a > eps` — and `_DAT_104454c4` = **0.0** otherwise. */
-float GetCurrHealthPercent() const;
-
 // --- Slots 304 / 305: the fighting-item loadout --------------------------------------------------
-
-/** `CNPC_VWerewolf::GiveBaseFightingItems` (`0x103cc9b0`) and `::RemoveBaseFightingItems`
- *  (`0x103cca80`), slot 304's and 305's one species pair. The Werewolf REPLACES the base rather than
- *  extending it: where the base gates on slots 307 and 308 BOTH answering false before giving
- *  `item_w_fists`, the Werewolf runs `Inventory_Find("item_w_werewolf_attacks")` and, only when
- *  absent, gives that item and sets misc flag `0x10`. It never consults the two base gates and never
- *  grants fists.
- *
- *  Reached by a spawned `npc_VWerewolf` since story 5 step 2 registered the classname as
- *  `CNPC_VWerewolf` (factory `0x103c8760`); before, the census gave the class no classname. */
-void WerewolfGiveBaseFightingItems();
-void WerewolfRemoveBaseFightingItems();
 
 /** `CBaseCombatCharacter::AddMiscFlag(0x10)` (`0x1033c6b0`) / `RemoveMiscFlag(0x10)` — the
  *  unarmed-combat marker both slot-304 bodies set and both slot-305 bodies clear. `ElysiumMiscFlags`
@@ -360,38 +330,6 @@ FYawClearanceSweep LastYawClearanceSweep;
 /** `CAI_BaseNPCTroika::SelectScheduleRangedCombat` (`0x102b7fc0`), the Troika-line body, 677 bytes.
  *  Fills `CAI_BaseNPCTroika#605` and 20 more. */
 int32 TroikaSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VHuman::SelectScheduleRangedCombat` (`0x10386560`), 802 bytes — the shared human arm that
- *  fills 36 species `#605` slots and no Troika slot. It REPLACES the Troika body wholesale and never
- *  chains it. */
-int32 HumanSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VAsianVampire::SelectScheduleRangedCombat` (`0x103620d0`), 546 bytes. Answers `0xf0` where
- *  the Troika base answers `0xb8` for COND `0x3c`, and against the human arm it has no dodge helper,
- *  no slot-606 arm and no cover-hint arm. */
-int32 AsianVampireSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VBach::SelectScheduleRangedCombat` (`0x103642f0`), 413 bytes — the one arm that CHAINS:
- *  its katana/rifle classname tests fall through to the human body, and its own tail then rewrites
- *  the answer. */
-int32 BachSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VMingXiao::SelectScheduleRangedCombat` (`0x103967d0`), 794 bytes — the human skeleton with
- *  the COND `0x3c` arm dropped, the discipline gate dropped, and the dodge decision INLINED at the
- *  same `0x4b` threshold `0x102b7f40` uses. */
-int32 MingXiaoSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VSheriffMan::SelectScheduleRangedCombat` (`0x103afdb0`), 984 bytes — three helpers offered
- *  separately rather than as one chained condition, an inlined dodge, and its own `0x15a` answer on
- *  an unreachable enemy. */
-int32 SheriffManSelectScheduleRangedCombat(int32 Arg);
-
-/** `CNPC_VBach`'s `+0x6690` — the stamp its COND `0x7b` arm writes `curtime + _DAT_10463584`
- *  (**15.0**) into before answering `0x15a`. A Bach-line word with no port producer and no other
- *  recovered reader; declared here because this body IS its retail writer. (`CNPC_VScurrying` owns
- *  the same OFFSET on its own line as `m_flDetectionDistance`, family Senses10 — two classes, one
- *  offset, two words.) */
-double BachRepositionTimer = 0.0;
 
 /** `FUN_102b8620` (`0x102b8620`), 688 bytes, no slot and no verdict row of its own — the weapon
  *  pre-pass every ranged selector offers first. It owns reload `0xc4`/`0xc6`, cover `0xc2`/`0xc3`,

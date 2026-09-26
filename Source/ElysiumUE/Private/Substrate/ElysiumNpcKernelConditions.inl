@@ -28,9 +28,6 @@
 // (`+0x66e8`) are declared by family **Hints** (`ElysiumNpcKernelHints.inl`) and are read here
 // rather than duplicated.
 
-bool bWasDisturbed = false;    // +0x6666 CNPC_VGhoulCroucher::m_bWasDisturbed (datamap)
-bool bUnawareExited = false;   // +0x6667 CNPC_VGhoulCroucher::m_bUnawareExited (datamap)
-
 // +0x1564 CBaseCombatCharacter::m_flNextAttack (datamap) — an absolute curtime deadline, carried as
 // double. It sits on the CHAIN, not on `CAI_BaseNPCTroika`'s own 388 words, which is why 29b's shape
 // map has no row for it; `RefreshCombatConditions` (`0x102b2570`) and `GatherAttackConditions`
@@ -61,16 +58,6 @@ FElysiumNpc* CineIgnoredConditionsPartner() const;
 // The species bodies are overrides on their C++ classes (story 5 step 3). What lands here is the
 // Troika-line body every chaining class ends in (`0x102ae140`) and the base body under it
 // (`0x1026e3e0`, already `FElysiumNpcFlags::NpcStateFlagsForRetailState`).
-
-/** `CNPC_VTzimisce::vfunc463`'s expression map (`0x103ba2c0` + `0x103b9f50`): the retail state to
- *  one of `PTR_s_normal_10653120`'s four names. Null for a state the switch does not name, which is
- *  the arm that writes nothing. Pure, so the map is drivable with no NPC at all. */
-static const TCHAR* StateChangeExpressionName(EElysiumNpcState NewState);
-
-/** SEAM for `CBaseCombatCharacter::LookupExpressionIndex` + `0x103b9f90(this, index, 1.0)`. There is
- *  no `SetExpression` in this runtime (the script API lists it as a stub), so this records the NAME
- *  in `DefExpression` and blends nothing. `BlendSeconds` is retail's own `1.0`. */
-void SetDefaultExpression(const TCHAR* ExpressionName, float BlendSeconds);
 
 /** `CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`) — the Troika-line body, reached by every class
  *  whose species row (if any) chains. Public so a fixture can state the transition without also
@@ -130,18 +117,6 @@ bool StartOpeningDoor(FElysiumEntity& Door);
  *  performs on `m_pNavigator` before it arms the mode. The port's own `StopMoving()` is the
  *  body-facing half and is called; this names the retail call it stands for. */
 
-// --- The disturbed latch --------------------------------------------------------------------------
-
-/** `CNPC_VGhoulCroucher::IsDisturbed` (`0x1037bb20`) — `return m_bWasDisturbed`, and nothing else.
- *  The producer `ElysiumNpc.cpp`'s stealth-kill gate names as absent. */
-bool IsDisturbed() const;
-
-/** `CNPC_VGhoulCroucher::OnDisturbed` (`0x1037b6e0`) — the once-latch: on the FIRST disturbance it
- *  latches `m_bWasDisturbed`, clears `m_bUnawareExited`, and then splits on whether the disturber is
- *  a player. `Disturber` is retail's `param_1`, the entity that did it; null is allowed and takes
- *  the non-player arm. */
-void OnDisturbed(FElysiumEntity* Disturber);
-
 // --- The cop / hunter pursuit counters ------------------------------------------------------------
 //
 // RECEIVER CORRECTION: 29c's rows name `FElysiumNpc::On*Pursuit*`, but the recovered receiver is the
@@ -187,34 +162,6 @@ bool WeaponFlagBlocksAttack() const;
  *  elapsed since it first stood, and the sentinel is reset the moment it drops. */
 void RefreshOccludedCondition(EElysiumNpcCond Cond, double& InOutStamp, double Now);
 
-// --- `SelectIdealState`, slot 461: the species half -----------------------------------------------
-//
-// Three SPECIES bodies that are complete replacements — none of them chains. Each is the
-// `SelectIdealStateRetail` override on its class (story 5 step 3).
-
-enum class EIdealStateSpecies : uint8
-{
-	/** `CNPC_VCamera::FUN_10369060` (0x10369060), shared with `CNPC_VCameraSecurity`: the ideal state
-	 *  is HARDCODED to retail 3 (ALERT) with no test at all. */
-	AlwaysAlert,
-	/** `CNPC_VMingXiao::vfunc461` (0x103945a0): `IsAlive() && GetState() != 7` skips a (dead) write
-	 *  of 7, then `GetEnemy() ? 2 : 1` unconditionally. */
-	MingXiao,
-	/** `CNPC_VMingXiaoTentacle::vfunc461` (0x1039e310): already dead — current OR ideal state 7 —
-	 *  stays 7; otherwise `GetEnemy() ? 2 : 1`. */
-	MingXiaoTentacle,
-};
-
-/** The rule applied. Pure over the three inputs the three bodies read, so a test drives it with no
- *  NPC: `bAlive` is slot 158, `Current` is `m_NPCState`, `Ideal` is `m_IdealNPCState` and
- *  `bHasEnemy` is `GetEnemy() != NULL`. */
-static EElysiumNpcState SelectIdealStateSpecies(EIdealStateSpecies Rule, bool bAlive,
-	EElysiumNpcState Current, EElysiumNpcState Ideal, bool bHasEnemy);
-
-/** The rule's answer for this NPC, written as `m_IdealNPCState` and answered in retail's ordinals:
- *  the body of the camera's, MingXiao's and the tentacle's `SelectIdealStateRetail` overrides. */
-int32 SpeciesIdealStateRetail(EIdealStateSpecies Rule);
-
 // --- `RequestDesiredState`, the two flee arms -----------------------------------------------------
 
 /** `FUN_102ad260` (gate `SUPERNATURAL_FLEE_LEVEL` 0x21, retail source line 0x4468) and `FUN_102ad2d0`
@@ -226,13 +173,3 @@ int32 SpeciesIdealStateRetail(EIdealStateSpecies Rule);
  *
  *  Returns retail's own answer — 8 when the gate stood, 0 when it did not. */
 int32 RequestFleeDesiredState(EElysiumNpcCond GateCondition, int32 RetailSourceLine);
-
-// --- The Werewolf death-triggered latch -----------------------------------------------------------
-
-/** `CNPC_VWerewolf::UpdateConditionDeathTriggered` (`0x103cc890`). 29c's row targets
- *  `FElysiumNpcConditions::UpdateConditionDeathTriggered`; that type is a bare 256-bit set with no
- *  NPC, no activity and no outputs, so the body lands here instead.
- *
- *  Condition `0x7a` belongs to a Werewolf-line registrar the census has not decoded, so it is spelled
- *  as the raw number. */
-void UpdateConditionDeathTriggered();

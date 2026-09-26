@@ -32,6 +32,15 @@
 #include "Templates/Function.h"
 #include "Tests/ElysiumTestServices.h"
 
+// `Entity` as species class `T` (`FElysiumNpc::AsSpecies`), or null when it is not an NPC of that
+// class: the typed view a case takes of a fixture NPC before it reaches a species member.
+template <class T>
+T* ElysiumTestAsSpecies(FElysiumEntity* Entity)
+{
+	FElysiumNpc* Npc = Entity != nullptr ? Entity->AsNpc() : nullptr;
+	return Npc != nullptr ? Npc->AsSpecies<T>() : nullptr;
+}
+
 // Assembles one map's `FElysiumEntityDefs` the way every fixture's constructor body did by hand:
 // an NPC row here, a counter there, an output wired between two rows by targetname. Seeds the NPC
 // schedule RNG stream up front, the same way every fixture's first statement did, so a chance roll
@@ -219,6 +228,15 @@ struct FElysiumNpcWorldFixture
 	{
 		FElysiumEntity* Entity = World.FindByName(Name);
 		return Entity ? Entity->AsNpc() : nullptr;
+	}
+
+	// The named NPC as species class `T`, or null when it is not one (`FElysiumNpc::AsSpecies`).
+	// (`ElysiumTestAsSpecies` does the same for any entity pointer.)
+	template <class T>
+	T* NpcAs(const TCHAR* Name)
+	{
+		FElysiumNpc* Found = Npc(Name);
+		return Found ? Found->AsSpecies<T>() : nullptr;
 	}
 
 	FElysiumPlayer* Player() const { return World.FindPlayer(); }

@@ -7,6 +7,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -270,100 +271,48 @@ bool FElysiumNpcKernelDebugNameSlotsTest::RunTest(const FString&)
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Events); ++Index)
 	{
 		TestEqual(*FString::Printf(TEXT("anim event %d is %s"), Index + 2, Events[Index]),
-			FString(FElysiumNpc::TzimisceEventName(Index + 2)), FString(Events[Index]));
+			FString(FElysiumNpcTzimisce::TzimisceEventName(Index + 2)), FString(Events[Index]));
 	}
 	for (const int32 Outside : { 0, 1, 9, 100 })
 	{
 		TestNull(*FString::Printf(TEXT("event %d falls through to CBaseAnimating"), Outside),
-			FElysiumNpc::TzimisceEventName(Outside));
+			FElysiumNpcTzimisce::TzimisceEventName(Outside));
 	}
 	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 408's species table — every row by name.
+// Slot 408's species blocks — every class's own override.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDebugShortConditionSpeciesTest,
 	"Elysium.Substrate.NpcKernelDebug.ShortConditionSpecies", GElysiumNpcKernelDebugFlags)
 bool FElysiumNpcKernelDebugShortConditionSpeciesTest::RunTest(const FString&)
 {
-	int32 Count = 0;
-	const FElysiumNpc::FShortConditionSpecies* Rows =
-		FElysiumNpc::ShortConditionSpeciesRows(Count);
-	TestEqual(TEXT("three census classes override slot 408"), Count, 3);
-
-	// Every row, by name: the class resolves in the census, the census agrees on the body, the block
-	// starts at 0x77 — the id straight above the base table's last — and the names are the ones in
-	// `.rdata`.
+	// The three census classes that override slot 408, each with its own block of names in its
+	// override (story 5 step 4). Every block starts at 0x77 — the id straight above the base
+	// table's last — and the names are the ones in `.rdata`.
 	const TCHAR* const MingXiao[] = { TEXT("xfr"), TEXT("xfl"), TEXT("xmr"), TEXT("xml"),
 		TEXT("xbr"), TEXT("xbl"), TEXT("xsp"), TEXT("xmh") };
 	const TCHAR* const Tentacle[] = { TEXT("tfl"), TEXT("tsc"), TEXT("tpe") };
 	const TCHAR* const Werewolf[] = { TEXT("ww0"), TEXT("ww1"), TEXT("ww2"), TEXT("ww3"),
 		TEXT("ww4") };
-	auto ExpectedNamesOf = [&MingXiao, &Tentacle, &Werewolf](const FString& Name,
-		int32& OutCount) -> const TCHAR* const*
+	struct FSpecies
 	{
-		if (Name == TEXT("CNPC_VMingXiao"))
-		{
-			OutCount = UE_ARRAY_COUNT(MingXiao);
-			return MingXiao;
-		}
-		if (Name == TEXT("CNPC_VMingXiaoTentacle"))
-		{
-			OutCount = UE_ARRAY_COUNT(Tentacle);
-			return Tentacle;
-		}
-		OutCount = UE_ARRAY_COUNT(Werewolf);
-		return Werewolf;
+		const TCHAR* Class;
+		const TCHAR* Body;
+		const TCHAR* const* Names;
+		int32 NameCount;
 	};
+	const FSpecies Rows[] = {
+		{ TEXT("CNPC_VMingXiao"), TEXT("0x103951d0"), MingXiao, UE_ARRAY_COUNT(MingXiao) },
+		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039ece0"), Tentacle, UE_ARRAY_COUNT(Tentacle) },
+		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d0640"), Werewolf, UE_ARRAY_COUNT(Werewolf) },
+	};
+	const int32 Count = UE_ARRAY_COUNT(Rows);
 
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		const FElysiumNpc::FShortConditionSpecies& Row = Rows[Index];
-		const FString Name(Row.RetailClass);
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
-		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
-		if (Cls == nullptr)
-		{
-			continue;
-		}
-		TestEqual(*FString::Printf(TEXT("%s fills slot 408 with %s"), *Name, Row.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 408)), FString(Row.Body));
-		TestEqual(*FString::Printf(TEXT("%s's block starts at 0x77"), *Name), Row.FirstId, 0x77);
-
-		int32 ExpectedCount = 0;
-		const TCHAR* const* Expected = ExpectedNamesOf(Name, ExpectedCount);
-		TestEqual(*FString::Printf(TEXT("%s's block is %d ids"), *Name, ExpectedCount),
-			Row.NameCount, ExpectedCount);
-		for (int32 Slot = 0; Slot < FMath::Min(Row.NameCount, ExpectedCount); ++Slot)
-		{
-			TestEqual(*FString::Printf(TEXT("%s 0x%02x is %s"), *Name, Row.FirstId + Slot,
-				Expected[Slot]), FString(Row.Names[Slot]), FString(Expected[Slot]));
-		}
-	}
-
-	// Only the werewolf's body pushes a scope trace; the other two do not.
-	const FElysiumNpc::FShortConditionSpecies* Wolf =
-		FElysiumNpc::ShortConditionSpeciesOf(TEXT("CNPC_VWerewolf"));
-	TestNotNull(TEXT("the werewolf row exists"), Wolf);
-	if (Wolf != nullptr)
-	{
-		TestTrue(TEXT("and it is the only scope-traced body"), Wolf->bScopeTraced);
-	}
-	const FElysiumNpc::FShortConditionSpecies* Xiao =
-		FElysiumNpc::ShortConditionSpeciesOf(TEXT("CNPC_VMingXiao"));
-	TestNotNull(TEXT("the MingXiao row exists"), Xiao);
-	if (Xiao != nullptr)
-	{
-		TestFalse(TEXT("and is not scope traced"), Xiao->bScopeTraced);
-	}
-	TestNull(TEXT("a class outside the table has no row"),
-		FElysiumNpc::ShortConditionSpeciesOf(TEXT("CNotAClass")));
-
-	// The join the other way: every census override of slot 408 has a row here.
+	// The census has exactly these three overrides of slot 408, with these bodies.
 	int32 CensusOverrides = 0;
-	bool bEveryOverrideHasARow = true;
 	for (const FElysiumNpcClassSlot& Override : ElysiumNpcKernelShape::Overrides())
 	{
 		if (Override.Slot != 408)
@@ -371,36 +320,33 @@ bool FElysiumNpcKernelDebugShortConditionSpeciesTest::RunTest(const FString&)
 			continue;
 		}
 		++CensusOverrides;
-		const FElysiumNpc::FShortConditionSpecies* Row =
-			FElysiumNpc::ShortConditionSpeciesOf(Override.Class);
-		if (Row == nullptr || FCString::Strcmp(Row->Body, Override.Address) != 0)
+		bool bKnown = false;
+		for (const FSpecies& Row : Rows)
 		{
-			bEveryOverrideHasARow = false;
-			AddError(FString::Printf(TEXT("slot 408 override %s (%s) has no matching table row"),
-				Override.Class, Override.Address));
+			bKnown |= FCString::Strcmp(Row.Class, Override.Class) == 0
+				&& FCString::Strcmp(Row.Body, Override.Address) == 0;
 		}
+		TestTrue(*FString::Printf(TEXT("slot 408 override %s (%s) is one of the three"),
+			Override.Class, Override.Address), bKnown);
 	}
 	TestEqual(TEXT("the census records three slot-408 overrides"), CensusOverrides, 3);
-	TestTrue(TEXT("and every one of them is a row of this table"), bEveryOverrideHasARow);
 
-	// The dispatch, on the three classes themselves. Since story 5 step 2 each row's class is built
-	// by its own classname (population.md), so slot 408 is asked on a real `CNPC_VWerewolf`,
-	// `CNPC_VMingXiao` and `CNPC_VMingXiaoTentacle`: `OverrideOf(RetailClass(), 408)` finds the
-	// row, the block answers its `.rdata` names from 0x77 up, and every id outside the block —
-	// a base id or the first id past the block's end — falls back to `0x1027e7f0`.
+	// The dispatch, on the three classes themselves, each built by its own classname: the block
+	// answers its `.rdata` names from 0x77 up, and every id outside the block — a base id or the
+	// first id past the block's end — falls back to `0x1027e7f0`.
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("debug_species"), 29u);
 		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
 			Builder.AddNpcOfClass(*FString::Printf(TEXT("species%d"), Index),
-				FVector(400.f * static_cast<float>(Index + 1), 0.f, 0.f), Rows[Index].RetailClass);
+				FVector(400.f * static_cast<float>(Index + 1), 0.f, 0.f), Rows[Index].Class);
 		}
 		FElysiumNpcWorldFixture SpeciesFixture(MoveTemp(Builder));
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			const FElysiumNpc::FShortConditionSpecies& Row = Rows[Index];
-			const FString Name(Row.RetailClass);
+			const FSpecies& Row = Rows[Index];
+			const FString Name(Row.Class);
 			FElysiumNpc* Species = SpeciesFixture.Npc(*FString::Printf(TEXT("species%d"), Index));
 			if (!TestNotNull(*FString::Printf(TEXT("a %s spawned"), *Name), Species))
 			{
@@ -408,22 +354,18 @@ bool FElysiumNpcKernelDebugShortConditionSpeciesTest::RunTest(const FString&)
 			}
 			FElysiumNpcWorldFixture::Quiet({ Species });
 			TestTrue(*FString::Printf(TEXT("its classname built %s"), *Name),
-				Species->RetailClass() == ElysiumNpcKernelClass::Find(Row.RetailClass));
-
-			int32 ExpectedCount = 0;
-			const TCHAR* const* Expected = ExpectedNamesOf(Name, ExpectedCount);
-			for (int32 Slot = 0; Slot < ExpectedCount; ++Slot)
+				Species->RetailClass() == ElysiumNpcKernelClass::Find(Row.Class));
+			for (int32 Slot = 0; Slot < Row.NameCount; ++Slot)
 			{
 				TestEqual(*FString::Printf(TEXT("a spawned %s names 0x%02x %s through slot 408"),
-					*Name, Row.FirstId + Slot, Expected[Slot]),
-					FString(Species->GetShortConditionName(Row.FirstId + Slot)),
-					FString(Expected[Slot]));
+					*Name, 0x77 + Slot, Row.Names[Slot]),
+					FString(Species->GetShortConditionName(0x77 + Slot)), FString(Row.Names[Slot]));
 			}
 			TestEqual(*FString::Printf(TEXT("a spawned %s reads the base table for 0x46"), *Name),
 				FString(Species->GetShortConditionName(0x46)), FString(TEXT("see")));
 			TestEqual(*FString::Printf(TEXT("and the id past %s's block is the *** default"),
 				*Name),
-				FString(Species->GetShortConditionName(Row.FirstId + ExpectedCount)),
+				FString(Species->GetShortConditionName(0x77 + Row.NameCount)),
 				FString(TEXT("***")));
 		}
 	}
@@ -916,14 +858,32 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	TestEqual(TEXT("a combatant draws no recoloured box"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
+	// The werewolf itself. Slot 620 is `FElysiumNpcWerewolf`'s own virtual, so `0x103d5050` is
+	// reached through `DrawBBoxOverlay`, gated on `0x103cf5f0`: a pursuing werewolf falls through to
+	// the `CBaseEntity` seam and draws nothing, exactly as the combatant above; one that has given up
+	// draws `NDebugOverlay::EntityBounds(this, 50, 255, 50, 0, 0)` (the listing `0x103d5050`). The
+	// pursuit inputs are the ones `NpcKernelSenses.Species` drives `0x103cf5f0` with.
+	ElysiumNpcTunables::ResetConVars();
+	FElysiumNpcWorldFixture WolfFixture(DebugBuilder(GDebugWerewolf));
+	FElysiumNpcWerewolf* Werewolf = WolfFixture.NpcAs<FElysiumNpcWerewolf>(TEXT("subject"));
+	if (!TestNotNull(TEXT("the werewolf spawned"), Werewolf))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Werewolf });
+	TestTrue(TEXT("a spawned npc_VWerewolf is CNPC_VWerewolf"), Werewolf->RetailClass() == Wolf);
+	FElysiumNpcWerewolf* const WolfClass = Werewolf;
+
 	// `DrawDebugHullAtPoint`: the box is drawn at the point it is handed, in the recovered colour
 	// (255, 100, 0) at alpha 100, and now at the hull table's own extents — this NPC stands on
 	// hull 0, so HUMAN_HULL's full box. It used to be degenerate because the table was a seam.
-	// Kept on the combatant for the extents: a real werewolf stands hull 12 (its constructor
-	// `0x103ca4b0`), whose box this file does not carry; the werewolf's own draw is asserted below
-	// for everything that does not depend on the hull.
+	// The werewolf's body on the combatant's hull: a real werewolf stands hull 12 (its constructor
+	// `0x103ca4b0`), whose box this file does not carry, so the case hands it hull 0 for the draw
+	// and puts its own back after.
+	const int32 WolfHullKind = Werewolf->HullKind;
+	Werewolf->HullKind = Npc->HullKind;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->DrawDebugHullAtPoint(FVector(12.f, -3.f, 4.f), 0.f);
+	Werewolf->DrawDebugHullAtPoint(FVector(12.f, -3.f, 4.f), 0.f);
 	const TArray<FElysiumNpc::FDebugLine> Hull = FElysiumNpc::EndDebugCapture();
 	TestEqual(TEXT("a box and the unrecovered second call"), Hull.Num(), 2);
 	if (Hull.Num() == 2)
@@ -934,22 +894,8 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 		TestEqual(TEXT("and the second call is emitted under its address, unrecovered"),
 			FString(Hull[1].Retail), FString(TEXT("0x1000566e")));
 	}
+	Werewolf->HullKind = WolfHullKind;
 
-	// The werewolf itself. Slot 620 is `FElysiumNpcWerewolf`'s own virtual, so `0x103d5050` is
-	// reached through `DrawBBoxOverlay`, gated on `0x103cf5f0`: a pursuing werewolf falls through to
-	// the `CBaseEntity` seam and draws nothing, exactly as the combatant above; one that has given up
-	// draws `NDebugOverlay::EntityBounds(this, 50, 255, 50, 0, 0)` (the listing `0x103d5050`). The
-	// pursuit inputs are the ones `NpcKernelSenses.Species` drives `0x103cf5f0` with.
-	ElysiumNpcTunables::ResetConVars();
-	FElysiumNpcWorldFixture WolfFixture(DebugBuilder(GDebugWerewolf));
-	FElysiumNpc* Werewolf = WolfFixture.Npc(TEXT("subject"));
-	if (!TestNotNull(TEXT("the werewolf spawned"), Werewolf))
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Werewolf });
-	TestTrue(TEXT("a spawned npc_VWerewolf is CNPC_VWerewolf"), Werewolf->RetailClass() == Wolf);
-	FElysiumNpcWerewolf* const WolfClass = static_cast<FElysiumNpcWerewolf*>(Werewolf);
 
 	// `+0x66e8` bit 2 skips the pursuit test: still pursuing, so the base seam and nothing drawn.
 	Werewolf->WerewolfHintFlags = 0x4u;

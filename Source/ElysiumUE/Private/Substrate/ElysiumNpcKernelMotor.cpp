@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelMotorShared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -41,19 +42,13 @@ namespace
 	constexpr float GStepHeightBase = ElysiumNpcTunables::StepHeightBase;   // `0x101a6b40` / `0x101a6b60`
 	constexpr float GMaxJumpSpeedTroika = ElysiumNpcTunables::MaxJumpSpeedTroika;   // `0x101aa670`
 	constexpr float GJumpGravity = ElysiumNpcTunables::JumpGravity;   // `0x101a6b80`
-	constexpr float GTestHullTunable = ElysiumNpcTunables::Forty;   // `0x102d72b0` / `0x102d72d0`
 
 	// `FUN_10280790`'s slack and its apex scale. Both are qword loads the x87 widens, so they are
 	// doubles in `.rdata` and floats at the comparison.
 	constexpr float GJumpLegalSlack = static_cast<float>(ElysiumNpcTunables::TenthDouble);
 	constexpr float GJumpApexScale = static_cast<float>(ElysiumNpcTunables::JumpApexScale);
 
-	// The yaw-speed ladder's constants. `GYawFloor` is also the clamp every "turning" arm ends on.
-	constexpr float GYawDefault = ElysiumNpcTunables::FortyFive;
 	constexpr float GYawRun = ElysiumNpcTunables::YawSpeedRun;
-	constexpr float GYawCrouch = ElysiumNpcTunables::Thirty;
-	constexpr float GYawTzimisceIdle = ElysiumNpcTunables::Five;
-	constexpr float GYawTzimisceDefault = ElysiumNpcTunables::YawSpeedTzimisceDefault;
 	constexpr float GYawFloor = ElysiumNpcTunables::One;
 
 	// `CheckOnGround` `0x1026e5e0`.
@@ -65,22 +60,8 @@ namespace
 	constexpr int32 GGroundTraceMask = 0x202400b;
 	constexpr int32 GCoverTraceMask = 0x2804091;    // `ValidateNavGoal`'s
 
-	// The two `SetupJump` rise constants the species table below carries. The rest of the jump
-	// family's constants live beside their bodies in `ElysiumNpcKernelMotor2.cpp`.
-	constexpr float GAsianJumpRise = 100.0f;        // _DAT_104a9310
-	constexpr float GSheriffJumpRise = 400.0f;      // _DAT_104c614c
-
-	// Retail activity numbers the yaw ladders switch on. Named so the switch reads like the binary.
-	constexpr int32 GActIdle = 1;
-	constexpr int32 GActIdleAngry = 5;
 	constexpr int32 GActWalk = 9;
-	constexpr int32 GActRun = 0x13;
-	constexpr int32 GActCrouchIdle = 0x3b;
-	constexpr int32 GActCrouchWalk = 0x3c;
 
-	// `m_afMemory` (+0x5d8c) bit 0x2000 — the "turning" tag the turn ladder writes (the Facing
-	// family's `bTagsTurnMemory`) and all three of the yaw-speed overrides branch on.
-	constexpr uint32 GMemoryTurning = 0x2000;
 	// The two `m_bfAINPCFlags` (+0x14b8) bits this file tests are named in `ElysiumNpcFlags.h`:
 	// `PLAYING_FACE_ANIM` (0x8000000), which suppresses the yaw ladder, and `SLEEPING` (0x20000),
 	// which both ignore chains test on the OTHER entity.
@@ -100,51 +81,7 @@ namespace
 	// `TaskFail`'s reason on the `ValidateNavGoal` failure (`0x10280360`, `vtable+0x700` slot 448).
 	constexpr int32 GFailNoCover = 0x1b;
 
-	// --- Units ----------------------------------------------------------------------------------
-
-	// This world's centimetres into retail's Source units. `Origin` is Unreal's axes, where
-	// `bsp.source_to_unreal` negated Y; every retail body reads `GetAbsOrigin()`, so the sign comes
-	// back here and stays back for the whole body.
-	FVector SourceOf(const FVector& Cm)
-	{
-		return FVector(Cm.X / ElysiumMove::U, -Cm.Y / ElysiumMove::U, Cm.Z / ElysiumMove::U);
-	}
-
-	// --- The species tables ---------------------------------------------------------------------
-
-	// Slot 516 `MaxYawSpeed`. `CAI_BaseNPCTroika`'s own body (`0x10297ce0`) is what slot 516 carries
-	// for every spawnable species; these are the classes that replace it. `CNPC_VWerewolf`'s
-	// override (`0x103d0a30`) is a scope-trace wrapper around an unconditional forward to the
-	// Troika body, so it is listed for the ledger's sake and answers the family default.
-	constexpr FElysiumNpc::FMaxYawSpeedSpecies GMaxYawSpeedSpecies[] =
-	{
-		{ TEXT("CNPC_VDog"),            TEXT("0x10374130") },
-		{ TEXT("CNPC_VMingXiao"),       TEXT("0x10394930") },
-		{ TEXT("CNPC_VTzimisce"),       TEXT("0x103ba020") },
-		{ TEXT("CNPC_VWerewolf"),       TEXT("0x103d0a30") },
-		{ TEXT("CAI_BaseNPC"),          TEXT("0x10280bb0") },
-	};
-
-	// Slots 68 and 69. The Troika bodies (`0x1029afc0` / `0x1029b180`) are the shared chain; these
-	// are the species arms that run in front of them. An empty address means the class does not
-	// replace that slot at all.
-	constexpr FElysiumNpc::FIgnoreCollisionSpecies GIgnoreCollisionSpecies[] =
-	{
-		{ TEXT("CNPC_VGargoyle"),           TEXT(""),           TEXT("0x10379490") },
-		{ TEXT("CNPC_VHengeyokai"),         TEXT(""),           TEXT("0x10380f90") },
-		{ TEXT("CNPC_VMingXiao"),           TEXT(""),           TEXT("0x10396fd0") },
-		{ TEXT("CNPC_VMingXiaoTentacle"),   TEXT("0x1039eb50"), TEXT("0x1039eb90") },
-		{ TEXT("CNPC_VRat"),                TEXT("0x103ad6d0"), TEXT("") },
-		{ TEXT("CNPC_VTzimisce"),           TEXT(""),           TEXT("0x103bfa00") },
-		{ TEXT("CNPC_VWerewolf"),           TEXT("0x103d9ab0"), TEXT("0x103d9ba0") },
-	};
-
-	// `SetupJump`. One behaviour, two species, one constant apart.
-	constexpr FElysiumNpc::FSetupJumpSpecies GSetupJumpSpecies[] =
-	{
-		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361a70"), TEXT("_DAT_104a9310"), GAsianJumpRise },
-		{ TEXT("CNPC_VSheriffMan"),   TEXT("0x103b1300"), TEXT("_DAT_104c614c"), GSheriffJumpRise },
-	};
+	// --- The movement-tunables table ------------------------------------------------------------
 
 	// Slots 521/522/523 — the movement tunables. `CAI_BaseNPCTroika` is the row every spawnable
 	// species answers with: step height from the base body slot 522 carries (`0x101a6b40`), jump
@@ -157,7 +94,7 @@ namespace
 			80.0f, 250.0f, 160.0f },
 		{ TEXT("CAI_BaseNPC"), TEXT("0x101a6b60"), GStepHeightBase, GStepHeightBase,
 			80.0f, 250.0f, 160.0f },
-		{ TEXT("CAI_TestHull"), TEXT("0x102d72d0"), GTestHullTunable, GTestHullTunable,
+		{ TEXT("CAI_TestHull"), TEXT("0x102d72d0"), NpcKernelMotorShared::GTestHullTunable, NpcKernelMotorShared::GTestHullTunable,
 			1024.0f, 1024.0f, 1024.0f },
 	};
 
@@ -177,14 +114,6 @@ namespace
 		{ TEXT("debug_turning_speed"), TEXT("0x10923e84"), 0.0f, ElysiumNpcTunables::EConVar::DebugTurningSpeed },
 	};
 
-	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s playback/turn tuning record, read by
-	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0. The
-	// Facing family records the same gap for the same record; the two are deliberately separate
-	// file-local helpers rather than one shared member, because neither family owns the other's file.
-	float MingXiaoTuningField(int32)
-	{
-		return 0.f;
-	}
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -266,14 +195,6 @@ bool FElysiumNpc::NavLinkActivity(int32& OutActivity) const
 	// **unrecovered** — the ledger itemises nothing past the `m_pNavigator` chain redirect.
 	(void)OutActivity;
 	return false;
-}
-
-void FElysiumNpc::MotorCancelLinkFacing()
-{
-	// `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s whole body. **SEAM**: the Facing family
-	// established that this mover keeps no facing queue (`m_facingQueue`, motor+0x54), so the cancel
-	// is recorded and cancels nothing.
-	++MotorSeams.LinkFacingCancels;
 }
 
 int32 FElysiumNpc::NavNodeWordAt(int32 RouteStepIndex) const
@@ -389,14 +310,6 @@ int32 FElysiumNpc::RetailDerivedType(const FElysiumEntity& Entity)
 	return 0;
 }
 
-uint32 FElysiumNpc::RetailFlags2(const FElysiumEntity& Entity)
-{
-	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`). **SEAM**: `FElysiumEntity::Flags` is the
-	// first word (+0x434) only.
-	(void)Entity;
-	return 0;
-}
-
 bool FElysiumNpc::RetailIsStandable(const FElysiumEntity& Entity)
 {
 	// `CBaseEntity::IsStandable()` slot 164 `0x100b50a0`:
@@ -453,67 +366,6 @@ float FElysiumNpc::RetailYawConVarValue(const TCHAR* Address)
 // The species call-outs.
 // -------------------------------------------------------------------------------------------------
 
-int32 FElysiumNpc::ChangBrosSector(const FVector& PositionUnits) const
-{
-	// `CNPC_VChangBros::GetSector(pos)`. **SEAM**: this substrate has no sector partition. It
-	// answers 4, which is the value `CheckForJumpAttack` tests for and which CLOSES its gate — the
-	// jump attack is refused rather than allowed on a guess.
-	(void)PositionUnits;
-	return 4;
-}
-
-bool FElysiumNpc::SolveJumpArc(const FVector& FromUnits, const FVector& ToUnits,
-	FVector& OutVelocityUnits) const
-{
-	// `thunk_FUN_102c4cc0(this, &outVelocity, from, to)`. **SEAM**: no arc solver here.
-	(void)FromUnits;
-	(void)ToUnits;
-	(void)OutVelocityUnits;
-	++MotorSeams.JumpArcSolves;
-	return false;
-}
-
-void FElysiumNpc::CommitSetupJump()
-{
-	// `thunk_FUN_102c4e80(this)` — the commit every `SetupJump`/`SetupSuperJump` ends on, which
-	// takes the three jump words just written and starts the leap. **SEAM**: recorded, starts
-	// nothing.
-	++MotorSeams.SetupJumpCommits;
-}
-
-bool FElysiumNpc::PositionClearForTeleport(const FVector& PositionUnits, float RadiusUnits) const
-{
-	// `CNPC_VAsianVampire::PositionClearForTeleport(pos, 150.0)`. **SEAM**: answers false, so
-	// `SelectJumpbaseNode` finds no node rather than choosing one blind.
-	(void)PositionUnits;
-	(void)RadiusUnits;
-	return false;
-}
-
-void FElysiumNpc::AddHintToStoredJumpPositions(int32 HintNode)
-{
-	// `CNPC_VAsianVampire::AddHintToStoredJumpPositions(hint)` — the ring write that pairs with
-	// `IsPosNearStoredJumpPositions`: store the hint's origin at `m_iLastJumpPositionIdx` (+0x66d0)
-	// and advance modulo the ring's two entries. The hint's ORIGIN is the seam.
-	FVector HintOriginUnits = FVector::ZeroVector;
-	if (!NavHintNodeOrigin(HintNode, HintOriginUnits))
-	{
-		return;
-	}
-	LastJumpPosition[LastJumpPositionIdx % 2] = HintOriginUnits;
-	LastJumpPositionIdx = (LastJumpPositionIdx + 1) % 2;
-}
-
-bool FElysiumNpc::DistToHintCenterLine2DSqr(int32 HintNode, const FVector& PositionUnits,
-	float& OutSqr) const
-{
-	// `CNPC_VVampireBoss::DistToHintCenterLine2D_2(hint, pos)`. **SEAM**: no hint geometry.
-	(void)HintNode;
-	(void)PositionUnits;
-	(void)OutSqr;
-	return false;
-}
-
 bool FElysiumNpc::NavHintNodeType(int32 HintNode, int32& OutType) const
 {
 	// `CAI_Hint+0x5dc m_nHintType`. **SEAM**: `ScheduleHost.HintNode` is a bare index and no store
@@ -538,20 +390,6 @@ bool FElysiumNpc::NavAllHintNodes(TArray<int32>& OutHintNodes) const
 	return false;
 }
 
-FElysiumEntity* FElysiumNpc::MingXiaoTentacleCompanion() const
-{
-	// `thunk_FUN_1039ede0(this)`. **SEAM**: the tentacle proxy chain is the Squad family's
-	// `Proxies[6]` and nothing links a head to it yet.
-	return nullptr;
-}
-
-FElysiumEntity* FElysiumNpc::RatIgnoredGlobalEntity() const
-{
-	// `thunk_FUN_101cda50()` — a no-argument global read. **SEAM**, and the entity's retail
-	// identity is **unrecovered**.
-	return nullptr;
-}
-
 bool FElysiumNpc::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const
 {
 	// `CBaseAnimating::IsIgnoreCollisionEntity` `0x1008be20`: resolve `m_hIgnoreCollisionEntity`
@@ -565,49 +403,8 @@ bool FElysiumNpc::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const
 }
 
 // -------------------------------------------------------------------------------------------------
-// The species tables' readers.
+// The movement-tunables table's readers.
 // -------------------------------------------------------------------------------------------------
-
-float FElysiumNpc::MingXiaoMaxYawSpeed()
-{
-	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own activity and tuning words — the
-	// body of `FElysiumNpcMingXiao::MaxYawSpeed`.
-	return MaxYawSpeedMingXiao(ActivityNumber, MingXiaoTuningField);
-}
-
-const FElysiumNpc::FMaxYawSpeedSpecies* FElysiumNpc::MaxYawSpeedSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GMaxYawSpeedSpecies);
-	return GMaxYawSpeedSpecies;
-}
-
-const FElysiumNpc::FIgnoreCollisionSpecies* FElysiumNpc::IgnoreCollisionSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GIgnoreCollisionSpecies);
-	return GIgnoreCollisionSpecies;
-}
-
-const FElysiumNpc::FSetupJumpSpecies* FElysiumNpc::SetupJumpSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GSetupJumpSpecies);
-	return GSetupJumpSpecies;
-}
-
-const FElysiumNpc::FSetupJumpSpecies* FElysiumNpc::SetupJumpSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FSetupJumpSpecies& Row : GSetupJumpSpecies)
-	{
-		if (FCString::Strcmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
-}
 
 const FElysiumNpc::FJumpTunableSpecies* FElysiumNpc::JumpTunableSpeciesRows(int32& OutCount)
 {
@@ -716,7 +513,7 @@ float FElysiumNpc::MaxYawSpeedBase()
 {
 	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — one constant, `_DAT_1049949c` = 45.0, the same
 	// number every other ladder in the family falls through to.
-	return GYawDefault;
+	return NpcKernelMotorShared::GYawDefault;
 }
 
 float FElysiumNpc::MaxYawSpeedTurningArm(const TCHAR* ConVarAddress)
@@ -736,80 +533,6 @@ float FElysiumNpc::MaxYawSpeedTurningArm(const TCHAR* ConVarAddress)
 	return Result <= GYawFloor ? GYawFloor : Result;
 }
 
-float FElysiumNpc::MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField)
-{
-	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930`: the tuning record `0x101e8da0(0x10739d08)`'s
-	// +0x48 inside the half-open band `(0x1129, 0x112e)` and its +0x44 everywhere else.
-	if (0x1129 < Activity && Activity < 0x112e)
-	{
-		return TuningField(0x48);
-	}
-	return TuningField(0x44);
-}
-
-float FElysiumNpc::MaxYawSpeedDog()
-{
-	// `CNPC_VDog::MaxYawSpeed` `0x10374130`. The Troika ladder with three differences: the fall-out
-	// for a recognised activity is 40.0 rather than 45.0, there is no `debug_slow_*` arm at all, and
-	// the turning cvar is the Dog's own `0x1093ad24`.
-	if ((ScheduleHost.MemoryBits & GMemoryTurning) != 0)
-	{
-		return MaxYawSpeedTurningArm(TEXT("0x1093ad24"));
-	}
-	if (NpcFlags.Has(EElysiumNpcFlag::PLAYING_FACE_ANIM))
-	{
-		return GYawDefault;
-	}
-	const int32 Activity = ActivityNumber;
-	if (Activity < GActCrouchWalk + 1)
-	{
-		if (GActCrouchIdle - 1 < Activity)
-		{
-			return GYawCrouch;        // _DAT_104492a8 = 30.0
-		}
-		if (Activity == GActIdle || Activity == GActIdleAngry)
-		{
-			// `m_bAllowTurningAnims` ORed with the cvar the Facing family recorded (`0x109247ec`):
-			// when neither is on, `debug_turning_speed` (`0x10923e84`, 90) decides; when either is, 30.0.
-			if (!TurningAnimsEnabled())
-			{
-				return RetailYawConVarValue(TEXT("0x10923e84"));
-			}
-			return GYawCrouch;
-		}
-		if (Activity != GActRun)
-		{
-			return GYawDefault;
-		}
-	}
-	else if (Activity != 0x1093 && (Activity < 0x1094 || 0x1096 < Activity))
-	{
-		return GYawDefault;
-	}
-	return GTestHullTunable;          // _DAT_10462950 = 40.0
-}
-
-float FElysiumNpc::MaxYawSpeedTzimisce()
-{
-	// `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020` — a four-arm switch and the shared turning arm,
-	// with the Tzimisce's own cvar `0x1093c9fc`.
-	if ((ScheduleHost.MemoryBits & GMemoryTurning) != 0)
-	{
-		return MaxYawSpeedTurningArm(TEXT("0x1093c9fc"));
-	}
-	switch (ActivityNumber)
-	{
-	case GActIdle:
-	case 0xfc:
-	case 0xfd:
-		return GYawTzimisceIdle;      // _DAT_10454110 = 5.0
-	case GActRun:
-		return GYawCrouch;            // _DAT_104492a8 = 30.0
-	default:
-		return GYawTzimisceDefault;   // _DAT_104cc504 = 11.0
-	}
-}
-
 float FElysiumNpc::MaxYawSpeed()
 {
 	// slot 516, `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`. `CNPC_VDog`, `CNPC_VMingXiao`,
@@ -817,25 +540,25 @@ float FElysiumNpc::MaxYawSpeed()
 	// werewolf's body is a scope-trace push/pop around a direct call into this one.
 
 	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm for arm.
-	if ((ScheduleHost.MemoryBits & GMemoryTurning) != 0)
+	if ((ScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
 	{
 		return MaxYawSpeedTurningArm(TEXT("0x10924c94"));
 	}
 	if (NpcFlags.Has(EElysiumNpcFlag::PLAYING_FACE_ANIM))
 	{
-		return GYawDefault;
+		return NpcKernelMotorShared::GYawDefault;
 	}
 	const int32 Activity = ActivityNumber;
-	if (Activity < GActCrouchWalk + 1)
+	if (Activity < NpcKernelMotorShared::GActCrouchWalk + 1)
 	{
-		if (GActCrouchIdle - 1 < Activity)
+		if (NpcKernelMotorShared::GActCrouchIdle - 1 < Activity)
 		{
-			return GYawCrouch;
+			return NpcKernelMotorShared::GYawCrouch;
 		}
 		switch (Activity)
 		{
-		case GActIdle:
-		case GActIdleAngry:
+		case NpcKernelMotorShared::GActIdle:
+		case NpcKernelMotorShared::GActIdleAngry:
 			// `(m_NpcStateFlags >> 7) & 1` — the per-state capability byte (+0x5b64), bit 7, which
 			// is set only for the combat (0x8f) and flee (0x85) states. Out of combat the
 			// `debug_slow_idle_yaw_speed` cvar decides; in combat the turning-anims gate does.
@@ -847,14 +570,14 @@ float FElysiumNpc::MaxYawSpeed()
 			{
 				return RetailYawConVarValue(TEXT("0x10923e84"));
 			}
-			return GYawCrouch;
+			return NpcKernelMotorShared::GYawCrouch;
 		case GActWalk:
 			if ((NpcStateFlags() & 0x80) == 0)
 			{
 				return RetailYawConVarValue(TEXT("0x1092411c"));
 			}
 			break;   // in combat, ACT_WALK falls out of the switch to the default
-		case GActRun:
+		case NpcKernelMotorShared::GActRun:
 			return GYawRun;
 		default:
 			break;
@@ -870,12 +593,12 @@ float FElysiumNpc::MaxYawSpeed()
 		case 0x1096:
 			return GYawRun;
 		case 0x1121:
-			return GYawCrouch;
+			return NpcKernelMotorShared::GYawCrouch;
 		default:
 			break;
 		}
 	}
-	return GYawDefault;
+	return NpcKernelMotorShared::GYawDefault;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -973,16 +696,6 @@ bool FElysiumNpc::ShouldIgnoreCollision(FElysiumEntity* Other)
 		}
 	}
 	return IsIgnoreCollisionEntityTail(Other);
-}
-
-bool FElysiumNpc::GargoyleIgnoresClassname(const FString& Classname)
-{
-	// `CNPC_VGargoyle::NavIgnoreCollision` `0x10379490`'s three `FClassnameIs` compares, which are
-	// case-insensitive (`__strcmpi`) and accept a trailing `*` as a prefix match — none of these
-	// three carries one, so all three are whole-name compares.
-	return Classname.Equals(TEXT("prop_dynamic"), ESearchCase::IgnoreCase)
-		|| Classname.Equals(TEXT("func_brush"), ESearchCase::IgnoreCase)
-		|| Classname.Equals(TEXT("func_door_rotating"), ESearchCase::IgnoreCase);
 }
 
 bool FElysiumNpc::NavIgnoreCollision(FElysiumEntity* Other)
@@ -1143,7 +856,7 @@ bool FElysiumNpc::ValidateNavGoal()
 		return true;
 	}
 	FKernelHullTrace Trace;
-	if (!KernelHullTrace(GoalUnits, SourceOf(Enemy->Origin), FVector::ZeroVector,
+	if (!KernelHullTrace(GoalUnits, NpcKernelMotorShared::SourceOf(Enemy->Origin), FVector::ZeroVector,
 		FVector::ZeroVector, GCoverTraceMask, Trace))
 	{
 		return true;
@@ -1292,7 +1005,7 @@ void FElysiumNpc::CheckOnGround()
 	}
 	CheckOnGroundTime = Now + GCheckOnGroundInterval;
 
-	const FVector OriginUnits = SourceOf(Origin);
+	const FVector OriginUnits = NpcKernelMotorShared::SourceOf(Origin);
 	const FVector StartUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z + GCheckOnGroundUp);
 	const FVector EndUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z - GCheckOnGroundDown);
 	FVector Mins = FVector::ZeroVector;
@@ -1373,18 +1086,6 @@ bool FElysiumNpc::BlockedIsNoOp() const
 		|| IsRetailClass(TEXT("CCineAISchedule"));
 }
 
-void FElysiumNpc::SetBlockedByFriend(bool bBlocked)
-{
-	// `FUN_1039aaf0` `0x1039aaf0`: `this->+0x6750 = param_1`.
-	bBlockedByFriend = bBlocked;
-}
-
-bool FElysiumNpc::BlockedByFriend() const
-{
-	// `FUN_1039ab10` `0x1039ab10`: `return this->+0x6750;`.
-	return bBlockedByFriend;
-}
-
 int32 FElysiumNpc::ResolveLinkActivity() const
 {
 	// `FUN_1027a6c0` `0x1027a6c0`:
@@ -1398,13 +1099,7 @@ int32 FElysiumNpc::ResolveLinkActivity() const
 	{
 		return Activity;
 	}
-	return GActIdle;
-}
-
-void FElysiumNpc::ClearLinkActivity()
-{
-	// `FUN_10382d20` `0x10382d20`: `thunk_FUN_102e1e20(m_pMotor, -1)`.
-	MotorCancelLinkFacing();
+	return NpcKernelMotorShared::GActIdle;
 }
 
 void FElysiumNpc::NavOnNavFailed(int32 FailReason)
@@ -1438,39 +1133,3 @@ void FElysiumNpc::ResumeScheduledMove()
 	ScheduleHost.bShouldMove = true;
 }
 
-bool FElysiumNpc::TranslateNavGoalPositionTzimisce(const FVector& GoalUnits,
-	FVector& OutGoalUnits) const
-{
-	// `CNPC_VTzimisce::vfunc410` `0x103bf580`, the species branch of slot 410:
-	//     if (m_ePathMode == 1) { if (GetEnemy()) return GetEnemy()->vtable[0x370/4 = 220](); }
-	//     else if (m_ePathMode != 2) return goal;
-	//     if (m_hPickupTarget resolves) return m_vecPickupTargetPos;
-	//     return goal;
-	// Note the fall-through: path mode 1 with no enemy does NOT return the goal, it drops into the
-	// pickup arm. That is retail's own control flow and it is kept.
-	if (PathMode == 1)
-	{
-		FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-			? World->Resolve(Senses.Memory.Enemy)
-			: nullptr;
-		if (Enemy != nullptr)
-		{
-			OutGoalUnits = SourceOf(Enemy->Origin);
-			return true;
-		}
-	}
-	else if (PathMode != 2)
-	{
-		OutGoalUnits = GoalUnits;
-		return false;
-	}
-	const bool bPickupLive = PickupTarget.IsSet() && World != nullptr
-		&& World->Resolve(PickupTarget) != nullptr;
-	if (bPickupLive)
-	{
-		OutGoalUnits = PickupTargetPos;
-		return true;
-	}
-	OutGoalUnits = GoalUnits;
-	return false;
-}

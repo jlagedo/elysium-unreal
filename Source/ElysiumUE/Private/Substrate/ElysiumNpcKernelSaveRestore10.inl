@@ -273,18 +273,6 @@ int32 BaseSave(void* Archive);
  *  same eleven and the same nine decoded in the same order. The return is `BaseSave`'s. */
 int32 TroikaSave(void* Archive);
 
-/** `CNPC_VMingXiao::Save` (`0x10395f80`) — the six `m_rflRegrowTimers` (`+0x66f4`) encoded at mode
- *  **4** ascending, the Troika body, then the same six decoded ascending. */
-int32 MingXiaoSave(void* Archive);
-
-/** `CNPC_VMingXiaoTentacle::Save` (`0x1039ed50`) — `m_flPhaseExpireTimer` (`+0x6674`) at mode
- *  **3** around the Troika body. */
-int32 MingXiaoTentacleSave(void* Archive);
-
-/** `CNPC_VTzimisceHeadClaw::Save` (`0x103c2810`) — `m_flSlowedExpire` (`+0x6678`) at mode **3**
- *  around the Troika body. */
-int32 TzimisceHeadClawSave(void* Archive);
-
 // --- Slot 127 `Restore` ----------------------------------------------------------------------------
 
 /** `CAI_BaseNPCTroika::Restore` (`0x10299700`) — slot 127's own body. `CAI_BaseNPC::Restore`
@@ -294,31 +282,6 @@ int32 TzimisceHeadClawSave(void* Archive);
  *  eleven stamps and nine sounds `TroikaSave` encodes, decoded in the same order with the same
  *  modes. */
 int32 TroikaRestore(void* Archive);
-
-/** `CNPC_VMingXiao::vfunc127` (`0x10396000`) — the Troika body, then the six `m_rflRegrowTimers`
- *  decoded at mode **4** ascending. */
-int32 MingXiaoRestore(void* Archive);
-
-/** `CNPC_VMingXiaoTentacle::vfunc127` (`0x1039eda0`) — the Troika body, then `m_flPhaseExpireTimer`
- *  at mode **3**. */
-int32 MingXiaoTentacleRestore(void* Archive);
-
-/** `CNPC_VTzimisceHeadClaw::vfunc127` (`0x103c2860`) — the Troika body, then `m_flSlowedExpire` at
- *  mode **3**. */
-int32 TzimisceHeadClawRestore(void* Archive);
-
-/** `CNPC_VVampireBoss::Restore` (`0x103c5910`) — the Troika body, then a post-load reset of the
- *  monster-model override: `m_pMonsterModelName` (`+0x6680`) := null, `ClearBodyEmitterNames()`
- *  (family Damage's, `0x103c6eb0`), and `m_pszMonsterClassname` (`+0x6694`) := the literal
- *  `"npc_VVampireBoss"`. The write order is the listing's (`103c5972` the model name, `103c597c`
- *  the emitter names, `103c5981` the classname).
- *
- *  This is also the body the other bosses' own slot-127 overrides call as their base
- *  (`CNPC_VAndreiBlood` `0x1035cf80`, `CNPC_VAsianVampire` `0x10360e10`, the Chang brothers
- *  `0x1036b170`, `CNPC_VSabbatLeader` `0x103a6e80`, `CNPC_VSheriffMan` `0x103ae7f0`), so it sits
- *  between the Troika body and those rows — which is why the arm keys on `CNPC_VVampireBoss` by
- *  the CHAIN walk (`IsRetailClass`) and not by a name compare. */
-int32 VampireBossRestore(void* Archive);
 
 // --- Slot 180 `UpdateOnRemove` ---------------------------------------------------------------------
 
@@ -336,32 +299,6 @@ int32 VampireBossRestore(void* Archive);
  *       order, through `0x1029f5d0`.
  *    6. tail-jump to `CAI_BaseNPC::UpdateOnRemove`. */
 void TroikaUpdateOnRemove();
-
-/** `CNPC_VCop::UpdateOnRemove` (`0x10371a90`), read off the listing — the decompiled C mis-renders
- *  the two census bytes as `this+1`. Retail, instruction for instruction:
- *
- *      DL = m_bCountedAlive (+0x6671);  AL = 0
- *      if (DL != 0) --DAT_1093acac
- *      DL = +0x6672;  m_bCountedAlive = 0
- *      if (DL != 0) --DAT_1093acb0
- *      +0x6672 = 0
- *      JMP CAI_BaseNPCTroika::UpdateOnRemove
- *
- *  Note the interleave: `+0x6672` is READ before `+0x6671` is cleared, so the two arms cannot
- *  interfere. Both counters are program-visible — `DAT_1093acac` is written by `CNPC_VCop::Spawn`
- *  and read by `CNPC_VCop::SelectSchedule`, `0x103707e0` and `0x10370850`; `DAT_1093acb0` by
- *  `CNPC_VCop::OnStateChange` and `SelectSchedule`. */
-void CopUpdateOnRemove();
-
-/** `CNPC_VMingXiao::UpdateOnRemove` (`0x10391230`) — when `m_eThrowableObjectMode` (`+0x673c`) is
- *  non-zero, drop the carried throwable through family Damage's `MingXiaoThrowCleanup`
- *  (`0x10398fd0`), then the Troika body either way. Without the drop the thrown prop outlives the
- *  boss. */
-void MingXiaoUpdateOnRemove();
-
-/** `CNPC_VNewscaster::UpdateOnRemove` (`0x103a03a0`) — family Species' `FUN_103a0d50` (the two
- *  story-queue teardowns and the active-story byte), then the Troika body. */
-void NewscasterUpdateOnRemove();
 
 /** `FUN_102b53d0` (`0x102b53d0`) — the interesting-place release, which the checklist's walk called
  *  "the grapple release". It is not: `+0x62ec` is `m_pInterestingPlace`, `+0x62e8`
@@ -475,37 +412,3 @@ int32 OpeningDoorToggleState() const;
 // Each carries its offset and the retail class that owns it, the convention family Lifecycle set:
 // one offset means a different thing per class, and `+0x6674` alone is five different fields.
 
-/** `+0x66f4 CNPC_VMingXiao::m_rflRegrowTimers[6]` — the six tentacle regrow stamps
- *  `CNPC_VMingXiao::Save` brackets the archive with. SIX is the loop bound in both bodies
- *  (`iVar1 = 6`), and `ElysiumNpcKernelShape.cpp` gives the array a 4-byte stride. */
-static constexpr int32 MingXiaoRegrowTimerCount = 6;
-double MingXiaoRegrowTimers[MingXiaoRegrowTimerCount] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-
-/** `+0x6674 CNPC_VMingXiaoTentacle::m_flPhaseExpireTimer` — the tentacle's phase deadline. */
-double MingXiaoTentaclePhaseExpireTimer = 0.0;
-
-/** `+0x6680 CNPC_VVampireBoss::m_pMonsterModelName` and `+0x6694 m_pszMonsterClassname` — the two
- *  words `CNPC_VVampireBoss::Restore` resets. Neither had a carrier before this story. */
-FString VampireBossMonsterModelName;
-FString VampireBossMonsterClassname;
-
-/** `+0x6671 CNPC_VCop::m_bCountedAlive` and `+0x6672`, its unnamed twin. The census row names only
- *  the first; the second is read and written by the same body at the same width and has no
- *  recovered name, so it is spelled by offset — the convention 29b uses for an unsettled word.
- *  `+0x6671` is `CNPC_VTzimisceRunner::m_bDeathNoticeProcessed` on another class, which family
- *  Species already declares, so these are declared by class here. */
-bool bCopCountedAlive = false;      // +0x6671 CNPC_VCop
-bool bCopCountedSecond = false;     // +0x6672 CNPC_VCop
-
-/** `DAT_1093acac` and `DAT_1093acb0`, the two PROCESS-WIDE live-cop censuses `CNPC_VCop` keeps.
- *  Statics and not per-NPC words, because retail's are: `CNPC_VCop::Spawn` increments the first for
- *  every cop in the level and `SelectSchedule` reads the total.
- *
- *  Ported as file statics, the way family Lifecycle ported the Werewolf's shared `rdtsc` pair, with
- *  named accessors so a fixture can read and reset them. **They answer nothing today in the sense
- *  that nothing INCREMENTS them** — `CNPC_VCop::Spawn` and `OnStateChange` are other stories' rows
- *  — so the decrement this family ports is the only writer so far. That is a missing producer, not
- *  a missing rule, and the guard (`only when the byte is set`) is what keeps the count from going
- *  negative meanwhile. */
-static int32& CopAliveCensus();    // DAT_1093acac
-static int32& CopSecondCensus();   // DAT_1093acb0

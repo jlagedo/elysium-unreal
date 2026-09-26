@@ -46,6 +46,7 @@ SUBSTRATE = PRIVATE / "Substrate"
 SHAPE = SUBSTRATE / "ElysiumNpcKernelShape.cpp"
 NPC_HEADER = SUBSTRATE / "ElysiumNpc.h"
 BINDINGS = SUBSTRATE / "ElysiumNpcKernelBindings.cpp"
+SPECIES_SHAPE_MAP = SUBSTRATE / "ElysiumNpcKernelSpeciesShapeMap.cpp"
 GRAPH = Path("docs/vtmb/npc-kernel/graph.tsv")
 VERDICTS = Path("research/tooling/ghidra/driver/kernel_verdicts.tsv")
 REPLAY = "ghidra/types/datamap_records-vampire.dll.json"
@@ -60,7 +61,7 @@ MOVE_DISPOSITION = re.compile(r"^(move|collapse:\w+|stay:.+|deferred:(7|8|9|10)|
 FIELD_COLUMNS = ("declaring_class", "offset", "member", "type", "flags", "external", "kind",
                  "final_owner", "final_path", "disposition", "packet", "note")
 FIELD_IDENTITY = FIELD_COLUMNS[:7]
-FIELD_DISPOSITION = re.compile(r"^(bind|declare|shadow:\w+|input:\w+|input-seam|output|investigate)$")
+FIELD_DISPOSITION = re.compile(r"^(bind|declare|shadow:\w+|input:\w+|input-seam|output|absent|investigate)$")
 PACKETS = {"4b", "4c", "4d", "4e", "4f", "4g", "4h"}
 
 
@@ -537,18 +538,34 @@ def check_moves(rows: list[dict], root: Path) -> collections.Counter:
 
 def check_fields(rows: list[dict], root: Path) -> collections.Counter:
     bindings = _code(root, BINDINGS)
+    shape_map = _code(root, SPECIES_SHAPE_MAP)
+    staying = npc_members(root)
     counts: collections.Counter = collections.Counter()
     for row in rows:
-        if row["disposition"] == "investigate":
+        disposition, who = row["disposition"], f"{row['declaring_class']}::{row['member']}"
+        if disposition == "investigate":
             raise km.InvalidManifest(f"binding row still under investigation: {row['member']}")
-        if row["kind"] == "field" and not row["disposition"].startswith("shadow:"):
+        offset = f"0x{int(row['offset'], 16):04x}"
+        if disposition == "absent":
+            # A recorded gap: the class-qualified map says why, and nothing is generated for it.
+            if not re.search(rf"ELYSIUM_NPC_SPECIES_WORD_ABSENT\(\s*{row['declaring_class']}\s*,\s*{offset}\b",
+                             shape_map):
+                raise km.InvalidManifest(f"{who} is absent but the species shape map does not say why")
+        elif row["kind"] == "field":
             owner, member = row["final_path"].split("::", 1)
-            if owner != row["final_owner"] or not re.search(
+            if disposition.startswith("shadow:") or owner == "FElysiumNpc":
+                # Inherited storage (a Troika word, or a deferred/Troika-read word that stays).
+                if owner != "FElysiumNpc" or member not in staying:
+                    raise km.InvalidManifest(f"{who} binds FElysiumNpc storage that is not there")
+            elif owner != row["final_owner"] or not re.search(
                     rf"\b{member.split('.')[0]}\b", _code(root, SUBSTRATE / f"{owner[1:]}.h")):
-                raise km.InvalidManifest(f"{row['declaring_class']}::{row['member']} has no storage on {owner}")
-        if row["external"] != "-" and row["kind"] != "input" and f'TEXT("{row["external"]}")' not in bindings:
+                raise km.InvalidManifest(f"{who} has no storage on {owner}")
+            name = row["external"] if row["external"] != "-" else row["member"]
+            if f'TEXT("{name}' not in bindings:
+                raise km.InvalidManifest(f"{who} ({name}) is not generated")
+        elif row["kind"] == "output" and f'TEXT("{row["external"]}")' not in bindings:
             raise km.InvalidManifest(f"{row['declaring_class']} {row['external']} is not generated")
-        counts[row["disposition"].split(":")[0]] += 1
+        counts[disposition.split(":")[0]] += 1
     return counts
 
 

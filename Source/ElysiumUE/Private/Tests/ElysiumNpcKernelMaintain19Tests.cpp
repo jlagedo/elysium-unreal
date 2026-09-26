@@ -6,6 +6,11 @@
 	#include "ElysiumEntityWorld.h"
 	#include "HAL/PlatformProcess.h"
 	#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
 	#include "Substrate/ElysiumNpcConditions.h"
 	#include "Substrate/ElysiumNpcFlags.h"
 	#include "Substrate/ElysiumSchedule.h"
@@ -208,7 +213,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 	FMaintain19Fixture F(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("subject"), F.Npc))
 		return false;
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcWerewolf& N = *ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
 	N.SetState(1);
 	N.bNpcIsAlive = true;
 	N.WerewolfScheduleStack.Reset();
@@ -310,46 +315,46 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 		FMaintain19Fixture F(TEXT("CNPC_VGargoyle"));
 		if (!TestNotNull(TEXT("subject"), F.Npc))
 			return false;
-		FElysiumNpc& N = *F.Npc;
-		N.SpeciesShunnedFindCount = 2;
+		FElysiumNpcGargoyle& N = *ElysiumTestAsSpecies<FElysiumNpcGargoyle>(F.Npc);
+		N.GargoyleShunnedFindPillar = 2;
 		N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
-		TestEqual(TEXT("10378fe4 decrements Gargoyle pillar shun"), N.SpeciesShunnedFindCount, 1);
+		TestEqual(TEXT("10378fe4 decrements Gargoyle pillar shun"), N.GargoyleShunnedFindPillar, 1);
 		N.NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
 		N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
-		TestEqual(TEXT("10378fd8 PRESERVE_PATH freezes it"), N.SpeciesShunnedFindCount, 1);
+		TestEqual(TEXT("10378fd8 PRESERVE_PATH freezes it"), N.GargoyleShunnedFindPillar, 1);
 	}
 
 	{
 		FMaintain19Fixture F(TEXT("CNPC_VHengeyokai"));
 		if (!TestNotNull(TEXT("subject"), F.Npc))
 			return false;
-		FElysiumNpc& N = *F.Npc;
+		FElysiumNpcHengeyokai& N = *ElysiumTestAsSpecies<FElysiumNpcHengeyokai>(F.Npc);
 		N.NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
-		N.PathMode = 7;
-		N.SpeciesShunnedFindCount = 2;
+		N.HengeyokaiPathMode = 7;
+		N.HengeyokaiShunnedFindFish = 2;
 		N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
-		TestEqual(TEXT("103830b0 clears Hengeyokai path mode"), N.PathMode, 0);
-		TestEqual(TEXT("103830be decrements fish shun"), N.SpeciesShunnedFindCount, 1);
+		TestEqual(TEXT("103830b0 clears Hengeyokai path mode"), N.HengeyokaiPathMode, 0);
+		TestEqual(TEXT("103830be decrements fish shun"), N.HengeyokaiShunnedFindFish, 1);
 	}
 
 	{
 		FMaintain19Fixture F(TEXT("CNPC_VTzimisce"));
 		if (!TestNotNull(TEXT("subject"), F.Npc))
 			return false;
-		FElysiumNpc& N = *F.Npc;
+		FElysiumNpcTzimisce& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisce>(F.Npc);
 		N.NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
 		N.PathMode = 4;
-		N.SpeciesShunnedFindCount = 3;
+		N.TzimisceShunnedFindBody = 3;
 		N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 		TestEqual(TEXT("103bf630 clears Tzimisce path mode"), N.PathMode, 0);
-		TestEqual(TEXT("103bf63e decrements body shun"), N.SpeciesShunnedFindCount, 2);
+		TestEqual(TEXT("103bf63e decrements body shun"), N.TzimisceShunnedFindBody, 2);
 	}
 
 	{
 		FMaintain19Fixture F(TEXT("CNPC_VWerewolf"));
 		if (!TestNotNull(TEXT("subject"), F.Npc))
 			return false;
-		FElysiumNpc& N = *F.Npc;
+		FElysiumNpcWerewolf& N = *ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
 		N.WerewolfScheduleStack.Reset();
 		for (int32 Index = 0; Index < 51; ++Index)
 			N.WerewolfScheduleStack.Add(TEXT("old"));
@@ -426,7 +431,7 @@ bool FElysiumNpcKernelMaintain19SabbatTaskFailTest::RunTest(const FString&)
 	FMaintain19Fixture F(TEXT("CNPC_VSabbatLeader"));
 	if (!TestNotNull(TEXT("subject"), F.Npc))
 		return false;
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcSabbatLeader& N = *ElysiumTestAsSpecies<FElysiumNpcSabbatLeader>(F.Npc);
 	N.SetState(1);
 	N.bNpcIsAlive = true;
 	N.Cognition.Conditions.Reset();

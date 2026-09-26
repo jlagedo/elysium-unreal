@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelSenses10Shared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -27,7 +28,6 @@ namespace
 {
 	// Retail's `Disposition_t`.
 	constexpr int32 GD_ER = 0;
-	constexpr int32 GD_HT = 1;
 	constexpr int32 GD_FR = 2;
 	constexpr int32 GD_LI = 3;
 	constexpr int32 GD_NU = 4;
@@ -54,24 +54,6 @@ namespace
 	constexpr float GYawWrap = 360.0f;
 	constexpr float GMingXiaoAimZBonus = 20.0f;
 
-	// The cop and hunter class statics. STATIC IN RETAIL — `DAT_1093ac3c` / `_DAT_1093aca8` are one
-	// grudge every cop in the map shares, and `DAT_1093b650` / `_DAT_1093b658` are the hunter's.
-	FElysiumEntityHandle GCopSuspect;
-	double GCopSuspectExpiry = 0.0;
-	FElysiumEntityHandle GHunterSuspect;
-	double GHunterSuspectExpiry = 0.0;
-
-	double NowOf(const FElysiumNpc& Npc)
-	{
-		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
-	}
-
-	bool IsPlayerRecord(const FElysiumNpc& Npc, const FElysiumEntity* Candidate)
-	{
-		// `+0x00a8 m_pPlayer`, `CBaseEntity`'s self-downcast cache: non-null on exactly the player.
-		return Candidate != nullptr && Npc.World != nullptr
-			&& Candidate->Handle == Npc.World->PlayerHandle();
-	}
 }
 
 // =================================================================================================
@@ -146,7 +128,7 @@ bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntit
 		return false;
 	}
 	// `102b466e`: `npc_ignore_player` AND the target carrying `+0xa8` — blocker written, false.
-	if (ElysiumNpcSense::IgnorePlayer() && IsPlayerRecord(*this, SeenTarget))
+	if (ElysiumNpcSense::IgnorePlayer() && NpcKernelSenses10Shared::IsPlayerRecord(*this, SeenTarget))
 	{
 		if (Blocker != nullptr)
 		{
@@ -252,7 +234,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* SeenTarget, int32 /*Mask*/, FElysiumEn
 	// `m_bEnemyWentOccluded` — the occlusion EDGE that `0x10270180` writes, a different word.
 	const bool bCombatBypass = GetMind().State() == EElysiumNpcState::Combat
 		&& !Senses.Memory.bEnemyWentOccluded;
-	const bool bOverrideActive = NowOf(*this) < Senses.Memory.StealthVisionOverrideUntil;
+	const bool bOverrideActive = NpcKernelSenses10Shared::NowOf(*this) < Senses.Memory.StealthVisionOverrideUntil;
 	if (!bCombatBypass && !bOverrideActive)
 	{
 		const float DistanceCm = static_cast<float>(FVector::Dist(MyEyeCm, TargetEyeCm));
@@ -302,7 +284,7 @@ bool FElysiumNpc::Slot594(FElysiumEntity* SeenTarget, int32 /*Mask*/, FElysiumEn
 bool FElysiumNpc::SoundOwnerInDeafZone(const FElysiumEntity* Owner) const
 {
 	// `CStealthKillRules::InDeafZone(&DAT_1072c540, owner->m_pPlayer, this)`.
-	if (World == nullptr || !IsPlayerRecord(*this, Owner))
+	if (World == nullptr || !NpcKernelSenses10Shared::IsPlayerRecord(*this, Owner))
 	{
 		return false;
 	}
@@ -329,7 +311,7 @@ bool FElysiumNpc::QueryHearSound(void* SoundPtr)
 	FElysiumEntity* Owner = World != nullptr && Sound->Source.IsSet()
 		? World->Resolve(Sound->Source) : nullptr;
 	// `102b35e2`: `npc_ignore_player` (`DAT_10924fb9`) AND the owner resolving to a player record.
-	if (ElysiumNpcSense::IgnorePlayer() && Owner != nullptr && IsPlayerRecord(*this, Owner))
+	if (ElysiumNpcSense::IgnorePlayer() && Owner != nullptr && NpcKernelSenses10Shared::IsPlayerRecord(*this, Owner))
 	{
 		return false;
 	}
@@ -387,7 +369,7 @@ bool FElysiumNpc::QueryHearSound(void* SoundPtr)
 		// sound whose owner carries a player record, subtract the owner's slot-30 stealth reduction
 		// and clamp at zero. `FElysiumGameSoundEvent` carries that reduction already resolved.
 		if (Owner != nullptr && Sound->TypeMask == ElysiumGameSounds::Player
-			&& IsPlayerRecord(*this, Owner))
+			&& NpcKernelSenses10Shared::IsPlayerRecord(*this, Owner))
 		{
 			LimitCm = FMath::Max(0.f, LimitCm - Sound->StealthHearingReductionCm);
 		}
@@ -413,7 +395,7 @@ bool FElysiumNpc::QuerySeeEntity(FElysiumEntity* Candidate)
 	{
 		return false;
 	}
-	if (ElysiumNpcSense::IgnorePlayer() && Candidate != nullptr && IsPlayerRecord(*this, Candidate))
+	if (ElysiumNpcSense::IgnorePlayer() && Candidate != nullptr && NpcKernelSenses10Shared::IsPlayerRecord(*this, Candidate))
 	{
 		return false;
 	}
@@ -429,14 +411,14 @@ bool FElysiumNpc::QuerySeeEntity(FElysiumEntity* Candidate)
 	{
 		return false;
 	}
-	if (IsPlayerRecord(*this, Candidate))
+	if (NpcKernelSenses10Shared::IsPlayerRecord(*this, Candidate))
 	{
 		return true;
 	}
 	// `102b393c`: slot 404 `IRelationType`, true for D_HT and D_FR alone. Every other disposition —
 	// including retail's `default:` — answers false.
 	const int32 Relation = IRelationTypeOf(Candidate);
-	return Relation == GD_HT || Relation == GD_FR;
+	return Relation == NpcKernelSenses10Shared::GD_HT || Relation == GD_FR;
 }
 
 // =================================================================================================
@@ -476,7 +458,7 @@ void FElysiumNpc::OnLooked(int32)
 void FElysiumNpc::OnSeeEntity(FElysiumEntity* Seen)
 {
 	FElysiumNpcMemory& Memory = Senses.Memory;
-	const double Now = NowOf(*this);
+	const double Now = NpcKernelSenses10Shared::NowOf(*this);
 
 	// `102b3e0c`: the outer gate, in retail's order — `m_bfAINPCFlags2 & 0x4000000` CLEAR
 	// (`NO_UNKNOWN_VISION`), the far byte `+0x6081` SET, and `0x102b3270(entity, false)` true.
@@ -488,7 +470,7 @@ void FElysiumNpc::OnSeeEntity(FElysiumEntity* Seen)
 	{
 		// `102b3e3c`: and only when the entity carries a player record AND `0x101671a0` admits it.
 		// `0x101671a0` is the stealth-posture test — retail's "is this player sneaking".
-		const FElysiumPlayer* Player = IsPlayerRecord(*this, Seen) && World != nullptr
+		const FElysiumPlayer* Player = NpcKernelSenses10Shared::IsPlayerRecord(*this, Seen) && World != nullptr
 			? World->FindPlayer() : nullptr;
 		if (Player != nullptr && Player->IsInStealthPosture())
 		{
@@ -641,7 +623,7 @@ FElysiumEntity* FElysiumNpc::BestEnemy()
 		// `10274483`: slot 404 `IRelationType`, D_HT or D_FR alone. Retail dispatches it TWICE when
 		// the first answer is not 1; the query is pure, so one call is the same observation.
 		const int32 Relation = IRelationTypeOf(Candidate);
-		if (Relation != GD_HT && Relation != GD_FR)
+		if (Relation != NpcKernelSenses10Shared::GD_HT && Relation != GD_FR)
 		{
 			continue;
 		}
@@ -751,7 +733,7 @@ bool FElysiumNpc::UpdateCaiMemory(FElysiumEntity* Enemy, const FVector& Position
 	// enemy, the position and the enemy's velocity. The node array is the AI network and does not
 	// exist here, so the record's two node ids stay `INDEX_NONE`.
 	const bool bFirstRecord = Enemy != nullptr && EnemyMemory.Find(Enemy->Handle) == nullptr;
-	const double Now = NowOf(*this);
+	const double Now = NpcKernelSenses10Shared::NowOf(*this);
 	if (Enemy == nullptr)
 	{
 		EnemyMemory.UpdatePositionOnly(PositionCm, Now);
@@ -1077,7 +1059,7 @@ bool FElysiumNpc::InnateWeaponLOSCondition(const FVector& OwnerPosCm, const FVec
 	}
 	// `1026fe08`: slot 404 `IRelationType` equal to D_HT answers TRUE — shooting a hated blocker is
 	// fine. Note `1026fe19`'s `MOV AL,AL`: the answer is the relation's own low byte, which is 1.
-	if (IRelationTypeOf(Blocker) == GD_HT)
+	if (IRelationTypeOf(Blocker) == NpcKernelSenses10Shared::GD_HT)
 	{
 		return true;
 	}
@@ -1118,7 +1100,7 @@ void FElysiumNpc::ArmMoveAndShootOverlay(float PauseMin, float PauseMax)
 	}
 	MoveAndShootOverlay.PauseMin = PauseMin;
 	MoveAndShootOverlay.PauseMax = PauseMax;
-	MoveAndShootOverlay.NextShotTime = static_cast<float>(NowOf(*this));
+	MoveAndShootOverlay.NextShotTime = static_cast<float>(NpcKernelSenses10Shared::NowOf(*this));
 	++MoveAndShootOverlay.Arms;
 }
 
@@ -1230,60 +1212,11 @@ void FElysiumNpc::HeadProbe()
 // The cop and hunter class statics — `DAT_1093ac3c` / `_DAT_1093aca8` and their hunter twins.
 // =================================================================================================
 
-FElysiumEntityHandle FElysiumNpc::CopSuspectHandle() { return GCopSuspect; }
-double FElysiumNpc::CopSuspectExpiry() { return GCopSuspectExpiry; }
-FElysiumEntityHandle FElysiumNpc::HunterSuspectHandle() { return GHunterSuspect; }
-double FElysiumNpc::HunterSuspectExpiry() { return GHunterSuspectExpiry; }
-
 void FElysiumNpc::ResetSpeciesSuspectGlobals()
 {
-	GCopSuspect = FElysiumEntityHandle::Invalid();
-	GCopSuspectExpiry = 0.0;
-	GHunterSuspect = FElysiumEntityHandle::Invalid();
-	GHunterSuspectExpiry = 0.0;
+	NpcKernelSenses10Shared::GCopSuspect = FElysiumEntityHandle::Invalid();
+	NpcKernelSenses10Shared::GCopSuspectExpiry = 0.0;
+	NpcKernelSenses10Shared::GHunterSuspect = FElysiumEntityHandle::Invalid();
+	NpcKernelSenses10Shared::GHunterSuspectExpiry = 0.0;
 }
 
-void FElysiumNpc::StampCopSuspect(FElysiumEntity* Seen)
-{
-	// `0x10370560`: `_DAT_1093aca8 = curtime + _DAT_104492a8` and `DAT_1093ac3c = seen->handle`,
-	// but ONLY when the seen entity carries a non-null `+0xa8` player record.
-	if (!IsPlayerRecord(*this, Seen))
-	{
-		return;
-	}
-	GCopSuspectExpiry = NowOf(*this) + SpeciesSuspectWindowSeconds;
-	GCopSuspect = Seen->Handle;
-}
-
-void FElysiumNpc::StampHunterSuspect(FElysiumEntity* Seen)
-{
-	// `0x10387fd0`: the same pair over the hunter's own globals, with NO `+0xa8` guard — the one
-	// difference between the two 54-byte twins.
-	if (Seen == nullptr)
-	{
-		return;
-	}
-	GHunterSuspectExpiry = NowOf(*this) + SpeciesSuspectWindowSeconds;
-	GHunterSuspect = Seen->Handle;
-}
-
-void FElysiumNpc::CopOnSeeEntity(FElysiumEntity* Seen)
-{
-	// `10371ae0`: when `+0x6081` is CLEAR and slot 404 answers D_HT, stamp; then the Troika body
-	// runs UNCONDITIONALLY.
-	if (!Senses.Memory.bPlayerInOuterBand && IRelationTypeOf(Seen) == GD_HT)
-	{
-		StampCopSuspect(Seen);
-	}
-	FElysiumNpc::OnSeeEntity(Seen);
-}
-
-void FElysiumNpc::HunterOnSeeEntity(FElysiumEntity* Seen)
-{
-	// `103887d0`: the twin.
-	if (!Senses.Memory.bPlayerInOuterBand && IRelationTypeOf(Seen) == GD_HT)
-	{
-		StampHunterSuspect(Seen);
-	}
-	FElysiumNpc::OnSeeEntity(Seen);
-}

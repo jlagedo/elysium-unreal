@@ -8,6 +8,16 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcHunter.h"
+#include "Substrate/ElysiumNpcYukie.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -41,8 +51,8 @@ namespace
 		FElysiumNpc* Other = nullptr;
 		FElysiumNpc* Boss = nullptr;
 		FElysiumNpc* Pedestrian = nullptr;
-		FElysiumNpc* Hunter = nullptr;
-		FElysiumNpc* Cop = nullptr;
+		FElysiumNpcHunter* Hunter = nullptr;
+		FElysiumNpcCop* Cop = nullptr;
 		FElysiumNpc* Newscaster = nullptr;
 		FElysiumNpc* Troika = nullptr;
 		FElysiumPlayer* Player = nullptr;
@@ -77,8 +87,8 @@ namespace
 			Other = World.Npc(TEXT("other"));
 			Boss = World.Npc(TEXT("boss"));
 			Pedestrian = World.Npc(TEXT("ped"));
-			Hunter = World.Npc(TEXT("hunter"));
-			Cop = World.Npc(TEXT("cop"));
+			Hunter = World.NpcAs<FElysiumNpcHunter>(TEXT("hunter"));
+			Cop = World.NpcAs<FElysiumNpcCop>(TEXT("cop"));
 			Newscaster = World.Npc(TEXT("news"));
 			Troika = World.Npc(TEXT("troika"));
 			Player = World.Player();
@@ -310,24 +320,24 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	// Reached through the dispatcher since story 5 step 2 (the census row above). The arms are
 	// driven directly, and the dispatcher is checked to land on the same answer.
 	TestEqual(TEXT("the cop's null arm is D_ER (10372b76)"),
-		F.Cop->CopIRelationType(nullptr), GCond10T_D_ER);
+		F.Cop->IRelationType(nullptr), GCond10T_D_ER);
 	TestEqual(TEXT("with nothing set the cop defers (10372c0a)"),
-		F.Cop->CopIRelationType(F.Other), GCond10T_D_NU);
+		F.Cop->IRelationType(F.Other), GCond10T_D_NU);
 	F.Cop->StampCopSuspect(F.Player);
 	TestEqual(TEXT("the cop's shared timed grudge is D_HT (10372b84)"),
-		F.Cop->CopIRelationType(F.Player), GCond10T_D_HT);
+		F.Cop->IRelationType(F.Player), GCond10T_D_HT);
 	FElysiumNpc::ResetSpeciesSuspectGlobals();
 	// `10372bc6`: the two player words, both of which stand on `FElysiumPlayer`.
 	TestEqual(TEXT("a heightened-alert player is D_HT to a cop (0x1017f8d0)"),
-		F.Cop->CopIRelationType(F.Player), GCond10T_D_HT);
+		F.Cop->IRelationType(F.Player), GCond10T_D_HT);
 	TestEqual(TEXT("and slot 404 dispatched on a cop reaches the same arm"),
 		F.Cop->IRelationType(F.Player), GCond10T_D_HT);
 	F.Player->Police.HeightenedAlertExpiry = 0.0;
 	TestEqual(TEXT("a non-zero cops-in-pursuit count is D_HT (0x1017f770)"),
-		F.Cop->CopIRelationType(F.Player), GCond10T_D_HT);
+		F.Cop->IRelationType(F.Player), GCond10T_D_HT);
 	F.Player->Police.CopsInPursuit = 0;
 	TestEqual(TEXT("with both player words clear the cop defers (10372c0a)"),
-		F.Cop->CopIRelationType(F.Player), GCond10T_D_NU);
+		F.Cop->IRelationType(F.Player), GCond10T_D_NU);
 	TestEqual(TEXT("dispatched on a cop with both words clear, the cop still defers"),
 		F.Cop->IRelationType(F.Player), GCond10T_D_NU);
 	// The Troika body, which is what the dispatcher gives the bare Troika line.
@@ -367,13 +377,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	}
 
 	// --- `CNPC_VYukie::IRelationType` (`0x103dd880`) ----------------------------------------------
-	// The whole species override is the null guard, driven directly here on an ordinary combatant
-	// (the body reads no Yukie word) and below on a real Yukie.
-	TestEqual(TEXT("the Yukie null guard answers D_ER (103dd888)"),
-		F.Guard->YukieIRelationType(nullptr), GCond10T_D_ER);
-	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 10);
-	TestEqual(TEXT("anything else tail-jumps to the Troika body (103dd88f)"),
-		F.Guard->YukieIRelationType(F.Other), GCond10T_D_HT);
+	// The whole species override is the null guard, driven on a real Yukie.
 
 	// Since story 5 step 2 `npc_VYukie` builds `CNPC_VYukie` (population.md), so the dispatcher
 	// reaches this arm on a spawned Yukie. Its answers are the Troika body's for these two inputs —
@@ -386,7 +390,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 		Builder.AddNpc(TEXT("yukie"), FVector::ZeroVector, TEXT("npc_VYukie"));
 		Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f), TEXT("npc_VHumanCombatant"));
 		FElysiumNpcWorldFixture YukieWorld(MoveTemp(Builder));
-		FElysiumNpc* Yukie = YukieWorld.Npc(TEXT("yukie"));
+		FElysiumNpcYukie* Yukie = YukieWorld.NpcAs<FElysiumNpcYukie>(TEXT("yukie"));
 		FElysiumNpc* YukieOther = YukieWorld.Npc(TEXT("other"));
 		if (!TestNotNull(TEXT("a Yukie spawned"), Yukie)
 			|| !TestNotNull(TEXT("and a second NPC"), YukieOther))
@@ -402,12 +406,12 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 		TestEqual(TEXT("slot 404 on a Yukie: the null guard answers D_ER (103dd888)"),
 			Yukie->IRelationType(nullptr), GCond10T_D_ER);
 		TestEqual(TEXT("and the arm on the Yukie itself agrees"),
-			Yukie->YukieIRelationType(nullptr), GCond10T_D_ER);
+			Yukie->IRelationType(nullptr), GCond10T_D_ER);
 		Yukie->Relationships.SetEntity(YukieOther->Handle, EElysiumRelationship::Hate, 10);
 		TestEqual(TEXT("slot 404 on a Yukie tail-jumps to the Troika body (103dd88f)"),
 			Yukie->IRelationType(YukieOther), GCond10T_D_HT);
 		TestEqual(TEXT("and the arm on the Yukie itself agrees"),
-			Yukie->YukieIRelationType(YukieOther), GCond10T_D_HT);
+			Yukie->IRelationType(YukieOther), GCond10T_D_HT);
 	}
 	return true;
 }
@@ -834,19 +838,16 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 	// by the cases below and reached through `TaskFail` on the seven classes at the end of this one.
 	// What is proved first is that the dispatcher adds nothing for a body whose class has no
 	// slot-448 override — a cop (`CNPC_VCop`, under `CNPC_VHumanCombatant`) included.
-	for (const FElysiumNpc* Npc : { F.Guard, F.Pedestrian, F.Cop })
+	for (const FElysiumNpc* Npc : std::initializer_list<const FElysiumNpc*>{ F.Guard, F.Pedestrian, F.Cop })
 	{
 		const TCHAR* const Body = ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 448);
 		TestTrue(TEXT("a plain leaf's slot 448 is the Troika body or nothing"),
 			Body == nullptr || FCString::Strcmp(Body, TEXT("0x1029adb0")) == 0);
 	}
 
-	// The prologue is a no-op for those leaves: `TaskFail` runs the Troika chain and nothing else.
-	F.Guard->bSpeciesPathBlocked = false;
-	F.Guard->SpeciesShunnedFindCount = 9;
+	// The prologue is a no-op for those leaves: `TaskFail` runs the Troika chain and nothing else
+	// (a plain combatant carries none of the arms' words).
 	F.Guard->TaskFail(13);
-	TestFalse(TEXT("no species arm ran for a plain combatant"), F.Guard->bSpeciesPathBlocked);
-	TestEqual(TEXT("and no species word was touched"), F.Guard->SpeciesShunnedFindCount, 9);
 	// The Troika body did run: `COND_TASK_FAILED` and the reason word.
 	TestTrue(TEXT("the Troika body still raised TASK_FAILED (0x1029adb0)"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
@@ -893,22 +894,22 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 		Spawned.Add(Npc);
 	}
 	FElysiumNpcWorldFixture::Quiet({ Target });
-	FElysiumNpc* const Asian = Spawned[0];
+	FElysiumNpcAsianVampire* const Asian = ElysiumTestAsSpecies<FElysiumNpcAsianVampire>(Spawned[0]);
 	FElysiumNpc* const Chang = Spawned[1];
-	FElysiumNpc* const Gargoyle = Spawned[2];
-	FElysiumNpc* const Hengeyokai = Spawned[3];
-	FElysiumNpc* const MingXiao = Spawned[4];
+	FElysiumNpcGargoyle* const Gargoyle = ElysiumTestAsSpecies<FElysiumNpcGargoyle>(Spawned[2]);
+	FElysiumNpcHengeyokai* const Hengeyokai = ElysiumTestAsSpecies<FElysiumNpcHengeyokai>(Spawned[3]);
+	FElysiumNpcMingXiao* const MingXiao = ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Spawned[4]);
 	FElysiumNpc* const Sheriff = Spawned[5];
-	FElysiumNpc* const Tzimisce = Spawned[6];
+	FElysiumNpcTzimisce* const Tzimisce = ElysiumTestAsSpecies<FElysiumNpcTzimisce>(Spawned[6]);
 
 	// `0x10362390`: codes 12..15 set `m_bPathBlocked`, 11 does not.
-	Asian->bSpeciesPathBlocked = false;
+	Asian->bAsianVampirePathBlocked = false;
 	Asian->TaskFail(11);
 	TestFalse(TEXT("TaskFail(11) on an AsianVampire sets nothing (103623c5)"),
-		Asian->bSpeciesPathBlocked);
+		Asian->bAsianVampirePathBlocked);
 	Asian->TaskFail(12);
 	TestTrue(TEXT("TaskFail(12) on an AsianVampire sets m_bPathBlocked (+0x66d4)"),
-		Asian->bSpeciesPathBlocked);
+		Asian->bAsianVampirePathBlocked);
 
 	// `0x1036d1d0`: the same window, writing `m_failSchedule`.
 	Chang->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
@@ -921,19 +922,19 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 
 	// `0x10379060`: the `FINDING_BODY` clear and `m_iShunnedFindPillar`.
 	Gargoyle->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
-	Gargoyle->SpeciesShunnedFindCount = 4;
+	Gargoyle->GargoyleShunnedFindPillar = 4;
 	Gargoyle->TaskFail(0);
 	TestFalse(TEXT("TaskFail on a Gargoyle clears FINDING_BODY (1037908e)"),
 		Gargoyle->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
 	TestEqual(TEXT("and zeroes m_iShunnedFindPillar (+0x6680)"),
-		Gargoyle->SpeciesShunnedFindCount, 0);
+		Gargoyle->GargoyleShunnedFindPillar, 0);
 
 	// `0x10380510`: blacklist, not release, while `CARRYING_BODY` stands.
 	Hengeyokai->SpeciesBlacklistedEntities.Reset();
-	Hengeyokai->SpeciesPickupTarget = Target->Handle;
+	Hengeyokai->HengeyokaiPickupTarget = Target->Handle;
 	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
 	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
-	Hengeyokai->SpeciesShunnedFindCount = 2;
+	Hengeyokai->HengeyokaiShunnedFindFish = 2;
 	Hengeyokai->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a Hengeyokai blacklists the pickup target (0x10382970)"),
 		Hengeyokai->SpeciesBlacklistedEntities.Num(), 1);
@@ -945,50 +946,45 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 	TestFalse(TEXT("FINDING_BODY is cleared (0x10381ba0)"),
 		Hengeyokai->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
 	TestTrue(TEXT("a carrying body keeps m_hPickupTarget (10381c80)"),
-		Hengeyokai->SpeciesPickupTarget == Target->Handle);
+		Hengeyokai->HengeyokaiPickupTarget == Target->Handle);
 	TestEqual(TEXT("m_iShunnedFindFish is zeroed (+0x6678)"),
-		Hengeyokai->SpeciesShunnedFindCount, 0);
+		Hengeyokai->HengeyokaiShunnedFindFish, 0);
 
 	// `0x10394090`: modes 3 and 4 touch only the motor; every other mode is set to 0 and the throw
 	// handle released.
 	MingXiao->SpeciesThrowableObjectMode = 3;
-	MingXiao->SpeciesThrowObject = Target->Handle;
+	MingXiao->MingXiaoThrowObject = Target->Handle;
 	MingXiao->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a MingXiao in mode 3 leaves the mode alone (103940a5)"),
 		MingXiao->SpeciesThrowableObjectMode, 3);
-	TestTrue(TEXT("and leaves m_hThrowObject alone"), MingXiao->SpeciesThrowObject.IsSet());
+	TestTrue(TEXT("and leaves m_hThrowObject alone"), MingXiao->MingXiaoThrowObject.IsSet());
 	MingXiao->SpeciesThrowableObjectMode = 1;
 	MingXiao->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a MingXiao in mode 1 sets the mode to 0 (0x10398d90)"),
 		MingXiao->SpeciesThrowableObjectMode, 0);
-	TestFalse(TEXT("and releases m_hThrowObject (+0x6718)"), MingXiao->SpeciesThrowObject.IsSet());
+	TestFalse(TEXT("and releases m_hThrowObject (+0x6718)"), MingXiao->MingXiaoThrowObject.IsSet());
 
-	// `0x103b0290`: no arm at all.
-	Sheriff->bSpeciesPathBlocked = false;
-	Sheriff->SpeciesShunnedFindCount = 3;
-	Sheriff->SpeciesThrowableObjectMode = 6;
-	Sheriff->SpeciesPickupTarget = Target->Handle;
+	// `0x103b0290`: no arm at all — the SheriffMan carries none of the arms' words, and its
+	// `TaskFail` is the Troika body alone.
+	Sheriff->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
 	Sheriff->TaskFail(12);
-	TestFalse(TEXT("TaskFail on a SheriffMan sets no path-blocked flag (103b0290)"),
-		Sheriff->bSpeciesPathBlocked);
-	TestEqual(TEXT("zeroes no shunned count"), Sheriff->SpeciesShunnedFindCount, 3);
-	TestEqual(TEXT("touches no throwable mode"), Sheriff->SpeciesThrowableObjectMode, 6);
-	TestTrue(TEXT("and releases no pickup target"), Sheriff->SpeciesPickupTarget.IsSet());
+	TestTrue(TEXT("TaskFail on a SheriffMan runs the Troika body (103b0290)"),
+		Sheriff->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
 	// `0x103ba350`: blacklist, then release with `CARRYING_BODY` clear.
 	Tzimisce->SpeciesBlacklistedEntities.Reset();
-	Tzimisce->SpeciesPickupTarget = Target->Handle;
+	Tzimisce->PickupTarget = Target->Handle;
 	Tzimisce->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
-	Tzimisce->SpeciesShunnedFindCount = 5;
+	Tzimisce->TzimisceShunnedFindBody = 5;
 	Tzimisce->TaskFail(0);
 	TestEqual(TEXT("TaskFail on a Tzimisce blacklists (0x103bf200)"),
 		Tzimisce->SpeciesBlacklistedEntities.Num(), 1);
 	TestFalse(TEXT("and clears FINDING_BODY (0x103be050)"),
 		Tzimisce->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
 	TestFalse(TEXT("and releases m_hPickupTarget (+0x6670)"),
-		Tzimisce->SpeciesPickupTarget.IsSet());
+		Tzimisce->PickupTarget.IsSet());
 	TestEqual(TEXT("and zeroes m_iShunnedFindBody (+0x66b8)"),
-		Tzimisce->SpeciesShunnedFindCount, 0);
+		Tzimisce->TzimisceShunnedFindBody, 0);
 	return true;
 }
 
@@ -1003,31 +999,45 @@ bool FElysiumNpcKernelConditions10TaskFailPathTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
+	FElysiumNpcWorldBuilder SecBuilder(TEXT("sections_itions10TaskFailPathTest"), 405);
+	SecBuilder.AddNpcOfClass(TEXT("asian"), FVector(400.f, 0.f, 0.f), TEXT("CNPC_VAsianVampire"));
+	SecBuilder.AddNpcOfClass(TEXT("chang"), FVector(800.f, 0.f, 0.f), TEXT("CNPC_VChangBros"));
+	SecBuilder.AddNpc(TEXT("secother"), FVector(0.f, 400.f, 0.f));
+	FElysiumNpcWorldFixture SecWorld(MoveTemp(SecBuilder));
+	FElysiumNpcAsianVampire* Asian = SecWorld.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
+	FElysiumNpcChangBros* Chang = SecWorld.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	FElysiumNpc* SecOther = SecWorld.Npc(TEXT("secother"));
+	if (Asian == nullptr || Chang == nullptr || SecOther == nullptr)
+	{
+		AddError(TEXT("the species world did not stand"));
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Asian, Chang, SecOther });
 
 	// `CNPC_VAsianVampire::TaskFail` (`0x10362390`): the window is `0xb < code && code < 0x10`.
 	for (const int32 Code : { 0, 11, 16, 100 })
 	{
-		F.Guard->bSpeciesPathBlocked = false;
-		F.Guard->AsianVampireTaskFail(Code);
+		Asian->bAsianVampirePathBlocked = false;
+		Asian->TaskFail(Code);
 		TestFalse(TEXT("codes outside 12..15 set nothing (103623c5)"),
-			F.Guard->bSpeciesPathBlocked);
+			Asian->bAsianVampirePathBlocked);
 	}
 	for (const int32 Code : { 12, 13, 14, 15 })
 	{
-		F.Guard->bSpeciesPathBlocked = false;
-		F.Guard->AsianVampireTaskFail(Code);
-		TestTrue(TEXT("codes 12..15 set m_bPathBlocked (+0x66d4)"), F.Guard->bSpeciesPathBlocked);
+		Asian->bAsianVampirePathBlocked = false;
+		Asian->TaskFail(Code);
+		TestTrue(TEXT("codes 12..15 set m_bPathBlocked (+0x66d4)"), Asian->bAsianVampirePathBlocked);
 	}
 
 	// `CNPC_VChangBros::TaskFail` (`0x1036d1d0`): the same window, a different write.
 	const int32 Expected = 0x15d;
-	F.Guard->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
-	F.Guard->ChangBrosTaskFail(11);
+	Chang->Schedule.FailScheduleOverride = ElysiumScheduleId::None;
+	Chang->TaskFail(11);
 	TestTrue(TEXT("code 11 writes no fail schedule (1036d205)"),
-		F.Guard->Schedule.FailScheduleOverride == ElysiumScheduleId::None);
-	F.Guard->ChangBrosTaskFail(12);
+		Chang->Schedule.FailScheduleOverride == ElysiumScheduleId::None);
+	Chang->TaskFail(12);
 	TestTrue(TEXT("code 12 writes m_failSchedule 0x15d (+0x5c54)"),
-		F.Guard->Schedule.FailScheduleOverride == Expected);
+		Chang->Schedule.FailScheduleOverride == Expected);
 	return true;
 }
 
@@ -1042,78 +1052,105 @@ bool FElysiumNpcKernelConditions10TaskFailBodyTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
+	FElysiumNpcWorldBuilder SecBuilder(TEXT("sections_itions10TaskFailBodyTest"), 405);
+	SecBuilder.AddNpcOfClass(TEXT("gargoyle"), FVector(400.f, 0.f, 0.f), TEXT("CNPC_VGargoyle"));
+	SecBuilder.AddNpcOfClass(TEXT("hengeyokai"), FVector(800.f, 0.f, 0.f), TEXT("CNPC_VHengeyokai"));
+	SecBuilder.AddNpc(TEXT("secother"), FVector(0.f, 400.f, 0.f));
+	FElysiumNpcWorldFixture SecWorld(MoveTemp(SecBuilder));
+	FElysiumNpcGargoyle* Gargoyle = SecWorld.NpcAs<FElysiumNpcGargoyle>(TEXT("gargoyle"));
+	FElysiumNpcHengeyokai* Hengeyokai = SecWorld.NpcAs<FElysiumNpcHengeyokai>(TEXT("hengeyokai"));
+	FElysiumNpc* SecOther = SecWorld.Npc(TEXT("secother"));
+	if (Gargoyle == nullptr || Hengeyokai == nullptr || SecOther == nullptr)
+	{
+		AddError(TEXT("the species world did not stand"));
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Gargoyle, Hengeyokai, SecOther });
 
 	// --- The shared memory-bit clear --------------------------------------------------------------
-	// `10379063`: it needs BOTH `m_NPCState == 2` and `HasInterruptCondition(0x5c)` — the INTERRUPT
-	// form, which needs an installed schedule and the bit in the custom mask, not just the raw
-	// condition. With no schedule installed the gate is shut and the bit survives.
-	F.Guard->ScheduleHost.MemoryBits = 0xffffffffu;
-	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
-	F.Guard->GargoyleTaskFail(0);
-	TestEqual(TEXT("without an installed schedule the memory bit survives (0x10269d30)"),
-		F.Guard->ScheduleHost.MemoryBits, 0xffffffffu);
+	// `10379063` clears the top bit of `m_afMemory` in COMBAT under the `0x5c` INTERRUPT. The Troika
+	// body the override then calls directly (`0x1029adb0`) masks `m_afMemory` to `0x0fffffff`, so
+	// after a whole `TaskFail` the arm's clear is subsumed: the top four bits are gone either way.
+	Gargoyle->ScheduleHost.MemoryBits = 0xffffffffu;
+	Gargoyle->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
+	Gargoyle->TaskFail(0);
+	TestEqual(TEXT("TaskFail leaves m_afMemory under the Troika body's 0x0fffffff mask"),
+		Gargoyle->ScheduleHost.MemoryBits & 0xf0000000u, 0u);
 
 	// --- The Gargoyle arm, `0x10379060` -----------------------------------------------------------
 	// **CORRECTION, pinned.** `0x10379040` never clobbers `ECX`, so `0x10379000` is reached with a
 	// live `this`: the pair is a plain `FINDING_BODY` read-then-clear and not a lost-`this` bug.
-	F.Guard->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
-	F.Guard->SpeciesShunnedFindCount = 4;
-	F.Guard->GargoyleTaskFail(0);
+	Gargoyle->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+	Gargoyle->GargoyleShunnedFindPillar = 4;
+	Gargoyle->TaskFail(0);
 	TestFalse(TEXT("the Gargoyle arm clears FINDING_BODY (1037908e)"),
-		F.Guard->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+		Gargoyle->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
 	TestEqual(TEXT("and zeroes m_iShunnedFindPillar (+0x6680)"),
-		F.Guard->SpeciesShunnedFindCount, 0);
+		Gargoyle->GargoyleShunnedFindPillar, 0);
 
 	// --- The Hengeyokai arm, `0x10380510` ---------------------------------------------------------
 	// **CORRECTION, pinned.** `0x10382970` does not release the pickup target: it appends
 	// `(handle, curtime + 20.0)` to `m_BlacklistedEntities`.
-	F.Guard->SpeciesBlacklistedEntities.Reset();
-	F.Guard->SpeciesPickupTarget = F.Other->Handle;
-	F.Guard->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
-	F.Guard->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
-	F.Guard->SpeciesShunnedFindCount = 2;
-	F.Guard->HengeyokaiTaskFail(0);
+	Hengeyokai->SpeciesBlacklistedEntities.Reset();
+	Hengeyokai->HengeyokaiPickupTarget = SecOther->Handle;
+	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+	Hengeyokai->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
+	Hengeyokai->HengeyokaiShunnedFindFish = 2;
+	Hengeyokai->TaskFail(0);
 	TestEqual(TEXT("the pickup target is blacklisted, not released (0x10382970)"),
-		F.Guard->SpeciesBlacklistedEntities.Num(), 1);
-	if (F.Guard->SpeciesBlacklistedEntities.Num() == 1)
+		Hengeyokai->SpeciesBlacklistedEntities.Num(), 1);
+	if (Hengeyokai->SpeciesBlacklistedEntities.Num() == 1)
 	{
 		TestTrue(TEXT("the blacklisted entity is the pickup target"),
-			F.Guard->SpeciesBlacklistedEntities[0].Entity == F.Other->Handle);
+			Hengeyokai->SpeciesBlacklistedEntities[0].Entity == SecOther->Handle);
 		TestEqual(TEXT("the window is twenty seconds (_DAT_1044eb0c)"),
-			F.Guard->SpeciesBlacklistedEntities[0].ExpiresAt - F.World.World.NowSeconds(), 20.0,
+			Hengeyokai->SpeciesBlacklistedEntities[0].ExpiresAt - F.World.World.NowSeconds(), 20.0,
 			0.001);
 	}
 	TestFalse(TEXT("FINDING_BODY is cleared (0x10381ba0)"),
-		F.Guard->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+		Hengeyokai->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
 	// `1038057c`: with `CARRYING_BODY` STANDING the second arm does not run, so the target survives.
 	TestTrue(TEXT("a carrying body keeps m_hPickupTarget (10381c80)"),
-		F.Guard->SpeciesPickupTarget == F.Other->Handle);
+		Hengeyokai->HengeyokaiPickupTarget == SecOther->Handle);
 	TestEqual(TEXT("m_iShunnedFindFish is always zeroed (+0x6678)"),
-		F.Guard->SpeciesShunnedFindCount, 0);
+		Hengeyokai->HengeyokaiShunnedFindFish, 0);
 
 	// With `CARRYING_BODY` CLEAR the second arm runs and releases the handle.
-	F.Guard->NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
-	F.Guard->SpeciesBlacklistedEntities.Reset();
-	F.Guard->HengeyokaiTaskFail(0);
+	Hengeyokai->NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
+	Hengeyokai->SpeciesBlacklistedEntities.Reset();
+	Hengeyokai->TaskFail(0);
 	TestFalse(TEXT("a non-carrying body releases m_hPickupTarget (10381c80)"),
-		F.Guard->SpeciesPickupTarget.IsSet());
+		Hengeyokai->HengeyokaiPickupTarget.IsSet());
 	TestEqual(TEXT("and FINDING_BODY being clear means no second blacklist (10380548)"),
-		F.Guard->SpeciesBlacklistedEntities.Num(), 0);
+		Hengeyokai->SpeciesBlacklistedEntities.Num(), 0);
 
 	// --- The Tzimisce arm, `0x103ba350` -----------------------------------------------------------
-	// The same shape with its own words, and the same two `m_bfAINPCFlags` bits.
-	F.Guard->SpeciesBlacklistedEntities.Reset();
-	F.Guard->SpeciesPickupTarget = F.Other->Handle;
-	F.Guard->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
-	F.Guard->SpeciesShunnedFindCount = 5;
-	F.Guard->TzimisceTaskFail(0);
-	TestEqual(TEXT("the Tzimisce arm blacklists too (0x103bf200)"),
-		F.Guard->SpeciesBlacklistedEntities.Num(), 1);
-	TestFalse(TEXT("and clears FINDING_BODY (0x103be050)"),
-		F.Guard->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
-	TestFalse(TEXT("and releases m_hPickupTarget (+0x6670)"), F.Guard->SpeciesPickupTarget.IsSet());
-	TestEqual(TEXT("and zeroes m_iShunnedFindBody (+0x66b8)"),
-		F.Guard->SpeciesShunnedFindCount, 0);
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("conditions10_tzimisce"), 405);
+		Builder.AddNpcOfClass(TEXT("tzimisce"), FVector::ZeroVector, TEXT("CNPC_VTzimisce"));
+		Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
+		FElysiumNpcWorldFixture World(MoveTemp(Builder));
+		FElysiumNpcTzimisce* Tzim = World.NpcAs<FElysiumNpcTzimisce>(TEXT("tzimisce"));
+		FElysiumNpc* Other = World.Npc(TEXT("other"));
+		if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzim) || !TestNotNull(TEXT("the other spawned"), Other))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Tzim, Other });
+		// The same shape with its own words, and the same two `m_bfAINPCFlags` bits.
+		Tzim->SpeciesBlacklistedEntities.Reset();
+		Tzim->PickupTarget = Other->Handle;
+		Tzim->NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);
+		Tzim->TzimisceShunnedFindBody = 5;
+		Tzim->TaskFail(0);
+		TestEqual(TEXT("the Tzimisce arm blacklists too (0x103bf200)"),
+			Tzim->SpeciesBlacklistedEntities.Num(), 1);
+		TestFalse(TEXT("and clears FINDING_BODY (0x103be050)"),
+			Tzim->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
+		TestFalse(TEXT("and releases m_hPickupTarget (+0x6670)"), Tzim->PickupTarget.IsSet());
+		TestEqual(TEXT("and zeroes m_iShunnedFindBody (+0x66b8)"),
+			Tzim->TzimisceShunnedFindBody, 0);
+	}
 	return true;
 }
 
@@ -1128,44 +1165,59 @@ bool FElysiumNpcKernelConditions10TaskFailBossTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
+	FElysiumNpcWorldBuilder SecBuilder(TEXT("sections_itions10TaskFailBossTest"), 405);
+	SecBuilder.AddNpcOfClass(TEXT("sheriff"), FVector(400.f, 0.f, 0.f), TEXT("CNPC_VSheriffMan"));
+	SecBuilder.AddNpc(TEXT("secother"), FVector(0.f, 400.f, 0.f));
+	FElysiumNpcWorldFixture SecWorld(MoveTemp(SecBuilder));
+	FElysiumNpcSheriffMan* Sheriff = SecWorld.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriff"));
+	FElysiumNpc* SecOther = SecWorld.Npc(TEXT("secother"));
+	if (Sheriff == nullptr || SecOther == nullptr)
+	{
+		AddError(TEXT("the species world did not stand"));
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Sheriff, SecOther });
+	FElysiumNpcWorldBuilder Builder(TEXT("conditions10_mingxiao"), 406);
+	Builder.AddNpcOfClass(TEXT("ming"), FVector(0.f, 0.f, 0.f), TEXT("CNPC_VMingXiao"));
+	FElysiumNpcWorldFixture MingWorld(MoveTemp(Builder));
+	FElysiumNpcMingXiao* Ming = MingWorld.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	if (!TestNotNull(TEXT("the Ming Xiao spawned"), Ming))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Ming });
 
 	// `CNPC_VMingXiao::TaskFail` (`0x10394090`). Modes 3 and 4 touch the motor and NOTHING else —
 	// in particular the mode and the throw handle survive.
 	for (const int32 Mode : { 3, 4 })
 	{
-		F.Guard->SpeciesThrowableObjectMode = Mode;
-		F.Guard->SpeciesThrowObject = F.Other->Handle;
-		F.Guard->MingXiaoTaskFail(0);
+		Ming->SpeciesThrowableObjectMode = Mode;
+		Ming->MingXiaoThrowObject = F.Other->Handle;
+		Ming->TaskFail(0);
 		TestEqual(TEXT("modes 3 and 4 leave m_eThrowableObjectMode alone (103940a5)"),
-			F.Guard->SpeciesThrowableObjectMode, Mode);
-		TestTrue(TEXT("and leave m_hThrowObject alone"), F.Guard->SpeciesThrowObject.IsSet());
+			Ming->SpeciesThrowableObjectMode, Mode);
+		TestTrue(TEXT("and leave m_hThrowObject alone"), Ming->MingXiaoThrowObject.IsSet());
 	}
 
 	// **CORRECTION, pinned.** `0x10398d90` is `m_eThrowableObjectMode = arg`, so the default arm
 	// sets the MODE to 0 and then releases the handle.
 	for (const int32 Mode : { 0, 1, 2, 5 })
 	{
-		F.Guard->SpeciesThrowableObjectMode = Mode;
-		F.Guard->SpeciesThrowObject = F.Other->Handle;
-		F.Guard->MingXiaoTaskFail(0);
+		Ming->SpeciesThrowableObjectMode = Mode;
+		Ming->MingXiaoThrowObject = F.Other->Handle;
+		Ming->TaskFail(0);
 		TestEqual(TEXT("every other mode is set to 0 (0x10398d90)"),
-			F.Guard->SpeciesThrowableObjectMode, 0);
+			Ming->SpeciesThrowableObjectMode, 0);
 		TestFalse(TEXT("and m_hThrowObject is released (+0x6718)"),
-			F.Guard->SpeciesThrowObject.IsSet());
+			Ming->MingXiaoThrowObject.IsSet());
 	}
 
-	// `CNPC_VSheriffMan::TaskFail` (`0x103b0290`): the recovered fact is the ABSENCE of an arm.
-	F.Guard->bSpeciesPathBlocked = false;
-	F.Guard->SpeciesShunnedFindCount = 3;
-	F.Guard->SpeciesThrowableObjectMode = 6;
-	F.Guard->SpeciesPickupTarget = F.Other->Handle;
-	F.Guard->SheriffManTaskFail(12);
-	TestFalse(TEXT("the sheriff sets no path-blocked flag (103b0290)"),
-		F.Guard->bSpeciesPathBlocked);
-	TestEqual(TEXT("the sheriff zeroes no shunned count"), F.Guard->SpeciesShunnedFindCount, 3);
-	TestEqual(TEXT("the sheriff touches no throwable mode"),
-		F.Guard->SpeciesThrowableObjectMode, 6);
-	TestTrue(TEXT("the sheriff releases no pickup target"), F.Guard->SpeciesPickupTarget.IsSet());
+	// `CNPC_VSheriffMan::TaskFail` (`0x103b0290`): the recovered fact is the ABSENCE of an arm — the
+	// SheriffMan carries none of the arms' words, and its body is the Troika one alone.
+	Sheriff->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+	Sheriff->TaskFail(12);
+	TestTrue(TEXT("the sheriff's TaskFail is the Troika body (103b0290)"),
+		Sheriff->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	return true;
 }
 

@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelLifecycleShared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -69,9 +70,6 @@ namespace
 	// re-roll and the blocked latch both compare against.
 	constexpr double GStandoffElapsedThresholdSeconds = ElysiumNpcTunables::MinusThousandthDouble;
 
-	// The camera's model fallback (`0x103689c0`), verbatim from `.rdata` `0x1062f790`.
-	const TCHAR* const GCameraNullModel = TEXT("models/null.mdl");
-
 	// `CAI_BaseNPC::FindNamedEntity` (`0x10279090`): the selector names, verbatim from `.rdata`, and
 	// the two retired literals with their own rate-limit counters.
 	const TCHAR* const GSelPlayer = TEXT("!player");                    // 0x10549184
@@ -90,18 +88,6 @@ namespace
 	int32 GRetiredSelfWarnings = 0;
 	int32 GRetiredPlayerWarnings = 0;
 	constexpr int32 GRetiredWarningLimit = 5;
-
-	// `DAT_1093d638` / `DAT_1093d63c` — `CNPC_VWerewolf`'s search-timer pair. FILE STATICS in retail,
-	// shared by every werewolf on the map, which is the recovered fact and not an accident.
-	uint64 GSearchTimerCycles = 0;
-
-	// The rdtsc stand-in. This runtime has no cycle counter seam; `FPlatformTime::Cycles64` is the
-	// same shape (a monotonic tick count) and the pair is a profiling aid with no game-visible
-	// consumer, so the swap changes no event order. Named modernization.
-	uint64 LifecycleCycles()
-	{
-		return FPlatformTime::Cycles64();
-	}
 
 	// `CAI_Hint::Spawn`'s per-hint-type default block (`0x102d0b60`). One row per recovered type,
 	// with the hex the body writes beside each float.
@@ -477,31 +463,6 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 	return Record;
 }
 
-void FElysiumNpc::WerewolfScriptUnhideTail(double Now)
-{
-	// 0x103d4a20 — the base, then four writes in this order: the stamp first, then the three timers
-	// high-to-low. Retail's order is preserved because a reader between them would see it.
-	WerewolfUnhideStamp = Now;   // +0x66ec := curtime (DAT_1070b228+0xc)
-	WerewolfMorphTimerC = 0.f;   // +0x66d8
-	WerewolfMorphTimerB = 0.f;   // +0x66d4
-	WerewolfMorphTimerA = 0.f;   // +0x66a4
-}
-
-void FElysiumNpc::GhoulCroucherScriptUnhideTail()
-{
-	// 0x1037c2f0 — the base, then `m_hBurningParticle` (`+0x6670`) resolved through the handle table
-	// and its vtable `+0x138` (slot 78) dispatched when it resolves to a live entity. Retail does
-	// NOT clear the handle, so neither does this.
-	if (World == nullptr || !BurningParticle.IsSet())
-	{
-		return;
-	}
-	if (FElysiumEntity* Particle = World->Resolve(BurningParticle))
-	{
-		Particle->ScriptUnhide();
-	}
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 103 `Spawn` — the species bodies.
 // -------------------------------------------------------------------------------------------------
@@ -620,22 +581,6 @@ void FElysiumNpc::ConversationPlacePrecache(const FString& SoundLoop, const FStr
 		Out.Add(FPrecacheRequest{ SoundLoop, /*bModel=*/false, /*bWarnedInvalid=*/false });
 	}
 	Out.Add(FPrecacheRequest{ SoundOnce, /*bModel=*/false, /*bWarnedInvalid=*/false });
-}
-
-FString FElysiumNpc::CameraPrecacheModel(const FString& AuthoredModel)
-{
-	// 0x103689c0, shared with `CNPC_VCameraSecurity`: the model key falls back to `models/null.mdl`
-	// through vtable `+0x350` (`SetModelName`) when it is unset OR empty — retail reads the key
-	// three times to decide, which is one question.
-	//
-	// **Not ported here:** the tail. After `PrecacheModel` the body dispatches slot 452 (`+0x710`),
-	// rejects the spawn outright (`Msg("ERROR: Rejecting spawn of %s as e...")` plus
-	// `thunk_FUN_101cd940`) when it answers false, zeroes `m_iInterestingPlaceGroups` (`+0x62dc`),
-	// and then runs the AI-node link-table integrity check (`0x102f9970` / `0x102f9920` /
-	// `0x102f9950`) that `DevMsg`s "is being spawned after links have been...". **Unrecovered here:**
-	// this substrate has no AI node graph and no link table, so there is nothing to check; the
-	// rejection arm needs slot 452, which is a later story's.
-	return AuthoredModel.IsEmpty() ? FString(GCameraNullModel) : AuthoredModel;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -925,109 +870,9 @@ bool FElysiumNpc::HasNonDefaultVelocity() const
 	return Velocity.X != 0.0 || Velocity.Y != 0.0 || Velocity.Z != 0.0;
 }
 
-int32 FElysiumNpc::UnawareTableEntry(const TCHAR* RetailTable, int32 Index)
-{
-	// SEAM for `DAT_1063abcc` and `DAT_1063abdc`. **Unrecovered:** neither table's contents nor its
-	// purpose (message, sound or activity selection) is settled anywhere in the corpus. The indexing
-	// is the recovered body and is above; this is the row it would read.
-	(void)RetailTable;
-	(void)Index;
-	return 0;
-}
-
-int32 FElysiumNpc::UnawareTableA() const
-{
-	// `FUN_1037b870` — `*(undefined4 *)(&DAT_1063abcc + *(int *)(this + 0x6668) * 4)`.
-	return UnawareTableEntry(TEXT("DAT_1063abcc"), UnawareType);
-}
-
-int32 FElysiumNpc::UnawareTableB() const
-{
-	// `FUN_1037b890` — the same shape over `DAT_1063abdc`, same index.
-	return UnawareTableEntry(TEXT("DAT_1063abdc"), UnawareType);
-}
-
-int32 FElysiumNpc::ProxySlotIndexOf(const FElysiumEntity* Proxy) const
-{
-	// SEAM for `proxy->+0x6660`. `CNPC_VMingXiao`'s blood-proxy subsystem has no producer here, so
-	// this answers `INDEX_NONE` and `ProxyReadyTimer` takes its "the slot did not resolve" arm.
-	(void)Proxy;
-	return INDEX_NONE;
-}
-
-bool FElysiumNpc::ProxyReadyTimer(const FElysiumEntity* Proxy, double Now)
-{
-	// `FUN_10397b40`, arm by arm.
-	//
-	// 1. A null argument answers false.
-	if (Proxy == nullptr)
-	{
-		return false;
-	}
-	// 2. `curtime < m_flProxyReadyTimer` (`+0x66a4`) answers false — the cooldown is not up. The
-	//    word is family **Bosses**' `MingXiaoProxyReadyTimer`, read through its owner.
-	if (Now < MingXiaoProxyReadyTimer)
-	{
-		return false;
-	}
-	// 3. The argument's own slot index (`proxy+0x6660`) must index back to the argument through
-	//    `this+0x66a8 + slot*4`. Anything else answers false.
-	const int32 Slot = ProxySlotIndexOf(Proxy);
-	if (Slot < 0 || Slot >= MingXiaoProxySlots)
-	{
-		return false;
-	}
-	const FElysiumEntity* Registered =
-		(World && Proxies[Slot].IsSet()) ? World->Resolve(Proxies[Slot]) : nullptr;
-	if (Registered != Proxy)
-	{
-		return false;
-	}
-	// 4. An already-registered slot answers TRUE at once, before the census below.
-	if (bProxyRegistered[Slot])
-	{
-		return true;
-	}
-	// 5. Count the six slots that are either a live handle OR already registered. Only a count of
-	//    ZERO registers this slot and answers true — one proxy at a time.
-	int32 Taken = 0;
-	for (int32 i = 0; i < MingXiaoProxySlots; ++i)
-	{
-		const bool bLive =
-			World && Proxies[i].IsSet() && World->Resolve(Proxies[i]) != nullptr;
-		if (bLive || bProxyRegistered[i])
-		{
-			++Taken;
-		}
-	}
-	if (Taken < 1)
-	{
-		bProxyRegistered[Slot] = true;
-		return true;
-	}
-	return false;
-}
-
-void FElysiumNpc::StartSearchTimer()
-{
-	// `CNPC_VWerewolf::StartSearchTimer` (`0x103d1ca0`): `rdtsc` into the STATIC pair
-	// `DAT_1093d638`/`DAT_1093d63c`, shared by every werewolf on the map rather than kept per NPC.
-	// That is the recovered fact and is why this is a file static here too.
-	GSearchTimerCycles = LifecycleCycles();
-}
-
-bool FElysiumNpc::ReportSearchTimer(bool bPassThrough)
-{
-	// `CNPC_VWerewolf::ReportSearchTimer` (`0x103d1d60`): `rdtsc` again, SUBTRACT the stored pair in
-	// place so the statics now hold the elapsed cycles, and pass the second argument through
-	// unchanged. Retail reports nothing else — the pair is the report.
-	GSearchTimerCycles = LifecycleCycles() - GSearchTimerCycles;
-	return bPassThrough;
-}
-
 uint64 FElysiumNpc::SearchTimerElapsedCycles()
 {
-	return GSearchTimerCycles;
+	return NpcKernelLifecycleShared::GSearchTimerCycles;
 }
 
 void FElysiumNpc::MotorResetToDefault()

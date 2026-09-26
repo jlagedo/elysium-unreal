@@ -5,12 +5,16 @@
 // `CNPC_VHengeyokai` (primary vtable `0x104b683c`), built by `npc_VHengeyokai` factory
 // `0x1037e610`.
 //
-// Story 5 step 2 stands the class so the classname's factory builds the retail class and the class
-// answers its own census row. Its overrides and own datamap words still sit on `FElysiumNpc` and
-// move here in steps 3-4 (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`).
+// The classname's factory builds this class and it answers its own census row (story 5 step 2). Its
+// slot overrides, own bodies, own datamap words and their bindings live here (steps 3-4,
+// `docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`); the words a Troika body still
+// reads stay on `FElysiumNpc` until step 11.
 class FElysiumNpcHengeyokai : public FElysiumNpcVampire
 {
 public:
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VHengeyokai");
+
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual void Precache() override;
@@ -25,4 +29,103 @@ public:
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
 	virtual void OnScheduleChange(int32 NewSchedule) override;
+
+	// +0x6678 m_iShunnedFindFish (`CNPC_VHengeyokai`): its own shunned-find counter, written by
+	// `NPCInit` (`0x1037fa70`) and `TaskFail` (`0x10380510`).
+	int32 HengeyokaiShunnedFindFish = 0;
+	// +0x6680 m_ePathMode (`CNPC_VHengeyokai`, walked; not in its datamap, so never saved): the
+	// Tzimisce's `m_ePathMode` (+0x668c) mirrored on this class. `NPCInit` `0x1037fa70` zeroes it,
+	// `StartTask` `0x103805d0` sets 2 when routing to `m_hPickupTarget`, and `OnScheduleChange`
+	// `0x10383090` zeroes it; no slot-410 override reads it (story 5 step 4 split it off the
+	// Tzimisce's word, which one port member had carried for both).
+	int32 HengeyokaiPathMode = 0;
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	/** `thunk_FUN_10381c80(this)` — `CNPC_VHengeyokai`'s carry-form probe, `m_bfAINPCFlags` (`+0x14b8`)
+	 *  bit `0x20 CARRYING_BODY`. Not a seam: the port carries the word. */
+	bool HengeyokaiCarryFormBit() const;
+
+	// From `ElysiumNpcKernelBosses.inl`.
+	// `CNPC_VHengeyokai`'s pickup chain. `+0x6664`/`+0x6668`/`+0x6684`/`+0x6690` are its own datamap
+	// words; family Motor's `PickupTarget`/`PickupTargetPos` are `CNPC_VTzimisce`'s at +0x6670/+0x6674
+	// and are a different species' fact at a different offset.
+	FElysiumEntityHandle HengeyokaiPickupTarget;             // +0x6664 m_hPickupTarget
+	int32 HengeyokaiPickupTargetGrabBone = 0;                // +0x6668 m_iPickupTargetGrabBone
+	FVector HengeyokaiPickupTargetPos = FVector::ZeroVector;  // +0x6684 m_vecPickupTargetPos, SOURCE units
+	FElysiumEntityHandle HengeyokaiPhysicsAnimlink;          // +0x6690 m_hPhysicsAnimlink
+	// +0x6698 m_SecurePickupParam, the `MvsnSec::CSecureType<int>` whose encoded word is +0x66a0.
+	// Carried decoded (see the standing facts above). `0x10382670` hands it to the carried ragdoll's
+	// `+0x2fc` and `+0x424`; nothing in layers 0–9 writes it but the constructor `0x1037e680`.
+	int32 HengeyokaiPickupParam = 0;
+	/** `+0x66a4 CNPC_VHengeyokai::m_BlacklistedEntities` — the store `0x10382970` appends to and
+	 *  `0x10382aa0`/`0x10382b30` walk. `+0x66a8` (allocation count), `+0x66ac` (grow size), `+0x66b0`
+	 *  (size) and `+0x66b4` (element pointer) are `CUtlMemory`'s own bookkeeping and have no counterpart
+	 *  on a `TArray`; the constructor's reserve of 8 rows is not observable and is not reproduced. */
+	TArray<FBlacklistedEntity> HengeyokaiBlacklist;
+	void SetCarriedRagdollHeld(const FElysiumEntityHandle& Carried, bool bHeld);
+	/** `0x10381e90` — `CNPC_VHengeyokai`'s grab-bone search. Walks the fixed two-name bone table
+	 *  (`PTR_s_Bone01_1063bd88`: `"Bone01"`, `"Bone04"`, terminated by an empty string) on the grab
+	 *  target, keeps the bone whose world position is nearest this NPC's own `GetOrigin()` (slot 220)
+	 *  inside 1025 units, and writes it to `m_vecPickupTargetPos` / `m_iPickupTargetGrabBone`. When the
+	 *  target does not cast, it writes the target's own origin with bone 0 and answers true. */
+	bool FindPickupTargetGrabBone(const FElysiumEntity* InTarget);
+	/** The two bone names `FindPickupTargetGrabBone` walks, in retail's order, `nullptr`-terminated. */
+	static const TCHAR* const* PickupGrabBoneNames();
+	/** `0x103822a0` — `CNPC_VHengeyokai`'s facing gate on its grab target: the 2-D yaw of the vector
+	 *  from me to `Target` versus `GetAngles().y`, wrapped by `UTIL_AngleDiff`, must land inside
+	 *  `[-20, +20]` degrees. Answers TRUE when `Target` is null or `m_hPickupTarget` does not resolve —
+	 *  retail's own early-out, and the permissive one. */
+	bool FUN_103822a0(const FElysiumEntity* InTarget) const;
+	/** The pure rule behind it, so the cone can be measured without a world: retail's own
+	 *  `UTIL_AngleDiff(UTIL_VecToYaw(delta), yaw)` inside `[_DAT_1049ae98, _DAT_1044eb0c]`. `Delta` is
+	 *  in THIS world's axes and `YawDegrees` is Source's, exactly as family Facing's readers take them. */
+	static bool WithinPickupFacingCone(const FVector& Delta, float YawDegrees);
+	/** `0x10382970` — append `Entity` to `m_BlacklistedEntities` with an expiry of
+	 *  `curtime + _DAT_1044eb0c` (20 s). Retail's `CUtlVector` grow (4, then double, then by the grow
+	 *  size) and the zero-length `memmove` it always performs are bookkeeping with no observable effect
+	 *  and are not reproduced; the APPEND and the STAMP are. */
+	void AddBlacklistedEntity(const FElysiumEntity* Entity);
+	/** `0x10382b30` — the index of `Entity` in `m_BlacklistedEntities`, or `INDEX_NONE`. Retail resolves
+	 *  each stored `EHANDLE` and compares the POINTER, so a dead handle matches a null candidate. */
+	int32 FindBlacklistedEntity(const FElysiumEntity* Entity) const;
+	/** `0x10382aa0` — is `Entity` still blacklisted? Found and not yet expired answers true; found and
+	 *  expired swap-removes the row with the LAST one and answers false; not found answers false.
+	 *  Byte-for-byte the same body as `CNPC_VBaseBoss`'s `0x10366400` at `+0x665c`, which is family
+	 *  **Species**' row — the rule below is written once and both stores can use it. */
+	bool IsEntityBlacklisted(const FElysiumEntity* Entity);
+	/** The pure rule over any such store, so both species' arrays are measurable without a world.
+	 *  `Index` is what `FindBlacklistedEntity` answered. */
+	static bool BlacklistTestAndExpire(TArray<FBlacklistedEntity>& Store, int32 Index, double Now);
+
+	/** Slot 9's string, the one line `CNPC_VHengeyokai#124` adds. Retail takes the FIRST word of
+	 *  whatever slot 9 returns and substitutes the empty string for null. **SEAM**: slot 9 is a
+	 *  generated stub owned by another story; answers the empty string, which is retail's null arm. */
+	FString HengeyokaiSlot9String() const;
+
+	// From `ElysiumNpcKernelLifecycle19.inl`.
+	static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
+	/** `CNPC_VHengeyokai` species words. `SpeciesShunnedFindCount` already carries `+0x6678`. */
+	bool bHengeyokaiJustFoundFish = false;       // +0x667c
+	bool bHengeyokaiInSharkForm = false;         // +0x6694
+	double HengeyokaiShunnedFishTimer = 0.0;     // +0x6670
+
+	// From `ElysiumNpcKernelMisc.inl`.
+	/** `0x10381ca0` — the read half of the pair above: has `m_flFishTimer` (`+0x666c`) reached curtime?
+	 *  NAMED `FormBitTimerExpired`, not 29c's `FormBit`: that name is the setter's, and one method
+	 *  cannot be both a `void(bool)` and a `bool()`. */
+	bool FormBitTimerExpired() const;
+
+	// From `ElysiumNpcKernelMotor.inl`.
+	/** `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s cancel of the motor's queued facing/link
+	 *  state. **SEAM**: shares the Facing family's finding that this mover keeps no facing queue. */
+	void MotorCancelLinkFacing();
+	/** `FUN_10382d20` `0x10382d20` — the other half of the same unrecovered link object: cancel the
+	 *  motor's queued facing/link state with -1. */
+	void ClearLinkActivity();
+
+	/** `CNPC_VHengeyokai` thaw side-effect count (`0x10383130`). */
+	int32 HengeyokaiThawCalls = 0;
+	/** `m_nSkin` (`+0x670`) as Hengeyokai's translate body reads it. */
+	int32 HengeyokaiSkin = 0;
 };

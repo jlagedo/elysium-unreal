@@ -1664,42 +1664,6 @@ int32 FElysiumNpc::SelectCombatSchedule()
 	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
 }
 
-void FElysiumNpc::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
-{
-	// The holster/draw switch of `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`) and its copy
-	// in `CNPC_VGuard1`'s (`0x1037d020`). Only those classes' `OnStateChange` overrides call it
-	// (story 5 step 3); the Troika body `0x102ae140` does not touch the weapon.
-	FElysiumItem* Active = Inventory.Active(*this);
-	FElysiumWeapon* Weapon = Active != nullptr ? Active->AsWeapon() : nullptr;
-	if (Weapon == nullptr)
-	{
-		// `GetActiveWeapon()` answered null, and both arms of the retail switch are guarded by it.
-		return;
-	}
-
-	switch (NewState)
-	{
-	case EElysiumNpcState::Idle:
-		// State 1. `GetActiveWeapon()->Hide()`.
-		Weapon->Hide(this);
-		break;
-	case EElysiumNpcState::Alert:
-	case EElysiumNpcState::Combat:
-		// States 2 and 3. `GetActiveWeapon()->Unhide()`.
-		//
-		// SEAM: retail's third unhide arm is state 11, which this runtime's `EElysiumNpcState` has
-		// no equivalent for — the enum's other members (Scripted, Prone, Dead) are this port's own
-		// and none of them is retail's 11. Nothing is known about what 11 means beyond the fact that
-		// it draws the weapon, so no port state is mapped onto it rather than guessing one.
-		Weapon->Unhide(this);
-		break;
-	default:
-		// Every other state falls straight through to the Troika base, which writes nothing. That
-		// includes this runtime's Scripted, Prone and Dead.
-		break;
-	}
-}
-
 void FElysiumNpc::PumpStateChange()
 {
 	const EElysiumNpcState Now = Mind.State();

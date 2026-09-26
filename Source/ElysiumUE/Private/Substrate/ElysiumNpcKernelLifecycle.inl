@@ -64,31 +64,12 @@ float Field_0x1ddc = 0.f;
 int32 Field_0x2830 = 0;
 bool bField_0x30e9 = false;
 
-/** `+0x66a4` / `+0x66d4` / `+0x66d8` / `+0x66ec` — `CNPC_VWerewolf`'s morph-timer block, which its
- *  own `ScriptUnhide` (`0x103d4a20`) zeroes and stamps. The first three are timers, the fourth an
- *  absolute curtime stamp (`DAT_1070b228+0xc`), carried as `double` like every other stamp here.
- *  NOTE `+0x66a4` is `CNPC_VMingXiao::m_flProxyReadyTimer` on a MingXiao — one offset, two species,
- *  which is exactly why these are declared by retail class rather than by offset alone. */
-float WerewolfMorphTimerA = 0.f;    // +0x66a4 CNPC_VWerewolf (walked)
-float WerewolfMorphTimerB = 0.f;    // +0x66d4 CNPC_VWerewolf (walked)
-float WerewolfMorphTimerC = 0.f;    // +0x66d8 CNPC_VWerewolf (walked)
-double WerewolfUnhideStamp = 0.0;   // +0x66ec CNPC_VWerewolf (walked)
-
-/** `+0x6670 CNPC_VGhoulCroucher::m_hBurningParticle` — the particle entity its `ScriptUnhide`
- *  (`0x1037c2f0`) kills on the way back up. */
-FElysiumEntityHandle BurningParticle;
-
-/** `+0x6668 CNPC_VGhoulCroucher::m_nUnawareType`, the index `UnawareTableA`/`UnawareTableB`
- *  (`0x1037b870` / `0x1037b890`) read the two static tables with. */
-int32 UnawareType = 0;
-
 /** `CNPC_VMingXiao`'s proxy block, read by `ProxyReadyTimer` (`0x10397b40`): `+0x66a4` the ready
  *  stamp (family **Bosses**' `MingXiaoProxyReadyTimer`), `+0x668c` the six-slot handle array (family
  *  **Squad**'s `Proxies`) and `+0x6684` the six-byte registered flags — the only one of the three
  *  that had no owner, so it lands here. SIX is the loop bound in the body (`iVar6 < 6`), and it is
  *  the same six as those two arrays'. */
 static constexpr int32 MingXiaoProxySlots = 6;
-bool bProxyRegistered[MingXiaoProxySlots] = { false, false, false, false, false, false };
 
 /** SEAM for `thunk_FUN_101618a0(player)` — the `!playercontroller` half of slot 559
  *  `FindNamedEntity` (`0x10279090`). Retail resolves the player's own scene stand-in from the
@@ -177,15 +158,6 @@ struct FCineUnhideRecord
  *  address; this body does not repeat it. */
 FCineUnhideRecord TroikaScriptUnhideTail();
 
-/** `CNPC_VWerewolf::ScriptUnhide` (`0x103d4a20`) — the base, then `+0x66ec := curtime` and
- *  `+0x66d8`/`+0x66d4`/`+0x66a4 := 0`, in that write order. */
-void WerewolfScriptUnhideTail(double Now);
-
-/** `CNPC_VGhoulCroucher::ScriptUnhide` (`0x1037c2f0`) — the base, then resolve
- *  `m_hBurningParticle` and, when it resolves to a live entity, dispatch its vtable `+0x138`
- *  (slot 78, the particle's own `ScriptUnhide`). Retail does NOT clear the handle. */
-void GhoulCroucherScriptUnhideTail();
-
 // The three tails above are not yet reached from `FElysiumEntity::ScriptUnhide`: the NPC's slot-78
 // chain is unwired (story 5 step 3 records the species rows as residue), so there is no dispatcher.
 
@@ -243,12 +215,6 @@ struct FPrecacheRequest
  *  retail fact and is reproduced. */
 static void ConversationPlacePrecache(const FString& SoundLoop, const FString& SoundOnce,
 	TArray<FPrecacheRequest>& Out);
-
-/** `CNPC_VCamera::Precache` (`0x103689c0`), shared with `CNPC_VCameraSecurity` — fall the model key
- *  back to `models/null.mdl` when it is unset or empty, precache it, then run the link-table
- *  integrity check. Answers the model that was precached; `OutLinkWarning` is retail's
- *  "spawned after links have been..." arm. */
-static FString CameraPrecacheModel(const FString& AuthoredModel);
 
 // --- Slot 110 `KeyValue`: the AI-helper-entity cascade ---------------------------------------------
 
@@ -361,38 +327,6 @@ bool TestField_0x2830() const;
  *  (`+0x03d4`) different from the static default vector `DAT_1070d1b0/b4/b8`? That vector is the
  *  always-zero one `GetGroundVelocityToApply` (slot 210) answers, so this is "am I moving at all". */
 bool HasNonDefaultVelocity() const;
-
-/** `CNPC_VGhoulCroucher`'s two static tables, indexed by `m_nUnawareType` (`+0x6668`):
- *  `DAT_1063abcc` (`0x1037b870`) and `DAT_1063abdc` (`0x1037b890`). **Unrecovered**: the tables'
- *  purpose — message, sound or activity selection — is not settled and neither table's contents are
- *  read anywhere the corpus pins. The INDEXING is the whole recovered body and is what lands. */
-int32 UnawareTableA() const;
-int32 UnawareTableB() const;
-
-/** SEAM for the two tables above. Both answer 0 and name their retail global; the day either is
- *  decoded, the row lands here and both readers come right. */
-static int32 UnawareTableEntry(const TCHAR* RetailTable, int32 Index);
-
-/** `CNPC_VMingXiao`'s `FUN_10397b40` — may `Proxy` take a proxy slot right now? Retail, arm by arm:
- *  a null argument answers false; `curtime < m_flProxyReadyTimer` answers false; the argument's own
- *  `+0x6660` slot index must resolve back to the argument through `+0x66a8`; an already-registered
- *  slot answers TRUE at once; otherwise count the six slots that are either live handles or
- *  registered, and only a count of ZERO registers this slot and answers true. */
-bool ProxyReadyTimer(const FElysiumEntity* Proxy, double Now);
-
-/** SEAM for `proxy->+0x6660`, the proxy's own slot index. `CNPC_VMingXiao`'s blood-proxy subsystem
- *  has no producer in this substrate, so this answers `INDEX_NONE` and every call to
- *  `ProxyReadyTimer` takes the "the slot did not resolve" arm. */
-int32 ProxySlotIndexOf(const FElysiumEntity* Proxy) const;
-
-/** `CNPC_VWerewolf::StartSearchTimer` (`0x103d1ca0`) and `ReportSearchTimer` (`0x103d1d60`) — a
- *  profiling pair over `rdtsc`, stamped into the STATIC pair `DAT_1093d638`/`DAT_1093d63c` and so
- *  **shared across every instance** rather than kept per NPC. The report subtracts and leaves the
- *  elapsed cycles in the same pair, and passes its second argument through unchanged.
- *
- *  Ported as file statics for exactly that reason. `ReportSearchTimer` answers its passthrough. */
-static void StartSearchTimer();
-static bool ReportSearchTimer(bool bPassThrough);
 
 /** The elapsed cycle count `ReportSearchTimer` left behind — the read side of the static pair, for
  *  a test and for a debug panel. */

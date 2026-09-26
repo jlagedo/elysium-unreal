@@ -2,7 +2,8 @@
   "scope": "Step 4 moves the introduced species' bodies, words and bindings onto their final class files in one commit. Deferred classes (steps 7-10) keep their bodies and words on FElysiumNpc in the listed transitional homes; Troika and base bodies do not move (steps 5-6).",
   "owner_decisions": {
     "2026-09-26 preflight commit": "Packet 4a (records and checker, no C++) lands as its own prerequisite commit, as 3a did. The atomic step-4 commit holds all C++, generated output, tests and oracle updates.",
-    "2026-09-26 class tables": "An introduced species' row in a class-keyed table becomes the body of its own override (the row is the body). A table is deleted once only deferred rows or non-dispatch readers remain; the survivors are listed here."
+    "2026-09-26 class tables": "An introduced species' row in a class-keyed table becomes the body of its own override (the row is the body). A table is deleted once only deferred rows or non-dispatch readers remain; the survivors are listed here.",
+    "2026-09-26 scurrying scope": "Step 4 does not port CNPC_VScurrying GatherConditions 0x103ac500 or StartTask 0x103ac740: both are band 19-29 rule rows story 8 pass I lands (Conditions19, StartTask19), onto the tree step 4 builds. Step 4 binds the eight keys and asserts ScurryingShouldDetect 0x103acac0 (incl. 0x103acb1a) and ScurryingFindFleeDestination 0x103acba0 directly on authored values."
   },
   "rules": {
     "move": "A member moves to the closest class over its users when every user is a species definition or another moving member (to a fixed point). A ported body retail places on an introduced species stands on that owner when every port user stands on it or beneath it; an unwired body (no port user) stands on its retail owner; an address-less unwired member follows the species state and bodies it names (data access). Users include free functions and header code, which keep a member on FElysiumNpc.",
@@ -10,8 +11,16 @@
     "stay": "A virtual the species override (the surface), a Troika or base body (its address is below the V-species objects), Troika API the moved bodies still call, a helper two sibling lines share (a sibling cannot call a species member), a species word a Troika activity predicate reads (the activity alias tables live to step 11), and a class table a Troika body or free code reads (`stay:data-query table`).",
     "deferred": "A member a deferred class's body owns or reads stays on FElysiumNpc until that class folds (`deferred:<step>`).",
     "retail_owner": "The kernel ledger's direct-call owner of the member's addresses, proposed from GOverrides' introducing class and direct callers (graph.tsv). Only addresses inside the V-species objects (0x1035c000-0x103e2000, and CPayphone's 0x101aa000-0x101ac000) can be species bodies; an address past them is a cited global, not a body.",
-    "bindings": "fields-step4.tsv is every record of an introduced species' own datamap in the pinned replay (the empty terminator row of Camera/Human/Vampire/... names nothing and is skipped). A field binds on its declaring class's descriptor only; descendants inherit it through the descriptor chain. An input binds a ported body or an explicit pending seam; an output is a generated output-name row.",
-    "saves": "Retail saves a species word only through its datamap SAVE row (or a class's own Save/Restore body). Step 4 adds no blob persistence for species words without one; they take their constructor defaults on restore, as retail."
+    "bindings": "fields-step4.tsv is every record of an introduced species' own datamap in the pinned replay (the empty terminator row of Camera/Human/Vampire/... names nothing and is skipped). The class-qualified species shape map (ElysiumNpcKernelSpeciesShapeMap.cpp) answers every field row by (declaring class, offset): `bind` an existing carrier, `declare` a new one, `shadow` a re-declared Troika word onto the inherited storage, or `absent` with the word's retail accessors. A keyed row registers under its external, a SAVE-only row under its retail member name, an array word once per element (`m_rhProxies[3]`), all on the declaring class's descriptor only; descendants inherit through the descriptor chain. An input binds a ported body or an explicit pending seam; an output is a generated output-name row.",
+    "saves": "Retail saves a species word only through its datamap SAVE row (or a class's own Save/Restore body). Step 4 adds no blob persistence for species words without one; they take their constructor defaults on restore, as retail.",
+    "declare": "A new member is declared for every KEY row (authored data must land and be saved) and for each word a split carrier stood for. A SAVE-only word no ported body reads or writes stays `absent`: saving a word nothing writes restores its constructor value either way, and the map row names its retail accessors for the story that ports them.",
+    "words_follow_the_datamap": "A species word lives on the class whose datamap declares it, whatever its port users: a body of another class that reads it (a head reading its tentacle, a shared pickup helper) reaches it through a typed instance. The binding manifest therefore overrides the move manifest's users-based placement for words (moves-step4.tsv rows corrected in 4b).",
+    "base_seams_stay": "A seam for a base engine call stays on FElysiumNpc (`stay:troika api`) even when one species is its only caller; a seam for a species' own retail callee moves with that species (SeverTentacle, NearestPointOnEntity, FireWerewolfZoneTrigger).",
+    "adapters_stay_helpers": "An override that converts its arguments (GetEnemy(), state ids, blocker handles) or runs a gate or prologue before the body keeps the body as an own helper (`move`), not a collapse; only a pure forward with the override's own parameters is inlined.",
+    "typed_species_access": "A body that reads another class's words reaches them through FElysiumNpc::AsSpecies<T>(), gated on the C++ class's own census row (OwnRetailClassDerivesFrom); where retail tests the class first (RTDynamicCast / IsRetailClass) the typed view follows that test. No unchecked downcast.",
+    "protected_troika_state": "FElysiumNpc's former private section is protected, so species bodies reach Troika state as retail's derived classes do.",
+    "splits_land_with_the_last_reader": "A split carrier splits when the last branch reading it moves (4g), each class taking its own word.",
+    "record_only_tables": "A class table whose every row names a body the class's override already owns is deleted, not collapsed; its test asserts the census body and the override's behaviour (slots 615, 141, 516, 68/69)."
   },
   "packets": {
     "4a": "preflight: records, checker, test inventory (separate commit)",
@@ -28,35 +37,196 @@
     "note": "Test files naming a member that moves or collapses (tests-inventory.json in the evidence root); each reference is re-pinned on a typed instance of the owner, never by casting a different class.",
     "files": 35,
     "references": 2134,
-    "heaviest": ["ElysiumNpcKernelSpeciesMisc10Tests.cpp", "ElysiumNpcKernelBossesTests.cpp", "ElysiumNpcKernelSpeciesTests.cpp", "ElysiumNpcKernelDamageTests.cpp", "ElysiumNpcKernelPositionsTests.cpp", "ElysiumNpcKernelHintsTests.cpp", "ElysiumNpcKernelSpeciesLifecycle10Tests.cpp"]
+    "heaviest": [
+      "ElysiumNpcKernelSpeciesMisc10Tests.cpp",
+      "ElysiumNpcKernelBossesTests.cpp",
+      "ElysiumNpcKernelSpeciesTests.cpp",
+      "ElysiumNpcKernelDamageTests.cpp",
+      "ElysiumNpcKernelPositionsTests.cpp",
+      "ElysiumNpcKernelHintsTests.cpp",
+      "ElysiumNpcKernelSpeciesLifecycle10Tests.cpp"
+    ]
   },
   "findings": [
     {
       "id": "scurrying-detection-unreached",
       "finding": "The tutorial rats' eight keys become effective in step 4, but nothing in the port reaches ScurryingShouldDetect 0x103acac0 or ScurryingFindFleeDestination 0x103acba0: their retail callers, CNPC_VScurrying GatherConditions 0x103ac500 (slot 433, COND 0x78) and StartTask 0x103ac740 (TASK 0x14a), are unported residue (overrides-step3.tsv). Step 4 moves both bodies onto FElysiumNpcScurrying, binds the keys and asserts the bodies on authored values, including 0x103acb1a. Played detection and fright need the residue ports (story 8) unless the owner widens step 4.",
-      "evidence": ["kernel_verdicts.tsv 103acac0, 103acba0, 103ac500", "overrides-step3.tsv CNPC_VScurrying 433 residue"]
+      "evidence": [
+        "kernel_verdicts.tsv 103acac0, 103acba0, 103ac500",
+        "overrides-step3.tsv CNPC_VScurrying 433 residue"
+      ]
     },
     {
       "id": "maker-reads-species-words",
       "finding": "CNPCMaker_Zombie and CNPCMaker_Fleshpile read or write species words (the zombie's m_iZombieAIType +0x6678, the Andrei's m_iActiveRunnerCount +0x66b8 and m_iKillCount +0x66bc). Their storage stays on FElysiumNpc (deferred:8) and the species descriptors bind to it until step 8 folds the makers.",
-      "evidence": ["FElysiumNpcMaker::FUN_1034c2d0", "FElysiumNpcMaker::FUN_1034c8e0", "ElysiumNpcMaker.h"]
+      "evidence": [
+        "FElysiumNpcMaker::FUN_1034c2d0",
+        "FElysiumNpcMaker::FUN_1034c8e0",
+        "ElysiumNpcMaker.h"
+      ]
     },
     {
       "id": "shared-shun-counter",
       "finding": "SpeciesShunnedFindCount stands for three retail words on three classes (CNPC_VGargoyle m_iShunnedFindPillar +0x6680, CNPC_VHengeyokai m_iShunnedFindFish +0x6678, CNPC_VTzimisce m_iShunnedFindBody +0x66b8). Step 4 splits it (collapse:split).",
-      "evidence": ["layout.tsv", "ElysiumNpcKernelConditions10.inl"]
+      "evidence": [
+        "layout.tsv",
+        "ElysiumNpcKernelConditions10.inl"
+      ]
     },
     {
       "id": "shadow-rows",
       "finding": "Some species datamaps re-declare an inherited Troika word (Hengeyokai and Tzimisce m_flIgnoreCollisionTimer +0x6458; SabbatLeader and VampireBoss m_bJumping +0x6498 and the jump vectors). Each binds explicitly on its class to the inherited storage (shadow) and keeps its own flags.",
-      "evidence": ["fields-step4.tsv rows with offset below 0x665c"]
+      "evidence": [
+        "fields-step4.tsv rows with offset below 0x665c"
+      ]
+    },
+    {
+      "id": "duplicate-carriers",
+      "finding": "Families declared their own member for a retail word another family had already declared, so 11 retail words have two or three port carriers that can disagree (Bach +0x6690 has BachNextHolyLightTime, BachFailStamp and BachRepositionTimer; SabbatLeader +0x66c8/+0x66d5, AsianVampire +0x66d4/+0x66e8, MingXiao +0x66c4[4..5]/+0x6710/+0x6718, ManBat +0x6674, Hengeyokai/Tzimisce pickup target). One survivor each binds; the others collapse into it in 4c (moves-step4.tsv `collapse:merge`). Merging makes a write one family made visible to the other family's reader: each merge is a retail correction with a test.",
+      "evidence": [
+        "fields-step4.tsv notes `merge ... (4c)`",
+        "moves-step4.tsv collapse:merge rows"
+      ]
+    },
+    {
+      "id": "split-carriers",
+      "finding": "Three port members stand for words of two classes: SpeciesShunnedFindCount (three classes), SpeciesPickupTarget (Hengeyokai +0x6664, Tzimisce +0x6670), PathMode (Tzimisce +0x668c datamap, Hengeyokai +0x6680 walked), and MingXiaoTentacleId (the head's +0x6674 and the tentacle's own +0x6660, now TentacleId). Each splits to one member per declaring class (4c-4g).",
+      "evidence": [
+        "fields-step4.tsv declare rows",
+        "layout.md +0x6680 CNPC_VHengeyokai m_ePathMode"
+      ]
+    },
+    {
+      "id": "zombie-gib-latch-off-by-one",
+      "finding": "CNPC_VZombie's datamap saves m_bShouldGib (+0x66e0), but retail writes the latch one byte past it (+0x66e1, 0x103e0430); the saved word is never written and the latch is not saved. The port's bZombieShouldGib stands for +0x66e1 and stays unsaved; the +0x66e0 row is absent.",
+      "evidence": [
+        "ElysiumNpcKernelDamage.inl bZombieShouldGib",
+        "0x103e0430"
+      ]
+    },
+    {
+      "id": "zombie-ai-type-key-vs-input",
+      "finding": "The ZombieAIType key is a plain datamap write (no reroll, no order push); only the SetZombieAIType input (0x103e0e30, name parser 0x103e0cd0) and the zombie maker (0x1034cf20) call SetZombieAIType 0x103e0980. The key binds as a field on the deferred storage; the input stays a pending seam.",
+      "evidence": [
+        "0x103e0e30",
+        "0x103e0cd0",
+        "0x1034cf20"
+      ]
+    },
+    {
+      "id": "species-save-restart",
+      "finding": "A species save round trip rewrites five words through retail's own bodies: the Gargoyle, Hengeyokai and Tzimisce slot-435 OnScheduleChange tails (the restore restarts the program, as the Troika round trip already names) decrement the shunned counters and clear m_ePathMode, and CNPC_VPedestrian::OnRestore 0x103a25a0 re-runs NPCInit on a load, clearing m_bFirstThink. The round-trip case names each.",
+      "evidence": [
+        "Elysium.Substrate.NpcKernelSpeciesBindings.SaveRoundTrip"
+      ]
     }
   ],
   "open_for_packets": {
-    "moves_investigate": "17 row types (`F*Species`) follow their accessors' collapse or survival (4d-4g)",
-    "fields_investigate": "37 binding rows whose port member join is wrong or ambiguous (sibling offsets, generic names) or that shadow a Troika word (4b-4g)"
+    "moves_investigate": "resolved: every row type follows its table (collapse:table, stay:data-query table or deferred)",
+    "fields_investigate": "resolved in 4b (0 rows)",
+    "merges_and_splits": "resolved in 4c (merges) and 4g (splits); tested by NpcKernelSpeciesBindings.MergedAndSplitCarriers",
+    "unlisted_words": "resolved in 4i: MingXiaoMeleeWeapon (+0x667c) and bRunnerDeathNoticeProcessed (+0x6671) moved to their classes; the Fleshpile maker reaches the runner's latch through AsSpecies after retail's class test"
   },
-  "surviving_tables": [],
-  "retail_corrections": [],
-  "step5_renames": ["BaseShouldPlayFloatSound", "BaseDrawDebugStatOverlays"]
+  "surviving_tables": [
+    {
+      "table": "SquadSlotSpeciesRows",
+      "rows": "CAI_BaseNPCTroika, CNPC_VFrenzyShadow, CNPC_VPlayerController, CNPC_VWolfMorph",
+      "why": "the Troika SquadSlotName reads the Troika line's and the controller line's id spaces until step 7; every introduced species holds its own FSquadSlotSpecies row in its override"
+    },
+    {
+      "table": "JumpTunableSpeciesRows",
+      "rows": "CAI_BaseNPCTroika, CAI_BaseNPC, CAI_TestHull",
+      "why": "no introduced species row; the Troika tunables (slots 521-523) read it; CAI_TestHull is deferred"
+    },
+    {
+      "table": "TookLifeSpeciesRows",
+      "rows": "CNPC_VFrenzyShadow, CNPC_VPlayerController, CNPC_VWolfMorph",
+      "why": "the controller line only (deferred:7)"
+    },
+    {
+      "table": "SpeciesSlotRows",
+      "rows": "CNPC_VFrenzyShadow 599/600, CNPCMaker_Fleshpile 139/617",
+      "why": "deferred classes only (steps 7, 8)"
+    },
+    {
+      "table": "SpeciesBlacklistedEntities",
+      "rows": "Hengeyokai +0x66a4 / Tzimisce +0x6690 blacklist storage",
+      "why": "written by the cross-branch BlacklistPickupTarget, which two sibling lines share"
+    },
+    {
+      "table": "FElysiumNpcVampire::PickupSpeciesRows",
+      "rows": "CNPC_VHengeyokai, CNPC_VManBat",
+      "why": "one pickup-animlink body pair two sibling classes share; each arm reaches its class's words through AsSpecies and refuses the other class's row"
+    }
+  ],
+  "retail_corrections": [
+    {
+      "id": "mingxiao-proxy-gate",
+      "bodies": [
+        "0x10397b40",
+        "0x10397a50"
+      ],
+      "correction": "FUN_10397b40 resolves the argument back through m_rhSeveredTentacles (+0x66a8), not m_rhProxies, with the tentacle's own m_iTentacleID (+0x6660), which the port had read as a seam answering nothing; FUN_10397a50's argument is a proxy (CNPC_VMingXiao, id +0x6674).",
+      "record": "docs/vtmb/npc-ai/lifecycle.md",
+      "test": "Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate"
+    },
+    {
+      "id": "werewolf-taskfail-checkstuck",
+      "bodies": [
+        "0x103ce750"
+      ],
+      "correction": "CNPC_VWerewolf::TaskFail calls thunk 0x10012d46 = CNPC_VWerewolf::CheckStuck 0x103cb920 at 103ce904; the port called CNPC_VSabbatLeader::CheckStuck 0x103ab580.",
+      "record": "docs/vtmb/npc-ai/shape.md"
+    },
+    {
+      "id": "tentacle-owner-move",
+      "bodies": [
+        "0x1039ef60",
+        "0x10397e00"
+      ],
+      "correction": "the tentacle's owner-move notice runs 0x10397e00 on its MingXiao head through a typed head, not on any NPC.",
+      "record": "decisions-step4.json"
+    },
+    {
+      "id": "scurrying-flee-march",
+      "bodies": [
+        "0x103acba0"
+      ],
+      "correction": "the march is horizontal (end.z copied from the start, 103ace05), blocked also on allsolid/startsolid, and deflects the direction by 0.5 * plane.normal before halving the distance; five refused jitters answer the bare node; the jitter draws y before x. The port had marched in 3-D, halved the direction, kept the last candidate and drawn x first.",
+      "record": "docs/vtmb/npc-ai/senses.md",
+      "test": "Elysium.Substrate.NpcKernelSpeciesBindings.TutorialRat"
+    },
+    {
+      "id": "scurrying-detection-arms",
+      "bodies": [
+        "0x103acac0"
+      ],
+      "correction": "arm citations re-read: distance 103acb15 (0x103acb1a inside it), Nosferatu 103acb26, must-detect 103acb3d, pass 103acb53. Behaviour unchanged.",
+      "record": "docs/vtmb/npc-ai/senses.md"
+    },
+    {
+      "id": "rat-keys-effective",
+      "bodies": [
+        "0x103acac0",
+        "0x103acba0"
+      ],
+      "correction": "the tutorial rats' eight keys now land through Construct (they were dropped: no species datamap row was bound). Their callers stay story 8 residue, so no in-game witness changes.",
+      "record": "docs/vtmb/npc-ai/senses.md",
+      "test": "Elysium.Substrate.NpcKernelSpeciesBindings.TutorialRat"
+    },
+    {
+      "id": "split-carriers",
+      "bodies": [
+        "0x103bf200",
+        "0x10382970"
+      ],
+      "correction": "SpeciesShunnedFindCount, SpeciesPickupTarget and PathMode each stood for several classes' words; each class now owns its word (the Tzimisce TaskFail blacklist/release acts on the target its pickup bodies set, retail's one word).",
+      "record": "fields-step4.tsv",
+      "test": "Elysium.Substrate.NpcKernelSpeciesBindings.MergedAndSplitCarriers"
+    }
+  ],
+  "step5_renames": [
+    "BaseShouldPlayFloatSound",
+    "BaseDrawDebugStatOverlays"
+  ]
 }

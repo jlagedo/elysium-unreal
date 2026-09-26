@@ -8,6 +8,12 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcYukie.h"
+#include "Substrate/ElysiumNpcProneDialog.h"
+#include "Substrate/ElysiumNpcPedestrian.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcCameraSecurity.h"
+#include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -46,11 +52,13 @@ namespace
 		FElysiumNpc* Guard = nullptr;
 		FElysiumNpc* Other = nullptr;
 
-		FSensesFixture()
-			: World([]
+		// `GuardClass` is the retail class the guard is built as: a species body is driven on an NPC
+		// of its class.
+		explicit FSensesFixture(const TCHAR* GuardClass = TEXT("CNPC_VHumanCombatant"))
+			: World([GuardClass]
 			{
 				FElysiumNpcWorldBuilder Builder(TEXT("senses_kernel"), 29103u);
-				Builder.AddNpc(TEXT("guard"), FVector(0.f, 0.f, 0.f));
+				Builder.AddNpcOfClass(TEXT("guard"), FVector(0.f, 0.f, 0.f), GuardClass);
 				Builder.AddNpc(TEXT("other"), FVector(400.f, 0.f, 0.f));
 				return Builder;
 			}())
@@ -278,11 +286,11 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 	// `npc_payphone` IS a registered spawn leaf AND a census classname, so `CPayphone` gets a body.
 	FElysiumNpcWorldBuilder Builder(TEXT("senses_fov"), 29104u);
 	Builder.AddNpc(TEXT("phone"), FVector::ZeroVector, TEXT("npc_payphone"));
-	Builder.AddNpc(TEXT("caller"), FVector(50.f, 0.f, 0.f));
+	Builder.AddNpcOfClass(TEXT("caller"), FVector(50.f, 0.f, 0.f), TEXT("CNPC_ProneDialog"));
 	Builder.AddNpc(TEXT("distant"), FVector(100000.f, 0.f, 0.f));
 	FElysiumNpcWorldFixture World(MoveTemp(Builder));
-	FElysiumNpc* Phone = World.Npc(TEXT("phone"));
-	FElysiumNpc* Caller = World.Npc(TEXT("caller"));
+	FElysiumNpcPayphone* Phone = World.NpcAs<FElysiumNpcPayphone>(TEXT("phone"));
+	FElysiumNpcProneDialog* Caller = World.NpcAs<FElysiumNpcProneDialog>(TEXT("caller"));
 	FElysiumNpc* Distant = World.Npc(TEXT("distant"));
 	if (!TestNotNull(TEXT("npc_payphone is a registered spawn leaf"), Phone)) { return false; }
 	if (!TestNotNull(TEXT("caller spawned"), Caller)) { return false; }
@@ -357,6 +365,10 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 	if (!TestNotNull(TEXT("other spawned"), F.Other)) { return false; }
 	FElysiumPlayer* Player = F.World.Player();
 	if (!TestNotNull(TEXT("the world stands a player"), Player)) { return false; }
+	// The werewolf bodies run on a werewolf of their own.
+	FSensesFixture WolfF(TEXT("CNPC_VWerewolf"));
+	FElysiumNpcWerewolf* SenseWolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(WolfF.Guard);
+	if (!TestNotNull(TEXT("the werewolf spawned"), SenseWolf)) { return false; }
 
 	// The shared three-test gate. With both ConVars off — their default — everything live passes.
 	TestFalse(TEXT("the gate refuses a null candidate"),
@@ -368,40 +380,52 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 	// `0x103cb810` — the werewolf has NO visibility test at all.
 	FElysiumEntityHandle Blocker = F.Other->Handle;
 	TestTrue(TEXT("0x103cb810: CNPC_VWerewolf::FVisible answers true unconditionally"),
-		F.Guard->WerewolfFVisible(F.Other, &Blocker));
+		SenseWolf->WerewolfFVisible(F.Other, &Blocker));
 	TestTrue(TEXT("0x103cb810: and leaves the blocker alone on the success arm"),
 		Blocker == F.Other->Handle);
 	TestFalse(TEXT("0x103cb810: a null candidate refuses"),
-		F.Guard->WerewolfFVisible(nullptr, &Blocker));
+		SenseWolf->WerewolfFVisible(nullptr, &Blocker));
 	TestTrue(TEXT("0x103cb810: and does NOT zero the blocker - retail's own asymmetry"),
 		Blocker == F.Other->Handle);
 
-	// `0x103ddaa0` — Yukie has no view cone either.
+	// `0x103ddaa0` — Yukie has no view cone either. On a Yukie.
+	FSensesFixture SenseYukieF(TEXT("CNPC_VYukie"));
+	FElysiumNpcYukie* SenseYukie = ElysiumTestAsSpecies<FElysiumNpcYukie>(SenseYukieF.Guard);
+	if (!TestNotNull(TEXT("the Yukie spawned"), SenseYukie)) { return false; }
 	TestTrue(TEXT("0x103ddaa0: CNPC_VYukie::FInViewCone admits any live candidate"),
-		F.Guard->YukieFInViewCone(F.Other));
+		SenseYukie->YukieFInViewCone(SenseYukieF.Other));
 	TestFalse(TEXT("0x103ddaa0: and refuses only a null one"),
-		F.Guard->YukieFInViewCone(nullptr));
+		SenseYukie->YukieFInViewCone(nullptr));
 
 	// `0x103ddaf0` — Yukie's FVisible chains slot 594 instead of answering true. Story 29d (family
 	// Senses10) wrote slot 594's body (`0x102b4760`), so the chain now answers the REAL range and
 	// concealment test rather than a stub's false: a candidate inside `m_flSeekDistInspection` is
 	// admitted, and one outside it is refused with the blocker written (`102b482e`).
-	F.Guard->Senses.Perception.VisionDistanceCm = 100000.f;
-	F.Guard->Senses.Perception.bResolved = true;
+	SenseYukie->Senses.Perception.VisionDistanceCm = 100000.f;
+	SenseYukie->Senses.Perception.bResolved = true;
 	TestTrue(TEXT("0x103ddaf0: CNPC_VYukie::FVisible chains slot 594, which now answers"),
-		F.Guard->YukieFVisible(F.Other, &Blocker));
-	F.Guard->Senses.Perception.VisionDistanceCm = 1.f;
+		SenseYukie->YukieFVisible(SenseYukieF.Other, &Blocker));
+	SenseYukie->Senses.Perception.VisionDistanceCm = 1.f;
 	TestFalse(TEXT("0x103ddaf0: ...and slot 594's range refusal comes back through the chain"),
-		F.Guard->YukieFVisible(F.Other, &Blocker));
+		SenseYukie->YukieFVisible(SenseYukieF.Other, &Blocker));
 	TestFalse(TEXT("0x103ddaf0: a null candidate refuses before the gate"),
-		F.Guard->YukieFVisible(nullptr, &Blocker));
+		SenseYukie->YukieFVisible(nullptr, &Blocker));
 
 	// `0x1036a030` — the security camera sees the PLAYER and nothing else. It replaces the base
 	// QuerySeeEntity rather than adding to it.
-	TestTrue(TEXT("0x1036a030: CNPC_VCameraSecurity::QuerySeeEntity admits the player"),
-		F.Guard->CameraSecurityQuerySeeEntity(*Player));
-	TestFalse(TEXT("0x1036a030: and refuses every NPC, whatever the base body would say"),
-		F.Guard->CameraSecurityQuerySeeEntity(*F.Other));
+	{
+		FSensesFixture Cam(TEXT("CNPC_VCameraSecurity"));
+		FElysiumNpcCameraSecurity* Camera = ElysiumTestAsSpecies<FElysiumNpcCameraSecurity>(Cam.Guard);
+		FElysiumPlayer* CamPlayer = Cam.World.Player();
+		if (!TestNotNull(TEXT("the security camera spawned"), Camera) || !TestNotNull(TEXT("its player"), CamPlayer))
+		{
+			return false;
+		}
+		TestTrue(TEXT("0x1036a030: CNPC_VCameraSecurity::QuerySeeEntity admits the player"),
+			Camera->QuerySeeEntity(CamPlayer));
+		TestFalse(TEXT("0x1036a030: and refuses every NPC, whatever the base body would say"),
+			Camera->QuerySeeEntity(Cam.Other));
+	}
 
 	// Every species row by name, against the census, so the rows are checked independently of any
 	// spawn.
@@ -509,7 +533,7 @@ bool FElysiumNpcKernelSensesWitnessTest::RunTest(const FString&)
 	for (uint32 Level = 0; Level <= 6; ++Level)
 	{
 		TestEqual(TEXT("0x1042fde0/0x1042fe90: the scramble round-trips"),
-			FElysiumNpc::DecodeWitnessedLevel(FElysiumNpc::EncodeWitnessedLevel(Level)), Level);
+			FElysiumNpcPedestrian::DecodeWitnessedLevel(FElysiumNpc::EncodeWitnessedLevel(Level)), Level);
 	}
 	TestNotEqual(TEXT("and it really is a scramble, not an identity"),
 		FElysiumNpc::EncodeWitnessedLevel(3u), 3u);
@@ -708,45 +732,52 @@ bool FElysiumNpcKernelSensesVisionTest::RunTest(const FString&)
 	F.Guard->UpdateEnemyWentOccluded(F.Other, true);
 	TestTrue(TEXT("0x10270180: and a set flag is never re-tested"), Memory.bEnemyWentOccluded);
 
-	// `0x103cf5f0` — the werewolf's pursuit test. The flag bit skips it entirely; without the bit
+	// `0x103cf5f0` — the werewolf's pursuit test, on a werewolf.
+	FSensesFixture WolfF(TEXT("CNPC_VWerewolf"));
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(WolfF.Guard);
+	if (!TestNotNull(TEXT("the werewolf spawned"), Wolf)) { return false; }
+	// The flag bit skips it entirely; without the bit
 	// both ConVar gates must fail: `werewolf_pursuit_unseen_time` 3.0 s and
 	// `werewolf_pursuit_distance` 800 units, as shipped.
-	F.Guard->WerewolfHintFlags = 0x4u;
+	Wolf->WerewolfHintFlags = 0x4u;
 	TestTrue(TEXT("0x103cf5f0: +0x66e8 bit 2 skips the whole test"),
-		F.Guard->WerewolfShouldPursueEnemy());
-	F.Guard->WerewolfHintFlags = 0u;
+		Wolf->WerewolfShouldPursueEnemy());
+	Wolf->WerewolfHintFlags = 0u;
 	TestEqual(TEXT("0x103cf5f0: DAT_1093f8ec is werewolf_pursuit_unseen_time, shipped 3.0"),
-		FElysiumNpc::WerewolfPursueElapsedLimitSeconds(), 3.f);
+		FElysiumNpcWerewolf::WerewolfPursueElapsedLimitSeconds(), 3.f);
 	TestEqual(TEXT("0x103cf5f0: DAT_1093d574 is werewolf_pursuit_distance, shipped 800"),
-		FElysiumNpc::WerewolfPursuePlayerDistLimitUnits(), 800.f);
-	const double PursueNow = F.Guard->World != nullptr ? F.Guard->World->NowSeconds() : 0.0;
-	F.Guard->WerewolfUnhideStamp = PursueNow - 10.0;
-	Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
+		FElysiumNpcWerewolf::WerewolfPursuePlayerDistLimitUnits(), 800.f);
+	const double PursueNow = Wolf->World != nullptr ? Wolf->World->NowSeconds() : 0.0;
+	Wolf->WerewolfUnhideStamp = PursueNow - 10.0;
+	Wolf->Senses.Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
 	TestFalse(TEXT("0x103cf5f0: 10 s since the unhide and the player past 800: the werewolf gives up"),
-		F.Guard->WerewolfShouldPursueEnemy());
-	Memory.ClosestPlayerDistanceCm = 500.f * ElysiumMove::U;
+		Wolf->WerewolfShouldPursueEnemy());
+	Wolf->Senses.Memory.ClosestPlayerDistanceCm = 500.f * ElysiumMove::U;
 	TestTrue(TEXT("0x103cf5f0: a player inside 800 units keeps it pursuing"),
-		F.Guard->WerewolfShouldPursueEnemy());
-	Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
-	F.Guard->WerewolfUnhideStamp = PursueNow;
+		Wolf->WerewolfShouldPursueEnemy());
+	Wolf->Senses.Memory.ClosestPlayerDistanceCm = 900.f * ElysiumMove::U;
+	Wolf->WerewolfUnhideStamp = PursueNow;
 	TestTrue(TEXT("0x103cf5f0: and so does an unhide inside the last 3 s"),
-		F.Guard->WerewolfShouldPursueEnemy());
+		Wolf->WerewolfShouldPursueEnemy());
 
+	FSensesFixture YukieF(TEXT("CNPC_VYukie"));
+	FElysiumNpcYukie* YukieNpc = ElysiumTestAsSpecies<FElysiumNpcYukie>(YukieF.Guard);
+	if (!TestNotNull(TEXT("the Yukie spawned"), YukieNpc)) { return false; }
 	// `0x103dda10` — Yukie's melee exit. Slot 308 is a declared stub answering false, so the
 	// distance arm is the one this runtime reaches; the melee range is
 	// `debug_melee_advance_combatmove_dist` 100, so the exit distance is 2 * 100 * 1.5 = 300.
 	TestFalse(TEXT("0x103dda10: slot 308 HasUsableRangedWeapon is still a stub"),
-		F.Guard->HasUsableRangedWeapon());
+		YukieNpc->HasUsableRangedWeapon());
 	TestEqual(TEXT("0x103dda10: and the melee range ConVar ships 100"),
 		FElysiumNpc::MeleeRangeUnits(), 100.f);
-	F.Guard->ScheduleHost.EnemyDistUnits = 299.f;
-	TestFalse(TEXT("0x103dda10: 299 units stays in melee"), F.Guard->YukieShouldLeaveMelee());
-	F.Guard->ScheduleHost.EnemyDistUnits = 300.f;
+	YukieNpc->ScheduleHost.EnemyDistUnits = 299.f;
+	TestFalse(TEXT("0x103dda10: 299 units stays in melee"), YukieNpc->Slot602());
+	YukieNpc->ScheduleHost.EnemyDistUnits = 300.f;
 	TestTrue(TEXT("0x103dda10: 300 units leaves it - the compare is <="),
-		F.Guard->YukieShouldLeaveMelee());
-	F.Guard->ScheduleHost.EnemyDistUnits = -1.f;
+		YukieNpc->Slot602());
+	YukieNpc->ScheduleHost.EnemyDistUnits = -1.f;
 	TestFalse(TEXT("0x103dda10: and the compare really is 2*range*1.5 <= dist"),
-		F.Guard->YukieShouldLeaveMelee());
+		YukieNpc->Slot602());
 	return true;
 }
 

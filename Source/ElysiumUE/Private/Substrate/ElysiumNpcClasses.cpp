@@ -281,6 +281,82 @@ static TUniquePtr<FElysiumEntity> MakeNpcOf()
 	return MakeUnique<T>();
 }
 
+// The introduced species' own datamap INPUTs (story 5 step 4). None has a ported handler yet, so
+// each is an explicit pending seam on the class that declares it: a wire to it is a reported
+// work-list row naming the retail handler, never an unknown-input diagnostic. The handlers are
+// story-8 residue; the addresses are the corpus's names for them.
+static void AddSpeciesPendingInputs(FElysiumClassDesc& D, const TCHAR* RetailClass)
+{
+	const auto Is = [RetailClass](const TCHAR* Class) { return FCString::Strcmp(RetailClass, Class) == 0; };
+	if (Is(TEXT("CNPC_VAndreiBlood")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VAndreiBlood", FElysiumNpc, TriggerCombat,
+			"0019 story 8 — CNPC_VAndreiBlood::InputTriggerCombat 0x1035dd00");
+	}
+	else if (Is(TEXT("CNPC_VBach")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VBach", FElysiumNpc, GrenadeEnter,
+			"0019 story 8 — CNPC_VBach::InputGrenadeEnter 0x10366120");
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VBach", FElysiumNpc, GrenadeExit,
+			"0019 story 8 — CNPC_VBach::InputGrenadeExit 0x10366190");
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VBach", FElysiumNpc, SignalVulnerable,
+			"0019 story 8 — CNPC_VBach::InputSignalVulnerable 0x103661d0");
+	}
+	else if (Is(TEXT("CNPC_VHengeyokai")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VHengeyokai", FElysiumNpc, StartTransformation,
+			"0019 story 8 — CNPC_VHengeyokai::InputStartTransformation 0x10383170");
+	}
+	else if (Is(TEXT("CNPC_VLasombra")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VLasombra", FElysiumNpc, DisableCover,
+			"0019 story 8 — CNPC_VLasombra::InputDisableCover 0x103893f0");
+	}
+	else if (Is(TEXT("CNPC_VManBat")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VManBat", FElysiumNpc, ManBatStun,
+			"0019 story 8 — CNPC_VManBat::InputManBatStun 0x1038fa50");
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VManBat", FElysiumNpc, ManBatFlyBegin,
+			"0019 story 8 — CNPC_VManBat::InputManBatFlyBegin 0x1038fa90");
+	}
+	else if (Is(TEXT("CNPC_VMingXiao")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VMingXiao", FElysiumNpc, StartTransformation,
+			"0019 story 8 — CNPC_VMingXiao::InputStartTransformation 0x1039a700");
+	}
+	else if (Is(TEXT("CNPC_VSabbatLeader")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VSabbatLeader", FElysiumNpc, StartTransformation,
+			"0019 story 8 — CNPC_VSabbatLeader::StartTransformation 0x103aa3b0");
+	}
+	else if (Is(TEXT("CNPC_VSheriffMan")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VSheriffMan", FElysiumNpc, StartAttacking,
+			"0019 story 8 — CNPC_VSheriffMan::StartAttacking 0x103b1470");
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VSheriffMan", FElysiumNpc, StartTransformation,
+			"0019 story 8 — CNPC_VSheriffMan::StartTransformation 0x103b15e0");
+	}
+	else if (Is(TEXT("CNPC_VVampireBoss")))
+	{
+		// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT), the protean swap's trigger.
+		// Its only stand-in was the `npc_VVampireBoss` stub row this class supersedes.
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VVampireBoss", FElysiumNpc, TransformModel,
+			"0019 story 8 — the vampire boss's protean swap");
+	}
+	else if (Is(TEXT("CNPC_VWerewolf")))
+	{
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VWerewolf", FElysiumNpc, ToggleDoorState,
+			"0019 story 8 — CNPC_VWerewolf::InputToggleDoorState 0x103d99a0");
+	}
+	else if (Is(TEXT("CNPC_VZombie")))
+	{
+		// `0x103e0e30` parses the name (`0x103e0cd0`) and calls `SetZombieAIType` (`0x103e0980`,
+		// ported as `FElysiumNpc::FUN_103e0980`); the parser is not, so the wire stays pending.
+		ELYSIUM_PENDING_INPUT_ON("CNPC_VZombie", FElysiumNpc, SetZombieAIType,
+			"0019 story 8 — CNPC_VZombie::InputSetZombieAIType 0x103e0e30");
+	}
+}
+
 struct FElysiumNpcRetailClassRow
 {
 	const TCHAR* RetailClass;
@@ -412,14 +488,10 @@ struct FElysiumNpcRegistrar
 		for (const FElysiumNpcRetailClassRow& Row : GNpcRetailClasses)
 		{
 			FElysiumClassDesc& D = Reg.RegisterAbstract(FName(Row.RetailClass), FName(Row.RetailBase));
-			if (FCString::Strcmp(Row.RetailClass, TEXT("CNPC_VVampireBoss")) == 0)
-			{
-				// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT), the protean swap's
-				// trigger. Its only stand-in was the `npc_VVampireBoss` stub row this class
-				// supersedes; the body is unported, so a wire still reports as pending.
-				ELYSIUM_PENDING_INPUT_ON("CNPC_VVampireBoss", FElysiumNpc, TransformModel,
-					"0019 story 8 — the vampire boss's protean swap");
-			}
+			// The class's own datamap rows (story 5 step 4): keyed fields and the SAVE walk, on
+			// this descriptor alone, so a descendant inherits them and a sibling never sees them.
+			ElysiumNpcKernelBindings::AddSpeciesFields(D, Row.RetailClass);
+			AddSpeciesPendingInputs(D, Row.RetailClass);
 		}
 		// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the class
 		// `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it decides

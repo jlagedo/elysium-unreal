@@ -77,19 +77,11 @@ static bool& InNpcInit();
 /** `DAT_109340d8` — node-graph hull index. Four writers, no restore. Retail defect 1. */
 static int32& NodeGraphHullIndex();
 
-static constexpr int32 HullIndexGargoyle = 0x0e;     // `0x103785f0`
-static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
-static constexpr int32 HullIndexManBat = 0x14;       // `0x1038b070`
-static constexpr int32 HullIndexSheriffMan = 0x15;   // `0x103ae6c0`
-
 /** `DAT_106c994c` — out-of-range ped-link index counter. */
 static int32& NodeIndexErrorCount();
 
 /** `DAT_10938040` — fleshpile Andrei cache. Filled by `CNPCMaker_Fleshpile::OnRestore`. */
 static FElysiumEntityHandle& FleshpileAndreiSingleton();
-
-/** `DAT_1093bd34` — Ming Xiao tentacle cached handle, invalidated on restore. */
-static FElysiumEntityHandle& MingXiaoTentacleCache();
 
 // -------------------------------------------------------------------------------------------------
 // `.rdata` constants, named once
@@ -101,24 +93,15 @@ static constexpr float MotorYawHalfTurn = ElysiumNpcTunables::OneEighty;
 static constexpr float TeleportMoveTimerFloor = ElysiumNpcTunables::Zero;
 static constexpr float TeleportMoveTimerExtra = 4.f;     // `_DAT_10450aa0`
 static constexpr float SpeciesShunWindowSeconds = 3.f;   // `_DAT_10449258`
-static constexpr double ManBatFlapDelaySeconds = 2.3;    // `_DAT_104bc690`
-static constexpr double WerewolfTeleportFloorSquare = 512.0; // `_DAT_104704c0`
-static constexpr float HullCentreHalf = ElysiumNpcTunables::Half;
-static constexpr double WerewolfFieldOfViewRadians = 2.0943951023931953; // `_DAT_104d0080`
-static constexpr float SheriffManJumpGravity = 2.f;      // `_DAT_104c6148`
-static constexpr float AsianVampireJumpGravity = 2.f;    // `_DAT_104a9300`
 // `_DAT_104ada44` ChangBros jump gravity is family SpeciesLifecycle10's `ChangBrosJumpGravity`.
 static constexpr float StartNpcDelayMin = 0.1f;
 static constexpr float StartNpcDelayMax = 0.4f;
 static constexpr float ShootAtHintRearmMin = 2.f;
 static constexpr float ShootAtHintRearmMax = 2.5f;
-static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`, Bach's
 static constexpr float BaseInitDistTooFar = 1024.f;
 static constexpr float BaseInitDistLookUnits = 3072.f;
 static constexpr float FarSightDistTooFar = 1.0e9f;
 static constexpr float FarSightDistLookUnits = 6000.f;
-static constexpr float WerewolfSeekDistBaseUnits = 4096.f;
-static constexpr float WerewolfHearingScalarBase = 3.f;
 static constexpr int32 LawThresholdNever = 999999;
 static constexpr float FrenzyShadowSpeedScale = 8.f;
 static constexpr uint32 FrenzyShadowFrenziedFlags = 0x5ddfu;
@@ -136,13 +119,6 @@ static constexpr int32 SpawnFlagFarSight = 0x100;
 static constexpr int32 TeleportForcedScheduleRetailId = 0xfe;
 static constexpr int32 StartNpcGoalEntityRetailId = 3;
 static constexpr int32 StartNpcAmbushRetailId = 0x2d;
-static constexpr int32 ZombieCrawlScheduleRetailId = 0x161;
-static constexpr float CameraOccludedDelayNormal = 3.4f;
-static constexpr float CameraOccludedDelayCover = 10.f;
-static constexpr float CameraEnemyStoreInterval = 0.5f;
-static constexpr float RunnerAttackExtentX = 50.f;
-static constexpr float RunnerAttackExtentY = 50.f;
-static constexpr float RunnerAttackExtentZ = 82.f;
 static constexpr float NeverThinkSentinel = 3.402823466e+38f; // `0x7f7fffff`
 
 // -------------------------------------------------------------------------------------------------
@@ -179,84 +155,14 @@ float NpcSpeedScale = 1.f;
  *  `NPCInit` writes `cos(120°) = −0.5`. */
 float FieldOfViewDot = 0.2f;
 
-/** `CNPC_VPedestrian::m_bFirstThink` (`+0x6678`) and `CNPC_VTaxiDriver::m_bFirstThink` (`+0x6660`).
- *  Different offsets, two members. */
-bool bPedestrianFirstThink = false;
-bool bTaxiFirstThink = false;
-
-/** `CNPC_VPedestrian::m_eLevelResetType` (`+0x667c`). */
-int32 PedestrianLevelResetType = 0;
-
-/** `CNPC_VGargoyle` species words at `NPCInit`. */
-FElysiumEntityHandle GargoylePillarTarget;   // +0x667c
-int32 GargoyleDoingGibDeath = 0;             // +0x6684
-int32 GargoyleCanKnockback = 0;              // +0x6688
-
-/** `CNPC_VHengeyokai` species words. `SpeciesShunnedFindCount` already carries `+0x6678`. */
-bool bHengeyokaiJustFoundFish = false;       // +0x667c
-bool bHengeyokaiInSharkForm = false;         // +0x6694
-double HengeyokaiShunnedFishTimer = 0.0;     // +0x6670
-
-/** `CNPC_VManBat` species words. `ManBatFlapTimer` and `bHasPlayedFlyBySound` already exist. */
-bool bManBatHasScaredMinions = false;        // +0x66b0
-double ManBatFlyTimer = 0.0;                 // +0x667c
-
-/** `CNPC_VTzimisce` species words. `PickupTarget` / `PathMode` / `SpeciesShunnedFindCount` exist. */
-bool bTzimisceFirstEnemy = false;            // +0x6689
-bool bTzimisceJustFoundBody = false;         // +0x66bc
-double TzimiscePounceCheckTimer = 0.0;       // +0x66ac
-double TzimisceShunnedBodyTimer = 0.0;       // +0x66b0
-
-/** `CNPC_VZombie`. */
-bool bZombieNeedsCrawlOutOfGround = false;   // +0x667c
-double ZombieGrappleReadyTimer = 0.0;        // +0x66d8
-
-/** `CNPC_VGhoulCroucher::m_bSpawnDisturbed` (`+0x6664`). `bGhoulSpawnBurning` is Damage's. */
-bool bGhoulSpawnDisturbed = false;
-
-/** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`) and `m_bSuppressRanged` (`+0x66e8`). */
-bool bAsianVampirePathBlocked = false;
-bool bAsianVampireSuppressRanged = false;
-
-/** SheriffMan flags written before the VampireBoss chain. `SheriffLastTeleportPosition` exists. */
-bool bSheriffTeleporting = false;            // +0x66e4
-bool bSheriffDead = false;                   // +0x66e5
-bool bSheriffActivated = false;              // +0x66e6
-
-/** Ledger `CNPC_VAnimal::m_bPlayerAttackedMe` at `+0x6660`. TaxiDriver's `bTaxiFirstThink` and
- *  Pedestrian's pre-death bounds are different classes at the same offset. */
-bool bPlayerAttackedMe = false;
-
 /** `CNPC_VGuard1::m_fHatesPlayer` (`+0x6660`) is family SpeciesMisc10's `bGuard1HatesPlayer` — a
  *  THIRD species' word at that offset, and the one `CNPC_VGuard1::NPCInit` (`1037e24a`) clears
  *  first. Not redeclared here. */
-
-/** `CNPC_VWerewolf` words `0x103cac20` clears that no earlier family declared. */
-bool bWerewolfPlayFrustration = false;     // +0x66a9 `m_bPlayFrustration`
-int32 WerewolfMoveHintSearchStart = 0;     // +0x66b8 `m_pMoveHintSearchStart`, retail's NULL is 0
-int32 WerewolfWord66f8 = 0;                // +0x66f8 (retail name unrecovered)
-int32 WerewolfWord66fc = 0;                // +0x66fc (retail name unrecovered)
-
-/** SabbatLeader words Damage / Misc / Schedule already carry some of; these are the rest.
- *  `bSabbatLeaderActivated` (`+0x66b8`) is family State19's. */
-int32 SabbatLeaderRouteFailCount = 0;        // +0x66bc — Schedule already has FailureType at +0x66c0
-double SabbatLeaderLastSplashTime = 0.0;     // +0x66c8
-bool bSabbatLeaderDiving = false;
-bool bSabbatLeaderLargeSplash = false;
-bool bSabbatLeaderParticleSpawned = false;
-int32 SabbatLeaderJumpBloodBalance = 0;
-bool bSabbatLeaderLastAttackWasNova = false;
-bool bSabbatLeaderTrackPlayer = false;
 
 /** `CNPC_VPlaceholder` zeros `+0x62ec` before the base. `CurrentSpotIndex` is that word. */
 
 /** FrenzyShadow retail state `0xb` has no `EElysiumNpcState` member; the write is the raw
  *  `WriteIdealStateRetail` / `SetState(0xb)`. */
-
-/** Camera engine-query seam: slot 74 of `DAT_1070ba0c`. Default admits. Tests may refuse. */
-bool bCameraEngineQueryAnswer = true;
-int32 CameraEngineQueries = 0;
-int32 CameraSelfRemovals = 0;
 
 /** `m_flSeekDistBase` (`+0x63b4`) is bound to `AuthoredVision`; Werewolf writes 4096.0 over it. */
 
@@ -304,22 +210,14 @@ int32 RestorePlaceRejections = 0;        // `0x10299a80`
 int32 PatrolPathRevalidations = 0;       // `0x1029f610`
 int32 PatrolPathReleases = 0;            // `0x1029f5d0`
 int32 PedLinkRebinds = 0;
-int32 GhoulBurningParticleCreates = 0;
-int32 Flag2Removals = 0;                 // `RemoveFlag2(4)`
 int32 FrenzyShadowWeaponFlagOrs = 0;     // the unconditional `|= 0x40`
 int32 FrenzyShadowNullWeaponFaults = 0;  // crash-guarded retail fault
-int32 HideActiveWeaponCalls = 0;         // slot 66 Hide on the ACTIVE WEAPON
 int32 SetScheduleRetailCalls = 0;
 int32 LastSetScheduleRetail = 0;
 bool bLastSetScheduleForce = false;
 int32 LastIdealScheduleStamp = 0;
-int32 TzimisceStartNpcRearms = 0;
-int32 ExpressionMapResets = 0;           // `0x103b9f50`
 int32 FollowerBossOnStartCalls = 0;      // seam for `0x102c44e0`
 int32 InventoryDestroys = 0;             // `Inventory_Destroy`
-/** SEAM for `CBaseEntity::Relink` (`0x1001514a` through `0x101cf600`), which `CNPC_VPedestrian`'s
- *  level reset runs after it resizes the hull. No spatial partition stands at this tier; counted. */
-int32 RestoreRelinkCalls = 0;
 
 /** SEAM for `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe`. No hull sweep stands here:
  *  answers the found-floor arm and leaves the origin where it was. */
@@ -357,9 +255,7 @@ void InstallScheduleRetail(int32 RawId, bool bForce);
 void SeedStatListOnNpcInit();
 void SeedCriminalLevelWitnessed();
 void SpawnEquipLoadout();
-void HideActiveWeaponIfAny();
 int32 FrenzyShadowHostileRecount();
-void WerewolfRearm();
 
 /** The four `CVFeatList_t` field getters `NPCInit` and `CNPC_VZombie::NPCInit` read off the
  *  process-global tuning record (`0x10739d08`), which `0x101e6310` fills from `Rules.txt`. They are
@@ -380,37 +276,9 @@ void BaseNPCInit();     // `0x10273390`
 void TroikaNPCInit();   // `0x1029a0b0`
 bool SpeciesNPCInit();
 
-void PayphoneNPCInit();             // `0x101aab90`
-void AndreiBloodNPCInit();          // `0x1035cec0`
-void AsianVampireNPCInit();         // `0x10360ce0`
-void BachNPCInit();                 // `0x10363940`
-void CameraNPCInit();               // `0x103692c0`
-void ChangBrosNPCInit();            // `0x1036b050`
-void ChangBrosBladeNPCInit();       // `0x1036f100`
-void ChangBrosClawNPCInit();        // `0x1036f900`
-void CopNPCInit();                  // `0x10372b00`
 void FrenzyShadowNPCInit();         // `0x10375c80`
-void GargoyleNPCInit();             // `0x103785f0`
-void GhoulCroucherNPCInit();        // `0x1037b290`
-void Guard1NPCInit();               // `0x1037e240` — not a TSV row; dispatcher completeness
-void HengeyokaiNPCInit();           // `0x1037fa70`
-void HumanCombatantNPCInit();       // `0x10387140` — helper for Cop / Hunter / Yukie
-void HunterNPCInit();               // `0x10388b30`
-void ManBatNPCInit();               // `0x1038b070`
-void NewscasterNPCInit();           // `0x103a0420`
-void PedestrianNPCInit();           // `0x103a2570`
-void PlaceholderNPCInit();          // `0x103a4350`
 void PlayerControllerNPCInit();     // `0x103a4580`
-void SabbatLeaderNPCInit();         // `0x103a6d40`
-void SheriffManNPCInit();           // `0x103ae6c0`
-void TaxiDriverNPCInit();           // `0x103b35c0`
-void TzimisceNPCInit();             // `0x103b91d0`
-void TzimisceHeadClawNPCInit();     // `0x103c1c80`
-void VampireBossNPCInit();          // `0x103c5840`
-void WerewolfNPCInit();             // `0x103caef0`
 void WolfMorphNPCInit();            // `0x103dce00`
-void YukieNPCInit();                // `0x103dd800`
-void ZombieNPCInit();               // `0x103defc0`
 
 // -------------------------------------------------------------------------------------------------
 // Slot 422
@@ -418,8 +286,6 @@ void ZombieNPCInit();               // `0x103defc0`
 
 void BaseStartNPC();    // `0x10273ad0`
 void TroikaStartNPC();  // `0x1029a8b0`
-void CameraStartNPC();     // `0x10369930`
-void TzimisceStartNPC();   // `0x103b9270`
 
 // -------------------------------------------------------------------------------------------------
 // Slot 130
@@ -427,7 +293,3 @@ void TzimisceStartNPC();   // `0x103b9270`
 
 void BaseOnRestore(bool bFromLoad);    // `0x1027bf50`
 void TroikaOnRestore(bool bFromLoad);  // `0x102998c0`
-void MingXiaoTentacleOnRestore(bool bFromLoad);  // `0x1039f000`
-void PedestrianOnRestore(bool bFromLoad);        // `0x103a25a0`
-void TzimisceRunnerOnRestore(bool bFromLoad);    // `0x103c3c40`
-void WerewolfOnRestore(bool bFromLoad);          // `0x103cabf0`

@@ -120,9 +120,6 @@ void ChangeSchedule(int32 Id);
  *  else is a `DevMsg("FixScriptNPCSchedule - no case!")` and then the clear. */
 void FixScriptNPCSchedule(int32 FinishSchedule);
 
-/** `CNPC_VSabbatLeader::FlipFailureType` (`0x103a9d00`): `m_FailureType = 1 - m_FailureType`. */
-void FlipFailureType();
-
 // --- Species words this family's bodies read ------------------------------------------------------
 //
 // 29b declared every word of the flattened `CAI_BaseNPCTroika` layout; the SPECIES words above
@@ -130,17 +127,6 @@ void FlipFailureType();
 // different things per species. These three are the ones this family's bodies write, declared by
 // retail name with the species class that owns the offset, exactly as family Squad declares its
 // four.
-
-/** `CNPC_VSabbatLeader::m_FailureType`, `+0x66c0`. */
-int32 FailureType = 0;
-
-/** `CNPC_VManBat::m_iMoveGoalNodeID`, `+0x6674` — written 1 by both early-out arms of that class's
- *  `SelectSchedule` (`0x1038e340`). Read by nothing in this runtime yet. */
-int32 MoveGoalNodeId = 0;
-
-/** `CNPC_VAsianVampire::m_bSuppressRanged`, `+0x66e8` — the two extra terms that class's
- *  `SelectScheduleMeleeCombat` (`0x10361be0`) puts on its ranged arms. No producer here. */
-bool bSuppressRanged = false;
 
 /** `0x102ae840` — the scripted-schedule order the director pushes.
  *
@@ -192,14 +178,6 @@ bool IsUnusableNodeIndex(int32 NodeIndex) const;
  *  "no opinion" — none of the three is a registered program here. */
 int32 BasePreSelectSchedule();
 
-/** The three SPECIES bodies of slot 437 this story carries, each its class's `PreSelectSchedule`
- *  override's body (story 5 step 3): `CNPC_VCamera` / `CNPC_VCameraSecurity` (`0x10368f20`),
- *  `CNPC_VMingXiaoTentacle` (`0x1039de00`) and `CNPC_VPlaceholder` (`0x103a43f0`). Each writes
- *  retail's selector-trace tag and answers a fixed raw schedule number. */
-int32 CameraPreSelectSchedule();
-int32 MingXiaoTentaclePreSelectSchedule();
-int32 PlaceholderPreSelectSchedule();
-
 /** Slot 438's species hook: a species class that REPLACES the whole selector overrides it (story 5
  *  step 3) — `CNPC_VAndreiBlood` (`0x1035d010`), `CNPC_VCamera`/`CNPC_VCameraSecurity`
  *  (`0x10368f40`), `CNPC_VManBat` (`0x1038e340`), `CNPC_VMingXiaoTentacle` (`0x1039de20`) and
@@ -209,11 +187,6 @@ int32 PlaceholderPreSelectSchedule();
  *  consults it first and falls through when the number names no registered program, which is how
  *  `TranslateSchedule` already handles an unported id. */
 virtual int32 SpeciesSelectSchedule();
-int32 AndreiBloodSelectSchedule();
-int32 CameraSelectSchedule();
-int32 PlaceholderSelectSchedule();
-int32 ManBatSelectSchedule();
-int32 MingXiaoTentacleSelectSchedule();
 
 /** `0x102b6fe0` — the melee selector's failure gate, called before every other arm of
  *  `SelectScheduleMeleeCombat` and again after the in-melee branch.
@@ -223,19 +196,7 @@ int32 MingXiaoTentacleSelectSchedule();
  *  name is unrecovered; 29c named the port method. */
 int32 MeleeScheduleFailureGate(FElysiumEntity* Enemy);
 
-/** The species bodies of slot 604 `SelectScheduleMeleeCombat` that live in this family, each the body
- *  of its class's override (story 5 step 3): the Chang brothers' `0x1036d800` and the Tzimisce
- *  runner's `0x103c4430` (one shape, two id sets), AsianVampire's `0x10361be0`, SheriffMan's
- *  `0x103af960` and SabbatLeader's `0x103aa060`. */
-/** The two species bodies of slot 418 `ResolveTaskDistance`, each its class's override's body: a
- *  species sentinel, else a direct call into the Troika body. */
-float MingXiaoResolveTaskDistance(float Distance);   // `0x10392a10`
-float TzimisceResolveTaskDistance(float Distance);   // `0x103b9120`
-
 int32 SelectScheduleMeleeCombatChangLine(bool bChang);
-int32 SelectScheduleMeleeCombatAsianVampire();
-int32 SelectScheduleMeleeCombatSheriffMan();
-int32 SelectScheduleMeleeCombatSabbatLeader();
 
 /** The hint-search request `SelectCoverOrKickSchedule` builds its mask from.
  *
@@ -256,20 +217,7 @@ struct FScheduleHintSearchRequest
  *  Answers a RAW retail schedule number (0x9b, 0x9d, 0x9e, 0xa0–0xa5, 0xa7–0xa9) or 0. */
 int32 SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& Request);
 
-/** The species halves of slot 453 `BuildScheduleTestBits`, each the body of its class's override
- *  (story 5 step 3). `CNPC_VGuard1` (`0x1037cdf0`) REPLACES the Troika body (it calls the empty
- *  `CAI_BaseNPC` base); the other three call `0x102ad140` first and add their own bits. */
-void Guard1BuildScheduleTestBits(FElysiumNpcConditions& InOutMask);
-void HumanCombatantBuildScheduleTestBits(FElysiumNpcConditions& InOutMask);
-void PedestrianBuildScheduleTestBits(FElysiumNpcConditions& InOutMask);
-void TzimisceHeadClawBuildScheduleTestBits(FElysiumNpcConditions& InOutMask);
-
 // --- The seams this family's bodies ask -----------------------------------------------------------
-
-/** SEAM for `GetJumpSchedule` (`0x10361a80`, reached from `CNPC_VAsianVampire::
- *  SelectScheduleMeleeCombat`'s `COND_ENEMY_UNREACHABLE` arm): the schedule that jumps to an
- *  unreachable enemy. Answers 0 — no jump vocabulary exists here. */
-int32 GetJumpSchedule(FElysiumEntity* Enemy) const;
 
 /** SEAM for `0x102b6650`, the kick-physics-prop search `SelectCoverOrKickSchedule` refreshes on its
  *  two-second timer. Retail answers a `CBaseEntity*`; this has no prop sweep and answers null. */
@@ -285,9 +233,4 @@ void SearchForCoverHint(uint32 SearchMask);
  *  Retail name unrecovered. Answers false, which is the arm that falls through. */
 bool ScheduleMeleeReachGate() const;
 
-/** SEAM for `thunk_FUN_1035e920` (`CNPC_VAndreiBlood::SelectSchedule`'s 0x15d/0x15c split, which
- *  reads `+0x66b8`) and for `CNPC_VManBat`'s navigator-state probe `0x1027d990`. Both are species
- *  state this substrate does not carry; each answers its refusing value and says so at the call
- *  site in `AndreiBloodSelectSchedule` / `ManBatSelectSchedule`. */
-bool AndreiBloodSelectGate() const;
 int32 NavigatorGoalType() const;

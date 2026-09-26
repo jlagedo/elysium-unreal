@@ -219,18 +219,6 @@ bool FElysiumNpc::SceneEntityForcesCutsceneLod(const void* SceneEntity) const
 	return false;
 }
 
-// --- Slot 259's camera body --------------------------------------------------------------------
-
-bool FElysiumNpc::CameraHandleAnimEvent(const FElysiumAnimEvent& Event)
-{
-	// `CNPC_VCamera::HandleAnimEvent` `0x10368ec0` — three bytes, an empty body that ignores its
-	// event id: the body of `FElysiumNpcCamera::HandleAnimEvent` (inherited by
-	// `CNPC_VCameraSecurity`). A retail camera swallows every animation event, footsteps included;
-	// the port answers "claimed" so no later chain handles it.
-	(void)Event;
-	return true;
-}
-
 // --- Slots 245/246's species branch -------------------------------------------------------------
 
 void FElysiumNpc::AddExtraAnimationModelsPlayerController(FElysiumEntity* ExtraModel,
@@ -281,39 +269,6 @@ void FElysiumNpc::RemoveExtraAnimationModelsPlayerController()
 	{
 		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s"), GWarnRemoveExtraModels);
 	}
-}
-
-// --- `CNPC_VMingXiao::BodyGroup` `0x10398800` ---------------------------------------------------
-
-bool FElysiumNpc::BodyGroupCvarIsCommand() const
-{
-	// `ConVar::IsCommand()` on `DAT_1093bb14` (`debug_tentacle_mask`): a ConVar object, never a
-	// ConCommand.
-	return false;
-}
-
-int32 FElysiumNpc::BodyGroupCvarValue() const
-{
-	// `ConVar::m_nValue` (`+0x2c`) on the same object: `debug_tentacle_mask`, shipped "-1" — the
-	// negative arm, which takes the severed-tentacle mask.
-	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugTentacleMask);
-}
-
-void FElysiumNpc::BodyGroup()
-{
-	// `0x10398800`, three arms in retail's order. The cvar is read TWICE, and the second read is not
-	// redundant: retail asks `IsCommand()` again rather than caching it.
-	if (!BodyGroupCvarIsCommand() && BodyGroupCvarValue() < 0)
-	{
-		NpcBody = SeveredTentacleMask;
-		return;
-	}
-	if (BodyGroupCvarIsCommand())
-	{
-		NpcBody = 0;
-		return;
-	}
-	NpcBody = BodyGroupCvarValue();
 }
 
 // --- The gesture-layer table (slots 265, 269, 270, 273, 274, 275) -------------------------------

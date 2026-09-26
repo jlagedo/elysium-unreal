@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelDebug10Shared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -31,14 +32,12 @@ namespace
 	// Unit-prefixed: the module builds adaptive-unity and anonymous namespaces are merged.
 
 	// --- `m_debugOverlays` bits this family gates on, with the instruction that tests each --------
-	constexpr int32 GDebug10BitText = 0x1;             // 0x1029d4ff `TEST AL,0x1`
 	constexpr int32 GDebug10BitSquad = 0x80000;        // 0x102767ef
 	constexpr int32 GDebug10BitCollisionBox = 0x1000;  // 0x1029cb39 `TEST AH,0x10`
 	constexpr int32 GDebug10BitTaskList = 0x100000;    // 0x10276dfc
 	constexpr int32 GDebug10BitConditions = 0x10000000;// 0x1029d9cb
 	constexpr int32 GDebug10BitWeaponRings = 0x20000000;// 0x1029cd68
 	constexpr int32 GDebug10BitViewCones = 0x400000;   // 0x1029ca59
-	constexpr int32 GDebug10BitZombieConds = 0x40000;  // 0x103e0e9a
 
 	// --- The debug globals these bodies read ---------------------------------------------------------
 	// Retail's own trace buffer, `1028de9a PUSH 0x200` on slot 17 and the same on slot 18. It is
@@ -130,8 +129,6 @@ namespace
 	constexpr TCHAR GDebug10SceneUnknown[] = TEXT("??? scene");          // 0x105d9aac
 
 	// --- The species text bodies ------------------------------------------------------------------
-	constexpr TCHAR GDebug10FmtTzimisceBody[] = TEXT("Body - %5.1f|%5.1f|%s"); // 0x1065c904
-	constexpr TCHAR GDebug10FmtZombieCond[] = TEXT("Cond: %s\n");        // 0x10665864
 
 	// --- The fixed 26-id watch list `0x1029d4e0` writes into its stack array at `ESP+0x80`, in
 	//     retail's order. Not sorted; the order IS the line layout. -------------------------------
@@ -148,18 +145,6 @@ namespace
 	// `+0x5b50` and a wrap latch at `+0x5b54`. ABSENT (story 29b); the two constants are the rule.
 	constexpr int32 GDebug10RingSize = 0x4000;
 	constexpr int32 GDebug10RingWrapAt = 0x3dff;
-
-	// `_DAT_104454c4` = 0.0, the floor every clamp in this band compares against.
-	constexpr float GDebug10Zero = 0.f;
-
-	// `_DAT_1047a3ac` = 160.0 — the distance the Tzimisce body line must exceed before it latches.
-	constexpr float GDebug10TzimisceLatchUnits = 160.f;
-
-	// `_DAT_1093d01c` and `DAT_1093cd70`: the cross-NPC latch pair `CNPC_VTzimisce#124` writes. They
-	// are CLASS statics in retail — every Tzimisce in the map shares one distance and one schedule
-	// name — so they are file statics here and not per-instance state. That is the recovery.
-	float GDebug10TzimisceLatchDistance = 0.f;
-	FString GDebug10TzimisceLatchSchedule;
 
 	// `GetDebugName()` (`0x1000b5cd`): `m_iName` when set, the classname otherwise, and the empty
 	// string (`DAT_106b8540`) for a null pointer on either. `"NULL ENTITY"` (`0x105387dc`) is the
@@ -470,7 +455,7 @@ int32 FElysiumNpc::BaseDrawDebugTextOverlays()
 	}
 
 	// --- Everything below is under `m_debugOverlays & 1` ------------------------------------------
-	if ((DebugOverlays & GDebug10BitText) == 0)
+	if ((DebugOverlays & NpcKernelDebug10Shared::GDebug10BitText) == 0)
 	{
 		return Line;
 	}
@@ -693,7 +678,7 @@ int32 FElysiumNpc::TroikaDrawDebugTextOverlays()
 	// 255, 255, 255)` shape; `EmitEntityText` is that seam and the colour is not carried because it
 	// is white and opaque on every call site.
 	int32 Line = BaseDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitText) == 0)
+	if ((DebugOverlays & NpcKernelDebug10Shared::GDebug10BitText) == 0)
 	{
 		return Line;
 	}
@@ -967,117 +952,6 @@ int32 FElysiumNpc::EmitConditionDump(int32 FirstLine)
 }
 
 // -------------------------------------------------------------------------------------------------
-// The species arms of slot 124.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::HengeyokaiDrawDebugTextOverlays()
-{
-	// `0x10383560`, 106 bytes: the Troika body, then slot 9's string on one further line under bit 0.
-	// The string is taken from slot 9's returned object's first word and the empty string
-	// (`DAT_106b8540`) substitutes for a null one; retail prints it with NO format string at all.
-	// The `+1` IS the contract: it is the budget every later overlay consumes.
-	const int32 Base = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-	const FString Slot9 = HengeyokaiSlot9String();
-	EmitEntityText(Base, TEXT("0x10383560"), Slot9);
-	return Base + 1;
-}
-
-int32 FElysiumNpc::NewscasterDrawDebugTextOverlays()
-{
-	// `0x103a1250`, 151 bytes. A scope-trace push carrying `GetDebugName()` — `"NULL ENTITY"`
-	// (`0x105387dc`) for a null `this`, the empty string for a null `m_iName` — then the Troika body,
-	// then `0x103a0ff0`'s lines. `0x103a0ff0` returns a COUNT and the newscaster adds it to the
-	// Troika body's answer, so the two share one budget.
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VNewscaster::DrawDebugTextOverlays %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	const int32 Base = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-	return Base + NewscasterStoryOverlayLines(Base);
-}
-
-int32 FElysiumNpc::TzimisceDrawDebugTextOverlays()
-{
-	// `0x103c08d0`, 387 bytes.
-	//
-	//     dist = 0.0;                                              // _DAT_104454c4
-	//     if (m_hPickupTarget (+0x6670) resolves)
-	//         dist = |target->GetAbsOrigin() - GetAbsOrigin()|;     // the full 3-D length
-	//     if (0x103be130() && _DAT_1047a3ac < dist) {               // 160.0
-	//         _DAT_1093d01c = dist;
-	//         if (m_pSchedule) strcpy(DAT_1093cd70, m_pSchedule->name);
-	//     }
-	//     Q_snprintf(buf, 512, "Body - %5.1f|%5.1f|%s", dist, _DAT_1093d01c, DAT_1093cd70);
-	//
-	// The two globals are a CROSS-NPC latch — every Tzimisce in the map writes and reads the same
-	// pair — so they are file statics here and not per-instance state. The checklist's walk spelled
-	// the format `"Body: %5.1f %5.1f %s"`; the image says `"Body - %5.1f|%5.1f|%s"`.
-	const int32 Base = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-
-	float Distance = GDebug10Zero;
-	const FElysiumEntity* const Carried =
-		World != nullptr ? World->Resolve(PickupTarget) : nullptr;
-	if (Carried != nullptr)
-	{
-		Distance = static_cast<float>((Carried->Origin - Origin).Size() / ElysiumMove::U);
-	}
-	if (TzimisceIsCarryingBody() && Distance > GDebug10TzimisceLatchUnits)
-	{
-		GDebug10TzimisceLatchDistance = Distance;
-		if (Schedule.IsRunning())
-		{
-			const TCHAR* const Name = ElysiumScheduleName(Schedule.Current);
-			GDebug10TzimisceLatchSchedule = Name != nullptr ? Name : TEXT("");
-		}
-	}
-	EmitEntityText(Base, GDebug10FmtTzimisceBody, FString::Printf(GDebug10FmtTzimisceBody,
-		Distance, GDebug10TzimisceLatchDistance, *GDebug10TzimisceLatchSchedule));
-	return Base + 1;
-}
-
-int32 FElysiumNpc::ZombieDrawDebugTextOverlays()
-{
-	// `0x103e0e80`, 224 bytes. The Troika body, then — under `m_debugOverlays & 0x40000`, which is
-	// NOT bit 0 — one line per set bit of the 0..0xbf bitfield at `+0x5c5c`:
-	//
-	//     global = (id == -1) ? -1 : id + 1000000000;
-	//     local  = ConditionGlobalToLocal(GetClassScheduleIdSpace() + 0x30, global);   // 0x102ea280
-	//     Q_snprintf(buf, 512, "Cond: %s\n", ConditionName(local));                    // slot 458
-	//
-	// The `id == -1` arm is unreachable (the loop starts at 0) and is recorded rather than written.
-	// The 1e9 offset is the same script-range constant slot 458 tests against, so the pair
-	// global-to-local then local-to-global is the identity for every base condition, which is what
-	// `ConditionName` is handed here.
-	int32 Line = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitZombieConds) == 0)
-	{
-		return Line;
-	}
-	for (int32 Id = 0; Id < 0xc0; ++Id)
-	{
-		if (!ZombieConditionBit(Id))
-		{
-			continue;
-		}
-		const TCHAR* const Name = ConditionName(Id);
-		EmitEntityText(Line, GDebug10FmtZombieCond,
-			FString::Printf(GDebug10FmtZombieCond, Name != nullptr ? Name : TEXT("")));
-		++Line;
-	}
-	return Line;
-}
-
-// -------------------------------------------------------------------------------------------------
 // The seams the text bodies read through.
 // -------------------------------------------------------------------------------------------------
 
@@ -1169,24 +1043,6 @@ bool FElysiumNpc::SquadObjectName(FString& OutName) const
 	return true;
 }
 
-FElysiumEntity* FElysiumNpc::CopPursuitPlayer() const
-{
-	// `CNPC_VCop::m_hPursuitPlayer` (`+0x6664`). **No longer a seam**: story 29d's family
-	// SpeciesMisc10 landed the WRITER (`CNPC_VCop#597`, `0x10372cc0`) and the word with it, so this
-	// resolves it. A cop that has not latched a pursuit still answers null, which is retail's own
-	// answer for the `0xffffffff` the latch writes when the seen entity carries no player record.
-	return World != nullptr ? World->Resolve(CopPursuitHandle) : nullptr;
-}
-
-bool FElysiumNpc::CopSuspectIs(const FElysiumEntity* Candidate) const
-{
-	// SEAM for the cop class's two statics, `DAT_1093ac3c` (the shared provoker handle) and
-	// `_DAT_1093aca8` (its expiry). Family Senses10's `CNPC_VCop::OnSeeEntity` (`0x10370560`) is the
-	// writer and family Conditions10's `CNPC_VCop::IRelationType` the other reader.
-	(void)Candidate;
-	return false;
-}
-
 bool FElysiumNpc::PlayerHeightenedAlert(const FElysiumEntity* Candidate) const
 {
 	// `0x1017f8d0`: `curtime < player->m_flHeightenedAlertExpireTimer (+0x1d1c)`, off the candidate's
@@ -1215,29 +1071,6 @@ int32 FElysiumNpc::PlayerCopsInPursuitCount(const FElysiumEntity* Candidate) con
 	return Player->Police.CopsInPursuit;
 }
 
-bool FElysiumNpc::TzimisceIsCarryingBody() const
-{
-	// `0x103be130`, the carry probe the `Body - …` latch stands behind.
-	//
-	// **No longer a seam.** It was landed as one on the grounds that the body has "no port
-	// counterpart", but the whole of it is
-	//     `return (m_bfAINPCFlags [+0x14b8] >> 5) & 0xffffff01;`
-	// — bit 5 of the NPC flag word, which story 29d (family Conditions10) recovered as
-	// `CARRYING_BODY` alongside `FINDING_BODY` (0x10) while porting `0x103be090`/`0x103be050`. The
-	// port carries that word, so the seam was refusing something it could answer. Ghidra's
-	// `0xffffff01` mask is the `AL`-return artifact: the shift puts bit 5 in the low bit and only
-	// the low bit is read.
-	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
-}
-
-int32 FElysiumNpc::NewscasterStoryOverlayLines(int32 FirstLine)
-{
-	// SEAM for `0x103a0ff0`, family Species' row in band 5–9. Its answer is a COUNT of lines, which
-	// the newscaster adds to the Troika body's line index.
-	(void)FirstLine;
-	return 0;
-}
-
 bool FElysiumNpc::DialogSceneWords(FString& OutSceneName, bool& bOutScenePlaying,
 	double& OutSceneTime) const
 {
@@ -1263,17 +1096,3 @@ bool FElysiumNpc::DialogSceneWords(FString& OutSceneName, bool& bOutScenePlaying
 	return true;
 }
 
-FString FElysiumNpc::HengeyokaiSlot9String() const
-{
-	// SEAM for slot 9's string, which `CNPC_VHengeyokai#124` prints verbatim. Slot 9 is a generated
-	// stub owned by another story; the empty string is retail's null arm (`DAT_106b8540`).
-	return FString();
-}
-
-bool FElysiumNpc::ZombieConditionBit(int32 ConditionId) const
-{
-	// SEAM for `CNPC_VZombie`'s bitfield at `+0x5c5c`, walked 0..0xbf. It is one of the schedule
-	// block's six words and no port member carries it.
-	(void)ConditionId;
-	return false;
-}

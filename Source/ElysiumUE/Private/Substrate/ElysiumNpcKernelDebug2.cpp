@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelDebug2Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -60,15 +61,10 @@ namespace
 	constexpr float GNpcKernelDebug2CrossZSpread = 2.f;
 	// `_DAT_104454c4` = 0.0.
 	constexpr float GNpcKernelDebug2Zero = 0.f;
-	// `_DAT_104454d0` = 0.5 — `DrawDebugHullAtPoint`'s hull midpoint scale.
-	constexpr float GNpcKernelDebug2Half = 0.5f;
 
-	// The overlay entry points, by retail name, so a captured line names the call it stands for.
-	const TCHAR* const GNpcKernelDebug2Box = TEXT("NDebugOverlay::Box");
 	const TCHAR* const GNpcKernelDebug2BoxDirection = TEXT("NDebugOverlay::BoxDirection");
 	const TCHAR* const GNpcKernelDebug2Line = TEXT("NDebugOverlay::Line");
 	const TCHAR* const GNpcKernelDebug2Text = TEXT("NDebugOverlay::Text");
-	const TCHAR* const GNpcKernelDebug2EntityBounds = TEXT("NDebugOverlay::EntityBounds");
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -178,7 +174,7 @@ void FElysiumNpc::BaseDrawDebugGeometryOverlays()
 	if (Schedule.IsRunning()
 		&& GetLocalScheduleId(Schedule.Current) == GNpcKernelDebug2SchedForcedGo)
 	{
-		EmitOverlayBox(GNpcKernelDebug2Box, LastPosition / ElysiumMove::U,
+		EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, LastPosition / ElysiumMove::U,
 			GNpcKernelDebug2Box5Mins, GNpcKernelDebug2Box5Maxs, 255, 0, 255, 0);
 	}
 
@@ -198,12 +194,12 @@ void FElysiumNpc::BaseDrawDebugGeometryOverlays()
 		FVector ObbMaxs = FVector::ZeroVector;
 		if (!CollisionObbExtentsUnits(ObbMins, ObbMaxs))
 		{
-			EmitOverlayBox(GNpcKernelDebug2Box, Origin / ElysiumMove::U,
+			EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, Origin / ElysiumMove::U,
 				GNpcKernelDebug2Box5Mins, GNpcKernelDebug2Box5Maxs, 255, 128, 0, 20);
 		}
 		else
 		{
-			EmitOverlayBox(GNpcKernelDebug2Box, Origin / ElysiumMove::U, ObbMins, ObbMaxs,
+			EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, Origin / ElysiumMove::U, ObbMins, ObbMaxs,
 				255, 0, 0, 20);
 		}
 	}
@@ -218,7 +214,7 @@ void FElysiumNpc::BaseDrawDebugGeometryOverlays()
 		FVector NodeUnits = FVector::ZeroVector;
 		if (NavigatorNearestNodePositionUnits(NodeUnits))
 		{
-			EmitOverlayBox(GNpcKernelDebug2Box, NodeUnits, GNpcKernelDebug2Box10Mins,
+			EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, NodeUnits, GNpcKernelDebug2Box10Mins,
 				GNpcKernelDebug2Box10Maxs, 255, 255, 255, 0);
 		}
 	}
@@ -438,8 +434,8 @@ void FElysiumNpc::DrawEnemyMemoryOverlays()
 		const FElysiumNpc* RememberedNpc = Remembered->AsNpc();
 		RetailHullExtents(RememberedNpc != nullptr ? RememberedNpc->HullKind : 0, EElysiumHullExtents::Full, HullMins,
 			HullMaxs);
-		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
-		EmitOverlayBox(GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
+		EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
+		EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, RememberedUnits, HullMins, HullMaxs, R, G, B, 0);
 	}
 }
 
@@ -472,67 +468,4 @@ int32 FElysiumNpc::HintDrawDebugTextOverlays(int32 EntityTextLine, int32 DebugOv
 	EmitEntityText(EntityTextLine + 1, TEXT("delay %f"),
 		FString::Printf(TEXT("delay %f"), Delay));
 	return EntityTextLine + 2;
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CNPC_VWerewolf` — slot 620 and the hull draw.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::WerewolfDrawBBoxOverlay()
-{
-	// `0x103d5050`, slot 620, filled by `CNPC_VWerewolf` alone:
-	//
-	//     scope trace push { "CNPC_VWerewolf::DrawBBoxOverlay", m_iName ? m_iName : "", "" }
-	//     if (!ShouldPursueEnemy())
-	//         NDebugOverlay::EntityBounds(this, 50, 255, 50, 0, 0);     // 0x10142e20
-	//     else
-	//         CBaseEntity::DrawBBoxOverlay();
-	//     scope trace pop
-	//
-	// So a werewolf that is NOT pursuing gets a green box drawn for it here, and a pursuing one
-	// falls through to the ordinary whole-entity box. `WerewolfShouldPursueEnemy` is family Senses'
-	// port of `0x103cf5f0`.
-	//
-	// Slot 620 has no Troika-line body: `CNPC_VWerewolf` introduces it, so this is the body of
-	// `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual (story 5 step 3).
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawBBoxOverlay %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	if (!WerewolfShouldPursueEnemy())
-	{
-		EmitOverlayEntityBounds(GNpcKernelDebug2EntityBounds, 50, 255, 50, 0);
-		return;
-	}
-	EntityDrawBBoxOverlay();
-}
-
-void FElysiumNpc::DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const
-{
-	// `0x103d4820`. `RET 0x10`: a `Vector` by value and the overlay duration.
-	//
-	//     scope trace push { "CNPC_VWerewolf::DrawDebugHullAtPoint", m_iName ? m_iName : "", "" }
-	//     mins = NAI_Hull::Mins(m_eHull);   maxs = NAI_Hull::Maxs(m_eHull);
-	//     halfX = (maxs.x + mins.x) * 0.5;  halfY = (maxs.y + mins.y) * 0.5;   // _DAT_104454d0
-	//     NDebugOverlay::Box(point, mins, maxs, 255, 100, 0, 100, duration);
-	//     NDebugOverlay::Line?(…, sqrt(halfX*halfX + halfY*halfY), 5.0, 255, 255, 0, 20, 0);
-	//     scope trace pop
-	//
-	// The second call (`0x1000566e`) takes the hull's planar RADIUS and the constant `5.0`
-	// (`0x40a00000`) with colour (255, 255, 0) at alpha 20; which `NDebugOverlay` entry point it is
-	// remains **UNRECOVERED** — the argument shape fits a circle or a swept box and the listing does
-	// not name it. It is emitted under its address so the arm is visible.
-	//
-	// **SEAM**: `RetailHullExtents` (family Motor) answers false with both extents at zero, so the
-	// box is degenerate and the radius is 0.
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawDebugHullAtPoint %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	FVector HullMins = FVector::ZeroVector;
-	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
-	EmitOverlayBox(GNpcKernelDebug2Box, PointUnits, HullMins, HullMaxs, 255, 100, 0, 100);
-	const float HalfX = (HullMaxs.X + HullMins.X) * GNpcKernelDebug2Half;
-	const float HalfY = (HullMaxs.Y + HullMins.Y) * GNpcKernelDebug2Half;
-	const float Radius = FMath::Sqrt(HalfX * HalfX + HalfY * HalfY);
-	EmitOverlayLine(TEXT("0x1000566e"), PointUnits,
-		PointUnits + FVector(Radius, 0.f, 5.f), 255, 255, 0, false);
-	(void)Duration;
 }

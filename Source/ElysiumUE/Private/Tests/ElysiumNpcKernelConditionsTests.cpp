@@ -8,6 +8,9 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -292,21 +295,22 @@ bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 	// `CNPC_VTzimisce`'s expression map, off `PTR_s_normal_10653120` — "normal", "angry", "scream",
 	// "dead". "scream" (index 2) is reached by no state.
 	TestEqual(TEXT("idle maps to normal"),
-		FString(FElysiumNpc::StateChangeExpressionName(EElysiumNpcState::Idle)), FString(TEXT("normal")));
+		FString(FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState::Idle)), FString(TEXT("normal")));
 	TestEqual(TEXT("combat maps to angry"),
-		FString(FElysiumNpc::StateChangeExpressionName(EElysiumNpcState::Combat)), FString(TEXT("angry")));
+		FString(FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState::Combat)), FString(TEXT("angry")));
 	TestEqual(TEXT("alert maps to angry too"),
-		FString(FElysiumNpc::StateChangeExpressionName(EElysiumNpcState::Alert)), FString(TEXT("angry")));
+		FString(FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState::Alert)), FString(TEXT("angry")));
 	TestEqual(TEXT("dead maps to dead"),
-		FString(FElysiumNpc::StateChangeExpressionName(EElysiumNpcState::Dead)), FString(TEXT("dead")));
+		FString(FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState::Dead)), FString(TEXT("dead")));
 	TestNull(TEXT("scripted names no expression and writes nothing"),
-		FElysiumNpc::StateChangeExpressionName(EElysiumNpcState::Scripted));
+		FElysiumNpcTzimisce::StateChangeExpressionName(EElysiumNpcState::Scripted));
 
 	// The seam records the NAME, since this runtime has no SetExpression.
-	FNpcKernelCondFixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
-	F.Npc->SetDefaultExpression(TEXT("angry"), 1.0f);
-	TestEqual(TEXT("the expression seam stores the name"), F.Npc->DefExpression, FString(TEXT("angry")));
+	FNpcKernelCondFixture F(TEXT("npc_VTzimisce"));
+	FElysiumNpcTzimisce* Tzimisce = ElysiumTestAsSpecies<FElysiumNpcTzimisce>(F.Npc);
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzimisce)) { return false; }
+	Tzimisce->SetDefaultExpression(TEXT("angry"), 1.0f);
+	TestEqual(TEXT("the expression seam stores the name"), Tzimisce->DefExpression, FString(TEXT("angry")));
 	return true;
 }
 
@@ -404,77 +408,71 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondIdealStateSpeciesTest,
 	"Elysium.Substrate.NpcKernelConditions.SelectIdealStateSpecies", GNpcKernelCondFlags)
 bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 {
-	using ERule = FElysiumNpc::EIdealStateSpecies;
-
-	struct FExpect { const TCHAR* Cls; const TCHAR* Body; ERule Rule; };
+	struct FExpect { const TCHAR* Cls; const TCHAR* Body; };
 	const FExpect Rows[] = {
-		{ TEXT("CNPC_VCamera"),           TEXT("0x10369060"), ERule::AlwaysAlert },
-		{ TEXT("CNPC_VCameraSecurity"),   TEXT("0x10369060"), ERule::AlwaysAlert },
-		{ TEXT("CNPC_VMingXiao"),         TEXT("0x103945a0"), ERule::MingXiao },
-		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039e310"), ERule::MingXiaoTentacle },
+		{ TEXT("CNPC_VCamera"),           TEXT("0x10369060") },
+		{ TEXT("CNPC_VCameraSecurity"),   TEXT("0x10369060") },
+		{ TEXT("CNPC_VMingXiao"),         TEXT("0x103945a0") },
+		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039e310") },
 	};
-	// Each body is the `SelectIdealStateRetail` override on its class (story 5 step 3); the census
-	// says which classes hold it.
+	// Each body is the `SelectIdealStateRetail` override on its class (story 5 step 4); the census
+	// says which classes hold it. Every class stands through its factory and is asked through the slot.
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_cond_461"), 461);
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Rows); ++Index)
+	{
+		Builder.AddNpcOfClass(Rows[Index].Cls, FVector(400.0 * (Index + 1), 0.0, 0.0), Rows[Index].Cls);
+	}
+	Builder.AddNpc(TEXT("foe"), FVector(0.0, 400.0, 0.0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Foe = Fixture.Npc(TEXT("foe"));
+	if (!TestNotNull(TEXT("the foe stood"), Foe))
+	{
+		return false;
+	}
 	for (const FExpect& E : Rows)
 	{
+		FElysiumNpc* Npc = Fixture.Npc(E.Cls);
+		if (!TestNotNull(FString::Printf(TEXT("%s stood through its factory"), E.Cls), Npc))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Npc });
 		TestEqual(FString::Printf(TEXT("%s's slot-461 body is %s"), E.Cls, E.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(E.Cls), 461)),
-			FString(E.Body));
-		(void)E.Rule;
+			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 461)), FString(E.Body));
 	}
+	FElysiumNpc* Camera = Fixture.Npc(TEXT("CNPC_VCamera"));
+	FElysiumNpc* Security = Fixture.Npc(TEXT("CNPC_VCameraSecurity"));
+	FElysiumNpc* Xiao = Fixture.Npc(TEXT("CNPC_VMingXiao"));
+	FElysiumNpc* Tentacle = Fixture.Npc(TEXT("CNPC_VMingXiaoTentacle"));
 
-	// `CNPC_VCamera::FUN_10369060` — retail 3 ALERT, with NO test at all.
-	for (const bool bEnemy : { false, true })
+	// `CNPC_VCamera::FUN_10369060` — retail 3 ALERT, with NO test at all, written as
+	// `m_IdealNPCState`; `CNPC_VCameraSecurity` inherits the body.
+	for (FElysiumNpc* Cam : { Camera, Security })
 	{
-		TestEqual(TEXT("a camera's ideal state is hardcoded ALERT"),
-			static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::AlwaysAlert, true,
-				EElysiumNpcState::Idle, EElysiumNpcState::Idle, bEnemy)),
-			static_cast<int32>(EElysiumNpcState::Alert));
+		for (const bool bEnemy : { false, true })
+		{
+			Cam->Senses.Memory.Enemy = bEnemy ? Foe->Handle : FElysiumEntityHandle();
+			TestEqual(TEXT("a camera's slot 461 answers retail ALERT"), Cam->SelectIdealStateRetail(), 3);
+			TestEqual(TEXT("and writes it as the ideal state"), Cam->IdealStateRetail(), 3);
+		}
 	}
-	TestEqual(TEXT("even a dead camera reports ALERT: the body writes before any test"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::AlwaysAlert, false,
-			EElysiumNpcState::Dead, EElysiumNpcState::Dead, false)),
-		static_cast<int32>(EElysiumNpcState::Alert));
 
 	// `CNPC_VMingXiao::vfunc461` — the dead write is ALWAYS overwritten by the enemy test, which is
 	// retail's own dead code. So the answer depends on the enemy and on nothing else.
-	TestEqual(TEXT("MingXiao with an enemy is COMBAT"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiao, true,
-			EElysiumNpcState::Idle, EElysiumNpcState::Idle, true)),
-		static_cast<int32>(EElysiumNpcState::Combat));
-	TestEqual(TEXT("MingXiao without one is IDLE"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiao, true,
-			EElysiumNpcState::Idle, EElysiumNpcState::Idle, false)),
-		static_cast<int32>(EElysiumNpcState::Idle));
-	TestEqual(TEXT("and a DEAD MingXiao still answers from the enemy: the 7 write is unreachable"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiao, false,
-			EElysiumNpcState::Dead, EElysiumNpcState::Dead, true)),
-		static_cast<int32>(EElysiumNpcState::Combat));
+	Xiao->Senses.Memory.Enemy = Foe->Handle;
+	TestEqual(TEXT("MingXiao with an enemy is COMBAT (retail 2)"), Xiao->SelectIdealStateRetail(), 2);
+	Xiao->Senses.Memory.Enemy = FElysiumEntityHandle();
+	TestEqual(TEXT("MingXiao without one is IDLE (retail 1)"), Xiao->SelectIdealStateRetail(), 1);
 
 	// `CNPC_VMingXiaoTentacle::vfunc461` — here the dead arm is REAL and short-circuits.
-	TestEqual(TEXT("a tentacle whose CURRENT state is dead stays dead"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiaoTentacle, true,
-			EElysiumNpcState::Dead, EElysiumNpcState::Idle, true)),
-		static_cast<int32>(EElysiumNpcState::Dead));
-	TestEqual(TEXT("and one whose IDEAL state is dead stays dead too"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiaoTentacle, true,
-			EElysiumNpcState::Idle, EElysiumNpcState::Dead, true)),
-		static_cast<int32>(EElysiumNpcState::Dead));
-	TestEqual(TEXT("a live tentacle with an enemy is COMBAT"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiaoTentacle, true,
-			EElysiumNpcState::Alert, EElysiumNpcState::Alert, true)),
-		static_cast<int32>(EElysiumNpcState::Combat));
-	TestEqual(TEXT("and without one is IDLE"),
-		static_cast<int32>(FElysiumNpc::SelectIdealStateSpecies(ERule::MingXiaoTentacle, true,
-			EElysiumNpcState::Alert, EElysiumNpcState::Alert, false)),
-		static_cast<int32>(EElysiumNpcState::Idle));
-
-	// Through the slot: a spawned camera's slot 461 is the hardcoded ALERT (retail 3) and writes it
-	// as `m_IdealNPCState`, whatever its state.
-	FNpcKernelCondFixture Cam(TEXT("npc_VCamera"));
-	if (!TestNotNull(TEXT("the camera spawned"), Cam.Npc)) { return false; }
-	TestEqual(TEXT("a camera's slot 461 answers retail ALERT"), Cam.Npc->SelectIdealStateRetail(), 3);
-	TestEqual(TEXT("and writes it as the ideal state"), Cam.Npc->IdealStateRetail(), 3);
+	Tentacle->Senses.Memory.Enemy = Foe->Handle;
+	TestEqual(TEXT("a live tentacle with an enemy is COMBAT"), Tentacle->SelectIdealStateRetail(), 2);
+	Tentacle->Senses.Memory.Enemy = FElysiumEntityHandle();
+	TestEqual(TEXT("and without one is IDLE"), Tentacle->SelectIdealStateRetail(), 1);
+	Tentacle->WriteIdealStateRetail(7);
+	Tentacle->Senses.Memory.Enemy = Foe->Handle;
+	TestEqual(TEXT("a tentacle whose IDEAL state is dead stays dead, enemy or not"),
+		Tentacle->SelectIdealStateRetail(), 7);
 	return true;
 }
 
@@ -660,45 +658,45 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondDisturbedTest,
 	"Elysium.Substrate.NpcKernelConditions.Disturbed", GNpcKernelCondFlags)
 bool FElysiumNpcKernelCondDisturbedTest::RunTest(const FString&)
 {
-	FNpcKernelCondFixture F;
+	FNpcKernelCondFixture F(TEXT("npc_VGhoulCroucher"));
 	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
 	FElysiumPlayer* Player = F.World.Player();
 	if (!TestNotNull(TEXT("the player spawned"), Player)) { return false; }
 
-	TestFalse(TEXT("m_bWasDisturbed starts clear"), F.Npc->IsDisturbed());
+	TestFalse(TEXT("m_bWasDisturbed starts clear"), ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->IsDisturbed());
 
 	// The player arm: `m_hClosestPlayer` takes the DISTURBER, `OnDisturbedByPlayer` fires, and an
 	// `AddEntityRelationship(player, D_HT, 10)` record is written.
-	F.Npc->bUnawareExited = true;
-	F.Npc->OnDisturbed(Player);
-	TestTrue(TEXT("the latch is set"), F.Npc->IsDisturbed());
-	TestFalse(TEXT("m_bUnawareExited (+0x6667) is cleared"), F.Npc->bUnawareExited);
+	ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->bUnawareExited = true;
+	ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->OnDisturbed(Player);
+	TestTrue(TEXT("the latch is set"), ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->IsDisturbed());
+	TestFalse(TEXT("m_bUnawareExited (+0x6667) is cleared"), ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->bUnawareExited);
 	TestEqual(TEXT("m_hClosestPlayer takes the disturber"),
-		F.Npc->Senses.Memory.ClosestPlayer.Index, Player->Handle.Index);
+		ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->Senses.Memory.ClosestPlayer.Index, Player->Handle.Index);
 	F.World.World.Tick(F.World.World.NowSeconds());
 	TestEqual(TEXT("OnDisturbedByPlayer fired"), F.World.Counter(TEXT("disturbedbyplayer")), 1.f);
 	TestEqual(TEXT("and OnDisturbed did not"), F.World.Counter(TEXT("disturbed")), 0.f);
 	EElysiumRelationship Value = EElysiumRelationship::Neutral;
 	int32 Priority = 0;
 	TestTrue(TEXT("a relationship row was written against the player"),
-		F.Npc->Relationships.ResolveRow(Player->Handle, FString(), Value, Priority));
+		ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->Relationships.ResolveRow(Player->Handle, FString(), Value, Priority));
 	TestEqual(TEXT("D_HT"), static_cast<int32>(Value),
 		static_cast<int32>(EElysiumRelationship::Hate));
 	TestEqual(TEXT("priority 10"), Priority, 10);
 
 	// The latch: a second disturbance writes nothing and fires nothing.
-	F.Npc->bUnawareExited = true;
-	F.Npc->OnDisturbed(Player);
+	ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->bUnawareExited = true;
+	ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->OnDisturbed(Player);
 	F.World.World.Tick(F.World.World.NowSeconds());
-	TestTrue(TEXT("the second call leaves m_bUnawareExited alone"), F.Npc->bUnawareExited);
+	TestTrue(TEXT("the second call leaves m_bUnawareExited alone"), ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(F.Npc)->bUnawareExited);
 	TestEqual(TEXT("and fires no second output"),
 		F.World.Counter(TEXT("disturbedbyplayer")), 1.f);
 
 	// The non-player arm, on a fresh subject: the generic `SetClosestPlayer` sweep runs and
 	// `OnDisturbed` fires instead.
-	FNpcKernelCondFixture G;
+	FNpcKernelCondFixture G(TEXT("npc_VGhoulCroucher"));
 	if (!TestNotNull(TEXT("the second subject spawned"), G.Npc)) { return false; }
-	G.Npc->OnDisturbed(nullptr);
+	ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(G.Npc)->OnDisturbed(nullptr);
 	G.World.World.Tick(G.World.World.NowSeconds());
 	TestEqual(TEXT("a non-player disturber fires OnDisturbed"),
 		G.World.Counter(TEXT("disturbed")), 1.f);
@@ -870,44 +868,44 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondWerewolfTest,
 	"Elysium.Substrate.NpcKernelConditions.Werewolf", GNpcKernelCondFlags)
 bool FElysiumNpcKernelCondWerewolfTest::RunTest(const FString&)
 {
-	FNpcKernelCondFixture F;
-	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
+	FNpcKernelCondFixture F(TEXT("npc_VWerewolf"));
+	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Npc);
+	if (!TestNotNull(TEXT("the Werewolf spawned"), Wolf)) { return false; }
 
 	// `UpdateConditionDeathTriggered` (`0x103cc890`). The gate is `m_Activity == 0x11d` AND
 	// `m_DoorState == 1`; the activity seam answers -1, so the gate cannot pass here and the whole
 	// body is a single `ClearCondition(0x7a)`.
 	const EElysiumNpcCond DeathTriggered = static_cast<EElysiumNpcCond>(0x7a);
 	TestEqual(TEXT("the activity seam answers -1 (this runtime names activities)"),
-		F.Npc->CurrentRetailActivityId(), -1);
-	F.Npc->WerewolfDoorState = 1;
-	F.Npc->Cognition.Conditions.Set(DeathTriggered);
-	F.Npc->UpdateConditionDeathTriggered();
+		Wolf->CurrentRetailActivityId(), -1);
+	Wolf->WerewolfDoorState = 1;
+	Wolf->Cognition.Conditions.Set(DeathTriggered);
+	Wolf->UpdateConditionDeathTriggered();
 	TestFalse(TEXT("0x7a is cleared unconditionally at the top of the body"),
-		F.Npc->Cognition.Conditions.Has(DeathTriggered));
+		Wolf->Cognition.Conditions.Has(DeathTriggered));
 	F.World.World.Tick(F.World.World.NowSeconds());
 	TestEqual(TEXT("and with the gate closed the output does not fire"),
 		F.World.Counter(TEXT("deathtriggered")), 0.f);
 
 	// The door-state term on its own refuses too, which is the second half of the gate.
-	F.Npc->WerewolfDoorState = 0;
-	F.Npc->UpdateConditionDeathTriggered();
+	Wolf->WerewolfDoorState = 0;
+	Wolf->UpdateConditionDeathTriggered();
 	TestFalse(TEXT("a closed door leaves 0x7a clear"),
-		F.Npc->Cognition.Conditions.Has(DeathTriggered));
+		Wolf->Cognition.Conditions.Has(DeathTriggered));
 
-	// The gather suppression (`0x103d02b0`): the zone word and the 40-unit height delta. No
-	// registered classname is a werewolf, so the census row is what is exercised by name.
+	// The gather suppression (`0x103d02b0`): the zone word and the 40-unit height delta, on the
+	// werewolf `npc_VWerewolf` builds (story 5 step 2).
 	TestNotNull(TEXT("CNPC_VWerewolf is a census class"),
 		ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
-	TestFalse(TEXT("and npc_VHumanCombatant is not one, so the arm is skipped for it"),
-		F.Npc->IsRetailClass(TEXT("CNPC_VWerewolf")));
+	TestTrue(TEXT("and the subject is one"), Wolf->IsRetailClass(TEXT("CNPC_VWerewolf")));
 
 	// The arm is a SUPPRESSION: with the zone bits set and the enemy 40 units above, the melee pair
 	// is taken away. Driven through the condition set directly, because the gather's own entry gates
 	// (a live enemy, a world) are `ElysiumNpcCond::GatherAttackConditions`' and not this arm's.
-	F.Npc->WerewolfHintFlags = 0x4u;
-	TestTrue(TEXT("the zone word carries bit 0x4"), (F.Npc->WerewolfHintFlags & 0x4u) != 0);
+	Wolf->WerewolfHintFlags = 0x4u;
+	TestTrue(TEXT("the zone word carries bit 0x4"), (Wolf->WerewolfHintFlags & 0x4u) != 0);
 	TestFalse(TEXT("bit 0x100 is the other admitted one"),
-		(F.Npc->WerewolfHintFlags & 0x100u) != 0);
+		(Wolf->WerewolfHintFlags & 0x100u) != 0);
 	return true;
 }
 

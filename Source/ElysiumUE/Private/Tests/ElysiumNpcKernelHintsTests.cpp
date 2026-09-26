@@ -6,7 +6,13 @@
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -35,66 +41,72 @@ namespace
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 566's species table.
+// Slot 566's species bodies, each its class's own override.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsTypeSpeciesTest,
 	"Elysium.Substrate.NpcKernelHints.HintTypeSpecies", GHintsTestFlags)
 bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 {
-	using FRow = FElysiumNpc::FHintTypeSpecies;
-	auto Ask = [](const TCHAR* Cls, int32 Type)
+	// Ten DISTINCT slot-566 species bodies, each its class's own override (story 5 step 4): four
+	// with a real rule, four `return 1`, one `return 0`, and `CNPC_VBach` (`0x10365800`), which
+	// accepts 17000..17005 outright and FALLS THROUGH to the base body for everything else.
+	// `CNPC_Crow`'s (`0x10358c60`) is on a class no map stands and has no C++ class. The blade and
+	// claw brothers share `CNPC_VChangBros`'s body by inheriting its override.
+	struct FSpecies
 	{
-		return FElysiumNpc::FValidateHintTypeSpecies(FElysiumNpc::HintTypeSpeciesOf(Cls), Type);
+		const TCHAR* Class;
+		const TCHAR* Body;
+	};
+	static const FSpecies Species[] = {
+		{ TEXT("CNPC_VDog"), TEXT("0x10374aa0") },
+		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a9340") },
+		{ TEXT("CNPC_VTzimisce"), TEXT("0x103ba780") },
+		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d7ce0") },
+		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035db00") },
+		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361470") },
+		{ TEXT("CNPC_VChangBros"), TEXT("0x1036c6a0") },
+		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103af810") },
+		{ TEXT("CNPC_VZombie"), TEXT("0x103e03b0") },
+		{ TEXT("CNPC_VBach"), TEXT("0x10365800") },
+		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036c6a0") },
+		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036c6a0") },
+	};
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_hints_566"), 566);
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Species); ++Index)
+	{
+		Builder.AddNpcOfClass(Species[Index].Class, FVector(300.0 * Index, 0.0, 0.0),
+			Species[Index].Class);
+	}
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	for (const FSpecies& Row : Species)
+	{
+		FElysiumNpc* Npc = Fixture.Npc(Row.Class);
+		if (!TestNotNull(*FString::Printf(TEXT("%s stood through its factory"), Row.Class), Npc))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Npc });
+		TestEqual(*FString::Printf(TEXT("%s's slot-566 body"), Row.Class),
+			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 566)), FString(Row.Body));
+	}
+	// The hint's group gate is the base body's alone; every hint here passes it, so a base answer
+	// is the type switch's.
+	auto Ask = [&Fixture](const TCHAR* Cls, int32 Type)
+	{
+		FElysiumNpc::FHintWords Hint = MakeHint(Type);
+		Hint.GroupMask = 1;
+		return Fixture.Npc(Cls)->FValidateHintType(&Hint);
 	};
 
-	// Every row, by name, with the retail address it came from.
-	int32 Count = 0;
-	const FRow* Rows = FElysiumNpc::HintTypeSpeciesRows(Count);
-	// Ten DISTINCT bodies: four with a real rule, four `return 1`, one `return 0`, and — added by
-	// story 29d, family Senses10 — `CNPC_VBach` (`0x10365800`), which accepts 17000..17005 outright
-	// and FALLS THROUGH to the base body for everything else. `CNPC_Crow`'s (`0x10358c60`) is on a
-	// class no map stands and carries no row.
-	// `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw` share `CNPC_VChangBros`'s body and reach it
-	// by inheritance, which is why they are not rows.
-	TestEqual(TEXT("the table carries the ten ported slot-566 species bodies"), Count, 10);
-	TMap<FString, FString> ByClass;
-	for (int32 i = 0; i < Count; ++i)
-	{
-		ByClass.Add(FString(Rows[i].RetailClass), FString(Rows[i].Body));
-	}
-	TestFalse(TEXT("CNPC_Crow carries no row"), ByClass.Contains(TEXT("CNPC_Crow")));
-	// Story 29d, family Senses10.
-	TestEqual(TEXT("CNPC_VBach's body"), ByClass.FindRef(TEXT("CNPC_VBach")),
-		FString(TEXT("0x10365800")));
+	// `CNPC_VBach` (`0x10365800`), story 29d family Senses10.
 	TestTrue(TEXT("0x10365800 accepts 17000..17005 outright"),
 		Ask(TEXT("CNPC_VBach"), 17000) && Ask(TEXT("CNPC_VBach"), 17005));
-	TestFalse(TEXT("...and 16999 / 17006 are outside the range"),
+	TestFalse(TEXT("...and 16999 / 17006 fall through to the base, whose switch refuses them"),
 		Ask(TEXT("CNPC_VBach"), 16999) || Ask(TEXT("CNPC_VBach"), 17006));
-	TestTrue(TEXT("...and a type outside it FALLS THROUGH to the base rather than refusing"),
-		FElysiumNpc::HintTypeSpeciesFallsThroughToBase(
-			FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VBach"))));
-	TestFalse(TEXT("no other row falls through to the base"),
-		FElysiumNpc::HintTypeSpeciesFallsThroughToBase(
-			FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VWerewolf"))));
-	TestEqual(TEXT("CNPC_VDog's body"), ByClass.FindRef(TEXT("CNPC_VDog")),
-		FString(TEXT("0x10374aa0")));
-	TestEqual(TEXT("CNPC_VSabbatLeader's body"), ByClass.FindRef(TEXT("CNPC_VSabbatLeader")),
-		FString(TEXT("0x103a9340")));
-	TestEqual(TEXT("CNPC_VTzimisce's body"), ByClass.FindRef(TEXT("CNPC_VTzimisce")),
-		FString(TEXT("0x103ba780")));
-	TestEqual(TEXT("CNPC_VWerewolf's body"), ByClass.FindRef(TEXT("CNPC_VWerewolf")),
-		FString(TEXT("0x103d7ce0")));
-	TestEqual(TEXT("CNPC_VAndreiBlood's body"), ByClass.FindRef(TEXT("CNPC_VAndreiBlood")),
-		FString(TEXT("0x1035db00")));
-	TestEqual(TEXT("CNPC_VAsianVampire's body"), ByClass.FindRef(TEXT("CNPC_VAsianVampire")),
-		FString(TEXT("0x10361470")));
-	TestEqual(TEXT("CNPC_VChangBros's body"), ByClass.FindRef(TEXT("CNPC_VChangBros")),
-		FString(TEXT("0x1036c6a0")));
-	TestEqual(TEXT("CNPC_VSheriffMan's body"), ByClass.FindRef(TEXT("CNPC_VSheriffMan")),
-		FString(TEXT("0x103af810")));
-	TestEqual(TEXT("CNPC_VZombie's body"), ByClass.FindRef(TEXT("CNPC_VZombie")),
-		FString(TEXT("0x103e03b0")));
+	TestTrue(TEXT("...and a type the base accepts (0x2774) FALLS THROUGH to it and is accepted"),
+		Ask(TEXT("CNPC_VBach"), 0x2774));
+	TestFalse(TEXT("no other body falls through to the base"), Ask(TEXT("CNPC_VWerewolf"), 0x2774));
 
 	// `CNPC_VDog` (`0x10374aa0`): `== 12000`.
 	TestTrue(TEXT("VDog accepts 12000"), Ask(TEXT("CNPC_VDog"), 12000));
@@ -111,10 +123,8 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	TestTrue(TEXT("VTzimisce accepts 14000"), Ask(TEXT("CNPC_VTzimisce"), 14000));
 	TestTrue(TEXT("VTzimisce accepts 14001"), Ask(TEXT("CNPC_VTzimisce"), 14001));
 	TestFalse(TEXT("VTzimisce rejects 14002"), Ask(TEXT("CNPC_VTzimisce"), 14002));
-	TestTrue(TEXT("and VTzimisce is the one body that null-checks its hint"),
-		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VTzimisce"))->bNullChecks);
-	TestFalse(TEXT("the others do not"),
-		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VWerewolf"))->bNullChecks);
+	TestFalse(TEXT("and VTzimisce, the one body that null-checks its hint, refuses a null hint"),
+		Fixture.Npc(TEXT("CNPC_VTzimisce"))->FValidateHintType(nullptr));
 
 	// `CNPC_VWerewolf` (`0x103d7ce0`): `t != 0x3a9f && 14999 < t && t < 0x3aab`.
 	TestFalse(TEXT("VWerewolf rejects 14999"), Ask(TEXT("CNPC_VWerewolf"), 14999));
@@ -127,43 +137,17 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 		Ask(TEXT("CNPC_VWerewolf"), 15018));
 	TestFalse(TEXT("VWerewolf rejects 15019"), Ask(TEXT("CNPC_VWerewolf"), 15019));
 
-	// The six constant bodies.
+	// The constant bodies.
 	TestTrue(TEXT("VAndreiBlood accepts anything"), Ask(TEXT("CNPC_VAndreiBlood"), -1));
 	TestTrue(TEXT("VAsianVampire accepts anything"), Ask(TEXT("CNPC_VAsianVampire"), 99999));
 	TestTrue(TEXT("VChangBros accepts anything"), Ask(TEXT("CNPC_VChangBros"), 0));
 	TestTrue(TEXT("VSheriffMan accepts anything"), Ask(TEXT("CNPC_VSheriffMan"), 700));
 	TestFalse(TEXT("VZombie accepts nothing"), Ask(TEXT("CNPC_VZombie"), 700));
 
-	// The blade and claw brothers reach `0x1036c6a0` by inheriting `FElysiumNpcChangBros`'s override
-	// (story 5 step 3), not by a row of their own: asked through the vtable on spawned brothers.
-	TestNull(TEXT("CNPC_VChangBrosBlade carries no row of its own"),
-		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VChangBrosBlade")));
-	{
-		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_hints_brothers"), 566);
-		Builder.AddNpcOfClass(TEXT("blade"), FVector::ZeroVector, TEXT("CNPC_VChangBrosBlade"));
-		Builder.AddNpcOfClass(TEXT("claw"), FVector(300.0, 0.0, 0.0), TEXT("CNPC_VChangBrosClaw"));
-		FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-		FElysiumNpc* Blade = Fixture.Npc(TEXT("blade"));
-		FElysiumNpc* Claw = Fixture.Npc(TEXT("claw"));
-		TestNotNull(TEXT("the blade brother spawned"), Blade);
-		TestNotNull(TEXT("the claw brother spawned"), Claw);
-		if (Blade != nullptr && Claw != nullptr)
-		{
-			FElysiumNpcWorldFixture::Quiet({ Blade, Claw });
-			FElysiumNpc::FHintWords Words;
-			Words.bValid = true;
-			Words.HintType = 42;
-			TestTrue(TEXT("CNPC_VChangBrosBlade inherits the ChangBros body"),
-				Blade->FValidateHintType(&Words));
-			TestTrue(TEXT("CNPC_VChangBrosClaw inherits it too"), Claw->FValidateHintType(&Words));
-		}
-	}
-
-	// A class with no override and no ancestor carrying one runs the base body, which is 29d's.
-	TestNull(TEXT("CAI_BaseNPCTroika carries no species row"),
-		FElysiumNpc::HintTypeSpeciesOf(TEXT("CAI_BaseNPCTroika")));
-	TestFalse(TEXT("and a null row cannot answer for the base body"),
-		FElysiumNpc::FValidateHintTypeSpecies(nullptr, 700));
+	// The blade and claw brothers reach `0x1036c6a0` by inheriting `FElysiumNpcChangBros`'s override.
+	TestTrue(TEXT("CNPC_VChangBrosBlade inherits the ChangBros body"),
+		Ask(TEXT("CNPC_VChangBrosBlade"), 42));
+	TestTrue(TEXT("CNPC_VChangBrosClaw inherits it too"), Ask(TEXT("CNPC_VChangBrosClaw"), 42));
 	return true;
 }
 
@@ -236,9 +220,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsRulesTest,
 bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("kernel_hints_rules"), 29031u);
-	Builder.AddNpc(TEXT("wolf"));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("wolf"));
+	FElysiumNpcWerewolf* Npc = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
 	if (!TestNotNull(TEXT("the fixture NPC spawned"), Npc))
 	{
 		return false;
@@ -247,12 +231,12 @@ bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 
 	// `GetHintTeleportPriority` (`0x103d3220`) — the whole map, including the two types that share
 	// priority 3 and the unlisted zero.
-	TestEqual(TEXT("15001 -> 2"), FElysiumNpc::GetHintTeleportPriority(0x3a99), 2);
-	TestEqual(TEXT("15002 -> 3"), FElysiumNpc::GetHintTeleportPriority(0x3a9a), 3);
-	TestEqual(TEXT("15003 -> 3 as well"), FElysiumNpc::GetHintTeleportPriority(0x3a9b), 3);
-	TestEqual(TEXT("15000 -> 1"), FElysiumNpc::GetHintTeleportPriority(15000), 1);
-	TestEqual(TEXT("15007 -> 4, the highest"), FElysiumNpc::GetHintTeleportPriority(0x3a9f), 4);
-	TestEqual(TEXT("anything else -> 0"), FElysiumNpc::GetHintTeleportPriority(0x3aa0), 0);
+	TestEqual(TEXT("15001 -> 2"), FElysiumNpcWerewolf::GetHintTeleportPriority(0x3a99), 2);
+	TestEqual(TEXT("15002 -> 3"), FElysiumNpcWerewolf::GetHintTeleportPriority(0x3a9a), 3);
+	TestEqual(TEXT("15003 -> 3 as well"), FElysiumNpcWerewolf::GetHintTeleportPriority(0x3a9b), 3);
+	TestEqual(TEXT("15000 -> 1"), FElysiumNpcWerewolf::GetHintTeleportPriority(15000), 1);
+	TestEqual(TEXT("15007 -> 4, the highest"), FElysiumNpcWerewolf::GetHintTeleportPriority(0x3a9f), 4);
+	TestEqual(TEXT("anything else -> 0"), FElysiumNpcWerewolf::GetHintTeleportPriority(0x3aa0), 0);
 
 	// `IsHintUnusable` (`0x102d14c0`) — three arms in retail's order.
 	{
@@ -289,27 +273,27 @@ bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 	// `SelectScheduleForHint` (`0x103ce9b0`) — three typed answers, then the distance test.
 	{
 		TestEqual(TEXT("no hint -> schedule 0x163"),
-			FElysiumNpc::SelectScheduleForHint(nullptr, 0.f, 0.f), 0x163);
+			FElysiumNpcWerewolf::SelectScheduleForHint(nullptr, 0.f, 0.f), 0x163);
 		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa4);
-		TestEqual(TEXT("15012 -> 0x15f"), FElysiumNpc::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x15f);
+		TestEqual(TEXT("15012 -> 0x15f"), FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x15f);
 		Hint.HintType = 0x3aa5;
-		TestEqual(TEXT("15013 -> 0x160"), FElysiumNpc::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x160);
+		TestEqual(TEXT("15013 -> 0x160"), FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x160);
 		Hint.HintType = 0x3aaa;
-		TestEqual(TEXT("15018 -> 0x164"), FElysiumNpc::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x164);
+		TestEqual(TEXT("15018 -> 0x164"), FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x164);
 		Hint.HintType = 0x3aa3;   // an unlisted type falls to the distance test
 		TestEqual(TEXT("beyond the goal tolerance -> 0x15a"),
-			FElysiumNpc::SelectScheduleForHint(&Hint, 33.0f, 32.0f), 0x15a);
+			FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 33.0f, 32.0f), 0x15a);
 		TestEqual(TEXT("at the tolerance exactly -> 0x15b, because retail's test is `>`"),
-			FElysiumNpc::SelectScheduleForHint(&Hint, 32.0f, 32.0f), 0x15b);
+			FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 32.0f, 32.0f), 0x15b);
 		TestEqual(TEXT("inside it -> 0x15b"),
-			FElysiumNpc::SelectScheduleForHint(&Hint, 1.0f, 32.0f), 0x15b);
+			FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 1.0f, 32.0f), 0x15b);
 	}
 
 	// `SetHintActivity`'s switch (`0x103d6000`). Every case, with both draws.
 	{
 		auto Act = [](int32 Type, bool bPct, bool bFlip)
 		{
-			return FElysiumNpc::HintActivityForType(Type, bPct, bFlip);
+			return FElysiumNpcWerewolf::HintActivityForType(Type, bPct, bFlip);
 		};
 		TestEqual(TEXT("15000 -> 0x10c"), Act(15000, false, false), 0x10c);
 		TestEqual(TEXT("0x3a99 -> 0x119"), Act(0x3a99, false, false), 0x119);
@@ -361,16 +345,16 @@ bool FElysiumNpcKernelHintsGeometryTest::RunTest(const FString&)
 		const FVector Start(0.0, 0.0, 0.0);
 		const FVector Dir(1.0, 0.0, 0.0);
 		TestEqual(TEXT("a point 5 to the side is 5 from the line"),
-			FElysiumNpc::DistToHintCenterLine2D_3(Start, Dir, FVector(3.0, 5.0, 0.0)), 5.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(Start, Dir, FVector(3.0, 5.0, 0.0)), 5.0f,
 			KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("a point ON the line is 0 from it"),
-			FElysiumNpc::DistToHintCenterLine2D_3(Start, Dir, FVector(100.0, 0.0, 0.0)), 0.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(Start, Dir, FVector(100.0, 0.0, 0.0)), 0.0f,
 			KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("a point BEHIND the start still projects — no clamp"),
-			FElysiumNpc::DistToHintCenterLine2D_3(Start, Dir, FVector(-100.0, 4.0, 0.0)), 4.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(Start, Dir, FVector(-100.0, 4.0, 0.0)), 4.0f,
 			KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("and Z is ignored, because _DAT_104454c4 is 0.0 and the caller zeroes Dir.Z"),
-			FElysiumNpc::DistToHintCenterLine2D_3(Start, Dir, FVector(3.0, 5.0, 900.0)), 5.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(Start, Dir, FVector(3.0, 5.0, 900.0)), 5.0f,
 			KINDA_SMALL_NUMBER);
 	}
 
@@ -381,13 +365,13 @@ bool FElysiumNpcKernelHintsGeometryTest::RunTest(const FString&)
 		Hint.OriginCm = FVector(0.0, 0.0, 700.0);   // the Z is thrown away
 		Hint.Angles = FVector(0.0, 0.0, 0.0);
 		TestEqual(TEXT("the hint's Z does not reach the answer"),
-			FElysiumNpc::DistToHintCenterLine2D(Hint, FVector(3.0, 5.0, 0.0)), 5.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D(Hint, FVector(3.0, 5.0, 0.0)), 5.0f,
 			KINDA_SMALL_NUMBER);
 		// A hint pitched steeply still measures flat, because the forward's Z is zeroed and the
 		// remainder re-normalised before the projection.
 		Hint.Angles = FVector(80.0, 0.0, 0.0);
 		TestEqual(TEXT("and a steep pitch does not shrink the flattened direction"),
-			FElysiumNpc::DistToHintCenterLine2D(Hint, FVector(3.0, 5.0, 0.0)), 5.0f,
+			FElysiumNpcSabbatLeader::DistToHintCenterLine2D(Hint, FVector(3.0, 5.0, 0.0)), 5.0f,
 			KINDA_SMALL_NUMBER);
 	}
 
@@ -395,19 +379,19 @@ bool FElysiumNpcKernelHintsGeometryTest::RunTest(const FString&)
 	{
 		const FVector A(0.0, 0.0, 0.0);
 		const FVector B(10.0, 0.0, 0.0);
-		TestEqual(TEXT("beside the segment"), FElysiumNpc::DistToSegment(A, B, FVector(5.0, 4.0, 0.0)),
+		TestEqual(TEXT("beside the segment"), FElysiumNpcChangBros::DistToSegment(A, B, FVector(5.0, 4.0, 0.0)),
 			4.0f, KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("past the far end it CLAMPS, unlike the centre-line body"),
-			FElysiumNpc::DistToSegment(A, B, FVector(20.0, 0.0, 0.0)), 10.0f, KINDA_SMALL_NUMBER);
+			FElysiumNpcChangBros::DistToSegment(A, B, FVector(20.0, 0.0, 0.0)), 10.0f, KINDA_SMALL_NUMBER);
 		// The degenerate arm answers `_DAT_104454c4`, the shared 0.0f — NOT the distance to the
 		// point. For `CheckJumpPathToHintNode`, whose test is `dist < threshold`, a zero-length
 		// segment therefore always reads as "something is on the line".
 		TestEqual(TEXT("a degenerate segment answers 0.0, not the distance to its point"),
-			FElysiumNpc::DistToSegment(A, A, FVector(0.0, 3.0, 0.0)), 0.0f, KINDA_SMALL_NUMBER);
+			FElysiumNpcChangBros::DistToSegment(A, A, FVector(0.0, 3.0, 0.0)), 0.0f, KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("before the near end it CLAMPS to that end"),
-			FElysiumNpc::DistToSegment(A, B, FVector(-6.0, 8.0, 0.0)), 10.0f, KINDA_SMALL_NUMBER);
+			FElysiumNpcChangBros::DistToSegment(A, B, FVector(-6.0, 8.0, 0.0)), 10.0f, KINDA_SMALL_NUMBER);
 		TestEqual(TEXT("and Z reaches the answer: this is a 3D distance"),
-			FElysiumNpc::DistToSegment(A, B, FVector(5.0, 0.0, 12.0)), 12.0f, KINDA_SMALL_NUMBER);
+			FElysiumNpcChangBros::DistToSegment(A, B, FVector(5.0, 0.0, 12.0)), 12.0f, KINDA_SMALL_NUMBER);
 	}
 	return true;
 }
@@ -421,9 +405,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsWerewolfTest,
 bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("kernel_hints_werewolf"), 29031u);
-	Builder.AddNpc(TEXT("wolf"));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
+	Builder.AddNpcOfClass(TEXT("asian"), FVector(0.0, 800.0, 0.0), TEXT("CNPC_VAsianVampire"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("wolf"));
+	FElysiumNpcWerewolf* Npc = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpcAsianVampire* Asian = Fixture.NpcAs<FElysiumNpcAsianVampire>(TEXT("asian"));
+	if (!TestNotNull(TEXT("the AsianVampire spawned"), Asian))
+	{
+		return false;
+	}
 	if (!TestNotNull(TEXT("the fixture NPC spawned"), Npc))
 	{
 		return false;
@@ -467,25 +457,25 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 	// ring itself is family Motor's `LastJumpPosition` pair, in SOURCE UNITS, so the origins below
 	// are whole-unit multiples of the 2.54 cm scale.
 	{
-		Npc->LastJumpPositionIdx = 0;
+		Asian->LastJumpPositionIdx = 0;
 		FElysiumNpc::FHintWords A = MakeHint(0);
 		A.OriginCm = FVector(100.0 * ElysiumMove::U, 0.0, 0.0);
 		FElysiumNpc::FHintWords B = MakeHint(0);
 		B.OriginCm = FVector(200.0 * ElysiumMove::U, 0.0, 0.0);
 		FElysiumNpc::FHintWords C = MakeHint(0);
 		C.OriginCm = FVector(300.0 * ElysiumMove::U, 0.0, 0.0);
-		Npc->AddHintToStoredJumpPositions(A);
-		TestEqual(TEXT("slot 0 takes the first"), Npc->LastJumpPosition[0].X, 100.0, 0.01);
-		TestEqual(TEXT("and the index advances"), Npc->LastJumpPositionIdx, 1);
-		Npc->AddHintToStoredJumpPositions(B);
-		TestEqual(TEXT("slot 1 takes the second"), Npc->LastJumpPosition[1].X, 200.0, 0.01);
-		TestEqual(TEXT("and the index wraps at 2"), Npc->LastJumpPositionIdx, 0);
-		Npc->AddHintToStoredJumpPositions(C);
-		TestEqual(TEXT("the third overwrites the first"), Npc->LastJumpPosition[0].X, 300.0, 0.01);
+		Asian->AddHintToStoredJumpPositions(A);
+		TestEqual(TEXT("slot 0 takes the first"), Asian->LastJumpPosition[0].X, 100.0, 0.01);
+		TestEqual(TEXT("and the index advances"), Asian->LastJumpPositionIdx, 1);
+		Asian->AddHintToStoredJumpPositions(B);
+		TestEqual(TEXT("slot 1 takes the second"), Asian->LastJumpPosition[1].X, 200.0, 0.01);
+		TestEqual(TEXT("and the index wraps at 2"), Asian->LastJumpPositionIdx, 0);
+		Asian->AddHintToStoredJumpPositions(C);
+		TestEqual(TEXT("the third overwrites the first"), Asian->LastJumpPosition[0].X, 300.0, 0.01);
 		FElysiumNpc::FHintWords None;
-		Npc->AddHintToStoredJumpPositions(None);
+		Asian->AddHintToStoredJumpPositions(None);
 		TestEqual(TEXT("and a null hint writes nothing and does not advance"),
-			Npc->LastJumpPositionIdx, 1);
+			Asian->LastJumpPositionIdx, 1);
 	}
 
 	// `IsImperativeTeleportHint` (`0x103d3360`) — every gate, by flag and by authored name.
@@ -564,9 +554,9 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 		// `0x7f7fffff`. NOT the hint's own origin, and not zero.
 		const FVector Fallback = Npc->GetHintGroundpoint(Hint);
 		TestTrue(TEXT("an empty table warns and falls back to GetGroundpoint, which answers "
-			"vec3_invalid because no trace ran"), FElysiumNpc::IsVec3Invalid(Fallback));
+			"vec3_invalid because no trace ran"), FElysiumNpcWerewolf::IsVec3Invalid(Fallback));
 		TestFalse(TEXT("and vec3_invalid is not mistaken for an ordinary point"),
-			FElysiumNpc::IsVec3Invalid(FVector(1.0, 2.0, 3.0)));
+			FElysiumNpcWerewolf::IsVec3Invalid(FVector(1.0, 2.0, 3.0)));
 
 		// `PositionAtHint` therefore declines the move — the port's one named divergence here.
 		const FVector Before = Npc->Origin;
@@ -684,8 +674,22 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("kernel_hints_seams"), 29031u);
 	Builder.AddNpc(TEXT("sabbat"), FVector::ZeroVector, TEXT("npc_VSabbatLeader"));
+	Builder.AddNpcOfClass(TEXT("tzimisce"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VTzimisce"));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector(800.0, 0.0, 0.0), TEXT("CNPC_VWerewolf"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector(0.0, 800.0, 0.0), TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("sabbat"));
+	FElysiumNpcTzimisce* Tzim = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("tzimisce"));
+	FElysiumNpcWerewolf* Wolf = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	if (!TestNotNull(TEXT("the ChangBros spawned"), Chang))
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("the Tzimisce spawned"), Tzim) || !TestNotNull(TEXT("the werewolf spawned"), Wolf))
+	{
+		return false;
+	}
 	if (!TestNotNull(TEXT("the fixture NPC spawned"), Npc))
 	{
 		return false;
@@ -714,10 +718,10 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	TestTrue(TEXT("a hint index the seam cannot resolve is unusable"),
 		Npc->IsHintUnusable(0, 10.0));
 
-	// Slot 566's species entry point: this NPC IS a `CNPC_VSabbatLeader`, so a row exists — and the
-	// refusal below is the seam's, not the table's.
-	TestNotNull(TEXT("CNPC_VSabbatLeader carries a slot-566 row"),
-		FElysiumNpc::HintTypeSpeciesOf(TEXT("CNPC_VSabbatLeader")));
+	// Slot 566's species entry point: this NPC IS a `CNPC_VSabbatLeader`, whose own override
+	// (`0x103a9340`) fills the slot — and the refusal below is the seam's, not the body's.
+	TestEqual(TEXT("CNPC_VSabbatLeader fills slot 566 with its own body"),
+		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 566)), FString(TEXT("0x103a9340")));
 	TestFalse(TEXT("but slot 566 on a hint node refuses, because the hint cannot be read"),
 		Npc->FValidateHintTypeNode(0));
 
@@ -734,13 +738,13 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 
 	// `SelectTzimisceHintNode` (`0x103bfa50`) — the null-target arm zeroes the hint, and a
 	// double miss returns 0 without touching it.
-	Npc->ScheduleHost.HintNode = 5;
-	TestEqual(TEXT("a null target answers 0"), Npc->SelectTzimisceHintNode(nullptr), 0);
-	TestEqual(TEXT("and zeroes m_pHintNode"), Npc->ScheduleHost.HintNode, int32(INDEX_NONE));
-	Npc->ScheduleHost.HintNode = 5;
-	TestEqual(TEXT("two missed searches also answer 0"), Npc->SelectTzimisceHintNode(Npc), 0);
+	Tzim->ScheduleHost.HintNode = 5;
+	TestEqual(TEXT("a null target answers 0"), Tzim->SelectTzimisceHintNode(nullptr), 0);
+	TestEqual(TEXT("and zeroes m_pHintNode"), Tzim->ScheduleHost.HintNode, int32(INDEX_NONE));
+	Tzim->ScheduleHost.HintNode = 5;
+	TestEqual(TEXT("two missed searches also answer 0"), Tzim->SelectTzimisceHintNode(Tzim), 0);
 	TestEqual(TEXT("but leave m_pHintNode alone — only the null-target arm clears it"),
-		Npc->ScheduleHost.HintNode, 5);
+		Tzim->ScheduleHost.HintNode, 5);
 
 	// The two cover forwards. `0x10297430` refuses before calling the validator when the handle is
 	// unset; `0x102974f0` has no such pre-check but still cannot resolve a hint.
@@ -762,7 +766,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		Hint.HintIndex = 13;
 		Hint.TargetName = TEXT("end_of_the_line");
 		TestEqual(TEXT("a hint whose target name resolves to nothing falls back to itself"),
-			Npc->FindHintEndEntity(Hint), 13);
+			Wolf->FindHintEndEntity(Hint), 13);
 	}
 
 	// `CheckJumpPathToHintNode` (`0x1036df50`) — the gates, in retail's order.
@@ -770,36 +774,36 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		FElysiumNpc::FHintWords Hint = MakeHint(15000);
 		Hint.OriginCm = FVector(500.0, 0.0, 0.0);
 
-		const FElysiumEntityHandle CachedPlayer = Npc->Senses.Memory.ClosestPlayer;
-		Npc->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
+		const FElysiumEntityHandle CachedPlayer = Chang->Senses.Memory.ClosestPlayer;
+		Chang->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
 		TestFalse(TEXT("no cached m_hClosestPlayer blocks the jump before anything else is asked"),
-			Npc->CheckJumpPathToHintNode(Hint));
-		Npc->Senses.Memory.ClosestPlayer = CachedPlayer;
+			Chang->CheckJumpPathToHintNode(Hint));
+		Chang->Senses.Memory.ClosestPlayer = CachedPlayer;
 
 		FElysiumNpc::FHintWords None;
 		TestFalse(TEXT("and so does a hint the seam could not resolve"),
-			Npc->CheckJumpPathToHintNode(None));
+			Chang->CheckJumpPathToHintNode(None));
 
 		// With a player cached, the segment arms test against `_DAT_104ada34` (100 units); whether
 		// or not the fixture player stands within it, the sector gate below refuses.
 		TestEqual(TEXT("the sector seam answers 4, the value that CLOSES the gate"),
-			Npc->JumpPathSector(FVector::ZeroVector), 4);
+			Chang->JumpPathSector(FVector::ZeroVector), 4);
 		TestTrue(TEXT("the fixture cached a closest player"),
-			Npc->Senses.Memory.ClosestPlayer.IsSet());
+			Chang->Senses.Memory.ClosestPlayer.IsSet());
 		TestFalse(TEXT("so the jump is refused on the sector gate, not on the segment distance"),
-			Npc->CheckJumpPathToHintNode(Hint));
+			Chang->CheckJumpPathToHintNode(Hint));
 	}
 
 	// `SetHintActivity` (`0x103d6000`) — a null hint refuses without drawing.
 	{
 		FElysiumNpc::FHintWords None;
-		TestFalse(TEXT("SetHintActivity refuses a null hint"), Npc->SetHintActivity(None));
+		TestFalse(TEXT("SetHintActivity refuses a null hint"), Wolf->SetHintActivity(None));
 		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa4);   // a type the switch does not carry
-		TestFalse(TEXT("and a type outside the switch"), Npc->SetHintActivity(Hint));
+		TestFalse(TEXT("and a type outside the switch"), Wolf->SetHintActivity(Hint));
 		Hint.HintType = 0x3aaa;
 		// A type the switch carries still answers true: `PositionAtHint` declining a `vec3_invalid`
 		// groundpoint does not change `SetHintActivity`'s answer, which retail never reads back.
-		TestTrue(TEXT("but positions at and plays a type it does"), Npc->SetHintActivity(Hint));
+		TestTrue(TEXT("but positions at and plays a type it does"), Wolf->SetHintActivity(Hint));
 	}
 
 	// `CAI_Hint::OnRestore` (slot 130, `0x102d3ec0`), handed over from family Sounds. With no AI
@@ -829,7 +833,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		TestFalse(TEXT("PatrolNodeInterestRecordName answers nothing"),
 			Npc->PatrolNodeInterestRecordName(0, Unused));
 	}
-	TestFalse(TEXT("IsTzimisceHintUsable answers false"), Npc->IsTzimisceHintUsable(0, Npc));
+	TestFalse(TEXT("IsTzimisceHintUsable answers false"), Tzim->IsTzimisceHintUsable(0, Tzim));
 	return true;
 }
 

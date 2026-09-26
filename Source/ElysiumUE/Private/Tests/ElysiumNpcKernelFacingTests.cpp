@@ -5,6 +5,11 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcSabbatGunman.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -496,13 +501,13 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 	// trail is cleared and the scalar is retail's -1 literal; above it both come from the convars.
 	{
 		using FPick = FElysiumNpc::FMotionTrailPick;
-		const FPick Stopped = FElysiumNpc::SabbatGunmanMotionTrail(0.f, 50.f, 7, 2.f);
+		const FPick Stopped = FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(0.f, 50.f, 7, 2.f);
 		TestEqual(TEXT("a stopped gunman clears the motion trail"), Stopped.MotionTrail, 0);
 		TestEqual(TEXT("and takes retail's -1 scalar"), Stopped.PlaybackScalar, -1.f);
-		const FPick AtThreshold = FElysiumNpc::SabbatGunmanMotionTrail(50.f, 50.f, 7, 2.f);
+		const FPick AtThreshold = FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(50.f, 50.f, 7, 2.f);
 		TestEqual(TEXT("the threshold itself is on the stopped side of the compare"),
 			AtThreshold.MotionTrail, 0);
-		const FPick Moving = FElysiumNpc::SabbatGunmanMotionTrail(51.f, 50.f, 7, 2.f);
+		const FPick Moving = FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(51.f, 50.f, 7, 2.f);
 		TestEqual(TEXT("a moving one takes the convar's trail id"), Moving.MotionTrail, 7);
 		TestEqual(TEXT("and the convar's playback scalar"), Moving.PlaybackScalar, 2.f);
 	}
@@ -513,24 +518,24 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 		using FPlayback = FElysiumNpc::FMingXiaoPlayback;
 		auto Field = [](int32 Offset) { return static_cast<float>(Offset); };
 		const FPlayback WalkFast =
-			FElysiumNpc::MingXiaoPlaybackScalar(9, /*bDisciplineArm*/ true, 0, Field);
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(9, /*bDisciplineArm*/ true, 0, Field);
 		TestEqual(TEXT("the discipline arm reads +0x1c for ACT_WALK"), WalkFast.Scalar, 28.f);
 		TestTrue(TEXT("and knows it was a walk/run"), WalkFast.bWalkOrRun);
 		TestEqual(TEXT("ACT_RUN reads the same field"),
-			FElysiumNpc::MingXiaoPlaybackScalar(0x13, true, 0, Field).Scalar, 28.f);
-		const FPlayback Special = FElysiumNpc::MingXiaoPlaybackScalar(0x4b, true, 0, Field);
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(0x13, true, 0, Field).Scalar, 28.f);
+		const FPlayback Special = FElysiumNpcMingXiao::MingXiaoPlaybackScalar(0x4b, true, 0, Field);
 		TestEqual(TEXT("activity 0x4b reads +0x18"), Special.Scalar, 24.f);
 		TestTrue(TEXT("and leaves before the second scalar write"), Special.bSecondWriteSkipped);
 		TestEqual(TEXT("anything else reads +0x14"),
-			FElysiumNpc::MingXiaoPlaybackScalar(5, true, 0, Field).Scalar, 20.f);
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(5, true, 0, Field).Scalar, 20.f);
 
 		// The tentacle arm: `per * (6 - count) + base`, floored at 0.1.
 		TestEqual(TEXT("the tentacle arm blends +0x60 over (6 - count) onto +0x5c"),
-			FElysiumNpc::MingXiaoPlaybackScalar(9, false, 2, Field).Scalar, 96.f * 4.f + 92.f);
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(9, false, 2, Field).Scalar, 96.f * 4.f + 92.f);
 		TestEqual(TEXT("a full six tentacles leave the base alone"),
-			FElysiumNpc::MingXiaoPlaybackScalar(0x4b, false, 6, Field).Scalar, 84.f);
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(0x4b, false, 6, Field).Scalar, 84.f);
 		TestEqual(TEXT("and an all-zero record lands on retail's 0.1 floor"),
-			FElysiumNpc::MingXiaoPlaybackScalar(5, false, 0, [](int32) { return 0.f; }).Scalar,
+			FElysiumNpcMingXiao::MingXiaoPlaybackScalar(5, false, 0, [](int32) { return 0.f; }).Scalar,
 			0.1f);
 	}
 
@@ -583,16 +588,18 @@ bool FElysiumNpcKernelFacingPlayerTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_player"), 4218);
 	Builder.AddNpc(TEXT("leader"), FVector::ZeroVector, TEXT("npc_VSabbatLeader"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Leader = Fixture.Npc(TEXT("leader"));
+	FElysiumNpcSabbatLeader* Leader = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("leader"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	FElysiumPlayer* Player = Fixture.Player();
 	TestNotNull(TEXT("the leader spawned"), Leader);
 	TestNotNull(TEXT("the player spawned"), Player);
-	if (Leader == nullptr || Player == nullptr)
+	if (Leader == nullptr || Chang == nullptr || Player == nullptr)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Leader });
+	FElysiumNpcWorldFixture::Quiet({ Leader, Chang });
 
 	// `CNPC_VSabbatLeader::PlayerIsFacingMe` `0x103aaf50`: no closest player is false outright.
 	Leader->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
@@ -623,39 +630,39 @@ bool FElysiumNpcKernelFacingPlayerTest::RunTest(const FString&)
 	// `CNPC_VChangBros::UpdateFacingTimer` `0x1036d600`: passing all three gates LEAVES the stamp,
 	// anything else resets it to curtime. The retail distances are Source units, so 50 u is 127 cm
 	// and 150 u is 381 cm.
-	Leader->FacingTime = -1.0;
-	Leader->Origin = FVector(100.0, 0.0, 0.0);
-	Leader->UpdateFacingTimer();
-	TestEqual(TEXT("close, level and faced leaves the stamp alone"), Leader->FacingTime, -1.0);
+	Chang->FacingTime = -1.0;
+	Chang->Origin = FVector(100.0, 0.0, 0.0);
+	Chang->UpdateFacingTimer();
+	TestEqual(TEXT("close, level and faced leaves the stamp alone"), Chang->FacingTime, -1.0);
 
-	Leader->Origin = FVector(100.0, 0.0, 200.0);   // 200 cm of height, past the 50 u band
-	Leader->UpdateFacingTimer();
-	TestEqual(TEXT("too much height difference resets it to curtime"), Leader->FacingTime,
+	Chang->Origin = FVector(100.0, 0.0, 200.0);   // 200 cm of height, past the 50 u band
+	Chang->UpdateFacingTimer();
+	TestEqual(TEXT("too much height difference resets it to curtime"), Chang->FacingTime,
 		Fixture.World.NowSeconds(), 0.001);
 
-	Leader->FacingTime = -1.0;
-	Leader->Origin = FVector(500.0, 0.0, 0.0);     // 500 cm, past the 150 u band
-	Leader->UpdateFacingTimer();
-	TestEqual(TEXT("too far resets it"), Leader->FacingTime, Fixture.World.NowSeconds(), 0.001);
+	Chang->FacingTime = -1.0;
+	Chang->Origin = FVector(500.0, 0.0, 0.0);     // 500 cm, past the 150 u band
+	Chang->UpdateFacingTimer();
+	TestEqual(TEXT("too far resets it"), Chang->FacingTime, Fixture.World.NowSeconds(), 0.001);
 
-	Leader->FacingTime = -1.0;
-	Leader->Origin = FVector(0.0, 100.0, 0.0);     // beside the player, 90 degrees off his yaw
-	Leader->UpdateFacingTimer();
-	TestEqual(TEXT("a yaw delta past 70 degrees resets it"), Leader->FacingTime,
+	Chang->FacingTime = -1.0;
+	Chang->Origin = FVector(0.0, 100.0, 0.0);     // beside the player, 90 degrees off his yaw
+	Chang->UpdateFacingTimer();
+	TestEqual(TEXT("a yaw delta past 70 degrees resets it"), Chang->FacingTime,
 		Fixture.World.NowSeconds(), 0.001);
 
-	Leader->FacingTime = -1.0;
-	Leader->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
-	Leader->UpdateFacingTimer();
-	TestEqual(TEXT("and no closest player at all resets it"), Leader->FacingTime,
+	Chang->FacingTime = -1.0;
+	Chang->Senses.Memory.ClosestPlayer = FElysiumEntityHandle();
+	Chang->UpdateFacingTimer();
+	TestEqual(TEXT("and no closest player at all resets it"), Chang->FacingTime,
 		Fixture.World.NowSeconds(), 0.001);
 
 	// `CNPC_VChangBros::GetFacingTimeToTeleport` `0x1036dc60`: 21 s while the squad still has a
 	// second member, 7 s otherwise. **SEAM**: `ConnectedSquad()` answers nothing because this
 	// substrate stands no squad object, so the long arm is unreachable and 7 is the answer.
-	TestTrue(TEXT("the squad seam answers nothing"), Leader->ConnectedSquad() == nullptr);
+	TestTrue(TEXT("the squad seam answers nothing"), Chang->ConnectedSquad() == nullptr);
 	TestEqual(TEXT("so the facing-to-teleport wait is the lone-brother 7 seconds"),
-		Leader->GetFacingTimeToTeleport(), 7.f);
+		Chang->GetFacingTimeToTeleport(), 7.f);
 
 	return true;
 }
@@ -675,7 +682,7 @@ bool FElysiumNpcKernelFacingAdvanceTest::RunTest(const FString&)
 		TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder),
 		[](FElysiumRecordingServices& Services) { Services.bProvideNpcMotor = true; });
-	FElysiumNpc* Andrei = Fixture.Npc(TEXT("andrei"));
+	FElysiumNpcAndreiBlood* Andrei = Fixture.NpcAs<FElysiumNpcAndreiBlood>(TEXT("andrei"));
 	FElysiumPlayer* Player = Fixture.Player();
 	TestNotNull(TEXT("Andrei spawned"), Andrei);
 	TestNotNull(TEXT("the player spawned"), Player);

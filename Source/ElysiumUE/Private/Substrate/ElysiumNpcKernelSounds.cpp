@@ -23,6 +23,7 @@
 //     `IElysiumAudio::StopEntitySounds`, added by this story and answering nothing.
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelSoundsShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"      // ElysiumMove::U — the Source-unit/centimetre conversion
@@ -61,10 +62,6 @@ namespace
 	// `CAI_BaseNPCTroika::JustMadeSound` `0x102b4c40` draws `RandomFloat(0x3e800000, 0x3f400000)`.
 	constexpr float GSoundsTroikaSoundWaitMin = 0.25f;
 	constexpr float GSoundsTroikaSoundWaitMax = 0.75f;
-	// `CNPC_VTzimisce::vfunc487` `0x103b9f10` draws `RandomFloat(0x3f000000, 0x3f400000)` — and,
-	// unlike both bodies above, writes NO squad copy.
-	constexpr float GSoundsTzimisceSoundWaitMin = 0.5f;
-	constexpr float GSoundsTzimisceSoundWaitMax = 0.75f;
 
 	// `CAI_BaseNPC::ShouldPlayIdleSound` `0x1027a420`: `RandomInt(0, 999)` ordinarily, `RandomInt(
 	// 0, 20)` while `SCHED_TROIKA_COMFORT` runs (`1027a4a8` loads `0x14` into the weight).
@@ -121,12 +118,6 @@ namespace
 	{
 		const double Now = Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
 		return Npc.Dialogue.bInDialog || Npc.IsTalking(Now);
-	}
-
-	// `gpGlobals->curtime` (`DAT_1070b228 + 0xc`).
-	double SoundsCurTime(const FElysiumNpc& Npc)
-	{
-		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
 	}
 
 	// The NPC's current `m_NPCState`, in RETAIL's ordinals.
@@ -524,7 +515,7 @@ bool FElysiumNpc::FOkToMakeSound()
 // on every NPC), so gate 2 never refuses; the squad layer replaces the accessor, not this body.
 bool FElysiumNpc::BaseFOkToMakeSound() const
 {
-	const double Now = SoundsCurTime(*this);
+	const double Now = NpcKernelSoundsShared::SoundsCurTime(*this);
 	if (Now <= Senses.Memory.SoundWaitTime)
 	{
 		return false;
@@ -542,27 +533,10 @@ bool FElysiumNpc::BaseFOkToMakeSound() const
 	return true;
 }
 
-// `CAI_BaseNPCTroika::FUN_102b4c40` (`0x102b4c40`), slot 487 on the Troika line: `m_flSoundWaitTime
-// = curtime + RandomFloat(0.25, 0.75)`, and — when the squad is connected — a SECOND, INDEPENDENT
-// draw written to the squad's own copy at `+0x60`. Retail draws twice; it does not reuse the first
-// number, which is why the two clocks drift apart.
-//
-// `CNPC_VTzimisce::vfunc487` (`0x103b9f10`) is the one species override of this slot: the same
-// formula with a 0.5–0.75 draw and NO squad half at all, `FElysiumNpcTzimisce`'s override (story 5
-// step 3).
-void FElysiumNpc::TzimisceJustMadeSound()
-{
-	// `CNPC_VTzimisce::vfunc487` `0x103b9f10`, the body of `FElysiumNpcTzimisce::JustMadeSound`: 41
-	// bytes that end at the write. No squad copy, and no call into the Troika body.
-	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = SoundsCurTime(*this)
-		+ Stream.FRandRange(GSoundsTzimisceSoundWaitMin, GSoundsTzimisceSoundWaitMax);
-}
-
 void FElysiumNpc::JustMadeSound()
 {
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = SoundsCurTime(*this)
+	Senses.Memory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this)
 		+ Stream.FRandRange(GSoundsTroikaSoundWaitMin, GSoundsTroikaSoundWaitMax);
 
 	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
@@ -578,7 +552,7 @@ void FElysiumNpc::JustMadeSound()
 void FElysiumNpc::BaseJustMadeSound()
 {
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	Senses.Memory.SoundWaitTime = SoundsCurTime(*this) + Stream.FRandRange(GSoundsBaseSoundWaitMin,
+	Senses.Memory.SoundWaitTime = NpcKernelSoundsShared::SoundsCurTime(*this) + Stream.FRandRange(GSoundsBaseSoundWaitMin,
 		GSoundsBaseSoundWaitMax);
 	if (ScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
 	{
@@ -627,7 +601,7 @@ bool FElysiumNpc::ShouldPlayIdleSound()
 	// Story 29d, family **SpeciesAnim10**: `CNPC_VZombie#509` is `0x103e0fa0`, which REPLACES this
 	// body wholesale — no dialog refusal, no state test, no `SF_NPC_GAG` — and adds a 1-in-21 arm on
 	// `SCHED_TROIKA_COMFORT` that skips the float-sound gate. It is `FElysiumNpcZombie`'s override
-	// (story 5 step 3); the body is `ShouldPlayIdleSoundZombie` in `ElysiumNpcKernelAnim10_2.cpp`.
+	// (story 5 step 3), whose body is in `ElysiumNpcZombie.cpp` (story 5 step 4).
 	if (SoundsIsInDialog(*this))
 	{
 		return false;
@@ -824,7 +798,7 @@ bool FElysiumNpc::BaseShouldPlayFloatSound() const
 	{
 		return false;
 	}
-	if (SoundsCurTime(*this) < NextFloatSoundTime)
+	if (NpcKernelSoundsShared::SoundsCurTime(*this) < NextFloatSoundTime)
 	{
 		return false;
 	}
@@ -855,18 +829,4 @@ void FElysiumNpc::StopLoopingSounds()
 	{
 		Audio->StopEntitySounds(Handle, /*retail's literal second argument*/ 1);
 	}
-}
-
-// ==================================================================================================
-// `CNPC_VManBat::m_bHasPlayedFlyBySound`
-// ==================================================================================================
-
-// `FUN_10390040` (`0x10390040`). Eight bytes: `*(bool*)(this + 0x66b8) = false`.
-//
-// UNRECOVERED: the body has NO caller anywhere in the image and nothing sets the byte either, so the
-// fly-by sound this latch exists for was cut or is emitted through a path the census does not reach.
-// The reset is ported verbatim; the latch has no producer and no consumer.
-void FElysiumNpc::ClearHasPlayedFlyBySound()
-{
-	bHasPlayedFlyBySound = false;
 }

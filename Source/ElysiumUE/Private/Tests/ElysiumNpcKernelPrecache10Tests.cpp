@@ -5,6 +5,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -679,9 +680,9 @@ bool FElysiumNpcKernelPrecache10MingXiaoTentacleTest::RunTest(const FString&)
 			TEXT("sound:character/monster/ming xiao/tentacle_flopping_loop.wav:0"),
 		});
 	TestEqual(TEXT("+0x6664 and +0x6668 are ONE model's index, because retail pushes one string"),
-		Fix.Species->ModeIndexTentacleToGrub, Fix.Species->ModeIndexGrub);
+		ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix.Species)->ModeIndexTentacleToGrub, ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix.Species)->ModeIndexGrub);
 	TestNotEqual(TEXT("+0x666c is the transformation model's, a different index"),
-		Fix.Species->ModeIndexGrubToProxy, Fix.Species->ModeIndexGrub);
+		ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix.Species)->ModeIndexGrubToProxy, ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix.Species)->ModeIndexGrub);
 	return Precache10CheckTroikaControl(*this, Fix);
 }
 

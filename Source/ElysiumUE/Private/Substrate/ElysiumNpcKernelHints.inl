@@ -134,10 +134,6 @@ static FHintRestoreResult HintOnRestore(const FHintWords& Hint);
 // different things per species. These are the ones this family's bodies read, declared by retail
 // name with the species class that owns the offset, exactly as family Squad declared its four.
 
-int32 TeleportHintNode = INDEX_NONE;  // +0x66b0 CNPC_VWerewolf::m_pTeleportHint (walked)
-int32 MoveHintNode = INDEX_NONE;      // +0x66bc CNPC_VWerewolf::m_pMoveHint (walked)
-bool bRandomHint = false;             // +0x66c8 CNPC_VWerewolf::m_bRandomHint (walked)
-int32 WerewolfDoorState = 0;          // +0x6680 CNPC_VWerewolf::m_DoorState (walked)
 uint32 WerewolfHintFlags = 0;         // +0x66e8 CNPC_VWerewolf, the hint-gate bit word (walked)
 //
 // `+0x66b8 m_vLastJumpPosition[2]` and `+0x66d0 m_iLastJumpPositionIdx` — the ring
@@ -165,89 +161,8 @@ struct FWerewolfHintGroundpoint
 	int32 HintNode = INDEX_NONE;                        // +0x04
 	FVector GroundpointUnits = FVector::ZeroVector;     // +0x08
 };
-TArray<FWerewolfHintGroundpoint> WerewolfHintGroundpoints;  // +0x6714 / +0x6720
-
-// --- Slot 566 `FValidateHintType`: the species half -----------------------------------------------
-//
-// THE SLOT ITSELF IS NOT THIS STORY'S. Slot 566's Troika-line body (`0x10295c20`, layer 11) is
-// story 29d's and the generator still emits its stub, so `FElysiumNpc::FValidateHintType(void*)` is
-// taken. What 29c-1 owns is the SPECIES half — the bodies with a real per-species rule and six
-// with a constant — and it lands under the name below until 29d's body can route to it.
-//
-// Every species body reads the hint's `m_nHintType` (`+0x5dc`) and nothing else. The base body is
-// the one that reads `m_iGroupID` (`+0x470`) and ANDs it against `m_iHintGroups` (`+0x62e4`) before
-// switching on the type, so the group gate is 29d's and `HintGroupMask` stays unread by this family.
-
-enum class EHintTypeRule : uint8
-{
-	/** Retail's whole body is `return 1;` — every hint type is accepted. */
-	AlwaysTrue,
-	/** Retail's whole body is `return 0;`. */
-	AlwaysFalse,
-	/** `m_nHintType == Lo`. */
-	Equals,
-	/** `Lo <= m_nHintType <= Hi`. */
-	InRange,
-	/** `Lo <= m_nHintType <= Hi && m_nHintType != Except`. */
-	InRangeExcept,
-	/** `Lo <= m_nHintType <= Hi` OUTRIGHT, and otherwise FALL THROUGH to the base body
-	 *  (`CAI_BaseNPCTroika::FValidateHintType`, `0x10295c20`) rather than answering false. Story
-	 *  29d's `CNPC_VBach` (`0x10365800`) is the one row, and it is why
-	 *  `HintTypeSpeciesFallsThroughToBase` exists: a `false` from such a row means "ask the base",
-	 *  not "no". */
-	InRangeOrBase,
-};
-
-/** One row of retail's slot-566 species table: the census class, the body that fills the slot for
- *  it (checkable against `docs/vtmb/npc-kernel/slots.md`), and the rule that body is. */
-struct FHintTypeSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	EHintTypeRule Rule = EHintTypeRule::AlwaysTrue;
-	int32 Lo = 0;
-	int32 Hi = 0;
-	int32 Except = 0;
-	/** Retail's body dereferences the hint without a null check. Only `CNPC_VTzimisce` tests it. */
-	bool bNullChecks = false;
-};
-
-/** The table: 11 rows. `CNPC_VBach` (`0x10365800`) and `CNPC_VManBat` (`0x1038e480`) also override
- *  slot 566 but chain into the base body / build a name from a random draw, so both are 29d's and
- *  are deliberately absent rather than guessed at. */
-static const FHintTypeSpecies* HintTypeSpeciesRows(int32& OutCount);
-
-/** The row for a retail class name, walking no base chain — a species with no row of its own runs
- *  the base body, which is 29d's. Null when the table carries no row for it. */
-static const FHintTypeSpecies* HintTypeSpeciesOf(const TCHAR* InRetailClass);
-
-/** The rule applied. A null row is "no species override", which this family cannot answer for. */
-static bool FValidateHintTypeSpecies(const FHintTypeSpecies* Row, int32 HintType);
-
-/** Does a `false` from `FValidateHintTypeSpecies` on this row mean "ask the base body" rather than
- *  "no"? True only for `EHintTypeRule::InRangeOrBase`. Story 29d, family Senses10. */
-static bool HintTypeSpeciesFallsThroughToBase(const FHintTypeSpecies* Row);
-
 
 // --- The bodies -----------------------------------------------------------------------------------
-
-/** `CNPC_VAsianVampire::AddHintToStoredJumpPositions` (`0x10361990`) — push the hint's origin into
- *  the two-slot ring at `m_vLastJumpPosition`, then advance and wrap `m_iLastJumpPositionIdx`. */
-void AddHintToStoredJumpPositions(const FHintWords& Hint);
-
-/** `CNPC_VChangBros::CheckJumpPathToHintNode` (`0x1036df50`) — may this brother jump to the hint
- *  without crossing the closest player, or the other brother, or a sector-4 endpoint? */
-bool CheckJumpPathToHintNode(const FHintWords& Hint) const;
-
-/** `CNPC_VVampireBoss::DistToSegment` (`0x103c6b70`) — the point-to-segment distance
- *  `CheckJumpPathToHintNode` tests against `_DAT_104ada34`. Verbatim, including the degenerate arm,
- *  which answers `0.0` and NOT the distance to the endpoint. */
-static float DistToSegment(const FVector& A, const FVector& B, const FVector& P);
-
-/** SEAM for `CNPC_VChangBros::GetSector(pos)` — the map-authored sector index the jump-path check
- *  compares against 4. No sector partition exists on this substrate. Answers 0, which is "not
- *  sector 4" and so does not block a jump retail would have allowed. */
-int32 JumpPathSector(const FVector& PositionCm) const;
 
 /** SEAM for the entity vtable `+0x370` position accessor `SelectTzimisceHintNode` (`0x103bfa50`)
  *  compares through — NOT `+0x364 GetAbsOrigin`, which the rest of this family uses. Slot 220 is
@@ -263,55 +178,13 @@ int32 CurrentRetailActivityId() const;
  *  `OnInterestingPlaceArrived`, take the INTO arm or the idle arm, and stamp `m_flWaitFinished`. */
 void ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bClaimSecondary, double Now);
 
-/** `CNPC_VWerewolf::ClearMoveHint` (`0x103d4690`). */
-void ClearMoveHint();
-
-/** `CNPC_VWerewolf::ClearTeleportHint` (`0x103d4760`). */
-void ClearTeleportHint();
-
-/** `CNPC_VVampireBoss::DistToHintCenterLine2D_3` (`0x103c6680`) — the squared-then-rooted distance
- *  from `Point` to the line through `LineStart` along `LineDir`. */
-static float DistToHintCenterLine2D_3(const FVector& LineStart, const FVector& LineDir,
-	const FVector& Point);
-
-/** `CNPC_VVampireBoss::DistToHintCenterLine2D_2` (`0x103c6570`) — the same, with the line taken from
- *  the hint's own origin and facing, flattened to 2D. */
-static float DistToHintCenterLine2D(const FHintWords& Hint, const FVector& PointCm);
-
-/** `CNPC_VWerewolf::FindHintEndEntity` (`0x103d6520`) — follow the hint's `m_strTargetName` to
- *  another hint, then one further unchecked hop from that hint's own target name. */
-int32 FindHintEndEntity(const FHintWords& Hint) const;
-
 /** `0x10365780` — the task-side hint install: search within 5000 units, install at
  *  `ScheduleHost.HintNode` and complete the task, or write the fail text and `TaskFail(4)`. */
 bool FindHintNode(int32 HintType, uint8 SearchFlags);
 
-/** `0x103bfa50` — `CNPC_VTzimisce`'s two-group hint pick (14000 vs 14001 within 200 units, nearer
- *  wins, loser released with a 0.5 s reuse delay). NAMED for what it does: the generic
- *  `FindHintNode` above is a different behaviour that happens to share 29c's target name. */
-int32 SelectTzimisceHintNode(const FElysiumEntity* Anchor);
-
-/** SEAM for `0x103bfc20`, the usability check `SelectTzimisceHintNode` applies to its winner before
- *  choosing between the two schedule ids. Answers false. */
-bool IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const;
-
-/** `CNPC_VWerewolf::GetHintGroundpoint` (`0x103d6770`) — the authored groundpoint for a hint, or
- *  retail's `DevWarning` plus the plain `GetGroundpoint` fallback. SOURCE UNITS, because family
- *  Motor's `GetGroundpoint` is and because the fallback can answer `vec3_invalid`, a SENTINEL that
- *  no unit conversion may be applied to. */
-FVector GetHintGroundpoint(const FHintWords& Hint) const;
-
-/** Is `Value` retail's `vec3_invalid` — `DAT_10713de0/de4/de8`, which `staticinit_101371a0` fills
- *  with `0x7f7fffff` (`FLT_MAX`)? `GetGroundpoint`'s no-hit answer, which `PositionAtHint` has to
- *  recognise. */
-static bool IsVec3Invalid(const FVector& Value);
-
 // `CNPC_VWerewolf::GetGroundpoint` (`0x103d6a40`), the fallback `GetHintGroundpoint` ends at, is
 // family **Motor**'s body and is declared in `ElysiumNpcKernelMotor.inl`. It takes and answers
 // SOURCE UNITS.
-
-/** `CNPC_VWerewolf::GetHintTeleportPriority` (`0x103d3220`) — the hint-type to priority map. */
-static int32 GetHintTeleportPriority(int32 HintType);
 
 /** `0x10297430` — resolve `m_hHintCoverObject` (`+0x6448`) and forward into the cover validator
  *  with the hint's `m_flTargetAngleRangeDot` and retail's `0.731`. */
@@ -319,18 +192,6 @@ bool IsHintCoverValid(int32 HintNode) const;
 
 /** `0x102974f0` — the same forward with `1.1` and no handle-validity pre-check. */
 bool IsHintCoverValidLoose(int32 HintNode) const;
-
-/** `CNPC_VWerewolf::IsImperativeTeleportHint` (`0x103d3360`) — the authored-name ladder that says a
- *  teleport hint must be taken. */
-bool IsImperativeTeleportHint(const FHintWords& Hint) const;
-
-/** SEAM for the Werewolf's vtable `+0x9a4` trace (slot 617), the last gate of the
- *  `jump_to_platform` arm. Answers true — retail's "trace was blocked" answer, which is the arm that
- *  does NOT call the hint imperative. */
-bool WerewolfHintTrace(const FVector& PositionCm) const;
-
-/** `CNPC_VWerewolf::IsValidBreakHint` (`0x103d8550`). */
-bool IsValidBreakHint(const FHintWords& Hint, double Now) const;
 
 /** `0x102781e0` — `SetHintGroup(string_t)`: write `m_strHintGroup` (`+0x5db0`) and, only on a real
  *  change, dispatch slot 551 `OnChangeHintGroup(old, new)`. NAMED `SetHintGroup`, not 29c's
@@ -344,9 +205,6 @@ bool PlayHintIdleActivity(double Now);
  *  types: a shoot-target/enemy LOS test through the engine trace. Answers true, which is retail's
  *  "the gate passed" answer and the arm that restarts the activity. */
 bool HintIdleActivityGate() const;
-
-/** `CNPC_VWerewolf::PositionAtHint` (`0x103d6280`) — snap to the hint's groundpoint and facing. */
-void PositionAtHint(const FHintWords& Hint);
 
 /** `0x1029f780` — the cached patrol-node interest-place resolve at `+0x6300`. */
 int32 ResolvePatrolInterestPlace(int32 PatrolNode);
@@ -380,23 +238,3 @@ void MoveToBoneOriginAngles(const TCHAR* BoneName, bool bMoveOrigin, bool bMoveA
 void SetMotorHintYaw(float Yaw);
 void ReleaseMotorHintYaw();
 
-/** `CNPC_VWerewolf::SelectScheduleForHint` (`0x103ce9b0`) — the pure half: the three hint-type
- *  answers plus the save-position distance test. Distances in SOURCE UNITS, as retail's are. */
-static int32 SelectScheduleForHint(const FHintWords* Hint, float DistToSavePositionUnits,
-	float GoalToleranceUnits);
-
-/** The node-index form. */
-int32 SelectScheduleForHint(int32 HintNode) const;
-
-/** `CNPC_VWerewolf::SetHintActivity` (`0x103d6000`) — the pure half: the hint type to activity
- *  switch, with the two random draws already made. */
-static int32 HintActivityForType(int32 HintType, bool bPercentRollPassed, bool bCoinFlip);
-
-/** The whole body: draw, switch, `PositionAtHint`, `RestartIdealActivity`. */
-bool SetHintActivity(const FHintWords& Hint);
-
-/** `CNPC_VWerewolf::SetMoveHint` (`0x103d44e0`). */
-void SetMoveHint(int32 HintNode, bool bRandom);
-
-/** `CNPC_VWerewolf::SetTeleportHint` (`0x103d45c0`). */
-void SetTeleportHint(int32 HintNode);

@@ -8,6 +8,8 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -27,7 +29,7 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelSquadFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // -------------------------------------------------------------------------------------------------
-// Slot 546: the species table, every row by name.
+// Slot 546: the deferred rows' table, and every species' own row through its override.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadSlotNameTableTest,
@@ -36,16 +38,14 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FSquadSlotSpecies* Rows = FElysiumNpc::SquadSlotSpeciesRows(Count);
-	// Retail has 60 census override classes; the 16 of them with no instance (`population.md`
-	// § "NPC classes with no instance") carry no row.
-	TestEqual(TEXT("the table carries the Troika line plus 44 census override classes"), Count, 45);
+	// Every introduced species holds its own id-space row in its override (story 5 step 4); the
+	// table keeps the Troika line and the three controller-line classes deferred to step 7.
+	TestEqual(TEXT("the table carries the Troika line plus the three deferred controller classes"),
+		Count, 4);
 
-	// Every row, by name: the class resolves in the census, the census says the same body fills
-	// slot 546 for it, and the recovered id space translates NOTHING — the local range is the 9999
-	// "empty" sentinel on all 44 species, so every id answers `<<null>>`.
-	TSet<FString> Bodies;
-	TSet<FString> IdSpaces;
-	int32 SpeciesRows = 0;
+	// Every table row, by name: the class resolves in the census, the census says the same body
+	// fills slot 546 for it, and the recovered id space translates NOTHING — the local range is the
+	// 9999 "empty" sentinel, so every id answers `<<null>>`.
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const FElysiumNpc::FSquadSlotSpecies& Row = Rows[Index];
@@ -58,7 +58,6 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 		}
 		TestEqual(*FString::Printf(TEXT("%s fills slot 546 with %s"), *Name, Row.Body),
 			FString(ElysiumNpcKernelClass::BodyOf(Cls, 546)), FString(Row.Body));
-		Bodies.Add(FString(Row.Body));
 
 		if (FCString::Strcmp(Row.RetailClass, TEXT("CAI_BaseNPCTroika")) == 0)
 		{
@@ -71,35 +70,24 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 			continue;
 		}
 
-		++SpeciesRows;
 		TestFalse(*FString::Printf(TEXT("%s names its own CAI_ClassScheduleIdSpace"), *Name),
 			FString(Row.IdSpace).IsEmpty());
-		IdSpaces.Add(FString(Row.IdSpace));
 		TestEqual(*FString::Printf(TEXT("%s's local range is the 9999 empty sentinel"), *Name),
 			Row.LocalBase, 9999);
-		// The recovered answer for every id, on every species: -1, then `<<null>>`.
 		for (const int32 LocalId : { -1, 0, 1, 7, 1000000000 })
 		{
 			TestEqual(*FString::Printf(TEXT("%s translates %d to -1"), *Name, LocalId),
 				FElysiumNpc::SquadSlotLocalToGlobal(&Row, LocalId), INDEX_NONE);
 		}
-		TestEqual(*FString::Printf(TEXT("%s answers <<null>> for slot 0"), *Name),
-			FString(FElysiumNpc::GlobalSquadSlotName(
-				FElysiumNpc::SquadSlotLocalToGlobal(&Row, 0))),
-			FString(TEXT("<<null>>")));
 	}
-	TestEqual(TEXT("44 species rows"), SpeciesRows, 44);
-	TestEqual(TEXT("across 41 distinct retail bodies (40 species + the Troika line)"), Bodies.Num(),
-		41);
-	// `CNPC_ProneDialog`/`CNPC_VHumanCombatant`, `CNPC_VCamera`/`CNPC_VCameraSecurity`,
-	// `CNPC_VRat`/`CNPC_VScurrying` and `CNPC_VPlayerController`/`CNPC_VVampire` each share a body,
-	// and a shared body shares its id space too.
-	TestEqual(TEXT("and 40 distinct species id spaces"), IdSpaces.Num(), 40);
 
-	// The join the other way: every census override of slot 546 on a class with an instance has a
-	// row here, with the same body. The classes with no instance keep their census rows only.
+	// The join the other way: every census override of slot 546 on a class with an instance is
+	// either a deferred table row or a class that stands through its factory and answers its own
+	// override — `<<null>>` for every id, the two the global namespace carries included, because
+	// the translation refuses before the lookup ever happens.
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_546_species"), 5462);
+	TArray<const FElysiumNpcClassSlot*> Standing;
 	int32 CensusOverrides = 0;
-	bool bEveryOverrideHasARow = true;
 	for (const FElysiumNpcClassSlot& Override : ElysiumNpcKernelShape::Overrides())
 	{
 		if (Override.Slot != 546 || ElysiumNpcDeadClasses::Contains(Override.Class))
@@ -107,18 +95,36 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 			continue;
 		}
 		++CensusOverrides;
-		const FElysiumNpc::FSquadSlotSpecies* Row =
-			FElysiumNpc::SquadSlotSpeciesOf(Override.Class);
-		if (Row == nullptr || FCString::Strcmp(Row->Body, Override.Address) != 0)
+		if (const FElysiumNpc::FSquadSlotSpecies* Row = FElysiumNpc::SquadSlotSpeciesOf(Override.Class))
 		{
-			bEveryOverrideHasARow = false;
-			AddError(FString::Printf(TEXT("slot 546 override %s (%s) has no matching table row"),
-				Override.Class, Override.Address));
+			TestEqual(*FString::Printf(TEXT("deferred %s's row carries its census body"), Override.Class),
+				FString(Row->Body), FString(Override.Address));
+			continue;
 		}
+		Builder.AddNpcOfClass(*FString::Printf(TEXT("s%d"), Standing.Num()),
+			FVector(600.0 * Standing.Num(), 0.0, 0.0), Override.Class);
+		Standing.Add(&Override);
 	}
 	TestEqual(TEXT("the census records 44 slot-546 overrides on classes with an instance"),
 		CensusOverrides, 44);
-	TestTrue(TEXT("and every one of them is a row of this family's table"), bEveryOverrideHasARow);
+	TestEqual(TEXT("41 of them are introduced species that carry their own row"), Standing.Num(), 41);
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	for (int32 Index = 0; Index < Standing.Num(); ++Index)
+	{
+		const FElysiumNpcClassSlot& Override = *Standing[Index];
+		FElysiumNpc* Npc = Fixture.Npc(*FString::Printf(TEXT("s%d"), Index));
+		if (!TestNotNull(*FString::Printf(TEXT("%s stood through its factory"), Override.Class), Npc))
+		{
+			continue;
+		}
+		TestTrue(*FString::Printf(TEXT("%s answers its own census row"), Override.Class),
+			Npc->RetailClass() == ElysiumNpcKernelClass::Find(Override.Class));
+		for (const int32 SlotEn : { 0, 1, -1, 1000000000, 1000000001 })
+		{
+			TestEqual(*FString::Printf(TEXT("%s answers <<null>> for squad slot %d"), Override.Class,
+				SlotEn), FString(Npc->SquadSlotName(SlotEn)), FString(TEXT("<<null>>")));
+		}
+	}
 	for (const TCHAR* Dead : ElysiumNpcDeadClasses::Names)
 	{
 		TestNull(*FString::Printf(TEXT("%s, a class with no instance, has no row"), Dead),
@@ -289,10 +295,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadSeamTest,
 bool FElysiumNpcKernelSquadSeamTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_seam"), 5440);
-	Builder.AddNpc(TEXT("a"));
+	Builder.AddNpcOfClass(TEXT("a"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));
 	Builder.AddNpc(TEXT("b"), FVector(200.0, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("a"));
+	FElysiumNpcChangBros* Npc = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("a"));
 	FElysiumNpc* Other = Fixture.Npc(TEXT("b"));
 	TestNotNull(TEXT("a spawned"), Npc);
 	TestNotNull(TEXT("b spawned"), Other);
@@ -629,7 +635,7 @@ bool FElysiumNpcKernelSquadChangBrosTest::RunTest(const FString&)
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_chang"), 66184);
 	Builder.AddNpc(TEXT("chang"), FVector::ZeroVector, TEXT("npc_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Chang = Fixture.Npc(TEXT("chang"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	TestNotNull(TEXT("the brother spawned"), Chang);
 	if (Chang == nullptr)
 	{
@@ -693,7 +699,7 @@ bool FElysiumNpcKernelSquadCoordinateTroopsTest::RunTest(const FString&)
 	Builder.AddNpc(TEXT("ming"), FVector::ZeroVector, TEXT("npc_VMingXiao"));
 	Builder.AddNpc(TEXT("tentacle"), FVector(300.0, 0.0, 0.0), TEXT("npc_VMingXiaoTentacle"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpc* Tentacle = Fixture.Npc(TEXT("tentacle"));
 	TestNotNull(TEXT("MingXiao spawned"), Ming);
 	TestNotNull(TEXT("the tentacle spawned"), Tentacle);

@@ -65,22 +65,6 @@ int32 TroikaDrawDebugTextOverlays();
  *  observable for. Takes the first free line and returns the next one. */
 int32 EmitConditionDump(int32 FirstLine);
 
-/** `CNPC_VHengeyokai::DrawDebugTextOverlays` (`0x10383560`) — the Troika body, then slot 9's string
- *  on one further line under bit 0. */
-int32 HengeyokaiDrawDebugTextOverlays();
-
-/** `CNPC_VNewscaster::DrawDebugTextOverlays` (`0x103a1250`) — a scope-trace push, the Troika body,
- *  then `0x103a0ff0`'s story-queue lines added to the SAME line budget under bit 0. */
-int32 NewscasterDrawDebugTextOverlays();
-
-/** `CNPC_VTzimisce::DrawDebugTextOverlays` (`0x103c08d0`) — the Troika body, then one `Body - …`
- *  line under bit 0 built from a cross-NPC latch pair of globals. */
-int32 TzimisceDrawDebugTextOverlays();
-
-/** `CNPC_VZombie::DrawDebugTextOverlays` (`0x103e0e80`) — the Troika body, then one `Cond: %s` line
- *  per set bit of the 0..0xbf condition bitfield at `+0x5c5c`, under `m_debugOverlays & 0x40000`. */
-int32 ZombieDrawDebugTextOverlays();
-
 // --- Slot 123 `DrawDebugGeometryOverlays` — one slot, five retail bodies ---------------------------
 
 /** `CAI_BaseNPCTroika::DrawDebugGeometryOverlays` (`0x1029ca50`) — the Troika-line body, 2,129
@@ -88,14 +72,6 @@ int32 ZombieDrawDebugTextOverlays();
  *  the relationship-line walk, then `CAI_BaseNPC::DrawDebugGeometryOverlays` (`0x10275760`, story
  *  29c-1's `BaseDrawDebugGeometryOverlays`). */
 void TroikaDrawDebugGeometryOverlays();
-
-/** `CNPC_VCop::DrawDebugGeometryOverlays` (`0x10372f00`) — the relationship label above the cop's
- *  head, then the Troika body unconditionally. */
-void VCopDrawDebugGeometryOverlays();
-
-/** `CNPC_VMingXiao::DrawDebugGeometryOverlays` (`0x10399d40`) — four range rings under
- *  `m_debugOverlays & 0x20000000` (NOT bit 0 like its siblings), then the Troika body. */
-void MingXiaoDrawDebugGeometryOverlays();
 
 /** `CNPCMaker::DrawDebugGeometryOverlays` (`0x1034bd30`), the fourth census body at slot 123.
  *  **SEAM**: its verdict is `registry:123` in band 0–4 — it is the maker's story, not this one — and
@@ -248,34 +224,12 @@ bool ActiveWeaponTextWords(FString& OutName, int32& OutClip1, int32& OutAmmo1, i
  *  the object's `+0x4` IS that name, so a non-empty `SquadName` answers true with it. */
 bool SquadObjectName(FString& OutName) const;
 
-/** `CNPC_VCop::m_hPursuitPlayer` (`+0x6664`), the ` Pursuit` suffix of the cop's relationship label.
- *  **SEAM**: no port word; answers null. */
-FElysiumEntity* CopPursuitPlayer() const;
-
-/** The cop class's two STATIC globals — `DAT_1093ac3c`, the provoker handle every cop shares, and
- *  `_DAT_1093aca8`, the curtime it expires at. `CNPC_VCop::OnSeeEntity` (`0x10370560`, family
- *  Senses10) is the writer and both this body and `CNPC_VCop::IRelationType` (family Conditions10)
- *  are the readers. **SEAM**: neither global is stood here; answers false, which drops the
- *  ` Suspect` suffix. */
-bool CopSuspectIs(const FElysiumEntity* Candidate) const;
-
 /** `0x1017f8d0` (`curtime < player->m_flHeightenedAlertExpireTimer`, `+0x1d1c`) and `0x1017f770`
  *  (`player->m_iCopsInPursuitCount`, `+0x1d10`) off the candidate's `+0xa8 m_pPlayer` — the ` Alert`
  *  and ` Count%d` suffixes. Both words exist on `FElysiumPlayer`; a non-player candidate answers
  *  false / 0, which is retail's null-`+0xa8` arm. */
 bool PlayerHeightenedAlert(const FElysiumEntity* Candidate) const;
 int32 PlayerCopsInPursuitCount(const FElysiumEntity* Candidate) const;
-
-/** `CNPC_VTzimisce`'s carry bit (`0x103be130`) — the gate on the `Body - …` line's latch. **SEAM**:
- *  the body has no verdict row and no port counterpart; answers false, so the latch never updates
- *  and the two globals keep whatever the last Tzimisce put there. */
-bool TzimisceIsCarryingBody() const;
-
-/** `CNPC_VNewscaster`'s story-queue overlay (`0x103a0ff0`), whose lines the newscaster's slot-124
- *  body adds to the SAME budget — the return is a COUNT, not a line index. **SEAM**: the body is
- *  family Species' row (band 5–9, `FElysiumNpc::FUN_103a0ff0`) and is already ported there; this
- *  answers 0 until the two are wired, so the newscaster's return is the Troika body's unchanged. */
-int32 NewscasterStoryOverlayLines(int32 FirstLine);
 
 /** `0x1029c4a0` — the 400-byte view-cone/fan draw the `0x400000` arm calls three times. It has no
  *  verdict row (it is not one of the band's core functions), so its body is not written here; the
@@ -339,11 +293,3 @@ void RunThinkDebugPreExtra(int32 Mode) const;
  *  the name; `bOutScenePlaying` stays false because no scene object is stood. */
 bool DialogSceneWords(FString& OutSceneName, bool& bOutScenePlaying, double& OutSceneTime) const;
 
-/** Slot 9's string, the one line `CNPC_VHengeyokai#124` adds. Retail takes the FIRST word of
- *  whatever slot 9 returns and substitutes the empty string for null. **SEAM**: slot 9 is a
- *  generated stub owned by another story; answers the empty string, which is retail's null arm. */
-FString HengeyokaiSlot9String() const;
-
-/** `CNPC_VZombie`'s own condition bitfield at `+0x5c5c`, walked 0..0xbf. **SEAM**: `+0x5c5c` is one
- *  of the schedule block's six words with no port member of its own; answers false for every id. */
-bool ZombieConditionBit(int32 ConditionId) const;

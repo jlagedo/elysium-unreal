@@ -9,6 +9,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumNpcTzimisceRunner.h"
 
 const TCHAR* FElysiumNpcMaker::AttemptName(EAttempt Attempt)
 {
@@ -599,11 +600,12 @@ void FElysiumNpcMaker::FUN_1034c8e0(FElysiumEntity* Child)
 	// bookkeeping (`OnOwnedEntityTerminated`) still runs.
 	if (FElysiumNpc* Owner = FleshpileOwner())
 	{
-		FElysiumNpc* Runner = Child != nullptr ? Child->AsNpc() : nullptr;
-		// The RTTI cast to `CNPC_VTzimisceRunner`, read through the census: one leaf stands every
-		// classname here, so "is this a runner" is the chain walk and never a name compare.
-		if (Runner != nullptr && Runner->IsRetailClass(TEXT("CNPC_VTzimisceRunner"))
-			&& !Runner->bRunnerDeathNoticeProcessed)
+		FElysiumNpc* Npc = Child != nullptr ? Child->AsNpc() : nullptr;
+		// The RTTI cast to `CNPC_VTzimisceRunner`: the census chain walk, then the typed view of the
+		// runner whose word the latch is (story 5 step 4).
+		FElysiumNpcTzimisceRunner* Runner = Npc != nullptr && Npc->IsRetailClass(TEXT("CNPC_VTzimisceRunner"))
+			? Npc->AsSpecies<FElysiumNpcTzimisceRunner>() : nullptr;
+		if (Runner != nullptr && !Runner->bRunnerDeathNoticeProcessed)
 		{
 			Owner->ActiveRunnerCount -= FleshpileRunnerCountStep;
 			Owner->AndreiKillCount += FleshpileRunnerCountStep;

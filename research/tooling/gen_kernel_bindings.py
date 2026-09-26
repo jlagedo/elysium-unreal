@@ -90,6 +90,8 @@ import gen_kernel_shape as shape  # noqa: E402  (same directory; its own sys.pat
 REPLAY = ("research", "ghidra", "types", "datamap_records-vampire.dll.json")
 SHAPE_MAP = ("Source", "ElysiumUE", "Private", "Substrate",
              "ElysiumNpcKernelShapeMap.cpp")
+SPECIES_SHAPE_MAP = ("Source", "ElysiumUE", "Private", "Substrate",
+                     "ElysiumNpcKernelSpeciesShapeMap.cpp")
 BINDINGS_H = ("Source", "ElysiumUE", "Private", "Substrate",
               "ElysiumNpcKernelBindings.h")
 BINDINGS_CPP = ("Source", "ElysiumUE", "Private", "Substrate",
@@ -112,6 +114,29 @@ BINDING_CLASSES = (
     ("NpcMakerZombie", ("CNPCMaker_Zombie",)),
 )
 
+# The introduced species (0019 story 5) whose own datamap names anything, each its own binding class
+# registered on its abstract retail descriptor. Their rows resolve through the CLASS-QUALIFIED species
+# shape map (`ElysiumNpcKernelSpeciesShapeMap.cpp`), never through the Troika map: above `+0x665c`
+# the same offset is a different word on every species, so a row binds on the class that declares it
+# and descendants inherit it through the descriptor chain -- a sibling never sees it.
+SPECIES_TABLES = (
+    "CNPC_VAndreiBlood", "CNPC_VAnimal", "CNPC_VAsianVampire", "CNPC_VBach",
+    "CNPC_VCameraSecurity", "CNPC_VChangBros", "CNPC_VCop", "CNPC_VGargoyle",
+    "CNPC_VGhoulCroucher", "CNPC_VGuard1", "CNPC_VHengeyokai", "CNPC_VHunter", "CNPC_VLasombra",
+    "CNPC_VManBat", "CNPC_VMingXiao", "CNPC_VMingXiaoTentacle", "CNPC_VPedestrian",
+    "CNPC_VSabbatLeader", "CNPC_VScurrying", "CNPC_VSheriffMan", "CNPC_VTaxiDriver",
+    "CNPC_VTzimisce", "CNPC_VTzimisceHeadClaw", "CNPC_VTzimisceRunner", "CNPC_VVampireBoss",
+    "CNPC_VWerewolf", "CNPC_VZombie",
+)
+
+
+def species_binding(table: str) -> str:
+    """`CNPC_VScurrying` -> `Scurrying`, the binding class and the port class's stem."""
+    return table.removeprefix("CNPC_V")
+
+
+BINDING_CLASSES = BINDING_CLASSES + tuple((species_binding(t), (t,)) for t in SPECIES_TABLES)
+
 # The port class each binding class registers against. The first five are the NPC's entity chain:
 # retail's `ReadKeyField` walks `CAI_BaseNPCTroika` -> `CAI_BaseNPC` -> `CBaseCombatCharacter` ->
 # `CBaseFlex` -> `CBaseAnimatingOverlay` -> `CBaseAnimating` -> `CBaseToggle` -> `CBaseEntity`, and
@@ -123,6 +148,7 @@ PORT_CLASS = {
     "Animating": "FElysiumAnimating",
     "CombatCharacter": "FElysiumCombatCharacter",
     "Npc": "FElysiumNpc",
+    **{species_binding(t): f"FElysiumNpc{species_binding(t)}" for t in SPECIES_TABLES},
 }
 
 # The NPC's entity chain, keyed by retail class then offset, as (port type, member). The port's
@@ -541,6 +567,10 @@ class Row:
     # (container, slot, is-base) for a `CBaseCombatCharacter` character-sheet element row.
     sheet: tuple[str, int, bool] | None = None
     reason: str = ""    # an unbound field's reason
+    # The element of an array word (a species datamap row with `count` > 1 becomes one row per
+    # element, registered as `name[i]`), or None for a scalar word.
+    element: int | None = None
+    count: int = 1
 
 
 def parse_shape_map(repo: Path) -> tuple[dict[int, tuple[str, str]], dict[int, str]]:
@@ -556,6 +586,43 @@ def parse_shape_map(repo: Path) -> tuple[dict[int, tuple[str, str]], dict[int, s
         raise SystemExit(f"gen_kernel_bindings: shape map offsets "
                          f"{[f'0x{o:x}' for o in overlap]} bind and disclaim a member")
     return bound, no_member
+
+
+SPECIES_BOUND_RE = re.compile(
+    r"ELYSIUM_NPC_SPECIES_WORD(?:_NOTED)?\(\s*(\w+)\s*,\s*0x([0-9a-f]+)\s*,\s*(\w+)\s*,\s*(\w+)")
+SPECIES_SHADOW_RE = re.compile(
+    r"ELYSIUM_NPC_SPECIES_WORD_SHADOW\(\s*(\w+)\s*,\s*0x([0-9a-f]+)\s*,\s*(\w+)")
+SPECIES_ABSENT_RE = re.compile(r"ELYSIUM_NPC_SPECIES_WORD_ABSENT\(\s*(\w+)\s*,\s*0x([0-9a-f]+)")
+
+
+def parse_species_map(text: str) -> dict[tuple[str, int], tuple[str, str, str]]:
+    """The species shape map as `(retail class, offset) -> (home, Type, Member)`, home one of
+    `member` / `shadow` / `absent`. A key named twice, or one port member bound for two different
+    species words (outside the shadow form, which is inherited storage by definition), fails:
+    either would be one word silently standing for another."""
+    rows: dict[tuple[str, int], tuple[str, str, str]] = {}
+
+    def add(key: tuple[str, int], value: tuple[str, str, str]) -> None:
+        if key in rows:
+            raise SystemExit(f"gen_kernel_bindings: species shape map names {key[0]} "
+                             f"+0x{key[1]:x} twice")
+        rows[key] = value
+
+    for m in SPECIES_BOUND_RE.finditer(text):
+        add((m.group(1), int(m.group(2), 16)), ("member", m.group(3), m.group(4)))
+    for m in SPECIES_SHADOW_RE.finditer(text):
+        add((m.group(1), int(m.group(2), 16)), ("shadow", "FElysiumNpc", m.group(3)))
+    for m in SPECIES_ABSENT_RE.finditer(text):
+        add((m.group(1), int(m.group(2), 16)), ("absent", "", ""))
+    owners: dict[tuple[str, str], tuple[str, int]] = {}
+    for key, (home, port_type, member) in sorted(rows.items()):
+        if home != "member":
+            continue
+        other = owners.setdefault((port_type, member), key)
+        if other != key:
+            raise SystemExit(f"gen_kernel_bindings: {port_type}::{member} is bound for both "
+                             f"{other[0]} +0x{other[1]:x} and {key[0]} +0x{key[1]:x}")
+    return rows
 
 
 @dataclass
@@ -664,11 +731,67 @@ def _classify_save(cls: str, record: dict, base: dict, bound: dict, no_member: d
     return Row(kind="save", reason="no shape-map member", **base)
 
 
+def classify_species(binding: str, table: str, replay: dict,
+                     species_map: dict[tuple[str, int], tuple[str, str, str]]) -> ClassModel:
+    """One introduced species' own datamap. Every field row must have a species-map row -- bound,
+    shadowed or recorded absent -- or the generator fails: that is the check that every retail word
+    the class declares has a port answer. A keyed row registers under its external, a SAVE-only row
+    under its retail member name (the Troika save walk's convention), both on this class alone."""
+    model = ClassModel(name=binding, tables=(table,))
+    seen: set[int] = set()
+    for record in replay[table]["records"]:
+        flags = list(record.get("flagNames") or [])
+        if "FUNCTIONTABLE" in flags or record.get("name") is None:
+            continue
+        offset = int(record["offset"])
+        external = record.get("external") or ""
+        base = dict(cls=table, name=record["name"], type=record["typeName"], offset=offset,
+                    external=external, flags=flags)
+        if "OUTPUT" in flags:
+            model.outputs.append(Row(kind="output", **base))
+            continue
+        if "INPUT" in flags and (record["typeName"] == "void" or offset == 0):
+            model.inputfuncs.append(Row(kind="inputfunc", **base))
+            continue
+        seen.add(offset)
+        entry = species_map.get((table, offset))
+        if entry is None:
+            raise SystemExit(f"gen_kernel_bindings: {table} +0x{offset:x} ({record['name']}) has no "
+                             f"row in the species shape map")
+        home, port_type, member = entry
+        kind = "field" if external else "save"
+        if home == "absent":
+            row = Row(kind=kind, reason="no port member (the species shape map's ABSENT row says why)",
+                      **base)
+            (model.unbound if external else model.save_unbound).append(row)
+            continue
+        count = int(record.get("count") or 1)
+        target = model.bound if external else model.saved
+        if count == 1:
+            target.append(Row(kind=kind, binding=(port_type, member), **base))
+        else:
+            target += [Row(kind=kind, via=(member, ""), element=i, count=count, **base)
+                       for i in range(count)]
+    stale = sorted(off for (cls, off) in species_map if cls == table and off not in seen)
+    if stale:
+        raise SystemExit(f"gen_kernel_bindings: species shape map rows for {table} name no datamap "
+                         f"field: {[f'0x{o:x}' for o in stale]}")
+    for rows in (model.bound, model.saved, model.unbound, model.save_unbound):
+        rows.sort(key=lambda r: (r.offset, r.element or 0))
+    model.outputs.sort(key=lambda r: r.external)
+    model.inputfuncs.sort(key=lambda r: r.external)
+    return model
+
+
 def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassModel]:
     """Every replay row of the binding classes that has an external name, classified."""
     bound, no_member = parse_shape_map(repo)
+    species_map = parse_species_map(repo.joinpath(*SPECIES_SHAPE_MAP).read_text(encoding="utf-8"))
     classes: list[ClassModel] = []
     for binding, tables in BINDING_CLASSES:
+        if tables[0] in SPECIES_TABLES:
+            classes.append(classify_species(binding, tables[0], replay, species_map))
+            continue
         model = ClassModel(name=binding, tables=tables)
         for cls in tables:
             for record in replay[cls]["records"]:
@@ -873,9 +996,16 @@ def render_header(model: Model) -> str:
         *_wrapped("enum class EClass : uint8 { "
                   + ", ".join(c.name for c in model.classes) + " };", "\t"),
         "",
-        *[f"\tvoid {_add_function_name(c)}(FElysiumClassDesc& D);" for c in model.classes],
+        *[f"\tvoid {_add_function_name(c)}(FElysiumClassDesc& D);" for c in model.classes
+          if _has_add(c)],
         *[f"\tvoid Add{c.name}SaveFields(FElysiumClassDesc& D);"
           for c in model.classes if c.saved or c.save_unbound],
+        "",
+        *_comment("An introduced species' own rows, by the retail class that declares them "
+                  "(`CNPC_VScurrying`): its keyed fields and its SAVE walk, registered on that "
+                  "class's abstract descriptor only. False for a class whose datamap names nothing.",
+                  "\t"),
+        "\tbool AddSpeciesFields(FElysiumClassDesc& D, const TCHAR* RetailClass);",
         "\tTConstArrayView<const TCHAR*> Outputs(EClass Class = EClass::Npc);",
         "\tTConstArrayView<const TCHAR*> InputFuncs(EClass Class = EClass::Npc);",
         "\tstruct FCounts",
@@ -892,6 +1022,13 @@ def render_header(model: Model) -> str:
     return "\n".join(out) + "\n"
 
 
+def _has_add(model_class: ClassModel) -> bool:
+    """A species with no keyed field has no `Add…Fields` (its words are all SAVE rows); every
+    other binding class keeps its function, as before."""
+    return model_class.tables[0] not in SPECIES_TABLES or bool(model_class.bound
+                                                               or model_class.unbound)
+
+
 def _add_function_name(model_class: ClassModel) -> str:
     if model_class.name == "Npc":
         return "AddNpcFields"
@@ -901,6 +1038,13 @@ def _add_function_name(model_class: ClassModel) -> str:
 def _row_code(model_class: ClassModel, row: Row) -> str:
     """The one registration statement a bound row emits."""
     name = _literal(row.external if row.kind != "save" else row.name)
+    if row.element is not None:
+        # One element of an array word: retail saves the array as one row with a count, and the
+        # registry's accessor is scalar, so each element registers under `name[i]`.
+        member = row.via[0]
+        name = _literal(f"{row.external if row.kind != 'save' else row.name}[{row.element}]")
+        return (f"ElysiumAddClassFieldVia<{PORT_CLASS[model_class.name]}>(D, {name}, "
+                f"[](auto& E) -> auto&{{ return E.{member}[{row.element}]; }}, {flags_of(row)});")
     if row.sheet is not None:
         container, slot, is_base = row.sheet
         return (f"ElysiumAddSheetField(D, {name}, "
@@ -917,6 +1061,17 @@ def _row_code(model_class: ClassModel, row: Row) -> str:
             f"&{port_type}::{member}, {flags_of(row)});")
 
 
+def _array_asserts(model_class: ClassModel, rows: list[Row]) -> list[str]:
+    """A compile-time check that each array word's port member has exactly retail's element count."""
+    out = []
+    for row in rows:
+        if row.element == 0:
+            port = PORT_CLASS[model_class.name]
+            out += _wrapped(f"static_assert(std::extent_v<decltype({port}::{row.via[0]})> == "
+                            f"{row.count}, \"{row.name} has {row.count} elements\");", "\t\t")
+    return out
+
+
 def _render_add(model_class: ClassModel) -> list[str]:
     out = [
         f"\tvoid {_add_function_name(model_class)}(FElysiumClassDesc& D)",
@@ -926,6 +1081,7 @@ def _render_add(model_class: ClassModel) -> list[str]:
         "\t\t// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn",
         "\t\t// keyvalues regardless of Key.",
     ]
+    out += _array_asserts(model_class, model_class.bound)
     for row in model_class.bound:
         lines = _wrapped(_row_code(model_class, row), "\t\t")
         lines[-1] += f"  // +0x{row.offset:x} {row.name}"
@@ -950,9 +1106,11 @@ def _render_save(model_class: ClassModel) -> list[str]:
         "\t\t// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,",
         "\t\t// and they cannot collide with the externals above.",
     ]
+    out += _array_asserts(model_class, model_class.saved)
     for row in model_class.saved:
         lines = _wrapped(_row_code(model_class, row), "\t\t")
-        lines[-1] += f"  // +0x{row.offset:x} {row.type}"
+        index = "" if row.element is None else f"[{row.element}]"
+        lines[-1] += f"  // +0x{row.offset:x}{index} {row.type}"
         out += lines
     for row in model_class.save_unbound:
         out += _comment(f"NOT SAVED +0x{row.offset:x} {row.name} ({row.type}) — {row.reason}",
@@ -991,13 +1149,30 @@ def render_cpp(model: Model) -> str:
         '#include "Substrate/ElysiumNpc.h"',
         '#include "Substrate/ElysiumNpcMaker.h"',
         '#include "Substrate/ElysiumSheetFields.h"',
+        *sorted(f'#include "Substrate/{PORT_CLASS[species_binding(t)][1:]}.h"'
+                for t in SPECIES_TABLES),
+        "",
+        "#include <type_traits>",
         "",
         "namespace ElysiumNpcKernelBindings",
         "{",
     ]
     for model_class in model.classes:
-        out += _render_add(model_class)
+        if _has_add(model_class):
+            out += _render_add(model_class)
         out += _render_save(model_class)
+    out += ["\tbool AddSpeciesFields(FElysiumClassDesc& D, const TCHAR* RetailClass)", "\t{"]
+    for model_class in model.classes:
+        if model_class.tables[0] not in SPECIES_TABLES:
+            continue
+        out += [f"\t\tif (FCString::Strcmp(RetailClass, TEXT(\"{model_class.tables[0]}\")) == 0)",
+                "\t\t{"]
+        if _has_add(model_class):
+            out.append(f"\t\t\t{_add_function_name(model_class)}(D);")
+        if model_class.saved or model_class.save_unbound:
+            out.append(f"\t\t\tAdd{model_class.name}SaveFields(D);")
+        out += ["\t\t\treturn true;", "\t\t}"]
+    out += ["\t\treturn false;", "\t}", ""]
     out += ["\tnamespace", "\t{"]
     for model_class in model.classes:
         out += _array_block(model_class, "Outputs", model_class.outputs)

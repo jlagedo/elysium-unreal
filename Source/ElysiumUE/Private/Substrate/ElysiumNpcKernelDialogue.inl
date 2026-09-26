@@ -108,20 +108,6 @@ struct FDialogResponsePage
 // `{0x6664, CNPC_VCameraSecurity, m_hLinkedCamera, EHANDLE, Walked}`; `+0x6668` has no census row
 // and is named from what `0x10369e70` does with it.
 
-/** `+0x6660 m_iszLinkedCamera` — the authored `targetname` of the `CSecCamera` this security-camera
- *  NPC watches through. A datamap keyfield in retail. `npc_VCameraSecurity` stands its class
- *  since story 5 step 2, but the class's keyfield binding lands with step 4, so it stands empty. */
-FString LinkedCameraName;   // +0x6660
-
-/** `+0x6664 m_hLinkedCamera` — the resolved handle, cached by `0x10369e70` and re-resolved whenever
- *  it goes dead. */
-FElysiumEntityHandle LinkedCamera;   // +0x6664
-
-/** `+0x6668` — "this NPC has been linked at least once". Set the first time the handle resolves and
- *  never cleared; its only consumer is `0x10369e70`'s own teardown arm, which `UTIL_Remove`s the NPC
- *  when a camera that WAS linked has gone. Retail name **unrecovered**. */
-bool bLinkedCameraBound = false;   // +0x6668
-
 // --- The pedestrian crosswalk link (`+0x630c`, and the one word retail reads off it) --------------
 
 /** The navigation-link object at `+0x630c`, which the shape map records as ABSENT ("no
@@ -222,31 +208,6 @@ FElysiumEntity* GetControllerNpc(const TCHAR* Classname);
  *  **unrecovered**; 29c's walk called `+0x1db0` a dialogue partner, which `vtmb_fields CBasePlayer`
  *  contradicts — it is `m_hControllerNPC`, the same word `GetControllerNPC` caches into. */
 bool ControllerNpcBusy() const;
-
-/** `CPayphone::CanTalk` (`0x101aaee0`, 119 bytes) — slot 295's `CPayphone` override, seven arms. */
-bool PayphoneCanTalk(const FElysiumEntity* Activator) const;
-
-/** `CNPC_VSabbatLeader::HandleInteraction` (`0x103a76d0`, 111 bytes) — slot 366's `CNPC_VSabbatLeader`
- *  override. */
-bool SabbatLeaderHandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other);
-/** `0x10385a70` — the human line's slot 366, `return 0;`: the body of `FElysiumNpcHuman::HandleInteraction`. */
-bool HumanHandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other);
-
-/** One row of the slot-366 species table: which body fills `HandleInteraction` for a class, and what
- *  that body answers. Both recovered bodies answer FALSE; the table exists because the two are
- *  DIFFERENT addresses and `slots.md` must be checkable against the port. */
-struct FHandleInteractionSpecies
-{
-	const TCHAR* RetailClass = nullptr;   // the census class this row came from
-	const TCHAR* Body = nullptr;          // the retail address that fills slot 366 for it
-	bool bAnswer = false;                 // what that body returns
-};
-static const FHandleInteractionSpecies* HandleInteractionSpeciesRows(int32& OutCount);
-static const FHandleInteractionSpecies* HandleInteractionSpeciesOf(const TCHAR* InRetailClass);
-
-/** `CNPC_VCameraSecurity`'s linked-camera resolve (`0x10369e70`, 252 bytes). Retail is unnamed; the
- *  name is inferred from the RTTI cast it performs (`CSecCamera`) and the census field names. */
-FElysiumEntity* ResolveSecCameraLink();
 
 /** The navigator waypoint `0x102a0bc0` is handed, as the four words it reads off it. Retail's
  *  argument is `navigator->CurWaypoint` (`FUN_102f0400` fetches it from `path+0x24`) and the offsets

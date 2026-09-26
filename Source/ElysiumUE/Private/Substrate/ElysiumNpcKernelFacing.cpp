@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelFacingShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -24,88 +25,6 @@
 //   * Retail's distance constants are Source units; this world is centimetres. `ElysiumMove::U` is
 //     the 2.54 that bridges them, applied at the point of use so the recovered constant stays
 //     visible.
-
-namespace
-{
-	// `UTIL_AngleDiff` `0x1013d580`: `a - b` walked back into `[-180, 180]` by whole turns, with
-	// `_DAT_10462948 = -180.0f` and `_DAT_1044c3a8 = 180.0f`. Retail wraps only on the side the
-	// `a <= b` test selects, and reproducing that is free.
-	float FacingRetailAngleDiff(float A, float B)
-	{
-		float Delta = A - B;
-		if (A <= B)
-		{
-			while (Delta < -180.0f)
-			{
-				Delta += 360.0f;
-			}
-		}
-		else
-		{
-			while (Delta > 180.0f)
-			{
-				Delta -= 360.0f;
-			}
-		}
-		return Delta;
-	}
-
-	// `UTIL_VecToYaw` (`0x101d2c70`, reached through `0x1027db80`) over a delta in THIS world's
-	// axes. `0x1027db80` answers the body's current angles for a zero vector rather than 0, so the
-	// caller's `AngleDiff` against that same yaw lands on 0 — which is the arm reproduced here.
-	float RetailYawOf(const FVector& PortDelta, float ZeroVectorYaw)
-	{
-		if (PortDelta.X == 0.0 && PortDelta.Y == 0.0 && PortDelta.Z == 0.0)
-		{
-			return ZeroVectorYaw;
-		}
-		return FMath::RadiansToDegrees(
-			static_cast<float>(FMath::Atan2(-PortDelta.Y, PortDelta.X)));
-	}
-
-	// `VectorAngles` `0x10139970`: Source `[pitch yaw roll]` for a direction in this world's axes.
-	FVector FacingRetailVectorAngles(const FVector& PortDir)
-	{
-		const double Y = -PortDir.Y;   // back into Source's Y
-		if (PortDir.X == 0.0 && Y == 0.0)
-		{
-			// Straight up is pitch 270 and straight down 90, which is `VectorAngles`' own
-			// degenerate arm and the opposite of what the sign of Z suggests.
-			return FVector(PortDir.Z > 0.0 ? 270.0 : 90.0, 0.0, 0.0);
-		}
-		float Yaw = FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Y, PortDir.X)));
-		if (Yaw < 0.0f)
-		{
-			Yaw += 360.0f;
-		}
-		const double Flat = FMath::Sqrt(PortDir.X * PortDir.X + Y * Y);
-		float Pitch = FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(-PortDir.Z, Flat)));
-		if (Pitch < 0.0f)
-		{
-			Pitch += 360.0f;
-		}
-		return FVector(Pitch, Yaw, 0.0);
-	}
-
-	// `AngleVectors` `0x10139550`, forward only — pitch AND yaw, unlike
-	// `ElysiumSkeletalBasis::FromSourceAngles`, which is the yaw-only standing-body form.
-	FVector RetailForward(const FVector& SourceAngles)
-	{
-		const float Pitch = FMath::DegreesToRadians(static_cast<float>(SourceAngles.X));
-		const float Yaw = FMath::DegreesToRadians(static_cast<float>(SourceAngles.Y));
-		return FVector(FMath::Cos(Pitch) * FMath::Cos(Yaw),
-			-(FMath::Cos(Pitch) * FMath::Sin(Yaw)), -FMath::Sin(Pitch));
-	}
-
-	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s own playback-tuning record, read by
-	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0 and the
-	// non-discipline arm's blend lands on its floor.
-	float FacingMingXiaoTuningField(int32)
-	{
-		return 0.f;
-	}
-}
-
 // --- The `CAI_Motor` seam -----------------------------------------------------------------------
 
 float FElysiumNpc::MotorDeltaIdealYaw() const
@@ -272,7 +191,7 @@ void FElysiumNpc::SetAim(const FVector& AimDirection)
 	//     SetPoseParameter( "aim_yaw",   0.0f );
 	// The yaw argument is a hard zero in the listing (`uVar1 = 0` pushed as the float), not the
 	// computed yaw: retail aims the pitch pose and pins the yaw pose at neutral.
-	const FVector AimAngles = FacingRetailVectorAngles(AimDirection);
+	const FVector AimAngles = NpcKernelFacingShared::FacingRetailVectorAngles(AimDirection);
 	SetPoseParameterByName(TEXT("aim_pitch"), static_cast<float>(AimAngles.X));
 	SetPoseParameterByName(TEXT("aim_yaw"), 0.f);
 }
@@ -295,7 +214,7 @@ void FElysiumNpc::SetHeadDirection(FVector& LookTarget, float Interval)
 	// The yaw half, from GetOrigin (slot 220) and GetAngles (slot 221).
 	const float BodyYaw = static_cast<float>(Angles.Y);
 	const FVector YawDelta = LookTarget - Origin;
-	const float TargetYaw = FacingRetailAngleDiff(RetailYawOf(YawDelta, BodyYaw), BodyYaw);
+	const float TargetYaw = NpcKernelFacingShared::FacingRetailAngleDiff(NpcKernelFacingShared::RetailYawOf(YawDelta, BodyYaw), BodyYaw);
 	if (Interval > 0.0f)
 	{
 		// A do/while: an interval at or under one step still integrates once.
@@ -470,116 +389,6 @@ void FElysiumNpc::SetTurnActivity()
 	SetIdealActivityNumber(1);
 }
 
-// --- Slot 465's species half --------------------------------------------------------------------
-
-FElysiumNpc::FMotionTrailPick FElysiumNpc::SabbatGunmanMotionTrail(float GroundSpeed,
-	float SpeedThreshold, int32 TrailId, float TrailScalar)
-{
-	// `CNPC_VSabbatGunman::OnChangeActivity` `0x103a56f0`: at or below the threshold the trail is
-	// cleared and the playback scalar is -1.0 — retail's "no scalar" literal, not a speed; above it
-	// both come from the other two convars.
-	if (GroundSpeed <= SpeedThreshold)
-	{
-		return FMotionTrailPick{ 0, -1.0f };
-	}
-	return FMotionTrailPick{ TrailId, TrailScalar };
-}
-
-FElysiumNpc::FMingXiaoPlayback FElysiumNpc::MingXiaoPlaybackScalar(int32 Activity,
-	bool bDisciplineArm, int32 TentacleCount, TFunctionRef<float(int32)> TuningField)
-{
-	// `CNPC_VMingXiao::OnChangeActivity` `0x103947b0`. Two arms of three rows each, selected by
-	// `0x10398870` — the gate `docs/vtmb/animation_and_movers.md` names "+0x6674". The activity
-	// numbers are the listing's raw words read as floats: 9 (`ACT_WALK`), 0x13 (`ACT_RUN`), 0x4b and
-	// 0x1132.
-	FMingXiaoPlayback Out;
-	Out.bWalkOrRun = (Activity == 9 || Activity == 0x13);
-	if (bDisciplineArm)
-	{
-		// A flat scalar straight off the record: +0x1c for walk/run, +0x18 for 0x4b, +0x14 otherwise.
-		if (Out.bWalkOrRun)
-		{
-			Out.Scalar = TuningField(0x1c);
-			return Out;
-		}
-		if (Activity == 0x4b)
-		{
-			// This arm writes the scalar and leaves at once, taking the second tail below without a
-			// second `SetPlaybackAndSpeedScalar`.
-			Out.Scalar = TuningField(0x18);
-			Out.bSecondWriteSkipped = true;
-			return Out;
-		}
-		Out.Scalar = TuningField(0x14);
-		return Out;
-	}
-	// The tentacle arm: a base plus a per-tentacle term over `6 - m_iConnectedTentacleCount`
-	// (+0x670c), floored at `_DAT_104493d0 = 0.1`.
-	float Base = 0.f;
-	float Per = 0.f;
-	if (Out.bWalkOrRun)
-	{
-		Base = TuningField(0x5c);
-		Per = TuningField(0x60);
-	}
-	else if (Activity == 0x4b)
-	{
-		Base = TuningField(0x54);
-		Per = TuningField(0x58);
-	}
-	else
-	{
-		Base = TuningField(0x4c);
-		Per = TuningField(0x50);
-	}
-	Out.Scalar = Per * static_cast<float>(6 - TentacleCount) + Base;
-	if (Out.Scalar <= 0.1f)
-	{
-		Out.Scalar = 0.1f;
-	}
-	return Out;
-}
-
-void FElysiumNpc::MingXiaoOnChangeActivity(int32 Activity)
-{
-	// `CNPC_VMingXiao::OnChangeActivity`, 303 bytes. **SEAM** on all three inputs: the gate
-	// `0x10398870`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)
-	// have no port source, so the discipline arm is false, every field answers 0 and the blend
-	// lands on its 0.1 floor. The two tails `0x1039ab30` and `0x1039aca0` are MingXiao's own and
-	// are named here rather than invented.
-	const FMingXiaoPlayback Pick = MingXiaoPlaybackScalar(Activity, /*bDisciplineArm*/ false,
-		/*TentacleCount*/ 0, [](int32 Field) { return FacingMingXiaoTuningField(Field); });
-	(void)Pick;   // SetPlaybackAndSpeedScalar has no kernel-tier seam in this substrate
-
-	// The tail: `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`) directly.
-	FElysiumNpc::OnChangeActivity(Activity);
-}
-
-void FElysiumNpc::SabbatGunmanOnChangeActivity(int32 Activity)
-{
-	// `CNPC_VSabbatGunman::OnChangeActivity`, 160 bytes. The three convars are
-	// `sabbat_gunman_speed_threshold` ("0.1", `+0x28`), `sabbat_gunman_speed_trails` ("3",
-	// `+0x2c`) and `sabbat_gunman_speed_scalar` ("3.0", `+0x28`). **SEAM** on the fourth input,
-	// `m_flGroundSpeed` (+0x0654): no ground-speed word stands here, so it answers 0 and the
-	// stopped arm is the one taken.
-	const FMotionTrailPick Pick = SabbatGunmanMotionTrail(/*GroundSpeed*/ 0.f,
-		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedThreshold),
-		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedTrails),
-		ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedScalar));
-	MotionTrail = Pick.MotionTrail;   // +0x1484
-
-	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
-}
-
-void FElysiumNpc::WerewolfOnChangeActivity(int32 Activity)
-{
-	// `CNPC_VWerewolf::OnChangeActivity`, 126 bytes: the scope-trace push/pop and an
-	// unconditional forward. There is no species behaviour here at all, and recording that is
-	// the point — a reader looking for one stops at this line.
-
-	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
-}
-
 // --- The facing readers and writers that fill no slot --------------------------------------------
 
 void FElysiumNpc::ClearFacingTarget()
@@ -608,124 +417,3 @@ bool FElysiumNpc::FacingIdeal() const
 	return FMath::Abs(MotorDeltaIdealYaw()) <= 0.006f;
 }
 
-float FElysiumNpc::GetFacingTimeToTeleport() const
-{
-	// `CNPC_VChangBros::GetFacingTimeToTeleport` `0x1036dc60`, 138 bytes:
-	//     if (m_iSquadDisconnected < 1 && m_pSquad != NULL && NumSquadMembers(m_pSquad) > 1)
-	//         return 21.0f;                                  // _DAT_104ada0c
-	//     return 7.0f;                                       // _DAT_104ada08
-	// The Chang brothers wait three times as long before teleporting while the other one is still
-	// standing. `ConnectedSquad()` is already this runtime's `m_iSquadDisconnected < 1 ? m_pSquad :
-	// NULL` (+0x5bb0, +0x5da4) and answers nothing, because no squad object exists here — so the
-	// long arm is unreachable and the answer is the lone-brother 7 seconds.
-	if (ConnectedSquad() != nullptr)
-	{
-		// `thunk_FUN_103160a0(m_pSquad) > 1` — the squad's member count. **SEAM**, unreachable
-		// today.
-		return 21.0f;
-	}
-	return 7.0f;
-}
-
-void FElysiumNpc::FacePlayerAdvance()
-{
-	// `CNPC_VAndreiBlood::FacePlayerAdvance` `0x1035e5f0`, 165 bytes:
-	//     if (m_hClosestPlayer resolves)
-	//         m_pMotor->thunk_FUN_102e20b0( player->GetAbsOrigin(), 10.0f );
-	// `DAT_104a6f80 = 10.0f` is the fixed turn rate, and the call is the motor's
-	// set-ideal-yaw-to-target. The whole body is the gate plus that one command.
-	const FElysiumPlayer* Player =
-		Senses.Memory.ClosestPlayer.IsSet() && World != nullptr ? World->FindPlayer() : nullptr;
-	if (Player == nullptr || Player->IsInert() || Player->Handle != Senses.Memory.ClosestPlayer)
-	{
-		return;
-	}
-	// **SEAM**: `IElysiumNpcMotor::Face` takes a yaw, not a target, and no turn RATE crosses it, so
-	// the recovered 10.0 has nowhere to land yet. The commanded yaw is retail's own — the yaw from
-	// this body to the player's origin.
-	if (IElysiumNpcMotor* Mover = Motor)
-	{
-		const float TargetYaw =
-			RetailYawOf(Player->Origin - Origin, static_cast<float>(Angles.Y));
-		// `Face` is in this world's yaw, which is the negated Source one.
-		Mover->Face(-TargetYaw);
-	}
-}
-
-bool FElysiumNpc::PlayerIsFacingMe() const
-{
-	// `CNPC_VSabbatLeader::PlayerIsFacingMe` `0x103aaf50`, 349 bytes, read from the listing because
-	// the decompiler dropped the in-place normalize:
-	//     if (!m_hClosestPlayer resolves) return false;
-	//     AngleVectors( player->GetAbsAngles(), &fwd );      // full pitch+yaw forward
-	//     Vector d = GetAbsOrigin() - player->GetAbsOrigin();
-	//     float len = VectorNormalize( d );
-	//     if (len > 0.0001f && DotProduct( fwd, d ) < 0.34202f) return false;
-	//     return true;
-	// `_DAT_104c3ce4 = 9.999999747378752e-05f` and `_DAT_104c3cf0 = 0.3420200049877167f`, which is
-	// cos(70 degrees): a 140-degree cone, and a player standing ON the leader (inside the length
-	// epsilon) counts as facing him.
-	const FElysiumPlayer* Player =
-		Senses.Memory.ClosestPlayer.IsSet() && World != nullptr ? World->FindPlayer() : nullptr;
-	if (Player == nullptr || Player->IsInert() || Player->Handle != Senses.Memory.ClosestPlayer)
-	{
-		return false;
-	}
-	const FVector PlayerForward = RetailForward(Player->Angles);
-	FVector Delta = Origin - Player->Origin;
-	const float Length = static_cast<float>(Delta.Size());
-	Delta = Delta.GetSafeNormal();
-	if (Length > 0.0001f && static_cast<float>(FVector::DotProduct(PlayerForward, Delta)) < 0.34202f)
-	{
-		return false;
-	}
-	return true;
-}
-
-void FElysiumNpc::UpdateFacingTimer()
-{
-	// `CNPC_VChangBros::UpdateFacingTimer` `0x1036d600`, 392 bytes. Three nested gates; passing ALL
-	// of them leaves `m_fFacingTime` alone, and anything else resets it to now — so the timer
-	// measures how long the player has been standing close, level and looking this way.
-	//
-	//     Vector d = GetAbsOrigin() - player->GetAbsOrigin();
-	//     if (|d.z| < 50.0)                                          // _DAT_104ada10
-	//     {
-	//         Vector flat( d.x, d.y, 0 );  float len = VectorNormalize( flat );
-	//         if (len < 150.0 && 1e-05 < len)                        // _DAT_104ada14, _DAT_104ad9fc
-	//         {
-	//             QAngle a;  VectorAngles( flat, a );
-	//             if (|AngleDiff( player->GetAbsAngles().y, a.y )| < 70.0) return;   // _DAT_104ada18
-	//         }
-	//     }
-	//     m_fFacingTime = gpGlobals->curtime;
-	//
-	// The distances are Source units and this world is centimetres, hence `ElysiumMove::U`. The yaw
-	// term compares the PLAYER's yaw against the yaw of the brother-minus-player delta, so it asks
-	// whether the player is pointed at the brother — not the other way round.
-	const FElysiumPlayer* Player =
-		Senses.Memory.ClosestPlayer.IsSet() && World != nullptr ? World->FindPlayer() : nullptr;
-	const bool bPlayerValid = Player != nullptr && !Player->IsInert()
-		&& Player->Handle == Senses.Memory.ClosestPlayer;
-	if (bPlayerValid)
-	{
-		const FVector Delta = Origin - Player->Origin;
-		if (FMath::Abs(Delta.Z) < 50.0 * ElysiumMove::U)
-		{
-			FVector Flat(Delta.X, Delta.Y, 0.0);
-			const float Length = static_cast<float>(Flat.Size());
-			Flat = Flat.GetSafeNormal();
-			if (Length < 150.0f * ElysiumMove::U && 1e-05f * ElysiumMove::U < Length)
-			{
-				const FVector FlatAngles = FacingRetailVectorAngles(Flat);
-				const float YawDelta = FacingRetailAngleDiff(static_cast<float>(Player->Angles.Y),
-					static_cast<float>(FlatAngles.Y));
-				if (FMath::Abs(YawDelta) < 70.0f)
-				{
-					return;
-				}
-			}
-		}
-	}
-	FacingTime = World != nullptr ? World->NowSeconds() : 0.0;
-}

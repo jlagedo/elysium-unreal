@@ -1,0 +1,5058 @@
+{
+ "schema_version": 1,
+ "ordered_tests": [],
+ "changes": [
+  {
+   "id": "step4-diag-CameraAnchors",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.CameraAnchors",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1147",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1171",
+     1
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-DialogHolster",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogHolster",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1191",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block — it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1215",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-DialogueConditionTruthiness",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogueConditionTruthiness",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1193",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1217",
+     1
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-DlgAutomatic",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DlgAutomatic",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1195",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1219",
+     4
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelAnim-MiscBodies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelAnim.MiscBodies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Unknown scene specified: jack/hello.vcd",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: Unknown scene specified: jack/hello.vcd",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-Blacklist",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.Blacklist",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-FlapActivity",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.FlapActivity",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-FlightVelocity",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.FlightVelocity",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 bat(npc_VHumanCombatant) TaskFail 0x1a: Bad position to Target",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 bat(npc_VManBat) TaskFail 0x1a: Bad position to Target",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-ManBatTraceFilter",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.ManBatTraceFilter",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-MingXiaoAttackGate",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.MingXiaoAttackGate",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-MingXiaoGrabSelector",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.MingXiaoGrabSelector",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-MingXiaoRates",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.MingXiaoRates",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-MingXiaoThrowCurve",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.MingXiaoThrowCurve",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-ObstacleProbe",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.ObstacleProbe",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-PedestalSearch",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.PedestalSearch",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-PickupChain",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.PickupChain",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-PickupFacingCone",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.PickupFacingCone",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-PickupGrabBone",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.PickupGrabBone",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelBosses-Seams",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelBosses.Seams",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelCombat10-GetCurrHealthPercent",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelCombat10.GetCurrHealthPercent",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions-Disturbed",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.Disturbed",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions-OnStateChangeSpecies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.OnStateChangeSpecies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions-SelectIdealStateSpecies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.SelectIdealStateSpecies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions-Werewolf",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions.Werewolf",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions10-TaskFailAsianVampireAndChangBros",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions10.TaskFailAsianVampireAndChangBros",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0x0: No failure",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0x10: Couldn't walk to target",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0x64: Unknown failure",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0xb: Couldn't find shoot position",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0xc: Don't have a route",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0xd: Don't have a route: no goal",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0xe: Don't have a route: blocked",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 asian(npc_VAsianVampire) TaskFail 0xf: Don't have a route: illegal move",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 chang(npc_VChangBros) TaskFail 0xb: Couldn't find shoot position",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 chang(npc_VChangBros) TaskFail 0xc: Don't have a route",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions10-TaskFailGargoyleHengeyokaiTzimisce",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions10.TaskFailGargoyleHengeyokaiTzimisce",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 gargoyle(npc_VGargoyle) TaskFail 0x0: No failure",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 tzimisce(npc_VTzimisce) TaskFail 0x0: No failure",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 hengeyokai(npc_VHengeyokai) TaskFail 0x0: No failure",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelConditions10-TaskFailMingXiaoAndSheriffMan",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelConditions10.TaskFailMingXiaoAndSheriffMan",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 ming(npc_VMingXiao) TaskFail 0x0: No failure",
+     6
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 sheriff(npc_VSheriffMan) TaskFail 0xc: Don't have a route",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-CanBeSetOnFire",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.CanBeSetOnFire",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-CausePlayerAOEDamage",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.CausePlayerAOEDamage",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumDamage: #1 victim(npc_VHumanCombatant) soak: feat 'Soak_vs_Lethal' does not resolve (rulebook absent) — soaking nothing",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumDamage: #1 victim(npc_VHumanCombatant) soak: feat 'Soak_vs_Lethal' does not resolve (rulebook absent) — soaking nothing",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-DamageFlinchGate",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.DamageFlinchGate",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-Emitters",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.Emitters",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-KillSheriff",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.KillSheriff",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-LastAttackTimeElapsed",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.LastAttackTimeElapsed",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-MingXiaoThrowChain",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.MingXiaoThrowChain",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-Seams",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.Seams",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-SpawnEnergyBall",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.SpawnEnergyBall",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-ThrowGrenadeAndModel",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.ThrowGrenadeAndModel",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelDamage-VGargoyleGibCleanup",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelDamage.VGargoyleGibCleanup",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelEntityChain-Payphone",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.Payphone",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the payphone's StudioFrameAdvance stub (fired once per process) moves to the first case that stands a payphone after the re-pins reordered fixture use.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelFacing-PlayerFacing",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelFacing.PlayerFacing",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelGeometry-FakeHull",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelGeometry.FakeHull",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the payphone's StudioFrameAdvance stub (fired once per process) moves to the first case that stands a payphone after the re-pins reordered fixture use.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelGeometry-HullBits",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelGeometry.HullBits",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VScurrying has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelGeometry-Scatter",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelGeometry.Scatter",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the payphone's StudioFrameAdvance stub (fired once per process) moves to the first case that stands a payphone after the re-pins reordered fixture use.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelGeometry-StandingOnPlayer",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelGeometry.StandingOnPlayer",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the payphone's StudioFrameAdvance stub (fired once per process) moves to the first case that stands a payphone after the re-pins reordered fixture use.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints-HintRules",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints.HintRules",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints-HintTypeSpecies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints.HintTypeSpecies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDog has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #8 CNPC_VZombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints-Seams",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints.Seams",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints-WerewolfHints",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints.WerewolfHints",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints10-ForwardHintForHint",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints10.ForwardHintForHint",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints10-HintEndEntity",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints10.HintEndEntity",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints10-IsValidTeleportHint",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints10.IsValidTeleportHint",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelHints10-ManBatValidateHintType",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelHints10.ManBatValidateHintType",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelLifecycle-Dormancy",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.Dormancy",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveCollide | 0x100aacd0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolid | 0x10027570 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolidFlags | 0x100274d0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveCollide | 0x100aacd0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolid | 0x10027570 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolidFlags | 0x100274d0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelLifecycle-FreeFunctions",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.FreeFunctions",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-MingXiaoProxyGate",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate",
+   "evidence": "retail correction mingxiao-proxy-gate: FUN_10397b40 resolves the argument through m_rhSeveredTentacles with the tentacle's own m_iTentacleID; the case stands a real MingXiao and tentacle.",
+   "packet": "4e"
+  },
+  {
+   "id": "step4-diag-NpcKernelMisc-SpeciesBodies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMisc.SpeciesBodies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #6 yukie(npc_VYukie) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the same stub, now on the real species instance the case stands.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMisc-SpeciesThresholds",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMisc.SpeciesThresholds",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-JumpChain",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.JumpChain",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-MaxYawSpeedTroika",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.MaxYawSpeedTroika",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealYawSpeed | 0x100916a0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDog has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealYawSpeed | 0x100916a0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     4
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-Navigator",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.Navigator",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 guard(npc_VHumanCombatant) TaskFail 0x1b: Route Destination No Longer Valid",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 guard(npc_VHengeyokai) TaskFail 0x1b: Route Destination No Longer Valid",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-ObstructingDoor",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.ObstructingDoor",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-Probes",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.Probes",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::DispatchAnimEvents | 0x10098c80 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::DispatchAnimEvents | 0x10098c80 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-SpeciesProbes",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.SpeciesProbes",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelMotor-TranslateNavGoal",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelMotor.TranslateNavGoal",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelPositions-Arena",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.Arena",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelPositions-FloorHeights",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.FloorHeights",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelPositions-PositionClearForTeleport",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.PositionClearForTeleport",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelPositions-Seams",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.Seams",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelPositions-WerewolfTeleport",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelPositions.WerewolfTeleport",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VHuman) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VHuman) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VHuman) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 sheriff(npc_VSheriffMan) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each; the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the werewolf teleport bodies now run on a real npc_VWerewolf rather than a latched npc_VHuman.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSenses-FovTrace",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSenses.FovTrace",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMercurio has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSenses-Species",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSenses.Species",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     6
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSenses-Vision",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSenses.Vision",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VYukie) | owner: the NPC kernel",
+     4
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the same stub, now on the real species instance the case stands.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSenses10-Scurrying",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSenses10.Scurrying",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VScurrying has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSounds-StopLooping",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSounds.StopLooping",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-BachGates",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.BachGates",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Blacklists",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Blacklists",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-CanPlaySequence",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.CanPlaySequence",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-CensusFactories",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.CensusFactories",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Fleshpile",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Fleshpile",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-MeleeQuartet",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.MeleeQuartet",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Newscaster",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Newscaster",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Slot323MoveDirection",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Slot323MoveDirection",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-SmallBodies",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.SmallBodies",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VTzimisce::DeathSound 0x103b92a0 -> SPI_DIES | on #0 runner(npc_VTzimisceRunner) | params: args=1065353216,65,0,100 | owner: 0002/29c-1: no script host for SPI_DIES",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VTzimisce::DeathSound 0x103b92a0 -> SPI_DIES | on #8 tzimisce(npc_VTzimisce) | params: args=1065353216,65,0,100 | owner: 0002/29c-1: no script host for SPI_DIES",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; the Tzimisce DeathSound body now runs on a real npc_VTzimisce rather than a runner; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-TzimisceCarry",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.TzimisceCarry",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Werewolf",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Werewolf",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpecies-Zombie",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Zombie",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     9
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #0 runner(npc_VTzimisceRunner) | params: type=2 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     9
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #0 runner(npc_VTzimisceRunner) | params: type=3 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #0 runner(npc_VTzimisceRunner) | params: type=5 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #0 runner(npc_VTzimisceRunner) | params: type=6 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     8
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     9
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #4 zombie(npc_VZombie) | params: type=2 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #4 zombie(npc_VZombie) | params: type=3 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #4 zombie(npc_VZombie) | params: type=5 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CNPC_VZombie::SetZombieAIType 0x103e0980 order push 0x102ae840 | on #4 zombie(npc_VZombie) | params: type=6 order=1 | owner: 0002/29c-1: family Schedule owns the scripted-order push",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel",
+     8
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; SetZombieAIType 0x103e0980 now runs on a real npc_VZombie rather than a Tzimisce runner; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-Chain",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.Chain",
+   "evidence": "inherited rows (warn_range on npc_VRat/npc_VDog), sibling rejection, input vs key, Cop/Hunter +0x6664, Hengeyokai shadow row.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-Counts",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.Counts",
+   "evidence": "species binding tables held to their generated counts (27 classes).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-MergedAndSplitCarriers",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.MergedAndSplitCarriers",
+   "evidence": "each merged (4c) and split (4g) carrier written through its retail word's binding and read on the survivor member.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-SaveRoundTrip",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.SaveRoundTrip",
+   "evidence": "every introduced class's species save rows through Freeze/ApplySnapshot; five rewritten by named retail bodies (slot 435 restart, Pedestrian slot 130).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-add-TutorialRat",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.TutorialRat",
+   "evidence": "retail corrections rat-keys-effective and scurrying-flee-march: the tutorial rat's eight keys land through Construct and drive 0x103acac0 and 0x103acba0.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesLifecycle10-DestroyAndreiBlood",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesLifecycle10.DestroyAndreiBlood",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesLifecycle10-DestroyWerewolf",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesLifecycle10.DestroyWerewolf",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-BachGatherAttackConditions",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.BachGatherAttackConditions",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-ChangSelectLedgeNode",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.ChangSelectLedgeNode",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-Guard1HatePlayer",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.Guard1HatePlayer",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGuard1 has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-HeadClawEndSlow",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.HeadClawEndSlow",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-HealthPercentRecord",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.HealthPercentRecord",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-ManBatReleaseSlowedEntity",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.ManBatReleaseSlowedEntity",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-WerewolfHasPath",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfHasPath",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSpeciesMisc10-WerewolfTaskFail",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfTaskFail",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 guard(npc_VWerewolf) TaskFail 0x3: Weapon doesn't exist",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the TaskFail case now drives each species' own TaskFail override on a real instance of that class; the Troika body logs the failure reason for each.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSquad-SquadSeam",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSquad.SquadSeam",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-NpcKernelSquad-SquadSlotNameTable",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSquad.SquadSlotNameTable",
+   "before": [],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBrujah has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDialogPedestrian has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDog has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGuard1 has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatPatrol has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VLasombra has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMercurio has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPlaceholder has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatGunman has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VScurrying has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTaxiDriver has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #40 s40(npc_VZombie) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "the case is re-pinned on real factory instances of the species whose body it asserts (story 5 step 4 moved the bodies onto their classes), so the spawn-time 'no eye offset' warning names those classnames instead of npc_VHumanCombatant; a real npc_VZombie now stands in the fixture and its spawn reaches the known unported Troika Hide slot (step 2/3's zombie Hide stub).",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-SceneJaw",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.SceneJaw",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1311 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1335 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-ScriptedSequenceBodyClaim",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.ScriptedSequenceBodyClaim",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1318",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1319",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1320",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1321",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1322",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1342",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1343",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1344",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1345",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1346",
+     1
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-Stance-CrossDispositionTransition",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.CrossDispositionTransition",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1029",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1053",
+     2
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  },
+  {
+   "id": "step4-diag-Stance-Driver",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.Driver",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1030",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1031",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1054",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1055",
+     1
+    ]
+   ],
+   "evidence": "map-epoch or entity-index counter shift only: the re-pinned cases stand more factory instances earlier in the suite; every diagnostic is otherwise identical.",
+   "packet": "4h"
+  }
+ ]
+}

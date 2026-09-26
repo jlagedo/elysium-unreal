@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelCombat10Shared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -31,10 +32,6 @@ namespace
 	// `vampire.dll` at file offset `address - 0x10000000` — story 29c-1's technique, applied to the
 	// eight cells the corpus does not carry.
 
-	// `_DAT_104ce8c0` — the shared epsilon `GetCurrHealthPercent` guards its DIVISOR with.
-	constexpr float GCombatEpsilon = ElysiumNpcTunables::VampireBossSegmentLengthFloor;
-	// `_DAT_104454c4` — the shared float zero, and `GetCurrHealthPercent`'s refusal answer.
-	constexpr float GCombatZero = ElysiumNpcTunables::Zero;
 	// `_DAT_104454c0` — 1.0, `ComputeKnockbackVelocity`'s blend parameter on the NULL-source path.
 	constexpr float GCombatOne = ElysiumNpcTunables::One;
 	// `_DAT_104491b4` — **0.1**, the scale applied to the source's raw attack value.
@@ -61,20 +58,15 @@ namespace
 	constexpr double GPrayerIntervalFloor = 0.3;
 	constexpr double GPrayerIntervalStep = 0.15;
 
-	// The `CVStatList_t` list types the `+0x13bc`/`+0x13c0` scan looks for.
-	constexpr int32 GStatListTypeSheet = 0;      // the character sheet — the one this runtime stands
 	constexpr int32 GStatListTypeBuff = 2;       // the buff list
 	constexpr int32 GStatListTypeScripted = 3;   // the scripted list
 
 	// The stat ids this family reads, in retail's numbering. `ElysiumSlot` carries the same numbers.
 	constexpr int32 GStatFaithPoints = 0x0e;   // ElysiumSlot::FaithPoints (14)
-	constexpr int32 GStatWounds = 0x0f;        // ElysiumSlot::Health (15) — damage TAKEN
-	constexpr int32 GStatMaxHealth = 0x11;     // ElysiumSlot::MaxHealth (17)
 
 	// The two fighting-item classnames, `s_item_w_fists_10585f08` and
 	// `s_item_w_werewolf_attacks_10661a20`.
 	const TCHAR* const GItemFists = TEXT("item_w_fists");
-	const TCHAR* const GItemWerewolfAttacks = TEXT("item_w_werewolf_attacks");
 
 	// `CSecureType`'s scramble constants, verbatim from `0x1042fde0` / `0x1042fe90`. Restated here
 	// rather than shared because `ElysiumNpcKernelSenses.cpp` holds them as file statics; the two
@@ -146,7 +138,7 @@ bool FElysiumNpc::HasTypedStatList(int32 ListType) const
 	// 29b's shape bound `ElysiumSlot::Health` to stat `0xf` and `ElysiumSlot::MaxHealth` to stat
 	// `0x11`, and `FElysiumCombatCharacter::SyncHealthFromSheet` already cites `0x1032fe60` for it.
 	// Types 2 and 3 have no port container, so the walk falls through to `DAT_109f0b40`.
-	return ListType == GStatListTypeSheet;
+	return ListType == NpcKernelCombat10Shared::GStatListTypeSheet;
 }
 
 int32 FElysiumNpc::TypedStatValue(int32 ListType, int32 StatId) const
@@ -220,9 +212,9 @@ void FElysiumNpc::TypedStatIncBase(int32 ListType, int32 StatId)
 int32 FElysiumNpc::HealthToPercent()
 {
 	// `1032ff24`: the type-0 list, then `GetValue(0x11)` — the CAP.
-	const int32 Cap = TypedStatValue(GStatListTypeSheet, GStatMaxHealth);
+	const int32 Cap = TypedStatValue(NpcKernelCombat10Shared::GStatListTypeSheet, NpcKernelCombat10Shared::GStatMaxHealth);
 	// `1032ff8f`: the same walk again, then `GetValue(0x0f)` — the accumulated WOUND counter.
-	const int32 Wounds = TypedStatValue(GStatListTypeSheet, GStatWounds);
+	const int32 Wounds = TypedStatValue(NpcKernelCombat10Shared::GStatListTypeSheet, NpcKernelCombat10Shared::GStatWounds);
 	// `1032ffa8`: `((cap - wounds) * m_iMaxHealth) / cap`, an INTEGER divide.
 	if (Cap == 0)
 	{
@@ -234,68 +226,9 @@ int32 FElysiumNpc::HealthToPercent()
 	return ((Cap - Wounds) * MaxHealth) / Cap;
 }
 
-int32 FElysiumNpc::MingXiaoHealthToPercent()
-{
-	// `0x103970d0`, `CNPC_VMingXiao#348`. The decompiler lost the FPU arithmetic (it shows three bare
-	// `__ftol()` calls with no operands); what the body DOES is the base formula with one extra
-	// contribution folded in per attached limb, `i = 0..5` over `0x10398000(this, i)`. The two stat
-	// reads, their order and the scope-trace string are the base's — retail even reuses
-	// `CBaseCombatCharacter::HealthToPercent` as this override's trace name.
-	const int32 Cap = TypedStatValue(GStatListTypeSheet, GStatMaxHealth);
-	const int32 Wounds = TypedStatValue(GStatListTypeSheet, GStatWounds);
-	int32 Limbs = 0;
-	for (int32 Index = 0; Index < 6; ++Index)
-	{
-		if (MingXiaoLimbPresent(Index))
-		{
-			++Limbs;
-		}
-	}
-	if (Cap == 0)
-	{
-		return 0;   // the same crash guard as the base
-	}
-	// The limb term LOWERS the reported percent — the regrown-limb count is added to the wounds.
-	// With every limb absent (this runtime's seam) the arm equals the base, which is retail's own
-	// answer for an intact boss.
-	return ((Cap - (Wounds + Limbs)) * MaxHealth) / Cap;
-}
-
-bool FElysiumNpc::MingXiaoLimbPresent(int32 /*LimbIndex*/) const
-{
-	// SEAM for `0x10398000(this, i)`. No port system stands Ming Xiao's severable limbs.
-	return false;
-}
-
-// =================================================================================================
-// `CNPC_VVampireBoss::GetCurrHealthPercent` `0x103c6830`, 356 bytes, no slot.
-// =================================================================================================
-
-float FElysiumNpc::GetCurrHealthPercent() const
-{
-	// `103c68db`: the type-0 list, then `GetValue(0x0f)` FIRST — the numerator, the wound counter.
-	const int32 Wounds = TypedStatValue(GStatListTypeSheet, GStatWounds);
-	// `103c694d`: the same walk again, then `GetValue(0x11)` SECOND — the denominator, the cap.
-	const int32 Cap = TypedStatValue(GStatListTypeSheet, GStatMaxHealth);
-	// `103c6964`: `ABS((float)cap)` against `_DAT_104ce8c0`. The decompiler's
-	// `(a < eps) == (a == eps)` idiom is true exactly when both are false, i.e. `a > eps` — so this
-	// is a divide-by-zero guard on the DIVISOR and not a test on the numerator.
-	if (FMath::Abs(static_cast<float>(Cap)) > GCombatEpsilon)
-	{
-		return static_cast<float>(Wounds) / static_cast<float>(Cap);
-	}
-	return GCombatZero;   // `_DAT_104454c4`
-}
-
 // =================================================================================================
 // Slots 304 / 305 — the fighting-item loadout.
 // =================================================================================================
-
-bool FElysiumNpc::InventoryFindByClassname(const TCHAR* Classname) const
-{
-	// `CBaseCombatCharacter::Inventory_Find(classname)` — ordinary carried slots, case-insensitive.
-	return Inventory.FindOrdinary(*this, FString(Classname)) != nullptr;
-}
 
 bool FElysiumNpc::GiveNamedFightingItem(const TCHAR* Classname)
 {
@@ -335,6 +268,12 @@ bool FElysiumNpc::RemoveNamedFightingItem(const TCHAR* Classname)
 	return true;
 }
 
+bool FElysiumNpc::InventoryFindByClassname(const TCHAR* Classname) const
+{
+	// `CBaseCombatCharacter::Inventory_Find(classname)` — ordinary carried slots, case-insensitive.
+	return Inventory.FindOrdinary(*this, FString(Classname)) != nullptr;
+}
+
 void FElysiumNpc::GiveBaseFightingItems()
 {
 	// `CAI_BaseNPCTroika::GiveBaseFightingItems` `0x102b5b20`, 56 bytes and the whole body:
@@ -362,32 +301,6 @@ void FElysiumNpc::RemoveBaseFightingItems()
 	}
 	// `102b5b85`: `thunk_FUN_1021fee0(this, "item_w_fists")` then `RemoveMiscFlag(0x10)`.
 	RemoveNamedFightingItem(GItemFists);
-	ElysiumMiscFlags::Clear(MiscFlags, MiscFlagBaseFightingItems);
-}
-
-void FElysiumNpc::WerewolfGiveBaseFightingItems()
-{
-	// `CNPC_VWerewolf::GiveBaseFightingItems` `0x103cc9b0`, 155 bytes of which 99 are the scope-trace
-	// frame. The arm REPLACES the base: no slot-307 gate, no slot-308 gate, and never fists.
-	// `103cca32`: `Inventory_Find("item_w_werewolf_attacks")`, and only an ABSENT item grants.
-	if (InventoryFindByClassname(GItemWerewolfAttacks))
-	{
-		return;
-	}
-	// `103cca44`: `thunk_FUN_1021fe50(this, "item_w_werewolf_attacks", 0)` then `AddMiscFlag(0x10)`.
-	GiveNamedFightingItem(GItemWerewolfAttacks);
-	ElysiumMiscFlags::Set(MiscFlags, MiscFlagBaseFightingItems);
-}
-
-void FElysiumNpc::WerewolfRemoveBaseFightingItems()
-{
-	// `CNPC_VWerewolf::RemoveBaseFightingItems` `0x103cca80`, 146 bytes. Mirrors the base's SHAPE
-	// with its own item: the flag gate is the base's, the classname is the Werewolf's.
-	if (!ElysiumMiscFlags::Has(MiscFlags, MiscFlagBaseFightingItems))
-	{
-		return;
-	}
-	RemoveNamedFightingItem(GItemWerewolfAttacks);
 	ElysiumMiscFlags::Clear(MiscFlags, MiscFlagBaseFightingItems);
 }
 
@@ -837,12 +750,12 @@ int32 FElysiumNpc::FaithPointsMaximum() const
 void FElysiumNpc::RunPrayerPulse(double Now)
 {
 	// `1033b673`: the type-0 list, then `GetValue(0x0e FaithPoints)`.
-	const int32 Faith = TypedStatValue(GStatListTypeSheet, GStatFaithPoints);
+	const int32 Faith = TypedStatValue(NpcKernelCombat10Shared::GStatListTypeSheet, GStatFaithPoints);
 	const int32 Maximum = FaithPointsMaximum();
 	if (Faith < Maximum)
 	{
 		// `1033b6c8`: `IncBase(0x0e)` on the same list.
-		TypedStatIncBase(GStatListTypeSheet, GStatFaithPoints);
+		TypedStatIncBase(NpcKernelCombat10Shared::GStatListTypeSheet, GStatFaithPoints);
 	}
 	else
 	{

@@ -4,12 +4,16 @@
 
 // `CNPC_VCamera` (primary vtable `0x104ac294`), built by `npc_VCamera` factory `0x10367ff0`.
 //
-// Story 5 step 2 stands the class so the classname's factory builds the retail class and the class
-// answers its own census row. Its overrides and own datamap words still sit on `FElysiumNpc` and
-// move here in steps 3-4 (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`).
+// The classname's factory builds this class and it answers its own census row (story 5 step 2). Its
+// slot overrides, own bodies, own datamap words and their bindings live here (steps 3-4,
+// `docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`); the words a Troika body still
+// reads stay on `FElysiumNpc` until step 11.
 class FElysiumNpcCamera : public FElysiumNpc
 {
 public:
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VCamera");
+
 	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void Slot497() override;
 	virtual void Slot506() override;
@@ -46,4 +50,23 @@ public:
 	virtual void TargetGiveUpSound() override;
 	virtual void FloatSound() override;
 	virtual void SpeakSentence(int32 SentenceIndex) override;
+
+	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
+
+	// From `ElysiumNpcKernelLifecycle.inl`.
+	/** `CNPC_VCamera::Precache` (`0x103689c0`), shared with `CNPC_VCameraSecurity` — fall the model key
+	 *  back to `models/null.mdl` when it is unset or empty, precache it, then run the link-table
+	 *  integrity check. Answers the model that was precached; `OutLinkWarning` is retail's
+	 *  "spawned after links have been..." arm. */
+	static FString CameraPrecacheModel(const FString& AuthoredModel);
+
+	// From `ElysiumNpcKernelLifecycle19.inl`.
+	static constexpr float CameraOccludedDelayNormal = 3.4f;
+	static constexpr float CameraOccludedDelayCover = 10.f;
+	static constexpr float CameraEnemyStoreInterval = 0.5f;
+	/** Camera engine-query seam: slot 74 of `DAT_1070ba0c`. Default admits. Tests may refuse. */
+	bool bCameraEngineQueryAnswer = true;
+	int32 CameraEngineQueries = 0;
+	int32 CameraSelfRemovals = 0;
+
 };

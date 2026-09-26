@@ -1558,6 +1558,20 @@ character template is `Player_Nosferatu` (`0x103ad0f0`). Then `m_fMustDetect` (`
 unless `0x103ad0a0` holds, which is true for any target that is **not** a player and for a player
 only while COND `0x5a` `SEE_PLAYER` or COND `0x6f` stands. Passing all of them answers true.
 
+Arm addresses (re-read against the listing, story 5 step 4): the distance compare is `103acb15
+FCOMP [ESI+0x6690]` then `TEST AH,0x5 / JP` (equal, greater and unordered refuse; `0x103acb1a` is
+inside that instruction), the Nosferatu arm `103acb26`, the must-detect arm `103acb3d` (thunk
+`0x10007595` → `0x103ad0a0`), and the pass `103acb53`.
+
+**The rats' keys are effective since story 5 step 4.** The three `npc_VRat` of `sp_tutorial_1`
+author `friendship_level 1`, `warn_range 200`, `conflict_range 100`, `detection_distance 256`,
+`ignore_nosferatu 1`, `must_detect 1`, `fright_distance 128` and `fright_duration 5`. Until step 4
+no species datamap row was bound, so all eight were dropped and this body refused every target
+(`m_flDetectionDistance` 0 under a strict `<`). They now land on `CNPC_VAnimal` (`+0x6664`,
+`+0x6668`, `+0x666c`) and `CNPC_VScurrying` (`+0x6690`..`+0x669c`) through `Construct`
+(`Elysium.Substrate.NpcKernelSpeciesBindings.TutorialRat`). The body's callers (`GatherConditions`
+`0x103ac500`, `StartTask` `0x103ac740`) are story 8 residue, so no rat runs it in game yet.
+
 **Unrecovered:** nothing.
 
 ### `ScurryingFindFleeDestination` `0x103acba0`
@@ -1566,19 +1580,29 @@ _Recovered 2026-09-14, story 29d._
 
 Given a threat position and a distance it first asks the navigator (`+0x5d34`) for the nearest node
 within 30000 units (`0x102edae0` over `0x103008f0` and `0x102ee9c0`). On **success** it jitters that
-node: whichever of the x or y deltas to the threat is larger picks the axis, the sign of that delta
-picks a `0..-60` or `0..60` band on it and the other axis gets `-80..80`; z is the node z plus slot
-522 `StepHeight` times `_DAT_104454d0`; and it tries up to **5** random points against
-`CAI_BaseNPCTroika::IsAreaClear` with mask `0x202400b`, keeping the **last one tried** whether or
-not it was accepted. The accepted point is written to the out vector when one was passed and it
-answers 1.
+node: whichever of the x or y deltas to the threat is larger picks the axis (y on a tie), the sign
+of that delta picks a `0..-60` or `0..60` band on it and the other axis gets `-80..80`; z is the
+node z plus slot 522 `StepHeight` times `_DAT_104454d0`. Each try draws the y offset FIRST and x
+second (`103accc1`, `103accda`), and up to **5** tries run against `CAI_BaseNPCTroika::IsAreaClear`
+with mask `0x202400b`; the first clear one wins. Five refusals answer the **bare node** (`103acd30`,
+y and z reloaded at `103acd40`). The point is written to the out vector when one was passed and it
+answers 1 either way.
 
-On **failure** it marches instead: start at slot 217 `GetAbsOrigin` raised by `StepHeight` times
-`_DAT_104454d0`, direction normalised **away** from the threat, hull-trace (collision bounds from
-`+0x1568`, mask `0x202400b`) to start plus direction times the distance, and while the trace is
-blocked (fraction below `_DAT_104454c0` or either solid flag set) scale **both** the distance and
-the direction by `_DAT_104454d0` and retry, answering 0 once the distance falls to `_DAT_104454c0`
-or below. A clear trace returns its endpoint.
+On **failure** it marches instead (`103acd6c`): start at slot 217 `GetAbsOrigin` raised by
+`StepHeight` times `_DAT_104454d0`; the direction is `origin − threat` off the **unraised** origin,
+normalised in 3-D (`0x1057966c`). The end point marches only **x and y** by direction times
+distance — `103ace00`/`103ace05` copy the start's z — so the march is horizontal and a threat above
+or below shortens it. The hull trace (collision bounds from `+0x1568`, mask `0x202400b`) is
+**blocked** when its fraction is below `_DAT_104454c0` (1.0), or `allsolid` (`trace+0x36`), or
+`startsolid` (`+0x37`) (`103aceb9`..`103acee1`); then the direction becomes `dir + 0.5 ×
+plane.normal`, renormalised (`103acee7`..`103acf31`), the distance halves, and the body answers 0
+once the distance is at or below 1.0. A clear trace writes its end point and answers 1.
+
+**CORRECTION (story 5 step 4).** The 29d reading above this date said the march scaled both the
+distance and the direction by 0.5 and marched in 3-D, and that the jitter kept the last candidate
+tried. The listing says otherwise, and `navigation-jump-links.md` § the species arms (2026-09-19)
+already read it this way; the port now matches, and the hull-trace seam carries `plane.normal`,
+`allsolid` and `startsolid` for the retry to read.
 
 **Unrecovered:** the AI network, so the node search always fails and the march is the arm taken —
 which is retail's own answer for a map with no network, and the arm that still produces a

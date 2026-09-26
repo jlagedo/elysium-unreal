@@ -7,6 +7,15 @@
 #include "ElysiumRng.h"
 #include "ElysiumSwingRecord.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcZombie.h"
+#include "Substrate/ElysiumNpcTzimisceRunner.h"
+#include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcDog.h"
+#include "Substrate/ElysiumNpcBach.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -538,7 +547,7 @@ bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(F.Npc);
 
 	Anim10Reset(N);
 	N.Senses.Memory.Enemy = FElysiumEntityHandle();
@@ -580,7 +589,7 @@ bool FAnim10TzimisceRunnerSetActivityTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcTzimisceRunner& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(F.Npc);
 
 	N.bTzimisceRunnerForm = false;
 	Anim10Reset(N);
@@ -703,7 +712,7 @@ bool FAnim10DogEarlyTranslateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcDog& N = *ElysiumTestAsSpecies<FElysiumNpcDog>(F.Npc);
 
 	TestEqual(TEXT("0x10374ad0: the dog PRESERVES ACT_FIDGET"),
 		N.NPC_EarlyTranslateActivity(GTActFidget), GTActFidget);
@@ -725,7 +734,7 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcHuman& N = *ElysiumTestAsSpecies<FElysiumNpcHuman>(F.Npc);
 
 	// Step 2: no active weapon clears the flag and goes straight to the Troika body, skipping BOTH
 	// rewrite blocks. The fixture's NPC carries no weapon, so this is the default state.
@@ -776,7 +785,7 @@ bool FAnim10HengeyokaiEarlyTranslateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcHengeyokai& N = *ElysiumTestAsSpecies<FElysiumNpcHengeyokai>(F.Npc);
 
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
 	TestFalse(TEXT("0x10381c80: the carry-form probe is m_bfAINPCFlags bit 5"),
@@ -810,7 +819,7 @@ bool FAnim10TzimisceEarlyTranslateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcTzimisce& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisce>(F.Npc);
 
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);
 	TestEqual(TEXT("0x103bde40: with the form bit clear everything falls to the Troika body"),
@@ -846,7 +855,7 @@ bool FAnim10TzimisceRunnerEarlyTranslateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcTzimisceRunner& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(F.Npc);
 
 	N.bTzimisceRunnerForm = false;
 	TestEqual(TEXT("0x103c3e10: with +0x6672 clear the chain's answer passes through"),
@@ -1166,7 +1175,7 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		FElysiumNpc& R = *Runner.Npc;
+		FElysiumNpcTzimisceRunner& R = *ElysiumTestAsSpecies<FElysiumNpcTzimisceRunner>(Runner.Npc);
 		R.bTzimisceRunnerForm = true;
 		TestTrue(TEXT("...and for the runner it is the form BYTE +0x6672, not the flag word"),
 			R.PreTranslatePredicate(static_cast<int32>(ENpcPredicate::FormBit), 0));
@@ -1178,7 +1187,7 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& T = *Tzimisce.Npc;
+	FElysiumNpcTzimisce& T = *ElysiumTestAsSpecies<FElysiumNpcTzimisce>(Tzimisce.Npc);
 	auto AskTz = [&T](ENpcPredicate P, int32 Operand = 0)
 	{
 		return T.PreTranslatePredicate(static_cast<int32>(P), Operand);
@@ -1303,7 +1312,7 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& T = *Tzimisce.Npc;
+	FElysiumNpcTzimisce& T = *ElysiumTestAsSpecies<FElysiumNpcTzimisce>(Tzimisce.Npc);
 	T.NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
 	T.bHeavyBodyTarget = false;
 	const FNpcClass* Tz = FindNpcClassByEntityClass(FString(TEXT("npc_VTzimisce")));
@@ -1351,7 +1360,7 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcHuman& N = *ElysiumTestAsSpecies<FElysiumNpcHuman>(F.Npc);
 	TestEqual(TEXT("CNPC_VHuman fills slot 604 with 0x10385e40"),
 		FString(ElysiumNpcKernelClass::BodyOf(N.RetailClass(), 604)),
 		FString(TEXT("0x10385e40")));
@@ -1428,7 +1437,7 @@ bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(F.Npc);
 
 	// DIFFERENCE 2: the distance is tested BEFORE anything else in the not-engaged arm, and the
 	// melee failure gate is not offered there at all — so an occluded enemy still answers 0xe7.
@@ -1480,16 +1489,16 @@ bool FAnim10BachMeleeSelectorTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcBach& N = *ElysiumTestAsSpecies<FElysiumNpcBach>(F.Npc);
 	const double Now = F.World.World.NowSeconds();
 
 	N.Cognition.Conditions.Reset();
 	N.Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7b));
-	N.BachFailStamp = 0.0;
+	N.BachNextHolyLightTime = 0.0;
 	TestEqual(TEXT("0x10364080: condition 0x7b answers 0x15a"),
 		N.SelectScheduleMeleeCombat(0), 0x15a);
 	TestEqual(TEXT("...and stamps +0x6690 with curtime + 15.0 (_DAT_10463584)"),
-		N.BachFailStamp, Now + 15.0);
+		N.BachNextHolyLightTime, Now + 15.0);
 
 	// Unarmed — the fixture's NPC carries no weapon.
 	N.Cognition.Conditions.Reset();
@@ -1530,7 +1539,7 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpc& N = *F.Npc;
+	FElysiumNpcZombie& N = *ElysiumTestAsSpecies<FElysiumNpcZombie>(F.Npc);
 	// Slot 509 is `FElysiumNpcZombie`'s own override (story 5 step 3).
 	TestTrue(TEXT("the subject is a CNPC_VZombie, whose slot 509 is 0x103e0fa0"),
 		N.RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));

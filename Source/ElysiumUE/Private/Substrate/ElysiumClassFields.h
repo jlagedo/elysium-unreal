@@ -104,6 +104,11 @@ void ElysiumAddClassFieldVia(FElysiumClassDesc& D, const TCHAR* Name, TResolve R
 	{
 		static_assert(sizeof(TMember) == 0, "ElysiumAddClassFieldVia: unsupported member type");
 	}
+	// One name, one word, per descriptor. `TMap::Add` would silently replace an earlier row, so a
+	// second registration of a name on the same class (two datamap rows, or a generated row and a
+	// hand one) is a registration fault, not a shadow: shadowing is a DERIVED descriptor's row.
+	checkf(!D.Fields.Contains(FName(Name)),
+		TEXT("ElysiumAddClassFieldVia: field '%s' is already registered on this descriptor"), Name);
 	D.Fields.Add(FName(Name), MoveTemp(Acc));
 }
 

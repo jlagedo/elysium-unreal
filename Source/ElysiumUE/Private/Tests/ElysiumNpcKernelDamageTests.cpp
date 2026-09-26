@@ -7,8 +7,20 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcVampire.h"
+#include "Substrate/ElysiumNpcAndreiBlood.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumReactions.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -103,25 +115,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageCanBeSetOnFireTest,
 	"Elysium.Substrate.NpcKernelDamage.CanBeSetOnFire", GDamageTestFlags)
 bool FElysiumNpcKernelDamageCanBeSetOnFireTest::RunTest(const FString&)
 {
-	// The species table: one row, and it is the one `vtmb_slot 615` names.
-	int32 Count = 0;
-	const FElysiumNpc::FCanBeSetOnFireSpecies* Rows = FElysiumNpc::CanBeSetOnFireSpeciesRows(Count);
-	TestEqual(TEXT("slot 615 has exactly one species override"), Count, 1);
-	TestEqual(TEXT("and it is CNPC_VGhoulCroucher"), FString(Rows[0].RetailClass),
-		FString(TEXT("CNPC_VGhoulCroucher")));
-	TestEqual(TEXT("filled by 0x1037c420"), FString(Rows[0].Body), FString(TEXT("0x1037c420")));
-	TestTrue(TEXT("and it refuses while m_bSpawnBurning is set"),
-		Rows[0].bRefusesWhileSpawnBurning);
-	// `npc_VGhoulCroucher` is not a registered spawn leaf, so the row is reached by retail name.
-	TestNotNull(TEXT("the row is reachable by retail class name"),
-		FElysiumNpc::CanBeSetOnFireSpeciesOf(TEXT("CNPC_VGhoulCroucher")));
-	TestNull(TEXT("and an unrelated class has no row"),
-		FElysiumNpc::CanBeSetOnFireSpeciesOf(TEXT("CNPC_VHumanCombatant")));
+	// `vtmb_slot 615`: `CNPC_VGhoulCroucher` is the one class that replaces the Troika body, with
+	// `0x1037c420`, its own override (story 5 step 4): it refuses while `m_bSpawnBurning` is set.
+	TestEqual(TEXT("CNPC_VGhoulCroucher fills slot 615 with 0x1037c420"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VGhoulCroucher")), 615)),
+		FString(TEXT("0x1037c420")));
+	TestNull(TEXT("and an unrelated class does not override it"),
+		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 615));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_fire"), 0x29c1d002);
-	Builder.AddNpc(TEXT("npc"));
+	Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, TEXT("CNPC_VGhoulCroucher"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	FElysiumNpcGhoulCroucher* Npc = Fixture.NpcAs<FElysiumNpcGhoulCroucher>(TEXT("npc"));
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	if (Npc == nullptr)
 	{
@@ -144,12 +149,13 @@ bool FElysiumNpcKernelDamageCanBeSetOnFireTest::RunTest(const FString&)
 	TestFalse(TEXT("a timer exactly at curtime refuses: the compare is strict"),
 		Npc->CanBeSetOnFire());
 
-	// The species arm, on the one runtime word it reads. This NPC's class carries no row, so the
-	// flag alone must not change the answer — the gate is the ROW, not the word.
+	// The species arm, on the one runtime word it reads: the ghoul's slot 615 (`0x1037c420`)
+	// refuses while `m_bSpawnBurning` stands, and the base arms decide once it clears.
 	Npc->NextBurnTime = Now - 100.0;
 	Npc->bGhoulSpawnBurning = true;
-	TestTrue(TEXT("m_bSpawnBurning alone does not refuse on a class with no slot-615 row"),
-		Npc->CanBeSetOnFire());
+	TestFalse(TEXT("0x1037c420 refuses while m_bSpawnBurning is set"), Npc->CanBeSetOnFire());
+	Npc->bGhoulSpawnBurning = false;
+	TestTrue(TEXT("and admits once it clears"), Npc->CanBeSetOnFire());
 	return true;
 }
 
@@ -369,46 +375,34 @@ bool FElysiumNpcKernelDamageTraceAttackSpeciesTest::RunTest(const FString&)
 	// The table: `vtmb_slot 141` names three species prologues beside the Troika line's 74
 	// inheritors. `CNPC_Bullseye`'s (`0x10356f60`) is on a class no map stands and carries no row,
 	// so two remain. Keyed by class, not by row position.
-	int32 Count = 0;
-	const FElysiumNpc::FTraceAttackSpecies* Rows = FElysiumNpc::TraceAttackSpeciesRows(Count);
-	TestEqual(TEXT("slot 141 has two ported species prologues"), Count, 2);
-	TMap<FString, FString> ByClass;
-	for (int32 Index = 0; Index < Count; ++Index)
+	// Slot 141's two ported species prologues are their classes' own overrides (story 5 step 4).
+	auto BodyOf141 = [](const TCHAR* Class)
 	{
-		ByClass.Add(FString(Rows[Index].RetailClass), FString(Rows[Index].Body));
-	}
-	TestEqual(TEXT("CNPC_VWerewolf is filled by 0x103ccbf0"),
-		ByClass.FindRef(TEXT("CNPC_VWerewolf")), FString(TEXT("0x103ccbf0")));
-	TestEqual(TEXT("CNPC_VZombie is filled by 0x103e0430"), ByClass.FindRef(TEXT("CNPC_VZombie")),
+		return FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Class), 141));
+	};
+	TestEqual(TEXT("CNPC_VWerewolf is filled by 0x103ccbf0"), BodyOf141(TEXT("CNPC_VWerewolf")),
+		FString(TEXT("0x103ccbf0")));
+	TestEqual(TEXT("CNPC_VZombie is filled by 0x103e0430"), BodyOf141(TEXT("CNPC_VZombie")),
 		FString(TEXT("0x103e0430")));
-	TestFalse(TEXT("CNPC_Bullseye carries no row"), ByClass.Contains(TEXT("CNPC_Bullseye")));
-
-	// Neither is a registered spawn leaf, so each is reached by retail class name.
-	TestNotNull(TEXT("CNPC_VWerewolf is reachable by name"),
-		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VWerewolf")));
-	TestNotNull(TEXT("CNPC_VZombie is reachable by name"),
-		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VZombie")));
-	TestNull(TEXT("CNPC_Bullseye takes the Troika line's body"),
-		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_Bullseye")));
-	TestNull(TEXT("and the Troika line has no row"),
-		FElysiumNpc::TraceAttackSpeciesOf(TEXT("CNPC_VHumanCombatant")));
+	TestNull(TEXT("and the Troika line's human combatant takes the base body"),
+		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 141));
 
 	// `0x103e0430`'s pure rule, arm by arm off the decompiled C.
 	bool bGib = false;
 	int32 Forced = 0;
 	TestTrue(TEXT("a head hit forces an ammo type"),
-		FElysiumNpc::ZombieTraceAttackPrologue(1, /*melee*/ false, 11, 22, bGib, Forced));
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(1, /*melee*/ false, 11, 22, bGib, Forced));
 	TestTrue(TEXT("and raises the gib latch"), bGib);
 	TestEqual(TEXT("with the SECOND cvar's value"), Forced, 22);
 
 	Forced = 0;
 	TestFalse(TEXT("a body hit from a non-melee weapon forces nothing"),
-		FElysiumNpc::ZombieTraceAttackPrologue(2, /*melee*/ false, 11, 22, bGib, Forced));
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(2, /*melee*/ false, 11, 22, bGib, Forced));
 	TestFalse(TEXT("and clears the gib latch"), bGib);
 	TestEqual(TEXT("leaving the forced type untouched"), Forced, 0);
 
 	TestTrue(TEXT("a body hit from a melee weapon forces one"),
-		FElysiumNpc::ZombieTraceAttackPrologue(7, /*melee*/ true, 11, 22, bGib, Forced));
+		FElysiumNpcZombie::ZombieTraceAttackPrologue(7, /*melee*/ true, 11, 22, bGib, Forced));
 	TestFalse(TEXT("still with no gib"), bGib);
 	TestEqual(TEXT("with the FIRST cvar's value — the swap is inside the capability test"),
 		Forced, 11);
@@ -670,62 +664,62 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageFlinchGateTest,
 	"Elysium.Substrate.NpcKernelDamage.DamageFlinchGate", GDamageTestFlags)
 bool FElysiumNpcKernelDamageFlinchGateTest::RunTest(const FString&)
 {
-	// The table: `vtmb_slot 292` lists 254 classes and exactly two of them gate the flinch.
-	int32 Count = 0;
-	const FElysiumNpc::FDamageFlinchSpecies* Rows = FElysiumNpc::DamageFlinchSpeciesRows(Count);
-	TestEqual(TEXT("slot 292 has two species gates"), Count, 2);
-	TestEqual(TEXT("row 0 is CNPC_VGargoyle"), FString(Rows[0].RetailClass),
-		FString(TEXT("CNPC_VGargoyle")));
-	TestEqual(TEXT("filled by 0x10378cb0"), FString(Rows[0].Body), FString(TEXT("0x10378cb0")));
-	TestEqual(TEXT("row 1 is CNPC_VHengeyokai"), FString(Rows[1].RetailClass),
-		FString(TEXT("CNPC_VHengeyokai")));
-	TestEqual(TEXT("filled by 0x103802a0"), FString(Rows[1].Body), FString(TEXT("0x103802a0")));
-	// Both bodies are byte-identical and the mask is exactly the port's own firearm mask.
-	TestEqual(TEXT("the Gargoyle mask is DMG_BULLET|DMG_BUCKSHOT"), Rows[0].SuppressMask,
-		ElysiumDamage::FirearmMask);
-	TestEqual(TEXT("and the Hengeyokai mask is the same word"), Rows[1].SuppressMask,
-		Rows[0].SuppressMask);
-	TestEqual(TEXT("which is 0x4000002"), Rows[0].SuppressMask, 0x4000002u);
-
-	// Neither classname is a registered spawn leaf, so both rows are reached by retail name.
-	TestNotNull(TEXT("CNPC_VGargoyle is reachable by name"),
-		FElysiumNpc::DamageFlinchSpeciesOf(TEXT("CNPC_VGargoyle")));
-	TestNotNull(TEXT("CNPC_VHengeyokai is reachable by name"),
-		FElysiumNpc::DamageFlinchSpeciesOf(TEXT("CNPC_VHengeyokai")));
-	TestNull(TEXT("and the Troika line has no gate"),
-		FElysiumNpc::DamageFlinchSpeciesOf(TEXT("CNPC_VHumanCombatant")));
+	// `vtmb_slot 292` lists 254 classes and exactly two of them gate the flinch, each with its own
+	// override (story 5 step 4) over the byte-identical gate `FElysiumNpcVampire` holds for both.
+	auto BodyOf292 = [](const TCHAR* Class)
+	{
+		return FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Class), 292));
+	};
+	TestEqual(TEXT("CNPC_VGargoyle is filled by 0x10378cb0"), BodyOf292(TEXT("CNPC_VGargoyle")),
+		FString(TEXT("0x10378cb0")));
+	TestEqual(TEXT("CNPC_VHengeyokai is filled by 0x103802a0"), BodyOf292(TEXT("CNPC_VHengeyokai")),
+		FString(TEXT("0x103802a0")));
+	TestEqual(TEXT("the mask both bodies test is DMG_BULLET|DMG_BUCKSHOT, 0x4000002"),
+		ElysiumDamage::FirearmMask, 0x4000002u);
 
 	// The pure rule, arm by arm.
 	const uint32 Mask = ElysiumDamage::FirearmMask;
 	TestTrue(TEXT("a bullet hit is suppressed"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgBullet, 25.f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgBullet, 25.f, Mask));
 	TestTrue(TEXT("a buckshot hit is suppressed"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgBuckshot, 25.f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgBuckshot, 25.f, Mask));
 	TestFalse(TEXT("a slash hit is not"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 25.f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 25.f, Mask));
 	// The magnitude test is an EXACT inequality against 0.0, not a threshold.
 	TestTrue(TEXT("a zero-magnitude hit is suppressed whatever the mask"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 0.f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 0.f, Mask));
 	TestFalse(TEXT("and the smallest non-zero magnitude is not"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 0.0001f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgSlash, 0.0001f, Mask));
 	// The mask is tested FIRST: a firearm hit is refused before the magnitude is even read.
 	TestTrue(TEXT("a firearm hit is suppressed even at full magnitude"),
-		FElysiumNpc::DamageFlinchSuppressed(ElysiumDamage::DmgBullet, 1000.f, Mask));
+		FElysiumNpcVampire::DamageFlinchSuppressed(ElysiumDamage::DmgBullet, 1000.f, Mask));
 
-	// A spawned NPC of a class with no row flinches exactly as it always has.
+	// Through the slot: the two species suppress a gunshot flinch and not a slash; a spawned NPC of
+	// a class with no gate flinches exactly as it always has.
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_flinchgate"), 0x29c1d00a);
 	Builder.AddNpc(TEXT("npc"));
+	Builder.AddNpcOfClass(TEXT("gargoyle"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VGargoyle"));
+	Builder.AddNpcOfClass(TEXT("hengeyokai"), FVector(800.0, 0.0, 0.0), TEXT("CNPC_VHengeyokai"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
-	FElysiumNpcWorldFixture::Quiet({ Npc });
-	if (Npc == nullptr)
+	FElysiumNpc* Gargoyle = Fixture.Npc(TEXT("gargoyle"));
+	FElysiumNpc* Hengeyokai = Fixture.Npc(TEXT("hengeyokai"));
+	if (Npc == nullptr || Gargoyle == nullptr || Hengeyokai == nullptr)
 	{
-		AddError(TEXT("fixture did not stand the NPC"));
+		AddError(TEXT("fixture did not stand the NPCs"));
 		return false;
 	}
+	FElysiumNpcWorldFixture::Quiet({ Npc, Gargoyle, Hengeyokai });
 	FElysiumDmg Shot = MakeResolvedDmg(30, ElysiumDamage::DmgBullet);
+	FElysiumDmg Cut = MakeResolvedDmg(30, ElysiumDamage::DmgSlash);
 	TestFalse(TEXT("an ordinary combatant does not suppress a gunshot flinch"),
 		Npc->SuppressesDamageFlinch(Shot));
+	for (FElysiumNpc* Species : { Gargoyle, Hengeyokai })
+	{
+		TestTrue(TEXT("a Gargoyle/Hengeyokai suppresses a gunshot flinch"),
+			Species->SuppressesDamageFlinch(Shot));
+		TestFalse(TEXT("and not a slash"), Species->SuppressesDamageFlinch(Cut));
+	}
 	return true;
 }
 
@@ -781,7 +775,7 @@ bool FElysiumNpcKernelDamageAndreiIdealStateTest::RunTest(const FString&)
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_andrei"), 0x29c1d00c);
 	Builder.AddNpc(TEXT("andrei"), FVector::ZeroVector, TEXT("npc_VAndreiBlood"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Andrei = Fixture.Npc(TEXT("andrei"));
+	FElysiumNpcAndreiBlood* Andrei = Fixture.NpcAs<FElysiumNpcAndreiBlood>(TEXT("andrei"));
 	FElysiumNpcWorldFixture::Quiet({ Andrei });
 	if (Andrei == nullptr)
 	{
@@ -816,9 +810,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageLastAttackTest,
 bool FElysiumNpcKernelDamageLastAttackTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_lastattack"), 0x29c1d00d);
-	Builder.AddNpc(TEXT("npc"));
+	Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, TEXT("CNPC_VVampireBoss"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	FElysiumNpcVampireBoss* Npc = Fixture.NpcAs<FElysiumNpcVampireBoss>(TEXT("npc"));
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	if (Npc == nullptr)
 	{
@@ -849,15 +843,23 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageEmittersTest,
 bool FElysiumNpcKernelDamageEmittersTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_emitters"), 0x29c1d00e);
-	Builder.AddNpc(TEXT("boss"), FVector(10.0 * DamageU, 20.0 * DamageU, 30.0 * DamageU));
+	// Each emitter body runs on its own class, all four standing where the boss stood.
+	const FVector BossOrigin(10.0 * DamageU, 20.0 * DamageU, 30.0 * DamageU);
+	Builder.AddNpcOfClass(TEXT("boss"), BossOrigin, TEXT("CNPC_VVampireBoss"));
+	Builder.AddNpcOfClass(TEXT("chang"), BossOrigin, TEXT("CNPC_VChangBros"));
+	Builder.AddNpcOfClass(TEXT("sabbat"), BossOrigin, TEXT("CNPC_VSabbatLeader"));
+	Builder.AddNpcOfClass(TEXT("andrei"), BossOrigin, TEXT("CNPC_VAndreiBlood"));
 	Builder.AddNpc(TEXT("body"), FVector(0.0, 0.0, 77.0 * DamageU));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcVampireBoss* Boss = Fixture.NpcAs<FElysiumNpcVampireBoss>(TEXT("boss"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	FElysiumNpcSabbatLeader* Sabbat = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("sabbat"));
+	FElysiumNpcAndreiBlood* Andrei = Fixture.NpcAs<FElysiumNpcAndreiBlood>(TEXT("andrei"));
 	FElysiumNpc* Body = Fixture.Npc(TEXT("body"));
-	FElysiumNpcWorldFixture::Quiet({ Boss, Body });
-	if (Boss == nullptr || Body == nullptr)
+	FElysiumNpcWorldFixture::Quiet({ Boss, Chang, Sabbat, Andrei, Body });
+	if (Boss == nullptr || Chang == nullptr || Sabbat == nullptr || Andrei == nullptr || Body == nullptr)
 	{
-		AddError(TEXT("fixture did not stand both NPCs"));
+		AddError(TEXT("fixture did not stand the four bosses and the body"));
 		return false;
 	}
 
@@ -917,66 +919,66 @@ bool FElysiumNpcKernelDamageEmittersTest::RunTest(const FString&)
 	TestTrue(TEXT("and leaves the handles standing"), Boss->ParticleEmitters[1] == Body->Handle);
 
 	// `0x1036e8c0` — the same pair on the single centre emitter.
-	Boss->EmitterKillCalls = 0;
-	Boss->ChangCenterEmitter = Body->Handle;
-	Boss->KillCenterEmitter();
-	TestEqual(TEXT("KillCenterEmitter asks once"), Boss->EmitterKillCalls, 1);
+	Chang->EmitterKillCalls = 0;
+	Chang->ChangCenterEmitter = Body->Handle;
+	Chang->KillCenterEmitter();
+	TestEqual(TEXT("KillCenterEmitter asks once"), Chang->EmitterKillCalls, 1);
 	TestTrue(TEXT("and leaves m_hCenterEmitter standing"),
-		Boss->ChangCenterEmitter == Body->Handle);
+		Chang->ChangCenterEmitter == Body->Handle);
 
 	// `0x103ab110` — the blood pool takes X and Y from this body's origin and Z from the optional
 	// orientation entity, and it DOES start its emitter.
-	Boss->EmitterCalls.Reset();
-	Boss->SpawnBloodPoolEmitter(TEXT("blood_pool"), Body);
-	if (Boss->EmitterCalls.Num() == 1)
+	Sabbat->EmitterCalls.Reset();
+	Sabbat->SpawnBloodPoolEmitter(TEXT("blood_pool"), Body);
+	if (Sabbat->EmitterCalls.Num() == 1)
 	{
 		TestEqual(TEXT("the pool takes this body's X"),
-			Boss->EmitterCalls[0].PositionUnits.X, 10.0, 0.001);
+			Sabbat->EmitterCalls[0].PositionUnits.X, 10.0, 0.001);
 		TestEqual(TEXT("and the orientation entity's Z"),
-			Boss->EmitterCalls[0].PositionUnits.Z, 77.0, 0.001);
-		TestTrue(TEXT("and it IS started"), Boss->EmitterCalls[0].bStarted);
+			Sabbat->EmitterCalls[0].PositionUnits.Z, 77.0, 0.001);
+		TestTrue(TEXT("and it IS started"), Sabbat->EmitterCalls[0].bStarted);
 	}
 	else
 	{
 		AddError(TEXT("SpawnBloodPoolEmitter did not create exactly one emitter"));
 	}
 	// An empty name refuses before anything is created.
-	Boss->EmitterCalls.Reset();
-	Boss->SpawnBloodPoolEmitter(FString(), Body);
-	TestEqual(TEXT("an empty name creates nothing"), Boss->EmitterCalls.Num(), 0);
+	Sabbat->EmitterCalls.Reset();
+	Sabbat->SpawnBloodPoolEmitter(FString(), Body);
+	TestEqual(TEXT("an empty name creates nothing"), Sabbat->EmitterCalls.Num(), 0);
 
 	// `0x1035e1a0` / `0x1035e3c0` — one body written twice; the whole difference is the word and
 	// the attach.
-	Boss->EmitterCalls.Reset();
-	Boss->StartBloodEmitter(TEXT("andrei_blood"));
-	if (Boss->EmitterCalls.Num() == 1)
+	Andrei->EmitterCalls.Reset();
+	Andrei->StartBloodEmitter(TEXT("andrei_blood"));
+	if (Andrei->EmitterCalls.Num() == 1)
 	{
-		TestEqual(TEXT("the blood arm attaches in mode 2"), Boss->EmitterCalls[0].AttachMode, 2);
-		TestTrue(TEXT("to this entity"), Boss->EmitterCalls[0].AttachEntity == Boss->Handle);
-		TestTrue(TEXT("names no bone"), Boss->EmitterCalls[0].AttachBone.IsEmpty());
-		TestTrue(TEXT("and starts it"), Boss->EmitterCalls[0].bStarted);
+		TestEqual(TEXT("the blood arm attaches in mode 2"), Andrei->EmitterCalls[0].AttachMode, 2);
+		TestTrue(TEXT("to this entity"), Andrei->EmitterCalls[0].AttachEntity == Andrei->Handle);
+		TestTrue(TEXT("names no bone"), Andrei->EmitterCalls[0].AttachBone.IsEmpty());
+		TestTrue(TEXT("and starts it"), Andrei->EmitterCalls[0].bStarted);
 	}
 	else
 	{
 		AddError(TEXT("StartBloodEmitter did not create exactly one emitter"));
 	}
-	Boss->EmitterCalls.Reset();
-	Boss->StartSummonEmitter(TEXT("andrei_summon"));
-	if (Boss->EmitterCalls.Num() == 1)
+	Andrei->EmitterCalls.Reset();
+	Andrei->StartSummonEmitter(TEXT("andrei_summon"));
+	if (Andrei->EmitterCalls.Num() == 1)
 	{
 		TestEqual(TEXT("the summon arm attaches at Bip01_R_Hand"),
-			Boss->EmitterCalls[0].AttachBone, FString(FElysiumNpc::SummonEmitterBoneName()));
-		TestTrue(TEXT("and starts it too"), Boss->EmitterCalls[0].bStarted);
+			Andrei->EmitterCalls[0].AttachBone, FString(FElysiumNpcAndreiBlood::SummonEmitterBoneName()));
+		TestTrue(TEXT("and starts it too"), Andrei->EmitterCalls[0].bStarted);
 	}
 	else
 	{
 		AddError(TEXT("StartSummonEmitter did not create exactly one emitter"));
 	}
 	// Both refuse a null name before touching the cached handle.
-	Boss->EmitterCalls.Reset();
-	Boss->StartBloodEmitter(FString());
-	Boss->StartSummonEmitter(FString());
-	TestEqual(TEXT("a null name creates nothing on either arm"), Boss->EmitterCalls.Num(), 0);
+	Andrei->EmitterCalls.Reset();
+	Andrei->StartBloodEmitter(FString());
+	Andrei->StartSummonEmitter(FString());
+	TestEqual(TEXT("a null name creates nothing on either arm"), Andrei->EmitterCalls.Num(), 0);
 	return true;
 }
 
@@ -1000,9 +1002,9 @@ bool FElysiumNpcKernelDamageEnergyBallTest::RunTest(const FString&)
 	TestEqual(TEXT("the origin is added"), Offset.X, 150.0, 0.001);
 
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_energyball"), 0x29c1d00f);
-	Builder.AddNpc(TEXT("chang"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Chang = Fixture.Npc(TEXT("chang"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
 	FElysiumNpcWorldFixture::Quiet({ Chang });
 	if (Chang == nullptr)
 	{
@@ -1031,10 +1033,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageAoeTest,
 bool FElysiumNpcKernelDamageAoeTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_aoe"), 0x29c1d010);
-	Builder.AddNpc(TEXT("boss"));
+	Builder.AddNpcOfClass(TEXT("boss"), FVector::ZeroVector, TEXT("CNPC_VVampireBoss"));
 	Builder.AddNpc(TEXT("victim"), FVector(100.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Boss = Fixture.Npc(TEXT("boss"));
+	FElysiumNpcVampireBoss* Boss = Fixture.NpcAs<FElysiumNpcVampireBoss>(TEXT("boss"));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
 	FElysiumNpcWorldFixture::Quiet({ Boss, Victim });
 	if (Boss == nullptr || Victim == nullptr)
@@ -1077,10 +1079,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageKillSheriffTest,
 bool FElysiumNpcKernelDamageKillSheriffTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_killsheriff"), 0x29c1d011);
-	Builder.AddNpc(TEXT("sheriffman"));
+	Builder.AddNpcOfClass(TEXT("sheriffman"), FVector::ZeroVector, TEXT("CNPC_VSheriffMan"));
 	Builder.AddCounter(TEXT("logic_zap_player"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Sheriff = Fixture.Npc(TEXT("sheriffman"));
+	FElysiumNpcSheriffMan* Sheriff = Fixture.NpcAs<FElysiumNpcSheriffMan>(TEXT("sheriffman"));
 	FElysiumNpcWorldFixture::Quiet({ Sheriff });
 	if (Sheriff == nullptr)
 	{
@@ -1129,14 +1131,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageMingXiaoTest,
 bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_mingxiao"), 0x29c1d012);
-	Builder.AddNpc(TEXT("ming"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));
 	Builder.AddNpc(TEXT("object"), FVector(200.0 * DamageU, 0.0, 0.0));
 	// A THIRD body for the slot-166 block: the cleanup bodies above reach `UTIL_Remove` on whatever
 	// `object` is, and a killed entity no longer resolves, which would make the handle comparisons
 	// below measure the fixture rather than the recovered walk.
 	Builder.AddNpc(TEXT("standable"), FVector(400.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Ming = Fixture.Npc(TEXT("ming"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
 	FElysiumNpc* Object = Fixture.Npc(TEXT("object"));
 	FElysiumNpc* Standable = Fixture.Npc(TEXT("standable"));
 	FElysiumNpcWorldFixture::Quiet({ Ming, Object, Standable });
@@ -1165,11 +1167,11 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 
 	// `0x103983d0`'s sibling `0x103990c0`'s speed rule: 1000 is a FLOOR, not a cap.
 	TestEqual(TEXT("a sum under 1000 answers the 1000 floor"),
-		FElysiumNpc::MingXiaoThrowSpeed(100.f, 1.f, 0.f), 1000.f, 0.001f);
+		FElysiumNpcMingXiao::MingXiaoThrowSpeed(100.f, 1.f, 0.f), 1000.f, 0.001f);
 	TestEqual(TEXT("a sum of exactly 1000 answers the floor too"),
-		FElysiumNpc::MingXiaoThrowSpeed(1000.f, 1.f, 0.f), 1000.f, 0.001f);
+		FElysiumNpcMingXiao::MingXiaoThrowSpeed(1000.f, 1.f, 0.f), 1000.f, 0.001f);
 	TestEqual(TEXT("a sum above it answers the sum"),
-		FElysiumNpc::MingXiaoThrowSpeed(1000.f, 2.f, 5.f), 2005.f, 0.001f);
+		FElysiumNpcMingXiao::MingXiaoThrowSpeed(1000.f, 2.f, 5.f), 2005.f, 0.001f);
 	// The three cvars are unrecovered and answer 0, which makes every real call take the floor.
 	TestEqual(TEXT("the quadratic cvar is unrecovered"), Ming->MingXiaoThrowCvar(0), 0.f);
 	TestEqual(TEXT("the constant cvar is unrecovered"), Ming->MingXiaoThrowCvar(1), 0.f);
@@ -1197,14 +1199,14 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 	Ming->MingXiaoThrowObject = Object->Handle;
 	TestEqual(TEXT("a live throw object answers 0"), Ming->MingXiaoFindThrowObject(0, 100), 0);
 	Ming->MingXiaoThrowObject = FElysiumEntityHandle();
-	Ming->MingXiaoPickupCooldownB = Now + 10.0;
+	Ming->MingXiaoAttackTimers[5] = Now + 10.0;
 	TestEqual(TEXT("a live cooldown B answers 0"), Ming->MingXiaoFindThrowObject(0, 100), 0);
-	Ming->MingXiaoPickupCooldownB = 0.0;
-	Ming->MingXiaoPickupCooldownA = Now + 10.0;
+	Ming->MingXiaoAttackTimers[5] = 0.0;
+	Ming->MingXiaoAttackTimers[4] = Now + 10.0;
 	TestEqual(TEXT("a live cooldown A answers 0"), Ming->MingXiaoFindThrowObject(0, 100), 0);
 	// Past both cooldowns the condition-9 clear runs unconditionally, and the search only with a
 	// draw strictly below the ceiling. Neither arm can find a pedestal here, so both answer 0.
-	Ming->MingXiaoPickupCooldownA = 0.0;
+	Ming->MingXiaoAttackTimers[4] = 0.0;
 	Ming->Cognition.Conditions.Set(EElysiumNpcCond::TooFarForMelee);
 	TestEqual(TEXT("with no pedestal in reach the search answers 0"),
 		Ming->MingXiaoFindThrowObject(0, 100), 0);
@@ -1269,10 +1271,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageTzimisceReleaseTest,
 bool FElysiumNpcKernelDamageTzimisceReleaseTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_tzimrelease"), 0x29c1d013);
-	Builder.AddNpc(TEXT("tzim"));
+	Builder.AddNpcOfClass(TEXT("tzim"), FVector::ZeroVector, TEXT("CNPC_VTzimisce"));
 	Builder.AddNpc(TEXT("carried"), FVector(50.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Tzim = Fixture.Npc(TEXT("tzim"));
+	FElysiumNpcTzimisce* Tzim = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("tzim"));
 	FElysiumNpc* Carried = Fixture.Npc(TEXT("carried"));
 	FElysiumNpcWorldFixture::Quiet({ Tzim, Carried });
 	if (Tzim == nullptr || Carried == nullptr)
@@ -1313,15 +1315,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageThrowTest,
 bool FElysiumNpcKernelDamageThrowTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_throw"), 0x29c1d014);
-	Builder.AddNpc(TEXT("bach"));
+	Builder.AddNpcOfClass(TEXT("bach"), FVector::ZeroVector, TEXT("CNPC_VBach"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(0.0, 300.0 * DamageU, 0.0), TEXT("CNPC_VManBat"));
 	Builder.AddNpc(TEXT("spot"), FVector(300.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Bach = Fixture.Npc(TEXT("bach"));
+	FElysiumNpcBach* Bach = Fixture.NpcAs<FElysiumNpcBach>(TEXT("bach"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
 	FElysiumNpc* Spot = Fixture.Npc(TEXT("spot"));
-	FElysiumNpcWorldFixture::Quiet({ Bach, Spot });
-	if (Bach == nullptr || Spot == nullptr)
+	FElysiumNpcWorldFixture::Quiet({ Bach, Bat, Spot });
+	if (Bach == nullptr || Bat == nullptr || Spot == nullptr)
 	{
-		AddError(TEXT("fixture did not stand both NPCs"));
+		AddError(TEXT("fixture did not stand the Bach, the ManBat and the spot"));
 		return false;
 	}
 	const double Now = Fixture.World.NowSeconds();
@@ -1358,20 +1362,20 @@ bool FElysiumNpcKernelDamageThrowTest::RunTest(const FString&)
 		Bach->bBachCamperFlag);
 
 	// `0x1038f2c0`: create `prop_physics`, and the `if (ragdoll != 0)` guard answers false.
-	Bach->CreateEntityCalls.Reset();
+	Bat->CreateEntityCalls.Reset();
 	TestFalse(TEXT("ThrowModel answers false when the ragdoll cannot be made"),
-		Bach->ThrowModel(TEXT("models/prop/crate.mdl"), FString()));
-	if (Bach->CreateEntityCalls.Num() == 1)
+		Bat->ThrowModel(TEXT("models/prop/crate.mdl"), FString()));
+	if (Bat->CreateEntityCalls.Num() == 1)
 	{
 		TestEqual(TEXT("and it asked for prop_physics by name"),
-			Bach->CreateEntityCalls[0].Classname, FString(TEXT("prop_physics")));
+			Bat->CreateEntityCalls[0].Classname, FString(TEXT("prop_physics")));
 	}
 	else
 	{
 		AddError(TEXT("ThrowModel did not ask the create seam exactly once"));
 	}
 	TestTrue(TEXT("so the ManBat pickup word is left as it was"),
-		!Bach->ManBatPickupTarget.IsSet());
+		!Bat->ManBatPickupTarget.IsSet());
 	return true;
 }
 
@@ -1453,13 +1457,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageSeamsTest,
 bool FElysiumNpcKernelDamageSeamsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_seams"), 0x29c1d016);
-	Builder.AddNpc(TEXT("npc"));
+	Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, TEXT("CNPC_VVampireBoss"));
+	Builder.AddNpcOfClass(TEXT("zombie"), FVector(200.0 * DamageU, 0.0, 0.0), TEXT("CNPC_VZombie"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector(400.0 * DamageU, 0.0, 0.0), TEXT("CNPC_VMingXiao"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
-	FElysiumNpcWorldFixture::Quiet({ Npc });
-	if (Npc == nullptr)
+	FElysiumNpcVampireBoss* Npc = Fixture.NpcAs<FElysiumNpcVampireBoss>(TEXT("npc"));
+	FElysiumNpcZombie* Zombie = Fixture.NpcAs<FElysiumNpcZombie>(TEXT("zombie"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	FElysiumNpcWorldFixture::Quiet({ Npc, Zombie, Ming });
+	if (Npc == nullptr || Zombie == nullptr || Ming == nullptr)
 	{
-		AddError(TEXT("fixture did not stand the NPC"));
+		AddError(TEXT("fixture did not stand the NPC, the zombie and the Ming Xiao"));
 		return false;
 	}
 
@@ -1502,16 +1510,16 @@ bool FElysiumNpcKernelDamageSeamsTest::RunTest(const FString&)
 
 	// The hitbox seams.
 	TestEqual(TEXT("the hitbox-set count is unrecovered"), Npc->HitboxSetCount(), 0);
-	TestFalse(TEXT("and the per-hitbox ray test answers false"),
-		Npc->TestOneHitbox(0, FVector::ZeroVector, FVector(1.0, 0.0, 0.0), 0));
+	TestFalse(TEXT("and the Ming Xiao's per-hitbox ray test (0x10399ef0) answers false"),
+		Ming->TestOneHitbox(0, FVector::ZeroVector, FVector(1.0, 0.0, 0.0), 0));
 
 	// `IsStandable` on another entity: an NPC answers its own slot, anything else TRUE.
 	TestTrue(TEXT("a null candidate is standable, which is CBaseEntity's own answer"),
 		Npc->CandidateIsStandable(nullptr));
 
 	// The Zombie gib cvars.
-	TestEqual(TEXT("the first zombie gib cvar is unrecovered"), Npc->ZombieGibAmmoTypeCvar(0), 0);
-	TestEqual(TEXT("and the second"), Npc->ZombieGibAmmoTypeCvar(1), 0);
+	TestEqual(TEXT("the first zombie gib cvar is unrecovered"), Zombie->ZombieGibAmmoTypeCvar(0), 0);
+	TestEqual(TEXT("and the second"), Zombie->ZombieGibAmmoTypeCvar(1), 0);
 
 	// The controller object and the AOE result code.
 	TestFalse(TEXT("the controller object is absent"), Npc->HasPlayerControllerObject());

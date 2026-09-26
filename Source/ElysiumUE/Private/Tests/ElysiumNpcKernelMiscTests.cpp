@@ -6,6 +6,14 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcBach.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcManBat.h"
+#include "Substrate/ElysiumNpcYukie.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcGargoyle.h"
+#include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -573,7 +581,6 @@ bool FElysiumNpcKernelMiscCanSeekCoverTest::RunTest(const FString&)
 	// The combatant therefore ignores `m_flCoverDisableOverride` entirely: setting it changes
 	// nothing, which is what says the species arm is gated on the census and not on the field.
 	Npc->CanSeekCoverTimer = Now + 100.0;
-	Npc->LasombraCoverDisableOverride = static_cast<float>(Now + 100.0);
 	TestFalse(TEXT("a non-Lasombra ignores m_flCoverDisableOverride"), Npc->CanSeekCover());
 	return true;
 }
@@ -616,16 +623,16 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	}
 
 	// The Gargoyle classname filter, as a pure function: two names, case-insensitive, whole-name.
-	TestTrue(TEXT("\"pillar\" matches"), FElysiumNpc::GargoyleHitsPillar(TEXT("pillar")));
+	TestTrue(TEXT("\"pillar\" matches"), FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("pillar")));
 	TestTrue(TEXT("\"PILLAR\" matches — the compare is __strcmpi"),
-		FElysiumNpc::GargoyleHitsPillar(TEXT("PILLAR")));
+		FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("PILLAR")));
 	TestTrue(TEXT("\"central_pillar\" matches"),
-		FElysiumNpc::GargoyleHitsPillar(TEXT("central_pillar")));
+		FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("central_pillar")));
 	TestFalse(TEXT("\"pillar_of_salt\" does NOT — neither name carries a trailing *"),
-		FElysiumNpc::GargoyleHitsPillar(TEXT("pillar_of_salt")));
-	TestFalse(TEXT("an empty classname does not"), FElysiumNpc::GargoyleHitsPillar(FString()));
+		FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("pillar_of_salt")));
+	TestFalse(TEXT("an empty classname does not"), FElysiumNpcGargoyle::GargoyleHitsPillar(FString()));
 	TestFalse(TEXT("and neither does prop_physics"),
-		FElysiumNpc::GargoyleHitsPillar(TEXT("prop_physics")));
+		FElysiumNpcGargoyle::GargoyleHitsPillar(TEXT("prop_physics")));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_victim_hit"), 0x1029f8d0);
 	Builder.AddNpc(TEXT("troika"), FVector::ZeroVector, GMiscSpawnableCombatant);
@@ -635,7 +642,7 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	Builder.AddCounter(TEXT("attacked"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Troika = Fixture.Npc(TEXT("troika"));
-	FElysiumNpc* Leader = Fixture.Npc(TEXT("leader"));
+	FElysiumNpcSabbatLeader* Leader = Fixture.NpcAs<FElysiumNpcSabbatLeader>(TEXT("leader"));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
 	TestNotNull(TEXT("the combatant spawned"), Troika);
 	TestNotNull(TEXT("the Sabbat leader spawned"), Leader);
@@ -710,8 +717,14 @@ bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_misc_species"), 0x10364500);
 	Builder.AddNpc(TEXT("npc"), FVector::ZeroVector, GMiscSpawnableCombatant);
+	Builder.AddNpcOfClass(TEXT("bach"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VBach"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	FElysiumNpcBach* BachNpc = Fixture.NpcAs<FElysiumNpcBach>(TEXT("bach"));
+	if (!TestNotNull(TEXT("the Bach spawned"), BachNpc))
+	{
+		return false;
+	}
 	TestNotNull(TEXT("the NPC spawned"), Npc);
 	if (Npc == nullptr)
 	{
@@ -733,19 +746,19 @@ bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(Bach, 554)), FString(TEXT("0x10364550")));
 
 	TestEqual(TEXT("dot exactly 0.5 accepts (the compare is >=)"),
-		Npc->BachRangeAttack1Conditions(0.5f, 10000.f), 0x4f);
-	TestEqual(TEXT("dot above 0.5 accepts"), Npc->BachRangeAttack1Conditions(0.9f, 10000.f), 0x4f);
+		BachNpc->BachRangeAttack1Conditions(0.5f, 10000.f), 0x4f);
+	TestEqual(TEXT("dot above 0.5 accepts"), BachNpc->BachRangeAttack1Conditions(0.9f, 10000.f), 0x4f);
 	TestEqual(TEXT("dot below 0.5 with the target far refuses with COND_NOT_FACING_ATTACK"),
-		Npc->BachRangeAttack1Conditions(0.49f, 10000.f), 0x61);
+		BachNpc->BachRangeAttack1Conditions(0.49f, 10000.f), 0x61);
 	TestEqual(TEXT("but a near target accepts even facing away — it is an OR"),
-		Npc->BachRangeAttack1Conditions(-1.f, 119.f), 0x4f);
+		BachNpc->BachRangeAttack1Conditions(-1.f, 119.f), 0x4f);
 	TestEqual(TEXT("distance exactly 120 accepts (the compare is <=)"),
-		Npc->BachRangeAttack1Conditions(-1.f, 120.f), 0x4f);
+		BachNpc->BachRangeAttack1Conditions(-1.f, 120.f), 0x4f);
 	TestEqual(TEXT("distance just past 120 refuses"),
-		Npc->BachRangeAttack1Conditions(-1.f, 120.1f), 0x61);
+		BachNpc->BachRangeAttack1Conditions(-1.f, 120.1f), 0x61);
 	TestEqual(TEXT("slot 554 shares the gate and answers COND_CAN_RANGE_ATTACK2"),
-		Npc->BachRangeAttack2Conditions(0.5f, 10000.f), 0x50);
-	TestEqual(TEXT("and shares the refusal"), Npc->BachRangeAttack2Conditions(0.49f, 10000.f),
+		BachNpc->BachRangeAttack2Conditions(0.5f, 10000.f), 0x50);
+	TestEqual(TEXT("and shares the refusal"), BachNpc->BachRangeAttack2Conditions(0.49f, 10000.f),
 		0x61);
 	return true;
 }
@@ -764,14 +777,31 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 	Builder.AddEntity(TEXT("point_target"), TEXT("trigger_werewolf_zone"), FVector(10.0, 0.0, 0.0));
 	Builder.AddEntity(TEXT("point_target"), TEXT("trigger_werewolf_zone"), FVector(20.0, 0.0, 0.0));
 	Builder.AddEntity(TEXT("point_target"), TEXT("rotdoor1"), FVector(30.0, 0.0, 0.0));
+	Builder.AddNpcOfClass(TEXT("wolf"), FVector(400.0, 0.0, 0.0), TEXT("CNPC_VWerewolf"));
+	Builder.AddNpcOfClass(TEXT("heng"), FVector(0.0, 400.0, 0.0), TEXT("CNPC_VHengeyokai"));
+	Builder.AddNpcOfClass(TEXT("yukie"), FVector(0.0, 800.0, 0.0), TEXT("CNPC_VYukie"));
+	Builder.AddNpcOfClass(TEXT("bat"), FVector(0.0, 1200.0, 0.0), TEXT("CNPC_VManBat"));
+	Builder.AddNpcOfClass(TEXT("chang"), FVector(0.0, 1600.0, 0.0), TEXT("CNPC_VChangBros"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	FElysiumNpcWerewolf* Wolf = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumNpcHengeyokai* Heng = Fixture.NpcAs<FElysiumNpcHengeyokai>(TEXT("heng"));
+	FElysiumNpcYukie* YukieNpc = Fixture.NpcAs<FElysiumNpcYukie>(TEXT("yukie"));
+	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
+	FElysiumNpcChangBros* Chang = Fixture.NpcAs<FElysiumNpcChangBros>(TEXT("chang"));
+	if (Heng == nullptr || YukieNpc == nullptr || Bat == nullptr || Chang == nullptr)
+	{
+		AddError(TEXT("the species bodies' classes did not stand"));
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Heng, YukieNpc, Bat, Chang });
 	TestNotNull(TEXT("the NPC spawned"), Npc);
-	if (Npc == nullptr)
+	TestNotNull(TEXT("the werewolf spawned"), Wolf);
+	if (Npc == nullptr || Wolf == nullptr)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Npc });
+	FElysiumNpcWorldFixture::Quiet({ Npc, Wolf });
 	// `m_flFishTimer` is a FLOAT against a double clock, so the `<= curtime` boundary below is
 	// only exact on a stamp both types represent. The fixture's clock stands at the NPC's first
 	// think (a tenth of a second, which float rounds up), so this case puts it on a whole second.
@@ -779,29 +809,29 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 	const double Now = Fixture.World.NowSeconds();
 
 	// `0x10381c00` / `0x10381ca0` — the form bit and its timer.
-	Npc->bHengeyokaiDidFakeThrow = true;
-	Npc->HengeyokaiFishTimer = 0.f;
-	Npc->FormBit(true);
+	Heng->bHengeyokaiDidFakeThrow = true;
+	Heng->HengeyokaiFishTimer = 0.f;
+	Heng->FormBit(true);
 	TestTrue(TEXT("the true arm raises CARRYING_BODY (+0x14b8 bit 0x20)"),
-		Npc->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
-	TestFalse(TEXT("and clears m_bDidFakeThrow (+0x667d)"), Npc->bHengeyokaiDidFakeThrow);
+		Heng->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+	TestFalse(TEXT("and clears m_bDidFakeThrow (+0x667d)"), Heng->bHengeyokaiDidFakeThrow);
 	TestTrue(TEXT("m_flFishTimer takes curtime + RandomFloat(5, 8)"),
-		Npc->HengeyokaiFishTimer >= static_cast<float>(Now) + 5.f
-			&& Npc->HengeyokaiFishTimer <= static_cast<float>(Now) + 8.f);
-	TestFalse(TEXT("so the timer has not expired"), Npc->FormBitTimerExpired());
+		Heng->HengeyokaiFishTimer >= static_cast<float>(Now) + 5.f
+			&& Heng->HengeyokaiFishTimer <= static_cast<float>(Now) + 8.f);
+	TestFalse(TEXT("so the timer has not expired"), Heng->FormBitTimerExpired());
 
-	const float Armed = Npc->HengeyokaiFishTimer;
-	Npc->bHengeyokaiDidFakeThrow = true;
-	Npc->FormBit(false);
+	const float Armed = Heng->HengeyokaiFishTimer;
+	Heng->bHengeyokaiDidFakeThrow = true;
+	Heng->FormBit(false);
 	TestFalse(TEXT("the false arm clears CARRYING_BODY"),
-		Npc->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
-	TestEqual(TEXT("and leaves m_flFishTimer exactly where it stood"), Npc->HengeyokaiFishTimer,
+		Heng->NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY));
+	TestEqual(TEXT("and leaves m_flFishTimer exactly where it stood"), Heng->HengeyokaiFishTimer,
 		Armed);
-	TestTrue(TEXT("and does NOT clear m_bDidFakeThrow"), Npc->bHengeyokaiDidFakeThrow);
+	TestTrue(TEXT("and does NOT clear m_bDidFakeThrow"), Heng->bHengeyokaiDidFakeThrow);
 
-	Npc->HengeyokaiFishTimer = static_cast<float>(Now);
+	Heng->HengeyokaiFishTimer = static_cast<float>(Now);
 	TestTrue(TEXT("a timer equal to curtime HAS expired (the compare is <=)"),
-		Npc->FormBitTimerExpired());
+		Heng->FormBitTimerExpired());
 
 	// `CNPC_VYukie`'s melee pair. The CENSUS proves which bodies fill the slots and the bodies
 	// themselves are called by name (`npc_VYukie` builds `CNPC_VYukie` since story 5 step 2,
@@ -813,65 +843,65 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("and slot 601 with 0x103dd9a0"),
 		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 601)), FString(TEXT("0x103dd9a0")));
 
-	const int32 EventsBefore = Npc->MeleeEventFires;
-	Npc->bInMelee = false;
-	Npc->MeleeMustLeaveTimer = 0.0;
+	const int32 EventsBefore = YukieNpc->MeleeEventFires;
+	YukieNpc->bInMelee = false;
+	YukieNpc->MeleeMustLeaveTimer = 0.0;
 	TestTrue(TEXT("Yukie's enter-melee is UNGATED and always answers true"),
-		Npc->YukieEnterMelee());
-	TestTrue(TEXT("it sets m_bInMelee"), Npc->bInMelee);
+		YukieNpc->YukieEnterMelee());
+	TestTrue(TEXT("it sets m_bInMelee"), YukieNpc->bInMelee);
 	TestTrue(TEXT("and arms m_flMeleeMustLeaveTimer inside [22.5, 45]"),
-		Npc->MeleeMustLeaveTimer >= Now + 22.5 && Npc->MeleeMustLeaveTimer <= Now + 45.0);
-	TestEqual(TEXT("the global melee event fired once"), Npc->MeleeEventFires, EventsBefore + 1);
+		YukieNpc->MeleeMustLeaveTimer >= Now + 22.5 && YukieNpc->MeleeMustLeaveTimer <= Now + 45.0);
+	TestEqual(TEXT("the global melee event fired once"), YukieNpc->MeleeEventFires, EventsBefore + 1);
 
-	Npc->MeleeCanEnterTimer = 1234.0;
-	Npc->YukieLeaveMelee();
-	TestFalse(TEXT("leaving clears m_bInMelee"), Npc->bInMelee);
-	TestEqual(TEXT("and fires the same global event again"), Npc->MeleeEventFires,
+	YukieNpc->MeleeCanEnterTimer = 1234.0;
+	YukieNpc->YukieLeaveMelee();
+	TestFalse(TEXT("leaving clears m_bInMelee"), YukieNpc->bInMelee);
+	TestEqual(TEXT("and fires the same global event again"), YukieNpc->MeleeEventFires,
 		EventsBefore + 2);
 	TestFalse(TEXT("slot 308 HasUsableRangedWeapon is still a stub answering false"),
-		Npc->HasUsableRangedWeapon());
+		YukieNpc->HasUsableRangedWeapon());
 	TestEqual(TEXT("so the can-enter re-arm is NOT reached and the timer stands"),
-		Npc->MeleeCanEnterTimer, 1234.0);
+		YukieNpc->MeleeCanEnterTimer, 1234.0);
 
 	// `0x1038f290` — a compare against ZERO (`_DAT_1044fab0`, the shared 0.0 double), not against
 	// curtime. A flag spelled as a float.
-	Npc->ManBatSlowedExpire = 0.f;
-	TestFalse(TEXT("an unarmed m_flSlowedExpire answers false"), Npc->SlowedExpire());
-	Npc->ManBatSlowedExpire = 0.001f;
-	TestTrue(TEXT("anything above zero answers true"), Npc->SlowedExpire());
+	Bat->ManBatSlowedExpire = 0.f;
+	TestFalse(TEXT("an unarmed m_flSlowedExpire answers false"), Bat->SlowedExpire());
+	Bat->ManBatSlowedExpire = 0.001f;
+	TestTrue(TEXT("anything above zero answers true"), Bat->SlowedExpire());
 	// The clock walks well past that stamp and the answer does NOT change — which is the whole
 	// point: `_DAT_1044fab0` is the shared `0.0` double, so the compare is against zero and a body
 	// that read `m_flSlowedExpire` as a deadline against curtime would flip here.
 	Fixture.Advance(Now + 60.0);
 	TestTrue(TEXT("curtime is now far past the stamp"), Fixture.World.NowSeconds() > 1.0);
-	TestTrue(TEXT("and it STILL answers true — it is NOT a deadline"), Npc->SlowedExpire());
-	Npc->ManBatSlowedExpire = -1.f;
-	TestFalse(TEXT("a negative value answers false"), Npc->SlowedExpire());
-	Npc->ManBatSlowedExpire = 0.f;
-	TestFalse(TEXT("and exactly zero does too — the compare is strict"), Npc->SlowedExpire());
+	TestTrue(TEXT("and it STILL answers true — it is NOT a deadline"), Bat->SlowedExpire());
+	Bat->ManBatSlowedExpire = -1.f;
+	TestFalse(TEXT("a negative value answers false"), Bat->SlowedExpire());
+	Bat->ManBatSlowedExpire = 0.f;
+	TestFalse(TEXT("and exactly zero does too — the compare is strict"), Bat->SlowedExpire());
 
 	// `CNPC_VChangBros::StoreArenaCenter` `0x1036e400`: both writes are inside the found arm, and
 	// the hint walk is family Squad's seam, which answers null.
 	TestNull(TEXT("the global hint walk answers nothing (no hint store carries hint types)"),
-		Npc->NthHintOfType(0x4651, 0));
-	Npc->ChangArenaCenter = FVector(1.0, 2.0, 3.0);
-	Npc->bChangCenterStored = false;
-	Npc->StoreArenaCenter();
-	TestFalse(TEXT("with no 0x4651 hint m_bCenterStored stays false"), Npc->bChangCenterStored);
-	TestEqual(TEXT("and m_vArenaCenter is left exactly as it was"), Npc->ChangArenaCenter,
+		Chang->NthHintOfType(0x4651, 0));
+	Chang->ChangArenaCenter = FVector(1.0, 2.0, 3.0);
+	Chang->bChangCenterStored = false;
+	Chang->StoreArenaCenter();
+	TestFalse(TEXT("with no 0x4651 hint m_bCenterStored stays false"), Chang->bChangCenterStored);
+	TestEqual(TEXT("and m_vArenaCenter is left exactly as it was"), Chang->ChangArenaCenter,
 		FVector(1.0, 2.0, 3.0));
 
 	// `0x103cade0`: the zone sweep is by TARGETNAME (`entity+0x11c`), so both zone entities are
 	// reached, and a missing `rotdoor2` stores the INVALID handle rather than anything else.
-	Npc->WerewolfZoneTriggerFires = 0;
-	Npc->WerewolfRotDoor1 = FElysiumEntityHandle::Invalid();
-	Npc->WerewolfRotDoor2 = FElysiumEntityHandle::Invalid();
-	Npc->TriggerWerewolfZone();
+	Wolf->WerewolfZoneTriggerFires = 0;
+	Wolf->WerewolfRotDoor1 = FElysiumEntityHandle::Invalid();
+	Wolf->WerewolfRotDoor2 = FElysiumEntityHandle::Invalid();
+	Wolf->TriggerWerewolfZone();
 	TestEqual(TEXT("both trigger_werewolf_zone entities were reached by targetname"),
-		Npc->WerewolfZoneTriggerFires, 2);
-	TestTrue(TEXT("rotdoor1 is cached"), Npc->WerewolfRotDoor1.IsSet());
+		Wolf->WerewolfZoneTriggerFires, 2);
+	TestTrue(TEXT("rotdoor1 is cached"), Wolf->WerewolfRotDoor1.IsSet());
 	TestFalse(TEXT("and a missing rotdoor2 stores the invalid handle"),
-		Npc->WerewolfRotDoor2.IsSet());
+		Wolf->WerewolfRotDoor2.IsSet());
 	return true;
 }
 

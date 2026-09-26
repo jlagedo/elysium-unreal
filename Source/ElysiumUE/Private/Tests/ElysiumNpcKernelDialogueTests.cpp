@@ -7,6 +7,10 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+#include "Substrate/ElysiumNpcHuman.h"
+#include "Substrate/ElysiumNpcCameraSecurity.h"
+#include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcFlags.h"
@@ -43,8 +47,8 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumNpc* Other = nullptr;
-		FElysiumNpc* Phone = nullptr;
-		FElysiumNpc* Sabbat = nullptr;
+		FElysiumNpcPayphone* Phone = nullptr;
+		FElysiumNpcSabbatLeader* Sabbat = nullptr;
 
 		FDialogueFixture()
 			: World([]
@@ -61,8 +65,8 @@ namespace
 		{
 			Guard = World.Npc(TEXT("guard"));
 			Other = World.Npc(TEXT("other"));
-			Phone = World.Npc(TEXT("phone"));
-			Sabbat = World.Npc(TEXT("sabbat"));
+			Phone = World.NpcAs<FElysiumNpcPayphone>(TEXT("phone"));
+			Sabbat = World.NpcAs<FElysiumNpcSabbatLeader>(TEXT("sabbat"));
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other, Phone, Sabbat });
 		}
 	};
@@ -374,38 +378,38 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 	// NO_DIALOG, no open session.
 	F.Phone->bWillTalk = true;
 	TestTrue(TEXT("0x101aaee0: all seven arms clear admits"),
-		F.Phone->PayphoneCanTalk(F.Other));
+		F.Phone->CanTalk(F.Other));
 
 	// Arm 1 — a null activator.
-	TestFalse(TEXT("arm 1: a null activator refuses"), F.Phone->PayphoneCanTalk(nullptr));
+	TestFalse(TEXT("arm 1: a null activator refuses"), F.Phone->CanTalk(nullptr));
 
 	// Arm 3 — `m_bScriptHidden` (+0x00f4), read through `0x100b5190`. NOT a liveness test: 29c's
 	// walk called it "the alive test" and `fields.md` names the word `m_bScriptHidden`.
 	F.Phone->ScriptHide();
 	TestFalse(TEXT("arm 3: m_bScriptHidden (+0x00f4) refuses — the 0x100b5190 word"),
-		F.Phone->PayphoneCanTalk(F.Other));
+		F.Phone->CanTalk(F.Other));
 	F.Phone->ScriptUnhide();
-	TestTrue(TEXT("...and unhiding admits again"), F.Phone->PayphoneCanTalk(F.Other));
+	TestTrue(TEXT("...and unhiding admits again"), F.Phone->CanTalk(F.Other));
 
 	// Arm 4 — `m_bWillTalk` (+0x1088), whose only writer is `InputWillTalk` (`0x103418f0`).
 	F.Phone->bWillTalk = false;
 	TestFalse(TEXT("arm 4: m_bWillTalk (+0x1088) clear refuses"),
-		F.Phone->PayphoneCanTalk(F.Other));
+		F.Phone->CanTalk(F.Other));
 	F.Phone->bWillTalk = true;
 
 	// Arm 6 — NO_DIALOG (`m_bfAINPCFlags & 0x80000`) ALONE. The payphone override does NOT test
 	// `NO_DIALOG_PERSISTENT`, which the Troika-line body `0x102c21c0` does.
 	F.Phone->NpcFlags.Set(EElysiumNpcFlag::NO_DIALOG);
-	TestFalse(TEXT("arm 6: NO_DIALOG refuses"), F.Phone->PayphoneCanTalk(F.Other));
+	TestFalse(TEXT("arm 6: NO_DIALOG refuses"), F.Phone->CanTalk(F.Other));
 	F.Phone->NpcFlags.Clear(EElysiumNpcFlag::NO_DIALOG);
 	F.Phone->NpcFlags.Set(EElysiumNpcFlag2::NO_DIALOG_PERSISTENT);
 	TestTrue(TEXT("0x101aaee0 does NOT test NO_DIALOG_PERSISTENT, unlike the Troika gate"),
-		F.Phone->PayphoneCanTalk(F.Other));
+		F.Phone->CanTalk(F.Other));
 	F.Phone->NpcFlags.Clear(EElysiumNpcFlag2::NO_DIALOG_PERSISTENT);
 
 	// Arm 7 — `IsInDialog` (`0x102c1170`): the body's answer IS its negation.
 	F.Phone->Dialogue.bInDialog = true;
-	TestFalse(TEXT("arm 7: an open session refuses"), F.Phone->PayphoneCanTalk(F.Other));
+	TestFalse(TEXT("arm 7: an open session refuses"), F.Phone->CanTalk(F.Other));
 	F.Phone->Dialogue.bInDialog = false;
 
 	// Arm 5 — `m_bfNPCStateFlags` (+0x5b64) bit 2, the per-state busy bit. The word is not stored:
@@ -423,10 +427,11 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 	TestEqual(TEXT("arm 5 reads the live byte, which an idle phone answers 0x31 for"),
 		static_cast<int32>(F.Phone->NpcStateFlags()), 0x31);
 
-	// Arm 2 — an NPC with no authored `dialogname` (`m_iDialog` +0x0128). The ordinary combatant
-	// authored none, so it stands for the empty word.
-	TestFalse(TEXT("arm 2: no dialogname (+0x0128) refuses"),
-		F.Other->PayphoneCanTalk(F.Phone));
+	// Arm 2 — a phone with no authored `dialogname` (`m_iDialog` +0x0128).
+	const FString AuthoredDialog = F.Phone->DialogName;
+	F.Phone->DialogName.Empty();
+	TestFalse(TEXT("arm 2: no dialogname (+0x0128) refuses"), F.Phone->CanTalk(F.Other));
+	F.Phone->DialogName = AuthoredDialog;
 	return true;
 }
 
@@ -441,33 +446,22 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 	FDialogueFixture F;
 	if (!TestNotNull(TEXT("sabbat spawned"), F.Sabbat)) { return false; }
 
-	// Every row exercised BY NAME, and each checked against the census so `slots.md` and the port
-	// cannot drift.
-	int32 Count = 0;
-	const FElysiumNpc::FHandleInteractionSpecies* Rows =
-		FElysiumNpc::HandleInteractionSpeciesRows(Count);
-	if (!TestEqual(TEXT("two slot-366 rows: the Sabbat override and the line it tail-calls"),
-		Count, 2))
+	// The two slot-366 fills, each checked against the census so `slots.md` and the port cannot
+	// drift: the Sabbat leader's own override and the human line's `return 0;`, which it tail-calls
+	// (story 5 step 4: both are overrides, `FElysiumNpcSabbatLeader` and `FElysiumNpcHuman`).
+	const TCHAR* Fills[][2] = {
+		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a76d0") },
+		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x10385a70") },
+	};
+	for (const TCHAR* const (&Fill)[2] : Fills)
 	{
-		return false;
+		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Fill[0]);
+		TestNotNull(*FString::Printf(TEXT("the census carries %s"), Fill[0]), Cls);
+		TestEqual(*FString::Printf(TEXT("slots.md: %s fills slot 366 with %s"), Fill[0], Fill[1]),
+			FString(ElysiumNpcKernelClass::BodyOf(Cls, 366)), FString(Fill[1]));
 	}
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Rows[Index].RetailClass);
-		TestNotNull(*FString::Printf(TEXT("the census carries %s"), Rows[Index].RetailClass), Cls);
-		TestEqual(*FString::Printf(TEXT("slots.md: %s fills slot 366 with %s"),
-			Rows[Index].RetailClass, Rows[Index].Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 366)), FString(Rows[Index].Body));
-		TestFalse(*FString::Printf(TEXT("%s's slot 366 answers false"), Rows[Index].RetailClass),
-			Rows[Index].bAnswer);
-	}
-
-	TestNotNull(TEXT("CNPC_VSabbatLeader row is reachable by name"),
-		FElysiumNpc::HandleInteractionSpeciesOf(TEXT("CNPC_VSabbatLeader")));
-	TestNotNull(TEXT("CNPC_VAndreiBlood row is reachable by name"),
-		FElysiumNpc::HandleInteractionSpeciesOf(TEXT("CNPC_VAndreiBlood")));
-	TestNull(TEXT("a class with no row answers null"),
-		FElysiumNpc::HandleInteractionSpeciesOf(TEXT("CNPC_VRat")));
+	TestFalse(TEXT("the human line's 0x10385a70 answers false on a real guard"),
+		F.Guard->HandleInteraction(0, nullptr, nullptr));
 
 	// `npc_VSabbatLeader` is a spawn leaf AND a census classname, so the body runs on a real one.
 	TestTrue(TEXT("the census resolves npc_VSabbatLeader to CNPC_VSabbatLeader"),
@@ -476,9 +470,9 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 	// `return 0`. The answer is false for every argument, which is what "the override adds only a
 	// debug name" means.
 	TestFalse(TEXT("0x103a76d0 answers false"),
-		F.Sabbat->SabbatLeaderHandleInteraction(0, nullptr, nullptr));
+		F.Sabbat->HandleInteraction(0, nullptr, nullptr));
 	TestFalse(TEXT("...for any interaction id and any partner"),
-		F.Sabbat->SabbatLeaderHandleInteraction(0x2a, nullptr, F.Guard));
+		F.Sabbat->HandleInteraction(0x2a, nullptr, F.Guard));
 	return true;
 }
 
@@ -517,9 +511,9 @@ bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 		Builder.AddNpc(TEXT("watcher"), FVector(0.f, 400.f, 0.f), TEXT("npc_VCameraSecurity"));
 		return Builder;
 	}());
-	FElysiumNpc* Camera = World.Npc(TEXT("camera"));
+	FElysiumNpcCameraSecurity* Camera = World.NpcAs<FElysiumNpcCameraSecurity>(TEXT("camera"));
 	FElysiumNpc* Other = World.Npc(TEXT("other"));
-	FElysiumNpc* Watcher = World.Npc(TEXT("watcher"));
+	FElysiumNpcCameraSecurity* Watcher = World.NpcAs<FElysiumNpcCameraSecurity>(TEXT("watcher"));
 	FElysiumPlayer* Player = World.Player();
 	if (!TestNotNull(TEXT("camera spawned"), Camera)) { return false; }
 	if (!TestNotNull(TEXT("other spawned"), Other)) { return false; }

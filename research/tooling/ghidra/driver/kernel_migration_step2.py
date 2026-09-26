@@ -89,7 +89,10 @@ def check_shells(classes: list[dict], root: Path) -> int:
             raise km.InvalidManifest(f"{row['port_class']} does not derive from {row['port_base']}")
         body = COMMENT.sub("", source.read_text(encoding="utf-8-sig"))
         own = re.search(rf"{row['port_class']}::OwnRetailClass\(\) const\s*\{{(.*?)\n\}}", body, re.S)
-        if own is None or f'Find(TEXT("{row["retail_class"]}"))' not in own.group(1):
+        # Step 4 spells the key once, on the class (`RetailClassName`, `FElysiumNpc::AsSpecies`'s key).
+        named = re.search(rf'RetailClassName = TEXT\("{row["retail_class"]}"\)', code) is not None
+        if own is None or not (f'Find(TEXT("{row["retail_class"]}"))' in own.group(1)
+                               or (named and "Find(RetailClassName)" in own.group(1))):
             raise km.InvalidManifest(f"{row['port_class']} does not answer {row['retail_class']}")
     return len(step2_classes(classes))
 

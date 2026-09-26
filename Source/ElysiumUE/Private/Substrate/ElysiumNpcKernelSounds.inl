@@ -57,14 +57,6 @@ int32 FloatSoundFrequency = 0;
 // test in `BaseShouldPlayFloatSound` always passes.
 double NextFloatSoundTime = 0.0;
 
-// `CNPC_VManBat::m_bHasPlayedFlyBySound` (`+0x66b8`, `FIELD_BOOLEAN`). A SPECIES word: `+0x66b8` is
-// claimed by four different classes in the census and this is CNPC_VManBat's reading of it.
-bool bHasPlayedFlyBySound = false;
-// `FUN_10390040` (`0x10390040`), whose whole body is `this->m_bHasPlayedFlyBySound = false`. It has
-// no caller in the image — the fly-by sound that would set it is unrecovered — so this is the state
-// reset and nothing more.
-void ClearHasPlayedFlyBySound();
-
 // --- The species vocalization table (slots 488–508, 620, 621) ----------------------------------
 //
 // Twenty-one retail sound hooks, filled per species. Retail's bodies are one behaviour written
@@ -129,5 +121,3 @@ static const FVocalization* VocalizationFor(const TCHAR* RetailClass, int32 Slot
 // a row ran (including a `Mute` row and a row the sound gate refused); false that there was none.
 bool SpeciesVocalize(const TCHAR* SpeciesClass, int32 Slot);
 
-// `CNPC_VTzimisce::vfunc487` (`0x103b9f10`) — the body of `FElysiumNpcTzimisce::JustMadeSound`.
-void TzimisceJustMadeSound();

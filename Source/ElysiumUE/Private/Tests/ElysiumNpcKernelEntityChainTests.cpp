@@ -7,6 +7,7 @@
 #include "ElysiumOverlayStack.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -546,12 +547,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainPayphoneTest,
 	"Elysium.Substrate.NpcKernelEntityChain.Payphone", GElysiumNpcKernelEntityChainFlags)
 bool FElysiumNpcKernelEntityChainPayphoneTest::RunTest(const FString&)
 {
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard))
+	FElysiumNpcWorldFixture World([]
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("sp_entitychain_phone"), 29103);
+		Builder.AddNpc(TEXT("phone"), FVector(0.f, 0.f, 0.f), TEXT("npc_payphone"));
+		Builder.AddNpc(TEXT("other"), FVector(300.f, 0.f, 0.f));
+		return Builder;
+	}());
+	FElysiumNpcPayphone* Phone = World.NpcAs<FElysiumNpcPayphone>(TEXT("phone"));
+	FElysiumNpc* Other = World.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("the phone spawned"), Phone) || !TestNotNull(TEXT("the other spawned"), Other))
 	{
 		return false;
 	}
-	FElysiumNpc& Npc = *Fixture.Guard;
+	FElysiumNpcWorldFixture::Quiet({ Phone, Other });
+	FElysiumNpcPayphone& Npc = *Phone;
 
 	// `npc_payphone` IS a registered spawn leaf (`Substrate/ElysiumNpcClasses.cpp`), and `CPayphone`
 	// IS a census class — so both tables are checked here rather than assumed.
@@ -581,11 +591,11 @@ bool FElysiumNpcKernelEntityChainPayphoneTest::RunTest(const FString&)
 	TestEqual(TEXT("a payphone swallows the scene event instead of queueing it"),
 		Npc.SceneEvents.Num(), 0);
 
-	// 0x101aa950 — `CanTalk(other) ? 0x2f : 0`. SEAM: slot 295 `CanTalk` is story 29d's stub and
-	// answers false, so the recovered answer today is 0 — and the test says WHICH term refused
+	// 0x101aa950 — `CanTalk(other) ? 0x2f : 0`. Slot 295 is the payphone's own `0x101aaee0`, and a
+	// phone with no authored `dialogname` refuses at its arm 2; the test says WHICH term refused
 	// rather than only that the number is 0.
-	TestFalse(TEXT("slot 295 CanTalk is 29d's stub and refuses"), Npc.CanTalk(Fixture.Other));
-	TestEqual(TEXT("so the payphone publishes no caps"), Npc.PayphoneUseCaps(Fixture.Other), 0);
+	TestFalse(TEXT("slot 295 (0x101aaee0) refuses: no dialogname"), Npc.CanTalk(Other));
+	TestEqual(TEXT("so the payphone publishes no caps"), Npc.PayphoneUseCaps(Other), 0);
 	return true;
 }
 

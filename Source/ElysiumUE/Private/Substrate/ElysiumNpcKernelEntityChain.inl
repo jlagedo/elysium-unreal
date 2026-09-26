@@ -307,13 +307,6 @@ TArray<FString> UnrecoveredChainCalls;
  *  call rather than double-firing an authored output. */
 void FireGlobalActsOutput(int32 RecordOffset);
 
-/** `DAT_10725f74` — the ConVar whose value `BeginHeightenedAlert` adds to curtime for the alert's
- *  expiry. RECOVERED as **`debug_heightened_alert_expire_time`** against
- *  `docs/vtmb/player-entity.md`. **SEAM**: the kernel stands no ConVar table, so `bIsCommand`
- *  answers true and the body takes its `_DAT_104454c4` = 0.0 arm — the alert expires the instant it
- *  is armed. That is the recovered refusal, not a chosen duration. */
-bool HeightenedAlertDurationCvar(float& OutSeconds) const;
-
 /** `DAT_10725894` / `DAT_107257bc` — the two ConVars `SetSpawnResponseCops` reads for the delay
  *  `(*DAT_1070b244 + 4)(lo, hi)` draws between, and `DAT_107258dc` — the developer ConVar
  *  `RemoveCopInPursuit` gates its `DevMsg` on. NAMES **unrecovered**. **SEAM**: both duration
@@ -360,22 +353,6 @@ const FElysiumLocalIdSpace* IdSpace(EElysiumIdCategory Category) const;
  *  the same word as `1.0f`), so the base sensitivity is unity and `CanHearSound`'s
  *  `volume * sensitivity` is the bare volume. */
 float BaseHearingSensitivity() const;
-
-/** `CPayphone::vfunc286` (`0x101aad90`) — the payphone's override of slot 286 `AddSceneEvent`, whose
- *  whole body is `return;`. Species-only (only `CPayphone#286` fills it), so `default:void` does not
- *  formally apply and it lands as a body: a payphone swallows every choreo scene event. */
-void PayphoneAddSceneEvent(const void* Scene, const void* Event);
-
-/** `0x101aadb0` — `CPayphone#612`, the speech sound FLAGS the emitter (`0x102c0520`) passes to
- *  `EmitSound` (`signatures.md` slot 612). `0xa80` when `bDialogQueIsFinal` (+0x654c) is SET,
- *  `0xe80` when it is clear — note the inversion against the Troika line's own body, which adds
- *  `0x400` when the flag is CLEAR. */
-int32 PayphoneSpeechSoundFlags() const;
-
-/** `CPayphone::vfunc35` (`0x101aa950`) — `return CanTalk(other) ? 0x2f : 0;`, the capability bitmask
- *  a payphone publishes. Slot 35's own base is generic ObjectCaps-style across the shared vtable;
- *  this is the payphone's, and it is the whole mask gated on one virtual. */
-int32 PayphoneUseCaps(FElysiumEntity* Other);
 
 // --- The bodies that fill no slot -----------------------------------------------------------------
 
@@ -649,3 +626,11 @@ double PlayerAnimFallbackDuration() const;
 
 /** `_DAT_1044e658`, the double 0.01 the released controller NPC's one-shot think is armed at. */
 double ControllerReleaseThinkDelay() const;
+
+// From `ElysiumNpcKernelEntityChain.inl`.
+/** `DAT_10725f74` — the ConVar whose value `BeginHeightenedAlert` adds to curtime for the alert's
+ *  expiry. RECOVERED as **`debug_heightened_alert_expire_time`** against
+ *  `docs/vtmb/player-entity.md`. **SEAM**: the kernel stands no ConVar table, so `bIsCommand`
+ *  answers true and the body takes its `_DAT_104454c4` = 0.0 arm — the alert expires the instant it
+ *  is armed. That is the recovered refusal, not a chosen duration. */
+bool HeightenedAlertDurationCvar(float& OutSeconds) const;

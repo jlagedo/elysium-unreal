@@ -13,9 +13,6 @@
 namespace
 {
 	constexpr int32 GMaintainActIdle = 1;
-	constexpr int32 GMaintainSabbatFailureFirst = 0x0c;
-	constexpr int32 GMaintainSabbatFailureLast = 0x0f;
-	constexpr float GMaintainSabbatRouteFailThreshold = 6.f; // _DAT_104c3cc0 = 00 00 c0 40
 
 	enum class EForceScheduleWarning : uint8
 	{
@@ -210,84 +207,6 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 	}
 	NpcFlags.FinishScheduleChange();	 // 0x102a0adb
 	ScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
-}
-
-void FElysiumNpc::GargoyleOnScheduleChange(int32 NewSchedule)
-{
-	// `CNPC_VGargoyle::OnScheduleChange` `0x10378fc0`: the Troika body `0x102a0940` directly, first.
-	FElysiumNpc::OnScheduleChange(NewSchedule);
-	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)
-		&& SpeciesShunnedFindCount > 0) // 0x10378fd5, 0x10378fe0
-	{
-		--SpeciesShunnedFindCount; // 0x10378fe4
-	}
-}
-
-void FElysiumNpc::HengeyokaiOnScheduleChange(int32 NewSchedule)
-{
-	// `CNPC_VHengeyokai::OnScheduleChange` `0x10383090`: the Troika body directly, first.
-	FElysiumNpc::OnScheduleChange(NewSchedule);
-	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103830a5
-	{
-		PathMode = 0;					 // 0x103830b0, +0x6680
-		if (SpeciesShunnedFindCount > 0) // 0x103830ba
-		{
-			--SpeciesShunnedFindCount; // 0x103830be
-		}
-	}
-}
-
-void FElysiumNpc::TzimisceOnScheduleChange(int32 NewSchedule)
-{
-	// `CNPC_VTzimisce::OnScheduleChange` `0x103bf610`: the Troika body directly, first.
-	FElysiumNpc::OnScheduleChange(NewSchedule);
-	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)) // 0x103bf625
-	{
-		PathMode = 0;					 // 0x103bf630, +0x668c
-		if (SpeciesShunnedFindCount > 0) // 0x103bf63a
-		{
-			--SpeciesShunnedFindCount; // 0x103bf63e
-		}
-	}
-}
-
-void FElysiumNpc::WerewolfOnScheduleChange(int32 NewSchedule)
-{
-	// `CNPC_VWerewolf::OnScheduleChange` `0x103ced10`: the Troika body directly, first.
-	FElysiumNpc::OnScheduleChange(NewSchedule);
-	if (WerewolfScheduleStack.Num() > 0x32) // 0x103ced8a
-	{
-		WerewolfScheduleStack.RemoveAt(0, 1, EAllowShrinking::No); // 0x103ceda3
-	}
-	WerewolfScheduleStack.Add(NewSchedule == ElysiumScheduleId::None
-			? FString()
-			: FString(ElysiumScheduleName(NewSchedule))); // 0x103cee0e
-}
-
-bool FElysiumNpc::SabbatLeaderTaskFail(int32 Reason)
-{
-	// `CNPC_VSabbatLeader::TaskFail` `0x103a9400`, the body of `FElysiumNpcSabbatLeader::TaskFail`.
-	if (Reason < GMaintainSabbatFailureFirst || Reason > GMaintainSabbatFailureLast) // 0x103a9455
-	{
-		return false;
-	}
-	++SabbatLeaderRouteFailCount;															// 0x103a9463
-	if (static_cast<float>(SabbatLeaderRouteFailCount) < GMaintainSabbatRouteFailThreshold) // 0x103a9474
-	{
-		return false;
-	}
-	FlipFailureType(); // 0x103a9489
-	// Retail stamps `+0x1b30/+0x1b34` here; both are ABSENT shape words. The chosen schedule and
-	// its instruction address are the port's observable provenance.
-	if (FailureType != 0)
-	{
-		SetSchedule(0x161, false); // 0x103a94af
-	}
-	else
-	{
-		SetSchedule(0x160, false); // 0x103a94ce
-	}
-	return true; // 0x103a94bc / 0x103a94db
 }
 
 void FElysiumNpc::TaskMovementComplete()

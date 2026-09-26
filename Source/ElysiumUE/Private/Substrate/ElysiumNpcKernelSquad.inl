@@ -64,22 +64,18 @@ FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 // different things per species. These four are the ones this family's bodies read, declared by
 // retail name with the species class that owns the offset.
 
-int32 ChangType = 0;  // +0x66b8 CNPC_VChangBros::m_ChangType (datamap)
-int32 CoordinateTentacleId = 0;  // +0x6740 CNPC_VMingXiao::m_iCoordinateTentacleID (datamap)
-FElysiumEntityHandle Proxies[6];  // +0x668c CNPC_VMingXiao::m_rhProxies[6] (datamap)
-FElysiumEntityHandle SeveredTentacles[6];  // +0x66a8 CNPC_VMingXiao::m_rhSeveredTentacles[6]
-
-// --- Slot 546 `SquadSlotName`: one port method and a species table --------------------------------
+// --- Slot 546 `SquadSlotName`: the Troika method and the deferred rows' table -------------------
 //
 // 57 retail bodies fill slot 546 — the Troika line's own (`0x101a6c00`) and 56 species overrides
 // across 60 census classes — and all 57 are the SAME two-step: translate the squad-slot id through
 // this class's `CAI_ClassScheduleIdSpace` (`0x102ea2d0 SquadSlotLocalToGlobal`), then look the
 // global id up in the one shared squad-slot namespace `DAT_10936c74`
 // (`0x102ea020 CAI_GlobalNamespace::IdToSymbol`). The Troika line skips the translation and looks
-// `slotEN` up directly. So this is one method plus a data table keyed on the retail class name,
-// not 57 methods; `ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546)` picks the row.
+// `slotEN` up directly. Each introduced species' override holds its own id-space row (story 5
+// step 4); the controller line's rows stay in a table the Troika method reads through
+// `ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546)` until the controller fold (step 7).
 
-/** One row of retail's slot-546 species table: the class, the body that fills the slot for it, and
+/** One slot-546 id-space row: the class, the body that fills the slot for it, and
  *  the `CAI_ClassScheduleIdSpace` that body translates through. The id-space fields are the state
  *  the static constructor left (`0x102ea090`) — every one of the 56 species spaces is constructed
  *  with `isRoot = false` and no class in the image ever registers a squad slot, so `LocalBase`
@@ -100,18 +96,14 @@ struct FSquadSlotSpecies
 	int32 LocalTop = INDEX_NONE;
 };
 
-/** The table: the census classes with an instance that override slot 546, plus the Troika line
- *  itself. The 21 classes with no instance carry no row. */
+/** The table: the Troika line and the deferred controller-line classes that override slot 546.
+ *  Every introduced species carries its own row in its override (story 5 step 4). */
 static const FSquadSlotSpecies* SquadSlotSpeciesRows(int32& OutCount);
 
 /** The row for a retail class name, or null when no row carries it. */
 static const FSquadSlotSpecies* SquadSlotSpeciesOf(const TCHAR* InRetailClass);
-/** `CNPC_VCamera::InitSquad` (`0x10369bd0`) — the body of `FElysiumNpcCamera::InitSquad`. */
-bool CameraInitSquad();
 /** The gates `0x10273d30` and `0x10369bd0` share, with the join arm each takes. */
 bool InitSquadLine(bool bCameraArm);
-/** Slot 546's species body: `SlotEn` mapped through `SpeciesClass`'s own id space, then named. */
-const TCHAR* SpeciesSquadSlotName(const TCHAR* SpeciesClass, int32 SlotEn);
 
 /** `CAI_ClassScheduleIdSpace::SquadSlotLocalToGlobal` (`0x102ea2d0`): walk the id-space chain from
  *  `Species` upward and translate, or -1. A null `Species` is the Troika line, which does not
@@ -134,20 +126,6 @@ bool SharesSquadWith(const FElysiumNpc* Other) const;
 /** `0x1028ae60` — release `m_iMySquadSlot` (`+0x5dac`) in the squad's slot bitmap. Retail name
  *  unrecovered; 29c named the port method. */
 void VacateSquadSlot();
-
-/** `CNPC_VChangBros::GetOtherBrother` (`0x1036e2f0`) — the paired brother, found by walking my
- *  squad for another `CNPC_VChangBros`. */
-FElysiumNpc* GetOtherBrother() const;
-
-/** `CNPC_VChangBros::ReadyForUnited` (`0x1036e820`) — am I running schedule `0x15a` or `0x15b`? */
-bool ReadyForUnited() const;
-
-/** `CNPC_VChangBros::SelectUnitedNode` (`0x1036d100`) — the hint node the twins meet at. */
-FElysiumEntity* SelectUnitedNode() const;
-
-/** `CNPC_VMingXiao::CoordinateTroops` (`0x10399610`) — one severed tentacle and one proxy per
- *  call, round-robin over six. */
-void CoordinateTroops();
 
 /** `0x102bf5d0` — tell one nearby ally about `Attacker`. 29c named the port method; the body is
  *  the detected-attack notice (`m_hDetectedAttacker +0x65c0`). */

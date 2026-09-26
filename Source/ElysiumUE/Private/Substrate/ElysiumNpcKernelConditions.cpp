@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelConditionsShared.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -79,9 +80,6 @@ namespace
 	// `ClearHintNode(this, 5.0)`, the reuse delay the tail imposes.
 	constexpr float GCondStateChangeHintReuseSeconds = 5.0f;
 
-	// `CNPC_VGhoulCroucher::OnDisturbed`'s `AddEntityRelationship(player, D_HT, 10)`.
-	constexpr int32 GCondDisturbedHatePriority = 10;
-
 	// Source's `Navigation_t`: the two values `CAI_BaseNPC::FCanCheckAttacks` refuses on.
 	constexpr int32 GCondNavGround = 0;
 	constexpr int32 GCondNavJump = 1;
@@ -91,36 +89,6 @@ namespace
 	// sign bit, which is EAX bit 15 — this mask, not bit 31.
 	constexpr int32 GCondCapWeaponMeleeAttack1 = 0x8000;
 
-	// `CNPC_VWerewolf`'s condition `0x7a`. It is above the base registrar's `0x76` and belongs to a
-	// Werewolf-line table the census has not decoded, so it is spelled as the number.
-	constexpr int32 GCondWerewolfDeathTriggered = 0x7a;
-	// `m_Activity == 0x11d` and `m_DoorState == 1`, the pair the latch fires on.
-	constexpr int32 GCondWerewolfDeathActivity = 0x11d;
-	constexpr int32 GCondWerewolfDoorStateOpen = 1;
-
-	EElysiumNpcCond CondOf(int32 RetailCondition)
-	{
-		return static_cast<EElysiumNpcCond>(RetailCondition);
-	}
-
-	// This runtime's state vocabulary onto retail's `m_NPCState` ids — the same table
-	// `FElysiumNpc::NpcStateFlags` uses, restated here as a free function because every body in this
-	// file switches on the retail id rather than on the port enum. The retail states this runtime has
-	// no member for (8 FLEE, 0xb HUNT, 0xe the criminal window) are unreachable through it, which is
-	// why the rules below are written over the RAW id and the dispatch is the only place that maps.
-	int32 CondRetailStateId(EElysiumNpcState State)
-	{
-		switch (State)
-		{
-		case EElysiumNpcState::Idle:     return 1;
-		case EElysiumNpcState::Combat:   return 2;
-		case EElysiumNpcState::Alert:    return 3;
-		case EElysiumNpcState::Scripted: return 4;
-		case EElysiumNpcState::Prone:    return 6;
-		case EElysiumNpcState::Dead:     return 7;
-		}
-		return 0;
-	}
 }
 
 // =================================================================================================
@@ -226,7 +194,7 @@ void FElysiumNpc::RemoveIgnoredConditions()
 	// body is a guard and a dispatch: while `m_NPCState` is 4 (SCRIPT) and `m_hCine` (`+0x5d74`)
 	// still resolves through the entity table, call THAT entity's own slot 459. Outside state 4 —
 	// and with a dead cine handle — it writes nothing at all.
-	if (CondRetailStateId(Mind.State()) != 4)
+	if (NpcKernelConditionsShared::CondRetailStateId(Mind.State()) != 4)
 	{
 		return;
 	}
@@ -346,39 +314,12 @@ bool FElysiumNpc::FCanCheckAttacks()
 // Slot 463 — `OnStateChange`
 // =================================================================================================
 
-const TCHAR* FElysiumNpc::StateChangeExpressionName(EElysiumNpcState NewState)
-{
-	// `CNPC_VTzimisce::vfunc463` (`0x103ba2c0`) maps the NEW state to an index into
-	// `PTR_s_normal_10653120`, whose four entries were read out of `.rdata`:
-	//   0 "normal", 1 "angry", 2 "scream", 3 "dead".
-	// The switch names three of them — idle -> 0, alert/combat/hunt -> 1, dead -> 3 — and "scream"
-	// is reached by no state. Every other state falls through writing nothing.
-	switch (CondRetailStateId(NewState))
-	{
-	case 1:               return TEXT("normal");   // index 0
-	case 2: case 3:       return TEXT("angry");    // index 1; retail also lists 0xb HUNT here
-	case 7:               return TEXT("dead");     // index 3
-	default:              return nullptr;
-	}
-}
-
-void FElysiumNpc::SetDefaultExpression(const TCHAR* ExpressionName, float BlendSeconds)
-{
-	// SEAM for `CBaseCombatCharacter::LookupExpressionIndex` + `0x103b9f90(this, index, 1.0)`. There
-	// is no `SetExpression` in this runtime — the script API lists it as a stub and family Sounds
-	// already recorded the same gap for `CNPC_VTzimisce::PainSound`. The NAME is stored because
-	// this runtime names expressions (`NoDeformExpression`, +0x64d0, is the same shape); the blend
-	// is dropped and named here rather than faked.
-	(void)BlendSeconds;
-	DefExpression = ExpressionName != nullptr ? FString(ExpressionName) : FString();
-}
-
 void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcState NewState)
 {
 	// 0x102ae140. Read in two halves, because the body's `goto` structure is exactly that: an
 	// "actually changed" half and an unconditional tail every call runs.
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const int32 NewRetail = CondRetailStateId(NewState);
+	const int32 NewRetail = NpcKernelConditionsShared::CondRetailStateId(NewState);
 
 	if (OldState != NewState)
 	{
@@ -392,7 +333,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 		// approximated: its body is a four-arm rule over `GetEnemy()`, two dialogue-partner probes
 		// (`+0x62ec` / `+0x6300`, each testing that entity's `+0x571`), the state set
 		// {1, 4, 0xc, 0xd} and `IRelationType(m_hClosestPlayer)`, and it hides or unhides through
-		// the weapon's own `+0x4f0` / `+0x4ec`. `FElysiumNpc::ApplyStateWeaponVisibility` is the
+		// the weapon's own `+0x4f0` / `+0x4ec`. `FElysiumNpcHuman::ApplyStateWeaponVisibility` is the
 		// SPECIES half (the seven classes' own slot-463 body), which is a different and simpler
 		// rule; conflating the two would give every NPC in the cast a holster policy retail gives
 		// nine of them. `0x102ae310` is not one of this family's rows.
@@ -478,58 +419,6 @@ void FElysiumNpc::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewS
 }
 
 // =================================================================================================
-// `SelectIdealState`, slot 461 — the three species overrides
-// =================================================================================================
-
-EElysiumNpcState FElysiumNpc::SelectIdealStateSpecies(EIdealStateSpecies Rule, bool bAlive,
-	EElysiumNpcState Current, EElysiumNpcState Ideal, bool bHasEnemy)
-{
-	switch (Rule)
-	{
-	case EIdealStateSpecies::AlwaysAlert:
-		// `CNPC_VCamera::FUN_10369060` — three writes to the file/line ideal-state trace (`+0x1b38`
-		// / `+0x1b3c` / `+0x1b40`, which the shape map records ABSENT) and then
-		// `m_IdealNPCState = 3`. There is NO test: a camera's ideal state is a constant.
-		return EElysiumNpcState::Alert;   // retail 3
-
-	case EIdealStateSpecies::MingXiao:
-	{
-		// `CNPC_VMingXiao::vfunc461`. The recovered body writes `m_IdealNPCState = 7` when
-		// `!(IsAlive() && m_NPCState != 7)` and then ALWAYS overwrites it from the enemy test — the
-		// dead write is unreachable in the same call, which is retail's own dead code and is
-		// reproduced by leaving the branch here with nothing it can keep.
-		const bool bDeadWrite = !(bAlive && Current != EElysiumNpcState::Dead);
-		(void)bDeadWrite;
-		return bHasEnemy ? EElysiumNpcState::Combat : EElysiumNpcState::Idle;   // retail 2 / 1
-	}
-
-	case EIdealStateSpecies::MingXiaoTentacle:
-		// `CNPC_VMingXiaoTentacle::vfunc461`. Here the dead arm is REAL: a tentacle whose CURRENT or
-		// IDEAL state is already 7 stays 7 and never reaches the enemy test.
-		if (Current == EElysiumNpcState::Dead || Ideal == EElysiumNpcState::Dead)
-		{
-			return EElysiumNpcState::Dead;   // retail 7
-		}
-		return bHasEnemy ? EElysiumNpcState::Combat : EElysiumNpcState::Idle;
-	}
-	return Current;
-}
-
-int32 FElysiumNpc::SpeciesIdealStateRetail(EIdealStateSpecies Rule)
-{
-	// The three replacement bodies' shared tail: the rule's answer written as `m_IdealNPCState`, in
-	// retail's ordinals, and answered.
-	const EElysiumNpcState SpeciesIdeal = SelectIdealStateSpecies(Rule, !IsInert(), Mind.State(),
-		Mind.IdealState(), Senses.Memory.Enemy.IsSet());
-	Mind.WriteIdealStateRetail(
-		SpeciesIdeal == EElysiumNpcState::Alert ? 3
-		: SpeciesIdeal == EElysiumNpcState::Combat ? 2
-		: SpeciesIdeal == EElysiumNpcState::Dead ? 7
-		: 1);
-	return IdealStateRetail();
-}
-
-// =================================================================================================
 // `RequestDesiredState` — the two flee arms of `PreSelectIdealState`
 // =================================================================================================
 
@@ -546,7 +435,7 @@ int32 FElysiumNpc::RequestFleeDesiredState(EElysiumNpcCond GateCondition, int32 
 	// `if (m_NPCState != 8) m_bfAINPCFlags |= 0x100` — `INITIAL_FLEE`, armed only on the way IN. This
 	// runtime has no state 8, so the test can never be false and the flag is always armed; the
 	// comparison is written out rather than folded so the day a flee state lands it is already here.
-	if (Mind.State() != EElysiumNpcState::Dead && CondRetailStateId(Mind.State()) != 8)
+	if (Mind.State() != EElysiumNpcState::Dead && NpcKernelConditionsShared::CondRetailStateId(Mind.State()) != 8)
 	{
 		NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);
 	}
@@ -644,68 +533,6 @@ bool FElysiumNpc::RunAlternateAiOpeningDoor(double Now)
 	}
 	// Retail returns 1 from here whether or not it advanced: the transaction still owns the body.
 	return true;
-}
-
-// =================================================================================================
-// The disturbed latch
-// =================================================================================================
-
-bool FElysiumNpc::IsDisturbed() const
-{
-	// `CNPC_VGhoulCroucher::IsDisturbed` (`0x1037bb20`). The 121 bytes are an AI scope-trace push and
-	// pop around one read; the body IS `return m_bWasDisturbed`.
-	return bWasDisturbed;
-}
-
-void FElysiumNpc::OnDisturbed(FElysiumEntity* Disturber)
-{
-	// `CNPC_VGhoulCroucher::OnDisturbed` (`0x1037b6e0`). The whole body is under one latch: a second
-	// disturbance writes nothing and fires nothing.
-	if (bWasDisturbed)
-	{
-		return;
-	}
-	bWasDisturbed = true;     // +0x6666
-	bUnawareExited = false;   // +0x6667
-
-	// The split is on the disturber's cached `CBasePlayer*` (`+0xa8`) — "was it a player", the same
-	// read the see-unknown sweep makes. This runtime asks the world for its player and compares, the
-	// way `ShouldInvestigate` does.
-	const FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr;
-	const bool bDisturberIsPlayer = Disturber != nullptr && Player != nullptr
-		&& static_cast<const FElysiumEntity*>(Player) == Disturber;
-	FName Output;
-	if (!bDisturberIsPlayer)
-	{
-		// `0x10293a80 SetClosestPlayer` — the generic handler, which rewrites `m_hClosestPlayer`
-		// (+0x628c) from the nearest live player within 20000 units, or clears it when there is none.
-		Senses.SetClosestPlayer(*this, World != nullptr ? World->NowSeconds() : 0.0);
-		Output = FName(TEXT("OnDisturbed"));          // +0x6674
-	}
-	else
-	{
-		// The player arm does NOT run the sweep: it writes the DISTURBER's handle straight into
-		// `m_hClosestPlayer` and fires the other output.
-		Senses.Memory.ClosestPlayer = Player->Handle;
-		Output = FName(TEXT("OnDisturbedByPlayer"));  // +0x668c
-	}
-	FireOutput(Output, Disturber != nullptr ? Disturber->Handle : FElysiumEntityHandle::Invalid());
-
-	// Then, and only when `m_hClosestPlayer` now resolves to a live entity,
-	// `AddEntityRelationship(player, D_HT, 10)`. Note the handle is re-read: on the non-player arm
-	// this is whatever the sweep just found, which may be a player the disturbance had nothing to do
-	// with. Reproduced.
-	if (World == nullptr || !Senses.Memory.ClosestPlayer.IsSet())
-	{
-		return;
-	}
-	const FElysiumEntity* Closest = World->Resolve(Senses.Memory.ClosestPlayer);
-	if (Closest == nullptr)
-	{
-		return;
-	}
-	Relationships.SetEntity(Senses.Memory.ClosestPlayer, EElysiumRelationship::Hate,
-		GCondDisturbedHatePriority);
 }
 
 // =================================================================================================
@@ -889,37 +716,4 @@ void FElysiumNpc::RefreshOccludedCondition(EElysiumNpcCond Cond, double& InOutSt
 	{
 		Cognition.Conditions.Clear(Cond);
 	}
-}
-
-// =================================================================================================
-// `CNPC_VWerewolf::UpdateConditionDeathTriggered` (`0x103cc890`)
-// =================================================================================================
-
-void FElysiumNpc::UpdateConditionDeathTriggered()
-{
-	// The body, in order — and the order is the point.
-	//
-	// `ClearCondition(0x7a)` runs FIRST and UNCONDITIONALLY. The `if (!HasCondition(0x7a))` that
-	// guards the output therefore ALWAYS passes: the "fire once" the guard reads as is not one, and
-	// `m_OnConditionDeathTriggered` fires on EVERY pass while the activity/door pair holds. That is
-	// the shipped behaviour and it is reproduced; the guard is kept in place rather than removed so
-	// a reader can see what it was meant to be.
-	Cognition.Conditions.Clear(CondOf(GCondWerewolfDeathTriggered));
-
-	if (CurrentRetailActivityId() != GCondWerewolfDeathActivity   // m_Activity +0xfec == 0x11d
-		|| WerewolfDoorState != GCondWerewolfDoorStateOpen)       // m_DoorState +0x6680 == 1
-	{
-		return;
-	}
-
-	if (!Cognition.Conditions.Has(CondOf(GCondWerewolfDeathTriggered)))
-	{
-		// `thunk_FUN_10265a90(this, GetEnemy())` — retail's "myself" self-reference write, then the
-		// output with the enemy as activator and this NPC as caller.
-		const FElysiumEntity* Enemy = World != nullptr && Senses.Memory.Enemy.IsSet()
-			? World->Resolve(Senses.Memory.Enemy) : nullptr;
-		FireOutput(FName(TEXT("OnConditionDeathTriggered")),
-			Enemy != nullptr ? Enemy->Handle : FElysiumEntityHandle::Invalid());
-	}
-	Cognition.Conditions.Set(CondOf(GCondWerewolfDeathTriggered));
 }
