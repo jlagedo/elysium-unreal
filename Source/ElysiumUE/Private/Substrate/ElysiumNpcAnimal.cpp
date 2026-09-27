@@ -23,7 +23,7 @@ int32 FElysiumNpcAnimal::CanPlaySequence(bool bDisregardState, int32 InterruptLe
 	// Bosses' `CanPlaySequenceSpecies`, the tail the four species copies share.
 	//
 	// Story 5 step 3 corrected this body: it used to call the base and so refused in SCRIPT state
-	// (`decisions-step3.json` `retail_corrections`).
+	// (`21bb56cf`; `docs/vtmb/npc-ai/shape.md` § "Slot 482 — the species copies").
 	return CanPlaySequenceSpecies(bDisregardState, InterruptLevel);
 }
 

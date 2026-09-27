@@ -111,10 +111,10 @@ bool FElysiumNpcZombie::ShouldPlayFloatSound()
 	// `0x10294070` and its two IDLE tests: an ALERT zombie still moans. `FElysiumNpcBase::ShouldPlayFloatSound`
 	// is that base body until story 5 step 5 names it `FElysiumNpcBase::ShouldPlayFloatSound`.
 	//
-	// Story 5 step 3 corrected this body (`decisions-step3.json` `retail_corrections`): it had lost
-	// the dialog, grapple and player-partner gates, read the distance as an unrecovered 0.0 and
-	// tailed into the Troika override. The row-3 distance is recovered (`Float_Sound_Info` row 3 =
-	// 250.0 Source units, `kernel_migration_audit.rulebook_fact`); retail caches it once per process,
+	// Story 5 step 3 corrected this body (`21bb56cf`; `docs/vtmb/npc-ai/shape.md` § "`CNPC_VZombie`"):
+	// it had lost the dialog, grapple and player-partner gates, read the distance as an unrecovered
+	// 0.0 and tailed into the Troika override. The row-3 distance is recovered (`Float_Sound_Info` row 3 =
+	// 250.0 Source units, read from the authored `Float_Sound_Info` table); retail caches it once per process,
 	// this port re-reads the authored table, which answers the same.
 	FloatSoundFrequency = ZombieFloatSoundFrequency;   // +0x10e8, unconditional and first
 

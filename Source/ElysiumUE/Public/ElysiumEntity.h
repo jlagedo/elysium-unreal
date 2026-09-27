@@ -610,8 +610,8 @@ public:
 	// Retail keeps the same answers as cached self-pointers on `CBaseEntity`: `+0x98
 	// m_pBaseNPCTroika` is `AsNpc()` (the `CAI_BaseNPCTroika` line), `+0x94 m_pBaseNPC` is
 	// `AsNpcBase()` (any `CAI_BaseNPC`, which also answers the script directors and the test hull).
-	// A retail test reads one or the other; `story-5/consumers-step5.tsv` records which each port
-	// consumer ports.
+	// A retail test reads one or the other; story 5 step 5's `consumers-step5.tsv` (retired with the
+	// migration records; git holds it at `a00cd11b`) records which each port consumer ports.
 	virtual class FElysiumNpc* AsNpc() { return nullptr; }
 	const class FElysiumNpc* AsNpc() const
 	{

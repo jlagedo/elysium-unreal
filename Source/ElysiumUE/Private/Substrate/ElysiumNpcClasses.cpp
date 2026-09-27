@@ -255,7 +255,7 @@ static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
 }
 
 // The ordinary NPC classes (story 5 step 2). Each classname registers the C++ class retail's
-// factory builds for it (`story-5/factories.tsv`, replayed from the 74 factories); two retail
+// factory builds for it (`kernel_factories.tsv`, replayed from the 74 factories); two retail
 // classes carry two classnames each (`CNPC_VPedestrian`, `CNPC_ProneDialog`). Above the classnames
 // stand the retail classes as abstract descriptors, chained as retail derives them, so a row a
 // class declares is reached by exactly its descendants. `CAI_BaseNPC` stands under the combat

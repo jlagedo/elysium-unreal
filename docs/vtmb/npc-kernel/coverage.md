@@ -375,7 +375,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100010f0` | thunk_FUN_101d9610 | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:541, Source/ElysiumUE/Public/ElysiumCameraSolve.h:108 |
 | `0x1000134d` | thunk_FUN_101d2850 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10.cpp:68 |
 | `0x100015cd` | SetCineCamera | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:139, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1401 |
-| `0x10001adc` | CAI_BaseNPCTroika::IRelationType | Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:174 |
+| `0x10001adc` | CAI_BaseNPCTroika::IRelationType | Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:175 |
 | `0x10001afa` | thunk_FUN_1034b430 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:643 |
 | `0x10001cb7` | CNPC_VTzimisce::vfunc496 | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:904, Source/ElysiumUE/Private/Tests/ElysiumCameraTests.cpp:1842, Source/ElysiumUE/Public/ElysiumCameraSolve.h:563 |
 | `0x10001f28` | CPointEntity::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:157 |
@@ -784,7 +784,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1034bbf0` | FUN_1034bbf0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:110, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:589, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:650, +8 more |
 | `0x1034c8b0` | FUN_1034c8b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:583, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:21, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:106, +9 more |
 | `0x1034c980` | FUN_1034c980 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:263 |
-| `0x1034cf20` | FUN_1034cf20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:706, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:53 |
+| `0x1034cf20` | FUN_1034cf20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:707, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:53 |
 | `0x1034d000` | FUN_1034d000 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:56 |
 | `0x1034d050` | FUN_1034d050 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:56 |
 | `0x1034d2d0` | FUN_1034d2d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:583, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:21, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:107, +7 more |
@@ -800,8 +800,8 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1035eaa0` | FUN_1035eaa0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.h:5 |
 | `0x103602f0` | FUN_103602f0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAsianVampire.h:6 |
 | `0x10362ba0` | FUN_10362ba0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:5 |
-| `0x10366120` | CNPC_VBach::InputGrenadeEnter | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:289, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:212, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:240 |
-| `0x10366190` | CNPC_VBach::InputGrenadeExit | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:291, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:213 |
+| `0x10366120` | CNPC_VBach::InputGrenadeEnter | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:289, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:213, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:241 |
+| `0x10366190` | CNPC_VBach::InputGrenadeExit | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:291, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:214 |
 | `0x103661d0` | CNPC_VBach::InputSignalVulnerable | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:293 |
 | `0x103677c0` | FUN_103677c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBrujah.h:5 |
 | `0x10367a40` | FUN_10367a40 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:106, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:113, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:219 |
@@ -837,7 +837,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10389c50` | FUN_10389c50 | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:5 |
 | `0x10389cc0` | FUN_10389cc0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:30, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:163 |
 | `0x1038fa50` | CNPC_VManBat::InputManBatStun | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:308 |
-| `0x1038fa90` | CNPC_VManBat::InputManBatFlyBegin | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:399 |
+| `0x1038fa90` | CNPC_VManBat::InputManBatFlyBegin | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:400 |
 | `0x10390e70` | FUN_10390e70 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:5 |
 | `0x10390ee0` | FUN_10390ee0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:16, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:175 |
 | `0x1039a700` | CNPC_VMingXiao::InputStartTransformation | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:315 |
@@ -859,7 +859,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x103ae3e0` | FUN_103ae3e0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSheriffMan.cpp:67, Source/ElysiumUE/Private/Substrate/ElysiumNpcSheriffMan.h:17, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:168 |
 | `0x103b1470` | CNPC_VSheriffMan::StartAttacking | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:325 |
 | `0x103b15e0` | CNPC_VSheriffMan::StartTransformation | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:327 |
-| `0x103b1860` | CNPC_VSheriffMan::SetTeleportVelocity | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:598 |
+| `0x103b1860` | CNPC_VSheriffMan::SetTeleportVelocity | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:599 |
 | `0x103b2ed0` | FUN_103b2ed0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTaxiDriver.h:6 |
 | `0x103b6bf0` | FUN_103b6bf0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:5 |
 | `0x103b6c60` | FUN_103b6c60 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:181, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:16, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:178 |
@@ -2090,8 +2090,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.h:16 | ``// `0x103dc750` returns the class's own schedule space `0x109402a8`, which the corpus loads as unit`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.cpp:72 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1094028c`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.cpp:75 | ``TEXT("CNPC_VWolfMorph"), TEXT("0x103dc950"), TEXT("0x1094028c") };`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:185 | ``// The class's `CAI_ClassScheduleIdSpace` `0x10940314`, left empty by `0x102ea090(isRoot = false)`:`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:188 | ``TEXT("CNPC_VYukie"), TEXT("0x103dd1f0"), TEXT("0x10940314") };`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:186 | ``// The class's `CAI_ClassScheduleIdSpace` `0x10940314`, left empty by `0x102ea090(isRoot = false)`:`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:189 | ``TEXT("CNPC_VYukie"), TEXT("0x103dd1f0"), TEXT("0x10940314") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:356 | ``// The class's `CAI_ClassScheduleIdSpace` `0x109403e0`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:359 | ``TEXT("CNPC_VZombie"), TEXT("0x103de4d0"), TEXT("0x109403e0") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumProp.h:33 | ``// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is`` |

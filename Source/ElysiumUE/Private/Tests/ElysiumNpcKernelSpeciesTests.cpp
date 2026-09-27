@@ -2008,7 +2008,8 @@ bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 	return true;
 }
 
-// Story 5 step 3 correction (`decisions-step3.json` `yukie-melee-wired`): a spawned `npc_VYukie`
+// Story 5 step 3 correction (`21bb56cf`; `docs/vtmb/npc-ai/shape.md` § "The melee quartet's species
+// replacements"): a spawned `npc_VYukie`
 // reaches its own melee quartet through the vtable. Before the step the four bodies were ported but
 // no dispatch reached them, so a Yukie ran the Troika line's.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredYukieMeleeTest,

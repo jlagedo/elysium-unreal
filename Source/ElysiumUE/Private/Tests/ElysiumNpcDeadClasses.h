@@ -1,7 +1,7 @@
 #pragma once
 
 // The 21 retail NPC classes with no instance (`docs/vtmb/npc-ai/population.md` § "NPC classes with
-// no instance"; `docs/specs/0019-npc-kernel-rework/story-5/classes.tsv` rows marked
+// no instance"; `research/tooling/ghidra/driver/kernel_classes.tsv` rows marked
 // `dead-census-retained`). 0019 story 5 step 1 deleted their port code but kept their census rows,
 // so a coverage test that walks the census for arms must skip exactly these and still fail loudly
 // for every live class.

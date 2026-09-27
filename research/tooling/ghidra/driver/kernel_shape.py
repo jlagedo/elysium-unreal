@@ -1129,8 +1129,8 @@ def override_rows(repo: Path, model) -> tuple[list[dict], list[tuple[str, ...]]]
         for layer in row.layers:
             if layer.verdict in LIVE_VERDICTS and layer.stubbed:
                 unported.append((layer.retail, str(row.slot), layer.address, layer.verdict, "stub", layer.owner))
-    story = repo / "docs" / "specs" / "0019-npc-kernel-rework" / "story-5" / "classes.tsv"
-    classes = list(csv.DictReader(story.read_text(encoding="utf-8").splitlines(), delimiter="\t"))
+    classes_tsv = repo / "research" / "tooling" / "ghidra" / "driver" / "kernel_classes.tsv"
+    classes = list(csv.DictReader(classes_tsv.read_text(encoding="utf-8").splitlines(), delimiter="\t"))
     ports = {r["retail_class"]: r["port_class"] for r in classes}
     live = {r["retail_class"] for r in classes if r["liveness"] == "live"}
     port_base = {r["port_class"]: r["port_base"] for r in classes if r["port_class"].startswith("F")}
@@ -1213,7 +1213,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--residue", metavar="PATH",
                         help="write the rows a reading has not settled (TSV) to PATH and exit")
     parser.add_argument("--unported", metavar="PATH",
-                        help="write the live rules the port does not carry yet (TSV) to PATH and exit")
+                        help="write the live rules the port does not carry yet (TSV) to PATH and exit; "
+                             "the committed pin is docs/vtmb/npc-kernel/unported.tsv")
     args = parser.parse_args(argv)
     repo = repo_root()
     if args.unported:

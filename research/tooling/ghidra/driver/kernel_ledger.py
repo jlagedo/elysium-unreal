@@ -165,10 +165,11 @@ TUNABLE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 DATA_CELL_RE = re.compile(r"\b_?DAT_(10[0-9a-fA-F]{6})\b")
 JMP_RE = re.compile(r"\bJMP\s+0x([0-9a-fA-F]{8})\b")
 GCLASS_ROW_RE = re.compile(r'\{ TEXT\("(\w+)"\), TEXT\("(\w+)"\),')
-# The reviewed classname -> class map, replayed from retail's 74 factories (story 5 step 0). The
-# replay's evidence columns (factory, constructor, final vtable write, listing hashes) ride in the
-# same table; the ledger reads only the classname -> class join.
-FACTORIES_TSV = Path("docs/specs/0019-npc-kernel-rework/story-5/factories.tsv")
+# The reviewed classname -> class map, replayed from retail's 74 factories (0019 story 5 step 0),
+# an authored overlay beside this file. The replay's evidence columns (factory, constructor, final
+# vtable write, listing hashes) ride in the same table; the ledger reads only the classname -> class
+# join.
+FACTORIES_TSV = Path("research/tooling/ghidra/driver/kernel_factories.tsv")
 FACTORY_COLUMNS = ("classname", "retail_class", "factory", "constructor", "constructor_thunks",
                    "allocation_size", "final_vtable", "final_write", "form",
                    "factory_listing_sha256", "constructor_listing_sha256", "current_registry",

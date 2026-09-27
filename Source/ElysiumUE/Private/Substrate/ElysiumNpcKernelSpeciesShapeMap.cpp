@@ -36,8 +36,9 @@
 #include "Substrate/ElysiumScriptedSequence.h"
 
 // One row per record of an introduced species' own datamap, grouped by declaring class and in
-// offset order. `docs/specs/0019-npc-kernel-rework/story-5/fields-step4.tsv` is the reviewed
-// record and the datamap replay the source. Inputs and outputs are not words and have no row.
+// offset order. The datamap replay is the source; the reviewed record was story 5 step 4's
+// `fields-step4.tsv`, retired with the migration records (git holds it at `a00cd11b`). Inputs and
+// outputs are not words and have no row.
 //
 // Reading a row: `ELYSIUM_NPC_SPECIES_WORD` compiles the declaring class's member.
 // `_NOTED` on `FElysiumNpc` is storage the base still holds for a deferred class or a Troika

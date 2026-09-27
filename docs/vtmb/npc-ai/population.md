@@ -2705,8 +2705,8 @@ word and override row (address and verdict), and the overlay rows stay `dead` wi
 all but one. Kept as census as well: the generated activity-table rows (`PreTranslate_Stalker`,
 the `CNPC_Crow` task handlers) and the hull-table rows; `0x103b2e60` keeps its target,
 `ElysiumNpcActivityTables.cpp:PreTranslate_Stalker`, because that generated row still stands. Retail confirms `npc_bullseye`'s factory
-(`0x10356630`); the port comments calling `CNPC_Bullseye` classname-less were stale. The record is
-`docs/specs/0019-npc-kernel-rework/story-5/deletions-step1.tsv`.
+(`0x10356630`); the port comments calling `CNPC_Bullseye` classname-less were stale. The
+deletion and its per-body record landed in `ecfa9d82` (story 5 step 1); git holds the record.
 
 ### The classname → class map, read from the factories (2026-09-24, 0019 story 5 review)
 
@@ -2923,7 +2923,7 @@ then attempts the same classname virtual call through that null receiver. It is 
 constructed-class answer. The replay retains this arm rather than treating it as another factory.
 
 Reproducible instrument: `uv run elysium research kernel_factory_map`; reviewed address mappings
-and full input hashes are under `docs/specs/0019-npc-kernel-rework/story-5/`. Generated listings
+and full input hashes are `research/tooling/ghidra/driver/kernel_factories.tsv`. Generated listings
 and evidence reports stay under `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/`. The bounded
 reader rejects unsupported receiver/control-flow shapes; arbitrary constructor analysis and
 liveness inference are outside this evidence claim.
@@ -2931,7 +2931,7 @@ liveness inference are outside this evidence claim.
 ### The census answers the factories (2026-09-25, 0019 story 5 step 2)
 
 The kernel census (`docs/vtmb/npc-kernel/classes.md`, `ElysiumNpcKernelShape.cpp`) now takes each
-class's classnames from the replayed factory map (`story-5/factories.tsv`) instead of the proximity
+class's classnames from the replayed factory map (`kernel_factories.tsv`) instead of the proximity
 scan. 74 classnames resolve, each to exactly one class, and no base class claims a descendant's name.
 The port registers the 45 ordinary-NPC classnames of the 44 step-2 classes as those classes.
 
@@ -2945,8 +2945,9 @@ Counting over all 108 exported maps' entities units corrects two statements abov
 
 `npc_VGuard1`, `npc_VPlaceholder` and `npc_VChangBros` have no placement, maker `NPCType` or
 deployed-script literal in the exported content. Their liveness verdicts rest on the evidence
-above, not on a content count. Per-name counts:
-`docs/specs/0019-npc-kernel-rework/story-5/registrations-step2.tsv`.
+above, not on a content count. The per-name counts are the step-2 registration record, committed
+with the change in `870360e9` (story 5 step 2); the registry, `ElysiumNpcClasses.cpp`, is the map
+since.
 
 ### The registry is the map (2026-09-27, 0019 story 5 commit B)
 
@@ -2962,4 +2963,5 @@ a type question is the tree's (`AsSpecies<T>()`). The corrected resolutions stan
 say — the six live names that resolved to nothing (`npc_VCop`, `npc_VGhoulCroucher`, `npc_VZombie`,
 `npc_VWerewolf`, `npc_VSheriffMan`, `npc_VPlaceholder`) and `npc_VVampireBoss`, whose registration
 was a stub — and every classname builds its class's overrides, words and schedule space
-(registrations and first-active names: `story-5/registrations-step2.tsv`).
+(the registrations landed in `870360e9`, story 5 step 2; the registry `ElysiumNpcClasses.cpp` holds
+them).

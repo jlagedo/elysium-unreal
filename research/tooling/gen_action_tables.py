@@ -1804,7 +1804,7 @@ def build_npc_model(image):
     # every factory PUSH near a write of the class's vtable, and a base's vtable is written by its
     # children's inlined constructors too, so it also finds the children's names (the controller
     # claimed `npc_VFrenzyShadow` and `npc_VWolfMorph`, `CNPC_VChangBros` its two brothers). The
-    # replayed factory ledger (`story-5/factories.tsv`, each classname's final vtable write) is the
+    # replayed factory ledger (`kernel_factories.tsv`, each classname's final vtable write) is the
     # authority where the class it names is among the claimants; a classname it does not carry, or
     # whose factory class the walk does not reach, keeps the walk's answer.
     factory_class = _factory_classes()
@@ -1880,7 +1880,7 @@ def build_npc_model(image):
 def _factory_classes():
     """`classname -> retail class` from the replayed factory ledger (casefolded classname)."""
     import csv
-    path = repo_root() / "docs" / "specs" / "0019-npc-kernel-rework" / "story-5" / "factories.tsv"
+    path = repo_root() / "research" / "tooling" / "ghidra" / "driver" / "kernel_factories.tsv"
     rows = csv.DictReader(path.read_text(encoding="utf-8").splitlines(), delimiter="	")
     return {row["classname"].casefold(): row["retail_class"] for row in rows}
 

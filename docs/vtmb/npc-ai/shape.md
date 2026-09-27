@@ -136,7 +136,7 @@ _Recovered 2026-09-13, story 29b-0._
   `NpcKernelClass.TreeMatchesCensus`): every live (class, slot) own body the port carries is an
   override with the recorded signature on the class that declares it, proved at compile time in the
   generated `Tests/ElysiumNpcKernelOverrideCensus.cpp`; `kernel_shape --unported` lists the rest
-  (`docs/specs/0019-npc-kernel-rework/story-5/unported.tsv`, 778 rows at commit B).
+  (`docs/vtmb/npc-kernel/unported.tsv`, 778 rows at commit B).
 
 **Unrecovered:** nothing.
 
@@ -3539,7 +3539,7 @@ own body — so it lands on the base and can never re-enter the species body. Si
 step 3 the port has two functions per slot as retail does: the species body is its C++ class's
 override, and its call to what it replaces is spelled as a qualified call to the recovered callee
 owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpc::Slot593()`, `FElysiumNpcBase::ShouldPlayFloatSound()`;
-the full list is `docs/specs/0019-npc-kernel-rework/story-5/decisions-step3.json` `direct_calls`). The
+the full list is `docs/vtmb/npc-kernel/direct-calls.tsv`). The
 per-slot guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone, and since commit B
 of story 5 nothing in the runtime resolves a body by class name: the vtable IS the C++ tree, and a
 species body the port carries is an override the census proves at compile time. Two slots are

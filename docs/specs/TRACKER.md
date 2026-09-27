@@ -219,8 +219,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     and the C4263/C4264 hides are gone; `gen_kernel_shape` emits the census, the chain slot bodies
     and a compile-checked override census. `kernel_shape --unported` 987 → 778. Gate on this tree:
     see the B landing commit. Details and the story-8 hand-off: the spec's story-5 landing paragraph
-    and `story-5/handoff-story-8.md`.
-  - *Hand-off to row 06 (pass I):* the residue pin `story-5/unported.tsv` (778 rows, must only
+    and [handoff-story-8.md](0019-npc-kernel-rework/handoff-story-8.md).
+  - *Hand-off to row 06 (pass I):* the residue pin `docs/vtmb/npc-kernel/unported.tsv` (778 rows, must only
     fall) and the carried items listed in the spec (the 431/437/433/442 think loop, Andrei's task
     0x154, `Weapon_Switch`, `CAI_Hint` `ObjectCaps`, Camera `NPCInit`, `+0xe4`).
 

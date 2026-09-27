@@ -115,8 +115,8 @@ int32 ZombieAiType = 0;   // +0x6678 CNPC_VZombie::m_iZombieAIType (datamap, key
 // Every one of those calls is a DIRECT call in retail — a `thunk_`, never a vtable dispatch. Since
 // story 5 step 3 the species bodies are their classes' C++ overrides and those calls are spelled as
 // qualified calls to the recovered owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpcBase::ShouldPlayFloatSound()`;
-// `story-5/decisions-step3.json` `direct_calls`), so the per-slot guard that emulated the thunk is
-// gone.
+// the full list is `docs/vtmb/npc-kernel/direct-calls.tsv`), so the per-slot guard that emulated the
+// thunk is gone.
 
 // --- The bodies, by retail address ------------------------------------------------------------------
 //

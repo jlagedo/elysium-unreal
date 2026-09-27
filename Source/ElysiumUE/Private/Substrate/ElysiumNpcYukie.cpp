@@ -46,7 +46,8 @@ namespace
 
 // The melee quartet: 599 `0x103dd8b0` (no gates), 600 `0x103dd900` (the one-shot flee), 601
 // `0x103dd9a0` (no coordinator release) and 602 `0x103dda10` (distance or clock). Story 5 step 3
-// wires all four, which were ported but not dispatched (`decisions-step3.json`).
+// wires all four, which were ported but not dispatched (`21bb56cf`; `docs/vtmb/npc-ai/shape.md`
+// § "The melee quartet's species replacements").
 bool FElysiumNpcYukie::Slot599(int32 Arg)
 {
 	(void)Arg;

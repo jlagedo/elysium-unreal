@@ -16,8 +16,8 @@
 //
 // **Hand-maintained, and compile-checked**, like the Troika map: a row names the port class and
 // member as identifiers, so a rename or a move is a build error. One row per record of an
-// introduced species' own datamap (`docs/specs/0019-npc-kernel-rework/story-5/fields-step4.tsv`
-// is the reviewed record behind each row).
+// introduced species' own datamap (the reviewed record behind each row was story 5 step 4's
+// `fields-step4.tsv`, retired with the migration records; git holds it at `a00cd11b`).
 
 // What this runtime does with a species word.
 enum class EElysiumNpcSpeciesWordHome : uint8

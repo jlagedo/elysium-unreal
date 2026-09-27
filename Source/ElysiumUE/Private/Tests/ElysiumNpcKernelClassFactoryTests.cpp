@@ -16,7 +16,7 @@
 #include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 5 step 2: the classname -> class map is retail's factories
-// (`docs/specs/0019-npc-kernel-rework/story-5/factories.tsv`, replayed from the 74 factories of
+// (`research/tooling/ghidra/driver/kernel_factories.tsv`, replayed from the 74 factories of
 // `vampire.dll`; `docs/vtmb/npc-ai/population.md`, "The classname -> class map, read from the
 // factories"). Every living ordinary-NPC classname builds its own C++ class, which answers its own
 // census row; the retail classes above it are abstract descriptors a map cannot stand; the dead

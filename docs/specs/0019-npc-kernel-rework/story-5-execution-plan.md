@@ -51,7 +51,13 @@ already guarded by `gen_kernel_shape --check`, `gen_kernel_bindings --check`, th
    oracle reads them: `classes.tsv` (`kernel_shape`), `factories.tsv` (`kernel_ledger`; the C++
    factory tests cite it), `registrations-step2.tsv` and `deletions-step1.tsv` (`population.md`),
    `decisions-step3.json` (`shape.md`'s direct-call list), `unported-step6.tsv` (the 987 pin
-   commit B reconciled; renamed `unported.tsv` by commit B, the story-8 pin, 778 rows). The reviewed **stub-fired diff** (§4.3) replaces `test_delta`. C++
+   commit B reconciled; renamed `unported.tsv` by commit B, the story-8 pin, 778 rows). After the
+   story closed the folder went too: `classes.tsv` and `factories.tsv` are the overlays
+   `research/tooling/ghidra/driver/kernel_classes.tsv` and `kernel_factories.tsv`; the pin is
+   `docs/vtmb/npc-kernel/unported.tsv`; the direct-call list is `docs/vtmb/npc-kernel/direct-calls.tsv`
+   (the rest of `decisions-step3.json` is in git at `96c73d1e`); the step-1 and step-2 records are
+   cited by their commits, `ecfa9d82` and `870360e9`; the story-8 hand-off is
+   [handoff-story-8.md](handoff-story-8.md). The reviewed **stub-fired diff** (§4.3) replaces `test_delta`. C++
    comments that cite a retired record cite git history at `a00cd11b`.
 3. **The commit is the record.** Its message carries the outcome, each retail correction (address,
    before/after, the test), the stub-fired diff summary, and the gate results with report paths.
@@ -263,8 +269,9 @@ left except the ChangBros type tests (B); the C++ census tests list no deferred 
 - **Residue:** regenerate `kernel_shape --unported`; explain every removed or added row against the
   987 pin by implementation, corrected evidence or scope change. This set and the class map are
   story 8's handoff, with the final report paths.
-- **Records:** regenerate the pin as the story-8 pin — done: `story-5/unported.tsv` (was
-  `unported-step6.tsv`); `classes.tsv` and `factories.tsv` stay as tooling inputs. The migration machinery
+- **Records:** regenerate the pin as the story-8 pin — done: `unported.tsv` (was
+  `unported-step6.tsv`; now `docs/vtmb/npc-kernel/unported.tsv`); `classes.tsv` and `factories.tsv`
+  stay as tooling inputs (now `kernel_classes.tsv` and `kernel_factories.tsv` beside `kernel_shape`). The migration machinery
   itself was retired with the 2026-09-27 revision (§1).
 - **Docs:** `shape.md`, `population.md`, `coverage.md` and affected oracle topics; the spec's
   story-5 tick and tracker 06b, only after §4 is green on this commit.
@@ -282,7 +289,7 @@ and the new override census; its `accepted` kind is gone. `m_hControllerNPC` has
 `--unported` 987 → 778, every row explained (176 implemented and 2 false positives in A, 31
 hook-named overrides recognised in B; +2 / −2 for `CNPC_VHengeyokai` 599/600, found carried by the
 wrong body and ported; `CNPC_VMingXiao` 166 wired where it had been counted off a comment). Appendix A's own-body column is the ledger's vtable diff. Hand-off: the
-spec's story-5 landing paragraph and `story-5/handoff-story-8.md`.
+spec's story-5 landing paragraph and [handoff-story-8.md](handoff-story-8.md).
 
 ## 7. Session contract, short
 

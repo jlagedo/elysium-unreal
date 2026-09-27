@@ -18,8 +18,11 @@ from the whole-body corpus (`research/tooling/ghidra/driver/corpus.py`; the SQLi
 from the same corpus, the datamap records `datamap_types` replays
 (`$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json`), Source SDK 2013's
 headers, and the two reading overlays beside the tool (`kernel_fields.tsv`,
-`kernel_signatures.tsv`). The tables carry addresses, names, offsets,
-edges and counts — the category `docs/vtmb/` already commits — and never a decompiled body.
+`kernel_signatures.tsv`). Two more authored overlays sit there: `kernel_factories.tsv`, the
+classname → retail class map replayed from retail's 74 factories (the ledger's `classes.md`
+classnames), and `kernel_classes.tsv`, the retail class → port class map with each class's liveness
+(`kernel_shape --unported` and `gen_kernel_shape`'s override census). The tables carry addresses,
+names, offsets, edges and counts — the category `docs/vtmb/` already commits — and never a decompiled body.
 The provenance line at the top of each file names the module hash and the corpus dump date.
 
 Two tables are not written from the corpus alone. `checklist-<band>.md` is the ledger joined with a
@@ -106,9 +109,13 @@ and the story that owns it until a story ports the body), and
 `Tests/ElysiumNpcKernelOverrideCensus.cpp` (one row per live class-own body the port carries as a
 C++ override, each proved at compile time; 0019 story 5 commit B). Nothing dispatches through the
 census: the class tree is C++. `uv run elysium research kernel_shape --unported <path>` lists the
-live rules the port does not carry yet, the number the species stories drive down; the story-5
-pin and what story 5 hands story 8 are `docs/specs/0019-npc-kernel-rework/story-5/unported.tsv` and
-`handoff-story-8.md` beside it. It reads the corpus
+live rules the port does not carry yet, the number the species stories drive down. Its committed
+pin is `unported.tsv` in this directory (778 rows at 0019 story 5 commit B; regenerate it with
+`--unported docs/vtmb/npc-kernel/unported.tsv`, and the row set must only fall); what story 5 hands
+story 8 is `docs/specs/0019-npc-kernel-rework/handoff-story-8.md`. `direct-calls.tsv`, also here and
+authored, is the table of species bodies' direct (non-virtual) calls into the body they replace,
+each with the retail caller, callee and callee owner and the port's qualified call (0019 story 5
+step 3). `gen_kernel_shape` reads the corpus
 through `kernel_shape.build`, so a table that drifts from the ledger fails generation rather than
 being emitted. Nothing in `uv run elysium build` runs it.
 
