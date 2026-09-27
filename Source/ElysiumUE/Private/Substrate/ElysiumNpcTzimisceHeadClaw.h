@@ -63,4 +63,12 @@ public:
 	virtual void GatherConditions() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** Slot 618 on this class, `0x103c24d0` (retail's `FUN_103c24d0`): the fat guy's exertion sound
+	 *  (`TC_FatGuy/Exert_Heavy_1..3`, table `0x1065ca78`, `RandomInt(0, 2)`, channel 4, volume 1.0,
+	 *  attenuation 0.8). `StartTask` `0x103c1820` reaches it through `CALL [EAX+0x9a8]`; the class has
+	 *  no subclass, so the dispatch lands here. Not a virtual: slot 618 has no port declaration on the
+	 *  boss line. */
+	void TransformationStartSlot618();
 };

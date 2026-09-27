@@ -144,4 +144,23 @@ public:
 	 *  `IsAreaClear(pos, 0x202400b, 2*mins(15), 2*maxs(15))`. (`TASK 0x150`'s goal goes through lane
 	 *  Script19's `Script19SetGoal`.) */
 	bool TentacleHintClear(const FVector& PositionCm) const;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x667c CNPC_VMingXiaoTentacle::m_flUpdateEvadeTimer` -- the evade re-arm deadline tasks `0x14f`
+	 *  (`RandomFloat(1, 2)` ahead), `0x151` and `0x152` (600 ahead) write. Walked from `0x1039c4c0`. */
+	double TentacleUpdateEvadeTimer = 0.0;
+	/** `+0x6680 CNPC_VMingXiaoTentacle::m_flHideReadyTimer` -- task `0x151`'s `RandomFloat(5, 15)` ahead. */
+	double TentacleHideReadyTimer = 0.0;
+	/** SEAM for `0x102c41d0(this, name, &position, 0, 0)` -- the named particle emitter; recorded. */
+	void TentacleCreateEmitter(const TCHAR* Name, const FVector& PositionUnits);
+	TArray<FTeleportEmitterPlacement> TentacleEmitterPlacements;
+	/** SEAM for `0x1039f310` (task `0x14a`'s phase-change teardown); counted. */
+	void FUN_1039f310();
+	int32 Fun1039f310Calls = 0;
+	/** SEAM for `0x1039ef10` (task `0x14e`); counted. */
+	void FUN_1039ef10();
+	int32 Fun1039ef10Calls = 0;
+	/** SEAM for `0x1039ea60` (task `0x156`; family Misc19's row); counted. */
+	void FUN_1039ea60();
+	int32 Fun1039ea60Calls = 0;
 };

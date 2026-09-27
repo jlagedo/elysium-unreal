@@ -137,4 +137,20 @@ public:
 	virtual void NPCThink() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x669c CNPC_VVampireBoss::m_fTaskStartTime` (datamap): `StartTask` `0x103c5ac0` stamps curtime
+	 *  on every task before its switch. (The species shape map's `ABSENT` row for `+0x669c` now has
+	 *  this member; the integrator rebinds it.) */
+	double VampireBossTaskStartTime = 0.0;
+	/** Slot 618 on the vampire-boss line (`CALL [EDX+0x9a8]`, `StartTask` task `0x14c` and the species
+	 *  `0x36`/`0x37` arms). **SEAM**: `CNPC_VVampireBoss::TransformationStart` `0x103c60a0` and
+	 *  `CNPC_VSabbatLeader::TransformationStart` `0x103ab310` are family Spawn19's rows; counted until
+	 *  they land behind this virtual. */
+	virtual void TransformationStartSlot618();
+	int32 TransformationStartCalls = 0;
+	/** SEAM for `CBaseAnimating::MatchOriginAnglesToAnimation("bip01", 1, 1)` (`0x1000577c`), the
+	 *  unhide arm's snap onto the root bone. Recorded; the transform is left alone (the same seam
+	 *  `FElysiumNpcWerewolf::MatchOriginAnglesCalls` stands). */
+	TArray<FMatchOriginAnglesCall> VampireBossMatchOriginAnglesCalls;
 };

@@ -64,7 +64,8 @@ namespace
 	constexpr int32 GShadowTaskTurnB = 0x124;
 	constexpr int32 GShadowTaskAttemptFeed = 0x14a;           // 330 TASK_VFRENZYSHADOW_ATTEMPT_FEED
 	constexpr uint32 GShadowMeleeWeaponBits = 0x18000u;       // `(uVar3 & 0x18000) != 0`
-	constexpr float GShadowGoalToleranceScale = 0.2f;         // `_DAT_10449198`
+	constexpr double GShadowGoalToleranceScale = 0.2;         // `_DAT_10449198` (a double: `FMUL double ptr`)
+	constexpr int32 GShadowWeaponDispatchArg0 = 0xf18;        // `0x10376052 PUSH 0xf18`
 	constexpr int32 GShadowActTurnPrimary = 0x13;             // the first activity the turn asks for
 	constexpr int32 GShadowActTurnFallback = 9;
 	// `TaskFail` codes the arms raise.
@@ -376,10 +377,12 @@ FElysiumEntity* FElysiumNpcFrenzyShadow::NearestHuntEntity() const
 	return nullptr;
 }
 
-int32 FElysiumNpcFrenzyShadow::WeaponAttackDispatch(bool bTask37)
+int32 FElysiumNpcFrenzyShadow::WeaponAttackDispatch(int32 Arg0, int32 Arg1, int32 Arg2)
 {
 	// SEAM (header).
-	(void)bTask37;
+	(void)Arg0;
+	(void)Arg1;
+	(void)Arg2;
 	return 0;
 }
 
@@ -416,7 +419,11 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		return FElysiumNpcHuman::StartTaskSlot442(Task);
 	}
 
-	switch (Step->TaskId)
+	// Retail switches on the class-LOCAL task id (`[EDI]`, `0x10375f7f`); the port's step carries the
+	// GLOBAL id, so it goes back through slot 450 first (0019/8 L04: the landed body compared raw
+	// global ids, which no retail task ever equals once a schedule is installed).
+	const int32 TaskLocal = GetLocalTaskId(Step->TaskId);             // 0x10375f7f MOV EAX,[EDI]
+	switch (TaskLocal)
 	{
 	case GShadowTaskAttackA:
 	case GShadowTaskAttackB:
@@ -427,7 +434,10 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 	{
 		// The attack tasks, only while NOT frenzy-hungry (a hungry shadow falls to the default):
 		// a weapon whose `+0x5a0` capability word carries `0x18000` stamps `m_flLastAttackTime` and
-		// answers the weapon's own `+0x5d0` dispatch; anything else fails with `0x1f`.
+		// answers the weapon's own `+0x5d0` dispatch; anything else fails with `0x1f`. The three
+		// arguments `(0xf18, 1, 1)` are pushed BEFORE the task-0x37 compare (`0x1037604b`..`0x10376052`,
+		// then `0x1037605f CMP EAX,0x37`), so both call sites make the same call (0019/8 pass R
+		// correction; the landed body passed a task-0x37 flag instead).
 		if (bFrenzyHunger)
 		{
 			break;
@@ -435,8 +445,8 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		const FElysiumEntity* Weapon = ActiveWeaponEntity();
 		if (Weapon != nullptr && (ActiveWeaponCapabilityWord() & GShadowMeleeWeaponBits) != 0)
 		{
-			LastAttackTime = Now;
-			return WeaponAttackDispatch(Step->TaskId == GShadowTaskAttackD);
+			LastAttackTime = Now;                                         // 0x10376057 +0x5d9c
+			return WeaponAttackDispatch(GShadowWeaponDispatchArg0, 1, 1);  // 0x10376068 / 0x1037607a +0x5d0
 		}
 		Fail(GShadowLineNoWeapon, GShadowFailNoWeapon);
 		return 0;
@@ -446,10 +456,17 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 	{
 		// `m_flGoalTolerance = thunk_FUN_102d61b0(0) * 0.2 + ResolveTaskDistance(data)` (slot 418,
 		// `+0x688`), written to the navigator twice, then `TaskComplete(false)`.
-		// `thunk_FUN_102d61b0(0)` is the unrecovered hull-table read `ElysiumNpcBaseHelpers.inl`
-		// already seams at 0.0.
-		const float HullTerm = 0.f;
-		const float Tolerance = HullTerm * GShadowGoalToleranceScale + ResolveTaskDistance(Step->Data);
+		// `0x102d61b0` is `NAI_Hull::Width`: `row[+0x18] - row[+0xc]` of the table at `0x1060a750`,
+		// whose rows are `{bits, name, mins, maxs, ...}` (`staticinit_102d4440`), so maxs.y - mins.y
+		// of hull 0 (`HUMAN_HULL`, 26.0). The landed body read it as 0.0; the replayed table
+		// (`RetailHullExtents`) carries it (0019/8 L04). The product is x87 double then stored.
+		FVector HullMins = FVector::ZeroVector;
+		FVector HullMaxs = FVector::ZeroVector;
+		RetailHullExtents(0, EElysiumHullExtents::Full, HullMins, HullMaxs);   // 0x10375faf 0x10008de6(0)
+		const double HullTerm = HullMaxs.Y - HullMins.Y;
+		const float Scaled = static_cast<float>(HullTerm * GShadowGoalToleranceScale);   // 0x10375fb4 FMUL double
+		ScheduleHost.GoalToleranceCm = Scaled * ElysiumMove::U;           // 0x10375fbf FSTP +0x6320 (the interim store)
+		const float Tolerance = ResolveTaskDistance(Step->Data) + Scaled;              // 0x10375fcb slot 418; 0x10375fd1 FADD
 		SetGoalTolerance(Tolerance);
 		TaskComplete(false);
 		return 0;

@@ -90,4 +90,12 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** Slot 618 on this class, `0x1037a100`: the gargoyle's exertion sound (`exert_heavy_1..3`, table
+	 *  `0x10639490`). `StartTask` `0x103790d0` tasks `0x36`/`0x37` reach it through `CALL [EAX+0x9a8]`. */
+	void TransformationStartSlot618();
+	/** SEAM for `m_pPhysicsObject` (`+0x36c`) vtable `+0xa4` (`IPhysicsObject` slot 41), the gib
+	 *  impulse `StartTask` tasks `0xe9`/`0xea` apply. No port physics object; receives nothing. */
+	void GargoyleGibImpulse(const FVector& VelocityUnits, const FVector& AngularUnits);
 };

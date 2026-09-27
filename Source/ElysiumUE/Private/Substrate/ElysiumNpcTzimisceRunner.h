@@ -80,4 +80,9 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** Slot 618 on this class, `0x103c3ff0`: the runner's exertion sound (`TC_Runner/Exert_Heavy_1..3`,
+	 *  table `0x1065d6a0`). `StartTask` `0x103c35d0` reaches it through `CALL [EAX+0x9a8]`. */
+	void TransformationStartSlot618();
 };

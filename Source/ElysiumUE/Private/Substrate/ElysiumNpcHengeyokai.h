@@ -191,4 +191,22 @@ public:
 	/** `FUN_10383470` `0x10383470` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
 	int32 HengeyokaiTask14bCalls = 0;
 	void HengeyokaiTask14b();
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** Slot 618 on this class, `0x10381960`: the hengeyokai's exertion sound (`exert_heavy_1..3`, table
+	 *  `0x1063bda4`). `StartTask` `0x103805d0` tasks `0x36`/`0x37` reach it through `CALL [EAX+0x9a8]`. */
+	void TransformationStartSlot618();
+	/** `+0x6674 CNPC_VHengeyokai::m_flTaskFailTimer` (datamap): `StartTask` task `0xc9` arms it to
+	 *  curtime + 1.0 when the facing gate refuses; `RunTask` `0x10380cb0` reads it. (The species shape
+	 *  map's `ABSENT` row for `+0x6674` now has this member; the integrator rebinds it.) */
+	double HengeyokaiTaskFailTimer = 0.0;
+	/** SEAMS for three `CNPC_VHengeyokai` helpers `StartTask` calls and no row of this lane owns:
+	 *  `0x103828a0` (the carried-body drop), `0x103831c0` (the shark-form proxy spawn) and `0x10382bb0`
+	 *  (the carry facing). Each is counted and does nothing else. */
+	void FUN_103828a0();
+	void FUN_103831c0();
+	void FUN_10382bb0();
+	int32 Fun103828a0Calls = 0;
+	int32 Fun103831c0Calls = 0;
+	int32 Fun10382bb0Calls = 0;
 };

@@ -120,4 +120,29 @@ public:
 	// the camper pass `0x10365a90`.)
 	double BachWarningTime = 0.0;           // +0x6694 m_flWarningTime, an absolute curtime
 	bool bBachShotLatch = false;            // +0x66a4, the unnamed byte the snipe arm sets to 1
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66a4 CNPC_VBach` (walked; no datamap name): the sniper-wait latch `StartTask` `0x103645a0`
+	 *  tasks `0x34`/`0x35`/`0xb0`/`0xb1`/`0x14a`/`0x151` raise and clear. */
+	bool bBachSniperWait = false;
+	/** `+0x66a1 m_bBachInStartingPosition`, `+0x66a2 m_bSkipToWarning`, `+0x6698 m_flSkipToWarningTime`,
+	 *  `+0x6694 m_flWarningTime`, `+0x6674 m_iWasOccluded`, `+0x6678 m_iReusedOccludeCount` (datamap) --
+	 *  the sniper-wait words `StartTask` reads and writes. (Each rebinds its species shape map `ABSENT`
+	 *  row.) */
+	bool bBachInStartingPosition = false;
+	bool bBachSkipToWarning = false;
+	float BachSkipToWarningTime = 0.f;
+	double BachWarningTime = 0.0;
+	int32 BachWasOccluded = 0;
+	int32 BachReusedOccludeCount = 0;
+	/** SEAMS for the calls `StartTask` makes that no port body answers: the enemy feat-row value
+	 *  (`0x101e56e0`), the type-3 stat list's `SetBase`, the holy-light equip `0x103656a0`, and the
+	 *  active weapon's `+0x518` / `+0x4f0`. See the definitions. */
+	int32 BachEnemyFeatValue(int32 FeatId, const FElysiumEntity* Enemy) const;
+	void BachSetType3StatBase(int32 StatId, int32 Value);
+	void FUN_103656a0();
+	TArray<FIntPoint> BachType3StatWrites;
+	int32 Fun103656a0Calls = 0;
+	int32 BachWeaponVtable518Calls = 0;
+	int32 BachWeaponVtable4f0Calls = 0;
 };

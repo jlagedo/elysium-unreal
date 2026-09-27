@@ -102,4 +102,15 @@ public:
 	// --- Lane L05 (story 8 RunTask19): `TASK 0x14e` hands `CreateCorpse` L06's two words above
 	// (`+0x6680 m_vecDeathForceVector`, `+0x668c m_DeathDamageInfo`); the rebase onto Select19
 	// dropped this lane's copies.
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66e4`, no datamap name: the feeding variant `StartTask` `0x103dfd80` task `0x153` switches on
+	 *  (1 -> `0x1098`, 2 -> `0x109b`, 3 -> `0x109e`). Its writer is unrecovered (`vtmb_readers 0x66e4`
+	 *  answers none); 0 keeps `m_Activity`. */
+	int32 ZombieFeedVariant = 0;
+	/** SEAM for the player's slot 425, `CBasePlayer::BeFedOnByZombie` `0x10168700`, which task `0x152`
+	 *  calls with this zombie. No port body starts a mode-8 grapple from the player side; counted and
+	 *  answers false (the refusal). */
+	bool ZombieBeFedOnByZombie(class FElysiumPlayer& Player);
+	int32 ZombieBeFedOnCalls = 0;
 };

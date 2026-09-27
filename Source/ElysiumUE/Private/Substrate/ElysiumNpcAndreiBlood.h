@@ -109,4 +109,12 @@ public:
 	bool bAndreiForceTeleport = false;          // +0x66d4 m_bForceTeleport
 	// (`+0x66d8 m_iHitCounter` is L09's `AndreiHitCounter` above; the rebase onto Damage19 dropped
 	// this lane's copy.)
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66ce CNPC_VAndreiBlood::m_bTriggerUnhide` (datamap): `StartTask` `0x1035d1b0` task `0x14b`
+	 *  raises it on the unhide-at-hint arm. (Rebinds the species shape map's `ABSENT` row.) */
+	bool bAndreiTriggerUnhide = false;
+	/** `+0x66d0 CNPC_VAndreiBlood::m_fTeleportWaitStartTime` (datamap): task `0x156` stamps curtime.
+	 *  (Rebinds the species shape map's `ABSENT` row.) */
+	double AndreiTeleportWaitStartTime = 0.0;
 };

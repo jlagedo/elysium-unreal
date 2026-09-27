@@ -443,4 +443,22 @@ public:
 	 *  `Bip01_[RL]_ThrowingTenticle5`, then mode 3) `TASK 0x158` runs outside mode 3. **SEAM**: counted
 	 *  on family Misc19's `MingXiaoGrabCalls`, the one recorder for this address (L05 integration). */
 	void MingXiaoTentacleGrab();
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x6680 CNPC_VMingXiao::m_hRangedWeapon` (datamap): `StartTask` `0x10392d80` task `0x155`
+	 *  switches to it. (Rebinds the species shape map's `ABSENT` row.) */
+	FElysiumEntityHandle MingXiaoRangedWeapon;
+	/** `+0x6714 CNPC_VMingXiao::m_eLastLostTentacle` (datamap): task `0x15c` aims `hit_yaw` at its
+	 *  bone. (Rebinds the `ABSENT` row.) */
+	int32 MingXiaoLastLostTentacle = 0;
+	/** SEAMS for the `StartTask` helpers no row of this lane owns: `0x1039a750` (the transform),
+	 *  `0x10395ce0` (family Misc19's `BeginDefeatSequenceOnce`), `0x10398630` (a tentacle's bone
+	 *  position) and the `0x102c4310`/`0x102c42a0` emitters. */
+	void FUN_1039a750();
+	void MingXiaoBeginDefeatSequenceOnce();
+	bool MingXiaoTentacleBonePosition(int32 Tentacle, FVector& OutCm) const;
+	void MingXiaoEmitter(const TCHAR* Name, const TCHAR* Attachment);
+	int32 Fun1039a750Calls = 0;
+	int32 BeginDefeatSequenceOnceCalls = 0;
+	TArray<FString> MingXiaoEmitters;
 };

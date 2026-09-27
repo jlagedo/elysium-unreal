@@ -120,9 +120,10 @@ public:
 	/** SEAM for `0x100f8580(origin, 256.0)` — the nearest entity within 256 units the hunt tasks fall
 	 *  back to when there is no enemy. Unrecovered filter; answers null. */
 	FElysiumEntity* NearestHuntEntity() const;
-	/** SEAM for the active weapon's `+0x5d0` dispatch the attack tasks answer with (task `0x37`
-	 *  passes `(0xf18, 1, 1)`). Unreachable while `ActiveWeaponCapabilityWord` answers 0; answers 0. */
-	int32 WeaponAttackDispatch(bool bTask37);
+	/** SEAM for the active weapon's `+0x5d0` (slot 372) dispatch the attack tasks answer with. Every
+	 *  attack task passes `(0xf18, 1, 1)` -- the pushes precede the task-0x37 compare (0019/8 pass R).
+	 *  Unreachable while `ActiveWeaponCapabilityWord` answers 0; answers 0. */
+	int32 WeaponAttackDispatch(int32 Arg0, int32 Arg1, int32 Arg2);
 	/** SEAM for `0x10295460(this, act, false)` — the activity's sequence, `-1` when the model has none.
 	 *  The port's activity vocabulary is names, not retail ids (`RestartIdealActivityId`), so it
 	 *  answers -1. */

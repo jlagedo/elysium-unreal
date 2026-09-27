@@ -37,6 +37,14 @@
 static constexpr EAutomationTestFlags GPlayerControllerTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
+/** A class-LOCAL task id as the GLOBAL id a schedule step carries -- the form every slot-442 body
+ *  translates back through slot 450 (0019/8 L04: `0x10375f50` switches on the local id). */
+static int32 PlayerControllerShadowTaskId(const FElysiumNpcBase& Npc, int32 LocalTask)
+{
+	const FElysiumLocalIdSpace* Space = Npc.IdSpace(EElysiumIdCategory::Task);
+	return Space != nullptr ? Space->LocalToGlobal(LocalTask) : LocalTask;
+}
+
 namespace
 {
 	// One world holding one body of `RetailClass`, built by its factory classname, and the player.
@@ -334,7 +342,7 @@ bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 	// Task 330's prologue and arm `0x10375f50`: owner present, `Replenish(1)` refused (the seam), so
 	// `m_bFailedGrapple = 1`.
 	FElysiumScheduleStep Step;
-	Step.TaskId = 0x14a;
+	Step.TaskId = PlayerControllerShadowTaskId(*Shadow, 0x14a);
 	Shadow->bFailedGrapple = false;
 	Shadow->StartTaskSlot442(&Step);
 	TestTrue(TEXT("task 330: a refused feed sets m_bFailedGrapple"), Shadow->bFailedGrapple);
@@ -696,7 +704,7 @@ bool FElysiumNpcKernelPlayerControllerShadowStartTaskTest::RunTest(const FString
 	AddExpectedError(TEXT("TaskFail 0x1f"), EAutomationExpectedErrorFlags::Contains, 0);
 	for (const int32 Task : { 0x34, 0x35, 0x36, 0x37, 0x3e, 0x3f })
 	{
-		Step.TaskId = Task;
+		Step.TaskId = PlayerControllerShadowTaskId(*Shadow, Task);
 		Shadow->BaseScheduleHost.FailureReason = 0;
 		Shadow->LastAttackTime = -1.0;
 		Shadow->StartTaskSlot442(&Step);
@@ -706,7 +714,7 @@ bool FElysiumNpcKernelPlayerControllerShadowStartTaskTest::RunTest(const FString
 	}
 
 	// Task 330 `TASK_VFRENZYSHADOW_ATTEMPT_FEED`: with no owning player neither word moves.
-	Step.TaskId = 0x14a;
+	Step.TaskId = PlayerControllerShadowTaskId(*Shadow, 0x14a);
 	Shadow->SetOwnerEntity(FElysiumEntityHandle::Invalid());
 	Shadow->bFailedGrapple = false;
 	Shadow->StartTaskSlot442(&Step);

@@ -97,4 +97,18 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** SEAMS for the calls `StartTask` `0x103aec70` makes that no port body answers: the named emitters
+	 *  (`0x102c41b0`), `CBaseCombatCharacter::ChooseBestMeleeWeapon` (`0x1000600a`), the weapon's
+	 *  show-and-solidify half, the stand hull trace's `startsolid`, and
+	 *  `MatchOriginAnglesToAnimation("bip01", 1, 1)`. See the definitions. */
+	void SheriffCreateEmitter(const TCHAR* Name, const FVector& PositionUnits);
+	void SheriffChooseBestMeleeWeapon();
+	void ShowAndSolidifyWeapon(const FElysiumEntityHandle& Weapon);
+	bool SheriffStandTraceStartSolid() const;
+	TArray<FTeleportEmitterPlacement> SheriffEmitterPlacements;
+	TArray<FHideAndUnsolidifyCall> ShowAndSolidifyCalls;
+	TArray<FMatchOriginAnglesCall> SheriffMatchOriginAnglesCalls;
+	int32 ChooseBestMeleeWeaponCalls = 0;
 };

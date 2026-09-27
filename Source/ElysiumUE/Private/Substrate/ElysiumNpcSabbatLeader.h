@@ -173,4 +173,15 @@ public:
 	/** `_DAT_1093c33c`, the `.data` float `TASK 0x15c` compares `m_flCycle` against before the splash:
 	 *  33.0 / 60.0 = 0.55f, stored by the static initialiser `0x103a5870`. */
 	float SabbatLeaderSplashCycle() const;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66dc CNPC_VSabbatLeader::m_fWarningFinishTime` (datamap): `StartTask` `0x103a78c0` task
+	 *  `0x15e` arms it to curtime + 1.0. */
+	double SabbatWarningFinishTime = 0.0;
+	/** SEAMS for the calls `StartTask` makes that no port body answers: `StopSound` by name (task
+	 *  `0x158`) and the named emitter `0x102c41b0` (task `0x163`). */
+	void SabbatStopSound(int32 Channel, const TCHAR* Wav);
+	void SabbatCreateEmitter(const TCHAR* Name, const FVector& PositionUnits);
+	TArray<FString> SabbatStoppedSounds;
+	TArray<FTeleportEmitterPlacement> SabbatEmitterPlacements;
 };

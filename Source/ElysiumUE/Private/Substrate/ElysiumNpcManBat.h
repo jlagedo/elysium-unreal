@@ -233,4 +233,31 @@ public:
 	/** The active weapon's slot 326 (`+0x518`, `PrimaryAttack`) `TASK 0x15a` fires. Counted. */
 	int32 ManBatWeaponAttacks = 0;
 	virtual bool OverrideMove(float Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66b4 CNPC_VManBat::m_flCoastTimer` (datamap): `StartTask` `0x1038c390` task `0x163` arms it
+	 *  to curtime + 1.0. */
+	double ManBatCoastTimer = 0.0;
+	/** The words `StartTask` writes on every flight arm: the secure mode word (both the encoded
+	 *  `+0x6670` and the port's decoded carrier) and `m_iMoveGoalNodeID` (both port carriers). */
+	void ManBatSetMode(int32 Mode);
+	void ManBatSetMoveGoalNodeId(int32 NodeId);
+	/** `0x102d1af0(this, 20000, type, 5000.0, 0, 0)` into `m_pFlyNode` (+0x6688). */
+	FElysiumEntity* ManBatFindFlyNode(int32 HintType);
+	/** `CBaseEntity::SetAbsVelocity` in SOURCE units. */
+	void ManBatSetAbsVelocityUnits(const FVector& VelocityUnits);
+	/** SEAMS for the ManBat helpers `StartTask` calls and no row of this lane owns: `0x1038e720` (the
+	 *  flap selector), `0x1038c250`, `0x1038f660`, `0x1038c170`, `0x1038fc80`, `0x1038fd40`. */
+	void FUN_1038e720(const FVector& VelocityUnits);
+	void FUN_1038c250(FElysiumEntity* FlyNode);
+	void FUN_1038f660();
+	void FUN_1038c170(int32 Mode);
+	void FUN_1038fc80();
+	void FUN_1038fd40();
+	TArray<FVector> ManBatFlapSelectorCalls;
+	TArray<int32> ManBatFlightSwitchCalls;
+	int32 Fun1038c250Calls = 0;
+	int32 Fun1038f660Calls = 0;
+	int32 Fun1038fc80Calls = 0;
+	int32 Fun1038fd40Calls = 0;
 };

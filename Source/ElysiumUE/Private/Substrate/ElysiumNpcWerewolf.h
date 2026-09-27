@@ -604,4 +604,9 @@ public:
 	// `0x103d3c20` directly (the lane-L12 block above; the L05 seams were redirected at L12's
 	// integration). The `TASK 0x14c` ConVar (`DAT_1093f9a4`) is `werewolf_force_teleport`, read
 	// through `WerewolfForceTeleportConVar` above.
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x6710` -- set by task `0x14a` to whether the closest player's character template is
+	 *  `Player_Malkavian`. Not in the datamap; name from the packet walk (`m_bPlayerIsMalkavian`). */
+	bool bWerewolfPlayerIsMalkavian = false;
 };

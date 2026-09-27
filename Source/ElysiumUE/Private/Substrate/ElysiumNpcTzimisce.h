@@ -224,4 +224,15 @@ public:
 	/** `+0x66a8 m_flTaskFailTimer` (absolute curtime), which `TASK 0xc9` waits out. **SEAM** word: its
 	 *  writer (`CNPC_VTzimisce::StartTask`) is lane L04's. */
 	double TzimisceTaskFailTimer = 0.0;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x66a8 CNPC_VTzimisce::m_flTaskFailTimer` (datamap): `StartTask` `0x103ba7c0` task `0xc9` arms
+	 *  it to curtime + 1.0 when the grab gate refuses. (Rebinds the species shape map's `ABSENT` row.) */
+	double TzimisceTaskFailTimer = 0.0;
+	/** SEAMS for `0x103bf440` (the carry facing) and `0x103bf660` (the pounce hull check, answers true);
+	 *  see the definitions. Neither is this lane's row. */
+	void FUN_103bf440();
+	bool FUN_103bf660();
+	int32 Fun103bf440Calls = 0;
+	int32 Fun103bf660Calls = 0;
 };

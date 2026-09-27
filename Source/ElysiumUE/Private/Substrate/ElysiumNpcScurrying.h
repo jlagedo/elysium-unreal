@@ -74,4 +74,18 @@ public:
 	virtual void GatherConditions() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
+
+	// --- 0019/8 L04 (StartTask19 species): private helpers ---
+	/** `+0x667c`, no datamap name: the remembered scarer handle `StartTask` `0x103ac740` task `0x14a`
+	 *  flees from. Its producer is `GatherConditions` `0x103ac4f0` (family Conditions19's row, which
+	 *  stores the repick or `0xffffffff` here); until that lands nothing writes it. */
+	FElysiumEntityHandle ScurryingScarer;
+	/** `+0x6680`/`+0x6684`/`+0x6688`, no datamap name: the cached flee-from point task `0x14a` uses when
+	 *  the scarer does not resolve. No recovered writer in the corpus's field ledger; cm, as every port
+	 *  position is. */
+	FVector ScurryingScarePointCm = FVector::ZeroVector;
+	/** `+0x668c`, no datamap name: the scare's expiry stamp (curtime) task `0x14a` refuses past. No
+	 *  recovered writer (`vtmb_readers 0x668c` answers none typed); 0 until one lands, which makes a
+	 *  scarer-less flee refuse. */
+	double ScurryingScareExpiry = 0.0;
 };

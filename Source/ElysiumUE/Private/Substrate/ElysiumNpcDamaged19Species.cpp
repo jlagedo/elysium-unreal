@@ -48,8 +48,5 @@ void FElysiumNpcWerewolf::NPCThink()
 	FElysiumNpcBaseBoss::NPCThink();
 }
 
-// STORY8-FORWARD slot 442 0x10371b70 CNPC_VCop::StartTaskSlot442 — forwarding stub, not the port; the porter replaces this body.
-int32 FElysiumNpcCop::StartTaskSlot442(void* Arg0)
-{
-	return FElysiumNpcHumanCombatant::StartTaskSlot442(Arg0);
-}
+// `0x10371b70 CNPC_VCop::StartTask` (slot 442) is ported by lane L04 in
+// `ElysiumNpcStartTask19Species.cpp`, beside the other species StartTask bodies.
