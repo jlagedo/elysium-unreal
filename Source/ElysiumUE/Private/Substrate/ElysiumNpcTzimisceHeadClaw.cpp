@@ -366,13 +366,6 @@ void FElysiumNpcTzimisceHeadClaw::Slot332(FElysiumEntity* SlowTarget)
 	}
 }
 
-// Slot 259: `0x103c1540`, the footstep body of `docs/vtmb/footsteps.md` §1.7; an id it does not
-// claim is a direct call into the base body.
-bool FElysiumNpcTzimisceHeadClaw::HandleAnimEvent(const FElysiumAnimEvent& Event)
-{
-	return SpeciesFootstepAnimEvent(TEXT("npc_VTzimisceHeadClaw"), Event);
-}
-
 // --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---

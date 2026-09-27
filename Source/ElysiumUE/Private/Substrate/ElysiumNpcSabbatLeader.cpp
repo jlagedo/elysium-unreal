@@ -377,10 +377,10 @@ const TCHAR* FElysiumNpcSabbatLeader::SquadSlotName(int32 SlotEn)
 
 // Slot 620: `0x103aa5e0`, a virtual `CNPC_VSabbatLeader` introduces, inside a VPROF scope:
 // `RandomInt(0, 6)` (`PUSH 0x6` at `103aa6c9`) over the seven step wavs `0x1064c480`, one
-// `EmitSound` at volume 1.0 on `CHAN_BODY` (`PUSH 0x4` at `103aa6dd`). NOT an animation event --
-// `ElysiumFootsteps.cpp` records why this class is absent from the footstep species table: retail
-// drives it from the schedule tasks `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` /
-// `..._STOP_FOOTSTEP_SOUND`, which are unbuilt. This is the SOUND that task will play.
+// `EmitSound` at volume 1.0 on `CHAN_BODY` (`PUSH 0x4` at `103aa6dd`). Its callers are the class's
+// `HandleAnimEvent` (`0x103a7000`, anim events 0x802/0x803 at `0x103a7066`,
+// `ElysiumNpcMisc19Species.cpp`) and the schedule tasks `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` /
+// `..._STOP_FOOTSTEP_SOUND`.
 void FElysiumNpcSabbatLeader::FootstepSound()
 {
 	NpcKernelSoundsShared::SoundsEmitSpeciesWav(*this, GSabbatLeaderSteps, UE_ARRAY_COUNT(GSabbatLeaderSteps),

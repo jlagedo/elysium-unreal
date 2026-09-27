@@ -217,8 +217,13 @@ void FElysiumNpcBase::DisconnectFromSquad()
 {
 	// 0x1026d050: the refcount is real even while no named squad exists. R17 supplies
 	// the shared/global enemy-memory redirection; this host must not invent a local squad.
+	// `0x1026d05b`: only a count <= 0 leaves the squad (`0x1026d068` through `+0x5da4`, no port
+	// squad) and formats the `ClearMemory` reason DevMsg (`0x1026d08b`, debug text, absent); then
+	// `++m_iSquadDisconnected` (`0x1026d097`). Retail writes NO flag here: `D_DISCONNECT_SQUAD`
+	// (`m_bfAINPCFlags2` bit 23) is set by the callers that want it (the task at `0x102a536e`). The
+	// port's `NpcFlags.Set(D_DISCONNECT_SQUAD)` is deleted (story 8 L11 integration): it made every
+	// grapple (`0x1026cdc0`) and feed-begin (`0x1026cec0`) carry the bit.
 	++BaseScheduleHost.SquadDisconnected;
-	NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
 }
 
 void FElysiumNpcBase::ReconnectToSquad()
@@ -279,13 +284,11 @@ void FElysiumNpcBase::MakeOblivious(bool bOblivious)
 		//    slot and the lost-output effects all happen — an incapacitated NPC forgetting its enemy
 		//    is the same operation as any other forgetting, not a field poke.
 		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
-		// 2. Squad disconnect (`0x1026d050`: leave the squad, `++m_iSquadDisconnected`, and set
-		//    `D_DISCONNECT_SQUAD`).
+		// 2. Squad disconnect (`0x1026d050`: leave the squad and `++m_iSquadDisconnected`; it sets no
+		//    flag).
 		//
 		// SEAM (named, no substrate): this runtime has no squad object for an NPC to leave, so there
-		// is nothing to disconnect from. The flag is set because it is what the schedule-change clear
-		// and the scripted-scene teardown both look for, and because a squad layer that lands later
-		// must find the bit already correct rather than have to backfill it.
+		// is nothing to disconnect from.
 		DisconnectFromSquad();
 		// 3. The refcount and its bookkeeping bit.
 		AddOblivious();

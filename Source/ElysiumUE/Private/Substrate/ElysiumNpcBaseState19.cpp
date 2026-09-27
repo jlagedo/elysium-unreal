@@ -192,7 +192,7 @@ int32 FElysiumNpcBase::BaseSelectIdealState()
 			// `1026f91b`: `thunk_FUN_101e3d70(&DAT_10739a4c, this)` runs UNCONDITIONALLY at the
 			// end of this arm — the discipline manager's break-on-notice sweep, whose only other
 			// caller is `SetEnemy` (`0x10279a50`). It walks the entity's discipline bitmask at
-			// `+0xf34` and `RemoveEffect`s (`0x101e3af0`) every discipline whose record carries a
+			// `+0xeb4` (`0x101e3d7f`) and `RemoveEffect`s (`0x101e3af0`) every discipline whose record carries a
 			// non-zero byte at `+0x32`.
 			++SelectIdealStateDisciplineStripCalls;
 			return IdealStateRetail();

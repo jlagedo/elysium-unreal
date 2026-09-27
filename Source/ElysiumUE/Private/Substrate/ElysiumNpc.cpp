@@ -103,31 +103,6 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 	Sheet.ApplyTemplate(Resolved, Table, /*Effects*/ nullptr, EquipRules);
 }
 
-// --- `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the footstep arm --------------------------
-//
-// The four ids and nothing else yet. `docs/vtmb/footsteps.md` §1 is the recovery; the rules are
-// `Substrate/ElysiumFootsteps.h` and the sequencing is here, because the chain reads this NPC's
-// template, this NPC's motor and the world's gate.
-//
-// **The rest of retail's switch is not claimed here.** `0x10274e30` also handles 1003, 2021/2022,
-// 2040, 2070/2071 and 4150-4155; those still fall to `FElysiumCombatCharacter::HandleAnimEvent` and
-// then to the anim-event census, which is what keeps them on the work list.
-
-bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
-{
-	// Slot 259's species bodies are their classes' own overrides (story 5 step 3): `CNPC_VCamera`'s
-	// empty `0x10368ec0`, and the four footstep bodies of `docs/vtmb/footsteps.md` §1.7, each of
-	// which calls this body directly for an id its own switch does not claim.
-	if (ElysiumFootsteps::IsFootstepEvent(Event.Event))
-	{
-		// 2050/2051 -> `0x1026d460(this, 0)` "normal"; 2052/2053 -> mode 1 "heavy". The left/right in
-		// the id is carried past this point only for the species overrides — the shared chain
-		// re-chooses the foot with a coin flip.
-		return NpcStep(Event.Event, ElysiumFootsteps::IsHeavyFootstep(Event.Event));
-	}
-	return FElysiumScriptedCharacter::HandleAnimEvent(Event);
-}
-
 bool FElysiumNpc::SpeciesFootstepAnimEvent(const TCHAR* SpeciesClassname,
 	const FElysiumAnimEvent& Event)
 {
@@ -751,79 +726,6 @@ void FElysiumNpc::ReleaseScriptBody(const TCHAR* Reason)
 bool FElysiumNpc::IsFeedBusy() const
 {
 	return Dialogue.bInDialog || FElysiumCombatCharacter::IsFeedBusy();
-}
-
-bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
-	EElysiumGrappleType Type, int32 Position, bool bHolster)
-{
-	// `CAI_BaseNPCTroika::EnterGrappleState` (`0x102b5c00`), slot 379, whole and in order. There is
-	// NO grapple-type gate anywhere in it: the port's `Type == StealthKill` gate — story 25a's named
-	// divergence, the twin of the one 29d removed from `LeaveGrappleState` — is deleted here.
-
-	// 1. `102b5c06`–`102b5d29`: a NON-EMPTY queued-burn list (`m_QueuedBurnDamage` `+0x65a8`, count
-	//    `+0x65b4`, records of `0x4c` bytes — `CreateDamageEffects` `0x10330d00` is the producer) is
-	//    DISCHARGED INTO THE PARTNER and the grapple is REFUSED. Each record takes this NPC as both
-	//    attacker and inflictor, a hitbox of `RandomInt(0,1) ? 4 : 5`, and is handed to the
-	//    partner's `TakeDamage`. The list is left standing — retail neither empties nor rewinds it,
-	//    so the next attempt discharges it again.
-	if (QueuedBurnDamage.Num() > 0)
-	{
-		FElysiumEntity* const PartnerEntity = World != nullptr ? World->Resolve(Partner) : nullptr;
-		FElysiumCombatCharacter* const PartnerCharacter =
-			PartnerEntity != nullptr ? PartnerEntity->AsCombatCharacter() : nullptr;
-		for (const FElysiumDmg& Queued : QueuedBurnDamage)
-		{
-			FElysiumDmg Burn = Queued;
-			Burn.Source = Handle;                                   // 102b5c1d rec[0xb] = this
-			Burn.Inflictor = Handle;                                // 102b5c20 rec[10] = this
-			// `101c2a10(rec, hitbox)` — the coin is `RandomInt(0, 1)` and ZERO takes 5.
-			LastGrappleBurnHitbox =
-				ElysiumRng::Stream(EElysiumRngStream::Reaction).RandRange(0, 1) == 0 ? 5 : 4;
-			// SEAM: this runtime's damage packet carries no hit group, so the hitbox is recorded
-			// rather than written into the descriptor.
-			++GrappleBurnDischarges;
-			if (PartnerCharacter != nullptr)
-			{
-				PartnerCharacter->TakeDamage(Burn, this);            // 102b5c3c
-			}
-		}
-		return false;                                               // 102b5d29, list intact
-	}
-
-	// 2. `102b5d2c`: `CAI_BaseNPC::EnterGrappleState` (`0x1026cdc0`) UNCONDITIONALLY — `0x1026d130`
-	//    (SetEnemy(NULL), DisconnectFromSquad, `m_iIsOblivious++` with no MADE_OBLIVIOUS and no
-	//    incapacitation event), then the `m_OnGrappleBegin` output (`+0x5bd8`), then
-	//    `CBaseCombatCharacter::EnterGrappleState` (`0x10329760`), whose answer is the base's.
-	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
-	DisconnectFromSquad();
-	AddGrappleOblivious();
-	FireOutput(TEXT("OnGrappleBegin"), Partner);
-	if (!FElysiumCombatCharacter::EnterGrappleState(Partner, Role, Type, Position, bHolster))
-	{
-		return false;                                               // 102b5d29
-	}
-
-	// 3. `102b5d3d`: `IsInDialog` (`0x102c1170`) -> the dialogue stop (`0x102c0bb0`).
-	if (Dialogue.bInDialog)
-	{
-		StopDialogOnRemove();
-	}
-	// 4. `102b5d4f`: a LIVE `m_hCine` -> `CancelScript` (`0x101a8c30`), and then an IMMEDIATE
-	//    `SetState(m_IdealNPCState)` (`0x1026e340`) when the current state is not already it.
-	if (ScriptOwnerIsLive() && World != nullptr)
-	{
-		if (FElysiumEntity* const Owner = World->Resolve(ScriptOwner))
-		{
-			Owner->CancelScriptedSequenceForDialogue(Handle);       // 101a8c30
-		}
-		if (NpcStateRetail() != IdealStateRetail())
-		{
-			SetState(IdealStateRetail());                           // 1026e340
-		}
-	}
-	// 5. `102b5d1c`: `ClearSchedule` (`0x10280d30`), then TRUE.
-	ClearSchedule();
-	return true;
 }
 
 void FElysiumNpc::LeaveGrappleState()
@@ -2423,8 +2325,8 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 	{
 		// Mode 3, recovered: "assigns the goal entity as enemy, copies its target position, and
 		// injects native condition 0x54". The assignment goes through the ordinary `SetEnemy`
-		// transaction rather than writing the handle, so the last-enemy transfer, the LOS-episode
-		// reset and everything else an acquisition means all happen exactly once and in one place.
+		// transaction rather than writing the handle, so the last-enemy transfer and everything else
+		// `SetEnemy` (`0x10279a50`) does all happen exactly once and in one place.
 		FElysiumEntity* Goal = World ? World->Resolve(Order.Goal) : nullptr;
 		ElysiumNpcEnemy::SetEnemy(*this, Order.Goal);
 		if (Goal != nullptr)

@@ -56,6 +56,28 @@ bool FElysiumRelationships::SetEntity(const FElysiumEntityHandle& Target,
 	return true;
 }
 
+void FElysiumRelationships::AddEntityRelationship(const FElysiumEntityHandle& Target,
+	EElysiumRelationship Value, int32 Priority)
+{
+	// `0x10332ca0`. A stated relationship supersedes a derived row exactly as `SetEntity`'s does.
+	if (!Target.IsSet())
+	{
+		return;
+	}
+	if (FElysiumEntityRelationship* Existing = EntityRules.FindByPredicate(
+		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; }))
+	{
+		Existing->Value = Value;
+		Existing->Priority = Priority;
+	}
+	else
+	{
+		EntityRules.Add({ Target, Value, Priority });
+	}
+	DerivedRules.RemoveAll(
+		[&Target](const FElysiumDerivedRelationship& Row) { return Row.Target == Target; });
+}
+
 bool FElysiumRelationships::SetClass(const FString& Classname,
 	EElysiumRelationship Value, int32 Priority)
 {

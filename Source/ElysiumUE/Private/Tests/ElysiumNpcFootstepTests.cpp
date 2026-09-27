@@ -249,8 +249,11 @@ bool FElysiumNpcFootstepNormalTest::RunTest(const FString&)
 	}
 
 	// An id in no footstep arm still falls to the chain — the ornament band and then the census.
+	// 2070 (`0x816`) lies past both switches of `0x1029b290` / `0x10274e30` (the base's second jump
+	// table ends at `0x805`). The old 2040 is `0x7f8` NPC_PICKUP, which both bodies claim
+	// (`0x1029b2ee`, `0x10275242`) — corrected to retail.
 	TestFalse(TEXT("an unrelated id is not claimed by the footstep arm"),
-		Fixture.Walker->HandleAnimEvent(Ev(2040)));
+		Fixture.Walker->HandleAnimEvent(Ev(2070)));
 	return true;
 }
 
@@ -644,44 +647,17 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 		TestNull(TEXT("an empty classname has none either"),
 			ElysiumFootsteps::SpeciesFor(FString()));
 
-		const FElysiumFootstepSpecies* Ming = ElysiumFootsteps::SpeciesFor(TEXT("npc_vmingxiao"));
-		if (TestNotNull(TEXT("Ming Xiao's row resolves case-insensitively"), Ming))
-		{
-			TestEqual(TEXT("...and is Silent"),
-				static_cast<int32>(Ming->Policy), static_cast<int32>(EElysiumFootstepPolicy::Silent));
-			TestTrue(TEXT("...claiming 2050"),
-				ElysiumFootsteps::SpeciesClaims(*Ming, ElysiumFootsteps::EventWalkLeft));
-			// 2052/2053 are not in `0x10392a70`'s switch.
-			TestFalse(TEXT("...and leaving 2052 to the base handler"),
-				ElysiumFootsteps::SpeciesClaims(*Ming, ElysiumFootsteps::EventRunLeft));
-			FRandomStream Stream(3);
-			TestNull(TEXT("...and drawing no wav at all"),
-				ElysiumFootsteps::PickSpeciesWav(*Ming, ElysiumFootsteps::EventWalkLeft, Stream));
-		}
-
-		const FElysiumFootstepSpecies* Shark = ElysiumFootsteps::SpeciesFor(TEXT("npc_VHengeyokai"));
-		if (TestNotNull(TEXT("the Hengeyokai's row resolves"), Shark))
-		{
-			TestEqual(TEXT("its shake amplitude is 2.0"), Shark->ShakeAmplitude, 2.0f, 1e-4f);
-			TestEqual(TEXT("its frequency is 0.2"), Shark->ShakeFrequency, 0.2f, 1e-4f);
-			TestEqual(TEXT("its duration is 0.2 s"), Shark->ShakeDurationSeconds, 0.2f, 1e-4f);
-			TestEqual(TEXT("its radius is 1024"), Shark->ShakeRadiusUnits, 1024.f, 1e-3f);
-			// `0x1037fb60` is the only row whose switch covers all four ids.
-			TestTrue(TEXT("it claims the run pair too"),
-				ElysiumFootsteps::SpeciesClaims(*Shark, ElysiumFootsteps::EventRunRight));
-			TestEqual(TEXT("its pool is four stomps"), Shark->LeftWavs.Num(), 4);
-			TestTrue(TEXT("and the foot is not read — both sides are the same pool"),
-				Shark->RightWavs.GetData() == Shark->LeftWavs.GetData());
-		}
-
-		const FElysiumFootstepSpecies* Claw =
-			ElysiumFootsteps::SpeciesFor(TEXT("npc_VTzimisceHeadClaw"));
-		if (TestNotNull(TEXT("the head-claw's row resolves"), Claw))
-		{
-			TestEqual(TEXT("its shake amplitude is 1.3"), Claw->ShakeAmplitude, 1.3f, 1e-4f);
-			TestFalse(TEXT("and it leaves 2052 to the base"),
-				ElysiumFootsteps::SpeciesClaims(*Claw, ElysiumFootsteps::EventRunLeft));
-		}
+		// Story 8 lane L11 ported `CNPC_VMingXiao 0x10392a70`, `CNPC_VHengeyokai 0x1037fb60` and
+		// `CNPC_VTzimisceHeadClaw 0x103c1540` whole as their classes' slot-259 overrides
+		// (`ElysiumNpcMisc19Species.cpp`, `Elysium.Substrate.NpcKernelMisc19.SpeciesHandleAnimEvent`).
+		// Their rows here were port guesses retail contradicts: the Hengeyokai sends 0x804/0x805 to the
+		// Troika body (`0x1037fb6e`) rather than claiming the run pair, and the head claw emits its own
+		// sounds, not the runner's `+0x9ac` pools. The rows are gone; only the runner's remains.
+		TestNull(TEXT("Ming Xiao reads no row"), ElysiumFootsteps::SpeciesFor(TEXT("npc_VMingXiao")));
+		TestNull(TEXT("the Hengeyokai reads no row"),
+			ElysiumFootsteps::SpeciesFor(TEXT("npc_VHengeyokai")));
+		TestNull(TEXT("the head claw reads no row"),
+			ElysiumFootsteps::SpeciesFor(TEXT("npc_VTzimisceHeadClaw")));
 
 		const FElysiumFootstepSpecies* Runner =
 			ElysiumFootsteps::SpeciesFor(TEXT("npc_VTzimisceRunner"));
@@ -768,20 +744,14 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 			Fixture.Services.BodySounds[0].Volume, 0.85f, 1e-4f);
 	}
 
-	// --- The unbuilt screenshake, once per row --------------------------------------------------
+	// --- The unbuilt screenshake: the one remaining row raises none ----------------------------
+	// (The two `Shake` rows were the Hengeyokai's and the head claw's, now class overrides.)
 	{
 		ElysiumFootsteps::ResetUnimplementedShakeReports();
-		const FElysiumFootstepSpecies* Shark = ElysiumFootsteps::SpeciesFor(TEXT("npc_VHengeyokai"));
 		const FElysiumFootstepSpecies* Runner =
 			ElysiumFootsteps::SpeciesFor(TEXT("npc_VTzimisceRunner"));
-		if (Shark != nullptr && Runner != nullptr)
+		if (Runner != nullptr)
 		{
-			AddExpectedError(TEXT("UNIMPLEMENTED footstep screenshake"),
-				EAutomationExpectedErrorFlags::Contains, 1);
-			for (int32 i = 0; i < 5; ++i)
-			{
-				ElysiumFootsteps::ReportUnimplementedShake(*Shark);
-			}
 			// A row that raises no shake never warns, however often it steps.
 			for (int32 i = 0; i < 5; ++i)
 			{

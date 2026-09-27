@@ -303,7 +303,7 @@ void FElysiumNpc::RecordDetectedAttack(const FElysiumEntity* Attacker)
 	{
 		return;
 	}
-	const FElysiumEntity* Redirected = RedirectDetectedAttacker(Attacker);
+	const FElysiumEntity* Redirected = SummonerRedirect(const_cast<FElysiumEntity*>(Attacker)); // 0x102707d0
 	Senses.Memory.DetectedAttackAttacker =
 		Redirected != nullptr ? Redirected->Handle : FElysiumEntityHandle();
 	Senses.Memory.DetectedAttackTime = World != nullptr ? World->NowSeconds() : 0.0;

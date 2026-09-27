@@ -435,8 +435,8 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 		return false;
 	}
 
-	// A previous acquisition episode, so the last-enemy transfer and the latch reset are observable
-	// rather than vacuous.
+	// A previous acquisition episode, so the last-enemy transfer (and the absence of any latch reset)
+	// is observable rather than vacuous.
 	F.Guard->BaseMemory.Enemy = F.Victim->Handle;
 	F.Guard->Senses.Memory.bEnemyLosLatched = true;
 	F.Guard->Senses.Memory.EnemyLosFailures = 7;
@@ -449,11 +449,15 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 		F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...through SetEnemy, so the old handle went down the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.Victim->Handle);
-	TestFalse(TEXT("...and the previous LOS episode's latch was forgotten"),
+	// `SetEnemy` (`0x10279a50`) resets no LOS episode: it writes `m_hEnemy`, the last enemy
+	// (`0x10279b70`), slot 560 and the discipline sweep, and nothing else. The port's old body
+	// forgot the latch, the debounce and the occlusion flag here — port-invented; the episode is
+	// `GatherEnemyConditions`' (`0x10270b20`). Corrected to retail in the story 8 L11 integration.
+	TestTrue(TEXT("...and SetEnemy leaves the previous LOS episode's latch to the gather pass"),
 		F.Guard->Senses.Memory.bEnemyLosLatched);
 	TestEqual(TEXT("...along with its failure debounce"),
-		F.Guard->Senses.Memory.EnemyLosFailures, 0);
-	TestFalse(TEXT("...and its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
+		F.Guard->Senses.Memory.EnemyLosFailures, 7);
+	TestTrue(TEXT("...and its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
 
 	// "injects native condition 0x54".
 	TestTrue(TEXT("NEW_ENEMY (0x54) is injected"),
@@ -894,8 +898,13 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	{
 		F.Step(0.7 + 0.1 * i);
 	}
-	TestFalse(TEXT("the dead enemy is no longer committed"),
-		F.Guard->BaseMemory.Enemy.IsSet() && F.Guard->BaseMemory.Enemy == F.Victim->Handle);
+	// Retail's observable is slot 167 `GetEnemy()`: the removed victim's handle no longer resolves.
+	// `ChooseEnemy` (`0x10279dd0`) clears `m_hEnemy` only on its change work, and a script-assigned
+	// enemy never set the `m_afMemory` enemy bits (`0x1027a0ff` is their one writer), so no
+	// went-null (`0x10279e85`) fires and the stale handle stands, resolving null. The old assertion
+	// read the raw handle the port's guessed body used to clear — corrected to retail (story 8 L11).
+	TestNull(TEXT("the dead enemy is no longer committed (GetEnemy answers null)"),
+		static_cast<const FElysiumNpcBase&>(*F.Guard).GetEnemy());
 	TestFalse(TEXT("the mind has left combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 	TestTrue(TEXT("the parked patrol route owns the body again"),

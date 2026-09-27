@@ -160,12 +160,6 @@ void SetDefaultEyeOffset();
  *  Returns a retail `Activity` number — 9 `ACT_WALK` or 0x18 `ACT_SCRIPT_CUSTOM_MOVE`. */
 int32 GetScriptCustomMoveActivity() const;
 
-/** SEAM for `thunk_FUN_102707d0(entity)` (`0x102707d0`) — the type-3 redirect `RecordDetectedAttack`
- *  resolves its argument through: an entity whose `+0x98` combat-character pointer answers `3` at
- *  vtable `+0x228` is replaced by its vtable `+0x184`. Neither word exists on `FElysiumEntity`, so
- *  this answers the argument unchanged, which is retail's own fall-through. */
-const FElysiumEntity* RedirectDetectedAttacker(const FElysiumEntity* Candidate) const;
-
 /** SEAM for `thunk_FUN_102d12e0(hint)` — the hint's own yaw, which both `ApplyHintLeanOffset` and
  *  `FindTacticalHintNode` turn into a forward vector. Answers false. */
 bool HintYaw(int32 HintNode, float& OutYaw) const;

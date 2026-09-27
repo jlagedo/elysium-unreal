@@ -525,7 +525,7 @@ struct FElysiumNpcRegistrar
 		// `default_camera` and `WillTalk`, the opener takes their dialogue body session, and the arm
 		// it runs instead of the camera is `StartGrappleAttack(this, npc, 5)`, whose state lives on
 		// the combat character. Its own `EnterGrappleState` override (`CPayphone::vfunc379`
-		// `0x101aade0`, the receiver animation) is not built.
+		// `0x101aade0`) is `FElysiumNpcPayphone::EnterGrappleState` (`ElysiumNpcMisc19Species.cpp`).
 		//
 		// A classname registered here supersedes its `ElysiumStubClasses.cpp` row, whichever
 		// registers first (`RegisterStub` answers null once an implementation owns the name).

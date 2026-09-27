@@ -823,11 +823,12 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 		FElysiumNpcWorldFixture::Quiet({ CameraNpc });
 	}
 
-	// Slot 259 through the vtable (story 5 step 3): an id no footstep or ornament arm claims (2040)
-	// falls to the chain and is unclaimed everywhere but on a camera, whose own empty override
-	// `0x10368ec0` swallows it.
+	// Slot 259 through the vtable (story 5 step 3): an id no footstep or ornament arm claims (2070,
+	// `0x816`, past both switches of `0x1029b290` / `0x10274e30`; the old 2040 is `0x7f8` NPC_PICKUP,
+	// claimed by both at `0x1029b2ee` / `0x10275242` — corrected to retail) falls to the chain and is
+	// unclaimed everywhere but on a camera, whose own empty override `0x10368ec0` swallows it.
 	FElysiumAnimEvent Unclaimed;
-	Unclaimed.Event = 2040;
+	Unclaimed.Event = 2070;
 	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
 	TestFalse(TEXT("so it swallows no anim events"), Troika->HandleAnimEvent(Unclaimed));
 	TestTrue(TEXT("npc_VCop builds CNPC_VCop"),

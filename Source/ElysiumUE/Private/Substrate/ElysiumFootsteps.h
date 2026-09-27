@@ -15,7 +15,7 @@
 // The recovery is `docs/vtmb/footsteps.md`; addresses are `vampire.dll` (image base `0x10000000`).
 //
 // TWO producers live above this file and neither knows about the other:
-//   * the NPC animation-event arm (`FElysiumNpc::HandleAnimEvent` -> `0x1026d460`), and
+//   * the NPC animation-event arm (`FElysiumNpcBase::HandleAnimEvent` `0x10274e30` -> `0x1026d460`), and
 //   * the player's millisecond step clock (`FElysiumPlayer::TickStepClock` -> `0x1011e940`),
 // which is why the shared vocabulary is here rather than on either of them.
 

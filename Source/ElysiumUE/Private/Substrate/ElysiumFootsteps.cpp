@@ -83,15 +83,6 @@ const FString* PickNpcWav(const FElysiumSurfaceSounds& Sounds, FRandomStream& St
 
 namespace
 {
-	// `CNPC_VHengeyokai`'s vfunc `+0x9a4` (`0x103817f0`): four stomps by `RandomInt(0, 3)`, one flat
-	// pool with no foot in it.
-	const TCHAR* const HengeyokaiStomps[] = {
-		TEXT("character/monster/hengeyokai/stomp_1.wav"),
-		TEXT("character/monster/hengeyokai/stomp_2.wav"),
-		TEXT("character/monster/hengeyokai/stomp_3.wav"),
-		TEXT("character/monster/hengeyokai/stomp_4.wav"),
-	};
-
 	// The Tzimisce vfunc `+0x9ac` (`0x103c4160`): `foot_steps_{1,2}` or `{3,4}` by the flag the
 	// caller passes, then `RandomInt(0, 1)` inside the chosen pair.
 	//
@@ -117,47 +108,14 @@ namespace
 		TEXT("character/monster/TC_Runner/Breath4.wav"),
 	};
 
-	// The table. Four rows, all live: story 5 step 2 registered `npc_VMingXiao`, `npc_VHengeyokai`
-	// and `npc_VTzimisceHeadClaw` beside `npc_VTzimisceRunner`.
+	// The table. One row: `CNPC_VTzimisceRunner`'s. The three other event-driven species bodies
+	// (`CNPC_VMingXiao 0x10392a70`, `CNPC_VHengeyokai 0x1037fb60`, `CNPC_VTzimisceHeadClaw
+	// 0x103c1540`) are ported whole as their classes' slot-259 overrides in
+	// `ElysiumNpcMisc19Species.cpp` (story 8 lane L11) and read no row here.
 	//
-	// `CNPC_VSabbatLeader::FootstepSound 0x103aa5e0` is deliberately NOT a row: its step is not an
-	// animation event at all. It is driven by the schedule tasks
-	// `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` / `..._STOP_FOOTSTEP_SOUND`, so its seam belongs to
-	// the schedule runner (`Substrate/ElysiumSchedule.h`'s task switch), not to `HandleAnimEvent`.
-	// TODO(footsteps): when the Sabbat leader's schedule lands, those two tasks play
-	// `character/monster/andrei_transfo*` with `RandomInt(0, 6)` at volume 0.8-1.0, and a stop.
+	// `CNPC_VSabbatLeader::FootstepSound 0x103aa5e0` is not a row either: its anim-event caller is the
+	// class's own slot-259 body (`0x103a7000`, 0x802/0x803), also in `ElysiumNpcMisc19Species.cpp`.
 	const FElysiumFootstepSpecies GSpeciesTable[] = {
-		// `CNPC_VMingXiao::HandleAnimEvent 0x10392a70` — 2050/2051 swallowed, silent. 2052/2053 are
-		// not in its switch and reach the base.
-		FElysiumFootstepSpecies{
-			TEXT("npc_VMingXiao"), TEXT("CNPC_VMingXiao"), TEXT("0x10392a70"),
-			EElysiumFootstepPolicy::Silent, /*bClaimsRun*/ false,
-			0.0f, 0.0f, 0.0f, 0.0f,
-			TArrayView<const TCHAR* const>(), TArrayView<const TCHAR* const>(),
-			TArrayView<const TCHAR* const>() },
-
-		// `CNPC_VHengeyokai::HandleAnimEvent 0x1037fb60` — in SHARK FORM, all four ids: a screenshake
-		// and the stomp pool. The form test is retail's own and this port has no shapeshift state to
-		// make it, so the row would be unconditional the day the class exists; stated in
-		// `docs/vtmb/footsteps.md` §1.9.
-		FElysiumFootstepSpecies{
-			TEXT("npc_VHengeyokai"), TEXT("CNPC_VHengeyokai"), TEXT("0x1037fb60"),
-			EElysiumFootstepPolicy::Shake, /*bClaimsRun*/ true,
-			/*amp*/ 2.0f, /*freq*/ 0.2f, /*dur*/ 0.2f, /*radius*/ 1024.0f,
-			TArrayView<const TCHAR* const>(HengeyokaiStomps, UE_ARRAY_COUNT(HengeyokaiStomps)),
-			TArrayView<const TCHAR* const>(HengeyokaiStomps, UE_ARRAY_COUNT(HengeyokaiStomps)),
-			TArrayView<const TCHAR* const>() },
-
-		// `CNPC_VTzimisceHeadClaw::HandleAnimEvent 0x103c1540` — 2050/2051: shake plus the same
-		// `+0x9ac` pools the runner uses.
-		FElysiumFootstepSpecies{
-			TEXT("npc_VTzimisceHeadClaw"), TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c1540"),
-			EElysiumFootstepPolicy::Shake, /*bClaimsRun*/ false,
-			/*amp*/ 1.3f, /*freq*/ 0.2f, /*dur*/ 0.2f, /*radius*/ 1024.0f,
-			TArrayView<const TCHAR* const>(TzimisceLeftSteps, UE_ARRAY_COUNT(TzimisceLeftSteps)),
-			TArrayView<const TCHAR* const>(TzimisceRightSteps, UE_ARRAY_COUNT(TzimisceRightSteps)),
-			TArrayView<const TCHAR* const>(TzimisceBreaths, UE_ARRAY_COUNT(TzimisceBreaths)) },
-
 		// `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0` — 2050/2051 only, NO shake, the `+0x9ac`
 		// pools. The run pair falls through to the base handler.
 		FElysiumFootstepSpecies{

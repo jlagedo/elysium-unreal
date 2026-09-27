@@ -67,6 +67,12 @@ class FElysiumRelationships
 {
 public:
 	bool SetEntity(const FElysiumEntityHandle& Target, EElysiumRelationship Value, int32 Priority);
+	// `CBaseCombatCharacter::AddEntityRelationship` (`0x10332ca0`): the target's row is overwritten
+	// at ANY priority (disposition `row+8`, priority `row+0xc`), else a row is appended. Unlike
+	// `SetEntity`, a lower priority is not refused — the slot-598 forget routes (`0x102b4fe0`,
+	// `0x10372dd0`) write `(D_NU, 0)` over a higher hate row.
+	void AddEntityRelationship(const FElysiumEntityHandle& Target, EElysiumRelationship Value,
+		int32 Priority);
 	bool SetClass(const FString& Classname, EElysiumRelationship Value, int32 Priority);
 
 	// Install or refresh the derived row toward `Target`, expiring at the absolute `ExpiresAt`.

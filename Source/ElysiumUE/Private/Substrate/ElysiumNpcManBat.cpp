@@ -816,8 +816,10 @@ void FElysiumNpcManBat::ManBatStartScreechCone(FElysiumEntity* ConeTarget)
 	}
 	// `1038ea60`: `UTIL_ScreenShake(slot 220 GetOrigin(), 2.5, 0.2, 3.0, 0.0, 0, 0)` around MY OWN
 	// origin — `vt+0x370` is slot 220 on `this`, not on the target.
-	ScreenShakeCalls.Add(FScreenShakeCall{ Origin / ElysiumMove::U, GManBatShakeAmplitude,
-		GManBatShakeFrequency, GManBatShakeDuration, GManBatShakeRadius });
+	// The one `UTIL_ScreenShake` (`0x101cdba0`) recorder, `RecordAnimEventShake`
+	// (`ElysiumNpcMisc19.inl`); `(…, 0, 0)` is no air shake.
+	RecordAnimEventShake(Origin / ElysiumMove::U, GManBatShakeAmplitude, GManBatShakeFrequency,
+		GManBatShakeDuration, GManBatShakeRadius, false);
 
 	// `1038ea69`: `param_1[0x27]` is `+0x9c`, the target's combat-character self-downcast — null for
 	// anything that is not a combat character, and the whole rest of the body is gated on it.

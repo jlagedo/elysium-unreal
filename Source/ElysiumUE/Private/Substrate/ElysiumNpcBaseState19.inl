@@ -27,11 +27,11 @@ int32 SelectIdealStateScriptExitCalls = 0;
 
 /** SEAM for `thunk_FUN_101e3d70(&DAT_10739a4c, this)`, the discipline manager's break-on-notice
  *  sweep at the end of `CAI_BaseNPC::SelectIdealState` case 3's hear arm (`1026f91b`). It walks
- *  `this +0xf34`'s discipline bitmask and `RemoveEffect`s (`0x101e3af0`) every discipline whose
+ *  `this +0xeb4`'s discipline bitmask (`FElysiumNpc::DisciplineFlags2`, read at `0x101e3d7f`) and `RemoveEffect`s (`0x101e3af0`) every discipline whose
  *  record carries a non-zero byte at `+0x32`. `FElysiumDisciplines` has no "strip the effects that
  *  break on notice" accessor — the break flag itself is unrecovered — so the sweep is counted and
- *  strips nothing. Its only other retail caller is `SetEnemy` (`0x10279a50`), which the port's
- *  `ElysiumNpcEnemy::SetEnemy` does not carry either. */
+ *  strips nothing. Its only other retail caller is `SetEnemy` (`0x10279a50`), counted there as
+ *  `SetEnemyDisciplineStripCalls` (`ElysiumNpcBaseMisc19.inl`). */
 int32 SelectIdealStateDisciplineStripCalls = 0;
 
 /** `m_NPCState` (`+0x5cc0`) as retail's raw id. Maps the typed mind when `SetState` has not

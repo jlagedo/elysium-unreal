@@ -40,12 +40,11 @@ int32 SetEnemyDisciplineStripCalls = 0;
  *  `0x102b4f6e`, `CNPC_VCop#596` `0x10372c5e`. */
 static FElysiumEntity* SummonerRedirect(FElysiumEntity* Entity);
 
-/** SEAM for `CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 `GetEnemies()`: walk the record
- *  list (`+0xc`, next `+0x38`), unlink and free the record whose handle (`+0x24`) resolves to the
- *  entity, reporting it through the list's `+0x0` vtable `+0xe0` or `0x103169a0` by the byte at
- *  `+8`. `FElysiumNpcEnemyMemory` keeps its records private and carries no removal, so the forget
- *  is counted here and removes nothing; a record-removal method on the store replaces this body.
- *  The `"%s(%d) :"` reason string retail formats for it is debug text and stays absent. */
+/** `CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 `GetEnemies()`: walk the record list
+ *  (`+0xc`, next `+0x38`), unlink and free the first record whose handle (`+0x24`) resolves to the
+ *  entity (`FElysiumNpcEnemyMemory::ClearMemory`). The notify through the list's `+0x0` vtable
+ *  `+0xe0` or `0x103169a0` (by the byte at `+8`) has no port target and stays absent; the calls
+ *  are counted for the tests. The `"%s(%d) :"` reason string retail formats is debug text. */
 void ClearEnemyMemoryRecord(FElysiumEntity* Entity);
 int32 ClearEnemyMemoryRecordCalls = 0;
 FElysiumEntityHandle LastClearedEnemyMemoryRecord;
@@ -80,16 +79,11 @@ int32 AnimEventLifeStateWord = 0;
 void EmitSoundScriptMisc19(const FString& SoundScript);
 TArray<FString> EmittedSoundScripts;
 
-/** SEAM for the four script-event arms spec 0003 owns: `AllowInterrupt` (`0x101a8890`, events
- *  0x3e9/0x3ea) and `FireScriptEvent` (`0x101a7230` on the cine, `0x102d09b0` on `m_pHintNode`,
- *  `0x102db3e0` on the Troika's interesting place; event 0x3eb). Recorded, not dispatched. */
-struct FAnimEventScriptSeamCall
-{
-	int32 Event = 0;
-	int32 Target = 0;     // 0 cine, 1 hint node, 2 interesting place
-	int32 Argument = 0;   // the allow flag, or `atoi(options)`
-};
-TArray<FAnimEventScriptSeamCall> AnimEventScriptSeamCalls;
+/** `0x102d09b0` (`CAI_Hint`'s anim-event output, retail name unrecovered): `0 < n < 9` fires the
+ *  hint's `OnAnimEvent<n>` (`+0x4e4 + 0x18n`) with this NPC as activator. `HintNode` is the port's
+ *  hint reference (the entity index). Callers: the base body's 0x3eb arm (`0x10274fd0`) and
+ *  `CNPC_VWerewolf::HandleAnimEvent`'s (`0x103d89d6`). Answers whether it fired. */
+bool FireHintAnimEvent(int32 HintNode, int32 N);
 
 /** SEAM for `CBaseCombatWeapon::OnPickedUp` (`0x10252c10`, weapon slot 341), which `0x7f8` runs on
  *  the weapon before `Weapon_Equip`: its `m_OnNPCPickup` output, weapon slot 225 and the solid-flag

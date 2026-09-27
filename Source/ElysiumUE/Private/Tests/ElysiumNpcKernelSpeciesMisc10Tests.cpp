@@ -607,13 +607,13 @@ bool FElysiumSpeciesMisc10ManBatConeTest::RunTest(const FString&)
 		TestEqual(TEXT("mode 1"), ManBat->EmitterCalls[0].AttachMode, 1);
 	}
 	TestEqual(TEXT("`1038ea33`: a null target does nothing else at all"),
-		ManBat->ScreenShakeCalls.Num(), 0);
+		ManBat->AnimEventShakeCalls.Num(), 0);
 
 	// `1038ea33`: a non-player target is refused too — the gate is `+0xa8`.
 	ManBat->EmitterCalls.Reset();
 	ManBat->ManBatStartScreechCone(F.Other);
 	TestEqual(TEXT("`1038ea33`: a non-player target takes no screen shake"),
-		ManBat->ScreenShakeCalls.Num(), 0);
+		ManBat->AnimEventShakeCalls.Num(), 0);
 
 	// The player pass.
 	ManBat->EmitterCalls.Reset();
@@ -621,14 +621,14 @@ bool FElysiumSpeciesMisc10ManBatConeTest::RunTest(const FString&)
 	ManBat->PushEntityCalls.Reset();
 	ManBat->ManBatSlowedExpire = 0.f;   // the DOUBLE 0.0 sentinel `_DAT_1044fab0`
 	ManBat->ManBatStartScreechCone(F.Player);
-	if (TestEqual(TEXT("`1038ea60`: one screen shake"), ManBat->ScreenShakeCalls.Num(), 1))
+	if (TestEqual(TEXT("`1038ea60`: one screen shake"), ManBat->AnimEventShakeCalls.Num(), 1))
 	{
-		TestEqual(TEXT("amplitude 2.5"), ManBat->ScreenShakeCalls[0].Amplitude, 2.5f, 0.0001f);
-		TestEqual(TEXT("frequency 0.2"), ManBat->ScreenShakeCalls[0].Frequency, 0.2f, 0.0001f);
-		TestEqual(TEXT("duration 3.0"), ManBat->ScreenShakeCalls[0].Duration, 3.0f, 0.0001f);
+		TestEqual(TEXT("amplitude 2.5"), ManBat->AnimEventShakeCalls[0].Amplitude, 2.5f, 0.0001f);
+		TestEqual(TEXT("frequency 0.2"), ManBat->AnimEventShakeCalls[0].Frequency, 0.2f, 0.0001f);
+		TestEqual(TEXT("duration 3.0"), ManBat->AnimEventShakeCalls[0].Duration, 3.0f, 0.0001f);
 		// The shake is centred on MY OWN slot-220 origin, not the target's.
 		TestEqual(TEXT("`1038ea52`: centred on the ManBat's own origin"),
-			ManBat->ScreenShakeCalls[0].CentreUnits.X, 0.0, 0.001);
+			ManBat->AnimEventShakeCalls[0].CentreUnits.X, 0.0, 0.001);
 	}
 	if (TestEqual(TEXT("`1038eb2c`: one push"), ManBat->PushEntityCalls.Num(), 1))
 	{

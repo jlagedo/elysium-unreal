@@ -24,6 +24,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses10Shared.h"
@@ -41,7 +42,7 @@ namespace
 	constexpr float Misc19AcquireHalfExtentZUnits = 128.0f;
 	// `0x102b4dcd`'s capacity argument: the query fills at most 32 entries.
 	constexpr int32 Misc19AcquireMaxCandidates = 0x20;
-	// `Disposition_t` `D_NU`, the literal slot 598 hands `AddEntityRelationship` (`0x102b4fe6`).
+	// `Disposition_t` `D_NU`, the literal slot 598 hands `AddEntityRelationship` (`0x102b4fe8`).
 	constexpr EElysiumRelationship Misc19ForgetDisposition = EElysiumRelationship::Neutral;
 }
 
@@ -92,12 +93,12 @@ void FElysiumNpc::AcquireNearestHatedTarget()
 	// `CAI_BaseNPCTroika::FUN_102b4cc0` `0x102b4cc0`, slot 595 — a possessed or frenzied body turns
 	// on the nearest hated, targetable, live entity in a box around it, then hands it to slot 596.
 	// It writes no NPC word of its own.
-	const FVector Origin = GetAbsOrigin();                                // 0x102b4d0d, slot 217
+	const FVector SelfOrigin = GetAbsOrigin();                                // 0x102b4d0d, slot 217
 	const FVector HalfCm(Misc19AcquireHalfExtentXUnits * ElysiumMove::U,
 		Misc19AcquireHalfExtentYUnits * ElysiumMove::U, Misc19AcquireHalfExtentZUnits * ElysiumMove::U);
-	const TArray<FElysiumEntity*> Candidates = AcquireTargetBoxQuery(Origin - HalfCm, Origin + HalfCm,
+	const TArray<FElysiumEntity*> Candidates = AcquireTargetBoxQuery(SelfOrigin - HalfCm, SelfOrigin + HalfCm,
 		Misc19AcquireMaxCandidates);                                       // 0x102b4dcd
-	// `0x102b4d50`: the running minimum starts at `FLT_MAX` and the winner at null.
+	// `0x102b4d33`: the running minimum starts at `FLT_MAX`; `0x102b4d50`: the winner at null.
 	float BestDistSq = TNumericLimits<float>::Max();
 	FElysiumEntity* Best = nullptr;
 	for (FElysiumEntity* const Candidate : Candidates)                    // 0x102b4ddb / 0x102b4e94
@@ -144,7 +145,7 @@ void FElysiumNpc::AcquireNearestHatedTarget()
 			continue;
 		}
 		// `0x102b4e46`-`0x102b4e85`: squared distance from OUR origin; strictly less replaces.
-		const float DistSq = static_cast<float>(FVector::DistSquared(Origin, Character->GetAbsOrigin()));
+		const float DistSq = static_cast<float>(FVector::DistSquared(SelfOrigin, Character->GetAbsOrigin()));
 		if (DistSq < BestDistSq)                                          // 0x102b4e7f
 		{
 			BestDistSq = DistSq;
@@ -193,22 +194,28 @@ void FElysiumNpc::Slot598(FElysiumEntity* Entity)
 	// 1. `CBaseCombatCharacter::AddEntityRelationship(entity, 4, 0)` — `D_NU`, priority 0, FIRST.
 	if (Entity != nullptr)
 	{
-		// Crash guard: a null entity adds no row (retail stores a null-keyed row nothing matches).
-		Relationships.SetEntity(Entity->Handle, Misc19ForgetDisposition, 0); // 0x102b4fed
+		// Crash guard: a null entity adds no row. (Retail's `0x10332ca0` walk matches the first row
+		// whose handle no longer resolves and overwrites it, appending a `-1` row only when none
+		// is stale; the port's store keeps no stale-keyed rows to match.) The write is
+		// unconditional — `SetEntity`'s lower-priority refusal is not retail's.
+		Relationships.AddEntityRelationship(Entity->Handle, Misc19ForgetDisposition, 0); // 0x102b4fed
 	}
 	// 2. Slot 167 `GetEnemy()` IS the entity -> `SetEnemy(NULL)`.
 	if (static_cast<const FElysiumNpcBase&>(*this).GetEnemy() == Entity)  // 0x102b4ff6 / 0x102b4ffe
 	{
 		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid()); // 0x102b5004
 	}
-	// 3. `m_hLastEnemy` (`+0x1a94`) resolving to the entity -> `0x10279b70(NULL)`.
+	// 3. `m_hLastEnemy` (`+0x1a94`) resolving to the entity -> `0x10279b70(NULL)`. The resolve's
+	//    0x102b5012 JZ (handle -1) and 0x102b502d JNZ (serial mismatch) both yield null, which
+	//    `World->Resolve` answers the same way.
 	FElysiumEntity* const Last = World != nullptr ? World->Resolve(BaseMemory.LastEnemy) : nullptr; // 0x102b5009 .. 0x102b502f
 	if (Last == Entity)                                                   // 0x102b5037
 	{
 		SetLastEnemy(nullptr);                                            // 0x102b503d
 	}
 	// 4. `CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 with the `"%s(%d) :"` reason
-	//    (`0x101d3730`, line `0x5511`, debug text).
+	//    (`0x101d3730`, line `0x5511`, debug text; the call 0x102b5051 formats that reason string,
+	//    which `ClearMemory` only carries for its debug trace, so the port has no line for it).
 	ClearEnemyMemoryRecord(Entity);                                       // 0x102b505f / 0x102b5067
 }
 
@@ -264,6 +271,9 @@ bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiu
 	}
 	// 4. A LIVE `m_hCine` (`+0x5d74`) -> `0x101a8c30` on it, then `SetState(m_IdealNPCState)`
 	//    (`0x1026e340`) when the current state is not already it.
+	// Liveness: 0x102b5cae JZ (handle -1), 0x102b5cce JNZ (serial mismatch), 0x102b5cd3 JZ (null
+	// table entry). The re-resolve at 0x102b5cd5 (its 0x102b5cde JZ -1 and 0x102b5cf5 JNZ serial
+	// tests, both to a null `this`) cannot fail after that check; the `Resolve` below stands for it.
 	if (ScriptOwnerIsLive() && World != nullptr)                          // 0x102b5cae .. 0x102b5cd3
 	{
 		if (FElysiumEntity* const Owner = World->Resolve(ScriptOwner))
@@ -315,7 +325,7 @@ namespace
 			{
 				++P;
 			}
-			const TCHAR* const Start = P;
+			const TCHAR* const FieldStart = P;
 			if (*P == TEXT('+') || *P == TEXT('-'))
 			{
 				++P;
@@ -355,7 +365,7 @@ namespace
 					}
 				}
 			}
-			const FString Token = FString::ConstructFromPtrSize(Start, static_cast<int32>(P - Start));
+			const FString Token = FString::ConstructFromPtrSize(FieldStart, static_cast<int32>(P - FieldStart));
 			*Field = static_cast<float>(FCString::Atod(*Token));
 			Cursor = P;
 			++Count;
@@ -366,8 +376,6 @@ namespace
 	// `0x1029b58f`-`0x1029b5a7`: the `sscanf` defaults.
 	constexpr float Misc19ExpressionDefaultTotal = 1.0f;
 	constexpr float Misc19ExpressionDefaultFade = 0.2f;
-	// `_DAT_104493d0` = 0.1 (double), the `0x80d` hold's pad.
-	constexpr float Misc19ExpressionHoldPad = 0.1f;
 	// `TASK_DO_INTEREST_ACTIVITY`, the class-local task id `0x1029b70d` / `0x1029b817` compare.
 	constexpr int32 Misc19TaskDoInterestActivity = 0xb4;
 	// The PAS `EmitSound` soundlevel every sound arm here passes (`0x42`, 66 dB).
@@ -392,6 +400,18 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 			== Misc19TaskDoInterestActivity;
 	IElysiumAudio* const Audio = World != nullptr ? World->Audio() : nullptr;
 
+	// Dispatch: `0x1029b2b0` JG (> 0x80c -> `0x1029b668`, where `0x1029b66e` JG sends > 0x1039 to
+	// `0x1029b7f1` (`0x1029b803` JG past 0x103b -> base) and `0x1029b68e` JLE sends <= 0x1035 to the
+	// base); `0x1029b2c5` JA (id - 0x7d5 > 0x23 -> base) and the table jump `0x1029b2d3` through the
+	// byte table `0x1029b990` into `0x1029b97c`. Every sound arm below builds a
+	// `CPASAttenuationFilter` around slot 222 `EyePosition` (`vt+0x378`) and tears it down after the
+	// emit; the port's sound request carries the sample, volume, level and channel, the filter being
+	// the Source server's recipient set: `0x7d5` `0x1029b3d2` / `0x1029b3de` / `0x1029b3f0` /
+	// `0x1029b40b` / `0x1029b416`, edict `0x1029b42a`, origin `0x1029b44b`; the stop arm `0x1029b729` /
+	// `0x1029b735` / `0x1029b747` / `0x1029b762` / `0x1029b76d`, edict `0x1029b781`, origin
+	// `0x1029b7a2`, teardown (shared with `0x7d5`) `0x1029b7c5` / `0x1029b7ce` / `0x1029b7df`; the
+	// interesting-place arm `0x1029b8a7` / `0x1029b8b3` / `0x1029b8c5` / `0x1029b8e0` / `0x1029b8eb`,
+	// edict `0x1029b8ff`, origin `0x1029b921`, teardown `0x1029b94f` / `0x1029b958` / `0x1029b969`.
 	switch (Event.Event)
 	{
 	case 0x80c:                                                           // 0x1029b2b6
@@ -406,21 +426,25 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		{
 			return true;
 		}
-		if (!(Total > 0.f))                                               // 0x1029b5d9 (<= 0 or unordered)
+		// `0x1029b5cc FCOMP float ptr [0x104454c4]` — the image's 0.0 cell.
+		if (!(Total > ElysiumNpcTunables::Zero))                          // 0x1029b5d9 (<= 0 or unordered)
 		{
 			return true;
 		}
-		if (Out + In > Total)                                             // 0x1029b5f2
+		// The x87 keeps the sum and the ratio at extended precision and rounds only at each store
+		// (`0x1029b5fe` / `0x1029b606` / `0x1029b629`); double stands for the 80-bit register.
+		const double Sum = static_cast<double>(Out) + static_cast<double>(In); // 0x1029b5df / 0x1029b5e3
+		if (Sum > static_cast<double>(Total))                             // 0x1029b5e7 / 0x1029b5f2
 		{
-			const float Ratio = Total / (Out + In);                       // 0x1029b5f4
-			In *= Ratio;
-			Out *= Ratio;
+			const double Ratio = static_cast<double>(Total) / Sum;        // 0x1029b5f4 FDIVR
+			In = static_cast<float>(static_cast<double>(In) * Ratio);     // 0x1029b5fc / 0x1029b5fe
+			Out = static_cast<float>(static_cast<double>(Out) * Ratio);   // 0x1029b602 / 0x1029b606
 		}
-		float Hold = Total - (Out + In);                                  // 0x1029b616
-		if (!(Hold > 0.f))                                                // 0x1029b627
-		{
-			Hold = 0.f;
-		}
+		const double HoldWide = static_cast<double>(Total)
+			- (static_cast<double>(Out) + static_cast<double>(In));       // 0x1029b60e .. 0x1029b616
+		// `0x1029b61a FCOM float ptr [0x104454c4]`.
+		const float Hold = HoldWide > static_cast<double>(ElysiumNpcTunables::Zero)
+			? static_cast<float>(HoldWide) : ElysiumNpcTunables::Zero;    // 0x1029b627 / 0x1029b629 / 0x1029b631
 		SetExpressionMisc19(Name, 0.f, In, Hold, Out, 1.f);               // 0x1029b656
 		return true;
 	}
@@ -448,7 +472,7 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		Dmg.BaseDamage = 1;                                               // 0x1029b495 m_iDiceAmt
 		Dmg.ExtraInput = 1;                                               // 0x1029b499 m_iToHitSuccesses
 		FElysiumEntity* const Closest =
-			World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr; // 0x1029b487 .. 0x1029b4bc
+			World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr; // 0x1029b487 .. 0x1029b4bc (-1 0x1029b49d, serial 0x1029b4ba)
 		FElysiumTakeDamageInfo Info;                                      // 0x1029b4dc 0x101c26d0
 		Info.Dmg = &Dmg;
 		Info.Attacker = Closest != nullptr ? Closest->Handle : FElysiumEntityHandle::Invalid();
@@ -457,24 +481,27 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		Info.AmmoType = INDEX_NONE;
 		// `0x1029b4e9` `0x101c2a90(1)`: `CTakeDamageInfo +0x48 := 1`. SEAM: the packet has no such
 		// field; the flag's meaning is unrecovered.
-		// `0x1029b4ee`-`0x1029b546`: on the first stat list whose `+0x10` is 0 (the sheet),
+		// `0x1029b4ee`-`0x1029b546`: on the first stat list whose `+0x10` is 0 (the sheet; the walk
+		// `0x1029b4f8` / `0x1029b508` / `0x1029b510`, with the static empty list's one-time
+		// construction `0x1029b519` / `0x1029b529` / `0x1029b533` as its fallback),
 		// `SetBaseToStatValue(0xf, 0x11)` — wounds taken := max health.
 		Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health,
 			TypedStatValue(0, ElysiumSlot::MaxHealth));
 		RecomputeSheet();
 		Event_Killed(&Info);                                              // 0x1029b557, slot 144
 		Event_Dying();                                                    // 0x1029b561, slot 403
-		return true;
+		return true;                                                      // 0x1029b56b the CVDmg_t destructor
 	}
 	case 0x7e5:                                                           // 0x1029b2da
-		// `0x10293d70`: `m_afMemory &= ~0x2000` (the turn-finished bit).
+		// `0x1029b2dc` -> `0x10293d70`: `m_afMemory &= ~0x2000` (the turn-finished bit).
 		BaseScheduleHost.MemoryBits &= ~0x2000u;
 		return true;
 	case 0x7f8:                                                           // 0x1029b2ee
 	{
 		// NPC_PICKUP: `m_hTargetEnt` (`+0x5ce4`) as a `CBaseCombatWeapon` (every VtMB item is one).
-		FElysiumEntity* const Target = World != nullptr ? World->Resolve(GetTarget()) : nullptr;
-		FElysiumItem* const Item = Target != nullptr ? Target->AsItem() : nullptr; // 0x1029b32b
+		// -1 (`0x1029b2f7`) or a stale serial (`0x1029b314`) resolves null.
+		FElysiumEntity* const PickupTarget = World != nullptr ? World->Resolve(GetTarget()) : nullptr;
+		FElysiumItem* const Item = PickupTarget != nullptr ? PickupTarget->AsItem() : nullptr; // 0x1029b32b
 		if (Item == nullptr)                                              // 0x1029b337
 		{
 			TaskFailText(TEXT("Weapon stolen by someone else"));          // 0x1029b3b3
@@ -483,7 +510,7 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		// `0x102521f0`: the weapon's owner (`+0x88c`) resolves to a combat character — this NPC
 		// included.
 		const FElysiumEntity* const Owner = World->Resolve(Item->Owner);
-		if (Owner != nullptr && Owner->AsCombatCharacter() != nullptr)   // 0x1029b344
+		if (Owner != nullptr && Owner->AsCombatCharacter() != nullptr)   // 0x1029b33b / 0x1029b344
 		{
 			TaskFailText(TEXT("Weapon in use by someone else"));          // 0x1029b34d
 			return true;
@@ -504,7 +531,9 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 			return true;
 		}
 		// `SequenceDuration(m_nSequence) * m_flCycle + 0.1` — the time ELAPSED in the sequence.
-		const float Hold = SequenceDurationOf(SequenceNumber) * SequenceCycle + Misc19ExpressionHoldPad;
+		// `0x1029b6db FADD double ptr [0x104493d0]` — the image's 0.1 DOUBLE, added at x87 width.
+		const float Hold = static_cast<float>(static_cast<double>(SequenceDurationOf(SequenceNumber))
+			* static_cast<double>(SequenceCycle) + ElysiumNpcTunables::TenthDouble); // 0x1029b6c6 .. 0x1029b6e1
 		SetExpressionMisc19(Event.Options, 0.f, 0.f, Hold, 0.f, 1.f);     // 0x1029b6f1
 		return true;
 	}
@@ -517,7 +546,7 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		{
 			return true;
 		}
-		// `IsMale` (`0x10336920`): the sheet's gender stat `== 1` picks the directory.
+		// `IsMale` (`0x10336920`): the sheet's gender stat `== 1` picks the directory (`0x1029b82b`).
 		const TCHAR* const Gender =
 			TypedStatValue(0, ElysiumSlot::Gender) == 1 ? TEXT("male") : TEXT("female"); // 0x1029b81f
 		// The filesystem test (`DAT_1070b238` slot 9) on `sound/Interesting_places/%s/%s.wav`
@@ -559,7 +588,8 @@ bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	default:
 		break;
 	}
-	// `0x1029b69c`: every id this layer does not claim — `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`.
+	// `0x1029b69c` / `0x1029b69f`: every id this layer does not claim — `CAI_BaseNPC::HandleAnimEvent`
+	// `0x10274e30`.
 	return FElysiumNpcBase::HandleAnimEvent(Event);
 }
 

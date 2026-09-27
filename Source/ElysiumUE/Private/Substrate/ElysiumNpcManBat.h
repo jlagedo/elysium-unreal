@@ -171,7 +171,6 @@ public:
 	FElysiumEntityHandle ManBatHudEmitter;       // +0x66a0 `HUD_Manbat_emitter`
 	FElysiumEntityHandle ManBatScreechCone;      // +0x66a4 `Manbat_screechcone_emitter`
 	FElysiumEntityHandle ManBatBlastEmitter;     // +0x66a8 `Manbat_blast_player`
-	TArray<FScreenShakeCall> ScreenShakeCalls;
 	TArray<FPushEntityCall> PushEntityCalls;
 	/** SEAM for `player->+0x2454` bit 0 — the word the ManBat cone ORs on and its teardown clears. The
 	 *  retail field has no name in the corpus and no port counterpart; it is carried here so both

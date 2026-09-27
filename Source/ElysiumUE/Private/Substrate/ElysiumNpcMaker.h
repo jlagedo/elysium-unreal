@@ -205,6 +205,9 @@ protected:
 	 *  the fleshpile passes its cached ground unless `m_bNoDrop`. */
 	bool IsSpawnBoxOccupied(float FloorZ) const;
 
+public:
+	// Public since story 8 L11: `FindEntityGenericNearest` `0x100f7fe0` (the 0x7f8 pickup arm of
+	// `CAI_BaseNPC::HandleAnimEvent`) falls back to it after the targetname pass.
 	/** The nearest live entity of `Classname` within `RadiusUnits` of `PointCm`,
 	 *  `FindEntityByClassnameNearest` `0x100f7d50`: squared distance STRICTLY below the radius
 	 *  squared, first-listed on a tie. */

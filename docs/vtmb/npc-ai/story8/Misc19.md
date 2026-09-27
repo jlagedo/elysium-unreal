@@ -57,12 +57,22 @@ eluded flag and slot 158 `IsAlive`.
 **Unrecovered:** slot 1 of `DAT_10924a6c` before each `SetCondition` is the `ent_trace_conditions`
 ConVar touch, with no observable.
 
+`ShouldChooseNewEnemy` (`0x10279d00`, slot 480) tests the enemy with slot 158 `IsAlive`
+(`0x10279d33`), `m_lifeState`; the port's old `IsInert` (dead-or-hidden) test was corrected in the
+L11 integration. Its first arm, `m_bfAINPCFlags2`-area bit `+0x14bc & 0x10000` answering FALSE
+(`0x10279d13`), still has no port word.
+
 ## `CAI_BaseNPC::EnterGrappleState` `0x1026cdc0`
 
 Three unconditional statements: `0x1026d130` (`SetEnemy(NULL)`, `DisconnectFromSquad` `0x1026d050`,
 `++m_iIsOblivious` `+0x5bb4`), `m_OnGrappleBegin` (`+0x5bd8`) with the partner as activator
 (`0x1026cdd7`), then `CBaseCombatCharacter::EnterGrappleState` `0x10329760` with every argument; its
 `AL` is the answer.
+
+`DisconnectFromSquad` (`0x1026d050`) only leaves the squad when not already disconnected
+(`0x1026d05b`) and increments `m_iSquadDisconnected` (`+0x5bb0`); it writes no flag. The port's
+extra `D_DISCONNECT_SQUAD` write was removed in the L11 integration (bit 23 is set by the task at
+`0x102a536e`, not here).
 
 **Unrecovered:** `0x102dfc10(DAT_109203f0, …)` inside `DisconnectFromSquad` (a global pending-record
 flush).
@@ -77,6 +87,11 @@ role at all, fires `m_OnFedUponBegin` (`+0x5c08`) with a null activator; otherwi
 is re-resolved and fired as activator (null when stale).
 
 **Unrecovered:** none.
+
+The feed wires both callbacks: `FeedBegin` (`0x10339d90`) dispatches the victim's slot 354 (the
+body above), and the feed end (`FeedInterrupt` `0x1033a9e0` -> slot 355 `0x1026cf90`) fires
+`OnFedUponEnd` and then runs `0x1026d160` unconditionally, releasing the obliviousness slot 354
+took. `CBaseCombatCharacter`'s slot 354 (`0x1014f8d0`) is a lone `RET`.
 
 ## `CAI_BaseNPCTroika` slot 595 `0x102b4cc0`
 
@@ -94,6 +109,9 @@ from FLT_MAX) goes to slot 596 (`0x102b4ea8`). No NPC word written.
 The forget-this-entity route: `AddEntityRelationship(entity, D_NU 4, 0)` FIRST; `SetEnemy(NULL)`
 when slot 167 is that entity; `0x10279b70(NULL)` when `m_hLastEnemy` resolves to it;
 `CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 with a `"%s(%d) :"` debug reason.
+`AddEntityRelationship` (`0x10332ca0`) overwrites the entity's row at any priority (a lower
+priority is not refused), so the forget always lands. `ClearMemory` unlinks the first record whose
+handle resolves to the entity (a null entity removes nothing).
 
 **Unrecovered:** `ClearMemory`'s notify target (`+0xe0` / `0x103169a0`).
 
@@ -164,9 +182,12 @@ Slot 259's base body, a two-band switch; every id it names returns at `0x102754d
 base, guard failures included. `0x3fc..0x3fe`: `DevMsg("Bodygroup!\n")`. `1000`
 (`SCRIPT_EVENT_DEAD`) and `0x3f2` (`NOT_DEAD`), only in `m_NPCState` 4: `m_lifeState := 1`,
 `m_iHealth := 0` / `m_lifeState := 0`, `m_iHealth := m_iMaxHealth`. `0x3e9`/`0x3ea`: a live
-`m_hCine` gets `AllowInterrupt(0/1)` (`0x101a8890`). `0x3eb`: `FireScriptEvent(atoi(options))` on
-the live cine (`0x101a7230`), else on `m_pHintNode` (`0x102d09b0`), else on the Troika's interesting
-place (`+0x98`→`+0x62ec`, `0x102db3e0`). `0x3ec`/`0x3f0`: `EmitSound(options)` (`0x101b0c10`).
+`m_hCine` gets `AllowInterrupt(0/1)` (`0x101a8890`). `0x3eb`: the Troika's interesting place
+(`+0x98`→`+0x62ec`) is read first; `atoi(options)` goes to the live cine's `OnScriptEvent0<n>`
+(`0x101a7230`), else to `m_pHintNode`'s `OnAnimEvent<n>` (`0x102d09b0`, `+0x4e4+0x18n`), else to the
+place's `OnAnimEvent<n>` (`0x102db3e0`, `(3n+0x8d)*8`); each fires only for n in 1..8, the NPC as
+activator of the hint and place outputs; with no target the event is still claimed. `0x7e6` and
+`0x7fa..0x7fc` test the options pointer only, so an empty option reaches `atoi("") = 0`. `0x3ec`/`0x3f0`: `EmitSound(options)` (`0x101b0c10`).
 `0x3f1`: `RandomInt(0,2)`, zero returns, non-zero falls into `0x3ed`: `SENTENCEG_PlayRndSz(edict,
 options, 1.0, 80, 0, 100)`. `0x7d1`/`0x7d2` (2001/2002), only with `FL_ONGROUND`:
 `AI_BaseNPC.BodyDrop_Light` / `_Heavy` (2001 is LIGHT). `0x7da`: `AI_BaseNPC.SwishSound`. `0x7e4`:
@@ -188,14 +209,15 @@ sequences, `OnPickedUp`, `FL_ONGROUND` on NPCs.
 
 `GetCurTask` (`0x1028a150`) first. `0x80c`: `sscanf("%s %f %f %f")` (defaults 1.0/0.2/0.2), fewer
 than two fields or a total `<= 0` return; fades exceeding the total are rescaled; hold = total -
-fades (floored at 0); `SetExpression(name, 0, in, hold, out, 1.0)`. `0x7d5`: `EmitSound` with the
+fades (floored at 0), at x87 width against the image's 0.0 cell `0x104454c4`;
+`SetExpression(name, 0, in, hold, out, 1.0)`. `0x7d5`: `EmitSound` with the
 option as the sample, `CHAN_AUTO`, 1.0, soundlevel 0x42, pitch 100. `0x7d6`: an inlined
 `CBaseCombatCharacter::Die` without its life-state guard — a `CVDmg_t` sourced on this NPC, a
 `CTakeDamageInfo` whose attacker is `m_hClosestPlayer`, the sheet's wounds := max health,
 `Event_Killed` then `Event_Dying`. `0x7e5`: `m_afMemory &= ~0x2000`. `0x7f8`: `m_hTargetEnt` as a
 `CBaseCombatWeapon`, owned -> "in use", `Weapon_CanUse` false -> "can't use", none -> "stolen";
 else `Weapon_Equip` and `TaskComplete`. `0x80d`: `SetExpression(option, 0, 0, SequenceDuration *
-m_flCycle + 0.1, 0, 1.0)` (the time ELAPSED). `0x1036/0x1037/0x103a/0x103b`, only in
+m_flCycle + 0.1, 0, 1.0)` (the time ELAPSED; 0.1 is the double `0x104493d0`). `0x1036/0x1037/0x103a/0x103b`, only in
 `TASK_DO_INTEREST_ACTIVITY` (0xb4): `Interesting_places/<male|female>/<opt>.wav` when that file
 exists, else `Interesting_places/<opt>.wav`, channel 4 (0x1036/0x103a) or 2. `0x1038/0x1039`, same
 gate: STOP channel 4 / 2. Everything else: the base body.
@@ -218,15 +240,19 @@ gate: STOP channel 4 / 2. Everything else: the base body.
 - **SabbatLeader `0x103a7000`:** `0x802/0x803` slot 620 `FootstepSound`.
 - **Tzimisce `0x103ba410`:** `0xbbd` release when carrying; `0xbbb` swish (channel 1); `0x802/0x803`
   shake and footstep; `0x7f8` pickup unless carrying; ids 2..9 the voice slots (2 and 3 only in
-  state 1), with expression 2 after 6, 7 and 9.
+  state 1), with expression 2 after 6, 7 and 9: `0x103b9f90(2, t)` is
+  `SetExpression("scream", 0, 0.15, max(t - 0.3, 0), 0.15, 1.0)` (names `0x10653120` {normal,
+  angry, scream, dead}; 0.3 the double `0x1047b868`).
 - **TzimisceHeadClaw `0x103c1540`:** `0x802` shake (1.3) and slot 619(1) (Foot_Step3/4); `0x803`
   shake and slot 619(0) (Foot_Step1/2).
 - **Werewolf `0x103d88e0`:** `0x835` the activity voice `0x103d8df0`; `0x836..0x83d` swallowed;
   `0x834` air shake (16, 2, 2, 1500) at `Bip01`; `0x3eb` fires the held teleport / move / break
-  hint's `OnAnimEvent<n>`; `0x802..0x805` the footstep `0x103d8c10`, whose sound and shake are
-  behind `werewolf_footstep_sounds` / `_shakes`, both shipped "0".
+  hint's `OnAnimEvent<n>` (`0x102d09b0`); `0x802..0x805` the footstep `0x103d8c10`, whose sound and
+  shake (centred on slot 192 `WorldSpaceCenter`) are behind `werewolf_footstep_sounds` / `_shakes`,
+  both shipped "0".
 
-**Unrecovered:** the dog bite and Ming Xiao grab bodies; Tzimisce expression 2's name.
+**Unrecovered:** the dog bite and Ming Xiao grab bodies; the `Bip01` bone position (the port's
+`RetailBonePosition` seam answers false, so the origin stands in).
 
 ## `0x10365a90` — Bach's camper pass
 

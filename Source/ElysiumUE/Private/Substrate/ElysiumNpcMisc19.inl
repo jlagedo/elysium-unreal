@@ -35,8 +35,8 @@ friend class FElysiumNpcBase;
 /** SEAM for `UTIL_ScreenShake(center, amplitude, frequency, duration, radius, command, bAirShake)`
  *  (`0x101cdba0`) as the species `HandleAnimEvent` bodies of this family raise it (footfalls, the
  *  Ming Xiao and Werewolf slams). Nothing in this substrate shakes the view from the kernel; each
- *  request is recorded, in order. SOURCE units. The ManBat's cone keeps its own recorder
- *  (`ScreenShakeCalls`), which has no air-shake field. */
+ *  request is recorded, in order. SOURCE units. The ManBat's screech cone (`1038ea60`) records
+ *  through it too. */
 struct FAnimEventShakeCall
 {
 	FVector CentreUnits = FVector::ZeroVector;
@@ -56,13 +56,8 @@ void RecordAnimEventShake(const FVector& CentreUnits, float Amplitude, float Fre
  *  - `CNPC_VMingXiao`'s tentacle grab `0x10398db0` (the `phys_animlink` on
  *    `Bip01_[RL]_ThrowingTenticle5`) and vomit emitter `0x102c42a0("Ming_xiao_vomit_emitter", …,
  *    "Bip01 MouthRoot")`;
- *  - `CNPC_VTzimisce`'s expression `0x103b9f90(2, x)` (table entry 2's name unrecovered);
- *  - `CNPC_VWerewolf`'s activity voice `0x103d8df0` and the hint `OnAnimEvent<n>` fire
- *    `0x102d09b0` (no hint-to-entity path). */
+ *  - `CNPC_VWerewolf`'s activity voice `0x103d8df0`. */
 int32 DogBiteCalls = 0;
 int32 MingXiaoGrabCalls = 0;
 int32 MingXiaoVomitEmitterCalls = 0;
-int32 TzimisceExpressionTwoCalls = 0;
 int32 WerewolfActivityVoiceCalls = 0;
-int32 WerewolfHintAnimEventCalls = 0;
-int32 WerewolfHintAnimEventIndex = 0;

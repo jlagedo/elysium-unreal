@@ -288,7 +288,7 @@ void FElysiumNpc::Slot56(FElysiumEntity* Other, FVector, FVector, const TCHAR*)
 	}
 	if (World->Resolve(BaseMemory.LastEnemy) == Other)
 	{
-		BaseMemory.LastEnemy = FElysiumEntityHandle();
+		SetLastEnemy(nullptr);                                            // 0x10279b70
 	}
 }
 

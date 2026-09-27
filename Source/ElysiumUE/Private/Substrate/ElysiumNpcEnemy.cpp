@@ -93,7 +93,11 @@ bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FEl
 	}
 	const FElysiumEntity* Enemy =
 		ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.BaseMemory.Enemy);
-	if (Enemy == nullptr || Enemy->IsInert())
+	// `0x10279d33`: slot 158 `IsAlive` (`vt+0x278`) on the enemy — `m_lifeState`, which the port
+	// spells as the death latch or `Kill`'s terminal flag (`FElysiumEntity::IsAlive`). The port's
+	// old test was `IsInert` (dead-or-HIDDEN), which missed a dying enemy whose death transaction
+	// had run and counted a hidden one as dead (corrected in the story 8 L11 integration).
+	if (Enemy == nullptr || !const_cast<FElysiumEntity*>(Enemy)->IsAlive()) // 0x10279d23 / 0x10279d3b
 	{
 		return true;   // the actor is dead, or gone; this is the same pass that noticed it
 	}
@@ -139,9 +143,11 @@ void ElysiumNpcEnemy::SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle&
 		(World != nullptr && NewEnemy.IsSet()) ? World->Resolve(NewEnemy) : nullptr;
 	if (Old != New)                                                        // 0x10279a8b
 	{
-		// `0x10279a96`-`0x10279ab7`: only a LIVE old handle (not -1, serial matching, table entry
-		// non-null) reaches the last-enemy helper; the re-resolve at `0x10279ab9`-`0x10279add` of
-		// the same handle cannot answer null in between (second judge, packet row 0x10279a50).
+		// `0x10279a96`-`0x10279ab7`: only a LIVE old handle (not -1, serial matching at 0x10279ab2
+		// JNZ, table entry non-null) reaches the last-enemy helper; the re-resolve at
+		// `0x10279ab9`-`0x10279add` of the same handle (its -1 test 0x10279ac2 JZ and serial test
+		// 0x10279ad9 JNZ, both to the null argument) cannot answer null in between, so the port has
+		// no separate line for it (second judge, packet row 0x10279a50).
 		if (Old != nullptr)
 		{
 			Npc.SetLastEnemy(Old);                                         // 0x10279ae4 -> 0x10279b70
@@ -172,7 +178,9 @@ void ElysiumNpcEnemy::SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle&
 // `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`), 1068 bytes, whole and in retail's order (story 8,
 // lane L11). The scope-trace frame and the `CVProfile` scope (`"CAI_Enemies_ChooseEnemy"`,
 // `0x10279e53`, `0x10279f5d`-`0x10279fa4`, `0x1027a105`-`0x1027a1e9`) are profiler bookkeeping
-// with no observable and stay absent.
+// with no observable and stay absent. The scope-trace frame's entity-name pick (`0x10279dda` JZ:
+// a null `this` names "NULL ENTITY"; `0x10279de4` JNZ: a null `+0x26c` classname falls back to
+// the empty string) feeds only that trace record, so the port has no line for it.
 //
 // Replaces the port's guess, which ran the stickiness test BEFORE the gate, had no went-null
 // fall-through, fired the lost outputs with the old enemy as activator, invented a last-seen
@@ -204,7 +212,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 			bLostOrEluded = true;                                          // 0x10279e90
 		}
 	}
-	// `0x10279e97`-`0x10279eaa`: slot 158 `IsAlive` on the current enemy.
+	// `0x10279e97`-`0x10279eaa`: slot 158 `IsAlive` on the current enemy (the call at 0x10279e9d).
 	const bool bDead = Current != nullptr && !Current->IsAlive();
 
 	// `0x10279eb9`: with NO running schedule (`m_pSchedule` `+0x5c38` null) all three interrupt
@@ -230,6 +238,8 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 		{
 			// The went-null case only WARNS and falls through to the choice: `DevMsg(2, …)` when
 			// neither NEW_ENEMY nor LOST_ENEMY interrupts a running program.
+			// 0x10279fb8 JNZ (NEW_ENEMY interrupts), 0x10279fc0 JNZ (LOST_ENEMY interrupts),
+			// 0x10279fca JZ (no running schedule): each skips the warning.
 			if (!bNewInterrupts && !bLostInterrupts && Npc.Schedule.IsRunning()) // 0x10279fb8/fc0/fca
 			{
 				UE_LOG(LogElysiumNpcEnt, Verbose,                          // 0x10279fd7
@@ -237,9 +247,14 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 					ElysiumScheduleName(Npc.Schedule.Current));
 			}
 		}
+		// 0x10279f30 JNZ (NEW_ENEMY interrupts -> choose), 0x10279f3c JZ (LOST_ENEMY does not
+		// interrupt -> keep), 0x10279f44 JNZ (lost or eluded -> choose).
 		else if (!bNewInterrupts && (!bLostInterrupts || !bLostOrEluded))  // 0x10279f30/f3c/f44
 		{
 			// The running program keeps ownership: nothing is chosen, nothing is written.
+			// 0x10279f5d JZ / 0x10279f67 JZ (at the root node with the profiler disabled ->
+			// straight to the exit at 0x1027a1e9), the node ExitScope call 0x10279f73 and its
+			// 0x10279f7b JZ (no pop to the parent node): the CVProfile scope exit, no observable.
 			return Current != nullptr;                                     // 0x10279f5d .. 0x10279fb5
 		}
 	}
@@ -270,6 +285,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 	Npc.BaseScheduleHost.MemoryBits &= 0xfffe7fffu;                        // 0x1027a019 / 0x1027a027
 	// The OLD enemy dead (slot 158 false) SETS `ENEMY_DEAD`; an alive one changes nothing, and
 	// nothing here clears 0x58 (second judge, packet row 0x10279dd0).
+	// 0x1027a02d JZ (no old enemy), the slot 158 `IsAlive` call 0x1027a033, 0x1027a03b JNZ (alive).
 	if (Current != nullptr && !Current->IsAlive())                         // 0x1027a02d/a033/a03b
 	{
 		// `(*DAT_10924a6c)->vfunc1()` (`0x1027a045`) is the `ent_trace_conditions` ConVar touch
@@ -282,6 +298,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 	}
 	else
 	{
+		// 0x1027a068: the `ent_trace_conditions` ConVar touch (`(*DAT_10924a6c)->vfunc1()`), no observable.
 		Cond.Set(EElysiumNpcCond::NewEnemy);                               // 0x1027a06f
 	}
 	SetEnemy(Npc, Chosen != nullptr ? Chosen->Handle : FElysiumEntityHandle::Invalid()); // 0x1027a077
@@ -294,6 +311,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 	{
 		if (bLostOrEluded)                                                 // 0x1027a09f
 		{
+			// 0x1027a0a9: the `ent_trace_conditions` ConVar touch, no observable.
 			Cond.Set(EElysiumNpcCond::LostEnemy);                          // 0x1027a0b0
 			Npc.LostEnemySound();                                          // 0x1027a0b9, slot 493
 		}
@@ -317,6 +335,10 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 		const bool bIsPlayer = Npc.World != nullptr && Chosen->Handle == Npc.World->PlayerHandle();
 		Npc.BaseScheduleHost.MemoryBits |= bIsPlayer ? 0x10000u : 0x8000u;
 	}
+	// 0x1027a11a..0x1027a1c0: the CVProfile scope exit (0x1027a11a JZ / 0x1027a122 JZ at the root
+	// with the profiler disabled, 0x1027a135 JNZ / 0x1027a13e JZ the node's recursion count, the RDTSC
+	// accumulate, 0x1027a1a4 JZ / 0x1027a1a9 JZ / 0x1027a1ae JNZ the break-on-budget test before
+	// the 0x1027a1b2 call, 0x1027a1c0 JNZ the pop to the parent node), no observable.
 	return Chosen != nullptr;                                              // 0x1027a105 .. 0x1027a1fb
 }
 

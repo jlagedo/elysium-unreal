@@ -388,14 +388,5 @@ bool FElysiumNpcBase::IsHintAvailableToMe(int32 HintNode) const
 
 // --- Moved from `ElysiumNpcTroikaHelpers.cpp` (story 5 step 5) ---
 
-const FElysiumEntity* FElysiumNpcBase::RedirectDetectedAttacker(const FElysiumEntity* Candidate) const
-{
-	// `0x102707d0`: an entity whose `+0x98` combat-character pointer answers `3` at vtable `+0x228`
-	// is replaced by whatever its vtable `+0x184` answers; everything else passes through. Neither
-	// word exists on `FElysiumEntity`. **SEAM**: the pass-through, which is retail's own fall-through
-	// for every entity that is not a type-3.
-	return Candidate;
-}
-
 // --- Moved from `ElysiumNpcTroikaHelpers.cpp` (story 5 step 5) ---
 

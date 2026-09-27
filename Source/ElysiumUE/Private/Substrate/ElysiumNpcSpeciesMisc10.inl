@@ -80,18 +80,6 @@ TArray<FSlowEntityCall> SlowEntityCalls;
 void BeginSlowEntity(const FElysiumEntityHandle& Victim, float Magnitude);
 void EndSlowEntity(const FElysiumEntityHandle& Victim, float Magnitude);
 
-/** SEAM for `UTIL_ScreenShake` (`0x101cdba0`) — the ManBat's cone shakes the screen with
- *  `(2.5, 0.2, 3.0, 0.0, 0, 0)` around **its own** slot-220 origin (`vt+0x370`), not the target's.
- *  Nothing in this substrate shakes the view from the kernel; the request is recorded. */
-struct FScreenShakeCall
-{
-	FVector CentreUnits = FVector::ZeroVector;
-	float Amplitude = 0.f;
-	float Frequency = 0.f;
-	float Duration = 0.f;
-	float Radius = 0.f;
-};
-
 /** SEAM for `0x10344f80(combatCharacter, delta, 2, 0)` — the physics push the cone applies, with
  *  `delta = target->GetAbsOrigin() - my GetAbsOrigin()` (both slot 217). Recorded. */
 struct FPushEntityCall

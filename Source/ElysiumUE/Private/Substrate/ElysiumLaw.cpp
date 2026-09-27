@@ -584,6 +584,7 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 	//    `m_flSupernaturalWitnessedTimer` (`+0x63a8`) := curtime + 20.0 and the `DevMsg`; a null
 	//    witness only prints `**UNKNOWN**`. The stamp is written INSIDE the debug guard, so on a
 	//    shipped build it never happens (retail defect, reproduced).
+	// `0x1017f4ac` is the ConVar's `IsCommand()` (a ConVar answers false).
 	if (GLawDebugShowCsActs != 0)                                          // 0x1017f4b5 / 0x1017f4c2
 	{
 		const double Now = Player.World ? Player.World->NowSeconds() : 0.0;
@@ -603,7 +604,8 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 		UE_LOG(LogElysiumPlayer, Log,                                     // 0x1017f509
 			TEXT("CSActs:    %6.1f - Supernatural act witnessed by %s at %f"), Now, *Name, Now);
 	}
-	// 1. `0x1017f512`-`0x1017f527`: the world (`0x1023bd00`) and its `m_nAreaType` (`+0x49c`).
+	// 1. `0x1017f512`-`0x1017f527`: the world (`0x1023bd00`) and its `m_nAreaType` (`+0x49c`); a null
+	//    world (`0x1017f519`) or area type 0 (`0x1017f527`) returns.
 	if (!AreaAdmitsIncident(Player))
 	{
 		UE_LOG(LogElysiumPlayer, Verbose,
@@ -612,8 +614,10 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 		return EAdmission::RefusedCombatArea;
 	}
 
-	// 1. The rate-limited Masquerade increment. The two consumers below are independent: the timer
-	//    closing does not stop the police branch, and vice versa.
+	// 1. The rate-limited Masquerade increment (`0x1017f52e`-`0x1017f573`): `curtime < +0x1dbc` skips
+	//    it (`0x1017f53e`); otherwise `0x1000b6a9(this, 1)` (`0x1017f543`) and `+0x1dbc` := curtime +
+	//    the masquerade-timer ConVar (`0x1017f553` `IsCommand`, `0x1017f558`). The two consumers below
+	//    are independent: the timer closing does not stop the police branch, and vice versa.
 	const double Now = Player.World ? Player.World->NowSeconds() : 0.0;
 	const FMasqueradeVerdict Verdict = DecideMasquerade(Player.Police, Now);
 	EAdmission Result = EAdmission::RefusedRateLimited;
@@ -633,8 +637,10 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 			*Player.DebugString(), Severity, Player.Police.MasqueradeTimerNext);
 	}
 
-	// 2. The independent police branch. Held in a local so the switch reads as the runtime policy it
-	//    is rather than as a folded literal.
+	// 2. The independent police branch (`0x1017f579`-`0x1017f5a1`): the ConVar at `DAT_10725804`
+	//    (`0x1017f581` `IsCommand`, `0x1017f586`, value `0x1017f592`) gates `0x10010eb0(severity,
+	//    witness, position)` (`0x1017f5a1`). Held in a local so the switch reads as the runtime policy
+	//    it is rather than as a folded literal.
 	const bool bCopSpawnEnabled = bSupernaturalCopSpawn;
 	if (bCopSpawnEnabled)
 	{

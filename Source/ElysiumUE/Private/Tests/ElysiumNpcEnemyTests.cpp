@@ -211,7 +211,12 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("...and the pass replaces it rather than carrying a corpse"),
 		F.Guard->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...raising NEW_ENEMY"), Cond.Has(EElysiumNpcCond::NewEnemy));
-	TestTrue(TEXT("the old handle went through the last-enemy path"),
+	// `SetEnemy` (`0x10279a50`) hands the old enemy to the last-enemy helper `0x10279b70` ONLY when
+	// its handle is still live (`0x10279a96` -1, `0x10279ab2` serial, `0x10279ab7` null entry). A
+	// killed-and-removed entity (`bDead`, `EFL_KILLME`) no longer resolves, so retail writes no last
+	// enemy; the port's old unconditional transfer asserted here was port-invented. Corrected to
+	// retail (story 8 L11 integration).
+	TestFalse(TEXT("a removed old enemy does not reach the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.ThugA->Handle);
 
 	// Step 5 gathers the committed enemy's own conditions AFTER the choice, so they describe the
@@ -311,9 +316,13 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 			TestTrue(TEXT("...and its recovered mask really is empty"), Swing->Interrupts.IsEmpty());
 		}
 
-		FElysiumNpcConditions Cond = FElysiumNpcConditions::Of({ EElysiumNpcCond::SeeHate });
-		TestFalse(TEXT("an uninterested schedule skips the search entirely"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
+		// `0x10279dd0` reads and writes the NPC's own condition word (slot 480 `ShouldChooseNewEnemy`
+		// reads `HasCondition(0x43)`), so the sight lands there.
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
+		// Retail's answer is "an enemy is held", not "the enemy changed": the gate's refusal
+		// (`0x10279f44` -> `0x10279f5d`) returns `GetEnemy() != NULL` (`0x1027a105`), TRUE here.
+		TestTrue(TEXT("an uninterested schedule skips the search and answers 'enemy held'"),
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
 		TestTrue(TEXT("...and keeps the enemy it already had"),
 			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 
@@ -321,8 +330,9 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		// takes the better candidate — no test-only mask installed.
 		TestTrue(TEXT("the idle program starts"),
 			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Guard));
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
 		TestTrue(TEXT("a schedule that admits NEW_ENEMY lets the replacement through"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 11.0));
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
 		TestTrue(TEXT("...and the higher-priority candidate wins"),
 			F.Guard->BaseMemory.Enemy == F.ThugB->Handle);
 	}
@@ -336,18 +346,20 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 		}
 		F.Hate(F.ThugA, 5);
 		F.Guard->Schedule.Clear();
-		FElysiumNpcConditions Cond;
 		TestTrue(TEXT("with no schedule running the gate is open"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
 		TestTrue(TEXT("...so a first enemy can be acquired at all"),
 			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 	}
 
-	// --- A null enemy under an uninterested schedule warns, once ---------------------------------
+	// --- A null enemy under an uninterested schedule -----------------------------------------------
+	// Retail (`0x10279dd0`): the went-null case is `m_afMemory & 0x18000` set at entry with
+	// `GetEnemy()` null (`0x10279e85`/`0x10279e89`). It only WARNS (`DevMsg(2, ...)` `0x10279fd7`, a
+	// developer-level message, when neither NEW_ENEMY `0x54` nor LOST_ENEMY `0x47` interrupts the
+	// running program, `0x10279fb8`-`0x10279fca`) and FALLS THROUGH to the choice at `0x10279fe5`;
+	// there is no refusal and no per-schedule latch. The port's old guess refused the choice and
+	// raised a one-per-schedule error; corrected to retail.
 	{
-		AddExpectedError(TEXT("does not interrupt on LOST_ENEMY"),
-			EAutomationExpectedErrorFlags::Contains, 1);
-
 		FEnemyFixture F;
 		if (F.Guard == nullptr || F.ThugA == nullptr)
 		{
@@ -358,16 +370,23 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 			ElysiumSchedule::Start(F.Guard->Schedule,
 				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
 
-		FElysiumNpcConditions Cond;
-		for (int32 i = 0; i < 4; ++i)
-		{
-			// Four passes, one warning: the latch is per NPC per schedule, and `AddExpectedError`
-			// above asserts the count rather than merely tolerating it.
-			TestFalse(TEXT("an empty mask admits neither NEW_ENEMY nor LOST_ENEMY"),
-				ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0 + i));
-		}
-		TestTrue(TEXT("the enemy handle is left alone rather than given a plausible fallback"),
+		// Without the entry bits there is no went-null: the gate refuses (`0x10279f44`, the enemy is
+		// not eluded) and the stale handle is left as it stands.
+		TestFalse(TEXT("no memory bit: the refusal answers 'no enemy held'"),
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
+		TestTrue(TEXT("...and the stale handle is left alone"), F.Guard->BaseMemory.Enemy.IsSet());
+
+		// With `0x8000` (a non-player enemy was held, `0x1027a0ff`) the enemy went null: the change
+		// work runs even under the uninterested program.
+		F.Guard->BaseScheduleHost.MemoryBits |= 0x8000u;
+		TestFalse(TEXT("went null: nothing chosen, so no enemy held"),
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
+		TestFalse(TEXT("...the committed handle is cleared by SetEnemy(NULL) (0x1027a077)"),
 			F.Guard->BaseMemory.Enemy.IsSet());
+		TestEqual(TEXT("...both enemy bits cleared (0x1027a027, 0x1027a08b)"),
+			F.Guard->BaseScheduleHost.MemoryBits & 0x38000u, 0u);
+		TestTrue(TEXT("...and LOST_ENEMY raised (0x1027a0b0)"),
+			F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::LostEnemy));
 	}
 	return true;
 }
@@ -651,7 +670,11 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	TestEqual(TEXT("...and counts no enemy sighting: that is the sense pass's write, not this edge"),
 		SightingsAfterFirst, 0);
 
-	// A replacement transfers the old handle and clears the episode.
+	// A replacement transfers the old handle. Retail's `SetEnemy` (`0x10279a50`) writes `m_hEnemy`
+	// (`+0x5ce0`), `m_hLastEnemy` through `0x10279b70`, runs slot 560 and the discipline sweep, and
+	// nothing else: the LOS episode is NOT reset here (the port's old body forgot the latch, the
+	// debounce and the occlusion flag -- port-invented; the episode belongs to
+	// `GatherEnemyConditions` `0x10270b20`, lane L07). Corrected to retail.
 	F.Guard->Senses.Memory.EnemyLosFailures = 3;
 	F.Guard->Senses.Memory.bEnemyOccluded = true;
 	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.ThugA->Handle);
@@ -659,19 +682,12 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 		F.Guard->BaseMemory.LastEnemy == F.Player->Handle);
 	TestTrue(TEXT("the new handle is committed"),
 		F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
-	TestFalse(TEXT("the previous LOS claim is forgotten"),
+	TestTrue(TEXT("the LOS latch is not SetEnemy's to clear"),
 		F.Guard->Senses.Memory.bEnemyLosLatched);
-	TestEqual(TEXT("...along with its debounce"), F.Guard->Senses.Memory.EnemyLosFailures, 0);
-	TestFalse(TEXT("...and its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
-
-	// Which is what lets the found edge fire again for the NEW enemy rather than being swallowed.
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0);
-	F.Flush(2.0);
-	TestEqual(TEXT("the new enemy gets its own found edge"), F.Counter(TEXT("c_foundenemy")), 2.f);
-	TestEqual(TEXT("...but not an OnFoundPlayer, because it is not the player"),
-		F.Counter(TEXT("c_foundplayer")), 1.f);
-	TestEqual(TEXT("...and still counts no enemy sighting"),
-		F.Guard->EnemySightings, SightingsAfterFirst);
+	TestEqual(TEXT("...nor its debounce"), F.Guard->Senses.Memory.EnemyLosFailures, 3);
+	TestTrue(TEXT("...nor its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
+	TestEqual(TEXT("the non-null write runs the discipline sweep (0x10279b0c)"),
+		F.Guard->SetEnemyDisciplineStripCalls, 1);
 	return true;
 }
 
@@ -695,19 +711,23 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		F.Guard->BaseMemory.Enemy = F.Player->Handle;
 		F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
 		F.Guard->Schedule.Clear();
+		// The output is picked by the ENTRY `m_afMemory` player bit `0x10000` (`0x1027a0c5`), which
+		// the acquisition of the player wrote (`0x1027a0ff`).
+		F.Guard->BaseScheduleHost.MemoryBits |= 0x10000u;
 
-		FElysiumNpcConditions Cond;
-		TestTrue(TEXT("an eluded enemy is a transition"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
+		// Retail answers "enemy held" (`0x1027a105`): the eluded player is dropped for nothing.
+		TestFalse(TEXT("an eluded enemy is dropped: no enemy held"),
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
 		F.Flush(10.0);
 		TestEqual(TEXT("the eluded PLAYER fires OnLostPlayer"),
 			F.Counter(TEXT("c_lostplayer")), 1.f);
 		TestEqual(TEXT("...and not OnLostEnemy"), F.Counter(TEXT("c_lostenemy")), 0.f);
-		TestTrue(TEXT("...and raises LOST_ENEMY"), Cond.Has(EElysiumNpcCond::LostEnemy));
+		TestTrue(TEXT("...and raises LOST_ENEMY"),
+			F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::LostEnemy));
 
-		// The eluded target was excluded from the search, so the enemy went null and the marker
+		// The eluded target was excluded from the search, so the enemy went null and the entry bits
 		// cleared with the transition. A second pass is not a second loss.
-		ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 11.0);
+		ElysiumNpcEnemy::ChooseEnemy(*F.Guard);
 		F.Flush(11.0);
 		TestEqual(TEXT("the loss is not re-fired"), F.Counter(TEXT("c_lostplayer")), 1.f);
 	}
@@ -721,10 +741,12 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		}
 		F.Guard->BaseMemory.Enemy = StaleHandle(F.ThugA->Handle);
 		F.Guard->Schedule.Clear();
+		// "Went null" is retail's `m_afMemory & 0x18000` at entry with `GetEnemy()` null
+		// (`0x10279e85`); `0x8000` is the non-player enemy bit the acquisition wrote.
+		F.Guard->BaseScheduleHost.MemoryBits |= 0x8000u;
 
-		FElysiumNpcConditions Cond;
-		TestTrue(TEXT("a handle that went null is a transition"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0));
+		TestFalse(TEXT("a handle that went null is a transition to no enemy held"),
+			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
 		F.Flush(10.0);
 		TestEqual(TEXT("a non-player enemy fires OnLostEnemy"),
 			F.Counter(TEXT("c_lostenemy")), 1.f);
@@ -732,7 +754,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		TestFalse(TEXT("the committed enemy is cleared, not replaced with a guess"),
 			F.Guard->BaseMemory.Enemy.IsSet());
 		TestFalse(TEXT("NEW_ENEMY is cleared when there is no enemy to be new"),
-			Cond.Has(EElysiumNpcCond::NewEnemy));
+			F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
 	}
 
 	// --- Losing LINE OF SIGHT is not losing the enemy ----------------------------------------------

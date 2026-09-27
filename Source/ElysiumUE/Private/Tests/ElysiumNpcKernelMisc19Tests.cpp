@@ -42,6 +42,7 @@
 #include "Substrate/ElysiumNpcCop.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
+#include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcPedestrian.h"
 #include "ElysiumNpcFlags.h"
@@ -340,8 +341,11 @@ bool FElysiumNpcKernelMisc19ChooseEnemyDeadTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Guard;
 	N.Schedule.Clear();
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
-	F.Other->Kill();
-	if (!TestNotNull(TEXT("the killed enemy still resolves this frame"),
+	// Retail's dead enemy is `m_lifeState != 0` (slot 158 false) while its handle still resolves.
+	// The port's `Kill()` is `UTIL_Remove` (the handle stops resolving); the death transaction's latch
+	// is what slot 158 reads (`FElysiumEntity::IsAlive`), so the case stands that latch.
+	F.Other->SetDeathReportedForRestore(true);
+	if (!TestNotNull(TEXT("the dead enemy still resolves this frame"),
 			static_cast<const FElysiumNpcBase&>(N).GetEnemy()))
 	{
 		return false;
@@ -884,17 +888,14 @@ bool FElysiumNpcKernelMisc19BaseHandleAnimEventTest::RunTest(const FString&)
 	N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x7f8));
 	TestEqual(TEXT("0x10275384 stolen"), N.LastTaskFailText, FString(TEXT("Weapon stolen by someone else")));
 
-	// 0x3e9 with no cine records nothing; 0x3eb falls to the Troika interesting place.
-	N.AnimEventScriptSeamCalls.Reset();
-	N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x3e9));
-	TestEqual(TEXT("0x1027500d no live cine: AllowInterrupt is not reached"), N.AnimEventScriptSeamCalls.Num(), 0);
+	// 0x3e9 with no cine is claimed and reaches nothing; 0x3eb with no cine, no hint and no
+	// interesting place (`0x10274fe0` JZ) is claimed and fires nothing.
+	TestTrue(TEXT("0x1027500d no live cine: 0x3e9 is still claimed"),
+		N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x3e9)));
 	N.BaseScheduleHost.HintNode = INDEX_NONE;
-	N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x3eb, TEXT("3")));
-	if (TestEqual(TEXT("0x10274ff6 FireScriptEvent reaches the interesting place"), N.AnimEventScriptSeamCalls.Num(), 1))
-	{
-		TestEqual(TEXT("0x10274fea atoi(options)"), N.AnimEventScriptSeamCalls[0].Argument, 3);
-		TestEqual(TEXT("0x10274fe0 the Troika place target"), N.AnimEventScriptSeamCalls[0].Target, 2);
-	}
+	TestTrue(TEXT("0x10274fe0 no target: 0x3eb is still claimed"),
+		N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x3eb, TEXT("3"))));
+	TestFalse(TEXT("0x102d09b0 refuses a hint index that is no hint"), N.FireHintAnimEvent(INDEX_NONE, 3));
 
 	// An unclaimed id goes on to CBaseCombatCharacter::HandleAnimEvent.
 	TestFalse(TEXT("0x102754bb 2070 is default-routed and unclaimed"), N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(2070)));
@@ -905,114 +906,204 @@ bool FElysiumNpcKernelMisc19BaseHandleAnimEventTest::RunTest(const FString&)
 // Species slot 259 bodies
 // =================================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19SpeciesHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.SpeciesHandleAnimEvent", GMisc19Flags)
-bool FElysiumNpcKernelMisc19SpeciesHandleAnimEventTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19DogHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.DogHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19DogHandleAnimEventTest::RunTest(const FString&)
 {
+	// `CNPC_VDog::HandleAnimEvent` `0x10374280`: 0xbb9 with no active weapon is swallowed.
+	FMisc19Fixture F(TEXT("CNPC_VDog"));
+	if (TestNotNull(TEXT("dog"), F.Guard) && F.Guard->ActiveWeaponEntity() == nullptr)
 	{
-		// `CNPC_VDog::HandleAnimEvent` `0x10374280`: 0xbb9 with no active weapon is swallowed.
-		FMisc19Fixture F(TEXT("CNPC_VDog"));
-		if (TestNotNull(TEXT("dog"), F.Guard) && F.Guard->ActiveWeaponEntity() == nullptr)
+		TestTrue(TEXT("0x103742a4 swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0xbb9)));
+		TestEqual(TEXT("0x103742a4 ...with no bite"), F.Guard->DogBiteCalls, 0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ManBatHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.ManBatHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19ManBatHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VManBat::HandleAnimEvent` `0x1038e000`.
+	FMisc19Fixture F(TEXT("CNPC_VManBat"));
+	if (TestNotNull(TEXT("manbat"), F.Guard))
+	{
+		TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+		Sounds.Reset();
+		TestTrue(TEXT("0x1038e110 event 2 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(2)));
+		if (TestEqual(TEXT("one sound"), Sounds.Num(), 1))
 		{
-			TestTrue(TEXT("0x103742a4 swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0xbb9)));
-			TestEqual(TEXT("0x103742a4 ...with no bite"), F.Guard->DogBiteCalls, 0);
+			TestEqual(TEXT("0x1038e110 event 2 is the screech"), Sounds[0].Rel,
+				FString(TEXT("character/male/sheriff_manbat/screech.wav")));
+		}
+		Sounds.Reset();
+		F.Guard->HandleAnimEvent(Misc19Ev(1));
+		TestTrue(TEXT("0x1038e1b0 event 1 draws a wingflap"),
+			Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("wingflap_")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19GargoyleHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.GargoyleHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19GargoyleHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VGargoyle::HandleAnimEvent` `0x103786c0`.
+	FMisc19Fixture F(TEXT("CNPC_VGargoyle"));
+	if (TestNotNull(TEXT("gargoyle"), F.Guard))
+	{
+		TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+		Sounds.Reset();
+		TestTrue(TEXT("0x103786d8 event 1 is swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(1)));
+		TestEqual(TEXT("0x103786d8 ...silently"), Sounds.Num(), 0);
+		F.Guard->HandleAnimEvent(Misc19Ev(0x802));
+		TestEqual(TEXT("0x1037881b the stomp shakes"), F.Guard->AnimEventShakeCalls.Num(), 1);
+		TestTrue(TEXT("0x10378848 slot 617 stomp"), Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("gargoyle/stomp_")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TzimisceHeadClawHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.TzimisceHeadClawHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19TzimisceHeadClawHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VTzimisceHeadClaw::HandleAnimEvent` `0x103c1540`: slot 619 argument 1 on 0x802.
+	FMisc19Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
+	if (TestNotNull(TEXT("head claw"), F.Guard))
+	{
+		TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+		Sounds.Reset();
+		TestTrue(TEXT("0x103c159a 0x802 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
+		if (TestEqual(TEXT("0x103c15cb one sound, no breath"), Sounds.Num(), 1))
+		{
+			TestTrue(TEXT("0x103c15c9 argument 1 draws Foot_Step3/4"),
+				Sounds[0].Rel.Contains(TEXT("Foot_Step3")) || Sounds[0].Rel.Contains(TEXT("Foot_Step4")));
+		}
+		if (TestEqual(TEXT("one shake"), F.Guard->AnimEventShakeCalls.Num(), 1))
+		{
+			TestEqual(TEXT("0x103c15a0 amplitude 1.3"), F.Guard->AnimEventShakeCalls[0].Amplitude, 1.3f);
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19WerewolfHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.WerewolfHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19WerewolfHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VWerewolf::HandleAnimEvent` `0x103d88e0`.
+	FMisc19Fixture F(TEXT("CNPC_VWerewolf"));
+	if (TestNotNull(TEXT("werewolf"), F.Guard))
 	{
-		// `CNPC_VManBat::HandleAnimEvent` `0x1038e000`.
-		FMisc19Fixture F(TEXT("CNPC_VManBat"));
-		if (TestNotNull(TEXT("manbat"), F.Guard))
+		TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+		Sounds.Reset();
+		TestTrue(TEXT("0x103d8c10 a footfall is claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
+		TestEqual(TEXT("werewolf_footstep_sounds ships 0: silent"), Sounds.Num(), 0);
+		F.Guard->HandleAnimEvent(Misc19Ev(0x834));
+		if (TestEqual(TEXT("0x103d8a1d the slam shakes"), F.Guard->AnimEventShakeCalls.Num(), 1))
 		{
-			TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
-			Sounds.Reset();
-			TestTrue(TEXT("0x1038e110 event 2 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(2)));
-			if (TestEqual(TEXT("one sound"), Sounds.Num(), 1))
-			{
-				TestEqual(TEXT("0x1038e110 event 2 is the screech"), Sounds[0].Rel,
-					FString(TEXT("character/male/sheriff_manbat/screech.wav")));
-			}
-			Sounds.Reset();
-			F.Guard->HandleAnimEvent(Misc19Ev(1));
-			TestTrue(TEXT("0x1038e1b0 event 1 draws a wingflap"),
-				Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("wingflap_")));
+			TestTrue(TEXT("0x103d8a1d ...as an air shake"), F.Guard->AnimEventShakeCalls[0].bAirShake);
+		}
+		F.Guard->HandleAnimEvent(Misc19Ev(0x835));
+		TestEqual(TEXT("0x103d8df0 the activity voice"), F.Guard->WerewolfActivityVoiceCalls, 1);
+		TestTrue(TEXT("0x836..0x83d swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0x838)));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19SabbatLeaderHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.SabbatLeaderHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19SabbatLeaderHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VSabbatLeader::HandleAnimEvent` `0x103a7000`.
+	FMisc19Fixture F(TEXT("CNPC_VSabbatLeader"));
+	if (TestNotNull(TEXT("sabbat leader"), F.Guard))
+	{
+		TestTrue(TEXT("0x103a7066 0x802 is the footstep slot"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19MingXiaoHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.MingXiaoHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19MingXiaoHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VMingXiao::HandleAnimEvent` `0x10392a70`.
+	FMisc19Fixture F(TEXT("CNPC_VMingXiao"));
+	if (TestNotNull(TEXT("ming xiao"), F.Guard))
+	{
+		TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+		Sounds.Reset();
+		TestTrue(TEXT("0x10392ba0 0x802 swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
+		TestEqual(TEXT("0x10392ba0 ...silently"), Sounds.Num(), 0);
+		F.Guard->HandleAnimEvent(Misc19Ev(0x835));
+		if (TestEqual(TEXT("0x10392afe the slam shake"), F.Guard->AnimEventShakeCalls.Num(), 1))
+		{
+			TestEqual(TEXT("0x10392afe amplitude 15"), F.Guard->AnimEventShakeCalls[0].Amplitude, 15.f);
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19HengeyokaiHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.HengeyokaiHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19HengeyokaiHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VHengeyokai::HandleAnimEvent` `0x1037fb60`.
+	FMisc19Fixture F(TEXT("CNPC_VHengeyokai"));
+	FElysiumNpcHengeyokai* const H = static_cast<FElysiumNpcHengeyokai*>(F.Guard);
+	if (!TestNotNull(TEXT("hengeyokai"), F.Guard))
 	{
-		// `CNPC_VGargoyle::HandleAnimEvent` `0x103786c0`.
-		FMisc19Fixture F(TEXT("CNPC_VGargoyle"));
-		if (TestNotNull(TEXT("gargoyle"), F.Guard))
-		{
-			TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
-			Sounds.Reset();
-			TestTrue(TEXT("0x103786d8 event 1 is swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(1)));
-			TestEqual(TEXT("0x103786d8 ...silently"), Sounds.Num(), 0);
-			F.Guard->HandleAnimEvent(Misc19Ev(0x802));
-			TestEqual(TEXT("0x1037881b the stomp shakes"), F.Guard->AnimEventShakeCalls.Num(), 1);
-			TestTrue(TEXT("0x10378848 slot 617 stomp"), Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("gargoyle/stomp_")));
-		}
+		return false;
 	}
+	TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+	H->bHengeyokaiInSharkForm = false;
+	Sounds.Reset();
+	TestTrue(TEXT("0x1037fbe4 0x802 out of shark form is swallowed"), H->HandleAnimEvent(Misc19Ev(0x802)));
+	TestEqual(TEXT("0x1037fbe4 ...silently"), Sounds.Num(), 0);
+	TestEqual(TEXT("0x1037fbe4 ...with no shake"), H->AnimEventShakeCalls.Num(), 0);
+
+	H->bHengeyokaiInSharkForm = true;
+	TestTrue(TEXT("0x1037fbe4 0x803 in shark form is claimed"), H->HandleAnimEvent(Misc19Ev(0x803)));
+	if (TestEqual(TEXT("0x1037fc09 one shake"), H->AnimEventShakeCalls.Num(), 1))
 	{
-		// `CNPC_VTzimisceHeadClaw::HandleAnimEvent` `0x103c1540`: slot 619 argument 1 on 0x802.
-		FMisc19Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
-		if (TestNotNull(TEXT("head claw"), F.Guard))
-		{
-			TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
-			Sounds.Reset();
-			TestTrue(TEXT("0x103c159a 0x802 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
-			if (TestEqual(TEXT("0x103c15cb one sound, no breath"), Sounds.Num(), 1))
-			{
-				TestTrue(TEXT("0x103c15c9 argument 1 draws Foot_Step3/4"),
-					Sounds[0].Rel.Contains(TEXT("Foot_Step3")) || Sounds[0].Rel.Contains(TEXT("Foot_Step4")));
-			}
-			if (TestEqual(TEXT("one shake"), F.Guard->AnimEventShakeCalls.Num(), 1))
-			{
-				TestEqual(TEXT("0x103c15a0 amplitude 1.3"), F.Guard->AnimEventShakeCalls[0].Amplitude, 1.3f);
-			}
-		}
+		TestEqual(TEXT("0x1037fbfb amplitude 2.0"), H->AnimEventShakeCalls[0].Amplitude, 2.0f);
+		TestEqual(TEXT("0x1037fbec radius 1024"), H->AnimEventShakeCalls[0].Radius, 1024.0f);
 	}
+	TestTrue(TEXT("0x1037fc15 slot 617 draws a stomp"),
+		Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("hengeyokai/stomp_")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TzimisceHandleAnimEventTest,
+	"Elysium.Substrate.NpcKernelMisc19.TzimisceHandleAnimEvent", GMisc19Flags)
+bool FElysiumNpcKernelMisc19TzimisceHandleAnimEventTest::RunTest(const FString&)
+{
+	// `CNPC_VTzimisce::HandleAnimEvent` `0x103ba410`.
+	FMisc19Fixture F(TEXT("CNPC_VTzimisce"));
+	if (!TestNotNull(TEXT("tzimisce"), F.Guard))
 	{
-		// `CNPC_VWerewolf::HandleAnimEvent` `0x103d88e0`.
-		FMisc19Fixture F(TEXT("CNPC_VWerewolf"));
-		if (TestNotNull(TEXT("werewolf"), F.Guard))
-		{
-			TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
-			Sounds.Reset();
-			TestTrue(TEXT("0x103d8c10 a footfall is claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
-			TestEqual(TEXT("werewolf_footstep_sounds ships 0: silent"), Sounds.Num(), 0);
-			F.Guard->HandleAnimEvent(Misc19Ev(0x834));
-			if (TestEqual(TEXT("0x103d8a1d the slam shakes"), F.Guard->AnimEventShakeCalls.Num(), 1))
-			{
-				TestTrue(TEXT("0x103d8a1d ...as an air shake"), F.Guard->AnimEventShakeCalls[0].bAirShake);
-			}
-			F.Guard->HandleAnimEvent(Misc19Ev(0x835));
-			TestEqual(TEXT("0x103d8df0 the activity voice"), F.Guard->WerewolfActivityVoiceCalls, 1);
-			TestTrue(TEXT("0x836..0x83d swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0x838)));
-		}
+		return false;
 	}
+	TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
+	Sounds.Reset();
+	TestTrue(TEXT("0x103ba532 0x802 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
+	if (TestEqual(TEXT("0x103ba557 one shake"), F.Guard->AnimEventShakeCalls.Num(), 1))
 	{
-		// `CNPC_VSabbatLeader::HandleAnimEvent` `0x103a7000`.
-		FMisc19Fixture F(TEXT("CNPC_VSabbatLeader"));
-		if (TestNotNull(TEXT("sabbat leader"), F.Guard))
-		{
-			TestTrue(TEXT("0x103a7066 0x802 is the footstep slot"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
-		}
+		TestEqual(TEXT("0x103ba549 amplitude 2.0"), F.Guard->AnimEventShakeCalls[0].Amplitude, 2.0f);
 	}
-	{
-		// `CNPC_VMingXiao::HandleAnimEvent` `0x10392a70`.
-		FMisc19Fixture F(TEXT("CNPC_VMingXiao"));
-		if (TestNotNull(TEXT("ming xiao"), F.Guard))
-		{
-			TArray<FElysiumBodySound>& Sounds = F.World.Services.BodySounds;
-			Sounds.Reset();
-			TestTrue(TEXT("0x10392ba0 0x802 swallowed"), F.Guard->HandleAnimEvent(Misc19Ev(0x802)));
-			TestEqual(TEXT("0x10392ba0 ...silently"), Sounds.Num(), 0);
-			F.Guard->HandleAnimEvent(Misc19Ev(0x835));
-			if (TestEqual(TEXT("0x10392afe the slam shake"), F.Guard->AnimEventShakeCalls.Num(), 1))
-			{
-				TestEqual(TEXT("0x10392afe amplitude 15"), F.Guard->AnimEventShakeCalls[0].Amplitude, 15.f);
-			}
-		}
-	}
+	TestTrue(TEXT("0x103ba563 slot 619 draws a spider footstep"),
+		Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("spiderchick/spi_footstep_indiv_")));
+
+	Sounds.Reset();
+	TestTrue(TEXT("0x103ba524 0xbbb claimed"), F.Guard->HandleAnimEvent(Misc19Ev(0xbbb)));
+	TestTrue(TEXT("0x103ba571 slot 620 draws a swish"),
+		Sounds.Num() == 1 && Sounds[0].Rel.Contains(TEXT("spiderchick/spi_attack_swish_")));
+
+	const int32 ExpressionsBefore = F.Guard->SetExpressionMisc19Calls;
+	TestTrue(TEXT("0x103ba436 event 6 claimed"), F.Guard->HandleAnimEvent(Misc19Ev(6)));
+	TestEqual(TEXT("event 6 sets the 'scream' expression (0x103b9f90(2, 0.5) -> 0x10106580)"),
+		F.Guard->SetExpressionMisc19Calls, ExpressionsBefore + 1);
 	return true;
 }
 

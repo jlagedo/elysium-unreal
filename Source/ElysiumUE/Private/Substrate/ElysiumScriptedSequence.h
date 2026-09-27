@@ -103,9 +103,9 @@ public:
 	// `CanOverride` `0x101a8ac0`: may another director take this one's NPC (the queue refusals).
 	bool CanOverride() const;
 	// `AllowInterrupt` `0x101a8890`, reached from the NPC's `HandleAnimEvent` (`0x10274e30`) script
-	// events, whose arms the port has not built (residue: nothing calls this yet).
+	// events 0x3e9/0x3ea (`FElysiumNpcBase::HandleAnimEvent`).
 	void AllowInterrupt(bool bAllow);
-	// `m_OnScriptEvent[Index]` (`+0x5fcc` + 0x18·Index), fired by the same unbuilt anim-event arms.
+	// `m_OnScriptEvent[Index]` (`+0x5fcc` + 0x18·Index), fired by the 0x3eb arm (`0x101a7230`).
 	void FireScriptEvent(int32 Index);
 
 	// `CineCleanup` `0x1027d170` — a `CAI_BaseNPC` body on the NPC, which reads the NPC's `m_hCine`.

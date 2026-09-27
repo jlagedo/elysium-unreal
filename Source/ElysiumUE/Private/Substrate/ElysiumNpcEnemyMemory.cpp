@@ -122,6 +122,24 @@ bool FElysiumNpcEnemyMemory::IsEluded(const FElysiumEntityHandle& Target) const
 	return Record != nullptr && Record->bEluded;
 }
 
+bool FElysiumNpcEnemyMemory::ClearMemory(const FElysiumEntityHandle& Target)
+{
+	// `0x102dfaa0`: `param_1 != 0` guards the walk; the first record whose `+0x24` handle resolves
+	// to the entity is unlinked (`*prev = rec->next`) and freed (`0x102df1b0`).
+	if (!Target.IsSet())
+	{
+		return false;
+	}
+	const int32 Index = Entries.IndexOfByPredicate(
+		[&Target](const FElysiumNpcEnemyMemoryRecord& Record) { return Record.Handle == Target; });
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	Entries.RemoveAt(Index);
+	return true;
+}
+
 void FElysiumNpcEnemyMemory::MarkEluded(const FElysiumEntityHandle& Target, bool bEluded)
 {
 	if (FElysiumNpcEnemyMemoryRecord* Record = FindMutable(Target))

@@ -17,6 +17,8 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumHint.h"
+#include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEnemy.h"
@@ -60,7 +62,7 @@ void FElysiumNpcBase::Slot354()
 	//    non-null), a set role (`+0x153c != -1`) and grapple type 8 (`+0x1540`,
 	//    `BeFedOnByZombie`) return having fired nothing.
 	const FElysiumEntity* const LivePartner =
-		World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;       // 0x1026cec8 .. 0x1026cef8
+		World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;       // 0x1026cec8 .. 0x1026cef8 (serial 0x1026cef3)
 	if (LivePartner != nullptr)
 	{
 		if (Grapple.Role == EElysiumGrappleRole::None)                    // 0x1026cf01
@@ -81,7 +83,7 @@ void FElysiumNpcBase::Slot354()
 		return;
 	}
 	const FElysiumEntity* const Partner =
-		World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;       // 0x1026cf15 .. 0x1026cf35
+		World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;       // 0x1026cf15 .. 0x1026cf35 (-1 0x1026cf1e)
 	FireOutput(OnFedUponBegin,
 		Partner != nullptr ? Partner->Handle : FElysiumEntityHandle::Invalid()); // 0x1026cf43 / 0x1026cf55
 }
@@ -115,11 +117,16 @@ FElysiumEntity* FElysiumNpcBase::SummonerRedirect(FElysiumEntity* Entity)
 
 void FElysiumNpcBase::ClearEnemyMemoryRecord(FElysiumEntity* Entity)
 {
-	// SEAM for `0x102dfaa0` on slot 541 `GetEnemies()` — see the declaration.
-	(void)GetEnemies();
+	// `CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 `GetEnemies()`: the entity's first
+	// record is unlinked (`FElysiumNpcEnemyMemory::ClearMemory`); a null entity removes nothing.
+	FElysiumNpcEnemyMemory* const Enemies = static_cast<FElysiumNpcEnemyMemory*>(GetEnemies());
 	++ClearEnemyMemoryRecordCalls;
 	LastClearedEnemyMemoryRecord =
 		Entity != nullptr ? Entity->Handle : FElysiumEntityHandle::Invalid();
+	if (Enemies != nullptr && Entity != nullptr)
+	{
+		Enemies->ClearMemory(Entity->Handle);
+	}
 }
 
 void FElysiumNpcBase::TaskFailText(const TCHAR* Text)
@@ -200,6 +207,10 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	// at `0x102754d1` without the base; only the default label forwards. So every named arm answers
 	// claimed, its guard failures included.
 	const int32 Id = Event.Event;
+	// Dispatch: `0x10274e45` JG (id > 0x3fe -> the second band at `0x1027512c`); `0x10274e5e` JA
+	// (id - 0x3e8 > 10 -> default) and the table jump `0x10274e64` (`0x102754dc`); in the second band
+	// `0x10275134` JA (id - 0x7d1 > 0x34 -> default) and the table jump `0x10275142` through the byte
+	// table `0x1027553c` into `0x10275508`. The C++ switch is those three jumps.
 	switch (Id)
 	{
 	case 0x3fc:
@@ -217,43 +228,52 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		return true;
 	case 0x3e9:
 	case 0x3ea:                                                           // 0x10275004 / 0x1027508c
-	{
-		// A live `m_hCine` -> `AllowInterrupt(cine, 0 / 1)` (`0x101a8890`). SEAM (spec 0003).
-		if (ResolveCine() != nullptr)                                     // 0x1027500d .. 0x1027503b
+		// A live `m_hCine` (`+0x5d74`: -1 `0x1027500d`/`0x10275095`, serial `0x10275031`/`0x102750b9`,
+		// null entry `0x1027503b`/`0x102750c3`) -> `AllowInterrupt(0 / 1)` (`0x101a8890`). The
+		// re-resolve (`0x1027504a`/`0x10275063`, `0x102750d2`/`0x102750eb`) of the handle just
+		// validated cannot miss; its null arm (`0x1027507e`/`0x10275107`) is unreachable.
+		if (FElysiumScriptedSequence* const Cine = ResolveCine())
 		{
-			FAnimEventScriptSeamCall Call;
-			Call.Event = Id;
-			Call.Target = 0;
-			Call.Argument = Id == 0x3ea ? 1 : 0;
-			AnimEventScriptSeamCalls.Add(Call);                           // 0x1027506b / 0x102750f3
+			Cine->AllowInterrupt(Id == 0x3ea);                            // 0x1027506b push 0 / 0x102750f3 push 1
 		}
 		return true;
-	}
 	case 0x3eb:                                                           // 0x10274f27
 	{
-		// `FireScriptEvent(atoi(options))` on the live cine (`0x101a7230`), else on `m_pHintNode`
-		// (`0x102d09b0`), else on the Troika's interesting place (`+0x98`'s `+0x62ec`,
-		// `0x102db3e0`). SEAM (spec 0003): the target the arm resolves is recorded.
-		FAnimEventScriptSeamCall Call;
-		Call.Event = Id;
-		Call.Argument = FCString::Atoi(*Event.Options);                   // 0x10274f99 / fc0 / fea
-		if (ResolveCine() != nullptr)                                     // 0x10274f42 .. 0x10274f69
+		// The Troika's interesting place (`+0x98`'s `+0x62ec`) is read FIRST (`0x10274f31` /
+		// `0x10274f33`); then `atoi(options)` goes to the live cine's `0x101a7230` (`m_hCine`
+		// checks `0x10274f42`/`0x10274f64`/`0x10274f69`, re-resolve `0x10274f74`/`0x10274f8d`), else
+		// to `m_pHintNode`'s `0x102d09b0` (`0x10274fba`), else to the place's `0x102db3e0`
+		// (`0x10274fe0`). Each fires its `OnScriptEvent0<n>` / `OnAnimEvent<n>` only for 1..8.
+		FElysiumNpc* const Troika = AsNpc();                              // 0x10274f27 +0x98
+		FElysiumInterestingPlace* const Place =
+			Troika != nullptr ? Troika->CurrentAmbientSpot() : nullptr;   // 0x10274f33 +0x62ec
+		if (FElysiumScriptedSequence* const Cine = ResolveCine())
 		{
-			Call.Target = 0;                                              // 0x10274fa4
+			// `0x101a7230(n)`: `+0x5fb4 + 0x18n` for n in 1..8, i.e. the port's zero-based index.
+			const int32 N = FCString::Atoi(*Event.Options);               // 0x10274f99
+			if (N >= 1 && N <= 8)
+			{
+				Cine->FireScriptEvent(N - 1);                             // 0x10274fa4
+			}
+			return true;
 		}
-		else if (BaseScheduleHost.HintNode != INDEX_NONE)                 // 0x10274fba
+		if (BaseScheduleHost.HintNode != INDEX_NONE)                      // 0x10274fba
 		{
-			Call.Target = 1;                                              // 0x10274fd0
+			FireHintAnimEvent(BaseScheduleHost.HintNode,
+				FCString::Atoi(*Event.Options));                          // 0x10274fc0 / 0x10274fd0
+			return true;
 		}
-		else if (AsNpc() != nullptr)                                      // 0x10274f31 / 0x10274fe0
-		{
-			Call.Target = 2;                                              // 0x10274ff6
-		}
-		else
+		if (Place == nullptr)                                             // 0x10274fe0
 		{
 			return true;
 		}
-		AnimEventScriptSeamCalls.Add(Call);
+		// `0x102db3e0(this, n)`: `(n*3 + 0x8d)*8` = `OnAnimEvent<n>` (`+0x480` for n = 1), n in 1..8,
+		// this NPC as activator.
+		const int32 N = FCString::Atoi(*Event.Options);                   // 0x10274fea
+		if (N >= 1 && N <= 8)
+		{
+			Place->FireOutput(FName(*FString::Printf(TEXT("OnAnimEvent%d"), N)), Handle); // 0x10274ff6
+		}
 		return true;
 	}
 	case 0x3ec:
@@ -297,6 +317,8 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		return true;
 	case 0x7e4:                                                           // 0x102751a6, the 180 turn
 		SetIdealActivity(1);                                              // 0x102751aa ACT_IDLE
+		// `0x102751c5` slot 221 `GetAngles` (`vt+0x374`) feeds `0x102751d3` (`0x1000a7c7`,
+		// `SetBoneController(0, yaw)`), which the port has no bone controller for.
 		BaseScheduleHost.MemoryBits &= ~Misc19MemoryTurning;              // 0x102751bf
 		// `0x10095cb0(0, GetAngles().y)` — `SetBoneController(0, yaw)`; the port drives no bone
 		// controller, the facing is the entity's own angles (the identity the facing family
@@ -307,11 +329,10 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		}
 		return true;
 	case 0x7e6:                                                           // 0x102751f1
-		if (Event.Options.IsEmpty())                                      // 0x102751f6
-		{
-			return true;
-		}
+		// `0x102751f4`/`0x102751f6` test the options POINTER only; a model event's options are
+		// never null, so an empty string reaches `atoi("") = 0` (`0x102751fd`).
 		// `0x102e0b40` then `0x102e1c10(motor, GetAbsAngles().y + atoi(options), -1.0)`.
+		// `0x10275218`: slot 219 `GetAbsAngles` (`vt+0x36c`), its `.y` plus the `atoi`.
 		SetAlternateAiIdealYaw(static_cast<float>(Angles.Y)
 			+ static_cast<float>(FCString::Atoi(*Event.Options)));        // 0x1027520f / 0x10275234
 		return true;
@@ -326,6 +347,7 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		}
 		else
 		{
+			// `m_hTargetEnt` -1 (`0x1027528e`) or a stale serial (`0x102752af`) -> the stolen arm.
 			Found = World != nullptr ? World->Resolve(GetTarget()) : nullptr; // 0x10275285 .. 0x102752b9
 		}
 		// `+0xa0` (`m_pCombatWeapon`, the weapon self-cast): every VtMB item is one.
@@ -362,22 +384,28 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		// The optional `FindEntityGeneric(NULL, options, this, NULL)` and its slot 192
 		// (`WorldSpaceCenter`) are computed and DISCARDED (`0x10275448`/`0x1027545a`); the drop is
 		// unconditional and takes no target (retail's divergence from the SDK's throw, kept).
+		// `0x1027543b` JZ (null options skip the lookup), `0x1027544f` JZ (a miss skips slot 192).
 		Weapon_Drop(ActiveWeaponEntity(), nullptr, false);                // 0x10275468 / 0x10275470 slot 385
 		return true;
 	case 0x7fa:
 	case 0x7fb:                                                           // 0x102753ba / 0x10275393
 		// Active weapon null or no option -> return; `LookupSequence(option)` / `atoi(option)` on
 		// the weapon model, -1 -> return, else `0x10260a50(weapon, seq)`. SEAM: no weapon model.
-		if (ActiveWeaponEntity() != nullptr && !Event.Options.IsEmpty())  // 0x1027539e / 0x102753a9 / 0x102753c5 / 0x102753d0
+		// The options test (`0x102753a9` / `0x102753d0`) is the pointer's, never null here.
+		if (ActiveWeaponEntity() != nullptr)                              // 0x10275395 / 0x1027539e / 0x102753bc / 0x102753c5
 		{
+			// A `-1` sequence returns (`0x102753e1`); otherwise `0x102753ea` (`0x1000d0b2`,
+			// `ResetSequence` on the weapon model).
 			++WeaponModelSequenceRequests;                                // 0x102753d9 / 0x102753b0
 		}
 		return true;
 	case 0x7fc:                                                           // 0x102753f8
 		// `LookupActivity(option)` on the active weapon; -1 -> return; else `Weapon_SetActivity(act,
 		// 0)`. SEAM: the weapon lookup answers -1.
-		if (ActiveWeaponEntity() != nullptr && !Event.Options.IsEmpty())  // 0x10275401 / 0x1027540c
+		// The options test (`0x1027540c`) is the pointer's, never null here.
+		if (ActiveWeaponEntity() != nullptr)                              // 0x102753fa / 0x10275401
 		{
+			// A found activity reaches `0x10275428` (`0x100101ea`, `Weapon_SetActivity(act, 0)`).
 			++WeaponModelSequenceRequests;                                // 0x10275415; 0x1027541d -1 -> return
 		}
 		return true;
@@ -399,9 +427,27 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	// `0x102754a3`: `pSource == this` (the port dispatches only this character's own timelines)
 	// and the id outside 3000..0xfa2 -> `CBaseCombatCharacter::HandleAnimEvent` (`0x102754bb`);
 	// otherwise `Weapon_HandleAnimEvent` (`0x102754cc`).
+	// `0x102754a6` JNZ: an event whose `pSource` is not this character goes to the weapon route too.
 	if (Id >= 3000 && Id <= 0xfa2)                                        // 0x102754ae / 0x102754b6
 	{
 		return WeaponHandleAnimEventMisc19(Event);
 	}
-	return FElysiumScriptedCharacter::HandleAnimEvent(Event);
+	return FElysiumCombatCharacter::HandleAnimEvent(Event);               // 0x102754bb direct call
+}
+
+bool FElysiumNpcBase::FireHintAnimEvent(int32 HintNode, int32 N)
+{
+	// `0x102d09b0(hint, activator, n)`: `0 < n < 9` fires `+0x4e4 + 0x18n` — `OnAnimEvent<n>`
+	// (`CAI_Hint +0x4fc` for n = 1) — with the calling NPC as activator and the hint as caller.
+	if (N < 1 || N > 8 || World == nullptr || !World->Entities().IsValidIndex(HintNode))
+	{
+		return false;
+	}
+	FElysiumHint* const Hint = FElysiumHint::Cast(World->Entities()[HintNode].Get());
+	if (Hint == nullptr)
+	{
+		return false;
+	}
+	Hint->FireOutput(FName(*FString::Printf(TEXT("OnAnimEvent%d"), N)), Handle);
+	return true;
 }

@@ -349,13 +349,6 @@ const TCHAR* FElysiumNpcHengeyokai::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// Slot 259: `0x1037fb60`, the footstep body of `docs/vtmb/footsteps.md` §1.7; an id it does not
-// claim is a direct call into the base body.
-bool FElysiumNpcHengeyokai::HandleAnimEvent(const FElysiumAnimEvent& Event)
-{
-	return SpeciesFootstepAnimEvent(TEXT("npc_VHengeyokai"), Event);
-}
-
 // Slot 292: `0x103802a0` — no flinch from gunfire or a zero-magnitude hit; otherwise the base
 // `CBaseCombatCharacter::DamageFlinch`. The port's flinch runs through `StartDamageFlinch`, whose
 // species hook this is.

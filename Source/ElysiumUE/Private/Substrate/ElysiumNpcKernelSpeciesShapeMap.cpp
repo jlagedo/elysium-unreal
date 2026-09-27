@@ -194,25 +194,16 @@ namespace
 		FElysiumNpcAsianVampire, bSuppressRanged),  // m_bSuppressRanged
 
 	// --- CNPC_VBach ---
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6664,  // m_vecLastOccludeOrigin
-		"no port member: no ported body reads or writes the word (Bach occlusion bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6670,  // m_flOccludeEnterTime
-		"no port member: no ported body reads or writes the word (Bach occlusion bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6674,  // m_iWasOccluded
-		"no port member: no ported body reads or writes the word (Bach occlusion bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm), 0x103652b0 Bach::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6678,  // m_iReusedOccludeCount
-		"no port member: no ported body reads or writes the word (Bach occlusion bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm), 0x103652b0 Bach::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x667c,  // m_iGrenadeActive
-		"no port member: no ported body reads or writes the word (Bach grenade bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x10366120 "
-		"Bach::InputGrenadeEnter (no override row), 0x10366190 Bach::InputGrenadeExit (no "
-		"override row)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6664,
+		FElysiumNpcBach, BachLastOccludeOriginUnits),  // m_vecLastOccludeOrigin
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6670,
+		FElysiumNpcBach, BachOccludeEnterTime),  // m_flOccludeEnterTime
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6674,
+		FElysiumNpcBach, BachWasOccluded),  // m_iWasOccluded
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6678,
+		FElysiumNpcBach, BachReusedOccludeCount),  // m_iReusedOccludeCount
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x667c,
+		FElysiumNpcBach, BachGrenadeActive),  // m_iGrenadeActive
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6680,
 		FElysiumNpcBach, BachLastGrenadeTime),  // m_flLastGrenadeTime
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6684,
@@ -235,10 +226,8 @@ namespace
 		FElysiumNpcBach, BachTeleportState),  // m_iBachTeleportState
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a0,
 		FElysiumNpcBach, bBachCamperFlag),  // m_bCamperFlag
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x66a1,  // m_bBachInStartingPosition
-		"no port member: no ported body reads or writes the word (Bach starting-position bodies "
-		"are story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm), 0x10366120 Bach::InputGrenadeEnter (no override row)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a1,
+		FElysiumNpcBach, bBachInStartingPosition),  // m_bBachInStartingPosition
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x66a2,  // m_bSkipToWarning
 		"no port member: no ported body reads or writes the word (Bach warning bodies are "
 		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
@@ -290,10 +279,8 @@ namespace
 	// --- CNPC_VCop ---
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VCop, 0x6664,
 		FElysiumNpcCop, CopPursuitHandle),  // m_hPursuitPlayer
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VCop, 0x6668,  // m_eOldPlayerRelationType
-		"no port member: no ported body reads or writes the word (the pursuit relationship "
-		"save/restore is story-8 residue); retail accessors: 0x10371a20 Cop::Spawn (residue), "
-		"0x10372dd0 Cop::vfunc598 (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VCop, 0x6668,
+		FElysiumNpcCop, CopOldPlayerRelationType),  // m_eOldPlayerRelationType
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VCop, 0x666c,  // m_iOldPlayerRelationPriority
 		"no port member: no ported body reads or writes the word (the pursuit relationship "
 		"save/restore is story-8 residue); retail accessors: none recorded"),

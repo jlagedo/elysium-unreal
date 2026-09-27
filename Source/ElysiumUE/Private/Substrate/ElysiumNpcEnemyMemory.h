@@ -46,6 +46,10 @@ public:
 	FElysiumNpcEnemyMemoryRecord* FindMutable(const FElysiumEntityHandle& Target);
 	bool IsEluded(const FElysiumEntityHandle& Target) const;
 	void MarkEluded(const FElysiumEntityHandle& Target, bool bEluded = true);
+	// `CAI_Enemies::ClearMemory` (`0x102dfaa0`): unlink the FIRST record whose handle resolves to
+	// the target; a null target or no match removes nothing. The notify retail makes on the way out
+	// (the list's `+0x0` vtable `+0xe0`, or `0x103169a0` by the byte at `+8`) has no port target.
+	bool ClearMemory(const FElysiumEntityHandle& Target);
 
 	const TArray<FElysiumNpcEnemyMemoryRecord>& Records() const { return Entries; }
 	// Spawn copies Rules.FreeKnowledgeDuration (default/authored V2 value .25) into CAI_Memory.

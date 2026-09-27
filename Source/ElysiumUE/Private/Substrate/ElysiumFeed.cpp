@@ -60,6 +60,7 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
 
@@ -198,7 +199,6 @@ namespace
 		return false;
 	}
 
-	const FName GOnFedUponBegin(TEXT("OnFedUponBegin"));
 	const FName GOnFedUponEnd(TEXT("OnFedUponEnd"));
 
 	float RenderedFeedHeightCm(const FElysiumCombatCharacter& Character)
@@ -750,13 +750,12 @@ bool FElysiumCombatCharacter::FeedBegin(FElysiumCombatCharacter& Victim)
 	FeedState.Interval = ElysiumFeed::InitialInterval(B);
 	FeedState.NextPulse = static_cast<float>(Now) + FeedState.Interval;
 
-	// The victim's feed-begin callback. It fires the victim's own `OnFedUponBegin` with the FEEDER
-	// as activator and the victim as caller — the identity the tutorial's maker wires resolve
-	// against, and the one this runtime picks. OPEN: retail's exact caller/activator identity for
-	// the feed callbacks needs the controlled tutorial trace (`feeding.md` § "Open verification
-	// gaps"). Chosen this way because it matches every other kind-2 producer on the chain —
-	// `OnDeath` fires from the entity that died, with the killer as activator.
-	Victim.FireOutput(GOnFedUponBegin, Handle);
+	// The victim's feed-begin callback: `FeedBegin` `0x10339d90` dispatches the VICTIM's slot 354
+	// (`CALL [EDX+0x588]` after the `GetRefEHandle` write of `+0x149c`). `CAI_BaseNPC`'s fill
+	// `0x1026cec0` makes the victim oblivious and fires its `OnFedUponBegin` with its grapple partner
+	// as activator (null without a role or a live partner; nothing in a zombie feed, type 8);
+	// `CBaseCombatCharacter`'s `0x1014f8d0` is `return`.
+	Victim.Slot354();
 	PlayFeedLoopAudio(Victim);
 
 	// `FeedBegin` `0x10339d90`'s tail, on the not-already-grappled arm: a PLAYER feeder, in a map
@@ -966,6 +965,15 @@ void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)
 		// keeps the later OnDeath consequence terminal. The tutorial authors both results on the
 		// victim; reversing them would let its success assignment overwrite its death assignment.
 		Victim->FireOutput(GOnFedUponEnd, Handle);
+		// The rest of the victim's feed-end callback, `CAI_BaseNPC` slot 355 (`0x1026cf90`, reached
+		// from `FeedInterrupt` `0x1033a9e0`): after the output, `0x10007ea0` -> `0x1026d160`
+		// unconditionally — the release half of the make-oblivious the feed-begin callback (slot 354,
+		// `0x1026cec0`) took. `CBaseCombatCharacter`'s slot 355 is a lone `RET`, so only an NPC victim
+		// runs it.
+		if (FElysiumNpc* const VictimNpc = Victim->AsNpc())
+		{
+			FElysiumScriptedSequence::ReleaseNpcOblivious(*VictimNpc);   // 0x1026d017
+		}
 		if (bDepleted)
 		{
 			// 5. below one selects the native death/incapacitation outcome.

@@ -974,9 +974,11 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 				Chase->Interrupts.Has(Admitted));
 		}
 	}
-	// ...and the enemy transaction's own gate reads that mask, so a dead enemy is not starved.
+	// ...and the enemy transaction's own gate reads that mask, so a dead enemy is not starved:
+	// `ChooseEnemy` (`0x10279dd0`) asks `ConditionInterruptsCurrentSchedule` (`0x10269c70`, the mask
+	// alone) for ENEMY_DEAD at `0x10279ed9` (the port-only `IsScheduleInterested` is gone).
 	TestTrue(TEXT("the starvation gate no longer blocks a dead enemy mid-chase"),
-		ElysiumNpcEnemy::IsScheduleInterested(*F.Fighter, ECond::EnemyDead));
+		ElysiumSchedule::MaskHasCondition(F.Fighter->Schedule, *F.Fighter, ECond::EnemyDead));
 
 	F.Fighter->Cognition.Conditions = FElysiumNpcConditions::Of({ ECond::EnemyDead });
 	// Fixture correction: `10281340` invalidates before task work, but `10281b89` reselects and

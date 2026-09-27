@@ -808,13 +808,6 @@ const TCHAR* FElysiumNpcMingXiao::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// Slot 259: `0x10392a70`, the footstep body of `docs/vtmb/footsteps.md` §1.7; an id it does not
-// claim is a direct call into the base body.
-bool FElysiumNpcMingXiao::HandleAnimEvent(const FElysiumAnimEvent& Event)
-{
-	return SpeciesFootstepAnimEvent(TEXT("npc_VMingXiao"), Event);
-}
-
 // Slot 563: `0x10392c40`, the `GoalToleranceLead` shape; a replacement that does not chain.
 void FElysiumNpcMingXiao::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm,
 	void* Tolerance, void* SecondTolerance)

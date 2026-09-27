@@ -1524,6 +1524,16 @@ namespace ElysiumNpcKernelBindings
 		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
 		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
 		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_vecLastOccludeOrigin"),
+			&FElysiumNpcBach::BachLastOccludeOriginUnits, EElysiumField::Save);  // +0x6664 vector
+		ElysiumAddClassField(D, TEXT("m_flOccludeEnterTime"),
+			&FElysiumNpcBach::BachOccludeEnterTime, EElysiumField::Save);  // +0x6670 time
+		ElysiumAddClassField(D, TEXT("m_iWasOccluded"), &FElysiumNpcBach::BachWasOccluded,
+			EElysiumField::Save);  // +0x6674 int
+		ElysiumAddClassField(D, TEXT("m_iReusedOccludeCount"),
+			&FElysiumNpcBach::BachReusedOccludeCount, EElysiumField::Save);  // +0x6678 int
+		ElysiumAddClassField(D, TEXT("m_iGrenadeActive"), &FElysiumNpcBach::BachGrenadeActive,
+			EElysiumField::Save);  // +0x667c int
 		ElysiumAddClassField(D, TEXT("m_flLastGrenadeTime"), &FElysiumNpcBach::BachLastGrenadeTime,
 			EElysiumField::Save);  // +0x6680 time
 		ElysiumAddClassField(D, TEXT("m_flShieldTime"), &FElysiumNpcBach::BachShieldTime,
@@ -1538,6 +1548,8 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x669c int
 		ElysiumAddClassField(D, TEXT("m_bCamperFlag"), &FElysiumNpcBach::bBachCamperFlag,
 			EElysiumField::Save);  // +0x66a0 bool
+		ElysiumAddClassField(D, TEXT("m_bBachInStartingPosition"),
+			&FElysiumNpcBach::bBachInStartingPosition, EElysiumField::Save);  // +0x66a1 bool
 		ElysiumAddClassField(D, TEXT("m_bFireOccluded"), &FElysiumNpcBach::bBachFireOccluded,
 			EElysiumField::Save);  // +0x66a3 bool
 		ElysiumAddClassField(D, TEXT("m_bShieldActive"), &FElysiumNpcBach::bBachShieldActive,
@@ -1546,22 +1558,10 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x66a7 bool
 		ElysiumAddClassField(D, TEXT("m_bCanFightYet"), &FElysiumNpcBach::bCanFightYet,
 			EElysiumField::Save);  // +0x66a8 bool
-		// NOT SAVED +0x6664 m_vecLastOccludeOrigin (vector) — no port member (the species shape
-		// map's ABSENT row says why)
-		// NOT SAVED +0x6670 m_flOccludeEnterTime (time) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x6674 m_iWasOccluded (int) — no port member (the species shape map's ABSENT
-		// row says why)
-		// NOT SAVED +0x6678 m_iReusedOccludeCount (int) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x667c m_iGrenadeActive (int) — no port member (the species shape map's ABSENT
-		// row says why)
 		// NOT SAVED +0x6694 m_flWarningTime (time) — no port member (the species shape map's ABSENT
 		// row says why)
 		// NOT SAVED +0x6698 m_flSkipToWarningTime (float) — no port member (the species shape map's
 		// ABSENT row says why)
-		// NOT SAVED +0x66a1 m_bBachInStartingPosition (bool) — no port member (the species shape
-		// map's ABSENT row says why)
 		// NOT SAVED +0x66a2 m_bSkipToWarning (bool) — no port member (the species shape map's
 		// ABSENT row says why)
 	}
@@ -1618,12 +1618,12 @@ namespace ElysiumNpcKernelBindings
 		// and they cannot collide with the externals above.
 		ElysiumAddClassField(D, TEXT("m_hPursuitPlayer"), &FElysiumNpcCop::CopPursuitHandle,
 			EElysiumField::Save);  // +0x6664 ehandle
+		ElysiumAddClassField(D, TEXT("m_eOldPlayerRelationType"),
+			&FElysiumNpcCop::CopOldPlayerRelationType, EElysiumField::Save);  // +0x6668 int
 		ElysiumAddClassField(D, TEXT("m_bWasEverInCombat"), &FElysiumNpcCop::bWasEverInCombat,
 			EElysiumField::Save);  // +0x6670 bool
 		ElysiumAddClassField(D, TEXT("m_bCountedAlive"), &FElysiumNpcCop::bCopCountedAlive,
 			EElysiumField::Save);  // +0x6671 bool
-		// NOT SAVED +0x6668 m_eOldPlayerRelationType (int) — no port member (the species shape
-		// map's ABSENT row says why)
 		// NOT SAVED +0x666c m_iOldPlayerRelationPriority (int) — no port member (the species shape
 		// map's ABSENT row says why)
 	}
@@ -3009,13 +3009,13 @@ namespace ElysiumNpcKernelBindings
 			case EClass::AsianVampire:
 				return {0, 0, 0, 0, 7};
 			case EClass::Bach:
-				return {0, 0, 0, 3, 11};
+				return {0, 0, 0, 3, 17};
 			case EClass::CameraSecurity:
 				return {1, 0, 0, 0, 0};
 			case EClass::ChangBros:
 				return {0, 0, 0, 0, 9};
 			case EClass::Cop:
-				return {0, 0, 0, 0, 3};
+				return {0, 0, 0, 0, 4};
 			case EClass::FrenzyShadow:
 				return {0, 0, 0, 0, 2};
 			case EClass::Gargoyle:
