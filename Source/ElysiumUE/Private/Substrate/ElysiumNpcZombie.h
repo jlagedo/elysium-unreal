@@ -73,6 +73,16 @@ public:
 	 *  `m_OnAttackedVictim` (`+0x66e8`) with no base forward. */
 	void FUN_103e12c0(FElysiumEntity* Victim);
 
+	// --- 0019/8 Damage19 (lane L09): `OnTakeDamage` `0x103e06d0`'s word and cvar ------------
+	/** `+0x66e0 m_bShouldGib` — raised at `103e0801` when the hit beats the head threshold;
+	 *  `CreateCorpse` `0x103dfbb0` reads it. No port word stood for it (`bZombieHeadHit` is +0x66e1). */
+	bool bZombieShouldGib = false;
+	/** SEAM for the ConVar object at `DAT_1094049c`, read as `cv->vtable[1]() ? 0 : cv->m_nValue`
+	 *  (`103e07cd..103e07e5`). The object is unnamed and never constructed by any corpus function
+	 *  (`vtmb_globals 1094049c`: two readers, no writer), so its name and default are unrecovered;
+	 *  an unconstructed ConVar reads 0, which is the answer. */
+	int32 ZombieHeadThresholdCvar() const;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage(void* Arg0) override;

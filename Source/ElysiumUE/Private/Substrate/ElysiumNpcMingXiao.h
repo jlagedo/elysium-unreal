@@ -323,6 +323,27 @@ public:
 	 *  `RET 0xc`). No weapon-side line test stands on the kernel; answers true, the clear line. */
 	bool MingXiaoWeaponLosCondition(FElysiumEntity* Weapon, const FVector& FromCm, const FVector& ToCm);
 
+	// --- 0019/8 Damage19 (lane L09): `OnTakeDamage_Alive` `0x10395ae0`'s helpers -------------
+	/** `FUN_10395650(this, info, weapon)` — the hit-to-tentacle index. A `weapon` whose slot-360 word
+	 *  carries `0x18000` defers to `FUN_103952b0`; otherwise `m_LastHitGroup` (`+0x1594`) maps
+	 *  1->-2, 4->1, 5->0, 6->5, 7->4, 8->3, 9->2, anything else -> -1. */
+	int32 MingXiaoHitTentacleIndex(const FElysiumEntity* Weapon);
+	/** `FUN_103952b0` — the melee arm of the same map: the hitgroup's own tentacle when it is still
+	 *  connected (`0x10398000`), falling through to its neighbours; a hitgroup outside 1 and 4..9
+	 *  draws `RandomInt(0,99)` against the tuning record's `+0x2c` cell and walks 1,0,3,2,5,4. */
+	int32 MingXiaoMeleeTentacleIndex();
+	/** SEAM for `FUN_101e8da0(0x10739d08)+0x2c`, the melee-spread chance `0x103952b0` draws against.
+	 *  The tuning record is unrecovered here as it is for families Facing and Squad; answers 0, so the
+	 *  draw never passes and the index is -1. */
+	int32 MingXiaoMeleeSpreadChance() const;
+	/** SEAM for `FUN_10395750` (`FElysiumNpc::MingXiaoApplyTentacleDamage`, Boss19's row, lane L12):
+	 *  the damage router the head runs on its packet copy before the Troika chain. Counted, and the
+	 *  index/weapon kept; the integrator binds this call to L12's body and deletes the seam. */
+	int32 MingXiaoApplyTentacleDamageCalls = 0;
+	int32 MingXiaoLastAppliedTentacleIndex = INDEX_NONE;
+	void MingXiaoApplyTentacleDamageSeam(int32 TentacleIndex, FElysiumTakeDamageInfo& Info,
+		const FElysiumEntity* Weapon);
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

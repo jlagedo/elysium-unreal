@@ -154,6 +154,13 @@ public:
 	 *  `0x600400b`, `CTraceFilterSimple(this, 0)`; true when `fraction == 1.0`. False for no enemy. */
 	bool HengeyokaiThrowLosTest(FElysiumEntity* Enemy);
 
+	// --- 0019/8 Damage19 (lane L09): `OnTakeDamage_Alive` `0x103801d0`'s one call ----------
+	/** SEAM for `FUN_103830e0` (`FElysiumNpc::HengeyokaiEnterMorph`, Boss19's row, lane L12): stamp
+	 *  `NPC_VHengeyokai.cpp:0x985`, `SetSchedule(0x16e, false)`, `SetSkinFadeTime(0.0)`,
+	 *  `FadeToSkin(1)`. Counted; the integrator binds this call to L12's body and deletes the seam. */
+	int32 HengeyokaiEnterMorphCalls = 0;
+	void HengeyokaiEnterMorphSeam();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;
