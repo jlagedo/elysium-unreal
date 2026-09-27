@@ -260,6 +260,11 @@
           "note": "step 6: moved-member overlay retargets and requalified registry references"
         }
       ]
+    },
+    "step6": {
+      "commit": "7d63e7fadffe6e68a9de717911364238e81724d2",
+      "acceptance": "acceptance-step6.json",
+      "note": "--check step6 reads this tree once recorded. The step-6 gate ran on the 7d63e7fa working tree (782a27e6 + packets 6c-6i), committed unchanged."
     }
   },
   "step1_packets": {

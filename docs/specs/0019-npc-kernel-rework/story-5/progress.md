@@ -1,10 +1,10 @@
-# Story 5 — step 6 accepted on the working tree (awaiting commit); step 5 accepted (`e0a71ee3`)
+# Story 5 — step 6 accepted (`7d63e7fa`)
 
 **Step 6 (every slot body on its retail owner), 2026-09-27.** Record:
 [packets/6-slot-owners.md](packets/6-slot-owners.md).
 - 6a: records and checker, committed `5ddaee2c`.
 - 6b: `FElysiumAnimatingOverlay`/`FElysiumFlex`, committed `782a27e6`.
-- 6c-6i (uncommitted, one commit):
+- 6c-6i, committed `7d63e7fa`:
   - the per-owner generated surface;
   - 84 hand bodies plus 129 members up the chain;
   - the eight integrations;
@@ -22,7 +22,7 @@ Acceptance on the working tree ([acceptance-step6.json](acceptance-step6.json)):
 
 ### Handoff
 
-- Awaiting the owner's go to commit 6c-6i as the step-6 commit. Afterwards, record
+- Step 6 committed as `7d63e7fa`; recorded
   `history.step6.commit` in the manifest so `--check step6` reads the accepted tree.
 - Open for the owner:
   - `.claude/rules/cpp.md` (one class per file) vs the two chain classes in `ElysiumPlayer.h`: a
