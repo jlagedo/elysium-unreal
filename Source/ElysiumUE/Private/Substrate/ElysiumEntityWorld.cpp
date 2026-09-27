@@ -19,6 +19,7 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumNodeEntity.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
@@ -706,13 +707,7 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity(const TCH
 		UE_LOG(LogElysiumWorld, Warning,
 			TEXT("\nGetControllerNPC() asked for NPC class: %s, but already has NPC of class %s.\n")
 			TEXT(" Deleting old NPC, this better be OK!!\n\n"), Requested, *ExistingClass);
-		Existing->Kill();
-		if (FElysiumCombatCharacter* Old = Existing->AsCombatCharacter(); Old != nullptr && Old->Visual)
-		{
-			Old->Visual->DestroyComponent();
-			Old->Visual = nullptr;
-		}
-		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+		RemovePlayerControllerEntity(EElysiumControllerRelease::CopyNothing);
 	}
 	FElysiumPlayer* Source = FindPlayer();
 	if (!Source)
@@ -758,111 +753,218 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity(const TCH
 	//   `CopyAnimationDataFrom(npc, me)` (`0x10097310`): `SetModel`, `SetModelIndex`, `m_flCycle`,
 	//   `m_nTopColor`, `m_nBottomColor`, `m_fEffects = me->m_fEffects | 0x10`, `m_nSequence`,
 	//   `m_flAnimTime`, `m_nBody`, `m_nSkin`, `m_nPhysicsChainDisableMask`. The port's player carries
-	//   the model and the skin of those; its sequence, cycle, colour, body, effects and physics-chain
-	//   words have no member, so they are not copied (the effects word reads as 0 and takes the
-	//   `| 0x10`).
+	//   the model, the skin and the anim time of those; its sequence, cycle, colour, body, effects and
+	//   physics-chain words have no member, so they are not copied (the effects word reads as 0 and
+	//   takes the `| 0x10`, which `CAI_BaseNPCTroika::NPCInit` `1029a0c0` then zeroes inside
+	//   `DispatchSpawn` below — the stand-in ends at exactly `0x60`).
 	Controller->Model = Source->Model;
 	Controller->Skin = Source->Skin;
 	Controller->EffectsWord |= 0x10u;
-	// **NAMED DIVERGENCE — the disposition copy.** Retail `GetControllerNPC` `0x10161a70` copies NO
-	// disposition. The port copies the player's because it has no member for `m_nSequence` (the word
-	// `CopyAnimationDataFrom` `0x10097310` copies), and the port picks a body's standing sequence from
-	// its disposition, so this is how the stand-in starts in the player's pose. It is not inert: the
-	// disposition feeds the Troika idle-disposition behaviour and `ApplyDefaultDispositionOnActivate`
-	// (which runs because the stand-in's `Classify` is 2, non-zero). **Open:** whether retail's
-	// stand-in keeps the copied sequence or immediately re-poses from its own (empty) default
-	// disposition is unrecovered; this copy goes when `m_nSequence` has a port member.
-	Controller->Disposition = Source->Disposition;
-	Controller->DispositionLevel = Source->DispositionLevel;
+	// `m_flAnimTime` and the two tables the player's chain does carry: `CopyAnimationDataFrom` copies
+	// `m_flAnimTime`; the gesture and flinch tables are NOT in its list, so they stay the fresh
+	// entity's. No disposition is copied — retail `GetControllerNPC` writes none, and the stand-in
+	// idles on its own (empty) default like any `npc_VVampire` spawned without one.
+	Controller->AnimTime = Source->AnimTime;
 	//   `npc->m_flSeekDistBase (+0x63b4) = 4096.0f`;
 	Controller->AuthoredVision = 4096.f;
 	//   slot 105 `SetModel(me->GetModelName())` — the model above, which the body build reads;
 	//   `DispatchSpawn(npc)` (`0x101d1280`): `Spawn` then `Activate` (the controller's `Spawn`
 	//   `0x103a4510` and, through `Activate`, its `NPCInit` `0x103a4580`);
 	CallEntitySpawn(*Controller);
-	//   `npc->m_fEffects |= 0x60` — `EF_NODRAW` (0x40) and 0x20 on the CONTROLLER;
+	//   `npc->m_fEffects |= 0x60` — `EF_NODRAW` (0x40) and `EF_NOSHADOW` (0x20) on the CONTROLLER.
+	//   `CBaseEntity::ShouldTransmit` `0x100ab020` then never sends it, so the stand-in is never
+	//   drawn; it stays a whole server entity — hull, motor, schedule, animation — and the pawn draws
+	//   its pose (`UpdatePlayerFromController`). The pawn's own draw state is not touched.
 	Controller->EffectsWord |= 0x60u;
+	Controller->RefreshVisualGate();
 	//   slot 614 `ResetThinkTimers()` (`+0x998`);
 	Controller->ResetThinkTimers(NowSeconds());
 	//   `m_hControllerNPC = npc->GetRefEHandle()`.
 	PlayerControllerEntity = Created;
-
-	// **Named modernization — who is drawn** (evidence brief open question 1). Retail draws the
-	// PAWN and hides the controller: `m_fEffects |= 0x60` lands on the controller (above, on the
-	// kernel's effects word) and nothing in retail touches the pawn's draw state
-	// (`docs/vtmb/entity_io.md`). The port instead draws the controller's own skeletal body and hides
-	// the pawn, so the scene performs on the body the scripted beats move. Which of the two retail's
-	// client renders during a controller scene (the pawn mirroring the controller through the
-	// `+0x1db0` readers, e.g. `0x10175180`) is unrecovered; until a capture settles it this is the
-	// port's arrangement, kept as a visible behaviour the owner decides.
-	Source->SetHiddenByController(true);
+	// Two named divergences stand on the stand-in: its Unreal motor ignores character capsules (the
+	// pawn is pinned inside it every frame; no retail step changes its solidity), and its removal
+	// kills it in the frame of the request rather than through `SUB_Remove` 0.01 s later.
 
 	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
 	return PlayerControllerEntity;
 }
 
-bool FElysiumEntityWorld::RemovePlayerControllerEntity()
+namespace
 {
-	FElysiumCombatCharacter* Controller = static_cast<FElysiumCombatCharacter*>(FindPlayerController());
-	FElysiumPlayer* Dest = FindPlayer();
+	// `bCopyAnimation`'s block, identical in `0x101618e0` and in `PostThink` (`0x1016c5be`..
+	// `0x1016c612`): controller -> pawn.
+	void CopyControllerAnimation(const FElysiumNpc& Controller, FElysiumPlayer& Pawn)
+	{
+		// `m_nSequence` (`+0x6f0`), `m_flCycle` (`+0x6f8`) and `m_flPlaybackRate` (`+0x6f4`) are copied
+		// first in retail. The player carries no member for any of the three (the NPC's are
+		// `SequenceNumber` / `SequenceCycle` / `SequencePlaybackRate`); what they are FOR — the pawn
+		// drawn in the stand-in's clip at the stand-in's phase — is the pose-source follow the per-frame
+		// copy sets (`IElysiumEmbodiment::SetPlayerBodyPoseSource`).
+		Pawn.AnimTime = Controller.AnimTime;   // `+0x174` m_flAnimTime
+		// `rep movsd` of 0x30 dwords from `+0x734`: the whole four-record `m_AnimOverlay[]`.
+		for (int32 Slot = 0; Slot < static_cast<int32>(UE_ARRAY_COUNT(Pawn.AnimOverlay)); ++Slot)
+		{
+			Pawn.AnimOverlay[Slot] = Controller.AnimOverlay[Slot];
+		}
+		// `rep movsd` of 0x15 dwords from `+0x7f4`: the whole three-record `m_Flinch[]`.
+		for (int32 Record = 0; Record < FElysiumAnimatingOverlay::NumFlinchRecords; ++Record)
+		{
+			Pawn.Flinch[Record] = Controller.Flinch[Record];
+		}
+	}
+
+	// `bCopyXform`'s block, identical in both: slot 64 `SetLocalAngles(ctrl.GetAbsAngles())`, then
+	// `SetAbsVelocity(ctrl + 0x3bc)` (after `CalcAbsoluteVelocity` when the controller's `m_iEFlags`
+	// bit 12 is set — the port's velocity word is always current), then slot 62
+	// `SetLocalOrigin(ctrl.GetAbsOrigin())`. The pawn has no parent, so local is absolute. Origin and
+	// angles are one body transaction here (`TeleportPlayer`), not two.
+	//
+	// **Named divergence — the view is pinned too.** Retail's slot 64 writes the pawn ENTITY's angles;
+	// the eye angles are the usercmd's, and a teleport's eye re-aim (`0x10178590`) survives PostThink.
+	// The port's `TeleportPlayer` also writes the control rotation (`SetControlRotation`), because the
+	// pawn's body yaw follows its view and the player entity samples its angles off that view; so while
+	// a controller lives the view is re-set to the stand-in's facing every frame.
+	void CopyControllerTransform(const FElysiumEntity& Controller, FElysiumPlayer& Pawn)
+	{
+		Pawn.SetRuntimeTransform(Controller.Origin, Controller.Angles);
+		Pawn.Velocity = Controller.Velocity;
+		// And on the body: the mover's velocity is the pawn's `m_vecAbsVelocity` as physics sees it,
+		// so without this a pawn pinned by teleport would go on integrating its own gravity under the
+		// pin and carry it out of the scene.
+		if (IElysiumEmbodiment* const Body = Pawn.World != nullptr ? Pawn.World->Embodiment() : nullptr)
+		{
+			Body->SetPlayerBodyVelocity(Controller.Velocity);
+		}
+	}
+}
+
+bool FElysiumEntityWorld::RemovePlayerControllerEntity(EElysiumControllerRelease Release)
+{
+	FElysiumEntity* const Controller = FindPlayerController();
+	FElysiumPlayer* const Dest = FindPlayer();
 	if (!Controller)
 	{
+		// `0x101618e0` is gated on the handle resolving; nothing, not even the clear, happens
+		// otherwise. The port clears a stale handle so it cannot resolve a recycled index later.
 		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+		if (Dest != nullptr && Embodiment() != nullptr)
+		{
+			Embodiment()->SetPlayerBodyPoseSource(nullptr);
+		}
 		return false;
 	}
 
-	// Retail's removal is `0x102272b0` (the classname check) then `0x101618e0(player, 1, 1)`: copy
-	// the controller's sequence, anim time, cycle, playback rate, gesture and flinch tables onto the
-	// player (`bCopyAnimation`), its velocity and its origin/angles (`bCopyVelocity`), then arm
-	// `SUB_Remove` (`0x101c0b10`) on the controller at `curtime + 0.01` (`_DAT_1044e658`, the double
-	// 0.01) and clear `m_hControllerNPC`. The copy is `rep movsd` over the whole four-record gesture
-	// table (0xc0 bytes from `+0x734`) and the whole three-record flinch table (0x54 bytes from
-	// `+0x7f4`); `bCopyVelocity` also reads the controller's CACHED absolute velocity (`+0x3bc`, with
-	// `CalcAbsoluteVelocity` first only when `m_iEFlags` bit 0xc is set). **Unported onto the player**
-	// (story 8): the sequence/cycle/rate/gesture/flinch/velocity hand-back; the port's player body is
-	// driven by its own locomotion, and a copy onto it was ported only on the NPC-side duplicate that
-	// story 5 commit B deleted.
-	//
-	// **Named divergence — the same-frame removal.** The port has no think-function slot to host
-	// `SUB_Remove` on an entity, so the controller is killed here, in the frame of the request,
-	// rather than 0.01 s later; nothing in shipped content observes the stand-in in that window
-	// (the handle is cleared at the request in both). The player's pose is the port's own reading of
-	// the copy: its transform, and — **named modernization**, pending the controller follow-up —
-	// model, skin and disposition, which retail's `0x101618e0` does not write: the port's pawn is
-	// the body hidden while the controller performed.
-	if (Dest)
+	// `0x101618e0(player, copyAnim, copyXform)`. The copies are the ones `PostThink` makes every
+	// frame, once more at the release: `bCopyAnimation` (only with a Troika under the controller,
+	// `controller+0x98` — every controller class is one), then `bCopyXform`. The view target is NOT
+	// in this body (only `PostThink` copies it), and neither is any model, skin, disposition or effects
+	// write: the pawn keeps its own appearance, which retail never swapped.
+	if (Dest != nullptr && Release == EElysiumControllerRelease::CopyAnimationAndTransform)
 	{
-		// Apply the final pose anchor before the stand-in disappears. SetModel goes through the
-		// player's rebuild path only when the controller actually changed it. Origin and view are one
-		// body transaction: splitting them would briefly place the pawn at the final mark with its old
-		// view, and would issue two Unreal teleports for one retail SetAbs transform.
-		Dest->SetRuntimeTransform(Controller->Origin, Controller->Angles);
-		if (Dest->Model != Controller->Model)
+		if (const FElysiumNpc* Troika = Controller->AsNpc())
 		{
-			Dest->SetRuntimeModel(Controller->Model);
+			CopyControllerAnimation(*Troika, *Dest);
 		}
-		Dest->Skin = Controller->Skin;
-		Dest->Disposition = Controller->Disposition;
+		CopyControllerTransform(*Controller, *Dest);
+	}
+	// The pawn takes its own graph back BEFORE the stand-in's body goes, so it never follows a
+	// destroyed component. Retail's pawn holds the copied sequence until its own `SetAnimation`
+	// replaces it on the next command; the pawn's graph resuming is that.
+	if (Dest != nullptr && Embodiment() != nullptr)
+	{
+		Embodiment()->SetPlayerBodyPoseSource(nullptr);
 	}
 
+	// Then `ThinkSet(controller, SUB_Remove 0x101c0b10)` at `curtime + 0.01` (`_DAT_1044e658`) and
+	// `m_hControllerNPC = -1`. **Named divergence — the same-frame removal.** The port has no
+	// think-function slot to host `SUB_Remove`, so the stand-in is killed here, in the frame of the
+	// request, rather than 0.01 s later; the handle is cleared at the request in both, so nothing
+	// reaches it through `!playercontroller` in that window.
+	//
 	// Kill first: the stand-in releases its scripted motor while the skeletal component is
 	// still a valid child of that motor. The visual can then be destroyed without leaving the
 	// engine-side path follower holding a dead attachment.
 	Controller->Kill();
-	if (Controller->Visual)
+	if (FElysiumCombatCharacter* const Character = Controller->AsCombatCharacter();
+		Character != nullptr && Character->Visual)
 	{
-		Controller->Visual->DestroyComponent();
-		Controller->Visual = nullptr;
+		Character->Visual->DestroyComponent();
+		Character->Visual = nullptr;
 	}
 	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+	return true;
+}
 
-	// Un-hide the real body in its new pose.
-	if (Dest)
+void FElysiumEntityWorld::UpdatePlayerFromController()
+{
+	FElysiumPlayer* const Pawn = FindPlayer();
+	if (Pawn == nullptr)
 	{
-		Dest->SetHiddenByController(false);
+		return;
+	}
+	// `h = m_hControllerNPC (+0x1db0); if (h != -1 && serial matches && entry && entry+0x98)`.
+	FElysiumEntity* const Controller = FindPlayerController();
+	IElysiumEmbodiment* const Body = Embodiment();
+	if (Controller == nullptr)
+	{
+		// No stand-in resolves (none made, or one killed by other means than the release): the pawn
+		// draws its own graph. Idempotent — a per-frame no-op once released.
+		if (Body != nullptr)
+		{
+			Body->SetPlayerBodyPoseSource(nullptr);
+		}
+		return;
 	}
 
-	return true;
+	if (!Pawn->bWolf)
+	{
+		// `0x1016c5be`..`0x1016c612` — the animation words, then `0x1016c614`..`0x1016c65c` — the
+		// transform and the velocity, then `0x1016c662`..`0x1016c672` — slot 277 `SetViewtarget(
+		// controller->slot 278 GetViewtarget())`. Slot 278 is still a stub on the port; its whole
+		// retail body is `LEA EAX,[ECX+0x848]; RET`, `&m_viewtarget`, so the word is read directly.
+		const FElysiumNpc* const Troika = Controller->AsNpc();
+		if (Troika != nullptr)
+		{
+			CopyControllerAnimation(*Troika, *Pawn);
+		}
+		CopyControllerTransform(*Controller, *Pawn);
+		if (Troika != nullptr)
+		{
+			Pawn->SetViewtarget(Troika->Viewtarget);
+		}
+		// The client half: the pawn draws the words it was just given, i.e. the stand-in's pose.
+		if (Body != nullptr)
+		{
+			const FElysiumCombatCharacter* const Character = Controller->AsCombatCharacter();
+			Body->SetPlayerBodyPoseSource(Character != nullptr ? Character->Visual : nullptr);
+		}
+	}
+	else
+	{
+		// The wolf arm (`0x1016c562`..`0x1016c5b1`): the same three writes the other way — the controller takes
+		// the pawn's angles, absolute velocity and origin. **Unreachable**: `m_bWolf` has no producer
+		// (Protean is unbuilt). The pawn draws its own graph; retail's wolf is drawn itself (the
+		// wolf path clears `0x60` on `npc_VWolfMorph`), which the effects gate would honour.
+		Controller->SetRuntimeTransform(Pawn->Origin, Pawn->Angles);
+		Controller->Velocity = Pawn->Velocity;
+		if (Body != nullptr)
+		{
+			Body->SetPlayerBodyPoseSource(nullptr);
+		}
+	}
+	// `CBaseEntity::Relink(this)` (`0x1016c67a`). The port has no spatial partition to relink into:
+	// the pawn's touch set is reconciled off its own overlaps on the post-move pass
+	// (`ReconcilePlayerTouches`), which the teleport above feeds.
+
+	// The frenzy-grapple arm (`0x1016c681`..`0x1016c6bc`), on both arms: `controller->Classify() == 3 && m_iCurFrenzyCount > 0 &&
+	// m_bFrenzyHunger && Replenish(1)` -> `m_bIsFrenzyGrapple = 1; 0x1033f6d0(this)`. Both player
+	// words it needs besides the count are `FElysiumNpcFrenzyShadow`'s seams, answering false.
+	if (Controller->Classify() == 3 && Pawn->CurFrenzyCount > 0
+		&& FElysiumNpcFrenzyShadow::OwnerFrenzyHunger(*Pawn)
+		&& FElysiumNpcFrenzyShadow::OwnerReplenish(*Pawn))
+	{
+		Pawn->BeginControllerFrenzyGrapple();
+	}
 }
 
 void FElysiumEntityWorld::RenameEntity(FElysiumEntity& Ent, const FString& NewName)

@@ -21,6 +21,7 @@ struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the da
 struct FElysiumClanTemplate;
 struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the trait-effect layer
 struct FElysiumDmg;            // Private/Substrate/ElysiumDamage.h — the typed damage descriptor
+struct FElysiumUserCmd;       // Public/ElysiumUserCmd.h — one frame of player intent
 enum class EElysiumDmgFamily : int32;
 
 // S3 — the player is an entity; the pawn is its body.
@@ -2095,11 +2096,53 @@ public:
 	FElysiumEntityHandle LastOpponent;
 
 	bool bImmobilized = false;
-	bool bHiddenByController = false;
 
 	void SetImmobilized(bool bInImmobilized) { bImmobilized = bInImmobilized; }
-	void SetHiddenByController(bool bInHidden);
-	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
+	// `m_bIsImmobilized` (`+0x19f7`) and nothing else. A controller scene is NOT this latch: retail
+	// takes the controller's input away by wiping the command (below), and the live PostThink arm —
+	// the weapon frame, the melee-movement stop — still runs, on an empty command.
+	bool IsMobile() const { return !bImmobilized; }
+
+	// `CHL2_Player` slot 462 `0x10351090` (`PlayerRunCommand`'s override), read off the handle every
+	// command — it is not a hide flag and nothing in `GetControllerNPC` `0x10161a70` sets it. While
+	// `m_hControllerNPC` (`+0x1db0`) resolves: `!m_Local.m_bWolf` (`+0x1edc`) wipes the WHOLE command
+	// (`FElysiumUserCmd::ApplyControllerWipe`), the wolf arm only the move words
+	// (`ApplyWolfControllerWipe`). Applied where the port builds the frame's command,
+	// `AElysiumPlayerController::TickActor`, ahead of `SetupMove`'s immobilize pair as retail orders
+	// them.
+	enum class EControllerCmdWipe : uint8
+	{
+		None,
+		WholeCommand,
+		MoveWordsOnly,
+	};
+	EControllerCmdWipe ControllerUserCmdWipe() const;
+	bool ControllerSuppressesUserCmd() const
+	{
+		return ControllerUserCmdWipe() == EControllerCmdWipe::WholeCommand;
+	}
+	// Apply this command's wipe to `Cmd`; true when it changed anything. The one door the controller's
+	// frame build and the tests both go through.
+	bool ApplyControllerUserCmdWipe(FElysiumUserCmd& Cmd) const;
+
+	// `m_Local.m_bWolf` (`+0x1edc`) — the Protean wolf-form latch. `CBasePlayer::PostThink`
+	// `0x1016be10` reverses its controller copy on it (pawn -> controller instead of controller ->
+	// pawn) and `0x10351090` narrows its usercmd wipe on it. **SEAM**: its writers are the Protean
+	// wolf paths (`0x101f8620` / `0x101f8f30` case 5, cleared by `0x1016bd50` and PostThink's own
+	// wolf-return arm), none of which this runtime builds, so it stands false — the same
+	// no-producer shape as `bObserver` below.
+	bool bWolf = false;
+
+	// The frenzy-grapple arm at the end of `CBasePlayer::PostThink`'s controller copy
+	// (`0x1016c681`..`0x1016c6bc`): `controller->Classify() == 3 && m_iCurFrenzyCount > 0 &&
+	// m_bFrenzyHunger && Replenish(1)` -> `m_bIsFrenzyGrapple (+0x1476) = 1; 0x1033f6d0(this)`.
+	// **SEAM**: the player carries no `m_bIsFrenzyGrapple` and `0x1033f6d0` (the frenzy end: clears
+	// `m_bFrenzyHunger`/`m_iCurFrenzyCount`, applies the template's frenzy-exit effect, then releases
+	// the shadow through `0x101618e0(player, 0, 0)` and notifies the events manager) is unported;
+	// the arm is counted here and changes nothing. Unreachable today: `m_bFrenzyHunger` and
+	// `Replenish(1)` are `FElysiumNpcFrenzyShadow`'s seams and both answer false.
+	int32 ControllerFrenzyGrappleRequests = 0;
+	void BeginControllerFrenzyGrapple() { ++ControllerFrenzyGrappleRequests; }
 
 	// === SC8 — `CBasePlayer::IsObserver` (`vfunc +0x658`, `FUN_1015ee60`) =====================
 	// `m_bIsObserver` `+0x19f6`, and the gate `CBasePlayer::HandleAnimEvent` `0x10178a10` opens
@@ -2354,9 +2397,12 @@ public:
 	// the bump lane's discipline interrupt, then the NPC's own `OnBumped` (mask-guarded there).
 	void PollTouchContacts(double Now);
 
-	// The pawn follows the entity: a write to origin/angles places the body.
-	// If !playercontroller is live, explicit writes also update its teardown anchor; SyncFromBody's
-	// ordinary movement sampling does not, so choreography can still stage that duplicate itself.
+	// The pawn follows the entity: a write to origin/angles places the body. It never reaches a live
+	// `!playercontroller`: nothing retail's `CPointTeleport::InputTeleport` (`0x1018dc00`) or
+	// `CBasePlayer::Teleport` (`0x101606a0`) writes — the target's slots 62/64, and for a player the
+	// eye re-aim, the entity-list notice, a timer, `EndGrapple` and the use releases — is `+0x1db0`, and `PostThink`'s controller
+	// copy re-pins the pawn to the stand-in on the next frame
+	// (`FElysiumEntityWorld::UpdatePlayerFromController`).
 	virtual void OnRuntimeTransformChanged() override;
 	// SetModel swaps the skeletal surface attached to the movement pawn. The pawn/hull itself stays
 	// put; the same component remains the FElysiumAnimating visual used by choreo clip playback.

@@ -257,6 +257,17 @@ reuse SDK constants:
 `0x40` is independently confirmed by `CBaseTrigger::InitTrigger`, which sets it on a trigger brush
 when `showtriggers` is zero (`docs/vtmb/entity_io.md` → "Trigger activation filter").
 
+**`EF_NODRAW` is a transmit gate on the server.** `CBaseEntity::ShouldTransmit` (`0x100ab020`)
+returns false for an entity with `m_fEffects & 0x40`, once the float at `+0x90` (name unrecovered) is
+not in the future; `CBaseCombatCharacter::ShouldTransmit` (`0x103407b0`) transmits a character
+regardless while its `m_clientAuraCount` is non-zero. An untransmitted entity is still a whole server
+entity — it thinks, animates and moves — the client simply never has it. The player's
+`npc_VPlayerController` stand-in is the load-bearing case (`GetControllerNPC` `0x10161a70` raises
+`0x60` on it): its pose reaches the screen only on the pawn, through `CBasePlayer::PostThink`'s copy
+(`docs/vtmb/npc-ai/lifecycle.md` § "The player controller"). Port: `FElysiumAnimating::IsTransmitted`,
+answered by `FElysiumNpc` off its kernel `EffectsWord`; an untransmitted body is not drawn but keeps
+ticking.
+
 `disableshadows` **suppresses the cast entirely**. `client.dll`'s `C_BaseAnimating::ShadowCastType`
 (`0x1009f300`) returns `SHADOWS_NONE` when either bit is present:
 

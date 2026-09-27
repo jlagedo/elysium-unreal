@@ -929,6 +929,16 @@ void AElysiumMapActor::BleedPlayerBodyVelocity(float StepCm)
 	Move->Velocity = Speed > 0.f ? Move->Velocity.GetSafeNormal() * Speed : FVector::ZeroVector;
 }
 
+void AElysiumMapActor::SetPlayerBodyVelocity(const FVector& VelocityCm)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	if (UElysiumMovementComponent* Move = Pawn != nullptr
+		? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr)
+	{
+		Move->Velocity = VelocityCm;
+	}
+}
+
 void AElysiumMapActor::SetPlayerFovOverride(int32 SourceFov)
 {
 	// The replicated integer, handed to the camera that resolves it. A frame with no pawn drops it:

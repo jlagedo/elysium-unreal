@@ -10,6 +10,8 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 
+#include "Components/SkeletalMeshComponent.h"
+
 // `CNPC_VPlayerController` — story 5 fold A2. Every body below is the retail body at the address its
 // comment names, read off the listing (`vtmb_asm`); the walked prose is
 // `docs/vtmb/npc-ai/lifecycle.md`, "The player controller".
@@ -390,4 +392,9 @@ void FElysiumNpcPlayerController::GetDebugState(TArray<TPair<FString, FString>>&
 	FElysiumNpcVampire::GetDebugState(Out);
 	Out.Emplace(TEXT("Role"), TEXT("player controller (the player's scene stand-in; non-solid)"));
 	Out.Emplace(TEXT("Owner"), OwnerIsThePlayer() ? TEXT("the player") : TEXT("(none)"));
+	// `GetControllerNPC` `0x10161a70`'s `m_fEffects |= 0x60` and what it means for the body.
+	Out.Emplace(TEXT("Effects"), FString::Printf(TEXT("0x%x%s"), EffectsWord,
+		IsTransmitted() ? TEXT("") : TEXT(" (EF_NODRAW: never transmitted, ShouldTransmit 0x100ab020)")));
+	Out.Emplace(TEXT("Body drawn"), Visual == nullptr ? TEXT("(no body)")
+		: Visual->IsVisible() ? TEXT("yes") : TEXT("no (animation host; the pawn draws its pose)"));
 }

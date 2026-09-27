@@ -53,10 +53,11 @@ alias its semantics. Maps and scripts use the resolved entity as an ordinary tar
 filter candidate, teleport subject, damage receiver and dialogue listener after lookup.
 
 `!playercontroller` is not another player and not a controller object standing in for gameplay
-authority. It is the map-epoch `npc_VPlayerController` relationship created for choreography: a
-temporary animating duplicate that borrows selected model, transform and character state, then
-returns its final pose anchor to the player when removed. Its lifetime and restoration rules belong
-to `entity_io.md`.
+authority. It is the map-epoch `npc_VPlayerController` relationship created for choreography: an
+undrawn (`EF_NODRAW`) animating duplicate that borrows the player's model and transform, whose
+animation state and transform the pawn wears every frame (the `PostThink` block below), and whose
+final animation words and transform go back to the player when it is removed. Its lifetime and
+restoration rules belong to `entity_io.md`.
 
 ## Construction, spawn and placement
 
@@ -458,13 +459,54 @@ action classifier consumes the movement that just completed, so animation is a r
 command rather than an input to movement. `SetAnimation` is the already-recovered priority router,
 including paired-action ownership and protected activity ranges.
 
-The common tail begins with `CBasePlayer::SimulatePlayerSimulatedEntities` (`0x1017c300`), which
-removes stale handles and advances the surviving owned entities. VtMB then performs a keyring
-countdown/removal, a conditional `CBaseCombatCharacter::HungerCheck` (`0x1033f4c0`), an
-address-labelled status reaction (`0x10338900` -> `0x10338920`), bidirectional state copying with
-the saved handle at `+0x1db0`, a delayed callback and an active-weapon notification. The
-`+0x1db0` copy branch is a player/body or cinematic-state join, but its concrete entity class is
-not yet proven and remains open.
+The common tail begins at `LAB_1016c41d` with `CBasePlayer::SimulatePlayerSimulatedEntities`
+(`0x1017c300`), which removes stale handles and advances the surviving owned entities. VtMB then
+performs a keyring countdown/removal, a conditional `CBaseCombatCharacter::HungerCheck`
+(`0x1033f4c0`), an address-labelled status reaction (`0x10338900` -> `0x10338920`), the controller
+copy below, a delayed callback (the `+0x1ca4`/`+0x1ca8`/`+0x1cac` player-animation record) and an
+active-weapon notification.
+
+**The controller copy (`0x1016c510`..`0x1016c6bc`), recovered 2026-09-27.** `+0x1db0` is
+`m_hControllerNPC`, the `npc_VPlayerController` / `npc_VFrenzyShadow` / `npc_VWolfMorph` stand-in.
+Because the block sits after the skip label it runs even when `m_iPlayerLocked`, a non-live player or
+`IsObserver` skipped the live body. With the handle resolving (entry, then `+0x98`):
+
+```text
+if (!m_Local.m_bWolf /*+0x1edc*/) {                                   // 0x1016c558
+    m_nSequence   = ctrl.m_nSequence      /*+0x6f0*/                   // 0x1016c5be
+    m_flAnimTime  = ctrl.m_flAnimTime     /*+0x174*/
+    m_flCycle     = ctrl.m_flCycle        /*+0x6f8*/
+    m_flPlaybackRate = ctrl.m_flPlaybackRate /*+0x6f4*/
+    rep movsd 0x30 dwords  m_AnimOverlay[] /*+0x734*/
+    rep movsd 0x15 dwords  m_Flinch[]      /*+0x7f4*/                  // ..0x1016c612
+    SetLocalAngles(ctrl.GetAbsAngles())                               // slot 64, 0x1016c614
+    if (ctrl.m_iEFlags & 0x1000) ctrl.CalcAbsoluteVelocity()
+    SetAbsVelocity(ctrl + 0x3bc)
+    SetLocalOrigin(ctrl.GetAbsOrigin())                               // slot 62, ..0x1016c65c
+    SetViewtarget(ctrl.GetViewtarget())                               // slots 277/278, ..0x1016c672
+} else {                                                              // 0x1016c562..0x1016c5b1
+    ctrl.SetLocalAngles(GetAbsAngles()); ctrl.SetAbsVelocity(this + 0x3bc);
+    ctrl.SetLocalOrigin(GetAbsOrigin());
+}
+Relink(this)                                                          // 0x1016c67a
+if (ctrl.Classify() == 3 && m_iCurFrenzyCount > 0 && m_bFrenzyHunger && Replenish(1)) {
+    m_bIsFrenzyGrapple = 1; 0x1033f6d0(this);                         // 0x1016c681..0x1016c6bc
+}
+```
+
+The client draws the pawn with those words; the stand-in itself is `EF_NODRAW` and never transmitted
+(`docs/vtmb/npc-ai/lifecycle.md` § "The player controller"). **Port:**
+`FElysiumEntityWorld::UpdatePlayerFromController`, on the post-move tick after the weapon frame and
+the melee walk; the pawn's body draws the stand-in's evaluated pose
+(`IElysiumEmbodiment::SetPlayerBodyPoseSource`) in place of the three scalar words the player has no
+member for, and the frenzy-grapple arm and `m_bWolf` are seams answering nothing. The follow is a
+presentation swap with its state readers wired: the live arm's `StudioFrameAdvance` (slot 250,
+`0x1016c2bf`) and `DispatchAnimEvents` (slot 258, `0x1016c2e5`) run on the copied sequence, so
+`UElysiumEntityBodies::GetBodyClipPhase` resolves a following body to its leader
+(`ElysiumNpcVisual::PoseHostOf`) and the player's anim-event walk, attack lock and grapple readers see
+the stand-in's clip — its events reach `CBasePlayer::HandleAnimEvent` `0x10178a10`. The usercmd wipe
+(`0x10351090`) is applied to the frame's command, not to the `IsMobile` latch, so this live arm still
+runs during a controller scene, on an empty command.
 
 One VtMB-specific Animalism beast-model transition inside the live body returns directly after
 resetting action/model state. It bypasses both the remainder of the live body and the common tail;
@@ -705,8 +747,8 @@ The player-wide investigation keeps these questions open:
    same-map save/load retention of world `m_nAreaType`, whose replication but not save record is
    established.
 6. Resolve the `0x1016b440` post-damage hook, the slot-406 `+0x19f6` latch, the
-   `0x10338900`/`0x10338920` status reaction, the `+0x1db0` PostThink relationship and the
-   Animalism early-return consequences; the remaining top-level `PreThink`/`PostThink` consumers
+   `0x10338900`/`0x10338920` status reaction and the Animalism early-return consequences (the
+   `+0x1db0` PostThink relationship is closed: the controller copy above); the remaining top-level `PreThink`/`PostThink` consumers
    are classified.
 7. Validate spawn/load, transition, conditional death respawn, cinematic-controller removal and
    world-side teardown boundaries in controlled retail incidents after the static joins close.

@@ -248,6 +248,29 @@ struct FElysiumUserCmd
 		Buttons &= ~ElysiumInput::ImmobilizeButtonMask;
 	}
 
+	// `CHL2_Player` slot 462 `0x10351090`, the controller arm: while `m_hControllerNPC` resolves and
+	// `!m_bWolf`, the WHOLE command is zeroed (`103510d7`: `+0x4`..`+0x5c`, with the two bytes at
+	// `+0x44`/`+0x45` set to 1) before `CBasePlayer`'s own slot 462 runs it — movement, look, every
+	// button, `IN_USE` included. `Seq` and `DeltaSeconds` are the port's frame bookkeeping, not
+	// intent, and survive: the mover integrates the frame by them. **Unrecovered:** the `CUserCmd`
+	// names behind the wiped offsets and what the two bytes set to 1 are.
+	void ApplyControllerWipe()
+	{
+		const uint32 KeptSeq = Seq;
+		const float KeptDelta = DeltaSeconds;
+		*this = FElysiumUserCmd();
+		Seq = KeptSeq;
+		DeltaSeconds = KeptDelta;
+	}
+
+	// The same body's wolf arm (`m_bWolf`): only `+0x20`/`+0x24`/`+0x28` — the three move words the
+	// idle-time test right after reads — are zeroed. Unreachable while `m_bWolf` has no producer.
+	void ApplyWolfControllerWipe()
+	{
+		Move = FVector2D::ZeroVector;
+		Up = 0.0f;
+	}
+
 	FString Describe() const;
 
 	// One line of a recorded stream: `seq dt fwd side up yaw pitch buttons`. Plain text so a stream

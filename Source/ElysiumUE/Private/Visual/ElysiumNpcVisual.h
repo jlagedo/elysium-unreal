@@ -40,6 +40,18 @@ namespace ElysiumNpcVisual
 	// through here, so the two cannot disagree about a garment.
 	void GateLeaderCloth(USkeletalMeshComponent* Body, bool bShown);
 
+	// The tag an entity's draw gate puts on a live body that is never transmitted (`EF_NODRAW`,
+	// `FElysiumAnimating::IsTransmitted`): it keeps animating off screen, and nothing may draw it.
+	FName UntransmittedBodyTag();
+	// The clip-commit reveal the pose layer performs after arming a clip (a body is shown only once it
+	// holds a real pose), withheld from a body carrying `UntransmittedBodyTag`.
+	void RevealPosedBody(USkeletalMeshComponent* Body);
+	// The body whose animation host a body's clip state is read from: its leader when it follows
+	// another skeletal body's pose (the player's pawn during a controller scene,
+	// `IElysiumEmbodiment::SetPlayerBodyPoseSource`), itself otherwise. A follower evaluates no graph
+	// of its own, so its phase IS its leader's.
+	USkeletalMeshComponent* PoseHostOf(USkeletalMeshComponent* Body);
+
 	// The master an eye section is drawn with, or null when the policy content has not been
 	// generated. Callers compare a built slot's base material against this to find the eye slots.
 	UMaterialInterface* EyeMaster(const USkeletalMesh* Mesh = nullptr);

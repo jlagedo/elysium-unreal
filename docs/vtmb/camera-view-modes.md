@@ -123,6 +123,12 @@ Two consequences that matter for reproduction:
   only on the *last* frame of third→first, when the weight reaches exactly 0.
 - **A scripted camera counts as third person.** Dialogue, feeding and death cameras reuse the
   same predicate, so they get the player model drawn for free.
+- **A controller scene adds no term.** While `npc_VPlayerController` stands in, the body drawn is
+  still the local pawn under the same predicates (`ShouldDrawLocalPlayer` `0x100a7a50` below): the
+  stand-in carries `EF_NODRAW` and is never transmitted (`CBaseEntity::ShouldTransmit` `0x100ab020`),
+  and the pawn wears its pose because `CBasePlayer::PostThink` copies it every frame
+  (`docs/vtmb/npc-ai/lifecycle.md` § "The player controller"). Nothing in the chain forces third
+  person; a first-person controller scene draws no body at all.
 
 ### `CAM_ToggleCamera` (`0x100ff800`)
 
@@ -3157,6 +3163,13 @@ source in the shot file at all** — and it is **shipped content, not just anim 
 `CBaseCineCam::Spawn` raises it from `spawnflags & 2`, which **27 of the 51
 shipped `camera_cinematic` directors** author, including `sp_tutorial_1`'s `feedcamera` (see "The
 entity's own class surface").
+
+**A controller scene is not a draw term (recovered 2026-09-27).** The predicate above is the whole
+answer during a `!playercontroller` scene too: the stand-in is `EF_NODRAW` and never reaches the
+client, the pawn carries its pose (`CBasePlayer::PostThink` `0x1016c510`..`0x1016c672`), and the pawn
+is drawn iff the adopted cine camera's `m_bDrawPlayer` says so, else iff third person. The port's
+`ElysiumCam::SolveDrawPolicy` is that predicate unchanged; the entity half of the pawn's gate is
+dormancy alone (`FElysiumPlayer::GateVisual`).
 
 **The viewmodel gate carries a speed term.** `C_BasePlayer::ShouldHideViewModel` (slot 174,
 `FUN_100a7ab0`) is `cine && !ShotWantsViewmodel(cine)`, called from `C_BaseViewModel`'s `vfunc4`,

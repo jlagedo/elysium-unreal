@@ -871,31 +871,35 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	TestTrue(TEXT("controller stands through the NPC skeletal path"),
 		Services.Saw(TEXT("BuildNpcVisual tremere_armor_0")));
 
-	// A point_teleport may move !player while the cinematic stand-in exists. The explicit player
-	// transform is authoritative for that move, so keep the stand-in's teardown anchor coherent;
-	// otherwise the later RemoveControllerNPC restores the stale pre-teleport position.
+	// A point_teleport may move !player while the cinematic stand-in exists. Retail's
+	// `CPointTeleport::InputTeleport` (`0x1018dc00`) writes its target — the pawn — plus that player's
+	// eye re-aim, grapple and use releases, none of them `m_hControllerNPC`, so the stand-in keeps its mark; `PostThink`'s copy re-pins the pawn to it on the next frame and
+	// `RemoveControllerNPC`'s `0x101618e0(player, 1, 1)` copies it once more.
+	const FVector StandInOrigin = Controller->Origin;
+	const FVector StandInAngles = Controller->Angles;
 	const FVector TeleportedOrigin(140.f, 250.f, 360.f);
 	const FVector TeleportedAngles(12.f, 34.f, 5.f);
 	Services.Calls.Reset();
 	Player->SetRuntimeTransform(TeleportedOrigin, TeleportedAngles);
-	TestTrue(TEXT("an explicit player teleport synchronizes the active controller origin"),
-		Controller->Origin.Equals(TeleportedOrigin));
-	TestTrue(TEXT("an explicit player teleport synchronizes the active controller angles"),
-		Controller->Angles.Equals(TeleportedAngles));
-	TestEqual(TEXT("controller synchronization does not duplicate the player body move"),
-		Services.Count(TEXT("TeleportPlayer ")), 1);
+	TestTrue(TEXT("a player teleport does not move the controller"),
+		Controller->Origin.Equals(StandInOrigin) && Controller->Angles.Equals(StandInAngles));
+	TestEqual(TEXT("the teleport is the pawn's one body move"), Services.Count(TEXT("TeleportPlayer ")), 1);
+	World.UpdatePlayerFromController();
+	TestTrue(TEXT("the next PostThink copy re-pins the pawn to the controller"),
+		Player->Origin.Equals(StandInOrigin));
 
 	Services.Calls.Reset();
 	TestTrue(TEXT("controller removal after a player teleport succeeds"),
 		World.RemovePlayerControllerEntity());
-	TestTrue(TEXT("controller teardown cannot roll the player back after teleport"),
-		Player->Origin.Equals(TeleportedOrigin) && Player->Angles.Equals(TeleportedAngles));
+	TestTrue(TEXT("the release copies the controller's transform, not the teleport's"),
+		Player->Origin.Equals(StandInOrigin) && Player->Angles.Equals(StandInAngles));
 	TestEqual(TEXT("controller teardown transfers its final transform atomically"),
 		Services.Count(TEXT("TeleportPlayer ")), 1);
-	TestNull(TEXT("the synchronized controller relationship clears"), World.FindPlayerController());
+	TestNull(TEXT("the controller relationship clears"), World.FindPlayerController());
 
-	// A scene remains allowed to stage the controller independently. Its final mark transfers back
-	// when that controller is removed, which is the other direction of the ownership contract.
+	// A scene stages the controller independently. Its final mark transfers back when that
+	// controller is removed; its appearance does not — retail's release writes no model, skin or
+	// disposition, and the pawn never stopped wearing its own.
 	World.CreatePlayerControllerEntity();
 	Controller = World.FindPlayerController();
 	if (!TestNotNull(TEXT("a second controller can be created for scene staging"), Controller))
@@ -917,11 +921,10 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 		Player->Origin.Equals(FVector(400.f, 500.f, 600.f)));
 	TestTrue(TEXT("final controller orientation transfers to player"),
 		Player->Angles.Equals(FVector(0.f, 135.f, 0.f)));
-	TestEqual(TEXT("final controller model transfers to player"), Player->Model,
-		FString(TEXT("models/character/pc/female/toreador_armor_0.mdl")));
-	TestEqual(TEXT("final controller skin transfers to player"), Player->Skin, 4);
-	TestEqual(TEXT("final controller disposition transfers to player"), Player->Disposition,
-		FString(TEXT("Neutral")));
+	TestEqual(TEXT("the player keeps its own model"), Player->Model,
+		FString(TEXT("models/character/pc/male/tremere_armor_0.mdl")));
+	TestEqual(TEXT("and its own skin"), Player->Skin, 2);
+	TestEqual(TEXT("and its own disposition"), Player->Disposition, FString(TEXT("Cinematic")));
 	TestFalse(TEXT("removing an absent controller is a no-op"), World.RemovePlayerControllerEntity());
 
 	World.CreatePlayerControllerEntity();

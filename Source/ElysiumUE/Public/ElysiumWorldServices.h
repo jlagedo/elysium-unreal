@@ -915,6 +915,19 @@ public:
 	// `npc_VPlayerController` double does not hide the real body, because retail does not hide it
 	// either (`docs/vtmb/camera-view-modes.md` §6).
 	virtual void SetPlayerBodyEntityHidden(bool bHidden) {}
+	// The presentation half of `CBasePlayer::PostThink`'s controller copy (`0x1016c5be`..`0x1016c612`):
+	// retail copies the stand-in's `m_nSequence`, `m_flAnimTime`, `m_flCycle`, `m_flPlaybackRate`,
+	// `m_AnimOverlay[]` and `m_Flinch[]` onto the pawn every frame and the client draws the pawn with
+	// them. Here the stand-in's animation host is its skeletal body, so the pawn's body draws THAT
+	// body's evaluated pose (Unreal's leader-pose follow — the mechanism Unreal ships for one mesh
+	// drawing another's animation state) instead of evaluating its own graph. Idempotent; null gives
+	// the pawn its own graph back. Anything the pawn's body leads (garments, ornaments, a leader-posed
+	// wield) follows the same source, because Unreal does not chain leader poses.
+	virtual void SetPlayerBodyPoseSource(USkeletalMeshComponent* Source) {}
+	// `SetAbsVelocity` on the pawn's BODY — the mover's own velocity, world cm/s. `PostThink`'s
+	// controller copy writes the stand-in's velocity over the pawn's every command, so a pinned pawn
+	// never carries motion of its own (gravity included) into the frame after the pin ends.
+	virtual void SetPlayerBodyVelocity(const FVector& VelocityCm) {}
 
 	// --- The player's body ------------------------------------------------------------------
 	// The eye: where the player is looking from and along. False when there is no player (the menu

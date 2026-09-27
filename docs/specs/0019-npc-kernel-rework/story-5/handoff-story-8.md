@@ -58,23 +58,32 @@ plan's Appendix A; the residue is `unported.tsv` beside this file (778 live rule
   `0x100a8710` / `ScriptUnhide` `0x100a8990` save/restore of the think, and `ThinkSet` `0x100ac4e0`'s
   NULL semantics (retail writes only `m_pfnThink`).
 
-## The controller hand-back `0x101618e0` (deleted from the NPC by commit B)
+## The controller hand-back `0x101618e0` (landed on the player by the controller follow-up)
 
 `CBasePlayer::m_hControllerNPC` (`+0x1db0`) has one port home, the world's `PlayerControllerHandle`.
-The NPC-side copy of `0x101618e0` that commit B deleted ported this field list, which the controller
-follow-up needs on the player: with `bCopyAnimation` (and a Troika controller, `controller+0x98`),
+`0x101618e0`'s field list: with `bCopyAnimation` (and a Troika controller, `controller+0x98`),
 `m_nSequence` `+0x6f0`, `m_flAnimTime` `+0x174`, `m_flCycle` `+0x6f8`, `m_flPlaybackRate` `+0x6f4`,
 then `rep movsd` of 0x30 dwords of `m_AnimOverlay[]` from `+0x734` and 0x15 dwords of `m_Flinch[]`
-from `+0x7f4`; with `bCopyVelocity`, the angles, the absolute velocity (`controller+0x3bc`,
-`CalcAbsoluteVelocity` first only when `m_iEFlags` bit 0xc is set), the origin and the view target;
-then, unconditionally, `ThinkSet(controller, SUB_Remove 0x101c0b10)` at `curtime + 0.01`
-(`_DAT_1044e658`) and `m_hControllerNPC = -1`. The world's `RemovePlayerControllerEntity` copies
-the transform, model, skin and disposition instead (a named modernization pending that follow-up);
-retail writes none of model, skin or disposition. The recovered answer to "which body is drawn"
-lands as its own commit after story 5.
+from `+0x7f4`; with `bCopyXform`, the angles, the absolute velocity (`controller+0x3bc`,
+`CalcAbsoluteVelocity` first only when `m_iEFlags` bit 0xc is set) and the origin — **no view target**
+(only `PostThink`'s per-frame copy adds slots 277/278); then, unconditionally,
+`ThinkSet(controller, SUB_Remove 0x101c0b10)` at `curtime + 0.01` (`_DAT_1044e658`) and
+`m_hControllerNPC = -1`. Landed with "which body is drawn" (retail draws the pawn; `lifecycle.md` §
+"The player controller"): `RemovePlayerControllerEntity(EElysiumControllerRelease)` makes this copy
+and no model/skin/disposition hand-back; `UpdatePlayerFromController` is `PostThink`'s per-frame copy.
+Story 8 carries: the frenzy end `0x1033f6d0` and the player teardown `0x10170090` as (0,0) callers
+(both unported), `m_bWolf` / Protean, and a player member for `m_nSequence`/`m_flCycle`/
+`m_flPlaybackRate`.
 
 ## Owner questions
 
 `enemy+0x3d4` (the third argument of `UpdateEnemyMemory`); `DAT_10924edc` / `DAT_10924a6c` `vfunc1`;
 the `AddFlag2(0x10)` bit; the names of `Classify` 2 and 3; the controller's solidity (walk
 `CNPC_VHuman::Spawn`); saving mid-beat (spec 0003 stories 1–2 build `SCHED_AISCRIPT`).
+
+## From the controller-scene correction (pawn sync), 2026-09-27
+- The use focus empties while the stand-in is live: most likely its capsule catches the use trace first; retail's controller solidity (`CNPC_VHuman::Spawn` SetSolid/collision group) is unwalked. Recover before changing the non-solid-motor divergence.
+- The stand-in's `Velocity` word is not published from its motor, so the per-frame pin (`0x1016c614..65c`, `SetAbsVelocity(ctrl +0x3bc)`) writes 0 onto the pawn instead of the travel speed.
+- The pawn's own anim graph still selects ACT_IDLE under the leader-pose follow (not drawn); retail overwrites `m_nSequence`/`m_flCycle`/`m_flPlaybackRate` on the pawn, which have no port members.
+- Unrecovered: the `CUserCmd` field names behind `0x10351090`'s offsets; the `+0x90` transmit stamp in `ShouldTransmit`; whether facial morphs follow the leader pose; the dynamic-cast class behind `0x1058ce30`/`+0x60ac` in `InputTeleport 0x1018dc00`; the client's `ShouldDraw` on an aura-transmitted controller.
+- Follow-ups outside this story: `bHidden` and `EffectsWord` bit 0x40 are two spellings of `m_fEffects` (unify); `ElysiumNpcWerewolf.cpp:~133` names `0x20` "NoDraw" — in this binary `0x20` is `EF_NOSHADOW` (`entity_visuals.md:240/253`); the value is right, the name is wrong.

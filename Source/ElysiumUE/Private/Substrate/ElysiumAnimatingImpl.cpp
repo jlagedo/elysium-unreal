@@ -130,9 +130,11 @@ void FElysiumAnimating::InstallPreparedCharacterVisual()
 		}
 		Embodiment->UpdateNpcDisposition(Visual, Disposition, DispositionLevel);
 		RefreshDispositionExpression();
-		if (IsInert())
+		if (IsInert() || !IsTransmitted())
 		{
-			GateVisual();   // born hidden (start_hidden / a Spawn()-time Kill)
+			// Born hidden (start_hidden / a Spawn()-time Kill), or born undrawn: a body admitted
+			// after `EF_NODRAW` was raised (the controller's asynchronous model) must not show.
+			GateVisual();
 		}
 	}
 }
@@ -598,8 +600,28 @@ void FElysiumAnimating::GateVisual()
 	if (Visual)
 	{
 		const bool bShown = !IsInert();
-		Visual->SetVisibility(bShown);
+		// Dormancy stops the body; `EF_NODRAW` only stops it being drawn. A live untransmitted body
+		// still ticks and still evaluates its pose off screen (the controller's pose is what the pawn
+		// draws, `IElysiumEmbodiment::SetPlayerBodyPoseSource`).
+		const bool bDrawn = bShown && IsTransmitted();
+		// The pose layer reveals a body when it commits a clip; the tag withholds that reveal from a
+		// body the entity says is never drawn, so a scripted beat cannot put the stand-in on screen.
+		// Keyed on the effects word alone: an inert untransmitted body must not be revealed either.
+		if (!IsTransmitted())
+		{
+			Visual->ComponentTags.AddUnique(ElysiumNpcVisual::UntransmittedBodyTag());
+		}
+		else
+		{
+			Visual->ComponentTags.Remove(ElysiumNpcVisual::UntransmittedBodyTag());
+		}
+		Visual->SetVisibility(bDrawn);
 		Visual->SetComponentTickEnabled(bShown);   // pause the idle clip while hidden
-		ElysiumNpcVisual::GateLeaderCloth(Visual, bShown);
+		if (bShown && !bDrawn)
+		{
+			Visual->VisibilityBasedAnimTickOption =
+				EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		}
+		ElysiumNpcVisual::GateLeaderCloth(Visual, bDrawn);
 	}
 }

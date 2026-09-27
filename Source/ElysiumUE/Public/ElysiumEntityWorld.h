@@ -52,6 +52,17 @@ namespace ElysiumWorldClock
 	inline constexpr double DefaultFrameSeconds = 1.0 / 60.0;
 }
 
+// The two argument pairs retail's controller release `0x101618e0(player, copyAnim, copyXform)` is
+// ever called with. (1,1): `CPlayerEvents::InputRemoveControllerNPC` `0x102272b0`,
+// `CBasePlayer::Event_Killed` `0x10163af0`, and the two Protean wolf returns (`0x1016bd50`, PostThink's
+// wolf arm). (0,0): `GetControllerNPC` `0x10161a70`'s class-mismatch arm, the frenzy end `0x1033f6d0`
+// and the player teardown `0x10170090`. No caller passes a mixed pair.
+enum class EElysiumControllerRelease : uint8
+{
+	CopyAnimationAndTransform,
+	CopyNothing,
+};
+
 // The world's side of the override channel's two outbound needs: turning an EHANDLE into the
 // entity's camera-source interface (`handleLive` + the slot-46..53 vtable) and dropping the live
 // cine shot when the VIEW entity is set. Held by value on the world so the channel never stores a
@@ -201,15 +212,27 @@ public:
 	FElysiumEntityHandle PlayerHandle() const { return Player; }
 
 	// The cutscene stand-in created by events_player. It is one real runtime entity per map epoch,
-	// not a latch: scenes, I/O and scripts resolve it through !playercontroller, and removal transfers
-	// its final embodied state back to the player before killing the stand-in.
+	// not a latch: scenes, I/O and scripts resolve it through !playercontroller. It is never drawn
+	// (`EF_NODRAW`); the pawn carries its pose and transform every frame
+	// (`UpdatePlayerFromController`), and the release copies them once more before killing it.
 	// `Classname` is `GetControllerNPC`'s (`0x10161a70`) argument: `events_player.CreateControllerNPC`
 	// asks for `npc_VPlayerController`; retail's frenzy (`0x10161fc0`) and wolf-form paths ask for
 	// `npc_VFrenzyShadow` / `npc_VWolfMorph` and have no port caller yet.
 	FElysiumEntityHandle CreatePlayerControllerEntity(const TCHAR* Classname = TEXT("npc_VPlayerController"));
-	bool RemovePlayerControllerEntity();
+	// `0x101618e0(player, copyAnim, copyXform)`. The default is `RemoveControllerNPC`'s (1,1).
+	bool RemovePlayerControllerEntity(
+		EElysiumControllerRelease Release = EElysiumControllerRelease::CopyAnimationAndTransform);
 	FElysiumEntity* FindPlayerController() const;
 	FElysiumEntityHandle PlayerControllerHandle() const { return PlayerControllerEntity; }
+
+	// `CBasePlayer::PostThink` `0x1016be10`'s controller copy (`0x1016c510`..`0x1016c672`), run once
+	// per post-move tick after the player's weapon frame and melee walk. It sits after
+	// `LAB_1016c41d`, the label the `m_iPlayerLocked` / not-alive / `IsObserver` gate jumps to, so it
+	// runs whatever state the player is in. With the controller resolving and `!m_bWolf`, the
+	// stand-in's animation words, transform, velocity and view target go onto the pawn and the pawn's
+	// body draws the stand-in's pose; with `m_bWolf` the transform goes the other way. Then the
+	// frenzy-grapple arm. A no-op with no player or no controller.
+	void UpdatePlayerFromController();
 
 	// Drop the player without touching the entity, so Teardown has nothing to dehydrate. What
 	// ending a session means: the run is over, and the dying world's numbers must not be written

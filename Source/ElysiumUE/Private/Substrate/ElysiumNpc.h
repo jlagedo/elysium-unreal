@@ -792,6 +792,9 @@ public:
 	}
 
 	virtual void OnDormancyChanged() override;
+	// `CBaseEntity::ShouldTransmit` `0x100ab020` over the kernel's `m_fEffects` (`EffectsWord`):
+	// `EF_NODRAW` (`0x40` in this build, `docs/vtmb/entity_visuals.md`) is never transmitted.
+	virtual bool IsTransmitted() const override;
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 

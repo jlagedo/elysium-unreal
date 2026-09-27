@@ -300,6 +300,11 @@ void FElysiumNpc::TroikaNPCInit()
 	// `Weapon_TranslateActivity` reads; clearing the word therefore UNHIDES. Retail does exactly
 	// that here, before the base body runs, and `CNPC_VZombie::NPCInit` re-hides itself afterwards.
 	bHidden = false;                                                     // 1029a0c0 m_fEffects +0x19c
+	// The same store on the kernel's own spelling of the word. `bHidden` and `EffectsWord` bit `0x40`
+	// are TWO port spellings of the one retail `m_fEffects` (follow-up: unify them). This zero is why
+	// the player controller ends at exactly `0x60`: `CopyAnimationDataFrom` (`0x10097310`, `100973cc`)
+	// wrote `player | 0x10`, `DispatchSpawn` reaches this body, and `GetControllerNPC` ORs `0x60` after.
+	EffectsWord = 0;                                                     // 1029a0c0 m_fEffects +0x19c
 	// `1029a0c6`–`1029a0ef`: `m_iHealth = ftol(DAT_10923f14->IsCommand() ? 0.0 : cvar+0x28)` —
 	// `sk_basenpctroika_health`, shipped "10". Written verbatim over what `SeedSheet` derived: this
 	// body is the only Troika-typed writer of `+0x210`, and the sheet's next projection

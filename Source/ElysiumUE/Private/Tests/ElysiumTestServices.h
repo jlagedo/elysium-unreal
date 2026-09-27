@@ -28,6 +28,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumBodyAnimInstance.h"   // the live clip-phase forward below
+#include "Visual/ElysiumNpcVisual.h"          // RevealPosedBody: the real reveal rule
 
 #include "Components/PointLightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -690,7 +691,7 @@ struct FElysiumRecordingServices final
 		// is only assertable headless if the double answers off the rule instead of mirroring it.
 		if (bPlayed && ElysiumAnimIntent::OneShotForcesVisibility(Request.Route))
 		{
-			Body->SetVisibility(true, true);
+			ElysiumNpcVisual::RevealPosedBody(Body);
 		}
 		// The held claim, MODELLED rather than only recorded — the producer polls it back, so a double
 		// that always answered the same thing would prove nothing about the resume.
@@ -775,6 +776,10 @@ struct FElysiumRecordingServices final
 	// because the fixture above is what every Substrate case drives, and a body whose host answers
 	// for itself cannot be scripted frame by frame.
 	bool bLiveClipPhase = false;
+	// The body the scripted record stands on, or null for "every body" (every case that predates it).
+	// Matched through `ElysiumNpcVisual::PoseHostOf`, the same resolution the real seam performs, so a
+	// body following another's pose answers its leader's record.
+	USkeletalMeshComponent* BodyClipPhaseBody = nullptr;
 	// Deliberately not recorded: the world's event pass asks this of every bodied entity every
 	// frame, and a line per body per frame would bury every call a suite is actually reading.
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
@@ -787,9 +792,14 @@ struct FElysiumRecordingServices final
 		}
 		if (bLiveClipPhase)
 		{
+			const USkeletalMeshComponent* Host = ElysiumNpcVisual::PoseHostOf(Body);
 			const UElysiumBodyAnimInstance* Inst =
-				Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
+				Cast<UElysiumBodyAnimInstance>(Host->GetAnimInstance());
 			return Inst != nullptr && Inst->GetClipPhase(Channel, Out);
+		}
+		if (BodyClipPhaseBody != nullptr && ElysiumNpcVisual::PoseHostOf(Body) != BodyClipPhaseBody)
+		{
+			return false;
 		}
 		if (!bBodyClipPhaseSet || BodyClipPhase.Channel != Channel)
 		{
@@ -1410,8 +1420,12 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("BuildPlayerVisual %s disp=%s var=%d"),
 			*StemOf(Stem), *Disposition, IdleVariant));
-		return Stem.IsEmpty() ? nullptr : NewComponent<USkeletalMeshComponent>();
+		LastPlayerVisual = Stem.IsEmpty() ? nullptr : NewComponent<USkeletalMeshComponent>();
+		return LastPlayerVisual;
 	}
+	// The player surface this double last built, so the pose-follow seam below acts on a real
+	// component the way the map actor's does.
+	USkeletalMeshComponent* LastPlayerVisual = nullptr;
 	virtual void ClearPlayerVisual() override
 	{
 		Record(TEXT("ClearPlayerVisual"));
@@ -1424,6 +1438,28 @@ struct FElysiumRecordingServices final
 	// The last entity-side gate the player pushed. The camera's half is not modelled here — it is a
 	// pure function asserted in `Elysium.Substrate.CameraDraw` with no world at all.
 	bool bPlayerBodyEntityHidden = false;
+
+	// The body whose pose the player's body draws (`PostThink`'s controller copy), or null for its
+	// own graph. Recorded on change only, the way the real seam acts only on change.
+	virtual void SetPlayerBodyPoseSource(USkeletalMeshComponent* Source) override
+	{
+		if (Source == PlayerBodyPoseSource)
+		{
+			return;
+		}
+		PlayerBodyPoseSource = Source;
+		if (LastPlayerVisual != nullptr && LastPlayerVisual != Source)
+		{
+			LastPlayerVisual->SetLeaderPoseComponent(Source);
+		}
+		Record(Source != nullptr ? TEXT("SetPlayerBodyPoseSource follow") : TEXT("SetPlayerBodyPoseSource own"));
+	}
+	USkeletalMeshComponent* PlayerBodyPoseSource = nullptr;
+
+	// The body velocity the controller pin last wrote (`SetAbsVelocity` on the pawn's body).
+	virtual void SetPlayerBodyVelocity(const FVector& VelocityCm) override { PlayerBodyVelocity = VelocityCm; ++PlayerBodyVelocityWrites; }
+	FVector PlayerBodyVelocity = FVector::ZeroVector;
+	int32 PlayerBodyVelocityWrites = 0;
 
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override
 	{

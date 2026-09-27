@@ -1081,14 +1081,70 @@ dropped. `CNPC_VWolfMorph` answers every activity with `ACT_WOLF_MORPH` (`0x1145
 schedule space (local 344 names a different schedule in each); the controller shares
 `CNPC_VVampire`'s.
 
+**Which body is drawn — the pawn (recovered 2026-09-27).** `m_fEffects |= 0x60` puts `EF_NODRAW`
+(`0x40` in this build) on the stand-in, and `CBaseEntity::ShouldTransmit` (`0x100ab020`, reached
+through `CBaseCombatCharacter::ShouldTransmit` `0x103407b0`) returns false on it, so the controller
+never reaches the client (the only exceptions are a future stamp at `+0x90` and a non-zero
+`m_clientAuraCount`, neither with a producer here). The pawn is drawn instead, carrying the stand-in's
+state: `CBasePlayer::PostThink` (`0x1016be10`) at `0x1016c510`..`0x1016c672` — after `LAB_1016c41d`,
+so it runs even when the `m_iPlayerLocked` / not-alive / `IsObserver` gate skipped the live body —
+resolves `m_hControllerNPC` and, with `!m_Local.m_bWolf` (`+0x1edc`), copies controller -> pawn
+`m_nSequence` `+0x6f0`, `m_flAnimTime` `+0x174`, `m_flCycle` `+0x6f8`, `m_flPlaybackRate` `+0x6f4`,
+0x30 dwords of `m_AnimOverlay[]` from `+0x734` and 0x15 dwords of `m_Flinch[]` from `+0x7f4`
+(`0x1016c5be`..`0x1016c612`); then slot 64 `SetLocalAngles(ctrl.GetAbsAngles())`, `SetAbsVelocity(ctrl
++0x3bc)` (after `CalcAbsoluteVelocity` when the controller's `m_iEFlags` bit 12 is set) and slot 62
+`SetLocalOrigin(ctrl.GetAbsOrigin())`; then slot 277 `SetViewtarget(ctrl.slot 278 GetViewtarget())`.
+In wolf form the three transform writes run the other way (pawn -> controller) and nothing else is
+copied. Both arms end in `Relink(pawn)` and the frenzy-grapple check: `ctrl.Classify() == 3 &&
+m_iCurFrenzyCount > 0 && m_bFrenzyHunger && Replenish(1)` -> `m_bIsFrenzyGrapple = 1;
+0x1033f6d0(player)` (the frenzy end). The client draws the local pawn only per
+`C_BasePlayer::ShouldDrawLocalPlayer` (`0x100a7a50`): an adopted cine camera's `m_bDrawPlayer`, else
+third person — a controller scene adds no term. Input: `CHL2_Player` slot 462 (`0x10351090`) zeroes the
+whole usercmd while the controller resolves and `!m_bWolf` (wolf: only `+0x20`/`+0x24`/`+0x28`).
+Release: `0x101618e0(player, copyAnim, copyXform)` makes the same animation copy and the same transform
+copy (no view target), then `ThinkSet(ctrl, SUB_Remove 0x101c0b10)` at `curtime + 0.01` and
+`m_hControllerNPC = -1` — no effects, model, skin or disposition write. (1,1) callers:
+`InputRemoveControllerNPC` `0x102272b0`, `Event_Killed` `0x10163af0`, the wolf returns `0x1016bd50` and
+PostThink's wolf arm; (0,0): `GetControllerNPC`'s class-mismatch arm, the frenzy end `0x1033f6d0`,
+the player teardown `0x10170090`. The stand-in is drawn only in Protean wolf form (`0x60` cleared on
+`npc_VWolfMorph`, render fx `0x1f` / pawn `0x1e` crossfade); the frenzy shadow `0x10161fc0` keeps
+`EF_NODRAW`. **Unrecovered:** the `CUserCmd` field names behind `0x10351090`'s offsets; whether the
+client's own `ShouldDraw` honours `EF_NODRAW` on an aura-transmitted controller.
+
 **Port shape.** `FElysiumNpcPlayerController` / `FElysiumNpcFrenzyShadow` / `FElysiumNpcWolfMorph`;
 `events_player.CreateControllerNPC` runs the sequence above in
-`FElysiumEntityWorld::CreatePlayerControllerEntity`. Named modernizations: the stand-in's Unreal
-motor ignores other character capsules (no retail solidity step), and the port draws the
-controller's body and hides the pawn where retail puts `EF_NODRAW` on the controller (which body
-retail's client shows during a controller scene is unrecovered). Named divergence: removal kills
-the stand-in in the frame of the request rather than through `SUB_Remove` (`0x101c0b10`) 0.01 s
-later. The port's live think pass (`FElysiumNpc::Think`) dispatches none of slots 431, 433, 437 or
+`FElysiumEntityWorld::CreatePlayerControllerEntity`. `FElysiumNpc::IsTransmitted` is the
+`ShouldTransmit` early-out over the kernel `EffectsWord`: the stand-in's skeletal body stays live — its
+animation host, motor and hull — and is never drawn (the pose layer's clip-commit reveal honours the
+gate through `ElysiumNpcVisual::UntransmittedBodyTag`). `FElysiumEntityWorld::UpdatePlayerFromController`
+is the PostThink block, run on the post-move tick after the weapon frame and the melee walk; the pawn's
+body draws the stand-in's evaluated pose through `IElysiumEmbodiment::SetPlayerBodyPoseSource` (the
+presentation of `m_nSequence`/`m_flCycle`/`m_flPlaybackRate`, which the player carries no member for),
+and the kernel words the player does carry (`AnimTime`, `AnimOverlay`, `Flinch`, `Viewtarget`,
+`Velocity`, the transform) are copied. The usercmd wipe is applied where the port builds the frame's
+command (`AElysiumPlayerController::TickActor` -> `FElysiumPlayer::ApplyControllerUserCmdWipe`, ahead
+of `SetupMove`'s immobilize pair): the whole command, `IN_USE` and the look included, and the move
+words only in wolf form. It is NOT `IsMobile` (`m_bIsImmobilized`), which also stands for
+`m_iPlayerLocked`'s skip of the live PostThink arm — retail still runs `ItemPostFrame` and the
+melee-movement stop during a controller scene, on the empty command. `bWolf` and the frenzy-grapple
+arm are seams answering nothing.
+`RemovePlayerControllerEntity(EElysiumControllerRelease)` is `0x101618e0`, called (1,1) by
+`RemoveControllerNPC` and the player's `OnKilled`, (0,0) by the class-mismatch arm. Named
+modernization: the stand-in's Unreal motor ignores other character capsules (no retail solidity step;
+the pawn is pinned inside it). Named divergences: removal kills the stand-in in the frame of the request
+rather than through `SUB_Remove` (`0x101c0b10`) 0.01 s later; and the per-frame pin writes the pawn's
+view as well as its entity angles (`TeleportPlayer` -> `SetControlRotation`, because the pawn's body
+yaw follows its view), where retail's slot 64 writes entity angles only and a teleport's eye re-aim
+(`0x10178590`) survives PostThink.
+
+**The pose follow is a presentation swap with its state readers wired.** The pawn's body drawing the
+stand-in's pose stands for the three scalar words the player has no member for, and the readers of
+those words read through it: `UElysiumEntityBodies::GetBodyClipPhase` resolves a following body to its
+leader (`ElysiumNpcVisual::PoseHostOf`), so the player's own anim-event walk, attack lock and grapple
+readers see the stand-in's clip — retail's pawn runs `StudioFrameAdvance` (slot 250, `0x1016c2bf`) and
+`DispatchAnimEvents` (slot 258, `0x1016c2e5`) on the sequence PostThink copied onto it, so the
+stand-in's clip events (the 4050/4051 camera ids, weapon and combat ids, footfalls 2050-2053) reach
+`CBasePlayer::HandleAnimEvent` `0x10178a10` as well as the stand-in's own handler. The port's live think pass (`FElysiumNpc::Think`) dispatches none of slots 431, 433, 437 or
 442 for any class, so `NPCThink`/`GatherConditions`/`PreSelectSchedule`/`StartTask` are reached by
 their slot callers and tests. The visible consequence: retail's `GetNewSchedule` `0x1028a260` asks
 slot 437 before slot 438 (and 438 only when 437 answers 0), so an idle retail stand-in takes `0x6b`;

@@ -3763,6 +3763,16 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	bScriptBodyHeld = false;
 }
 
+bool FElysiumNpc::IsTransmitted() const
+{
+	// `0x100ab020`: `if (*(float*)(this+0x90) <= curtime) { if (m_fEffects & 0x40) return false; ...
+	// }` — a future stamp at `+0x90` (name unrecovered, no port word) transmits regardless, and the
+	// combat-character override `0x103407b0` transmits while `m_clientAuraCount` is non-zero (no port
+	// word either). Both stand at the arm that honours the bit. The one writer of the bit on this
+	// line is `GetControllerNPC` `0x10161a70`'s `|= 0x60`.
+	return (EffectsWord & 0x40u) == 0;
+}
+
 void FElysiumNpc::OnDormancyChanged()
 {
 	FElysiumCombatCharacter::OnDormancyChanged();
@@ -3825,6 +3835,11 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	// (`ElysiumNpcKernelBindings.cpp`: "the port member exists but its owner keeps it private"), so
 	// the record carries it until that owner opens a path.
 	Ar << NextComfortCheckTime;
+	// `m_fEffects` (`CBaseEntity +0x19c`, datamap offset 412, flags 6 = `SAVE|KEY`, external
+	// `effects`): a retail save row the generated walk does not bind, so the record carries it. It is
+	// what keeps a restored `!playercontroller` undrawn (`EF_NODRAW`, `GetControllerNPC` `0x10161a70`);
+	// `OnPostRestore` re-applies the draw gate over it.
+	Ar << EffectsWord;
 }
 
 // Retail's slot 130, `CAI_BaseNPCTroika::OnRestore 0x102998c0` over `CAI_BaseNPC::OnRestore
@@ -3874,6 +3889,8 @@ void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
 	Cognition.Conditions.Reset();
 	Cognition.GatheredAt = InWorld.NowSeconds();
 	RestoreDeathBodyState();
+	// The restored `m_fEffects` decides whether the body is transmitted (`ShouldTransmit` `0x100ab020`).
+	RefreshVisualGate();
 }
 
 // **Divergence, stated.** Retail's `OnRestore` installs the re-found program by writing

@@ -99,11 +99,12 @@ public:
 	//
 	// **Named modernization — the non-solid stand-in.** No step of retail's `Spawn` `0x103a4510`,
 	// `NPCInit` `0x103a4580` or `GetControllerNPC` `0x10161a70` changes the stand-in's solidity (brief
-	// open question 6: `CNPC_VHuman::Spawn`'s own `SetSolid` is unwalked). The port's stand-in shares
-	// the player's position while the pawn is hidden (`ElysiumEntityWorld.cpp`,
-	// `CreatePlayerControllerEntity`), so its Unreal motor ignores other character capsules rather
-	// than becoming a second solid character at the same mark. No retail state, and no event order,
-	// reads the Unreal capsule.
+	// open question 6: `CNPC_VHuman::Spawn`'s own `SetSolid` is unwalked). `CBasePlayer::PostThink`
+	// (`0x1016c510`..`0x1016c672`) pins the pawn onto the stand-in every frame
+	// (`FElysiumEntityWorld::UpdatePlayerFromController`), so its Unreal motor ignores other character
+	// capsules — the pawn's first among them — rather than walking into the body standing inside it.
+	// No retail state, and no event order, reads the Unreal capsule. The stand-in itself is never drawn
+	// (`EF_NODRAW`, `FElysiumNpc::IsTransmitted`); its body stays live as the pose the pawn draws.
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	// Port presentation, no retail counterpart: the stand-in's removal kills it and then destroys its

@@ -207,6 +207,30 @@ namespace ElysiumNpcVisual
 		}
 	}
 
+	FName UntransmittedBodyTag()
+	{
+		static const FName Tag(TEXT("Elysium.Untransmitted"));
+		return Tag;
+	}
+
+	void RevealPosedBody(USkeletalMeshComponent* Body)
+	{
+		if (Body != nullptr && !Body->ComponentHasTag(UntransmittedBodyTag()))
+		{
+			Body->SetVisibility(true, true);
+		}
+	}
+
+	USkeletalMeshComponent* PoseHostOf(USkeletalMeshComponent* Body)
+	{
+		if (Body == nullptr)
+		{
+			return nullptr;
+		}
+		USkeletalMeshComponent* const Leader = Cast<USkeletalMeshComponent>(Body->LeaderPoseComponent.Get());
+		return Leader != nullptr ? Leader : Body;
+	}
+
 	UMaterialInterface* EyeMaster(const USkeletalMesh* Mesh)
 	{
 		if (UElysiumCharacterProvenance::Find(Mesh))

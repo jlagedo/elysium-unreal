@@ -465,6 +465,8 @@ public:
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual void ClearPlayerVisual() override;
 	virtual void SetPlayerBodyEntityHidden(bool bInHidden) override;
+	virtual void SetPlayerBodyPoseSource(USkeletalMeshComponent* Source) override;
+	virtual void SetPlayerBodyVelocity(const FVector& VelocityCm) override;
 
 	// IElysiumEmbodiment: the player's body.
 	// Every override in this block resolves the pawn through this world's first player controller
@@ -808,6 +810,9 @@ private:
 	// rather than per frame, and the mover keeps the tables across a teleport because they belong to
 	// the body — so this is the only thing that has to remember whether it happened.
 	uint32 PushedGaitGeneration = 0;
+	// The player body's own followers `SetPlayerBodyPoseSource` re-led onto a controller's body, so
+	// the release can hand them back even when the source died first (its weak lead then reads null).
+	TArray<TWeakObjectPtr<USkinnedMeshComponent>> PlayerPoseFollowers;
 	void TickPlayerAnimation(float DeltaSeconds);
 
 	// Animation-driven movement.

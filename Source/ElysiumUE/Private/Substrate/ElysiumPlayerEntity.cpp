@@ -9,6 +9,7 @@
 #include "ElysiumAnimEvent.h"                // the 2050-2053 swallow reads the record's id
 #include "ElysiumEntityDefs.h"
 #include "ElysiumStub.h"           // the dialogue holster's unrecovered halves
+#include "ElysiumUserCmd.h"        // the controller usercmd wipe (`0x10351090`)
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLocomotionSample.h"         // the step clock's whole input
 #include "ElysiumMoveSolve.h"
@@ -609,6 +610,11 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	{
 		return true;
 	}
+	// Which body's clip this came off is observable only through the pose follow: during a controller
+	// scene the pawn walks the stand-in's clip (`PostThink`'s copy, `ElysiumNpcVisual::PoseHostOf`).
+	UE_LOG(LogElysiumPlayer, Verbose, TEXT("player anim event %d at %.3f (%s)%s"), Event.Event,
+		Event.Cycle, *Event.Options,
+		World != nullptr && World->FindPlayerController() != nullptr ? TEXT(" [controller scene]") : TEXT(""));
 
 	// 2050-2053, **inside** the gate where the listing puts them: the switch that swallows them is
 	// the same switch 4050/4051 sit in, so an observer reaches none of the four. Claimed, and
@@ -1141,8 +1147,16 @@ void FElysiumPlayer::SyncFromBody()
 	// (`0x102b15c0`) and the enemy memory's observed velocity read it. The sample carries the body's
 	// motion in its facing frame, so it goes back to world axes here; a body with no published
 	// sample keeps its last velocity, as it keeps its last position above.
+	//
+	// Not while a controller owns the pawn: `CBasePlayer::PostThink` (`0x1016c62a`..`0x1016c647`) writes the
+	// stand-in's absolute velocity (`controller+0x3bc`) onto the pawn every command, ahead of the
+	// frame's entity thinks, so what those thinks read is the stand-in's motion — the pinned body's
+	// own sample (a teleport a frame) is not. `FElysiumEntityWorld::UpdatePlayerFromController`
+	// writes it.
+	const bool bVelocityFromController = World->FindPlayerController() != nullptr && !bWolf
+		&& World->PlayerHandle() == Handle;
 	FElysiumLocomotionSample Sample;
-	if (Embodiment->SamplePlayerLocomotion(Sample))
+	if (!bVelocityFromController && Embodiment->SamplePlayerLocomotion(Sample))
 	{
 		const FVector Planar = FRotator(0.0f, Sample.FacingYaw, 0.0f)
 			.RotateVector(FVector(Sample.LocalVelocity.X, Sample.LocalVelocity.Y, 0.0));
@@ -1156,15 +1170,16 @@ void FElysiumPlayer::OnRuntimeTransformChanged()
 	// FElysiumAnimating::OnRuntimeTransformChanged, which would treat its relative transform as a
 	// map-root world transform and double-apply the placement.
 	FElysiumEntity::OnRuntimeTransformChanged();
-	// CreateControllerNPC snapshots a scene-owned duplicate that RemoveControllerNPC later uses as
-	// the player's final pose anchor. An explicit player transform (point_teleport, console teleport,
-	// or script SetOrigin/SetAngles) is authoritative while that relationship exists; carry it onto
-	// the duplicate so delayed teardown cannot restore the pre-teleport mark. Ordinary pawn movement
-	// reaches SyncFromBody instead and deliberately leaves a scene-staged controller independent.
-	if (FElysiumEntity* Controller = World ? World->FindPlayerController() : nullptr)
-	{
-		Controller->SetRuntimeTransform(Origin, Angles);
-	}
+	// The pawn only. Retail's `CPointTeleport::InputTeleport` (`0x1018dc00`) writes slots 62/64 on
+	// its target and, when that target carries a player (`+0xa8`, or an NPC whose `m_hFriendPlayer`
+	// `+0x60ac` resolves to one), re-aims that player's eyes (`0x10178590`), notifies the entity list
+	// (`0x1028d820`), stamps a player timer at `curtime + 0.5`, ends a live grapple (`EndGrapple`),
+	// clears the use entity (`0x1017c6d0`, `+0x1eb8`) and releases the use target (`0x10167fd0`,
+	// `+0x1040`); `CBasePlayer::Teleport` (`0x101606a0`) adds only `0x1028d820`. None of it touches
+	// `m_hControllerNPC` (`+0x1db0`): a transform written to `!player` while a controller lives does
+	// NOT reach the controller. `PostThink` (`0x1016c614`..`0x1016c65c`) copies the
+	// controller's transform back onto the pawn on the next frame, and `RemoveControllerNPC`'s
+	// `0x101618e0(player, 1, 1)` copies it once more, so the stand-in's mark is what survives.
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
 		Embodiment->TeleportPlayer(Origin, ElysiumPlayerView::ToUnreal(Angles));
@@ -1208,21 +1223,49 @@ void FElysiumPlayer::InstallPreparedCharacterVisual()
 	}
 }
 
-void FElysiumPlayer::SetHiddenByController(bool bInHidden)
-{
-	bHiddenByController = bInHidden;
-	GateVisual();
-}
-
 void FElysiumPlayer::GateVisual()
 {
 	// The pawn owns the surface. Publishing the entity's hide state and letting the pawn combine it
 	// with the camera's eligibility is what keeps one flag from having two writers — the defect that
 	// let a scene clip un-hide a body the camera had just put away.
+	//
+	// A controller scene adds no term here. Retail never hides the pawn for one: `GetControllerNPC`
+	// (`0x10161a70`) puts `EF_NODRAW` on the STAND-IN, which `CBaseEntity::ShouldTransmit`
+	// (`0x100ab020`) then never sends, and the pawn — carrying the stand-in's pose and transform
+	// through `PostThink`'s copy — is drawn exactly when `C_BasePlayer::ShouldDrawLocalPlayer`
+	// (`0x100a7a50`) says so, which is the camera's half of this AND.
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
-		Embodiment->SetPlayerBodyEntityHidden(IsInert() || bHiddenByController);
+		Embodiment->SetPlayerBodyEntityHidden(IsInert());
 	}
+}
+
+FElysiumPlayer::EControllerCmdWipe FElysiumPlayer::ControllerUserCmdWipe() const
+{
+	// `0x10351090`: `h = m_hControllerNPC; if (h != -1 && serial matches && entity != null) { if
+	// (!m_bWolf) <zero the whole usercmd>; else <zero +0x20/+0x24/+0x28>; }`. This player's
+	// `+0x1db0` is the world's controller handle (story 5 commit B).
+	if (World == nullptr || World->PlayerHandle() != Handle || World->FindPlayerController() == nullptr)
+	{
+		return EControllerCmdWipe::None;
+	}
+	return bWolf ? EControllerCmdWipe::MoveWordsOnly : EControllerCmdWipe::WholeCommand;
+}
+
+bool FElysiumPlayer::ApplyControllerUserCmdWipe(FElysiumUserCmd& Cmd) const
+{
+	switch (ControllerUserCmdWipe())
+	{
+	case EControllerCmdWipe::WholeCommand:
+		Cmd.ApplyControllerWipe();
+		return true;
+	case EControllerCmdWipe::MoveWordsOnly:
+		Cmd.ApplyWolfControllerWipe();
+		return true;
+	case EControllerCmdWipe::None:
+		break;
+	}
+	return false;
 }
 
 // --- Death (RC14): `Event_Killed`, and the think that walks the life state --------------------
@@ -1260,6 +1303,15 @@ void FElysiumPlayer::OnKilled()
 	// `interface/final_death.wav` from ever happening. It is raised from `PlayerDeathThink`'s
 	// `LIFE_DEAD -> LIFE_RESPAWNABLE` step instead. A sign-shaped overlay at this instant is UI the
 	// port does not have; that, and only that, is what is missing here.
+
+	// Step 3 — the controller release, after the rules' death notices (`g_pGameRules` `+0xb0` /
+	// `+0x14`, which the port has no object for): `if (m_hControllerNPC resolves) 0x101618e0(this, 1,
+	// 1)` — the stand-in's final pose and transform onto this body, then its removal. The placeholder
+	// release beside it (`m_hPlaceholderNPC`, `0x10161f10`) has no port producer.
+	if (World && World->FindPlayerController() != nullptr && World->PlayerHandle() == Handle)
+	{
+		World->RemovePlayerControllerEntity(EElysiumControllerRelease::CopyAnimationAndTransform);
+	}
 
 	// Step 5 — `SetAnimation(4)`, the death animation (`CBasePlayer::SetAnimation` `0x10164240`,
 	// slot 449). Asked for through the one Reaction-band producer, on the same ladder

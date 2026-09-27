@@ -97,6 +97,13 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		Current = ElysiumFeed::GatePairedUserCmd(Current);
 		bCmdChanged = true;
 	}
+	// `CHL2_Player` slot 462 `0x10351090`, ahead of `CBasePlayer`'s own slot 462 and so ahead of
+	// `SetupMove`'s immobilize pair below: while a controller stand-in lives the whole command is wiped
+	// — `IN_USE` and the look included — and the frame still runs, on nothing.
+	if (FeedPlayer && FeedPlayer->ApplyControllerUserCmdWipe(Current))
+	{
+		bCmdChanged = true;
+	}
 	if (FeedPlayer && !FeedPlayer->IsMobile())
 	{
 		// `CPlayerMove::SetupMove` `0x10186120`'s immobilize pair and **only** that pair:

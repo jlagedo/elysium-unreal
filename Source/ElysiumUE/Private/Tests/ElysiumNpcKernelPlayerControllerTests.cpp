@@ -5,7 +5,11 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumAnimEvent.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumStub.h"
+#include "ElysiumUserCmd.h"
+#include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -20,6 +24,9 @@
 #include "Substrate/ElysiumScheduleText.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
+#include "Visual/ElysiumNpcVisual.h"
+
+#include "Components/SkeletalMeshComponent.h"
 
 // Story 5 fold A2 — the controller line as C++ classes: `CNPC_VPlayerController`
 // (`FElysiumNpcPlayerController`), `CNPC_VFrenzyShadow` and `CNPC_VWolfMorph` below it. Every
@@ -517,6 +524,9 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 	TestNull(TEXT("0x101618a0: no controller, !playercontroller resolves nothing"),
 		Guard->FindNamedEntity(TEXT("!playercontroller")));
+	Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+	Player->Disposition = TEXT("Cinematic");
+	F.Services.bPlayerBodyEntityHidden = false;
 
 	const FElysiumEntityHandle Handle = F.World.CreatePlayerControllerEntity();
 	FElysiumEntity* Entity = F.World.Resolve(Handle);
@@ -530,8 +540,9 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 	TestTrue(TEXT("so NPCInit's m_hFriendPlayer is the player"), Controller->FriendPlayer == Player->Handle);
 	TestTrue(TEXT("spawnflags |= 4"), (Controller->SpawnFlags & 4) != 0);
 	TestEqual(TEXT("m_flSeekDistBase = 4096"), Controller->AuthoredVision, 4096.f);
-	TestEqual(TEXT("m_fEffects: 0x10 from the copy, 0x60 on the controller"), Controller->EffectsWord & 0x70u,
-		0x70u);
+	// `CopyAnimationDataFrom`'s `| 0x10` (`100973cc`) is zeroed by `CAI_BaseNPCTroika::NPCInit`
+	// (`1029a0c0`) inside `DispatchSpawn`; `GetControllerNPC` then ORs `0x60`.
+	TestEqual(TEXT("m_fEffects: exactly 0x60 on the controller"), Controller->EffectsWord, 0x60u);
 	TestTrue(TEXT("origin copied"), Controller->Origin.Equals(Player->Origin));
 	TestEqual(TEXT("model copied"), Controller->Model, Player->Model);
 	TestEqual(TEXT("named playercontroller"), Controller->TargetName, FString(TEXT("playercontroller")));
@@ -540,6 +551,22 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 		F.World.FindByName(TEXT("!playercontroller")), static_cast<FElysiumEntity*>(Controller));
 	TestEqual(TEXT("and through an NPC's FindNamedEntity (0x101618a0)"),
 		Guard->FindNamedEntity(TEXT("!playercontroller")), static_cast<FElysiumEntity*>(Controller));
+
+	// Who is drawn: `EF_NODRAW` on the stand-in, which `ShouldTransmit` `0x100ab020` never sends, and
+	// nothing on the pawn.
+	TestFalse(TEXT("the stand-in is never transmitted (m_fEffects & 0x40)"), Controller->IsTransmitted());
+	if (TestNotNull(TEXT("the stand-in stands a body (its animation host)"), Controller->Visual))
+	{
+		TestFalse(TEXT("which is never drawn"), Controller->Visual->IsVisible());
+		TestTrue(TEXT("but still ticks: the pawn draws its pose"), Controller->Visual->IsComponentTickEnabled());
+		// The pose layer's clip-commit reveal (a scripted beat arming a clip on the stand-in).
+		ElysiumNpcVisual::RevealPosedBody(Controller->Visual);
+		TestFalse(TEXT("and a clip commit does not reveal it"), Controller->Visual->IsVisible());
+	}
+	TestFalse(TEXT("the pawn is not hidden (retail touches no draw state on it)"),
+		F.Services.bPlayerBodyEntityHidden);
+	TestNotEqual(TEXT("no disposition is copied (GetControllerNPC writes none)"), Controller->Disposition,
+		FString(TEXT("Cinematic")));
 
 	TestTrue(TEXT("removal succeeds"), F.World.RemovePlayerControllerEntity());
 	TestNull(TEXT("and clears m_hControllerNPC"), F.World.FindPlayerController());
@@ -674,6 +701,375 @@ bool FElysiumNpcKernelPlayerControllerShadowStartTaskTest::RunTest(const FString
 	Shadow->StartTaskSlot442(&Step);
 	TestTrue(TEXT("owned, refused: +0x6668 = 1"), Shadow->bFailedGrapple);
 	TestEqual(TEXT("and the accepted arm did not run"), Shadow->OwnerFeedAcceptances, 0);
+	return true;
+}
+
+namespace
+{
+	// One world with the player and nothing else, and a live `npc_VPlayerController` stand-in.
+	struct FControllerSceneFixture
+	{
+		FElysiumNpcWorldFixture World;
+		FElysiumPlayer* Player = nullptr;
+		FElysiumNpcPlayerController* Controller = nullptr;
+
+		FControllerSceneFixture(const TCHAR* Map, uint32 Seed)
+			: World([Map, Seed]
+				{
+					FElysiumNpcWorldBuilder Builder(Map, Seed);
+					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+					return Builder;
+				}())
+		{
+			Player = World.Player();
+			if (Player != nullptr)
+			{
+				// A model, so the stand-in `CopyAnimationDataFrom` builds stands a body to follow.
+				Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+			}
+			FElysiumEntity* Stand = World.World.Resolve(World.World.CreatePlayerControllerEntity());
+			Controller = Stand != nullptr && Stand->AsNpc() != nullptr
+				? Stand->AsNpc()->AsSpecies<FElysiumNpcPlayerController>() : nullptr;
+		}
+
+		// Stage the stand-in the way a beat leaves it: a mark, a facing, a travel velocity and the
+		// animation words `PostThink` reads.
+		void Stage(const FVector& Mark, const FVector& Facing)
+		{
+			Controller->SetRuntimeTransform(Mark, Facing);
+			Controller->Velocity = FVector(40.f, -40.f, 0.f);
+			Controller->AnimTime = 12.5f;
+			Controller->AnimOverlay[2].Sequence = 17;
+			Controller->AnimOverlay[2].Cycle = 0.4f;
+			Controller->AnimOverlay[2].Weight = 0.7f;
+			Controller->AnimOverlay[2].Activity = 33;
+			Controller->Flinch[1].Sequence = 9;
+			Controller->Flinch[1].ExpireTime = 3.f;
+			Controller->Viewtarget = FVector(1.f, 2.f, 3.f);
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerPawnFollowsTest,
+	"Elysium.Substrate.NpcKernelPlayerController.PawnFollowsController", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerPawnFollowsTest::RunTest(const FString&)
+{
+	// `CBasePlayer::PostThink` `0x1016c510`..`0x1016c672`: one post-move tick puts the stand-in's
+	// animation words, transform, velocity and view target on the pawn, and the pawn's body draws the
+	// stand-in's pose.
+	FControllerSceneFixture F(TEXT("npc_kernel_controller_follow"), 5240);
+	if (!TestNotNull(TEXT("the player"), F.Player) || !TestNotNull(TEXT("the stand-in"), F.Controller))
+	{
+		return false;
+	}
+	const FVector Mark(320.f, -64.f, 12.f);
+	const FVector Facing(0.f, 135.f, 0.f);
+	F.Stage(Mark, Facing);
+	F.World.Services.Calls.Reset();
+
+	F.World.World.UpdatePlayerFromController();
+
+	TestTrue(TEXT("slot 62: the pawn stands on the stand-in's origin"), F.Player->Origin.Equals(Mark));
+	TestTrue(TEXT("slot 64: and takes its angles"), F.Player->Angles.Equals(Facing));
+	TestEqual(TEXT("in one body transaction"), F.World.Services.Count(TEXT("TeleportPlayer ")), 1);
+	TestTrue(TEXT("SetAbsVelocity(controller + 0x3bc)"), F.Player->Velocity.Equals(FVector(40.f, -40.f, 0.f)));
+	TestTrue(TEXT("on the pawn's body too, so a pinned mover integrates no motion of its own"),
+		F.World.Services.PlayerBodyVelocity.Equals(FVector(40.f, -40.f, 0.f)));
+	TestEqual(TEXT("m_flAnimTime (+0x174)"), F.Player->AnimTime, 12.5f);
+	TestEqual(TEXT("m_AnimOverlay[2] m_nSequence"), F.Player->AnimOverlay[2].Sequence, 17);
+	TestEqual(TEXT("m_AnimOverlay[2] m_flCycle"), F.Player->AnimOverlay[2].Cycle, 0.4f);
+	TestEqual(TEXT("m_AnimOverlay[2] m_flWeight"), F.Player->AnimOverlay[2].Weight, 0.7f);
+	TestEqual(TEXT("m_AnimOverlay[2] m_nActivity"), F.Player->AnimOverlay[2].Activity, 33);
+	TestEqual(TEXT("m_Flinch[1] nSequence"), F.Player->Flinch[1].Sequence, 9);
+	TestEqual(TEXT("m_Flinch[1] flExpireTime"), F.Player->Flinch[1].ExpireTime, 3.f);
+	TestTrue(TEXT("slot 277(slot 278): the view target"), F.Player->Viewtarget.Equals(FVector(1.f, 2.f, 3.f)));
+	TestTrue(TEXT("the pawn's body draws the stand-in's pose"),
+		F.Controller->Visual != nullptr && F.World.Services.PlayerBodyPoseSource == F.Controller->Visual);
+	TestFalse(TEXT("and the pawn is not hidden"), F.World.Services.bPlayerBodyEntityHidden);
+
+	// A write to `!player` while the stand-in lives moves the pawn only (`0x1018dc00` writes its
+	// target's transform and that player's eye/grapple/use state, never `+0x1db0`); the next frame's
+	// copy puts the pawn back on the stand-in.
+	F.Player->SetRuntimeTransform(FVector(-500.f, 0.f, 0.f), FVector::ZeroVector);
+	TestTrue(TEXT("a pawn teleport does not move the stand-in"), F.Controller->Origin.Equals(Mark));
+	F.World.World.UpdatePlayerFromController();
+	TestTrue(TEXT("and the next copy re-pins the pawn to it"), F.Player->Origin.Equals(Mark));
+
+	TestTrue(TEXT("removal succeeds"), F.World.World.RemovePlayerControllerEntity());
+	F.World.World.UpdatePlayerFromController();
+	TestNull(TEXT("no stand-in: the pawn draws its own graph"), F.World.Services.PlayerBodyPoseSource);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerPawnEventsTest,
+	"Elysium.Substrate.NpcKernelPlayerController.StandInClipEventsReachPlayer", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerPawnEventsTest::RunTest(const FString&)
+{
+	// Retail's pawn runs `StudioFrameAdvance` (slot 250, `0x1016c2bf`) and `DispatchAnimEvents` (slot
+	// 258, `0x1016c2e5`) on the sequence `PostThink` copied off the stand-in, so the stand-in's clip
+	// events reach `CBasePlayer::HandleAnimEvent` `0x10178a10`. The port's pawn follows the stand-in's
+	// pose, and its clip phase is read through the leader (`ElysiumNpcVisual::PoseHostOf`).
+	FControllerSceneFixture F(TEXT("npc_kernel_controller_events"), 5280);
+	if (!TestNotNull(TEXT("the player"), F.Player) || !TestNotNull(TEXT("the stand-in"), F.Controller)
+		|| !TestNotNull(TEXT("the stand-in's body"), F.Controller->Visual)
+		|| !TestNotNull(TEXT("the pawn's body"), F.Player->Visual))
+	{
+		return false;
+	}
+	FElysiumRecordingServices& Services = F.World.Services;
+	TestTrue(TEXT("the double built the pawn's body"), Services.LastPlayerVisual == F.Player->Visual);
+
+	// The stand-in stands on one clip carrying a 4100 ornament attach (the combat-character arm the
+	// player's handler falls through to).
+	const TCHAR* const Owner = TEXT("stand_bank");
+	const TCHAR* const Label = TEXT("stand_clip");
+	FElysiumAnimEvent Attach;
+	Attach.Cycle = 0.25f;
+	Attach.Event = ElysiumAnimEvents::AttachFollowModel;
+	Attach.Options = TEXT("cigarette");
+	Services.NpcEventTimelines.Add(FElysiumRecordingServices::EventTimelineKey(Owner, Label)).Add(Attach);
+	const FString Path = ElysiumAnimEvents::FormatFollowModelPath(
+		ElysiumAnimEvents::AttachFollowModel, TEXT("cigarette"), F.Player->Sheet.IsMale());
+	Services.OrnamentModels.Add(Path);
+	Services.bBodyClipPhaseSet = true;
+	Services.BodyClipPhaseBody = F.Controller->Visual;
+	Services.BodyClipPhase.OwnerStem = Owner;
+	Services.BodyClipPhase.Label = Label;
+	Services.BodyClipPhase.Cycle = 0.5f;
+	Services.BodyClipPhase.Length = 1.0f;
+	Services.BodyClipPhase.bLooping = true;
+	Services.BodyClipPhase.PlayId = 1;
+
+	F.Player->AdvanceAnimEvents();
+	TestTrue(TEXT("a pawn on its own graph does not walk the stand-in's clip"),
+		Services.WornOrnament(F.Player->Visual).IsEmpty());
+
+	F.World.World.UpdatePlayerFromController();
+	TestTrue(TEXT("the pawn's body follows the stand-in's pose"),
+		F.Player->Visual->LeaderPoseComponent.Get() == F.Controller->Visual);
+	F.Player->AdvanceAnimEvents();
+	TestEqual(TEXT("the stand-in's clip event reaches the player's own handler"),
+		Services.WornOrnament(F.Player->Visual), Path);
+	TestEqual(TEXT("and lands on the player's slot"), F.Player->AnimFollowModel, Path);
+
+	F.World.World.RemovePlayerControllerEntity();
+	TestNull(TEXT("released, the pawn takes its own graph back"), F.Player->Visual->LeaderPoseComponent.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerEffectsSaveTest,
+	"Elysium.Substrate.NpcKernelPlayerController.EffectsSurviveSnapshot", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerEffectsSaveTest::RunTest(const FString&)
+{
+	// `m_fEffects` is a retail SAVE row (datamap offset 412, flags 6): a restored stand-in is still
+	// `EF_NODRAW`, and still undrawn.
+	const auto BuildDefs = []()
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_controller_effects_save"), 5290);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		return MoveTemp(Builder.Defs);
+	};
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(BuildDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("the player"), Player))
+	{
+		return false;
+	}
+	Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+	World.CreatePlayerControllerEntity();
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+
+	FElysiumEntityWorld Restored(nullptr, nullptr, Services.Bundle());
+	Restored.Load(BuildDefs());
+	Restored.SpawnPlayer();
+	Restored.Activate(0.0);
+	Restored.ApplySnapshot(Snapshot);
+	FElysiumEntity* Stand = Restored.FindPlayerController();
+	FElysiumNpc* StandNpc = Stand != nullptr ? Stand->AsNpc() : nullptr;
+	if (!TestNotNull(TEXT("the relationship is rebound"), StandNpc))
+	{
+		return false;
+	}
+	TestEqual(TEXT("m_fEffects comes back as saved"), StandNpc->EffectsWord, 0x60u);
+	TestFalse(TEXT("so the restored stand-in is not transmitted"), StandNpc->IsTransmitted());
+	if (StandNpc->Visual != nullptr)
+	{
+		TestFalse(TEXT("and its body is not drawn"), StandNpc->Visual->IsVisible());
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerInputTest,
+	"Elysium.Substrate.NpcKernelPlayerController.InputSuppressedWhileLive", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerInputTest::RunTest(const FString&)
+{
+	// `CHL2_Player` slot 462 `0x10351090`: the whole usercmd is zeroed while `m_hControllerNPC`
+	// resolves and `!m_bWolf`. It is read off the handle, not latched at creation.
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_controller_input"), 5250);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("the player"), Player))
+	{
+		return false;
+	}
+	// One frame of a player pushing forward, looking, holding `+use` and `+attack`.
+	const auto Sample = []()
+	{
+		FElysiumUserCmd Cmd;
+		Cmd.Seq = 42;
+		Cmd.DeltaSeconds = 0.016f;
+		Cmd.Move = FVector2D(1.0, 0.5);
+		Cmd.Up = 0.25f;
+		Cmd.LookDelta = FVector2D(3.0, -1.0);
+		Cmd.Buttons = EElysiumButton::Use | EElysiumButton::Attack
+			| static_cast<uint64>(EElysiumButton::Forward);
+		return Cmd;
+	};
+
+	FElysiumUserCmd Cmd = Sample();
+	TestFalse(TEXT("no stand-in: nothing is wiped"), Player->ApplyControllerUserCmdWipe(Cmd));
+	TestTrue(TEXT("and the command stands"), Cmd.SameIntent(Sample()));
+
+	F.World.CreatePlayerControllerEntity();
+	Cmd = Sample();
+	TestTrue(TEXT("a live stand-in wipes the command"), Player->ApplyControllerUserCmdWipe(Cmd));
+	TestTrue(TEXT("no move"), Cmd.Move.IsZero() && Cmd.Up == 0.0f);
+	TestTrue(TEXT("no look"), Cmd.LookDelta.IsZero());
+	TestEqual(TEXT("no button at all — IN_USE included (0x10351090 is not SetupMove's 0x807)"),
+		Cmd.Buttons, static_cast<uint64>(0));
+	TestEqual(TEXT("the frame's bookkeeping survives"), Cmd.Seq, static_cast<uint32>(42));
+	TestTrue(TEXT("m_bIsImmobilized is NOT raised: the live PostThink arm still runs, on nothing"),
+		Player->IsMobile());
+
+	Player->bWolf = true;
+	Cmd = Sample();
+	TestTrue(TEXT("m_bWolf: the wipe narrows"), Player->ApplyControllerUserCmdWipe(Cmd));
+	TestTrue(TEXT("to the three move words"), Cmd.Move.IsZero() && Cmd.Up == 0.0f);
+	TestEqual(TEXT("the buttons survive"), Cmd.Buttons, Sample().Buttons);
+	Player->bWolf = false;
+
+	F.World.RemovePlayerControllerEntity();
+	Cmd = Sample();
+	TestFalse(TEXT("the stand-in gone, nothing is wiped"), Player->ApplyControllerUserCmdWipe(Cmd));
+	Player->SetImmobilized(true);
+	TestFalse(TEXT("m_bIsImmobilized is its own term"), Player->IsMobile());
+	Player->SetImmobilized(false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerReleaseTest,
+	"Elysium.Substrate.NpcKernelPlayerController.ReleaseCopiesPoseOnly", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerReleaseTest::RunTest(const FString&)
+{
+	// `0x101618e0(player, 1, 1)`: the animation words and the transform, then the removal — and
+	// nothing else. The view target is `PostThink`'s alone; model, skin and disposition are never
+	// written.
+	FControllerSceneFixture F(TEXT("npc_kernel_controller_release"), 5260);
+	if (!TestNotNull(TEXT("the player"), F.Player) || !TestNotNull(TEXT("the stand-in"), F.Controller))
+	{
+		return false;
+	}
+	F.Player->Disposition = TEXT("Cinematic");
+	F.Player->Skin = 2;
+	F.Player->Viewtarget = FVector::ZeroVector;
+	const FString PlayerModel = F.Player->Model;
+	F.Controller->SetRuntimeModel(TEXT("models/character/pc/female/toreador_armor_0.mdl"));
+	F.Controller->Skin = 4;
+	F.Controller->Disposition = TEXT("Neutral");
+	const FVector Mark(750.f, 125.f, 20.f);
+	const FVector Facing(0.f, 210.f, 0.f);
+	F.Stage(Mark, Facing);
+
+	TestTrue(TEXT("RemoveControllerNPC (0x102272b0) releases with (1, 1)"),
+		F.World.World.RemovePlayerControllerEntity());
+	TestNull(TEXT("m_hControllerNPC = -1"), F.World.World.FindPlayerController());
+	TestTrue(TEXT("the final mark"), F.Player->Origin.Equals(Mark));
+	TestTrue(TEXT("and facing"), F.Player->Angles.Equals(Facing));
+	TestTrue(TEXT("and velocity"), F.Player->Velocity.Equals(FVector(40.f, -40.f, 0.f)));
+	TestEqual(TEXT("the gesture table travels"), F.Player->AnimOverlay[2].Sequence, 17);
+	TestEqual(TEXT("the flinch table travels"), F.Player->Flinch[1].Sequence, 9);
+	TestTrue(TEXT("the release copies no view target"), F.Player->Viewtarget.Equals(FVector::ZeroVector));
+	TestEqual(TEXT("no model is handed back"), F.Player->Model, PlayerModel);
+	TestEqual(TEXT("no skin"), F.Player->Skin, 2);
+	TestEqual(TEXT("no disposition"), F.Player->Disposition, FString(TEXT("Cinematic")));
+	TestNull(TEXT("the pawn takes its own graph back"), F.World.Services.PlayerBodyPoseSource);
+
+	// (0, 0): `GetControllerNPC`'s class-mismatch arm lets the old stand-in go with nothing copied.
+	F.World.World.CreatePlayerControllerEntity();
+	FElysiumEntity* Stand = F.World.World.FindPlayerController();
+	if (!TestNotNull(TEXT("a second stand-in"), Stand))
+	{
+		return false;
+	}
+	Stand->SetRuntimeTransform(FVector(-900.f, 40.f, 0.f), FVector(0.f, 90.f, 0.f));
+	AddExpectedError(TEXT("asked for NPC class"), EAutomationExpectedErrorFlags::Contains, 1);
+	F.World.World.CreatePlayerControllerEntity(TEXT("npc_VFrenzyShadow"));
+	TestTrue(TEXT("the mismatch arm copies no transform"), F.Player->Origin.Equals(Mark));
+
+	// (1, 1): `CBasePlayer::Event_Killed` `0x10163af0` releases the live stand-in with the copy.
+	FElysiumEntity* Shadow = F.World.World.FindPlayerController();
+	if (!TestNotNull(TEXT("the frenzy shadow stands in"), Shadow))
+	{
+		return false;
+	}
+	const FVector DeathMark(64.f, 64.f, 8.f);
+	Shadow->SetRuntimeTransform(DeathMark, FVector(0.f, 45.f, 0.f));
+	F.Player->OnKilled();
+	TestNull(TEXT("Event_Killed releases the stand-in"), F.World.World.FindPlayerController());
+	TestTrue(TEXT("with its transform"), F.Player->Origin.Equals(DeathMark));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerSeamsTest,
+	"Elysium.Substrate.NpcKernelPlayerController.FrenzyGrappleAndWolfSeams", GPlayerControllerTestFlags)
+bool FElysiumNpcKernelPlayerControllerSeamsTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_controller_seams"), 5270);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("the player"), Player))
+	{
+		return false;
+	}
+	FElysiumEntity* Shadow = F.World.Resolve(F.World.CreatePlayerControllerEntity(TEXT("npc_VFrenzyShadow")));
+	if (!TestNotNull(TEXT("a frenzy shadow stands in"), Shadow))
+	{
+		return false;
+	}
+
+	// The frenzy-grapple arm: `Classify() == 3 && m_iCurFrenzyCount > 0 && m_bFrenzyHunger &&
+	// Replenish(1)`. The shadow answers 3 and the count is set, but the two seams answer false.
+	Player->CurFrenzyCount = 1;
+	TestEqual(TEXT("the shadow is class 3"), Shadow->Classify(), 3);
+	TestFalse(TEXT("m_bFrenzyHunger has no player word: the seam answers false"),
+		FElysiumNpcFrenzyShadow::OwnerFrenzyHunger(*Player));
+	TestFalse(TEXT("Replenish(1) answers false"), FElysiumNpcFrenzyShadow::OwnerReplenish(*Player));
+	F.World.UpdatePlayerFromController();
+	TestEqual(TEXT("so the grapple arm (m_bIsFrenzyGrapple, 0x1033f6d0) answers nothing"),
+		Player->ControllerFrenzyGrappleRequests, 0);
+	Player->CurFrenzyCount = 0;
+
+	// The wolf arm: `m_bWolf` answers false, so the copy runs controller -> pawn. Raised by hand, the
+	// transform goes the other way and the pawn draws its own graph.
+	TestFalse(TEXT("m_bWolf stands false"), Player->bWolf);
+	const FVector PawnMark(-128.f, 256.f, 0.f);
+	Shadow->SetRuntimeTransform(FVector(10.f, 10.f, 0.f), FVector::ZeroVector);
+	Player->bWolf = true;
+	Player->SetRuntimeTransform(PawnMark, FVector(0.f, 30.f, 0.f));
+	F.World.UpdatePlayerFromController();
+	TestTrue(TEXT("wolf: the controller takes the pawn's origin"), Shadow->Origin.Equals(PawnMark));
+	TestTrue(TEXT("and the pawn stays where it is"), Player->Origin.Equals(PawnMark));
+	TestNull(TEXT("and draws its own graph"), F.Services.PlayerBodyPoseSource);
+	Player->bWolf = false;
+	F.World.UpdatePlayerFromController();
+	TestTrue(TEXT("unwolfed: the pawn is pinned to the controller again"), Player->Origin.Equals(Shadow->Origin));
 	return true;
 }
 

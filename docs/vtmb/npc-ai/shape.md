@@ -3050,9 +3050,12 @@ a `CAI_BaseNPCTroika` (`controller+0x98`) and then bulk-copies, in retail's orde
 (`+0x6f0`), `m_flAnimTime` (`+0x174`), `m_flCycle` (`+0x6f8`), `m_flPlaybackRate` (`+0x6f4`), then
 **0xc0 bytes from `+0x734`** — the whole four-record gesture-layer table — and **0x54 bytes from
 `+0x7f4`** — the whole three-record flinch table. Both are `rep movsd`, so every field travels,
-including ones no body on the receiving side ever writes. The second flag transfers absolute linear
-and angular velocity, recomputing the source's cached value first only when its `m_iEFlags` bit 0xc
-is set. Then, unconditionally and outside both flags:
+including ones no body on the receiving side ever writes. The second flag transfers the transform
+and the linear velocity, in retail's order: slot 64 `SetLocalAngles(controller.GetAbsAngles())`, then
+`SetAbsVelocity(controller + 0x3bc)` (recomputing the source's cached value first only when its
+`m_iEFlags` bit 0xc is set), then slot 62 `SetLocalOrigin(controller.GetAbsOrigin())`. No view target
+— only `CBasePlayer::PostThink`'s per-frame copy of the same block (`0x1016c510`..`0x1016c672`) adds
+slots 277/278. Then, unconditionally and outside both flags:
 `ThinkSet(controller, 0x101c0b10, 0.0)`, `controller->m_flNextThink = curtime + _DAT_1044e658`, and
 `m_hControllerNPC = -1`. Retail arms the one-shot think on the entity it is *letting go of*.
 
@@ -3066,12 +3069,16 @@ world's `PlayerControllerHandle`, written by `FElysiumEntityWorld::CreatePlayerC
 (`GetControllerNPC` `0x10161a70`) and cleared by `RemovePlayerControllerEntity` (`0x101618e0`);
 `FElysiumPlayer::ControllerNpcBusy` is `0x10175180` over it. The copies of `GetControllerNPC`,
 `0x101618e0` and `0x10175180` that story 29c had ported onto the NPC over an NPC-side
-`ControllerNpc` word — none of them reached by a live path — are deleted. **Not ported onto the
-player:** this detach's animation hand-back (sequence, cycle, rate, the gesture and flinch tables)
-and its velocity transfer; the world's release copies the transform, model, skin and disposition as
-the port's reading — a **named modernization** pending the controller follow-up, since retail's
-`0x101618e0` writes none of model, skin or disposition. Carried to story 8
-(`docs/specs/0019-npc-kernel-rework/story-5/handoff-story-8.md` lists the field list).
+`ControllerNpc` word — none of them reached by a live path — are deleted.
+
+**Port (the controller follow-up, 2026-09-27).** `RemovePlayerControllerEntity(EElysiumControllerRelease)`
+is this body on the player: `CopyAnimationAndTransform` (the (1,1) callers — `RemoveControllerNPC`,
+the player's `Event_Killed`) copies `m_flAnimTime`, the whole gesture and flinch tables, the transform
+and the velocity; `CopyNothing` (the class-mismatch arm of `GetControllerNPC`) copies nothing. The
+hand-back of model, skin and disposition the port used to make is gone — retail writes none of them,
+and the pawn never stopped wearing its own. `m_nSequence`, `m_flCycle` and `m_flPlaybackRate` have no
+player member; their presentation is the pawn's body following the stand-in's pose, which the release
+ends (`IElysiumEmbodiment::SetPlayerBodyPoseSource(nullptr)`) before the stand-in's body is destroyed.
 
 ### Autoaim — `0x10176520`, `0x10176930`
 

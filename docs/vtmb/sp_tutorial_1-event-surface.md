@@ -838,9 +838,11 @@ teleports and the +4-second second acquisition retain the exact queue order in t
 The `256` on the first `StartPlayerDialogRemote` is not a decoded camera or placement flag. The
 hash-pinned server handler at `0x1029f060` never reads its input variant and writes no player, Jack,
 or camera transform **[VtMB, RE46]**. `CreateControllerNPC` remains an earlier, independently authored
-event in the same zero-time batch. Whether downstream client/body code changes visibility or body
-ownership is an explicit capture question; no placement or forced-facing behavior follows from the
-map row alone.
+event in the same zero-time batch. Its body consequences are recovered (2026-09-27): the stand-in is
+`EF_NODRAW`, the pawn wears its pose and is pinned to its transform every frame by
+`CBasePlayer::PostThink`, and the player's usercmd is zeroed while it lives (`0x10351090`), until the
+`+5` `RemoveControllerNPC` (`docs/vtmb/entity_io.md` § "`!playercontroller`"). A `teleport_fade`
+warp that lands inside that window is undone by the pin and the release; one after it stands.
 
 `teleport_very_beginning` is not an authored-position warp. Its spawnflag `1` changes the cached
 destination to the player's activation-time transform, so its visible map origin

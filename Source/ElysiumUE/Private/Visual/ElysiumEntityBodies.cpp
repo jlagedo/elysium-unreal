@@ -745,7 +745,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
-	Body->SetVisibility(true, true);
+	ElysiumNpcVisual::RevealPosedBody(Body);
 	return true;
 }
 
@@ -1100,7 +1100,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	// `ElysiumAnimIntent::OneShotForcesVisibility`.
 	if (ElysiumAnimIntent::OneShotForcesVisibility(Request.Route))
 	{
-		Body->SetVisibility(true, true);
+		ElysiumNpcVisual::RevealPosedBody(Body);
 	}
 	return true;
 }
@@ -1109,8 +1109,14 @@ bool UElysiumEntityBodies::GetBodyClipPhase(USkeletalMeshComponent* Body,
 	EElysiumAnimChannel Channel, FElysiumClipPhase& Out)
 {
 	Out = FElysiumClipPhase();
-	const UElysiumBodyAnimInstance* Inst = Body != nullptr
-		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance())
+	// A body following another's pose reports the pose it DRAWS. During a controller scene the pawn's
+	// body follows the stand-in's (`SetPlayerBodyPoseSource`) and evaluates no graph of its own —
+	// retail's pawn runs `StudioFrameAdvance` (slot 250, `0x1016c2bf`) and `DispatchAnimEvents` (slot
+	// 258, `0x1016c2e5`) on the stand-in's sequence `PostThink` copied onto it, so the player's own
+	// event walk, attack lock and grapple readers must read the stand-in's clip here.
+	USkeletalMeshComponent* const Host = ElysiumNpcVisual::PoseHostOf(Body);
+	const UElysiumBodyAnimInstance* Inst = Host != nullptr
+		? Cast<UElysiumBodyAnimInstance>(Host->GetAnimInstance())
 		: nullptr;
 	if (Inst == nullptr)
 	{
@@ -1286,7 +1292,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
-	Body->SetVisibility(true, true);
+	ElysiumNpcVisual::RevealPosedBody(Body);
 	return true;
 }
 

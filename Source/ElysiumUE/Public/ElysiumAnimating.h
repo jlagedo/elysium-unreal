@@ -73,6 +73,14 @@ public:
 	virtual void OnRuntimeModelChanged() override;
 	// R6 — a ScriptHidden/dead character is undrawn and stops ticking its clip.
 	virtual void OnDormancyChanged() override;
+	// `CBaseEntity::ShouldTransmit` `0x100ab020`'s `EF_NODRAW` (`m_fEffects & 0x40`) early-out: an
+	// entity carrying it is never sent to the client, so its body is never drawn — but it is still a
+	// server entity, so its animation keeps advancing, its events keep firing and its hull keeps
+	// moving. The base carries no effects word and always transmits; `FElysiumNpc` answers off its
+	// kernel `EffectsWord`.
+	virtual bool IsTransmitted() const { return true; }
+	// Re-apply the draw gate after a write to what `IsTransmitted` reads.
+	void RefreshVisualGate() { GateVisual(); }
 	// The body a camera shot's `Bone: Bip01 Head` attach point resolves against.
 	virtual USkeletalMeshComponent* GetSkeletalBody() const override { return Visual; }
 

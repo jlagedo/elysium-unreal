@@ -798,6 +798,65 @@ void AElysiumMapActor::SetPlayerBodyEntityHidden(bool bInHidden)
 	}
 }
 
+void AElysiumMapActor::SetPlayerBodyPoseSource(USkeletalMeshComponent* Source)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	USkeletalMeshComponent* Visual = Body ? Body->GetPlayerVisual() : nullptr;
+	if (Visual == nullptr || Visual == Source)
+	{
+		return;
+	}
+	USkinnedMeshComponent* const Current = Visual->LeaderPoseComponent.Get();
+	// A source that died before its release leaves the lead reading null with followers still
+	// pointed at it; that is a change to make, not the resting state.
+	const bool bFollowersStranded = Source == nullptr && Current == nullptr && !PlayerPoseFollowers.IsEmpty();
+	if (Current == Source && !bFollowersStranded)
+	{
+		return;   // already following this source (or already on its own graph): a per-frame no-op
+	}
+	// The body's own followers — the cloth garments `InstallGarment` leads off it, a worn ornament,
+	// a leader-posed wield — were led by the body. Unreal resolves a leader to the top of a chain only
+	// when the lead is SET, so a body that starts following leaves them reading a component whose own
+	// transforms it no longer evaluates. They are re-led to the root of the new chain, and back to
+	// the body when it takes its own graph again.
+	USkinnedMeshComponent* const NewRoot = Source != nullptr ? static_cast<USkinnedMeshComponent*>(Source)
+		: static_cast<USkinnedMeshComponent*>(Visual);
+	TArray<USceneComponent*> Attached;
+	Visual->GetChildrenComponents(/*bIncludeAllDescendants=*/false, Attached);
+	TArray<USkinnedMeshComponent*> Followers;
+	for (USceneComponent* Child : Attached)
+	{
+		USkinnedMeshComponent* const Skinned = Cast<USkinnedMeshComponent>(Child);
+		if (Skinned == nullptr)
+		{
+			continue;
+		}
+		const USkinnedMeshComponent* const Leader = Skinned->LeaderPoseComponent.Get();
+		if (Leader == Visual || (Current != nullptr && Leader == Current)
+			|| PlayerPoseFollowers.Contains(TWeakObjectPtr<USkinnedMeshComponent>(Skinned)))
+		{
+			Followers.Add(Skinned);
+		}
+	}
+	PlayerPoseFollowers.Reset();
+	if (Source != nullptr)
+	{
+		// The source is an undrawn body (`EF_NODRAW`); it must evaluate its pose whether or not the
+		// renderer ever sees it, or the follower would copy a frozen one.
+		Source->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	}
+	Visual->SetLeaderPoseComponent(Source);
+	for (USkinnedMeshComponent* Follower : Followers)
+	{
+		Follower->SetLeaderPoseComponent(NewRoot);
+		if (Source != nullptr)
+		{
+			PlayerPoseFollowers.Add(Follower);
+		}
+	}
+}
+
 APawn* AElysiumMapActor::ResolvePlayerPawn() const
 {
 	const UWorld* W = GetWorld();
@@ -2437,6 +2496,11 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// It is the only substrate call in this pass that takes the frame's delta, because the
 		// sub-step count is `floor(dt * 100)` and nothing else in the layer measures a frame.
 		EntityWorld->AdvanceMeleeSwings(DeltaSeconds);
+		// `CBasePlayer::PostThink`'s controller copy (`0x1016c510`..`0x1016c672`), at its own place in
+		// retail's body: after the live half (the weapon frame and the melee walk above stand for
+		// `ItemPostFrame` and `UpdateCharacter`), past `LAB_1016c41d`, so it runs whatever the
+		// locked/alive/observer gate said. The camera below then frames the re-pinned pawn.
+		EntityWorld->UpdatePlayerFromController();
 		// The melee weapon-trail VFX rides the same frame's Swing state the contact walk just
 		// advanced, and the same fresh render data the contact walk's own bone queries just read.
 		// Presentation only -- no substrate mutation, so it runs beside the walk rather than inside

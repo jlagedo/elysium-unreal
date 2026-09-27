@@ -257,32 +257,61 @@ conditions and worth counting separately: only the second is a gap in a reimplem
 ### `!playercontroller` — the cinematic relationship entity
 
 `events_player.CreateControllerNPC` creates one map-epoch `npc_VPlayerController`, not a boolean
-latch. Repeated creation returns the same entity. It copies the player's model, origin, angles, skin,
-and available embodied character state, builds through the ordinary NPC skeletal path, and remains
-non-AI and non-solid. `!playercontroller` resolves that relationship directly, which is why the
-shipped choreographies and scripted sequences can bind it as an ordinary animating actor.
+latch. Repeated creation returns the same entity. It copies the player's model, skin, anim time, origin
+and angles (`CopyAnimationDataFrom` `0x10097310` plus slots 62/64), builds through the ordinary NPC
+skeletal path, and is a whole `CAI_BaseNPCTroika` that thinks every frame. `!playercontroller`
+resolves that relationship directly, which is why the shipped choreographies and scripted sequences
+can bind it as an ordinary animating actor. It is **never drawn**: `GetControllerNPC` (`0x10161a70`)
+raises `EF_NODRAW | EF_NOSHADOW` (`0x60`) on it and `CBaseEntity::ShouldTransmit` (`0x100ab020`) never
+sends it (`docs/vtmb/npc-ai/lifecycle.md` § "The player controller").
 
-`events_player.RemoveControllerNPC` first transfers the controller's final model, transform, skin,
-and applicable character state back to the player, then destroys it and clears the alias. The
-relationship handle is map-snapshot state: restoring a scene in progress rebinds
-`!playercontroller` to the restored runtime entity before event processing resumes.
+`events_player.RemoveControllerNPC` copies the controller's final animation words and transform onto
+the player, then schedules its removal and clears the alias; it writes no model, skin, disposition or
+effects. The relationship handle is map-snapshot state: restoring a scene in progress rebinds
+`!playercontroller` to the restored runtime entity before event processing resumes (the port also
+re-raises the unsaved `0x60` there).
 
-An explicit transform write to `!player` while this relationship is live also updates the
-controller's pose anchor. Ordinary player movement does not: it samples the pawn into `!player`
-without taking ownership of a scene-staged controller. This distinction is load-bearing in the
-tutorial porch chain. `teleport_fade` moves the player while the controller exists, and the delayed
-`RemoveControllerNPC` must preserve that destination rather than restoring the controller's
-pre-fade porch transform.
+**While the relationship is live the pawn follows the controller, not the other way round.**
+`CBasePlayer::PostThink` (`0x1016be10`) copies the controller's `m_nSequence`, `m_flAnimTime`,
+`m_flCycle`, `m_flPlaybackRate`, `m_AnimOverlay[]` and `m_Flinch[]` (`0x1016c5be`..`0x1016c612`), then
+its angles, absolute velocity and origin (`0x1016c614`..`0x1016c65c`) and its view target
+(`0x1016c662`..`0x1016c672`) onto the pawn every command, after `LAB_1016c41d` so a locked or dead
+player is pinned too (the wolf form reverses the transform copy). A transform written to `!player`
+meanwhile never reaches the controller. `CPointTeleport::InputTeleport` (`0x1018dc00`) writes its
+target's slots 62/64 and, when the target carries a player (`+0xa8`, or an NPC whose `m_hFriendPlayer`
+`+0x60ac` resolves to one), re-aims that player's eyes (`0x10178590`), notifies the entity list
+(`0x1028d820`), stamps a player timer at `curtime + 0.5`, ends a live grapple, clears the use entity
+(`0x1017c6d0`, `+0x1eb8`) and releases the use target (`0x10167fd0`, `+0x1040`);
+`CBasePlayer::Teleport` (`0x101606a0`) adds only `0x1028d820`. None of it touches `+0x1db0`, so the next PostThink puts the pawn back on the controller's mark, and the release copies
+that mark once more. **Correction (2026-09-27):** this section previously stated the reverse (an
+explicit `!player` write "updates the controller's pose anchor" so the tutorial's delayed
+`RemoveControllerNPC` preserves the `teleport_fade` destination). The listing refutes it. In
+`sp_tutorial_1`, `trig_off_porch.OnEndTouch` creates the controller at `t0` and removes it at `+5`;
+`teleport_fade` is started by `tutorial.py`'s `DialogPostProcess` (the Unofficial Patch's
+`Tut_Jack == 1 and Tut_Patch == 0` arm) when the `t0` Jack conversation ends, and its `OnBeginFade`
+fires `teleport_player.Teleport` (target `!player`) at `+1`. A conversation that ends within four
+seconds therefore teleports the pawn while the controller lives — and retail puts the player back on
+the porch (PostThink every frame, then the `+5` release). A longer one teleports after the release and
+lands in the alley. Both are retail's behaviour; the port reproduces both.
 
 Both inputs are thin: `CreateControllerNPC` (`0x10227280`) resolves the player and calls a
 get-or-create keyed on `m_hControllerNPC` (player `+0x1db0`), which reuses a live controller of the
-matching classname and otherwise spawns one and copies model, skin, pose fields, origin and angles
-across. **Nothing in that chain touches the player pawn** — no hide, no freeze, no input suppression,
-no solidity change; a scene wanting any of those authors them separately.
-`RemoveControllerNPC` (`0x102272b0`) calls the destroy with both copy flags set, and the order inside
-is state first: angles, then origin read from the controller's **live** absolute-origin field, then
-the pose block, and only then is removal scheduled — via a think set to the next frame, not a
-synchronous delete. The alias clears after that scheduling.
+matching classname and otherwise spawns one. **Nothing in that chain touches the player pawn** — no
+hide, no freeze, no solidity change. Input is taken by a different route: `CHL2_Player` slot 462
+(`0x10351090`, its `PlayerRunCommand`) zeroes the **whole usercmd** while `m_hControllerNPC` resolves
+and `!m_Local.m_bWolf` (`+0x1edc`; the wolf form zeroes only `+0x20`/`+0x24`/`+0x28`), read off the
+handle every command. `RemoveControllerNPC` (`0x102272b0`) calls the release `0x101618e0(player, 1,
+1)`. Its order is: with the first flag (and a Troika under the controller, `controller+0x98`) the
+animation words `m_nSequence` `+0x6f0`, `m_flAnimTime` `+0x174`, `m_flCycle` `+0x6f8`,
+`m_flPlaybackRate` `+0x6f4`, then `rep movsd` of 0x30 dwords of `m_AnimOverlay[]` from `+0x734` and
+0x15 dwords of `m_Flinch[]` from `+0x7f4`; with the second flag slot 64 `SetLocalAngles(ctrl
+GetAbsAngles)`, `SetAbsVelocity(ctrl+0x3bc)` (after `CalcAbsoluteVelocity` when its `m_iEFlags` bit 12
+is set) and slot 62 `SetLocalOrigin(ctrl GetAbsOrigin)`; then, unconditionally,
+`ThinkSet(controller, SUB_Remove 0x101c0b10)` at `curtime + 0.01` and `m_hControllerNPC = -1`. No view
+target (only PostThink copies that). (1,1) callers: `InputRemoveControllerNPC` `0x102272b0`,
+`CBasePlayer::Event_Killed` `0x10163af0`, the Protean wolf returns `0x1016bd50` and PostThink's wolf
+arm. (0,0) callers — nothing copied, only the removal: `GetControllerNPC`'s class-mismatch arm, the
+frenzy end `0x1033f6d0`, the player teardown `0x10170090`.
 
 ### `events_player.RemoveDisciplinesNow`
 
