@@ -9,7 +9,6 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumWeaponClasses.h"

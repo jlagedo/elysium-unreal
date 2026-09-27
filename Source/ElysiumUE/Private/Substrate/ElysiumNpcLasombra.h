@@ -11,10 +11,8 @@
 class FElysiumNpcLasombra : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VLasombra");
+	ELYSIUM_NPC_CLASS("CNPC_VLasombra", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual bool CanSeekCover() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 

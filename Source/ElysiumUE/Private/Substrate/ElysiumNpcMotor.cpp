@@ -8,7 +8,6 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -173,16 +172,6 @@ bool FElysiumNpc::NavAllHintNodes(TArray<int32>& OutHintNodes) const
 }
 
 // -------------------------------------------------------------------------------------------------
-// The movement-tunables table's readers.
-// -------------------------------------------------------------------------------------------------
-
-const FElysiumNpcBase::FJumpTunableSpecies* FElysiumNpc::JumpTunableSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(NpcKernelMotorShared::GJumpTunableSpecies);
-	return NpcKernelMotorShared::GJumpTunableSpecies;
-}
-
-// -------------------------------------------------------------------------------------------------
 // The movement tunables — slots 521, 522, 523, 524.
 // -------------------------------------------------------------------------------------------------
 
@@ -192,8 +181,7 @@ float FElysiumNpc::GetMaxJumpSpeed() const
 	// a DIFFERENT constant from the base's `0x101a6b60`, which returns the same 18.0 as its step
 	// height. `CAI_TestHull::GetMaxJumpSpeed` `0x102d72d0` is its own class's override
 	// (`FElysiumNpcTestHull`), on the `CAI_BaseNPC` line and never below this one.
-	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
-	return Row != nullptr ? Row->MaxJumpSpeed : NpcKernelMotorShared::GMaxJumpSpeedTroika;
+	return NpcKernelMotorShared::GMaxJumpSpeedTroika;
 }
 
 // -------------------------------------------------------------------------------------------------

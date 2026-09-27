@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcDog.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -29,12 +28,6 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Visual/ElysiumActionTables.h"
-
-const FElysiumNpcClass* FElysiumNpcDog::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 375: `0x10374ad0`, which calls the Troika body `0x10295590` directly.
 /** `CNPC_VDog::NPC_EarlyTranslateActivity` (`0x10374ad0`), 21 bytes. Retail preserves

@@ -1,17 +1,10 @@
 #include "Substrate/ElysiumNpcSabbatGunman.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-
-const FElysiumNpcClass* FElysiumNpcSabbatGunman::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 465: `0x103a56f0`, ending in a direct call into `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`).
 // `0x103a56f0`

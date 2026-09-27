@@ -10,7 +10,6 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEntityChainShared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 

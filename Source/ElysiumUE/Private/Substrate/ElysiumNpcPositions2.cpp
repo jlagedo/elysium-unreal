@@ -7,7 +7,6 @@
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
 // Story 29c-1, family **Positions**, second half — the trace bodies, the unreachable cache, the

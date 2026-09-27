@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcCameraSecurity.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -17,12 +16,6 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
-
-const FElysiumNpcClass* FElysiumNpcCameraSecurity::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 201: `0x10369ff0`. It REPLACES the Troika body `0x102b4630` outright: a security-camera NPC
 // never consults its own eyes, and only the candidate is read of the four arguments.

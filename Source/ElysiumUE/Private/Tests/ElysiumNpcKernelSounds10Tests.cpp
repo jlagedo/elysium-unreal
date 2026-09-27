@@ -6,8 +6,8 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Sounds10** — the seventeen sound hooks of slots 488–507, the three `KeyValue`
 // overloads and the two formatters behind them, slot 185 `FireBullets`, and the two species arms
@@ -270,7 +270,7 @@ bool FElysiumNpcKernelSounds10PainSoundWerewolfTest::RunTest(const FString&)
 		FSounds10Fixture F(nullptr, TEXT("CNPC_VWerewolf"));
 		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
 		TestNotNull(TEXT("the census carries the class"),
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf")));
 		F.Npc->PainSound();
 		CheckPlainHook(*this, *F.Npc, TEXT("CNPC_VWerewolf#491"), { TEXT("Pain"), 0.0f });
 	}

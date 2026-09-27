@@ -10,7 +10,6 @@
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAnim10Shared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumReactions.h"

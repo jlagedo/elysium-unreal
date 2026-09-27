@@ -6,11 +6,11 @@
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Precache10**. Every expectation below is read off the decompiled C of the
 // body it names and, where the decompiler folded an argument or a table index, off the listing —
@@ -407,8 +407,8 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 		return false;
 	}
 	TestNull(TEXT("CNPC_VHumanCombatant carries no slot-104 override"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), GPrecacheSlotIndex));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VHumanCombatant")), GPrecacheSlotIndex));
 	Plain.Species->PrecacheLog.Reset();
 	Plain.Species->Precache();
 	const TArray<FString> Slot = Precache10LogText(Plain.Species->PrecacheLog);
@@ -1015,7 +1015,7 @@ bool FElysiumNpcKernelPrecache10MakerArmCoverageTest::RunTest(const FString&)
 {
 	// `ArmCoverage`'s other half: EVERY `CNPCMaker*` slot-104 override row the census carries runs
 	// its OWN arm on a real maker of the row's classname — not a sibling's, and not the Troika body.
-	// The census is the input: each row's classname comes from `ElysiumNpcKernelClass::Find`.
+	// The census is the input: each row's classname comes from `ElysiumNpcTestCensus::Find`.
 	//
 	// Each maker stands with a model and NO child classname, the one input on which the three arms
 	// diverge (`0x1034b160` checks the classname and removes the maker; `0x1034c180` precaches it

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcHuman.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Debug/ElysiumNpcDebugLogging.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
@@ -75,12 +74,6 @@ namespace
 	// The two source-file strings the selector trace stamps into `+0x1b30`.
 	constexpr TCHAR GAnim10_2FileHuman[] = TEXT("NPC_VHuman.cpp");        // 0x1063f724
 	const TCHAR* const GHumanFile = TEXT("NPC_VHuman.cpp");
-}
-
-const FElysiumNpcClass* FElysiumNpcHuman::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 482: `0x103850a0` (the ledger indexes it under `CNPC_VAndreiBlood`; every human-line class
@@ -188,7 +181,7 @@ void FElysiumNpcHuman::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
 	{
 	case EElysiumNpcState::Idle:
 		// State 1. `GetActiveWeapon()->Hide()`.
-		Weapon->Hide(this);
+		Weapon->Hide();
 		break;
 	case EElysiumNpcState::Alert:
 	case EElysiumNpcState::Combat:
@@ -198,7 +191,7 @@ void FElysiumNpcHuman::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
 		// no equivalent for — the enum's other members (Scripted, Prone, Dead) are this port's own
 		// and none of them is retail's 11. Nothing is known about what 11 means beyond the fact that
 		// it draws the weapon, so no port state is mapped onto it rather than guessing one.
-		Weapon->Unhide(this);
+		Weapon->Unhide();
 		break;
 	default:
 		// Every other state falls straight through to the Troika base, which writes nothing. That
@@ -723,5 +716,5 @@ void FElysiumNpcHuman::HideActiveWeaponIfAny()
 		return;                                                          // 1038714f JZ
 	}
 	++HideActiveWeaponCalls;
-	Weapon->Hide(this);                                                  // 1038715f JMP [+0x108]
+	Weapon->Hide();                                                  // 1038715f JMP [+0x108]
 }

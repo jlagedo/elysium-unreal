@@ -14,10 +14,10 @@
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcNewscaster.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Debug10**. One case per `rule` row, and every assertion comes from the
 // LISTING of the row it names or from the pinned image's `.rdata` — the sixteen format strings of
@@ -1047,10 +1047,10 @@ bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 	};
 	for (const TPair<const TCHAR*, const TCHAR*>& Row : Slot124)
 	{
-		const FElysiumNpcClass* const Cls = ElysiumNpcKernelClass::Find(Row.Key);
+		const FElysiumNpcClass* const Cls = ElysiumNpcTestCensus::Find(Row.Key);
 		TestNotNull(*FString::Printf(TEXT("%s is in the census"), Row.Key), Cls);
 		TestEqual(*FString::Printf(TEXT("%s fills slot 124 with %s"), Row.Key, Row.Value),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 124)), FString(Row.Value));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 124)), FString(Row.Value));
 	}
 
 	const TPair<const TCHAR*, const TCHAR*> Slot123[] = {
@@ -1061,10 +1061,10 @@ bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 	};
 	for (const TPair<const TCHAR*, const TCHAR*>& Row : Slot123)
 	{
-		const FElysiumNpcClass* const Cls = ElysiumNpcKernelClass::Find(Row.Key);
+		const FElysiumNpcClass* const Cls = ElysiumNpcTestCensus::Find(Row.Key);
 		TestNotNull(*FString::Printf(TEXT("%s is in the census"), Row.Key), Cls);
 		TestEqual(*FString::Printf(TEXT("%s fills slot 123 with %s"), Row.Key, Row.Value),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 123)), FString(Row.Value));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 123)), FString(Row.Value));
 	}
 
 	// **The control the story asks for.** The bare Troika line takes the TROIKA bodies at both
@@ -1118,9 +1118,9 @@ bool FElysiumNpcKernelDebug10SlotDispatchTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Cop, Other });
 	Cop->Schedule.Clear();
 	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
-		Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		Cop->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	TestEqual(TEXT("so its slot 123 is the cop body 0x10372f00"),
-		FString(ElysiumNpcKernelClass::BodyOf(Cop->RetailClass(), 123)),
+		FString(ElysiumNpcTestCensus::BodyOf(Cop->RetailClass(), 123)),
 		FString(TEXT("0x10372f00")));
 
 	// Slot 123 on the cop, through the slot method, with the VCopGeometry case's own inputs and
@@ -1172,9 +1172,9 @@ bool FElysiumNpcKernelDebug10HengeyokaiTextTest::RunTest(const FString&)
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
 	TestTrue(TEXT("a spawned npc_VHengeyokai is CNPC_VHengeyokai"),
-		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VHengeyokai")));
+		Npc->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VHengeyokai")));
 	TestEqual(TEXT("which fills slot 124 with 0x10383560"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 124)),
 		FString(TEXT("0x10383560")));
 
 	// Bit 0 clear: the Troika body's answer, unchanged.
@@ -1238,7 +1238,7 @@ bool FElysiumNpcKernelDebug10NewscasterTextTest::RunTest(const FString&)
 		FString(Npc->RetailClass() != nullptr ? Npc->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VNewscaster")));
 	TestEqual(TEXT("which fills slot 124 with 0x103a1250"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 124)),
 		FString(TEXT("0x103a1250")));
 
 	// The slot method routes to the species arm, which chains the Troika body and adds
@@ -1281,9 +1281,9 @@ bool FElysiumNpcKernelDebug10TzimisceTextTest::RunTest(const FString&)
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
 	TestTrue(TEXT("a spawned npc_VTzimisce is CNPC_VTzimisce"),
-		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")));
+		Npc->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")));
 	TestEqual(TEXT("which fills slot 124 with 0x103c08d0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 124)),
 		FString(TEXT("0x103c08d0")));
 
 	Npc->DebugOverlays = 0;
@@ -1354,9 +1354,9 @@ bool FElysiumNpcKernelDebug10ZombieTextTest::RunTest(const FString&)
 	Npc->ActivityNumber = INDEX_NONE;
 	Npc->IdealActivityNumber = INDEX_NONE;
 	TestTrue(TEXT("a spawned npc_VZombie is CNPC_VZombie"),
-		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
+		Npc->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VZombie")));
 	TestEqual(TEXT("which fills slot 124 with 0x103e0e80"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 124)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 124)),
 		FString(TEXT("0x103e0e80")));
 
 	// The zombie's gate is `m_debugOverlays & 0x40000` and NOT bit 0, so the two are independent:
@@ -1498,9 +1498,9 @@ bool FElysiumNpcKernelDebug10MingXiaoGeometryTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Npc });
 	Npc->Schedule.Clear();
 	TestTrue(TEXT("a spawned npc_VMingXiao is CNPC_VMingXiao"),
-		Npc->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")));
+		Npc->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")));
 	TestEqual(TEXT("which fills slot 123 with 0x10399d40"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 123)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 123)),
 		FString(TEXT("0x10399d40")));
 
 	// The gate is `0x20000000` — the WEAPON-RING bit, not bit 0 like its siblings — so MingXiao's

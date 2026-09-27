@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcCop.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -77,12 +76,6 @@ namespace
 		Npc.Slot596(Closest);
 		NpcKernelState19_2Shared::State19_2Stamp(Npc, IdealRetail, Line);
 	}
-}
-
-const FElysiumNpcClass* FElysiumNpcCop::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 597: `0x10372cc0`, the `m_hPursuitPlayer` latch and the "Player D_HT 10" relationship in
@@ -501,7 +494,7 @@ void FElysiumNpcCop::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 		{
 			if (FElysiumWeapon* const Weapon = Active->AsWeapon())
 			{
-				Weapon->Unhide(this);
+				Weapon->Unhide();
 			}
 		}
 		[[fallthrough]];

@@ -12,10 +12,8 @@
 class FElysiumNpcPedestrian : public FElysiumNpcHuman
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VPedestrian");
+	ELYSIUM_NPC_CLASS("CNPC_VPedestrian", FElysiumNpcHuman)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual void OnRestore(bool bFromLoad) override;
 	virtual int32 SelectIdealStateRetail() override;

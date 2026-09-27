@@ -11,7 +11,6 @@
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
 namespace NpcKernelPositions2Shared

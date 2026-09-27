@@ -16,9 +16,9 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Misc** — the 37 layer 0–9 rows no other family owns. Every assertion below
 // comes from the decompiled C or the listing of the row it names: the slop window is one second
@@ -293,14 +293,14 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	{
 		const FElysiumNpc::FComponentFactory& Row = Rows[Index];
 		const FString Name(Row.RetailClass);
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
 		if (Cls == nullptr)
 		{
 			continue;
 		}
 		TestEqual(*FString::Printf(TEXT("%s fills slot %d with %s"), *Name, Row.Slot, Row.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, Row.Slot)), FString(Row.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, Row.Slot)), FString(Row.Body));
 	}
 
 	// The recovered allocation sizes, by row — the one fact each factory exists to state. The rat's
@@ -393,7 +393,7 @@ bool FElysiumNpcKernelMiscComponentFactoryTest::RunTest(const FString&)
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). Slot 428's
 	// only species override is `CNPC_VRat`'s (`docs/vtmb/npc-kernel/slots.md`), so the cop's chain
 	// (CNPC_VCop -> CNPC_VHumanCombatant -> ...) inherits the base body.
-	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	const FElysiumNpcClass* CopClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop"));
 	TestTrue(TEXT("npc_VCop's RetailClass() is CNPC_VCop — its factory builds it"),
 		CopClass != nullptr && Cop->RetailClass() == CopClass);
 	TestEqual(TEXT("the inherited base body, since CNPC_VCop's chain replaces nothing at 428"),
@@ -486,7 +486,7 @@ bool FElysiumNpcKernelMiscMeleeInterruptTest::RunTest(const FString&)
 		FString(Leader->RetailClass() != nullptr ? Leader->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VSabbatLeader")));
 	TestEqual(TEXT("which fills slot 590 with 0x103ab400"),
-		FString(ElysiumNpcKernelClass::BodyOf(Leader->RetailClass(), 590)),
+		FString(ElysiumNpcTestCensus::BodyOf(Leader->RetailClass(), 590)),
 		FString(TEXT("0x103ab400")));
 	Leader->ActivityNumber = 0x1141;
 	Leader->bInChoreoScene = true;
@@ -570,12 +570,12 @@ bool FElysiumNpcKernelMiscCanSeekCoverTest::RunTest(const FString&)
 	// `CNPC_VLasombra` fills slot 592 with `0x103893c0`. The species arm is exercised through the
 	// census by retail class name (`npc_VLasombra` builds `CNPC_VLasombra` since story 5 step 2,
 	// population.md) — which is also what proves the arm a combatant takes is the Troika line.
-	const FElysiumNpcClass* Lasombra = ElysiumNpcKernelClass::Find(TEXT("CNPC_VLasombra"));
+	const FElysiumNpcClass* Lasombra = ElysiumNpcTestCensus::Find(TEXT("CNPC_VLasombra"));
 	TestNotNull(TEXT("CNPC_VLasombra is a census class"), Lasombra);
 	TestEqual(TEXT("and fills slot 592 with 0x103893c0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Lasombra, 592)), FString(TEXT("0x103893c0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Lasombra, 592)), FString(TEXT("0x103893c0")));
 	TestEqual(TEXT("while npc_VHumanCombatant takes the Troika line 0x102953e0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 592)),
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 592)),
 		FString(TEXT("0x102953e0")));
 
 	// The combatant therefore ignores `m_flCoverDisableOverride` entirely: setting it changes
@@ -612,14 +612,14 @@ bool FElysiumNpcKernelMiscVictimHitTest::RunTest(const FString&)
 	for (const FRow& Row : Rows)
 	{
 		const FString Name(Row.RetailClass);
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
 		if (Cls == nullptr)
 		{
 			continue;
 		}
 		TestEqual(*FString::Printf(TEXT("%s fills slot 24 with %s"), *Name, Row.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 24)), FString(Row.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 24)), FString(Row.Body));
 	}
 
 	// The Gargoyle classname filter, as a pure function: two names, case-insensitive, whole-name.
@@ -738,12 +738,12 @@ bool FElysiumNpcKernelMiscSpeciesThresholdTest::RunTest(const FString&)
 
 	// `CNPC_VBach`'s slots 553/554 (`0x10364500`, `0x10364550`): an OR of two thresholds, 0.5 on the
 	// dot and 120 units on the distance, with the answer the only difference between the two.
-	const FElysiumNpcClass* Bach = ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach"));
+	const FElysiumNpcClass* Bach = ElysiumNpcTestCensus::Find(TEXT("CNPC_VBach"));
 	TestNotNull(TEXT("CNPC_VBach is a census class"), Bach);
 	TestEqual(TEXT("and fills slot 553 with 0x10364500"),
-		FString(ElysiumNpcKernelClass::BodyOf(Bach, 553)), FString(TEXT("0x10364500")));
+		FString(ElysiumNpcTestCensus::BodyOf(Bach, 553)), FString(TEXT("0x10364500")));
 	TestEqual(TEXT("and slot 554 with 0x10364550"),
-		FString(ElysiumNpcKernelClass::BodyOf(Bach, 554)), FString(TEXT("0x10364550")));
+		FString(ElysiumNpcTestCensus::BodyOf(Bach, 554)), FString(TEXT("0x10364550")));
 
 	TestEqual(TEXT("dot exactly 0.5 accepts (the compare is >=)"),
 		BachNpc->BachRangeAttack1Conditions(0.5f, 10000.f), 0x4f);
@@ -836,12 +836,12 @@ bool FElysiumNpcKernelMiscSpeciesBodiesTest::RunTest(const FString&)
 	// `CNPC_VYukie`'s melee pair. The CENSUS proves which bodies fill the slots and the bodies
 	// themselves are called by name (`npc_VYukie` builds `CNPC_VYukie` since story 5 step 2,
 	// population.md; this case does not stand one).
-	const FElysiumNpcClass* Yukie = ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie"));
+	const FElysiumNpcClass* Yukie = ElysiumNpcTestCensus::Find(TEXT("CNPC_VYukie"));
 	TestNotNull(TEXT("CNPC_VYukie is a census class"), Yukie);
 	TestEqual(TEXT("and fills slot 599 with 0x103dd8b0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 599)), FString(TEXT("0x103dd8b0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Yukie, 599)), FString(TEXT("0x103dd8b0")));
 	TestEqual(TEXT("and slot 601 with 0x103dd9a0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 601)), FString(TEXT("0x103dd9a0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Yukie, 601)), FString(TEXT("0x103dd9a0")));
 
 	const int32 EventsBefore = YukieNpc->MeleeEventFires;
 	YukieNpc->bInMelee = false;

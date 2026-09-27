@@ -9,7 +9,6 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAnimShared.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumSceneData.h"

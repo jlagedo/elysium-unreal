@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcGuard1.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -58,12 +57,6 @@ namespace
 		NpcKernelState19_2Shared::State19_2Stamp(Npc, IdealRetail, Line);
 		return true;
 	}
-}
-
-const FElysiumNpcClass* FElysiumNpcGuard1::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x1037e240`.

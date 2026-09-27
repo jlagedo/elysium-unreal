@@ -12,10 +12,8 @@
 class FElysiumNpcBaseBoss : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VBaseBoss");
+	ELYSIUM_NPC_CLASS("CNPC_VBaseBoss", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void DrawDebugStatOverlays() override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------

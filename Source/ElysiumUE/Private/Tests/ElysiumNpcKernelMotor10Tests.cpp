@@ -11,7 +11,6 @@
 #include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcTestHull.h"
 #include "Substrate/ElysiumNpcUsedHullBits.h"
 #include "Tests/ElysiumNpcTestFixture.h"

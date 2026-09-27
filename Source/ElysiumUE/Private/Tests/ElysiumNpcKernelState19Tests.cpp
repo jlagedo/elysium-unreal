@@ -19,11 +19,11 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29e, family **State19**. Every assertion is read off the decompiled C or the listing
 // (story 29e's banked reading). The central premise: Troika `SelectIdealState` answers nothing with
@@ -197,8 +197,8 @@ bool FElysiumNpcKernelState19FifteenByteTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Cls);
-		const FElysiumNpcClassSlot* Slot = ElysiumNpcKernelClass::OverrideOf(Cls, 461);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Cls);
+		const FElysiumNpcClassSlot* Slot = ElysiumNpcTestCensus::OverrideOf(Cls, 461);
 		if (!TestNotNull(FString::Printf(TEXT("%s has a slot-461 override"), Row.Cls), Slot))
 		{
 			continue;

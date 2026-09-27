@@ -83,13 +83,21 @@ _Recovered 2026-09-13, story 29b-0._
     `m_iIsOblivious` (`+0x5bb4`) and `m_bfNPCFrenziedFlags` (`+0x5b84`) are `CAI_BaseNPC` words on
     `FElysiumNpcBase`. The obliviousness bookkeeping bit `MADE_OBLIVIOUS` sits in the combat
     character's word and its refcount in the NPC's, and `CAI_BaseNPC`'s bodies write the two together.
-  - Eight retail slot names that a subclass also declares are reviewed rows (`gen_kernel_shape`
-    `SLOT_PORT_MAP` `accepted`):
-    - the weapon's `Hide`/`Unhide`;
-    - the cinematic camera's `ShouldTransmit`/`DrawDebugGeometryOverlays`;
-    - the maker's `ParseMapData`;
-    - the mover's `MoveDone`, which overrides slot 133 as retail's doors do, and its `IsMoving`;
-    - the player's `IsAlive`.
+  - A retail slot name a class below the NPC line also declares is a real override of the slot
+    (`gen_kernel_shape` `SLOT_PORT_MAP` `overridden-below`, which fails generation on a same-name
+    member without `override`). Commit B of story 5 turned the last hides into overrides or
+    renames, and the build carries no C4263/C4264:
+    - the weapon's `Hide`/`Unhide` (66/67) are `CBaseEntity::Hide`/`Unhide` `0x1009d2a0`/`0x1009d380`
+      on the class that carries `EF_NODRAW`, taking the owner's wield model with the bit;
+    - the mover's `MoveDone` (133), as retail's doors override `CBaseToggle::MoveDone`, and its
+      `IsMoving` (153), `CBaseEntity::IsMoving` `0x10026e70` (`m_vecVelocity != 0`), which on a
+      constant-velocity mover is a move in flight;
+    - the player's `IsAlive` (158), `0x100b4dc0` over the player's own `m_lifeState`;
+    - the maker's `ParseMapData` (107, fold A4);
+    - the cinematic camera's `ShouldTransmit` (86) and `DrawDebugGeometryOverlays` (123), retail's
+      own `CBaseCineCam` bodies `0x1006e6a0` / `0x1006ff40`: the edict argument has no port
+      meaning, so the recipient is the single player (a named seam, as on the NPC's own 86), and
+      the `camera_showdebug` read is a seam answering the cvar's default 0.
   - The entity-method slots map onto what the port already has:
     - `GetAbsOrigin`/`GetOrigin` (217/220) answer `Origin`;
     - `GetAbsAngles`/`GetAngles` (219/221) answer `Angles`, by reference;
@@ -105,6 +113,30 @@ _Recovered 2026-09-13, story 29b-0._
       `0x101a6d00` on `FElysiumNpcBase`, the Troika body `0x101aa790` as `FElysiumNpc`'s override.
     - Named modernization: the port keeps one origin and no local/abs split, so 220 equals 217 for
       a parented entity.
+
+- The whole tree is C++ (0019 story 5, closed by commit B). Every one of the 56 live retail classes
+  is a port class under its retail base (`docs/specs/0019-npc-kernel-rework/story-5-execution-plan.md`
+  Appendix A); the 21 dead ones are census rows only. A class's identity is its census row
+  (`ELYSIUM_NPC_CLASS`, `ElysiumNpcKernelShape::ClassNamed`), read by logs, the census and factory
+  tests and the schedule corpus's per-class spaces, never as a dispatch key. Retail's
+  `__RTDynamicCast` is `FElysiumNpcBase::AsSpecies<T>()`, answered by the C++ chain (`IsNpcClass`:
+  each class its own row, then its base's), so a `CNPC_VChangBrosBlade` IS a `CNPC_VChangBros`
+  (`0x1036e2f0`). The string-keyed class lookup (`ElysiumNpcKernelClassLookup`: `Find`,
+  `OfClassname`, `DerivesFrom`, `OverrideOf`, `BodyOf`) and `IsRetailClass` are gone; tests read the
+  census by name through a test-only reader (`Tests/ElysiumNpcTestCensus.h`).
+- The hull words are constructor stores, as retail's are. The `CAI_BaseNPC` constructor
+  `0x1027c300` zeroes both; each class whose retail constructor stores a hull writes it in its own
+  constructor (`CNPC_VCamera` 7, `CNPC_VGargoyle` 14, `CNPC_VManBat` 20, `CNPC_VWerewolf` 12,
+  `CNPC_VScurrying` 19 — `CNPC_VRat` has no constructor and inherits it —, `CNPC_VSheriffMan` 21 on
+  `+0x1568` only, `CNPC_VHengeyokai` 0/18, `CNPC_VMingXiao` 15/16, `CNPC_VMingXiaoTentacle` 17,
+  `CNPC_VTzimisce` 10, `CNPC_VTzimisceHeadClaw` 11, `CNPC_VTzimisceRunner` 13; stores in
+  `docs/vtmb/data/class_hulls.json`). The generated `ElysiumRetailHulls::ClassHulls` is the table the
+  constructors are tested against, not a runtime query.
+- The census asserts the tree (`Elysium.Substrate.NpcKernelShape.Overrides`,
+  `NpcKernelClass.TreeMatchesCensus`): every live (class, slot) own body the port carries is an
+  override with the recorded signature on the class that declares it, proved at compile time in the
+  generated `Tests/ElysiumNpcKernelOverrideCensus.cpp`; `kernel_shape --unported` lists the rest
+  (`docs/specs/0019-npc-kernel-rework/story-5/unported.tsv`, 778 rows at commit B).
 
 **Unrecovered:** nothing.
 
@@ -311,11 +343,13 @@ because retail drives its step from the schedule tasks `TASK_VSABBATLEADER_PLAY_
 matters because the Troika-line body behind slot 490 (`0x10294280`) does a real idle-sound-modifier
 lookup and emit, which the camera suppresses.
 
-**Port (0019 story 5 step 3, 2026-09-26).** Before this step the rows for the camera, the Tzimisce
-490/491 and the Sabbat leader 620/621 sat in one class-keyed table that no production path read, so a
-camera spoke the Troika concepts. Each row is now its class's override of the hook (the camera's
-nineteen are empty, and `CNPC_VCameraSecurity` inherits them as in retail); 620/621 are the Sabbat
-leader's own virtuals, and the Tzimisce 491 body re-arms slot 487 as `103b9592` does.
+**Port (0019 story 5 step 3, 2026-09-26; commit B, 2026-09-27).** Before step 3 the rows for the
+camera, the Tzimisce 490/491 and the Sabbat leader 620/621 sat in one class-keyed table that no
+production path read, so a camera spoke the Troika concepts. Each is now its class's override of the
+hook, and since commit B each override IS the body (the `FVocalization` table is gone): the camera's
+nineteen are empty (`CNPC_VCameraSecurity` inherits them as in retail); 620/621 are the Sabbat
+leader's own virtuals over its two wav tables; the Tzimisce pair is gated on `FOkToMakeSound()` and
+491 re-arms slot 487 as `103b9592` does.
 
 **`CNPC_VTzimisce`** answers a **sentence group** rather than a wav pool, through
 `SENTENCEG_PlayRndSz(edict(), group, volume, soundlevel, 0, pitch)` (`0x101aeb60`) with all three
@@ -3027,6 +3061,18 @@ is set. Then, unconditionally and outside both flags:
 removes the stand-in in the frame of the request instead (a named divergence in
 `FElysiumEntityWorld::RemovePlayerControllerEntity`: no think-function slot hosts `SUB_Remove`).
 
+**Port (0019 story 5 commit B).** `m_hControllerNPC` is a `CBasePlayer` word with one port home, the
+world's `PlayerControllerHandle`, written by `FElysiumEntityWorld::CreatePlayerControllerEntity`
+(`GetControllerNPC` `0x10161a70`) and cleared by `RemovePlayerControllerEntity` (`0x101618e0`);
+`FElysiumPlayer::ControllerNpcBusy` is `0x10175180` over it. The copies of `GetControllerNPC`,
+`0x101618e0` and `0x10175180` that story 29c had ported onto the NPC over an NPC-side
+`ControllerNpc` word — none of them reached by a live path — are deleted. **Not ported onto the
+player:** this detach's animation hand-back (sequence, cycle, rate, the gesture and flinch tables)
+and its velocity transfer; the world's release copies the transform, model, skin and disposition as
+the port's reading — a **named modernization** pending the controller follow-up, since retail's
+`0x101618e0` writes none of model, skin or disposition. Carried to story 8
+(`docs/specs/0019-npc-kernel-rework/story-5/handoff-story-8.md` lists the field list).
+
 ### Autoaim — `0x10176520`, `0x10176930`
 
 `0x10176520` is `CBasePlayer::GetAutoaimVector`. With autoaim off the whole body is
@@ -3487,7 +3533,14 @@ step 3 the port has two functions per slot as retail does: the species body is i
 override, and its call to what it replaces is spelled as a qualified call to the recovered callee
 owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpc::Slot593()`, `FElysiumNpcBase::ShouldPlayFloatSound()`;
 the full list is `docs/specs/0019-npc-kernel-rework/story-5/decisions-step3.json` `direct_calls`). The
-per-slot guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone. Since step 5 a
+per-slot guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone, and since commit B
+of story 5 nothing in the runtime resolves a body by class name: the vtable IS the C++ tree, and a
+species body the port carries is an override the census proves at compile time. Two slots are
+carried under the port's own virtual rather than the retail name: 438 is
+`FElysiumNpc::SpeciesSelectSchedule` (the base `SelectSchedule` asks it first and runs the Troika
+body `0x1028a380` when it answers 0, which is where a species body's direct call to the base lands)
+and 440 is `FElysiumNpc::TranslateScheduleRetail` (retail numbers; the typed runner hook
+`TranslateSchedule` wraps it). Since step 5 a
 callee `CAI_BaseNPC` owns is spelled `FElysiumNpcBase::`: `ShouldPlayFloatSound` `0x1027a530`,
 `DrawDebugStatOverlays` `0x102775e0`, `TraceAttack` `0x10266780`, `GetShortConditionName`
 `0x1027ede0`, and `GatherAttackConditions` `0x1026dd10`. It is also spelled that way when the

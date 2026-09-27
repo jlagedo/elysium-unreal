@@ -12,10 +12,8 @@
 class FElysiumNpcGhoulCroucher : public FElysiumNpcHumanCombatant
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VGhoulCroucher");
+	ELYSIUM_NPC_CLASS("CNPC_VGhoulCroucher", FElysiumNpcHumanCombatant)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual void Precache() override;
 	virtual void SetModel(TCHAR* ModelName) override;

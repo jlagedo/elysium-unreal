@@ -22,67 +22,13 @@
 // `CBaseCombatCharacter`'s two float-sound words (`FloatSoundFrequency`, `NextFloatSoundTime`) are
 // declared on `FElysiumCombatCharacter`, where retail declares them (story 5 step 5).
 
-// --- The species vocalization table (slots 488–508, 620, 621) ----------------------------------
+// --- The species vocalization hooks (slots 488–508, 620, 621) ----------------------------------
 //
-// Twenty-one retail sound hooks, filled per species. Retail's bodies are one behaviour written
-// many times: build a `CPASAttenuationFilter` at `GetSoundEmissionOrigin()` (slot 222), pick one
-// wav out of a fixed table with `RandomInt(0, N)`, and `IEngineSound::EmitSound(filter, entindex,
-// channel, wav, volume, attenuation 0.8, flags 0, pitch 100)`. Two species answer a SENTENCE GROUP
-// instead of a wav pool, and one pair of species answers silence.
-//
-// So it is ONE body plus a table, keyed on the retail class name: since story 5 step 3 each row is
-// the body of its class's override of the hook (`SpeciesVocalize`), which a subclass inherits.
-//
-// The Troika-line bodies BEHIND these slots (`0x10293ec0`, `0x10293f80`, `0x10294280`, …) are
-// layer 14 and belong to story 29d, so their generated stubs still stand in
-// `ElysiumNpcKernelSlots.cpp`. A species row REPLACES the Troika body: every override here returns
-// without calling up.
-enum class EVocalization : uint8
-{
-	// The override's whole body is `return` — the species makes no sound at this hook.
-	Mute,
-	// `RandomInt(0, WavCount - 1)` over `Wavs`, then one `EmitSound`.
-	WavPool,
-	// `SENTENCEG_PlayRndSz(edict, group, volume, soundlevel, 0, pitch)` — a named sentence group
-	// rather than a wav path.
-	Sentence,
-};
-
-// One species row. Every row carries the retail class it came from AND the retail address of the
-// body, so a reader can check it against `docs/vtmb/npc-kernel/slots.md`.
-struct FVocalization
-{
-	const TCHAR* RetailClass = nullptr;
-	int32 Slot = 0;
-	const TCHAR* RetailAddress = nullptr;
-	EVocalization Kind = EVocalization::Mute;
-	// The wav table in retail's own order; `RandomInt(0, WavCount - 1)` indexes it.
-	const TCHAR* const* Wavs = nullptr;
-	int32 WavCount = 0;
-	// The sentence group name for an `EVocalization::Sentence` row.
-	const TCHAR* Sentence = nullptr;
-	// `EmitSound`'s `flVolume`. 1.0 everywhere except the two death hooks, which pass 0.5.
-	float Volume = 1.0f;
-	// `EmitSound`'s `flAttenuation`. 0.8 (`ATTN_NORM`) on every recovered row.
-	float Attenuation = 0.8f;
-	// Source's `CHAN_*`: 2 `CHAN_VOICE` on the vocalizations, 4 `CHAN_BODY` on the Sabbat leader's
-	// two hooks.
-	int32 Channel = 2;
-	// The override opens with `if (!FOkToMakeSound()) return;` (slot 486, vtable `+0x798`).
-	bool bGatedByFOkToMakeSound = false;
-	// The override ends with `JustMadeSound()` (slot 487, vtable `+0x79c`) inside the gate.
-	bool bCallsJustMadeSound = false;
-};
-
-// The whole table, in (class, slot) order. Public so the suite can walk every row by name.
-static const FVocalization* Vocalizations(int32& OutCount);
-
-// The row a retail class answers at a slot: the class's OWN row (a subclass inherits its base's
-// through the C++ override — `CNPC_VCameraSecurity` takes `FElysiumNpcCamera`'s nineteen). Null
-// when the class fills no row at the slot.
-static const FVocalization* VocalizationFor(const TCHAR* RetailClass, int32 Slot);
-
-// The body of a species class's vocalization override: `SpeciesClass`'s row at `Slot`. True means
-// a row ran (including a `Mute` row and a row the sound gate refused); false that there was none.
-bool SpeciesVocalize(const TCHAR* SpeciesClass, int32 Slot);
+// Retail's species bodies at these slots are plain overrides on their classes (0019 story 5): the
+// nineteen one-byte `RET` bodies of `CNPC_VCamera` (inherited by `CNPC_VCameraSecurity`), the two
+// `CHAN_BODY` wav hooks `CNPC_VSabbatLeader` introduces at 620/621, and `CNPC_VTzimisce`'s two
+// sentence-group hooks. Every wav-table species is dead. The Troika-line bodies BEHIND these
+// slots (`0x10293ec0`, `0x10293f80`, `0x10294280`, …) are layer 14 and story 29d's; a species
+// override replaces the Troika body and never calls up. The shared wav arm is
+// `NpcKernelSoundsShared::SoundsEmitSpeciesWav`.
 

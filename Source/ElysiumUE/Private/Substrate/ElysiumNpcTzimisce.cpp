@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcTzimisce.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -179,10 +178,13 @@ namespace
 	}
 }
 
-const FElysiumNpcClass* FElysiumNpcTzimisce::OwnRetailClass() const
+// `CNPC_VTzimisce`'s constructor `0x103b6c60` writes both hull words at `0x103b6d32`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order. `0x103b6d27` `b8 0a 00 00 00` feeds both stores.
+FElysiumNpcTzimisce::FElysiumNpcTzimisce()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 10;
+	PathingHullKind = 10;
 }
 
 // Slot 482: `0x103bd270`, the standalone copy with the SCRIPT-state tail.
@@ -744,16 +746,43 @@ void FElysiumNpcTzimisce::JustMadeSound()
 		+ Stream.FRandRange(GSoundsTzimisceSoundWaitMin, GSoundsTzimisceSoundWaitMax);
 }
 
-// Slot 490: `0x103b9380`, gated on `FOkToMakeSound()`, a sentence group; it does not chain.
+// Slot 490: `0x103b9380`: `if (FOkToMakeSound())`, the Tzimisce sound family's three ConVars
+// (`tzimisce_voice_pitch` "100" `0x1093cf94`, `tzimisce_voice_attn` "65" `0x1093cfdc`,
+// `tzimisce_voice_volume` "1" `0x1093cebc`), then `SENTENCEG_PlayRndSz(edict, "SPI_IDLE", volume,
+// attn, 0, pitch)`; it does not chain.
 void FElysiumNpcTzimisce::IdleSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VTzimisce"), 490);
+	if (FOkToMakeSound())
+	{
+		NpcKernelSoundsShared::SoundsPlaySentenceGroup(*this, TEXT("SPI_IDLE"),
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::TzimisceVoiceVolume),
+			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::TzimisceVoiceAttn), 0,
+			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::TzimisceVoicePitch));
+	}
 }
 
-// Slot 491: `0x103b9500`, gated on `FOkToMakeSound()`, a sentence group; it does not chain.
+// Slot 491: `0x103b9500`:
+//
+//     if (FOkToMakeSound()) {                                  // vtable +0x798
+//         <the three ConVars>; SENTENCEG_PlayRndSz(edict, "SPI_TAKE_DAMAGE", …);
+//         JustMadeSound();                                     // vtable +0x79c, 103b9592
+//     }
+//     0x103b9f90(this, 1, 1.0);                                // UNCONDITIONAL
+//
+// The only vocalization in the family that re-arms the sound clock itself; it does not chain. The
+// tail is `SetExpression(ExpressionTable[1] = "angry", …, 1.0)`, the pain facial expression, and it
+// runs whether the gate opened or not: `SetDefaultExpression` is its seam (it records the name).
 void FElysiumNpcTzimisce::PainSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VTzimisce"), 491);
+	if (FOkToMakeSound())
+	{
+		NpcKernelSoundsShared::SoundsPlaySentenceGroup(*this, TEXT("SPI_TAKE_DAMAGE"),
+			ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::TzimisceVoiceVolume),
+			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::TzimisceVoiceAttn), 0,
+			ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::TzimisceVoicePitch));
+		JustMadeSound();
+	}
+	SetDefaultExpression(TEXT("angry"), 1.0f);   // 0x103b9f90(this, 1, 1.0)
 }
 
 // --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcPayphone.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -44,12 +43,6 @@ namespace
 	// `_DAT_1047a3b0` = 85.0f, also a single-reader cell: the payphone's MANHATTAN distance limit,
 	// in SOURCE units.
 	constexpr float GPayphoneManhattanLimitUnits = 85.0f;
-}
-
-const FElysiumNpcClass* FElysiumNpcPayphone::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x101aab90`.

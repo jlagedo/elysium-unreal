@@ -22,9 +22,7 @@ class FElysiumNpcAndreiBlood;
 class FElysiumNpcMakerFleshpile : public FElysiumNpcMaker
 {
 public:
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPCMaker_Fleshpile");
-
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	ELYSIUM_NPC_CLASS("CNPCMaker_Fleshpile", FElysiumNpcMaker)
 
 	// Slot 82 `0x1034bdc0` — `&datamap_CNPCMaker_Fleshpile`.
 	virtual void* GetDataDescMap() override;

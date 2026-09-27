@@ -49,13 +49,11 @@ bool FElysiumNpcKernelTestHullConstructionTest::RunTest(const FString&)
 		// is the scalar deleting destructor, the C++ destructor's.
 		TestEqual(TEXT("it fills six slots with bodies of its own"), Cls->OwnBodies, 6);
 	}
-	TestTrue(TEXT("IsRetailClass walks to CAI_BaseNPC"), AsBase.IsRetailClass(TEXT("CAI_BaseNPC")));
-	TestFalse(TEXT("and never to the Troika line"), AsBase.IsRetailClass(TEXT("CAI_BaseNPCTroika")));
 	TestTrue(TEXT("AsSpecies answers the typed hull"), AsBase.AsSpecies<FElysiumNpcTestHull>() == &Hull);
 
 	FTestHullBaseOnlyNpc Base;
 	TestNull(TEXT("a base-only NPC is no test hull"), Base.AsSpecies<FElysiumNpcTestHull>());
-	TestFalse(TEXT("nor answers CAI_TestHull"), Base.IsRetailClass(TEXT("CAI_TestHull")));
+	TestNull(TEXT("nor answers any class of the tree"), Base.RetailClass());
 	return true;
 }
 

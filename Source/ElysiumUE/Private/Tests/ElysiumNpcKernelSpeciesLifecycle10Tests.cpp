@@ -16,12 +16,12 @@
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcPayphone.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcMakerFleshpile.h"
 #include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **SpeciesLifecycle10** — one case per `rule` row, twelve in all. Every
 // expectation is read off the decompiled C of the body it names and, where the decompiler aliased an
@@ -327,11 +327,11 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FS
 
 	// The census row: `CNPC_VAndreiBlood#127` is `0x1035cf80`, and family SaveRestore10's arm table
 	// now names this body rather than routing the row to the base.
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(TEXT("CNPC_VAndreiBlood"));
+	const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(TEXT("CNPC_VAndreiBlood"));
 	if (TestNotNull(TEXT("the census carries CNPC_VAndreiBlood"), Cls))
 	{
 		TestEqual(TEXT("its slot 127 is 0x1035cf80"),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 127)), FString(TEXT("0x1035cf80")));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 127)), FString(TEXT("0x1035cf80")));
 	}
 
 	// `0x1035cf80` has ONE call between its scope-frame push and pop, and it is
@@ -367,13 +367,13 @@ bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FStr
 		TEXT("CNPC_VChangBros"), TEXT("CNPC_VChangBrosBlade"), TEXT("CNPC_VChangBrosClaw") };
 	for (const TCHAR* Brother : Brothers)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Brother);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Brother);
 		if (!TestNotNull(FString::Printf(TEXT("the census carries %s"), Brother), Cls))
 		{
 			continue;
 		}
 		TestEqual(FString::Printf(TEXT("%s's slot 127 is the shared 0x1036b170"), Brother),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 127)), FString(TEXT("0x1036b170")));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 127)), FString(TEXT("0x1036b170")));
 
 		FSpeciesLifecycle10Fixture Fix(Brother);
 		if (!TestNotNull(FString::Printf(TEXT("the %s subject spawned"), Brother), Fix.Species))
@@ -436,9 +436,9 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 	// A plain NPC does not take the body at all: slot 431's payphone body is `FElysiumNpcPayphone`'s
 	// own `Think` override (story 5 step 3), and the partner is an `npc_VHumanCombatant`.
 	TestTrue(TEXT("the subject is a CPayphone"),
-		N.RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CPayphone")));
+		N.RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CPayphone")));
 	TestTrue(TEXT("a non-payphone does not take slot 431's species body"),
-		Partner->RetailClass() != ElysiumNpcKernelClass::Find(TEXT("CPayphone")));
+		Partner->RetailClass() != ElysiumNpcTestCensus::Find(TEXT("CPayphone")));
 
 	const double Now = N.World->NowSeconds();
 	// A spawned payphone has already thought: its own slot 431 took the idle arm on the fixture's

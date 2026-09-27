@@ -3,7 +3,9 @@
 Status: **steps 0–6 accepted** (last: 6r, `9f52fbad`, recorded `a00cd11b`); **commit A landed
 2026-09-27** (the four folds, on wip checkpoints `0231934c`, `81c696cc`, `779622a2`, `fe26d16d`,
 `aa2b65d9`, `275834a8`, `8941aa9a`; gate 1,320 / 14 / 1, zero failures; `--unported` 987 → 809).
-**Commit B (closure) remains.** Revised 2026-09-27 after the owner's review of the first six steps;
+**Commit B (closure) landed 2026-09-27** (`Elysium.Substrate` 1,321 / 0 failed, zero C4263/C4264,
+`--unported` 809 → 778; the outcome is the spec's story-5 landing paragraph and §6 below). **Story 5
+is closed.** Revised 2026-09-27 after the owner's review of the first six steps;
 the revision and its reasons are §1. Cross-cutting findings for B and story 8 are collected in
 `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/briefs/commit-B-handoff-notes.md`.
 Records: the commits themselves (§1). Scope: [spec.md, story 5](spec.md). Tracker:
@@ -49,7 +51,7 @@ already guarded by `gen_kernel_shape --check`, `gen_kernel_bindings --check`, th
    oracle reads them: `classes.tsv` (`kernel_shape`), `factories.tsv` (`kernel_ledger`; the C++
    factory tests cite it), `registrations-step2.tsv` and `deletions-step1.tsv` (`population.md`),
    `decisions-step3.json` (`shape.md`'s direct-call list), `unported-step6.tsv` (the 987 pin
-   commit B reconciles). The reviewed **stub-fired diff** (§4.3) replaces `test_delta`. C++
+   commit B reconciled; renamed `unported.tsv` by commit B, the story-8 pin, 778 rows). The reviewed **stub-fired diff** (§4.3) replaces `test_delta`. C++
    comments that cite a retired record cite git history at `a00cd11b`.
 3. **The commit is the record.** Its message carries the outcome, each retail correction (address,
    before/after, the test), the stub-fired diff summary, and the gate results with report paths.
@@ -216,8 +218,10 @@ from `ElysiumNpc.h`.
   `NpcKernelShape.FieldOwners` exception goes.
 - The cine motor arm (`ElysiumNpcMotor.cpp:468`) and `BlockedIsNoOp` become overrides.
 - Acceptance: existing ScriptedSequence, AiScriptedSchedule and ScheduleWitness coverage; all three
-  factories; the CCineAI-specific bodies; interruption and restore of an in-progress beat; a played
-  tutorial sequence.
+  factories; the CCineAI-specific bodies; interruption; restore of a possessed NPC through the
+  map-teardown/revisit path (`NpcKernelDirector.RevisitMidBeat`); explicit saves stay refused
+  mid-beat per [spec 0003](../0003-scripted-sequence/spec.md) (lines 184–185), lifting with its
+  stories 1–2; a played tutorial sequence.
 
 ### A4. The makers
 
@@ -259,13 +263,26 @@ left except the ChangBros type tests (B); the C++ census tests list no deferred 
 - **Residue:** regenerate `kernel_shape --unported`; explain every removed or added row against the
   987 pin by implementation, corrected evidence or scope change. This set and the class map are
   story 8's handoff, with the final report paths.
-- **Records:** regenerate `unported-step6.tsv` as the story-8 pin (or move it to the work root and
-  cite the path); `classes.tsv` and `factories.tsv` stay as tooling inputs. The migration machinery
+- **Records:** regenerate the pin as the story-8 pin — done: `story-5/unported.tsv` (was
+  `unported-step6.tsv`); `classes.tsv` and `factories.tsv` stay as tooling inputs. The migration machinery
   itself was retired with the 2026-09-27 revision (§1).
 - **Docs:** `shape.md`, `population.md`, `coverage.md` and affected oracle topics; the spec's
   story-5 tick and tracker 06b, only after §4 is green on this commit.
 
 Done when the compatibility list is empty, §4 is green, and story 8 has its handoff.
+
+**Landed 2026-09-27.** The §3 compatibility list is empty: the lookup and `IsRetailClass` are deleted
+(the typed test is `AsSpecies<T>()` over `IsNpcClass`; the hull words are constructor stores; the
+pickup pairs are the classes' own bodies, and the slot-546, jump-tunable and slot-117 row tables and
+the name-keyed schedule lookups are gone — the slot-580/452 row tables stay as test-read records of
+the recovered bodies, the stated exemption), the vocalisation table is inlined, and the seven hides
+are real overrides (66, 67, 86, 123, 133, 153, 158). `m_pSenses` moved in A3. The
+generator's outputs are the census, the chain slot bodies (one-constant bodies and counting stubs)
+and the new override census; its `accepted` kind is gone. `m_hControllerNPC` has one home.
+`--unported` 987 → 778, every row explained (176 implemented and 2 false positives in A, 31
+hook-named overrides recognised in B; +2 / −2 for `CNPC_VHengeyokai` 599/600, found carried by the
+wrong body and ported; `CNPC_VMingXiao` 166 wired where it had been counted off a comment). Appendix A's own-body column is the ledger's vtable diff. Hand-off: the
+spec's story-5 landing paragraph and `story-5/handoff-story-8.md`.
 
 ## 7. Session contract, short
 
@@ -286,68 +303,67 @@ generated census, not from this table. Rows marked **A** land in commit A; the r
 
 | Retail class | Port class | Port base | Classnames (retail factories) | Own bodies | Own words | Lands |
 |---|---|---|---|---:|---:|:---:|
-| `CAI_BaseNPC` | `FElysiumNpcBase` | `FElysiumScriptedCharacter` | none (abstract, or built by code) | 285 | 135 | 5 |
-| `CAI_BaseNPCTroika` | `FElysiumNpc` | `FElysiumNpcBase` | none (abstract, or built by code) | 170 | 253 | 2 |
+| `CAI_BaseNPC` | `FElysiumNpcBase` | `FElysiumScriptedCharacter` | none (abstract, or built by code) | 215 | 135 | 5 |
+| `CAI_BaseNPCTroika` | `FElysiumNpc` | `FElysiumNpcBase` | none (abstract, or built by code) | 185 | 253 | 2 |
 | `CAI_TestHull` | `FElysiumNpcTestHull` | `FElysiumNpcBase` | none (abstract, or built by code) | 6 | 0 | **A** |
-| `CCineNPC` | `FElysiumScriptedSequence` | `FElysiumNpcBase` | `scripted_sequence` | 20¹ | 25 | **A** |
-| `CNPCMaker` | `FElysiumNpcMaker` | `FElysiumNpc` | `npc_maker` | 21² | 19 | **A** |
+| `CCineNPC` | `FElysiumScriptedSequence` | `FElysiumNpcBase` | `scripted_sequence` | 20 | 25 | **A** |
+| `CNPCMaker` | `FElysiumNpcMaker` | `FElysiumNpc` | `npc_maker` | 21 | 19 | **A** |
 | `CNPC_VAnimal` | `FElysiumNpcAnimal` | `FElysiumNpc` | `npc_VAnimal` | 20 | 5 | 2 |
-| `CNPC_VBaseBoss` | `FElysiumNpcBaseBoss` | `FElysiumNpc` | none (abstract, or built by code) | 5 | 1 | 2 |
+| `CNPC_VBaseBoss` | `FElysiumNpcBaseBoss` | `FElysiumNpc` | none (abstract, or built by code) | 6 | 1 | 2 |
 | `CNPC_VCamera` | `FElysiumNpcCamera` | `FElysiumNpc` | `npc_VCamera` | 54 | 0 | 2 |
-| `CNPC_VHuman` | `FElysiumNpcHuman` | `FElysiumNpc` | `npc_VHuman` | 19 | 0 | 2 |
-| `CNPC_VMingXiaoTentacle` | `FElysiumNpcMingXiaoTentacle` | `FElysiumNpc` | `npc_VMingXiaoTentacle` | 38 | 16 | 2 |
+| `CNPC_VHuman` | `FElysiumNpcHuman` | `FElysiumNpc` | `npc_VHuman` | 26 | 0 | 2 |
+| `CNPC_VMingXiaoTentacle` | `FElysiumNpcMingXiaoTentacle` | `FElysiumNpc` | `npc_VMingXiaoTentacle` | 41 | 16 | 2 |
 | `CNPC_VNewscaster` | `FElysiumNpcNewscaster` | `FElysiumNpc` | `npc_VNewscaster` | 27 | 6 | 2 |
 | `CNPC_VPlaceholder` | `FElysiumNpcPlaceholder` | `FElysiumNpc` | `npc_VPlaceholder` | 24 | 0 | 2 |
-| `CPayphone` | `FElysiumNpcPayphone` | `FElysiumNpc` | `npc_payphone` | 23 | 0 | 2 |
+| `CPayphone` | `FElysiumNpcPayphone` | `FElysiumNpc` | `npc_payphone` | 27 | 0 | 2 |
 | `CCineAI` | `FElysiumAiScriptedSequence` | `FElysiumScriptedSequence` | `aiscripted_sequence` | 5 | 0 | **A** |
-| `CCineAISchedule` | `FElysiumAiScriptedSchedule` | `FElysiumScriptedSequence` | `aiscripted_schedule` | 6¹ | 3 | **A** |
-| `CNPCMaker_Fleshpile` | `FElysiumNpcMakerFleshpile` | `FElysiumNpcMaker` | `npc_maker_fleshpile` | 15² | 0 | **A** |
-| `CNPCMaker_Zombie` | `FElysiumNpcMakerZombie` | `FElysiumNpcMaker` | `npc_maker_zombie` | 14² | 3 | **A** |
+| `CCineAISchedule` | `FElysiumAiScriptedSchedule` | `FElysiumScriptedSequence` | `aiscripted_schedule` | 6 | 3 | **A** |
+| `CNPCMaker_Fleshpile` | `FElysiumNpcMakerFleshpile` | `FElysiumNpcMaker` | `npc_maker_fleshpile` | 15 | 0 | **A** |
+| `CNPCMaker_Zombie` | `FElysiumNpcMakerZombie` | `FElysiumNpcMaker` | `npc_maker_zombie` | 14 | 3 | **A** |
 | `CNPC_VDog` | `FElysiumNpcDog` | `FElysiumNpcAnimal` | `npc_VDog` | 19 | 0 | 2 |
 | `CNPC_VScurrying` | `FElysiumNpcScurrying` | `FElysiumNpcAnimal` | `npc_VScurrying` | 14 | 9 | 2 |
 | `CNPC_VZombie` | `FElysiumNpcZombie` | `FElysiumNpcAnimal` | `npc_VZombie` | 30 | 10 | 2 |
-| `CNPC_VMingXiao` | `FElysiumNpcMingXiao` | `FElysiumNpcBaseBoss` | `npc_VMingXiao` | 50 | 29 | 2 |
-| `CNPC_VTzimisce` | `FElysiumNpcTzimisce` | `FElysiumNpcBaseBoss` | `npc_VTzimisce` | 61 | 17 | 2 |
-| `CNPC_VTzimisceHeadClaw` | `FElysiumNpcTzimisceHeadClaw` | `FElysiumNpcBaseBoss` | `npc_VTzimisceHeadClaw` | 26 | 5 | 2 |
-| `CNPC_VTzimisceRunner` | `FElysiumNpcTzimisceRunner` | `FElysiumNpcBaseBoss` | `npc_VTzimisceRunner` | 31 | 5 | 2 |
-| `CNPC_VWerewolf` | `FElysiumNpcWerewolf` | `FElysiumNpcBaseBoss` | `npc_VWerewolf` | 49 | 36 | 2 |
+| `CNPC_VMingXiao` | `FElysiumNpcMingXiao` | `FElysiumNpcBaseBoss` | `npc_VMingXiao` | 53 | 29 | 2 |
+| `CNPC_VTzimisce` | `FElysiumNpcTzimisce` | `FElysiumNpcBaseBoss` | `npc_VTzimisce` | 71 | 17 | 2 |
+| `CNPC_VTzimisceHeadClaw` | `FElysiumNpcTzimisceHeadClaw` | `FElysiumNpcBaseBoss` | `npc_VTzimisceHeadClaw` | 31 | 5 | 2 |
+| `CNPC_VTzimisceRunner` | `FElysiumNpcTzimisceRunner` | `FElysiumNpcBaseBoss` | `npc_VTzimisceRunner` | 36 | 5 | 2 |
+| `CNPC_VWerewolf` | `FElysiumNpcWerewolf` | `FElysiumNpcBaseBoss` | `npc_VWerewolf` | 52 | 36 | 2 |
 | `CNPC_VCameraSecurity` | `FElysiumNpcCameraSecurity` | `FElysiumNpcCamera` | `npc_VCameraSecurity` | 5 | 2 | 2 |
 | `CNPC_VGuard1` | `FElysiumNpcGuard1` | `FElysiumNpcHuman` | `npc_VGuard1` | 15 | 2 | 2 |
-| `CNPC_VHumanCombatant` | `FElysiumNpcHumanCombatant` | `FElysiumNpcHuman` | `npc_VHumanCombatant` | 12 | 0 | 2 |
+| `CNPC_VHumanCombatant` | `FElysiumNpcHumanCombatant` | `FElysiumNpcHuman` | `npc_VHumanCombatant` | 15 | 0 | 2 |
 | `CNPC_VPedestrian` | `FElysiumNpcPedestrian` | `FElysiumNpcHuman` | `npc_VDialogPedestrian`, `npc_VPedestrian` | 20 | 4 | 2 |
 | `CNPC_VTaxiDriver` | `FElysiumNpcTaxiDriver` | `FElysiumNpcHuman` | `npc_VTaxiDriver` | 16 | 1 | 2 |
-| `CNPC_VVampire` | `FElysiumNpcVampire` | `FElysiumNpcHuman` | `npc_VVampire` | 9 | 0 | 2 |
+| `CNPC_VVampire` | `FElysiumNpcVampire` | `FElysiumNpcHuman` | `npc_VVampire` | 8 | 0 | 2 |
 | `CNPC_ProneDialog` | `FElysiumNpcProneDialog` | `FElysiumNpcHumanCombatant` | `npc_VMercurio`, `npc_VProneDialog` | 2 | 0 | 2 |
-| `CNPC_VCop` | `FElysiumNpcCop` | `FElysiumNpcHumanCombatant` | `npc_VCop` | 23 | 6 | 2 |
-| `CNPC_VGhoulCroucher` | `FElysiumNpcGhoulCroucher` | `FElysiumNpcHumanCombatant` | `npc_VGhoulCroucher` | 24 | 9 | 2 |
-| `CNPC_VHumanCombatPatrol` | `FElysiumNpcHumanCombatPatrol` | `FElysiumNpcHumanCombatant` | `npc_VHumanCombatPatrol` | 8 | 0 | 2 |
+| `CNPC_VCop` | `FElysiumNpcCop` | `FElysiumNpcHumanCombatant` | `npc_VCop` | 22 | 6 | 2 |
+| `CNPC_VGhoulCroucher` | `FElysiumNpcGhoulCroucher` | `FElysiumNpcHumanCombatant` | `npc_VGhoulCroucher` | 23 | 9 | 2 |
+| `CNPC_VHumanCombatPatrol` | `FElysiumNpcHumanCombatPatrol` | `FElysiumNpcHumanCombatant` | `npc_VHumanCombatPatrol` | 7 | 0 | 2 |
 | `CNPC_VHunter` | `FElysiumNpcHunter` | `FElysiumNpcHumanCombatant` | `npc_VHunter` | 16 | 1 | 2 |
 | `CNPC_VSabbatGunman` | `FElysiumNpcSabbatGunman` | `FElysiumNpcHumanCombatant` | `npc_VSabbatGunman` | 8 | 0 | 2 |
-| `CNPC_VYukie` | `FElysiumNpcYukie` | `FElysiumNpcHumanCombatant` | `npc_VYukie` | 15 | 1 | 2 |
+| `CNPC_VYukie` | `FElysiumNpcYukie` | `FElysiumNpcHumanCombatant` | `npc_VYukie` | 18 | 1 | 2 |
 | `CNPC_VRat` | `FElysiumNpcRat` | `FElysiumNpcScurrying` | `npc_VRat` | 18 | 0 | 2 |
-| `CNPC_VBach` | `FElysiumNpcBach` | `FElysiumNpcVampire` | `npc_VBach` | 26 | 23 | 2 |
+| `CNPC_VBach` | `FElysiumNpcBach` | `FElysiumNpcVampire` | `npc_VBach` | 28 | 23 | 2 |
 | `CNPC_VBrujah` | `FElysiumNpcBrujah` | `FElysiumNpcVampire` | `npc_VBrujah` | 6 | 0 | 2 |
-| `CNPC_VGargoyle` | `FElysiumNpcGargoyle` | `FElysiumNpcVampire` | `npc_VGargoyle` | 35 | 5 | 2 |
-| `CNPC_VHengeyokai` | `FElysiumNpcHengeyokai` | `FElysiumNpcVampire` | `npc_VHengeyokai` | 35 | 14 | 2 |
+| `CNPC_VGargoyle` | `FElysiumNpcGargoyle` | `FElysiumNpcVampire` | `npc_VGargoyle` | 40 | 5 | 2 |
+| `CNPC_VHengeyokai` | `FElysiumNpcHengeyokai` | `FElysiumNpcVampire` | `npc_VHengeyokai` | 40 | 14 | 2 |
 | `CNPC_VLasombra` | `FElysiumNpcLasombra` | `FElysiumNpcVampire` | `npc_VLasombra` | 8 | 1 | 2 |
 | `CNPC_VManBat` | `FElysiumNpcManBat` | `FElysiumNpcVampire` | `npc_VManBat` | 22 | 21 | 2 |
-| `CNPC_VPlayerController` | `FElysiumNpcPlayerController` | `FElysiumNpcVampire` | `npc_VPlayerController` | 11 | 0 | **A** |
-| `CNPC_VVampireBoss` | `FElysiumNpcVampireBoss` | `FElysiumNpcVampire` | `npc_VVampireBoss` | 14 | 9 | 2 |
-| `CNPC_VFrenzyShadow` | `FElysiumNpcFrenzyShadow` | `FElysiumNpcPlayerController` | `npc_VFrenzyShadow` | 31 | 2 | **A** |
-| `CNPC_VWolfMorph` | `FElysiumNpcWolfMorph` | `FElysiumNpcPlayerController` | `npc_VWolfMorph` | 14 | 2 | **A** |
-| `CNPC_VAndreiBlood` | `FElysiumNpcAndreiBlood` | `FElysiumNpcVampireBoss` | `npc_VAndreiBlood` | 25 | 10 | 2 |
+| `CNPC_VPlayerController` | `FElysiumNpcPlayerController` | `FElysiumNpcVampire` | `npc_VPlayerController` | 26 | 0 | **A** |
+| `CNPC_VVampireBoss` | `FElysiumNpcVampireBoss` | `FElysiumNpcVampire` | `npc_VVampireBoss` | 15 | 9 | 2 |
+| `CNPC_VFrenzyShadow` | `FElysiumNpcFrenzyShadow` | `FElysiumNpcPlayerController` | `npc_VFrenzyShadow` | 26 | 2 | **A** |
+| `CNPC_VWolfMorph` | `FElysiumNpcWolfMorph` | `FElysiumNpcPlayerController` | `npc_VWolfMorph` | 11 | 2 | **A** |
+| `CNPC_VAndreiBlood` | `FElysiumNpcAndreiBlood` | `FElysiumNpcVampireBoss` | `npc_VAndreiBlood` | 21 | 10 | 2 |
 | `CNPC_VAsianVampire` | `FElysiumNpcAsianVampire` | `FElysiumNpcVampireBoss` | `npc_VAsianVampire` | 22 | 6 | 2 |
-| `CNPC_VChangBros` | `FElysiumNpcChangBros` | `FElysiumNpcVampireBoss` | `npc_VChangBros` | 24 | 12 | 2 |
+| `CNPC_VChangBros` | `FElysiumNpcChangBros` | `FElysiumNpcVampireBoss` | `npc_VChangBros` | 23 | 12 | 2 |
 | `CNPC_VSabbatLeader` | `FElysiumNpcSabbatLeader` | `FElysiumNpcVampireBoss` | `npc_VSabbatLeader` | 36 | 15 | 2 |
 | `CNPC_VSheriffMan` | `FElysiumNpcSheriffMan` | `FElysiumNpcVampireBoss` | `npc_VSheriffMan` | 25 | 12 | 2 |
 | `CNPC_VChangBrosBlade` | `FElysiumNpcChangBrosBlade` | `FElysiumNpcChangBros` | `npc_VChangBrosBlade` | 7 | 0 | 2 |
 | `CNPC_VChangBrosClaw` | `FElysiumNpcChangBrosClaw` | `FElysiumNpcChangBros` | `npc_VChangBrosClaw` | 7 | 0 | 2 |
 
-¹ Fold A3 counted the directors' own bodies by vtable diff against `CAI_BaseNPC` / `CCineNPC`
-(20 / 5 / 6). The ledger's name-prefix count gave 12 / 5 / 14 because eight bodies only
-`CCineNPC`'s table fills are Ghidra-named `CCineAISchedule::FUN_*` (slots 72, 113, 117, 362, 364,
-365, 459, 584); `classes.md` still carries the name-prefix count.
-
-² Fold A4 counted the makers' own bodies by vtable diff (21 / 15 / 14). The name-prefix count
-(17 / 12 / 10) misses the unnamed fills of the four slots the maker adds past the Troika's table
-(617 `MakeNPC`, 618 `CanMakeNPC`, 619/620); `classes.md` still carries the name-prefix count.
+Own bodies are the ledger's primary-vtable diff against the direct base (`kernel_ledger`
+`own_bodies`, commit B), which is what `classes.md` and the census's `OwnBodies` carry. The column
+first held a count of bodies Ghidra had *named* on the class, which missed unnamed fills and bodies
+Ghidra filed under another class (`CCineAISchedule::FUN_*` bodies only `CCineNPC`'s table holds; the
+makers' 617–620); folds A2–A4 counted their classes by hand from the vtables (26/26/11, 20/5/6,
+21/15/14), and commit B made the ledger count every class that way, which corrected 26 rows
+here (the controller line's three among them). The two base rows count the same way (215 / 185).

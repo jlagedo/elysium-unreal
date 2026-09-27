@@ -11,10 +11,11 @@
 class FElysiumNpcCamera : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VCamera");
+	ELYSIUM_NPC_CLASS("CNPC_VCamera", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x10368060`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcCamera();
+
 	virtual void Slot497() override;
 	virtual void Slot506() override;
 	virtual void NPCInit() override;

@@ -23,14 +23,13 @@
 //     (`Substrate/ElysiumNpcClasses.cpp`, from retail's factories) and `RetailClass()` is that
 //     class's census row, so a spawned `npc_VCop` is `CNPC_VCop` and a spawned `npc_VCamera` is
 //     `CNPC_VCamera`. Until then the census gave `CNPC_VCop` no classname and a cop fell through to
-//     the Troika line. Step 3 turned these dispatchers into overrides.
+//     the Troika line. Step 3 turned these dispatchers into overrides; since commit B the census row
+//     is identity only and a type question is `AsSpecies<T>()`.
 //
-//   * **Two of this family's rows do not belong on an NPC at all.** `CNPCMaker_Fleshpile`'s
-//     `MakeNPC` (`0x1034c2d0`) and `DeathNotice` (`0x1034c8e0`) are the MAKER's bodies, and this
-//     runtime's maker is `FElysiumNpcMaker` — a `FElysiumEntity`, not an NPC. They land there
-//     (`Substrate/ElysiumNpcMaker.h`), per `.claude/rules/cpp.md`, and the report says so. A third,
-//     `0x1034b430`, turned out to be ALREADY PORTED as `FElysiumNpcMaker::IsDepleted`; the address
-//     is cited there and the row is reported as a `present` re-verdict, not re-implemented here.
+//   * **Two of this family's rows are the makers'.** `CNPCMaker_Fleshpile`'s `MakeNPC`
+//     (`0x1034c2d0`) and `DeathNotice` (`0x1034c8e0`) are overrides on `FElysiumNpcMakerFleshpile`
+//     since fold A4 (the maker is a Troika NPC). A third, `0x1034b430`, is
+//     `FElysiumNpcMaker::IsDepleted`, a `present` re-verdict.
 
 // --- Species words this family's bodies touch ------------------------------------------------------
 //

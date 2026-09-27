@@ -12,7 +12,6 @@
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumMiscFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -21,6 +20,52 @@
 
 namespace NpcKernelSoundsShared
 {
+	// `soundlevel_t` for every species vocalization. Retail passes `EmitSound` the pair (volume,
+	// attenuation 0.8); 0.8 is Source's `ATTN_NORM`, and the level behind it is the exact inverse of
+	// `0x1026d5e1`'s own `20/(L-50)`: `L = 50 + 20/0.8 = 75` (the derivation is spelled once in
+	// `ElysiumFootsteps.h` → `SpeciesSoundLevelDb`, which reads the same pair off the footstep
+	// vfuncs). A species vocalization is `SNDLVL_NORM`; not one of these rows reads a distance.
+	inline constexpr int32 GSoundsSpeciesSoundLevelDb = 75;
+	// `pitch 100` on every row, which is this seam's 1.0 (`FElysiumBodySound::Pitch` is a
+	// multiplier, not Source's percentage).
+	inline constexpr float GSoundsSpeciesPitch = 1.0f;
+
+	// Source `CHAN_*`. The vocalizations emit on `CHAN_VOICE`; the Sabbat leader's footstep and
+	// attack hooks emit on `CHAN_BODY`.
+	inline constexpr int32 GSoundsChanVoice = 2;
+	inline constexpr int32 GSoundsChanBody = 4;
+
+	// The wav-pool arm of a species sound hook, as each body spells it: `RandomInt(0, Count - 1)`
+	// (`DAT_1070b244` slot 2, inclusive at both ends) over the body's own table, then
+	// `EmitSound(CPASAttenuationFilter(GetSoundEmissionOrigin(), 0.8), entindex(), channel, wav,
+	// volume, 0.8, 0, 100, NULL, NULL, true, 0)`. The PAS filter is a recipient cull single-player
+	// never runs (`docs/vtmb/footsteps.md` §3.5), so the port emits and builds no filter. A draw on
+	// `CHAN_BODY` is a footstep-family draw (`EElysiumRngStream::Footsteps`); any other is an
+	// NPC-think decision on the schedule stream.
+	inline void SoundsEmitSpeciesWav(FElysiumNpcBase& Npc, const TCHAR* const* Wavs, int32 Count, float Volume,
+		int32 Channel)
+	{
+		if (Wavs == nullptr || Count <= 0)
+		{
+			return;
+		}
+		const EElysiumRngStream Which = Channel == GSoundsChanBody
+			? EElysiumRngStream::Footsteps : EElysiumRngStream::NpcSchedule;
+		const int32 Index = ElysiumRng::Stream(Which).RandRange(0, Count - 1);
+		IElysiumAudio* Audio = Npc.World != nullptr ? Npc.World->Audio() : nullptr;
+		if (Audio == nullptr)
+		{
+			return;
+		}
+		FElysiumBodySound Sound;
+		Sound.Rel = Wavs[Index];
+		Sound.Volume = Volume;
+		Sound.SoundLevelDb = GSoundsSpeciesSoundLevelDb;
+		Sound.Pitch = GSoundsSpeciesPitch;
+		Sound.Channel = static_cast<EElysiumSoundChannel>(Channel);
+		Audio->PlayBodySound(Npc.Handle, Sound);
+	}
+
 	// `gpGlobals->curtime` (`DAT_1070b228 + 0xc`).
 	inline double SoundsCurTime(const FElysiumNpcBase& Npc)
 	{

@@ -5,7 +5,6 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
@@ -29,12 +28,6 @@ namespace
 	// base maker overwrites.
 	constexpr int32 GFleshpileChildSpawnFlags = 0x4;
 	constexpr int32 GFleshpileChildFadeSpawnFlags = 0x204;
-}
-
-const FElysiumNpcClass* FElysiumNpcMakerFleshpile::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 82: `0x1034bdc0` returns `&datamap_CNPCMaker_Fleshpile` (`0x106250f0`).

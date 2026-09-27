@@ -11,7 +11,6 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcDebugShared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumSchedule.h"

@@ -13,7 +13,6 @@
 #include "ElysiumSchedule.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 

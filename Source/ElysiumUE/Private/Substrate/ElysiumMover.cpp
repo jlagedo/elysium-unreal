@@ -1063,7 +1063,7 @@ void FElysiumDoorBase::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	static const TCHAR* StateNames[] = { TEXT("AtTop (open)"), TEXT("AtBottom (closed)"),
 		TEXT("GoingUp (opening)"), TEXT("GoingDown (closing)") };
 	Out.Emplace(TEXT("Toggle state"), StateNames[(uint8)ToggleState]);
-	Out.Emplace(TEXT("Moving"), IsMoving()
+	Out.Emplace(TEXT("Moving"), MoveKind() != EMoveKind::None
 		? (MoveKind() == EMoveKind::Angular ? TEXT("yes (angular)") : TEXT("yes (linear)")) : TEXT("no"));
 	// Two authorities, reported separately: the door's own byte, and whichever one actually decides
 	// a refusal. A knobbed door's answer comes from the knob.

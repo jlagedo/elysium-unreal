@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcBase.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Debug/ElysiumNpcDebugLogging.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
@@ -39,31 +38,6 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 
 #include <cmath>
-
-// --- The leaf's own answer ----------------------------------------------------------------------
-
-const FElysiumNpcClass* FElysiumNpcBase::RetailClass() const
-{
-	// The C++ class is the answer: the classname's factory built it (story 5 step 2), so nothing
-	// here reads the classname. (The test-only latch that stood the controller line on a bare
-	// Troika NPC went with fold A2.)
-	return OwnRetailClass();
-}
-
-const FElysiumNpcClass* FElysiumNpcBase::OwnRetailClass() const
-{
-	return nullptr;
-}
-
-bool FElysiumNpcBase::IsRetailClass(const TCHAR* RetailClassName) const
-{
-	return ElysiumNpcKernelClass::DerivesFrom(RetailClass(), RetailClassName);
-}
-
-bool FElysiumNpcBase::OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const
-{
-	return ElysiumNpcKernelClass::DerivesFrom(OwnRetailClass(), RetailClassName);
-}
 
 // --- `m_hCine` and the ideal-state writers a director uses (story 5 fold A3) ------------------
 

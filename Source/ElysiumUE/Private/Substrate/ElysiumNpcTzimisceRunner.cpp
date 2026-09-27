@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntityDefs.h"
@@ -69,10 +68,13 @@ namespace
 	const TCHAR* const GRunnerWeapon = TEXT("item_w_tzimisce3_claw");
 }
 
-const FElysiumNpcClass* FElysiumNpcTzimisceRunner::OwnRetailClass() const
+// `CNPC_VTzimisceRunner`'s constructor `0x103c2fa0` writes both hull words at `0x103c2ff3`, after
+// the `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the
+// same order.
+FElysiumNpcTzimisceRunner::FElysiumNpcTzimisceRunner()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 13;
+	PathingHullKind = 13;
 }
 
 // Slot 588: `0x103c3fd0`, `RestartIdealActivity(1)` with no `IsActivityFinished` gate.

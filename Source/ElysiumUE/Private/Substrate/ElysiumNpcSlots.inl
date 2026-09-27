@@ -63,9 +63,15 @@
 // slot 380 0x102b5d90 FElysiumNpc::LeaveGrappleState — its exit
 // slot 435 0x102a0940 FElysiumNpc::OnScheduleChange — the schedule-change release, ported in story
 // 8
-// slot 438 0x102af660 FElysiumNpc::SelectSchedule — the state switch of the base selector
-// 0x1028a380
-// slot 440 0x102b12f0 FElysiumNpc::TranslateSchedule — the schedule translation, ported in story 25
+// slot 438 0x102af660 FElysiumNpc::SpeciesSelectSchedule — the overridable half of the selector:
+// `FElysiumNpc::SelectSchedule` asks it first and runs the Troika body 0x1028a380 (the state
+// switch) when it answers 0, which is where a species body's direct call to the base lands; each
+// species body is this virtual's override (0019/5 commit B named the virtual, so `kernel_shape
+// --unported` sees the overrides)
+// slot 440 0x102b12f0 FElysiumNpc::TranslateScheduleRetail — the schedule translation in retail
+// numbers (story 25), which the typed runner hook `FElysiumNpc::TranslateSchedule` wraps; each
+// species body is this virtual's override (0019/5 commit B named the virtual rather than the
+// wrapper)
 // slot 448 0x1029adb0 FElysiumNpc::TaskFail — the failure route, ported in story 13
 // slot 453 0x102ad140 FElysiumNpc::BuildScheduleTestBits — the interrupt mask, ported in story 25
 // slot 534 0x1026b270 FElysiumCombatCharacter::EyeLookTargetHandle — the gaze cascade's chosen

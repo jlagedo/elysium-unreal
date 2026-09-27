@@ -11,10 +11,8 @@
 class FElysiumNpcZombie : public FElysiumNpcAnimal
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VZombie");
+	ELYSIUM_NPC_CLASS("CNPC_VZombie", FElysiumNpcAnimal)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void Slot25(FElysiumEntity* Victim) override;
 	virtual void Slot26(FElysiumEntity* Victim) override;
 	virtual bool ShouldPlayFloatSound() override;

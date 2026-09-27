@@ -1710,7 +1710,7 @@ bool FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Part
 		FElysiumItem* Item = Inventory.Active(*this);
 		FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr;
 		Grapple.bHolsteredOnEnter = bHolster && Weapon && !Weapon->IsHidden();
-		if (Grapple.bHolsteredOnEnter) Weapon->Hide(this);
+		if (Grapple.bHolsteredOnEnter) Weapon->Hide();
 	}
 	// `+0x1558 = (role != 0) ? partner : -1` — only the victim points at its attacker, because the
 	// attacker is the half that drives the paired animation.
@@ -1735,7 +1735,7 @@ void FElysiumCombatCharacter::LeaveGrappleState()
 		if (Grapple.bHolsteredOnEnter)
 		{
 			FElysiumItem* Item = Inventory.Active(*this);
-			if (FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr) Weapon->Unhide(this);
+			if (FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr) Weapon->Unhide();
 		}
 		if (Grapple.bOwnsStealthAction)
 		{

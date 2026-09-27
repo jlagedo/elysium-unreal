@@ -11,10 +11,11 @@
 class FElysiumNpcTzimisce : public FElysiumNpcBaseBoss
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VTzimisce");
+	ELYSIUM_NPC_CLASS("CNPC_VTzimisce", FElysiumNpcBaseBoss)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x103b6c60`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcTzimisce();
+
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
 	virtual void DeathSound() override;
 	virtual void Slot593() override;

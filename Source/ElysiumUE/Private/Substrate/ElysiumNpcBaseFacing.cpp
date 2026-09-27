@@ -9,7 +9,6 @@
 #include "ElysiumSkeletalBasis.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
 // --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 5) ---

@@ -125,10 +125,10 @@ FVector SpawnResponseCopsLocation = FVector::ZeroVector;   // +0x1d04
 // the image writes it, which is itself the recovered fact.
 int32 Field_0x1d24 = 0;   // +0x1d24
 
-// +0x1db0 `m_hControllerNPC` — the `npc_VPlayerController` currently driving this player's body.
-// `0x101618e0` is the DETACH: it copies the controller's animation and velocity back, arms a
-// one-shot think ON THE CONTROLLER and clears this to -1.
-FElysiumEntityHandle ControllerNpc;   // +0x1db0
+// +0x1db0 `CBasePlayer::m_hControllerNPC` is the PLAYER's word, and the port holds it once: on the
+// world (`FElysiumEntityWorld::PlayerControllerHandle`, written by `CreatePlayerControllerEntity`
+// `0x10161a70` and cleared by `RemovePlayerControllerEntity` `0x101618e0`). Story 5 commit B deleted
+// the NPC-side copy this family had declared here.
 
 // +0x1eb8 `m_hUseEntity` and +0x1ec0 — the held `+use` session. `+0x1eb8` is an EDICT INDEX, not an
 // EHANDLE: `0x100d5000` hands it straight to the engine's `PEntityOfEntIndex` (`+0x98`). `+0x1ec0`
@@ -305,13 +305,6 @@ void AddListenerEntity(void* Listener);
  *  compaction, decrement. A value not present is a silent no-op. */
 void RemoveListenerEntity(void* Listener);
 
-/** `0x101618e0` — the `npc_VPlayerController` DETACH. `bCopyAnimation` copies the controller's four
- *  scalar animation words plus its whole gesture-layer table (0xc0 bytes) and flinch table
- *  (0x54 bytes) onto this body; `bCopyVelocity` transfers its absolute linear and angular velocity.
- *  Then, UNCONDITIONALLY, it arms a one-shot think on the CONTROLLER (`0x101c0b10`, at
- *  `curtime + _DAT_1044e658`) and clears `m_hControllerNPC` to -1. */
-void ReleaseControllerNpc(bool bCopyAnimation, bool bCopyVelocity);
-
 /** `0x10176520` — `CBasePlayer::GetAutoaimVector`. Autoaim off is the whole first arm:
  *  `AngleVectors(punch + v_angle)`. Autoaim on clears `m_vecAutoAim`, runs `AutoaimDeflection` from
  *  the shoot position over 16384 units, normalises the two angles into (-180, 180], clamps them to
@@ -479,9 +472,6 @@ bool ClosestNpcCandidateBitSet(const FElysiumEntity& Candidate) const;
  *  duration) in `SetPlayerAnim` — both DOUBLES in `.rdata`. */
 double PlayerAnimLeadIn() const;
 double PlayerAnimFallbackDuration() const;
-
-/** `_DAT_1044e658`, the double 0.01 the released controller NPC's one-shot think is armed at. */
-double ControllerReleaseThinkDelay() const;
 
 // From `ElysiumNpcEntityChain.inl`.
 /** `DAT_10725f74` — the ConVar whose value `BeginHeightenedAlert` adds to curtime for the alert's

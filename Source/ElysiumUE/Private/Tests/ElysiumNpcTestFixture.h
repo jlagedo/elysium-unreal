@@ -28,9 +28,9 @@
 #include "ElysiumSaveTypes.h"
 #include "Misc/AssertionMacros.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Templates/Function.h"
 #include "Tests/ElysiumTestServices.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // `Entity` as species class `T` (`FElysiumNpc::AsSpecies`), or null when it is not an NPC of that
 // class: the typed view a case takes of a fixture NPC before it reaches a species member.
@@ -122,7 +122,7 @@ struct FElysiumNpcWorldBuilder
 	// (an `ensure`, not a `check`, so one bad row does not stop the whole automation run).
 	static const TCHAR* ClassnameOf(const TCHAR* RetailClass)
 	{
-		const FElysiumNpcClass* Row = ElysiumNpcKernelClass::Find(RetailClass);
+		const FElysiumNpcClass* Row = ElysiumNpcTestCensus::Find(RetailClass);
 		if (!ensureMsgf(Row != nullptr && Row->ClassnameCount > 0, TEXT("%s: no classname builds it"),
 			RetailClass))
 		{
@@ -244,7 +244,7 @@ struct FElysiumNpcWorldFixture
 	// it: the player controller line's `SetName("playercontroller")` (`0x103a4510`, story 5 fold A2).
 	FElysiumNpc* NpcOfClass(const TCHAR* RetailClass, int32 Nth = 0)
 	{
-		const FElysiumNpcClass* Wanted = ElysiumNpcKernelClass::Find(RetailClass);
+		const FElysiumNpcClass* Wanted = ElysiumNpcTestCensus::Find(RetailClass);
 		for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
 		{
 			FElysiumNpc* Npc = Entity.IsValid() && !Entity->IsDead() ? Entity->AsNpc() : nullptr;

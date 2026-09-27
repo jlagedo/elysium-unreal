@@ -40,7 +40,6 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"

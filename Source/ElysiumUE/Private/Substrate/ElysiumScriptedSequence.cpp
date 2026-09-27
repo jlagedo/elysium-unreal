@@ -11,7 +11,6 @@
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "Misc/Paths.h"
@@ -119,12 +118,6 @@ namespace
 	{
 		return Entity.World != nullptr ? Entity.World->NowSeconds() : 0.0;
 	}
-}
-
-const FElysiumNpcClass* FElysiumScriptedSequence::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // --- Own slots ------------------------------------------------------------------------------------

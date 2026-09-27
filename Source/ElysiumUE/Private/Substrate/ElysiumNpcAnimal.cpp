@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcAnimal.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
@@ -10,12 +9,6 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
-
-const FElysiumNpcClass* FElysiumNpcAnimal::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 482: `0x1035fd40`, a standalone copy that keeps a SCRIPT-state body's answer.
 /** `0x1035fd40` / `0x103bd270` — `CNPC_VAnimal`'s and `CNPC_VTzimisce`'s slot 482: standalone

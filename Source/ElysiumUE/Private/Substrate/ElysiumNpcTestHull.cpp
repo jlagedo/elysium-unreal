@@ -1,7 +1,6 @@
 #include "Substrate/ElysiumNpcTestHull.h"
 
 #include "ElysiumEntity.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcUsedHullBits.h"
 
@@ -16,12 +15,6 @@ namespace
 	constexpr int32 GTestHullHealth = 0x32;              // 50
 	// `0x40000` — the flag `ElysiumCameraAnimated.cpp` records beside `MakeDormant`, i.e. dormancy.
 	constexpr int32 GTestHullFlagDormant = 0x40000;
-}
-
-const FElysiumNpcClass* FElysiumNpcTestHull::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 103: `0x102d72f0`, a replacement that does not chain to `CAI_BaseNPC::Spawn`.

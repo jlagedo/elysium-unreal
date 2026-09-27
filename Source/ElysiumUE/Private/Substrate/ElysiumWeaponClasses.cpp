@@ -690,7 +690,7 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	}
 }
 
-void FElysiumWeapon::Hide(FElysiumCombatCharacter* Wearer)
+void FElysiumWeapon::Hide()
 {
 	// `CBaseEntity::Hide` (0x1009d2a0), vtable `+0x108`: set `m_fEffects |= EF_NODRAW`. The weapon
 	// stays the owner's ACTIVE weapon — nothing about the transaction, the mode or the magazine
@@ -700,7 +700,7 @@ void FElysiumWeapon::Hide(FElysiumCombatCharacter* Wearer)
 	// The hand follows the bit. Retail's NODRAW is what stops the model rendering at all; here the
 	// wield model is a separate attached component, so it is taken off explicitly. The trail goes
 	// with it — a trail on a weapon nothing is drawing is a swing arc from an empty hand.
-	if (Wearer != nullptr)
+	if (FElysiumCombatCharacter* const Wearer = OwnerCharacter())
 	{
 		if (USkeletalMeshComponent* const WearerBody = Wearer->GetSkeletalBody())
 		{
@@ -711,12 +711,13 @@ void FElysiumWeapon::Hide(FElysiumCombatCharacter* Wearer)
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s hidden (EF_NODRAW set)"), *DebugString());
 }
 
-void FElysiumWeapon::Unhide(FElysiumCombatCharacter* Wearer)
+void FElysiumWeapon::Unhide()
 {
 	// `CBaseEntity::Unhide` (0x1009d380), vtable `+0x10c`: clear `m_fEffects &= ~EF_NODRAW`.
 	bHidden = false;
 	// The wield model is re-installed only for the wielder that is actually holding this weapon: an
 	// unhide on a weapon some other equip has since replaced must not put its model back in the hand.
+	FElysiumCombatCharacter* const Wearer = OwnerCharacter();
 	if (Wearer != nullptr && IsActiveWeapon())
 	{
 		ApplyWieldVisual(*this, *Wearer);

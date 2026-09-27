@@ -4,7 +4,6 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumLaw.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -61,12 +60,6 @@ namespace
 		}
 		return Entity.Class != nullptr ? Entity.Class->ClassName.ToString() : FString();
 	}
-}
-
-const FElysiumNpcClass* FElysiumNpcPlayerController::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 72: `0x103751a0`.

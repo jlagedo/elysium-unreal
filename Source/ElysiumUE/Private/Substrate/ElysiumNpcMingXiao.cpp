@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -196,10 +195,13 @@ namespace
 	constexpr float GMingXiaoAimZBonusUnits = 20.0f;
 }
 
-const FElysiumNpcClass* FElysiumNpcMingXiao::OwnRetailClass() const
+// `CNPC_VMingXiao`'s constructor `0x10390ee0` writes both hull words at `0x10390f78`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order. The split MING_XIAO_PATHING_HULL exists for.
+FElysiumNpcMingXiao::FElysiumNpcMingXiao()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 15;
+	PathingHullKind = 16;
 }
 
 // Slot 482: `0x10396e90`, the same standalone copy as the human line's.

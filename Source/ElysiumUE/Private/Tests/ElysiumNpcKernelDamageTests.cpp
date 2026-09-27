@@ -18,13 +18,13 @@
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Damage**. Every assertion below is read off the decompiled C — or, for
 // `0x100b4ea0`'s tail call, `0x102664c0`'s vector algebra and `0x10266780`'s stack-shifted
@@ -119,10 +119,10 @@ bool FElysiumNpcKernelDamageCanBeSetOnFireTest::RunTest(const FString&)
 	// `vtmb_slot 615`: `CNPC_VGhoulCroucher` is the one class that replaces the Troika body, with
 	// `0x1037c420`, its own override (story 5 step 4): it refuses while `m_bSpawnBurning` is set.
 	TestEqual(TEXT("CNPC_VGhoulCroucher fills slot 615 with 0x1037c420"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VGhoulCroucher")), 615)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VGhoulCroucher")), 615)),
 		FString(TEXT("0x1037c420")));
 	TestNull(TEXT("and an unrelated class does not override it"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 615));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHumanCombatant")), 615));
 
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_fire"), 0x29c1d002);
 	Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, TEXT("CNPC_VGhoulCroucher"));
@@ -379,14 +379,14 @@ bool FElysiumNpcKernelDamageTraceAttackSpeciesTest::RunTest(const FString&)
 	// Slot 141's two ported species prologues are their classes' own overrides (story 5 step 4).
 	auto BodyOf141 = [](const TCHAR* Class)
 	{
-		return FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Class), 141));
+		return FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(Class), 141));
 	};
 	TestEqual(TEXT("CNPC_VWerewolf is filled by 0x103ccbf0"), BodyOf141(TEXT("CNPC_VWerewolf")),
 		FString(TEXT("0x103ccbf0")));
 	TestEqual(TEXT("CNPC_VZombie is filled by 0x103e0430"), BodyOf141(TEXT("CNPC_VZombie")),
 		FString(TEXT("0x103e0430")));
 	TestNull(TEXT("and the Troika line's human combatant takes the base body"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 141));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHumanCombatant")), 141));
 
 	// `0x103e0430`'s pure rule, arm by arm off the decompiled C.
 	bool bHeadHit = false;
@@ -669,7 +669,7 @@ bool FElysiumNpcKernelDamageFlinchGateTest::RunTest(const FString&)
 	// override (story 5 step 4) over the byte-identical gate `FElysiumNpcVampire` holds for both.
 	auto BodyOf292 = [](const TCHAR* Class)
 	{
-		return FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Class), 292));
+		return FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(Class), 292));
 	};
 	TestEqual(TEXT("CNPC_VGargoyle is filled by 0x10378cb0"), BodyOf292(TEXT("CNPC_VGargoyle")),
 		FString(TEXT("0x10378cb0")));
@@ -784,7 +784,7 @@ bool FElysiumNpcKernelDamageAndreiIdealStateTest::RunTest(const FString&)
 		return false;
 	}
 	TestNotNull(TEXT("and the census claims it"), Andrei->RetailClass());
-	TestTrue(TEXT("as CNPC_VAndreiBlood"), Andrei->IsRetailClass(TEXT("CNPC_VAndreiBlood")));
+	TestTrue(TEXT("as CNPC_VAndreiBlood"), Andrei->AsSpecies<FElysiumNpcAndreiBlood>() != nullptr);
 
 	// Twenty-five bytes: stamp the trace selector with 4, then answer 1 (IDLE) or 2 (ALERT).
 	Andrei->SelectIdealStateSelector = 0;
@@ -1245,6 +1245,13 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("with every handle live, a null candidate answers true and skips IsStandable"),
 		Ming->SeveredTentaclesCanStandOn(nullptr));
+	// Slot 166 through the vtable (story 5 commit B wired it as the class's `CanStandOn` override):
+	// an entity reference reaches the same body. Retail reaches it through the `CAI_` component
+	// thunks `0x102e7e40` / `0x102e2730` and `0x1016a030`; the port has no such caller yet.
+	FElysiumEntity& MingEntity = *Ming;
+	TestTrue(TEXT("slot 166 through FElysiumEntity& accepts a null candidate with every handle live"),
+		MingEntity.CanStandOn(static_cast<FElysiumEntity*>(nullptr)));
+	TestFalse(TEXT("and refuses a registered proxy"), MingEntity.CanStandOn(Standable));
 	for (int32 i = 0; i < 6; ++i)
 	{
 		Ming->Proxies[i] = FElysiumEntityHandle();

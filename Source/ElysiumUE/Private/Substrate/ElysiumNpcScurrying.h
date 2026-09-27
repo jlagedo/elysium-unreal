@@ -11,10 +11,11 @@
 class FElysiumNpcScurrying : public FElysiumNpcAnimal
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VScurrying");
+	ELYSIUM_NPC_CLASS("CNPC_VScurrying", FElysiumNpcAnimal)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x103abb00`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcScurrying();
+
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual int32 GetUsedHullBits() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;

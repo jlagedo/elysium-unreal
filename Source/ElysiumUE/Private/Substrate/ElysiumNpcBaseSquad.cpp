@@ -7,10 +7,8 @@
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
-#include "Substrate/ElysiumNpcSquadShared.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -59,17 +57,15 @@ void FElysiumNpcBase::ClearSquadSlotOccupied(void* Squad, int32 SquadSlot)
 	(void)SquadSlot;
 }
 
-// slot 546 0x101a6c00 `const char* SquadSlotName(int)`. The species classes override it with their
-// own id-space row (story 5 step 4; the controller line's `CNPC_VFrenzyShadow` `0x10375440` and
-// `CNPC_VWolfMorph` `0x103dc950` since fold A2, `CNPC_VPlayerController` inheriting
-// `CNPC_VVampire`'s `0x103c4a80`); the rest inherit one of those. The table arm below answers the
-// Troika line alone.
+// slot 546 0x101a6c00 `const char* SquadSlotName(int)`: `slotEN` straight to `IdToSymbol`, with no
+// id-space translation. Every live species class with a slot-546 body of its own overrides this
+// with its own id-space row (story 5 step 4; the controller line's `CNPC_VFrenzyShadow`
+// `0x10375440` and `CNPC_VWolfMorph` `0x103dc950` since fold A2, `CNPC_VPlayerController`
+// inheriting `CNPC_VVampire`'s `0x103c4a80`); a class with none (the makers, the directors, the
+// test hull, `CPayphone`, `CNPC_VNewscaster`) runs this body, as its vtable does.
 const TCHAR* FElysiumNpcBase::SquadSlotName(int32 SlotEn)
 {
-	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546);
-	const FSquadSlotSpecies* Species =
-		Override != nullptr ? SquadSlotSpeciesOf(Override->Class) : nullptr;
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(Species, SlotEn));
+	return GlobalSquadSlotName(SlotEn);
 }
 
 // slot 545 0x10273d30 `bool InitSquad()`. `CNPC_VCamera` (`0x10369bd0`, inherited by
@@ -145,22 +141,6 @@ void FElysiumNpcBase::RemoveFromSquad(void* Squad)
 	// SEAM for `CAI_Squad::RemoveFromSquad` (`0x103158f0`): compacts `m_hMembers` and calls
 	// slot 578 (an empty virtual) on each survivor.
 	(void)Squad;
-}
-
-const FElysiumNpcBase::FSquadSlotSpecies* FElysiumNpcBase::SquadSlotSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FSquadSlotSpecies& Row : NpcKernelSquadShared::GNpcKernelSquadSlotSpecies)
-	{
-		if (FCString::Strcmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
 }
 
 int32 FElysiumNpcBase::SquadSlotLocalToGlobal(const FSquadSlotSpecies* Species, int32 LocalId)

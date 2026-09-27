@@ -12,10 +12,11 @@
 class FElysiumNpcMingXiaoTentacle : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VMingXiaoTentacle");
+	ELYSIUM_NPC_CLASS("CNPC_VMingXiaoTentacle", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x1039afe0`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcMingXiaoTentacle();
+
 	virtual void Slot21(FElysiumEntity* Attacker) override;
 	virtual void Slot22(FElysiumEntity* Attacker) override;
 	virtual void Slot23(FElysiumEntity* Attacker) override;

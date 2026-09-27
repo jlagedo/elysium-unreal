@@ -19,11 +19,12 @@
 //     The dialogue SESSION (`Scripting/ElysiumDlg.cpp`, `FElysiumDlgConversation`) is spec 0004's
 //     and NOTHING of it is re-derived here: every mechanism these two bodies end on is a seam that
 //     records the request and answers nothing.
-//   * `CBasePlayer` — the cine-camera getter (`0x1017cf90`), the controller-NPC factory
-//     (`0x10161a70`), the controller-busy predicate (`0x10175180`) and the two pursuit-count
-//     getters (`0x1017f770`, `0x1017f8b0`). The first three run over words EntityChain already
-//     declared here (`ControllerNpc`, `+0x1db0`); the last two land on `FElysiumPlayer`, whose
-//     `Police` record already carries both counts.
+//   * `CBasePlayer` — the cine-camera getter (`0x1017cf90`) and the two pursuit-count getters
+//     (`0x1017f770`, `0x1017f8b0`), which land on `FElysiumPlayer`, whose `Police` record already
+//     carries both counts. The controller-NPC factory (`0x10161a70`) and the controller-busy
+//     predicate (`0x10175180`) are the world's and the player's (`CBasePlayer::m_hControllerNPC`
+//     `+0x1db0` has one home, `FElysiumEntityWorld::PlayerControllerHandle`; story 5 commit B
+//     deleted the NPC-side copy).
 //   * `CAI_BaseNPCTroika` — the crosswalk pair (`0x102a0bc0`, `0x102a0d20`), which is the pedestrian
 //     traffic-light rule and the family's only condition producer.
 //   * Two species overrides — `CPayphone::CanTalk` (`0x101aaee0`) and
@@ -144,13 +145,6 @@ TArray<FString> DialogUiCalls;
  *  `"<opcode>:<byte>,<byte>,…"` so the ORDER and the payload are assertable. */
 TArray<FString> DialogUserMessages;
 
-/** `CBasePlayer::GetControllerNPC`'s `CreateEntityByName(classname)` (`thunk_FUN_10136580`). **SEAM**:
- *  the kernel does not spawn entities; the world's registry does, and no kernel body may reach it
- *  without becoming a second spawner. Answers null, which takes retail's OWN
- *  `"GetControllerNPC(): ... created NULL Entity ..."` arm — the arm that clears `m_hControllerNPC`
- *  to -1 — rather than refusing the body. */
-FElysiumEntity* CreateControllerNpcEntity(const TCHAR* Classname);
-
 /** `0x102f96e0` — given a waypoint's owning entity and a link id, the path node whose id matches.
  *  **SEAM**: this runtime stands no node graph; answers false and writes nothing, so
  *  `ResolvePedestrianPathNode` reaches its own no-node arm. `OutSignalFlags` is the node's `+0x64`.
@@ -183,15 +177,6 @@ int32 DialogGotoLineForResponse(int32 ResponseIndex);
 /** `CBasePlayer::GetCineCamera` (`0x1017cf90`, 111 bytes) — the adopted cine camera, or null.
  *  `m_iCameraOverrideIdx` (`+0x1ec4`) must be strictly positive AND `+0x19b4` must resolve. */
 FElysiumEntity* GetActiveCameraEntity() const;
-
-/** `CBasePlayer::GetControllerNPC` (`0x10161a70`, 534 bytes) — the cached `npc_VPlayerController`
- *  of the requested classname, created on demand. Writes `m_hControllerNPC` (`+0x1db0`). */
-FElysiumEntity* GetControllerNpc(const TCHAR* Classname);
-
-/** `0x10175180` (116 bytes) — "the controller NPC at `m_hControllerNPC` is in state 3". Retail name
- *  **unrecovered**; 29c's walk called `+0x1db0` a dialogue partner, which `vtmb_fields CBasePlayer`
- *  contradicts — it is `m_hControllerNPC`, the same word `GetControllerNPC` caches into. */
-bool ControllerNpcBusy() const;
 
 /** The navigator waypoint `0x102a0bc0` is handed, as the four words it reads off it. Retail's
  *  argument is `navigator->CurWaypoint` (`FUN_102f0400` fetches it from `path+0x24`) and the offsets

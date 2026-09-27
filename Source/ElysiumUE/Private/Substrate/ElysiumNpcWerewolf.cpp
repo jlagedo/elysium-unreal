@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumDecalSubsystem.h"
@@ -201,10 +200,13 @@ namespace
 	};
 }
 
-const FElysiumNpcClass* FElysiumNpcWerewolf::OwnRetailClass() const
+// `CNPC_VWerewolf`'s constructor `0x103ca4b0` writes both hull words at `0x103ca5cc`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order.
+FElysiumNpcWerewolf::FElysiumNpcWerewolf()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 12;
+	PathingHullKind = 12;
 }
 
 // Slot 420: `0x103caef0`.

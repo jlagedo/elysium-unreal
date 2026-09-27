@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcHengeyokai.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntityDefs.h"
@@ -114,10 +113,82 @@ namespace
 	const TCHAR* const GHengeyokaiWeapon = TEXT("item_w_hengeyokai_fist");
 }
 
-const FElysiumNpcClass* FElysiumNpcHengeyokai::OwnRetailClass() const
+// `CNPC_VHengeyokai`'s pickup row (0019 story 5 commit B moved it onto the class: it was a row of a
+// class-keyed table read by retail class name). The release re-arms `0x102c43b0`'s collision
+// ignore at 0.75 s.
+const FElysiumNpc::FPickupSpecies& FElysiumNpcHengeyokai::PickupRow()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
+	static constexpr FPickupSpecies Row = { TEXT("CNPC_VHengeyokai"), TEXT("0x10382670"), TEXT("0x10382400"),
+		TEXT("Bip01 R Hand"), 0x6664, 0.75f, false };
 	return Row;
+}
+
+// Slot 599: `0x10381750`, `CNPC_VHengeyokai::vfunc599`, the whole body:
+//     (*DAT_10924edc)->vfunc1();      // the global melee-entered event, FIRST
+//     m_bInMelee = 1;                 // +0x6078
+//     return true;
+// Every gate of the Troika line's body is gone, as on `CNPC_VFrenzyShadow` `0x10376b70`,
+// whose order it shares; this one answers `true` explicitly.
+bool FElysiumNpcHengeyokai::Slot599(int32 Arg)
+{
+	(void)Arg;
+	++MeleeEventFires;   // `(*DAT_10924edc)->vfunc1()`, family Bosses' counter for this global
+	bInMelee = true;
+	return true;
+}
+
+// Slot 600: `0x10381780`, the whole body: `m_bInMelee (+0x6078) = 1; (*DAT_10924edc)->vfunc1();
+// return true;` -- the write FIRST here and SECOND in slot 599, as on the frenzy shadow's `0x10376ba0`.
+bool FElysiumNpcHengeyokai::Slot600(FElysiumEntity* Enemy)
+{
+	(void)Enemy;
+	bInMelee = true;
+	++MeleeEventFires;
+	return true;
+}
+
+bool FElysiumNpcHengeyokai::AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey)
+{
+	// `0x10382670`.
+	(void)ElementKey;
+	int32 Bone = INDEX_NONE;
+	const FElysiumEntityHandle Link = BeginPickupLink(PickupRow(), Carried, Bone);
+	if (!Link.IsSet())
+	{
+		return false;
+	}
+	// `rag = dynamic_cast<CRagdollProp*>(param_1)`: `SetHeld(true)`, the key decoded from
+	// `m_SecurePickupParam`, `SetDamage((float)key)`, then the element at that key.
+	const int32 Key = HengeyokaiPickupParam;
+	SetCarriedRagdollHeld(Carried->Handle, true);
+	if (!FinishPickupLink(Link, Bone, Carried, Key))
+	{
+		return false;
+	}
+	HengeyokaiPhysicsAnimlink = Link;
+	NpcFlags.Clear(EElysiumNpcFlag::FINDING_BODY);   // 0x10381ba0(this, false)
+	CallFormBit(true);                               // 0x10381c00(this, true)
+	return true;
+}
+
+void FElysiumNpcHengeyokai::ReleasePickupAnimlink(const FElysiumEntity* AimTarget)
+{
+	// `0x10382400`: the carried word is cleared AFTER the throw and BEFORE the collision re-arm, and
+	// this arm never calls `StartIgnoringCollision`.
+	ReleasePickupLink(HengeyokaiPhysicsAnimlink, HengeyokaiPickupTarget, AimTarget);
+	HengeyokaiPickupTarget = FElysiumEntityHandle::Invalid();
+	ArmIgnoreCollisionExpiry(PickupRow().IgnoreCollisionSeconds);
+	CallFormBit(false);                              // 0x10381c00(this, false)
+}
+
+// `CNPC_VHengeyokai`'s constructor `0x1037e680` writes both hull words at `0x1037e786`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order. The inverse split: a human-sized box, HENGEYOKAI pathing (`1037e786` `MOV
+// [ESI+0x1568],EDI`, `1037e78c` `MOV [ESI+0x156c],0x12`).
+FElysiumNpcHengeyokai::FElysiumNpcHengeyokai()
+{
+	HullKind = 0;
+	PathingHullKind = 18;
 }
 
 // Slot 420: `0x1037fa70`.

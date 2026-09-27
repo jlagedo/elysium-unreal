@@ -198,9 +198,9 @@ FYawClearanceSweep LastYawClearanceSweep;
 // Slot 605 `SelectScheduleRangedCombat` — the dispatcher's six arms and the three helpers
 // =================================================================================================
 //
-// The slot method is the dispatcher and lives in `ElysiumNpcCombat10_2.cpp`; it selects on
-// `OverrideOf(RetailClass(), 605)` exactly as slot 604's does and runs one of the six bodies below.
-// They are declared rather than inlined for one recovered reason: `CNPC_VBach`'s arm ends by calling
+// The slot method is the Troika body and lives in `ElysiumNpcCombat10_2.cpp`; each species body is
+// its class's override (story 5 step 3). The six bodies are declared rather than inlined for one
+// recovered reason: `CNPC_VBach`'s arm ends by calling
 // `CNPC_VHuman`'s body `0x10386560` through a DIRECT, non-virtual call, which a named body expresses
 // (story 5 step 3 made the six bodies their classes' overrides).
 //

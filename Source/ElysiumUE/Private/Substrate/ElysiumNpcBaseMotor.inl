@@ -43,10 +43,11 @@ FElysiumEntityHandle IgnoreCollisionEntity;
 // `0x103d6a40` among them). Below the shape map's band, so 29b did not bind it; the extents
 // themselves come from the generated table (`RetailHullExtents` below).
 //
-// Both words are filled from `ElysiumRetailHulls::ClassHulls` by the body that wears this kernel,
-// keyed on the retail class. A class with no row of its own inherits the nearest ancestor's, which
-// is retail's own arrangement: `CAI_BaseNPC`'s constructor zeroes both before any derived
-// constructor runs (`navigation-jump-links.md` § "The two hull words", 2026-09-20).
+// Both words are written by CONSTRUCTORS, as retail's are: this default is `CAI_BaseNPC`'s zero
+// (`0x1027c300`, store `0x1027c574`), and each class whose retail constructor stores a hull writes
+// it in its own (`FElysiumNpcCamera` ... `FElysiumNpcTzimisceRunner`; the generated
+// `ElysiumRetailHulls::ClassHulls` is the table they are tested against). A class with no store
+// of its own keeps its nearest ancestor's (`navigation-jump-links.md` § "The two hull words").
 int32 HullKind = 0;
 
 FNavigator Navigator;
@@ -206,19 +207,6 @@ static float MaxYawSpeedBase();
  *  cached activity when the link is valid and not -1, else 1 (`ACT_IDLE`). */
 int32 ResolveLinkActivity() const;
 
-/** Slots 521/522/523 `IsJumpLegal` / `StepHeight` / `GetMaxJumpSpeed`: the movement tunables, one
- *  row per class that answers them differently from the Troika line. */
-struct FJumpTunableSpecies
-{
-	const TCHAR* RetailClass;
-	const TCHAR* Body;
-	float StepHeight;
-	float MaxJumpSpeed;
-	float JumpLegalRise;
-	float JumpLegalDrop;
-	float JumpLegalDistance;
-};
-
 /** `thunk_FUN_102ee140(m_pNavigator)` — the navigator's current goal position, SOURCE units.
  *  **SEAM**: the mover keeps no readable goal; answers false and leaves `OutGoal` untouched. */
 bool NavGoalPosition(FVector& OutGoalUnits) const;
@@ -228,4 +216,3 @@ bool NavGoalPosition(FVector& OutGoalUnits) const;
 static bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
 	const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance);
 
-static const FJumpTunableSpecies* JumpTunableSpeciesOf(const TCHAR* InRetailClass);

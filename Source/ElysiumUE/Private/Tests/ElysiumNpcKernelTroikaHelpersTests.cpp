@@ -7,12 +7,12 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **TroikaHelpers**. Every assertion below is read off the decompiled C of the
 // body it names — the threshold, the arm order, the id, what is written — never off 29c's one-line
@@ -24,7 +24,7 @@
 // `npc_VCop`'s factory `0x103704f0` builds `CNPC_VCop`, so a spawned cop is NOT the Troika line. A
 // case asserting the Troika-line body with no species override in the way stands a bare
 // `CAI_BaseNPCTroika` (`AddTroikaNpc`), whose `RetailClass()` is null. A species row is also
-// exercised through `ElysiumNpcKernelClass::Find` and the table's own lookup.
+// exercised through `ElysiumNpcTestCensus::Find` and the table's own lookup.
 
 static constexpr EAutomationTestFlags GTroikaHelpersTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -60,8 +60,8 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 	// The census itself: `CNPC_VVampire` takes the `CNPC_VAndreiBlood` line at all four slots and
 	// `CNPC_VRat` the Troika line. Exercised by RETAIL CLASS NAME so the claim does not depend on a
 	// classname being spawnable.
-	const FElysiumNpcClass* Vampire = ElysiumNpcKernelClass::Find(TEXT("CNPC_VVampire"));
-	const FElysiumNpcClass* Rat = ElysiumNpcKernelClass::Find(TEXT("CNPC_VRat"));
+	const FElysiumNpcClass* Vampire = ElysiumNpcTestCensus::Find(TEXT("CNPC_VVampire"));
+	const FElysiumNpcClass* Rat = ElysiumNpcTestCensus::Find(TEXT("CNPC_VRat"));
 	if (Vampire == nullptr || Rat == nullptr)
 	{
 		AddError(TEXT("the census carries neither CNPC_VVampire nor CNPC_VRat"));
@@ -70,10 +70,10 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 	for (const int32 Slot : { 599, 600, 601, 602 })
 	{
 		TestEqual(TEXT("CNPC_VVampire is on the AndreiBlood line"),
-			FString(ElysiumNpcKernelClass::BodyOf(Vampire, Slot)),
+			FString(ElysiumNpcTestCensus::BodyOf(Vampire, Slot)),
 			FString(FElysiumNpc::MeleeSlotBody(Slot, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 		TestEqual(TEXT("CNPC_VRat is on the Troika line"),
-			FString(ElysiumNpcKernelClass::BodyOf(Rat, Slot)),
+			FString(ElysiumNpcTestCensus::BodyOf(Rat, Slot)),
 			FString(FElysiumNpc::MeleeSlotBody(Slot, FElysiumNpc::EMeleeSlotLine::Troika)));
 	}
 
@@ -98,11 +98,11 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 	TestTrue(TEXT("npc_VVampire resolves to a census class"), Vamp->RetailClass() != nullptr);
 	TestEqual(TEXT("and takes the AndreiBlood line at 602"),
 		FString(Vamp->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(Vamp->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(Vamp->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	TestEqual(TEXT("npc_VRat takes the Troika line at 602"),
 		FString(RatNpc->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(RatNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(RatNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 
 	// The bare Troika line: no species class, so the Troika-line body runs.
@@ -110,21 +110,21 @@ bool FElysiumNpcKernelTroikaHelpersMeleeLineTest::RunTest(const FString&)
 	TestEqual(TEXT("so a bare Troika NPC falls through to the Troika line, which is the recovered "
 		"answer"),
 		FString(Troika->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(Troika->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(Troika->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), and the
 	// census row puts CNPC_VCop on the `CNPC_VAndreiBlood` line at 599..602 (`0x10385d70` at 602,
 	// `docs/vtmb/npc-kernel/slots.md`).
-	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	const FElysiumNpcClass* CopClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop"));
 	TestTrue(TEXT("npc_VCop's RetailClass is CNPC_VCop — its factory builds it"),
 		CopClass != nullptr && Cop->RetailClass() == CopClass);
 	TestEqual(TEXT("CNPC_VCop's 602 body is the AndreiBlood line's"),
-		FString(ElysiumNpcKernelClass::BodyOf(CopClass, 602)),
+		FString(ElysiumNpcTestCensus::BodyOf(CopClass, 602)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	TestEqual(TEXT("so a cop takes the AndreiBlood line at 602"),
 		FString(Cop->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(Cop->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(Cop->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 	return true;
 }
@@ -252,11 +252,11 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 	// DIFFERENT bodies, and `0x10385d70` drops the `m_pAttackCoordinator != 0` test.
 	TestEqual(TEXT("npc_VRat is on the Troika line at 602"),
 		FString(TroikaNpc->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(TroikaNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(TroikaNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)));
 	TestEqual(TEXT("npc_VVampire is on the AndreiBlood line at 602"),
 		FString(BloodNpc->RetailClass() != nullptr
-			? ElysiumNpcKernelClass::BodyOf(BloodNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
+			? ElysiumNpcTestCensus::BodyOf(BloodNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 
 	// **NAMED DIVERGENCE**, and the reachability argument behind it: every coordinator entry point

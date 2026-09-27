@@ -58,12 +58,17 @@ public:
 	void AngularMove(const FRotator& DestRelRot, float SpeedDegPerSec);
 
 	EMoveKind MoveKind() const { return CurrentMove; }
-	bool IsMoving() const { return CurrentMove != EMoveKind::None; }
+	// Slot 153, `CBaseEntity::IsMoving` `0x10026e70`: `m_vecVelocity != vec3_origin`. A mover's
+	// velocity is non-zero exactly while `LinearMove` / `AngularMove` has a move in flight (retail's
+	// `CBaseToggle` sets `m_vecVelocity` / `m_vecAngVelocity` for the move and zeroes them at
+	// `MoveDone`), which is what `CurrentMove` records. The slot's override on the mover line (it hid
+	// the slot as a `const` method before, story 5 commit B).
+	virtual bool IsMoving() override { return CurrentMove != EMoveKind::None; }
 
 protected:
-	// Fired once when a move reaches its target (the body is already snapped to the exact dest).
-	// The door overrides this to route HitTop/HitBottom.
-	virtual void MoveDone() {}
+	// Slot 133 `MoveDone`: fired once when a move reaches its target (the body is already snapped to
+	// the exact dest). `CBaseToggle`'s own is empty; the door overrides this to route HitTop/HitBottom.
+	virtual void MoveDone() override {}
 
 	// A swept move hit a blocker mid-flight. Base default: nothing (the move clamps and retries
 	// next frame). The door overrides to reverse + damage when closing.

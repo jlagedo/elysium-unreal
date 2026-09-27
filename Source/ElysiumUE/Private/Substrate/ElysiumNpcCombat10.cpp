@@ -9,7 +9,6 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcWitness.h"

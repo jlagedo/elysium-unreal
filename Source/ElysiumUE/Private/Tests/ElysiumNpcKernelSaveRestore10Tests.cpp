@@ -12,12 +12,12 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcCop.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **SaveRestore10 + Lifecycle10**. Every expectation below is read off the
 // decompiled C of the body it names and, where the decompiler aliased or mislabelled an argument,
@@ -864,7 +864,7 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 		for (const FSlotProbe& Probe : Probes)
 		{
 			const FElysiumNpcClassSlot* Override =
-				ElysiumNpcKernelClass::OverrideOf(&Row, Probe.Slot);
+				ElysiumNpcTestCensus::OverrideOf(&Row, Probe.Slot);
 			if (Override == nullptr)
 			{
 				continue;

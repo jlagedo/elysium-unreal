@@ -12,10 +12,8 @@
 class FElysiumNpcVampireBoss : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VVampireBoss");
+	ELYSIUM_NPC_CLASS("CNPC_VVampireBoss", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual int32 Restore(void* Archive) override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
@@ -94,8 +92,7 @@ public:
 	 *  This is also the body the other bosses' own slot-127 overrides call as their base
 	 *  (`CNPC_VAndreiBlood` `0x1035cf80`, `CNPC_VAsianVampire` `0x10360e10`, the Chang brothers
 	 *  `0x1036b170`, `CNPC_VSabbatLeader` `0x103a6e80`, `CNPC_VSheriffMan` `0x103ae7f0`), so it sits
-	 *  between the Troika body and those rows — which is why the arm keys on `CNPC_VVampireBoss` by
-	 *  the CHAIN walk (`IsRetailClass`) and not by a name compare. */
+	 *  between the Troika body and those rows: each of them calls this directly, as retail does. */
 	int32 VampireBossRestore(void* Archive);
 	/** `+0x6680 CNPC_VVampireBoss::m_pMonsterModelName` and `+0x6694 m_pszMonsterClassname` — the two
 	 *  words `CNPC_VVampireBoss::Restore` resets. Neither had a carrier before this story. */

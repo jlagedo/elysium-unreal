@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "ElysiumClassRegistry.h"
@@ -32,6 +31,7 @@
 #include "Substrate/ElysiumNpcPositionsShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
+#include "Substrate/ElysiumNpcSoundsShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcState19_2Shared.h"
@@ -48,6 +48,23 @@
 
 namespace
 {
+	// The two wav tables `CNPC_VSabbatLeader::Precache` `0x103a6ab0` precaches, contiguous in
+	// `.rdata`: `0x1064c480`, seven entries, and `0x1064c49c`, three.
+	const TCHAR* const GSabbatLeaderSteps[] = {
+		TEXT("character/monster/andrei_transformed/step1.wav"),
+		TEXT("character/monster/andrei_transformed/step2.wav"),
+		TEXT("character/monster/andrei_transformed/step3.wav"),
+		TEXT("character/monster/andrei_transformed/step4.wav"),
+		TEXT("character/monster/andrei_transformed/step5.wav"),
+		TEXT("character/monster/andrei_transformed/step6.wav"),
+		TEXT("character/monster/andrei_transformed/step7.wav"),
+	};
+	const TCHAR* const GSabbatLeaderExertHeavy[] = {
+		TEXT("character/monster/andrei_transformed/exert_heavy_1.wav"),
+		TEXT("character/monster/andrei_transformed/exert_heavy_2.wav"),
+		TEXT("character/monster/andrei_transformed/exert_heavy_3.wav"),
+	};
+
 	constexpr float GStuckDegenerate = 9.999999974752427e-07f;  // _DAT_104c3d14
 	constexpr float GStuckHalf = ElysiumNpcTunables::Half;
 	constexpr float GStuckOne = ElysiumNpcTunables::One;
@@ -141,12 +158,6 @@ namespace
 	constexpr double GSabbatSplashIntervalSeconds = 0.25;
 	// `_DAT_104c3ce0` = **2.0** — the wound-counter rise `PlayerDamagedEnoughThisRound` requires.
 	constexpr float GSabbatRoundDamageThreshold = 2.f;
-}
-
-const FElysiumNpcClass* FElysiumNpcSabbatLeader::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x103a6d40`.
@@ -364,17 +375,24 @@ const TCHAR* FElysiumNpcSabbatLeader::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// Slot 620: `0x103aa5e0`, a virtual `CNPC_VSabbatLeader` introduces. Driven by the schedule tasks
-// `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` / `..._STOP_FOOTSTEP_SOUND`, which are unbuilt.
+// Slot 620: `0x103aa5e0`, a virtual `CNPC_VSabbatLeader` introduces, inside a VPROF scope:
+// `RandomInt(0, 6)` (`PUSH 0x6` at `103aa6c9`) over the seven step wavs `0x1064c480`, one
+// `EmitSound` at volume 1.0 on `CHAN_BODY` (`PUSH 0x4` at `103aa6dd`). NOT an animation event --
+// `ElysiumFootsteps.cpp` records why this class is absent from the footstep species table: retail
+// drives it from the schedule tasks `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` /
+// `..._STOP_FOOTSTEP_SOUND`, which are unbuilt. This is the SOUND that task will play.
 void FElysiumNpcSabbatLeader::FootstepSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VSabbatLeader"), 620);
+	NpcKernelSoundsShared::SoundsEmitSpeciesWav(*this, GSabbatLeaderSteps, UE_ARRAY_COUNT(GSabbatLeaderSteps),
+		1.0f, NpcKernelSoundsShared::GSoundsChanBody);
 }
 
-// Slot 621: `0x103aa7a0`, a virtual `CNPC_VSabbatLeader` introduces.
+// Slot 621: `0x103aa7a0`, a virtual `CNPC_VSabbatLeader` introduces: `RandomInt(0, 2)` (`PUSH 0x2` at
+// `103aa889`) over the three exert wavs `0x1064c49c`, volume 1.0, `CHAN_BODY`.
 void FElysiumNpcSabbatLeader::AttackSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VSabbatLeader"), 621);
+	NpcKernelSoundsShared::SoundsEmitSpeciesWav(*this, GSabbatLeaderExertHeavy,
+		UE_ARRAY_COUNT(GSabbatLeaderExertHeavy), 1.0f, NpcKernelSoundsShared::GSoundsChanBody);
 }
 
 // Slot 127: `0x103a6e80`, whose body is the `CNPC_VVampireBoss` restore (`0x103c5910`, family

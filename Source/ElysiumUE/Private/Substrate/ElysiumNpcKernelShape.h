@@ -14,17 +14,19 @@
 // hand-edited. This header declares the shape of that output and nothing else — the census carries
 // no behaviour, no rule and no threshold, only the recorded identity of every word, slot and class.
 //
-// Three consumers:
+// Consumers:
 //
 //   * `ElysiumNpcKernelShapeMap.cpp` binds every census word to the port member that carries it,
 //     with the member's existence checked by the compiler.
-//   * `ElysiumNpcKernelSlots.inl` / `.cpp` declare and stub the Troika-line slots the port has no
-//     body for yet; the census row is what says which story owns each.
-//   * `Tests/ElysiumNpcKernelShapeTests.cpp` walks all of it and requires the recovered counts
-//     back, which is what catches a bad regeneration or a hand-edit.
+//   * the generated `…Slots.inl` / `.cpp` of each chain class declare its slots and hold the
+//     one-constant bodies and the counting stubs; the census row says which story owns each.
+//   * each class of the NPC tree takes its own row as its identity (`ELYSIUM_NPC_CLASS`,
+//     `ClassNamed`) -- identity only: behaviour is the class's overrides.
+//   * `Tests/ElysiumNpcKernelShapeTests.cpp` and the class-tree tests walk all of it and require
+//     the recovered counts back, which is what catches a bad regeneration or a hand-edit.
 //
-// Species are data here as they are everywhere else in this runtime: a species' own words and its
-// own slot bodies are rows keyed on the retail class name, not a C++ subclass.
+// A species' own words and slot bodies are census rows here and C++ members and overrides on its
+// port class (0019 story 5): the rows are what the classes are asserted against.
 
 // Where a row's answer came from, in the ledger's own vocabulary (`npc-kernel/README.md`,
 // "What is a fact and what is a heuristic"). `Unsettled` is a reading that did not settle and
@@ -170,8 +172,8 @@ struct FElysiumNpcClass
 	int32 ClassnameCount = 0;
 };
 
-// One species override: the class, the slot it replaces, and the body that replaces it. The census
-// row a species class's dispatch still reads until story 5 step 3 turns it into an override.
+// One species slot body: the class, the slot it fills and the body that fills it, where that body is
+// not the Troika line's. Census only: the port's answer is the class's override (0019 story 5).
 struct FElysiumNpcClassSlot
 {
 	const TCHAR* Class = nullptr;
@@ -182,8 +184,7 @@ struct FElysiumNpcClassSlot
 	const TCHAR* Verdict = nullptr;
 	// The literal this species answers at this slot, where the verdict says the body is a class →
 	// slot → value row and the whole retail body is one `return`. `void` for `return;`, empty
-	// where the body is not a constant. This is the value half of the registry decision 29c took:
-	// a species override of a constant-returning virtual is data, not a C++ type.
+	// where the body is not a constant.
 	const TCHAR* Default = nullptr;
 };
 
@@ -225,6 +226,11 @@ namespace ElysiumNpcKernelShape
 	TArrayView<const FElysiumNpcClass> Classes();
 	TArrayView<const FElysiumNpcClassSlot> Overrides();
 	const FElysiumNpcShapeCensus& Census();
+
+	// The census row of a retail class by its name (`CNPC_VCop`), or null. A linear walk of
+	// `Classes()`: the class tree takes its own row once (`ELYSIUM_NPC_CLASS`), and the census and
+	// factory tests read rows by name. Never a dispatch key.
+	const FElysiumNpcClass* ClassNamed(const TCHAR* Name);
 
 	// Each port class's generated slot rows, defined at the end of its generated `…Slots.cpp`.
 	TArrayView<const TElysiumNpcSlotRow<FElysiumEntity>> EntitySlotRows();

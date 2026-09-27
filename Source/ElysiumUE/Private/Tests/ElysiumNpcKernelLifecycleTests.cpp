@@ -13,10 +13,10 @@
 #include "Substrate/ElysiumNpcCamera.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Lifecycle**. Every assertion below is read off the decompiled C of the body
 // it names — the threshold, the arm order, the bit, what is written — never off 29c's one-line walk.
@@ -366,50 +366,6 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 117 `ObjectCaps` — the species overrides.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleObjectCapsTest,
-	"Elysium.Substrate.NpcKernelLifecycle.ObjectCaps", GLifecycleTestFlags)
-bool FElysiumNpcKernelLifecycleObjectCapsTest::RunTest(const FString&)
-{
-	int32 Count = 0;
-	const ElysiumEntityCaps::FSpeciesRow* Rows = ElysiumEntityCaps::SpeciesRows(Count);
-	// Retail has four slot-117 overrides; `CGeneric_NPC_bathack`'s and `CScriptedTarget`'s have no
-	// instance and no row, and `CAI_TestHull`'s is its own class's override (`FElysiumNpcTestHull`,
-	// story 5 fold A1; `NpcKernelTestHull.Bodies`).
-	TestEqual(TEXT("one class with an instance and no port class overrides slot 117"), Count, 1);
-	TMap<FString, FString> ByClass;
-	for (int32 i = 0; i < Count; ++i)
-	{
-		ByClass.Add(FString(Rows[i].RetailClass), FString(Rows[i].Body));
-	}
-	// Every row, by name, with the address that fills slot 117 for it.
-	TestEqual(TEXT("CAI_Hint's body"), ByClass.FindRef(TEXT("CAI_Hint")), FString(TEXT("0x102d2ee0")));
-	TestNull(TEXT("CAI_TestHull's body is its class's override, not a row"),
-		ElysiumEntityCaps::SpeciesRowOf(TEXT("CAI_TestHull")));
-	TestNull(TEXT("CScriptedTarget has no instance and no row"),
-		ElysiumEntityCaps::SpeciesRowOf(TEXT("CScriptedTarget")));
-	TestNull(TEXT("CGeneric_NPC_bathack has no instance and no row"),
-		ElysiumEntityCaps::SpeciesRowOf(TEXT("CGeneric_NPC_bathack")));
-
-	const int32 Base = ElysiumEntityCaps::AcrossTransition;
-	// The `& 0xfffffffd` class ends at ZERO from the base's single bit, which is retail saying "I am
-	// never carried across a level change".
-	TestEqual(TEXT("CAI_Hint clears the transition bit"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CAI_Hint")), 0);
-	// The mask is a CLEAR, not a replace: every other bit survives it.
-	TestEqual(TEXT("CAI_Hint leaves the other bits alone"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base | 0x40, TEXT("CAI_Hint")), 0x40);
-	// A class with no row does not override the slot at all, which is the base's own answer.
-	TestEqual(TEXT("an unlisted class answers the base"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CNPC_VHumanCombatant")), Base);
-	TestNull(TEXT("and has no row"), ElysiumEntityCaps::SpeciesRowOf(TEXT("CNPC_VHumanCombatant")));
-	TestNull(TEXT("nor does a null name"), ElysiumEntityCaps::SpeciesRowOf(nullptr));
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
 // Slot 103 `Spawn` — the species bodies.
 // -------------------------------------------------------------------------------------------------
 
@@ -531,11 +487,11 @@ bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 
 	// The species row is reachable by retail class name. story 5 step 2: `npc_VCamera`'s factory
 	// builds `CNPC_VCamera` (population.md), so the classname resolves to the same row.
-	const FElysiumNpcClass* Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
+	const FElysiumNpcClass* Camera = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
 	TestNotNull(TEXT("CNPC_VCamera is a census class"), Camera);
 	TestTrue(TEXT("npc_VCamera resolves to CNPC_VCamera"),
 		Camera != nullptr
-			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCamera"))) == Camera);
+			&& ElysiumNpcTestCensus::OfClassname(FString(TEXT("npc_VCamera"))) == Camera);
 	return true;
 }
 
@@ -739,7 +695,7 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 		if (TestNotNull(TEXT("the Sabbat leader spawned"), Sabbat.Npc))
 		{
 			TestEqual(TEXT("CNPC_VSabbatLeader fills slot 434 with its forwarding 0x103a7650"),
-				FString(ElysiumNpcKernelClass::BodyOf(Sabbat.Npc->RetailClass(), 434)),
+				FString(ElysiumNpcTestCensus::BodyOf(Sabbat.Npc->RetailClass(), 434)),
 				FString(TEXT("0x103a7650")));
 		}
 	}
@@ -750,21 +706,21 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *Fix.Npc;
 	{
-		const FString CombatantBody(ElysiumNpcKernelClass::BodyOf(N.RetailClass(), 434));
+		const FString CombatantBody(ElysiumNpcTestCensus::BodyOf(N.RetailClass(), 434));
 		TestTrue(TEXT("an ordinary combatant takes neither the camera's nor the Sabbat leader's body"),
 			CombatantBody != TEXT("0x10369100") && CombatantBody != TEXT("0x103a7650"));
 	}
 	// `CNPC_VCamera`'s row is exercised by retail class name — which is what the census answers.
 	// story 5 step 2: `npc_VCamera` is now a registered classname building it (population.md).
 	TestNotNull(TEXT("CNPC_VCamera is a census class"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")));
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera")));
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md), so the
 	// classname resolves to that census class — a cop is not the Troika line.
-	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	const FElysiumNpcClass* CopClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop"));
 	TestNotNull(TEXT("CNPC_VCop is a census class"), CopClass);
 	TestTrue(TEXT("npc_VCop resolves to CNPC_VCop"),
 		CopClass != nullptr
-			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCop"))) == CopClass);
+			&& ElysiumNpcTestCensus::OfClassname(FString(TEXT("npc_VCop"))) == CopClass);
 	// The bare Troika line has NO retail class, so every species lookup falls through to the
 	// Troika line's slot 434. That is the recovered answer.
 	{

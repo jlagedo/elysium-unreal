@@ -3,7 +3,6 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAiSeq, Log, All);
 
@@ -31,12 +30,6 @@ namespace
 		}
 		return Entity.Class != nullptr ? Entity.Class->ClassName.ToString() : FString();
 	}
-}
-
-const FElysiumNpcClass* FElysiumAiScriptedSequence::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 583: `0x101a9080`. `CCineNPC`'s body without the queue, without the `m_hNextCine` clear and

@@ -28,7 +28,6 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 
@@ -45,18 +44,6 @@ namespace
 	// `corpus asm 102a0d20` shows the `FADD float ptr [0x104454c0]` the decompiler folded into a
 	// name. **1.0 s**, not 29c's 5 s.
 	constexpr double GDlgCrosswalkRearmSeconds = 1.0;
-
-	// `0x45800000` — the float `0x10161a70` stamps into the created controller's `+0x63b4`
-	// (`m_flSeekDistBase`). Read straight off the listing's immediate.
-	constexpr float GDlgControllerSeekDistBase = 4096.f;
-
-	// `m_fEffects` bits `0x60`, OR-ed onto the created controller after `CopyAnimationDataFrom`
-	// already set `src | 0x10`, so a live controller carries `0x70`.
-	constexpr uint32 GDlgControllerEffects = 0x60u;
-
-	// `m_spawnflags` bit 2. `0x10161a70` raises it on the controller it creates; the shipped
-	// `camera_cinematic` teardown reads the same bit as "this entity is disposable".
-	constexpr int32 GDlgControllerSpawnFlag = 0x4;
 
 	// `CAI_Navigator`'s pedestrian/crosswalk path type. Both `0x102a0bc0` and `0x102a0d20` gate on
 	// `GetPathType() == 8` and on nothing else.
@@ -323,156 +310,6 @@ FElysiumEntity* FElysiumNpc::GetActiveCameraEntity() const
 		return nullptr;
 	}
 	return World->Resolve(Camera);
-}
-
-FElysiumEntity* FElysiumNpc::CreateControllerNpcEntity(const TCHAR* Classname)
-{
-	// **SEAM** for `CreateEntityByName(classname)` + `DispatchSpawn` (`0x10161b4c` -> the factory,
-	// then `thunk_FUN_101d1280` = `DispatchSpawn` `0x101d1280`). The kernel does not spawn: the
-	// class registry and `FElysiumEntityWorld` do — `FElysiumEntityWorld::CreatePlayerControllerEntity`
-	// is the port's live `GetControllerNPC` (fold A2), driven by `events_player.CreateControllerNPC`
-	// — and a kernel body that reached them would be a second spawner beside it.
-	//
-	// Answers null, which is retail's OWN `"GetControllerNPC() created NULL Entity for :%s"` arm.
-	// The body is not refused — that arm runs, the warning is emitted and `m_hControllerNPC` is
-	// cleared, which is what retail does when the factory fails.
-	(void)Classname;
-	return nullptr;
-}
-
-FElysiumEntity* FElysiumNpc::GetControllerNpc(const TCHAR* Classname)
-{
-	// 0x10161a70 — `CBasePlayer::GetControllerNPC(const char* classname)`, 534 bytes, read off
-	// `corpus asm 10161a70`. Hand back the `npc_VPlayerController` driving this body, creating one
-	// of the requested class if there is none or the cached one is of a different class.
-	//
-	// STEP 1 — the cache. `m_hControllerNPC` (+0x1db0) must resolve to a live entity. If it does:
-	//     name = cached->m_iClassname (+0x11c), or "" when null
-	//     if (__strcmpi(name, classname) == 0)  -> jump straight to the tail (STEP 3)
-	//     otherwise
-	//         Warning("\nGetControllerNPC() asked for NPC class: %s, but already has NPC of
-	//                  class %s.\n Deleting old NPC, this better be OK!!\n\n", classname,
-	//                 cached->GetClassname());
-	//         ReleaseControllerNpc(false, false);      // 0x101618e0, family EntityChain's body
-	//     and FALL THROUGH into STEP 2. Note what the release does NOT do: it copies nothing
-	//     (both flags false) and it clears the handle, so STEP 2 always creates.
-	//
-	// STEP 2 — create. `ent = CreateEntityByName(classname)`; `npc = ent->m_pCombatCharacter (+0x98)`.
-	//     if (ent == NULL || npc == NULL)
-	//         Warning("GetControllerNPC() created NULL Entity for :%s\n", classname);
-	//         m_hControllerNPC = -1;
-	//     else, in this order:
-	//         npc->m_spawnflags |= 4;
-	//         npc->SetOrigin(  me->GetAbsOrigin() );          // slot 62  (+0xf8)  <- slot 217 (+0x364)
-	//         npc->SetAngles(  me->GetAngles()    );          // slot 64  (+0x100) <- slot 221 (+0x374)
-	//         npc->SetOwnerEntity(me);                        // slot 202 (+0x328)
-	//         CopyAnimationDataFrom(npc, me);                 // 0x10097310
-	//         npc->m_flSeekDistBase (+0x63b4) = 4096.0f;      // 0x45800000
-	//         npc->SetModel( me->GetModelName() );            // slot 105 (+0x1a4) <- slot 9 (+0x24)
-	//         DispatchSpawn(npc);                             // 0x101d1280
-	//         npc->m_fEffects |= 0x60;
-	//         npc->ResetThinkTimers();                        // slot 614 (+0x998)
-	//         m_hControllerNPC = npc->GetRefEHandle();
-	//
-	// STEP 3 — the tail, shared by both paths: resolve `m_hControllerNPC` once more with its serial
-	//     check and return the pointer, or 0.
-	//
-	// `CopyAnimationDataFrom` (`0x10097310`) is nine assignments plus two model calls:
-	// `SetModel(src->GetModelName())`, `SetModelIndex(src->GetModelIndex())`, then `m_flCycle`,
-	// `m_nTopColor`, `m_nBottomColor`, `m_fEffects = src->m_fEffects | 0x10`, `m_nSequence`,
-	// `m_flAnimTime`, `m_nBody`, `m_nSkin`, `m_nPhysicsChainDisableMask`. This runtime carries four
-	// of the eleven (`SequenceCycle`, `EffectsWord`, `SequenceNumber`, `AnimTime`); the colour,
-	// body, skin and physics-chain words have no member here and are named rather than dropped.
-	const TCHAR* const Requested = Classname != nullptr ? Classname : TEXT("");
-
-	FElysiumEntity* Cached = World != nullptr && ControllerNpc.IsSet()
-		? World->Resolve(ControllerNpc) : nullptr;
-	if (Cached != nullptr)
-	{
-		const FString CachedClass = Cached->Class != nullptr
-			? Cached->Class->ClassName.ToString() : FString();
-		// `__strcmpi` — a case-insensitive compare, which is what `FString::Equals` with
-		// `ESearchCase::IgnoreCase` is.
-		if (CachedClass.Equals(Requested, ESearchCase::IgnoreCase))
-		{
-			return Cached;
-		}
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("\nGetControllerNPC() asked for NPC class: %s, but already has NPC of class %s.\n")
-			TEXT(" Deleting old NPC, this better be OK!!\n\n"),
-			Requested, *CachedClass);
-		ReleaseControllerNpc(false, false);
-	}
-
-	FElysiumEntity* Created = CreateControllerNpcEntity(Requested);
-	FElysiumNpc* CreatedNpc = Created != nullptr ? Created->AsNpc() : nullptr;
-	if (CreatedNpc == nullptr)
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("GetControllerNPC() created NULL Entity for :%s\n"), Requested);
-		ControllerNpc = FElysiumEntityHandle::Invalid();
-	}
-	else
-	{
-		CreatedNpc->SpawnFlags |= GDlgControllerSpawnFlag;
-		CreatedNpc->SetRuntimeTransform(Origin, Angles);
-		CreatedNpc->SetOwnerEntity(Handle);
-
-		// `CopyAnimationDataFrom(npc, me)` — the four words this runtime carries, in retail's order.
-		CreatedNpc->SequenceCycle = SequenceCycle;
-		CreatedNpc->EffectsWord = EffectsWord | 0x10u;
-		CreatedNpc->SequenceNumber = SequenceNumber;
-		CreatedNpc->AnimTime = AnimTime;
-		// **Unrecovered in this substrate**: `m_nTopColor`, `m_nBottomColor`, `m_nBody`, `m_nSkin`
-		// and `m_nPhysicsChainDisableMask` have no port member, and the model-index copy is the
-		// model name's, below.
-
-		CreatedNpc->AuthoredVision = GDlgControllerSeekDistBase;   // +0x63b4 m_flSeekDistBase
-		CreatedNpc->SetRuntimeModel(Model);                        // slot 105 <- slot 9
-		// `DispatchSpawn` — the world's spawn pass, which the create seam stands for.
-		CreatedNpc->EffectsWord |= GDlgControllerEffects;
-		CreatedNpc->ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);
-		ControllerNpc = CreatedNpc->Handle;
-	}
-
-	return World != nullptr && ControllerNpc.IsSet() ? World->Resolve(ControllerNpc) : nullptr;
-}
-
-bool FElysiumNpc::ControllerNpcBusy() const
-{
-	// 0x10175180 — 116 bytes, retail name **unrecovered**. This is its reading over the NPC-side
-	// home of `m_hControllerNPC` (`FElysiumNpc::ControllerNpc`, written only by the unwired
-	// `GetControllerNpc` below); the live readers use the world's controller handle through
-	// `FElysiumPlayer::ControllerNpcBusy` until story 5 commit B unifies the two homes:
-	//
-	//     h = m_hControllerNPC (+0x1db0);
-	//     if (h == -1) return false;
-	//     if (serial mismatch || slot pointer NULL) return false;
-	//     re-resolve h (a second, laxer check) -> obj, NULL when it fails
-	//     return obj->vtable[+0x228]() == 3;
-	//
-	// 29c's walk called `+0x1db0` "the dialogue/companion partner"; `vtmb_fields CBasePlayer` names
-	// it `m_hControllerNPC` — the SAME word `GetControllerNPC` (`0x10161a70`) caches into and
-	// `ReleaseControllerNpc` (`0x101618e0`) clears. The predicate is therefore "a controller NPC is
-	// driving this body and it is in state 3", and its readers are the dialogue refusal predicate
-	// (`0x10178170`), `CAI_BaseNPCTroika::CanTalk` (`0x102c21c0`) and the stealth-kill gate
-	// (`0x101681a0`).
-	//
-	// Slot 138 at `+0x228` is `Classify()`. `Class_T == 3` has no recovered name, but it has a
-	// producer: `CNPC_VFrenzyShadow::Classify` (`0x10375d70`) answers 3, and `CheckForPlayerFrenzy`
-	// (`0x10162075`) warns when its created controller does not — so "busy" is "a frenzy shadow is
-	// driving this body". Since story 5 fold A2 the controller line's classes answer their own
-	// `Classify` (the controller and the wolf 2, the shadow 3), and the dispatch is made.
-	if (World == nullptr || !ControllerNpc.IsSet())
-	{
-		return false;
-	}
-	const FElysiumEntity* Controller = World->Resolve(ControllerNpc);
-	if (Controller == nullptr)
-	{
-		return false;
-	}
-	return const_cast<FElysiumEntity*>(Controller)->Classify() == 3;
 }
 
 // =================================================================================================

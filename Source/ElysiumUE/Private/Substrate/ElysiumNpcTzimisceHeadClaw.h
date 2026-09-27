@@ -12,10 +12,11 @@
 class FElysiumNpcTzimisceHeadClaw : public FElysiumNpcBaseBoss
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VTzimisceHeadClaw");
+	ELYSIUM_NPC_CLASS("CNPC_VTzimisceHeadClaw", FElysiumNpcBaseBoss)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x103c1220`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcTzimisceHeadClaw();
+
 	virtual bool Slot599(int32 Arg) override;
 	virtual bool Slot600(FElysiumEntity* Enemy) override;
 	virtual void Slot601(FElysiumEntity* Enemy) override;

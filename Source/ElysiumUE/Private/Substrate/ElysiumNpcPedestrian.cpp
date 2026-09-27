@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcPedestrian.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -83,12 +82,6 @@ namespace
 				Criminal.Location);
 		}
 	}
-}
-
-const FElysiumNpcClass* FElysiumNpcPedestrian::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x103a2570`.

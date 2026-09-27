@@ -19,8 +19,8 @@ bool SharesSquadWith(const FElysiumNpc* Other) const;
  *  unrecovered; 29c named the port method. */
 void VacateSquadSlot();
 
-/** One slot-546 id-space row: the class, the body that fills the slot for it, and
- *  the `CAI_ClassScheduleIdSpace` that body translates through. The id-space fields are the state
+/** One slot-546 id-space row, held by each species class's `SquadSlotName` override: the class,
+ *  the body that fills the slot for it, and the `CAI_ClassScheduleIdSpace` that body translates through. The id-space fields are the state
  *  the static constructor left (`0x102ea090`) — every one of the 56 species spaces is constructed
  *  with `isRoot = false` and no class in the image ever registers a squad slot, so `LocalBase`
  *  keeps the 9999 "empty" sentinel and the translation answers -1. */
@@ -48,9 +48,6 @@ void* FindOrCreateSquad(const FString& InSquadName, bool bFindOnly) const;
 /** `CAI_Squad::RemoveFromSquad(squad, this)` (`0x103158f0`) — compacts the member array and calls
  *  slot 578 on each survivor. No squad object: it does nothing. */
 void RemoveFromSquad(void* Squad);
-
-/** The row for a retail class name, or null when no row carries it. */
-static const FSquadSlotSpecies* SquadSlotSpeciesOf(const TCHAR* InRetailClass);
 
 /** The gates `0x10273d30` and `0x10369bd0` share, with the join arm each takes. */
 bool InitSquadLine(bool bCameraArm);

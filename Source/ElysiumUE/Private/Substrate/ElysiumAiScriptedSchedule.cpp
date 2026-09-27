@@ -5,7 +5,6 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 
 // `aiscripted_schedule` — `CCineAISchedule`, story 5 fold A3. Each body is the retail body at the
@@ -14,12 +13,6 @@
 namespace
 {
 	constexpr int32 GScheduleSfQuietRoute = ElysiumAiScriptedSchedule::SpawnFlagSuppressRouteWarning;
-}
-
-const FElysiumNpcClass* FElysiumAiScriptedSchedule::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 82: `0x101a9620`.

@@ -49,11 +49,10 @@ struct FScheduleIdSpace
 };
 
 /** The table: the twelve species bodies of slot 580 across fourteen census classes, plus the
- *  Troika line itself (`0x101aa790` → `DAT_10924248`). */
+ *  Troika line itself (`0x101aa790` → `DAT_10924248`). A record of the recovered bodies and globals,
+ *  read only by tests: the live space is the schedule corpus's, per class (story 5 commit B deleted
+ *  the name-keyed lookup). */
 static const FScheduleIdSpace* ScheduleIdSpaceRows(int32& OutCount);
-
-/** The row for a retail class name, or null when no row carries it. */
-static const FScheduleIdSpace* ScheduleIdSpaceOf(const TCHAR* InRetailClass);
 
 /** Slot 580 for THIS NPC: the nearest species override of slot 580 walking its class chain, else
  *  the Troika line's own row. Never null — every chain ends at `CAI_BaseNPCTroika`. */
@@ -78,11 +77,9 @@ struct FScheduleLoadFlag
 };
 
 /** The table: the twelve species bodies of slot 452 across their census classes, plus the Troika
- *  line's own `0x102b97f0`. */
+ *  line's own `0x102b97f0`. A record read only by tests: the live flag is the schedule corpus's
+ *  parse result, per class. */
 static const FScheduleLoadFlag* LoadedSchedulesRows(int32& OutCount);
-
-/** The row for a retail class name, or null when no row carries it. */
-static const FScheduleLoadFlag* LoadedSchedulesRowOf(const TCHAR* InRetailClass);
 
 // --- The schedule-change door ---------------------------------------------------------------------
 

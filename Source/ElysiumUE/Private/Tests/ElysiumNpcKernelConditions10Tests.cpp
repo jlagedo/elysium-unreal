@@ -20,11 +20,11 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Conditions10** — the flag-word writers, slot 404 `IRelationType` and its
 // species arms, `CanBeFedUponBy`, the seven `TaskFail` species arms and the condition-debug string.
@@ -268,18 +268,18 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 
 	// --- The census dispatch ----------------------------------------------------------------------
 	TestEqual(TEXT("npc_VPedestrian's slot 404 is 0x103a2930"),
-		FString(ElysiumNpcKernelClass::BodyOf(F.Pedestrian->RetailClass(), 404)),
+		FString(ElysiumNpcTestCensus::BodyOf(F.Pedestrian->RetailClass(), 404)),
 		FString(TEXT("0x103a2930")));
 	TestEqual(TEXT("npc_VHunter's slot 404 is 0x10388bb0"),
-		FString(ElysiumNpcKernelClass::BodyOf(F.Hunter->RetailClass(), 404)),
+		FString(ElysiumNpcTestCensus::BodyOf(F.Hunter->RetailClass(), 404)),
 		FString(TEXT("0x10388bb0")));
 	// Story 5 step 2: `npc_VCop`'s factory 0x103704f0 builds `CNPC_VCop` (population.md), so a
 	// spawned cop dispatches the cop arm. The bare Troika line has no species class and takes the
 	// TROIKA body.
 	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
-		F.Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		F.Cop->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	TestEqual(TEXT("npc_VCop's slot 404 is 0x10372b70"),
-		FString(ElysiumNpcKernelClass::BodyOf(F.Cop->RetailClass(), 404)),
+		FString(ElysiumNpcTestCensus::BodyOf(F.Cop->RetailClass(), 404)),
 		FString(TEXT("0x10372b70")));
 	TestNull(TEXT("the bare Troika line has no species class"), F.Troika->RetailClass());
 
@@ -350,7 +350,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 	if (F.Newscaster != nullptr)
 	{
 		TestEqual(TEXT("npc_VNewscaster's slot 404 is 0x103a01b0"),
-			FString(ElysiumNpcKernelClass::BodyOf(F.Newscaster->RetailClass(), 404)),
+			FString(ElysiumNpcTestCensus::BodyOf(F.Newscaster->RetailClass(), 404)),
 			FString(TEXT("0x103a01b0")));
 		F.Newscaster->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 10);
 		TestEqual(TEXT("a newscaster answers D_NU even for a hated entity (103a01b0)"),
@@ -371,7 +371,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 			TEXT("CNPC_VWolfMorph") })
 	{
 		TestEqual(*FString::Printf(TEXT("%s's slot 404 is 0x103a48b0"), Name),
-			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Name), 404)),
+			FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(Name), 404)),
 			FString(TEXT("0x103a48b0")));
 	}
 
@@ -398,9 +398,9 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 		}
 		FElysiumNpcWorldFixture::Quiet({ Yukie, YukieOther });
 		TestTrue(TEXT("a spawned npc_VYukie is CNPC_VYukie"),
-			Yukie->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie")));
+			Yukie->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VYukie")));
 		TestEqual(TEXT("npc_VYukie's slot 404 is 0x103dd880"),
-			FString(ElysiumNpcKernelClass::BodyOf(Yukie->RetailClass(), 404)),
+			FString(ElysiumNpcTestCensus::BodyOf(Yukie->RetailClass(), 404)),
 			FString(TEXT("0x103dd880")));
 		TestEqual(TEXT("slot 404 on a Yukie: the null guard answers D_ER (103dd888)"),
 			Yukie->IRelationType(nullptr), GCond10T_D_ER);
@@ -839,7 +839,7 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 	// slot-448 override — a cop (`CNPC_VCop`, under `CNPC_VHumanCombatant`) included.
 	for (const FElysiumNpc* Npc : std::initializer_list<const FElysiumNpc*>{ F.Guard, F.Pedestrian, F.Cop })
 	{
-		const TCHAR* const Body = ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 448);
+		const TCHAR* const Body = ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 448);
 		TestTrue(TEXT("a plain leaf's slot 448 is the Troika body or nothing"),
 			Body == nullptr || FCString::Strcmp(Body, TEXT("0x1029adb0")) == 0);
 	}
@@ -889,7 +889,7 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 		}
 		FElysiumNpcWorldFixture::Quiet({ Npc });
 		TestEqual(*FString::Printf(TEXT("%s's slot 448 is %s"), Arm.Key, Arm.Value),
-			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 448)), FString(Arm.Value));
+			FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 448)), FString(Arm.Value));
 		Spawned.Add(Npc);
 	}
 	FElysiumNpcWorldFixture::Quiet({ Target });

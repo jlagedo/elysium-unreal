@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcScurrying.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -38,10 +37,14 @@ namespace
 	constexpr float GFleeNodeSearchUnits = 30000.0f;
 }
 
-const FElysiumNpcClass* FElysiumNpcScurrying::OwnRetailClass() const
+// `CNPC_VScurrying`'s constructor `0x103abb00` writes both hull words at `0x103abb22`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order. `CNPC_VRat` has no constructor of its own (its factory `0x103ad710` runs this one and
+// re-vtables), so a rat stands and paths on 19 through C++ construction.
+FElysiumNpcScurrying::FElysiumNpcScurrying()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 19;
+	PathingHullKind = 19;
 }
 
 // Slot 440: `0x103ac490`.

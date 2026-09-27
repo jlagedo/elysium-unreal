@@ -31,32 +31,11 @@ namespace ElysiumEntityCaps
 	// across a `trigger_changelevel`.
 	inline constexpr int32 AcrossTransition = 0x2;
 
-	// --- Story 29c-1, family Lifecycle: the slot-117 species overrides ---------------------------
-	//
-	// Four classes on the `CAI_BaseNPC` line override `ObjectCaps`. `CAI_TestHull`'s (`0x102d7290`)
-	// is its own port class's override (`FElysiumNpcTestHull`, 0019 story 5 fold A1); `CAI_Hint`
-	// has no port class on that line yet (story 8), so its body lands as the census-keyed row below.
-	// Each row carries the retail class and the address of the body that fills slot 117 for it, so
-	// a reader can check it against `docs/vtmb/npc-kernel/slots.md`. Every one of them chains the
-	// base first (`CBaseEntity::ObjectCaps` `0x100b4320`) and then applies one mask.
-	// `CScriptedTarget` (`0x1034d410`) and `CGeneric_NPC_bathack` (`0x1035ad50`) have no instance
-	// in the install and carry no row (0019 story 5 step 1).
-	struct FSpeciesRow
-	{
-		const TCHAR* RetailClass = nullptr;
-		const TCHAR* Body = nullptr;
-		int32 AndMask = ~0;   // applied first
-		int32 OrMask = 0;     // then this
-	};
-
-	// The rows, for a test that exercises each by name.
-	const FSpeciesRow* SpeciesRows(int32& OutCount);
-
-	// The row for a retail class, or null when that class overrides nothing.
-	const FSpeciesRow* SpeciesRowOf(const TCHAR* RetailClass);
-
-	// `BaseCaps` put through `RetailClass`'s override, or unchanged when it has none.
-	int32 SpeciesObjectCaps(int32 BaseCaps, const TCHAR* RetailClass);
+	// The slot-117 overrides of the `CAI_BaseNPC` line's family are their classes' own
+	// (`FElysiumNpcTestHull` `0x102d7290`, `FElysiumScriptedSequence`); each chains
+	// `CBaseEntity::ObjectCaps` `0x100b4320` and clears this bit. `CAI_Hint`'s `0x102d2ee0` (the same
+	// `& 0xfffffffd`) is not ported: story 8 (story 5 commit B deleted the class-keyed row table
+	// that recorded it and no runtime path read).
 }
 
 // How a `scripted_sequence` sends its NPC to the mark — `m_fMoveTo`'s travelling values. 0 ("No")

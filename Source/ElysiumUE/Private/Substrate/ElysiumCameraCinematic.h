@@ -281,18 +281,30 @@ public:
 	// re-arms `m_flNextThink` on that path.
 	void SetCamThink(double Now);
 
-	// `ShouldTransmit` (slot 86): the force-transmit window, else **only to the client whose player
-	// is `m_hSubject`**, and only while `CamMode != 0`. The whole PVS/`EF_NODRAW` logic of the base
-	// is replaced. One player here, so this is a fact recorded as state rather than a wire filter:
-	// a shot whose subject is not the player would in retail be invisible to it.
-	bool ShouldTransmit(const FElysiumEntityHandle& Recipient) const;
+	// Slot 86 `ShouldTransmit`, `CBaseCineCam::vfunc86` `0x1006e6a0`: true inside the force-transmit
+	// window (`+0x90 > curtime`); false when `m_hSubject` (`+0x5d0`) does not resolve; false when the
+	// edict argument is not the subject's (`+0x2e0`); else the base body `0x10011bb7`. The whole
+	// PVS/`EF_NODRAW` logic of the base is replaced. **SEAM**: this runtime has no edict, so the
+	// recipient is the single player (the NPC's slot-86 override takes the same reading); the body
+	// is `TransmitsTo(player)`.
+	virtual bool ShouldTransmit(int32 Param1, void* Edict, void* Info, int32 Param4, int32 Param5) override;
+	// The recipient test behind slot 86, over a port handle: only to the subject's client, and only
+	// while `CamMode != 0`. The force-transmit window has no port producer (RG-A), so it is not an
+	// arm here. One player, so a shot whose subject is not the player is, as in retail, invisible to it.
+	bool TransmitsTo(const FElysiumEntityHandle& Recipient) const;
 
-	// `DrawDebugGeometryOverlays` (slot 123), gated on `camera_showdebug == 1` exactly. Retail draws
+	// Slot 123 `DrawDebugGeometryOverlays`, `CBaseCineCam`'s own body `0x1006ff40`: read
+	// `camera_showdebug` and draw the shot overlay when it is exactly 1 (`DrawShotDebugOverlay`).
+	// **SEAM** for the cvar read: the substrate holds no console store, so `CameraShowDebugCvar`
+	// answers the cvar's shipped default, 0 (`0x1006d5b0`).
+	virtual void DrawDebugGeometryOverlays() override;
+	static int32 CameraShowDebugCvar();
+	// The gated body of slot 123, the cvar's value handed in. Retail draws
 	// the forward line **in modes 1 and 2 only**, from the replicated origin using the replicated
 	// angles, four anchor boxes (Start blue, End green, both target points dark red) and a pulsing
 	// red box at the look-at. The substrate has no debug-draw seam, so the body is the gate plus a
 	// verbose log; the drawing itself belongs to whoever gains that seam.
-	void DrawDebugGeometryOverlays(int32 ShowDebugCvarValue) const;
+	void DrawShotDebugOverlay(int32 ShowDebugCvarValue) const;
 
 	// `FUN_10070470(name, e0..e3)` — create a disposable runtime `camera_cinematic` from a shot
 	// name. A failed `SetShot` is the **only** failure path and it `UTIL_Remove`s the new entity.

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntityDefs.h"
@@ -62,12 +61,6 @@ namespace
 	constexpr float GBurnHitboxInterval = 0.5f;      // 0x3f000000
 	// `CTakeDamageInfo`'s `bitsDamageType` at `1037c14b` — retail's DMG_BURN.
 	constexpr int32 GBurnDamageBits = 8;
-}
-
-const FElysiumNpcClass* FElysiumNpcGhoulCroucher::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x1037b290`.

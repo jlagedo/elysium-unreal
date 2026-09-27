@@ -151,9 +151,10 @@ namespace ElysiumRetailHulls
 	};
 
 	/** Most-derived first: a class with no row of its own inherits the nearest ancestor's,
-	    so a caller takes the FIRST row whose class is in the body's retail chain.
-	    CNPC_VRat is the case that needs the ordering -- it has no constructor of its own
-	    and takes CNPC_VScurrying's 19. */
+	    so the FIRST row whose class is in a body's retail chain is its answer. The port's
+	    constructors write these stores as retail's do (0019 story 5 commit B) and the
+	    RetailHull tests hold them to this table. CNPC_VRat is the case that needs the
+	    ordering -- it has no constructor of its own and takes CNPC_VScurrying's 19. */
 	inline constexpr int32 ClassHullCount = 21;
 	inline const FClassHulls ClassHulls[ClassHullCount] =
 	{

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcVampireBoss.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -54,12 +53,6 @@ namespace
 	const TCHAR* const GVampireBossDefaultClassname = TEXT("npc_VVampireBoss");
 	// `_DAT_104ce8bc` = **2.0** s, the transformation wait.
 	constexpr double GTransformWaitSeconds = 2.0;
-}
-
-const FElysiumNpcClass* FElysiumNpcVampireBoss::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x103c5840`.
@@ -330,16 +323,14 @@ void FElysiumNpcVampireBoss::WaitForTransformation()
 	TypedStatSet(/*ListType*/ 0, NpcKernelSpeciesMisc10_2Shared::GStatWounds, 0);
 	// `103c64c4`: resolve `m_hTransformPartner`, `RTDynamicCast` it, and fire the partner's `+0x6664`
 	// output with THIS as both activator and caller. The cast refuses anything that is not on the
-	// boss line, which this runtime expresses as a `RetailClass` chain test.
+	// boss line: the tree's typed test.
 	if (FElysiumEntity* Partner = World != nullptr ? World->Resolve(TransformPartner) : nullptr)
 	{
-		if (FElysiumNpc* PartnerNpc = Partner->AsNpc())
+		FElysiumNpc* PartnerNpc = Partner->AsNpc();
+		if (FElysiumNpcVampireBoss* PartnerBoss =
+			PartnerNpc != nullptr ? PartnerNpc->AsSpecies<FElysiumNpcVampireBoss>() : nullptr)
 		{
-			if (ElysiumNpcKernelClass::DerivesFrom(PartnerNpc->RetailClass(),
-				TEXT("CNPC_VVampireBoss")))
-			{
-				PartnerNpc->FireOutput(TEXT("OnTransformComplete"), Handle);
-			}
+			PartnerBoss->FireOutput(TEXT("OnTransformComplete"), Handle);
 		}
 	}
 	// `103c6515`: `TaskComplete(0)` — `0x10273e80` returns untouched while `COND 0x5c TASK_FAILED`

@@ -13,13 +13,13 @@
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Conditions**. Every assertion here comes off the decompiled C or off a
 // constant read out of retail `vampire.dll`'s `.rdata`; the addresses are cited beside each case so
@@ -211,7 +211,7 @@ bool FElysiumNpcKernelCondRangeBandsTest::RunTest(const FString&)
 	for (const TCHAR* Cls : { TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VSheriffSwarm") })
 	{
 		TestNotNull(FString::Printf(TEXT("%s is a census class"), Cls),
-			ElysiumNpcKernelClass::Find(Cls));
+			ElysiumNpcTestCensus::Find(Cls));
 	}
 	return true;
 }
@@ -286,11 +286,11 @@ bool FElysiumNpcKernelCondStateChangeSpeciesTest::RunTest(const FString&)
 	for (const FExpect& E : Rows)
 	{
 		TestEqual(FString::Printf(TEXT("%s's slot-463 body is %s"), E.Cls, E.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(E.Cls), 463)),
+			FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(E.Cls), 463)),
 			FString(E.Body));
 	}
 	TestNull(TEXT("a class with no override runs the Troika body"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VPedestrian")), 463));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VPedestrian")), 463));
 
 	// `CNPC_VTzimisce`'s expression map, off `PTR_s_normal_10653120` — "normal", "angry", "scream",
 	// "dead". "scream" (index 2) is reached by no state.
@@ -438,7 +438,7 @@ bool FElysiumNpcKernelCondIdealStateSpeciesTest::RunTest(const FString&)
 		}
 		FElysiumNpcWorldFixture::Quiet({ Npc });
 		TestEqual(FString::Printf(TEXT("%s's slot-461 body is %s"), E.Cls, E.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 461)), FString(E.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 461)), FString(E.Body));
 	}
 	FElysiumNpc* Camera = Fixture.Npc(TEXT("CNPC_VCamera"));
 	FElysiumNpc* Security = Fixture.Npc(TEXT("CNPC_VCameraSecurity"));
@@ -909,8 +909,8 @@ bool FElysiumNpcKernelCondWerewolfTest::RunTest(const FString&)
 	// The gather suppression (`0x103d02b0`): the zone word and the 40-unit height delta, on the
 	// werewolf `npc_VWerewolf` builds (story 5 step 2).
 	TestNotNull(TEXT("CNPC_VWerewolf is a census class"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
-	TestTrue(TEXT("and the subject is one"), Wolf->IsRetailClass(TEXT("CNPC_VWerewolf")));
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf")));
+	TestTrue(TEXT("and the subject is one"), Wolf->AsSpecies<FElysiumNpcWerewolf>() != nullptr);
 
 	// The arm is a SUPPRESSION: with the zone bits set and the enemy 40 units above, the melee pair
 	// is taken away. Driven through the condition set directly, because the gather's own entry gates

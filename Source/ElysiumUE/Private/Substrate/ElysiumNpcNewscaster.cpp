@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcNewscaster.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -114,12 +113,6 @@ namespace
 		}
 		return false;
 	}
-}
-
-const FElysiumNpcClass* FElysiumNpcNewscaster::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x103a0420`.

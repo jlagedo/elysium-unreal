@@ -8,7 +8,6 @@
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 
@@ -134,22 +133,6 @@ const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::ScheduleIdSpaceRows(int32& Out
 	return GNpcKernelScheduleIdSpaces;
 }
 
-const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::ScheduleIdSpaceOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FScheduleIdSpace& Row : GNpcKernelScheduleIdSpaces)
-	{
-		if (FCString::Strcmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
-}
-
 // slot 580, the species half of 0x101aa790
 const FElysiumLocalIdSpace* FElysiumNpc::ClassScheduleIdSpace() const
 {
@@ -196,22 +179,6 @@ const FElysiumNpc::FScheduleLoadFlag* FElysiumNpc::LoadedSchedulesRows(int32& Ou
 {
 	OutCount = UE_ARRAY_COUNT(GNpcKernelScheduleLoadFlags);
 	return GNpcKernelScheduleLoadFlags;
-}
-
-const FElysiumNpc::FScheduleLoadFlag* FElysiumNpc::LoadedSchedulesRowOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FScheduleLoadFlag& Row : GNpcKernelScheduleLoadFlags)
-	{
-		if (FCString::Strcmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
 }
 
 // slot 452 0x102b97f0 `bool LoadedSchedules()`, with the twelve species bodies

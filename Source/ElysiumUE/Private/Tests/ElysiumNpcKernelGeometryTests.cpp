@@ -15,11 +15,11 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Geometry** — one case per ported body, every threshold and every formula
 // taken from the decompiled C and, where the decompiler dropped an instruction, from the LISTING.
@@ -32,7 +32,7 @@
 //
 // The census cross-check at the end is what keeps the species tables honest: every retail class
 // this family carries a row for is asked for that slot's address through
-// `ElysiumNpcKernelClass::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
+// `ElysiumNpcTestCensus::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
 //
 // Every classname builds the class retail's factory builds (story 5 step 2,
 // `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories"):
@@ -125,10 +125,10 @@ bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 	// The census, by name: `CPayphone` replaces slot 193 (its C++ override since story 5 step 3) and
 	// the humanoid combatant does not.
 	TestEqual(TEXT("CPayphone fills slot 193 with 0x101aae60"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CPayphone")), 193)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CPayphone")), 193)),
 		FString(TEXT("0x101aae60")));
 	TestNull(TEXT("CNPC_VHumanCombatant does not replace slot 193"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 193));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHumanCombatant")), 193));
 	return true;
 }
 
@@ -282,11 +282,11 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 	// story 5 step 2: npc_VCop's factory 0x103704f0 builds CNPC_VCop (population.md). CNPC_VCop is
 	// not one of slot 337's fourteen species classes below and its base chain replaces nothing there
 	// (`docs/vtmb/npc-kernel/slots.md`), so a real cop runs the Troika line's body.
-	const FElysiumNpcClass* CopClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop"));
+	const FElysiumNpcClass* CopClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop"));
 	TestTrue(TEXT("npc_VCop's census class is CNPC_VCop — its factory builds it"),
 		CopClass != nullptr && F.Cop->RetailClass() == CopClass);
 	TestNull(TEXT("CNPC_VCop's chain does not override slot 337"),
-		ElysiumNpcKernelClass::OverrideOf(CopClass, 337));
+		ElysiumNpcTestCensus::OverrideOf(CopClass, 337));
 	TestEqual(TEXT("and a cop therefore answers the Troika line's 1"), F.Cop->GetUsedHullBits(), 1);
 
 	// `CNPC_VRat` shares `CNPC_VScurrying`'s body and ORs 0x80000 onto the base 1.
@@ -337,19 +337,19 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestTrue(*FString::Printf(TEXT("%s answers its own census row"), Row.Class),
 			Cls != nullptr && Npc->RetailClass() == Cls);
 		TestEqual(*FString::Printf(TEXT("%s's slot 337 answer"), Row.Class), Npc->GetUsedHullBits(),
 			Row.Answer);
 		// The census cross-check: the override's address is the one `slots.md` records.
 		TestEqual(*FString::Printf(TEXT("%s's slot 337 body"), Row.Class),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 337)), FString(Row.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 337)), FString(Row.Body));
 	}
 
 	// A class the census gives no slot-337 override answers the Troika line's 1 and nothing else.
 	TestNull(TEXT("CNPC_VHumanCombatant does not replace slot 337"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHumanCombatant")), 337));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHumanCombatant")), 337));
 	return true;
 }
 

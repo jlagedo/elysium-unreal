@@ -18,10 +18,9 @@
 //
 // A body with a `default:` verdict says something stronger: retail's whole body at that
 // slot is `return <literal>;`, so the port answers the same literal and stops tallying.
-// The literal is a recovered fact, not a written behaviour — the same argument the story
-// makes for a species override of a constant-returning virtual — and the slot table at the
-// end of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of
-// them through, on a receiver typed to this class.
+// The literal is a recovered fact, not a written behaviour, and the slot table at the end
+// of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them
+// through, on a receiver typed to this class.
 
 #include "Substrate/ElysiumNpc.h"
 

@@ -12,7 +12,6 @@
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 

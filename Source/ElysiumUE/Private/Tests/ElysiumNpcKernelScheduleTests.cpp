@@ -5,10 +5,10 @@
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Schedule** — one case per sub-family, every species row exercised BY NAME.
 //
@@ -23,6 +23,25 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelScheduleFlags =
 // Slot 580 `GetClassScheduleIdSpace` — the species bodies on classes with an instance, plus the
 // Troika line.
 // -------------------------------------------------------------------------------------------------
+
+namespace
+{
+	// A recovered-fact table's row by retail class name (test-side; the runtime asks the corpus).
+	template <typename TRow>
+	const TRow* ScheduleRowOf(const TRow* (*Rows)(int32&), const TCHAR* RetailClass)
+	{
+		int32 Count = 0;
+		const TRow* All = Rows(Count);
+		for (int32 Index = 0; Index < Count && RetailClass != nullptr; ++Index)
+		{
+			if (FCString::Strcmp(All[Index].RetailClass, RetailClass) == 0)
+			{
+				return &All[Index];
+			}
+		}
+		return nullptr;
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleIdSpaceTest,
 	"Elysium.Substrate.NpcKernelSchedule.ClassScheduleIdSpace", GElysiumNpcKernelScheduleFlags)
@@ -39,39 +58,39 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const FElysiumNpc::FScheduleIdSpace& Row = Rows[Index];
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.RetailClass), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 580 with %s"), Row.RetailClass, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 580)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 580)), FString(Row.Body));
 		}
 		TestEqual(*FString::Printf(TEXT("%s is the row the lookup answers"), Row.RetailClass),
-			reinterpret_cast<UPTRINT>(FElysiumNpc::ScheduleIdSpaceOf(Row.RetailClass)),
+			reinterpret_cast<UPTRINT>(ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, Row.RetailClass)),
 			reinterpret_cast<UPTRINT>(&Row));
 	}
 
 	TestNull(TEXT("a class with no row answers nothing"),
-		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNotAClass")));
+		ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, TEXT("CNotAClass")));
 	// `CNPC_VCombatman` and `CNPC_VGangrel` override slot 580 in retail but have no instance
 	// (0019 story 5 step 1): their census rows stand, their table rows do not.
 	TestNull(TEXT("CNPC_VCombatman, a class with no instance, has no row"),
-		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VCombatman")));
-	TestNull(TEXT("nor does CNPC_VGangrel"), FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VGangrel")));
+		ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, TEXT("CNPC_VCombatman")));
+	TestNull(TEXT("nor does CNPC_VGangrel"), ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, TEXT("CNPC_VGangrel")));
 
 	// The two classes that SHARE a body, which is why the table has twelve species rows and ten
 	// species bodies.
 	TestEqual(TEXT("CNPC_VCameraSecurity shares CNPC_VCamera's 0x103683b0"),
-		FString(FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VCameraSecurity"))->Body),
+		FString(ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, TEXT("CNPC_VCameraSecurity"))->Body),
 		FString(TEXT("0x103683b0")));
 	// The controller line has no table row since fold A2; the census and the corpus carry it.
 	TestNull(TEXT("CNPC_VPlayerController has no table row"),
-		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VPlayerController")));
+		ScheduleRowOf(FElysiumNpc::ScheduleIdSpaceRows, TEXT("CNPC_VPlayerController")));
 	TestEqual(TEXT("CNPC_VPlayerController shares CNPC_VVampire's 0x103750e0 in the census"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VPlayerController")), 580)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VPlayerController")), 580)),
 		FString(TEXT("0x103750e0")));
 	TestEqual(TEXT("CNPC_VWolfMorph fills slot 580 with its own 0x103dc750"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VWolfMorph")), 580)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VWolfMorph")), 580)),
 		FString(TEXT("0x103dc750")));
 
 	// --- The LIVE spaces, which are the corpus's ------------------------------------------------
@@ -118,10 +137,10 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 	// class map, read from the factories"). The census used to carry an empty classname list for it,
 	// so a spawned cop resolved to no class; story 5 step 2 reads the classnames off the factories.
 	TestEqual(TEXT("npc_VCop is claimed by CNPC_VCop"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop")),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCop")),
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	TestNotNull(TEXT("CNPC_VCop is a census class"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 
 	// The leaf's own answer, through a spawned entity.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_idspace"), 4101);
@@ -156,7 +175,7 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 		(Combatant->ClassScheduleIdSpace()->LocalToGlobal(
 			ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
 	TestEqual(TEXT("a spawned npc_VCop is CNPC_VCop"), Cop->RetailClass(),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	// Story 5 step 2 (retail correction): a placed cop used to take the Troika line's space, the
 	// census giving `CNPC_VCop` no classname. Retail's cop runs in `CNPC_VCop`'s own space.
 	TestNotNull(TEXT("the corpus places CNPC_VCop"),
@@ -184,28 +203,28 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		const FElysiumNpc::FScheduleLoadFlag& Row = Rows[Index];
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.RetailClass), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 452 with %s"), Row.RetailClass, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 452)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 452)), FString(Row.Body));
 		}
 		TestTrue(*FString::Printf(TEXT("%s names its flag global"), Row.RetailClass),
 			Row.Flag != nullptr && FCString::Strlen(Row.Flag) > 0);
 	}
 	TestEqual(TEXT("the Troika line's flag is DAT_105d1058"),
-		FString(FElysiumNpc::LoadedSchedulesRowOf(TEXT("CAI_BaseNPCTroika"))->Flag),
+		FString(ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CAI_BaseNPCTroika"))->Flag),
 		FString(TEXT("0x105d1058")));
 	TestEqual(TEXT("CNPC_VBrujah's is DAT_1062f278, the one 0x10367a40 writes"),
-		FString(FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNPC_VBrujah"))->Flag),
+		FString(ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VBrujah"))->Flag),
 		FString(TEXT("0x1062f278")));
 	TestNull(TEXT("a class with no row answers nothing"),
-		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNotAClass")));
+		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNotAClass")));
 	TestNull(TEXT("CNPC_VCombatman, a class with no instance, has no row"),
-		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNPC_VCombatman")));
+		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VCombatman")));
 	TestNull(TEXT("nor does CNPC_VGangrel"),
-		FElysiumNpc::LoadedSchedulesRowOf(TEXT("CNPC_VGangrel")));
+		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VGangrel")));
 
 	// The slot itself. Its only writer is the class's own schedule-text parse loop, and this runtime
 	// RUNS that loop now -- so the answer is the real parse result rather than the shipped `true`
@@ -401,12 +420,12 @@ bool FElysiumNpcKernelScheduleSetScheduleTest::RunTest(const FString&)
 	{
 		TestEqual(*FString::Printf(TEXT("%s pushes its own trace name"), Row.Class),
 			FString(FElysiumNpcScheduleHost::SetScheduleTraceName(Row.Class)), FString(Row.Trace));
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("and fills slot 619 with %s"), Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 619)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 619)), FString(Row.Body));
 		}
 	}
 	TestEqual(TEXT("a class with no slot-619 override pushes nothing"),
@@ -467,20 +486,20 @@ bool FElysiumNpcKernelSchedulePreSelectTest::RunTest(const FString&)
 
 	// The three species bodies, by census row.
 	TestEqual(TEXT("CNPC_VCamera fills slot 437 with 0x10368f20"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")), 437)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera")), 437)),
 		FString(TEXT("0x10368f20")));
 	TestEqual(TEXT("CNPC_VCameraSecurity shares it"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 437)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 437)),
 		FString(TEXT("0x10368f20")));
 	TestEqual(TEXT("CNPC_VMingXiaoTentacle fills it with 0x1039de00"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiaoTentacle")), 437)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiaoTentacle")), 437)),
 		FString(TEXT("0x1039de00")));
 	TestEqual(TEXT("CNPC_VPlaceholder fills it with 0x103a43f0"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VPlaceholder")), 437)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VPlaceholder")), 437)),
 		FString(TEXT("0x103a43f0")));
 
 	// Through the slot: each class's `PreSelectSchedule` override is its body (story 5 step 3).
@@ -527,12 +546,12 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 	};
 	for (const FExpect& Row : Expected)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 438 with %s"), Row.Class, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 438)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 438)), FString(Row.Body));
 		}
 	}
 
@@ -626,12 +645,12 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 	};
 	for (const FExpect& Row : Expected)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 604 with %s"), Row.Class, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 604)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 604)), FString(Row.Body));
 		}
 	}
 
@@ -809,12 +828,12 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 		Guard->ResolveTaskDistance(64.75f), 64.f);
 	// The two species sentinels, by census row — neither class has a registered classname here.
 	TestEqual(TEXT("CNPC_VMingXiao fills slot 418 with 0x10392a10"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 418)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")), 418)),
 		FString(TEXT("0x10392a10")));
 	TestEqual(TEXT("CNPC_VTzimisce fills it with 0x103b9120"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")), 418)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")), 418)),
 		FString(TEXT("0x103b9120")));
 	TestEqual(TEXT("a class with neither override still reads the Troika line's table at -1000004"),
 		Guard->ResolveTaskDistance(-1000004.f), -1000004.f);
@@ -870,12 +889,12 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 	};
 	for (const FExpect& Row : Expected)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 453 with %s"), Row.Class, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 453)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 453)), FString(Row.Body));
 		}
 	}
 
@@ -910,7 +929,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 	{
 		FElysiumNpcConditions Mask;
 		TestEqual(TEXT("a spawned npc_VCop is CNPC_VCop"), Cop->RetailClass(),
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 		Cop->BuildScheduleTestBits(Mask);
 		// Story 5 step 2 (retail correction): `CNPC_VCop` fills slot 453 with the combatant body
 		// `0x10387520`, which a placed cop now takes; alive and idle like the hunter above, it adds

@@ -42,10 +42,9 @@
 
 // --- Slot 124 `DrawDebugTextOverlays` — one slot, eight retail bodies ------------------------------
 //
-// `FElysiumNpc::DrawDebugTextOverlays()` (the generated virtual, defined by this family) is the one
-// port method. It resolves the census body for this NPC's retail class
-// (`ElysiumNpcKernelClass::BodyOf(RetailClass(), 124)`) and runs that arm; the arms themselves are
-// named below because three of them are several hundred lines. The two bodies on classes no map
+// `FElysiumNpc::DrawDebugTextOverlays()` (the generated virtual, defined by this family) is the
+// Troika body; each species body is its class's override (story 5 step 3), and the arms are named
+// below because three of them are several hundred lines. The two bodies on classes no map
 // stands, `CNPC_Crow#124` (`0x10358f90`) and `CScriptedTarget#124` (`0x1034ddf0`), carry no arm.
 
 /** `CAI_BaseNPCTroika::DrawDebugTextOverlays` (`0x1029d4e0`) — the Troika-line body proper, 3,754
@@ -154,14 +153,9 @@ int32 RetailLastDamageInfoWord40() const;
  *  uses for the same word. */
 float RetailFieldOfViewDot() const;
 
-/** Fill both hull words from the generated class table, keyed on this body's retail class.
- *  Called once the class is known; a class with no row of its own inherits the nearest
- *  ancestor's, which is what retail's constructor chain does. */
-void ApplyRetailHulls();
-
 /** `+0x156c`, the PATHING hull — the hull the `0x1000` arm draws a second box for when it differs
- *  from `m_eHull` (`+0x1568`). Answers `PathingHullKind`, which the body fills from the class
- *  table, so the two differ on exactly the species retail differs on. */
+ *  from `m_eHull` (`+0x1568`). Answers `PathingHullKind`, which each class's constructor writes
+ *  as retail's does, so the two differ on exactly the species retail differs on. */
 int32 RetailAlternateHullKind() const;
 
 /** `CBaseAnimating::GetBonePosition01("Bip01", &pos, &ang)` (`0x1000f263`), the root-bone box of the

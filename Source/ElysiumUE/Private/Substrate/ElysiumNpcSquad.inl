@@ -40,18 +40,15 @@ FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 // different things per species. These four are the ones this family's bodies read, declared by
 // retail name with the species class that owns the offset.
 
-// --- Slot 546 `SquadSlotName`: the Troika method and the deferred rows' table -------------------
+// --- Slot 546 `SquadSlotName` ------------------------------------------------------------------
 //
 // 57 retail bodies fill slot 546 — the Troika line's own (`0x101a6c00`) and 56 species overrides
 // across 60 census classes — and all 57 are the SAME two-step: translate the squad-slot id through
 // this class's `CAI_ClassScheduleIdSpace` (`0x102ea2d0 SquadSlotLocalToGlobal`), then look the
 // global id up in the one shared squad-slot namespace `DAT_10936c74`
 // (`0x102ea020 CAI_GlobalNamespace::IdToSymbol`). The Troika line skips the translation and looks
-// `slotEN` up directly. Each species' override holds its own id-space row (story 5 step 4; the
-// controller line since fold A2).
-
-/** The table: the Troika line's row alone. Every species carries its own row in its override. */
-static const FSquadSlotSpecies* SquadSlotSpeciesRows(int32& OutCount);
+// `slotEN` up directly (`FElysiumNpcBase::SquadSlotName`). Each species' override holds its own
+// id-space row (story 5 step 4; the controller line since fold A2).
 
 // --- The bodies -----------------------------------------------------------------------------------
 

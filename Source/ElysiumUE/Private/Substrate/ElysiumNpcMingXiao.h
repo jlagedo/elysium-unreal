@@ -11,10 +11,11 @@
 class FElysiumNpcMingXiao : public FElysiumNpcBaseBoss
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VMingXiao");
+	ELYSIUM_NPC_CLASS("CNPC_VMingXiao", FElysiumNpcBaseBoss)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x10390ee0`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcMingXiao();
+
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
 	virtual void Precache() override;
 	virtual int32 Save(void* Archive) override;
@@ -239,6 +240,10 @@ public:
 	 *  false there answers false; a NULL candidate skips that test and answers TRUE. Slot 166's
 	 *  Troika-line body is family Motor's `CanStandOn`, which this does not call. */
 	bool SeveredTentaclesCanStandOn(const FElysiumEntity* Candidate) const;
+	/** Slot 166 `CanStandOn(CBaseEntity*)`: `0x10397000`, the body above, as the class's override
+	 *  (story 5 commit B wired it: the body stood ported under its helper name and no dispatch reached
+	 *  it, so a Ming Xiao answered the entity-chain body). */
+	virtual bool CanStandOn(FElysiumEntity* Other) override { return SeveredTentaclesCanStandOn(Other); }
 	/** `0x10399fe0` — `CNPC_VMingXiao`'s slot-100 `TestHitboxes` override. Refuses without a model,
 	 *  without `m_bHasTransformed` (+0x6678) and with fewer than 7 hitbox sets; then tests hitbox set 0
 	 *  and, on a miss, sets 1..6 — each gated by family Bosses' `IsTentacleConnected(index)`

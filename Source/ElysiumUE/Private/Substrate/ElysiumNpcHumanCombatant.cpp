@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcHumanCombatant.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -24,12 +23,6 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
-
-const FElysiumNpcClass* FElysiumNpcHumanCombatant::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 420: `0x10387140`.
 void FElysiumNpcHumanCombatant::NPCInit()
@@ -114,12 +107,12 @@ void FElysiumNpcHumanCombatant::CopHumanCombatantOnStateChange(int32 NewRetail)
 	if (NewRetail == 1)
 	{
 		// `+0x108` — `CBaseEntity::Hide` (slot 66, `0x1009d2a0`).
-		Weapon->Hide(this);
+		Weapon->Hide();
 	}
 	else if (NewRetail == 2 || NewRetail == 3 || NewRetail == 0xb)
 	{
 		// `+0x10c` — `Unhide`.
-		Weapon->Unhide(this);
+		Weapon->Unhide();
 	}
 }
 

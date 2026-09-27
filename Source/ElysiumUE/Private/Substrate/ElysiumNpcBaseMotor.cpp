@@ -11,7 +11,6 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumRetailHullTable.h"
@@ -215,8 +214,7 @@ float FElysiumNpcBase::StepHeight() const
 	// slot 522. `CAI_BaseNPC::StepHeight` `0x101a6b40` returns `_DAT_10453b94` = 18.0 and IS the
 	// body slot 522 carries on the Troika line. `CAI_TestHull::StepHeight` `0x102d72b0` (40.0) and
 	// three species override it on their own classes.
-	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
-	return Row != nullptr ? Row->StepHeight : NpcKernelMotorShared::GStepHeightBase;
+	return NpcKernelMotorShared::GStepHeightBase;
 }
 
 float FElysiumNpcBase::GetMaxJumpSpeed() const
@@ -241,11 +239,8 @@ bool FElysiumNpcBase::IsJumpLegal(FVector& StartUnits, FVector& ApexUnits, FVect
 	// slot 521. `CAI_BaseNPC::IsJumpLegal` `0x10280880` forwards to the geometry helper with
 	// 80.0 / 250.0 / 160.0; `CAI_TestHull::IsJumpLegal` `0x102d7760` is its own class's override
 	// with 1024 / 1024 / 1024 (`FElysiumNpcTestHull`).
-	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
-	const float Rise = Row != nullptr ? Row->JumpLegalRise : 80.0f;
-	const float Drop = Row != nullptr ? Row->JumpLegalDrop : 250.0f;
-	const float Distance = Row != nullptr ? Row->JumpLegalDistance : 160.0f;
-	return IsJumpLegalGeometry(StartUnits, ApexUnits, EndUnits, Rise, Drop, Distance);
+	return IsJumpLegalGeometry(StartUnits, ApexUnits, EndUnits, NpcKernelMotorShared::GJumpLegalRise,
+		NpcKernelMotorShared::GJumpLegalDrop, NpcKernelMotorShared::GJumpLegalDistance);
 }
 
 float FElysiumNpcBase::MaxYawSpeedBase()
@@ -543,22 +538,6 @@ bool FElysiumNpcBase::NavGoalPosition(FVector& OutGoalUnits) const
 	// readable goal; the caller is left with its own untouched vector.
 	(void)OutGoalUnits;
 	return false;
-}
-
-const FElysiumNpcBase::FJumpTunableSpecies* FElysiumNpcBase::JumpTunableSpeciesOf(const TCHAR* InRetailClass)
-{
-	if (InRetailClass == nullptr)
-	{
-		return nullptr;
-	}
-	for (const FJumpTunableSpecies& Row : NpcKernelMotorShared::GJumpTunableSpecies)
-	{
-		if (FCString::Strcmp(Row.RetailClass, InRetailClass) == 0)
-		{
-			return &Row;
-		}
-	}
-	return nullptr;
 }
 
 bool FElysiumNpcBase::IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,

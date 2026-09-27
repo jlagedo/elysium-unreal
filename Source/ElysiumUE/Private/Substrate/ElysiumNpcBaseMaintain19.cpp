@@ -8,7 +8,6 @@
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 
 // --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 5) ---

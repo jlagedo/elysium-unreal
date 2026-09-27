@@ -11,10 +11,11 @@
 class FElysiumNpcWerewolf : public FElysiumNpcBaseBoss
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VWerewolf");
+	ELYSIUM_NPC_CLASS("CNPC_VWerewolf", FElysiumNpcBaseBoss)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x103ca4b0`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcWerewolf();
+
 	virtual void NPCInit() override;
 	virtual void OnRestore(bool bFromLoad) override;
 	virtual void Precache() override;

@@ -19,11 +19,11 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Senses10** — what the NPC perceives and who its enemy is.
 //
@@ -786,44 +786,44 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 	// The census IS the dispatcher: each arm is proved by the address the census says fills the slot
 	// for that retail class.
 	TestEqual(TEXT("the census puts 0x10369ff0 on CNPC_VCameraSecurity#201"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 201)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 201)),
 		FString(TEXT("0x10369ff0")));
 	TestEqual(TEXT("...0x103ba290 on CNPC_VTzimisce#201"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")), 201)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")), 201)),
 		FString(TEXT("0x103ba290")));
 	TestEqual(TEXT("...0x103e0bc0 on CNPC_VZombie#201"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")), 201)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VZombie")), 201)),
 		FString(TEXT("0x103e0bc0")));
 	TestEqual(TEXT("...0x10371ae0 on CNPC_VCop#472"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")), 472)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")), 472)),
 		FString(TEXT("0x10371ae0")));
 	TestEqual(TEXT("...0x103887d0 on CNPC_VHunter#472"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VHunter")), 472)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VHunter")), 472)),
 		FString(TEXT("0x103887d0")));
 	TestEqual(TEXT("...0x103766d0 on CNPC_VFrenzyShadow#478"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VFrenzyShadow")), 478)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VFrenzyShadow")), 478)),
 		FString(TEXT("0x103766d0")));
 	TestEqual(TEXT("...0x10395d00 on CNPC_VMingXiao#574"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 574)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")), 574)),
 		FString(TEXT("0x10395d00")));
 	TestEqual(TEXT("...0x10369fb0 on CNPC_VCameraSecurity#363"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 363)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 363)),
 		FString(TEXT("0x10369fb0")));
 
 	// A spawned `npc_VCop` is `CNPC_VCop` (factory `0x103704f0`, story 5 step 2), so this family's
 	// five dispatchers take the cop's own rows; until then the census gave the class no classname
 	// and a cop fell through to the Troika line.
 	TestTrue(TEXT("a spawned npc_VCop is CNPC_VCop"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
-			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 
 	// --- `CNPC_VCameraSecurity#201` (`0x10369ff0`) and `#363` (`0x10369fb0`) ----------------------
 	{

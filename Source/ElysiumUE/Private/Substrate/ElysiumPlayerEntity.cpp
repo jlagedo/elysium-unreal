@@ -55,7 +55,7 @@ bool FElysiumPlayer::ControllerNpcBusy() const
 {
 	// `0x10175180`, 116 bytes: `h = m_hControllerNPC (+0x1db0); if (h == -1 || stale) return false;
 	// return resolve(h)->vt[+0x228]() == 3;`. This player's `+0x1db0` is the world's controller
-	// handle (see the header for the word's second, NPC-side home).
+	// handle, the word's one home (story 5 commit B).
 	if (World == nullptr || World->PlayerHandle() != Handle)
 	{
 		return false;
@@ -72,7 +72,7 @@ bool FElysiumPlayer::CanAttemptStealthKill() const
 	// both through the world's controller handle); then the other handles (`+0xfe8`, `+0x1040`,
 	// `+0x1eb8`, `+0x19c0`, `+0x19cc`), which have no producer here and answer not-busy; then the
 	// active cine camera; then the menu `0x1023bd00`, also not-busy here.
-	if (!IsAlive() || IsInert())
+	if (LifeState != EElysiumLifeState::Alive || IsInert())
 	{
 		return false;
 	}

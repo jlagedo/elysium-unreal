@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcGargoyle.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -66,10 +65,13 @@ namespace
 	constexpr int32 GOnTakeDamageSlot = 142;
 }
 
-const FElysiumNpcClass* FElysiumNpcGargoyle::OwnRetailClass() const
+// `CNPC_VGargoyle`'s constructor `0x10377a60` writes both hull words at `0x10377a93`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order.
+FElysiumNpcGargoyle::FElysiumNpcGargoyle()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 14;
+	PathingHullKind = 14;
 }
 
 // Slots 599 / 600: `0x10379ef0` / `0x10379f20`, byte-identical to FrenzyShadow's unconditional

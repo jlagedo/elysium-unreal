@@ -13,7 +13,7 @@
 //
 // --- What this family is -------------------------------------------------------------------------
 //
-// **One port method with twenty-two arms, not twenty-two methods.** The family's rows fill two
+// **Twenty-two species overrides of one slot.** The family's rows fill two
 // retail functions on the NPC line — `CAI_BaseNPC::Precache` `0x1027bb50` and
 // `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus the census's
 // twenty-five distinct species bodies of that one slot and three `CNPCMaker*` bodies, which are the
@@ -22,12 +22,10 @@
 // classes, `CNPC_VTest`, `CGenericNPC`) and carry no port arm; the other nineteen and the three
 // maker rows are the twenty-two arms.
 //
-// A species override is an `OverrideOf(RetailClass(), 104)` case inside slot 104's one port
-// method, keyed through `Substrate/ElysiumNpcKernelClassLookup.h` — the convention story 29c-1 set
-// for the 57 addresses that land on `FElysiumNpc::SquadSlotName`. The dispatch keys on the
-// override row's RETAIL ADDRESS rather than on the class name, which is what makes the three Chang
+// Each arm is its class's `Precache` override (story 5 step 3; the makers' since fold A4), and a
+// subclass that shares its base's body inherits the override, which is what makes the three Chang
 // forms (`CNPC_VChangBros`, `…Blade`, `…Claw`, all three carrying `0x1036ae60`) and the two camera
-// forms (`CNPC_VCamera`, `CNPC_VCameraSecurity`, both `0x103689c0`) one arm apiece instead of five.
+// forms (`CNPC_VCamera`, `CNPC_VCameraSecurity`, both `0x103689c0`) one override apiece.
 //
 // --- Three standing facts, stated once ------------------------------------------------------------
 //

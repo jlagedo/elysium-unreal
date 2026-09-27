@@ -964,13 +964,13 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 			const FElysiumEntityHandle SubjectHandle =
 				Subject ? Subject->Handle : FElysiumEntityHandle::Invalid();
 			TestTrue(TEXT("an active camera transmits to its own subject"),
-				Transmit->ShouldTransmit(SubjectHandle));
+				Transmit->TransmitsTo(SubjectHandle));
 			// A recipient that is not `m_hSubject`, standing in for a second client: retail's shot
 			// is invisible to it.
 			TestFalse(TEXT("... and to nobody else"),
-				Transmit->ShouldTransmit(Ordinary->Handle));
+				Transmit->TransmitsTo(Ordinary->Handle));
 			TestFalse(TEXT("... nor to an unset recipient"),
-				Transmit->ShouldTransmit(FElysiumEntityHandle::Invalid()));
+				Transmit->TransmitsTo(FElysiumEntityHandle::Invalid()));
 
 			// The caps, through the BASE's virtual — the wire, not the leaf's literal.
 			const FElysiumEntity* AsBase = TransmitEntity;
@@ -998,7 +998,7 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 			// `CamMode == 0` refuses every client, which is the port's "the goal is released".
 			Transmit->ClearMode();
 			TestFalse(TEXT("an idle camera transmits to nobody, subject included"),
-				Transmit->ShouldTransmit(SubjectHandle));
+				Transmit->TransmitsTo(SubjectHandle));
 		}
 	}
 

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcProneDialog.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumWorldServices.h"
@@ -18,12 +17,6 @@ namespace
 {
 	// `_DAT_10449280` = 1.0 (a double) — the engine's CLEAR trace fraction.
 	constexpr float GSensesTraceClearFraction = 1.0f;
-}
-
-const FElysiumNpcClass* FElysiumNpcProneDialog::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 4) ---

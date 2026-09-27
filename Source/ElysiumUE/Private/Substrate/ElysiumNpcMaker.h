@@ -28,10 +28,8 @@ struct FElysiumClassDesc;
 class FElysiumNpcMaker : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpcBase::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPCMaker");
+	ELYSIUM_NPC_CLASS("CNPCMaker", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 
 	// --- `CNPCMaker`'s own words (datamap `0x10624718`) ------------------------------------------
 	FString NpcType;                // +0x665c m_iszNPCClassname     NPCType

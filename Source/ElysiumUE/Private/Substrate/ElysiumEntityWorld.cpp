@@ -693,7 +693,7 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity(const TCH
 	// `CBasePlayer::GetControllerNPC(classname)` (`0x10161a70`): the player's `m_hControllerNPC`
 	// (`+0x1db0`, this world's `PlayerControllerEntity`) is the cache. A live one of the asked class
 	// (`__strcmpi`) is handed back unchanged; one of another class is warned about and let go with
-	// `ReleaseControllerNpc(false, false)` (`0x101618e0`: nothing copied back, the handle cleared),
+	// `0x101618e0(player, 0, 0)` (nothing copied back, the handle cleared),
 	// and a new one is created.
 	const TCHAR* const Requested = Classname != nullptr ? Classname : TEXT("npc_VPlayerController");
 	if (FElysiumEntity* Existing = FindPlayerController())
@@ -814,14 +814,22 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 	// Retail's removal is `0x102272b0` (the classname check) then `0x101618e0(player, 1, 1)`: copy
 	// the controller's sequence, anim time, cycle, playback rate, gesture and flinch tables onto the
 	// player (`bCopyAnimation`), its velocity and its origin/angles (`bCopyVelocity`), then arm
-	// `SUB_Remove` (`0x101c0b10`) on the controller at `curtime + 0.01` and clear `m_hControllerNPC`.
+	// `SUB_Remove` (`0x101c0b10`) on the controller at `curtime + 0.01` (`_DAT_1044e658`, the double
+	// 0.01) and clear `m_hControllerNPC`. The copy is `rep movsd` over the whole four-record gesture
+	// table (0xc0 bytes from `+0x734`) and the whole three-record flinch table (0x54 bytes from
+	// `+0x7f4`); `bCopyVelocity` also reads the controller's CACHED absolute velocity (`+0x3bc`, with
+	// `CalcAbsoluteVelocity` first only when `m_iEFlags` bit 0xc is set). **Unported onto the player**
+	// (story 8): the sequence/cycle/rate/gesture/flinch/velocity hand-back; the port's player body is
+	// driven by its own locomotion, and a copy onto it was ported only on the NPC-side duplicate that
+	// story 5 commit B deleted.
 	//
 	// **Named divergence — the same-frame removal.** The port has no think-function slot to host
 	// `SUB_Remove` on an entity, so the controller is killed here, in the frame of the request,
 	// rather than 0.01 s later; nothing in shipped content observes the stand-in in that window
 	// (the handle is cleared at the request in both). The player's pose is the port's own reading of
-	// the copy: its transform, and — as the port's presentation hand-back — model, skin and
-	// disposition, since the port's pawn is the body hidden while the controller performed.
+	// the copy: its transform, and — **named modernization**, pending the controller follow-up —
+	// model, skin and disposition, which retail's `0x101618e0` does not write: the port's pawn is
+	// the body hidden while the controller performed.
 	if (Dest)
 	{
 		// Apply the final pose anchor before the stand-in disappears. SetModel goes through the

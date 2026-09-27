@@ -9,11 +9,11 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Debug**. Every assertion below comes from the decompiled C, the LISTING or
 // the `.rdata` of the row it names: the 119 `COND_*` symbols `0x102c8ce0` registers and the 119
@@ -354,7 +354,7 @@ bool FElysiumNpcKernelDebugShortConditionSpeciesTest::RunTest(const FString&)
 			}
 			FElysiumNpcWorldFixture::Quiet({ Species });
 			TestTrue(*FString::Printf(TEXT("its classname built %s"), *Name),
-				Species->RetailClass() == ElysiumNpcKernelClass::Find(Row.Class));
+				Species->RetailClass() == ElysiumNpcTestCensus::Find(Row.Class));
 			for (int32 Slot = 0; Slot < Row.NameCount; ++Slot)
 			{
 				TestEqual(*FString::Printf(TEXT("a spawned %s names 0x%02x %s through slot 408"),
@@ -480,16 +480,16 @@ bool FElysiumNpcKernelDebugStatOverlaysTest::RunTest(const FString&)
 	// The census is what the dispatch reads, so assert it first: the boss body and the Troika body
 	// are two different addresses at the same slot.
 	TestEqual(TEXT("CNPC_VBaseBoss fills slot 76 with the distance body"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VBaseBoss")), 76)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VBaseBoss")), 76)),
 		FString(TEXT("0x10366290")));
 	TestEqual(TEXT("CNPC_VTzimisceRunner inherits it"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisceRunner")), 76)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisceRunner")), 76)),
 		FString(TEXT("0x10366290")));
 	TestEqual(TEXT("CAI_BaseNPCTroika's own body is the expression dump"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CAI_BaseNPCTroika")), 76)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CAI_BaseNPCTroika")), 76)),
 		FString(TEXT("0x1029c010")));
 
 	// A combatant with no dialogue: `0x1029c010`'s first arm tail-calls the base, so the lines are
@@ -824,24 +824,24 @@ bool FElysiumNpcKernelDebugWerewolfDrawsTest::RunTest(const FString&)
 	// (`0x103aa5e0`) — two classes whose vtables diverge before that index. So the dispatch has to
 	// check the ADDRESS and not merely "does this class override slot 620", and that is what the
 	// body does.
-	const FElysiumNpcClass* Wolf = ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf"));
+	const FElysiumNpcClass* Wolf = ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf"));
 	TestNotNull(TEXT("CNPC_VWerewolf is a census class"), Wolf);
 	if (Wolf != nullptr)
 	{
 		TestEqual(TEXT("and fills slot 620 with DrawBBoxOverlay"),
-			FString(ElysiumNpcKernelClass::BodyOf(Wolf, 620)), FString(TEXT("0x103d5050")));
+			FString(ElysiumNpcTestCensus::BodyOf(Wolf, 620)), FString(TEXT("0x103d5050")));
 	}
-	const FElysiumNpcClass* Sabbat = ElysiumNpcKernelClass::Find(TEXT("CNPC_VSabbatLeader"));
+	const FElysiumNpcClass* Sabbat = ElysiumNpcTestCensus::Find(TEXT("CNPC_VSabbatLeader"));
 	if (Sabbat != nullptr)
 	{
 		TestEqual(TEXT("while CNPC_VSabbatLeader's slot 620 is a different function entirely"),
-			FString(ElysiumNpcKernelClass::BodyOf(Sabbat, 620)), FString(TEXT("0x103aa5e0")));
+			FString(ElysiumNpcTestCensus::BodyOf(Sabbat, 620)), FString(TEXT("0x103aa5e0")));
 	}
 	// Story 5 step 2: `npc_VWerewolf`'s factory 0x103c8760 builds `CNPC_VWerewolf`
 	// (population.md), so the spawn classname resolves to the class and the body is reached
 	// through slot 620 on a spawned werewolf at the end of this case.
 	TestTrue(TEXT("the spawn classname npc_VWerewolf resolves to CNPC_VWerewolf"),
-		Wolf != nullptr && ElysiumNpcKernelClass::OfClassname(TEXT("npc_VWerewolf")) == Wolf);
+		Wolf != nullptr && ElysiumNpcTestCensus::OfClassname(TEXT("npc_VWerewolf")) == Wolf);
 
 	FElysiumNpcWorldFixture Fixture(DebugBuilder(GDebugCombatant));
 	FElysiumNpc* Npc = Fixture.Npc(TEXT("subject"));

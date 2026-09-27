@@ -6,7 +6,6 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcMakerFleshpile.h"
@@ -14,6 +13,7 @@
 #include "Substrate/ElysiumNpcTestHull.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 5 step 2: the classname -> class map is retail's factories
 // (`docs/specs/0019-npc-kernel-rework/story-5/factories.tsv`, replayed from the 74 factories of
@@ -156,8 +156,8 @@ namespace
 	TArray<FString> ProjectedChain(const TCHAR* RetailClass)
 	{
 		TArray<FString> Chain;
-		for (const FElysiumNpcClass* Row = ElysiumNpcKernelClass::Find(RetailClass); Row != nullptr;
-			Row = ElysiumNpcKernelClass::Find(Row->Base))
+		for (const FElysiumNpcClass* Row = ElysiumNpcTestCensus::Find(RetailClass); Row != nullptr;
+			Row = ElysiumNpcTestCensus::Find(Row->Base))
 		{
 			Chain.Add(FString(Row->Name));
 			if (FCString::Strcmp(Row->Name, TEXT("CAI_BaseNPC")) == 0)
@@ -216,7 +216,7 @@ bool FElysiumNpcKernelClassFactoriesTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s answers its factory's class"), Row.Classname),
 			Cls != nullptr ? FString(Cls->Name) : FString(), FString(Row.RetailClass));
 		TestTrue(FString::Printf(TEXT("%s's census row names the classname"), Row.Classname),
-			ElysiumNpcKernelClass::OfClassname(Row.Classname) == Cls);
+			ElysiumNpcTestCensus::OfClassname(Row.Classname) == Cls);
 		if (TestNotNull(FString::Printf(TEXT("%s has a descriptor"), Row.Classname), Entity->Class))
 		{
 			const TArray<FString> Chain = RegistryChain(*Entity->Class);
@@ -240,7 +240,7 @@ bool FElysiumNpcKernelClassFactoriesTest::RunTest(const FString&)
 				Reg.FindField(*Entity->Class, FName(TEXT("stattemplate"))));
 			// `TransformModel` is a `CNPC_VVampireBoss` datamap INPUT: every class below it inherits
 			// it (retail's datamap chain), no other class has it.
-			const bool bBossLine = ElysiumNpcKernelClass::DerivesFrom(Cls, TEXT("CNPC_VVampireBoss"));
+			const bool bBossLine = ElysiumNpcTestCensus::DerivesFrom(Cls, TEXT("CNPC_VVampireBoss"));
 			TestEqual(FString::Printf(TEXT("%s has TransformModel only on the vampire-boss line"),
 				Row.Classname), Reg.FindInput(*Entity->Class, FName(TEXT("TransformModel"))) != nullptr,
 				bBossLine);
@@ -268,7 +268,7 @@ bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 	TestEqual(TEXT("the census carries exactly the factories' classnames"), CensusNames, Listed);
 	auto Check = [this](const TCHAR* Classname, const TCHAR* RetailClass)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::OfClassname(Classname);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::OfClassname(Classname);
 		TestEqual(FString::Printf(TEXT("%s is %s in the census"), Classname, RetailClass),
 			Cls != nullptr ? FString(Cls->Name) : FString(), FString(RetailClass));
 	};
@@ -367,9 +367,9 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassDeadAndDeferredTest,
-	"Elysium.Substrate.NpcKernelClass.DeadAndDeferred", GElysiumNpcKernelFactoryFlags)
-bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassDeadClassnamesTest,
+	"Elysium.Substrate.NpcKernelClass.DeadClassnames", GElysiumNpcKernelFactoryFlags)
+bool FElysiumNpcKernelClassDeadClassnamesTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	// A dead class's classname is not registered: a def naming one is an inert record.
@@ -383,8 +383,8 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s stands as a record"), Name),
 			Entity.IsValid() && Entity->IsRecordOnly() && Entity->AsNpc() == nullptr);
 	}
-	// Nothing is deferred any more (story 5 fold A4): the three maker classnames, the last deferred
-	// factory rows, build their own NPC classes under their retail class, which hangs from
+	// Nothing is deferred (story 5 commit A): the three maker classnames, the last factory rows to
+	// stand, build their own NPC classes under their retail class, which hangs from
 	// `CAI_BaseNPCTroika`. A bare def still stands a live entity (its missing model removes it at
 	// `Spawn`, not here) and it is an `FElysiumNpc`.
 	for (const FFactoryRow& Row : GMakerFactories)
@@ -489,8 +489,7 @@ bool FElysiumNpcKernelClassMakerFactoriesTest::RunTest(const FString&)
 	return true;
 }
 
-// The factory map at the step-6 boundary (0019 story 5 step 6, plan § 5 step 6: "extend the census
-// tests for ... current factories; all ten deferred classes remain explicitly listed").
+// The factory map in its closing form (0019 story 5 commit B).
 //
 // The registry's NPC line is exactly the factory map: every constructible descriptor under
 // `CAI_BaseNPC` is one of the 45 step-2 classnames, the controller line's 3 (fold A2), the
@@ -499,9 +498,6 @@ bool FElysiumNpcKernelClassMakerFactoriesTest::RunTest(const FString&)
 // is deferred (the test hull, fold A1, stands as an abstract live census class).
 namespace
 {
-	// `manifest.json` `deferred_classes` (git at `a00cd11b`), less the folds commit A has landed: A1
-	// the test hull, A2 the controller line, A3 the directors, A4 the makers. None remains.
-
 	// Whether a descriptor is `CAI_BaseNPC` or derives from it through the registry chain.
 	bool OnNpcLine(const FElysiumClassDesc& Desc)
 	{
@@ -537,7 +533,7 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			Abstract.Add(Name);
 			const bool bLine = Name == TEXT("CAI_BaseNPC") || Name == TEXT("CAI_BaseNPCTroika");
 			TestTrue(FString::Printf(TEXT("abstract %s is a live census class"), *Name),
-				bLine || (ElysiumNpcKernelClass::Find(*Name) != nullptr
+				bLine || (ElysiumNpcTestCensus::Find(*Name) != nullptr
 					&& !ElysiumNpcDeadClasses::Contains(*Name)));
 			return;
 		}

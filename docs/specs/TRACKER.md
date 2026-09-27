@@ -1,6 +1,6 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 06's pass I and C boxes read "after 06b", so 06b is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 06b landed 2026-09-27, so row 06's pass I is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
@@ -182,7 +182,7 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     - [ ] Boss19 (11/19)
     - [ ] Werewolf19 (17/17)
   - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
-- [ ] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **NEXT.**
+- [x] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **Landed 2026-09-27.**
   Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
   Moved up from row 10 on 2026-09-23 (decision recorded under "Where this differs"). Its inputs
   are landed (rows 02 and 04); its census clause is amended in the spec so unported `rule`
@@ -214,6 +214,15 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     accepted (2026-09-27, last gate 1,281 / 14 / 1, zero failures); revised the same day to two
     remaining commits, A (the ten deferred classes folded) and B (closure). The step records,
     checkers and expectation files were retired the same day; the commits are the record.
+  - *Landed 2026-09-27* (commit A the ten deferred classes, commit B the closure): all 56 live retail
+    classes are C++ classes; the string-keyed class lookup, `IsRetailClass`, the vocalisation table
+    and the C4263/C4264 hides are gone; `gen_kernel_shape` emits the census, the chain slot bodies
+    and a compile-checked override census. `kernel_shape --unported` 987 → 778. Gate on this tree:
+    see the B landing commit. Details and the story-8 hand-off: the spec's story-5 landing paragraph
+    and `story-5/handoff-story-8.md`.
+  - *Hand-off to row 06 (pass I):* the residue pin `story-5/unported.tsv` (778 rows, must only
+    fall) and the carried items listed in the spec (the 431/437/433/442 think loop, Andrei's task
+    0x154, `Weapon_Switch`, `CAI_Hint` `ObjectCaps`, Camera `NPCInit`, `+0xe4`).
 
 ## B — the movement base 0019/6 stands on
 

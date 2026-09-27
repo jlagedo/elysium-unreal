@@ -6,7 +6,6 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcZombie.h"
@@ -22,12 +21,6 @@ namespace
 	constexpr double GZombieMakerDistanceScale = 0.9;
 	// `1034d249 PUSH 0x41700000` — the spawn emitter's 15-second life.
 	constexpr float GZombieSpawnEmitterLifetimeSeconds = 15.0f;
-}
-
-const FElysiumNpcClass* FElysiumNpcMakerZombie::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 82: `0x1034c9f0` returns `&datamap_CNPCMaker_Zombie` (`0x106253e8`).

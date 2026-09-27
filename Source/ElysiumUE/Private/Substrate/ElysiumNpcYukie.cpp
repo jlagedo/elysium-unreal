@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcYukie.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -43,12 +42,6 @@ namespace
 	// `0x41b40000` and `0x42340000`; 29c's walk reads them as 22.0/45.0 and the first is **22.5**.
 	constexpr float YukieFleeWindowMin = 22.5f;             // 0x41b40000
 	constexpr float YukieFleeWindowMax = 45.0f;             // 0x42340000
-}
-
-const FElysiumNpcClass* FElysiumNpcYukie::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // The melee quartet: 599 `0x103dd8b0` (no gates), 600 `0x103dd900` (the one-shot flee), 601

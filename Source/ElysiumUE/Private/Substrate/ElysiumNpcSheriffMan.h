@@ -12,10 +12,11 @@
 class FElysiumNpcSheriffMan : public FElysiumNpcVampireBoss
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VSheriffMan");
+	ELYSIUM_NPC_CLASS("CNPC_VSheriffMan", FElysiumNpcVampireBoss)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x103ae3e0`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcSheriffMan();
+
 	virtual void NPCInit() override;
 	virtual void Precache() override;
 	virtual int32 SelectIdealStateRetail() override;

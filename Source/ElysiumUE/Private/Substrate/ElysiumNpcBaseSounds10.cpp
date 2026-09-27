@@ -10,7 +10,6 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSounds10Shared.h"
 #include "Substrate/ElysiumRulebook.h"

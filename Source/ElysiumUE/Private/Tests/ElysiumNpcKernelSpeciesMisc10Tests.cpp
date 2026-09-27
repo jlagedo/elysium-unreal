@@ -24,11 +24,11 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **SpeciesMisc10** — the one-off species bodies that are not slot overrides.
 //
@@ -281,7 +281,7 @@ bool FElysiumSpeciesMisc10BachTest::RunTest(const FString&)
 		if (TestNotNull(TEXT("the Bach spawned"), B.Guard))
 		{
 			TestTrue(TEXT("npc_VBach builds CNPC_VBach"),
-				B.Guard->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach")));
+				B.Guard->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VBach")));
 			B.Guard->Cognition.Conditions.Reset();
 			ElysiumTestAsSpecies<FElysiumNpcBach>(B.Guard)->BachNextWeaponSwitchTime = -1.0;
 			B.Guard->GatherAttackConditions(B.Other, 72.f);
@@ -513,7 +513,7 @@ bool FElysiumSpeciesMisc10CroucherTest::RunTest(const FString&)
 	// `1037be80` is `FElysiumNpcGhoulCroucher`'s own slot-24 override (story 5 step 3), which is what
 	// makes the arm reachable at all.
 	TestTrue(TEXT("`1037be80`: the NPC is a CNPC_VGhoulCroucher, whose slot 24 is the croucher body"),
-		GhoulCroucher->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VGhoulCroucher")));
+		GhoulCroucher->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VGhoulCroucher")));
 
 	// `1037bf2b`: the burn needs BOTH `m_bSpawnBurning` and a victim that carries a player record.
 	GhoulCroucher->bGhoulSpawnBurning = false;

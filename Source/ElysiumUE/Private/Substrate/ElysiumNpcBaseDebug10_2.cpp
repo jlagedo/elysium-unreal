@@ -9,7 +9,6 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcDebug10_2Shared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"

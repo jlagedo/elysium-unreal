@@ -14,9 +14,9 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Dialogue** — one case per ported body. Every threshold, arm order and
 // written value below comes from the decompiled C (and from `corpus asm` where the decompiler
@@ -265,69 +265,6 @@ bool FElysiumNpcKernelDialogueCineCameraTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueControllerNpcTest,
-	"Elysium.Substrate.NpcKernelDialogue.ControllerNpc", GElysiumNpcKernelDialogueFlags)
-bool FElysiumNpcKernelDialogueControllerNpcTest::RunTest(const FString&)
-{
-	FElysiumNpcWorldFixture World([]
-	{
-		FElysiumNpcWorldBuilder Builder(TEXT("dialogue_controller"), 29105u);
-		Builder.AddNpc(TEXT("guard"), FVector(0.f, 0.f, 0.f));
-		// `npc_VPlayerController` builds `FElysiumNpcPlayerController` (story 5 fold A2), whose
-		// `Spawn` (`0x103a4510`) renames it `playercontroller`; the shadow is the class that
-		// `Classify`s as 3.
-		Builder.AddNpc(TEXT("controller"), FVector(10.f, 0.f, 0.f), TEXT("npc_VPlayerController"));
-		Builder.AddNpc(TEXT("shadow"), FVector(20.f, 0.f, 0.f), TEXT("npc_VFrenzyShadow"));
-		return Builder;
-	}());
-	FElysiumNpc* Guard = World.Npc(TEXT("guard"));
-	FElysiumEntity* Controller = World.NpcOfClass(TEXT("CNPC_VPlayerController"));
-	FElysiumEntity* Shadow = World.NpcOfClass(TEXT("CNPC_VFrenzyShadow"));
-	if (!TestNotNull(TEXT("shadow spawned"), Shadow)) { return false; }
-	if (!TestNotNull(TEXT("guard spawned"), Guard)) { return false; }
-	if (!TestNotNull(TEXT("controller spawned"), Controller)) { return false; }
-	FElysiumNpcWorldFixture::Quiet({ Guard });
-
-	// STEP 1, the cache HIT: the cached entity's classname matches (`__strcmpi`, so case does not
-	// matter) and the body returns it without creating anything.
-	Guard->ControllerNpc = Controller->Handle;
-	TestTrue(TEXT("0x10161a70: a matching cached class is returned unchanged"),
-		Guard->GetControllerNpc(TEXT("NPC_VPLAYERCONTROLLER")) == Controller);
-	TestTrue(TEXT("...and m_hControllerNPC (+0x1db0) is untouched"),
-		Guard->ControllerNpc == Controller->Handle);
-
-	// STEP 1, the MISMATCH: `Warning(...)`, `ReleaseControllerNpc(false, false)` — which clears
-	// `+0x1db0` — and then STEP 2 always creates.
-	AddExpectedError(TEXT("GetControllerNPC"), EAutomationExpectedErrorFlags::Contains, 0);
-	Guard->ControllerNpc = Controller->Handle;
-	FElysiumEntity* Answer = Guard->GetControllerNpc(TEXT("npc_VHumanCombatant"));
-
-	// STEP 2's seam answers null, which is retail's OWN "created NULL Entity" arm: the warning is
-	// emitted and `m_hControllerNPC` is cleared to -1. The arm is taken, not skipped.
-	TestNull(TEXT("0x10161a70: the create seam answers nothing, so the null-entity arm runs"),
-		Answer);
-	TestFalse(TEXT("...and that arm clears m_hControllerNPC (+0x1db0) to -1"),
-		Guard->ControllerNpc.IsSet());
-
-	// STEP 2 with no cache at all reaches the same arm.
-	Guard->ControllerNpc = FElysiumEntityHandle::Invalid();
-	TestNull(TEXT("0x10161a70: no cache also reaches the create seam"),
-		Guard->GetControllerNpc(TEXT("npc_VPlayerController")));
-
-	// `0x10175180` — the predicate over the SAME word. `+0x1db0` is `m_hControllerNPC`, not a
-	// dialogue partner; 29c's walk is corrected here by name.
-	TestFalse(TEXT("0x10175180: no controller is not busy"), Guard->ControllerNpcBusy());
-	Guard->ControllerNpc = Controller->Handle;
-	// Slot 138 `Classify()` through the vtable: the controller answers 2 (`0x103a4890`), not 3.
-	TestFalse(TEXT("0x10175180: a live player controller (Classify 2) answers not-busy"),
-		Guard->ControllerNpcBusy());
-	Guard->ControllerNpc = Shadow->Handle;
-	TestTrue(TEXT("0x10175180: a frenzy shadow (Classify 3, 0x10375d70) answers busy"),
-		Guard->ControllerNpcBusy());
-	Guard->ControllerNpc = FElysiumEntityHandle::Invalid();
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialoguePursuitCountsTest,
 	"Elysium.Substrate.NpcKernelDialogue.PursuitCounts", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialoguePursuitCountsTest::RunTest(const FString&)
@@ -378,7 +315,7 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 	const FElysiumNpcClass* PhoneClass = F.Phone->RetailClass();
 	if (!TestNotNull(TEXT("the census claims npc_payphone"), PhoneClass)) { return false; }
 	TestEqual(TEXT("slots.md: CPayphone fills slot 295 with 0x101aaee0"),
-		FString(ElysiumNpcKernelClass::BodyOf(PhoneClass, 295)), FString(TEXT("0x101aaee0")));
+		FString(ElysiumNpcTestCensus::BodyOf(PhoneClass, 295)), FString(TEXT("0x101aaee0")));
 
 	// The admitting state: an activator, an authored `dialogname`, visible, willing, idle, no
 	// NO_DIALOG, no open session.
@@ -461,17 +398,17 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 	};
 	for (const TCHAR* const (&Fill)[2] : Fills)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Fill[0]);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Fill[0]);
 		TestNotNull(*FString::Printf(TEXT("the census carries %s"), Fill[0]), Cls);
 		TestEqual(*FString::Printf(TEXT("slots.md: %s fills slot 366 with %s"), Fill[0], Fill[1]),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 366)), FString(Fill[1]));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 366)), FString(Fill[1]));
 	}
 	TestFalse(TEXT("the human line's 0x10385a70 answers false on a real guard"),
 		F.Guard->HandleInteraction(0, nullptr, nullptr));
 
 	// `npc_VSabbatLeader` is a spawn leaf AND a census classname, so the body runs on a real one.
 	TestTrue(TEXT("the census resolves npc_VSabbatLeader to CNPC_VSabbatLeader"),
-		F.Sabbat->IsRetailClass(TEXT("CNPC_VSabbatLeader")));
+		F.Sabbat->AsSpecies<FElysiumNpcSabbatLeader>() != nullptr);
 	// `0x103a76d0` is a scope-trace prologue and a tail call to `0x10385a70`, whose whole body is
 	// `return 0`. The answer is false for every argument, which is what "the override adds only a
 	// debug name" means.
@@ -494,10 +431,10 @@ bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 	// (population.md), so the classname resolves to the class AND the spawn registry registers it —
 	// a map may stand one. The body runs on a spawned security camera: `m_iszLinkedCamera`,
 	// `m_hLinkedCamera` and the `+0x6668` latch are that class's words.
-	const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity"));
+	const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity"));
 	if (!TestNotNull(TEXT("the census carries CNPC_VCameraSecurity"), Cls)) { return false; }
 	TestTrue(TEXT("the classname npc_VCameraSecurity resolves to CNPC_VCameraSecurity"),
-		ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VCameraSecurity"))) == Cls);
+		ElysiumNpcTestCensus::OfClassname(FString(TEXT("npc_VCameraSecurity"))) == Cls);
 	TestNotNull(TEXT("...and the spawn registry registers it, so a map may stand one"),
 		FElysiumClassRegistry::Get().Find(FName(TEXT("npc_VCameraSecurity"))));
 	// The payphone, which both tables have always agreed on.
@@ -505,7 +442,7 @@ bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 		FElysiumClassRegistry::Get().Find(FName(TEXT("npc_payphone"))));
 	// `0x10369e70`'s callers are the class's own slot 201 and slot 363 bodies.
 	TestEqual(TEXT("CNPC_VCameraSecurity fills slot 201 with 0x10369ff0, a caller of 0x10369e70"),
-		FString(ElysiumNpcKernelClass::BodyOf(Cls, 201)), FString(TEXT("0x10369ff0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Cls, 201)), FString(TEXT("0x10369ff0")));
 
 	// Two security cameras: `camera` has the body driven directly, `watcher` reaches it through
 	// slot 201. `other` is the entity both link to by name.

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcManBat.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -154,10 +153,55 @@ namespace
 	constexpr float GSlowEntityMagnitude = 500.f;    // 0x43fa0000
 }
 
-const FElysiumNpcClass* FElysiumNpcManBat::OwnRetailClass() const
+// `CNPC_VManBat`'s pickup row (0019 story 5 commit B moved it onto the class: it was a row of a
+// class-keyed table read by retail class name). The release re-arms `0x102c43b0`'s collision
+// ignore at 2.0 s.
+const FElysiumNpc::FPickupSpecies& FElysiumNpcManBat::PickupRow()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
+	static constexpr FPickupSpecies Row = { TEXT("CNPC_VManBat"), TEXT("0x1038f430"), TEXT("0x1038f790"),
+		TEXT("Bip01_R_Foot"), 0x668c, 2.0f, true };
 	return Row;
+}
+
+bool FElysiumNpcManBat::AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey)
+{
+	// `0x1038f430`.
+	int32 Bone = INDEX_NONE;
+	const FElysiumEntityHandle Link = BeginPickupLink(PickupRow(), Carried, Bone);
+	if (!Link.IsSet() || !FinishPickupLink(Link, Bone, Carried, ElementKey))
+	{
+		return false;
+	}
+	ManBatPhysicsAnimlink = Link;
+	NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);    // 0x1038f600(this, true)
+	bManBatPickupTargetBreakable = IsCarriedBreakable(Carried);
+	SetCarriedBreakable(Carried->Handle, false);
+	return true;
+}
+
+void FElysiumNpcManBat::ReleasePickupAnimlink(const FElysiumEntity* AimTarget)
+{
+	// `0x1038f790` ignores its argument and aims at the cached closest player; the carried word is
+	// cleared AFTER the re-arm, which is why `StartIgnoringCollision` still resolves it.
+	(void)AimTarget;
+	const FElysiumEntity* Aim = World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;
+	if (ReleasePickupLink(ManBatPhysicsAnimlink, ManBatPickupTarget, Aim))
+	{
+		SetCarriedBreakable(ManBatPickupTarget, bManBatPickupTargetBreakable);
+	}
+	StartIgnoringCollision(ManBatPickupTarget);
+	ArmIgnoreCollisionExpiry(PickupRow().IgnoreCollisionSeconds);
+	ManBatPickupTarget = FElysiumEntityHandle::Invalid();
+	NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);  // 0x1038f600(this, false)
+}
+
+// `CNPC_VManBat`'s constructor `0x10389cc0` writes both hull words at `0x10389d56`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order.
+FElysiumNpcManBat::FElysiumNpcManBat()
+{
+	HullKind = 20;
+	PathingHullKind = 20;
 }
 
 // Slot 420: `0x1038b070`.

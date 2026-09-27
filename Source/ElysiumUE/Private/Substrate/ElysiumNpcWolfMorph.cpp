@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcWolfMorph.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -18,12 +17,6 @@ namespace
 	// `NPCInit` `0x103dce00`: `+0x5cc4 = 0xc`, the `NPC_VWolfMorph.cpp:0x67` trace.
 	constexpr int32 GWolfMorphRetailState = 0xc;
 	constexpr int32 GWolfMorphNpcInitLine = 0x67;
-}
-
-const FElysiumNpcClass* FElysiumNpcWolfMorph::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 138: `0x103dce50`.

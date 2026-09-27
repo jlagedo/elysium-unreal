@@ -424,3 +424,26 @@ def test_a_subclass_member_is_a_collision_for_the_chain(tmp_path):
     assert "Local" not in names
     assert "Precache" not in names       # the NPC line overrides on purpose
 
+
+
+def test_a_subclass_override_is_told_from_a_hide(tmp_path):
+    # 0019 story 5 commit B: an `OVERRIDDEN_BELOW` slot needs every declaring class below the NPC
+    # line to say `override`; the scan collects which ones do.
+    root = tmp_path / "Source" / "ElysiumUE" / "Private"
+    root.mkdir(parents=True)
+    (root / "Weapon.h").write_text(
+        "class FElysiumWeapon final : public FElysiumEntity\n{\npublic:\n\tvirtual void Hide() override;\n"
+        "\tvoid Unhide(FElysiumCombatCharacter* Wearer);   // not an override\n};\n",
+        encoding="utf-8")
+    overrides: dict[str, set[str]] = {}
+    names = gks.chain_subclass_names(tmp_path, overrides)
+    assert names["Hide"] == {"FElysiumWeapon"} and overrides.get("Hide") == {"FElysiumWeapon"}
+    assert names["Unhide"] == {"FElysiumWeapon"} and "Unhide" not in overrides
+
+
+def test_no_slot_is_an_accepted_hide():
+    # The accepted-hide kind is gone with commit B: every slot a class below the NPC line declares
+    # is a real override of it.
+    kinds = {kind for kind, _, _ in gks.SLOT_PORT_MAP.values()}
+    assert "accepted" not in kinds
+    assert {s for s, (k, _, _) in gks.SLOT_PORT_MAP.items() if k == gks.OVERRIDDEN_BELOW} == {66, 67, 86, 123, 133, 153, 158}

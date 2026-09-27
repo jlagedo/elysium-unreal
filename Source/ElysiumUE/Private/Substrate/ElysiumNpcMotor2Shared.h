@@ -10,7 +10,6 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 
 namespace NpcKernelMotor2Shared
 {

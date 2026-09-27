@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcLasombra.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
@@ -8,12 +7,6 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-
-const FElysiumNpcClass* FElysiumNpcLasombra::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 592: `0x103893c0`, whose miss calls the Troika body `0x102953e0` directly.
 /** `CNPC_VLasombra::vfunc592` (`0x103893c0`) — the body of `FElysiumNpcLasombra::CanSeekCover`. */

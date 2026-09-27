@@ -12,10 +12,10 @@
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Hints**. Every assertion below is read off the decompiled C of the body it
 // names — the threshold, the arm order, the id, what is written — never off 29c's one-line walk.
@@ -88,7 +88,7 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 		}
 		FElysiumNpcWorldFixture::Quiet({ Npc });
 		TestEqual(*FString::Printf(TEXT("%s's slot-566 body"), Row.Class),
-			FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 566)), FString(Row.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 566)), FString(Row.Body));
 	}
 	// The hint's group gate is the base body's alone; every hint here passes it, so a base answer
 	// is the type switch's.
@@ -721,7 +721,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// Slot 566's species entry point: this NPC IS a `CNPC_VSabbatLeader`, whose own override
 	// (`0x103a9340`) fills the slot — and the refusal below is the seam's, not the body's.
 	TestEqual(TEXT("CNPC_VSabbatLeader fills slot 566 with its own body"),
-		FString(ElysiumNpcKernelClass::BodyOf(Npc->RetailClass(), 566)), FString(TEXT("0x103a9340")));
+		FString(ElysiumNpcTestCensus::BodyOf(Npc->RetailClass(), 566)), FString(TEXT("0x103a9340")));
 	TestFalse(TEXT("but slot 566 on a hint node refuses, because the hint cannot be read"),
 		Npc->FValidateHintTypeNode(0));
 

@@ -11,10 +11,11 @@
 class FElysiumNpcGargoyle : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VGargoyle");
+	ELYSIUM_NPC_CLASS("CNPC_VGargoyle", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The constructor `0x10377a60`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcGargoyle();
+
 	virtual bool Slot599(int32 Arg) override;
 	virtual bool Slot600(FElysiumEntity* Enemy) override;
 	virtual void NPCInit() override;

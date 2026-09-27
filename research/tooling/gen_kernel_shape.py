@@ -5,21 +5,27 @@ Owner-run archaeology, not part of any build.  The kernel ledger
 (``docs/vtmb/npc-kernel/``) says what ``CAI_BaseNPCTroika`` *is*: every word of
 its flattened layout with a type, every primary-vtable slot with a declaration,
 and the 77-class tree with the entity classnames each claims.  This generator
-transcribes that ledger into three committed artifacts the runtime can assert
-against:
+transcribes that ledger into committed artifacts the runtime is asserted against
+(0019 story 5 closed the class tree: every live retail class is a C++ class, and
+nothing here dispatches):
 
 * ``ElysiumNpcKernelShape.cpp`` — the **census**.  One row per retail word
   (offset, retail name, type, owning chain layer, tier), one row per slot
   (declaration, tier, the Troika-line body's address and ``order.md`` layer, and
   the port's callable), one row per family class (direct base, vtable, slot
-  count, entity classnames) and one row per species slot override.  The census
-  is data only: nothing in it invents a behaviour.
-* ``ElysiumNpcKernelSlots.inl`` — one ``virtual`` declaration per Troika-line
-  slot the port does not already implement under a mapped name, included inside
-  ``class FElysiumNpc``.  Each carries ``// slot N  0x……  (tier)``.
-* ``ElysiumNpcKernelSlots.cpp`` — those virtuals' bodies: a named stub that
-  tallies ``elysium.stubs`` with the retail address and the owning story, so the
-  tally joins ``functions.md`` by address.
+  count, entity classnames) and one row per class's own slot body.  The census
+  is data only: nothing in it invents a behaviour, and the class tree takes its
+  rows as identity (``ClassNamed``), never as a dispatch key.
+* per chain class (``SLOT_SURFACES``: the entity, animating, overlay, flex and
+  combat-character nodes, ``FElysiumNpcBase``, ``FElysiumNpc``), ``…Slots.inl``
+  — one ``virtual`` declaration per slot the class introduces or refills whose
+  body the port does not already carry under a mapped name, each with
+  ``// slot N  0x……  (tier)`` — and ``…Slots.cpp``, those virtuals' bodies:
+  retail's one-constant body where a ``default:`` verdict records it, else a
+  named stub that tallies ``elysium.stubs`` with the retail address and the
+  owning story (the tally joins ``functions.md`` by address).  Both are port
+  code: stubs keep counting until a story ports the body, and one-constant
+  bodies stay.
 
 The shape's *members* are not generated.  Every retail word lands by hand on the
 struct that owns its concern and is bound to its offset by the compile-checked
@@ -173,8 +179,8 @@ REGISTRY_PREFIX = "registry:"
 CONSTANT_BODY_RE = re.compile(
     r"^\s*\{\s*return\s*(;|(?:-?\d+|0x[0-9a-fA-F]+)\s*;)\s*\}\s*$", re.S)
 
-# The table the port's leaf stands for. Species classes add words past its end; those are rows in
-# the class registry, not members of the leaf.
+# The flattened table `FElysiumNpc` stands for. Species classes add words past its end; the census
+# carries them as rows, and each is a member of its own port class.
 BASE_TABLE = "CAI_BaseNPCTroika"
 
 # The chain layers whose words belong to the NPC rather than to the entity classes under it. A word
@@ -315,10 +321,11 @@ GENERATED_OVERRIDE = "generated-override"
 # A stub whose body is dead, uncalled and overridden nowhere (0019/5 step 6): no virtual is
 # generated, and the census row stays with an empty port callable.
 DELETED = "deleted"
-# A slot name a class below the NPC line also declares, reviewed as harmless (0019/5 step 6): the
-# virtual is generated under its retail name and the subclass member overrides it (same signature)
-# or hides it (another signature) with nothing dispatching through the hidden form.
-ACCEPTED = "accepted"
+# A slot a class below the NPC line overrides (0019/5 commit B): the virtual is generated under its
+# retail name and every class below the NPC line that declares the name declares it `override`, so
+# the member IS the slot's body on that class. A same-name member without `override` (a hide under
+# another signature) fails generation; commit B retired the hides this kind replaced.
+OVERRIDDEN_BELOW = "overridden-below"
 
 SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 
@@ -389,10 +396,15 @@ def _load_slot_map() -> None:
         # --- The kernel surface the port already runs -------------------------------------------
         (435, PORT, "FElysiumNpc::OnScheduleChange",
          "the schedule-change release, ported in story 8"),
-        (438, PORT, "FElysiumNpc::SelectSchedule",
-         "the state switch of the base selector 0x1028a380"),
-        (440, PORT, "FElysiumNpc::TranslateSchedule",
-         "the schedule translation, ported in story 25"),
+        (438, PORT, "FElysiumNpc::SpeciesSelectSchedule",
+         "the overridable half of the selector: `FElysiumNpc::SelectSchedule` asks it first and runs "
+         "the Troika body 0x1028a380 (the state switch) when it answers 0, which is where a species "
+         "body's direct call to the base lands; each species body is this virtual's override "
+         "(0019/5 commit B named the virtual, so `kernel_shape --unported` sees the overrides)"),
+        (440, PORT, "FElysiumNpc::TranslateScheduleRetail",
+         "the schedule translation in retail numbers (story 25), which the typed runner hook "
+         "`FElysiumNpc::TranslateSchedule` wraps; each species body is this virtual's override "
+         "(0019/5 commit B named the virtual rather than the wrapper)"),
         (448, PORT, "FElysiumNpc::TaskFail", "the failure route, ported in story 13"),
         (453, PORT, "FElysiumNpc::BuildScheduleTestBits", "the interrupt mask, ported in story 25"),
         (488, GENERATED_OVERRIDE, "DeathSound",
@@ -400,21 +412,21 @@ def _load_slot_map() -> None:
          "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),
         (534, PORT, "FElysiumCombatCharacter::EyeLookTargetHandle",
          "the gaze cascade's chosen subject; `EyeLookTarget` beside it is the point it resolved to"),
-        # --- Names a class below the NPC line also declares (0019/5 step 6) -------------------
-        (66, ACCEPTED, "", "`FElysiumWeapon::Hide(FElysiumCombatCharacter*)` is the port's holster "
-         "visual, another signature: it hides the slot on the weapon; nothing calls slot 66 on one"),
-        (67, ACCEPTED, "", "`FElysiumWeapon::Unhide(FElysiumCombatCharacter*)`, as slot 66"),
-        (86, ACCEPTED, "", "`FElysiumCameraCinematic::ShouldTransmit(handle)` is the port's reading "
-         "of the camera's own transmit test, another signature; nothing dispatches slot 86 on it"),
-        (123, ACCEPTED, "", "`FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32)`, another "
-         "signature, as slot 86"),
-        (133, ACCEPTED, "", "`FElysiumMoverBase::MoveDone()` is the mover line's own `MoveDone` "
-         "(retail's doors and buttons override `CBaseToggle::MoveDone`): same signature, so it "
-         "overrides the chain's slot, which is retail's shape"),
-        (153, ACCEPTED, "", "`FElysiumMoverBase::IsMoving() const` differs by const: it hides the slot "
-         "on the mover line; nothing calls slot 153 on a mover"),
-        (158, ACCEPTED, "", "`FElysiumPlayer::IsAlive() const` differs by const: the player's own "
-         "reading hides the slot on the player; a call through `FElysiumEntity*` runs the chain body"),
+        # --- Slots a class below the NPC line overrides (0019/5 commit B) ---------------------
+        (66, OVERRIDDEN_BELOW, "", "`FElysiumWeapon::Hide()`: `CBaseEntity::Hide` 0x1009d2a0 on the "
+         "class that carries the EF_NODRAW bit, the owner's wield model going with it"),
+        (67, OVERRIDDEN_BELOW, "", "`FElysiumWeapon::Unhide()`: `CBaseEntity::Unhide` 0x1009d380, as "
+         "slot 66"),
+        (86, OVERRIDDEN_BELOW, "", "`FElysiumCameraCinematic::ShouldTransmit`: `CBaseCineCam::vfunc86` "
+         "0x1006e6a0, the subject-only transmit, over the single player as recipient"),
+        (123, OVERRIDDEN_BELOW, "", "`FElysiumCameraCinematic::DrawDebugGeometryOverlays`: "
+         "`CBaseCineCam` 0x1006ff40, gated on `camera_showdebug == 1`"),
+        (133, OVERRIDDEN_BELOW, "", "`FElysiumMoverBase::MoveDone()`: the mover line's own `MoveDone` "
+         "(retail's doors and buttons override `CBaseToggle::MoveDone`)"),
+        (153, OVERRIDDEN_BELOW, "", "`FElysiumMoverBase::IsMoving()`: `CBaseEntity::IsMoving` "
+         "0x10026e70 (`m_vecVelocity != 0`), which on a mover is a move in flight"),
+        (158, OVERRIDDEN_BELOW, "", "`FElysiumPlayer::IsAlive()`: `CBaseEntity::IsAlive` 0x100b4dc0 "
+         "over the player's own `m_lifeState`"),
         (582, DELETED, "",
          "`CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller, overridden nowhere "
          "(0019/5 step 6)"),
@@ -595,9 +607,9 @@ class OverrideRow:
 def constant_return(code: str) -> str:
     """The literal a body returns when its whole body is `return <literal>;`, else `""`.
 
-    Species are data in this port, so a species override that answers one constant is a row in a
-    class → slot → value table rather than a C++ body. The *decision* that a body is that shape is
-    a reading and lives in the verdict overlay; this only reads the value back off the decompiled
+    The census carries the value a class's own body answers where the whole body is one constant
+    (the `registry:` verdicts), so a species override can be checked against it. The *decision*
+    that a body is that shape is a reading and lives in the verdict overlay; this only reads the value back off the decompiled
     C, and only when the body has exactly one statement, so it cannot be fooled into recording a
     behaviour as a value.
     """
@@ -690,7 +702,7 @@ def _class_scope_lines(body: str) -> list[str]:
     return out
 
 
-def chain_subclass_names(repo: Path) -> dict[str, set[str]]:
+def chain_subclass_names(repo: Path, overrides: dict[str, set[str]] | None = None) -> dict[str, set[str]]:
     """Member name -> the classes that declare it, over every class that derives from the chain
     below the NPC line: the player, items, props, triggers, the makers and directors, the ~50
     `FElysiumEntity` subclasses (story 0019/5 step 6).
@@ -698,7 +710,8 @@ def chain_subclass_names(repo: Path) -> dict[str, set[str]]:
     From step 6 a generated slot on `FElysiumEntity`, `FElysiumAnimating`, the overlay, the flex
     node or the combat character is a virtual every one of those inherits. A same-name member there
     would silently override it (same signature) or hide it (another signature), and neither is a
-    default: the collision is a `SLOT_PORT_MAP` decision.
+    default: the collision is a `SLOT_PORT_MAP` decision. `overrides`, when given, collects the
+    classes whose declaration of a name carries `override` (an `OVERRIDDEN_BELOW` row's proof).
     """
     bases: dict[str, list[str]] = {}
     bodies: dict[str, list[str]] = collections.defaultdict(list)
@@ -735,6 +748,11 @@ def chain_subclass_names(repo: Path) -> dict[str, set[str]]:
                     match = pattern.match(line)
                     if match:
                         names[match.group(1)].add(name)
+                        # The declaration's own text: a trailing `//` or inline `/* */` comment that
+                        # spells `override` is not one.
+                        code = re.sub(r"/\*.*?\*/", "", line.split("//", 1)[0])
+                        if overrides is not None and pattern is DECL_RE and re.search(r"\boverride\b", code):
+                            overrides.setdefault(match.group(1), set()).add(name)
     for keyword in ("if", "for", "while", "switch", "return", "sizeof", "static_cast", "else", "catch"):
         names.pop(keyword, None)
     return names
@@ -920,7 +938,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
         if decision is not None:
             kind, port_name, why = decision
             row.port_kind, row.port_why = kind, why
-            row.port_name = (port_name if kind in (PORT, DELETED) else name if kind == ACCEPTED
+            row.port_name = (port_name if kind in (PORT, DELETED) else name if kind == OVERRIDDEN_BELOW
                              else port_name or f"{name}Slot{row.slot}")
             if kind in (PORT, DELETED):
                 continue
@@ -957,8 +975,18 @@ def build(repo: Path, module: str, depth: int) -> Model:
 
     # A slot the chain now declares below the NPC line is inherited by every entity class; a
     # same-name member on one of them is a decision, not a default (story 0019/5 step 6).
-    subclass_names = chain_subclass_names(repo)
+    subclass_overrides: dict[str, set[str]] = {}
+    subclass_names = chain_subclass_names(repo, subclass_overrides)
     for row in slots:
+        if row.port_kind == OVERRIDDEN_BELOW:
+            declaring = subclass_names.get(row.port_name, set())
+            hiding = declaring - subclass_overrides.get(row.port_name, set())
+            if not declaring or hiding:
+                raise SystemExit(f"gen_kernel_shape: slot {row.slot} `{row.port_name}` is mapped "
+                                 f"{OVERRIDDEN_BELOW}, but "
+                                 + (f"{', '.join(sorted(hiding))} declare(s) it without `override`"
+                                    if declaring else "no class below the NPC line declares it"))
+            continue
         if not row.generated or row.slot in SLOT_PORT_MAP:
             continue
         if any(layer.owner not in LAYER_PORT.values() for layer in row.layers)                 and row.port_name in subclass_names:
@@ -979,12 +1007,9 @@ def build(repo: Path, module: str, depth: int) -> Model:
         row.port_name = row.method or f"Slot{row.slot}"
 
     # --- classes and the species overrides -------------------------------------------------------
-    own = collections.Counter()
-    for slot, bodies in ledger.slot_bodies.items():
-        for cls, fn_addr in bodies.items():
-            fn = ledger.functions.get(fn_addr)
-            if fn and fn.ns == cls:
-                own[cls] += 1
+    # Own bodies by primary-vtable diff against the direct base (the ledger's count, story 5
+    # commit B; the name-prefix count missed unnamed and misfiled fills).
+    own = ledger.own_bodies()
     classes = [ClassRow(name=cls, base=ledger.bases.get(cls, ""),
                         vtable=f"0x{ledger.vtable_addr.get(cls, '')}" if ledger.vtable_addr.get(cls)
                         else "",
@@ -1177,11 +1202,9 @@ def render_census(model: Model, module: str) -> str:
     out.append("\t};")
     out.append("")
 
-    out.append("\t// Species overrides, as rows rather than subclasses: the port stands one leaf")
-    out.append("\t// for every `npc_V*` classname and a species' own body is data about which slot")
-    out.append("\t// it replaces, not a C++ type. `Verdict` is the overlay's word for that body and")
-    out.append("\t// `Default` the literal it answers where the whole body is one `return`, which")
-    out.append("\t// is the class → slot → value table story 29c's `registry:` rows record.")
+    out.append("	// Each class's own slot bodies (census only: the port's answer is the class's")
+    out.append("	// override on its C++ class). `Verdict` is the overlay's word for that body and")
+    out.append("	// `Default` the literal it answers where the whole body is one `return`.")
     out.append("\tconstexpr FElysiumNpcClassSlot GOverrides[] =")
     out.append("\t{")
     for row in model.overrides:
@@ -1245,10 +1268,27 @@ def render_census(model: Model, module: str) -> str:
     return "\n".join(out) + "\n"
 
 
-# The two functions over the tables that are code rather than data. They are emitted with the
+# The three functions over the tables that are code rather than data (`ClassNamed` is the class
+# tree's identity lookup, story 5 commit B). They are emitted with the
 # tables so the digest walks the arrays it was taken from: the stored constant catches a bad
 # regeneration, and this walk catches a hand-edit of a row the constant was not regenerated for.
 CENSUS_TAIL = """
+const FElysiumNpcClass* ClassNamed(const TCHAR* Name)
+{
+	if (Name == nullptr)
+	{
+		return nullptr;
+	}
+	for (const FElysiumNpcClass& Row : Classes())
+	{
+		if (FCString::Strcmp(Row.Name, Name) == 0)
+		{
+			return &Row;
+		}
+	}
+	return nullptr;
+}
+
 const TCHAR* TierName(EElysiumNpcShapeTier Tier)
 {
 \tswitch (Tier)
@@ -1475,10 +1515,9 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         "//",
         "// A body with a `default:` verdict says something stronger: retail's whole body at that",
         "// slot is `return <literal>;`, so the port answers the same literal and stops tallying.",
-        "// The literal is a recovered fact, not a written behaviour — the same argument the story",
-        "// makes for a species override of a constant-returning virtual — and the slot table at the",
-        "// end of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of",
-        "// them through, on a receiver typed to this class.",
+        "// The literal is a recovered fact, not a written behaviour, and the slot table at the end",
+        "// of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them",
+        "// through, on a receiver typed to this class.",
         "",
         f'#include "{surface.header}"',
         "",
@@ -1566,6 +1605,85 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
 
 
 # --- Driver -------------------------------------------------------------------------------------
+
+
+# --- The override census (0019 story 5 commit B) ------------------------------------------------
+#
+# One row per live (class, slot) own body the port carries as an override, each with a compile-time
+# proof: `TDeclaredOn<DeclaringClass, Signature>::Test(&DeclaringClass::Method)` is true only when
+# the method with that exact signature is declared on that class itself, and `std::is_base_of_v`
+# holds the class the retail factory builds to the declaring class (an inherited override is carried
+# where its owner declares it). A name that exists nowhere stops the build; an override deleted while
+# a base keeps the name reads false and `NpcKernelShape.Overrides` fails; `--check` stops a
+# stale table. `kernel_shape --unported` is the other half: the rows the port does not carry yet.
+
+OVERRIDE_CENSUS_OUTPUT = ("Source", "ElysiumUE", "Private", "Tests", "ElysiumNpcKernelOverrideCensus.cpp")
+
+
+def _port_header(port: str) -> str:
+    return f"Substrate/{port[1:]}.h"
+
+
+def render_override_census(model: Model, module: str, repo: Path) -> str:
+    ported, unported = ks.override_rows(repo, model)
+    live_rows = len(ported) + len([r for r in unported if r[4] == "no-override"])
+    missing = [r for r in ported if r["signature"] is None]
+    if missing:
+        raise SystemExit("gen_kernel_shape: no declaration reads for the ported override(s) "
+                         + ", ".join(f"{r['cls']}#{r['slot']} {r['declared']}::{r['method']}"
+                                     for r in missing))
+    ported.sort(key=lambda r: (r["cls"], r["slot"], r["address"]))
+    headers = sorted({_port_header(r["port"]) for r in ported} | {_port_header(r["declared"]) for r in ported})
+    out = _header(module, model.meta,
+                  f"{len(ported)} live own bodies the port carries as overrides, of {live_rows} live "
+                  f"(class, slot) own-body rows on live classes; `kernel_shape --unported` lists the "
+                  f"other {live_rows - len(ported)}.")
+    out += ["//",
+            "// The override census (0019 story 5 commit B): each row's two booleans are compile-time",
+            "// proofs -- the method with the recorded signature is declared on the declaring class",
+            "// itself, and the class the retail factory builds derives from it. Read by",
+            "// `Elysium.Substrate.NpcKernelShape.Overrides`.",
+            "",
+            '#include "Tests/ElysiumNpcKernelOverrideCensus.h"',
+            "",
+            "#if WITH_DEV_AUTOMATION_TESTS",
+            ""]
+    out += [f'#include "{h}"' for h in headers]
+    out += ["",
+            "#include <type_traits>",
+            "",
+            "namespace ElysiumNpcKernelOverrideCensus",
+            "{",
+            "namespace",
+            "{",
+            "\tusing ElysiumNpcKernelShape::TDeclaredOn;",
+            "",
+            "\tconst FElysiumNpcPortedOverride GRows[] =",
+            "\t{"]
+    for r in ported:
+        ret, params, const = r["signature"]
+        sig = f"{ret}({params})" + (" const" if const else "")
+        proof = f"TDeclaredOn<{r['declared']}, {sig}>::Test(&{r['declared']}::{r['method']})"
+        inherits = f"std::is_base_of_v<{r['declared']}, {r['port']}>"
+        out += _row([_literal(r["cls"]), str(r["slot"]), _literal(r["address"]), _literal(r["verdict"]),
+                     _literal(r["port"]), _literal(r["declared"]), _literal(r["method"]),
+                     f"&{r['port']}::StaticRetailClass", proof, inherits])
+    out += ["\t};",
+            "}",
+            "",
+            "TArrayView<const FElysiumNpcPortedOverride> Rows()",
+            "{",
+            "\treturn MakeArrayView(GRows);",
+            "}",
+            "",
+            "int32 LiveRows()",
+            "{",
+            f"\treturn {live_rows};",
+            "}",
+            "}",
+            "",
+            "#endif  // WITH_DEV_AUTOMATION_TESTS"]
+    return "\n".join(out) + "\n"
 
 
 def _emit(output: Path, text: str, check: bool) -> int:
@@ -1656,6 +1774,8 @@ def main(argv: list[str] | None = None) -> int:
 
     status = 0
     status |= _emit(repo.joinpath(*CENSUS_OUTPUT), render_census(model, args.module), args.check)
+    status |= _emit(repo.joinpath(*OVERRIDE_CENSUS_OUTPUT), render_override_census(model, args.module, repo),
+                    args.check)
     for owner, surface in SLOT_SURFACES.items():
         status |= _emit(repo.joinpath(*surface.inl), render_slots_inl(model, args.module, owner),
                         args.check)

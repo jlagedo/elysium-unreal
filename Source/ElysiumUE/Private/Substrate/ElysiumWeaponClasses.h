@@ -635,10 +635,13 @@ public:
 	// stated here rather than reproduced, and moving it down the chain is a mechanical change if a
 	// second family ever needs it.
 	bool IsHidden() const { return bHidden; }
-	// Set/clear the bit AND the drawn wield model with it, so the hand matches what the translation
-	// answers. `Wearer` may be null — a loose weapon has no hand to take a model off.
-	void Hide(FElysiumCombatCharacter* Wearer);
-	void Unhide(FElysiumCombatCharacter* Wearer);
+	// Slots 66 / 67, `CBaseEntity::Hide` `0x1009d2a0` / `Unhide` `0x1009d380`, on the weapon: set /
+	// clear the bit AND the drawn wield model with it, so the hand matches what the translation
+	// answers. The hand is the owner's (`OwnerCharacter()`); a loose weapon has none to take a model
+	// off. The slots' overrides on the class that carries the bit (story 5 commit B; they hid the
+	// slots under a one-argument signature before).
+	virtual void Hide() override;
+	virtual void Unhide() override;
 
 	// `m_bCanStealthKill` at `weapon+0x872`. `CWeaponMelee` `0x103e9ac0` and `CWeaponUnarmed`
 	// `0x103f53f0` write 1; `CWeapon` `0x10250ac0` writes 0. This port's unarmed records are

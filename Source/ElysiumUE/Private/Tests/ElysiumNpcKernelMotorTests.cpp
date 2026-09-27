@@ -6,6 +6,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcTestHull.h"
 #include "Substrate/ElysiumNpcChangBros.h"
 #include "Substrate/ElysiumNpcAsianVampire.h"
 #include "Substrate/ElysiumNpcHengeyokai.h"
@@ -19,9 +20,9 @@
 #include "Substrate/ElysiumNpcDog.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Motor** — `CAI_Motor`, `CAI_Navigator` and everything the NPC asks of its
 // motor.
@@ -59,46 +60,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorTunablesTest,
 	"Elysium.Substrate.NpcKernelMotor.Tunables", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 {
-	// The species table, every row by name. `CAI_TestHull`'s answers are its own class's overrides
-	// (`FElysiumNpcTestHull`, story 5 fold A1; `NpcKernelTestHull.Bodies`), not a row.
-	int32 Count = 0;
-	const FElysiumNpcBase::FJumpTunableSpecies* Rows = FElysiumNpc::JumpTunableSpeciesRows(Count);
-	TestEqual(TEXT("two tunable rows: the base line and the Troika line"), Count, 2);
-	TestNotNull(TEXT("rows"), Rows);
+	// `CAI_TestHull`'s answers are its own class's overrides (`FElysiumNpcTestHull`, story 5 fold A1;
+	// `NpcKernelTestHull.Bodies`); commit B collapsed the class-keyed row table into the bodies below.
+	// The base line (a base-only NPC answers the `CAI_BaseNPC` bodies): `0x101a6b60` returns the SAME
+	// `_DAT_10453b94` as `0x101a6b40`, so its jump speed and its step height are one constant, 18.
+	FElysiumNpcTestHull HullOnly;
+	FElysiumNpcBase& BaseLine = HullOnly;
+	TestEqual(TEXT("the base line's step height is 18"), BaseLine.FElysiumNpcBase::StepHeight(), 18.0f);
+	TestEqual(TEXT("and its jump speed is the same 18"), BaseLine.FElysiumNpcBase::GetMaxJumpSpeed(), 18.0f);
 
-	const FElysiumNpcBase::FJumpTunableSpecies* Troika =
-		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
-	TestNotNull(TEXT("CAI_BaseNPCTroika row"), Troika);
-	if (Troika != nullptr)
-	{
-		// `0x101a6b40` `_DAT_10453b94` = 18.0 for the step height slot 522 carries, and Troika's own
-		// override of 523 (`0x101aa670`, `_DAT_1044faa8`) = 36.0 — a DIFFERENT constant.
-		TestEqual(TEXT("troika step height is 18"), Troika->StepHeight, 18.0f);
-		TestEqual(TEXT("troika max jump speed is 36, not the step height"), Troika->MaxJumpSpeed,
-			36.0f);
-		TestEqual(TEXT("troika jump rise 80"), Troika->JumpLegalRise, 80.0f);
-		TestEqual(TEXT("troika jump drop 250"), Troika->JumpLegalDrop, 250.0f);
-		TestEqual(TEXT("troika jump distance 160"), Troika->JumpLegalDistance, 160.0f);
-	}
-
-	const FElysiumNpcBase::FJumpTunableSpecies* Base =
-		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
-	TestNotNull(TEXT("CAI_BaseNPC row"), Base);
-	if (Base != nullptr)
-	{
-		// `0x101a6b60` returns the SAME `_DAT_10453b94` as `0x101a6b40` — the base line's jump speed
-		// and its step height are one constant.
-		TestEqual(TEXT("base line's jump speed equals its step height"), Base->MaxJumpSpeed,
-			Base->StepHeight);
-		TestEqual(TEXT("and both are 18"), Base->StepHeight, 18.0f);
-	}
-
-	TestNull(TEXT("the test hull has no row: its class overrides the slots"),
-		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_TestHull")));
-	TestNull(TEXT("a class with no row answers null"),
-		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CNPC_VNotAClass")));
-
-	// The live slots on a spawnable species, which dispatch the Troika row.
+	// The Troika line: `0x101a6b40`'s 18 for the step height slot 522 carries, and Troika's own
+	// override of 523 (`0x101aa670`, `_DAT_1044faa8`) = 36.0 -- a DIFFERENT constant.
+	// The live slots on a spawnable species.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_tunables"), 4301);
 	Builder.AddNpc(TEXT("guard"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
@@ -206,13 +179,13 @@ bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 	for (const TCHAR* const (&Row)[2] : Expected)
 	{
 		TestEqual(*FString::Printf(TEXT("%s's slot-516 body"), Row[0]),
-			FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(Row[0]), 516)),
+			FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(Row[0]), 516)),
 			FString(Row[1]));
 	}
 	// Every other class runs the Troika line's own `0x10297ce0`, which replaces `CAI_BaseNPC`'s
 	// `0x10280bb0` for the whole line.
 	TestEqual(TEXT("the Troika line's slot-516 body"),
-		FString(ElysiumNpcKernelClass::SlotRow(516)->Address), FString(TEXT("0x10297ce0")));
+		FString(ElysiumNpcTestCensus::SlotRow(516)->Address), FString(TEXT("0x10297ce0")));
 	return true;
 }
 
@@ -386,19 +359,19 @@ bool FElysiumNpcKernelMotorIgnoreCollisionTest::RunTest(const FString&)
 	};
 	for (const TCHAR* const (&Row)[3] : Expected)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row[0]);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row[0]);
 		for (int32 Arm = 0; Arm < 2; ++Arm)
 		{
 			const int32 Slot = 68 + Arm;
 			if (Row[1 + Arm] != nullptr)
 			{
 				TestEqual(*FString::Printf(TEXT("%s's slot-%d body"), Row[0], Slot),
-					FString(ElysiumNpcKernelClass::BodyOf(Cls, Slot)), FString(Row[1 + Arm]));
+					FString(ElysiumNpcTestCensus::BodyOf(Cls, Slot)), FString(Row[1 + Arm]));
 			}
 			else
 			{
 				TestNull(*FString::Printf(TEXT("%s does not replace slot %d"), Row[0], Slot),
-					ElysiumNpcKernelClass::OverrideOf(Cls, Slot));
+					ElysiumNpcTestCensus::OverrideOf(Cls, Slot));
 			}
 		}
 	}
@@ -481,7 +454,7 @@ bool FElysiumNpcKernelMotorIgnoreCollisionTest::RunTest(const FString&)
 
 	// `CNPC_VRat::ShouldIgnoreCollision` `0x103ad6d0`: the fixed global entity, else the base. The
 	// global is a SEAM answering null, so the rat declines like anybody else.
-	TestTrue(TEXT("the rat resolves to CNPC_VRat"), Rat->IsRetailClass(TEXT("CNPC_VRat")));
+	TestTrue(TEXT("the rat resolves to CNPC_VRat"), Rat->AsSpecies<FElysiumNpcRat>() != nullptr);
 	TestFalse(TEXT("and its slot 68 declines while the global-entity seam answers null"),
 		Rat->ShouldIgnoreCollision(Other));
 	TestNull(TEXT("which it does"), Rat->RatIgnoredGlobalEntity());
@@ -970,7 +943,7 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Leader });
 	TestTrue(TEXT("the leader resolves to CNPC_VSabbatLeader"),
-		Leader->IsRetailClass(TEXT("CNPC_VSabbatLeader")));
+		Leader->AsSpecies<FElysiumNpcSabbatLeader>() != nullptr);
 
 	Leader->Origin = PortUnits(0.0, 0.0, 0.0);
 	Player->Origin = PortUnits(20.0, 0.0, 0.0);

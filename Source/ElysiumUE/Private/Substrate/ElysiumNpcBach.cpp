@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcBach.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -128,12 +127,6 @@ namespace
 		}
 	}
 	constexpr TCHAR GTranslate19BachKatana[] = TEXT("item_w_katana");   // 0x10587668
-}
-
-const FElysiumNpcClass* FElysiumNpcBach::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 606: `0x10364280`, the arm-then-fire gate that calls the Troika body `0x102b8320` directly.

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -72,12 +71,6 @@ namespace
 	// inclusive at both ends, the same object and slot family Sounds and Damage read.
 	constexpr int32 AndreiHitMaxMin = 2;
 	constexpr int32 AndreiHitMaxMax = 4;
-}
-
-const FElysiumNpcClass* FElysiumNpcAndreiBlood::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x1035cec0`.

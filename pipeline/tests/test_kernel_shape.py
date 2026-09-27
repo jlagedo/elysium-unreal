@@ -247,3 +247,22 @@ def test_check_mode_matches_committed_tables(built):
         pytest.skip("the shape tables are not committed yet")
     shape, rows, sigs = built
     assert ks.kl.emit(ks.render(shape, rows, sigs), out, check=True) == 0
+
+
+def test_signature_reads_the_declaration_not_a_comment():
+    # 0019 story 5 commit B: the override census's proof needs the declaration's own signature,
+    # names and defaults stripped; a doc comment that spells `Name(...) override` is not one.
+    header = (
+        "class FElysiumNpcThing : public FElysiumNpc\n{\npublic:\n"
+        "\tvirtual void Slot597(FElysiumEntity* Other, int32 Priority) override;\n"
+        "\tvirtual bool IsJumpLegal(const FVector& StartPos, const FVector& Apex,\n"
+        "\t\tconst FVector& EndPos) const override;\n"
+        "\tvirtual int32 Plain() override { return 0; }\n"
+        "\tvirtual void NoOverride(int32 Value = 3);\n"
+        "};\n")
+    assert ks._signature_of(header, "Slot597", True) == ("void", "FElysiumEntity*, int32", False)
+    assert ks._signature_of(header, "IsJumpLegal", True) == (
+        "bool", "const FVector&, const FVector&, const FVector&", True)
+    assert ks._signature_of(header, "Plain", True) == ("int32", "", False)
+    assert ks._signature_of(header, "NoOverride", True) is None
+    assert ks._signature_of(header, "NoOverride", False) == ("void", "int32", False)

@@ -14,9 +14,7 @@
 class FElysiumNpcMakerZombie : public FElysiumNpcMaker
 {
 public:
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPCMaker_Zombie");
-
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	ELYSIUM_NPC_CLASS("CNPCMaker_Zombie", FElysiumNpcMaker)
 
 	// --- `CNPCMaker_Zombie`'s own words (datamap `0x106253e8`) --------------------------------------
 	int32 ZombieAiSpawnType = 0;    // +0x76d0 m_iZombieAISpawnType  Flag_ZombieAIType

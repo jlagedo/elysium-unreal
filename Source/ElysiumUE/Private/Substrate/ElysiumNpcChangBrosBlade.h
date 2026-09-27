@@ -12,10 +12,8 @@
 class FElysiumNpcChangBrosBlade : public FElysiumNpcChangBros
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VChangBrosBlade");
+	ELYSIUM_NPC_CLASS("CNPC_VChangBrosBlade", FElysiumNpcChangBros)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 

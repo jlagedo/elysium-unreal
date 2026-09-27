@@ -12,9 +12,9 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Bosses**. Every assertion below is read off the decompiled C (or, for
 // `0x103983d0` and `0x103989b0`, off the LISTING, whose two bodies the decompiler lost) of the body
@@ -149,19 +149,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesPickupSpeciesTest,
 	"Elysium.Substrate.NpcKernelBosses.PickupSpecies", GBossesTestFlags)
 bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 {
-	int32 Count = 0;
-	const FElysiumNpc::FPickupSpecies* Rows = FElysiumNpcHengeyokai::PickupSpeciesRows(Count);
-	TestEqual(TEXT("two species carry the pickup chain"), Count, 2);
-
-	// Every row by NAME, with the two retail bodies, the carrier bone, the `m_hPickupTarget` offset
-	// and the collision-ignore re-arm the release passes to `0x102c43b0`.
-	const FElysiumNpc::FPickupSpecies* Heng =
-		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
-	if (Heng == nullptr)
-	{
-		AddError(TEXT("CNPC_VHengeyokai has no pickup row"));
-		return false;
-	}
+	// Each of the two classes owns its row (story 5 commit B), with the two retail bodies, the carrier
+	// bone, the `m_hPickupTarget` offset and the collision-ignore re-arm the release passes to
+	// `0x102c43b0`.
+	const FElysiumNpc::FPickupSpecies* Heng = &FElysiumNpcHengeyokai::PickupRow();
+	TestEqual(TEXT("the Hengeyokai's row is its own"), FString(Heng->RetailClass),
+		FString(FElysiumNpcHengeyokai::RetailClassName));
 	TestEqual(TEXT("Hengeyokai's attach body"), FString(Heng->AttachBody),
 		FString(TEXT("0x10382670")));
 	TestEqual(TEXT("Hengeyokai's release body"), FString(Heng->ReleaseBody),
@@ -173,12 +166,9 @@ bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 		0.0001f);
 	TestFalse(TEXT("Hengeyokai does not restore the breakable latch"), Heng->bRestoresBreakable);
 
-	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VManBat"));
-	if (Bat == nullptr)
-	{
-		AddError(TEXT("CNPC_VManBat has no pickup row"));
-		return false;
-	}
+	const FElysiumNpc::FPickupSpecies* Bat = &FElysiumNpcManBat::PickupRow();
+	TestEqual(TEXT("the ManBat's row is its own"), FString(Bat->RetailClass),
+		FString(FElysiumNpcManBat::RetailClassName));
 	TestEqual(TEXT("ManBat's attach body"), FString(Bat->AttachBody), FString(TEXT("0x1038f430")));
 	TestEqual(TEXT("ManBat's release body"), FString(Bat->ReleaseBody), FString(TEXT("0x1038f790")));
 	TestEqual(TEXT("ManBat grabs on Bip01_R_Foot"), FString(Bat->CarrierBone),
@@ -188,10 +178,6 @@ bool FElysiumNpcKernelBossesPickupSpeciesTest::RunTest(const FString&)
 		0.0001f);
 	TestTrue(TEXT("ManBat restores the breakable latch after the throw"), Bat->bRestoresBreakable);
 
-	// A species with no row of its own and no boss ancestor.
-	TestNull(TEXT("CNPC_VWerewolf carries no pickup row"),
-		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VWerewolf")));
-	TestNull(TEXT("a null class carries no pickup row"), FElysiumNpcVampire::PickupSpeciesOf(nullptr));
 	return true;
 }
 
@@ -216,20 +202,15 @@ bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand the Hengeyokai, the ManBat and two NPCs"));
 		return false;
 	}
-	const FElysiumNpc::FPickupSpecies* Heng =
-		FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VHengeyokai"));
-	const FElysiumNpc::FPickupSpecies* Bat = FElysiumNpcVampire::PickupSpeciesOf(TEXT("CNPC_VManBat"));
-
-	// No row: nothing runs at all.
-	TestFalse(TEXT("a class with no pickup row attaches nothing"),
-		Heng2->AttachPickupAnimlinkFor(nullptr, Body, 0));
+	// No carried thing: `if (param_1 == NULL) return false;`, before anything is created.
+	TestFalse(TEXT("a null carried thing attaches nothing"), Heng2->AttachPickupAnimlink(nullptr, 0));
 
 	// The attach arms both stop at `CreatePhysAnimlink`, the first seam: retail's
 	// "CreateNoSpawn failed" arm, which returns false before writing a single word.
 	TestFalse(TEXT("Hengeyokai's attach stops at the phys_animlink seam"),
-		Heng2->AttachPickupAnimlinkFor(Heng, Body, 0));
+		Heng2->AttachPickupAnimlink(Body, 0));
 	TestFalse(TEXT("ManBat's attach stops at the same seam"),
-		Bat2->AttachPickupAnimlinkFor(Bat, Body, 0));
+		Bat2->AttachPickupAnimlink(Body, 0));
 	TestFalse(TEXT("no animlink handle was written"),
 		Heng2->HengeyokaiPhysicsAnimlink.IsSet() || Bat2->ManBatPhysicsAnimlink.IsSet());
 	TestFalse(TEXT("and neither carry flag was raised"),
@@ -248,7 +229,7 @@ bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 	// a cleared carry leaves the fish timer standing wherever the last pickup left it.
 	Heng2->HengeyokaiFishTimer = 1234.f;
 	Heng2->bHengeyokaiDidFakeThrow = true;
-	Heng2->ReleasePickupAnimlinkFor(Heng, Aim);
+	Heng2->ReleasePickupAnimlink(Aim);
 	TestFalse(TEXT("Hengeyokai's m_hPhysicsAnimlink is cleared"),
 		Heng2->HengeyokaiPhysicsAnimlink.IsSet());
 	TestFalse(TEXT("Hengeyokai's m_hPickupTarget is cleared"),
@@ -262,7 +243,7 @@ bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 	TestTrue(TEXT("and leaves m_bDidFakeThrow standing"), Heng2->bHengeyokaiDidFakeThrow);
 
 	// The TRUE arm, which the attach half takes and which the seams above stop this fixture from
-	// reaching through `AttachPickupAnimlinkFor`. Driven directly so the three writes `0x10381c00`
+	// reaching through `AttachPickupAnimlink`. Driven directly so the three writes `0x10381c00`
 	// makes are all measured: the flag, `m_flFishTimer = curtime + RandomFloat(5, 8)` and the
 	// `m_bDidFakeThrow` clear.
 	const double Now = Fixture.World.NowSeconds();
@@ -282,7 +263,7 @@ bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 	Bat2->ManBatPhysicsAnimlink = Body->Handle;
 	Bat2->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
 	Bat2->HengeyokaiFishTimer = 4321.f;
-	Bat2->ReleasePickupAnimlinkFor(Bat, nullptr);
+	Bat2->ReleasePickupAnimlink(nullptr);
 	TestFalse(TEXT("ManBat's m_hPhysicsAnimlink is cleared"), Bat2->ManBatPhysicsAnimlink.IsSet());
 	TestFalse(TEXT("ManBat's m_hPickupTarget is cleared"), Bat2->ManBatPickupTarget.IsSet());
 	TestFalse(TEXT("ManBat clears CARRYING_BODY through 0x1038f600"),
@@ -372,13 +353,13 @@ bool FElysiumNpcKernelBossesCanPlaySequenceTest::RunTest(const FString&)
 	// The two human-line / MingXiao bodies are overrides on `FElysiumNpcHuman` / `FElysiumNpcMingXiao`
 	// since story 5 step 3; the census still says which body each class holds.
 	TestEqual(TEXT("CNPC_VAndreiBlood holds the human line's 0x103850a0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VAndreiBlood")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VAndreiBlood")), 482)),
 		FString(TEXT("0x103850a0")));
 	TestEqual(TEXT("which CNPC_VHuman introduces"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHuman")), 482)),
 		FString(TEXT("0x103850a0")));
 	TestEqual(TEXT("CNPC_VMingXiao's body"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")), 482)),
 		FString(TEXT("0x10396e90")));
 
 	// The state arm, every branch of it. `Result` is 1 without a cine and 2 with one.

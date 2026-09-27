@@ -11,10 +11,8 @@
 class FElysiumNpcDog : public FElysiumNpcAnimal
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VDog");
+	ELYSIUM_NPC_CLASS("CNPC_VDog", FElysiumNpcAnimal)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual int32 NPC_EarlyTranslateActivity(int32 Activity) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 PreSelectIdealStateRetail() override;

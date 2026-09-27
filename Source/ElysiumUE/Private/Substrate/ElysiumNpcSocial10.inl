@@ -48,8 +48,7 @@
 /** `thunk_FUN_10175180(activator)` (gate 10) — "the ACTIVATOR's controller NPC is in state 3":
  *  the activator's `m_hControllerNPC` (`+0x1db0`) stand-in answers `Classify() == 3`. The activator
  *  is the player, whose `+0x1db0` is the world's controller handle (`FElysiumPlayer::
- *  ControllerNpcBusy`; the word's second, NPC-side home is `FElysiumNpc::ControllerNpc`, written
- *  only by the unwired `GetControllerNpc` path — story 5 commit B unifies them). A non-player
+ *  ControllerNpcBusy`; the word's one home since story 5 commit B). A non-player
  *  activator carries no such word and answers false. Retail refuses when the test is true. */
 bool ActivatorControllerBusy(const FElysiumEntity* Activator) const;
 

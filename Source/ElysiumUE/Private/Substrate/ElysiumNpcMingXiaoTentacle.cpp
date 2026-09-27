@@ -2,7 +2,6 @@
 
 #include "Substrate/ElysiumNpcMingXiao.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -68,10 +67,13 @@ namespace
 	constexpr EElysiumNpcCond TentacleCoordinateCondition = static_cast<EElysiumNpcCond>(0x78);
 }
 
-const FElysiumNpcClass* FElysiumNpcMingXiaoTentacle::OwnRetailClass() const
+// `CNPC_VMingXiaoTentacle`'s constructor `0x1039afe0` writes both hull words at `0x1039b008`, after
+// the `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the
+// same order.
+FElysiumNpcMingXiaoTentacle::FElysiumNpcMingXiaoTentacle()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 17;
+	PathingHullKind = 17;
 }
 
 // Slots 21-23: `0x1039e800` / `0x1039e830` / `0x1039e860`, each forwarding to the head.

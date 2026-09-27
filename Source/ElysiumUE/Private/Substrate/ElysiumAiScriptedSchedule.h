@@ -21,9 +21,7 @@
 class FElysiumAiScriptedSchedule : public FElysiumScriptedSequence
 {
 public:
-	static constexpr const TCHAR* RetailClassName = TEXT("CCineAISchedule");
-
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	ELYSIUM_NPC_CLASS("CCineAISchedule", FElysiumScriptedSequence)
 
 	// Slot 82 `0x101a9620` — `&datamap_CCineAISchedule` (`0x10593c9c`), chained to `CCineNPC`'s.
 	virtual void* GetDataDescMap() override;

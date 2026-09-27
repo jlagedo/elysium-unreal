@@ -8,9 +8,9 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcPayphone.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **EntityChain**. The assertions come from the decompiled C of the 57 rows —
 // the two recovered `.rdata` constants (80.0 and 1024.0), the three solid numbers slot 164 tests,
@@ -564,15 +564,15 @@ bool FElysiumNpcKernelEntityChainPayphoneTest::RunTest(const FString&)
 
 	// `npc_payphone` IS a registered spawn leaf (`Substrate/ElysiumNpcClasses.cpp`), and `CPayphone`
 	// IS a census class — so both tables are checked here rather than assumed.
-	const FElysiumNpcClass* Payphone = ElysiumNpcKernelClass::Find(TEXT("CPayphone"));
+	const FElysiumNpcClass* Payphone = ElysiumNpcTestCensus::Find(TEXT("CPayphone"));
 	if (TestNotNull(TEXT("CPayphone is a census class"), Payphone))
 	{
 		TestEqual(TEXT("CPayphone fills slot 286 with 0x101aad90"),
-			FString(ElysiumNpcKernelClass::BodyOf(Payphone, 286)), FString(TEXT("0x101aad90")));
+			FString(ElysiumNpcTestCensus::BodyOf(Payphone, 286)), FString(TEXT("0x101aad90")));
 		TestEqual(TEXT("CPayphone fills slot 612 with 0x101aadb0"),
-			FString(ElysiumNpcKernelClass::BodyOf(Payphone, 612)), FString(TEXT("0x101aadb0")));
+			FString(ElysiumNpcTestCensus::BodyOf(Payphone, 612)), FString(TEXT("0x101aadb0")));
 		TestEqual(TEXT("CPayphone fills slot 35 with 0x101aa950"),
-			FString(ElysiumNpcKernelClass::BodyOf(Payphone, 35)), FString(TEXT("0x101aa950")));
+			FString(ElysiumNpcTestCensus::BodyOf(Payphone, 35)), FString(TEXT("0x101aa950")));
 	}
 
 	// 0x101aadb0 — the two speech sound flags, selected by `bDialogQueIsFinal` (+0x654c).
@@ -1196,50 +1196,6 @@ bool FElysiumNpcKernelEntityChainUseAndControllerTest::RunTest(const FString&)
 	Npc.SetPlayerAnim(TEXT(""), nullptr);
 	TestFalse(TEXT("an empty name disarms the pointer"), Npc.bPlayerAnimNameSet);
 	TestTrue(TEXT("but the buffer is still overwritten"), Npc.PlayerAnimNameBuffer.IsEmpty());
-
-	// --- 0x101618e0 `ReleaseControllerNpc` ---
-	// The gate is the handle resolving. Nothing happens otherwise — not even the clear.
-	Npc.ControllerNpc = FElysiumEntityHandle::Invalid();
-	Npc.SequenceNumber = 5;
-	Npc.ReleaseControllerNpc(true, true);
-	TestEqual(TEXT("an unset controller handle changes nothing"), Npc.SequenceNumber, 5);
-
-	FElysiumNpc& Controller = *Fixture.Other;
-	Controller.SequenceNumber = 77;
-	Controller.AnimTime = 1.5f;
-	Controller.SequenceCycle = 0.25f;
-	Controller.SequencePlaybackRate = 2.f;
-	Controller.AnimOverlay[2].Activity = 0x99;
-	Controller.Flinch[1].Sequence = 31;
-	Controller.Velocity = FVector(1.f, 2.f, 3.f);
-	Controller.AngularVelocity = FVector(4.f, 5.f, 6.f);
-
-	Npc.ControllerNpc = Controller.Handle;
-	Npc.SequenceNumber = 0;
-	Npc.Velocity = FVector::ZeroVector;
-	Npc.ReleaseControllerNpc(/*bCopyAnimation*/ false, /*bCopyVelocity*/ false);
-	TestEqual(TEXT("with both flags clear, no animation travels"), Npc.SequenceNumber, 0);
-	TestEqual(TEXT("and no velocity"), Npc.Velocity, FVector::ZeroVector);
-	TestFalse(TEXT("but the handle is cleared unconditionally"), Npc.ControllerNpc.IsSet());
-
-	Npc.ControllerNpc = Controller.Handle;
-	Npc.ReleaseControllerNpc(/*bCopyAnimation*/ true, /*bCopyVelocity*/ true);
-	TestEqual(TEXT("+0x6f0 m_nSequence travels"), Npc.SequenceNumber, 77);
-	TestEqual(TEXT("+0x174 m_flAnimTime travels"), Npc.AnimTime, 1.5f);
-	TestEqual(TEXT("+0x6f8 m_flCycle travels"), Npc.SequenceCycle, 0.25f);
-	TestEqual(TEXT("+0x6f4 m_flPlaybackRate travels"), Npc.SequencePlaybackRate, 2.f);
-	TestEqual(TEXT("the whole gesture-layer table travels (0xc0 bytes from +0x734)"),
-		Npc.AnimOverlay[2].Activity, 0x99);
-	TestEqual(TEXT("and the whole flinch table (0x54 bytes from +0x7f4)"), Npc.Flinch[1].Sequence,
-		31);
-	TestEqual(TEXT("the absolute velocity transfers"), Npc.Velocity, FVector(1.f, 2.f, 3.f));
-	TestEqual(TEXT("and the angular velocity"), Npc.AngularVelocity, FVector(4.f, 5.f, 6.f));
-	TestFalse(TEXT("and the link is detached"), Npc.ControllerNpc.IsSet());
-	// The one-shot think is armed on the CONTROLLER, not on the releaser, 0.01 s out.
-	TestEqual(TEXT("the released controller's think is armed at curtime + 0.01"),
-		Controller.NextThink, static_cast<float>(Fixture.World.World.NowSeconds() + 0.01));
-	TestEqual(TEXT("the _DAT_1044e658 think delay is the double 0.01"),
-		Npc.ControllerReleaseThinkDelay(), 0.01);
 	return true;
 }
 

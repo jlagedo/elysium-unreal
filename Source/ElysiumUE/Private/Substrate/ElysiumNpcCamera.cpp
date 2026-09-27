@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcCamera.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -46,10 +45,13 @@ namespace
 	const TCHAR* const GCameraNullModel = TEXT("models/null.mdl");
 }
 
-const FElysiumNpcClass* FElysiumNpcCamera::OwnRetailClass() const
+// `CNPC_VCamera`'s constructor `0x10368060` writes both hull words at `0x1036807e`, after the
+// `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the same
+// order.
+FElysiumNpcCamera::FElysiumNpcCamera()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 7;
+	PathingHullKind = 7;
 }
 
 // Slots 497 / 506: `0x103681d0` / `0x103682f0`, one-byte `ret` bodies.
@@ -451,116 +453,97 @@ void FElysiumNpcCamera::PrescheduleThink()
 // Slot 488: `0x103680b0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::DeathSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 488);
 }
 
 // Slot 489: `0x103680d0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::AlertSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 489);
 }
 
 // Slot 490: `0x103680f0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::IdleSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 490);
 }
 
 // Slot 491: `0x10368110`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::PainSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 491);
 }
 
 // Slot 492: `0x10368130`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FearSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 492);
 }
 
 // Slot 493: `0x10368150`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::LostEnemySound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 493);
 }
 
 // Slot 494: `0x10368170`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FoundEnemySound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 494);
 }
 
 // Slot 495: `0x10368190`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::SurprisedSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 495);
 }
 
 // Slot 496: `0x103681b0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::TargetAcquiredSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 496);
 }
 
 // Slot 498: `0x103681f0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FleeSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 498);
 }
 
 // Slot 499: `0x10368210`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::IdleAgitatedSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 499);
 }
 
 // Slot 500: `0x10368230`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::ExertHvySound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 500);
 }
 
 // Slot 501: `0x10368250`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::ExertLightSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 501);
 }
 
 // Slot 502: `0x10368270`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::RiledSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 502);
 }
 
 // Slot 503: `0x10368290`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::ComfortSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 503);
 }
 
 // Slot 504: `0x103682b0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::UpsetSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 504);
 }
 
 // Slot 505: `0x103682d0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::TargetGiveUpSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 505);
 }
 
 // Slot 507: `0x10368310`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FloatSound()
 {
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 507);
 }
 
 // Slot 508: `0x10368330`, three bytes that pop the argument — the camera never speaks a sentence.
 void FElysiumNpcCamera::SpeakSentence(int32 SentenceIndex)
 {
 	(void)SentenceIndex;
-	SpeciesVocalize(TEXT("CNPC_VCamera"), 508);
 }
 
 // --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 4) ---

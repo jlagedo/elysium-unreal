@@ -15,55 +15,6 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
 
-// --- Story 29c-1, family Lifecycle: slot 117's species overrides ---------------------------------
-
-namespace ElysiumEntityCaps
-{
-	namespace
-	{
-		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: the class says "I am never carried across
-		// a level change". Since the base answers `AcrossTransition` and nothing else, it answers
-		// **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same reason.
-		// `CScriptedTarget`'s row (`0x1034d410`) was retired with the class: no map stands one.
-		// `CAI_TestHull`'s (`0x102d7290`) is its own class's override (`FElysiumNpcTestHull`, story 5
-		// fold A1).
-		constexpr FSpeciesRow GSpeciesRows[] =
-		{
-			{ TEXT("CAI_Hint"),             TEXT("0x102d2ee0"), ~AcrossTransition, 0 },
-		};
-	}
-
-	const FSpeciesRow* SpeciesRows(int32& OutCount)
-	{
-		OutCount = UE_ARRAY_COUNT(GSpeciesRows);
-		return GSpeciesRows;
-	}
-
-	const FSpeciesRow* SpeciesRowOf(const TCHAR* RetailClass)
-	{
-		if (RetailClass == nullptr)
-		{
-			return nullptr;
-		}
-		for (const FSpeciesRow& Row : GSpeciesRows)
-		{
-			if (FCString::Strcmp(Row.RetailClass, RetailClass) == 0)
-			{
-				return &Row;
-			}
-		}
-		return nullptr;
-	}
-
-	int32 SpeciesObjectCaps(int32 BaseCaps, const TCHAR* RetailClass)
-	{
-		const FSpeciesRow* Row = SpeciesRowOf(RetailClass);
-		// No row means "this class does not override slot 117", which is the base's own answer and
-		// not a refusal.
-		return Row ? ((BaseCaps & Row->AndMask) | Row->OrMask) : BaseCaps;
-	}
-}
-
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
 	Def = &InDef;

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcRat.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -13,12 +12,6 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
-
-const FElysiumNpcClass* FElysiumNpcRat::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 68: `0x103ad6d0`. A fixed global entity is ignored; otherwise a direct call into the Troika
 // body `0x1029afc0`.

@@ -10,10 +10,11 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcManBat.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcTzimisce.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Sounds** — the NPC's sound and speech surface.
 //
@@ -46,173 +47,79 @@ namespace
 			FElysiumNpcWorldFixture::Quiet({ Npc });
 		}
 	};
-
-	const FElysiumNpc::FVocalization* SoundsRow(const TCHAR* RetailClass, int32 Slot)
-	{
-		return FElysiumNpc::VocalizationFor(RetailClass, Slot);
-	}
 }
 
 // =================================================================================================
-// The species vocalization table — every row by name
+// The species vocalization overrides (slots 488–508, 620, 621)
 // =================================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSoundsTableTest,
-	"Elysium.Substrate.NpcKernelSounds.Table", GElysiumNpcKernelSoundsFlags)
-bool FElysiumNpcKernelSoundsTableTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSoundsOverridesTest,
+	"Elysium.Substrate.NpcKernelSounds.Overrides", GElysiumNpcKernelSoundsFlags)
+bool FElysiumNpcKernelSoundsOverridesTest::RunTest(const FString&)
 {
-	using EKind = FElysiumNpc::EVocalization;
-
-	int32 Count = 0;
-	const FElysiumNpc::FVocalization* Rows = FElysiumNpc::Vocalizations(Count);
-	TestNotNull(TEXT("the table exists"), Rows);
-	// 19 CNPC_VCamera + 2 CNPC_VSabbatLeader + 2 CNPC_VTzimisce. `CGeneric_NPC`,
-	// `CGenericSabbat_NPC` and `CNPC_VTest` override sound hooks too, but have no instance and
-	// carry no row.
-	TestEqual(TEXT("23 recovered species sound bodies on classes with an instance"), Count, 23);
-
-	// Every row names a class the census carries and a slot inside the sound band (or the Sabbat
-	// leader's two extended slots), and every retail address is spelled the ledger's way.
-	for (int32 Index = 0; Index < Count; ++Index)
+	// The census's own-body rows at the sound band on live classes are exactly the camera's
+	// nineteen (inherited by the security camera, 497/506 aside), the Tzimisce pair and the Sabbat
+	// leader's two branch hooks; `CGeneric_NPC`, `CGenericSabbat_NPC` and `CNPC_VTest` override
+	// sound hooks too but have no instance.
+	const TCHAR* const CameraBodies[] = { TEXT("0x103680b0"), TEXT("0x103680d0"), TEXT("0x103680f0"),
+		TEXT("0x10368110"), TEXT("0x10368130"), TEXT("0x10368150"), TEXT("0x10368170"),
+		TEXT("0x10368190"), TEXT("0x103681b0"), TEXT("0x103681f0"), TEXT("0x10368210"),
+		TEXT("0x10368230"), TEXT("0x10368250"), TEXT("0x10368270"), TEXT("0x10368290"),
+		TEXT("0x103682b0"), TEXT("0x103682d0"), TEXT("0x10368310"), TEXT("0x10368330") };
+	const int32 CameraSlots[] = { 488, 489, 490, 491, 492, 493, 494, 495, 496, 498, 499, 500, 501,
+		502, 503, 504, 505, 507, 508 };
+	static_assert(UE_ARRAY_COUNT(CameraSlots) == UE_ARRAY_COUNT(CameraBodies), "one address per slot");
+	const FElysiumNpcClass* Camera = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
+	const FElysiumNpcClass* Security = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity"));
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(CameraSlots); ++Index)
 	{
-		const FElysiumNpc::FVocalization& Row = Rows[Index];
-		const FString Where = FString::Printf(TEXT("row %d (%s#%d)"), Index, Row.RetailClass,
-			Row.Slot);
-		TestNotNull(*(Where + TEXT(" names a census class")),
-			ElysiumNpcKernelClass::Find(Row.RetailClass));
-		// Every slot, not just the first: a class with no instance carries no row at all.
-		TestFalse(*(Where + TEXT(" is not on a class with no instance")),
-			ElysiumNpcDeadClasses::Contains(Row.RetailClass));
-		TestTrue(*(Where + TEXT(" cites a retail address")),
-			Row.RetailAddress != nullptr && FString(Row.RetailAddress).StartsWith(TEXT("0x10")));
-		TestTrue(*(Where + TEXT(" is a sound slot")),
-			(Row.Slot >= 488 && Row.Slot <= 508) || Row.Slot == 620 || Row.Slot == 621);
-		// Retail passes `EmitSound` attenuation 0.8 on every recovered row.
-		TestEqual(*(Where + TEXT(" emits at ATTN_NORM")), Row.Attenuation, 0.8f);
-		TestTrue(*(Where + TEXT(" emits on CHAN_VOICE or CHAN_BODY")),
-			Row.Channel == 2 || Row.Channel == 4);
-		if (Row.Kind == EKind::WavPool)
+		TestEqual(*FString::Printf(TEXT("CNPC_VCamera fills slot %d with %s"), CameraSlots[Index],
+			CameraBodies[Index]), FString(ElysiumNpcTestCensus::BodyOf(Camera, CameraSlots[Index])),
+			FString(CameraBodies[Index]));
+		TestEqual(*FString::Printf(TEXT("and CNPC_VCameraSecurity inherits it at %d"), CameraSlots[Index]),
+			FString(ElysiumNpcTestCensus::BodyOf(Security, CameraSlots[Index])), FString(CameraBodies[Index]));
+	}
+	const FElysiumNpcClass* Tzimisce = ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce"));
+	TestEqual(TEXT("CNPC_VTzimisce fills 490 with 0x103b9380"),
+		FString(ElysiumNpcTestCensus::BodyOf(Tzimisce, 490)), FString(TEXT("0x103b9380")));
+	TestEqual(TEXT("CNPC_VTzimisce fills 491 with 0x103b9500"),
+		FString(ElysiumNpcTestCensus::BodyOf(Tzimisce, 491)), FString(TEXT("0x103b9500")));
+
+	// The camera's nineteen are empty: the Troika body (which speaks a concept) never runs.
+	{
+		FSoundsFixture Cam(TEXT("npc_VCamera"));
+		if (TestNotNull(TEXT("the camera spawned"), Cam.Npc))
 		{
-			TestTrue(*(Where + TEXT(" carries a non-empty wav pool")),
-				Row.Wavs != nullptr && Row.WavCount > 0);
-		}
-		else if (Row.Kind == EKind::Sentence)
-		{
-			TestTrue(*(Where + TEXT(" names a sentence group")),
-				Row.Sentence != nullptr && *Row.Sentence != TEXT('\0'));
-		}
-		else
-		{
-			TestTrue(*(Where + TEXT(" is mute and carries no pool")), Row.Wavs == nullptr);
+			Cam.World.Services.BodySounds.Reset();
+			Cam.Npc->VSoundSpeakCalls.Reset();
+			Cam.Npc->DeathSound(); Cam.Npc->AlertSound(); Cam.Npc->IdleSound(); Cam.Npc->PainSound();
+			Cam.Npc->FearSound(); Cam.Npc->LostEnemySound(); Cam.Npc->FoundEnemySound();
+			Cam.Npc->SurprisedSound(); Cam.Npc->TargetAcquiredSound(); Cam.Npc->FleeSound();
+			Cam.Npc->IdleAgitatedSound(); Cam.Npc->ExertHvySound(); Cam.Npc->ExertLightSound();
+			Cam.Npc->RiledSound(); Cam.Npc->ComfortSound(); Cam.Npc->UpsetSound();
+			Cam.Npc->TargetGiveUpSound(); Cam.Npc->FloatSound(); Cam.Npc->SpeakSentence(3);
+			TestEqual(TEXT("the camera's nineteen hooks speak nothing"), Cam.Npc->VSoundSpeakCalls.Num(), 0);
+			TestEqual(TEXT("and emit nothing"), Cam.World.Services.BodySounds.Num(), 0);
 		}
 	}
 
-	// --- The classes with no instance carry no row -----------------------------------------------
-	for (const TCHAR* Dead :
-		{ TEXT("CGeneric_NPC"), TEXT("CGenericSabbat_NPC"), TEXT("CNPC_VTest") })
+	// `CNPC_VTzimisce`'s two sentence hooks: gated on `FOkToMakeSound()`, and only PainSound
+	// re-arms the clock through `JustMadeSound()` (vtable `+0x79c`, `103b9592`).
 	{
-		TestNull(*FString::Printf(TEXT("%s#488 has no row"), Dead), SoundsRow(Dead, 488));
-	}
-
-	// --- CNPC_VCamera: nineteen empty overrides, inherited by CNPC_VCameraSecurity --------------
-	{
-		const int32 Mutes[] = { 488, 489, 490, 491, 492, 493, 494, 495, 496, 498, 499, 500, 501,
-			502, 503, 504, 505, 507, 508 };
-		const TCHAR* const Addresses[] = { TEXT("0x103680b0"), TEXT("0x103680d0"),
-			TEXT("0x103680f0"), TEXT("0x10368110"), TEXT("0x10368130"), TEXT("0x10368150"),
-			TEXT("0x10368170"), TEXT("0x10368190"), TEXT("0x103681b0"), TEXT("0x103681f0"),
-			TEXT("0x10368210"), TEXT("0x10368230"), TEXT("0x10368250"), TEXT("0x10368270"),
-			TEXT("0x10368290"), TEXT("0x103682b0"), TEXT("0x103682d0"), TEXT("0x10368310"),
-			TEXT("0x10368330") };
-		static_assert(UE_ARRAY_COUNT(Mutes) == UE_ARRAY_COUNT(Addresses), "one address per slot");
-		for (int32 Index = 0; Index < UE_ARRAY_COUNT(Mutes); ++Index)
+		FSoundsFixture Tz(TEXT("npc_VTzimisce"));
+		FElysiumNpcTzimisce* Npc = Tz.Npc != nullptr ? Tz.Npc->AsSpecies<FElysiumNpcTzimisce>() : nullptr;
+		if (TestNotNull(TEXT("npc_VTzimisce builds FElysiumNpcTzimisce"), Npc))
 		{
-			const FElysiumNpc::FVocalization* Row = SoundsRow(TEXT("CNPC_VCamera"), Mutes[Index]);
-			TestNotNull(*FString::Printf(TEXT("CNPC_VCamera#%d is a row"), Mutes[Index]), Row);
-			if (Row == nullptr)
-			{
-				continue;
-			}
-			TestEqual(*FString::Printf(TEXT("CNPC_VCamera#%d is %s"), Mutes[Index],
-				Addresses[Index]), FString(Row->RetailAddress), FString(Addresses[Index]));
-			TestTrue(*FString::Printf(TEXT("CNPC_VCamera#%d is mute"), Mutes[Index]),
-				Row->Kind == EKind::Mute);
-			// `CNPC_VCameraSecurity` carries no copy: it inherits `FElysiumNpcCamera`'s overrides
-			// (story 5 step 3), which `Emit` asserts on a spawned one.
-			TestNull(*FString::Printf(TEXT("CNPC_VCameraSecurity#%d carries no row of its own"),
-				Mutes[Index]), SoundsRow(TEXT("CNPC_VCameraSecurity"), Mutes[Index]));
-		}
-		// 497 and 506 are unnamed slots in the band and the camera does not fill them.
-		TestNull(TEXT("CNPC_VCamera fills no slot 497"), SoundsRow(TEXT("CNPC_VCamera"), 497));
-		TestNull(TEXT("CNPC_VCamera fills no slot 506"), SoundsRow(TEXT("CNPC_VCamera"), 506));
-	}
-
-	// --- CNPC_VSabbatLeader: two hooks, on CHAN_BODY ---------------------------------------------
-	{
-		const FElysiumNpc::FVocalization* Step = SoundsRow(TEXT("CNPC_VSabbatLeader"), 620);
-		TestNotNull(TEXT("CNPC_VSabbatLeader#620 FootstepSound"), Step);
-		if (Step != nullptr)
-		{
-			TestEqual(TEXT("...is 0x103aa5e0"), FString(Step->RetailAddress),
-				FString(TEXT("0x103aa5e0")));
-			// `PUSH 0x6` at `103aa6c9`: `RandomInt(0, 6)` over seven step wavs.
-			TestEqual(TEXT("...draws RandomInt(0, 6) over seven wavs"), Step->WavCount, 7);
-			TestEqual(TEXT("...first is step1.wav"), FString(Step->Wavs[0]),
-				FString(TEXT("character/monster/andrei_transformed/step1.wav")));
-			TestEqual(TEXT("...last is step7.wav"), FString(Step->Wavs[6]),
-				FString(TEXT("character/monster/andrei_transformed/step7.wav")));
-			// `PUSH 0x4` at `103aa6dd` — CHAN_BODY, not the voice channel the vocalizations use.
-			TestEqual(TEXT("...on CHAN_BODY"), Step->Channel, 4);
-			TestEqual(TEXT("...at volume 1.0"), Step->Volume, 1.0f);
-		}
-		const FElysiumNpc::FVocalization* Attack = SoundsRow(TEXT("CNPC_VSabbatLeader"), 621);
-		TestNotNull(TEXT("CNPC_VSabbatLeader#621 AttackSound"), Attack);
-		if (Attack != nullptr)
-		{
-			TestEqual(TEXT("...is 0x103aa7a0"), FString(Attack->RetailAddress),
-				FString(TEXT("0x103aa7a0")));
-			// `PUSH 0x2` at `103aa889`.
-			TestEqual(TEXT("...draws RandomInt(0, 2) over three wavs"), Attack->WavCount, 3);
-			TestEqual(TEXT("...first is exert_heavy_1.wav"), FString(Attack->Wavs[0]),
-				FString(TEXT("character/monster/andrei_transformed/exert_heavy_1.wav")));
-			TestEqual(TEXT("...on CHAN_BODY"), Attack->Channel, 4);
+			const double Now = Tz.World.World.NowSeconds();
+			TestTrue(TEXT("outside dialogue the gate is open"), Npc->FOkToMakeSound());
+			Npc->BaseMemory.SoundWaitTime = 0.0;
+			Npc->IdleSound();
+			TestEqual(TEXT("IdleSound does not re-arm the sound clock"), Npc->BaseMemory.SoundWaitTime, 0.0);
+			Npc->PainSound();
+			TestTrue(TEXT("PainSound re-arms it with the Tzimisce draw"),
+				Npc->BaseMemory.SoundWaitTime > Now);
 		}
 	}
-
-	// --- CNPC_VTzimisce: two sentence hooks -----------------------------------------------------
-	{
-		const FElysiumNpc::FVocalization* Idle = SoundsRow(TEXT("CNPC_VTzimisce"), 490);
-		TestNotNull(TEXT("CNPC_VTzimisce#490 IdleSound"), Idle);
-		if (Idle != nullptr)
-		{
-			TestEqual(TEXT("...is 0x103b9380"), FString(Idle->RetailAddress),
-				FString(TEXT("0x103b9380")));
-			TestTrue(TEXT("...answers a sentence group"), Idle->Kind == EKind::Sentence);
-			TestEqual(TEXT("...SPI_IDLE"), FString(Idle->Sentence), FString(TEXT("SPI_IDLE")));
-			TestTrue(TEXT("...gated on FOkToMakeSound"), Idle->bGatedByFOkToMakeSound);
-			TestFalse(TEXT("...and does not re-arm the clock"), Idle->bCallsJustMadeSound);
-		}
-		const FElysiumNpc::FVocalization* Pain = SoundsRow(TEXT("CNPC_VTzimisce"), 491);
-		TestNotNull(TEXT("CNPC_VTzimisce#491 PainSound"), Pain);
-		if (Pain != nullptr)
-		{
-			TestEqual(TEXT("...is 0x103b9500"), FString(Pain->RetailAddress),
-				FString(TEXT("0x103b9500")));
-			TestEqual(TEXT("...SPI_TAKE_DAMAGE"), FString(Pain->Sentence),
-				FString(TEXT("SPI_TAKE_DAMAGE")));
-			TestTrue(TEXT("...gated on FOkToMakeSound"), Pain->bGatedByFOkToMakeSound);
-			// `CALL [EDX+0x79c]` at `103b9592`: the only vocalization in the family that
-			// re-arms the sound clock itself.
-			TestTrue(TEXT("...and calls JustMadeSound (vtable +0x79c)"), Pain->bCallsJustMadeSound);
-		}
-	}
-
-	// A class outside the table, and a slot outside the band, answer nothing.
-	TestNull(TEXT("CAI_BaseNPCTroika fills no species row"),
-		SoundsRow(TEXT("CAI_BaseNPCTroika"), 490));
-	TestNull(TEXT("a class the census does not carry answers nothing"),
-		SoundsRow(TEXT("CNotAClass"), 490));
-	TestNull(TEXT("a null class answers nothing"), SoundsRow(nullptr, 490));
 	return true;
 }
 
@@ -253,14 +160,39 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 		TestTrue(TEXT("...on CHAN_BODY"), Sound.Channel == EElysiumSoundChannel::Body);
 	}
 
-	// Slot 621 `AttackSound` (`0x103aa7a0`): the three-wav exert pool, same channel and level.
+	// Slot 621 `AttackSound` (`0x103aa7a0`), dispatched through the class that introduces the slot:
+	// one `CHAN_BODY` emit (`PUSH 0x4`) from the three-entry table `0x1064c49c`, `RandomInt(0, 2)`
+	// (`PUSH 0x2` at `103aa889`), volume 1.0, attenuation 0.8 (soundlevel 75).
+	FElysiumNpcSabbatLeader& Leader = *F.Npc->AsSpecies<FElysiumNpcSabbatLeader>();
 	F.World.Services.BodySounds.Reset();
-	static_cast<FElysiumNpcSabbatLeader*>(F.Npc)->AttackSound();   // the class's own slot 621
+	Leader.AttackSound();
 	if (TestEqual(TEXT("...with exactly one emit"), F.World.Services.BodySounds.Num(), 1))
 	{
+		const FElysiumBodySound& Sound = F.World.Services.BodySounds[0];
 		TestTrue(TEXT("...from the exert_heavy pool"),
-			F.World.Services.BodySounds[0].Rel.StartsWith(
-				TEXT("character/monster/andrei_transformed/exert_heavy_")));
+			Sound.Rel.StartsWith(TEXT("character/monster/andrei_transformed/exert_heavy_")));
+		TestTrue(TEXT("...on CHAN_BODY"), Sound.Channel == EElysiumSoundChannel::Body);
+		TestEqual(TEXT("...volume 1.0"), Sound.Volume, 1.0f);
+		TestEqual(TEXT("...soundlevel 75 (attenuation 0.8)"), Sound.SoundLevelDb, 75);
+	}
+	F.World.Services.BodySounds.Reset();
+	TSet<FString> Exerts;
+	for (int32 Pass = 0; Pass < 64; ++Pass)
+	{
+		Leader.AttackSound();
+	}
+	for (const FElysiumBodySound& Sound : F.World.Services.BodySounds)
+	{
+		Exerts.Add(Sound.Rel);
+	}
+	TestTrue(TEXT("RandomInt(0, 2) reaches more than one of the three exert wavs"), Exerts.Num() > 1);
+	TestTrue(TEXT("and no more than the three"), Exerts.Num() <= 3);
+	for (const FString& Rel : Exerts)
+	{
+		TestTrue(FString::Printf(TEXT("%s is exert_heavy_1..3"), *Rel),
+			Rel == TEXT("character/monster/andrei_transformed/exert_heavy_1.wav")
+				|| Rel == TEXT("character/monster/andrei_transformed/exert_heavy_2.wav")
+				|| Rel == TEXT("character/monster/andrei_transformed/exert_heavy_3.wav"));
 	}
 
 	// The draw is `RandomInt(0, 6)` over seven wavs, so repeated calls must reach more than one
@@ -279,12 +211,8 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 	TestTrue(TEXT("...and reached more than one of the seven step wavs"), Seen.Num() > 1);
 	TestTrue(TEXT("...all seven at most"), Seen.Num() <= 7);
 
-	// A slot this species does not override: the Troika-line body (story 29d) runs instead, and
-	// nothing was emitted here.
+	// A slot this species does not override: the Troika-line body (story 29d) runs instead.
 	F.World.Services.BodySounds.Reset();
-	TestFalse(TEXT("the Sabbat leader has no PainSound row"),
-		F.Npc->SpeciesVocalize(TEXT("CNPC_VSabbatLeader"), 491));
-	TestEqual(TEXT("...and emitted nothing"), F.World.Services.BodySounds.Num(), 0);
 	F.Npc->VSoundSpeakCalls.Reset();
 	F.Npc->PainSound();
 	TestEqual(TEXT("...so its PainSound is the Troika body's concept speak"), F.Npc->VSoundSpeakCalls.Num(), 1);
@@ -304,10 +232,8 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 		}
 	}
 
-	// A body whose species answers a SENTENCE group cannot be spawned here (`npc_VTzimisce` is not
-	// a registered classname), so the refusal the seam makes is asserted where it can be: the row
-	// names the group, and the group resolves to nothing because this runtime has no sentence
-	// table. Slot 484 is the same seam and the same refusal.
+	// The sentence seam the Tzimisce hooks go through refuses a group by name, because this runtime
+	// has no sentence table. Slot 484 is the same seam and the same refusal.
 	TestEqual(TEXT("the sentence seam refuses a group by name"),
 		F.Npc->PlaySentence(TEXT("SPI_IDLE"), 0.f, 1.f, 75, nullptr), -1);
 	return true;
@@ -418,15 +344,13 @@ bool FElysiumNpcKernelSoundsJustMadeSoundTest::RunTest(const FString&)
 	TestTrue(TEXT("...and is a draw, not a constant"), High - Low > 0.1);
 
 	// `CNPC_VTzimisce::vfunc487` (`0x103b9f10`) is the one species override of the slot: a
-	// 0.5–0.75 draw and NO squad copy. `npc_VTzimisce` is not a registered classname here, so the
-	// species arm is exercised by name through the dispatcher the body itself asks.
+	// 0.5–0.75 draw and NO squad copy, on its own class; a human combatant is not one.
 	TestFalse(TEXT("a human combatant is not CNPC_VTzimisce"),
-		F.Npc->IsRetailClass(TEXT("CNPC_VTzimisce")));
-	TestNotNull(TEXT("CNPC_VTzimisce is a census class the arm can dispatch on"),
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")));
+		F.Npc->AsSpecies<FElysiumNpcTzimisce>() != nullptr);
+	TestNotNull(TEXT("CNPC_VTzimisce is a census class"), ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")));
 	// And the body it fills slot 487 with is the one the arm reproduces.
 	TestEqual(TEXT("CNPC_VTzimisce fills slot 487 with 0x103b9f10"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")),
 			487)).ToLower(), FString(TEXT("0x103b9f10")));
 	return true;
 }

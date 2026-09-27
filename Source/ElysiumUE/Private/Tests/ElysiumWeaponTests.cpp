@@ -4418,7 +4418,7 @@ bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
 
 	// `CBaseEntity::Hide` (0x1009d2a0). The weapon is STILL the active one — that is the whole
 	// point of the gate: retail reads `m_hActiveWeapon` and then refuses to translate through it.
-	Katana->Hide(Char);
+	Katana->Hide();
 	TestTrue(TEXT("Hide sets the bit"), Katana->IsHidden());
 	TestTrue(TEXT("...and the weapon is still the active weapon"),
 		Char->Inventory.Active(*Char) == Katana);
@@ -4432,7 +4432,7 @@ bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
 		Hidden.ActorClassname, Drawn.ActorClassname);
 
 	// `CBaseEntity::Unhide` (0x1009d380).
-	Katana->Unhide(Char);
+	Katana->Unhide();
 	TestFalse(TEXT("Unhide clears the bit"), Katana->IsHidden());
 	FElysiumActivityClipRequest Redrawn;
 	Char->FillActivityClipRequest(Redrawn);
@@ -4495,7 +4495,7 @@ bool FElysiumWeaponHiddenHolsterTest::RunTest(const FString&)
 		FElysiumSaveArchive Out(Writer, FElysiumSaveVersion::Latest);
 		Pistol->Serialize(Out);
 
-		Pistol->Unhide(Char);
+		Pistol->Unhide();
 		TestFalse(TEXT("the pistol is drawn before the load"), Pistol->IsHidden());
 
 		FMemoryReader Reader(Bytes);

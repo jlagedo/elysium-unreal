@@ -348,3 +348,14 @@ def test_check_mode_matches_committed_tables(ledger):
     if not (out / "functions.md").is_file():
         pytest.skip("the tables are not committed yet")
     assert kl.emit(ledger.render(), out, check=True) == 0
+
+
+def test_own_bodies_are_the_vtable_diff(ledger):
+    # 0019 story 5 commit B: own bodies are the class's primary vtable diffed against its direct
+    # base's, not a count of bodies Ghidra happened to name on the class. The three folds of commit
+    # A counted these by hand; the name-prefix count gave 11/31/14, 12/5/14 and 17/12/10.
+    own = ledger.own_bodies()
+    assert [own[c] for c in ("CNPC_VPlayerController", "CNPC_VFrenzyShadow", "CNPC_VWolfMorph")] == [26, 26, 11]
+    assert [own[c] for c in ("CCineNPC", "CCineAI", "CCineAISchedule")] == [20, 5, 6]
+    assert [own[c] for c in ("CNPCMaker", "CNPCMaker_Fleshpile", "CNPCMaker_Zombie")] == [21, 15, 14]
+    assert own["CAI_TestHull"] == 6

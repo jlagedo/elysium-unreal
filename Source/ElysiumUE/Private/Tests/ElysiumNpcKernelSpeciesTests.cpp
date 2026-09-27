@@ -29,13 +29,13 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcMakerFleshpile.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Species**. Every assertion comes from the decompiled C of the row it names
 // and from the `.rdata` cells read out of the pinned retail `vampire.dll` — the slot-323 band
@@ -219,25 +219,25 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 	// last two rows, `CNPCMaker_Fleshpile`'s 139 and 617, are that class's overrides
 	// (`FElysiumNpcMakerFleshpile::DeathNotice` / `MakeNPC`). The census still names every body the
 	// tree now dispatches, and names the inherited ones.
-	const FElysiumNpcClass* Fleshpile = ElysiumNpcKernelClass::Find(TEXT("CNPCMaker_Fleshpile"));
+	const FElysiumNpcClass* Fleshpile = ElysiumNpcTestCensus::Find(TEXT("CNPCMaker_Fleshpile"));
 	if (!TestNotNull(TEXT("CNPCMaker_Fleshpile is a census class"), Fleshpile))
 	{
 		return false;
 	}
 	TestEqual(TEXT("CNPCMaker_Fleshpile fills slot 139 with 0x1034c8e0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 139)), FString(TEXT("0x1034c8e0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Fleshpile, 139)), FString(TEXT("0x1034c8e0")));
 	TestEqual(TEXT("and slot 617 with 0x1034c2d0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 617)), FString(TEXT("0x1034c2d0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Fleshpile, 617)), FString(TEXT("0x1034c2d0")));
 	TestEqual(TEXT("CNPCMaker_Fleshpile inherits CNPCMaker's slot 618"),
-		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 618)), FString(TEXT("0x1034b580")));
+		FString(ElysiumNpcTestCensus::BodyOf(Fleshpile, 618)), FString(TEXT("0x1034b580")));
 	TestEqual(TEXT("CNPC_VCameraSecurity inherits CNPC_VCamera's slot 497"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 497)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 497)),
 		FString(TEXT("0x103681d0")));
 	TestEqual(TEXT("CNPC_VDog inherits CNPC_VAnimal's slot 482"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VDog")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VDog")), 482)),
 		FString(TEXT("0x1035fd40")));
 	TestEqual(TEXT("CNPC_VFrenzyShadow's slot 599 is 0x10376b70"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VFrenzyShadow")), 599)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VFrenzyShadow")), 599)),
 		FString(TEXT("0x10376b70")));
 	return true;
 }
@@ -277,7 +277,7 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 		TestEqual(TEXT("and it is CNPC_VTzimisceRunner, the class its factory builds"),
 			FString(RunnerClass->Name), FString(TEXT("CNPC_VTzimisceRunner")));
 	}
-	const FElysiumNpcClass* BaseBoss = ElysiumNpcKernelClass::Find(TEXT("CNPC_VBaseBoss"));
+	const FElysiumNpcClass* BaseBoss = ElysiumNpcTestCensus::Find(TEXT("CNPC_VBaseBoss"));
 	if (TestNotNull(TEXT("the census carries CNPC_VBaseBoss"), BaseBoss))
 	{
 		TestEqual(TEXT("and CNPC_VBaseBoss claims no classname"), BaseBoss->ClassnameCount, 0);
@@ -293,8 +293,8 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 			FString(CopClass->Name), FString(TEXT("CNPC_VCop")));
 	}
 	TestTrue(TEXT("the classname query agrees: npc_VCop is CNPC_VCop"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
-			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	// `CNPC_VCop`'s slot 599 is the body its chain `CNPC_VCop` -> `CNPC_VHumanCombatant` ->
 	// `CNPC_VHuman` inherits (`0x10385ab0`), dispatched by C++ inheritance since the species table
 	// retired (story 5 fold A4).
@@ -313,9 +313,9 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 			FString(TEXT("CNPC_VCamera")));
 	}
 	TestNotNull(TEXT("the census claims it"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCamera")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCamera")));
 	TestEqual(TEXT("and its census slot-497 body is the camera's own 0x103681d0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera")), 497)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera")), 497)),
 		FString(TEXT("0x103681d0")));
 	return true;
 }
@@ -481,7 +481,7 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// `CNPC_VFrenzyShadow`'s `0x10376b70` / `0x10376ba0`, which are `FElysiumNpcFrenzyShadow`'s since
 	// fold A2 (`Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee`).
 	TestEqual(TEXT("CNPC_VGargoyle's slot 599 is 0x10379ef0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VGargoyle")), 599)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VGargoyle")), 599)),
 		FString(TEXT("0x10379ef0")));
 	Fixture.Gargoyle->bInMelee = false;
 	Fixture.Gargoyle->MeleeEventFires = 0;
@@ -617,9 +617,9 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 
 	// The bodies are called directly on a runner here; `WiredSlot606` / `WiredSlot609` drive them
 	// through `FElysiumNpcBach`'s overrides on a spawned `npc_VBach`.
-	const FElysiumNpcClass* BachClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach"));
+	const FElysiumNpcClass* BachClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VBach"));
 	TestEqual(TEXT("CNPC_VBach's slot 606 is 0x10364280"),
-		FString(ElysiumNpcKernelClass::BodyOf(BachClass, 606)), FString(TEXT("0x10364280")));
+		FString(ElysiumNpcTestCensus::BodyOf(BachClass, 606)), FString(TEXT("0x10364280")));
 
 	// --- `0x10364280`: without the condition the flag is CLEARED and 0 is answered ---------------
 	Npc->bBachFireOccluded = true;
@@ -649,7 +649,7 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 	// Only retail states 4 (`NPC_STATE_SCRIPT`) and 0xc admit the base hint search; every other
 	// state ZEROES `m_pShootAtHintNode` as a side effect of asking.
 	TestEqual(TEXT("CNPC_VBach's slot 609 is 0x103661f0"),
-		FString(ElysiumNpcKernelClass::BodyOf(BachClass, 609)), FString(TEXT("0x103661f0")));
+		FString(ElysiumNpcTestCensus::BodyOf(BachClass, 609)), FString(TEXT("0x103661f0")));
 	// Retail's byte-identical `CNPC_VBatSwarm` / `CNPC_VSheriffSwarm` copies are on classes with no
 	// instance and carry no port row (0019 story 5 step 1).
 	Npc->ScheduleHost.ShootAtHintNode = 77;
@@ -684,12 +684,12 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	// a different tail: a body in retail state 4 (SCRIPT) keeps its 1-or-2 where the base answers 0
 	// (`0x1035fdf9` `SETNZ/DEC/AND`). Story 5 step 3 corrected the port, which called the base.
 	TestEqual(TEXT("CNPC_VAnimal's slot 482 is 0x1035fd40"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VAnimal")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VAnimal")), 482)),
 		FString(TEXT("0x1035fd40")));
 	TestEqual(TEXT("CNPC_VTzimisce's is 0x103bd270"),
-		FString(ElysiumNpcKernelClass::BodyOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VTzimisce")), 482)),
+		FString(ElysiumNpcTestCensus::BodyOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VTzimisce")), 482)),
 		FString(TEXT("0x103bd270")));
 
 	// The state gate, from the decompiled C: refuse when the caller did not disregard state, the
@@ -961,11 +961,11 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 	}
 
 	// --- slots 25 and 26: the same output from two vtable entries, no base forward ---------------
-	const FElysiumNpcClass* ZombieClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie"));
+	const FElysiumNpcClass* ZombieClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VZombie"));
 	TestEqual(TEXT("CNPC_VZombie's slot 25 is 0x103e12c0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ZombieClass, 25)), FString(TEXT("0x103e12c0")));
+		FString(ElysiumNpcTestCensus::BodyOf(ZombieClass, 25)), FString(TEXT("0x103e12c0")));
 	TestEqual(TEXT("and slot 26 is 0x103e12f0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ZombieClass, 26)), FString(TEXT("0x103e12f0")));
+		FString(ElysiumNpcTestCensus::BodyOf(ZombieClass, 26)), FString(TEXT("0x103e12f0")));
 	// Both fire `m_OnAttackedVictim`; the wiring is what a mapper sees, so the counter is the read.
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("zombie"), 29132u);
@@ -1316,13 +1316,13 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("all three tentacle slots ask for the head"), Tentacle->TentacleHeadForwards, 3);
 	TestNull(TEXT("and the seam answers null, so nothing is forwarded"),
 		Tentacle->MingXiaoTentacleHead());
-	const FElysiumNpcClass* TentacleClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiaoTentacle"));
+	const FElysiumNpcClass* TentacleClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiaoTentacle"));
 	TestEqual(TEXT("CNPC_VMingXiaoTentacle's slot 21 is 0x1039e800"),
-		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
+		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
 	TestEqual(TEXT("its slot 22 is 0x1039e830"),
-		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 22)), FString(TEXT("0x1039e830")));
+		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 22)), FString(TEXT("0x1039e830")));
 	TestEqual(TEXT("and its slot 23 is 0x1039e860"),
-		FString(ElysiumNpcKernelClass::BodyOf(TentacleClass, 23)), FString(TEXT("0x1039e860")));
+		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 23)), FString(TEXT("0x1039e860")));
 
 	// --- `0x103b9180`, slot 593: the base first, then five literals ------------------------------
 	Tzim->TargetLeadMin = 999.f;
@@ -1343,17 +1343,17 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 
 	// --- `0x103681d0` / `0x103682f0`: two EMPTY bodies, and emptiness is the point ---------------
 	// The overrides exist so the base sound hooks do NOT run for a camera (`WiredSlot497` / `506`).
-	const FElysiumNpcClass* CameraClass = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
+	const FElysiumNpcClass* CameraClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
 	TestEqual(TEXT("CNPC_VCamera's slot 497 is 0x103681d0"),
-		FString(ElysiumNpcKernelClass::BodyOf(CameraClass, 497)), FString(TEXT("0x103681d0")));
+		FString(ElysiumNpcTestCensus::BodyOf(CameraClass, 497)), FString(TEXT("0x103681d0")));
 	TestEqual(TEXT("and its slot 506 is 0x103682f0"),
-		FString(ElysiumNpcKernelClass::BodyOf(CameraClass, 506)), FString(TEXT("0x103682f0")));
+		FString(ElysiumNpcTestCensus::BodyOf(CameraClass, 506)), FString(TEXT("0x103682f0")));
 
 	// --- `0x103c3fd0`, slot 588: the base's IsActivityFinished gate is GONE ----------------------
 	// The restart is unconditional; `RestartIdealActivityId` is family Hints' seam and records it.
 	Runner->Slot588();
 	TestEqual(TEXT("a runner's slot 588 is 0x103c3fd0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Runner->RetailClass(), 588)), FString(TEXT("0x103c3fd0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Runner->RetailClass(), 588)), FString(TEXT("0x103c3fd0")));
 	Runner->Slot588();   // `FElysiumNpcTzimisceRunner::Slot588`, the same body through the slot
 
 	// --- `0x103b92a0`, slot 488: the three voice ConVars, then the event -------------------------
@@ -1682,9 +1682,9 @@ bool FElysiumNpcKernelSpeciesWiredSlot497Test::RunTest(const FString&)
 	// response-concept table, which this runtime has no table for (the seam writes -1 into a global
 	// this substrate does not carry). So the assertion is the census body and that both terminate.
 	TestEqual(TEXT("a camera's slot 497 is 0x103681d0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Camera->RetailClass(), 497)), FString(TEXT("0x103681d0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Camera->RetailClass(), 497)), FString(TEXT("0x103681d0")));
 	TestEqual(TEXT("and CNPC_VCameraSecurity inherits the same body"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 497)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 497)),
 		FString(TEXT("0x103681d0")));
 	Camera->Slot497();   // the empty species arm
 	Cop->Slot497();      // the once-only base arm
@@ -1818,7 +1818,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
 		FString(Runner->RetailClass() != nullptr ? Runner->RetailClass()->Name : TEXT("")),
 		FString(TEXT("CNPC_VTzimisceRunner")));
 	TestEqual(TEXT("and its slot-588 body is 0x103c3fd0, not the base's 0x10293e50"),
-		FString(ElysiumNpcKernelClass::BodyOf(Runner->RetailClass(), 588)),
+		FString(ElysiumNpcTestCensus::BodyOf(Runner->RetailClass(), 588)),
 		FString(TEXT("0x103c3fd0")));
 	Runner->Slot588();   // the species arm, through the slot
 	Cop->Slot588();      // the base arm

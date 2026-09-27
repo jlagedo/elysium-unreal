@@ -11,10 +11,8 @@
 class FElysiumNpcVampire : public FElysiumNpcHuman
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VVampire");
+	ELYSIUM_NPC_CLASS("CNPC_VVampire", FElysiumNpcHuman)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
@@ -32,28 +30,20 @@ public:
 	 *  and release bodies set around a carry. The read answers false. */
 	bool IsCarriedBreakable(const FElysiumEntity* Carried) const;
 	void SetCarriedBreakable(const FElysiumEntityHandle& Carried, bool bBreakable);
-	static const FPickupSpecies* PickupSpeciesOf(const TCHAR* InRetailClass);
-	/** This NPC's row, walking the census chain, or null when neither boss claims it. */
-	const FPickupSpecies* PickupSpecies() const;
-	/** `0x10382670` (`CNPC_VHengeyokai`, `"Bip01 R Hand"`) and `0x1038f430` (`CNPC_VManBat`,
-	 *  `"Bip01_R_Foot"`) — ONE body written twice. Create a `phys_animlink`, find the carrier bone by
-	 *  name, ask the carried thing for the element at the species' element key, wire the two together
-	 *  and store the link at `m_hPhysicsAnimlink`. `Carried` is retail's `param_1`; `ElementKey` is its
-	 *  `param_2`, which the ManBat arm passes straight through and the Hengeyokai arm ignores in favour
-	 *  of the decoded `m_SecurePickupParam`. */
-	bool AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey);
-	/** The same body with the species row handed in rather than resolved, so a row can be exercised by
-	 *  name. A null row is "no body fills this for my class" and answers false. */
-	bool AttachPickupAnimlinkFor(const FPickupSpecies* Row, FElysiumEntity* Carried, int32 ElementKey);
-	/** `0x10382400` (`CNPC_VHengeyokai`) and `0x1038f790` (`CNPC_VManBat`) — the release half, also one
-	 *  body written twice: drop the link, solve an impulse from the carried thing onto a target point
-	 *  48 units above the aim entity's origin, apply it, clear the carried handle and re-arm the
-	 *  collision-ignore expiry. `AimTarget` is the Hengeyokai arm's `param_1`; the ManBat arm ignores it
-	 *  and aims at `m_hClosestPlayer` (+0x628c) instead. */
-	void ReleasePickupAnimlink(const FElysiumEntity* AimTarget);
-	/** The row-explicit form, for the same reason as `AttachPickupAnimlinkFor`. */
-	void ReleasePickupAnimlinkFor(const FPickupSpecies* Row, const FElysiumEntity* AimTarget);
-
-	// From `FElysiumNpcHengeyokai` (the move manifest's corrected owner).
-	static const FPickupSpecies* PickupSpeciesRows(int32& OutCount);
+	/** The shared half of `0x10382670` (`CNPC_VHengeyokai`) and `0x1038f430` (`CNPC_VManBat`), one
+	 *  body retail writes twice: `if (param_1 == NULL) return false;` then
+	 *  `CreateNoSpawn("phys_animlink")` and the carrier-bone scan. Answers the created link (invalid on
+	 *  any refusal) and the bone. Each class's own `AttachPickupAnimlink` runs it with its own row,
+	 *  then its own arm, then `FinishPickupLink`. */
+	FElysiumEntityHandle BeginPickupLink(const FPickupSpecies& Row, FElysiumEntity* Carried, int32& OutBone);
+	/** The shared tail of both attach bodies: the carried thing's element at `Key` (`+0x424`), then
+	 *  `LinkAnimlink(link, this, bone, element, …)` (`0x1014f210`). False when there is no element. */
+	bool FinishPickupLink(const FElysiumEntityHandle& Link, int32 Bone, FElysiumEntity* Carried, int32 Key);
+	/** The shared half of the release bodies `0x10382400` (`CNPC_VHengeyokai`) and `0x1038f790`
+	 *  (`CNPC_VManBat`): remove the link and clear its word, then, with an aim and a live carried
+	 *  thing, solve the throw onto a point 48 units above the aim's origin and apply it. True when the
+	 *  throw was applied. The collision re-arm, the carried-word clear and the flag write are each
+	 *  class's own, in its own order. */
+	bool ReleasePickupLink(FElysiumEntityHandle& AnimlinkWord, const FElysiumEntityHandle& PickupTarget,
+		const FElysiumEntity* Aim);
 };

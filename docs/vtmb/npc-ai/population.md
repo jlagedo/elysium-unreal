@@ -2725,8 +2725,9 @@ entity-prefixed string PUSHed within a fixed radius of a reference to the class'
 proximity rule both over-claims (`CNPC_VBaseBoss` "claims" four boss classnames,
 `CNPC_VPlayerController` claims `npc_VFrenzyShadow` and `npc_VWolfMorph`) and under-claims (a
 factory placed far from its constructor is missed). The port's "most-derived claimant" rule
-(`ElysiumNpcKernelClass::OfClassname`) exists only to undo the over-claims. It cannot recover the
-misses, and nine classnames resolve differently from the factories:
+(`ElysiumNpcKernelClass::OfClassname`, deleted by story 5 commit B) existed only to undo the
+over-claims. It could not recover the misses, and nine classnames resolved differently from the
+factories:
 
 | Classname | Factory | Builds | Census resolves to |
 |---|---|---|---|
@@ -2946,3 +2947,19 @@ Counting over all 108 exported maps' entities units corrects two statements abov
 deployed-script literal in the exported content. Their liveness verdicts rest on the evidence
 above, not on a content count. Per-name counts:
 `docs/specs/0019-npc-kernel-rework/story-5/registrations-step2.tsv`.
+
+### The registry is the map (2026-09-27, 0019 story 5 commit B)
+
+The classname → class map is the port's class registry and nothing else: each of the 54 live
+classnames (the 45 ordinary-NPC names, the controller line's three, the three directors and the
+three makers) registers the C++ class its retail factory builds, under an abstract descriptor named
+for the retail class, and a descriptor chain that follows retail's bases
+(`NpcKernelClass.Factories`, `RegistryMatchesFactories`). `CAI_BaseNPC`, `CAI_BaseNPCTroika`,
+`CNPC_VBaseBoss` and `CAI_TestHull` stand only by internal construction, and the 20 dead classnames
+stay unregistered (records). No runtime body resolves a classname through the census any more: the
+most-derived claimant rule, `OfClassname` and the rest of the string-keyed class lookup are gone, and
+a type question is the tree's (`AsSpecies<T>()`). The corrected resolutions stand as the factories
+say — the six live names that resolved to nothing (`npc_VCop`, `npc_VGhoulCroucher`, `npc_VZombie`,
+`npc_VWerewolf`, `npc_VSheriffMan`, `npc_VPlaceholder`) and `npc_VVampireBoss`, whose registration
+was a stub — and every classname builds its class's overrides, words and schedule space
+(registrations and first-active names: `story-5/registrations-step2.tsv`).

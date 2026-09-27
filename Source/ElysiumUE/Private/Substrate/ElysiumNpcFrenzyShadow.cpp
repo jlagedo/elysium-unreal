@@ -5,7 +5,6 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -81,12 +80,6 @@ namespace
 	constexpr int32 GShadowLineNoEnemy = 0x25c;
 	constexpr int32 GShadowLineNoActivity = 0x26d;
 	constexpr int32 GShadowLineNoClearance = 0x28b;
-}
-
-const FElysiumNpcClass* FElysiumNpcFrenzyShadow::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 103: `0x10375c50`.
@@ -190,7 +183,7 @@ void FElysiumNpcFrenzyShadow::NPCInit()
 		FElysiumItem* Item = Fists->AsItem();
 		if (FElysiumWeapon* Weapon = Item != nullptr ? Item->AsWeapon() : nullptr)
 		{
-			Weapon->Hide(this);
+			Weapon->Hide();
 		}
 		++FistsNoDrawWrites;
 	}

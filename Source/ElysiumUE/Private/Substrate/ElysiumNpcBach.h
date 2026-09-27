@@ -11,10 +11,8 @@
 class FElysiumNpcBach : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VBach");
+	ELYSIUM_NPC_CLASS("CNPC_VBach", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual int32 Slot606(int32 Arg) override;
 	virtual void* Slot609(bool bForce) override;
 	virtual void NPCInit() override;

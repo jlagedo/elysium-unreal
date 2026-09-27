@@ -8,7 +8,6 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMotor10Shared.h"
 #include "Substrate/ElysiumNpcUsedHullBits.h"

@@ -11,6 +11,8 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcKernelShapeMap.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
+#include "Tests/ElysiumNpcKernelOverrideCensus.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // The NPC kernel's shape, asserted rather than described.
@@ -491,6 +493,48 @@ bool FElysiumNpcKernelSlotOwnersTest::RunTest(const FString&)
 			Slot.PortMethod, Slot.Address), Rows.Contains(FSlotKey(Slot.Slot, Slot.Address)));
 	}
 	TestTrue(TEXT("the census has generated Troika rows to join"), Joined > 0);
+	return true;
+}
+
+// One override per ported (class, slot) own-body row (0019 story 5 commit B, the census clause of the
+// story's job). The rows are the generated override census; each carries two proofs evaluated at
+// compile time. A method name that no longer exists anywhere stops the build; an override deleted
+// from its class while a base still declares the name reads `bDeclared` false, which this case
+// catches at run time; and `gen_kernel_shape --check` catches a stale table. This case also holds
+// the table to the census: every row is a live own-body row of a live class and stands on the class
+// its factory builds; the ported rows plus `kernel_shape --unported`'s `no-override` rows are the
+// whole live set.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelOverridesTest,
+	"Elysium.Substrate.NpcKernelShape.Overrides", GElysiumNpcShapeFlags)
+bool FElysiumNpcKernelOverridesTest::RunTest(const FString&)
+{
+	const TArrayView<const FElysiumNpcPortedOverride> Rows = ElysiumNpcKernelOverrideCensus::Rows();
+	TestTrue(TEXT("the port carries overrides"), Rows.Num() > 0);
+	TestTrue(TEXT("and no more than the census's live own-body rows"),
+		Rows.Num() <= ElysiumNpcKernelOverrideCensus::LiveRows());
+	TSet<FString> Seen;
+	for (const FElysiumNpcPortedOverride& Row : Rows)
+	{
+		const FString What = FString::Printf(TEXT("%s slot %d (%s) as %s::%s"), Row.Class, Row.Slot,
+			Row.Address, Row.DeclaringClass, Row.Method);
+		TestTrue(What + TEXT(" is declared on its class with the recorded signature"), Row.bDeclared);
+		TestTrue(What + FString::Printf(TEXT(" is inherited by %s"), Row.PortClass), Row.bInherits);
+		const FElysiumNpcClass* Own = Row.PortRow != nullptr ? Row.PortRow() : nullptr;
+		TestTrue(What + TEXT(": its port class answers the row's retail class"),
+			Own != nullptr && FCString::Strcmp(Own->Name, Row.Class) == 0);
+		TestFalse(What + TEXT(" is on a live class"), ElysiumNpcDeadClasses::Contains(Row.Class));
+		const bool bCensus = Algo::FindByPredicate(ElysiumNpcKernelShape::Overrides(),
+			[&Row](const FElysiumNpcClassSlot& Census)
+			{
+				return Census.Slot == Row.Slot && FCString::Strcmp(Census.Class, Row.Class) == 0
+					&& FCString::Strcmp(Census.Address, Row.Address) == 0
+					&& FCString::Strcmp(Census.Verdict, Row.Verdict) == 0;
+			}) != nullptr;
+		TestTrue(What + TEXT(" is a census own-body row with its verdict"), bCensus);
+		const FString Key = FString::Printf(TEXT("%s#%d"), Row.Class, Row.Slot);
+		TestFalse(What + TEXT(" is listed once"), Seen.Contains(Key));
+		Seen.Add(Key);
+	}
 	return true;
 }
 

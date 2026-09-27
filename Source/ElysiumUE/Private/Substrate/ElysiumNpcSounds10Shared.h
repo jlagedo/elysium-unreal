@@ -11,7 +11,6 @@
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"

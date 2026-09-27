@@ -13,9 +13,7 @@
 class FElysiumAiScriptedSequence : public FElysiumScriptedSequence
 {
 public:
-	static constexpr const TCHAR* RetailClassName = TEXT("CCineAI");
-
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	ELYSIUM_NPC_CLASS("CCineAI", FElysiumScriptedSequence)
 
 	// Slot 583 `0x101a9080`.
 	virtual void PossessEntity() override;

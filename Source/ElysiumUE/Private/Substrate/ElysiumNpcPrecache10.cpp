@@ -2,7 +2,6 @@
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 
 #include "ElysiumEntityDefs.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 

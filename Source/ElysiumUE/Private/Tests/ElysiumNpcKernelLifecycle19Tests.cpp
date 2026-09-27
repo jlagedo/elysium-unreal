@@ -25,7 +25,6 @@
 #include "Substrate/ElysiumNpcCamera.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
@@ -277,7 +276,7 @@ bool FElysiumNpcKernelLifecycle19WeaponHideTest::RunTest(const FString&)
 		// answer rather than asserting the counter alone.
 		return true;
 	}
-	Weapon->Unhide(F.Npc);
+	Weapon->Unhide();
 	F.Npc->NPCInit();
 	TestEqual(TEXT("1038715f the ACTIVE WEAPON is hidden, not the NPC"),
 		F.As<FElysiumNpcHuman>()->HideActiveWeaponCalls, Before + 1);

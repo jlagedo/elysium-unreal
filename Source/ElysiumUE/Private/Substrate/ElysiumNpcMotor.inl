@@ -120,11 +120,3 @@ bool IgnoreCollisionSharedHead(const FElysiumEntity* Other) const;
  *  Target is 29c's best guess at the retail name; the body is exact. */
 void ResumeScheduledMove();
 
-// --- The movement-tunables table ----------------------------------------------------------------
-//
-// Every row carries the retail class it came from AND the retail address of the body, so a reader
-// can check it against `docs/vtmb/npc-kernel/slots.md`. The species answers of slots 68/69, 516 and
-// the `SetupJump` rises are their classes' own overrides (story 5 step 4); this table's rows are the
-// Troika line, the non-Troika branch and the debug hull, which the Troika bodies read.
-
-static const FJumpTunableSpecies* JumpTunableSpeciesRows(int32& OutCount);

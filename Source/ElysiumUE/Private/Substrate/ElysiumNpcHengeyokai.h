@@ -12,10 +12,29 @@
 class FElysiumNpcHengeyokai : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VHengeyokai");
+	ELYSIUM_NPC_CLASS("CNPC_VHengeyokai", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// Slots 599 / 600: `0x10381750` / `0x10381780`, the melee-enter pair with every gate gone (story 5
+	// commit B: the census walk had counted them carried by `CNPC_VHuman`'s bodies).
+	virtual bool Slot599(int32 Arg) override;
+	virtual bool Slot600(FElysiumEntity* Enemy) override;
+
+	// The pickup chain's row for this class: the attach body `0x10382670`, the release body `0x10382400`,
+	// the carrier bone, the `m_hPickupTarget` offset and the collision-ignore re-arm.
+	static const FPickupSpecies& PickupRow();
+	/** `0x10382670` — the attach: the shared head, then `dynamic_cast<CRagdollProp*>(param_1)`,
+	 *  `SetHeld(true)` (`0x10157890`) and the element at the decoded `m_SecurePickupParam`
+	 *  (`+0x66a0`, `0x10430130`; `ElementKey` is not read), the shared tail, then
+	 *  `m_hPhysicsAnimlink = link`, `FINDING_BODY` off and `FormBit(true)` (`0x10381c00`). */
+	bool AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey);
+	/** `0x10382400` — the release: the shared throw toward `AimTarget` (`param_1`), then
+	 *  `m_hPickupTarget = -1` BEFORE the collision re-arm (`0x102c43b0`, 0.75 s), then
+	 *  `FormBit(false)`. No `StartIgnoringCollision`. */
+	void ReleasePickupAnimlink(const FElysiumEntity* AimTarget);
+
+	// The constructor `0x1037e680`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcHengeyokai();
+
 	virtual void NPCInit() override;
 	virtual void Precache() override;
 	virtual int32 NPC_EarlyTranslateActivity(int32 Activity) override;

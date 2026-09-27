@@ -12,7 +12,6 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -43,17 +42,12 @@ namespace NpcKernelMotorShared
 	// doubles in `.rdata` and floats at the comparison.
 	inline constexpr float GJumpLegalSlack = static_cast<float>(ElysiumNpcTunables::TenthDouble);
 	inline constexpr float GMaxJumpSpeedTroika = ElysiumNpcTunables::MaxJumpSpeedTroika;   // `0x101aa670`
-	// Slots 521/522/523 — the movement tunables. `CAI_BaseNPCTroika` is the row every spawnable
-	// species answers with: step height from the base body slot 522 carries (`0x101a6b40`), jump
-	// speed from Troika's own override of 523 (`0x101aa670`), jump legality from the base's 521
-	// (`0x10280880`). `CAI_BaseNPC` is the branch answer for the non-Troika line, whose 523 returns
-	// the SAME constant as its step height. `CAI_TestHull`'s five answers are its own class's
-	// overrides (`FElysiumNpcTestHull`, story 5 fold A1), not a row here.
-	inline constexpr FElysiumNpcBase::FJumpTunableSpecies GJumpTunableSpecies[] =
-	{
-		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x101aa670"), NpcKernelMotorShared::GStepHeightBase, GMaxJumpSpeedTroika,
-			80.0f, 250.0f, 160.0f },
-		{ TEXT("CAI_BaseNPC"), TEXT("0x101a6b60"), NpcKernelMotorShared::GStepHeightBase, NpcKernelMotorShared::GStepHeightBase,
-			80.0f, 250.0f, 160.0f },
-	};
+	// `CAI_BaseNPC::IsJumpLegal` `0x10280880`'s three immediates, pushed right to left into
+	// `FUN_10280790`: `10280892 PUSH 0x42a00000` (rise 80), `1028088d PUSH 0x437a0000` (drop 250),
+	// `10280888 PUSH 0x43200000` (distance 160). The per-class movement tunables are overrides since
+	// story 5 (the test hull's 40 / 40 / 1024s on `FElysiumNpcTestHull`); commit B collapsed the
+	// class-keyed row table these sat in.
+	inline constexpr float GJumpLegalRise = 80.0f;
+	inline constexpr float GJumpLegalDrop = 250.0f;
+	inline constexpr float GJumpLegalDistance = 160.0f;
 }

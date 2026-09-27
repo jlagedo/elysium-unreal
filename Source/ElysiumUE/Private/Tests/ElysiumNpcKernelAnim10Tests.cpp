@@ -18,7 +18,6 @@
 #include "Substrate/ElysiumNpcBach.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumReactions.h"
@@ -26,6 +25,7 @@
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "ElysiumAnimationIntent.h"
 #include "Visual/ElysiumActionTables.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, families **Anim10** and **SpeciesAnim10**. One case per `rule` row, each named for the
 // retail address it drives and each expectation read off the decompiled C — or, where the decompiler
@@ -227,7 +227,7 @@ bool FAnim10SetModelArmCoverageTest::RunTest(const FString&)
 	int32 Rows = 0;
 	for (const FElysiumNpcClass& Cls : ElysiumNpcKernelShape::Classes())
 	{
-		const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(&Cls, 105);
+		const FElysiumNpcClassSlot* Override = ElysiumNpcTestCensus::OverrideOf(&Cls, 105);
 		if (Override == nullptr || ElysiumNpcDeadClasses::Contains(Cls.Name))
 		{
 			continue;
@@ -1362,7 +1362,7 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	}
 	FElysiumNpcHuman& N = *ElysiumTestAsSpecies<FElysiumNpcHuman>(F.Npc);
 	TestEqual(TEXT("CNPC_VHuman fills slot 604 with 0x10385e40"),
-		FString(ElysiumNpcKernelClass::BodyOf(N.RetailClass(), 604)),
+		FString(ElysiumNpcTestCensus::BodyOf(N.RetailClass(), 604)),
 		FString(TEXT("0x10385e40")));
 
 	// Out of melee with slot 599 refusing and the melee failure gate silent: the melee-range ConVar
@@ -1542,9 +1542,9 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 	FElysiumNpcZombie& N = *ElysiumTestAsSpecies<FElysiumNpcZombie>(F.Npc);
 	// Slot 509 is `FElysiumNpcZombie`'s own override (story 5 step 3).
 	TestTrue(TEXT("the subject is a CNPC_VZombie, whose slot 509 is 0x103e0fa0"),
-		N.RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
+		N.RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VZombie")));
 	TestTrue(TEXT("the cop is not"),
-		F.Cop->RetailClass() != ElysiumNpcKernelClass::Find(TEXT("CNPC_VZombie")));
+		F.Cop->RetailClass() != ElysiumNpcTestCensus::Find(TEXT("CNPC_VZombie")));
 
 	// The state test the Troika/base body makes is ABSENT here: a COMBAT zombie still rolls, where
 	// a human body would have refused on `m_NPCState`.

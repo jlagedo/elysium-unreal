@@ -20,10 +20,8 @@
 class FElysiumNpcTestHull : public FElysiumNpcBase
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpcBase::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CAI_TestHull");
+	ELYSIUM_NPC_CLASS("CAI_TestHull", FElysiumNpcBase)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 
 	// Slot 103 `0x102d72f0`.
 	virtual void Spawn() override;

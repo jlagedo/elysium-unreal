@@ -9,7 +9,6 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 
@@ -60,12 +59,6 @@ const TCHAR* FElysiumNpcMaker::MakerThinkName(EMakerThink Think)
 	case EMakerThink::Zombie:    return TEXT("zombie");
 	}
 	return TEXT("unknown");
-}
-
-const FElysiumNpcClass* FElysiumNpcMaker::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // --- Own slots ------------------------------------------------------------------------------------

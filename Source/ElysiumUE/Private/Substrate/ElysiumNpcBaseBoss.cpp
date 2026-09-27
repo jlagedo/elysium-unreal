@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcBaseBoss.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -25,12 +24,6 @@
 namespace
 {
 	constexpr float RetailHalf = ElysiumNpcTunables::Half;
-}
-
-const FElysiumNpcClass* FElysiumNpcBaseBoss::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 76: `0x10366290`, which chains `CAI_BaseNPC::DrawDebugStatOverlays` (`0x102775e0`) directly.

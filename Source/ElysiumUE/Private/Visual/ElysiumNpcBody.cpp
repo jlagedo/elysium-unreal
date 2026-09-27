@@ -246,34 +246,6 @@ void AElysiumNpcBody::ApplyRetailHull()
 		return;
 	}
 
-	// The ORDER this depends on, made loud. The kernel fills both words in `FElysiumNpc::Spawn`,
-	// ahead of `BuildMotor` -- retail writes them in a constructor, earlier still. This body ran
-	// once with the call in `FElysiumNpcBase::NPCInit` instead, which `Activate` reaches AFTER `BuildMotor`:
-	// both words were 0, every species took the human capsule and the human agent, and nothing
-	// said a word because the tests pinned the table rather than the body. If the ordering ever
-	// slips again, this is the line that says so.
-	if (Npc->HullKind == ElysiumRetailHulls::DefaultHull
-		&& Npc->PathingHullKind == ElysiumRetailHulls::DefaultHull)
-	{
-		const ElysiumRetailHulls::FClassHulls* Row = nullptr;
-		for (int32 Index = 0; Index < ElysiumRetailHulls::ClassHullCount; ++Index)
-		{
-			if (Npc->IsRetailClass(ElysiumRetailHulls::ClassHulls[Index].RetailClass))
-			{
-				Row = &ElysiumRetailHulls::ClassHulls[Index];
-				break;
-			}
-		}
-		if (Row != nullptr && (Row->Standing != ElysiumRetailHulls::DefaultHull
-			|| Row->Pathing != ElysiumRetailHulls::DefaultHull))
-		{
-			UE_LOG(LogElysiumNpcEnt, Error,
-				TEXT("%s: the kernel's hull words are still unset but %s stands on %d and paths "
-					"on %d; the body is being sized before FElysiumNpc::Spawn filled them"),
-				*GetName(), Row->RetailClass, Row->Standing, Row->Pathing);
-		}
-	}
-
 	UCapsuleComponent* Capsule = GetCapsuleComponent();
 	const float StandRadius = static_cast<float>(Stand->Maxs.X * ElysiumMove::U);
 	const float StandHalfHeight =

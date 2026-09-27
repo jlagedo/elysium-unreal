@@ -20,10 +20,10 @@
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29d, family **Combat10** — the ranged-combat selectors, the fighting-item loadout, the
 // health-percent readers, the two weapon drops, the scripted discipline, the ideal-state
@@ -299,8 +299,8 @@ bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString
 	// story 5 step 2 a placed `npc_VCop` reached it too, the census giving `CNPC_VCop` no classname;
 	// retail's factory `0x103704f0` builds `CNPC_VCop`, and the census now says so.
 	TestTrue(TEXT("npc_VCop resolves to CNPC_VCop"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
-			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCop"))
+			== ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	{
 		FCombat10Fixture F(nullptr);
 		if (!TestNotNull(TEXT("the fighter leaf constructs"), F.Fighter))
@@ -314,8 +314,8 @@ bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString
 
 	// `CNPC_VMingXiao#348` is the one override at this slot.
 	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 348"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 348));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")), 348));
 	FCombat10Fixture F(TEXT("CNPC_VMingXiao"));
 	if (!TestNotNull(TEXT("the Ming Xiao fighter constructs"), F.Fighter))
 	{
@@ -455,11 +455,11 @@ bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const F
 	// The census's classname side: retail's factory `0x103c8760` builds `CNPC_VWerewolf` from
 	// `npc_VWerewolf` (story 5 step 2; the proximity census gave the class no classname).
 	TestTrue(TEXT("npc_VWerewolf resolves to CNPC_VWerewolf"),
-		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VWerewolf"))
-			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")));
+		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VWerewolf"))
+			== ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf")));
 	TestNotNull(TEXT("...and the census carries its slot-304 override"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf")), 304));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf")), 304));
 
 	Werewolf->MiscFlags = 0;
 	// `103cca32`: the arm consults NEITHER base gate. An ARMED werewolf still gets its claws, which
@@ -1146,9 +1146,9 @@ bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 	// `CNPC_VHuman` (the census carries the inherited row on each of them); the bare Troika line
 	// takes none.
 	TestNotNull(TEXT("CNPC_VHuman overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")), 605));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VHuman")), 605));
 	TestEqual(TEXT("CNPC_VCop inherits CNPC_VHuman's slot-605 body through CNPC_VHumanCombatant"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")), 605)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")), 605)),
 		FString(TEXT("0x10386560")));
 
 	N.Cognition.Conditions.Reset();
@@ -1216,8 +1216,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10AsianVampireRangedTest
 bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 {
 	TestNotNull(TEXT("CNPC_VAsianVampire overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VAsianVampire")), 605));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VAsianVampire")), 605));
 
 	// Each half of the pair is its own unarmed fighter in a world of its own: the Asian vampire, then
 	// the bare Troika line. The fixture's item catalogue is a global, so each world is gone before
@@ -1303,7 +1303,7 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 	}
 	FElysiumNpcBach& N = *ElysiumTestAsSpecies<FElysiumNpcBach>(F.Fighter);
 	TestNotNull(TEXT("CNPC_VBach overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VBach")), 605));
+		ElysiumNpcTestCensus::OverrideOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VBach")), 605));
 	N.Cognition.Conditions.Reset();
 
 	// `103642f6`: COND `0x7b` — a Bach-line condition above the base registrar's `0x76`, carried by
@@ -1368,8 +1368,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10MingXiaoRangedTest,
 bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 {
 	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VMingXiao")), 605));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiao")), 605));
 
 	// Every fighter below is its own, in a world of its own (the item catalogue is a global, so each
 	// world is gone before the next stands), armed with a LOADED rifle so the pre-pass declines.
@@ -1461,8 +1461,8 @@ bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 	}
 	FElysiumNpcSheriffMan& N = *ElysiumTestAsSpecies<FElysiumNpcSheriffMan>(F.Fighter);
 	TestNotNull(TEXT("CNPC_VSheriffMan overrides slot 605"),
-		ElysiumNpcKernelClass::OverrideOf(
-			ElysiumNpcKernelClass::Find(TEXT("CNPC_VSheriffMan")), 605));
+		ElysiumNpcTestCensus::OverrideOf(
+			ElysiumNpcTestCensus::Find(TEXT("CNPC_VSheriffMan")), 605));
 	N.Cognition.Conditions.Reset();
 	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
 	if (Rifle != nullptr)

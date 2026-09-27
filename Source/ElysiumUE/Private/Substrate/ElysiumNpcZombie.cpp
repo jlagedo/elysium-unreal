@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcZombie.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -73,12 +72,6 @@ namespace
 	}
 	// `CNPC_VZombie`'s two output slots. Retail fires the SAME `COutputEvent` (`+0x66e8`) from both.
 	const FName ZombieOnAttackedVictim(TEXT("OnAttackedVictim"));
-}
-
-const FElysiumNpcClass* FElysiumNpcZombie::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slots 25 / 26: `0x103e12c0` / `0x103e12f0`, the `m_OnAttackedVictim` fire with no base forward.

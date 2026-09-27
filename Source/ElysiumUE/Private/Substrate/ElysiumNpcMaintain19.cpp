@@ -4,7 +4,6 @@
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 
 // Story 29e, family Maintain19. The instruction addresses on every arm are from the retail

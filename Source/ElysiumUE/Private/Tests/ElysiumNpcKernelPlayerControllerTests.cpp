@@ -10,7 +10,6 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcPlayerController.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -20,6 +19,7 @@
 #include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScheduleText.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 5 fold A2 — the controller line as C++ classes: `CNPC_VPlayerController`
 // (`FElysiumNpcPlayerController`), `CNPC_VFrenzyShadow` and `CNPC_VWolfMorph` below it. Every
@@ -120,7 +120,7 @@ bool FElysiumNpcKernelPlayerControllerClassesTest::RunTest(const FString&)
 			continue;
 		}
 		TestTrue(FString::Printf(TEXT("%s answers its own census row"), Row.RetailClass),
-			F.Npc->RetailClass() == ElysiumNpcKernelClass::Find(Row.RetailClass));
+			F.Npc->RetailClass() == ElysiumNpcTestCensus::Find(Row.RetailClass));
 		TestNotNull(FString::Printf(TEXT("%s is a player controller"), Row.RetailClass),
 			F.Npc->AsSpecies<FElysiumNpcPlayerController>());
 		TestNotNull(FString::Printf(TEXT("%s is a CNPC_VVampire"), Row.RetailClass),
@@ -480,10 +480,10 @@ bool FElysiumNpcKernelPlayerControllerSpacesTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the controller runs CNPC_VVampire's space (0x103750e0)"), Controller == Vampire);
 	TestEqual(TEXT("CNPC_VWolfMorph's slot 580 is its own 0x103dc750"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VWolfMorph")), 580)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VWolfMorph")), 580)),
 		FString(TEXT("0x103dc750")));
 	TestEqual(TEXT("CNPC_VPlayerController's is CNPC_VVampire's 0x103750e0"),
-		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VPlayerController")), 580)),
+		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VPlayerController")), 580)),
 		FString(TEXT("0x103750e0")));
 	const int32 ShadowGlobal = Shadow->LocalToGlobal(344);
 	const int32 WolfGlobal = Wolf->LocalToGlobal(344);
@@ -592,6 +592,15 @@ bool FElysiumNpcKernelPlayerControllerBusyReadersTest::RunTest(const FString&)
 	TestEqual(TEXT("the dialogue refusal names it"), Refusal(), Occupied);
 	TestEqual(TEXT("asking again for the same class hands the same one back"),
 		F.World.CreatePlayerControllerEntity(TEXT("npc_VFrenzyShadow")).Index, ShadowHandle.Index);
+
+	// `0x10161a70`'s null-entity arm: a class whose factory builds no NPC takes the mismatch warning,
+	// lets the shadow go, then warns "created NULL Entity" and leaves `m_hControllerNPC` at -1.
+	AddExpectedError(TEXT("asked for NPC class"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("created NULL Entity"), EAutomationExpectedErrorFlags::Contains, 1);
+	TestFalse(TEXT("0x10161a70: a non-NPC class answers an invalid handle"),
+		F.World.CreatePlayerControllerEntity(TEXT("info_target")).IsSet());
+	TestFalse(TEXT("and m_hControllerNPC (+0x1db0) is cleared"), F.World.PlayerControllerHandle().IsSet());
+	TestFalse(TEXT("so nothing is busy"), Player->ControllerNpcBusy());
 	return true;
 }
 

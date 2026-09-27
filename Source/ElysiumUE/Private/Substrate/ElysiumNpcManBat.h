@@ -11,10 +11,25 @@
 class FElysiumNpcManBat : public FElysiumNpcVampire
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VManBat");
+	ELYSIUM_NPC_CLASS("CNPC_VManBat", FElysiumNpcVampire)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+	// The pickup chain's row for this class: the attach body `0x1038f430`, the release body `0x1038f790`,
+	// the carrier bone, the `m_hPickupTarget` offset and the collision-ignore re-arm.
+	static const FPickupSpecies& PickupRow();
+	/** `0x1038f430` — the attach: the shared head, the element at `ElementKey` (`param_2`, no cast,
+	 *  no decode), the shared tail, then `m_hPhysicsAnimlink = link`, `CARRYING_BODY` on
+	 *  (`0x1038f600`), `m_bPickupTargetBreakable = IsBreakable(param_1)` and `SetBreakable(param_1,
+	 *  false)`. */
+	bool AttachPickupAnimlink(FElysiumEntity* Carried, int32 ElementKey);
+	/** `0x1038f790` — the release: the shared throw toward `m_hClosestPlayer` (`+0x628c`; the
+	 *  argument is ignored), restoring the carried thing's breakable latch after it, then
+	 *  `StartIgnoringCollision(carried)` (`0x102c4380`), the re-arm (`0x102c43b0`, 2.0 s),
+	 *  `m_hPickupTarget = -1` AFTER the re-arm, and `CARRYING_BODY` off. */
+	void ReleasePickupAnimlink(const FElysiumEntity* AimTarget);
+
+	// The constructor `0x10389cc0`: its hull store (`docs/vtmb/data/class_hulls.json`).
+	FElysiumNpcManBat();
+
 	virtual void NPCInit() override;
 	virtual void Precache() override;
 	virtual int32 SpeciesSelectSchedule() override;

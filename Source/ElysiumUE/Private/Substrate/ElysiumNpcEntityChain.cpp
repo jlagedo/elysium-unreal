@@ -5,7 +5,6 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumOverlayStack.h"
 #include "ElysiumRng.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 

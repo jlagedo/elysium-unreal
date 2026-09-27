@@ -12,10 +12,8 @@
 class FElysiumNpcPlaceholder : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VPlaceholder");
+	ELYSIUM_NPC_CLASS("CNPC_VPlaceholder", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual int32 PreSelectSchedule() override;
 	virtual int32 SpeciesSelectSchedule() override;

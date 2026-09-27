@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcSheriffMan.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -65,10 +64,13 @@ namespace
 	const TCHAR* const GSheriffWeapon = TEXT("item_w_sheriff_sword");
 }
 
-const FElysiumNpcClass* FElysiumNpcSheriffMan::OwnRetailClass() const
+// `CNPC_VSheriffMan`'s constructor `0x103ae3e0` writes the standing hull word at `0x103ae463`,
+// after the `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs
+// in the same order. It writes `+0x1568` ALONE: he stands on SHERIFF_HULL and routes on the human
+// mesh the `CAI_BaseNPC` constructor left in `+0x156c`.
+FElysiumNpcSheriffMan::FElysiumNpcSheriffMan()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 21;
 }
 
 // Slot 420: `0x103ae6c0`.

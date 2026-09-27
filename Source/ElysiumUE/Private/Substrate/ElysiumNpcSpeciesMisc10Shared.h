@@ -14,7 +14,6 @@
 #include "ElysiumRng.h"
 #include "Misc/FileHelper.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 

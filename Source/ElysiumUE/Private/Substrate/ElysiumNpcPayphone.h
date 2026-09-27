@@ -11,10 +11,8 @@
 class FElysiumNpcPayphone : public FElysiumNpc
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CPayphone");
+	ELYSIUM_NPC_CLASS("CPayphone", FElysiumNpc)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual void NPCInit() override;
 	virtual FVector HeadDirection2D() override;
 	virtual FVector HeadDirection3D() override;

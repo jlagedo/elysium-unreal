@@ -2262,10 +2262,10 @@ public:
 	// dialogue refusal (`0x10178170`), `CAI_BaseNPCTroika::CanTalk` gate 10 (`0x102c21c0`) and the
 	// stealth-kill busy test (`0x101681a0`).
 	//
-	// `m_hControllerNPC` (`CBasePlayer +0x1db0`) has TWO homes in this port until story 5 commit B
-	// unifies them: the world's `PlayerControllerHandle()` — the live one, written by
-	// `CreatePlayerControllerEntity` (retail `GetControllerNPC` `0x10161a70`) — and the NPC-side
-	// `FElysiumNpc::ControllerNpc`, written only by the unwired `FElysiumNpc::GetControllerNpc` path.
+	// `m_hControllerNPC` (`CBasePlayer +0x1db0`) has one home: the world's `PlayerControllerHandle()`,
+	// written by `CreatePlayerControllerEntity` (retail `GetControllerNPC` `0x10161a70`) and cleared
+	// by `RemovePlayerControllerEntity` (`0x101618e0`). Story 5 commit B deleted the NPC-side copy
+	// (`FElysiumNpc::ControllerNpc` and the CBasePlayer bodies ported onto the NPC over it).
 	bool ControllerNpcBusy() const;
 
 	// The whole predicate, as one readable reason or nullptr when the player may talk. The string
@@ -2391,7 +2391,10 @@ public:
 	// returns, exactly as `PreThink` returns after it.
 	void PlayerDeathThink();
 
-	bool IsAlive() const { return LifeState == EElysiumLifeState::Alive; }
+	// Slot 158, `CBaseEntity::IsAlive` `0x100b4dc0`: `m_lifeState == LIFE_ALIVE`, read from the
+	// player's own `m_lifeState` (`LifeState`). The slot's override on the player (it hid the slot as
+	// a `const` method before, story 5 commit B).
+	virtual bool IsAlive() override { return LifeState == EElysiumLifeState::Alive; }
 	// =============================================================================================
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).

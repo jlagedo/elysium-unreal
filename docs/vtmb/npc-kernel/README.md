@@ -76,7 +76,8 @@ its **Neither** column is the acceptance measure of stories 29c, 29d and 29e.
 
 A `rule` row's target is one of four spellings, and the last two are read by `gen_kernel_shape`:
 `FElysiumSomething::Method` (the port method that carries the body), `registry:<slot>` (a species
-override of a constant-returning virtual: a row in the class registry, not code),
+override of a constant-returning virtual, whose literal the census's own-body row carries; the port's
+answer is the class's override),
 `default:<literal>` / `default:void` (retail's whole body is one literal, so the generator emits
 that body and the automation suite calls it), and `hand:<PortMethod>` (the body is written by hand
 in the substrate, so the generator emits no definition and the linker checks the claim).
@@ -98,9 +99,16 @@ The tables have one consumer that is not a reader:
 
 `research/tooling/gen_kernel_shape.py` transcribes `layout`, `signatures`, `classes` and the slot
 bodies into project source — `Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelShape.cpp` (the
-census the runtime asserts its own shape against), `ElysiumNpcKernelSlots.inl` (one `virtual` per
-Troika-line slot the port has no body for) and `ElysiumNpcKernelSlots.cpp` (their stubs, each
-tallying `elysium.stubs` with the retail address and the story that owns it). It reads the corpus
+census the runtime asserts its own shape against, and each class of the tree takes as its
+identity), per chain class `Elysium<Class>Slots.inl` / `.cpp` (the slots that class introduces or
+refills: retail's one-constant bodies, and stubs that tally `elysium.stubs` with the retail address
+and the story that owns it until a story ports the body), and
+`Tests/ElysiumNpcKernelOverrideCensus.cpp` (one row per live class-own body the port carries as a
+C++ override, each proved at compile time; 0019 story 5 commit B). Nothing dispatches through the
+census: the class tree is C++. `uv run elysium research kernel_shape --unported <path>` lists the
+live rules the port does not carry yet, the number the species stories drive down; the story-5
+pin and what story 5 hands story 8 are `docs/specs/0019-npc-kernel-rework/story-5/unported.tsv` and
+`handoff-story-8.md` beside it. It reads the corpus
 through `kernel_shape.build`, so a table that drifts from the ledger fails generation rather than
 being emitted. Nothing in `uv run elysium build` runs it.
 

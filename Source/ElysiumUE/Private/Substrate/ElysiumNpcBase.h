@@ -6,6 +6,7 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
+#include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -15,8 +16,25 @@
 #include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScriptedCharacter.h"
 
-struct FElysiumNpcClass;   // Substrate/ElysiumNpcKernelShape.h — the census row for a retail class
 class FElysiumScriptedSequence;   // Substrate/ElysiumScriptedSequence.h — `CCineNPC`, the directors
+
+// One class of the NPC tree (story 5), declared inside its class body: its retail name, its census
+// row (`ElysiumNpcKernelShape::ClassNamed`, looked up once), the row as its own identity, and its
+// link in the typed test `AsSpecies<T>()` walks -- its own row, then `BaseClass`'s answer. The row
+// is identity only; nothing selects behaviour by it.
+#define ELYSIUM_NPC_CLASS(RetailName, BaseClass) \
+public: \
+	static constexpr const TCHAR* RetailClassName = TEXT(RetailName); \
+	static const FElysiumNpcClass* StaticRetailClass() \
+	{ \
+		static const FElysiumNpcClass* const Row = ElysiumNpcKernelShape::ClassNamed(RetailClassName); \
+		return Row; \
+	} \
+	virtual const FElysiumNpcClass* OwnRetailClass() const override { return StaticRetailClass(); } \
+	virtual bool IsNpcClass(const FElysiumNpcClass* Cls) const override \
+	{ \
+		return Cls != nullptr && (Cls == StaticRetailClass() || BaseClass::IsNpcClass(Cls)); \
+	}
 
 // `CAI_BaseNPC` — the AI base every NPC class derives from (story 5 step 5). `FElysiumNpc`, the
 // `CAI_BaseNPCTroika` line every living `npc_*` classname builds, derives from it; so does
@@ -36,41 +54,44 @@ public:
 	// to the AI list `DAT_1090fe10` and sets `FL_NPC`).
 	virtual FElysiumNpcBase* AsNpcBase() override { return this; }
 
-	// --- Which retail class this NPC IS (story 29c-1) ---------------------------------------------
+	// --- Which retail class this NPC IS ---------------------------------------------------------
 	/**
-	 * The census row for the retail class this NPC IS (`Substrate/ElysiumNpcKernelClassLookup.h`):
-	 * the C++ class's own answer (`OwnRetailClass`), which is the class retail's factory for the
-	 * authored classname builds (story 5 step 2). Null for a bare `FElysiumNpc`, the Troika line
-	 * itself, which no classname builds.
+	 * The census row of the retail class this NPC is (`ElysiumNpcKernelShape::Classes()`): the C++
+	 * class's own answer (`OwnRetailClass`), which is the class retail's factory for the authored
+	 * classname builds. Null on the two base lines, `FElysiumNpcBase` and `FElysiumNpc`, which no
+	 * classname builds.
 	 *
-	 * Species behaviour is reached through overrides (story 5 step 3) and lives on the species
-	 * classes (step 4). What still reads this: retail's own `RTDynamicCast` type tests, the census
-	 * lookups, and the class-keyed data queries `story-5/decisions-step3.json` lists.
+	 * IDENTITY, NEVER DISPATCH (story 5 commit B). Behaviour is reached through overrides and retail's
+	 * `__RTDynamicCast` type tests through `AsSpecies<T>()`. What reads the row: the census and
+	 * factory tests, logs and inspectors, and the schedule corpus, whose per-class id spaces and
+	 * parse flags are keyed by the class's own name exactly as retail's `InitCustomSchedules`
+	 * statics are one per class (`FElysiumNpcBase::IdSpace`, `FElysiumNpc::LoadedSchedules`).
 	 */
-	const FElysiumNpcClass* RetailClass() const;
+	const FElysiumNpcClass* RetailClass() const { return OwnRetailClass(); }
 
-	// Each species class answers its own census row; the base and Troika lines answer null.
-	virtual const FElysiumNpcClass* OwnRetailClass() const;
+	// Each class of the tree answers its own census row (`ELYSIUM_NPC_CLASS`); the two base lines null.
+	virtual const FElysiumNpcClass* OwnRetailClass() const { return nullptr; }
 
-	// `RetailClass()` is `CNPC_VVampireBoss` or below, `CNPC_VBaseBoss` or below, … The chain walk a
-	// species body's "am I one of these" arm performs, so no body compares classnames by hand.
-	bool IsRetailClass(const TCHAR* RetailClassName) const;
+	// Whether this object's C++ class is the class whose census row is `Cls`, or derives from it.
+	// Each class of the tree answers its own row and then asks its base (`ELYSIUM_NPC_CLASS`), so
+	// the walk is the C++ inheritance chain -- the walk retail's RTTI class hierarchy descriptor
+	// performs for `__RTDynamicCast`. The two base lines are no class of the tree and answer false.
+	virtual bool IsNpcClass(const FElysiumNpcClass* Cls) const { return false; }
 
-	// This NPC as species class `T` (`Substrate/ElysiumNpc<X>.h`), or null: the typed view a body
-	// takes of ANOTHER instance whose species words it reads (a tentacle's head, a pickup helper's
-	// ManBat). It tests the C++ class's own census row, so a non-null answer is always an object of
-	// class `T`: the species tree mirrors retail's (story 5 step 2).
+	// This NPC as class `T` of the tree (`Substrate/ElysiumNpc<X>.h`), or null: retail's
+	// `dynamic_cast<T*>` (`__RTDynamicCast`), which the port without RTTI answers through
+	// `IsNpcClass`. A non-null answer is always an object of class `T` or below -- a
+	// `CNPC_VChangBrosBlade` IS a `CNPC_VChangBros` (`0x1036e2f0`).
 	template <class T>
 	T* AsSpecies()
 	{
-		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<T*>(this) : nullptr;
+		return IsNpcClass(T::StaticRetailClass()) ? static_cast<T*>(this) : nullptr;
 	}
 	template <class T>
 	const T* AsSpecies() const
 	{
-		return OwnRetailClassDerivesFrom(T::RetailClassName) ? static_cast<const T*>(this) : nullptr;
+		return IsNpcClass(T::StaticRetailClass()) ? static_cast<const T*>(this) : nullptr;
 	}
-	bool OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const;
 
 	// --- Moved from `FElysiumNpc` (story 5 step 5) ---------------------------------------------
 

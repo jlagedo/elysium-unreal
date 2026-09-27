@@ -6,7 +6,6 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
 // Story 29c-1, family **Misc** — the 37 layer 0–9 rows that belong to no other family's concern.

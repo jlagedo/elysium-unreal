@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcChangBrosClaw.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumMiscFlags.h"
@@ -12,12 +11,6 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumWeaponClasses.h"
-
-const FElysiumNpcClass* FElysiumNpcChangBrosClaw::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
-}
 
 // Slot 420: `0x1036f900`.
 // `0x1036f900`

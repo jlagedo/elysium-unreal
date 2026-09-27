@@ -11,7 +11,12 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcTestHull.h"
+#include "ElysiumClassRegistry.h"
+#include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumRetailHullTable.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 static constexpr EAutomationTestFlags GElysiumRetailHullFlags =
@@ -140,6 +145,61 @@ bool FElysiumRetailHullSplitTest::RunTest(const FString&)
 	// he routes on the human's mesh however large the box he stands in.
 	TestEqual(TEXT("the Sheriff's agent is the human's"),
 		ElysiumRetailHulls::AgentName(0), FName(TEXT("Human")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullConstructorsTest,
+	"Elysium.Substrate.RetailHull.Constructors", GElysiumRetailHullFlags)
+bool FElysiumRetailHullConstructorsTest::RunTest(const FString&)
+{
+	// Retail writes both hull words in CONSTRUCTORS (0019 story 5 commit B moved the port's writes
+	// there): every live classname's class, freshly constructed and before any Spawn, holds the
+	// nearest row of the generated table on its retail chain -- `CAI_BaseNPC`'s zero where none
+	// claims it.
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	int32 Checked = 0;
+	for (const FElysiumNpcClass& Cls : ElysiumNpcKernelShape::Classes())
+	{
+		if (Cls.ClassnameCount == 0 || ElysiumNpcDeadClasses::Contains(Cls.Name))
+		{
+			continue;
+		}
+		FElysiumEntityDef Def;
+		Def.Classname = Cls.Classnames[0];
+		TUniquePtr<FElysiumEntity> Entity = Reg.Create(Def, FElysiumEntityHandle(0, 1));
+		const FElysiumNpcBase* Npc = Entity.IsValid() ? Entity->AsNpcBase() : nullptr;
+		if (!TestNotNull(FString::Printf(TEXT("%s constructs an NPC"), *Def.Classname), Npc))
+		{
+			continue;
+		}
+		const ElysiumRetailHulls::FClassHulls* Row = nullptr;
+		for (int32 Index = 0; Index < ElysiumRetailHulls::ClassHullCount && Row == nullptr; ++Index)
+		{
+			if (ElysiumNpcTestCensus::DerivesFrom(&Cls, ElysiumRetailHulls::ClassHulls[Index].RetailClass))
+			{
+				Row = &ElysiumRetailHulls::ClassHulls[Index];
+			}
+		}
+		const int32 Standing = Row != nullptr ? Row->Standing : ElysiumRetailHulls::DefaultHull;
+		const int32 Pathing = Row != nullptr ? Row->Pathing : ElysiumRetailHulls::DefaultHull;
+		TestEqual(FString::Printf(TEXT("%s (%s) is constructed standing on %d"), *Def.Classname, Cls.Name,
+			Standing), Npc->HullKind, Standing);
+		// The pathing word (`+0x156c`) is a Troika word; a director is a `CAI_BaseNPC` only.
+		if (const FElysiumNpc* Troika = Entity->AsNpc())
+		{
+			TestEqual(FString::Printf(TEXT("%s (%s) is constructed pathing on %d"), *Def.Classname,
+				Cls.Name, Pathing), Troika->PathingHullKind, Pathing);
+		}
+		++Checked;
+	}
+	// 52: the 54 live classnames less the second names of `CNPC_ProneDialog` (`npc_VMercurio`) and
+	// `CNPC_VPedestrian` (`npc_VDialogPedestrian`) -- one construction per class that has a classname.
+	TestEqual(TEXT("every live classname's class was constructed"), Checked, 52);
+
+	// `CAI_TestHull` has no classname and no constructor store of its own: built by code, it holds
+	// `CAI_BaseNPC`'s 0 until its `Spawn` (`0x102d72f0`) picks a hull.
+	FElysiumNpcTestHull Hull;
+	TestEqual(TEXT("CAI_TestHull is constructed standing on 0"), Hull.HullKind, 0);
 	return true;
 }
 

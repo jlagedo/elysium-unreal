@@ -37,7 +37,6 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcGeometryShared.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLifecycleShared.h"
 #include "Substrate/ElysiumNpcLog.h"

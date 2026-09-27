@@ -16,7 +16,6 @@
 #include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcHunter.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcManBat.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
@@ -24,6 +23,7 @@
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcScurrying.h"
 #include "Substrate/ElysiumNpcTzimisce.h"
+#include "Substrate/ElysiumNpcRat.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 5 step 4 — the species datamap rows, asserted on the classes that declare them.
@@ -556,7 +556,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		TSet<FName> Rows;
 		for (const TPair<FString, TArray<FName>>& Table : TableRows)
 		{
-			if (Npc->IsRetailClass(*Table.Key))
+			if (ElysiumNpcTestCensus::DerivesFrom(Npc->RetailClass(), *Table.Key))
 			{
 				Rows.Append(Table.Value);
 				StampedTables.Add(Table.Key);
@@ -702,7 +702,7 @@ bool FElysiumNpcKernelSpeciesBindingsTutorialRatTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Rat, Other });
-	TestTrue(TEXT("npc_VRat builds CNPC_VRat"), Rat->IsRetailClass(TEXT("CNPC_VRat")));
+	TestTrue(TEXT("npc_VRat builds CNPC_VRat"), Rat->AsSpecies<FElysiumNpcRat>() != nullptr);
 
 	// The eight keys, on the words their datamap rows name.
 	TestEqual(TEXT("friendship_level -> CNPC_VAnimal +0x6664"), Rat->AnimalFriendshipLevel, 1);

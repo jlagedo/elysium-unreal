@@ -1060,18 +1060,75 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
       * `stub` -- a generated slot body on its owner class (the chain classes, the NPC base or the
         Troika) whose live verdict has no `default:` or `hand:` target, so it still tallies;
       * `no-override` -- a species class's own live body at a slot its port class declares no
-        override of (the port runs the inherited body), or a deferred class's (steps 7-10) whose
-        port class does not stand yet.
+        override of (the port runs the inherited body).
     """
-    import csv
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     import gen_kernel_shape as g
     model = g.build(repo, module, depth)
-    out: list[tuple[str, ...]] = []
+    _, unported = override_rows(repo, model)
+    return unported
+
+
+# A port declaration the census proof reads: `[virtual] <ret> <Name>(<params>) [const] [override]`
+# up to its `;` or body, wrapped lines included.
+_DECL_TEMPLATE = (r"(?m)^[\t ]*(?:virtual[\t ]+)?(?P<ret>[\w:<>,\*&]+(?:[\t ]+[\w:<>,\*&]+)*?)[\t ]*\b{name}\s*"
+                  r"\((?P<params>[^;{{}}()]*)\)\s*(?P<const>const)?\s*(?P<override>override)?\s*[;{{]")
+
+
+def _split_params(text: str) -> list[str]:
+    out, depth, cur = [], 0, ""
+    for ch in text:
+        if ch == "<":
+            depth += 1
+        elif ch == ">":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return out
+
+
+def _signature_of(header: str, name: str, need_override: bool) -> tuple[str, str, bool] | None:
+    """The (return type, parameter types, const) of `name`'s declaration in a class header, with
+    parameter names, comments and defaults stripped; the one carrying `override` when
+    `need_override`. None when no declaration reads."""
+    for match in re.finditer(_DECL_TEMPLATE.format(name=re.escape(name)), header):
+        if need_override and not match.group("override"):
+            continue
+        ret = " ".join(match.group("ret").split())
+        if ret.startswith("virtual "):
+            ret = ret[len("virtual "):]
+        params = []
+        for raw in _split_params(match.group("params")):
+            part = re.sub(r"/\*.*?\*/", "", raw.split("=", 1)[0]).strip()
+            if not part:
+                continue
+            named = re.match(r"^(.*?[\s\*&])([A-Za-z_]\w*)$", part)
+            head = named.group(1).strip() if named else ""
+            if named and head not in ("", "const", "unsigned", "signed"):
+                part = head
+            params.append(" ".join(part.split()))
+        if params == ["void"]:
+            params = []
+        return ret, ", ".join(params), bool(match.group("const"))
+    return None
+
+
+def override_rows(repo: Path, model) -> tuple[list[dict], list[tuple[str, ...]]]:
+    """Every live (class, slot) own-body row of the census, split into the ported ones -- with the
+    port class whose C++ declaration carries the body and that declaration's signature, which
+    `gen_kernel_shape` turns into a compile-checked census -- and the unported rows `--unported`
+    lists (0019 story 5 commit B)."""
+    import csv
+    unported: list[tuple[str, ...]] = []
+    ported: list[dict] = []
     for row in model.slots:
         for layer in row.layers:
             if layer.verdict in LIVE_VERDICTS and layer.stubbed:
-                out.append((layer.retail, str(row.slot), layer.address, layer.verdict, "stub", layer.owner))
+                unported.append((layer.retail, str(row.slot), layer.address, layer.verdict, "stub", layer.owner))
     story = repo / "docs" / "specs" / "0019-npc-kernel-rework" / "story-5" / "classes.tsv"
     classes = list(csv.DictReader(story.read_text(encoding="utf-8").splitlines(), delimiter="\t"))
     ports = {r["retail_class"]: r["port_class"] for r in classes}
@@ -1102,9 +1159,16 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
     def header_of(port: str) -> str:
         if port not in headers:
             path = substrate / f"{port[1:]}.h"
-            headers[port] = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
+            text = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
+            # Declarations only: a comment that spells `Name(...) override` is not one (fold B found
+            # `CNPC_VMingXiao` slot 166 counted ported off its doc comment).
+            text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+            headers[port] = re.sub(r"//[^\n]*", "", text)
         return headers[port]
 
+    # Each class's own body at each slot (census rows), and the retail class a port class stands for.
+    body_of = {(r.cls, r.slot): r.address for r in model.overrides}
+    retail_of = {port: retail for retail, port in ports.items() if port.startswith("F")}
     for row in model.overrides:
         # A dead class's body is census, not a debt (its class stands no instance).
         if row.verdict not in LIVE_VERDICTS or row.cls not in live or row.slot in lifetime:
@@ -1116,19 +1180,28 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
         # The species line from the class up to (not including) the Troika leaf: an inherited body is
         # carried where its owner overrides it, or -- for a branch's own slot -- where its introducing
         # class declares it.
-        declared, cursor = False, port
+        declared, cursor, need_override = "", port, True
         while name and cursor.startswith("F") and cursor not in ("FElysiumNpc", "FElysiumNpcBase"):
             if re.search(rf"\b{re.escape(name)}\s*\([^;{{]*\)[^;{{]*\boverride\b", header_of(cursor)):
-                declared = True
+                declared = cursor
                 break
             if cursor == introducer_port and re.search(
                     rf"\bvirtual\b[^;{{]*\b{re.escape(name)}\s*\(", header_of(cursor)):
-                declared = True
+                declared, need_override = cursor, False
                 break
             cursor = port_base.get(cursor, "")
+        # The override that runs is the nearest declared one; it carries this row only when its own
+        # retail class fills the slot with the same body (fold B found `CNPC_VHengeyokai` 599/600
+        # counted ported by `CNPC_VHuman`'s different bodies).
+        if declared and body_of.get((retail_of.get(declared, ""), row.slot)) != row.address:
+            declared = ""
         if not declared:
-            out.append((row.cls, str(row.slot), row.address, row.verdict, "no-override", port))
-    return sorted(set(out), key=lambda r: (r[0], int(r[1]), r[2]))
+            unported.append((row.cls, str(row.slot), row.address, row.verdict, "no-override", port))
+            continue
+        ported.append({"cls": row.cls, "slot": row.slot, "address": row.address, "verdict": row.verdict,
+                       "port": port, "declared": declared, "method": name,
+                       "signature": _signature_of(header_of(declared), name, need_override)})
+    return ported, sorted(set(unported), key=lambda r: (r[0], int(r[1]), r[2]))
 
 
 def main(argv: list[str] | None = None) -> int:

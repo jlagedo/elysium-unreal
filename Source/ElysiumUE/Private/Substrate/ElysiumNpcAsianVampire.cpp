@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcAsianVampire.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -55,12 +54,6 @@ namespace
 	constexpr int32 GSchedJumpAcross = 0x15a;
 	// `CNPC_VAsianVampire::SelectLedgeNode` `0x103615c0`'s clearance.
 	constexpr float AsianLedgeClearance = 150.0f;         // DAT_104a9320
-}
-
-const FElysiumNpcClass* FElysiumNpcAsianVampire::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x10360ce0`.

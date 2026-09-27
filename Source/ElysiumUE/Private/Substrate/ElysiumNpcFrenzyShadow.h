@@ -18,10 +18,8 @@
 class FElysiumNpcFrenzyShadow : public FElysiumNpcPlayerController
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VFrenzyShadow");
+	ELYSIUM_NPC_CLASS("CNPC_VFrenzyShadow", FElysiumNpcPlayerController)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 
 	// Slot 103 `0x10375c50`.
 	virtual void Spawn() override;

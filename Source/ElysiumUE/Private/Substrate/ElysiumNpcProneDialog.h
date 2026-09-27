@@ -12,10 +12,8 @@
 class FElysiumNpcProneDialog : public FElysiumNpcHumanCombatant
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_ProneDialog");
+	ELYSIUM_NPC_CLASS("CNPC_ProneDialog", FElysiumNpcHumanCombatant)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

@@ -16,12 +16,12 @@
 #include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Senses** — one case per ported body, every threshold and every arm order
 // taken from the decompiled C rather than from 29c's one-line walks (which this family found wrong
@@ -29,7 +29,7 @@
 //
 // The census cross-check at the end is what keeps the six species rows honest: every retail class
 // this family carries a body for is asked for that slot's address through
-// `ElysiumNpcKernelClass::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
+// `ElysiumNpcTestCensus::BodyOf`, so a row that drifts from `npc-kernel/slots.md` fails here.
 //
 // Spawn facts this suite obeys: every classname builds the class retail's factory builds (story 5
 // step 2, `docs/vtmb/npc-ai/population.md`, "The classname → class map, read from the factories").
@@ -312,14 +312,14 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 		FElysiumNpcBase::RetailCollisionExtents(*Caller, Mins, Maxs));
 
 	// The census rows both slot-45 bodies came from.
-	const FElysiumNpcClass* Payphone = ElysiumNpcKernelClass::Find(TEXT("CPayphone"));
-	const FElysiumNpcClass* Prone = ElysiumNpcKernelClass::Find(TEXT("CNPC_ProneDialog"));
+	const FElysiumNpcClass* Payphone = ElysiumNpcTestCensus::Find(TEXT("CPayphone"));
+	const FElysiumNpcClass* Prone = ElysiumNpcTestCensus::Find(TEXT("CNPC_ProneDialog"));
 	TestEqual(TEXT("CPayphone#45 is 0x101aaf80"),
-		FString(ElysiumNpcKernelClass::BodyOf(Payphone, 45)), FString(TEXT("0x101aaf80")));
+		FString(ElysiumNpcTestCensus::BodyOf(Payphone, 45)), FString(TEXT("0x101aaf80")));
 	TestEqual(TEXT("CNPC_ProneDialog#45 is 0x103a4bb0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Prone, 45)), FString(TEXT("0x103a4bb0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Prone, 45)), FString(TEXT("0x103a4bb0")));
 	TestEqual(TEXT("and npc_payphone resolves to CPayphone"),
-		FString(ElysiumNpcKernelClass::OfClassname(TEXT("npc_payphone"))->Name),
+		FString(ElysiumNpcTestCensus::OfClassname(TEXT("npc_payphone"))->Name),
 		FString(TEXT("CPayphone")));
 
 	// `0x103a4bb0` — the prone-dialog ray, driven on an ordinary NPC. (`npc_VProneDialog` builds
@@ -429,19 +429,19 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 
 	// Every species row by name, against the census, so the rows are checked independently of any
 	// spawn.
-	const FElysiumNpcClass* Werewolf = ElysiumNpcKernelClass::Find(TEXT("CNPC_VWerewolf"));
-	const FElysiumNpcClass* Yukie = ElysiumNpcKernelClass::Find(TEXT("CNPC_VYukie"));
-	const FElysiumNpcClass* Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity"));
+	const FElysiumNpcClass* Werewolf = ElysiumNpcTestCensus::Find(TEXT("CNPC_VWerewolf"));
+	const FElysiumNpcClass* Yukie = ElysiumNpcTestCensus::Find(TEXT("CNPC_VYukie"));
+	const FElysiumNpcClass* Camera = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity"));
 	TestEqual(TEXT("CNPC_VWerewolf#201 is 0x103cb810"),
-		FString(ElysiumNpcKernelClass::BodyOf(Werewolf, 201)), FString(TEXT("0x103cb810")));
+		FString(ElysiumNpcTestCensus::BodyOf(Werewolf, 201)), FString(TEXT("0x103cb810")));
 	TestEqual(TEXT("CNPC_VYukie#201 is 0x103ddaf0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 201)), FString(TEXT("0x103ddaf0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Yukie, 201)), FString(TEXT("0x103ddaf0")));
 	TestEqual(TEXT("CNPC_VYukie#363 is 0x103ddaa0"),
-		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 363)), FString(TEXT("0x103ddaa0")));
+		FString(ElysiumNpcTestCensus::BodyOf(Yukie, 363)), FString(TEXT("0x103ddaa0")));
 	TestEqual(TEXT("CNPC_VCameraSecurity#468 is 0x1036a030"),
-		FString(ElysiumNpcKernelClass::BodyOf(Camera, 468)), FString(TEXT("0x1036a030")));
+		FString(ElysiumNpcTestCensus::BodyOf(Camera, 468)), FString(TEXT("0x1036a030")));
 	TestEqual(TEXT("CNPC_VYukie#602 is 0x103dda10"),
-		FString(ElysiumNpcKernelClass::BodyOf(Yukie, 602)), FString(TEXT("0x103dda10")));
+		FString(ElysiumNpcTestCensus::BodyOf(Yukie, 602)), FString(TEXT("0x103dda10")));
 	// story 5 step 2: npc_VWerewolf's factory 0x103c8760 builds CNPC_VWerewolf (population.md),
 	// so the census row claims exactly that one classname and the classname resolves to the row.
 	if (TestNotNull(TEXT("CNPC_VWerewolf is a census class"), Werewolf))
@@ -454,12 +454,12 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 				FString(TEXT("npc_VWerewolf")));
 		}
 		TestTrue(TEXT("npc_VWerewolf resolves to CNPC_VWerewolf"),
-			ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VWerewolf"))) == Werewolf);
+			ElysiumNpcTestCensus::OfClassname(FString(TEXT("npc_VWerewolf"))) == Werewolf);
 	}
 	// story 5 step 2: npc_VYukie builds CNPC_VYukie (population.md); this map stands none.
 	TestTrue(TEXT("npc_VYukie resolves to CNPC_VYukie"),
 		Yukie != nullptr
-			&& ElysiumNpcKernelClass::OfClassname(FString(TEXT("npc_VYukie"))) == Yukie);
+			&& ElysiumNpcTestCensus::OfClassname(FString(TEXT("npc_VYukie"))) == Yukie);
 	TestNull(TEXT("and this map stands no npc_VYukie, so nothing resolves it here"),
 		F.World.Npc(TEXT("npc_VYukie")));
 

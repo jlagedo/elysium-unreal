@@ -10,7 +10,6 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 

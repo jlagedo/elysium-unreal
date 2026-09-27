@@ -15,9 +15,9 @@
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcBaseBoss.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Positions**. The decisions this family ports read a node graph and run
 // world traces, and this substrate produces neither — so the recovered rules are written as PURE
@@ -313,7 +313,7 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 	// No dispatcher: the four are non-virtual per-class methods in retail (no vtable slot), each
 	// called by its own selector (story 5 step 3). The Andrei rule, as `npc_VAndreiBlood` builds it.
 	TestTrue(TEXT("npc_VAndreiBlood builds CNPC_VAndreiBlood"),
-		Andrei->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VAndreiBlood")));
+		Andrei->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VAndreiBlood")));
 	Andrei->AndreiLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
 	TestTrue(TEXT("and the Andrei rule accepts a clear spot"),
 		Andrei->PositionClearForTeleportAndrei(FVector(300.0, 0.0, 0.0), Clearance));
@@ -621,9 +621,9 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 	// `CNPC_VHuman`'s body (`0x10384760`) covers 42 classes and `CNPC_VAnimal`'s (`0x1035f5c0`) five;
 	// both are the offset-only shape.
 	TestTrue(TEXT("npc_VHuman is CNPC_VHuman"),
-		Human->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VHuman")));
+		Human->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VHuman")));
 	TestTrue(TEXT("npc_VRat derives from CNPC_VAnimal, whose body it inherits"),
-		ElysiumNpcKernelClass::DerivesFrom(Rat->RetailClass(), TEXT("CNPC_VAnimal")));
+		ElysiumNpcTestCensus::DerivesFrom(Rat->RetailClass(), TEXT("CNPC_VAnimal")));
 
 	// The census is what says so, one row per recovered body. Every row is exercised by name.
 	struct FRow { const TCHAR* Class; const TCHAR* Body; };
@@ -639,14 +639,14 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		if (Cls == nullptr)
 		{
 			AddError(FString::Printf(TEXT("%s is not a census class"), Row.Class));
 			continue;
 		}
 		TestEqual(FString::Printf(TEXT("%s fills slot 563 with %s"), Row.Class, Row.Body),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 563)), FString(Row.Body));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 563)), FString(Row.Body));
 	}
 
 	// The nav gate. `NavGetType()` is family Motor's seam and answers 0, so the offset arm is not

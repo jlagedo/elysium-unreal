@@ -448,7 +448,32 @@ void FElysiumCameraCinematic::SetCamThink(double Now)
 	ThinkAccumulator = 0.0f;
 }
 
-bool FElysiumCameraCinematic::ShouldTransmit(const FElysiumEntityHandle& Recipient) const
+bool FElysiumCameraCinematic::ShouldTransmit(int32 Param1, void* Edict, void* Info, int32 Param4, int32 Param5)
+{
+	// Slot 86, `0x1006e6a0`, over the one recipient the port has: the player (the edict argument has
+	// no port meaning; see the header).
+	(void)Param1;
+	(void)Edict;
+	(void)Info;
+	(void)Param4;
+	(void)Param5;
+	return TransmitsTo(World != nullptr ? World->PlayerHandle() : FElysiumEntityHandle::Invalid());
+}
+
+void FElysiumCameraCinematic::DrawDebugGeometryOverlays()
+{
+	// Slot 123, `0x1006ff40`: the cvar read, then the gated overlay.
+	DrawShotDebugOverlay(CameraShowDebugCvar());
+}
+
+int32 FElysiumCameraCinematic::CameraShowDebugCvar()
+{
+	// **SEAM** for `camera_showdebug.GetInt()` (`0x1006d5b0`, default `"0"`): the substrate reads no
+	// console store, so the shipped default answers.
+	return 0;
+}
+
+bool FElysiumCameraCinematic::TransmitsTo(const FElysiumEntityHandle& Recipient) const
 {
 	// Slot 86, `0x1006e6a0`. The base's force-transmit window (`+0x90 > curtime`) has no port
 	// counterpart — its producer is unrecovered (RG-A "what remains unrecovered") — so the recorded
@@ -456,7 +481,7 @@ bool FElysiumCameraCinematic::ShouldTransmit(const FElysiumEntityHandle& Recipie
 	return IsActive() && Recipient.IsSet() && Recipient == Subject;
 }
 
-void FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32 ShowDebugCvarValue) const
+void FElysiumCameraCinematic::DrawShotDebugOverlay(int32 ShowDebugCvarValue) const
 {
 	// `CBaseCineCam::vfunc123` `0x1006ff40`. The gate is `!IsCommand() && GetInt() == 1` — exactly
 	// one, never truthiness.

@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcTzimisceHeadClaw.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntity.h"
@@ -100,10 +99,13 @@ namespace
 	}
 }
 
-const FElysiumNpcClass* FElysiumNpcTzimisceHeadClaw::OwnRetailClass() const
+// `CNPC_VTzimisceHeadClaw`'s constructor `0x103c1220` writes both hull words at `0x103c127d`, after
+// the `CAI_BaseNPC` constructor `0x1027c300` zeroed both; the port's constructor chain runs in the
+// same order.
+FElysiumNpcTzimisceHeadClaw::FElysiumNpcTzimisceHeadClaw()
 {
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
+	HullKind = 11;
+	PathingHullKind = 11;
 }
 
 // The melee quartet, slots 599-602: `0x103c19e0`, `0x103c1a60`, `0x103c1ad0`, `0x103c1b10`. Every recovered dispatch

@@ -8,7 +8,6 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"

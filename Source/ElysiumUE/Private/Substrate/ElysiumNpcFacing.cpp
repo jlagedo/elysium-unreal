@@ -5,7 +5,6 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
 // Story 29c-1, family **Facing** — the facing-target queue and the turn-activity ladder.

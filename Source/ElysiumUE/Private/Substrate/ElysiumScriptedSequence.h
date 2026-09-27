@@ -32,10 +32,8 @@ struct FElysiumClassDesc;
 class FElysiumScriptedSequence : public FElysiumNpcBase
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpcBase::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CCineNPC");
+	ELYSIUM_NPC_CLASS("CCineNPC", FElysiumNpcBase)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 
 	// --- The own vtable slots (`CCineNPC`, `0x104771e4`) -----------------------------------------
 	// Slot 72 `0x101a6e20` — `XOR AL,AL`: no discipline targets a director.

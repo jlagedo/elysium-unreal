@@ -1,6 +1,5 @@
 #include "Substrate/ElysiumNpcChangBros.h"
 
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -99,12 +98,6 @@ namespace
 	// health fraction each brother is tested against.
 	constexpr double GChangUnitedCooldownSeconds = 30.0;
 	constexpr float GChangUnitedHealthFraction = 0.5f;
-}
-
-const FElysiumNpcClass* FElysiumNpcChangBros::OwnRetailClass() const
-{
-	static const FElysiumNpcClass* const Row = ElysiumNpcKernelClass::Find(RetailClassName);
-	return Row;
 }
 
 // Slot 420: `0x1036b050`.
@@ -546,12 +539,10 @@ bool FElysiumNpcChangBros::CheckForJumpAttack()
 			continue;
 		}
 		FElysiumNpc* Brother = Member->AsNpc();
-		// `___RTDynamicCast(member, 0, CNPC_VChangBros)` — a sibling of the same retail class only.
-		if (Brother == nullptr || Brother == this || !Brother->IsRetailClass(TEXT("CNPC_VChangBros")))
-		{
-			continue;
-		}
-		const FElysiumNpcChangBros* const Chang = Brother->AsSpecies<FElysiumNpcChangBros>();
+		// `___RTDynamicCast(member, 0, CNPC_VChangBros)`: a `CNPC_VChangBros` or a class below it (the
+		// Blade and the Claw), never any other squadmate.
+		const FElysiumNpcChangBros* const Chang =
+			Brother != nullptr && Brother != this ? Brother->AsSpecies<FElysiumNpcChangBros>() : nullptr;
 		if (Chang == nullptr)
 		{
 			continue;
@@ -721,11 +712,8 @@ bool FElysiumNpcChangBros::PositionClearForTeleportChang(const FVector& Position
 			{
 				continue;
 			}
-			// `___RTDynamicCast(member, 0, …, CNPC_VChangBros, 0)` — a brother, not any squadmate.
-			if (!Member->IsRetailClass(TEXT("CNPC_VChangBros")))
-			{
-				continue;
-			}
+			// `___RTDynamicCast(member, 0, …, CNPC_VChangBros, 0)`: a brother (the Blade and the Claw
+			// are `CNPC_VChangBros` too), not any squadmate.
 			FElysiumNpcChangBros* const Chang = Member->AsSpecies<FElysiumNpcChangBros>();
 			if (Chang == nullptr)
 			{
@@ -1011,11 +999,10 @@ FElysiumNpcChangBros* FElysiumNpcChangBros::GetOtherBrother() const
 			continue;
 		}
 		FElysiumNpc* Brother = Member->AsNpc();
-		// The RTTI cast, as the chain walk this runtime dispatches species by.
-		if (Brother != nullptr && Brother != this
-			&& Brother->IsRetailClass(TEXT("CNPC_VChangBros")))
+		// The RTTI cast `___RTDynamicCast(member, 0, CNPC_VChangBros)`: the tree's typed test, which
+		// admits the Blade and the Claw as the retail cast does.
+		if (Brother != nullptr && Brother != this)
 		{
-			// The typed view of the brother the cast admitted, for his own words.
 			if (FElysiumNpcChangBros* const Typed = Brother->AsSpecies<FElysiumNpcChangBros>())
 			{
 				return Typed;

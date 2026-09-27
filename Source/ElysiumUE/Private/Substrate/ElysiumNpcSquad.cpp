@@ -1,17 +1,15 @@
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcSquadShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 
 // Story 29c-1, family **Squad** — the squad and follower surface of `order.md` layers 0–9.
 //
-// 74 rows: the 57 slot-546 `SquadSlotName` bodies (the Troika method, the deferred rows' table below, and
-// each species' own id-space row in its override), the
+// 74 rows: the 57 slot-546 `SquadSlotName` bodies (the base body and each species' own id-space row
+// in its override), the
 // squad join/leave/share/vacate set, the follower pair, and the `CNPC_VChangBros` /
 // `CNPC_VMingXiao` coordination helpers. The walked prose is `docs/vtmb/npc-ai/social.md`.
 //
@@ -58,7 +56,7 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 546 `SquadSlotName` — the Troika method and the deferred rows' table.
+// Slot 546 `SquadSlotName`.
 // -------------------------------------------------------------------------------------------------
 //
 // Every row was read from the decompiled C, not from a summary. All 56 species bodies are
@@ -87,16 +85,6 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 // the Troika line answers `SQUAD_SLOT_ATTACK1`/`2` for ids 1000000000/1000000001, `"<<null>>"` for
 // -1 and null for anything else. This agrees with `docs/vtmb/npc-ai/social.md` § "Squads, decoded
 // (2026-09-08)" — "Strategy slots ship dead … every class registers zero squadslots".
-
-namespace
-{
-}
-
-const FElysiumNpcBase::FSquadSlotSpecies* FElysiumNpc::SquadSlotSpeciesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(NpcKernelSquadShared::GNpcKernelSquadSlotSpecies);
-	return NpcKernelSquadShared::GNpcKernelSquadSlotSpecies;
-}
 
 // -------------------------------------------------------------------------------------------------
 // The squad bodies.

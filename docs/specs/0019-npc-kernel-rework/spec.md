@@ -543,7 +543,7 @@ green, and `coverage.md` shows the change.
   `_DAT_104492e0` (1e-6) behind the hull sweep, and `_DAT_10449154` (0.45) behind the navigator
   re-probe.
 
-- [ ] **5. The class tree: one port class per live retail class.**
+- [x] **5. The class tree: one port class per live retail class.**
   Retail: 77 classes whose primary vtable spans the NPC range (`classes.md`). 63 sit below
   `CAI_BaseNPCTroika` in ten direct lines, 12 more sit below `CAI_BaseNPC` beside it, and the
   two bases complete the set. 21 are dead (`population.md` § "NPC classes with no instance").
@@ -653,6 +653,82 @@ green, and `coverage.md` shows the change.
   class in the tree's order). Provides: the tree every species story in 0002 lands on, and the
   tree story 8's pass I ports onto.
   Size: XL. Effort: Opus / high.
+  **Landed 2026-09-27** (steps 0–6, commit A, commit B, on `0019-5-class-tree`). All **56 live
+  retail classes are C++ classes** at their Appendix A place in the plan; the 21 dead ones stay
+  census rows. Commit A folded the last ten (the test hull, the controller line, the three
+  directors, the three makers); commit B closed the compatibility surface:
+  - *Dispatch.* `ElysiumNpcKernelClassLookup` (`Find`, `OfClassname`, `DerivesFrom`, `OverrideOf`,
+    `BodyOf`), `IsRetailClass` and `OwnRetailClassDerivesFrom` are deleted. Retail's
+    `__RTDynamicCast` is `AsSpecies<T>()` over the C++ chain (`ELYSIUM_NPC_CLASS` / `IsNpcClass`),
+    so the ChangBros brother casts (`0x1036e2f0` and its two siblings) admit the Blade and the Claw
+    as retail's do, and the Vampire boss's partner cast (`103c64c4`) is typed. A class's census row
+    is identity only (`ElysiumNpcKernelShape::ClassNamed`); its one runtime data use is the schedule
+    corpus's per-class spaces. The hull words are constructor stores on the twelve classes whose
+    retail constructors store them, not a class-keyed table walk; the pickup attach/release pairs
+    are the Hengeyokai's (`0x10382670` / `0x10382400`) and the ManBat's (`0x1038f430` /
+    `0x1038f790`) own bodies over a shared helper, with no name test; the Troika-only slot-546
+    table, the jump-tunable rows, the slot-117 row table and the name-keyed schedule-space and
+    load-flag lookups are gone. Exempt, stated: `FElysiumNpc::ScheduleIdSpaceRows` and
+    `LoadedSchedulesRows` stay as records of the recovered slot-580/452 bodies and globals, read
+    only by tests (the live answer is the schedule corpus's, per class).
+  - *Vocalisation.* `FVocalization` / `GSoundsVocalizations` are gone: each Camera (19),
+    SabbatLeader (2) and Tzimisce (2) override is its body.
+  - *Hides.* Slots 66, 67, 86, 123, 133, 153 and 158 are real overrides below the NPC line: the
+    weapon's `Hide`/`Unhide`, the cinematic camera's `ShouldTransmit` (`CBaseCineCam::vfunc86`
+    `0x1006e6a0`, over the single player as recipient, a named seam) and `DrawDebugGeometryOverlays`
+    (`0x1006ff40`, reading `camera_showdebug` through a seam answering its default 0), the mover's
+    `MoveDone`/`IsMoving`, the player's `IsAlive`. `SLOT_PORT_MAP`'s `accepted` kind is replaced by
+    `overridden-below`, which fails generation on a same-name member without `override` (comments
+    stripped). The build has zero C4263/C4264.
+  - *Census.* `gen_kernel_shape` emits the census, the chain classes' slot bodies (one-constant
+    bodies and counting stubs, which stay) and a new compile-checked override census
+    (`Tests/ElysiumNpcKernelOverrideCensus.cpp`, 789 rows): `NpcKernelShape.Overrides` holds one
+    override per ported (class, slot) live row; `NpcKernelClass.TreeMatchesCensus` holds the C++
+    chain of every live classname to the census's; `RegistryMatchesFactories` lists 56 live classes
+    and no deferred one; `RetailHull.Constructors` holds the constructors to the hull table.
+    Slots 438/440 name the virtuals the species override (`SpeciesSelectSchedule`,
+    `TranslateScheduleRetail`). `NpcKernelShape.FieldOwners` covers the base and Troika layers; the
+    species words are covered by the generated per-class bindings and their tests.
+  - *`kernel_shape --unported`:* **987 → 778** (721 `no-override`, 57 `stub`): 176 rows
+    implemented in commit A plus two SabbatLeader 620/621 false positives corrected there; 31
+    hook-named overrides (slot 438 ×8, 440 ×23) the tool now sees; +2 corrected evidence when the
+    tool learned that an inherited override carries a row only if its class owns the same body
+    (`CNPC_VHengeyokai` 599 `0x10381750` / 600 `0x10381780` had been counted on `CNPC_VHuman`'s
+    bodies), −2 when those two bodies were ported on the Hengeyokai. Pin: `story-5/unported.tsv`.
+  - *Corrections found.* `CNPC_VMingXiao`'s slot-166 `CanStandOn` (`0x10397000`) stood ported under
+    a helper name and was counted ported off its doc comment; it is now the class's override and the
+    scan ignores comments. `CNPC_VTzimisce` 491 `0x103b9500` writes its pain expression
+    (`0x103b9f90(this, 1, 1.0)`) whether or not the sound gate opens, and both sentence hooks read
+    the `tzimisce_voice_*` ConVars (the attenuation is 65, not 75). `kernel_ledger`'s own-body count is a primary-vtable diff (26 plan rows
+    corrected; `classes.md` regenerated). `CBasePlayer::m_hControllerNPC` (`+0x1db0`) has one home,
+    the world's controller handle; the NPC-side copy and the `GetControllerNPC` / `0x101618e0` /
+    `0x10175180` bodies ported onto the NPC over it are deleted.
+  - *Named modernizations* (commit A's, standing): who is drawn during a controller scene, the
+    non-solid controller motor, same-frame controller removal, the disposition copy, the director's
+    0.05 s beat, explicit saves refused mid-beat, restart-not-resume on revisit, the skipped
+    pre-idle flash, the ground-ray lift and clamp, the "Non Troika" child removal, StartHidden not
+    replayed onto a child, a self-removing child returning null.
+  - *Validation:* gate on this tree: see the B landing commit.
+  - *Hand-off to story 8* ([story-5/handoff-story-8.md](story-5/handoff-story-8.md), the durable
+    list). The class map is the plan's Appendix A; the residue is `story-5/unported.tsv` (778 rows),
+    regenerated by `kernel_shape --unported`, which must only fall. Carried: the think loop — no live code dispatches slots 431/437/433/442, and retail
+    `GetNewSchedule` `0x1028a260` runs 437 before 438; Andrei's `StartTask` case 0x154 (the
+    fleshpile runner spawner; `SummonRunnerNear` is its seam); `Weapon_Switch` `0x1032dde0` (Ming
+    Xiao, Bach); `CAI_Hint`'s `ObjectCaps` `0x102d2ee0`; Camera's `NPCInit` write of
+    `DesiredMoveYaw`; `+0xe4 m_pfnScriptSavedThink` and the maker's two think records; the
+    `0x101618e0` animation and velocity hand-back onto the player; the VHuman 103/438/442 and
+    WolfMorph 451/452/580 bodies; no shipped creator for FrenzyShadow (`0x10161fc0`) or WolfMorph
+    (`0x101f8620`/`0x101f8f30`); no navigator or move-probe dispatch of slot 166 (retail's `CAI_`
+    thunks `0x102e7e40` / `0x102e2730`, `0x1016a030`); the slot-440 translation of `0x2a`/`0x2e`
+    for `CCineAI` and the `m_saved_troika_flags` word (A3's 8.2 / 8.6); `+0x5f44`, `DAT_1093412c`
+    and `NAI_Hull::Bits` answering 0; `fields.md`'s sibling-class words at one offset; `m_fEffects`
+    `+0x19c` and the `0x10274e30` anim-event arms; `MemberSync` `0x10337ca0` now reached;
+    `DAT_10938040`; hidden makers never thinking; the `0x101618e0` copy-back field list (in the
+    hand-off file). Owner questions: who is drawn during a controller scene (recovered
+    after B, lands as its own commit), `enemy+0x3d4`, `DAT_10924edc`/`DAT_10924a6c`,
+    `AddFlag2(0x10)`, the Classify 2/3 names, controller solidity, saving mid-beat (spec 0003
+    stories 1–2). Records: the step and fold commits' messages; reports under
+    `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/` (`gateA/`, `smokeA/`, `B/`).
 
 - [ ] **6. The deletions and the mechanism seams.**
   The species `dead` rows are deleted by story 5's step 1 instead: 228 hand-written bodies and

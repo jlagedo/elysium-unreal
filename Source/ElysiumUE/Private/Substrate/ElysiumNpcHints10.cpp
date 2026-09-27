@@ -1,7 +1,6 @@
 #include "Substrate/ElysiumNpc.h"
 
 #include "ElysiumEntityWorld.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 

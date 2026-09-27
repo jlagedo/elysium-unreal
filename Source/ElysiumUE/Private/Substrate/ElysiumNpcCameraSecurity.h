@@ -12,10 +12,8 @@
 class FElysiumNpcCameraSecurity : public FElysiumNpcCamera
 {
 public:
-	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpc::AsSpecies`'s key.
-	static constexpr const TCHAR* RetailClassName = TEXT("CNPC_VCameraSecurity");
+	ELYSIUM_NPC_CLASS("CNPC_VCameraSecurity", FElysiumNpcCamera)
 
-	virtual const FElysiumNpcClass* OwnRetailClass() const override;
 	virtual bool FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4) override;
 	virtual bool QuerySeeEntity(FElysiumEntity* Candidate) override;
 

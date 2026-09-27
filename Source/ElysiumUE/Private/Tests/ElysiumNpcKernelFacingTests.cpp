@@ -10,9 +10,9 @@
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcSabbatGunman.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Facing** — the facing-target queue and the turn-activity ladder.
 //
@@ -410,16 +410,16 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls == nullptr)
 		{
 			continue;
 		}
 		TestEqual(*FString::Printf(TEXT("%s fills slot 370 with %s"), Row.Class, Row.Body370),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 370)), FString(Row.Body370));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 370)), FString(Row.Body370));
 		TestEqual(*FString::Printf(TEXT("%s fills slot 371 with %s"), Row.Class, Row.Body371),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, 371)), FString(Row.Body371));
+			FString(ElysiumNpcTestCensus::BodyOf(Cls, 371)), FString(Row.Body371));
 	}
 
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_dirs"), 4215);
@@ -482,19 +482,19 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.Class);
+		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 465 with %s"), Row.Class, Row.Body),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 465)), FString(Row.Body));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 465)), FString(Row.Body));
 		}
 	}
 	// And the base they all chain to.
 	{
-		const FElysiumNpcClass* Troika = ElysiumNpcKernelClass::Find(TEXT("CAI_BaseNPCTroika"));
+		const FElysiumNpcClass* Troika = ElysiumNpcTestCensus::Find(TEXT("CAI_BaseNPCTroika"));
 		TestEqual(TEXT("the Troika line's own slot 465 is the empty body they all chain to"),
-			FString(ElysiumNpcKernelClass::BodyOf(Troika, 465)), FString(TEXT("0x10295a60")));
+			FString(ElysiumNpcTestCensus::BodyOf(Troika, 465)), FString(TEXT("0x10295a60")));
 	}
 
 	// `CNPC_VSabbatGunman::OnChangeActivity` `0x103a56f0`'s pick. At or BELOW the threshold the
@@ -570,7 +570,7 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 		{
 			FElysiumNpcWorldFixture::Quiet({ Guard });
 			TestNull(TEXT("CNPC_VHumanCombatant overrides no slot 465"),
-				ElysiumNpcKernelClass::OverrideOf(Guard->RetailClass(), 465));
+				ElysiumNpcTestCensus::OverrideOf(Guard->RetailClass(), 465));
 			Guard->MotionTrail = 3;
 			Guard->OnChangeActivity(9);
 			TestEqual(TEXT("so nothing species-specific runs"), Guard->MotionTrail, 3);

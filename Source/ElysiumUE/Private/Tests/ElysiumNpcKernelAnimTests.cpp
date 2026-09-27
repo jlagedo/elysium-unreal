@@ -8,10 +8,10 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+#include "Tests/ElysiumNpcTestCensus.h"
 
 // Story 29c-1, family **Anim** — the gesture-layer table, the flex controllers, the scene-event
 // queue and the activity commit.
@@ -758,22 +758,22 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 	// Slot 259's EMPTY override, exercised by RETAIL CLASS NAME through the census reader. (Since
 	// story 5 step 2 `npc_VCamera` and `npc_VCameraSecurity` are registered classnames building
 	// these classes, population.md; the rows are read by class name so no camera need be stood.)
-	const FElysiumNpcClass* const Camera = ElysiumNpcKernelClass::Find(TEXT("CNPC_VCamera"));
+	const FElysiumNpcClass* const Camera = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
 	TestNotNull(TEXT("CNPC_VCamera is a census class"), Camera);
 	if (Camera != nullptr)
 	{
 		TestTrue(TEXT("and it is its own class"),
-			ElysiumNpcKernelClass::DerivesFrom(Camera, TEXT("CNPC_VCamera")));
+			ElysiumNpcTestCensus::DerivesFrom(Camera, TEXT("CNPC_VCamera")));
 		TestEqual(TEXT("whose slot 259 body is the empty one"),
-			FString(ElysiumNpcKernelClass::BodyOf(Camera, 259)), FString(TEXT("0x10368ec0")));
+			FString(ElysiumNpcTestCensus::BodyOf(Camera, 259)), FString(TEXT("0x10368ec0")));
 	}
 	const FElysiumNpcClass* const CameraSecurity =
-		ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity"));
+		ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity"));
 	TestNotNull(TEXT("CNPC_VCameraSecurity is one too"), CameraSecurity);
 	if (CameraSecurity != nullptr)
 	{
 		TestEqual(TEXT("sharing the same empty slot-259 body"),
-			FString(ElysiumNpcKernelClass::BodyOf(CameraSecurity, 259)),
+			FString(ElysiumNpcTestCensus::BodyOf(CameraSecurity, 259)),
 			FString(TEXT("0x10368ec0")));
 	}
 
@@ -784,14 +784,14 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 	};
 	for (const TCHAR* const Name : Forwarders)
 	{
-		const FElysiumNpcClass* const Cls = ElysiumNpcKernelClass::Find(Name);
+		const FElysiumNpcClass* const Cls = ElysiumNpcTestCensus::Find(Name);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Name), Cls);
 		if (Cls != nullptr)
 		{
 			TestEqual(*FString::Printf(TEXT("%s fills slot 245 with the shared body"), Name),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 245)), FString(TEXT("0x103a49c0")));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 245)), FString(TEXT("0x103a49c0")));
 			TestEqual(*FString::Printf(TEXT("%s fills slot 246 with the shared body"), Name),
-				FString(ElysiumNpcKernelClass::BodyOf(Cls, 246)), FString(TEXT("0x103a4a60")));
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 246)), FString(TEXT("0x103a4a60")));
 		}
 	}
 
@@ -831,7 +831,7 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 	TestNull(TEXT("the bare Troika line has no species class"), Troika->RetailClass());
 	TestFalse(TEXT("so it swallows no anim events"), Troika->HandleAnimEvent(Unclaimed));
 	TestTrue(TEXT("npc_VCop builds CNPC_VCop"),
-		Cop->RetailClass() == ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
+		Cop->RetailClass() == ElysiumNpcTestCensus::Find(TEXT("CNPC_VCop")));
 	TestFalse(TEXT("a cop is not a camera, so it swallows none either"),
 		Cop->HandleAnimEvent(Unclaimed));
 	TestFalse(TEXT("and neither does the ordinary combatant"), Guard->HandleAnimEvent(Unclaimed));
