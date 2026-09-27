@@ -29,58 +29,16 @@
 // list, walked by ordinal and answering an `FElysiumEntity*`. It is left exactly as it is: the two
 // are the same missing store seen from two sides, and the day a hint store lands it replaces both.
 
-/** Resolve `HintNode` — a hint's entity index, the form a `ScheduleHost::HintNode` holds — into the
- *  live `ai_hint`'s words (`FElysiumHint::ToWords`). Answers false and leaves `Out` untouched when
- *  the index is not a live hint. */
-bool HintWords(int32 HintNode, FHintWords& Out) const;
-
-/** SEAM for `0x102d1af0` — the task-side hint search `FindHintNode` (`0x10365780`) runs, with the
- *  hint type, the caller's flag byte and a radius in SOURCE UNITS. Answers `INDEX_NONE`. */
-int32 FindHintNear(int32 HintType, uint8 SearchFlags, float RadiusUnits) const;
-
-/** SEAM for `0x102d24b0` — the same search anchored on another entity, which is what the two-group
- *  pick `SelectTzimisceHintNode` (`0x103bfa50`) calls twice. Retail walks the global list from the
- *  rotating cursor, skipping any node `IsHintUnusable` rejects, requiring `m_nHintType == HintType`
- *  (or `HintType == 0` for any), a squared-distance test against `RadiusUnits`, and slot 566
- *  `FValidateHintType` (vtable `+0x8d8`). Answers `INDEX_NONE`. */
-int32 FindHintOfTypeNear(const FElysiumEntity* Near, int32 HintType, uint8 SearchFlags,
-	float RadiusUnits) const;
-
 /** `CGlobalEntityList::FindEntityByName` + the `CAI_Hint` RTTI cast that `FindHintEndEntity`
  *  (`0x103d6520`) performs: the first entity the name matches, as a hint index, or `INDEX_NONE`
  *  when that first match is not a hint. */
 int32 FindHintByName(const FString& HintName) const;
-
-/** `0x102d1420`, the hint release: `m_hHintOwner (+0x5e0) = -1` and
- *  `m_flNextUseTime (+0x5ec) = ReuseDelaySeconds + curtime`. SEAM on the write side only — the rule
- *  is exact, but there is no hint to write it into. */
-void ReleaseHintNode(int32 HintNode, float ReuseDelaySeconds);
-
-/** `0x102d14c0` — is this hint unusable right now? Three arms, in retail's order: `m_iDisabled`
- *  non-zero; `curtime < m_flNextUseTime`; a live `m_hHintOwner`. Pure over the words, so this is the
- *  whole recovered rule and not a seam. `bOwnerAlive` is the `EHANDLE` validity test retail runs on
- *  `m_hHintOwner`. */
-static bool IsHintUnusable(const FHintWords& Hint, double Now, bool bOwnerAlive);
-
-/** The node-index form of the above. Answers true — an unresolvable hint is not usable. */
-bool IsHintUnusable(int32 HintNode, double Now) const;
 
 /** SEAM for `0x10296c40`, the shared range/LOS/cover validator both `IsHintCoverValid` bodies
  *  forward into. `0x10296c40` is NOT this story's row (layer 11) and is not ported here; this
  *  answers false and names it. */
 bool ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* CoverObject,
 	float AngleRangeDot, float BadRangeLimit) const;
-
-/** SEAM for `RestartIdealActivity` (`0x10289ee0`), which every hint body calls with a retail
- *  `Activity` enum id. This runtime's activity vocabulary is NAMES (`FElysiumClipIdentity`) and
- *  carries no retail-id table — the same reason 29b left `m_IdealTranslatedActivity` (`+0x5cd0`) an
- *  opaque `int32`. The ported bodies therefore DECIDE the id (that half is tested) and hand it here,
- *  which records nothing. */
-void RestartIdealActivityId(int32 RetailActivityId);
-
-/** `CAI_Hint::OnRestore` (`0x102d3ec0`). The hint's own save-restore fixup, handed over from family
- *  Sounds. `this` is the hint, not the NPC, so it is a static helper rather than a member rule. */
-static FHintRestoreResult HintOnRestore(const FHintWords& Hint);
 
 // --- Species words this family's bodies read ------------------------------------------------------
 //
@@ -119,16 +77,6 @@ struct FWerewolfHintGroundpoint
 
 // --- The bodies -----------------------------------------------------------------------------------
 
-/** SEAM for the entity vtable `+0x370` position accessor `SelectTzimisceHintNode` (`0x103bfa50`)
- *  compares through — NOT `+0x364 GetAbsOrigin`, which the rest of this family uses. Slot 220 is
- *  unidentified in the census, so this answers the entity's origin and says that is a stand-in. */
-FVector HintComparePosition(const FElysiumEntity* Entity) const;
-
-/** SEAM for `m_Activity` (`+0xfec`), the currently playing retail `Activity` id that
- *  `RunInterestingPlaceLoop` compares its refreshed id against. Answers -1: this runtime's activity
- *  is an `FElysiumClipIdentity` name pair and carries no retail id. */
-int32 CurrentRetailActivityId() const;
-
 /** `0x102a9f40` — "the wait" every `TASK_DO_INTEREST_*` shares: claim the marker, fire
  *  `OnInterestingPlaceArrived`, take the INTO arm or the idle arm, and stamp `m_flWaitFinished`. */
 void ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bClaimSecondary, double Now);
@@ -147,11 +95,6 @@ bool IsHintCoverValid(int32 HintNode) const;
 
 /** `0x102974f0` — the same forward with `1.1` and no handle-validity pre-check. */
 bool IsHintCoverValidLoose(int32 HintNode) const;
-
-/** `0x102781e0` — `SetHintGroup(string_t)`: write `m_strHintGroup` (`+0x5db0`) and, only on a real
- *  change, dispatch slot 551 `OnChangeHintGroup(old, new)`. NAMED `SetHintGroup`, not 29c's
- *  `OnChangeHintGroup`: that name is slot 551 itself, which this body CALLS. */
-void SetHintGroup(const FString& NewHintGroup);
 
 /** `0x102aaa60` — the hint-node idle activity restart. Returns whether an activity was restarted. */
 bool PlayHintIdleActivity(double Now);
@@ -172,12 +115,6 @@ bool PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const;
  *  is finished, which is the byte retail leaves in `AL`. */
 bool RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, double Now);
 
-/** SEAM for `ActivityNameToId` (`0x10412520`), the interest-place activity resolve. This runtime's
- *  activities are NAMES, so there is no retail id to answer: it answers -1, which is retail's own
- *  "not in the activity table" value and takes the `DevWarning` + `ACT_IDLE` fallback arm that both
- *  interest bodies carry. */
-int32 ActivityIdForName(const FString& ActivityName) const;
-
 /** SEAM for `m_bSequenceFinished` (`+0x65c`) and `m_bSequenceLoops` (`+0x65d`), the two animation
  *  bytes `RunInterestingPlaceLoop` reads. The port's clip phase is not wired to this seam yet, so
  *  both answer false. */
@@ -190,6 +127,4 @@ bool DoesHintSequenceLoop() const;
  *  has a source in this substrate; each answers nothing and is named at its call site. */
 FElysiumNpc* InterestingPlaceMarkerOccupant(const FElysiumInterestingPlace* Place) const;
 void MoveToBoneOriginAngles(const TCHAR* BoneName, bool bMoveOrigin, bool bMoveAngles);
-void SetMotorHintYaw(float Yaw);
-void ReleaseMotorHintYaw();
 

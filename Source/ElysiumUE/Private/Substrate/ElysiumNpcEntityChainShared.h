@@ -18,4 +18,7 @@ namespace NpcKernelEntityChainShared
 	// `_DAT_104454c4` — the image's shared `0.0f` (1,328 readers, no writer;
 	// `docs/vtmb/npc-ai/shape.md` § slot 568).
 	inline constexpr float GChainZero = 0.0f;
+	// Retail's `SolidType_t` values the two standability bodies test by number.
+	inline constexpr int32 GChainSolidBsp = 1;       // SOLID_BSP
+	inline constexpr int32 GChainSolidVPhysics = 6;  // SOLID_VPHYSICS
 }

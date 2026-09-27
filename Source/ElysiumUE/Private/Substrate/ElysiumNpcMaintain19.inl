@@ -1,16 +1,10 @@
 // Story 29e, family Maintain19 — the schedule-change door and the one retail interpreter loop.
 // Included inside `class FElysiumNpc`; definitions are in ElysiumNpcMaintain19.cpp.
 
-/** `CAI_BaseNPC::MaintainSchedule` (`0x102817c0`) through the engine-neutral schedule kernel. */
-bool MaintainSchedule(double Now, bool bReduced);
-
 /** `ForceScheduleChange` (`0x102ae490`) and the translate/lookup entry `0x102ae750` feeding
  *  Troika `SetSchedule(CAI_Schedule*, bool)` (`0x102ae780`). */
 void ForceScheduleChange(int32 NewSchedule, bool bForce);
 void SetSchedule(int32 RawRetailId, bool bForce);
-
-/** `TaskMovementComplete` (`0x10273ec0`), including all four task-status arms. */
-void TaskMovementComplete();
 
 // Slot 435's Troika body and its four species tails. The public virtual remains the one dispatcher.
 void TroikaOnScheduleChange(int32 NewSchedule);
@@ -37,7 +31,6 @@ virtual void			   DebugTaskStart(const FElysiumScheduleStep& Step) override;
 virtual void			   MaintenanceStartTaskOverlay() override;
 virtual bool			   MaintenanceIsCurTaskContinuousMove() override;
 virtual void			   RememberContinuousMove() override;
-virtual void			   RunTaskOverlay() override;
 virtual bool			   IsAiStepMode() const override;
 virtual void			   AdvanceAiStepDebugIndex() override;
 virtual void			   FreezeForAiStep() override;
@@ -45,7 +38,6 @@ virtual void			   NextScheduledTaskForMaintenance(FElysiumScheduleState& State) 
 virtual bool			   TakeExternalExecutorReturn() override;
 
 bool ShouldSelectIdealStateForMaintenance();
-void RefreshIdealStateForMaintenance();
 void CacheInterruptConditionsForMaintenance(double Now);
 
 // `m_nDebugCurIndex` (`+0x5f40`), used only by `ai_step`.

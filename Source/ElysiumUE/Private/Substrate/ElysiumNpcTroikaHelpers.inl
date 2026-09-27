@@ -44,12 +44,6 @@
  *  id like both of those and is carried as one. Nothing reads it yet. */
 int32 AtCrosswalkNode = 0;
 
-/** `+0x0ec0 m_iCurFrenzyCount` (`CBaseCombatCharacter`) — the discipline gate slot 334 reads
- *  first: a body already mid-frenzy refuses every further cast outright. Below the shape map's
- *  band, so 29b did not bind it, and no landed family had a reader for it. Nothing in this runtime
- *  writes it yet. */
-int32 CurFrenzyCount = 0;
-
 /** SEAM for `entity->+0x200`, the word slot 56 (`0x102b5120`) requires to be non-zero before it
  *  looks at the argument at all. Below every band this runtime models and **unrecovered** — the
  *  corpus holds no other reader that pins it. Answers `false`, which is retail's own early return
@@ -100,24 +94,6 @@ static float MeleeHeightDiffLimitUnits();
 /** `thunk_FUN_102bf5d0(this, attacker)` — the ally notice slot 322 runs before it asks the melee
  *  coordinator. Family **Squad** ported it as `NoticeAttackerNearby`; slot 322 CALLS it. */
 
-/** SEAM for `thunk_FUN_102707d0(entity)` (`0x102707d0`) — the type-3 redirect `RecordDetectedAttack`
- *  resolves its argument through: an entity whose `+0x98` combat-character pointer answers `3` at
- *  vtable `+0x228` is replaced by its vtable `+0x184`. Neither word exists on `FElysiumEntity`, so
- *  this answers the argument unchanged, which is retail's own fall-through. */
-const FElysiumEntity* RedirectDetectedAttacker(const FElysiumEntity* Candidate) const;
-
-/** SEAM for `thunk_FUN_101e1250(&DAT_10739a4c, disciplineId, arg)` and `thunk_FUN_101e11c0` — the
- *  global discipline table slot 334 looks a discipline up in, and the cooldown float at record
- *  `+0x2c`. There is no such table on this substrate; `Find` answers `INDEX_NONE` and the row
- *  lookup answers `0.0`. */
-int32 DisciplineTableFind(int32 DisciplineId, int32 Level) const;
-float DisciplineTableCooldown(int32 RowIndex) const;
-
-/** SEAM for `m_fDisciplineTimers[row]` (`+0x146c`), the per-discipline last-cast stamps slot 334
- *  measures against. Below the shape map's band and with no producer here; answers `0.0`, which
- *  makes every elapsed time `curtime` and so every cooldown expired. */
-double DisciplineTimer(int32 RowIndex) const;
-
 /** `DAT_10937cf2` — the global byte slot 334 clears on entry and sets on its success arm. A retail
  *  GLOBAL, not a per-NPC word, and ported as one (a file static): a per-NPC copy would be a
  *  divergence. This is its read side, for the test and the debug layer. */
@@ -158,10 +134,6 @@ static const int32* AttackCoordinatorIndices(int32& OutCount);
  *  leaves the point untouched; family **Hints** owns the same absent hint store. */
 bool HintStandPosition(int32 HintNode, FVector& InOutPointUnits) const;
 
-/** SEAM for `thunk_FUN_102d12e0(hint)` — the hint's own yaw, which both `ApplyHintLeanOffset` and
- *  `FindTacticalHintNode` turn into a forward vector. Answers false. */
-bool HintYaw(int32 HintNode, float& OutYaw) const;
-
 /** SEAM for `thunk_FUN_102d1350(hint, this)` — the hint CLAIM `FindTacticalHintNode` takes on its
  *  winner; a false answer drops the node again. Answers false, which is the drop arm. */
 bool ClaimHintNode(int32 HintNode);
@@ -175,11 +147,6 @@ float LeanScaleRecordField() const;
  *  way. */
 float IdealHintSearchRangeUnits() const;
 
-/** SEAM for slot 16 (vtable `+0x40`), the attack-extent margin `FindTacticalHintNode` caches into
- *  `m_vecSavedSleepExtents` (`+0x65d0`) before `SetAbsoluteAttackExtents`. Answers the zero vector,
- *  which is the margin `FElysiumNpc::SetAttackExtents` already stands for. SOURCE units. */
-FVector HintAttackExtentsUnits() const;
-
 /** SEAM for `thunk_FUN_102e0290(pathfinder, target, out, outRatio)` — the lead-ratio query
  *  `ComputeTargetLeadPoint` (`0x102c36d0`) asks the pathfinder (`vtable +0x874`, slot 541) for.
  *  Family **Motor**'s standing fact is that there is no pathfinder here; answers false, which is
@@ -187,33 +154,9 @@ FVector HintAttackExtentsUnits() const;
 bool TargetLeadQuery(const FElysiumEntity& Target, FVector& OutPointUnits,
 	FVector& OutVelocityUnits) const;
 
-/** SEAM for `thunk_FUN_102ee3f0(m_pNavigator)` — the navigator's current LINK activity
- *  `StopScheduledMove` (`0x102bf770`) compares `m_IdealActivity` (`+0x0ff0`) against. Family
- *  **Motor** records the same absent link object (`NavLinkActivity`); this answers `-1`. */
-int32 NavCurrentLinkActivity() const;
-
 /** SEAM for `thunk_FUN_102ee2a0(m_pNavigator)` — the navigator reset the same body ends on.
  *  Counted, and resets nothing. */
 int32 NavResets = 0;
-
-/** SEAM for `thunk_FUN_102cc1f0(this, localId)` — `CAI_Behavior::GetSchedule(localId)`, the
- *  behaviour-local schedule id `StandoffVfunc20` / `StandoffVfunc21` compare `m_pSchedule` against.
- *  There is no behaviour-local id space here; answers `None`, so the compare fails and neither body
- *  clears its condition. */
-int32 StandoffScheduleForLocalId(int32 LocalId) const;
-
-/** SEAM for slot 513 (vtable `+0x804`), the owner capability word `StandoffVfunc3` tests
- *  `0x8000000` in. Answers `0`, which CLOSES the gate — and closing it is what clears
- *  `bStandoffRangedCache`, so the refusal is still observable. */
-uint32 StandoffOwnerCapabilityWord() const;
-
-/** SEAM for `CBaseAnimating::SelectHeaviestSequence(owner, 8, -1)` — the sequence lookup
- *  `StandoffVfunc3` requires to answer a non-negative index. Answers `INDEX_NONE`. */
-int32 SelectHeaviestSequence(int32 Activity, int32 CurrentSequence) const;
-
-/** SEAM for the owner's discipline cast counter, which `StandoffVfunc3` requires to be exactly
- *  `2`. No such counter on this leaf; answers `0`. */
-int32 DisciplineCastCounter() const;
 
 /** SEAM for `thunk_FUN_10307b80(param_1->+0x4)` and `thunk_FUN_1029f5d0(param_1)` — the two halves
  *  of `FUN_102aa9e0`'s success arm over an argument this substrate has no type for. The predicate
@@ -303,13 +246,6 @@ static FVector BlendTargetLeadPoint(const FVector& PredictedUnits, const FVector
 int32 SetActivityIdCalls = 0;
 int32 LastSetActivityId = INDEX_NONE;
 
-/** `FUN_102e2180`'s blend, as a pure function of the surviving entries: for each, accumulate
- *  `(target - self) * weight + accumulator * (1 - weight)` and then normalise the accumulator.
- *  Retail normalises the per-entry delta too and then **throws that away**, blending the RAW delta
- *  — the registers it multiplies are loaded before the call. Reproduced verbatim. */
-static FVector BlendFacingQueue(TArrayView<const FFacingQueueEntry> Entries,
-	const FVector& SelfUnits);
-
 /** `0x102c4380` — `StartIgnoringCollision(other)` then pin `m_flIgnoreCollisionTimer` (`+0x6458`)
  *  to `FLT_MAX`, the "never expire" sentinel.
  *
@@ -356,55 +292,7 @@ void SetAtCrosswalk(int32 CrosswalkNode);
 // then asks a seam. `this` is the motor in retail and this leaf in the port, which is why
 // `field_0x4` (the owning NPC) reads as `*this`.
 
-/** `CAI_Motor#3` `0x102e0ea0` — the motor's init: force activity `0x33` through the owner
- *  (vtable `+0x4d8`), reset the motor state, `SetSolid(2)`, zero `m_flGravity` (`+0x3ec`) and
- *  dispatch the owner's `+0x340` with `(0, 5, 0)`. */
-void FUN_102e0ea0();
-
-/** `CAI_Motor#4` `0x102e0f90` — ground deceleration toward `GoalUnits`, scaled by `_DAT_10450564`:
- *  under `m_flMoveInterval * scale` it draws the interval down by `distance * _DAT_10450aa4` and
- *  issues the move; at or above it, it zeroes the interval and restarts at speed `-1.0`. Answers
- *  retail's `1` / `0`. */
-bool FUN_102e0f90(const FVector& GoalUnits, float Yaw);
-
-/** `CAI_Motor#6` `0x102e1180` — stop and face: `SetAbsVelocity(goal)`, force activity `0x2c`,
- *  then reissue the move at the goal's own yaw and speed `-1.0`. */
-void FUN_102e1180(const FVector& GoalUnits);
-
-/** `CAI_Motor#8` `0x102e1270` — the full stop: `SetAbsVelocity(0,0,0)` then force activity `0x30`.
- *  Also fills `CAI_HumanoidMotor#8`. */
-void FUN_102e1270();
-
-/** `CAI_Motor#15` `0x102e2180` — the facing-queue average: drop every expired entry (stride
- *  `0x24`), then blend each survivor's target-minus-self delta into a running accumulator by that
- *  entry's own weight against `1.0 - weight`, normalising before and after each blend. Answers the
- *  accumulator in SOURCE units and the number of entries that survived. */
-FVector FUN_102e2180(int32& OutSurvivors);
-
-/** `CAI_Motor#17` `0x102e2580` — the move speed: the base speed clamped DOWN to the motor's own
- *  ceiling (vtable `+0x40`) and then UP to the hull table's floor for this hull. SOURCE units. */
-float FUN_102e2580() const;
-
-/** `CAI_Motor#18` `0x102e19e0` — the steering write. Guarded by the owner's clip test (vtable
- *  `+0x838`); on a miss it takes the yaw toward the goal, asks whether the playing sequence carries
- *  the named pose parameter `"move_yaw"`, and writes the final yaw either to the owning NPC's
- *  `m_flDesiredMoveYaw` (`+0x63ec`) or through the motor's own pose-parameter setter. */
-void FUN_102e19e0(const FVector& GoalUnits);
-
 // --- `CAI_Navigator`'s own vtable -----------------------------------------------------------------
-
-/** `CAI_Navigator#7` `0x102eea70` and `CAI_Navigator#11` `0x102eeac0` — **byte-identical bodies at
- *  two distinct slots**: the shared `0x102eeb70` reset (`+0x54 := -1`, `+0x58 := -1.0`,
- *  `+0x60 := -1.0`, clear the route at `+0x28`) and then `+0x1c := 1`, family Motor's
- *  `Navigator.bNavFailed`. One method carries both, and the two `FUN_` names forward to it so each
- *  slot still has a body of its own. */
-void NavStopAndMarkDirty();
-void FUN_102eea70();
-void FUN_102eeac0();
-
-FNavMoveInfo FUN_102eee40() const;
-
-FNavPathSample NavPathSample() const;
 
 // --- `CAI_StandoffBehavior`'s own vtable ----------------------------------------------------------
 //
@@ -414,25 +302,6 @@ FNavPathSample NavPathSample() const;
 // goes through the same absent-behaviour posture. The names carry `Standoff` because slot 3 and
 // slot 5 here are the BEHAVIOUR's vtable, not the shared entity numbering, and a bare `vfunc3`
 // would read as the latter.
-
-/** `CAI_StandoffBehavior::vfunc3` `0x102c7410` — may this standoff do its ranged thing? Reads
- *  `+0x19` first (false there answers false outright), then the owner's capability bit `0x8000000`,
- *  then a non-negative `SelectHeaviestSequence(owner, 8, -1)`, then `m_iDisciplineCastCounter == 2`
- *  AND a live active weapon. Both of the two middle refusals CLEAR `+0x19`. */
-bool StandoffVfunc3();
-
-/** `CAI_StandoffBehavior::vfunc5` `0x102c7530` — release the owner's claimed hint node
- *  (`+0x5ddc`) when it is live and this behaviour owns it, zero it, copy the behaviour's `+0x50`
- *  into the owner's `m_flDistTooFar` (`+0x5de4`) and force the owner's `+0x1fc` to `2`. */
-void StandoffVfunc5();
-
-/** `CAI_StandoffBehavior::vfunc20` `0x102c7960` and `vfunc21` `0x102c79a0` — **byte-identical
- *  bodies at two distinct slots**: when the running program is the behaviour's local schedule
- *  `0x17`, clear `COND_NEW_ENEMY` (`0x54`). One method, two entry points, as the navigator pair
- *  above. */
-void StandoffClearNewEnemyOnLocalSchedule();
-void StandoffVfunc20();
-void StandoffVfunc21();
 
 // --- The slot bodies that need a named entry point ------------------------------------------------
 

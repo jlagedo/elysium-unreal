@@ -311,12 +311,12 @@ bool FElysiumNpcKernelLifecycle19RestoreChecksumTest::RunTest(const FString&)
 	ElysiumSchedule::Start(N.Schedule, ElysiumSched::IDLE_STAND, N);
 	TArray<uint8> TaskBytes;
 	N.ScheduleTaskBytes(TaskBytes);
-	uint32 Crc = FElysiumNpc::SaveCrc32Init();
-	Crc = FElysiumNpc::SaveCrc32Update(Crc, TaskBytes.GetData(), TaskBytes.Num());
+	uint32 Crc = FElysiumNpcBase::SaveCrc32Init();
+	Crc = FElysiumNpcBase::SaveCrc32Update(Crc, TaskBytes.GetData(), TaskBytes.Num());
 	N.LastSavedExtendedHeader.Version = 1;
 	N.LastSavedExtendedHeader.Flags = 0;
 	N.LastSavedExtendedHeader.ScheduleName = ElysiumScheduleName(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
-	N.LastSavedExtendedHeader.ScheduleCrc = FElysiumNpc::SaveCrc32Final(Crc);
+	N.LastSavedExtendedHeader.ScheduleCrc = FElysiumNpcBase::SaveCrc32Final(Crc);
 	N.OnRestore(true);
 	TestTrue(TEXT("1027c064 a matching task checksum keeps the schedule"), N.Schedule.IsRunning());
 
@@ -495,7 +495,7 @@ bool FElysiumNpcKernelLifecycle19FarSightTest::RunTest(const FString&)
 		return false;
 	}
 	F.Npc->SpawnFlags |= 0x100;
-	F.Npc->BaseNPCInit();                                                // 0x10273390 far-sight arm
+	F.Npc->FElysiumNpcBase::NPCInit();                                                // 0x10273390 far-sight arm
 	TestEqual(TEXT("spawnflag 0x100 DistTooFar = 1e9"), F.Npc->DistTooFar, 1.0e9f);
 	return true;
 }
@@ -690,7 +690,7 @@ bool FElysiumNpcKernelLifecycle19PlaceholderTest::RunTest(const FString&)
 	// The spawn's own `NPCInit` already wrote both; each takes a value only the call replaces. The
 	// think name is the base body's first-second one, which `ThinkSet(NULL)` must clear.
 	Placeholder->bIsBccTargetable = false;
-	Placeholder->ThinkFunctionName = FElysiumNpc::NpcInitThinkFunction();
+	Placeholder->ThinkFunctionName = FElysiumNpcBase::NpcInitThinkFunction();
 	Placeholder->NPCInit();                                                    // 0x103a4350
 	TestTrue(TEXT("targetable"), Placeholder->bIsBccTargetable);
 	TestTrue(TEXT("ThinkSet(NULL)"), Placeholder->ThinkFunctionName.IsEmpty());

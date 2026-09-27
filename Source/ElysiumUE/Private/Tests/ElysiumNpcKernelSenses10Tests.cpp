@@ -628,7 +628,7 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 	// Both gates are required before the shadow is built, and the slot answers TRUE unconditionally
 	// — including when nothing was created.
 	F.Guard->bHasPhysicsObject = true;
-	F.Guard->VPhysicsShadow = FElysiumNpc::FVPhysicsShadowBuild();
+	F.Guard->VPhysicsShadow = FElysiumNpcBase::FVPhysicsShadowBuild();
 	TestTrue(TEXT("0x10273720 answers true even when nothing is created"),
 		F.Guard->CreateVPhysics());
 	TestFalse(TEXT("...and an existing physics object blocks the build"),
@@ -653,7 +653,7 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 	F.Guard->AimGun();
 
 	// --- Slot 445 `StartTaskOverlay` (`0x10288710`) -----------------------------------------------
-	F.Guard->MoveAndShootOverlay = FElysiumNpc::FMoveAndShootOverlay();
+	F.Guard->MoveAndShootOverlay = FElysiumNpcBase::FMoveAndShootOverlay();
 	if (!F.Guard->IsCurTaskContinuousMove())
 	{
 		F.Guard->StartTaskOverlay();
@@ -678,7 +678,7 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 	F.Guard->bIsUsingSmallHull = false;
 	F.Guard->bWantsLargeHull = false;
 	F.Guard->bHasPhysicsObject = false;
-	F.Guard->VPhysicsShadow = FElysiumNpc::FVPhysicsShadowBuild();
+	F.Guard->VPhysicsShadow = FElysiumNpcBase::FVPhysicsShadowBuild();
 	F.Guard->HeadProbe();
 	TestFalse(TEXT("0x1026ab5a with the hull latches clear the probe does nothing"),
 		F.Guard->VPhysicsShadow.bBuilt);
@@ -1061,7 +1061,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 		return false;
 	}
 
-	FElysiumNpc::FHintWords Hint;
+	FElysiumNpcBase::FHintWords Hint;
 	Hint.bValid = true;
 	Hint.HintIndex = 7;
 	Hint.HintType = 0x3aa8;
@@ -1078,7 +1078,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103d6939 the scan answers the row's target groundpoint"),
 		Wolf->GetHintTargetGroundpoint(Hint), FVector(11.0, 22.0, 33.0));
 	// `103d698c`: a MISS still answers a point — the `GetGroundpoint` fallback, not a refusal.
-	FElysiumNpc::FHintWords Missing = Hint;
+	FElysiumNpcBase::FHintWords Missing = Hint;
 	Missing.HintIndex = 99;
 	const FVector Fallback = Wolf->GetHintTargetGroundpoint(Missing);
 	TestFalse(TEXT("0x103d69ad a miss still answers a point rather than refusing"),
@@ -1090,7 +1090,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 	const float Yaw = Wolf->GetForwardYawForHint(Hint);
 	TestTrue(TEXT("0x103d7347 the answer is wrapped into [0, 360]"), Yaw >= 0.f && Yaw <= 360.f);
 	// `103d7328`: types `0x3aa3` and `0x3aa5` DISCARD the computed yaw and take the hint's own.
-	FElysiumNpc::FHintWords OwnYaw = Hint;
+	FElysiumNpcBase::FHintWords OwnYaw = Hint;
 	OwnYaw.HintType = 0x3aa3;
 	TestEqual(TEXT("0x103d7328 type 0x3aa3 takes the hint's own slot-219 yaw"),
 		Wolf->GetForwardYawForHint(OwnYaw), 45.f);
@@ -1118,7 +1118,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 
 	// --- `0x103d7dc0` / `0x103d8060`, the two twins -----------------------------------------------
 	// `103d7dfa`: an INVALID hint is false for both.
-	FElysiumNpc::FHintWords Invalid;
+	FElysiumNpcBase::FHintWords Invalid;
 	TestFalse(TEXT("0x103d7dfa a null hint is false"),
 		Wolf->IsValidRandomMoveHint(Invalid, 10.0));
 	TestFalse(TEXT("0x103d8113 ...for the move twin too"), Wolf->IsValidMoveHint(Invalid, 10.0));
@@ -1127,14 +1127,14 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 	// move twin refuses `0x3aa3` and `0x3aa9` by name. The two sets differ in membership AND sense.
 	for (const int32 Type : { 0x3aa7, 0x3aa5, 15000, 0x3aa3 })
 	{
-		FElysiumNpc::FHintWords Typed = Hint;
+		FElysiumNpcBase::FHintWords Typed = Hint;
 		Typed.HintType = Type;
 		TestFalse(*FString::Printf(TEXT("0x103d7f4c random-move type 0x%x is always false"), Type),
 			Wolf->IsValidRandomMoveHint(Typed, 10.0));
 	}
 	// `103d820c`: `0x3aa5` on the MOVE twin needs `m_DoorState` to be exactly 2 — so it is NOT
 	// always false there.
-	FElysiumNpc::FHintWords DoorHint = Hint;
+	FElysiumNpcBase::FHintWords DoorHint = Hint;
 	DoorHint.HintType = 0x3aa5;
 	Wolf->WerewolfDoorState = 1;
 	TestFalse(TEXT("0x103d820c the move twin refuses 0x3aa5 with m_DoorState != 2"),
@@ -1144,7 +1144,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 
 	// `103d81a5`: the move twin's `0x3aa8` needs `HasCondition(0x77)` SET; the random-move twin's
 	// does not.
-	FElysiumNpc::FHintWords JumpHint = Hint;
+	FElysiumNpcBase::FHintWords JumpHint = Hint;
 	JumpHint.HintType = 0x3aa8;
 	Wolf->Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x77));
 	TestFalse(TEXT("0x103d81b2 the move twin refuses 0x3aa8 without COND 0x77"),
@@ -1152,7 +1152,7 @@ bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 
 	// `103d7ea8`: the random-move twin's `0x3a9a` group is true while the last-seen elapsed time is
 	// below `_DAT_10452dc4` (2.0 s).
-	FElysiumNpc::FHintWords RandomHint = Hint;
+	FElysiumNpcBase::FHintWords RandomHint = Hint;
 	RandomHint.HintType = 0x3a9a;
 	Wolf->WerewolfLastSeenTime = 10.0;
 	TestTrue(TEXT("0x103d7ed8 within 2.0 s of the last sighting the hint is valid"),

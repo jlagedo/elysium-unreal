@@ -345,18 +345,18 @@ bool FElysiumNpcKernelSoundsOkToMakeSoundTest::RunTest(const FString&)
 	// mask at `1027a5d8` carries the equal bit), so a sound at exactly the deadline is refused.
 	F.Npc->BaseMemory.SoundWaitTime = Now + 100.0;
 	TestFalse(TEXT("the base gate refuses inside the sound-wait window"),
-		F.Npc->BaseFOkToMakeSound());
+		F.Npc->FElysiumNpcBase::FOkToMakeSound());
 	F.Npc->BaseMemory.SoundWaitTime = Now;
-	TestFalse(TEXT("...and refuses at exactly the deadline"), F.Npc->BaseFOkToMakeSound());
+	TestFalse(TEXT("...and refuses at exactly the deadline"), F.Npc->FElysiumNpcBase::FOkToMakeSound());
 	F.Npc->BaseMemory.SoundWaitTime = Now - 0.001;
-	TestTrue(TEXT("...and allows past it"), F.Npc->BaseFOkToMakeSound());
+	TestTrue(TEXT("...and allows past it"), F.Npc->FElysiumNpcBase::FOkToMakeSound());
 
 	// `SF_NPC_GAG` (`m_spawnflags & 2`) plus `m_NPCState != NPC_STATE_COMBAT`. Idle is the
 	// spawn state, so a gagged idle NPC is silent.
 	F.Npc->SpawnFlags |= 0x2;
-	TestFalse(TEXT("a gagged idle NPC refuses"), F.Npc->BaseFOkToMakeSound());
+	TestFalse(TEXT("a gagged idle NPC refuses"), F.Npc->FElysiumNpcBase::FOkToMakeSound());
 	F.Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
-	TestTrue(TEXT("...but a gagged NPC in COMBAT does not"), F.Npc->BaseFOkToMakeSound());
+	TestTrue(TEXT("...but a gagged NPC in COMBAT does not"), F.Npc->FElysiumNpcBase::FOkToMakeSound());
 	F.Npc->SpawnFlags &= ~0x2;
 
 	// SEAM: the squad half (`m_iSquadDisconnected < 1 && m_pSquad`, then the squad's own
@@ -408,7 +408,7 @@ bool FElysiumNpcKernelSoundsJustMadeSoundTest::RunTest(const FString&)
 	for (int32 Pass = 0; Pass < 256; ++Pass)
 	{
 		F.Npc->BaseMemory.SoundWaitTime = 0.0;
-		F.Npc->BaseJustMadeSound();
+		F.Npc->FElysiumNpcBase::JustMadeSound();
 		const double Wait = F.Npc->BaseMemory.SoundWaitTime - Now;
 		bInRange &= (Wait >= 1.5 - KINDA_SMALL_NUMBER) && (Wait <= 2.0 + KINDA_SMALL_NUMBER);
 		Low = FMath::Min(Low, Wait);
@@ -456,7 +456,7 @@ bool FElysiumNpcKernelSoundsBestSoundTest::RunTest(const FString&)
 	// `0x1026aef0`, the base half — `m_pSenses->GetClosestSound(false)`, unreachable on the Troika
 	// line. SEAM: no "closest of the live list" accessor exists, so it answers null and warns
 	// exactly as retail does.
-	TestNull(TEXT("the base GetBestSound seam answers nothing"), F.Npc->BaseGetBestSound());
+	TestNull(TEXT("the base GetBestSound seam answers nothing"), F.Npc->FElysiumNpcBase::GetBestSound());
 
 	// `0x1026af30` fills slot 475 for CAI_BaseNPCTroika too — the Troika line does NOT override
 	// it — so this IS the dispatched body. SEAM: no scent channel exists on the game-sound bus.
@@ -527,19 +527,19 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	// first one; COMBAT does not (the table at `0x1027e660` orders None, Idle, Combat, Alert, so
 	// the admitted pair is 1 and 3).
 	F.Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
-	TestFalse(TEXT("a body in COMBAT never rolls"), F.Npc->BaseShouldPlayIdleSound());
+	TestFalse(TEXT("a body in COMBAT never rolls"), F.Npc->FElysiumNpcBase::ShouldPlayIdleSound());
 	F.Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Alert);
 	// ALERT is admitted; the roll below decides, so only the refusal is asserted here.
 	F.Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Idle);
 
 	F.Npc->SpawnFlags |= 0x2;
-	TestFalse(TEXT("a gagged body never rolls"), F.Npc->BaseShouldPlayIdleSound());
+	TestFalse(TEXT("a gagged body never rolls"), F.Npc->FElysiumNpcBase::ShouldPlayIdleSound());
 	F.Npc->SpawnFlags &= ~0x2;
 
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::D_IS_BUSY);
 	TestTrue(TEXT("the discipline-busy predicate stands"), F.Npc->IsBusyWithDiscipline());
 	TestFalse(TEXT("a body busy with a Discipline never rolls"),
-		F.Npc->BaseShouldPlayIdleSound());
+		F.Npc->FElysiumNpcBase::ShouldPlayIdleSound());
 	F.Npc->NpcFlags.Clear(EElysiumNpcFlag::D_IS_BUSY);
 
 	// The float-sound arm (`1027a4cc`), and it is the one the one-line walk missed: when slot 510
@@ -560,7 +560,7 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	for (int32 Pass = 0; Pass < 64 && !bFloated; ++Pass)
 	{
 		F.Npc->VSoundSpeakCalls.Reset();
-		const bool bIdle = F.Npc->BaseShouldPlayIdleSound();
+		const bool bIdle = F.Npc->FElysiumNpcBase::ShouldPlayIdleSound();
 		const bool bPlayedFloat = F.Npc->VSoundSpeakCalls.ContainsByPredicate(
 			[](const FElysiumNpc::FVSoundSpeak& Row)
 			{
@@ -582,7 +582,7 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	int32 Fired = 0;
 	for (int32 Pass = 0; Pass < 400; ++Pass)
 	{
-		Fired += F.Npc->BaseShouldPlayIdleSound() ? 1 : 0;
+		Fired += F.Npc->FElysiumNpcBase::ShouldPlayIdleSound() ? 1 : 0;
 	}
 	TestTrue(TEXT("RandomInt(0, 999) == 0 fires rarely"), Fired <= 8);
 
@@ -616,7 +616,7 @@ bool FElysiumNpcKernelSoundsIdleGateTest::RunTest(const FString&)
 	for (int32 Pass = 0; Pass < 64 && !bFloatedUnderSchedule; ++Pass)
 	{
 		F.Npc->VSoundSpeakCalls.Reset();
-		const bool bIdle = F.Npc->BaseShouldPlayIdleSound();
+		const bool bIdle = F.Npc->FElysiumNpcBase::ShouldPlayIdleSound();
 		if (F.Npc->VSoundSpeakCalls.ContainsByPredicate(
 			[](const FElysiumNpc::FVSoundSpeak& Row)
 			{
@@ -652,14 +652,14 @@ bool FElysiumNpcKernelSoundsFloatGateTest::RunTest(const FString&)
 	// The base half first (`0x1027a530`), because the Troika body tail-calls it.
 	F.Npc->NextFloatSoundTime = 0.0;
 	F.Npc->FloatSoundFrequency = 0;
-	TestFalse(TEXT("floatfreq 0 disables the hook"), F.Npc->BaseShouldPlayFloatSound());
+	TestFalse(TEXT("floatfreq 0 disables the hook"), F.Npc->FElysiumNpcBase::ShouldPlayFloatSound());
 	// Retail tests 0 and 8 as two SEPARATE equalities, so 8 is a hole in the middle of the range
 	// rather than a ceiling: 7 and 9 both roll.
 	F.Npc->FloatSoundFrequency = 8;
-	TestFalse(TEXT("floatfreq 8 also disables it"), F.Npc->BaseShouldPlayFloatSound());
+	TestFalse(TEXT("floatfreq 8 also disables it"), F.Npc->FElysiumNpcBase::ShouldPlayFloatSound());
 	F.Npc->FloatSoundFrequency = 1;
 	F.Npc->NextFloatSoundTime = F.World.World.NowSeconds() + 100.0;
-	TestFalse(TEXT("inside the next-float window it refuses"), F.Npc->BaseShouldPlayFloatSound());
+	TestFalse(TEXT("inside the next-float window it refuses"), F.Npc->FElysiumNpcBase::ShouldPlayFloatSound());
 
 	// `RandomInt(0, m_iFloatSoundFrequency) == 0` — "the sound plays 1 time in X". At frequency 1
 	// that is one pass in two, so over 400 draws it must fire, must not always fire, and must land
@@ -668,7 +668,7 @@ bool FElysiumNpcKernelSoundsFloatGateTest::RunTest(const FString&)
 	int32 Fired = 0;
 	for (int32 Pass = 0; Pass < 400; ++Pass)
 	{
-		Fired += F.Npc->BaseShouldPlayFloatSound() ? 1 : 0;
+		Fired += F.Npc->FElysiumNpcBase::ShouldPlayFloatSound() ? 1 : 0;
 	}
 	TestTrue(TEXT("floatfreq 1 rolls about one pass in two"), Fired > 140 && Fired < 260);
 
@@ -677,7 +677,7 @@ bool FElysiumNpcKernelSoundsFloatGateTest::RunTest(const FString&)
 	Fired = 0;
 	for (int32 Pass = 0; Pass < 400; ++Pass)
 	{
-		Fired += F.Npc->BaseShouldPlayFloatSound() ? 1 : 0;
+		Fired += F.Npc->FElysiumNpcBase::ShouldPlayFloatSound() ? 1 : 0;
 	}
 	TestTrue(TEXT("floatfreq 9 rolls about one pass in ten"), Fired > 10 && Fired < 90);
 

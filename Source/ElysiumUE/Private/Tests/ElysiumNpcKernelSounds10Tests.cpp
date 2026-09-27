@@ -72,14 +72,14 @@ bool FElysiumNpcKernelSounds10KeyValueFormattersTest::RunTest(const FString&)
 	// literal at `0x10555584`. Six decimals, C's `%f` default, and the three floats widened by the
 	// varargs call.
 	TestEqual(TEXT("0x1009eca0 formats \"%f %f %f\""),
-		FElysiumNpc::FormatKeyValueVector(FVector(1.0, -2.5, 3.25)),
+		FElysiumNpcBase::FormatKeyValueVector(FVector(1.0, -2.5, 3.25)),
 		FString(TEXT("1.000000 -2.500000 3.250000")));
 
 	// `0x1009ebb0` — the same shape with the format at `0x10554f28`, which is `"%f"`.
-	TestEqual(TEXT("0x1009ebb0 formats \"%f\""), FElysiumNpc::FormatKeyValueFloat(0.5f),
+	TestEqual(TEXT("0x1009ebb0 formats \"%f\""), FElysiumNpcBase::FormatKeyValueFloat(0.5f),
 		FString(TEXT("0.500000")));
 	TestEqual(TEXT("...and a whole number still carries six decimals"),
-		FElysiumNpc::FormatKeyValueFloat(7.f), FString(TEXT("7.000000")));
+		FElysiumNpcBase::FormatKeyValueFloat(7.f), FString(TEXT("7.000000")));
 	return true;
 }
 
@@ -551,7 +551,7 @@ bool FElysiumNpcKernelSounds10FloatSoundTest::RunTest(const FString&)
 
 		// `1029502c` pushes row **1** — `FloatSoundMinDelay`, 5.0 — which `__ftol` truncates to an
 		// int and `FIADD` adds to the engine clock. This is the FIRST writer of
-		// `m_flNextFloatSoundTime` (`+0x10ec`) in the port; `BaseShouldPlayFloatSound` reads it.
+		// `m_flNextFloatSoundTime` (`+0x10ec`) in the port; `FElysiumNpcBase::ShouldPlayFloatSound` reads it.
 		TestEqual(TEXT("Float_Sound_Info row 1 is the delay, truncated to an int"),
 			F.Npc->FloatSoundMinDelaySeconds(), 5);
 		TestEqual(TEXT("m_flNextFloatSoundTime = curtime + 5"), F.Npc->NextFloatSoundTime,
@@ -580,7 +580,7 @@ bool FElysiumNpcKernelSounds10VectorVectorsTest::RunTest(const FString&)
 	// one. `right = normalize(f.y, -f.x, 0)`, `up = normalize(cross(right, f))`.
 	FVector RightAxis = FVector::ZeroVector;
 	FVector UpAxis = FVector::ZeroVector;
-	FElysiumNpc::VectorVectors(FVector(1.0, 0.0, 0.0), RightAxis, UpAxis);
+	FElysiumNpcBase::VectorVectors(FVector(1.0, 0.0, 0.0), RightAxis, UpAxis);
 	TestTrue(TEXT("forward +X gives right (0,-1,0)"),
 		RightAxis.Equals(FVector(0.0, -1.0, 0.0), 1e-4));
 	TestTrue(TEXT("...and up (0,0,1)"), UpAxis.Equals(FVector(0.0, 0.0, 1.0), 1e-4));
@@ -589,7 +589,7 @@ bool FElysiumNpcKernelSounds10VectorVectorsTest::RunTest(const FString&)
 
 	// Retail's degenerate arm, verbatim: a vertical forward answers `right = (1,0,0)` and
 	// `up = (0, -f.z, 0)` — unnormalized, and not perpendicular to the forward.
-	FElysiumNpc::VectorVectors(FVector(0.0, 0.0, -3.0), RightAxis, UpAxis);
+	FElysiumNpcBase::VectorVectors(FVector(0.0, 0.0, -3.0), RightAxis, UpAxis);
 	TestTrue(TEXT("a vertical forward takes retail's degenerate arm: right (1,0,0)"),
 		RightAxis.Equals(FVector(1.0, 0.0, 0.0), 1e-4));
 	TestTrue(TEXT("...and up (0, -f.z, 0), unnormalized"),
@@ -608,7 +608,7 @@ bool FElysiumNpcKernelSounds10FireBulletsTest::RunTest(const FString&)
 	F.Npc->FireBullets(nullptr);
 	TestEqual(TEXT("a null packet traces nothing"), F.Npc->FireBulletsTraces.Num(), 0);
 
-	FElysiumNpc::FElysiumFireBulletsInfo Info;
+	FElysiumNpcBase::FElysiumFireBulletsInfo Info;
 	Info.Repeats = 2;
 	Info.Bullets = 3;
 	Info.SrcUnits = FVector(10.0, 20.0, 30.0);
@@ -664,7 +664,7 @@ bool FElysiumNpcKernelSounds10FireBulletsTest::RunTest(const FString&)
 
 	// The tracer arm, driven by `info+0xa0` bit 0 and a name. It REPLACES the trace pass.
 	F.Npc->FireBulletsTraces.Reset();
-	FElysiumNpc::FElysiumFireBulletsInfo Tracer;
+	FElysiumNpcBase::FElysiumFireBulletsInfo Tracer;
 	Tracer.Repeats = 1;
 	Tracer.Bullets = 4;
 	Tracer.DirShooting = FVector(1.0, 0.0, 0.0);

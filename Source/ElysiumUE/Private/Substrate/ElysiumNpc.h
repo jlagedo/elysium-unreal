@@ -70,10 +70,6 @@ public:
 	bool bStanceUnavailable = false;  // this model authors no stance set; do not ask again
 
 	int32 ScheduleActivityCycle = 0;
-	// The resolved (bank, label) pair `TASK_SET_ACTIVITY` most recently made ideal. It is session
-	// state: schedule restore restarts at task zero because neither the current body pose nor the
-	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
-	FElysiumClipIdentity ScheduleIdealActivity;
 
 	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
@@ -81,13 +77,6 @@ public:
 	FElysiumScriptedScheduleOrder ScriptedScheduleOrder;
 
 	// --- Combat loadout ---
-	// `cantdropweapons` (78 authored rows; 71 write 0 and 7 write 1).
-	//
-	// SEAM (parsed, unread): the drop it suppresses is the death-time weapon drop, and this runtime
-	// has no such path — `Event_Killed`'s weapon cleanup does not spawn a loose item yet. The
-	// keyfield is carried so an authored NPC round-trips through a save with the policy it was
-	// authored with, and so the drop path has a value to read the day it lands.
-	bool bCantDropWeapons = false;
 	// Whether the loadout has already run. It saves for the reason `FElysiumItemContainer`'s equip
 	// seeds do: the weapon it granted is a runtime entity the snapshot restores, so a restored NPC
 	// must not be handed a second one.
@@ -338,11 +327,6 @@ public:
 
 	void InputClearPatrolPath(const FElysiumInputArgs&);
 
-	// One name out of a `FollowPatrolPath` list — retail's `0x102d2840`: the first hint, in hint-list
-	// order, of type 10000 or 800 whose `Group` equals the token exactly (case-sensitive). A patrol
-	// point is never addressed by targetname.
-	const FElysiumEntity* FindPatrolPoint(const FString& Name) const;
-
 	bool ResolvePatrolPoints();
 
 	bool IssuePatrolMove();
@@ -497,32 +481,12 @@ public:
 	virtual bool WaitPvs() override;
 
 	virtual float PlayActivity(const FString& Activity) override;
-	virtual bool IsIdealActivityCurrent() const override;
 
 	// One rung of `TASK_PLAY_DEATH_SEQUENCE`'s ladder. It goes through the same Reaction-band
 	// producer every other combat reaction does, because a death pose has to replace whatever owns
 	// the base channel and hold it — `PlayActivity`'s ambient claim is outranked by the next
 	// locomotion publish, which would stand a corpse back up.
 	virtual float PlayDeathActivity(const FString& Activity) override;
-	virtual void BeginDying() override;
-	virtual bool IsDeathPerformanceFinished() const override;
-	virtual void CommitDeath() override;
-
-	virtual float RandomSeconds(float Max) override;
-
-	/**
-	 * `ClearSchedule` (`0x10280d30`) — the one door out of a running program.
-	 *
-	 * Retail has no raw clear: everything that drops a program calls this, and what it does is
-	 * zero the six schedule words `+0x5c38..+0x5c4c`, clear `PRESERVE_PATH` and dispatch slot 435
-	 * `OnScheduleChange` with `NULL`. `m_failSchedule` (`+0x5c54`) is deliberately not among them.
-	 * The body is `ElysiumSchedule::ClearSchedule`; this is the name its callers see, because the
-	 * retail call is on the NPC and a site that reached into the schedule record instead would
-	 * skip the flag release the slot-435 dispatch performs.
-	 *
-	 * NOT a vtable slot: `0x10280d30` is a non-virtual the kernel calls directly.
-	 */
-	void ClearSchedule();
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body. SEAM: the task-body callers are 0003's
 	// scripted family, the non-task callers 25a's; no body in this runtime asks yet, so the request
@@ -535,14 +499,12 @@ public:
 	// Slot 440 on this class: `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), the arms whose
 	// ids this runtime registers. See the body for the arms that are seams.
 	virtual int32 TranslateSchedule(int32 Id) override;
-	virtual int32 ResolveScheduleId(int32 Id) const override;
 	virtual int32 LocalScheduleId(int32 GlobalId) const override;
 	virtual const FElysiumLocalIdSpace* ConditionIdSpace() const override
 	{
 		return IdSpace(EElysiumIdCategory::Condition);
 	}
 
-	virtual void RecordScheduleEvent(const FString& Row) override;
 	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
 
 	virtual bool FaceSavePosition() override;
@@ -554,10 +516,8 @@ public:
 	// and answers false when the claim is refused, which fails its task by name. The token is given
 	// back once, where the program ends (`ReleaseScheduleBody`).
 
-	virtual void StopMoving() override;
 	virtual EElysiumTaskResult StopMovingTask() override;
-	virtual EElysiumTaskResult BeginStopMovingTask() override;
-	virtual void TaskStarting() override { ScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
+	virtual void TaskStarting() override { BaseScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
 	virtual void SetGoalTolerance(float Units) override;
 	virtual void TaskFail(int32 Reason) override;
 	virtual void ScheduleDone() override;
@@ -575,9 +535,6 @@ public:
 	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
 	// arms the entity think and nothing else.
 	void ArmThinkNow(double Now);
-	// The same write at an arbitrary stamp — `m_flNextThink := Stamp`, rounded so a float stamp
-	// never lands above the double frame it names.
-	void ArmThinkAt(double Stamp);
 	// Slot 584 `0x1028d910`: slot 614 and then every `Last` mirror := now. The broadcast form
 	// (`SetAIEnabled(true)`, the node-graph rebuild) and `TASK_WAIT_PVS`'s completion use it.
 	void ResetAllThinkStamps(double Now)
@@ -592,14 +549,6 @@ public:
 	// which is the handler's own order. True when the bit was recorded, false when the running
 	// program's mask refused it.
 	bool OnBumped(double Now);
-	// `m_scriptState in {4,5,6}`, the third term of `ShouldThinkFrequently()` (`0x102c2430`) --
-	// the aiscripted states in which a beat is actively driving this body. Mapped rather than
-	// transcribed: this runtime spells the same fact as a scripted owner holding the body or a
-	// scripted move in flight.
-	bool IsScriptDriven() const
-	{
-		return ScriptOwner.IsSet() || ScriptPhase != EScriptPhase::None;
-	}
 	// `m_flTeleportMoveTimer` (+0x65dc), the keyfield `teleport_move_timer` and nothing else: no
 	// function in the image writes the field (the literal-offset grep finds only its reader,
 	// `ShouldThinkFrequently` `0x102c2430`). It is an ABSOLUTE curtime: while `curtime <= it` the
@@ -617,10 +566,6 @@ public:
 	double TalkingUntil = -1.0;
 	bool IsTalking(double Now) const { return Now <= TalkingUntil; }
 	virtual void OnDialogFilePlayed(double DurationSeconds) override;
-	// `m_bfNPCStateFlags`, the per-state capability byte `0x1026e3e0` writes on every state
-	// change. A pure function of the state here rather than a second stored word: the byte has no
-	// writer but the state change, so reading it off the state can never be stale.
-	uint8 NpcStateFlags() const;
 	// `NPCThink`'s enemy triple (`+0x6268/+0x626c/+0x6270`), refreshed on every normal-due think
 	// from the committed enemy and its memory record; `5000.0` when there is none.
 	void UpdateEnemyDistances();
@@ -649,27 +594,19 @@ public:
 	void SetBodyAnimationHeld(bool bHeld);
 
 	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
-	void SetAttackExtents(const FVector& MarginCm) { ScheduleHost.AttackExtentsCm = MarginCm; }
+	void SetAttackExtents(const FVector& MarginCm) { BaseScheduleHost.AttackExtentsCm = MarginCm; }
 	FBox AttackBounds(const FBox& CollisionBounds) const
 	{
-		return FBox(CollisionBounds.Min - ScheduleHost.AttackExtentsCm,
-			CollisionBounds.Max + ScheduleHost.AttackExtentsCm);
+		return FBox(CollisionBounds.Min - BaseScheduleHost.AttackExtentsCm,
+			CollisionBounds.Max + BaseScheduleHost.AttackExtentsCm);
 	}
 	void ClearScheduleHint(float ReuseDelay);
 	void ClearOwnedActivityCopyProps();
 	void EndDisciplineSchedule();
-	void DisconnectFromSquad();
-	void ReconnectToSquad();
-
-	// `m_iSquadDisconnected < 1 ? m_pSquad : NULL` (`+0x5bb0`, `+0x5da4`), the squad an NPC answers
-	// to while connected. This substrate has no squad object (0002/17), so `m_pSquad` is null on
-	// every NPC and this answers nothing; a squad layer replaces the body, not the callers.
-	const void* ConnectedSquad() const { return nullptr; }
 
 	// `CAI_BaseNPC::m_hTargetEnt` (`+0x5ce4`) and its setter `0x10279cc0`. Written by the comfort
 	// sweep; read by the gaze cascade's target arm (`GazeTargetEntity`).
 	void SetTarget(const FElysiumEntityHandle& NewTarget) { TargetEnt = NewTarget; }
-	const FElysiumEntityHandle& GetTarget() const { return TargetEnt; }
 
 	virtual bool GetPathToEnemy(float ToleranceUnits) override;
 
@@ -693,8 +630,6 @@ public:
 
 	// --- The incapacitation task bodies and the install rules -----------------------------------
 
-	virtual void MakeOblivious(bool bOblivious) override;
-
 	virtual void SetNpcFlag(uint32 EncodedFlag) override;
 
 	virtual void ClearConditions() override;
@@ -702,19 +637,6 @@ public:
 	virtual void OnScheduleChange(int32 NewSchedule) override;
 
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
-
-	/**
-	 * `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`) — the sole reader of `D_IS_BUSY`,
-	 * whose whole body is that one bit test.
-	 *
-	 * Named as its own predicate rather than left as a bit test at each site, because that is what
-	 * its 17 retail callers see: the bit and the predicate are the same fact, and a caller that
-	 * tested the bit directly would drift from them.
-	 */
-	virtual bool IsBusyWithDiscipline() const override
-	{
-		return NpcFlags.Has(EElysiumNpcFlag::D_IS_BUSY);
-	}
 
 	/**
 	 * `m_iIsOblivious > 0` (`CAI_BaseNPC` `+0x5bb4`).
@@ -883,6 +805,10 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 
+	// `m_pSenses` (+0x5cdc) on the Troika line: the senses runner this class carries.
+	virtual FElysiumNpcSenses* SensesObject() override { return &Senses; }
+	using FElysiumNpcBase::SensesObject;
+
 	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
 
 	virtual const TCHAR* SaveBlockReason() const override;
@@ -903,14 +829,6 @@ public:
 	// Written beside every `Motor->MoveTo`, read by the gaze arm above and nothing else — the
 	// motor owns the route, this is only what the character asked it for.
 	FVector MoveGoal = FVector::ZeroVector;
-
-	// Read-only, for the debug layer. The mind is private because every WRITE to it has to go
-	// through `RequestState` / `Acquire` / `Release` so the admission and the body arbitration
-	// cannot be sidestepped; reading its state, its ideal state, its owner and its transition trace
-	// sidesteps nothing, and those four together are the only account of why a character is doing
-	// what it is doing. Const on purpose — a panel that could call `RequestState` would be a second
-	// producer of NPC state.
-	const FElysiumNpcMind& GetMind() const { return Mind; }
 
 	// Requirement 23: the debugger may show the authored place this NPC currently owns, but it
 	// must not reach into the private ambient phase/index state or acquire/release a claim.
@@ -1093,8 +1011,10 @@ public:
 
 	// --- The retail vtable surface (`docs/vtmb/npc-kernel/signatures.md`) -------------------------
 	//
-	// One `virtual` per Troika-line slot the port does not already implement under a mapped name —
-	// 586 of the 617 — each carrying its slot index, the body's address and the ledger's tier. The
+	// The Troika layer of the generated slot surface (story 0019/5 step 5): one `virtual` per slot
+	// `CAI_BaseNPCTroika` introduces past the base's table, and one `override` per base slot the
+	// Troika table fills with a body of its own. The base's declarations — every slot the
+	// `CAI_BaseNPC` table holds — are in `ElysiumNpcBaseSlots.inl`, inside `FElysiumNpcBase`. The
 	// declarations are generated from `signatures.tsv` rather than typed, because a surface that
 	// can drift from the ledger is the thing this story exists to end; the file is data, included
 	// here because a virtual can only be declared inside its class.
@@ -1102,10 +1022,10 @@ public:
 	// A virtual here declares the surface retail dispatches through; the species classes
 	// (`Substrate/ElysiumNpc<X>.h`) override it (story 5 steps 3-4).
 	//
-	// The bodies are in `ElysiumNpcKernelSlots.cpp`: a named stub that tallies `elysium.stubs` with
+	// The bodies are in `ElysiumNpcSlots.cpp`: a named stub that tallies `elysium.stubs` with
 	// the retail address and the story that owns it (29c/29d/29e). A story replaces a stub with the
 	// recovered body in place; nothing about the shape moves when it does.
-	#include "Substrate/ElysiumNpcKernelSlots.inl"
+	#include "Substrate/ElysiumNpcSlots.inl"
 
 	// --- Story 29c-1: the layer 0–9 bodies that are NOT vtable slots ------------------------------
 	//
@@ -1230,7 +1150,6 @@ protected:
 	// Words only. Retail's one hand block (`AIExtendedSaveHeader_t`) and, after it, the port state
 	// no retail datamap row reaches. Everything load-side is `OnPostRestore` below.
 
-	void SerializeExtendedHeader(FElysiumSaveArchive& Ar);
 	void SerializePatrolBlock(FElysiumSaveArchive& Ar);
 	void SerializeMakerBlock(FElysiumSaveArchive& Ar);
 	void SerializeMindBlock(FElysiumSaveArchive& Ar);
@@ -1268,13 +1187,6 @@ protected:
 	// both mean "this NPC stops driving its body", and the difference between them is only whether
 	// the mind ends up dead.
 	void ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind);
-
-	// The end of the death transaction, run once: hand the body to Unreal's physics, seeded from the
-	// pose it is standing in. A body with no physics asset behind it holds that pose instead — the
-	// shipped outcome, because the character bake writes none. The solid-body policy is deliberately
-	// NOT here: it is re-asserted on every terminal dead think, because a corpse's body can be handed
-	// back to it by something that took it before the kill.
-	void CompleteDeathHandoff();
 
 	// The death transaction's body half, re-applied after a restore. A load rebuilds the motor, so
 	// frozen / non-solid-to-characters / held-pose all have to be stated again on it — and a corpse's
@@ -1325,7 +1237,6 @@ protected:
 	// lock is stamped synchronously, the arbiter claim can arrive a think later.
 	bool bScriptBodyRequested = false;
 	bool bScriptBodyHeld = false;
-	bool bWalkingAnimation = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
 	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is

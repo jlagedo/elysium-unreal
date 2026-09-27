@@ -207,7 +207,7 @@ struct FElysiumNpcWorldFixture
 		// honest way to say "the map has been up for a tenth of a second": the retail delay is kept
 		// intact and the first think lands on the frame at zero, which is the clock every case
 		// measures its absolute stamps from.
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 	}
 

@@ -58,7 +58,6 @@
 // never answers `D_ER`, so retail's `default:` arms (the `OnLooked` `DevWarning`, `QuerySeeEntity`'s
 // refusal) are unreachable through this helper and say so at each site.
 int32 IRelationTypeOf(const FElysiumEntity* Candidate) const;
-int32 IRelationPriorityOf(const FElysiumEntity* Candidate) const;
 
 // --- Slot 201 `FVisible`: the blocker out-parameter ----------------------------------------------
 
@@ -81,46 +80,20 @@ bool BaseEntityFVisible(const FElysiumEntity& Target, int32 Mask) const;
 
 // --- Slot 469 `OnLooked`: the `CAI_BaseNPC` base body beneath the Troika override ----------------
 
-/** `CAI_BaseNPC::OnLooked` (`0x1026a2c0`), 624 bytes — a DISTINCT retail function beside the Troika
- *  override `0x102b39a0` that owns slot 469, so it takes its own name and is not a slot body.
- *
- *  The body itself is `ElysiumNpcCond::GatherSight` (`ElysiumNpcConditions.cpp`), which is where the
- *  port has carried it since story 10b and where story 29d added the two gates it was missing (the
- *  `relation != D_NU` gate and the `SEE_ENEMY` raise, both cited at the line that does them). This
- *  is the NAMED ENTRY POINT retail's slot 469 calls first — it runs that body against this NPC's
- *  own condition set on the substrate clock, which is what `CAI_Senses::Look` does. */
-void BaseOnLooked();
-
 // --- Slot 472 `OnSeeEntity`: the two species arms and their class statics -------------------------
 
 static void ResetSpeciesSuspectGlobals();
 
 // --- Slot 478 `BestEnemy`: the arbitration words and the one species arm -------------------------
 
-/** One candidate of `CAI_BaseNPC::BestEnemy` (`0x102743c0`), scored once so the comparison below is
- *  the recovered rule and nothing else. The four incumbent words are retail's four stack slots:
- *  `[ESP+0x11]` seeded `1`, `[ESP+0x14]` seeded `0x10000000`, `[ESP+0x18]` seeded `-1000` and
- *  `[ESP+0x10]` seeded `0`. */
-struct FBestEnemyState
-{
-	FElysiumEntity* Best = nullptr;
-	int32 Distance = 0x10000000;    // __ftol of the SUM OF SQUARES, Source units squared
-	int32 Priority = -1000;
-	bool bUnreachable = true;
-	bool bVisible = false;
-};
-
-/** The visibility term both `BestEnemy` bodies compute: `CAI_Senses::DidSeeEntity`
- *  (`0x1030fb10`, this Look pass's accepted set) OR slot 201 `FVisible(cand, 0x2804091, 0, 0)`. */
-bool BestEnemyCandidateVisible(FElysiumEntity* Candidate);
-
-/** `__ftol` of the SUM OF SQUARES between two slot-217 origins, in SOURCE units squared — the
- *  distance key both `BestEnemy` bodies compare. `0x10431320` is plain `__ftol`; there is no root. */
-int32 BestEnemyDistanceKey(const FElysiumEntity& Candidate) const;
-
 /** `CNPC_VFrenzyShadow::BestEnemy` (`0x103766d0`), slot 478's one species arm: a sticky arm in front
  *  and then a SCORE-based rescan, where the base body is a lexicographic key walk. */
 FElysiumEntity* FrenzyShadowBestEnemy();
+
+/** Slot 478 on the Troika line: the `CNPC_VFrenzyShadow#478` census arm, then the base body. A
+ *  transitional override (story 5 step 5): the species arm has no class until the controller fold
+ *  (step 7), and a base body does not route to Troika code. */
+FElysiumEntity* BestEnemy() override;
 
 /** `CNPC_VFrenzyShadow::m_iHostileEnemyCount` (`+0x6664`) and `m_bFailedGrapple` (`+0x6668`), the
  *  two words its slot-478 body owns. No port system writes either yet; they are declared here
@@ -130,38 +103,9 @@ bool bFrenzyShadowFailedGrapple = false;   // +0x6668
 
 // --- Slot 574 `GetShootEnemyDir` and the aim point behind it -------------------------------------
 
-/** `0x10278650` — the aim POINT slot 574 subtracts the caller's shoot position from. Not a row of
- *  this family and not a slot; carried here because slot 574 and its Ming Xiao arm are both defined
- *  by it. Three arms, in retail's order:
- *
- *    1. `m_hShootTargetOverride` (`+0x5ba8`) live → that entity's `GetAbsOrigin` (slot 217), whole.
- *    2. no enemy → the body's own forward, from slot 372's angles through `AngleVectors`
- *       (`0x10139610`) — **SEAM**: this runtime's `+0x374` accessor is the entity's angles and the
- *       vector build is family Geometry's, so this answers the NPC's own eye position, which is
- *       where retail's degenerate arm lands for a body with no enemy.
- *    3. an enemy → the enemy-memory LKP (`0x102dfed0`) plus `BodyTarget(shootPos)` minus the
- *       enemy's `GetAbsOrigin`, with `+_DAT_104994e0` added to Z when the enemy's stat `0x0b` reads
- *       `5` (-30.0). **SEAM**: the `CVStatList_t` join by retail list TYPE does not exist on this
- *       sheet, so the stat reads not-5 and the offset is not applied. */
-FVector ShootEnemyAimPoint(const FVector& ShootPositionCm);
-
 // --- Slot 562 `WeaponLOSCondition`: the player-in-line-of-fire test ------------------------------
 
-/** `0x10266b10` — the cone test slot 562 applies AFTER the weapon has answered, and which overrides
- *  a weapon that said yes. For each client: `dot(normalize(target - owner), normalize(center -
- *  owner))` STRICTLY above `0.92` AND the distance to the target STRICTLY greater than the distance
- *  to that client. True means a player stands between this body and what it is aiming at.
- *
- *  `0x10137220` (`1057966c`) is `VectorNormalize`, which answers the LENGTH — that is where both
- *  distance terms come from, and it is why they are unsquared. A zero-length delta normalises to
- *  the zero vector here rather than faulting, which is a CRASH GUARD and not a rule: retail divides
- *  by the length unguarded. */
-bool PlayerInLineOfFire(const FVector& OwnerPosCm, const FVector& TargetPosCm) const;
-
 // --- Slot 445 `StartTaskOverlay`: the move-and-shoot overlay's two words -------------------------
-
-void DisableMoveAndShootOverlay();                       // 0x102e8250
-void ArmMoveAndShootOverlay(float PauseMin, float PauseMax);  // 0x102e8270
 
 // `m_flBurstShootPauseMin` (`+0x5bbc`) and `m_flBurstShootPauseMax` (`+0x5bc0`), the pair slot 445
 // hands `0x102e8270`, are already declared on `FElysiumNpc` itself (story 29b's shape). Slot 445 is
@@ -169,35 +113,9 @@ void ArmMoveAndShootOverlay(float PauseMin, float PauseMax);  // 0x102e8270
 
 // --- Slot 223 `CreateVPhysics`: the shadow the callee builds -------------------------------------
 
-void BuildVPhysicsShadow();       // 0x10272f40
-
-/** SEAM for the model's authored `mass` keyvalue (`0x10272f40` reads it off the studio header).
- *  No studio header is parsed on this substrate; answers `0.0`, which is retail's at-or-below-zero
- *  arm and therefore takes the gender default rather than refusing. */
-float ModelMassKeyvalue() const;
-/** The gender half of that default: `90` male, `65` female. `FElysiumNpc` has no recovered gender
- *  word yet, so this answers the MALE default and names the retail read. */
-bool IsFemaleBody() const;
-
 // --- Slot 402 `Event_Gibbed` ---------------------------------------------------------------------
 
-void CreateSecondaryDiscParticles();
-
-/** SEAM for `UTIL_Remove(this)` (`0x101cd940`), slot 402's no-explosive-gibs arm. `FElysiumEntity`
- *  has `Remove`-shaped lifetime elsewhere in this substrate; this counts the call and names it so
- *  the arm that removes the body is distinguishable from the arm that fades it. */
-int32 UtilRemoveCalls = 0;
-void UtilRemoveSelf();
-
 // --- Slot 544 `UpdateEnemyMemory`: the squad gate and the eluded gate ----------------------------
-
-uint32 SquadWord() const;       // +0x5da4
-
-/** SEAM for `CAI_Memory::UpdateMemory` (`0x102df700`), the call slot 544 forwards to with the node
- *  array at `m_pNavigator+0x2c`. This runtime's store is `FElysiumNpcEnemyMemory`; the node array is
- *  the AI network, which does not exist here, and the two node ids the record carries stay
- *  `INDEX_NONE`. Answers true when the target gained its FIRST record, which is retail's answer. */
-bool UpdateCaiMemory(FElysiumEntity* Enemy, const FVector& PositionCm);
 
 // --- Slot 594 `Slot594`: the range and concealment test under `FVisible` -------------------------
 //
@@ -213,24 +131,6 @@ float SeekDistInspectionCm() const;
  *  surface, which is every character except the player. */
 float TargetStealthVisionScalar(const FElysiumEntity& Target) const;
 
-/** SEAM for `m_bIsBCCTargetable` (`+0x1480`), the byte `BestEnemy` reads off a candidate's `+0x9c`
- *  combat character and both `BestEnemy` bodies gate on. `FElysiumCombatCharacter` carries no such
- *  word and no body in the kernel closure clears it, so this answers **true** — the ADMITTING arm,
- *  which is retail's own answer for an untouched character. Named so the gate is in the tree. */
-static bool IsBccTargetable(const FElysiumEntity& Candidate);
-
-/** SEAM for `FL_NOTARGET` — `CBaseEntity::GetFlags()` bit `0x8000`, which `BestEnemy` reads as the
- *  SIGN of `(flags >> 8)` (`10274449` `TEST AH,AH / JS`). `FElysiumEntity::Flags` carries no
- *  `FL_NOTARGET` bit and no producer sets one, so this answers false — the admitting arm. */
-static bool HasNoTargetFlag(const FElysiumEntity& Candidate);
-
-/** SEAM for the `0x46004003` segment trace slot 573 runs, whose HIT ENTITY is what its three arms
- *  branch on. `IElysiumEmbodiment::QueryLineOfSight` answers a bool and names no blocker, and the
- *  kernel hull trace (family Motor's `KernelHullTrace`) answers no hit either, so this reports a
- *  CLEAR trace with no blocker — which is retail's `fraction == 1.0` arm and slot 573's `true`. */
-bool InnateWeaponLosTrace(const FVector& StartCm, const FVector& EndCm,
-	FElysiumEntity*& OutBlocker) const;
-
 // --- Slot 467 `QueryHearSound` -------------------------------------------------------------------
 
 /** `CStealthKillRules::InDeafZone(&DAT_1072c540, player, this)` — slot 467's sound-type-4 arm.
@@ -239,30 +139,6 @@ bool InnateWeaponLosTrace(const FVector& StartCm, const FVector& EndCm,
 bool SoundOwnerInDeafZone(const FElysiumEntity* Owner) const;
 
 // --- `CAI_BaseNPC`'s head probe ------------------------------------------------------------------
-
-/** `0x1026ab50` — the shrunk-hull head probe `RunAI` (`0x1026f110`) runs between `GatherConditions`
- *  and `PrescheduleThink`. It is UNPORTED as a behaviour and this is why: its whole body is gated on
- *  `+0x5f2d` (the shrunk-hull latch) AND `+0x5f2c`, and neither word has a port producer — the hull
- *  swap they record is `CAI_Navigator`'s, which this substrate does not stand. The recovered rule is
- *  written out in full at the definition and the two latches are declared below so the day the
- *  navigator lands the probe is one function that changes rather than one that is invented.
- *
- *  With `m_fIsUsingSmallHull` false — which is every NPC today — the body does nothing, which is
- *  retail's own answer for a body whose hull was never shrunk. The two latches are `FElysiumNpc`'s
- *  own `bIsUsingSmallHull` (`+0x5f2d`) and `bWantsLargeHull` (`+0x5f2c`), declared by story 29b. */
-void HeadProbe();
-
-/** SEAM for `0x10273070`, the probe's clean-trace tail: restore the normal hull from the navigator,
- *  clear `+0x5f2d`, and re-run `0x10272f40` when `+0x36c` (the physics object) stands. The hull
- *  restore is the navigator's; the two observable halves — the latch clear and the shadow rebuild —
- *  are performed. */
-void RestoreNormalHull();
-
-/** SEAM for `CAI_Navigator`'s hull bounds (`0x102d6100` mins / `0x102d6120` maxs, and the SMALL
- *  hull's `0x102d6140` / `0x102d6160`). No navigator stands here, so both answer the entity's own
- *  collision bounds and say so. SOURCE units, as every retail hull word is. */
-FVector HullMinsUnits(bool bSmall) const;
-FVector HullMaxsUnits(bool bSmall) const;
 
 // --- `CNPC_VCameraSecurity` (slots 201 and 363) --------------------------------------------------
 
@@ -282,14 +158,6 @@ bool SecCameraInViewCone(const FElysiumEntity* Camera, const FElysiumEntity* Tar
 // step 4): 17000..17005 outright, every other type falling through into the Troika body.
 
 // --- `CNPC_VScurrying` ---------------------------------------------------------------------------
-
-/** SEAM for `0x102edae0(navigator, threat, fleeDistance, 30000.0, &out)` -- the navigator's node
- *  search `0x103008f0` / `0x10300b50` around the threat, which takes the caller's flee distance and
- *  the constant 30000.0 (a recursive node walk that ends on a node `CanStandAt` accepts), then the
- *  node's position (`0x102ee9c0`). Not "the nearest node within 30000" (story 5 step 4r). No AI
- *  network stands here; answers false, which is the march arm's failure branch. */
-bool NearestNavigatorNode(const FVector& ThreatCm, float FleeDistanceUnits, float SearchLimitUnits,
-	FVector& OutNodeCm) const;
 
 /** SEAM for `CAI_BaseNPCTroika::IsAreaClear(pos, mask, 0, 0)` — the jitter arm's acceptance test.
  *  This runtime has no hull sweep; answers true, which admits the jittered point, and the march arm

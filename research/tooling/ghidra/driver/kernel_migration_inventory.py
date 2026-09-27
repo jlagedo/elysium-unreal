@@ -69,6 +69,10 @@ class Definition:
     cited_addresses: list[str]
 
 
+# The generated slot surface: one file before story 5 step 5, one per layer after it.
+GENERATED_SLOT_CPP = ('ElysiumNpcKernelSlots.cpp', 'ElysiumNpcBaseSlots.cpp', 'ElysiumNpcSlots.cpp')
+
+
 def definitions(text: str, path: str) -> list[Definition]:
     mask = mask_cpp(text)
     includes = re.findall(r'^#include\s+"([^"]+)"', text, re.M)
@@ -94,7 +98,7 @@ def definitions(text: str, path: str) -> list[Definition]:
                 else:
                     break
             prefix_text = '\n'.join(reversed(prefix))
-            if path.endswith('ElysiumNpcKernelSlots.cpp'):
+            if path.endswith(GENERATED_SLOT_CPP):
                 slot_headers = list(re.finditer(r'// slot \d+ 0x(10[0-9a-f]{6})', prefix_text))
                 lead = slot_headers[-1] if slot_headers else None
             else:
@@ -347,8 +351,10 @@ def build(root: Path) -> dict:
             'outside_census_layout': [r for r in layout if r['table'] == 'CAI_BaseActor'
                                      and not any(c in r['member'] for c in '.[') and '+' not in r['member']],
             'summary': {'definitions': len(defs), 'bodies': len(bodies), 'fields': len(fields),
-                        'generated_slot_definitions': sum(d.path.endswith('ElysiumNpcKernelSlots.cpp') for d in defs),
-                        'generated_slot_stubs': sum(d.path.endswith('ElysiumNpcKernelSlots.cpp') and 'FireKernelSlot' in d.calls for d in defs),
+                        'generated_slot_definitions': sum(d.path.endswith(GENERATED_SLOT_CPP) for d in defs),
+                        'generated_slot_stubs': sum(d.path.endswith(GENERATED_SLOT_CPP)
+                                                    and {'FireKernelSlot', 'FireKernelBaseSlot'} & set(d.calls)
+                                                    for d in defs),
                         'base_fields': sum(f['declaring_class'] == 'CAI_BaseNPC' for f in fields),
                         'troika_fields': sum(f['declaring_class'] == 'CAI_BaseNPCTroika' for f in fields),
                         'live_species_fields': sum(f['declaring_class'] not in {'CAI_BaseNPC','CAI_BaseNPCTroika'} and clsmap[f['declaring_class']]['liveness']=='live' for f in fields),

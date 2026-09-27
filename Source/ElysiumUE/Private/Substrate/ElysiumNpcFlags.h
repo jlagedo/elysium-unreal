@@ -271,7 +271,7 @@ public:
 	// Bit readers recovered so far: `0x08` forces PVS and LOS true in `SetPlayerLOS` (`0x10291610`,
 	// so an alert, combat or scripted body is never throttled by distance); `0x10` admits
 	// `HEAR_FLINCH` and `0x20` the two attack levels in `CacheInterruptConditions`. The byte is a
-	// pure function of the state, so it is derived rather than stored (`FElysiumNpc::NpcStateFlags`).
+	// pure function of the state, so it is derived rather than stored (`FElysiumNpcBase::NpcStateFlags`).
 	static constexpr uint8 StateAlwaysInPlayerView = 0x08;
 	static constexpr uint8 StateAdmitsHearFlinch = 0x10;
 	static constexpr uint8 StateAdmitsAttackLevels = 0x20;

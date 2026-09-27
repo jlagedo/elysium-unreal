@@ -29,7 +29,7 @@ ActivityNumber	field	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpcBase	base	5d
 AddDoorBlockFlags	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	100f0e90	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AddExtraAnimationModelsPlayerController	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AddListenerEntity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100f6d80	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-AddMultiDamage	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+AddMultiDamage	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 AddSceneEventBase	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100b5e60	base	FElysiumNpcBase	base	5e	anchor
 AddScriptedExpression	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AddSelfToSquadMemory	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	10316720	-	FElysiumNpcBase	base	5e	reached by base ReconnectToSquad
@@ -53,9 +53,9 @@ AmbientNextActivityAt	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word
 AmbientOwner	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AmbientPhase	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 AmbientType	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-AmmoDefFlags	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	104276a0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-AmmoMaxCarry	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-AmmoTypeNameForIndex	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+AmmoDefFlags	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	104276a0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+AmmoMaxCarry	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+AmmoTypeNameForIndex	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 AndreiKillCount	field	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AngleVectorsForward	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	10139610	-	FElysiumNpcBase	base	5e	reached by base GetShootTarget
 AnimFormBit	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -72,7 +72,7 @@ ApplyResolvedTemplate	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:tr
 ApplyRetailHulls	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelClassLookup.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ApplyThrowImpulse	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ArmIgnoreCollisionExpiry	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	102c43b0	troika	FElysiumNpc	stay:troika body	-	
-ArmMoveAndShootOverlay	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102e8270	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ArmMoveAndShootOverlay	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102e8270	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ArmThinkAt	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseStartNPC
 ArmThinkNow	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 AsNpc	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -123,12 +123,12 @@ BaseNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.c
 BaseNpcUpdateOnRemove	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	1027ca30	base	FElysiumNpcBase	base	5e	anchor
 BaseOnLooked	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	1026a2c0	base	FElysiumNpcBase	base	5e	anchor
 BaseOnRestore	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	1027bf50	base	FElysiumNpcBase	rename:OnRestore	5e	the base's own body of the slot virtual; the Troika body calls it qualified
-BasePreSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	1026f590	base	FElysiumNpcBase	rename:PreSelectIdealState	5e	the base's own body of the slot virtual; the Troika body calls it qualified
+BasePreSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	1026f590	base	FElysiumNpcBase	base	5e	the base's retail-id body of slot 460/461; the slot's typed return (NPC_STATE) differs, so it keeps its name and the base's typed slot body wraps it (rename rule: a mismatch keeps the helper's name)
 BasePreSelectSchedule	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	1028a2a0	base	FElysiumNpcBase	rename:PreSelectSchedule	5e	the base's own body of the slot virtual; the Troika body calls it qualified
 BasePrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	1027bb50	base	FElysiumNpcBase	rename:Precache	5e	the base's own body of the slot virtual; the Troika body calls it qualified
 BaseSave	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	1027bc60	base	FElysiumNpcBase	rename:Save	5e	the base's own body of the slot virtual; the Troika body calls it qualified
 BaseSchedulingErrorName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	101a6660	base	FElysiumNpcBase	base	5e	anchor
-BaseSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	1026f660	base	FElysiumNpcBase	rename:SelectIdealState	5e	the base's own body of the slot virtual; the Troika body calls it qualified
+BaseSelectIdealState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	1026f660	base	FElysiumNpcBase	base	5e	the base's retail-id body of slot 460/461; the slot's typed return (NPC_STATE) differs, so it keeps its name and the base's typed slot body wraps it (rename rule: a mismatch keeps the helper's name)
 BaseSetActivity	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	102725d0	base	FElysiumNpcBase	rename:SetActivity	5e	the base's own body of the slot virtual; the Troika body calls it qualified
 BaseShouldPlayFloatSound	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	1027a530	base	FElysiumNpcBase	rename:ShouldPlayFloatSound	5e	the base's own body of the slot virtual; the Troika body calls it qualified
 BaseShouldPlayIdleSound	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	1027a420	base	FElysiumNpcBase	rename:ShouldPlayIdleSound	5e	the base's own body of the slot virtual; the Troika body calls it qualified
@@ -169,7 +169,7 @@ BuildLocalRouteWaypoints	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpc	sta
 BuildScheduleTestBits	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 BuildVPhysicsShadow	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	10272f40	base	FElysiumNpcBase	base	5e	anchor
 BulletSpreadOffset	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10268170	base	FElysiumNpcBase	base	5e	anchor
-BulletTracerCalls	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+BulletTracerCalls	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 BurstFireCount	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 BurstShootPauseMax	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 BurstShootPauseMin	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
@@ -210,10 +210,10 @@ ChaseLeadPosition	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions
 ChaseLeadTolerance	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CheckOnGround	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	1026e5e0	base	FElysiumNpcBase	base	5e	anchor
 CheckOnGroundTime	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
-CineAllowsDynamicInteraction	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+CineAllowsDynamicInteraction	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 CineCanInterrupt	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	101a8930	-	FElysiumNpcBase	base	5e	anchor
 CineDelayState	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-CineIgnoredConditionsPartner	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	101a8930	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+CineIgnoredConditionsPartner	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	101a8930	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 CineIsInterruptable	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	reached by base CineCanInterrupt
 CineIsTimeToStart	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CineSpawn	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -227,7 +227,7 @@ ClampTargetLeadRatio	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTr
 ClassScheduleIdSpace	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	101aa790	troika	FElysiumNpc	pair:ClassScheduleIdSpace	5e	slot 580: base 0x101a6d00 (BaseClassScheduleIdSpace), Troika 0x101aa790
 ClassifyIsNonZero	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ClassifyKeyValue	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	1009e430	base	FElysiumNpcBase	base	5e	anchor
-ClearCineIgnoredConditions	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ClearCineIgnoredConditions	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ClearConditions	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ClearDebugRingDumpRequest	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10_2.cpp	10292500	troika	FElysiumNpc	stay:troika body	-	
 ClearDoorBlockFlags	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	100f0e70	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -246,9 +246,9 @@ ClosestNpcCandidateRefused	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKern
 ClosestNpcPerception	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ClosestNpcSense	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain2.cpp	10182a90	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ClosestNpcSenseScalar	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	10739d08	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-ClosureRefusals	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ClosureRefusals	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 Cognition	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSelectIdealState
-CollisionGroup	field	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+CollisionGroup	field	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 CollisionMask	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 CollisionObbExtentsUnits	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseDrawDebugGeometryOverlays
 CombatCharacterExpressionEventParams	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	10014ba0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -258,7 +258,7 @@ CommitDeath	method	ElysiumNpc.h	ElysiumNpc.cpp	103392c0	base	FElysiumNpcBase	bas
 CommitForcedSequence	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10260a50	-	FElysiumNpcBase	base	5e	reached by base SetActivityAndSequence
 CommitIdealStateForSchedule	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CompleteDeathHandoff	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpcBase	base	5e	reached by base CommitDeath
-ComponentFactoryRefusals	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ComponentFactoryRefusals	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ComponentFactoryRows	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	10312cd0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ComputeHitboxSurroundingBox	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ComputeKnockbackVelocity	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	102a0290,102a0296	troika	FElysiumNpc	stay:troika body	-	
@@ -266,7 +266,7 @@ ComputeTargetLeadPoint	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernel
 CondHitByDoor	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 ConditionDebugList	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	1028da19	troika	FElysiumNpc	stay:troika body	-	
 ConditionIdSpace	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-ConditionIdSpaceRows	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea090	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ConditionIdSpaceRows	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea090	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ConnectedSquad	method	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	reached by base ReconnectToSquad
 ConsumeBlockedDoorForSchedule	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ConsumeChooseNewSchedule	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -295,15 +295,15 @@ CriminalWitnessByte6361	field	ElysiumNpcKernelSenses.inl	-	-	-	FElysiumNpc	stay:
 CrosswalkLinkSignalFlags	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CrosswalkNodeQueries	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CrosswalkPhaseMask	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	102a0bc0	troika	FElysiumNpc	stay:troika body	-	
-CurFrenzyCount	field	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+CurFrenzyCount	field	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 CurrentAmbientSpot	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 CurrentHintPointer	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-CurrentRetailActivityId	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+CurrentRetailActivityId	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 CurrentRetailTaskNumber	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	1028a150	base	FElysiumNpcBase	base	5e	anchor
 CurrentSpotIndex	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 DamageFilters	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DeathPerformanceEndsAt	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5d	reached by base IsDeathPerformanceFinished
-DeathThrowImpulse	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+DeathThrowImpulse	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 DebugLogRingAdvance	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1027ef20	base	FElysiumNpcBase	base	5e	anchor
 DebugMaskLadder	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	1028dac6	troika	FElysiumNpc	stay:troika body	-	
 DebugOverlayBits	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	-	-	FElysiumNpcBase	base	5e	reached by base DrawPathfinderDebugOverlays
@@ -341,7 +341,7 @@ DialogUserMessages	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:tro
 Dialogue	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DialogueBodyOwner	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DialogueSoundDirectory	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	10298ad0	troika	FElysiumNpc	stay:troika body	-	
-DisableMoveAndShootOverlay	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102e8250	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+DisableMoveAndShootOverlay	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102e8250	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 DisallowsKnockbacks	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DisciplineCastCounter	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base StandoffVfunc3
 DisciplineFlags	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -349,9 +349,9 @@ DisciplineFlags2	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:tr
 DisciplinePreFlags	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DisciplinePreFlags2	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DisciplineReadyFlag	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-DisciplineTableCooldown	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-DisciplineTableFind	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-DisciplineTimer	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+DisciplineTableCooldown	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+DisciplineTableFind	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+DisciplineTimer	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 DisconnectFromSquad	method	ElysiumNpc.h	ElysiumNpc.cpp	1026d050	base	FElysiumNpcBase	base	5e	anchor
 DispatchVictimHitReaction	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 DispositionDefaultEyeTarget	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	100eccf0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -377,15 +377,15 @@ EHintRejectReason	type	ElysiumNpcKernelBaseHelpers.inl	-	-	-	FElysiumNpc	stay:tr
 EHintTypeArm	type	ElysiumNpcKernelHints10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EKeyValueArm	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base ClassifyKeyValue
 EMeleeSlotLine	type	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-EMoveDirectionCode	type	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+EMoveDirectionCode	type	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 EObstructingDoorResult	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base OnObstructingDoorBase
-EPrecacheChannel	type	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+EPrecacheChannel	type	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpcBase	base	5e	the precache seam the base Precache 0x1027bb50 issues through (UTIL_PrecacheOther); the record is shared by the Troika's precaches
 EResolveActivityRung	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base ResolveActivityToSequence
 ESaveStampMode	type	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSave
 ETweakParamKey	type	ElysiumNpcKernelSocial10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EVocalization	type	ElysiumNpcKernelSounds.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EffectsWord	field	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-EmitBulletTracer	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+EmitBulletTracer	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 EmitConditionDump	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1029d4e0	troika	FElysiumNpc	stay:troika body	-	
 EmitDebugMsg	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	10119750	-	FElysiumNpcBase	base	5e	reached by base BaseDrawDebugStatOverlays
 EmitDevMsg	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	-	FElysiumNpcBase	base	5e	reached by base DumpDebugLogRing
@@ -414,12 +414,12 @@ EnergyBallSpawnPoint	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.c
 EnsureStanceResolved	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EnterAlternateAi	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	10298800	troika	FElysiumNpc	stay:troika body	-	
 EnterGrappleState	method	ElysiumNpc.h	ElysiumNpc.cpp	102b5c00	troika	FElysiumNpc	stay:troika body	-	
-EntityDelay	field	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+EntityDelay	field	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 EntityDrawBBoxOverlay	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EntityDrawDebugGeometryOverlays	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	10275760	base	FElysiumNpcBase	base	5e	anchor
 EntityDrawDebugTextOverlays	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseDrawDebugTextOverlays
 EntityListeners	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-EntityOfEdict	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+EntityOfEdict	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 EntityUnselectable	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EntityWord0x200	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 EvalNewscasterDependency	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	1000134d	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -435,14 +435,14 @@ EyeToEyeBlocker	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10_2.cpp
 FActivityChangeNotice	type	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetActivityAndSequence
 FAiExtendedSaveHeader	type	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSave
 FAnimOverlayLayer	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetOverlayLayer
-FBestEnemyState	type	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FBestEnemyState	type	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FBlacklistedEntity	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FBulletTracerCall	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FBulletTracerCall	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FBurnHitboxCall	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FCanCheckAttacksBase	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	10270840	base	FElysiumNpcBase	base	5e	anchor
 FCineSpawnState	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FCineUnhideRecord	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FClosureRefusals	type	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FClosureRefusals	type	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base field uses; moves with it (field_types rule)
 FComponentFactory	type	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FControllerAiEvent	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FCreateEntityCall	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -452,11 +452,11 @@ FDialogPcLine	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika
 FDialogPedWaypoint	type	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FDialogResponsePage	type	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FDoorBlockWrite	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FElysiumFireBulletsInfo	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FElysiumFireBulletsInfo	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FElysiumMeleeDiceRollResult	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FElysiumNpc	method	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	reached by base BasePreSelectIdealState
-FElysiumTakeDamageInfo	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FElysiumTraceHit	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FElysiumNpc	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	the constructor (a scanner artifact, not a base-reached method); it sets the inherited bWillTalk and stays on FElysiumNpc
+FElysiumTakeDamageInfo	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
+FElysiumTraceHit	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FEmitterCall	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FEnemySightCandidates	type	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FEntityListenerVector	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -466,17 +466,17 @@ FFacingQueueEntry	type	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpcBase	b
 FFacingTargetRequest	type	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5d	the type of a base field (TroikaMotor / FacingTargetRequests)
 FFakeHullSeamLedger	type	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FFireBulletsInfo	type	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FFireBulletsTrace	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FFireBulletsTrace	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FFlapActivity	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FFlinchRecord	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FFlinchRecord	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FGargoylePillarHit	type	ElysiumNpcKernelSpeciesLifecycle10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FHasPathQuery	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FHideAndUnsolidifyCall	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FHintRestoreResult	type	ElysiumNpcKernelHints.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base HintOnRestore
 FHintWords	type	ElysiumNpcKernelBaseHelpers.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base IsHintUnusable
-FJumpTunableSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FJumpTunableSpecies	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FKernelHullTrace	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base InnateWeaponLosTrace
-FKernelIdSpace	type	ElysiumNpcKernelDebug.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FKernelIdSpace	type	ElysiumNpcKernelDebug.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FLocalMoveGoal	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base MoveGroundExecute
 FManBatStationaryWatch	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FMatchOriginAnglesCall	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -486,21 +486,21 @@ FMotor10SeamLedger	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5
 FMotorMoveTrace	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base MotorMoveGroundStep
 FMotorSeamLedger	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5d	the type of a base field
 FMoveAndShootOverlay	type	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpcBase	base	5d	the type of a base field
-FMoveRebound	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FMoveRebound	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FNamedWavEmit	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FNavMoveInfo	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base NavigatorMoveNormal
 FNavPathSample	type	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base FUN_102eee40
 FNavigator	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5d	the type of a base field
 FNearMissReaction	type	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FNetworkChangeState	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FNetworkChangeState	type	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base field uses; moves with it (field_types rule)
 FNewscasterStory	type	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FPhysicsTraceEntityCall	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FPickupSpecies	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FPoseParameterWrite	type	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FPrecacheOp	type	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FPoseParameterWrite	type	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+FPrecacheOp	type	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpcBase	base	5e	the precache seam the base Precache 0x1027bb50 issues through (UTIL_PrecacheOther); the record is shared by the Troika's precaches
 FPrecacheRequest	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FPushEntityCall	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FRangedDamagePerVictimCall	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FRangedDamagePerVictimCall	type	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FRetailYawConVar	type	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FSaveArchiveOp	type	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SaveWriteFields
 FSceneEventRecord	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base AddSceneEventBase
@@ -510,22 +510,22 @@ FScheduleLoadFlag	type	ElysiumNpcKernelSchedule.inl	-	-	-	FElysiumNpc	stay:troik
 FScreenShakeCall	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FScriptedExpressionRequest	type	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FSlowEntityCall	type	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FSpawnBloodCall	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FSpawnBloodCall	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FSpeciesBlacklistEntry	type	ElysiumNpcKernelConditions10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FSpeciesSlotRow	type	ElysiumNpcKernelSpecies.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FSquadSlotSpecies	type	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FSquadSlotSpecies	type	ElysiumNpcKernelSquad.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FStandingOnHeadStep	type	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FStandoffAimWords	type	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FStandoffConditions	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FStandoffGoalWords	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FStandoffWords	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FStandoffAimWords	type	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
+FStandoffConditions	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
+FStandoffGoalWords	type	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
+FStandoffWords	type	ElysiumNpcKernelLifecycle.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FTeleportEmitterPlacement	type	ElysiumNpcKernelBosses.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FTeleportNodePick	type	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FTookLifeSpecies	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FTraceBleedPass	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FTraceBleedPass	type	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	a type a base body uses; moves with it (field_types rule)
 FTroikaMotorSeams	type	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpcBase	base	5d	the type of a base field (TroikaMotor / FacingTargetRequests)
 FTurnActivityPick	type	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base TurnActivityBaseLadder
-FTypedStatWrite	type	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FTypedStatWrite	type	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FUN_10178120	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	10178120	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FUN_1027e0f0	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	1027e0f0,10290570	mixed	FElysiumNpcBase	collapse:Slot532	5e	a second port body of 0x1027e0f0 (BaseSlot532 is the one Slot532 calls); its test moves to the base's Slot532
 FUN_1028ebc0	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	1028ebc0,103268e0	troika	FElysiumNpc	stay:troika body	-	
@@ -571,9 +571,9 @@ FaceSavePosition	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	
 FaceYawDiff	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FacingIdeal	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	10278c80	base	FElysiumNpcBase	base	5e	anchor
 FacingTargetRequests	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base MotorAddFacingTarget
-FacingTargetsEnabled	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	10924f74	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FacingTargetsEnabled	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	10924f74	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FailedSpotIndices	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FaithPointsMaximum	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	10200370	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FaithPointsMaximum	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	10200370	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FakeReloadCount	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FarSightDistLookUnits	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseNPCInit
 FarSightDistTooFar	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseNPCInit
@@ -592,7 +592,7 @@ FindHintNode	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FEly
 FindHintOfTypeNear	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102d24b0	base	FElysiumNpcBase	base	5e	anchor
 FindInterestingPlaceHoldingMe	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	102db5e0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FindKickPhysicsProp	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	102b6650	troika	FElysiumNpc	stay:troika body	-	
-FindOrCreateSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	10315800	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FindOrCreateSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	10315800	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FindPatrolPoint	method	ElysiumNpc.h	ElysiumNpc.cpp	102d2840	base	FElysiumNpcBase	base	5e	anchor
 FindShootAtHintNode	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	102b6b50	troika	FElysiumNpc	stay:troika body	-	
 FindTacticalHintNode	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	102b7110	troika	FElysiumNpc	stay:troika body	-	
@@ -601,21 +601,21 @@ FinishAmbientUse	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	
 FinishTalking	method	ElysiumNpcKernelSocial10.inl	ElysiumNpcKernelSocial10.cpp	102c0ca0,102c0d0c	troika	FElysiumNpc	stay:troika body	-	
 FinishingMoveBoneTrackLastPos	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FinishingMoveBoneTrackLastTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
-FireBulletsFilterWord	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FireBulletsShooterIsNpc	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10268900	base	FElysiumNpcBase	base	5e	anchor
+FireBulletsFilterWord	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+FireBulletsShooterIsNpc	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10268900	base	FElysiumNpcBase	collapse:AsNpc	5e	the +0x98 stand-in; FireBullets tests AsNpc() directly (story 5 step 5)
 FireBulletsShooterIsPlayer	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BulletSpreadOffset
-FireBulletsTracePass	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FireBulletsTraces	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FireBulletsTracePass	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+FireBulletsTraces	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FireGlobalActsOutput	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FirstGestureLayerOrRefusal	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	10098a40	base	FElysiumNpcBase	base	5e	anchor
-FirstRefusedComponentSlot	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FirstRefusedComponentSlot	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FixScriptNPCSchedule	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FixScriptNpcSchedule	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 FleshpileAndreiSingleton	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-FlexControllerName	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FlexControllerName	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FlexControllerRange	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100b5ba0	base	FElysiumNpcBase	base	5e	anchor
-FlexWeight	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-Flinch	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+FlexWeight	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+Flinch	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 FloatSoundAttenuation	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10294f9f	troika	FElysiumNpc	stay:troika body	-	
 FloatSoundFrequency	field	ElysiumNpcKernelSounds.inl	-	-	-	FElysiumCombatCharacter	chain:FElysiumCombatCharacter	5d	CBaseCombatCharacter +0x10e8/+0x10ec (field-decisions.tsv, step 5): the base's float-sound body reads them without Troika storage
 FloatSoundMinDelaySeconds	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	1029502c	troika	FElysiumNpc	stay:troika body	-	
@@ -630,7 +630,7 @@ FollowerDistanceRunTo	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word
 FollowerDistanceWalkTo	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FollowerType	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FootstepTemplate	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-ForceBone	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ForceBone	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ForceScheduleChange	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	102ae490	troika	FElysiumNpc	stay:troika body	-	
 ForcedNpcState	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	102ae840	troika	FElysiumNpc	stay:troika body	-	
 FormBit	method	ElysiumNpcKernelMisc.inl	ElysiumNpcKernelMisc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -652,11 +652,11 @@ FrenzyShadowWeaponFlagOrs	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNp
 FriendPlayer	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 FullInvestigate	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 GameRulesAllowAutoTargetCrosshair	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GameRulesAllowsAmmo	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+GameRulesAllowsAmmo	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 GameRulesAllowsAutoAimAt	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 GameRulesAutoAimEnabled	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 GatherHintNodes	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GatherPassNow	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+GatherPassNow	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 GazeEnemy	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 GazeHeardSound	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 GazeNavigationGoal	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -679,11 +679,11 @@ GetShootTarget	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	10
 GetTarget	method	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	reached by base BuildExtendedSaveHeader
 GetTemplateDamageFilter	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 GiveNamedFightingItem	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	1021fe50	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GlobalConditionName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea020	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+GlobalConditionName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea020	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 GlobalHintList	method	ElysiumNpcKernelHints10.inl	ElysiumNpcKernelHints10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GlobalSquadSlotName	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	102ea020	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GlobalTaskName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	10316ff0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-GlobalToLocalId	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	102ea280	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+GlobalSquadSlotName	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	102ea020	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+GlobalTaskName	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	10316ff0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+GlobalToLocalId	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	102ea280	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 GoalEntityInputActivate	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	102cd650	base	FElysiumNpcBase	base	5e	anchor
 GoalEntityInputDeactivate	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	102cdb70	base	FElysiumNpcBase	base	5e	anchor
 GrappleBurnDischarges	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -694,7 +694,7 @@ HardThinkDeadline	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika
 HasDialogSuppressFlag	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 HasLiveDialogPartner	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 HasMaintenanceCondition	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-HasNoTargetFlag	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+HasNoTargetFlag	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 HasNonDefaultVelocity	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	10027370	base	FElysiumNpcBase	base	5e	anchor
 HasPlayerControllerObject	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 HasStudioModel	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -726,7 +726,7 @@ HintStandPosition	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroik
 HintWords	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpcBase	base	5e	reached by base IsHintUnusable
 HintYaw	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base StandoffTranslateActivity
 HitBuildupConVarValue	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-HitGroupDamageScaleCvar	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+HitGroupDamageScaleCvar	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 HitboxSetCount	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 HullKind	field	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base DrawEnemyMemoryOverlays
 HullMaxsUnits	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BuildVPhysicsShadow
@@ -741,7 +741,7 @@ HuntPatrolTarget	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-
 IRelationPriorityOf	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	10333700	base	FElysiumNpcBase	base	5e	anchor
 IRelationTypeOf	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	10299da0	troika	FElysiumNpc	stay:troika body	-	
 IdSpace	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	reached by base ResolveScheduleId
-IdSpaceLocalToGlobal	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea2d0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IdSpaceLocalToGlobal	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	102ea2d0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 IdealActivityNumber	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSetActivity
 IdealHintSearchRangeUnits	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IdealSequence	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
@@ -754,7 +754,7 @@ IgnoreCollisionEntity	field	ElysiumNpcKernelMotor.inl	-	-	-	FElysiumNpcBase	base
 IgnoreCollisionSharedHead	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	1029afc0	troika	FElysiumNpc	stay:troika body	-	
 IgnoreCollisionUntil	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 InNpcInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-InitSquadLine	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+InitSquadLine	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 InitialAngles	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 InitialPosition	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 InnateWeaponLosTrace	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base HeadProbe
@@ -787,9 +787,9 @@ IsAiStepMode	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cp
 IsAiThinkDue	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	10290700	troika	FElysiumNpc	stay:troika body	-	
 IsAreaClear	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp,ElysiumNpcKernelSenses10_2.cpp	102a0fb0	troika	FElysiumNpc	stay:troika body	-	
 IsBaseNpcTroika	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseDrawDebugGeometryOverlays
-IsBccTargetable	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	1029a4a2	troika	FElysiumNpc	stay:troika body	-	
+IsBccTargetable	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	1029a4a2	troika	FElysiumNpcBase	base	5e	reads the candidate's m_bIsBCCTargetable (+0x1480, CBaseCombatCharacter) through its port carrier; reached by base BestEnemy 0x102743c0 (step 6 relocates the word up the chain)
 IsBodyVisible	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-IsBusyWithDiscipline	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IsBusyWithDiscipline	method	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 IsDeathPerformanceFinished	method	ElysiumNpc.h	ElysiumNpc.cpp	10272900	base	FElysiumNpcBase	base	5e	anchor
 IsFeedBusy	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsFemaleBody	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BuildVPhysicsShadow
@@ -801,10 +801,10 @@ IsHintDebugNpc	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelper
 IsHintSequenceFinished	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsHintUnusable	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102d14c0	base	FElysiumNpcBase	base	5e	anchor
 IsHintViewable	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	102d1320	base	FElysiumNpcBase	base	5e	anchor
-IsIdealActivityCurrent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IsIdealActivityCurrent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 IsIgnoreCollisionEntityTail	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	1008be20	base	FElysiumNpcBase	base	5e	anchor
 IsInDialog	method	ElysiumNpcKernelSocial10.inl	ElysiumNpcKernelSocial10.cpp	102c1170	troika	FElysiumNpc	stay:troika body	-	
-IsJumpLegalGeometry	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IsJumpLegalGeometry	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 IsKindred	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsNormalThinkDue	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	102906c0	troika	FElysiumNpc	stay:troika body	-	
 IsOblivious	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -813,7 +813,7 @@ IsRetailClass	method	ElysiumNpc.h	ElysiumNpcKernelClassLookup.cpp	-	-	FElysiumNp
 IsScriptDriven	method	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	reached by base TaskMovementComplete
 IsSpecialNavigation	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsSquadSlotOccupied	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpcBase	base	5e	reached by base VacateSquadSlot
-IsStandableSolid	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100b5110	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IsStandableSolid	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100b5110	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 IsTalking	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsUnconsciousMiscFlag	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	10341aa0	base	FElysiumNpcBase	base	5e	anchor
 IsUnusableNodeIndex	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	1027db30	base	FElysiumNpcBase	base	5e	anchor
@@ -821,12 +821,12 @@ IsUpdateThinkDue	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelp
 IsUsable	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 IsValidStealthKillTarget	method	ElysiumNpc.h	ElysiumNpc.cpp	102c2300	troika	FElysiumNpc	stay:troika body	-	
 IssuePatrolMove	method	ElysiumNpc.h	ElysiumNpc.cpp	102aa640,102aa860	troika	FElysiumNpc	stay:troika body	-	
-IssuePrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+IssuePrecache	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	-	-	FElysiumNpcBase	base	5e	the precache seam the base Precache 0x1027bb50 issues through (UTIL_PrecacheOther); the record is shared by the Troika's precaches
 JumpGravity	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 JumpHeight	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 JumpOrigin	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 JumpTarget	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
-JumpTunableSpeciesOf	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+JumpTunableSpeciesOf	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 JumpTunableSpeciesRows	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 KernelHullTrace	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	reached by base InnateWeaponLosTrace
 KillNamedEmitter	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -837,16 +837,16 @@ KnockbackWallHitFallTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika w
 LastAiThink	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	101a64a0	base	FElysiumNpc	stay:troika body	-	
 LastAttackTime	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 LastBlockedReactionActivity	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-LastComponentFactoryBody	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+LastComponentFactoryBody	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 LastFVisibleBlockerTarget	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LastFacing	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 LastFinishTalkingNotify	field	ElysiumNpcKernelSocial10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LastGrappleBurnHitbox	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-LastHitGroup	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+LastHitGroup	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 LastHullNotPrecached	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetHullSizeNormal
 LastIdealScheduleStamp	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base InstallScheduleRetail
 LastMeleeStepbackTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
-LastMeleeWeapon	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+LastMeleeWeapon	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 LastMoveThink	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	101a6480	base	FElysiumNpc	stay:troika body	-	
 LastNormalThink	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	101a6460	base	FElysiumNpc	stay:troika body	-	
 LastOnStateChangeNewRetail	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetState
@@ -872,7 +872,7 @@ LeaveInterestingPlaceOnRemove	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNp
 LevelCriminalAct	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	1017ddd0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LevelInvestigateAct	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	1017de60	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LevelSupernaturalAct	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	1017dd80	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-Lip	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+Lip	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 LoadedSchedulesRowOf	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LoadedSchedulesRows	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LocalPunchAngle	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -881,8 +881,8 @@ LocalScheduleIdForStart	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMa
 LocalVelocityCm	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LookupBoneByName	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 LookupExpressionIndex	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-LookupFlexController	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100b5d10	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-LookupPoseParameter	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+LookupFlexController	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100b5d10	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+LookupPoseParameter	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 LookupSequenceByName	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpcBase	base	5e	reached by base ResolveActivityToSequence
 LoudExpressionTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 MaintainActivity	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	102727d0	base	FElysiumNpc	stay:transitional	-	port probe bookkeeping around BaseMaintainActivity 0x102727d0; latch writers are Troika
@@ -942,26 +942,26 @@ MotorTaskComplete	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.c
 MotorTaskFail	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	1029adb0	troika	FElysiumNpc	stay:troika body	-	
 MotorVelocityUnits	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base MoveGroundExecute
 MotorYawHalfTurn	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseNPCInit
-MotorYawSpeed	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+MotorYawSpeed	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 MoveAndShootOverlay	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base RunTaskOverlay
 MoveAndShootRestoreFixups	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSave
 MoveAndShootSaveFixups	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSave
-MoveDistance	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+MoveDistance	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 MoveGoal	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 MoveGroundExecute	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	102e14a0	base	FElysiumNpcBase	base	5e	anchor
 MoveProbeCheckStandPosition	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 MoveProbeFloorDrop	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	102e7880	-	FElysiumNpcBase	base	5e	reached by base BaseStartNPC
 MoveReboundBlend	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	101c10d0	base	FElysiumNpcBase	base	5e	anchor
-MoveReboundState	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+MoveReboundState	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 MoveToBoneOriginAngles	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-MultiDamageAccumulator	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+MultiDamageAccumulator	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 MySquadSlot	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 NamedWavEmits	field	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NavAllHintNodes	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NavCurrentLinkActivity	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base NavigatorMoveNormal
 NavDebugPair	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	1028db6b	troika	FElysiumNpc	stay:troika body	-	
 NavGetType	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	reached by base NavigatorMoveGate
-NavGoalPosition	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+NavGoalPosition	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 NavGoalState	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpcBase	base	5e	reached by base GetNavTargetEntity
 NavHintNodeOrigin	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NavHintNodeType	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1004,7 +1004,7 @@ NavigatorWord0x60	field	ElysiumNpcKernelTroikaHelpers.inl	-	-	-	FElysiumNpcBase	
 NearMissBands	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NearMissReactions	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NearestNavigatorNode	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10_2.cpp	102edae0	base	FElysiumNpcBase	base	5e	anchor
-NetworkChangeState	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+NetworkChangeState	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 NeverThinkSentinel	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NewscasterPlayerPresent	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	101cd9e0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NextAttackTime	field	ElysiumNpcKernelConditions.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1020,9 +1020,9 @@ NextWeaponSearchTime	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 NoDeformExpression	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 NodeGraphHullIndex	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NodeIndexErrorCount	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-NormalizePoseParameter	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100c43e0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+NormalizePoseParameter	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	100c43e0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 NotifyScatterCenter	method	ElysiumNpcKernelGeometry.inl	ElysiumNpcKernelGeometry.cpp	10269a20	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-NotifyWeaponDropped	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+NotifyWeaponDropped	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 NpcBody	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NpcFlags	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5d	reached by base BasePreSelectIdealState
 NpcInitAddFlags	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseNPCInit
@@ -1037,9 +1037,9 @@ NpcStateFlags	method	ElysiumNpc.h	ElysiumNpc.cpp	1026e3e0	base	FElysiumNpcBase	b
 NpcStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	-	FElysiumNpcBase	base	5e	reached by base SetState
 NpcStep	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 NthHintOfType	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-NumFlexControllers	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10012530	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-NumFlexWeightSlots	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-NumFlinchRecords	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+NumFlexControllers	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10012530	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+NumFlexWeightSlots	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+NumFlinchRecords	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 NumPatrolPointsForDebug	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ObfuscateActLevel	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	1017ddd0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 OccludedDelay	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
@@ -1103,9 +1103,9 @@ PercentOccludedWait	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-
 PercentOccludedWalk	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 PerceptionRecomputes	field	ElysiumNpcKernelSocial10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PerformMovement	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	1026c120	base	FElysiumNpcBase	base	5e	anchor
-PhysicsObjectIsStandable	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100b5110	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PhysicsObjectIsStandable	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100b5110	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PhysicsObjectPosition	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100b4f30	base	FElysiumNpcBase	base	5e	anchor
-PhysicsUpdateCalls	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PhysicsUpdateCalls	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PlCriminalAttack	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 PlCriminalFlee	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 PlInvestigate	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
@@ -1115,7 +1115,7 @@ PlayActivity	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	po
 PlayAmbientActivity	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayDeathActivity	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayHintIdleActivity	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102aaa60	troika	FElysiumNpc	stay:troika body	-	
-PlayInstancedScene	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10084b40	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PlayInstancedScene	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10084b40	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PlayReaction	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayerAnimEndTime	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayerAnimFallbackDuration	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1123,38 +1123,38 @@ PlayerAnimFlags	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:tro
 PlayerAnimLeadIn	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayerAnimNameBuffer	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayerControllerNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PlayerControllerOf	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PlayerControllerOf	method	ElysiumNpcKernelLifecycle.inl	ElysiumNpcKernelLifecycle.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PlayerCopsInPursuitCount	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1017f770	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PlayerHeightenedAlert	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1017f8d0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PlayerInLineOfFire	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	10266b10	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PlayerInLineOfFire	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	10266b10	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PlayerInventorySlot0	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10.cpp	1015d680	base	FElysiumNpcBase	base	5e	anchor
 PlayerReaction	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 PoseParameter01	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1000108c	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PoseParameterWrites	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PostConstructorCalls	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PostConstructorName	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PoseParameterWrites	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+PostConstructorCalls	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+PostConstructorName	field	ElysiumNpcKernelSaveRestore10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PostRestorePathRefinds	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base RefindPostRestorePath
 PostRun	method	ElysiumNpcKernelMotor.inl	ElysiumNpcKernelMotor.cpp	1026c7c0	base	FElysiumNpcBase	base	5e	anchor
-PrayerActivityId	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PrayerActivityId	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PreOpenDoorActivity	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 PreSelectIdealStateRetail	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	102ad340	troika	FElysiumNpc	stay:troika body	-	
 PreTranslatePredicate	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PrecacheDirectory	method	ElysiumNpcKernelPrecache10.inl	ElysiumNpcKernelPrecache10.cpp	101d0f10	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PrecacheLog	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PrecacheLog	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpcBase	base	5e	the precache seam the base Precache 0x1027bb50 issues through (UTIL_PrecacheOther); the record is shared by the Troika's precaches
 PrepareBodyForDialogue	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PrepareScheduleReselect	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PrevAnimTime	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PrevAnimTime	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 PromoteCriminalWindowNpcs	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	102ae840	troika	FElysiumNpc	stay:troika body	-	
 PumpStateChange	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 PythonDialogCalls	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-PythonInteropObject	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+PythonInteropObject	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 QueuedBurnDamage	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 RagdollBonePosition	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RagdollElementForBone	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	1057fff0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RandomSeconds	method	ElysiumNpc.h	ElysiumNpc.cpp	10283dae	base	FElysiumNpcBase	base	5e	anchor
 RangeAttack1	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-RangedDamagePerVictim	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-RangedDamagePerVictimCalls	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+RangedDamagePerVictim	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+RangedDamagePerVictimCalls	field	ElysiumNpcKernelSounds10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 RangedDisciplineGate	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	101e3f50	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RangedGateConVarEnabled	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RangedReloadPrepCalls	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1163,7 +1163,7 @@ RecomputePerceptionDistances	method	ElysiumNpcKernelSocial10.inl	ElysiumNpcKerne
 ReconnectToSquad	method	ElysiumNpc.h	ElysiumNpc.cpp	10009601,1026d0c0	base	FElysiumNpcBase	base	5e	anchor
 RecordCriminalWitness	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	1028ea60	troika	FElysiumNpc	stay:troika body	-	
 RecordDetectedAttack	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	102bf560	troika	FElysiumNpc	stay:troika body	-	
-RecordScheduleEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+RecordScheduleEvent	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 RecordSupernaturalWitness	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	1028eb30	troika	FElysiumNpc	stay:troika body	-	
 RedirectDetectedAttacker	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers.cpp	102707d0	base	FElysiumNpcBase	base	5e	anchor
 RefindPostRestorePath	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	102ee1e0	base	FElysiumNpcBase	base	5e	anchor
@@ -1179,7 +1179,7 @@ ReleaseControllerNpc	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEnti
 ReleaseHintNode	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102d1420	base	FElysiumNpcBase	base	5e	anchor
 ReleaseMotorHintYaw	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102e1e20	base	FElysiumNpcBase	base	5e	anchor
 ReleaseProgramBody	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-ReleaseSceneEvent	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ReleaseSceneEvent	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ReleaseScheduleBody	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ReleaseScriptBody	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ReleaseScriptMove	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1191,15 +1191,15 @@ RememberScaredNpc	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityC
 RememberUnreachable	method	ElysiumNpcKernelBaseHelpers.inl	ElysiumNpcKernelBaseHelpers.cpp	10274080	base	FElysiumNpcBase	base	5e	anchor
 RemoveCopInPursuit	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	1017f6e0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RemoveExtraAnimationModelsPlayerController	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	103a4a60	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-RemoveFromSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	103158f0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+RemoveFromSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	103158f0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 RemoveListenerEntity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	100f6e40	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RemoveNamedEntity	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RemoveNamedFightingItem	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	1021fee0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RemovePhysAnimlink	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RemovedEntities	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-RenderMode	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+RenderMode	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ReplayDeferredScriptedOrder	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-RepointEnemyMemoryToSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	1029a930	troika	FElysiumNpc	stay:troika body	-	
+RepointEnemyMemoryToSquad	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	1029a930	troika	FElysiumNpcBase	base	5e	the m_pEnemies (+0x5d88, CAI_BaseNPC) ownership-move seam shared by Troika SetSquad 0x1029a930 and base slot 542 0x10273dd0
 ReportedStepSurfacesWithoutPool	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RequestClearSchedule	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RequestFleeDesiredState	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	10269d30	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1289,7 +1289,7 @@ RunConditionPass	method	ElysiumNpc.h	ElysiumNpc.cpp	1026f110	base	FElysiumNpc	st
 RunInterestingPlaceLoop	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102aa210	troika	FElysiumNpc	stay:troika body	-	
 RunPath	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RunPatrolPathTask	method	ElysiumNpc.h	ElysiumNpc.cpp	102a594d	troika	FElysiumNpc	stay:troika body	-	
-RunPrayerPulse	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	1033b673	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+RunPrayerPulse	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	1033b673	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 RunSpecialIdleActivity	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 RunTaskOverlay	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	10289c90	base	FElysiumNpcBase	base	5e	anchor
 RunThinkDebugPreExtra	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10_2.cpp	1028e030	troika	FElysiumNpc	stay:troika body	-	
@@ -1315,7 +1315,7 @@ ScaleWeaponBurstPause	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelCo
 ScatterNoticeCondition	field	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ScatterNoticeEvents	field	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SceneEntityForcesCutsceneLod	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SceneEventReleases	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SceneEventReleases	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SceneEvents	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base AddSceneEventBase
 SceneEventsAllocated	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base AddSceneEventBase
 SceneEventsGrowSize	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base AddSceneEventBase
@@ -1327,7 +1327,7 @@ ScheduleDone	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	po
 ScheduleHost	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika aggregate	-	Troika words; the 20 base words split to FElysiumNpcBase::BaseScheduleHost
 ScheduleIdSpaceOf	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ScheduleIdSpaceRows	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-ScheduleIdealActivity	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ScheduleIdealActivity	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ScheduleLocalToGlobal	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	102ea2d0	-	FElysiumNpcBase	base	5e	reached by base ResolveIdealScheduleStamp
 ScheduleMeleeReachGate	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	102a11d0	troika	FElysiumNpc	stay:troika body	-	
 ScheduleOwner	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1362,7 +1362,7 @@ SelectDoorObstructionSchedule	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc
 SelectHeaviestSequence	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseNPCInit
 SelectIdealStateDisciplineStripCalls	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSelectIdealState
 SelectIdealStateMotorResets	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSelectIdealState
-SelectIdealStateNonNpcParentFlagWrites	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BasePreSelectIdealState
+SelectIdealStateNonNpcParentFlagWrites	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	collapse:BasePreSelectIdealState	5e	the crash-guard counter of the move-parent arm; 0x1026f590 reads its own +0x98, so the arm and the counter are gone (retail correction base-pre-select-ideal-state)
 SelectIdealStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	102ad660	troika	FElysiumNpc	stay:troika body	-	
 SelectIdealStateScriptExitCalls	field	ElysiumNpcKernelState19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSelectIdealState
 SelectIdealStateSelector	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseSelectIdealState
@@ -1417,13 +1417,13 @@ SetIdealScheduleForMaintenance	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcK
 SetIgnoreCollisionExpiry	method	ElysiumNpcKernelConditions10.inl	ElysiumNpcKernelConditions10.cpp	102c43b0	troika	FElysiumNpc	stay:troika body	-	
 SetInterestingPlaceGroups	method	ElysiumNpc.h	ElysiumNpc.cpp	10298910	troika	FElysiumNpc	stay:troika body	-	
 SetJumpOriginAndTarget	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	102c4ad0	troika	FElysiumNpc	stay:troika body	-	
-SetLocalAngularVelocity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SetLocalVelocity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SetLocalAngularVelocity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+SetLocalVelocity	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SetMotorHintYaw	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	102e0a80	base	FElysiumNpcBase	base	5e	anchor
 SetNpcFlag	method	ElysiumNpc.h	ElysiumNpc.cpp	102a585d	troika	FElysiumNpc	stay:troika body	-	
 SetOverlayLayer	method	ElysiumNpcKernelAnim.inl	ElysiumNpcKernelAnim.cpp	10099020	base	FElysiumNpcBase	base	5e	anchor
 SetPlayerAnim	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain2.cpp	10182c40	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SetPoseParameterByName	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SetPoseParameterByName	method	ElysiumNpcKernelFacing.inl	ElysiumNpcKernelFacing.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SetPoseParameterPitch	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SetPoseParameterYaw	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SetRetailClassForTests	method	ElysiumNpcKernelSpecies.inl	ElysiumNpcKernelSpecies.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1436,7 +1436,7 @@ SetSquadFocus	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	10316
 SetState	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	1026e340	base	FElysiumNpcBase	base	5e	anchor
 SetTarget	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SetViewOffset	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base SetActivityAndSequence
-SetWeaponStackCount	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SetWeaponStackCount	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SharesSquadWith	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	102781a0	base	FElysiumNpcBase	base	5e	anchor
 ShootAtHintRearmMax	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ShootAtHintRearmMin	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1444,12 +1444,12 @@ ShootEnemyAimPoint	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.
 ShootTargetDelta	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ShootTargetFalloff	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	102c5570	troika	FElysiumNpc	stay:troika body	-	
 ShootTargetOverride	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
-ShooterRangedSkill	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	101cda50	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+ShooterRangedSkill	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	101cda50	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 ShortConditionNameTable	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	1027e7f0	base	FElysiumNpcBase	base	5e	anchor
 ShouldDisappearNow	method	ElysiumNpc.h	ElysiumNpc.cpp	10292de0	troika	FElysiumNpc	stay:troika body	-	
 ShouldDodgeRangedAttack	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10_2.cpp	102b7f46	troika	FElysiumNpc	stay:troika body	-	
 ShouldSelectIdealStateForMaintenance	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SizeCm	field	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SizeCm	field	ElysiumNpcKernelGeometry.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SlowEntityCalls	field	ElysiumNpcKernelSpeciesMisc10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SolidFlagsWord	field	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SolveThrowImpulse	method	ElysiumNpcKernelBosses.inl	ElysiumNpcKernelBosses.cpp	102c4cc0	troika	FElysiumNpc	stay:troika body	-	
@@ -1459,8 +1459,8 @@ SourceAbsVelocityUnits	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelComba
 SourceRawAttackValue	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SourceWeaponIdIsKnockbackFamily	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 Spawn	method	ElysiumNpc.h	ElysiumNpc.cpp	10298d30,102d0b60,102dbc80	mixed	FElysiumNpc	stay:troika body	-	
-SpawnBlood	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SpawnBloodCalls	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SpawnBlood	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+SpawnBloodCalls	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SpawnEquipLoadout	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SpawnEquipRequests	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SpawnFlagFarSight	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseNPCInit
@@ -1499,8 +1499,8 @@ SquadMembers	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	
 SquadName	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 SquadObjectName	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base BaseDrawDebugTextOverlays
 SquadPositionTaken	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SquadSlotLocalToGlobal	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	102ea2d0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-SquadSlotSpeciesOf	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+SquadSlotLocalToGlobal	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	102ea2d0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+SquadSlotSpeciesOf	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 SquadSlotSpeciesRows	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 SquadWord	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102709c0	base	FElysiumNpcBase	base	5e	anchor
 Stance	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
@@ -1549,7 +1549,7 @@ StatListSeeds	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troik
 StatTemplate	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 StepAwayFromSavePosition	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 StopDialogOnRemove	method	ElysiumNpcKernelSaveRestore10.inl	ElysiumNpcKernelSaveRestore10.cpp	102c0ca0	troika	FElysiumNpc	stay:troika body	-	
-StopMoving	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+StopMoving	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 StopMovingTask	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 StopScheduledMove	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernelTroikaHelpers2.cpp	102bf770	troika	FElysiumNpc	stay:troika body	-	
 SubState	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
@@ -1573,7 +1573,7 @@ TaskArgumentNeedsClear	method	ElysiumNpcKernelTroikaHelpers.inl	ElysiumNpcKernel
 TaskComplete	method	ElysiumNpcKernelSchedule.inl	ElysiumNpcKernelSchedule.cpp	102623c0,10273e80	base	FElysiumNpcBase	base	5e	anchor
 TaskFail	method	ElysiumNpc.h	ElysiumNpc.cpp	102623a0,10273fc0,1029adb0	mixed	FElysiumNpc	pair:TaskFail	5e	slot 448: Troika 0x1029adb0 ends in a direct call to base 0x10273fc0 (m_bShouldMove=0, +0x5c50=reason, SetCondition(0x5c)); the base half is split out
 TaskFailureReason	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-TaskIdSpaceRows	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	10316ff0	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+TaskIdSpaceRows	method	ElysiumNpcKernelDebug.inl	ElysiumNpcKernelDebug.cpp	10316ff0	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 TaskMovementComplete	method	ElysiumNpcKernelMaintain19.inl	ElysiumNpcKernelMaintain19.cpp	10273ec0	base	FElysiumNpcBase	base	5e	anchor
 TaskStarting	method	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TeleportForcedScheduleRetailId	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1607,8 +1607,8 @@ TookLifeSpeciesRows	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage2.cp
 TouchFunctionCalls	field	ElysiumNpcKernelSpeciesLifecycle10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BaseEntityTouch
 TouchSpecies	method	ElysiumNpcKernelSpeciesLifecycle10.inl	ElysiumNpcKernelSpeciesLifecycle10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TraceAimRay	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-TraceAttackEvadeCheck	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	10012783	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-TraceBleedPasses	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+TraceAttackEvadeCheck	method	ElysiumNpcKernelDamage.inl	ElysiumNpcKernelDamage.cpp	10012783	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+TraceBleedPasses	field	ElysiumNpcKernelDamage.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 TraceMessageFormat	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	1028d990	troika	FElysiumNpc	stay:troika body	-	
 TraceMessagesGoToRing	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TraceMoveClearanceAtYaw	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	102a1650	troika	FElysiumNpc	stay:troika body	-	
@@ -1662,12 +1662,12 @@ TweakParamPerceptionMin	field	ElysiumNpcKernelSocial10.inl	-	-	-	FElysiumNpc	sta
 TweakParamsIgnored	field	ElysiumNpcKernelSocial10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TypedStatAddBase	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TypedStatBase	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-TypedStatIncBase	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+TypedStatIncBase	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 TypedStatSet	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TypedStatSubBase	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 TypedStatValue	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	102012d0	base	FElysiumNpcBase	base	5e	anchor
 TypedStatValueOf	method	ElysiumNpcKernelSpeciesMisc10.inl	ElysiumNpcKernelSpeciesMisc10_2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-TypedStatWrites	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+TypedStatWrites	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 Unknown5b58	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 UnreachableEnts	field	ElysiumNpcKernelPositions.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base RememberUnreachable
 UnrecoveredChainCalls	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1678,13 +1678,13 @@ UpdateEnemyDistances	method	ElysiumNpc.h	ElysiumNpc.cpp	10292de0	troika	FElysium
 UpdateEnemyWentOccluded	method	ElysiumNpcKernelSenses.inl	ElysiumNpcKernelSenses.cpp	10270180	base	FElysiumNpcBase	base	5e	anchor
 UpdateIdealState	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 UpdatePedestrianInfo	method	ElysiumNpcKernelDialogue.inl	ElysiumNpcKernelDialogue.cpp	102a0d20	troika	FElysiumNpc	stay:troika body	-	
-UseActivator	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+UseActivator	field	ElysiumNpcKernelDialogue.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 UseEntityIndex	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-UtilRemoveCalls	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-UtilRemoveSelf	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+UtilRemoveCalls	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+UtilRemoveSelf	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 VPhysicsHullRebuilds	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetHullSizeSmall
 VPhysicsShadow	field	ElysiumNpcKernelSenses10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base BuildVPhysicsShadow
-VPhysicsUpdatePusher	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+VPhysicsUpdatePusher	method	ElysiumNpcKernelEntityChain.inl	ElysiumNpcKernelEntityChain.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 VSoundConceptId	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 VSoundGroupName	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 VSoundGroupRow	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1694,12 +1694,12 @@ VSoundTableIndex	field	ElysiumNpcKernelPrecache10.inl	-	-	-	FElysiumNpc	stay:tro
 VacateSquadSlot	method	ElysiumNpcKernelSquad.inl	ElysiumNpcKernelSquad.cpp	1028ae60	base	FElysiumNpcBase	base	5e	anchor
 ValidateHintCoverRange	method	ElysiumNpcKernelHints.inl	ElysiumNpcKernelHints.cpp	10296c40	troika	FElysiumNpc	stay:troika body	-	
 ValidateRestoredInterestingPlace	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19.cpp	10299a80	troika	FElysiumNpc	stay:troika body	-	
-VectorVectors	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10138a90	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+VectorVectors	method	ElysiumNpcKernelSounds10.inl	ElysiumNpcKernelSounds10.cpp	10138a90	-	FElysiumNpcBase	base	5e	Source's VectorVectors 0x10138a90 (mathlib), reached by base FireBullets
 VictimHitReactionDispatches	field	ElysiumNpcKernelMisc.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 ViewConeLengthForPlayer	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10_2.cpp	1029c9f0	troika	FElysiumNpc	stay:troika body	-	
 ViewConeThirdLength	method	ElysiumNpcKernelDebug10.inl	ElysiumNpcKernelDebug10_2.cpp	1029ca30	troika	FElysiumNpc	stay:troika body	-	
 ViewOffsetWrites	field	ElysiumNpcKernelAnim10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base SetViewOffset
-Viewtarget	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+Viewtarget	field	ElysiumNpcKernelFacing.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 VocalizationFor	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 Vocalizations	method	ElysiumNpcKernelSounds.inl	ElysiumNpcKernelSounds.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 WaitForMovement	method	ElysiumNpc.h	ElysiumNpc.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1711,18 +1711,18 @@ WeaponAmmoCap	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-
 WeaponAmmoFromWeaponData	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base RerollDroppedWeaponAmmo
 WeaponAmmoRerolls	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base RerollDroppedWeaponAmmo
 WeaponBlockedByFriendTimer	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
-WeaponCreateForDrop	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponDetach	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponDetaches	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponDropNotifies	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+WeaponCreateForDrop	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+WeaponDetach	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+WeaponDetaches	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+WeaponDropNotifies	field	ElysiumNpcKernelCombat10.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 WeaponFlagBlocksAttack	method	ElysiumNpcKernelConditions.inl	ElysiumNpcKernelConditions.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponIsDroppable	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponIsStackSplittable	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WeaponNeedsTransmitUpdate	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+WeaponIsDroppable	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+WeaponIsStackSplittable	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
+WeaponNeedsTransmitUpdate	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 WeaponOwnsThisType	method	ElysiumNpcKernelMotor10.inl	ElysiumNpcKernelMotor10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base StandoffTranslateActivity
 WeaponScareTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 WeaponSetActivity	method	ElysiumNpcKernelAnim10.inl	ElysiumNpcKernelAnim10.cpp	-	-	FElysiumNpcBase	base	5e	reached by base SetActivityAndSequence
-WeaponStackCount	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+WeaponStackCount	method	ElysiumNpcKernelCombat10.inl	ElysiumNpcKernelCombat10.cpp	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 WeaponThroughWallTime	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 WerewolfChaseToleranceConVar	method	ElysiumNpcKernelPositions.inl	ElysiumNpcKernelPositions2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 WerewolfHintFlags	field	ElysiumNpcKernelHints.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1732,7 +1732,7 @@ Witness	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base me
 WolfMorphActivity	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 WolfMorphNPCInit	method	ElysiumNpcKernelLifecycle19.inl	ElysiumNpcKernelLifecycle19_2.cpp	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 WolfMorphRetailState	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
-WorldSpaceCentreCacheCm	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+WorldSpaceCentreCacheCm	field	ElysiumNpcKernelClosure.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 WriteFVisibleBlocker	method	ElysiumNpcKernelSenses10.inl	ElysiumNpcKernelSenses10.cpp	102b4630	troika	FElysiumNpc	stay:troika body	-	
 WriteIdealStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	-	FElysiumNpcBase	base	5e	reached by base SetState
 WriteNpcStateRetail	method	ElysiumNpcKernelState19.inl	ElysiumNpcKernelState19.cpp	-	-	FElysiumNpcBase	base	5e	reached by base SetState
@@ -1744,7 +1744,7 @@ bAllowAlertLookaround	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word
 bAllowTurningAnims	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 bAmbientArrived	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 bCameFromSpawner	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
-bCantDropWeapons	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+bCantDropWeapons	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 bCineScriptHidden	field	ElysiumNpcKernelLifecycle19.inl	-	-	base	FElysiumNpcBase	base	5d	anchor
 bClearScheduleRequested	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 bCondHitByDoor	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
@@ -1791,7 +1791,7 @@ bNavIgnorePhysicsProps	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika wor
 bNavigatorByte51	field	ElysiumNpcKernelMotor10.inl	-	-	-	FElysiumNpcBase	base	5d	reached by base NavigatorMoveNormal
 bNoAlertState	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 bNoDamageDecal	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
-bNoFlinch	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+bNoFlinch	field	ElysiumNpcKernelAnim.inl	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 bNpcIsAlive	field	ElysiumNpcKernelLifecycle19.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 bOnTarget	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 bOpeningDoorWait	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
@@ -1815,17 +1815,17 @@ bUnknown1b4d	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 bUnread6658	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
 bUseEntityNotify	field	ElysiumNpcKernelEntityChain.inl	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
 bUseInteresting	field	ElysiumNpc.h	-	-	troika	FElysiumNpc	stay:troika word	-	
-bWalkingAnimation	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	port-only; no base member reaches it
+bWalkingAnimation	field	ElysiumNpc.h	-	-	-	FElysiumNpcBase	base	5e	port helper reached by a base-layer slot body (5e/5f closure over the generated slots' hand bodies)
 bWantsLargeHull	field	ElysiumNpc.h	-	-	base	FElysiumNpcBase	base	5d	anchor
 uint8	field	ElysiumNpc.h	-	-	-	FElysiumNpc	stay:troika	-	scanner artifact: `enum class EDeadThink : uint8` in the protected think section (the member scanner reads the underlying type as the name); the Troika ThinkDead's own type
-ScheduleHost.AttackExtentsCm	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpc::ScheduleHost.AttackExtentsCm	stay:troika word	-	port-only word; 
+ScheduleHost.AttackExtentsCm	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpcBase::BaseScheduleHost.AttackExtentsCm	split:BaseScheduleHost	5e	CBaseEntity m_vecAttackExtents +0x50..+0x58, read by base GetAttackExtents 0x1009b030 (retail correction base-host-words)
 ScheduleHost.CacheInterruptTime	component-field	ElysiumNpcScheduleHost.h	-	+0x1b24	base	FElysiumNpcBase::BaseScheduleHost.CacheInterruptTime	split:BaseScheduleHost	5d	
 ScheduleHost.DesiredMoveYaw	component-field	ElysiumNpcScheduleHost.h	-	+0x63ec	troika	FElysiumNpc::ScheduleHost.DesiredMoveYaw	stay:troika word	-	read by base BaseNPCInit, BeginStopMovingTask, FUN_102e19e0
 ScheduleHost.EnemyDistUnits	component-field	ElysiumNpcScheduleHost.h	-	+0x6268	troika	FElysiumNpc::ScheduleHost.EnemyDistUnits	stay:troika word	-	
 ScheduleHost.FailText	component-field	ElysiumNpcScheduleHost.h	-	+0x5f30	base	FElysiumNpcBase::BaseScheduleHost.FailText	split:BaseScheduleHost	5d	read by base BaseDrawDebugTextOverlays
 ScheduleHost.FailedCoverLosChecks	component-field	ElysiumNpcScheduleHost.h	-	+0x6404	troika	FElysiumNpc::ScheduleHost.FailedCoverLosChecks	stay:troika word	-	
 ScheduleHost.FailedSchedule	component-field	ElysiumNpcScheduleHost.h	-	+0x5f38	base	FElysiumNpcBase::BaseScheduleHost.FailedSchedule	split:BaseScheduleHost	5d	read by base BaseDrawDebugTextOverlays, NextScheduledTask
-ScheduleHost.FailureReason	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpc::ScheduleHost.FailureReason	stay:troika word	-	port-only word; 
+ScheduleHost.FailureReason	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpcBase::BaseScheduleHost.FailureReason	split:BaseScheduleHost	5e	m_ScheduleState.taskFailureCode +0x5c50 (CAI_BaseNPC datamap), written by base TaskFail 0x10273fc0 (retail correction task-fail-base-half)
 ScheduleHost.ForcedSchedule	component-field	ElysiumNpcScheduleHost.h	-	+0x65c8	troika	FElysiumNpc::ScheduleHost.ForcedSchedule	stay:troika word	-	
 ScheduleHost.GoalEnt	component-field	ElysiumNpcScheduleHost.h	-	+0x5de8	base	FElysiumNpcBase::BaseScheduleHost.GoalEnt	split:BaseScheduleHost	5d	read by base BaseStartNPC
 ScheduleHost.GoalToleranceCm	component-field	ElysiumNpcScheduleHost.h	-	+0x6320	troika	FElysiumNpc::ScheduleHost.GoalToleranceCm	stay:troika word	-	
@@ -1834,7 +1834,7 @@ ScheduleHost.HintGroup	component-field	ElysiumNpcScheduleHost.h	-	+0x5db0	base	F
 ScheduleHost.HintGroupMask	component-field	ElysiumNpcScheduleHost.h	-	+0x62e4	troika	FElysiumNpc::ScheduleHost.HintGroupMask	stay:troika word	-	
 ScheduleHost.HintGroups	component-field	ElysiumNpcScheduleHost.h	-	+0x62e0	troika	FElysiumNpc::ScheduleHost.HintGroups	stay:troika word	-	
 ScheduleHost.HintNode	component-field	ElysiumNpcScheduleHost.h	-	+0x5ddc	base	FElysiumNpcBase::BaseScheduleHost.HintNode	split:BaseScheduleHost	5d	read by base BaseNPCInit, StandoffTranslateActivity, StandoffVfunc5
-ScheduleHost.HintReusableAt	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpc::ScheduleHost.HintReusableAt	stay:troika word	-	port-only word; 
+ScheduleHost.HintReusableAt	component-field	ElysiumNpcScheduleHost.h	-	-	-	FElysiumNpcBase::BaseScheduleHost.HintReusableAt	split:BaseScheduleHost	5e	the claimed hint's reuse time (hint +0x5ec), stamped by base UpdateOnRemove 0x1027ca30's inline release (retail correction base-host-words)
 ScheduleHost.IdealScheduleRetail	component-field	ElysiumNpcScheduleHost.h	-	+0x5c3c	base	FElysiumNpcBase::BaseScheduleHost.IdealScheduleRetail	split:BaseScheduleHost	5d	read by base ChangeSchedule
 ScheduleHost.InsideInterruptDistanceSqr	component-field	ElysiumNpcScheduleHost.h	-	+0x6324	troika	FElysiumNpc::ScheduleHost.InsideInterruptDistanceSqr	stay:troika word	-	
 ScheduleHost.InterruptSchedule	component-field	ElysiumNpcScheduleHost.h	-	+0x5f3c	base	FElysiumNpcBase::BaseScheduleHost.InterruptSchedule	split:BaseScheduleHost	5d	read by base BaseDrawDebugTextOverlays, NextScheduledTask

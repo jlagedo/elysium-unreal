@@ -734,7 +734,7 @@ void ElysiumNpcCond::GatherComfort(FElysiumNpc& Npc, double Now, FElysiumNpcCond
 
 			// 3. A comforter that is an NPC (`+0x94`, the entity's cached `CAI_BaseNPC*`) must answer
 			//    to the same connected squad as this one; a player comforter skips the test.
-			if (const FElysiumNpc* ComforterNpc = Nearest->AsNpc();
+			if (const FElysiumNpcBase* ComforterNpc = Nearest->AsNpcBase();
 				ComforterNpc != nullptr && ComforterNpc->ConnectedSquad() != Npc.ConnectedSquad())
 			{
 				return;
@@ -1071,7 +1071,7 @@ namespace
 	//
 	// The entity's `Angles.Y` is the NEGATED Unreal yaw the motor is driven with, the same frame
 	// `FElysiumNpcSenses::IsInViewCone` reads it in.
-	bool NpcCondFacesTarget(const FElysiumNpc& Npc, const FVector& TargetCm)
+	bool NpcCondFacesTarget(const FElysiumNpcBase& Npc, const FVector& TargetCm)
 	{
 		FVector To = TargetCm - Npc.Origin;
 		To.Z = 0.0;
@@ -1092,7 +1092,7 @@ namespace
 	// Does the mode this press would use still have a round to spend, counting the reserve?
 	// `NO_PRIMARY_AMMO` is EMPTY MAGAZINE AND EMPTY RESERVE: a magazine that can be refilled is a
 	// reload, not an ammunition failure, and the two select different schedules.
-	bool NpcCondOutOfAmmo(const FElysiumNpc& Npc, const FElysiumWeapon& Weapon,
+	bool NpcCondOutOfAmmo(const FElysiumNpcBase& Npc, const FElysiumWeapon& Weapon,
 		const FElysiumWeaponMode& Mode)
 	{
 		if (Mode.AmmoCost <= 0)
@@ -1151,11 +1151,13 @@ bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiu
 	return false;
 }
 
-void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
+void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpcBase& Npc, double Now,
 	FElysiumNpcConditions& Out)
 {
 	const FElysiumEntityWorld* World = Npc.World;
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	// The weapon-sight occlusion is the senses runner's LOS debounce (`SensesObject()`).
+	const FElysiumNpcSenses* const Senses = Npc.SensesObject();
+	const bool bEnemyOccluded = Senses != nullptr && Senses->Memory.bEnemyOccluded;
 	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return;
@@ -1245,14 +1247,14 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 	// the weapon, and this runtime has one visibility query and one latch, so the two conditions
 	// agree here where retail's could disagree. What is NOT done is the converse — see the
 	// `WEAPON_THROUGH_WALL` seam in this function's declaration.
-	if (Memory.bEnemyOccluded)
+	if (bEnemyOccluded)
 	{
 		Out.Set(EElysiumNpcCond::WeaponSightOccluded);
 	}
 
 	const bool bHasAmmo = Weapon != nullptr && Mode != nullptr
 		&& (Mode->AmmoCost <= 0 || Weapon->MagazineCount >= Mode->AmmoCost);
-	if (bReady && bHasAmmo && !bTooClose && !Memory.bEnemyOccluded
+	if (bReady && bHasAmmo && !bTooClose && !bEnemyOccluded
 		&& !Out.Has(EElysiumNpcCond::TooFarToAttack))
 	{
 		Out.Set(EElysiumNpcCond::CanRangeAttack1);
@@ -1295,6 +1297,6 @@ bool ElysiumNpcCond::HasDetectedAttack(const FElysiumNpc& Npc, double Now)
 // --- Ideal state ---
 //
 // Story 29e, family State19 replaced this file's two-layer summary with slot 461's retail bodies.
-// `FElysiumNpc::BaseSelectIdealState` (`0x1026f660`), `FElysiumNpc::TroikaSelectIdealState`
+// `FElysiumNpcBase::BaseSelectIdealState` (`0x1026f660`), `FElysiumNpc::TroikaSelectIdealState`
 // (`0x102ad660`) and the twelve species arms live in `Substrate/ElysiumNpcState19.cpp` and
 // `ElysiumNpcState19_2.cpp`.

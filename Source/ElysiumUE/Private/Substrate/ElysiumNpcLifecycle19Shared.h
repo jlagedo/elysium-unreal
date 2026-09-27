@@ -24,8 +24,17 @@
 namespace NpcKernelLifecycle19Shared
 {
 	inline constexpr uint32 GFlOnGround = 1u;
-	inline double Lifecycle19Now(const FElysiumNpc& Npc)
+	inline double Lifecycle19Now(const FElysiumNpcBase& Npc)
 	{
 		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
+	}
+	inline constexpr float GFltMax = 3.402823466e+38f;
+	inline FElysiumEntity* Lifecycle19ResolveHandle(const FElysiumNpcBase& Npc, const FElysiumEntityHandle& Handle)
+	{
+		if (Npc.World == nullptr || !Handle.IsSet())
+		{
+			return nullptr;
+		}
+		return Npc.World->Resolve(Handle);
 	}
 }

@@ -40,9 +40,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingTurnLadderTest,
 	"Elysium.Substrate.NpcKernelFacing.TurnLadder", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingTurnLadderTest::RunTest(const FString&)
 {
-	using FPick = FElysiumNpc::FTurnActivityPick;
+	using FPick = FElysiumNpcBase::FTurnActivityPick;
 
-	auto Base = [](float Delta) { return FElysiumNpc::TurnActivityBaseLadder(Delta, AllSequences); };
+	auto Base = [](float Delta) { return FElysiumNpcBase::TurnActivityBaseLadder(Delta, AllSequences); };
 	auto Troika = [](float Delta)
 	{
 		return FElysiumNpc::TurnActivityTroikaLadder(Delta, AllSequences);
@@ -98,7 +98,7 @@ bool FElysiumNpcKernelFacingTurnLadderTest::RunTest(const FString&)
 	// An unauthored rung is skipped entirely and the ladder keeps walking, which is what the
 	// `SelectWeightedSequence != -1` guard is for.
 	auto No90Right = [](int32 Activity) { return Activity != 0xa2; };
-	const FPick Fallen = FElysiumNpc::TurnActivityBaseLadder(-90.f, No90Right);
+	const FPick Fallen = FElysiumNpcBase::TurnActivityBaseLadder(-90.f, No90Right);
 	TestEqual(TEXT("base: a body with no ACT_90_RIGHT walks on to the loose right turn"),
 		Fallen.Activity, 0x3c);
 	TestFalse(TEXT("and picks up the loose rung's untagged memory"), Fallen.bTagsTurnMemory);
@@ -220,7 +220,7 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 	// The seam below them, exercised directly: which of the motor's three overloads each slot
 	// reaches is a recovered fact (519 -> motor slot 14, 518 -> 13, 517 -> 12) and is what the
 	// queue will carry the day one exists.
-	FElysiumNpc::FFacingTargetRequest Request;
+	FElysiumNpcBase::FFacingTargetRequest Request;
 	Request.MotorSlot = 14;
 	Request.Target = Subject->Handle;
 	Request.Duration = 1.5f;

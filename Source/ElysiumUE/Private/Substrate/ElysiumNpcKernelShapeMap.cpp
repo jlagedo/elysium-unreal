@@ -72,7 +72,7 @@ namespace
 		"an absolute curtime stamp, carried as double"),
 	ELYSIUM_NPC_WORD_IMPLICIT(0x5b64,
 		"the per-state capability byte is a pure function of the state here "
-			"(FElysiumNpc::NpcStateFlags)"),
+			"(FElysiumNpcBase::NpcStateFlags)"),
 	ELYSIUM_NPC_WORD_NOTED(0x5b68, FElysiumNpcBaseMemory, LastSeen,
 		"the HATE element of the seen-by-disposition array"),
 	ELYSIUM_NPC_WORD_NOTED(0x5b6c, FElysiumNpcBaseMemory, LastSeen, "the FEAR element"),

@@ -18,3 +18,6 @@ TArray<FUnreachableEntity> UnreachableEnts;
 // the shape map's band, so 29b did not bind it; this runtime names activities and carries retail's
 // registered number beside them, exactly as family Facing's `IdealActivityNumber` (+0x0ff0) does.
 int32 ActivityNumber = 0;
+
+/** `GetEnemies()` (slot 541) then `thunk_FUN_102dfed0` — the enemy's last known position. */
+bool EnemyLastKnownPosition(FVector& OutPositionCm) const;

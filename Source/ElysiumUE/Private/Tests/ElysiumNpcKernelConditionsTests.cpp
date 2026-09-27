@@ -520,7 +520,7 @@ bool FElysiumNpcKernelCondRemoveIgnoredTest::RunTest(const FString&)
 	F.Npc->Cognition.Conditions.Set(EElysiumNpcCond::SeeEnemy);   // not in the list
 	F.Npc->Cognition.bCondTookDamage = true;
 
-	FElysiumNpc::ClearCineIgnoredConditions(*F.Npc);
+	FElysiumNpcBase::ClearCineIgnoredConditions(*F.Npc);
 
 	for (const EElysiumNpcCond Cond : Cleared)
 	{

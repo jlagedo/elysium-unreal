@@ -60,23 +60,6 @@ int32 BaseCombatCharacterIRelationType(const FElysiumEntity* Candidate) const;
 
 // --- Slot 342 `CanBeFedUponBy` ------------------------------------------------------------------
 
-/** `CBaseCombatCharacter::CanBeFedUponBy` (`0x10339800`), 237 bytes — the base body the Troika
- *  override chains to. The FEEDER ARGUMENT IS NEVER READ: every one of its five terms is about the
- *  victim. In order: `CanBeFedUpon()` (`0x10339a90`), `NOT_FEEDABLE` (`m_bfAINPCFlags2 &
- *  0x8000000`) clear, no live grapple (`m_GrapplePartner` resolves AND `m_GrappleRole != -1`
- *  refuses), `IsAlive()` (slot 158, `vtable +0x278`) and `!IsUnconscious()`. */
-bool BaseCanBeFedUponBy(FElysiumEntity* Feeder);
-
-/** `CBaseCombatCharacter::CanBeFedUpon` (`0x10339a90`) — `GetCharTemplate(this)->+0x95 == 0`.
- *  **SEAM**: `+0x95` has no recovered column name and this runtime's `FElysiumClanTemplate` exposes
- *  none, so this answers TRUE, which is retail's own answer for a template whose byte is zero — the
- *  admitting arm, so nothing is silently refused. */
-bool CanBeFedUponTemplate() const;
-
-/** `CBaseCombatCharacter::IsUnconscious` (`0x10341aa0`) — `(m_iMiscFlags & 1) != 0`, bit 0 of the
- *  name table being `Unconscious` (`Substrate/ElysiumMiscFlags.h`). */
-bool IsUnconsciousMiscFlag() const;
-
 // --- Slot 448 `TaskFail` — the seven species arms in front of story 13's body -------------------
 //
 // `FElysiumNpc::TaskFail` (`ElysiumNpc.cpp`) runs the whole `CAI_BaseNPCTroika::TaskFail`
@@ -119,21 +102,10 @@ void SetIgnoreCollisionExpiry(float DelaySeconds);
 
 // --- Slot 532 — the door-failure cleanup --------------------------------------------------------
 
-/** `CAI_BaseNPC::vfunc532` (`0x1027e0f0`) — the base body every arm of `0x10290570` chains to
- *  unconditionally: `m_hOpeningDoor = -1; m_bOpeningDoorWait = 0; return 1;`. */
-void BaseSlot532(int32 FailureBits);
-
 /** `0x102bf7e0` — the door cleanup the navigator arm runs: `if (nav->IsGoalSet()) nav->StopMoving();
  *  m_bShouldMove = 1;`. The `IsGoalSet` test is made TWICE in retail (once by the caller at
  *  `102905da` and once here), and both are reproduced. */
 void NavigatorDoorCleanup();
-
-/** `0x102ee2e0` — `CAI_Navigator::IsGoalSet()`, `m_pPath(+0x30)->GoalType(+0x10) != 0`. Distinct
- *  from `0x102ee680` (`IsGoalActive`, the current-waypoint test) which family Motor already wires.
- *  **SEAM**: this runtime's mover carries ONE goal latch and no separate goal-type word, so this
- *  answers that latch — the admitting value, since `IsGoalActive` implies `IsGoalSet`. The one case
- *  it under-admits is a goal set with no current waypoint, which the mover cannot represent. */
-bool NavIsGoalSet() const;
 
 // --- Slot 419 `UpdateBurstShootPause` -----------------------------------------------------------
 

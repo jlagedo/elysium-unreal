@@ -248,7 +248,7 @@ void AElysiumNpcBody::ApplyRetailHull()
 
 	// The ORDER this depends on, made loud. The kernel fills both words in `FElysiumNpc::Spawn`,
 	// ahead of `BuildMotor` -- retail writes them in a constructor, earlier still. This body ran
-	// once with the call in `BaseNPCInit` instead, which `Activate` reaches AFTER `BuildMotor`:
+	// once with the call in `FElysiumNpcBase::NPCInit` instead, which `Activate` reaches AFTER `BuildMotor`:
 	// both words were 0, every species took the human capsule and the human agent, and nothing
 	// said a word because the tests pinned the table rather than the body. If the ordering ever
 	// slips again, this is the line that says so.

@@ -39,4 +39,23 @@ namespace NpcKernelMotorShared
 	{
 		return FVector(Cm.X / ElysiumMove::U, -Cm.Y / ElysiumMove::U, Cm.Z / ElysiumMove::U);
 	}
+	inline constexpr float GStepHeightBase = ElysiumNpcTunables::StepHeightBase;   // `0x101a6b40` / `0x101a6b60`
+	// `FUN_10280790`'s slack and its apex scale. Both are qword loads the x87 widens, so they are
+	// doubles in `.rdata` and floats at the comparison.
+	inline constexpr float GJumpLegalSlack = static_cast<float>(ElysiumNpcTunables::TenthDouble);
+	inline constexpr float GMaxJumpSpeedTroika = ElysiumNpcTunables::MaxJumpSpeedTroika;   // `0x101aa670`
+	// Slots 521/522/523 — the movement tunables. `CAI_BaseNPCTroika` is the row every spawnable
+	// species answers with: step height from the base body slot 522 carries (`0x101a6b40`), jump
+	// speed from Troika's own override of 523 (`0x101aa670`), jump legality from the base's 521
+	// (`0x10280880`). `CAI_BaseNPC` is the branch answer for the non-Troika line, whose 523 returns
+	// the SAME constant as its step height; `CAI_TestHull` is the debug hull, generous on all five.
+	inline constexpr FElysiumNpcBase::FJumpTunableSpecies GJumpTunableSpecies[] =
+	{
+		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x101aa670"), NpcKernelMotorShared::GStepHeightBase, GMaxJumpSpeedTroika,
+			80.0f, 250.0f, 160.0f },
+		{ TEXT("CAI_BaseNPC"), TEXT("0x101a6b60"), NpcKernelMotorShared::GStepHeightBase, NpcKernelMotorShared::GStepHeightBase,
+			80.0f, 250.0f, 160.0f },
+		{ TEXT("CAI_TestHull"), TEXT("0x102d72d0"), NpcKernelMotorShared::GTestHullTunable, NpcKernelMotorShared::GTestHullTunable,
+			1024.0f, 1024.0f, 1024.0f },
+	};
 }

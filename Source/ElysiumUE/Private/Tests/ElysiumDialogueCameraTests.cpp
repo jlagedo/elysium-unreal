@@ -168,7 +168,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 		FElysiumEntityWorld Probe(nullptr, nullptr);
 		Probe.Load(MakeDialogueWorldDefs());
 		Probe.SpawnPlayer();
-		Probe.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		Probe.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		Probe.Tick(0.0);
 		FElysiumEntity* ProbeSpeaker = Probe.FindByName(TEXT("speaker"));
 		if (!ProbeSpeaker)
@@ -199,7 +199,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0); // deterministic NPC admission, no executor action
 	FElysiumEntity* Speaker = World.FindByName(TEXT("speaker"));
 	if (!TestNotNull(TEXT("dialogue speaker"), Speaker))
@@ -266,7 +266,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	FElysiumEntityWorld HeadlessWorld(nullptr, nullptr);
 	HeadlessWorld.Load(MakeDialogueWorldDefs());
 	HeadlessWorld.SpawnPlayer();
-	HeadlessWorld.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	HeadlessWorld.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	HeadlessWorld.Tick(0.0);
 	FElysiumEntity* HeadlessSpeaker = HeadlessWorld.FindByName(TEXT("speaker"));
 	if (TestNotNull(TEXT("null-camera speaker"), HeadlessSpeaker))
@@ -282,7 +282,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 		FElysiumEntityWorld TeardownWorld(nullptr, nullptr, TeardownServices);
 		TeardownWorld.Load(MakeDialogueWorldDefs());
 		TeardownWorld.SpawnPlayer();
-		TeardownWorld.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		TeardownWorld.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		TeardownWorld.Tick(0.0);
 		if (FElysiumEntity* TeardownSpeaker = TeardownWorld.FindByName(TEXT("speaker")))
 		{
@@ -354,7 +354,7 @@ bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 	FElysiumEntity* First = World.FindByName(TEXT("speaker"));
 	FElysiumEntity* Second = World.FindByName(TEXT("speaker2"));
@@ -559,7 +559,7 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 	FElysiumEntity* Speaker = World.FindByName(TEXT("speaker"));
 	FElysiumPlayer* Player = World.FindPlayer();
@@ -720,7 +720,7 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 	FElysiumEntity* Jack = World.FindByName(TEXT("speaker"));
 	if (!TestNotNull(TEXT("Jack fixture"), Jack))

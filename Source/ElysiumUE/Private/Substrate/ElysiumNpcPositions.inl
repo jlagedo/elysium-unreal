@@ -193,8 +193,6 @@ float ShootTargetFalloff(float RangeBase, float RangeDivisor, float Value) const
  *  `m_hShootTargetOverride` (+0x5ba8) arm or from `GetEnemies()->GetLastKnownPosition(GetEnemy())`.
  *  False when neither resolves, which is the arm that skips the divide entirely. */
 bool ShootTargetDelta(FVector& OutDeltaCm) const;
-/** `GetEnemies()` (slot 541) then `thunk_FUN_102dfed0` — the enemy's last known position. */
-bool EnemyLastKnownPosition(FVector& OutPositionCm) const;
 
 // --- Slot 389's `CNPC_VTzimisce` override -------------------------------------------------------
 

@@ -11,6 +11,7 @@ class FElysiumCombatCharacter;
 class FElysiumEntity;
 class FElysiumEntityWorld;
 class FElysiumNpc;
+class FElysiumNpcBase;
 struct FElysiumLocalIdSpace;
 struct FElysiumEntityHandle;
 struct FElysiumNpcBaseMemory;
@@ -724,7 +725,7 @@ namespace ElysiumNpcCond
 	 * secondary attack's own eligibility rule is not decoded, and a mode's authored `Secondary`
 	 * record does not by itself say when an NPC should use it.
 	 */
-	void GatherAttackConditions(const FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
+	void GatherAttackConditions(const FElysiumNpcBase& Npc, double Now, FElysiumNpcConditions& Out);
 	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)'s own arm: the zone melee suppression.
 	// True when it cleared the melee pair, in which case the base gather does not run that pass.
 	bool WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);
@@ -771,7 +772,7 @@ namespace ElysiumNpcCond
 	// --- Ideal state --------------------------------------------------------------------------------
 	// Story 29e, family State19: the two-layer port-only summary that used to live here
 	// (`FIdealStateInput`, `SelectIdealStateBase`, `SelectIdealState`) is GONE. Slot 461's retail
-	// bodies are `FElysiumNpc::BaseSelectIdealState` (`0x1026f660`) and
+	// bodies are `FElysiumNpcBase::BaseSelectIdealState` (`0x1026f660`) and
 	// `FElysiumNpc::TroikaSelectIdealState` (`0x102ad660`) in
 	// `Substrate/ElysiumNpcState19.cpp`, with the species line beside them; a retail body
 	// never sits next to a port-only equivalent of itself.

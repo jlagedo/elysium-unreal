@@ -37,7 +37,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadSlotNameTableTest,
 bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
-	const FElysiumNpc::FSquadSlotSpecies* Rows = FElysiumNpc::SquadSlotSpeciesRows(Count);
+	const FElysiumNpcBase::FSquadSlotSpecies* Rows = FElysiumNpc::SquadSlotSpeciesRows(Count);
 	// Every introduced species holds its own id-space row in its override (story 5 step 4); the
 	// table keeps the Troika line and the three controller-line classes deferred to step 7.
 	TestEqual(TEXT("the table carries the Troika line plus the three deferred controller classes"),
@@ -48,7 +48,7 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 	// 9999 "empty" sentinel, so every id answers `<<null>>`.
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		const FElysiumNpc::FSquadSlotSpecies& Row = Rows[Index];
+		const FElysiumNpcBase::FSquadSlotSpecies& Row = Rows[Index];
 		const FString Name(Row.RetailClass);
 		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
 		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
@@ -66,7 +66,7 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 			TestEqual(TEXT("CAI_BaseNPCTroika carries no id space"), FString(Row.IdSpace),
 				FString());
 			TestEqual(TEXT("and does not translate"),
-				FElysiumNpc::SquadSlotLocalToGlobal(&Row, 1000000000), 1000000000);
+				FElysiumNpcBase::SquadSlotLocalToGlobal(&Row, 1000000000), 1000000000);
 			continue;
 		}
 
@@ -77,7 +77,7 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 		for (const int32 LocalId : { -1, 0, 1, 7, 1000000000 })
 		{
 			TestEqual(*FString::Printf(TEXT("%s translates %d to -1"), *Name, LocalId),
-				FElysiumNpc::SquadSlotLocalToGlobal(&Row, LocalId), INDEX_NONE);
+				FElysiumNpcBase::SquadSlotLocalToGlobal(&Row, LocalId), INDEX_NONE);
 		}
 	}
 
@@ -95,7 +95,7 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 			continue;
 		}
 		++CensusOverrides;
-		if (const FElysiumNpc::FSquadSlotSpecies* Row = FElysiumNpc::SquadSlotSpeciesOf(Override.Class))
+		if (const FElysiumNpcBase::FSquadSlotSpecies* Row = FElysiumNpcBase::SquadSlotSpeciesOf(Override.Class))
 		{
 			TestEqual(*FString::Printf(TEXT("deferred %s's row carries its census body"), Override.Class),
 				FString(Row->Body), FString(Override.Address));
@@ -128,11 +128,11 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 	for (const TCHAR* Dead : ElysiumNpcDeadClasses::Names)
 	{
 		TestNull(*FString::Printf(TEXT("%s, a class with no instance, has no row"), Dead),
-			FElysiumNpc::SquadSlotSpeciesOf(Dead));
+			FElysiumNpcBase::SquadSlotSpeciesOf(Dead));
 	}
 
 	TestNull(TEXT("a class outside the table has no row"),
-		FElysiumNpc::SquadSlotSpeciesOf(TEXT("CNotAClass")));
+		FElysiumNpcBase::SquadSlotSpeciesOf(TEXT("CNotAClass")));
 	return true;
 }
 
@@ -143,16 +143,16 @@ bool FElysiumNpcKernelSquadSlotNamespaceTest::RunTest(const FString&)
 {
 	// `0x10316e80` seeds exactly two symbols, at 1000000000 and 1000000001. `0x102ea020` answers
 	// the literal `<<null>>` for -1 and NULL for an id the table does not carry.
-	TestEqual(TEXT("-1 is <<null>>"), FString(FElysiumNpc::GlobalSquadSlotName(INDEX_NONE)),
+	TestEqual(TEXT("-1 is <<null>>"), FString(FElysiumNpcBase::GlobalSquadSlotName(INDEX_NONE)),
 		FString(TEXT("<<null>>")));
 	TestEqual(TEXT("1000000000 is SQUAD_SLOT_ATTACK1"),
-		FString(FElysiumNpc::GlobalSquadSlotName(1000000000)),
+		FString(FElysiumNpcBase::GlobalSquadSlotName(1000000000)),
 		FString(TEXT("SQUAD_SLOT_ATTACK1")));
 	TestEqual(TEXT("1000000001 is SQUAD_SLOT_ATTACK2"),
-		FString(FElysiumNpc::GlobalSquadSlotName(1000000001)),
+		FString(FElysiumNpcBase::GlobalSquadSlotName(1000000001)),
 		FString(TEXT("SQUAD_SLOT_ATTACK2")));
-	TestNull(TEXT("0 is in no namespace"), FElysiumNpc::GlobalSquadSlotName(0));
-	TestNull(TEXT("and neither is 1000000002"), FElysiumNpc::GlobalSquadSlotName(1000000002));
+	TestNull(TEXT("0 is in no namespace"), FElysiumNpcBase::GlobalSquadSlotName(0));
+	TestNull(TEXT("and neither is 1000000002"), FElysiumNpcBase::GlobalSquadSlotName(1000000002));
 	return true;
 }
 

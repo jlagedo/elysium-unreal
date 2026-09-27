@@ -223,13 +223,13 @@ bool FElysiumNpcKernelMotor10ShootTargetTest::RunTest(const FString&)
 	// The forward is `0x10139610`'s, with `_DAT_1044eb08` the degrees-to-radians scale. A 90 degree
 	// yaw turns `(1,0,0)` into `(0,1,0)`.
 	F.Npc->Angles = FVector(0.f, 90.f, 0.f);
-	const FVector YawedForward = FElysiumNpc::AngleVectorsForward(F.Npc->Angles);
+	const FVector YawedForward = FElysiumNpcBase::AngleVectorsForward(F.Npc->Angles);
 	TestTrue(TEXT("AngleVectors at yaw 90 answers +Y"),
 		YawedForward.Equals(FVector(0.0, 1.0, 0.0), 1e-5));
 	// A 90 degree PITCH answers `-Z`, which is the sign retail's `-s2` carries.
 	F.Npc->Angles = FVector(90.f, 0.f, 0.f);
 	TestTrue(TEXT("AngleVectors at pitch 90 answers -Z (retail's -sin(pitch))"),
-		FElysiumNpc::AngleVectorsForward(F.Npc->Angles).Equals(FVector(0.0, 0.0, -1.0), 1e-5));
+		FElysiumNpcBase::AngleVectorsForward(F.Npc->Angles).Equals(FVector(0.0, 0.0, -1.0), 1e-5));
 	F.Npc->Angles = FVector::ZeroVector;
 
 	// Arm 1: a resolving `m_hShootTargetOverride` (+0x5ba8) wins outright and **ignores all three
@@ -251,7 +251,7 @@ bool FElysiumNpcKernelMotor10ShootTargetTest::RunTest(const FString&)
 	// The stat arm is a SEAM and answers 0, which is not 5, so the `-30.0` Z offset is never
 	// applied. `_DAT_104994e0` is negative — the target moves DOWN, not up.
 	TestEqual(TEXT("the type-3 CVStatList seam answers 0 (0x102012d0 on an empty list)"),
-		FElysiumNpc::EnemyTypedStatValue(*F.Door, 0xb), 0);
+		FElysiumNpcBase::EnemyTypedStatValue(*F.Door, 0xb), 0);
 	return true;
 }
 
@@ -270,7 +270,7 @@ bool FElysiumNpcKernelMotor10ObstructingDoorTest::RunTest(const FString&)
 		return false;
 	}
 
-	FElysiumNpc::FLocalMoveGoal Goal;
+	FElysiumNpcBase::FLocalMoveGoal Goal;
 	int32 Result = 0x7f;
 
 	// Arm 0: a NULL door warns and answers false without touching the result.
@@ -415,7 +415,7 @@ bool FElysiumNpcKernelMotor10StandoffActivityTest::RunTest(const FString&)
 		return false;
 	}
 
-	FElysiumNpc::FStandoffWords Words;
+	FElysiumNpcBase::FStandoffWords Words;
 
 	// Posture 0 with no hint: nothing matches, so the body falls through to `CAI_Behavior::vfunc22`
 	// — the base this runtime does not carry, spelled `INDEX_NONE`.
@@ -464,9 +464,9 @@ bool FElysiumNpcKernelMotor10StandoffActivityTest::RunTest(const FString&)
 		F.Npc->StandoffTranslateActivity(Words, 9), INDEX_NONE);
 
 	// The two activity ids are runtime-registered in uninitialised `.data` and stay unrecovered.
-	TestEqual(TEXT("DAT_10925390 is unrecovered"), FElysiumNpc::StandoffLowAimActivitySmg(),
+	TestEqual(TEXT("DAT_10925390 is unrecovered"), FElysiumNpcBase::StandoffLowAimActivitySmg(),
 		INDEX_NONE);
-	TestEqual(TEXT("DAT_10925388 is unrecovered"), FElysiumNpc::StandoffLowAimActivityPistol(),
+	TestEqual(TEXT("DAT_10925388 is unrecovered"), FElysiumNpcBase::StandoffLowAimActivityPistol(),
 		INDEX_NONE);
 
 	// The hint arm: `m_pHintNode` must exist AND its `m_nHintType` be `0x65`. Family Debug10's
@@ -492,10 +492,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotor10StandoffActivateTest,
 bool FElysiumNpcKernelMotor10StandoffActivateTest::RunTest(const FString&)
 {
 	// The clamp: in range, nothing happens.
-	FElysiumNpc::FStandoffGoalWords Goal;
+	FElysiumNpcBase::FStandoffGoalWords Goal;
 	Goal.Aggressiveness = 3;
 	Goal.ActorCount = 2;
-	FElysiumNpc::StandoffInputActivate(Goal);
+	FElysiumNpcBase::StandoffInputActivate(Goal);
 	TestEqual(TEXT("0x102c87a0 leaves an in-range aggressiveness alone"), Goal.Aggressiveness, 3);
 	TestEqual(TEXT("...and warns about nothing"), Goal.InvalidWarnings, 0);
 	// `0x102cd650` ran exactly once: the goal is on the list, active, and the actors resolved.
@@ -510,42 +510,42 @@ bool FElysiumNpcKernelMotor10StandoffActivateTest::RunTest(const FString&)
 
 	// A SECOND activate on an already-active goal does **nothing at all** — no list insert, no
 	// actor pass. The clamp still runs in front of it.
-	FElysiumNpc::StandoffInputActivate(Goal);
+	FElysiumNpcBase::StandoffInputActivate(Goal);
 	TestEqual(TEXT("a second activate resolves nothing"), Goal.ActorResolves, 1);
 	TestEqual(TEXT("...refreshes nothing"), Goal.ActorRefreshes, 0);
 	TestEqual(TEXT("...and enables nothing"), Goal.EnableGoalCalls, 2);
 
 	// The sentinel 5 is EXEMPT from the warning and from the clamp.
-	FElysiumNpc::FStandoffGoalWords Sentinel;
+	FElysiumNpcBase::FStandoffGoalWords Sentinel;
 	Sentinel.Aggressiveness = 5;
-	FElysiumNpc::StandoffInputActivate(Sentinel);
+	FElysiumNpcBase::StandoffInputActivate(Sentinel);
 	TestEqual(TEXT("5 is a sentinel, not an invalid value"), Sentinel.Aggressiveness, 5);
 	TestEqual(TEXT("...and warns about nothing"), Sentinel.InvalidWarnings, 0);
 
 	// Negative clamps to 0, and the warning carries the PRE-clamp value.
-	FElysiumNpc::FStandoffGoalWords Low;
+	FElysiumNpcBase::FStandoffGoalWords Low;
 	Low.Aggressiveness = -3;
-	FElysiumNpc::StandoffInputActivate(Low);
+	FElysiumNpcBase::StandoffInputActivate(Low);
 	TestEqual(TEXT("a negative aggressiveness clamps to 0"), Low.Aggressiveness, 0);
 	TestEqual(TEXT("...with one warning"), Low.InvalidWarnings, 1);
 	TestEqual(TEXT("...naming the pre-clamp value"), Low.LastInvalidValue, -3);
 	TestTrue(TEXT("...and 0x102cd650 still ran exactly once"), Low.bOnGoalList);
 
 	// Over 4 clamps to 4. 6 is over the sentinel and is NOT exempt.
-	FElysiumNpc::FStandoffGoalWords High;
+	FElysiumNpcBase::FStandoffGoalWords High;
 	High.Aggressiveness = 6;
-	FElysiumNpc::StandoffInputActivate(High);
+	FElysiumNpcBase::StandoffInputActivate(High);
 	TestEqual(TEXT("6 clamps to 4"), High.Aggressiveness, 4);
 	TestEqual(TEXT("...with one warning naming 6"), High.LastInvalidValue, 6);
 
 	// The boundaries are inclusive: 0 and 4 are both valid.
-	FElysiumNpc::FStandoffGoalWords Edge;
+	FElysiumNpcBase::FStandoffGoalWords Edge;
 	Edge.Aggressiveness = 0;
-	FElysiumNpc::StandoffInputActivate(Edge);
+	FElysiumNpcBase::StandoffInputActivate(Edge);
 	TestEqual(TEXT("0 is valid"), Edge.InvalidWarnings, 0);
-	FElysiumNpc::FStandoffGoalWords Edge4;
+	FElysiumNpcBase::FStandoffGoalWords Edge4;
 	Edge4.Aggressiveness = 4;
-	FElysiumNpc::StandoffInputActivate(Edge4);
+	FElysiumNpcBase::StandoffInputActivate(Edge4);
 	TestEqual(TEXT("4 is valid"), Edge4.InvalidWarnings, 0);
 	return true;
 }
@@ -555,10 +555,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotor10StandoffDeactivateTest,
 bool FElysiumNpcKernelMotor10StandoffDeactivateTest::RunTest(const FString&)
 {
 	// An INACTIVE goal: `0x102cdb70` does nothing at all, and the clamp in front of it still runs.
-	FElysiumNpc::FStandoffGoalWords Goal;
+	FElysiumNpcBase::FStandoffGoalWords Goal;
 	Goal.Aggressiveness = -1;
 	Goal.ActorCount = 3;
-	FElysiumNpc::StandoffInputDeactivate(Goal);
+	FElysiumNpcBase::StandoffInputDeactivate(Goal);
 	TestEqual(TEXT("0x102c8830 runs the SAME clamp as slot 241"), Goal.Aggressiveness, 0);
 	TestEqual(TEXT("...with one warning"), Goal.InvalidWarnings, 1);
 	TestEqual(TEXT("...but an inactive goal resolves nothing"), Goal.ActorResolves, 0);
@@ -566,11 +566,11 @@ bool FElysiumNpcKernelMotor10StandoffDeactivateTest::RunTest(const FString&)
 
 	// Activate, then deactivate: the exact inverse, and the actor pass REFRESHES rather than
 	// resolves because bit 0x2 is already latched.
-	FElysiumNpc::FStandoffGoalWords Live;
+	FElysiumNpcBase::FStandoffGoalWords Live;
 	Live.Aggressiveness = 2;
 	Live.ActorCount = 3;
-	FElysiumNpc::StandoffInputActivate(Live);
-	FElysiumNpc::StandoffInputDeactivate(Live);
+	FElysiumNpcBase::StandoffInputActivate(Live);
+	FElysiumNpcBase::StandoffInputDeactivate(Live);
 	TestEqual(TEXT("the ACTIVE bit is cleared"), static_cast<int32>(Live.Flags & 0x1), 0);
 	TestTrue(TEXT("...the actors-resolved latch survives"), (Live.Flags & 0x2) != 0);
 	TestEqual(TEXT("...the second pass REFRESHED (0x102cd3b0) rather than resolved"),
@@ -580,9 +580,9 @@ bool FElysiumNpcKernelMotor10StandoffDeactivateTest::RunTest(const FString&)
 	TestFalse(TEXT("...and the goal left the list (0x100f6e40), LAST"), Live.bOnGoalList);
 
 	// The clamp is shared byte-for-byte, so the same edges hold.
-	FElysiumNpc::FStandoffGoalWords Sentinel;
+	FElysiumNpcBase::FStandoffGoalWords Sentinel;
 	Sentinel.Aggressiveness = 5;
-	FElysiumNpc::StandoffInputDeactivate(Sentinel);
+	FElysiumNpcBase::StandoffInputDeactivate(Sentinel);
 	TestEqual(TEXT("the sentinel 5 is exempt here too"), Sentinel.Aggressiveness, 5);
 	TestEqual(TEXT("...and warns about nothing"), Sentinel.InvalidWarnings, 0);
 	return true;
@@ -593,20 +593,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotor10StandoffUpdateOnRemoveT
 bool FElysiumNpcKernelMotor10StandoffUpdateOnRemoveTest::RunTest(const FString&)
 {
 	// Bit 0 of `m_flags` (+0x480) CLEAR: the release is skipped entirely and only the tail runs.
-	FElysiumNpc::FStandoffGoalWords Idle;
+	FElysiumNpcBase::FStandoffGoalWords Idle;
 	Idle.ActorCount = 2;
-	FElysiumNpc::StandoffGoalUpdateOnRemove(Idle);
+	FElysiumNpcBase::StandoffGoalUpdateOnRemove(Idle);
 	TestEqual(TEXT("0x102cdc50 with the ACTIVE bit clear issues no release"), Idle.ReleaseInputs, 0);
 	TestEqual(TEXT("...and disables nobody"), Idle.DisableGoalCalls, 0);
 	TestTrue(TEXT("...but CBaseEntity::UpdateOnRemove still runs"), Idle.bUpdateOnRemoveTailRan);
 
 	// Bit 0 SET: the goal's own slot 243 is dispatched with the stack `inputdata_t`, and the tail
 	// runs after it.
-	FElysiumNpc::FStandoffGoalWords Live;
+	FElysiumNpcBase::FStandoffGoalWords Live;
 	Live.Aggressiveness = 1;
 	Live.ActorCount = 2;
-	FElysiumNpc::StandoffInputActivate(Live);
-	FElysiumNpc::StandoffGoalUpdateOnRemove(Live);
+	FElysiumNpcBase::StandoffInputActivate(Live);
+	FElysiumNpcBase::StandoffGoalUpdateOnRemove(Live);
 	TestEqual(TEXT("an ACTIVE goal issues exactly one release"), Live.ReleaseInputs, 1);
 	TestEqual(TEXT("...which is slot 243, so the actors are disabled"), Live.DisableGoalCalls, 2);
 	TestEqual(TEXT("...and the ACTIVE bit is cleared"), static_cast<int32>(Live.Flags & 0x1), 0);
@@ -615,12 +615,12 @@ bool FElysiumNpcKernelMotor10StandoffUpdateOnRemoveTest::RunTest(const FString&)
 
 	// The release goes through slot 243, which carries the aggressiveness clamp — so a goal with an
 	// out-of-range aggressiveness warns on the way out too.
-	FElysiumNpc::FStandoffGoalWords Bad;
+	FElysiumNpcBase::FStandoffGoalWords Bad;
 	Bad.Aggressiveness = 9;
-	FElysiumNpc::StandoffInputActivate(Bad);
+	FElysiumNpcBase::StandoffInputActivate(Bad);
 	Bad.InvalidWarnings = 0;
 	Bad.Aggressiveness = -2;
-	FElysiumNpc::StandoffGoalUpdateOnRemove(Bad);
+	FElysiumNpcBase::StandoffGoalUpdateOnRemove(Bad);
 	TestEqual(TEXT("the release runs slot 243's clamp"), Bad.Aggressiveness, 0);
 	TestEqual(TEXT("...and warns"), Bad.InvalidWarnings, 1);
 	return true;
@@ -660,7 +660,7 @@ bool FElysiumNpcKernelMotor10TestHullSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("22 misses fall back to hull 0"),
 		FElysiumNpc::TestHullPickHull(1 << 22, [](int32 Hull) { return 1 << Hull; }, bFallback), 0);
 	TestTrue(TEXT("...through the fallback, which ORs 0 (a no-op)"), bFallback);
-	TestEqual(TEXT("...and the no-op OR left the mask alone"), FElysiumNpc::RetailUsedHullBits(), 0);
+	TestEqual(TEXT("...and the no-op OR left the mask alone"), FElysiumNpcBase::RetailUsedHullBits(), 0);
 
 	// Hull 21 is the LAST index the walk reaches.
 	TestEqual(TEXT("hull 21 is inside the walk"),
@@ -668,10 +668,10 @@ bool FElysiumNpcKernelMotor10TestHullSpawnTest::RunTest(const FString&)
 
 	// The two mask writers.
 	FElysiumNpc::RetailClearUsedHullBits();
-	TestEqual(TEXT("0x102f9900 clears the mask"), FElysiumNpc::RetailUsedHullBits(), 0);
+	TestEqual(TEXT("0x102f9900 clears the mask"), FElysiumNpcBase::RetailUsedHullBits(), 0);
 	FElysiumNpc::RetailAddUsedHullBits(0x6);
 	FElysiumNpc::RetailAddUsedHullBits(0x8);
-	TestEqual(TEXT("0x102f9920 ORs bits in"), FElysiumNpc::RetailUsedHullBits(), 0xe);
+	TestEqual(TEXT("0x102f9920 ORs bits in"), FElysiumNpcBase::RetailUsedHullBits(), 0xe);
 	FElysiumNpc::RetailClearUsedHullBits();
 
 	// The whole body.
@@ -739,7 +739,7 @@ bool FElysiumNpcKernelMotor10MoveGroundExecuteTest::RunTest(const FString&)
 		return false;
 	}
 
-	FElysiumNpc::FLocalMoveGoal Goal;
+	FElysiumNpcBase::FLocalMoveGoal Goal;
 	Goal.DirUnits = FVector(1.0, 0.0, 0.0);
 	Goal.MaxDistanceUnits = 100.f;
 
@@ -791,7 +791,7 @@ bool FElysiumNpcKernelMotor10MoveGroundExecuteTest::RunTest(const FString&)
 	}
 
 	// The epsilon arm, driven directly: a step of exactly 0.0 is NOT above `_DAT_1044fab0`.
-	FElysiumNpc::FLocalMoveGoal Near;
+	FElysiumNpcBase::FLocalMoveGoal Near;
 	Near.DirUnits = FVector(1.0, 0.0, 0.0);
 	Near.MaxDistanceUnits = 10.f;
 	F.Npc->Motor10Seams.LocalNavigatorAsks = 0;
@@ -804,7 +804,7 @@ bool FElysiumNpcKernelMotor10MoveGroundExecuteTest::RunTest(const FString&)
 	// The OVERSHOOT arm, without the goal flag `0x2`: the interval is scaled by
 	// `1.0 - maxDist/step` and the step is clamped to `maxDist`.
 	F.Npc->TroikaMotor.MoveInterval = 4.f;
-	FElysiumNpc::FLocalMoveGoal Over;
+	FElysiumNpcBase::FLocalMoveGoal Over;
 	Over.DirUnits = FVector(1.0, 0.0, 0.0);
 	Over.MaxDistanceUnits = 10.f;
 	F.Npc->Motor10Seams.LastStepEndUnits = FVector::ZeroVector;
@@ -840,12 +840,12 @@ bool FElysiumNpcKernelMotor10MoveGroundStepTest::RunTest(const FString&)
 		return false;
 	}
 
-	FElysiumNpc::FLocalMoveGoal Goal;
+	FElysiumNpcBase::FLocalMoveGoal Goal;
 	Goal.DirUnits = FVector(0.0, 1.0, 0.0);
 	Goal.MaxDistanceUnits = 3.f;
 	F.Npc->MotorVelocityUnits = FVector(0.0, 6.0, 0.0);
 	F.Npc->TroikaMotor.MoveInterval = 2.f;
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 
 	const float Speed = F.Npc->GetIdealSpeed();
 	// `m_vecVelocity` is rewritten to `dir * speed` BEFORE the magnitude is taken, so the
@@ -854,7 +854,7 @@ bool FElysiumNpcKernelMotor10MoveGroundStepTest::RunTest(const FString&)
 	const float RawStep = static_cast<float>((Magnitude + Speed) * 2.0 * 0.5);
 	const FVector OriginUnits = Motor10SourceUnits(F.Npc->Origin);
 
-	FElysiumNpc::FMotorMoveTrace Out;
+	FElysiumNpcBase::FMotorMoveTrace Out;
 	Out.Status = 0x7f;
 	const int32 Answer = F.Npc->MotorMoveGroundStep(Goal, &Out, nullptr);
 
@@ -898,10 +898,10 @@ bool FElysiumNpcKernelMotor10MoveGroundStepTest::RunTest(const FString&)
 
 	// The LAST arm: force the distance mismatch by giving the goal a maxDist smaller than the step,
 	// so the step is clamped to a non-zero length while the trace still reports 0 travelled.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->MotorVelocityUnits = FVector(0.0, 0.0, 0.0);
 	F.Npc->TroikaMotor.MoveInterval = 0.f;
-	FElysiumNpc::FLocalMoveGoal Far;
+	FElysiumNpcBase::FLocalMoveGoal Far;
 	Far.DirUnits = FVector(1.0, 0.0, 0.0);
 	Far.MaxDistanceUnits = -5.f;    // any step > maxDist takes the clamp; 0 > -5
 	const FVector Before = Motor10SourceUnits(F.Npc->Origin);
@@ -935,7 +935,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 
 	// The gate, `0x102efd50`. The route nav type is a seam answering 0 (`NAV_GROUND`), so a nav type
 	// of 0 passes straight through with no warning and no teardown.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->NavSetType(0);
 	F.Npc->bNavigatorByte51 = true;
 	TestTrue(TEXT("0x102efd50 passes for a ground route under a ground nav type"),
@@ -945,7 +945,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 	TestFalse(TEXT("...and clearing navigator+0x51"), F.Npc->bNavigatorByte51);
 
 	// A JUMP nav type (1) under a ground route warns, runs the jump teardown and resets the type.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->NavSetType(1);
 	TestTrue(TEXT("a jump nav type under a ground route still passes"), F.Npc->NavigatorMoveGate());
 	TestEqual(TEXT("...after one warning"), F.Npc->Motor10Seams.NavGateWrongTypeWarnings, 1);
@@ -955,7 +955,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 	TestEqual(TEXT("...and the nav type is reset to 0"), F.Npc->NavGetType(), 0);
 
 	// A CLIMB nav type (3) takes the other teardown.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->NavSetType(3);
 	TestTrue(TEXT("a climb nav type passes too"), F.Npc->NavigatorMoveGate());
 	TestEqual(TEXT("...through the climb teardown (nav+0x20 slot 5)"),
@@ -964,7 +964,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 
 	// Nav type 2 (FLY) under a ground route warns but runs NEITHER teardown — the two `if`s name 1
 	// and 3 only.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->NavSetType(2);
 	TestTrue(TEXT("a fly nav type under a ground route passes"), F.Npc->NavigatorMoveGate());
 	TestEqual(TEXT("...with a warning"), F.Npc->Motor10Seams.NavGateWrongTypeWarnings, 1);
@@ -974,7 +974,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 	// The whole body. With the gate passing, the override refusing and the enact answering
 	// `AIMR_OK`, the answer is 0 and the tail runs.
 	F.Npc->NavSetType(0);
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->bNavigatorByte51 = false;
 	const int32 SavedSequence = F.Npc->SequenceNumber;
 	const int32 Answer = F.Npc->NavigatorMoveNormal(0x1234);
@@ -991,7 +991,7 @@ bool FElysiumNpcKernelMotor10NavigatorMoveNormalTest::RunTest(const FString&)
 		SavedSequence);
 
 	// `navigator+0x51` SET suppresses the tail.
-	F.Npc->Motor10Seams = FElysiumNpc::FMotor10SeamLedger();
+	F.Npc->Motor10Seams = FElysiumNpcBase::FMotor10SeamLedger();
 	F.Npc->bNavigatorByte51 = true;
 	// The gate clears the byte on its way through, so the suppression is only observable when the
 	// gate itself is bypassed — which is the OVERRIDE arm.

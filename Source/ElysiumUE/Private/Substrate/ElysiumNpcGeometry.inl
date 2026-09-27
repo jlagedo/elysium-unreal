@@ -44,13 +44,6 @@
 // means different things per species. Each is named for the class it belongs to, exactly as
 // families Bosses, Damage and Motor record theirs.
 
-/** `+0x038c m_vecSize` and the two words after it — the box `CBaseEntity::SetSize` (`0x100b1890`,
- *  slot 213) writes. A `CBaseEntity` word, below 29b's band, and written by this one body and read
- *  by `GetSize` (slot 214) alone in layers 0–9. CENTIMETRES, like every other length on this
- *  struct; Unreal's collision component is the eventual host and this member is what the kernel
- *  sees until then. */
-FVector SizeCm = FVector::ZeroVector;
-
 /** `+0x668c CNPC_VMingXiaoTentacle::m_vecScatterCenter` — the point a severed tentacle is told to
  *  scatter away from. Family **Squad** owns `+0x668c` as `CNPC_VMingXiao::m_rhProxies[6]` and
  *  family **Bosses** owns it as `CNPC_VManBat::m_hPickupTarget`; this is a THIRD species' word at
@@ -58,20 +51,6 @@ FVector SizeCm = FVector::ZeroVector;
 FVector TentacleScatterCenterUnits = FVector::ZeroVector;
 
 // --- Slot 193 `EyePosition`, and its species override --------------------------------------------
-
-/** `CBaseEntity::EyePosition` (`0x100b4b40`, slot 193) with the family's species override in front
- *  of it. The Troika-line body is `GetAbsOrigin() + m_vecViewOffset`, which this chain already
- *  answers through `FElysiumCombatCharacter::EyePosition()`; what lands here is the dispatch and
- *  the override:
- *
- *    * `CPayphone::vfunc193` (`0x101aae60`) looks up the bone `"Phone_bone_01"` and answers its
- *      world position, falling back to the base body when `LookupBone` answers -1.
- *
- *  `CAI_BaseHumanoid::vfunc193` (`0x1025e8e0`) was deleted by 0019 story 5 step 1: the class has no
- *  instance (`population.md`); its census row remains.
- *
- *  CENTIMETRES, because every caller of `EyePosition()` in this runtime is. */
-virtual FVector EyePosition() const override;
 
 /** SEAM for `CBaseAnimating::LookupBone(name)` + `CBaseAnimating::GetBonePosition02(bone, &pos,
  *  &ang)` — the pair `CPayphone::vfunc193` runs — and, with the local offset already folded in, for
@@ -90,23 +69,6 @@ mutable int32 BoneWorldPositionCalls = 0;
 // every one of them with that body. The definitions forward to slots 219 and 221 verbatim.
 
 // --- Slot 197 `BodyTarget` -----------------------------------------------------------------------
-
-/** `CAI_BaseNPC::FUN_102789c0`'s blend, lifted out of the body so the formula can be measured
- *  without a world and so the two random draws are the caller's. Every argument is CENTIMETRES and
- *  the answer is too.
- *
- *  `AnchorCm` is retail's `E`: `WorldSpaceCenter() - 0.25 * (WorldSpaceCenter() - GetAbsOrigin())`,
- *  a point a quarter of the way back down from the bounds centre toward the feet. `EyeCm` is slot
- *  193. `Noise1`/`Noise2` are the two independent `RandomFloat(0, 0.5)` draws the noisy arm makes,
- *  and are ignored by the other two arms. */
-static FVector BodyTargetBlend(const FVector& AnchorCm, const FVector& EyeCm, bool bNoisy,
-	bool bAimAtEyeExactly, float Noise1, float Noise2);
-
-/** `E` itself, the anchor both non-noisy arms interpolate from. Exposed because the 0.25 is the
- *  half of this body a reader is most likely to get wrong: the delta is measured from
- *  `WorldSpaceCenter()` to `GetAbsOrigin()` and then subtracted from `WorldSpaceCenter()` AGAIN,
- *  through a SECOND slot-192 dispatch, which is why the body calls slot 192 twice. */
-static FVector BodyTargetAnchor(const FVector& CentreCm, const FVector& OriginCm);
 
 // --- Slot 192 `WorldSpaceCenter`, species-dispatched ---------------------------------------------
 
@@ -144,12 +106,6 @@ static const int32* HintEyeOffsetActivities(int32& OutCount);
  *  on slot 513 (`+0x804`) AND the activity `0x57` or `8`, a fixed `(0, 0, 1.5)` override; otherwise
  *  `m_vDefaultEyeOffset` (`+0x5d60`). CENTIMETRES. */
 FVector BaseEyeOffset(int32 Activity) const;
-
-/** SEAM for slot 513 (vtable `+0x804`), the debug-overlay bit field `FUN_10274db0` tests `0x8000000`
- *  against. This runtime stands no per-NPC overlay word; answers 0, so the override arm never
- *  fires and every activity answers `m_vDefaultEyeOffset` — which is retail's own answer with the
- *  overlay off, and the shipped default. */
-uint32 DebugOverlayBits() const;
 
 /** `m_vDefaultEyeOffset` (`+0x5d60`). The shape map binds that word to `FElysiumEntity` with
  *  "no stored view offset; the eye point is the chain's virtual `EyePosition()`", so this answers

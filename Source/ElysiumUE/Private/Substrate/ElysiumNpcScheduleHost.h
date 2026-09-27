@@ -29,6 +29,13 @@ struct FElysiumNpcBaseScheduleHost
 {
 	uint32 MemoryBits = 0;
 
+	// +0x5c50 m_ScheduleState.taskFailureCode (datamap), written by the base `TaskFail` `0x10273fc0`.
+	int32 FailureReason = 0;
+	// The claimed hint's reuse time (hint `+0x5ec`), which a hint release stamps.
+	double HintReusableAt = 0.0;
+	// `CBaseEntity::m_vecAttackExtents` (+0x50..0x58), the additive attack-partition margin, in cm.
+	FVector AttackExtentsCm = FVector::ZeroVector;
+
 	int32 SquadDisconnected = 0; // +0x5bb0; shared-memory routing lands with the squad store
 
 	// `m_flCacheInterruptTime` (`+0x1b24`), distinct from `InterruptTime` above.
@@ -112,7 +119,6 @@ struct FElysiumNpcScheduleHost
 	// in SOURCE UNITS as retail's combat selectors compare them; `5000.0` with no live enemy.
 	// Session state: `NPCThink` rewrites all three on every normal-due think.
 	float EnemyDistUnits = 5000.f, EnemyHeightDiffUnits = 5000.f, EnemyLastKnownDistUnits = 5000.f;
-	int32 FailureReason = 0;
 	int32 PendingFailureReason = 0; // consumed in the same maintenance pass; never saved
 	float GoalToleranceCm = 0.f;
 	float DesiredMoveYaw = 0.f;
@@ -125,10 +131,8 @@ struct FElysiumNpcScheduleHost
 	// cleared by either.
 	FElysiumEntityHandle MoveTarget;
 	FElysiumEntityHandle KickProp;
-	double HintReusableAt = 0.0;
 	int32 FailedCoverLosChecks = 0;
 	FVector SavedSleepExtents = FVector(-1.0);
-	FVector AttackExtentsCm = FVector::ZeroVector; // additive attack-partition margin, entity +0x50..58
 	bool bPatrolPathUseHint = false;
 	bool bSavePositionWalk = false; // m_fSavePositionWalk
 	bool bWaitFinishedSet = false; // m_bWaitFinishedSet
@@ -198,7 +202,7 @@ struct FElysiumNpcScheduleHost
 	 * `CNPC_VSabbatLeader` (`0x103a9fd0`) and `CNPC_VSheriffMan` (`0x103af8d0`).
 	 *
 	 * All five are 100-byte scope-trace wrappers around the shared `CAI_BaseNPC::SetSchedule(int)`
-	 * (`0x10280de0`, ported as `FElysiumNpc::ChangeSchedule`): push a literal name onto retail's
+	 * (`0x10280de0`, ported as `FElysiumNpcBase::ChangeSchedule`): push a literal name onto retail's
 	 * `g_ScopeTraceStack`, forward, pop. They carry NO class-specific logic, so the whole of what
 	 * they add over the shared body is the name they push — which is what this answers. Empty for a
 	 * class with no slot-619 override.

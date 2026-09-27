@@ -13,10 +13,10 @@
 //
 // 42 rows in `Lifecycle19.tsv`, three shapes:
 //
-//   * **Six spine bodies.** `CAI_BaseNPC::NPCInit` `0x10273390` (`BaseNPCInit`) under Troika
-//     `0x1029a0b0` (`NPCInit`, slot 420); `CAI_BaseNPC::StartNPC` `0x10273ad0` (`BaseStartNPC`)
+//   * **Six spine bodies.** `CAI_BaseNPC::NPCInit` `0x10273390` (`FElysiumNpcBase::NPCInit`) under Troika
+//     `0x1029a0b0` (`NPCInit`, slot 420); `CAI_BaseNPC::StartNPC` `0x10273ad0` (`FElysiumNpcBase::StartNPC`)
 //     under Troika `0x1029a8b0` (`StartNPC`, slot 422); `CAI_BaseNPC::OnRestore` `0x1027bf50`
-//     (`BaseOnRestore`) under Troika `0x102998c0` (`OnRestore`, slot 130).
+//     (`FElysiumNpcBase::OnRestore`) under Troika `0x102998c0` (`OnRestore`, slot 130).
 //   * **Species `NPCInit` bodies**, each the body of its class's C++ override (story 5 step 3; the
 //     controller line's three stay slot-420 census arms until step 7). Retail's species bodies call
 //     the body they replace through a direct non-virtual thunk, spelled as a direct call here.
@@ -149,11 +149,6 @@ float FieldOfViewDot = 0.2f;
 // ThinkSet seam — `CBaseEntity::ThinkSet`
 // -------------------------------------------------------------------------------------------------
 
-void ThinkSet(const TCHAR* Function, double Delay);
-
-static const TCHAR* NpcInitThinkFunction();    // `0x10273aa0`
-static const TCHAR* StartNpcThinkFunction();   // `LAB_1000f4e8`
-
 // -------------------------------------------------------------------------------------------------
 // Seams and counted helpers
 // -------------------------------------------------------------------------------------------------
@@ -174,21 +169,11 @@ int32 FrenzyShadowNullWeaponFaults = 0;  // crash-guarded retail fault
 int32 FollowerBossOnStartCalls = 0;      // seam for `0x102c44e0`
 int32 InventoryDestroys = 0;             // `Inventory_Destroy`
 
-/** SEAM for `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe`. No hull sweep stands here:
- *  answers the found-floor arm and leaves the origin where it was. */
-bool MoveProbeFloorDrop(FVector& InOutOriginUnits);
-
 /** `0x102db5e0` — the interesting place whose marker table names this NPC, or `INDEX_NONE`. */
 int32 FindInterestingPlaceHoldingMe() const;
 
 /** `0x10299a80` — the restore-time check of that place, with retail's two `DevMsg` refusals. */
 void ValidateRestoredInterestingPlace();
-
-/** `0x1027be60` — give-up restore. */
-void RestoreGiveUp();
-
-/** SEAM for `0x102ee1e0`. No navigator: answers false (failure). */
-bool RefindPostRestorePath();
 
 /** `0x1029f340` — the null guard plus `ActivityNameToId` (`0x10412520`), which family Hints already
  *  stands as `ActivityIdForName`. */
@@ -202,10 +187,6 @@ void ClearFollowerBossName();
  *  overlay row of another family, `SetFollowerBoss` identifier is absent, `+0x647c` is
  *  `FollowerBoss` with no writer. */
 void SetFollowerBossByAuthoredName(const FString& Name);
-
-/** Install a raw registrar id through `0x10280de0` / `0x102ae750`. An id the registry lacks goes
- *  through story 25's miss arm (`IDLE_STAND`). */
-void InstallScheduleRetail(int32 RawId, bool bForce);
 
 void SeedStatListOnNpcInit();
 void SeedCriminalLevelWitnessed();
@@ -227,7 +208,6 @@ float TuningZombieGrappleReadyInterval() const;
 // Slot 420
 // -------------------------------------------------------------------------------------------------
 
-void BaseNPCInit();     // `0x10273390`
 void TroikaNPCInit();   // `0x1029a0b0`
 bool SpeciesNPCInit();
 
@@ -239,12 +219,10 @@ void WolfMorphNPCInit();            // `0x103dce00`
 // Slot 422
 // -------------------------------------------------------------------------------------------------
 
-void BaseStartNPC();    // `0x10273ad0`
 void TroikaStartNPC();  // `0x1029a8b0`
 
 // -------------------------------------------------------------------------------------------------
 // Slot 130
 // -------------------------------------------------------------------------------------------------
 
-void BaseOnRestore(bool bFromLoad);    // `0x1027bf50`
 void TroikaOnRestore(bool bFromLoad);  // `0x102998c0`

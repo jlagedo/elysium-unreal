@@ -759,7 +759,7 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	}
 	Tzim->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	TestEqual(TEXT("and the Tzimisce copy answers the same"), Tzim->CanPlaySequence(false, 0), 0);
-	TestEqual(TEXT("and so does the base"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("and so does the base"), Animal->FElysiumNpcBase::CanPlaySequence(false, 0), 0);
 
 	TestEqual(TEXT("disregarding state admits it"), Animal->CanPlaySequence(true, 0), 1);
 	Animal->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Idle);
@@ -774,7 +774,7 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 	TestEqual(TEXT("a SCRIPT-state animal's copy admits a sequence"), Animal->CanPlaySequence(false, 0), 1);
 	Tzim->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Scripted);
 	TestEqual(TEXT("and so does the Tzimisce copy"), Tzim->CanPlaySequence(false, 0), 1);
-	TestEqual(TEXT("where the base refuses it"), Animal->FElysiumNpc::CanPlaySequence(false, 0), 0);
+	TestEqual(TEXT("where the base refuses it"), Animal->FElysiumNpcBase::CanPlaySequence(false, 0), 0);
 	TestEqual(TEXT("and the slot answers the animal's own copy"), Animal->CanPlaySequence(false, 0), 1);
 	return true;
 }

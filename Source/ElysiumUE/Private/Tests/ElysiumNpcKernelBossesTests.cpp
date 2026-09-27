@@ -685,7 +685,7 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 	Out = FVector::ZeroVector;
 	Bat->FUN_1038b370(0.1f, Out);
 	TestEqual(TEXT("an unreachable fly-by target falls to the plain velocity"), Out.X, 11.0, 0.001);
-	TestEqual(TEXT("and TaskFail recorded retail's 0x1a"), Bat->ScheduleHost.FailureReason, 0x1a);
+	TestEqual(TEXT("and TaskFail recorded retail's 0x1a"), Bat->BaseScheduleHost.FailureReason, 0x1a);
 	TestTrue(TEXT("with COND_TASK_FAILED raised"),
 		Bat->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
@@ -701,18 +701,18 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ FlyByNpc });
 	FElysiumNpc::ResetManBatStationaryWatch();
 	Bat->ManBatFlyByTarget = FlyByNpc->Handle;
-	Bat->ScheduleHost.FailureReason = 0;
+	Bat->BaseScheduleHost.FailureReason = 0;
 	Out = FVector::ZeroVector;
 	Bat->FUN_1038b370(0.1f, Out);
 	TestTrue(TEXT("a live NPC fly-by target passes slot 158"), FlyByNpc->IsAlive());
-	TestEqual(TEXT("and reaches the same navigator refusal"), Bat->ScheduleHost.FailureReason, 0x1a);
+	TestEqual(TEXT("and reaches the same navigator refusal"), Bat->BaseScheduleHost.FailureReason, 0x1a);
 	FElysiumNpc::ResetManBatStationaryWatch();
 	FlyByNpc->bDead = true;
-	Bat->ScheduleHost.FailureReason = 0;
+	Bat->BaseScheduleHost.FailureReason = 0;
 	Out = FVector::ZeroVector;
 	Bat->FUN_1038b370(0.1f, Out);
 	TestEqual(TEXT("a dead fly-by target is refused by slot 158 before the probe, so no TaskFail"),
-		Bat->ScheduleHost.FailureReason, 0);
+		Bat->BaseScheduleHost.FailureReason, 0);
 	TestEqual(TEXT("and the plain velocity stands"), Out.X, 11.0, 0.001);
 	FlyByNpc->bDead = false;
 	Bat->ManBatFlyByTarget = FlyBy->Handle;

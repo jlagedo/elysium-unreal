@@ -47,22 +47,6 @@ FElysiumPlayer* ChainPlayer() const;
 // types and names the chain half; the `CBasePlayer` half is named by that class's own datamap
 // (`vtmb_fields CBasePlayer`), which is where this family recovered it.
 
-// +0x01b0 `m_NetworkChangeState` (`CEntityNetworkChangeState`, `layout.md` `+0x01b0`) — an
-// 8-byte record the SDK does not declare: a bool at +0, `m_bChanged` at +1, a second bool at +2, a
-// short interval at +4 and a short countdown at +6. Slot 88 (`0x10026b50`) asks whether a send is
-// due; slot 89 — this family's — clears the two flag bytes. SEAM-ADJACENT: nothing in this runtime
-// networks an entity, so the interval/countdown stand at 0 and only the two flags are written, by
-// the one body that writes them in retail.
-struct FNetworkChangeState
-{
-	bool bByte0 = false;       // +0x00 — set by the static prop/brush Spawns through 0x101466e0
-	bool bChanged = false;     // +0x01 m_bChanged — SetAbsOrigin/SetModel/SetLocalVelocity set it
-	bool bByte2 = false;       // +0x02 — the second flag 0x10146790 clears; its writer is unrecovered
-	int16 IntervalTicks = 0;   // +0x04
-	int16 CountdownTicks = 0;  // +0x06
-};
-FNetworkChangeState NetworkChangeState;   // +0x01b0
-
 // +0x06f4 `m_flPlaybackRate` (`CBaseAnimating`, datamap `KEY playbackrate`) — the fourth of the four
 // scalar animation words `0x101618e0` copies off a controller NPC, beside family Anim's
 // `SequenceNumber` (+0x06f0), `AnimTime` (+0x0174) and `SequenceCycle` (+0x06f8).
@@ -195,38 +179,6 @@ FString PendingDialogEventScript;   // +0x31ea
 //
 // Each answers NOTHING and names the retail call it stands for. None of them invents a value.
 
-/** `IPhysicsObject::GetPosition(&origin, &angles)` — the physics object's own transform, which slot
- *  226's movetype-7 arm reads and writes back through slots 216/218. **SEAM**: this runtime stands
- *  no `IPhysicsObject`; the pointer arrives through the generated `void*` and nothing can be read
- *  off it, so this answers false and the arm writes nothing. */
-bool PhysicsObjectPosition(const void* PhysicsObject, FVector& OutOrigin, FRotator& OutAngles) const;
-
-/** `CBaseEntity::PhysicsTouchTriggers(0)` (`0x100b0f30`) and `CBaseEntity::PhysicsRelinkChildren`,
- *  the two calls slot 226's movetype-7 arm ends on, IN THAT ORDER. **SEAM**: this runtime's overlap
- *  routing is the world's, not the entity's, and it carries no child relink. Recorded so the ORDER
- *  is assertable; read by the test and by nothing else. */
-TArray<FString> PhysicsUpdateCalls;
-
-/** `CBaseEntity::VPhysicsUpdatePusher(physicsObject)` — the arm movetypes 1 and 8 take. **SEAM**:
- *  the same missing physics object. Recorded into `PhysicsUpdateCalls`. */
-void VPhysicsUpdatePusher(const void* PhysicsObject);
-
-/** `edict_t + 0x40`'s `IServerNetworkable::GetBaseEntity()` (`+0x10`) — the hop slot 165 makes
- *  before dispatching slot 166. **SEAM**: there are no edicts here. The generated signature hands
- *  the edict in as `void*`; this answers null, which takes retail's own "no networkable" arm and
- *  dispatches slot 166 with 0 — the SAME call retail makes, not a refusal of it. */
-FElysiumEntity* EntityOfEdict(const void* Edict) const;
-
-/** `IPhysics`'s "is this vphysics object static/asleep" query — `(*DAT_1070b250 + 0x18)(index)`,
- *  the second arm of `0x100b5110`. **SEAM**: answers false, so a `SOLID_VPHYSICS` entity is not
- *  standable, which is retail's answer for a moving one. */
-bool PhysicsObjectIsStandable(const FElysiumEntity& Entity) const;
-
-/** `DAT_1072b360`, the single global word slot 240 returns. It is the CPython interop side of the
- *  entity — whatever the embedded interpreter last stored there — and this runtime embeds no
- *  interpreter. **SEAM**: answers null, which is the global's own pre-interpreter value. */
-void* PythonInteropObject() const;
-
 /** `CBaseAnimating::LookupBone("bip01_head")` and slot 192's bone-position fetch (`+0x300`), the
  *  two calls `0x100e49b0` makes on the resolved speaker. **SEAM**: the kernel stands no bone table;
  *  answers false and the walk records the miss. */
@@ -329,30 +281,8 @@ static constexpr int32 ActCvarInvestigate = 0x107250d4;
 
 // --- The slot bodies' named halves ----------------------------------------------------------------
 
-/** `FUN_100b5110` (`0x100b5110`) — the shared standability helper slots 159 and 164 both end in.
- *  `GetSolid() == 1` (`SOLID_BSP`) is standable outright; `SOLID_VPHYSICS` (6) asks the physics
- *  object; everything else is not. NAMED from what it does, not from a recovered symbol. */
-bool IsStandableSolid() const;
-
 // Family Schedule's slot-580 row type, declared here because this family's `.inl` is included
 // BEFORE `ElysiumNpcSchedule.inl` and slot 580's Troika-line body is this family's.
-
-/** `0x101a6d00` — slot 580's BASE body (`CAI_BaseNPC`), `return &DAT_1090ff08`. Not the slot: slot
- *  580 is `CAI_BaseNPCTroika`'s own (`0x101aa790`), which this family defines. The base answers a
- *  DIFFERENT `CAI_ClassScheduleIdSpace` from the Troika line's `&DAT_10924248`, and family
- *  Schedule's table has no row for it, so this is the row and the reading of it. */
-const FElysiumLocalIdSpace* BaseClassScheduleIdSpace() const;
-
-/** This NPC's live `CAI_LocalIdSpace` for one category, out of the loaded corpus. Slot 580's own
- *  answer, and never null while a corpus is loaded. */
-const FElysiumLocalIdSpace* IdSpace(EElysiumIdCategory Category) const;
-
-/** `0x101a67c0` — slot 476 `HearingSensitivity`'s BASE body. The slot itself is Troika's
- *  (`0x101aa5f0`, which reads `+0x63c0`), so this is the base under its own name. RECOVERED VALUE:
- *  `_DAT_104454c0` is the image's shared `1.0f` (`docs/vtmb/animation_and_movers.md` line 659 reads
- *  the same word as `1.0f`), so the base sensitivity is unity and `CanHearSound`'s
- *  `volume * sensitivity` is the bare volume. */
-float BaseHearingSensitivity() const;
 
 // --- The bodies that fill no slot -----------------------------------------------------------------
 
@@ -505,10 +435,6 @@ void SetPlayerAnim(const TCHAR* Name, const TCHAR* Sound);
  *  is an AND, which is a shipped divergence and is what this ports. */
 bool CineIsTimeToStart() const;
 
-/** `0x101a8930` — `CCineNPC::CanInterrupt`. `m_interruptable` (+0x5f90) set AND the resolved
- *  `m_hTargetEnt` (+0x5ce4) answering slot 158 `IsAlive`. A missing target is false, not true. */
-bool CineCanInterrupt() const;
-
 /** `0x101a8840` — `CCineNPC::FixScriptNPCSchedule`, the body every scripted-sequence teardown ends
  *  on. If the NPC's `m_IdealNPCState` (+0x5cc4) is not 7 (`NPC_STATE_DEAD`), stamp the
  *  `m_SelectIdealStateTrace` file/line pair (+0x1b3c / +0x1b40 = 970) and store 1
@@ -519,67 +445,17 @@ bool CineCanInterrupt() const;
  *  the image stamps. Corrected here and in the walked paragraph. */
 void FixScriptNpcSchedule(FElysiumNpc& Npc);
 
-/** `0x101a64a0` — `GetLastThink` for the FOURTH (AI) think channel, beside family Lifecycle's
+/** `0x101aa730` — the Troika's stamp for the FOURTH (AI) think channel (+0x6260), beside family Lifecycle's
  *  `LastUpdateThink` / `LastNormalThink` / `LastMoveThink`. This runtime carries the word as
  *  `FElysiumNpcScheduleHost::LastAI`, so the body is that read and nothing else. */
 float LastAiThink() const;
 
-/** `0x100994c0`'s companion read, exposed so a case can assert slot 271 against the table's own
- *  starting index. `GetFirstGestureLayer()` (slot 267) answers 0 for every class in the hierarchy;
- *  retail's scan starts THERE and refuses outright when it is 4 or more. */
-int32 FirstGestureLayerOrRefusal() const;
-
 // --- Slot 135's own inputs ------------------------------------------------------------------------
-
-/** The `CBaseEntity` mover words slot 135 reads. Not one of them has a port member
- *  (`docs/vtmb/npc-kernel/layout.md` types them on `CBaseEntity`; the shape map's band starts at
- *  `+0x1a40`), so they arrive through one seam rather than seven. */
-struct FMoveRebound
-{
-	float LocalTime = 0.f;        // m_flLocalTime
-	float MoveDoneTime = 0.f;     // m_flMoveDoneTime
-	float StartTime = 0.f;        // m_flMoveReboundStartTime
-	float Duration = 0.f;         // m_flMoveReboundDuration
-	FVector Velocity = FVector::ZeroVector;      // m_flMoveReboundVelocity[3]
-	FVector AngVelocity = FVector::ZeroVector;   // m_flMoveReboundAngVelocity[3]
-	FVector FinalDest = FVector::ZeroVector;     // m_vecFinalDest[3]
-	FVector FinalAngle = FVector::ZeroVector;    // m_vecFinalAngle[3]
-	FVector LocalOrigin = FVector::ZeroVector;   // slot 220 GetLocalOrigin
-	FVector LocalAngle = FVector::ZeroVector;    // slot 221 GetLocalAngles
-};
-
-/** **SEAM**: answers the resting state and FALSE, which makes slot 135's first gate refuse — which
- *  is what retail answers for an NPC that is not rebounding. */
-bool MoveReboundState(FMoveRebound& Out) const;
-
-/** The easing inside `0x101c10d0`, on its own so the cubic is assertable without a mover:
- *  `(t*t + 1)*t - (t/D)*(D*D + 1)*t`. Zero at `t == 0` and at `t == D`. */
-static float MoveReboundBlend(float T, float Duration);
-
-/** `CBaseEntity::SetLocalVelocity` / `SetLocalAngularVelocity`, slot 135's two writes. The port's
- *  `FElysiumEntity::Velocity` and `AngularVelocity` ARE those words. */
-void SetLocalVelocity(const FVector& NewVelocity);
-void SetLocalAngularVelocity(const FVector& NewAngularVelocity);
-
-/** `thunk_FUN_10075b70(record.event)` — the release both scene-event removers call before they
- *  compact. **SEAM**: the port's scene events are parsed data owned by the scene asset and are not
- *  reference-counted; the call is recorded so the SEQUENCE is assertable. */
-void ReleaseSceneEvent(const FSceneEventRecord& Record);
-/** How many times that release ran, which is the only observable it has here. */
-int32 SceneEventReleases = 0;
-
-/** `0x102ea280` — the GLOBAL-to-LOCAL range translation slots 447 and 450 both forward into.
- *  A null space is retail's end-of-chain and answers -1. */
-static int32 GlobalToLocalId(const FElysiumLocalIdSpace* Space, int32 GlobalId);
 
 /** **SEAM** for `CCineNPC::m_iDelay` (+0x5f70) and `m_startTime` (+0x5f74): the port's beat lives on
  *  the `scripted_sequence` entity and the kernel holds no pointer to it. Answers (0, 0), the state
  *  retail's constructor leaves. */
 void CineDelayState(int32& OutDelay, float& OutStartTime) const;
-
-/** `CCineNPC::m_interruptable` (+0x5f90), read through the scripted-sequence entity that already
- *  stores the word. A missing or non-sequence owner answers false. */
-bool CineIsInterruptable() const;
 
 // --- The `CBasePlayer` bodies' own inputs ---------------------------------------------------------
 

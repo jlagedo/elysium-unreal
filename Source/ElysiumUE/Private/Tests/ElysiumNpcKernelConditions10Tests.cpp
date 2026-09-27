@@ -468,7 +468,7 @@ bool FElysiumNpcKernelConditions10CanBeFedUponByTest::RunTest(const FString&)
 	// **The feeder argument is never read by the base body.** A null feeder reaches it unchanged and
 	// answers the same as any other, which is the recovered asymmetry the Troika arm compensates for.
 	TestTrue(TEXT("the base body ignores the feeder entirely (0x10339800)"),
-		F.Guard->BaseCanBeFedUponBy(nullptr));
+		F.Guard->FElysiumNpcBase::CanBeFedUponBy(nullptr));
 	return true;
 }
 

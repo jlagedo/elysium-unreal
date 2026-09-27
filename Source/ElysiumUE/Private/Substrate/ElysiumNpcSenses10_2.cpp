@@ -175,17 +175,6 @@ FElysiumEntity* FElysiumNpc::FrenzyShadowBestEnemy()
 // `CNPC_VScurrying` — `0x103acac0` and `0x103acba0`.
 // =================================================================================================
 
-bool FElysiumNpc::NearestNavigatorNode(const FVector& /*ThreatCm*/, float /*FleeDistanceUnits*/,
-	float /*SearchLimitUnits*/, FVector& OutNodeCm) const
-{
-	// SEAM for `0x102edae0` over `0x103008f0` / `0x10300b50` / `0x102ee9c0` -- the navigator's node
-	// search around the threat with the caller's flee distance and 30000.0. No AI network stands on
-	// this substrate, so the search fails, which is the arm that still produces a destination (the
-	// march).
-	OutNodeCm = FVector::ZeroVector;
-	return false;
-}
-
 bool FElysiumNpc::IsAreaClear(const FVector& /*PositionCm*/, int32 /*Mask*/) const
 {
 	// SEAM for `CAI_BaseNPCTroika::IsAreaClear(pos, 0x202400b, 0, 0)`. This runtime has no hull

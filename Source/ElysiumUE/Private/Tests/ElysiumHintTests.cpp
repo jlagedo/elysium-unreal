@@ -141,14 +141,14 @@ bool FElysiumHintListTest::RunTest(const FString&)
 		F.World.HintList()[0], Second->Handle.Index);
 	TestTrue(TEXT("...and the kernel walks the same list"), Reader->GlobalHintList() == F.World.HintList());
 
-	FElysiumNpc::FHintWords Words;
+	FElysiumNpcBase::FHintWords Words;
 	TestTrue(TEXT("HintWords reads a live hint"), Reader->HintWords(Second->Handle.Index, Words));
 	TestEqual(TEXT("...its entity index"), Words.HintIndex, Second->Handle.Index);
 	TestEqual(TEXT("...its authored type"), Words.HintType, 10100);
 	TestEqual(TEXT("...its interest-record place name"), Words.TargetName, FString(TEXT("spot")));
 	TestEqual(TEXT("...its group folded by CAI_Hint::Spawn (1..32 -> one bit)"), Words.GroupMask, 1 << 2);
 	TestEqual(TEXT("...and no network node until story 3"), Words.NodeId, static_cast<int32>(INDEX_NONE));
-	FElysiumNpc::FHintWords CoverWords;
+	FElysiumNpcBase::FHintWords CoverWords;
 	Reader->HintWords(First->Handle.Index, CoverWords);
 	TestEqual(TEXT("the cover row's type is the one it authored (none), not the class-forced one"),
 		CoverWords.HintType, 0);
@@ -306,7 +306,7 @@ bool FElysiumHintBridgeTest::RunTest(const FString&)
 	ElysiumExpr::Exec(TEXT("Bottleneck_Cover.EnableHint()"), Env);
 	TestFalse(TEXT("the script call evaluates"), Env.bError);
 	TestTrue(TEXT("...and reaches only the first name match, the lower index"), A->Disabled == 0 && B->Disabled == 1);
-	FElysiumNpc::FHintWords Words;
+	FElysiumNpcBase::FHintWords Words;
 	Reader->HintWords(A->Disabled == 0 ? A->Handle.Index : B->Handle.Index, Words);
 	TestEqual(TEXT("the NPC's hint query observes the input's write"), Words.Disabled, 0);
 

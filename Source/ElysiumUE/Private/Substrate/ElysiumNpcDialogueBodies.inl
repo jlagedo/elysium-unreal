@@ -121,13 +121,6 @@ int32 CrosswalkLinkSignalFlags = 0;     // link +0x64
 
 // --- `CBaseEntity + 0x8c`, the cached use activator -----------------------------------------------
 
-/** `+0x8c` — the handle of whoever last began a `+use` on this entity, written by slot 39 and
- *  cleared to `-1` by slot 42 and by a null activator. Not a datamap field and not in
- *  `ElysiumNpcKernelShapeMap.cpp` (which covers the `CAI_BaseNPC` band only); its retail name is
- *  **unrecovered**. It has no reader in this family's closure — the two slots are its only
- *  toucher — so it is carried as the recorded write rather than wired to a consumer. */
-FElysiumEntityHandle UseActivator;   // +0x8c
-
 // --- The seams ------------------------------------------------------------------------------------
 //
 // Each answers NOTHING and names the retail call it stands for. None of them invents a value.
@@ -157,8 +150,6 @@ TArray<FString> DialogUserMessages;
  *  `"GetControllerNPC(): ... created NULL Entity ..."` arm — the arm that clears `m_hControllerNPC`
  *  to -1 — rather than refusing the body. */
 FElysiumEntity* CreateControllerNpcEntity(const TCHAR* Classname);
-
-int32 NavigatorPathType() const;
 
 /** `0x102f96e0` — given a waypoint's owning entity and a link id, the path node whose id matches.
  *  **SEAM**: this runtime stands no node graph; answers false and writes nothing, so

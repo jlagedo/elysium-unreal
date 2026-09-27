@@ -170,7 +170,7 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MakeEntryDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 
 	FElysiumEntity* Ent = World.FindByName(GTalker);
@@ -250,7 +250,7 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MakeEntryDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 
 	FElysiumEntity* Ent = World.FindByName(GTalker);
@@ -418,7 +418,7 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MakeEntryDefs(*DialogName));
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 
 	FElysiumEntity* Ent = World.FindByName(GTalker);

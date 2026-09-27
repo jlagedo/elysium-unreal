@@ -246,7 +246,7 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 	static const FDerived Derived[] =
 	{
 		// --- The restart divergence, through retail's own slot 435 -------------------------------
-		// `BaseOnRestore 0x1027bf50` re-finds the saved program and retail then RESUMES it, because
+		// `FElysiumNpcBase::OnRestore` `0x1027bf50` re-finds the saved program and retail then RESUMES it, because
 		// its datamap also restored the task cursor at `+0x5c50`. This port does not save that
 		// cursor (a task holds a clip, a pending move or a deadline, none of which survive a load),
 		// so it restarts the program instead -- and a restart runs `TroikaOnScheduleChange`

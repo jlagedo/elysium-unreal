@@ -35,10 +35,10 @@ namespace
 {
 	constexpr float U = ElysiumMove::U;
 
-	FElysiumNpc::FHintWords MakeNode(int32 HintType, const FVector& OriginCm,
+	FElysiumNpcBase::FHintWords MakeNode(int32 HintType, const FVector& OriginCm,
 		const TCHAR* Group = TEXT(""))
 	{
-		FElysiumNpc::FHintWords Node;
+		FElysiumNpcBase::FHintWords Node;
 		Node.bValid = true;
 		Node.HintType = HintType;
 		Node.OriginCm = OriginCm;
@@ -63,14 +63,14 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 	// `SelectCenterNode` `0x103b0930`: type 0x4651 only, nearest to the player, `<` so the FIRST of
 	// a tie survives.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x4653, FVector(10.0, 0.0, 0.0)));    // a ledge, not a centre
 		Nodes.Add(MakeNode(0x4651, FVector(500.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4651, FVector(100.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4651, FVector(100.0, 0.0, 0.0)));   // the tie
 		TestEqual(TEXT("SelectCenterNode takes the nearest 0x4651 and keeps the first of a tie"),
 			FElysiumNpcSheriffMan::SelectCenterNodeRule(Nodes, Player), 2);
-		TArray<FElysiumNpc::FHintWords> NoCentre;
+		TArray<FElysiumNpcBase::FHintWords> NoCentre;
 		NoCentre.Add(MakeNode(0x4653, FVector(10.0, 0.0, 0.0)));
 		TestEqual(TEXT("and answers null when the map authors no centre node"),
 			FElysiumNpcSheriffMan::SelectCenterNodeRule(NoCentre, Player), (int32)INDEX_NONE);
@@ -79,7 +79,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 	// `SelectLedgeNode` `0x103b0ab0`: type 0x4653, and the reference point is retail's `char`
 	// argument — `'\0'` measures from the PLAYER, anything else from the NPC.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x4653, FVector(100.0, 0.0, 0.0)));   // near the player
 		Nodes.Add(MakeNode(0x4653, FVector(900.0, 0.0, 0.0)));   // near the NPC at x=1000
 		Nodes.Add(MakeNode(0x4651, FVector(0.0, 0.0, 0.0)));     // a centre node, never picked
@@ -93,7 +93,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 	// `_DAT_104c3cbc = 24.0` units, and the score is the yaw delta ALONE — distance does not enter
 	// it, so the far archway in front beats the near one to the side.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x3e82, FVector(-20.0, 0.0, 0.0)));            // inside 24 units: rejected
 		Nodes.Add(MakeNode(0x3e82, FVector(0.0, 200.0 * U, 0.0)));        // 90 degrees off
 		Nodes.Add(MakeNode(0x3e82, FVector(-2000.0 * U, 0.0, 0.0)));      // straight ahead, far
@@ -101,7 +101,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		TestEqual(TEXT("SelectTeleportArchway scores by yaw alone, so distance never breaks a tie"),
 			Pick, 2);
 
-		TArray<FElysiumNpc::FHintWords> TooClose;
+		TArray<FElysiumNpcBase::FHintWords> TooClose;
 		TooClose.Add(MakeNode(0x3e82, FVector(23.0 * U, 0.0, 0.0)));
 		TestEqual(TEXT("and a node inside 24.0 units (_DAT_104c3cbc) is refused"),
 			FElysiumNpcSabbatLeader::SelectTeleportArchwayRule(TooClose, Player, 0.f), (int32)INDEX_NONE);
@@ -111,7 +111,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 	// `_DAT_104c3cfc = 40.0` units, score = |yawDelta| + flatDistance. One degree of misalignment
 	// costs exactly one unit of distance, which is retail's own weighting.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x3e85, FVector(39.0 * U, 0.0, 0.0)));       // inside 40 units: refused
 		Nodes.Add(MakeNode(0x3e85, FVector(-100.0 * U, 0.0, 0.0)));     // yaw 0, 100 units away
 		Nodes.Add(MakeNode(0x3e85, FVector(0.0, 60.0 * U, 0.0)));       // 90 degrees off, 60 units
@@ -121,7 +121,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 		TestEqual(TEXT("SelectDiveOutPoint adds the yaw delta to the flat distance"),
 			FElysiumNpcSabbatLeader::SelectDiveOutPointRule(Nodes, Player, 0.f), 2);
 		// And with the distance term removed it does: the same two positions typed as archways.
-		TArray<FElysiumNpc::FHintWords> Archways;
+		TArray<FElysiumNpcBase::FHintWords> Archways;
 		Archways.Add(MakeNode(0x3e82, FVector(-100.0 * U, 0.0, 0.0)));
 		Archways.Add(MakeNode(0x3e82, FVector(0.0, 60.0 * U, 0.0)));
 		TestEqual(TEXT("where the archway picker, scoring on yaw alone, takes the aligned one"),
@@ -131,7 +131,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 	// `SelectDiveInPoint` `0x103a9760`: `SelectDiveOutPoint` plus the leader's own distance gate
 	// (`_DAT_104c3d00 = 45.0` units) and the away-from-the-player hemisphere test.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x3e85, FVector(-800.0, 0.0, 0.0)));   // behind the leader, away from player
 		Nodes.Add(MakeNode(0x3e85, FVector(500.0, 0.0, 0.0)));    // toward the player: dot >= 0
 
@@ -159,7 +159,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 
 	// `CNPC_VSheriffMan::SelectTeleportNode` `0x103b0630`.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		// Type filter: 17000 / 0x4653 / 0x4652 only.
 		Nodes.Add(MakeNode(0x4651, FVector(-1000.0, 0.0, 0.0)));          // a centre node: skipped
 		Nodes.Add(MakeNode(17000, FVector(-1000.0, 0.0, 0.0)));           // straight ahead
@@ -182,7 +182,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 		TestEqual(TEXT("and PositionClearForTeleport is a gate, not a tiebreak"), Refused.Index,
 			(int32)INDEX_NONE);
 
-		TArray<FElysiumNpc::FHintWords> TooClose;
+		TArray<FElysiumNpcBase::FHintWords> TooClose;
 		TooClose.Add(MakeNode(17000, FVector(-99.0 * U, 0.0, 0.0)));
 		TestEqual(TEXT("a node inside DAT_104c6124 = 100.0 units is refused before the gate"),
 			FElysiumNpcSheriffMan::SelectTeleportNodeSheriffRule(TooClose, Player, 0.f, &AlwaysClear).Index,
@@ -192,7 +192,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 	// `CNPC_VAndreiBlood::SelectTeleportNode` `0x1035ddd0` — the coin flip picks nearest or
 	// FARTHEST, and the seed of the running best follows it.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x4653, FVector(-400.0, 0.0, 0.0)));      // wrong type for Andrei
 		Nodes.Add(MakeNode(17000, FVector(-400.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4269, FVector(-4000.0, 0.0, 0.0)));
@@ -208,7 +208,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 	// `CNPC_VChangBros::SelectTeleportNode` `0x1036cce0` — the nearest node is kept, and a node in
 	// the PLAYER's sector replaces it outright however much further away it is.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(18000, FVector(-400.0, 0.0, 0.0)));    // nearest, wrong sector
 		Nodes.Add(MakeNode(0x4652, FVector(-4000.0, 0.0, 0.0)));  // far, the player's sector
 		auto SectorOf = [](const FVector& P) -> int32
@@ -230,7 +230,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 	// `CNPC_VAsianVampire::SelectLedgeNode` `0x103615c0` — the only selector that never asks for a
 	// player, and the one that runs its clearance gate BEFORE it measures anything.
 	{
-		TArray<FElysiumNpc::FHintWords> Nodes;
+		TArray<FElysiumNpcBase::FHintWords> Nodes;
 		Nodes.Add(MakeNode(0x4652, FVector(10.0, 0.0, 0.0)));    // wrong type
 		Nodes.Add(MakeNode(0x4653, FVector(900.0, 0.0, 0.0)));
 		Nodes.Add(MakeNode(0x4653, FVector(200.0, 0.0, 0.0)));
@@ -524,7 +524,7 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 	const double Now = Fixture.World.NowSeconds();
 	TestFalse(TEXT("an empty cache answers false"), Npc->IsUnreachable(Target));
 
-	FElysiumNpc::FUnreachableEntity Record;
+	FElysiumNpcBase::FUnreachableEntity Record;
 	Record.Entity = Target->Handle;
 	Record.ExpiresAt = Now + 5.0;
 	Record.PositionCm = Target->Origin;
@@ -551,7 +551,7 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 	TestEqual(TEXT("and is removed"), Npc->UnreachableEnts.Num(), 0);
 
 	// A record whose handle no longer resolves is compacted away and the walk continues.
-	FElysiumNpc::FUnreachableEntity Stale;
+	FElysiumNpcBase::FUnreachableEntity Stale;
 	Stale.Entity = FElysiumEntityHandle();
 	Npc->UnreachableEnts.Add(Stale);
 	Npc->UnreachableEnts.Add(Record);
@@ -569,7 +569,7 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 	Npc->BaseScheduleHost.HintGroup = TEXT("rooftops");
 	TestFalse(TEXT("one with a hint group refuses a null hint"),
 		Npc->IsValidShootPosition(FVector::ZeroVector, nullptr));
-	FElysiumNpc::FHintWords Hint;
+	FElysiumNpcBase::FHintWords Hint;
 	Hint.bValid = true;
 	Hint.Group = TEXT("alley");
 	TestFalse(TEXT("and refuses a hint from another group"),
@@ -816,7 +816,7 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	Npc->Senses.Memory.ClosestPlayer = Player->Handle;
 
 	// The node-graph seam. Every selector asks it, and every one of them answers retail's null.
-	TArray<FElysiumNpc::FHintWords> Nodes;
+	TArray<FElysiumNpcBase::FHintWords> Nodes;
 	TArray<int32> NodeIds;
 	Npc->GatherHintNodes(Nodes, NodeIds);
 	TestEqual(TEXT("the global hint list answers empty"), Nodes.Num(), 0);

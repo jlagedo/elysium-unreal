@@ -640,7 +640,7 @@ bool FElysiumDialogueChoiceCarriesLineIdTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Speaker));
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	// `Activate` only ARMS the mind's admission barrier; an unadmitted NPC refuses
 	// `BeginDialogueBodySession` and `OpenDialog` with it. One deterministic think admits it — and
 	// that think falls at `curtime + 0.1`, because `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms

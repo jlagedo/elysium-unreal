@@ -57,16 +57,7 @@ static const FScheduleIdSpace* ScheduleIdSpaceOf(const TCHAR* InRetailClass);
 
 /** Slot 580 for THIS NPC: the nearest species override of slot 580 walking its class chain, else
  *  the Troika line's own row. Never null — every chain ends at `CAI_BaseNPCTroika`. */
-const FElysiumLocalIdSpace* ClassScheduleIdSpace() const;
-
-/** `CAI_ClassScheduleIdSpace::ScheduleLocalToGlobal` (`0x102ea2d0`, the same walk family Squad
- *  ports for squad slots over the space at `+0x48`): -1 stays -1, otherwise walk the chain and
- *  answer `(globalBase - localBase) + id` for the first space whose range holds it, else -1.
- *
- *  SEAM: every row's range is the empty one the static constructor left, because the port parses no
- *  schedule text, so this answers -1 for every id. Retail's ranges are filled by the class's own
- *  `InitCustomSchedules`. */
-static int32 ScheduleLocalToGlobal(const FElysiumLocalIdSpace* Space, int32 LocalId);
+const FElysiumLocalIdSpace* ClassScheduleIdSpace() const override;
 
 // --- Slot 452 `LoadedSchedules`: one method and a species table -----------------------------------
 //
@@ -95,24 +86,6 @@ static const FScheduleLoadFlag* LoadedSchedulesRowOf(const TCHAR* InRetailClass)
 
 // --- The schedule-change door ---------------------------------------------------------------------
 
-/** `CAI_BaseNPC::SetSchedule(int)` (`0x10280de0`), first half: the value `m_IdealSchedule`
- *  (`+0x5c3c`) is stamped with.
- *
- *  Retail: an id at or above 1,000,000,000 is already global and is stamped unchanged; anything
- *  below it — and the -1 sentinel — goes through this class's schedule id space. Split out from
- *  `ChangeSchedule` because it is the whole of what that body adds over the port's existing
- *  install chain, and a test has to be able to state it without installing a program. */
-int32 ResolveIdealScheduleStamp(int32 RawRetailId) const;
-
-/** `CAI_BaseNPC::SetSchedule(int)` (`0x10280de0`) whole, and the body all five slot-619 species
- *  overrides forward to (`0x1035dba0`, `0x10361530`, `0x1036c760`, `0x103a9fd0`, `0x103af8d0` —
- *  each a scope-trace wrapper with no logic of its own; their trace names are
- *  `FElysiumNpcScheduleHost::SetScheduleTraceName`).
- *
- *  Stamp raw `BaseScheduleHost.IdealScheduleRetail`, then run `SetSchedule(int)` (`0x102cc1f0`) →
- *  `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`), which is `ElysiumSchedule::Start`. */
-void ChangeSchedule(int32 Id);
-
 /** `CCineAI::FixScriptNPCSchedule`, slot 586 (`0x101a95d0`), applied to THIS NPC.
  *
  *  `FinishSchedule` is the director's own `m_iFinishSchedule` (`CCineAI +0x5f64`), not a word of
@@ -136,47 +109,11 @@ void AcceptScriptedScheduleOrder(int32 OrderId, bool bForce);
 
 // --- The task surface -----------------------------------------------------------------------------
 
-/** `NextScheduledTask` (`0x10280f40`): clear the task status, advance the task index, and when the
- *  program is exhausted zero `m_failedSchedule`/`m_interuptSchedule` and raise
- *  `COND_SCHEDULE_DONE` (0x5d). */
-void NextScheduledTask();
-
-/** `CAI_BaseNPC::TaskComplete(bool)` (`0x10273e80`) — the body `CAI_Motor` slot 2 (`0x102623c0`)
- *  forwards to through its owner back-pointer. `bIgnoreTaskFailed` false refuses to overwrite an
- *  already raised `COND_TASK_FAILED`; true writes the status regardless. */
-void TaskComplete(bool bIgnoreTaskFailed);
-
-/** `CAI_Motor` slot 2 (`0x102623c0`): `m_pOuter->TaskComplete(b)`. The motor telling its owner a
- *  motor-driven task finished; no logic of its own. */
-void MotorTaskComplete(bool bIgnoreTaskFailed);
-
 /** `CAI_Motor` slot 1 (`0x102623a0`): `JMP [[m_pOuter] + 0x700]` — the owner's slot 448
  *  `TaskFail`, unchanged. `FElysiumNpc::TaskFail` is that body; this is the motor's door into it. */
 void MotorTaskFail(int32 Reason);
 
-/** `0x1027db30` — **NOT `StartTaskByIndex`.** 29c's target name was a guess over a `‼` row with no
- *  recovered callers; the disassembly reads the NAVIGATOR at `+0x5d34`, indexes its node list
- *  (`+0x2c`, count at `+0x00`, array at `+0x04`) and tail-jumps to slot 527 `IsUnusableNode`, which
- *  the ledger's signature table names. An index below zero or past the end bumps the global error
- *  counter `0x106c994c` and answers false, as does a null node.
- *
- *  SEAM: there is no node list on the port's motor, so the bounds test always fails and the counter
- *  is tallied instead of incremented. */
-bool IsUnusableNodeIndex(int32 NodeIndex) const;
-
 // --- The selectors --------------------------------------------------------------------------------
-
-/** `CAI_BaseNPC::PreSelectSchedule` (`0x1028a2a0`).
- *
- *  **NAMED `BasePreSelectSchedule`, not `PreSelectSchedule`.** Slot 437 is filled by a DIFFERENT
- *  retail body on the Troika line (`CAI_BaseNPCTroika` `0x102ae920`, layer 25), which is story
- *  29e's and whose generated stub is still in `ElysiumNpcKernelSlots.cpp`. This is the base class's
- *  body, which fills the same slot for `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_ExpressiveNPC` and
- *  ten more.
- *
- *  Answers a RAW retail schedule number (0x3a `NPC_FREEZE`, 0x151, 0x3e `FALL_TO_GROUND`) or 0 for
- *  "no opinion" — none of the three is a registered program here. */
-int32 BasePreSelectSchedule();
 
 /** Slot 438's species hook: a species class that REPLACES the whole selector overrides it (story 5
  *  step 3) — `CNPC_VAndreiBlood` (`0x1035d010`), `CNPC_VCamera`/`CNPC_VCameraSecurity`

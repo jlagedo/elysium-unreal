@@ -112,7 +112,7 @@ bool FElysiumSaveRefusedInDialogueTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MakeSaveTestDefs());
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
 
 	FElysiumEntity* Ent = World.FindByName(TEXT("speaker"));

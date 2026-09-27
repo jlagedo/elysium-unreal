@@ -360,23 +360,23 @@ bool FAnim10BaseSetActivityTest::RunTest(const FString&)
 
 	Anim10Reset(N);
 	N.ActivityNumber = GTActWalk;
-	N.BaseSetActivity(GTActWalk);
+	N.FElysiumNpcBase::SetActivity(GTActWalk);
 	TestEqual(TEXT("0x102725d0: a request equal to m_Activity is a NO-OP"),
 		N.NavigatorActivityNotices, 0);
 	TestEqual(TEXT("...and writes no ideal"), N.IdealActivityNumber, -1);
 
 	Anim10Reset(N);
 	N.ActivityNumber = GTActTransition;
-	N.BaseSetActivity(GTActWalk);
+	N.FElysiumNpcBase::SetActivity(GTActWalk);
 	TestEqual(TEXT("0x102725d0: ACT_TRANSITION refuses every request..."),
 		N.NavigatorActivityNotices, 0);
-	N.BaseSetActivity(GTActReset);
+	N.FElysiumNpcBase::SetActivity(GTActReset);
 	TestEqual(TEXT("...except ACT_RESET (0)"), N.NavigatorActivityNotices, 1);
 	TestEqual(TEXT("...which commits as the ideal"), N.ActivityNumber, GTActReset);
 
 	Anim10Reset(N);
 	N.ActivityNumber = GTActIdle;
-	N.BaseSetActivity(GTActWalk);
+	N.FElysiumNpcBase::SetActivity(GTActWalk);
 	TestEqual(TEXT("0x102725d0: m_IdealActivity took the request"), N.IdealActivityNumber,
 		GTActWalk);
 	TestEqual(TEXT("...and SetActivityAndSequence committed it"), N.ActivityNumber, GTActWalk);

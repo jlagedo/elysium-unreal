@@ -6,6 +6,7 @@
 
 class FElysiumEntityWorld;
 class FElysiumNpc;
+class FElysiumNpcBase;
 struct FElysiumSaveArchive;
 
 // CAI_Memory's observed-actor record list. It is deliberately separate from the committed enemy:
@@ -31,7 +32,7 @@ public:
 	// UpdateEnemyMemory (slot 544, 0x102709c0): create or refresh the target's one record. The
 	// caller supplies an observed actor only; neutral/like relation policy remains BestEnemy's gate.
 	void Update(FElysiumNpc& Npc, const FElysiumEntityHandle& Target, double Now);
-	void UpdateAtPosition(FElysiumNpc& Npc, const FElysiumEntityHandle& Target,
+	void UpdateAtPosition(FElysiumNpcBase& Npc, const FElysiumEntityHandle& Target,
 		const FVector& Position, double Now);
 	// UpdateMemory's null-entity arm: retain one position-only record. It is never a BestEnemy
 	// candidate, but supplies the current damage/sound investigation position until a later refresh.

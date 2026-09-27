@@ -209,44 +209,6 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 	BaseScheduleHost.MemoryBits &= ~0x2000u; // 0x102a0aed
 }
 
-void FElysiumNpc::TaskMovementComplete()
-{
-	BaseScheduleHost.bShouldMove = false; // 0x10273ec9
-	bMoveIssued = false;
-	switch (Schedule.TaskStatus)
-	{
-		case EElysiumTaskStatus::New:
-		case EElysiumTaskStatus::Running:
-			Schedule.TaskStatus = EElysiumTaskStatus::RunningTask; // 0x10273edc
-			break;
-		case EElysiumTaskStatus::RunningMovement:
-			TaskComplete(false); // 0x10273eec
-			break;
-		case EElysiumTaskStatus::RunningTask:
-			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Movement completed twice!")); // 0x10273ef3
-			break;
-		case EElysiumTaskStatus::Complete:
-			break;
-	}
-	if (!IsScriptDriven()) // 0x10273f01..0x10273f14
-	{
-		SetIdealActivity(ResolveLinkActivity()); // 0x10273f20
-	}
-	if (NavIsGoalActive()) // 0x10273f2b
-	{
-		NavStopMoving(); // 0x10273f3a
-	}
-	if (Motor != nullptr)
-	{
-		Motor->ClearNavigationGoal(); // 0x10273f46
-	}
-}
-
-bool FElysiumNpc::MaintainSchedule(double Now, bool bReduced)
-{
-	return ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions, bReduced); // 0x102817c0
-}
-
 double FElysiumNpc::ScheduleTime() const
 {
 	return World != nullptr ? World->NowSeconds() : 0.0;
@@ -312,23 +274,6 @@ bool FElysiumNpc::ShouldSelectIdealStateForMaintenance()
 		return true;
 	}
 	return NpcStateRetail() == 2 && GetEnemy() == nullptr; // 0x1028148d..0x102814a4
-}
-
-void FElysiumNpc::RefreshIdealStateForMaintenance()
-{
-	// `0x1026f4d0` clears only the five debug/source words. They are ABSENT in the shape map; no
-	// member, source path or line stamp is introduced here.
-	int32 Selected = PreSelectIdealStateRetail(); // 0x1026f4ec
-	if (Selected == 0)
-	{
-		Selected = SelectIdealStateRetail(); // 0x1026f4f8
-	}
-	LastSelectIdealStateRetail = Selected;
-	if (NpcFlags.Has(EElysiumNpcFlag2::D_INSANE)
-		&& (Selected == 1 || Selected == 3)) // 0x1026f50b
-	{
-		Mind.WriteIdealStateRetail(0x0b); // 0x1026f55d / 0x1026f586
-	}
 }
 
 void FElysiumNpc::PrepareScheduleReselect()
@@ -471,17 +416,6 @@ bool FElysiumNpc::MaintenanceIsCurTaskContinuousMove()
 void FElysiumNpc::RememberContinuousMove()
 {
 	BaseScheduleHost.MemoryBits |= 0x00040000u; // 0x102820e6
-}
-
-void FElysiumNpc::RunTaskOverlay()
-{
-	// `RunTaskOverlay 0x10289c90` re-tests slot 529 before entering the already stood
-	// `CAI_MoveAndShootOverlay` seam. The overlay's full weapon/pose controller is outside this
-	// family; its existing state records the live call instead of silently dropping it.
-	if (IsCurTaskContinuousMove()) // 0x10289c90
-	{
-		++MoveAndShootOverlay.UpdateCalls; // 0x10289c9e -> 0x102e8560
-	}
 }
 
 bool FElysiumNpc::IsAiStepMode() const

@@ -31,9 +31,9 @@ static constexpr EAutomationTestFlags GHintsTestFlags =
 namespace
 {
 	// A hint the seam never has to resolve: the words a `CAI_Hint` would have carried.
-	FElysiumNpc::FHintWords MakeHint(int32 HintType)
+	FElysiumNpcBase::FHintWords MakeHint(int32 HintType)
 	{
-		FElysiumNpc::FHintWords Hint;
+		FElysiumNpcBase::FHintWords Hint;
 		Hint.bValid = true;
 		Hint.HintType = HintType;
 		return Hint;
@@ -94,7 +94,7 @@ bool FElysiumNpcKernelHintsTypeSpeciesTest::RunTest(const FString&)
 	// is the type switch's.
 	auto Ask = [&Fixture](const TCHAR* Cls, int32 Type)
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(Type);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(Type);
 		Hint.GroupMask = 1;
 		return Fixture.Npc(Cls)->FValidateHintType(&Hint);
 	};
@@ -240,27 +240,27 @@ bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 
 	// `IsHintUnusable` (`0x102d14c0`) — three arms in retail's order.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa3);
-		TestFalse(TEXT("a plain hint is usable"), FElysiumNpc::IsHintUnusable(Hint, 10.0, false));
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x3aa3);
+		TestFalse(TEXT("a plain hint is usable"), FElysiumNpcBase::IsHintUnusable(Hint, 10.0, false));
 		Hint.Disabled = 1;
 		TestTrue(TEXT("m_iDisabled makes it unusable"),
-			FElysiumNpc::IsHintUnusable(Hint, 10.0, false));
+			FElysiumNpcBase::IsHintUnusable(Hint, 10.0, false));
 		Hint.Disabled = 0;
 		Hint.NextUseTime = 20.0;
 		TestTrue(TEXT("curtime before m_flNextUseTime makes it unusable"),
-			FElysiumNpc::IsHintUnusable(Hint, 10.0, false));
+			FElysiumNpcBase::IsHintUnusable(Hint, 10.0, false));
 		TestFalse(TEXT("and at the deadline exactly it is usable again — retail's test is `<`"),
-			FElysiumNpc::IsHintUnusable(Hint, 20.0, false));
+			FElysiumNpcBase::IsHintUnusable(Hint, 20.0, false));
 		Hint.NextUseTime = 0.0;
 		TestTrue(TEXT("a live m_hHintOwner makes it unusable"),
-			FElysiumNpc::IsHintUnusable(Hint, 10.0, true));
+			FElysiumNpcBase::IsHintUnusable(Hint, 10.0, true));
 	}
 
 	// `IsValidBreakHint` (`0x103d8550`) — null, unusable, then type 0x3aa3 exactly.
 	{
-		FElysiumNpc::FHintWords None;
+		FElysiumNpcBase::FHintWords None;
 		TestFalse(TEXT("a null hint is not a break hint"), Npc->IsValidBreakHint(None, 10.0));
-		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa3);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x3aa3);
 		TestTrue(TEXT("type 0x3aa3 is"), Npc->IsValidBreakHint(Hint, 10.0));
 		Hint.HintType = 0x3aa2;
 		TestFalse(TEXT("the type either side is not"), Npc->IsValidBreakHint(Hint, 10.0));
@@ -274,7 +274,7 @@ bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("no hint -> schedule 0x163"),
 			FElysiumNpcWerewolf::SelectScheduleForHint(nullptr, 0.f, 0.f), 0x163);
-		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa4);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x3aa4);
 		TestEqual(TEXT("15012 -> 0x15f"), FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x15f);
 		Hint.HintType = 0x3aa5;
 		TestEqual(TEXT("15013 -> 0x160"), FElysiumNpcWerewolf::SelectScheduleForHint(&Hint, 0.f, 0.f), 0x160);
@@ -361,7 +361,7 @@ bool FElysiumNpcKernelHintsGeometryTest::RunTest(const FString&)
 	// `DistToHintCenterLine2D_2` (`0x103c6570`) — the hint's own origin and facing as the line, both
 	// flattened. A hint at the origin facing +X (yaw 0) is the case above.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(15000);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(15000);
 		Hint.OriginCm = FVector(0.0, 0.0, 700.0);   // the Z is thrown away
 		Hint.Angles = FVector(0.0, 0.0, 0.0);
 		TestEqual(TEXT("the hint's Z does not reach the answer"),
@@ -458,11 +458,11 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 	// are whole-unit multiples of the 2.54 cm scale.
 	{
 		Asian->LastJumpPositionIdx = 0;
-		FElysiumNpc::FHintWords A = MakeHint(0);
+		FElysiumNpcBase::FHintWords A = MakeHint(0);
 		A.OriginCm = FVector(100.0 * ElysiumMove::U, 0.0, 0.0);
-		FElysiumNpc::FHintWords B = MakeHint(0);
+		FElysiumNpcBase::FHintWords B = MakeHint(0);
 		B.OriginCm = FVector(200.0 * ElysiumMove::U, 0.0, 0.0);
-		FElysiumNpc::FHintWords C = MakeHint(0);
+		FElysiumNpcBase::FHintWords C = MakeHint(0);
 		C.OriginCm = FVector(300.0 * ElysiumMove::U, 0.0, 0.0);
 		Asian->AddHintToStoredJumpPositions(A);
 		TestEqual(TEXT("slot 0 takes the first"), Asian->LastJumpPosition[0].X, 100.0, 0.01);
@@ -472,7 +472,7 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 		TestEqual(TEXT("and the index wraps at 2"), Asian->LastJumpPositionIdx, 0);
 		Asian->AddHintToStoredJumpPositions(C);
 		TestEqual(TEXT("the third overwrites the first"), Asian->LastJumpPosition[0].X, 300.0, 0.01);
-		FElysiumNpc::FHintWords None;
+		FElysiumNpcBase::FHintWords None;
 		Asian->AddHintToStoredJumpPositions(None);
 		TestEqual(TEXT("and a null hint writes nothing and does not advance"),
 			Asian->LastJumpPositionIdx, 1);
@@ -480,7 +480,7 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 
 	// `IsImperativeTeleportHint` (`0x103d3360`) — every gate, by flag and by authored name.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa9);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x3aa9);
 		Hint.Name = TEXT("cheater_outside_hint_2");
 		Npc->WerewolfHintFlags = 0;
 		TestFalse(TEXT("with no flag set, nothing is imperative"),
@@ -537,7 +537,7 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 
 	// `GetHintGroundpoint` (`0x103d6770`) — the authored table, then retail's warn-and-fall-back.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(15000);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(15000);
 		Hint.HintIndex = 42;
 		Hint.OriginCm = FVector(10.0, 20.0, 30.0);
 		Npc->WerewolfHintGroundpoints.Reset();
@@ -701,7 +701,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		EAutomationExpectedErrorFlags::Contains, 0);
 
 	// The typed hint query — the seam everything else in the family goes through.
-	FElysiumNpc::FHintWords Words;
+	FElysiumNpcBase::FHintWords Words;
 	TestFalse(TEXT("HintWords cannot resolve a hint index: there is no hint store"),
 		Npc->HintWords(0, Words));
 	TestFalse(TEXT("and it leaves the view invalid"), Words.bValid);
@@ -729,12 +729,12 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// `TaskFail(4)`.
 	AddExpectedError(TEXT("TaskFail 0x4"), EAutomationExpectedErrorFlags::Contains, 0);
 	Npc->BaseScheduleHost.HintNode = 5;
-	Npc->ScheduleHost.FailureReason = 0;
+	Npc->BaseScheduleHost.FailureReason = 0;
 	TestFalse(TEXT("FindHintNode misses"), Npc->FindHintNode(15000, 0));
 	TestEqual(TEXT("and still clears m_pHintNode, as retail's unconditional store does"),
 		Npc->BaseScheduleHost.HintNode, int32(INDEX_NONE));
 	TestEqual(TEXT("and fails the task with retail's reason 4"),
-		Npc->ScheduleHost.FailureReason, 4);
+		Npc->BaseScheduleHost.FailureReason, 4);
 
 	// `SelectTzimisceHintNode` (`0x103bfa50`) — the null-target arm zeroes the hint, and a
 	// double miss returns 0 without touching it.
@@ -754,7 +754,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	TestFalse(TEXT("IsHintCoverValidLoose refuses too, at the hint rather than the handle"),
 		Npc->IsHintCoverValidLoose(0));
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(0x27d8);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x27d8);
 		TestFalse(TEXT("and the 0x10296c40 validator seam itself answers false"),
 			Npc->ValidateHintCoverRange(Hint, nullptr, 0.0f, 0.731f));
 	}
@@ -762,7 +762,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// `FindHintEndEntity` (`0x103d6520`) — with both lookups refusing, retail's fallback is the
 	// hint itself.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(15000);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(15000);
 		Hint.HintIndex = 13;
 		Hint.TargetName = TEXT("end_of_the_line");
 		TestEqual(TEXT("a hint whose target name resolves to nothing falls back to itself"),
@@ -771,7 +771,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 
 	// `CheckJumpPathToHintNode` (`0x1036df50`) — the gates, in retail's order.
 	{
-		FElysiumNpc::FHintWords Hint = MakeHint(15000);
+		FElysiumNpcBase::FHintWords Hint = MakeHint(15000);
 		Hint.OriginCm = FVector(500.0, 0.0, 0.0);
 
 		const FElysiumEntityHandle CachedPlayer = Chang->Senses.Memory.ClosestPlayer;
@@ -780,7 +780,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 			Chang->CheckJumpPathToHintNode(Hint));
 		Chang->Senses.Memory.ClosestPlayer = CachedPlayer;
 
-		FElysiumNpc::FHintWords None;
+		FElysiumNpcBase::FHintWords None;
 		TestFalse(TEXT("and so does a hint the seam could not resolve"),
 			Chang->CheckJumpPathToHintNode(None));
 
@@ -796,9 +796,9 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 
 	// `SetHintActivity` (`0x103d6000`) — a null hint refuses without drawing.
 	{
-		FElysiumNpc::FHintWords None;
+		FElysiumNpcBase::FHintWords None;
 		TestFalse(TEXT("SetHintActivity refuses a null hint"), Wolf->SetHintActivity(None));
-		FElysiumNpc::FHintWords Hint = MakeHint(0x3aa4);   // a type the switch does not carry
+		FElysiumNpcBase::FHintWords Hint = MakeHint(0x3aa4);   // a type the switch does not carry
 		TestFalse(TEXT("and a type outside the switch"), Wolf->SetHintActivity(Hint));
 		Hint.HintType = 0x3aaa;
 		// A type the switch carries still answers true: `PositionAtHint` declining a `vec3_invalid`
@@ -811,8 +811,8 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	AddExpectedError(TEXT("AI hint has incorrect origin"),
 		EAutomationExpectedErrorFlags::Contains, 0);
 	{
-		const FElysiumNpc::FHintRestoreResult Restore =
-			FElysiumNpc::HintOnRestore(MakeHint(15000));
+		const FElysiumNpcBase::FHintRestoreResult Restore =
+			FElysiumNpcBase::HintOnRestore(MakeHint(15000));
 		TestFalse(TEXT("no node was found"), Restore.bNodeFound);
 		TestFalse(TEXT("so no node was claimed"), Restore.bClaimedNode);
 		TestTrue(TEXT("and nothing was teleported"), Restore.NodeOriginCm.IsNearlyZero());

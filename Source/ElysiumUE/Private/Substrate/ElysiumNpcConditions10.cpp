@@ -306,61 +306,6 @@ int32 FElysiumNpc::TroikaIRelationType(FElysiumEntity* Candidate)
 // Slot 342 `CanBeFedUponBy` — `CAI_BaseNPCTroika::CanBeFedUponBy` `0x102c4a60`.
 // =================================================================================================
 
-bool FElysiumNpc::CanBeFedUponTemplate() const
-{
-	// `CBaseCombatCharacter::CanBeFedUpon` (`0x10339a90`): `GetCharTemplate(this)->+0x95 == 0`.
-	// **SEAM**: `+0x95` has no recovered column name and `FElysiumClanTemplate` exposes none, so
-	// this answers TRUE — retail's own answer for a template byte of zero, and the ADMITTING arm.
-	return true;
-}
-
-bool FElysiumNpc::IsUnconsciousMiscFlag() const
-{
-	// `CBaseCombatCharacter::IsUnconscious` (`0x10341aa0`) past its scope-trace push:
-	// `return (m_iMiscFlags & 1) != 0`. Bit 0 of the name table at `0x10619ec8` is `Unconscious`.
-	return ElysiumMiscFlags::Has(MiscFlags, ElysiumMiscFlags::Unconscious);
-}
-
-bool FElysiumNpc::BaseCanBeFedUponBy(FElysiumEntity* Feeder)
-{
-	// `CBaseCombatCharacter::CanBeFedUponBy` (`0x10339800`), 237 bytes. **The feeder argument is
-	// never read**: every one of the five terms is about the victim, which is exactly why the Troika
-	// override above it has to make the follower test itself.
-	(void)Feeder;
-
-	// `1033988a`: `CanBeFedUpon()`.
-	if (!CanBeFedUponTemplate())
-	{
-		return false;
-	}
-	// `1033989a`: `m_bfAINPCFlags2 & 0x8000000` — `NOT_FEEDABLE`.
-	if (NpcFlags.Has(EElysiumNpcFlag2::NOT_FEEDABLE))
-	{
-		return false;
-	}
-	// `103398a6`: a live grapple refuses. The handle `m_GrapplePartner` (`+0x1538`) must fail to
-	// resolve, OR `m_GrappleRole` (`+0x153c`) must be -1; anything else is a body already in a pair.
-	{
-		const FElysiumEntity* const Partner =
-			World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;
-		if (Partner != nullptr && Grapple.Role != EElysiumGrappleRole::None)
-		{
-			return false;
-		}
-	}
-	// `103398f1`: slot 158 `IsAlive()` (`vtable +0x278`).
-	if (!IsAlive())
-	{
-		return false;
-	}
-	// `103398fa`: `IsUnconscious()`.
-	if (IsUnconsciousMiscFlag())
-	{
-		return false;
-	}
-	return true;
-}
-
 bool FElysiumNpc::CanBeFedUponBy(FElysiumEntity* Feeder)
 {
 	// slot 342, `CAI_BaseNPCTroika::CanBeFedUponBy` (`0x102c4a60`), 77 bytes, three arms.
@@ -389,7 +334,7 @@ bool FElysiumNpc::CanBeFedUponBy(FElysiumEntity* Feeder)
 	}
 
 	// `102c4a9e`: everything else defers entirely to the base body WITH the feeder.
-	return BaseCanBeFedUponBy(Feeder);
+	return FElysiumNpcBase::CanBeFedUponBy(Feeder);
 }
 
 // =================================================================================================
@@ -441,16 +386,6 @@ bool FElysiumNpc::CanWitnessSupernatural(int32 Level)
 // Slot 532 — the door-failure cleanup, `0x10290570`.
 // =================================================================================================
 
-bool FElysiumNpc::NavIsGoalSet() const
-{
-	// `0x102ee2e0` — `CAI_Navigator::IsGoalSet()`, `m_pPath(+0x30)->GoalType(+0x10) != 0`. DISTINCT
-	// from `0x102ee680` (`IsGoalActive`, the current-waypoint test) which family Motor wires to the
-	// same latch. **SEAM**: the mover keeps one goal latch and no goal-type word, so this answers
-	// that latch — the admitting value, since `IsGoalActive` implies `IsGoalSet`. The one case it
-	// under-admits is a goal set with no current waypoint, which the mover cannot represent.
-	return NavIsGoalActive();
-}
-
 void FElysiumNpc::NavigatorDoorCleanup()
 {
 	// `0x102bf7e0`: `if (nav->IsGoalSet()) nav->StopMoving(); m_bShouldMove = 1;`. The `IsGoalSet`
@@ -460,14 +395,6 @@ void FElysiumNpc::NavigatorDoorCleanup()
 		NavStopMoving();
 	}
 	BaseScheduleHost.bShouldMove = true;                                     // +0x1a40
-}
-
-void FElysiumNpc::BaseSlot532(int32 FailureBits)
-{
-	// `CAI_BaseNPC::vfunc532` (`0x1027e0f0`): the whole body is the two door words and `return 1`.
-	(void)FailureBits;
-	OpeningDoor = FElysiumEntityHandle::Invalid();                       // +0x5d24
-	bOpeningDoorWait = false;                                            // +0x5d30
 }
 
 void FElysiumNpc::Slot532(int32 FailureBits)
@@ -539,7 +466,7 @@ void FElysiumNpc::Slot532(int32 FailureBits)
 	}
 
 	// `102905f4`: every path chains the base body with the caller's bits unchanged.
-	BaseSlot532(FailureBits);
+	FElysiumNpcBase::Slot532(FailureBits);
 }
 
 // =================================================================================================

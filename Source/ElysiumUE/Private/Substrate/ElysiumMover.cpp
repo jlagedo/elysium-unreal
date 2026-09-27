@@ -538,7 +538,7 @@ bool FElysiumDoorBase::IsUseRefused(const FElysiumEntityHandle& Activator) const
 	if ((SpawnFlags & SF_DOOR_NONPCS) != 0)
 	{
 		const FElysiumCombatCharacter* User = ResolveUser(Activator);
-		if (User && User->AsNpc())
+		if (User && User->AsNpcBase())   // `param_1[0x25]`, `+0x94 m_pBaseNPC`
 		{
 			return true;
 		}

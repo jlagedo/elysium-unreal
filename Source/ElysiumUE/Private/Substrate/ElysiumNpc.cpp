@@ -553,36 +553,6 @@ void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 	// No clock reset: not a slot-614 site.
 }
 
-const FElysiumEntity* FElysiumNpc::FindPatrolPoint(const FString& Name) const
-{
-	// `0x102d2840`, which `0x102d2900` wraps for `InputFollowPatrolPath` (`0x1029ed90`): walk the
-	// global hint list from its head, admit a hint of type 10000 or 800 only, and compare its
-	// `Group` (`+0x5f0`) to the token with a byte-for-byte, CASE-SENSITIVE compare. First match wins.
-	// No targetname path, and no disabled/owner/cooldown or group-mask test (`python_bridge.md`).
-	//
-	// Retail answers the hint's network node (`+0x5e4`, -1 on a miss); this answers the hint
-	// itself, whose origin the patrol walks to. The node id stays a named seam until 0018 story 4,
-	// and a hint found here is never turned into a network-route failure.
-	if (World == nullptr)
-	{
-		return nullptr;
-	}
-	for (const int32 Index : World->HintList())
-	{
-		const FElysiumHint* Hint = World->Entities().IsValidIndex(Index)
-			? FElysiumHint::Cast(World->Entities()[Index].Get()) : nullptr;
-		if (Hint == nullptr || (Hint->HintType != 10000 && Hint->HintType != 800))
-		{
-			continue;
-		}
-		if (Hint->Group.Equals(Name, ESearchCase::CaseSensitive))
-		{
-			return Hint;
-		}
-	}
-	return nullptr;
-}
-
 bool FElysiumNpc::ResolvePatrolPoints()
 {
 	PatrolNames.Reset();
@@ -851,7 +821,7 @@ void FElysiumNpc::LeaveGrappleState()
 	// four steps are UNCONDITIONAL — this body used to gate the output fire and the
 	// oblivious-decrement pair on `Grapple.Type == StealthKill`, which retail does not, and omitted
 	// slot 416 `SetForceFrequentThink(false)` entirely.
-	BaseLeaveGrappleState();
+	FElysiumNpcBase::LeaveGrappleState();
 	// A body released from a grapple thinks on the same frame.
 	ResetThinkTimers(World ? World->NowSeconds() : 0.0);
 }
@@ -1182,39 +1152,6 @@ FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
 	// think is not rescheduled at all rather than being parked on a slow cadence.
 	NextThink = ELYSIUM_NEVER_THINK;
 	return EDeadThink::Terminal;
-}
-
-void FElysiumNpc::CompleteDeathHandoff()
-{
-	if (bDeathHandoffDone)
-	{
-		return;
-	}
-	bDeathHandoffDone = true;
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Visual == nullptr)
-	{
-		return;   // headless, or a bodiless record — an ordinary absence, not a failure
-	}
-	// **The named divergence.** Retail creates its ragdoll inside the shared `Event_Killed` body,
-	// from the model's own `ACT_DIERAGDOLL` seed pose and with a force envelope composed from the
-	// killing blow (`docs/vtmb/combat-and-damage.md`). Ours hands over at the END of the death
-	// program, seeded from whatever pose that program left on the body, and with no impulse: the
-	// force envelope is unrecovered (the launch slice cannot start before the impulse is), so an
-	// invented one would be a behaviour rather than a reproduction.
-	if (Embodiment->StartBodyRagdoll(Visual))
-	{
-		// Physics owns the pose now, so the animation claims mean nothing and go back.
-		Embodiment->ReleaseBodyAnimClaims(Visual);
-		Mind.RecordExternal(TEXT("death: the body handed to physics from its current pose"));
-		return;
-	}
-	// The stated fallback, and the shipped one. The claims deliberately STAY: the pose stops being
-	// evaluated at all, and releasing them would hand the base channel back to a locomotion publish
-	// on a body that no longer answers it, leaving the verdict surface naming no holder for a pose it
-	// is holding.
-	Embodiment->HoldBodyFinalPose(Visual);
-	Mind.RecordExternal(TEXT("death: no physics behind this body — holding its final frame"));
 }
 
 bool FElysiumNpc::RunAdmissionBarrier()
@@ -2167,25 +2104,6 @@ bool FElysiumNpc::WaitPvs()
 	return true;
 }
 
-uint8 FElysiumNpc::NpcStateFlags() const
-{
-	// This runtime's state vocabulary onto retail's `m_NPCState` ids (`0x1026e3e0`'s cases): idle
-	// 1, combat 2, alert 3, script 4, dead 7. Prone is Source's `NPC_STATE_PRONE` 6. The flee (8)
-	// and hunt (0xb) states are 21a's and 10h's; until they exist no body can carry `0x85` or
-	// `0x7f`.
-	int32 RetailState = 0;
-	switch (Mind.State())
-	{
-	case EElysiumNpcState::Idle:     RetailState = 1; break;
-	case EElysiumNpcState::Combat:   RetailState = 2; break;
-	case EElysiumNpcState::Alert:    RetailState = 3; break;
-	case EElysiumNpcState::Scripted: RetailState = 4; break;
-	case EElysiumNpcState::Prone:    RetailState = 6; break;
-	case EElysiumNpcState::Dead:     RetailState = 7; break;
-	}
-	return FElysiumNpcFlags::NpcStateFlagsForRetailState(RetailState);
-}
-
 void FElysiumNpc::UpdateEnemyDistances()
 {
 	// `0x10292de0`, right after `SetClosestPlayer`: `GetEnemy()` null or with a nonzero
@@ -2291,28 +2209,6 @@ float FElysiumNpc::PlayActivity(const FString& Activity)
 	return Seconds;
 }
 
-bool FElysiumNpc::IsIdealActivityCurrent() const
-{
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Visual == nullptr || !ScheduleIdealActivity.IsValid())
-	{
-		return false;
-	}
-
-	FElysiumClipPhase Current;
-	if (!Embodiment->GetBodyClipPhase(Visual, EElysiumAnimChannel::Base, Current)
-		|| !Current.IsValid())
-	{
-		return false;
-	}
-	// Both sides are canonicalized before they cross their seams: the activity resolver supplies the
-	// owning include-DAG bank, and the body publishes that same committed identity. Case-insensitive
-	// comparison is the convention at every other identity join; no source-model alias participates.
-	return Current.OwnerStem.Equals(ScheduleIdealActivity.OwnerStem, ESearchCase::IgnoreCase)
-		&& Current.OwnerRoot.Equals(ScheduleIdealActivity.OwnerRoot, ESearchCase::IgnoreCase)
-		&& Current.Label.Equals(ScheduleIdealActivity.Label, ESearchCase::IgnoreCase);
-}
-
 float FElysiumNpc::PlayDeathActivity(const FString& Activity)
 {
 	FElysiumReactionPlayRequest Request;
@@ -2338,65 +2234,6 @@ float FElysiumNpc::PlayDeathActivity(const FString& Activity)
 	return Seconds;
 }
 
-// `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal, write `m_lifeState = 1`.
-void FElysiumNpc::BeginDying()
-{
-	// The navigator reset is the port's stop -- `0x102ee270` clears the goal and the path, which is
-	// what `StopMoving` already does here. `m_lifeState` has no field in this runtime: the mind's
-	// dead state carries it, and `OnKilled` set that before the program ever started.
-	StopMoving();
-	Mind.RecordExternal(TEXT("TASK_DIE: dying, waiting out the death performance"));
-}
-
-// `TASK_DIE`'s Troika gate (`0x102abb90`):
-//   (IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE
-//
-// The second arm decides the ordinary case. Base `DIE` names NO activity task -- retail's only
-// death poses come from `BecomeClientRagdoll`'s `ACT_DIERAGDOLL` seed, from
-// `TASK_PLAY_DEATH_SEQUENCE` in the named Discipline schedules, and from Troika's interesting-place
-// death activity (`+0x6308`) -- so an NPC that reaches this task with nothing playing is idle and
-// commits on its first think, exactly as retail's does.
-bool FElysiumNpc::IsDeathPerformanceFinished() const
-{
-	// UNPORTED, and named rather than approximated: `IsActivityFinished` (slot 251, `0x10272900`) and
-	// `m_flCycle` are sequence-level state this runtime does not mirror, so the first arm of retail's
-	// gate has no input here. What stands in is the one death performance this port CAN see -- the
-	// clip `PlayDeathActivity` started -- which is the same set of producers retail's first arm is
-	// waiting on. When none is running, both retail and this answer "finished" immediately.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return Now >= DeathPerformanceEndsAt;
-}
-
-// `TASK_DIE`'s commit. Retail: target the NPC itself, write `m_lifeState` 1 -> 0, and call
-// `CBaseCombatCharacter::Die` (`0x103392c0`), which re-enters `Event_Killed` -- and it is that
-// SECOND `Event_Killed` whose `CreateCorpse` (`0x1032c0e0`) makes the corpse and takes the entity
-// out of the world.
-//
-// This runtime has the handoff half of that and none of the entity half, so the handoff runs here
-// and `bDeathCommitted` stands in for the removal. The task itself still does not complete, because
-// retail's does not.
-void FElysiumNpc::CommitDeath()
-{
-	bDeathCommitted = true;
-	CompleteDeathHandoff();
-}
-
-float FElysiumNpc::RandomSeconds(float Max)
-{
-	// `RandomFloat(0.1, arg)` (`0x10283dae`). `FRandRange` is the same `low + (high - low) * frac`,
-	// so an operand below the floor draws between it and 0.1, as retail's does.
-	return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.1f, Max);
-}
-
-void FElysiumNpc::ClearSchedule()
-{
-	// `CAI_BaseNPC::ClearSchedule` (`0x10280d30`), reached by every site that drops a running
-	// program. The six schedule words, `PRESERVE_PATH` and the slot-435 dispatch are
-	// `ElysiumSchedule::ClearSchedule`'s; what this adds is the name, so no site clears the
-	// schedule record directly and skips the release the dispatch performs.
-	ElysiumSchedule::ClearSchedule(Schedule, *this);
-}
-
 bool FElysiumNpc::TakeClearScheduleRequest()
 {
 	const bool bRequested = bClearScheduleRequested;
@@ -2410,11 +2247,6 @@ void FElysiumNpc::ClearPreservePath()
 }
 
 
-
-void FElysiumNpc::RecordScheduleEvent(const FString& Row)
-{
-	Mind.RecordExternal(Row);
-}
 
 void FElysiumNpc::DebugScheduleInstalled(int32 InstalledSchedule)
 {
@@ -2817,16 +2649,6 @@ bool FElysiumNpc::StartScheduleId(int32 Id, const FString& Surface, const FStrin
 	return ElysiumSchedule::Start(Schedule, Id, *this);
 }
 
-void FElysiumNpc::StopMoving()
-{
-	if (Motor != nullptr)
-	{
-		Motor->Stop();
-	}
-	bMoveIssued = false;
-	bWalkingAnimation = false;
-}
-
 EElysiumTaskResult FElysiumNpc::StopMovingTask()
 {
 	ScheduleHost.PendingFailureReason = 0;
@@ -2852,21 +2674,6 @@ EElysiumTaskResult FElysiumNpc::StopMovingTask()
 	return EElysiumTaskResult::Complete;
 }
 
-EElysiumTaskResult FElysiumNpc::BeginStopMovingTask()
-{
-	// StartTask 0x10282d71: only an active goal enters RunTask. Clearing the goal must
-	// retain nav type and flight velocity, which RunTask still reads in this same think.
-	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
-	if (!Nav.bActiveGoal)
-	{
-		bMoveIssued = false;
-		return EElysiumTaskResult::Complete;
-	}
-	Motor->ClearNavigationGoal();
-	ScheduleHost.DesiredMoveYaw = 0.f;
-	return StopMovingTask();
-}
-
 void FElysiumNpc::SetGoalTolerance(float Units)
 {
 	ScheduleHost.GoalToleranceCm = Units * ElysiumMove::U;
@@ -2874,7 +2681,8 @@ void FElysiumNpc::SetGoalTolerance(float Units)
 
 void FElysiumNpc::TaskFail(int32 Reason)
 {
-	// Troika slot 448 (0x1029adb0), then CAI_BaseNPC 0x10273fc0. In particular,
+	// Troika slot 448 (0x1029adb0), then its direct call to CAI_BaseNPC 0x10273fc0
+	// (`FElysiumNpcBase::TaskFail`). In particular,
 	// OnScheduleChange is not a substitute: its masks and oblivious refcount writes differ.
 	//
 	// Nine species classes override slot 448 on their C++ classes (story 5 step 3): eight run their
@@ -2920,9 +2728,9 @@ void FElysiumNpc::TaskFail(int32 Reason)
 	ScheduleHost.Unknown6300 = ScheduleHost.Unknown659c = 0;
 	ScheduleHost.bPatrolPathUseHint = false;
 	bMoveIssued = false;
-	ScheduleHost.FailureReason = Reason;
 	ScheduleHost.PendingFailureReason = 0;
-	Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
+	// `0x1029adb0` ends in the direct call to the base half.
+	FElysiumNpcBase::TaskFail(Reason);
 	RecordScheduleEvent(FString::Printf(TEXT("TaskFail 0x%x: %s"), Reason, ElysiumTaskFailureName(Reason)));
 	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s TaskFail 0x%x: %s"), *DebugString(), Reason, ElysiumTaskFailureName(Reason));
 }
@@ -2946,7 +2754,7 @@ void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
 	if (BaseScheduleHost.bOwnsHint)
 	{
 		BaseScheduleHost.bOwnsHint = false;
-		ScheduleHost.HintReusableAt = (World ? World->NowSeconds() : 0.0) + ReuseDelay;
+		BaseScheduleHost.HintReusableAt = (World ? World->NowSeconds() : 0.0) + ReuseDelay;
 	}
 	BaseScheduleHost.HintNode = INDEX_NONE;
 	ScheduleHost.FailedCoverLosChecks = 0;
@@ -2959,37 +2767,6 @@ void FElysiumNpc::ClearOwnedActivityCopyProps()
 	// 0x1018e910 enumerates activity_copy_prop and deletes rows whose owner +0x730
 	// resolves to this NPC. Its class and owner producer are not implemented yet;
 	// this named seam currently finds no owned copies.
-}
-
-void FElysiumNpc::DisconnectFromSquad()
-{
-	// 0x1026d050: the refcount is real even while no named squad exists. R17 supplies
-	// the shared/global enemy-memory redirection; this host must not invent a local squad.
-	++BaseScheduleHost.SquadDisconnected;
-	NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
-}
-
-void FElysiumNpc::ReconnectToSquad()
-{
-	// 0x1026d0c0 (reached through the jump thunk 0x10009601), read whole in story 29c-1:
-	//
-	//   if (--m_iSquadDisconnected < 1) {
-	//       if (m_pSquad) AddSelfToSquadMemory(m_pSquad, this);   // 0x10316720
-	//       m_iSquadDisconnected = 0;
-	//   }
-	//   m_bfAINPCFlags2 &= 0x7f7fffff;
-	//
-	// The clamp below is retail's `< 1 -> 0` arm; the mask clears D_DISCONNECT_SQUAD (0x00800000)
-	// and bit 31, which `docs/vtmb/npc-ai/schedule-kernel.md` records as the flag-name resolver's
-	// word-two routing marker and not a flag, so the one named bit is the whole observable clear.
-	const bool bReachedZero = BaseScheduleHost.SquadDisconnected - 1 < 1;
-	BaseScheduleHost.SquadDisconnected = FMath::Max(0, BaseScheduleHost.SquadDisconnected - 1);
-	if (bReachedZero)
-	{
-		// The squad seam (`ElysiumNpcSquad.cpp`): no `CAI_Squad`, so nothing to rejoin.
-		AddSelfToSquadMemory(const_cast<void*>(ConnectedSquad()));
-	}
-	NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
 }
 
 void FElysiumNpc::EndDisciplineSchedule()
@@ -3338,40 +3115,6 @@ void FElysiumNpc::RememberFact(uint32 MemoryMask)
 {
 	BaseScheduleHost.MemoryBits |= MemoryMask;
 	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), MemoryMask));
-}
-
-void FElysiumNpc::MakeOblivious(bool bOblivious)
-{
-	// `CAI_BaseNPC` `0x1026d130` (set) and `0x1026d160` (clear), in their recovered order.
-	if (bOblivious)
-	{
-		// 1. `SetEnemy(NULL)`. Through the ordinary transaction, so the last-enemy transfer, the
-		//    slot and the lost-output effects all happen — an incapacitated NPC forgetting its enemy
-		//    is the same operation as any other forgetting, not a field poke.
-		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
-		// 2. Squad disconnect (`0x1026d050`: leave the squad, `++m_iSquadDisconnected`, and set
-		//    `D_DISCONNECT_SQUAD`).
-		//
-		// SEAM (named, no substrate): this runtime has no squad object for an NPC to leave, so there
-		// is nothing to disconnect from. The flag is set because it is what the schedule-change clear
-		// and the scripted-scene teardown both look for, and because a squad layer that lands later
-		// must find the bit already correct rather than have to backfill it.
-		DisconnectFromSquad();
-		// 3. The refcount and its bookkeeping bit.
-		NpcFlags.AddOblivious();
-		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
-		//    (`docs/vtmb/npc-ai/README.md`), so this is a real content surface and not a
-		//    diagnostic. The NPC is both caller and activator: nothing else is in scope at the arm.
-		FireOutput(FName(TEXT("OnIncapacitatedStart")), Handle);
-	}
-	else
-	{
-		NpcFlags.RemoveOblivious();
-		ReconnectToSquad();
-		FireOutput(FName(TEXT("OnIncapacitatedEnd")), Handle);
-	}
-	RecordScheduleEvent(FString::Printf(TEXT("TASK_MAKE_OBLIVIOUS %s -> %s"),
-		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *NpcFlags.Describe()));
 }
 
 void FElysiumNpc::SetNpcFlag(uint32 EncodedFlag)
@@ -3874,7 +3617,7 @@ void FElysiumNpc::Spawn()
 	SeedSheet();
 	// BEFORE the body, because the body is sized from these: retail writes both hull words in a
 	// CONSTRUCTOR, long before anything can read them, and the port's nearest equivalent is here.
-	// They were filled in `BaseNPCInit` first, which runs from `Activate` -- after `BuildMotor`
+	// They were filled in `FElysiumNpcBase::NPCInit` first, which runs from `Activate` -- after `BuildMotor`
 	// below had already sized the capsule and stated the nav agent from a word that was still 0,
 	// so every species stood and pathed as a human however right the table was.
 	ApplyRetailHulls();
@@ -3960,21 +3703,6 @@ void FElysiumNpc::ArmThinkNow(double Now)
 {
 	// `m_flNextThink := curtime`, alone.
 	ArmThinkAt(Now);
-}
-
-void FElysiumNpc::ArmThinkAt(double Stamp)
-{
-	// `m_flNextThink := Stamp`. `NextThink` is a float and the world clock a double, so
-	// `float(Stamp)` rounds ABOVE `Stamp` for most values -- and `RunThinks`' `NextThink > Now` test
-	// would then skip the very frame the stamp names, which is visible for any armed delay
-	// (`NPCInit`'s `curtime + 0.1` most of all). One ULP down where it does. (Retail has no such
-	// problem: `m_flNextThink` and `gpGlobals->curtime` are both floats there.)
-	float Armed = static_cast<float>(Stamp);
-	if (static_cast<double>(Armed) > Stamp)
-	{
-		Armed = std::nextafterf(Armed, -FLT_MAX);
-	}
-	NextThink = Armed;
 }
 
 bool FElysiumNpc::BypassesKnockbackEligibility() const
@@ -4070,45 +3798,21 @@ void FElysiumNpc::OnDormancyChanged()
 // the blocks happen to be written in.
 void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 {
-	SerializeExtendedHeader(Ar);
+	// Troika `Save` `0x102993c0` calls the base's `0x1027bc60` first, and `Restore` runs the base's
+	// `0x1027c160` first: the base half of the record leads (story 5 step 5).
+	FElysiumNpcBase::Serialize(Ar);
 	SerializePatrolBlock(Ar);
 	SerializeMakerBlock(Ar);
 	SerializeMindBlock(Ar);
-	// The NPC flag word travels with the record and not with the walk: retail's `m_bfAINPCFlags`
-	// pair is a concern the shape map reaches no compiled path into.
-	NpcFlags.Serialize(Ar);
-	Relationships.Serialize(Ar);
-	BaseMemory.Serialize(Ar);
 	Senses.Serialize(Ar);
-	FElysiumNpcPendingSound::SerializeQueue(Ar, PendingSounds);
-	EnemyMemory.Serialize(Ar);
 	Ar << bLoadoutResolved;
 	Disciplines.Serialize(Ar);
 	SerializeDisciplineFlags(Ar);
-	BaseScheduleHost.Serialize(Ar);
 	ScheduleHost.Serialize(Ar);
-	// `m_flNextComfortCheckTime` and `m_hTargetEnt`. Both are retail `SAVE` rows, and both are
-	// recorded gaps in the generated walk (`ElysiumNpcKernelBindings.cpp`: "the port member exists
-	// but its owner keeps it private"), so the record carries them until that owner opens a path.
+	// `m_flNextComfortCheckTime`, a retail `SAVE` row and a recorded gap in the generated walk
+	// (`ElysiumNpcKernelBindings.cpp`: "the port member exists but its owner keeps it private"), so
+	// the record carries it until that owner opens a path.
 	Ar << NextComfortCheckTime;
-	Ar << TargetEnt;
-}
-
-// `AIExtendedSaveHeader_t` -- the one block retail's own `Save` writes by hand (`0x1027bc60`), and
-// the only thing `BaseOnRestore 0x1027bf50` needs in order to re-find the program the save was
-// taken during: its NAME, the checksum of its task array, and the three-bit liveness word.
-void FElysiumNpc::SerializeExtendedHeader(FElysiumSaveArchive& Ar)
-{
-	FAiExtendedSaveHeader Header = Ar.IsLoading()
-		? FAiExtendedSaveHeader() : BuildExtendedSaveHeader();
-	Ar << Header.Version;
-	Ar << Header.Flags;
-	Ar << Header.ScheduleName;
-	Ar << Header.ScheduleCrc;
-	if (Ar.IsLoading())
-	{
-		LastSavedExtendedHeader = Header;
-	}
 }
 
 // Retail's slot 130, `CAI_BaseNPCTroika::OnRestore 0x102998c0` over `CAI_BaseNPC::OnRestore
@@ -4119,7 +3823,7 @@ void FElysiumNpc::SerializeExtendedHeader(FElysiumSaveArchive& Ar)
 void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
 	// --- Retail's own chain, arm for arm (the seams inside it are named at their sites). ---
-	// `BaseOnRestore` re-finds the program the record named, compares the checksum of its task
+	// `FElysiumNpcBase::OnRestore` re-finds the program the record named, compares the checksum of its task
 	// array against the one the record carries, and gives up to `RestoreGiveUp` when either fails.
 	OnRestore(/*bFromLoad=*/true);
 	RestartRestoredSchedule();
@@ -4245,7 +3949,7 @@ void FElysiumNpc::RestoreMindState()
 		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 	AmbientOwner = Owner == EElysiumBodyOwner::Ambient
 		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
-	// A restore never resumes `Schedule` ownership either: `BaseOnRestore` re-found the program by
+	// A restore never resumes `Schedule` ownership either: `FElysiumNpcBase::OnRestore` re-found the program by
 	// name and restarted it, and its first movement task takes the claim again.
 	ScheduleOwner.Reset();
 	// Nor `ScriptedSchedule`. The order behind it is a live goal handle and a route resolved out of
@@ -4286,7 +3990,7 @@ void FElysiumNpc::RestoreDeathBodyState()
 		// end it: the handoff is the load's own work.
 		CompleteDeathHandoff();
 	}
-	// Otherwise `SCHED_DIE` came back with the record through `BaseOnRestore`, the saved think that
+	// Otherwise `SCHED_DIE` came back with the record through `FElysiumNpcBase::OnRestore`, the saved think that
 	// was carrying it comes back too, and `ThinkDead` ends it exactly as it would have.
 }
 

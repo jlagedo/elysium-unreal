@@ -57,9 +57,9 @@ namespace
 
 	// The hint words every pure-rule case starts from: valid, enabled, facing +X, band [10, 100]
 	// source units, dot floor 0.5.
-	FElysiumNpc::FHintWords MakeHint()
+	FElysiumNpcBase::FHintWords MakeHint()
 	{
-		FElysiumNpc::FHintWords Hint;
+		FElysiumNpcBase::FHintWords Hint;
 		Hint.bValid = true;
 		Hint.Disabled = 0;
 		Hint.OriginCm = FVector::ZeroVector;
@@ -349,7 +349,7 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 		return false;
 	}
 	using EReason = FElysiumNpc::EHintRejectReason;
-	const FElysiumNpc::FHintWords Base = MakeHint();
+	const FElysiumNpcBase::FHintWords Base = MakeHint();
 
 	// --- 0x10295ed0's rule, the quiet twin -------------------------------------------------------
 	TestTrue(TEXT("a cover object 50 units along the hint's facing is valid"),
@@ -370,7 +370,7 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 	TestFalse(TEXT("a cover object behind the hint fails the dot floor"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(-50.0), FVector::ZeroVector, true));
 	{
-		FElysiumNpc::FHintWords Disabled = Base;
+		FElysiumNpcBase::FHintWords Disabled = Base;
 		Disabled.Disabled = 1;
 		TestFalse(TEXT("a disabled hint is never valid"),
 			F.Npc->CoverHintStillValid(Disabled, AtUnits(50.0), FVector::ZeroVector, true));
@@ -391,7 +391,7 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 		F.Npc->CoverHintRejectReason(Base, AtUnits(-50.0), true), EReason::OutsideGoodRange);
 	{
 		// The `target_name` gate, which `0x10295ed0` does NOT have. An empty name admits everyone.
-		FElysiumNpc::FHintWords Named = Base;
+		FElysiumNpcBase::FHintWords Named = Base;
 		Named.TargetName = TEXT("someone_else");
 		TestEqual(TEXT("a target_name naming another NPC is a mismatch"),
 			F.Npc->CoverHintRejectReason(Named, AtUnits(50.0), true),
@@ -460,7 +460,7 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 		EReason::InsideBadRange);
 
 	// The seams every entry point depends on, asked and refusing.
-	FElysiumNpc::FHintWords Resolved;
+	FElysiumNpcBase::FHintWords Resolved;
 	TestFalse(TEXT("the hint store answers nothing"), F.Npc->HintWords(0, Resolved));
 	float RangeUnits = -1.f;
 	TestFalse(TEXT("and no weapon carries a maximum range"),
@@ -533,11 +533,12 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 		ElysiumSchedule::MaskHasCondition(F.Npc->Schedule, *F.Npc, EElysiumNpcCond::ShouldDodge),
 		bDodged);
 
-	// 0x1027e0f0 — the BASE line's slot-532 body. `Slot532(int32)` is the TROIKA override and is
-	// story 29d's, so this is its own method and it reports handled.
+	// 0x1027e0f0 — the BASE line's slot-532 body, `FElysiumNpcBase::Slot532` (story 5 step 5 folded
+	// the second port body `FUN_1027e0f0` into it). Retail's `AL = 1` is dropped by every dispatch
+	// site, so the slot is `void`; the two door words are the whole effect.
 	F.Npc->OpeningDoor = F.Other->Handle;
 	F.Npc->bOpeningDoorWait = true;
-	TestTrue(TEXT("the base slot-532 body reports handled"), F.Npc->FUN_1027e0f0());
+	F.Npc->FElysiumNpcBase::Slot532(0);
 	TestFalse(TEXT("and forgets the door being opened (+0x5d24)"), F.Npc->OpeningDoor.IsSet());
 	TestFalse(TEXT("and the wait flag (+0x5d30)"), F.Npc->bOpeningDoorWait);
 

@@ -19,4 +19,21 @@
 namespace NpcKernelDebug10Shared
 {
 	inline constexpr int32 GDebug10BitText = 0x1;             // 0x1029d4ff `TEST AL,0x1`
+	inline constexpr TCHAR GDebug10Newline[] = TEXT("\n");                      // 0x10547e40
+	inline constexpr TCHAR GDebug10EnemyTooFar[] = TEXT("Enemy too far to attack"); // 0x105cc784
+	// `GetDebugName()` (`0x1000b5cd`): `m_iName` when set, the classname otherwise, and the empty
+	// string (`DAT_106b8540`) for a null pointer on either. `"NULL ENTITY"` (`0x105387dc`) is the
+	// scope-trace spelling for a null `this`, not this one's.
+	inline FString GDebug10DebugName(const FElysiumEntity* Entity)
+	{
+		if (Entity == nullptr)
+		{
+			return FString();
+		}
+		if (!Entity->TargetName.IsEmpty())
+		{
+			return Entity->TargetName;
+		}
+		return Entity->Def != nullptr ? Entity->Def->Classname : FString();
+	}
 }

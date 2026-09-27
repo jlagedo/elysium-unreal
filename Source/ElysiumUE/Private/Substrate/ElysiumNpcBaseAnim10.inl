@@ -66,3 +66,42 @@ TArray<FActivityChangeNotice> ActivityChangeNotices;
  *  family Motor found no `CAI_Navigator` object in this substrate at all; the notice is counted so
  *  the tail of every commit is assertable. */
 int32 NavigatorActivityNotices = 0;
+
+void SetActivityAndSequence(int32 Activity, int32 Sequence, int32 TranslatedActivity,
+	int32 WeaponActivity);
+
+/** `AdvanceToIdealActivity` (`0x102726a0`), the non-virtual helper `MaintainActivity` ends in.
+ *
+ *  `FindTransitionSequence(m_nSequence, m_nIdealSequence)`; a `-NAN` answer (retail's own sentinel,
+ *  which the listing produces by comparing the returned float against itself) dispatches slot 310
+ *  with `m_IdealActivity` and stops. A transition sequence that is NOT the ideal one commits
+ *  activity **2** with that sequence, re-resolving the translated/weapon pair from the transition's
+ *  own activity when it has one. Only when the transition IS the ideal sequence does the ideal
+ *  activity commit. */
+void AdvanceToIdealActivity();
+
+/** `CAI_BaseNPC::MaintainActivity` (`0x102727d0`). Gated on slot 466 `ShouldMaintainActivity`;
+ *  inside, work happens only when `m_Activity` differs from `m_IdealActivity` OR `m_nSequence` from
+ *  `m_nIdealSequence`. Activity 2 is the special arm — it waits for `m_bSequenceFinished` and then
+ *  runs `AdvanceToIdealActivity` and NOTHING else; every other activity first re-resolves the ideal
+ *  through `0x10272130` and then advances. The body writes no field of its own.
+ *
+ *  **Not a vtable slot** — `vtmb_func 0x102727d0` reports `__thiscall` with no dispatch site — so it
+ *  takes its own name. Family **SaveRestore10** had already declared `MaintainActivity()` as a SEAM
+ *  that counts the call and records the latch `m_bForceMaintainActivity` was holding; that seam is
+ *  the entry point and keeps its bookkeeping, and it now runs THIS body after it instead of
+ *  answering nothing. The name here is `BaseMaintainActivity` for the same reason
+ *  `FElysiumNpcBase::SetActivity` is: it is `CAI_BaseNPC`'s own function, with no Troika override above it. */
+void BaseMaintainActivity();
+
+/** `CBaseAnimating::FindTransitionSequence(from, to, &dir)` — the studio transition graph.
+ *  **SEAM**: family Anim recorded that this substrate stands no studio header and no sequence index.
+ *  It answers **`To`**, which is retail's OWN no-transition answer — the SDK body returns the
+ *  destination sequence unchanged when no transition clip stands between the two — and is the arm
+ *  that commits the ideal through `SetActivityAndSequence` directly. See the definition for why the
+ *  `-1` sentinel would have stranded a body in `ACT_TRANSITION`. */
+int32 FindTransitionSequence(int32 From, int32 To) const;
+
+void WeaponSetActivity(int32 Activity, float Duration);
+
+void SetViewOffset(const FVector& OffsetUnits);

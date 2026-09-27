@@ -56,7 +56,7 @@ namespace ElysiumSched
 	inline constexpr int32 WAIT_FOR_SCRIPT = 0x2d;
 	inline constexpr int32 AISCRIPT = 0x2e;
 
-	// The five the scripted director routes a cine command onto. `BaseTranslateSchedule` already
+	// The five the scripted director routes a cine command onto. `FElysiumNpcBase::TranslateSchedule` already
 	// carries this map; these are the numbers it maps ONTO, and they are why the port's two
 	// invented `ScriptedMoveToGoal` / `ScriptedFollowPath` ids die with no replacement.
 	inline constexpr int32 SCRIPTED_WALK = 0x2f;

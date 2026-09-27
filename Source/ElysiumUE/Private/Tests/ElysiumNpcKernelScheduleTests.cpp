@@ -81,27 +81,27 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 		return false;
 	}
 	TestEqual(TEXT("ScheduleLocalToGlobal(-1) is -1"),
-		FElysiumNpc::ScheduleLocalToGlobal(Brujah, INDEX_NONE), INDEX_NONE);
+		FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, INDEX_NONE), INDEX_NONE);
 
 	// `CNPC_VBrujah::InitCustomSchedules` (`0x10367a40`) registers exactly two names,
 	// `SCHED_VBRUJAH_WALK` 0x158 and `SCHED_VBRUJAH_WATCH` 0x159, into `DAT_1093a740` under
 	// `CNPC_VVampire`'s space as the parent.
-	const int32 Walk = FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x158);
-	const int32 Watch = FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x159);
+	const int32 Walk = FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, 0x158);
+	const int32 Watch = FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, 0x159);
 	TestTrue(TEXT("SCHED_VBRUJAH_WALK translates"), (Walk) != INDEX_NONE);
 	TestEqual(TEXT("...and SCHED_VBRUJAH_WATCH is the next global id"), Watch, Walk + 1);
 	TestEqual(TEXT("the round trip is the identity"), Brujah->GlobalToLocal(Walk), 0x158);
 	TestEqual(TEXT("an id this class never registered is -1"),
-		FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x15a), INDEX_NONE);
+		FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, 0x15a), INDEX_NONE);
 
 	// The parent walk, which is the structural rule the id spaces have: a Brujah reaches its base
 	// class's programs and its grandparent's, because `LocalToGlobal` falls through `m_pParent`.
-	TestTrue(TEXT("a Brujah reaches CNPC_VVampire's SCHED_VVAMPIRE_IDLE_STAND (0x157)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, 0x157)) != INDEX_NONE);
-	TestTrue(TEXT("...and the Troika line's SCHED_TROIKA_IDLE_DISPOSITION (0x6b)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
-	TestTrue(TEXT("...and the base's FAIL (0x43)"), (FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL)) != INDEX_NONE);
+	TestTrue(TEXT("a Brujah reaches CNPC_VVampire's SCHED_VVAMPIRE_IDLE_STAND (0x157)"), (FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, 0x157)) != INDEX_NONE);
+	TestTrue(TEXT("...and the Troika line's SCHED_TROIKA_IDLE_DISPOSITION (0x6b)"), (FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)) != INDEX_NONE);
+	TestTrue(TEXT("...and the base's FAIL (0x43)"), (FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL)) != INDEX_NONE);
 	TestEqual(TEXT("the names agree with the numbers"),
 		FString(ElysiumScheduleName(
-			FElysiumNpc::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL))),
+			FElysiumNpcBase::ScheduleLocalToGlobal(Brujah, ElysiumSched::FAIL))),
 		FString(TEXT("FAIL")));
 
 	// **`npc_VCop` builds `CNPC_VCop`.** `CNPC_VCop` is a census class with a slot-580 body of its
@@ -334,10 +334,10 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 		Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete);
 
 	Guard->Cognition.Conditions.Reset();
-	Guard->ScheduleHost.FailureReason = 0;
+	Guard->BaseScheduleHost.FailureReason = 0;
 	Guard->MotorTaskFail(0x1b);
 	TestEqual(TEXT("the motor's slot 1 is the owner's slot 448, unchanged"),
-		Guard->ScheduleHost.FailureReason, 0x1b);
+		Guard->BaseScheduleHost.FailureReason, 0x1b);
 	TestTrue(TEXT("and raises COND_TASK_FAILED"),
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
@@ -432,29 +432,29 @@ bool FElysiumNpcKernelSchedulePreSelectTest::RunTest(const FString&)
 	// `0x1028a2a0`, arm by arm, in the corrected order: the gravity write, then NPC_FREEZE, then
 	// ON_FIRE, then FLOATING_OFF_GROUND.
 	Guard->Cognition.Conditions.Reset();
-	TestEqual(TEXT("no condition is no opinion"), Guard->BasePreSelectSchedule(), 0);
+	TestEqual(TEXT("no condition is no opinion"), Guard->FElysiumNpcBase::PreSelectSchedule(), 0);
 
 	Guard->Gravity = 0.0f;
 	Guard->Cognition.Conditions.Reset();
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::FloatingOffGround);
 	TestEqual(TEXT("FLOATING_OFF_GROUND alone answers 0x3e FALL_TO_GROUND"),
-		Guard->BasePreSelectSchedule(), 0x3e);
+		Guard->FElysiumNpcBase::PreSelectSchedule(), 0x3e);
 	TestEqual(TEXT("and its first arm writes gravity 1.0 on the way past"), Guard->Gravity, 1.0f);
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::FloatingOffGround);
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::NpcFreeze);
-	TestEqual(TEXT("NPC_FREEZE outranks it and answers 0x3a"), Guard->BasePreSelectSchedule(), 0x3a);
+	TestEqual(TEXT("NPC_FREEZE outranks it and answers 0x3a"), Guard->FElysiumNpcBase::PreSelectSchedule(), 0x3a);
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::FloatingOffGround);
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::OnFire);
-	TestEqual(TEXT("ON_FIRE comes next and answers 0x151"), Guard->BasePreSelectSchedule(), 0x151);
+	TestEqual(TEXT("ON_FIRE comes next and answers 0x151"), Guard->FElysiumNpcBase::PreSelectSchedule(), 0x151);
 
 	Guard->Cognition.Conditions.Reset();
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::OnFire);
 	Guard->Cognition.Conditions.Set(EElysiumNpcCond::NpcFreeze);
-	TestEqual(TEXT("and NPC_FREEZE outranks ON_FIRE"), Guard->BasePreSelectSchedule(), 0x3a);
+	TestEqual(TEXT("and NPC_FREEZE outranks ON_FIRE"), Guard->FElysiumNpcBase::PreSelectSchedule(), 0x3a);
 
 	// The three species bodies, by census row.
 	TestEqual(TEXT("CNPC_VCamera fills slot 437 with 0x10368f20"),

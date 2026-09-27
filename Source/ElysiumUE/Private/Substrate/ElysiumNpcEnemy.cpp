@@ -25,7 +25,7 @@ namespace
 
 	// The candidate struct and the three scoring helpers this file used to arbitrate with moved into
 	// story 29d's slot-478 body (`FElysiumNpc::FBestEnemyState`,
-	// `FElysiumNpc::BestEnemyCandidateVisible`, `FElysiumNpc::BestEnemyDistanceKey` and the slot-530
+	// `FElysiumNpcBase::BestEnemyCandidateVisible`, `FElysiumNpcBase::BestEnemyDistanceKey` and the slot-530
 	// `IsUnreachable` dispatch). The rule they carried is unchanged and is now beside the three
 	// gates retail applies in front of it.
 }
@@ -85,9 +85,8 @@ bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, d
 	return true;
 }
 
-bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiumNpcConditions& Cond)
+bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FElysiumNpcConditions& Cond)
 {
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
 	if (!Npc.BaseMemory.Enemy.IsSet() || Npc.World == nullptr)
 	{
 		return true;
@@ -166,14 +165,13 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 	// the higher-priority replacement) and the one species arm over it
 	// (`CNPC_VFrenzyShadow#478`, `0x103766d0`). This dispatches the slot rather than keeping a
 	// second copy of the arbitration; the four helpers this file used to score with moved into
-	// `FElysiumNpc::BestEnemyCandidateVisible` / `BestEnemyDistanceKey` / the slot-530 dispatch.
+	// `FElysiumNpcBase::BestEnemyCandidateVisible` / `BestEnemyDistanceKey` / the slot-530 dispatch.
 	FElysiumEntity* Best = const_cast<FElysiumNpc&>(Npc).BestEnemy();
 	return Best != nullptr ? Best->Handle : FElysiumEntityHandle::Invalid();
 }
 
-void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& NewEnemy)
+void ElysiumNpcEnemy::SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle& NewEnemy)
 {
-	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
 	const FElysiumEntityHandle Old = Npc.BaseMemory.Enemy;
 	if (Old.IsSet())
 	{
@@ -183,11 +181,15 @@ void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& New
 
 	// "forgets the previous LOS claim": the debounce, its occlusion flag and the edge latch all
 	// belong to ONE acquisition episode, so a new enemy starts a new one. Without this the found
-	// edge for the new target would be swallowed by the previous target's latch.
-	Memory.EnemyLosFailures = 0;
-	Memory.bEnemyOccluded = false;
-	Memory.bEnemyLosLatched = false;
-	Memory.EnemyLastLosTime = -1.0;
+	// edge for the new target would be swallowed by the previous target's latch. The episode lives
+	// on the senses runner (`SensesObject()`, transitional on the Troika).
+	if (FElysiumNpcSenses* const Senses = Npc.SensesObject())
+	{
+		Senses->Memory.EnemyLosFailures = 0;
+		Senses->Memory.bEnemyOccluded = false;
+		Senses->Memory.bEnemyLosLatched = false;
+		Senses->Memory.EnemyLastLosTime = -1.0;
+	}
 	// SEAM (comment only): a non-null enemy is also registered with retail's response system, which
 	// drives idle/combat speech selection. No response system exists here, so nothing is registered
 	// and nothing pretends to be.

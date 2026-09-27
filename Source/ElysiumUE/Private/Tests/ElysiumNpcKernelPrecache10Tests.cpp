@@ -37,30 +37,30 @@ namespace
 	constexpr int32 GPrecacheSlotIndex = 104;
 	const TCHAR* const GTroikaOnly = TEXT("model:models/error/error.mdl:0");
 
-	FString Precache10OpText(const FElysiumNpc::FPrecacheOp& Op)
+	FString Precache10OpText(const FElysiumNpcBase::FPrecacheOp& Op)
 	{
 		switch (Op.Channel)
 		{
-		case FElysiumNpc::EPrecacheChannel::Model:
+		case FElysiumNpcBase::EPrecacheChannel::Model:
 			return FString::Printf(TEXT("model:%s:%d"), *Op.Name, Op.Flag);
-		case FElysiumNpc::EPrecacheChannel::Sound:
+		case FElysiumNpcBase::EPrecacheChannel::Sound:
 			return FString::Printf(TEXT("sound:%s:%d"), *Op.Name, Op.Flag);
-		case FElysiumNpc::EPrecacheChannel::Particle:
+		case FElysiumNpcBase::EPrecacheChannel::Particle:
 			return FString::Printf(TEXT("particle:%s:%d"), *Op.Name, Op.Flag);
-		case FElysiumNpc::EPrecacheChannel::Other:
+		case FElysiumNpcBase::EPrecacheChannel::Other:
 			return FString::Printf(TEXT("other:%s:%d"), *Op.Name, Op.Flag);
-		case FElysiumNpc::EPrecacheChannel::Directory:
+		case FElysiumNpcBase::EPrecacheChannel::Directory:
 			return FString::Printf(TEXT("dir:%s:%s:star=%d:flag=%d"), *Op.Name, *Op.Extension,
 				Op.bStarPrefix ? 1 : 0, Op.Flag);
 		}
 		return TEXT("?");
 	}
 
-	TArray<FString> Precache10LogText(const TArray<FElysiumNpc::FPrecacheOp>& Log)
+	TArray<FString> Precache10LogText(const TArray<FElysiumNpcBase::FPrecacheOp>& Log)
 	{
 		TArray<FString> Out;
 		Out.Reserve(Log.Num());
-		for (const FElysiumNpc::FPrecacheOp& Op : Log)
+		for (const FElysiumNpcBase::FPrecacheOp& Op : Log)
 		{
 			Out.Add(Precache10OpText(Op));
 		}
@@ -174,20 +174,20 @@ bool FElysiumNpcKernelPrecache10BaseTest::RunTest(const FString&)
 	// Arm 1a: an UNSET `m_spawnEquipment` precaches nothing — retail's outer `TEST EAX,EAX / JZ`.
 	N.PrecacheLog.Reset();
 	N.AdditionalEquipment.Reset();
-	N.BasePrecache();
+	N.FElysiumNpcBase::Precache();
 	TestEqual(TEXT("an unset m_spawnEquipment precaches nothing"), N.PrecacheLog.Num(), 0);
 
 	// Arm 1b: the authored none sentinel is the one-character string `"0"` (`DAT_105399a0`), and
 	// retail's two-byte `REPE CMPSB` against it is what skips it.
 	N.PrecacheLog.Reset();
 	N.AdditionalEquipment = TEXT("0");
-	N.BasePrecache();
+	N.FElysiumNpcBase::Precache();
 	TestEqual(TEXT("the \"0\" sentinel precaches nothing"), N.PrecacheLog.Num(), 0);
 
 	// Arm 1c: anything else goes through `UTIL_PrecacheOther` `0x101d0ec0`.
 	N.PrecacheLog.Reset();
 	N.AdditionalEquipment = TEXT("item_w_glock_17c");
-	N.BasePrecache();
+	N.FElysiumNpcBase::Precache();
 	Precache10CheckLog(*this, TEXT("an authored m_spawnEquipment"), N,
 		{ TEXT("other:item_w_glock_17c:0") });
 
@@ -195,7 +195,7 @@ bool FElysiumNpcKernelPrecache10BaseTest::RunTest(const FString&)
 	// second character makes the compare fail on byte two and the string IS precached.
 	N.PrecacheLog.Reset();
 	N.AdditionalEquipment = TEXT("00");
-	N.BasePrecache();
+	N.FElysiumNpcBase::Precache();
 	Precache10CheckLog(*this, TEXT("\"00\" is not the sentinel"), N, { TEXT("other:00:0") });
 
 	// Arm 2: slot 452 `LoadedSchedules` (vtable `+0x710`) decides the rest. A false answer prints
@@ -210,7 +210,7 @@ bool FElysiumNpcKernelPrecache10BaseTest::RunTest(const FString&)
 	TestTrue(TEXT("slot 452 answers true for every class in this runtime"), N.LoadedSchedules());
 	N.AdditionalEquipment.Reset();
 	N.PrecacheLog.Reset();
-	N.BasePrecache();
+	N.FElysiumNpcBase::Precache();
 	TestTrue(TEXT("so the base falls through and does not remove the entity"), N.IsAlive());
 	return true;
 }
@@ -929,7 +929,7 @@ namespace
 
 		/** What `Spawn`'s own slot-104 dispatch precached, before any case drove `Precache()` by
 		 *  hand. See the constructor. */
-		TArray<FElysiumNpc::FPrecacheOp> SpawnPrecacheLog;
+		TArray<FElysiumNpcBase::FPrecacheOp> SpawnPrecacheLog;
 		bool bDeadAfterSpawn = false;
 
 		FPrecache10MakerFixture(const TCHAR* Classname, const TCHAR* ModelKey, const TCHAR* NpcType)
@@ -984,7 +984,7 @@ namespace
 	};
 
 	bool Precache10CheckMakerLog(FAutomationTestBase& Test, const TCHAR* What,
-		const TArray<FString>& Expected, const TArray<FElysiumNpc::FPrecacheOp>& Log)
+		const TArray<FString>& Expected, const TArray<FElysiumNpcBase::FPrecacheOp>& Log)
 	{
 		const TArray<FString> Actual = Precache10LogText(Log);
 		if (Actual != Expected)

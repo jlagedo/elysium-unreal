@@ -692,7 +692,7 @@ bool FElysiumNpcKernelClosureCoverReloadTest::RunTest(const FString&)
 	// false and the hint type is `INDEX_NONE` whichever pointer arrives — which takes retail's
 	// `param_1 == 0` arm. Asserted rather than worked around; every retail call site passes
 	// `m_pHintNode`, which is `BaseScheduleHost.HintNode` here.
-	FElysiumNpc::FHintWords Words;
+	FElysiumNpcBase::FHintWords Words;
 	N.BaseScheduleHost.HintNode = 3;
 	TestFalse(TEXT("the hint store seam refuses"), N.HintWords(N.BaseScheduleHost.HintNode, Words));
 	TestEqual(TEXT("so a non-null hint still takes the no-hint arm"), N.GetReloadActivity(&N),

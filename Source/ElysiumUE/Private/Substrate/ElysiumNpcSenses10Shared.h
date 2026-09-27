@@ -29,7 +29,7 @@ namespace NpcKernelSenses10Shared
 	inline double GCopSuspectExpiry = 0.0;
 	inline FElysiumEntityHandle GHunterSuspect;
 	inline double GHunterSuspectExpiry = 0.0;
-	inline double NowOf(const FElysiumNpc& Npc)
+	inline double NowOf(const FElysiumNpcBase& Npc)
 	{
 		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
 	}
@@ -39,4 +39,5 @@ namespace NpcKernelSenses10Shared
 		return Candidate != nullptr && Npc.World != nullptr
 			&& Candidate->Handle == Npc.World->PlayerHandle();
 	}
+	inline constexpr int32 GD_FR = 2;
 }

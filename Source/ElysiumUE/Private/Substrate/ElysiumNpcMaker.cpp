@@ -690,8 +690,8 @@ void FElysiumNpcMaker::Precache()
 	}
 
 	// `PrecacheModel(model, 0)` through the engine (`(*DAT_1070b22c)+0x34`).
-	FElysiumNpc::FPrecacheOp ModelOp;
-	ModelOp.Channel = FElysiumNpc::EPrecacheChannel::Model;
+	FElysiumNpcBase::FPrecacheOp ModelOp;
+	ModelOp.Channel = FElysiumNpcBase::EPrecacheChannel::Model;
 	ModelOp.Name = Model;
 	PrecacheLog.Add(ModelOp);
 
@@ -717,8 +717,8 @@ void FElysiumNpcMaker::Precache()
 	// All three are no-ops on this type, and the chain is named rather than dropped.
 	if (!AdditionalEquipment.IsEmpty() && AdditionalEquipment != TEXT("0"))
 	{
-		FElysiumNpc::FPrecacheOp EquipOp;
-		EquipOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+		FElysiumNpcBase::FPrecacheOp EquipOp;
+		EquipOp.Channel = FElysiumNpcBase::EPrecacheChannel::Other;
 		EquipOp.Name = AdditionalEquipment;
 		PrecacheLog.Add(EquipOp);
 	}
@@ -737,16 +737,16 @@ void FElysiumNpcMaker::Precache()
 		return;
 	}
 
-	FElysiumNpc::FPrecacheOp ChildOp;
-	ChildOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+	FElysiumNpcBase::FPrecacheOp ChildOp;
+	ChildOp.Channel = FElysiumNpcBase::EPrecacheChannel::Other;
 	ChildOp.Name = NpcType;
 	PrecacheLog.Add(ChildOp);
 
 	if (bZombie)
 	{
 		// And the zombie arm's one extra weapon, AFTER the classname.
-		FElysiumNpc::FPrecacheOp FistsOp;
-		FistsOp.Channel = FElysiumNpc::EPrecacheChannel::Other;
+		FElysiumNpcBase::FPrecacheOp FistsOp;
+		FistsOp.Channel = FElysiumNpcBase::EPrecacheChannel::Other;
 		FistsOp.Name = ZombieFistsItem;
 		PrecacheLog.Add(FistsOp);
 	}

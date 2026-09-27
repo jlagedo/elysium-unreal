@@ -41,6 +41,20 @@ _Recovered 2026-09-13, story 29b-0._
   species datamaps re-declare a Troika word, for example Hengeyokai's and Tzimisce's `+0x6458
   m_flIgnoreCollisionTimer` and the VampireBoss line's jump words `+0x6498`..`+0x64b8`. Those are
   bound as shadows on the inherited storage.
+- The two NPC layers are two classes in the port (0019 story 5 step 5). `CAI_BaseNPC` is
+  `FElysiumNpcBase` and `CAI_BaseNPCTroika` is `FElysiumNpc`, beneath it.
+  - Each generated slot is declared by the layer whose table introduces it:
+    - The 583 slots of `CAI_BaseNPC`'s table are declared on the base, with the body that table
+      holds (`ElysiumNpcBaseSlots.inl`).
+    - Troika overrides the slots its own table refills, and declares 583–616
+      (`ElysiumNpcSlots.inl`).
+  - The two `CBaseEntity` type words each have an accessor:
+    - `+0x94 m_pBaseNPC` is `AsNpcBase()`.
+    - `+0x98 m_pBaseNPCTroika` is `AsNpc()`.
+  - A base body reaches Troika state only through `AsNpc()`, as retail's reaches it through
+    `+0x98`. Examples: `0x1026f590`'s flags2 write, `OnDoorBlocked`'s alternate-AI arm, and motor
+    slot 18's `m_flDesiredMoveYaw`.
+  - On a base-only NPC `AsNpc()` is null, so the null arm is the base's own behaviour.
 
 **Unrecovered:** nothing.
 
@@ -3405,9 +3419,14 @@ jumps into `CAI_BaseNPC::ShouldPlayFloatSound` (`thunk_FUN_1027a530`).
 own body — so it lands on the base and can never re-enter the species body. Since 0019 story 5
 step 3 the port has two functions per slot as retail does: the species body is its C++ class's
 override, and its call to what it replaces is spelled as a qualified call to the recovered callee
-owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpc::Slot593()`, `BaseShouldPlayFloatSound()`; the full
-list is `docs/specs/0019-npc-kernel-rework/story-5/decisions-step3.json` `direct_calls`). The per-slot
-guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone.
+owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpc::Slot593()`, `FElysiumNpcBase::ShouldPlayFloatSound()`;
+the full list is `docs/specs/0019-npc-kernel-rework/story-5/decisions-step3.json` `direct_calls`). The
+per-slot guard that used to emulate the thunk (`SpeciesDispatchingSlot`) is gone. Since step 5 a
+callee `CAI_BaseNPC` owns is spelled `FElysiumNpcBase::`: `ShouldPlayFloatSound` `0x1027a530`,
+`DrawDebugStatOverlays` `0x102775e0`, `TraceAttack` `0x10266780`, `GetShortConditionName`
+`0x1027ede0`, and `GatherAttackConditions` `0x1026dd10`. It is also spelled that way when the
+Troika override calls its base half: `TaskFail` `0x10273fc0`, `Save` `0x1027bc60`, `NPCInit`
+`0x10273390`, and the rest of the step-5 renames.
 
 ### Slot 609 — the three state gates, `0x103661f0`, `0x10367740`, `0x103b26f0`
 

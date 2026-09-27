@@ -96,7 +96,7 @@ void FElysiumNpcZombie::Slot26(FElysiumEntity* Victim)
 
 // Slot 510: `0x103e1080`, which tails directly into the CAI_BaseNPC body `0x1027a530`.
 /** `0x103e1080` — `CNPC_VZombie`'s slot 510, `bool ShouldPlayFloatSound()`; tails into the
- *  CAI_BaseNPC body `BaseShouldPlayFloatSound`. */
+ *  CAI_BaseNPC body `FElysiumNpcBase::ShouldPlayFloatSound`. */
 bool FElysiumNpcZombie::ShouldPlayFloatSound()
 {
 	// `0x103e1080`, `CNPC_VZombie`'s slot 510 `ShouldPlayFloatSound` (zero stack words: the retail
@@ -115,7 +115,7 @@ bool FElysiumNpcZombie::ShouldPlayFloatSound()
 	//
 	// **No IDLE-state gates.** The accepting arm is a direct call (`0x103e11f9` -> thunk
 	// `0x10005f97` -> `0x1027a530`) into the CAI_BaseNPC body, bypassing the Troika override
-	// `0x10294070` and its two IDLE tests: an ALERT zombie still moans. `BaseShouldPlayFloatSound`
+	// `0x10294070` and its two IDLE tests: an ALERT zombie still moans. `FElysiumNpcBase::ShouldPlayFloatSound`
 	// is that base body until story 5 step 5 names it `FElysiumNpcBase::ShouldPlayFloatSound`.
 	//
 	// Story 5 step 3 corrected this body (`decisions-step3.json` `retail_corrections`): it had lost
@@ -170,7 +170,7 @@ bool FElysiumNpcZombie::ShouldPlayFloatSound()
 	{
 		return false;
 	}
-	return BaseShouldPlayFloatSound();
+	return FElysiumNpcBase::ShouldPlayFloatSound();
 }
 
 // Slot 420: `0x103defc0`.
@@ -464,7 +464,7 @@ void FElysiumNpcZombie::TraceAttack(void* InInfo, const FVector& DirUnits, void*
 		Info->DamageBits = static_cast<uint32>(Forced);
 	}
 	bZombieHeadHit = bHeadHit;                                         // +0x66e1
-	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
+	FElysiumNpcBase::TraceAttack(InInfo, DirUnits, InTrace);
 }
 
 // --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---

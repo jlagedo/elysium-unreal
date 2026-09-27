@@ -16,9 +16,6 @@ int32 LastTranslateScheduleRetail = 0;
 
 /** `FUN_102b11c0`, the frenzied pre-table. Answers 0 for an id it does not name. */
 int32 FrenziedTranslateSchedule(int32 ScheduleNumber);
-/** `CAI_BaseNPC::TranslateSchedule` (`0x102cc080`). Identity except `0x2e`, which re-dispatches
- *  slot 440 virtually on the mapped id. */
-int32 BaseTranslateSchedule(int32 ScheduleNumber);
 
 // `CNPC_VTzimisce` (`0x103bd390`) and `CNPC_VWerewolf` (`0x103d5e00`) stamp retail's own
 // `__FILE__`/`__LINE__` into `+0x1b30`/`+0x1b34` before answering. The shape map calls that pair

@@ -78,47 +78,9 @@ void ResolveStanceTableRow();
 // `TranslatedActivity` (+0x0ff4, family Anim) already exist. What this family adds is the three
 // bodies that WRITE them in retail's order, and `m_bKeepSound`.
 
-void SetActivityAndSequence(int32 Activity, int32 Sequence, int32 TranslatedActivity,
-	int32 WeaponActivity);
-
-/** `CAI_BaseNPC::SetActivity` (`0x102725d0`) — slot 310's BASE body, a DISTINCT retail function
- *  beside the Troika override `0x10295750` that owns the slot, so it takes its own name and is never
- *  `hand:`. Ported under the convention wave 1's `Precache10` set with `BasePrecache`.
- *
- *  Two refusals then three writes: return at once when `m_Activity` already equals the request, and
- *  return when `m_Activity` is 2 (`ACT_TRANSITION`) unless the request is 0 (`ACT_RESET`);
- *  otherwise `m_IdealActivity = request`, `ResolveActivityToSequence` (`0x10272130`, family Anim)
- *  fills `m_nIdealSequence` / `m_IdealTranslatedActivity` / `m_IdealWeaponActivity`, and
- *  `SetActivityAndSequence` commits all four in that order. */
-void BaseSetActivity(int32 Activity);
-
-/** `AdvanceToIdealActivity` (`0x102726a0`), the non-virtual helper `MaintainActivity` ends in.
- *
- *  `FindTransitionSequence(m_nSequence, m_nIdealSequence)`; a `-NAN` answer (retail's own sentinel,
- *  which the listing produces by comparing the returned float against itself) dispatches slot 310
- *  with `m_IdealActivity` and stops. A transition sequence that is NOT the ideal one commits
- *  activity **2** with that sequence, re-resolving the translated/weapon pair from the transition's
- *  own activity when it has one. Only when the transition IS the ideal sequence does the ideal
- *  activity commit. */
-void AdvanceToIdealActivity();
-
-/** `CAI_BaseNPC::MaintainActivity` (`0x102727d0`). Gated on slot 466 `ShouldMaintainActivity`;
- *  inside, work happens only when `m_Activity` differs from `m_IdealActivity` OR `m_nSequence` from
- *  `m_nIdealSequence`. Activity 2 is the special arm — it waits for `m_bSequenceFinished` and then
- *  runs `AdvanceToIdealActivity` and NOTHING else; every other activity first re-resolves the ideal
- *  through `0x10272130` and then advances. The body writes no field of its own.
- *
- *  **Not a vtable slot** — `vtmb_func 0x102727d0` reports `__thiscall` with no dispatch site — so it
- *  takes its own name. Family **SaveRestore10** had already declared `MaintainActivity()` as a SEAM
- *  that counts the call and records the latch `m_bForceMaintainActivity` was holding; that seam is
- *  the entry point and keeps its bookkeeping, and it now runs THIS body after it instead of
- *  answering nothing. The name here is `BaseMaintainActivity` for the same reason
- *  `BaseSetActivity` is: it is `CAI_BaseNPC`'s own function, with no Troika override above it. */
-void BaseMaintainActivity();
-
 /** `CAI_BaseNPCTroika::SetActivity` (`0x10295750`) — slot 310's own body, without the species
  *  prologue. 612 bytes, three top arms, and every request outside the `0x1093`-`0x1096` and
- *  `0x1115`-`0x1117` families forwards to `BaseSetActivity` unchanged. */
+ *  `0x1115`-`0x1117` families forwards to `FElysiumNpcBase::SetActivity` unchanged. */
 void TroikaSetActivity(int32 Activity);
 
 /** `+0x6672`, `CNPC_VTzimisceRunner`'s form byte. Both its slot-310 remap and its slot-375 post-pass
@@ -129,18 +91,6 @@ bool bTzimisceRunnerForm = false;
 /** `+0x6688 m_bHeavyBodyTarget`, `CNPC_VTzimisce`'s carried-body side. Retail's slot-375 arm takes
  *  the `_L` variants when it is **ZERO**. */
 bool bHeavyBodyTarget = false;
-
-/** `CBaseAnimating::FindTransitionSequence(from, to, &dir)` — the studio transition graph.
- *  **SEAM**: family Anim recorded that this substrate stands no studio header and no sequence index.
- *  It answers **`To`**, which is retail's OWN no-transition answer — the SDK body returns the
- *  destination sequence unchanged when no transition clip stands between the two — and is the arm
- *  that commits the ideal through `SetActivityAndSequence` directly. See the definition for why the
- *  `-1` sentinel would have stranded a body in `ACT_TRANSITION`. */
-int32 FindTransitionSequence(int32 From, int32 To) const;
-
-void WeaponSetActivity(int32 Activity, float Duration);
-
-void SetViewOffset(const FVector& OffsetUnits);
 
 /** `m_pHintNode` (`+0x5ddc`) as the two cover/reload delegates take it. The generated slot-569/570
  *  signatures take an opaque `void*` and story 29c-1's bodies use it only as a NON-NULL marker,

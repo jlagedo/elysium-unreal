@@ -68,7 +68,7 @@ void FElysiumNpcBaseBoss::BossDrawDebugStatOverlays()
 	// SOURCE units, so the print divides.
 	EmitDebugMsg(TEXT("Dist to player: %.3f"), FString::Printf(TEXT("Dist to player: %.3f"),
 		Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U));
-	BaseDrawDebugStatOverlays();
+	FElysiumNpcBase::DrawDebugStatOverlays();
 }
 
 // --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---

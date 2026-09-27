@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
@@ -40,22 +41,6 @@ namespace
 	// of the same arm states it. Anything else says UNRECOVERED and the arm that reads it says what
 	// it does instead.
 
-	// The band both melee-condition bodies share with the two ranged ones.
-	constexpr float GDatAttackBandUnits = ElysiumNpcTunables::SixtyFour;
-	// `FCOMP double ptr [0x104492d0]` — a DOUBLE, and SDK 2013's `MeleeAttack1Conditions` reads the
-	// same arm as `if (flDot < 0.7)`. Recovered from the twin, not from the bytes.
-	constexpr double GDatMeleeDotMin = 0.7;                  // _DAT_104492d0, as a double
-	constexpr float GDatMelee2TooFarUnits = ElysiumNpcTunables::OneEighty;
-	// UNRECOVERED. `MeleeAttack1Conditions`'s outer band must exceed 64 for the `0x60` rung below
-	// it to be reachable at all, and nothing pins it. Standing it at +inf makes the `0x09` arm
-	// UNREACHABLE, which is a stated refusal rather than a guessed threshold; every other arm of
-	// the body is exact.
-	constexpr float GDatMelee1TooFarUnits = TNumericLimits<float>::Max();  // _DAT_1044ddb0
-	// SDK 2013 `SetDefaultEyeOffset`: `m_vDefaultEyeOffset *= 0.75`.
-	constexpr float GDatEyeOffsetFallbackScale = 0.75f;      // _DAT_104629b8
-	// `docs/vtmb/npc-ai/conditions-and-states.md` (line 1010) and `entity_io.md` pin
-	// `_DAT_10449258 = 3.0f` — the unreachable record's retention.
-	constexpr float GDatUnreachableSeconds = 3.0f;           // _DAT_10449258
 	constexpr float GDatOne = ElysiumNpcTunables::One;
 	constexpr float GDatZero = ElysiumNpcTunables::Zero;
 	// The clear-trace fraction both LOS arms compare against: a DOUBLE cell, compared as a float.
@@ -70,9 +55,6 @@ namespace
 	// `"Projection (%.2f) < 0.2"` — the literal is in the message.
 	constexpr float GDatProjectionMin = 0.2f;                // _DAT_10451ab4
 
-	// UNRECOVERED literals. Each is named so the arm reads as retail's and the value is the one
-	// thing waiting; each site says what the stand-in does.
-	constexpr float GDatFollowRunDistanceUnits = 0.f;        // _DAT_1049a17c — slot 571's walk/run
 	// Read 2026-09-21 (`docs/vtmb/npc-ai/rdata-cells.md`) and held by the tunables table since
 	// 0019/4; each stood at a 0.0 stand-in before. The height limit is `FCOMP double ptr`: a DOUBLE.
 	constexpr double GDatHintHeightDiffUnits = ElysiumNpcTunables::SixtyFourDouble;  // 0x10296c40
@@ -87,8 +69,6 @@ namespace
 	// The retail `Activity` numbers this family's bodies name. Spelled here because the port has no
 	// retail activity table (family Hints' `RestartIdealActivityId` says why).
 	constexpr int32 GBaseHelpersActIdle = 1;                // ACT_IDLE — the tail of the face-anim ladder
-	constexpr int32 GBaseHelpersActWalk = 9;                // ACT_WALK
-	constexpr int32 GBaseHelpersActRun = 0x13;              // ACT_RUN
 	constexpr int32 GBaseHelpersActScriptCustomMove = 0x18; // ACT_SCRIPT_CUSTOM_MOVE
 	constexpr int32 GBaseHelpersActDisposition = 0xf1;      // ACT_DISPOSITION, slot 588's restart
 
@@ -98,306 +78,11 @@ namespace
 	constexpr int32 GFaceAnimAct45 = 0x10fa;
 	constexpr int32 GFaceAnimActSmall = 0x10f8;
 
-	// `CBaseEntity::GetFlags()` bit 0.
-	constexpr uint32 GFlOnGround = 1;
-
-	// `m_iszCustomMove` sits at `+0x5f50` on the cine. There is no port field for it, so
-	// `GetScriptCustomMoveActivity` reads this empty key and says so.
-	const FString GUnrecoveredCustomMove;
 }
 
 // =================================================================================================
 // `CAI_BaseNPC`'s own helpers.
 // =================================================================================================
-
-// slot 555 0x1026d9a0 `int MeleeAttack1Conditions(float, float)`
-int32 FElysiumNpc::MeleeAttack1Conditions(float Dot, float Dist)
-{
-	// Arm for arm, and NOTE that `GetEnemy()` (slot 167, vtable `+0x29c`) is dispatched THREE
-	// times: once up front for the combat-character cache, once as a null gate after the dot, and
-	// once more for the ground-flag read. Retail re-reads it each time.
-	const FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
-		? World->Resolve(BaseMemory.Enemy) : nullptr;
-	// `enemy->+0x9c` is `CBaseEntity`'s self-downcast cache: non-null exactly for a combat
-	// character.
-	const FElysiumCombatCharacter* EnemyCombatant =
-		Enemy != nullptr ? Enemy->AsCombatCharacter() : nullptr;
-
-	// `_DAT_1044ddb0` is UNRECOVERED, so this arm is stated unreachable rather than guessed. The
-	// rung IS recovered: past the outer band the answer is `COND_TOO_FAR_FOR_MELEE`.
-	if (Dist > GDatMelee1TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 9
-	}
-	if (Dist > GDatAttackBandUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);   // 0x60
-	}
-	if (static_cast<double>(Dot) < GDatMeleeDotMin)
-	{
-		return static_cast<int32>(EElysiumNpcCond::None);
-	}
-	if (Enemy == nullptr)
-	{
-		return static_cast<int32>(EElysiumNpcCond::None);
-	}
-	if (EnemyCombatant != nullptr)
-	{
-		// Slot 327 (vtable `+0x51c`) on the ENEMY's combat character; the base body `0x10345460`
-		// is `return 1`. A non-NPC combat character (the player) has no port body for the slot,
-		// which is the same answer.
-		const FElysiumNpc* EnemyNpc = Enemy->AsNpc();
-		if (EnemyNpc != nullptr && !const_cast<FElysiumNpc*>(EnemyNpc)->Slot327())
-		{
-			return static_cast<int32>(EElysiumNpcCond::None);
-		}
-	}
-	// `GetFlags() & FL_ONGROUND` — the answer is `COND_CAN_MELEE_ATTACK1` only for a grounded
-	// enemy, and 0 otherwise. Retail computes it branchlessly (`-(flags & 1) & 0x51`).
-	return (Enemy->Flags & GFlOnGround) != 0
-		? static_cast<int32>(EElysiumNpcCond::CanMeleeAttack1) : 0;
-}
-
-// slot 556 0x1026da90 `int MeleeAttack2Conditions(float, float)`
-int32 FElysiumNpc::MeleeAttack2Conditions(float Dot, float Dist)
-{
-	// The sibling, and the three differences are the whole of it: a DIFFERENT outer band
-	// (`_DAT_1044c3a8`, 180 units), NO second `GetEnemy()` null gate, and NO ground test — a
-	// passing body answers `COND_CAN_MELEE_ATTACK2` outright.
-	const FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
-		? World->Resolve(BaseMemory.Enemy) : nullptr;
-	const FElysiumCombatCharacter* EnemyCombatant =
-		Enemy != nullptr ? Enemy->AsCombatCharacter() : nullptr;
-
-	if (Dist > GDatMelee2TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 9
-	}
-	if (Dist > GDatAttackBandUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);   // 0x60
-	}
-	if (static_cast<double>(Dot) < GDatMeleeDotMin)
-	{
-		return static_cast<int32>(EElysiumNpcCond::None);
-	}
-	if (EnemyCombatant != nullptr)
-	{
-		const FElysiumNpc* EnemyNpc = Enemy->AsNpc();
-		if (EnemyNpc != nullptr && !const_cast<FElysiumNpc*>(EnemyNpc)->Slot327())
-		{
-			return static_cast<int32>(EElysiumNpcCond::None);
-		}
-	}
-	return static_cast<int32>(EElysiumNpcCond::CanMeleeAttack2);      // 0x52
-}
-
-// 0x102729d0 `CAI_BaseNPC::GetNavTargetEntity`
-FElysiumEntity* FElysiumNpc::GetNavTargetEntity() const
-{
-	// `GetGoalType()` (`thunk_FUN_102ee620(m_pNavigator)`), re-read for EVERY arm:
-	//   2 `GOALTYPE_ENEMY`     -> m_hEnemy      (+0x5ce0)
-	//   1 `GOALTYPE_TARGETENT` -> m_hTargetEnt  (+0x5ce4)
-	//   7 `GOALTYPE_COVER`     -> the handle behind `(this+0x98)->vtable+0x928`
-	//   anything else          -> NULL
-	// and every arm then resolves the handle through the global entity table, answering NULL for a
-	// stale one. `NavGoalState()` is family Motor's seam for the goal-type read and answers -1, so
-	// the default arm is what this takes today.
-	if (World == nullptr)
-	{
-		return nullptr;
-	}
-	FElysiumEntityWorld* MutableWorld = const_cast<FElysiumEntityWorld*>(World);
-	const int32 GoalType = NavGoalState();
-	if (GoalType == 2)
-	{
-		return MutableWorld->Resolve(BaseMemory.Enemy);
-	}
-	if (GoalType == 1)
-	{
-		return MutableWorld->Resolve(TargetEnt);
-	}
-	if (GoalType == 7)
-	{
-		// SEAM: `+0x98` is `CBaseEntity`'s self-downcast cache and `+0x928` the cover-goal query on
-		// it. No port object answers it; the arm resolves nothing, which is retail's stale-handle
-		// answer.
-		return nullptr;
-	}
-	return nullptr;
-}
-
-// 0x10274080 `CAI_BaseNPC::RememberUnreachable`
-void FElysiumNpc::RememberUnreachable(FElysiumEntity* Entity)
-{
-	// The scan is BACKWARD, from `m_UnreachableEnts.Count() - 1`, and stops at the FIRST match; a
-	// hit refreshes the expiry and falls through to the position write without touching the handle.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const double Expiry = Now + static_cast<double>(GDatUnreachableSeconds);
-	for (int32 Index = UnreachableEnts.Num() - 1; Index >= 0; --Index)
-	{
-		FElysiumEntity* Recorded = (World != nullptr)
-			? const_cast<FElysiumEntityWorld*>(World)->Resolve(UnreachableEnts[Index].Entity)
-			: nullptr;
-		if (Recorded == Entity)
-		{
-			UnreachableEnts[Index].ExpiresAt = Expiry;
-			// Retail writes the position for a null `param_1` too — and faults doing it. The port
-			// refuses instead (NAMED DIVERGENCE: a crash is not a behaviour to reproduce).
-			if (Entity != nullptr)
-			{
-				UnreachableEnts[Index].PositionCm = Entity->Origin;
-			}
-			return;
-		}
-	}
-	// The append. Retail grows the vector, writes `-1` into the new record's handle word TWICE
-	// (once by the grow helper, once by the null arm) and then overwrites it with the entity's own
-	// `GetRefEHandle()` (`vtable +0x4`) when there is one.
-	FUnreachableEntity& Record = UnreachableEnts.AddDefaulted_GetRef();
-	if (Entity != nullptr)
-	{
-		Record.Entity = Entity->Handle;
-		Record.PositionCm = Entity->Origin;   // `GetAbsOrigin()`, slot 217 / vtable +0x364
-	}
-	Record.ExpiresAt = Expiry;
-}
-
-// slot 515 0x10274b30 `float CalcIdealYaw(const Vector&)`
-float FElysiumNpc::CalcIdealYaw(const FVector& TargetPos)
-{
-	// The navigator's state word (`thunk_FUN_102ee3f0(m_pNavigator)`) picks how the delta is built,
-	// and the answer is always `VecToYaw(delta)` (`thunk_FUN_101d2c70`), which reads X and Y only:
-	//
-	//   0x37 -> ( -p.y - origin.x , p.x - origin.y )
-	//   0x38 -> (  p.y - origin.x , p.x - origin.y )
-	//   else -> (  p.x - origin.x , p.y - origin.y )
-	//
-	// The Z term of the two special arms is built from an UNINITIALISED stack slot in retail; it is
-	// harmless because `VecToYaw` never reads Z, and the port simply does not build one.
-	//
-	// `GetOrigin()` is slot 220 (vtable `+0x370`), the raw `m_vecOrigin`, not `GetAbsOrigin`.
-	// `NavGoalState()` is family Motor's seam and answers -1, so the default arm is what runs.
-	const int32 NavState = NavGoalState();
-	double Dx = 0.0;
-	double Dy = 0.0;
-	if (NavState == 0x37)
-	{
-		Dx = -TargetPos.Y - Origin.X;
-		Dy = TargetPos.X - Origin.Y;
-	}
-	else if (NavState == 0x38)
-	{
-		Dx = TargetPos.Y - Origin.X;
-		Dy = TargetPos.X - Origin.Y;
-	}
-	else
-	{
-		Dx = TargetPos.X - Origin.X;
-		Dy = TargetPos.Y - Origin.Y;
-	}
-	// `VecToYaw`: `atan2(y, x)` in degrees, and zero for a zero-length 2-D vector.
-	if (Dx == 0.0 && Dy == 0.0)
-	{
-		return 0.f;
-	}
-	return static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Dy, Dx)));
-}
-
-// 0x10274ca0 `CAI_BaseNPC::SetDefaultEyeOffset`
-void FElysiumNpc::SetDefaultEyeOffset()
-{
-	// `GetEyePosition(GetModelPtr(), m_vDefaultEyeOffset)`; if the result is the unset sentinel
-	// `vec3_origin` (`DAT_1070d1b0/b4/b8`), DevMsg and fall back to
-	// `(WorldAlignMins() + WorldAlignMaxs()) * 0.75`; then `SetViewOffset(m_vDefaultEyeOffset)`.
-	//
-	// Retail DevMsgs UNCONDITIONALLY where SDK 2013 gates the message on `Classify() != CLASS_NONE`;
-	// the gate is not in the body and is not reproduced.
-	//
-	// SEAM: no `.qc` eye-offset channel reaches this runtime — the character bake publishes an eye
-	// point through the visual layer, not a model-space offset word — so the read always lands on
-	// the sentinel and the fallback arm is the one every call takes. `+0x5d60` is `_CHAIN` in the
-	// shape map ("no stored view offset; the eye point is the chain's virtual `EyePosition()`"), so
-	// there is nothing to write either; what is recovered and stated here is the WARNING and the
-	// formula.
-	FVector EyeOffset = FVector::ZeroVector;   // GetEyePosition answers the sentinel
-	if (EyeOffset.IsNearlyZero(0.0))
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("WARNING: %s has no eye offset in .qc!"),
-			Class != nullptr ? *Class->ClassName.ToString() : TEXT(""));
-		FVector MinsUnits = FVector::ZeroVector;
-		FVector MaxsUnits = FVector::ZeroVector;
-		// `m_Collision`'s vtable `+4` / `+8` — family Motor's seam for the same pair, which answers
-		// false and leaves both at zero.
-		RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
-		EyeOffset = (MinsUnits + MaxsUnits) * GDatEyeOffsetFallbackScale;
-	}
-	// `thunk_FUN_1009f380` is `SetViewOffset`. The chain carries no view-offset word (`+0x5d60`
-	// `_CHAIN`), so the write has nowhere to land and is recorded rather than made.
-	(void)EyeOffset;
-}
-
-// slot 529 0x10280330 `bool IsCurTaskContinuousMove()`
-bool FElysiumNpc::IsCurTaskContinuousMove()
-{
-	// `GetCurTask()` (`0x1028a150`), then: NO task answers TRUE, and a task answers true only for
-	// ids 0x6e, 0x0b and 0x72. Everything else is false. Retail spells it as a single negated
-	// conjunction and the port keeps the shape.
-	if (!Schedule.IsRunning())
-	{
-		return true;
-	}
-	int32 Task = INDEX_NONE;
-	if (!CurrentRetailTaskNumber(Task))
-	{
-		// A running task the seam cannot number. Retail's answer for a non-null task that is not
-		// one of the three is FALSE, and that is what an unnumbered task gets here.
-		return false;
-	}
-	return Task == 0x6e || Task == 0x0b || Task == 0x72;
-}
-
-bool FElysiumNpc::CurrentRetailTaskNumber(int32& OutTaskNumber) const
-{
-	// SEAM for `GetCurTask()->iTask` (`0x1028a150`, the `Task_t` at `+0x00`). This runtime's task
-	// vocabulary is `EElysiumTask`, a 30-odd identity subset of retail's 441-entry library with no
-	// registered numbers — `ElysiumSchedule.h` names the retail id in a COMMENT beside a few tasks
-	// and nowhere in the data. So a running task cannot be numbered and this answers false.
-	OutTaskNumber = INDEX_NONE;
-	return false;
-}
-
-// 0x10289fe0 `CAI_BaseNPC::GetScriptCustomMoveActivity`
-int32 FElysiumNpc::GetScriptCustomMoveActivity() const
-{
-	// `ACT_WALK` unless `m_hCine` (`+0x5d74`) resolves AND its `m_iszCustomMove` (`+0x5f50`) is
-	// set; then `LookupActivity(name)`, and on a miss `LookupSequence(name)` -> `ACT_SCRIPT_CUSTOM_
-	// MOVE` when the sequence exists, `ACT_WALK` when it does not. Retail re-resolves the handle at
-	// every one of the four reads.
-	if (World == nullptr || !ScriptOwner.IsSet()
-		|| const_cast<FElysiumEntityWorld*>(World)->Resolve(ScriptOwner) == nullptr)
-	{
-		return GBaseHelpersActWalk;
-	}
-	// SEAM: `m_iszCustomMove` (`+0x5f50` on the cine) has no port field — `FElysiumAiScriptedSchedule`
-	// carries the beat's named clips, not the scripted-sequence custom move — so the key reads
-	// empty and the body takes its own `ACT_WALK` arm.
-	const FString& CustomMove = GUnrecoveredCustomMove;
-	if (CustomMove.IsEmpty())
-	{
-		return GBaseHelpersActWalk;
-	}
-	const int32 Activity = ActivityIdForName(CustomMove);   // `LookupActivity`
-	if (Activity != INDEX_NONE)
-	{
-		return Activity;
-	}
-	// `LookupSequence(name)`: a name that is not an activity may still be a raw sequence, and the
-	// answer is then `ACT_SCRIPT_CUSTOM_MOVE`. SEAM — this runtime resolves clips by name through
-	// the clip identity and carries no retail sequence index, so the lookup answers "not found"
-	// and the body takes its `ACT_WALK` tail. That is retail's own arm for an unknown name.
-	return GBaseHelpersActWalk;
-}
 
 // 0x1028ebc0 — can I see this point? Retail name unrecovered; no caller in the corpus.
 bool FElysiumNpc::FUN_1028ebc0(const FVector& PointCm) const
@@ -562,7 +247,7 @@ bool FElysiumNpc::CoverHintStillValid(const FHintWords& Hint, const FVector& Cov
 	}
 	const FVector DeltaUnits = (CoverObjectCm - Hint.OriginCm) / ElysiumMove::U;
 	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
-	const double Tolerance = bIsCurrentHint ? static_cast<double>(GDatAttackBandUnits) : 0.0;
+	const double Tolerance = bIsCurrentHint ? static_cast<double>(NpcKernelBaseHelpersShared::GDatAttackBandUnits) : 0.0;
 	if (Dist < static_cast<double>(Hint.TargetDistMin) - Tolerance
 		|| Dist > static_cast<double>(Hint.TargetDistMax) + Tolerance)
 	{
@@ -647,7 +332,7 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::CoverHintRejectReason(const FHintWor
 	}
 	const FVector DeltaUnits = (CoverObjectCm - Hint.OriginCm) / ElysiumMove::U;
 	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
-	const double Tolerance = bIsCurrentHint ? static_cast<double>(GDatAttackBandUnits) : 0.0;
+	const double Tolerance = bIsCurrentHint ? static_cast<double>(NpcKernelBaseHelpersShared::GDatAttackBandUnits) : 0.0;
 	if (Dist < static_cast<double>(Hint.TargetDistMin) - Tolerance
 		|| Dist > static_cast<double>(Hint.TargetDistMax) + Tolerance)
 	{
@@ -928,24 +613,6 @@ void FElysiumNpc::Slot23(FElysiumEntity* Attacker)
 	Cognition.Conditions.Set(EElysiumNpcCond::BeingAttacked);
 }
 
-// slot 25 0x100265b0 `void vfunc25(CBaseEntity*)`
-void FElysiumNpc::Slot25(FElysiumEntity* Victim)
-{
-	// `CNPC_VZombie` replaces slots 25 and 26 (`FElysiumNpcZombie`, story 5 step 3) with one
-	// `m_OnAttackedVictim` fire and NO base forward.
-	(void)Victim;
-	// `0x100265b0`, the Troika line's own body: ONE byte, `ret`. The overlay's reading was
-	// `default:void` and the body is still exactly that — no member is written and nothing is
-	// tallied, because retail writes nothing either.
-}
-
-// slot 26 0x100265d0 `void vfunc26(CBaseEntity*)`
-void FElysiumNpc::Slot26(FElysiumEntity* Victim)
-{
-	(void)Victim;
-	// `0x100265d0`, empty on the Troika line exactly as slot 25 is.
-}
-
 // slot 27 0x1029f8f0 `void vfunc27(CBaseEntity*)`
 void FElysiumNpc::Slot27(FElysiumEntity* Attacker)
 {
@@ -1001,34 +668,6 @@ void FElysiumNpc::TraceMessageBare(const TCHAR* Message) const
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s"), Message);
 }
 
-// slot 542 0x10273dd0 `void vfunc542()`
-void FElysiumNpc::Slot542()
-{
-	// `delete m_pEnemies (+0x5d88); m_pEnemies = m_pSquad (+0x5da4) + 8;` — the NPC gives up its
-	// private `AI_Enemies` and points at the squad's embedded one. Retail does NOT null-check
-	// `m_pSquad`: with no squad it writes the literal 8 into the pointer, which the next enemy read
-	// dereferences.
-	//
-	// Family Squad already stands this ownership move as `RepointEnemyMemoryToSquad` and calls
-	// `Slot542()` from `InitSquad`; this is the slot's body and it forwards there rather than
-	// standing a second copy. The port carries ONE enemy memory per NPC and no squad memory to
-	// point it at, so the move changes nothing and the null-squad fault is not reproduced (NAMED
-	// DIVERGENCE: a crash is not a behaviour to reproduce).
-	RepointEnemyMemoryToSquad(const_cast<void*>(ConnectedSquad()));
-}
-
-// slot 571 0x10289ce0 `Activity vfunc571(float)`
-int32 FElysiumNpc::Slot571(float Distance)
-{
-	// The whole 30-byte body: `ACT_WALK` below `_DAT_1049a17c`, `ACT_RUN` at or beyond it. Its one
-	// caller is `CAI_BaseNPC::RunTask` (`0x10288780`) task 0x0b, which passes the distance to the
-	// move target and makes the answer both the movement and the ideal activity.
-	//
-	// `_DAT_1049a17c` is UNRECOVERED; at the 0.0 stand-in every non-negative distance answers
-	// `ACT_RUN`, which is the arm the task takes for any real separation.
-	return Distance >= GDatFollowRunDistanceUnits ? GBaseHelpersActRun : GBaseHelpersActWalk;
-}
-
 // slot 588 0x10293e50 `void vfunc588()`
 void FElysiumNpc::Slot588()
 {
@@ -1070,21 +709,6 @@ void FElysiumNpc::Slot497()
 	}
 	bConceptCached = true;
 	// `_DAT_109247dc = -1`: no concept table to scan.
-}
-
-// 0x1027e0f0 `CAI_BaseNPC::FUN_1027e0f0` — the BASE line's slot-532 body
-bool FElysiumNpc::FUN_1027e0f0()
-{
-	// `m_hOpeningDoor = -1; m_bOpeningDoorWait = 0; return 1;` — the argument is ignored. Retail
-	// leaves `AL = 1` and every dispatch site drops it, which is why `signatures.md` types the slot
-	// `void`.
-	//
-	// The generated `Slot532(int32)` carries the TROIKA override `0x10290570` (layer 11, story 29d),
-	// which switches on its argument to end the alternate-AI door wait and then chains HERE. This
-	// is that chain target and is named by address because the retail name is unrecovered.
-	OpeningDoor = FElysiumEntityHandle();
-	bOpeningDoorWait = false;
-	return true;
 }
 
 // =================================================================================================
@@ -1129,14 +753,6 @@ bool FElysiumNpc::HintLosCheck(int32 HintNode, const FElysiumEntity* Against) co
 	return true;
 }
 
-bool FElysiumNpc::HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const
-{
-	// SEAM for `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` rays to.
-	(void)HintNode;
-	(void)OutPointCm;
-	return false;
-}
-
 bool FElysiumNpc::IsHintDebugNpc() const
 {
 	// SEAM for `DAT_10925444`, the `ai_debug_npc` handle. No console selection exists here, so no
@@ -1145,12 +761,3 @@ bool FElysiumNpc::IsHintDebugNpc() const
 	return false;
 }
 
-bool FElysiumNpc::IsHintAvailableToMe(int32 HintNode) const
-{
-	// SEAM for `0x102d1540`. Retail: the hint's `m_hHintOwner` (`+0x5e0`) is me -> true; otherwise
-	// `curtime < m_flNextUseTime` (`+0x5ec`) -> false; otherwise a LIVE owner handle -> false;
-	// else true. Family Hints ports the same three words as `IsHintUnusable`, from the other side.
-	// With no hint store there is no owner, which is retail's free answer.
-	(void)HintNode;
-	return true;
-}

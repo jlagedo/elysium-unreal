@@ -169,6 +169,8 @@ def _slot(ret="int", port="int32", default="", hand="", params="", params_port=(
     row.verdict = "rule" if (default or hand) else ""
     row.default = default
     row.hand = hand
+    # A Troika-introduced slot: the one emission row is the Troika layer's own declaration.
+    row.layers = [row]
     return row
 
 
@@ -214,7 +216,7 @@ def test_a_verdict_decides_whether_a_slot_is_stubbed():
     # to find; the emission carries the claim as a comment and no body.
     model = gks.Model(words=[], slots=[_slot(hand="FElysiumNpc::Slot33")], branch=[], classes=[],
                       overrides=[], reserved=set(), family=set(), meta={})
-    text = gks.render_slots_cpp(model, "vampire.dll")
+    text = gks.render_slots_cpp(model, "vampire.dll", "FElysiumNpc")
     assert "written by hand in the substrate" in text
     assert "int32 FElysiumNpc::Slot33()" not in text
     assert "FireKernelSlot" not in text.split("namespace ElysiumNpcKernelShape")[1]
@@ -223,7 +225,7 @@ def test_a_verdict_decides_whether_a_slot_is_stubbed():
 def test_a_constant_body_is_emitted_with_its_probe():
     model = gks.Model(words=[], slots=[_slot(default="0xffffffff")], branch=[], classes=[],
                       overrides=[], reserved=set(), family=set(), meta={})
-    text = gks.render_slots_cpp(model, "vampire.dll")
+    text = gks.render_slots_cpp(model, "vampire.dll", "FElysiumNpc")
     assert "int32 FElysiumNpc::Slot33()" in text
     assert "return static_cast<int32>(0xffffffff);" in text
     assert "FireKernelSlot(TEXT(\"Slot33\")" not in text
@@ -231,7 +233,7 @@ def test_a_constant_body_is_emitted_with_its_probe():
     # And a model with no constant rows still compiles: a zero-length C array does not.
     empty = gks.Model(words=[], slots=[_slot()], branch=[], classes=[], overrides=[],
                       reserved=set(), family=set(), meta={})
-    empty_text = gks.render_slots_cpp(empty, "vampire.dll")
+    empty_text = gks.render_slots_cpp(empty, "vampire.dll", "FElysiumNpc")
     assert "GDefaults[]" not in empty_text
     assert "return TArrayView<const FElysiumNpcSlotDefault>();" in empty_text
 
@@ -319,7 +321,41 @@ def test_check_mode_matches_the_committed_files(model):
         pytest.skip("the census is not committed yet")
     assert gks._emit(REPO.joinpath(*gks.CENSUS_OUTPUT),
                      gks.render_census(model, gks.kl.MODULE), True) == 0
-    assert gks._emit(REPO.joinpath(*gks.SLOTS_INL_OUTPUT),
-                     gks.render_slots_inl(model, gks.kl.MODULE), True) == 0
-    assert gks._emit(REPO.joinpath(*gks.SLOTS_CPP_OUTPUT),
-                     gks.render_slots_cpp(model, gks.kl.MODULE), True) == 0
+    for inl, cpp, owner in ((gks.BASE_SLOTS_INL_OUTPUT, gks.BASE_SLOTS_CPP_OUTPUT, "FElysiumNpcBase"),
+                            (gks.SLOTS_INL_OUTPUT, gks.SLOTS_CPP_OUTPUT, "FElysiumNpc")):
+        assert gks._emit(REPO.joinpath(*inl), gks.render_slots_inl(model, gks.kl.MODULE, owner),
+                         True) == 0
+        assert gks._emit(REPO.joinpath(*cpp), gks.render_slots_cpp(model, gks.kl.MODULE, owner),
+                         True) == 0
+
+
+def test_the_slot_surface_splits_by_layer():
+    # Story 0019/5 step 5: a slot the CAI_BaseNPC table holds is the base's declaration with the
+    # base body; the Troika overrides it when its table holds another body, and keeps the base's
+    # other overloads of that name visible.
+    from dataclasses import replace
+
+    row = _slot(hand="FElysiumNpcBase::Slot33")
+    base = replace(row, owner="FElysiumNpcBase", override=False, layers=[])
+    troika = replace(_slot(), owner="FElysiumNpc", override=True, layers=[], address="0x102b0000")
+    row.layers = [base, troika]
+    overload = _slot(params="int", params_port=("int32",))
+    overload.layers = [replace(overload, owner="FElysiumNpcBase", override=False, layers=[])]
+    model = gks.Model(words=[], slots=[row, overload], branch=[], classes=[], overrides=[],
+                      reserved=set(), family=set(), meta={})
+    base_inl = gks.render_slots_inl(model, "vampire.dll", "FElysiumNpcBase")
+    troika_inl = gks.render_slots_inl(model, "vampire.dll", "FElysiumNpc")
+    assert "\tvirtual int32 Slot33();" in base_inl
+    assert "\tvirtual int32 Slot33(int32);" in base_inl
+    assert "\tint32 Slot33() override;" in troika_inl
+    assert "\tusing FElysiumNpcBase::Slot33;" in troika_inl
+    base_cpp = gks.render_slots_cpp(model, "vampire.dll", "FElysiumNpcBase")
+    troika_cpp = gks.render_slots_cpp(model, "vampire.dll", "FElysiumNpc")
+    # The base's hand body is declared, not defined here; its overload is a base stub.
+    assert "int32 FElysiumNpcBase::Slot33()\n" not in base_cpp
+    assert "int32 FElysiumNpcBase::Slot33(int32)" in base_cpp
+    assert "FireKernelBaseSlot(TEXT(\"Slot33\")" in base_cpp
+    # The Troika override is its own stub, firing its own address under the unchanged surface text.
+    assert "int32 FElysiumNpc::Slot33()" in troika_cpp
+    assert 'TEXT("0x102b0000")' in troika_cpp
+    assert 'TEXT("CAI_BaseNPCTroika::%s")' in troika_cpp and 'TEXT("CAI_BaseNPCTroika::%s")' in base_cpp

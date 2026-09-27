@@ -73,7 +73,7 @@ struct FAiExtendedSaveHeader
 	uint32 ScheduleCrc = 0;
 };
 
-/** The header the last `BaseSave` built, kept so a case can read the flags without an archive. */
+/** The header the last `FElysiumNpcBase::Save` built, kept so a case can read the flags without an archive. */
 FAiExtendedSaveHeader LastSavedExtendedHeader;
 
 /** SEAM for `thunk_FUN_102e0b60` / `thunk_FUN_102e0b80` (`CAI_Motor`'s pre- and post-archive
@@ -92,3 +92,72 @@ int32 MotorRestoreFixups = 0;
 int32 MoveAndShootSaveFixups = 0;
 
 int32 MoveAndShootRestoreFixups = 0;
+
+/** `FLT_MAX` as this runtime's stamps carry it. Retail's fields are 32-bit floats and the compare
+ *  is exact, so a `double` stamp only matches when it holds the widened float constant — which is
+ *  what every port writer of an "infinite" stamp stores. */
+static double SaveStampFloatMax();
+
+/** `FUN_101cf250` (`0x101cf250`), the encode. Returns whether the stamp was rewritten, so a test
+ *  can state which arm fired without inspecting the value twice. */
+static bool SaveStampEncode(double& Stamp, ESaveStampMode Mode);
+
+/** `FUN_101cf2f0` (`0x101cf2f0`), the decode. Same return contract. */
+static bool SaveStampDecode(double& Stamp, ESaveStampMode Mode);
+
+/** The same pair over a stamp this runtime carries as a 32-bit `float` rather than a `double` —
+ *  `m_flEyeFidgetTime` (`+0x657c`) is the only one in this family, and it lands on the entity chain
+ *  as `FElysiumCombatCharacter::NextFidgetTime`. Retail's fields are ALL `float`, so this overload
+ *  is the exact width and the `double` one is the widened convenience. */
+static bool SaveStampEncode(float& Stamp, ESaveStampMode Mode);
+
+static bool SaveStampDecode(float& Stamp, ESaveStampMode Mode);
+
+/** `FUN_1023f040` — `*crc = 0xffffffff`. */
+static uint32 SaveCrc32Init();
+
+/** `FUN_1023f0c0` — the unrolled table-driven CRC32 over `DAT_10496f58`. The table is the standard
+ *  reflected CRC-32 (`0xedb88320`) one, which is what makes the routine reproducible without the
+ *  1 KB of `.rdata`: the port generates the table from the polynomial and the suite pins the
+ *  routine against the published `"123456789"` check value `0xcbf43926`.
+ *
+ *  **UNRECOVERED, and it does not matter here:** the corpus does not hold `DAT_10496f58`'s bytes,
+ *  so "this is the standard table" is an inference from the shape of the unrolled loop (byte-at-a-
+ *  time, `crc >> 8 ^ table[(byte ^ crc) & 0xff]`, four-at-a-time on an aligned run) and not a read.
+ *  A different polynomial would change the checksum's value and nothing else about the body. */
+static uint32 SaveCrc32Update(uint32 Crc, const uint8* Bytes, int32 Count);
+
+/** `FUN_1023f060` — `*crc = ~*crc`. */
+static uint32 SaveCrc32Final(uint32 Crc);
+
+/** The running program's task array as retail's `Task_t[]` — an `int32` task id and a `float`
+ *  operand per task, 8 bytes each, which is the stride `schedule+0x24 << 3` counts in.
+ *
+ *  **SEAM, and it answers this runtime's own ids:** retail checksums its compiled schedule table's
+ *  memory image, whose task numbers are `vdata`'s. This runtime's `EElysiumTask` is its own
+ *  enumeration, so the checksum is not comparable with a retail save — the recovered half is the
+ *  ROUTINE, the 8-byte stride and the fact that the header carries a checksum of the task array at
+ *  all. An NPC with no running program produces no bytes, and CRC32 over zero bytes is
+ *  `~0xffffffff == 0`, which is the literal `0` retail's own no-schedule arm writes. */
+void ScheduleTaskBytes(TArray<uint8>& OutBytes) const;
+
+/** Build the header from live state — retail's own block, shared by `FElysiumNpcBase::Save` and by the record
+ *  `FElysiumNpcBase::Serialize` writes. */
+FAiExtendedSaveHeader BuildExtendedSaveHeader() const;
+
+/** `ISave` vtable `+0x08` — `WriteFields(&header, &datamap_AIExtendedSaveHeader_t)`. Routes the
+ *  four words through `FElysiumSaveArchive` when `Archive` is non-null, and records the call. */
+void SaveWriteFields(void* Archive, FAiExtendedSaveHeader& Header);
+
+/** SEAM for `0x102ee6a0` on `m_pNavigator` — "the navigator has an active goal", header bit `0x4`.
+ *  Family Senses already stands `NavigatorHasNodeGraph()` for this substrate's missing node graph;
+ *  this is the goal query beside it and answers **false**, because nothing in this runtime stands a
+ *  `CAI_Navigator` goal object. Named rather than inlined so the day a navigator lands the bit
+ *  moves with it. */
+bool NavigatorGoalIsActive() const;
+
+/** Whether slot 106 has run, and the name it was handed. Retail passes the classname string; this
+ *  runtime's construct path already carries it, so the argument is recorded rather than applied. */
+FString PostConstructorName;
+
+int32 PostConstructorCalls = 0;

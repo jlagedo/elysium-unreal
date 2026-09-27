@@ -191,13 +191,16 @@ class Names:
     @staticmethod
     def _slots() -> dict[int, tuple[str, str, str]]:
         """slot → (base body address, walk state, retail signature) from the port's slot table."""
-        path = (repo_root() / "Source" / "ElysiumUE" / "Private" / "Substrate"
-                / "ElysiumNpcKernelSlots.inl")
+        substrate = repo_root() / "Source" / "ElysiumUE" / "Private" / "Substrate"
         out: dict[int, tuple[str, str, str]] = {}
-        if not path.is_file():
-            return out
-        for m in SLOT_RE.finditer(path.read_text(encoding="utf-8")):
-            out.setdefault(int(m.group(1)), (m.group(2), m.group(3) or "", m.group(4)))
+        # The Troika layer first: its override is the body a Troika instance runs; the base
+        # layer's declaration answers every slot Troika does not refill (story 5 step 5).
+        for name in ("ElysiumNpcSlots.inl", "ElysiumNpcBaseSlots.inl", "ElysiumNpcKernelSlots.inl"):
+            path = substrate / name
+            if not path.is_file():
+                continue
+            for m in SLOT_RE.finditer(path.read_text(encoding="utf-8")):
+                out.setdefault(int(m.group(1)), (m.group(2), m.group(3) or "", m.group(4)))
         return out
 
     def field(self, cls: str | None, off: int) -> tuple[str, str, str, str | None] | None:

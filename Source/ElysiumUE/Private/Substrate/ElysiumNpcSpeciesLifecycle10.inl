@@ -98,23 +98,13 @@
 // 29c-1's report set aside as "`CBaseEntity`'s story, not this one". `gen_kernel_shape` therefore
 // still emits their named stubs, and a definition of `FElysiumNpc::Touch` here would be a duplicate
 // symbol. The two base bodies are ported under their own names instead — exactly as story 29c-1's
-// cleanup landed `CBaseEntity`'s own slot-153 body as `FElysiumNpc::BaseEntityIsMoving` — and the
+// cleanup landed `CBaseEntity`'s own slot-153 body as `FElysiumNpcBase::BaseEntityIsMoving` — and the
 // species dispatch sits on top of them.
 //
 // **GAP, named rather than patched:** nothing dispatches slot 175 in this runtime. There is no
 // per-frame entity-vs-entity touch pass here; the world's touch surface is begin/end only. Slot 174
 // IS wired, through `FElysiumEntity::OnTouchStart`, which is this runtime's touch-begin
 // notification and is retail's `StartTouch` by construction.
-
-/** `CBaseEntity::StartTouch` (`0x100a49d0`), slot 174's Troika-line body. The whole body is the
- *  parent forward: when `m_pParent` resolves live, dispatch ITS slot 174 (`vtable +0x2b8`) with the
- *  same toucher. Nothing else — no output, no condition, no state. */
-void BaseEntityStartTouch(FElysiumEntity* Other);
-
-/** `CBaseEntity::Touch` (`0x100a4af0`), slot 175's Troika-line body. Two steps in order:
- *  `if (m_pfnTouch) m_pfnTouch(other)`, then the same parent forward through the parent's slot 175
- *  (`vtable + 700`). */
-void BaseEntityTouch(FElysiumEntity* Other);
 
 /** Slot 174 on the NPC line: the `CBaseEntity` body. `CNPC_VGhoulCroucher` overrides it
  *  (story 5 step 3). */
@@ -154,12 +144,6 @@ struct FGargoylePillarHit
 // the switch (`ApplyStateWeaponVisibility`) and then the Troika body, Hunter's a direct call into
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`). Called from the classes' `OnStateChange`
 // overrides (story 5 step 3).
-
-/** `CAI_BaseNPC::FUN_101a67e0` (`0x101a67e0`), vtable `+0x29c` = slot **167** — `GetEnemy()`. The
- *  whole body resolves `m_hEnemy` through the global entity table and answers null when the handle
- *  is stale. Declared here because this family is the first to need it by name and because the
- *  checklist's two walks call it a door reference; it is `BaseMemory.Enemy` resolved. */
-FElysiumEntity* GetEnemyEntity() const;
 
 // -------------------------------------------------------------------------------------------------
 // The two destructors.

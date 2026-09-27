@@ -51,16 +51,6 @@
 
 // --- `CAI_BaseNPC::LeaveGrappleState` `0x1026ce30` -----------------------------------------------
 
-/** `CAI_BaseNPC::LeaveGrappleState` (`0x1026ce30`), 100 bytes — a DISTINCT retail function beside
- *  the Troika override `0x102b5d90` that owns slot 380, so it takes its own name and is not a slot
- *  body. Four UNCONDITIONAL steps with no grapple-type gate anywhere: fire `m_OnGrappleEnd` with the
- *  grapple partner as activator (null when the handle is stale), `CBaseCombatCharacter::
- *  LeaveGrappleState`, slot 416 `SetForceFrequentThink(false)`, then `0x10007ea0` — the saturating
- *  decrement of `m_iIsOblivious` (`+0x5bb4`) clamped at 0, and the squad reconnect `0x10009601`.
- *
- *  `FElysiumNpc::LeaveGrappleState` (`ElysiumNpc.cpp`) calls this and then slot 614. */
-void BaseLeaveGrappleState();
-
 // --- `CNPC_VGhoulCroucher` — `0x1037be80` (slot 24) and `0x1037c090` ----------------------------
 
 /** One `BurnHitbox` request. **SEAM**: this substrate exposes no hitbox table to the kernel
@@ -110,12 +100,6 @@ struct FPushEntityCall
 	FVector DeltaUnits = FVector::ZeroVector;
 	int32 Mode = 0;
 };
-
-/** SEAM for `0x1015d680(player, 0)` — the entity in the player's inventory slot 0 (the `+0x2308`
- *  handle array), which both the ManBat's HUD emitter and the head claw's gate on. This runtime's
- *  inventory is `FElysiumInventory`; this answers its active weapon entity, which IS retail's slot 0
- *  for a character carrying one, and null otherwise — retail's own refusal. */
-FElysiumEntity* PlayerInventorySlot0() const;
 
 // --- `CNPC_VNewscaster` — `0x103a0670` and `0x103a0ab0` -----------------------------------------
 

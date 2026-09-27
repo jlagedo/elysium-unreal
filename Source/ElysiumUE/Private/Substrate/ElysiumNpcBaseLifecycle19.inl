@@ -80,3 +80,28 @@ int32 LastSetScheduleRetail = 0;
 bool bLastSetScheduleForce = false;
 
 int32 LastIdealScheduleStamp = 0;
+
+void ThinkSet(const TCHAR* Function, double Delay);
+
+static const TCHAR* NpcInitThinkFunction();    // `0x10273aa0`
+
+static const TCHAR* StartNpcThinkFunction();   // `LAB_1000f4e8`
+
+/** SEAM for `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe`. No hull sweep stands here:
+ *  answers the found-floor arm and leaves the origin where it was. */
+bool MoveProbeFloorDrop(FVector& InOutOriginUnits);
+
+/** `0x1027be60` — give-up restore. */
+void RestoreGiveUp();
+
+/** SEAM for `0x102ee1e0`. No navigator: answers false (failure). */
+bool RefindPostRestorePath();
+
+/** Install a raw registrar id through `0x10280de0` / `0x102ae750`. An id the registry lacks goes
+ *  through story 25's miss arm (`IDLE_STAND`). */
+void InstallScheduleRetail(int32 RawId, bool bForce);
+
+/** `CAI_Motor::m_IdealYaw` (motor `+0x34`), the yaw `NPCInit` `0x10273390` seeds from the absolute
+ *  angles (`±180` under the motor's animation-movement latch). SEAM: `IElysiumNpcMotor` keeps no
+ *  ideal-yaw word, so the seed is held here and nothing reads it yet. */
+float MotorIdealYaw = 0.f;

@@ -490,18 +490,6 @@ int32 FElysiumNpc::CrosswalkPhaseMask(double CurTime)
 	return GDlgCrosswalkSignalBit << ((Seconds >> 4) & 3);
 }
 
-int32 FElysiumNpc::NavigatorPathType() const
-{
-	// **SEAM** for `0x102ee620`, which is `return path->+0x30` on `m_pNavigator` (`+0x5d34`) — the
-	// navigator's current path TYPE. The shape map routes `+0x5d34` to
-	// `FElysiumScriptedCharacter::Motor`, "the one motor seam this chain stands beside the body",
-	// and that motor carries no path object at all.
-	//
-	// Answers `-1`, which is neither the crosswalk type `8` nor any other retail type, so both
-	// bodies below take their own "not a pedestrian path" arm rather than being refused.
-	return NavigatorPathTypeWord;
-}
-
 bool FElysiumNpc::FindCrosswalkPathNode(int32 EntityIndex, int32 LinkId, int32& OutSignalFlags) const
 {
 	// **SEAM** for `0x102f96e0` — given the waypoint's owning entity and the hint's link id, walk
@@ -667,34 +655,3 @@ void FElysiumNpc::UpdatePedestrianInfo()
 // The two `CBaseEntity` use slots, 39 and 42
 // =================================================================================================
 
-void FElysiumNpc::OnUseBegin(FElysiumEntity* Activator)
-{
-	// slot 39, 0x100a4fe0 — `CBaseEntity`'s use-begin hook, 59 bytes, shared by 82 classes in the
-	// kernel family (`CAISound` is simply the class the corpus attributes the address to). Two
-	// statements:
-	//
-	//     FireOutput(m_OnUseBegin (+0x5c), activator = param_1, caller = this, delay = 0);
-	//     m_hUseActivator (+0x8c) = param_1 ? param_1->GetRefEHandle() : -1;
-	//
-	// The output fires FIRST and UNCONDITIONALLY — a null activator still fires it, with a null
-	// activator — and the handle is written after. `OnUseBegin` is a `CBaseEntity` datamap keyfield
-	// (`vtmb_fields CAISound` names `+0x5c` `m_OnUseBegin`, key `OnUseBegin`), so every `npc_*` row
-	// in a shipped map may wire it.
-	static const FName GOnUseBegin(TEXT("OnUseBegin"));
-	FireOutput(GOnUseBegin, Activator != nullptr ? Activator->Handle : FElysiumEntityHandle());
-	UseActivator = Activator != nullptr ? Activator->Handle : FElysiumEntityHandle::Invalid();
-}
-
-void FElysiumNpc::OnUseEnd(FElysiumEntity* Activator)
-{
-	// slot 42, 0x100a5030 — the other half, 33 bytes:
-	//
-	//     FireOutput(m_OnUseEnd (+0x74), activator = param_1, caller = this, delay = 0);
-	//     m_hUseActivator (+0x8c) = -1;
-	//
-	// The clear is UNCONDITIONAL — it does not consult the activator at all, so ending a use someone
-	// else began still clears the cache. That asymmetry with slot 39 is retail's.
-	static const FName GOnUseEnd(TEXT("OnUseEnd"));
-	FireOutput(GOnUseEnd, Activator != nullptr ? Activator->Handle : FElysiumEntityHandle());
-	UseActivator = FElysiumEntityHandle::Invalid();
-}

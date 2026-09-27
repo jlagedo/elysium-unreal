@@ -53,27 +53,12 @@ int32 PatrolNodeInterestPercent(int32 Record) const;
  *  Answers true, which is retail's PASS arm — the trace seam behind it reports a clear line. */
 bool HintLosCheck(int32 HintNode, const FElysiumEntity* Target) const;
 
-/** SEAM for `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` runs its LOS ray to.
- *  Answers false; the caller then has no endpoint and takes its own refusal. */
-bool HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const;
-
 /** SEAM for `DAT_10925444`, the `ai_debug_npc` handle every reason-string arm of `0x102961a0` and
  *  `0x10296c40` compares against `this` before formatting anything. Answers false, so the reason
  *  strings are never built — which is retail's own behaviour for every NPC but the one being
  *  debugged. The REASONS are still decided and returned (`FHintRejectReason` below), because the
  *  reason is what the walk recovered and a test has to be able to read it. */
 bool IsHintDebugNpc() const;
-
-/** SEAM for `GetCurTask()->iTask` (`0x1028a150`), the retail task NUMBER of the running program's
- *  current step. `EElysiumTask` carries no registered numbers, so this answers false and
- *  `IsCurTaskContinuousMove` reads that as retail's "a task that is not one of the three". */
-bool CurrentRetailTaskNumber(int32& OutTaskNumber) const;
-
-/** SEAM for `0x102d1540` — "is this hint free, or already mine?". Retail: the hint's `m_hHintOwner`
- *  (`+0x5e0`) is me, or `curtime >= m_flNextUseTime` (`+0x5ec`) and the owner handle is dead. Family
- *  Hints ports the same three words as `IsHintUnusable` from the other side; this is the OWNER-only
- *  half `IsUnusableNode` (slot 527) negates, and it answers true (free) with no hint store. */
-bool IsHintAvailableToMe(int32 HintNode) const;
 
 // --- The rejection reasons the two verbose validators decide --------------------------------------
 //
@@ -102,25 +87,6 @@ enum class EHintRejectReason : uint8
 // --- The bodies -----------------------------------------------------------------------------------
 //
 // `CAI_BaseNPC`'s own.
-
-/** `CAI_BaseNPC::GetNavTargetEntity` (`0x102729d0`). NAMED: the SDK twin's two arms
- *  (`GOALTYPE_ENEMY` -> `GetEnemy()`, `GOALTYPE_TARGETENT` -> `GetTarget()`) are retail's modes 2
- *  and 1 exactly; retail adds a third, mode 7 `GOALTYPE_COVER`, through the navigator. */
-FElysiumEntity* GetNavTargetEntity() const;
-
-/** `CAI_BaseNPC::RememberUnreachable` (`0x10274080`). NAMED by the SDK twin, arm for arm: a
- *  BACKWARD scan for an existing record refreshes its expiry, a miss appends one, and the entity's
- *  current position is written either way. The duration is baked (`_DAT_10449258`). */
-void RememberUnreachable(FElysiumEntity* Entity);
-
-/** `CAI_BaseNPC::SetDefaultEyeOffset` (`0x10274ca0`). NAMED by the SDK twin and by its own string,
- *  `"WARNING: %s has no eye offset in .qc!"`. */
-void SetDefaultEyeOffset();
-
-/** `CAI_BaseNPC::GetScriptCustomMoveActivity` (`0x10289fe0`). NAMED by the SDK twin: the cine's
- *  `m_iszCustomMove` (`+0x5f50` on `m_hCine`) as an activity, else as a sequence, else `ACT_WALK`.
- *  Returns a retail `Activity` number — 9 `ACT_WALK` or 0x18 `ACT_SCRIPT_CUSTOM_MOVE`. */
-int32 GetScriptCustomMoveActivity() const;
 
 /** `0x1028ebc0` — can I see this point? `FInViewCone`, then a squared-distance test against
  *  `m_flVisionDistance` (`+0x63b8`), then a clear trace. Retail name UNRECOVERED and the corpus
@@ -199,8 +165,3 @@ struct FFaceAnimPick
 };
 static FFaceAnimPick FaceAnimLadder(float YawDelta, TFunctionRef<bool(int32)> HasSequence);
 
-/** `CAI_BaseNPC::FUN_1027e0f0` — the BASE line's slot-532 body: forget the door being opened and
- *  report handled. Retail name UNRECOVERED (`signatures.md`: "no SDK 2013 twin or string names it").
- *  NOT the port's `Slot532`: the generated virtual carries the TROIKA override `0x10290570`, which
- *  is `order.md` layer 11 and story 29d's row, and that body chains to this one. */
-bool FUN_1027e0f0();

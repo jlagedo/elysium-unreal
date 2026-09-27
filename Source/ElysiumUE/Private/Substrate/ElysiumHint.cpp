@@ -24,9 +24,9 @@ const FElysiumHint* FElysiumHint::Cast(const FElysiumEntity* Entity)
 	return Cast(const_cast<FElysiumEntity*>(Entity));
 }
 
-FElysiumNpc::FHintWords FElysiumHint::ToWords() const
+FElysiumNpcBase::FHintWords FElysiumHint::ToWords() const
 {
-	FElysiumNpc::FHintWords Words;
+	FElysiumNpcBase::FHintWords Words;
 	Words.bValid = true;
 	Words.HintIndex = Handle.Index;
 	Words.Name = TargetName;
@@ -50,7 +50,7 @@ FElysiumNpc::FHintWords FElysiumHint::ToWords() const
 	return Words;
 }
 
-void FElysiumHint::FromWords(const FElysiumNpc::FHintWords& Words)
+void FElysiumHint::FromWords(const FElysiumNpcBase::FHintWords& Words)
 {
 	// The words a kernel body writes back: the Spawn fill and fold, the claim, the disabled word.
 	// Identity (name, type, group, node, position) is the entity's and is never taken from a view.
@@ -68,25 +68,25 @@ void FElysiumHint::FromWords(const FElysiumNpc::FHintWords& Words)
 void FElysiumHint::Spawn()
 {
 	// `CAI_Hint::Spawn` (`0x102d0b60`). Its `SetSolid(0)`/`Relink` half has no body here to act on;
-	// the per-type default block and the in-place group fold are `FElysiumNpc::HintSpawn`.
-	FElysiumNpc::FHintWords Words = ToWords();
-	FElysiumNpc::HintSpawn(Words);
+	// the per-type default block and the in-place group fold are `FElysiumNpcBase::HintSpawn`.
+	FElysiumNpcBase::FHintWords Words = ToWords();
+	FElysiumNpcBase::HintSpawn(Words);
 	FromWords(Words);
 }
 
 void FElysiumHint::HintScriptHide()
 {
 	ScriptHide();
-	FElysiumNpc::FHintWords Words = ToWords();
-	FElysiumNpc::HintScriptHide(Words);
+	FElysiumNpcBase::FHintWords Words = ToWords();
+	FElysiumNpcBase::HintScriptHide(Words);
 	FromWords(Words);
 }
 
 void FElysiumHint::HintScriptUnhide()
 {
 	ScriptUnhide();
-	FElysiumNpc::FHintWords Words = ToWords();
-	FElysiumNpc::HintScriptUnhide(Words);
+	FElysiumNpcBase::FHintWords Words = ToWords();
+	FElysiumNpcBase::HintScriptUnhide(Words);
 	FromWords(Words);
 }
 

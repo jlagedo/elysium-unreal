@@ -34,20 +34,11 @@
 //    this file is a chosen number.
 //  * Retail `NPC_STATE` ids, from `0x1027e660`'s name table and `0x1026e3e0`'s switch: 1 IDLE,
 //    2 COMBAT, 3 ALERT, 4 SCRIPT, 6 PRONE, 7 DEAD, 8 FLEE, 0xb HUNT, 0xe the criminal window.
-//    `FElysiumNpc::NpcStateFlags` already carries that mapping and this file uses the same one.
+//    `FElysiumNpcBase::NpcStateFlags` already carries that mapping and this file uses the same one.
 
 namespace
 {
 	// --- The recovered constants, by their `.rdata` address ------------------------------------
-	// `CAI_BaseNPC::RangeAttack1Conditions` (`0x1026d890`), in SOURCE UNITS.
-	constexpr float GCondRange1TooCloseForRangedUnits = ElysiumNpcTunables::Hundred;
-	constexpr float GCondRange1TooCloseToAttackUnits = 200.0f;    // `_DAT_104492b8`
-	constexpr float GCondRange1TooFarUnits = 1024.0f;             // `_DAT_1045d650`
-	// `CAI_BaseNPC::RangeAttack2Conditions` (`0x1026d920`).
-	constexpr float GCondRange2TooCloseForRangedUnits = ElysiumNpcTunables::SixtyFour;
-	constexpr float GCondRange2TooFarUnits = ElysiumNpcTunables::FiveHundredTwelve;
-	// The facing dot both bodies share (`FCOMP double ptr [0x10449270]`).
-	constexpr double GCondAttackFacingDot = ElysiumNpcTunables::HalfDouble;
 
 	// `FUN_102b2570`'s attack-period numerator: the re-raise window is
 	// `m_flLastMeleeStepbackTime + 3.0 / m_flSpeedScale`.
@@ -80,11 +71,6 @@ namespace
 	// `ClearHintNode(this, 5.0)`, the reuse delay the tail imposes.
 	constexpr float GCondStateChangeHintReuseSeconds = 5.0f;
 
-	// Source's `Navigation_t`: the two values `CAI_BaseNPC::FCanCheckAttacks` refuses on.
-	constexpr int32 GCondNavGround = 0;
-	constexpr int32 GCondNavJump = 1;
-	constexpr int32 GCondNavClimb = 3;
-
 	// `bits_CAP_WEAPON_MELEE_ATTACK1`. `CAI_BaseNPCTroika::FCanCheckAttacks`'s own arm tests AH's
 	// sign bit, which is EAX bit 15 — this mask, not bit 31.
 	constexpr int32 GCondCapWeaponMeleeAttack1 = 0x8000;
@@ -95,195 +81,21 @@ namespace
 // Slot 560 — `CAI_BaseNPC::ClearAttackConditions` (`0x1026dc80`)
 // =================================================================================================
 
-void FElysiumNpc::ClearAttackConditions()
-{
-	// 0x1026dc80. Eleven `ClearCondition` calls, in retail's order and no other work at all. The
-	// list is fixed in the binary; it is NOT derived from the weapon, the state or the capability
-	// word, which is why it is spelled out rather than computed.
-	static const EElysiumNpcCond Clears[] = {
-		EElysiumNpcCond::CanRangeAttack1,          // 0x4f
-		EElysiumNpcCond::CanRangeAttack2,          // 0x50
-		EElysiumNpcCond::CanMeleeAttack1,          // 0x51
-		EElysiumNpcCond::CanMeleeAttack2,          // 0x52
-		EElysiumNpcCond::ExtendedBlockedByFriend,  // 0x2e
-		EElysiumNpcCond::WaitingAttackTime,        // 0x2f
-		EElysiumNpcCond::WeaponHasLos,             // 0x62
-		EElysiumNpcCond::WeaponBlockedByFriend,    // 99 = 0x63
-		EElysiumNpcCond::WeaponPlayerInSpread,     // 100 = 0x64
-		EElysiumNpcCond::WeaponPlayerNearTarget,   // 0x65
-		EElysiumNpcCond::WeaponSightOccluded,      // 0x66
-	};
-	for (const EElysiumNpcCond Cond : Clears)
-	{
-		Cognition.Conditions.Clear(Cond);
-	}
-}
-
 // =================================================================================================
 // Slot 477 — `CAI_BaseNPC::ClearSenseConditions` (`0x1026e5c0`)
 // =================================================================================================
-
-void FElysiumNpc::ClearSenseConditions()
-{
-	// 0x1026e5c0, whose whole body is `ClearConditions(0x105c97dc, 0xe)`.
-	//
-	// The table is fourteen dwords in `.rdata`, READ OUT of retail (`vampire.dll` file offset
-	// `0x5c97dc - 0x10000000 + .rdata delta`): `43 45 46 44 5b 5a 6a 6d 6e 6f 6b 6c 71 5e`. It is
-	// the union of the SEE family (`0x105c979c`, 6) and part of the HEAR family (`0x105c97b4`, 10),
-	// and the two the HEAR sweep clears that this list does NOT are load-bearing:
-	// `HEAR_BULLET_IMPACT` (0x70) and `HEAR_FLINCH` (0x72) SURVIVE a sense clear.
-	static const EElysiumNpcCond Clears[] = {
-		EElysiumNpcCond::SeeHate,           // 0x43
-		EElysiumNpcCond::SeeDislike,        // 0x45
-		EElysiumNpcCond::SeeEnemy,          // 0x46
-		EElysiumNpcCond::SeeFear,           // 0x44
-		EElysiumNpcCond::SeeNemesis,        // 0x5b
-		EElysiumNpcCond::SeePlayer,         // 0x5a
-		EElysiumNpcCond::HearDanger,        // 0x6a
-		EElysiumNpcCond::HearCombat,        // 0x6d
-		EElysiumNpcCond::HearWorld,         // 0x6e
-		EElysiumNpcCond::HearPlayer,        // 0x6f
-		EElysiumNpcCond::HearThumper,       // 0x6b
-		EElysiumNpcCond::HearBugbait,       // 0x6c
-		EElysiumNpcCond::HearPhysicsDanger, // 0x71
-		EElysiumNpcCond::Smell,             // 0x5e
-	};
-	for (const EElysiumNpcCond Cond : Clears)
-	{
-		Cognition.Conditions.Clear(Cond);
-	}
-}
 
 // =================================================================================================
 // Slot 459 — `RemoveIgnoredConditions` (`0x1026d7f0`, and the cine body `0x101a89a0`)
 // =================================================================================================
 
-void FElysiumNpc::ClearCineIgnoredConditions(FElysiumNpc& Partner)
-{
-	// 0x101a89a0, the cine entity's own slot-459 body, applied to its scene partner. Three damage
-	// conditions, then `m_bCondTookDamage` (+0x5b80), then ten more — in retail's order, which is
-	// NOT sorted and is reproduced as written.
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::LightDamage);       // 0x4c
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::HeavyDamage);       // 0x4d
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::RepeatedDamage);    // 0x4e
-	Partner.Cognition.bCondTookDamage = false;                              // +0x5b80
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::InvestigateLevel);        // 0x1e
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::CriminalFleeLevel);       // 0x1f
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::SupernaturalFleeLevel);   // 0x21
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::HearFlinch);              // 0x72
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::CriminalAttackLevel);     // 0x20
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::SupernaturalAttackLevel); // 0x22
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::InvestigateSound);        // 0x25
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::InvestigateSight);        // 0x26
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::Comfort);                 // 0x27
-	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);           // 10 = 0x0a
-}
-
-FElysiumNpc* FElysiumNpc::CineIgnoredConditionsPartner() const
-{
-	// SEAM. Retail's chain is `m_hCine (+0x5d74)` -> the cine entity's slot 459 -> its own
-	// `m_hTargetEnt` -> that entity's `+0x94` (its NPC). This runtime's `FElysiumEntity::ScriptOwner`
-	// carries the first hop, but no scripted-scene object here carries a target entity or the
-	// `0x101a8930` "already in this state" predicate the body gates on, so the walk cannot start.
-	return nullptr;
-}
-
-void FElysiumNpc::RemoveIgnoredConditions()
-{
-	// 0x1026d7f0, read off the listing (the decompiled C reports a damaged jump table). The whole
-	// body is a guard and a dispatch: while `m_NPCState` is 4 (SCRIPT) and `m_hCine` (`+0x5d74`)
-	// still resolves through the entity table, call THAT entity's own slot 459. Outside state 4 —
-	// and with a dead cine handle — it writes nothing at all.
-	if (NpcKernelConditionsShared::CondRetailStateId(Mind.State()) != 4)
-	{
-		return;
-	}
-	if (!ScriptOwner.IsSet() || World == nullptr || World->Resolve(ScriptOwner) == nullptr)
-	{
-		return;
-	}
-	FElysiumNpc* Partner = CineIgnoredConditionsPartner();
-	if (Partner == nullptr)
-	{
-		return;
-	}
-	ClearCineIgnoredConditions(*Partner);
-}
-
 // =================================================================================================
 // Slots 553 / 554 — the two ranged attack bands (`0x1026d890`, `0x1026d920`)
 // =================================================================================================
 
-int32 FElysiumNpc::RangeAttack1Conditions(float FlDot, float FlDist)
-{
-	// 0x1026d890. A nested threshold tree over the DISTANCE, then one facing test; it RETURNS a
-	// condition number and sets nothing — `GatherAttackConditions` (`0x1026dd10`) is what calls
-	// `SetCondition` on the answer. Every comparison is strict except the dot, which carries the
-	// equal bit (`TEST AH,0x5 / JNP` at `1026d8ec`).
-	//
-	// `CNPC_VBatSwarm::vfunc553` (`0x103675e0`) and `CNPC_VSheriffSwarm::vfunc553` (`0x103b2590`)
-	// are the only overrides and both are unmodified forwards to this body, so there is no species
-	// table here: the base answer IS every class's answer.
-	if (FlDist < GCondRange1TooCloseForRangedUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooCloseForRanged);   // 8
-	}
-	if (FlDist < GCondRange1TooCloseToAttackUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooCloseToAttack);    // 0x5f
-	}
-	if (FlDist > GCondRange1TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);      // 0x60
-	}
-	return static_cast<double>(FlDot) >= GCondAttackFacingDot
-		? static_cast<int32>(EElysiumNpcCond::CanRangeAttack1)           // 0x4f
-		: static_cast<int32>(EElysiumNpcCond::NotFacingAttack);          // 0x61
-}
-
-int32 FElysiumNpc::RangeAttack2Conditions(float FlDot, float FlDist)
-{
-	// 0x1026d920. The same shape with its own numbers and ONE FEWER BAND: there is no
-	// `TOO_CLOSE_TO_ATTACK` rung, so anything past 64 units and inside 512 is a candidate. Same
-	// overrides, same forwards (`0x10367610`, `0x103b25c0`).
-	if (FlDist < GCondRange2TooCloseForRangedUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooCloseForRanged);   // 8
-	}
-	if (FlDist > GCondRange2TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);      // 0x60
-	}
-	return static_cast<double>(FlDot) >= GCondAttackFacingDot
-		? static_cast<int32>(EElysiumNpcCond::CanRangeAttack2)           // 0x50
-		: static_cast<int32>(EElysiumNpcCond::NotFacingAttack);          // 0x61
-}
-
 // =================================================================================================
 // Slot 564 — `FCanCheckAttacks` (`0x102953a0` over `0x10270840`)
 // =================================================================================================
-
-int32 FElysiumNpc::NavType() const
-{
-	// SEAM for `0x1027d990` = `m_pNavigator(+0x5d34)->m_navType(+0x18)`. The shape map binds
-	// `+0x5d34` to `FElysiumScriptedCharacter::Motor`, and that motor seam answers no nav type.
-	// `NAV_GROUND` is the answer because it is the one every walking body has in retail and because
-	// it is the value that does NOT suppress: a seam must not invent a refusal.
-	return GCondNavGround;
-}
-
-bool FElysiumNpc::FCanCheckAttacksBase() const
-{
-	// 0x10270840. Four terms, and the two nav-type refusals come FIRST: a climbing or jumping body
-	// never evaluates its conditions at all.
-	const int32 Nav = NavType();
-	if (Nav == GCondNavClimb || Nav == GCondNavJump)
-	{
-		return false;
-	}
-	return Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy)         // 0x46
-		&& !Cognition.Conditions.Has(EElysiumNpcCond::EnemyTooFar);    // 0x55
-}
 
 bool FElysiumNpc::FCanCheckAttacks()
 {
@@ -387,7 +199,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 		// The changed-half tail: drop the top five bits of `m_afMemory` (+0x5d8c) and, unless the
 		// body is climbing or jumping, clear `PRESERVE_PATH` (+0x14b8 bit 0x8).
 		BaseScheduleHost.MemoryBits &= GCondMemoryKeepMask;
-		if (NavType() != GCondNavClimb && NavType() != GCondNavJump)
+		if (NavType() != NpcKernelConditionsShared::GCondNavClimb && NavType() != NpcKernelConditionsShared::GCondNavJump)
 		{
 			NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
 		}
@@ -404,7 +216,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 
 	// `CAI_BaseNPC::OnStateChange` (`0x1026e3e0`): assign `m_bfNPCStateFlags` from the new state.
 	// The byte is a pure function of the state and this runtime DERIVES it
-	// (`FElysiumNpc::NpcStateFlags` -> `FElysiumNpcFlags::NpcStateFlagsForRetailState`), so there is
+	// (`FElysiumNpcBase::NpcStateFlags` -> `FElysiumNpcFlags::NpcStateFlagsForRetailState`), so there is
 	// nothing to store — the recovered table is already the port's, and the call below is the
 	// assertion that it agrees.
 	(void)FElysiumNpcFlags::NpcStateFlagsForRetailState(NewRetail);
@@ -467,25 +279,7 @@ bool FElysiumNpc::OpeningDoorFacingPoint(const FElysiumEntity& Door, bool bWait,
 	return false;
 }
 
-void FElysiumNpc::SetAlternateAiIdealYaw(float YawDegrees)
-{
-	// SEAM for `0x102e0b40` (reset steering) + `0x102e1c10(motor, yaw, -1.0)` (set the ideal yaw,
-	// unlimited turn rate). Family Hints stands `SetMotorHintYaw` over the same absent motor word;
-	// this one is kept separate because it is a different retail call with a different turn-rate
-	// argument, and folding them would hide that.
-	(void)YawDegrees;
-}
-
 // `FacingIdeal` (`0x10278c80`) is family **Facing**'s body and is called, not restated.
-
-bool FElysiumNpc::StartOpeningDoor(FElysiumEntity& Door)
-{
-	// SEAM for `FUN_10298840`. Its body asks the door for its point again, `RestartIdealActivity`s
-	// onto it (`0x10289ee0`), and then either `0x1027de00` (the push) when `0x100eec70` accepts the
-	// pair, or the door's own vtable `+0x1d8` use handler. None of the four has a source here.
-	(void)Door;
-	return false;
-}
 
 bool FElysiumNpc::RunAlternateAiOpeningDoor(double Now)
 {

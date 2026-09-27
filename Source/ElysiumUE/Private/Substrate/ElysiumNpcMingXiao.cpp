@@ -764,7 +764,7 @@ const TCHAR* FElysiumNpcMingXiao::GetShortConditionName(int32 ConditionId)
 		return Names[Offset];
 	}
 	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpc::GetShortConditionName(ConditionId);
+	return FElysiumNpcBase::GetShortConditionName(ConditionId);
 }
 
 // Slot 465: `0x103947b0`, ending in a direct call into `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`).

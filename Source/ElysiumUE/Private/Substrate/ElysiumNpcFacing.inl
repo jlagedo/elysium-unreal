@@ -25,11 +25,6 @@
 // `0x1a40`..`0x665a`, the words `CAI_BaseNPC` itself carries): two are `CBaseAnimating`-tier and
 // two are a species leaf's own.
 
-// +0x0848 m_viewtarget — the world point `SetViewtarget` (slot 277) copies in. Retail networks it
-// to the client, which is the hop this runtime makes with `FElysiumCombatCharacter::CurEyeTarget`;
-// this is retail's own word, written by the kernel and read by nothing in this substrate yet.
-FVector Viewtarget = FVector::ZeroVector;
-
 // +0x1484 m_nMotionTrail — the motion-trail id `CNPC_VSabbatGunman::OnChangeActivity` picks per
 // activity change. No visual layer reads it yet.
 int32 MotionTrail = 0;
@@ -42,16 +37,6 @@ int32 MotionTrail = 0;
 // `m_IdealYaw` at motor+0x34 and the queued-facing-target list at motor+0x54. Every accessor below
 // stands for one of its virtuals and answers nothing until that mover carries them.
 
-// The seam's read side, so a body cites `0x102e1f90` at the point of use.
-float MotorDeltaIdealYaw() const;
-
-void MotorAddFacingTarget(const FFacingTargetRequest& Request);
-
-// The retail cvar the whole facing-target family is gated on (`0x10924f74`, read as
-// `!IsCommand() && m_nValue != 0` — `ConVar::GetBool()` inlined): `debug_allow_move_facing`,
-// shipped "1".
-bool FacingTargetsEnabled() const;
-
 // The retail cvar `CAI_BaseNPCTroika::SetTurnActivity` ORs with `m_bAllowTurningAnims`
 // (`0x109247ec`, the same `ConVar::GetBool()` shape; also read by both `MaxYawSpeed` overrides).
 // `debug_turning`, shipped "0" — which leaves `m_bAllowTurningAnims` (+0x65f9), an authored
@@ -60,39 +45,11 @@ bool TurningAnimsEnabled() const;
 
 // --- The animation seam the turn ladder ends in -------------------------------------------------
 
-// `CBaseAnimating::SelectWeightedSequence(Activity, -1)` on the base line and
-// `CAI_BaseNPCTroika`'s stat-filtered twin (`0x10295460`) on the Troika line: which sequence this
-// body would play for an activity, or -1 when it authors none. The ladder branches on `!= -1`.
-// **SEAM** — this substrate resolves activities by NAME through the action tables and its animating
-// tier stands no sequence index, so this answers -1 and the ladder falls through to its `ACT_IDLE`
-// tail, which is retail's own answer for a body with no turn clips.
-int32 SelectWeightedSequenceForActivity(int32 Activity) const;
-
-// `CAI_BaseNPC::SetIdealActivity` (`0x10272650`): store `m_IdealActivity` (+0x0ff0), then
-// re-translate it into `m_nIdealSequence`/`m_IdealTranslatedActivity`/`m_IdealWeaponActivity`
-// through `0x10272130`. The translation chain is story 29d's; this stores the word and stops,
-// which is the half the turn ladder is measured by.
-void SetIdealActivityNumber(int32 Activity);
-
-// `CBaseAnimating::SetPoseParameter(name, value)` (retail vtable +0x564) — `SetAim`'s two writes.
-// **SEAM**: this runtime's animating tier exposes no pose-parameter surface, so the writes are
-// recorded and go no further. Read by the test and by nothing else.
-struct FPoseParameterWrite
-{
-	FString Name;
-	float Value = 0.f;
-};
-TArray<FPoseParameterWrite> PoseParameterWrites;
-void SetPoseParameterByName(const TCHAR* Name, float Value);
-
 // --- The turn-activity ladder (`SetTurnActivity`) -----------------------------------------------
 //
 // Both rungs of slot 572, as pure functions of the motor's yaw delta so every threshold is
 // assertable without a mover. `HasSequence` is `SelectWeightedSequence(act) != -1`.
 
-// `CAI_BaseNPC::SetTurnActivity` `0x10289d10` — the base line's ladder.
-static FTurnActivityPick TurnActivityBaseLadder(float YawDelta,
-	TFunctionRef<bool(int32)> HasSequence);
 // `CAI_BaseNPCTroika::SetTurnActivity` `0x10297640` — the Troika line's, which slot 572 dispatches
 // to for every spawnable species.
 static FTurnActivityPick TurnActivityTroikaLadder(float YawDelta,
@@ -127,7 +84,3 @@ struct FMingXiaoPlayback
 
 // --- The facing readers and writers that fill no slot -------------------------------------------
 
-// `CAI_Motor` slot 7 `0x102e11f0` — cancel the current facing-queue entry.
-void ClearFacingTarget();
-// `CAI_BaseNPC::FacingIdeal` `0x10278c80`.
-bool FacingIdeal() const;

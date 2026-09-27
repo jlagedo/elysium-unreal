@@ -167,7 +167,7 @@ bool FElysiumNpcKernelGeometryBodyTargetTest::RunTest(const FString&)
 	// anchor sits 75 above it, not 50 and not 25.
 	const FVector OriginCm(0.f, 0.f, 0.f);
 	const FVector CentreCm(0.f, 0.f, 100.f);
-	const FVector Anchor = FElysiumNpc::BodyTargetAnchor(CentreCm, OriginCm);
+	const FVector Anchor = FElysiumNpcBase::BodyTargetAnchor(CentreCm, OriginCm);
 	TestTrue(TEXT("the anchor is the centre pulled a quarter back toward the origin"),
 		Anchor.Equals(FVector(0.f, 0.f, 75.f), 0.001));
 
@@ -175,25 +175,25 @@ bool FElysiumNpcKernelGeometryBodyTargetTest::RunTest(const FString&)
 
 	// The non-noisy, non-exact arm: `anchor + span * 0.5`, the plain midpoint. 75 + (160-75)/2.
 	TestTrue(TEXT("the plain arm is the midpoint of anchor and eye"),
-		FElysiumNpc::BodyTargetBlend(Anchor, EyeCm, false, false, 0.4f, 0.4f)
+		FElysiumNpcBase::BodyTargetBlend(Anchor, EyeCm, false, false, 0.4f, 0.4f)
 			.Equals(FVector(0.f, 0.f, 117.5f), 0.001));
 
 	// The third-bool arm answers the eye EXACTLY, and does not consult the anchor at all.
 	TestTrue(TEXT("the exact arm answers slot 193 verbatim"),
-		FElysiumNpc::BodyTargetBlend(Anchor, EyeCm, false, true, 0.4f, 0.4f).Equals(EyeCm, 0.001));
+		FElysiumNpcBase::BodyTargetBlend(Anchor, EyeCm, false, true, 0.4f, 0.4f).Equals(EyeCm, 0.001));
 
 	// The noisy arm adds the span once per draw, so the two `RandomFloat(0, 0.5)` results SUM. Two
 	// draws of 0.5 put the answer on the eye; one draw of 0.5 alone would stop halfway.
 	TestTrue(TEXT("the noisy arm adds the span once for EACH draw"),
-		FElysiumNpc::BodyTargetBlend(Anchor, EyeCm, true, false, 0.5f, 0.5f).Equals(EyeCm, 0.001));
+		FElysiumNpcBase::BodyTargetBlend(Anchor, EyeCm, true, false, 0.5f, 0.5f).Equals(EyeCm, 0.001));
 	TestTrue(TEXT("and a single maximal draw only reaches halfway"),
-		FElysiumNpc::BodyTargetBlend(Anchor, EyeCm, true, false, 0.5f, 0.f)
+		FElysiumNpcBase::BodyTargetBlend(Anchor, EyeCm, true, false, 0.5f, 0.f)
 			.Equals(FVector(0.f, 0.f, 117.5f), 0.001));
 
 	// The noisy arm ignores the third bool — retail tests the second bool FIRST and never reaches
 	// the `bAimAtEyeExactly` compare when it is set.
 	TestTrue(TEXT("noisy wins over exact, because retail tests it first"),
-		FElysiumNpc::BodyTargetBlend(Anchor, EyeCm, true, true, 0.f, 0.f).Equals(Anchor, 0.001));
+		FElysiumNpcBase::BodyTargetBlend(Anchor, EyeCm, true, true, 0.f, 0.f).Equals(Anchor, 0.001));
 
 	// The `posSrc` argument is never read. Two calls with wildly different sources and the same
 	// arms answer the same point.

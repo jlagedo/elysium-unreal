@@ -115,15 +115,15 @@ bool FElysiumNpcKernelDebug10RingTest::RunTest(const FString&)
 	// lands EXACTLY on 0x3dff does not wrap and the next byte does.
 	bool bWrapped = true;
 	TestEqual(TEXT("an ordinary append advances the cursor by the byte count"),
-		FElysiumNpc::DebugLogRingAdvance(0, 16, bWrapped), 16);
+		FElysiumNpcBase::DebugLogRingAdvance(0, 16, bWrapped), 16);
 	TestFalse(TEXT("and does not wrap"), bWrapped);
 
 	TestEqual(TEXT("a cursor landing exactly on 0x3dff does NOT wrap"),
-		FElysiumNpc::DebugLogRingAdvance(0x3df0, 0xf, bWrapped), 0x3dff);
+		FElysiumNpcBase::DebugLogRingAdvance(0x3df0, 0xf, bWrapped), 0x3dff);
 	TestFalse(TEXT("0x3dff is inside the buffer"), bWrapped);
 
 	TestEqual(TEXT("one byte further resets the cursor to 0"),
-		FElysiumNpc::DebugLogRingAdvance(0x3df0, 0x10, bWrapped), 0);
+		FElysiumNpcBase::DebugLogRingAdvance(0x3df0, 0x10, bWrapped), 0);
 	TestTrue(TEXT("and raises the wrap latch at +0x5b54"), bWrapped);
 
 	// The append itself. Story 29b records the 16 KB ring at `+0x1b4e` absent, so the LINE is what
@@ -305,7 +305,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->DebugOverlays = 0;
 	FElysiumNpc::BeginDebugCapture();
 	TestEqual(TEXT("a zero m_debugOverlays emits nothing and returns the base line"),
-		Npc->BaseDrawDebugTextOverlays(), 0);
+		Npc->FElysiumNpcBase::DrawDebugTextOverlays(), 0);
 	TestEqual(TEXT("no lines"), FElysiumNpc::EndDebugCapture().Num(), 0);
 
 	// --- The `0x80000` arm: FOUR lines, not three -------------------------------------------------
@@ -318,7 +318,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->BaseScheduleHost.SquadDisconnected = 0;
 	Npc->SquadName.Reset();
 	FElysiumNpc::BeginDebugCapture();
-	const int32 SquadLines = Npc->BaseDrawDebugTextOverlays();
+	const int32 SquadLines = Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("the 0x80000 arm emits FOUR lines"), Lines.Num(), 4);
@@ -342,7 +342,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->BaseScheduleHost.SquadDisconnected = 1;
 	Npc->SquadName = TEXT("alpha");
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("a disconnected squad member is 'X' and the squad NAME is appended"),
@@ -355,7 +355,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// otherwise — and appends `"\n"` rather than the `" - \n"` block.
 	Npc->BaseMemory.Enemy = Other->Handle;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("a live enemy is named"), Lines[2].Text, FString(TEXT("Enemy: other\n")));
@@ -365,7 +365,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// --- The `0x1` arm ------------------------------------------------------------------------------
 	Npc->DebugOverlays = 0x1;
 	FElysiumNpc::BeginDebugCapture();
-	const int32 TextLines = Npc->BaseDrawDebugTextOverlays();
+	const int32 TextLines = Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		// No memory records, no schedule, no weapon, activities invalid, velocity zero. What stands
@@ -382,7 +382,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// every record while the line index advances only for the printed ones.
 	Npc->EnemyMemory.Update(*Npc, Other->Handle, 0.0);
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("the memory line leads the 0x1 arm"), FString(Lines[0].Retail),
@@ -395,14 +395,14 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->ActivityNumber = 0;
 	Npc->IdealActivityNumber = INDEX_NONE;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	TestTrue(TEXT("ACT_RESET wins over ACT_INVALID when either activity is -1"),
 		Debug10RetailOrder(FElysiumNpc::EndDebugCapture()).Contains(TEXT("Actv: RESET")));
 
 	Npc->ActivityNumber = 3;
 	Npc->IdealActivityNumber = 4;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	TestTrue(TEXT("two live activities take the named arm, 'Actv: %s (%s)\\n'"),
 		Debug10RetailOrder(FElysiumNpc::EndDebugCapture()).Contains(TEXT("Actv: %s (%s)\n")));
 	Npc->ActivityNumber = INDEX_NONE;
@@ -414,7 +414,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	Npc->BaseScheduleHost.FailedSchedule = ElysiumSched::IDLE_STAND;
 	Npc->BaseScheduleHost.FailText = TEXT("no route");
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestTrue(TEXT("Intr: then Fail:, in that order and after the activity line"),
@@ -427,7 +427,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// `COND_ENEMY_TOO_FAR` prints a bare literal with no `Q_snprintf` at all.
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyTooFar);
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	TestTrue(TEXT("COND 0x55 adds the fixed line"),
 		Debug10RetailOrder(FElysiumNpc::EndDebugCapture())
 			.Contains(TEXT("Enemy too far to attack")));
@@ -438,7 +438,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	// after `Vel` and three spaces before `Ang:`.
 	Npc->Velocity = FVector(12.f * ElysiumMove::U, 0.f, 0.f);
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("the velocity line is last"), FString(Lines.Last().Retail),
@@ -447,7 +447,7 @@ bool FElysiumNpcKernelDebug10BaseTextTest::RunTest(const FString&)
 	}
 	Npc->Velocity = FVector::ZeroVector;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugTextOverlays();
+	Npc->FElysiumNpcBase::DrawDebugTextOverlays();
 	TestFalse(TEXT("and is absent for a still NPC"),
 		Debug10RetailOrder(FElysiumNpc::EndDebugCapture()).Contains(TEXT("Vel %.1f")));
 	return true;

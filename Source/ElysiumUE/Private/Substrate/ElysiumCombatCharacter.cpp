@@ -28,7 +28,7 @@
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
 #include "Substrate/ElysiumLaw.h"           // FireWorldEvent, the `events_world` bus
-#include "Substrate/ElysiumNpc.h"           // FElysiumNpc::GetMind — the cast body's own state
+#include "Substrate/ElysiumNpc.h"           // FElysiumNpcBase::GetMind — the cast body's own state
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumReactions.h"     // the damage flinch's pure rules
 #include "Substrate/ElysiumRulebook.h"

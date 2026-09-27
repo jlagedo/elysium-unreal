@@ -27,18 +27,6 @@
 
 // --- Raw NPC_STATE words --------------------------------------------------------------------------
 
-/** `m_NPCState` (`+0x5cc0`) as retail's raw id. Maps the typed mind when `SetState` has not
- *  written an unmapped value (8 FLEE, 0xb HUNT, 0xe). */
-int32 NpcStateRetail() const;
-void WriteNpcStateRetail(int32 RetailId);
-/** `m_IdealNPCState` (`+0x5cc4`) as retail's raw id. */
-int32 IdealStateRetail() const;
-void WriteIdealStateRetail(int32 RetailId);
-
-/** `CAI_BaseNPC::SetState` (`0x1026e340`). Not a vtable slot. Writes both state words, strips
- *  the enemy on a transition to IDLE, and dispatches slot 463 with the entry-time old state. */
-void SetState(int32 NewRetail);
-
 // --- Seams this family's bodies read --------------------------------------------------------------
 
 /** How many times idle combat rolled below 0x14 and dispatched vtable `+0x7bc` — slot 495
@@ -71,15 +59,11 @@ int32 PedestrianCrimeReports = 0;
 
 // --- Non-slot / base bodies -----------------------------------------------------------------------
 
-/** `CAI_BaseNPC::PreSelectIdealState` (`0x1026f590`), slot 460's BASE body. Always returns 0. */
-int32 BasePreSelectIdealState();
-/** `CAI_BaseNPC::SelectIdealState` (`0x1026f660`), slot 461's BASE body. */
-int32 BaseSelectIdealState();
 /** `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`). */
 int32 TroikaSelectIdealState();
 /** Slot 461 in retail's own ordinals — the method species classes override (story 5 step 3); the
  *  typed `SelectIdealState()` records its answer and converts it. */
-virtual int32 SelectIdealStateRetail();
+int32 SelectIdealStateRetail() override;
 
 int32 HumanSelectIdealState();
 int32 AnimalSelectIdealState();

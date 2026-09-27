@@ -249,7 +249,7 @@ bool FElysiumNpcMingXiaoTentacle::CanStandOn(FElysiumEntity* Other)
 	{
 		return false;
 	}
-	return FElysiumNpc::CanStandOn(Other);
+	return FElysiumNpcBase::CanStandOn(Other);
 }
 
 // Slot 408: `0x1039ece0`, whose miss calls `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
@@ -264,7 +264,7 @@ const TCHAR* FElysiumNpcMingXiaoTentacle::GetShortConditionName(int32 ConditionI
 		return Names[Offset];
 	}
 	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpc::GetShortConditionName(ConditionId);
+	return FElysiumNpcBase::GetShortConditionName(ConditionId);
 }
 
 // Slot 337: `0x1039c480`.

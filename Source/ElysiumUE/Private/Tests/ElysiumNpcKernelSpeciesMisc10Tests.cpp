@@ -104,7 +104,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 
 	F.Guard->Grapple.Type = EElysiumGrappleType::Feed;
 	F.Guard->Grapple.Partner = F.Other->Handle;
-	F.Guard->BaseLeaveGrappleState();
+	F.Guard->FElysiumNpcBase::LeaveGrappleState();
 	// The output rides the world's event queue; one tick delivers it.
 	F.World.World.Tick(FElysiumNpcWorldFixture::FirstThinkSeconds);
 
@@ -116,7 +116,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 		F.Guard->NpcFlags.IsOblivious());
 
 	// The saturating half: a second call on a zero count must not go negative.
-	F.Guard->BaseLeaveGrappleState();
+	F.Guard->FElysiumNpcBase::LeaveGrappleState();
 	TestFalse(TEXT("`10007ea4`: the decrement saturates rather than going negative"),
 		F.Guard->NpcFlags.IsOblivious());
 	return true;
@@ -395,16 +395,16 @@ bool FElysiumSpeciesMisc10ChangLedgeTest::RunTest(const FString&)
 	}
 	// The rule alone, so the comparison is assertable without a node graph. Type `0x4653` is the
 	// ledge; the score is the full 3-D distance from THIS NPC's origin.
-	TArray<FElysiumNpc::FHintWords> Nodes;
-	FElysiumNpc::FHintWords Near;
+	TArray<FElysiumNpcBase::FHintWords> Nodes;
+	FElysiumNpcBase::FHintWords Near;
 	Near.bValid = true;
 	Near.HintType = 0x4653;
 	Near.OriginCm = FVector(SpeciesMisc10Cm(100.f), 0.0, 0.0);
-	FElysiumNpc::FHintWords Far;
+	FElysiumNpcBase::FHintWords Far;
 	Far.bValid = true;
 	Far.HintType = 0x4653;
 	Far.OriginCm = FVector(SpeciesMisc10Cm(900.f), 0.0, 0.0);
-	FElysiumNpc::FHintWords WrongType;
+	FElysiumNpcBase::FHintWords WrongType;
 	WrongType.bValid = true;
 	WrongType.HintType = 0x4652;
 	WrongType.OriginCm = FVector(SpeciesMisc10Cm(5000.f), 0.0, 0.0);
@@ -421,7 +421,7 @@ bool FElysiumSpeciesMisc10ChangLedgeTest::RunTest(const FString&)
 	TestEqual(TEXT("`103b0ab0`: the Sheriff's nearest-wins rule picks the near one"),
 		FElysiumNpcSheriffMan::SelectLedgeNodeRule(Nodes, FVector::ZeroVector), 0);
 	// `1036cffb`: the type filter.
-	TArray<FElysiumNpc::FHintWords> WrongOnly;
+	TArray<FElysiumNpcBase::FHintWords> WrongOnly;
 	WrongOnly.Add(WrongType);
 	TestEqual(TEXT("`1036cffb`: a non-0x4653 node never qualifies"),
 		FElysiumNpcChangBros::ChangBrosSelectLedgeNodeRule(WrongOnly, FVector::ZeroVector), INDEX_NONE);

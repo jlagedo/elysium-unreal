@@ -255,9 +255,9 @@ public:
 	};
 	TArray<FDeveloperOverlayBox> DeveloperOverlayBoxes;
 
-	/** What slot 104 precached, in retail's order. See `FElysiumNpc::IssuePrecache` for why a
+	/** What slot 104 precached, in retail's order. See `FElysiumNpcBase::IssuePrecache` for why a
 	 *  precache is recorded rather than performed in this substrate. */
-	TArray<FElysiumNpc::FPrecacheOp> PrecacheLog;
+	TArray<FElysiumNpcBase::FPrecacheOp> PrecacheLog;
 
 	/** `m_altEquipment` (`+0x1a98`) and `m_spawnEquipment` (`+0x5dec`) — the two `CAI_BaseNPCTroika`
 	 *  words a maker carries in retail because `CNPCMaker` IS one, and the two

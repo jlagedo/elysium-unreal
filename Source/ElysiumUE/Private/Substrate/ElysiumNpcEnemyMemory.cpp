@@ -18,7 +18,7 @@ void FElysiumNpcEnemyMemory::Update(FElysiumNpc& Npc, const FElysiumEntityHandle
 	UpdateObserved(Target, Entity->Origin, Entity->Velocity, Now);
 }
 
-void FElysiumNpcEnemyMemory::UpdateAtPosition(FElysiumNpc& Npc,
+void FElysiumNpcEnemyMemory::UpdateAtPosition(FElysiumNpcBase& Npc,
 	const FElysiumEntityHandle& Target, const FVector& Position, double Now)
 {
 	const FElysiumEntity* Entity = Npc.World ? Npc.World->Resolve(Target) : nullptr;

@@ -23,4 +23,6 @@ namespace NpcKernelDamageShared
 	inline constexpr int32 HitGroupHead = 1;
 	// Retail's `.rdata`, one line per constant. Distances are SOURCE units.
 	inline constexpr float DamageZero = ElysiumNpcTunables::Zero;
+	// `_DAT_1070ba40`/`44`/`48`. ONE per level, as retail's file-static triple is.
+	inline FVector GDeathThrowImpulse = FVector::ZeroVector;
 }

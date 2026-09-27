@@ -63,12 +63,12 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 	// port's roster, so its row is exercised through the table's own lookup, which is what the
 	// slot-521/522/523 bodies consult.
 	int32 Count = 0;
-	const FElysiumNpc::FJumpTunableSpecies* Rows = FElysiumNpc::JumpTunableSpeciesRows(Count);
+	const FElysiumNpcBase::FJumpTunableSpecies* Rows = FElysiumNpc::JumpTunableSpeciesRows(Count);
 	TestEqual(TEXT("three tunable rows: the base line, the Troika line and the test hull"), Count, 3);
 	TestNotNull(TEXT("rows"), Rows);
 
-	const FElysiumNpc::FJumpTunableSpecies* Troika =
-		FElysiumNpc::JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
+	const FElysiumNpcBase::FJumpTunableSpecies* Troika =
+		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
 	TestNotNull(TEXT("CAI_BaseNPCTroika row"), Troika);
 	if (Troika != nullptr)
 	{
@@ -82,8 +82,8 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 		TestEqual(TEXT("troika jump distance 160"), Troika->JumpLegalDistance, 160.0f);
 	}
 
-	const FElysiumNpc::FJumpTunableSpecies* Base =
-		FElysiumNpc::JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
+	const FElysiumNpcBase::FJumpTunableSpecies* Base =
+		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
 	TestNotNull(TEXT("CAI_BaseNPC row"), Base);
 	if (Base != nullptr)
 	{
@@ -94,8 +94,8 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 		TestEqual(TEXT("and both are 18"), Base->StepHeight, 18.0f);
 	}
 
-	const FElysiumNpc::FJumpTunableSpecies* Hull =
-		FElysiumNpc::JumpTunableSpeciesOf(TEXT("CAI_TestHull"));
+	const FElysiumNpcBase::FJumpTunableSpecies* Hull =
+		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_TestHull"));
 	TestNotNull(TEXT("CAI_TestHull row"), Hull);
 	if (Hull != nullptr)
 	{
@@ -108,7 +108,7 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 		TestEqual(TEXT("test hull jump distance 1024"), Hull->JumpLegalDistance, 1024.0f);
 	}
 	TestNull(TEXT("a class with no row answers null"),
-		FElysiumNpc::JumpTunableSpeciesOf(TEXT("CNPC_VNotAClass")));
+		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CNPC_VNotAClass")));
 
 	// The live slots on a spawnable species, which dispatch the Troika row.
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_tunables"), 4301);
@@ -138,7 +138,7 @@ bool FElysiumNpcKernelMotorJumpLegalTest::RunTest(const FString&)
 	// the four thresholds; the apex uses `_DAT_10460020 = 1.25` as a MULTIPLIER on the rise instead.
 	auto Legal = [](double StartZ, double ApexZ, double EndZ, double EndX)
 	{
-		return FElysiumNpc::IsJumpLegalGeometry(FVector(0.0, 0.0, StartZ), FVector(0.0, 0.0, ApexZ),
+		return FElysiumNpcBase::IsJumpLegalGeometry(FVector(0.0, 0.0, StartZ), FVector(0.0, 0.0, ApexZ),
 			FVector(EndX, 0.0, EndZ), 80.0f, 250.0f, 160.0f);
 	};
 
@@ -159,7 +159,7 @@ bool FElysiumNpcKernelMotorJumpLegalTest::RunTest(const FString&)
 		Legal(250.0, 250.0, 0.0, 0.0));
 	auto Hull = [](double StartZ, double ApexZ, double EndZ, double EndX)
 	{
-		return FElysiumNpc::IsJumpLegalGeometry(FVector(0.0, 0.0, StartZ), FVector(0.0, 0.0, ApexZ),
+		return FElysiumNpcBase::IsJumpLegalGeometry(FVector(0.0, 0.0, StartZ), FVector(0.0, 0.0, ApexZ),
 			FVector(EndX, 0.0, EndZ), 1024.0f, 1024.0f, 1024.0f);
 	};
 	TestTrue(TEXT("the test hull admits a drop of exactly 1024.1"),
@@ -174,10 +174,10 @@ bool FElysiumNpcKernelMotorJumpLegalTest::RunTest(const FString&)
 
 	// `CAI_TestHull::IsJumpLegal` `0x102d7760` — the same body with 1024 everywhere.
 	TestTrue(TEXT("the test hull's 1024 rise admits what the base refuses"),
-		FElysiumNpc::IsJumpLegalGeometry(FVector::ZeroVector, FVector::ZeroVector,
+		FElysiumNpcBase::IsJumpLegalGeometry(FVector::ZeroVector, FVector::ZeroVector,
 			FVector(0.0, 0.0, 300.0), 1024.0f, 1024.0f, 1024.0f));
 	TestFalse(TEXT("and its apex scale is still 1.25 of the rise"),
-		FElysiumNpc::IsJumpLegalGeometry(FVector::ZeroVector, FVector(0.0, 0.0, 1280.1),
+		FElysiumNpcBase::IsJumpLegalGeometry(FVector::ZeroVector, FVector(0.0, 0.0, 1280.1),
 			FVector::ZeroVector, 1024.0f, 1024.0f, 1024.0f));
 	return true;
 }
@@ -189,7 +189,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorYawLaddersTest,
 bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — one constant, `_DAT_1049949c`.
-	TestEqual(TEXT("the base line is 45 for everything"), FElysiumNpc::MaxYawSpeedBase(), 45.0f);
+	TestEqual(TEXT("the base line is 45 for everything"), FElysiumNpcBase::MaxYawSpeedBase(), 45.0f);
 
 	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` — the tuning record's +0x48 inside the
 	// (0x1129, 0x112e) band and +0x44 outside it. The SEAM answers 0 for every field, so the case
@@ -628,7 +628,7 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestEqual(TEXT("and re-plays the resolved link activity, which is ACT_IDLE"),
 		Guard->IdealActivityNumber, 1);
 	TestEqual(TEXT("and routes the caller's reason through TaskFail"),
-		Guard->ScheduleHost.FailureReason, 0x1b);
+		Guard->BaseScheduleHost.FailureReason, 0x1b);
 
 	// `FUN_102bf7e0` `0x102bf7e0` — `m_bShouldMove` is set UNCONDITIONALLY, outside the stop.
 	Guard->BaseScheduleHost.bShouldMove = false;
@@ -738,25 +738,25 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	FVector Mins(1.0, 1.0, 1.0);
 	FVector Maxs(2.0, 2.0, 2.0);
 	TestTrue(TEXT("the hull table answers for hull 0"),
-		Guard->RetailHullExtents(0, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
+		Guard->RetailHullExtents(0, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs));
 	TestEqual(TEXT("HUMAN_HULL's full mins"), Mins, FVector(-13.0, -13.0, 0.0));
 	TestEqual(TEXT("...and its full maxs"), Maxs, FVector(13.0, 13.0, 72.0));
 	TestTrue(TEXT("the small pair is the same row's other box"),
-		Guard->RetailHullExtents(0, FElysiumNpc::EElysiumHullExtents::Small, Mins, Maxs));
+		Guard->RetailHullExtents(0, FElysiumNpcBase::EElysiumHullExtents::Small, Mins, Maxs));
 	TestEqual(TEXT("HUMAN_HULL's small mins"), Mins, FVector(-8.0, -8.0, 0.0));
 	TestEqual(TEXT("...and its small maxs"), Maxs, FVector(8.0, 8.0, 72.0));
 	// Retail's table has 22 rows; a hull id outside it keeps the refusal every caller's failure
 	// arm is written against.
 	TestFalse(TEXT("a hull id the table does not carry still refuses"),
-		Guard->RetailHullExtents(22, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
+		Guard->RetailHullExtents(22, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs));
 	TestEqual(TEXT("and zeroes both extents"), Mins, FVector::ZeroVector);
 	TestEqual(TEXT("both"), Maxs, FVector::ZeroVector);
 	// Not every small box is smaller: TZIMISCE1 (bit 10) widens from 35 to 45.
 	TestTrue(TEXT("TZIMISCE1's full box"),
-		Guard->RetailHullExtents(10, FElysiumNpc::EElysiumHullExtents::Full, Mins, Maxs));
+		Guard->RetailHullExtents(10, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs));
 	TestEqual(TEXT("reaches 35"), Maxs.X, 35.0);
 	TestTrue(TEXT("and its SMALL box is wider"),
-		Guard->RetailHullExtents(10, FElysiumNpc::EElysiumHullExtents::Small, Mins, Maxs));
+		Guard->RetailHullExtents(10, FElysiumNpcBase::EElysiumHullExtents::Small, Mins, Maxs));
 	TestEqual(TEXT("at 45"), Maxs.X, 45.0);
 
 	// `PerformMovement` `0x1026c120` and `PostRun` `0x1026c7c0` — the delegate and the ordered pair.
@@ -787,7 +787,7 @@ bool FElysiumNpcKernelMotorDoorTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 
-	using EResult = FElysiumNpc::EObstructingDoorResult;
+	using EResult = FElysiumNpcBase::EObstructingDoorResult;
 	EResult Result = EResult::Ok;
 
 	// `0x1027dc80` arm 1: the move goal's own max distance is already shorter than the clearance.
@@ -1001,7 +1001,7 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	FVector Mins(1.0, 1.0, 1.0);
 	FVector Maxs(2.0, 2.0, 2.0);
 	TestFalse(TEXT("the extent seam refuses"),
-		FElysiumNpc::RetailCollisionExtents(*Leader, Mins, Maxs));
+		FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs));
 	TestEqual(TEXT("and zeroes the mins"), Mins, FVector::ZeroVector);
 
 	// `PlayerInNoJumpZone` `0x103a9e70` — the hint list is empty, so nobody is ever inside one.
@@ -1136,21 +1136,21 @@ bool FElysiumNpcKernelMotorBaseIsMovingTest::RunTest(const FString&)
 	// `0x10026e70`, all three components against `vec3_origin` (`DAT_1070d1b0..b8`).
 	Guard->Velocity = FVector::ZeroVector;
 	TestFalse(TEXT("0x10026e70: a zero velocity is not moving"),
-		FElysiumNpc::BaseEntityIsMoving(*Guard));
+		FElysiumNpcBase::BaseEntityIsMoving(*Guard));
 
 	// One component differing is enough: retail's test is an AND of three equalities, so any
 	// inequality falls through to `return 1`.
 	Guard->Velocity = FVector(0.0, 0.0, 1.0);
-	TestTrue(TEXT("0x10026e70: Z alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+	TestTrue(TEXT("0x10026e70: Z alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
 	Guard->Velocity = FVector(0.0, 1.0, 0.0);
-	TestTrue(TEXT("0x10026e70: Y alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+	TestTrue(TEXT("0x10026e70: Y alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
 	Guard->Velocity = FVector(1.0, 0.0, 0.0);
-	TestTrue(TEXT("0x10026e70: X alone is moving"), FElysiumNpc::BaseEntityIsMoving(*Guard));
+	TestTrue(TEXT("0x10026e70: X alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
 
 	// EXACT equality, not a tolerance — a velocity retail calls moving must not be rounded away.
 	Guard->Velocity = FVector(0.0, 0.0, 1e-8);
 	TestTrue(TEXT("0x10026e70: the comparison is exact, so a tiny velocity is still moving"),
-		FElysiumNpc::BaseEntityIsMoving(*Guard));
+		FElysiumNpcBase::BaseEntityIsMoving(*Guard));
 
 	// This body is NOT the NPC's slot-153 answer: every class on the NPC line carries `0x10280300`,
 	// which is the navigator forward, and it answers independently of the velocity word above.

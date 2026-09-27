@@ -96,6 +96,14 @@
         "research/tooling/gen_kernel_bindings.py",
         "ElysiumNpcClasses.cpp BuildNpcBaseClass"
       ]
+    },
+    {
+      "id": "slot-surface-closure",
+      "text": "5f's split puts 172 hand-defined generated slots (inherited by Troika, B == T) on the base; their hand bodies moved to ElysiumNpcBase<Family>.cpp by signature (5e/gen/slot-def-plan.json). 5a's closure never covered them: a second closure over the Troika-only members they reach moved 135 more port helpers, fields and types to the base (moves-step5.tsv notes '5e/5f closure'); 16 bodies reached true Troika state and were resolved by retail review (+0x98 arms, SensesObject, virtual dispatch through slots 404/440/460/461, the corrections above, and two transitional routes)."
+    },
+    {
+      "id": "slot-surface-split",
+      "text": "gen_kernel_shape emits ElysiumNpcBaseSlots.inl/.cpp (552 slots the CAI_BaseNPC table holds: 248 stubs, 177 hand, 127 defaults) and ElysiumNpcSlots.inl/.cpp (137 Troika overrides, 33 Troika-introduced). Stub text is unchanged; base stubs fire the base address, Troika overrides the Troika address, so a Troika instance tallies exactly what it did. The Troika surface re-exposes the base overloads of four overridden names (FInViewCone, GetEnemy, TraceMessage, TraceMessageBare) with using-declarations. The merged rows still drive the census and the default probes."
     }
   ],
   "retail_corrections": [
@@ -103,49 +111,71 @@
       "id": "desired-move-yaw-carrier",
       "address": "0x10273390 / 0x10282d71 / 0x102e19e0",
       "correction": "The port's ScheduleHost.DesiredMoveYaw stands for three retail words. Base NPCInit 0x10273390 writes CAI_Motor m_IdealYaw (motor+0x34), not Troika +0x63ec, which it leaves 0; base StartTask's stop-moving arm 0x10282d71 sets the move_yaw pose parameter to 0 (LookupPoseParameter + slot 345), not +0x63ec; CAI_Motor slot 18 0x102e19e0 writes +0x63ec through +0x98 when the owner is Troika, else the pose parameter, and bumps one counter, not both.",
-      "evidence": "review 5a (motor); +0x63ec's only writers are Troika TaskFail, OnScheduleChange, RunTask, 0x102a9940, 0x102bf770, FrenzyShadow, TzimisceRunner and 0x102e19e0"
+      "evidence": "review 5a (motor); +0x63ec's only writers are Troika TaskFail, OnScheduleChange, RunTask, 0x102a9940, 0x102bf770, FrenzyShadow, TzimisceRunner and 0x102e19e0",
+      "status": "applied in 5e: NPCInit seeds FElysiumNpcBase::MotorIdealYaw (the motor m_IdealYaw seam), BeginStopMovingTask writes the move_yaw pose parameter, motor slot 18 FUN_102e19e0 writes +0x63ec through AsNpc() else the pose parameter (one counted write). ElysiumNpcCamera's own NPCInit copy still writes DesiredMoveYaw (species, step 4 body; not re-read here)."
     },
     {
       "id": "last-damage-carrier",
       "address": "+0x5b7c / +0x660c",
       "correction": "Senses.Memory.LastDamageAttacker stood for m_hLastDamageEnt (+0x5b7c, base) and was also the shape-map member of m_LastTakeDamageInfo (+0x660c, Troika, walked, no datamap row). The base word keeps the member (FElysiumNpcBase::BaseMemory.LastDamageAttacker); +0x660c's row names FElysiumNpcMemory::LastDamageAmount, the Troika member of the LastDamage triple the port keeps for the packet. No new member (nothing reads +0x660c).",
-      "evidence": "ElysiumNpcKernelShapeMap.cpp rows 0x5b7c and 0x660c"
+      "evidence": "ElysiumNpcKernelShapeMap.cpp rows 0x5b7c and 0x660c",
+      "status": "applied in 5d"
     },
     {
       "id": "update-on-remove-hint",
       "address": "0x1027ca30",
       "correction": "Base UpdateOnRemove releases the hint inline (0x102d1420(hint, 0.0): hint +0x5e0 = -1, +0x5ec = now; then +0x5ddc = 0), with no owner test and no +0x5c.. flag or extents writes. The port called Troika ClearHintNode 0x10295ab0. Not observable today: Troika 0x1028d6e0 clears the hint first.",
-      "evidence": "review 5a (motor)"
+      "evidence": "review 5a (motor)",
+      "status": "applied in 5e: BaseNpcUpdateOnRemove releases inline under the m_pHintNode guard (1027ca59): claim released, reuse time stamped now + 0.0, node forgotten; no Troika ClearHintNode writes."
     },
     {
       "id": "last-think-slots",
       "address": "0x101a6440..0x101a64a0 / 0x101aa6d0..0x101aa730",
       "correction": "Slots 412-415: the base bodies return CBaseEntity::GetLastThink(NULL) (+0x178); the Troika overrides return the Troika think stamps +0x6254..+0x6260, which is what the port's bodies do. Their comments cite the base addresses; the members stay Troika and the citations are corrected.",
-      "evidence": "review 5a (think)"
+      "evidence": "review 5a (think)",
+      "status": "applied in 5e: citations name the Troika overrides 0x101aa6d0/f0/710/730 and their +0x6254..+0x6260 stamps."
     },
     {
       "id": "class-schedule-id-space",
       "address": "0x101a6d00 / 0x101aa790",
       "correction": "Slot 580 has a base body (MOV EAX, 0x1090ff08) as well as the Troika override (0x10924248); the port's ClassScheduleIdSpace is the Troika's and BaseClassScheduleIdSpace the base's. They become a base virtual and its Troika override.",
-      "evidence": "review 5a (think)"
+      "evidence": "review 5a (think)",
+      "status": "applied in 5e: FElysiumNpcBase::ClassScheduleIdSpace (virtual, the 0x101a6d00 body) and the Troika override; the generated void* slot 580 stays a base stub."
     },
     {
       "id": "cine-can-interrupt",
       "address": "0x101a8930",
       "correction": "In 0x101a8930 `this` is the cine entity: +0x5f90 is CCineNPC::m_interruptable, not a Troika word. CineCanInterrupt is base-layer; whether retail reads the cine's own +0x5ce4 where the port reads the NPC's TargetEnt is left open (review item).",
-      "evidence": "review 5a (think)"
+      "evidence": "review 5a (think)",
+      "status": "moved to the base with its body; the +0x5ce4 reading stays open."
     },
     {
       "id": "base-pre-select-ideal-state",
       "address": "0x1026f590",
       "correction": "OPEN (not changed by 5a): 0x1026f590 reads the NPC's own +0x98 and ORs 0x80002000 into its +0x14bc; the port resolves MoveParent instead, and retail's else-arm SquadNewEnemy(m_pSquad) is reached only by base-only NPCs. Packet 5e re-reads it before moving the body.",
-      "evidence": "asnpc consumer review"
+      "evidence": "asnpc consumer review",
+      "status": "RESOLVED in 5e (asm 0x1026f590 re-read): 1026f5da reads this+0x98 m_pBaseNPCTroika; a Troika NPC ORs 0x80002000 into its own flags2 (+0x14bc) and returns 0, a base-only NPC takes SquadNewEnemy (1026f61c). The move-parent arm and its crash-guard counter are gone."
     },
     {
       "id": "keep-sound-carrier",
       "address": "+0x5cd8",
       "correction": "The step-4 tree carried m_bKeepSound twice: FElysiumNpc::bKeepSound (Anim10 family; the Troika SetActivity 0x10295750 raise around its random pick, read by SetActivityAndSequence 0x10272490) and FElysiumNpcSenses::bKeepSound (the shape-map and save-row member, which nothing in SetActivity wrote). One word, one member: the Anim10 member on FElysiumNpcBase, which the shape map and the base SAVE row now name.",
-      "evidence": "ElysiumNpcBaseAnim10.inl, ElysiumNpcKernelShapeMap.cpp +0x5cd8"
+      "evidence": "ElysiumNpcBaseAnim10.inl, ElysiumNpcKernelShapeMap.cpp +0x5cd8",
+      "status": "applied in 5d"
+    },
+    {
+      "id": "task-fail-base-half",
+      "address": "0x10273fc0",
+      "status": "applied in 5e",
+      "correction": "The pair's base half writes m_bShouldMove +0x1a40 = 0 (the port wrote nothing there), m_ScheduleState.taskFailureCode +0x5c50 and SetCondition(0x5c). +0x5c50 is a CAI_BaseNPC datamap word 5a misread as port-only: ScheduleHost.FailureReason moved to FElysiumNpcBaseScheduleHost. The ai_debug_task trace (+0x5f30..+0x5f3c, DevMsg) is dead.",
+      "evidence": "vtmb_asm 0x10273fc0 (10274027..10274043); layout.tsv +0x5c50"
+    },
+    {
+      "id": "base-host-words",
+      "address": "+0x50 / hint +0x5ec",
+      "status": "applied in 5e",
+      "correction": "ScheduleHost.AttackExtentsCm (CBaseEntity m_vecAttackExtents +0x50..+0x58, read by base GetAttackExtents 0x1009b030) and ScheduleHost.HintReusableAt (the claimed hint's reuse time, stamped by the base hint release) are base-layer words the port kept on the Troika host; both moved to FElysiumNpcBaseScheduleHost with their save lines.",
+      "evidence": "ElysiumNpcBaseDamage.cpp GetAttackExtents; 0x1027ca30 inline release"
     }
   ],
   "transitional": {
@@ -155,7 +185,10 @@
     "ThinkInDialog / ThinkSchedulePolicy / ThinkAutonomous / ThinkStanceOrIdle / AcquireSequenceBody": "Port routing with no retail anchor; see moves-step5.tsv notes.",
     "MaintainActivity": "Port probe bookkeeping around BaseMaintainActivity 0x102727d0 (which moves to the base).",
     "DialogMessageSend": "CDialog::message_send 0x100e58e0 parked on the NPC; its long-term home is the dialogue object.",
-    "FindCoverFromEnemy": "Base 0x10283558 submits tolerance -1 (the navigator's installed tolerance, which Troika SET_TOLERANCE_DISTANCE pushes via 0x102ee1c0); the port reads Troika m_flGoalTolerance +0x6320 in its place. Needs a navigator seam first."
+    "FindCoverFromEnemy": "Base 0x10283558 submits tolerance -1 (the navigator's installed tolerance, which Troika SET_TOLERANCE_DISTANCE pushes via 0x102ee1c0); the port reads Troika m_flGoalTolerance +0x6320 in its place. Needs a navigator seam first.",
+    "BestEnemy (FrenzyShadow arm)": "CNPC_VFrenzyShadow#478 0x103766d0 is a census arm with no class until the controller fold (step 7): FElysiumNpc::BestEnemy routes it, then calls the base body 0x102743c0.",
+    "BaseOnLooked -> GatherSight": "The port's sight classifier reads the senses runner (Troika-held): base OnLooked 0x1026a2c0 reaches it through AsNpc(); a base-only NPC classifies nothing until fold 9.",
+    "SensesObject consumers": "SetDistLook 0x1026a2a0, BestEnemyCandidateVisible, SetEnemy's LOS-episode reset and GatherAttackConditions' weapon-sight occlusion read the senses runner through FElysiumNpcBase::SensesObject() (null on a base-only NPC)."
   },
   "unported_base_bodies": [
     "CAI_BaseNPC::Spawn 0x10273200 (AI-disabled test, m_spawnEquipment when +0x98 is null, slot 223, CBaseCombatCharacter::Spawn)",

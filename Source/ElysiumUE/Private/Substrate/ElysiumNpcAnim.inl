@@ -24,13 +24,6 @@
 // `CBaseAnimatingOverlay`'s, `CBaseFlex`'s, `CBaseCombatCharacter`'s and one species leaf's own.
 // `docs/vtmb/npc-kernel/layout.md` types and names all of them.
 
-// +0x0170 m_flPrevAnimTime and +0x0174 m_flAnimTime — `CBaseEntity`'s animation clock.
-// `AddSceneEvent` reads the second to stamp a queued event's start, `ProcessGestureSceneEvent`
-// measures its cycle against it, and `ForcePreTranslatedSequenceAndActivity` zeroes the first.
-// **SEAM-ADJACENT**: nothing in this substrate advances them yet, so they stand at 0 and every body
-// that writes one writes retail's own value.
-float PrevAnimTime = 0.f;
-
 // +0x067c m_nBody — the model's body-submodel selector `BodyGroup` (`0x10398800`) picks.
 int32 NpcBody = 0;
 
@@ -40,82 +33,11 @@ bool bCutsceneForceLOD = false;
 
 // --- `CBaseAnimatingOverlay`'s gesture-layer table (+0x0730 … +0x07c3) --------------------------
 
-bool bNoFlinch = false;   // +0x0730 m_bNoFlinch
-
-// Three bodies of the same table that are NOT this family's rows — slots 268, 271 and 272 are still
-// 29c's `FireKernelSlot` stubs — but whose BODIES this family's rows dispatch through, so they are
-// reproduced here as named methods beside the stubs. A family that ported `HasLayer`,
-// `RemoveLayerByOwner` and `RestartGesture` onto a stub that answers 0 for "not found" would have
-// ported the opposite of retail's search.
-//
-// `SetOverlayLayer` is `CBaseAnimatingOverlay::SetLayer` `0x10099020`, field for field and in
-// retail's own write order; `FindGestureLayerByOwner` is `FindGestureLayer` `0x100994c0`;
-// `AllocateGestureLayer` is `AllocateLayer` `0x10099470`.
-void SetOverlayLayer(int32 SlotIndex, int32 Activity, int32 Sequence, bool bAutoKill);
-int32 FindGestureLayerByOwner(int32 Activity) const;
-int32 AllocateGestureLayer() const;
-
 // --- `CBaseAnimatingOverlay`'s flinch table (+0x07f4 … +0x0847) ---------------------------------
-//
-// Three records of 0x1c bytes. `AddFlinchGesture` (slot 265) is the only writer in this band.
-struct FFlinchRecord
-{
-	int32 Sequence = 0;          // +0x00 nSequence
-	int32 Latch = 0;             // +0x04 nLatch — `(old + 1) & 3`, retail's own 2-bit rotation
-	float FadeIn = 0.f;          // +0x08 flFadeIn
-	float FadeOut = 0.f;         // +0x0c flFadeOut
-	int32 PoseParamIndex = 0;    // +0x10 nPoseParamIndex — seeded 0x18 before the lookup
-	float PoseParamValue = 0.f;  // +0x14 flPoseParamValue
-	float ExpireTime = 0.f;      // +0x18 flExpireTime
-};
-
-static constexpr int32 NumFlinchRecords = 3;
-FFlinchRecord Flinch[NumFlinchRecords];   // +0x07f4, stride 0x1c
 
 // --- `CBaseFlex`'s flex weights (+0x0858) -------------------------------------------------------
-//
-// `float m_flexWeight[128]`, retail's own array, indexed by flex-controller number. The two slot
-// bodies that read and write it by INDEX (279 / 281) are 29c's, not this family's; this family
-// carries the two that address it BY NAME (280 / 282) and the two expression writers above them.
-static constexpr int32 NumFlexWeightSlots = 128;
-float FlexWeight[NumFlexWeightSlots] = {};
-
-// `CBaseAnimating::GetNumFlexControllers`. **SEAM** — this substrate's animating tier stands no
-// studio header, so it answers 0 and every name lookup below walks an empty table.
-int32 NumFlexControllers() const;
-
-// `CBaseAnimating::GetFlexControllerName(int)`. **SEAM**, answering an empty name.
-FString FlexControllerName(int32 Index) const;
-
-// `LookupFlexController` `0x100b5d10` — the real body: a linear `__strcmpi` scan over
-// `GetNumFlexControllers()`, re-reading the count every iteration. **It answers 0, not -1, when
-// nothing matches**, which is retail's own behaviour and the reason a misspelt flex name writes
-// controller zero rather than being dropped. Ported verbatim; the two sub-calls are the seams above.
-int32 LookupFlexController(const TCHAR* Name) const;
-
-// The studio flex-controller descriptor's `min`/`max` pair (`studiohdr + 0x164 + index * 0x14`,
-// fields +0xc and +0x10), which slot 279 normalises a written weight through and slot 281
-// de-normalises a read one through. **SEAM** — no studio header here, so it answers false and both
-// slots take their own `min == max` arm, which passes the stored weight through untouched.
-// This is 29c's named target for `0x100b5c50`; slot 281 is where its body actually lands.
-bool FlexControllerRange(int32 Index, float& OutMin, float& OutMax) const;
 
 // --- `CBaseFlex`'s scene-event queue (+0x0a58 … +0x0a6b) ----------------------------------------
-
-// `CUtlMemory::Grow` as `0x100b5e60` inlines it: 0 becomes 2, then a zero grow step DOUBLES and a
-// non-zero one ADDS, until the capacity covers `Needed`. Static so the arithmetic is assertable on
-// its own; returns the new capacity, or `Current` when the grow step is -1 (external memory).
-static int32 GrowSceneEventCapacity(int32 Current, int32 GrowSize, int32 Needed);
-
-// `CBaseFlex::AddSceneEvent` `0x100b5e60` — the base-line body of slot 286. Slot 286 ITSELF is
-// `CAI_BaseNPCTroika`'s override (`0x102c1680`), which forwards here for every event type it does
-// not claim, so this is a named method rather than the slot.
-void AddSceneEventBase(const struct FElysiumSceneData* Scene, const struct FElysiumSceneEvent* Event);
-
-// `CChoreoScene::GetTime()` (`0x1007dfa0`), one float at scene+0x7c. **SEAM**: `FElysiumSceneData`
-// is the PARSED file and holds no clock — the clock lives on `FElysiumScenePlayer`, which the
-// kernel does not reach — so it answers 0.
-float SceneTimeOf(const struct FElysiumSceneData& Scene) const;
 
 // --- The Troika scene-event arms' own inputs ----------------------------------------------------
 
@@ -168,15 +90,6 @@ int32 ChangeStanceForReaction();
 TArray<FString> PythonDialogCalls;
 void CallPythonDialogFunction(const FString& FunctionName);
 
-// `0x101a8ac0` — the dynamic-interaction check `CanPlaySequence` puts in front of a live cine.
-// **SEAM**: this substrate models no dynamic scripted interaction, so it answers TRUE, the arm that
-// lets the cine stand; answering false would make every scripted body refuse every sequence.
-bool CineAllowsDynamicInteraction() const;
-
-// `m_hCine` (+0x5d74) resolving to a live entity — the port carries it as
-// `FElysiumEntity::ScriptOwner`, which is what the shape map binds the offset to. Not a seam.
-bool ScriptOwnerIsLive() const;
-
 // `CSceneEntity + 0x57d`, the byte slots 59/60/61 gate `m_bCutsceneForceLOD` on. **SEAM** — the
 // scene entity reaches the kernel as an opaque pointer through the generated `void*` signature and
 // this substrate stands no `CSceneEntity` layout, so it answers false and the LOD byte is left
@@ -184,44 +97,6 @@ bool ScriptOwnerIsLive() const;
 bool SceneEntityForcesCutsceneLod(const void* SceneEntity) const;
 
 // --- The animating-tier mechanisms every activity body ends in ----------------------------------
-
-// `CBaseAnimating::LookupSequence(const char*)`. **SEAM**, answering -1 — retail's own "this model
-// authors no such sequence" value, which is the arm every caller below already has a branch for.
-int32 LookupSequenceByName(const TCHAR* Name) const;
-
-// `CBaseAnimating::GetSequenceFlags(int)`. **SEAM**, answering 0. Bit 0 is the "looping" flag the
-// gesture arm of `AddSceneEvent` warns about; bit 1 is the SNAP bit `SetLayer` zeroes an envelope
-// for (`ElysiumOverlay::BlendFor`).
-int32 SequenceFlagsOf(int32 Sequence) const;
-
-// `CBaseAnimating::GetSequenceActivity(int)`. **SEAM**, answering -1.
-int32 SequenceActivityOf(int32 Sequence) const;
-
-// `CBaseAnimating::SequenceDuration(int)`. **SEAM**, answering 0.
-float SequenceDurationOf(int32 Sequence) const;
-
-// `CBaseAnimating::ResetSequenceInfo` `0x10090950`. **SEAM**: the port's clip funnel owns rate and
-// length, so this records that retail would have re-read them and does nothing else.
-void ResetSequenceInfo();
-
-// `0x10260a50`, the helper `ForcePreTranslatedSequenceAndActivity` hands its forced sequence to.
-// **SEAM**: it is `SetSequence` plus the studio bookkeeping around it; the number is stored on
-// `SequenceNumber` here and nothing downstream reads it yet.
-void CommitForcedSequence(int32 Sequence);
-
-// `CBaseAnimating::LookupPoseParameter(const char*)`. **SEAM**, answering -1.
-int32 LookupPoseParameter(const TCHAR* Name) const;
-
-// `0x100c43e0` — the studio pose-parameter normaliser `AddFlinchGesture` runs its authored value
-// through before stashing it. **SEAM**: with no studio header there is no range, so it answers the
-// value unchanged, which is what a 0..1 parameter's identity range gives.
-float NormalizePoseParameter(int32 Index, float Value) const;
-
-// `CBaseFlex::PlayScene`'s `instanced_scripted_scene` (`0x10084b40`). **SEAM**: standing a scene
-// entity from the kernel needs the world's entity factory and the scene cache, neither of which the
-// substrate's NPC reaches; it answers -1, the "unknown scene" length, and `PlayScene` then takes
-// retail's own `Msg("Unknown scene specified: %s")` arm.
-float PlayInstancedScene(const TCHAR* SceneFile);
 
 // --- The rows that fill no slot -----------------------------------------------------------------
 
@@ -261,34 +136,10 @@ bool OwnerIsThePlayer() const;
 // runtime records selections in the mind's transition trace. Answers 0 (SCHED_NONE) otherwise.
 int32 IdleSequenceGate() const;
 
-// `ResolveActivityToSequence` `0x10272130` — the whole fallback ladder, including its own retry
-// loop. Writes the three out-parameters exactly as retail writes `m_nIdealSequence`,
-// `m_IdealTranslatedActivity` and `m_IdealWeaponActivity`.
-void ResolveActivityToSequence(int32 Activity, int32& OutSequence, int32& OutTranslatedActivity,
-	int32& OutWeaponActivity) const;
-
-// `CAI_BaseNPC::TranslateActivity` `0x10271ff0`. **SEAM**: the recovered per-species translation is
-// `Visual/ElysiumAnimationResolve.cpp`'s, keyed on activity NAMES, and there is no retail-numbered
-// table at this tier — so it answers the activity unchanged, which is retail's own empty-table
-// answer, and writes the weapon activity beside it.
-int32 TranslateActivityNumber(int32 Activity, int32& OutWeaponActivity) const;
-
 // `0x10295a80`, the Troika disposition resolver `ResolveActivityToSequence` hands ACT_DISPOSITION
 // to when `m_pBaseNPCTroika` (+0x98) is set — which it always is on a spawned NPC. **SEAM**: the
 // stance machine that answers it is `ElysiumStance::Select` and it answers by CLIP NAME, so there
 // is no sequence index to give back; it leaves the sequence at -1 and the ladder falls through to
 // retail's own `"%s has no sequence for act ACT_DISPOSITION"` arm.
 void ResolveDispositionActivity(int32& OutSequence, int32& OutTranslatedActivity) const;
-
-// The cine's `m_iszCustomMove` (`m_hCine + 0x5f50`), the sequence name the ACT_SCRIPT_CUSTOM_MOVE
-// arm looks up. **SEAM**: the port's scripted sequence carries its custom-move label on the
-// scripted-sequence entity rather than on a `CCineNPC` the kernel can reach by offset, so this
-// answers empty and the arm takes retail's `"SCRIPT_CUSTOM_MOVE: %s has no sequence"` branch.
-FString ScriptCustomMoveSequenceName() const;
-
-// `CAI_BaseNPC::SetIdealActivity` `0x10272650` — the whole body: activity 0 tail-jumps to slot 310,
-// and every other activity stores `m_IdealActivity` and re-resolves the ideal triple beside it.
-// Family Facing's `SetIdealActivityNumber` is the STORE half of this and is called from here rather
-// than respelt; what this adds is the reset arm and the translation.
-void SetIdealActivity(int32 Activity);
 

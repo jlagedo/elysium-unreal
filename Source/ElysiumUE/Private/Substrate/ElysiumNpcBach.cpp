@@ -462,7 +462,7 @@ const TCHAR* FElysiumNpcBach::SquadSlotName(int32 SlotEn)
 void FElysiumNpcBach::GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUnits)
 {
 	BachGatherAttackConditions(DistanceUnits);
-	FElysiumNpc::GatherAttackConditions(Enemy, DistanceUnits);
+	FElysiumNpcBase::GatherAttackConditions(Enemy, DistanceUnits);
 }
 
 // --- Moved from `ElysiumNpcKernelAnim10_2.cpp` (story 5 step 4) ---

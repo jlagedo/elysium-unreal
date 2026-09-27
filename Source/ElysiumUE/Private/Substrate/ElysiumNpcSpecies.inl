@@ -117,22 +117,6 @@ int32 ZombieAiType = 0;   // +0x6678 CNPC_VZombie::m_iZombieAIType (datamap, key
 
 // --- Slot 323's four answers -----------------------------------------------------------------------
 
-/** `CAI_BaseNPC::FUN_10344dd0` `0x10344dd0`, slot 323 — the four codes retail returns for a movement
- *  direction relative to the body's own facing, by the angle band the direction falls in. Every
- *  boundary below was read out of the pinned `vampire.dll`'s `.rdata`, so the bands are recovered
- *  numbers and the NAMES are this port's reading of them (`+yaw` is counter-clockwise in Source, so
- *  a relative yaw of 90 is to the body's left). The NUMBERS are retail's own return values.
- *
- *  Note `_DAT_1049e8a4` is **316**, not 315: the four bands are 89, 90, 90 and 91 degrees wide, not
- *  a clean quarter split. That is retail's number and it is kept. */
-enum class EMoveDirectionCode : int32
-{
-	Behind = 0,   // (135, 225]                — `_DAT_1049e8a0` .. `_DAT_1049e89c`, and the too-slow arm
-	Right = 1,    // (225, 316]                — above `_DAT_1049e89c`
-	Ahead = 2,    // (316, 360) and [0, 45]    — above `_DAT_1049e8a4`, or at-or-below `_DAT_1049949c`
-	Left = 3,     // (45, 135]                 — at-or-below `_DAT_1049e8a0`
-};
-
 // --- The per-species slot table ---------------------------------------------------------------------
 
 /** One row: the retail class whose vtable carries the body, the slot it fills, and the RETAIL
@@ -162,7 +146,7 @@ const FSpeciesSlotRow* SpeciesSlotRow(int32 Slot) const;
 // overwrites what it wrote, `CNPC_VZombie`'s 510 tails into `CAI_BaseNPC::ShouldPlayFloatSound`.
 // Every one of those calls is a DIRECT call in retail — a `thunk_`, never a vtable dispatch. Since
 // story 5 step 3 the species bodies are their classes' C++ overrides and those calls are spelled as
-// qualified calls to the recovered owner (`FElysiumNpc::Slot606(Arg)`, `BaseShouldPlayFloatSound()`;
+// qualified calls to the recovered owner (`FElysiumNpc::Slot606(Arg)`, `FElysiumNpcBase::ShouldPlayFloatSound()`;
 // `story-5/decisions-step3.json` `direct_calls`), so the per-slot guard that emulated the thunk is
 // gone.
 

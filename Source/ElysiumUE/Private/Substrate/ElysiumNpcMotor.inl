@@ -52,46 +52,6 @@ int32 PathingHullKind = 0;
 
 // --- The navigator seam --------------------------------------------------------------------------
 
-/** `FUN_1027d990` — `return m_pNavigator->field_0x18;`. The most-called body of this family. */
-int32 NavGetType() const;
-
-/** `FUN_1027d9b0` → `0x102eeba0` — `m_pNavigator->field_0x18 = value`, and the one push onto the
- *  port's mover, which IS this runtime's navigator. */
-void NavSetType(int32 Type);
-
-/** `CAI_Navigator::vfunc3` `0x102ecb50` — the owner-pointer snapshot above. */
-void NavSnapshotOwnerPointers(int32 Argument);
-
-/** `CAI_Navigator#10 OnNavFailed` `0x102eeae0`, and `CAI_Navigator#9` `0x102eeb50`, whose whole body
- *  is a tail-jump to slot 10 with its second argument shifted down one stack word — so slot 9 IS
- *  `OnNavFailed` under another index, which the 29c walk recorded as unrecovered and the listing
- *  settles. Writes the file/line marker at owner+0x1b44/+0x1b48 (ABSENT in the shape map), calls
- *  `TaskFail` (slot 448) with the caller's reason, re-plays the resolved link activity through
- *  `SetIdealActivity`, and sets the failed latch. */
-void NavOnNavFailed(int32 FailReason);
-
-/** `thunk_FUN_102ee680(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`. The port's mover
- *  answers the same question through `SampleNavigation().bActiveGoal`. */
-bool NavIsGoalActive() const;
-
-/** `thunk_FUN_102ee2c0(m_pNavigator)` — SDK `CAI_Navigator::StopMoving()`. Wired to the mover's
- *  own `Stop()`. */
-void NavStopMoving();
-
-/** `thunk_FUN_102ee620(m_pNavigator)` — the navigator's route/goal-state word, which
- *  `ValidateNavGoal` requires to be exactly 6. **SEAM**: `IElysiumNpcMotor` keeps no goal type, so
- *  this answers -1 and `ValidateNavGoal` takes retail's own "not that state" arm. */
-int32 NavGoalState() const;
-
-/** `thunk_FUN_102ee140(m_pNavigator)` — the navigator's current goal position, SOURCE units.
- *  **SEAM**: the mover keeps no readable goal; answers false and leaves `OutGoal` untouched. */
-bool NavGoalPosition(FVector& OutGoalUnits) const;
-
-/** `thunk_FUN_102ee6a0` (is the pending link valid) and `thunk_FUN_102ee510` (its cached activity)
- *  — the pair `FUN_1027a6c0` reads. **SEAM**: no link objects here; answers false. The link's
- *  retail identity is **unrecovered**. */
-bool NavLinkActivity(int32& OutActivity) const;
-
 /** `FUN_1029f6c0` — resolve a `CAI_Node` through the navigator's node array (`nav+0x2c`, count at
  *  `[0]`, entries at `[1]`) using the index the argument's route step carries, and answer
  *  `node+0xa0`. **SEAM**: there is no node graph; answers 0, which is retail's own answer for a
@@ -100,39 +60,10 @@ int32 NavNodeWordAt(int32 RouteStepIndex) const;
 
 // --- The motor seams -----------------------------------------------------------------------------
 
-/** `thunk_FUN_102e0bd0(m_pMotor, …)` — `CAI_Motor::MoveGroundExecute`'s apply of one interval's
- *  root-motion delta, which `AutoMovement` (`0x10280a50`) calls under its gate. **SEAM**: Unreal's
- *  animation instance extracts and applies root motion itself, so this records that the gate was
- *  PASSED and applies nothing; the gate and the order above it are the retail contract this port
- *  keeps (see `docs/vtmb/npc-ai/shape.md` § `0x10280a50`). */
-bool MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta);
-
-/** `CBaseAnimating::GetIntervalMovement(flInterval, …)` — the per-frame root-motion delta
- *  `AutoMovement` blends. **SEAM**: the animating tier here publishes no interval movement to the
- *  kernel; answers false with the delta zeroed. */
-bool AnimIntervalMovement(float Interval, FVector& OutDeltaUnits, float& OutYawDelta) const;
-
 /** `thunk_FUN_102e7270(m_pMoveProbe, …)` — `CAI_MoveProbe::CheckStandPosition`, the hull/pathfinder
  *  probe `CanStandAt` (`0x102a0ed0`) brackets with `m_bForceNPCCheck`. **SEAM**: the mover answers
  *  no hull probe; answers false. */
 bool MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 ProbeFlags) const;
-
-bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const FVector& HullMins,
-	const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const;
-
-/** The shared hull table's mins and maxs for a hull id, in SOURCE units.
- *
- *  Answers from the replayed `NAI_Hull` table (`Substrate/ElysiumRetailHullTable.h`,
- *  `docs/vtmb/data/hull_table.json`). False, with both left at zero, for a hull id retail's own
- *  table does not carry -- which is what every caller's failure arm was written against. */
-bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,
-	FVector& OutMaxsUnits) const;
-
-/** `m_Collision`'s slots +4 / +8 — an entity's OBB mins and maxs, SOURCE units, which `CheckStuck`
- *  (`0x103ab580`) builds both boxes from. **SEAM**: `FElysiumEntity` carries no collision extents;
- *  answers false with both left at zero. */
-static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
-	FVector& OutMaxsUnits);
 
 /** `CBaseEntity::m_edtDerivedType` (+0x004c) — the derived-type word the collision-ignore chain
  *  tests bitwise (`& 0x2`, `& 0x12`, `& 0x14`, `& 0x16`) and the cover chooser tests as `& 4`
@@ -140,43 +71,6 @@ static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMin
  *  2 is recovered; this runtime stands no derived-type word at all, so it answers 0 and every one of
  *  those gates falls through. What each remaining bit MEANS is **unrecovered**. */
 static int32 RetailDerivedType(const FElysiumEntity& Entity);
-
-/** `CBaseEntity::IsStandable()` (slot 164, `0x100b50a0`) — solid flag `0x10` clear, then move type
- *  1 / 6 / 2, else `thunk_FUN_100b5110`. **SEAM**: this substrate carries no solid flags and no
- *  move type, so it answers FALSE, and `CanStandOn` therefore refuses every non-null candidate.
- *  That is the conservative refusal, stated rather than guessed: retail's own answer for an entity
- *  with `0x10` set is also false. */
-static bool RetailIsStandable(const FElysiumEntity& Entity);
-
-/** `CBaseEntity`'s OWN slot-153 body (`0x10026e70`, spelled `CAISound::FUN_10026e70` because
- *  `CAISound` is the class the corpus attributes it to) — `m_vecVelocity` compared COMPONENT-WISE
- *  for EXACT equality against `DAT_1070d1b0`/`b4`/`b8`, the image's shared zero vector, answering 0
- *  when all three match and 1 otherwise.
- *
- *  Slot 153 has two bodies in this family and this is the other one: every class on the NPC line —
- *  `CAI_BaseNPC` through every `CNPC_V*` leaf — carries `0x10280300`, which is `IsMoving()` above
- *  and forwards to the navigator; the 497 classes that are NOT NPCs carry this, including the five
- *  the kernel's closure walks (`CAISound`, `CAI_Hint`, `CAI_InterestingPlace`,
- *  `CAI_InterestingPlaceConverstation`, `CAI_StandoffGoal`). It is therefore **not** a species
- *  override of the NPC's slot and does not belong in `IsMoving`'s dispatch; it is the base entity's
- *  answer, and it lands here beside its twin under the class it came from, exactly as `CanStandOn`
- *  carries `CAISound::FUN_10026f80`.
- *
- *  No port caller: nothing in this runtime stands a `CAI_Hint` or a `CAISound` as an entity with a
- *  vtable, so this is reached only by the test that pins it — the shape family BaseHelpers already
- *  uses for `FUN_1028ebc0`. Exact equality is retail's and is kept: a velocity of `-0.0` on any axis
- *  compares equal to `0.0` and answers "not moving", which is the shipped answer. */
-static bool BaseEntityIsMoving(const FElysiumEntity& Entity);
-
-/** The active weapon's capability word (weapon vtable +0x5a0, slot 360, retail body `0x1014f930`),
- *  which `ShouldMoveAndShoot` requires to carry `0x6000`. **SEAM**: `FElysiumWeapon` stands no such
- *  word; answers 0, so the Troika gate closes and the base rung is never reached. */
-uint32 ActiveWeaponCapabilityWord() const;
-
-/** `CAI_Motor`'s deceleration query (`0x102e1300`, `CAI_Motor#16`) lives on `IElysiumNpcMotor`
- *  itself as `MinStoppingDistance()`; this is the NPC-side read, so a body cites the address at the
- *  point of use. Answers the interface's own floor when there is no motor. */
-float MotorMinStoppingDistanceUnits() const;
 
 // --- The console variables this family's ladders read --------------------------------------------
 //
@@ -207,43 +101,15 @@ bool NavHintNodeOrigin(int32 HintNode, FVector& OutOriginUnits) const;
  *  `SelectJumpbaseNode` walk end to end. **SEAM**: answers an empty list. */
 bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
 
-/** `CBaseAnimating::IsIgnoreCollisionEntity(other)` (`0x1008be20`) — the tail of both
- *  collision-ignore chains: `m_hIgnoreCollisionEntity` resolved and compared against the candidate. */
-bool IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const;
-
 // --- The non-slot bodies of this family ----------------------------------------------------------
-
-/** `CAI_BaseNPC::AutoMovement` `0x10280a50` — slot 250 first, then the interval movement, applied
- *  ONLY when `GetMoveType() == 4` and `FL_FROZEN 0x400` is clear. The gate is the retail contract a
- *  modernization has to keep; the extraction underneath it is Unreal's. */
-bool AutoMovement();
-
-/** `CAI_BaseNPC::PerformMovement(a, b)` `0x1026c120` — VProf scaffolding around one delegating call
- *  to the navigator's vtable slot 5, both parameters forwarded. */
-void PerformMovement(float Interval, int32 MoveFlags);
-
-/** `CAI_BaseNPC::PostRun` `0x1026c7c0` — the PAIRING and its ORDER: dispatch own vtable +0x408 with
- *  the elapsed interval from `thunk_FUN_1026c540`, then `CBaseCombatCharacter::Weapon_FrameUpdate`
- *  with the same number. */
-void PostRun();
-
-/** `CAI_BaseNPC::CheckOnGround` `0x1026e5e0` — the gated ground hull-trace and the two writes it
- *  can make (clear the ground entity, or adopt the traced one). */
-void CheckOnGround();
 
 /** `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` — `m_bForceNPCCheck` around the move probe. */
 bool CanStandAt(const FVector& PositionUnits, int32 Flags);
-
-bool OnObstructingDoorBase(float& InOutMoveGoalMaxDistance, int32 DoorState, float DistClear,
-	EObstructingDoorResult& OutResult) const;
 
 /** `CCineNPC`/`CCineAI`/`CCineAISchedule`'s shared slot 178 `Blocked` (`0x101a7580`) — a `return;`
  *  with the argument ignored. Answers whether the class this NPC IS is one of the three, which is
  *  the whole of the recovered behaviour. */
 bool BlockedIsNoOp() const;
-
-/** `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — the base line's single constant. */
-static float MaxYawSpeedBase();
 
 /** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
  *  `m_afMemory & 0x2000` (AT_COVER_HINT) is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0.
@@ -255,18 +121,9 @@ float MaxYawSpeedTurningArm(const TCHAR* ConVarAddress);
  *  before they diverge (`0x1029afc0` and `0x1029b180`, arms 1–3). */
 bool IgnoreCollisionSharedHead(const FElysiumEntity* Other) const;
 
-/** `CAI_Navigator::OnNavFailed`'s activity resolution, `FUN_1027a6c0` `0x1027a6c0`: the link's
- *  cached activity when the link is valid and not -1, else 1 (`ACT_IDLE`). */
-int32 ResolveLinkActivity() const;
-
 /** `FUN_102bf7e0` `0x102bf7e0` — stop an active goal, then set `m_bShouldMove` unconditionally.
  *  Target is 29c's best guess at the retail name; the body is exact. */
 void ResumeScheduledMove();
-
-/** `CAI_BaseNPC::IsJumpLegal`'s shared geometry helper `FUN_10280790` `0x10280790`, as a pure
- *  function of the three points and the three thresholds, so both fills of slot 521 are one body. */
-static bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
-	const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance);
 
 // --- The movement-tunables table ----------------------------------------------------------------
 //
@@ -275,17 +132,4 @@ static bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUn
 // the `SetupJump` rises are their classes' own overrides (story 5 step 4); this table's rows are the
 // Troika line, the non-Troika branch and the debug hull, which the Troika bodies read.
 
-/** Slots 521/522/523 `IsJumpLegal` / `StepHeight` / `GetMaxJumpSpeed`: the movement tunables, one
- *  row per class that answers them differently from the Troika line. */
-struct FJumpTunableSpecies
-{
-	const TCHAR* RetailClass;
-	const TCHAR* Body;
-	float StepHeight;
-	float MaxJumpSpeed;
-	float JumpLegalRise;
-	float JumpLegalDrop;
-	float JumpLegalDistance;
-};
 static const FJumpTunableSpecies* JumpTunableSpeciesRows(int32& OutCount);
-static const FJumpTunableSpecies* JumpTunableSpeciesOf(const TCHAR* InRetailClass);

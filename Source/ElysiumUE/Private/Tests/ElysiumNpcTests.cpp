@@ -890,12 +890,12 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	// (`0x1029a0b0`) arms his first think at `curtime + 0.1` (`_DAT_104493d0`), and until it runs the
 	// mind's admission barrier refuses every claim. The maker half above is deliberately measured on
 	// the map's own zero, so the clock is advanced to that think here rather than at Activate.
-	World.Tick(FElysiumNpc::NpcInitThinkDelay);
+	World.Tick(FElysiumNpcBase::NpcInitThinkDelay);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("WillTalk")), FElysiumVariant::Int(1), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("StartPlayerDialogRemote")), FElysiumVariant::Int(256), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
-	for (int32 i = 0; i < 4; ++i) { World.Tick(FElysiumNpc::NpcInitThinkDelay); }
+	for (int32 i = 0; i < 4; ++i) { World.Tick(FElysiumNpcBase::NpcInitThinkDelay); }
 
 	// Read a keyed debug row (the concrete leaf is file-local, so its state surfaces via GetDebugState).
 	auto DebugRow = [](const FElysiumEntity* E, const TCHAR* Key) -> FString
@@ -1034,7 +1034,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 
 		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
 		if (!TestNotNull(TEXT("the walker resolved"), WalkerEnt))
@@ -1102,7 +1102,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 
 		FElysiumEntity* SeqEnt = World.FindByName(TEXT("scripted_walk"));
 		if (TestNotNull(TEXT("the scripted beat resolved"), SeqEnt))
@@ -1152,7 +1152,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 
 		FElysiumEntity* SeqEnt = World.FindByName(TEXT("scripted_run"));
 		if (TestNotNull(TEXT("the scripted run beat resolved"), SeqEnt))
@@ -1265,7 +1265,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 
 		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
 		if (!TestNotNull(TEXT("the walker resolved"), WalkerEnt))
@@ -1323,7 +1323,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
@@ -1400,7 +1400,7 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 	Services.bProvideNpcMotor = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	FElysiumEntity* JackEnt = World.FindByName(TEXT("Jack"));
 	if (!TestNotNull(TEXT("Jack resolves"), JackEnt))
 	{
@@ -1472,7 +1472,7 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 	Defs.MapName = TEXT("__spawn_test__");
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	World.Load(MoveTemp(Defs));   // empty map — everything here is runtime-created
-	World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 
 	// --- Phase 1: CreateEntityNoSpawn appends a live, findable, NOT-yet-spawned entity ---
 	FElysiumEntityDef D;

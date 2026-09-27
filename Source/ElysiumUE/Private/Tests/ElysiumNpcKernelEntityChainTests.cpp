@@ -77,7 +77,7 @@ bool FElysiumNpcKernelEntityChainConstantsTest::RunTest(const FString&)
 
 	// 0x101a67c0 slot 476's BASE — `_DAT_104454c0`, the shared 1.0. Unity, so `CanHearSound`'s
 	// `volume * sensitivity` is the bare volume.
-	TestEqual(TEXT("the base HearingSensitivity is 1.0"), Npc.BaseHearingSensitivity(), 1.f);
+	TestEqual(TEXT("the base HearingSensitivity is 1.0"), Npc.FElysiumNpcBase::HearingSensitivity(), 1.f);
 
 	// 0x10026730 slot 38 — `return this;`, and the argument never reaches anything.
 	TestTrue(TEXT("slot 38 answers itself"),
@@ -273,11 +273,11 @@ bool FElysiumNpcKernelEntityChainMoveReboundTest::RunTest(const FString&)
 	// The formula, on its own: `(t*t + 1)*t - (t/D)*(D*D + 1)*t`. Zero at both ends of the span,
 	// non-zero between them — a rebound that leaves and returns.
 	const float D = 2.f;
-	TestEqual(TEXT("the blend is zero at t = 0"), FElysiumNpc::MoveReboundBlend(0.f, D), 0.f);
-	TestEqual(TEXT("the blend is zero at t = D"), FElysiumNpc::MoveReboundBlend(D, D), 0.f);
+	TestEqual(TEXT("the blend is zero at t = 0"), FElysiumNpcBase::MoveReboundBlend(0.f, D), 0.f);
+	TestEqual(TEXT("the blend is zero at t = D"), FElysiumNpcBase::MoveReboundBlend(D, D), 0.f);
 	// t = 1, D = 2: (1 + 1)*1 - (0.5)*(4 + 1)*1 = 2 - 2.5 = -0.5.
 	TestEqual(TEXT("the blend at the midpoint is the cubic minus the linear"),
-		FElysiumNpc::MoveReboundBlend(1.f, D), -0.5f);
+		FElysiumNpcBase::MoveReboundBlend(1.f, D), -0.5f);
 
 	// The body ALWAYS answers its own interval, on every path including the refusal.
 	TestEqual(TEXT("slot 135 answers the interval it was given"), Npc.Slot135(0.25f), 0.25f);
@@ -285,7 +285,7 @@ bool FElysiumNpcKernelEntityChainMoveReboundTest::RunTest(const FString&)
 
 	// SEAM: none of the seven `CBaseEntity` mover words has a port member, so the state answers the
 	// resting one and the first gate refuses — the velocities are not touched.
-	FElysiumNpc::FMoveRebound Rebound;
+	FElysiumNpcBase::FMoveRebound Rebound;
 	TestFalse(TEXT("the mover-word seam refuses"), Npc.MoveReboundState(Rebound));
 	Npc.Velocity = FVector(9.f, 9.f, 9.f);
 	Npc.Slot135(0.25f);
@@ -313,7 +313,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	// is deliberately NOT written.
 	Npc.AnimOverlay[1].Flags = 0x77;
 	Npc.SetLayer(1, /*Activity*/ 0x42, /*Sequence*/ 9, /*bAutoKill*/ true);
-	const FElysiumNpc::FAnimOverlayLayer& Layer = Npc.AnimOverlay[1];
+	const FElysiumNpcBase::FAnimOverlayLayer& Layer = Npc.AnimOverlay[1];
 	TestEqual(TEXT("SetLayer stores the owner activity"), Layer.Activity, 0x42);
 	TestEqual(TEXT("SetLayer stores the sequence"), Layer.Sequence, 9);
 	TestEqual(TEXT("SetLayer seeds the weight to 0.1"), Layer.Weight, ElysiumOverlay::SeedWeight);
@@ -349,7 +349,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	// --- slot 266 (0x100997f0) ---
 	// Three records, two writes each: the sequence to -1 and the expire time to curtime - 1.0. The
 	// latch, the fades and the pose parameter SURVIVE.
-	for (int32 Index = 0; Index < FElysiumNpc::NumFlinchRecords; ++Index)
+	for (int32 Index = 0; Index < FElysiumNpcBase::NumFlinchRecords; ++Index)
 	{
 		Npc.Flinch[Index].Sequence = 40 + Index;
 		Npc.Flinch[Index].Latch = 2;
@@ -359,7 +359,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	}
 	Npc.Slot266();
 	const float Now = static_cast<float>(Fixture.World.World.NowSeconds());
-	for (int32 Index = 0; Index < FElysiumNpc::NumFlinchRecords; ++Index)
+	for (int32 Index = 0; Index < FElysiumNpcBase::NumFlinchRecords; ++Index)
 	{
 		TestEqual(TEXT("the flinch sequence is cleared to -1"), Npc.Flinch[Index].Sequence, -1);
 		TestEqual(TEXT("the expire stamp is one second in the PAST"), Npc.Flinch[Index].ExpireTime,
@@ -408,7 +408,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 		Npc.SceneEventReleases = 0;
 		auto Add = [&Npc](void* Scene, void* Event)
 		{
-			FElysiumNpc::FSceneEventRecord Record;
+			FElysiumNpcBase::FSceneEventRecord Record;
 			Record.Scene = static_cast<const FElysiumSceneData*>(Scene);
 			Record.Event = static_cast<const FElysiumSceneEvent*>(Event);
 			Npc.SceneEvents.Add(Record);
@@ -425,7 +425,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 	Npc.ClearSceneEvents(&SceneA);
 	TestEqual(TEXT("slot 285 removes every record of the named scene"), Npc.SceneEvents.Num(), 2);
 	TestEqual(TEXT("and releases each one it removed"), Npc.SceneEventReleases, 2);
-	for (const FElysiumNpc::FSceneEventRecord& Record : Npc.SceneEvents)
+	for (const FElysiumNpcBase::FSceneEventRecord& Record : Npc.SceneEvents)
 	{
 		TestTrue(TEXT("no record of scene A survives"),
 			static_cast<const void*>(Record.Scene) != static_cast<const void*>(&SceneA));
@@ -444,7 +444,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 	TestEqual(TEXT("slot 287 removes exactly one record"), Npc.SceneEvents.Num(), 3);
 	TestEqual(TEXT("and releases exactly one"), Npc.SceneEventReleases, 1);
 	int32 RemainingB = 0;
-	for (const FElysiumNpc::FSceneEventRecord& Record : Npc.SceneEvents)
+	for (const FElysiumNpcBase::FSceneEventRecord& Record : Npc.SceneEvents)
 	{
 		if (static_cast<const void*>(Record.Event) == static_cast<const void*>(&EventB))
 		{
@@ -487,7 +487,7 @@ bool FElysiumNpcKernelEntityChainIdSpaceTest::RunTest(const FString&)
 
 	// 0x101a6d00 is slot 580's BASE body and answers a DIFFERENT space from the Troika line's. It
 	// is the corpus's `cai_basenpc` unit -- the root every other schedule space parents on.
-	const FElysiumLocalIdSpace* Base = Npc.BaseClassScheduleIdSpace();
+	const FElysiumLocalIdSpace* Base = Npc.FElysiumNpcBase::ClassScheduleIdSpace();
 	if (TestNotNull(TEXT("the base space is loaded"), Base))
 	{
 		TestTrue(TEXT("and it is not the Troika line's"),
@@ -501,11 +501,11 @@ bool FElysiumNpcKernelEntityChainIdSpaceTest::RunTest(const FString&)
 
 	// `0x102ea280`: -1 stays -1, and a null space is the end of the chain.
 	TestEqual(TEXT("the translation refuses -1 outright"),
-		FElysiumNpc::GlobalToLocalId(Base, INDEX_NONE), INDEX_NONE);
+		FElysiumNpcBase::GlobalToLocalId(Base, INDEX_NONE), INDEX_NONE);
 	TestEqual(TEXT("a null space is the end of the chain"),
-		FElysiumNpc::GlobalToLocalId(nullptr, 5), INDEX_NONE);
+		FElysiumNpcBase::GlobalToLocalId(nullptr, 5), INDEX_NONE);
 	TestEqual(TEXT("a global id below the base is not in the range"),
-		FElysiumNpc::GlobalToLocalId(Base, 5), INDEX_NONE);
+		FElysiumNpcBase::GlobalToLocalId(Base, 5), INDEX_NONE);
 
 	// The arithmetic, over the real range: `(localBase - globalBase) + id` on the inclusive span
 	// `[m_globalBase, m_translatedTop]`. The UPPER bound is the TRANSLATED top (`+0x0c`), which is
@@ -514,13 +514,13 @@ bool FElysiumNpcKernelEntityChainIdSpaceTest::RunTest(const FString&)
 	if (Base != nullptr && !Base->IsEmpty())
 	{
 		TestEqual(TEXT("the low bound is inclusive and rebases to the local base"),
-			FElysiumNpc::GlobalToLocalId(Base, Base->GlobalBase), Base->LocalBase);
+			FElysiumNpcBase::GlobalToLocalId(Base, Base->GlobalBase), Base->LocalBase);
 		TestEqual(TEXT("the high bound is the TRANSLATED top, inclusive"),
-			FElysiumNpc::GlobalToLocalId(Base, Base->TranslatedTop), Base->LocalTop);
+			FElysiumNpcBase::GlobalToLocalId(Base, Base->TranslatedTop), Base->LocalTop);
 		TestEqual(TEXT("one below the range answers -1"),
-			FElysiumNpc::GlobalToLocalId(Base, Base->GlobalBase - 1), INDEX_NONE);
+			FElysiumNpcBase::GlobalToLocalId(Base, Base->GlobalBase - 1), INDEX_NONE);
 		TestEqual(TEXT("one above the TRANSLATED top answers -1"),
-			FElysiumNpc::GlobalToLocalId(Base, Base->TranslatedTop + 1), INDEX_NONE);
+			FElysiumNpcBase::GlobalToLocalId(Base, Base->TranslatedTop + 1), INDEX_NONE);
 	}
 
 	// Slots 447 and 450, both over this NPC's own sub-spaces. Both used to answer -1 for every id
@@ -1317,12 +1317,12 @@ bool FElysiumNpcKernelEntityChainAnglesAndThinkTest::RunTest(const FString&)
 	Npc.SetAngles(FRotator(10.f, 20.f, 30.f));
 	TestTrue(TEXT("slot 65 is slot 64 with its arguments packed"), true);
 
-	// 0x101a64a0 — the FOURTH think channel, beside family Lifecycle's other three.
+	// 0x101aa730 — the FOURTH think channel, beside family Lifecycle's other three.
 	Npc.ScheduleHost.LastAI = 12.5;
 	Npc.ScheduleHost.LastUpdate = 1.0;
 	Npc.ScheduleHost.LastNormal = 2.0;
 	Npc.ScheduleHost.LastMove = 3.0;
-	TestEqual(TEXT("0x101a64a0 reads the AI channel"), Npc.LastAiThink(), 12.5f);
+	TestEqual(TEXT("0x101aa730 reads the AI channel"), Npc.LastAiThink(), 12.5f);
 	TestEqual(TEXT("and not the update channel"), Npc.LastUpdateThink(), 1.f);
 	TestEqual(TEXT("nor the normal channel"), Npc.LastNormalThink(), 2.f);
 	TestEqual(TEXT("nor the move channel"), Npc.LastMoveThink(), 3.f);

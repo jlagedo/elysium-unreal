@@ -543,7 +543,7 @@ const TCHAR* FElysiumNpcWerewolf::GetShortConditionName(int32 ConditionId)
 		return Names[Offset];
 	}
 	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpc::GetShortConditionName(ConditionId);
+	return FElysiumNpcBase::GetShortConditionName(ConditionId);
 }
 
 // Slot 76: `0x103d5130`, which chains `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) directly.
@@ -626,7 +626,7 @@ void FElysiumNpcWerewolf::TraceAttack(void* InInfo, const FVector& DirUnits, voi
 		return;   // the port's one refusal: retail would have dereferenced both
 	}
 	Info->DamageBits = 0;
-	FElysiumNpc::TraceAttack(InInfo, DirUnits, InTrace);
+	FElysiumNpcBase::TraceAttack(InInfo, DirUnits, InTrace);
 }
 
 // Slot 563: `0x103d9e00`, the `GoalToleranceWerewolfLead` shape; a replacement that does not chain.
@@ -677,7 +677,7 @@ void FElysiumNpcWerewolf::GatherAttackConditions(FElysiumEntity* Enemy, float Di
 	{
 		return;
 	}
-	FElysiumNpc::GatherAttackConditions(Enemy, DistanceUnits);
+	FElysiumNpcBase::GatherAttackConditions(Enemy, DistanceUnits);
 }
 
 // --- Moved from `ElysiumNpcCombat10.cpp` (story 5 step 4) ---

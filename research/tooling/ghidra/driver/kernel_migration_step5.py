@@ -61,7 +61,7 @@ LEDGER = Path("docs/vtmb/npc-kernel")
 VERDICTS = Path("research/tooling/ghidra/driver/kernel_verdicts.tsv")
 REPLAY = "ghidra/types/datamap_records-vampire.dll.json"
 HISTORICAL_PATHS = ("Source/ElysiumUE", str(VERDICTS).replace("\\", "/"), str(LEDGER).replace("\\", "/"))
-SLOTS_INL = "ElysiumNpcKernelSlots.inl"
+SLOTS_INL = ("ElysiumNpcKernelSlots.inl", "ElysiumNpcBaseSlots.inl", "ElysiumNpcSlots.inl")
 
 MOVE_COLUMNS = ("member", "kind", "declared_in", "defined_in", "addresses", "anchor",
                 "final_owner", "disposition", "packet", "note")
@@ -254,6 +254,12 @@ def struct_members(root: Path, header: str, struct: str) -> set[str]:
             depth += 1
         elif char == "}":
             depth -= 1
+            head = re.sub(r"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]", "[]", "".join(statement))
+            if depth == 0 and "(" in head.split("=")[0]:
+                # An inline method body ends without a `;`: it is its own declaration, and the
+                # next member starts afresh.
+                statement = []
+                continue
         if depth == 0:
             statement.append(char)
             if char == ";":
@@ -307,7 +313,7 @@ def move_manifest(root: Path) -> list[dict]:
     paths = shape_paths(root)
     rows = []
     for name, info in sorted(members.items()):
-        if info["file"] == SLOTS_INL:
+        if info["file"] in SLOTS_INL:
             continue   # the generated slot surface: `gen_kernel_shape` splits it by slot
         cited = sorted(a for a in addresses.get(name, ()) if ledger.code_layer(a) != "species")
         layers = {ledger.code_layer(a) for a in cited}
@@ -426,6 +432,15 @@ def check_moves(rows: list[dict], root: Path) -> collections.Counter:
                 raise km.InvalidManifest(f"pair {name}: FElysiumNpcBase declares no virtual {new}")
             if not troika.get(new, {}).get("override"):
                 raise km.InvalidManifest(f"pair {name}: FElysiumNpc::{new} is not an override")
+        elif family == "collapse":
+            # A second port body folded into its survivor: gone from both layers, the survivor
+            # declared on the base or up the entity chain (`AsNpc`, the `+0x98` word).
+            survivor = disposition.split(":", 1)[1]
+            if name in troika or name in base:
+                raise km.InvalidManifest(f"collapsed {name} is still declared")
+            if survivor not in base and not re.search(
+                    rf"\b{survivor}\s*\(", _code(root, PRIVATE.parent / "Public/ElysiumEntity.h")):
+                raise km.InvalidManifest(f"{name}'s survivor {survivor} is not declared")
         elif family == "chain":
             header = {"FElysiumCombatCharacter": PRIVATE.parent / "Public/ElysiumPlayer.h"}.get(owner)
             if header is None or not re.search(rf"\b{name}\b", _code(root, header)):
@@ -528,6 +543,13 @@ def check_consumers(rows: list[dict], root: Path) -> collections.Counter:
             raise km.InvalidManifest(f"consumer still under investigation: {row['consumer']}")
         wanted = (int(row["sites"]) if disposition == "as-npc-base"
                   else int(disposition.split(":")[1].split("/")[0]) if disposition.startswith("mixed:") else 0)
+        if wanted and row["consumer"].startswith("declaration/table in "):
+            # A site outside any named definition (a lambda, a free helper): its file spells it.
+            text = _code(root, Path("Source/ElysiumUE") / row["path"])
+            if len(re.findall(r"\bAsNpcBase\s*\(", text)) < wanted:
+                raise km.InvalidManifest(f"consumer {row['consumer']} does not test AsNpcBase()")
+            counts[disposition.split(":")[0]] += 1
+            continue
         if wanted:
             owner, _, method = row["consumer"].partition("::")
             found = [(d, p) for d, p in defs.get(method, ()) if d.symbol.split("::")[0] in (owner, "FElysiumNpcBase")]

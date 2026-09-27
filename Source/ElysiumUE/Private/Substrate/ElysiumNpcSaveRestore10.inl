@@ -61,25 +61,6 @@
 
 // --- The sentinel codec ---------------------------------------------------------------------------
 
-/** `FLT_MAX` as this runtime's stamps carry it. Retail's fields are 32-bit floats and the compare
- *  is exact, so a `double` stamp only matches when it holds the widened float constant — which is
- *  what every port writer of an "infinite" stamp stores. */
-static double SaveStampFloatMax();
-
-/** `FUN_101cf250` (`0x101cf250`), the encode. Returns whether the stamp was rewritten, so a test
- *  can state which arm fired without inspecting the value twice. */
-static bool SaveStampEncode(double& Stamp, ESaveStampMode Mode);
-
-/** `FUN_101cf2f0` (`0x101cf2f0`), the decode. Same return contract. */
-static bool SaveStampDecode(double& Stamp, ESaveStampMode Mode);
-
-/** The same pair over a stamp this runtime carries as a 32-bit `float` rather than a `double` —
- *  `m_flEyeFidgetTime` (`+0x657c`) is the only one in this family, and it lands on the entity chain
- *  as `FElysiumCombatCharacter::NextFidgetTime`. Retail's fields are ALL `float`, so this overload
- *  is the exact width and the `double` one is the widened convenience. */
-static bool SaveStampEncode(float& Stamp, ESaveStampMode Mode);
-static bool SaveStampDecode(float& Stamp, ESaveStampMode Mode);
-
 /** `FUN_101b9840` (`0x101b9840`) and `FUN_101b9860` (`0x101b9860`) — the nine-times-repeated
  *  wrappers whose whole body is the codec at mode **2** over a `CSound`'s `+0x10 m_flExpireTime`
  *  (`FIELD_TIME`, `vtmb_fields CSound`). This runtime's `CSound` is `FElysiumGameSoundEvent` and
@@ -88,32 +69,6 @@ static void SaveSoundStampEncode(struct FElysiumGameSoundEvent& Sound);
 static void SaveSoundStampDecode(struct FElysiumGameSoundEvent& Sound);
 
 // --- The CRC32 `AIExtendedSaveHeader_t`'s last word carries ---------------------------------------
-
-/** `FUN_1023f040` — `*crc = 0xffffffff`. */
-static uint32 SaveCrc32Init();
-/** `FUN_1023f0c0` — the unrolled table-driven CRC32 over `DAT_10496f58`. The table is the standard
- *  reflected CRC-32 (`0xedb88320`) one, which is what makes the routine reproducible without the
- *  1 KB of `.rdata`: the port generates the table from the polynomial and the suite pins the
- *  routine against the published `"123456789"` check value `0xcbf43926`.
- *
- *  **UNRECOVERED, and it does not matter here:** the corpus does not hold `DAT_10496f58`'s bytes,
- *  so "this is the standard table" is an inference from the shape of the unrolled loop (byte-at-a-
- *  time, `crc >> 8 ^ table[(byte ^ crc) & 0xff]`, four-at-a-time on an aligned run) and not a read.
- *  A different polynomial would change the checksum's value and nothing else about the body. */
-static uint32 SaveCrc32Update(uint32 Crc, const uint8* Bytes, int32 Count);
-/** `FUN_1023f060` — `*crc = ~*crc`. */
-static uint32 SaveCrc32Final(uint32 Crc);
-
-/** The running program's task array as retail's `Task_t[]` — an `int32` task id and a `float`
- *  operand per task, 8 bytes each, which is the stride `schedule+0x24 << 3` counts in.
- *
- *  **SEAM, and it answers this runtime's own ids:** retail checksums its compiled schedule table's
- *  memory image, whose task numbers are `vdata`'s. This runtime's `EElysiumTask` is its own
- *  enumeration, so the checksum is not comparable with a retail save — the recovered half is the
- *  ROUTINE, the 8-byte stride and the fact that the header carries a checksum of the task array at
- *  all. An NPC with no running program produces no bytes, and CRC32 over zero bytes is
- *  `~0xffffffff == 0`, which is the literal `0` retail's own no-schedule arm writes. */
-void ScheduleTaskBytes(TArray<uint8>& OutBytes) const;
 
 // --- The archive seam ------------------------------------------------------------------------------
 //
@@ -129,14 +84,6 @@ void ScheduleTaskBytes(TArray<uint8>& OutBytes) const;
 // gain. The bodies are ported whole and driven by `Elysium.Substrate.NpcKernelSaveRestore10.*`, the
 // same posture family Precache10 took for slot 104 and for the same reason.
 
-/** Build the header from live state — retail's own block, shared by `BaseSave` and by the record
- *  `FElysiumNpc::Serialize` writes. */
-FAiExtendedSaveHeader BuildExtendedSaveHeader() const;
-
-/** `ISave` vtable `+0x08` — `WriteFields(&header, &datamap_AIExtendedSaveHeader_t)`. Routes the
- *  four words through `FElysiumSaveArchive` when `Archive` is non-null, and records the call. */
-void SaveWriteFields(void* Archive, FAiExtendedSaveHeader& Header);
-
 /** `ISave` vtable `+0x30` / `+0x28` — the single `bool` and the two `int`s the Troika body writes
  *  between the encode and the decode. */
 void SaveWriteBool(void* Archive, const TCHAR* Field, bool bValue);
@@ -148,43 +95,15 @@ void SaveWriteInt(void* Archive, const TCHAR* Field, int32 Value);
 bool RestoreReadBool(void* Archive, const TCHAR* Field);
 void RestoreReadInt(void* Archive, const TCHAR* Field, int32& Value);
 
-/** SEAM for `0x102ee6a0` on `m_pNavigator` — "the navigator has an active goal", header bit `0x4`.
- *  Family Senses already stands `NavigatorHasNodeGraph()` for this substrate's missing node graph;
- *  this is the goal query beside it and answers **false**, because nothing in this runtime stands a
- *  `CAI_Navigator` goal object. Named rather than inlined so the day a navigator lands the bit
- *  moves with it. */
-bool NavigatorGoalIsActive() const;
-
 // --- Slot 126 `Save` -------------------------------------------------------------------------------
-
-/** `CAI_BaseNPC::Save` (`0x1027bc60`), slot 126's body on the `CAI_BaseNPC`-line classes and the
- *  body the Troika override `0x102993c0` calls through a DIRECT `thunk_`. A distinct retail
- *  function beside the slot's own body, so it takes its own name — the precedent family Precache10
- *  set with `BasePrecache`/`TroikaPrecache`/`Precache`.
- *
- *  In retail's order:
- *    1. encode `m_flExtendedBlockedByFriendTimer` (`+0x5b8c`) mode **4**;
- *    2. encode `m_flWaitFinished` (`+0x5db4`) mode **3**;
- *    3. the motor pre-fixup, only when `m_pMotor` stands;
- *    4. the move-and-shoot overlay pre-fixup, always;
- *    5. build `AIExtendedSaveHeader_t` — version, the three flag bits in the order above, then the
- *       schedule name and its task CRC, or a cleared name and a zero CRC when `+0x5c38` is null;
- *    6. `WriteFields`;
- *    7. `CBaseCombatCharacter::Save`, whose answer is THIS body's return value;
- *    8. decode 1 and 2 in the same order, then the two post-fixups.
- *
- *  `CBaseCombatCharacter::Save` (`0x1000e534` -> the chain's) is not an NPC-kernel row and has no
- *  port body; it answers **1** here, the "wrote something" answer every retail `Save` chain
- *  produces, so a caller that tests the result takes the same arm. */
-int32 BaseSave(void* Archive);
 
 /** `CAI_BaseNPCTroika::Save` (`0x102993c0`) — slot 126's own body, without the species prologue.
  *  `Save()` is the slot; this is what it runs on the Troika line, and what a species
  *  class's override calls directly.
  *
  *  Eleven stamps encoded in retail's order and modes, then nine `CSound` expiry stamps at mode 2,
- *  then `BaseSave`, then one `bool` and (when it is true) two `int`s through the archive, then the
- *  same eleven and the same nine decoded in the same order. The return is `BaseSave`'s. */
+ *  then `FElysiumNpcBase::Save`, then one `bool` and (when it is true) two `int`s through the archive, then the
+ *  same eleven and the same nine decoded in the same order. The return is `FElysiumNpcBase::Save`'s. */
 int32 TroikaSave(void* Archive);
 
 // --- Slot 127 `Restore` ----------------------------------------------------------------------------
@@ -264,11 +183,6 @@ int32 DialogStopScheduleRequests = 0;
 // retail function: `CBaseCombatCharacter::PostConstructor` (`0x100035e4` -> the chain's) sets the
 // entity's classname and registers it, which this runtime's `FElysiumEntity::Construct` has already
 // done by the time any NPC stands.
-
-/** Whether slot 106 has run, and the name it was handed. Retail passes the classname string; this
- *  runtime's construct path already carries it, so the argument is recorded rather than applied. */
-FString PostConstructorName;
-int32 PostConstructorCalls = 0;
 
 // --- `FUN_10290350` — `RunAlternateAI` mode 4, the door-blocked transaction ------------------------
 

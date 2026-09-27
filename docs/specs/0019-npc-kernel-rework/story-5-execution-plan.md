@@ -1,6 +1,6 @@
 # 0019 story 5 — reviewed execution plan: the class tree
 
-Status: **reviewed plan; steps 0–4 accepted (step 4 with its review follow-up, packet 4r); step 5 in progress (packet 5a)** (2026-09-26).
+Status: **reviewed plan; steps 0–4 accepted (step 4 with its review follow-up, packet 4r); step 5 complete in the working tree (packets 5a–5h), its commit pending the owner** (2026-09-26).
 Execution checkpoint and evidence: [story-5/progress.md](story-5/progress.md).
 Scope: [spec.md, story 5](spec.md). Tracker: [06b](../TRACKER.md).
 This document defines execution order, intermediate states and acceptance. The spec defines the

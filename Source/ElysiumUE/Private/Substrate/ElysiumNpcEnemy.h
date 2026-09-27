@@ -7,6 +7,7 @@
 
 class FElysiumEntity;
 class FElysiumNpc;
+class FElysiumNpcBase;
 struct FElysiumDmg;
 
 // The enemy transaction: the recovered `GatherConditions` order, the stickiness test, the schedule
@@ -63,7 +64,7 @@ namespace ElysiumNpcEnemy
 	 * The internal declining bit at `+0x14bc` (`0x10000`) is not reproduced: it is unnamed, has no
 	 * recovered writer, and gating on an invented flag would silently disable selection.
 	 */
-	bool ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiumNpcConditions& Cond);
+	bool ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FElysiumNpcConditions& Cond);
 
 	// The exceptional interrupt relevant to a pending replacement: `LOST_ENEMY` for an eluded or
 	// went-null enemy, `ENEMY_DEAD` for a dead one, `NEW_ENEMY` for ordinary replacement. Retail's
@@ -96,7 +97,7 @@ namespace ElysiumNpcEnemy
 	 * new one, and forgets the previous LOS claim — which is what lets `OnFoundEnemy` fire again for
 	 * the new target rather than being swallowed by the previous episode's latch.
 	 */
-	void SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& NewEnemy);
+	void SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle& NewEnemy);
 
 	/**
 	 * `ChooseEnemy` (`0x10279dd0`) plus its effects. Runs the interrupt gate, the stickiness test,

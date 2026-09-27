@@ -47,9 +47,9 @@ namespace
 	// Named apart from the other kernel suites' `DamageU`: a unity blob can put two anonymous ones together.
 	constexpr float DamageU = ElysiumMove::U;
 
-	FElysiumNpc::FElysiumTraceHit MakeTrace(int32 HitGroup, const FVector& EndPosUnits)
+	FElysiumNpcBase::FElysiumTraceHit MakeTrace(int32 HitGroup, const FVector& EndPosUnits)
 	{
-		FElysiumNpc::FElysiumTraceHit Trace;
+		FElysiumNpcBase::FElysiumTraceHit Trace;
 		Trace.HitGroup = HitGroup;
 		Trace.EndPosUnits = EndPosUnits;
 		return Trace;
@@ -266,10 +266,10 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 
 	// `m_fNoDamageDecal = false` runs BEFORE the `m_takedamage` test, so a body that takes no damage
 	// still has the flag cleared and nothing else written.
-	FElysiumNpc::FElysiumTakeDamageInfo Info;
+	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
 	Info.Damage = 50.f;
 	Info.Attacker = Attacker->Handle;
-	FElysiumNpc::FElysiumTraceHit Trace = MakeTrace(2, FVector(10.0, 0.0, 30.0));
+	FElysiumNpcBase::FElysiumTraceHit Trace = MakeTrace(2, FVector(10.0, 0.0, 30.0));
 	Trace.PhysicsBone = 9;
 	Npc->bNoDamageDecal = true;
 	Npc->TakeDamageMode = 0;
@@ -293,7 +293,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	// 0. The rewrite is observable on the caller's own trace record.
 	Npc->MultiDamageAccumulator.Reset();
 	Npc->SpawnBloodCalls.Reset();
-	FElysiumNpc::FElysiumTraceHit Gear = MakeTrace(10, FVector::ZeroVector);
+	FElysiumNpcBase::FElysiumTraceHit Gear = MakeTrace(10, FVector::ZeroVector);
 	Npc->TraceAttack(&Info, FVector::ForwardVector, &Gear);
 	TestEqual(TEXT("a gear hit rewrites the trace hitgroup to generic"), Gear.HitGroup, 0);
 	TestEqual(TEXT("and m_LastHitGroup kept the ORIGINAL 10, written before the switch"),
@@ -306,10 +306,10 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	// apply and nothing to scale.
 	Npc->SpawnBloodCalls.Reset();
 	Npc->bNoDamageDecal = false;
-	FElysiumNpc::FElysiumTakeDamageInfo NoDescriptor;
+	FElysiumNpcBase::FElysiumTakeDamageInfo NoDescriptor;
 	NoDescriptor.Damage = 500.f;   // `m_flDamage` is NOT what this body tests
 	NoDescriptor.Attacker = Attacker->Handle;
-	FElysiumNpc::FElysiumTraceHit Generic = MakeTrace(0, FVector(1.0, 2.0, 3.0));
+	FElysiumNpcBase::FElysiumTraceHit Generic = MakeTrace(0, FVector(1.0, 2.0, 3.0));
 	Npc->TraceAttack(&NoDescriptor, FVector::ForwardVector, &Generic);
 	TestEqual(TEXT("a hit under 1.0 spawns no blood"), Npc->SpawnBloodCalls.Num(), 0);
 	TestFalse(TEXT("and it does NOT raise m_fNoDamageDecal: retail raises that flag only on the "
@@ -319,7 +319,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	// `DMG_SHOCK` (0x100) suppresses the blood and the bleed even at full magnitude.
 	Npc->SpawnBloodCalls.Reset();
 	FElysiumDmg Shock = MakeResolvedDmg(30, 0x100u);
-	FElysiumNpc::FElysiumTakeDamageInfo WithShock;
+	FElysiumNpcBase::FElysiumTakeDamageInfo WithShock;
 	WithShock.Dmg = &Shock;
 	WithShock.Attacker = Attacker->Handle;
 	Npc->TraceAttack(&WithShock, FVector::ForwardVector, &Generic);
@@ -331,10 +331,10 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	Npc->bNoDamageDecal = false;
 	Npc->Health = 100;
 	FElysiumDmg Head = MakeResolvedDmg(10, 0);
-	FElysiumNpc::FElysiumTakeDamageInfo WithHead;
+	FElysiumNpcBase::FElysiumTakeDamageInfo WithHead;
 	WithHead.Dmg = &Head;
 	WithHead.Attacker = Attacker->Handle;
-	FElysiumNpc::FElysiumTraceHit HeadTrace = MakeTrace(1, FVector(4.0, 5.0, 6.0));
+	FElysiumNpcBase::FElysiumTraceHit HeadTrace = MakeTrace(1, FVector(4.0, 5.0, 6.0));
 	Npc->TraceAttack(&WithHead, FVector::ForwardVector, &HeadTrace);
 	TestTrue(TEXT("a survived headshot raises m_fNoDamageDecal"), Npc->bNoDamageDecal);
 	TestEqual(TEXT("and spawns no blood"), Npc->SpawnBloodCalls.Num(), 0);
@@ -427,7 +427,7 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand the NPC"));
 		return false;
 	}
-	FElysiumNpc::FElysiumTraceHit Trace = MakeTrace(0, FVector(0.0, 0.0, 40.0));
+	FElysiumNpcBase::FElysiumTraceHit Trace = MakeTrace(0, FVector(0.0, 0.0, 40.0));
 
 	// The three refusals. A refused pass records nothing, because the record is written past the
 	// loop — which is exactly where retail's `return` arms leave it.
@@ -460,14 +460,14 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 	}
 
 	// The noise/count table: `< 10` -> 0.1 and one trace, `< 25` -> 0.2 and two, else 0.3 and four.
-	const auto BandFor = [&](int32 BaseDamage) -> FElysiumNpc::FTraceBleedPass
+	const auto BandFor = [&](int32 BaseDamage) -> FElysiumNpcBase::FTraceBleedPass
 	{
 		FElysiumDmg Dmg = MakeResolvedDmg(BaseDamage, 0x2u);
 		Dmg.BaseDamage = BaseDamage;
 		Npc->TraceBleedPasses.Reset();
 		Npc->TraceBleed(&Dmg, FVector::ForwardVector, &Trace);
 		return Npc->TraceBleedPasses.Num() == 1 ? Npc->TraceBleedPasses[0]
-											    : FElysiumNpc::FTraceBleedPass();
+											    : FElysiumNpcBase::FTraceBleedPass();
 	};
 	TestEqual(TEXT("damage under 10 runs one trace"), BandFor(9).TraceCount, 1);
 	TestEqual(TEXT("at noise 0.1"), BandFor(9).Noise, 0.1f, 0.0001f);
@@ -483,7 +483,7 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 	// The trace segment: `endpos` to `endpos + (dir * -1 + jitter) * -172`. With the incoming
 	// direction +X and a jitter under 0.3, the double negation lands the far end at roughly
 	// `endpos + 172` on X — behind the victim, which is what paints a wall.
-	const FElysiumNpc::FTraceBleedPass Pass = BandFor(9);
+	const FElysiumNpcBase::FTraceBleedPass Pass = BandFor(9);
 	TestEqual(TEXT("the trace starts at the trace's endpos"), Pass.LastStartUnits,
 		FVector(0.0, 0.0, 40.0));
 	TestTrue(TEXT("and runs 172 units downrange, give or take the jitter"),
@@ -517,29 +517,29 @@ bool FElysiumNpcKernelDamageOnTakeDamageDeadTest::RunTest(const FString&)
 
 	// The global impulse. It is a FILE-STATIC triple in retail, shared by the whole level.
 	FElysiumNpc::ResetDeathThrowImpulse();
-	FElysiumNpc::FElysiumTakeDamageInfo NoAttacker;
+	FElysiumNpcBase::FElysiumTakeDamageInfo NoAttacker;
 	NoAttacker.Damage = 40.f;
 	NoAttacker.DamageBits = 0x1u;
 	Npc->Health = 100;
 	Npc->TakeDamageMode = 2;
 	Npc->OnTakeDamage_Dead(&NoAttacker);
 	TestEqual(TEXT("a packet with no attacker leaves the impulse at vec3_origin"),
-		FElysiumNpc::DeathThrowImpulse(), FVector::ZeroVector);
+		FElysiumNpcBase::DeathThrowImpulse(), FVector::ZeroVector);
 
 	// With an attacker 100 units directly above: `a.z -= 10`, so the impulse is straight up.
-	FElysiumNpc::FElysiumTakeDamageInfo WithAttacker = NoAttacker;
+	FElysiumNpcBase::FElysiumTakeDamageInfo WithAttacker = NoAttacker;
 	WithAttacker.Attacker = Attacker->Handle;
 	Npc->Health = 100;
 	Npc->OnTakeDamage_Dead(&WithAttacker);
 	TestEqual(TEXT("the impulse is normalized"),
-		static_cast<float>(FElysiumNpc::DeathThrowImpulse().Size()), 1.0f, 0.001f);
+		static_cast<float>(FElysiumNpcBase::DeathThrowImpulse().Size()), 1.0f, 0.001f);
 	TestEqual(TEXT("and points from this body at the attacker, 10 units lower"),
-		static_cast<float>(FElysiumNpc::DeathThrowImpulse().Z), 1.0f, 0.001f);
+		static_cast<float>(FElysiumNpcBase::DeathThrowImpulse().Z), 1.0f, 0.001f);
 
 	// The `0xe1` low-byte gate. `DMG_BULLET` (0x2) is NOT in it, so a gunshot into a corpse takes
 	// no health at all — a recovered fact, not a slip.
 	Npc->Health = 100;
-	FElysiumNpc::FElysiumTakeDamageInfo Bullet = WithAttacker;
+	FElysiumNpcBase::FElysiumTakeDamageInfo Bullet = WithAttacker;
 	Bullet.DamageBits = 0x2u;
 	Bullet.Damage = 100.f;
 	TestEqual(TEXT("a non-0xe1 damage type answers 1"), Npc->OnTakeDamage_Dead(&Bullet), 1);
@@ -560,7 +560,7 @@ bool FElysiumNpcKernelDamageOnTakeDamageDeadTest::RunTest(const FString&)
 
 	// And the descriptor's `GetDmg()` is what the tenth is taken of when one is carried.
 	FElysiumDmg Dmg = MakeResolvedDmg(70, 0x1u);
-	FElysiumNpc::FElysiumTakeDamageInfo Typed = WithAttacker;
+	FElysiumNpcBase::FElysiumTakeDamageInfo Typed = WithAttacker;
 	Typed.Dmg = &Dmg;
 	Typed.Damage = 0.f;
 	Npc->Health = 100;
@@ -1427,7 +1427,7 @@ bool FElysiumNpcKernelDamageControllerLineTest::RunTest(const FString&)
 		Shadow->HasPlayerControllerObject());
 
 	// Both damage forwards ALWAYS answer 0, whatever the object does.
-	FElysiumNpc::FElysiumTakeDamageInfo Info;
+	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
 	Info.Damage = 500.f;
 	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamageSpecies(&Info), 0);
 	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"),

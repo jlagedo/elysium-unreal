@@ -75,7 +75,7 @@ import collections
 import difflib
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from elysium_pipeline.paths import repo_root
@@ -87,8 +87,17 @@ import kernel_shape as ks  # noqa: E402
 
 SUBSTRATE = ("Source", "ElysiumUE", "Private", "Substrate")
 CENSUS_OUTPUT = (*SUBSTRATE, "ElysiumNpcKernelShape.cpp")
-SLOTS_INL_OUTPUT = (*SUBSTRATE, "ElysiumNpcKernelSlots.inl")
-SLOTS_CPP_OUTPUT = (*SUBSTRATE, "ElysiumNpcKernelSlots.cpp")
+# The slot surface, split by the layer that declares each slot (story 0019/5 step 5): the base
+# class `FElysiumNpcBase` (`CAI_BaseNPC`) declares every slot its table holds, with the body its
+# chain fills; the Troika leaf `FElysiumNpc` declares the slots Troika introduces and overrides
+# the ones it fills with a body of its own.
+BASE_SLOTS_INL_OUTPUT = (*SUBSTRATE, "ElysiumNpcBaseSlots.inl")
+BASE_SLOTS_CPP_OUTPUT = (*SUBSTRATE, "ElysiumNpcBaseSlots.cpp")
+SLOTS_INL_OUTPUT = (*SUBSTRATE, "ElysiumNpcSlots.inl")
+SLOTS_CPP_OUTPUT = (*SUBSTRATE, "ElysiumNpcSlots.cpp")
+# The layer classes and their port types.
+BASE_LAYER = "CAI_BaseNPC"
+LAYER_PORT = {"CAI_BaseNPC": "FElysiumNpcBase", "CAI_BaseNPCTroika": "FElysiumNpc"}
 
 # The verdict overlay's target spellings that change what the generator emits (story 29c).
 DEFAULT_PREFIX = "default:"
@@ -357,6 +366,13 @@ class Slot:
     verdict_target: str = ""
     default: str = ""        # the retail literal, or `void`, when the body is a constant
     hand: str = ""           # the port method that defines this virtual by hand
+    # The emission by layer (story 0019/5 step 5). `layers` holds the rows the two slot files
+    # emit for this slot: the base's (`owner` `FElysiumNpcBase`, the `CAI_BaseNPC` table's body)
+    # and the Troika's (`owner` `FElysiumNpc`, `override` when the slot is the base's). The merged
+    # row itself — the body a Troika instance runs — is what the census and the probes read.
+    owner: str = "FElysiumNpc"
+    override: bool = False
+    layers: list["Slot"] = field(default_factory=list)
 
     @property
     def generated(self) -> bool:
@@ -538,6 +554,73 @@ def check_generated_override(row: Slot) -> None:
                          "the reviewed interface signature and hand body")
 
 
+def apply_verdict(row: Slot, ledger) -> None:
+    """Read the overlay's verdict for `row.body` into the row's emission (default / hand)."""
+    row.verdict, row.verdict_target, row.default, row.hand = "", "", "", ""
+    verdict = ledger.verdicts.get(row.body)
+    if verdict is not None:
+        row.verdict, row.verdict_target = verdict.verdict, verdict.target
+    # What the verdict does to the emission. A `rule` whose whole retail body is a constant
+    # lands as that constant; a `rule` or `present` whose body is written by hand in the
+    # substrate loses its definition here. Everything else keeps its stub and carries the
+    # verdict in the comment.
+    # `dead` rides along since 0019/1: a `dead` row keeps its port target until 0019/6 removes
+    # the body and writes `-`, so a slot the pass judged dead emits exactly what it emitted
+    # before and the judgment alone changes no runtime behaviour.
+    if row.verdict in ("rule", "present", "mechanism", "dead"):
+        if row.verdict_target.startswith(DEFAULT_PREFIX):
+            literal = row.verdict_target[len(DEFAULT_PREFIX):].strip()
+            if not DEFAULT_LITERAL_RE.match(literal):
+                raise SystemExit(
+                    f"gen_kernel_shape: slot {row.slot} ({row.address}) records "
+                    f"`{row.verdict_target}`, which is not a literal this generator emits")
+            # The overlay's literal is a reading, and the body is the fact. They have to
+            # agree: a `default:` row is the one place a verdict puts a VALUE into project
+            # source, so a misread constant would be an invented behaviour that compiles.
+            body = ledger.functions.get(row.body)
+            read = constant_return(body.code or "") if body is not None else ""
+            if read and read != literal and not same_word(read, literal):
+                raise SystemExit(
+                    f"gen_kernel_shape: slot {row.slot} ({row.address}) records "
+                    f"`default:{literal}` but the body returns `{read}`")
+            row.default = literal
+            default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
+        elif row.verdict_target.startswith(HAND_PREFIX):
+            row.hand = row.verdict_target[len(HAND_PREFIX):].strip()
+
+
+def split_layers(row: Slot, ledger) -> None:
+    """The per-layer emission of a generated Troika-line slot (story 0019/5 step 5).
+
+    A slot inside the `CAI_BaseNPC` table is declared on `FElysiumNpcBase` with the body that
+    table holds; when the Troika table holds another body, `FElysiumNpc` overrides it. A slot past
+    the base's table is Troika's own and declared on `FElysiumNpc`. Each layer row carries its own
+    body's address, layer, story and verdict, so a Troika instance dispatches exactly what the
+    merged row names and a base-only instance runs the base's body.
+    """
+    if not row.generated:
+        return
+    bodies = ledger.slot_bodies.get(row.slot, {})
+    base_body = bodies.get(BASE_LAYER, "")
+    troika_body = bodies.get(BASE_TABLE, "")
+    base_slots = ledger.slot_count.get(BASE_LAYER, 0)
+
+    def layer_row(body: str, owner: str, override: bool) -> Slot:
+        layer = replace(row, body=body, address=f"0x{body}" if body else "", owner=owner,
+                        override=override, layers=[], notes=list(row.notes))
+        layer.layer = ledger.layer_of.get(body, -1)
+        layer.story = story_for(layer.layer) if layer.layer >= 0 else ""
+        apply_verdict(layer, ledger)
+        return layer
+
+    if row.slot < base_slots and base_body:
+        row.layers.append(layer_row(base_body, LAYER_PORT[BASE_LAYER], False))
+        if troika_body and troika_body != base_body:
+            row.layers.append(layer_row(troika_body, LAYER_PORT[BASE_TABLE], True))
+    else:
+        row.layers.append(layer_row(row.body, LAYER_PORT[BASE_TABLE], False))
+
+
 def build(repo: Path, module: str, depth: int) -> Model:
     shape, rows, sigs = ks.build(module, depth, repo)
     ledger = shape.ledger
@@ -632,34 +715,9 @@ def build(repo: Path, module: str, depth: int) -> Model:
             row.params_port.append(lowered)
             if param_note:
                 row.notes.append(f"takes {param_note}")
-        # What the verdict does to the emission. A `rule` whose whole retail body is a constant
-        # lands as that constant; a `rule` or `present` whose body is written by hand in the
-        # substrate loses its definition here. Everything else keeps its stub and carries the
-        # verdict in the comment.
-        # `dead` rides along since 0019/1: a `dead` row keeps its port target until 0019/6 removes
-        # the body and writes `-`, so a slot the pass judged dead emits exactly what it emitted
-        # before and the judgment alone changes no runtime behaviour.
-        if row.verdict in ("rule", "present", "mechanism", "dead"):
-            if row.verdict_target.startswith(DEFAULT_PREFIX):
-                literal = row.verdict_target[len(DEFAULT_PREFIX):].strip()
-                if not DEFAULT_LITERAL_RE.match(literal):
-                    raise SystemExit(
-                        f"gen_kernel_shape: slot {row.slot} ({row.address}) records "
-                        f"`{row.verdict_target}`, which is not a literal this generator emits")
-                # The overlay's literal is a reading, and the body is the fact. They have to
-                # agree: a `default:` row is the one place a verdict puts a VALUE into project
-                # source, so a misread constant would be an invented behaviour that compiles.
-                body = ledger.functions.get(row.body)
-                read = constant_return(body.code or "") if body is not None else ""
-                if read and read != literal and not same_word(read, literal):
-                    raise SystemExit(
-                        f"gen_kernel_shape: slot {row.slot} ({row.address}) records "
-                        f"`default:{literal}` but the body returns `{read}`")
-                row.default = literal
-                default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
-            elif row.verdict_target.startswith(HAND_PREFIX):
-                row.hand = row.verdict_target[len(HAND_PREFIX):].strip()
+        apply_verdict(row, ledger)
         check_generated_override(row)
+        split_layers(row, ledger)
 
     if collisions:
         print("gen_kernel_shape: the port's entity chain already declares these slot names; add a "
@@ -1013,38 +1071,88 @@ def _slot_comment(row: Slot, indent: str = "\t") -> list[str]:
     return lines
 
 
-def render_slots_inl(model: Model, module: str) -> str:
+def _layer_rows(model: Model, owner: str) -> list[Slot]:
+    """The emission rows of one layer's slot file, in slot order."""
+    return [layer for row in model.slots for layer in row.layers if layer.owner == owner]
+
+
+def render_slots_inl(model: Model, module: str, owner: str) -> str:
+    rows = _layer_rows(model, owner)
     generated = [r for r in model.slots if r.generated]
-    counts = (f"{len(generated)} of the {len(model.slots)} Troika-line slots; the other "
-              f"{len(model.slots) - len(generated)} are declared by hand, because the port already "
-              "implements them under the name `SLOT_PORT_MAP` records.")
+    base = owner == LAYER_PORT[BASE_LAYER]
+    if base:
+        counts = (f"{len(rows)} of the {len(model.slots)} Troika-line slots are declared here, on "
+                  "`FElysiumNpcBase`: every generated slot the `CAI_BaseNPC` table holds.")
+    else:
+        overrides = len([r for r in rows if r.override])
+        counts = (f"{len(rows)} of the {len(model.slots)} Troika-line slots are declared here, on "
+                  f"`FElysiumNpc`: {len(rows) - overrides} Troika introduces and {overrides} it "
+                  f"overrides with a body of its own. {len(model.slots) - len(generated)} are "
+                  "declared by hand, because the port already implements them under the name "
+                  "`SLOT_PORT_MAP` records.")
     out = _header(module, model.meta, counts)
+    cls, cpp = ((LAYER_PORT[BASE_LAYER], "ElysiumNpcBaseSlots.cpp") if base
+                else (LAYER_PORT[BASE_TABLE], "ElysiumNpcSlots.cpp"))
+    header = "ElysiumNpcBase.h" if base else "ElysiumNpc.h"
     out += [
         "//",
-        "// This file is included INSIDE `class FElysiumNpc` (`Substrate/ElysiumNpc.h`). It is not",
-        "// a header: it has no include guard and declares nothing of its own. One `virtual` per",
+        f"// This file is included INSIDE `class {cls}` (`Substrate/{header}`). It is not",
+        "// a header: it has no include guard and declares nothing of its own. One declaration per",
         "// slot, in slot order, with the retail declaration in the comment and the port's lowered",
         "// signature in the code. A virtual here declares the surface retail dispatches through;",
         "// species classes override it from story 5 step 3 on.",
         "//",
+    ]
+    if base:
+        out += [
+            "// The base layer (story 0019/5 step 5): `CAI_BaseNPC`'s table, with the body that table",
+            "// holds — the base's own, or the entity chain's it inherits. Where the Troika table holds",
+            "// another body, `ElysiumNpcSlots.inl` overrides the slot on `FElysiumNpc`.",
+            "//",
+        ]
+    else:
+        out += [
+            "// The Troika layer (story 0019/5 step 5): the slots `CAI_BaseNPCTroika` introduces past",
+            "// the base's table (`virtual`), and the base's slots it fills with a body of its own",
+            "// (`override`). The base's declarations are in `ElysiumNpcBaseSlots.inl`.",
+            "//",
+        ]
+    out += [
         "// A body lands on one of these in 29c/29d/29e. Until then the definition in",
-        "// `ElysiumNpcKernelSlots.cpp` tallies `elysium.stubs` with the retail address — except",
+        f"// `{cpp}` tallies `elysium.stubs` with the retail address — except",
         "// where the verdict overlay records that retail's whole body is one literal, which the",
         "// generator emits, or that the body is written by hand in the substrate, in which case no",
         "// definition is generated at all and the linker is what checks the claim.",
-        "//",
-        "// The slots NOT declared here are the ones the port already runs. They are listed rather",
-        "// than left implicit, because \"this slot has a body somewhere else\" is exactly the fact a",
-        "// reader of this file needs, and the census carries the same pairing as data:",
     ]
-    for row in model.slots:
-        if row.port_kind != PORT:
-            continue
-        out += _comment(f"  slot {row.slot:>3}  {row.address}  {row.port_name} — {row.port_why}")
+    if not base:
+        out += [
+            "//",
+            "// The slots NOT declared here are the ones the port already runs. They are listed rather",
+            "// than left implicit, because \"this slot has a body somewhere else\" is exactly the fact a",
+            "// reader of this file needs, and the census carries the same pairing as data:",
+        ]
+        for row in model.slots:
+            if row.port_kind != PORT:
+                continue
+            out += _comment(f"  slot {row.slot:>3}  {row.address}  {row.port_name} — {row.port_why}")
     out.append("")
-    for row in generated:
+    for row in rows:
         out += _slot_comment(row)
-        out.append(f"\tvirtual {row.port_declaration()};")
+        if row.override:
+            out.append(f"\t{row.port_declaration()} override;")
+        else:
+            out.append(f"\tvirtual {row.port_declaration()};")
+    if not base:
+        # An override of one overload hides the base's others (C++ name lookup stops at the first
+        # scope that declares the name), so a name the base layer declares more than once keeps the
+        # base's set visible here.
+        base_rows = _layer_rows(model, LAYER_PORT[BASE_LAYER])
+        base_counts = collections.Counter(r.port_name for r in base_rows)
+        hidden = sorted({r.port_name for r in rows if r.override and base_counts[r.port_name] > 1})
+        if hidden:
+            out.append("")
+            out.append("\t// The base layer's other overloads of an overridden name stay visible.")
+            out += [f"\tusing {LAYER_PORT[BASE_LAYER]}::{name};" for name in hidden]
     return "\n".join(out) + "\n"
 
 
@@ -1074,16 +1182,21 @@ def _probe_arguments(row: Slot) -> tuple[list[str], str]:
     return locals_, ", ".join(args)
 
 
-def render_slots_cpp(model: Model, module: str) -> str:
-    generated = [r for r in model.slots if r.generated]
+def render_slots_cpp(model: Model, module: str, owner: str) -> str:
+    base = owner == LAYER_PORT[BASE_LAYER]
+    generated = _layer_rows(model, owner)
     stubbed = [r for r in generated if r.stubbed]
-    defaults = [r for r in generated if r.default]
+    layer_defaults = [r for r in generated if r.default]
     hand = [r for r in generated if r.hand]
+    # The probes call through a Troika instance, so they read the merged rows (the body a Troika
+    # instance runs) and live in the Troika file.
+    defaults = [] if base else [r for r in model.slots if r.generated and r.default]
     stories = collections.Counter(r.story or "unassigned" for r in stubbed)
-    counts = (f"{len(generated)} generated virtuals: {len(defaults)} carry the retail default "
-              f"story 29c recovered, {len(hand)} are defined by hand in the substrate, and "
-              f"{len(stubbed)} are still stubs — "
+    counts = (f"{len(generated)} generated slot bodies of `{owner}`: {len(layer_defaults)} carry "
+              f"the retail default story 29c recovered, {len(hand)} are defined by hand in the "
+              f"substrate, and {len(stubbed)} are still stubs — "
               + ", ".join(f"{count} {story}" for story, count in sorted(stories.items())) + ".")
+    fire = "FireKernelBaseSlot" if base else "FireKernelSlot"
     out = _header(module, model.meta, counts)
     out += [
         "//",
@@ -1097,7 +1210,7 @@ def render_slots_cpp(model: Model, module: str) -> str:
         "// makes for a species override of a constant-returning virtual — and `GDefaults` below",
         "// is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them through.",
         "",
-        '#include "Substrate/ElysiumNpc.h"',
+        f'#include "Substrate/{"ElysiumNpcBase.h" if base else "ElysiumNpc.h"}"',
         "",
         '#include "ElysiumStub.h"',
         '#include "Substrate/ElysiumNpcKernelShape.h"',
@@ -1107,7 +1220,7 @@ def render_slots_cpp(model: Model, module: str) -> str:
         "\t// One shape for every slot stub: the surface is the retail class and method, which is",
         "\t// what the ledger joins on, and never an instance name. Unit-prefixed because the module",
         "\t// builds adaptive-unity and this anonymous namespace is regularly merged with others.",
-        "\tvoid FireKernelSlot(const TCHAR* Method, const TCHAR* Address, const TCHAR* Story,",
+        f"\tvoid {fire}(const TCHAR* Method, const TCHAR* Address, const TCHAR* Story,",
         "\t\tconst FString& Receiver)",
         "\t{",
         "\t\tElysiumStub::FSurface Surface;",
@@ -1133,13 +1246,13 @@ def render_slots_cpp(model: Model, module: str) -> str:
             out += _comment(f"verdict `{row.verdict}`: retail's whole body is "
                             f"`{'return;' if row.default == 'void' else f'return {row.default};'}`",
                             "")
-        out += _wrapped(row.port_declaration("FElysiumNpc::"), "")
+        out += _wrapped(row.port_declaration(f"{owner}::"), "")
         out.append("{")
         if row.default:
             if statement:
                 out.append(f"\t{statement}")
         else:
-            out += _wrapped(f"FireKernelSlot({_literal(row.port_name)}, {_literal(row.address)}, "
+            out += _wrapped(f"{fire}({_literal(row.port_name)}, {_literal(row.address)}, "
                             f"{_literal(row.story)}, DebugString());", "\t")
             tail = _default_return(row.ret_port)
             if tail:
@@ -1147,6 +1260,8 @@ def render_slots_cpp(model: Model, module: str) -> str:
         out.append("}")
         out.append("")
 
+    if base:
+        return "\n".join(out).rstrip("\n") + "\n"
     out += [
         "namespace ElysiumNpcKernelShape",
         "{",
@@ -1280,10 +1395,12 @@ def main(argv: list[str] | None = None) -> int:
 
     status = 0
     status |= _emit(repo.joinpath(*CENSUS_OUTPUT), render_census(model, args.module), args.check)
-    status |= _emit(repo.joinpath(*SLOTS_INL_OUTPUT), render_slots_inl(model, args.module),
-                    args.check)
-    status |= _emit(repo.joinpath(*SLOTS_CPP_OUTPUT), render_slots_cpp(model, args.module),
-                    args.check)
+    for inl, cpp, owner in ((BASE_SLOTS_INL_OUTPUT, BASE_SLOTS_CPP_OUTPUT, LAYER_PORT[BASE_LAYER]),
+                            (SLOTS_INL_OUTPUT, SLOTS_CPP_OUTPUT, LAYER_PORT[BASE_TABLE])):
+        status |= _emit(repo.joinpath(*inl), render_slots_inl(model, args.module, owner),
+                        args.check)
+        status |= _emit(repo.joinpath(*cpp), render_slots_cpp(model, args.module, owner),
+                        args.check)
     return status
 
 

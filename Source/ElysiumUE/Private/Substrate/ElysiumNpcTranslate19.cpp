@@ -43,52 +43,6 @@ int32 FElysiumNpc::FrenziedTranslateSchedule(int32 ScheduleNumber)
 	}
 }
 
-int32 FElysiumNpc::BaseTranslateSchedule(int32 ScheduleNumber)
-{
-	if (ScheduleNumber != 0x2e)
-	{
-		return ScheduleNumber;
-	}
-	int32 Mapped = ScheduleNumber;
-	// `102cc091`: `m_hCine` (`+0x5d74`) resolved with the serial check. The shape map binds that
-	// word to `FElysiumEntity::ScriptOwner`, and family Anim already reads it as
-	// `ScriptOwnerIsLive()` — so the failure arm is a REAL test, not a seam.
-	if (!ScriptOwnerIsLive())
-	{
-		// `102cc0cc`: `DevWarning(2, "Script failed for %s\n", GetClassname())`, then
-		// `CineCleanup` (`0x1027d170`), then `slot440(1)`.
-		RecordScheduleEvent(FString::Printf(TEXT("Script failed for %s"), *DebugString()));
-		++TranslateCineCleanupCalls;
-		Mapped = 1;
-	}
-	else
-	{
-		switch (TranslateCineMoveTo)
-		{
-		case 0:
-		case 4:
-			Mapped = 0x32;
-			break;
-		case 1:
-			Mapped = 0x2f;
-			break;
-		case 2:
-			Mapped = 0x30;
-			break;
-		case 3:
-			Mapped = 0x31;
-			break;
-		case 5:
-			Mapped = 0x33;
-			break;
-		default:
-			return ScheduleNumber;
-		}
-	}
-	// `slot440(mapped)` through the vtable: a species class's own body answers.
-	return TranslateScheduleRetail(Mapped);
-}
-
 int32 FElysiumNpc::TranslateScheduleRetail(int32 ScheduleNumber)
 {
 	// Nineteen species classes override this method on their C++ classes (story 5 step 3), each
@@ -163,7 +117,7 @@ int32 FElysiumNpc::TroikaTranslateScheduleRetail(int32 ScheduleNumber)
 	default:
 		break;
 	}
-	return BaseTranslateSchedule(ScheduleNumber);
+	return FElysiumNpcBase::TranslateSchedule(ScheduleNumber);
 }
 
 int32 FElysiumNpc::TranslateSchedule(int32 Id)

@@ -53,37 +53,37 @@ bool FElysiumNpcKernelMiscStandoffTest::RunTest(const FString&)
 {
 	// Slot 28 (`0x102c7ef0`): the whole body is `return DAT_10601874`, and that latch is only ever
 	// raised by `CAI_StandoffBehavior`'s class initialiser, which this runtime has no loader for.
-	TestFalse(TEXT("0x102c7ef0 answers the unloaded latch"), FElysiumNpc::StandoffVfunc28());
+	TestFalse(TEXT("0x102c7ef0 answers the unloaded latch"), FElysiumNpcBase::StandoffVfunc28());
 
 	// Slot 26 (`0x102c7dd0`): two INDEPENDENT tests, not an if/else.
 	{
-		FElysiumNpc::FStandoffWords Words;
-		FElysiumNpc::FStandoffAimWords Aim;
+		FElysiumNpcBase::FStandoffWords Words;
+		FElysiumNpcBase::FStandoffAimWords Aim;
 		Aim.AimMode = 0;
 		Aim.AimWord0x58 = 7.f;
 		Aim.AimWord0x5c = 7.f;
 		Aim.AimWord0x60 = 7.f;
-		FElysiumNpc::StandoffVfunc26(Words, Aim);
+		FElysiumNpcBase::StandoffVfunc26(Words, Aim);
 		TestEqual(TEXT("mode 0 resets nothing (+0x58)"), Aim.AimWord0x58, 7.f);
 		TestEqual(TEXT("mode 0 resets nothing (+0x5c)"), Aim.AimWord0x5c, 7.f);
 		TestEqual(TEXT("mode 0 resets nothing (+0x60)"), Aim.AimWord0x60, 7.f);
 		TestFalse(TEXT("mode 0 does not latch bSawNewEnemy"), Words.bSawNewEnemy);
 	}
 	{
-		FElysiumNpc::FStandoffWords Words;
-		FElysiumNpc::FStandoffAimWords Aim;
+		FElysiumNpcBase::FStandoffWords Words;
+		FElysiumNpcBase::FStandoffAimWords Aim;
 		Aim.AimMode = 1;
-		FElysiumNpc::StandoffVfunc26(Words, Aim);
+		FElysiumNpcBase::StandoffVfunc26(Words, Aim);
 		TestEqual(TEXT("mode 1 writes 5.0 into +0x5c"), Aim.AimWord0x5c, 5.f);
 		TestEqual(TEXT("mode 1 writes 0.0 into +0x60"), Aim.AimWord0x60, 0.f);
 		TestEqual(TEXT("mode 1 writes -1.0 into +0x58"), Aim.AimWord0x58, -1.f);
 		TestFalse(TEXT("mode 1 does NOT latch bSawNewEnemy"), Words.bSawNewEnemy);
 	}
 	{
-		FElysiumNpc::FStandoffWords Words;
-		FElysiumNpc::FStandoffAimWords Aim;
+		FElysiumNpcBase::FStandoffWords Words;
+		FElysiumNpcBase::FStandoffAimWords Aim;
 		Aim.AimMode = 2;
-		FElysiumNpc::StandoffVfunc26(Words, Aim);
+		FElysiumNpcBase::StandoffVfunc26(Words, Aim);
 		TestEqual(TEXT("mode 2 takes the reset arm too"), Aim.AimWord0x5c, 5.f);
 		TestTrue(TEXT("and mode 2 ALSO latches bSawNewEnemy"), Words.bSawNewEnemy);
 	}
@@ -105,11 +105,11 @@ bool FElysiumNpcKernelMiscStandoffTest::RunTest(const FString&)
 	{
 		Npc->DistTooFar = 900.f;
 		Npc->Field_0x01fc = 0;
-		FElysiumNpc::FStandoffWords Words;
+		FElysiumNpcBase::FStandoffWords Words;
 		Words.ReactionDelayMin = 3.f;
 		Words.ReactionDelayMax = 0.f;
 		Words.ReactionsLeft = 4;
-		FElysiumNpc::FStandoffAimWords Aim;
+		FElysiumNpcBase::FStandoffAimWords Aim;
 		Aim.bForcesOwnerWord0x1fc = false;
 		Npc->StandoffVfunc4(Words, Aim);
 		TestTrue(TEXT("slot 4 latches bSawNewEnemy"), Words.bSawNewEnemy);
@@ -123,10 +123,10 @@ bool FElysiumNpcKernelMiscStandoffTest::RunTest(const FString&)
 
 	// The ranged arm draws, and stays inside the bounds.
 	{
-		FElysiumNpc::FStandoffWords Words;
+		FElysiumNpcBase::FStandoffWords Words;
 		Words.ReactionDelayMin = 2.f;
 		Words.ReactionDelayMax = 6.f;
-		FElysiumNpc::FStandoffAimWords Aim;
+		FElysiumNpcBase::FStandoffAimWords Aim;
 		Aim.bForcesOwnerWord0x1fc = true;
 		Npc->StandoffVfunc4(Words, Aim);
 		TestTrue(TEXT("a non-zero max draws inside [min, max]"),

@@ -150,7 +150,7 @@ namespace
 			World = MakeUnique<FElysiumEntityWorld>(static_cast<AActor*>(nullptr),
 				static_cast<UElysiumSessionSubsystem*>(nullptr), Services.Bundle());
 			World->Load(MakeFootstepDefs());
-			World->Activate(-FElysiumNpc::NpcInitThinkDelay);
+			World->Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 			// One deterministic think, no executor action: `Activate` only ARMS the mind's admission
 			// barrier, and an unadmitted NPC refuses `BeginDialogueBodySession`, which the muted case
 			// needs in order to open a conversation at all. Same line, same reason, as

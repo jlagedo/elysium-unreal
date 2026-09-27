@@ -78,7 +78,7 @@ bool FElysiumNpcKernelDebugConditionNamesTest::RunTest(const FString&)
 {
 	// `0x102ea020`: -1 is the ONE id with a name of its own.
 	TestEqual(TEXT("-1 answers the namespace's null symbol"),
-		FString(FElysiumNpc::GlobalConditionName(INDEX_NONE)), FString(TEXT("<<null>>")));
+		FString(FElysiumNpcBase::GlobalConditionName(INDEX_NONE)), FString(TEXT("<<null>>")));
 
 	// The registrar's boundaries and every id whose registration is out of call order — the two
 	// places `0x102c8ce0` breaks its own sequence, which is what proves the table is keyed by id.
@@ -106,14 +106,14 @@ bool FElysiumNpcKernelDebugConditionNamesTest::RunTest(const FString&)
 	for (const TPair<int32, const TCHAR*>& Row : Rows)
 	{
 		TestEqual(*FString::Printf(TEXT("condition 0x%02x is %s"), Row.Key, Row.Value),
-			FString(FElysiumNpc::GlobalConditionName(Row.Key)), FString(Row.Value));
+			FString(FElysiumNpcBase::GlobalConditionName(Row.Key)), FString(Row.Value));
 	}
 
 	// 0x77 is the first id the base registrar does NOT register: the namespace answers no symbol,
 	// which retail hands straight to `printf` as a null `%s`.
-	TestNull(TEXT("0x77 is not in the base namespace"), FElysiumNpc::GlobalConditionName(0x77));
+	TestNull(TEXT("0x77 is not in the base namespace"), FElysiumNpcBase::GlobalConditionName(0x77));
 	TestNull(TEXT("and neither is a script-range id"),
-		FElysiumNpc::GlobalConditionName(1000000000));
+		FElysiumNpcBase::GlobalConditionName(1000000000));
 
 	// The short table, `0x1027e7f0`, over the same ids. Each abbreviation is the same condition:
 	// `fai` is TASK_FAILED, `bmp` is WAS_BUMPED, `fog` is FLOATING_OFF_GROUND — and `fog` is the one
@@ -129,7 +129,7 @@ bool FElysiumNpcKernelDebugConditionNamesTest::RunTest(const FString&)
 	for (const TPair<int32, const TCHAR*>& Row : ShortRows)
 	{
 		TestEqual(*FString::Printf(TEXT("short name 0x%02x is %s"), Row.Key, Row.Value),
-			FString(FElysiumNpc::ShortConditionNameTable(Row.Key)), FString(Row.Value));
+			FString(FElysiumNpcBase::ShortConditionNameTable(Row.Key)), FString(Row.Value));
 	}
 
 	// The `default:` arm covers everything outside 0x00..0x76 INCLUDING -1: `0x1027e7f0` has no -1
@@ -137,15 +137,15 @@ bool FElysiumNpcKernelDebugConditionNamesTest::RunTest(const FString&)
 	for (const int32 Outside : { -1, 0x77, 0x100, 1000000000 })
 	{
 		TestEqual(*FString::Printf(TEXT("%d takes the *** arm"), Outside),
-			FString(FElysiumNpc::ShortConditionNameTable(Outside)), FString(TEXT("***")));
+			FString(FElysiumNpcBase::ShortConditionNameTable(Outside)), FString(TEXT("***")));
 	}
 
 	// Every one of the 119 ids has BOTH a long and a short name, and none of them is the default.
 	int32 Covered = 0;
 	for (int32 Id = 0; Id <= 0x76; ++Id)
 	{
-		const TCHAR* Long = FElysiumNpc::GlobalConditionName(Id);
-		const TCHAR* Short = FElysiumNpc::ShortConditionNameTable(Id);
+		const TCHAR* Long = FElysiumNpcBase::GlobalConditionName(Id);
+		const TCHAR* Short = FElysiumNpcBase::ShortConditionNameTable(Id);
 		if (Long != nullptr && FCString::Strcmp(Short, TEXT("***")) != 0
 			&& FCString::Strlen(Short) == 3 && FString(Long).StartsWith(TEXT("COND_")))
 		{
@@ -167,8 +167,8 @@ bool FElysiumNpcKernelDebugIdSpacesTest::RunTest(const FString&)
 	// The CONDITION chain: the Troika line's space is empty and its parent, `CAI_BaseNPC`'s, holds
 	// 0x00..0x76 at global base 0 — so the walk skips the first row and translates by identity.
 	int32 ConditionCount = 0;
-	const FElysiumNpc::FKernelIdSpace* Conditions =
-		FElysiumNpc::ConditionIdSpaceRows(ConditionCount);
+	const FElysiumNpcBase::FKernelIdSpace* Conditions =
+		FElysiumNpcBase::ConditionIdSpaceRows(ConditionCount);
 	TestEqual(TEXT("two condition spaces, Troika then base"), ConditionCount, 2);
 	TestEqual(TEXT("the Troika condition space is the 9999 empty sentinel"),
 		Conditions[0].LocalBase, 9999);
@@ -178,16 +178,16 @@ bool FElysiumNpcKernelDebugIdSpacesTest::RunTest(const FString&)
 	for (const int32 Id : { 0, 1, 0x46, 0x76 })
 	{
 		TestEqual(*FString::Printf(TEXT("condition %d translates to itself"), Id),
-			FElysiumNpc::IdSpaceLocalToGlobal(Conditions, ConditionCount, Id), Id);
+			FElysiumNpcBase::IdSpaceLocalToGlobal(Conditions, ConditionCount, Id), Id);
 	}
 	TestEqual(TEXT("-1 stays -1 without walking at all"),
-		FElysiumNpc::IdSpaceLocalToGlobal(Conditions, ConditionCount, INDEX_NONE), INDEX_NONE);
+		FElysiumNpcBase::IdSpaceLocalToGlobal(Conditions, ConditionCount, INDEX_NONE), INDEX_NONE);
 	TestEqual(TEXT("0x77 falls off the end of the chain"),
-		FElysiumNpc::IdSpaceLocalToGlobal(Conditions, ConditionCount, 0x77), INDEX_NONE);
+		FElysiumNpcBase::IdSpaceLocalToGlobal(Conditions, ConditionCount, 0x77), INDEX_NONE);
 
 	// The TASK chain: both rows empty, and the base one is unrecovered rather than known-empty.
 	int32 TaskCount = 0;
-	const FElysiumNpc::FKernelIdSpace* Tasks = FElysiumNpc::TaskIdSpaceRows(TaskCount);
+	const FElysiumNpcBase::FKernelIdSpace* Tasks = FElysiumNpcBase::TaskIdSpaceRows(TaskCount);
 	TestEqual(TEXT("two task spaces"), TaskCount, 2);
 	for (int32 Index = 0; Index < TaskCount; ++Index)
 	{
@@ -197,7 +197,7 @@ bool FElysiumNpcKernelDebugIdSpacesTest::RunTest(const FString&)
 	for (const int32 Id : { 0, 1, 0x69, 441 })
 	{
 		TestEqual(*FString::Printf(TEXT("task %d has nowhere to translate"), Id),
-			FElysiumNpc::IdSpaceLocalToGlobal(Tasks, TaskCount, Id), INDEX_NONE);
+			FElysiumNpcBase::IdSpaceLocalToGlobal(Tasks, TaskCount, Id), INDEX_NONE);
 	}
 	return true;
 }
@@ -255,7 +255,7 @@ bool FElysiumNpcKernelDebugNameSlotsTest::RunTest(const FString&)
 	// Slot 451 and its base body: two different class names, and every spawnable leaf is on the
 	// Troika line so every one of them answers the second.
 	TestEqual(TEXT("the base body answers CAI_BaseNPC"),
-		FString(FElysiumNpc::BaseSchedulingErrorName()), FString(TEXT("CAI_BaseNPC")));
+		FString(FElysiumNpcBase::BaseSchedulingErrorName()), FString(TEXT("CAI_BaseNPC")));
 	TestEqual(TEXT("the Troika line's override answers CAI_BaseNPCTroika"),
 		FString(Npc->GetSchedulingErrorName()), FString(TEXT("CAI_BaseNPCTroika")));
 
@@ -665,7 +665,7 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// Nothing set: every gate is closed and the two tail calls draw nothing.
 	Npc->DebugOverlays = 0;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("a zero m_debugOverlays draws nothing"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -673,7 +673,7 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// box at the origin in orange at alpha 20, NOT the ±5 red box the other arm would draw.
 	Npc->DebugOverlays = 0x1000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("one box"), Lines.Num(), 1);
@@ -690,14 +690,14 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// `0x2000`: the nearest nav node. The node graph is a seam, so the arm runs and draws nothing.
 	Npc->DebugOverlays = 0x2000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("the nav-node arm asks the seam and draws nothing"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
 	// `0x4000`: the navigator route, also a seam.
 	Npc->DebugOverlays = 0x4000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("the route arm asks the seam and draws nothing"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -706,7 +706,7 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	TestTrue(TEXT("this leaf is always a CAI_BaseNPCTroika"), Npc->IsBaseNpcTroika());
 	Npc->DebugOverlays = 0x400000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("so the view-cone arm never runs"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -714,14 +714,14 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// gate alone because `GetEnemy()` and `m_hTargetEnt` are both empty on a quiet fixture NPC.
 	Npc->DebugOverlays = 0x200000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("no enemy and no target means no lines"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
 	// `0x20000`: the enemy-memory labels. An empty memory means no records to label.
 	Npc->DebugOverlays = 0x20000;
 	FElysiumNpc::BeginDebugCapture();
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestEqual(TEXT("an empty CAI_Memory labels nothing"),
 		FElysiumNpc::EndDebugCapture().Num(), 0);
 
@@ -745,7 +745,7 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	{
 		Npc->LastPosition = FVector(254.f, 0.f, 0.f);   // 100 source units
 		FElysiumNpc::BeginDebugCapture();
-		Npc->BaseDrawDebugGeometryOverlays();
+		Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 		const TArray<FElysiumNpc::FDebugLine> Lines = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("SCHED_FORCED_GO draws the save-position box"), Lines.Num(), 1);
 		if (Lines.Num() == 1)
@@ -767,7 +767,7 @@ bool FElysiumNpcKernelDebugGeometryOverlaysTest::RunTest(const FString&)
 	// call. The observable half here is the removal.
 	Npc->DebugOverlays = 0x10000;
 	TestFalse(TEXT("the NPC is alive before the zap arm"), Npc->bDead);
-	Npc->BaseDrawDebugGeometryOverlays();
+	Npc->FElysiumNpcBase::DrawDebugGeometryOverlays();
 	TestTrue(TEXT("the zap arm removes it"), Npc->bDead);
 	TestEqual(TEXT("and leaves the bit set, so it would fire again"),
 		Npc->DebugOverlays & 0x10000, 0x10000);
@@ -786,10 +786,10 @@ bool FElysiumNpcKernelDebugForeignOverlaysTest::RunTest(const FString&)
 	// `CAI_Hint::DrawDebugTextOverlays` — the two words are parameters because no hint store carries
 	// them. The first format is a BARE `%i`, with no label at all.
 	TestEqual(TEXT("without the 0x1 bit the hint adds no lines"),
-		FElysiumNpc::HintDrawDebugTextOverlays(4, 0, 13, 10.0, 0.0), 4);
+		FElysiumNpcBase::HintDrawDebugTextOverlays(4, 0, 13, 10.0, 0.0), 4);
 
 	FElysiumNpc::BeginDebugCapture();
-	const int32 HintNext = FElysiumNpc::HintDrawDebugTextOverlays(4, 0x1, 13, 10.0, 2.5);
+	const int32 HintNext = FElysiumNpcBase::HintDrawDebugTextOverlays(4, 0x1, 13, 10.0, 2.5);
 	const TArray<FElysiumNpc::FDebugLine> Hint = FElysiumNpc::EndDebugCapture();
 	TestEqual(TEXT("two lines, starting at the line it was handed"), Hint.Num(), 2);
 	TestEqual(TEXT("and the next free line is that plus two"), HintNext, 6);
@@ -802,7 +802,7 @@ bool FElysiumNpcKernelDebugForeignOverlaysTest::RunTest(const FString&)
 	}
 	// The floor is `_DAT_104454c4` = 0.0: an expired hint reads zero, never a negative.
 	FElysiumNpc::BeginDebugCapture();
-	FElysiumNpc::HintDrawDebugTextOverlays(0, 0x1, 3, 1.0, 99.0);
+	FElysiumNpcBase::HintDrawDebugTextOverlays(0, 0x1, 3, 1.0, 99.0);
 	const TArray<FElysiumNpc::FDebugLine> Expired = FElysiumNpc::EndDebugCapture();
 	if (TestEqual(TEXT("two lines for an expired hint too"), Expired.Num(), 2))
 	{

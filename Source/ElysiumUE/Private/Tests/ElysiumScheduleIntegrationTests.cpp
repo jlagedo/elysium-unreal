@@ -147,7 +147,7 @@ bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 	const double FailureStart = LastWaitEnd + 1.0;
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart);
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart + 0.3);
-	TestEqual(TEXT("no cover has retail failure 8"), Npc->ScheduleHost.FailureReason, 8);
+	TestEqual(TEXT("no cover has retail failure 8"), Npc->BaseScheduleHost.FailureReason, 8);
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart + 0.4, &Npc->Cognition.Conditions);
 	TestEqual(TEXT("STANDOFF translates to the loaded Troika program"), Npc->LocalScheduleId(Npc->Schedule.Current), 0xc1);
 	return true;

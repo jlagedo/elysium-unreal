@@ -54,7 +54,7 @@ namespace
 	// Conditions reads it the same way for the comforter test (`ElysiumNpcConditions.cpp:683`).
 	bool SpeciesLifecycle10IsNpc(const FElysiumEntity* Candidate)
 	{
-		return Candidate != nullptr && Candidate->AsNpc() != nullptr;
+		return Candidate != nullptr && Candidate->AsNpcBase() != nullptr;   // `+0x94 m_pBaseNPC`
 	}
 	// `CNPC_VGhoulCroucher::BurnPlayer`'s per-hitbox pair (`1037c12a`) and the damage its one caller
 	// hands it (`1037bf3c`, `0x41200000`).

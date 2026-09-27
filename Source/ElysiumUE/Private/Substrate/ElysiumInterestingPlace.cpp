@@ -85,7 +85,7 @@ bool FElysiumInterestingPlace::OnRestoreResolveType()
 {
 	// 0x102d9dd0, slot 130. `CAISound::OnRestore` (`0x100aa5a0`) first — which is
 	// `SetCheckUntouch(false)` whatever it was called with, family Lifecycle's
-	// `FElysiumNpc::OnRestoreForwardsCheckUntouch` — then the same lookup, at `DevMsg` severity.
+	// `FElysiumNpcBase::OnRestoreForwardsCheckUntouch` — then the same lookup, at `DevMsg` severity.
 	//
 	// **Unrecovered:** the tail call `thunk_FUN_102d9eb0()`, which runs on the surviving arm only.
 	// It takes no argument in the listing and the corpus does not settle what it registers.

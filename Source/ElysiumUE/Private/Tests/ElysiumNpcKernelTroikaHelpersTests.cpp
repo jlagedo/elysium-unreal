@@ -718,11 +718,11 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 
 	// `0x102aa9e0` — the branch itself. A null argument raises `TaskFail(0x1d)`; a live one
 	// forwards and completes the task.
-	Npc->ScheduleHost.FailureReason = 0;
+	Npc->BaseScheduleHost.FailureReason = 0;
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
 	Npc->FUN_102aa9e0(nullptr);
 	TestEqual(TEXT("a null argument raises assert reason 0x1d through TaskFail (slot 448)"),
-		Npc->ScheduleHost.FailureReason, 0x1d);
+		Npc->BaseScheduleHost.FailureReason, 0x1d);
 	TestTrue(TEXT("and TaskFail raised COND_TASK_FAILED with it"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	const int32 ForwardsBefore = Npc->TaskArgumentForwards;
@@ -901,10 +901,10 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 
 	// `CAI_Motor#15` `0x102e2180`'s blend, as a pure function. One entry at full weight is the
 	// normalised delta; a zero-weight entry contributes nothing.
-	const FElysiumNpc::FFacingQueueEntry Entries[] = {
+	const FElysiumNpcBase::FFacingQueueEntry Entries[] = {
 		{ FVector(10.0, 0.0, 0.0), 1.0f },
 	};
-	const FVector Blend = FElysiumNpc::BlendFacingQueue(Entries, FVector::ZeroVector);
+	const FVector Blend = FElysiumNpcBase::BlendFacingQueue(Entries, FVector::ZeroVector);
 	TestEqual(TEXT("#15 normalises the accumulator after every entry"),
 		static_cast<float>(Blend.X), 1.f, 0.0001f);
 	int32 Survivors = -1;
@@ -949,7 +949,7 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 	TestEqual(TEXT("#11 clears the route once"), Npc->NavigatorRouteClears, Clears + 1);
 
 	// `CAI_Navigator#17` — the path is a seam, so the block comes back with `bHasPath` clear.
-	const FElysiumNpc::FNavMoveInfo Info = Npc->FUN_102eee40();
+	const FElysiumNpcBase::FNavMoveInfo Info = Npc->FUN_102eee40();
 	TestFalse(TEXT("#17 answers no path while the path object is a seam"), Info.bHasPath);
 	TestEqual(TEXT("but it still reports the nav type it read first"), Info.NavType,
 		Npc->NavGetType());

@@ -10,3 +10,7 @@
 int32 TranslateCineMoveTo = 0;
 
 int32 TranslateCineCleanupCalls = 0;
+
+/** `CAI_BaseNPC::TranslateSchedule` (`0x102cc080`). Identity except `0x2e`, which re-dispatches
+ *  slot 440 virtually on the mapped id. */
+int32 TranslateSchedule(int32 ScheduleNumber) override;

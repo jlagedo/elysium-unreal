@@ -152,7 +152,11 @@ FElysiumNpc* FElysiumAiScriptedSchedule::ResolveNpc() const
 		return nullptr;
 	}
 	FElysiumEntity* Entity = World->FindByName(TargetEntity);
-	return Entity != nullptr ? Entity->AsNpc() : nullptr;
+	// `0x101a9790`: `*(ent+0x94)` (`m_pBaseNPC`, `AsNpcBase()`), null fails. The port's scripted
+	// schedule executor (`BeginScriptedSchedule`) is Troika-held, so a base-only NPC resolves
+	// nothing until fold 9.
+	FElysiumNpcBase* const BaseNpc = Entity != nullptr ? Entity->AsNpcBase() : nullptr;
+	return BaseNpc != nullptr ? BaseNpc->AsNpc() : nullptr;
 }
 
 FElysiumEntity* FElysiumAiScriptedSchedule::ResolveGoal() const

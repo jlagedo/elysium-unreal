@@ -16,7 +16,7 @@
 
 namespace
 {
-	AActor* BodyActor(const FElysiumNpc& Npc)
+	AActor* BodyActor(const FElysiumNpcBase& Npc)
 	{
 		const USkeletalMeshComponent* Visual = Npc.GetSkeletalBody();
 		return Visual ? Visual->GetAttachParentActor() : nullptr;
@@ -71,7 +71,7 @@ namespace ElysiumNpcDebugLogging
 			TEXT("sighted %s%s"), *Candidate.DebugString(), Arm);
 	}
 
-	void EnemyChoice(const FElysiumNpc& Npc, const FElysiumEntityWorld& World,
+	void EnemyChoice(const FElysiumNpcBase& Npc, const FElysiumEntityWorld& World,
 		const FElysiumEntityHandle& OldEnemy, const FElysiumEntityHandle& NewEnemy)
 	{
 		AActor* Owner = BodyActor(Npc);

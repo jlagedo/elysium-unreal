@@ -21,7 +21,7 @@
 
 namespace NpcKernelState19Shared
 {
-	inline bool State19HasCondition(const FElysiumNpc& Npc, EElysiumNpcCond Cond)
+	inline bool State19HasCondition(const FElysiumNpcBase& Npc, EElysiumNpcCond Cond)
 	{
 		return Npc.Cognition.Conditions.Has(Cond);
 	}
@@ -29,11 +29,29 @@ namespace NpcKernelState19Shared
 	// (`+0x1b3c`/`+0x1b40`) at every one of these sites. The shape map calls that pair ABSENT; the
 	// mind's transition trace carries the same account, so only the retail LINE is recorded here,
 	// as the arm's name.
-	inline void State19StampIdeal(FElysiumNpc& Npc, int32 RetailId, int32 Line)
+	inline void State19StampIdeal(FElysiumNpcBase& Npc, int32 RetailId, int32 Line)
 	{
 		Npc.WriteIdealStateRetail(RetailId);
 		Npc.RecordScheduleEvent(FString::Printf(TEXT("SelectIdealState :%d -> %d"),
 			Line, RetailId));
 	}
 	inline int32 GState19CopCensus = 0;
+	inline EElysiumNpcState State19TypedFromRetail(int32 RetailId, EElysiumNpcState Fallback)
+	{
+		switch (RetailId)
+		{
+		case 1: return EElysiumNpcState::Idle;
+		case 2: return EElysiumNpcState::Combat;
+		case 3: return EElysiumNpcState::Alert;
+		case 4: return EElysiumNpcState::Scripted;
+		case 6: return EElysiumNpcState::Prone;
+		case 7: return EElysiumNpcState::Dead;
+		default: return Fallback;
+		}
+	}
+	inline bool State19HasInterrupt(FElysiumNpcBase& Npc, EElysiumNpcCond Cond)
+	{
+		return ElysiumSchedule::HasInterruptCondition(
+			Npc.Schedule, Npc, Npc.Cognition.Conditions, Cond);
+	}
 }

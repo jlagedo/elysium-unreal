@@ -263,7 +263,7 @@ bool FElysiumNpcKernelLifecycleThinkStampsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// 0x101a6440 / 0x101a6460 / 0x101a6480 each forward to `CBaseEntity::GetLastThink` for ONE
+	// 0x101aa6d0 / 0x101aa6f0 / 0x101aa710 each return the Troika's stamp for ONE
 	// channel. The three answers must be independent, which is the whole point of the bookkeeping.
 	Fix.Npc->ScheduleHost.LastUpdate = 11.0;
 	Fix.Npc->ScheduleHost.LastNormal = 22.0;
@@ -289,16 +289,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleDormancyTest,
 bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 {
 	// The hint trio, pure over `FHintWords`.
-	FElysiumNpc::FHintWords Hint;
+	FElysiumNpcBase::FHintWords Hint;
 	Hint.bValid = true;
 	Hint.Disabled = 0;
-	FElysiumNpc::HintScriptHide(Hint);
+	FElysiumNpcBase::HintScriptHide(Hint);
 	TestEqual(TEXT("CAI_Hint::ScriptHide 0x102d0860 sets m_iDisabled"), Hint.Disabled, 1);
-	FElysiumNpc::HintScriptUnhide(Hint);
+	FElysiumNpcBase::HintScriptUnhide(Hint);
 	TestEqual(TEXT("CAI_Hint::ScriptUnhide 0x102d0890 clears it"), Hint.Disabled, 0);
 	// `CAI_Hint::Kill` (slot 119) IS slot 77 — `JMP [[this]+0x134]`. A hint node's Kill disables it
 	// rather than tearing the entity down, which is the whole recovered fact.
-	FElysiumNpc::HintKill(Hint);
+	FElysiumNpcBase::HintKill(Hint);
 	TestEqual(TEXT("CAI_Hint::Kill 0x102d08c0 is ScriptHide, not a teardown"), Hint.Disabled, 1);
 
 	FLifecycleFixture Fix;
@@ -444,7 +444,7 @@ bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 
 	// `CAI_StandoffGoal::Spawn` (0x102cd2d0) — the clock and nothing else.
 	TestEqual(TEXT("the standoff goal's think is curtime + _DAT_1044e658 (0.01)"),
-		FElysiumNpc::StandoffGoalSpawnNextThink(40.0), 40.01);
+		FElysiumNpcBase::StandoffGoalSpawnNextThink(40.0), 40.01);
 
 	// `CAI_InterestingPlaceConverstation::Spawn` (0x102dbc80): its own init and then a TAIL JUMP to
 	// slot 104, so the precache is last.
@@ -460,18 +460,18 @@ bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 	// `CAI_Hint::Spawn` (0x102d0b60) — the per-hint-type default block, one row at a time.
 	auto Fill = [](int32 HintType, int32 GroupId)
 	{
-		FElysiumNpc::FHintWords Hint;
+		FElysiumNpcBase::FHintWords Hint;
 		Hint.bValid = true;
 		Hint.HintType = HintType;
 		Hint.GroupMask = GroupId;
-		FElysiumNpc::HintSpawn(Hint);
+		FElysiumNpcBase::HintSpawn(Hint);
 		return Hint;
 	};
 
 	// 100..101, the cover band: 60 / 256 / FLT_MAX / 3, category bit 1. Every row but 0x27d8 then
 	// STORES the range times `_DAT_104454d0` = 0.5 (`102d0d9f FMUL` / `102d0da5 FST +0x454`) and
 	// takes the dot of the halved value, so the default 60 reads back as 30.
-	FElysiumNpc::FHintWords Cover = Fill(100, 1);
+	FElysiumNpcBase::FHintWords Cover = Fill(100, 1);
 	TestEqual(TEXT("hint 100's angle range default 60 is stored halved"), Cover.TargetAngleRange, 30.f);
 	TestEqual(TEXT("its min distance is 256"), Cover.TargetDistMin, 256.f);
 	TestEqual(TEXT("its max distance is FLT_MAX"), Cover.TargetDistMax, MAX_FLT);
@@ -488,23 +488,23 @@ bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 	// 0x283c (10300) — 60 again but category bit 4, halved.
 	TestEqual(TEXT("hint 0x283c's default 60 is stored halved"), Fill(0x283c, 1).TargetAngleRange, 30.f);
 	// 0x283d (10301) — the only row with a FINITE max distance.
-	FElysiumNpc::FHintWords Near = Fill(0x283d, 1);
+	FElysiumNpcBase::FHintWords Near = Fill(0x283d, 1);
 	TestEqual(TEXT("hint 0x283d's default 10 is stored halved"), Near.TargetAngleRange, 5.f);
 	TestEqual(TEXT("its min distance is 64"), Near.TargetDistMin, 64.f);
 	TestEqual(TEXT("and its max distance is 256, not FLT_MAX"), Near.TargetDistMax, 256.f);
 	// 0x28a0 (10400) — 10 / 64 / FLT_MAX.
-	FElysiumNpc::FHintWords Far = Fill(0x28a0, 1);
+	FElysiumNpcBase::FHintWords Far = Fill(0x28a0, 1);
 	TestEqual(TEXT("hint 0x28a0's min distance is 64"), Far.TargetDistMin, 64.f);
 	TestEqual(TEXT("and its max is FLT_MAX"), Far.TargetDistMax, MAX_FLT);
 
 	// An AUTHORED value is never replaced by the default — only the unset sentinel is filled — but
 	// it is halved like any other, which is retail's own `FST` over the authored word.
-	FElysiumNpc::FHintWords Authored;
+	FElysiumNpcBase::FHintWords Authored;
 	Authored.bValid = true;
 	Authored.HintType = 100;
 	Authored.TargetAngleRange = 25.f;
 	Authored.GroupMask = 1;
-	FElysiumNpc::HintSpawn(Authored);
+	FElysiumNpcBase::HintSpawn(Authored);
 	TestEqual(TEXT("an authored angle range is kept, and halved"), Authored.TargetAngleRange, 12.5f);
 	TestEqual(TEXT("but its unset neighbours still fill"), Authored.TargetDistMin, 256.f);
 
@@ -569,11 +569,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleKeyValueTest,
 	"Elysium.Substrate.NpcKernelLifecycle.KeyValue", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 {
-	using EArm = FElysiumNpc::EKeyValueArm;
+	using EArm = FElysiumNpcBase::EKeyValueArm;
 	FString Truncated;
 	auto Arm = [&Truncated](const TCHAR* Key)
 	{
-		return FElysiumNpc::ClassifyKeyValue(FString(Key), Truncated);
+		return FElysiumNpcBase::ClassifyKeyValue(FString(Key), Truncated);
 	};
 
 	// The `#` truncation happens FIRST, before any comparison — so a key with one still matches.
@@ -602,7 +602,7 @@ bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 	TestEqual(TEXT("targetname falls to the datamap walk"), Arm(TEXT("targetname")), EArm::DataMap);
 
 	// The `angle` rewrite: the YAW alone is replaced, pitch and roll come from the live angles.
-	const FString Rewritten = FElysiumNpc::RewriteAngleKey(90.f, FVector(11.0, 22.0, 33.0));
+	const FString Rewritten = FElysiumNpcBase::RewriteAngleKey(90.f, FVector(11.0, 22.0, 33.0));
 	TArray<FString> Parts;
 	Rewritten.ParseIntoArrayWS(Parts);
 	TestEqual(TEXT("the rewrite is three numbers"), Parts.Num(), 3);
@@ -674,9 +674,9 @@ bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 	// Slot 130 (0x100aa5a0): the argument is OVERWRITTEN with 0 before the tail jump to slot 6, so
 	// a restore always lands as `SetCheckUntouch(false)` however it was called.
 	TestFalse(TEXT("OnRestore(true) forwards false"),
-		FElysiumNpc::OnRestoreForwardsCheckUntouch(true));
+		FElysiumNpcBase::OnRestoreForwardsCheckUntouch(true));
 	TestFalse(TEXT("OnRestore(false) forwards false too"),
-		FElysiumNpc::OnRestoreForwardsCheckUntouch(false));
+		FElysiumNpcBase::OnRestoreForwardsCheckUntouch(false));
 
 	// `CAI_BaseNPC::Restore` `0x1027c160` — CORRECTED by story 29d, family SaveRestore10: the second
 	// argument of `thunk_FUN_101cf2f0` is the sentinel MODE and not a count, so the body decodes
@@ -690,20 +690,20 @@ bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *Fix.Npc;
 	// Mode 4 catches the sentinel and writes FLT_MAX back; mode 3 writes 0.0 back.
-	N.ExtendedBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
-	N.BaseScheduleHost.WaitFinished = FElysiumNpc::SaveStampSentinel;
+	N.ExtendedBlockedByFriendTimer = FElysiumNpcBase::SaveStampSentinel;
+	N.BaseScheduleHost.WaitFinished = FElysiumNpcBase::SaveStampSentinel;
 	// Neither neighbour is touched: the body names two fields and only two.
-	N.WeaponBlockedByFriendTimer = FElysiumNpc::SaveStampSentinel;
-	N.BaseScheduleHost.MoveWaitFinished = FElysiumNpc::SaveStampSentinel;
+	N.WeaponBlockedByFriendTimer = FElysiumNpcBase::SaveStampSentinel;
+	N.BaseScheduleHost.MoveWaitFinished = FElysiumNpcBase::SaveStampSentinel;
 	TestEqual(TEXT("the base body answers the chain's result"),
 		N.RestoreExtendedHeader(/*Archive=*/nullptr), 1);
 	TestEqual(TEXT("m_flExtendedBlockedByFriendTimer decodes at mode 4"),
-		N.ExtendedBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
+		N.ExtendedBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
 	TestEqual(TEXT("m_flWaitFinished decodes at mode 3"), N.BaseScheduleHost.WaitFinished, 0.0);
 	TestEqual(TEXT("the neighbour of the first is NOT one of the two fields"),
-		N.WeaponBlockedByFriendTimer, FElysiumNpc::SaveStampSentinel);
+		N.WeaponBlockedByFriendTimer, FElysiumNpcBase::SaveStampSentinel);
 	TestEqual(TEXT("nor is the neighbour of the second"),
-		N.BaseScheduleHost.MoveWaitFinished, FElysiumNpc::SaveStampSentinel);
+		N.BaseScheduleHost.MoveWaitFinished, FElysiumNpcBase::SaveStampSentinel);
 	// A stamp below the 1e+10 floor is left alone whatever its mode.
 	N.ExtendedBlockedByFriendTimer = 3.0;
 	N.BaseScheduleHost.WaitFinished = 7.0;
@@ -737,16 +737,16 @@ bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 	// node forgotten.
 	N.BaseScheduleHost.HintNode = 12;
 	N.BaseScheduleHost.bOwnsHint = true;
-	N.ScheduleHost.HintReusableAt = -1.0;
+	N.BaseScheduleHost.HintReusableAt = -1.0;
 	N.BaseNpcUpdateOnRemove();
 	TestEqual(TEXT("the hint node is forgotten"), N.BaseScheduleHost.HintNode, INDEX_NONE);
 	TestFalse(TEXT("the claim is released"), N.BaseScheduleHost.bOwnsHint);
 	TestEqual(TEXT("with a zero reuse delay, which is retail's 0.0"),
-		N.ScheduleHost.HintReusableAt, N.World->NowSeconds());
-	// A body with no hint writes nothing, which is `ClearScheduleHint`'s own first clause.
-	N.ScheduleHost.HintReusableAt = -5.0;
+		N.BaseScheduleHost.HintReusableAt, N.World->NowSeconds());
+	// A body with no hint writes nothing: retail's own guard on `m_pHintNode` (`1027ca59`).
+	N.BaseScheduleHost.HintReusableAt = -5.0;
 	N.BaseNpcUpdateOnRemove();
-	TestEqual(TEXT("a body with no hint writes nothing"), N.ScheduleHost.HintReusableAt, -5.0);
+	TestEqual(TEXT("a body with no hint writes nothing"), N.BaseScheduleHost.HintReusableAt, -5.0);
 	// The squad unlink has no list to leave on this substrate.
 	TestNull(TEXT("and there is no squad to unlink from"), N.ConnectedSquad());
 	return true;
@@ -989,8 +989,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleStandoffTest,
 	"Elysium.Substrate.NpcKernelLifecycle.Standoff", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 {
-	using FWords = FElysiumNpc::FStandoffWords;
-	using FConds = FElysiumNpc::FStandoffConditions;
+	using FWords = FElysiumNpcBase::FStandoffWords;
+	using FConds = FElysiumNpcBase::FStandoffConditions;
 
 	// 0. Not in COMBAT: the selector declines outright, whatever stands.
 	{
@@ -998,7 +998,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x40 = true;
 		TestEqual(TEXT("a standoff outside COMBAT falls through to the base"),
-			FElysiumNpc::StandoffSelect(W, C, /*bInCombatState=*/false, true, nullptr, 0.0),
+			FElysiumNpcBase::StandoffSelect(W, C, /*bInCombatState=*/false, true, nullptr, 0.0),
 			INDEX_NONE);
 	}
 	// 1. Conditions 0x40 and 0x3f share ONE answer, `0x29` minus the +0x24 byte.
@@ -1007,15 +1007,15 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x40 = true;
 		TestEqual(TEXT("condition 0x40 answers 0x29"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x29);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x29);
 		W.bCoverDirty = true;
 		TestEqual(TEXT("and 0x28 with the +0x24 byte set"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x28);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x28);
 		FConds D;
 		D.bCond0x3f = true;
 		FWords V;
 		TestEqual(TEXT("condition 0x3f takes the same arm"),
-			FElysiumNpc::StandoffSelect(V, D, true, true, nullptr, 0.0), 0x29);
+			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, 0.0), 0x29);
 	}
 	// 2. The +0x4c latch is CONSUMED on read, and only answers 0x17 with an enemy standing.
 	{
@@ -1024,13 +1024,13 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		W.ReactionsLeft = 5;
 		FConds C;
 		TestEqual(TEXT("a set latch with an enemy answers 0x17"),
-			FElysiumNpc::StandoffSelect(W, C, true, /*bHasEnemy=*/true, nullptr, 0.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(W, C, true, /*bHasEnemy=*/true, nullptr, 0.0), 0x17);
 		TestFalse(TEXT("and the latch is cleared by the read"), W.bSawNewEnemy);
 
 		FWords V;
 		V.bSawNewEnemy = true;
 		V.ReactionsLeft = 5;
-		FElysiumNpc::StandoffSelect(V, C, true, /*bHasEnemy=*/false, nullptr, 0.0);
+		FElysiumNpcBase::StandoffSelect(V, C, true, /*bHasEnemy=*/false, nullptr, 0.0);
 		TestFalse(TEXT("a set latch with NO enemy is still cleared"), V.bSawNewEnemy);
 	}
 	// 6. An exhausted counter answers 0x17 and writes the posture off the hint's type: 0x65 is
@@ -1041,18 +1041,18 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		W.ReactionChanceMin = 0;
 		W.ReactionChanceMax = 0;   // the re-roll cannot lift it
 		FConds C;
-		FElysiumNpc::FHintWords Hint;
+		FElysiumNpcBase::FHintWords Hint;
 		Hint.bValid = true;
 		Hint.HintType = 0x65;
 		TestEqual(TEXT("an exhausted counter answers 0x17"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, &Hint, 10.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, &Hint, 10.0), 0x17);
 		TestEqual(TEXT("hint type 0x65 writes posture 2"), W.Posture, 2);
 
 		FWords V;
 		V.ReactionsLeft = 0;
 		Hint.HintType = 0x66;
 		TestEqual(TEXT("any other hint type writes posture 0"),
-			FElysiumNpc::StandoffSelect(V, C, true, true, &Hint, 10.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(V, C, true, true, &Hint, 10.0), 0x17);
 		TestEqual(TEXT("which is 0"), V.Posture, 0);
 	}
 	// 7. Condition 0x48 promotes posture 2 to 3 and answers 0x25 — the one arm that changes posture
@@ -1064,7 +1064,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x48 = true;
 		TestEqual(TEXT("condition 0x48 over posture 2 answers 0x25"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x25);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x25);
 		TestEqual(TEXT("and promotes the posture to 3"), W.Posture, 3);
 	}
 	// 8. 0x4f and 0x51 each SUPPRESS the 0x60 answer. That nesting is the arm order.
@@ -1074,19 +1074,19 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FWords W;
 		W.ReactionsLeft = 2;
 		TestEqual(TEXT("condition 0x60 alone answers 0x21"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x21);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x21);
 		FConds D = C;
 		D.bCond0x4f = true;
 		FWords V;
 		V.ReactionsLeft = 2;
 		TestEqual(TEXT("condition 0x4f suppresses it"),
-			FElysiumNpc::StandoffSelect(V, D, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, 0.0), INDEX_NONE);
 		FConds E = C;
 		E.bCond0x51 = true;
 		FWords W51;
 		W51.ReactionsLeft = 2;
 		TestEqual(TEXT("and so does 0x51"),
-			FElysiumNpc::StandoffSelect(W51, E, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(W51, E, true, true, nullptr, 0.0), INDEX_NONE);
 	}
 	// 9. Nothing standing: the base.
 	{
@@ -1094,7 +1094,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		W.ReactionsLeft = 2;
 		FConds C;
 		TestEqual(TEXT("with nothing standing the selector declines"),
-			FElysiumNpc::StandoffSelect(W, C, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), INDEX_NONE);
 	}
 	return true;
 }
@@ -1304,7 +1304,7 @@ bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 	// The owner is holding node 7 and owns it, with a cooldown that has not been set.
 	N.BaseScheduleHost.HintNode = 7;
 	N.BaseScheduleHost.bOwnsHint = true;
-	N.ScheduleHost.HintReusableAt = 0.0;
+	N.BaseScheduleHost.HintReusableAt = 0.0;
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
 
 	N.HintDeletingDestructor();
@@ -1317,7 +1317,7 @@ bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 	TestEqual(TEXT("the hint reference is dropped"), N.BaseScheduleHost.HintNode, INDEX_NONE);
 	TestFalse(TEXT("ownership is released"), N.BaseScheduleHost.bOwnsHint);
 	TestEqual(TEXT("with a ZERO reuse delay: the node is gone, nothing to cool down"),
-		N.ScheduleHost.HintReusableAt, N.World != nullptr ? N.World->NowSeconds() : 0.0);
+		N.BaseScheduleHost.HintReusableAt, N.World != nullptr ? N.World->NowSeconds() : 0.0);
 
 	// Retail raises the condition unconditionally once the owner resolves — `ClearHintNode`'s own
 	// "no hint" arm performs no writes, but the condition has already been set by then.

@@ -36,22 +36,6 @@ namespace
 // `CAI_BaseNPC::LeaveGrappleState` — `0x1026ce30`, 100 bytes.
 // =================================================================================================
 
-void FElysiumNpc::BaseLeaveGrappleState()
-{
-	// `1026ce30`: the `m_OnGrappleEnd` fire. The activator is the entity `+0x1538` resolves to, or
-	// NULL when `+0x153c` is -1 or the handle fails its `0x1fff` index / `>>13` serial check.
-	// UNCONDITIONAL — there is no grapple-type gate anywhere in this body.
-	FireOutput(TEXT("OnGrappleEnd"), Grapple.Partner);
-	// `1026ce78`: `CBaseCombatCharacter::LeaveGrappleState`.
-	FElysiumCombatCharacter::LeaveGrappleState();
-	// `1026ce82`: slot 416 (`vt+0x680`) `SetForceFrequentThink(false)`.
-	SetForceFrequentThink(false);
-	// `1026ce8d` -> `0x10007ea0`: `--m_iIsOblivious (+0x5bb4)`, clamped at 0, then the squad
-	// reconnect `0x10009601`. Both UNCONDITIONAL, which is the arm the port was missing.
-	NpcFlags.RemoveGrappleOblivious();
-	ReconnectToSquad();
-}
-
 // =================================================================================================
 // `CNPC_VManBat` — `0x1038e9c0` and `0x1038f020`, and the four seams they share.
 // =================================================================================================
@@ -66,19 +50,6 @@ void FElysiumNpc::EndSlowEntity(const FElysiumEntityHandle& Victim, float Magnit
 {
 	// SEAM for `CBaseCombatCharacter::EndSlowEntity`.
 	SlowEntityCalls.Add(FSlowEntityCall{ Victim, Magnitude, /*bBegin=*/false });
-}
-
-FElysiumEntity* FElysiumNpc::PlayerInventorySlot0() const
-{
-	// SEAM for `0x1015d680(player, 0)` — the `+0x2308` handle array's slot 0. This runtime's
-	// equivalent standing entity is the character's active weapon; a character with none answers
-	// null, which is retail's own refusal for an empty slot.
-	if (World == nullptr)
-	{
-		return nullptr;
-	}
-	FElysiumPlayer* Player = World->FindPlayer();
-	return Player != nullptr ? World->Resolve(Player->Inventory.ActiveWeapon) : nullptr;
 }
 
 // =================================================================================================

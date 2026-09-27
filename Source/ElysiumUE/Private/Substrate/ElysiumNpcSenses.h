@@ -9,6 +9,7 @@
 class FElysiumEntity;
 class FElysiumEntityWorld;
 class FElysiumNpc;
+class FElysiumNpcBase;
 class UElysiumRulebookSubsystem;
 struct FElysiumRuleTable;
 struct FElysiumSaveArchive;
@@ -331,7 +332,7 @@ public:
 	// `CAI_Senses::m_LookDist`, `senses+0x10` — the radius `PerformSensing` hands `Look()`, and the
 	// SECOND vision distance in this object: `0x1029c970` picks between it and the resolved
 	// `m_flVisionDistance` (`+0x63b8`, `Perception.VisionDistanceCm`) per think. Its one writer is
-	// `SetDistLook` (`0x1026a2a0`, `FElysiumNpc::SetDistLook`); story 29c-1, family Senses.
+	// `SetDistLook` (`0x1026a2a0`, `FElysiumNpcBase::SetDistLook`); story 29c-1, family Senses.
 	//
 	// An OFFSET ON `CAI_Senses`, like `bCanPerformSenses` above, which is why neither is in the NPC
 	// shape map. CENTIMETRES here; Source units in retail.
@@ -407,11 +408,11 @@ public:
 	// `TargetConeScalar` is the TARGET's own `m_flStealthVisionCone`, which retail applies inside
 	// this test alongside the observer's own threshold. 1.0 is a target carrying no stealth
 	// surface, which is every character except the player.
-	static bool IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
+	static bool IsInViewCone(const FElysiumNpcBase& Npc, const FVector& TargetCm,
 		float TargetConeScalar = 1.0f);
 	// The observer's full 3-D forward: Source pitch, inverse Unreal yaw. The cone test's own
 	// axis, exposed so the debug drawings paint the cone that was actually tested.
-	static FVector ViewForward(const FElysiumNpc& Npc);
+	static FVector ViewForward(const FElysiumNpcBase& Npc);
 	// Troika slot 363 (`0x102b4540`): the two sense-off ConVars, then the follower any-angle
 	// seam, then the base body at the target's eye. Look and the `SEE_SOUND_SOURCE` stranger
 	// arm dispatch this.

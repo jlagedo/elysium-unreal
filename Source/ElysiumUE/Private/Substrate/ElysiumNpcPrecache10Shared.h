@@ -20,31 +20,31 @@ namespace NpcKernelPrecache10Shared
 	inline const TCHAR* const GExtMp3 = TEXT(".mp3");
 	inline void Precache10Model(FElysiumNpc& Npc, const TCHAR* Name, int32 Preload)
 	{
-		FElysiumNpc::FPrecacheOp Op;
-		Op.Channel = FElysiumNpc::EPrecacheChannel::Model;
+		FElysiumNpcBase::FPrecacheOp Op;
+		Op.Channel = FElysiumNpcBase::EPrecacheChannel::Model;
 		Op.Name = Name;
 		Op.Flag = Preload;
 		Npc.IssuePrecache(Op);
 	}
 	inline void Precache10Sound(FElysiumNpc& Npc, const TCHAR* Name)
 	{
-		FElysiumNpc::FPrecacheOp Op;
-		Op.Channel = FElysiumNpc::EPrecacheChannel::Sound;
+		FElysiumNpcBase::FPrecacheOp Op;
+		Op.Channel = FElysiumNpcBase::EPrecacheChannel::Sound;
 		Op.Name = Name;
 		Npc.IssuePrecache(Op);
 	}
 	inline void Precache10Particle(FElysiumNpc& Npc, const TCHAR* Name, int32 Preload)
 	{
-		FElysiumNpc::FPrecacheOp Op;
-		Op.Channel = FElysiumNpc::EPrecacheChannel::Particle;
+		FElysiumNpcBase::FPrecacheOp Op;
+		Op.Channel = FElysiumNpcBase::EPrecacheChannel::Particle;
 		Op.Name = Name;
 		Op.Flag = Preload;
 		Npc.IssuePrecache(Op);
 	}
-	inline void Precache10Other(FElysiumNpc& Npc, const FString& Classname)
+	inline void Precache10Other(FElysiumNpcBase& Npc, const FString& Classname)
 	{
-		FElysiumNpc::FPrecacheOp Op;
-		Op.Channel = FElysiumNpc::EPrecacheChannel::Other;
+		FElysiumNpcBase::FPrecacheOp Op;
+		Op.Channel = FElysiumNpcBase::EPrecacheChannel::Other;
 		Op.Name = Classname;
 		Npc.IssuePrecache(Op);
 	}
@@ -61,4 +61,9 @@ namespace NpcKernelPrecache10Shared
 	// `0x10642adc` — precached TWICE in a row by BOTH `CNPC_VManBat` and `CNPC_VSheriffMan`, from
 	// the same `.rdata` cell. A retail duplicate, kept.
 	inline const TCHAR* const GSheriffTeleportEmitter = TEXT("sheriff_teleport_emitter");
+	//
+	// `DAT_105399a0` is the one-character string `"0"` — the authored "none" sentinel this runtime
+	// already spells `ElysiumNpcLoadout::IsNoneSentinel`, and the thing the two-byte `REPE CMPSB`
+	// in both bodies tests an equipment keyfield against.
+	inline const TCHAR* const GNoneSentinel = TEXT("0");
 }

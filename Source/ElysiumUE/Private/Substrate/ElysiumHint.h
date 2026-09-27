@@ -12,7 +12,7 @@ struct FElysiumClassDesc;
 // `CNodeEnt::Spawn` `0x102d78d0` → `FUN_102d2f30`). It owns the hint's own words — the eleven
 // keyfields, the claim (`m_hHintOwner`, `m_flNextUseTime`), the disabled word — and its place on
 // the world's hint list (`FElysiumEntityWorld::HintList`). Kernel queries read it through
-// `FElysiumNpc::HintWords`, which fills an `FHintWords` view from this entity.
+// `FElysiumNpcBase::HintWords`, which fills an `FHintWords` view from this entity.
 //
 // The network node (`m_nNodeID` `+0x5e4`) stays -1: the node binding is 0018 story 4's. The
 // searches over the list (`0x102d1af0`, `0x102d24b0`, `0x102d2980`) are story 4's.
@@ -52,11 +52,11 @@ public:
 
 	// The hint's words as the kernel reads them (`FElysiumNpc::FHintWords`), and the write-back of
 	// the words a kernel body is allowed to change.
-	FElysiumNpc::FHintWords ToWords() const;
-	void FromWords(const FElysiumNpc::FHintWords& Words);
+	FElysiumNpcBase::FHintWords ToWords() const;
+	void FromWords(const FElysiumNpcBase::FHintWords& Words);
 
 	// `CAI_Hint::Spawn` (`0x102d0b60`): the per-type defaults and the group fold
-	// (`FElysiumNpc::HintSpawn`).
+	// (`FElysiumNpcBase::HintSpawn`).
 	virtual void Spawn() override;
 
 	// Slot 77 `CAI_Hint::ScriptHide` (`0x102d0860`): the base hide, then `m_iDisabled := 1`.

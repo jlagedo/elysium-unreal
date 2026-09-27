@@ -1,4 +1,4 @@
-# Story 5 — step 5 in progress (packets 5a, 5b complete)
+# Story 5 — step 5 complete (accepted on the working tree; commit pending)
 
 **Step 5 (separate `CAI_BaseNPC` from Troika), 2026-09-26.**
 - **5a** (records and checker, no C++), committed `571561aa`:
@@ -45,48 +45,31 @@
   map smoke and `acceptance-step5.json` belong to the final step-5 tree, and the manifest phase
   stays 4.
 
-### Handoff: next is packet 5e (bodies)
+- **5e + 5f done together** (checkpoint `step5/checkpoints/5e5f-done.patch`; the slot split and
+  the base bodies need each other to compile). Record: [packets/5e-5f-bodies-and-slot-split.md](packets/5e-5f-bodies-and-slot-split.md).
+  - 5e: 309 base methods, 23 renames (two keep their `Base*` retail-id bodies behind typed slot
+    bodies), the three pairs (`TaskFail`, `Serialize`, `ClassScheduleIdSpace`), the collapse;
+    the eight `+0x94` consumers on `AsNpcBase()`; `SensesObject()`; the `+0x98` arms on
+    `AsNpc()`; the step-3 base direct calls requalified; the recorded retail corrections plus two
+    new ones (`TaskFail`'s base half, the base host words).
+  - 5f: `gen_kernel_shape` emits `ElysiumNpcBaseSlots.*` / `ElysiumNpcSlots.*`; 172 hand slot
+    bodies and a 135-member helper closure moved to the base; overlay retargeted (361 targets,
+    23 renames, one new row); ledger, shape and lists regenerated.
+  - Build green; `Elysium.Substrate` 1,270, zero failures; five generator checks, `--check step0..4`
+    PASS, `--check step5` PENDING (records match); step-5 source checks: moves 5c-5e (726 rows),
+    consumers, registry, overlay owners, fields all pass; kernel tooling pytest 132 passed.
 
-- **Rows.** `moves-step5.tsv` rows with packet `5e`: `base` methods, 23 `rename:<Slot>`, 3
-  `pair:` (`TaskFail`, `Serialize`, `ClassScheduleIdSpace`) and 1 `collapse:Slot532`.
-  `declared_in` uses the step-4 file names; map them through
-  `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step5/rename-5b.json`.
-- **Tooling.** `step5/tools/relocate5.py` moves declarations only. Extend it with definition moves
-  (`FElysiumNpc::X` → `FElysiumNpcBase::X` in `ElysiumNpcBase<Family>.cpp`, where `ElysiumNpc.cpp`
-  maps to `ElysiumNpcBase.cpp`), reusing the definition and file-local logic of
-  `step4/relocate.py`. Methods declared inside `ElysiumNpc.h` keep their public/protected section.
-- **Renames.** Each rename makes the `Base*` body the base's own body of the slot virtual. Most slot
-  virtuals are generated declarations in `ElysiumNpcKernelSlots.inl`, so 5f's generator split has
-  to declare the base virtual and bind it to the hand base body (the retargeted overlay target
-  `FElysiumNpcBase::<Slot>`). If a slot's signature is const-mismatched, adopt the virtual's.
-- **Pairs.**
-  - `TaskFail`: split out the base half (`m_bShouldMove=0`, `+0x5c50`, `SetCondition(0x5c)`, at
-    `ElysiumNpc.cpp` around 2922).
-  - `Serialize`: the base half writes the header, mind, flags, `TargetEnt`, `BaseScheduleHost`,
-    `BaseMemory` and `PendingSounds`; the Troika half calls the base first.
-  - `ClassScheduleIdSpace`: slot 580.
-- **Also in 5e.**
-  - Switch the `AsNpcBase()` consumers in `consumers-step5.tsv`.
-  - Add the `SensesObject()` accessor (`m_pSenses +0x5cdc`), used by `SetDistLook` and
-    `BestEnemyCandidateVisible`.
-  - Keep the `+0x98` arms as `AsNpc()` calls (`OnDoorBlocked`, `ResolveActivityToSequence`,
-    motor slot 18 `FUN_102e19e0`).
-  - Apply the `decisions-step5.json` corrections: the `DesiredMoveYaw` writes in `BaseNPCInit` and
-    `BeginStopMovingTask`; the inline hint release in `BaseNpcUpdateOnRemove`; the last-think
-    citations. Re-read `BasePreSelectIdealState` `0x1026f590` first, because it is open.
-  - Re-qualify the step-3 direct calls (`decisions-step3.json` `direct_calls` whose callee is
-    `CAI_BaseNPC`).
-- **Then.**
-  - 5f: the `gen_kernel_shape` per-layer slot surface.
-  - 5g: tests — the base-only probe, pair order and bindings.
-  - 5h: overlay retargets, ledger, oracle, the full gate and `test_delta` against step 4r's gate
-    (`step4r/gate/run.json`), smoke, and `acceptance-step5.json`.
-- **Checks at each packet.**
-  - Build, then `Elysium.Substrate`.
-  - The step-5 source checks over the packet's rows: `check_moves` on rows filtered by packet, as
-    in the 5d run.
-  - `step5/tools/refresh_pins.py "<note>"` whenever `ElysiumNpcClasses.cpp` or the verdicts change.
-  - Never edit or stash the tree while a gate runs.
+- **5g + 5h done**: [packets/5-base-troika-split.md](packets/5-base-troika-split.md). Acceptance
+  on the working tree: `--check step5` PASS at phase 5 (revision `step-5-base-troika-split`);
+  1,274 + 14 + 1, zero failures; `test_delta` vs step 4r passes with 12 expectations; five-map
+  smoke clean. [acceptance-step5.json](acceptance-step5.json).
+
+### Handoff: step 5 awaits its commit
+
+- The owner commits 5e-5h (one commit on top of `826f4bb1`), then `history.step5 =
+  {commit, acceptance: acceptance-step5.json}` goes into `manifest.json` in a records commit,
+  as step 4 did (`655cdd27`).
+- Next: step 6 (the plan's §5 step 6).
 
 ## Step 4 (accepted, `bb690d7a`; 4r `61aa2cd8`; closed `03c0d030`)
 

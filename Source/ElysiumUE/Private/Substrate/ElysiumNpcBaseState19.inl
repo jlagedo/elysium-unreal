@@ -25,9 +25,6 @@ int32 SelectIdealStateSquadNewEnemyCalls = 0;
 /** How many times case 4 ran `0x1027d0a0` (script-fail / cine release). */
 int32 SelectIdealStateScriptExitCalls = 0;
 
-/** Crash-guard count: `0x1026f590` ORs `0x80002000` into a non-NPC move parent. Retail faults. */
-int32 SelectIdealStateNonNpcParentFlagWrites = 0;
-
 /** SEAM for `thunk_FUN_101e3d70(&DAT_10739a4c, this)`, the discipline manager's break-on-notice
  *  sweep at the end of `CAI_BaseNPC::SelectIdealState` case 3's hear arm (`1026f91b`). It walks
  *  `this +0xf34`'s discipline bitmask and `RemoveEffect`s (`0x101e3af0`) every discipline whose
@@ -36,3 +33,31 @@ int32 SelectIdealStateNonNpcParentFlagWrites = 0;
  *  strips nothing. Its only other retail caller is `SetEnemy` (`0x10279a50`), which the port's
  *  `ElysiumNpcEnemy::SetEnemy` does not carry either. */
 int32 SelectIdealStateDisciplineStripCalls = 0;
+
+/** `m_NPCState` (`+0x5cc0`) as retail's raw id. Maps the typed mind when `SetState` has not
+ *  written an unmapped value (8 FLEE, 0xb HUNT, 0xe). */
+int32 NpcStateRetail() const;
+
+void WriteNpcStateRetail(int32 RetailId);
+
+/** `m_IdealNPCState` (`+0x5cc4`) as retail's raw id. */
+int32 IdealStateRetail() const;
+
+void WriteIdealStateRetail(int32 RetailId);
+
+/** `CAI_BaseNPC::SetState` (`0x1026e340`). Not a vtable slot. Writes both state words, strips
+ *  the enemy on a transition to IDLE, and dispatches slot 463 with the entry-time old state. */
+void SetState(int32 NewRetail);
+
+/** `CAI_BaseNPC::PreSelectIdealState` (`0x1026f590`), slot 460's base body, in retail ids: the
+ *  `+0x98` Troika arm or `SquadNewEnemy`, always answering 0. The typed slot body wraps it. */
+int32 BasePreSelectIdealState();
+
+/** `CAI_BaseNPC::SelectIdealState` (`0x1026f660`), slot 461's base body, in retail ids. The typed
+ *  slot body wraps it; the Troika's `TroikaSelectIdealState` falls through to it. */
+int32 BaseSelectIdealState();
+
+/** Slots 460 / 461 in retail ids: the vtable entries `0x1026f4d0` dispatches (`0x1026f4ec`,
+ *  `0x1026f4f8`). The base answers its own bodies; the Troika line overrides both. */
+virtual int32 PreSelectIdealStateRetail() { return BasePreSelectIdealState(); }
+virtual int32 SelectIdealStateRetail() { return BaseSelectIdealState(); }

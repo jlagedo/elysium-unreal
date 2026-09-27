@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 4,
-  "revision": "step-4-species-bodies-words-bindings",
+  "phase": 5,
+  "revision": "step-5-base-troika-split",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -22,12 +22,12 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "e2ca6834aa45ee25676d3cd3a231f055dff5a61c2bc8fb4702015a155298de8b"
+      "sha256": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6"
     },
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87"
+      "sha256": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f"
     },
     "stub_registry": {
       "root": "repo",
@@ -42,7 +42,7 @@
     "schedule_registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp",
-      "sha256": "e33fb46042aad5a25aa219b9443a8c8f27770e179f482563c2cda2da87a1e99d"
+      "sha256": "6eb82a7bb281c740a9d62b1c2e645c85330d6196b6634f74e075499caaa3f5a4"
     },
     "corpus": {
       "root": "research",
@@ -169,12 +169,17 @@
         "verdicts": {
           "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
           "previous_sha256": "43840137d851907ecb5d111d22e7f407141b2d0e5d54712e41c7dfa074eb8d87",
-          "sha256": "e2ca6834aa45ee25676d3cd3a231f055dff5a61c2bc8fb4702015a155298de8b"
+          "sha256": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6"
         },
         "registry": {
           "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
           "previous_sha256": "b77bb0a8cecb31d7c909b7ddb27e054923b5c4e80ce8d0c140e83dcf38b17d22",
-          "sha256": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87"
+          "sha256": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f"
+        },
+        "schedule_registry": {
+          "path": "Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp",
+          "previous_sha256": "e33fb46042aad5a25aa219b9443a8c8f27770e179f482563c2cda2da87a1e99d",
+          "sha256": "6eb82a7bb281c740a9d62b1c2e645c85330d6196b6634f74e075499caaa3f5a4"
         }
       },
       "log": [
@@ -189,6 +194,36 @@
           "from": "af6678c73f798f27764b62ec866eacb99c3cba2e87a2403cb3711eaa0f5708d7",
           "to": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87",
           "note": "5d: CAI_BaseNPC rows registered on its own descriptor (BuildNpcBaseClass); the float-sound keyfield binds on the combat character"
+        },
+        {
+          "input": "verdicts",
+          "from": "e2ca6834aa45ee25676d3cd3a231f055dff5a61c2bc8fb4702015a155298de8b",
+          "to": "c6583488a1c74fa990d561e490eb9cc65fc52a58ac34b55733713fb32c1b2eb5",
+          "note": "5e/5f: overlay retarget of the base-layer bodies (361 FElysiumNpcBase targets, 23 renames, 0x10339800 row) and the registry's slot-split edits"
+        },
+        {
+          "input": "registry",
+          "from": "fb2a15a52e2e431a0a794b969fd8357c4c96c50c079ed0062279308676ebdd87",
+          "to": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f",
+          "note": "5e/5f: overlay retarget of the base-layer bodies (361 FElysiumNpcBase targets, 23 renames, 0x10339800 row) and the registry's slot-split edits"
+        },
+        {
+          "input": "schedule_registry",
+          "from": "e33fb46042aad5a25aa219b9443a8c8f27770e179f482563c2cda2da87a1e99d",
+          "to": "6eb82a7bb281c740a9d62b1c2e645c85330d6196b6634f74e075499caaa3f5a4",
+          "note": "5e/5f: overlay retarget of the base-layer bodies (361 FElysiumNpcBase targets, 23 renames, 0x10339800 row) and the registry's slot-split edits"
+        },
+        {
+          "input": "verdicts",
+          "from": "c6583488a1c74fa990d561e490eb9cc65fc52a58ac34b55733713fb32c1b2eb5",
+          "to": "57371d00da7eb2aa407e96789ba6e244992d7e01c5982c5ff8f778bb76ad0cd7",
+          "note": "5e/5f: the 0x10339800 row takes the 0019/1 tag grammar kernel_lists enforces"
+        },
+        {
+          "input": "verdicts",
+          "from": "57371d00da7eb2aa407e96789ba6e244992d7e01c5982c5ff8f778bb76ad0cd7",
+          "to": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6",
+          "note": "5h: overlay targets of the 5d component methods retargeted (FElysiumNpcBaseScheduleHost::SetWaitFinished, MoveWaitFinished, MemoryBits)"
         }
       ]
     }
@@ -240,9 +275,9 @@
     "5b": "accepted",
     "5c": "done-uncommitted",
     "5d": "done-uncommitted",
-    "5e": "pending",
-    "5f": "pending",
-    "5g": "pending",
-    "5h": "pending"
+    "5e": "done-uncommitted",
+    "5f": "done-uncommitted",
+    "5g": "done-uncommitted",
+    "5h": "done-uncommitted"
   }
 }

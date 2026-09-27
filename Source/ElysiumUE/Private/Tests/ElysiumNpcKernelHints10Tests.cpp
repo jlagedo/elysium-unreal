@@ -21,9 +21,9 @@ namespace
 {
 	// Prefixed because the module builds adaptive-unity and this anonymous namespace is merged with
 	// the other suites'.
-	FElysiumNpc::FHintWords Hints10MakeHint(int32 HintType)
+	FElysiumNpcBase::FHintWords Hints10MakeHint(int32 HintType)
 	{
-		FElysiumNpc::FHintWords Hint;
+		FElysiumNpcBase::FHintWords Hint;
 		Hint.bValid = true;
 		Hint.HintType = HintType;
 		// `+0x470 m_iGroupID` — a 32-bit SET. The NPC's own mask defaults to `0xffffffff`, so any
@@ -108,7 +108,7 @@ bool FElysiumNpcKernelHints10GroupGateTest::RunTest(const FString&)
 	}
 
 	// `10295ca0` — `hint->+0x470 & this->+0x62e4`. Both sides are 32-bit SETS.
-	FElysiumNpc::FHintWords Hint = Hints10MakeHint(0x2774);
+	FElysiumNpcBase::FHintWords Hint = Hints10MakeHint(0x2774);
 	Hint.GroupMask = 1u << 3;
 	F.Npc->ScheduleHost.HintGroupMask = 1u << 3;
 	TestTrue(TEXT("a shared group bit admits, and 0x2774 is then accepted outright"),
@@ -180,7 +180,7 @@ bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 
 	// `1038e48b CMP [EBX + 0x5dc],0x4e20 / JNZ 0x1038e5b3` — anything but 20000 refuses before the
 	// scrambled word is even read.
-	FElysiumNpc::FHintWords Wrong = Hints10MakeHint(19999);
+	FElysiumNpcBase::FHintWords Wrong = Hints10MakeHint(19999);
 	TestFalse(TEXT("a hint type other than 20000 refuses"), Bat->ManBatValidateHintType(Wrong));
 
 	// The five templates. Driven through `ManBatHintName` directly, because the mode is the output of
@@ -212,7 +212,7 @@ bool FElysiumNpcKernelHints10ManBatTest::RunTest(const FString&)
 	// The whole body, end to end. Mode 3, index 4 -> `"ManBat Divepoint 4 Bottom"`.
 	Bat->ManBatHintModeWord = 0xbb2782f9u;
 	Bat->ManBatHintIndex = 4;
-	FElysiumNpc::FHintWords Hint = Hints10MakeHint(20000);
+	FElysiumNpcBase::FHintWords Hint = Hints10MakeHint(20000);
 	Hint.Name = TEXT("ManBat Divepoint 4 Bottom");
 	TestTrue(TEXT("the built name matches the hint's own name"),
 		Bat->ManBatValidateHintType(Hint));
@@ -263,7 +263,7 @@ bool FElysiumNpcKernelHints10EndEntityTest::RunTest(const FString&)
 
 	// `103d63xx` — the empty cache falls straight through to `FindHintEndEntity` (`0x103d6520`),
 	// which with no hint store and no target name answers the hint's own node id.
-	FElysiumNpc::FHintWords Hint = Hints10MakeHint(15000);
+	FElysiumNpcBase::FHintWords Hint = Hints10MakeHint(15000);
 	Hint.HintIndex = 11;
 	TestEqual(TEXT("an empty cache falls through to FindHintEndEntity, which answers the hint"),
 		Wolf->GetHintEndEntity(Hint), 11);
@@ -328,14 +328,14 @@ bool FElysiumNpcKernelHints10ForwardHintTest::RunTest(const FString&)
 	TestFalse(TEXT("0x3a9e is not exempt"), FElysiumNpcWerewolf::IsForwardHintExemptType(0x3a9e));
 
 	// `103d70dd` — an exempt hint is handed straight back.
-	FElysiumNpc::FHintWords Exempted = Hints10MakeHint(0x3a9c);
+	FElysiumNpcBase::FHintWords Exempted = Hints10MakeHint(0x3a9c);
 	Exempted.HintIndex = 21;
 	TestEqual(TEXT("an exempt hint is returned unchanged"),
 		Wolf->GetForwardHintForHint(Exempted), 21);
 
 	// `103d7176` — the global hint list is empty here, so the loop runs to its end and the body
 	// answers the null cursor after warning. That is retail's own no-match arm, not a refusal.
-	FElysiumNpc::FHintWords Other = Hints10MakeHint(0x3aab);
+	FElysiumNpcBase::FHintWords Other = Hints10MakeHint(0x3aab);
 	Other.HintIndex = 22;
 	TestTrue(TEXT("the global hint list seam answers nothing"), Wolf->GlobalHintList().IsEmpty());
 	TestEqual(TEXT("a non-exempt hint with no partner answers null"),
@@ -379,7 +379,7 @@ bool FElysiumNpcKernelHints10TeleportHintTest::RunTest(const FString&)
 	// A hint that passes every gate. Slot 566 (gate 4) is VIRTUAL, so on a werewolf it is
 	// `CNPC_VWerewolf`'s own row, which accepts 15000..15018 except 15007; 15000 satisfies it
 	// without a cover object. The NPC's group mask defaults to every group.
-	FElysiumNpc::FHintWords Good = Hints10MakeHint(15000);
+	FElysiumNpcBase::FHintWords Good = Hints10MakeHint(15000);
 	Good.HintIndex = 31;
 	Wolf->WerewolfHintFlags = 0;
 	TestTrue(TEXT("a hint that passes every gate is valid, because the endpoint seam answers "
@@ -394,25 +394,25 @@ bool FElysiumNpcKernelHints10TeleportHintTest::RunTest(const FString&)
 
 	// Gate 3 — `IsHintUnusable` (`0x102d14c0`), family Hints' three-arm rule. `m_iDisabled` is its
 	// first arm.
-	FElysiumNpc::FHintWords Disabled = Good;
+	FElysiumNpcBase::FHintWords Disabled = Good;
 	Disabled.Disabled = 1;
 	TestFalse(TEXT("a disabled hint refuses through IsHintUnusable"),
 		Wolf->IsValidTeleportHint(&Disabled, Now));
 
 	// Gate 4 — slot 566. `0x2773` is not an accepted type.
-	FElysiumNpc::FHintWords BadType = Good;
+	FElysiumNpcBase::FHintWords BadType = Good;
 	BadType.HintType = 0x2773;
 	TestFalse(TEXT("a type slot 566 refuses refuses here too"),
 		Wolf->IsValidTeleportHint(&BadType, Now));
 
 	// Gate 6 — `hint->+0x470 == 1` AND `field_0x66e8 & 0x40`. Note the EQUALITY compare against 1 on
 	// the same word gate 4 treats as a bit set: retail's own asymmetry.
-	FElysiumNpc::FHintWords GroupOne = Good;
+	FElysiumNpcBase::FHintWords GroupOne = Good;
 	GroupOne.GroupMask = 1;
 	Wolf->WerewolfHintFlags = 0x40;
 	TestFalse(TEXT("group word 1 with flag 0x40 refuses"),
 		Wolf->IsValidTeleportHint(&GroupOne, Now));
-	FElysiumNpc::FHintWords GroupTwo = Good;
+	FElysiumNpcBase::FHintWords GroupTwo = Good;
 	GroupTwo.GroupMask = 2;
 	TestTrue(TEXT("group word 2 with the same flag admits — the compare is for equality with 1"),
 		Wolf->IsValidTeleportHint(&GroupTwo, Now));

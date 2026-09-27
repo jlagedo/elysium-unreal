@@ -90,28 +90,28 @@ bool FElysiumNpcKernelSensesConesTest::RunTest(const FString&)
 	const FVector At = FVector::ZeroVector;
 	const FVector Ahead(1000.f, 0.f, 0.f);
 	TestTrue(TEXT("0x10326bd0: dead ahead is inside the 0.994 aim cone"),
-		FElysiumNpc::AimConeAdmits(At, Ahead, FVector(1.f, 0.f, 0.f)));
+		FElysiumNpcBase::AimConeAdmits(At, Ahead, FVector(1.f, 0.f, 0.f)));
 	// cos(6.28 deg) == 0.994; 7 degrees off axis is outside, 5 degrees is inside.
 	{
 		const float Seven = FMath::DegreesToRadians(7.f);
 		const FVector AimSeven(FMath::Cos(Seven), FMath::Sin(Seven), 0.f);
 		TestFalse(TEXT("0x10326bd0: 7 degrees off axis is outside (0.994 is a 6.28 degree cone)"),
-			FElysiumNpc::AimConeAdmits(At, Ahead, AimSeven));
+			FElysiumNpcBase::AimConeAdmits(At, Ahead, AimSeven));
 		const float Five = FMath::DegreesToRadians(5.f);
 		const FVector AimFive(FMath::Cos(Five), FMath::Sin(Five), 0.f);
 		TestTrue(TEXT("0x10326bd0: 5 degrees off axis is inside"),
-			FElysiumNpc::AimConeAdmits(At, Ahead, AimFive));
+			FElysiumNpcBase::AimConeAdmits(At, Ahead, AimFive));
 	}
 	// **The correction 29c's walk missed**: the Z is zeroed BEFORE the normalise, so the cone is
 	// planar in both operands. A target 1000 units ahead and 1000 up is still dead ahead.
 	TestTrue(TEXT("0x10326bd0: the delta's Z is zeroed before the normalise, so height is ignored"),
-		FElysiumNpc::AimConeAdmits(At, FVector(1000.f, 0.f, 1000.f), FVector(1.f, 0.f, 0.f)));
+		FElysiumNpcBase::AimConeAdmits(At, FVector(1000.f, 0.f, 1000.f), FVector(1.f, 0.f, 0.f)));
 	// A 3-D normalise would give dot == 0.707 here and refuse, which is the whole difference.
 	TestFalse(TEXT("0x10326bd0: and a 3-D normalise would have refused that same target"),
 		FVector(1000.f, 0.f, 1000.f).GetSafeNormal().X > 0.994f);
 	// Strictly greater, and a degenerate delta refuses.
 	TestFalse(TEXT("0x10326bd0: a zero-length delta refuses"),
-		FElysiumNpc::AimConeAdmits(At, At, FVector(1.f, 0.f, 0.f)));
+		FElysiumNpcBase::AimConeAdmits(At, At, FVector(1.f, 0.f, 0.f)));
 
 	// The seam that makes the slot itself answer false today, asserted as the refusal it is.
 	TestEqual(TEXT("slot 370 HeadDirection2D is still a stub, so EyeDirection2D is the zero vector"),
@@ -128,7 +128,7 @@ bool FElysiumNpcKernelSensesConesTest::RunTest(const FString&)
 	// The planar rule: slot 364 zeroes Z before normalising, so a target almost straight up but
 	// barely ahead is still admitted.
 	TestTrue(TEXT("0x10326bd0: the aim cone's planar rule admits a near-vertical target ahead"),
-		FElysiumNpc::AimConeAdmits(At, FVector(100.f, 0.f, 1000.f), FVector(1.f, 0.f, 0.f)));
+		FElysiumNpcBase::AimConeAdmits(At, FVector(100.f, 0.f, 1000.f), FVector(1.f, 0.f, 0.f)));
 	return true;
 }
 
@@ -309,7 +309,7 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 	FVector Mins = FVector::ZeroVector;
 	FVector Maxs = FVector::ZeroVector;
 	TestFalse(TEXT("0x101aaf80: and that seam is RetailCollisionExtents answering nothing"),
-		FElysiumNpc::RetailCollisionExtents(*Caller, Mins, Maxs));
+		FElysiumNpcBase::RetailCollisionExtents(*Caller, Mins, Maxs));
 
 	// The census rows both slot-45 bodies came from.
 	const FElysiumNpcClass* Payphone = ElysiumNpcKernelClass::Find(TEXT("CPayphone"));
@@ -335,20 +335,20 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 	TestFalse(TEXT("0x103a4bb0: a degenerate ray clears that byte"), bRayValid);
 
 	// `0x102d1320` — `CAI_Hint::IsViewable`, pure over the hint's own words.
-	FElysiumNpc::FHintWords Hint;
+	FElysiumNpcBase::FHintWords Hint;
 	Hint.HintType = 13;
 	Hint.Disabled = 0;
-	TestTrue(TEXT("0x102d1320: hint type 13 is viewable"), FElysiumNpc::IsHintViewable(Hint));
+	TestTrue(TEXT("0x102d1320: hint type 13 is viewable"), FElysiumNpcBase::IsHintViewable(Hint));
 	Hint.HintType = 12;
 	TestFalse(TEXT("0x102d1320: and 12 is not - the literal is 0xd and nothing else"),
-		FElysiumNpc::IsHintViewable(Hint));
+		FElysiumNpcBase::IsHintViewable(Hint));
 	Hint.HintType = 13;
 	Hint.Disabled = 1;
 	TestFalse(TEXT("0x102d1320: a disabled hint is never viewable"),
-		FElysiumNpc::IsHintViewable(Hint));
+		FElysiumNpcBase::IsHintViewable(Hint));
 	Hint.Disabled = 0x100;
 	TestFalse(TEXT("0x102d1320: including one whose m_iDisabled has a non-zero HIGH byte - the "
-		"returned mask's low byte is what the caller reads"), FElysiumNpc::IsHintViewable(Hint));
+		"returned mask's low byte is what the caller reads"), FElysiumNpcBase::IsHintViewable(Hint));
 	return true;
 }
 
@@ -610,7 +610,7 @@ bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 	TestEqual(TEXT("0x1027de00: so the unreachable mark never runs"),
 		F.Guard->NavigatorUnreachableMarks, 0);
 	TestEqual(TEXT("0x1027de00: the door flag word is a seam answering a plain door"),
-		static_cast<int32>(FElysiumNpc::DoorBlockFlags(*F.Other)), 0);
+		static_cast<int32>(FElysiumNpcBase::DoorBlockFlags(*F.Other)), 0);
 
 	// Arm 5 — the squad focus. `ConnectedSquad()` is null on every NPC here, so the whole arm is
 	// skipped; that is retail's own answer for a squadless NPC.

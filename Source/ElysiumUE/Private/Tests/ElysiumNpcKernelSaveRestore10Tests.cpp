@@ -82,20 +82,20 @@ namespace
 	}
 
 	// The archive log as one readable line per op, so an order mismatch reads as a diff.
-	TArray<FString> SaveRestore10LogText(const TArray<FElysiumNpc::FSaveArchiveOp>& Log)
+	TArray<FString> SaveRestore10LogText(const TArray<FElysiumNpcBase::FSaveArchiveOp>& Log)
 	{
 		TArray<FString> Out;
 		Out.Reserve(Log.Num());
-		for (const FElysiumNpc::FSaveArchiveOp& Op : Log)
+		for (const FElysiumNpcBase::FSaveArchiveOp& Op : Log)
 		{
 			const TCHAR* Kind = TEXT("?");
 			switch (Op.Kind)
 			{
-			case FElysiumNpc::FSaveArchiveOp::EKind::Fields:   Kind = TEXT("fields"); break;
-			case FElysiumNpc::FSaveArchiveOp::EKind::Bool:     Kind = TEXT("bool"); break;
-			case FElysiumNpc::FSaveArchiveOp::EKind::Int:      Kind = TEXT("int"); break;
-			case FElysiumNpc::FSaveArchiveOp::EKind::ReadBool: Kind = TEXT("readbool"); break;
-			case FElysiumNpc::FSaveArchiveOp::EKind::ReadInt:  Kind = TEXT("readint"); break;
+			case FElysiumNpcBase::FSaveArchiveOp::EKind::Fields:   Kind = TEXT("fields"); break;
+			case FElysiumNpcBase::FSaveArchiveOp::EKind::Bool:     Kind = TEXT("bool"); break;
+			case FElysiumNpcBase::FSaveArchiveOp::EKind::Int:      Kind = TEXT("int"); break;
+			case FElysiumNpcBase::FSaveArchiveOp::EKind::ReadBool: Kind = TEXT("readbool"); break;
+			case FElysiumNpcBase::FSaveArchiveOp::EKind::ReadInt:  Kind = TEXT("readint"); break;
 			}
 			Out.Add(FString::Printf(TEXT("%s:%s:%d"), Kind, *Op.Name, Op.Value));
 		}
@@ -111,39 +111,39 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10CodecTest,
 	"Elysium.Substrate.NpcKernelSaveRestore10.Codec", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10CodecTest::RunTest(const FString&)
 {
-	using EMode = FElysiumNpc::ESaveStampMode;
-	const double Sentinel = FElysiumNpc::SaveStampSentinel;
-	const double FloatMax = FElysiumNpc::SaveStampFloatMax();
+	using EMode = FElysiumNpcBase::ESaveStampMode;
+	const double Sentinel = FElysiumNpcBase::SaveStampSentinel;
+	const double FloatMax = FElysiumNpcBase::SaveStampFloatMax();
 
 	// `0x101cf250`, arm by arm. Mode 1 is `*p < 0.0` STRICTLY.
 	double V = -0.5;
-	TestTrue(TEXT("mode 1 encodes a value below 0.0"), FElysiumNpc::SaveStampEncode(V, EMode::BelowZero));
+	TestTrue(TEXT("mode 1 encodes a value below 0.0"), FElysiumNpcBase::SaveStampEncode(V, EMode::BelowZero));
 	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
 	V = 0.0;
 	TestFalse(TEXT("mode 1 leaves exactly 0.0 alone"),
-		FElysiumNpc::SaveStampEncode(V, EMode::BelowZero));
+		FElysiumNpcBase::SaveStampEncode(V, EMode::BelowZero));
 	TestEqual(TEXT("so 0.0 survives mode 1"), V, 0.0);
 
 	V = -1.0;
-	TestTrue(TEXT("mode 2 encodes exactly -1.0"), FElysiumNpc::SaveStampEncode(V, EMode::MinusOne));
+	TestTrue(TEXT("mode 2 encodes exactly -1.0"), FElysiumNpcBase::SaveStampEncode(V, EMode::MinusOne));
 	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
 	V = -1.5;
 	TestFalse(TEXT("mode 2 is an EQUALITY, not a comparison"),
-		FElysiumNpc::SaveStampEncode(V, EMode::MinusOne));
+		FElysiumNpcBase::SaveStampEncode(V, EMode::MinusOne));
 
 	V = 0.0;
 	TestTrue(TEXT("mode 3 encodes exactly _DAT_104454c4 (0.0)"),
-		FElysiumNpc::SaveStampEncode(V, EMode::Zero));
+		FElysiumNpcBase::SaveStampEncode(V, EMode::Zero));
 	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
 
 	V = FloatMax;
-	TestTrue(TEXT("mode 4 encodes exactly FLT_MAX"), FElysiumNpc::SaveStampEncode(V, EMode::FloatMax));
+	TestTrue(TEXT("mode 4 encodes exactly FLT_MAX"), FElysiumNpcBase::SaveStampEncode(V, EMode::FloatMax));
 	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
 
 	// A mode outside 1..4 is retail's `default:` and writes nothing.
 	V = 0.0;
 	TestFalse(TEXT("mode 0 is retail's default: and does nothing"),
-		FElysiumNpc::SaveStampEncode(V, EMode::None));
+		FElysiumNpcBase::SaveStampEncode(V, EMode::None));
 	TestEqual(TEXT("the stamp survives an unknown mode"), V, 0.0);
 
 	// The ROUND TRIP, one case per mode. `_DAT_10482fac` is 1e+10 and the sentinel 1e+11, so every
@@ -159,10 +159,10 @@ bool FElysiumNpcKernelSaveRestore10CodecTest::RunTest(const FString&)
 	{
 		double Stamp = Seeds[Index];
 		TestTrue(FString::Printf(TEXT("mode %d encodes its seed"), static_cast<int32>(RoundTrips[Index].Key)),
-			FElysiumNpc::SaveStampEncode(Stamp, RoundTrips[Index].Key));
+			FElysiumNpcBase::SaveStampEncode(Stamp, RoundTrips[Index].Key));
 		TestEqual(TEXT("the encoded stamp is the sentinel"), Stamp, Sentinel);
 		TestTrue(TEXT("and the decode fires on it"),
-			FElysiumNpc::SaveStampDecode(Stamp, RoundTrips[Index].Key));
+			FElysiumNpcBase::SaveStampDecode(Stamp, RoundTrips[Index].Key));
 		TestEqual(FString::Printf(TEXT("mode %d decodes to retail's value"),
 			static_cast<int32>(RoundTrips[Index].Key)), Stamp, RoundTrips[Index].Value);
 	}
@@ -170,17 +170,17 @@ bool FElysiumNpcKernelSaveRestore10CodecTest::RunTest(const FString&)
 	// Mode 1's asymmetry, stated by name: `-0.5` goes in and `-1.0` comes back, because modes 1 and
 	// 2 share a `case` label in `0x101cf2f0`.
 	double Asymmetric = -0.5;
-	FElysiumNpc::SaveStampEncode(Asymmetric, EMode::BelowZero);
-	FElysiumNpc::SaveStampDecode(Asymmetric, EMode::BelowZero);
+	FElysiumNpcBase::SaveStampEncode(Asymmetric, EMode::BelowZero);
+	FElysiumNpcBase::SaveStampDecode(Asymmetric, EMode::BelowZero);
 	TestEqual(TEXT("mode 1 is not its own inverse: -0.5 returns as -1.0"), Asymmetric, -1.0);
 
 	// The decode's floor is `1e+10` inclusive, and anything under it survives.
-	double Floor = FElysiumNpc::SaveStampSentinelFloor;
-	TestTrue(TEXT("the decode fires AT the floor"), FElysiumNpc::SaveStampDecode(Floor, EMode::Zero));
-	double Under = FElysiumNpc::SaveStampSentinelFloor * 0.5;
-	TestFalse(TEXT("and not below it"), FElysiumNpc::SaveStampDecode(Under, EMode::Zero));
+	double Floor = FElysiumNpcBase::SaveStampSentinelFloor;
+	TestTrue(TEXT("the decode fires AT the floor"), FElysiumNpcBase::SaveStampDecode(Floor, EMode::Zero));
+	double Under = FElysiumNpcBase::SaveStampSentinelFloor * 0.5;
+	TestFalse(TEXT("and not below it"), FElysiumNpcBase::SaveStampDecode(Under, EMode::Zero));
 	TestEqual(TEXT("an ordinary stamp survives the decode"),
-		Under, FElysiumNpc::SaveStampSentinelFloor * 0.5);
+		Under, FElysiumNpcBase::SaveStampSentinelFloor * 0.5);
 
 	// `0x101b9840` / `0x101b9860` are mode 2 on a `CSound`'s `+0x10 m_flExpireTime`.
 	FElysiumGameSoundEvent Sound;
@@ -200,16 +200,16 @@ bool FElysiumNpcKernelSaveRestore10Crc32Test::RunTest(const FString&)
 	// walk calls them: init `0xffffffff`, a table-driven byte loop over `DAT_10496f58`, final
 	// complement. Pinned against the published reflected CRC-32 check value.
 	const char Check[] = "123456789";
-	uint32 Crc = FElysiumNpc::SaveCrc32Init();
+	uint32 Crc = FElysiumNpcBase::SaveCrc32Init();
 	TestEqual(TEXT("the init word is 0xffffffff"), Crc, 0xffffffffu);
-	Crc = FElysiumNpc::SaveCrc32Update(Crc, reinterpret_cast<const uint8*>(Check), 9);
-	Crc = FElysiumNpc::SaveCrc32Final(Crc);
+	Crc = FElysiumNpcBase::SaveCrc32Update(Crc, reinterpret_cast<const uint8*>(Check), 9);
+	Crc = FElysiumNpcBase::SaveCrc32Final(Crc);
 	TestEqual(TEXT("\"123456789\" checksums to 0xcbf43926"), Crc, 0xcbf43926u);
 
 	// Zero bytes: `~0xffffffff == 0`, which is the literal `0` retail's own no-schedule arm writes
 	// into the header — the two arms agree on the checksum and differ only in the name.
-	uint32 Empty = FElysiumNpc::SaveCrc32Final(
-		FElysiumNpc::SaveCrc32Update(FElysiumNpc::SaveCrc32Init(), nullptr, 0));
+	uint32 Empty = FElysiumNpcBase::SaveCrc32Final(
+		FElysiumNpcBase::SaveCrc32Update(FElysiumNpcBase::SaveCrc32Init(), nullptr, 0));
 	TestEqual(TEXT("an empty run checksums to 0"), Empty, 0u);
 	return true;
 }
@@ -232,19 +232,19 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 	// `CAI_BaseNPC::Save` `0x1027bc60` encodes exactly TWO fields — the CORRECTION this family made:
 	// the second argument of `thunk_FUN_101cf250` is the sentinel MODE, not a count.
 	// `1027bc6c PUSH 0x4` on `+0x5b8c` and `1027bc80 PUSH 0x3` on `+0x5db4`.
-	N.ExtendedBlockedByFriendTimer = FElysiumNpc::SaveStampFloatMax();   // mode 4 catches it
+	N.ExtendedBlockedByFriendTimer = FElysiumNpcBase::SaveStampFloatMax();   // mode 4 catches it
 	N.BaseScheduleHost.WaitFinished = 0.0;                                  // mode 3 catches it
-	N.WeaponBlockedByFriendTimer = FElysiumNpc::SaveStampFloatMax();    // NOT one of the two
+	N.WeaponBlockedByFriendTimer = FElysiumNpcBase::SaveStampFloatMax();    // NOT one of the two
 	N.BaseScheduleHost.MoveWaitFinished = 0.0;                              // NOT one of the two
 	N.SaveArchiveLog.Reset();
 
-	TestEqual(TEXT("the base answers the chain's result"), N.BaseSave(nullptr), 1);
+	TestEqual(TEXT("the base answers the chain's result"), N.FElysiumNpcBase::Save(nullptr), 1);
 	// The encode and the decode bracket the archive call, so the fields are back where they started.
 	TestEqual(TEXT("the extended-block timer round-trips"),
-		N.ExtendedBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
+		N.ExtendedBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
 	TestEqual(TEXT("the wait stamp round-trips"), N.BaseScheduleHost.WaitFinished, 0.0);
 	TestEqual(TEXT("the neighbour of the first is untouched"),
-		N.WeaponBlockedByFriendTimer, FElysiumNpc::SaveStampFloatMax());
+		N.WeaponBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
 	TestEqual(TEXT("and so is the neighbour of the second"), N.BaseScheduleHost.MoveWaitFinished, 0.0);
 
 	// The archive call: one `WriteFields` of `AIExtendedSaveHeader_t` and nothing else.
@@ -257,10 +257,10 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 	// The three flag bits, in the order `0x1027bc60` ORs them.
 	TestEqual(TEXT("a quiet NPC sets no flag bit"), N.LastSavedExtendedHeader.Flags, 0u);
 	N.BaseMemory.Enemy = N.Handle;   // slot 0x29c `GetEnemy()` is non-null
-	N.BaseSave(nullptr);
+	N.FElysiumNpcBase::Save(nullptr);
 	TestEqual(TEXT("bit 0x1 is the committed enemy"), N.LastSavedExtendedHeader.Flags, 1u);
 	N.SetTarget(N.Handle);              // `m_hTargetEnt` resolves onto a live entity
-	N.BaseSave(nullptr);
+	N.FElysiumNpcBase::Save(nullptr);
 	TestEqual(TEXT("bit 0x2 is m_hTargetEnt, and both stand together"),
 		N.LastSavedExtendedHeader.Flags, 3u);
 	// Bit 0x4 is the navigator goal, whose seam answers nothing (`NavigatorGoalIsActive`).
@@ -278,7 +278,7 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 	// invariant that holds whatever the fixture provides.
 	const int32 OverlayBefore = N.MoveAndShootSaveFixups;
 	const int32 MotorBefore = N.MotorSaveFixups;
-	N.BaseSave(nullptr);
+	N.FElysiumNpcBase::Save(nullptr);
 	TestEqual(TEXT("the overlay fix-up is not guarded and runs every pass"),
 		N.MoveAndShootSaveFixups, OverlayBefore + 1);
 	TestTrue(TEXT("the motor fix-up is guarded, so it runs at most once per pass"),
@@ -311,8 +311,8 @@ bool FElysiumNpcKernelSaveRestore10TroikaSaveTest::RunTest(const FString&)
 	N.OccludedReportTimeW = 0.0;                          // mode 3
 	N.ScheduleHost.InterruptTime = 0.0;                   // mode 3
 	N.WeaponScareTime = -1.0;                             // mode 2
-	N.IgnoreCollisionUntil = FElysiumNpc::SaveStampFloatMax();    // mode 4
-	N.NextFidgetTime = static_cast<float>(FElysiumNpc::SaveStampFloatMax());   // mode 4
+	N.IgnoreCollisionUntil = FElysiumNpcBase::SaveStampFloatMax();    // mode 4
+	N.NextFidgetTime = static_cast<float>(FElysiumNpcBase::SaveStampFloatMax());   // mode 4
 	N.Senses.Memory.BestSound.ExpireTime = -1.0;
 	N.Senses.Memory.LastSoundFlinch.ExpireTime = -1.0;
 	N.SaveArchiveLog.Reset();
@@ -324,9 +324,9 @@ bool FElysiumNpcKernelSaveRestore10TroikaSaveTest::RunTest(const FString&)
 	TestEqual(TEXT("m_flSeeUnknownCheatVisionTime round-trips at mode 2"),
 		N.Senses.Memory.SeeUnknownGraceUntil, -1.0);
 	TestEqual(TEXT("m_flIgnoreCollisionTimer round-trips at mode 4"),
-		N.IgnoreCollisionUntil, FElysiumNpc::SaveStampFloatMax());
+		N.IgnoreCollisionUntil, FElysiumNpcBase::SaveStampFloatMax());
 	TestEqual(TEXT("m_flEyeFidgetTime is the one float-width stamp and round-trips too"),
-		N.NextFidgetTime, static_cast<float>(FElysiumNpc::SaveStampFloatMax()));
+		N.NextFidgetTime, static_cast<float>(FElysiumNpcBase::SaveStampFloatMax()));
 	TestEqual(TEXT("m_BestSound's expiry round-trips at mode 2"),
 		N.Senses.Memory.BestSound.ExpireTime, -1.0);
 	TestEqual(TEXT("and so does m_LastSoundFlinch's"),
@@ -359,7 +359,7 @@ bool FElysiumNpcKernelSaveRestore10EncodeOrderTest::RunTest(const FString&)
 {
 	// The ORDER of the eleven encodes is observable through the save file, so it is pinned.
 	//
-	// The instrument: set every stamp to the SENTINEL first. `BaseSave` runs between the encode and
+	// The instrument: set every stamp to the SENTINEL first. `FElysiumNpcBase::Save` runs between the encode and
 	// the decode pass, and the header it writes is the one observable a body on the stack would see
 	// — but a stronger statement is available without an archive. Each mode fires on a different
 	// seed value, so seeding the eleven with a mode-matched value and checking that exactly the
@@ -376,8 +376,8 @@ bool FElysiumNpcKernelSaveRestore10EncodeOrderTest::RunTest(const FString&)
 	// not, so after the encode pass the mode-2 fields hold the sentinel. The body's own decode would
 	// hide that, so the check is run against the codec on the same list rather than through `Save`.
 	SaveRestore10SetAllStamps(N, -1.0);
-	struct FStampProbe { const TCHAR* Field; double* Value; FElysiumNpc::ESaveStampMode Mode; };
-	using EMode = FElysiumNpc::ESaveStampMode;
+	struct FStampProbe { const TCHAR* Field; double* Value; FElysiumNpcBase::ESaveStampMode Mode; };
+	using EMode = FElysiumNpcBase::ESaveStampMode;
 	const FStampProbe Probes[] = {
 		{ TEXT("m_flCanSeekCoverTimer"),         &N.CanSeekCoverTimer,                  EMode::Zero },
 		{ TEXT("m_flSeeUnknownCheatVisionTime"), &N.Senses.Memory.SeeUnknownGraceUntil, EMode::MinusOne },
@@ -396,7 +396,7 @@ bool FElysiumNpcKernelSaveRestore10EncodeOrderTest::RunTest(const FString&)
 	for (const FStampProbe& Probe : Probes)
 	{
 		ModeOrder.Add(FString::FromInt(static_cast<int32>(Probe.Mode)));
-		const bool bFired = FElysiumNpc::SaveStampEncode(*Probe.Value, Probe.Mode);
+		const bool bFired = FElysiumNpcBase::SaveStampEncode(*Probe.Value, Probe.Mode);
 		TestEqual(FString::Printf(TEXT("%s fires at mode 2 only"), Probe.Field),
 			bFired, Probe.Mode == EMode::MinusOne);
 	}
@@ -424,7 +424,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10SaveSpeciesTest,
 	"Elysium.Substrate.NpcKernelSaveRestore10.SaveSpecies", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
 {
-	const double FloatMax = FElysiumNpc::SaveStampFloatMax();
+	const double FloatMax = FElysiumNpcBase::SaveStampFloatMax();
 
 	// `CNPC_VMingXiao::Save` `0x10395f80` — the six `m_rflRegrowTimers` at mode 4, ascending.
 	{
@@ -509,8 +509,8 @@ bool FElysiumNpcKernelSaveRestore10RestoreTest::RunTest(const FString&)
 
 	// `CAI_BaseNPCTroika::Restore` `0x10299700`: the base's answer comes back unchanged, then one
 	// `ReadBool` gates two `ReadInt`s, then the eleven stamps and the nine sounds decode.
-	SaveRestore10SetAllStamps(N, FElysiumNpc::SaveStampSentinel);
-	N.Senses.Memory.BestSound.ExpireTime = FElysiumNpc::SaveStampSentinel;
+	SaveRestore10SetAllStamps(N, FElysiumNpcBase::SaveStampSentinel);
+	N.Senses.Memory.BestSound.ExpireTime = FElysiumNpcBase::SaveStampSentinel;
 	N.SaveArchiveLog.Reset();
 
 	TestEqual(TEXT("slot 127 answers the base body's result"), N.Restore(nullptr), 1);
@@ -518,7 +518,7 @@ bool FElysiumNpcKernelSaveRestore10RestoreTest::RunTest(const FString&)
 	TestEqual(TEXT("the mode-2 stamps decode to -1.0"),
 		N.Senses.Memory.SeeUnknownGraceUntil, -1.0);
 	TestEqual(TEXT("the mode-4 stamps decode to FLT_MAX"),
-		N.IgnoreCollisionUntil, FElysiumNpc::SaveStampFloatMax());
+		N.IgnoreCollisionUntil, FElysiumNpcBase::SaveStampFloatMax());
 	TestEqual(TEXT("the nine sounds decode at mode 2"),
 		N.Senses.Memory.BestSound.ExpireTime, -1.0);
 
@@ -534,7 +534,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10RestoreSpeciesTes
 	"Elysium.Substrate.NpcKernelSaveRestore10.RestoreSpecies", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 {
-	const double Sentinel = FElysiumNpc::SaveStampSentinel;
+	const double Sentinel = FElysiumNpcBase::SaveStampSentinel;
 
 	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base first, then the six regrow timers at mode 4.
 	{
@@ -553,7 +553,7 @@ bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
 		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
 		{
 			TestEqual(FString::Printf(TEXT("regrow timer %d decodes to FLT_MAX"), Index),
-				N.MingXiaoRegrowTimers[Index], FElysiumNpc::SaveStampFloatMax());
+				N.MingXiaoRegrowTimers[Index], FElysiumNpcBase::SaveStampFloatMax());
 		}
 	}
 
@@ -804,13 +804,13 @@ bool FElysiumNpcKernelSaveRestore10DoorMode4Test::RunTest(const FString&)
 	N.AlternateAi = 4;
 	N.bOpeningDoorWait = true;
 	N.AlternateAiExpireTime = 10.0;
-	N.ScheduleHost.FailureReason = 0;
+	N.BaseScheduleHost.FailureReason = 0;
 	N.RunAlternateAiDoorMode4(/*Now=*/10.0);
 	TestEqual(TEXT("an expiry stamp equal to curtime expires"), N.AlternateAi, 0);
 	TestFalse(TEXT("m_bOpeningDoorWait is cleared with it"), N.bOpeningDoorWait);
 	// `TaskFail` (`0x1029adb0`) writes the reason into `m_failureReason` and ZEROES the pending
-	// one, so the landed reason is `ScheduleHost.FailureReason` and not `TaskFailureReason()`.
-	TestEqual(TEXT("and TaskFail is raised with reason 0xe"), N.ScheduleHost.FailureReason, 0xe);
+	// one, so the landed reason is `BaseScheduleHost.FailureReason` and not `TaskFailureReason()`.
+	TestEqual(TEXT("and TaskFail is raised with reason 0xe"), N.BaseScheduleHost.FailureReason, 0xe);
 	return true;
 }
 

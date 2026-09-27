@@ -47,7 +47,7 @@ bool FElysiumNpcKernelAnimGestureLayersTest::RunTest(const FString&)
 
 	// `SetLayer` `0x10099020`, field for field.
 	Guard->SetOverlayLayer(0, /*Activity*/ 0x3b, /*Sequence*/ 17, /*bAutoKill*/ true);
-	const FElysiumNpc::FAnimOverlayLayer& L0 = Guard->AnimOverlay[0];
+	const FElysiumNpcBase::FAnimOverlayLayer& L0 = Guard->AnimOverlay[0];
 	TestEqual(TEXT("SetLayer seeds the weight at 0.1"), L0.Weight, ElysiumOverlay::SeedWeight);
 	TestEqual(TEXT("and the ceiling at 1.0"), L0.WeightMax, ElysiumOverlay::WeightMax);
 	TestEqual(TEXT("and 0.2 at both ends of the envelope"), L0.BlendIn,
@@ -143,7 +143,7 @@ bool FElysiumNpcKernelAnimFlinchTest::RunTest(const FString&)
 
 	// Three records of 0x1c bytes at +0x07f4.
 	TestEqual(TEXT("m_Flinch is three records"),
-		static_cast<int32>(UE_ARRAY_COUNT(Guard->Flinch)), FElysiumNpc::NumFlinchRecords);
+		static_cast<int32>(UE_ARRAY_COUNT(Guard->Flinch)), FElysiumNpcBase::NumFlinchRecords);
 
 	// `0x10099690` opens on two refusals in retail's order: `IsAlive()` (slot 158) then
 	// `m_bNoFlinch`. The second is the one a case can drive.
@@ -167,7 +167,7 @@ bool FElysiumNpcKernelAnimFlinchTest::RunTest(const FString&)
 	auto PickVictim = [](const FElysiumNpc& Npc)
 	{
 		int32 Best = 0;
-		for (int32 Candidate = 1; Candidate < FElysiumNpc::NumFlinchRecords; ++Candidate)
+		for (int32 Candidate = 1; Candidate < FElysiumNpcBase::NumFlinchRecords; ++Candidate)
 		{
 			if (Npc.Flinch[Candidate].ExpireTime < Npc.Flinch[Best].ExpireTime)
 			{
@@ -214,7 +214,7 @@ bool FElysiumNpcKernelAnimFlexTest::RunTest(const FString&)
 
 	// `m_flexWeight` is retail's own `float[128]`.
 	TestEqual(TEXT("the flex-weight array is retail's 128"),
-		static_cast<int32>(UE_ARRAY_COUNT(Guard->FlexWeight)), FElysiumNpc::NumFlexWeightSlots);
+		static_cast<int32>(UE_ARRAY_COUNT(Guard->FlexWeight)), FElysiumNpcBase::NumFlexWeightSlots);
 
 	// The studio seams, and what they refuse with.
 	TestEqual(TEXT("GetNumFlexControllers answers an empty table"), Guard->NumFlexControllers(), 0);
@@ -630,7 +630,7 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("the ladder ends on retail's own floor, sequence 0"), Sequence, 0);
 	TestEqual(TEXT("and the rung that answered says so"),
 		static_cast<int32>(Guard->LastResolveActivityRung),
-		static_cast<int32>(FElysiumNpc::EResolveActivityRung::SequenceZero));
+		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::SequenceZero));
 	TestEqual(TEXT("with the translated activity left at the retry's own 0xf1"), Translated, 0xf1);
 
 	// ACT_RUN (0x13): the SAME floor, but the run-to-walk rung is reached on the way — retail rewrites
@@ -645,7 +645,7 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("ACT_DISPOSITION lands on sequence 0 without retrying itself"), Sequence, 0);
 	TestEqual(TEXT("through the disposition rung"),
 		static_cast<int32>(Guard->LastResolveActivityRung),
-		static_cast<int32>(FElysiumNpc::EResolveActivityRung::SequenceZero));
+		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::SequenceZero));
 
 	// ACT_SCRIPT_CUSTOM_MOVE (0x18) with no cine is NOT the custom-move arm: retail's guard is the
 	// cine handle, and without one the request takes the ordinary weighted rung.

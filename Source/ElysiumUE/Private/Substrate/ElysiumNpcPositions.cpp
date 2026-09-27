@@ -80,21 +80,6 @@ void FElysiumNpc::SquadMembers(TArray<FElysiumNpc*>& OutMembers) const
 
 // --- What is left of `FUN_102c5570` -------------------------------------------------------------
 
-bool FElysiumNpc::EnemyLastKnownPosition(FVector& OutPositionCm) const
-{
-	// `GetEnemies()` (slot 541) then `thunk_FUN_102dfed0(memory, &out, pEnemy)`. This runtime's
-	// `FElysiumNpcEnemyMemory` is the same store, so the fact is carried; the record's position is
-	// what retail's helper copies out.
-	const FElysiumEntity* Enemy =
-		World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
-	if (Enemy == nullptr)
-	{
-		return false;
-	}
-	OutPositionCm = Enemy->Origin;
-	return true;
-}
-
 bool FElysiumNpc::ShootTargetDelta(FVector& OutDeltaCm) const
 {
 	// The middle of `FUN_102c5570`, which is what the listing settles:

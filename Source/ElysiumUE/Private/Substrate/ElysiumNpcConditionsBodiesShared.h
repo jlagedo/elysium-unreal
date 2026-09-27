@@ -24,7 +24,7 @@
 namespace NpcKernelConditionsShared
 {
 	// This runtime's state vocabulary onto retail's `m_NPCState` ids — the same table
-	// `FElysiumNpc::NpcStateFlags` uses, restated here as a free function because every body in this
+	// `FElysiumNpcBase::NpcStateFlags` uses, restated here as a free function because every body in this
 	// file switches on the retail id rather than on the port enum. The retail states this runtime has
 	// no member for (8 FLEE, 0xb HUNT, 0xe the criminal window) are unreachable through it, which is
 	// why the rules below are written over the RAW id and the dispatch is the only place that maps.
@@ -41,4 +41,6 @@ namespace NpcKernelConditionsShared
 		}
 		return 0;
 	}
+	inline constexpr int32 GCondNavJump = 1;
+	inline constexpr int32 GCondNavClimb = 3;
 }

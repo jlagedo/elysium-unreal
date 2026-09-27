@@ -259,7 +259,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -320,7 +320,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);   // the NPC mind admits its body on its first think
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -383,7 +383,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -415,7 +415,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -457,7 +457,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* PhoneEnt = World.FindByName(GPhone);
@@ -516,7 +516,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -583,7 +583,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -671,7 +671,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		// The opener's camera is in the slot; the per-line `SetCamera` re-shots that same entity.
@@ -729,7 +729,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -783,7 +783,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpc::NpcInitThinkDelay);
+		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
