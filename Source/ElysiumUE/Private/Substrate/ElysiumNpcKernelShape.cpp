@@ -4099,8 +4099,9 @@ namespace
 			TEXT("const char* SelectRandomExpressionForState(NPC_STATE)"),
 			TEXT("SelectRandomExpressionForState"), ETier::Walked, TEXT("0x10260540"), 0,
 			TEXT("29c"), false, TEXT("dead"), TEXT("") },
-		{ 617, TEXT("CNPCMaker"), TEXT("MakeNPC"), TEXT("void MakeNPC(bool)"), TEXT("MakeNPC"),
-			ETier::Walked, TEXT("0x1034b7b0"), 10, TEXT("29d"), false, TEXT("rule"), TEXT("") },
+		{ 617, TEXT("CNPCMaker"), TEXT("MakeNPC"), TEXT("CAI_BaseNPCTroika* MakeNPC(bool)"),
+			TEXT("MakeNPC"), ETier::Walked, TEXT("0x1034b7b0"), 10, TEXT("29d"), false,
+			TEXT("rule"), TEXT("") },
 		{ 617, TEXT("CNPC_VBaseBoss"), TEXT("EnemyCouldSeeHull"),
 			TEXT("bool EnemyCouldSeeHull(Vector, bool, bool, Vector)"), TEXT("EnemyCouldSeeHull"),
 			ETier::Walked, TEXT("0x10366510"), 4, TEXT("29c"), false, TEXT("rule"), TEXT("") },
@@ -8954,7 +8955,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 83,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 226,
-		/* RowDigest        */ 0xcb4915273a53545aull,
+		/* RowDigest        */ 0x11d57806f40fce60ull,
 	};
 	return GCensus;
 }

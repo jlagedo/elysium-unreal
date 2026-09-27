@@ -369,10 +369,10 @@ bool FElysiumNpcKernelPrecache10ArmCoverageTest::RunTest(const FString&)
 			continue;
 		}
 		++Rows;
-		// Counted but not driven here: the three `CNPCMaker*` rows. Their classnames build
-		// `FElysiumNpcMaker`, which is not an `FElysiumNpc`, so no NPC of the class exists to spawn;
-		// their bodies are `FElysiumNpcMaker::Precache`'s. `MakerArmCoverage` below stands a real
-		// maker of each row's classname and proves the row's own body runs.
+		// Counted but not driven here: the three `CNPCMaker*` rows. Their bodies chain
+		// `CAI_BaseNPC::Precache` directly, not the Troika's, so the Troika control this loop checks
+		// does not apply; `MakerArmCoverage` below stands a real maker of each row's classname (its
+		// own class since story 5 fold A4) and proves the row's own body runs.
 		if (FCString::Strncmp(Row.Class, TEXT("CNPCMaker"), 9) == 0)
 		{
 			continue;
@@ -913,15 +913,14 @@ bool FElysiumNpcKernelPrecache10CameraTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// The three `CNPCMaker*` arms, on `FElysiumNpcMaker`.
+// The three `CNPCMaker*` arms, each its class's own override (story 5 fold A4).
 // =================================================================================================
 
 namespace
 {
 	// One maker of a given classname, with its two keyfields set. `Classname` must be one of the
-	// three `ElysiumNpcClasses.cpp` registers against `FElysiumNpcMaker` — `npc_maker`,
-	// `npc_maker_fleshpile` and `npc_maker_zombie` — because anything else stands a different leaf
-	// and the downcast below would be a lie.
+	// three maker classnames — `npc_maker`, `npc_maker_fleshpile` and `npc_maker_zombie` — each of
+	// which builds its own `FElysiumNpcMaker` subclass.
 	struct FPrecache10MakerFixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -1214,8 +1213,8 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 	// `item_w_zombie_fists` is precached AFTER the child classname.
 	//
 	// The fixture stands a real `npc_maker_zombie`, the census's classname for `CNPCMaker_Zombie`
-	// (`CNPCMaker_Zombie_Classnames`), which `ElysiumNpcClasses.cpp` registers against the maker
-	// leaf; its own classname is what selects the zombie arm.
+	// (`CNPCMaker_Zombie_Classnames`), which builds `FElysiumNpcMakerZombie`; its class's override
+	// is what runs.
 	{
 		FPrecache10MakerFixture Fix(TEXT("npc_maker_zombie"), TEXT("models/z.mdl"),
 			TEXT("npc_VZombie"));
@@ -1223,9 +1222,12 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		TestTrue(TEXT("the zombie arm is selected"), Fix.Maker->IsZombieMaker());
-		// Set both words by hand: nothing in this port writes them (the maker class table registers
-		// no such keyfield), and the point of the arm is that it discards them.
+		TestTrue(TEXT("the zombie maker is its own class"),
+			Fix.Maker->RetailClass() != nullptr
+				&& FString(Fix.Maker->RetailClass()->Name) == TEXT("CNPCMaker_Zombie"));
+		// Set both words by hand (a maker inherits the Troika's `additionalequipment` /
+		// `alternateequipment` keyfields since story 5 fold A4); the point of the arm is that it
+		// discards them.
 		Fix.Maker->AlternateEquipment = TEXT("item_w_katana");
 		Fix.Maker->AdditionalEquipment = TEXT("item_w_glock_17c");
 		Fix.Maker->Precache();

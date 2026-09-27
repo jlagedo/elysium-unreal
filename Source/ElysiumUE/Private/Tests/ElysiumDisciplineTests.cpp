@@ -78,6 +78,10 @@ namespace
 
 	// The four containers, sized to the compiled tables so `At(Index)` answers for every slot the
 	// runtime addresses. Bounds are deliberately generous except where a test asserts a clamp.
+	// The NPC template the discipline victims author (`MakeDisciplineTestDefs`), added to the fixture's
+	// clan table so the name resolves.
+	const TCHAR* const DisciplineVictimTemplate = TEXT("Test_Discipline_Victim");
+
 	FElysiumStatTable MakeStats()
 	{
 		FElysiumStatTable Table;
@@ -440,6 +444,12 @@ namespace
 		FRulesFixture()
 		{
 			AddInterruptRecords(Targets);
+			// The NPC template the victims author (`MakeDisciplineTestDefs`): its fields are
+			// irrelevant here, only its authored NAME is read — see there.
+			FElysiumClanTemplate Victim;
+			Victim.TemplateName = DisciplineVictimTemplate;
+			Victim.SourceFile = TEXT("npctemplate_test.txt");
+			Clans.AddNpcTemplate(MoveTemp(Victim));
 			Rebind();
 		}
 		void Rebind()
@@ -460,6 +470,11 @@ namespace
 
 	FElysiumEntityDefs MakeDisciplineTestDefs()
 	{
+		// Every victim authors `stattemplate`, as 2055 of the 2060 shipped `npc_*` rows do. It is what
+		// makes an NPC selectable: `CAI_BaseNPCTroika::NPCInit` `0x1029a0b0` sets `m_bIsBCCTargetable`
+		// (`+0x1480`, `1029a4a2`) only when `m_statTemplate` (`+0x10e4`) is non-empty, and
+		// `EntityUnselectable` `0x100a52a0` (read by `FindEntityFOV` `0x10341c30`, the melee and feed
+		// enumerations) rejects a clear byte. A victim with no template is untargetable in retail too.
 		FElysiumEntityDefs Defs;
 		Defs.MapName = TEXT("__discipline_test__");
 
@@ -470,6 +485,7 @@ namespace
 			Victim.Classname = TEXT("npc_VPedestrian");
 			Victim.TargetName = FString::Printf(TEXT("victim%d"), i);
 			Victim.Origin = FVector(100.0f * static_cast<float>(i + 1), 0.0f, 0.0f);
+			Victim.Keys.Add(TEXT("stattemplate"), DisciplineVictimTemplate);
 			Defs.Defs.Add(MoveTemp(Victim));
 		}
 		// One far outside every authored range.
@@ -477,6 +493,7 @@ namespace
 		Far.Classname = TEXT("npc_VPedestrian");
 		Far.TargetName = TEXT("faraway");
 		Far.Origin = FVector(500000.0f, 0.0f, 0.0f);
+		Far.Keys.Add(TEXT("stattemplate"), DisciplineVictimTemplate);
 		Defs.Defs.Add(MoveTemp(Far));
 
 		// The `events_world` policy entity, so the world-area gate has something to look for.

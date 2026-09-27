@@ -4,12 +4,12 @@
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`, beside the generated
 // `ElysiumNpcKernelSlots.inl`. **No body in this family is a Troika-line slot body**, so nothing
 // here is declared by the generator and nothing here is `hand:` — every row is either a species
-// override of a slot another family owns (an arm added to that family's method) or a class body on
-// a leaf that is not `FElysiumNpc` at all (`CNPCMaker`, whose three `Spawn` bodies land on
-// `FElysiumNpcMaker`).
+// override of a slot another family owns (an arm added to that family's method) or a maker class's
+// own `Spawn` (`FElysiumNpcMaker`, `FElysiumNpcMakerFleshpile`, `FElysiumNpcMakerZombie`, story 5
+// fold A4).
 //
-// The definitions are in `Substrate/ElysiumNpcSpeciesLifecycle10.cpp`, the maker's three in
-// `Substrate/ElysiumNpcMaker.cpp`, and the tests in
+// The definitions are in `Substrate/ElysiumNpcSpeciesLifecycle10.cpp`, the makers' three in
+// `Substrate/ElysiumNpcMaker*.cpp`, and the tests in
 // `Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp`. The walked prose is
 // `docs/vtmb/npc-ai/lifecycle.md` § "Story 29d, family SpeciesLifecycle10".
 //
@@ -26,8 +26,7 @@
 //     `CNPC_VVampireBoss::Restore` with a comment saying "the day the owning story lands their own
 //     halves, each row's `Body` moves to it". This is that story; the rows now point here.
 //   * **Three maker `Spawn`s** (`CNPCMaker` `0x1034afe0`, `_Fleshpile` `0x1034c020`, `_Zombie`
-//     `0x1034cc60`). One method with three arms on `FElysiumNpcMaker`, the shape that class already
-//     uses for slots 104, 139, 617 and 618.
+//     `0x1034cc60`). One override per maker class since story 5 fold A4.
 //   * **Five species arms on slots another family owns**: slot 431 `NPCThink` (`CPayphone`), slot
 //     174 `StartTouch` (`CNPC_VGhoulCroucher`), slot 175 `Touch` (`CNPC_VGargoyle`) and slot 463
 //     `OnStateChange` twice (`CNPC_VGuard1`, `CNPC_VHunter`).

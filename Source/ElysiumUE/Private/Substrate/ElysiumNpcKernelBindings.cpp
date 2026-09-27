@@ -3,9 +3,9 @@
 // The datamap-backed field/input bindings of the port's NPC-family classes, transcribed from the
 // datamap replay (`research/ghidra/types/datamap_records-vampire.dll.json`; CBaseEntity 0x10552e18,
 // CBaseToggle 0x1059b6f0, CBaseAnimating 0x1054cd70, CBaseCombatCharacter 0x1061664c, CAI_BaseNPC
-// 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8,
-// CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
-// CCineAISchedule 0x10593c9c, CCineNPC 0x10593628, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
+// 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CAI_InterestingPlace 0x1060bdd8, CAI_Hint 0x106099f0,
+// CAI_InterestingPlaceConverstation 0x1060c2c0, CCineAISchedule 0x10593c9c, CCineNPC 0x10593628,
+// CNPCMaker 0x10624718, CNPCMaker_Zombie 0x106253e8, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
 // 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach 0x1062d22c, CNPC_VCameraSecurity
 // 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88, CNPC_VFrenzyShadow 0x10637aa8,
 // CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
@@ -27,7 +27,6 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumSheetFields.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
@@ -44,6 +43,8 @@
 #include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcHunter.h"
 #include "Substrate/ElysiumNpcLasombra.h"
+#include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Substrate/ElysiumNpcManBat.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -1222,36 +1223,6 @@ namespace ElysiumNpcKernelBindings
 		// own typed `Serialize`, which is the same shape
 	}
 
-	void AddNpcMakerFields(FElysiumClassDesc& D)
-	{
-		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
-		ElysiumAddClassField(D, TEXT("Flag_Fade"), &FElysiumNpcMaker::bFade, EElysiumField::Save);  // +0x66c2 m_bFade
-		ElysiumAddClassField(D, TEXT("Flag_InfChild"), &FElysiumNpcMaker::bInfinite,
-			EElysiumField::Save);  // +0x66c3 m_bInfChild
-		ElysiumAddClassField(D, TEXT("Flag_NPCClip"), &FElysiumNpcMaker::bNpcClip,
-			EElysiumField::Save);  // +0x66c1 m_bNPCClip
-		ElysiumAddClassField(D, TEXT("Flag_NoDrop"), &FElysiumNpcMaker::bNoDrop,
-			EElysiumField::Save);  // +0x66c4 m_bNoDrop
-		ElysiumAddClassField(D, TEXT("Flag_StartDisabled"), &FElysiumNpcMaker::bDisabled,
-			EElysiumField::Save);  // +0x66c0 m_bDisabled
-		ElysiumAddClassField(D, TEXT("Flag_ViewCone"), &FElysiumNpcMaker::bViewCone,
-			EElysiumField::Save);  // +0x66c5 m_bViewCone
-		ElysiumAddClassField(D, TEXT("MaxLiveChildren"), &FElysiumNpcMaker::MaxLiveChildren,
-			EElysiumField::Save);  // +0x66b4 m_iMaxLiveChildren
-		ElysiumAddClassField(D, TEXT("MaxNPCCount"), &FElysiumNpcMaker::RemainingTotal,
-			EElysiumField::Save);  // +0x6660 m_iMaxNumNPCs
-		ElysiumAddClassField(D, TEXT("MinPCDistance"), &FElysiumNpcMaker::MinPcDistance,
-			EElysiumField::Save);  // +0x66c8 m_iMinPCDistance
-		ElysiumAddClassField(D, TEXT("NPCTargetname"), &FElysiumNpcMaker::ChildTargetName,
-			EElysiumField::Save);  // +0x66bc m_ChildTargetName
-		ElysiumAddClassField(D, TEXT("NPCType"), &FElysiumNpcMaker::NpcType, EElysiumField::Save);  // +0x665c m_iszNPCClassname
-		ElysiumAddClassField(D, TEXT("SpawnFrequency"), &FElysiumNpcMaker::SpawnFrequency,
-			EElysiumField::Save);  // +0x6664 m_flSpawnFrequency
-	}
-
 	void AddInterestingPlaceFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
@@ -1331,20 +1302,6 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumConversationPlace::bTurnTowardsTalker, EElysiumField::Save);  // +0x514 m_bTurnTowardsTalker
 	}
 
-	void AddNpcMakerZombieFields(FElysiumClassDesc& D)
-	{
-		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
-		ElysiumAddClassField(D, TEXT("Flag_ZombieAIType"), &FElysiumNpcMaker::ZombieAiType,
-			EElysiumField::Save);  // +0x76d0 m_iZombieAISpawnType
-		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcMaker::RemoveDistance,
-			EElysiumField::Save);  // +0x76d8 m_flRemoveDist
-		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcMaker::bShouldRagdoll,
-			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
-	}
-
 	void AddAiScriptedScheduleFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
@@ -1418,6 +1375,65 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumScriptedSequence::bSequenceStarted, EElysiumField::Save);  // +0x5f91 bool
 		ElysiumAddClassField(D, TEXT("m_hNextCine"), &FElysiumScriptedSequence::NextCine,
 			EElysiumField::Save);  // +0x5f94 ehandle
+	}
+
+	void AddNpcMakerFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("NPCType"), &FElysiumNpcMaker::NpcType, EElysiumField::Save);  // +0x665c m_iszNPCClassname
+		ElysiumAddClassField(D, TEXT("MaxNPCCount"), &FElysiumNpcMaker::RemainingTotal,
+			EElysiumField::Save);  // +0x6660 m_iMaxNumNPCs
+		ElysiumAddClassField(D, TEXT("SpawnFrequency"), &FElysiumNpcMaker::SpawnFrequency,
+			EElysiumField::Save);  // +0x6664 m_flSpawnFrequency
+		ElysiumAddClassField(D, TEXT("MaxLiveChildren"), &FElysiumNpcMaker::MaxLiveChildren,
+			EElysiumField::Save);  // +0x66b4 m_iMaxLiveChildren
+		ElysiumAddClassField(D, TEXT("NPCTargetname"), &FElysiumNpcMaker::ChildTargetName,
+			EElysiumField::Save);  // +0x66bc m_ChildTargetName
+		ElysiumAddClassField(D, TEXT("Flag_StartDisabled"), &FElysiumNpcMaker::bDisabled,
+			EElysiumField::Save);  // +0x66c0 m_bDisabled
+		ElysiumAddClassField(D, TEXT("Flag_NPCClip"), &FElysiumNpcMaker::bNpcClip,
+			EElysiumField::Save);  // +0x66c1 m_bNPCClip
+		ElysiumAddClassField(D, TEXT("Flag_Fade"), &FElysiumNpcMaker::bFade, EElysiumField::Save);  // +0x66c2 m_bFade
+		ElysiumAddClassField(D, TEXT("Flag_InfChild"), &FElysiumNpcMaker::bInfinite,
+			EElysiumField::Save);  // +0x66c3 m_bInfChild
+		ElysiumAddClassField(D, TEXT("Flag_NoDrop"), &FElysiumNpcMaker::bNoDrop,
+			EElysiumField::Save);  // +0x66c4 m_bNoDrop
+		ElysiumAddClassField(D, TEXT("Flag_ViewCone"), &FElysiumNpcMaker::bViewCone,
+			EElysiumField::Save);  // +0x66c5 m_bViewCone
+		ElysiumAddClassField(D, TEXT("MinPCDistance"), &FElysiumNpcMaker::MinPcDistance,
+			EElysiumField::Save);  // +0x66c8 m_iMinPCDistance
+	}
+
+	void AddNpcMakerSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_cLiveChildren"), &FElysiumNpcMaker::LiveChildren,
+			EElysiumField::Save);  // +0x66b0 int
+		ElysiumAddClassField(D, TEXT("m_flGround"), &FElysiumNpcMaker::CachedGroundZ,
+			EElysiumField::Save);  // +0x66b8 float
+		ElysiumAddClassField(D, TEXT("m_sRefMapDataBuffer"), &FElysiumNpcMaker::RefMapDataBuffer,
+			EElysiumField::Save);  // +0x76cc string
+	}
+
+	void AddNpcMakerZombieFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("Flag_ZombieAIType"),
+			&FElysiumNpcMakerZombie::ZombieAiSpawnType, EElysiumField::Save);  // +0x76d0 m_iZombieAISpawnType
+		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcMakerZombie::bShouldRagdoll,
+			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
+		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcMakerZombie::RemoveDistance,
+			EElysiumField::Save);  // +0x76d8 m_flRemoveDist
 	}
 
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D)
@@ -2262,6 +2278,17 @@ namespace ElysiumNpcKernelBindings
 			AddScriptedSequenceSaveFields(D);
 			return true;
 		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPCMaker")) == 0)
+		{
+			AddNpcMakerFields(D);
+			AddNpcMakerSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPCMaker_Zombie")) == 0)
+		{
+			AddNpcMakerZombieFields(D);
+			return true;
+		}
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VAndreiBlood")) == 0)
 		{
 			AddAndreiBloodSaveFields(D);
@@ -2568,21 +2595,6 @@ namespace ElysiumNpcKernelBindings
 		TEXT("WalkToNode"),
 	};
 
-	const TCHAR* const GNpcMakerOutputs[] =
-	{
-		TEXT("OnLastNPCDied"),
-		TEXT("OnNPCDied"),
-		TEXT("OnSpawnNPC"),
-	};
-
-	const TCHAR* const GNpcMakerInputFuncs[] =
-	{
-		TEXT("Disable"),
-		TEXT("Enable"),
-		TEXT("Spawn"),
-		TEXT("Toggle"),
-	};
-
 	const TCHAR* const GInterestingPlaceOutputs[] =
 	{
 		TEXT("OnAnimEvent1"),
@@ -2667,6 +2679,21 @@ namespace ElysiumNpcKernelBindings
 		TEXT("BeginSequence"),
 		TEXT("CancelSequence"),
 		TEXT("MoveToPosition"),
+	};
+
+	const TCHAR* const GNpcMakerOutputs[] =
+	{
+		TEXT("OnLastNPCDied"),
+		TEXT("OnNPCDied"),
+		TEXT("OnSpawnNPC"),
+	};
+
+	const TCHAR* const GNpcMakerInputFuncs[] =
+	{
+		TEXT("Disable"),
+		TEXT("Enable"),
+		TEXT("Spawn"),
+		TEXT("Toggle"),
 	};
 
 	const TCHAR* const GAndreiBloodInputFuncs[] =
@@ -2779,20 +2806,20 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GCombatCharacterOutputs);
 			case EClass::NpcBase:
 				return MakeArrayView(GNpcBaseOutputs);
-			case EClass::NpcMaker:
-				return MakeArrayView(GNpcMakerOutputs);
 			case EClass::InterestingPlace:
 				return MakeArrayView(GInterestingPlaceOutputs);
 			case EClass::Hint:
 				return MakeArrayView(GHintOutputs);
 			case EClass::ConversationPlace:
 				return MakeArrayView(GConversationPlaceOutputs);
-			case EClass::NpcMakerZombie:
-				return TConstArrayView<const TCHAR*>();
 			case EClass::AiScriptedSchedule:
 				return TConstArrayView<const TCHAR*>();
 			case EClass::ScriptedSequence:
 				return MakeArrayView(GScriptedSequenceOutputs);
+			case EClass::NpcMaker:
+				return MakeArrayView(GNpcMakerOutputs);
+			case EClass::NpcMakerZombie:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::AndreiBlood:
 				return TConstArrayView<const TCHAR*>();
 			case EClass::Animal:
@@ -2870,20 +2897,20 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GCombatCharacterInputFuncs);
 			case EClass::NpcBase:
 				return MakeArrayView(GNpcBaseInputFuncs);
-			case EClass::NpcMaker:
-				return MakeArrayView(GNpcMakerInputFuncs);
 			case EClass::InterestingPlace:
 				return MakeArrayView(GInterestingPlaceInputFuncs);
 			case EClass::Hint:
 				return MakeArrayView(GHintInputFuncs);
 			case EClass::ConversationPlace:
 				return MakeArrayView(GConversationPlaceInputFuncs);
-			case EClass::NpcMakerZombie:
-				return TConstArrayView<const TCHAR*>();
 			case EClass::AiScriptedSchedule:
 				return MakeArrayView(GAiScriptedScheduleInputFuncs);
 			case EClass::ScriptedSequence:
 				return MakeArrayView(GScriptedSequenceInputFuncs);
+			case EClass::NpcMaker:
+				return MakeArrayView(GNpcMakerInputFuncs);
+			case EClass::NpcMakerZombie:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::AndreiBlood:
 				return MakeArrayView(GAndreiBloodInputFuncs);
 			case EClass::Animal:
@@ -2961,20 +2988,20 @@ namespace ElysiumNpcKernelBindings
 				return {150, 8, 2, 25, 0};
 			case EClass::NpcBase:
 				return {4, 0, 16, 1, 55};
-			case EClass::NpcMaker:
-				return {12, 0, 3, 4, 0};
 			case EClass::InterestingPlace:
 				return {8, 3, 10, 2, 0};
 			case EClass::Hint:
 				return {11, 0, 10, 5, 0};
 			case EClass::ConversationPlace:
 				return {10, 0, 6, 3, 0};
-			case EClass::NpcMakerZombie:
-				return {3, 0, 0, 0, 0};
 			case EClass::AiScriptedSchedule:
 				return {3, 0, 0, 1, 0};
 			case EClass::ScriptedSequence:
 				return {11, 0, 10, 3, 11};
+			case EClass::NpcMaker:
+				return {12, 0, 3, 4, 3};
+			case EClass::NpcMakerZombie:
+				return {3, 0, 0, 0, 0};
 			case EClass::AndreiBlood:
 				return {0, 0, 0, 1, 5};
 			case EClass::Animal:

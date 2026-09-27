@@ -72,6 +72,7 @@
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumNpc.h"           // FElysiumNpc::PlayActivity — the schedule's activity task
 #include "Substrate/ElysiumNpcGait.h"       // the travel-speed fallback a body with no fan takes
+#include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -242,6 +243,13 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 		return false;
 	}
 	TestEqual(TEXT("start-disabled installs no automatic think"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+	FElysiumNpcMaker* TypedMaker = Maker->AsNpc() != nullptr ? Maker->AsNpc()->AsSpecies<FElysiumNpcMaker>() : nullptr;
+	if (!TestNotNull(TEXT("npc_maker is CNPCMaker, a Troika NPC (story 5 fold A4)"), TypedMaker))
+	{
+		return false;
+	}
+	TestEqual(TEXT("and its disabled Spawn installs the inert think 0x101c0b60"),
+		FString(FElysiumNpcMaker::MakerThinkName(TypedMaker->InstalledThink)), FString(TEXT("inert")));
 	const int32 Before = World.NumEntities();
 	FElysiumEntity* SceneBlocker = World.FindByName(TEXT("scene_blocker"));
 	if (!TestNotNull(TEXT("scene blocker exists"), SceneBlocker))
@@ -302,7 +310,9 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	TestEqual(TEXT("one child was allocated"), World.NumEntities(), Before + 1);
 	TestEqual(TEXT("infinite mode forces fade spawnflags"), Child->SpawnFlags, 0x204);
 	TestEqual(TEXT("child owns the maker handle"), Child->GetOwnerEntity().Index, Maker->Handle.Index);
-	TestFalse(TEXT("maker controls are absent from the child template"),
+	// D10 (story 5 fold A4): the child replays the maker's OWN block (`+0x66cc`), keys it does not read
+	// included — not a filtered template.
+	TestTrue(TEXT("the maker's own block is replayed onto the child"),
 		Child->Def->Keys.Contains(TEXT("MaxLiveChildren")));
 	TestEqual(TEXT("ordinary template keys are cloned"), Child->Def->Keys.FindRef(TEXT("model")),
 		FString(TEXT("models/test_child.mdl")));
@@ -330,20 +340,31 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
 	TestEqual(TEXT("Enable schedules an immediate maker think"), Maker->NextThink, 0.0f);
+	TestEqual(TEXT("and installs the base MakerThink 0x1034bbf0"),
+		FString(FElysiumNpcMaker::MakerThinkName(TypedMaker->InstalledThink)), FString(TEXT("base")));
 	World.Tick(0.0);
 	TestEqual(TEXT("a timed live-limit retry uses SpawnFrequency"), Maker->NextThink, 5.0f);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("Disable")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
-	TestEqual(TEXT("Disable clears the maker think"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+	// `0x1034b4d0`: `ThinkSet(NULL)`, and `m_flNextThink` is NOT written.
+	TestEqual(TEXT("Disable clears the installed think"),
+		FString(FElysiumNpcMaker::MakerThinkName(TypedMaker->InstalledThink)), FString(TEXT("none")));
+	TestEqual(TEXT("and leaves m_flNextThink as it was"), Maker->NextThink, 5.0f);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("Toggle")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
 	TestEqual(TEXT("Toggle delegates disabled to immediate Enable"), Maker->NextThink, 0.0f);
+	TestEqual(TEXT("with the base think installed"),
+		FString(FElysiumNpcMaker::MakerThinkName(TypedMaker->InstalledThink)), FString(TEXT("base")));
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("Toggle")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
-	TestEqual(TEXT("Toggle delegates enabled to Disable"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("Toggle delegates enabled to Disable"),
+		FString(FElysiumNpcMaker::MakerThinkName(TypedMaker->InstalledThink)), FString(TEXT("none")));
+	// The think that came due in that tick ran first (a live-limit re-arm, +5); Disable then wrote
+	// no stamp.
+	TestEqual(TEXT("its stamp is the think's own re-arm"), Maker->NextThink, 5.0f);
 
 	// Player-dependent guards fail open when no player entity exists; occupancy still runs.
 	FElysiumRecordingServices NoPlayerServices;
@@ -385,6 +406,11 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("live ceiling survives save/load"),
 		ReadInt(*RestoredMaker, TEXT("m_cLiveChildren")), 1);
+	// D11: the installed think rides the record (retail saves `m_pfnThink` through the FUNCTIONTABLE).
+	const FElysiumNpcMaker* RestoredTyped = RestoredMaker->AsNpc() != nullptr
+		? RestoredMaker->AsNpc()->AsSpecies<FElysiumNpcMaker>() : nullptr;
+	TestTrue(TEXT("the installed think survives save/load"), RestoredTyped != nullptr
+		&& RestoredTyped->InstalledThink == TypedMaker->InstalledThink);
 	TestEqual(TEXT("owner handle rebases to the restored maker"),
 		RestoredChild->GetOwnerEntity().Index, RestoredMaker->Handle.Index);
 	const int32 RestoredCount = Restored.NumEntities();
@@ -403,6 +429,30 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	RestoredChild->Kill();
 	TestEqual(TEXT("death followed by Kill does not notify twice"),
 		ReadInt(*RestoredMaker, TEXT("m_cLiveChildren")), 0);
+
+	// D6: the live-removal refund is UNCONDITIONAL (`1034bcb7 INC [ESI+0x6660]`, no `m_bInfChild`
+	// test): an INFINITE maker's total grows too.
+	{
+		const int32 TotalBefore = ReadInt(*RestoredMaker, TEXT("MaxNPCCount"));
+		ExplicitSpawn(Restored, RestoredMaker->Handle);
+		FElysiumEntity* LiveChild = nullptr;
+		for (const TUniquePtr<FElysiumEntity>& Candidate : Restored.Entities())
+		{
+			if (Candidate.IsValid() && !Candidate->IsDead() && Candidate.Get() != RestoredChild
+				&& Candidate->TargetName.Equals(TEXT("child"), ESearchCase::IgnoreCase))
+			{
+				LiveChild = Candidate.Get();
+			}
+		}
+		if (TestNotNull(TEXT("the infinite maker spawns again once the ceiling frees"), LiveChild))
+		{
+			TestEqual(TEXT("an infinite spawn consumes nothing"),
+				ReadInt(*RestoredMaker, TEXT("MaxNPCCount")), TotalBefore);
+			LiveChild->Kill();
+			TestEqual(TEXT("and a live removal still refunds, infinite or not"),
+				ReadInt(*RestoredMaker, TEXT("MaxNPCCount")), TotalBefore + 1);
+		}
+	}
 
 	// Removing a live finite child refunds the consumed total and never needs a rendered body.
 	FElysiumEntityDefs FiniteDefs = MakeDefs();

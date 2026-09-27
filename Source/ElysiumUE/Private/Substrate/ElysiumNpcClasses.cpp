@@ -68,6 +68,8 @@
 #include "Substrate/ElysiumNpcKernelBindings.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerFleshpile.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Tests/ElysiumNpcTestHooks.h"
@@ -90,7 +92,6 @@ bool ElysiumNpcTestHooks::ApplyResolvedTemplate(FElysiumEntity& Entity,
 
 // --- Registration -----------------------------------------------------------------------------
 
-static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
 static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FElysiumInterestingPlace>(); }
 static TUniquePtr<FElysiumEntity> MakeHint()      { return MakeUnique<FElysiumHint>(); }
 static TUniquePtr<FElysiumEntity> MakeConversationPlace() { return MakeUnique<FElysiumConversationPlace>(); }
@@ -253,29 +254,6 @@ static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("testflags"),         &FElysiumInterestingPlace::TestFlags);
 }
 
-static void BuildNpcMakerClass(FElysiumClassDesc& D)
-{
-	ElysiumNpcKernelBindings::AddNpcMakerFields(D);
-
-	D.Input(TEXT("Spawn"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpcMaker&>(E).InputSpawn(Args); });
-	D.Input(TEXT("Enable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpcMaker&>(E).InputEnable(Args); });
-	D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpcMaker&>(E).InputDisable(Args); });
-	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpcMaker&>(E).InputToggle(Args); });
-	// The maker is a Troika NPC in retail; its `DisableThink` is inherited onto every child.
-	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
-		{ static_cast<FElysiumNpcMaker&>(E).InputDisableThink(Args); });
-
-	// The datamap's two save-only rows (no external name, so nothing to generate): the live-child
-	// counter the spawner owns and its cached ground height.
-	using FM = FElysiumNpcMaker;
-	ElysiumAddClassField(D, TEXT("m_cLiveChildren"),   &FM::LiveChildren, EElysiumField::Save);
-	ElysiumAddClassField(D, TEXT("m_flGround"),        &FM::CachedGroundZ, EElysiumField::Save);
-}
-
 // The ordinary NPC classes (story 5 step 2). Each classname registers the C++ class retail's
 // factory builds for it (`story-5/factories.tsv`, replayed from the 74 factories); two retail
 // classes carry two classnames each (`CNPC_VPedestrian`, `CNPC_ProneDialog`). Above the classnames
@@ -384,6 +362,10 @@ static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 	{ TEXT("CCineAI"), TEXT("CCineNPC") },
 	{ TEXT("CCineAISchedule"), TEXT("CCineNPC") },
 	{ TEXT("CCineNPC"), TEXT("CAI_BaseNPC") },
+	// The makers (story 5 fold A4): `CNPCMaker` IS a Troika NPC; its two variants derive from it.
+	{ TEXT("CNPCMaker"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPCMaker_Fleshpile"), TEXT("CNPCMaker") },
+	{ TEXT("CNPCMaker_Zombie"), TEXT("CNPCMaker") },
 	{ TEXT("CNPC_ProneDialog"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VAndreiBlood"), TEXT("CNPC_VVampireBoss") },
 	{ TEXT("CNPC_VAnimal"), TEXT("CAI_BaseNPCTroika") },
@@ -446,6 +428,10 @@ static const FElysiumNpcClassnameRow GNpcClassnames[] =
 	// (`aiscripted_schedule`), `0x1000886e` (`aiscripted_sequence`), and `scripted_sequence`'s.
 	{ TEXT("aiscripted_schedule"), TEXT("CCineAISchedule"), &MakeNpcOf<FElysiumAiScriptedSchedule> },
 	{ TEXT("aiscripted_sequence"), TEXT("CCineAI"), &MakeNpcOf<FElysiumAiScriptedSequence> },
+	// The makers (story 5 fold A4), each classname its own class.
+	{ TEXT("npc_maker"), TEXT("CNPCMaker"), &MakeNpcOf<FElysiumNpcMaker> },
+	{ TEXT("npc_maker_fleshpile"), TEXT("CNPCMaker_Fleshpile"), &MakeNpcOf<FElysiumNpcMakerFleshpile> },
+	{ TEXT("npc_maker_zombie"), TEXT("CNPCMaker_Zombie"), &MakeNpcOf<FElysiumNpcMakerZombie> },
 	{ TEXT("npc_payphone"), TEXT("CPayphone"), &MakeNpcOf<FElysiumNpcPayphone> },
 	{ TEXT("npc_VAndreiBlood"), TEXT("CNPC_VAndreiBlood"), &MakeNpcOf<FElysiumNpcAndreiBlood> },
 	{ TEXT("npc_VAnimal"), TEXT("CNPC_VAnimal"), &MakeNpcOf<FElysiumNpcAnimal> },
@@ -530,6 +516,8 @@ struct FElysiumNpcRegistrar
 			// The directors' datamap inputs (`CCineNPC` `0x10593628`, `CCineAISchedule` `0x10593c9c`).
 			FElysiumScriptedSequence::AddInputs(D, Row.RetailClass);
 			FElysiumAiScriptedSchedule::AddInputs(D, Row.RetailClass);
+			// The makers' datamap inputs (`CNPCMaker` `0x10624718`).
+			FElysiumNpcMaker::AddInputs(D, Row.RetailClass);
 		}
 		// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the class
 		// `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it decides
@@ -545,18 +533,6 @@ struct FElysiumNpcRegistrar
 		{
 			Reg.Register(FName(Row.Classname), FName(Row.RetailClass), Row.Factory);
 		}
-
-		static const TCHAR* const MakerClasses[] = { TEXT("npc_maker"), TEXT("npc_maker_fleshpile") };
-		for (const TCHAR* Name : MakerClasses)
-		{
-			BuildNpcMakerClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeNpcMaker));
-		}
-		// `CNPCMaker_Zombie` (0018 story 2): the shared maker leaf plus the zombie's own three rows.
-		// Its think is a seam (`FElysiumNpcMaker::Think`).
-		FElysiumClassDesc& ZombieMaker = Reg.Register(TEXT("npc_maker_zombie"), ElysiumBaseClassName(),
-			&MakeNpcMaker);
-		BuildNpcMakerClass(ZombieMaker);
-		ElysiumNpcKernelBindings::AddNpcMakerZombieFields(ZombieMaker);
 
 		// `ai_hint` — the live `CAI_Hint` every hint-making `info_node*` row becomes
 		// (`ElysiumNodeEntity::ApplyHintReplacement`).

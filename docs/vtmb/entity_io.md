@@ -1671,6 +1671,17 @@ logic-only base. Its own datamap adds `OnSpawnNPC` (`+0x6668`), `OnNPCDied` (`+0
 `OnFedUponBegin`, `OnFedUponEnd`, `OnDamaged`, `OnIncapacitated`, `OnFoundPlayer`, `OnDialogEnd`
 and `OnDeath` syntactically valid on the maker record.
 
+**A maker IS a Troika NPC** (story 5 fold A4, 2026-09-27): `CAI_BaseNPC`'s constructor adds it to the
+AI list and sets `m_pBaseNPC` (`+0x94`), the Troika's sets `m_pTroika` (`+0x98`). So every AI-list
+walk visits it — `SetAIEnabled` `0x10265680` and `WakeNpcsNear` `0x1028d820` (teleports,
+`point_teleport`) dispatch slot 614 `ResetThinkTimers` on it, pulling its think to now. What keeps
+it a marker is its own slot table: `Spawn` and `Activate` chain no NPC body (no `NPCInit`, no
+`NPCThink`, no model), `SetSolid(SOLID_NONE)`, `ShouldTransmit` false, the four cones,
+`CanWitnessSupernatural` and the discipline veto (slot 72) false. The maker's authored NPC keys
+(`vision`, `pl_*`, `percent_occluded_*` ...) land on its own Troika words, which `MakeNPC` copies to
+each child. Its entry point is its **installed think** (`m_pfnThink`), never `NPCThink`, so neither
+`m_bDisableAI` nor the `g_AIDisabled` gate stops it: a maker keeps its cadence through a feed.
+
 ### State and admission
 
 The maker keeps two independent quotas. `MaxNPCCount` (`+0x6660`) is the mutable number of finite
@@ -1698,10 +1709,15 @@ order:
 A rejected attempt allocates no entity, changes neither quota, and fires no maker output.
 `Flag_StartDisabled` (`m_bDisabled`, `+0x66c0`) controls only automatic thinking: it does not block
 an explicit `Spawn` input. `Spawn` (`FUN_1034afe0`) initializes the live count to zero, installs
-`MakerThink` at `curtime + SpawnFrequency` when enabled, installs no think when disabled, and clears
-the cached ground height. `Enable` refuses a finite depleted maker; otherwise it clears the disabled
-latch and schedules an immediate think at current time. `Disable` sets the latch and clears the
-think; `Toggle` selects between those two operations.
+`MakerThink` at `curtime + SpawnFrequency` when enabled, installs the inert bare-`RET` think
+`0x101c0b60` when disabled (the zombie maker installs NULL) without writing `m_flNextThink`, and
+clears the cached ground height. `Enable` (`0x1034b490`) refuses a finite depleted maker; otherwise
+it clears the disabled latch, installs the **base** `MakerThink` (`0x1000696a` -> `0x1034bbf0`) on
+**every** maker class — an enabled fleshpile or zombie maker runs the base think, whose slot-617
+call still reaches its own `MakeNPC` — and stamps `m_flNextThink = curtime`. `Disable`
+(`0x1034b4d0`) sets the latch and `ThinkSet(NULL)`, leaving `m_flNextThink` as it was; `Toggle`
+selects between those two operations. A slot-614 reset of a disabled or depleted maker therefore
+runs the inert or NULL think and spawns nothing.
 
 After a successful timed attempt, or a failure caused by the live ceiling, `MakerThink` retries at
 `curtime + SpawnFrequency`. Other admission failures retry after a random 1-to-2-second delay. This
@@ -1711,18 +1727,31 @@ at the full authored frequency.
 ### Child construction and output ownership
 
 On an admitted attempt, `FUN_1034b7b0` creates the class named by `NPCType`, rejects a null or
-non-Troika NPC, copies the maker's raw keyvalue template through the child's ordinary parser, runs
-the class initialization, and copies the maker's NPC type and model. It then fires `OnSpawnNPC`
+non-Troika NPC, replays the maker's OWN raw keyvalue block (`m_sRefMapDataBuffer` `+0x76cc`,
+targetname included) through the child's `ParseMapData`, dispatches the child's slot 111, and sets
+its classname to `NPCType`. A child therefore keeps the MAKER's targetname unless `NPCTargetname`
+is authored non-empty (an empty key is a null `string_t`, `0x1042bff0`, and `SetName` is skipped);
+`StartHidden` in the block is not consumed, because only the map loader's `PostSpawn` `0x100aaf30`
+reads it. It then fires `OnSpawnNPC`
 with the maker as both activator and caller **before** applying child spawn flags and relationship
 template data, dispatching the child spawn, associating the maker as owner, assigning
 `NPCTargetname`, or incrementing either quota. `Flag_Fade` adds child spawnflag `0x200` to the base
 value `4`.
 
 Only after successful dispatch does the maker increment `m_cLiveChildren`. A finite maker then
-decrements `MaxNPCCount`; reaching zero clears `MakerThink`. Infinite mode leaves the remaining
-total untouched. `Flag_NoDrop` (`+0x66c4`) is declared on this datamap but is not consumed by this
-base `CNPCMaker` child-construction body; a nearby specialized maker path references it, so its exact
-leaf-specific effect remains outside this base-class result.
+decrements `MaxNPCCount`; reaching zero clears `MakerThink` (`ThinkSet(NULL)`). Infinite mode leaves
+the remaining total untouched. The copies onto the child are the maker's own words: the
+perception triple (`InitPerceptionDistances` then runs on the MAKER), `+0x63d9`, the five
+`m_iPercentOccluded*`, `+0x6434..+0x6436`, `SetDisableAI(child, maker's)`, and last
+`m_bCameFromSpawner`. Slot 617 returns the child. `Flag_NoDrop` (`+0x66c4`) is not consumed by this
+base body; `CNPCMaker_Fleshpile::MakeNPC` (`0x1034c2d0`) is its one reader (the spawn-box floor).
+
+The fleshpile maker (`npc_maker_fleshpile`) does **not** spawn from its think: `0x1034c8b0` only
+re-arms `m_flNextThink = freq + curtime`. Its runners come from `CNPC_VAndreiBlood::StartTask`
+`0x1035d1b0` case `0x154` (the summon): the nearest `npc_maker_fleshpile` within 1024 units
+(`0x100f7d50`), cast to `CNPCMaker_Fleshpile`, slot 617 `MakeNPC(0)`. Its own `MakeNPC` is gated on
+Andrei's runner budget (`m_iActiveRunnerCount < 2`), replays no map data, copies its own set of
+words and writes none of the base's counters.
 
 The inherited NPC rows are **child templates, not maker-forwarded notifications**. Each child owns
 a newly parsed copy of those action lists and its own positive `times` counters. Feeding, damage,
@@ -1731,9 +1760,11 @@ through the maker changes their activator/caller provenance.
 
 ### Child death and removal
 
-The separate child notification (`FUN_1034bc90`) has a per-child once guard. If the notified child
-is still alive, removal refunds one finite remaining-total slot and does not fire `OnNPCDied`. A
-genuinely dead child fires `OnNPCDied` without a refund. The maker then tests finite-total
+The separate child notification (`FUN_1034bc90`, slot 139) has a per-child once guard
+(`m_bHasCalledMakerDeathNotice` `+0x44c`). If the notified child is still alive, removal refunds one
+remaining-total slot — **unconditionally**, infinite makers included (`1034bcb7 INC [ESI+0x6660]`,
+no `m_bInfChild` test) — and does not fire `OnNPCDied`. A genuinely dead child fires `OnNPCDied`
+without a refund. The maker then tests finite-total
 depletion and fires `OnLastNPCDied` when depleted, before decrementing `m_cLiveChildren` and
 clamping it to zero. The code does not include a second `m_cLiveChildren == 1` test at that output,
 and infinite makers are never depleted through this path.

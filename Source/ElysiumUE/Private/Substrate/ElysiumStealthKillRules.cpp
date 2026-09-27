@@ -103,7 +103,8 @@ namespace
 		{
 			FElysiumEntity* Ent = EntPtr.Get();
 			FElysiumNpc* Npc = Ent ? Ent->AsNpc() : nullptr;
-			if (!Npc || Npc->IsInert() || Npc->Handle == Ignore)
+			// A non-solid NPC (a maker's `SOLID_NONE`, story 5 fold A4) has no hull a trace can hit.
+			if (!Npc || Npc->IsInert() || Npc->Handle == Ignore || Npc->IsRetailNotSolid())
 			{
 				continue;
 			}

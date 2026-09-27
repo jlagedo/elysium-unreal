@@ -19,6 +19,8 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerFleshpile.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **SpeciesLifecycle10** — one case per `rule` row, twelve in all. Every
@@ -83,15 +85,15 @@ namespace
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpcMaker* Base = nullptr;
-		FElysiumNpcMaker* Fleshpile = nullptr;
-		FElysiumNpcMaker* Zombie = nullptr;
+		FElysiumNpcMakerFleshpile* Fleshpile = nullptr;
+		FElysiumNpcMakerZombie* Zombie = nullptr;
 
 		FSpeciesLifecycle10MakerFixture()
 			: World(Build())
 		{
-			Base = Get(TEXT("maker"));
-			Fleshpile = Get(TEXT("fleshmaker"));
-			Zombie = Get(TEXT("zombiemaker"));
+			Base = Get<FElysiumNpcMaker>(TEXT("maker"));
+			Fleshpile = Get<FElysiumNpcMakerFleshpile>(TEXT("fleshmaker"));
+			Zombie = Get<FElysiumNpcMakerZombie>(TEXT("zombiemaker"));
 		}
 
 		static FElysiumNpcWorldBuilder Build()
@@ -119,10 +121,13 @@ namespace
 			return Builder;
 		}
 
-		FElysiumNpcMaker* Get(const TCHAR* Name)
+		// Each classname builds its own class (story 5 fold A4): the typed view is the tree's.
+		template <typename T>
+		T* Get(const TCHAR* Name)
 		{
 			FElysiumEntity* Entity = World.World.FindByName(Name);
-			return Entity != nullptr ? static_cast<FElysiumNpcMaker*>(Entity) : nullptr;
+			FElysiumNpc* Npc = Entity != nullptr ? Entity->AsNpc() : nullptr;
+			return Npc != nullptr ? Npc->AsSpecies<T>() : nullptr;
 		}
 	};
 }
@@ -185,14 +190,20 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnTest::RunTest(const FString&)
 	// next-think stamp — retail leaves `m_flNextThink` where it stood.
 	M.bDisabled = true;
 	M.RelinkCalls = 0;
+	const float StampBefore = M.NextThink;
 	M.Spawn();
 	TestEqual(TEXT("the disabled base maker installs the INERT think, not a null one"),
 		FString(FElysiumNpcMaker::MakerThinkName(M.InstalledThink)), FString(TEXT("inert")));
-	TestEqual(TEXT("a disabled maker never becomes due"), M.NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("and leaves m_flNextThink where it stood"), M.NextThink, StampBefore);
 	TestEqual(TEXT("and Relink still ran — it is on both paths"), M.RelinkCalls, 1);
+	// Whatever the stamp, the inert body does nothing when it comes due: no child, no re-arm.
+	const int32 LiveBefore = M.LiveChildren;
+	M.Think();
+	TestEqual(TEXT("the inert think spawns nothing"), M.LiveChildren, LiveBefore);
 
-	// Nothing on the base arm touches the police thresholds.
-	TestEqual(TEXT("the base maker leaves m_iPLInvestigateLevel alone"), M.PlInvestigate, 0);
+	// Nothing on the base arm touches the police thresholds: the Troika's own default stands.
+	TestEqual(TEXT("the base maker leaves m_iPLInvestigateLevel alone"), M.PlInvestigate,
+		ElysiumNpcWitness::DefaultThreshold);
 	return true;
 }
 
@@ -206,8 +217,9 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnFleshpileTest::RunTest(const F
 	{
 		return false;
 	}
-	FElysiumNpcMaker& M = *Fix.Fleshpile;
-	TestTrue(TEXT("it is the fleshpile variant"), M.IsFleshpileMaker());
+	FElysiumNpcMakerFleshpile& M = *Fix.Fleshpile;
+	TestTrue(TEXT("it is its own class, CNPCMaker_Fleshpile"),
+		M.RetailClass() != nullptr && FString(M.RetailClass()->Name) == TEXT("CNPCMaker_Fleshpile"));
 
 	// `CNPCMaker_Fleshpile::Spawn` `0x1034c020` is byte-identical to `0x1034afe0` but for the think
 	// body it installs: `0x10010dd4` -> `0x1034c8b0` instead of `0x1000696a` -> `0x1034bbf0`.
@@ -246,10 +258,11 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnZombieTest::RunTest(const FStr
 	{
 		return false;
 	}
-	FElysiumNpcMaker& M = *Fix.Zombie;
+	FElysiumNpcMakerZombie& M = *Fix.Zombie;
 
 	// A real `npc_maker_zombie` (`CNPCMaker_Zombie`, factory `0x1034c980`).
-	TestTrue(TEXT("npc_maker_zombie is CNPCMaker_Zombie"), M.IsZombieMaker());
+	TestTrue(TEXT("npc_maker_zombie is CNPCMaker_Zombie"),
+		M.RetailClass() != nullptr && FString(M.RetailClass()->Name) == TEXT("CNPCMaker_Zombie"));
 
 	M.SpawnFrequency = 3.0f;
 	M.bDisabled = false;

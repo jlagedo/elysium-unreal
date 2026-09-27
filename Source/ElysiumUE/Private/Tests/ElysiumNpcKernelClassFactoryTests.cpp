@@ -8,7 +8,11 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerFleshpile.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Substrate/ElysiumNpcTestHull.h"
+#include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 5 step 2: the classname -> class map is retail's factories
@@ -16,9 +20,9 @@
 // `vampire.dll`; `docs/vtmb/npc-ai/population.md`, "The classname -> class map, read from the
 // factories"). Every living ordinary-NPC classname builds its own C++ class, which answers its own
 // census row; the retail classes above it are abstract descriptors a map cannot stand; the dead
-// names stay unregistered; the deferred classes keep their pre-step-2 factories until their folds
-// (commit A; the test hull, which has no classname, stands at fold A1; the controller line's three
-// classnames are NPC factories since fold A2).
+// names stay unregistered. Commit A folded the ten deferred classes (the test hull, which has no
+// classname, at fold A1; the controller line at A2; the directors at A3; the makers at A4), so no
+// live retail class is deferred any more.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelFactoryFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -125,20 +129,13 @@ namespace
 		{ TEXT("scripted_target"), TEXT("CScriptedTarget") },
 	};
 
-	struct FDeferredRow
+	// The makers' three classnames (story 5 fold A4): `CNPCMaker` IS a `CAI_BaseNPCTroika`, and its
+	// two variants derive from it. Troika NPCs by class, with no body (`AsNpc` answers).
+	const FFactoryRow GMakerFactories[] =
 	{
-		const TCHAR* Classname;
-		const TCHAR* RetailClass;
-		bool bRegistered;   // `factories.tsv` `current_registry` is not `unregistered-base-fallback`
-		FName PriorBase;    // the base its pre-step-2 registration hangs from
-	};
-
-	// The deferred classes' classnames (fold A4); each keeps its pre-step-2 registration.
-	const FDeferredRow GDeferredFactories[] =
-	{
-		{ TEXT("npc_maker"), TEXT("CNPCMaker"), true, ElysiumBaseClassName() },
-		{ TEXT("npc_maker_fleshpile"), TEXT("CNPCMaker_Fleshpile"), true, ElysiumBaseClassName() },
-		{ TEXT("npc_maker_zombie"), TEXT("CNPCMaker_Zombie"), true, ElysiumBaseClassName() },
+		{ TEXT("npc_maker"), TEXT("CNPCMaker") },
+		{ TEXT("npc_maker_fleshpile"), TEXT("CNPCMaker_Fleshpile") },
+		{ TEXT("npc_maker_zombie"), TEXT("CNPCMaker_Zombie") },
 	};
 
 	// The registry's base chain above `Desc`, as names.
@@ -257,11 +254,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassPartitionTest,
 bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 {
 	// The 74 replayed factories partition into the 45 step-2 classnames, the 3 of the controller
-	// line (fold A2), the 3 directors (fold A3), the 20 dead names and the 3 names of the deferred
-	// maker fold, and the census carries exactly those, each on its own class.
+	// line (fold A2), the 3 directors (fold A3), the 3 makers (fold A4) and the 20 dead names, and
+	// the census carries exactly those, each on its own class.
 	const int32 Listed = UE_ARRAY_COUNT(GStep2Factories) + UE_ARRAY_COUNT(GControllerLineFactories)
-		+ UE_ARRAY_COUNT(GDirectorFactories) + UE_ARRAY_COUNT(GDeadClassnames)
-		+ UE_ARRAY_COUNT(GDeferredFactories);
+		+ UE_ARRAY_COUNT(GDirectorFactories) + UE_ARRAY_COUNT(GMakerFactories)
+		+ UE_ARRAY_COUNT(GDeadClassnames);
 	TestEqual(TEXT("45 + 3 + 3 + 20 + 3 names"), Listed, 74);
 	int32 CensusNames = 0;
 	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
@@ -279,7 +276,7 @@ bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 	for (const FFactoryRow& Row : GControllerLineFactories) { Check(Row.Classname, Row.RetailClass); }
 	for (const FFactoryRow& Row : GDirectorFactories) { Check(Row.Classname, Row.RetailClass); }
 	for (const FFactoryRow& Row : GDeadClassnames) { Check(Row.Classname, Row.RetailClass); }
-	for (const FDeferredRow& Row : GDeferredFactories) { Check(Row.Classname, Row.RetailClass); }
+	for (const FFactoryRow& Row : GMakerFactories) { Check(Row.Classname, Row.RetailClass); }
 	return true;
 }
 
@@ -297,6 +294,10 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 		Abstract.AddUnique(Row.RetailClass);
 	}
 	for (const FFactoryRow& Row : GControllerLineFactories)
+	{
+		Abstract.AddUnique(Row.RetailClass);
+	}
+	for (const FFactoryRow& Row : GMakerFactories)
 	{
 		Abstract.AddUnique(Row.RetailClass);
 	}
@@ -382,28 +383,109 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s stands as a record"), Name),
 			Entity.IsValid() && Entity->IsRecordOnly() && Entity->AsNpc() == nullptr);
 	}
-	// The deferred classes keep the registration they had before step 2 until their fold: a live
-	// entity that is not yet an `FElysiumNpc`.
-	for (const FDeferredRow& Row : GDeferredFactories)
+	// Nothing is deferred any more (story 5 fold A4): the three maker classnames, the last deferred
+	// factory rows, build their own NPC classes under their retail class, which hangs from
+	// `CAI_BaseNPCTroika`. A bare def still stands a live entity (its missing model removes it at
+	// `Spawn`, not here) and it is an `FElysiumNpc`.
+	for (const FFactoryRow& Row : GMakerFactories)
 	{
 		const FElysiumClassDesc* Desc = Reg.Find(FName(Row.Classname));
-		TestEqual(FString::Printf(TEXT("%s keeps its registration"), Row.Classname), Desc != nullptr,
-			Row.bRegistered);
-		TestFalse(FString::Printf(TEXT("%s is not abstract"), Row.Classname),
-			Desc != nullptr && Desc->bAbstract);
-		if (Desc != nullptr)
+		if (!TestNotNull(FString::Printf(TEXT("%s is registered"), Row.Classname), Desc))
 		{
-			TestEqual(FString::Printf(TEXT("%s keeps its pre-step-2 base"), Row.Classname),
-				Desc->BaseName, Row.PriorBase);
+			continue;
 		}
+		TestFalse(FString::Printf(TEXT("%s is not abstract"), Row.Classname), Desc->bAbstract);
+		TestEqual(FString::Printf(TEXT("%s hangs from its retail class"), Row.Classname),
+			Desc->BaseName, FName(Row.RetailClass));
 		FElysiumEntityDef Def;
 		Def.Classname = Row.Classname;
 		TUniquePtr<FElysiumEntity> Entity = Reg.Create(Def, FElysiumEntityHandle(0, 1));
-		TestEqual(FString::Printf(TEXT("%s builds a live entity only if registered"), Row.Classname),
-			Entity.IsValid() && !Entity->IsRecordOnly(), Row.bRegistered);
-		TestTrue(FString::Printf(TEXT("%s (%s) is not yet an FElysiumNpc"), Row.Classname,
-			Row.RetailClass), Entity.IsValid() && Entity->AsNpc() == nullptr);
+		FElysiumNpc* Npc = Entity.IsValid() ? Entity->AsNpc() : nullptr;
+		if (TestNotNull(FString::Printf(TEXT("%s (%s) is an FElysiumNpc"), Row.Classname, Row.RetailClass), Npc))
+		{
+			const FElysiumNpcClass* Cls = Npc->RetailClass();
+			TestEqual(FString::Printf(TEXT("%s answers %s"), Row.Classname, Row.RetailClass),
+				Cls != nullptr ? FString(Cls->Name) : FString(), FString(Row.RetailClass));
+			TestNotNull(FString::Printf(TEXT("%s is a CNPCMaker by type"), Row.Classname),
+				Npc->AsSpecies<FElysiumNpcMaker>());
+		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassMakerFactoriesTest,
+	"Elysium.Substrate.NpcKernelClass.MakerFactories", GElysiumNpcKernelFactoryFlags)
+bool FElysiumNpcKernelClassMakerFactoriesTest::RunTest(const FString&)
+{
+	// The makers stand through the map-load path: a live NPC of its own class, not a record, whose
+	// descriptor derives exactly as retail's class does, carrying the Troika surface it inherits (a
+	// maker IS a `CAI_BaseNPCTroika`) and its own datamap inputs.
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_maker_factories"), 5151);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(GMakerFactories); ++Index)
+	{
+		FElysiumEntityDef& Def = Builder.AddEntity(GMakerFactories[Index].Classname,
+			GMakerFactories[Index].Classname, FVector(400.f * Index, 9000.f, 0.f));
+		Def.Keys.Add(TEXT("model"), TEXT("models/maker.mdl"));
+		Def.Keys.Add(TEXT("NPCType"), TEXT("npc_VHuman"));
+		Def.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+	}
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	for (const FFactoryRow& Row : GMakerFactories)
+	{
+		FElysiumEntity* Entity = F.World.FindByName(Row.Classname);
+		if (!TestNotNull(FString::Printf(TEXT("%s stands"), Row.Classname), Entity))
+		{
+			continue;
+		}
+		FElysiumNpc* Npc = Entity->AsNpc();
+		if (!TestNotNull(FString::Printf(TEXT("%s is an NPC"), Row.Classname), Npc))
+		{
+			continue;
+		}
+		TestNotNull(FString::Printf(TEXT("%s is an NPC base"), Row.Classname), Entity->AsNpcBase());
+		TestNotNull(FString::Printf(TEXT("%s is a combat character"), Row.Classname), Entity->AsCombatCharacter());
+		const FElysiumNpcClass* Cls = Npc->RetailClass();
+		TestEqual(FString::Printf(TEXT("%s answers its factory's class"), Row.Classname),
+			Cls != nullptr ? FString(Cls->Name) : FString(), FString(Row.RetailClass));
+		if (!TestNotNull(FString::Printf(TEXT("%s has a descriptor"), Row.Classname), Entity->Class))
+		{
+			continue;
+		}
+		const TArray<FString> Chain = RegistryChain(*Entity->Class);
+		const TArray<FString> Expected = ProjectedChain(Row.RetailClass);
+		const bool bPrefix = Chain.Num() >= Expected.Num()
+			&& TArray<FString>(Chain.GetData(), Expected.Num()) == Expected;
+		TestTrue(FString::Printf(TEXT("%s's descriptor chain [%s] begins [%s]"), Row.Classname,
+			*FString::Join(Chain, TEXT(" ")), *FString::Join(Expected, TEXT(" "))), bPrefix);
+		// Its own inputs, on `CNPCMaker`'s descriptor, and the Troika's `DisableThink` inherited.
+		for (const TCHAR* Input : { TEXT("Spawn"), TEXT("Enable"), TEXT("Disable"), TEXT("Toggle"),
+			TEXT("DisableThink") })
+		{
+			TestTrue(FString::Printf(TEXT("%s resolves input %s"), Row.Classname, Input),
+				Reg.FindInput(*Entity->Class, FName(Input)) != nullptr);
+		}
+		// Its own words, generated per class: the zombie's three only on the zombie.
+		TestNotNull(FString::Printf(TEXT("%s resolves field NPCType"), Row.Classname),
+			Reg.FindField(*Entity->Class, FName(TEXT("NPCType"))));
+		TestNotNull(FString::Printf(TEXT("%s resolves the saved m_sRefMapDataBuffer"), Row.Classname),
+			Reg.FindField(*Entity->Class, FName(TEXT("m_sRefMapDataBuffer"))));
+		TestEqual(FString::Printf(TEXT("%s has remove_distance only on the zombie maker"), Row.Classname),
+			Reg.FindField(*Entity->Class, FName(TEXT("remove_distance"))) != nullptr,
+			FCString::Strcmp(Row.RetailClass, TEXT("CNPCMaker_Zombie")) == 0);
+		// And the Troika's keyed words, which a maker authors on itself (`vision`, `pl_investigate`).
+		TestNotNull(FString::Printf(TEXT("%s resolves the Troika's vision"), Row.Classname),
+			Reg.FindField(*Entity->Class, FName(TEXT("vision"))));
+	}
+	TestNotNull(TEXT("npc_maker_fleshpile builds FElysiumNpcMakerFleshpile"),
+		F.World.FindByName(TEXT("npc_maker_fleshpile")) != nullptr
+			? F.World.FindByName(TEXT("npc_maker_fleshpile"))->AsNpc()->AsSpecies<FElysiumNpcMakerFleshpile>()
+			: nullptr);
+	TestNotNull(TEXT("npc_maker_zombie builds FElysiumNpcMakerZombie"),
+		F.World.FindByName(TEXT("npc_maker_zombie")) != nullptr
+			? F.World.FindByName(TEXT("npc_maker_zombie"))->AsNpc()->AsSpecies<FElysiumNpcMakerZombie>()
+			: nullptr);
 	return true;
 }
 
@@ -411,31 +493,14 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 // tests for ... current factories; all ten deferred classes remain explicitly listed").
 //
 // The registry's NPC line is exactly the factory map: every constructible descriptor under
-// `CAI_BaseNPC` is one of the 45 step-2 classnames, the controller line's 3 (fold A2) or the
-// directors' 3 (fold A3) hanging from its own retail class, every abstract one is a live census class, and none of the three still-deferred classes has an NPC descriptor yet
-// (the test hull, fold A1, stands as an abstract live census class).
+// `CAI_BaseNPC` is one of the 45 step-2 classnames, the controller line's 3 (fold A2), the
+// directors' 3 (fold A3) or the makers' 3 (fold A4) hanging from its own retail class, every
+// abstract one is a live census class, and every live census class stands on the line — no class
+// is deferred (the test hull, fold A1, stands as an abstract live census class).
 namespace
 {
-	// `manifest.json` `deferred_classes` (git at `a00cd11b`), less the folds commit A has landed:
-	// A1 the test hull, A2 the controller line and A3 the directors; A4 the makers remain.
-	const TCHAR* const GDeferredClasses[] =
-	{
-		TEXT("CNPCMaker"),
-		TEXT("CNPCMaker_Fleshpile"),
-		TEXT("CNPCMaker_Zombie"),
-	};
-
-	bool IsDeferredClass(const FString& RetailClass)
-	{
-		for (const TCHAR* Name : GDeferredClasses)
-		{
-			if (RetailClass == Name)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
+	// `manifest.json` `deferred_classes` (git at `a00cd11b`), less the folds commit A has landed: A1
+	// the test hull, A2 the controller line, A3 the directors, A4 the makers. None remains.
 
 	// Whether a descriptor is `CAI_BaseNPC` or derives from it through the registry chain.
 	bool OnNpcLine(const FElysiumClassDesc& Desc)
@@ -472,7 +537,8 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			Abstract.Add(Name);
 			const bool bLine = Name == TEXT("CAI_BaseNPC") || Name == TEXT("CAI_BaseNPCTroika");
 			TestTrue(FString::Printf(TEXT("abstract %s is a live census class"), *Name),
-				bLine || (ElysiumNpcKernelClass::Find(*Name) != nullptr && !IsDeferredClass(Name)));
+				bLine || (ElysiumNpcKernelClass::Find(*Name) != nullptr
+					&& !ElysiumNpcDeadClasses::Contains(*Name)));
 			return;
 		}
 		Constructible.Add(Name);
@@ -498,19 +564,27 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 				Row = &Candidate;
 			}
 		}
+		for (const FFactoryRow& Candidate : GMakerFactories)
+		{
+			if (Name == Candidate.Classname)
+			{
+				Row = &Candidate;
+			}
+		}
 		if (TestNotNull(FString::Printf(TEXT("constructible %s is a factory-map classname"), *Name), Row))
 		{
 			TestEqual(FString::Printf(TEXT("%s hangs from its retail class"), *Name),
 				Desc.BaseName, FName(Row->RetailClass));
 		}
 	});
-	TestEqual(TEXT("the registry's NPC line builds exactly the 45 step-2, 3 controller-line and 3 "
-		"director classnames"), Constructible.Num(),
+	TestEqual(TEXT("the registry's NPC line builds exactly the 45 step-2, 3 controller-line, 3 "
+		"director and 3 maker classnames"), Constructible.Num(),
 		static_cast<int32>(UE_ARRAY_COUNT(GStep2Factories) + UE_ARRAY_COUNT(GControllerLineFactories)
-			+ UE_ARRAY_COUNT(GDirectorFactories)));
+			+ UE_ARRAY_COUNT(GDirectorFactories) + UE_ARRAY_COUNT(GMakerFactories)));
 	TArray<FFactoryRow> NpcFactories(GStep2Factories, UE_ARRAY_COUNT(GStep2Factories));
 	NpcFactories.Append(GControllerLineFactories, UE_ARRAY_COUNT(GControllerLineFactories));
 	NpcFactories.Append(GDirectorFactories, UE_ARRAY_COUNT(GDirectorFactories));
+	NpcFactories.Append(GMakerFactories, UE_ARRAY_COUNT(GMakerFactories));
 	for (const FFactoryRow& Row : NpcFactories)
 	{
 		TestTrue(FString::Printf(TEXT("%s is registered on the NPC line"), Row.Classname),
@@ -519,32 +593,21 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			Abstract.Contains(Row.RetailClass));
 	}
 
-	// The three deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
-	// their classnames are exactly the three deferred factory rows.
-	TestEqual(TEXT("three classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 3);
-	int32 DeferredNames = 0;
-	for (const TCHAR* Name : GDeferredClasses)
+	// No deferred entry: EVERY live census class (the 56 of plan Appendix A; the 21 dead ones keep
+	// their census rows and no port class) has a descriptor on the NPC line.
+	int32 Live = 0;
+	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Name);
-		if (!TestNotNull(FString::Printf(TEXT("deferred %s is a census class"), Name), Cls))
+		if (ElysiumNpcDeadClasses::Contains(Row.Name))
 		{
 			continue;
 		}
-		DeferredNames += Cls->ClassnameCount;
-		const FElysiumClassDesc* Desc = Reg.Find(FName(Name));
-		TestFalse(FString::Printf(TEXT("deferred %s has no NPC descriptor before its fold"), Name),
+		++Live;
+		const FElysiumClassDesc* Desc = Reg.Find(FName(Row.Name));
+		TestTrue(FString::Printf(TEXT("live census class %s stands on the NPC line"), Row.Name),
 			Desc != nullptr && OnNpcLine(*Desc));
 	}
-	TestEqual(TEXT("the deferred classes carry the three deferred classnames"), DeferredNames,
-		static_cast<int32>(UE_ARRAY_COUNT(GDeferredFactories)));
-	for (const FDeferredRow& Row : GDeferredFactories)
-	{
-		TestTrue(FString::Printf(TEXT("%s belongs to a deferred class"), Row.Classname),
-			IsDeferredClass(Row.RetailClass));
-		const FElysiumClassDesc* Desc = Reg.Find(FName(Row.Classname));
-		TestFalse(FString::Printf(TEXT("%s is not on the NPC line"), Row.Classname),
-			Desc != nullptr && OnNpcLine(*Desc));
-	}
+	TestEqual(TEXT("56 live census classes, none deferred"), Live, 56);
 	return true;
 }
 

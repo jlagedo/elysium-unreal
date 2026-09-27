@@ -3,9 +3,9 @@
 // The datamap-backed field/input bindings of the port's NPC-family classes, transcribed from the
 // datamap replay (`research/ghidra/types/datamap_records-vampire.dll.json`; CBaseEntity 0x10552e18,
 // CBaseToggle 0x1059b6f0, CBaseAnimating 0x1054cd70, CBaseCombatCharacter 0x1061664c, CAI_BaseNPC
-// 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8,
-// CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
-// CCineAISchedule 0x10593c9c, CCineNPC 0x10593628, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
+// 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CAI_InterestingPlace 0x1060bdd8, CAI_Hint 0x106099f0,
+// CAI_InterestingPlaceConverstation 0x1060c2c0, CCineAISchedule 0x10593c9c, CCineNPC 0x10593628,
+// CNPCMaker 0x10624718, CNPCMaker_Zombie 0x106253e8, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
 // 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach 0x1062d22c, CNPC_VCameraSecurity
 // 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88, CNPC_VFrenzyShadow 0x10637aa8,
 // CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
@@ -27,8 +27,8 @@ struct FElysiumClassDesc;
 namespace ElysiumNpcKernelBindings
 {
 	enum class EClass : uint8 { BaseEntity, Toggle, Animating, CombatCharacter, NpcBase, Npc,
-		NpcMaker, InterestingPlace, Hint, ConversationPlace, NpcMakerZombie, AiScriptedSchedule,
-		ScriptedSequence, AndreiBlood, Animal, AsianVampire, Bach, CameraSecurity, ChangBros, Cop,
+		InterestingPlace, Hint, ConversationPlace, AiScriptedSchedule, ScriptedSequence, NpcMaker,
+		NpcMakerZombie, AndreiBlood, Animal, AsianVampire, Bach, CameraSecurity, ChangBros, Cop,
 		FrenzyShadow, Gargoyle, GhoulCroucher, Guard1, Hengeyokai, Hunter, Lasombra, ManBat,
 		MingXiao, MingXiaoTentacle, Pedestrian, SabbatLeader, Scurrying, SheriffMan, TaxiDriver,
 		Tzimisce, TzimisceHeadClaw, TzimisceRunner, VampireBoss, Werewolf, WolfMorph, Zombie };
@@ -39,13 +39,13 @@ namespace ElysiumNpcKernelBindings
 	void AddCombatCharacterFields(FElysiumClassDesc& D);
 	void AddNpcBaseFields(FElysiumClassDesc& D);
 	void AddNpcFields(FElysiumClassDesc& D);
-	void AddNpcMakerFields(FElysiumClassDesc& D);
 	void AddInterestingPlaceFields(FElysiumClassDesc& D);
 	void AddHintFields(FElysiumClassDesc& D);
 	void AddConversationPlaceFields(FElysiumClassDesc& D);
-	void AddNpcMakerZombieFields(FElysiumClassDesc& D);
 	void AddAiScriptedScheduleFields(FElysiumClassDesc& D);
 	void AddScriptedSequenceFields(FElysiumClassDesc& D);
+	void AddNpcMakerFields(FElysiumClassDesc& D);
+	void AddNpcMakerZombieFields(FElysiumClassDesc& D);
 	void AddAnimalFields(FElysiumClassDesc& D);
 	void AddCameraSecurityFields(FElysiumClassDesc& D);
 	void AddGhoulCroucherFields(FElysiumClassDesc& D);
@@ -56,6 +56,7 @@ namespace ElysiumNpcKernelBindings
 	void AddNpcBaseSaveFields(FElysiumClassDesc& D);
 	void AddNpcSaveFields(FElysiumClassDesc& D);
 	void AddScriptedSequenceSaveFields(FElysiumClassDesc& D);
+	void AddNpcMakerSaveFields(FElysiumClassDesc& D);
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D);
 	void AddAnimalSaveFields(FElysiumClassDesc& D);
 	void AddAsianVampireSaveFields(FElysiumClassDesc& D);

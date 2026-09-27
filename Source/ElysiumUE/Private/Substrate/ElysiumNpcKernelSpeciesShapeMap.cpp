@@ -16,6 +16,8 @@
 #include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcHunter.h"
 #include "Substrate/ElysiumNpcLasombra.h"
+#include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Substrate/ElysiumNpcManBat.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -100,11 +102,38 @@ namespace
 		FElysiumScriptedSequence, bSequenceStarted),  // m_sequenceStarted
 	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f94,
 		FElysiumScriptedSequence, NextCine),  // m_hNextCine
+	// --- CNPCMaker (story 5 fold A4). A Troika NPC in retail: its own words start at `+0x665c`,
+	// past the Troika's layout, and the Troika words it also authors (`vision`, `pl_*`, ...) bind on
+	// the inherited storage through the Troika map. `+0x66cc` (the 4 KB map-data buffer) is not a
+	// datamap row. ---
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x665c, FElysiumNpcMaker, NpcType),  // m_iszNPCClassname
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x6660, FElysiumNpcMaker, RemainingTotal),  // m_iMaxNumNPCs
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x6664, FElysiumNpcMaker, SpawnFrequency),  // m_flSpawnFrequency
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66b0, FElysiumNpcMaker, LiveChildren),  // m_cLiveChildren
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66b4, FElysiumNpcMaker, MaxLiveChildren),  // m_iMaxLiveChildren
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66b8, FElysiumNpcMaker, CachedGroundZ),  // m_flGround
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66bc, FElysiumNpcMaker, ChildTargetName),  // m_ChildTargetName
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c0, FElysiumNpcMaker, bDisabled),  // m_bDisabled
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c1, FElysiumNpcMaker, bNpcClip),  // m_bNPCClip
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c2, FElysiumNpcMaker, bFade),  // m_bFade
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c3, FElysiumNpcMaker, bInfinite),  // m_bInfChild
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c4, FElysiumNpcMaker, bNoDrop),  // m_bNoDrop
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c5, FElysiumNpcMaker, bViewCone),  // m_bViewCone
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x66c8, FElysiumNpcMaker, MinPcDistance),  // m_iMinPCDistance
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker, 0x76cc, FElysiumNpcMaker, RefMapDataBuffer),  // m_sRefMapDataBuffer
+	// --- CNPCMaker_Zombie (story 5 fold A4). `+0x76d8` is ONE float word, the only one
+	// `CanMakeNPC` `0x1034d0a0` compares. ---
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker_Zombie, 0x76d0,
+		FElysiumNpcMakerZombie, ZombieAiSpawnType),  // m_iZombieAISpawnType
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker_Zombie, 0x76d4,
+		FElysiumNpcMakerZombie, bShouldRagdoll),  // m_bShouldRagdoll
+	ELYSIUM_NPC_SPECIES_WORD(CNPCMaker_Zombie, 0x76d8,
+		FElysiumNpcMakerZombie, RemoveDistance),  // m_flRemoveDist
 	// --- CNPC_VAndreiBlood ---
 	ELYSIUM_NPC_SPECIES_WORD_NOTED(CNPC_VAndreiBlood, 0x66b8, FElysiumNpc, ActiveRunnerCount,
-		"deferred:8 -- the fleshpile maker reads and writes it"),
+		"deferred:8 -- the fleshpile maker (FElysiumNpcMakerFleshpile) reads and writes it"),
 	ELYSIUM_NPC_SPECIES_WORD_NOTED(CNPC_VAndreiBlood, 0x66bc, FElysiumNpc, AndreiKillCount,
-		"deferred:8 -- the fleshpile maker reads and writes it"),
+		"deferred:8 -- the fleshpile maker (FElysiumNpcMakerFleshpile) reads and writes it"),
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66c0,
 		FElysiumNpcAndreiBlood, AndreiLastTeleportPosition),  // m_vLastTeleportPosition
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66cc,

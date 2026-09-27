@@ -423,6 +423,19 @@ namespace
 	// nearest live combat character inside the record's own `Range` and
 	// `ElysiumDisciplines::AimConeHalfAngleDegrees`, which is the acquisition rule the melee half
 	// already uses. Range and the filter set stay the record's.
+	// The slot-72 arm of retail's discipline target filter `0x101e1a60`: `target->vfunc72(record+0x10)`
+	// (`CALL [EAX+0x120]`) must answer true. Every combat character's body is `0x1015dc20` (true);
+	// the makers (`0x1034aef0`, story 5 fold A4), the script directors (`0x101a6e20`) and the player
+	// controller (`0x103751a0`) answer false, so no discipline lands on them. The argument is the
+	// record's `+0x10` word, which no port record carries and no body reads (every override ignores
+	// it), so 0 stands for it. The filter's other arms (EF_NODRAW, the model pointer, `IsAlive`, the
+	// targetable byte, the dialog and ally tests, the range arms and the line trace) stay the
+	// port's own existing checks.
+	bool PassesDisciplineTargetVeto(FElysiumCombatCharacter& Target)
+	{
+		return Target.Slot72(0);
+	}
+
 	FElysiumCombatCharacter* AcquirePrimary(FElysiumCombatCharacter& Caster, float RangeSourceUnits)
 	{
 		if (Caster.World == nullptr)
@@ -446,7 +459,7 @@ namespace
 				continue;
 			}
 			FElysiumCombatCharacter* Other = Ent->AsCombatCharacter();
-			if (Other == nullptr)
+			if (Other == nullptr || !PassesDisciplineTargetVeto(*Other))
 			{
 				continue;
 			}
@@ -518,7 +531,7 @@ namespace
 					continue;
 				}
 				FElysiumCombatCharacter* Other = Ent->AsCombatCharacter();
-				if (Other == nullptr)
+				if (Other == nullptr || !PassesDisciplineTargetVeto(*Other))
 				{
 					continue;
 				}

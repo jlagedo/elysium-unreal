@@ -406,9 +406,6 @@ def _load_slot_map() -> None:
         (67, ACCEPTED, "", "`FElysiumWeapon::Unhide(FElysiumCombatCharacter*)`, as slot 66"),
         (86, ACCEPTED, "", "`FElysiumCameraCinematic::ShouldTransmit(handle)` is the port's reading "
          "of the camera's own transmit test, another signature; nothing dispatches slot 86 on it"),
-        (107, ACCEPTED, "", "`FElysiumNpcMaker::ParseMapData(const FString&)` is the deferred maker's "
-         "port of `CNPCMaker::ParseMapData` 0x1034b3c0, retail's override of this slot, under another "
-         "signature: it hides the slot until the maker fold (step 8) makes it the override"),
         (123, ACCEPTED, "", "`FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32)`, another "
          "signature, as slot 86"),
         (133, ACCEPTED, "", "`FElysiumMoverBase::MoveDone()` is the mover line's own `MoveDone` "

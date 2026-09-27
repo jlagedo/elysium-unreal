@@ -324,3 +324,14 @@ int32 RetailMoveCollide = 0;
 int32 RetailSolidType = 0;
 uint32 RetailSolidFlags = 0;
 int32 RetailSolidSets = 0;
+
+// `CBaseEntity::IsSolid()` inverted, as far as this port records it: `m_nSolidType == SOLID_NONE ||
+// (flags & FSOLID_NOT_SOLID 0x4)`. A trace or a hull test never reports such an entity. The port's
+// NPC `Spawn` bodies do not record their own `SetSolid(SOLID_BBOX)`, so an entity that never
+// recorded a `SetSolid` is NOT read as `SOLID_NONE`; one whose last recorded `SetSolid` was
+// `SOLID_NONE` is — the makers (`CNPCMaker::Spawn` `0x1034afe0`, story 5 fold A4) — and so is one
+// carrying `FSOLID_NOT_SOLID` — the script directors (`CCineNPC::Spawn` `0x101a6f10`, fold A3).
+bool IsRetailNotSolid() const
+{
+	return (RetailSolidFlags & 0x4u) != 0 || (RetailSolidSets > 0 && RetailSolidType == 0);
+}

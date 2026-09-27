@@ -16,9 +16,8 @@
 // **One port method with twenty-two arms, not twenty-two methods.** The family's rows fill two
 // retail functions on the NPC line — `CAI_BaseNPC::Precache` `0x1027bb50` and
 // `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus the census's
-// twenty-five distinct species bodies of that one slot and three `CNPCMaker*` bodies that land on
-// `FElysiumNpcMaker::Precache` instead (`Substrate/ElysiumNpcMaker.h`), because this port models
-// makers as a separate type and an `FElysiumNpc` arm would never run on one. Six of the
+// twenty-five distinct species bodies of that one slot and three `CNPCMaker*` bodies, which are the
+// makers' own overrides (`Substrate/ElysiumNpcMaker*.h`, story 5 fold A4). Six of the
 // twenty-five sit on classes with no instance in the install (`CNPC_Crow`, the three generic
 // classes, `CNPC_VTest`, `CGenericNPC`) and carry no port arm; the other nineteen and the three
 // maker rows are the twenty-two arms.

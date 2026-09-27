@@ -68,11 +68,6 @@ int32 EmitConditionDump(int32 FirstLine);
  *  29c-1's `FElysiumNpcBase::DrawDebugGeometryOverlays`). */
 void TroikaDrawDebugGeometryOverlays();
 
-/** `CNPCMaker::DrawDebugGeometryOverlays` (`0x1034bd30`), the fourth census body at slot 123.
- *  **SEAM**: its verdict is `registry:123` in band 0–4 — it is the maker's story, not this one — and
- *  it is reached here only so a spawned `npc_maker` does not silently take the Troika body. */
-void MakerDrawDebugGeometryOverlays();
-
 // --- `CAI_BaseNPCTroika::NPCThinkDebugPre` (`0x10292500`) -------------------------------------------
 
 /** The pre-think debug pass, 1,782 bytes, read from the LISTING (the decompiler does not settle its

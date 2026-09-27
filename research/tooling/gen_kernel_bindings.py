@@ -5,7 +5,7 @@ Owner-run archaeology, not part of any build.  The datamap replay
 (``$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json``)
 records what retail's own registration wrote for the classes this port stands:
 ``CAI_BaseNPC`` and ``CAI_BaseNPCTroika`` (the shared ``npc_*`` leaf),
-``CNPCMaker`` (the ``npc_maker`` classnames) and its ``CNPCMaker_Zombie`` rows,
+``CNPCMaker`` (``npc_maker``) and ``CNPCMaker_Zombie`` (``npc_maker_zombie``),
 ``CAI_InterestingPlace`` (retail's misspelled ``intersting_place``),
 ``CAI_InterestingPlaceConverstation`` and ``CAI_Hint`` (``ai_hint``): every
 member with its offset, type and flags, and — where retail had one — the
@@ -47,7 +47,8 @@ shape-map member belongs to one of the port's component structs binds through
 resolve through ``CHAIN_MEMBER_MAPS``, and a chain row in neither that nor
 ``CHAIN_UNBOUND``/``BOUND_ELSEWHERE`` FAILS the generator — that is the check
 that every retail ``KEY`` on a stood class has a member or a stated reason.
-``CNPCMaker`` and ``CAI_InterestingPlace`` resolve through ``CLASS_MEMBER_MAPS``.
+``CAI_InterestingPlace`` and its kin resolve through ``CLASS_MEMBER_MAPS``; the introduced
+species, the directors and the makers through the class-qualified species shape map.
 Everywhere, the compiler is the second check — a wrong member name fails
 ``uv run elysium build``.
 
@@ -101,7 +102,8 @@ KEYFIELDS_H = ("Source", "ElysiumUE", "Private", "AiInfra", "ElysiumInfraKeyfiel
 # The binding classes, each over the retail datamap tables whose rows it registers. The NPC's two
 # tables are two binding classes since story 5 step 5: `CAI_BaseNPC`'s rows register on the base's
 # own descriptor (`FElysiumNpcBase`) and `CAI_BaseNPCTroika`'s on the Troika's (`FElysiumNpc`), so a
-# descendant inherits both through the chain. The maker and the place stand their own.
+# descendant inherits both through the chain. The places and the hint stand their own; the makers
+# (story 5 fold A4) are species tables below.
 BINDING_CLASSES = (
     ("BaseEntity", ("CBaseEntity",)),
     ("Toggle", ("CBaseToggle",)),
@@ -109,11 +111,9 @@ BINDING_CLASSES = (
     ("CombatCharacter", ("CBaseCombatCharacter",)),
     ("NpcBase", ("CAI_BaseNPC",)),
     ("Npc", ("CAI_BaseNPCTroika",)),
-    ("NpcMaker", ("CNPCMaker",)),
     ("InterestingPlace", ("CAI_InterestingPlace",)),
     ("Hint", ("CAI_Hint",)),
     ("ConversationPlace", ("CAI_InterestingPlaceConverstation",)),
-    ("NpcMakerZombie", ("CNPCMaker_Zombie",)),
 )
 
 # The introduced species (0019 story 5) whose own datamap names anything, each its own binding class
@@ -122,7 +122,7 @@ BINDING_CLASSES = (
 # the same offset is a different word on every species, so a row binds on the class that declares it
 # and descendants inherit it through the descriptor chain -- a sibling never sees it.
 SPECIES_TABLES = (
-    "CCineAISchedule", "CCineNPC",
+    "CCineAISchedule", "CCineNPC", "CNPCMaker", "CNPCMaker_Zombie",
     "CNPC_VAndreiBlood", "CNPC_VAnimal", "CNPC_VAsianVampire", "CNPC_VBach",
     "CNPC_VCameraSecurity", "CNPC_VChangBros", "CNPC_VCop", "CNPC_VFrenzyShadow", "CNPC_VGargoyle",
     "CNPC_VGhoulCroucher", "CNPC_VGuard1", "CNPC_VHengeyokai", "CNPC_VHunter", "CNPC_VLasombra",
@@ -137,9 +137,15 @@ SPECIES_TABLES = (
 # `CCineNPC` and `CCineAISchedule` stand as `FElysiumScriptedSequence` / `FElysiumAiScriptedSchedule`
 # (`CCineAI` has no datamap of its own). Their words sit at `+0x5f44..+0x6094`, offsets the Troika
 # uses for other words, which is exactly why they bind through the class-qualified species map.
+#
+# The makers (story 5 fold A4) the same way: `CNPCMaker` stands as `FElysiumNpcMaker` (a Troika NPC in
+# retail, so its own words sit at `+0x665c..+0x76cc` above the Troika's) and `CNPCMaker_Zombie` as
+# `FElysiumNpcMakerZombie` (`+0x76d0..+0x76d8`). `CNPCMaker_Fleshpile`'s datamap names no word.
 DIRECTOR_BINDINGS = {
     "CCineNPC": ("ScriptedSequence", "FElysiumScriptedSequence"),
     "CCineAISchedule": ("AiScriptedSchedule", "FElysiumAiScriptedSchedule"),
+    "CNPCMaker": ("NpcMaker", "FElysiumNpcMaker"),
+    "CNPCMaker_Zombie": ("NpcMakerZombie", "FElysiumNpcMakerZombie"),
 }
 
 
@@ -497,20 +503,6 @@ EMBEDDED_REASON = (
     "port's matching member carries its own typed `Serialize`, which is the same shape")
 
 CLASS_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
-    "CNPCMaker": {
-        0x665C: ("FElysiumNpcMaker", "NpcType"),
-        0x6660: ("FElysiumNpcMaker", "RemainingTotal"),
-        0x6664: ("FElysiumNpcMaker", "SpawnFrequency"),
-        0x66B4: ("FElysiumNpcMaker", "MaxLiveChildren"),
-        0x66BC: ("FElysiumNpcMaker", "ChildTargetName"),
-        0x66C0: ("FElysiumNpcMaker", "bDisabled"),
-        0x66C1: ("FElysiumNpcMaker", "bNpcClip"),
-        0x66C2: ("FElysiumNpcMaker", "bFade"),
-        0x66C3: ("FElysiumNpcMaker", "bInfinite"),
-        0x66C4: ("FElysiumNpcMaker", "bNoDrop"),
-        0x66C5: ("FElysiumNpcMaker", "bViewCone"),
-        0x66C8: ("FElysiumNpcMaker", "MinPcDistance"),
-    },
     "CAI_InterestingPlace": {
         0x544: ("FElysiumInterestingPlace", "Type"),
         0x568: ("FElysiumInterestingPlace", "MinTime"),
@@ -547,12 +539,6 @@ CLASS_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x510: ("FElysiumConversationPlace", "MaxTime"),
         0x514: ("FElysiumConversationPlace", "bTurnTowardsTalker"),
         0x515: ("FElysiumConversationPlace", "bSoundOccluded"),
-    },
-    # `npc_maker_zombie`'s own three rows, on the shared maker leaf.
-    "CNPCMaker_Zombie": {
-        0x76D0: ("FElysiumNpcMaker", "ZombieAiType"),
-        0x76D4: ("FElysiumNpcMaker", "bShouldRagdoll"),
-        0x76D8: ("FElysiumNpcMaker", "RemoveDistance"),
     },
 }
 
@@ -668,7 +654,7 @@ def parse_species_map(text: str) -> dict[tuple[str, int], tuple[str, str, str]]:
 class ClassModel:
     """One binding class's classified rows."""
 
-    name: str                          # Npc | NpcMaker | InterestingPlace
+    name: str                          # Npc | NpcMaker | InterestingPlace | Scurrying ...
     tables: tuple[str, ...]            # the retail datamap tables it registers
     bound: list[Row] = field(default_factory=list)
     unbound: list[Row] = field(default_factory=list)
@@ -1206,7 +1192,6 @@ def render_cpp(model: Model) -> str:
         '#include "Substrate/ElysiumHint.h"',
         '#include "Substrate/ElysiumInterestingPlace.h"',
         '#include "Substrate/ElysiumNpc.h"',
-        '#include "Substrate/ElysiumNpcMaker.h"',
         '#include "Substrate/ElysiumSheetFields.h"',
         *sorted(f'#include "Substrate/{PORT_CLASS[species_binding(t)][1:]}.h"'
                 for t in SPECIES_TABLES),

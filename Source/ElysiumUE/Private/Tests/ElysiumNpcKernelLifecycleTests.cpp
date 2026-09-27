@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumClassRegistry.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -1194,10 +1195,22 @@ bool FElysiumNpcKernelLifecycleParseMapDataTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcMaker& Maker = *static_cast<FElysiumNpcMaker*>(Entity);
-	Maker.ParseMapData(TEXT("\"npctype\" \"npc_VCop\"}"));
-	TestEqual(TEXT("slot 107 latches the extracted block"), Maker.RefMapDataBuffer,
+	FElysiumNpc* Npc = Entity->AsNpc();
+	FElysiumNpcMaker* Maker = Npc != nullptr ? Npc->AsSpecies<FElysiumNpcMaker>() : nullptr;
+	if (!TestNotNull(TEXT("the maker is an NPC of class CNPCMaker"), Maker))
+	{
+		return false;
+	}
+	// Slot 107 is the maker's OVERRIDE (story 5 fold A4 ended the C4263 hide), dispatched through the
+	// entity's own declaration. This port's `CEntityMapData` is the keyvalue text.
+	const FString MapText = TEXT("\"npctype\" \"npc_VCop\"}");
+	FElysiumEntity& AsEntity = *Maker;
+	AsEntity.ParseMapData(const_cast<FString*>(&MapText));
+	TestEqual(TEXT("slot 107 latches the extracted block"), Maker->RefMapDataBuffer,
 		FString(TEXT("\"npctype\" \"npc_VCop\"}")));
+	// And `m_sRefMapDataBuffer` is a SAVE row (`+0x76cc`), generated on the `CNPCMaker` descriptor.
+	TestNotNull(TEXT("m_sRefMapDataBuffer is a saved field"), Maker->Class != nullptr
+		? FElysiumClassRegistry::Get().FindField(*Maker->Class, FName(TEXT("m_sRefMapDataBuffer"))) : nullptr);
 	return true;
 }
 

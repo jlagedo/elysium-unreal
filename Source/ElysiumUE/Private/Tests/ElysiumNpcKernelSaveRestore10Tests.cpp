@@ -15,6 +15,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerZombie.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
@@ -888,7 +889,8 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// The maker: `MakeNPC`'s child inheritance and `CNPCMaker_Zombie`'s two slots.
+// The maker: `MakeNPC`'s child inheritance and `CNPCMaker_Zombie`'s two slots (story 5 fold A4:
+// both are NPCs of their own classes, and the inherited words are the maker's OWN Troika words).
 // -------------------------------------------------------------------------------------------------
 
 namespace
@@ -897,29 +899,51 @@ namespace
 	{
 		FElysiumNpcWorldFixture World;
 		FElysiumNpcMaker* Maker = nullptr;
+		FElysiumNpcMakerZombie* ZombieMaker = nullptr;
 
 		FSaveRestore10MakerFixture()
 			: World(Build())
 		{
 			FElysiumEntity* Entity = World.World.FindByName(TEXT("maker"));
-			Maker = Entity != nullptr ? static_cast<FElysiumNpcMaker*>(Entity) : nullptr;
+			FElysiumNpc* Npc = Entity != nullptr ? Entity->AsNpc() : nullptr;
+			Maker = Npc != nullptr ? Npc->AsSpecies<FElysiumNpcMaker>() : nullptr;
+			Entity = World.World.FindByName(TEXT("zmaker"));
+			Npc = Entity != nullptr ? Entity->AsNpc() : nullptr;
+			ZombieMaker = Npc != nullptr ? Npc->AsSpecies<FElysiumNpcMakerZombie>() : nullptr;
 		}
 
 		static FElysiumNpcWorldBuilder Build()
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("saverestore10maker"), 20260914);
 			// Far from the player the fixture spawns at the origin, so the zombie maker's MAXIMUM
-			// player distance has a distance to refuse on — the arm's whole point is that it refuses
-			// when the player is too FAR, which a maker standing on top of the player cannot show.
+			// player distance has a distance to refuse on.
 			FElysiumEntityDef& Def =
 				Builder.AddEntity(TEXT("npc_maker"), TEXT("maker"), FVector(50000.0, 0.0, 0.0));
-			// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker::Spawn` (`0x1034afe0`)
-			// dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the maker. A maker
-			// with no `model` key does not survive its own spawn, in retail or here.
+			// `CNPCMaker::Spawn` (`0x1034afe0`) dispatches slot 104 `Precache`, whose missing-model arm
+			// `UTIL_Remove`s the maker, so the maker authors a model.
 			Def.Keys.Add(TEXT("model"), TEXT("models/maker.mdl"));
 			Def.Keys.Add(TEXT("NPCType"), TEXT("npc_VHumanCombatant"));
 			Def.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
 			Def.Keys.Add(TEXT("MaxLiveChildren"), TEXT("10"));
+			Def.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+			// `sp_tutorial_1`'s `thug_maker`, key for key: the Troika words it authors ON THE MAKER
+			// (the witness for D8, story 5 fold A4).
+			Def.Keys.Add(TEXT("vision"), TEXT("540"));
+			Def.Keys.Add(TEXT("hearing"), TEXT("1.00"));
+			Def.Keys.Add(TEXT("npc_perception"), TEXT("3"));
+			Def.Keys.Add(TEXT("use_interesting"), TEXT("1"));
+			Def.Keys.Add(TEXT("percent_occluded_wait"), TEXT("10"));
+			Def.Keys.Add(TEXT("percent_occluded_cover"), TEXT("30"));
+			Def.Keys.Add(TEXT("allow_alert_lookaround"), TEXT("1"));
+			Def.Keys.Add(TEXT("allow_kick_hint_use"), TEXT("1"));
+			FElysiumEntityDef& Zombie =
+				Builder.AddEntity(TEXT("npc_maker_zombie"), TEXT("zmaker"), FVector(50000.0, 0.0, 0.0));
+			Zombie.Keys.Add(TEXT("model"), TEXT("models/zombiemaker.mdl"));
+			Zombie.Keys.Add(TEXT("NPCType"), TEXT("npc_VZombie"));
+			Zombie.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
+			Zombie.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+			Zombie.Keys.Add(TEXT("Flag_ZombieAIType"), TEXT("1"));
+			Zombie.Keys.Add(TEXT("remove_distance"), TEXT("1500.5"));
 			return Builder;
 		}
 	};
@@ -930,109 +954,121 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10MakerTest,
 bool FElysiumNpcKernelSaveRestore10MakerTest::RunTest(const FString&)
 {
 	FSaveRestore10MakerFixture Fix;
-	if (!TestNotNull(TEXT("the maker spawned"), Fix.Maker))
+	if (!TestNotNull(TEXT("the maker spawned"), Fix.Maker)
+		|| !TestNotNull(TEXT("the zombie maker spawned"), Fix.ZombieMaker))
 	{
 		return false;
 	}
 	FElysiumNpcMaker& M = *Fix.Maker;
 
-	// `CNPCMaker::MakeNPC` `0x1034b7b0`'s inheritance block — NINE words, not the "script-state
-	// block" the checklist's walk names. The listing's offsets are `+0x6420`..`+0x6436` and the
-	// datamap names them the five `m_iPercentOccluded*` thresholds and three policy bytes.
-	M.ChildWords.RelationshipString = TEXT("Like Player 5");
-	M.ChildWords.AuthoredPerception = 3;
-	M.ChildWords.AuthoredVision = 512.f;
-	M.ChildWords.AuthoredHearing = 256.f;
-	M.ChildWords.bUseInteresting = true;
-	M.ChildWords.PercentOccludedWait = 11;
-	M.ChildWords.PercentOccludedCover = 22;
-	M.ChildWords.PercentOccludedWalk = 33;
-	M.ChildWords.PercentOccludedFlank = 44;
-	M.ChildWords.PercentOccludedChase = 55;
-	M.ChildWords.bAllowAlertLookaround = true;
-	M.ChildWords.bStayEntrenched = true;
-	M.ChildWords.bAllowKickHintUse = true;
-	M.ChildTargetName = TEXT("spawned");
+	// D8: the authored keys bind on the maker's OWN Troika words (a maker IS a Troika NPC).
+	TestEqual(TEXT("the maker carries its authored vision"), M.AuthoredVision, 540.f);
+	TestEqual(TEXT("and its npc_perception"), M.AuthoredPerception, 3);
 
-	const int32 PreBefore = M.ChildPreSpawnCalls;
-	const int32 PostBefore = M.ChildPostSpawnCalls;
-	const int32 DeriveBefore = M.MakerPerceptionDerivations;
-	TestEqual(TEXT("the maker spawned a child"), M.TrySpawn(/*bBypass=*/true),
-		FElysiumNpcMaker::EAttempt::Spawned);
-	FElysiumEntity* ChildEntity = M.World != nullptr ? M.World->Resolve(M.LastSpawnedChild) : nullptr;
-	FElysiumNpc* Child = ChildEntity != nullptr ? ChildEntity->AsNpc() : nullptr;
-	if (!TestNotNull(TEXT("and the child is an NPC"), Child))
+	// `CNPCMaker::MakeNPC` `0x1034b7b0`, slot 617: `child.X = this->X`, nine words and the triple.
+	M.ChildTargetName = TEXT("spawned");
+	const int32 DeriveBefore = M.PerceptionRecomputes;
+	FElysiumNpc* Child = M.MakeNPC(/*bBypass=*/true);
+	if (!TestNotNull(TEXT("the maker spawned a child, and slot 617 returns it"), Child))
 	{
 		return false;
 	}
-	TestEqual(TEXT("the authored perception triple is inherited"), Child->AuthoredPerception, 3);
-	TestEqual(TEXT("the vision keyfield too"), Child->AuthoredVision, 512.f);
-	TestEqual(TEXT("and the hearing keyfield"), Child->AuthoredHearing, 256.f);
-	TestTrue(TEXT("+0x63d9 m_bUseInteresting is inherited"), Child->bUseInteresting);
-	TestEqual(TEXT("+0x6420 m_iPercentOccludedWait is inherited"), Child->PercentOccludedWait, 11);
-	TestEqual(TEXT("+0x6424 m_iPercentOccludedCover"), Child->PercentOccludedCover, 22);
-	TestEqual(TEXT("+0x6428 m_iPercentOccludedWalk"), Child->PercentOccludedWalk, 33);
-	TestEqual(TEXT("+0x642c m_iPercentOccludedFlank"), Child->PercentOccludedFlank, 44);
-	TestEqual(TEXT("+0x6430 m_iPercentOccludedChase"), Child->PercentOccludedChase, 55);
-	TestTrue(TEXT("+0x6434 m_bAllowAlertLookaround"), Child->bAllowAlertLookaround);
-	TestTrue(TEXT("+0x6435 m_bStayEntrenched"), Child->bStayEntrenched);
-	TestTrue(TEXT("+0x6436 m_bAllowKickHintUse"), Child->ScheduleHost.bAllowKickHintUse);
-	TestEqual(TEXT("+0x1584 m_RelationshipString has no port carrier and lands on the seam"),
-		M.LastChildRelationshipString, FString(TEXT("Like Player 5")));
-	TestTrue(TEXT("+0x65f4 m_bCameFromSpawner is the last write of the body"),
-		Child->bCameFromSpawner);
-	TestEqual(TEXT("the two perception derivations run on the MAKER, which is retail's oddity"),
-		M.MakerPerceptionDerivations, DeriveBefore + 1);
-	TestEqual(TEXT("slot 619 ChildPreSpawn ran once"), M.ChildPreSpawnCalls, PreBefore + 1);
-	TestEqual(TEXT("slot 620 ChildPostSpawn ran once"), M.ChildPostSpawnCalls, PostBefore + 1);
-	TestEqual(TEXT("the RefMapData block is replayed onto the seam"),
-		M.LastChildMapDataReplay, M.RefMapDataBuffer);
+	TestEqual(TEXT("D8: the child keeps thug_maker's vision 540, not a default"), Child->AuthoredVision, 540.f);
+	TestEqual(TEXT("hearing 1.00"), Child->AuthoredHearing, 1.0f);
+	TestEqual(TEXT("npc_perception 3"), Child->AuthoredPerception, 3);
+	TestTrue(TEXT("use_interesting 1"), Child->bUseInteresting);
+	TestEqual(TEXT("percent_occluded_wait 10"), Child->PercentOccludedWait, 10);
+	TestEqual(TEXT("percent_occluded_cover 30"), Child->PercentOccludedCover, 30);
+	TestTrue(TEXT("allow_alert_lookaround 1"), Child->bAllowAlertLookaround);
+	TestTrue(TEXT("allow_kick_hint_use 1"), Child->ScheduleHost.bAllowKickHintUse);
+	TestTrue(TEXT("+0x65f4 m_bCameFromSpawner is the last write of the body"), Child->bCameFromSpawner);
+	TestEqual(TEXT("InitPerceptionDistances and 0x1028fc90 run on the MAKER, retail's oddity"),
+		M.PerceptionRecomputes, DeriveBefore + 1);
+	TestTrue(TEXT("the child is named NPCTargetname"), Child->TargetName == TEXT("spawned"));
+	// D10: the child is built from the maker's own block, keys it does not read included.
+	TestTrue(TEXT("the replay carries the maker's own block (MaxNPCCount rides along)"),
+		Child->Def != nullptr && Child->Def->Keys.Contains(TEXT("MaxNPCCount")));
 
-	// `CNPCMaker_Zombie::CanMakeNPC` `0x1034d0a0`, slot 618.
-	//
-	//   1. A non-zero bypass answers YES before anything else.
-	TestEqual(TEXT("a bypass admits before any other arm"),
-		M.CanMakeNpcZombie(/*bBypass=*/true), FElysiumNpcMaker::EAttempt::Spawned);
-	//   2. The MANHATTAN distance times 0.9 must NOT exceed `+0x76d8` — a zombie maker refuses when
-	//      the player is too FAR, the opposite sense of the base's minimum-distance arm.
-	M.ZombieMaxPcDistance = 0;
-	TestEqual(TEXT("an unauthored maximum refuses any player at a distance"),
-		M.CanMakeNpcZombie(/*bBypass=*/false), FElysiumNpcMaker::EAttempt::Distance);
-	M.ZombieMaxPcDistance = 100000;
+	// The copy is `this->X` at the moment of the call: change the maker's words, spawn again.
+	M.AuthoredPerception = 7;
+	M.AuthoredVision = 512.f;
+	M.AuthoredHearing = 256.f;
+	M.PercentOccludedWait = 11;
+	M.PercentOccludedCover = 22;
+	M.PercentOccludedWalk = 33;
+	M.PercentOccludedFlank = 44;
+	M.PercentOccludedChase = 55;
+	M.bUseInteresting = false;
+	M.bAllowAlertLookaround = false;
+	M.bStayEntrenched = true;
+	M.ScheduleHost.bAllowKickHintUse = false;
+	FElysiumNpc* Second = M.MakeNPC(/*bBypass=*/true);
+	if (TestNotNull(TEXT("a second child"), Second))
+	{
+		TestEqual(TEXT("+0x63b0 follows the maker"), Second->AuthoredPerception, 7);
+		TestEqual(TEXT("+0x63b4"), Second->AuthoredVision, 512.f);
+		TestEqual(TEXT("+0x63bc"), Second->AuthoredHearing, 256.f);
+		TestFalse(TEXT("+0x63d9"), Second->bUseInteresting);
+		TestEqual(TEXT("+0x6420"), Second->PercentOccludedWait, 11);
+		TestEqual(TEXT("+0x6424"), Second->PercentOccludedCover, 22);
+		TestEqual(TEXT("+0x6428"), Second->PercentOccludedWalk, 33);
+		TestEqual(TEXT("+0x642c"), Second->PercentOccludedFlank, 44);
+		TestEqual(TEXT("+0x6430"), Second->PercentOccludedChase, 55);
+		TestFalse(TEXT("+0x6434"), Second->bAllowAlertLookaround);
+		TestTrue(TEXT("+0x6435"), Second->bStayEntrenched);
+		TestFalse(TEXT("+0x6436"), Second->ScheduleHost.bAllowKickHintUse);
+	}
+
+	// `CNPCMaker_Zombie::CanMakeNPC` `0x1034d0a0`, slot 618, through a `CNPCMaker` reference.
+	FElysiumNpcMakerZombie& Z = *Fix.ZombieMaker;
+	FElysiumNpcMaker& AsMaker = Z;
+	//   D9: `remove_distance` binds the ONE float word `+0x76d8`.
+	TestEqual(TEXT("remove_distance is the float +0x76d8"), Z.RemoveDistance, 1500.5f);
+	TestEqual(TEXT("Flag_ZombieAIType is +0x76d0 m_iZombieAISpawnType"), Z.ZombieAiSpawnType, 1);
+	//   1. A bypass answers yes before anything else.
+	TestTrue(TEXT("a bypass admits before any other arm"), AsMaker.CanMakeNPC(/*bBypass=*/true));
+	//   2. `m_flRemoveDist < 0.9 * Manhattan` refuses: 50000 units away is too FAR.
+	TestFalse(TEXT("a player 50000 units away is beyond 0.9 x Manhattan"), AsMaker.CanMakeNPC(false));
+	TestEqual(TEXT("on the distance arm"), FString(FElysiumNpcMaker::AttemptName(Z.LastAttempt)),
+		FString(TEXT("distance")));
+	Z.RemoveDistance = 100000.f;
+	AsMaker.CanMakeNPC(/*bBypass=*/false);
 	TestNotEqual(TEXT("a generous maximum falls through to the base"),
-		M.CanMakeNpcZombie(/*bBypass=*/false), FElysiumNpcMaker::EAttempt::Distance);
+		FString(FElysiumNpcMaker::AttemptName(Z.LastAttempt)), FString(TEXT("distance")));
+	// The comparison is the float against the scaled sum, strictly: at 0.9 x 50000 = 45000 exactly
+	// the maker admits past this arm.
+	Z.RemoveDistance = 45000.f;
+	AsMaker.CanMakeNPC(/*bBypass=*/false);
+	TestNotEqual(TEXT("equality admits (m_flRemoveDist < scaled refuses, not <=)"),
+		FString(FElysiumNpcMaker::AttemptName(Z.LastAttempt)), FString(TEXT("distance")));
 
-	// `CNPCMaker_Zombie::MakeNPC` `0x1034d140`, slot 617 — and its last four steps, which the
-	// checklist's walk stops short of.
-	//
-	// The MISSING-ITEM arm first: `item_w_zombie_fists` is not a registered classname, so retail's
-	// own refusal releases the spawned zombie and answers null.
-	//
-	// The absence is FORCED rather than assumed. `ZombieFistsItemExists`'s fallback reads
-	// `FElysiumClassRegistry`, a process-wide singleton, so whether a bare fixture sees the
-	// catalogue depends on whether some earlier suite in the same process installed it — this case
-	// passed alone and failed under the full `Elysium.` filter for exactly that reason. Forcing
-	// both directions makes the two arms order-independent instead of ambient.
-	M.SetZombieFistsItemForTests(false);
-	TestFalse(TEXT("the missing-item arm sees no catalogue"), M.ZombieFistsItemExists());
-	const int32 EquipsBefore = M.ZombieFistsEquips;
-	TestNull(TEXT("a missing item definition answers null"), M.EquipZombieFists(/*bBypass=*/true));
-	TestEqual(TEXT("and hands nothing over"), M.ZombieFistsEquips, EquipsBefore);
+	// `CNPCMaker_Zombie::MakeNPC` `0x1034d140`, slot 617 — the missing-item arm first (forced: the
+	// class registry is process-wide, so an earlier suite could have installed the catalogue).
+	Z.SetZombieFistsItemForTests(false);
+	TestFalse(TEXT("the missing-item arm sees no catalogue"), Z.ZombieFistsItemExists());
+	const int32 EquipsBefore = Z.ZombieFistsEquips;
+	TestNull(TEXT("a missing item definition answers null"), AsMaker.MakeNPC(/*bBypass=*/true));
+	TestEqual(TEXT("and hands nothing over"), Z.ZombieFistsEquips, EquipsBefore);
 
-	// The SUCCESS arm, through the same latch forced the other way.
-	M.SetZombieFistsItemForTests(true);
-	FElysiumNpc* Zombie = M.EquipZombieFists(/*bBypass=*/true);
+	// The SUCCESS arm.
+	Z.SetZombieFistsItemForTests(true);
+	FElysiumNpc* Zombie = AsMaker.MakeNPC(/*bBypass=*/true);
 	if (TestNotNull(TEXT("the zombie maker spawned a child"), Zombie))
 	{
-		TestEqual(TEXT("the fists were handed over"), M.ZombieFistsEquips, EquipsBefore + 1);
-		TestEqual(TEXT("the item it looked up"), M.LastZombieFistsItem,
-			FString(TEXT("item_w_zombie_fists")));
-		TestEqual(TEXT("the spawn emitter was requested once"), M.ZombieSpawnEmitters.Num(), 1);
-		TestEqual(TEXT("at the maker's own origin"), M.ZombieSpawnEmitters[0].Origin, M.Origin);
-		TestEqual(TEXT("with retail's 15.0-second life"),
-			M.ZombieSpawnEmitters[0].LifetimeSeconds, 15.0f);
+		TestEqual(TEXT("the fists were handed over"), Z.ZombieFistsEquips, EquipsBefore + 1);
+		TestEqual(TEXT("the item it looked up"), Z.LastZombieFistsItem, FString(TEXT("item_w_zombie_fists")));
+		TestEqual(TEXT("the spawn emitter was requested once"), Z.ZombieSpawnEmitters.Num(), 1);
+		if (Z.ZombieSpawnEmitters.Num() > 0)
+		{
+			TestEqual(TEXT("at the maker's own origin"), Z.ZombieSpawnEmitters[0].Origin, Z.Origin);
+			TestEqual(TEXT("with retail's 15.0-second life"), Z.ZombieSpawnEmitters[0].LifetimeSeconds, 15.0f);
+		}
 		TestFalse(TEXT("SetDisableAI(false) overrides the maker's own copy"), Zombie->IsAiDisabled());
+		// The RTTI cast to `CNPC_VZombie` (`0x1062567c`, `.?AVCNPC_VZombie@@`) hits, so
+		// `SetZombieAIType(child, m_iZombieAISpawnType)` runs: 1 is stored as-is.
+		TestEqual(TEXT("an npc_VZombie child takes the maker's AI spawn type"), Zombie->ZombieAiType, 1);
 	}
+	Z.ClearZombieFistsItemForTests();
 	return true;
 }
 

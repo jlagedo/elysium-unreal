@@ -8,7 +8,7 @@
 
 // Story 29d, family **Precache10** — slot 104 `Precache`: the `CAI_BaseNPC` base body, the
 // `CAI_BaseNPCTroika` body that owns the slot, and its species arms. The three `CNPCMaker*` bodies
-// are in `Substrate/ElysiumNpcMaker.cpp`, on the separate type this port models a maker as; the
+// are their classes' overrides (`ElysiumNpcMaker*.cpp`, story 5 fold A4); the
 // arms of the classes with no instance (`population.md` § "NPC classes with no instance") are not
 // ported.
 //
@@ -227,7 +227,7 @@ void FElysiumNpc::Precache()
 {
 	// Nineteen species classes override slot 104 on their C++ classes (story 5 step 3); each species
 	// body calls `TroikaPrecache` first, retail's direct call into `0x10298ad0`. The three maker
-	// bodies are `FElysiumNpcMaker::Precache`'s.
+	// bodies are their classes' overrides (story 5 fold A4), each chaining `CAI_BaseNPC::Precache`.
 	//
 	// NOTHING IN THIS RUNTIME CALLS `Precache()` YET, and that is deliberate rather than an
 	// oversight: this substrate acquires assets for the whole map epoch before any NPC stands

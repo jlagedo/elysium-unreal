@@ -12,8 +12,7 @@
 // Story 29d, family **SpeciesLifecycle10** — `CPayphone`'s slot 431, the slot 174/175 base bodies
 // and their two species arms, the `CNPC_VGuard1` / `CNPC_VHunter` slot-463 pre-steps, the two
 // `CNPC_VVampireBoss`-line `Restore` arms and the two destructors. The three maker `Spawn` bodies
-// land on `FElysiumNpcMaker` and are in `Substrate/ElysiumNpcMaker.cpp`, beside that class's other
-// slot bodies.
+// are the makers' own overrides (`Substrate/ElysiumNpcMaker*.cpp`, story 5 fold A4).
 //
 // `ElysiumNpcSpeciesLifecycle10.inl` carries the family's reading notes, the corrections it
 // made to the checklist's walks and the four `.rdata` cells it read out of the pinned image. The

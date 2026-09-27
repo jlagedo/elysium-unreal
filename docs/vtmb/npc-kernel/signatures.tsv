@@ -629,7 +629,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 614		ResetThinkTimers	void			walked	0	
 615		CanBeSetOnFire	bool			walked	0	
 616			void			walked	0	
-617	CNPCMaker	MakeNPC	void	bool		walked	1	
+617	CNPCMaker	MakeNPC	CAI_BaseNPCTroika*	bool		walked	1	
 617	CNPC_VBaseBoss	EnemyCouldSeeHull	bool	Vector, bool, bool, Vector		walked	8	
 617	CNPC_VGargoyle		void			walked	0	
 617	CNPC_VHengeyokai		void			walked	0	

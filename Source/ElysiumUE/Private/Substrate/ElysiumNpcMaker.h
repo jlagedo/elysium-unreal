@@ -2,44 +2,152 @@
 
 #include "CoreMinimal.h"
 
-#include "ElysiumEntity.h"
-// Story 29d, family Precache10: the maker's slot-104 arms record `FElysiumNpc::FPrecacheOp`, the
-// one recorded-request type the kernel's precaches share. Included whole rather than duplicated
-// here — every translation unit that includes this header already includes `ElysiumNpc.h`, and a
-// maker's precache IS an NPC-kernel slot body that happens to land on this type.
 #include "Substrate/ElysiumNpc.h"
 
-// `npc_maker`: retail admission, quotas, timed retries and child ownership.
+struct FElysiumClassDesc;
 
-class FElysiumNpcMaker final : public FElysiumEntity
+// `CNPCMaker` (primary vtable `0x1049f404`), built by the `npc_maker` factory — story 5 fold A4.
+// `CNPCMaker_Fleshpile` (`ElysiumNpcMakerFleshpile.h`) and `CNPCMaker_Zombie`
+// (`ElysiumNpcMakerZombie.h`) derive from it.
+//
+// **A retail maker IS a Troika NPC.** Its constructor chain runs `CAI_BaseNPC`'s (`0x1027c300`: the
+// AI-list add on `DAT_1090fe10`, flag `0x20` at `+0x4c`, `m_pBaseNPC +0x94 = this`) and the Troika's
+// (`0x1028d230`: flag `0x40`, `m_pTroika +0x98 = this`), so it is in every AI-list walk —
+// `SetAIEnabled` `0x10265680`, `WakeNpcsNear` `0x1028d820` — and answers every slot a Troika does.
+// What makes it inert as a body is its own slot table: `Spawn` (`0x1034afe0`) and `Activate`
+// (`0x1034b140`) chain NO NPC body, so `NPCInit` and `NPCThink` never run; `SetSolid(SOLID_NONE)`,
+// no `SetModel`, `ShouldTransmit` false; the four cones, `CanWitnessSupernatural` and the
+// discipline veto (slot 72) all answer false. What it runs is its INSTALLED THINK (`m_pfnThink`):
+// `MakerThink` `0x1034bbf0`, the fleshpile re-arm `0x1034c8b0`, the zombie think `0x1034d2d0`, the
+// bare-`RET` inert think `0x101c0b60`, or none (`EMakerThink`).
+//
+// Twenty-one own vtable bodies (the vtable diff against `CAI_BaseNPCTroika`; `classes.md`'s 17 is
+// the name-prefix count and misses 617-620): slot 5 is the deleting destructor (the C++
+// destructor's); the rest are overrides below, each citing its address. Slots 617-620 are the
+// maker's OWN virtuals past the Troika's 617-slot table (`signatures.md`), declared here.
+class FElysiumNpcMaker : public FElysiumNpc
 {
 public:
-	FString NpcType;
-	int32 RemainingTotal = 0;       // MaxNPCCount is the mutable remaining finite total
-	float SpawnFrequency = 0.0f;
-	int32 LiveChildren = 0;
-	int32 MaxLiveChildren = 0;
-	float CachedGroundZ = 0.0f;
-	FString ChildTargetName;
-	bool bDisabled = false;
-	bool bNpcClip = false;
-	bool bFade = false;
-	bool bInfinite = false;
-	bool bNoDrop = false;           // base CNPCMaker declares it but does not consume it
-	bool bViewCone = false;
-	int32 MinPcDistance = 0;        // Source units
-	// `CNPCMaker_Zombie`'s own three keyfields (datamap `0x106253e8`), bound on this shared leaf by
-	// `ElysiumNpcKernelBindings::AddNpcMakerZombieFields`. Carried and saved; nothing in this runtime
-	// reads them yet, because the zombie maker's think (`0x1034d2d0`) is unported (0018 story 16).
-	int32 ZombieAiType = 0;         // +0x76d0 m_iZombieAISpawnType  Flag_ZombieAIType
-	bool bShouldRagdoll = false;    // +0x76d4 m_bShouldRagdoll      should_ragdoll
-	float RemoveDistance = 0.0f;    // +0x76d8 m_flRemoveDist        remove_distance
-	// `CNPCMaker` is a `CAI_BaseNPCTroika` in retail, so it carries `m_bDisableAI` and the
-	// `DisableThink` input, and `MakeNPC` `0x1034b7b0` copies its own value onto every child
-	// (`0x1029f2e0` -> `0x1029f300`). The maker itself never thinks as an NPC here.
-	bool bDisableAi = false;
-	void InputDisableThink(const FElysiumInputArgs& Args);
+	// The retail class this C++ class is: `OwnRetailClass`'s row and `FElysiumNpcBase::AsSpecies`'s key.
+	static constexpr const TCHAR* RetailClassName = TEXT("CNPCMaker");
 
+	virtual const FElysiumNpcClass* OwnRetailClass() const override;
+
+	// --- `CNPCMaker`'s own words (datamap `0x10624718`) ------------------------------------------
+	FString NpcType;                // +0x665c m_iszNPCClassname     NPCType
+	int32 RemainingTotal = 0;       // +0x6660 m_iMaxNumNPCs         MaxNPCCount (the mutable total)
+	float SpawnFrequency = 0.0f;    // +0x6664 m_flSpawnFrequency    SpawnFrequency
+	int32 LiveChildren = 0;         // +0x66b0 m_cLiveChildren       (SAVE)
+	int32 MaxLiveChildren = 0;      // +0x66b4 m_iMaxLiveChildren    MaxLiveChildren
+	float CachedGroundZ = 0.0f;     // +0x66b8 m_flGround            (SAVE)
+	FString ChildTargetName;        // +0x66bc m_ChildTargetName     NPCTargetname
+	bool bDisabled = false;         // +0x66c0 m_bDisabled           Flag_StartDisabled
+	bool bNpcClip = false;          // +0x66c1 m_bNPCClip            Flag_NPCClip
+	bool bFade = false;             // +0x66c2 m_bFade               Flag_Fade
+	bool bInfinite = false;         // +0x66c3 m_bInfChild           Flag_InfChild
+	bool bNoDrop = false;           // +0x66c4 m_bNoDrop             Flag_NoDrop (read by the fleshpile only)
+	bool bViewCone = false;         // +0x66c5 m_bViewCone           Flag_ViewCone
+	int32 MinPcDistance = 0;        // +0x66c8 m_iMinPCDistance      MinPCDistance (Source units)
+	// +0x76cc m_sRefMapDataBuffer (SAVE) — the text `ParseMapData` carves into the 4 KB `+0x66cc`
+	// buffer. See `ParseMapData` for what the port carries and what `MakeNPC` replays.
+	FString RefMapDataBuffer;
+
+	// --- The own vtable slots (`CNPCMaker`, `0x1049f404`) ----------------------------------------
+	// Slot 72 `0x1034aef0` — `XOR AL,AL; RET 4`: the discipline target filter `0x101e1a60` asks it,
+	// so no discipline targets a maker. Inherited by both variants.
+	virtual bool Slot72(int32 Discipline) override;
+	// Slot 82 `0x1034ab50` — `&datamap_CNPCMaker`; this port's datamap is the class descriptor.
+	virtual void* GetDataDescMap() override;
+	// Slot 86 `0x1034af10` — `return false`: a maker is never transmitted, so it draws nothing.
+	virtual bool ShouldTransmit(int32 Arg1, void* Edict, void* CheckBits, int32 Arg4, int32 Arg5) override;
+	// Slot 103 `0x1034afe0`. Chains no base `Spawn`: no body, no model, no `NPCInit`.
+	virtual void Spawn() override;
+	// Slot 104 `0x1034b160`. Chains `CAI_BaseNPC::Precache` `0x1027bb50` DIRECT, not the Troika's.
+	virtual void Precache() override;
+	// Slot 107 `0x1034b3c0`. `MapData` is this port's `CEntityMapData`: the entity's keyvalue TEXT,
+	// passed as `const FString*`.
+	virtual void ParseMapData(void* MapData) override;
+	// Slot 113 `0x1034b140` — an EMPTY body; it does not even chain `CBaseEntity::Activate`, so the
+	// Troika `Activate` (disposition, relationship, senses, admission, `NPCInit`) never runs.
+	virtual void Activate() override;
+	// Slot 123 `0x1034bd30` — an empty body (the debug overlay slot; verdict dead).
+	virtual void DrawDebugGeometryOverlays() override;
+	// Slot 139 `0x1034bc90`. `CNPCMaker_Fleshpile` overrides it (`0x1034c8e0`) and calls this one.
+	virtual void DeathNotice(FElysiumEntity* Child) override;
+	// Slots 362-365 `0x1034ae70` / `0x1034ae50` / `0x1034aeb0` / `0x1034ae90` — every cone is false.
+	// The variants' own copies (`0x1034bf10`.., `0x1034cb50`..) are byte-identical and inherited.
+	virtual bool FInViewCone(const FVector& PointCm) override;
+	virtual bool FInViewCone(FElysiumEntity* Candidate) override;
+	virtual bool FInAimCone(const FVector& TargetCm) override;
+	virtual bool FInAimCone(FElysiumEntity* AimTarget) override;
+	// Slots 370/371 `0x1034adf0` / `0x1034ae20` — this-adjusting forwards through slots 368/369.
+	virtual FVector HeadDirection2D() override;
+	virtual FVector HeadDirection3D() override;
+	// Slot 587 `0x1034aed0` — `return false`: a maker is never a masquerade witness.
+	virtual bool CanWitnessSupernatural(int32 Level) override;
+
+	// Slots 617-620, the maker's own virtuals.
+	// Slot 617 `0x1034b7b0` `MakeNPC(bool bypass)` — returns the child (the ledger typed it void; the
+	// listing's `InputSpawn` tail jump, `MakerThink`'s test and `0x10310c10`'s use all read EAX).
+	virtual FElysiumNpc* MakeNPC(bool bBypass);
+	// Slot 618 `0x1034b580` `CanMakeNPC(bool bypass)`.
+	virtual bool CanMakeNPC(bool bBypass);
+	// Slot 619 `0x1034af30` / slot 620 `0x1034af50` — both `RET 4`, and so are both variants'.
+	virtual void ChildPreSpawn(FElysiumNpc* Child);
+	virtual void ChildPostSpawn(FElysiumNpc* Child);
+
+	// --- The installed think (`m_pfnThink`) -------------------------------------------------------
+	/** Which body `ThinkSet` last installed, named by its retail address. The port has no think
+	 *  pointer; this enum is it, saved with the record (retail saves the pointer through the
+	 *  datamap's FUNCTIONTABLE rows). */
+	enum class EMakerThink : uint8
+	{
+		None,        // `ThinkSet(NULL)`: Disable, depletion, the zombie's disabled Spawn
+		Inert,       // `0x1000572c` -> `0x101c0b60`, a bare `RET`: the base/fleshpile disabled Spawn
+		Base,        // `0x1000696a` -> `0x1034bbf0` `MakerThink`: Spawn, and Enable on all three
+		Fleshpile,   // `0x10010dd4` -> `0x1034c8b0`: the fleshpile's enabled Spawn
+		Zombie,      // `0x10015c4e` -> `0x1034d2d0`: the zombie's enabled Spawn
+	};
+	EMakerThink InstalledThink = EMakerThink::None;
+	static const TCHAR* MakerThinkName(EMakerThink Think);
+
+	/** The entity think: `m_pfnThink(this)`, never `NPCThink`. The decision pass, the
+	 *  `m_bDisableAI` gate and the `g_AIDisabled` gate are all `NPCThink`'s and none runs here, so a
+	 *  maker keeps its cadence through a feed. The variants add their own think bodies. */
+	virtual void Think() override;
+	/** `0x1034bbf0`, `CNPCMaker`'s think: slot 617 `MakeNPC(false)`; a child or a full live
+	 *  ceiling re-arms at `m_flSpawnFrequency`, anything else at `RandomFloat(1, 2)`. */
+	void MakerThink();
+
+	// --- Inputs (datamap `0x10624718`) -----------------------------------------------------------
+	// `InputSpawnNPC` `0x1034b500` — writes 0 over its argument and tail-jumps into slot 617.
+	void InputSpawn(const FElysiumInputArgs& Args);
+	// `InputEnable` `0x1034b520` -> `0x1034b490`.
+	void InputEnable(const FElysiumInputArgs& Args);
+	// `InputDisable` `0x1034b540` -> `0x1034b4d0`.
+	void InputDisable(const FElysiumInputArgs& Args);
+	// `InputToggle` `0x1034b560` -> `0x1034b460`.
+	void InputToggle(const FElysiumInputArgs& Args);
+	// The datamap inputs on the `CNPCMaker` descriptor (`ElysiumNpcClasses.cpp`).
+	static void AddInputs(FElysiumClassDesc& D, const TCHAR* RetailClass);
+
+	// `0x1034b490` Enable: refuse when depleted, else clear the latch, install the BASE think
+	// (`0x1000696a`, on every maker class) and stamp `m_flNextThink = curtime`.
+	void Enable();
+	// `0x1034b4d0` Disable: latch set, `ThinkSet(NULL)`; `m_flNextThink` is not written.
+	void Disable();
+
+	// `0x1034b430` — `!m_bInfChild && m_iMaxNumNPCs < 1`.
+	bool IsDepleted() const { return !bInfinite && RemainingTotal < 1; }
+
+	// `CNPCMaker::ParseMapData`'s extraction verbatim: copy until `\0` or `}`, then ALWAYS write a
+	// `}` — an input with no brace still ends in one and an EMPTY input yields `}`. The
+	// `m_sRefMapDataBuffer` latch reads the first byte, which that `}` makes non-zero on every path.
+	static FString ExtractRefMapDataBlock(const FString& MapData);
+
+	// --- Port diagnostics -------------------------------------------------------------------------
+	/** Why the last admission (slot 618) or creation refused, or `Spawned`. Retail answers a bool
+	 *  and a pointer; the reason is the port's, for the debug panel and the tests. */
 	enum class EAttempt : uint8
 	{
 		Spawned,
@@ -52,199 +160,18 @@ public:
 		InvalidChild,
 	};
 	EAttempt LastAttempt = EAttempt::InvalidChild;
-
 	static const TCHAR* AttemptName(EAttempt Attempt);
 
-	// `FUN_1034b430` `0x1034b430` — `return !m_bInfChild (+0x66c3) && m_iMaxNumNPCs (+0x6660) < 1`.
-	// Story 29c's checklist gives the row the verdict `rule` and the best-guess target
-	// `FElysiumNpc::FUN_1034b430`; it is neither an NPC's body nor unported. Two direct callers
-	// (`0x1034b7b0 MakeNPC`, `0x1034bc90 DeathNotice`) plus one from outside the closure, and the
-	// port already carried the predicate verbatim. Cited rather than re-implemented — story 29c-1,
-	// family Species.
-	bool IsDepleted() const { return !bInfinite && RemainingTotal < 1; }
-
-	// --- Story 29d, family SpeciesLifecycle10: slot 103 `Spawn`, the three maker arms -------------
-	//
-	//   `CNPCMaker::Spawn`           `0x1034afe0`  — 261 bytes
-	//   `CNPCMaker_Fleshpile::Spawn` `0x1034c020`  — byte-identical but for the installed think
-	//   `CNPCMaker_Zombie::Spawn`    `0x1034cc60`  — 295 bytes; a spawn jitter, a NULL disabled
-	//                                                think, Relink on both paths, and the five
-	//                                                police thresholds slammed to 999999
-	//
-	// One method with three arms keyed on the maker's own classname, exactly as slots 104, 139, 617
-	// and 618 already are on this class.
-	//
-	// **The checklist's walk has `+0x66b0` and `+0x66b8` the wrong way round.** `vtmb_fields
-	// CNPCMaker` puts `m_cLiveChildren` at `+0x66b0` and `m_flGround` at `+0x66b8`, and the listing
-	// agrees: `1034b065 MOV dword ptr [ESI + 0x66b0],0x0` runs BEFORE the slot-104 dispatch and
-	// `1034b0bc MOV dword ptr [ESI + 0x66b8],0x0` is the last write on both paths. It also calls the
-	// collision property `+0x17c`; `1034b04c LEA ECX,[ESI + 0x270]` says `m_Collision` is `+0x270`
-	// and `+0x17c` is `m_flNextThink`, the other word the body writes.
-
-	/** Which think body the last `Spawn` installed, named by its retail address. `ThinkSet` is what
-	 *  chooses between the four, and the choice is the whole difference between the three arms. */
-	enum class EMakerThink : uint8
-	{
-		None,        // `CBaseEntity::ThinkSet(NULL)` — the zombie's disabled path
-		Inert,       // `0x1000572c` -> `0x101c0b60`, a bare `RET`: the base/fleshpile disabled path
-		Base,        // `0x1000696a` -> `0x1034bbf0`, `CNPCMaker`'s own think
-		Fleshpile,   // `0x10010dd4` -> `0x1034c8b0`
-		Zombie,      // `0x10015c4e` -> `0x1034d2d0`
-	};
-	EMakerThink InstalledThink = EMakerThink::None;
-	static const TCHAR* MakerThinkName(EMakerThink Think);
-
-	// `CCollisionProperty::SetSolid(SOLID_NONE = 0)` on `m_Collision` (`+0x270`), which `Spawn`
-	// writes, is the entity's own `m_Collision` seam, `FElysiumEntity::RetailSolidType`
-	// (`ElysiumEntitySlotBodies.inl`) — one home for the `CBaseEntity` word, which the maker's fold
-	// onto the NPC line (story 5 fold A4) inherits rather than shadows. A maker is never solid.
-
-	/** SEAM for `CBaseEntity::Relink` (`0x1001514a`), which re-inserts the entity into the engine's
-	 *  spatial partition. This runtime has no partition to relink into, so the call is counted —
-	 *  and the COUNT is the recovered fact, because the base and fleshpile arms run it on the
-	 *  enabled path only reachable through their `if`, while the zombie arm runs it on both. */
+	/** SEAM for `CBaseEntity::Relink` (`0x1001514a`): this runtime has no spatial partition, so the
+	 *  call is counted. The base and fleshpile arms run it inside each branch, the zombie's once
+	 *  after the join. */
 	int32 RelinkCalls = 0;
 
-	/** `m_iPLInvestigateLevel` (`+0x6348`), `m_iPLCriminalFleeLevel` (`+0x634c`),
-	 *  `m_iPLCriminalAttackLevel` (`+0x6350`), `m_iPLSupernaturalFleeLevel` (`+0x6354`) and
-	 *  `m_iPLSupernaturalAttackLevel` (`+0x6358`) — the five `CAI_BaseNPCTroika` law thresholds a
-	 *  maker carries in retail because `CNPCMaker` IS one. `CNPCMaker_Zombie::Spawn` writes the
-	 *  literal 999999 into all five on ITSELF, so the maker entity can never cross a law threshold.
-	 *
-	 *  **SEAM:** `ElysiumNpcClasses.cpp` registers no police-level keyfield on `npc_maker`, and this
-	 *  port's maker is not a law participant at all, so nothing reads these back. They are carried
-	 *  so the zombie arm's five writes are real writes at their retail names. */
-	int32 PlInvestigate = 0;
-	int32 PlCriminalFlee = 0;
-	int32 PlCriminalAttack = 0;
-	int32 PlSupernaturalFlee = 0;
-	int32 PlSupernaturalAttack = 0;
-
-	/** `1034cd58 MOV EAX,0xf423f` — **999999**, the literal all five take. */
-	static constexpr int32 ZombieMakerPoliceLevel = 999999;
-
-	/** `1034cd25 PUSH 0x3f800000` / `1034cd20 PUSH 0x40000000` — `RandomFloat(1.0, 2.0)`, the
-	 *  zombie maker's first-think jitter, added to `m_flSpawnFrequency` and curtime. */
-	static constexpr float ZombieSpawnJitterMin = 1.0f;
-	static constexpr float ZombieSpawnJitterMax = 2.0f;
-
-	virtual void Spawn() override;
-
-	// --- Story 29c-1, family Lifecycle ------------------------------------------------------------
-
-	// +0x66cc `field_0x66cc` / +0x76cc `m_sRefMapDataBuffer` — the sub-block `CNPCMaker::ParseMapData`
-	// (`0x1034b3c0`, slot 107) carves out of its own map data before forwarding to
-	// `CBaseEntity::ParseMapData`. It is the child NPC's keyvalue block, which `MakeNPC` replays onto
-	// each spawned child. Nothing in this runtime consumes it yet: the port's maker builds its child
-	// from the registered classname alone.
-	FString RefMapDataBuffer;
-
-	// `CNPCMaker::ParseMapData` (`0x1034b3c0`), the extraction verbatim. Retail copies characters
-	// until a `\0` or a literal `}` and then ALWAYS writes a `}` at the cursor — so an input with no
-	// brace still ends in one, and an EMPTY input yields the single character `}`. It then sets
-	// `m_sRefMapDataBuffer` from the buffer's first byte, which the `}` it just wrote makes non-zero
-	// on every path: **the "empty means null" arm is unreachable**, and that is a retail fact, not a
-	// simplification.
-	static FString ExtractRefMapDataBlock(const FString& MapData);
-
-	// The slot-107 body: extract, latch, and then the base's own `ParseMapData`.
-	void ParseMapData(const FString& MapData);
-
-	EAttempt CanMakeNpc(bool bBypass) const;
-
-	EAttempt TrySpawn(bool bBypass = false);
-
-	void InputSpawn(const FElysiumInputArgs&) { TrySpawn(/*bBypass=*/false); }
-
-	void InputEnable(const FElysiumInputArgs&);
-	void InputDisable(const FElysiumInputArgs&);
-	void InputToggle(const FElysiumInputArgs& Args);
-
-	virtual void Think() override;
-
-	virtual void OnOwnedEntityTerminated(FElysiumEntity& Child,
-		EElysiumOwnedEntityTermination Reason) override;
-
-	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
-
-	// --- Story 29c-1, family Species: `CNPCMaker_Fleshpile`'s two overrides ------------------------
-	//
-	// `npc_maker_fleshpile` shares this leaf with `npc_maker` (`Substrate/ElysiumNpcClasses.cpp`
-	// registers both against it), so the fleshpile's slot 617 `MakeNPC` and slot 139 `DeathNotice`
-	// are species arms on this class and not a subclass — the same rule family Species applies to
-	// `FElysiumNpc`. The retail class of the maker a map stood is read off its own classname, which
-	// is the only discriminator either body needs.
-	//
-	// Both bodies talk to the ONE `npc_VAndreiBlood` in the level through the file-static
-	// `DAT_10938040`, which `MakeNPC` fills lazily by classname search and dynamic cast. That
-	// singleton's `m_iActiveRunnerCount` (`+0x66b8`) and `m_iKillCount` (`+0x66bc`) are family
-	// Species' members on `FElysiumNpc`; both bodies reach them through the world by classname,
-	// exactly as retail reaches them through the cached pointer.
-
-	/** Is this maker the fleshpile variant? `npc_maker_fleshpile` in this runtime,
-	 *  `CNPCMaker_Fleshpile` in the census. */
-	bool IsFleshpileMaker() const;
-
-	/** The one `npc_VAndreiBlood` in the level — retail's `DAT_10938040`, which `0x1034c2d0` fills
-	 *  with `FindEntityByClassname(NULL, "npc_VAndreiBlood")` plus a dynamic cast the first time it
-	 *  is asked and never clears. Null when the level stands none, which is the arm BOTH bodies
-	 *  refuse on. */
-	class FElysiumNpc* FleshpileOwner() const;
-
-	/** `CNPCMaker_Fleshpile::OnRestore` `0x1034c260`, slot 130: bind `DAT_10938040` to the live
-	 *  `npc_VAndreiBlood`, then chain Troika `OnRestore`. The chain is a seam — this leaf is not
-	 *  `FElysiumNpc`. */
-	void OnRestore(bool bFromLoad);
-	int32 MakerOnRestoreTroikaChains = 0;
-
-	/** `CNPCMaker_Fleshpile::MakeNPC` `0x1034c2d0`, slot 617. */
-	EAttempt FUN_1034c2d0(bool bBypass);
-
-	/** `CNPCMaker_Fleshpile::DeathNotice` `0x1034c8e0`, slot 139. */
-	void FUN_1034c8e0(FElysiumEntity* Child);
-
-	// --- Story 29d, family Precache10: slot 104, the three maker arms -----------------------------
-	//
-	// `classes.md` stands `CNPCMaker` as a `CAI_BaseNPCTroika` with 621 slots, so slot 104 IS the
-	// NPC `Precache` virtual for a maker — but no maker is an `FElysiumNpc` in this port
-	// (`FElysiumNpcMaker final : public FElysiumEntity`, registered for `npc_maker`,
-	// `npc_maker_fleshpile` and `npc_maker_zombie` in `ElysiumNpcClasses.cpp`), so an
-	// `FElysiumNpc` arm would never run. The three bodies are therefore ONE method with three arms,
-	// keyed on the maker's own classname exactly as `IsFleshpileMaker` already keys slots 617 and
-	// 139 — the same shape the overlay uses for the three maker slot-103 bodies on `Spawn`.
-	//
-	//   `CNPCMaker::Precache`           `0x1034b160`  — both keyfields, both developer overlays
-	//   `CNPCMaker_Fleshpile::Precache` `0x1034c180`  — the model keyfield only, no overlay
-	//   `CNPCMaker_Zombie::Precache`    `0x1034cde0`  — the fleshpile shape, plus two zeroed
-	//                                                   equipment words and `item_w_zombie_fists`
-	//
-	// `Spawn` calls it at retail's position (`1034b06f`, slot 104 after `m_cLiveChildren = 0`). It
-	// RECORDS rather than acquires, for the reason `FElysiumNpc::Precache` states: this substrate
-	// acquires assets for the whole map epoch before an entity stands.
-
-	/** Is this maker the zombie variant? `npc_maker_zombie` here, `CNPCMaker_Zombie` in the census.
-	 *
-	 *  `ElysiumNpcClasses.cpp` registers `npc_maker_zombie` against this leaf (0018 story 2), so a
-	 *  shipped zombie maker stands with its own three keyfields and takes this arm. Its think body
-	 *  (`CNPCMaker_Zombie` think `0x1034d2d0`) is unported: `Think` refuses to run the base maker's
-	 *  spawn loop in its place (see there). */
-	bool IsZombieMaker() const;
-
-
-	/** `DAT_1070af4c`, the `developer` cvar both `CNPCMaker::Precache` overlay arms gate on:
-	 *  `!cvar->IsCommand() && cvar->GetInt() >= 1`. This runtime stands no console variable for it,
-	 *  so the value is retail's own shipped **0** and the overlay arms do not run. Settable because
-	 *  it IS a cvar — a debug panel or a test raises it and the arm runs, which is what retail does
-	 *  with `developer 1`. */
+	/** `DAT_1070af4c`, the `developer` cvar `CNPCMaker::Precache`'s overlay arms gate on (`>= 1`).
+	 *  No console variable stands for it; the value is retail's shipped 0, settable as a cvar is. */
 	static int32 DeveloperCvarLevel;
-
-	/** One `NDebugOverlay::Box` request `CNPCMaker::Precache` issues under `developer >= 1`:
-	 *  `0x100067f3` formats the text, `0x100092c3` binds it to this entity's origin and angles, and
-	 *  `thunk_FUN_101cf390` draws it at the collision `OBBMins`/`OBBMaxs`.
-	 *
-	 *  SEAM: this substrate has no maker debug-overlay service and the box is developer-only and
-	 *  visual, so the request is RECORDED and nothing is drawn. The text and the bounds are the
-	 *  recovered half. */
+	/** One `NDebugOverlay::Box` request `CNPCMaker::Precache` issues under `developer >= 1`. SEAM:
+	 *  no maker debug-overlay service; the text and the bounds are recorded, nothing is drawn. */
 	struct FDeveloperOverlayBox
 	{
 		FString Text;
@@ -253,166 +180,35 @@ public:
 	};
 	TArray<FDeveloperOverlayBox> DeveloperOverlayBoxes;
 
-	/** What slot 104 precached, in retail's order. See `FElysiumNpcBase::IssuePrecache` for why a
-	 *  precache is recorded rather than performed in this substrate. */
-	TArray<FElysiumNpcBase::FPrecacheOp> PrecacheLog;
+	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+	virtual void OnOwnedEntityTerminated(FElysiumEntity& Child,
+		EElysiumOwnedEntityTermination Reason) override;
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
-	/** `m_altEquipment` (`+0x1a98`) and `m_spawnEquipment` (`+0x5dec`) — the two `CAI_BaseNPCTroika`
-	 *  words a maker carries in retail because `CNPCMaker` IS one, and the two
-	 *  `CNPCMaker_Zombie::Precache` zeroes BEFORE it chains `CAI_BaseNPC::Precache`, discarding any
-	 *  authored equipment keyfield.
-	 *
-	 *  SEAM, and it answers nothing: `ElysiumNpcClasses.cpp` registers `additionalequipment` and
-	 *  `alternateequipment` on the NPC class only, so nothing on this port's maker ever writes
-	 *  them and the base chain's `UTIL_PrecacheOther(m_spawnEquipment)` arm is never taken. They
-	 *  are carried so the zombie arm's two writes are real writes rather than a dropped line. */
-	FString AlternateEquipment;    // +0x1a98
-	FString AdditionalEquipment;   // +0x5dec
-
-	/** Slot 104 for all three maker classnames. */
-	void Precache();
-
-	/** The tail only the base `CNPCMaker` arm runs: the `developer >= 1` gate and the overlay box
-	 *  request. The bool IS the whole state — retail's two texts are `"%s: BAD NPC Classname"`
-	 *  (`0x10624f18`) and `"%s: BAD MODEL NAME"` (`0x10624f00`) and there is no third. */
+protected:
+	/** The model half every maker `Precache` opens with (`0x1034b160`, `0x1034c180`, `0x1034cde0`
+	 *  share it byte for byte): slot 9 `GetModelName` empty -> `Warning(... missing modelname)` and
+	 *  `UTIL_Remove(this)`; otherwise `PrecacheModel(model, 0)`. False when the maker removed itself.
+	 *  `bBadModelOverlay` is the base arm's `developer` overlay, which the variants drop. */
+	bool PrecacheMakerModel(bool bBadModelOverlay);
+	/** The `developer >= 1` overlay box the base `Precache` issues: `"%s: BAD NPC Classname"`
+	 *  (`0x10624f18`) or `"%s: BAD MODEL NAME"` (`0x10624f00`). */
 	void DrawBadNameOverlay(bool bBadClassname);
 
-	// --- Story 29d, family Lifecycle10: `MakeNPC`'s child inheritance, and the zombie maker -------
-	//
-	// `CNPCMaker::MakeNPC` `0x1034b7b0` copies eleven of its OWN `CAI_BaseNPCTroika` words onto each
-	// child — retail's maker IS an NPC, so a mapper authoring `npc_perception` or a script-state key
-	// on the maker has it inherited by everything it spawns. This port's maker is an
-	// `FElysiumEntity`, so those words have no home on it; the block below is the seam that gives
-	// them one.
-	//
-	// **It answers nothing today and names why:** `ElysiumNpcClasses.cpp` registers none of these
-	// keyfields on `npc_maker`, so every field stays at its default and the copy moves the default
-	// onto the child — which is what a retail maker that authors none of them does. The day a
-	// keyfield lands on the maker the copy is already here.
+	/** Slot 103's common prefix and suffix, in retail's order: `SetSolid(SOLID_NONE)`,
+	 *  `m_cLiveChildren = 0`, slot 104, `m_bInfChild` => `m_bFade`. */
+	void SpawnPrefix();
 
-	/** The twelve words `0x1034b7b0` copies from the maker onto the child, by retail offset and in
-	 *  the listing's copy order.
-	 *
-	 *  **CORRECTED against the checklist's walk.** The walk calls `+0x6420`..`+0x6436` "the whole
-	 *  script-state block (saved move collide, hidden, solid flags, effects, transparent, blocks
-	 *  traces, occludes sound, sound override ent, the three fake-silence bytes)", which is Ghidra's
-	 *  mislabelled `this_00[0x17].<field>` struct view of the child pointer. The listing copies plain
-	 *  offsets (`1034ba0f MOV ECX,[ESI+0x6420] / MOV [EDI+0x6420],ECX` and so on) and the datamap
-	 *  (`ElysiumNpcKernelShape.cpp`) names them: five `m_iPercentOccluded*` thresholds and three
-	 *  authored policy bytes. Nine words, not eleven, and nothing about script state. */
-	struct FChildInheritance
-	{
-		/** `+0x1584 m_RelationshipString` (`CBaseCombatCharacter`'s `string_t`). **SEAM:** no port
-		 *  member carries it — `ElysiumNpcClasses.cpp` registers no `relationship` keyfield and
-		 *  `ElysiumNpcKernelShapeMap.cpp` has no row for the offset — so it is copied into
-		 *  `LastChildRelationshipString` and applied to nothing. */
-		FString RelationshipString;
-		int32 AuthoredPerception = 0;       // +0x63b0 m_iPerception
-		float AuthoredVision = -1.f;        // +0x63b4 m_flVision
-		float AuthoredHearing = -1.f;       // +0x63bc m_flHearing
-		bool bUseInteresting = false;       // +0x63d9 m_bUseInteresting
-		int32 PercentOccludedWait = 0;      // +0x6420 m_iPercentOccludedWait
-		int32 PercentOccludedCover = 0;     // +0x6424 m_iPercentOccludedCover
-		int32 PercentOccludedWalk = 0;      // +0x6428 m_iPercentOccludedWalk
-		int32 PercentOccludedFlank = 0;     // +0x642c m_iPercentOccludedFlank
-		int32 PercentOccludedChase = 0;     // +0x6430 m_iPercentOccludedChase
-		bool bAllowAlertLookaround = false; // +0x6434 m_bAllowAlertLookaround
-		bool bStayEntrenched = false;       // +0x6435 m_bStayEntrenched
-		bool bAllowKickHintUse = false;     // +0x6436 m_bAllowKickHintUse
-	};
-	FChildInheritance ChildWords;
+	/** `CanMakeNPC`'s ground cache: when `m_flGround == 0.0` (compared against 0, not a sentinel),
+	 *  trace `2048` units down (mask `0x2400b`) and keep the end Z. */
+	void CacheGroundZ();
+	/** The 34-unit spawn box test `EntityInBox` (`0x101cca80`, mask `0x2080`); `FloorZ` is the box's
+	 *  minimum Z. True when something solid stands in it. */
+	bool IsSpawnBoxOccupied(float FloorZ) const;
 
-	/** The `+0x1584` copy's destination, for the seam above. */
-	FString LastChildRelationshipString;
-
-	/** Apply `ChildWords` to a freshly created child, in the listing's order, and run the two
-	 *  perception derivations retail runs — **on the MAKER**, which is retail's own oddity and is
-	 *  reproduced: `1034b9ee MOV ECX,ESI` puts `this` (the maker), not `EDI` (the child), in the
-	 *  `this` register for `thunk_FUN_1028fb70` (`InitPerceptionDistances`) and `thunk_FUN_1028fc90`.
-	 *  So the child inherits the three authored perception words and nothing derives them. */
-	void ApplyChildInheritance(class FElysiumNpc& Child);
-
-	/** SEAM for `InitPerceptionDistances` (`0x1028fb70`) and `0x1028fc90` run on the MAKER. Counted,
-	 *  because a maker on this leaf carries no perception words to derive from; naming the oddity is
-	 *  the recovered half. */
-	int32 MakerPerceptionDerivations = 0;
-
-	/** SEAM for the child's `ParseMapData` (`+0x1ac`) replay: `MakeNPC` copies
-	 *  `m_sRefMapDataBuffer` (`+0x76cc`) byte by byte into its inline buffer at `+0x66cc` and hands
-	 *  the child a `CEntityMapData` over it, then `Precache` (`+0x1bc`) and `SetClassname`
-	 *  (`+0x1e8`). This runtime builds a child from the registered classname and a keyvalue map the
-	 *  world applies at `Construct`, which has already happened by the time `TrySpawn` has a child —
-	 *  so the replayed block is RECORDED and applied to nothing. */
-	FString LastChildMapDataReplay;
-
-	/** Slots 619 / 620, `ChildPreSpawn` and `ChildPostSpawn`. `CNPCMaker`'s own bodies
-	 *  (`0x1034af30`, `0x1034af50`) are EMPTY — a `return;` apiece — so the base maker's hooks are a
-	 *  fact and not a gap; only the fleshpile and zombie variants fill them, and those are other
-	 *  rows. Counted so the call ORDER around `DispatchSpawn` stays assertable. */
-	int32 ChildPreSpawnCalls = 0;
-	int32 ChildPostSpawnCalls = 0;
-
-	/** `+0x76d8`, the MAXIMUM player distance `CNPCMaker_Zombie::CanMakeNPC` refuses beyond, in
-	 *  Source units. **SEAM:** `npc_maker_zombie` is not a registered spawn leaf here, so no keyfield
-	 *  writes it and it holds the authored **0** a maker with no such key would carry. */
-	int32 ZombieMaxPcDistance = 0;
-
-	/** The child `TrySpawn` last created, so `EquipZombieFists` can reach it — retail's `MakeNPC`
-	 *  RETURNS the child and this port's `TrySpawn` returns an admission verdict instead. */
-	FElysiumEntityHandle LastSpawnedChild;
-
-	/** `CNPCMaker_Zombie::CanMakeNPC` `0x1034d0a0`, slot 618. */
-	EAttempt CanMakeNpcZombie(bool bBypass) const;
-
-	/** `CNPCMaker_Zombie::MakeNPC` `0x1034d140`, slot 617 — `MakeNPC` and then the zombie's fists.
-	 *  Answers the spawned child, or null when either the spawn or the item lookup refused. */
-	class FElysiumNpc* EquipZombieFists(bool bBypass);
-
-	/** SEAM for `CBaseCombatCharacter::Weapon_OwnsThisType(this, "item_w_zombie_fists", 0)` — note
-	 *  retail asks the MAKER, not the spawned zombie (`1034d16a MOV ECX,EDI`, and `EDI` is `this`).
-	 *  A maker on this leaf owns no weapons, so it answers **false**, which is the arm that goes on
-	 *  to look the item up. See `EquipZombieFists` for why the other arm is a retail crash. */
-	bool ZombieMakerOwnsFists() const;
-
-	/** SEAM for `thunk_FUN_10136580("item_w_zombie_fists")`, retail's entity factory. This runtime's
-	 *  factory is the class registry, and the item catalogue registers one class per `vdata/items`
-	 *  definition only when `ElysiumItems::Install` runs — which a headless world does not do. So
-	 *  the honest answer in a bare fixture is **false**, and that is retail's own "the item
-	 *  definition is missing" arm: release the spawned zombie and answer null.
-	 *
-	 *  **GAP, named rather than patched:** the SUCCESS arm is therefore unreachable without an
-	 *  installed catalogue. The latch below forces the answer so a fixture reaches that arm; nothing
-	 *  in the shipping build sets it. */
-	bool ZombieFistsItemExists() const;
-
-#if WITH_DEV_AUTOMATION_TESTS
-	/** Force the catalogue answer, in BOTH directions.
-	 *
-	 *  The fallback reads `FElysiumClassRegistry`, which is a **process-wide singleton**: once any
-	 *  earlier suite in the same process has installed the item catalogue, `item_w_zombie_fists` is
-	 *  registered and the missing-item arm stops being reachable. A fixture that asserted the
-	 *  absence therefore passed alone and failed in a full run, which is an order dependency rather
-	 *  than a defect in either body. Unset, the registry still answers. */
-	void SetZombieFistsItemForTests(bool bExists) { ZombieFistsItemForTests = bExists; }
-	void ClearZombieFistsItemForTests() { ZombieFistsItemForTests.Reset(); }
-	TOptional<bool> ZombieFistsItemForTests;
-#endif
-
-	/** `"Zombies_spawning_emitter"` (`0x1062565c`), created at the maker's origin and angles and
-	 *  given a 15.0-second life (`1034d249 PUSH 0x41700000`). SEAM: this runtime stands no Source
-	 *  particle emitters, so the request is recorded. */
-	struct FZombieSpawnEmitter
-	{
-		FVector Origin = FVector::ZeroVector;
-		FVector Angles = FVector::ZeroVector;
-		float LifetimeSeconds = 0.f;
-	};
-	TArray<FZombieSpawnEmitter> ZombieSpawnEmitters;
-
-	/** What `EquipZombieFists` handed the child, in order, so a case can state the whole arm without
-	 *  an item substrate: the item classname it created, whether the item's own `+0x1d0` check
-	 *  refused (which is what makes retail hand it over), and the `0x40000000` flag it OR'd into the
-	 *  item's flag word at `+0x204`. */
-	FString LastZombieFistsItem;
-	int32 ZombieFistsEquips = 0;
+	/** The nearest live entity of `Classname` within `RadiusUnits` of `PointCm`,
+	 *  `FindEntityByClassnameNearest` `0x100f7d50`: squared distance STRICTLY below the radius
+	 *  squared, first-listed on a tie. */
+	static FElysiumEntity* FindNearestByClassname(FElysiumEntityWorld& InWorld, const TCHAR* Classname,
+		const FVector& PointCm, float RadiusUnits);
 };

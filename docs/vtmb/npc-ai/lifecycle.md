@@ -497,7 +497,8 @@ trance install (both "slot 614, then `SetSchedule`", now at the callers rather t
 `StartNamedSchedule`, because the `ChangeSchedule`/`StartSchedule` inputs are not sites),
 `TASK_WAIT_PVS`'s completion (`FElysiumNpc::WaitPvs`, the slot-584 form), the teleport broadcast
 (`FElysiumEntityWorld::WakeNpcsNear`, slot 583 from `point_teleport` and `teleport_player`), the
-map-wide `SetAIEnabled` (`FElysiumEntityWorld::SetAiEnabled`, the slot-584 form on every NPC, with
+map-wide `SetAIEnabled` (`FElysiumEntityWorld::SetAiEnabled`, the slot-584 form on every NPC —
+the makers included since story 5 fold A4, whose pulled think is their installed one — with
 its three producers: a player's `FeedBegin` under the area-type and 3 s unobserved gate,
 `FeedInterrupt`, `events_world`'s `AIEnable`, and the level-change fade), the scene cast
 (`SetDisableAi(true)` at `position_start`, restored with slot 614 at `OnSceneFinished`), and the
@@ -1131,6 +1132,90 @@ A null result answers false. Otherwise the expresser's `+0x04` is back-linked to
 **Unrecovered:** the expresser object's layout beyond those two back-links, and what `+0x5f44` is —
 the census leaves both unbound.
 
+## The NPC makers — `CNPCMaker`, `CNPCMaker_Fleshpile`, `CNPCMaker_Zombie` (0019 story 5 fold A4)
+
+_Recovered 2026-09-27, story 5 fold A4._
+
+**A maker IS a Troika NPC.** `CNPCMaker`'s constructor chain runs `CAI_BaseNPC`'s (`0x1027c300`: the
+AI-list add on `DAT_1090fe10` through `0x10265310`, flag `0x20` at `+0x4c`, `m_pBaseNPC +0x94 =
+this`) and the Troika's (`0x1028d230`: flag `0x40`, `m_pTroika +0x98 = this`). Its vtables
+(`0x1049f404`, `0x1049ffe4`, `0x104a0bbc`) carry 21 / 15 / 14 own bodies — `classes.md`'s 17 / 12 /
+10 is the name-prefix count and misses the unnamed fills of the four slots the maker adds past the
+Troika's table, 617 `MakeNPC` (returns the child), 618 `CanMakeNPC`, 619 `ChildPreSpawn` and 620
+`ChildPostSpawn`. The port stands them as `FElysiumNpcMaker : FElysiumNpc`,
+`FElysiumNpcMakerFleshpile` and `FElysiumNpcMakerZombie` beneath it.
+
+**What makes it a marker is its own slot table**, and nothing else:
+
+| Question | Maker's answer | Retail body |
+|---|---|---|
+| Spawn (103) | `SetSolid(SOLID_NONE)`, live = 0, slot 104, InfChild => Fade, the think installation, Relink, `m_flGround` = 0; no `SetModel`, no base `Spawn` | `0x1034afe0` / `0x1034c020` / `0x1034cc60` |
+| Precache (104) | the model, then `CAI_BaseNPC::Precache` `0x1027bb50` DIRECT (not the Troika's) | `0x1034b160` / `0x1034c180` / `0x1034cde0` |
+| Activate (113) | empty — no disposition, relationship, senses, admission or `NPCInit` | `0x1034b140` |
+| Transmit (86) | false — never drawn | `0x1034af10` |
+| Cones (362-365), witness (587), discipline target (72) | false | `0x1034ae70`.., `0x1034aed0`, `0x1034aef0` |
+| Think | the INSTALLED think (`m_pfnThink`), never `NPCThink` | `0x1034bbf0` / `0x1034c8b0` / `0x1034d2d0` / inert `0x101c0b60` / NULL |
+
+So `NPCInit` and `NPCThink` never run on a maker: its `m_bDisableAI` and the console `g_AIDisabled`
+bit (both `NPCThink`'s gates) never stop it — a maker keeps its cadence through a feed — and
+`DisableThink` on a maker only reaches its children, through `MakeNPC`'s `SetDisableAI` copy.
+
+**It is in every AI-list walk.** `SetAIEnabled(true)` `0x10265680` and `WakeNpcsNear` `0x1028d820`
+(teleports, `point_teleport`, `teleport_player`) dispatch slot 614 `ResetThinkTimers`
+(`0x102c23f0`, which no maker overrides) on it, pulling `m_flNextThink` to now; so do an unhide
+(the Troika `ScriptUnhide` tail `0x102c1ec0`) and `SetDisableAI(false)` `0x1029f300`. The pulled
+think is the INSTALLED one: an enabled maker attempts a spawn at once, a disabled one runs the
+inert `RET` (base, fleshpile) or nothing (zombie), a depleted one nothing.
+
+**The installed think.** `Spawn` installs the class's think when enabled — base `MakerThink`
+`0x1034bbf0`, fleshpile `0x1034c8b0`, zombie `0x1034d2d0` (instruction for instruction
+`MakerThink`'s code) — at `freq + curtime` (the zombie adds `RandomFloat(1, 2)`), and when disabled
+the inert think (base, fleshpile) or NULL (zombie) without writing `m_flNextThink`. `Enable`
+`0x1034b490` refuses a depleted maker, clears the latch and installs the **base** think on every
+class (`0x1000696a`), `m_flNextThink = curtime`; `Disable` `0x1034b4d0` sets the latch and
+`ThinkSet(NULL)`; `MakeNPC`'s depletion arm `ThinkSet(NULL)`s too. `MakerThink` dispatches slot 617
+`MakeNPC(0)` virtually and re-arms at `freq` after a child or on a full live ceiling, else at
+`RandomFloat(1, 2)`. The fleshpile's own think only re-arms — see `CNPCMaker_Fleshpile` below.
+
+**`DeathNotice` (139, `0x1034bc90`).** Once per child (`+0x44c`): `child->IsAlive()` (slot 158)
+refunds `m_iMaxNumNPCs` **unconditionally** (`1034bcb7 INC [ESI+0x6660]`, no `m_bInfChild` test),
+else `OnNPCDied(child, this)`; then `OnLastNPCDied` when depleted; then `m_cLiveChildren - 1`,
+clamped at 0. The fleshpile's `0x1034c8e0` moves Andrei's runner budget first (RTTI
+`CNPC_VTzimisceRunner`, `0x10625270`) and then calls it directly.
+
+**What the port suppresses, and by which retail word.** The port's own consumers that treat every
+NPC as a body: the maker's `SOLID_NONE` (`FElysiumEntity::IsRetailNotSolid`) keeps it out of the aim
+and swing contacts, the hull traces (`TracePlayerSolid`, the stealth-kill `TraceNpcHulls`), the
+grapple stand test and the maker spawn box (its own included); slot 72 keeps it out of discipline
+targeting (`0x101e1a60`'s arm, now asked by the port's `AcquirePrimary`/`BuildTargetSet`); the
+targetable byte `+0x1480` (set only by `NPCInit`) keeps it out of the feed probe, the melee pick and
+`BestEnemy`; it has no body or motor, so the per-frame body loops skip it. Left to run as retail's
+walks: the AI toggle and the teleport wake above, and the other NPCs' `Look` candidate walk (retail
+walks the AI list; whether a looker's relationship ever hates a class-4 maker is **unrecovered** —
+brief open question 1).
+
+**Named divergences in the port.** *A child its own spawn removes.* Retail has no test after
+`DispatchSpawn` (`1034ba7a`): a `UTIL_Remove` inside the child's spawn is deferred, so the child is
+owned, named, counted (`m_cLiveChildren`, `m_iMaxNumNPCs`, the depletion `ThinkSet(NULL)`),
+`m_bCameFromSpawner` is set and `MakeNPC` returns it; its end-of-frame `UpdateOnRemove` then dispatches
+slot 139, whose `IsAlive` arm refunds the total. The port's `Kill` is immediate and latches the owner
+notice before an owner exists, so the port drops such a child instead: `MakeNPC` answers null, nothing
+is owned or counted, no `ThinkSet(NULL)`, and `MakerThink` re-arms at `RandomFloat(1, 2)` instead of
+`+freq` (the fleshpile also leaves Andrei's budget alone). Unreachable in shipped content: the one
+removal arm in an NPC's own spawn is `Precache`'s `LoadedSchedules` refusal, which never fires here.
+*A hidden maker.* The port's `RunThinks` skips every inert (script-hidden or `StartHidden`) entity, so a
+hidden maker never thinks, while retail's `Enable` on a hidden maker installs the base think at now
+and it spawns while hidden — a pre-existing world rule, not this fold's (`calm_cop_front_5` in
+`sm_hub_1` is such a maker: `StartHidden 1`, enabled). Retail's `ScriptHide` `0x100a8710` saves
+`m_pfnThink` into `m_pfnScriptSavedThink` (`+0xe4`), installs NULL and parks `m_flNextThink` at
+`FLT_MAX`; `ScriptUnhide` `0x100a8990` re-installs the saved think (`ThinkSet(saved)`), overwriting one
+`Enable` installed meanwhile. The port keeps the maker's installed think across a hide (it carries no
+`+0xe4`), which is the same answer once the maker is visible again.
+
+**Unrecovered:** `+0x1f0`, which `MakeNPC`'s depletion arm zeroes after `ThinkSet(NULL)`
+(`m_pfnUse` by the datamap layout; the port carries no use-function pointer on a maker), and
+whether a sense walk ever admits a maker (above).
+
 ## `CNPCMaker_Fleshpile`'s two overrides — `0x1034c2d0`, `0x1034c8e0` (2026-09-13)
 
 _Recovered 2026-09-13, story 29c-1, family Species._
@@ -1165,12 +1250,28 @@ the cache test is `== 0.0` rather than a sentinel, so a maker standing at exactl
 at exactly Z = 0 re-traces on every attempt.
 
 The base's live-children, scene-block, visibility, view-cone and PC-distance terms are **absent**: a
-fleshpile maker ignores all five. Everything after admission — the classname lookup, the `+0x98`
-Troika check with its `"Non Troika Ent in NPCMaker!\n"` / `"NULL Ent in NPCMaker!\n"` warnings, the
-roughly twenty field copies onto the child (view offset, move dir, physics update time, the
-spawnflags with a view-cone bit at `+0x66c2`, several float pairs at `+0x63xx`), `Spawn`, the
-rename from `m_ChildTargetName` (`+0x66bc` on the maker) and the ownership notice — is the base
-body's, and the last thing it does is `m_iActiveRunnerCount += _DAT_104454c0` = **1.0**.
+fleshpile maker ignores all five. **Corrected 2026-09-27 (story 5 fold A4):** everything after
+admission is this body's OWN, not the base's. The classname lookup and the `+0x98` Troika check with
+its `"Non Troika Ent in NPCMaker!\n"` / `"NULL Ent in NPCMaker!\n"` warnings; `+0x1584`; `OnSpawnNPC`;
+`SetAbsOrigin`/`SetAbsAngles` from the maker; the spawnflags **ORed** with 4, or `0x204` when
+`m_bFade` (`+0x66c2` is `m_bFade`, not a view-cone bit); then the copy set — `m_spawnEquipment`
+`+0x5dec`, `m_SquadName` `+0x5da8`, `SetHintGroup(+0x5db0)` (`0x102781e0`), `m_altEquipment`
+`+0x1a98`, the perception triple (twice), `SetModel(GetModelName())`, `+0x64bc`, `+0x6558`
+(disposition), `+0x64c4` (camera), the `+0x62d8` place-group string (not its parsed `+0x62dc`),
+`+0x6338`/`+0x633c`/`+0x6344`, the five police thresholds, `+0x63ac`, `+0x63d9`, `m_nSkin` `+0x670`
+and `m_statTemplate` `+0x10e4`; slot 619; `DispatchSpawn`; the owner; the optional `SetName`; slot
+620. There is NO map-data replay, NO `m_cLiveChildren` / `m_iMaxNumNPCs` change and NO
+`m_bCameFromSpawner`. The last thing it does is `m_iActiveRunnerCount += _DAT_104454c0` = **1.0**
+(on the bypass path with no Andrei, a null dereference in retail; the port skips it).
+
+**Its think does not spawn.** `CNPCMaker_Fleshpile`'s installed think `0x1034c8b0` is four
+instructions: `m_flNextThink = m_flSpawnFrequency + curtime`. The spawner is Andrei:
+`CNPC_VAndreiBlood::StartTask` `0x1035d1b0` case `0x154` (the summon: sound, activity `0x113a`,
+`StartSummonEmitter`) finds the nearest `npc_maker_fleshpile` within 1024 units
+(`FindEntityByClassnameNearest` `0x100f7d50`, squared distance strictly below, first-listed on a
+tie), RTTI-casts it to `CNPCMaker_Fleshpile` (`0x1062520c`) and dispatches slot 617 `MakeNPC(0)`.
+`Enable` installs the BASE think on a fleshpile too (`0x1034b490`), whose slot-617 call is this
+body — so an enabled fleshpile maker does spawn, on the base cadence, within the budget.
 
 ### `0x1034c8e0` — slot 139 `DeathNotice`
 
@@ -1808,7 +1909,8 @@ The rest of the walk holds: the ground-Z cache into `+0x66b8` from one downward 
 (`+0x9a8`); the child classname resolved through the entity factory with `"NULL Ent in NPCMaker!"`
 and `"Non Troika Ent in NPCMaker!"` as its two refusals; the `m_sRefMapDataBuffer` (`+0x76cc`) copy
 into `+0x66cc` and its replay through the child's `ParseMapData` (`+0x1ac`), `Precache` (`+0x1bc`)
-and `SetClassname` (`+0x1e8`); spawnflags 4 or `0x204`; the disable-AI copy; slot 619
+and `SetClassname` (`+0x1e8`) — `+0x1bc` is slot **111** (`MemberSync`), not `Precache` (slot 104
+is `+0x1a0`; corrected 2026-09-27); spawnflags 4 or `0x204`; the disable-AI copy; slot 619
 `ChildPreSpawn`; `DispatchSpawn`; `SetOwnerEntity`; the optional `SetName` from `+0x66bc`; slot 620
 `ChildPostSpawn`; `++m_nLiveChildren`; and, unless `m_bInfChild` (`+0x66c3`), `--m_iMaxNumNPCs` with
 `ThinkSet(0)` and `+0x1f0 = 0` once `0x1034b430` reports depleted.
@@ -1816,8 +1918,14 @@ and `SetClassname` (`+0x1e8`); spawnflags 4 or `0x204`; the disable-AI copy; slo
 `CNPCMaker::ChildPreSpawn` (`0x1034af30`) and `ChildPostSpawn` (`0x1034af50`) are both a bare
 `return;` — the base maker's hooks do nothing, which is a fact and not a gap.
 
-**Unrecovered:** nothing in the body. `+0x76cc`'s replayed block has no consumer in this port, and
-`m_RelationshipString` has no port carrier at all.
+The function **returns the child** (`EAX`): `MakerThink` tests it, `InputSpawnNPC` tail-jumps into
+the slot and `CNPCMaker_Zombie::MakeNPC` continues on it (the ledger typed it void; corrected
+2026-09-27). The optional `SetName` is skipped for a null `m_ChildTargetName` — and an authored
+empty `NPCTargetname` IS null (`0x1042bff0` stores 0 for `""`) — so such a child keeps the targetname
+the replayed block gave it: the maker's own.
+
+**Unrecovered:** nothing in the body. The port replays the parsed form of the block (the def's
+keys; it never holds the raw text) and `m_RelationshipString` has no port carrier at all.
 
 ### `CNPCMaker_Zombie::CanMakeNPC` — `0x1034d0a0`
 
@@ -1862,8 +1970,12 @@ the copy `MakeNPC` made from the maker's own `m_bDisableAI` — a zombie maker's
 in retail because a maker owns no weapons; the port guards it and takes the refusal instead, which
 is a named divergence.
 
-**Unrecovered:** the `___RTDynamicCast` target type name at `0x1062567c` (the corpus does not hold
-its bytes) and what `+0x76d0` is, so the cast arm is skipped rather than ported.
+**Resolved 2026-09-27 (story 5 fold A4):** the cast target `0x1062567c`'s name at `+8`
+(`0x10625684`) is `.?AVCNPC_VZombie@@`, and `+0x76d0` is `m_iZombieAISpawnType` (datamap
+`0x106253e8`, key `Flag_ZombieAIType`); the arm is ported. Its writer beside the keyvalue is
+`SetZombieAIType` `0x1034cf20` (store `+0x76d0`; with the propagate flag, call `0x103e0980` on every
+entity named `m_ChildTargetName` whose Troika's `m_pParent` is this maker), reached only from
+`0x1034d000` / `0x1034d050` — input-shaped bodies with no datamap row and no corpus caller.
 
 ## Story 29d, family SpeciesLifecycle10 — the per-species spawn, touch, restore, destroy and think bodies — `0x101aabf0`, `0x1034afe0`, `0x1034c020`, `0x1034cc60`, `0x1035cd00`, `0x1035cf80`, `0x1036b170`, `0x1037a270`, `0x1037bf60`, `0x1037d020`, `0x10388880`, `0x103ca7c0` (2026-09-14)
 
@@ -1954,10 +2066,9 @@ writes `0xf423f` (**999999**) into all five police thresholds on **itself** —
 maker authored with no `model` keyfield does not survive its own spawn** — in retail and now in the
 port. Six port fixtures were standing makers retail would have deleted; each now authors the key.
 
-**Unrecovered:** nothing in the three bodies. The port's gaps are named instead: `SetSolid` and
-`Relink` are seams (no collision property, no spatial partition), and no map in this runtime can
-stand a `CNPCMaker_Zombie` because `ElysiumNpcClasses.cpp` registers no such spawn leaf — a
-registration gap, not a fact about retail.
+**Unrecovered:** nothing in the three bodies. The port's gaps are named instead: `Relink` is a seam
+(no spatial partition). `npc_maker_zombie` has been a registered spawn leaf since 0018 story 2 and
+its own class since story 5 fold A4.
 
 ### `CNPC_VAndreiBlood::Restore` — `0x1035cf80`, and `CNPC_VChangBros::Restore` — `0x1036b170`
 

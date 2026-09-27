@@ -32,7 +32,7 @@
 // Rows whose target is another struct landed on that struct: `FElysiumEntity::ObjectCaps` and
 // `FElysiumEntity::ScriptHide`/`ScriptUnhide` (`ElysiumEntity.h`), `FElysiumInterestingPlace::Spawn`
 // /`OnRestore`/`Reset` (`ElysiumInterestingPlace.h`), `FElysiumNpcMaker::ParseMapData`
-// (`ElysiumNpcMaker.h`), `FElysiumNpcSenses::Tick` (`ElysiumNpcSenses.h`).
+// (`ElysiumNpcMaker.h`, the slot-107 override since story 5 fold A4), `FElysiumNpcSenses::Tick` (`ElysiumNpcSenses.h`).
 
 // --- The words this family's bodies read that 29b did not declare ---------------------------------
 //

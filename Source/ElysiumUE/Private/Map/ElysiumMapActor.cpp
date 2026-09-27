@@ -72,15 +72,17 @@ namespace
 			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
 	}
 
-	// `FSOLID_NOT_SOLID` (`0x4`) standing in the entity's solid-flag word (`m_Collision +0x2b4`,
-	// `FElysiumEntity::RetailSolidFlags`): a trace or a hull test never reports such an entity. The
-	// script directors (`CCineNPC::Spawn` `0x101a6f10`, story 5 fold A3) are combat characters by
-	// class but set it, so no shot, melee sweep or maker spawn check lands on a marker. (The feed
-	// probe is retail's `FindEntityFOV` enumeration, which does include non-solid entities; it tests
+	// A non-solid entity by its own recorded `m_Collision` (`FElysiumEntity::IsRetailNotSolid`): a
+	// trace or a hull test never reports one. The script directors (`FSOLID_NOT_SOLID`,
+	// `CCineNPC::Spawn` `0x101a6f10`, story 5 fold A3) and the makers (`SOLID_NONE`,
+	// `CNPCMaker::Spawn` `0x1034afe0`, fold A4) are combat characters by class, so no shot, melee
+	// sweep, hull trace, grapple stand test or maker spawn check lands on one — the maker's own spawn
+	// box included, which its own hull would otherwise always occupy. (The feed probe is retail's
+	// `FindEntityFOV` enumeration, which does include non-solid entities; it tests
 	// `m_bIsBCCTargetable` instead.)
 	bool ElysiumIsRetailNotSolid(const FElysiumEntity& Entity)
 	{
-		return (Entity.RetailSolidFlags & 0x4u) != 0;
+		return Entity.IsRetailNotSolid();
 	}
 }
 
@@ -1754,7 +1756,7 @@ bool AElysiumMapActor::TracePlayerSolid(const FVector& FromCm, const FVector& To
 	{
 		FElysiumEntity* Ent = EntPtr.Get();
 		FElysiumNpc* Npc = Ent ? Ent->AsNpc() : nullptr;
-		if (!Npc || Npc->IsInert() || Npc->Handle == Ignore)
+		if (!Npc || Npc->IsInert() || Npc->Handle == Ignore || ElysiumIsRetailNotSolid(*Npc))
 		{
 			continue;
 		}
@@ -1800,6 +1802,7 @@ bool AElysiumMapActor::CanStandForGrapple(const FVector& FeetCm,
 	{
 		const FElysiumNpc* Npc = Entry ? Entry->AsNpc() : nullptr;
 		if (Npc && !Npc->IsInert() && !Npc->HasReportedDeath() && Npc->Handle != Ignore
+			&& !ElysiumIsRetailNotSolid(*Npc)
 			&& Standing.Intersect(ElysiumStandHullAt(Npc->Origin))) return false;
 	}
 	return true;

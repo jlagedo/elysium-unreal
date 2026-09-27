@@ -46,9 +46,6 @@ namespace
 	constexpr TCHAR GDebug10_2Line[] = TEXT("NDebugOverlay::Line");
 	constexpr TCHAR GDebug10_2ViewCone[] = TEXT("0x1029c4a0");
 
-	// --- The census addresses slot 123 dispatches on -----------------------------------------------
-	constexpr TCHAR GDebug10_2Body_Maker[] = TEXT("0x1034bd30");
-
 	// --- Every box extent `0x1029ca50` and `0x10292500` push, in SOURCE units ----------------------
 	// `0xc0400000`/`0x40400000` = -3.0/3.0; `0xc0000000`/`0x40000000` = -2.0/2.0;
 	// `0xc1200000`/`0x41200000` = -10.0/10.0; `0x43480000` = 200.0; `0x42000000` = 32.0.
@@ -250,14 +247,6 @@ void FElysiumNpc::RunThinkDebugPreExtra(int32 Mode) const
 	}
 }
 
-void FElysiumNpc::MakerDrawDebugGeometryOverlays()
-{
-	// `CNPCMaker::DrawDebugGeometryOverlays` (`0x1034bd30`). SEAM: its verdict is `registry:123` in
-	// band 0–4 — the maker's story, not this one. Reached here only so a spawned `npc_maker` does not
-	// silently fall onto the Troika body now that this family owns the slot.
-	EmitDevMsg(TEXT("0x1034bd30"), TEXT("0x1034bd30"));
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 123 — the dispatcher and its three arms.
 // -------------------------------------------------------------------------------------------------
@@ -266,17 +255,8 @@ void FElysiumNpc::DrawDebugGeometryOverlays()
 {
 	// slot 123, the Troika body `0x1029ca50`. `CNPC_VCop` (`0x10372f00`) and `CNPC_VMingXiao`
 	// (`0x10399d40`) override this method on their C++ classes (story 5 step 3).
-	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class. The maker's
-	// `0x1034bd30` stays a census arm until the maker fold (step 8).
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 123);
-	if (SlotBody != nullptr)
-	{
-		if (FCString::Strcmp(SlotBody, GDebug10_2Body_Maker) == 0)
-		{
-			MakerDrawDebugGeometryOverlays();
-			return;
-		}
-	}
+	// `CScriptedTarget#123` (`0x1034e070`) carries no arm: no map stands that class. The makers'
+	// empty `0x1034bd30` is `FElysiumNpcMaker::DrawDebugGeometryOverlays` (story 5 fold A4).
 	TroikaDrawDebugGeometryOverlays();
 }
 

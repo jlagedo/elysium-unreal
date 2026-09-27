@@ -73,6 +73,9 @@ bool FElysiumNpcKernelSpeciesBindingsCountsTest::RunTest(const FString&)
 		// The script directors' two datamaps (story 5 fold A3; `CCineAI` declares none).
 		{ TEXT("CCineAISchedule"), EClass::AiScriptedSchedule },
 		{ TEXT("CCineNPC"), EClass::ScriptedSequence },
+		// The makers' two datamaps (story 5 fold A4; `CNPCMaker_Fleshpile` declares none).
+		{ TEXT("CNPCMaker"), EClass::NpcMaker },
+		{ TEXT("CNPCMaker_Zombie"), EClass::NpcMakerZombie },
 		{ TEXT("CNPC_VAndreiBlood"), EClass::AndreiBlood },
 		{ TEXT("CNPC_VAnimal"), EClass::Animal },
 		{ TEXT("CNPC_VAsianVampire"), EClass::AsianVampire },
@@ -103,8 +106,9 @@ bool FElysiumNpcKernelSpeciesBindingsCountsTest::RunTest(const FString&)
 		{ TEXT("CNPC_VWolfMorph"), EClass::WolfMorph },
 		{ TEXT("CNPC_VZombie"), EClass::Zombie },
 	};
-	TestEqual(TEXT("the 31 species binding classes (the controller line's two since fold A2, the "
-		"directors' two since fold A3)"), static_cast<int32>(UE_ARRAY_COUNT(Species)), 31);
+	TestEqual(TEXT("the 33 species binding classes (the controller line's two since fold A2, the "
+		"directors' two since fold A3, the makers' two since fold A4)"),
+		static_cast<int32>(UE_ARRAY_COUNT(Species)), 33);
 	for (const FSpecies& Row : Species)
 	{
 		FElysiumClassDesc D;
@@ -482,11 +486,14 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 			}
 		}
 	}
-	// 29 NPC species tables plus the directors' two (`CCineNPC`, `CCineAISchedule`, fold A3); the
-	// directors' own round trip is `Elysium.Substrate.NpcKernelDirector.SaveRestore`.
-	TestEqual(TEXT("the census names the 31 species tables"), TableRows.Num(), 31);
+	// 29 NPC species tables plus the directors' two (`CCineNPC`, `CCineAISchedule`, fold A3) and the
+	// makers' two (`CNPCMaker`, `CNPCMaker_Zombie`, fold A4); the directors' own round trip is
+	// `Elysium.Substrate.NpcKernelDirector.SaveRestore`, the makers' `Elysium.Substrate.NpcMaker*`.
+	TestEqual(TEXT("the census names the 33 species tables"), TableRows.Num(), 33);
 	TableRows.Remove(TEXT("CCineNPC"));
 	TableRows.Remove(TEXT("CCineAISchedule"));
+	TableRows.Remove(TEXT("CNPCMaker"));
+	TableRows.Remove(TEXT("CNPCMaker_Zombie"));
 
 	// One NPC per species class a classname builds, plus a live witness every saved handle can
 	// name. The controller line's bodies rename themselves `playercontroller` in their `Spawn`

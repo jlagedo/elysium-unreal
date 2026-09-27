@@ -32,6 +32,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcMakerFleshpile.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -46,9 +47,8 @@
 // ragdoll bone table, the hint node's entity, the `Float Sound Info` KeyValues block — the case says
 // so: that the seam is asked and that the refusal is the recovered one.
 //
-// **Both tables are checked before a species answer is asserted.** A class no registered classname
-// builds (`CNPCMaker_Fleshpile`) is exercised by RETAIL CLASS NAME through `SpeciesSlotRowOf`;
-// every other carrier is spawned by the classname its retail factory builds it from
+// **Both tables are checked before a species answer is asserted.** Every carrier (the fleshpile maker
+// included, since story 5 fold A4) is spawned by the classname its retail factory builds it from
 // (`Substrate/ElysiumNpcClasses.cpp`), and the Troika side of a wiring case is a bare
 // `CAI_BaseNPCTroika` (0019 story 5 step 2). `npc_VCop`'s factory answer, `CNPC_VCop`, is asserted.
 
@@ -215,54 +215,30 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesSlotTableTest,
 	"Elysium.Substrate.NpcKernelSpecies.SlotTable", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 {
-	int32 Count = 0;
-	const FElysiumNpc::FSpeciesSlotRow* Rows = FElysiumNpc::SpeciesSlotRows(Count);
-	// 34 before 0019 story 5 step 1 removed the rows of classes no map stands, 30 until story 5
-	// step 3 turned every introduced class's row into an override on its C++ class, 4 until fold A2
-	// moved `CNPC_VFrenzyShadow`'s 599/600 onto `FElysiumNpcFrenzyShadow`: what is left is the
-	// Fleshpile maker's 139/617, until the maker fold (A4).
-	TestEqual(TEXT("the table carries the two deferred (class, slot) rows"), Count, 2);
-
-	// Every row, BY NAME: the class is a census class, and the census agrees that the row's retail
-	// address is the body that fills that slot for it. A row that does not match `slots.md` fails
-	// here rather than being discovered by a reader.
-	for (int32 Index = 0; Index < Count; ++Index)
+	// The species slot table (`FElysiumNpc::SpeciesSlotRows`) is retired with story 5 fold A4: its
+	// last two rows, `CNPCMaker_Fleshpile`'s 139 and 617, are that class's overrides
+	// (`FElysiumNpcMakerFleshpile::DeathNotice` / `MakeNPC`). The census still names every body the
+	// tree now dispatches, and names the inherited ones.
+	const FElysiumNpcClass* Fleshpile = ElysiumNpcKernelClass::Find(TEXT("CNPCMaker_Fleshpile"));
+	if (!TestNotNull(TEXT("CNPCMaker_Fleshpile is a census class"), Fleshpile))
 	{
-		const FElysiumNpc::FSpeciesSlotRow& Row = Rows[Index];
-		const FString Name(Row.RetailClass);
-		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Row.RetailClass);
-		TestNotNull(*FString::Printf(TEXT("%s is a census class"), *Name), Cls);
-		if (Cls == nullptr)
-		{
-			continue;
-		}
-		TestEqual(*FString::Printf(TEXT("%s fills slot %d with %s"), *Name, Row.Slot, Row.Address),
-			FString(ElysiumNpcKernelClass::BodyOf(Cls, Row.Slot)), FString(Row.Address));
+		return false;
 	}
-
-	// The census still says which body a class inherits: `CNPC_VCameraSecurity` has no body of its
-	// own at 497 and runs `CNPC_VCamera`'s, and `CNPC_VDog` runs `CNPC_VAnimal`'s slot 482 — which
-	// C++ inheritance now resolves (the overrides stand on `FElysiumNpcCamera` / `FElysiumNpcAnimal`).
+	TestEqual(TEXT("CNPCMaker_Fleshpile fills slot 139 with 0x1034c8e0"),
+		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 139)), FString(TEXT("0x1034c8e0")));
+	TestEqual(TEXT("and slot 617 with 0x1034c2d0"),
+		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 617)), FString(TEXT("0x1034c2d0")));
+	TestEqual(TEXT("CNPCMaker_Fleshpile inherits CNPCMaker's slot 618"),
+		FString(ElysiumNpcKernelClass::BodyOf(Fleshpile, 618)), FString(TEXT("0x1034b580")));
 	TestEqual(TEXT("CNPC_VCameraSecurity inherits CNPC_VCamera's slot 497"),
 		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VCameraSecurity")), 497)),
 		FString(TEXT("0x103681d0")));
 	TestEqual(TEXT("CNPC_VDog inherits CNPC_VAnimal's slot 482"),
 		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VDog")), 482)),
 		FString(TEXT("0x1035fd40")));
-	// The controller line's rows are gone with fold A2: the census still names the bodies, and the
-	// class carries them as overrides (`Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee`).
-	TestNull(TEXT("CNPC_VFrenzyShadow has no slot-599 table row since fold A2"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599));
-	TestEqual(TEXT("its census body is still 0x10376b70"),
+	TestEqual(TEXT("CNPC_VFrenzyShadow's slot 599 is 0x10376b70"),
 		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VFrenzyShadow")), 599)),
 		FString(TEXT("0x10376b70")));
-
-	// And a class with no row at a slot answers null rather than the nearest row of another slot.
-	TestNull(TEXT("CNPC_VAnimal has no slot 599 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VAnimal"), 599));
-	TestNull(TEXT("a null class name answers null"), FElysiumNpc::SpeciesSlotRowOf(nullptr, 599));
-	TestNull(TEXT("a class outside the family answers null"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNotAClass"), 599));
 	return true;
 }
 
@@ -319,14 +295,9 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 	TestTrue(TEXT("the classname query agrees: npc_VCop is CNPC_VCop"),
 		ElysiumNpcKernelClass::OfClassname(TEXT("npc_VCop"))
 			== ElysiumNpcKernelClass::Find(TEXT("CNPC_VCop")));
-	// `CNPC_VCop`'s slot rows. The census DOES carry `{CNPC_VCop, 599, 0x10385ab0}` (the body its
-	// chain `CNPC_VCop` -> `CNPC_VHumanCombatant` -> `CNPC_VHuman` inherits); what answers null is
-	// this family's Species table (`SpeciesSlotRowOf`), which holds no row for that body. So the
-	// lookup a spawned cop makes answers exactly what the class's own Species row answers — none —
-	// and the species dispatcher refuses.
-	TestTrue(TEXT("a spawned cop's slot-599 row is CNPC_VCop's"),
-		Fixture.Cop->SpeciesSlotRow(599) == FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCop"), 599));
-	TestNull(TEXT("so it has no species row at slot 599"), Fixture.Cop->SpeciesSlotRow(599));
+	// `CNPC_VCop`'s slot 599 is the body its chain `CNPC_VCop` -> `CNPC_VHumanCombatant` ->
+	// `CNPC_VHuman` inherits (`0x10385ab0`), dispatched by C++ inheritance since the species table
+	// retired (story 5 fold A4).
 
 	// `npc_VCamera` is a registered spawn leaf now, answering `CNPC_VCamera`; its own world, so the
 	// shared fixture's spawn order (and its RNG draws) stay what the other cases were written on.
@@ -626,11 +597,6 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	TestFalse(TEXT("a runner's slot 601 forgets m_hPotentialEnemy"), Runner->RunnerPotentialEnemy.IsSet());
 	Runner->ScheduleHost.EnemyDistUnits = 0.f;
 	TestTrue(TEXT("and its slot 602 falls through to 'the coordinator does not hold me'"), Runner->Slot602());
-	// The animal has no melee body of its own and no deferred row either.
-	if (Fixture.Animal != nullptr)
-	{
-		TestNull(TEXT("an animal has no species slot-599 row"), Fixture.Animal->SpeciesSlotRow(599));
-	}
 	return true;
 }
 
@@ -686,11 +652,6 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 		FString(ElysiumNpcKernelClass::BodyOf(BachClass, 609)), FString(TEXT("0x103661f0")));
 	// Retail's byte-identical `CNPC_VBatSwarm` / `CNPC_VSheriffSwarm` copies are on classes with no
 	// instance and carry no port row (0019 story 5 step 1).
-	for (const TCHAR* Name : { TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VSheriffSwarm") })
-	{
-		TestNull(*FString::Printf(TEXT("%s, a class with no instance, has no slot-609 row"), Name),
-			FElysiumNpc::SpeciesSlotRowOf(Name, 609));
-	}
 	Npc->ScheduleHost.ShootAtHintNode = 77;
 	Npc->BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Combat);
 	TestFalse(TEXT("a combat body does not reach the base hint search"), Npc->FUN_103661f0(false));
@@ -1090,15 +1051,12 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 	TestTrue(TEXT("both ends of the range are reachable — the draw is inclusive"),
 		bSawTwo && bSawFour);
 
-	// --- the maker's two overrides ---------------------------------------------------------------
-	// `npc_maker_fleshpile` IS a registered spawn leaf and shares `FElysiumNpcMaker` with
-	// `npc_maker`, so the fleshpile arms are a species branch on that class and not a subclass.
+	// --- the fleshpile maker's two overrides (story 5 fold A4: its own class) ------------------------
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile"), 29133u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
-		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
-		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
-		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
+		// `CNPCMaker_Fleshpile::Spawn` (`0x1034c020`) dispatches slot 104 `Precache`, whose
+		// missing-model arm `UTIL_Remove`s the maker, so the maker authors a model.
 		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
@@ -1109,69 +1067,75 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 
 		FElysiumEntity* MakerEnt = World.World.FindByName(TEXT("maker"));
 		TestNotNull(TEXT("npc_maker_fleshpile stands"), MakerEnt);
-		FElysiumNpcMaker* Fleshpile = MakerEnt != nullptr
-			? static_cast<FElysiumNpcMaker*>(MakerEnt) : nullptr;
+		FElysiumNpc* MakerNpc = MakerEnt != nullptr ? MakerEnt->AsNpc() : nullptr;
+		FElysiumNpcMakerFleshpile* Fleshpile = MakerNpc != nullptr
+			? MakerNpc->AsSpecies<FElysiumNpcMakerFleshpile>() : nullptr;
 		FElysiumNpc* Owner = World.Npc(TEXT("owner"));
 		FElysiumNpc* Child = World.Npc(TEXT("child"));
 		FElysiumNpcWorldFixture::Quiet({ Owner, Child });
-		if (Fleshpile == nullptr || Owner == nullptr || Child == nullptr)
+		if (!TestNotNull(TEXT("and it is CNPCMaker_Fleshpile, an NPC of its own class"), Fleshpile)
+			|| Owner == nullptr || Child == nullptr)
 		{
 			return false;
 		}
-		TestTrue(TEXT("and it is the fleshpile variant"), Fleshpile->IsFleshpileMaker());
-		TestEqual(TEXT("whose singleton owner is the one npc_VAndreiBlood in the level"),
-			Fleshpile->FleshpileOwner(), Owner);
+		TestTrue(TEXT("whose singleton owner is the one npc_VAndreiBlood in the level"),
+			static_cast<FElysiumNpc*>(Fleshpile->FleshpileOwner()) == Owner);
 
-		// `0x1034c2d0`: the budget gate. With the cap reached, MakeNPC refuses — a term the base
-		// `CNPCMaker::MakeNPC` does not have at all.
+		// `0x1034c2d0`, dispatched through slot 617 on a `CNPCMaker` reference: the budget gate.
+		FElysiumNpcMaker& AsMaker = *Fleshpile;
 		Owner->ActiveRunnerCount = 2;
-		TestEqual(TEXT("0x1034c2d0 refuses once Andrei has two live runners"),
-			Fleshpile->FUN_1034c2d0(/*bBypass=*/false), FElysiumNpcMaker::EAttempt::LiveLimit);
+		TestNull(TEXT("0x1034c2d0 refuses once Andrei has two live runners"), AsMaker.MakeNPC(/*bBypass=*/false));
+		TestEqual(TEXT("on the budget"), FString(FElysiumNpcMaker::AttemptName(Fleshpile->LastAttempt)),
+			FString(TEXT("live-limit")));
 		TestEqual(TEXT("and the count is untouched"), Owner->ActiveRunnerCount, 2);
 
 		// **The bypass flag skips the WHOLE admission, blood budget included.**
-		const FElysiumNpcMaker::EAttempt Bypassed = Fleshpile->FUN_1034c2d0(/*bBypass=*/true);
-		TestEqual(TEXT("but the bypass arm spawns anyway"), Bypassed,
-			FElysiumNpcMaker::EAttempt::Spawned);
-		TestEqual(TEXT("and increments the live-runner count by one"),
-			Owner->ActiveRunnerCount, 3);
-
+		const int32 LiveBefore = Fleshpile->LiveChildren;
+		const int32 TotalBefore = Fleshpile->RemainingTotal;
+		FElysiumNpc* Made = AsMaker.MakeNPC(/*bBypass=*/true);
+		TestNotNull(TEXT("but the bypass arm spawns anyway"), Made);
+		TestEqual(TEXT("and increments the live-runner count by one"), Owner->ActiveRunnerCount, 3);
+		// Retail correction (story 5 fold A4): `0x1034c2d0` writes none of the base's counters and no
+		// `m_bCameFromSpawner`; the port used to run the base body behind its admission.
+		TestEqual(TEXT("m_cLiveChildren is not touched by the fleshpile body"), Fleshpile->LiveChildren, LiveBefore);
+		TestEqual(TEXT("nor m_iMaxNumNPCs"), Fleshpile->RemainingTotal, TotalBefore);
+		if (Made != nullptr)
+		{
+			TestFalse(TEXT("nor the child's m_bCameFromSpawner"), Made->bCameFromSpawner);
+			TestTrue(TEXT("the child is owned by the maker"), Made->GetOwnerEntity() == Fleshpile->Handle);
+			TestEqual(TEXT("and takes the maker's model through SetModel"), Made->Model,
+				FString(TEXT("models/fleshpile.mdl")));
+			TestEqual(TEXT("with spawnflags ORed with 4"), Made->SpawnFlags & 0x4, 0x4);
+		}
 	}
 
-	// With NO npc_VAndreiBlood in the level at all, the non-bypass arm refuses outright — the first
-	// term of the fleshpile's admission and one the base maker does not have.
+	// With NO npc_VAndreiBlood in the level at all, the non-bypass arm refuses outright.
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile_no_owner"), 29135u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
-		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
-		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
-		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
 		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("MaxNPCCount"), TEXT("10"));
 		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
 		FElysiumNpcWorldFixture World(MoveTemp(Builder));
 		FElysiumEntity* MakerEnt = World.World.FindByName(TEXT("maker"));
-		FElysiumNpcMaker* Fleshpile = MakerEnt != nullptr
-			? static_cast<FElysiumNpcMaker*>(MakerEnt) : nullptr;
-		if (Fleshpile != nullptr)
+		FElysiumNpc* MakerNpc = MakerEnt != nullptr ? MakerEnt->AsNpc() : nullptr;
+		FElysiumNpcMakerFleshpile* Fleshpile = MakerNpc != nullptr
+			? MakerNpc->AsSpecies<FElysiumNpcMakerFleshpile>() : nullptr;
+		if (TestNotNull(TEXT("the ownerless fleshpile maker stands"), Fleshpile))
 		{
-			TestNull(TEXT("with no npc_VAndreiBlood there is no singleton"),
-				Fleshpile->FleshpileOwner());
-			TestEqual(TEXT("and 0x1034c2d0 refuses outright"),
-				Fleshpile->FUN_1034c2d0(/*bBypass=*/false),
-				FElysiumNpcMaker::EAttempt::InvalidChild);
+			TestNull(TEXT("with no npc_VAndreiBlood there is no singleton"), Fleshpile->FleshpileOwner());
+			TestNull(TEXT("and 0x1034c2d0 refuses outright"), Fleshpile->MakeNPC(/*bBypass=*/false));
+			TestEqual(TEXT("before any other term"), FString(FElysiumNpcMaker::AttemptName(Fleshpile->LastAttempt)),
+				FString(TEXT("invalid-child")));
 		}
 	}
 
-	// `0x1034c8e0`: the death notice's once-only decrement, over a fresh world so the singleton is
-	// live again.
+	// `0x1034c8e0`: the death notice's once-only decrement, dispatched through slot 139, with the
+	// runner test a TYPED test on the tree (`AsSpecies<FElysiumNpcTzimisceRunner>`).
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("fleshpile2"), 29134u);
 		FElysiumEntityDef& Maker = Builder.AddEntity(TEXT("npc_maker_fleshpile"), TEXT("maker"));
-		// STRENGTHENED, story 29d family SpeciesLifecycle10: `CNPCMaker_Fleshpile::Spawn`
-		// (`0x1034c020`) dispatches slot 104 `Precache`, whose missing-model arm `UTIL_Remove`s the
-		// maker. A maker with no `model` key does not survive its own spawn, in retail or here.
 		Maker.Keys.Add(TEXT("model"), TEXT("models/fleshpile.mdl"));
 		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VTzimisceRunner"));
 		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
@@ -1180,8 +1144,9 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 		Builder.AddNpc(TEXT("bystander"), FVector(980.0, 0.0, 0.0), TEXT("npc_VAnimal"));
 		FElysiumNpcWorldFixture World(MoveTemp(Builder));
 		FElysiumEntity* MakerEnt = World.World.FindByName(TEXT("maker"));
-		FElysiumNpcMaker* Fleshpile = MakerEnt != nullptr
-			? static_cast<FElysiumNpcMaker*>(MakerEnt) : nullptr;
+		FElysiumNpc* MakerNpc = MakerEnt != nullptr ? MakerEnt->AsNpc() : nullptr;
+		FElysiumNpcMakerFleshpile* Fleshpile = MakerNpc != nullptr
+			? MakerNpc->AsSpecies<FElysiumNpcMakerFleshpile>() : nullptr;
 		FElysiumNpc* Owner = World.Npc(TEXT("owner"));
 		FElysiumNpc* Child = World.Npc(TEXT("child"));
 		FElysiumNpc* Bystander = World.Npc(TEXT("bystander"));
@@ -1190,27 +1155,31 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// `0x1034c8e0` reads `DAT_10938040` as it stands and never fills it; the maker's own
+		// `MakeNPC` / `OnRestore` are what fill it.
+		TestNotNull(TEXT("the maker's lookup fills the Andrei singleton"), Fleshpile->FleshpileOwner());
 		Owner->ActiveRunnerCount = 2;
 		Owner->AndreiKillCount = 0;
 
-		Fleshpile->FUN_1034c8e0(Child);
-		TestEqual(TEXT("0x1034c8e0 decrements the live-runner count"),
-			Owner->ActiveRunnerCount, 1);
+		FElysiumEntity& AsEntity = *Fleshpile;
+		AsEntity.DeathNotice(Child);
+		TestEqual(TEXT("0x1034c8e0 decrements the live-runner count"), Owner->ActiveRunnerCount, 1);
 		TestEqual(TEXT("and counts the kill"), Owner->AndreiKillCount, 1);
 		FElysiumNpcTzimisceRunner* ChildRunner = Child->AsSpecies<FElysiumNpcTzimisceRunner>();
 		TestTrue(TEXT("marking the runner so it cannot be counted twice"),
 			ChildRunner != nullptr && ChildRunner->bRunnerDeathNoticeProcessed);
+		// The base `0x1034bc90` ran behind it: a live child REFUNDS the total (0 -> 1).
+		TestEqual(TEXT("then CNPCMaker::DeathNotice runs: a live child refunds the total"),
+			Fleshpile->RemainingTotal, 1);
 
 		// The once-only flag is what stops a corpse re-notified from being counted again.
-		Fleshpile->FUN_1034c8e0(Child);
-		TestEqual(TEXT("a second notice for the same runner changes nothing"),
-			Owner->ActiveRunnerCount, 1);
+		AsEntity.DeathNotice(Child);
+		TestEqual(TEXT("a second notice for the same runner changes nothing"), Owner->ActiveRunnerCount, 1);
 		TestEqual(TEXT("nor the kill count"), Owner->AndreiKillCount, 1);
 
-		// A child that is not a `CNPC_VTzimisceRunner` fails the cast and is not counted.
-		Fleshpile->FUN_1034c8e0(Bystander);
-		TestEqual(TEXT("and a non-runner child is not counted at all"),
-			Owner->ActiveRunnerCount, 1);
+		// A child that is not a `CNPC_VTzimisceRunner` fails the typed test and is not counted.
+		AsEntity.DeathNotice(Bystander);
+		TestEqual(TEXT("and a non-runner child is not counted at all"), Owner->ActiveRunnerCount, 1);
 		TestEqual(TEXT("nor is its death a kill"), Owner->AndreiKillCount, 1);
 	}
 	return true;
@@ -1310,8 +1279,6 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 
 	// `CNPC_Crow`'s slot 197 (`0x103577d0`) and fly step (`0x10357be0`) are on a class no map
 	// stands and carry no port body.
-	TestNull(TEXT("CNPC_Crow carries no slot-197 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_Crow"), 197));
 
 	// --- `0x1036c7f0`: the ChangBros setter writes family Squad's word ---------------------------
 	Fixture.Chang->ChangType = 0;
@@ -1373,8 +1340,6 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		1.0e-06f);
 
 	// `CScriptedTarget::Spawn` (`0x1034d6e0`) is on a class no map stands and carries no port body.
-	TestNull(TEXT("CScriptedTarget carries no slot-103 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CScriptedTarget"), 103));
 
 	// --- `0x103681d0` / `0x103682f0`: two EMPTY bodies, and emptiness is the point ---------------
 	// The overrides exist so the base sound hooks do NOT run for a camera (`WiredSlot497` / `506`).

@@ -72,8 +72,9 @@ bool FElysiumNpcKernelBindingsCountsTest::RunTest(const FString&)
 		Seen.Add(Name);
 	}
 
-	// The maker and the interesting place: same walk, per class. The maker's two save-only rows
-	// and the place's testflags are hand rows outside the generated tables and are not counted.
+	// The maker and the interesting place: same walk, per class. The maker's three SAVE-only rows are
+	// its own generated walk (`AddNpcMakerSaveFields`, story 5 fold A4) and the place's testflags a
+	// hand row; neither is a bound keyed row, so neither is counted here.
 	{
 		FElysiumClassDesc Maker;
 		ElysiumNpcKernelBindings::AddNpcMakerFields(Maker);

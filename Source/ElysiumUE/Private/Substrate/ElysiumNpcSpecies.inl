@@ -106,38 +106,7 @@ int32 ZombieAiType = 0;   // +0x6678 CNPC_VZombie::m_iZombieAIType (datamap, key
  *  (`0x10293e50`) gates it on `IsActivityFinished`. Family **Hints** already stands the same retail
  *  body as `RestartIdealActivity()`; it is called here and records the call. */
 
-/** SEAM for `thunk_FUN_101cca80(&trace, 2, mins, maxs, 0x2080, 0)` — the spawn-box overlap query
- *  `CNPCMaker_Fleshpile::MakeNPC` runs. `FElysiumNpcMaker::CanMakeNpc` already asks the embodiment
- *  the same question (`IsNpcMakerSpawnAreaOccupied`); the fleshpile body calls THAT rather than
- *  standing a second seam. Named here for the reader. */
-
-/** SEAM for `thunk_FUN_101d3190(&out, this, 0)` + `(*DAT_1070b254 + 0x10)(...)` — the downward
- *  trace `CNPCMaker_Fleshpile::MakeNPC` runs once to cache `m_flGround`. `FElysiumNpcMaker` already
- *  caches the same number through `ResolveNpcMakerGroundZ`; the fleshpile body calls that. */
-
 // --- Slot 323's four answers -----------------------------------------------------------------------
-
-// --- The per-species slot table ---------------------------------------------------------------------
-
-/** One row: the retail class whose vtable carries the body, the slot it fills, and the RETAIL
- *  ADDRESS of that body. Since story 5 fold A2 only the Fleshpile maker's 139/617 are left, until
- *  the maker fold (A4). */
-struct FSpeciesSlotRow
-{
-	const TCHAR* RetailClass = nullptr;
-	int32 Slot = 0;
-	const TCHAR* Address = nullptr;
-};
-
-/** Every row this family ports, in slot then class order. */
-static const FSpeciesSlotRow* SpeciesSlotRows(int32& OutCount);
-
-/** The row for `Slot` on `InRetailClass` exactly (none of the deferred classes has a subclass that
- *  inherits a row), or null. */
-static const FSpeciesSlotRow* SpeciesSlotRowOf(const TCHAR* InRetailClass, int32 Slot);
-
-/** The same, for the class THIS npc is (null on the bare Troika line). */
-const FSpeciesSlotRow* SpeciesSlotRow(int32 Slot) const;
 
 // --- Retail's NON-VIRTUAL call back down to the base body --------------------------------------------
 //

@@ -794,8 +794,10 @@ void TickPlayerLaw(FElysiumPlayer& Player, double Now)
 					// **SEAM** — the no-wait path. Retail marks the player as the response target and
 					// invokes the CONFIGURED GLOBAL NPC MAKER once per required delta, reporting
 					// `Failed to spawn with NPCMaker` when one attempt fails. This runtime has no such
-					// concept: `FElysiumNpcMaker` is a map-authored `npc_maker` entity reached by
-					// targetname, and nothing registers one as the game-wide police maker, so there is
+					// concept yet: `FElysiumNpcMaker` (story 5 fold A4) is a map-authored `npc_maker`
+					// reached by targetname, retail's invocation is its slot 617 `MakeNPC(1)` through
+					// `0x10310c10` on the maker named by `DAT_10936c00`, and nothing registers one as
+					// the game-wide police maker, so there is
 					// no receiver to invoke and no cop body to place. Everything up to this line — the
 					// admission, the random deadline, the severity replacement, the witness check, the
 					// desired-cop arithmetic and the grace delta — is built and tested; only the
