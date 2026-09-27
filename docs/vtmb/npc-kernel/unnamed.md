@@ -228,7 +228,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 219 | `0x10280de0` | — | 11 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2455, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSchedule.cpp:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSchedule.cpp:50, +8 more |  |
 | 220 | `0x102b4760` | `CAI_BaseNPCTroika#594`, `CGeneric_NPC#594`, +62 more | 4 | 1 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:135, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:270, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.h:47, +3 more |  |
 | 221 | `0x102b93c0` | `CAI_BaseNPCTroika#607`, `CGeneric_NPC#607`, +62 more | 2 | 5 | 6 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:670, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:477 |  |
-| 222 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:755, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:1002, Source/ElysiumUE/Public/ElysiumPlayer.h:1765 |  |
+| 222 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:755, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:1002, Source/ElysiumUE/Public/ElysiumPlayer.h:1784 |  |
 | 223 | `0x102c7600` | `CAI_StandoffBehavior#13` | 0 | 3 | 10 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:579, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:985 |  |
 | 224 | `0x102d14c0` | — | 10 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumHint.cpp:190, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:507, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:80, +6 more |  |
 | 225 | `0x102ee1c0` | — | 12 | 0 | 1 | — | — |  |
@@ -310,7 +310,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 301 | `0x100a0ae0` | — | 10 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:755, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:1339 |  |
 | 302 | `0x10146190` | — | 8 | 0 | 2 | — | — |  |
 | 303 | `0x1017df50` | — | 5 | 3 | 2 | `CSActs:    %6.1f - Supernatural level %d…`, `CSActs:    %6.1f - Supernatural level %d…`, +1 more | — |  |
-| 304 | `0x1017ed00` | — | 2 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:585, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:818, Source/ElysiumUE/Public/ElysiumPlayer.h:2385 |  |
+| 304 | `0x1017ed00` | — | 2 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:585, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:818, Source/ElysiumUE/Public/ElysiumPlayer.h:2404 |  |
 | 305 | `0x10194780` | — | 1 | 4 | 5 | — | — |  |
 | 306 | `0x101c10d0` | `CAI_BaseHumanoid#135`, `CAI_BaseNPC#135`, +334 more | 0 | 0 | 10 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:200, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:262 | `CAI_BaseNPC#135 no SDK twin: stretch #128-#138 holds 9 retai…` |
 | 307 | `0x101ccd70` | — | 7 | 3 | 0 | — | — |  |
@@ -595,10 +595,10 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 586 | `0x10129870` | — | 2 | 0 | 4 | — | — |  |
 | 587 | `0x1012b080` | — | 2 | 1 | 3 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
 | 588 | `0x10143d80` | — | 6 | 0 | 0 | — | — |  |
-| 589 | `0x10146a80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:263, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:270, Source/ElysiumUE/Public/ElysiumPlayer.h:439 |  |
+| 589 | `0x10146a80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:263, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:270, Source/ElysiumUE/Public/ElysiumPlayer.h:441 |  |
 | 590 | `0x101578d0` | — | 4 | 1 | 1 | — | — |  |
 | 591 | `0x101681a0` | — | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:56 |  |
-| 592 | `0x1017ff40` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:411, Source/ElysiumUE/Public/ElysiumPlayer.h:2132 |  |
+| 592 | `0x1017ff40` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:411, Source/ElysiumUE/Public/ElysiumPlayer.h:2151 |  |
 | 593 | `0x1019cff0` | — | 5 | 1 | 0 | — | — |  |
 | 594 | `0x101a8840` | `CCineNPC#586` | 6 | 0 | 0 | `E:\Vampire\main\dlls\scripted.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:450, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:723 |  |
 | 595 | `0x101b99d0` | — | 6 | 0 | 0 | — | — |  |
@@ -778,7 +778,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 769 | `0x101e1590` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1574, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:91 |  |
 | 770 | `0x101e1610` | — | 3 | 0 | 2 | — | — |  |
 | 771 | `0x101e1720` | — | 4 | 0 | 1 | `ERROR: DiscFlag Lookup Failed!⏎` | — |  |
-| 772 | `0x101e3560` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1345, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:65, Source/ElysiumUE/Public/ElysiumPlayer.h:459 |  |
+| 772 | `0x101e3560` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1345, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:65, Source/ElysiumUE/Public/ElysiumPlayer.h:461 |  |
 | 773 | `0x101f7310` | — | 1 | 4 | 0 | — | — |  |
 | 774 | `0x101f9a00` | — | 5 | 0 | 0 | — | — |  |
 | 775 | `0x101f9a40` | — | 5 | 0 | 0 | — | — |  |
@@ -1558,7 +1558,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1549 | `0x10323930` | — | 3 | 0 | 0 | — | — |  |
 | 1550 | `0x10323a70` | — | 2 | 0 | 1 | — | — |  |
 | 1551 | `0x10323b60` | `CBaseCombatCharacter#130`, `CBaseGrenade#130`, +4 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle19.cpp:358 |  |
-| 1552 | `0x10324080` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1652, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1671, Source/ElysiumUE/Public/ElysiumPlayer.h:2165, +1 more |  |
+| 1552 | `0x10324080` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1652, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1671, Source/ElysiumUE/Public/ElysiumPlayer.h:2184, +1 more |  |
 | 1553 | `0x10325da0` | — | 3 | 0 | 0 | — | — |  |
 | 1554 | `0x10330220` | — | 3 | 0 | 0 | — | — |  |
 | 1555 | `0x1033d460` | — | 1 | 0 | 2 | — | — |  |
@@ -1766,7 +1766,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1757 | `0x1017deb0` | — | 2 | 0 | 0 | — | — |  |
 | 1758 | `0x1017f8b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:587, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1456, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:235, +4 more |  |
 | 1759 | `0x1017f980` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:357, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:710, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:865 |  |
-| 1760 | `0x101800a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:764, Source/ElysiumUE/Public/ElysiumPlayer.h:2133 |  |
+| 1760 | `0x101800a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:764, Source/ElysiumUE/Public/ElysiumPlayer.h:2152 |  |
 | 1761 | `0x10182e00` | — | 2 | 0 | 0 | — | — |  |
 | 1762 | `0x1018e790` | — | 1 | 0 | 1 | `activity_copy_prop` | — |  |
 | 1763 | `0x1018f690` | — | 1 | 1 | 0 | `Invalid collision type %d set on : %s⏎` | — |  |
@@ -2506,9 +2506,9 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2497 | `0x101f6010` | — | 1 | 0 | 0 | ` CVSoundActivityTable_t::Play !!!!!!!!!!…` | — |  |
 | 2498 | `0x101f69a0` | — | 1 | 0 | 0 | — | — |  |
 | 2499 | `0x101f8510` | — | 1 | 0 | 0 | — | — |  |
-| 2500 | `0x101f8620` | — | 1 | 0 | 0 | `Bip01 Spine2`, `models/%s`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
+| 2500 | `0x101f8620` | — | 1 | 0 | 0 | `Bip01 Spine2`, `models/%s`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:839 |  |
 | 2501 | `0x101f8e20` | — | 1 | 0 | 0 | — | — |  |
-| 2502 | `0x101f8f30` | — | 1 | 0 | 0 | `Bip01 Spine2`, `D_ProteanTransform_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:837 |  |
+| 2502 | `0x101f8f30` | — | 1 | 0 | 0 | `Bip01 Spine2`, `D_ProteanTransform_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcLoadout.cpp:81, Source/ElysiumUE/Public/ElysiumPlayer.h:839 |  |
 | 2503 | `0x101f96b0` | — | 1 | 0 | 0 | `ERROR: Ran out of TraitEffect slots!!!⏎` | — |  |
 | 2504 | `0x101f9830` | — | 1 | 0 | 0 | — | — |  |
 | 2505 | `0x101f9d60` | — | 1 | 0 | 0 | — | — |  |

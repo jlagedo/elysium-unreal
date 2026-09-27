@@ -153,8 +153,21 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("combat character's base is CBaseAnimating"),
-		CharDesc->BaseName.ToString(), ElysiumAnimatingClassName().ToString());
+	// CBaseCombatCharacter -> CBaseFlex -> CBaseAnimatingOverlay -> CBaseAnimating (0019 story 5 step 6).
+	const FElysiumClassDesc* FlexDesc = Reg.Find(ElysiumFlexClassName());
+	const FElysiumClassDesc* OverlayDesc = Reg.Find(ElysiumAnimatingOverlayClassName());
+	if (!TestNotNull(TEXT("CBaseFlex is registered"), FlexDesc) ||
+		!TestNotNull(TEXT("CBaseAnimatingOverlay is registered"), OverlayDesc))
+	{
+		return false;
+	}
+	TestEqual(TEXT("combat character's base is CBaseFlex"),
+		CharDesc->BaseName.ToString(), ElysiumFlexClassName().ToString());
+	TestEqual(TEXT("flex's base is CBaseAnimatingOverlay"),
+		FlexDesc->BaseName.ToString(), ElysiumAnimatingOverlayClassName().ToString());
+	TestEqual(TEXT("animating overlay's base is CBaseAnimating"),
+		OverlayDesc->BaseName.ToString(), ElysiumAnimatingClassName().ToString());
+	TestTrue(TEXT("CBaseFlex is a chain node with no factory"), FlexDesc->Factory == nullptr);
 	TestEqual(TEXT("animating's base is CBaseEntity"),
 		AnimDesc->BaseName.ToString(), ElysiumBaseClassName().ToString());
 

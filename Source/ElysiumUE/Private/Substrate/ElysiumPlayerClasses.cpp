@@ -1,4 +1,4 @@
-// The registration site for the player entity and the two chain nodes above it (S3).
+// The registration site for the player entity and the four chain nodes above it (S3).
 //
 // `docs/vtmb/script_api.md` is the input inventory. The three classes here are ordinary registry
 // nodes: nothing about the
@@ -249,9 +249,17 @@ static FElysiumClassRegistrar GRegViewModel(
 	ElysiumViewModelClassName(), ElysiumAnimatingClassName(), &MakeViewModel,
 	[](FElysiumClassDesc&) {});
 
+// CBaseAnimatingOverlay and CBaseFlex — the two retail nodes between the animating class and the
+// combat character (0019 story 5 step 6). Chain nodes, never `.ents` classnames, so no factory; their
+// datamaps name no external, so nothing is registered on them.
+static FElysiumClassRegistrar GRegAnimatingOverlay(
+	ElysiumAnimatingOverlayClassName(), ElysiumAnimatingClassName(), nullptr, [](FElysiumClassDesc&) {});
+static FElysiumClassRegistrar GRegFlex(
+	ElysiumFlexClassName(), ElysiumAnimatingOverlayClassName(), nullptr, [](FElysiumClassDesc&) {});
+
 // CBaseCombatCharacter — datamap 0x1061664c, 25 inputs (`docs/vtmb/script_api.md`).
 static FElysiumClassRegistrar GRegCombatCharacter(
-	ElysiumCombatCharacterClassName(), ElysiumAnimatingClassName(), nullptr,
+	ElysiumCombatCharacterClassName(), ElysiumFlexClassName(), nullptr,
 	[](FElysiumClassDesc& D)
 	{
 		using FC = FElysiumCombatCharacter;

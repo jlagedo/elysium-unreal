@@ -44,6 +44,8 @@ enum class EElysiumDmgFamily : int32;
 // The chain-node classnames. They never appear in a `.ents` file — they exist so the registry's
 // base-chain walk reaches the inputs and fields they own.
 inline FName ElysiumAnimatingClassName()      { return FName(TEXT("CBaseAnimating")); }
+inline FName ElysiumAnimatingOverlayClassName(){ return FName(TEXT("CBaseAnimatingOverlay")); }
+inline FName ElysiumFlexClassName()           { return FName(TEXT("CBaseFlex")); }
 inline FName ElysiumCombatCharacterClassName(){ return FName(TEXT("CBaseCombatCharacter")); }
 // The player's own classname and the targetname it is registered under. `!player` is what the maps
 // themselves write (48 `point_teleport.target` keys across the exported maps), so putting it in the
@@ -1062,7 +1064,24 @@ struct FElysiumReactionPlayRequest
 	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
 };
 
-class FElysiumCombatCharacter : public FElysiumAnimating, public IElysiumCameraOverrideSource
+// FElysiumAnimatingOverlay — CBaseAnimatingOverlay, and FElysiumFlex — CBaseFlex: the two retail
+// nodes between the animating class and the combat character (0019 story 5 step 6). Retail's chain is
+// CBaseAnimating -> CBaseAnimatingOverlay -> CBaseFlex -> CBaseCombatCharacter, and each node owns
+// virtuals and bodies of its own (the gesture layers, the flex weights and scene events). Their
+// datamaps name no external, so neither carries a keyfield; they are declared here, between the two
+// classes they sit between, because the combat character needs them complete.
+
+class FElysiumAnimatingOverlay : public FElysiumAnimating
+{
+public:
+};
+
+class FElysiumFlex : public FElysiumAnimatingOverlay
+{
+public:
+};
+
+class FElysiumCombatCharacter : public FElysiumFlex, public IElysiumCameraOverrideSource
 {
 public:
 	FElysiumSheet Sheet;
