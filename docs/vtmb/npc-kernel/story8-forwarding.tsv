@@ -87,7 +87,6 @@ RunTask19	CNPC_VTzimisceRunner	444	0x103c3870	Source/ElysiumUE/Private/Substrate
 RunTask19	CNPC_VVampireBoss	444	0x103c5f40	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp
 RunTask19	CNPC_VWerewolf	444	0x103cdfb0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp
 RunTask19	CNPC_VZombie	444	0x103e01d0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp
-Script19	CNPC_VManBat	525	0x1038b120	Source/ElysiumUE/Private/Substrate/ElysiumNpcScript19Species.cpp
 Select19	CAI_BaseNPCTroika	437	0x102ae920	Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp
 Select19	CNPC_VAnimal	438	0x1035fb50	Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp
 Select19	CNPC_VAsianVampire	438	0x10360eb0	Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp

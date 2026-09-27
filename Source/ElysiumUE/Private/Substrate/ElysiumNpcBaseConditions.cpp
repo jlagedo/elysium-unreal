@@ -33,8 +33,6 @@ namespace
 	constexpr float GCondRange2TooFarUnits = ElysiumNpcTunables::FiveHundredTwelve;
 	// The facing dot both bodies share (`FCOMP double ptr [0x10449270]`).
 	constexpr double GCondAttackFacingDot = ElysiumNpcTunables::HalfDouble;
-	// Source's `Navigation_t`: the two values `CAI_BaseNPC::FCanCheckAttacks` refuses on.
-	constexpr int32 GCondNavGround = 0;
 }
 
 // --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 5) ---
@@ -163,11 +161,9 @@ int32 FElysiumNpcBase::RangeAttack2Conditions(float FlDot, float FlDist)
 
 int32 FElysiumNpcBase::NavType() const
 {
-	// SEAM for `0x1027d990` = `m_pNavigator(+0x5d34)->m_navType(+0x18)`. The shape map binds
-	// `+0x5d34` to `FElysiumScriptedCharacter::Motor`, and that motor seam answers no nav type.
-	// `NAV_GROUND` is the answer because it is the one every walking body has in retail and because
-	// it is the value that does NOT suppress: a seam must not invent a refusal.
-	return GCondNavGround;
+	// `0x1027d990` = `m_pNavigator(+0x5d34)->m_navType(+0x18)`: family Motor's stored word, read
+	// through its body (`NavGetType`), not a second answer to the same question.
+	return NavGetType();
 }
 
 bool FElysiumNpcBase::FCanCheckAttacksBase() const

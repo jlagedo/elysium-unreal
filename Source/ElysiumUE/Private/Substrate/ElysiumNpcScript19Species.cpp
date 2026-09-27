@@ -105,13 +105,14 @@ bool FElysiumNpcManBat::OverrideMove(float Arg0)
 	// `+0x6670` through the caller-side ladder and `0x1042fbf0` (`ManBatHintMode`), against the
 	// constant through `0x1042fbf0` alone: `SETZ AL`.
 	return ManBatHintMode(ManBatHintModeWord)                 // 0x1038b13f..0x1038b163
-		== HintObfuscationFold(GScript19ManBatModeWordConstant); // 0x1038b168..0x1038b179
+		== HintObfuscationFold(GScript19ManBatModeWordConstant); // 0x1038b168 / 0x1038b16f 0x1042fbf0 .. 0x1038b179
 }                                                             // 0x1038b17d
 
 // `0x1038b1a0`, 366 bytes.
 void FElysiumNpcManBat::ManBatOverrideMoveFly(float Interval)
 {
-	// `cvar_manbat_stun`: `(*0x1093b85c)->IsCommand()` false (always, for a ConVar) AND `m_nValue`.
+	// `cvar_manbat_stun`: `(*0x1093b85c)->IsCommand()` (`0x1038b1af` vtable +4; `0x1038b1b4 JNZ`
+	// skips the stun on a command) false (always, for a ConVar) AND `m_nValue`.
 	if (ManBatStunConVar() != 0)                              // 0x1038b1a6..0x1038b1c1
 	{
 		RecordScheduleEvent(FString::Printf(TEXT("SetSchedule trace %s:%d"), GScript19ManBatFile,
@@ -142,7 +143,10 @@ void FElysiumNpcManBat::ManBatOverrideMoveFly(float Interval)
 		Yaw = Yaw < MotorYawHalfTurn ? Yaw + MotorYawHalfTurn : Yaw - MotorYawHalfTurn;
 	}
 	MotorIdealYaw = Yaw;                                      // 0x1038b28d 0x102e1c10
-	++ManBatMotorYawSpeedResets;                              // 0x1038b27d rate -1.0 == _DAT_104492dc -> 0x102e1cf0
+	// Rate -1.0 == `_DAT_104492dc` (`0x1038b27d`) takes `0x102e1cf0` on the motor (`+0x38` := the
+	// outer's `MaxYawSpeed`): the SAME call on the same `m_pMotor` (`+0x5d44`) that
+	// `SetActivityAndSequence` ends in (`0x10272569` / `0x10272575`), counted by family Anim10's seam.
+	++NavigatorActivityNotices;
 	ReleaseMotorHintYaw();                                    // 0x102e1e20(motor, -1)
 	FVector NewAngles = Angles;                               // 0x1038b296 slot 221 GetAngles
 	NewAngles.X = ManBatVecToPitch(VelocityUnits);            // 0x1038b2b5 0x101d2ce0 -> pitch
@@ -164,9 +168,9 @@ void FElysiumNpcManBat::ManBatWingTurnSelect(const FVector& VelocityUnits)
 	{
 		return;                                               // 0x1038e820
 	}
-	auto Flap = [this](const TCHAR* Body)
+	auto Flap = [this](const TCHAR* FlapBody)
 	{
-		if (const FFlapActivity* Row = FlapActivityOf(Body))
+		if (const FFlapActivity* Row = FlapActivityOf(FlapBody))
 		{
 			SetFlapActivity(Row->Activity, Row->Seconds);
 		}
@@ -181,7 +185,10 @@ void FElysiumNpcManBat::ManBatWingTurnSelect(const FVector& VelocityUnits)
 	{
 		Turn += GScript19ManBatFullTurn;                      // 0x1038e7ba
 	}
-	if (Turn >= GScript19ManBatTurnLow && Turn <= GScript19ManBatTurnHigh) // 0x1038e7c0..0x1038e7da
+	// Written as retail's two refusals so an unordered turn proceeds as the x87 flags do:
+	// `0x1038e7cb JNP` leaves only on C0 alone (below 30), `0x1038e7da JZ` only on C0 = C3 = 0 (above
+	// 330); `0x1038e7e9 JP` takes `0x1038e6e0` on even parity, which an unordered turn also has.
+	if (!(Turn < GScript19ManBatTurnLow) && !(Turn > GScript19ManBatTurnHigh)) // 0x1038e7c0..0x1038e7da
 	{
 		if (Turn < GScript19ManBatTurnSplit)                  // 0x1038e7dc / 0x1038e7e9
 		{
@@ -202,16 +209,22 @@ void FElysiumNpcManBat::ManBatWingTurnSelect(const FVector& VelocityUnits)
 // --- `CNPC_VGhoulCroucher` -----------------------------------------------------------------------
 
 // Slot 77: `0x1037c1c0`, 232 bytes. The scope-trace push/pop keyed on `m_iName`
-// (`0x1037c1c5..0x1037c227`, `0x1037c292` / `0x1037c2a5`) is debugger bookkeeping and stays absent.
+// (`0x1037c1c5..0x1037c227`, its null-name default `0x1037c1cf JNZ` / `0x1037c1d1`, and `0x1037c292` /
+// `0x1037c2a5`) is debugger bookkeeping and stays absent.
 void FElysiumNpcGhoulCroucher::GhoulCroucherScriptHide()
 {
-	ScriptHide();                                             // 0x1037c229 CAI_BaseNPCTroika::ScriptHide 0x102c1ce0
+	// `0x1037c229` calls `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`) DIRECT. That Troika body (the
+	// cine-cancel gate, forced schedule `0x6b`, the active weapon's slot 77) is family Damaged19's row
+	// and unported; the base half it ends in (`CBaseEntity::ScriptHide 0x100a8710`) stands for it,
+	// called qualified so a species-level `ScriptHide` never shadows it.
+	FElysiumEntity::ScriptHide();                             // 0x1037c229 -> 0x102c1ce0 (base half only)
 	if (World == nullptr || !BurningParticle.IsSet())         // 0x1037c22e / 0x1037c237 m_hBurningParticle == -1
 	{
 		return;                                               // 0x1037c29f..0x1037c2a7
 	}
 	// Stale serial / null slot skip (`0x1037c259` / `0x1037c25e`). The re-validation of the same
-	// handle (`0x1037c260..0x1037c280`) cannot fail with nothing between the reads, so its
+	// handle (`0x1037c260..0x1037c280`, its -1 test `0x1037c269 JZ 0x1037c295`) cannot fail with
+	// nothing between the reads, so its
 	// null-receiver arm (`0x1037c295 XOR ECX,ECX / 0x1037c299`) is dead.
 	if (FElysiumEntity* Particle = World->Resolve(BurningParticle))
 	{

@@ -50,8 +50,11 @@ namespace
 	// The `+0x1b34` line `0x1029f460` stamps before its `SetSchedule`.
 	constexpr int32 GScript19BuildPatrolScheduleLine = 0x27a1;
 
-	// `AI_NavGoal_t [0]` for every Script19 goal: 4, a location goal.
+	// `AI_NavGoal_t [0]`: 4 (`GOALTYPE_LOCATION`) for every Script19 goal but `0x102801e0`'s, which
+	// is 3 (`GOALTYPE_PATHCORNER`, `0x10280205 MOV [ESP+0x8],0x3`). `SetGoal` routes type 3 through
+	// its location arm (it is not 1 / 2 / 7), so the two differ only in the word.
 	constexpr int32 GScript19GoalTypeLocation = 4;
+	constexpr int32 GScript19GoalTypePathCorner = 3;
 	// `ACT_RUN` / `ACT_WALK`, the movement activities the Script19 goals name.
 	constexpr int32 GScript19ActRun = 0x13;
 	constexpr int32 GScript19ActWalk = 9;
@@ -170,7 +173,7 @@ int32& FElysiumNpc::PatrolNodeMissCounter()
 
 // --- `0x1029f460` ----------------------------------------------------------------------------------
 
-void FElysiumNpc::BuildPatrolPath(FPatrolPathCell* Cell, int32 Repeat, int32 Type, int32 Schedule,
+void FElysiumNpc::BuildPatrolPath(FPatrolPathCell* Cell, int32 Repeat, int32 Type, int32 ScheduleId,
 	const int32* NodeIds, EPatrolPathBuild Build)
 {
 	if (NpcStateRetail() == GScript19NpcStateDead)            // 0x1029f464 / 0x1029f46b
@@ -234,9 +237,9 @@ void FElysiumNpc::BuildPatrolPath(FPatrolPathCell* Cell, int32 Repeat, int32 Typ
 		}
 	}
 	Cell->Path->Current = PatrolPathStartIndex(*Cell->Path);  // 0x1029f520 0x10307b60
-	if (Schedule != 0)                                        // 0x1029f52c
+	if (ScheduleId != 0)                                        // 0x1029f52c
 	{
-		Cell->Path->Schedule = Schedule;                      // 0x1029f531
+		Cell->Path->Schedule = ScheduleId;                      // 0x1029f531
 	}
 	if (Cell->Path->Schedule != 0)                            // 0x1029f534..0x1029f53c
 	{
@@ -352,7 +355,7 @@ void FElysiumNpc::IssuePatrolMoveRun(FPatrolPathCell* Cell)
 	// `0x102d61b0(m_eHull)` -- `NAI_Hull::Width`, the Y span (family Positions' reading).
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs); // 0x102aa8b8..0x102aa8d3
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs); // 0x102aa8b8..0x102aa8d3 (0x102aa8c5 -> 0x102d61b0)
 	FScript19NavGoal Goal;
 	Goal.Type = GScript19GoalTypeLocation;                    // local_40 = 4
 	Goal.PositionCm = PositionCm;                             // 0x102aa8df GetPosition
@@ -369,15 +372,23 @@ bool FElysiumNpc::Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFla
 	// The `SetGoalFlags` arms (1: `0x102f28a0` clear the route; 2: reset the path's target and
 	// position; 4: clear on failure) address the navigator's own path object, which this runtime does
 	// not carry: the motor request below REPLACES whatever it was doing, which is the effect of each.
-	(void)SetGoalFlags;
+	// Carried: flag 1's zeroing of the path tolerance, which the `[8]` resolution reads.
 	if (Goal.Activity != -1)
 	{
-		ScheduleHost.NavigationActivity = Goal.Activity;      // 0x102ecd9c 0x102ee250 SetMovementActivity
+		ScheduleHost.NavigationActivity = Goal.Activity;      // 0x102ecdaa / 0x102ecdb2 0x102ee250 SetMovementActivity
 	}
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
 	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 	const float HullWidthCm = static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U; // 0x102d61b0
+	// Flag 1 (`0x102ecd6e TEST AL,0x1` / `0x102ecd74`) runs `0x102f28a0`, whose path reset
+	// `0x1030bb30` zeroes the path's tolerance `+0x28` BEFORE the `[8]` resolution below: a flag-1
+	// goal with the -1.0 "keep" word (`0x10278220`'s) therefore always resolves to the hull width.
+	if ((SetGoalFlags & 1) != 0)
+	{
+		NavPathToleranceCm = 0.f;                             // 0x102ecd74 0x102f28a0 -> 0x1030bb30
+	}
+	const float StandingToleranceCm = NavPathToleranceCm;
 	float ToleranceCm = Goal.Tolerance;
 	if (Goal.Tolerance == NavGoalToleranceHull)
 	{
@@ -386,19 +397,32 @@ bool FElysiumNpc::Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFla
 	else if (Goal.Tolerance == NavGoalToleranceKeep)
 	{
 		// [8] == -1.0: the path's tolerance stands; a zero one takes the hull width (the target-hull
-		// average of goal types 1 / 2 / 7 is not reached: every Script19 goal is type 4).
-		ToleranceCm = ScheduleHost.GoalToleranceCm != 0.f ? ScheduleHost.GoalToleranceCm : HullWidthCm;
+		// average of goal types 1 / 2 / 7 is not reached: every Script19 goal is type 4 or 3).
+		ToleranceCm = StandingToleranceCm != 0.f ? StandingToleranceCm : HullWidthCm; // == _DAT_104454c4 (0.0)
 	}
-	ScheduleHost.GoalToleranceCm = ToleranceCm;               // path +0x28
+	NavPathToleranceCm = ToleranceCm;                         // 0x102ecec7 path +0x28
 	if (Motor == nullptr || !AcquireScheduleBody(Reason))
 	{
-		return false;
+		return false;   // no body to route (the port's arbiter refusal): no route was attempted
 	}
 	const bool bRun = ScheduleHost.NavigationActivity == GScript19ActRun;
 	const EElysiumNpcGaitKind Gait = bRun ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 	MoveGoal = Goal.PositionCm;
 	bMoveIssued = Motor->MoveTo(Goal.PositionCm, ToleranceCm, ElysiumNpcGait::TravelSpeed(Motor, Gait),
 		/*bAllowPartialPath=*/false, Gait);                   // 0x102f1dc0 the route build
+	if (!bMoveIssued)
+	{
+		// `0x102f1dc0`'s refusal with no route-search window (`0x102f1ee8` navigator `+0x40`
+		// `m_timePathRebuildMax == 0.0`, `0x102f1f00`): navigator `vtable+0x28` `(0xc, 1)` =
+		// `OnNavFailed 0x102eeae0` -- `TaskFail(FAIL_NO_ROUTE)`, the ideal activity, the `+0x1c`
+		// latch. The window is written only by `TASK_SET_ROUTE_SEARCH_TIME` (`0x102886f0`, from
+		// `StartTask 0x102827f0`) and zeroed by `0x102f28a0` (flag 1); the navigator's constructor
+		// `0x102eca50` leaves it alone. Nothing on this branch writes it, so the zero arm is the one
+		// every refusal takes. The non-zero arm (defer, `+0x5d8c` bit `0x20`, retry stamps `+0x48` /
+		// `+0x4c`) waits for lane L03's `NavRouteSearchTime`: whichever of L03 / L10 lands second
+		// gates this call on it. Flag 4's `0x102f28a0` on failure clears a route never built here.
+		NavOnNavFailed(GScript19FailNoRoute);
+	}
 	return bMoveIssued;
 }
 
@@ -411,8 +435,10 @@ bool FElysiumNpc::TryMoveToHiddenPosition(const FVector& ThreatCm, const FVector
 	// filter entity; the second ignored entity is carried for the record.
 	(void)IgnoreEntity;
 	// End = candidate + `m_vecViewOffset` (`+0x184/+0x188/+0x18c`, `0x10278245..0x10278290`); the ray
-	// runs from the threat point with mask `0x2804091` (`0x102782b8`). The `0x10738960` debug-overlay
-	// line (`0x102782bb..0x102782ee`) is a developer visualisation and stays absent.
+	// (`Ray_t::Init`, `0x10278294` -> `0x1004f7a0`) runs from the threat point with mask `0x2804091`
+	// (`0x102782b8`). The `0x10738960` debug-overlay line (`0x102782bb..0x102782ee`: its enable test
+	// `0x102782c0` -> `0x1005f190` / `0x102782c7 JZ`, the draw `0x102782e9` -> `0x10146570`) is a
+	// developer visualisation and stays absent.
 	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	const FVector EyeEndCm = CandidateCm + (EyePosition() - Origin);
 	if (Embodiment == nullptr || Embodiment->QueryLineOfSight(ThreatCm, EyeEndCm)) // 0x102782f1..0x10278303 fraction == 1.0
@@ -423,7 +449,7 @@ bool FElysiumNpc::TryMoveToHiddenPosition(const FVector& ThreatCm, const FVector
 	{
 		return false;                                         // 0x10278318 JZ 0x1027840c
 	}
-	// `0x102e6d70` on `m_pMoveProbe (+0x5d40)` from slot 220 to the candidate, mask `0x202400b`,
+	// `0x102e6d70` on `m_pMoveProbe (+0x5d40)` from slot 220 (`0x10278336`) to the candidate, mask `0x202400b`,
 	// 100.0 (`0x10278359`); a non-zero `fStatus` refuses (`0x10278365`). The port's lateral-cover
 	// reachability service is that probe.
 	if (Motor == nullptr || !Motor->CanReachLateralCover(CandidateCm))
@@ -441,9 +467,9 @@ bool FElysiumNpc::TryMoveToHiddenPosition(const FVector& ThreatCm, const FVector
 
 // --- `0x102800c0` / `0x102801e0` -------------------------------------------------------------------
 
-bool FElysiumNpc::ScheduledMoveToGoalEntity(int32 Schedule, FElysiumEntity* Goal, int32 Activity)
+bool FElysiumNpc::ScheduledMoveToGoalEntity(int32 ScheduleId, FElysiumEntity* Goal, int32 Activity)
 {
-	ChangeSchedule(Schedule);                                 // 0x102800cd 0x10280de0(param_1)
+	ChangeSchedule(ScheduleId);                                 // 0x102800cd 0x10280de0(param_1)
 	if (Goal == nullptr)
 	{
 		return false;   // retail dispatches slot 217 on the null goal and faults (crash guard)
@@ -462,16 +488,16 @@ bool FElysiumNpc::ScheduledMoveToGoalEntity(int32 Schedule, FElysiumEntity* Goal
 	return Script19SetGoal(NavGoal, 0, TEXT("ScheduledMoveToGoalEntity (0x102800c0)")); // 0x10280187, AL out
 }
 
-bool FElysiumNpc::ScheduledFollowPath(int32 Schedule, FElysiumEntity* Goal, int32 Activity)
+bool FElysiumNpc::ScheduledFollowPath(int32 ScheduleId, FElysiumEntity* Goal, int32 Activity)
 {
-	ChangeSchedule(Schedule);                                 // 0x102801ec 0x10280de0(param_1)
+	ChangeSchedule(ScheduleId);                                 // 0x102801ec 0x10280de0(param_1)
 	if (Goal == nullptr)
 	{
 		return false;   // slot 220 on the null goal faults in retail (crash guard)
 	}
 	BaseScheduleHost.GoalEnt = Goal->Handle;                  // 0x102801f5 m_pGoalEnt +0x5de8
 	FScript19NavGoal NavGoal;
-	NavGoal.Type = GScript19GoalTypeLocation;                 // [0] = 4
+	NavGoal.Type = GScript19GoalTypePathCorner;               // 0x10280205 [0] = 3
 	NavGoal.PositionCm = Goal->Origin;                        // 0x102801ff slot 220
 	NavGoal.Activity = Activity;                              // 0x10280227 [5] = param_3
 	NavGoal.Tolerance = NavGoalToleranceKeep;                 // 0x10280231 / 0x10280276 [8] = _DAT_1049a154 (-1.0)

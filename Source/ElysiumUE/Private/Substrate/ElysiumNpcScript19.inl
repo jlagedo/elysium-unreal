@@ -42,9 +42,10 @@ struct FPatrolPathCell
 	FPatrolPathRecord* Path = nullptr;     // +0x4
 };
 
-/** `+0x658c m_sppPatrolPath` -- SEAM ROW: the port's own patrol route (`PatrolPoints`,
- *  `PatrolNames`, `PatrolIndex`, `bPatrolActive`) stands at this offset today; the integrator retires
- *  it (L10 report, "delete/redirect"). */
+/** `+0x658c m_sppPatrolPath`. The port's own patrol route (`PatrolPoints`, `PatrolNames`,
+ *  `PatrolIndex`, `bPatrolActive`, the shape map's `0x658c` row) still stands at this offset and is
+ *  what runs: nothing reaches `BuildPatrolPath` / `IssuePatrolMove*` until the Troika StartTask /
+ *  RunTask arms `0x7a..0x7e` are wired (wave 2, L13). The route is marked `STORY8-TWIN` there. */
 FPatrolPathCell PatrolPathCell;
 /** `+0x6594 m_sppPatrolPathHunt` -- the sibling cell (`HuntPatrolPoints` today). */
 FPatrolPathCell PatrolPathHuntCell;
@@ -122,6 +123,13 @@ struct FScript19NavGoal
 	int32 Flags = 0;
 	FElysiumEntityHandle Target;
 };
+/** SEAM for `CAI_Path::+0x28`, the goal tolerance of the navigator's path (`m_pNavigator +0x30`),
+ *  which `0x102ecd20` resolves from `[8]` and writes, and whose -1.0 "keep" arm reads back. This
+ *  runtime has no `CAI_Path` (0018 story 4); the word is NOT `m_flGoalTolerance` (`+0x6320`,
+ *  `ScheduleHost.GoalToleranceCm`), which `SetGoal` never touches. Cleared by `SetGoal` flag 1
+ *  (`0x102f28a0` -> `0x1030bb30`); retail's other path resets (the navigator's own `ClearGoal`
+ *  callers) are not carried. Centimetres. */
+float NavPathToleranceCm = 0.f;
 /** `0x102ecd20`'s tolerance sentinels, `_DAT_1049d980` and `_DAT_1049d97c`. */
 static constexpr float NavGoalToleranceHull = -2.0f;
 static constexpr float NavGoalToleranceKeep = -1.0f;

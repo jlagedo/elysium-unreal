@@ -209,6 +209,7 @@ int32 FElysiumNpcBase::BaseSelectIdealState()
 		{
 			Cognition.bCondTookDamage = false;
 			++SelectIdealStateScriptExitCalls;
+			ExitScriptedSequence();                   // 0x1026f9dc thunk_FUN_1027d0a0, answer ignored
 			return IdealStateRetail();
 		}
 		return IdealStateRetail();

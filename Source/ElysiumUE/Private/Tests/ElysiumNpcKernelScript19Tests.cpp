@@ -78,6 +78,15 @@ namespace
 		return Cine.DiagnosticsForTest().Contains(Line);
 	}
 
+	// A guard with a `model` key: without one the leaf builds no body, and without a body the
+	// recording services build no motor (`FElysiumRecordingServices::BuildNpcMotor`).
+	FElysiumEntityDef& Script19GuardWithBody(FElysiumNpcWorldBuilder& Builder)
+	{
+		FElysiumEntityDef& Def = Builder.AddNpc(TEXT("guard"));
+		Def.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		return Def;
+	}
+
 	// The standard two-director world: `jack`, directors `s1`/`s2` of `Classname`, counter `c_end`
 	// wired to `s1`'s `OnEndSequence`.
 	FElysiumNpcWorldBuilder Script19DirectorWorld(const TCHAR* Map, uint32 Seed, const TCHAR* Classname)
@@ -707,7 +716,7 @@ namespace
 	{
 		FElysiumNpcWorldBuilder Builder(Map, Seed);
 		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-		Builder.AddNpc(TEXT("guard"));
+		Script19GuardWithBody(Builder);
 		FElysiumEntityDef& Point = Builder.AddEntity(TEXT("info_node_patrol_point"), TEXT("pp"),
 			FVector(400.0, 0.0, 0.0));
 		Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
@@ -803,17 +812,23 @@ bool FElysiumNpcKernelScript19PatrolRunTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102aa88a node -1 writes nothing"), Guard->BaseScheduleHost.FailureReason, 0);
 	TestTrue(TEXT("and issues no goal"), Motor->RequestedFeet.Equals(Before, 0.01));
 
-	// A real node at the hull tolerance; an unreachable one does NOT fail.
+	// A real node at the hull tolerance. The body ignores SetGoal's answer (`0x102aa954`, no fail arm
+	// of its own), but a refused route fails the task INSIDE SetGoal: `0x102f1dc0` with no
+	// route-search window (`0x102f1ee8` / `0x102f1f00`) calls `OnNavFailed(0xc)` (`0x102eeae0`).
 	const int32 Node[] = { Point->Handle.Index, -1 };
 	Guard->BuildPatrolPath(&Guard->PatrolPathCell, 0, 0, 0, Node, EBuild::Replace);
-	Motor->bAcceptMoves = false;
+	Motor->bAcceptMoves = true;
 	Guard->IssuePatrolMoveRun(&Guard->PatrolPathCell);
 	TestTrue(TEXT("0x102aa954 SetGoal to the node"), Motor->RequestedFeet.Equals(Point->Origin, 0.01));
-	TestEqual(TEXT("0x102aa954 its answer is ignored: no fail"), Guard->BaseScheduleHost.FailureReason, 0);
+	TestEqual(TEXT("a routed node writes no fail"), Guard->BaseScheduleHost.FailureReason, 0);
+	Motor->bAcceptMoves = false;
+	Guard->IssuePatrolMoveRun(&Guard->PatrolPathCell);
+	TestEqual(TEXT("0x102f1f00 an unroutable node fails 0xc through OnNavFailed, not the body"),
+		Guard->BaseScheduleHost.FailureReason, 0xc);
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	Guard->RetailHullExtents(Guard->HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
-	TestEqual(TEXT("0x102aa8d3 the tolerance is NAI_Hull::Width"), Guard->ScheduleHost.GoalToleranceCm,
+	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
+	TestEqual(TEXT("0x102aa8d3 the tolerance is NAI_Hull::Width"), Guard->NavPathToleranceCm,
 		static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
 	FElysiumNpc::ResetPatrolPathPool();
 	return true;
@@ -829,7 +844,7 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_hidden"), 19017);
 	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-	Builder.AddNpc(TEXT("guard"));
+	Script19GuardWithBody(Builder);
 	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& S) { S.bProvideNpcMotor = true; });
 	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
 	if (!TestNotNull(TEXT("guard"), Guard) || !TestTrue(TEXT("a recording motor"), F.Services.NpcMotors.Num() > 0))
@@ -860,6 +875,16 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102783f6 the goal is the candidate"), Motor->RequestedFeet.Equals(Candidate, 0.01));
 	TestEqual(TEXT("0x102783d2 activity ACT_RUN (0x13)"), Guard->ScheduleHost.NavigationActivity, 0x13);
 
+	// SetGoal flag 1 (`0x102ecd74` -> `0x102f28a0` -> `0x1030bb30`) zeroes the path tolerance before
+	// the -1.0 "keep" word is resolved: a standing one is NOT kept, the hull width is taken.
+	Guard->NavPathToleranceCm = 77.f;
+	Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr);
+	FVector HullMins = FVector::ZeroVector;
+	FVector HullMaxs = FVector::ZeroVector;
+	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
+	TestEqual(TEXT("0x102ecd74 flag 1 zeroes the path tolerance: keep -> hull width"), Guard->NavPathToleranceCm,
+		static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
+
 	Motor->bAcceptMoves = false;
 	TestFalse(TEXT("0x102783fd SetGoal's FALSE is the answer"), Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
 	return true;
@@ -875,7 +900,7 @@ bool FElysiumNpcKernelScript19MoveToGoalTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_move_goal"), 19018);
 	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-	Builder.AddNpc(TEXT("guard"));
+	Script19GuardWithBody(Builder);
 	Builder.AddEntity(TEXT("info_target"), TEXT("goal"), FVector(500.f, 0.f, 0.f));
 	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& S) { S.bProvideNpcMotor = true; });
 	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
@@ -894,7 +919,8 @@ bool FElysiumNpcKernelScript19MoveToGoalTest::RunTest(const FString&)
 		Guard->ResolveIdealScheduleStamp(ElysiumSched::IDLE_WALK));
 	TestTrue(TEXT("0x102800d6 m_pGoalEnt := goal"), Guard->BaseScheduleHost.GoalEnt == Goal->Handle);
 	TestTrue(TEXT("0x102800e6 the goal is its GetAbsOrigin"), Motor->RequestedFeet.Equals(Goal->Origin, 0.01));
-	TestEqual(TEXT("0x10280150 tolerance 128 units"), Guard->ScheduleHost.GoalToleranceCm, 128.f * ElysiumMove::U);
+	TestEqual(TEXT("0x10280150 tolerance 128 units"), Guard->NavPathToleranceCm, 128.f * ElysiumMove::U);
+	TestEqual(TEXT("0x102ecd20 never writes m_flGoalTolerance (+0x6320)"), Guard->ScheduleHost.GoalToleranceCm, 0.f);
 	TestEqual(TEXT("0x10280126 the movement activity is the caller's"), Guard->ScheduleHost.NavigationActivity, 9);
 
 	Motor->bAcceptMoves = false;
@@ -908,7 +934,7 @@ bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_follow_path"), 19019);
 	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-	Builder.AddNpc(TEXT("guard"));
+	Script19GuardWithBody(Builder);
 	Builder.AddEntity(TEXT("path_corner"), TEXT("corner"), FVector(0.f, 600.f, 0.f));
 	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& S) { S.bProvideNpcMotor = true; });
 	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
@@ -922,19 +948,19 @@ bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 	FElysiumRecordingNpcMotor* Motor = F.Services.NpcMotors[0].Get();
 
 	// The `-1.0` tolerance keeps the path's; a zero one takes the hull width.
-	Guard->ScheduleHost.GoalToleranceCm = 0.f;
+	Guard->NavPathToleranceCm = 0.f;
 	TestTrue(TEXT("0x102802a8 SetGoal's TRUE"), Guard->ScheduledFollowPath(ElysiumSched::IDLE_WALK, Corner, 0x13));
 	TestTrue(TEXT("0x102801f5 m_pGoalEnt := corner"), Guard->BaseScheduleHost.GoalEnt == Corner->Handle);
 	TestTrue(TEXT("0x102801ff the goal is its origin"), Motor->RequestedFeet.Equals(Corner->Origin, 0.01));
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	Guard->RetailHullExtents(Guard->HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
+	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
 	TestEqual(TEXT("0x10280231 -1.0 on a zero path tolerance takes the hull width"),
-		Guard->ScheduleHost.GoalToleranceCm, static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
+		Guard->NavPathToleranceCm, static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
 	TestEqual(TEXT("0x10280227 ACT_RUN"), Guard->ScheduleHost.NavigationActivity, 0x13);
-	Guard->ScheduleHost.GoalToleranceCm = 77.f;
+	Guard->NavPathToleranceCm = 77.f;
 	Guard->ScheduledFollowPath(ElysiumSched::IDLE_WALK, Corner, 9);
-	TestEqual(TEXT("and a standing tolerance is kept"), Guard->ScheduleHost.GoalToleranceCm, 77.f);
+	TestEqual(TEXT("and a standing path tolerance is kept (flag 0)"), Guard->NavPathToleranceCm, 77.f);
 	return true;
 }
 
@@ -1032,10 +1058,10 @@ bool FElysiumNpcKernelScript19ManBatFlyTest::RunTest(const FString&)
 	// One of the four still activities: velocity only, no facing block (0x1038b24e..0x1038b26d).
 	Bat->ActivityNumber = 0x30;
 	Bat->MotorIdealYaw = 12345.f;
-	const int32 Resets = Bat->ManBatMotorYawSpeedResets;
+	const int32 Resets = Bat->NavigatorActivityNotices;
 	Bat->ManBatOverrideMoveFly(0.1f);
 	TestEqual(TEXT("0x1038b306 activity 0x30 skips the motor yaw"), Bat->MotorIdealYaw, 12345.f);
-	TestEqual(TEXT("and the yaw-speed reset"), Bat->ManBatMotorYawSpeedResets, Resets);
+	TestEqual(TEXT("and the yaw-speed reset"), Bat->NavigatorActivityNotices, Resets);
 
 	// Any other activity: the motor yaw and the pitch follow the velocity SetAbsVelocity wrote.
 	Bat->ActivityNumber = 0;
@@ -1045,7 +1071,7 @@ bool FElysiumNpcKernelScript19ManBatFlyTest::RunTest(const FString&)
 	const FVector VelocityUnits = Bat->Velocity / ElysiumMove::U;
 	TestEqual(TEXT("0x1038b28d the motor's ideal yaw is VecToYaw(velocity)"), Bat->MotorIdealYaw,
 		FElysiumNpcManBat::ManBatVecToYaw(VelocityUnits));
-	TestEqual(TEXT("0x102e1cf0 the -1.0 rate resets the yaw speed"), Bat->ManBatMotorYawSpeedResets, Resets + 1);
+	TestEqual(TEXT("0x102e1cf0 the -1.0 rate resets the yaw speed"), Bat->NavigatorActivityNotices, Resets + 1);
 	TestEqual(TEXT("0x1038b2ca the pitch is VecToPitch(velocity)"), static_cast<float>(Bat->Angles.X),
 		FElysiumNpcManBat::ManBatVecToPitch(VelocityUnits));
 	TestEqual(TEXT("0x1038b2e4 m_flFlapTimer not due: no selector"), Bat->IdealActivityNumber, -7);

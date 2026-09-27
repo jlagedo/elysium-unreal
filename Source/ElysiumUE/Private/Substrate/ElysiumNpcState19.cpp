@@ -207,6 +207,7 @@ int32 FElysiumNpc::TroikaSelectIdealState()
 		{
 			Cognition.bCondTookDamage = false;
 			++SelectIdealStateScriptExitCalls;
+			ExitScriptedSequence();                   // 0x102adc92 thunk_FUN_1027d0a0, answer ignored
 		}
 		break;
 	case 8:

@@ -347,6 +347,27 @@ static void AddSpeciesPendingInputs(FElysiumClassDesc& D, const TCHAR* RetailCla
 	}
 }
 
+// The species whose own slot 77 / 78 body replaces the base entity's `ScriptHide` / `ScriptUnhide`
+// input. `FElysiumEntity::ScriptHide/ScriptUnhide` are not virtual, so the input (and the Python
+// `ent.ScriptHide()` that reaches it through the same registry row) is routed to the species body
+// here, on the class descriptor that declares it, as the hint's are (`ElysiumHint.cpp`).
+static void AddSpeciesSlotInputs(FElysiumClassDesc& D, const TCHAR* RetailClass)
+{
+	if (FCString::Strcmp(RetailClass, TEXT("CNPC_VGhoulCroucher")) == 0)
+	{
+		// Slot 77 `0x1037c1c0`.
+		D.Input(TEXT("ScriptHide"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{ static_cast<FElysiumNpcGhoulCroucher&>(E).GhoulCroucherScriptHide(); });
+		// Slot 78 `0x1037c2f0`: `CAI_BaseNPCTroika::ScriptUnhide` DIRECT (`0x1037c359` -> `0x102c1ec0`,
+		// unported: the entity base it ends in stands for it, as for slot 77), then the particle's.
+		D.Input(TEXT("ScriptUnhide"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{
+				E.ScriptUnhide();
+				static_cast<FElysiumNpcGhoulCroucher&>(E).GhoulCroucherScriptUnhideTail();
+			});
+	}
+}
+
 struct FElysiumNpcRetailClassRow
 {
 	const TCHAR* RetailClass;
@@ -513,6 +534,7 @@ struct FElysiumNpcRegistrar
 			// this descriptor alone, so a descendant inherits them and a sibling never sees them.
 			ElysiumNpcKernelBindings::AddSpeciesFields(D, Row.RetailClass);
 			AddSpeciesPendingInputs(D, Row.RetailClass);
+			AddSpeciesSlotInputs(D, Row.RetailClass);
 			// The directors' datamap inputs (`CCineNPC` `0x10593628`, `CCineAISchedule` `0x10593c9c`).
 			FElysiumScriptedSequence::AddInputs(D, Row.RetailClass);
 			FElysiumAiScriptedSchedule::AddInputs(D, Row.RetailClass);

@@ -199,9 +199,6 @@ public:
 	 *  world's axes (Source's Y is this world's -Y). */
 	static float ManBatVecToYaw(const FVector& PortVector);
 	static float ManBatVecToPitch(const FVector& PortVector);
-	/** How many times `0x102e1c10` took its rate-`-1.0` arm, `0x102e1cf0` (motor `+0x38` := the outer's
-	 *  `MaxYawSpeed`). SEAM: no motor yaw-speed word stands here, so the reset is counted. */
-	int32 ManBatMotorYawSpeedResets = 0;
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

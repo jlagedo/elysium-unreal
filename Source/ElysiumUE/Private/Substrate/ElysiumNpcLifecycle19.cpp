@@ -349,6 +349,7 @@ void FElysiumNpc::TroikaNPCInit()
 	// (`+0x658c` byte, `+0x6590` pointer) and `m_sppPatrolPathHunt` (`+0x6594`, `+0x6598`) — are
 	// zeroed whole. This runtime carries each pair as the route resolved to its points, so dropping
 	// the points IS dropping the pair. The authored route NAME is a keyfield and is not touched.
+	// STORY8-TWIN: replaced by zeroing PatrolPathCell / PatrolPathHuntCell (0x1029f460's cells) at wave 2
 	PatrolPoints.Reset();                                                // 1029a236 / 1029a23c
 	HuntPatrolPoints.Reset();                                            // 1029a242 / 1029a248
 	ScheduleHost.Unknown659c = 0;                                        // 1029a24e
@@ -499,6 +500,7 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	// `m_sppPatrolPathHunt`, each checked and released on its own. SEAM: no node network stands
 	// here, so a stored route cannot validate and is released, which is retail's answer for a path
 	// the network no longer carries.
+	// STORY8-TWIN: replaced by 0x1029f5d0 on PatrolPathCell / PatrolPathHuntCell at wave 2
 	++PatrolPathRevalidations;
 	if (PatrolPoints.Num() > 0)
 	{

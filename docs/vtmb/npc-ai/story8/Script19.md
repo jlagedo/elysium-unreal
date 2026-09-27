@@ -96,12 +96,15 @@ otherwise `0x1042fbf0(ladder(+0x6670)) == 0x1042fbf0(0xfa0b0699)` (`0x1038b13f..
 5. `0x102e1c10(motor, VecToYaw(vel), -1.0)` (`0x1038b283` / `0x1038b28d`): the `+0x28` flip, the
    `+0x1c == 180` direct write else `0x102e0a80`; the rate `-1.0` equals `_DAT_104492dc` and takes
    `0x102e1cf0` (motor `+0x38 := MaxYawSpeed()`) — it does NOT leave the rate alone — then `0x102e1e20(-1)`.
+   `0x102e1cf0` is the same call on the same `m_pMotor (+0x5d44)` that `SetActivityAndSequence 0x10272490`
+   ends in (`0x10272569` / `0x10272575`); the port counts both on one seam (`NavigatorActivityNotices`).
 6. `GetAngles` with pitch `:= VecToPitch(vel)` (`0x101d2ce0`) through `SetAngles` (`0x1038b296..0x1038b2ca`).
 7. `m_flFlapTimer (+0x6678) <= curtime` (`0x1038b2d6..0x1038b2e4`) → `0x1038e720(vel)` (`0x1038b301`).
 
 `0x1038e720` (the selector): refuses activities `0x28, 0x30, 0xb0, 0x4b, 0x1171`; `vel.z >= 30.0`
 (`_DAT_104492a8` f32 — the VELOCITY's z, not the interval) → `0x1038e640` (act `0x22`, 2.3 s); else
-`turn = VecToYaw(vel) - angles.yaw` (+360 when negative); `30 <= turn <= 330` (f64 cells `0x1044dcf0`,
+`turn = VecToYaw(vel) - angles.yaw` (+360 when negative); `!(turn < 30) && !(turn > 330)` — an unordered
+turn stays in the band (`0x1038e7cb` leaves on C0 alone, `0x1038e7da` on C0=C3=0) — (f64 cells `0x1044dcf0`,
 `0x104bc6a0`) → `0x1038e6a0` (act `0x116d`, 0.2 s) below 180 (`0x10452918`) else `0x1038e6e0` (`0x116e`,
 0.2 s); otherwise activity `0x24` → `0x1038e640`, anything else `0x1038e670` (`0x24`, 4.0 s).
 `UTIL_VecToYaw 0x101d2c70` answers 0 for a vertical vector and wraps into `[0, 360)`; `UTIL_VecToPitch
@@ -121,7 +124,8 @@ otherwise `0x1042fbf0(ladder(+0x6670)) == 0x1042fbf0(0xfa0b0699)` (`0x1038b13f..
    `0x1026d130` (`0x101a7c41`); empty `m_iszNextScript (+0x5f58)` → `m_hNextCine := -1` (`0x101a7c50`);
    `m_pGoalEnt`, `m_hCine`, `SetTarget(npc, this)` (`0x101a7c5a..0x101a7c72`); the save block `+0x5f78`
    movetype, `+0x5f7c` movecollide, `+0x5f80` solid, `+0x5f84` solid flags, `+0x5f88` effects
-   (`0x101a7c7b..0x101a7cbd`); NPC `+0x98` → slot 614, `+0x5f8c := npc+0x14b8`, OR `0x40` under spawnflag
+   (`0x101a7c7b..0x101a7cbd`; the effects word is the NPC's `m_fEffects +0x19c`, which `CineCleanup
+   0x1027d170` writes back at `0x1027d271` / `0x1027d279`); NPC `+0x98` → slot 614, `+0x5f8c := npc+0x14b8`, OR `0x40` under spawnflag
    `0x1000` (`0x101a7cc3..0x101a7cf6`); `npc->m_fEffects |= ours` (`0x101a7d0a`).
 5. `m_fMoveTo (+0x5f60)`, table `0x101a7eac`: 1/2/3 → state 4/5/6 each with `DelayStart(1)`; 4 →
    teleport (slot 181 to our origin with NULL angles and a zero velocity; `0x102e0b40`; the motor's
@@ -129,7 +133,8 @@ otherwise `0x1042fbf0(ladder(+0x6670)) == 0x1042fbf0(0xfa0b0699)` (`0x1038b13f..
    ours, pitch/roll kept) and FALLS THROUGH; 0/5 → state 1; above 5 skips.
 6. `AI scripted.cpp:0x2c8`, `m_IdealNPCState := 4` (`0x101a7e84..0x101a7e98`).
 
-**Unrecovered:** the director's own `m_fEffects` (no port word; spec 0003).
+**Unrecovered:** the director's own `m_fEffects` (no port word; spec 0003), so the OR at `0x101a7d0a` adds
+nothing here.
 
 ## `0x101a8460` SequenceDone (371 bytes)
 
@@ -186,14 +191,23 @@ answer 1. **Unrecovered:** none (the port plays the clip by name — no studio h
 4. `0x102e6d70` on `m_pMoveProbe` from slot 220 to the candidate, mask `0x202400b`, 100.0; non-zero
    `fStatus` → FALSE (`0x10278359` / `0x10278365`).
 5. Goal `{type 4, candidate, activity 0x13, tolerance -1.0 (_DAT_104994a0), flags 0, target
-   DAT_1090fdb4}` through `SetGoal(goal, 1)`; its `AL` is the answer (`0x102783ca..0x102783fd`).
+   DAT_1090fdb4}` through `SetGoal(goal, 1)`; its `AL` is the answer (`0x102783ca..0x102783fd`). Flag 1
+   (`0x102ecd74`) runs `0x102f28a0` first, which zeroes navigator `+0x40..+0x4c` and, through `0x1030bb30`,
+   the path's tolerance `+0x28`: the -1.0 "keep" word therefore always resolves to the hull width here.
+
+`SetGoal 0x102ecd20` writes the path's tolerance (`CAI_Path +0x28`, `0x102ecec7`), never
+`m_flGoalTolerance (+0x6320)`. A refused route (`0x102f1dc0`) with navigator `+0x40
+m_timePathRebuildMax == 0.0` (`0x102f1ee8`) calls `OnNavFailed(0xc)` (`0x102f1f00` → `0x102eeae0`):
+`TaskFail(0xc)` inside `SetGoal`, whatever the caller then does with the FALSE. `+0x40` is written only by
+`TASK_SET_ROUTE_SEARCH_TIME` (`0x102886f0`, from `StartTask 0x102827f0`) and zeroed by `0x102f28a0`; the
+navigator constructor `0x102eca50` does not write it.
 
 **Unrecovered:** `DAT_1090fdb4`'s identity (a null handle in practice).
 
 ## `0x102800c0` ScheduledMoveToGoalEntity / `0x102801e0` ScheduledFollowPath (213 bytes each)
 
-`0x10280de0(schedule)`; `m_pGoalEnt (+0x5de8) := goal`; goal `{type 4 (0x102800ec), goal->slot 217 origin
-(0x102801e0: slot 220), [4..7] -1 except [5] := param_3 = the MOVEMENT ACTIVITY (9 / 0x13 / 0x22 from
+`0x10280de0(schedule)`; `m_pGoalEnt (+0x5de8) := goal`; goal `{type 4 (0x102800ec; 0x102801e0: type 3
+GOALTYPE_PATHCORNER, 0x10280205), goal->slot 217 origin (0x102801e0: slot 220), [4..7] -1 except [5] := param_3 = the MOVEMENT ACTIVITY (9 / 0x13 / 0x22 from
 0x101a98c0) — not a goal type, tolerance 128.0 (0x102801e0: -1.0), flags 1, target DAT_10923a2c}`; slot 563
 `(goal, &dest, &tolerance, &param_1)`; `SetGoal(goal, 0)`, whose `AL` is returned (the caller
 `0x101a98c0` tests it). **Unrecovered:** `DAT_10923a2c` (zero-initialised; a null handle).
@@ -208,7 +222,8 @@ m_eHull), activity -1, tolerance -1.0, flags 0}` through `SetGoal(goal, 2)`: TRU
 
 `0x102aa860` (RunTask `0x7a` / `0x7b`): no path → `0x3d73`, `TaskFail(0x1d)`; node -1 → return silently;
 out of range → `++DAT_106c994c` and a NULL node into `GetPosition` (a retail fault; the port returns);
-goal `{4, position, -1, NAI_Hull::Width(m_eHull), 0}` through `SetGoal(goal, 0)`, answer ignored.
+goal `{4, position, -1, NAI_Hull::Width(m_eHull), 0}` through `SetGoal(goal, 0)`, answer ignored — but a
+refused route still fails the task inside `SetGoal` (`OnNavFailed(0xc)`, above).
 **Unrecovered:** the AI network (0018 story 4); the port stands a node id as a patrol hint's entity index.
 
 ## `0x1037c1c0` CNPC_VGhoulCroucher::ScriptHide (232 bytes)

@@ -482,6 +482,7 @@ void FElysiumNpc::InputSetRelationship(const FElysiumInputArgs& Args)
 		Relationships.NumEntityRules(), Relationships.NumClassRules()));
 }
 
+// STORY8-TWIN: replaced by 0x1029eb30 (InputSetupPatrolType over BuildPatrolPath 0x1029f460) at wave 2
 void FElysiumNpc::InputSetupPatrolType(const FElysiumInputArgs& Args)
 {
 	PatrolType = Args.Param.ToString();
@@ -489,6 +490,7 @@ void FElysiumNpc::InputSetupPatrolType(const FElysiumInputArgs& Args)
 		*DebugString(), *PatrolType);
 }
 
+// STORY8-TWIN: replaced by 0x1029ed90 (InputFollowPatrolPath over BuildPatrolPath 0x1029f460) at wave 2
 void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
 {
 	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
@@ -508,6 +510,7 @@ void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
 		bPatrolActive ? TEXT("armed") : TEXT("not armed"));
 }
 
+// STORY8-TWIN: replaced by the retail clear of m_sppPatrolPath (0x1029f5d0 on +0x658c) at wave 2
 void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 {
 	bPatrolActive = false;
@@ -541,6 +544,7 @@ void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 	// No clock reset: not a slot-614 site.
 }
 
+// STORY8-TWIN: replaced by 0x1029f460 (BuildPatrolPath; node ids for FindPatrolPoint 0x102d2900) at wave 2
 bool FElysiumNpc::ResolvePatrolPoints()
 {
 	PatrolNames.Reset();
@@ -566,6 +570,7 @@ bool FElysiumNpc::ResolvePatrolPoints()
 	return !PatrolPoints.IsEmpty();
 }
 
+// STORY8-TWIN: replaced by 0x102aa640 / 0x102aa860 (IssuePatrolMoveStart / Run) at wave 2
 bool FElysiumNpc::IssuePatrolMove()
 {
 	if (!Motor || !bPatrolActive || PatrolPoints.IsEmpty())
@@ -1618,6 +1623,7 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 	// returned none; the ordinary cadence asks again.
 }
 
+// STORY8-TWIN: replaced by the Troika StartTask/RunTask arms 0x7a..0x7e (0x102a39c7 / 0x102ab018) at wave 2
 void FElysiumNpc::ThinkPatrol(double Now)
 {
 	if (!bPatrolActive || PatrolPoints.IsEmpty())
@@ -2413,6 +2419,10 @@ void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
 	ReleaseScriptedScheduleBody(Reason);
 }
 
+// STORY8-TWIN: replaced by 0x102800c0 / 0x102801e0 (ScheduledMoveToGoalEntity / ScheduledFollowPath),
+// called from CCineAISchedule 0x101a98c0 (Misc19), at wave 2. Not redirected at L10: the director
+// path here starts the program itself (a second ChangeSchedule), walks a multi-leg route, and
+// writes `m_flGoalTolerance` (+0x6320) where retail's SetGoal writes the path's +0x28.
 bool FElysiumNpc::GetPathToScriptedGoal()
 {
 	if (!ScriptedScheduleOrder.IsSet())
@@ -2778,7 +2788,6 @@ bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
 	const FElysiumEntity* Threat = GazeEnemy();
 	if (Threat == nullptr) Threat = this;
 	const FVector ThreatEye = Threat->EyePosition();
-	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	FVector HullMins, HullMaxs;
 	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 	const float DefaultTolerance = static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U;
@@ -2792,16 +2801,11 @@ bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
 		if (!bMoveIssued) TaskFail(0x0c); // SetGoal -> OnNavFailed, synchronous before the next candidate
 		return bMoveIssued;
 	};
-	auto TryLateral = [&](const FVector& Point)
+	// Each lateral candidate is `0x10278220` (`TryMoveToHiddenPosition`, family Script19): the
+	// threat's eye, the candidate, and the threat as the trace filter's second entity.
+	auto TryLateral = [this, &ThreatEye, Threat](const FVector& Point)
 	{
-		// The shared sight service carries the brush half of 0x2804091. Its existing character-
-		// occluder gap is documented on QueryLineOfSight; no collision world means no cover.
-		if (Embodiment == nullptr || Embodiment->QueryLineOfSight(ThreatEye, Point + (EyePosition() - Origin)))
-			return false;
-		if (!IsValidCover(Point, nullptr) || Motor == nullptr || !Motor->CanReachLateralCover(Point))
-			return false;
-		return Submit(Point, ScheduleHost.GoalToleranceCm > 0.f
-			? ScheduleHost.GoalToleranceCm : DefaultTolerance);
+		return TryMoveToHiddenPosition(ThreatEye, Point, Threat);
 	};
 	bool bFound = TryLateral(Origin);
 	// Source AngleVectors' right after the pipeline's Y reflection, z deliberately unchanged.

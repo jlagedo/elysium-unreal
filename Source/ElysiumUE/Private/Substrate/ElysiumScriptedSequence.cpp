@@ -18,7 +18,8 @@
 // `scripted_sequence` — `CCineNPC`, the script director (story 5 fold A3). Every body below is the
 // retail body at the address its comment names, read off the decompilation and, where a branch
 // mattered, the listing (`vtmb_asm`). The walked prose is `docs/vtmb/npc-ai/authored-control.md`
-// § "Scripted sequences" and `docs/specs/0003-scripted-sequence/spec.md`.
+// § "Scripted control and authority", `docs/vtmb/npc-ai/story8/Script19.md` and
+// `docs/specs/0003-scripted-sequence/spec.md`.
 //
 // The outputs are the load-bearing half: across the exported maps 88 wires leave these entities,
 // 48 of them `OnEndSequence`, and they unlock doors, restore cameras and start conversations.
@@ -75,6 +76,8 @@ namespace
 
 	// `m_bfAINPCFlags` bit `0x40`, `NAV_IGNORE_NPC`: what spawnflag `0x1000` ORs in for the beat.
 	constexpr uint32 GNavIgnoreNpc = 0x40u;
+	// `EF_NOINTERP`, the `m_fEffects` bit the case-4 teleport ORs in (`0x101a7e2f`).
+	constexpr uint32 GEffectNoInterp = 0x10u;
 	// `AddFlag2(0x10)` at the end of `Spawn`.
 	constexpr uint32 GCineFlags2 = 0x10u;
 	// `FSOLID_NOT_SOLID`, `SOLID_NONE`, `SOLID_BBOX`, `MOVETYPE_FLY`.
@@ -317,7 +320,12 @@ void FElysiumScriptedSequence::RemoveIgnoredConditions()
 // `CineThink` `0x101a8070`, the two inputs and `Finish`'s hand-off to a chained cine. Arms in the
 // listing's order; the two `Msg` blocks under the debug ConVar `DAT_1072bb84`
 // (`0x101a798d..0x101a7a34` "posession delayed", `0x101a7b77..0x101a7c1d` "is posessing entity")
-// are dead in shipped play (the ConVar defaults off) and stay absent.
+// are dead in shipped play (the ConVar defaults off) and stay absent. Block one: the ConVar gate
+// `0x101a7995` / `0x101a799a` / `0x101a79ab`, the `m_hTargetEnt` resolve `0x101a79ba` / `0x101a79da` /
+// `0x101a79df` / `0x101a79ea` / `0x101a7a01`, the `GetDebugName`s `0x101a7a05` / `0x101a7a0f` /
+// `0x101a7a1e`, the `Msg` `0x101a7a29`. Block two: the gate `0x101a7b7f` / `0x101a7b84` / `0x101a7b94`,
+// the resolve `0x101a7ba3` / `0x101a7bc3` / `0x101a7bc8` / `0x101a7bd3` / `0x101a7bea`, the
+// `GetDebugName`s `0x101a7bee` / `0x101a7bf8` / `0x101a7c07`, the `Msg` `0x101a7c12`.
 void FElysiumScriptedSequence::PossessEntity()
 {
 	// `m_hTargetEnt` (`+0x5ce4`) -> entity -> `MyNPCPointer` (`+0x94`); any miss does NOTHING.
@@ -335,7 +343,7 @@ void FElysiumScriptedSequence::PossessEntity()
 	// owner, never stolen.
 	if (World != nullptr && Npc->ScriptOwner.IsSet() && World->Resolve(Npc->ScriptOwner) != nullptr) // 0x101a7954 / 0x101a795d / 0x101a797e / 0x101a7987
 	{
-		FElysiumScriptedSequence* Old = Npc->ResolveCine();   // 0x101a7a39..0x101a7a62
+		FElysiumScriptedSequence* Old = Npc->ResolveCine();   // 0x101a7a39..0x101a7a62 (-1 0x101a7a48)
 		if (Old == nullptr)
 		{
 			// **Named divergence (port ownership rule).** The port's choreographed scene also stands
@@ -346,6 +354,8 @@ void FElysiumScriptedSequence::PossessEntity()
 				*CineDebugName(*this), *CineDebugName(*Npc)));
 			return;
 		}
+		// The kicked cine is re-read through a second `m_hCine` resolve (`0x101a7aa9` / `0x101a7ac3`) and
+		// its `m_hNextCine` (`0x101a7ad4` / `0x101a7aeb`): the same entity as the test resolved.
 		if (FElysiumEntity* Kicked = World->Resolve(Old->NextCine)) // 0x101a7a6a / 0x101a7a73 / 0x101a7a91 / 0x101a7a9a
 		{
 			if (FElysiumNpcBase* KickedBase = Kicked->AsNpcBase())
@@ -353,8 +363,10 @@ void FElysiumScriptedSequence::PossessEntity()
 				KickedBase->SetTarget(FElysiumEntityHandle::Invalid()); // 0x101a7af7 SetTarget(kicked, NULL)
 			}
 			Diagnostic(FString::Printf(TEXT("script \"%s\" kicking script \"%s\" out of the queue"),
-				*CineDebugName(*this), *CineDebugName(*Kicked)));        // 0x101a7b13 DevMsg(2, ...)
+				*CineDebugName(*this), *CineDebugName(*Kicked)));        // 0x101a7b06 / 0x101a7afe GetDebugName, 0x101a7b13 DevMsg(2, ...)
 		}
+		// `m_hCine` resolved a third time (`0x101a7b2b` / `0x101a7b44`); `this` is never null, so the
+		// `-1` store of `0x101a7b4e JZ 0x101a7b66` is not reached.
 		Old->NextCine = Handle;   // 0x101a7b54..0x101a7b5a current cine's m_hNextCine := our handle
 		return;                   // 0x101a7b65
 	}
@@ -378,10 +390,12 @@ void FElysiumScriptedSequence::PossessEntity()
 	SavedMoveCollide = Npc->RetailMoveCollide; // 0x101a7c8b slot 95 -> 0x101a7c91 +0x5f7c
 	SavedSolid = Npc->RetailSolidType;        // 0x101a7c9b slot 92 -> 0x101a7ca1 +0x5f80
 	SavedSolidFlags = static_cast<int32>(Npc->RetailSolidFlags); // 0x101a7cab slot 211 -> 0x101a7cb1 +0x5f84
-	// SEAM for `m_fEffects` (`+0x19c`, `0x101a7cb7..0x101a7cbd`): the director has no effects word
-	// (spec 0003's, story-8 hand-off), so nothing is saved here and nothing is ORed onto the NPC at
-	// `0x101a7cfc..0x101a7d0a` below.
-	SavedEffects = 0;
+	// `+0x5f88 := npc m_fEffects (+0x19c)` (`0x101a7cb7..0x101a7cbd`). The NPC's word is the Troika
+	// tier's `EffectsWord` (`ElysiumNpcPositions.inl`); a base-only NPC carries none and saves 0. The
+	// OR of the DIRECTOR's own `m_fEffects` onto the NPC at `0x101a7cfc..0x101a7d0a` below stays a
+	// SEAM: the director carries no effects word (spec 0003's), so the OR adds nothing.
+	const FElysiumNpc* EffectsNpc = Npc->AsNpc();
+	SavedEffects = EffectsNpc != nullptr ? static_cast<int32>(EffectsNpc->EffectsWord) : 0;
 	if (FElysiumNpc* Troika = Npc->AsNpc())   // 0x101a7cc3 npc +0x98, 0x101a7ccb
 	{
 		Troika->ResetThinkTimers(CineNow(*this));                          // 0x101a7cd1 slot 614
@@ -393,18 +407,18 @@ void FElysiumScriptedSequence::PossessEntity()
 	}
 	// `m_fMoveTo` (`+0x5f60`) through the six-entry table at `0x101a7eac`; above 5 skips the switch
 	// (`0x101a7d19 JA 0x101a7e84`). Every state write is preceded by the empty `0x1027f270(state)`.
-	switch (MoveTo)
+	switch (MoveTo)                                  // 0x101a7d1f JMP [table]
 	{
 	case 1:
-		NpcScriptState = GScriptWalkToMark;          // 0x101a7d26..0x101a7d33
+		NpcScriptState = GScriptWalkToMark;          // 0x101a7d26..0x101a7d33 (0x1027f270 0x101a7d2a)
 		DelayStart(true);                            // 0x101a7d3d DelayStart(1)
 		break;
 	case 2:
-		NpcScriptState = GScriptRunToMark;           // 0x101a7d47..0x101a7d54
+		NpcScriptState = GScriptRunToMark;           // 0x101a7d47..0x101a7d54 (0x1027f270 0x101a7d4b)
 		DelayStart(true);                            // 0x101a7d5e
 		break;
 	case 3:
-		NpcScriptState = GScriptCustomMoveToMark;    // 0x101a7d68..0x101a7d75
+		NpcScriptState = GScriptCustomMoveToMark;    // 0x101a7d68..0x101a7d75 (0x1027f270 0x101a7d6c)
 		DelayStart(true);                            // 0x101a7d7f
 		break;
 	case 4:
@@ -412,7 +426,7 @@ void FElysiumScriptedSequence::PossessEntity()
 		[[fallthrough]];                             // falls into 0x101a7e71
 	case 0:
 	case 5:
-		NpcScriptState = GScriptWait;                // 0x101a7e71..0x101a7e7a
+		NpcScriptState = GScriptWait;                // 0x101a7e71..0x101a7e7a (0x1027f270 0x101a7e75)
 		break;
 	default:
 		break;                                       // 0x101a7d19 JA 0x101a7e84
@@ -425,23 +439,24 @@ void FElysiumScriptedSequence::PossessEntity()
 
 void FElysiumScriptedSequence::NotRunAiWarning(const FElysiumNpcBase& Npc, const TCHAR* HasNotRunLine)
 {
-	// `DevMsg` through the import at `0x109f3630`, one line per call, verbatim.
-	Diagnostic(TEXT("************************************************"));
-	Diagnostic(TEXT("***  WARNING  **********************************"));
-	Diagnostic(FString::Printf(TEXT("   scripted sequence(%s)"), *CineDebugName(*this)));
-	Diagnostic(FString::Printf(TEXT("   is targeting an entity(%s)"), *CineDebugName(Npc)));
+	// `DevMsg` through the import at `0x109f3630`, one line per call, verbatim. The trailing addresses
+	// are `CCineNPC`'s (`0x101a7880`); `CCineAI` / `CCineAISchedule` cite theirs at the call site.
+	Diagnostic(TEXT("************************************************"));                          // 0x101a78e5
+	Diagnostic(TEXT("***  WARNING  **********************************"));                          // 0x101a78ec
+	Diagnostic(FString::Printf(TEXT("   scripted sequence(%s)"), *CineDebugName(*this)));      // 0x101a78f3 / 0x101a78fe
+	Diagnostic(FString::Printf(TEXT("   is targeting an entity(%s)"), *CineDebugName(Npc)));   // 0x101a7905 / 0x101a7910
 	if (HasNotRunLine != nullptr)
 	{
-		Diagnostic(HasNotRunLine);
+		Diagnostic(HasNotRunLine);                                                             // 0x101a7917
 	}
-	Diagnostic(TEXT("   This can happen if it starts hidden and is"));
-	Diagnostic(TEXT("   immediately put into a script without a delay."));
-	Diagnostic(TEXT("   If this is the case.  Put at least a .1 second"));
-	Diagnostic(TEXT("   delay between ScriptUnhide and starting the"));
-	Diagnostic(TEXT("   scripted sequence."));
-	Diagnostic(TEXT("   Otherwise, talk to a programmer."));
-	Diagnostic(TEXT("***  WARNING  **********************************"));
-	Diagnostic(TEXT("************************************************"));
+	Diagnostic(TEXT("   This can happen if it starts hidden and is"));                              // 0x101a791e
+	Diagnostic(TEXT("   immediately put into a script without a delay."));                          // 0x101a7925
+	Diagnostic(TEXT("   If this is the case.  Put at least a .1 second"));                          // 0x101a792c
+	Diagnostic(TEXT("   delay between ScriptUnhide and starting the"));                             // 0x101a7933
+	Diagnostic(TEXT("   scripted sequence."));                                                      // 0x101a793a
+	Diagnostic(TEXT("   Otherwise, talk to a programmer."));                                        // 0x101a7941
+	Diagnostic(TEXT("***  WARNING  **********************************"));                          // 0x101a7948
+	Diagnostic(TEXT("************************************************"));                          // 0x101a794f
 }
 
 void FElysiumScriptedSequence::TeleportToMark(FElysiumNpcBase& Npc) const
@@ -462,8 +477,13 @@ void FElysiumScriptedSequence::TeleportToMark(FElysiumNpcBase& Npc) const
 	// SEAM: no motor `+0x1c`; `MotorIdealYaw` takes the direct write, as `NPCInit` does.
 	Npc.MotorIdealYaw = Yaw;                                     // 0x101a7dfe / 0x101a7e04 (0x101a7e10 / 0x101a7e15)
 	Npc.AngularVelocity = FVector::ZeroVector;                   // 0x101a7e1f SetLocalAngularVelocity(vec3_angle)
-	// `npc->m_fEffects |= 0x10` (`EF_NOINTERP`, `0x101a7e24..0x101a7e2f`): a network interpolation
-	// bit with no consumer in this runtime (visual-only). Not written.
+	// `npc->m_fEffects |= 0x10` (`EF_NOINTERP`, `0x101a7e24..0x101a7e2f`; the CCineAI twin
+	// `0x101a933f..0x101a9344`), on the Troika tier's `EffectsWord`. No reader of bit 0x10 on an NPC
+	// yet; `CineCleanup`'s restore of `+0x5f88` clears it again, as retail's does.
+	if (FElysiumNpc* EffectsNpc = Npc.AsNpc())
+	{
+		EffectsNpc->EffectsWord |= GEffectNoInterp;
+	}
 	FVector NpcAngles = Npc.Angles;                              // 0x101a7e37 slot 221 on the NPC
 	NpcAngles.Y = Angles.Y;                                      // 0x101a7e55..0x101a7e60 our yaw
 	Npc.SetRuntimeAngles(NpcAngles);                             // 0x101a7e6b slot 64 SetAngles
@@ -478,7 +498,10 @@ void FElysiumScriptedSequence::SetScriptStateOf(FElysiumNpcBase& Npc, int32 Stat
 }
 
 // Slot 584: `0x101a82d0` (`StartSequence`), `CCineNPC` and `CCineAISchedule`. The `Msg` tail under the
-// debug ConVar `DAT_1072bb84` (`0x101a8358..0x101a83fe`) is dead in shipped play and stays absent.
+// debug ConVar `DAT_1072bb84` (`0x101a8358..0x101a83fe`) is dead in shipped play and stays absent: the
+// ConVar gate `0x101a8360` / `0x101a8365` / `0x101a8375`, the `m_hTargetEnt` resolve `0x101a8384` /
+// `0x101a83a4` / `0x101a83a9` / `0x101a83b4` / `0x101a83cb`, the `GetDebugName`s `0x101a83cf` /
+// `0x101a83d9` / `0x101a83e8` and the `Msg` `0x101a83f3`.
 bool FElysiumScriptedSequence::StartSequence(FElysiumNpcBase& Npc, const FString& SequenceName,
 	bool bCompleteOnEmpty)
 {
@@ -496,6 +519,7 @@ bool FElysiumScriptedSequence::StartSequence(FElysiumNpcBase& Npc, const FString
 	const float Seconds = PlayBeatClip(Npc, SequenceName, /*bLoop=*/!bCompleteOnEmpty);
 	if (Seconds < 0.f)                                // 0x101a831b
 	{
+		// `GetDebugName(npc)` `0x101a8329`; a null name prints "" (`0x101a831f`).
 		UE_LOG(LogElysiumSeq, Log, TEXT("%s: unknown scripted sequence \"%s\""), *CineDebugName(Npc),
 			*SequenceName);
 	}
@@ -792,6 +816,7 @@ void FElysiumScriptedSequence::CancelScript()
 	// `ScriptEntityCancel(e)`. The names are collected first; nothing a cancel does renames an
 	// entity, so the order and the set are retail's.
 	TArray<FElysiumEntityHandle> Named;
+	// The loop re-reads `m_iName` for each next search (`0x101a8c87`), "" when null (`0x101a8c92`).
 	World->ForEachNamed(TargetName, [&Named](FElysiumEntity& Candidate) { Named.Add(Candidate.Handle); }); // 0x101a8c76 / 0x101a8ca4
 	for (const FElysiumEntityHandle& Each : Named)                         // 0x101a8c7f / 0x101a8cad
 	{
@@ -828,9 +853,9 @@ void FElysiumScriptedSequence::CineCleanup(FElysiumNpcBase& Npc)
 		Cine->SetTarget(FElysiumEntityHandle::Invalid());
 		Npc.SetMoveType(Cine->SavedMoveType, Cine->SavedMoveCollide);
 		Npc.RetailSolidFlags = static_cast<uint32>(Cine->SavedSolidFlags) & 0xffffu;
-		// `m_fEffects = saved` — SEAM (no port effects word).
 		if (FElysiumNpc* Troika = Npc.AsNpc())
 		{
+			Troika->EffectsWord = static_cast<uint32>(Cine->SavedEffects);   // 0x1027d271 / 0x1027d279 m_fEffects := +0x5f88
 			Troika->NpcFlags.AssignAiFlagsWord(static_cast<uint32>(Cine->SavedTroikaFlags));
 		}
 		// The port's beat stand-in ends with the cine that ran it.
@@ -944,7 +969,7 @@ void FElysiumScriptedSequence::AllowInterrupt(bool bAllow)
 	{
 		return;                                   // 0x101a8907 -> 0x101a8908
 	}
-	if (FElysiumNpcBase* Npc = TargetNpc())       // 0x101a889c..0x101a88d7 m_hTargetEnt, +0x94
+	if (FElysiumNpcBase* Npc = TargetNpc())       // 0x101a889c..0x101a88d7 m_hTargetEnt (-1 0x101a88aa, serial 0x101a88c7, null 0x101a88cd), +0x94
 	{
 		if (!bInterruptable)                      // 0x101a88d9 +0x5f90 / 0x101a88e1 JZ 0x101a88f7
 		{
@@ -1065,10 +1090,13 @@ void FElysiumScriptedSequence::StartScript()
 
 // `SequenceDone` `0x101a8460`, 371 bytes, three direct callers and no slot. The `Msg` block under the
 // debug ConVar `DAT_1072bb84` (`0x101a8463..0x101a850b`, "Sequence %s targeting %s is done" and the
-// `0x101a6ec0` stack dump) is dead in shipped play and stays absent.
+// `0x101a6ec0` stack dump) is dead in shipped play and stays absent: the ConVar gate `0x101a846c` /
+// `0x101a8471` / `0x101a8482`, the `m_hTargetEnt` resolve `0x101a8491` / `0x101a84b1` / `0x101a84b6` /
+// `0x101a84c1` / `0x101a84d8`, the three `GetDebugName`s `0x101a84dc` / `0x101a84e6` / `0x101a84f5` and
+// the `Msg` `0x101a8500`.
 void FElysiumScriptedSequence::SequenceDone(FElysiumNpcBase& Npc)
 {
-	FElysiumEntity* Next = World != nullptr ? World->Resolve(NextCine) : nullptr; // 0x101a851a..0x101a8545
+	FElysiumEntity* Next = World != nullptr ? World->Resolve(NextCine) : nullptr; // 0x101a851a..0x101a8545 (-1 0x101a8523, serial 0x101a8540)
 	if (PostIdle.IsEmpty() || Next != nullptr)    // 0x101a8510 / 0x101a8518 JZ, 0x101a8545 JNZ
 	{
 		Finish(Npc);                              // 0x101a857b Finish 0x101a8640
@@ -1085,7 +1113,8 @@ void FElysiumScriptedSequence::SequenceDone(FElysiumNpcBase& Npc)
 		}
 	}
 	// `m_OnEndSequence` (`+0x5fb4`) through `0x100cd660`, LAST and UNCONDITIONALLY, with
-	// `m_hActivator` (`+0x10c`) when it resolves and NULL when it does not, caller `this`.
+	// `m_hLastInputActivator` (`+0x10c`, `0x101a8580`) when it resolves and NULL when it does not
+	// (`0x101a85be`; -1 `0x101a8589`, serial `0x101a85a6`), caller `this`.
 	FireOutput(FName(TEXT("OnEndSequence")), LastInputActivator); // 0x101a8580..0x101a85c9
 }
 
@@ -1102,9 +1131,9 @@ void FElysiumScriptedSequence::Finish(FElysiumNpcBase& Npc)
 		// NPC's OWNING cine's, re-resolved from `npc +0x5d74`. A stale `m_hCine` makes retail read
 		// `[NULL + 0x5f4c]` (`0x101a86bc` / `0x101a86be`) and fault; the port prints the empty
 		// string instead (crash guard).
-		const FElysiumScriptedSequence* Owner = Npc.ResolveCine();   // 0x101a8696..0x101a86b8
+		const FElysiumScriptedSequence* Owner = Npc.ResolveCine();   // 0x101a8696..0x101a86b8 (-1 0x101a869f, serial 0x101a86b6)
 		Diagnostic(FString::Printf(TEXT("Post Idle %s finished"),
-			Owner != nullptr ? *Owner->PostIdle : TEXT("")));        // 0x101a86be..0x101a86d5
+			Owner != nullptr ? *Owner->PostIdle : TEXT("")));        // 0x101a86be..0x101a86d5 (null string 0x101a86c6)
 		SetScriptStateOf(Npc, GScriptPostIdle);                      // 0x101a86e2 0x1027f270(2) / 0x101a86e7
 		StartSequence(Npc, PostIdle, false);                         // 0x101a86ff slot 584 (npc, m_iszPostIdle, 0)
 		if (Phase != EBeatPhase::None)
@@ -1120,7 +1149,7 @@ void FElysiumScriptedSequence::Finish(FElysiumNpcBase& Npc)
 	}
 	CineCleanup(Npc);                                                // 0x101a873f 0x1027d170
 	FixScriptNPCSchedule(Npc);                                       // 0x101a8749 slot 586, virtual
-	Next = World != nullptr ? World->Resolve(NextCine) : nullptr;    // 0x101a874f..0x101a877d
+	Next = World != nullptr ? World->Resolve(NextCine) : nullptr;    // 0x101a874f..0x101a877d, re-resolved 0x101a877f..0x101a87a5 (-1 0x101a8788, serial 0x101a879f)
 	FElysiumNpcBase* NextBase = Next != nullptr ? Next->AsNpcBase() : nullptr;
 	FElysiumScriptedSequence* NextCineEntity = NextBase != nullptr
 		? NextBase->AsSpecies<FElysiumScriptedSequence>() : nullptr;

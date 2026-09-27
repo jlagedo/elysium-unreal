@@ -235,10 +235,17 @@ bool FElysiumNpcKernelCondCanCheckAttacksTest::RunTest(const FString&)
 	TestFalse(TEXT("ENEMY_TOO_FAR refuses"), F.Npc->FCanCheckAttacksBase());
 	F.Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyTooFar);
 
-	// The nav-type seam. `NAV_GROUND` (0) is what it answers, and 0 is the value that does NOT
-	// suppress — so the two refusals `NAV_JUMP` (1) and `NAV_CLIMB` (3) are unreachable today. The
-	// seam is asked and the refusal it declines to make is the recovered one.
-	TestEqual(TEXT("the nav-type seam answers NAV_GROUND"), F.Npc->NavType(), 0);
+	// The nav type is `0x1027d990`, the navigator's `+0x18` (family Motor's `NavGetType`). A fresh
+	// body stands on `NAV_GROUND` (0), which does not suppress; `NAV_JUMP` (1) and `NAV_CLIMB` (3)
+	// refuse BEFORE the condition terms are read (`0x10270840`), `NAV_FLY` (2) does not.
+	TestEqual(TEXT("a fresh navigator reads NAV_GROUND"), F.Npc->NavType(), 0);
+	F.Npc->NavSetType(1);
+	TestFalse(TEXT("NAV_JUMP refuses though SEE_ENEMY holds"), F.Npc->FCanCheckAttacksBase());
+	F.Npc->NavSetType(3);
+	TestFalse(TEXT("NAV_CLIMB refuses though SEE_ENEMY holds"), F.Npc->FCanCheckAttacksBase());
+	F.Npc->NavSetType(2);
+	TestTrue(TEXT("NAV_FLY does not refuse"), F.Npc->FCanCheckAttacksBase());
+	F.Npc->NavSetType(0);
 
 	// The Troika body: with no active weapon the capability word is 0, so
 	// `bits_CAP_WEAPON_MELEE_ATTACK1` (0x8000) is clear and the suppression arm cannot fire — the

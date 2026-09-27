@@ -42,6 +42,11 @@ void FElysiumAiScriptedSchedule::PossessEntity()
 	}
 	if (!Npc->BaseScheduleHost.bRanAi)    // 0x101a97db m_bRanAI +0x1b4c / 0x101a97e3
 	{
+		// `DevMsg` (`[0x109f3630]`, held in ESI) per line: 0x101a97f1 stars, 0x101a97f8 WARNING,
+		// 0x101a97ff GetDebugName(this) / 0x101a980a "scripted sequence(%s)", 0x101a9811
+		// GetDebugName(npc) / 0x101a981c "is targeting an entity(%s)", 0x101a9823 hidden, 0x101a982a
+		// immediately, 0x101a9831 .1 second, 0x101a9838 ScriptUnhide, 0x101a983f scripted sequence,
+		// 0x101a9846 programmer, 0x101a984d WARNING, 0x101a9854 stars.
 		NotRunAiWarning(*Npc, nullptr);   // 0x101a97e6..0x101a9854, the "has not run" line skipped
 	}
 	if (!bInterruptable)                  // 0x101a985a +0x5f90 / 0x101a9862

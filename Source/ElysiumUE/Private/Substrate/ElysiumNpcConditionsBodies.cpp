@@ -159,6 +159,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 			// `if (m_sppPatrolPath +0x6590) 0x1029f5d0(&m_sppPatrolPath)` — the release is guarded
 			// on the route being installed, which for this runtime's resolved-point array is
 			// "non-empty".
+			// STORY8-TWIN: replaced by 0x1029f5d0 on PatrolPathCell (0x1029f460's cell) at wave 2
 			if (!PatrolPoints.IsEmpty())
 			{
 				PatrolPoints.Reset();
@@ -207,6 +208,7 @@ void FElysiumNpc::OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcStat
 	// The unconditional tail — it runs even when the state did NOT change, which is the whole reason
 	// retail's entry `goto` exists. Six writes in order.
 	NpcFlags.Clear(EElysiumNpcFlag::MADE_HUNT_PATH);   // +0x14b8 bit 0x1000
+	// STORY8-TWIN: replaced by 0x1029f5d0 on PatrolPathHuntCell (0x1029f460's cell) at wave 2
 	HuntPatrolPoints.Reset();                          // 0x1029f5d0(&m_sppPatrolPathHunt) +0x6594
 	NpcFlags.Clear(EElysiumNpcFlag::AT_CROSSWALK);     // +0x14b8 bit 0x4
 	bGoToIdleState = false;                            // +0x63fc

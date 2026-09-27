@@ -46,6 +46,11 @@ void FElysiumAiScriptedSequence::PossessEntity()
 	}
 	if (!Npc->BaseScheduleHost.bRanAi)    // 0x101a90ce m_bRanAI +0x1b4c, 0x101a90d7
 	{
+		// `DevMsg` (`[0x109f3630]`, held in EBX) per line: 0x101a90e4 stars, 0x101a90eb WARNING,
+		// 0x101a90f2 GetDebugName(this) / 0x101a90fd "scripted sequence(%s)", 0x101a9104
+		// GetDebugName(npc) / 0x101a910f "is targeting an entity(%s)", 0x101a9116 hidden, 0x101a911d
+		// immediately, 0x101a9124 .1 second, 0x101a912b ScriptUnhide, 0x101a9132 scripted sequence,
+		// 0x101a9139 programmer, 0x101a9140 WARNING, 0x101a9147 stars.
 		NotRunAiWarning(*Npc, nullptr);   // 0x101a90d9..0x101a9147, the "has not run" line skipped
 	}
 	if (Npc->bHidden)                     // 0x101a914e 0x100b5190 / 0x101a9155
@@ -69,7 +74,10 @@ void FElysiumAiScriptedSequence::PossessEntity()
 	SavedMoveCollide = Npc->RetailMoveCollide; // 0x101a91a1 slot 95 -> 0x101a91a7 +0x5f7c
 	SavedSolid = Npc->RetailSolidType;        // 0x101a91b1 slot 92 -> 0x101a91b7 +0x5f80
 	SavedSolidFlags = static_cast<int32>(Npc->RetailSolidFlags); // 0x101a91c1 slot 211 -> 0x101a91c7 +0x5f84
-	SavedEffects = 0;   // 0x101a91cd..0x101a91d3 SEAM: the director has no `m_fEffects` word (spec 0003)
+	// `+0x5f88 := npc m_fEffects (+0x19c)` (`0x101a91cd..0x101a91d3`). The NPC's word is the Troika
+	// tier's `EffectsWord` (`ElysiumNpcPositions.inl`); a base-only NPC carries none and saves 0.
+	const FElysiumNpc* EffectsNpc = Npc->AsNpc();
+	SavedEffects = EffectsNpc != nullptr ? static_cast<int32>(EffectsNpc->EffectsWord) : 0;
 	if (FElysiumNpc* Troika = Npc->AsNpc())   // 0x101a91d9 npc +0x98 / 0x101a91e1
 	{
 		Troika->ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);   // 0x101a91e7 slot 614
@@ -79,25 +87,33 @@ void FElysiumAiScriptedSequence::PossessEntity()
 			Troika->NpcFlags.AssignAiFlagsWord(Troika->NpcFlags.RawWord1() | GAiNavIgnoreNpc); // 0x101a920c
 		}
 	}
-	// 0x101a9212..0x101a9220: npc m_fEffects |= ours — SEAM (spec 0003), not written.
+	// 0x101a9212..0x101a9220: npc m_fEffects |= this director's `m_fEffects` (+0x19c). SEAM (spec 0003):
+	// the director carries no effects word, so the OR adds nothing.
 	switch (MoveTo)   // 0x101a9226 +0x5f60 / 0x101a922f JA / 0x101a9235 table 0x101a9404
 	{
 	case 0:
 	case 5:
-		NpcScriptState = GAiScriptWait;               // 0x101a923c..0x101a9245 0x1027f270(1), state 1
+		NpcScriptState = GAiScriptWait;               // 0x101a923c..0x101a9245 state 1; 0x101a9240 0x1027f270(1) is empty
 		break;
 	case 1:
-		NpcScriptState = GAiScriptWalkToMark;         // 0x101a9254..0x101a925d state 4, NO DelayStart
+		NpcScriptState = GAiScriptWalkToMark;         // 0x101a9254..0x101a925d state 4, NO DelayStart; 0x101a9258 0x1027f270(4) empty
 		break;
 	case 2:
-		NpcScriptState = GAiScriptRunToMark;          // 0x101a926c..0x101a9275 state 5
+		NpcScriptState = GAiScriptRunToMark;          // 0x101a926c..0x101a9275 state 5; 0x101a9270 0x1027f270(5) empty
 		break;
 	case 3:
-		NpcScriptState = GAiScriptCustomMoveToMark;   // 0x101a9284..0x101a928d state 6
+		NpcScriptState = GAiScriptCustomMoveToMark;   // 0x101a9284..0x101a928d state 6; 0x101a9288 0x1027f270(6) empty
 		break;
 	case 4:
+		// `CCineNPC`'s teleport instruction for instruction (`0x101a7d89..0x101a7e6b`), so the shared
+		// helper runs it: 0x101a92a9 slot 220 GetAbsOrigin(this) -> 0x101a92b2 slot 181 Teleport;
+		// 0x101a92be 0x102e0b40(motor) yaw-speed hold; 0x101a92cd slot 221 our angles; 0x101a92df JZ
+		// motor+0x28 clear skips the flip, 0x101a92f6 JNZ (C0: yaw < 180) FADD else FSUB 180; 0x101a9311
+		// JNZ motor+0x1c != 180.0 -> 0x101a9323 0x102e0a80, else the direct +0x34 write; 0x101a9332
+		// SetLocalAngularVelocity(vec3_angle); 0x101a933f..0x101a9344 EF_NOINTERP; 0x101a934a slot 221
+		// on the NPC, 0x101a9368 slot 221 our yaw, 0x101a937e slot 64 SetAngles.
 		TeleportToMark(*Npc);                         // 0x101a929c..0x101a937e
-		NpcScriptState = GAiScriptWait;               // 0x101a9388..0x101a9391 state 1
+		NpcScriptState = GAiScriptWait;               // 0x101a9388 0x1027f270(1) empty / 0x101a9391 state 1
 		Npc->Flags &= ~GAiFlagOnGround;               // 0x101a939b RemoveFlag(FL_ONGROUND)
 		break;
 	default:
@@ -135,6 +151,8 @@ bool FElysiumAiScriptedSequence::StartSequence(FElysiumNpcBase& Npc, const FStri
 	const float Seconds = PlayBeatClip(Npc, SequenceName, /*bLoop=*/!bCompleteOnEmpty);
 	if (Seconds < 0.f)                                  // 0x101a9557
 	{
+		// `Warning("%s: unknown aiscripted sequence \"%s\"\n")` through `0x109f362c` (`0x101a9570`).
+		// 0x101a955b JNZ: a null name prints as "" (`0x106b8540`); 0x101a9565 GetDebugName(npc).
 		UE_LOG(LogElysiumAiSeq, Log, TEXT("%s: unknown aiscripted sequence \"%s\""), *AiDebugName(Npc),
 			*SequenceName);
 	}
