@@ -215,6 +215,8 @@ namespace
 		Victim.Classname = TEXT("npc_VPedestrian");
 		Victim.TargetName = TEXT("victim");
 		Victim.Origin = FVector(100.0f, 0.0f, 0.0f);
+		// Targetable: NPCInit sets +0x1480 only with a template (`0x1029a4a0`); `0x100a52a0` reads it.
+		Victim.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
 		FElysiumOutputDef Row;
 		Row.Name = TEXT("OnDamaged");
 		Row.Target = TEXT("damagedcount");
@@ -256,6 +258,8 @@ namespace
 			Candidate.Classname = TEXT("npc_VPedestrian");
 			Candidate.TargetName = Row.Key;
 			Candidate.Origin = FVector(Row.Value, 0.0f, 0.0f);
+			// Targetable: NPCInit sets +0x1480 only with a template (`0x1029a4a0`); `0x100a52a0` reads it.
+			Candidate.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
 			Defs.Defs.Add(MoveTemp(Candidate));
 		}
 		return Defs;

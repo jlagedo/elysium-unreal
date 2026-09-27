@@ -185,6 +185,8 @@ namespace
 		Victim.TargetName = TEXT("victim");
 		Victim.Origin = GVictim;
 		Victim.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/male_citizen.mdl"));
+		// Targetable: NPCInit sets +0x1480 only with a template (`0x1029a4a0`); `0x100a52a0` reads it.
+		Victim.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
 		Defs.Defs.Add(MoveTemp(Victim));
 		return Defs;
 	}
