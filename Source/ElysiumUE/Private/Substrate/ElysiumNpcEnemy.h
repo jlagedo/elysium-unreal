@@ -66,16 +66,6 @@ namespace ElysiumNpcEnemy
 	 */
 	bool ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FElysiumNpcConditions& Cond);
 
-	// The exceptional interrupt relevant to a pending replacement: `LOST_ENEMY` for an eluded or
-	// went-null enemy, `ENEMY_DEAD` for a dead one, `NEW_ENEMY` for ordinary replacement. Retail's
-	// active-schedule gate accepts NEW_ENEMY OR the exceptional bit; IsScheduleInterested owns that
-	// composition.
-	EElysiumNpcCond RequiredInterrupt(const FElysiumNpc& Npc);
-
-	// Does the active schedule admit `Required`? An NPC running NO schedule is interested in
-	// everything — see the note at the definition.
-	bool IsScheduleInterested(const FElysiumNpc& Npc, EElysiumNpcCond Required);
-
 	/**
 	 * `BestEnemy` (`0x102743c0`).
 	 *
@@ -93,17 +83,20 @@ namespace ElysiumNpcEnemy
 	FElysiumEntityHandle BestEnemy(const FElysiumNpc& Npc);
 
 	/**
-	 * `SetEnemy` (`0x10279a50`). Transfers the old handle through the last-enemy path, writes the
-	 * new one, and forgets the previous LOS claim — which is what lets `OnFoundEnemy` fire again for
-	 * the new target rather than being swallowed by the previous episode's latch.
+	 * `SetEnemy` (`0x10279a50`), retail's body (story 8 L11). On a change of the resolved enemy: the
+	 * LIVE old enemy goes to `m_hLastEnemy` (`0x10279b70`) and slot 560 `ClearAttackConditions`
+	 * runs; then `m_hEnemy` is written, and a non-null write runs the discipline break-on-notice
+	 * sweep (`0x101e3d70`, a counted seam).
 	 */
 	void SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle& NewEnemy);
 
 	/**
-	 * `ChooseEnemy` (`0x10279dd0`) plus its effects. Runs the interrupt gate, the stickiness test,
-	 * the search and the transition outputs. Returns true when the committed enemy changed.
+	 * `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`), retail's body (story 8 L11): the interrupt gate
+	 * (with the went-null fall-through), slot 480, slot 478 through the summoner redirect, and the
+	 * change work on the NPC's own condition set and `m_afMemory`. Returns whether an enemy is now
+	 * held — retail's answer, not "the enemy changed".
 	 */
-	bool ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond, double Now);
+	bool ChooseEnemy(FElysiumNpcBase& Npc);
 
 	// `IRelationPriority` for one candidate, joined through the NPC's own table.
 	int32 RelationPriority(const FElysiumNpc& Npc, const FElysiumEntity& Candidate);

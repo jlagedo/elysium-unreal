@@ -80,6 +80,11 @@ public:
 	bool bWasEverInCombat = false;
 	void CopOnStateChange(int32 OldRetail, int32 NewRetail);
 
+	/** `+0x6668 CNPC_VCop::m_eOldPlayerRelationType` (datamap `int`). Slot 598's forgive arm
+	 *  (`0x10372dd0`, `10372e1e`) zeroes it; story 8 lane L11 gave it the port word the species
+	 *  shape map listed ABSENT. */
+	int32 CopOldPlayerRelationType = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 SpeciesSelectSchedule() override;

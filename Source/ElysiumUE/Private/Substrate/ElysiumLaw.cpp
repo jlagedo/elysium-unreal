@@ -8,6 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDisciplines.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcWitness.h"   // the world-event lane's record store
 #include "Substrate/ElysiumPlayerLog.h"
 
@@ -562,9 +563,47 @@ EAdmission PlayerCriminalIncident(FElysiumPlayer& Player, int32 Severity,
 		: EAdmission::Accepted;
 }
 
+// `debug_show_cs_acts` (`DAT_107258dc`, registered by `0x1015a5c0` with the shared `"0"` default
+// string `0x105399a0`), read as `!IsCommand() && m_nValue != 0`. Shipped "0": the witness stamp arm
+// of `PlayerSupernaturalIncident` never runs on a shipped build. A mutable word, as the ConVar is,
+// so a developer (or a test) can open the arm; nothing in the port writes it.
+int32 GLawDebugShowCsActs = 0;
+
+namespace
+{
+	// `_DAT_1044eb0c` = 20.0: the witness timer's span.
+	constexpr double LawSupernaturalWitnessedSpanSeconds = 20.0;
+}
+
+// `PlayerSupernaturalIncident` (`0x1017f4a0`), 267 bytes, in retail's order (story 8 lane L11 added
+// arm 0, the only one the port lacked).
 EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 	const FElysiumEntityHandle& Witness, const FVector& Position)
 {
+	// 0. `0x1017f4a3`-`0x1017f509`: with `debug_show_cs_acts` enabled, the witness NPC's
+	//    `m_flSupernaturalWitnessedTimer` (`+0x63a8`) := curtime + 20.0 and the `DevMsg`; a null
+	//    witness only prints `**UNKNOWN**`. The stamp is written INSIDE the debug guard, so on a
+	//    shipped build it never happens (retail defect, reproduced).
+	if (GLawDebugShowCsActs != 0)                                          // 0x1017f4b5 / 0x1017f4c2
+	{
+		const double Now = Player.World ? Player.World->NowSeconds() : 0.0;
+		FElysiumEntity* const WitnessEntity = Player.World ? Player.World->Resolve(Witness) : nullptr;
+		FString Name = TEXT("**UNKNOWN**");                               // 0x1017f4c6
+		if (WitnessEntity != nullptr)
+		{
+			if (FElysiumNpc* const WitnessNpc = WitnessEntity->AsNpc())
+			{
+				WitnessNpc->Witness.SupernaturalWitnessedTime =
+					static_cast<float>(Now + LawSupernaturalWitnessedSpanSeconds); // 0x1017f4d9
+			}
+			// `CBaseEntity::GetDebugName` (`0x1017f4df`): the targetname, else the classname.
+			Name = !WitnessEntity->TargetName.IsEmpty() ? WitnessEntity->TargetName
+				: (WitnessEntity->Def ? WitnessEntity->Def->Classname : FString());
+		}
+		UE_LOG(LogElysiumPlayer, Log,                                     // 0x1017f509
+			TEXT("CSActs:    %6.1f - Supernatural act witnessed by %s at %f"), Now, *Name, Now);
+	}
+	// 1. `0x1017f512`-`0x1017f527`: the world (`0x1023bd00`) and its `m_nAreaType` (`+0x49c`).
 	if (!AreaAdmitsIncident(Player))
 	{
 		UE_LOG(LogElysiumPlayer, Verbose,
