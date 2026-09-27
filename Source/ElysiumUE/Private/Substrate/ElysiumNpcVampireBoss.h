@@ -133,6 +133,17 @@ public:
 	 *  into it — it is the half of the decision the seam does not carry. */
 	FString BodyEmitterAttachments[4];
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** Slot 617 `0x103c75f0` `CNPC_VVampireBoss::InputTransformModel` -- introduced here (the Troika
+	 *  table's 617 is another body on other lines). Eight classes fill it with this body. */
+	virtual void InputTransformModel(const FElysiumInputArgs& Args);
+	/** Slot 618 `0x103c60a0` `CNPC_VVampireBoss::TransformationStart` -- introduced here; seven classes
+	 *  fill it with this body and `CNPC_VSabbatLeader` with its own (`0x103ab310`). */
+	virtual void TransformationStart();
+	/** The factory miss retail does not guard (`0x103c6104` null -> fault at `0x103c6110`). */
+	int32 Spawn19TransformCreateFailures = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void NPCThink() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;

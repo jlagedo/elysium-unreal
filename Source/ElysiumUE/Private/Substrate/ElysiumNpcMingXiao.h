@@ -315,6 +315,30 @@ public:
 	 *  writes this substrate CAN make are made and the rest is recorded. */
 	void SeverTentacle(int32 TentacleId);
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	FElysiumEntityHandle MingXiaoParentMingZhao;   // +0x6670 CNPC_VMingXiao::m_hParentMingZhao (datamap)
+	FElysiumEntityHandle MingXiaoRangedWeapon;     // +0x6680 CNPC_VMingXiao::m_hRangedWeapon (datamap)
+	float MingXiaoTentacleHitPoints[6] = { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };   // +0x66dc m_rflHitPoints[6]
+	bool bMingXiaoPlayedDeathAnim = false;         // +0x6744 CNPC_VMingXiao::m_bPlayedDeathAnim (datamap)
+	float MingXiaoIdealRange = 0.f;                // +0x6748 CNPC_VMingXiao::m_flIdealRange (datamap)
+	double MingXiaoChargeReadyTime = 0.0;          // +0x674c CNPC_VMingXiao::m_flChargeReadyTime
+	/** SEAM for `CBaseCombatCharacter::GetBestMeleeWeapon` (`0x10336f20`). No inventory pick stands for
+	 *  an NPC here; answers null, retail's own "no melee weapon" arm (`m_hMeleeWeapon = -1`). */
+	FElysiumEntity* Spawn19BestMeleeWeapon();
+	/** SEAM for `0x103986b0`, the ideal-range pick `Spawn` stores into `m_flIdealRange`. No port body;
+	 *  answers 0.0, the pooled zero. */
+	float Spawn19IdealRangePick() const;
+	/** SEAMS for family Boss19's rows (lane L12): `0x10397e90` and `0x10397f00` (the head's grub
+	 *  teardown on death) and `0x10395c70` (the death-animation start that sets `m_bPlayedDeathAnim`).
+	 *  Counted; the integrator redirects each to L12's body. */
+	void Spawn19GrubDeathA();
+	void Spawn19GrubDeathB();
+	void Spawn19StartDeathAnim();
+	int32 Spawn19GrubDeathACalls = 0;
+	int32 Spawn19GrubDeathBCalls = 0;
+	int32 Spawn19DeathAnimStarts = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

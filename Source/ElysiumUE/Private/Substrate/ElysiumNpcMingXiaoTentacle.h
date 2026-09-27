@@ -102,6 +102,25 @@ public:
 	 *  2 is a fact of this family's rows. */
 	int32 TentaclePhase = 0;
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	double TentacleFailedEvadeTimer = 0.0;     // +0x6678 m_flFailedEvadeTimer (datamap, FIELD_TIME)
+	double TentacleUpdateEvadeTimer = 0.0;     // +0x667c m_flUpdateEvadeTimer (datamap, FIELD_TIME)
+	double TentacleHideReadyTimer = 0.0;       // +0x6680 m_flHideReadyTimer (datamap, FIELD_TIME)
+	double TentacleIgnoreCollisionTimer = 0.0; // +0x6684 m_flIgnoreCollisionTimer (datamap, FIELD_TIME)
+	bool bTentacleHitGroundSound = false;      // +0x6698 m_bHitGroundSound (datamap)
+	bool bTentaclePlayedDeathAnim = false;     // +0x6699 m_bPlayedDeathAnim (datamap)
+	/** SEAM for `thunk_FUN_103979d0(head, this)` -- the Ming Xiao head's own handling of a dying
+	 *  tentacle (`Event_Killed` `0x1039e919`). No port body; counted. */
+	void Spawn19NotifyHeadOfDeath(FElysiumEntity* Head);
+	int32 Spawn19HeadDeathNotices = 0;
+	/** SEAM for `thunk_FUN_1039e970(this)` -- the tentacle's death-schedule install (`0x16a`/`0x16b`/
+	 *  `0x16c`), family Boss19's row (lane L12). Counted here; the integrator redirects this to L12's
+	 *  body. Retail's body is what sets `m_bPlayedDeathAnim`, so until then a tentacle never takes the
+	 *  second arm of `Event_Killed`. */
+	void Spawn19StartDeathSchedule();
+	int32 Spawn19DeathScheduleStarts = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

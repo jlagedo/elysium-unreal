@@ -89,6 +89,14 @@ public:
 	 *  Step 2 is the whole observable body: Andrei's blood pieces do not outlive him. */
 	void DestroyAndreiBlood();
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	bool bAndreiDead = false;                  // +0x66cd CNPC_VAndreiBlood::m_bDead (datamap)
+	bool bAndreiTriggerUnhide = false;         // +0x66ce CNPC_VAndreiBlood::m_bTriggerUnhide (datamap)
+	double AndreiTeleportWaitStartTime = 0.0;  // +0x66d0 CNPC_VAndreiBlood::m_fTeleportWaitStartTime
+	bool bAndreiForceTeleport = false;         // +0x66d4 CNPC_VAndreiBlood::m_bForceTeleport (datamap)
+	int32 AndreiHitCounter = 0;                // +0x66d8 CNPC_VAndreiBlood::m_iHitCounter (datamap)
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Activate() override;

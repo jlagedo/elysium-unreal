@@ -73,6 +73,12 @@ public:
 	 *  `m_OnAttackedVictim` (`+0x66e8`) with no base forward. */
 	void FUN_103e12c0(FElysiumEntity* Victim);
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	FVector ZombieDeathForceVector = FVector::ZeroVector;   // +0x6680 CNPC_VZombie::m_vecDeathForceVector
+	FElysiumTakeDamageInfo ZombieDeathDamageInfo;          // +0x668c CNPC_VZombie::m_DeathDamageInfo
+	bool bZombieShouldGib = false;                          // +0x66e0 CNPC_VZombie::m_bShouldGib
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage(void* Arg0) override;

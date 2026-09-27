@@ -80,6 +80,10 @@ public:
 	bool bWasEverInCombat = false;
 	void CopOnStateChange(int32 OldRetail, int32 NewRetail);
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	int32 CopOldPlayerRelationType = 0;     // +0x6668 CNPC_VCop::m_eOldPlayerRelationType (datamap)
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 SpeciesSelectSchedule() override;

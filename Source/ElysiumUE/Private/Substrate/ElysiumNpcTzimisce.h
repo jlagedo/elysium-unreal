@@ -169,6 +169,13 @@ public:
 	// From `ElysiumNpcMotor.inl`.
 	int32 PathMode = 0;
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** SEAM for `FUN_103bdfc0` -- `UTIL_Remove` every entity of search type 2 within 150 units of the
+	 *  origin (`0x100f8490`). The search type has no port counterpart; counted. */
+	void Spawn19RemoveNearbyType2();
+	int32 Spawn19NearbyRemovals = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

@@ -33,6 +33,13 @@ public:
 	double DogSnarlTime = 0.0;         // `+0x6678`
 	void DogCombatShortCircuit();   // `0x10374e50`
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** `+0x6688` and `+0x6674`, the two words `CNPC_VDog::Spawn` (`0x10374000`) seeds. `CNPC_VDog`
+	 *  carries no datamap in the corpus and no reader of either is recovered; declared by offset. */
+	int32 DogWord6688 = 0;                   // +0x6688 (walked)
+	double DogStamp6674 = 0.0;               // +0x6674 (walked), curtime + RandomFloat(0, 1)
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;

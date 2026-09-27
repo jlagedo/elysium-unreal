@@ -92,6 +92,19 @@ public:
 	/** `CNPC_VBach::m_bMovementSpot` (`+0x66a7`). */
 	bool bBachMovementSpot = false;
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	bool bBachInStartingPosition = false;    // +0x66a1 CNPC_VBach::m_bBachInStartingPosition (datamap)
+	bool bBachSkipToWarning = false;         // +0x66a2 CNPC_VBach::m_bSkipToWarning (datamap)
+	bool bBachByte66a4 = false;              // +0x66a4, written by `Spawn` (`0x103638b8`); name unrecovered
+	double BachWarningTime = 0.0;            // +0x6694 CNPC_VBach::m_flWarningTime (datamap, FIELD_TIME)
+	float BachSkipToWarningTime = 0.f;       // +0x6698 CNPC_VBach::m_flSkipToWarningTime (datamap, float)
+	int32 BachWasOccluded = 0;               // +0x6674 CNPC_VBach::m_iWasOccluded (datamap)
+	double BachOccludeEnterTime = 0.0;       // +0x6670 CNPC_VBach::m_flOccludeEnterTime (datamap, FIELD_TIME)
+	int32 BachReusedOccludeCount = 0;        // +0x6678 CNPC_VBach::m_iReusedOccludeCount (datamap)
+	FVector BachLastOccludeOrigin = FVector::ZeroVector;   // +0x6664 CNPC_VBach::m_vecLastOccludeOrigin
+	int32 BachGrenadeActive = 0;             // +0x667c CNPC_VBach::m_iGrenadeActive (datamap)
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;

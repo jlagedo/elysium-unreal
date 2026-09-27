@@ -178,6 +178,17 @@ public:
 	 *  bodies' writes are observable and paired. */
 	bool bPlayerScreechConeBit = false;
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** SEAMS for `CNPC_VManBat::Event_Killed`'s three unported teardown calls: `0x1038c170(2)` (the fly-
+	 *  mode switch: flag `0x400`, `0x1027d9b0`, the capability swap and `SetMoveType(4, 0)`),
+	 *  `0x1038f660` (the carried-body drop) and `0x1038fd40` (the scared-minion release). Counted, in
+	 *  retail's order; no port body stands for any of them. */
+	void Spawn19SetFlyMode(int32 Mode);
+	void Spawn19DropCarried();
+	void Spawn19ReleaseMinions();
+	TArray<FString> Spawn19DeathTeardown;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;
