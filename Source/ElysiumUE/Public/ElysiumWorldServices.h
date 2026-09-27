@@ -1317,7 +1317,9 @@ public:
 	}
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector&) const { return false; }
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector&) const { return false; }
-	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float) const { return false; }
+	// The spawn box `[Origin.xy ± HalfExtent] x [FloorZ, Origin.z]` (`CNPCMaker::CanMakeNPC`
+	// `0x1034b580`: flat, `FloorZ == Origin.z`; the fleshpile lowers the floor to its cached ground).
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float, float) const { return false; }
 
 	// R7.2 -- the ranged shot's forward world trace and the stain it leaves, owner call B.
 	//

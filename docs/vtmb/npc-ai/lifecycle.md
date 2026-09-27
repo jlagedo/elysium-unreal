@@ -1194,6 +1194,17 @@ walks: the AI toggle and the teleport wake above, and the other NPCs' `Look` can
 walks the AI list; whether a looker's relationship ever hates a class-4 maker is **unrecovered** —
 brief open question 1).
 
+**The world questions** (`Map/ElysiumNpcMakerGeometry.h`, corrected 2026-09-27 after the commit-A
+map smoke). *Ground:* `MakeNPC` `1034b7ba`..`1034b8a3` traces from `GetAbsOrigin()` down 2048 units
+(`_DAT_1046bacc`), `CTraceFilterSimple(this, 0)`, mask `0x2400b`, and stores `tr.endpos.z`
+(`1034b881`); a start on the floor surface is a fraction-0 hit, so a maker on its floor caches its own
+Z. **Named modernization:** Unreal's line trace ignores the surface it starts on, so the port lifts
+the start by `DistEpsilon` and clamps the answer to the origin's Z. *Box:* `CanMakeNPC`
+`1034b686`..`1034b72b` builds `[origin.xy ± 34] x [origin.z, origin.z]` — flat at the maker's own Z —
+and `UTIL_EntitiesInBox(.., 2, .., 0x2080)` counts only `FL_CLIENT | FL_NPC` entities (the player,
+and NPCs `NPCInit` flagged); the port used to float the box at the cached ground and count props and
+brush bodies. The port measures an `FL_NPC` body by its standing hull.
+
 **Named divergences in the port.** *A child its own spawn removes.* Retail has no test after
 `DispatchSpawn` (`1034ba7a`): a `UTIL_Remove` inside the child's spawn is deferred, so the child is
 owned, named, counted (`m_cLiveChildren`, `m_iMaxNumNPCs`, the depletion `ThinkSet(NULL)`),

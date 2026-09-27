@@ -553,8 +553,8 @@ public:
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const override;
-	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
-		float HalfExtentCm) const override;
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& MakerOriginCm,
+		float HalfExtentCm, float FloorZCm) const override;
 	// R7.2: the ranged shot's forward world trace and the decal it leaves, through the world's
 	// UElysiumDecalSubsystem.
 	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,

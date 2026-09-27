@@ -202,8 +202,9 @@ protected:
 	/** `CanMakeNPC`'s ground cache: when `m_flGround == 0.0` (compared against 0, not a sentinel),
 	 *  trace `2048` units down (mask `0x2400b`) and keep the end Z. */
 	void CacheGroundZ();
-	/** The 34-unit spawn box test `EntityInBox` (`0x101cca80`, mask `0x2080`); `FloorZ` is the box's
-	 *  minimum Z. True when something solid stands in it. */
+	/** `UTIL_EntitiesInBox(.., 0x2080)` (`0x101cca80`) over `[origin.xy ± 34] x [FloorZ, origin.z]`:
+	 *  true when the player or an `FL_NPC` body stands in it. The base passes `origin.z` (a flat box);
+	 *  the fleshpile passes its cached ground unless `m_bNoDrop`. */
 	bool IsSpawnBoxOccupied(float FloorZ) const;
 
 	/** The nearest live entity of `Classname` within `RadiusUnits` of `PointCm`,

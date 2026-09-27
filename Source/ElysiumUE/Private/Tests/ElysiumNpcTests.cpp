@@ -298,6 +298,10 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	TestEqual(TEXT("occupancy is the final guard"), Services.Count(TEXT("IsNpcMakerSpawnAreaOccupied")), 1);
 	TestTrue(TEXT("occupancy half-extent converts 34 Source units once"),
 		Services.Log().Contains(TEXT("half=86.36")));
+	// `CNPCMaker::CanMakeNPC` `0x1034b580`: the box is flat at the maker's OWN Z (0), not at the
+	// cached ground (25) — corrected 2026-09-27.
+	TestTrue(TEXT("the spawn box's floor is the maker's origin Z, not the cached ground"),
+		Services.Log().Contains(TEXT("half=86.36 floor=0.00")));
 
 	Services.Calls.Reset();
 	Services.bNpcMakerOccupied = false;

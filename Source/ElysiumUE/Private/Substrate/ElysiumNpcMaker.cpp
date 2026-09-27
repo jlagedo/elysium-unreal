@@ -333,8 +333,10 @@ void FElysiumNpcMaker::CacheGroundZ()
 bool FElysiumNpcMaker::IsSpawnBoxOccupied(float FloorZ) const
 {
 	const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	// The box `[origin.xy ± 34] x [FloorZ, origin.z]` (`1034b686`..`1034b72b`), enumerated for
+	// `FL_CLIENT | FL_NPC` (`1034b715 PUSH 0x2080`).
 	return Embodiment != nullptr && Embodiment->IsNpcMakerSpawnAreaOccupied(
-		FVector(Origin.X, Origin.Y, FloorZ), GMakerSpawnBoxHalfExtentUnits * ElysiumMove::U);
+		FVector(Origin), GMakerSpawnBoxHalfExtentUnits * ElysiumMove::U, FloorZ);
 }
 
 // Slot 618: `0x1034b580`.
@@ -384,10 +386,11 @@ bool FElysiumNpcMaker::CanMakeNPC(bool bBypass)
 			}
 		}
 	}
-	// 5. `EntityInBox` over the 34-unit box, mask `0x2080`. **Named divergence (pre-existing, not
-	//    this fold's):** retail's box is flat at the maker's own Z (`mins.z = maxs.z = origin.z`);
-	//    the port asks for a standing hull from the cached ground.
-	if (IsSpawnBoxOccupied(CachedGroundZ))
+	// 5. `UTIL_EntitiesInBox(list, 2, mins, maxs, 0x2080)` (`0x101cca80`) over a box FLAT at the
+	//    maker's own Z: `1034b6a5` / `1034b6e3` copy `GetAbsOrigin().z` into both corners and
+	//    `1034b70c` re-reads it into `mins.z` — the cached ground plays no part (corrected 2026-09-27,
+	//    the port used to float the box at `m_flGround`). Occupied when the count is non-zero.
+	if (IsSpawnBoxOccupied(static_cast<float>(Origin.Z)))
 	{
 		LastAttempt = EAttempt::Occupied;
 		return false;

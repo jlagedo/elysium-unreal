@@ -1822,10 +1822,11 @@ struct FElysiumRecordingServices final
 			bNpcMakerInViewCone ? TEXT("true") : TEXT("false")));
 		return bNpcMakerInViewCone;
 	}
-	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& Origin, float HalfExtent) const override
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& Origin, float HalfExtent,
+		float FloorZ) const override
 	{
-		Record(FString::Printf(TEXT("IsNpcMakerSpawnAreaOccupied %s half=%.2f -> %s"),
-			*Origin.ToString(), HalfExtent, bNpcMakerOccupied ? TEXT("true") : TEXT("false")));
+		Record(FString::Printf(TEXT("IsNpcMakerSpawnAreaOccupied %s half=%.2f floor=%.2f -> %s"),
+			*Origin.ToString(), HalfExtent, FloorZ, bNpcMakerOccupied ? TEXT("true") : TEXT("false")));
 		return bNpcMakerOccupied;
 	}
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override

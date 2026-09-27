@@ -35,6 +35,7 @@
 #include "Visual/ElysiumMapVisuals.h"
 #include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Map/ElysiumNpcMakerGeometry.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/LightComponent.h"
@@ -63,8 +64,7 @@ namespace
 	// floor and put its top at chest height.
 	//
 	// The three character queries below — feed, aim and swing contact — each build this, and
-	// `IsNpcMakerSpawnAreaOccupied` builds the same box from the same constants. One function so a
-	// change to VtMB's hull cannot land in three of the four.
+	// `ElysiumNpcMakerGeometry::IsSpawnAreaOccupied` builds the same box from the same constants.
 	FBox ElysiumStandHullAt(const FVector& FeetOriginCm)
 	{
 		const FVector Half(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f);
@@ -1948,17 +1948,9 @@ void AElysiumMapActor::StopPlayerBody()
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 	float TraceDepthCm) const
 {
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return MakerOriginCm.Z;
-	}
-	const FVector End = MakerOriginCm - FVector::UpVector * TraceDepthCm;
-	FCollisionQueryParams Params(FName(TEXT("ElysiumNpcMakerGround")), /*bTraceComplex*/ false);
-	Params.AddIgnoredActor(ResolvePlayerPawn());
-	FHitResult Hit;
-	return World->LineTraceSingleByChannel(Hit, MakerOriginCm, End, ELYSIUM_USE_CHANNEL, Params)
-		? Hit.ImpactPoint.Z : End.Z;
+	// `CNPCMaker::MakeNPC` `0x1034b7b0`'s ground cache (`Map/ElysiumNpcMakerGeometry.h`).
+	return ElysiumNpcMakerGeometry::ResolveGroundZ(GetWorld(), MakerOriginCm, TraceDepthCm,
+		ResolvePlayerPawn());
 }
 
 bool AElysiumMapActor::IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const
@@ -2016,54 +2008,13 @@ bool AElysiumMapActor::IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) 
 		&& FMath::Abs(Local.Z / Local.X) <= TanHalfVertical;
 }
 
-bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
-	float HalfExtentCm) const
+bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& MakerOriginCm,
+	float HalfExtentCm, float FloorZCm) const
 {
-	// Native enumerates solid entities through a 2D 68-unit square at the cached ground. A thin
-	// plane is sufficient here: any standing body that owns that ground point crosses it.
-	const FBox SpawnArea(
-		GroundOriginCm - FVector(HalfExtentCm, HalfExtentCm, 1.0f),
-		GroundOriginCm + FVector(HalfExtentCm, HalfExtentCm, 1.0f));
-	if (const APawn* Pawn = ResolvePlayerPawn())
-	{
-		if (SpawnArea.Intersect(Pawn->GetComponentsBoundingBox(/*bNonColliding*/ false)))
-		{
-			return true;
-		}
-	}
-	if (!EntityWorld)
-	{
-		return false;
-	}
-	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
-	{
-		const FElysiumEntity* Ent = EntPtr.Get();
-		if (!Ent || Ent->IsInert() || Ent->Handle == EntityWorld->PlayerHandle())
-		{
-			continue;
-		}
-		FBox Bounds(ForceInit);
-		if (const USkeletalMeshComponent* Skeletal = Ent->GetSkeletalBody())
-		{
-			if (Skeletal->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
-			{
-				Bounds = Skeletal->Bounds.GetBox();
-			}
-		}
-		else if (Ent->Body && Ent->Body->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
-		{
-			Bounds = Ent->Body->Bounds.GetBox();
-		}
-		else if (Ent->AsCombatCharacter() && !ElysiumIsRetailNotSolid(*Ent))
-		{
-			Bounds = ElysiumStandHullAt(Ent->Origin);
-		}
-		if (Bounds.IsValid && SpawnArea.Intersect(Bounds))
-		{
-			return true;
-		}
-	}
-	return false;
+	// `UTIL_EntitiesInBox(.., 0x2080)` over `CNPCMaker::CanMakeNPC` `0x1034b580`'s box
+	// (`Map/ElysiumNpcMakerGeometry.h`): the player and `FL_NPC` bodies only.
+	return ElysiumNpcMakerGeometry::IsSpawnAreaOccupied(EntityWorld.Get(), ResolvePlayerPawn(),
+		MakerOriginCm, HalfExtentCm, FloorZCm);
 }
 
 void AElysiumMapActor::PreMoveTick(float DeltaSeconds)

@@ -1691,7 +1691,9 @@ exhaustion and forces `Flag_Fade` (`+0x66c2`) on. It does **not** bypass the liv
 
 Both `InputSpawnNPC` (`FUN_1034b500`) and `MakerThink` (`FUN_1034bbf0`) invoke the ordinary spawn
 path with its internal bypass argument clear. Before allocation, that path caches ground height by
-tracing 2,048 units down from the maker, then `CanMakeNPC` (`FUN_1034b580`) applies these gates in
+tracing 2,048 units down from the maker (mask `0x2400b`, `MASK_NPCSOLID_BRUSHONLY`; `m_flGround =
+tr.endpos.z`, so a maker standing exactly on its floor caches its own Z — a Source ray starting on a
+surface hits at fraction 0), then `CanMakeNPC` (`FUN_1034b580`) applies these gates in
 order:
 
 1. A true internal bypass argument accepts immediately. Neither the public `Spawn` input nor the
@@ -1703,8 +1705,12 @@ order:
    inside the player's view cone.
 5. With positive `MinPCDistance` (`+0x66c8`), truncate the 3D player-to-maker distance to an integer
    and reject when it is strictly less than the authored threshold. Equality is admitted.
-6. Query a 68-by-68-unit square at cached ground height, X/Y `origin +/- 34`, using native filter
-   value `0x2080`; admit only when it finds no blocking entity.
+6. `UTIL_EntitiesInBox(list, 2, mins, maxs, 0x2080)` (`0x101cca80`) over a 68-by-68-unit square
+   X/Y `origin +/- 34` that is FLAT at the maker's **own** Z (`1034b6a5`/`1034b6e3`/`1034b70c` all
+   read `GetAbsOrigin().z`; the cached ground plays no part here — the fleshpile's box alone drops
+   its floor to `m_flGround`). The flag mask `0x2080` is `FL_CLIENT | FL_NPC`, so only the player and
+   NPCs that ran `NPCInit` (which adds `FL_NPC`) count — never a prop, a brush or a maker. Admit only
+   when the count is zero.
 
 A rejected attempt allocates no entity, changes neither quota, and fires no maker output.
 `Flag_StartDisabled` (`m_bDisabled`, `+0x66c0`) controls only automatic thinking: it does not block
