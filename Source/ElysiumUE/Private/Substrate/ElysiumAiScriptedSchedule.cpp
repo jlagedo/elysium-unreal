@@ -31,25 +31,25 @@ void FElysiumAiScriptedSchedule::Spawn()
 	}
 }
 
-// Slot 583: `0x101a9790`.
+// Slot 583: `0x101a9790` (`CCineAISchedule::vfunc583`), 233 bytes. No `m_hCine`, no script state, no
+// ideal state, nothing written on this object: straight to this class's own slot 586.
 void FElysiumAiScriptedSchedule::PossessEntity()
 {
-	FElysiumNpcBase* Npc = TargetNpc();
+	FElysiumNpcBase* Npc = TargetNpc();   // 0x101a9794..0x101a97cd m_hTargetEnt, +0x94
 	if (Npc == nullptr)
 	{
-		return;
+		return;                           // 0x101a979d / 0x101a97bd / 0x101a97c7 / 0x101a97d5 -> 0x101a9876
 	}
-	if (!Npc->GetMind().IsAdmitted())
+	if (!Npc->BaseScheduleHost.bRanAi)    // 0x101a97db m_bRanAI +0x1b4c / 0x101a97e3
 	{
-		Diagnostic(FString::Printf(TEXT("scripted_sequence %s is targeting an entity (%s)"), *DebugString(),
-			*Npc->DebugString()));
+		NotRunAiWarning(*Npc, nullptr);   // 0x101a97e6..0x101a9854, the "has not run" line skipped
 	}
-	if (!bInterruptable)
+	if (!bInterruptable)                  // 0x101a985a +0x5f90 / 0x101a9862
 	{
-		MakeNpcOblivious(*Npc);   // 0x1026d130
+		MakeNpcOblivious(*Npc);           // 0x101a9866 0x1026d130
 	}
-	FixScriptNPCSchedule(*Npc);   // slot 586, virtual
-}
+	FixScriptNPCSchedule(*Npc);           // 0x101a986b..0x101a9870 slot 586, virtual (0x101a98c0)
+}                                         // 0x101a9878
 
 // Slot 585: `0x101a9770`.
 bool FElysiumAiScriptedSchedule::FCanOverrideState() const

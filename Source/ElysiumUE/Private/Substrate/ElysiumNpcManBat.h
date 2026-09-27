@@ -177,6 +177,32 @@ public:
 	 *  bodies' writes are observable and paired. */
 	bool bPlayerScreechConeBit = false;
 
+	// --- Story 0019/8, family Script19 (`ElysiumNpcScript19Species.cpp`) ---------------------------
+	/** `0x1038b1a0` (`ManBatOverrideMoveFly`, name coined), slot 525's body at navigator state 2: the
+	 *  `manbat_stun` bail into schedule `0x15b`, else the interval clamp, the `0x1038b370` velocity
+	 *  through `SetAbsVelocity`, and -- outside four activities -- the motor yaw, the velocity pitch and
+	 *  the wing/turn selector once `m_flFlapTimer` is due. `Interval` is seconds. */
+	void ManBatOverrideMoveFly(float Interval);
+	/** `0x1038e720` -- the wing/turn selector over the flight velocity (SOURCE units, this world's
+	 *  axes): refuses five activities; `vel.z >= 30` flaps (`0x1038e640`); a yaw turn in `[30, 330]`
+	 *  takes `0x1038e6a0` below 180 and `0x1038e6e0` above; otherwise activity `0x24` flaps and anything
+	 *  else glides (`0x1038e670`). Its only caller is `0x1038b1a0`, and no family row carries it. */
+	void ManBatWingTurnSelect(const FVector& VelocityUnits);
+	/** `cvar_manbat_stun` (`0x1093b858`, "manbat_stun", default "0", `FUN_1038ae50`): its `m_nValue`
+	 *  (`+0x2c`). SEAM: the kernel ConVar table (`ElysiumNpcKernelTunables.h`, generated) has no row
+	 *  for it; the value lives here, and `0x1038b1a0` clears it through `ConVar::SetValue(0)`. */
+	static int32& ManBatStunConVar();
+	/** `CNPC_VManBat`'s own schedule `0x15b` (`InputManBatStun 0x1038fa50` pushes the same id), the
+	 *  stun program `0x1038b1a0` installs through `0x102ae750`. */
+	static constexpr int32 ManBatStunScheduleRetailId = 0x15b;
+	/** `UTIL_VecToYaw` (`0x101d2c70`) and `UTIL_VecToPitch` (`0x101d2ce0`) over a vector in this
+	 *  world's axes (Source's Y is this world's -Y). */
+	static float ManBatVecToYaw(const FVector& PortVector);
+	static float ManBatVecToPitch(const FVector& PortVector);
+	/** How many times `0x102e1c10` took its rate-`-1.0` arm, `0x102e1cf0` (motor `+0x38` := the outer's
+	 *  `MaxYawSpeed`). SEAM: no motor yaw-speed word stands here, so the reset is counted. */
+	int32 ManBatMotorYawSpeedResets = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

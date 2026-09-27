@@ -119,6 +119,21 @@ public:
 	static void ReleaseNpcOblivious(FElysiumNpcBase& Npc);
 	// `0x101a77a0`: `m_bCineScriptHidden := 1` on the hidden NPC, and the "voodoo" warning block.
 	void ScriptHiddenWarning(FElysiumNpcBase& Npc) const;
+	// The eleven-line `DevMsg` block the three possession bodies print when the NPC's `m_bRanAI`
+	// (`+0x1b4c`) is still clear (`0x101a78da..0x101a794f`, `0x101a90d9..0x101a9147`,
+	// `0x101a97e6..0x101a9854`). `HasNotRunLine` is `CCineNPC`'s third line
+	// (`"   that has not run it's AI yet.....\n"`); the two subclasses skip it and pass null.
+	void NotRunAiWarning(const FElysiumNpcBase& Npc, const TCHAR* HasNotRunLine);
+	// `m_fMoveTo` 4's teleport arm, shared verbatim by `0x101a7880` (`0x101a7d89..0x101a7e6b`) and
+	// `0x101a9080` (`0x101a929c..0x101a937e`): slot 181 `Teleport(GetOrigin(), NULL, vec3_origin)`,
+	// `0x102e0b40` on the motor, the motor's ideal yaw from THIS cine's yaw (the `+0x28` flip, the
+	// `+0x1c == 180.0` direct write), `SetLocalAngularVelocity(vec3_angle)`, `EF_NOINTERP`, and the
+	// NPC's angles with only the YAW replaced by this cine's.
+	void TeleportToMark(FElysiumNpcBase& Npc) const;
+	// `npc->m_scriptState (+0x5d70) := State`, written through the director that owns `Npc` (the
+	// port holds the word there, `NpcScriptState`). An NPC no director owns has nowhere to hold it;
+	// every retail writer runs with `m_hCine` resolved, so that arm is not reached from a body.
+	static void SetScriptStateOf(FElysiumNpcBase& Npc, int32 State);
 
 	// The NPC `m_hTargetEnt` (`+0x5ce4`) resolves to through its `+0x94`, or null.
 	FElysiumNpcBase* TargetNpc() const;
@@ -271,4 +286,8 @@ protected:
 	// The retail diagnostics this class prints, kept for the inspector and tests.
 	TArray<FString> Diagnostics;
 	void Diagnostic(const FString& Line);
+
+public:
+	// Read side of `Diagnostics` for the Script19 tests: the retail `DevMsg` lines in print order.
+	const TArray<FString>& DiagnosticsForTest() const { return Diagnostics; }
 };

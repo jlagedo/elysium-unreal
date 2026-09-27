@@ -51,6 +51,11 @@ public:
 	 *  `m_hBurningParticle` and, when it resolves to a live entity, dispatch its vtable `+0x138`
 	 *  (slot 78, the particle's own `ScriptUnhide`). Retail does NOT clear the handle. */
 	void GhoulCroucherScriptUnhideTail();
+	/** `CNPC_VGhoulCroucher::ScriptHide` (`0x1037c1c0`, slot 77) -- `CAI_BaseNPCTroika::ScriptHide`
+	 *  (`0x102c1ce0`, this runtime's `FElysiumEntity::ScriptHide`) DIRECT, then slot 77 on the entity
+	 *  `m_hBurningParticle` (`+0x6670`) resolves to, when it resolves live. The handle is not cleared.
+	 *  Slot 77 is not virtual in this runtime: the integrator routes this class's hide here. */
+	void GhoulCroucherScriptHide();
 	/** `CNPC_VGhoulCroucher`'s two static tables, indexed by `m_nUnawareType` (`+0x6668`):
 	 *  `DAT_1063abcc` (`0x1037b870`) and `DAT_1063abdc` (`0x1037b890`). **Unrecovered**: the tables'
 	 *  purpose — message, sound or activity selection — is not settled and neither table's contents are

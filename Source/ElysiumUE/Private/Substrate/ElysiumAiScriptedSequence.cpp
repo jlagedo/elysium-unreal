@@ -32,109 +32,114 @@ namespace
 	}
 }
 
-// Slot 583: `0x101a9080`. `CCineNPC`'s body without the queue, without the `m_hNextCine` clear and
-// without `DelayStart`.
+// Slot 583: `0x101a9080` (`CCineAI::vfunc583`), 899 bytes. `CCineNPC`'s body (`0x101a7880`) without the
+// queue arm (a standing cine is OVERWRITTEN), without the `m_hNextCine` clear and without
+// `DelayStart`; case 4 writes its own state and drops `FL_ONGROUND`, and an out-of-range `m_fMoveTo`
+// reaches a warning the sequence version has no equivalent for. Last, an NPC that was ALREADY in
+// SCRIPT gets `SCHED_AISCRIPT` installed at once.
 void FElysiumAiScriptedSequence::PossessEntity()
 {
-	FElysiumNpcBase* Npc = TargetNpc();
+	FElysiumNpcBase* Npc = TargetNpc();   // 0x101a9087..0x101a90c0 m_hTargetEnt, +0x94
 	if (Npc == nullptr)
 	{
-		return;
+		return;                           // 0x101a9090 / 0x101a90b0 / 0x101a90ba / 0x101a90c8 -> 0x101a93fd
 	}
-	if (!Npc->GetMind().IsAdmitted())
+	if (!Npc->BaseScheduleHost.bRanAi)    // 0x101a90ce m_bRanAI +0x1b4c, 0x101a90d7
 	{
-		// The same warning block as `CCineNPC`'s, less its "has not run it's AI yet" line.
-		Diagnostic(FString::Printf(TEXT("scripted_sequence %s is targeting an entity (%s)"),
-			*AiDebugName(*this), *AiDebugName(*Npc)));
+		NotRunAiWarning(*Npc, nullptr);   // 0x101a90d9..0x101a9147, the "has not run" line skipped
 	}
-	if (Npc->bHidden)
+	if (Npc->bHidden)                     // 0x101a914e 0x100b5190 / 0x101a9155
 	{
-		ScriptHiddenWarning(*Npc);   // 0x101a77a0
+		ScriptHiddenWarning(*Npc);        // 0x101a915a 0x101a77a0
 	}
-	if (!bInterruptable)
+	if (!bInterruptable)                  // 0x101a915f +0x5f90 / 0x101a9167
 	{
-		MakeNpcOblivious(*Npc);   // 0x1026d130
+		MakeNpcOblivious(*Npc);           // 0x101a916b 0x1026d130
 	}
-	// A standing cine is OVERWRITTEN: `m_pGoalEnt`, `m_hCine`, `SetTarget(npc, this)`.
+	// A standing cine is OVERWRITTEN. The port's stand-in of the previous cine's scripted schedule
+	// stops with it (retail's NPC simply reselects under the new `m_hCine`) — modernization bookkeeping.
 	if (FElysiumScriptedSequence* Previous = Npc->ResolveCine(); Previous != nullptr && Previous != this)
 	{
-		// The port's stand-in of the previous cine's scripted schedule stops with it (retail's NPC
-		// simply reselects under the new `m_hCine`).
 		Previous->EndBeat();
 	}
-	Npc->BaseScheduleHost.GoalEnt = Handle;
-	Npc->ScriptOwner = Handle;
-	Npc->SetTarget(Handle);
-	SavedMoveType = Npc->RetailMoveType;
-	SavedMoveCollide = Npc->RetailMoveCollide;
-	SavedSolid = Npc->RetailSolidType;
-	SavedSolidFlags = static_cast<int32>(Npc->RetailSolidFlags);
-	SavedEffects = 0;   // SEAM: no port `m_fEffects` word
-	if (FElysiumNpc* Troika = Npc->AsNpc())
+	Npc->BaseScheduleHost.GoalEnt = Handle;   // 0x101a9170 npc m_pGoalEnt +0x5de8
+	Npc->ScriptOwner = Handle;                // 0x101a917a..0x101a9180 npc m_hCine +0x5d74
+	Npc->SetTarget(Handle);                   // 0x101a9188 SetTarget(npc, this)
+	SavedMoveType = Npc->RetailMoveType;      // 0x101a9191 slot 94 -> 0x101a9197 +0x5f78
+	SavedMoveCollide = Npc->RetailMoveCollide; // 0x101a91a1 slot 95 -> 0x101a91a7 +0x5f7c
+	SavedSolid = Npc->RetailSolidType;        // 0x101a91b1 slot 92 -> 0x101a91b7 +0x5f80
+	SavedSolidFlags = static_cast<int32>(Npc->RetailSolidFlags); // 0x101a91c1 slot 211 -> 0x101a91c7 +0x5f84
+	SavedEffects = 0;   // 0x101a91cd..0x101a91d3 SEAM: the director has no `m_fEffects` word (spec 0003)
+	if (FElysiumNpc* Troika = Npc->AsNpc())   // 0x101a91d9 npc +0x98 / 0x101a91e1
 	{
-		Troika->ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);   // slot 614
-		SavedTroikaFlags = static_cast<int32>(Troika->NpcFlags.RawWord1());
-		if ((SpawnFlags & GAiSfIgnoreNpcCollision) != 0)
+		Troika->ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);   // 0x101a91e7 slot 614
+		SavedTroikaFlags = static_cast<int32>(Troika->NpcFlags.RawWord1());      // 0x101a91ed..0x101a91f3 +0x5f8c
+		if ((SpawnFlags & GAiSfIgnoreNpcCollision) != 0)                           // 0x101a91f9 / 0x101a9202
 		{
-			Troika->NpcFlags.AssignAiFlagsWord(Troika->NpcFlags.RawWord1() | GAiNavIgnoreNpc);
+			Troika->NpcFlags.AssignAiFlagsWord(Troika->NpcFlags.RawWord1() | GAiNavIgnoreNpc); // 0x101a920c
 		}
 	}
-	switch (MoveTo)
+	// 0x101a9212..0x101a9220: npc m_fEffects |= ours — SEAM (spec 0003), not written.
+	switch (MoveTo)   // 0x101a9226 +0x5f60 / 0x101a922f JA / 0x101a9235 table 0x101a9404
 	{
 	case 0:
 	case 5:
-		NpcScriptState = GAiScriptWait;
+		NpcScriptState = GAiScriptWait;               // 0x101a923c..0x101a9245 0x1027f270(1), state 1
 		break;
 	case 1:
-		NpcScriptState = GAiScriptWalkToMark;
+		NpcScriptState = GAiScriptWalkToMark;         // 0x101a9254..0x101a925d state 4, NO DelayStart
 		break;
 	case 2:
-		NpcScriptState = GAiScriptRunToMark;
+		NpcScriptState = GAiScriptRunToMark;          // 0x101a926c..0x101a9275 state 5
 		break;
 	case 3:
-		NpcScriptState = GAiScriptCustomMoveToMark;
+		NpcScriptState = GAiScriptCustomMoveToMark;   // 0x101a9284..0x101a928d state 6
 		break;
 	case 4:
-		// Placed inline, then WAIT and `RemoveFlag(FL_ONGROUND)` — no fall-through here.
-		PlaceOnMark(*Npc);
-		NpcScriptState = GAiScriptWait;
-		Npc->Flags &= ~GAiFlagOnGround;
+		TeleportToMark(*Npc);                         // 0x101a929c..0x101a937e
+		NpcScriptState = GAiScriptWait;               // 0x101a9388..0x101a9391 state 1
+		Npc->Flags &= ~GAiFlagOnGround;               // 0x101a939b RemoveFlag(FL_ONGROUND)
 		break;
 	default:
-		UE_LOG(LogElysiumAiSeq, Log, TEXT("aiscript:  invalid Move To Position value!"));
+		// `DevWarning(2, "aiscript:  invalid Move To Position value!")` through `0x109f3658`.
+		Diagnostic(TEXT("aiscript:  invalid Move To Position value!"));   // 0x101a93a2..0x101a93a9
 		break;
 	}
-	Diagnostic(FString::Printf(TEXT("\"%s\" found and used"), *AiDebugName(*Npc)));
+	Diagnostic(FString::Printf(TEXT("\"%s\" found and used"), *AiDebugName(*Npc)));   // 0x101a93b4..0x101a93c1 DevMsg(2, ...)
 	// `m_NPCState` is read BEFORE the ideal-state write: an NPC already in SCRIPT would not reselect,
 	// so the script schedule is installed on it directly (local `0x2e` through `0x10280de0`).
-	const int32 StateBefore = Npc->NpcStateRetail();
-	Npc->RequestIdealStateRetail(GAiNpcStateScript, GAiPossessLine);
-	if (StateBefore == GAiNpcStateScript)
+	const int32 StateBefore = Npc->NpcStateRetail();                    // 0x101a93c7 npc +0x5cc0
+	Npc->RequestIdealStateRetail(GAiNpcStateScript, GAiPossessLine);    // 0x101a93d3..0x101a93e7 line 0x554, ideal 4
+	if (StateBefore == GAiNpcStateScript)                               // 0x101a93f2
 	{
-		Npc->ChangeSchedule(ScheduleAiScript);
+		Npc->ChangeSchedule(ScheduleAiScript);                          // 0x101a93f8 0x10280de0(0x2e)
 	}
-	// The port's stand-in for the scripted schedule `0x2e` selects (see `ElysiumScriptedSequence.h`).
+	// Named modernization: the stand-in for the scripted schedule `0x2e` selects.
 	BeginBeat(*Npc);
 }
 
-// Slot 584: `0x101a9510`.
+// Slot 584: `0x101a9510` (`CCineAI::vfunc584`), 139 bytes. `0x101a82d0`'s shape with two differences:
+// the empty-name arm answers TRUE, and there is no debug tail.
 bool FElysiumAiScriptedSequence::StartSequence(FElysiumNpcBase& Npc, const FString& SequenceName,
 	bool bCompleteOnEmpty)
 {
-	bSequenceStarted = true;
-	if (SequenceName.IsEmpty() && bCompleteOnEmpty)
+	bSequenceStarted = true;                            // 0x101a9517 m_sequenceStarted := 1
+	if (SequenceName.IsEmpty() && bCompleteOnEmpty)     // 0x101a951e / 0x101a9526
 	{
-		SequenceDone(Npc);
-		return true;   // `CCineNPC`'s answers false here
+		SequenceDone(Npc);                              // 0x101a952d SequenceDone 0x101a8460
+		return true;                                    // 0x101a9532 AL = 1 (`CCineNPC`'s answers 0)
 	}
+	// `LookupSequence` (`0x101a9549`) into `m_nSequence` (`0x101a9551`); -1 -> the warning
+	// (`0x101a9570`) and sequence 0 (`0x101a9579`); `m_flCycle = 0` (`0x101a9585`);
+	// `ResetSequenceInfo` (`0x101a958f`). The clip plays through the body, as `CCineNPC`'s does.
 	const float Seconds = PlayBeatClip(Npc, SequenceName, /*bLoop=*/!bCompleteOnEmpty);
-	if (Seconds < 0.f)
+	if (Seconds < 0.f)                                  // 0x101a9557
 	{
 		UE_LOG(LogElysiumAiSeq, Log, TEXT("%s: unknown aiscripted sequence \"%s\""), *AiDebugName(Npc),
 			*SequenceName);
 	}
 	BeatClipEndsAt = (World != nullptr ? World->NowSeconds() : 0.0) + FMath::Max(0.f, Seconds);
-	return true;
+	return true;                                        // 0x101a9595 AL = 1
 }
 
 // Slot 585: `0x101a9060`.
