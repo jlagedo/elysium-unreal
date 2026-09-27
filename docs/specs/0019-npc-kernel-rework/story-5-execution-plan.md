@@ -1,8 +1,11 @@
 # 0019 story 5 — execution plan: the class tree
 
-Status: **steps 0–6 accepted** (last: 6r, `9f52fbad`, recorded `a00cd11b`, 2026-09-27). **Two
-commits remain: A (the four folds) and B (closure).** Revised 2026-09-27 after the owner's review of
-the first six steps; the revision and its reasons are §1.
+Status: **steps 0–6 accepted** (last: 6r, `9f52fbad`, recorded `a00cd11b`); **commit A landed
+2026-09-27** (the four folds, on wip checkpoints `0231934c`, `81c696cc`, `779622a2`, `fe26d16d`,
+`aa2b65d9`, `275834a8`, `8941aa9a`; gate 1,320 / 14 / 1, zero failures; `--unported` 987 → 809).
+**Commit B (closure) remains.** Revised 2026-09-27 after the owner's review of the first six steps;
+the revision and its reasons are §1. Cross-cutting findings for B and story 8 are collected in
+`$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/briefs/commit-B-handoff-notes.md`.
 Records: the commits themselves (§1). Scope: [spec.md, story 5](spec.md). Tracker:
 [06b](../TRACKER.md). Tree at revision: `a00cd11b`, clean.
 
