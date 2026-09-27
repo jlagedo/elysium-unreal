@@ -29,7 +29,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 20 | `0x100b4b40` | `CAISound#193`, `CAI_BaseNPC#193`, +486 more | 47 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseGeometry.cpp:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:69, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:80, +3 more | `CAI_BaseNPC#193 no SDK twin: stretch #189-#199 holds 9 retai…` |
 | 21 | `0x10269b50` | — | 48 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:408, Source/ElysiumUE/Private/Substrate/ElysiumNpcChangBros.cpp:578, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:299, +2 more |  |
 | 22 | `0x1002cca0` | — | 45 | 0 | 0 | — | — |  |
-| 23 | `0x1034c2d0` | `CNPCMaker_Fleshpile#617` | 9 | 1 | 35 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎`, +1 more | Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:365, +12 more |  |
+| 23 | `0x1034c2d0` | `CNPCMaker_Fleshpile#617` | 9 | 1 | 35 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎`, +1 more | Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:365, +12 more |  |
 | 24 | `0x1002cbd0` | — | 44 | 0 | 0 | — | — |  |
 | 25 | `0x1004f7a0` | — | 24 | 16 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:503 |  |
 | 26 | `0x1005f190` | — | 42 | 0 | 1 | — | — |  |
@@ -37,7 +37,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 28 | `0x101cd940` | — | 41 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:934, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:410, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.h:85, +5 more |  |
 | 29 | `0x101d3850` | — | 2 | 39 | 0 | — | — |  |
 | 30 | `0x102dfed0` | — | 37 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2130, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:911, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:426, +1 more |  |
-| 31 | `0x1034b7b0` | `CNPCMaker#617` | 10 | 4 | 27 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎` | Source/ElysiumUE/Private/AiInfra/ElysiumNpcMakerActor.h:11, Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1951, Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:14, +4 more |  |
+| 31 | `0x1034b7b0` | `CNPCMaker#617` | 10 | 4 | 27 | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎` | Source/ElysiumUE/Private/AiInfra/ElysiumNpcMakerActor.h:11, Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1951, Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:15, +4 more |  |
 | 32 | `0x102e0b40` | — | 34 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:189, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:158, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:305 |  |
 | 33 | `0x1019d040` | — | 27 | 2 | 4 | — | — |  |
 | 34 | `0x1025e8e0` | `CAI_BaseHumanoid#193` | 28 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseGeometry.cpp:39 |  |
@@ -213,7 +213,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 204 | `0x102b5650` | `CAI_BaseNPCTroika#599`, `CGeneric_NPC#599`, +16 more | 5 | 2 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:233, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:335, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:352, +4 more |  |
 | 205 | `0x102bf6e0` | `CAI_BaseNPCTroika#418`, `CGeneric_NPC#418`, +60 more | 11 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:500, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:284, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:291, +1 more |  |
 | 206 | `0x102ce150` | — | 1 | 6 | 7 | — | — |  |
-| 207 | `0x1034b580` | `CNPCMaker#618`, `CNPCMaker_Fleshpile#618` | 8 | 0 | 6 | — | Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:2014, Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:33, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:342, +5 more |  |
+| 207 | `0x1034b580` | `CNPCMaker#618`, `CNPCMaker_Fleshpile#618` | 8 | 0 | 6 | — | Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:2014, Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:342, +5 more |  |
 | 208 | `0x10369930` | `CNPC_VCamera#422`, `CNPC_VCameraSecurity#422` | 0 | 4 | 10 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:222, Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:223, Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:226, +2 more |  |
 | 209 | `0x10385d70` | `CNPC_ProneDialog#602`, `CNPC_VAndreiBlood#602`, +36 more | 8 | 0 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHuman.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:236, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:524, +4 more |  |
 | 210 | `0x10397410` | — | 1 | 6 | 7 | `Ming_xiao_tentacle_burst_emitter`, `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…`, +1 more | — |  |
@@ -605,7 +605,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 596 | `0x101bab50` | — | 2 | 2 | 2 | `Free Sound List is empty!⏎` | — |  |
 | 597 | `0x101c2a10` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:967, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:91, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:145 |  |
 | 598 | `0x101c2a50` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:91 |  |
-| 599 | `0x101cca80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:389, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:205 |  |
+| 599 | `0x101cca80` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Map/ElysiumNpcMakerGeometry.h:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:389, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:205 |  |
 | 600 | `0x101ccb60` | — | 1 | 5 | 0 | — | — |  |
 | 601 | `0x101d1a90` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2105, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:477, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:578, +5 more |  |
 | 602 | `0x101d33a0` | — | 1 | 5 | 0 | — | — |  |

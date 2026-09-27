@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 
 class AActor;
 class FElysiumEntityWorld;
@@ -21,9 +22,13 @@ namespace ElysiumNpcMakerGeometry
 	 *  inside) a floor surface hits at fraction 0, so a maker placed exactly on the floor caches its
 	 *  own Z. An Unreal line trace ignores the surface it starts on, so it would fall through to the
 	 *  ray's end. The ray therefore starts `ElysiumMove::DistEpsilon` above the origin and the answer
-	 *  is clamped to the origin's Z — the same `endpos` retail reports. `Ignore` is the player pawn;
-	 *  `ELYSIUM_USE_CHANNEL` stands for the brush-only mask (the NPC bodies' capsules do not block it,
-	 *  as `CONTENTS_MONSTER` is not in `0x2400b`). */
+	 *  is clamped to the origin's Z — the same `endpos` retail reports; a start inside the solid
+	 *  (`bStartPenetrating`, retail's `startsolid`) answers the origin's Z too. `Ignore` is the player
+	 *  pawn. The mask is the NPC-solid question, so the ray runs on `GroundChannel` (`ECC_Pawn`, the
+	 *  channel the contents-signature world profiles block for NPC-solid brushes; the `ElysiumUse`
+	 *  channel the first cut used is ignored by every `ElysiumSig_*` world profile, which is why the
+	 *  shipped floors were missed) and skips character bodies (`CONTENTS_MONSTER` is not in
+	 *  `0x2400b`). */
 	float ResolveGroundZ(const UWorld* World, const FVector& MakerOriginCm, float TraceDepthCm,
 		const AActor* Ignore);
 
@@ -42,6 +47,9 @@ namespace ElysiumNpcMakerGeometry
 	 *  walk. */
 	bool IsSpawnAreaOccupied(const FElysiumEntityWorld* EntityWorld, const AActor* PlayerPawn,
 		const FVector& CentreCm, float HalfExtentCm, float FloorZCm);
+
+	/** The channel `0x2400b` (`MASK_NPCSOLID_BRUSHONLY`) maps to: whether a brush blocks an NPC. */
+	inline constexpr ECollisionChannel GroundChannel = ECC_Pawn;
 
 	/** `FL_CLIENT | FL_NPC`, the `0x2080` flag mask `CanMakeNPC` passes (`1034b715 PUSH 0x2080`). */
 	inline constexpr int32 SpawnAreaFlagMask = 0x2080;

@@ -1198,8 +1198,14 @@ brief open question 1).
 map smoke). *Ground:* `MakeNPC` `1034b7ba`..`1034b8a3` traces from `GetAbsOrigin()` down 2048 units
 (`_DAT_1046bacc`), `CTraceFilterSimple(this, 0)`, mask `0x2400b`, and stores `tr.endpos.z`
 (`1034b881`); a start on the floor surface is a fraction-0 hit, so a maker on its floor caches its own
-Z. **Named modernization:** Unreal's line trace ignores the surface it starts on, so the port lifts
-the start by `DistEpsilon` and clamps the answer to the origin's Z. *Box:* `CanMakeNPC`
+Z (a start inside the solid is `startsolid`, `endpos` = the start). **Named modernization:** Unreal's
+line trace ignores the surface it starts on, so the port lifts the start by `DistEpsilon`, clamps the
+answer to the origin's Z and answers the origin's Z on `bStartPenetrating`. `0x2400b` asks whether a
+brush blocks an NPC, which the port asks on `ECC_Pawn` (the `ElysiumSig_*` world profiles block it
+where retail's NPC-solid contents do), skipping character bodies (`CONTENTS_MONSTER` is not in the
+mask); the first cut traced `ElysiumUse`, which every `ElysiumSig_*` world profile ignores, and fell
+through the shipped floors. In game: `thug_maker` (authored 2 units above its floor) caches the floor,
+-101.6 cm; `sp_giovanni_2b` `Zombie_Spawner_1` caches 0. *Box:* `CanMakeNPC`
 `1034b686`..`1034b72b` builds `[origin.xy ± 34] x [origin.z, origin.z]` — flat at the maker's own Z —
 and `UTIL_EntitiesInBox(.., 2, .., 0x2080)` counts only `FL_CLIENT | FL_NPC` entities (the player,
 and NPCs `NPCInit` flagged); the port used to float the box at the cached ground and count props and

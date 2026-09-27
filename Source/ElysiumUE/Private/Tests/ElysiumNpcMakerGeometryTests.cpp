@@ -10,6 +10,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumUseIcons.h"
 #include "Map/ElysiumNpcMakerGeometry.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -24,21 +25,25 @@ static constexpr EAutomationTestFlags GElysiumNpcMakerGeometryFlags =
 
 namespace
 {
-	// One floor slab whose TOP is at `TopZ`, blocking every channel.
-	UBoxComponent* SpawnMakerFloor(UWorld* World, float TopZ)
+	// One slab whose TOP is at `TopZ`, centred on (`X`, 0), answering the channels the way a baked
+	// `ElysiumSig_PNS` world brush does: it blocks the pawn channels and IGNORES `ElysiumUse` — the
+	// smoke's cause: the first cut traced `ElysiumUse` and fell through every shipped floor.
+	UBoxComponent* SpawnMakerFloor(UWorld* World, float X, float TopZ, ECollisionChannel ObjectType,
+		const TCHAR* Name)
 	{
 		AActor* Owner = World != nullptr ? World->SpawnActor<AActor>() : nullptr;
 		if (Owner == nullptr)
 		{
 			return nullptr;
 		}
-		UBoxComponent* Floor = NewObject<UBoxComponent>(Owner, TEXT("MakerFloor"));
+		UBoxComponent* Floor = NewObject<UBoxComponent>(Owner, Name);
 		Owner->SetRootComponent(Floor);
-		Floor->InitBoxExtent(FVector(400.f, 400.f, 50.f));
-		Floor->SetWorldLocation(FVector(0.f, 0.f, TopZ - 50.f));
+		Floor->InitBoxExtent(FVector(200.f, 200.f, 50.f));
+		Floor->SetWorldLocation(FVector(X, 0.f, TopZ - 50.f));
 		Floor->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		Floor->SetCollisionObjectType(ECC_WorldStatic);
+		Floor->SetCollisionObjectType(ObjectType);
 		Floor->SetCollisionResponseToAllChannels(ECR_Block);
+		Floor->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
 		Floor->RegisterComponent();
 		Owner->AddInstanceComponent(Floor);
 		return Floor;
@@ -56,27 +61,43 @@ bool FElysiumNpcMakerGroundCacheTest::RunTest(const FString&)
 		return false;
 	}
 	UWorld* World = TestWorld.GetTestWorld();
-	const float FloorTop = -96.52f;   // `thug_maker`'s own Z, `sp_tutorial_1`
-	if (!TestNotNull(TEXT("a floor slab"), SpawnMakerFloor(World, FloorTop)))
+	// `sp_tutorial_1`'s floor under `thug_maker`: the baked `World_PNS-` surface at -101.6 cm (Source
+	// -40), with the maker authored 2 units above it at -96.52 (Source -38).
+	const float FloorTop = -101.6f;
+	// A second floor, a character body (object type Pawn) standing on it at x = 1000.
+	const float CharacterTop = FloorTop + 180.f;
+	if (!TestNotNull(TEXT("a world floor"), SpawnMakerFloor(World, 0.f, FloorTop, ECC_WorldStatic, TEXT("WorldFloor")))
+		|| !TestNotNull(TEXT("a floor under the character"),
+			SpawnMakerFloor(World, 1000.f, FloorTop, ECC_WorldStatic, TEXT("SecondFloor")))
+		|| !TestNotNull(TEXT("a character body"),
+			SpawnMakerFloor(World, 1000.f, CharacterTop, ECC_Pawn, TEXT("CharacterBody"))))
 	{
 		return false;
 	}
 	TestWorld.TickTestWorld();
 	const float Depth = 2048.0f * ElysiumMove::U;   // `_DAT_1046bacc`
+	const auto Ground = [World, Depth](float X, float Z)
+	{
+		return ElysiumNpcMakerGeometry::ResolveGroundZ(World, FVector(X, 0.f, Z), Depth, nullptr);
+	};
 
-	// A maker placed EXACTLY on the floor: Source's ray starts on the surface and hits at fraction 0,
-	// so `m_flGround = tr.endpos.z` is the maker's own Z (the smoke's `thug_maker` cached -5298.44).
-	TestEqual(TEXT("a maker exactly on the floor caches its own Z"),
-		ElysiumNpcMakerGeometry::ResolveGroundZ(World, FVector(0.f, 0.f, FloorTop), Depth, nullptr),
-		FloorTop, 1e-3f);
-	// One 19 cm above the floor (`disc3_maker`) caches the floor.
-	TestEqual(TEXT("a maker 19 cm above the floor caches the floor"),
-		ElysiumNpcMakerGeometry::ResolveGroundZ(World, FVector(0.f, 0.f, FloorTop + 19.f), Depth, nullptr),
-		FloorTop, 1e-3f);
+	// A maker whose origin is EXACTLY on the floor: Source's ray starts on the surface and hits at
+	// fraction 0, so `m_flGround = tr.endpos.z` is the maker's own Z.
+	TestEqual(TEXT("a maker exactly on the floor caches its own Z"), Ground(0.f, FloorTop), FloorTop, 1e-3f);
+	// `thug_maker`: 2 units above the floor caches the floor (the smoke read -5298.44).
+	TestEqual(TEXT("thug_maker, 5.08 cm above the floor, caches the floor"),
+		Ground(0.f, -96.52f), FloorTop, 1e-3f);
+	// `disc3_maker`: 19 cm above the floor caches the floor.
+	TestEqual(TEXT("a maker 19 cm above the floor caches the floor"), Ground(0.f, FloorTop + 19.f), FloorTop, 1e-3f);
+	// A floor whose top is slightly ABOVE the origin (the maker embedded 2 cm): `startsolid`, and
+	// Source's `endpos` is the start — the maker's own Z.
+	TestEqual(TEXT("a maker embedded in the floor caches its own Z (startsolid)"),
+		Ground(0.f, FloorTop - 2.f), FloorTop - 2.f, 1e-3f);
+	// `CONTENTS_MONSTER` is not in `0x2400b`: a character body under the maker is not ground.
+	TestEqual(TEXT("a character body under the maker is skipped; the floor beneath it answers"),
+		Ground(1000.f, CharacterTop + 50.f), FloorTop, 1e-3f);
 	// A maker with no floor within 2048 units caches the ray's end.
-	TestEqual(TEXT("no floor within 2048 units: the ray's end"),
-		ElysiumNpcMakerGeometry::ResolveGroundZ(World, FVector(5000.f, 0.f, FloorTop), Depth, nullptr),
-		FloorTop - Depth, 1e-2f);
+	TestEqual(TEXT("no floor within 2048 units: the ray's end"), Ground(5000.f, FloorTop), FloorTop - Depth, 1e-2f);
 	return true;
 }
 
