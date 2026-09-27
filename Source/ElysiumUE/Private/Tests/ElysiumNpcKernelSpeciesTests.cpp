@@ -1933,20 +1933,20 @@ bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 	// `0x103c3960` drops EVERY gate the Troika body has — frenzy, the can-enter timer, the range and
 	// height terms — and goes straight to the coordinator, which refuses. The frenzy bit is the
 	// discriminator: the Troika arm enters melee outright on it, the runner's arm never reads it.
-	Runner->NpcFlags.SetFrenziedWord(0x2);
+	Runner->SetFrenziedWord(0x2);
 	Runner->bInMelee = true;
 	TestFalse(TEXT("a runner's slot 599 refuses on the coordinator, frenzy bit and all"),
 		Runner->Slot599(0));
 	TestFalse(TEXT("and clears m_bInMelee, which the Troika arm's first gate would not have"),
 		Runner->bInMelee);
-	Runner->NpcFlags.SetFrenziedWord(0);
+	Runner->SetFrenziedWord(0);
 
-	Cop->NpcFlags.SetFrenziedWord(0x2);
+	Cop->SetFrenziedWord(0x2);
 	Cop->bInMelee = false;
 	TestTrue(TEXT("a plain Troika NPC's slot 599 enters melee outright on frenzy bit 0x2"),
 		Cop->Slot599(0));
 	TestTrue(TEXT("and sets m_bInMelee"), Cop->bInMelee);
-	Cop->NpcFlags.SetFrenziedWord(0);
+	Cop->SetFrenziedWord(0);
 
 	// The ARGUMENT. `signatures.md` types slot 599 `int` because the base ignores it, but the
 	// runner's copy caches `m_hPotentialEnemy` from it — and every recovered dispatch site pushes

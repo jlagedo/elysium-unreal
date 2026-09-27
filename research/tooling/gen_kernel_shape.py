@@ -146,10 +146,10 @@ SLOT_SURFACES = {
                                      "ElysiumAnimating.h", "FireAnimatingSlot"),
     "FElysiumAnimatingOverlay": SlotSurface((*PUBLIC, "ElysiumAnimatingOverlaySlots.inl"),
                                             (*SUBSTRATE, "ElysiumAnimatingOverlaySlots.cpp"),
-                                            "ElysiumPlayer.h", "FireAnimatingOverlaySlot"),
+                                            "ElysiumAnimatingOverlay.h", "FireAnimatingOverlaySlot"),
     "FElysiumFlex": SlotSurface((*PUBLIC, "ElysiumFlexSlots.inl"),
                                 (*SUBSTRATE, "ElysiumFlexSlots.cpp"),
-                                "ElysiumPlayer.h", "FireFlexSlot"),
+                                "ElysiumFlex.h", "FireFlexSlot"),
     "FElysiumCombatCharacter": SlotSurface((*PUBLIC, "ElysiumCombatCharacterSlots.inl"),
                                            (*SUBSTRATE, "ElysiumCombatCharacterSlots.cpp"),
                                            "ElysiumPlayer.h", "FireCombatCharacterSlot"),
@@ -190,13 +190,15 @@ TROIKA_SLOTS = 617
 STORY_BANDS = ((0, 9, "29c"), (10, 18, "29d"), (19, 99, "29e"))
 
 # The port headers whose declared method names a generated slot name may not silently shadow, and
-# where to stop reading each. `ElysiumAnimating.h` declares `FElysiumAnimating`, and `ElysiumPlayer.h`
-# declares the NPC's other chain bases before `FElysiumPlayer`, which is a sibling leaf: the scan
+# where to stop reading each. The middle chain classes have their own headers, and `ElysiumPlayer.h`
+# declares `FElysiumCombatCharacter` before `FElysiumPlayer`, which is a sibling leaf: the scan
 # stops where the player's own surface begins, because a name only the player declares is not a name
 # the NPC's chain holds.
 PORT_CHAIN_HEADERS = (
     ("Source/ElysiumUE/Public/ElysiumEntity.h", None),
     ("Source/ElysiumUE/Public/ElysiumAnimating.h", None),
+    ("Source/ElysiumUE/Public/ElysiumAnimatingOverlay.h", None),
+    ("Source/ElysiumUE/Public/ElysiumFlex.h", None),
     ("Source/ElysiumUE/Public/ElysiumPlayer.h", "class FElysiumPlayer final"),
     ("Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h", None),
     ("Source/ElysiumUE/Private/Substrate/ElysiumScriptedCharacter.h", None),
@@ -368,6 +370,10 @@ def _load_slot_map() -> None:
          "the class registry are that walk (0019/5 step 6)"),
         (119, PORT, "FElysiumEntity::Kill", "terminal: mark dead and go inert"),
         (134, PORT, "FElysiumNpc::Think", "`NPCThink` 0x10292de0, the whole pass"),
+        (580, PORT, "FElysiumNpcBase::ClassScheduleIdSpace",
+         "the typed id space: the base body 0x101a6d00 and `FElysiumNpc`'s override, the Troika body "
+         "0x101aa790 (0019/5 step 6, the step-5 carried item); a `void*` beside it would be a second "
+         "producer of the same answer"),
         (173, PORT, "FElysiumEntity::Use", "the `+use` door"),
         (193, PORT, "FElysiumEntity::EyePosition", "origin plus the view offset"),
         (202, PORT, "FElysiumEntity::SetOwnerEntity", "the owner handle's writer"),
@@ -536,23 +542,23 @@ def default_body(row: Slot) -> tuple[str, str, int]:
             raise SystemExit(f"gen_kernel_shape: slot {row.slot} records the fractional default "
                              f"`{literal}`; the probe compares integers, so argue the row instead")
         value = int(float(literal))
-        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Npc.{call})", value)
+        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Receiver.{call})", value)
     value = int(literal, 0)
     if port == "bool":
         if value not in (0, 1):
             raise SystemExit(f"gen_kernel_shape: slot {row.slot} returns bool but retail returns "
                              f"{literal}")
-        return f"return {'true' if value else 'false'};", "Npc.{call} ? 1 : 0", value
+        return f"return {'true' if value else 'false'};", "Receiver.{call} ? 1 : 0", value
     if port.endswith("*"):
         if value != 0:
             raise SystemExit(f"gen_kernel_shape: slot {row.slot} returns `{port}` but retail "
                              f"returns {literal}; a pointer constant is not a default")
-        return "return nullptr;", "static_cast<int64>(reinterpret_cast<UPTRINT>(Npc.{call}))", 0
+        return "return nullptr;", "static_cast<int64>(reinterpret_cast<UPTRINT>(Receiver.{call}))", 0
     if port == "EElysiumNpcState":
         return (f"return static_cast<EElysiumNpcState>({literal});",
-                "static_cast<int64>(Npc.{call})", value)
+                "static_cast<int64>(Receiver.{call})", value)
     if port in ("float", "double"):
-        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Npc.{call})", value)
+        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Receiver.{call})", value)
     widths = {"int8": (8, True), "uint8": (8, False), "int16": (16, True), "uint16": (16, False),
               "int32": (32, True), "uint32": (32, False), "int64": (64, True),
               "uint64": (64, False)}
@@ -563,7 +569,7 @@ def default_body(row: Slot) -> tuple[str, str, int]:
             wrapped -= 1 << bits
         # `static_cast`, not the bare literal: retail's `return 0xffffffff;` out of an `int` body
         # is -1, and the cast says so where a bare `0xffffffff` would be a narrowing warning.
-        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Npc.{call})",
+        return (f"return static_cast<{port}>({literal});", "static_cast<int64>(Receiver.{call})",
                 wrapped)
     raise SystemExit(f"gen_kernel_shape: slot {row.slot} returns `{port}`, which has no default "
                      f"lowering for retail `{literal}`")
@@ -1409,45 +1415,53 @@ def _probe_arguments(row: Slot) -> tuple[list[str], str]:
     return locals_, ", ".join(args)
 
 
-def _probe_row(row: Slot, qualifier: str = "") -> list[str]:
-    """One probe initialiser. `qualifier` names the class whose own body a qualified call runs."""
-    _, expression, value = default_body(row)
-    locals_, args = _probe_arguments(row)
-    call = f"{qualifier}{row.port_name}({args})"
-    prologue = " ".join(locals_) + (" " if locals_ else "")
-    if row.default == "void":
-        lambda_body = f"{prologue}Npc.{call}; return 0;"
+def slot_rows_accessor(owner: str) -> str:
+    """The census accessor of one port class's slot table: `FElysiumEntity` -> `EntitySlotRows`."""
+    return owner.removeprefix("FElysium") + "SlotRows"
+
+
+def _signature(row: Slot) -> str:
+    """The row's port signature as a function type, the way the `.inl` declares it."""
+    return f"{row.ret_port}({', '.join(row.params_port)}){' const' if row.const else ''}"
+
+
+def _slot_table_row(row: Slot, owner: str) -> list[str]:
+    """One row of `owner`'s slot table.
+
+    `bDeclaredHere` is a compile-time answer: `TDeclaredOn` deduces the class of the member pointer
+    `&Owner::Method` for exactly the row's signature, and a slot declared on a base instead would
+    deduce the base. A default row carries the probe that calls the virtual on a receiver typed to
+    the owner; a stub or hand row carries none (a stub fired here would tally, and a hand body
+    reaches state a bare receiver does not have).
+    """
+    kind = "Default" if row.default else ("Hand" if row.hand else "Stub")
+    declared = (f"ElysiumNpcKernelShape::TDeclaredOn<{owner}, {_signature(row)}>::Test("
+                f"&{owner}::{row.port_name})")
+    if row.default:
+        _, expression, value = default_body(row)
+        locals_, args = _probe_arguments(row)
+        call = f"{row.port_name}({args})"
+        prologue = " ".join(locals_) + (" " if locals_ else "")
+        if row.default == "void":
+            body = f"{prologue}Receiver.{call}; return 0;"
+        else:
+            body = f"{prologue}return {expression.format(call=call)};"
+        invoke = f"[]({owner}& Receiver) -> int64 {{ {body} }}"
+        literal, void = row.default, row.default == "void"
     else:
-        lambda_body = f"{prologue}return {expression.format(call=call)};"
-    return _row([str(row.slot), _literal(row.address), _literal(row.port_name),
-                 _literal(row.default), str(value),
-                 "true" if row.default == "void" else "false",
-                 "[](FElysiumNpc& Npc) -> int64 { " + lambda_body + " }"], "\t\t\t")
-
-
-def shadowed_defaults(model: Model) -> list[Slot]:
-    """The generated default bodies a Troika instance never dispatches to: a class's own constant
-    body at a slot a more-derived class refills. The merged probes cannot reach them, so these are
-    probed through a qualified call (story 0019/5 step 6)."""
-    out = []
-    for row in model.slots:
-        for layer in row.layers:
-            if layer.default and layer.body != row.layers[-1].body:
-                out.append(layer)
-    return out
+        invoke, literal, value, void = "nullptr", "", 0, False
+    return _row([str(row.slot), _literal(row.address), _literal(row.retail), _literal(row.port_name),
+                 f"EElysiumNpcSlotBody::{kind}", _literal(literal), str(value),
+                 "true" if void else "false", "true" if row.override else "false", declared, invoke],
+                "\t\t\t")
 
 
 def render_slots_cpp(model: Model, module: str, owner: str) -> str:
     surface = SLOT_SURFACES[owner]
-    leaf = owner == LAYER_PORT[BASE_TABLE]
     generated = _layer_rows(model, owner)
     stubbed = [r for r in generated if r.stubbed]
     layer_defaults = [r for r in generated if r.default]
     hand = [r for r in generated if r.hand]
-    # The probes call through a Troika instance, so they read the merged rows (the body a Troika
-    # instance runs) and live in the Troika file, beside the shadowed class bodies they call by name.
-    defaults = [r for r in model.slots if r.generated and r.default] if leaf else []
-    shadowed = shadowed_defaults(model) if leaf else []
     stories = collections.Counter(r.story or "unassigned" for r in stubbed)
     counts = (f"{len(generated)} generated slot bodies of `{owner}`: {len(layer_defaults)} carry "
               f"the retail default story 29c recovered, {len(hand)} are defined by hand in the "
@@ -1465,17 +1479,14 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         "// A body with a `default:` verdict says something stronger: retail's whole body at that",
         "// slot is `return <literal>;`, so the port answers the same literal and stops tallying.",
         "// The literal is a recovered fact, not a written behaviour — the same argument the story",
-        "// makes for a species override of a constant-returning virtual — and the probe tables in",
-        "// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and",
-        "// `.ShadowedDefaults` call every one of them through.",
+        "// makes for a species override of a constant-returning virtual — and the slot table at the",
+        "// end of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of",
+        "// them through, on a receiver typed to this class.",
         "",
         f'#include "{surface.header}"',
         "",
     ]
-    if leaf:
-        out += ['#include "ElysiumStub.h"', '#include "Substrate/ElysiumNpcKernelShape.h"', ""]
-    else:
-        out += ['#include "ElysiumStub.h"', ""]
+    out += ['#include "ElysiumStub.h"', '#include "Substrate/ElysiumNpcKernelShape.h"', ""]
     out += [
         "namespace",
         "{",
@@ -1525,50 +1536,32 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         out.append("}")
         out.append("")
 
-    if not leaf:
-        return "\n".join(out).rstrip("\n") + "\n"
+    accessor = slot_rows_accessor(owner)
+    row_type = f"TElysiumNpcSlotRow<{owner}>"
     out += [
         "namespace ElysiumNpcKernelShape",
         "{",
         "\tnamespace",
         "\t{",
-        "\t\t// One probe per recovered default: it calls the port's virtual with",
-        "\t\t// value-initialised arguments and renders the answer as an integer, so the suite can",
-        "\t\t// require retail's literal back without naming hundreds of methods by hand. A `void`",
-        "\t\t// slot has no answer to render and the suite asserts only that calling it tallies",
-        "\t\t// nothing.",
+        f"\t\t// Every generated slot row of `{owner}`, in slot order: the census the class answers",
+        "\t\t// for (`Elysium.Substrate.NpcKernelShape.SlotOwners`) and, for each recovered default,",
+        "\t\t// the probe `Elysium.Substrate.NpcKernelSlots.Defaults` calls on a receiver of this",
+        "\t\t// class. `bDeclaredHere` is decided by the compiler, not written.",
     ]
-    if defaults:
-        out += ["\t\tconstexpr FElysiumNpcSlotDefault GDefaults[] =", "\t\t{"]
-        for row in defaults:
-            out += _probe_row(row)
+    if generated:
+        out += [f"\t\tconst {row_type} G{accessor}[] =", "\t\t{"]
+        for row in generated:
+            out += _slot_table_row(row, owner)
         out.append("\t\t};")
     else:
-        out.append("\t\t// No slot carries a recovered default yet.")
-    out += [
-        "",
-        "\t\t// The constant bodies a Troika instance never dispatches to — a class's own body at a",
-        "\t\t// slot a more-derived class refills — called through a qualified (non-virtual) call on",
-        "\t\t// the same instance, which runs exactly that class's body.",
-    ]
-    if shadowed:
-        out += ["\t\tconstexpr FElysiumNpcSlotDefault GShadowedDefaults[] =", "\t\t{"]
-        for row in shadowed:
-            out += _probe_row(row, f"{row.owner}::")
-        out.append("\t\t};")
+        out.append("\t\t// This class declares no generated slot.")
     out += [
         "\t}",
         "",
-        "\tTArrayView<const FElysiumNpcSlotDefault> SlotDefaults()",
+        f"\tTArrayView<const {row_type}> {accessor}()",
         "\t{",
-        ("\t\treturn MakeArrayView(GDefaults);" if defaults
-         else "\t\treturn TArrayView<const FElysiumNpcSlotDefault>();"),
-        "\t}",
-        "",
-        "\tTArrayView<const FElysiumNpcSlotDefault> ShadowedSlotDefaults()",
-        "\t{",
-        ("\t\treturn MakeArrayView(GShadowedDefaults);" if shadowed
-         else "\t\treturn TArrayView<const FElysiumNpcSlotDefault>();"),
+        (f"\t\treturn MakeArrayView(G{accessor});" if generated
+         else f"\t\treturn TArrayView<const {row_type}>();"),
         "\t}",
         "}",
     ]

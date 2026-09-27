@@ -8,6 +8,7 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
+#include "ElysiumFlex.h"
 #include "ElysiumInventorySections.h"
 #include "ElysiumNpcFlags.h"
 #include "ElysiumSheetSlots.h"
@@ -25,8 +26,9 @@ enum class EElysiumDmgFamily : int32;
 // S3 — the player is an entity; the pawn is its body.
 //
 // This header holds the middle chain nodes VtMB's own datamap chain has and the player leaf
-// under them, plus the session-lifetime record the entity hydrates from. `FElysiumAnimating` is
-// declared in its own header, `ElysiumAnimating.h`:
+// under them, plus the session-lifetime record the entity hydrates from. `FElysiumAnimating`,
+// `FElysiumAnimatingOverlay` and `FElysiumFlex` are declared in their own headers
+// (`ElysiumAnimating.h`, `ElysiumAnimatingOverlay.h`, `ElysiumFlex.h`):
 //
 //     FElysiumEntity              CBaseEntity           keyfields, dormancy, I/O, think
 //      +- FElysiumAnimating       CBaseAnimating        a body to follow, clips, skin, disposition
@@ -916,35 +918,6 @@ struct FElysiumReactionPlayRequest
 	//  - a held pose ends when the predicate that asked for it goes false (`Predicate`), and its
 	//    producer must call `FElysiumCombatCharacter::ReleaseHeldReaction` on every path that ends it.
 	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
-};
-
-// FElysiumAnimatingOverlay — CBaseAnimatingOverlay, and FElysiumFlex — CBaseFlex: the two retail
-// nodes between the animating class and the combat character (0019 story 5 step 6). Retail's chain is
-// CBaseAnimating -> CBaseAnimatingOverlay -> CBaseFlex -> CBaseCombatCharacter, and each node owns
-// virtuals and bodies of its own (the gesture layers, the flex weights and scene events). Their
-// datamaps name no external, so neither carries a keyfield; they are declared here, between the two
-// classes they sit between, because the combat character needs them complete.
-
-class FElysiumAnimatingOverlay : public FElysiumAnimating
-{
-public:
-
-public:
-	// The generated slot surface and the hand-written slot bodies of this class's retail node
-	// (0019 story 5 step 6).
-	#include "ElysiumAnimatingOverlaySlots.inl"
-	#include "ElysiumAnimatingOverlaySlotBodies.inl"
-};
-
-class FElysiumFlex : public FElysiumAnimatingOverlay
-{
-public:
-
-public:
-	// The generated slot surface and the hand-written slot bodies of this class's retail node
-	// (0019 story 5 step 6).
-	#include "ElysiumFlexSlots.inl"
-	#include "ElysiumFlexSlotBodies.inl"
 };
 
 class FElysiumCombatCharacter : public FElysiumFlex, public IElysiumCameraOverrideSource

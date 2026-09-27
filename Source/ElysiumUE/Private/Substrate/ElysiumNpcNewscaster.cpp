@@ -132,7 +132,7 @@ void FElysiumNpcNewscaster::NPCInit()
 	SeedCriminalLevelWitnessed();
 	InvestigateMode = 0;
 	InvestigateModeCombat = 0;
-	NpcFlags.SetFrenziedWord(0);
+	SetFrenziedWord(0);
 	Senses.bCanPerformSenses = false;
 	bIsBccTargetable = false;
 }

@@ -348,6 +348,58 @@ public:
 
 	virtual void MakeOblivious(bool bOblivious) override;
 
+	// --- `m_iIsOblivious` (`+0x5bb4`) -------------------------------------------------------------
+	// A `CAI_BaseNPC` word. Its bookkeeping bit `MADE_OBLIVIOUS` is in the combat character's
+	// `m_bfAINPCFlags2` (`NpcFlags`), and the methods below write the pair the way retail's do.
+
+	/**
+	 * `m_iIsOblivious > 0`.
+	 *
+	 * A REFCOUNT, not a flag, and that is load-bearing: retail nests the sources (a scripted scene,
+	 * a grapple, being fed upon, and `TASK_MAKE_OBLIVIOUS` all increment it), so a body that is
+	 * oblivious for two reasons stays oblivious when one of them ends. Its four recovered consumers
+	 * are the sense pass (`CAI_BaseNPC::PerformSensing` `0x1026e4f0` skips sensing entirely), the
+	 * weapon-aim pose (slot 314, `0x102bf070`, stops aiming), a reaction predicate (slot 587,
+	 * `0x1028ef20`) and `CStealthKillRules::FindVictim` (`0x101be1f0`, which makes an oblivious body
+	 * backstabbable from any angle).
+	 */
+	bool IsOblivious() const { return ObliviousCount > 0; }
+	// Grapples own a raw nesting reference, not `TASK_MAKE_OBLIVIOUS`'s bookkeeping bit.
+	void AddGrappleOblivious() { ++ObliviousCount; }
+	void RemoveGrappleOblivious() { ObliviousCount = FMath::Max(0, ObliviousCount - 1); }
+	// `0x1026d130` / `0x1026d160`, the refcount halves of `TASK_MAKE_OBLIVIOUS`: the counter and the
+	// bookkeeping bit, the pair the schedule-change clear keeps consistent. `MakeOblivious` owns the
+	// rest (the enemy, the squad, the outputs).
+	void AddOblivious();
+	void RemoveOblivious();
+	// `m_iIsOblivious`, saved through its generated binding.
+	int32 ObliviousCount = 0;
+
+	// --- `m_bfNPCFrenziedFlags` (`+0x5b84`) ---------------------------------------------------------
+	// A `CAI_BaseNPC` word no task addresses, so it carries no name table. 16c's two discipline arms
+	// write it whole -- `0x3b1c` for `DoPossession` (`0x102c51a0`), `0x9fbd` for `DoFrenzy`
+	// (`0x102c5310`). Bit meanings come from their readers: `0x8` always-PVS/LOS
+	// (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10` "does not witness", `0x800`
+	// the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
+	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
+	// `0x10`, "does not witness". Its one reader is slot 587 `CanWitnessSupernatural`
+	// (`0x1028ef20`, `1028ef53 TEST byte ptr [ESI+0x14c8],0x10`), whose fourth refusal it is: a
+	// frenzied body cannot witness a supernatural act at all. Story 29d, Conditions10.
+	static constexpr uint32 FrenziedDoesNotWitness = 0x00000010;
+	// `0x800`, the frenzy friend. Its readers are slot 467 `QueryHearSound` (`0x102b35b0`,
+	// `102b3621`) and slot 468 `QuerySeeEntity` (`0x102b38b0`, `102b38f1`), which both refuse the
+	// entity `m_hFriendPlayer` (`+0x60ac`) resolves to while the bit stands. Story 29d, Senses10.
+	static constexpr uint32 FrenziedFriendPlayer = 0x00000800;
+	bool HasFrenzied(uint32 Mask) const { return (FrenziedWord & Mask) != 0; }
+	// 16c's writer. Retail assigns the whole word rather than OR-ing, and so does this.
+	void SetFrenziedWord(uint32 Value) { FrenziedWord = Value; }
+	// `m_bfNPCFrenziedFlags`, saved through its generated binding.
+	uint32 FrenziedWord = 0;
+
+	// The flag words by name plus the refcount: the trace row `TASK_MAKE_OBLIVIOUS` and
+	// `TASK_SET_NPC_FLAG` record.
+	FString DescribeNpcFlags() const;
+
 	// Read-only, for the debug layer. The mind is private because every WRITE to it has to go
 	// through `RequestState` / `Acquire` / `Release` so the admission and the body arbitration
 	// cannot be sidestepped; reading its state, its ideal state, its owner and its transition trace

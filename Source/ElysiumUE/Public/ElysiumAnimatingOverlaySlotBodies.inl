@@ -1,6 +1,6 @@
 // `CBaseAnimatingOverlay`'s hand-written slot bodies and the members they reach (story 5 step 6),
 // moved up the chain from `FElysiumNpcBase`. Included inside `class FElysiumAnimatingOverlay`
-// (`ElysiumPlayer.h`), after its generated slot surface; the definitions are in
+// (`ElysiumAnimatingOverlay.h`), after its generated slot surface; the definitions are in
 // `Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp`.
 
 //

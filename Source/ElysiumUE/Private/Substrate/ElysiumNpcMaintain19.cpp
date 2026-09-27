@@ -186,6 +186,7 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 		}
 		if (NpcFlags.ApplyScheduleChangeMasks()) // 0x102a0a19..0x102a0a45
 		{
+			RemoveOblivious();
 			ReconnectToSquad();
 			RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
 		}

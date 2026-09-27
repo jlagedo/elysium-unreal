@@ -355,9 +355,9 @@ NPC_COMPONENT_PATHS: dict[str, str] = {
 # The storage a `CAI_BaseNPC` row may bind (story 5 step 5): the base's own members and the
 # components it holds. A base row resolving to Troika storage is a layer error, not a binding.
 BASE_PORT_TYPES = {"FElysiumNpcBase", "FElysiumCombatCharacter"}
+# `FElysiumNpcFlags` is not one: it holds the combat character's two flag words (story 5 step 6r).
 BASE_COMPONENTS = {"FElysiumNpcBaseScheduleHost", "FElysiumNpcBaseMemory", "FElysiumNpcMind",
-                   "FElysiumNpcEnemyMemory", "FElysiumNpcCognition", "FElysiumNpcFlags",
-                   "FElysiumScheduleState"}
+                   "FElysiumNpcEnemyMemory", "FElysiumNpcCognition", "FElysiumScheduleState"}
 
 
 def check_base_storage(cls: str, offset: int, port_type: str) -> None:

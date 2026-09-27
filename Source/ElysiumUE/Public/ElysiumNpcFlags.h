@@ -4,13 +4,14 @@
 
 struct FElysiumSaveArchive;
 
-// VtMB's per-NPC flag word, and the obliviousness refcount that travels with it.
+// VtMB's per-NPC flag words.
 //
 // Retail carries two 32-bit words on `CBaseCombatCharacter` -- `m_bfAINPCFlags` at `+0x14b8` and
-// `m_bfAINPCFlags2` at `+0x14bc`, both datamap members (builder `0x1031a600`) -- plus an `int`
-// refcount `CAI_BaseNPC::m_iIsOblivious` at `+0x5bb4`. They are one system rather than three
-// fields: the same task writes the bit and bumps the counter, and the same schedule-change virtual
-// clears both.
+// `m_bfAINPCFlags2` at `+0x14bc`, both datamap members (builder `0x1031a600`). The obliviousness
+// refcount `CAI_BaseNPC::m_iIsOblivious` (`+0x5bb4`) works with them -- the same task writes the
+// bookkeeping bit and bumps the counter, and the same schedule-change virtual clears both -- but it
+// is a word of the NPC, not of the combat character, so it lives on `FElysiumNpcBase`, which owns
+// the methods that write the pair (0019 story 5 step 6r).
 //
 // Schedules address the words BY NAME. `TASK_SET_NPC_FLAG` (0x100) and `TASK_CLEAR_NPC_FLAG`
 // (0x101) take an operand spelled `NPCFlag:<name>`, which the schedule compiler resolves through
@@ -110,7 +111,7 @@ enum class EElysiumNpcFlag2 : uint32
 	DISALLOW_TGT_DISCIPLINE  = 0x00000800,
 	// Pure bookkeeping. It has ZERO readers anywhere in retail -- a scan of every access to `+0x14bc`
 	// finds no test of `0x1000`. Its only job is to tell the schedule-change virtual that this NPC
-	// owes a refcount decrement. All the behaviour hangs off `FElysiumNpcFlags::ObliviousCount`.
+	// owes a refcount decrement. All the behaviour hangs off `FElysiumNpcBase::ObliviousCount`.
 	MADE_OBLIVIOUS           = 0x00001000,
 	SQUAD_NEW_ENEMY          = 0x00002000,
 	DONT_FALL_TO_GROUND      = 0x00004000,
@@ -135,7 +136,7 @@ enum class EElysiumNpcFlag2 : uint32
 ENUM_CLASS_FLAGS(EElysiumNpcFlag2);
 
 /**
- * The two flag words and the obliviousness refcount, as one saved object.
+ * The two `CBaseCombatCharacter` flag words, as one saved object.
  *
  * Every mutation retail performs on these is a method here, so a caller cannot write a bit without
  * going through the recovered rule that owns it -- particularly `OnScheduleChange`, which is what
@@ -175,33 +176,9 @@ public:
 	void Clear(EElysiumNpcFlag2 Flag) { Word2 &= ~static_cast<uint32>(Flag); }
 
 	/**
-	 * Is this NPC oblivious -- `m_iIsOblivious > 0`?
-	 *
-	 * A REFCOUNT, not a flag, and that is load-bearing: retail nests the sources (a scripted scene,
-	 * a grapple, being fed upon, and this task all increment it), so a body that is oblivious for
-	 * two reasons stays oblivious when one of them ends.
-	 */
-	bool IsOblivious() const { return ObliviousCount > 0; }
-	// Grapples own a raw nesting reference, not TASK_MAKE_OBLIVIOUS's bookkeeping bit.
-	void AddGrappleOblivious() { ++ObliviousCount; }
-	void RemoveGrappleOblivious() { ObliviousCount = FMath::Max(0, ObliviousCount - 1); }
-
-	/**
-	 * `CAI_BaseNPC` `0x1026d130` / `0x1026d160` -- the increment and decrement halves.
-	 *
-	 * The caller owns the rest of what `TASK_MAKE_OBLIVIOUS` does (clearing the enemy, the outputs),
-	 * because those reach the world and this object does not. What lives here is the counter and the
-	 * bookkeeping bit, which is the pair the schedule-change clear has to keep consistent.
-	 */
-	void AddOblivious();
-	void RemoveOblivious();
-
-	/**
 	 * `CAI_BaseNPCTroika::OnScheduleChange`, virtual slot 435 (`0x102a0940`) -- the tail of every
-	 * `SetSchedule`.
-	 *
-	 * Returns whether the oblivious refcount was released, so the caller can run the world-facing
-	 * half (rejoining a squad, resuming sensing) it owns.
+	 * `SetSchedule`, in three stages the runner (`FElysiumNpc::TroikaOnScheduleChange`) calls in
+	 * retail's order around its own world-facing work.
 	 *
 	 * The recovered body, in order: set `SCHEDULE_CHANGED`; then, ONLY when `PRESERVE_PATH` is
 	 * clear, reset the navigator and apply `Word1 &= 0xbbf4b97e` and `Word2 &= 0x77fff14f`, and if
@@ -217,10 +194,12 @@ public:
 	 * reaches the world, so it lives on the runner (`FElysiumNpc::OnScheduleChange`), which reads
 	 * `PRESERVE_PATH` off this object before calling in here. Same guard, same order.
 	 */
-	bool OnScheduleChange();
 	// Split stages let the host restore bounds/reconnect and dispatch discipline interruption
 	// before 0x102a0940's unconditional tail consumes ACTIVITY_COPY_PROP_CLEAN.
 	void BeginScheduleChange();
+	// The guarded masks. Answers whether `MADE_OBLIVIOUS` survived them, which is retail's test for
+	// owing the refcount release; the release itself (`FElysiumNpcBase::RemoveOblivious`, which also
+	// clears the bit) is the NPC's, because the refcount is its word.
 	bool ApplyScheduleChangeMasks();
 	void FinishScheduleChange();
 	// Slot 448 deliberately clears MADE_OBLIVIOUS without releasing its refcount.
@@ -241,29 +220,10 @@ public:
 	static bool ParseName(const FString& Name, EElysiumNpcFlag& OutWord1, EElysiumNpcFlag2& OutWord2);
 	static const TCHAR* LexToString(EElysiumNpcFlag Flag);
 
-	// --- The two `CAI_BaseNPCTroika` words that are NOT part of the vocabulary above -------------
-	// No task addresses `m_bfNPCFrenziedFlags` or `m_bfNPCStateFlags`, so neither carries a name
-	// table; they live here because they are per-NPC bit state saved and cleared beside the other
-	// two. Both are read-only in this runtime today and both readers say so at the call site.
-	//
-	// Frenzied: 16c's two discipline arms write it whole -- `0x3b1c` for `DoPossession`
-	// (`0x102c51a0`), `0x9fbd` for `DoFrenzy` (`0x102c5310`). Bit meanings come from their readers:
-	// `0x8` always-PVS/LOS (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10`
-	// "does not witness", `0x800` the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
-	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
-	// `0x10`, "does not witness". Its one reader is slot 587 `CanWitnessSupernatural`
-	// (`0x1028ef20`, `1028ef53 TEST byte ptr [ESI+0x14c8],0x10`), whose fourth refusal it is: a
-	// frenzied body cannot witness a supernatural act at all. Story 29d, Conditions10.
-	static constexpr uint32 FrenziedDoesNotWitness = 0x00000010;
-	// `0x800`, the frenzy friend. Its readers are slot 467 `QueryHearSound` (`0x102b35b0`,
-	// `102b3621`) and slot 468 `QuerySeeEntity` (`0x102b38b0`, `102b38f1`), which both refuse the
-	// entity `m_hFriendPlayer` (`+0x60ac`) resolves to while the bit stands. Story 29d, Senses10.
-	static constexpr uint32 FrenziedFriendPlayer = 0x00000800;
-	bool HasFrenzied(uint32 Mask) const { return (FrenziedWord & Mask) != 0; }
-	// 16c's writer. Retail assigns the whole word rather than OR-ing, and so does this.
-	void SetFrenziedWord(uint32 Value) { FrenziedWord = Value; }
-
 	// --- `m_bfNPCStateFlags`, the per-state capability byte -------------------------------------
+	// A `CAI_BaseNPC` word (`+0x5b64`) with no storage in this runtime: the byte is derived, so only
+	// its table lives here, beside the flag vocabulary its readers test with it.
+	//
 	// `0x1026e3e0`, called on every state change with the new `m_NPCState`, assigns the whole byte
 	// from this table (retail ids: 1 idle, 2 combat, 3 alert, 4 script, 7 dead, 8 flee, 0xb hunt):
 	//   default 0x30; 1 -> 0x31; 2 -> 0x8f; 3 -> 0x39; 4 -> 0x08; 5/6/0xc -> 0x00;
@@ -281,8 +241,4 @@ private:
 	// `m_bfAINPCFlags` / `m_bfAINPCFlags2`.
 	uint32 Word1 = 0;
 	uint32 Word2 = 0;
-	// `CAI_BaseNPC::m_iIsOblivious`, `+0x5bb4`.
-	int32 ObliviousCount = 0;
-	// `m_bfNPCFrenziedFlags`.
-	uint32 FrenziedWord = 0;
 };

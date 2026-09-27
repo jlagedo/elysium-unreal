@@ -98,7 +98,7 @@ SLOT_DISPOSITION = re.compile(r"^(keep|move|move-hand|new-chain-row|adapter:\w+|
 MOVE_COLUMNS = ("member", "kind", "current_owner", "declared_in", "defined_in", "final_owner",
                 "disposition", "packet", "note")
 MOVE_DISPOSITION = re.compile(r"^(move|stay:.+|investigate)$")
-PACKETS = {"6a", "6b", "6c", "6d", "6e", "6f", "6g", "6h", "6i", "-"}
+PACKETS = {"6a", "6b", "6c", "6d", "6e", "6f", "6g", "6h", "6i", "6r", "-"}  # 6r: the step-6 review follow-up
 
 SLOT_HEAD = re.compile(r"^\s*// slot (\d+)\s+(0x[0-9a-f]+|no body)\s+\(")
 
@@ -505,4 +505,37 @@ def _check_step6(directory: Path, tree: Path) -> dict:
         raise km.InvalidManifest("step-6 runtime gate incomplete/failing")
     if not artifacts["cheap_checks"] or any(r["exit"] for r in artifacts["cheap_checks"]):
         raise km.InvalidManifest("step-6 cheap/Python gates incomplete/failing")
-    return {**counts, "step5": {k: v for k, v in step5.items() if k != "step4"}}
+    review = check_review_receipt(directory)
+    return {**counts, "step5": {k: v for k, v in step5.items() if k != "step4"},
+            **({"review_6r": review} if review else {})}
+
+
+def check_review_receipt(directory: Path) -> dict:
+    """The step-6 review follow-up (packet 6r), compared against step 6's own accepted gate: its
+    pinned evidence, a passing regression comparison that consumed every 6r expectation, and a
+    green runtime and cheap-check gate. Absent before the follow-up lands."""
+    path = directory / "acceptance-step6r.json"
+    if not path.is_file():
+        return {}
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("scope") != "step-6r-review-follow-up":
+        raise km.InvalidManifest("acceptance-step6r.json does not record the step-6 review follow-up")
+    artifacts = {}
+    for name in ("delta", "runtime", "cheap_checks"):
+        ref = record["artifacts"][name]
+        artifact = Path(ref["path"])
+        if not artifact.is_absolute() or not artifact.is_file() or file_sha(artifact) != ref["sha256"]:
+            raise km.InvalidManifest(f"step-6r evidence changed/missing: {name}")
+        artifacts[name] = json.loads(artifact.read_text(encoding="utf-8-sig"))
+    delta = artifacts["delta"]
+    if not delta.get("comparison_passed") or delta.get("differences"):
+        raise km.InvalidManifest("step-6r regression comparison has unmatched differences")
+    expectations = json.loads((directory / "expectations/step-6r.json").read_text(encoding="utf-8"))
+    unused = {c["id"] for c in expectations["changes"]} - set(delta.get("applied_expectations", []))
+    if unused:
+        raise km.InvalidManifest("unconsumed step-6r expectations: " + ", ".join(sorted(unused)))
+    if len(artifacts["runtime"]) != 4 or any(r["exit"] for r in artifacts["runtime"]):
+        raise km.InvalidManifest("step-6r runtime gate incomplete/failing")
+    if not artifacts["cheap_checks"] or any(r["exit"] for r in artifacts["cheap_checks"]):
+        raise km.InvalidManifest("step-6r cheap/Python gates incomplete/failing")
+    return {"expectations": len(expectations["changes"]), "results": record.get("results", {})}

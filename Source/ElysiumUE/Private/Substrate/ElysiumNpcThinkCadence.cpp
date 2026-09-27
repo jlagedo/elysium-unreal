@@ -59,7 +59,7 @@ ElysiumNpcThink::FInputs ElysiumNpcThink::GatherInputs(const FElysiumNpc& Npc)
 	In.bScheduleChanged = Npc.NpcFlags.Has(EElysiumNpcFlag2::SCHEDULE_CHANGED);
 	In.bThinkFrequently = ShouldThinkFrequently(Npc);
 	In.bAlwaysInPlayerView =
-		Npc.NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedAlwaysInPlayerView);
+		Npc.HasFrenzied(FElysiumNpcBase::FrenziedAlwaysInPlayerView);
 	return In;
 }
 

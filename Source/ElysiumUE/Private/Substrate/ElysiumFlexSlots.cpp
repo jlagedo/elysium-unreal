@@ -19,13 +19,14 @@
 // A body with a `default:` verdict says something stronger: retail's whole body at that
 // slot is `return <literal>;`, so the port answers the same literal and stops tallying.
 // The literal is a recovered fact, not a written behaviour — the same argument the story
-// makes for a species override of a constant-returning virtual — and the probe tables in
-// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and
-// `.ShadowedDefaults` call every one of them through.
+// makes for a species override of a constant-returning virtual — and the slot table at the
+// end of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of
+// them through, on a receiver typed to this class.
 
-#include "ElysiumPlayer.h"
+#include "ElysiumFlex.h"
 
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumNpcKernelShape.h"
 
 namespace
 {
@@ -191,3 +192,111 @@ void FElysiumFlex::AddSceneEvent(void*, void*)
 //   layer 3, story 29c
 // verdict `mechanism`: the body is `FElysiumFlex::ProcessGestureSceneEvent`, written by hand in the
 // substrate. Declared here, defined there.
+
+namespace ElysiumNpcKernelShape
+{
+	namespace
+	{
+		// Every generated slot row of `FElysiumFlex`, in slot order: the census the class answers
+		// for (`Elysium.Substrate.NpcKernelShape.SlotOwners`) and, for each recovered default,
+		// the probe `Elysium.Substrate.NpcKernelSlots.Defaults` calls on a receiver of this
+		// class. `bDeclaredHere` is decided by the compiler, not written.
+		const TElysiumNpcSlotRow<FElysiumFlex> GFlexSlotRows[] =
+		{
+			{ 5, TEXT("0x100b5940"), TEXT("CBaseFlex"), TEXT("Slot5"), EElysiumNpcSlotBody::Stub,
+				TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*(uint32)>::Test(&FElysiumFlex::Slot5),
+				nullptr },
+			{ 79, TEXT("0x100b58b0"), TEXT("CBaseFlex"), TEXT("GetPredDescMap"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*()>::Test(&FElysiumFlex::GetPredDescMap),
+				nullptr },
+			{ 80, TEXT("0x100b5520"), TEXT("CBaseFlex"), TEXT("GetServerClass"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*()>::Test(&FElysiumFlex::GetServerClass),
+				nullptr },
+			{ 81, TEXT("0x100b5540"), TEXT("CBaseFlex"),
+				TEXT("YouForgotToImplementOrDeclareServerClass"), EElysiumNpcSlotBody::Stub,
+				TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, int32()>::Test(&FElysiumFlex::YouForgotToImplementOrDeclareServerClass),
+				nullptr },
+			{ 82, TEXT("0x100b57b0"), TEXT("CBaseFlex"), TEXT("GetDataDescMap"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*()>::Test(&FElysiumFlex::GetDataDescMap),
+				nullptr },
+			{ 105, TEXT("0x100b5ab0"), TEXT("CBaseFlex"), TEXT("SetModel"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(TCHAR*)>::Test(&FElysiumFlex::SetModel),
+				nullptr },
+			{ 276, TEXT("0x100b5ce0"), TEXT("CBaseFlex"), TEXT("Blink"), EElysiumNpcSlotBody::Stub,
+				TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void()>::Test(&FElysiumFlex::Blink),
+				nullptr },
+			{ 277, TEXT("0x100b5b00"), TEXT("CBaseFlex"), TEXT("SetViewtarget"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(const FVector&)>::Test(&FElysiumFlex::SetViewtarget),
+				nullptr },
+			{ 278, TEXT("0x100b5b40"), TEXT("CBaseFlex"), TEXT("GetViewtarget"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*() const>::Test(&FElysiumFlex::GetViewtarget),
+				nullptr },
+			{ 279, TEXT("0x100b5ba0"), TEXT("CBaseFlex"), TEXT("SetFlexWeight"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(int32, float)>::Test(&FElysiumFlex::SetFlexWeight),
+				nullptr },
+			{ 280, TEXT("0x100b5b60"), TEXT("CBaseFlex"), TEXT("SetFlexWeight"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(TCHAR*, float)>::Test(&FElysiumFlex::SetFlexWeight),
+				nullptr },
+			{ 281, TEXT("0x100b5c50"), TEXT("CBaseFlex"), TEXT("GetFlexWeight"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, float(int32)>::Test(&FElysiumFlex::GetFlexWeight),
+				nullptr },
+			{ 282, TEXT("0x100b5c20"), TEXT("CBaseFlex"), TEXT("GetFlexWeight"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, float(TCHAR*)>::Test(&FElysiumFlex::GetFlexWeight),
+				nullptr },
+			{ 283, TEXT("0x100b6250"), TEXT("CBaseFlex"), TEXT("ProcessSceneEvents"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void()>::Test(&FElysiumFlex::ProcessSceneEvents),
+				nullptr },
+			{ 284, TEXT("0x100b65b0"), TEXT("CBaseFlex"), TEXT("AddSceneExpressions"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void()>::Test(&FElysiumFlex::AddSceneExpressions),
+				nullptr },
+			{ 285, TEXT("0x100b5d80"), TEXT("CBaseFlex"), TEXT("ClearSceneEvents"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ClearSceneEvents),
+				nullptr },
+			{ 286, TEXT("0x100b5e60"), TEXT("CBaseFlex"), TEXT("AddSceneEvent"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*, void*)>::Test(&FElysiumFlex::AddSceneEvent),
+				nullptr },
+			{ 287, TEXT("0x100b6180"), TEXT("CBaseFlex"), TEXT("RemoveSceneEvent"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::RemoveSceneEvent),
+				nullptr },
+			{ 288, TEXT("0x100b6cf0"), TEXT("CBaseFlex"), TEXT("AddFlexSetting"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(const TCHAR*, float, void*, void*, bool)>::Test(&FElysiumFlex::AddFlexSetting),
+				nullptr },
+			{ 289, TEXT("0x100b6960"), TEXT("CBaseFlex"), TEXT("AddFlexAnimation"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::AddFlexAnimation),
+				nullptr },
+			{ 290, TEXT("0x100b70e0"), TEXT("CBaseFlex"), TEXT("ProcessSequenceSceneEvent"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ProcessSequenceSceneEvent),
+				nullptr },
+			{ 291, TEXT("0x100b7040"), TEXT("CBaseFlex"), TEXT("ProcessGestureSceneEvent"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ProcessGestureSceneEvent),
+				nullptr },
+		};
+	}
+
+	TArrayView<const TElysiumNpcSlotRow<FElysiumFlex>> FlexSlotRows()
+	{
+		return MakeArrayView(GFlexSlotRows);
+	}
+}

@@ -2,7 +2,7 @@
 // moved up the chain from `FElysiumNpcBase`. Declarations are generated in
 // `ElysiumFlexSlots.inl` (a slot body) or in `ElysiumFlexSlotBodies.inl`.
 
-#include "ElysiumPlayer.h"
+#include "ElysiumFlex.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"

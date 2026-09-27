@@ -2,6 +2,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Algo/Find.h"
+#include "ElysiumAnimatingOverlay.h"
+#include "ElysiumClassRegistry.h"
+#include "ElysiumFlex.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -341,23 +346,322 @@ bool FElysiumNpcKernelShapeMapTest::RunTest(const FString&)
 	return true;
 }
 
+// --- The per-class slot tables --------------------------------------------------------------------
+
+namespace
+{
+	// The retail class each port class stands for (0019 story 5 step 6). The port has no
+	// `CBaseToggle` node; its bodies stand on `FElysiumAnimating`, the nearest port class below it.
+	const TCHAR* PortClassOf(const TCHAR* Retail)
+	{
+		static const TCHAR* const Map[][2] =
+		{
+			{ TEXT("CBaseEntity"), TEXT("FElysiumEntity") },
+			{ TEXT("CBaseToggle"), TEXT("FElysiumAnimating") },
+			{ TEXT("CBaseAnimating"), TEXT("FElysiumAnimating") },
+			{ TEXT("CBaseAnimatingOverlay"), TEXT("FElysiumAnimatingOverlay") },
+			{ TEXT("CBaseFlex"), TEXT("FElysiumFlex") },
+			{ TEXT("CBaseCombatCharacter"), TEXT("FElysiumCombatCharacter") },
+			{ TEXT("CAI_BaseNPC"), TEXT("FElysiumNpcBase") },
+			{ TEXT("CAI_BaseNPCTroika"), TEXT("FElysiumNpc") },
+		};
+		for (const TCHAR* const* Row : Map)
+		{
+			if (FCString::Strcmp(Row[0], Retail) == 0)
+			{
+				return Row[1];
+			}
+		}
+		return nullptr;
+	}
+
+	// The registry descriptor that stands for a retail layer.
+	FName DescriptorOf(const TCHAR* Retail)
+	{
+		return FCString::Strcmp(Retail, TEXT("CBaseToggle")) == 0 ? FName(TEXT("CBaseAnimating"))
+			: FName(Retail);
+	}
+
+	// Receivers for the defaults probes: a bare instance of each port class, so a virtual call runs
+	// exactly that class's own body. The pattern is `FElysiumActivatePassProbe`'s.
+	class FSlotProbeEntity final : public FElysiumEntity {};
+	class FSlotProbeAnimating final : public FElysiumAnimating {};
+	class FSlotProbeAnimatingOverlay final : public FElysiumAnimatingOverlay {};
+	class FSlotProbeFlex final : public FElysiumFlex {};
+	class FSlotProbeCombatCharacter final : public FElysiumCombatCharacter {};
+	// A base-only NPC (story 5 step 5): the interface's four pure hooks answer the inert value.
+	class FSlotProbeNpcBase final : public FElysiumNpcBase
+	{
+	public:
+		virtual float RunSpecialIdleActivity(double) override { return 0.f; }
+		virtual bool IsBodyVisible() const override { return false; }
+		virtual float PlayActivity(const FString&) override { return 0.f; }
+		virtual float RandomSeconds(float) override { return 0.f; }
+	};
+
+	using FSlotKey = TPair<int32, FString>;
+
+	// Calls every `Default` row of one class's table on a receiver of that class and requires
+	// retail's literal back; records each probed (slot, body).
+	template <typename TReceiver>
+	void ProbeDefaults(FAutomationTestBase& Test, const TCHAR* PortClass,
+		TArrayView<const TElysiumNpcSlotRow<TReceiver>> Rows, TReceiver& Receiver, TSet<FSlotKey>& OutProbed)
+	{
+		for (const TElysiumNpcSlotRow<TReceiver>& Row : Rows)
+		{
+			if (Row.Body != EElysiumNpcSlotBody::Default)
+			{
+				continue;
+			}
+			OutProbed.Add(FSlotKey(Row.Slot, Row.Address));
+			if (!Test.TestNotNull(FString::Printf(TEXT("%s slot %d carries a probe"), PortClass, Row.Slot),
+				Row.Invoke))
+			{
+				continue;
+			}
+			const int64 Answer = Row.Invoke(Receiver);
+			if (!Row.bVoid)
+			{
+				Test.TestEqual(FString::Printf(TEXT("%s slot %d (%s, %s) answers retail's %s"), PortClass,
+					Row.Slot, Row.Address, Row.PortMethod, Row.Default), Answer, Row.Value);
+			}
+		}
+	}
+
+	// One class's table against the chain it models: every row is declared on the class itself,
+	// names a retail owner the class stands for, and overrides exactly when a more-base class
+	// declares the slot. `InOutBaseSlots` carries the slots the more-base tables declared.
+	template <typename TReceiver>
+	void CheckSlotTable(FAutomationTestBase& Test, const TCHAR* PortClass,
+		TArrayView<const TElysiumNpcSlotRow<TReceiver>> Rows, TSet<int32>& InOutBaseSlots,
+		TSet<FSlotKey>& OutRows)
+	{
+		Test.TestTrue(FString::Printf(TEXT("%s declares generated slots"), PortClass), Rows.Num() > 0);
+		TSet<int32> Own;
+		for (const TElysiumNpcSlotRow<TReceiver>& Row : Rows)
+		{
+			const FString What = FString::Printf(TEXT("%s slot %d %s (%s)"), PortClass, Row.Slot,
+				Row.PortMethod, Row.Address);
+			Test.TestTrue(What + TEXT(" is declared on the class itself"), Row.bDeclaredHere);
+			const TCHAR* Owner = PortClassOf(Row.Retail);
+			// A stub tallies under `Retail::PortMethod`, so this is also the owner prefix of its text.
+			Test.TestTrue(What + FString::Printf(TEXT(": its body's owner %s is this class's retail node"),
+				Row.Retail), Owner != nullptr && FCString::Strcmp(Owner, PortClass) == 0);
+			Test.TestEqual(What + TEXT(" overrides exactly when a more-base class declares the slot"),
+				Row.bOverride, InOutBaseSlots.Contains(Row.Slot));
+			Test.TestEqual(What + TEXT(": a probe exactly on a default row"), Row.Invoke != nullptr,
+				Row.Body == EElysiumNpcSlotBody::Default);
+			Own.Add(Row.Slot);
+			OutRows.Add(FSlotKey(Row.Slot, Row.Address));
+		}
+		InOutBaseSlots.Append(Own);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSlotOwnersTest,
+	"Elysium.Substrate.NpcKernelShape.SlotOwners", GElysiumNpcShapeFlags)
+bool FElysiumNpcKernelSlotOwnersTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcKernelShape;
+
+	// Base first, so each table sees the slots its bases declared.
+	TSet<int32> BaseSlots;
+	TSet<FSlotKey> Rows;
+	CheckSlotTable(*this, TEXT("FElysiumEntity"), EntitySlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumAnimating"), AnimatingSlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumAnimatingOverlay"), AnimatingOverlaySlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumFlex"), FlexSlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumCombatCharacter"), CombatCharacterSlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumNpcBase"), NpcBaseSlotRows(), BaseSlots, Rows);
+	CheckSlotTable(*this, TEXT("FElysiumNpc"), NpcSlotRows(), BaseSlots, Rows);
+
+	// Every generated body a Troika instance runs is a row of the class that owns it. A slot the
+	// port implements elsewhere (`bPorted`, e.g. 118 `AcceptInput` on the world's chokepoint) and a
+	// deleted dead stub (582) carry no generated row.
+	int32 Joined = 0;
+	for (const FElysiumNpcSlot& Slot : Slots())
+	{
+		if ((Slot.Class != nullptr && FCString::Strlen(Slot.Class) > 0) || Slot.bPorted
+			|| FCString::Strlen(Slot.PortMethod) == 0 || FCString::Strlen(Slot.Address) == 0)
+		{
+			continue;
+		}
+		++Joined;
+		TestTrue(FString::Printf(TEXT("slot %d %s (%s) is a row of its owner's table"), Slot.Slot,
+			Slot.PortMethod, Slot.Address), Rows.Contains(FSlotKey(Slot.Slot, Slot.Address)));
+	}
+	TestTrue(TEXT("the census has generated Troika rows to join"), Joined > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFieldOwnersTest,
+	"Elysium.Substrate.NpcKernelShape.FieldOwners", GElysiumNpcShapeFlags)
+bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcKernelShape;
+
+	// The storage each shape-map owner type is: a port class, or a component the named class holds.
+	// Held components per `gen_kernel_bindings.py` `NPC_COMPONENT_PATHS` / `BASE_COMPONENTS`.
+	static const TCHAR* const Holders[][2] =
+	{
+		{ TEXT("FElysiumEntity"), TEXT("FElysiumEntity") },
+		{ TEXT("FElysiumAnimating"), TEXT("FElysiumAnimating") },
+		{ TEXT("FElysiumAnimatingOverlay"), TEXT("FElysiumAnimatingOverlay") },
+		{ TEXT("FElysiumFlex"), TEXT("FElysiumFlex") },
+		{ TEXT("FElysiumCombatCharacter"), TEXT("FElysiumCombatCharacter") },
+		{ TEXT("FElysiumNpcFlags"), TEXT("FElysiumCombatCharacter") },
+		{ TEXT("FElysiumNpcBase"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpcBaseScheduleHost"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpcBaseMemory"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpcMind"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpcEnemyMemory"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpcCognition"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumScheduleState"), TEXT("FElysiumNpcBase") },
+		{ TEXT("FElysiumNpc"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcScheduleHost"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcSenses"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcPerception"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcMemory"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcWitness"), TEXT("FElysiumNpc") },
+		{ TEXT("FElysiumNpcDialogue"), TEXT("FElysiumNpc") },
+	};
+	auto HolderOf = [](const FString& Type) -> const TCHAR*
+	{
+		for (const TCHAR* const* Row : Holders)
+		{
+			if (Type == Row[0])
+			{
+				return Row[1];
+			}
+		}
+		return nullptr;
+	};
+	auto WordAt = [](int32 Offset) -> const FElysiumNpcWord*
+	{
+		for (const FElysiumNpcWord& Word : Words())
+		{
+			if (IsTroikaTable(Word) && Word.Offset == Offset)
+			{
+				return &Word;
+			}
+		}
+		return nullptr;
+	};
+
+	// The words stored away from their owner on a recorded transitional home, each with the fold
+	// that ends it. `m_pSenses` (`+0x5cdc`) is `CAI_BaseNPC`'s, but a base-only NPC's `CAI_Senses` is
+	// unported until fold 9 (`story-5/decisions-step5.json` `transitional.Senses`), so the object
+	// stays on the Troika and the base reaches it through `SensesObject()`.
+	static const int32 Transitional[] = { 0x5cdc };
+
+	// The shape map: each word the NPC stores is a member of the port class of its declaring retail
+	// class (or of a component that class holds). A `Chain` row is a word the port carries beside
+	// the NPC's storage, so it must not name NPC storage; one naming a chain class names its own.
+	int32 Members = 0;
+	int32 TransitionalSeen = 0;
+	for (const FElysiumNpcWordBinding& Row : ElysiumNpcKernelShapeMap::Bindings())
+	{
+		if (Row.PortPath == nullptr)
+		{
+			continue;
+		}
+		const FElysiumNpcWord* Word = WordAt(Row.Offset);
+		if (!TestNotNull(FString::Printf(TEXT("+0x%04x is a census word"), Row.Offset), Word))
+		{
+			continue;
+		}
+		FString Type;
+		FString Member;
+		FString(Row.PortPath).Split(TEXT("::"), &Type, &Member);
+		const TCHAR* Holder = HolderOf(Type);
+		const TCHAR* Expected = PortClassOf(Word->Layer);
+		if (Row.Home == EElysiumNpcWordHome::Member)
+		{
+			++Members;
+			if (Algo::Find(Transitional, Row.Offset) != nullptr)
+			{
+				++TransitionalSeen;
+				TestTrue(FString::Printf(TEXT("+0x%04x is a transitional home that still says so"), Row.Offset),
+					Row.Note != nullptr && FCString::Strlen(Row.Note) > 0);
+				continue;
+			}
+			TestTrue(FString::Printf(TEXT("+0x%04x %s (%s) is stored on %s, not %s"), Row.Offset, Word->Member,
+				Word->Layer, Expected, Holder != nullptr ? Holder : *Type),
+				Holder != nullptr && Expected != nullptr && FCString::Strcmp(Holder, Expected) == 0);
+		}
+		else if (Row.Home == EElysiumNpcWordHome::Chain && Holder != nullptr)
+		{
+			const bool bNpcStorage = FCString::Strcmp(Holder, TEXT("FElysiumNpcBase")) == 0
+				|| FCString::Strcmp(Holder, TEXT("FElysiumNpc")) == 0;
+			TestFalse(FString::Printf(TEXT("+0x%04x %s: a chain row does not name NPC storage (%s)"),
+				Row.Offset, Word->Member, *Type), bNpcStorage);
+			if (!IsNpcLayer(*Word))
+			{
+				TestTrue(FString::Printf(TEXT("+0x%04x %s: a chain word is its own layer's (%s)"), Row.Offset,
+					Word->Member, Word->Layer), Expected != nullptr && FCString::Strcmp(Holder, Expected) == 0);
+			}
+		}
+	}
+	TestTrue(TEXT("the shape map binds member words"), Members > 0);
+	TestEqual(TEXT("every listed transitional home is still a shape-map member row"), TransitionalSeen,
+		static_cast<int32>(UE_ARRAY_COUNT(Transitional)));
+
+	// The registry: every census word the Troika's descriptor chain binds by its datamap name is
+	// bound on the descriptor of its declaring layer, down the whole chain (CBaseEntity up to the
+	// Troika), never copied onto another.
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	int32 Bound = 0;
+	for (const FElysiumClassDesc* Desc = Reg.Find(FName(TEXT("CAI_BaseNPCTroika"))); Desc != nullptr;
+		Desc = Desc->BaseName.IsNone() ? nullptr : Reg.Find(Desc->BaseName))
+	{
+		for (const TPair<FName, FElysiumFieldAccessor>& Field : Desc->Fields)
+		{
+			const FString Name = Field.Key.ToString();
+			bool bCensus = false;
+			bool bOwnLayer = false;
+			FString Layers;
+			for (const FElysiumNpcWord& Word : Words())
+			{
+				if (IsTroikaTable(Word) && Name == Word.Member)
+				{
+					bCensus = true;
+					bOwnLayer |= DescriptorOf(Word.Layer) == Desc->ClassName;
+					Layers += FString(Layers.IsEmpty() ? TEXT("") : TEXT(" ")) + Word.Layer;
+				}
+			}
+			if (!bCensus)
+			{
+				continue;
+			}
+			++Bound;
+			TestTrue(FString::Printf(TEXT("%s is bound on %s, the descriptor of its layer (%s)"), *Name,
+				*Desc->ClassName.ToString(), *Layers), bOwnLayer);
+		}
+	}
+	TestTrue(TEXT("the descriptor chain binds census words"), Bound > 0);
+	return true;
+}
+
 // --- The recovered slot defaults ------------------------------------------------------------------
 
 // Story 29c's `rule` rows whose whole retail body is one literal.
 //
 // Those slots' port bodies are generated from the recovered literal rather than written, which
-// makes this suite the thing that keeps the two joined: it stands one NPC, calls every generated
-// virtual through the probe the generator emitted for it, and requires retail's own answer back.
-// It also requires that the call tallied no stub — that is the half that proves the generated body
-// replaced the stub rather than sitting beside it.
+// makes this suite the thing that keeps the two joined: it calls every generated default through
+// the probe its class's slot table carries, on a receiver of exactly that class, and requires
+// retail's own answer back. It also requires that the calls tallied no stub — the half that proves
+// the generated body replaced the stub rather than sitting beside it.
 //
 // One suite covers every `default:` row, which is deliberate and is the same argument the story
 // makes for species overrides: the literal is data, and data is tested once over its table, not
-// once per row.
+// once per row. The receivers are one bare instance per chain class, a base-only NPC for
+// `CAI_BaseNPC`'s own bodies (step 5's typed probe) and a Troika NPC for the Troika's.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSlotDefaultsTest,
 	"Elysium.Substrate.NpcKernelSlots.Defaults", GElysiumNpcShapeFlags)
 bool FElysiumNpcKernelSlotDefaultsTest::RunTest(const FString&)
 {
+	using namespace ElysiumNpcKernelShape;
+
 	FElysiumNpcWorldBuilder Builder(TEXT("kernel_slot_defaults"), 29003u);
 	Builder.AddNpc(TEXT("subject"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
@@ -368,38 +672,40 @@ bool FElysiumNpcKernelSlotDefaultsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({Npc});
 
-	// The slot rows say which slots carry a default; the probe table has to agree with them, or a
-	// row was emitted into one and not the other.
-	TSet<int32> Declared;
-	for (const FElysiumNpcSlot& Slot : ElysiumNpcKernelShape::Slots())
+	FSlotProbeEntity Entity;
+	FSlotProbeAnimating Animating;
+	FSlotProbeAnimatingOverlay Overlay;
+	FSlotProbeFlex Flex;
+	FSlotProbeCombatCharacter Combat;
+	FSlotProbeNpcBase Base;
+
+	ElysiumStub::ClearTally();
+	TSet<FSlotKey> Probed;
+	ProbeDefaults<FElysiumEntity>(*this, TEXT("FElysiumEntity"), EntitySlotRows(), Entity, Probed);
+	ProbeDefaults<FElysiumAnimating>(*this, TEXT("FElysiumAnimating"), AnimatingSlotRows(), Animating, Probed);
+	ProbeDefaults<FElysiumAnimatingOverlay>(*this, TEXT("FElysiumAnimatingOverlay"), AnimatingOverlaySlotRows(),
+		Overlay, Probed);
+	ProbeDefaults<FElysiumFlex>(*this, TEXT("FElysiumFlex"), FlexSlotRows(), Flex, Probed);
+	ProbeDefaults<FElysiumCombatCharacter>(*this, TEXT("FElysiumCombatCharacter"), CombatCharacterSlotRows(),
+		Combat, Probed);
+	ProbeDefaults<FElysiumNpcBase>(*this, TEXT("FElysiumNpcBase"), NpcBaseSlotRows(), Base, Probed);
+	ProbeDefaults<FElysiumNpc>(*this, TEXT("FElysiumNpc"), NpcSlotRows(), *Npc, Probed);
+
+	// Every default the census gives the Troika table (the body a Troika instance runs) is one of
+	// the probed rows; the rest are a class's own constant body under a more-derived one.
+	int32 Declared = 0;
+	for (const FElysiumNpcSlot& Slot : Slots())
 	{
 		if ((Slot.Class == nullptr || FCString::Strlen(Slot.Class) == 0)
 			&& FCString::Strlen(Slot.Default) > 0)
 		{
-			Declared.Add(Slot.Slot);
+			++Declared;
+			TestTrue(FString::Printf(TEXT("slot %d (%s)'s default is probed on its owner"), Slot.Slot,
+				Slot.Address), Probed.Contains(FSlotKey(Slot.Slot, Slot.Address)));
 		}
 	}
-
-	TArrayView<const FElysiumNpcSlotDefault> Rows = ElysiumNpcKernelShape::SlotDefaults();
-	TestEqual(TEXT("every slot the census gives a default has a probe"), Rows.Num(),
-		Declared.Num());
-
-	ElysiumStub::ClearTally();
-	for (const FElysiumNpcSlotDefault& Row : Rows)
-	{
-		if (!TestNotNull(FString::Printf(TEXT("slot %d carries a probe"), Row.Slot), Row.Invoke))
-		{
-			continue;
-		}
-		TestTrue(FString::Printf(TEXT("slot %d's probe is a slot the census declared"), Row.Slot),
-			Declared.Contains(Row.Slot));
-		const int64 Answer = Row.Invoke(*Npc);
-		if (!Row.bVoid)
-		{
-			TestEqual(FString::Printf(TEXT("slot %d (%s, %s) answers retail's %s"), Row.Slot,
-				Row.Address, Row.PortMethod, Row.Retail), Answer, Row.Value);
-		}
-	}
+	TestTrue(TEXT("the census gives defaults"), Declared > 0);
+	TestTrue(TEXT("and the tables probe at least those"), Probed.Num() >= Declared);
 
 	// Not one of them may report itself unimplemented: a `default:` verdict says retail's answer
 	// is recovered, and a stub firing would mean the generator emitted the comment without the

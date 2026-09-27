@@ -252,10 +252,10 @@ bool FElysiumNpcKernelSenses10QueryHearSoundTest::RunTest(const FString&)
 
 	// `102b361b`: the frenzy-friend veto — the arm the port did not have.
 	F.Guard->FriendPlayer = F.Other->Handle;
-	F.Guard->NpcFlags.SetFrenziedWord(FElysiumNpcFlags::FrenziedFriendPlayer);
+	F.Guard->SetFrenziedWord(FElysiumNpcBase::FrenziedFriendPlayer);
 	TestFalse(TEXT("0x102b3621 a frenzied body refuses its friend's sound"),
 		F.Guard->QueryHearSound(&Sound));
-	F.Guard->NpcFlags.SetFrenziedWord(0);
+	F.Guard->SetFrenziedWord(0);
 	TestTrue(TEXT("...and without the 0x800 bit it hears it again"),
 		F.Guard->QueryHearSound(&Sound));
 	F.Guard->FriendPlayer = FElysiumEntityHandle::Invalid();
@@ -306,10 +306,10 @@ bool FElysiumNpcKernelSenses10QuerySeeEntityTest::RunTest(const FString&)
 
 	// `102b38f1`: the frenzy-friend veto beats even the unconditional player arm.
 	F.Guard->FriendPlayer = F.Player->Handle;
-	F.Guard->NpcFlags.SetFrenziedWord(FElysiumNpcFlags::FrenziedFriendPlayer);
+	F.Guard->SetFrenziedWord(FElysiumNpcBase::FrenziedFriendPlayer);
 	TestFalse(TEXT("0x102b38f1 a frenzied body refuses its friend before the player arm"),
 		F.Guard->QuerySeeEntity(F.Player));
-	F.Guard->NpcFlags.SetFrenziedWord(0);
+	F.Guard->SetFrenziedWord(0);
 	TestTrue(TEXT("...and without the bit the player arm answers again"),
 		F.Guard->QuerySeeEntity(F.Player));
 	return true;

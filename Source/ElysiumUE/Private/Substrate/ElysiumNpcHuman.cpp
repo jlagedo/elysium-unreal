@@ -263,7 +263,7 @@ int32 FElysiumNpcHuman::HumanNpcEarlyTranslateActivity(int32 Activity)
 		// `m_bfAINPCFlags & 0x10000` wins over everything below it.
 		bAggressiveAnims = false;
 	}
-	else if (NpcFlags.HasFrenzied(GAnim10FrenziedForceAggressive))
+	else if (HasFrenzied(GAnim10FrenziedForceAggressive))
 	{
 		// `m_bfNPCFrenziedFlags & 0x200` skips the state ladder entirely and sets the flag.
 		bAggressiveAnims = true;

@@ -480,10 +480,9 @@ bool FElysiumNpcKernelEntityChainIdSpaceTest::RunTest(const FString&)
 	// Slot 580 is this family's row (`0x101aa790`) and family Schedule's walk is its body: this
 	// NPC's own space out of the loaded corpus, or the Troika line's where its class has no
 	// slot-580 body. It is never null.
-	TestNotNull(TEXT("slot 580 answers an id space"), Npc.GetClassScheduleIdSpace());
-	TestEqual(TEXT("and it IS family Schedule's walk, not a second table"),
-		Npc.GetClassScheduleIdSpace(),
-		static_cast<void*>(const_cast<FElysiumLocalIdSpace*>(Npc.ClassScheduleIdSpace())));
+	TestNotNull(TEXT("slot 580 answers an id space"), Npc.ClassScheduleIdSpace());
+	TestTrue(TEXT("and it IS family Schedule's walk, not a second table"),
+		Npc.ClassScheduleIdSpace() == Npc.IdSpace(EElysiumIdCategory::Schedule));
 
 	// 0x101a6d00 is slot 580's BASE body and answers a DIFFERENT space from the Troika line's. It
 	// is the corpus's `cai_basenpc` unit -- the root every other schedule space parents on.

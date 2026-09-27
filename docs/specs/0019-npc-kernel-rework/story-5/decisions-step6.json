@@ -1,10 +1,11 @@
 {
   "scope": "Step 6 moves every generated slot body and every chain-owned hand body to the port class of its retail owner: the entity chain's bodies onto FElysiumEntity, FElysiumAnimating, the new FElysiumAnimatingOverlay and FElysiumFlex, and FElysiumCombatCharacter; the NPC layers' stay on FElysiumNpcBase / FElysiumNpc. Stubs keep counting and name their retail owner; one dead stub is deleted; the eight entity-method candidates get their audited dispositions; obsolete tables whose last consumer is a test are retired; kernel_shape --unported pins the live unported rule set; the census tests check owners. The ten deferred classes stay listed.",
   "owner_decisions": {
-    "2026-09-26 chain classes": "Add FElysiumAnimatingOverlay (CBaseAnimatingOverlay) and FElysiumFlex (CBaseFlex) between FElysiumAnimating and FElysiumCombatCharacter, each with its own cpp; register their abstract descriptors. Their datamaps name no external, so they get no binding class. They are declared in ElysiumPlayer.h between the two classes they sit between, where the chain's other two nodes already are: FElysiumCombatCharacter needs them complete, so a header of their own would have to be included mid-file.",
+    "2026-09-26 chain classes": "Add FElysiumAnimatingOverlay (CBaseAnimatingOverlay) and FElysiumFlex (CBaseFlex) between FElysiumAnimating and FElysiumCombatCharacter; register their abstract descriptors. Their datamaps name no external, so they get no binding class. 6b declared them in ElysiumPlayer.h; packet 6r gave each chain class its own public header (ElysiumAnimating.h, pure move bdcfc197; ElysiumAnimatingOverlay.h; ElysiumFlex.h), with ElysiumPlayer.h including ElysiumFlex.h. Their hand-written bodies are Elysium<Class>SlotBodies.cpp, which include the class header first (owner decision 2026-09-27: the SlotBodies cpp is the class cpp).",
     "2026-09-26 stub text": "A generated stub's surface names its retail owner (CBaseEntity::X, CBaseFlex::X, CAI_BaseNPC::X, CAI_BaseNPCTroika::X) instead of CAI_BaseNPCTroika::X for every row. Each changed observed message is a diagnostic_remap expectation; test_delta refuses a remap that changes the address or the receiver.",
     "2026-09-26 stub deletion": "Delete only a stub with a `dead` verdict, no C++ caller and no override in any class. Every other stub stays with a recorded disposition; no reachability study in this step.",
-    "2026-09-26 commit split": "6a (records and checker, no C++) and 6b (the two chain classes, full gate) are their own commits; 6c-6i land as the one step-6 commit."
+    "2026-09-26 commit split": "6a (records and checker, no C++) and 6b (the two chain classes, full gate) are their own commits; 6c-6i land as the one step-6 commit.",
+    "2026-09-27 review follow-up": "Finish step 6 as the plan specifies (packet 6r): headers per cpp.md, the CAI_BaseNPC words out of FElysiumNpcFlags, per-owner default probes, the C++ census assertions, slot 580 typed, and every deferral mapped to its owning step or story. Weapon_Switch gets a rule verdict row (the unported pin keeps 987: +1 Weapon_Switch, -1 slot 580's base stub). The CAI_Hint ObjectCaps override belongs to story 8."
   },
   "rules": {
     "owner": "A body's owner is the most-base class of the retail chain CBaseEntity -> CBaseToggle -> CBaseAnimating -> CBaseAnimatingOverlay -> CBaseFlex -> CBaseCombatCharacter -> CAI_BaseNPC -> CAI_BaseNPCTroika whose primary vtable holds the same (thunk-resolved) pointer at that slot. Ghidra's namespace label is not an owner (95 CBaseEntity-held bodies are labelled CAISound::).",
@@ -26,7 +27,8 @@
     "6f": "Stub dispositions and the diagnostic remaps.",
     "6g": "No table is retired in step 6 (obsolete_machinery): both candidates still carry a consumer or a live unported rule. surviving_sites is re-keyed to the current tree (below).",
     "6h": "kernel_shape --unported and its pin; census owner tests.",
-    "6i": "Regeneration, oracle, records, full gate, delta, smoke, acceptance."
+    "6i": "Regeneration, oracle, records, full gate, delta, smoke, acceptance.",
+    "6r": "Review follow-up: the pure move of FElysiumAnimating (bdcfc197); ElysiumAnimatingOverlay.h / ElysiumFlex.h; m_iIsOblivious and m_bfNPCFrenziedFlags onto FElysiumNpcBase with generated SAVE bindings; one generated slot table per port class (declared-on-owner by the compiler, the default probes typed to the owner) replacing SlotDefaults/ShadowedSlotDefaults; census cases SlotOwners, FieldOwners, RegistryMatchesFactories; slot 580 through SLOT_PORT_MAP; Weapon_Switch's verdict row; carried items mapped (below)."
   },
   "findings": [
     {
@@ -115,9 +117,12 @@
     },
     {
       "id": "npc-flags-refcount",
-      "finding": "FElysiumNpcFlags carries m_iIsOblivious (+0x5bb4), a CAI_BaseNPC word, beside the two CBaseCombatCharacter flag words: 'one system rather than three fields' (ElysiumNpcFlags.h). The aggregate moved whole to FElysiumCombatCharacter with its header (now Public/); a combat character that is not an NPC carries a refcount nothing writes. Named transitional aggregation: splitting the refcount onto FElysiumNpcBase is a follow-up.",
+      "finding": "FElysiumNpcFlags carried m_iIsOblivious (+0x5bb4) and m_bfNPCFrenziedFlags (+0x5b84), both CAI_BaseNPC words in the census, beside the two CBaseCombatCharacter flag words, and 6d moved the aggregate whole to FElysiumCombatCharacter. RESOLVED in 6r: both words are FElysiumNpcBase members (ObliviousCount, FrenziedWord) with their writers (AddOblivious/RemoveOblivious, the grapple pair, SetFrenziedWord) and readers; the shape map binds them as members and gen_kernel_bindings emits their SAVE rows, so FElysiumNpcFlags::Serialize writes only the two flag words. FElysiumNpcFlags::ApplyScheduleChangeMasks answers whether MADE_OBLIVIOUS survived the masks and the runner calls RemoveOblivious (0x102a0a19..0x102a0a45, same order). The trace row keeps its text (FElysiumNpcBase::DescribeNpcFlags). m_bfNPCStateFlags (+0x5b64) has no storage (derived), so only its table stays with the flag vocabulary.",
       "evidence": [
-        "Public/ElysiumNpcFlags.h"
+        "Public/ElysiumNpcFlags.h",
+        "ElysiumNpcBase.h ObliviousCount/FrenziedWord",
+        "ElysiumNpcKernelShapeMap.cpp +0x5b84/+0x5bb4",
+        "Elysium.Substrate.NpcKernelShape.FieldOwners"
       ]
     },
     {
@@ -137,10 +142,51 @@
     },
     {
       "id": "header-placement",
-      "finding": "6b declared FElysiumAnimatingOverlay and FElysiumFlex in ElysiumPlayer.h. .claude/rules/cpp.md says a new class never lands in an existing multi-class file; the rule-conformant layout needs FElysiumAnimating moved verbatim into its own header first (the combat character needs the two new classes complete, so they cannot be included from a header that itself needs ElysiumPlayer.h). Recorded as an open follow-up for the owner.",
+      "finding": "6b declared FElysiumAnimatingOverlay and FElysiumFlex in ElysiumPlayer.h. .claude/rules/cpp.md says a new class never lands in an existing multi-class file; the rule-conformant layout needs FElysiumAnimating moved verbatim into its own header first (the combat character needs the two new classes complete, so they cannot be included from a header that itself needs ElysiumPlayer.h). Recorded as an open follow-up for the owner. RESOLVED in 6r: FElysiumAnimating moved verbatim to ElysiumAnimating.h in its own commit (bdcfc197, full gate, empty delta), then the two chain classes got ElysiumAnimatingOverlay.h and ElysiumFlex.h.",
       "evidence": [
         ".claude/rules/cpp.md File granularity",
         "782a27e6"
+      ]
+    },
+    {
+      "id": "slot-580-typed",
+      "finding": "Plan 6c replaces the base's generated void* GetClassScheduleIdSpace with the typed ClassScheduleIdSpace through a SLOT_PORT_MAP row; step 6 had carried it. 6r adds (580, PORT, FElysiumNpcBase::ClassScheduleIdSpace): the base virtual is 0x101a6d00, FElysiumNpc's override is 0x101aa790, and the void* stub and the Troika void* hand body are gone. The unported pin loses CAI_BaseNPC 580 (implemented).",
+      "evidence": [
+        "gen_kernel_shape.py SLOT_PORT_MAP 580",
+        "ElysiumNpcSchedule.cpp ClassScheduleIdSpace",
+        "kernel_verdicts.tsv 101aa790"
+      ]
+    },
+    {
+      "id": "weapon-switch-verdict",
+      "finding": "0x1032dde0 had no overlay row, so kernel_shape --unported could not list it. 6r adds a `rule` row (band 19-29, layer 22) whose observable is the species schedules that call slot 388: CNPC_VMingXiao Spawn 0x103927a0, StartTask 0x10392d80, RunTask 0x10393930, PreSelectSchedule 0x10394120 and CNPC_VBach::StartTask 0x103645a0. The pin gains CBaseCombatCharacter 388 (explained here) and stays at 987 with slot 580's removal.",
+      "evidence": [
+        "vtmb_callers 0x1032dde0",
+        "unported-step6.tsv"
+      ]
+    },
+    {
+      "id": "census-assertions",
+      "finding": "Plan 6h's census tests are C++: NpcKernelShape.SlotOwners (every generated row is declared on its own class, compiler-checked through TDeclaredOn; its retail owner is the class's node, which is the stub's owner prefix; override exactly when a base declares the slot; every generated Troika census row is a row of its owner's table), NpcKernelShape.FieldOwners (shape-map member words live on the port class of their declaring layer, with m_pSenses +0x5cdc the one listed transitional home until fold 9; every census word the descriptor chain binds is bound on its own layer's descriptor), NpcKernelClass.RegistryMatchesFactories (the registry's NPC line builds exactly the 45 classnames; the ten deferred classes listed and off the NPC line).",
+      "evidence": [
+        "ElysiumNpcKernelShapeTests.cpp",
+        "ElysiumNpcKernelClassFactoryTests.cpp"
+      ]
+    },
+    {
+      "id": "per-owner-probes",
+      "finding": "Plan 6c's per-owner default probes: each port class's generated slot table carries a probe for every default row, typed to that class, and NpcKernelSlots.Defaults calls it on a bare receiver of the class (entity, animating, overlay, flex, combat character), a base-only NPC and a Troika NPC. ShadowedSlotDefaults and its qualified calls, and NpcKernelSlots.ShadowedDefaults, are gone. The census digest is unchanged (the probe tables were never in the row stream).",
+      "evidence": [
+        "gen_kernel_shape.py _slot_table_row",
+        "ElysiumNpcKernelShape.h TElysiumNpcSlotRow"
+      ]
+    },
+    {
+      "id": "gate-generated-slot-files",
+      "finding": "The step-3 static dispatch gate (kernel_migration_step3.gate_sites) scans non-generated source only, but its GENERATED set still named the pre-rename ElysiumNpcKernelSlots.* files. 6r's slot tables name each slot by member pointer (&FElysiumNpc::X, 169 in ElysiumNpcSlots.cpp) so the compiler can prove the declaring class, which the gate counted as member-pointer dispatch. GENERATED now also names the per-owner Elysium<Class>Slots.{cpp,inl}; no surviving site of any step lies in them, so the older trees' results are unchanged.",
+      "evidence": [
+        "kernel_migration_step3.py GENERATED",
+        "--check step3/step5/step6 PASS"
       ]
     }
   ],
@@ -608,18 +654,69 @@
   ],
   "transitional": {},
   "carried": [
-    "Steps 7-10: the ten deferred classes, their compatibility rows and the six surviving species tables.",
-    "Step 11: census-only generation and deletion of the old generated files.",
-    "Slot 580: the base's generated void* GetClassScheduleIdSpace stays a stub beside the typed ClassScheduleIdSpace (step-5 carried item, unchanged).",
-    "ElysiumNpcCamera's own NPCInit writes DesiredMoveYaw (species body).",
-    "Fold 9: the senses object.",
-    "Retail CBasePlayer/item overrides of chain slots are not modelled: a non-NPC receiver inherits the chain class's own body."
+    {
+      "item": "The ten deferred classes, their compatibility rows and the six surviving species tables.",
+      "target": "steps 7-10 (controller line 7, makers 8, directors 9, test hull 10)"
+    },
+    {
+      "item": "Census-only generation and deletion of the old generated files.",
+      "target": "step 11"
+    },
+    {
+      "item": "Weapon_Switch 0x1032dde0 full port (Weapon_CanSwitchTo gate, armour branch, last-weapon records, the outgoing weapon's refusal, deploy/wield); a counting stub on FElysiumCombatCharacter until then.",
+      "consumers": "CNPC_VMingXiao Spawn/StartTask/RunTask/PreSelectSchedule, CNPC_VBach::StartTask",
+      "target": "story 8"
+    },
+    {
+      "item": "CAI_Hint ObjectCaps override 0x102d2ee0 (ObjectCaps & ~FCAP_ACROSS_TRANSITION), held as a row of ElysiumEntityCaps::SpeciesRows.",
+      "consumers": "FElysiumHint (no override yet); the EntityCaps lifecycle test",
+      "target": "story 8"
+    },
+    {
+      "item": "The CAI_TestHull row of ElysiumEntityCaps::SpeciesRows.",
+      "target": "step 10"
+    },
+    {
+      "item": "FVocalization / GSoundsVocalizations: inline each row into its override.",
+      "consumers": "SpeciesVocalize from the Camera (19), SabbatLeader (2), Tzimisce (2) overrides",
+      "target": "step 11"
+    },
+    {
+      "item": "The maker's ParseMapData(const FString&) hiding slot 107 (ACCEPTED collision).",
+      "consumers": "FElysiumNpcMaker",
+      "target": "step 8 (the maker fold makes it the slot's override or renames it)"
+    },
+    {
+      "item": "GetModelIndex (slot 8) counting-stub seam: no model-index concept.",
+      "target": "step 11 residue audit"
+    },
+    {
+      "item": "Reachability of the unverdicted chain stubs (kept, --residue).",
+      "target": "story 8's verdict pass"
+    },
+    {
+      "item": "C4263/C4264 warnings from the eight ACCEPTED hides (slots 66, 67, 86, 107, 123, 133, 153, 158).",
+      "target": "the fold that makes each hide an override (step 8 for the maker's 107), the rest at the step-11 closure"
+    },
+    {
+      "item": "ElysiumNpcCamera's own NPCInit writes DesiredMoveYaw (species body).",
+      "target": "story 8"
+    },
+    {
+      "item": "m_pSenses +0x5cdc on the Troika (transitional.Senses in decisions-step5.json).",
+      "target": "step 9 (fold 9, the base-only senses object)"
+    },
+    {
+      "item": "Retail CBasePlayer/item overrides of chain slots are not modelled: a non-NPC receiver inherits the chain class's own body.",
+      "target": "named limitation; test_delta's receiver check watches it (no owning step in story 5)"
+    }
   ],
   "retired_symbols": [],
   "unported_pin": {
     "rows": 987,
     "stub": 59,
     "no-override": 928,
-    "file": "unported-step6.tsv"
+    "file": "unported-step6.tsv",
+    "6r": "+CBaseCombatCharacter 388 0x1032dde0 (finding weapon-switch-verdict), -CAI_BaseNPC 580 0x101a6d00 (finding slot-580-typed)"
   }
 }

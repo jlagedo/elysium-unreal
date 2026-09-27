@@ -149,10 +149,10 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 	}
 
 	// Arm 1: `m_bfNPCFrenziedFlags & 2` forces melee outright and sets `m_bInMelee` on the way.
-	Thug->NpcFlags.SetFrenziedWord(0x2);
+	Thug->SetFrenziedWord(0x2);
 	TestTrue(TEXT("frenzy bit 0x2 enters melee outright"), Thug->Slot599(0));
 	TestTrue(TEXT("and m_bInMelee is set"), Thug->bInMelee);
-	Thug->NpcFlags.SetFrenziedWord(0);
+	Thug->SetFrenziedWord(0);
 
 	// Arm 2: the can-enter timer. `curtime < m_flMeleeCanEnterTimer` refuses AND clears the latch.
 	Thug->bInMelee = true;
@@ -176,7 +176,7 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 	// substrate can reach the entry write — and it arms the must-leave timer from
 	// `RandomFloat(7.5, 15.0)`, NOT `RandomFloat(4, 15)` as 29c's walk reads.
 	const int32 EventsBefore = Thug->MeleeEventFires;
-	Thug->NpcFlags.SetFrenziedWord(0x1000);
+	Thug->SetFrenziedWord(0x1000);
 	const double Now = Thug->World->NowSeconds();
 	TestTrue(TEXT("the 0x1000 coordinator bypass enters melee"), Thug->Slot599(0));
 	TestTrue(TEXT("m_bInMelee is set"), Thug->bInMelee);
@@ -185,7 +185,7 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 	TestTrue(TEXT("and at most curtime + 15.0"), Thug->MeleeMustLeaveTimer <= Now + 15.0 + 0.001);
 	TestEqual(TEXT("the global melee event fired exactly once"), Thug->MeleeEventFires,
 		EventsBefore + 1);
-	Thug->NpcFlags.SetFrenziedWord(0);
+	Thug->SetFrenziedWord(0);
 
 	// Slot 600: the weapon capability word is family Motor's seam answering 0, so `0x18000` is
 	// never present and the body writes NOTHING — not even the `m_bInMelee = 0` inside the gate.
@@ -274,9 +274,9 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 
 	// Both lines share the two gates in front of it, and both are tested BEFORE the coordinator.
 	BloodNpc->AttackCoordinator = 2;
-	BloodNpc->NpcFlags.SetFrenziedWord(0x2);
+	BloodNpc->SetFrenziedWord(0x2);
 	TestFalse(TEXT("frenzy bit 0x2 refuses on both lines"), BloodNpc->Slot602());
-	BloodNpc->NpcFlags.SetFrenziedWord(0);
+	BloodNpc->SetFrenziedWord(0);
 
 	// With a coordinator index in hand the tail runs and the two lines agree, which is retail's own
 	// state. The must-leave arm is unreachable while slot 308 is a stub answering false, so the far
@@ -432,9 +432,9 @@ bool FElysiumNpcKernelTroikaHelpersOccludeTest::RunTest(const FString&)
 	Shooter->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyUnreachable);
 
 	// Frenzied bit 0x100 -> 0xb4, still ahead of every roll.
-	Shooter->NpcFlags.SetFrenziedWord(0x100);
+	Shooter->SetFrenziedWord(0x100);
 	TestEqual(TEXT("frenzied bit 0x100 answers 0xb4"), Shooter->Slot606(0), 0xb4);
-	Shooter->NpcFlags.SetFrenziedWord(0);
+	Shooter->SetFrenziedWord(0);
 
 	// `D_POSSESSED` rolls at 0x46 and answers one of the two; `FORCED_OCCLUDE` rolls at 0x50 and
 	// CLEARS itself on the way out, which the next call proves.

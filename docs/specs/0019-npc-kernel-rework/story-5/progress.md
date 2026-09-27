@@ -1,4 +1,4 @@
-# Story 5 — step 6 accepted (`7d63e7fa`)
+# Story 5 — step 6 accepted (`7d63e7fa`); review follow-up 6r on the working tree
 
 **Step 6 (every slot body on its retail owner), 2026-09-27.** Record:
 [packets/6-slot-owners.md](packets/6-slot-owners.md).
@@ -11,23 +11,33 @@
   - the dead stub 582 deleted;
   - `kernel_shape --unported` (987 rows pinned);
   - five new tests.
+- Acceptance ([acceptance-step6.json](acceptance-step6.json)):
+  - runtime gate 1,279 + 14 + 1, zero failures;
+  - `test_delta` vs step 5 with 142 expectations;
+  - five-map smoke clean.
 
-Acceptance on the working tree ([acceptance-step6.json](acceptance-step6.json)):
-- Manifest phase 6, revision `step-6-slot-owners`; `--check step6` **PASS**.
-- Runtime gate: 1,279 + 14 + 1, zero failures.
-- `test_delta` vs step 5: passes with 142 expectations (119 owner-prefix remaps, 18 exact diagnostic
-  changes, 5 additions).
-- Checks gate green: five generator checks, pytest (169), `--check factories/step0..5`.
-- Five-map smoke clean (`step6/smoke.json`).
+**Review follow-up 6r (2026-09-27)**, [packet 6 § 6r](packets/6-slot-owners.md). It finishes the
+plan as written.
+- The pure move of `FElysiumAnimating` is committed as `bdcfc197`.
+- The rest of 6r:
+  - `ElysiumAnimatingOverlay.h` / `ElysiumFlex.h`;
+  - `m_iIsOblivious`/`m_bfNPCFrenziedFlags` on `FElysiumNpcBase`;
+  - per-class slot tables and per-owner probes;
+  - the C++ census cases (`SlotOwners`, `FieldOwners`, `RegistryMatchesFactories`);
+  - slot 580 typed;
+  - `Weapon_Switch`'s verdict row;
+  - every deferral mapped to a step or story.
+- Gate on the working tree:
+  - build green;
+  - 1,281 + 14 + 1, zero failures;
+  - `test_delta` vs step 6 with 12 expectations;
+  - checks gate green.
+- `acceptance-step6r.json` is verified by `--check step6`.
 
 ### Handoff
 
-- Step 6 committed as `7d63e7fa`; recorded
-  `history.step6.commit` in the manifest so `--check step6` reads the accepted tree.
-- Open for the owner:
-  - `.claude/rules/cpp.md` (one class per file) vs the two chain classes in `ElysiumPlayer.h`: a
-    verbatim move of `FElysiumAnimating` to its own header would allow separate headers.
-  - The `m_iIsOblivious` refcount rides with `NpcFlags` on the combat character.
+- `history.step6.commit` is recorded as the 6r commit (the 4r precedent). `accepted_6c_6i` keeps
+  `7d63e7fa`, and the verdicts pin is refreshed under `history.step6r_pins`.
 - Next: step 7 (the controller fold).
 
 # Step 5 — accepted (`e0a71ee3`)

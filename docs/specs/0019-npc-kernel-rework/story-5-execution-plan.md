@@ -1,6 +1,6 @@
 # 0019 story 5 — reviewed execution plan: the class tree
 
-Status: **reviewed plan; steps 0–4 accepted (step 4 with its review follow-up, packet 4r); step 5 accepted (`e0a71ee3`); step 6 accepted on its working tree (6a `5ddaee2c`, 6b `782a27e6`, 6c-6i `7d63e7fa`)** (2026-09-27).
+Status: **reviewed plan; steps 0–4 accepted (step 4 with its review follow-up, packet 4r); step 5 accepted (`e0a71ee3`); step 6 accepted on its working tree (6a `5ddaee2c`, 6b `782a27e6`, 6c-6i `7d63e7fa`), with its review follow-up 6r (pure move `bdcfc197`)** (2026-09-27).
 Execution checkpoint and evidence: [story-5/progress.md](story-5/progress.md).
 Scope: [spec.md, story 5](spec.md). Tracker: [06b](../TRACKER.md).
 This document defines execution order, intermediate states and acceptance. The spec defines the
@@ -534,6 +534,9 @@ Stand `FElysiumNpcMaker : FElysiumNpc`, with Fleshpile and Zombie subclasses.
 - Audit new `AsNpc()` and combat-character membership in world and sense consumers against
   retail flags/casts. Do not force all previous nonparticipation to remain if retail says otherwise.
 - Attach the inherited datamap only when the C++ type and field ownership support it.
+- Carried from step 6 (`decisions-step6.json` `carried`): the maker's `ParseMapData(const FString&)`
+  hides slot 107 (an accepted collision, a C4263/C4264 warning); the fold makes it the slot's override
+  or renames it.
 
 **Acceptance.** Full gate plus deterministic enabled/disabled, frequency, depletion, child
 inheritance, death notice and save/restore cases. Inherited inputs must write the same state the
@@ -553,6 +556,9 @@ Stand `FElysiumAiScriptedSequence` for `CCineAI` and `FElysiumAiScriptedSchedule
 - Audit construction, Spawn/Activate, target acquisition, possession/release, installed think,
   interruption, chaining, removal and restore before accepting inherited base behaviour.
 - Attach the base-NPC datamap without Troika-only accessors or scheduling assumptions.
+- Carried from steps 5–6: `m_pSenses` (`+0x5cdc`) is a `CAI_BaseNPC` word stored on the Troika
+  (`decisions-step5.json` `transitional.Senses`, the one exception `NpcKernelShape.FieldOwners`
+  lists); the base-only senses object moves it to `FElysiumNpcBase`.
 
 **Acceptance.** Full gate plus existing ScriptedSequence, AiScriptedSchedule and ScheduleWitness
 coverage. Exercise all three factories, the CCineAI-specific bodies, interruption and restore of
@@ -567,6 +573,8 @@ classname factory. Check step height 40, jump speed 40 and the 1024/1024/1024 ju
 Migrate the remaining Motor class checks and fixtures. Instantiate the concrete C++ type for
 internal-construction tests; do not fabricate a classname or mark it dead because no factory
 exists. If port navigation does not construct it, state that explicitly and retain its contract.
+Carried from step 6: the `CAI_TestHull` row of `ElysiumEntityCaps::SpeciesRows` becomes the class's
+own `ObjectCaps` override.
 
 **Acceptance.** Full gate and typed tests. The class deferral list is empty. All remaining
 compatibility entries must now be removable support code, with no live or test consumer.
@@ -578,6 +586,13 @@ compatibility entries must now be removable support code, with no live or test c
   consumer needs them. Genuine type tests must use the final supported type mechanism.
 - Make `gen_kernel_shape` census-only and delete the obsolete generated slot files after their
   final dependencies are gone. Update generator tests and final source checks together.
+- Carried from step 6 (`decisions-step6.json` `carried`): inline each `FVocalization` row into its
+  override (Camera, SabbatLeader, Tzimisce) and retire `GSoundsVocalizations`; audit the slot-8
+  `GetModelIndex` counting seam in the residue; close the remaining C4263/C4264 hides of the accepted
+  collisions (slots 66, 67, 86, 123, 133, 153, 158).
+- Hand story 8 the rows step 6 carried to it: the full `Weapon_Switch` `0x1032dde0` port (callers
+  Ming Xiao and Bach), the `CAI_Hint` `ObjectCaps` override `0x102d2ee0`, the reachability of the
+  unverdicted chain stubs, and `ElysiumNpcCamera`'s `NPCInit` write of `DesiredMoveYaw`.
 - Verify 56 live classes, the exact final factory and descriptor chains, class-qualified fields,
   implemented overrides and an empty compatibility list. Preserve all dead census records.
 - Reconcile the entire live unported-rule set. Explain every removed or added row by implementation,

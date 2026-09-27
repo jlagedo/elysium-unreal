@@ -32,7 +32,7 @@ void FElysiumNpcBase::LeaveGrappleState()
 	SetForceFrequentThink(false);
 	// `1026ce8d` -> `0x10007ea0`: `--m_iIsOblivious (+0x5bb4)`, clamped at 0, then the squad
 	// reconnect `0x10009601`. Both UNCONDITIONAL, which is the arm the port was missing.
-	NpcFlags.RemoveGrappleOblivious();
+	RemoveGrappleOblivious();
 	ReconnectToSquad();
 }
 

@@ -12,7 +12,7 @@
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
 //
-// This file is included INSIDE `class FElysiumAnimatingOverlay` (`ElysiumPlayer.h`). It is not
+// This file is included INSIDE `class FElysiumAnimatingOverlay` (`ElysiumAnimatingOverlay.h`). It is not
 // a header: it has no include guard and declares nothing of its own. One declaration per
 // slot, in slot order, with the retail declaration in the comment and the port's lowered
 // signature in the code.

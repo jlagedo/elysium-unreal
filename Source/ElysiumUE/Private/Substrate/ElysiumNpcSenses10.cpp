@@ -256,7 +256,7 @@ bool FElysiumNpc::QueryHearSound(void* SoundPtr)
 	// `m_hFriendPlayer`. THE ARM THE PORT WAS MISSING — `ElysiumNpcSenses.cpp` recorded it as "16c
 	// work" and the seam answered not-a-friend. `FriendPlayer` is a real word (`+0x60ac`) and the
 	// frenzied word is a real word; both ship at their retail defaults, so the arm is live.
-	if (NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedFriendPlayer) && FriendPlayer.IsSet()
+	if (HasFrenzied(FElysiumNpcBase::FrenziedFriendPlayer) && FriendPlayer.IsSet()
 		&& Sound->Source == FriendPlayer)
 	{
 		return false;
@@ -337,7 +337,7 @@ bool FElysiumNpc::QuerySeeEntity(FElysiumEntity* Candidate)
 		return false;
 	}
 	// `102b38f1`: the frenzy-friend veto. THE ARM THE PORT WAS MISSING.
-	if (NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedFriendPlayer) && Candidate != nullptr
+	if (HasFrenzied(FElysiumNpcBase::FrenziedFriendPlayer) && Candidate != nullptr
 		&& FriendPlayer.IsSet() && Candidate->Handle == FriendPlayer)
 	{
 		return false;

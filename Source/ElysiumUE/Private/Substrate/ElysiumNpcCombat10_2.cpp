@@ -294,7 +294,7 @@ int32 FElysiumNpc::SelectCombatReactionSchedule()
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	if (Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy)
 		&& NextDodgeTime < Now
-		&& NpcFlags.HasFrenzied(GFrenziedDisciplineBit)
+		&& HasFrenzied(GFrenziedDisciplineBit)
 		&& !NpcFlags.Has(EElysiumNpcFlag2::D_INSANE)
 		&& !bStayEntrenched)
 	{

@@ -375,7 +375,7 @@ bool FElysiumNpc::Slot599(int32)
 	//     }
 	//     m_bInMelee = 0;
 	//     return false;
-	if (NpcFlags.HasFrenzied(TroikaFrenziedBitForcesMelee) || GetFollowerBoss() != nullptr)
+	if (HasFrenzied(TroikaFrenziedBitForcesMelee) || GetFollowerBoss() != nullptr)
 	{
 		bInMelee = true;
 		return true;
@@ -401,7 +401,7 @@ bool FElysiumNpc::Slot599(int32)
 	const bool bHeightOk = ScheduleHost.EnemyHeightDiffUnits <= MeleeHeightDiffLimitUnits()
 		|| !Cognition.Conditions.Has(EElysiumNpcCond::EnemyUnreachable);
 
-	const bool bCoordinatorOk = NpcFlags.HasFrenzied(TroikaFrenziedBitSkipsCoordinator)
+	const bool bCoordinatorOk = HasFrenzied(TroikaFrenziedBitSkipsCoordinator)
 		|| MeleeCoordinatorAdmits599();
 
 	if (bHeightOk && bRangeOk && bCoordinatorOk)
@@ -560,7 +560,7 @@ bool FElysiumNpc::Slot602()
 	// The recovered difference itself is recorded here and in `MeleeSlotBody`.
 	//
 	// Retail's `(a < b) != (a == b)` on the distance is the FPU flag pair for `a <= b`.
-	if (NpcFlags.HasFrenzied(TroikaFrenziedBitForcesMelee))
+	if (HasFrenzied(TroikaFrenziedBitForcesMelee))
 	{
 		return false;
 	}
@@ -626,7 +626,7 @@ int32 FElysiumNpc::Slot606(int32 Arg)
 	{
 		return TroikaOccludeAnswerUnreachable;
 	}
-	if (NpcFlags.HasFrenzied(TroikaFrenziedBitBlocksOcclude))
+	if (HasFrenzied(TroikaFrenziedBitBlocksOcclude))
 	{
 		return TroikaOccludeAnswerFrenzied;
 	}

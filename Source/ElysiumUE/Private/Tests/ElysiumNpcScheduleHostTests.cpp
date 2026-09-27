@@ -55,7 +55,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	// A direct navigator failure still in Jump has a different preservation result.
 	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
 	Npc->NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
-	Npc->NpcFlags.AddOblivious();
+	Npc->AddOblivious();
 	Npc->NpcFlags.Set(EElysiumNpcFlag::NO_DIALOG);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->ScheduleHost.SavedSleepExtents = FVector(10,10,30);
@@ -126,7 +126,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN);
 	Npc->ScheduleHost.SavedSleepExtents = FVector(4,5,6);
 	Npc->BaseScheduleHost.SquadDisconnected = 1;
-	Npc->NpcFlags.AddOblivious();
+	Npc->AddOblivious();
 	Npc->bInvincible = true;
 	// Slot 435's recovered signature is `void OnScheduleChange(CAI_Schedule*)`; `102a0940` ignores
 	// the argument, and this direct base-body case supplies retail's null schedule pointer.
@@ -150,7 +150,9 @@ bool FElysiumNpcFailureMasksTest::RunTest(const FString&)
 		Flags.Set(static_cast<EElysiumNpcFlag>(Bit));
 		Flags.Set(static_cast<EElysiumNpcFlag2>(Bit));
 	}
-	Flags.AddOblivious();
+	// The loop set `MADE_OBLIVIOUS` too. The NPC's refcount beside it (`m_iIsOblivious`) is
+	// `FElysiumNpcBase`'s word; the Failure case above asserts that it outlives this clear, and its
+	// save is the generated binding the kernel bindings round trip covers.
 	TestTrue(TEXT("mask transaction reports the retail leak"), Flags.OnTaskFail());
 	for (uint32 Bit = 1; Bit != 0x80000000u; Bit <<= 1)
 	{
@@ -171,11 +173,11 @@ bool FElysiumNpcFailureMasksTest::RunTest(const FString&)
 		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
 		Loaded.Serialize(Ar);
 	}
-	TestTrue(TEXT("leaked obliviousness survives save"), Loaded.IsOblivious());
 	TestFalse(TEXT("save does not reconstruct the lost bookkeeping bit"), Loaded.Has(EElysiumNpcFlag2::MADE_OBLIVIOUS));
 	Loaded.Clear(EElysiumNpcFlag::PRESERVE_PATH);
-	TestFalse(TEXT("later schedule change cannot recover the lost decrement"), Loaded.OnScheduleChange());
-	TestTrue(TEXT("later schedule still retains leaked obliviousness"), Loaded.IsOblivious());
+	Loaded.BeginScheduleChange();
+	TestFalse(TEXT("later schedule change cannot recover the lost decrement"), Loaded.ApplyScheduleChangeMasks());
+	Loaded.FinishScheduleChange();
 	FElysiumNpcFlags Stages;
 	Stages.Set(EElysiumNpcFlag::D_IS_BUSY);
 	Stages.Set(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN);

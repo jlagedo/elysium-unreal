@@ -48,6 +48,12 @@ VERDICTS = Path("research/tooling/ghidra/driver/kernel_verdicts.tsv")
 # retail body as a stub; none of them dispatches.
 GENERATED = {"ElysiumNpcKernelShape.cpp", "ElysiumNpcKernelBindings.cpp", "ElysiumNpcKernelSlots.cpp",
              "ElysiumNpcKernelSlots.inl"}
+# The per-owner slot files that replaced `ElysiumNpcKernelSlots.*` (0019/5 steps 5-6). Their census
+# tables name each slot by member pointer so the compiler can prove which class declares it (6r);
+# nothing dispatches through them.
+GENERATED |= {f"Elysium{owner}Slots.{ext}" for owner in ("Entity", "Animating", "AnimatingOverlay", "Flex",
+                                                          "CombatCharacter", "NpcBase", "Npc")
+              for ext in ("cpp", "inl")}
 HISTORICAL_PATHS = ("Source/ElysiumUE", str(VERDICTS).replace("\\", "/"))
 MATRIX_COLUMNS = ("retail_class", "slot", "address", "verdict", "target", "port_class", "port_method",
                   "disposition", "packet", "note")

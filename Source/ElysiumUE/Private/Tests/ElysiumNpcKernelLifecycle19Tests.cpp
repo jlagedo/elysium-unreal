@@ -730,7 +730,7 @@ bool FElysiumNpcKernelLifecycle19FrenzyShadowTest::RunTest(const FString&)
 	}
 	F.Npc->NPCInit();                                                    // 0x10375c80
 	TestEqual(TEXT("state 0xb"), F.Npc->IdealStateRetail(), 0xb);
-	TestTrue(TEXT("frenzied flags 0x5ddf"), F.Npc->NpcFlags.HasFrenzied(0x5ddfu));
+	TestTrue(TEXT("frenzied flags 0x5ddf"), F.Npc->HasFrenzied(0x5ddfu));
 	TestEqual(TEXT("speed scale 8"), F.Npc->NpcSpeedScale, 8.f);
 	TestTrue(TEXT("senses on"), F.Npc->Senses.bCanPerformSenses);
 	TestTrue(TEXT("nav ignore physics"), F.Npc->bNavIgnorePhysicsProps);

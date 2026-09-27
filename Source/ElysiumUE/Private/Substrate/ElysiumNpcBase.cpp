@@ -254,6 +254,32 @@ void FElysiumNpcBase::ReconnectToSquad()
 	NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
 }
 
+void FElysiumNpcBase::AddOblivious()
+{
+	NpcFlags.Set(EElysiumNpcFlag2::MADE_OBLIVIOUS);
+	++ObliviousCount;
+}
+
+void FElysiumNpcBase::RemoveOblivious()
+{
+	// Retail clamps at zero (`0x1026d160`) rather than trusting the pairing, and so does this: the
+	// binary itself has a path that drops the bookkeeping bit without decrementing, so the counter is
+	// not provably balanced even in retail.
+	ObliviousCount = FMath::Max(0, ObliviousCount - 1);
+	NpcFlags.Clear(EElysiumNpcFlag2::MADE_OBLIVIOUS);
+}
+
+FString FElysiumNpcBase::DescribeNpcFlags() const
+{
+	const FString Words = NpcFlags.Describe();
+	if (ObliviousCount <= 0)
+	{
+		return Words;
+	}
+	const FString Count = FString::Printf(TEXT("oblivious=%d"), ObliviousCount);
+	return Words == TEXT("-") ? Count : Words + TEXT("|") + Count;
+}
+
 void FElysiumNpcBase::MakeOblivious(bool bOblivious)
 {
 	// `CAI_BaseNPC` `0x1026d130` (set) and `0x1026d160` (clear), in their recovered order.
@@ -272,7 +298,7 @@ void FElysiumNpcBase::MakeOblivious(bool bOblivious)
 		// must find the bit already correct rather than have to backfill it.
 		DisconnectFromSquad();
 		// 3. The refcount and its bookkeeping bit.
-		NpcFlags.AddOblivious();
+		AddOblivious();
 		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
 		//    (`docs/vtmb/npc-ai/README.md`), so this is a real content surface and not a
 		//    diagnostic. The NPC is both caller and activator: nothing else is in scope at the arm.
@@ -280,12 +306,12 @@ void FElysiumNpcBase::MakeOblivious(bool bOblivious)
 	}
 	else
 	{
-		NpcFlags.RemoveOblivious();
+		RemoveOblivious();
 		ReconnectToSquad();
 		FireOutput(FName(TEXT("OnIncapacitatedEnd")), Handle);
 	}
 	RecordScheduleEvent(FString::Printf(TEXT("TASK_MAKE_OBLIVIOUS %s -> %s"),
-		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *NpcFlags.Describe()));
+		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *DescribeNpcFlags()));
 }
 
 void FElysiumNpcBase::ArmThinkAt(double Stamp)
@@ -336,8 +362,9 @@ void FElysiumNpcBase::Serialize(FElysiumSaveArchive& Ar)
 	// `0x1027bc60` first): retail's one hand block (`AIExtendedSaveHeader_t`), then the base words no
 	// retail datamap row reaches through the generated walk.
 	SerializeExtendedHeader(Ar);
-	// The NPC flag word travels with the record and not with the walk: retail's `m_bfAINPCFlags`
-	// pair is a concern the shape map reaches no compiled path into.
+	// The combat character's flag words travel with the record and not with the walk: retail's
+	// `m_bfAINPCFlags` pair is a concern the shape map reaches no compiled path into. The NPC's own
+	// `m_iIsOblivious` and `m_bfNPCFrenziedFlags` are generated bindings and ride the walk.
 	NpcFlags.Serialize(Ar);
 	Relationships.Serialize(Ar);
 	BaseMemory.Serialize(Ar);

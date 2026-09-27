@@ -153,6 +153,11 @@ const FElysiumNpc::FScheduleIdSpace* FElysiumNpc::ScheduleIdSpaceOf(const TCHAR*
 // slot 580, the species half of 0x101aa790
 const FElysiumLocalIdSpace* FElysiumNpc::ClassScheduleIdSpace() const
 {
+	// 0x101aa790, slot 580 — `CAI_BaseNPCTroika`'s override, `return &DAT_10924248`. The space is
+	// the CORPUS's, keyed on this NPC's retail class, so what this answers is the same
+	// `CAI_ClassScheduleIdSpace` retail returns -- filled, with its parent link and its four
+	// sub-spaces.
+	//
 	// The table above is documentation now -- the retail class, the slot-580 body and the id space
 	// that body returns, all checkable against `docs/vtmb/npc-kernel/slots.md`. The LIVE space is
 	// the corpus's, keyed on this NPC's own retail class rather than on the slot-580 override row,

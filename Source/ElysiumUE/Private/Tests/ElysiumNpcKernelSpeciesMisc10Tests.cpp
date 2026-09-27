@@ -99,7 +99,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 	// slot 416. `0x1026ce30` has NO type gate at all, so an ordinary (non-stealth) grapple end must
 	// fire the output, clear the oblivious count and turn frequent thinking off.
 	F.Guard->SetForceFrequentThink(true);
-	F.Guard->NpcFlags.AddGrappleOblivious();
+	F.Guard->AddGrappleOblivious();
 	const float Before = F.World.Counter(TEXT("grapple_ends"));
 
 	F.Guard->Grapple.Type = EElysiumGrappleType::Feed;
@@ -113,12 +113,12 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 	TestFalse(TEXT("`1026ce82`: slot 416 SetForceFrequentThink(false), which the port omitted"),
 		F.Guard->GetForceFrequentThink());
 	TestFalse(TEXT("`10007ea0`: the oblivious count is decremented and clamped at 0"),
-		F.Guard->NpcFlags.IsOblivious());
+		F.Guard->IsOblivious());
 
 	// The saturating half: a second call on a zero count must not go negative.
 	F.Guard->FElysiumNpcBase::LeaveGrappleState();
 	TestFalse(TEXT("`10007ea4`: the decrement saturates rather than going negative"),
-		F.Guard->NpcFlags.IsOblivious());
+		F.Guard->IsOblivious());
 	return true;
 }
 
@@ -161,7 +161,7 @@ bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 		TestEqual(TEXT("...and the list is left standing, so the next attempt discharges it again"),
 			F.Guard->QueuedBurnDamage.Num(), 2);
 		TestFalse(TEXT("the refused grapple took no oblivious count"),
-			F.Guard->NpcFlags.IsOblivious());
+			F.Guard->IsOblivious());
 		(void)OtherHealthBefore;
 		F.Guard->QueuedBurnDamage.Reset();
 	}
@@ -179,7 +179,7 @@ bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 	TestTrue(TEXT("`102b5d2c`: a NON-stealth grapple still takes the base body"), bEntered);
 	TestNull(TEXT("`1026d130`: SetEnemy(NULL) with no grapple-type gate"), F.Guard->GetEnemy());
 	TestTrue(TEXT("`10007ea0`: the oblivious count is raised with no MADE_OBLIVIOUS"),
-		F.Guard->NpcFlags.IsOblivious());
+		F.Guard->IsOblivious());
 	// --- Step 5: `102b5d1c` `ClearSchedule` on the accepting arm --------------------------------
 	TestFalse(TEXT("`10280d30`: the running program is cleared"), F.Guard->Schedule.IsRunning());
 	return true;

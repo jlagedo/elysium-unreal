@@ -78,7 +78,7 @@ bool FElysiumNpcKernelTranslate19TroikaTest::RunTest(const FString&)
 	N.NpcFlags.Set(EElysiumNpcFlag2::D_MILDLY_CRAZY);
 	// `102b1335`: the flag SET arm, the other of exactly two values.
 	TestEqual(TEXT("102b12f0 crazy 1 -> 0x132"), N.TranslateScheduleRetail(1), 0x132);
-	N.NpcFlags.SetFrenziedWord(0x100);
+	N.SetFrenziedWord(0x100);
 	// `102b120c MOV EAX,0xc9` — the frenzied pre-table runs BEFORE the Troika table and returns.
 	TestEqual(TEXT("102b11c0 frenzied 0xc7 -> 0xc9"), N.TranslateScheduleRetail(0xc7), 0xc9);
 	return true;

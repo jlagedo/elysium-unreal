@@ -134,7 +134,7 @@ void FElysiumNpcCamera::NPCInit()
 	}
 	Mind.ClearForceStateChange();
 	Unknown5b58 = 0;
-	NpcFlags.SetFrenziedWord(0);
+	SetFrenziedWord(0);
 	NpcInitTime = Now;
 	WeaponBlockedByFriendTimer = 0.0;
 	ExtendedBlockedByFriendTimer = static_cast<double>(NeverThinkSentinel);

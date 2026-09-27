@@ -512,7 +512,7 @@ bool FAnim10TroikaSetActivityTest::RunTest(const FString&)
 	// The hunt family: the frenzy gait wins outright and does NOT restart itself.
 	Anim10Reset(N);
 	N.ActivityNumber = GTActIdle;
-	N.NpcFlags.SetFrenziedWord(0x40);
+	N.SetFrenziedWord(0x40);
 	N.SetActivity(GTActHuntWalk);
 	TestEqual(TEXT("0x10295750: frenzy bit 0x40 forces ACT_RUN_FRENZY"), N.ActivityNumber,
 		GTActRunFrenzy);
@@ -523,12 +523,12 @@ bool FAnim10TroikaSetActivityTest::RunTest(const FString&)
 
 	Anim10Reset(N);
 	N.ActivityNumber = GTActIdle;
-	N.NpcFlags.SetFrenziedWord(0x20);
+	N.SetFrenziedWord(0x20);
 	N.SetActivity(GTActHuntWalk);
 	TestEqual(TEXT("0x10295750: frenzy bit 0x20 forces ACT_RUN"), N.ActivityNumber, GTActRun);
 
 	Anim10Reset(N);
-	N.NpcFlags.SetFrenziedWord(0);
+	N.SetFrenziedWord(0);
 	N.ActivityNumber = GTActIdle;
 	N.SetActivity(GTActHuntWalk);
 	TestEqual(TEXT("0x10295750: 0x1115 from outside the hunt family commits 0x1115"),
@@ -654,17 +654,17 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 	ElysiumNpcTunables::ResetConVars();
 
 	// 2. The frenzy word. Bit 0x40 wins OUTRIGHT over bit 0x20 — they are an `else if`.
-	N.NpcFlags.SetFrenziedWord(0x40);
+	N.SetFrenziedWord(0x40);
 	for (const int32 Request : { GTActRunRelaxed, GTActWalk, GTActRun, GTActWalkRelaxed,
 			GTActHuntWalk, GTActCombatMove })
 	{
 		TestEqual(*FString::Printf(TEXT("0x10295590 step 2: frenzy 0x40 rewrites 0x%x to 0xf17"),
 			Request), N.NPC_EarlyTranslateActivity(Request), GTActRunFrenzy);
 	}
-	N.NpcFlags.SetFrenziedWord(0x40 | 0x20);
+	N.SetFrenziedWord(0x40 | 0x20);
 	TestEqual(TEXT("0x10295590 step 2: 0x40 and 0x20 together take the 0x40 arm, not both"),
 		N.NPC_EarlyTranslateActivity(GTActWalk), GTActRunFrenzy);
-	N.NpcFlags.SetFrenziedWord(0x20);
+	N.SetFrenziedWord(0x20);
 	for (const int32 Request : { GTActHuntWalk, GTActWalk, GTActWalkRelaxed, GTActCombatMove })
 	{
 		TestEqual(*FString::Printf(TEXT("0x10295590 step 2: frenzy 0x20 rewrites 0x%x to ACT_RUN"),
@@ -672,7 +672,7 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("...and ACT_RUN_RELAXED is NOT in the 0x20 set"),
 		N.NPC_EarlyTranslateActivity(GTActRunRelaxed), GTActRunRelaxed);
-	N.NpcFlags.SetFrenziedWord(0);
+	N.SetFrenziedWord(0);
 
 	// 3. ACT_FIDGET becomes ACT_IDLE.
 	TestEqual(TEXT("0x10295590 step 3: ACT_FIDGET becomes ACT_IDLE"),
@@ -927,12 +927,12 @@ bool FAnim10UpdatePoseParametersTest::RunTest(const FString&)
 
 	// `m_iIsOblivious` takes the no-aim arm even WITH a target, because the test is INSIDE the aim
 	// arm and not in front of it.
-	N.NpcFlags.AddOblivious();
+	N.AddOblivious();
 	N.bAimWeaponAtTarget = true;
 	N.UpdatePoseParameters(0.1f);
 	TestFalse(TEXT("0x102bf070: m_iIsOblivious takes the no-aim arm even with an enemy"),
 		N.bAimWeaponAtTarget);
-	N.NpcFlags.RemoveOblivious();
+	N.RemoveOblivious();
 	return true;
 }
 
@@ -1138,12 +1138,12 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 	ElysiumNpcTunables::ResetConVars();
 
-	N.NpcFlags.SetFrenziedWord(0x40);
+	N.SetFrenziedWord(0x40);
 	TestTrue(TEXT("MovementPolicyFrenzy is m_bfNPCFrenziedFlags 0x40"),
 		Ask(ENpcPredicate::MovementPolicyFrenzy));
-	N.NpcFlags.SetFrenziedWord(0x20);
+	N.SetFrenziedWord(0x20);
 	TestTrue(TEXT("MovementPolicyRun is 0x20"), Ask(ENpcPredicate::MovementPolicyRun));
-	N.NpcFlags.SetFrenziedWord(0);
+	N.SetFrenziedWord(0);
 
 	N.CapabilityWord = 0x8000000;
 	TestTrue(TEXT("ReloadFastCapable is capability 0x8000000"),
@@ -1256,7 +1256,7 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	// 1. The frenzy gait. `m_bfNPCFrenziedFlags & 0x40` rewrites all four to ACT_RUN_FRENZY on both
 	//    surfaces. The fixture's subject already is `CNPC_VHumanCombatant`, spawned as
 	//    `npc_VHumanCombatant`, the entity class whose table this walks.
-	N.NpcFlags.SetFrenziedWord(0x40);
+	N.SetFrenziedWord(0x40);
 	for (const FCase& Case : Cases)
 	{
 		const FNpcTranslation Walk = WalkVisual(Case.Name);
@@ -1269,7 +1269,7 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	}
 
 	// 2. The hurried gait, `& 0x20`, whose set is smaller — ACT_RUN_RELAXED is NOT in it.
-	N.NpcFlags.SetFrenziedWord(0x20);
+	N.SetFrenziedWord(0x20);
 	for (const FCase& Case : Cases)
 	{
 		TestEqual(*FString::Printf(TEXT("frenzy 0x20: the table walk rewrites %s to ACT_RUN"),
@@ -1281,7 +1281,7 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 		WalkVisual(TEXT("ACT_RUN_RELAXED")).Activity, FString(TEXT("ACT_RUN_RELAXED")));
 	TestEqual(TEXT("...and outside it in the kernel body too"),
 		N.NPC_EarlyTranslateActivity(GTActRunRelaxed), GTActRunRelaxed);
-	N.NpcFlags.SetFrenziedWord(0);
+	N.SetFrenziedWord(0);
 
 	// 3. The gait-override ConVar.
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 1);
@@ -1338,10 +1338,10 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 	if (TestTrue(TEXT("BindPreTranslateState binds the kernel's evaluator"),
 			static_cast<bool>(Intent.NpcLiveState)))
 	{
-		T.NpcFlags.SetFrenziedWord(0x40);
+		T.SetFrenziedWord(0x40);
 		TestTrue(TEXT("...and the bound intent answers the kernel's own frenzy bit"),
 			Intent.NpcLiveState(static_cast<int32>(ENpcPredicate::MovementPolicyFrenzy), 0));
-		T.NpcFlags.SetFrenziedWord(0);
+		T.SetFrenziedWord(0);
 	}
 	return true;
 }

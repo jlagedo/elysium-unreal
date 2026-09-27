@@ -1,0 +1,603 @@
+{
+ "schema_version": 1,
+ "ordered_tests": [],
+ "changes": [
+  {
+   "id": "step6r-diag-CameraAnchors",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.CameraAnchors",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1178",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1177",
+     1
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-DialogHolster",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogHolster",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1222",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1221",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-DialogueConditionTruthiness",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogueConditionTruthiness",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1224",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1223",
+     1
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-DlgAutomatic",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DlgAutomatic",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1226",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1225",
+     4
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-add-RegistryMatchesFactories",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelClass.RegistryMatchesFactories",
+   "evidence": "plan 6h: the registry's NPC line builds exactly the 45 step-2 classnames, each under its retail class; the ten deferred classes are listed and not on the NPC line",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-add-FieldOwners",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelShape.FieldOwners",
+   "evidence": "plan 6h: shape-map member words live on the port class of their declaring retail layer (m_pSenses +0x5cdc the one listed transitional home until fold 9), and the descriptor chain binds every census word on its own layer's descriptor",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-add-SlotOwners",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelShape.SlotOwners",
+   "evidence": "plan 6h: every generated slot row is declared on its own port class (compiler-checked), names that class's retail node as owner (the stub's owner prefix), overrides exactly when a base declares the slot, and every generated Troika census row is a row of its owner's table",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-remove-ShadowedDefaults",
+   "kind": "removal",
+   "test": "Elysium.Substrate.NpcKernelSlots.ShadowedDefaults",
+   "coverage_disposition": "re-homed: NpcKernelSlots.Defaults probes every class's own constant bodies (the shadowed ones included) on a receiver of that class, through the per-class slot tables that replaced ShadowedSlotDefaults (plan 6c)",
+   "evidence": "plan 6c: per-owner probes replace the qualified-call table",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-SceneJaw",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.SceneJaw",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1342 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1341 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-ScriptedSequenceBodyClaim",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.ScriptedSequenceBodyClaim",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1349",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1350",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1351",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1352",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1353",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1348",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1349",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1350",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1351",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1352",
+     1
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-CrossDispositionTransition",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.CrossDispositionTransition",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1060",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1059",
+     2
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  },
+  {
+   "id": "step6r-diag-Driver",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.Driver",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1061",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1062",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1060",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1061",
+     1
+    ]
+   ],
+   "evidence": "map-epoch shift only: the removed ShadowedDefaults case stood one world fewer earlier in the run; messages and counts are unchanged",
+   "packet": "6r"
+  }
+ ]
+}

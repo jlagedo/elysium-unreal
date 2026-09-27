@@ -74,6 +74,15 @@ _Recovered 2026-09-13, story 29b-0._
   - The surfaces are `Public/Elysium<Class>Slots.inl` plus `Private/Substrate/Elysium<Class>Slots.cpp`,
     with the hand bodies in `Elysium<Class>SlotBodies.*`.
   - A stub names its owner (`CBaseEntity::GetModelIndex`), with its address and story unchanged.
+  - Each port class carries a generated table of its own slot rows
+    (`ElysiumNpcKernelShape::EntitySlotRows()` … `NpcSlotRows()`). The compiler decides whether each
+    row is declared on the class itself, and every constant body is probed on a receiver of exactly
+    that class.
+  - Words live on their retail owner too. `m_bfAINPCFlags`/`m_bfAINPCFlags2` (`+0x14b8`/`+0x14bc`)
+    are `CBaseCombatCharacter` words (`FElysiumNpcFlags` on `FElysiumCombatCharacter`), while
+    `m_iIsOblivious` (`+0x5bb4`) and `m_bfNPCFrenziedFlags` (`+0x5b84`) are `CAI_BaseNPC` words on
+    `FElysiumNpcBase`. The obliviousness bookkeeping bit `MADE_OBLIVIOUS` sits in the combat
+    character's word and its refcount in the NPC's, and `CAI_BaseNPC`'s bodies write the two together.
   - Eight retail slot names that a subclass also declares are reviewed rows (`gen_kernel_shape`
     `SLOT_PORT_MAP` `accepted`):
     - the weapon's `Hide`/`Unhide`;
@@ -88,7 +97,12 @@ _Recovered 2026-09-13, story 29b-0._
     - `SetMoveType` (93) is the `m_MoveType`/`m_MoveCollide` seam;
     - `AcceptInput` (118) is the world's input chokepoint;
     - `Weapon_Switch` (388) and `GetModelIndex` (8) stay counting stubs. `SetActiveWeapon` ports
-      only the swap of `0x1032dde0`, and the port has no model-precache index.
+      only the swap of `0x1032dde0`, and the port has no model-precache index. `Weapon_Switch` is a
+      live rule: `CNPC_VMingXiao` (`Spawn` `0x103927a0`, `StartTask` `0x10392d80`, `RunTask`
+      `0x10393930`, `PreSelectSchedule` `0x10394120`) and `CNPC_VBach::StartTask` (`0x103645a0`)
+      switch weapons through slot 388.
+    - `GetClassScheduleIdSpace` (580) is the typed `ClassScheduleIdSpace`: the base body
+      `0x101a6d00` on `FElysiumNpcBase`, the Troika body `0x101aa790` as `FElysiumNpc`'s override.
     - Named modernization: the port keeps one origin and no local/abs split, so 220 equals 217 for
       a parented entity.
 

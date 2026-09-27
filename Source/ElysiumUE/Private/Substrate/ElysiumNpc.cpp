@@ -783,7 +783,7 @@ bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiu
 	//    `CBaseCombatCharacter::EnterGrappleState` (`0x10329760`), whose answer is the base's.
 	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
 	DisconnectFromSquad();
-	NpcFlags.AddGrappleOblivious();
+	AddGrappleOblivious();
 	FireOutput(TEXT("OnGrappleBegin"), Partner);
 	if (!FElysiumCombatCharacter::EnterGrappleState(Partner, Role, Type, Position, bHolster))
 	{
@@ -3130,7 +3130,7 @@ void FElysiumNpc::SetNpcFlag(uint32 EncodedFlag)
 		NpcFlags.Set(static_cast<EElysiumNpcFlag>(EncodedFlag));
 	}
 	RecordScheduleEvent(FString::Printf(TEXT("TASK_SET_NPC_FLAG 0x%08x -> %s"),
-		EncodedFlag, *NpcFlags.Describe()));
+		EncodedFlag, *DescribeNpcFlags()));
 }
 
 void FElysiumNpc::ClearConditions()

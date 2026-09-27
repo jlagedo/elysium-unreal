@@ -229,13 +229,39 @@ def test_a_constant_body_is_emitted_with_its_probe():
     assert "int32 FElysiumNpc::Slot33()" in text
     assert "return static_cast<int32>(0xffffffff);" in text
     assert "FireKernelSlot(TEXT(\"Slot33\")" not in text
-    assert 'TEXT("0xffffffff"), -1, false' in text
-    # And a model with no constant rows still compiles: a zero-length C array does not.
-    empty = gks.Model(words=[], slots=[_slot()], branch=[], classes=[], overrides=[],
+    # The class's slot table carries the row, its probe typed to the class, and the compiler's
+    # answer to whether the class itself declares it.
+    assert 'EElysiumNpcSlotBody::Default, TEXT("0xffffffff"), -1, false' in text
+    assert "[](FElysiumNpc& Receiver) -> int64 { return static_cast<int64>(Receiver.Slot33()); }" in text
+    assert "TDeclaredOn<FElysiumNpc, int32()>::Test(&FElysiumNpc::Slot33)" in text
+    assert "TArrayView<const TElysiumNpcSlotRow<FElysiumNpc>> NpcSlotRows()" in text
+    # A stub row carries no probe: firing it would tally.
+    stub = gks.Model(words=[], slots=[_slot()], branch=[], classes=[], overrides=[],
+                     reserved=set(), family=set(), meta={})
+    stub_text = gks.render_slots_cpp(stub, "vampire.dll", "FElysiumNpc")
+    assert "EElysiumNpcSlotBody::Stub" in stub_text and "nullptr }," in stub_text
+    # And a class with no generated row still compiles: a zero-length C array does not.
+    empty = gks.Model(words=[], slots=[], branch=[], classes=[], overrides=[],
                       reserved=set(), family=set(), meta={})
     empty_text = gks.render_slots_cpp(empty, "vampire.dll", "FElysiumNpc")
-    assert "GDefaults[]" not in empty_text
-    assert "return TArrayView<const FElysiumNpcSlotDefault>();" in empty_text
+    assert "GNpcSlotRows[]" not in empty_text
+    assert "return TArrayView<const TElysiumNpcSlotRow<FElysiumNpc>>();" in empty_text
+
+
+def test_each_class_emits_its_own_typed_slot_table():
+    # A chain class's own constant body is probed on a receiver of that class, not through a
+    # qualified call on an NPC (plan step 6c).
+    row = _slot(default="0")
+    row.owner, row.retail = "FElysiumEntity", "CBaseEntity"
+    model = gks.Model(words=[], slots=[row], branch=[], classes=[], overrides=[],
+                      reserved=set(), family=set(), meta={})
+    text = gks.render_slots_cpp(model, "vampire.dll", "FElysiumEntity")
+    assert "const TElysiumNpcSlotRow<FElysiumEntity> GEntitySlotRows[] =" in text
+    assert 'TEXT("CBaseEntity"), TEXT("Slot33")' in text
+    assert "[](FElysiumEntity& Receiver) -> int64" in text
+    assert "TArrayView<const TElysiumNpcSlotRow<FElysiumEntity>> EntitySlotRows()" in text
+    assert "FElysiumNpc& Npc" not in text and "::Slot33(" not in text.split("GEntitySlotRows")[1]
+    assert gks.slot_rows_accessor("FElysiumCombatCharacter") == "CombatCharacterSlotRows"
 
 
 def test_a_default_matches_its_body_as_a_32_bit_word():

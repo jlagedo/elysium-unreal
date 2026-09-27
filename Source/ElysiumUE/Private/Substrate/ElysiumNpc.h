@@ -636,16 +636,6 @@ public:
 
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
 
-	/**
-	 * `m_iIsOblivious > 0` (`CAI_BaseNPC` `+0x5bb4`).
-	 *
-	 * Its four recovered consumers are: the sense pass (`CAI_BaseNPC::PerformSensing` `0x1026e4f0`
-	 * skips sensing entirely), the weapon-aim pose (slot 314, `0x102bf070`, stops aiming), a
-	 * reaction predicate (slot 587, `0x1028ef20`) and `CStealthKillRules::FindVictim`
-	 * (`0x101be1f0`, which makes an oblivious body backstabbable from any angle).
-	 */
-	bool IsOblivious() const { return NpcFlags.IsOblivious(); }
-
 	// `CAI_BaseNPCTroika::IsValidStealthKillTarget` `0x102c2300` (slot 294). The attacker argument
 	// is unused in the listing, matching retail.
 	bool IsValidStealthKillTarget(const FElysiumPlayer& Attacker) const;

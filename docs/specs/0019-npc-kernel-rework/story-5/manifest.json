@@ -22,7 +22,7 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7"
+      "sha256": "a68839a75b9bdc0ea8a6470216aeeae4d005ad2ea3504726a80bdcab0e852732"
     },
     "registry": {
       "root": "repo",
@@ -262,9 +262,34 @@
       ]
     },
     "step6": {
-      "commit": "7d63e7fadffe6e68a9de717911364238e81724d2",
       "acceptance": "acceptance-step6.json",
-      "note": "--check step6 reads this tree once recorded. The step-6 gate ran on the 7d63e7fa working tree (782a27e6 + packets 6c-6i), committed unchanged."
+      "note": "--check step6 reads this tree once recorded. The step-6 gate ran on the 7d63e7fa working tree (782a27e6 + packets 6c-6i), committed unchanged. Packet 6r (the review follow-up, acceptance-step6r.json) is in progress: history.step6.commit is re-recorded as the 6r commit once it lands.",
+      "accepted_6c_6i": "7d63e7fadffe6e68a9de717911364238e81724d2",
+      "commit": ""
+    },
+    "step6r_pins": {
+      "note": "step 6r: kernel_verdicts.tsv gains the Weapon_Switch 0x1032dde0 rule row (finding weapon-switch-verdict) and 0x101aa790 retargets to FElysiumNpc::ClassScheduleIdSpace (finding slot-580-typed); no other verdict changed",
+      "refreshed": {
+        "verdicts": {
+          "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+          "previous_sha256": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7",
+          "sha256": "a68839a75b9bdc0ea8a6470216aeeae4d005ad2ea3504726a80bdcab0e852732"
+        }
+      },
+      "log": [
+        {
+          "input": "verdicts",
+          "from": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7",
+          "to": "02a52c8dfbb88491e913c1bffb5efcaca271509f943ec0de954f572a833e6c27",
+          "note": "step 6r: kernel_verdicts.tsv gains the Weapon_Switch 0x1032dde0 rule row (finding weapon-switch-verdict) and 0x101aa790 retargets to FElysiumNpc::ClassScheduleIdSpace (finding slot-580-typed); no other verdict changed"
+        },
+        {
+          "input": "verdicts",
+          "from": "02a52c8dfbb88491e913c1bffb5efcaca271509f943ec0de954f572a833e6c27",
+          "to": "a68839a75b9bdc0ea8a6470216aeeae4d005ad2ea3504726a80bdcab0e852732",
+          "note": "step 6r: the Weapon_Switch row takes the strict [0019/1 obs=] tag"
+        }
+      ]
     }
   },
   "step1_packets": {
@@ -328,6 +353,7 @@
     "6f": "accepted",
     "6g": "accepted",
     "6h": "accepted",
-    "6i": "accepted"
+    "6i": "accepted",
+    "6r": "accepted"
   }
 }

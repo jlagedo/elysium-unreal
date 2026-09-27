@@ -62,7 +62,7 @@ int32 FElysiumNpc::TranslateScheduleRetail(int32 ScheduleNumber)
 int32 FElysiumNpc::TroikaTranslateScheduleRetail(int32 ScheduleNumber)
 {
 	// `CAI_BaseNPCTroika::TranslateSchedule` `0x102b12f0`.
-	if (NpcFlags.HasFrenzied(GTranslate19FrenziedBit))
+	if (HasFrenzied(GTranslate19FrenziedBit))
 	{
 		if (const int32 Frenzied = FrenziedTranslateSchedule(ScheduleNumber); Frenzied != 0)
 		{

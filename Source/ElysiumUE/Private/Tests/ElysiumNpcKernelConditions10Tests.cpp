@@ -507,14 +507,14 @@ bool FElysiumNpcKernelConditions10WitnessTest::RunTest(const FString&)
 	F.Guard->PlSupernaturalAttack = 0;
 
 	// The five refusals, each on its own.
-	F.Guard->NpcFlags.AddOblivious();
+	F.Guard->AddOblivious();
 	TestFalse(TEXT("m_iIsOblivious > 0 refuses (1028ef44)"), F.Guard->CanWitnessSupernatural(0));
-	F.Guard->NpcFlags.RemoveOblivious();
+	F.Guard->RemoveOblivious();
 
-	F.Guard->NpcFlags.SetFrenziedWord(FElysiumNpcFlags::FrenziedDoesNotWitness);
+	F.Guard->SetFrenziedWord(FElysiumNpcBase::FrenziedDoesNotWitness);
 	TestFalse(TEXT("the frenzied does-not-witness bit refuses (1028ef53)"),
 		F.Guard->CanWitnessSupernatural(0));
-	F.Guard->NpcFlags.SetFrenziedWord(0);
+	F.Guard->SetFrenziedWord(0);
 
 	F.Guard->NpcFlags.Set(EElysiumNpcFlag::D_IS_BUSY);
 	TestFalse(TEXT("IsBusyWithDiscipline refuses (1028ef60)"),

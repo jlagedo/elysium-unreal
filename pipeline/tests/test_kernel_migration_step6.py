@@ -3,6 +3,7 @@ the committed records."""
 from __future__ import annotations
 
 import collections
+import json
 import csv
 import sys
 from pathlib import Path
@@ -153,9 +154,19 @@ def test_the_committed_records_are_complete_and_reviewed():
     slots = s6.read_slots(directory / "slots-step6.tsv")
     moves = s6.read_moves(directory / "moves-step6.tsv")
     assert not [r for r in slots if r["disposition"] == "investigate"]
-    assert len(slots) == 824 and len(moves) == 129
+    # 6r adds the twelve members split out of FElysiumNpcFlags onto FElysiumNpcBase
+    assert len(slots) == 824 and len(moves) == 141
+    assert len([r for r in moves if r["packet"] == "6r" and r["final_owner"] == "FElysiumNpcBase"]) == 12
     counts = collections.Counter(r["disposition"].split(":")[0] for r in slots)
-    assert counts == {"keep": 374, "move": 256, "new-chain-row": 102, "move-hand": 84, "adapter": 5,
-                      "seam": 1, "implemented": 1, "delete-dead": 1}
+    # 6r: slot 580's two rows are the typed ClassScheduleIdSpace (SLOT_PORT_MAP), no longer `keep`
+    assert counts == {"keep": 372, "move": 256, "new-chain-row": 102, "move-hand": 84, "adapter": 5,
+                      "seam": 1, "implemented": 3, "delete-dead": 1}
     # every chain-owned base row leaves the NPC base; the Troika rows all stay
     assert all(r["final_owner"] == "FElysiumNpc" for r in slots if r["current_owner"] == "FElysiumNpc")
+
+
+def test_the_review_receipt_is_optional_until_it_lands(tmp_path):
+    assert s6.check_review_receipt(tmp_path) == {}
+    (tmp_path / "acceptance-step6r.json").write_text(json.dumps({"scope": "step-6"}), encoding="utf-8")
+    with pytest.raises(km.InvalidManifest, match="review follow-up"):
+        s6.check_review_receipt(tmp_path)

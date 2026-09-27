@@ -13,10 +13,11 @@ C++ classes and registry descriptors. No behaviour changes. Lands as its own com
     `FElysiumFlex : FElysiumAnimatingOverlay`;
   - `FElysiumCombatCharacter` derives from `FElysiumFlex`;
   - adds the chain-node names `ElysiumAnimatingOverlayClassName()` / `ElysiumFlexClassName()`.
-- Both classes are declared in `ElysiumPlayer.h` beside the other two chain nodes
-  (`decisions-step6.json`, owner decisions). A header of their own would have to be included
-  mid-file, because the combat character needs them complete. Their cpps arrive with content in
-  6c/6d (the generated slot bodies and the moved hand bodies).
+- Both classes were declared in `ElysiumPlayer.h` beside the other two chain nodes. **Superseded by
+  packet 6r:** `.claude/rules/cpp.md` puts one class per file. `FElysiumAnimating` moved verbatim to
+  `ElysiumAnimating.h` (`bdcfc197`), and the two new classes live in `ElysiumAnimatingOverlay.h` and
+  `ElysiumFlex.h`, which `ElysiumPlayer.h` includes. Their cpps are `Elysium<Class>SlotBodies.cpp`,
+  which arrived with content in 6c/6d (the generated slot bodies and the moved hand bodies).
 - `ElysiumPlayerClasses.cpp`, the chain's one registration site:
   - registers abstract descriptors `CBaseAnimatingOverlay` (base `CBaseAnimating`) and `CBaseFlex`
     (base `CBaseAnimatingOverlay`);

@@ -91,29 +91,6 @@ namespace
 	constexpr uint32 GScheduleChangeTailKeep2 = 0x3fffffffu;
 }
 
-void FElysiumNpcFlags::AddOblivious()
-{
-	Set(EElysiumNpcFlag2::MADE_OBLIVIOUS);
-	++ObliviousCount;
-}
-
-void FElysiumNpcFlags::RemoveOblivious()
-{
-	// Retail clamps at zero (`0x1026d160`) rather than trusting the pairing, and so does this: the
-	// binary itself has a path that drops the bookkeeping bit without decrementing, so the counter is
-	// not provably balanced even in retail.
-	ObliviousCount = FMath::Max(0, ObliviousCount - 1);
-	Clear(EElysiumNpcFlag2::MADE_OBLIVIOUS);
-}
-
-bool FElysiumNpcFlags::OnScheduleChange()
-{
-	BeginScheduleChange();
-	const bool Released = ApplyScheduleChangeMasks();
-	FinishScheduleChange();
-	return Released;
-}
-
 void FElysiumNpcFlags::BeginScheduleChange()
 {
 	Word2 |= 0x80000004u; // The transient high bit is set by the virtual, not the name parser.
@@ -121,18 +98,15 @@ void FElysiumNpcFlags::BeginScheduleChange()
 
 bool FElysiumNpcFlags::ApplyScheduleChangeMasks()
 {
-	bool bReleasedOblivious = false;
-	if (!Has(EElysiumNpcFlag::PRESERVE_PATH))
+	if (Has(EElysiumNpcFlag::PRESERVE_PATH))
 	{
-		Word1 &= GScheduleChangeKeep1;
-		Word2 &= GScheduleChangeKeep2;
-		if (Has(EElysiumNpcFlag2::MADE_OBLIVIOUS))
-		{
-			RemoveOblivious();
-			bReleasedOblivious = true;
-		}
+		return false;
 	}
-	return bReleasedOblivious;
+	Word1 &= GScheduleChangeKeep1;
+	Word2 &= GScheduleChangeKeep2;
+	// `GScheduleChangeKeep2` keeps `MADE_OBLIVIOUS` (0x1000), so the bit the masks leave is the one
+	// retail tests next.
+	return Has(EElysiumNpcFlag2::MADE_OBLIVIOUS);
 }
 
 void FElysiumNpcFlags::FinishScheduleChange()
@@ -153,8 +127,6 @@ void FElysiumNpcFlags::Serialize(FElysiumSaveArchive& Ar)
 {
 	Ar << Word1;
 	Ar << Word2;
-	Ar << ObliviousCount;
-	Ar << FrenziedWord;
 }
 
 uint8 FElysiumNpcFlags::NpcStateFlagsForRetailState(int32 RetailState)
@@ -190,10 +162,6 @@ FString FElysiumNpcFlags::Describe() const
 		{
 			Parts.Add(Row.Name);
 		}
-	}
-	if (ObliviousCount > 0)
-	{
-		Parts.Add(FString::Printf(TEXT("oblivious=%d"), ObliviousCount));
 	}
 	return Parts.IsEmpty() ? TEXT("-") : FString::Join(Parts, TEXT("|"));
 }

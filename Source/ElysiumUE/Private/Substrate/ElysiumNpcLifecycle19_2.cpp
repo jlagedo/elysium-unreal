@@ -38,7 +38,7 @@ void FElysiumNpc::FrenzyShadowNPCInit()
 	PlayerControllerNPCInit();
 	WriteIdealStateRetail(0xb);
 	SetState(0xb);                                                       // 1026e340(0xb)
-	NpcFlags.SetFrenziedWord(FrenzyShadowFrenziedFlags);
+	SetFrenziedWord(FrenzyShadowFrenziedFlags);
 	Senses.bCanPerformSenses = true;
 	FrenzyShadowHostileEnemyCount = 0;
 	bFrenzyShadowFailedGrapple = false;
@@ -65,7 +65,7 @@ void FElysiumNpc::PlayerControllerNPCInit()
 	{
 		FriendPlayer = Owner;
 	}
-	NpcFlags.SetFrenziedWord(0);
+	SetFrenziedWord(0);
 	Senses.bCanPerformSenses = false;
 	bIsBccTargetable = false;
 }

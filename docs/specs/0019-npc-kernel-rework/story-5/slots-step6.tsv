@@ -788,8 +788,8 @@ slot	port_name	signature	current_owner	row_class	body	kind	verdict	introducer	fi
 577	IsHeavyDamage	bool IsHeavyDamage(float, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10266660	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
 578	NotifyDeadFriend	void NotifyDeadFriend(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6cc0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
 579	Slot579	bool Slot579(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6ce0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
-580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa790	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
-580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpcBase	CAI_BaseNPC	0x101a6d00	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa790	hand	rule	CAI_BaseNPC	FElysiumNpc	implemented:FElysiumNpc::ClassScheduleIdSpace	6r	the typed override of FElysiumNpcBase::ClassScheduleIdSpace (SLOT_PORT_MAP 580); the void* hand body is gone
+580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpcBase	CAI_BaseNPC	0x101a6d00	stub	rule	CAI_BaseNPC	FElysiumNpcBase	implemented:FElysiumNpcBase::ClassScheduleIdSpace	6r	the typed base virtual (SLOT_PORT_MAP 580); the generated void* stub is gone
 581	ReportAIState	void ReportAIState()	FElysiumNpcBase	CAI_BaseNPC	0x102779a0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
 582	ReportOverThinkLimit	void ReportOverThinkLimit(float)	FElysiumNpcBase	CAI_BaseNPC	0x10277d90	stub	dead	CAI_BaseNPC	FElysiumNpcBase	delete-dead	6f	dead verdict, no caller, no override in any class; census row stays, overlay target -
 583	Slot583	void Slot583(const FVector&)	FElysiumNpc	CAI_BaseNPCTroika	0x1028d860	hand	present	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-

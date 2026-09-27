@@ -4,6 +4,8 @@
 
 #include "Containers/ArrayView.h"
 
+#include <type_traits>
+
 // The NPC kernel's shape, as project source: what `CAI_BaseNPCTroika` *is*, so the port's own
 // shape can be asserted against it rather than described in comments.
 //
@@ -99,29 +101,59 @@ struct FElysiumNpcSlot
 	const TCHAR* Default = nullptr;
 };
 
-// One slot whose retail body is a constant, with a probe that calls the port's virtual for it.
+class FElysiumEntity;
+class FElysiumAnimating;
+class FElysiumAnimatingOverlay;
+class FElysiumFlex;
+class FElysiumCombatCharacter;
+class FElysiumNpcBase;
+class FElysiumNpc;
+
+// What a generated slot row's port body is.
+enum class EElysiumNpcSlotBody : uint8
+{
+	// The counting stub: no port implementation yet. It tallies under `Retail::PortMethod`.
+	Stub,
+	// Retail's whole body is one literal (`Default`), and the port answers it.
+	Default,
+	// Declared by the generator, defined by hand in the substrate.
+	Hand,
+};
+
+// One generated slot row of one port class (0019 story 5 step 6): a slot the class introduces, or
+// one it overrides because its retail table holds a body of its own there.
 //
-// The port's body for these is generated from `Default` rather than written, so something has to
-// keep the generated body and the recovered literal joined: that is
-// `Elysium.Substrate.NpcKernelSlots.Defaults`, which walks this table, calls `Invoke` on a real
-// NPC and requires `Value` back. Without it the emission would be a comment that compiles.
-struct FElysiumNpcSlotDefault
+// One table per port class, typed to it (`ElysiumNpcKernelShape::EntitySlotRows()` ...
+// `NpcSlotRows()`). The census suite reads the table to hold the tree to the chain it models; the
+// defaults suite calls every `Default` row's `Invoke` on a receiver of exactly this class, so the
+// generated body and the recovered literal stay joined. Without that the emission would be a
+// comment that compiles.
+template <typename TReceiver>
+struct TElysiumNpcSlotRow
 {
 	int32 Slot = 0;
 	// The retail body, `0x10……`.
 	const TCHAR* Address = nullptr;
-	// The port's virtual, as `FElysiumNpc` declares it.
-	const TCHAR* PortMethod = nullptr;
-	// The retail literal exactly as the decompiled C spells it, or `void`.
+	// The retail class that owns the body: the most-base table holding the same pointer. A stub
+	// tallies under `Retail::PortMethod`.
 	const TCHAR* Retail = nullptr;
-	// That literal in the port's return type, as an integer. 0 for a `void` slot.
+	// The port's virtual, as the class declares it.
+	const TCHAR* PortMethod = nullptr;
+	EElysiumNpcSlotBody Body = EElysiumNpcSlotBody::Stub;
+	// For a `Default` row, the retail literal exactly as the decompiled C spells it, or `void`.
+	const TCHAR* Default = nullptr;
+	// That literal in the port's return type, as an integer. 0 for a `void` or non-default row.
 	int64 Value = 0;
-	// True when retail's body is `return;` and there is no answer to compare — the assertion is
-	// then only that the call tallies no stub.
+	// True when retail's body is `return;` and there is no answer to compare.
 	bool bVoid = false;
-	// Calls the port's virtual with value-initialised arguments and renders the answer as an
-	// integer. Never null.
-	int64 (*Invoke)(class FElysiumNpc&) = nullptr;
+	// True when a more-base port class declares the slot and this row overrides it.
+	bool bOverride = false;
+	// Whether the port method is declared on `TReceiver` itself, answered by the compiler
+	// (`TDeclaredOn`) rather than by the generator.
+	bool bDeclaredHere = false;
+	// A `Default` row's probe: calls the virtual with value-initialised arguments and renders the
+	// answer as an integer. Null on every other row.
+	int64 (*Invoke)(TReceiver&) = nullptr;
 };
 
 // One class of the family: the 77 whose primary vtable spans the NPC slot range.
@@ -194,12 +226,32 @@ namespace ElysiumNpcKernelShape
 	TArrayView<const FElysiumNpcClassSlot> Overrides();
 	const FElysiumNpcShapeCensus& Census();
 
-	// The slots whose body the port generates from the recovered literal, each with the probe the
-	// defaults suite calls it through. Defined beside those bodies in `ElysiumNpcKernelSlots.cpp`.
-	TArrayView<const FElysiumNpcSlotDefault> SlotDefaults();
-	// The constant bodies a Troika instance never dispatches to -- a class's own body at a slot a
-	// more-derived class refills -- each probed through a qualified call (0019 story 5 step 6).
-	TArrayView<const FElysiumNpcSlotDefault> ShadowedSlotDefaults();
+	// Each port class's generated slot rows, defined at the end of its generated `…Slots.cpp`.
+	TArrayView<const TElysiumNpcSlotRow<FElysiumEntity>> EntitySlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumAnimating>> AnimatingSlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumAnimatingOverlay>> AnimatingOverlaySlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumFlex>> FlexSlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumCombatCharacter>> CombatCharacterSlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumNpcBase>> NpcBaseSlotRows();
+	TArrayView<const TElysiumNpcSlotRow<FElysiumNpc>> NpcSlotRows();
+
+	// Whether `&TClass::Method` names a method declared on `TClass` itself, for one signature.
+	// Deduction picks the one overload with that signature out of the name's set, and the member
+	// pointer's class is the class that declares it: a method only a base declares deduces the base.
+	template <typename TClass, typename TSignature>
+	struct TDeclaredOn;
+	template <typename TClass, typename TRet, typename... TArgs>
+	struct TDeclaredOn<TClass, TRet(TArgs...)>
+	{
+		template <typename TOwner>
+		static constexpr bool Test(TRet (TOwner::*)(TArgs...)) { return std::is_same_v<TOwner, TClass>; }
+	};
+	template <typename TClass, typename TRet, typename... TArgs>
+	struct TDeclaredOn<TClass, TRet(TArgs...) const>
+	{
+		template <typename TOwner>
+		static constexpr bool Test(TRet (TOwner::*)(TArgs...) const) { return std::is_same_v<TOwner, TClass>; }
+	};
 
 	// The ledger's own spelling of a tier (`datamap`, `sdk-order`, `walked`…), which is what the
 	// digest folds and what a diagnostic prints.

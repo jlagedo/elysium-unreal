@@ -1,6 +1,6 @@
 // `CBaseFlex`'s hand-written slot bodies and the members they reach (story 5 step 6),
 // moved up the chain from `FElysiumNpcBase`. Included inside `class FElysiumFlex`
-// (`ElysiumPlayer.h`), after its generated slot surface; the definitions are in
+// (`ElysiumFlex.h`), after its generated slot surface; the definitions are in
 // `Private/Substrate/ElysiumFlexSlotBodies.cpp`.
 
 //

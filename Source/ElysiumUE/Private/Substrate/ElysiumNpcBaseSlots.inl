@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 204 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 170 it introduces and 34 it overrides
+// 203 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 169 it introduces and 34 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -691,10 +691,6 @@
 	// slot 579 0x101a6ce0 (walked) `bool vfunc579(int)`
 	//   layer 1, story 29c
 	virtual bool Slot579(int32);
-	// slot 580 0x101a6d00 (walked) `CAI_ClassScheduleIdSpace* GetClassScheduleIdSpace()`
-	//   returns `CAI_ClassScheduleIdSpace*`
-	//   layer 0, story 29c
-	virtual void* GetClassScheduleIdSpace();
 	// slot 581 0x102779a0 (walked) `void ReportAIState()`
 	//   layer 4, story 29c
 	virtual void ReportAIState();

@@ -593,6 +593,8 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.bShouldMove; }, EElysiumField::Save);  // +0x1a40 bool
 		ElysiumAddClassField(D, TEXT("m_bWantsLargeHull"), &FElysiumNpcBase::bWantsLargeHull,
 			EElysiumField::Save);  // +0x5f2c bool
+		ElysiumAddClassField(D, TEXT("m_bfNPCFrenziedFlags"), &FElysiumNpcBase::FrenziedWord,
+			EElysiumField::Save);  // +0x5b84 int
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_eEnemyOccludedCheck"),
 			[](auto& E) -> auto&{ return E.BaseMemory.EnemyOccludedCheck; }, EElysiumField::Save);  // +0x5b98 int
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_failSchedule"),
@@ -657,6 +659,8 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcBase::ShootTargetOverride, EElysiumField::Save);  // +0x5ba8 ehandle
 		ElysiumAddClassField(D, TEXT("m_iCollisionMask"), &FElysiumNpcBase::CollisionMask,
 			EElysiumField::Save);  // +0x1a44 int
+		ElysiumAddClassField(D, TEXT("m_iIsOblivious"), &FElysiumNpcBase::ObliviousCount,
+			EElysiumField::Save);  // +0x5bb4 int
 		ElysiumAddClassField(D, TEXT("m_iMySquadSlot"), &FElysiumNpcBase::MySquadSlot,
 			EElysiumField::Save);  // +0x5dac int
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_iSquadDisconnected"),
@@ -704,9 +708,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x1b28 m_bForceStateChange (bool) — the port member exists but its owner keeps
 		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
 		// it, which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5b84 m_bfNPCFrenziedFlags (int) — the port member exists but its owner keeps
-		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
-		// it, which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x5b64 m_bfNPCStateFlags (int) — the language or an existing mechanism
 		// provides the word, so there is no member to persist
 		// NOT SAVED +0x5de0 m_cAmmoLoaded (int) — the port carries this concern on the entity chain
@@ -717,9 +718,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x5d74 m_hCine (ehandle) — the port carries this concern on the entity chain
 		// BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x5ce4 m_hTargetEnt (ehandle) — the port member exists but its owner keeps it
-		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
-		// which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5bb4 m_iIsOblivious (int) — the port member exists but its owner keeps it
 		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
 		// which is where it stays until that struct exposes an accessor
 		// NOT SAVED +0x5de8 m_pGoalEnt (classptr) — `m_pGoalEnt` is a FIELD_CLASSPTR, the same case
@@ -2793,7 +2791,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::CombatCharacter:
 				return {150, 8, 2, 25, 0};
 			case EClass::NpcBase:
-				return {4, 0, 16, 1, 53};
+				return {4, 0, 16, 1, 55};
 			case EClass::NpcMaker:
 				return {12, 0, 3, 4, 0};
 			case EClass::InterestingPlace:

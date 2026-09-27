@@ -498,7 +498,7 @@ void FElysiumNpcSenses::SetPlayerLos(FElysiumNpc& Npc, double Now)
 	// `m_bfNPCFrenziedFlags & 0x8` is set by both discipline arms (`0x3b1c` and `0x9fbd`); 16c is
 	// its producer and the read is live the day it lands.
 	if ((Npc.NpcStateFlags() & FElysiumNpcFlags::StateAlwaysInPlayerView) != 0
-		|| Npc.NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedAlwaysInPlayerView))
+		|| Npc.HasFrenzied(FElysiumNpcBase::FrenziedAlwaysInPlayerView))
 	{
 		ForceVisible();
 	}

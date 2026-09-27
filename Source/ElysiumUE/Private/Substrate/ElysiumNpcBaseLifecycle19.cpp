@@ -203,7 +203,7 @@ void FElysiumNpcBase::NPCInit()
 	}
 	Mind.ClearForceStateChange();                                        // +0x1b28
 	Unknown5b58 = 0;                                                     // +0x5b58
-	NpcFlags.SetFrenziedWord(0);                                         // +0x5b84
+	SetFrenziedWord(0);                                         // +0x5b84
 	NpcInitTime = Now;                                                   // +0x5b5c
 	WeaponBlockedByFriendTimer = 0.0;
 	ExtendedBlockedByFriendTimer = static_cast<double>(NpcKernelLifecycle19Shared::GFltMax);

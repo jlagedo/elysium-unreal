@@ -70,7 +70,7 @@ MoveReboundState	method	FElysiumNpcBase	ElysiumNpcBaseEntityChain.inl	ElysiumNpc
 NetworkChangeState	field	FElysiumNpcBase	ElysiumNpcBaseEntityChain.inl	-	FElysiumEntity	move	6d	+0x01b0 CBaseEntity m_NetworkChangeState
 NormalizePoseParameter	method	FElysiumNpcBase	ElysiumNpcBaseAnim.inl	ElysiumNpcBaseAnim.cpp	FElysiumAnimatingOverlay	move	6d	closure of the chain hand bodies
 NotifyWeaponDropped	method	FElysiumNpcBase	ElysiumNpcBaseCombat10.inl	ElysiumNpcBaseCombat10.cpp	FElysiumCombatCharacter	move	6d	closure of the chain hand bodies
-NpcFlags	field	FElysiumNpcBase	ElysiumNpcBase.h	-	FElysiumCombatCharacter	move	6d	carrier: stands for m_bfAINPCFlags/m_bfAINPCFlags2 +0x14b8/+0x14bc, CBaseCombatCharacter words (census layer); FElysiumNpcFlags moves with it
+NpcFlags	field	FElysiumNpcBase	ElysiumNpcBase.h	-	FElysiumCombatCharacter	move	6d	carrier: stands for m_bfAINPCFlags/m_bfAINPCFlags2 +0x14b8/+0x14bc, CBaseCombatCharacter words (census layer); FElysiumNpcFlags moves with it, and 6r splits out the two CAI_BaseNPC words it also carried (rows below)
 NumFlexControllers	method	FElysiumNpcBase	ElysiumNpcBaseAnim.inl	ElysiumNpcBaseAnim.cpp	FElysiumFlex	move	6d	closure of the chain hand bodies
 NumFlexWeightSlots	field	FElysiumNpcBase	ElysiumNpcBaseAnim.inl	-	FElysiumFlex	move	6d	closure of the chain hand bodies
 NumFlinchRecords	field	FElysiumNpcBase	ElysiumNpcBaseAnim.inl	-	FElysiumAnimatingOverlay	move	6d	closure of the chain hand bodies
@@ -129,3 +129,15 @@ AttackExtentsCm	field	FElysiumNpcBaseScheduleHost	ElysiumNpcBase.h	-	FElysiumEnt
 SetAttackExtents	method	FElysiumNpc	ElysiumNpc.h	-	FElysiumEntity	move	6d	slot 15 SLOT_PORT_MAP body, CBaseEntity::SetAttackExtents 0x1009af40
 RetailMoveType	field	FElysiumNpc	ElysiumNpcMotor10.inl	-	FElysiumEntity	move	6e	CBaseEntity m_MoveType, written by SetMoveType 0x100aad70
 RetailMoveCollide	field	FElysiumNpc	ElysiumNpcMotor10.inl	-	FElysiumEntity	move	6e	CBaseEntity m_MoveCollide, written by SetMoveType 0x100aad70
+ObliviousCount	field	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	m_iIsOblivious +0x5bb4, a CAI_BaseNPC word (census layer): split out of FElysiumNpcFlags; saved through its generated binding
+FrenziedWord	field	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	m_bfNPCFrenziedFlags +0x5b84, a CAI_BaseNPC word (census layer): split out of FElysiumNpcFlags; saved through its generated binding
+IsOblivious	method	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	the m_iIsOblivious reader
+AddOblivious	method	FElysiumNpcFlags	ElysiumNpcFlags.h	ElysiumNpcFlags.cpp	FElysiumNpcBase	move	6r	0x1026d130's refcount half: MADE_OBLIVIOUS + the count
+RemoveOblivious	method	FElysiumNpcFlags	ElysiumNpcFlags.h	ElysiumNpcFlags.cpp	FElysiumNpcBase	move	6r	0x1026d160's refcount half; OnScheduleChange's release calls it
+AddGrappleOblivious	method	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	the grapple's raw nesting reference
+RemoveGrappleOblivious	method	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	its release
+HasFrenzied	method	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	the m_bfNPCFrenziedFlags reader
+SetFrenziedWord	method	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	16c's whole-word writer
+FrenziedAlwaysInPlayerView	field	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	bit 0x8 of m_bfNPCFrenziedFlags
+FrenziedDoesNotWitness	field	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	bit 0x10 of m_bfNPCFrenziedFlags
+FrenziedFriendPlayer	field	FElysiumNpcFlags	ElysiumNpcFlags.h	-	FElysiumNpcBase	move	6r	bit 0x800 of m_bfNPCFrenziedFlags

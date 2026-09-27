@@ -356,13 +356,13 @@ bool FElysiumNpc::CanWitnessSupernatural(int32 Level)
 	{
 		return false;
 	}
-	if (NpcFlags.IsOblivious())                                          // 1028ef44, m_iIsOblivious > 0
+	if (IsOblivious())                                          // 1028ef44, m_iIsOblivious > 0
 	{
 		return false;
 	}
 	// `1028ef53`: `m_bfNPCFrenziedFlags & 0x10` — the "does not witness" bit `DoFrenzy`'s
 	// `0x9fbd` word carries.
-	if (NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedDoesNotWitness))
+	if (HasFrenzied(FElysiumNpcBase::FrenziedDoesNotWitness))
 	{
 		return false;
 	}

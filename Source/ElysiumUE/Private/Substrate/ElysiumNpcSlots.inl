@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 170 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 137 it
+// 169 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 136 it
 // overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -70,6 +70,9 @@
 // slot 453 0x102ad140 FElysiumNpc::BuildScheduleTestBits — the interrupt mask, ported in story 25
 // slot 534 0x1026b270 FElysiumCombatCharacter::EyeLookTargetHandle — the gaze cascade's chosen
 // subject; `EyeLookTarget` beside it is the point it resolved to
+// slot 580 0x101aa790 FElysiumNpcBase::ClassScheduleIdSpace — the typed id space: the base body
+// 0x101a6d00 and `FElysiumNpc`'s override, the Troika body 0x101aa790 (0019/5 step 6, the step-5
+// carried item); a `void*` beside it would be a second producer of the same answer
 // slot 582 0x10277d90 deleted — `CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller,
 // overridden nowhere (0019/5 step 6)
 // slot 614 0x102c23f0 FElysiumNpc::ResetThinkTimers — the four think stamps, ported in story 21
@@ -529,10 +532,6 @@
 	// slot 575 0x102bf4a0 (walked) `bool ShouldMoveAndShoot()`
 	//   layer 3, story 29c
 	bool ShouldMoveAndShoot() override;
-	// slot 580 0x101aa790 (walked) `CAI_ClassScheduleIdSpace* GetClassScheduleIdSpace()`
-	//   returns `CAI_ClassScheduleIdSpace*`
-	//   layer 0, story 29c
-	void* GetClassScheduleIdSpace() override;
 	// slot 583 0x1028d860 (walked) `void vfunc583(const Vector&)`
 	//   layer 1, story 29c
 	virtual void Slot583(const FVector&);

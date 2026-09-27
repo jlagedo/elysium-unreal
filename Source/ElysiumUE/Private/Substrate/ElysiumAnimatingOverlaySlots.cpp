@@ -20,13 +20,14 @@
 // A body with a `default:` verdict says something stronger: retail's whole body at that
 // slot is `return <literal>;`, so the port answers the same literal and stops tallying.
 // The literal is a recovered fact, not a written behaviour — the same argument the story
-// makes for a species override of a constant-returning virtual — and the probe tables in
-// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and
-// `.ShadowedDefaults` call every one of them through.
+// makes for a species override of a constant-returning virtual — and the slot table at the
+// end of this file is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of
+// them through, on a receiver typed to this class.
 
-#include "ElysiumPlayer.h"
+#include "ElysiumAnimatingOverlay.h"
 
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumNpcKernelShape.h"
 
 namespace
 {
@@ -181,3 +182,103 @@ int32 FElysiumAnimatingOverlay::GetFirstGestureLayer()
 //   layer 0, story 29c
 // verdict `mechanism`: the body is `FElysiumAnimatingOverlay::RemoveAllGestures`, written by hand
 // in the substrate. Declared here, defined there.
+
+namespace ElysiumNpcKernelShape
+{
+	namespace
+	{
+		// Every generated slot row of `FElysiumAnimatingOverlay`, in slot order: the census the class answers
+		// for (`Elysium.Substrate.NpcKernelShape.SlotOwners`) and, for each recovered default,
+		// the probe `Elysium.Substrate.NpcKernelSlots.Defaults` calls on a receiver of this
+		// class. `bDeclaredHere` is decided by the compiler, not written.
+		const TElysiumNpcSlotRow<FElysiumAnimatingOverlay> GAnimatingOverlaySlotRows[] =
+		{
+			{ 5, TEXT("0x10098a60"), TEXT("CBaseAnimatingOverlay"), TEXT("Slot5"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void*(uint32)>::Test(&FElysiumAnimatingOverlay::Slot5),
+				nullptr },
+			{ 31, TEXT("0x10098a90"), TEXT("CBaseAnimatingOverlay"), TEXT("Dump"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32)>::Test(&FElysiumAnimatingOverlay::Dump),
+				nullptr },
+			{ 79, TEXT("0x10097d70"), TEXT("CBaseAnimatingOverlay"), TEXT("GetPredDescMap"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void*()>::Test(&FElysiumAnimatingOverlay::GetPredDescMap),
+				nullptr },
+			{ 80, TEXT("0x10098020"), TEXT("CBaseAnimatingOverlay"), TEXT("GetServerClass"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void*()>::Test(&FElysiumAnimatingOverlay::GetServerClass),
+				nullptr },
+			{ 81, TEXT("0x10098040"), TEXT("CBaseAnimatingOverlay"),
+				TEXT("YouForgotToImplementOrDeclareServerClass"), EElysiumNpcSlotBody::Stub,
+				TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::YouForgotToImplementOrDeclareServerClass),
+				nullptr },
+			{ 82, TEXT("0x10097ce0"), TEXT("CBaseAnimatingOverlay"), TEXT("GetDataDescMap"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void*()>::Test(&FElysiumAnimatingOverlay::GetDataDescMap),
+				nullptr },
+			{ 250, TEXT("0x10098bb0"), TEXT("CBaseAnimatingOverlay"), TEXT("StudioFrameAdvance"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, float(float)>::Test(&FElysiumAnimatingOverlay::StudioFrameAdvance),
+				nullptr },
+			{ 255, TEXT("0x10098eb0"), TEXT("CBaseAnimatingOverlay"), TEXT("GetSkeleton"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(FVector*, void*, int32)>::Test(&FElysiumAnimatingOverlay::GetSkeleton),
+				nullptr },
+			{ 258, TEXT("0x10098c80"), TEXT("CBaseAnimatingOverlay"), TEXT("DispatchAnimEvents"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(float, FElysiumEntity*)>::Test(&FElysiumAnimatingOverlay::DispatchAnimEvents),
+				nullptr },
+			{ 265, TEXT("0x10099690"), TEXT("CBaseAnimatingOverlay"), TEXT("AddFlinchGesture"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, float, float, const TCHAR*, float)>::Test(&FElysiumAnimatingOverlay::AddFlinchGesture),
+				nullptr },
+			{ 266, TEXT("0x100997f0"), TEXT("CBaseAnimatingOverlay"), TEXT("Slot266"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void()>::Test(&FElysiumAnimatingOverlay::Slot266),
+				nullptr },
+			{ 267, TEXT("0x10098a40"), TEXT("CBaseAnimatingOverlay"), TEXT("GetFirstGestureLayer"),
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::GetFirstGestureLayer),
+				[](FElysiumAnimatingOverlay& Receiver) -> int64 { return static_cast<int64>(Receiver.GetFirstGestureLayer()); } },
+			{ 268, TEXT("0x10099020"), TEXT("CBaseAnimatingOverlay"), TEXT("SetLayer"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, int32, int32, bool)>::Test(&FElysiumAnimatingOverlay::SetLayer),
+				nullptr },
+			{ 269, TEXT("0x10099660"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveLayer"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32)>::Test(&FElysiumAnimatingOverlay::RemoveLayer),
+				nullptr },
+			{ 270, TEXT("0x10099540"), TEXT("CBaseAnimatingOverlay"), TEXT("HasLayer"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, bool(int32)>::Test(&FElysiumAnimatingOverlay::HasLayer),
+				nullptr },
+			{ 271, TEXT("0x100994c0"), TEXT("CBaseAnimatingOverlay"), TEXT("FindLayerByOwner"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32(int32)>::Test(&FElysiumAnimatingOverlay::FindLayerByOwner),
+				nullptr },
+			{ 272, TEXT("0x10099470"), TEXT("CBaseAnimatingOverlay"), TEXT("AllocateLayer"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::AllocateLayer),
+				nullptr },
+			{ 273, TEXT("0x10099570"), TEXT("CBaseAnimatingOverlay"), TEXT("RestartGesture"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, bool, bool)>::Test(&FElysiumAnimatingOverlay::RestartGesture),
+				nullptr },
+			{ 274, TEXT("0x100995e0"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveLayerByOwner"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32)>::Test(&FElysiumAnimatingOverlay::RemoveLayerByOwner),
+				nullptr },
+			{ 275, TEXT("0x10099630"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveAllGestures"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void()>::Test(&FElysiumAnimatingOverlay::RemoveAllGestures),
+				nullptr },
+		};
+	}
+
+	TArrayView<const TElysiumNpcSlotRow<FElysiumAnimatingOverlay>> AnimatingOverlaySlotRows()
+	{
+		return MakeArrayView(GAnimatingOverlaySlotRows);
+	}
+}

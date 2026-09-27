@@ -47,7 +47,7 @@ namespace
 	constexpr int32 GCondStepbackChancePercent = 20;
 	constexpr int32 GCondStepbackRareDenominator = 10;
 	// `m_bfNPCFrenziedFlags & 0x400`, the frenzy bit the rare arm requires CLEAR. 29b's
-	// `FElysiumNpcFlags::FrenziedWord` is the word; `0x400` has no recovered name.
+	// `FElysiumNpcBase::FrenziedWord` is the word; `0x400` has no recovered name.
 	constexpr uint32 GCondFrenziedSuppressesStepback = 0x400u;
 	// The active weapon's flag word (`weapon vtable +0x5a0`) bit 30 — "this weapon is blocked". No
 	// recovered name; it is the one term `SHOULD_KICK`'s re-raise needs and this runtime's weapon
@@ -440,7 +440,7 @@ void FElysiumNpc::RefreshCombatConditions()
 			// Arm B: NOT frenzied (`m_bfNPCFrenziedFlags & 0x400` clear), and none of
 			// `TOO_FAR_FOR_MELEE` (9), `TOO_FAR_TO_ATTACK` (0x60), `CAN_MELEE_ATTACK1` (0x51)
 			// standing, and a 1-in-11 draw (`RandomInt(0, 10) == 0`).
-			bStepback = !NpcFlags.HasFrenzied(GCondFrenziedSuppressesStepback)
+			bStepback = !HasFrenzied(GCondFrenziedSuppressesStepback)
 				&& !Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee)
 				&& !Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack)
 				&& !Cognition.Conditions.Has(EElysiumNpcCond::CanMeleeAttack1)

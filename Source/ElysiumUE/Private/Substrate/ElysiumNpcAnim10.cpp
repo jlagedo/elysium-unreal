@@ -353,7 +353,7 @@ void FElysiumNpc::TroikaSetActivity(int32 Activity)
 	if (Activity == GAnim10ActHuntSetFirst)
 	{
 		// --- Request 0x1115, the hunt-walk family --------------------------------------------------
-		if (NpcFlags.HasFrenzied(GAnim10FrenziedRunFrenzy))
+		if (HasFrenzied(GAnim10FrenziedRunFrenzy))
 		{
 			// The frenzy gait forces `ACT_RUN_FRENZY` — unless it is ALREADY playing, in which case
 			// the body does nothing at all rather than restarting it.
@@ -363,7 +363,7 @@ void FElysiumNpc::TroikaSetActivity(int32 Activity)
 			}
 			return;
 		}
-		if (NpcFlags.HasFrenzied(GAnim10FrenziedRunGait))
+		if (HasFrenzied(GAnim10FrenziedRunGait))
 		{
 			if (ActivityNumber != NpcKernelAnim10Shared::GAnim10ActRun)
 			{
@@ -456,7 +456,7 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 	// 2. The frenzy word. Bit 0x40 wins outright over bit 0x20 — they are an `else if` in retail, not
 	//    two tests — and each rewrite `goto`es past step 3.
 	bool bRewroteGait = false;
-	if (NpcFlags.HasFrenzied(GAnim10FrenziedRunFrenzy))
+	if (HasFrenzied(GAnim10FrenziedRunFrenzy))
 	{
 		if (Request == NpcKernelAnim10Shared::GAnim10ActRunRelaxed || Request == NpcKernelAnim10Shared::GAnim10ActWalk || Request == NpcKernelAnim10Shared::GAnim10ActRun
 			|| Request == NpcKernelAnim10Shared::GAnim10ActWalkRelaxed || Request == GAnim10ActHuntWalk
@@ -466,7 +466,7 @@ int32 FElysiumNpc::TroikaNpcEarlyTranslateActivity(int32 Activity)
 			bRewroteGait = true;
 		}
 	}
-	else if (NpcFlags.HasFrenzied(GAnim10FrenziedRunGait))
+	else if (HasFrenzied(GAnim10FrenziedRunGait))
 	{
 		if (Request == GAnim10ActHuntWalk || Request == NpcKernelAnim10Shared::GAnim10ActWalk
 			|| Request == NpcKernelAnim10Shared::GAnim10ActWalkRelaxed || Request == GAnim10ActCombatMove)
@@ -788,11 +788,11 @@ bool FElysiumNpc::PreTranslatePredicate(int32 Predicate, int32 Operand) const
 		return ElysiumNpcTunables::ConVarInt(GAnim10CvGait) == GAnim10GaitForceWalk;
 	case ENpcPredicate::MovementPolicyFrenzy:
 		// `0x10295590` step 2: `m_bfNPCFrenziedFlags & 0x40`.
-		return NpcFlags.HasFrenzied(GAnim10FrenziedRunFrenzy);
+		return HasFrenzied(GAnim10FrenziedRunFrenzy);
 	case ENpcPredicate::MovementPolicyRun:
 		// ... and `& 0x20`, which retail reaches only when `0x40` is CLEAR — the two are an
 		// `else if`. The table's row order reproduces that, so the predicate itself is the bare bit.
-		return NpcFlags.HasFrenzied(GAnim10FrenziedRunGait);
+		return HasFrenzied(GAnim10FrenziedRunGait);
 	case ENpcPredicate::ReloadFastCapable:
 	case ENpcPredicate::CoverCapable:
 		// `0x10295590` step 4: ONE capability test, `0x8000000`, in front of BOTH delegates.

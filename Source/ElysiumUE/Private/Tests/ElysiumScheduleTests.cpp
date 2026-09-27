@@ -164,6 +164,20 @@ namespace
 		// The incapacitation verbs and the two install rules, recorded rather than simulated: the
 		// kernel owns WHEN they fire, and that ordering is what these tests assert.
 		FElysiumNpcFlags Flags;
+		// The NPC's `m_iIsOblivious` beside the combat character's flag words, written the way
+		// `FElysiumNpcBase::AddOblivious` / `RemoveOblivious` write the pair.
+		int32 ObliviousCount = 0;
+		bool IsOblivious() const { return ObliviousCount > 0; }
+		void AddOblivious()
+		{
+			Flags.Set(EElysiumNpcFlag2::MADE_OBLIVIOUS);
+			++ObliviousCount;
+		}
+		void RemoveOblivious()
+		{
+			ObliviousCount = FMath::Max(0, ObliviousCount - 1);
+			Flags.Clear(EElysiumNpcFlag2::MADE_OBLIVIOUS);
+		}
 		int32 ConditionClears = 0;
 		virtual void MakeOblivious(bool bOblivious) override
 		{
@@ -171,11 +185,11 @@ namespace
 				bOblivious ? TEXT("TRUE") : TEXT("FALSE")));
 			if (bOblivious)
 			{
-				Flags.AddOblivious();
+				AddOblivious();
 			}
 			else
 			{
-				Flags.RemoveOblivious();
+				RemoveOblivious();
 			}
 		}
 		virtual void SetNpcFlag(uint32 EncodedFlag) override
@@ -199,7 +213,12 @@ namespace
 		{
 			if (ObservedState) OutgoingSchedules.Add(ObservedState->Current);
 			Calls.Add(TEXT("OnScheduleChange"));
-			Flags.OnScheduleChange();
+			Flags.BeginScheduleChange();
+			if (Flags.ApplyScheduleChangeMasks())
+			{
+				RemoveOblivious();
+			}
+			Flags.FinishScheduleChange();
 		}
 		// The per-NPC overlay, as a list a case fills: the kernel's contract is only that it asks
 		// before the test and honours what comes back.
@@ -817,7 +836,7 @@ bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
 	// `10280e53` slot-435 call releases these bits before the missing-schedule return.
 	TestFalse(TEXT("D_IS_BUSY is released by the loop's replacement install"),
 		Runner.Flags.Has(EElysiumNpcFlag::D_IS_BUSY));
-	TestFalse(TEXT("the obliviousness refcount is released with it"), Runner.Flags.IsOblivious());
+	TestFalse(TEXT("the obliviousness refcount is released with it"), Runner.IsOblivious());
 
 	// A later real install leaves the already released state clear.
 	ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI, Runner);
@@ -828,7 +847,7 @@ bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
 	TestFalse(TEXT("DONT_INVESTIGATE released by the next install"),
 		Runner.Flags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
 	TestFalse(TEXT("and the obliviousness refcount is released with them"),
-		Runner.Flags.IsOblivious());
+		Runner.IsOblivious());
 	return true;
 }
 
@@ -942,7 +961,7 @@ bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
 	TestEqual(TEXT("the source reason table names follower failure"), FString(ElysiumTaskFailureName(0x29)), FString(TEXT("NPC had no follower boss")));
 	Runner.bIdleAvailable = false;
 	ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Runner);
-	Runner.Flags.AddOblivious();
+	Runner.AddOblivious();
 	Runner.Flags.Set(EElysiumNpcFlag::NO_DIALOG);
 	TestTrue(TEXT("failed activity runs the failure transaction and ends the pass"), ElysiumSchedule::Tick(State, Runner, 1.0));
 	TestEqual(TEXT("the kernel invokes TaskFail and keeps the program for the route"), Runner.FailureReasons.Last(), 0x15);
@@ -950,7 +969,7 @@ bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
 	TestEqual(TEXT("...which the next pass takes into FAIL"), State.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 	TestFalse(TEXT("failure releases NO_DIALOG"), Runner.Flags.Has(EElysiumNpcFlag::NO_DIALOG));
 	TestFalse(TEXT("failure clears the bookkeeping bit"), Runner.Flags.Has(EElysiumNpcFlag2::MADE_OBLIVIOUS));
-	TestTrue(TEXT("retail failure retains the oblivious refcount"), Runner.Flags.IsOblivious());
+	TestTrue(TEXT("retail failure retains the oblivious refcount"), Runner.IsOblivious());
 	return true;
 }
 
@@ -1212,7 +1231,7 @@ bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
 		Guard->TranslateSchedule(ElysiumSched::IDLE_STAND), 0x132);
 	TestEqual(TEXT("...and the raw number slot 440 answered is 0x132 (102b1335)"),
 		Guard->LastTranslateScheduleRetail, 0x132);
-	Guard->NpcFlags.SetFrenziedWord(0x100);
+	Guard->SetFrenziedWord(0x100);
 	TestEqual(TEXT("the frenzied pre-table preserves the loaded 0xc9"),
 		Guard->TranslateSchedule(ElysiumSched::SCHED_TROIKA_MELEE_IDLE), 0xc9);
 	TestEqual(TEXT("...and the raw number is 0xc9 (102b120c MOV EAX,0xc9)"),

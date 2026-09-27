@@ -286,16 +286,6 @@ int32 FElysiumNpc::LocalScheduleId(int32 GlobalId) const
 	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
 }
 
-void* FElysiumNpc::GetClassScheduleIdSpace()
-{
-	// 0x101aa790, slot 580 — `CAI_BaseNPCTroika`'s override, `return &DAT_10924248`.
-	//
-	// The space is the CORPUS's, keyed on this NPC's retail class (`IdSpace` below), so what this
-	// answers is the same `CAI_ClassScheduleIdSpace` retail returns -- filled, with its parent link
-	// and its four sub-spaces, rather than the empty static the port used to stand here.
-	return const_cast<FElysiumLocalIdSpace*>(IdSpace(EElysiumIdCategory::Schedule));
-}
-
 float FElysiumNpc::LastAiThink() const
 {
 	// 0x101aa730 — the Troika's stamp for the FOURTH think channel (+0x6260; the base body

@@ -15,10 +15,10 @@
 // owner — `FElysiumEntity`, `FElysiumAnimating`, `FElysiumAnimatingOverlay`, `FElysiumFlex`,
 // `FElysiumCombatCharacter`, `FElysiumNpcBase` or `FElysiumNpc` — and a stub names that owner.
 //
-// These cases hold what that move made observable: the constant bodies a Troika instance never
-// dispatches to (a chain class's own body under a more-derived one) still answer retail's literal,
-// a chain stub fires under its owner's name with its own address, and the entity-method
-// integrations write and answer the port's own words.
+// These cases hold what that move made observable: a chain stub fires under its owner's name with
+// its own address, and the entity-method integrations write and answer the port's own words. Every
+// class's constant bodies are probed on a receiver of that class by `NpcKernelSlots.Defaults`, and
+// the per-class slot tables are held to the chain by `NpcKernelShape.SlotOwners`.
 
 static constexpr EAutomationTestFlags GChainSlotsTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -55,46 +55,6 @@ namespace
 				return Row.Kind == TEXT("slot") && Row.Surface == Surface;
 			});
 	}
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelShadowedDefaultsTest,
-	"Elysium.Substrate.NpcKernelSlots.ShadowedDefaults", GChainSlotsTestFlags)
-bool FElysiumNpcKernelShadowedDefaultsTest::RunTest(const FString&)
-{
-	FChainSlotsFixture F;
-	if (!TestNotNull(TEXT("the fixture stands the subject"), F.Npc))
-	{
-		return false;
-	}
-	// A chain class's own constant body at a slot a more-derived class refills is emitted on its
-	// class but never reached by a Troika instance's virtual call. The generator probes each one
-	// through a qualified call on the same instance, which runs exactly that class's body.
-	TArrayView<const FElysiumNpcSlotDefault> Rows = ElysiumNpcKernelShape::ShadowedSlotDefaults();
-	TestTrue(TEXT("the shadowed constant bodies have probes"), Rows.Num() > 0);
-	ElysiumStub::ClearTally();
-	for (const FElysiumNpcSlotDefault& Row : Rows)
-	{
-		if (!TestNotNull(FString::Printf(TEXT("slot %d (%s) carries a probe"), Row.Slot, Row.Address),
-			Row.Invoke))
-		{
-			continue;
-		}
-		const int64 Answer = Row.Invoke(*F.Npc);
-		if (!Row.bVoid)
-		{
-			TestEqual(FString::Printf(TEXT("slot %d (%s, %s) answers retail's %s"), Row.Slot, Row.Address,
-				Row.PortMethod, Row.Retail), Answer, Row.Value);
-		}
-	}
-	TArray<ElysiumStub::FTally> Tally;
-	ElysiumStub::CollectTally(Tally);
-	for (const ElysiumStub::FTally& Fired : Tally)
-	{
-		AddError(FString::Printf(TEXT("a shadowed default still tallies a stub: %s %s"), *Fired.Surface,
-			*Fired.Address));
-	}
-	ElysiumStub::ClearTally();
-	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelChainStubOwnerTest,

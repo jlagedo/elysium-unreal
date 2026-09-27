@@ -353,4 +353,132 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 	return true;
 }
 
+// The factory map at the step-6 boundary (0019 story 5 step 6, plan § 5 step 6: "extend the census
+// tests for ... current factories; all ten deferred classes remain explicitly listed").
+//
+// The registry's NPC line is exactly the factory map: every constructible descriptor under
+// `CAI_BaseNPC` is one of the 45 step-2 classnames hanging from its own retail class, every abstract
+// one is a live census class, and none of the ten deferred classes has an NPC descriptor yet.
+namespace
+{
+	// `manifest.json` `deferred_classes`, folded at steps 7 (controller line), 8 (makers),
+	// 9 (directors) and 10 (the test hull).
+	const TCHAR* const GDeferredClasses[] =
+	{
+		TEXT("CAI_TestHull"),
+		TEXT("CCineNPC"),
+		TEXT("CCineAI"),
+		TEXT("CCineAISchedule"),
+		TEXT("CNPCMaker"),
+		TEXT("CNPCMaker_Fleshpile"),
+		TEXT("CNPCMaker_Zombie"),
+		TEXT("CNPC_VPlayerController"),
+		TEXT("CNPC_VFrenzyShadow"),
+		TEXT("CNPC_VWolfMorph"),
+	};
+
+	bool IsDeferredClass(const FString& RetailClass)
+	{
+		for (const TCHAR* Name : GDeferredClasses)
+		{
+			if (RetailClass == Name)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Whether a descriptor is `CAI_BaseNPC` or derives from it through the registry chain.
+	bool OnNpcLine(const FElysiumClassDesc& Desc)
+	{
+		const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+		for (const FElysiumClassDesc* D = &Desc; D != nullptr;
+			D = D->BaseName.IsNone() ? nullptr : Reg.Find(D->BaseName))
+		{
+			if (D->ClassName == FName(TEXT("CAI_BaseNPC")))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassRegistryTest,
+	"Elysium.Substrate.NpcKernelClass.RegistryMatchesFactories", GElysiumNpcKernelFactoryFlags)
+bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
+{
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+	TSet<FString> Constructible;
+	TSet<FString> Abstract;
+	Reg.ForEach([this, &Constructible, &Abstract](const FElysiumClassDesc& Desc)
+	{
+		if (!OnNpcLine(Desc))
+		{
+			return;
+		}
+		const FString Name = Desc.ClassName.ToString();
+		if (Desc.bAbstract)
+		{
+			Abstract.Add(Name);
+			const bool bLine = Name == TEXT("CAI_BaseNPC") || Name == TEXT("CAI_BaseNPCTroika");
+			TestTrue(FString::Printf(TEXT("abstract %s is a live census class"), *Name),
+				bLine || (ElysiumNpcKernelClass::Find(*Name) != nullptr && !IsDeferredClass(Name)));
+			return;
+		}
+		Constructible.Add(Name);
+		const FFactoryRow* Row = nullptr;
+		for (const FFactoryRow& Candidate : GStep2Factories)
+		{
+			if (Name == Candidate.Classname)
+			{
+				Row = &Candidate;
+			}
+		}
+		if (TestNotNull(FString::Printf(TEXT("constructible %s is a factory-map classname"), *Name), Row))
+		{
+			TestEqual(FString::Printf(TEXT("%s hangs from its retail class"), *Name),
+				Desc.BaseName, FName(Row->RetailClass));
+		}
+	});
+	TestEqual(TEXT("the registry's NPC line builds exactly the 45 step-2 classnames"), Constructible.Num(),
+		static_cast<int32>(UE_ARRAY_COUNT(GStep2Factories)));
+	for (const FFactoryRow& Row : GStep2Factories)
+	{
+		TestTrue(FString::Printf(TEXT("%s is registered on the NPC line"), Row.Classname),
+			Constructible.Contains(Row.Classname));
+		TestTrue(FString::Printf(TEXT("its retail class %s has an abstract descriptor"), Row.RetailClass),
+			Abstract.Contains(Row.RetailClass));
+	}
+
+	// The ten deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
+	// their classnames are exactly the nine deferred factory rows (the test hull has none).
+	TestEqual(TEXT("ten classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 10);
+	int32 DeferredNames = 0;
+	for (const TCHAR* Name : GDeferredClasses)
+	{
+		const FElysiumNpcClass* Cls = ElysiumNpcKernelClass::Find(Name);
+		if (!TestNotNull(FString::Printf(TEXT("deferred %s is a census class"), Name), Cls))
+		{
+			continue;
+		}
+		DeferredNames += Cls->ClassnameCount;
+		const FElysiumClassDesc* Desc = Reg.Find(FName(Name));
+		TestFalse(FString::Printf(TEXT("deferred %s has no NPC descriptor before its fold"), Name),
+			Desc != nullptr && OnNpcLine(*Desc));
+	}
+	TestEqual(TEXT("the deferred classes carry the nine deferred classnames"), DeferredNames,
+		static_cast<int32>(UE_ARRAY_COUNT(GDeferredFactories)));
+	for (const FDeferredRow& Row : GDeferredFactories)
+	{
+		TestTrue(FString::Printf(TEXT("%s belongs to a deferred class"), Row.Classname),
+			IsDeferredClass(Row.RetailClass));
+		const FElysiumClassDesc* Desc = Reg.Find(FName(Row.Classname));
+		TestFalse(FString::Printf(TEXT("%s is not on the NPC line"), Row.Classname),
+			Desc != nullptr && OnNpcLine(*Desc));
+	}
+	return true;
+}
+
 #endif

@@ -32,7 +32,6 @@ CAI_BaseNPC	569	0x10274aa0	present	stub	FElysiumNpcBase
 CAI_BaseNPC	570	0x10274820	present	stub	FElysiumNpcBase
 CAI_BaseNPC	572	0x10289d10	rule	stub	FElysiumNpcBase
 CAI_BaseNPC	575	0x10278c60	rule	stub	FElysiumNpcBase
-CAI_BaseNPC	580	0x101a6d00	rule	stub	FElysiumNpcBase
 CAI_BaseNPCTroika	5	0x1028d5e0	mechanism	stub	FElysiumNpc
 CAI_BaseNPCTroika	142	0x102bed30	rule	stub	FElysiumNpc
 CAI_BaseNPCTroika	144	0x102bf340	rule	stub	FElysiumNpc
@@ -57,6 +56,7 @@ CAI_TestHull	523	0x102d72d0	mechanism	no-override	FElysiumNpcTestHull
 CBaseAnimatingOverlay	255	0x10098eb0	mechanism	stub	FElysiumAnimatingOverlay
 CBaseCombatCharacter	80	0x10321960	mechanism	stub	FElysiumCombatCharacter
 CBaseCombatCharacter	326	0x103482e0	present	stub	FElysiumCombatCharacter
+CBaseCombatCharacter	388	0x1032dde0	rule	stub	FElysiumCombatCharacter
 CBaseEntity	79	0x1009e100	mechanism	stub	FElysiumEntity
 CBaseEntity	110	0x1009e430	rule	stub	FElysiumEntity
 CBaseEntity	130	0x100aa5a0	mechanism	stub	FElysiumEntity
