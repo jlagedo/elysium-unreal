@@ -108,222 +108,216 @@ bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FEl
 		|| Cond.Has(EElysiumNpcCond::EnemyDead);
 }
 
-EElysiumNpcCond ElysiumNpcEnemy::RequiredInterrupt(const FElysiumNpc& Npc)
-{
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (Npc.BaseMemory.Enemy.IsSet() && Npc.World != nullptr)
-	{
-		const FElysiumEntity* Enemy =
-			ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.BaseMemory.Enemy);
-		if (Enemy == nullptr || Npc.EnemyMemory.IsEluded(Npc.BaseMemory.Enemy))
-		{
-			return EElysiumNpcCond::LostEnemy;   // eluded, or the handle went null
-		}
-		if (Enemy->IsInert())
-		{
-			return EElysiumNpcCond::EnemyDead;   // still an actor, just not a fightable one
-		}
-	}
-	return EElysiumNpcCond::NewEnemy;   // ordinary replacement, and the no-enemy-yet case
-}
-
-bool ElysiumNpcEnemy::IsScheduleInterested(const FElysiumNpc& Npc, EElysiumNpcCond Required)
-{
-	if (!Npc.Schedule.IsRunning())
-	{
-		// Recovered from ChooseEnemy (0x10279dd0): when the active-schedule pointer is null, it
-		// seeds all three interrupt answers true before the replacement predicates run. The port's
-		// spawn/idle gap is therefore interested, rather than a permissive fallback invented to
-		// compensate for missing installation.
-		return true;
-	}
-	const FElysiumScheduleProgram* Active = ElysiumScheduleFor(Npc.Schedule.Current);
-	if (Active == nullptr)
-	{
-		return false;
-	}
-	// ChooseEnemy (0x10279dd0) accepts ordinary NEW_ENEMY beside the exceptional interrupt: a
-	// marked-eluded handle tests NEW_ENEMY || LOST_ENEMY, and a dead one NEW_ENEMY || ENEMY_DEAD.
-	if (Required == EElysiumNpcCond::LostEnemy)
-	{
-		return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy)
-			|| Active->Interrupts.Has(EElysiumNpcCond::LostEnemy);
-	}
-	if (Required == EElysiumNpcCond::EnemyDead)
-	{
-		return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy)
-			|| Active->Interrupts.Has(EElysiumNpcCond::EnemyDead);
-	}
-	return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy);
-}
-
 FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 {
 	// `BestEnemy` (`0x102743c0`) is SLOT 478, and story 29d's family Senses10 carries its body —
 	// including the three gates this walk did not have (`FL_NOTARGET`, `m_bIsBCCTargetable` and
-	// slot 479 `IsValidEnemy`, which retail requires before BOTH the outright reachability win and
-	// the higher-priority replacement) and the one species arm over it
-	// (`CNPC_VFrenzyShadow#478`, `0x103766d0`). This dispatches the slot rather than keeping a
-	// second copy of the arbitration; the four helpers this file used to score with moved into
-	// `FElysiumNpcBase::BestEnemyCandidateVisible` / `BestEnemyDistanceKey` / the slot-530 dispatch.
+	// slot 479 `IsValidEnemy`) and the one species arm over it (`CNPC_VFrenzyShadow#478`,
+	// `0x103766d0`). This dispatches the slot rather than keeping a second copy of the arbitration.
 	FElysiumEntity* Best = const_cast<FElysiumNpc&>(Npc).BestEnemy();
 	return Best != nullptr ? Best->Handle : FElysiumEntityHandle::Invalid();
 }
 
+// `SetEnemy` (`0x10279a50`), 213 bytes, whole and in retail's order (story 8, lane L11).
+//
+// The body the port used to carry transferred the old handle unconditionally, never cleared the
+// attack conditions, left the discipline notify a comment and reset the port's own LOS-debounce
+// episode (`EnemyLosFailures` / `bEnemyLosLatched` / `EnemyLastLosTime`) — a port-invented step
+// retail does not have here. All corrected; the LOS episode belongs to the gather pass that owns
+// it (`CAI_BaseNPC::GatherEnemyConditions` `0x10270b20`, lane L07).
 void ElysiumNpcEnemy::SetEnemy(FElysiumNpcBase& Npc, const FElysiumEntityHandle& NewEnemy)
 {
-	const FElysiumEntityHandle Old = Npc.BaseMemory.Enemy;
-	if (Old.IsSet())
+	FElysiumEntityWorld* const World = Npc.World;
+	const FElysiumEntityHandle OldHandle = Npc.BaseMemory.Enemy;
+	// `0x10279a5a`-`0x10279a7f`: `m_hEnemy` (`+0x5ce0`) resolved through the handle table; `-1`
+	// (`0x10279a63`) or a stale serial (`0x10279a7d`) is a null old enemy.
+	FElysiumEntity* const Old = World != nullptr ? World->Resolve(OldHandle) : nullptr;
+	// Retail's argument is an entity pointer; this runtime's callers hand a handle. A set handle is
+	// retail's non-null argument (it writes the handle as given at `0x10279b01`); the pointer the
+	// identity test compares is that handle resolved.
+	FElysiumEntity* const New =
+		(World != nullptr && NewEnemy.IsSet()) ? World->Resolve(NewEnemy) : nullptr;
+	if (Old != New)                                                        // 0x10279a8b
 	{
-		Npc.BaseMemory.LastEnemy = Old;   // the old handle goes through the last-enemy path first
-	}
-	Npc.BaseMemory.Enemy = NewEnemy;
-
-	// "forgets the previous LOS claim": the debounce, its occlusion flag and the edge latch all
-	// belong to ONE acquisition episode, so a new enemy starts a new one. Without this the found
-	// edge for the new target would be swallowed by the previous target's latch. The episode lives
-	// on the senses runner (`SensesObject()`, transitional on the Troika).
-	if (FElysiumNpcSenses* const Senses = Npc.SensesObject())
-	{
-		Senses->Memory.EnemyLosFailures = 0;
-		Senses->Memory.bEnemyOccluded = false;
-		Senses->Memory.bEnemyLosLatched = false;
-		Senses->Memory.EnemyLastLosTime = -1.0;
-	}
-	// SEAM (comment only): a non-null enemy is also registered with retail's response system, which
-	// drives idle/combat speech selection. No response system exists here, so nothing is registered
-	// and nothing pretends to be.
-
-	Npc.RecordScheduleEvent(FString::Printf(TEXT("SetEnemy: %s -> %s"),
-		Old.IsSet() ? *Old.ToString() : TEXT("(none)"),
-		NewEnemy.IsSet() ? *NewEnemy.ToString() : TEXT("(none)")));
-	if (Npc.World != nullptr && Old != NewEnemy)
-	{
-		ElysiumNpcDebugLogging::EnemyChoice(Npc, *Npc.World, Old, NewEnemy);
-	}
-}
-
-bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond, double Now)
-{
-	FElysiumEntityWorld* World = Npc.World;
-	if (World == nullptr)
-	{
-		return false;
-	}
-	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-
-	// The recovered implementation order lists the interrupt gate ahead of `ShouldChooseNewEnemy`.
-	// Both are side-effect-free predicates and a search needs both, so which runs first cannot
-	// change the outcome — only the diagnostics. Stickiness runs first here so the gate's
-	// starvation record describes a search that was actually wanted, rather than firing on every
-	// pass of an NPC that was never going to look.
-	if (!ShouldChooseNewEnemy(Npc, Cond))
-	{
-		return false;   // a living, non-eluded current enemy with none of the trigger conditions
-	}
-
-	// The interrupt-interest gate, BEFORE any search. This is the starvation rule.
-	const EElysiumNpcCond Required = RequiredInterrupt(Npc);
-	if (!IsScheduleInterested(Npc, Required))
-	{
-		const int32 ScheduleNumber = Npc.GetLocalScheduleId(Npc.Schedule.Current);
-		if (Npc.Cognition.StarvedScheduleNumber != ScheduleNumber)
+		// `0x10279a96`-`0x10279ab7`: only a LIVE old handle (not -1, serial matching, table entry
+		// non-null) reaches the last-enemy helper; the re-resolve at `0x10279ab9`-`0x10279add` of
+		// the same handle cannot answer null in between (second judge, packet row 0x10279a50).
+		if (Old != nullptr)
 		{
-			// One record per NPC per schedule: a different program starving selection is a
-			// different fact, and the same one repeating every think is not.
-			Npc.Cognition.StarvedScheduleNumber = ScheduleNumber;
-			Npc.RecordScheduleEvent(FString::Printf(
-				TEXT("enemy selection skipped: %s (0x%x) does not interrupt on %s"),
-				ElysiumScheduleName(Npc.Schedule.Current), ScheduleNumber,
-				ElysiumNpcCondName(Required)));
-
-			// The retail warning, and the ONE arm it belongs to. The recovered text names "a null
-			// enemy under such a schedule", and the schedule gate reaches that state only through
-			// `LOST_ENEMY`: a committed enemy that went null while the running program refuses to
-			// hear about it. The never-had-an-enemy case reaches the same gate with a null handle
-			// but is the ordinary steady state of every civilian in the corpus — warning on it
-			// would report the game working as a fault, and one map's cast would bury the real one.
-			if (Required == EElysiumNpcCond::LostEnemy
-				&& ElysiumNpcCond::ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy) == nullptr)
-			{
-				UE_LOG(LogElysiumNpcEnt, Warning,
-					TEXT("%s lost its enemy to a null handle and the active schedule %s (0x%x) does "
-						"not interrupt on LOST_ENEMY — selection is skipped and the schedule keeps "
-						"ownership"),
-					*Npc.DebugString(), ElysiumScheduleName(Npc.Schedule.Current), ScheduleNumber);
-			}
+			Npc.SetLastEnemy(Old);                                         // 0x10279ae4 -> 0x10279b70
 		}
-		return false;
+		// Slot 560 `ClearAttackConditions` on EVERY change, even from a null old enemy.
+		Npc.ClearAttackConditions();                                       // 0x10279aed
 	}
-	// A pass that got through the gate clears the latch: the next refusal, even by the same
-	// schedule, is a fresh episode rather than one already reported.
-	Npc.Cognition.StarvedScheduleNumber = -1;
-	const FElysiumEntityHandle Old = Npc.BaseMemory.Enemy;
-	const FElysiumEntity* OldEntity = ElysiumNpcCond::ResolveEnemyHandle(*World, Old);
-	const bool bOldWentNull = Old.IsSet() && OldEntity == nullptr;
-	const bool bOldDead = OldEntity != nullptr && OldEntity->IsInert();
-	const bool bOldEluded = Old.IsSet() && Npc.EnemyMemory.IsEluded(Old);
-
-	const FElysiumEntityHandle New = BestEnemy(Npc);
-	if (New == Old)
+	if (NewEnemy.IsSet())                                                  // 0x10279af5
 	{
-		// The same actor survived arbitration. Nothing transitions, so nothing fires; the committed
-		// conditions gathered after this still describe it.
-		return false;
-	}
-
-	if (bOldDead)
-	{
-		Cond.Set(EElysiumNpcCond::EnemyDead);
-	}
-	if ((bOldWentNull || bOldEluded) && !New.IsSet())
-	{
-		Cond.Set(EElysiumNpcCond::LostEnemy);
-		// The remembered target kind decides which surface fires. These are the LOST-THE-ACTOR
-		// outputs, distinct from the lost-LINE-OF-SIGHT pair: losing sight neither clears the
-		// enemy nor forgets the player, and this transaction does both.
-		static const FName OnLostPlayer(TEXT("OnLostPlayer"));
-		static const FName OnLostEnemy(TEXT("OnLostEnemy"));
-		const bool bWasPlayer = World->PlayerHandle().IsSet() && Old == World->PlayerHandle();
-		Npc.FireOutput(bWasPlayer ? OnLostPlayer : OnLostEnemy, Old);
-		Npc.RecordScheduleEvent(FString::Printf(TEXT("%s: %s (%s)"),
-			bWasPlayer ? TEXT("OnLostPlayer") : TEXT("OnLostEnemy"), *Old.ToString(),
-			bOldEluded ? TEXT("eluded") : TEXT("went null")));
-		// SEAM (comment only): retail also emits a lost-enemy sound hook here. The game-sound bus
-		// carries no recovered category for it, so nothing is emitted rather than a guessed one.
-	}
-
-	SetEnemy(Npc, New);
-
-	// "clears stale had-enemy/player memory": the closest-player cache belongs to the sight pass and
-	// is not hostility admission, so it is left alone; what a replacement invalidates is the
-	// last-seen record the previous target owned, which no longer describes the committed one.
-	if (bOldWentNull || bOldEluded || bOldDead)
-	{
-		for (int32 i = 0; i < static_cast<int32>(FElysiumNpcBaseMemory::ESeen::Count); ++i)
-		{
-			if (Npc.BaseMemory.LastSeen[i].IsSet() && Npc.BaseMemory.LastSeen[i] == Old)
-			{
-				Npc.BaseMemory.LastSeen[i] = FElysiumEntityHandle::Invalid();
-				Npc.BaseMemory.LastSeenTime[i] = -1.0;
-			}
-		}
-	}
-
-	// "sets or clears NEW_ENEMY".
-	if (New.IsSet())
-	{
-		Cond.Set(EElysiumNpcCond::NewEnemy);
+		Npc.BaseMemory.Enemy = NewEnemy;                                   // 0x10279afb / 0x10279b01
+		// `thunk_FUN_101e3d70(&DAT_10739a4c, this)` — the discipline manager's break-on-notice
+		// sweep, run on EVERY non-null write, an unchanged enemy included. SEAM (counted, strips
+		// nothing): see `SetEnemyDisciplineStripCalls`.
+		++Npc.SetEnemyDisciplineStripCalls;                                // 0x10279b0c
 	}
 	else
 	{
-		Cond.Clear(EElysiumNpcCond::NewEnemy);
+		Npc.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();            // 0x10279b16
 	}
 
-	// SEAM (comment only): retail also vacates an occupied strategy slot on the transition. Slots
-	// are a squad-coordination store this runtime does not carry.
-	(void)Now;
-	return true;
+	// Debug-layer observability only (no retail word): the enemy-choice log line.
+	if (World != nullptr && OldHandle != Npc.BaseMemory.Enemy)
+	{
+		ElysiumNpcDebugLogging::EnemyChoice(Npc, *World, OldHandle, Npc.BaseMemory.Enemy);
+	}
+}
+
+// `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`), 1068 bytes, whole and in retail's order (story 8,
+// lane L11). The scope-trace frame and the `CVProfile` scope (`"CAI_Enemies_ChooseEnemy"`,
+// `0x10279e53`, `0x10279f5d`-`0x10279fa4`, `0x1027a105`-`0x1027a1e9`) are profiler bookkeeping
+// with no observable and stay absent.
+//
+// Replaces the port's guess, which ran the stickiness test BEFORE the gate, had no went-null
+// fall-through, fired the lost outputs with the old enemy as activator, invented a last-seen
+// scrub, never cleared or set `m_afMemory`, never vacated the squad slot and never played
+// `LostEnemySound`. It answers retail's value: whether an enemy is now held.
+bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
+{
+	FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;
+	// `0x10279e5d`: slot 167 `GetEnemy()` — the const overload, `m_hEnemy` resolved.
+	FElysiumEntity* const Current = static_cast<const FElysiumNpcBase&>(Npc).GetEnemy();
+	// `0x10279e65`: `m_afMemory` (`+0x5d8c`) at entry. `bHadEnemy` is bit `0x8000` (a non-player
+	// enemy) or `0x10000` (the player) — the pair `0x1027a0ff` below writes.
+	const uint32 MemoryAtEntry = Npc.BaseScheduleHost.MemoryBits;
+	const bool bHadEnemy = (MemoryAtEntry & 0x18000u) != 0;               // 0x10279e6b / 0x10279e76
+	bool bWentNull = false;
+	bool bLostOrEluded = false;
+	if (bHadEnemy && Current == nullptr)                                   // 0x10279e85 / 0x10279e89
+	{
+		bWentNull = true;                                                  // 0x10279e8b
+		bLostOrEluded = true;                                              // 0x10279e90
+	}
+	else if (Current != nullptr)                                           // 0x10279eeb
+	{
+		// `0x10279ef2`: slot 541 `GetEnemies()`, then `IsEluded` (`0x102e0210`) for the enemy.
+		const FElysiumNpcEnemyMemory* const Enemies =
+			static_cast<const FElysiumNpcEnemyMemory*>(Npc.GetEnemies());
+		if (Enemies != nullptr && Enemies->IsEluded(Current->Handle))      // 0x10279efa / 0x10279f01
+		{
+			bLostOrEluded = true;                                          // 0x10279e90
+		}
+	}
+	// `0x10279e97`-`0x10279eaa`: slot 158 `IsAlive` on the current enemy.
+	const bool bDead = Current != nullptr && !Current->IsAlive();
+
+	// `0x10279eb9`: with NO running schedule (`m_pSchedule` `+0x5c38` null) all three interrupt
+	// answers are FORCED true; otherwise each is `ConditionInterruptsCurrentSchedule`
+	// (`0x10269c70`, the mask alone — `ElysiumSchedule::MaskHasCondition`).
+	bool bNewInterrupts = true;
+	bool bLostInterrupts = true;
+	bool bDeadInterrupts = true;
+	if (Npc.Schedule.IsRunning())
+	{
+		bNewInterrupts = ElysiumSchedule::MaskHasCondition(Npc.Schedule, Npc,
+			EElysiumNpcCond::NewEnemy);                                    // 0x10279ebf (0x54)
+		bLostInterrupts = ElysiumSchedule::MaskHasCondition(Npc.Schedule, Npc,
+			EElysiumNpcCond::LostEnemy);                                   // 0x10279ecc (0x47)
+		bDeadInterrupts = ElysiumSchedule::MaskHasCondition(Npc.Schedule, Npc,
+			EElysiumNpcCond::EnemyDead);                                   // 0x10279ed9 (0x58)
+	}
+
+	// The gate. A dead enemy whose death the program listens for skips it outright.
+	if (!bDead || !bDeadInterrupts)                                        // 0x10279f18 / 0x10279f1c
+	{
+		if (bWentNull)                                                     // 0x10279f28
+		{
+			// The went-null case only WARNS and falls through to the choice: `DevMsg(2, …)` when
+			// neither NEW_ENEMY nor LOST_ENEMY interrupts a running program.
+			if (!bNewInterrupts && !bLostInterrupts && Npc.Schedule.IsRunning()) // 0x10279fb8/fc0/fca
+			{
+				UE_LOG(LogElysiumNpcEnt, Verbose,                          // 0x10279fd7
+					TEXT("WARNING: AI enemy went NULL but schedule (%s) is not interested"),
+					ElysiumScheduleName(Npc.Schedule.Current));
+			}
+		}
+		else if (!bNewInterrupts && (!bLostInterrupts || !bLostOrEluded))  // 0x10279f30/f3c/f44
+		{
+			// The running program keeps ownership: nothing is chosen, nothing is written.
+			return Current != nullptr;                                     // 0x10279f5d .. 0x10279fb5
+		}
+	}
+
+	// `0x10279fe5`: slot 480 `ShouldChooseNewEnemy`. A refusal keeps the current enemy as the
+	// candidate; so does a `BestEnemy` answer that IS the current enemy. Either way the change work
+	// still runs when the enemy went null (`0x1027a00d`-`0x1027a013`, the saved byte), the one case
+	// where old and new are both null.
+	FElysiumEntity* Chosen = Current;
+	bool bChange = false;
+	if (!Npc.ShouldChooseNewEnemy())                                       // 0x10279fed
+	{
+		bChange = bWentNull;                                               // 0x1027a00d / 0x1027a013
+	}
+	else
+	{
+		// Slot 478 `BestEnemy`, then `0x102707d0` — a summoned body (its Troika answering
+		// `Classify() == 3`) hands the hate to its owner.
+		Chosen = FElysiumNpcBase::SummonerRedirect(Npc.BestEnemy());       // 0x10279ff3 / 0x10279ffc
+		bChange = Chosen != Current || bWentNull;                          // 0x1027a003 / 0x1027a005
+	}
+	if (!bChange)
+	{
+		return Chosen != nullptr;                                          // 0x1027a105
+	}
+
+	// The change work.
+	Npc.BaseScheduleHost.MemoryBits &= 0xfffe7fffu;                        // 0x1027a019 / 0x1027a027
+	// The OLD enemy dead (slot 158 false) SETS `ENEMY_DEAD`; an alive one changes nothing, and
+	// nothing here clears 0x58 (second judge, packet row 0x10279dd0).
+	if (Current != nullptr && !Current->IsAlive())                         // 0x1027a02d/a033/a03b
+	{
+		// `(*DAT_10924a6c)->vfunc1()` (`0x1027a045`) is the `ent_trace_conditions` ConVar touch
+		// every `SetCondition` site makes; it has no observable.
+		Cond.Set(EElysiumNpcCond::EnemyDead);                              // 0x1027a04c
+	}
+	if (Chosen == nullptr)                                                 // 0x1027a053
+	{
+		Cond.Clear(EElysiumNpcCond::NewEnemy);                             // 0x1027a059 (0x10269b50)
+	}
+	else
+	{
+		Cond.Set(EElysiumNpcCond::NewEnemy);                               // 0x1027a06f
+	}
+	SetEnemy(Npc, Chosen != nullptr ? Chosen->Handle : FElysiumEntityHandle::Invalid()); // 0x1027a077
+	if (bHadEnemy)                                                         // 0x1027a07c / 0x1027a082
+	{
+		Npc.VacateSquadSlot();                                             // 0x1027a086 -> 0x1028ae60
+		Npc.BaseScheduleHost.MemoryBits &= 0xfffdffffu;                    // 0x1027a08b
+	}
+	if (Chosen == nullptr)                                                 // 0x1027a097
+	{
+		if (bLostOrEluded)                                                 // 0x1027a09f
+		{
+			Cond.Set(EElysiumNpcCond::LostEnemy);                          // 0x1027a0b0
+			Npc.LostEnemySound();                                          // 0x1027a0b9, slot 493
+		}
+		// The ENTRY word's player bit picks the output; retail fires it with `this` as both
+		// activator and caller (`0x100cd660(&output, this, this, 0)`).
+		static const FName OnLostPlayer(TEXT("OnLostPlayer"));
+		static const FName OnLostEnemy(TEXT("OnLostEnemy"));
+		if ((MemoryAtEntry & 0x10000u) != 0)                               // 0x1027a0c5
+		{
+			Npc.FireOutput(OnLostPlayer, Npc.Handle);                      // 0x1027a0cd, +0x5ecc
+		}
+		else
+		{
+			Npc.FireOutput(OnLostEnemy, Npc.Handle);                       // 0x1027a0da, +0x5e84
+		}
+	}
+	else
+	{
+		// `0x1027a0e1`-`0x1027a0ff`: the new enemy's `+0xa8` `m_pPlayer` set -> `0x10000`, else
+		// `0x8000`. This runtime's player is the one `FElysiumEntityWorld::PlayerHandle()` names.
+		const bool bIsPlayer = Npc.World != nullptr && Chosen->Handle == Npc.World->PlayerHandle();
+		Npc.BaseScheduleHost.MemoryBits |= bIsPlayer ? 0x10000u : 0x8000u;
+	}
+	return Chosen != nullptr;                                              // 0x1027a105 .. 0x1027a1fb
 }
 
 void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
@@ -387,8 +381,8 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 		}
 	}
 
-	// 3. ChooseEnemy — the gate, the stickiness test, the search and the transition outputs.
-	ElysiumNpcEnemy::ChooseEnemy(Npc, Cond, Now);
+	// 3. ChooseEnemy (`0x10279dd0`), retail's body (story 8 L11).
+	ElysiumNpcEnemy::ChooseEnemy(Npc);
 
 	// 4. The new-enemy-condition repair (`0x1026fb40`).
 	//    CHOSEN, NOT RECOVERED (the body, not the position): the survey names this stage and its

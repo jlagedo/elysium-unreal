@@ -436,6 +436,15 @@ public:
 	int32 WerewolfLastUsedMoveHint = INDEX_NONE;     // +0x66c0 `m_pLastUsedMoveHint`
 	bool bWerewolfTaskFailed = false;                // +0x66a1 (walked; retail name unrecovered)
 	int32 WerewolfHintNodeCacheA = INDEX_NONE;       // +0x6708 (walked; retail name unrecovered)
+	/** `CNPC_VWerewolf::CheckAllMoveHints` (`0x103cfc50`), story 8 lane L11 — the move-hint search:
+	 *  the four move-hint programs answer TRUE at once, a refused pursuit FALSE, a held hint with a
+	 *  path TRUE; otherwise the global hint walk, first imperative or first valid hint passing the four
+	 *  distance/path tests taken. Body in `ElysiumNpcMisc19Species.cpp`. */
+	bool CheckAllMoveHints();
+	/** SEAM for `CNPC_VWerewolf::IsImperativeMoveHint` (`0x103d2070`), family Werewolf19's row (lane
+	 *  L12), which had no port body when `CheckAllMoveHints` landed: answers false — the arm that
+	 *  goes on to `IsValidMoveHint`. The integrator redirects it to L12's body. */
+	bool CheckAllMoveHintsImperativeSeam(const FHintWords& Hint) const;
 	/** `CNPC_VWerewolf::HasPath` (`0x103d0db0`). 120 of its 138 bytes are the scope-trace frame; the
 	 *  body is one call, `0x102ee380(m_pNavigator, start, end)`, which stamps the navigator cache twice
 	 *  — `+8` from the NPC's own `+0x156c` hull and `+0xc` from the global frame word, then the same

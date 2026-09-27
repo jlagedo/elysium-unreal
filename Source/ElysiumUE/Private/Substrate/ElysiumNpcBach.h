@@ -92,6 +92,22 @@ public:
 	/** `CNPC_VBach::m_bMovementSpot` (`+0x66a7`). */
 	bool bBachMovementSpot = false;
 
+	// --- Story 8 lane L11: the camper pass `0x10365a90` and its words ------------------------
+	/** `0x10365a90` (retail name unrecovered), the tail `CNPC_VBach::GatherConditions`
+	 *  (`0x10365a70`) jumps to after the Troika gather: Bach's camper detector and grenade
+	 *  dispenser. Body in `ElysiumNpcMisc19Species.cpp`. */
+	void BachGatherCamperConditions();
+	FVector BachLastOccludeOriginUnits = FVector::ZeroVector;  // +0x6664 m_vecLastOccludeOrigin, SOURCE units
+	double BachOccludeEnterTime = 0.0;       // +0x6670 m_flOccludeEnterTime, an absolute stamp
+	int32 BachWasOccluded = 0;               // +0x6674 m_iWasOccluded
+	int32 BachReusedOccludeCount = 0;        // +0x6678 m_iReusedOccludeCount
+	/** +0x667c `m_iGrenadeActive`: written by `InputGrenadeEnter` `0x10366120` / `InputGrenadeExit`
+	 *  `0x10366190`, both unported, so it reads 0 until they land. */
+	int32 BachGrenadeActive = 0;
+	/** +0x66a1 `m_bBachInStartingPosition`: `Spawn` `0x10363850` and `StartTask` `0x103645a0` write
+	 *  it (other lanes' rows). */
+	bool bBachInStartingPosition = false;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
