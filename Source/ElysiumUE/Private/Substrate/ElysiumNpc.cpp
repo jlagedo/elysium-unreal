@@ -263,6 +263,9 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 	return true;
 }
 
+// STORY8-TWIN: replaced by 0x10265ed0 (CAI_BaseNPC::OnTakeDamage_Alive) + 0x102beda0 (the Troika
+// slot-390 body) at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
+// Still the one that runs; delete it with `RememberDamage` and `AccumulateDamage`.
 void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 {
 	const double Now = World ? World->NowSeconds() : 0.0;

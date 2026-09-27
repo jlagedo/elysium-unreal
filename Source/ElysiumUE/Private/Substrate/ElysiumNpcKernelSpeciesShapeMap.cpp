@@ -139,11 +139,8 @@ namespace
 		FElysiumNpcAndreiBlood, AndreiLastTeleportPosition),  // m_vLastTeleportPosition
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66cc,
 		FElysiumNpcAndreiBlood, bAndreiActivated),  // m_bActivated
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66cd,  // m_bDead
-		"no port member: the ported reader is a named SEAM answering the retail default "
-		"(AndreiBloodSelectSchedule 0x1035d010 SEAM); retail accessors: 0x1035cc20 "
-		"AndreiBlood::Spawn (residue), 0x1035d010 AndreiBlood::SelectSchedule (override), "
-		"0x1035e6d0 AndreiBlood::OnTakeDamage_Alive (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66cd,
+		FElysiumNpcAndreiBlood, bAndreiDead),  // m_bDead, set at 0x1035e84e (Damage19)
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66ce,  // m_bTriggerUnhide
 		"no port member: no ported body reads or writes the word (Andrei unhide bodies are "
 		"story-8 residue); retail accessors: 0x1035cc20 AndreiBlood::Spawn (residue), 0x1035d1b0 "
@@ -157,12 +154,8 @@ namespace
 		"(AndreiBloodSelectSchedule 0x1035d010 SEAM); retail accessors: 0x1035cc20 "
 		"AndreiBlood::Spawn (residue), 0x1035d010 AndreiBlood::SelectSchedule (override), "
 		"0x1035d8b0 AndreiBlood::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66d8,  // m_iHitCounter
-		"no port member: the ported reader is a named SEAM answering the retail default "
-		"(AndreiBloodSelectSchedule 0x1035d010 SEAM); retail accessors: 0x1035cc20 "
-		"AndreiBlood::Spawn (residue), 0x1035d010 AndreiBlood::SelectSchedule (override), "
-		"0x1035d8b0 AndreiBlood::RunTask (task arm), 0x1035e6d0 AndreiBlood::OnTakeDamage_Alive "
-		"(residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66d8,
+		FElysiumNpcAndreiBlood, AndreiHitCounter),  // m_iHitCounter, ++ at 0x1035e83f (Damage19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66dc,
 		FElysiumNpcAndreiBlood, AndreiHitMax),  // m_iHitMax
 
@@ -490,11 +483,8 @@ namespace
 		"no port member: no ported body reads or writes the word (the evade bodies are story-8 "
 		"residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), 0x1039c4c0 "
 		"MingXiaoTentacle::StartTask (task arm), 0x1039e3d0 MingXiaoTentacle::RunAI (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6680,  // m_flHideReadyTimer
-		"no port member: no ported body reads or writes the word (the hide bodies are story-8 "
-		"residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), 0x1039c4c0 "
-		"MingXiaoTentacle::StartTask (task arm), 0x1039de20 MingXiaoTentacle::SelectSchedule "
-		"(override), 0x1039e890 MingXiaoTentacle::vfunc390 (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6680,
+		FElysiumNpcMingXiaoTentacle, TentacleHideReadyTimer),  // m_flHideReadyTimer, zeroed at 0x1039e89a (Damage19)
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6684,  // m_flIgnoreCollisionTimer
 		"no port member: no ported body reads or writes the word (the tentacle's own collision "
 		"timer (not Troika's +0x6458); its bodies are story-8 residue); retail accessors: none "
@@ -702,12 +692,8 @@ namespace
 		FElysiumNpcZombie, ZombieGrappleReadyTimer),  // m_flGrappleReadyTimer
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66dc,
 		FElysiumNpcZombie, ZombieRemoveDistUnits),  // m_flRemoveDist
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VZombie, 0x66e0,  // m_bShouldGib
-		"no port member: no ported body reads or writes the word (OnTakeDamage sets it on an "
-		"over-threshold hit at 103e0801, CreateCorpse reads it; both story-8 residue). The "
-		"neighbouring +0x66e1 is a different, unsaved head-hit byte (`bZombieHeadHit`); retail "
-		"accessors: 0x103dfbb0 Zombie::CreateCorpse (residue), 0x103e06d0 Zombie::OnTakeDamage "
-		"(residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66e0,
+		FElysiumNpcZombie, bZombieShouldGib),  // m_bShouldGib, set at 0x103e0801 (Damage19)
 	};
 }
 

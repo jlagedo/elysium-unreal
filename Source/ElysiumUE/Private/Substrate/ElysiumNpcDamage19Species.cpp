@@ -106,7 +106,7 @@ namespace
 	}
 
 	// The "neuter" both scripted-death floors apply to their packet COPY: `+0x30 = 0` and, with a
-	// descriptor, its `m_iDiceAmt` (`+0x4`, `BaseDamage`) and `m_iToHitSuccesses` (`+0xc`,
+	// descriptor (the word-0 test, `0x1035e863` / `0x103b1036`), its `m_iDiceAmt` (`+0x4`, `BaseDamage`) and `m_iToHitSuccesses` (`+0xc`,
 	// `ExtraInput`). The descriptor is SHARED with the caller's packet (the copy is shallow), so the
 	// zeroing reaches the original descriptor too — reproduced.
 	void Damage19SpeciesNeuter(FElysiumNpcBase::FElysiumTakeDamageInfo& Copy)
@@ -177,6 +177,8 @@ int32 FElysiumNpcWerewolf::OnTakeDamage(void* Arg0)
 	// copied over it (`0x103ccd36`), and `0x101c2a50(copy, 0)` zeroing the COPY's `+0x44` (a word the
 	// port's packet does not carry). The copy is never read again: this override does NOT modify the
 	// damage — the original goes on.
+	// The scope-trace push's `this == NULL` / classname-null name picks (`0x103ccccb`, `0x103cccd5`)
+	// feed only the absent debug ring.
 	FElysiumTakeDamageInfo Copy;                                            // 0x103ccd31
 	if (const FElysiumTakeDamageInfo* Info = static_cast<const FElysiumTakeDamageInfo*>(Arg0))
 	{
@@ -192,7 +194,8 @@ int32 FElysiumNpcWerewolf::OnTakeDamage(void* Arg0)
 
 int32 FElysiumNpcZombie::ZombieHeadThresholdCvar() const
 {
-	// SEAM (header): the unconstructed ConVar at `DAT_1094049c` reads 0.
+	// SEAM (header): the unconstructed ConVar at `DAT_1094049c` reads 0 - its slot-1 test
+	// (`0x103e07d5` / `0x103e07da`) and its `+0x2c` int (`0x103e07e0`) alike.
 	return 0;
 }
 
@@ -200,6 +203,10 @@ int32 FElysiumNpcZombie::OnTakeDamage(void* Arg0)
 {
 	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(Arg0);
 	// 1. Stat 0x0f (wounds) then stat 0x11 (cap), each through the type-0 list walk.
+	//    `TypedStatValue` is the inlined type-0 list walk (`0x103e06e1` / `0x103e06f2` / `0x103e06fa`
+	//    and `0x103e0745` / `0x103e0756` / `0x103e075e`) with the `DAT_109f0b40` fallback's
+	//    one-time construction (`0x103e0703` / `0x103e0717` / `0x103e0721`, `0x103e0773` /
+	//    `0x103e0787` / `0x103e0791`).
 	const int32 Wounds = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatWounds); // 0x103e0732
 	const int32 Cap = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatCap);       // 0x103e07a2
 	// 2. The amount, then the head threshold: 0 when the ConVar's slot 1 answers true, else its
@@ -218,7 +225,7 @@ int32 FElysiumNpcZombie::OnTakeDamage(void* Arg0)
 	//    and returned.
 	const int32 Result = FElysiumNpc::OnTakeDamage(Arg0);                   // 0x103e080b
 	// 4. The running schedule's id (`m_pSchedule+0x1c`, -1 with none).
-	const int32 ScheduleId = Schedule.IsRunning() ? Schedule.Current : INDEX_NONE; // 0x103e0812..0x103e081f
+	const int32 ScheduleId = Schedule.IsRunning() ? Schedule.Current : INDEX_NONE; // 0x103e0812 / 0x103e081d / 0x103e081f
 	// 5. A live answer and a live schedule whose class-local id is not 0x161 take 0x164; every other
 	//    case takes 0x162 (FORCED) unless `m_bShouldRagdoll`, which skips the program entirely.
 	if (Result != 0                                                         // 0x103e0824
@@ -324,6 +331,10 @@ int32 FElysiumNpcAndreiBlood::OnTakeDamage_Alive(void* Arg0)
 	FElysiumTakeDamageInfo Copy = *Info;                                    // 0x1035e733
 	const float Amount = Damage19SpeciesMagnitude(Copy);                    // 0x1035e73b / 0x1035e73d / 0x1035e750
 	// 2. Stat 0x11 (cap) then stat 0x0f (wounds).
+	//    `TypedStatValue` is the inlined type-0 list walk (`0x1035e762` / `0x1035e772` / `0x1035e77a`
+	//    and `0x1035e7c1` / `0x1035e7d1` / `0x1035e7d9`) with the `DAT_109f0b40` fallback's one-time
+	//    construction (`0x1035e783` / `0x1035e793` / `0x1035e79d`, `0x1035e7ee` / `0x1035e7fe` /
+	//    `0x1035e808`).
 	const int32 Cap = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatCap);       // 0x1035e7ae
 	const int32 Wounds = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatWounds); // 0x1035e819
 	// 3. Activated: the hit counter moves, and the copy is forwarded UNTOUCHED while
@@ -361,7 +372,7 @@ int32 FElysiumNpcAnimal::OnTakeDamage_Alive(void* Arg0)
 	if (const FElysiumTakeDamageInfo* Info = static_cast<const FElysiumTakeDamageInfo*>(Arg0))
 	{
 		// Crash guard: a null packet or attacker faults in retail; both read as "not the player".
-		if (Damage19SpeciesIsPlayer(*this, Damage19SpeciesAttacker(*this, *Info))) // 0x103601a7..0x103601b9
+		if (Damage19SpeciesIsPlayer(*this, Damage19SpeciesAttacker(*this, *Info))) // 0x103601a7 / 0x103601b2 (local player) / 0x103601b9
 		{
 			bPlayerAttackedMe = true;                                       // 0x103601bb
 		}
@@ -444,6 +455,8 @@ int32 FElysiumNpcGhoulCroucher::OnTakeDamage_Alive(void* Arg0)
 {
 	// Both statements UNCONDITIONAL and before the chain: `OnDisturbed(info+0x2c)`, then
 	// `m_bUnawareExited = 1`. Any damage from any source ends the crouch.
+	// The scope-trace push's `this == NULL` / classname-null name picks (`0x1037bc96`, `0x1037bca0`)
+	// feed only the absent debug ring.
 	const FElysiumTakeDamageInfo* Info = static_cast<const FElysiumTakeDamageInfo*>(Arg0);
 	OnDisturbed(Info != nullptr ? Damage19SpeciesAttacker(*this, *Info) : nullptr); // 0x1037bd01 / 0x1037bd05
 	bUnawareExited = true;                                                  // 0x1037bd0d
@@ -470,8 +483,10 @@ int32 FElysiumNpcHengeyokai::OnTakeDamage_Alive(void* Arg0)
 	{
 		return Result;   // crash guard: retail reads `[attacker+0x11c]` unconditionally
 	}
-	// 2. The attacker's classname (`+0x11c`) against "point_explosion": the pointer-equal short
-	//    circuit (0x103801ee) is the same answer as the string test below. For this literal the
+	// 2. The attacker's classname (`+0x11c`) against "point_explosion": the null test (0x103801ec)
+	//    and the pointer-equal short circuit (0x103801ee / 0x103801f3) give the same answer as the
+	//    string test below; the length test (0x10380206), the wildcard test (0x1038021e) and the two
+	//    null-classname substitutions (0x10380222 / 0x1038023b) are folded into it. For this literal the
 	//    computed length is 15 (so the `+0x26c` arm at 0x10380208 is dead) and its last byte is not
 	//    '*' (so the `_strnicmp` arm at 0x1038024a is dead): a null classname compares as "" through
 	//    `_stricmp`.
@@ -647,6 +662,10 @@ int32 FElysiumNpcSheriffMan::OnTakeDamage_Alive(void* Arg0)
 	// 1. The copy and its amount; stat 0x11 (cap) then stat 0x0f (wounds).
 	FElysiumTakeDamageInfo Copy = *Info;                                    // 0x103b0ef3
 	const float Amount = Damage19SpeciesMagnitude(Copy);                    // 0x103b0efb / 0x103b0efd / 0x103b0f10
+	//    `TypedStatValue` is the inlined type-0 list walk (`0x103b0f22` / `0x103b0f32` / `0x103b0f3a`
+	//    and `0x103b0f81` / `0x103b0f91` / `0x103b0f99`) with the `DAT_109f0b40` fallback's one-time
+	//    construction (`0x103b0f43` / `0x103b0f53` / `0x103b0f5d`, `0x103b0fae` / `0x103b0fbe` /
+	//    `0x103b0fc8`).
 	const int32 Cap = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatCap);       // 0x103b0f6e
 	const int32 Wounds = TypedStatValue(GDamage19SpeciesStatListType, GDamage19SpeciesStatWounds); // 0x103b0fd9
 	// 2. A lethal packet (`cap <= wounds + amount`; `TEST AH,0x41 / JP` skips on > and unordered):
@@ -655,7 +674,7 @@ int32 FElysiumNpcSheriffMan::OnTakeDamage_Alive(void* Arg0)
 	if (static_cast<double>(Cap) <= static_cast<double>(Wounds) + static_cast<double>(Amount)) // 0x103b0fee / 0x103b0ff5
 	{
 		TakeDamageMode = 0;                                                 // 0x103b0ff7
-		Cognition.Conditions.Set(GDamage19SheriffDeadCond);                 // 0x103b1010
+		Cognition.Conditions.Set(GDamage19SheriffDeadCond);                 // 0x103b1009 (ConVar poll) / 0x103b1010
 		bSheriffDead = true;                                                // 0x103b1015
 		Damage19SpeciesNeuter(Copy);                                        // 0x103b102c / 0x103b1038 / 0x103b1043
 	}

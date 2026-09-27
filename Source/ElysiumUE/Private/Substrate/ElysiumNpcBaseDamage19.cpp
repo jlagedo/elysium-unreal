@@ -61,6 +61,7 @@ namespace
 	// (`0x102661e5..0x102661f5`).
 	uint32 Damage19BaseCombinedBits(const FElysiumNpcBase::FElysiumTakeDamageInfo& Info)
 	{
+		// Word-0 test `0x102661e9` (slot 576's bits) / `0x10266242` (slot 577's).
 		return Info.Dmg != nullptr ? (Info.Dmg->DmgMask | Info.DamageBits) : Info.DamageBits;
 	}
 
@@ -68,6 +69,9 @@ namespace
 	// packet's float `+0x30` when it does not (`0x102661fa..0x10266212`).
 	float Damage19BaseMagnitude(const FElysiumNpcBase::FElysiumTakeDamageInfo& Info)
 	{
+		// Slot 576's amount: test `0x102661f8`, `GetDmg` `0x102661fc`; slot 577's: test `0x10266253`,
+		// `GetDmg` `0x10266255`; the sum's: tests `0x102662b7` / `0x102662db`, `GetDmg` `0x102662b9` /
+		// `0x102662dd`.
 		return Info.Dmg != nullptr ? static_cast<float>(Info.Dmg->GetDmg()) : Info.Damage;
 	}
 
@@ -173,7 +177,7 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 	}
 
 	// 5. `FL_NPC` clear on this body answers 1 with nothing more.
-	if ((Damage19BaseRetailFlags(*this) & GDamage19BaseFlNpc) == 0)         // 0x10265f59
+	if ((Damage19BaseRetailFlags(*this) & GDamage19BaseFlNpc) == 0)         // 0x10265f51 / 0x10265f59
 	{
 		return 1;                                                           // -> 0x10266363
 	}
@@ -188,7 +192,7 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 
 	// 7. An attacker with neither `FL_CLIENT` nor `FL_NPC` skips straight to the sound tail: no
 	//    attack position, no memory, no last-damage record, no conditions and no sum.
-	if ((Damage19BaseRetailFlags(*Attacker) & GDamage19BaseFlClientOrNpc) != 0) // 0x10265f74
+	if ((Damage19BaseRetailFlags(*Attacker) & GDamage19BaseFlClientOrNpc) != 0) // 0x10265f6a / 0x10265f74
 	{
 		// 8. Seen = slot 363 `FInViewCone(attacker)` AND slot 201 `FVisible(attacker, 0x2804091,
 		//    0, 0)`, the second asked only when the first answered true.
@@ -221,7 +225,7 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 				Memory != nullptr && Memory->Find(Attacker->Handle) != nullptr; // 0x10266108
 			// Retail passes `&DAT_1070d1b0` as slot 544's third (informer) argument on both calls
 			// (`PUSH 0x1070d1b0`, `0x10266124` / `0x10266156`); the port's body does not read it.
-			if (GetEnemy() != nullptr                                       // 0x102660f6
+			if (GetEnemy() != nullptr                                       // 0x102660ee / 0x102660f6
 				&& !bAttackerKnown                                          // 0x1026610f
 				&& !Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))    // 0x10266115 / 0x1026611c
 			{
@@ -256,13 +260,14 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 		// 12. `m_hLastDamageEnt` = the attacker's handle, or `0xffffffff` for none (unreachable
 		//     here: step 6 refused a null attacker, but retail tests it again at `0x102661c3`).
 		BaseMemory.LastDamageAttacker = Attacker != nullptr
-			? Attacker->Handle : FElysiumEntityHandle::Invalid();           // 0x102661cc / 0x102661d4
+			? Attacker->Handle : FElysiumEntityHandle::Invalid();           // 0x102661c7 / 0x102661cc / 0x102661d4
 		// 13. `m_bCondTookDamage = 1`.
 		Cognition.bCondTookDamage = true;                                   // 0x102661de
 
 		// 14. Slot 576 `IsLightDamage(amount, bits)` sets 0x4c; slot 577 `IsHeavyDamage` sets
 		//     0x4d. Retail recomputes bits and amount before each (`0x102661e5`, `0x1026623e`), and
-		//     polls the ConVar at `DAT_10924a6c` (slot 1, result discarded) before each SetCondition.
+		//     polls the ConVar at `DAT_10924a6c` (slot 1, result discarded) before each SetCondition
+		//     (`0x10266232`, `0x1026628c`, and `0x10266327` before 0x4e) - it decides nothing.
 		if (IsLightDamage(Damage19BaseMagnitude(*Info),
 			static_cast<int32>(Damage19BaseCombinedBits(*Info))))           // 0x10266220 / 0x10266228
 		{

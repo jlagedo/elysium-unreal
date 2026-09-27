@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumReactions.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 // Story 29c-1, family **Damage** — damage, death and the effects the two spawn. The declarations,
 // the two retail packets and the family's four standing facts are
@@ -235,9 +236,23 @@ bool FElysiumNpc::PlayerAttackerBlockedReaction(FElysiumEntity* Defender, void* 
 	//    exists AND `thunk_FUN_10349830(roll)` answers 2 — retail's own
 	//    `(_DAT_1049a1bc - _DAT_1049a1b8) * t + _DAT_1049a1b8`, with `_DAT_1049a1b8` = 0.5 and
 	//    `_DAT_1049a1bc` = 1.5 read out of `.rdata`. So an ordinary block re-arms the attacker in
-	//    half a second and a dice-roll-type-2 block in one and a half.
-	const FElysiumMeleeDiceRollResult* Roll = static_cast<const FElysiumMeleeDiceRollResult*>(InRoll);
-	const float T = (Roll != nullptr && Roll->RollType == 2) ? 1.0f : 0.0f;
+	//    half a second and a blocked-major one in one and a half.
+	//    The `melee_dice_roll_result*` is the SAME object slot 318 (`0x1029fcf0`) is handed, the
+	//    port's `FElysiumMeleeRoll` (story 8 L09 integration: unified with family Damage19's slot
+	//    318). `0x10349830` is `__ftol(word1 - word3 - word2)` (`0x10349831..0x1034984b`, that is
+	//    `Margin()`) against the two attacker cells `_DAT_10739f98` (`<=` answers 2, `0x1034985e`)
+	//    and `_DAT_10739f9c` (`<=` answers 1, `0x10349874`), else 0: `ClassifyAttacker`'s
+	//    BlockedMajor / Blocked / Hit in the same order. An unloaded `Melee_Reactions` table
+	//    (`Unclassified`) is not 2 and takes the short delay.
+	const FElysiumMeleeRoll* Roll = static_cast<const FElysiumMeleeRoll*>(InRoll);
+	bool bBlockedMajor = false;
+	if (Roll != nullptr)                                                    // 0x1029fdcf
+	{
+		const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(*this);
+		bBlockedMajor = ElysiumWeapons::ClassifyAttacker(Context.Margins, Roll->Margin())
+			== EElysiumMeleeAttackerReaction::BlockedMajor;                 // 0x1029fdd1 / 0x1029fdd6
+	}
+	const float T = bBlockedMajor ? 1.0f : 0.0f;                            // 0x1029fddb
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	NextAttackTime = Now + static_cast<double>(
 		(BlockedReactionLong - BlockedReactionShort) * T + BlockedReactionShort);

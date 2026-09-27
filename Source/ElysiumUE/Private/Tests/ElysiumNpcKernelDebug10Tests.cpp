@@ -530,14 +530,17 @@ bool FElysiumNpcKernelDebug10TroikaTextTest::RunTest(const FString&)
 	Npc->Model.Reset();
 
 	// The `HG - %d : HB - %d` line: the hit group is live (family Damage's `LastHitGroup`), the hit
-	// box is the `CTakeDamageInfo + 0x40` seam.
+	// box is `m_LastTakeDamageInfo + 0x40`. Corrected to retail (story 8 L09 integration): the
+	// Troika constructor default-builds that packet, `0x101c2690` -> `0x101c2910(this, 0, 0, &v,
+	// &v, 0, 0, 0, 0xffffffff)` -> `0x101c2890` writes `+0x40 = param_6` = -1, so before any
+	// packet is cached the line reads `HB - -1`, not the old seam's 0.
 	Npc->LastHitGroup = 4;
 	FElysiumNpc::BeginDebugCapture();
 	Npc->TroikaDrawDebugTextOverlays();
 	{
 		const TArray<FElysiumNpc::FDebugLine> Hit = FElysiumNpc::EndDebugCapture();
 		TestEqual(TEXT("HG is m_LastHitGroup and HB the damage packet's seam"),
-			Hit.Last().Text, FString(TEXT("HG - 4 : HB - 0")));
+			Hit.Last().Text, FString(TEXT("HG - 4 : HB - -1")));   // 0x101c2890 +0x40 = -1
 	}
 	Npc->LastHitGroup = 0;
 

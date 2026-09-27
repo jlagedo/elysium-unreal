@@ -251,6 +251,8 @@ bool ElysiumNpcCond::IsHearFamily(EElysiumNpcCond Cond)
 		|| Cond == EElysiumNpcCond::HearThumper || Cond == EElysiumNpcCond::HearBugbait;
 }
 
+// STORY8-TWIN: replaced by 0x10265ed0 (m_flSumDamage reset when `curtime - m_flLastDamageTime >= 1.0`,
+// 0x1026629f..0x10266310) at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
 void ElysiumNpcCond::AccumulateDamage(FElysiumNpcBaseMemory& Memory, int32 CommittedDamage, double Now)
 {
 	if (CommittedDamage <= 0)
@@ -282,6 +284,9 @@ void ElysiumNpcCond::GatherBump(const FElysiumNpc& Npc, double PreviousGatherTim
 	}
 }
 
+// STORY8-TWIN: replaced by 0x10265ed0 (LIGHT 0x4c via slot 576 at 0x10266239, HEAVY 0x4d via slot
+// 577 at 0x10266293, REPEATED 0x4e at `m_iMaxHealth * 0.3 < m_flSumDamage`, 0x1026632e) and the
+// Troika zero-damage arm 0x102bef5c at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
 void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime,
 	FElysiumNpcConditions& Out)
 {

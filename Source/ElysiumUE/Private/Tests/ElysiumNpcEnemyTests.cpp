@@ -783,6 +783,14 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 
 
 // The damage conditions, and the recovered 15%-in-one-second repeated-damage window.
+//
+// STORY8-TWIN: this case pins `ElysiumNpcCond::AccumulateDamage` / `GatherDamage`, the damage twin
+// that still runs from the typed commit (no live path reaches slots 142/390 yet). Its 20 % heavy
+// and 15 % repeated fractions are the twin's, not retail's: `0x10265ed0` raises HEAVY through slot
+// 577 (`> 20.0`, `_DAT_1044eb0c`) at `0x10266293` and REPEATED at `m_iMaxHealth * 0.3
+// (_DAT_1047b868) < m_flSumDamage`, reset when `curtime - m_flLastDamageTime >= 1.0` (`0x1026632e`,
+// `0x102662a8`) — pinned by `Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_*`.
+// Delete this case with the twin at wave 2 (L13).
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,

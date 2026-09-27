@@ -127,8 +127,9 @@ int32 FElysiumNpcAndreiBlood::SpeciesSelectSchedule()
 {
 	// CNPC_VAndreiBlood, a strict priority ladder under `field_0x1b2c = 4`.
 	RecordScheduleEvent(TEXT("SelectSchedule trace 4 (CNPC_VAndreiBlood 0x1035d010)"));
-	// SEAM: `m_bDead` (`+0x66cd`), `m_bForceTeleport` (`+0x66d4`) and `m_iHitCounter` (`+0x66d8`)
-	// have no port member (their other accessors are story-8 residue); `m_bActivated` and
+	// SEAM: `m_bForceTeleport` (`+0x66d4`) has no port member; `m_bDead` (`+0x66cd`) and
+	// `m_iHitCounter` (`+0x66d8`) are `bAndreiDead` / `AndreiHitCounter` since story 8 (family
+	// Damage19's `0x1035e6d0` writes both) but this ladder does not read them yet; `m_bActivated` and
 	// `m_iHitMax` are `bAndreiActivated` / `AndreiHitMax` since step 4. The ladder is written out and
 	// the first gate answers "activated" so the recovered order is visible; `AndreiBloodSelectGate`
 	// carries the `0x1035e920` split and refuses.

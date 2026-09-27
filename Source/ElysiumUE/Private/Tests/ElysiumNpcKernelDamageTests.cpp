@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
+#include "Tests/ElysiumMeleeTestHelpers.h"
 
 // Story 29c-1, family **Damage**. Every assertion below is read off the decompiled C — or, for
 // `0x100b4ea0`'s tail call, `0x102664c0`'s vector algebra and `0x10266780`'s stack-shifted
@@ -602,19 +603,27 @@ bool FElysiumNpcKernelDamageBlockedReactionTest::RunTest(const FString&)
 	TestEqual(TEXT("with the one recovered name"), Npc->LastBlockedReactionActivity,
 		FString(ElysiumReactions::DefaultBlockedReaction));
 
-	// A roll record whose type is NOT 2 also takes the short delay: only 2 selects the long one.
-	FElysiumNpc::FElysiumMeleeDiceRollResult Roll;
-	Roll.RollType = 1;
+	// The roll record is the port's `FElysiumMeleeRoll` (story 8 L09 integration: the one object
+	// slots 318 and 319 are both handed). `0x10349830` answers 2 only for a margin
+	// (`word1 - word3 - word2`, `0x10349831..0x1034984b`) at or below `_DAT_10739f98`
+	// (`SuccessesForAttackerBlockedMajor`, `0x10349853`/`0x1034985e`); 1 at or below `_DAT_10739f9c`
+	// (`SuccessesForAttackerBlocked`), else 0. Only 2 selects the long delay (`CMP EAX,0x2` at
+	// `0x1029fdd6`). The bands are the melee fixture's stated table (BlockedMajor -2, Blocked -1).
+	const ElysiumMeleeTest::FRulesFixture Rules;
+	FElysiumMeleeRoll Roll;
+	Roll.Lethality = 3;
+	Roll.Defense = 2;
+	Roll.Soak = 2;   // margin -1: Blocked, answer 1
 	Npc->PlayerAttackerBlockedReaction(Defender, &Roll, nullptr);
-	TestEqual(TEXT("roll type 1 still re-arms in 0.5 s"), Npc->NextAttackTime, Now + 0.5, 0.0001);
-	Roll.RollType = 3;
+	TestEqual(TEXT("a Blocked margin (answer 1) still re-arms in 0.5 s"), Npc->NextAttackTime, Now + 0.5, 0.0001);
+	Roll.Soak = 0;   // margin +1: Hit, answer 0
 	Npc->PlayerAttackerBlockedReaction(Defender, &Roll, nullptr);
-	TestEqual(TEXT("roll type 3 too"), Npc->NextAttackTime, Now + 0.5, 0.0001);
+	TestEqual(TEXT("a Hit margin (answer 0) too"), Npc->NextAttackTime, Now + 0.5, 0.0001);
 
-	// Roll type 2 takes `_DAT_1049a1bc` = 1.5 s — the one longer follow-up delay in the body.
-	Roll.RollType = 2;
+	// A BlockedMajor margin (answer 2) takes `_DAT_1049a1bc` = 1.5 s — the one longer follow-up delay.
+	Roll.Soak = 3;   // margin -2
 	Npc->PlayerAttackerBlockedReaction(Defender, &Roll, nullptr);
-	TestEqual(TEXT("roll type 2 re-arms in 1.5 s"), Npc->NextAttackTime, Now + 1.5, 0.0001);
+	TestEqual(TEXT("a BlockedMajor margin re-arms in 1.5 s"), Npc->NextAttackTime, Now + 1.5, 0.0001);
 	return true;
 }
 

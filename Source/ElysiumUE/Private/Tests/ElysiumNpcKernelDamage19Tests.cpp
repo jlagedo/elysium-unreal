@@ -66,6 +66,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
+#include "Tests/ElysiumMeleeTestHelpers.h"
 
 static constexpr EAutomationTestFlags GDamage19TestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -634,6 +635,29 @@ bool FElysiumNpcKernelDamage19Slot318Test::RunTest(const FString&)
 	}
 	// Headless there is no `rules.txt`: the classifier is Unclassified, which is no retail band.
 	TestEqual(TEXT("103498b0 without a Melee_Reactions table the class is -1 (not 3)"), Class, -1);
+
+	// Integration (story 8 L09): with a stated `Melee_Reactions` table the class-3 arm is reached.
+	// `0x103498b0` walks `_DAT_10739fa0..fac` (DodgeAttack -3, Dodge -2, Block -1, BlockStagger 0
+	// in the melee fixture) with `<=`; margin 0 is class 3 and takes 0xd8 (`0x1029fd3e`/`0x1029fd48`),
+	// margin -1 is class 2 and takes 0xd7 (`0x1029fd2d`/`0x1029fd37`).
+	{
+		const ElysiumMeleeTest::FRulesFixture Rules;
+		FElysiumMeleeRoll Stagger;
+		Stagger.Lethality = 2;
+		Stagger.Defense = 1;
+		Stagger.Soak = 1;   // margin 0
+		TestEqual(TEXT("103498b0 margin 0 is class 3"), N.DefenderBlockReactionClass(Stagger), 3);
+		FElysiumMeleeRoll Block = Stagger;
+		Block.Soak = 2;     // margin -1
+		TestEqual(TEXT("103498b0 margin -1 is class 2"), N.DefenderBlockReactionClass(Block), 2);
+		if (N.OkToDisturb())
+		{
+			TestTrue(TEXT("1029fd6d class 3 answers true"), N.PlayerDefenderBlockReaction(F.Other, &Stagger, nullptr));
+			TestEqual(TEXT("1029fd48 class 3 installs 0xd8"), N.LastSetScheduleRetail, 0xd8);
+			TestTrue(TEXT("1029fd6d class 2 answers true"), N.PlayerDefenderBlockReaction(F.Other, &Block, nullptr));
+			TestEqual(TEXT("1029fd37 class 2 installs 0xd7"), N.LastSetScheduleRetail, 0xd7);
+		}
+	}
 	return true;
 }
 

@@ -1095,6 +1095,9 @@ bool FElysiumCombatCharacter::IsKindred() const
 void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
 	bool bDisallowFirearmsToBashing)
 {
+	// STORY8-TWIN (NPC half): `RejectsAllDamage` is replaced for NPCs by 0x102bed30 (the Troika
+	// slot-142 body, which also fires OnDamaged once per tick) at wave 2 (L13), once slot 142 is the
+	// NPC entry.
 	if (IsInert() || HasReportedDeath() || RejectsAllDamage())
 	{
 		return;   // invincible: retail refuses ahead of life state, the resolver and the commit
@@ -1116,6 +1119,7 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 
 void FElysiumCombatCharacter::TakeDamage(float Amount)
 {
+	// STORY8-TWIN (NPC half): 0x102bed30 at wave 2 (L13), as above.
 	if (Amount <= 0.f || IsInert() || RejectsAllDamage())
 	{
 		return;   // invincible: the scalar input reaches the same virtual in retail
@@ -1197,6 +1201,9 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 		RecomputeSheet();
 	}
 
+	// STORY8-TWIN (NPC half): for NPCs this emit, and the OnDamaged / OnHalfHealth pair below, are
+	// 0x10265ed0 steps 3, 4 and 17 (activator the NPC itself, not `Dmg.Source`) at wave 2 (L13);
+	// the player path keeps them.
 	// `NPC_TAKE_DAMAGE`, from its real producer: the noise a body makes when it is hit, emitted only
 	// once damage has actually landed on this character. The two early returns above — nothing to
 	// commit, and no health track — make no sound, which is right: neither is a hit.

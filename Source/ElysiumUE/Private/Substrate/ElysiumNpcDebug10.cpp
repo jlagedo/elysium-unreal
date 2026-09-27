@@ -575,11 +575,12 @@ float FElysiumNpc::RetailGroundSpeed() const
 
 int32 FElysiumNpc::RetailLastDamageInfoWord40() const
 {
-	// SEAM for `m_LastTakeDamageInfo + 0x40` (`+0x664c`). `0x101c2a30` is four bytes,
+	// `m_LastTakeDamageInfo + 0x40` (`+0x664c`). `0x101c2a30` is four bytes,
 	// `return *(int*)(this + 0x40)`, over the 0x4c-byte `CTakeDamageInfo` the Troika constructor
-	// builds at `+0x660c`; layout.md records the packet as walked and no reader for it. The port
-	// carries the attacker (`FElysiumNpcMemory::LastDamageAttacker`) and not the packet.
-	return 0;
+	// default-builds at `+0x660c` (`0x101c2690` -> `0x101c2910(.., 0xffffffff)` -> `0x101c2890`
+	// `+0x40 = param_6`, so -1 until a packet is cached) and the Troika slot-390 body
+	// (`0x102beda0`, `0x102bee21`) overwrites verbatim on every packet (family Damage19).
+	return LastTakeDamageInfo.AmmoType;
 }
 
 float FElysiumNpc::RetailFieldOfViewDot() const

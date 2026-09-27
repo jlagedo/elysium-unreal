@@ -191,20 +191,20 @@ int32 FElysiumNpc::OnTakeDamage(void* Info)
 // Slot 316 — `CAI_BaseNPCTroika::FUN_1029fa50` `0x1029fa50`, the melee-reaction hook.
 // =================================================================================================
 
-void FElysiumNpc::Slot316(FElysiumEntity* Target, bool bCheckDodge, bool bCheckBlock)
+void FElysiumNpc::Slot316(FElysiumEntity* Swinger, bool bCheckDodge, bool bCheckBlock)
 {
 	// The ConVar at `DAT_10924a6c` is polled (slot 1, result discarded) before every SetCondition
 	// in this body (`0x1029fa5c`, `0x1029fab3`, `0x1029fb18`); it decides nothing.
 	// 1. BEING_ATTACKED, UNCONDITIONALLY and before the null-target test.
 	Cognition.Conditions.Set(EElysiumNpcCond::BeingAttacked);               // 0x1029fa63
-	if (Target == nullptr)                                                  // 0x1029fa6e
+	if (Swinger == nullptr)                                                  // 0x1029fa6e
 	{
 		return;
 	}
 	// 2. The dodge arm: bCheckDodge, the TARGET's swing in range of this body's origin, this body
 	//    holding a melee weapon, slot 325 — all four, in that order.
 	if (bCheckDodge                                                         // 0x1029fa7a
-		&& MeleeSwingInRange(*Target, GetAbsOrigin())                       // 0x1029fa80 / 0x1029fa89 / 0x1029fa90
+		&& MeleeSwingInRange(*Swinger, GetAbsOrigin())                       // 0x1029fa80 / 0x1029fa89 / 0x1029fa90
 		&& HoldingMeleeWeapon(*this)                                        // 0x1029fa94 / 0x1029fa9b
 		&& Slot325())                                                       // 0x1029faa1 / 0x1029faa9
 	{
@@ -245,9 +245,9 @@ bool FElysiumNpc::PlayerDefenderBlockReaction(FElysiumEntity* Attacker, void* In
 		return false;                                                       // 0x1029fd10
 	}
 	// 3. The defender class of the roll: 3 (block-stagger) takes 0xd8, anything else 0xd7.
-	const int32 Class =
+	const int32 DefenderClass =
 		DefenderBlockReactionClass(*static_cast<const FElysiumMeleeRoll*>(InRoll)); // 0x1029fd15
-	if (Class == GDamage19BlockStaggerClass)                                // 0x1029fd1a / 0x1029fd2b
+	if (DefenderClass == GDamage19BlockStaggerClass)                                // 0x1029fd1a / 0x1029fd2b
 	{
 		Damage19StampSchedule(*this, TEXT("PlayerDefenderBlockReaction"), GDamage19BlockStaggerLine,
 			GDamage19BlockStaggerSchedule);                                 // 0x1029fd21 / 0x1029fd3e
@@ -321,7 +321,7 @@ int32 FElysiumNpc::OnTakeDamage_Alive(void* InInfo)
 	}
 
 	// 1. The whole incoming packet is cached verbatim on the NPC FIRST.
-	LastTakeDamageInfo = *Info;                                             // 0x102bedab..0x102bee48
+	LastTakeDamageInfo = *Info;                                             // 0x102bedab..0x102bee48 (vector copies 0x102bedd6 / 0x102bede5)
 
 	// 2. `CAI_BaseNPC::OnTakeDamage_Alive`, DIRECT; its answer is what every exit returns, and a
 	//    zero answer returns at once.
@@ -360,7 +360,7 @@ int32 FElysiumNpc::OnTakeDamage_Alive(void* InInfo)
 				InterestingDeathActivity = ActivityIdForName(Name);         // 0x102beee7 / 0x102beef2
 				if (InterestingDeathActivity == INDEX_NONE)                 // 0x102beeef / 0x102beef8
 				{
-					// `0x10411f90` (result discarded) then DevWarning through `[0x109f364c]`.
+					// `0x10411f90` (`0x102beefa`, result discarded) then DevWarning through `[0x109f364c]`.
 					UE_LOG(LogElysiumNpcEnt, Warning,
 						TEXT("Can not find interest death activity '%s' in the activity list.  Dying immediately.\n"),
 						*Name);                                             // 0x102bef00 / 0x102bef05
@@ -381,9 +381,9 @@ int32 FElysiumNpc::OnTakeDamage_Alive(void* InInfo)
 	{
 		// 7. Zero (or unordered) damage still counts as damage for the AI: LIGHT_DAMAGE, the
 		//    last-damage attacker and `m_bCondTookDamage` — the arm the base cannot raise.
-		Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);             // 0x102bef4d / 0x102bef5c
+		Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);             // 0x102bef4d / 0x102bef55 (ConVar poll, discarded) / 0x102bef5c
 		BaseMemory.LastDamageAttacker = Attacker != nullptr
-			? Attacker->Handle : FElysiumEntityHandle::Invalid();           // 0x102bef66 / 0x102bef6f / 0x102bef77
+			? Attacker->Handle : FElysiumEntityHandle::Invalid();           // 0x102bef66 / 0x102bef6a / 0x102bef6f / 0x102bef77
 		Cognition.bCondTookDamage = true;                                   // 0x102bef81
 	}
 

@@ -35,6 +35,8 @@ int32 ElysiumNpcEnemy::RelationPriority(const FElysiumNpc& Npc, const FElysiumEn
 	return Npc.Relationships.ResolvePriority(Candidate.Handle, NpcEnemyClassnameOf(Candidate));
 }
 
+// STORY8-TWIN: replaced by 0x10265ed0 (the unseen-attacker slot-544 arms, 0x102660f6..0x1026616c) at
+// wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
 bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, double Now)
 {
 	FElysiumEntityWorld* World = Npc.World;
