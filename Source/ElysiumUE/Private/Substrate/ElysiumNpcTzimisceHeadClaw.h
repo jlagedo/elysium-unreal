@@ -56,4 +56,11 @@ public:
 	FElysiumEntityHandle HeadClawPlayerEmitter;   // +0x667c `Tzim2_player_emitter`
 	FElysiumEntityHandle HeadClawHudEmitter;      // +0x6680 `HUD_Tzim2_emitter`
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void Event_Killed(void* Arg0) override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
 };

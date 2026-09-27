@@ -61,3 +61,10 @@ int32 BaseSelectIdealState();
  *  `0x1026f4f8`). The base answers its own bodies; the Troika line overrides both. */
 virtual int32 PreSelectIdealStateRetail() { return BasePreSelectIdealState(); }
 virtual int32 SelectIdealStateRetail() { return BaseSelectIdealState(); }
+
+/** Slots 460 / 461 as this runtime's typed state: the census names, wrapping the two `Retail`
+ *  virtuals above. 0019/8's shape commit mapped the slots to the `Retail` virtuals (the ones the
+ *  species override and `0x1026f4d0` dispatches), so the generated surface stopped declaring these;
+ *  the bodies are unchanged (`ElysiumNpcBaseState19.cpp`). */
+virtual EElysiumNpcState PreSelectIdealState();
+virtual EElysiumNpcState SelectIdealState();

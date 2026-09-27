@@ -89,4 +89,13 @@ public:
 	 *  Step 2 is the whole observable body: Andrei's blood pieces do not outlive him. */
 	void DestroyAndreiBlood();
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void Activate() override;
+	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
+	virtual void NPCThink() override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

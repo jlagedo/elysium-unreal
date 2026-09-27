@@ -70,4 +70,7 @@ public:
 	int32 CameraEngineQueries = 0;
 	int32 CameraSelfRemovals = 0;
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void NPCThink() override;
 };

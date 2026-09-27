@@ -56,4 +56,9 @@ public:
 	bool ScurryingFindFleeDestination(const FVector& ThreatPosCm, float DistanceUnits,
 		FVector* OutDestinationCm);
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
 };

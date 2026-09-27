@@ -64,6 +64,10 @@ int32 TroikaSelectIdealState();
 /** Slot 461 in retail's own ordinals — the method species classes override (story 5 step 3); the
  *  typed `SelectIdealState()` records its answer and converts it. */
 int32 SelectIdealStateRetail() override;
+/** The Troika's typed slot-460 / 461 wrappers (`ElysiumNpcCombat10.cpp`, `ElysiumNpcState19.cpp`),
+ *  declared here since 0019/8 mapped the slots to the `Retail` virtuals; bodies unchanged. */
+EElysiumNpcState PreSelectIdealState() override;
+EElysiumNpcState SelectIdealState() override;
 
 int32 HumanSelectIdealState();
 int32 AnimalSelectIdealState();

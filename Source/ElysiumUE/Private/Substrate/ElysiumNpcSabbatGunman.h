@@ -21,4 +21,7 @@ public:
 
 	static FMotionTrailPick SabbatGunmanMotionTrail(float GroundSpeed, float SpeedThreshold,
 		int32 TrailId, float TrailScalar);
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual int32 StartTaskSlot442(void* Arg0) override;
 };

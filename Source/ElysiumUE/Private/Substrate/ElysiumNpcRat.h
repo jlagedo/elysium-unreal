@@ -25,4 +25,7 @@ public:
 	 *  against. **SEAM**, and its retail identity is **unrecovered**: the body takes no argument and
 	 *  reads a global; answers null. */
 	FElysiumEntity* RatIgnoredGlobalEntity() const;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
 };

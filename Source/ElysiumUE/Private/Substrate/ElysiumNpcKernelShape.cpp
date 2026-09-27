@@ -3633,11 +3633,11 @@ namespace
 			TEXT("RemoveIgnoredConditions"), ETier::Walked, TEXT("0x1026d7f0"), 0, TEXT("29c"),
 			false, TEXT("rule"), TEXT("") },
 		{ 460, TEXT(""), TEXT("PreSelectIdealState"), TEXT("NPC_STATE PreSelectIdealState()"),
-			TEXT("PreSelectIdealState"), ETier::Walked, TEXT("0x102ad340"), 15, TEXT("29d"), false,
-			TEXT("rule"), TEXT("") },
+			TEXT("FElysiumNpcBase::PreSelectIdealStateRetail"), ETier::Walked, TEXT("0x102ad340"),
+			15, TEXT("29d"), true, TEXT("rule"), TEXT("") },
 		{ 461, TEXT(""), TEXT("SelectIdealState"), TEXT("NPC_STATE SelectIdealState()"),
-			TEXT("SelectIdealState"), ETier::Walked, TEXT("0x102ad660"), 22, TEXT("29e"), false,
-			TEXT("rule"), TEXT("") },
+			TEXT("FElysiumNpcBase::SelectIdealStateRetail"), ETier::Walked, TEXT("0x102ad660"), 22,
+			TEXT("29e"), true, TEXT("rule"), TEXT("") },
 		{ 462, TEXT(""), TEXT("ShouldGoToIdleState"), TEXT("bool ShouldGoToIdleState()"),
 			TEXT("ShouldGoToIdleState"), ETier::Sdk, TEXT("0x101aa6b0"), 0, TEXT("29c"), false,
 			TEXT("present"), TEXT("") },
@@ -8944,7 +8944,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* Slots            */ 666,
 		/* TroikaSlots      */ 617,
 		/* BranchSlots      */ 49,
-		/* PortedSlots      */ 34,
+		/* PortedSlots      */ 36,
 		/* UnsettledSlots   */ 7,
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
@@ -8953,7 +8953,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 83,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 226,
-		/* RowDigest        */ 0x58f1f6b006df9859ull,
+		/* RowDigest        */ 0xc92d3f5ddbd59621ull,
 	};
 	return GCensus;
 }

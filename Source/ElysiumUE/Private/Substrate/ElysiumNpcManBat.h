@@ -177,4 +177,14 @@ public:
 	 *  retail field has no name in the corpus and no port counterpart; it is carried here so both
 	 *  bodies' writes are observable and paired. */
 	bool bPlayerScreechConeBit = false;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void Event_Killed(void* Arg0) override;
+	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
+	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
+	virtual void RunAI(bool Arg0) override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
+	virtual bool OverrideMove(float Arg0) override;
 };

@@ -407,6 +407,12 @@ def _load_slot_map() -> None:
          "(0019/5 commit B named the virtual rather than the wrapper)"),
         (448, PORT, "FElysiumNpc::TaskFail", "the failure route, ported in story 13"),
         (453, PORT, "FElysiumNpc::BuildScheduleTestBits", "the interrupt mask, ported in story 25"),
+        (460, PORT, "FElysiumNpcBase::PreSelectIdealStateRetail",
+         "0019/8 shape: the typed `SelectIdealState()` wrapper keeps the census name; the slot's "
+         "virtual is the Retail one"),
+        (461, PORT, "FElysiumNpcBase::SelectIdealStateRetail",
+         "0019/8 shape: the typed `SelectIdealState()` wrapper keeps the census name; the slot's "
+         "virtual is the Retail one"),
         (488, GENERATED_OVERRIDE, "DeathSound",
          "IElysiumScheduleRunner's void DeathSound() is implemented by the generated declaration "
          "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),

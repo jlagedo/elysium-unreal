@@ -72,4 +72,12 @@ public:
 	 *  quantity is unrecovered. */
 	float RunnerHullEngineToken() const;
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual bool PlayerKnockbackReaction(FElysiumEntity* Arg0, int32 Arg1) override;
+	virtual void Slot330(float Arg0, void* Arg1) override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

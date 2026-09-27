@@ -74,4 +74,7 @@ public:
 	 *  Dialogue's row. Recorded here because nothing in this substrate plays a VCD from the kernel and
 	 *  the CHOICE (which queue, which cursor, which version) is the whole of what this body decides. */
 	TArray<FString> NewscasterPlayedFiles;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void NPCThink() override;
 };

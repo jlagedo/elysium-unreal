@@ -21,4 +21,8 @@ public:
 
 	// From `ElysiumNpcLifecycle19.inl`.
 	bool bTaxiFirstThink = false;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

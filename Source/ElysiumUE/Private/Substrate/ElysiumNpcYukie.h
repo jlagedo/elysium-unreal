@@ -47,4 +47,7 @@ public:
 	 *  `npc_ignore_senses` branch, not on a null candidate — retail's own asymmetry. */
 	bool YukieFVisible(const FElysiumEntity* Candidate, FElysiumEntityHandle* OutBlocker);
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 SpeciesSelectSchedule() override;
 };

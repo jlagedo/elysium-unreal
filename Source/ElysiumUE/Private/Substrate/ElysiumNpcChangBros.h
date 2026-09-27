@@ -161,4 +161,11 @@ public:
 	/** `CNPC_VChangBros::SelectUnitedNode` (`0x1036d100`) — the hint node the twins meet at. */
 	FElysiumEntity* SelectUnitedNode() const;
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual void NPCThink() override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

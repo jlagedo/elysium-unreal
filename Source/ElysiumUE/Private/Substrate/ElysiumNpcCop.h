@@ -80,4 +80,10 @@ public:
 	bool bWasEverInCombat = false;
 	void CopOnStateChange(int32 OldRetail, int32 NewRetail);
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual void Slot596(FElysiumEntity* Arg0) override;
+	virtual void Slot598(FElysiumEntity* Arg0) override;
 };

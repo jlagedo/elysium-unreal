@@ -101,4 +101,8 @@ public:
 	static constexpr double PayphoneIdleThinkSeconds = 0.25;
 	/** `101aac9c PUSH 0x1` — `ACT_IDLE`. */
 	static constexpr int32 PayphoneIdleActivity = 1;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;
 };

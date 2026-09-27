@@ -20,4 +20,7 @@ public:
 
 	// From `ElysiumNpcMisc.inl`.
 	float LasombraCoverDisableOverride = 0.f;  // +0x6664 CNPC_VLasombra::m_flCoverDisableOverride
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
 };

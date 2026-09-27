@@ -81,4 +81,14 @@ public:
 	 *  `TakeDamage` it. The caller (`0x1037be80`) passes **10.0**. */
 	void BurnPlayer(FElysiumEntity* Target, float Damage);
 	TArray<FBurnHitboxCall> BurnHitboxCalls;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;
+	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
+	virtual void NPCThink() override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

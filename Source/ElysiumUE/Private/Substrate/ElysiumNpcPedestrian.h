@@ -58,4 +58,10 @@ public:
 	bool bPedestrianCorpseThinkStopped = false;
 	int32 PedestrianCorpseSolid = -1;
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Slot27(FElysiumEntity* Arg0) override;
+	virtual void Spawn() override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
 };

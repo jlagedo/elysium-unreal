@@ -42,4 +42,7 @@ public:
 	void Guard1HatePlayer();
 	bool bGuard1HatesPlayer = false;   // +0x6660 CNPC_VGuard1 (walked; the retail name is unrecovered)
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 SpeciesSelectSchedule() override;
 };

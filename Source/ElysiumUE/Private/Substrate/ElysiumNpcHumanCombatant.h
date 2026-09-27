@@ -44,4 +44,8 @@ public:
 	/** `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`)'s weapon half, the tail both of Cop's
 	 *  arms chain. Unconditional — it carries no census class list. */
 	void CopHumanCombatantOnStateChange(int32 NewRetail);
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 SpeciesSelectSchedule() override;
 };

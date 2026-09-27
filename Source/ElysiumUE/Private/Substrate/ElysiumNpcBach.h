@@ -91,4 +91,12 @@ public:
 
 	/** `CNPC_VBach::m_bMovementSpot` (`+0x66a7`). */
 	bool bBachMovementSpot = false;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

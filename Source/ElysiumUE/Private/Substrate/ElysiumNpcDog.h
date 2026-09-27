@@ -33,4 +33,12 @@ public:
 	double DogSnarlTime = 0.0;         // `+0x6678`
 	void DogCombatShortCircuit();   // `0x10374e50`
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

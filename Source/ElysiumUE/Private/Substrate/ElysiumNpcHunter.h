@@ -55,4 +55,6 @@ public:
 	/** `'player D_HT 10'` (`0x1063bc28`). */
 	static const TCHAR* PlayerHateRelationshipSpec();
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
 };

@@ -146,4 +146,15 @@ public:
 	/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
 	bool bSabbatLeaderActivated = false;
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
+	virtual void UpdatePresenceEffect() override;
+	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
+	virtual void RunAI(bool Arg0) override;
+	virtual void GatherConditions() override;
+	virtual int32 PreSelectSchedule() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

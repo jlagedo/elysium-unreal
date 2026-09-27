@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 203 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 169 it introduces and 34 it overrides
+// 201 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 167 it introduces and 34 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -307,12 +307,6 @@
 	// slot 459 0x1026d7f0 (walked) `void RemoveIgnoredConditions()`
 	//   layer 0, story 29c
 	virtual void RemoveIgnoredConditions();
-	// slot 460 0x1026f590 (walked) `NPC_STATE PreSelectIdealState()`
-	//   layer 21, story 29e
-	virtual EElysiumNpcState PreSelectIdealState();
-	// slot 461 0x1026f660 (walked) `NPC_STATE SelectIdealState()`
-	//   layer 21, story 29e
-	virtual EElysiumNpcState SelectIdealState();
 	// slot 462 0x101a6700 (sdk) `bool ShouldGoToIdleState()`
 	//   layer 0, story 29c
 	virtual bool ShouldGoToIdleState();

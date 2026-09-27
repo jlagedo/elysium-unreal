@@ -294,6 +294,19 @@ public:
 	#include "Substrate/ElysiumNpcBaseSquad.inl"
 	#include "Substrate/ElysiumNpcBaseState19.inl"
 	#include "Substrate/ElysiumNpcBaseTranslate19.inl"
+	#include "Substrate/ElysiumNpcBaseConditions19.inl"
+	#include "Substrate/ElysiumNpcBaseRunAi19.inl"
+	#include "Substrate/ElysiumNpcBaseStartTask19.inl"
+	#include "Substrate/ElysiumNpcBaseRunTask19.inl"
+	#include "Substrate/ElysiumNpcBaseSelect19.inl"
+	#include "Substrate/ElysiumNpcBaseThink19.inl"
+	#include "Substrate/ElysiumNpcBaseSpawn19.inl"
+	#include "Substrate/ElysiumNpcBaseDamage19.inl"
+	#include "Substrate/ElysiumNpcBaseScript19.inl"
+	#include "Substrate/ElysiumNpcBaseBoss19.inl"
+	#include "Substrate/ElysiumNpcBaseWerewolf19.inl"
+	#include "Substrate/ElysiumNpcBaseMisc19.inl"
+	#include "Substrate/ElysiumNpcBaseDamaged19.inl"
 
 	// --- Moved from `FElysiumNpc` (story 5 step 5) ---------------------------------------------
 

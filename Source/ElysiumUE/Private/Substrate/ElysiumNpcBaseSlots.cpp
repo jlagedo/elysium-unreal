@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 203 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
-// 110 are defined by hand in the substrate, and 38 are still stubs — 24 29c, 2 29d, 12 29e.
+// 201 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
+// 118 are defined by hand in the substrate, and 28 are still stubs — 24 29c, 2 29d, 2 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -136,21 +136,14 @@ bool FElysiumNpcBase::Slot136()
 // slot 142 0x10265e90 (sdk) `int OnTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 24, story 29e
-int32 FElysiumNpcBase::OnTakeDamage(void*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnTakeDamage"), TEXT("0x10265e90"), TEXT("29e"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpcBase::OnTakeDamage`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 144 0x10265ad0 (sdk) `void Event_Killed(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 20, story 29e
-void FElysiumNpcBase::Event_Killed(void*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Event_Killed"), TEXT("0x10265ad0"), TEXT("29e"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::Event_Killed`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 153 0x10280300 (walked) `bool IsMoving()`
 //   layer 2, story 29c
@@ -212,11 +205,8 @@ int32 FElysiumNpcBase::GetUsedHullBits()
 
 // slot 354 0x1026cec0 (walked) `void vfunc354()`
 //   layer 21, story 29e
-void FElysiumNpcBase::Slot354()
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Slot354"), TEXT("0x1026cec0"), TEXT("29e"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::Slot354`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 355 0x1026cf90 (walked) `void vfunc355()`
 //   layer 8, story 29c
@@ -254,12 +244,8 @@ int32 FElysiumNpcBase::NPC_TranslateActivity(int32)
 // slot 390 0x10265ed0 (walked) `int OnTakeDamage_Alive(const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
 //   layer 23, story 29e
-int32 FElysiumNpcBase::OnTakeDamage_Alive(void*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnTakeDamage_Alive"), TEXT("0x10265ed0"), TEXT("29e"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpcBase::OnTakeDamage_Alive`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 392 0x102664c0 (sdk) `int OnTakeDamage_Dead(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -440,26 +426,18 @@ void FElysiumNpcBase::PostNPCInit()
 
 // slot 431 0x1026ca80 (sdk) `void NPCThink()`
 //   layer 25, story 29e
-void FElysiumNpcBase::NPCThink()
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::NPCThink"), TEXT("0x1026ca80"), TEXT("29e"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::NPCThink`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 432 0x1026f110 (walked) `void RunAI(bool)`
 //   layer 24, story 29e
-void FElysiumNpcBase::RunAI(bool)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::RunAI"), TEXT("0x1026f110"), TEXT("29e"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::RunAI`, written by hand in the substrate. Declared
+// here, defined there.
 
 // slot 433 0x1026ec30 (sdk) `void GatherConditions()`
 //   layer 23, story 29e
-void FElysiumNpcBase::GatherConditions()
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GatherConditions"), TEXT("0x1026ec30"), TEXT("29e"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::GatherConditions`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 434 0x101a6560 (sdk) `void PrescheduleThink()`
 //   layer 0, story 29c
@@ -500,12 +478,8 @@ int32 FElysiumNpcBase::StartTask(void*)
 //   slot 441 declares the same method; which body is which is unrecovered
 //   takes `Task_t*`
 //   layer 24, story 29e
-int32 FElysiumNpcBase::StartTaskSlot442(void*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::StartTaskSlot442"), TEXT("0x102827f0"), TEXT("29e"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpcBase::StartTaskSlot442`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 443 0x101a65e0 (walked) `int RunTask(Task_t*)`
 //   takes `Task_t*`
@@ -521,12 +495,8 @@ int32 FElysiumNpcBase::RunTask(void*)
 //   slot 443 declares the same method; which body is which is unrecovered
 //   takes `Task_t*`
 //   layer 22, story 29e
-int32 FElysiumNpcBase::RunTaskSlot444(void*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::RunTaskSlot444"), TEXT("0x10288780"), TEXT("29e"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumNpcBase::RunTaskSlot444`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 445 0x10288710 (walked) `void StartTaskOverlay()`
 //   layer 10, story 29d
@@ -614,16 +584,6 @@ int32 FElysiumNpcBase::NumBehaviors()
 // slot 459 0x1026d7f0 (walked) `void RemoveIgnoredConditions()`
 //   layer 0, story 29c
 // verdict `rule`: the body is `FElysiumNpcBase::RemoveIgnoredConditions`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 460 0x1026f590 (walked) `NPC_STATE PreSelectIdealState()`
-//   layer 21, story 29e
-// verdict `rule`: the body is `FElysiumNpcBase::PreSelectIdealState`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 461 0x1026f660 (walked) `NPC_STATE SelectIdealState()`
-//   layer 21, story 29e
-// verdict `rule`: the body is `FElysiumNpcBase::SelectIdealState`, written by hand in the
 // substrate. Declared here, defined there.
 
 // slot 462 0x101a6700 (sdk) `bool ShouldGoToIdleState()`
@@ -758,11 +718,8 @@ bool FElysiumNpcBase::IsValidEnemy(FElysiumEntity*)
 
 // slot 481 0x10270b20 (sdk) `void GatherEnemyConditions(CBaseEntity*)`
 //   layer 22, story 29e
-void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GatherEnemyConditions"), TEXT("0x10270b20"), TEXT("29e"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::GatherEnemyConditions`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 482 0x10278090 (walked) `CanPlaySequence_t CanPlaySequence(bool, int)`
 //   returns `CanPlaySequence_t`
@@ -1445,11 +1402,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void(void*, const FVector&, void*)>::Test(&FElysiumNpcBase::TraceAttack),
 				nullptr },
 			{ 142, TEXT("0x10265e90"), TEXT("CAI_BaseNPC"), TEXT("OnTakeDamage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::OnTakeDamage),
 				nullptr },
 			{ 144, TEXT("0x10265ad0"), TEXT("CAI_BaseNPC"), TEXT("Event_Killed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void(void*)>::Test(&FElysiumNpcBase::Event_Killed),
 				nullptr },
 			{ 153, TEXT("0x10280300"), TEXT("CAI_BaseNPC"), TEXT("IsMoving"),
@@ -1494,7 +1451,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32()>::Test(&FElysiumNpcBase::GetUsedHullBits),
 				nullptr },
 			{ 354, TEXT("0x1026cec0"), TEXT("CAI_BaseNPC"), TEXT("Slot354"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void()>::Test(&FElysiumNpcBase::Slot354),
 				nullptr },
 			{ 355, TEXT("0x1026cf90"), TEXT("CAI_BaseNPC"), TEXT("Slot355"),
@@ -1518,7 +1475,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(int32)>::Test(&FElysiumNpcBase::NPC_TranslateActivity),
 				nullptr },
 			{ 390, TEXT("0x10265ed0"), TEXT("CAI_BaseNPC"), TEXT("OnTakeDamage_Alive"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::OnTakeDamage_Alive),
 				nullptr },
 			{ 392, TEXT("0x102664c0"), TEXT("CAI_BaseNPC"), TEXT("OnTakeDamage_Dead"),
@@ -1630,15 +1587,15 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void*()>::Test(&FElysiumNpcBase::CreatePathfinder),
 				nullptr },
 			{ 431, TEXT("0x1026ca80"), TEXT("CAI_BaseNPC"), TEXT("NPCThink"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void()>::Test(&FElysiumNpcBase::NPCThink),
 				nullptr },
 			{ 432, TEXT("0x1026f110"), TEXT("CAI_BaseNPC"), TEXT("RunAI"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void(bool)>::Test(&FElysiumNpcBase::RunAI),
 				nullptr },
 			{ 433, TEXT("0x1026ec30"), TEXT("CAI_BaseNPC"), TEXT("GatherConditions"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void()>::Test(&FElysiumNpcBase::GatherConditions),
 				nullptr },
 			{ 434, TEXT("0x101a6560"), TEXT("CAI_BaseNPC"), TEXT("PrescheduleThink"),
@@ -1662,7 +1619,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::StartTask),
 				nullptr },
 			{ 442, TEXT("0x102827f0"), TEXT("CAI_BaseNPC"), TEXT("StartTaskSlot442"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::StartTaskSlot442),
 				nullptr },
 			{ 443, TEXT("0x101a65e0"), TEXT("CAI_BaseNPC"), TEXT("RunTask"),
@@ -1670,7 +1627,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::RunTask),
 				nullptr },
 			{ 444, TEXT("0x10288780"), TEXT("CAI_BaseNPC"), TEXT("RunTaskSlot444"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::RunTaskSlot444),
 				nullptr },
 			{ 445, TEXT("0x10288710"), TEXT("CAI_BaseNPC"), TEXT("StartTaskOverlay"),
@@ -1724,14 +1681,6 @@ namespace ElysiumNpcKernelShape
 			{ 459, TEXT("0x1026d7f0"), TEXT("CAI_BaseNPC"), TEXT("RemoveIgnoredConditions"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void()>::Test(&FElysiumNpcBase::RemoveIgnoredConditions),
-				nullptr },
-			{ 460, TEXT("0x1026f590"), TEXT("CAI_BaseNPC"), TEXT("PreSelectIdealState"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, EElysiumNpcState()>::Test(&FElysiumNpcBase::PreSelectIdealState),
-				nullptr },
-			{ 461, TEXT("0x1026f660"), TEXT("CAI_BaseNPC"), TEXT("SelectIdealState"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, EElysiumNpcState()>::Test(&FElysiumNpcBase::SelectIdealState),
 				nullptr },
 			{ 462, TEXT("0x101a6700"), TEXT("CAI_BaseNPC"), TEXT("ShouldGoToIdleState"),
 				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
@@ -1810,7 +1759,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, bool()>::Test(&FElysiumNpcBase::ShouldChooseNewEnemy),
 				nullptr },
 			{ 481, TEXT("0x10270b20"), TEXT("CAI_BaseNPC"), TEXT("GatherEnemyConditions"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void(FElysiumEntity*)>::Test(&FElysiumNpcBase::GatherEnemyConditions),
 				nullptr },
 			{ 482, TEXT("0x10278090"), TEXT("CAI_BaseNPC"), TEXT("CanPlaySequence"),

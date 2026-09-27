@@ -15,4 +15,7 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VHumanCombatPatrol", FElysiumNpcHumanCombatant)
 
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual int32 SpeciesSelectSchedule() override;
 };

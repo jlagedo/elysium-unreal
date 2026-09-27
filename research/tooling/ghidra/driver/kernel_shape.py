@@ -1220,7 +1220,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.unported:
         rows_out = unported_rows(repo, args.module, args.depth)
         text = ("# The live rules the port does not carry yet (`kernel_shape --unported`); the set must "
-                "only fall.\n" + "\t".join(UNPORTED_COLUMNS) + "\n"
+                "only fall. Story 8's forwarding overrides and hand-owned spine stubs read as carried "
+                "here; story 8's progress pin is story8-forwarding.tsv.\n"
+                + "\t".join(UNPORTED_COLUMNS) + "\n"
                 + "".join("\t".join(r) + "\n" for r in rows_out))
         Path(args.unported).write_text(text, encoding="utf-8", newline="\n")
         print(f"wrote {args.unported}: {len(rows_out)} rows "

@@ -74,4 +74,10 @@ public:
 	// second argument does. Only those classes' `OnStateChange` overrides call it (story 5 step 3);
 	// public so a fixture can state a transition without driving the whole decision pass.
 	void ApplyStateWeaponVisibility(EElysiumNpcState NewState);
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };

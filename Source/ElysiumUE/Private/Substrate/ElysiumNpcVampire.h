@@ -46,4 +46,7 @@ public:
 	 *  class's own, in its own order. */
 	bool ReleasePickupLink(FElysiumEntityHandle& AnimlinkWord, const FElysiumEntityHandle& PickupTarget,
 		const FElysiumEntity* Aim);
+
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
 };

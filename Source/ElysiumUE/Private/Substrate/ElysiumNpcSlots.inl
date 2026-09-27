@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 169 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 136 it
+// 167 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 134 it
 // overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -74,6 +74,10 @@
 // wrapper)
 // slot 448 0x1029adb0 FElysiumNpc::TaskFail — the failure route, ported in story 13
 // slot 453 0x102ad140 FElysiumNpc::BuildScheduleTestBits — the interrupt mask, ported in story 25
+// slot 460 0x102ad340 FElysiumNpcBase::PreSelectIdealStateRetail — 0019/8 shape: the typed
+// `SelectIdealState()` wrapper keeps the census name; the slot's virtual is the Retail one
+// slot 461 0x102ad660 FElysiumNpcBase::SelectIdealStateRetail — 0019/8 shape: the typed
+// `SelectIdealState()` wrapper keeps the census name; the slot's virtual is the Retail one
 // slot 534 0x1026b270 FElysiumCombatCharacter::EyeLookTargetHandle — the gaze cascade's chosen
 // subject; `EyeLookTarget` beside it is the point it resolved to
 // slot 580 0x101aa790 FElysiumNpcBase::ClassScheduleIdSpace — the typed id space: the base body
@@ -373,12 +377,6 @@
 	// slot 452 0x102b97f0 (sdk) `bool LoadedSchedules()`
 	//   layer 0, story 29c
 	bool LoadedSchedules() override;
-	// slot 460 0x102ad340 (walked) `NPC_STATE PreSelectIdealState()`
-	//   layer 15, story 29d
-	EElysiumNpcState PreSelectIdealState() override;
-	// slot 461 0x102ad660 (walked) `NPC_STATE SelectIdealState()`
-	//   layer 22, story 29e
-	EElysiumNpcState SelectIdealState() override;
 	// slot 462 0x101aa6b0 (sdk) `bool ShouldGoToIdleState()`
 	//   layer 0, story 29c
 	bool ShouldGoToIdleState() override;

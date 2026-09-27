@@ -73,4 +73,13 @@ public:
 	 *  `m_OnAttackedVictim` (`+0x66e8`) with no base forward. */
 	void FUN_103e12c0(FElysiumEntity* Victim);
 
+	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
+	virtual void Spawn() override;
+	virtual int32 OnTakeDamage(void* Arg0) override;
+	virtual void CreateCorpse(const FVector& Arg0, void* Arg1) override;
+	virtual void NPCThink() override;
+	virtual void RunAI(bool Arg0) override;
+	virtual int32 SpeciesSelectSchedule() override;
+	virtual int32 StartTaskSlot442(void* Arg0) override;
+	virtual int32 RunTaskSlot444(void* Arg0) override;
 };
