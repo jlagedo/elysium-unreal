@@ -45,7 +45,7 @@ REQUIRED_PINS = {"module", "corpus", "listing", "datamaps", "census", "verdicts"
 
 
 # A phase is listed here only when its checker exists; no later phase is implicitly accepted.
-ACCEPTED_PHASES = (0, 1, 2, 3, 4, 5)
+ACCEPTED_PHASES = (0, 1, 2, 3, 4, 5, 6)
 
 
 class InvalidManifest(ValueError):
@@ -320,7 +320,7 @@ def _check_step0(directory: Path, manifest: dict, source_root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2", "step3", "step4", "step5"), required=True)
+    parser.add_argument("--check", choices=("factories", "step0", "step1", "step2", "step3", "step4", "step5", "step6"), required=True)
     args = parser.parse_args(argv)
     try:
         manifest, classes, factories = load()
@@ -375,6 +375,17 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print('PASS: step 5 acceptance; accepted step-4 receipt, base/Troika moves, base '
                       'bindings, consumers, registry chain, regression comparison and runtime gate verified.')
+            print(json.dumps(counts, sort_keys=True))
+        if args.check == "step6":
+            from kernel_migration_step6 import check_step6
+            counts = check_step6()
+            if counts.get("pending"):
+                print('PENDING: step 6 in progress; the slot record matches the accepted step-5 tree, '
+                      'the pinned verdicts and the pinned corpus. Source dispositions are not yet enforced.')
+            else:
+                print('PASS: step 6 acceptance; accepted step-5 receipt, slot owners, member moves, '
+                      'dispatch gate, retired tables, unported pin, regression comparison and runtime '
+                      'gate verified.')
             print(json.dumps(counts, sort_keys=True))
     except (InvalidManifest, ValueError, OSError) as exc:
         print(f"REFUSED: {exc}")

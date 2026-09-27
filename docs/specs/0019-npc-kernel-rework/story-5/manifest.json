@@ -284,5 +284,16 @@
     "5f": "accepted",
     "5g": "accepted",
     "5h": "accepted"
+  },
+  "step6_packets": {
+    "6a": "accepted",
+    "6b": "pending",
+    "6c": "pending",
+    "6d": "pending",
+    "6e": "pending",
+    "6f": "pending",
+    "6g": "pending",
+    "6h": "pending",
+    "6i": "pending"
   }
 }

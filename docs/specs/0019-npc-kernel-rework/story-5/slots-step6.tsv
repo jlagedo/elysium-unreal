@@ -1,0 +1,827 @@
+# Story 5 step 6: every generated slot row and every chain row step 6 emits. Identity columns
+# (slot..introducer) are re-derived by `kernel_migration --check step6`; final_owner/disposition are reviewed.
+slot	port_name	signature	current_owner	row_class	body	kind	verdict	introducer	final_owner	disposition	packet	note
+0	SetRefEHandle	void SetRefEHandle(const FElysiumEntityHandle&)	FElysiumNpcBase	CBaseEntity	0x10027450	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+1	GetRefEHandle	void* GetRefEHandle() const	FElysiumNpcBase	CBaseEntity	0x10027470	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+2	GetCollideable	void* GetCollideable()	FElysiumNpcBase	CBaseEntity	0x10027610	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+3	GetNetworkable	void* GetNetworkable()	FElysiumNpcBase	CBaseEntity	0x10027630	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+4	GetBaseEntity	FElysiumEntity* GetBaseEntity()	FElysiumNpcBase	CBaseEntity	0x10027650	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+5	Slot5	void* Slot5(uint32)	-	CBaseEntity	0x1009def0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+5	Slot5	void* Slot5(uint32)	-	CBaseAnimating	0x1008b390	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+5	Slot5	void* Slot5(uint32)	-	CBaseAnimatingOverlay	0x10098a60	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+5	Slot5	void* Slot5(uint32)	-	CBaseFlex	0x100b5940	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+5	Slot5	void* Slot5(uint32)	-	CBaseCombatCharacter	0x103274a0	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+5	Slot5	void* Slot5(uint32)	FElysiumNpc	CAI_BaseNPCTroika	0x1028d5e0	stub	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+5	Slot5	void* Slot5(uint32)	FElysiumNpcBase	CAI_BaseNPC	0x1027c7f0	stub	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+6	SetCheckUntouch	void SetCheckUntouch(bool)	FElysiumNpcBase	CBaseEntity	0x100b11d0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+7	SetSentLastFrame	void SetSentLastFrame(bool)	FElysiumNpcBase	CBaseEntity	0x100b12e0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+8	GetModelIndex	int32 GetModelIndex() const	FElysiumNpcBase	CBaseEntity	0x100b17f0	stub	-	CBaseEntity	FElysiumEntity	move	6e	stub stays on its owner: the port has no model-precache index (seam); counts when fired
+9	GetModelName	FName GetModelName() const	FElysiumNpcBase	CBaseEntity	0x100b1690	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+10	SetModelIndex	void SetModelIndex(int32)	FElysiumNpcBase	CBaseEntity	0x100b1750	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+11	DebugSetEntityName	void DebugSetEntityName(const TCHAR*)	FElysiumNpcBase	CBaseEntity	0x1009ac80	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+12	DebugGetEntityName	const TCHAR* DebugGetEntityName()	FElysiumNpcBase	CBaseEntity	0x1009ad70	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+13	DebugSetClassName	void DebugSetClassName(const TCHAR*)	FElysiumNpcBase	CBaseEntity	0x1009ae10	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+14	DebugGetClassName	const TCHAR* DebugGetClassName()	FElysiumNpcBase	CBaseEntity	0x1009af00	hand	dead	CBaseEntity	FElysiumEntity	move-hand	6d	-
+16	GetAttackExtents	FVector GetAttackExtents()	FElysiumNpcBase	CBaseEntity	0x1009b030	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	carrier: AttackExtentsCm (+0x50 CBaseEntity m_vecAttackExtents) moves from FElysiumNpcBaseScheduleHost to FElysiumEntity with its save line
+17	TraceMessage	void TraceMessage(const TCHAR*, int32) const	FElysiumNpc	CAI_BaseNPCTroika	0x1028de90	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+17	TraceMessage	void TraceMessage(const TCHAR*, int32) const	FElysiumNpcBase	CBaseEntity	0x1009b380	stub	dead	CBaseEntity	FElysiumEntity	move	6c	-
+18	TraceMessage	void TraceMessage(const TCHAR*, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x1028de10	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+18	TraceMessage	void TraceMessage(const TCHAR*, int32)	FElysiumNpcBase	CBaseEntity	0x1009b2c0	stub	dead	CBaseEntity	FElysiumEntity	move	6c	-
+19	TraceMessageBare	void TraceMessageBare(const TCHAR*) const	FElysiumNpc	CAI_BaseNPCTroika	0x1028dfb0	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+19	TraceMessageBare	void TraceMessageBare(const TCHAR*) const	FElysiumNpcBase	CBaseEntity	0x1009b5a0	stub	dead	CBaseEntity	FElysiumEntity	move	6c	-
+20	TraceMessageBare	void TraceMessageBare(const TCHAR*)	FElysiumNpc	CAI_BaseNPCTroika	0x1028df30	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+20	TraceMessageBare	void TraceMessageBare(const TCHAR*)	FElysiumNpcBase	CBaseEntity	0x1009b500	stub	dead	CBaseEntity	FElysiumEntity	move	6c	-
+21	Slot21	void Slot21(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029f800	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+21	Slot21	void Slot21(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026530	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+22	Slot22	void Slot22(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029f850	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+22	Slot22	void Slot22(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026550	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+23	Slot23	void Slot23(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029f890	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+23	Slot23	void Slot23(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026570	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+24	OnVictimHitByMe	void OnVictimHitByMe(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029f8d0	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+24	OnVictimHitByMe	void OnVictimHitByMe(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026590	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+25	Slot25	void Slot25(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100265b0	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+26	Slot26	void Slot26(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100265d0	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+27	Slot27	void Slot27(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029f8f0	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+27	Slot27	void Slot27(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100265f0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+28	GetStealthVisionScalar	float GetStealthVisionScalar()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa610	hand	present	CBaseEntity	FElysiumNpc	keep	-	-
+28	GetStealthVisionScalar	float GetStealthVisionScalar()	FElysiumNpcBase	CBaseEntity	0x10026610	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+29	GetStealthVisionCone	float GetStealthVisionCone()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa630	hand	present	CBaseEntity	FElysiumNpc	keep	-	-
+29	GetStealthVisionCone	float GetStealthVisionCone()	FElysiumNpcBase	CBaseEntity	0x10026630	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+30	GetStealthHearingDist	float GetStealthHearingDist()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa650	hand	present	CBaseEntity	FElysiumNpc	keep	-	-
+30	GetStealthHearingDist	float GetStealthHearingDist()	FElysiumNpcBase	CBaseEntity	0x10026650	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+31	Dump	void Dump(int32)	-	CBaseEntity	0x1009c980	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+31	Dump	void Dump(int32)	-	CBaseAnimating	0x1008b530	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+31	Dump	void Dump(int32)	-	CBaseAnimatingOverlay	0x10098a90	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+31	Dump	void Dump(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x103222c0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+32	CanBeInteractiveUsed	bool CanBeInteractiveUsed(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026670	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+33	Slot33	int32 Slot33()	FElysiumNpcBase	CBaseEntity	0x10026690	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+34	GetHighlightMaterial	int32 GetHighlightMaterial(FElysiumEntity*)	-	CBaseEntity	0x100266b0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+34	GetHighlightMaterial	int32 GetHighlightMaterial(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10342800	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+35	Slot35	int32 Slot35(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c0220	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+35	Slot35	int32 Slot35(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100266d0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+36	Slot36	const TCHAR* Slot36()	FElysiumNpcBase	CBaseEntity	0x100266f0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+37	Slot37	float Slot37()	FElysiumNpcBase	CBaseEntity	0x10026710	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+38	Slot38	FElysiumEntity* Slot38(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026730	hand	dead	CBaseEntity	FElysiumEntity	move-hand	6d	-
+39	OnUseBegin	void OnUseBegin(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a4fe0	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+40	Slot40	void Slot40(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026750	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+41	Slot41	void Slot41(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026770	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+42	OnUseEnd	void OnUseEnd(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a5030	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+43	Slot43	void Slot43(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026790	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+44	Slot44	bool Slot44(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100267b0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+45	PassesFindEntityFOVTrace	bool PassesFindEntityFOVTrace(FElysiumEntity*, FVector, FVector, int32)	FElysiumNpcBase	CBaseEntity	0x100a5070	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+46	Slot46	void Slot46()	FElysiumNpcBase	CBaseEntity	0x100267d0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+47	Slot47	void Slot47()	FElysiumNpcBase	CBaseEntity	0x100267f0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+48	Slot48	float Slot48()	FElysiumNpcBase	CBaseEntity	0x10026810	hand	present	CBaseEntity	FElysiumEntity	move-hand	6d	-
+49	Slot49	float Slot49()	FElysiumNpcBase	CBaseEntity	0x10026830	hand	present	CBaseEntity	FElysiumEntity	move-hand	6d	-
+54	Slot54	bool Slot54(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b50b0	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+54	Slot54	bool Slot54(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026910	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+55	Slot55	void Slot55(FElysiumEntity*, FVector, FVector)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5100	default	dead	CBaseEntity	FElysiumNpc	keep	-	-
+55	Slot55	void Slot55(FElysiumEntity*, FVector, FVector)	FElysiumNpcBase	CBaseEntity	0x10026930	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+56	Slot56	void Slot56(FElysiumEntity*, FVector, FVector, const TCHAR*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5120	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+56	Slot56	void Slot56(FElysiumEntity*, FVector, FVector, const TCHAR*)	FElysiumNpcBase	CBaseEntity	0x10026950	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+57	Slot57	void Slot57(FElysiumEntity*, FVector, FVector)	FElysiumNpc	CAI_BaseNPCTroika	0x102b51a0	default	dead	CBaseEntity	FElysiumNpc	keep	-	-
+57	Slot57	void Slot57(FElysiumEntity*, FVector, FVector)	FElysiumNpcBase	CBaseEntity	0x10026970	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+58	Slot58	void Slot58(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b51c0	default	dead	CBaseEntity	FElysiumNpc	keep	-	-
+58	Slot58	void Slot58(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026990	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+59	Slot59	void Slot59(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b51e0	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+59	Slot59	void Slot59(void*)	FElysiumNpcBase	CBaseEntity	0x100269b0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+60	Slot60	void Slot60(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5220	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+60	Slot60	void Slot60(void*)	FElysiumNpcBase	CBaseEntity	0x100269d0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+61	Slot61	void Slot61(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5260	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+61	Slot61	void Slot61(void*)	FElysiumNpcBase	CBaseEntity	0x100269f0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+62	SetOrigin	void SetOrigin(const FVector&)	FElysiumNpcBase	CBaseEntity	0x100b2be0	stub	-	CBaseEntity	FElysiumEntity	adapter:SetRuntimeOrigin	6e	0x100b2be0: acts only when the new origin differs; SetRuntimeOrigin writes Origin; the +0x1b1 change-tracker byte stays a refusal
+63	SetOrigin	void SetOrigin(float, float, float)	FElysiumNpcBase	CBaseEntity	0x10026a10	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+64	SetAngles	void SetAngles(const FRotator&)	FElysiumNpcBase	CBaseEntity	0x100b2d00	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+65	SetAngles	void SetAngles(float, float, float)	FElysiumNpcBase	CBaseEntity	0x10026a50	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+66	Hide	void Hide()	FElysiumNpcBase	CBaseEntity	0x1009d2a0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+67	Unhide	void Unhide()	FElysiumNpcBase	CBaseEntity	0x1009d380	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+68	ShouldIgnoreCollision	bool ShouldIgnoreCollision(FElysiumEntity*)	-	CBaseEntity	0x10026a90	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+68	ShouldIgnoreCollision	bool ShouldIgnoreCollision(FElysiumEntity*)	-	CBaseAnimating	0x1008bfe0	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+68	ShouldIgnoreCollision	bool ShouldIgnoreCollision(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029afc0	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+68	ShouldIgnoreCollision	bool ShouldIgnoreCollision(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10340650	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+69	NavIgnoreCollision	bool NavIgnoreCollision(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029b180	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+69	NavIgnoreCollision	bool NavIgnoreCollision(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026ab0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+70	IsMonster	bool IsMonster()	FElysiumNpcBase	CBaseEntity	0x1009d820	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+71	PrecacheSoundTable	void PrecacheSoundTable()	FElysiumNpcBase	CBaseEntity	0x1009d460	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+72	Slot72	bool Slot72(int32)	-	CBaseEntity	0x10026ad0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+72	Slot72	bool Slot72(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1015dc20	default	rule	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+73	CausesImpactDamage	bool CausesImpactDamage(FElysiumEntity*)	-	CBaseEntity	0x10026af0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+73	CausesImpactDamage	bool CausesImpactDamage(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10340590	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+74	ReceivesImpactDamage	bool ReceivesImpactDamage(FElysiumEntity*)	-	CBaseEntity	0x10026b10	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+74	ReceivesImpactDamage	bool ReceivesImpactDamage(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x103404f0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+75	TakeDamageFromCollision	void TakeDamageFromCollision(int32, void*)	FElysiumNpcBase	CBaseEntity	0x100a8400	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+76	DrawDebugStatOverlays	void DrawDebugStatOverlays()	-	CBaseEntity	0x10026b30	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+76	DrawDebugStatOverlays	void DrawDebugStatOverlays()	FElysiumNpc	CAI_BaseNPCTroika	0x1029c010	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+76	DrawDebugStatOverlays	void DrawDebugStatOverlays()	FElysiumNpcBase	CAI_BaseNPC	0x102775e0	hand	dead	CBaseEntity	FElysiumNpcBase	keep	-	-
+79	GetPredDescMap	void* GetPredDescMap()	-	CBaseEntity	0x1009e100	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+79	GetPredDescMap	void* GetPredDescMap()	-	CBaseAnimating	0x10097ae0	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+79	GetPredDescMap	void* GetPredDescMap()	-	CBaseAnimatingOverlay	0x10097d70	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+79	GetPredDescMap	void* GetPredDescMap()	-	CBaseFlex	0x100b58b0	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+79	GetPredDescMap	void* GetPredDescMap()	FElysiumNpcBase	CBaseCombatCharacter	0x10321670	hand	mechanism	CBaseEntity	FElysiumCombatCharacter	move-hand	6d	-
+80	GetServerClass	void* GetServerClass()	-	CBaseEntity	0x1009a660	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+80	GetServerClass	void* GetServerClass()	-	CBaseAnimating	0x1008a9f0	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+80	GetServerClass	void* GetServerClass()	-	CBaseAnimatingOverlay	0x10098020	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+80	GetServerClass	void* GetServerClass()	-	CBaseFlex	0x100b5520	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+80	GetServerClass	void* GetServerClass()	FElysiumNpc	CAI_BaseNPCTroika	0x102c5870	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+80	GetServerClass	void* GetServerClass()	FElysiumNpcBase	CBaseCombatCharacter	0x10321960	stub	mechanism	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	-	CBaseEntity	0x1009a680	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	-	CBaseAnimating	0x1008aa10	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	-	CBaseAnimatingOverlay	0x10098040	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	-	CBaseFlex	0x100b5540	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	FElysiumNpc	CAI_BaseNPCTroika	0x102c5890	default	dead	CBaseEntity	FElysiumNpc	keep	-	-
+81	YouForgotToImplementOrDeclareServerClass	int32 YouForgotToImplementOrDeclareServerClass()	FElysiumNpcBase	CBaseCombatCharacter	0x10321980	default	dead	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+82	GetDataDescMap	void* GetDataDescMap()	-	CBaseEntity	0x100a2290	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+82	GetDataDescMap	void* GetDataDescMap()	-	CBaseAnimating	0x1008a760	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+82	GetDataDescMap	void* GetDataDescMap()	-	CBaseAnimatingOverlay	0x10097ce0	new	-	CBaseEntity	FElysiumAnimatingOverlay	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+82	GetDataDescMap	void* GetDataDescMap()	-	CBaseFlex	0x100b57b0	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+82	GetDataDescMap	void* GetDataDescMap()	-	CBaseCombatCharacter	0x1031a5a0	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+82	GetDataDescMap	void* GetDataDescMap()	FElysiumNpc	CAI_BaseNPCTroika	0x1028cd10	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+82	GetDataDescMap	void* GetDataDescMap()	FElysiumNpcBase	CAI_BaseNPC	0x1027a7c0	stub	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+83	GetEFlags	int32 GetEFlags()	FElysiumNpcBase	CBaseEntity	0x100b4ef0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+84	SetEFlags	void SetEFlags(int32)	FElysiumNpcBase	CBaseEntity	0x100b4f10	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+85	GetEdict	void* GetEdict()	FElysiumNpcBase	CBaseEntity	0x100b3d10	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+86	ShouldTransmit	bool ShouldTransmit(int32, void*, void*, int32, int32)	-	CBaseEntity	0x100ab020	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+86	ShouldTransmit	bool ShouldTransmit(int32, void*, void*, int32, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102c0420	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+86	ShouldTransmit	bool ShouldTransmit(int32, void*, void*, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x103407b0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+87	SetTransmit	void SetTransmit(void*)	FElysiumNpcBase	CBaseEntity	0x100ab280	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+88	Slot88	bool Slot88()	FElysiumNpcBase	CBaseEntity	0x10026b50	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+89	Slot89	void Slot89()	FElysiumNpcBase	CBaseEntity	0x10026b70	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+90	IsTransparent	bool IsTransparent() const	FElysiumNpcBase	CBaseEntity	0x100aa840	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+91	ShouldCollide	bool ShouldCollide(int32, int32) const	FElysiumNpcBase	CBaseEntity	0x100b4de0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+92	GetSolid	int32 GetSolid() const	FElysiumNpcBase	CBaseEntity	0x10027570	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+93	SetMoveType	void SetMoveType(int32, int32)	FElysiumNpcBase	CBaseEntity	0x100aad70	stub	-	CBaseEntity	FElysiumEntity	seam:RetailMoveType	6e	0x100aad70: writes m_MoveType/m_MoveCollide only when the type differs; the physics-object notify is a refusal
+94	GetMoveType	int32 GetMoveType() const	FElysiumNpcBase	CBaseEntity	0x100aac30	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+95	GetMoveCollide	int32 GetMoveCollide() const	FElysiumNpcBase	CBaseEntity	0x100aacd0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+96	GetAimEntEdict	void* GetAimEntEdict()	FElysiumNpcBase	CBaseEntity	0x100a9ba0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+98	CalcAbsolutePosition	void CalcAbsolutePosition()	FElysiumNpcBase	CBaseEntity	0x100b1ac0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+99	TestCollision	bool TestCollision(void*, int32, void*)	-	CBaseEntity	0x100aa900	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+99	TestCollision	bool TestCollision(void*, int32, void*)	FElysiumNpcBase	CBaseAnimating	0x100956e0	stub	-	CBaseEntity	FElysiumAnimating	move	6c	-
+100	TestHitboxes	bool TestHitboxes(void*, int32, void*)	-	CBaseEntity	0x100aa9a0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+100	TestHitboxes	bool TestHitboxes(void*, int32, void*)	FElysiumNpcBase	CBaseAnimating	0x10095a20	stub	-	CBaseEntity	FElysiumAnimating	move	6c	-
+101	ComputeWorldSpaceSurroundingBox	void ComputeWorldSpaceSurroundingBox(FVector*, FVector*)	FElysiumNpcBase	CBaseEntity	0x100ab430	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+102	Physics_TraceEntity	void Physics_TraceEntity(FElysiumEntity*, const FVector&, const FVector&, uint32, void*)	FElysiumNpcBase	CBaseEntity	0x100ab450	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+104	Precache	void Precache()	-	CBaseEntity	0x10026b90	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+104	Precache	void Precache()	-	CBaseCombatCharacter	0x10340360	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+104	Precache	void Precache()	FElysiumNpc	CAI_BaseNPCTroika	0x10298ad0	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+104	Precache	void Precache()	FElysiumNpcBase	CAI_BaseNPC	0x1027bb50	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+105	SetModel	void SetModel(TCHAR*)	-	CBaseEntity	0x100ad460	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+105	SetModel	void SetModel(TCHAR*)	-	CBaseAnimating	0x10095030	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+105	SetModel	void SetModel(TCHAR*)	-	CBaseFlex	0x100b5ab0	new	-	CBaseEntity	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+105	SetModel	void SetModel(TCHAR*)	FElysiumNpc	CAI_BaseNPCTroika	0x10298ce0	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+105	SetModel	void SetModel(TCHAR*)	FElysiumNpcBase	CBaseCombatCharacter	0x103409a0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+106	PostConstructor	void PostConstructor(TCHAR*)	-	CBaseEntity	0x1009e120	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+106	PostConstructor	void PostConstructor(TCHAR*)	-	CBaseCombatCharacter	0x10337d80	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+106	PostConstructor	void PostConstructor(TCHAR*)	FElysiumNpcBase	CAI_BaseNPC	0x1027bb20	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+107	ParseMapData	void ParseMapData(void*)	FElysiumNpcBase	CBaseEntity	0x1009e280	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+108	KeyValue	bool KeyValue(const TCHAR*, FVector)	-	CBaseEntity	0x1009eca0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+108	KeyValue	bool KeyValue(const TCHAR*, FVector)	FElysiumNpcBase	CBaseToggle	0x1004fbb0	hand	dead	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+109	KeyValue	bool KeyValue(const TCHAR*, float)	-	CBaseEntity	0x1009ebb0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+109	KeyValue	bool KeyValue(const TCHAR*, float)	FElysiumNpcBase	CBaseToggle	0x1004fbf0	hand	dead	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+110	KeyValue	bool KeyValue(const TCHAR*, const TCHAR*)	-	CBaseEntity	0x1009e430	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+110	KeyValue	bool KeyValue(const TCHAR*, const TCHAR*)	FElysiumNpcBase	CBaseToggle	0x101c1480	hand	rule	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+111	MemberSync	void MemberSync()	-	CBaseEntity	0x10026bb0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+111	MemberSync	void MemberSync()	FElysiumNpcBase	CBaseCombatCharacter	0x10337ca0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+112	Slot112	void Slot112(int32, int32)	FElysiumNpcBase	CBaseEntity	0x10026bd0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+114	PostClientMessagesSent	void PostClientMessagesSent()	FElysiumNpcBase	CBaseEntity	0x100ad780	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+115	Slot115	void Slot115(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026bf0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+116	IsMarkedForDeletion	bool IsMarkedForDeletion()	FElysiumNpcBase	CBaseEntity	0x10027490	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+118	AcceptInput	bool AcceptInput(TCHAR*, FElysiumEntity*, FElysiumEntity*, int32, int32)	FElysiumNpcBase	CBaseEntity	0x100abc90	stub	-	CBaseEntity	FElysiumEntity	implemented:FElysiumEntityWorld::AcceptInput	6e	0x100abc90 is the datamap INPUT walk; the port's chokepoint plus the class registry is that walk; the generated virtual goes, the census row names the chokepoint
+120	GetInputDispatchEffectPosition	void GetInputDispatchEffectPosition(TCHAR*, FVector&, FRotator&)	FElysiumNpcBase	CBaseEntity	0x100ace00	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+121	ReadKeyField	bool ReadKeyField(TCHAR*, void*)	FElysiumNpcBase	CBaseEntity	0x100acab0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+122	SetClassname	void SetClassname(TCHAR*)	FElysiumNpcBase	CBaseEntity	0x1009f120	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+123	DrawDebugGeometryOverlays	void DrawDebugGeometryOverlays()	-	CBaseEntity	0x100a0130	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+123	DrawDebugGeometryOverlays	void DrawDebugGeometryOverlays()	FElysiumNpc	CAI_BaseNPCTroika	0x1029ca50	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+123	DrawDebugGeometryOverlays	void DrawDebugGeometryOverlays()	FElysiumNpcBase	CAI_BaseNPC	0x10275760	hand	dead	CBaseEntity	FElysiumNpcBase	keep	-	-
+124	DrawDebugTextOverlays	int32 DrawDebugTextOverlays()	-	CBaseEntity	0x100a02b0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+124	DrawDebugTextOverlays	int32 DrawDebugTextOverlays()	-	CBaseAnimating	0x10096100	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+124	DrawDebugTextOverlays	int32 DrawDebugTextOverlays()	-	CBaseCombatCharacter	0x1033e4a0	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+124	DrawDebugTextOverlays	int32 DrawDebugTextOverlays()	FElysiumNpc	CAI_BaseNPCTroika	0x1029d4e0	hand	dead	CBaseEntity	FElysiumNpc	keep	-	-
+124	DrawDebugTextOverlays	int32 DrawDebugTextOverlays()	FElysiumNpcBase	CAI_BaseNPC	0x102767d0	hand	dead	CBaseEntity	FElysiumNpcBase	keep	-	-
+125	DrawMuzzleOverlay	void DrawMuzzleOverlay()	-	CBaseEntity	0x1009faf0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+125	DrawMuzzleOverlay	void DrawMuzzleOverlay()	FElysiumNpcBase	CBaseCombatCharacter	0x1033e7e0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+126	Save	int32 Save(void*)	-	CBaseEntity	0x100a9f70	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+126	Save	int32 Save(void*)	-	CBaseCombatCharacter	0x10348980	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+126	Save	int32 Save(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102993c0	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+126	Save	int32 Save(void*)	FElysiumNpcBase	CAI_BaseNPC	0x1027bc60	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+127	Restore	int32 Restore(void*)	-	CBaseEntity	0x100aa140	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+127	Restore	int32 Restore(void*)	-	CBaseCombatCharacter	0x10348890	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+127	Restore	int32 Restore(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x10299700	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+127	Restore	int32 Restore(void*)	FElysiumNpcBase	CAI_BaseNPC	0x1027c160	stub	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+128	ShouldSavePhysics	bool ShouldSavePhysics()	-	CBaseEntity	0x100aa680	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+128	ShouldSavePhysics	bool ShouldSavePhysics()	FElysiumNpcBase	CAI_BaseNPC	0x101a6520	default	dead	CBaseEntity	FElysiumNpcBase	keep	-	-
+129	OnSave	void OnSave()	FElysiumNpcBase	CBaseEntity	0x100aa4e0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+130	OnRestore	void OnRestore(bool)	-	CBaseEntity	0x100aa5a0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+130	OnRestore	void OnRestore(bool)	-	CBaseAnimating	0x1008df10	new	-	CBaseEntity	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+130	OnRestore	void OnRestore(bool)	-	CBaseCombatCharacter	0x10323b60	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+130	OnRestore	void OnRestore(bool)	FElysiumNpc	CAI_BaseNPCTroika	0x102998c0	hand	mechanism	CBaseEntity	FElysiumNpc	keep	-	-
+130	OnRestore	void OnRestore(bool)	FElysiumNpcBase	CAI_BaseNPC	0x1027bf50	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+131	RequiredEdictIndex	int32 RequiredEdictIndex()	FElysiumNpcBase	CBaseEntity	0x10026c10	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+132	Slot132	void Slot132()	FElysiumNpcBase	CBaseEntity	0x10026c30	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+133	MoveDone	void MoveDone()	-	CBaseEntity	0x10026c50	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+133	MoveDone	void MoveDone()	FElysiumNpcBase	CBaseToggle	0x101c1720	hand	dead	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+135	Slot135	float Slot135(float)	-	CBaseEntity	0x10026d10	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+135	Slot135	float Slot135(float)	FElysiumNpcBase	CBaseToggle	0x101c10d0	hand	dead	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+136	Slot136	bool Slot136()	-	CBaseEntity	0x10026d30	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+136	Slot136	bool Slot136()	FElysiumNpcBase	CAI_BaseNPC	0x101a6860	default	dead	CBaseEntity	FElysiumNpcBase	keep	-	-
+137	GetBaseAnimating	FElysiumEntity* GetBaseAnimating()	-	CBaseEntity	0x10026d50	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+137	GetBaseAnimating	FElysiumEntity* GetBaseAnimating()	FElysiumNpcBase	CBaseAnimating	0x1004fc50	hand	mechanism	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+138	Classify	int32 Classify()	FElysiumNpc	CAI_BaseNPCTroika	0x10299d80	default	rule	CBaseEntity	FElysiumNpc	keep	-	-
+138	Classify	int32 Classify()	FElysiumNpcBase	CBaseEntity	0x100a7a80	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+139	DeathNotice	void DeathNotice(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026d70	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+140	PassesDamageFilter	bool PassesDamageFilter(void*)	FElysiumNpcBase	CBaseEntity	0x100a7aa0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+141	TraceAttack	void TraceAttack(void*, const FVector&, void*)	-	CBaseEntity	0x100a7de0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+141	TraceAttack	void TraceAttack(void*, const FVector&, void*)	FElysiumNpcBase	CAI_BaseNPC	0x10266780	hand	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+142	OnTakeDamage	int32 OnTakeDamage(void*)	-	CBaseEntity	0x100a0e40	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+142	OnTakeDamage	int32 OnTakeDamage(void*)	-	CBaseCombatCharacter	0x1032ef60	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+142	OnTakeDamage	int32 OnTakeDamage(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102bed30	stub	rule	CBaseEntity	FElysiumNpc	keep	-	-
+142	OnTakeDamage	int32 OnTakeDamage(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10265e90	stub	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+143	TakeHealth	int32 TakeHealth(float, int32)	-	CBaseEntity	0x100a0d20	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+143	TakeHealth	int32 TakeHealth(float, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1032ebc0	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+144	Event_Killed	void Event_Killed(void*)	-	CBaseEntity	0x100a1a70	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+144	Event_Killed	void Event_Killed(void*)	-	CBaseCombatCharacter	0x1032b9b0	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+144	Event_Killed	void Event_Killed(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102bf340	stub	rule	CBaseEntity	FElysiumNpc	keep	-	-
+144	Event_Killed	void Event_Killed(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10265ad0	stub	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+145	BloodColor	int32 BloodColor()	-	CBaseEntity	0x10026d90	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+145	BloodColor	int32 BloodColor()	FElysiumNpcBase	CBaseCombatCharacter	0x1014fa10	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+146	TraceBleed	void TraceBleed(void*, const FVector&, void*)	FElysiumNpcBase	CBaseEntity	0x10268ef0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+147	IsTriggered	bool IsTriggered(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026db0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+148	AddPoints	void AddPoints(int32, bool)	FElysiumNpcBase	CBaseEntity	0x10026dd0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+149	AddPointsToTeam	void AddPointsToTeam(int32, bool)	FElysiumNpcBase	CBaseEntity	0x10026df0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+150	AddPlayerItem	bool AddPlayerItem(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026e10	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+151	RemovePlayerItem	bool RemovePlayerItem(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026e30	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+152	GetDelay	float GetDelay()	-	CBaseEntity	0x10026e50	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+152	GetDelay	float GetDelay()	FElysiumNpcBase	CBaseToggle	0x1004fc10	hand	dead	CBaseEntity	FElysiumAnimating	move-hand	6d	-
+153	IsMoving	bool IsMoving()	-	CBaseEntity	0x10026e70	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+153	IsMoving	bool IsMoving()	FElysiumNpcBase	CAI_BaseNPC	0x10280300	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+154	DamageDecal	int32 DamageDecal(int32, int32)	FElysiumNpcBase	CBaseEntity	0x100b4ea0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+155	DecalTrace	void DecalTrace(void*, int32, bool, int32, FElysiumEntity*, int32, bool)	FElysiumNpcBase	CBaseEntity	0x100a6c50	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+156	Slot156	void Slot156(int32)	FElysiumNpcBase	CBaseEntity	0x10026ee0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+157	OnControls	bool OnControls(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026f00	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+158	IsAlive	bool IsAlive()	FElysiumNpcBase	CBaseEntity	0x100b4dc0	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+159	ReflectGauss	bool ReflectGauss()	FElysiumNpcBase	CBaseEntity	0x10026f20	hand	dead	CBaseEntity	FElysiumEntity	move-hand	6d	-
+160	HasTarget	bool HasTarget(FName)	FElysiumNpcBase	CBaseEntity	0x100a1b40	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+161	HasLinkedDoor	bool HasLinkedDoor(FName)	FElysiumNpcBase	CBaseEntity	0x100a1c30	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+162	IsPlayer	bool IsPlayer()	FElysiumNpcBase	CBaseEntity	0x10026f60	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+163	IsViewable	bool IsViewable()	FElysiumNpcBase	CBaseEntity	0x100a9800	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+164	IsStandable	bool IsStandable()	FElysiumNpcBase	CBaseEntity	0x100b50a0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+165	CanStandOn	bool CanStandOn(void*)	FElysiumNpcBase	CBaseEntity	0x10026fb0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+166	CanStandOn	bool CanStandOn(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10026f80	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+167	GetEnemy	FElysiumEntity* GetEnemy() const	-	CBaseEntity	0x10027000	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+167	GetEnemy	FElysiumEntity* GetEnemy() const	FElysiumNpcBase	CAI_BaseNPC	0x101a67e0	hand	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+168	GetEnemy	FElysiumEntity* GetEnemy()	FElysiumNpc	CAI_BaseNPCTroika	0x102b5360	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+168	GetEnemy	FElysiumEntity* GetEnemy()	FElysiumNpcBase	CBaseEntity	0x10027020	stub	rule	CBaseEntity	FElysiumEntity	move	6c	-
+169	ViewPunch	void ViewPunch(const FRotator&)	FElysiumNpcBase	CBaseEntity	0x10027040	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+170	VelocityPunch	void VelocityPunch(const FVector&)	FElysiumNpcBase	CBaseEntity	0x10027060	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+171	SetMovedir	void SetMovedir()	FElysiumNpcBase	CBaseEntity	0x100ad550	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+172	GetNextTarget	FElysiumEntity* GetNextTarget()	FElysiumNpcBase	CBaseEntity	0x100a1d20	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+174	StartTouch	void StartTouch(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a49d0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+175	Touch	void Touch(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a4af0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+176	EndTouch	void EndTouch(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a4c20	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+177	StartBlocked	void StartBlocked(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x10027080	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+178	Blocked	void Blocked(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100a4d40	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+179	EndBlocked	void EndBlocked()	FElysiumNpcBase	CBaseEntity	0x100270a0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+180	UpdateOnRemove	void UpdateOnRemove()	-	CBaseEntity	0x100a47d0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+180	UpdateOnRemove	void UpdateOnRemove()	-	CBaseCombatCharacter	0x10327790	new	-	CBaseEntity	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+180	UpdateOnRemove	void UpdateOnRemove()	FElysiumNpc	CAI_BaseNPCTroika	0x1028d6e0	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+180	UpdateOnRemove	void UpdateOnRemove()	FElysiumNpcBase	CAI_BaseNPC	0x1027ca30	stub	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+181	Teleport	void Teleport(FVector*, FRotator*, FVector*)	FElysiumNpcBase	CBaseEntity	0x100ada20	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+182	Slot182	void Slot182(int32, int32, int32, int32)	FElysiumNpcBase	CBaseEntity	0x100ad8f0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+183	NotifySystemEvent	void NotifySystemEvent(FElysiumEntity*, int32, void*)	FElysiumNpcBase	CBaseEntity	0x100ad910	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+184	MakeTracer	void MakeTracer(const FVector&, void*, int32)	FElysiumNpcBase	CBaseEntity	0x10267260	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+185	FireBullets	void FireBullets(void*)	FElysiumNpcBase	CBaseEntity	0x10268900	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	keeps its +0x98 arm through AsNpc() (retail reads CBaseEntity +0x98 m_pBaseNPCTroika); the defining cpp includes ElysiumNpc.h
+186	Slot186	bool Slot186()	FElysiumNpcBase	CBaseEntity	0x100270c0	default	rule	CBaseEntity	FElysiumEntity	move	6c	-
+187	Respawn	FElysiumEntity* Respawn()	FElysiumNpcBase	CBaseEntity	0x100270e0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+188	IsLockedByMaster	bool IsLockedByMaster()	FElysiumNpcBase	CBaseEntity	0x10027100	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+189	GetDamageType	int32 GetDamageType() const	FElysiumNpcBase	CBaseEntity	0x100ad850	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+190	GetDamage	float GetDamage()	FElysiumNpcBase	CBaseEntity	0x10027120	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+191	SetDamage	void SetDamage(float)	FElysiumNpcBase	CBaseEntity	0x10027140	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+192	WorldSpaceCenter	FVector WorldSpaceCenter()	FElysiumNpcBase	CBaseEntity	0x10027160	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+194	EyeAngles	void* EyeAngles()	FElysiumNpcBase	CBaseEntity	0x100b4bc0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+195	LocalEyeAngles	void* LocalEyeAngles()	FElysiumNpcBase	CBaseEntity	0x100b4be0	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+196	EarPosition	FVector EarPosition()	FElysiumNpcBase	CBaseEntity	0x100b4c00	hand	rule	CBaseEntity	FElysiumEntity	move-hand	6d	-
+197	BodyTarget	FVector BodyTarget(const FVector&, bool, bool)	-	CBaseEntity	0x1009f2c0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+197	BodyTarget	FVector BodyTarget(const FVector&, bool, bool)	FElysiumNpcBase	CAI_BaseNPC	0x102789c0	hand	rule	CBaseEntity	FElysiumNpcBase	keep	-	-
+198	GetLocalVelocity	void* GetLocalVelocity()	FElysiumNpcBase	CBaseEntity	0x100274b0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+199	GetVelocity	void GetVelocity(FVector*, void*)	-	CBaseEntity	0x100ad1a0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+199	GetVelocity	void GetVelocity(FVector*, void*)	FElysiumNpcBase	CBaseAnimating	0x10095e50	stub	-	CBaseEntity	FElysiumAnimating	move	6c	-
+200	Illumination	int32 Illumination()	FElysiumNpcBase	CBaseEntity	0x100ad6e0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+201	FVisible	bool FVisible(FElysiumEntity*, int32, FElysiumEntity*, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4630	hand	rule	CBaseEntity	FElysiumNpc	keep	-	-
+201	FVisible	bool FVisible(FElysiumEntity*, int32, FElysiumEntity*, int32)	FElysiumNpcBase	CBaseEntity	0x100a6fa0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+203	GetAttackDamageScale	float GetAttackDamageScale()	FElysiumNpcBase	CBaseEntity	0x100a1360	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+204	GetReceivedDamageScale	float GetReceivedDamageScale()	FElysiumNpcBase	CBaseEntity	0x100a1470	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+205	Slot205	bool Slot205()	FElysiumNpcBase	CBaseEntity	0x10027330	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+206	Slot206	bool Slot206(int32, int32, int32, int32, int32)	FElysiumNpcBase	CBaseEntity	0x10027350	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+207	IsCurrentlyTouching	bool IsCurrentlyTouching() const	FElysiumNpcBase	CBaseEntity	0x1003d3d0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+208	SetGroundEntity	void SetGroundEntity(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100b1420	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+209	GetGroundEntity	FElysiumEntity* GetGroundEntity()	FElysiumNpcBase	CBaseEntity	0x100b1510	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+210	GetGroundVelocityToApply	void GetGroundVelocityToApply(FVector&)	FElysiumNpcBase	CBaseEntity	0x10027370	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+211	GetSolidFlags	int32 GetSolidFlags() const	FElysiumNpcBase	CBaseEntity	0x100274d0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+212	SetModelName	void SetModelName(FName)	FElysiumNpcBase	CBaseEntity	0x100b15f0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+213	SetSize	void SetSize(const FVector&)	FElysiumNpcBase	CBaseEntity	0x100b1890	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+214	GetSize	void* GetSize()	FElysiumNpcBase	CBaseEntity	0x100b1960	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+215	WorldSpaceCenter	void* WorldSpaceCenter() const	FElysiumNpcBase	CBaseEntity	0x100b4c30	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+216	SetAbsOrigin	void SetAbsOrigin(FVector&)	FElysiumNpcBase	CBaseEntity	0x100b2300	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+217	GetAbsOrigin	void* GetAbsOrigin() const	FElysiumNpcBase	CBaseEntity	0x100b31b0	stub	-	CBaseEntity	FElysiumEntity	adapter:Origin	6e	returns const FVector& of Origin (port units); was a void* lowering
+218	SetAbsAngles	void SetAbsAngles(FRotator&)	FElysiumNpcBase	CBaseEntity	0x100b2510	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+219	GetAbsAngles	void* GetAbsAngles() const	FElysiumNpcBase	CBaseEntity	0x100b3280	stub	-	CBaseEntity	FElysiumEntity	adapter:Angles	6e	returns const FVector& of Angles (Source degrees); the port has no local/abs split
+220	GetOrigin	void* GetOrigin()	FElysiumNpcBase	CBaseEntity	0x100b3070	stub	-	CBaseEntity	FElysiumEntity	adapter:Origin	6e	the port has no local/abs split: equal to 217 for a parented entity (named modernization)
+221	GetAngles	void* GetAngles()	FElysiumNpcBase	CBaseEntity	0x100b3110	stub	-	CBaseEntity	FElysiumEntity	adapter:Angles	6e	folds RetailGetAnglesDegrees; 194/195 follow
+222	GetSoundEmissionOrigin	FVector GetSoundEmissionOrigin() const	FElysiumNpcBase	CBaseEntity	0x100a9eb0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+223	CreateVPhysics	bool CreateVPhysics()	-	CBaseEntity	0x100b5080	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+223	CreateVPhysics	bool CreateVPhysics()	FElysiumNpcBase	CAI_BaseNPC	0x10273720	hand	mechanism	CBaseEntity	FElysiumNpcBase	keep	-	-
+224	ForceVPhysicsCollide	bool ForceVPhysicsCollide(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100273b0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+225	VPhysicsDestroyObject	void VPhysicsDestroyObject()	FElysiumNpcBase	CBaseEntity	0x100b5040	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+226	VPhysicsUpdate	void VPhysicsUpdate(void*)	FElysiumNpcBase	CBaseEntity	0x100b4f30	hand	mechanism	CBaseEntity	FElysiumEntity	move-hand	6d	-
+227	VPhysicsTakeDamage	int32 VPhysicsTakeDamage(void*)	FElysiumNpcBase	CBaseEntity	0x100a1580	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+228	VPhysicsShadowCollision	void VPhysicsShadowCollision(int32, void*)	-	CBaseEntity	0x100a65a0	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+228	VPhysicsShadowCollision	void VPhysicsShadowCollision(int32, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x10334a50	stub	-	CBaseEntity	FElysiumCombatCharacter	move	6c	-
+229	VPhysicsShadowUpdate	void VPhysicsShadowUpdate(void*)	FElysiumNpcBase	CBaseEntity	0x100273d0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+230	VPhysicsCollision	void VPhysicsCollision(int32, void*)	FElysiumNpcBase	CBaseEntity	0x100a6640	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+231	VPhysicsFriction	void VPhysicsFriction(void*, float, int32, int32)	FElysiumNpcBase	CBaseEntity	0x100a6800	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+232	UpdatePhysicsShadowToCurrentPosition	void UpdatePhysicsShadowToCurrentPosition(float)	FElysiumNpcBase	CBaseEntity	0x100a69e0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+233	VPhysicsGetObjectList	int32 VPhysicsGetObjectList(void*, int32)	FElysiumNpcBase	CBaseEntity	0x100a6ad0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+234	PhysicsPushEntity	void PhysicsPushEntity(FVector&, void*)	FElysiumNpcBase	CBaseEntity	0x10035780	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+235	OnPhysGunPickup	void OnPhysGunPickup(FElysiumEntity*)	FElysiumNpcBase	CBaseEntity	0x100273f0	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+236	OnPhysGunDrop	void OnPhysGunDrop(FElysiumEntity*, bool)	FElysiumNpcBase	CBaseEntity	0x10027410	default	dead	CBaseEntity	FElysiumEntity	move	6c	-
+237	PhysicsSolidMaskForEntity	int32 PhysicsSolidMaskForEntity() const	FElysiumNpcBase	CBaseEntity	0x1003e7a0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+238	PerformCustomPhysics	void PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotator*)	FElysiumNpcBase	CBaseEntity	0x10039ff0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+239	PhysicsPushRotate	FElysiumEntity* PhysicsPushRotate(float)	FElysiumNpcBase	CBaseEntity	0x100389e0	stub	-	CBaseEntity	FElysiumEntity	move	6c	-
+240	Slot240	void* Slot240()	-	CBaseEntity	0x10027430	new	-	CBaseEntity	FElysiumEntity	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+240	Slot240	void* Slot240()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f8b0	hand	dead	CBaseEntity	FElysiumCombatCharacter	move-hand	6d	-
+241	GetEventName	void GetEventName(TCHAR*, void*)	FElysiumNpcBase	CBaseAnimating	0x1008c170	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+242	GetIdealYawSpeed	float GetIdealYawSpeed()	FElysiumNpcBase	CBaseAnimating	0x100916a0	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+243	BurnModel	void BurnModel(const TCHAR*, bool)	FElysiumNpcBase	CBaseAnimating	0x10090580	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+244	GetSkeletonModelName	const TCHAR* GetSkeletonModelName()	-	CBaseAnimating	0x1004fc30	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+244	GetSkeletonModelName	const TCHAR* GetSkeletonModelName()	FElysiumNpcBase	CBaseCombatCharacter	0x103408e0	stub	-	CBaseAnimating	FElysiumCombatCharacter	move	6c	-
+245	AddExtraAnimationModels	void AddExtraAnimationModels(FElysiumEntity*, const TCHAR*, const TCHAR*, int32, int32)	FElysiumNpcBase	CBaseAnimating	0x1008e0a0	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+246	RemoveExtraAnimationModels	void RemoveExtraAnimationModels()	FElysiumNpcBase	CBaseAnimating	0x1008e310	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+247	SetAttackExtentsForSequence	void SetAttackExtentsForSequence(int32)	FElysiumNpcBase	CBaseAnimating	0x10090c80	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+248	GetIdealSpeed	float GetIdealSpeed() const	FElysiumNpcBase	CBaseAnimating	0x10091740	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+249	GetIdealAccel	float GetIdealAccel() const	FElysiumNpcBase	CBaseAnimating	0x100917e0	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+250	StudioFrameAdvance	float StudioFrameAdvance(float)	-	CBaseAnimating	0x1008f120	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+250	StudioFrameAdvance	float StudioFrameAdvance(float)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10098bb0	stub	-	CBaseAnimating	FElysiumAnimatingOverlay	move	6c	-
+251	IsActivityFinished	bool IsActivityFinished()	-	CBaseAnimating	0x1004fc70	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+251	IsActivityFinished	bool IsActivityFinished()	FElysiumNpcBase	CAI_BaseNPC	0x10272900	hand	rule	CBaseAnimating	FElysiumNpcBase	keep	-	-
+252	SelectWeightedSequenceForStat	int32 SelectWeightedSequenceForStat(int32, int32, int32)	-	CBaseAnimating	0x1008f3c0	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+252	SelectWeightedSequenceForStat	int32 SelectWeightedSequenceForStat(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x103251c0	stub	-	CBaseAnimating	FElysiumCombatCharacter	move	6c	-
+253	SelectHeaviestSequenceForStat	int32 SelectHeaviestSequenceForStat(int32, int32, int32)	-	CBaseAnimating	0x1008f600	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+253	SelectHeaviestSequenceForStat	int32 SelectHeaviestSequenceForStat(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10325440	stub	-	CBaseAnimating	FElysiumCombatCharacter	move	6c	-
+254	SelectSameSequenceForStat	int32 SelectSameSequenceForStat(int32, int32, int32)	-	CBaseAnimating	0x1008f480	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+254	SelectSameSequenceForStat	int32 SelectSameSequenceForStat(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10325300	stub	-	CBaseAnimating	FElysiumCombatCharacter	move	6c	-
+255	GetSkeleton	void GetSkeleton(FVector*, void*, int32)	-	CBaseAnimating	0x10095fe0	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+255	GetSkeleton	void GetSkeleton(FVector*, void*, int32)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10098eb0	stub	mechanism	CBaseAnimating	FElysiumAnimatingOverlay	move	6c	-
+256	GetBoneTransform	void GetBoneTransform(int32, void*)	FElysiumNpcBase	CBaseAnimating	0x100927f0	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+257	SetupBones	void SetupBones(void*, int32)	FElysiumNpcBase	CBaseAnimating	0x10092b50	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+258	DispatchAnimEvents	void DispatchAnimEvents(float, FElysiumEntity*)	-	CBaseAnimating	0x10091880	new	-	CBaseAnimating	FElysiumAnimating	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+258	DispatchAnimEvents	void DispatchAnimEvents(float, FElysiumEntity*)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10098c80	stub	-	CBaseAnimating	FElysiumAnimatingOverlay	move	6c	-
+260	SetPoseParameter02	float SetPoseParameter02(int32, float)	FElysiumNpcBase	CBaseAnimating	0x10091fe0	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+261	SetPoseParameter01	float SetPoseParameter01(const TCHAR*, float)	FElysiumNpcBase	CBaseAnimating	0x10091f10	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+262	GetAttachment03	bool GetAttachment03(int32, void*)	FElysiumNpcBase	CBaseAnimating	0x10093000	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+263	GetGroundSpeedVelocity	FVector GetGroundSpeedVelocity()	FElysiumNpcBase	CBaseAnimating	0x10094870	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+264	DrawServerHitboxes	void DrawServerHitboxes()	FElysiumNpcBase	CBaseAnimating	0x10096980	stub	-	CBaseAnimating	FElysiumAnimating	move	6c	-
+265	AddFlinchGesture	void AddFlinchGesture(int32, float, float, const TCHAR*, float)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099690	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+266	Slot266	void Slot266()	FElysiumNpcBase	CBaseAnimatingOverlay	0x100997f0	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+267	GetFirstGestureLayer	int32 GetFirstGestureLayer()	FElysiumNpcBase	CBaseAnimatingOverlay	0x10098a40	default	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move	6c	-
+268	SetLayer	void SetLayer(int32, int32, int32, bool)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099020	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+269	RemoveLayer	void RemoveLayer(int32)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099660	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+270	HasLayer	bool HasLayer(int32)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099540	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+271	FindLayerByOwner	int32 FindLayerByOwner(int32)	FElysiumNpcBase	CBaseAnimatingOverlay	0x100994c0	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+272	AllocateLayer	int32 AllocateLayer()	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099470	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+273	RestartGesture	void RestartGesture(int32, bool, bool)	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099570	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+274	RemoveLayerByOwner	void RemoveLayerByOwner(int32)	FElysiumNpcBase	CBaseAnimatingOverlay	0x100995e0	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+275	RemoveAllGestures	void RemoveAllGestures()	FElysiumNpcBase	CBaseAnimatingOverlay	0x10099630	hand	mechanism	CBaseAnimatingOverlay	FElysiumAnimatingOverlay	move-hand	6d	-
+276	Blink	void Blink()	FElysiumNpcBase	CBaseFlex	0x100b5ce0	stub	-	CBaseFlex	FElysiumFlex	move	6c	-
+277	SetViewtarget	void SetViewtarget(const FVector&)	FElysiumNpcBase	CBaseFlex	0x100b5b00	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+278	GetViewtarget	void* GetViewtarget() const	FElysiumNpcBase	CBaseFlex	0x100b5b40	stub	-	CBaseFlex	FElysiumFlex	move	6c	-
+279	SetFlexWeight	void SetFlexWeight(int32, float)	FElysiumNpcBase	CBaseFlex	0x100b5ba0	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+280	SetFlexWeight	void SetFlexWeight(TCHAR*, float)	FElysiumNpcBase	CBaseFlex	0x100b5b60	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+281	GetFlexWeight	float GetFlexWeight(int32)	FElysiumNpcBase	CBaseFlex	0x100b5c50	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+282	GetFlexWeight	float GetFlexWeight(TCHAR*)	FElysiumNpcBase	CBaseFlex	0x100b5c20	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+283	ProcessSceneEvents	void ProcessSceneEvents()	FElysiumNpcBase	CBaseFlex	0x100b6250	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+284	AddSceneExpressions	void AddSceneExpressions()	-	CBaseFlex	0x100b65b0	new	-	CBaseFlex	FElysiumFlex	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+284	AddSceneExpressions	void AddSceneExpressions()	FElysiumNpcBase	CBaseCombatCharacter	0x10105f30	stub	-	CBaseFlex	FElysiumCombatCharacter	move	6c	-
+285	ClearSceneEvents	void ClearSceneEvents(void*)	FElysiumNpcBase	CBaseFlex	0x100b5d80	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+286	AddSceneEvent	void AddSceneEvent(void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c1680	hand	rule	CBaseFlex	FElysiumNpc	keep	-	-
+286	AddSceneEvent	void AddSceneEvent(void*, void*)	FElysiumNpcBase	CBaseFlex	0x100b5e60	stub	mechanism	CBaseFlex	FElysiumFlex	move	6c	-
+287	RemoveSceneEvent	void RemoveSceneEvent(void*)	FElysiumNpcBase	CBaseFlex	0x100b6180	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+288	AddFlexSetting	void AddFlexSetting(const TCHAR*, float, void*, void*, bool)	FElysiumNpcBase	CBaseFlex	0x100b6cf0	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+289	AddFlexAnimation	void AddFlexAnimation(void*)	FElysiumNpcBase	CBaseFlex	0x100b6960	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+290	ProcessSequenceSceneEvent	void ProcessSequenceSceneEvent(void*)	FElysiumNpcBase	CBaseFlex	0x100b70e0	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+291	ProcessGestureSceneEvent	void ProcessGestureSceneEvent(void*)	FElysiumNpcBase	CBaseFlex	0x100b7040	hand	mechanism	CBaseFlex	FElysiumFlex	move-hand	6d	-
+292	DamageFlinch	void DamageFlinch(void*, const FVector&, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x103229d0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+293	GetFollowerBoss	FElysiumEntity* GetFollowerBoss()	FElysiumNpc	CAI_BaseNPCTroika	0x102c5470	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+293	GetFollowerBoss	FElysiumEntity* GetFollowerBoss()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f6f0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+295	CanTalk	bool CanTalk(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c21c0	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+295	CanTalk	bool CanTalk(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x103417b0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+296	Slot296	bool Slot296(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10348ba0	hand	dead	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+297	AdjustDialogReaction	void AdjustDialogReaction(FElysiumEntity*, int32, const TCHAR*)	FElysiumNpcBase	CBaseCombatCharacter	0x10332ef0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+298	GetMaxInvenSlotsPerSection	int32 GetMaxInvenSlotsPerSection(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10323c20	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+299	CreateDamageEffects	void CreateDamageEffects(void*, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x10330d00	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+300	Event_TookLife	void Event_TookLife(FElysiumEntity*, bool, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1032c580	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+301	CreateCorpse	void CreateCorpse(const FVector&, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x1032c0e0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+302	Inventory_ShouldAllow_Autopickup	bool Inventory_ShouldAllow_Autopickup(FElysiumEntity*, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x10335f60	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+303	Inventory_ShouldAllow_AutopickupAmmo	bool Inventory_ShouldAllow_AutopickupAmmo(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10336000	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+304	GiveBaseFightingItems	void GiveBaseFightingItems()	FElysiumNpc	CAI_BaseNPCTroika	0x102b5b20	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+304	GiveBaseFightingItems	void GiveBaseFightingItems()	FElysiumNpcBase	CBaseCombatCharacter	0x1033dde0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+305	RemoveBaseFightingItems	void RemoveBaseFightingItems()	FElysiumNpc	CAI_BaseNPCTroika	0x102b5b70	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+305	RemoveBaseFightingItems	void RemoveBaseFightingItems()	FElysiumNpcBase	CBaseCombatCharacter	0x1033deb0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+306	LookAtEntity	void LookAtEntity(FElysiumEntity*, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1033e370	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+307	HasUsableMeleeWeapon	bool HasUsableMeleeWeapon()	FElysiumNpcBase	CBaseCombatCharacter	0x10336cd0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+308	HasUsableRangedWeapon	bool HasUsableRangedWeapon()	FElysiumNpcBase	CBaseCombatCharacter	0x10336d70	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+309	GetBestRangedWeapon	FElysiumEntity* GetBestRangedWeapon()	FElysiumNpcBase	CBaseCombatCharacter	0x10337080	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+310	SetActivity	void SetActivity(int32)	-	CBaseCombatCharacter	0x10324430	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+310	SetActivity	void SetActivity(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x10295750	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+310	SetActivity	void SetActivity(int32)	FElysiumNpcBase	CAI_BaseNPC	0x102725d0	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+311	ForcePreTranslatedSequenceAndActivity	void ForcePreTranslatedSequenceAndActivity(int32, int32, int32)	-	CBaseCombatCharacter	0x103250d0	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+311	ForcePreTranslatedSequenceAndActivity	void ForcePreTranslatedSequenceAndActivity(int32, int32, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10272400	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+313	UpdatePresenceEffect	void UpdatePresenceEffect()	FElysiumNpcBase	CBaseCombatCharacter	0x10322b40	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+314	UpdatePoseParameters	void UpdatePoseParameters(float)	FElysiumNpc	CAI_BaseNPCTroika	0x102bf070	hand	mechanism	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+314	UpdatePoseParameters	void UpdatePoseParameters(float)	FElysiumNpcBase	CBaseCombatCharacter	0x10054060	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+315	MeleeSwingUpdate	void MeleeSwingUpdate()	FElysiumNpcBase	CBaseCombatCharacter	0x10346cd0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+316	Slot316	void Slot316(FElysiumEntity*, bool, bool)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fa50	stub	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+316	Slot316	void Slot316(FElysiumEntity*, bool, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f710	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+317	Slot317	bool Slot317(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fb70	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+317	Slot317	bool Slot317(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f730	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+318	PlayerDefenderBlockReaction	bool PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fcf0	stub	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+318	PlayerDefenderBlockReaction	bool PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f750	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+319	PlayerAttackerBlockedReaction	bool PlayerAttackerBlockedReaction(FElysiumEntity*, void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fdb0	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+319	PlayerAttackerBlockedReaction	bool PlayerAttackerBlockedReaction(FElysiumEntity*, void*, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f770	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+320	PlayerKnockbackReaction	bool PlayerKnockbackReaction(FElysiumEntity*, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102a01b0	stub	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+320	PlayerKnockbackReaction	bool PlayerKnockbackReaction(FElysiumEntity*, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f790	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+321	Slot321	bool Slot321(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f7b0	default	dead	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+322	Slot322	void Slot322(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102a0910	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+322	Slot322	void Slot322(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f7d0	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+323	Slot323	int32 Slot323(const FVector&)	FElysiumNpcBase	CBaseCombatCharacter	0x10344dd0	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+324	Slot324	bool Slot324()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f7f0	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+325	Slot325	bool Slot325()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f810	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+326	Slot326	bool Slot326(void*, FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fec0	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+326	Slot326	bool Slot326(void*, FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x103482e0	stub	present	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+327	Slot327	bool Slot327()	FElysiumNpcBase	CBaseCombatCharacter	0x10345460	default	dead	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+328	Slot328	bool Slot328()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f830	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+329	Slot329	bool Slot329()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f850	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+330	Slot330	void Slot330(float, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029fbe0	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+330	Slot330	void Slot330(float, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f870	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+331	ChooseMeleeAttackSequence	bool ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, int32, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x10347180	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+332	Slot332	void Slot332(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f890	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+333	MaintainEyeDirection	void MaintainEyeDirection(float)	-	CBaseCombatCharacter	0x10325580	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+333	MaintainEyeDirection	void MaintainEyeDirection(float)	FElysiumNpc	CAI_BaseNPCTroika	0x102bff20	hand	present	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+333	MaintainEyeDirection	void MaintainEyeDirection(float)	FElysiumNpcBase	CAI_BaseNPC	0x1026b810	stub	present	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+334	Slot334	bool Slot334(int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10330020	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+335	NotifyChangeSizeSmall	void NotifyChangeSizeSmall()	FElysiumNpcBase	CBaseCombatCharacter	0x103415f0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+336	NotifyChangeSizeNormal	void NotifyChangeSizeNormal()	FElysiumNpcBase	CBaseCombatCharacter	0x10341680	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+337	GetUsedHullBits	int32 GetUsedHullBits()	-	CBaseCombatCharacter	0x10341710	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+337	GetUsedHullBits	int32 GetUsedHullBits()	FElysiumNpc	CAI_BaseNPCTroika	0x1029a050	hand	mechanism	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+337	GetUsedHullBits	int32 GetUsedHullBits()	FElysiumNpcBase	CAI_BaseNPC	0x10270820	stub	mechanism	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+338	AddPreDisciplineEffect	void AddPreDisciplineEffect(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1033cc30	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+339	AddDisciplineEffect	void AddDisciplineEffect(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1033cd70	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+340	RemovePreDisciplineEffects	void RemovePreDisciplineEffects(int32, int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1033ccd0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+341	RemoveDisciplineEffects	void RemoveDisciplineEffects(int32, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1033cef0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+342	CanBeFedUponBy	bool CanBeFedUponBy(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c4a60	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+342	CanBeFedUponBy	bool CanBeFedUponBy(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10339800	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+343	SetShakyHands	void SetShakyHands(float, float, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10053e20	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+344	GetShakyHandsIntensity	float GetShakyHandsIntensity()	FElysiumNpcBase	CBaseCombatCharacter	0x10053fa0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+345	SetPoseParameter	float SetPoseParameter(const TCHAR*, float, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1032fb80	hand	mechanism	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+346	SetPoseParameter	float SetPoseParameter(int32, float, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1032fc50	hand	mechanism	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+347	GetExpressionEventParams	bool GetExpressionEventParams(int32, TCHAR*, void*, void*, void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c1c10	hand	mechanism	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+347	GetExpressionEventParams	bool GetExpressionEventParams(int32, TCHAR*, void*, void*, void*, void*)	FElysiumNpcBase	CBaseCombatCharacter	0x10107120	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+348	HealthToPercent	int32 HealthToPercent()	FElysiumNpcBase	CBaseCombatCharacter	0x1032fe60	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+349	InputBarterBegin	void InputBarterBegin(void*)	FElysiumNpcBase	CBaseCombatCharacter	0x103412b0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+350	InputBarterEnd	void InputBarterEnd(void*)	FElysiumNpcBase	CBaseCombatCharacter	0x10341450	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+354	Slot354	void Slot354()	-	CBaseCombatCharacter	0x1014f8d0	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+354	Slot354	void Slot354()	FElysiumNpcBase	CAI_BaseNPC	0x1026cec0	stub	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+355	Slot355	void Slot355()	-	CBaseCombatCharacter	0x1014f8f0	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+355	Slot355	void Slot355()	FElysiumNpcBase	CAI_BaseNPC	0x1026cf90	hand	present	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+356	PrayerBegin	void PrayerBegin()	FElysiumNpcBase	CBaseCombatCharacter	0x1033b500	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+357	Slot357	void Slot357()	FElysiumNpcBase	CBaseCombatCharacter	0x1033b5f0	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+358	PrayerEnd	void PrayerEnd()	FElysiumNpcBase	CBaseCombatCharacter	0x1033b890	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+359	Slot359	int32 Slot359(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029e750	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+359	Slot359	int32 Slot359(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f910	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+360	Slot360	bool Slot360()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f930	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+361	Slot361	bool Slot361()	FElysiumNpcBase	CBaseCombatCharacter	0x1014f950	default	dead	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+362	FInViewCone	bool FInViewCone(const FVector&)	FElysiumNpcBase	CBaseCombatCharacter	0x10326a20	hand	present	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+363	FInViewCone	bool FInViewCone(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4540	hand	present	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+363	FInViewCone	bool FInViewCone(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10326750	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+364	FInAimCone	bool FInAimCone(const FVector&)	FElysiumNpcBase	CBaseCombatCharacter	0x10326bd0	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	keeps its +0x98 arm through AsNpc() (retail reads CBaseEntity +0x98 m_pBaseNPCTroika); the defining cpp includes ElysiumNpc.h
+365	FInAimCone	bool FInAimCone(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10326ae0	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	keeps its +0x98 arm through AsNpc() (retail reads CBaseEntity +0x98 m_pBaseNPCTroika); the defining cpp includes ElysiumNpc.h
+366	HandleInteraction	bool HandleInteraction(int32, void*, FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10326d40	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+367	BodyAngles	FRotator BodyAngles()	FElysiumNpcBase	CBaseCombatCharacter	0x10331880	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+369	BodyDirection3D	FVector BodyDirection3D()	FElysiumNpcBase	CBaseCombatCharacter	0x10331a40	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+370	HeadDirection2D	FVector HeadDirection2D()	FElysiumNpcBase	CBaseCombatCharacter	0x10331cb0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+371	HeadDirection3D	FVector HeadDirection3D()	FElysiumNpcBase	CBaseCombatCharacter	0x10331b30	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+372	EyeDirection2D	FVector EyeDirection2D()	-	CBaseCombatCharacter	0x1014f970	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+372	EyeDirection2D	FVector EyeDirection2D()	FElysiumNpcBase	CAI_BaseNPC	0x1026b210	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+373	EyeDirection3D	FVector EyeDirection3D()	-	CBaseCombatCharacter	0x1014f9a0	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+373	EyeDirection3D	FVector EyeDirection3D()	FElysiumNpcBase	CAI_BaseNPC	0x1026b240	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+374	GiveAmmo	int32 GiveAmmo(int32, int32, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x10334180	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+375	NPC_EarlyTranslateActivity	int32 NPC_EarlyTranslateActivity(int32)	-	CBaseCombatCharacter	0x10328030	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+375	NPC_EarlyTranslateActivity	int32 NPC_EarlyTranslateActivity(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x10295590	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+375	NPC_EarlyTranslateActivity	int32 NPC_EarlyTranslateActivity(int32)	FElysiumNpcBase	CAI_BaseNPC	0x10271f50	stub	present	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+376	NPC_TranslateActivity	int32 NPC_TranslateActivity(int32)	-	CBaseCombatCharacter	0x10328110	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+376	NPC_TranslateActivity	int32 NPC_TranslateActivity(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x10295710	hand	present	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+376	NPC_TranslateActivity	int32 NPC_TranslateActivity(int32)	FElysiumNpcBase	CAI_BaseNPC	0x10271f70	stub	present	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+377	Slot377	bool Slot377(FElysiumEntity*, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f9d0	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+378	Slot378	bool Slot378(FElysiumEntity*, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1014f9f0	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+381	Weapon_TranslateActivity	int32 Weapon_TranslateActivity(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10327ec0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+382	Weapon_CanUse	bool Weapon_CanUse(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1032d9b0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+383	Weapon_Equip	void Weapon_Equip(FElysiumEntity*, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1032d380	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+384	Weapon_EquipAmmoOnly	bool Weapon_EquipAmmoOnly(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x1032d6e0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+385	Weapon_Drop	void Weapon_Drop(FElysiumEntity*, const FVector*, bool)	FElysiumNpcBase	CBaseCombatCharacter	0x1032d0c0	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+386	Weapon_Drop	void Weapon_Drop()	FElysiumNpcBase	CBaseCombatCharacter	0x1032ce40	hand	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move-hand	6d	-
+387	Weapon_Drop_All	void Weapon_Drop_All()	FElysiumNpcBase	CBaseCombatCharacter	0x1032d2e0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+388	Weapon_Switch	bool Weapon_Switch(FElysiumEntity*, int32)	FElysiumNpcBase	CBaseCombatCharacter	0x1032dde0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6e	stub stays on CBaseCombatCharacter: FElysiumInventory::SetActiveWeapon is a partial Weapon_Switch (no Weapon_CanSwitchTo gate, armor branch, m_hLastWeapon/m_hLastMeleeWeapon, outgoing Holster refusal, Deploy); no port caller
+389	Weapon_ShootPosition	FVector Weapon_ShootPosition(const FVector&)	FElysiumNpcBase	CBaseCombatCharacter	0x103338c0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+390	OnTakeDamage_Alive	int32 OnTakeDamage_Alive(void*)	-	CBaseCombatCharacter	0x103302e0	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+390	OnTakeDamage_Alive	int32 OnTakeDamage_Alive(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102beda0	stub	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+390	OnTakeDamage_Alive	int32 OnTakeDamage_Alive(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10265ed0	stub	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+391	OnTakeDamage_Dying	int32 OnTakeDamage_Dying(void*)	FElysiumNpcBase	CBaseCombatCharacter	0x103315e0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+392	OnTakeDamage_Dead	int32 OnTakeDamage_Dead(void*)	-	CBaseCombatCharacter	0x10331680	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+392	OnTakeDamage_Dead	int32 OnTakeDamage_Dead(void*)	FElysiumNpcBase	CAI_BaseNPC	0x102664c0	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+393	GetDeathActivity	int32 GetDeathActivity()	FElysiumNpcBase	CBaseCombatCharacter	0x10327e20	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+394	CorpseGib	bool CorpseGib()	FElysiumNpcBase	CBaseCombatCharacter	0x10327a90	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+395	CorpseFade	void CorpseFade()	FElysiumNpcBase	CBaseCombatCharacter	0x10326040	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+396	HasHumanGibs	bool HasHumanGibs()	FElysiumNpcBase	CBaseCombatCharacter	0x10325f00	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+397	HasAlienGibs	bool HasAlienGibs()	FElysiumNpcBase	CBaseCombatCharacter	0x10325fa0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+398	HasExplosiveGibs	bool HasExplosiveGibs()	FElysiumNpcBase	CBaseCombatCharacter	0x10348a60	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+399	Slot399	bool Slot399()	FElysiumNpcBase	CBaseCombatCharacter	0x1014fa30	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+400	AllowsKnockbackBypass	bool AllowsKnockbackBypass()	FElysiumNpcBase	CBaseCombatCharacter	0x1014fa50	default	rule	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+401	KnockbackActivity_Default	int32 KnockbackActivity_Default(int32)	FElysiumNpcBase	CBaseCombatCharacter	0x10348b00	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+402	Event_Gibbed	bool Event_Gibbed()	-	CBaseCombatCharacter	0x1032af40	new	-	CBaseCombatCharacter	FElysiumCombatCharacter	new-chain-row	6c	the chain class's own body at this slot; the NPC runs a more-derived body
+402	Event_Gibbed	bool Event_Gibbed()	FElysiumNpcBase	CAI_BaseNPC	0x102658f0	hand	rule	CBaseCombatCharacter	FElysiumNpcBase	keep	-	-
+403	Event_Dying	void Event_Dying()	FElysiumNpcBase	CBaseCombatCharacter	0x1032bdf0	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+404	IRelationType	int32 IRelationType(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x10299da0	hand	rule	CBaseCombatCharacter	FElysiumNpc	keep	-	-
+404	IRelationType	int32 IRelationType(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10333340	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+405	IRelationPriority	int32 IRelationPriority(FElysiumEntity*)	FElysiumNpcBase	CBaseCombatCharacter	0x10333700	stub	-	CBaseCombatCharacter	FElysiumCombatCharacter	move	6c	-
+406	GetStateName	const TCHAR* GetStateName(EElysiumNpcState)	FElysiumNpcBase	CAI_BaseNPC	0x1027e740	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+407	GetNavTypeName	const TCHAR* GetNavTypeName(int32)	FElysiumNpcBase	CAI_BaseNPC	0x1027e7d0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+408	GetShortConditionName	const TCHAR* GetShortConditionName(int32)	FElysiumNpcBase	CAI_BaseNPC	0x1027ede0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+409	GetLastSharedCondition	int32 GetLastSharedCondition()	FElysiumNpcBase	CAI_BaseNPC	0x1027ee00	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+410	TranslateNavGoalPosition	const FVector* TranslateNavGoalPosition(const FVector*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6420	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+411	Slot411	void Slot411()	FElysiumNpcBase	CAI_BaseNPC	0x10280fd0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+412	GetLastUpdateThink	float GetLastUpdateThink()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa6d0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+412	GetLastUpdateThink	float GetLastUpdateThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a6440	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+413	GetLastNormalThink	float GetLastNormalThink()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa6f0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+413	GetLastNormalThink	float GetLastNormalThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a6460	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+414	GetLastMoveThink	float GetLastMoveThink()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa710	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+414	GetLastMoveThink	float GetLastMoveThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a6480	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+415	GetLastAIThink	float GetLastAIThink()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa730	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+415	GetLastAIThink	float GetLastAIThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a64a0	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+416	SetForceFrequentThink	void SetForceFrequentThink(bool)	FElysiumNpc	CAI_BaseNPCTroika	0x101aa750	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+416	SetForceFrequentThink	void SetForceFrequentThink(bool)	FElysiumNpcBase	CAI_BaseNPC	0x101a64c0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+417	GetForceFrequentThink	bool GetForceFrequentThink()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa770	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+417	GetForceFrequentThink	bool GetForceFrequentThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a64e0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+418	ResolveTaskDistance	float ResolveTaskDistance(float)	FElysiumNpc	CAI_BaseNPCTroika	0x102bf6e0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+418	ResolveTaskDistance	float ResolveTaskDistance(float)	FElysiumNpcBase	CAI_BaseNPC	0x102702d0	stub	unsettled	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+419	UpdateBurstShootPause	void UpdateBurstShootPause()	FElysiumNpc	CAI_BaseNPCTroika	0x102c5500	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+419	UpdateBurstShootPause	void UpdateBurstShootPause()	FElysiumNpcBase	CAI_BaseNPC	0x101a6500	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+420	NPCInit	void NPCInit()	FElysiumNpc	CAI_BaseNPCTroika	0x1029a0b0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+420	NPCInit	void NPCInit()	FElysiumNpcBase	CAI_BaseNPC	0x10273390	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+421	PostNPCInit	void PostNPCInit()	FElysiumNpcBase	CAI_BaseNPC	0x101a6540	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+422	StartNPC	void StartNPC()	FElysiumNpc	CAI_BaseNPCTroika	0x1029a8b0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+422	StartNPC	void StartNPC()	FElysiumNpcBase	CAI_BaseNPC	0x10273ad0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+423	IsTemplate	bool IsTemplate()	FElysiumNpcBase	CAI_BaseNPC	0x1027e120	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+424	CreateComponents	bool CreateComponents()	FElysiumNpcBase	CAI_BaseNPC	0x1027cae0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+425	CreateSenses	void* CreateSenses()	FElysiumNpcBase	CAI_BaseNPC	0x1027cc10	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+426	CreateMoveProbe	void* CreateMoveProbe()	FElysiumNpcBase	CAI_BaseNPC	0x1027cef0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+427	CreateMotor	void* CreateMotor()	FElysiumNpcBase	CAI_BaseNPC	0x1027cec0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+428	CreateLocalNavigator	void* CreateLocalNavigator()	FElysiumNpcBase	CAI_BaseNPC	0x1027cf60	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+429	CreateNavigator	void* CreateNavigator()	FElysiumNpcBase	CAI_BaseNPC	0x1027cf90	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+430	CreatePathfinder	void* CreatePathfinder()	FElysiumNpcBase	CAI_BaseNPC	0x1027cfc0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+431	NPCThink	void NPCThink()	FElysiumNpc	CAI_BaseNPCTroika	0x10292de0	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+431	NPCThink	void NPCThink()	FElysiumNpcBase	CAI_BaseNPC	0x1026ca80	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+432	RunAI	void RunAI(bool)	FElysiumNpc	CAI_BaseNPCTroika	0x1028fcc0	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+432	RunAI	void RunAI(bool)	FElysiumNpcBase	CAI_BaseNPC	0x1026f110	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+433	GatherConditions	void GatherConditions()	FElysiumNpc	CAI_BaseNPCTroika	0x102b27f0	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+433	GatherConditions	void GatherConditions()	FElysiumNpcBase	CAI_BaseNPC	0x1026ec30	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+434	PrescheduleThink	void PrescheduleThink()	FElysiumNpcBase	CAI_BaseNPC	0x101a6560	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+436	OnStartSchedule	void OnStartSchedule(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6580	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+437	PreSelectSchedule	int32 PreSelectSchedule()	FElysiumNpc	CAI_BaseNPCTroika	0x102ae920	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+437	PreSelectSchedule	int32 PreSelectSchedule()	FElysiumNpcBase	CAI_BaseNPC	0x1028a2a0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+439	SelectFailSchedule	int32 SelectFailSchedule(int32, int32, int32)	FElysiumNpcBase	CAI_BaseNPC	0x1028abe0	hand	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+441	StartTask	int32 StartTask(void*)	FElysiumNpcBase	CAI_BaseNPC	0x101a65a0	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+442	StartTaskSlot442	int32 StartTaskSlot442(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102a1910	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+442	StartTaskSlot442	int32 StartTaskSlot442(void*)	FElysiumNpcBase	CAI_BaseNPC	0x102827f0	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+443	RunTask	int32 RunTask(void*)	FElysiumNpcBase	CAI_BaseNPC	0x101a65e0	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+444	RunTaskSlot444	int32 RunTaskSlot444(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102aacf0	stub	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+444	RunTaskSlot444	int32 RunTaskSlot444(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10288780	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+445	StartTaskOverlay	void StartTaskOverlay()	FElysiumNpcBase	CAI_BaseNPC	0x10288710	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+446	GetScheduleOfType	void* GetScheduleOfType(int32)	FElysiumNpcBase	CAI_BaseNPC	0x102cc260	hand	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+447	GetLocalScheduleId	int32 GetLocalScheduleId(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6620	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+449	TaskName	TCHAR* TaskName(int32)	FElysiumNpcBase	CAI_BaseNPC	0x102cc350	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+450	GetLocalTaskId	int32 GetLocalTaskId(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6640	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+451	GetSchedulingErrorName	TCHAR* GetSchedulingErrorName()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa7b0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+451	GetSchedulingErrorName	TCHAR* GetSchedulingErrorName()	FElysiumNpcBase	CAI_BaseNPC	0x101a6660	stub	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+452	LoadedSchedules	bool LoadedSchedules()	FElysiumNpc	CAI_BaseNPCTroika	0x102b97f0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+452	LoadedSchedules	bool LoadedSchedules()	FElysiumNpcBase	CAI_BaseNPC	0x1027c2e0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+454	GetRunningBehavior	void* GetRunningBehavior()	FElysiumNpcBase	CAI_BaseNPC	0x101a6680	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+455	OnBehaviorChangeStatus	bool OnBehaviorChangeStatus(void*, bool)	FElysiumNpcBase	CAI_BaseNPC	0x101a66a0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+456	AccessBehaviors	void* AccessBehaviors()	FElysiumNpcBase	CAI_BaseNPC	0x101a66c0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+457	NumBehaviors	int32 NumBehaviors()	FElysiumNpcBase	CAI_BaseNPC	0x101a66e0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+458	ConditionName	const TCHAR* ConditionName(int32)	FElysiumNpcBase	CAI_BaseNPC	0x102cc300	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+459	RemoveIgnoredConditions	void RemoveIgnoredConditions()	FElysiumNpcBase	CAI_BaseNPC	0x1026d7f0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+460	PreSelectIdealState	EElysiumNpcState PreSelectIdealState()	FElysiumNpc	CAI_BaseNPCTroika	0x102ad340	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+460	PreSelectIdealState	EElysiumNpcState PreSelectIdealState()	FElysiumNpcBase	CAI_BaseNPC	0x1026f590	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+461	SelectIdealState	EElysiumNpcState SelectIdealState()	FElysiumNpc	CAI_BaseNPCTroika	0x102ad660	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+461	SelectIdealState	EElysiumNpcState SelectIdealState()	FElysiumNpcBase	CAI_BaseNPC	0x1026f660	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+462	ShouldGoToIdleState	bool ShouldGoToIdleState()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa6b0	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+462	ShouldGoToIdleState	bool ShouldGoToIdleState()	FElysiumNpcBase	CAI_BaseNPC	0x101a6700	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+463	OnStateChange	void OnStateChange(EElysiumNpcState, EElysiumNpcState)	FElysiumNpc	CAI_BaseNPCTroika	0x102ae140	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+463	OnStateChange	void OnStateChange(EElysiumNpcState, EElysiumNpcState)	FElysiumNpcBase	CAI_BaseNPC	0x1026e3e0	stub	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+464	GetState	EElysiumNpcState GetState()	FElysiumNpcBase	CAI_BaseNPC	0x101a6720	hand	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+465	OnChangeActivity	void OnChangeActivity(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x10295a60	default	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+465	OnChangeActivity	void OnChangeActivity(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6740	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+466	ShouldMaintainActivity	bool ShouldMaintainActivity()	FElysiumNpc	CAI_BaseNPCTroika	0x102bf510	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+466	ShouldMaintainActivity	bool ShouldMaintainActivity()	FElysiumNpcBase	CAI_BaseNPC	0x10272790	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+467	QueryHearSound	bool QueryHearSound(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b35b0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+467	QueryHearSound	bool QueryHearSound(void*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6760	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+468	QuerySeeEntity	bool QuerySeeEntity(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b38b0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+468	QuerySeeEntity	bool QuerySeeEntity(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6780	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+469	OnLooked	void OnLooked(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b39a0	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+469	OnLooked	void OnLooked(int32)	FElysiumNpcBase	CAI_BaseNPC	0x1026a2c0	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+470	OnListened	void OnListened()	FElysiumNpc	CAI_BaseNPCTroika	0x102b39e0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+470	OnListened	void OnListened()	FElysiumNpcBase	CAI_BaseNPC	0x1026a5e0	stub	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+471	GetReactionDelay	float GetReactionDelay()	FElysiumNpcBase	CAI_BaseNPC	0x1026a8a0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+472	OnSeeEntity	void OnSeeEntity(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b3e00	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+472	OnSeeEntity	void OnSeeEntity(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x101a67a0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+473	GetSoundInterests	int32 GetSoundInterests()	FElysiumNpc	CAI_BaseNPCTroika	0x102b4070	default	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+473	GetSoundInterests	int32 GetSoundInterests()	FElysiumNpcBase	CAI_BaseNPC	0x1026ae90	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+474	GetBestSound	void* GetBestSound()	FElysiumNpc	CAI_BaseNPCTroika	0x102b4520	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+474	GetBestSound	void* GetBestSound()	FElysiumNpcBase	CAI_BaseNPC	0x1026aef0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+475	GetBestScent	void* GetBestScent()	FElysiumNpcBase	CAI_BaseNPC	0x1026af30	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+476	HearingSensitivity	float HearingSensitivity()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa5f0	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+476	HearingSensitivity	float HearingSensitivity()	FElysiumNpcBase	CAI_BaseNPC	0x101a67c0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+477	ClearSenseConditions	void ClearSenseConditions()	FElysiumNpcBase	CAI_BaseNPC	0x1026e5c0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+478	BestEnemy	FElysiumEntity* BestEnemy()	FElysiumNpcBase	CAI_BaseNPC	0x102743c0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+479	IsValidEnemy	bool IsValidEnemy(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6820	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+480	ShouldChooseNewEnemy	bool ShouldChooseNewEnemy()	FElysiumNpcBase	CAI_BaseNPC	0x10279d00	hand	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+481	GatherEnemyConditions	void GatherEnemyConditions(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x10270b20	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+482	CanPlaySequence	int32 CanPlaySequence(bool, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10278090	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+483	CanPlaySentence	bool CanPlaySentence(bool)	FElysiumNpcBase	CAI_BaseNPC	0x101a6840	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+484	PlaySentence	int32 PlaySentence(const TCHAR*, float, float, int32, FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x10278e30	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+485	PlayScriptedSentence	int32 PlayScriptedSentence(const TCHAR*, float, float, int32, bool, FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x10279000	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+486	FOkToMakeSound	bool FOkToMakeSound()	FElysiumNpc	CAI_BaseNPCTroika	0x102b4c10	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+486	FOkToMakeSound	bool FOkToMakeSound()	FElysiumNpcBase	CAI_BaseNPC	0x1027a5c0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+487	JustMadeSound	void JustMadeSound()	FElysiumNpc	CAI_BaseNPCTroika	0x102b4c40	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+487	JustMadeSound	void JustMadeSound()	FElysiumNpcBase	CAI_BaseNPC	0x1027a640	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+488	DeathSound	void DeathSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10293ec0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+488	DeathSound	void DeathSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6880	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+489	AlertSound	void AlertSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10293f80	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+489	AlertSound	void AlertSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a68a0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+490	IdleSound	void IdleSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294280	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+490	IdleSound	void IdleSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a68c0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+491	PainSound	void PainSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294340	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+491	PainSound	void PainSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a68e0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+492	FearSound	void FearSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294400	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+492	FearSound	void FearSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6900	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+493	LostEnemySound	void LostEnemySound()	FElysiumNpc	CAI_BaseNPCTroika	0x102944c0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+493	LostEnemySound	void LostEnemySound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6920	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+494	FoundEnemySound	void FoundEnemySound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294590	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+494	FoundEnemySound	void FoundEnemySound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6940	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+495	SurprisedSound	void SurprisedSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294660	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+495	SurprisedSound	void SurprisedSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6960	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+496	TargetAcquiredSound	void TargetAcquiredSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294720	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+496	TargetAcquiredSound	void TargetAcquiredSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6980	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+497	Slot497	void Slot497()	FElysiumNpc	CAI_BaseNPCTroika	0x102947e0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+497	Slot497	void Slot497()	FElysiumNpcBase	CAI_BaseNPC	0x101a69a0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+498	FleeSound	void FleeSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294870	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+498	FleeSound	void FleeSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a69c0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+499	IdleAgitatedSound	void IdleAgitatedSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294930	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+499	IdleAgitatedSound	void IdleAgitatedSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a69e0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+500	ExertHvySound	void ExertHvySound()	FElysiumNpc	CAI_BaseNPCTroika	0x102949f0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+500	ExertHvySound	void ExertHvySound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6a00	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+501	ExertLightSound	void ExertLightSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294ab0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+501	ExertLightSound	void ExertLightSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6a20	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+502	RiledSound	void RiledSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294b70	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+502	RiledSound	void RiledSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6a40	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+503	ComfortSound	void ComfortSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294c30	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+503	ComfortSound	void ComfortSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6a60	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+504	UpsetSound	void UpsetSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294cf0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+504	UpsetSound	void UpsetSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6a80	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+505	TargetGiveUpSound	void TargetGiveUpSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294db0	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+505	TargetGiveUpSound	void TargetGiveUpSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6aa0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+506	Slot506	void Slot506()	FElysiumNpc	CAI_BaseNPCTroika	0x10294e70	hand	dead	CAI_BaseNPC	FElysiumNpc	keep	-	-
+506	Slot506	void Slot506()	FElysiumNpcBase	CAI_BaseNPC	0x101a6ac0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+507	FloatSound	void FloatSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294f40	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+507	FloatSound	void FloatSound()	FElysiumNpcBase	CAI_BaseNPC	0x101a6ae0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+508	SpeakSentence	void SpeakSentence(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6b00	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+509	ShouldPlayIdleSound	bool ShouldPlayIdleSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294040	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+509	ShouldPlayIdleSound	bool ShouldPlayIdleSound()	FElysiumNpcBase	CAI_BaseNPC	0x1027a420	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+510	ShouldPlayFloatSound	bool ShouldPlayFloatSound()	FElysiumNpc	CAI_BaseNPCTroika	0x10294070	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+510	ShouldPlayFloatSound	bool ShouldPlayFloatSound()	FElysiumNpcBase	CAI_BaseNPC	0x1027a530	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+511	StopLoopingSounds	void StopLoopingSounds()	FElysiumNpcBase	CAI_BaseNPC	0x1027caa0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+512	GetExpresser	void* GetExpresser()	FElysiumNpcBase	CAI_BaseNPC	0x101a6b20	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+513	CapabilitiesGet	int32 CapabilitiesGet() const	FElysiumNpcBase	CAI_BaseNPC	0x1026db30	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+514	MovementCost	bool MovementCost(int32, const FVector&, const FVector&, void*)	FElysiumNpcBase	CAI_BaseNPC	0x1027d9d0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+515	CalcIdealYaw	float CalcIdealYaw(const FVector&)	FElysiumNpcBase	CAI_BaseNPC	0x10274b30	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+516	MaxYawSpeed	float MaxYawSpeed()	FElysiumNpc	CAI_BaseNPCTroika	0x10297ce0	hand	mechanism	CAI_BaseNPC	FElysiumNpc	keep	-	-
+516	MaxYawSpeed	float MaxYawSpeed()	FElysiumNpcBase	CAI_BaseNPC	0x10280bb0	stub	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+517	AddFacingTarget	void AddFacingTarget(FElysiumEntity*, const FVector&, float, float, float)	FElysiumNpcBase	CAI_BaseNPC	0x10278d90	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+518	AddFacingTarget	void AddFacingTarget(const FVector&, float, float, float)	FElysiumNpcBase	CAI_BaseNPC	0x10278d20	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+519	AddFacingTarget	void AddFacingTarget(FElysiumEntity*, float, float, float)	FElysiumNpcBase	CAI_BaseNPC	0x10278cb0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+520	GetFacingDirection	float GetFacingDirection(FVector&)	FElysiumNpcBase	CAI_BaseNPC	0x10278e00	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+521	IsJumpLegal	bool IsJumpLegal(FVector&, FVector&, FVector&) const	FElysiumNpcBase	CAI_BaseNPC	0x10280880	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+522	StepHeight	float StepHeight() const	FElysiumNpcBase	CAI_BaseNPC	0x101a6b40	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+523	GetMaxJumpSpeed	float GetMaxJumpSpeed() const	FElysiumNpc	CAI_BaseNPCTroika	0x101aa670	hand	mechanism	CAI_BaseNPC	FElysiumNpc	keep	-	-
+523	GetMaxJumpSpeed	float GetMaxJumpSpeed() const	FElysiumNpcBase	CAI_BaseNPC	0x101a6b60	stub	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+524	GetJumpGravity	float GetJumpGravity() const	FElysiumNpcBase	CAI_BaseNPC	0x101a6b80	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+525	OverrideMove	bool OverrideMove(float)	FElysiumNpcBase	CAI_BaseNPC	0x1027da90	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+526	OverrideMoveFacing	bool OverrideMoveFacing(void*, float)	FElysiumNpcBase	CAI_BaseNPC	0x1027d9f0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+527	IsUnusableNode	bool IsUnusableNode(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x10293e80	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+527	IsUnusableNode	bool IsUnusableNode(void*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6ba0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+528	ValidateNavGoal	bool ValidateNavGoal()	FElysiumNpcBase	CAI_BaseNPC	0x10280360	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+529	IsCurTaskContinuousMove	bool IsCurTaskContinuousMove()	FElysiumNpcBase	CAI_BaseNPC	0x10280330	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+530	IsUnreachable	bool IsUnreachable(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x102741e0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+531	OnObstructingDoor	bool OnObstructingDoor(void*, FElysiumEntity*, float, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102984a0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+531	OnObstructingDoor	bool OnObstructingDoor(void*, FElysiumEntity*, float, void*)	FElysiumNpcBase	CAI_BaseNPC	0x1027dc80	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+532	Slot532	void Slot532(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x10290570	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+532	Slot532	void Slot532(int32)	FElysiumNpcBase	CAI_BaseNPC	0x1027e0f0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+533	EyeOffset	FVector EyeOffset(int32, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4ab0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+533	EyeOffset	FVector EyeOffset(int32, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10274db0	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+535	AddLookTarget	void AddLookTarget(const FVector&, float, float, float)	FElysiumNpcBase	CAI_BaseNPC	0x101a6be0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+536	AddLookTarget	void AddLookTarget(FElysiumEntity*, float, float, float)	FElysiumNpcBase	CAI_BaseNPC	0x101a6bc0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+537	SetHeadDirection	void SetHeadDirection(FVector&, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026af70	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+538	AimGun	void AimGun()	FElysiumNpcBase	CAI_BaseNPC	0x1026b4f0	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+539	SetAim	void SetAim(const FVector&)	FElysiumNpcBase	CAI_BaseNPC	0x1026b480	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+540	PlayScene	float PlayScene(const TCHAR*)	FElysiumNpcBase	CAI_BaseNPC	0x10279060	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+541	GetEnemies	void* GetEnemies()	FElysiumNpcBase	CAI_BaseNPC	0x10273e10	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+542	Slot542	void Slot542()	FElysiumNpcBase	CAI_BaseNPC	0x10273dd0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+543	RemoveMemory	void RemoveMemory()	FElysiumNpcBase	CAI_BaseNPC	0x10273e40	hand	mechanism	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+544	UpdateEnemyMemory	bool UpdateEnemyMemory(FElysiumEntity*, const FVector&, FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x102709c0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+545	InitSquad	bool InitSquad()	FElysiumNpcBase	CAI_BaseNPC	0x10273d30	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+546	SquadSlotName	const TCHAR* SquadSlotName(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6c00	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+547	GetSlotSchedule	int32 GetSlotSchedule(int32)	FElysiumNpcBase	CAI_BaseNPC	0x1028b0f0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+548	IsValidCover	bool IsValidCover(const FVector&, void*)	FElysiumNpcBase	CAI_BaseNPC	0x1028af20	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+549	IsValidShootPosition	bool IsValidShootPosition(const FVector&, void*)	FElysiumNpcBase	CAI_BaseNPC	0x1028b0b0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+550	CoverRadius	float CoverRadius()	FElysiumNpcBase	CAI_BaseNPC	0x101a6c20	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+551	OnChangeHintGroup	void OnChangeHintGroup(FName, FName)	FElysiumNpcBase	CAI_BaseNPC	0x101a6c40	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+552	ShouldFadeOnDeath	bool ShouldFadeOnDeath()	FElysiumNpcBase	CAI_BaseNPC	0x1027a400	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+553	RangeAttack1Conditions	int32 RangeAttack1Conditions(float, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026d890	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+554	RangeAttack2Conditions	int32 RangeAttack2Conditions(float, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026d920	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+555	MeleeAttack1Conditions	int32 MeleeAttack1Conditions(float, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026d9a0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+556	MeleeAttack2Conditions	int32 MeleeAttack2Conditions(float, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026da90	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+557	OnBeginMoveAndShoot	bool OnBeginMoveAndShoot()	FElysiumNpcBase	CAI_BaseNPC	0x101a6c60	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+558	OnEndMoveAndShoot	void OnEndMoveAndShoot()	FElysiumNpcBase	CAI_BaseNPC	0x101a6c80	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+559	FindNamedEntity	FElysiumEntity* FindNamedEntity(const TCHAR*)	FElysiumNpcBase	CAI_BaseNPC	0x10279090	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+560	ClearAttackConditions	void ClearAttackConditions()	FElysiumNpcBase	CAI_BaseNPC	0x1026dc80	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+561	GatherAttackConditions	void GatherAttackConditions(FElysiumEntity*, float)	FElysiumNpcBase	CAI_BaseNPC	0x1026dd10	hand	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+562	WeaponLOSCondition	bool WeaponLOSCondition(const FVector&, const FVector&, bool)	FElysiumNpcBase	CAI_BaseNPC	0x1026fbe0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+563	TranslateEnemyChasePosition	void TranslateEnemyChasePosition(FElysiumEntity*, FVector&, void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x10295300	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+563	TranslateEnemyChasePosition	void TranslateEnemyChasePosition(FElysiumEntity*, FVector&, void*, void*)	FElysiumNpcBase	CAI_BaseNPC	0x10289f20	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+564	FCanCheckAttacks	bool FCanCheckAttacks()	FElysiumNpc	CAI_BaseNPCTroika	0x102953a0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+564	FCanCheckAttacks	bool FCanCheckAttacks()	FElysiumNpcBase	CAI_BaseNPC	0x10270840	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+565	CheckAmmo	void CheckAmmo()	FElysiumNpcBase	CAI_BaseNPC	0x101a6ca0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+566	FValidateHintType	bool FValidateHintType(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x10295c20	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+566	FValidateHintType	bool FValidateHintType(void*)	FElysiumNpcBase	CAI_BaseNPC	0x1026a8d0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+567	GetHintActivity	int32 GetHintActivity(int16)	FElysiumNpcBase	CAI_BaseNPC	0x1026a8f0	default	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+568	GetHintDelay	float GetHintDelay(int16)	FElysiumNpcBase	CAI_BaseNPC	0x1026a910	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+569	GetCoverActivity	int32 GetCoverActivity(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x10297560	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+569	GetCoverActivity	int32 GetCoverActivity(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10274aa0	stub	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+570	GetReloadActivity	int32 GetReloadActivity(void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102954b0	hand	present	CAI_BaseNPC	FElysiumNpc	keep	-	-
+570	GetReloadActivity	int32 GetReloadActivity(void*)	FElysiumNpcBase	CAI_BaseNPC	0x10274820	stub	present	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+571	Slot571	int32 Slot571(float)	FElysiumNpcBase	CAI_BaseNPC	0x10289ce0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+572	SetTurnActivity	void SetTurnActivity()	FElysiumNpc	CAI_BaseNPCTroika	0x10297640	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+572	SetTurnActivity	void SetTurnActivity()	FElysiumNpcBase	CAI_BaseNPC	0x10289d10	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+573	InnateWeaponLOSCondition	bool InnateWeaponLOSCondition(const FVector&, const FVector&, bool)	FElysiumNpcBase	CAI_BaseNPC	0x1026fcf0	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+574	GetShootEnemyDir	FVector GetShootEnemyDir(const FVector&, int32, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10278900	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+575	ShouldMoveAndShoot	bool ShouldMoveAndShoot()	FElysiumNpc	CAI_BaseNPCTroika	0x102bf4a0	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+575	ShouldMoveAndShoot	bool ShouldMoveAndShoot()	FElysiumNpcBase	CAI_BaseNPC	0x10278c60	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+576	IsLightDamage	bool IsLightDamage(float, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10266630	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+577	IsHeavyDamage	bool IsHeavyDamage(float, int32)	FElysiumNpcBase	CAI_BaseNPC	0x10266660	hand	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+578	NotifyDeadFriend	void NotifyDeadFriend(FElysiumEntity*)	FElysiumNpcBase	CAI_BaseNPC	0x101a6cc0	default	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+579	Slot579	bool Slot579(int32)	FElysiumNpcBase	CAI_BaseNPC	0x101a6ce0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa790	hand	rule	CAI_BaseNPC	FElysiumNpc	keep	-	-
+580	GetClassScheduleIdSpace	void* GetClassScheduleIdSpace()	FElysiumNpcBase	CAI_BaseNPC	0x101a6d00	stub	rule	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+581	ReportAIState	void ReportAIState()	FElysiumNpcBase	CAI_BaseNPC	0x102779a0	hand	dead	CAI_BaseNPC	FElysiumNpcBase	keep	-	-
+582	ReportOverThinkLimit	void ReportOverThinkLimit(float)	FElysiumNpcBase	CAI_BaseNPC	0x10277d90	stub	dead	CAI_BaseNPC	FElysiumNpcBase	delete-dead	6f	dead verdict, no caller, no override in any class; census row stays, overlay target -
+583	Slot583	void Slot583(const FVector&)	FElysiumNpc	CAI_BaseNPCTroika	0x1028d860	hand	present	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+584	Slot584	void Slot584(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x1028d910	hand	present	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+585	ProcessTweakParam	void ProcessTweakParam(const TCHAR*, const TCHAR*)	FElysiumNpc	CAI_BaseNPCTroika	0x1029aa10	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+586	GetBestSeeUnknown	FElysiumEntityHandle GetBestSeeUnknown()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa5d0	hand	present	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+587	CanWitnessSupernatural	bool CanWitnessSupernatural(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x1028ef20	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+588	Slot588	void Slot588()	FElysiumNpc	CAI_BaseNPCTroika	0x10293e50	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+589	SetScriptedDiscipline	void SetScriptedDiscipline(int32, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102c2ec0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+590	OkToInterruptForMelee	bool OkToInterruptForMelee()	FElysiumNpc	CAI_BaseNPCTroika	0x1029f940	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+591	Slot591	bool Slot591()	FElysiumNpc	CAI_BaseNPCTroika	0x101aa690	default	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+592	CanSeekCover	bool CanSeekCover()	FElysiumNpc	CAI_BaseNPCTroika	0x102953e0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+593	Slot593	void Slot593()	FElysiumNpc	CAI_BaseNPCTroika	0x1029a070	hand	present	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+594	Slot594	bool Slot594(FElysiumEntity*, int32, FElysiumEntity*, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4760	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+595	AcquireNearestHatedTarget	void AcquireNearestHatedTarget()	FElysiumNpc	CAI_BaseNPCTroika	0x102b4cc0	stub	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+596	Slot596	void Slot596(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4f60	stub	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+597	Slot597	void Slot597(FElysiumEntity*, int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4fb0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+598	Slot598	void Slot598(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b4fe0	stub	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+599	Slot599	bool Slot599(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5650	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+600	Slot600	bool Slot600(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b57c0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+601	Slot601	void Slot601(FElysiumEntity*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b5880	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+602	Slot602	bool Slot602()	FElysiumNpc	CAI_BaseNPCTroika	0x102b5900	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+603	Slot603	float Slot603(void*, void*)	FElysiumNpc	CAI_BaseNPCTroika	0x102b59e0	stub	-	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+604	SelectScheduleMeleeCombat	int32 SelectScheduleMeleeCombat(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b6c30	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+605	SelectScheduleRangedCombat	int32 SelectScheduleRangedCombat(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b7fc0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+606	Slot606	int32 Slot606(int32)	FElysiumNpc	CAI_BaseNPCTroika	0x102b8320	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+607	Slot607	int32 Slot607()	FElysiumNpc	CAI_BaseNPCTroika	0x102b93c0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+608	Slot608	bool Slot608(const TCHAR*)	FElysiumNpc	CAI_BaseNPCTroika	0x102c48b0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+609	Slot609	void* Slot609(bool)	FElysiumNpc	CAI_BaseNPCTroika	0x102b6b50	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+610	Slot610	void Slot610(EElysiumNpcState)	FElysiumNpc	CAI_BaseNPCTroika	0x102adfe0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+611	Slot611	int32 Slot611()	FElysiumNpc	CAI_BaseNPCTroika	0x102c12a0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+612	Slot612	int32 Slot612()	FElysiumNpc	CAI_BaseNPCTroika	0x102c04b0	hand	mechanism	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+613	Slot613	bool Slot613()	FElysiumNpc	CAI_BaseNPCTroika	0x102c0b60	stub	-	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+615	CanBeSetOnFire	bool CanBeSetOnFire()	FElysiumNpc	CAI_BaseNPCTroika	0x102ad0c0	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
+616	Slot616	void Slot616()	FElysiumNpc	CAI_BaseNPCTroika	0x102ad110	hand	rule	CAI_BaseNPCTroika	FElysiumNpc	keep	-	-
