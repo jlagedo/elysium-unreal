@@ -11,6 +11,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
 // --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 5) ---
@@ -31,11 +32,12 @@ int32 FElysiumNpcBase::TranslateSchedule(int32 ScheduleNumber)
 		// `CineCleanup` (`0x1027d170`), then `slot440(1)`.
 		RecordScheduleEvent(FString::Printf(TEXT("Script failed for %s"), *DebugString()));
 		++TranslateCineCleanupCalls;
+		FElysiumScriptedSequence::CineCleanup(*this);
 		Mapped = 1;
 	}
 	else
 	{
-		switch (TranslateCineMoveTo)
+		switch (TranslateCineMoveTo())
 		{
 		case 0:
 		case 4:
@@ -60,4 +62,10 @@ int32 FElysiumNpcBase::TranslateSchedule(int32 ScheduleNumber)
 	// `slot440(mapped)` through the vtable: a species class's own body answers (the Troika line's
 	// `TranslateSchedule` reaches `TranslateScheduleRetail`, which species override).
 	return TranslateSchedule(Mapped);
+}
+
+int32 FElysiumNpcBase::TranslateCineMoveTo() const
+{
+	const FElysiumScriptedSequence* Cine = ResolveCine();
+	return Cine != nullptr ? Cine->MoveTo : 0;
 }

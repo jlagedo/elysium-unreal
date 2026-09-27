@@ -106,7 +106,9 @@ green, and `coverage.md` shows the change.
   type 5 has no issuer; hint type 800 is authored by nothing, so the patrol lookup's `|| 0x320`
   never matches; `TASK_CREATE_HUNT_PATROL_LIST 0xae` has no issuer; `FINISH_CLIMB 0xfc` cannot
   run (no shipped link climbs); the generic `.sch` file loader `0x1030f220` has no caller and no
-  file; `m_flRadius` on `aiscripted_schedule` and the `nosferatu_tolerrant` key have no reader.
+  file; the `nosferatu_tolerrant` key has no reader. (**Corrected in story 5 fold A3:** `m_flRadius`
+  on `aiscripted_schedule` HAS a reader — `CCineNPC::FindEntity` `0x101a7600` reads it at
+  `0x101a7621` / `0x101a76c7` as the acquisition radius of `CineThink` `0x101a8070`.)
   And one correction to the ledger's vocabulary: in the goal record the `0x13` several rows call a
   "flag" is the ACTIVITY word `+0x14`.
   Size: M. Effort: Fable / high.
@@ -158,7 +160,8 @@ green, and `coverage.md` shows the change.
   dead in their row's tag — `COND_KNOCKBACK`'s two arms in `PreSelectSchedule 0x102ae920` and the
   `TASK 0xae` arm in `0x10375f50`; goal type 5 and the hint-type-800 `|| 0x320` are not yet named
   in a tag and ride with the stories that port those bodies (0018/5, 0002/10g); `m_flRadius` and
-  `nosferatu_tolerrant` are keys with no reader, which story 2's bindings leave unbound. Slot 580 (the class's id space) stays `rule` on every
+  `nosferatu_tolerrant` were recorded as keys with no reader, which story 2's bindings left unbound;
+  story 5 fold A3 corrected `m_flRadius` (read by `FindEntity` `0x101a7600`) and binds it. Slot 580 (the class's id space) stays `rule` on every
   class: story 3 keys its units by it. The six rows that called the goal record's `0x13` a flag
   carry the correction in their tag.
 

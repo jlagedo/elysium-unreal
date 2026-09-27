@@ -272,35 +272,4 @@ void FElysiumNpc::SetFollowerType(const FString& NewFollowerType)
 	FollowerType = NewFollowerType.IsEmpty() ? FString() : NewFollowerType;
 }
 
-FElysiumEntity* FElysiumNpc::ResolveNamedMaster() const
-{
-	// 0x101a8130, disassembled because the decompiled C folds the RTTI call:
-	//
-	//   name = *(char**)(this + 0x5f5c); if (!name) return 0;
-	//   ent  = gEntList.FindEntityByName(NULL, name, 0, 0);   -- 0x100f7770 over DAT_106eb5d8
-	//   if (!ent || !ent->m_pBaseNPC (+0x94)) return 0;
-	//   return RTDynamicCast(ent, 0, CBaseEntity_typeinfo 0x10538764, 0x105947c8, 0);
-	//
-	// LARGELY UNRECOVERED, and stated rather than papered over:
-	//   * the key word. `+0x5f5c` is the second `COutputEvent` of the NPC's eight-output block in
-	//     this runtime's shape (`ElysiumNpcKernelShapeMap.cpp`, `_IMPLICIT`), so no port member
-	//     holds a name there and the read is a local empty key;
-	//   * the target type. RTTI type descriptor `0x105947c8` has exactly ONE referrer in the whole
-	//     image — this body — so the corpus does not name the class the cast admits;
-	//   * the caller. The corpus records no call site, so the receiver class is unconfirmed.
-	//
-	// What IS recovered and ported: the name gate, the by-name entity lookup and the `+0x94`
-	// `m_pBaseNPC` gate (the entity must be an NPC). The final type gate has no recovered answer,
-	// so this refuses rather than admitting an NPC retail might reject.
-	const FString NamedMasterKey;  // +0x5f5c, UNRECOVERED — see above
-	if (NamedMasterKey.IsEmpty() || World == nullptr)
-	{
-		return nullptr;
-	}
-	FElysiumEntity* Found = World->FindByName(NamedMasterKey);
-	if (Found == nullptr || Found->AsNpcBase() == nullptr)   // `piVar1[0x25]`, `+0x94 m_pBaseNPC`
-	{
-		return nullptr;
-	}
-	return nullptr;  // UNRECOVERED: the RTTI class `0x105947c8` admits
-}
+

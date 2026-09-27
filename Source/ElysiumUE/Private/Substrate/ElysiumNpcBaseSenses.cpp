@@ -289,8 +289,8 @@ void FElysiumNpcBase::SetDistLook(float LookDistCm)
 	// `CAI_Senses+0x10` is `m_LookDist` — `vtmb_fields CAI_Senses` declares exactly two fields and
 	// this is one of them. 29c filed the inner word as unrecovered because it read the offset
 	// rather than the class's own field list; there is no seam here at all, only a member that had
-	// not been declared. The object is reached through `SensesObject()`, the `m_pSenses` word; a
-	// base-only NPC has none yet (fold 9), and the write lands nowhere.
+	// not been declared. The object is reached through `SensesObject()`, the `m_pSenses` word, which
+	// every NPC-base instance carries (story 5 fold A3).
 	if (FElysiumNpcSenses* const SensesPtr = SensesObject())
 	{
 		SensesPtr->LookDistCm = LookDistCm;

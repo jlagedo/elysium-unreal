@@ -106,11 +106,6 @@ bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
 /** `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` — `m_bForceNPCCheck` around the move probe. */
 bool CanStandAt(const FVector& PositionUnits, int32 Flags);
 
-/** `CCineNPC`/`CCineAI`/`CCineAISchedule`'s shared slot 178 `Blocked` (`0x101a7580`) — a `return;`
- *  with the argument ignored. Answers whether the class this NPC IS is one of the three, which is
- *  the whole of the recovered behaviour. */
-bool BlockedIsNoOp() const;
-
 /** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
  *  `m_afMemory & 0x2000` (AT_COVER_HINT) is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0.
  *  The cvar differs per species and each names its own address. */

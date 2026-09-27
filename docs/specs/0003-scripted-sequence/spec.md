@@ -89,18 +89,22 @@ oblivious refcount — **0002** (7).
   StartSequence(m_iszPostIdle))`, then **`OnEndSequence` fires unconditionally** with the stored
   activator. **`Finish 0x101a8640`**: with `m_iszPostIdle` and spawnflag `0x100` and no next cine
   → `"Post Idle %s finished"`, state 2, replay, return (cleanup and chain held; `OnEndSequence`
-  already fired); else self-remove unless REPEATABLE (`0x4`), `CineCleanup`, `FixScriptNPCSchedule`
-  (`m_iFinishSchedule 0` → `ClearSchedule`), and a live `m_hNextCine` (`next != this ||
-  REPEATABLE`) is given the NPC and possesses it.
+  already fired); else self-remove unless REPEATABLE (`0x4`), `CineCleanup`, slot 586
+  `FixScriptNPCSchedule` (`CCineNPC` `0x101a8840`: ideal IDLE unless DEAD, then `ClearSchedule` —
+  `m_iFinishSchedule` is read only by `CCineAI`'s `0x101a95d0`), and a live `m_hNextCine`
+  (`next != this || REPEATABLE`) is given the NPC and possesses it.
 - **`CineCleanup 0x1027d170`**: state 0; oblivious−− for NOINTERRUPT; restore movetype,
   solidflags, effects and the weapon flags (`m_saved_solid` is never read back); detach `m_hCine`
   and the target; when `m_iszPlay && m_sequenceStarted`: spawnflag `0x2000` → `MoveToBoneOrigin
   ("Bip01")`, else unless `0x80` → the bone-0 position, `+1` Z, `FL_ONGROUND`, drop-to-floor
   probe; ideal state IDLE (7 when dead). **Bits `0x80` and `0x2000` are read here**, outside the
   class range the oracle searched.
-- **`CancelScript 0x101a8c30`** (the `CancelSequence` input and the NPC's `Event_Killed` arm) →
-  `ScriptEntityCancel FUN_101a7170` on every same-named entity: only when the NPC's state is
-  SCRIPT → state 3, `CineCleanup`; `m_iDelay = 0`. No output. **`DelayStart 0x101a8cf0`** counts
+- **`CancelScript 0x101a8c30`** (`CineThink`'s failed search and the NPC-side callers:
+  `Event_Killed 0x10265ad0`, `EnterGrappleState 0x102b5c00`, `ForceScheduleChange 0x102ae490`,
+  `ScriptHide 0x102c1ce0`, `0x102c0270`, `0x102c6ff0`, `0x1027d0a0`) → `ScriptEntityCancel
+  FUN_101a7170` on every same-named entity: only when the NPC's state is SCRIPT → state 3,
+  `CineCleanup`; `m_iDelay = 0`. No output. The `CancelSequence` INPUT (`0x101a7500`) is NOT this
+  path: it runs `ScriptEntityCancel` on its own cine only (corrected 0019/5 fold A3). **`DelayStart 0x101a8cf0`** counts
   `m_iDelay` on every same-named entity whose classname is literally `scripted_sequence`; release
   to 0 sets `m_startTime = curtime + 0.05`.
 - **The pre-idle is played by `TASK_WAIT_FOR_SCRIPT`**, after possession and travel; `Spawn
@@ -212,5 +216,7 @@ model / effort tier recommended for it.
   the shared `DelayStart` datum `0x10445e08`; `_DAT_104493d0` = 0.1, the `SUB_Remove` self-remove
   delay; `CCineNPC::vfunc586 0x101a8840` — ideal-state IDLE unless dead, then unconditional
   `ClearSchedule`, never reading `m_iFinishSchedule` (that switch is `CCineAI`'s slot-586 alone);
-  OVERRIDESTATE `0x40` is never read, in any encoding; plus_jenny and the prophet hold no
+  OVERRIDESTATE `0x40` IS read — slot 585 `FCanOverrideState` `0x101a7210` is `SHR AL,6; AND AL,1`
+  on `m_spawnflags`, the `bDisregardState` every `CanPlaySequence` call passes (corrected 0019/5
+  fold A3); plus_jenny and the prophet hold no
   level-start pose — both are trigger-fired beats.

@@ -23,13 +23,9 @@ void SetAlternateAiIdealYaw(float YawDegrees);
  *  the door open or fires its use handler. Answers false. */
 bool StartOpeningDoor(FElysiumEntity& Door);
 
-/** `CCineAISchedule::RemoveIgnoredConditions` (`0x101a89a0`) — the SCRIPT entity's own slot-459
- *  body, which the NPC's slot 459 (`0x1026d7f0`) dispatches into. It clears fourteen conditions on
- *  the scene partner, in retail's order, and clears its `m_bCondTookDamage` byte between the two
- *  groups. Static and taking the partner because `this` is the cine entity in retail, not the NPC. */
-static void ClearCineIgnoredConditions(FElysiumNpc& Partner);
-
-/** SEAM for `CCineAISchedule::0x101a8930`, the "am I already in this state" predicate slot 459 tests
- *  first, and for the cine entity's `m_hTargetEnt` -> `+0x94` partner walk. This runtime's scripted
- *  scenes do not carry either, so the resolve answers null and slot 459 clears nothing. */
-FElysiumNpc* CineIgnoredConditionsPartner() const;
+/** The write list of `CCineNPC::RemoveIgnoredConditions` (`0x101a89a0`, the director's own slot 459,
+ *  `FElysiumScriptedSequence::RemoveIgnoredConditions`, which the NPC's slot 459 `0x1026d7f0`
+ *  dispatches into): fourteen conditions on the director's NPC, in retail's order, with
+ *  `m_bCondTookDamage` cleared between the two groups. Static and taking the NPC because `this` is
+ *  the director in retail. */
+static void ClearCineIgnoredConditions(FElysiumNpcBase& Partner);

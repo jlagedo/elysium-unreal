@@ -416,32 +416,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSpawnTest,
 	"Elysium.Substrate.NpcKernelLifecycle.Spawn", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 {
-	// `CCineNPC::Spawn` (0x101a6f10). An UNNAMED cine always arms the auto-remove think and, being
-	// unnamed, takes no start time.
-	FElysiumNpc::FCineSpawnState Unnamed = FElysiumNpc::CineSpawn(0, /*bNamed=*/false, 10.0);
-	TestTrue(TEXT("an unnamed cine arms the auto-remove think"), Unnamed.bAutoRemoveThink);
-	TestFalse(TEXT("and takes no start time"), Unnamed.bHasStartTime);
-	TestEqual(TEXT("it is non-solid"), Unnamed.Solid, 0);
-	TestEqual(TEXT("with FSOLID_NOT_SOLID added"), Unnamed.AddedSolidFlags, 4);
-	TestFalse(TEXT("not BCC-targetable"), Unnamed.bTargetable);
-	TestFalse(TEXT("and not alive"), Unnamed.bAlive);
-	TestTrue(TEXT("interruptable with spawnflag 0x20 clear"), Unnamed.bInterruptable);
-	TestFalse(TEXT("m_hNextCine is -1"), Unnamed.bNextCineSet);
-	TestEqual(TEXT("entity flag 0x10 is added"), Unnamed.AddedFlags2, 0x10);
-
-	// A NAMED cine only arms the think when spawnflag 0x10 is set — and then it DOES take a start
-	// time. The two conditions are separate and this is the pair that tells them apart.
-	FElysiumNpc::FCineSpawnState Named = FElysiumNpc::CineSpawn(0, /*bNamed=*/true, 10.0);
-	TestFalse(TEXT("a named cine without 0x10 arms no auto-remove think"), Named.bAutoRemoveThink);
-	TestFalse(TEXT("and so takes no start time"), Named.bHasStartTime);
-	FElysiumNpc::FCineSpawnState NamedFlagged = FElysiumNpc::CineSpawn(0x10, /*bNamed=*/true, 10.0);
-	TestTrue(TEXT("a named cine WITH 0x10 arms it"), NamedFlagged.bAutoRemoveThink);
-	TestTrue(TEXT("and only then takes a start time"), NamedFlagged.bHasStartTime);
-
-	// Spawnflag 0x20 CLEARS interruptable; retail's `if` is inverted and this is that arm.
-	FElysiumNpc::FCineSpawnState NotInterruptable =
-		FElysiumNpc::CineSpawn(0x20, /*bNamed=*/false, 10.0);
-	TestFalse(TEXT("spawnflag 0x20 clears interruptable"), NotInterruptable.bInterruptable);
+	// `CCineNPC::Spawn` (0x101a6f10) is asserted on the real director since story 5 fold A3
+	// (`Elysium.Substrate.NpcKernelDirector.Spawn`).
 
 	// `CAI_StandoffGoal::Spawn` (0x102cd2d0) — the clock and nothing else.
 	TestEqual(TEXT("the standoff goal's think is curtime + _DAT_1044e658 (0.01)"),
@@ -728,12 +704,6 @@ bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Npc;
-	// 0x101a75a0 — a cine actor's Touch is `return;` and does NOT chain to the base, so nothing
-	// downstream gets a chance either.
-	TestTrue(TEXT("a cine actor consumes the touch and does nothing"),
-		FElysiumNpc::CineTouch(&N));
-	TestTrue(TEXT("including a null toucher"), FElysiumNpc::CineTouch(nullptr));
-
 	// 0x1027ca30 — the hint release with a ZERO reuse delay. A claimed hint is given back and the
 	// node forgotten.
 	N.BaseScheduleHost.HintNode = 12;

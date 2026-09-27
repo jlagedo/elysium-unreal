@@ -733,8 +733,10 @@ bool FElysiumNpcBase::IsBccTargetable(const FElysiumEntity& Candidate)
 	// `npc_VNewscaster`, whose own `NPCInit` (`0x103a0420`) clears the byte anyway — so the gate
 	// costs nothing that retail keeps and refuses exactly what retail refuses.
 	//
-	// An entity that is NOT an NPC has no such byte: retail's gate is on `+0x9c`'s combat character
-	// and every caller has already established that, so a non-NPC combat character passes.
-	const FElysiumNpc* const CandidateNpc = Candidate.AsNpc();
+	// An entity that is NOT an NPC has no such byte in this port (the player's is unported): retail's
+	// gate is on `+0x9c`'s combat character and every caller has already established that, so a
+	// non-NPC combat character passes. Every NPC-base instance carries it (story 5 fold A3): a
+	// scripted director's `Spawn` stores 0, so no NPC ever takes a director as an enemy.
+	const FElysiumNpcBase* const CandidateNpc = Candidate.AsNpcBase();
 	return CandidateNpc == nullptr || CandidateNpc->bIsBccTargetable;
 }

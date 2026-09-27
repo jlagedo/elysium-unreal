@@ -132,43 +132,6 @@ float FElysiumNpcBase::HearingSensitivity()
 	return NpcBaseEntityChainShared::GChainOne;
 }
 
-bool FElysiumNpcBase::CineCanInterrupt() const
-{
-	// 0x101a8930 — `m_interruptable` (+0x5f90) set AND the resolved `m_hTargetEnt` (+0x5ce4)
-	// answering slot 158 `IsAlive`. The three terms are sequential and short-circuit in retail's own
-	// order: the flag, the handle resolving to a non-null entity, and only then the virtual. A
-	// missing target answers FALSE, not true — an interruptable beat whose actor has gone cannot be
-	// interrupted, it is already over.
-	//
-	// `+0x5ce4` is bound to `FElysiumNpcBase::TargetEnt` in the shape map, which is the word this reads.
-	// `m_interruptable` is read through the owning scripted-sequence leaf by
-	// `CineIsInterruptable()` below.
-	if (!CineIsInterruptable())
-	{
-		return false;
-	}
-	if (World == nullptr || !TargetEnt.IsSet())
-	{
-		return false;
-	}
-	FElysiumEntity* Resolved = World->Resolve(TargetEnt);
-	if (Resolved == nullptr)
-	{
-		return false;
-	}
-	FElysiumNpc* TargetNpc = Resolved->AsNpc();
-	return TargetNpc != nullptr ? TargetNpc->IsAlive() : false;
-}
-
-bool FElysiumNpcBase::CineIsInterruptable() const
-{
-	// `CCineNPC::m_interruptable` (+0x5f90, `FIELD_BOOLEAN`). The scripted-sequence leaf derives the
-	// exact immutable value from spawnflag 0x20; the accessor keeps the NPC from guessing from the
-	// different queue-lock bit.
-	const FElysiumEntity* Owner = World != nullptr ? World->Resolve(ScriptOwner) : nullptr;
-	return Owner != nullptr && Owner->IsScriptedSequenceInterruptable();
-}
-
 // --- Moved from `ElysiumNpcEntityChain.cpp` (story 5 step 5) ---
 
 // -------------------------------------------------------------------------------------------------

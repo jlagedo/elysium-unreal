@@ -103,14 +103,6 @@ static constexpr float NeverThinkSentinel = 3.402823466e+38f; // `0x7f7fffff`
 // Words this family needed that no earlier family declared
 // -------------------------------------------------------------------------------------------------
 
-/** `m_bIsBCCTargetable` (`+0x1480`). Family Senses10's `IsBccTargetable` is a CANDIDATE seam
- *  answering true; this is THIS NPC's own byte, written by `NPCInit`. */
-bool bIsBccTargetable = false;
-
-/** `m_bIsAlive` (`+0x1481`), the combat-character liveness byte `NPCInit` writes independently of
- *  `LifeState`. Payphone clears it after the base wrote 1. */
-bool bNpcIsAlive = false;
-
 /** `CAI_BaseNPCTroika`'s four discipline bit words, cleared whole by `NPCInit` at `1029a589`. No
  *  earlier family declared them: this runtime's discipline activity lives in
  *  `FElysiumDisciplineState::EndTime`, and these are the retail masks beside it. */

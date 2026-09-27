@@ -275,11 +275,23 @@ Recovered schedule modes are:
 `CCineAISchedule` (datamap `0x10593c9c`, factory `0x101a96b0`) has five keys of its own —
 `m_iszEntity +0x5f54`, `m_flRadius +0x5f68`, `goalent` `m_sGoalEnt +0x608c`, `schedule`
 `m_nSchedule +0x6090`, `forcestate` `m_nForceState +0x6094` — over `CCineNPC`'s, and one input,
-`StartSchedule` (`0x101a9b30`), which names nothing: it wakes the entity's think. There is NO
-`interruptability` key, no grab-all and no radius search in this binary: `m_flRadius` is parsed
-and has no reader; the target is `m_iszEntity` resolved by NAME at `Activate 0x101a8de0`
-(`FindEntityByName 0x100f7770`, case-insensitive, trailing `*` allowed), taking each match that
-is an NPC; `goalent` resolves the same way, `!player` through the alias table.
+`StartSchedule` (`0x101a9b30`), which names nothing: it is `ThinkSet(CineThink)` at curtime. There
+is NO `interruptability` key and no grab-all. **`m_flRadius` IS read** (corrected 0019/5 fold A3; the
+2026-09-21 walk said it had no reader): the target is acquired by `CineThink` (`0x101a8070`), the
+think `Spawn` and `StartSchedule` install, through `FindEntity` (`0x101a7600`, reads at
+`0x101a7621` / `0x101a76c7`) -> `FindEntityGenericWithin` `0x100f7f70` -> `0x100f7c30` (name) then
+`0x100f7e30` (classname fallback): each candidate named `m_iszEntity` (case-insensitive, trailing
+`*` allowed, procedural `!` names from the start of the list only) whose origin lies STRICTLY inside
+`m_flRadius` of the director (`d² < r²`; a radius of 0 is unbounded), starting after
+`m_pLastFoundEntity` (`+0x5f98`, written under spawnflag `0x400`), and among those with `+0x94` the
+first answering slot 482 `CanPlaySequence(FCanOverrideState(), 0) == 1`, else the LAST answering 2
+(a candidate answering 0 prints "Found %s, but can't play!" unless spawnflag `0x800`). Found:
+`m_sequenceStarted = 0`, slot 583 `PossessEntity` (for `CCineAISchedule`, `0x101a9790`: the
+NOINTERRUPT oblivious call, then slot 586 on the target), no re-arm. Not found: `CancelScript`
+(`0x101a8c30`, `ScriptEntityCancel` on every same-named entity) and a retry `+1.0 s`, forever.
+23 of the 30 shipped `aiscripted_schedule` rows author a radius (32–1026). `Activate 0x101a8de0`
+resolves the actor only for its precache; `goalent` resolves by name at the executor, `!player`
+through the alias table.
 
 The executor `0x101a98c0`, in order: resolve `goalent` — none → log "Can't find goal entity %s /
 Can't execute script %s" (`0x1059528c`) and RETURN BEFORE the force state is applied; apply

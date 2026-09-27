@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 
 // Story 29c-1, family **Lifecycle** — spawn, init, precache, save/restore, dormancy and the
 // per-think clocks of `order.md` layers 0–9. 59 rows. The walked prose is
@@ -31,15 +32,6 @@ namespace
 	// `m_fEffects` bits the `KeyValue` cascade ORs in (`0x1009e430`).
 	constexpr int32 GEffectNoShadow = 0x20;
 	constexpr int32 GEffectNoReceiveShadow = 0x80;
-
-	// `CCineNPC::Spawn` (`0x101a6f10`): the two spawnflags it reads and the two compiled DOUBLES it
-	// adds to `curtime` — the auto-remove think delay and the named cine's start-time offset. Both
-	// stood at 0.0 as unrecovered until the cells were read (2026-09-21, held by the tunables table
-	// since 0019/4).
-	constexpr int32 GCineSpawnFlagAutoRemove = 0x10;
-	constexpr int32 GCineSpawnFlagNotInterruptable = 0x20;
-	constexpr double GCineAutoRemoveDelaySeconds = ElysiumNpcTunables::OneDouble;
-	constexpr double GCineStartTimeOffsetSeconds = ElysiumNpcTunables::CineStartTimeOffset;
 
 }
 
@@ -118,8 +110,8 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 	//    `m_bScriptHidden` (`+0x0f4`) and from `m_fEffects`. Its SETTER — retail's `ScriptHide` —
 	//    is not ported yet, so the latch would never stand; until it is, the condition is read from
 	//    the entity's own hidden flag, which is this runtime's only live spelling of "hidden by a
-	//    script". The beat (`FElysiumScriptedSequence`) carries no `+0x5f78` block, so the record is
-	//    RETURNED rather than written.
+	//    script". The words land on the director (`FElysiumScriptedSequence::Saved*`, story 5 fold
+	//    A3) when `m_hCine` resolves to one; the record is returned for the test either way.
 	const bool bCineLatchStands = bHidden;
 	FElysiumEntity* Cine = (World && ScriptOwner.IsSet()) ? World->Resolve(ScriptOwner) : nullptr;
 	if (bCineLatchStands && Cine != nullptr)
@@ -129,12 +121,19 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 		Record.MoveCollide = GetMoveCollide();
 		Record.Solid = GetSolid();
 		Record.SolidFlags = GetSolidFlags();
-		// `m_fEffects` and `m_bfAINPCFlags` both stay 0 here: this runtime carries no `m_fEffects`
-		// word at all (rendering effects are the body's, not the entity's), and `FElysiumNpcFlags`
-		// keeps its two raw words private — no ported reader wants the whole word, only named bits.
-		// Recorded as the two words retail writes so the day a consumer exists it fills them.
+		// `m_fEffects` stays 0: this runtime carries no `m_fEffects` word (rendering effects are the
+		// body's, not the entity's). `m_bfAINPCFlags` is the whole first flag word.
 		Record.Effects = 0;
-		Record.NpcFlagWord = 0;
+		Record.NpcFlagWord = NpcFlags.RawWord1();
+		if (FElysiumScriptedSequence* Director = ResolveCine())
+		{
+			Director->SavedMoveType = Record.MoveType;
+			Director->SavedMoveCollide = Record.MoveCollide;
+			Director->SavedSolid = Record.Solid;
+			Director->SavedSolidFlags = Record.SolidFlags;
+			Director->SavedEffects = Record.Effects;
+			Director->SavedTroikaFlags = static_cast<int32>(Record.NpcFlagWord);
+		}
 	}
 	// 4. `m_bCineScriptHidden = 0` on BOTH arms — the latch is cleared whether or not a cine took
 	//    the record (`102c1fxx` and the tail).
@@ -152,33 +151,6 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 // Slot 103 `Spawn` — the species bodies.
 // -------------------------------------------------------------------------------------------------
 
-FElysiumNpc::FCineSpawnState FElysiumNpc::CineSpawn(int32 InSpawnFlags, bool bNamed, double Now)
-{
-	FCineSpawnState State;
-	// 0x101a6f10, in retail's own order.
-	State.Solid = 0;                 // SetSolid(SOLID_NONE)
-	State.AddedSolidFlags = 4;       // AddSolidFlags(flags | 4) — FSOLID_NOT_SOLID
-	State.bTargetable = false;       // m_bIsBCCTargetable = 0
-	State.bAlive = false;            // m_bIsAlive = 0
-	// The auto-remove think: an UNNAMED cine, or spawnflag 0x10 on a named one.
-	if (!bNamed || (InSpawnFlags & GCineSpawnFlagAutoRemove) != 0)
-	{
-		State.bAutoRemoveThink = true;
-		State.NextThink = Now + GCineAutoRemoveDelaySeconds;
-		// Only a NAMED cine that armed the think also takes a start time.
-		if (bNamed)
-		{
-			State.bHasStartTime = true;
-			State.StartTime = Now + GCineStartTimeOffsetSeconds;
-		}
-	}
-	// Spawnflag 0x20 CLEARS interruptable; its absence sets it.
-	State.bInterruptable = (InSpawnFlags & GCineSpawnFlagNotInterruptable) == 0;
-	State.SequenceStarted = 0;
-	State.bNextCineSet = false;      // m_hNextCine = 0xffffffff
-	State.AddedFlags2 = 0x10;        // AddFlag2(0x10)
-	return State;
-}
 
 bool FElysiumNpc::ConversationPlaceSpawnPrecachesLast()
 {
@@ -296,14 +268,6 @@ TArray<FElysiumEntityHandle> FElysiumNpc::ConversationPlaceActivate(const FStrin
 // Slot 175 `Touch`, slot 180 `UpdateOnRemove`.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::CineTouch(FElysiumEntity* Other)
-{
-	// 0x101a75a0, shared by `CCineAI`, `CCineAISchedule` and `CCineNPC`: `return;`, parameter
-	// ignored, no chain to the base. Nothing happens when something touches a cine actor, and
-	// nothing else gets a chance to.
-	(void)Other;
-	return true;
-}
 
 // -------------------------------------------------------------------------------------------------
 // Slot 434 `PrescheduleThink` — `CNPC_VCamera`'s empty `0x10369100` is its class's override (story 5

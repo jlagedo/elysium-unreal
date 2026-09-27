@@ -16,12 +16,14 @@
 #include "Substrate/ElysiumScriptedCharacter.h"
 
 struct FElysiumNpcClass;   // Substrate/ElysiumNpcKernelShape.h — the census row for a retail class
+class FElysiumScriptedSequence;   // Substrate/ElysiumScriptedSequence.h — `CCineNPC`, the directors
 
 // `CAI_BaseNPC` — the AI base every NPC class derives from (story 5 step 5). `FElysiumNpc`, the
 // `CAI_BaseNPCTroika` line every living `npc_*` classname builds, derives from it; so does
-// `FElysiumNpcTestHull` (`CAI_TestHull`, story 5 fold A1). The script directors (`CCineNPC`,
-// `CCineAI`, `CCineAISchedule`) sit directly beneath it in retail and fold onto it in fold A3
-// (`docs/vtmb/npc-kernel/classes.md`).
+// `FElysiumNpcTestHull` (`CAI_TestHull`, story 5 fold A1), and the script directors
+// `FElysiumScriptedSequence` (`CCineNPC`) with `FElysiumAiScriptedSequence` (`CCineAI`) and
+// `FElysiumAiScriptedSchedule` (`CCineAISchedule`) beneath it (fold A3,
+// `docs/vtmb/npc-kernel/classes.md`).
 //
 // It carries the base layer's own words (`+0x1a40..+0x5f40`, `docs/vtmb/npc-kernel/layout.tsv`)
 // and bodies. A base body reaches Troika state only where retail does, through the entity's
@@ -111,6 +113,13 @@ public:
 	// last-damage records and the occlusion edge `CAI_BaseNPC` declares. The Troika's (the sound
 	// records, the player-LOS cache, the see-unknown clocks) are `FElysiumNpc::Senses.Memory`.
 	FElysiumNpcBaseMemory BaseMemory;
+
+	// `m_pSenses` (`+0x5cdc`), the `CAI_Senses` object. `CAI_BaseNPC::PostConstructor` (`0x1027bb20`)
+	// builds it through slot 424 (`CreateComponents`, `0x1027cae0`) for EVERY NPC-base instance, the
+	// scripted directors included (story 5 fold A3), so it lives here. Only the Troika line runs a
+	// sense pass over it; on a base-only NPC it stands idle, as retail's does (a director never runs
+	// `PerformSensing`). The Troika's own memory words ride inside it (`Senses.Memory`).
+	FElysiumNpcSenses Senses;
 
 	// The base layer's two words of the sense pass, which the senses runner (`FElysiumNpc::Senses`,
 	// the Troika's) fills through its `Npc` argument: `m_DelayedSoundConditionList` (`+0x1ae0`) — the
@@ -308,15 +317,10 @@ public:
 	// sounds, the enemy memory, the base schedule host and `m_hTargetEnt`.
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 
-	// `m_pSenses` (+0x5cdc), the `CAI_Senses` object. A base word, but the port's senses runner
-	// reads Troika words throughout, so the object itself stays on `FElysiumNpc` (transitional,
-	// fold 9) and the base reaches it through this accessor. Null on a base-only NPC: its
-	// `CAI_Senses` is unported until then.
-	virtual FElysiumNpcSenses* SensesObject() { return nullptr; }
-	const FElysiumNpcSenses* SensesObject() const
-	{
-		return const_cast<FElysiumNpcBase*>(this)->SensesObject();
-	}
+	// `m_pSenses` (+0x5cdc), the `CAI_Senses` object (`Senses` above). Never null: every NPC-base
+	// instance carries one (story 5 fold A3 ended the Troika-only transitional home).
+	FElysiumNpcSenses* SensesObject() { return &Senses; }
+	const FElysiumNpcSenses* SensesObject() const { return &Senses; }
 
 	// The same write at an arbitrary stamp — `m_flNextThink := Stamp`, rounded so a float stamp
 	// never lands above the double frame it names.
@@ -346,6 +350,23 @@ public:
 	const void* ConnectedSquad() const { return nullptr; }
 
 	const FElysiumEntityHandle& GetTarget() const { return TargetEnt; }
+
+	// `CAI_BaseNPC::SetTarget` (`0x10279cc0`): `m_hTargetEnt` (`+0x5ce4`) := the handle. Written by the
+	// comfort sweep, by a director's `FindEntity` wrapper (`0x101a7760`), by `PossessEntity`
+	// (`SetTarget(npc, cine)`) and by `CineCleanup` (`SetTarget(npc, NULL)`); read by the gaze
+	// cascade's target arm (`GazeTargetEntity`).
+	void SetTarget(const FElysiumEntityHandle& NewTarget) { TargetEnt = NewTarget; }
+
+	// `m_hCine` (`+0x5d74`, `FElysiumEntity::ScriptOwner`) resolved to the director that owns this NPC,
+	// or null: the dead-handle test every retail reader of the word performs, plus the type the
+	// word always holds in retail (only `CCineNPC::PossessEntity` and its two twins write it).
+	FElysiumScriptedSequence* ResolveCine() const;
+
+	// `m_IdealNPCState := RetailId` with the selector trace retail stamps beside every writer
+	// (`+0x1b3c`/`+0x1b40`, recorded by the mind's transition trace): the public face of the mind's
+	// own request, for a director writing ANOTHER NPC's ideal state (`PossessEntity`,
+	// `FixScriptNPCSchedule`).
+	void RequestIdealStateRetail(int32 RetailId, int32 SourceLine);
 
 	virtual void MakeOblivious(bool bOblivious) override;
 

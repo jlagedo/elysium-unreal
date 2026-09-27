@@ -5,7 +5,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumStanceTypes.h"
-#include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumScriptedScheduleOrder.h"
 #include "Substrate/ElysiumDamage.h"   // the deferred death packet and the queued burn ticks
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
@@ -143,9 +143,8 @@ public:
 	float AuthoredVision = ElysiumNpcSense::DerivedSentinel;
 	float AuthoredHearing = ElysiumNpcSense::DerivedSentinel;
 
-	// The sensory transaction and everything it remembers, including the last damaging hit this
-	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
-	FElysiumNpcSenses Senses;
+	// The sensory transaction (`m_pSenses`, `+0x5cdc`) is `FElysiumNpcBase::Senses` since story 5
+	// fold A3: a `CAI_BaseNPC` word every NPC-base instance carries, scripted directors included.
 
 	// --- Player-law witnessing (`ElysiumNpcWitness.h`) ---
 	// The four authored thresholds the two law lanes compare a player activity level against, and
@@ -609,10 +608,6 @@ public:
 	void ClearOwnedActivityCopyProps();
 	void EndDisciplineSchedule();
 
-	// `CAI_BaseNPC::m_hTargetEnt` (`+0x5ce4`) and its setter `0x10279cc0`. Written by the comfort
-	// sweep; read by the gaze cascade's target arm (`GazeTargetEntity`).
-	void SetTarget(const FElysiumEntityHandle& NewTarget) { TargetEnt = NewTarget; }
-
 	virtual bool GetPathToEnemy(float ToleranceUnits) override;
 
 	virtual void RunPath() override;
@@ -799,10 +794,6 @@ public:
 	virtual void OnDormancyChanged() override;
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
-
-	// `m_pSenses` (+0x5cdc) on the Troika line: the senses runner this class carries.
-	virtual FElysiumNpcSenses* SensesObject() override { return &Senses; }
-	using FElysiumNpcBase::SensesObject;
 
 	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
 

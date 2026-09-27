@@ -812,10 +812,6 @@ bool FElysiumNpcKernelMotorDoorTest::RunTest(const FString&)
 		Guard->OnObstructingDoorBase(MaxDistance, 1, 0.1f, Result));
 	TestEqual(TEXT("with the ok result"), static_cast<int32>(Result), 0);
 
-	// `CCineNPC::Blocked` `0x101a7580` — the three cine classes answer slot 178 with nothing. A
-	// spawnable `npc_*` is none of them.
-	TestFalse(TEXT("an ordinary NPC is not a cine actor"), Guard->BlockedIsNoOp());
-
 	// `0x1039aaf0` / `0x1039ab10` — `CNPC_VMingXiao`'s `m_bBlockedByFriend` setter and getter.
 	FElysiumNpcWorldBuilder MingBuilder(TEXT("npc_kernel_motor_blocked"), 4307);
 	MingBuilder.AddNpcOfClass(TEXT("ming"), FVector::ZeroVector, TEXT("CNPC_VMingXiao"));

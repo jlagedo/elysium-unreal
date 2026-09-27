@@ -18,7 +18,8 @@
 #include "ElysiumSurfaceSounds.h"
 #include "ElysiumWorldServices.h"
 #include "HAL/IConsoleManager.h"
-#include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumScriptedScheduleOrder.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumFeed.h"
@@ -62,6 +63,20 @@ bool FElysiumNpcBase::IsRetailClass(const TCHAR* RetailClassName) const
 bool FElysiumNpcBase::OwnRetailClassDerivesFrom(const TCHAR* RetailClassName) const
 {
 	return ElysiumNpcKernelClass::DerivesFrom(OwnRetailClass(), RetailClassName);
+}
+
+// --- `m_hCine` and the ideal-state writers a director uses (story 5 fold A3) ------------------
+
+FElysiumScriptedSequence* FElysiumNpcBase::ResolveCine() const
+{
+	FElysiumEntity* Owner = World != nullptr && ScriptOwner.IsSet() ? World->Resolve(ScriptOwner) : nullptr;
+	FElysiumNpcBase* AsBase = Owner != nullptr ? Owner->AsNpcBase() : nullptr;
+	return AsBase != nullptr ? AsBase->AsSpecies<FElysiumScriptedSequence>() : nullptr;
+}
+
+void FElysiumNpcBase::RequestIdealStateRetail(int32 RetailId, int32 SourceLine)
+{
+	Mind.RequestDesiredState(RetailId, SourceLine);
 }
 
 // --- Moved from `ElysiumNpc.cpp` (story 5 step 5) ---

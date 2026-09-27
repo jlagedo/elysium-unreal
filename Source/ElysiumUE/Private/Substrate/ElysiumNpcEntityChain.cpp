@@ -59,12 +59,6 @@ namespace
 	constexpr float GChainAutoaimPitchClamp = 25.0f;
 	constexpr float GChainAutoaimYawClamp = 12.0f;
 
-	// `NPC_STATE` ids `FixScriptNpcSchedule` reads and writes (`0x1026e3e0`'s own cases).
-	constexpr int32 GChainNpcStateIdle = 1;
-	constexpr int32 GChainNpcStateDead = 7;
-	// The `__LINE__` retail stamps into `m_SelectIdealStateTrace.m_iLine` on the way out: `0x3ca`.
-	constexpr int32 GChainFixScriptScheduleLine = 970;
-
 	// `0x101a6420`'s identity passthrough needs somewhere to point when the caller supplies null;
 	// retail returns the caller's own pointer, so there is no such place and the port answers null
 	// too. Declared for readability at the one site.
@@ -400,68 +394,8 @@ void FElysiumNpc::RemoveListenerEntity(void* Listener)
 	EntityListeners.Listeners.RemoveAt(Index);
 }
 
-// -------------------------------------------------------------------------------------------------
-// `CCineNPC` — the scripted-sequence trio.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpc::CineIsTimeToStart() const
-{
-	// 0x101a7540 — `m_iDelay` (+0x5f70) below 1 **AND** `m_startTime` (+0x5f74) at or before
-	// curtime.
-	//
-	// The SDK's `CAI_ScriptedSequence::IsTimeToStart` is `(m_iDelay <= 0 || curtime >= m_startTime)`
-	// — an **OR**. Retail's is an AND, in the decompiled C, which means a beat with a delay never
-	// starts by its start time alone and one with no delay still waits for it. A shipped divergence
-	// from the SDK, ported as it stands.
-	//
-	// SEAM: `CCineNPC`'s own datamap words are not on this leaf — the port's scripted sequence is
-	// `FElysiumScriptedSequence` and its beat clock is that entity's, not the NPC's — so both words
-	// are read through `CineDelayState()` below, which answers the resting (0, 0) pair. Both terms
-	// then hold, and the answer is TRUE: a beat with no authored delay is ready, which is retail's
-	// own answer for `m_iDelay == 0, m_startTime == 0`.
-	int32 Delay = 0;
-	float StartTime = 0.f;
-	CineDelayState(Delay, StartTime);
-	const float Now = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f;
-	return Delay < 1 && StartTime <= Now;
-}
-
-void FElysiumNpc::CineDelayState(int32& OutDelay, float& OutStartTime) const
-{
-	// SEAM for `CCineNPC::m_iDelay` (+0x5f70) and `m_startTime` (+0x5f74). The port's beat lives on
-	// the `scripted_sequence` entity and the kernel holds no pointer to it; (0, 0) is the resting
-	// state retail's constructor leaves.
-	OutDelay = 0;
-	OutStartTime = 0.f;
-}
-
-void FElysiumNpc::FixScriptNpcSchedule(FElysiumNpc& Npc)
-{
-	// 0x101a8840 — `CCineNPC::FixScriptNPCSchedule(npc)`, the body every scripted-sequence teardown
-	// ends on, and one of the SDK's own named bodies:
-	//
-	//     if ( pNPC->GetIdealState() != NPC_STATE_DEAD )
-	//         pNPC->SetIdealState( NPC_STATE_IDLE );
-	//     pNPC->ClearSchedule( ... );
-	//
-	// Retail's `m_IdealNPCState` (+0x5cc4) is compared against 7 and stored as 1, with the
-	// `m_SelectIdealStateTrace` pair stamped first: `+0x1b3c` takes the
-	// `e:\vampire\main\dlls\scripted_cp...` path string and `+0x1b40` the `__LINE__` 0x3ca = 970.
-	//
-	// 29c's walk read that pair as "a one-shot assertion/error-state tripwire". It is NOT:
-	// `docs/vtmb/npc-kernel/layout.md` names `+0x1b3c`/`+0x1b40` the ideal-state selector trace, and
-	// every writer of `m_IdealNPCState` in the image — `Event_Killed` `0x10265ad0`, `NPCInit`
-	// `0x10273390`, `CineCleanup` `0x1027d170` — stamps it the same way. The shape map records both
-	// words ABSENT because this runtime traces selections through the mind's transition trace, which
-	// is where the reason lands instead.
-	//
-	// `ClearSchedule` runs on EVERY path, including the dead one.
-	if (Npc.Mind.DesiredRetailState() != GChainNpcStateDead)
-	{
-		Npc.Mind.RequestDesiredState(GChainNpcStateIdle, GChainFixScriptScheduleLine);
-	}
-	Npc.ClearSchedule();
-}
+// `CCineNPC`'s bodies (`IsTimeToStart`, `FixScriptNPCSchedule`) stand on the director since story 5
+// fold A3 (`Substrate/ElysiumScriptedSequence.cpp`).
 
 // -------------------------------------------------------------------------------------------------
 // `CBasePlayer` — the law and police half.

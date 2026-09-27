@@ -97,8 +97,8 @@ float LastMoveThink() const;     // 0x101aa710
 void HintDeletingDestructor();
 
 /** What `CAI_BaseNPCTroika::ScriptUnhide` (`0x102c1ec0`) hands the `scripted_sequence` that hid this
- *  body — the six words it writes into the cine entity at `+0x5f78`..`+0x5f8c`. Returned rather than
- *  written, because this runtime's beat carries no such block: see the definition. */
+ *  body — the six words it writes into the cine entity at `+0x5f78`..`+0x5f8c` (written onto the
+ *  director when `m_hCine` resolves to one, and returned for the test). */
 struct FCineUnhideRecord
 {
 	/** False when `m_bCineScriptHidden` (`+0x5d78`) was clear or `m_hCine` (`+0x5d74`) did not
@@ -126,26 +126,6 @@ FCineUnhideRecord TroikaScriptUnhideTail();
 // chain is unwired (story 5 step 3 records the species rows as residue), so there is no dispatcher.
 
 // --- Slot 103 `Spawn`: the species bodies ---------------------------------------------------------
-
-/** `CCineNPC::Spawn` (`0x101a6f10`), shared with `CCineAI` — the cine actor's own spawn. Pure: it
- *  reads the spawnflags and the name and answers the whole state it would have written, because the
- *  cine entity is `FElysiumScriptedSequence` here and not an NPC at all. */
-struct FCineSpawnState
-{
-	int32 Solid = 0;                  // SetSolid(0) — SOLID_NONE
-	int32 AddedSolidFlags = 4;        // AddSolidFlags(m_Collision.flags | 4)
-	bool bTargetable = false;         // m_bIsBCCTargetable = 0
-	bool bAlive = false;              // m_bIsAlive = 0
-	bool bAutoRemoveThink = false;    // an unnamed cine, or spawnflag 0x10
-	double NextThink = 0.0;           // curtime + _DAT_10449280 when the think is armed
-	bool bHasStartTime = false;       // only a NAMED cine that armed the think gets one
-	double StartTime = 0.0;           // curtime + _DAT_10449e10
-	bool bInterruptable = true;       // spawnflag 0x20 CLEARS it
-	int32 SequenceStarted = 0;
-	bool bNextCineSet = false;        // m_hNextCine = -1
-	int32 AddedFlags2 = 0x10;         // AddFlag2(0x10)
-};
-static FCineSpawnState CineSpawn(int32 SpawnFlags, bool bNamed, double Now);
 
 /** `CAI_InterestingPlaceConverstation::Spawn` (`0x102dbc80`), whose whole body is its own field
  *  init followed by `JMP [[this]+0x1a0]` — vtable `+0x1a0` is slot 104, so **the spawn precaches at
@@ -200,11 +180,6 @@ TArray<FElysiumEntityHandle> ConversationPlaceActivate(const FString& PlacesName
 // --- Slot 127/130: save and restore ----------------------------------------------------------------
 
 // --- Slot 175 `Touch`, slot 180 `UpdateOnRemove` ---------------------------------------------------
-
-/** `CCineNPC::Touch` (`0x101a75a0`), shared by `CCineAI` and `CCineAISchedule` — the body is
- *  `return;` with the parameter ignored. Nothing happens when something touches a cine actor.
- *  Answers whether the touch was consumed, which is always true (retail does not chain). */
-static bool CineTouch(FElysiumEntity* Other);
 
 // --- Slot 434 `PrescheduleThink`: the species bodies ----------------------------------------------
 

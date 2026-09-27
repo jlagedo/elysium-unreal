@@ -2204,7 +2204,7 @@ writing the literal key `m_iszPreIdle` is dropped by the keyvalue lookup:
 | `m_iszLinkedSequence` | `0x5f5c` | resolved to an entity by a single getter (`FUN_101a8130`); no exported map writes it |
 | `m_fMoveTo` | `0x5f60` | 0 No / 1 Walk / 2 Run / 3 Custom movement / 4 Instantaneous / 5 No - Turn to Face |
 | `m_iFinishSchedule` | `0x5f64` | which schedule the NPC is handed back on, in `CCineAI`'s `FixScriptNPCSchedule` (`FUN_101a95d0` — slot 586 is per-class; see below): `0` the default, `1` schedule `0x2a`, anything else `DevMsg("FixScriptNPCSchedule - no case!")` and then the default. The `scripted_sequence` override never reads the field, so a value authored there is accepted by the datamap and never consulted. All six exported `aiscripted_sequence`s write `0` |
-| `m_flRadius` | `0x5f68` | **never read** — no site in the class range touches it |
+| `m_flRadius` | `0x5f68` | **the acquisition radius** — `FindEntity` `0x101a7600` reads it (`0x101a7621`, `0x101a76c7`): a candidate named `m_iszEntity` counts only when its origin lies strictly inside it (`0` is unbounded). Corrected 0019/5 fold A3 (was "never read"; the site is outside the range first searched) |
 | `m_flRepeat` | `0x5f6c` | **never read** |
 
 The private half of the record set — `m_iDelay`, `m_startTime`, `m_saved_movetype`,
@@ -2296,10 +2296,10 @@ VtMB additions are decoded from the bit tests in the class range `0x101a5000–0
 | `8` | LEAVECORPSE | — |
 | `16` | START_ON_SPAWN — **set on none of the exported sequences** | — |
 | `32` | NOINTERRUPT — gates `m_interruptable` | `FUN_101a8890` |
-| `64` | OVERRIDESTATE — **never read.** No test of bit `0x40` on `m_spawnflags` exists in `vampire.dll`: the and-immediate dword form (`+0x204 & 0x40`), the byte form (`+0x205 & 0x40`), the shift form (`+0x204 >> 6 & 1`) and the compound mask (`& 0xc0`) are all absent corpus-wide; every and-form hit is a mover class reusing the bit (`CRotDoor`, `CFuncRotating`, `CBaseButton`, `CEnvSpark`). 55 exported sequences author it — authored noise, not a behaviour | — |
-| `128` | NOSCRIPTMOVEMENT — do not move the NPC to the mark; also read at cleanup (shift form, `>> 7 & 1`) to skip the bone-0 grounding snap | `0x1027d170` |
-| `256` | **Hold the post-idle.** With `m_iszPostIdle` set and no live `m_hNextCine`, the sequence-done path logs `Post Idle %s finished`, sets the NPC's script state to 2, replays the post-idle, and returns before cleanup — so the beat never completes and `OnEndSequence` never fires | `FUN_101a8640` |
-| `512` | **Priority script.** Tested on the contending cine; when set the challenger is refused with `%s is a priority script and cannot be kicked out of the queue` | `FUN_101a8ac0` |
+| `64` | OVERRIDESTATE — **read** by slot 585 `FCanOverrideState` (`0x101a7210`: `MOV AL,[ECX+0x204]; SHR AL,6; AND AL,1`, the byte shift form), the `bDisregardState` `FindEntity` and `BeginSequence` pass to the NPC's slot 482 `CanPlaySequence`: with it a beat may take an NPC outside IDLE/ALERT. `CCineAI` / `CCineAISchedule` answer true always. Corrected 0019/5 fold A3 (was "never read") | `0x101a7210` |
+| `128` | HL1's NOSCRIPTMOVEMENT — in VtMB read ONLY at cleanup (shift form, `>> 7 & 1`) to skip the bone-0 grounding snap; the scripted schedules split by `m_fMoveTo` alone (`0x102cc080`), so the NPC still travels to the mark. Corrected 0019/5 fold A3 | `0x1027d170` |
+| `256` | **Hold the post-idle.** With `m_iszPostIdle` set and no live `m_hNextCine`, `Finish` logs `Post Idle %s finished`, sets the NPC's script state to 2, replays the post-idle, and returns before cleanup — so the beat never completes. `OnEndSequence` HAS fired: `SequenceDone` (`0x101a8460`) fires it unconditionally before any post-idle (corrected 0019/5 fold A3) | `FUN_101a8640` |
+| `512` | **Priority script.** Read by `CanOverride` (`0x101a8ac0`) on the cine QUEUED as the holder's `m_hNextCine`, not on the holder: a queued priority beat refuses a later challenger with `%s is a priority script and cannot be kicked out of the queue` (as does any queued beat when the holder authors `m_iszNextScript`: `%s is specified as the 'Next Script'…`). Corrected 0019/5 fold A3 | `FUN_101a8ac0` |
 | `1024` | caches the resolved NPC pointer into the cine at `+0x5f98`; no exported map sets it | `FUN_101a7760` |
 | `2048` | suppresses the `Found %s, but can't play` console warning; no exported map sets it | `FUN_101a7600` |
 | `4096` | **Pass through characters.** Saves the NPC's troika flags into `m_saved_troika_flags` and ORs bit `0x40` into them for the beat's duration, restoring on cleanup. Bit `0x40` is read by the NPC's `CBaseAnimating::IsIgnoreCollisionEntity` override (`FUN_1029afc0`, `FUN_1029b180`), which with it set answers true for any entity carrying an AI object (`+0x94`) or a player controller (`+0xa8`) — every NPC and the player. World collision is untouched | `FUN_101a7880`, `FUN_101a9080` |
@@ -2377,13 +2377,17 @@ Each is a deliberate call, recorded beside the behaviour it departs from:
   still ends — a beat that never ends stalls the map's whole script flow. The cap has to sit under
   the cleanup timers a map hangs off its own camera track: `sp_theatre` kills the walk-out beats
   twenty seconds into the shot, having authored them against a walk of about half that.
-- **Spawnflag 256's condition is approximated.** The engine holds the post-idle when there is no
-  live `m_hNextCine`; the nearest thing here is an authored `m_iszNextScript`, so an empty one
-  stands in for it.
-- **Queue ownership is one bit, not a re-read of the owner.** The engine decides a refusal by
-  inspecting the cine that holds the NPC; this runtime stamps "this owner refuses handover" onto the
-  NPC when the claim is made, and distinguishes the two refusal messages by re-reading only the
-  owner's spawnflags. A claim whose owner has been destroyed is cleared rather than honoured.
+- **The director drives the NPC's scripted task order itself** (story 0019/5 fold A3, a named
+  modernization until spec 0003 stories 1–2 build `SCHED_AISCRIPT` on the NPC): travel through the
+  port's motor, plant/face, `DelayStart(0)`, `TASK_WAIT_FOR_SCRIPT` (pre-idle, `IsTimeToStart`,
+  `StartScript`), `TASK_PLAY_SCRIPT`, `TASK_PLAY_SCRIPT_POST_IDLE` — on a 0.05 s beat think, calling
+  the retail director bodies (`PossessEntity`, `StartSequence`, `SequenceDone`, `Finish`, the queue,
+  `m_hNextCine`, `CineCleanup`) at the points the tasks do. `m_hNextCine`, the queue, `CanOverride`
+  and `SUB_Remove` are retail's (the one-bit queue lock and the string stand-in for `m_hNextCine`
+  are retired).
+- **Saves are refused while a beat runs** (named modernization): retail saves the datamap words and
+  the NPC's scripted schedule and resumes; the port's travel request and montage run are not
+  rebuilt from a payload.
 - **`OnScriptEvent01..08` do not fire** — the `.mdl` event record and ID-1003 dispatch are decoded,
   but the current character export/bake does not yet carry the event timeline into playback.
 

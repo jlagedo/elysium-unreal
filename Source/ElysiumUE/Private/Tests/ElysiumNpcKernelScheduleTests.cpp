@@ -826,22 +826,9 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 	Leader->FlipFailureType();
 	TestEqual(TEXT("and a second puts it back"), Leader->FailureType, 0);
 
-	// --- `0x101a95d0` -----------------------------------------------------------------------------
+	// `0x101a95d0` (`CCineAI::FixScriptNPCSchedule`) is the director's since story 5 fold A3:
+	// `Elysium.Substrate.NpcKernelDirector.AiFinishSchedule`.
 	FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
-	Guard->ChangeSchedule(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
-	TestTrue(TEXT("a program is installed"), Guard->Schedule.IsRunning());
-	Guard->FixScriptNPCSchedule(0);
-	TestFalse(TEXT("m_iFinishSchedule 0 clears the schedule"), Guard->Schedule.IsRunning());
-
-	Guard->ChangeSchedule(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
-	Guard->FixScriptNPCSchedule(1);
-	TestTrue(TEXT("m_iFinishSchedule 1 installs 0x2a with NO clear — unregistered, so the program "
-		"it was running survives and the miss is tallied"), Guard->Schedule.IsRunning());
-
-	AddExpectedError(TEXT("FixScriptNPCSchedule - no case"),
-		EAutomationExpectedErrorFlags::Contains, 0);
-	Guard->FixScriptNPCSchedule(7);
-	TestFalse(TEXT("any other value warns and then clears"), Guard->Schedule.IsRunning());
 
 	// --- `0x102ae840` -----------------------------------------------------------------------------
 	Guard->ScriptedScheduleOrder.Reset();

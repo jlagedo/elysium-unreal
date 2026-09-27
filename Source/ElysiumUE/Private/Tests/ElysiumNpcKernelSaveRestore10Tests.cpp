@@ -840,8 +840,8 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 		TEXT("0x103ae7f0") };
 	const TCHAR* const KnownRemove[] = {
 		TEXT("0x10371a90"), TEXT("0x10391230"), TEXT("0x103a03a0"),
-		// The three cine classes share `0x101a7140` and are `FElysiumScriptedSequence` here, so the
-		// arm is listed and can never be selected.
+		// The three cine classes share `0x101a7140`, `FElysiumScriptedSequence::UpdateOnRemove`
+		// (story 5 fold A3), which releases the NPC through `ScriptEntityCancel`.
 		TEXT("0x101a7140") };
 
 	int32 ClassCount = 0;

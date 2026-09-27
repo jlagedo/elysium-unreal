@@ -1727,6 +1727,9 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), WaveoverEntity->Handle);
 	World.Tick(0.0);
+	// The play starts once the possessed NPC's start gate opens (`IsTimeToStart` `0x101a7540`,
+	// `m_startTime = input + 0.05`), on its next think.
+	World.Tick(0.1);
 	TestEqual(TEXT("beat two starts Jack's authored waveover"),
 		Services.Count(TEXT("PlayNpcClip smiling_jack waveover01 loop=0")), 1);
 	TestTrue(TEXT("the waveover beat claims Jack until dialogue interrupts it"),

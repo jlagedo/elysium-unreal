@@ -481,10 +481,6 @@ bool FElysiumNpcKernelSquadFollowerTest::RunTest(const FString&)
 	Npc->SetFollowerType(FString());
 	TestTrue(TEXT("an empty follower type clears the keyfield"), Npc->FollowerType.IsEmpty());
 
-	// `0x101a8130` — the named-master lookup. Its key word and its RTTI target are UNRECOVERED, so
-	// the body asks for a key it has no member for and refuses.
-	TestNull(TEXT("ResolveNamedMaster refuses: the +0x5f5c key and the RTTI class are unrecovered"),
-		Npc->ResolveNamedMaster());
 	return true;
 }
 

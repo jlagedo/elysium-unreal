@@ -70,7 +70,8 @@ bool FElysiumNpcKernelBaseSplitTypeWordsTest::RunTest(const FString&)
 	FBaseOnlyNpc Base;
 	TestTrue(TEXT("a base-only NPC answers +0x94 with itself"), Base.AsNpcBase() == &Base);
 	TestNull(TEXT("and +0x98 with null"), Base.AsNpc());
-	TestNull(TEXT("it has no CAI_Senses object yet (fold 9)"), Base.SensesObject());
+	// `PostConstructor` (`0x1027bb20`) builds `m_pSenses` for every NPC-base instance (story 5 fold A3).
+	TestTrue(TEXT("it carries its own CAI_Senses object"), Base.SensesObject() == &Base.Senses);
 
 	FBaseSplitFixture Fix;
 	if (!TestNotNull(TEXT("the Troika subject spawned"), Fix.Npc))
@@ -114,9 +115,9 @@ bool FElysiumNpcKernelBaseSplitBaseBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("and writes the failure code (+0x5c50)"), Base.BaseScheduleHost.FailureReason, 0x1b);
 	TestTrue(TEXT("and raises TASK_FAILED (0x5c)"), Base.Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
-	// `0x1026a2a0` writes through `m_pSenses`; a base-only NPC has none, and the write lands nowhere.
+	// `0x1026a2a0` writes through `m_pSenses`, which a base-only NPC carries too (fold A3).
 	Base.SetDistLook(1234.f);
-	TestNull(TEXT("SetDistLook with no senses object writes nowhere"), Base.SensesObject());
+	TestEqual(TEXT("SetDistLook writes the base's own senses object"), Base.Senses.LookDistCm, 1234.f);
 
 	// `0x1026f590`, slot 460's base body, answers 0 (no change) on every path: with no enemy the
 	// arm is not taken, and the typed slot answers the ideal state the mind already holds.

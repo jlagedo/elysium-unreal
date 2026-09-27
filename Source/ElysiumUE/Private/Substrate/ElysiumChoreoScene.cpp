@@ -589,7 +589,6 @@ public:
 				continue;
 			}
 			A->ScriptOwner = Handle;
-			A->bScriptOwnerLocked = false;
 			Bound[i].bClaimed = true;
 		}
 	}
@@ -610,7 +609,6 @@ public:
 			if (A != nullptr && A->ScriptOwner == Handle)
 			{
 				A->ScriptOwner = FElysiumEntityHandle::Invalid();
-				A->bScriptOwnerLocked = false;
 			}
 		}
 	}

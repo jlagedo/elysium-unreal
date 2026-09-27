@@ -527,13 +527,13 @@ public:
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) {}
 
 	// --- Scripted-beat ownership (VtMB's m_pCine) ---
-	// The `scripted_sequence` currently driving this entity, and whether that owner refuses to be
-	// kicked out of the queue (spawnflag 512, or an authored `m_iszNextScript`). Claimed on a
-	// successful BeginSequence and released when the beat ends or is cancelled. Not part of the
-	// base snapshot: the owning sequence serializes its own claim and re-stamps this on load, so
-	// the two can never disagree.
+	// `m_hCine` (`+0x5d74`): the script director (`CCineNPC` and its twins) that possesses this
+	// entity, written by `PossessEntity` and cleared by `CineCleanup` (`0x1027d170`). Whether a second
+	// director may take the body is the owner's `CanOverride` (`0x101a8ac0`) through slot 482
+	// `CanPlaySequence`, not a latch here (story 5 fold A3 retired `bScriptOwnerLocked`). Not part of
+	// the base snapshot: the owning director saves the possession in its own record and re-stamps
+	// this in its `OnPostRestore` (`FElysiumScriptedSequence`).
 	FElysiumEntityHandle ScriptOwner;
-	bool bScriptOwnerLocked = false;
 
 	// Play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
 	// model), selecting this actor's skeleton inside it by the scene's `bonerename` source. Kept

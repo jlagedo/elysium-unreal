@@ -46,6 +46,9 @@
 #include "Substrate/ElysiumNpcPedestrian.h"
 #include "Substrate/ElysiumNpcPlaceholder.h"
 #include "Substrate/ElysiumNpcPlayerController.h"
+#include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumAiScriptedSequence.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumNpcProneDialog.h"
 #include "Substrate/ElysiumNpcRat.h"
 #include "Substrate/ElysiumNpcSabbatGunman.h"
@@ -377,6 +380,10 @@ static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 	// `FElysiumNpcTestHull`: no factory builds it by classname; retail builds it by code, and so does
 	// a test here (`FElysiumEntityDef::InternalFactory`), against this abstract descriptor.
 	{ TEXT("CAI_TestHull"), TEXT("CAI_BaseNPC") },
+	// The script directors (story 5 fold A3): `CCineNPC` under `CAI_BaseNPC`, its two twins under it.
+	{ TEXT("CCineAI"), TEXT("CCineNPC") },
+	{ TEXT("CCineAISchedule"), TEXT("CCineNPC") },
+	{ TEXT("CCineNPC"), TEXT("CAI_BaseNPC") },
 	{ TEXT("CNPC_ProneDialog"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VAndreiBlood"), TEXT("CNPC_VVampireBoss") },
 	{ TEXT("CNPC_VAnimal"), TEXT("CAI_BaseNPCTroika") },
@@ -435,6 +442,10 @@ struct FElysiumNpcClassnameRow
 
 static const FElysiumNpcClassnameRow GNpcClassnames[] =
 {
+	// The script directors (story 5 fold A3), each classname its own class: `0x101a96b0`
+	// (`aiscripted_schedule`), `0x1000886e` (`aiscripted_sequence`), and `scripted_sequence`'s.
+	{ TEXT("aiscripted_schedule"), TEXT("CCineAISchedule"), &MakeNpcOf<FElysiumAiScriptedSchedule> },
+	{ TEXT("aiscripted_sequence"), TEXT("CCineAI"), &MakeNpcOf<FElysiumAiScriptedSequence> },
 	{ TEXT("npc_payphone"), TEXT("CPayphone"), &MakeNpcOf<FElysiumNpcPayphone> },
 	{ TEXT("npc_VAndreiBlood"), TEXT("CNPC_VAndreiBlood"), &MakeNpcOf<FElysiumNpcAndreiBlood> },
 	{ TEXT("npc_VAnimal"), TEXT("CNPC_VAnimal"), &MakeNpcOf<FElysiumNpcAnimal> },
@@ -493,6 +504,7 @@ static const FElysiumNpcClassnameRow GNpcClassnames[] =
 	{ TEXT("npc_VWolfMorph"), TEXT("CNPC_VWolfMorph"), &MakeNpcOf<FElysiumNpcWolfMorph> },
 	{ TEXT("npc_VYukie"), TEXT("CNPC_VYukie"), &MakeNpcOf<FElysiumNpcYukie> },
 	{ TEXT("npc_VZombie"), TEXT("CNPC_VZombie"), &MakeNpcOf<FElysiumNpcZombie> },
+	{ TEXT("scripted_sequence"), TEXT("CCineNPC"), &MakeNpcOf<FElysiumScriptedSequence> },
 };
 
 struct FElysiumNpcRegistrar
@@ -515,6 +527,9 @@ struct FElysiumNpcRegistrar
 			// this descriptor alone, so a descendant inherits them and a sibling never sees them.
 			ElysiumNpcKernelBindings::AddSpeciesFields(D, Row.RetailClass);
 			AddSpeciesPendingInputs(D, Row.RetailClass);
+			// The directors' datamap inputs (`CCineNPC` `0x10593628`, `CCineAISchedule` `0x10593c9c`).
+			FElysiumScriptedSequence::AddInputs(D, Row.RetailClass);
+			FElysiumAiScriptedSchedule::AddInputs(D, Row.RetailClass);
 		}
 		// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the class
 		// `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it decides

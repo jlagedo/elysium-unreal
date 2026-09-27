@@ -11,6 +11,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
@@ -48,9 +49,6 @@ namespace
 	constexpr int32 GBaseHelpersActRun = 0x13;              // ACT_RUN
 	// `CBaseEntity::GetFlags()` bit 0.
 	constexpr uint32 GFlOnGround = 1;
-	// `m_iszCustomMove` sits at `+0x5f50` on the cine. There is no port field for it, so
-	// `GetScriptCustomMoveActivity` reads this empty key and says so.
-	const FString GUnrecoveredCustomMove;
 }
 
 // --- Moved from `ElysiumNpcKernelBaseHelpers.cpp` (story 5 step 5) ---
@@ -324,10 +322,9 @@ int32 FElysiumNpcBase::GetScriptCustomMoveActivity() const
 	{
 		return GBaseHelpersActWalk;
 	}
-	// SEAM: `m_iszCustomMove` (`+0x5f50` on the cine) has no port field — `FElysiumAiScriptedSchedule`
-	// carries the beat's named clips, not the scripted-sequence custom move — so the key reads
-	// empty and the body takes its own `ACT_WALK` arm.
-	const FString& CustomMove = GUnrecoveredCustomMove;
+	// `m_iszCustomMove` (`+0x5f50`) on the director `m_hCine` resolves to (story 5 fold A3).
+	const FElysiumScriptedSequence* Cine = ResolveCine();
+	const FString CustomMove = Cine != nullptr ? Cine->CustomMove : FString();
 	if (CustomMove.IsEmpty())
 	{
 		return GBaseHelpersActWalk;

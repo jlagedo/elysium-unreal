@@ -1050,9 +1050,13 @@ drops its jump table, is a guard and a dispatch: while `m_NPCState` is 4 (SCRIPT
 (`+0x5d74`) still resolves through the entity table, it calls THAT entity's own slot 459. Outside
 state 4, and with a dead cine handle, it writes nothing at all.
 
-**`CCineAISchedule::RemoveIgnoredConditions` (`0x101a89a0`)** is the body the dispatch reaches. It
-first refuses when `0x101a8930` says the scene is already in this state, then walks `m_hTargetEnt`
-through `+0x94` to the scene's NPC and clears fourteen conditions on **that** NPC, in this order:
+**`CCineNPC::RemoveIgnoredConditions` (`0x101a89a0`)** (the director's own slot 459, shared by
+`CCineAI` and `CCineAISchedule`; Ghidra files it under `CCineAISchedule`) is the body the dispatch
+reaches. It clears only when `CanInterrupt` (`0x101a8930`: `m_interruptable` and the target alive)
+answers **false** — a NOINTERRUPT (`0x20`) beat, or one whose NPC is dead — then walks
+`m_hTargetEnt` through `+0x94` to the director's NPC and clears fourteen conditions on **that** NPC,
+in this order (corrected 0019/5 fold A3: the gate was read as "already in this state"; port
+`FElysiumScriptedSequence::RemoveIgnoredConditions`):
 `LIGHT_DAMAGE` `0x4c`, `HEAVY_DAMAGE` `0x4d`, `REPEATED_DAMAGE` `0x4e`, then the
 `m_bCondTookDamage` byte at `+0x5b80`, then `INVESTIGATE_LEVEL` `0x1e`, `CRIMINAL_FLEE_LEVEL` `0x1f`,
 `SUPERNATURAL_FLEE_LEVEL` `0x21`, `HEAR_FLINCH` `0x72`, `CRIMINAL_ATTACK_LEVEL` `0x20`,

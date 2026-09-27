@@ -25,7 +25,8 @@
 #include "ElysiumStub.h"
 #include "ElysiumSurfaceSounds.h"
 #include "ElysiumWorldServices.h"
-#include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumScriptedScheduleOrder.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumPhysProp.h"
@@ -318,6 +319,19 @@ void FElysiumNpc::OnKilled()
 	if (HasReportedDeath())
 	{
 		return;
+	}
+	// `CAI_BaseNPC::Event_Killed` (`0x10265ad0`), its head: an NPC in NPC_STATE_SCRIPT with a live
+	// `m_hCine` runs `CancelScript` (`0x101a8c30`) on that cine at once, while the mind is still in
+	// SCRIPT (the cancel's own gate). **Named divergence:** retail first DEFERS the death when the
+	// cine's sequence has started and its spawnflags do not read exactly `0x80` of `0x2080` (the
+	// damage info is stored at `+0x1a48 m_DeferredDeathInfo` and the NPC dies when the sequence ends);
+	// the port's death transaction cannot be deferred, so the beat is always cancelled.
+	if (NpcStateRetail() == 4)
+	{
+		if (FElysiumScriptedSequence* Cine = ResolveCine())
+		{
+			Cine->CancelScript();
+		}
 	}
 	// The shared body first — the `OnDeath` output, the owner/maker notification and the log. Its
 	// producer order is already settled there and death does not reorder it.
@@ -1278,13 +1292,17 @@ bool FElysiumNpc::TickScriptWatchdog()
 	}
 	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
 		*DebugString());
-	// Everything the beat holds leaves together, the queue lock included: a beat that stopped
-	// advancing its own move will not run its teardown either, and half a claim would leave
-	// this body suppressed and unowned for the rest of the map.
+	// Everything the beat holds leaves together: a beat that stopped advancing its own move will not
+	// run its teardown either, and half a claim would leave this body suppressed and unowned for the
+	// rest of the map. While the owning director still resolves, that teardown IS `CineCleanup`
+	// (`0x1027d170`): the saved movetype/flags, the oblivious count and the squad come back with it.
+	if (ResolveCine() != nullptr)
+	{
+		FElysiumScriptedSequence::CineCleanup(*this);
+	}
 	ReleaseScriptBody(TEXT("abandoned scripted move"));
 	EndScriptMove();
 	ScriptOwner = FElysiumEntityHandle::Invalid();
-	bScriptOwnerLocked = false;
 	// The beat's montage-slot run claim goes with the rest of what it held. Nothing else can give it
 	// back — the beat that took it is the thing that stopped answering — and it has no duration, so a
 	// claim left standing here would refuse the idle below at the ambient band and park this body's
@@ -3476,7 +3494,6 @@ FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
 			ReleaseScriptBody(TEXT("stale scripted owner cleared for dialogue"));
 			EndScriptMove();
 			ScriptOwner = FElysiumEntityHandle::Invalid();
-			bScriptOwnerLocked = false;
 		}
 	}
 	// A pushed scripted order is DROPPED rather than parked. The arbiter's one parked slot is spoken
@@ -3891,8 +3908,9 @@ void FElysiumNpc::RestartRestoredSchedule()
 	ElysiumSchedule::Start(Schedule, Restored, *this);
 }
 
-// A restored body stands where the record puts it, so no in-flight travel survives the load; the
-// beat that owned it re-issues its own move (`FElysiumScriptedSequence`). Then the authored patrol
+// A restored body stands where the record puts it, so no in-flight travel survives the load; a beat
+// cannot be in flight across a save at all (`FElysiumScriptedSequence::SaveBlockReason`, a named
+// modernization). Then the authored patrol
 // route is resolved again from the `PatrolPath` keyfield the field walk restored.
 //
 // **Divergence, stated:** `TroikaOnRestore` releases both stored routes, because retail persists

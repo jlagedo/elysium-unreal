@@ -109,12 +109,12 @@ void FElysiumNpcBase::RemoveIgnoredConditions()
 	{
 		return;
 	}
-	FElysiumNpc* Partner = CineIgnoredConditionsPartner();
-	if (Partner == nullptr)
+	// That entity's own slot 459, dispatched virtually: the director's body
+	// (`FElysiumScriptedSequence::RemoveIgnoredConditions`, `0x101a89a0`).
+	if (FElysiumNpcBase* Cine = World->Resolve(ScriptOwner)->AsNpcBase())
 	{
-		return;
+		Cine->RemoveIgnoredConditions();
 	}
-	ClearCineIgnoredConditions(*Partner);
 }
 
 int32 FElysiumNpcBase::RangeAttack1Conditions(float FlDot, float FlDist)
@@ -204,9 +204,9 @@ bool FElysiumNpcBase::StartOpeningDoor(FElysiumEntity& Door)
 
 // --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 5) ---
 
-void FElysiumNpcBase::ClearCineIgnoredConditions(FElysiumNpc& Partner)
+void FElysiumNpcBase::ClearCineIgnoredConditions(FElysiumNpcBase& Partner)
 {
-	// 0x101a89a0, the cine entity's own slot-459 body, applied to its scene partner. Three damage
+	// 0x101a89a0's write list, applied to the director's NPC. Three damage
 	// conditions, then `m_bCondTookDamage` (+0x5b80), then ten more — in retail's order, which is
 	// NOT sorted and is reproduced as written.
 	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::LightDamage);       // 0x4c
@@ -223,13 +223,4 @@ void FElysiumNpcBase::ClearCineIgnoredConditions(FElysiumNpc& Partner)
 	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::InvestigateSight);        // 0x26
 	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::Comfort);                 // 0x27
 	Partner.Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);           // 10 = 0x0a
-}
-
-FElysiumNpc* FElysiumNpcBase::CineIgnoredConditionsPartner() const
-{
-	// SEAM. Retail's chain is `m_hCine (+0x5d74)` -> the cine entity's slot 459 -> its own
-	// `m_hTargetEnt` -> that entity's `+0x94` (its NPC). This runtime's `FElysiumEntity::ScriptOwner`
-	// carries the first hop, but no scripted-scene object here carries a target entity or the
-	// `0x101a8930` "already in this state" predicate the body gates on, so the walk cannot start.
-	return nullptr;
 }

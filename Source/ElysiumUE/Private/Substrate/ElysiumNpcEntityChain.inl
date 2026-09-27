@@ -430,32 +430,12 @@ int32 ClosestNpcSense() const;
  *  `_DAT_10471720`, then ORs bit 0 into `+0x1cac`. */
 void SetPlayerAnim(const TCHAR* Name, const TCHAR* Sound);
 
-/** `0x101a7540` — `CCineNPC::IsTimeToStart`. `m_iDelay` (+0x5f70) below 1 **AND** `m_startTime`
- *  (+0x5f74) at or before curtime. The SDK's own body is an **OR** of the same two terms; retail's
- *  is an AND, which is a shipped divergence and is what this ports. */
-bool CineIsTimeToStart() const;
-
-/** `0x101a8840` — `CCineNPC::FixScriptNPCSchedule`, the body every scripted-sequence teardown ends
- *  on. If the NPC's `m_IdealNPCState` (+0x5cc4) is not 7 (`NPC_STATE_DEAD`), stamp the
- *  `m_SelectIdealStateTrace` file/line pair (+0x1b3c / +0x1b40 = 970) and store 1
- *  (`NPC_STATE_IDLE`); then, on every path, `ClearSchedule` (`0x10280d30`).
- *
- *  29c's walk read the file/line write as "a one-shot assertion tripwire". It is not: `layout.md`
- *  names `+0x1b3c`/`+0x1b40` the ideal-state selector trace, which every `m_IdealNPCState` writer in
- *  the image stamps. Corrected here and in the walked paragraph. */
-void FixScriptNpcSchedule(FElysiumNpc& Npc);
-
 /** `0x101aa730` — the Troika's stamp for the FOURTH (AI) think channel (+0x6260), beside family Lifecycle's
  *  `LastUpdateThink` / `LastNormalThink` / `LastMoveThink`. This runtime carries the word as
  *  `FElysiumNpcScheduleHost::LastAI`, so the body is that read and nothing else. */
 float LastAiThink() const;
 
 // --- Slot 135's own inputs ------------------------------------------------------------------------
-
-/** **SEAM** for `CCineNPC::m_iDelay` (+0x5f70) and `m_startTime` (+0x5f74): the port's beat lives on
- *  the `scripted_sequence` entity and the kernel holds no pointer to it. Answers (0, 0), the state
- *  retail's constructor leaves. */
-void CineDelayState(int32& OutDelay, float& OutStartTime) const;
 
 // --- The `CBasePlayer` bodies' own inputs ---------------------------------------------------------
 

@@ -323,16 +323,16 @@ bool FElysiumFogDecalMIDTest::RunTest(const FString&)
 // No skeletal body here, so no action animation: this covers the half every map depends on —
 // placement on the mark, OnBeginSequence/OnEndSequence, and the m_iszNextScript chain. A beat
 // with no `m_iszPlay` is zero-length (59 of the 108 exported sequences are), so the whole chain
-// settles within a few ticks of the null clock.
+// settles within a few ticks once `IsTimeToStart` (`0x101a7540`, `m_startTime = input + 0.05`)
+// opens. The target is an NPC: `FindEntity` (`0x101a7600`) admits only an entity with `+0x94`.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceTest,
 	"Elysium.Substrate.ScriptedSequence", GElysiumTestFlags)
 bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 {
-	// Builds one scripted_sequence def. The target is a logic_relay purely because it is a point
-	// entity the world will place — the sequence drives FElysiumEntity::SetRuntimeOrigin, which is
-	// on the base, not on the NPC leaf.
+	// Builds one scripted_sequence def aimed at `mover1`, an NPC (retail's `FindEntity` admits only a
+	// `CAI_BaseNPC`; a point entity by that name is skipped).
 	auto MakeSeq = [](const TCHAR* Name, const TCHAR* MoveTo, const FVector& At, const TCHAR* SpawnFlags)
 	{
 		FElysiumEntityDef Seq;
@@ -376,8 +376,9 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Seq3));
 
 	FElysiumEntityDef Mover;
-	Mover.Classname = TEXT("logic_relay");
+	Mover.Classname = TEXT("npc_VHumanCombatant");
 	Mover.TargetName = TEXT("mover1");
+	Mover.Keys.Add(TEXT("stattemplate"), TEXT("Thug"));
 	Defs.Defs.Add(MoveTemp(Mover));
 
 	FElysiumEntityDef Counter;
@@ -411,14 +412,21 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	TestTrue(TEXT("the target starts at the origin"), Target->Origin.IsNearlyZero());
 
+	double Now = 0.0;
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), /*Delay*/ 0.0,
 		FElysiumEntityHandle::Invalid(), Seq->Handle);
-	for (int32 i = 0; i < 8; ++i)
+	World.Tick(Now);
+	// `OnBeginSequence` fires from `StartScript` (`0x101a81a0`) once the NPC stands on its mark and the
+	// start gate opens — NOT at the input.
+	TestEqual(TEXT("nothing fires at the input"), CounterValue(Count), 0.f);
+	for (int32 i = 0; i < 12; ++i)
 	{
-		World.Tick(0.0);
+		Now += 0.1;
+		World.Tick(Now);
 	}
 
-	// Both of seq1's outputs fired, then the chain carried seq2's.
+	// Both of seq1's outputs fired, then the chain (`Finish` `0x101a8640`: `m_hNextCine` possesses the
+	// NPC directly) carried seq2's.
 	TestEqual(TEXT("OnBeginSequence + OnEndSequence + the chained beat all fired"),
 		CounterValue(Count), 7.f);
 	// m_fMoveTo 1 placed the target on seq1's mark; seq2's m_fMoveTo 0 left it there.
@@ -426,22 +434,25 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	TestTrue(TEXT("the mark's facing was applied"),
 		FMath::IsNearlyEqual(Target->Angles.Y, 90.f, 0.01f));
 
-	// NOSCRIPTMOVEMENT: the beat still runs, but the target stays where it is.
+	// Spawnflag 128 (HL1's NOSCRIPTMOVEMENT) is NOT a movement gate in VtMB: the scripted schedules
+	// split by `m_fMoveTo` alone (`0x102cc080`), and `CineCleanup` (`0x1027d170`) is its one reader
+	// (it skips the bone-0 placement). The beat moves its NPC like any other.
 	FElysiumEntity* NoMove = World.FindByName(TEXT("seq3"));
 	if (TestNotNull(TEXT("seq3 resolved"), NoMove))
 	{
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
 			FElysiumEntityHandle::Invalid(), NoMove->Handle);
-		for (int32 i = 0; i < 4; ++i)
+		for (int32 i = 0; i < 6; ++i)
 		{
-			World.Tick(0.0);
+			Now += 0.1;
+			World.Tick(Now);
 		}
-		TestTrue(TEXT("SF_SCRIPT_NOSCRIPTMOVEMENT left the target on its previous mark"),
-			Target->Origin.Equals(Mark, 0.01));
+		TestTrue(TEXT("spawnflag 128 still places the target on the mark"),
+			Target->Origin.Equals(FVector(-777.f, -777.f, -777.f), 0.01));
 	}
 
-	// A sequence naming the player has no body to drive; it must still run as a timing shell so the
-	// map's flow continues rather than dead-ending (10 of the 108 target `!playercontroller`).
+	// A sequence naming `!playercontroller` with no stand-in standing finds nothing, and retail's
+	// `BeginSequence` then does nothing at all: no think, no output (`0x101a7412 JZ 0x101a74a9`).
 	FElysiumEntityDefs PlayerDefs;
 	PlayerDefs.MapName = TEXT("__test2__");
 	FElysiumEntityDef PlayerSeq = MakeSeq(TEXT("pseq"), TEXT("1"), Mark, TEXT("0"));
@@ -466,11 +477,13 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	{
 		World2.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
 			FElysiumEntityHandle::Invalid(), PSeq->Handle);
-		for (int32 i = 0; i < 4; ++i)
+		double Now2 = 0.0;
+		for (int32 i = 0; i < 6; ++i)
 		{
-			World2.Tick(0.0);
+			World2.Tick(Now2);
+			Now2 += 0.1;
 		}
-		TestEqual(TEXT("a player-targeted beat still fires OnEndSequence"), CounterValue(Count2), 9.f);
+		TestEqual(TEXT("a beat whose target is not found fires nothing"), CounterValue(Count2), 0.f);
 	}
 
 	return true;
@@ -630,7 +643,8 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
 			FElysiumEntityHandle::Invalid(), Seq->Handle);
-		for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+		double Now = 0.0;
+		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
 
 		TestTrue(TEXT("an unreachable mark places the NPC on it instead"), Npc->Origin.Equals(Mark, 0.01));
 		TestTrue(TEXT("and applies the mark's facing"),
@@ -844,8 +858,8 @@ bool FElysiumPlayerControllerSequenceLocomotionTest::RunTest(const FString&)
 
 // =====================================================================================
 // The three VtMB spawnflag additions on CCineNPC (`docs/vtmb/entity_io.md`): 256 holds the
-// post-idle so the beat never completes, 512 makes the beat's claim on its NPC unbreakable,
-// and 4096 turns off character collision for the beat's duration. sp_theatre's courtroom
+// post-idle so the beat never completes (its `OnEndSequence` still fires), 512 keeps a QUEUED beat
+// from being kicked out of the queue, and 4096 turns off character collision for the beat's duration. sp_theatre's courtroom
 // walk-out authors all three — `0x1260` on the five who walk, `0x360` on the two who stand.
 // =====================================================================================
 
@@ -983,40 +997,62 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		Begin(World, Seq);
 		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
 
-		// 256: the post-idle is held, so the beat never completes and its wire never fires.
-		TestEqual(TEXT("256 suppresses OnEndSequence"), CounterValue(Count), 0.f);
+		// 256: `OnEndSequence` fires from `SequenceDone` (`0x101a8460`) UNCONDITIONALLY, before the
+		// post-idle; `Finish` (`0x101a8640`) then holds the post-idle and the beat never completes.
+		TestEqual(TEXT("256 does not suppress OnEndSequence"), CounterValue(Count), 5.f);
 		TestTrue(TEXT("a held beat keeps the collision it borrowed"),
 			Motor->bIgnoreCharacterCollision);
 
 		World.EnqueueInput(TEXT("beat_a"), FName(TEXT("CancelSequence")), FElysiumVariant::Void(),
 			0.0, {}, {});
 		for (int32 i = 0; i < 3; ++i) { World.Tick(Now); Now += 0.1; }
-		TestEqual(TEXT("cancelling a held beat still fires no OnEndSequence"),
-			CounterValue(Count), 0.f);
+		TestEqual(TEXT("cancelling a held beat fires no second OnEndSequence"),
+			CounterValue(Count), 5.f);
 		TestFalse(TEXT("cancelling releases the borrowed collision"),
 			Motor->bIgnoreCharacterCollision);
 	}
 
-	// --- 512: a priority beat cannot be kicked out of the queue ------------------------------
+	// --- 512: a QUEUED priority beat cannot be kicked out of the queue ------------------------
+	// `CanOverride` (`0x101a8ac0`) reads spawnflag `0x200` on the cine queued as the holder's
+	// `m_hNextCine`, not on the holder: a priority beat waiting its turn refuses a later challenger.
 	{
 		FElysiumEntityDefs Defs;
-		BuildDefs(Defs, /*spawnflags*/ 0x360, TEXT("Converse_Normal_Talk_A"), /*m_fMoveTo*/ 0);
+		BuildDefs(Defs, /*spawnflags*/ 0x160, TEXT("Converse_Normal_Talk_A"), /*m_fMoveTo*/ 0);
+		// beat_b becomes the queued priority beat; beat_c is the late challenger.
+		for (FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.TargetName == TEXT("beat_b"))
+			{
+				Def.Keys.Add(TEXT("spawnflags"), TEXT("576"));   // 0x200 | 0x40
+			}
+		}
+		FElysiumEntityDef Late;
+		Late.Classname = TEXT("scripted_sequence");
+		Late.TargetName = TEXT("beat_c");
+		Late.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Late.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
+		Late.Keys.Add(TEXT("spawnflags"), TEXT("64"));
+		FElysiumOutputDef W3;
+		W3.Name = TEXT("OnBeginSequence");
+		W3.Target = TEXT("counter1");
+		W3.Input = TEXT("Add");
+		W3.Param = TEXT("1000");
+		Late.Outputs.Add(W3);
+		Defs.Defs.Add(MoveTemp(Late));
 
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
-		// The first think — and the mind admission every body claim needs — falls at
-		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
-		// there on the map's first second (`_DAT_104493d0`).
 		World.Tick(0.0);
 
 		FElysiumEntity* First = World.FindByName(TEXT("beat_a"));
 		FElysiumEntity* Second = World.FindByName(TEXT("beat_b"));
+		FElysiumEntity* Third = World.FindByName(TEXT("beat_c"));
 		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
 		if (!TestNotNull(TEXT("beat_a resolved"), First) || !TestNotNull(TEXT("beat_b resolved"), Second)
-			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+			|| !TestNotNull(TEXT("beat_c resolved"), Third) || !TestNotNull(TEXT("counter1 resolved"), Count))
 		{
 			return false;
 		}
@@ -1024,19 +1060,15 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		double Now = 0.0;
 		Begin(World, First);
 		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
+		const float AfterFirst = CounterValue(Count);   // beat_a's OnEndSequence (5)
 
+		// Both challengers in one pass: beat_b queues behind the held beat_a, and beat_c is refused
+		// because the queued beat_b is a priority script.
 		Begin(World, Second);
-		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
-		TestEqual(TEXT("512 refuses the challenger outright — not even OnBeginSequence"),
-			CounterValue(Count), 0.f);
-
-		// Releasing the claim reopens the queue: the same challenger now gets the NPC.
-		World.EnqueueInput(TEXT("beat_a"), FName(TEXT("CancelSequence")), FElysiumVariant::Void(),
-			0.0, {}, {});
-		for (int32 i = 0; i < 3; ++i) { World.Tick(Now); Now += 0.1; }
-		Begin(World, Second);
-		for (int32 i = 0; i < 6; ++i) { World.Tick(Now); Now += 0.1; }
-		TestEqual(TEXT("and admits it once the claim is released"), CounterValue(Count), 100.f);
+		Begin(World, Third);
+		for (int32 i = 0; i < 10; ++i) { World.Tick(Now); Now += 0.1; }
+		TestEqual(TEXT("the queued priority beat runs once the holder yields; the late challenger never"),
+			CounterValue(Count) - AfterFirst, 100.f);
 	}
 
 	return true;
@@ -1518,17 +1550,19 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 			return false;
 		}
 
-		// The waiting pose, taken at map load. It is the AMBIENT band and holds nothing: the beat has
-		// claimed no NPC yet, so the body's own patrol or interesting-place travel still owns it and a
-		// `Scripted` pre-idle would refuse the travel clip and slide the NPC to its next mark praying.
-		TestTrue(TEXT("the waiting pose plays on the ambient band"),
-			Services.Saw(TEXT("PlayNpcClip damsel wait_idle loop=1 band=ambient")));
-		TestFalse(TEXT("...and takes no run claim, because the beat owns nothing yet"),
-			Services.bNpcSegmentHeld);
+		// Nothing plays at map load: `Activate` (`0x101a8de0`) resolves names and precaches, and the
+		// pre-idle belongs to the possessed NPC's `TASK_WAIT_FOR_SCRIPT`.
+		TestFalse(TEXT("no waiting pose at map load"), Services.Saw(TEXT("PlayNpcClip damsel wait_idle")));
+		TestFalse(TEXT("...and no run claim, because the beat owns nothing yet"), Services.bNpcSegmentHeld);
 
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
 			FElysiumEntityHandle::Invalid(), Seq->Handle);
 		World.Tick(0.0);
+		World.Tick(0.1);
+
+		// `TASK_WAIT_FOR_SCRIPT` plays the pre-idle through slot 584 — part of the beat's run.
+		TestTrue(TEXT("the pre-idle plays inside the beat, on the scripted band"),
+			Services.Saw(TEXT("PlayNpcClip damsel wait_idle loop=1 band=scripted held=1")));
 
 		// The action is the run proper: the beat's own band, and a claim with no duration so the gap
 		// between two of its segments is never a frame the channel goes back to locomotion.
@@ -1536,16 +1570,16 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 			Services.Saw(TEXT("PlayNpcClip damsel praying_idle loop=0 band=scripted held=1")));
 		TestTrue(TEXT("...and the body is holding the run's claim"), Services.bNpcSegmentHeld);
 
-		// The action runs out. A post-idle the beat does NOT hold is what it LEAVES the NPC standing
-		// in after handing the body back, so it drops to the ambient band with the claim given back —
-		// a released beat still holding `Scripted` would park the channel on a beat that has ended.
-		double Now = 0.1;
-		for (int32 i = 0; i < 12; ++i) { World.Tick(Now); Now += 0.1; }
+		// The action runs out. `SequenceDone` plays the post-idle through slot 584 — still the run, at
+		// the beat's band — and `TASK_PLAY_SCRIPT_POST_IDLE` holds it until it finishes; `Finish`'s
+		// `CineCleanup` then gives the claim back.
+		double Now = 0.2;
+		for (int32 i = 0; i < 16; ++i) { World.Tick(Now); Now += 0.1; }
+		TestTrue(TEXT("the post-idle plays as the run's last segment"),
+			Services.Saw(TEXT("PlayNpcClip damsel rest_idle loop=1 band=scripted held=1")));
 		TestTrue(TEXT("the run's claim is given back when the beat ends"),
 			Services.Saw(TEXT("ReleaseNpcSegment body=1")));
 		TestFalse(TEXT("...and nothing is left holding it"), Services.bNpcSegmentHeld);
-		TestTrue(TEXT("the released post-idle is a resting pose on the ambient band"),
-			Services.Saw(TEXT("PlayNpcClip damsel rest_idle loop=1 band=ambient")));
 	}
 
 	// --- spawnflag 256: the beat goes on owning its NPC, so the post-idle stays part of the run ----

@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 203 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
-// 109 are defined by hand in the substrate, and 39 are still stubs — 25 29c, 2 29d, 12 29e.
+// 110 are defined by hand in the substrate, and 38 are still stubs — 24 29c, 2 29d, 12 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -165,11 +165,8 @@ void FElysiumNpcBase::Event_Killed(void*)
 
 // slot 180 0x1027ca30 (sdk) `void UpdateOnRemove()`
 //   layer 6, story 29c
-void FElysiumNpcBase::UpdateOnRemove()
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::UpdateOnRemove"), TEXT("0x1027ca30"), TEXT("29c"),
-		DebugString());
-}
+// verdict `rule`: the body is `FElysiumNpcBase::UpdateOnRemove`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 197 0x102789c0 (walked) `Vector BodyTarget(const Vector&, bool, bool)`
 //   layer 9, story 29c
@@ -1465,7 +1462,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, FElysiumEntity*() const>::Test(&FElysiumNpcBase::GetEnemy),
 				nullptr },
 			{ 180, TEXT("0x1027ca30"), TEXT("CAI_BaseNPC"), TEXT("UpdateOnRemove"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, void()>::Test(&FElysiumNpcBase::UpdateOnRemove),
 				nullptr },
 			{ 197, TEXT("0x102789c0"), TEXT("CAI_BaseNPC"), TEXT("BodyTarget"),

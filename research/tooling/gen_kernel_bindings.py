@@ -122,6 +122,7 @@ BINDING_CLASSES = (
 # the same offset is a different word on every species, so a row binds on the class that declares it
 # and descendants inherit it through the descriptor chain -- a sibling never sees it.
 SPECIES_TABLES = (
+    "CCineAISchedule", "CCineNPC",
     "CNPC_VAndreiBlood", "CNPC_VAnimal", "CNPC_VAsianVampire", "CNPC_VBach",
     "CNPC_VCameraSecurity", "CNPC_VChangBros", "CNPC_VCop", "CNPC_VFrenzyShadow", "CNPC_VGargoyle",
     "CNPC_VGhoulCroucher", "CNPC_VGuard1", "CNPC_VHengeyokai", "CNPC_VHunter", "CNPC_VLasombra",
@@ -132,9 +133,28 @@ SPECIES_TABLES = (
 )
 
 
+# The script directors (story 5 fold A3) are species tables in every respect but their port names:
+# `CCineNPC` and `CCineAISchedule` stand as `FElysiumScriptedSequence` / `FElysiumAiScriptedSchedule`
+# (`CCineAI` has no datamap of its own). Their words sit at `+0x5f44..+0x6094`, offsets the Troika
+# uses for other words, which is exactly why they bind through the class-qualified species map.
+DIRECTOR_BINDINGS = {
+    "CCineNPC": ("ScriptedSequence", "FElysiumScriptedSequence"),
+    "CCineAISchedule": ("AiScriptedSchedule", "FElysiumAiScriptedSchedule"),
+}
+
+
 def species_binding(table: str) -> str:
     """`CNPC_VScurrying` -> `Scurrying`, the binding class and the port class's stem."""
+    if table in DIRECTOR_BINDINGS:
+        return DIRECTOR_BINDINGS[table][0]
     return table.removeprefix("CNPC_V")
+
+
+def species_port_class(table: str) -> str:
+    """The port class a species table's rows register against."""
+    if table in DIRECTOR_BINDINGS:
+        return DIRECTOR_BINDINGS[table][1]
+    return f"FElysiumNpc{species_binding(table)}"
 
 
 BINDING_CLASSES = BINDING_CLASSES + tuple((species_binding(t), (t,)) for t in SPECIES_TABLES)
@@ -151,7 +171,7 @@ PORT_CLASS = {
     "CombatCharacter": "FElysiumCombatCharacter",
     "NpcBase": "FElysiumNpcBase",
     "Npc": "FElysiumNpc",
-    **{species_binding(t): f"FElysiumNpc{species_binding(t)}" for t in SPECIES_TABLES},
+    **{species_binding(t): species_port_class(t) for t in SPECIES_TABLES},
 }
 
 # The NPC's entity chain, keyed by retail class then offset, as (port type, member). The port's

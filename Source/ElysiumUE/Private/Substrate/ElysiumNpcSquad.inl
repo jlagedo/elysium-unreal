@@ -73,5 +73,3 @@ void SetFollowerBossName(const FElysiumEntity* Boss);
  *  `Rules.txt` `Npc_Follower_Info`, then `walkTo >= backAway + 10`, `runTo >= walkTo + 10`. */
 void SetFollowerType(const FString& NewFollowerType);
 
-/** `0x101a8130` — the named-master lookup. Largely UNRECOVERED; see the definition. */
-FElysiumEntity* ResolveNamedMaster() const;

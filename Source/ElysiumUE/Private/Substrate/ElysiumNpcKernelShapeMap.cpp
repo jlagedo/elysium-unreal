@@ -141,9 +141,9 @@ namespace
 	ELYSIUM_NPC_WORD_NOTED(0x5cd4, FElysiumNpcBase, IdealWeaponActivity,
 		"an activity enum with no port counterpart, so the registered number"),
 	ELYSIUM_NPC_WORD(0x5cd8, FElysiumNpcBase, bKeepSound),
-	ELYSIUM_NPC_WORD_NOTED(0x5cdc, FElysiumNpc, Senses,
-		"m_pSenses, a CAI_BaseNPC word: the senses object stays on the Troika as a transitional home "
-		"(story-5/decisions-step5.json transitional.Senses); the base reaches it through SensesObject()"),
+	ELYSIUM_NPC_WORD_NOTED(0x5cdc, FElysiumNpcBase, Senses,
+		"m_pSenses, the CAI_Senses object every NPC-base instance carries (PostConstructor 0x1027bb20 -> "
+		"slot 424); directors hold it idle"),
 	ELYSIUM_NPC_WORD(0x5ce0, FElysiumNpcBaseMemory, Enemy),
 	ELYSIUM_NPC_WORD_PRIVATE(0x5ce4, "FElysiumNpcBase::TargetEnt",
 		"private to its owner: m_hTargetEnt"),

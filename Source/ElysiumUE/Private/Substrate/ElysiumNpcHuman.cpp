@@ -20,7 +20,7 @@
 #include "ElysiumWorldServices.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/ElysiumCameraShots.h"
-#include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumScriptedScheduleOrder.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumFeed.h"

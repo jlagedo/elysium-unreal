@@ -237,30 +237,8 @@ bool FElysiumNpc::LoadedSchedules()
 // The schedule-change door.
 // -------------------------------------------------------------------------------------------------
 
-// slot 586 0x101a95d0 `CCineAI::FixScriptNPCSchedule`
-void FElysiumNpc::FixScriptNPCSchedule(int32 FinishSchedule)
-{
-	// `m_iFinishSchedule` is the DIRECTOR's word (`CCineAI +0x5f64`), passed in rather than read off
-	// this NPC. Retail's arms, in order:
-	if (FinishSchedule != 0)
-	{
-		if (FinishSchedule == 1)
-		{
-			// `thunk_FUN_10280de0(npc, 0x2a)` — `SCHED_AISCRIPT`, installed with NO clear.
-			//
-			// SEAM: 0x2a is not a registered program here. The scripted family this runtime carries
-			// is `ScriptedMoveToGoal` / `ScriptedFollowPath`, which the director pushes directly, so
-			// naming one of them here would be a different program under a recovered number.
-			ElysiumStub::Fired(TEXT("schedule"),
-				TEXT("CCineAI::FixScriptNPCSchedule SCHED_AISCRIPT 0x2a"), DebugString(),
-				TEXT("m_iFinishSchedule=1"), TEXT("0002/0003: SCHED_AISCRIPT is not registered"));
-			return;
-		}
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s FixScriptNPCSchedule - no case!"), *DebugString());
-	}
-	// Both the 0 arm and the no-case arm fall through to the clear.
-	ClearSchedule();
-}
+// `CCineAI::FixScriptNPCSchedule` (slot 586, `0x101a95d0`) is the director's own body since story 5
+// fold A3 (`FElysiumAiScriptedSequence`).
 
 // 0x102ae840 — the scripted-schedule order push
 void FElysiumNpc::AcceptScriptedScheduleOrder(int32 OrderId, bool bForce)

@@ -47,7 +47,7 @@ static bool StandoffSchedulesLoaded();
  *  recover); this is walked off the listing:
  *
  *      if (GetState() == 4 (NPC_STATE_SCRIPT) && m_hCine (+0x5d74) resolves)
- *          if (!CineCanInterrupt()) return false;              // 0x101a8930, on the CINE
+ *          if (!cine->CanInterrupt()) return false;            // 0x101a8930, on the CINE
  *      if (m_bInChoreoScene (+0x5bc4)) return false;
  *      if (m_bfAINPCFlags2 (+0x14bc) & 0x1000) return false;   // TEST AH,0x10 at 0x1028a213
  *      return IsAlive();                                       // vtable +0x278, slot 158

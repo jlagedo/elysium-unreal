@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumNpcKernelSpeciesShapeMap.h"
 
+#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"
@@ -30,6 +31,7 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcWolfMorph.h"
 #include "Substrate/ElysiumNpcZombie.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 
 // One row per record of an introduced species' own datamap, grouped by declaring class and in
 // offset order. `docs/specs/0019-npc-kernel-rework/story-5/fields-step4.tsv` is the reviewed
@@ -45,6 +47,59 @@ namespace
 {
 	constexpr FElysiumNpcSpeciesWordBinding GSpeciesBindings[] =
 	{
+	// --- CCineAISchedule (story 5 fold A3) ---
+	ELYSIUM_NPC_SPECIES_WORD(CCineAISchedule, 0x608c,
+		FElysiumAiScriptedSchedule, GoalEntity),  // m_sGoalEnt
+	ELYSIUM_NPC_SPECIES_WORD(CCineAISchedule, 0x6090,
+		FElysiumAiScriptedSchedule, Mode),  // m_nSchedule
+	ELYSIUM_NPC_SPECIES_WORD(CCineAISchedule, 0x6094,
+		FElysiumAiScriptedSchedule, ForceState),  // m_nForceState
+	// --- CCineNPC (story 5 fold A3). The same offsets are Troika words; this map is per declaring
+	// class, so these bind on `CCineNPC`'s descriptor alone. ---
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f44,
+		FElysiumScriptedSequence, PreIdle),  // m_iszPreIdle (key m_iszIdle)
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f48,
+		FElysiumScriptedSequence, Play),  // m_iszPlay
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f4c,
+		FElysiumScriptedSequence, PostIdle),  // m_iszPostIdle
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f50,
+		FElysiumScriptedSequence, CustomMove),  // m_iszCustomMove
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f54,
+		FElysiumScriptedSequence, TargetEntity),  // m_iszEntity
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f58,
+		FElysiumScriptedSequence, NextScript),  // m_iszNextScript
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f5c,
+		FElysiumScriptedSequence, LinkedSequenceName),  // m_iszLinkedSequence
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f60,
+		FElysiumScriptedSequence, MoveTo),  // m_fMoveTo
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f64,
+		FElysiumScriptedSequence, FinishSchedule),  // m_iFinishSchedule
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f68,
+		FElysiumScriptedSequence, Radius),  // m_flRadius
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f6c,
+		FElysiumScriptedSequence, Repeat),  // m_flRepeat
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f70,
+		FElysiumScriptedSequence, Delay),  // m_iDelay
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f74,
+		FElysiumScriptedSequence, StartTime),  // m_startTime
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f78,
+		FElysiumScriptedSequence, SavedMoveType),  // m_saved_movetype
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f7c,
+		FElysiumScriptedSequence, SavedMoveCollide),  // m_saved_movecollide
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f80,
+		FElysiumScriptedSequence, SavedSolid),  // m_saved_solid
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f84,
+		FElysiumScriptedSequence, SavedSolidFlags),  // m_saved_solidflags
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f88,
+		FElysiumScriptedSequence, SavedEffects),  // m_saved_effects
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f8c,
+		FElysiumScriptedSequence, SavedTroikaFlags),  // m_saved_troika_flags
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f90,
+		FElysiumScriptedSequence, bInterruptable),  // m_interruptable
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f91,
+		FElysiumScriptedSequence, bSequenceStarted),  // m_sequenceStarted
+	ELYSIUM_NPC_SPECIES_WORD(CCineNPC, 0x5f94,
+		FElysiumScriptedSequence, NextCine),  // m_hNextCine
 	// --- CNPC_VAndreiBlood ---
 	ELYSIUM_NPC_SPECIES_WORD_NOTED(CNPC_VAndreiBlood, 0x66b8, FElysiumNpc, ActiveRunnerCount,
 		"deferred:8 -- the fleshpile maker reads and writes it"),

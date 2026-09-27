@@ -285,7 +285,7 @@ generated census, not from this table. Rows marked **A** land in commit A; the r
 | `CAI_BaseNPC` | `FElysiumNpcBase` | `FElysiumScriptedCharacter` | none (abstract, or built by code) | 285 | 135 | 5 |
 | `CAI_BaseNPCTroika` | `FElysiumNpc` | `FElysiumNpcBase` | none (abstract, or built by code) | 170 | 253 | 2 |
 | `CAI_TestHull` | `FElysiumNpcTestHull` | `FElysiumNpcBase` | none (abstract, or built by code) | 6 | 0 | **A** |
-| `CCineNPC` | `FElysiumScriptedSequence` | `FElysiumNpcBase` | `scripted_sequence` | 12 | 25 | **A** |
+| `CCineNPC` | `FElysiumScriptedSequence` | `FElysiumNpcBase` | `scripted_sequence` | 20¹ | 25 | **A** |
 | `CNPCMaker` | `FElysiumNpcMaker` | `FElysiumNpc` | `npc_maker` | 17 | 19 | **A** |
 | `CNPC_VAnimal` | `FElysiumNpcAnimal` | `FElysiumNpc` | `npc_VAnimal` | 20 | 5 | 2 |
 | `CNPC_VBaseBoss` | `FElysiumNpcBaseBoss` | `FElysiumNpc` | none (abstract, or built by code) | 5 | 1 | 2 |
@@ -296,7 +296,7 @@ generated census, not from this table. Rows marked **A** land in commit A; the r
 | `CNPC_VPlaceholder` | `FElysiumNpcPlaceholder` | `FElysiumNpc` | `npc_VPlaceholder` | 24 | 0 | 2 |
 | `CPayphone` | `FElysiumNpcPayphone` | `FElysiumNpc` | `npc_payphone` | 23 | 0 | 2 |
 | `CCineAI` | `FElysiumAiScriptedSequence` | `FElysiumScriptedSequence` | `aiscripted_sequence` | 5 | 0 | **A** |
-| `CCineAISchedule` | `FElysiumAiScriptedSchedule` | `FElysiumScriptedSequence` | `aiscripted_schedule` | 14 | 3 | **A** |
+| `CCineAISchedule` | `FElysiumAiScriptedSchedule` | `FElysiumScriptedSequence` | `aiscripted_schedule` | 6¹ | 3 | **A** |
 | `CNPCMaker_Fleshpile` | `FElysiumNpcMakerFleshpile` | `FElysiumNpcMaker` | `npc_maker_fleshpile` | 12 | 0 | **A** |
 | `CNPCMaker_Zombie` | `FElysiumNpcMakerZombie` | `FElysiumNpcMaker` | `npc_maker_zombie` | 10 | 3 | **A** |
 | `CNPC_VDog` | `FElysiumNpcDog` | `FElysiumNpcAnimal` | `npc_VDog` | 19 | 0 | 2 |
@@ -338,3 +338,8 @@ generated census, not from this table. Rows marked **A** land in commit A; the r
 | `CNPC_VSheriffMan` | `FElysiumNpcSheriffMan` | `FElysiumNpcVampireBoss` | `npc_VSheriffMan` | 25 | 12 | 2 |
 | `CNPC_VChangBrosBlade` | `FElysiumNpcChangBrosBlade` | `FElysiumNpcChangBros` | `npc_VChangBrosBlade` | 7 | 0 | 2 |
 | `CNPC_VChangBrosClaw` | `FElysiumNpcChangBrosClaw` | `FElysiumNpcChangBros` | `npc_VChangBrosClaw` | 7 | 0 | 2 |
+
+¹ Fold A3 counted the directors' own bodies by vtable diff against `CAI_BaseNPC` / `CCineNPC`
+(20 / 5 / 6). The ledger's name-prefix count gave 12 / 5 / 14 because eight bodies only
+`CCineNPC`'s table fills are Ghidra-named `CCineAISchedule::FUN_*` (slots 72, 113, 117, 362, 364,
+365, 459, 584); `classes.md` still carries the name-prefix count.

@@ -71,6 +71,17 @@ namespace
 		return FBox(FeetOriginCm - Half,
 			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
 	}
+
+	// `FSOLID_NOT_SOLID` (`0x4`) standing in the entity's solid-flag word (`m_Collision +0x2b4`,
+	// `FElysiumEntity::RetailSolidFlags`): a trace or a hull test never reports such an entity. The
+	// script directors (`CCineNPC::Spawn` `0x101a6f10`, story 5 fold A3) are combat characters by
+	// class but set it, so no shot, melee sweep or maker spawn check lands on a marker. (The feed
+	// probe is retail's `FindEntityFOV` enumeration, which does include non-solid entities; it tests
+	// `m_bIsBCCTargetable` instead.)
+	bool ElysiumIsRetailNotSolid(const FElysiumEntity& Entity)
+	{
+		return (Entity.RetailSolidFlags & 0x4u) != 0;
+	}
 }
 
 // The pre-move tick function.
@@ -1405,7 +1416,10 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
 	{
 		FElysiumEntity* Ent = EntPtr.Get();
-		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || !Ent->AsCombatCharacter())
+		// `FindEntityFOV` (`0x10341c30`) enumerates non-solid entities too; `EntityUnselectable`
+		// (`0x100a52a0`) rejects a clear `m_bIsBCCTargetable` (`+0x1480`), which a director stores.
+		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || !Ent->AsCombatCharacter()
+			|| !FElysiumNpcBase::IsBccTargetable(*Ent))
 		{
 			continue;
 		}
@@ -1504,7 +1518,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryAimTarget(float MaxRangeCm) const
 		// it is a combat character in this runtime without being a body anything can be shot at.
 		const FElysiumCombatCharacter* AsChar = Ent ? Ent->AsCombatCharacter() : nullptr;
 		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || AsChar == nullptr
-			|| Ent->AsItemContainer() != nullptr)
+			|| Ent->AsItemContainer() != nullptr || ElysiumIsRetailNotSolid(*Ent))
 		{
 			continue;
 		}
@@ -1609,7 +1623,7 @@ void AElysiumMapActor::QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		// it is a combat character in this runtime without being a body a swing can land on.
 		const FElysiumCombatCharacter* AsChar = Ent ? Ent->AsCombatCharacter() : nullptr;
 		if (!Ent || Ent->IsInert() || AsChar == nullptr || Ent->AsItemContainer() != nullptr
-			|| Ent->Handle == Sweep.Attacker)
+			|| Ent->Handle == Sweep.Attacker || ElysiumIsRetailNotSolid(*Ent))
 		{
 			continue;
 		}
@@ -2037,7 +2051,7 @@ bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm
 		{
 			Bounds = Ent->Body->Bounds.GetBox();
 		}
-		else if (Ent->AsCombatCharacter())
+		else if (Ent->AsCombatCharacter() && !ElysiumIsRetailNotSolid(*Ent))
 		{
 			Bounds = ElysiumStandHullAt(Ent->Origin);
 		}

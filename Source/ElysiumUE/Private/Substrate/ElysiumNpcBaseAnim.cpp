@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -206,11 +207,10 @@ int32 FElysiumNpcBase::TranslateActivityNumber(int32 Activity, int32& OutWeaponA
 
 FString FElysiumNpcBase::ScriptCustomMoveSequenceName() const
 {
-	// `m_hCine + 0x5f50`, the scripted sequence's `m_iszCustomMove`. **SEAM**: the port's scripted
-	// sequence carries its custom-move label on the `scripted_sequence` entity rather than on a
-	// `CCineNPC` the kernel reaches by offset. Empty is retail's own null-string case, which it
-	// replaces with `""` before the lookup.
-	return FString();
+	// `m_hCine + 0x5f50`, the director's `m_iszCustomMove`. Empty is retail's own null-string case,
+	// which it replaces with `""` before the lookup.
+	const FElysiumScriptedSequence* Cine = ResolveCine();
+	return Cine != nullptr ? Cine->CustomMove : FString();
 }
 
 void FElysiumNpcBase::ResolveActivityToSequence(int32 Activity, int32& OutSequence,
@@ -404,8 +404,7 @@ float FElysiumNpcBase::PlayInstancedScene(const TCHAR* SceneFile)
 
 bool FElysiumNpcBase::CineAllowsDynamicInteraction() const
 {
-	// `0x101a8ac0` on the resolved `m_hCine`. **SEAM**: this substrate models no dynamic scripted
-	// interaction, so it answers TRUE — the arm that lets the cine stand. Answering false would make
-	// every scripted body refuse every sequence, which is the opposite of retail's ordinary case.
-	return true;
+	// `0x101a8ac0` on the resolved `m_hCine`.
+	const FElysiumScriptedSequence* Cine = ResolveCine();
+	return Cine == nullptr || Cine->CanOverride();
 }

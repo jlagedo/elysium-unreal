@@ -356,6 +356,13 @@ bool FElysiumNpcBase::OnRestoreForwardsCheckUntouch(bool bCallerValue)
 	return false;
 }
 
+void FElysiumNpcBase::UpdateOnRemove()
+{
+	// Slot 180 `0x1027ca30` on the non-Troika branch: the body below (story 5 fold A3 made the slot
+	// hand-bodied, because a director's slot 180 `0x101a7140` calls it directly).
+	BaseNpcUpdateOnRemove();
+}
+
 void FElysiumNpcBase::BaseNpcUpdateOnRemove()
 {
 	// 0x1027ca30 — slot 180 for the NON-Troika branch (`CAI_BaseNPC`, `CScriptedTarget`,

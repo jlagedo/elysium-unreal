@@ -537,9 +537,8 @@ bool FElysiumNpcKernelCondRemoveIgnoredTest::RunTest(const FString&)
 	TestTrue(TEXT("outside state 4 slot 459 writes nothing"),
 		F.Npc->Cognition.Conditions.Has(EElysiumNpcCond::LightDamage));
 
-	// The partner seam. It answers null — this runtime's scripted scenes carry no cine target — so
-	// even inside state 4 the dispatch has nobody to clear. The refusal IS the recovered arm.
-	TestNull(TEXT("the cine-partner seam answers nothing"), F.Npc->CineIgnoredConditionsPartner());
+	// Inside state 4 the dispatch reaches the director's own slot 459 (`0x101a89a0`): the director
+	// case is `Elysium.Substrate.NpcKernelDirector.Interrupt` (story 5 fold A3).
 	return true;
 }
 

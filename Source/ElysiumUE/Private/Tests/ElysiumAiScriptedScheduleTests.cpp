@@ -211,10 +211,16 @@ namespace
 			Quiet();
 		}
 
+		// `InputStartSchedule` (`0x101a9b30`) only arms `CineThink` at curtime; the search (within
+		// `m_flRadius`) and the push run at the director's next think, which this runs at once.
 		void FireStartSchedule()
 		{
 			World.AcceptInput(TEXT("!self"), FName(TEXT("StartSchedule")), FElysiumVariant::Void(),
 				DirectorHandle, DirectorHandle);
+			if (FElysiumEntity* Live = World.Resolve(DirectorHandle))
+			{
+				Live->ThinkAt(World.NowSeconds());
+			}
 		}
 
 		FElysiumRecordingNpcMotor* MotorFor(const FElysiumNpc* Npc) const
@@ -491,7 +497,8 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 	// This fires in shipped content: `sm_medical_1`'s `guard_to_cs` names `cs_target`, which that
 	// map does not contain.
 	{
-		AddExpectedError(TEXT("resolves to nothing"), EAutomationExpectedErrorFlags::Contains, 1);
+		// `0x101a98c0`'s "Can't find goal entity" line, on every fire: retail keeps no once-latch.
+		AddExpectedError(TEXT("Can't find goal entity"), EAutomationExpectedErrorFlags::Contains, 2);
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 2;
 		Setup.ForceState = 3;
@@ -509,14 +516,13 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		// "logs and stops" — including the state, which the director never got far enough to push.
 		TestTrue(TEXT("...and does not push the forced state either"),
 			F.Guard->GetMind().State() == EElysiumNpcState::Idle);
-		// The second fire is latched, not repeated.
+		// The second fire looks again and logs again.
 		F.FireStartSchedule();
 	}
 
-	// The spawn validator: neither a schedule nor a forced state.
+	// The spawn validator (`0x101a9730`): neither a schedule nor a forced state is a `DevMsg(2)`, and
+	// the row still stands.
 	{
-		AddExpectedError(TEXT("authors neither a schedule mode nor a forced state"),
-			EAutomationExpectedErrorFlags::Contains, 1);
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 0;
 		Setup.ForceState = 0;

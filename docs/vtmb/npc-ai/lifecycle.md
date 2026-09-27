@@ -659,11 +659,18 @@ array by its head.
 
 ## Slot 103 `Spawn`, by species — `0x101a6f10`, `0x102cd2d0`, `0x102d0b60`, `0x102dbc80` (2026-09-13)
 
-`CCineNPC::Spawn` (`0x101a6f10`, shared with `CCineAI`): `SetSolid(0)`, `AddSolidFlags(flags | 4)`,
-`m_bIsBCCTargetable = 0`, `m_bIsAlive = 0`. Then the auto-remove think, armed when the cine is
-**unnamed** or spawnflag `0x10` is set — and only a **named** cine that armed it also takes
-`m_startTime = curtime + _DAT_10449e10`. Spawnflag `0x20` **clears** `m_interruptable`; its absence
-sets it. Finally `Relink`, `m_sequenceStarted = 0`, `m_hNextCine = -1` and `AddFlag2(0x10)`.
+`CCineNPC::Spawn` (`0x101a6f10`, shared with `CCineAI`; `CCineAISchedule::Spawn` `0x101a9730` calls
+it DIRECTLY, then prints "no schedule or state has been set!" when both are 0): `SetSolid(0)`,
+`AddSolidFlags(flags | 4)`, slot 93 `SetMoveType(0, 0)`, `m_bIsBCCTargetable = 0`, `m_bIsAlive = 0`.
+Then `CineThink` (`0x101a8070`, not an "auto-remove" think — corrected 0019/5 fold A3), armed at
+`curtime + 1.0` when the cine is **unnamed** or spawnflag `0x10` is set — and only a **named** cine
+that armed it also takes `m_startTime = curtime + _DAT_10449e10` (1e6, "wait for BeginSequence").
+`CineThink` searches for the NPC (`FindEntity`, the radius gate) and possesses it, or runs
+`CancelScript` and retries in 1.0 s. Spawnflag `0x20` **clears** `m_interruptable`; its absence sets
+it. Finally `Relink`, `m_sequenceStarted = 0`, `m_hNextCine = -1`, `m_pLastFoundEntity (+0x5f98) = 0`
+and `AddFlag2(0x10)`. No base `Spawn`, so a director never runs `NPCInit` or `NPCThink`; its only
+thinks are `CineThink` and, after a non-repeatable beat, `SUB_Remove` (`Finish` `0x101a8640`, +0.1 s).
+Port: `FElysiumScriptedSequence::Spawn`.
 
 `CAI_StandoffGoal::Spawn` (`0x102cd2d0`) is `ThinkSet(&LAB_10006672, 0, NULL)` and
 `m_flNextThink = curtime + _DAT_1044e658`; the think function is a stub label with no body in the

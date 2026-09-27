@@ -5,15 +5,16 @@
 // CBaseToggle 0x1059b6f0, CBaseAnimating 0x1054cd70, CBaseCombatCharacter 0x1061664c, CAI_BaseNPC
 // 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8,
 // CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
-// CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach
-// 0x1062d22c, CNPC_VCameraSecurity 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88,
-// CNPC_VFrenzyShadow 0x10637aa8, CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0,
-// CNPC_VGuard1 0x1063b590, CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra
-// 0x10640600, CNPC_VManBat 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle
-// 0x106474f0, CNPC_VPedestrian 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying
-// 0x1064f480, CNPC_VSheriffMan 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130,
-// CNPC_VTzimisceHeadClaw 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418,
-// CNPC_VWerewolf 0x1065f4e0, CNPC_VWolfMorph 0x10663b38, CNPC_VZombie 0x10664090).
+// CCineAISchedule 0x10593c9c, CCineNPC 0x10593628, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
+// 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach 0x1062d22c, CNPC_VCameraSecurity
+// 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88, CNPC_VFrenzyShadow 0x10637aa8,
+// CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
+// CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra 0x10640600, CNPC_VManBat
+// 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle 0x106474f0, CNPC_VPedestrian
+// 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying 0x1064f480, CNPC_VSheriffMan
+// 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130, CNPC_VTzimisceHeadClaw
+// 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418, CNPC_VWerewolf
+// 0x1065f4e0, CNPC_VWolfMorph 0x10663b38, CNPC_VZombie 0x10664090).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
@@ -28,6 +29,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumSheetFields.h"
+#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"
 #include "Substrate/ElysiumNpcAsianVampire.h"
@@ -57,6 +59,7 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcWolfMorph.h"
 #include "Substrate/ElysiumNpcZombie.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 
 #include <type_traits>
 
@@ -1342,6 +1345,81 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
 	}
 
+	void AddAiScriptedScheduleFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("goalent"), &FElysiumAiScriptedSchedule::GoalEntity,
+			EElysiumField::Save);  // +0x608c m_sGoalEnt
+		ElysiumAddClassField(D, TEXT("schedule"), &FElysiumAiScriptedSchedule::Mode,
+			EElysiumField::Save);  // +0x6090 m_nSchedule
+		ElysiumAddClassField(D, TEXT("forcestate"), &FElysiumAiScriptedSchedule::ForceState,
+			EElysiumField::Save);  // +0x6094 m_nForceState
+	}
+
+	void AddScriptedSequenceFields(FElysiumClassDesc& D)
+	{
+		// One row per replay field row the class's member map binds, sorted by external.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
+		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
+		// keyvalues regardless of Key.
+		ElysiumAddClassField(D, TEXT("m_iszIdle"), &FElysiumScriptedSequence::PreIdle,
+			EElysiumField::Save);  // +0x5f44 m_iszPreIdle
+		ElysiumAddClassField(D, TEXT("m_iszPlay"), &FElysiumScriptedSequence::Play,
+			EElysiumField::Save);  // +0x5f48 m_iszPlay
+		ElysiumAddClassField(D, TEXT("m_iszPostIdle"), &FElysiumScriptedSequence::PostIdle,
+			EElysiumField::Save);  // +0x5f4c m_iszPostIdle
+		ElysiumAddClassField(D, TEXT("m_iszCustomMove"), &FElysiumScriptedSequence::CustomMove,
+			EElysiumField::Save);  // +0x5f50 m_iszCustomMove
+		ElysiumAddClassField(D, TEXT("m_iszEntity"), &FElysiumScriptedSequence::TargetEntity,
+			EElysiumField::Save);  // +0x5f54 m_iszEntity
+		ElysiumAddClassField(D, TEXT("m_iszNextScript"), &FElysiumScriptedSequence::NextScript,
+			EElysiumField::Save);  // +0x5f58 m_iszNextScript
+		ElysiumAddClassField(D, TEXT("m_iszLinkedSequence"),
+			&FElysiumScriptedSequence::LinkedSequenceName, EElysiumField::Save);  // +0x5f5c m_iszLinkedSequence
+		ElysiumAddClassField(D, TEXT("m_fMoveTo"), &FElysiumScriptedSequence::MoveTo,
+			EElysiumField::Save);  // +0x5f60 m_fMoveTo
+		ElysiumAddClassField(D, TEXT("m_iFinishSchedule"),
+			&FElysiumScriptedSequence::FinishSchedule, EElysiumField::Save);  // +0x5f64 m_iFinishSchedule
+		ElysiumAddClassField(D, TEXT("m_flRadius"), &FElysiumScriptedSequence::Radius,
+			EElysiumField::Save);  // +0x5f68 m_flRadius
+		ElysiumAddClassField(D, TEXT("m_flRepeat"), &FElysiumScriptedSequence::Repeat,
+			EElysiumField::Save);  // +0x5f6c m_flRepeat
+	}
+
+	void AddScriptedSequenceSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_iDelay"), &FElysiumScriptedSequence::Delay,
+			EElysiumField::Save);  // +0x5f70 int
+		ElysiumAddClassField(D, TEXT("m_startTime"), &FElysiumScriptedSequence::StartTime,
+			EElysiumField::Save);  // +0x5f74 time
+		ElysiumAddClassField(D, TEXT("m_saved_movetype"), &FElysiumScriptedSequence::SavedMoveType,
+			EElysiumField::Save);  // +0x5f78 int
+		ElysiumAddClassField(D, TEXT("m_saved_movecollide"),
+			&FElysiumScriptedSequence::SavedMoveCollide, EElysiumField::Save);  // +0x5f7c int
+		ElysiumAddClassField(D, TEXT("m_saved_solid"), &FElysiumScriptedSequence::SavedSolid,
+			EElysiumField::Save);  // +0x5f80 int
+		ElysiumAddClassField(D, TEXT("m_saved_solidflags"),
+			&FElysiumScriptedSequence::SavedSolidFlags, EElysiumField::Save);  // +0x5f84 int
+		ElysiumAddClassField(D, TEXT("m_saved_effects"), &FElysiumScriptedSequence::SavedEffects,
+			EElysiumField::Save);  // +0x5f88 int
+		ElysiumAddClassField(D, TEXT("m_saved_troika_flags"),
+			&FElysiumScriptedSequence::SavedTroikaFlags, EElysiumField::Save);  // +0x5f8c int
+		ElysiumAddClassField(D, TEXT("m_interruptable"), &FElysiumScriptedSequence::bInterruptable,
+			EElysiumField::Save);  // +0x5f90 bool
+		ElysiumAddClassField(D, TEXT("m_sequenceStarted"),
+			&FElysiumScriptedSequence::bSequenceStarted, EElysiumField::Save);  // +0x5f91 bool
+		ElysiumAddClassField(D, TEXT("m_hNextCine"), &FElysiumScriptedSequence::NextCine,
+			EElysiumField::Save);  // +0x5f94 ehandle
+	}
+
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D)
 	{
 		// Retail's persistence, and only that: a `SAVE` row with no external name is
@@ -2173,6 +2251,17 @@ namespace ElysiumNpcKernelBindings
 
 	bool AddSpeciesFields(FElysiumClassDesc& D, const TCHAR* RetailClass)
 	{
+		if (FCString::Strcmp(RetailClass, TEXT("CCineAISchedule")) == 0)
+		{
+			AddAiScriptedScheduleFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CCineNPC")) == 0)
+		{
+			AddScriptedSequenceFields(D);
+			AddScriptedSequenceSaveFields(D);
+			return true;
+		}
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VAndreiBlood")) == 0)
 		{
 			AddAndreiBloodSaveFields(D);
@@ -2554,6 +2643,32 @@ namespace ElysiumNpcKernelBindings
 		TEXT("PlayOneOffSound"),
 	};
 
+	const TCHAR* const GAiScriptedScheduleInputFuncs[] =
+	{
+		TEXT("StartSchedule"),
+	};
+
+	const TCHAR* const GScriptedSequenceOutputs[] =
+	{
+		TEXT("OnBeginSequence"),
+		TEXT("OnEndSequence"),
+		TEXT("OnScriptEvent01"),
+		TEXT("OnScriptEvent02"),
+		TEXT("OnScriptEvent03"),
+		TEXT("OnScriptEvent04"),
+		TEXT("OnScriptEvent05"),
+		TEXT("OnScriptEvent06"),
+		TEXT("OnScriptEvent07"),
+		TEXT("OnScriptEvent08"),
+	};
+
+	const TCHAR* const GScriptedSequenceInputFuncs[] =
+	{
+		TEXT("BeginSequence"),
+		TEXT("CancelSequence"),
+		TEXT("MoveToPosition"),
+	};
+
 	const TCHAR* const GAndreiBloodInputFuncs[] =
 	{
 		TEXT("TriggerCombat"),
@@ -2674,6 +2789,10 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GConversationPlaceOutputs);
 			case EClass::NpcMakerZombie:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::AiScriptedSchedule:
+				return TConstArrayView<const TCHAR*>();
+			case EClass::ScriptedSequence:
+				return MakeArrayView(GScriptedSequenceOutputs);
 			case EClass::AndreiBlood:
 				return TConstArrayView<const TCHAR*>();
 			case EClass::Animal:
@@ -2761,6 +2880,10 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GConversationPlaceInputFuncs);
 			case EClass::NpcMakerZombie:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::AiScriptedSchedule:
+				return MakeArrayView(GAiScriptedScheduleInputFuncs);
+			case EClass::ScriptedSequence:
+				return MakeArrayView(GScriptedSequenceInputFuncs);
 			case EClass::AndreiBlood:
 				return MakeArrayView(GAndreiBloodInputFuncs);
 			case EClass::Animal:
@@ -2848,6 +2971,10 @@ namespace ElysiumNpcKernelBindings
 				return {10, 0, 6, 3, 0};
 			case EClass::NpcMakerZombie:
 				return {3, 0, 0, 0, 0};
+			case EClass::AiScriptedSchedule:
+				return {3, 0, 0, 1, 0};
+			case EClass::ScriptedSequence:
+				return {11, 0, 10, 3, 11};
 			case EClass::AndreiBlood:
 				return {0, 0, 0, 1, 5};
 			case EClass::Animal:

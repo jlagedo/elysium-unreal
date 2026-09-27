@@ -57,8 +57,9 @@ static FTurnActivityPick TurnActivityTroikaLadder(float YawDelta,
 
 // Slots 370/371 that forward to 368/369 — `CNPC_VRat` (`0x103ad7f0`/`0x103ad820`) and `CPayphone`
 // (`0x101aa7f0`/`0x101aa820`) override `HeadDirection2D`/`HeadDirection3D` on their C++ classes
-// (story 5 step 3). `CCineNPC`/`CCineAI`/`CCineAISchedule` and the three `CNPCMaker`s forward the
-// same way; they fold in steps 9 and 8.
+// (story 5 step 3). `CCineNPC` (`0x101a6d40`/`0x101a6d70`, inherited by `CCineAI` and
+// `CCineAISchedule`) overrides them on `FElysiumScriptedSequence` (fold A3); the three `CNPCMaker`s
+// forward the same way and fold in A4.
 
 // --- Slot 465's species half --------------------------------------------------------------------
 

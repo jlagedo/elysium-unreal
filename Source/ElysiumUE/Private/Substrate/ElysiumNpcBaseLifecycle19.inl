@@ -105,3 +105,14 @@ void InstallScheduleRetail(int32 RawId, bool bForce);
  *  angles (`±180` under the motor's animation-movement latch). SEAM: `IElysiumNpcMotor` keeps no
  *  ideal-yaw word, so the seed is held here and nothing reads it yet. */
 float MotorIdealYaw = 0.f;
+
+/** `m_bIsBCCTargetable` (`+0x1480`), a `CBaseCombatCharacter` byte. `CAI_BaseNPCTroika::NPCInit`
+ *  sets it from the stat template and five species clear it; `CCineNPC::Spawn` (`0x101a6f10`,
+ *  `101a7029`) stores 0. Carried here rather than on the Troika since story 5 fold A3, because a
+ *  director writes it and `IsBccTargetable` reads it off any `+0x94` NPC. */
+bool bIsBccTargetable = false;
+
+/** `m_bIsAlive` (`+0x1481`), the combat-character liveness byte `NPCInit` writes independently of
+ *  `LifeState`. Payphone clears it after the base wrote 1; `CCineNPC::Spawn` stores 0
+ *  (`101a7031`). */
+bool bNpcIsAlive = false;

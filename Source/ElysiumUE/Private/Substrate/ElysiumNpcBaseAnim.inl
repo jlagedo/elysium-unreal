@@ -83,9 +83,7 @@ void ResolveActivityToSequence(int32 Activity, int32& OutSequence, int32& OutTra
 int32 TranslateActivityNumber(int32 Activity, int32& OutWeaponActivity) const;
 
 // The cine's `m_iszCustomMove` (`m_hCine + 0x5f50`), the sequence name the ACT_SCRIPT_CUSTOM_MOVE
-// arm looks up. **SEAM**: the port's scripted sequence carries its custom-move label on the
-// scripted-sequence entity rather than on a `CCineNPC` the kernel can reach by offset, so this
-// answers empty and the arm takes retail's `"SCRIPT_CUSTOM_MOVE: %s has no sequence"` branch.
+// arm looks up: the resolved director's own word (story 5 fold A3), empty with no live cine.
 FString ScriptCustomMoveSequenceName() const;
 
 // `CAI_BaseNPC::SetIdealActivity` `0x10272650` — the whole body: activity 0 tail-jumps to slot 310,
@@ -101,9 +99,9 @@ void SetIdealActivity(int32 Activity);
 // that writes one writes retail's own value.
 float PrevAnimTime = 0.f;
 
-// `0x101a8ac0` — the dynamic-interaction check `CanPlaySequence` puts in front of a live cine.
-// **SEAM**: this substrate models no dynamic scripted interaction, so it answers TRUE, the arm that
-// lets the cine stand; answering false would make every scripted body refuse every sequence.
+// `0x101a8ac0` `CanOverride` on the live `m_hCine` — the queue refusals `CanPlaySequence` puts in
+// front of a second director (story 5 fold A3). An owner that is not a director (the port's
+// choreographed scene also stands in `ScriptOwner`) answers true, the arm that lets the cine stand.
 bool CineAllowsDynamicInteraction() const;
 
 // `CBaseFlex::PlayScene`'s `instanced_scripted_scene` (`0x10084b40`). **SEAM**: standing a scene

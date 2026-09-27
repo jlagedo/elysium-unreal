@@ -3,6 +3,7 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumScriptedSequence.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
@@ -308,16 +309,17 @@ bool FElysiumNpcBase::OkToDisturb() const
 	// is the counter-example. The header is another story's file and is left alone; the correction
 	// is recorded here and in `docs/vtmb/npc-ai/conditions-and-states.md`.
 	//
-	// The cine arm asks `CineCanInterrupt()` (family **EntityChain**'s port of `0x101a8930`) on
-	// THIS NPC rather than on the resolved cine: this runtime stands one leaf and the cine entity
-	// is not an `FElysiumNpc`. That body's own `m_interruptable` term is a seam answering false, so
-	// the arm refuses either way — which is the recovered refusal and is stated here, not hidden.
+	// The cine arm asks `CanInterrupt` (`0x101a8930`) ON THE CINE — the director's own
+	// `m_interruptable` and its target's `IsAlive` (story 5 fold A3). A live owner that is not a
+	// director (the port's choreographed scene also stands in `ScriptOwner`) has no such body; it
+	// refuses, which is what the arm answered before the fold.
 	//
 	// Retail name unrecovered.
 	if (Mind.State() == EElysiumNpcState::Scripted && ScriptOwner.IsSet()
 		&& World != nullptr && World->Resolve(ScriptOwner) != nullptr)
 	{
-		if (!CineCanInterrupt())
+		const FElysiumScriptedSequence* Cine = ResolveCine();
+		if (Cine == nullptr || !Cine->CanInterrupt())
 		{
 			return false;
 		}

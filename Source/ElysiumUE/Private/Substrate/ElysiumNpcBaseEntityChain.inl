@@ -12,14 +12,6 @@ virtual const FElysiumLocalIdSpace* ClassScheduleIdSpace() const;
  *  answer, and never null while a corpus is loaded. */
 const FElysiumLocalIdSpace* IdSpace(EElysiumIdCategory Category) const;
 
-/** `0x101a8930` — `CCineNPC::CanInterrupt`. `m_interruptable` (+0x5f90) set AND the resolved
- *  `m_hTargetEnt` (+0x5ce4) answering slot 158 `IsAlive`. A missing target is false, not true. */
-bool CineCanInterrupt() const;
-
-/** `CCineNPC::m_interruptable` (+0x5f90), read through the scripted-sequence entity that already
- *  stores the word. A missing or non-sequence owner answers false. */
-bool CineIsInterruptable() const;
-
 /** `0x102ea280` — the GLOBAL-to-LOCAL range translation slots 447 and 450 both forward into.
  *  A null space is retail's end-of-chain and answers -1. */
 static int32 GlobalToLocalId(const FElysiumLocalIdSpace* Space, int32 GlobalId);

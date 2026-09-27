@@ -1081,6 +1081,19 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
     # (`FElysiumNpc::Spawn`), and the override is of its bare name.
     names = {r.slot: r.port_name.rsplit("::", 1)[-1] for r in model.slots}
     names.update({r.slot: r.port_name.rsplit("::", 1)[-1] for r in model.branch if r.slot not in names})
+    # Past a base's table a branch declares its OWN virtuals at the Troika's indices (`CCineNPC`'s
+    # 583-586, 0019/5 fold A3): such a slot is named by its branch row, and the class that introduces
+    # it declares it `virtual` rather than `override`.
+    branch_names = {(r.cls, r.slot): r.port_name.rsplit("::", 1)[-1] for r in model.branch}
+    retail_base = {r["retail_class"]: r["retail_base"] for r in classes}
+
+    def branch_of(cls: str, slot: int) -> str:
+        cursor = cls
+        while cursor:
+            if (cursor, slot) in branch_names:
+                return cursor
+            cursor = retail_base.get(cursor, "")
+        return ""
     # A lifetime slot (the scalar deleting destructor) is the C++ destructor's, not a body owed.
     lifetime = {r.slot for r in model.slots if any("lifetime slot" in n for n in r.notes)}
     substrate = repo / "Source" / "ElysiumUE" / "Private" / "Substrate"
@@ -1097,12 +1110,19 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
         if row.verdict not in LIVE_VERDICTS or row.cls not in live or row.slot in lifetime:
             continue
         port = ports.get(row.cls, "-")
-        name = names.get(row.slot, "")
+        introducer = branch_of(row.cls, row.slot)
+        name = branch_names[(introducer, row.slot)] if introducer else names.get(row.slot, "")
+        introducer_port = ports.get(introducer, "") if introducer else ""
         # The species line from the class up to (not including) the Troika leaf: an inherited body is
-        # carried where its owner overrides it.
+        # carried where its owner overrides it, or -- for a branch's own slot -- where its introducing
+        # class declares it.
         declared, cursor = False, port
         while name and cursor.startswith("F") and cursor not in ("FElysiumNpc", "FElysiumNpcBase"):
             if re.search(rf"\b{re.escape(name)}\s*\([^;{{]*\)[^;{{]*\boverride\b", header_of(cursor)):
+                declared = True
+                break
+            if cursor == introducer_port and re.search(
+                    rf"\bvirtual\b[^;{{]*\b{re.escape(name)}\s*\(", header_of(cursor)):
                 declared = True
                 break
             cursor = port_base.get(cursor, "")

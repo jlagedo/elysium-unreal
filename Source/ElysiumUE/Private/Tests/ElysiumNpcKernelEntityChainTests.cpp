@@ -17,7 +17,7 @@
 // slot 226's movetype switch and its call ORDER, slot 285's two bodies, slot 287's stop-at-first,
 // slot 279's normalise-and-drop, the `(-180, 180]` single-pass wrap, the camera crossfade's three
 // arms and its reset-on-read, the closest-NPC ladder's seven rungs, the response record's
-// no-reschedule upgrade, the alert pair's asymmetry, and `CineIsTimeToStart`'s AND.
+// no-reschedule upgrade and the alert pair's asymmetry.
 //
 // Where a body can only answer "nothing" because its input is a seam — the physics object, the
 // studio header, the trace, the game rules, the id spaces, the six unrecovered `.rdata` words — the
@@ -683,59 +683,8 @@ bool FElysiumNpcKernelEntityChainDialogAndListTest::RunTest(const FString&)
 	return true;
 }
 
-// -------------------------------------------------------------------------------------------------
-// The `CCineNPC` trio.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainCineTest,
-	"Elysium.Substrate.NpcKernelEntityChain.Cine", GElysiumNpcKernelEntityChainFlags)
-bool FElysiumNpcKernelEntityChainCineTest::RunTest(const FString&)
-{
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard) || Fixture.Other == nullptr)
-	{
-		return false;
-	}
-	FElysiumNpc& Npc = *Fixture.Guard;
-
-	// 0x101a7540 — `m_iDelay < 1 && m_startTime <= curtime`, an **AND** where the SDK's own
-	// `IsTimeToStart` is an OR. SEAM: both words answer the resting (0, 0) pair, where both terms
-	// hold — a beat with no authored delay is ready, which is retail's answer for that pair too.
-	int32 Delay = 7;
-	float StartTime = 7.f;
-	Npc.CineDelayState(Delay, StartTime);
-	TestEqual(TEXT("the CCineNPC delay seam answers 0"), Delay, 0);
-	TestEqual(TEXT("and the start time 0"), StartTime, 0.f);
-	TestTrue(TEXT("so IsTimeToStart holds — both terms, not either"), Npc.CineIsTimeToStart());
-
-	// 0x101a8930 — `m_interruptable && m_hTargetEnt->IsAlive()`. SEAM: `m_interruptable` has no
-	// port member and answers false, so the FIRST term refuses; the test says which.
-	TestFalse(TEXT("the m_interruptable seam answers false"), Npc.CineIsInterruptable());
-	Npc.SetTarget(Fixture.Other->Handle);
-	TestTrue(TEXT("the target IS live and alive, so the second term would hold"),
-		Fixture.Other->IsAlive());
-	TestFalse(TEXT("but CanInterrupt still refuses on the first term"), Npc.CineCanInterrupt());
-	// And a missing target is FALSE, not true — an interruptable beat with no actor is already over.
-	Npc.SetTarget(FElysiumEntityHandle::Invalid());
-	TestFalse(TEXT("an unset target answers false"), Npc.CineCanInterrupt());
-
-	// 0x101a8840 `FixScriptNPCSchedule` — ideal state 7 (DEAD) is left alone; anything else becomes
-	// 1 (IDLE) with the selector-trace line 970 stamped. `ClearSchedule` runs on EVERY path.
-	FElysiumNpc& Actor = *Fixture.Other;
-	TestEqual(TEXT("a fresh NPC has never had a raw ideal state written"),
-		Actor.GetMind().DesiredRetailState(), 0);
-	Npc.FixScriptNpcSchedule(Actor);
-	TestEqual(TEXT("the teardown stores NPC_STATE_IDLE"), Actor.GetMind().DesiredRetailState(), 1);
-
-	// Now the dead arm: the state is NOT overwritten. `FElysiumNpc` publishes the mind read-only
-	// (`GetMind()`), and nothing else in this runtime writes retail state 7 yet, so the case stands
-	// the precondition through the same writer the body uses.
-	const_cast<FElysiumNpcMind&>(Actor.GetMind()).RequestDesiredState(7, 0);
-	TestEqual(TEXT("the actor is now NPC_STATE_DEAD"), Actor.GetMind().DesiredRetailState(), 7);
-	Npc.FixScriptNpcSchedule(Actor);
-	TestEqual(TEXT("a dead actor keeps NPC_STATE_DEAD"), Actor.GetMind().DesiredRetailState(), 7);
-	return true;
-}
+// The `CCineNPC` trio (`IsTimeToStart`, `CanInterrupt`, `FixScriptNPCSchedule`) is asserted on the
+// real directors since story 5 fold A3: `Elysium.Substrate.NpcKernelDirector.*`.
 
 // -------------------------------------------------------------------------------------------------
 // The `CBasePlayer` law half.

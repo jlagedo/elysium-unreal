@@ -1308,8 +1308,11 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 		// The melee predicate rejects self, a missing entity and anything not `LIFE_ALIVE`. A loot
 		// container re-registers on the combat-character base (it owns the same inventory), so it is
 		// a combat character in this runtime without being a combatant — it is not a swing target.
+		// Retail enumerates candidates through `FindEntityFOV` (`0x10341c30`), whose sphere includes
+		// non-solid entities; `EntityUnselectable` (`0x100a52a0`) rejects `m_bIsBCCTargetable`
+		// (`+0x1480`) clear — a script director (`CCineNPC::Spawn` `0x101a6f10` stores 0).
 		if (!Other || Other->Handle == Attacker.Handle || Other->AsItemContainer() != nullptr
-			|| !IsAliveForCombat(*Other))
+			|| !IsAliveForCombat(*Other) || !FElysiumNpcBase::IsBccTargetable(*Other))
 		{
 			continue;
 		}

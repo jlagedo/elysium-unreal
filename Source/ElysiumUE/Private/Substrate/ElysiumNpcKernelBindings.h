@@ -5,15 +5,16 @@
 // CBaseToggle 0x1059b6f0, CBaseAnimating 0x1054cd70, CBaseCombatCharacter 0x1061664c, CAI_BaseNPC
 // 0x105c9814, CAI_BaseNPCTroika 0x105ce470, CNPCMaker 0x10624718, CAI_InterestingPlace 0x1060bdd8,
 // CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
-// CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach
-// 0x1062d22c, CNPC_VCameraSecurity 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88,
-// CNPC_VFrenzyShadow 0x10637aa8, CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0,
-// CNPC_VGuard1 0x1063b590, CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra
-// 0x10640600, CNPC_VManBat 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle
-// 0x106474f0, CNPC_VPedestrian 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying
-// 0x1064f480, CNPC_VSheriffMan 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130,
-// CNPC_VTzimisceHeadClaw 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418,
-// CNPC_VWerewolf 0x1065f4e0, CNPC_VWolfMorph 0x10663b38, CNPC_VZombie 0x10664090).
+// CCineAISchedule 0x10593c9c, CCineNPC 0x10593628, CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal
+// 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach 0x1062d22c, CNPC_VCameraSecurity
+// 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88, CNPC_VFrenzyShadow 0x10637aa8,
+// CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
+// CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra 0x10640600, CNPC_VManBat
+// 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle 0x106474f0, CNPC_VPedestrian
+// 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying 0x1064f480, CNPC_VSheriffMan
+// 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130, CNPC_VTzimisceHeadClaw
+// 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418, CNPC_VWerewolf
+// 0x1065f4e0, CNPC_VWolfMorph 0x10663b38, CNPC_VZombie 0x10664090).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
@@ -26,11 +27,11 @@ struct FElysiumClassDesc;
 namespace ElysiumNpcKernelBindings
 {
 	enum class EClass : uint8 { BaseEntity, Toggle, Animating, CombatCharacter, NpcBase, Npc,
-		NpcMaker, InterestingPlace, Hint, ConversationPlace, NpcMakerZombie, AndreiBlood, Animal,
-		AsianVampire, Bach, CameraSecurity, ChangBros, Cop, FrenzyShadow, Gargoyle, GhoulCroucher,
-		Guard1, Hengeyokai, Hunter, Lasombra, ManBat, MingXiao, MingXiaoTentacle, Pedestrian,
-		SabbatLeader, Scurrying, SheriffMan, TaxiDriver, Tzimisce, TzimisceHeadClaw,
-		TzimisceRunner, VampireBoss, Werewolf, WolfMorph, Zombie };
+		NpcMaker, InterestingPlace, Hint, ConversationPlace, NpcMakerZombie, AiScriptedSchedule,
+		ScriptedSequence, AndreiBlood, Animal, AsianVampire, Bach, CameraSecurity, ChangBros, Cop,
+		FrenzyShadow, Gargoyle, GhoulCroucher, Guard1, Hengeyokai, Hunter, Lasombra, ManBat,
+		MingXiao, MingXiaoTentacle, Pedestrian, SabbatLeader, Scurrying, SheriffMan, TaxiDriver,
+		Tzimisce, TzimisceHeadClaw, TzimisceRunner, VampireBoss, Werewolf, WolfMorph, Zombie };
 
 	void AddBaseEntityFields(FElysiumClassDesc& D);
 	void AddToggleFields(FElysiumClassDesc& D);
@@ -43,6 +44,8 @@ namespace ElysiumNpcKernelBindings
 	void AddHintFields(FElysiumClassDesc& D);
 	void AddConversationPlaceFields(FElysiumClassDesc& D);
 	void AddNpcMakerZombieFields(FElysiumClassDesc& D);
+	void AddAiScriptedScheduleFields(FElysiumClassDesc& D);
+	void AddScriptedSequenceFields(FElysiumClassDesc& D);
 	void AddAnimalFields(FElysiumClassDesc& D);
 	void AddCameraSecurityFields(FElysiumClassDesc& D);
 	void AddGhoulCroucherFields(FElysiumClassDesc& D);
@@ -52,6 +55,7 @@ namespace ElysiumNpcKernelBindings
 	void AddZombieFields(FElysiumClassDesc& D);
 	void AddNpcBaseSaveFields(FElysiumClassDesc& D);
 	void AddNpcSaveFields(FElysiumClassDesc& D);
+	void AddScriptedSequenceSaveFields(FElysiumClassDesc& D);
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D);
 	void AddAnimalSaveFields(FElysiumClassDesc& D);
 	void AddAsianVampireSaveFields(FElysiumClassDesc& D);

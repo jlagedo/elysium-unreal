@@ -110,14 +110,17 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 			Out.AbsentEntities.Add(E.Handle.Index);
 			continue;
 		}
-		// `ObjectCaps() & FCAP_ACROSS_TRANSITION` — the port's transition carry **is** this
-		// snapshot, so an entity that clears the bit is simply not written into it. It is not
-		// recorded absent either: a map-placed entity must come back from its own def on the next
-		// load, fresh, and a runtime one must not come back at all. `CBaseCineCam::ObjectCaps()`
-		// returns 0 (RC2.4), so a live scripted shot never rides a `trigger_changelevel` or a save
-		// — the map teardown `FUN_10071970` has already ended it on the way out, and this is the
-		// same statement from the persistence side.
-		if ((E.ObjectCaps() & ElysiumEntityCaps::AcrossTransition) == 0)
+		// **Port rule: a live scripted shot is not written.** Retail's level save loop (`0x101a37c0`)
+		// skips only `FCAP_DONT_SAVE`; `FCAP_ACROSS_TRANSITION` (bit 2) picks the changelevel carry
+		// list (`0x101c7ff0`), what travels with the player INTO a new level, and this snapshot is the
+		// LEVEL's own save and revisit record. The port keys its one exclusion on the camera
+		// (`CBaseCineCam::ObjectCaps()` returns 0, RC2.4; the map teardown `FUN_10071970` has already
+		// ended the shot on the way out) and records it neither saved nor absent: a map-placed camera
+		// comes back from its own def, fresh. Every other entity clearing bit 2 — the script
+		// directors (`CCineNPC::ObjectCaps` `0x101a6d20`, story 5 fold A3) — is saved with its level,
+		// so a removed director stays gone and a director mid-beat keeps its NPC.
+		if ((E.ObjectCaps() & ElysiumEntityCaps::AcrossTransition) == 0
+			&& E.AsCameraCinematic() != nullptr)
 		{
 			continue;
 		}

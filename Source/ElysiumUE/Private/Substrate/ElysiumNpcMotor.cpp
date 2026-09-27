@@ -459,14 +459,6 @@ bool FElysiumNpc::CanStandAt(const FVector& PositionUnits, int32 InFlags)
 	return bResult;
 }
 
-bool FElysiumNpc::BlockedIsNoOp() const
-{
-	// `CCineNPC::Blocked` `0x101a7580` — the shared slot 178 of `CCineAI`, `CCineAISchedule` and
-	// `CCineNPC` is `return;` with the argument ignored. Retail's answer is that nothing happens
-	// when a cine actor is blocked; this is which classes give it.
-	return IsRetailClass(TEXT("CCineNPC")) || IsRetailClass(TEXT("CCineAI"))
-		|| IsRetailClass(TEXT("CCineAISchedule"));
-}
 
 void FElysiumNpc::ResumeScheduledMove()
 {

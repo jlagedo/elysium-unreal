@@ -91,6 +91,15 @@ namespace
 		{ TEXT("npc_VWolfMorph"), TEXT("CNPC_VWolfMorph") },
 	};
 
+	// The script directors' three classnames (story 5 fold A3): `CCineNPC` under `CAI_BaseNPC` and its
+	// two twins under it. NPC-base classes, not Troika: `AsNpcBase` answers, `AsNpc` does not.
+	const FFactoryRow GDirectorFactories[] =
+	{
+		{ TEXT("aiscripted_schedule"), TEXT("CCineAISchedule") },
+		{ TEXT("aiscripted_sequence"), TEXT("CCineAI") },
+		{ TEXT("scripted_sequence"), TEXT("CCineNPC") },
+	};
+
 	// Classnames whose factory builds a class with no instance in shipped content: census only.
 	const FFactoryRow GDeadClassnames[] =
 	{
@@ -124,15 +133,12 @@ namespace
 		FName PriorBase;    // the base its pre-step-2 registration hangs from
 	};
 
-	// The deferred classes' classnames (folds A3, A4); each keeps its pre-step-2 registration.
+	// The deferred classes' classnames (fold A4); each keeps its pre-step-2 registration.
 	const FDeferredRow GDeferredFactories[] =
 	{
-		{ TEXT("aiscripted_schedule"), TEXT("CCineAISchedule"), true, ElysiumBaseClassName() },
-		{ TEXT("aiscripted_sequence"), TEXT("CCineAI"), true, ElysiumBaseClassName() },
 		{ TEXT("npc_maker"), TEXT("CNPCMaker"), true, ElysiumBaseClassName() },
 		{ TEXT("npc_maker_fleshpile"), TEXT("CNPCMaker_Fleshpile"), true, ElysiumBaseClassName() },
 		{ TEXT("npc_maker_zombie"), TEXT("CNPCMaker_Zombie"), true, ElysiumBaseClassName() },
-		{ TEXT("scripted_sequence"), TEXT("CCineNPC"), true, ElysiumBaseClassName() },
 	};
 
 	// The registry's base chain above `Desc`, as names.
@@ -251,11 +257,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassPartitionTest,
 bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 {
 	// The 74 replayed factories partition into the 45 step-2 classnames, the 3 of the controller
-	// line (fold A2), the 20 dead names and the 6 names of the deferred folds, and the census carries
-	// exactly those, each on its own class.
+	// line (fold A2), the 3 directors (fold A3), the 20 dead names and the 3 names of the deferred
+	// maker fold, and the census carries exactly those, each on its own class.
 	const int32 Listed = UE_ARRAY_COUNT(GStep2Factories) + UE_ARRAY_COUNT(GControllerLineFactories)
-		+ UE_ARRAY_COUNT(GDeadClassnames) + UE_ARRAY_COUNT(GDeferredFactories);
-	TestEqual(TEXT("45 + 3 + 20 + 6 names"), Listed, 74);
+		+ UE_ARRAY_COUNT(GDirectorFactories) + UE_ARRAY_COUNT(GDeadClassnames)
+		+ UE_ARRAY_COUNT(GDeferredFactories);
+	TestEqual(TEXT("45 + 3 + 3 + 20 + 3 names"), Listed, 74);
 	int32 CensusNames = 0;
 	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
 	{
@@ -270,6 +277,7 @@ bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 	};
 	for (const FFactoryRow& Row : GStep2Factories) { Check(Row.Classname, Row.RetailClass); }
 	for (const FFactoryRow& Row : GControllerLineFactories) { Check(Row.Classname, Row.RetailClass); }
+	for (const FFactoryRow& Row : GDirectorFactories) { Check(Row.Classname, Row.RetailClass); }
 	for (const FFactoryRow& Row : GDeadClassnames) { Check(Row.Classname, Row.RetailClass); }
 	for (const FDeferredRow& Row : GDeferredFactories) { Check(Row.Classname, Row.RetailClass); }
 	return true;
@@ -403,19 +411,15 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 // tests for ... current factories; all ten deferred classes remain explicitly listed").
 //
 // The registry's NPC line is exactly the factory map: every constructible descriptor under
-// `CAI_BaseNPC` is one of the 45 step-2 classnames or the controller line's 3 (fold A2) hanging from
-// its own retail class, every abstract
-// one is a live census class, and none of the six still-deferred classes has an NPC descriptor yet
+// `CAI_BaseNPC` is one of the 45 step-2 classnames, the controller line's 3 (fold A2) or the
+// directors' 3 (fold A3) hanging from its own retail class, every abstract one is a live census class, and none of the three still-deferred classes has an NPC descriptor yet
 // (the test hull, fold A1, stands as an abstract live census class).
 namespace
 {
 	// `manifest.json` `deferred_classes` (git at `a00cd11b`), less the folds commit A has landed:
-	// A1 the test hull and A2 the controller line; A3 the directors and A4 the makers remain.
+	// A1 the test hull, A2 the controller line and A3 the directors; A4 the makers remain.
 	const TCHAR* const GDeferredClasses[] =
 	{
-		TEXT("CCineNPC"),
-		TEXT("CCineAI"),
-		TEXT("CCineAISchedule"),
 		TEXT("CNPCMaker"),
 		TEXT("CNPCMaker_Fleshpile"),
 		TEXT("CNPCMaker_Zombie"),
@@ -487,17 +491,26 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 				Row = &Candidate;
 			}
 		}
+		for (const FFactoryRow& Candidate : GDirectorFactories)
+		{
+			if (Name == Candidate.Classname)
+			{
+				Row = &Candidate;
+			}
+		}
 		if (TestNotNull(FString::Printf(TEXT("constructible %s is a factory-map classname"), *Name), Row))
 		{
 			TestEqual(FString::Printf(TEXT("%s hangs from its retail class"), *Name),
 				Desc.BaseName, FName(Row->RetailClass));
 		}
 	});
-	TestEqual(TEXT("the registry's NPC line builds exactly the 45 step-2 and 3 controller-line classnames"),
-		Constructible.Num(),
-		static_cast<int32>(UE_ARRAY_COUNT(GStep2Factories) + UE_ARRAY_COUNT(GControllerLineFactories)));
+	TestEqual(TEXT("the registry's NPC line builds exactly the 45 step-2, 3 controller-line and 3 "
+		"director classnames"), Constructible.Num(),
+		static_cast<int32>(UE_ARRAY_COUNT(GStep2Factories) + UE_ARRAY_COUNT(GControllerLineFactories)
+			+ UE_ARRAY_COUNT(GDirectorFactories)));
 	TArray<FFactoryRow> NpcFactories(GStep2Factories, UE_ARRAY_COUNT(GStep2Factories));
 	NpcFactories.Append(GControllerLineFactories, UE_ARRAY_COUNT(GControllerLineFactories));
+	NpcFactories.Append(GDirectorFactories, UE_ARRAY_COUNT(GDirectorFactories));
 	for (const FFactoryRow& Row : NpcFactories)
 	{
 		TestTrue(FString::Printf(TEXT("%s is registered on the NPC line"), Row.Classname),
@@ -506,9 +519,9 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			Abstract.Contains(Row.RetailClass));
 	}
 
-	// The six deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
-	// their classnames are exactly the six deferred factory rows.
-	TestEqual(TEXT("six classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 6);
+	// The three deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
+	// their classnames are exactly the three deferred factory rows.
+	TestEqual(TEXT("three classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 3);
 	int32 DeferredNames = 0;
 	for (const TCHAR* Name : GDeferredClasses)
 	{
@@ -522,7 +535,7 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 		TestFalse(FString::Printf(TEXT("deferred %s has no NPC descriptor before its fold"), Name),
 			Desc != nullptr && OnNpcLine(*Desc));
 	}
-	TestEqual(TEXT("the deferred classes carry the six deferred classnames"), DeferredNames,
+	TestEqual(TEXT("the deferred classes carry the three deferred classnames"), DeferredNames,
 		static_cast<int32>(UE_ARRAY_COUNT(GDeferredFactories)));
 	for (const FDeferredRow& Row : GDeferredFactories)
 	{

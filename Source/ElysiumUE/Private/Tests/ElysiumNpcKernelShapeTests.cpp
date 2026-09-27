@@ -548,17 +548,13 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 		return nullptr;
 	};
 
-	// The words stored away from their owner on a recorded transitional home, each with the fold
-	// that ends it. `m_pSenses` (`+0x5cdc`) is `CAI_BaseNPC`'s, but a base-only NPC's `CAI_Senses` is
-	// unported until fold 9 (`story-5/decisions-step5.json` `transitional.Senses`), so the object
-	// stays on the Troika and the base reaches it through `SensesObject()`.
-	static const int32 Transitional[] = { 0x5cdc };
+	// No word is stored away from its owner any more: `m_pSenses` (`+0x5cdc`), the last transitional
+	// home, moved to `FElysiumNpcBase` in story 5 fold A3.
 
 	// The shape map: each word the NPC stores is a member of the port class of its declaring retail
 	// class (or of a component that class holds). A `Chain` row is a word the port carries beside
 	// the NPC's storage, so it must not name NPC storage; one naming a chain class names its own.
 	int32 Members = 0;
-	int32 TransitionalSeen = 0;
 	for (const FElysiumNpcWordBinding& Row : ElysiumNpcKernelShapeMap::Bindings())
 	{
 		if (Row.PortPath == nullptr)
@@ -578,13 +574,6 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 		if (Row.Home == EElysiumNpcWordHome::Member)
 		{
 			++Members;
-			if (Algo::Find(Transitional, Row.Offset) != nullptr)
-			{
-				++TransitionalSeen;
-				TestTrue(FString::Printf(TEXT("+0x%04x is a transitional home that still says so"), Row.Offset),
-					Row.Note != nullptr && FCString::Strlen(Row.Note) > 0);
-				continue;
-			}
 			TestTrue(FString::Printf(TEXT("+0x%04x %s (%s) is stored on %s, not %s"), Row.Offset, Word->Member,
 				Word->Layer, Expected, Holder != nullptr ? Holder : *Type),
 				Holder != nullptr && Expected != nullptr && FCString::Strcmp(Holder, Expected) == 0);
@@ -603,8 +592,6 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("the shape map binds member words"), Members > 0);
-	TestEqual(TEXT("every listed transitional home is still a shape-map member row"), TransitionalSeen,
-		static_cast<int32>(UE_ARRAY_COUNT(Transitional)));
 
 	// The registry: every census word the Troika's descriptor chain binds by its datamap name is
 	// bound on the descriptor of its declaring layer, down the whole chain (CBaseEntity up to the

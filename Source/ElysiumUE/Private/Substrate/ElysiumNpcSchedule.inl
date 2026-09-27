@@ -86,13 +86,6 @@ static const FScheduleLoadFlag* LoadedSchedulesRowOf(const TCHAR* InRetailClass)
 
 // --- The schedule-change door ---------------------------------------------------------------------
 
-/** `CCineAI::FixScriptNPCSchedule`, slot 586 (`0x101a95d0`), applied to THIS NPC.
- *
- *  `FinishSchedule` is the director's own `m_iFinishSchedule` (`CCineAI +0x5f64`), not a word of
- *  this NPC: 0 clears the schedule, 1 installs `0x2a` (`SCHED_AISCRIPT`) with no clear, anything
- *  else is a `DevMsg("FixScriptNPCSchedule - no case!")` and then the clear. */
-void FixScriptNPCSchedule(int32 FinishSchedule);
-
 // --- Species words this family's bodies read ------------------------------------------------------
 //
 // 29b declared every word of the flattened `CAI_BaseNPCTroika` layout; the SPECIES words above
