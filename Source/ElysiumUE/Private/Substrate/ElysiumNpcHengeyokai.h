@@ -14,6 +14,16 @@ class FElysiumNpcHengeyokai : public FElysiumNpcVampire
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VHengeyokai", FElysiumNpcVampire)
 
+	// --- Select19 (story 0019/8 lane L06): the helpers `SelectSchedule` `0x1037fca0` calls --------
+	/** `0x10382f60` — the melee-attack pick (`0x15c` / `0x16a`) by enemy distance; clears `+0x6678`. */
+	int32 Select19HengeyokaiMeleeAttackSchedule();
+	/** `0x10382d40` — the find-fish gate: `0x16b` `FIND_FISH` when a fish is found, else writes
+	 *  `+0x6678 = 2`, `+0x667c = 0` and answers 0. */
+	int32 Select19HengeyokaiFindFishSchedule();
+	/** SEAM for `0x10381cd0`, the fish search `0x10382d40` asks. No fish sweep stands here; answers
+	 *  false, retail's no-fish arm. */
+	bool Select19HengeyokaiFindFish();
+
 	// Slots 599 / 600: `0x10381750` / `0x10381780`, the melee-enter pair with every gate gone (story 5
 	// commit B: the census walk had counted them carried by `CNPC_VHuman`'s bodies).
 	virtual bool Slot599(int32 Arg) override;

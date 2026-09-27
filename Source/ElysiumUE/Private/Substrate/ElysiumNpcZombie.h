@@ -13,6 +13,13 @@ class FElysiumNpcZombie : public FElysiumNpcAnimal
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VZombie", FElysiumNpcAnimal)
 
+	// --- Select19 (story 0019/8 lane L06): the words `SelectSchedule` `0x103df2e0` passes ----------
+	/** `+0x6680 m_vecDeathForceVector` (datamap) and `+0x668c m_DeathDamageInfo` (walked), the two
+	 *  arguments of the dead-zombie `CreateCorpse` call; both ABSENT in the shape map until now, and
+	 *  no ported body writes them yet (the death-force bodies are story-8 residue). */
+	FVector ZombieDeathForceVector = FVector::ZeroVector;
+	FElysiumDmg ZombieDeathDamageInfo;
+
 	virtual void Slot25(FElysiumEntity* Victim) override;
 	virtual void Slot26(FElysiumEntity* Victim) override;
 	virtual bool ShouldPlayFloatSound() override;

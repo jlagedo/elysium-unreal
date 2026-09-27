@@ -1133,9 +1133,11 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	TestTrue(TEXT("the NPC promotes to alert"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 
-	// Alert selects the lookaround, which alert state is what makes reachable.
-	TestTrue(TEXT("alert selects the lookaround program"),
-		F.Guard->SelectSchedule() == ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI);
+	// Alert selects `0x4b SCHED_TROIKA_ALERT_WAIT`, never the lookaround: `CAI_BaseNPCTroika::
+	// SelectSchedule` case 3 ends at `0x102af961..0x102af985` (`m_bGoToIdleState = m_bForceStateChange
+	// = 1`, `MOV EAX,0x4b`); the lookaround `0x4f` is read ONLY in case 1 (`0x102af829`).
+	// `conditions-and-states.md` § "The port's NPC-core guesses, settled" 1. (Story 8 L06.)
+	TestEqual(TEXT("alert selects ALERT_WAIT 0x4b"), F.Guard->SelectSchedule(), 0x4b);
 
 	// A committed enemy takes it to combat, and combat selects a real fight program.
 	F.Hate(F.ThugA, 5);

@@ -13,6 +13,18 @@ class FElysiumNpcGargoyle : public FElysiumNpcVampire
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VGargoyle", FElysiumNpcVampire)
 
+	// --- Select19 (story 0019/8 lane L06): the helpers `SelectSchedule` `0x103788d0` calls --------
+	/** `0x10378f80` — the find-pillar gate: `FINDING_BODY` and `0x15a` `FIND_PILLAR` when a pillar is
+	 *  found, else `+0x6680 = 2` and 0. */
+	int32 Select19GargoyleFindPillarSchedule();
+	/** SEAM for `0x10378ec0`'s `0x100f7b20("pillar", enemy origin)` nearest-entity search, which writes
+	 *  `+0x667c`. No nearest-by-name search stands on the world; the miss arm writes `-1` and answers
+	 *  false. */
+	bool Select19GargoyleFindPillar();
+	/** SEAM for `0x102ee380(m_pNavigator, from, to)`, the path test the combat arm asks. The same
+	 *  navigator seam `FElysiumNpcWerewolf::WerewolfHasPath` records: no path object, answers false. */
+	bool Select19GargoyleHasPath(const FVector& FromUnits, const FVector& ToUnits) const;
+
 	// The constructor `0x10377a60`: its hull store (`docs/vtmb/data/class_hulls.json`).
 	FElysiumNpcGargoyle();
 

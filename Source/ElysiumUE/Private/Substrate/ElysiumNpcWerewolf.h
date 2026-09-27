@@ -13,6 +13,13 @@ class FElysiumNpcWerewolf : public FElysiumNpcBaseBoss
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VWerewolf", FElysiumNpcBaseBoss)
 
+	// --- Select19 (story 0019/8 lane L06): the two Werewolf19 rows `SelectSchedule` calls ---------
+	/** SEAM for `CNPC_VWerewolf::CheckAllRandomMoveHints` (`0x103cf770`) and
+	 *  `CNPC_VWerewolf::FindRandomMoveHint` (`0x103d14f0`), rows of family Werewolf19 (lane L12). Until
+	 *  those land these answer false (no hint found); the integrator redirects both to L12's bodies. */
+	bool Select19CheckAllRandomMoveHints();
+	bool Select19FindRandomMoveHint();
+
 	// The constructor `0x103ca4b0`: its hull store (`docs/vtmb/data/class_hulls.json`).
 	FElysiumNpcWerewolf();
 

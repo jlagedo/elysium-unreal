@@ -13,6 +13,10 @@ class FElysiumNpcScurrying : public FElysiumNpcAnimal
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VScurrying", FElysiumNpcAnimal)
 
+	// --- Select19 (story 0019/8 lane L06): the fright words `SelectSchedule` `0x103ac610` writes ---
+	FVector ScurryingFrightOrigin = FVector::ZeroVector;   // +0x6680 m_vecFrightOrigin (walked)
+	double ScurryingFrightEndTime = 0.0;                   // +0x668c m_flFrightEndTime (walked)
+
 	// The constructor `0x103abb00`: its hull store (`docs/vtmb/data/class_hulls.json`).
 	FElysiumNpcScurrying();
 

@@ -239,14 +239,17 @@ bool FElysiumNpcKernelPlayerControllerPreSelectTest::RunTest(const FString&)
 			continue;
 		}
 		F.Npc->SetState(1);
-		const int32 TroikaBefore = StubFires(TEXT("CAI_BaseNPCTroika::PreSelectSchedule"));
+		F.Npc->SelectScheduleSelector = 0;
 		TestEqual(FString::Printf(TEXT("%s idle -> 0x6b (107)"), Cls), F.Npc->PreSelectSchedule(), 0x6b);
+		// Story 8 L06: the Troika body `0x102ae920` is ported (it no longer tallies a stub); what marks
+		// it is its own first write, `0x102ae92a MOV [ESI+0x1b2c],2` (`SelectScheduleSelector`).
 		TestEqual(FString::Printf(TEXT("%s idle does not reach the Troika body"), Cls),
-			StubFires(TEXT("CAI_BaseNPCTroika::PreSelectSchedule")), TroikaBefore);
+			F.Npc->SelectScheduleSelector, 0);
 		F.Npc->SetState(2);
+		F.Npc->SelectScheduleSelector = 0;
 		F.Npc->PreSelectSchedule();
-		TestEqual(FString::Printf(TEXT("%s non-idle -> the Troika body, directly"), Cls),
-			StubFires(TEXT("CAI_BaseNPCTroika::PreSelectSchedule")), TroikaBefore + 1);
+		TestEqual(FString::Printf(TEXT("%s non-idle -> the Troika body, directly (0x102ae92a)"), Cls),
+			F.Npc->SelectScheduleSelector, 2);
 	}
 	return true;
 }

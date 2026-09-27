@@ -468,7 +468,10 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		// NOT the melee branch's answer is the claim.
 		TestEqual(TEXT("ranged capability does not enter the melee selector"),
 			F.Fighter->SelectScheduleRangedCombat(0), ElysiumScheduleId::None);
-		TestEqual(TEXT("...so the composition rule answers the base idle"),
+		// Story 8 L06: the ranged zero falls through `CNPC_VHuman::SelectSchedule` (`0x1038502f`) to
+		// `CAI_BaseNPCTroika::SelectSchedule` case 2, whose no-`SEE_ENEMY` arm answers `0xb
+		// COMBAT_FACE` (`0x102afe5d`), not the idle the port's composition rule chose.
+		TestNotEqual(TEXT("...so the Troika combat ladder answers, not the idle"),
 			F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	}
 

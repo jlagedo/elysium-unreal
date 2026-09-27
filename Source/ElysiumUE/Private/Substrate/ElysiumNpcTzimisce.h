@@ -13,6 +13,34 @@ class FElysiumNpcTzimisce : public FElysiumNpcBaseBoss
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VTzimisce", FElysiumNpcBaseBoss)
 
+	// --- Select19 (story 0019/8 lane L06): the helpers `SelectSchedule` `0x103bb7c0` calls --------
+	/** `0x103bc4e0` — the find-body gate (retail name UNRECOVERED): answers `0x18f`/`0x190`
+	 *  (`FIND_BODY` / `_WALK`) when a body is found, else writes `+0x66b8 = 2`, `+0x66bc = 0` and 0. */
+	int32 Select19TzimisceFindBodySchedule();
+	/** SEAM for `0x103be180`, the body search `0x103bc4e0` asks. No body sweep stands here (the
+	 *  pickup chain's own search is story-8 residue); answers false, retail's no-body arm. */
+	bool Select19TzimisceFindBody();
+	/** `0x103bc820` — the melee-attack pick (`0x177` / `0x178` / `0x179`) by enemy distance. */
+	int32 Select19TzimisceMeleeAttackSchedule();
+	/** `0x103bca20` — the `MELEE_IDLE` continuation. */
+	int32 Select19TzimisceMeleeIdleContinuation();
+	/** `0x103bcaf0` — the `MELEE_ADVANCE` continuation. */
+	int32 Select19TzimisceMeleeAdvanceContinuation();
+	/** `0x103bcb60` — the retreat / dodge / block continuation. */
+	int32 Select19TzimisceMeleeRetreatContinuation();
+	/** `0x103bcc00` — the attack continuation. */
+	int32 Select19TzimisceMeleeAttackContinuation();
+	/** SEAM for `0x103bf660`, the pounce hull probe (a `TraceHull` from the enemy's last known position
+	 *  toward this body, mask `0x202400b`). No hull trace stands on the kernel; answers false, which
+	 *  withholds the pounce. */
+	bool Select19TzimiscePounceProbe();
+	/** SEAM for slot 627 (`vtable +0x9cc`, `0x103b9e30`), the fidget-voice body only this class fills
+	 *  (`SPI_FIDGET` through the three `tzimisce_voice_*` ConVars when slot 486 allows). Counted. */
+	int32 Select19TzimisceFidgetCalls = 0;
+	/** SEAM for `CBaseAnimating::m_fSequencePastHalf` (`+0x568`), which `0x103bcc00` reads first. The
+	 *  animation layer carries no such byte; answers false (a sequence not yet past half). */
+	bool Select19SequencePastHalf() const;
+
 	// The constructor `0x103b6c60`: its hull store (`docs/vtmb/data/class_hulls.json`).
 	FElysiumNpcTzimisce();
 
