@@ -4,7 +4,7 @@ Base: `03c0d030` (step 4 closed out).
 - 5a: records and checker, committed `571561aa`.
 - 5b: pure rename, committed `4e91d0d8`.
 - 5c–5d: committed as the `wip` checkpoint `826f4bb1`.
-- 5e–5h: complete in the working tree, which lands as the step-5 commit.
+- 5e–5h: committed `e0a71ee3`, the step-5 commit.
 
 Manifest phase 5, revision `step-5-base-troika-split`.
 

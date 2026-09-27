@@ -226,6 +226,11 @@
           "note": "5h: overlay targets of the 5d component methods retargeted (FElysiumNpcBaseScheduleHost::SetWaitFinished, MoveWaitFinished, MemoryBits)"
         }
       ]
+    },
+    "step5": {
+      "commit": "e0a71ee3ff8fdc3ff8cd77cbe8196cff6338ff43",
+      "acceptance": "acceptance-step5.json",
+      "note": "--check step5 reads this tree once it is recorded. The step-5 gate ran on the e0a71ee3 working tree (826f4bb1 + packets 5e-5h), committed unchanged."
     }
   },
   "step1_packets": {
@@ -273,11 +278,11 @@
   "step5_packets": {
     "5a": "accepted",
     "5b": "accepted",
-    "5c": "done-uncommitted",
-    "5d": "done-uncommitted",
-    "5e": "done-uncommitted",
-    "5f": "done-uncommitted",
-    "5g": "done-uncommitted",
-    "5h": "done-uncommitted"
+    "5c": "accepted",
+    "5d": "accepted",
+    "5e": "accepted",
+    "5f": "accepted",
+    "5g": "accepted",
+    "5h": "accepted"
   }
 }

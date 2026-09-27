@@ -1,4 +1,4 @@
-# Story 5 — step 5 complete (accepted on the working tree; commit pending)
+# Story 5 — step 5 accepted (`e0a71ee3`)
 
 **Step 5 (separate `CAI_BaseNPC` from Troika), 2026-09-26.**
 - **5a** (records and checker, no C++), committed `571561aa`:
@@ -64,12 +64,12 @@
   1,274 + 14 + 1, zero failures; `test_delta` vs step 4r passes with 12 expectations; five-map
   smoke clean. [acceptance-step5.json](acceptance-step5.json).
 
-### Handoff: step 5 awaits its commit
+### Handoff: next is step 6
 
-- The owner commits 5e-5h (one commit on top of `826f4bb1`), then `history.step5 =
-  {commit, acceptance: acceptance-step5.json}` goes into `manifest.json` in a records commit,
-  as step 4 did (`655cdd27`).
-- Next: step 6 (the plan's §5 step 6).
+- Step 5 committed as `e0a71ee3`; `manifest.json` `history.step5` records it, so `--check step5`
+  now reads that tree.
+- Next: step 6 (the plan's §5 step 6): the entity-chain relocation of the bodies on
+  `FElysiumNpcBase`, the 8 entity-method merges, the stub dispositions and diagnostic remaps.
 
 ## Step 4 (accepted, `bb690d7a`; 4r `61aa2cd8`; closed `03c0d030`)
 
