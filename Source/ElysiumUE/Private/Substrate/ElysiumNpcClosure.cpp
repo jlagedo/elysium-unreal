@@ -7,7 +7,7 @@
 #include "Substrate/ElysiumCameraOverride.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -509,7 +509,7 @@ float FElysiumNpc::HearingSensitivity()
 //
 // Both bodies probe the model with `SelectWeightedSequence` — `thunk_FUN_10295460` (the Troika
 // line's stat-filtered twin) and `CBaseAnimating::SelectWeightedSequence` — and take the first
-// candidate the body can play. The port's probe is `FElysiumNpcBase::SelectWeightedSequenceForActivity`
+// candidate the body can play. The port's probe is `FElysiumAnimatingOverlay::SelectWeightedSequenceForActivity`
 // (family Facing), which is a SEAM answering -1: this substrate resolves activities by name and
 // stands no sequence index at the kernel tier. Every probe therefore misses today, which means
 // slot 569 answers `ACT_COVER_LOW` under the flag and `ACT_IDLE` otherwise, and slot 570 answers

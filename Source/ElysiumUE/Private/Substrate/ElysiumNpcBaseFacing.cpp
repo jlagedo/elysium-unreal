@@ -37,15 +37,6 @@ void FElysiumNpcBase::MotorAddFacingTarget(const FFacingTargetRequest& Request)
 	FacingTargetRequests.Add(Request);
 }
 
-int32 FElysiumNpcBase::SelectWeightedSequenceForActivity(int32) const
-{
-	// `CBaseAnimating::SelectWeightedSequence(Activity, -1)` on the base line, `0x10295460` on the
-	// Troika line. **SEAM**: this substrate resolves activities by NAME and stands no sequence
-	// index at the kernel tier, so nothing is authored and the ladder walks to its `ACT_IDLE` tail —
-	// retail's own answer for a body with no turn clips.
-	return -1;
-}
-
 void FElysiumNpcBase::SetIdealActivityNumber(int32 Activity)
 {
 	// `CAI_BaseNPC::SetIdealActivity` `0x10272650`, the half this family is measured by:
@@ -58,13 +49,6 @@ void FElysiumNpcBase::SetIdealActivityNumber(int32 Activity)
 }
 
 // --- Slot 277 `SetViewtarget` -------------------------------------------------------------------
-
-void FElysiumNpcBase::SetViewtarget(const FVector& NewViewtarget)
-{
-	// `0x100b5b00`, the whole body: three floats into `m_viewtarget` (+0x0848). Retail networks the
-	// word; nothing in this substrate reads it yet.
-	Viewtarget = NewViewtarget;
-}
 
 void FElysiumNpcBase::AddFacingTarget(FElysiumEntity* FaceEntity, float Duration, float Ramp,
 	float Tolerance)
@@ -302,10 +286,3 @@ bool FElysiumNpcBase::FacingTargetsEnabled() const
 	return ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing) != 0;
 }
 
-void FElysiumNpcBase::SetPoseParameterByName(const TCHAR* Name, float Value)
-{
-	// `CBaseAnimating::SetPoseParameter(const char*, float)`, slot 345 (retail vtable +0x564).
-	// **SEAM**: the animating tier exposes no pose-parameter surface to the kernel, so the write is
-	// recorded and goes no further.
-	PoseParameterWrites.Add(FPoseParameterWrite{ FString(Name), Value });
-}

@@ -344,6 +344,9 @@ void FElysiumNpcBase::Serialize(FElysiumSaveArchive& Ar)
 	FElysiumNpcPendingSound::SerializeQueue(Ar, PendingSounds);
 	EnemyMemory.Serialize(Ar);
 	BaseScheduleHost.Serialize(Ar);
+	// `CBaseEntity::m_vecAttackExtents` (+0x50), on the entity since story 5 step 6; saved where the
+	// base host saved it, so the record's order is unchanged.
+	Ar << AttackExtentsCm;
 	// `m_hTargetEnt`, a retail `SAVE` row and a recorded gap in the generated walk.
 	Ar << TargetEnt;
 }

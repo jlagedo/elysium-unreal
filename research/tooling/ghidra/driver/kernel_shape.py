@@ -1046,6 +1046,71 @@ def residue(shape: Shape, rows: list[Row], sigs: list[dict]) -> str:
     return "\n".join(out) + "\n"
 
 
+# The verdicts that name a live rule the port owes (0019/5 step 6): a body the pass read and judged
+# live. `dead` and `unsettled` are not owed; an unverdicted body is `--residue`'s, not this list's.
+LIVE_VERDICTS = ("rule", "present", "mechanism")
+UNPORTED_COLUMNS = ("class", "slot", "address", "verdict", "kind", "port_class")
+
+
+def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_DEPTH) -> list[tuple[str, ...]]:
+    """The live rules the port does not carry yet, one row per (retail class, slot, body): a number
+    that must only fall as the species stories land (spec 0019 story 5, "The census").
+
+    Two kinds:
+      * `stub` -- a generated slot body on its owner class (the chain classes, the NPC base or the
+        Troika) whose live verdict has no `default:` or `hand:` target, so it still tallies;
+      * `no-override` -- a species class's own live body at a slot its port class declares no
+        override of (the port runs the inherited body), or a deferred class's (steps 7-10) whose
+        port class does not stand yet.
+    """
+    import csv
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    import gen_kernel_shape as g
+    model = g.build(repo, module, depth)
+    out: list[tuple[str, ...]] = []
+    for row in model.slots:
+        for layer in row.layers:
+            if layer.verdict in LIVE_VERDICTS and layer.stubbed:
+                out.append((layer.retail, str(row.slot), layer.address, layer.verdict, "stub", layer.owner))
+    story = repo / "docs" / "specs" / "0019-npc-kernel-rework" / "story-5" / "classes.tsv"
+    classes = list(csv.DictReader(story.read_text(encoding="utf-8").splitlines(), delimiter="\t"))
+    ports = {r["retail_class"]: r["port_class"] for r in classes}
+    live = {r["retail_class"] for r in classes if r["liveness"] == "live"}
+    port_base = {r["port_class"]: r["port_base"] for r in classes if r["port_class"].startswith("F")}
+    # The method a species override must spell: a `SLOT_PORT_MAP` row's callable is qualified
+    # (`FElysiumNpc::Spawn`), and the override is of its bare name.
+    names = {r.slot: r.port_name.rsplit("::", 1)[-1] for r in model.slots}
+    names.update({r.slot: r.port_name.rsplit("::", 1)[-1] for r in model.branch if r.slot not in names})
+    # A lifetime slot (the scalar deleting destructor) is the C++ destructor's, not a body owed.
+    lifetime = {r.slot for r in model.slots if any("lifetime slot" in n for n in r.notes)}
+    substrate = repo / "Source" / "ElysiumUE" / "Private" / "Substrate"
+    headers: dict[str, str] = {}
+
+    def header_of(port: str) -> str:
+        if port not in headers:
+            path = substrate / f"{port[1:]}.h"
+            headers[port] = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
+        return headers[port]
+
+    for row in model.overrides:
+        # A dead class's body is census, not a debt (its class stands no instance).
+        if row.verdict not in LIVE_VERDICTS or row.cls not in live or row.slot in lifetime:
+            continue
+        port = ports.get(row.cls, "-")
+        name = names.get(row.slot, "")
+        # The species line from the class up to (not including) the Troika leaf: an inherited body is
+        # carried where its owner overrides it.
+        declared, cursor = False, port
+        while name and cursor.startswith("F") and cursor not in ("FElysiumNpc", "FElysiumNpcBase"):
+            if re.search(rf"\b{re.escape(name)}\s*\([^;{{]*\)[^;{{]*\boverride\b", header_of(cursor)):
+                declared = True
+                break
+            cursor = port_base.get(cursor, "")
+        if not declared:
+            out.append((row.cls, str(row.slot), row.address, row.verdict, "no-override", port))
+    return sorted(set(out), key=lambda r: (r[0], int(r[1]), r[2]))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--module", default=kl.MODULE)
@@ -1054,8 +1119,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="verify the committed tables; write nothing")
     parser.add_argument("--residue", metavar="PATH",
                         help="write the rows a reading has not settled (TSV) to PATH and exit")
+    parser.add_argument("--unported", metavar="PATH",
+                        help="write the live rules the port does not carry yet (TSV) to PATH and exit")
     args = parser.parse_args(argv)
     repo = repo_root()
+    if args.unported:
+        rows_out = unported_rows(repo, args.module, args.depth)
+        text = ("# The live rules the port does not carry yet (`kernel_shape --unported`); the set must "
+                "only fall.\n" + "\t".join(UNPORTED_COLUMNS) + "\n"
+                + "".join("\t".join(r) + "\n" for r in rows_out))
+        Path(args.unported).write_text(text, encoding="utf-8", newline="\n")
+        print(f"wrote {args.unported}: {len(rows_out)} rows "
+              f"({collections.Counter(r[4] for r in rows_out)})")
+        return 0
     out_dir = Path(args.out) if args.out else repo.joinpath(*kl.DEFAULT_OUTPUT)
     shape, rows, sigs = build(args.module, args.depth, repo)
     if args.residue:

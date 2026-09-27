@@ -351,7 +351,7 @@ void FElysiumNpcSenses::StartSoundCursorAtHead(const FElysiumNpc& Npc)
 	Cursor = Npc.World ? Npc.World->GameSounds().LastSerial() : 0;
 }
 
-FVector FElysiumNpcSenses::ViewForward(const FElysiumNpcBase& Npc)
+FVector FElysiumNpcSenses::ViewForward(const FElysiumEntity& Npc)
 {
 	// Source angles carry the inverse Unreal yaw in this substrate; pitch remains Source pitch,
 	// so construct the full forward vector rather than flattening a target above/below the
@@ -368,7 +368,7 @@ float FElysiumNpcSenses::ViewConeBodyOffsetCm()
 		* ElysiumMove::U;
 }
 
-bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpcBase& Npc, const FVector& TargetCm,
+bool FElysiumNpcSenses::IsInViewCone(const FElysiumEntity& Npc, const FVector& TargetCm,
 	float TargetConeScalar)
 {
 	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test. `0x103268e0` would take the 2-D body

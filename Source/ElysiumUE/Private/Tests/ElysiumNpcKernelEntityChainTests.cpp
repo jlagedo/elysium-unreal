@@ -273,11 +273,11 @@ bool FElysiumNpcKernelEntityChainMoveReboundTest::RunTest(const FString&)
 	// The formula, on its own: `(t*t + 1)*t - (t/D)*(D*D + 1)*t`. Zero at both ends of the span,
 	// non-zero between them — a rebound that leaves and returns.
 	const float D = 2.f;
-	TestEqual(TEXT("the blend is zero at t = 0"), FElysiumNpcBase::MoveReboundBlend(0.f, D), 0.f);
-	TestEqual(TEXT("the blend is zero at t = D"), FElysiumNpcBase::MoveReboundBlend(D, D), 0.f);
+	TestEqual(TEXT("the blend is zero at t = 0"), FElysiumAnimating::MoveReboundBlend(0.f, D), 0.f);
+	TestEqual(TEXT("the blend is zero at t = D"), FElysiumAnimating::MoveReboundBlend(D, D), 0.f);
 	// t = 1, D = 2: (1 + 1)*1 - (0.5)*(4 + 1)*1 = 2 - 2.5 = -0.5.
 	TestEqual(TEXT("the blend at the midpoint is the cubic minus the linear"),
-		FElysiumNpcBase::MoveReboundBlend(1.f, D), -0.5f);
+		FElysiumAnimating::MoveReboundBlend(1.f, D), -0.5f);
 
 	// The body ALWAYS answers its own interval, on every path including the refusal.
 	TestEqual(TEXT("slot 135 answers the interval it was given"), Npc.Slot135(0.25f), 0.25f);
@@ -285,7 +285,7 @@ bool FElysiumNpcKernelEntityChainMoveReboundTest::RunTest(const FString&)
 
 	// SEAM: none of the seven `CBaseEntity` mover words has a port member, so the state answers the
 	// resting one and the first gate refuses — the velocities are not touched.
-	FElysiumNpcBase::FMoveRebound Rebound;
+	FElysiumAnimating::FMoveRebound Rebound;
 	TestFalse(TEXT("the mover-word seam refuses"), Npc.MoveReboundState(Rebound));
 	Npc.Velocity = FVector(9.f, 9.f, 9.f);
 	Npc.Slot135(0.25f);
@@ -313,7 +313,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	// is deliberately NOT written.
 	Npc.AnimOverlay[1].Flags = 0x77;
 	Npc.SetLayer(1, /*Activity*/ 0x42, /*Sequence*/ 9, /*bAutoKill*/ true);
-	const FElysiumNpcBase::FAnimOverlayLayer& Layer = Npc.AnimOverlay[1];
+	const FElysiumAnimatingOverlay::FAnimOverlayLayer& Layer = Npc.AnimOverlay[1];
 	TestEqual(TEXT("SetLayer stores the owner activity"), Layer.Activity, 0x42);
 	TestEqual(TEXT("SetLayer stores the sequence"), Layer.Sequence, 9);
 	TestEqual(TEXT("SetLayer seeds the weight to 0.1"), Layer.Weight, ElysiumOverlay::SeedWeight);
@@ -349,7 +349,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	// --- slot 266 (0x100997f0) ---
 	// Three records, two writes each: the sequence to -1 and the expire time to curtime - 1.0. The
 	// latch, the fades and the pose parameter SURVIVE.
-	for (int32 Index = 0; Index < FElysiumNpcBase::NumFlinchRecords; ++Index)
+	for (int32 Index = 0; Index < FElysiumAnimatingOverlay::NumFlinchRecords; ++Index)
 	{
 		Npc.Flinch[Index].Sequence = 40 + Index;
 		Npc.Flinch[Index].Latch = 2;
@@ -359,7 +359,7 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	}
 	Npc.Slot266();
 	const float Now = static_cast<float>(Fixture.World.World.NowSeconds());
-	for (int32 Index = 0; Index < FElysiumNpcBase::NumFlinchRecords; ++Index)
+	for (int32 Index = 0; Index < FElysiumAnimatingOverlay::NumFlinchRecords; ++Index)
 	{
 		TestEqual(TEXT("the flinch sequence is cleared to -1"), Npc.Flinch[Index].Sequence, -1);
 		TestEqual(TEXT("the expire stamp is one second in the PAST"), Npc.Flinch[Index].ExpireTime,
@@ -408,7 +408,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 		Npc.SceneEventReleases = 0;
 		auto Add = [&Npc](void* Scene, void* Event)
 		{
-			FElysiumNpcBase::FSceneEventRecord Record;
+			FElysiumFlex::FSceneEventRecord Record;
 			Record.Scene = static_cast<const FElysiumSceneData*>(Scene);
 			Record.Event = static_cast<const FElysiumSceneEvent*>(Event);
 			Npc.SceneEvents.Add(Record);
@@ -425,7 +425,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 	Npc.ClearSceneEvents(&SceneA);
 	TestEqual(TEXT("slot 285 removes every record of the named scene"), Npc.SceneEvents.Num(), 2);
 	TestEqual(TEXT("and releases each one it removed"), Npc.SceneEventReleases, 2);
-	for (const FElysiumNpcBase::FSceneEventRecord& Record : Npc.SceneEvents)
+	for (const FElysiumFlex::FSceneEventRecord& Record : Npc.SceneEvents)
 	{
 		TestTrue(TEXT("no record of scene A survives"),
 			static_cast<const void*>(Record.Scene) != static_cast<const void*>(&SceneA));
@@ -444,7 +444,7 @@ bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
 	TestEqual(TEXT("slot 287 removes exactly one record"), Npc.SceneEvents.Num(), 3);
 	TestEqual(TEXT("and releases exactly one"), Npc.SceneEventReleases, 1);
 	int32 RemainingB = 0;
-	for (const FElysiumNpcBase::FSceneEventRecord& Record : Npc.SceneEvents)
+	for (const FElysiumFlex::FSceneEventRecord& Record : Npc.SceneEvents)
 	{
 		if (static_cast<const void*>(Record.Event) == static_cast<const void*>(&EventB))
 		{

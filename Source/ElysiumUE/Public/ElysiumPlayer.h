@@ -10,6 +10,7 @@
 #include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
 #include "ElysiumInventorySections.h"
+#include "ElysiumNpcFlags.h"
 #include "ElysiumSheetSlots.h"
 // By base: `FElysiumCombatCharacter` implements retail's camera-source slots 46-53, so the
 // interface's definition is needed here. Same posture as the `Visual/` rigs several Public headers
@@ -1019,6 +1020,12 @@ private:
 	// `ElysiumAnimIntent::NumChannels` block because a channel nothing polls owns no timeline
 	// position, and a slot standing at cycle 0 forever would read as a clip that never advances.
 	TArray<FElysiumAnimEventCursor> EventCursors;
+
+public:
+	// The generated slot surface and the hand-written slot bodies of this class's retail node
+	// (0019 story 5 step 6).
+	#include "ElysiumAnimatingSlots.inl"
+	#include "ElysiumAnimatingSlotBodies.inl"
 };
 
 // FElysiumCombatCharacter — CBaseCombatCharacter. The sheet, and the 25 datamap inputs
@@ -1074,11 +1081,23 @@ struct FElysiumReactionPlayRequest
 class FElysiumAnimatingOverlay : public FElysiumAnimating
 {
 public:
+
+public:
+	// The generated slot surface and the hand-written slot bodies of this class's retail node
+	// (0019 story 5 step 6).
+	#include "ElysiumAnimatingOverlaySlots.inl"
+	#include "ElysiumAnimatingOverlaySlotBodies.inl"
 };
 
 class FElysiumFlex : public FElysiumAnimatingOverlay
 {
 public:
+
+public:
+	// The generated slot surface and the hand-written slot bodies of this class's retail node
+	// (0019 story 5 step 6).
+	#include "ElysiumFlexSlots.inl"
+	#include "ElysiumFlexSlotBodies.inl"
 };
 
 class FElysiumCombatCharacter : public FElysiumFlex, public IElysiumCameraOverrideSource
@@ -2011,6 +2030,12 @@ protected:
 	// Rebuilt from `Effects`, never copied between characters: it is a resolution of the names, and
 	// the names are the truth. Null until something puts a group on this character.
 	TSharedPtr<FElysiumSheetEffects> EffectLayer;
+
+public:
+	// The generated slot surface and the hand-written slot bodies of this class's retail node
+	// (0019 story 5 step 6).
+	#include "ElysiumCombatCharacterSlots.inl"
+	#include "ElysiumCombatCharacterSlotBodies.inl"
 };
 
 // FElysiumPlayer — CBasePlayer / CHL2_Player. The player character: the sheet above, the 10

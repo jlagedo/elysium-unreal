@@ -19,7 +19,7 @@
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -625,7 +625,7 @@ bool FElysiumNpcKernelCombat10WeaponDropNamedTest::RunTest(const FString&)
 	Stack->ItemCount = 1;
 	const int32 Notifies = F.Fighter->WeaponDropNotifies;
 	TestTrue(TEXT("the catalogue's default is droppable"),
-		FElysiumNpcBase::WeaponIsDroppable(Stack));
+		FElysiumCombatCharacter::WeaponIsDroppable(Stack));
 	F.Fighter->Weapon_Drop(Stack, nullptr, false);
 	TestEqual(TEXT("...a single droppable unit takes the ordinary removal"),
 		F.Fighter->WeaponDropNotifies, Notifies + 1);
@@ -812,7 +812,7 @@ bool FElysiumNpcKernelCombat10PrayerPulseTest::RunTest(const FString&)
 	// `m_Activity` (`+0xfec`) and answers `-1`, which is not `0x132` — retail's own answer for a body
 	// that is not praying, so the slot refuses and nothing pulses.
 	TestNotEqual(TEXT("0x1033b5f0 m_Activity is a seam and is never the prayer activity"),
-		N.CurrentRetailActivityId(), FElysiumNpcBase::PrayerActivityId);
+		N.CurrentRetailActivityId(), FElysiumCombatCharacter::PrayerActivityId);
 	N.FeedState.NextPulse = 0.f;
 	N.FeedState.Interval = 1.f;
 	N.Slot357();

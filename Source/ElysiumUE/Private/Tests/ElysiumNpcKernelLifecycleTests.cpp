@@ -569,11 +569,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleKeyValueTest,
 	"Elysium.Substrate.NpcKernelLifecycle.KeyValue", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 {
-	using EArm = FElysiumNpcBase::EKeyValueArm;
+	using EArm = FElysiumAnimating::EKeyValueArm;
 	FString Truncated;
 	auto Arm = [&Truncated](const TCHAR* Key)
 	{
-		return FElysiumNpcBase::ClassifyKeyValue(FString(Key), Truncated);
+		return FElysiumAnimating::ClassifyKeyValue(FString(Key), Truncated);
 	};
 
 	// The `#` truncation happens FIRST, before any comparison — so a key with one still matches.

@@ -70,12 +70,6 @@ FString ActivityNameForNumber(int32 Activity) const;
  *  **SEAM**: the motor carries no `Navigation_t`; answers -1, which slot 407 names `"None"`. */
 int32 RetailNavType() const;
 
-/** `CBaseCombatCharacter::GetActiveWeapon()` (`0x10007e19` → the inventory's active slot), which
- *  `DrawDebugGeometryOverlays`'s `0x10000` arm hands to `Weapon_Drop`. **SEAM**: no kernel accessor
- *  stands the active weapon entity yet (family BaseHelpers seams its range the same way). Answers
- *  null, and the drop still happens with a null weapon exactly as retail's would. */
-FElysiumEntity* ActiveWeaponEntity() const;
-
 /** `CAI_Navigator::DrawDebugRouteOverlay(m_pNavigator)` (`0x102f28e0`), the `0x4000` arm.
  *  **SEAM**: `m_pNavigator` (+0x5d34) is a CHAIN row onto the motor and no route store exists. */
 void DrawNavigatorRouteOverlay() const;

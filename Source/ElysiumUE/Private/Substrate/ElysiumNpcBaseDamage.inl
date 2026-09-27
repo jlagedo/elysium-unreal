@@ -2,10 +2,6 @@
 // moved from `ElysiumNpcDamage*.inl`. Included inside `class FElysiumNpcBase`
 // (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseDamage.cpp`.
 
-// +0x01fc m_takedamage (datamap, CBaseEntity). 0 = DAMAGE_NO, 1 = DAMAGE_EVENTS_ONLY,
-// 2 = DAMAGE_YES. Retail's default for a live NPC is 2, which is what this seeds.
-int32 TakeDamageMode = 2;
-
 // `CNPC_VAndreiBlood`'s `SelectIdealState` tag. The port's mind transition trace does not carry
 // retail's `{selector, file, line}` triple — the shape map calls `+0x1b38` ABSENT — so the one word
 // `0x1035d150` writes is kept here so the arm is measurable.
@@ -32,30 +28,6 @@ struct FElysiumTakeDamageInfo
 	int32 AmmoType = INDEX_NONE;                // +0x40  m_iAmmoType (0x101c2a10's one field)
 };
 
-/** Retail's `trace_t` as the same bodies read it. `+0x0c` is `endpos`, `+0x44` the hitgroup,
- *  `+0x48` the physics bone (a `short`, sign-extended by `0x102667e7`) and `+0x50` the ammo type
- *  `TraceAttack`'s tail copies into the sub-packet through `0x101c2a10`. */
-struct FElysiumTraceHit
-{
-	FVector EndPosUnits = FVector::ZeroVector;  // +0x0c  SOURCE units
-	FVector PlaneNormal = FVector::ZeroVector;  // the surface normal the decal seam needs
-	int32 HitGroup = 0;                         // +0x44
-	int32 PhysicsBone = 0;                      // +0x48
-	int32 AmmoType = INDEX_NONE;                // +0x50
-};
-
-/** What `TraceBleed` decided on each pass that got past its three refusals: the noise half-width and
- *  the trace count its damage band selected, and the segment of the last trace it ran. Retail's
- *  effect is a blood decal on a wall, which the decal seam cannot answer for headless; the TABLE is
- *  the recovered concern and this is what makes it measurable. */
-struct FTraceBleedPass
-{
-	float Noise = 0.f;
-	int32 TraceCount = 0;
-	FVector LastStartUnits = FVector::ZeroVector;
-	FVector LastEndUnits = FVector::ZeroVector;
-};
-
 /** SEAM for `thunk_FUN_102699e0` — `SpawnBlood(ptr->endpos, BloodColor(), damage)`, the surface
  *  spray `TraceAttack` emits before it bleeds. `PositionUnits` is SOURCE units. Recorded so the
  *  test can read back that the gate opened and with what amount; the visual is the particle seam's
@@ -74,8 +46,6 @@ struct FSpawnBloodCall
 int32 LastHitGroup = 0;       // +0x1594 m_LastHitGroup (datamap, CBaseCombatCharacter)
 
 int32 ForceBone = 0;          // +0x0660 m_nForceBone (datamap, CBaseAnimating)
-
-int32 RenderMode = 0;         // +0x016c m_nRenderMode (CBaseEntity); 4 is kRenderTransAlpha
 
 /** `_DAT_1070ba40`/`44`/`48` — the global death-throw impulse `CAI_BaseNPC::OnTakeDamage_Dead`
  *  writes. It is a FILE-STATIC triple in retail, shared by every body in the level rather than one
@@ -107,8 +77,6 @@ TArray<FSpawnBloodCall> SpawnBloodCalls;
 
 void SpawnBlood(const FVector& PositionUnits, int32 BloodColor, float Damage);
 
-TArray<FTraceBleedPass> TraceBleedPasses;
-
 /** SEAM for `thunk_FUN_101c2d20(subInfo, this)` — SDK 2013's `AddMultiDamage`, the accumulator
  *  `TraceAttack` hands its modified sub-packet to and which `ApplyMultiDamage` later spends. This
  *  runtime commits damage through `FElysiumCombatCharacter::TakeDamage` / `CommitDamage` instead of
@@ -119,17 +87,3 @@ TArray<FElysiumTakeDamageInfo> MultiDamageAccumulator;
 
 void AddMultiDamage(const FElysiumTakeDamageInfo& SubInfo);
 
-/** SEAM for `thunk_FUN_10427620` — `GetAmmoDef()->MaxCarry(index)`, the capacity `GiveAmmo` clamps
- *  against, and for the index-to-name join the clamp needs. This runtime's `FElysiumInventory`
- *  keys its reserve by the authored ammo TYPE NAME (`AmmoReserve`, a `TMap<FString,int32>`), not by
- *  retail's 0..31 `CAmmoDef` index, and no table joins the two. Both answer nothing —
- *  `MaxCarry` `0` and the name empty — which closes `GiveAmmo`'s clamp at zero and makes it return
- *  0 without sounding. **Unrecovered:** the `CAmmoDef` index order. */
-int32 AmmoMaxCarry(int32 AmmoIndex) const;
-
-FString AmmoTypeNameForIndex(int32 AmmoIndex) const;
-
-/** SEAM for `(*g_pGameRules)->vtable+0xd4` — the "is ammo enabled" predicate `GiveAmmo` asks before
- *  anything else. No rules object here carries it; answers TRUE, the permissive arm, so the clamp
- *  below it is what actually decides. */
-bool GameRulesAllowsAmmo(int32 AmmoIndex) const;

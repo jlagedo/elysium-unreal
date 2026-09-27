@@ -31,24 +31,6 @@ struct FNavigator
 };
 
 
-/** What the seams above were ASKED, so a test can assert that a body reached its motor call and
- *  that the refusal was the recovered one. Read by the test suite and by nothing else. */
-struct FMotorSeamLedger
-{
-	int32 MoveDone = 0;                  // slot 133's tail dispatch of `m_pfnMoveDone` (+0x114)
-	int32 IntervalMovementApplied = 0;   // `AutoMovement`'s gated `thunk_FUN_102e0bd0`
-	int32 PerformMovement = 0;           // the navigator's vtable slot 5 delegate
-	float PerformMovementInterval = 0.f;
-	int32 PostRunWeaponUpdates = 0;      // `PostRun`'s ordered pair, tallied on the second half
-	float PostRunInterval = 0.f;
-	int32 SetupJumpCommits = 0;          // `thunk_FUN_102c4e80`
-	int32 MoveProbeChecks = 0;           // `CanStandAt`'s `thunk_FUN_102e7270`
-	int32 HullTraces = 0;                // every `KernelHullTrace` caller
-	int32 JumpArcSolves = 0;             // `thunk_FUN_102c4cc0`
-	int32 LinkFacingCancels = 0;         // `thunk_FUN_102e1e20(-1)`
-};
-
-
 // `CBaseAnimating::m_hIgnoreCollisionEntity` (+0x055c) — the single entity
 // `CBaseAnimating::IsIgnoreCollisionEntity` (`0x1008be20`) compares against, and the tail every
 // `ShouldIgnoreCollision`/`NavIgnoreCollision` arm falls through to. Nothing in this runtime writes
@@ -95,8 +77,6 @@ enum class EElysiumHullExtents : uint8
 	Full,    // 0x102d6100 / 0x102d6120
 	Small,   // 0x102d6140 / 0x102d6160
 };
-
-mutable FMotorSeamLedger MotorSeams;
 
 /** `CAI_BaseNPC::FUN_1027dc80` `0x1027dc80` — the BASE branch of slot 531 `OnObstructingDoor`. The
  *  Troika-line body slot 531 carries is `0x102984a0` and belongs to story 29d, so this lands as a
@@ -168,13 +148,6 @@ bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUn
 static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits);
 
-/** `CBaseEntity::IsStandable()` (slot 164, `0x100b50a0`) — solid flag `0x10` clear, then move type
- *  1 / 6 / 2, else `thunk_FUN_100b5110`. **SEAM**: this substrate carries no solid flags and no
- *  move type, so it answers FALSE, and `CanStandOn` therefore refuses every non-null candidate.
- *  That is the conservative refusal, stated rather than guessed: retail's own answer for an entity
- *  with `0x10` set is also false. */
-static bool RetailIsStandable(const FElysiumEntity& Entity);
-
 /** `CBaseEntity`'s OWN slot-153 body (`0x10026e70`, spelled `CAISound::FUN_10026e70` because
  *  `CAISound` is the class the corpus attributes it to) — `m_vecVelocity` compared COMPONENT-WISE
  *  for EXACT equality against `DAT_1070d1b0`/`b4`/`b8`, the image's shared zero vector, answering 0
@@ -213,10 +186,6 @@ bool IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const;
  *  ONLY when `GetMoveType() == 4` and `FL_FROZEN 0x400` is clear. The gate is the retail contract a
  *  modernization has to keep; the extraction underneath it is Unreal's. */
 bool AutoMovement();
-
-/** `CAI_BaseNPC::PerformMovement(a, b)` `0x1026c120` — VProf scaffolding around one delegating call
- *  to the navigator's vtable slot 5, both parameters forwarded. */
-void PerformMovement(float Interval, int32 MoveFlags);
 
 /** `CAI_BaseNPC::PostRun` `0x1026c7c0` — the PAIRING and its ORDER: dispatch own vtable +0x408 with
  *  the elapsed interval from `thunk_FUN_1026c540`, then `CBaseCombatCharacter::Weapon_FrameUpdate`

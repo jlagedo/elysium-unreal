@@ -9,7 +9,7 @@
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"

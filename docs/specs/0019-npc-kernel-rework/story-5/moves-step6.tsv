@@ -25,7 +25,6 @@ EMoveDirectionCode	type	FElysiumNpcBase	ElysiumNpcBaseSpecies.inl	-	FElysiumComb
 EmitBulletTracer	method	FElysiumNpcBase	ElysiumNpcBaseSounds10.inl	ElysiumNpcBaseSounds10.cpp	FElysiumEntity	move	6d	closure of the chain hand bodies
 EntityDelay	field	FElysiumNpcBase	ElysiumNpcBaseLifecycle.inl	-	FElysiumAnimating	move	6d	closure of the chain hand bodies
 EntityOfEdict	method	FElysiumNpcBase	ElysiumNpcBaseEntityChain.inl	ElysiumNpcBaseEntityChain.cpp	FElysiumEntity	move	6d	closure of the chain hand bodies
-EyeDirection2D	method	FElysiumNpcBase	ElysiumNpcBaseSlots.inl	ElysiumNpcBaseFacing.cpp	FElysiumCombatCharacter	move	6d	closure of the chain hand bodies
 FAnimOverlayLayer	type	FElysiumNpcBase	ElysiumNpcBaseAnim.inl	-	FElysiumAnimatingOverlay	move	6d	closure of the chain hand bodies
 FBulletTracerCall	type	FElysiumNpcBase	ElysiumNpcBaseSounds10.inl	-	FElysiumEntity	move	6d	closure of the chain hand bodies
 FClosureRefusals	type	FElysiumNpcBase	ElysiumNpcBaseClosure.inl	-	FElysiumEntity	move	6d	closure of the chain hand bodies

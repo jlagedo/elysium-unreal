@@ -23,7 +23,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"

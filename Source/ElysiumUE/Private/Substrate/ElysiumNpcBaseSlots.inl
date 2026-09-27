@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 552 of the 617 Troika-line slots are declared here, on `FElysiumNpcBase`: every generated slot
-// the `CAI_BaseNPC` table holds.
+// 204 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 170 it introduces and 34 it overrides
+// with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -15,12 +15,11 @@
 // This file is included INSIDE `class FElysiumNpcBase` (`Substrate/ElysiumNpcBase.h`). It is not
 // a header: it has no include guard and declares nothing of its own. One declaration per
 // slot, in slot order, with the retail declaration in the comment and the port's lowered
-// signature in the code. A virtual here declares the surface retail dispatches through;
-// species classes override it from story 5 step 3 on.
+// signature in the code.
 //
-// The base layer (story 0019/5 step 5): `CAI_BaseNPC`'s table, with the body that table
-// holds — the base's own, or the entity chain's it inherits. Where the Troika table holds
-// another body, `ElysiumNpcSlots.inl` overrides the slot on `FElysiumNpc`.
+// Each slot is declared by the port class of the retail class that introduces it, with that
+// class's own body, and overridden by every port class whose retail table holds another
+// body there (story 0019/5 step 6). The stub names the retail class that owns its body.
 //
 // A body lands on one of these in 29c/29d/29e. Until then the definition in
 // `ElysiumNpcBaseSlots.cpp` tallies `elysium.stubs` with the retail address — except
@@ -28,1271 +27,121 @@
 // generator emits, or that the body is written by hand in the substrate, in which case no
 // definition is generated at all and the linker is what checks the claim.
 
-	// slot 0 0x10027450 (walked) `void SetRefEHandle(const CBaseHandle&)`
-	//   layer 0, story 29c
-	virtual void SetRefEHandle(const FElysiumEntityHandle&);
-	// slot 1 0x10027470 (sdk) `CBaseHandle& GetRefEHandle() const`
-	//   returns `CBaseHandle&`
-	//   layer 0, story 29c
-	virtual void* GetRefEHandle() const;
-	// slot 2 0x10027610 (walked) `ICollideable* GetCollideable()`
-	//   returns `ICollideable*`
-	//   layer 0, story 29c
-	virtual void* GetCollideable();
-	// slot 3 0x10027630 (walked) `IServerNetworkable* GetNetworkable()`
-	//   returns `IServerNetworkable*`
-	//   layer 0, story 29c
-	virtual void* GetNetworkable();
-	// slot 4 0x10027650 (walked) `CBaseEntity* GetBaseEntity()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* GetBaseEntity();
 	// slot 5 0x1027c7f0 (walked) `void* ~CBaseEntity(unsigned int)`
 	//   retail `~CBaseEntity` is a lifetime slot; declared by index
 	//   returns `void*`
 	//   layer 7, story 29c
-	virtual void* Slot5(uint32);
-	// slot 6 0x100b11d0 (sdk) `void SetCheckUntouch(bool)`
-	//   layer 0, story 29c
-	virtual void SetCheckUntouch(bool);
-	// slot 7 0x100b12e0 (walked) `void SetSentLastFrame(bool)`
-	//   layer 0, story 29c
-	virtual void SetSentLastFrame(bool);
-	// slot 8 0x100b17f0 (sdk) `int GetModelIndex() const`
-	//   layer 0, story 29c
-	virtual int32 GetModelIndex() const;
-	// slot 9 0x100b1690 (sdk) `string_t GetModelName() const`
-	//   layer 0, story 29c
-	virtual FName GetModelName() const;
-	// slot 10 0x100b1750 (sdk) `void SetModelIndex(int)`
-	//   layer 0, story 29c
-	virtual void SetModelIndex(int32);
-	// slot 11 0x1009ac80 (walked) `void DebugSetEntityName(const char*)`
-	//   layer 0, story 29c
-	virtual void DebugSetEntityName(const TCHAR*);
-	// slot 12 0x1009ad70 (walked) `const char* DebugGetEntityName()`
-	//   layer 0, story 29c
-	virtual const TCHAR* DebugGetEntityName();
-	// slot 13 0x1009ae10 (walked) `void DebugSetClassName(const char*)`
-	//   layer 0, story 29c
-	virtual void DebugSetClassName(const TCHAR*);
-	// slot 14 0x1009af00 (walked) `const char* DebugGetClassName()`
-	//   layer 0, story 29c
-	virtual const TCHAR* DebugGetClassName();
-	// slot 16 0x1009b030 (walked) `Vector GetAttackExtents()`
-	//   layer 0, story 29c
-	virtual FVector GetAttackExtents();
-	// slot 17 0x1009b380 (walked) `void TraceMessage(const char*, int) const`
-	//   layer 1, story 29c
-	virtual void TraceMessage(const TCHAR*, int32) const;
-	// slot 18 0x1009b2c0 (walked) `void TraceMessage(const char*, int)`
-	//   layer 1, story 29c
-	virtual void TraceMessage(const TCHAR*, int32);
-	// slot 19 0x1009b5a0 (walked) `void TraceMessageBare(const char*) const`
-	//   layer 1, story 29c
-	virtual void TraceMessageBare(const TCHAR*) const;
-	// slot 20 0x1009b500 (walked) `void TraceMessageBare(const char*)`
-	//   layer 1, story 29c
-	virtual void TraceMessageBare(const TCHAR*);
-	// slot 21 0x10026530 (walked) `void vfunc21(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot21(FElysiumEntity*);
-	// slot 22 0x10026550 (walked) `void vfunc22(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot22(FElysiumEntity*);
-	// slot 23 0x10026570 (walked) `void vfunc23(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot23(FElysiumEntity*);
-	// slot 24 0x10026590 (walked) `void OnVictimHitByMe(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void OnVictimHitByMe(FElysiumEntity*);
-	// slot 25 0x100265b0 (walked) `void vfunc25(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot25(FElysiumEntity*);
-	// slot 26 0x100265d0 (walked) `void vfunc26(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot26(FElysiumEntity*);
-	// slot 27 0x100265f0 (walked) `void vfunc27(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot27(FElysiumEntity*);
-	// slot 28 0x10026610 (walked) `float GetStealthVisionScalar()`
-	//   layer 0, story 29c
-	virtual float GetStealthVisionScalar();
-	// slot 29 0x10026630 (walked) `float GetStealthVisionCone()`
-	//   layer 0, story 29c
-	virtual float GetStealthVisionCone();
-	// slot 30 0x10026650 (walked) `float GetStealthHearingDist()`
-	//   layer 0, story 29c
-	virtual float GetStealthHearingDist();
-	// slot 31 0x103222c0 (walked) `void Dump(int)`
-	//   layer 12, story 29d
-	virtual void Dump(int32);
-	// slot 32 0x10026670 (walked) `bool CanBeInteractiveUsed(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool CanBeInteractiveUsed(FElysiumEntity*);
-	// slot 33 0x10026690 (walked) `int vfunc33()`
-	//   layer 0, story 29c
-	virtual int32 Slot33();
-	// slot 34 0x10342800 (walked) `int GetHighlightMaterial(CBaseEntity*)`
-	//   layer 2, story 29c
-	virtual int32 GetHighlightMaterial(FElysiumEntity*);
-	// slot 35 0x100266d0 (walked) `int vfunc35(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual int32 Slot35(FElysiumEntity*);
-	// slot 36 0x100266f0 (walked) `const char* vfunc36()`
-	//   layer 0, story 29c
-	virtual const TCHAR* Slot36();
-	// slot 37 0x10026710 (walked) `float vfunc37()`
-	//   layer 0, story 29c
-	virtual float Slot37();
-	// slot 38 0x10026730 (walked) `CBaseEntity* vfunc38(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* Slot38(FElysiumEntity*);
-	// slot 39 0x100a4fe0 (walked) `void OnUseBegin(CBaseEntity*)`
-	//   layer 8, story 29c
-	virtual void OnUseBegin(FElysiumEntity*);
-	// slot 40 0x10026750 (walked) `void vfunc40(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot40(FElysiumEntity*);
-	// slot 41 0x10026770 (walked) `void vfunc41(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot41(FElysiumEntity*);
-	// slot 42 0x100a5030 (walked) `void OnUseEnd(CBaseEntity*)`
-	//   layer 8, story 29c
-	virtual void OnUseEnd(FElysiumEntity*);
-	// slot 43 0x10026790 (walked) `void vfunc43(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot43(FElysiumEntity*);
-	// slot 44 0x100267b0 (walked) `bool vfunc44(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool Slot44(FElysiumEntity*);
-	// slot 45 0x100a5070 (walked) `bool PassesFindEntityFOVTrace(CBaseEntity*, Vector, Vector,
-	// int)`
-	//   layer 0, story 29c
-	virtual bool PassesFindEntityFOVTrace(FElysiumEntity*, FVector, FVector, int32);
-	// slot 46 0x100267d0 (walked) `void vfunc46()`
-	//   layer 0, story 29c
-	virtual void Slot46();
-	// slot 47 0x100267f0 (walked) `void vfunc47()`
-	//   layer 0, story 29c
-	virtual void Slot47();
-	// slot 48 0x10026810 (walked) `float vfunc48()`
-	//   layer 0, story 29c
-	virtual float Slot48();
-	// slot 49 0x10026830 (walked) `float vfunc49()`
-	//   layer 0, story 29c
-	virtual float Slot49();
-	// slot 54 0x10026910 (walked) `bool vfunc54(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool Slot54(FElysiumEntity*);
-	// slot 55 0x10026930 (walked) `void vfunc55(CBaseEntity*, Vector, Vector)`
-	//   layer 0, story 29c
-	virtual void Slot55(FElysiumEntity*, FVector, FVector);
-	// slot 56 0x10026950 (walked) `void vfunc56(CBaseEntity*, Vector, Vector, const char*)`
-	//   layer 0, story 29c
-	virtual void Slot56(FElysiumEntity*, FVector, FVector, const TCHAR*);
-	// slot 57 0x10026970 (walked) `void vfunc57(CBaseEntity*, Vector, Vector)`
-	//   layer 0, story 29c
-	virtual void Slot57(FElysiumEntity*, FVector, FVector);
-	// slot 58 0x10026990 (walked) `void vfunc58(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot58(FElysiumEntity*);
-	// slot 59 0x100269b0 (walked) `void vfunc59(CSceneEntity*)`
-	//   takes `CSceneEntity*`
-	//   layer 0, story 29c
-	virtual void Slot59(void*);
-	// slot 60 0x100269d0 (walked) `void vfunc60(CSceneEntity*)`
-	//   takes `CSceneEntity*`
-	//   layer 0, story 29c
-	virtual void Slot60(void*);
-	// slot 61 0x100269f0 (walked) `void vfunc61(CSceneEntity*)`
-	//   takes `CSceneEntity*`
-	//   layer 0, story 29c
-	virtual void Slot61(void*);
-	// slot 62 0x100b2be0 (walked) `void SetOrigin(const Vector&)`
-	//   layer 0, story 29c
-	virtual void SetOrigin(const FVector&);
-	// slot 63 0x10026a10 (walked) `void SetOrigin(float, float, float)`
-	//   layer 1, story 29c
-	virtual void SetOrigin(float, float, float);
-	// slot 64 0x100b2d00 (walked) `void SetAngles(const QAngle&)`
-	//   layer 0, story 29c
-	virtual void SetAngles(const FRotator&);
-	// slot 65 0x10026a50 (walked) `void SetAngles(float, float, float)`
-	//   layer 1, story 29c
-	virtual void SetAngles(float, float, float);
-	// slot 66 0x1009d2a0 (walked) `void Hide()`
-	//   layer 0, story 29c
-	virtual void Hide();
-	// slot 67 0x1009d380 (walked) `void Unhide()`
-	//   layer 0, story 29c
-	virtual void Unhide();
-	// slot 68 0x10340650 (walked) `bool ShouldIgnoreCollision(CBaseEntity*)`
-	//   layer 1, story 29c
-	virtual bool ShouldIgnoreCollision(FElysiumEntity*);
-	// slot 69 0x10026ab0 (walked) `bool NavIgnoreCollision(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool NavIgnoreCollision(FElysiumEntity*);
-	// slot 70 0x1009d820 (walked) `bool IsMonster()`
-	//   layer 0, story 29c
-	virtual bool IsMonster();
-	// slot 71 0x1009d460 (walked) `void PrecacheSoundTable()`
-	//   layer 0, story 29c
-	virtual void PrecacheSoundTable();
-	// slot 72 0x1015dc20 (walked) `bool vfunc72(int)`
-	//   layer 0, story 29c
-	virtual bool Slot72(int32);
-	// slot 73 0x10340590 (walked) `bool CausesImpactDamage(CBaseEntity*)`
-	//   layer 1, story 29c
-	virtual bool CausesImpactDamage(FElysiumEntity*);
-	// slot 74 0x103404f0 (walked) `bool ReceivesImpactDamage(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool ReceivesImpactDamage(FElysiumEntity*);
-	// slot 75 0x100a8400 (walked) `void TakeDamageFromCollision(int, gamevcollisionevent_t*)`
-	//   takes `gamevcollisionevent_t*`
-	//   layer 0, story 29c
-	virtual void TakeDamageFromCollision(int32, void*);
+	void* Slot5(uint32) override;
 	// slot 76 0x102775e0 (walked) `void DrawDebugStatOverlays()`
 	//   layer 6, story 29c
-	virtual void DrawDebugStatOverlays();
-	// slot 79 0x10321670 (walked) `datamap_t* GetPredDescMap()`
-	//   returns `datamap_t*`
-	//   layer 0, story 29c
-	virtual void* GetPredDescMap();
-	// slot 80 0x10321960 (walked) `ServerClass* GetServerClass()`
-	//   returns `ServerClass*`
-	//   layer 0, story 29c
-	virtual void* GetServerClass();
-	// slot 81 0x10321980 (walked) `int YouForgotToImplementOrDeclareServerClass()`
-	//   layer 0, story 29c
-	virtual int32 YouForgotToImplementOrDeclareServerClass();
+	void DrawDebugStatOverlays() override;
 	// slot 82 0x1027a7c0 (walked) `datamap_t* GetDataDescMap()`
 	//   returns `datamap_t*`
 	//   layer 0, story 29c
-	virtual void* GetDataDescMap();
-	// slot 83 0x100b4ef0 (walked) `int GetEFlags()`
-	//   layer 0, story 29c
-	virtual int32 GetEFlags();
-	// slot 84 0x100b4f10 (walked) `void SetEFlags(int)`
-	//   layer 0, story 29c
-	virtual void SetEFlags(int32);
-	// slot 85 0x100b3d10 (walked) `edict_t* GetEdict()`
-	//   returns `edict_t*`
-	//   layer 0, story 29c
-	virtual void* GetEdict();
-	// slot 86 0x103407b0 (walked) `bool ShouldTransmit(int, const edict_t*, const void*, int, int)`
-	//   takes `const edict_t*`
-	//   takes `const void*`
-	//   layer 1, story 29c
-	virtual bool ShouldTransmit(int32, void*, void*, int32, int32);
-	// slot 87 0x100ab280 (walked) `void SetTransmit(CCheckTransmitInfo*)`
-	//   takes `CCheckTransmitInfo*`
-	//   layer 0, story 29c
-	virtual void SetTransmit(void*);
-	// slot 88 0x10026b50 (walked) `bool vfunc88()`
-	//   layer 2, story 29c
-	virtual bool Slot88();
-	// slot 89 0x10026b70 (walked) `void vfunc89()`
-	//   layer 1, story 29c
-	virtual void Slot89();
-	// slot 90 0x100aa840 (sdk) `bool IsTransparent() const`
-	//   layer 0, story 29c
-	virtual bool IsTransparent() const;
-	// slot 91 0x100b4de0 (walked) `bool ShouldCollide(int, int) const`
-	//   layer 0, story 29c
-	virtual bool ShouldCollide(int32, int32) const;
-	// slot 92 0x10027570 (sdk) `SolidType_t GetSolid() const`
-	//   returns `SolidType_t`
-	//   layer 0, story 29c
-	virtual int32 GetSolid() const;
-	// slot 93 0x100aad70 (sdk) `void SetMoveType(MoveType_t, MoveCollide_t)`
-	//   takes `MoveType_t`
-	//   takes `MoveCollide_t`
-	//   layer 0, story 29c
-	virtual void SetMoveType(int32, int32);
-	// slot 94 0x100aac30 (sdk) `MoveType_t GetMoveType() const`
-	//   returns `MoveType_t`
-	//   layer 0, story 29c
-	virtual int32 GetMoveType() const;
-	// slot 95 0x100aacd0 (sdk) `MoveCollide_t GetMoveCollide() const`
-	//   returns `MoveCollide_t`
-	//   layer 0, story 29c
-	virtual int32 GetMoveCollide() const;
-	// slot 96 0x100a9ba0 (walked) `edict_t* GetAimEntEdict()`
-	//   returns `edict_t*`
-	//   layer 0, story 29c
-	virtual void* GetAimEntEdict();
-	// slot 98 0x100b1ac0 (sdk) `void CalcAbsolutePosition()`
-	//   layer 0, story 29c
-	virtual void CalcAbsolutePosition();
-	// slot 99 0x100956e0 (sdk) `bool TestCollision(Ray_t&, unsignedint, trace_t&)`
-	//   takes `Ray_t&`
-	//   takes `unsignedint`
-	//   takes `trace_t&`
-	//   layer 0, story 29c
-	virtual bool TestCollision(void*, int32, void*);
-	// slot 100 0x10095a20 (sdk) `bool TestHitboxes(Ray_t&, unsignedint, trace_t&)`
-	//   takes `Ray_t&`
-	//   takes `unsignedint`
-	//   takes `trace_t&`
-	//   layer 0, story 29c
-	virtual bool TestHitboxes(void*, int32, void*);
-	// slot 101 0x100ab430 (walked) `void ComputeWorldSpaceSurroundingBox(Vector*, Vector*)`
-	//   layer 0, story 29c
-	virtual void ComputeWorldSpaceSurroundingBox(FVector*, FVector*);
-	// slot 102 0x100ab450 (walked) `void Physics_TraceEntity(CBaseEntity*, const Vector&, const
-	// Vector&, unsigned int, trace_t*)`
-	//   takes `trace_t*`
-	//   layer 3, story 29c
-	virtual void Physics_TraceEntity(FElysiumEntity*, const FVector&, const FVector&, uint32, void*);
+	void* GetDataDescMap() override;
 	// slot 104 0x1027bb50 (sdk) `void Precache()`
 	//   layer 13, story 29d
-	virtual void Precache();
-	// slot 105 0x103409a0 (sdk) `void SetModel(char*)`
-	//   layer 10, story 29d
-	virtual void SetModel(TCHAR*);
+	void Precache() override;
 	// slot 106 0x1027bb20 (sdk) `void PostConstructor(char*)`
 	//   layer 15, story 29d
-	virtual void PostConstructor(TCHAR*);
-	// slot 107 0x1009e280 (sdk) `void ParseMapData(CEntityMapData*)`
-	//   takes `CEntityMapData*`
-	//   layer 0, story 29c
-	virtual void ParseMapData(void*);
-	// slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
-	//   layer 11, story 29d
-	virtual bool KeyValue(const TCHAR*, FVector);
-	// slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
-	//   layer 11, story 29d
-	virtual bool KeyValue(const TCHAR*, float);
-	// slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
-	//   layer 10, story 29d
-	virtual bool KeyValue(const TCHAR*, const TCHAR*);
-	// slot 111 0x10337ca0 (walked) `void MemberSync()`
-	//   layer 13, story 29d
-	virtual void MemberSync();
-	// slot 112 0x10026bd0 (walked) `void vfunc112(int, int)`
-	//   layer 0, story 29c
-	virtual void Slot112(int32, int32);
-	// slot 114 0x100ad780 (walked) `void PostClientMessagesSent()`
-	//   layer 0, story 29c
-	virtual void PostClientMessagesSent();
-	// slot 115 0x10026bf0 (walked) `void vfunc115(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot115(FElysiumEntity*);
-	// slot 116 0x10027490 (walked) `bool IsMarkedForDeletion()`
-	//   layer 0, story 29c
-	virtual bool IsMarkedForDeletion();
-	// slot 118 0x100abc90 (sdk) `bool AcceptInput(char*, CBaseEntity*, CBaseEntity*, variant_t,
-	// int)`
-	//   takes `variant_t`
-	//   layer 0, story 29c
-	virtual bool AcceptInput(TCHAR*, FElysiumEntity*, FElysiumEntity*, int32, int32);
-	// slot 120 0x100ace00 (sdk) `void GetInputDispatchEffectPosition(char*, Vector&, QAngle&)`
-	//   layer 0, story 29c
-	virtual void GetInputDispatchEffectPosition(TCHAR*, FVector&, FRotator&);
-	// slot 121 0x100acab0 (sdk) `bool ReadKeyField(char*, variant_t*)`
-	//   takes `variant_t*`
-	//   layer 0, story 29c
-	virtual bool ReadKeyField(TCHAR*, void*);
-	// slot 122 0x1009f120 (sdk) `void SetClassname(char*)`
-	//   layer 0, story 29c
-	virtual void SetClassname(TCHAR*);
+	void PostConstructor(TCHAR*) override;
 	// slot 123 0x10275760 (sdk) `void DrawDebugGeometryOverlays()`
 	//   layer 8, story 29c
-	virtual void DrawDebugGeometryOverlays();
+	void DrawDebugGeometryOverlays() override;
 	// slot 124 0x102767d0 (sdk) `int DrawDebugTextOverlays()`
 	//   layer 14, story 29d
-	virtual int32 DrawDebugTextOverlays();
-	// slot 125 0x1033e7e0 (walked) `void DrawMuzzleOverlay()`
-	//   layer 4, story 29c
-	virtual void DrawMuzzleOverlay();
+	int32 DrawDebugTextOverlays() override;
 	// slot 126 0x1027bc60 (sdk) `int Save(ISave&)`
 	//   takes `ISave&`
 	//   layer 15, story 29d
-	virtual int32 Save(void*);
+	int32 Save(void*) override;
 	// slot 127 0x1027c160 (walked) `int Restore(IRestore&)`
 	//   takes `IRestore&`
 	//   layer 9, story 29c
-	virtual int32 Restore(void*);
+	int32 Restore(void*) override;
 	// slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 	//   layer 0, story 29c
-	virtual bool ShouldSavePhysics();
-	// slot 129 0x100aa4e0 (walked) `void OnSave()`
-	//   layer 0, story 29c
-	virtual void OnSave();
+	bool ShouldSavePhysics() override;
 	// slot 130 0x1027bf50 (walked) `void OnRestore(bool)`
 	//   layer 21, story 29e
-	virtual void OnRestore(bool);
-	// slot 131 0x10026c10 (walked) `int RequiredEdictIndex()`
-	//   layer 0, story 29c
-	virtual int32 RequiredEdictIndex();
-	// slot 132 0x10026c30 (walked) `void vfunc132()`
-	//   layer 0, story 29c
-	virtual void Slot132();
-	// slot 133 0x101c1720 (walked) `void MoveDone()`
-	//   layer 9, story 29c
-	virtual void MoveDone();
-	// slot 135 0x101c10d0 (walked) `float vfunc135(float)`
-	//   layer 1, story 29c
-	virtual float Slot135(float);
+	void OnRestore(bool) override;
 	// slot 136 0x101a6860 (walked) `bool vfunc136()`
 	//   layer 0, story 29c
-	virtual bool Slot136();
-	// slot 137 0x1004fc50 (walked) `CBaseAnimating* GetBaseAnimating()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* GetBaseAnimating();
-	// slot 138 0x100a7a80 (sdk) `Class_T Classify()`
-	//   returns `Class_T`
-	//   layer 0, story 29c
-	virtual int32 Classify();
-	// slot 139 0x10026d70 (walked) `void DeathNotice(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void DeathNotice(FElysiumEntity*);
-	// slot 140 0x100a7aa0 (sdk) `bool PassesDamageFilter(CTakeDamageInfo&)`
-	//   takes `CTakeDamageInfo&`
-	//   layer 0, story 29c
-	virtual bool PassesDamageFilter(void*);
+	bool Slot136() override;
 	// slot 141 0x10266780 (walked) `void TraceAttack(const CTakeDamageInfo&, const Vector&,
 	// trace_t*)`
 	//   takes `const CTakeDamageInfo&`
 	//   takes `trace_t*`
 	//   layer 8, story 29c
-	virtual void TraceAttack(void*, const FVector&, void*);
+	void TraceAttack(void*, const FVector&, void*) override;
 	// slot 142 0x10265e90 (sdk) `int OnTakeDamage(CTakeDamageInfo&)`
 	//   takes `CTakeDamageInfo&`
 	//   layer 24, story 29e
-	virtual int32 OnTakeDamage(void*);
-	// slot 143 0x1032ebc0 (sdk) `int TakeHealth(float, int)`
-	//   layer 1, story 29c
-	virtual int32 TakeHealth(float, int32);
+	int32 OnTakeDamage(void*) override;
 	// slot 144 0x10265ad0 (sdk) `void Event_Killed(CTakeDamageInfo&)`
 	//   takes `CTakeDamageInfo&`
 	//   layer 20, story 29e
-	virtual void Event_Killed(void*);
-	// slot 145 0x1014fa10 (walked) `int BloodColor()`
-	//   layer 0, story 29c
-	virtual int32 BloodColor();
-	// slot 146 0x10268ef0 (walked) `void TraceBleed(CVDmg_t*, const Vector&, trace_t*)`
-	//   takes `CVDmg_t*`
-	//   takes `trace_t*`
-	//   layer 4, story 29c
-	virtual void TraceBleed(void*, const FVector&, void*);
-	// slot 147 0x10026db0 (walked) `bool IsTriggered(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool IsTriggered(FElysiumEntity*);
-	// slot 148 0x10026dd0 (walked) `void AddPoints(int, bool)`
-	//   layer 0, story 29c
-	virtual void AddPoints(int32, bool);
-	// slot 149 0x10026df0 (walked) `void AddPointsToTeam(int, bool)`
-	//   layer 0, story 29c
-	virtual void AddPointsToTeam(int32, bool);
-	// slot 150 0x10026e10 (walked) `bool AddPlayerItem(CBaseCombatWeapon*)`
-	//   layer 0, story 29c
-	virtual bool AddPlayerItem(FElysiumEntity*);
-	// slot 151 0x10026e30 (walked) `bool RemovePlayerItem(CBaseCombatWeapon*)`
-	//   layer 0, story 29c
-	virtual bool RemovePlayerItem(FElysiumEntity*);
-	// slot 152 0x1004fc10 (walked) `float GetDelay()`
-	//   layer 0, story 29c
-	virtual float GetDelay();
+	void Event_Killed(void*) override;
 	// slot 153 0x10280300 (walked) `bool IsMoving()`
 	//   layer 2, story 29c
-	virtual bool IsMoving();
-	// slot 154 0x100b4ea0 (walked) `int DamageDecal(int, int)`
-	//   layer 0, story 29c
-	virtual int32 DamageDecal(int32, int32);
-	// slot 155 0x100a6c50 (walked) `void DecalTrace(trace_t*, int, bool, int, CBaseEntity*, int,
-	// bool)`
-	//   takes `trace_t*`
-	//   layer 0, story 29c
-	virtual void DecalTrace(void*, int32, bool, int32, FElysiumEntity*, int32, bool);
-	// slot 156 0x10026ee0 (unsettled) `void vfunc156(int)`
-	//   layer 0, story 29c
-	virtual void Slot156(int32);
-	// slot 157 0x10026f00 (walked) `bool OnControls(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool OnControls(FElysiumEntity*);
-	// slot 158 0x100b4dc0 (walked) `bool IsAlive()`
-	//   layer 0, story 29c
-	virtual bool IsAlive();
-	// slot 159 0x10026f20 (walked) `bool ReflectGauss()`
-	//   layer 1, story 29c
-	virtual bool ReflectGauss();
-	// slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
-	//   layer 0, story 29c
-	virtual bool HasTarget(FName);
-	// slot 161 0x100a1c30 (walked) `bool HasLinkedDoor(string_t)`
-	//   layer 0, story 29c
-	virtual bool HasLinkedDoor(FName);
-	// slot 162 0x10026f60 (walked) `bool IsPlayer()`
-	//   layer 0, story 29c
-	virtual bool IsPlayer();
-	// slot 163 0x100a9800 (sdk) `bool IsViewable()`
-	//   layer 0, story 29c
-	virtual bool IsViewable();
-	// slot 164 0x100b50a0 (walked) `bool IsStandable()`
-	//   layer 1, story 29c
-	virtual bool IsStandable();
-	// slot 165 0x10026fb0 (walked) `bool CanStandOn(edict_t*)`
-	//   takes `edict_t*`
-	//   layer 1, story 29c
-	virtual bool CanStandOn(void*);
-	// slot 166 0x10026f80 (walked) `bool CanStandOn(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool CanStandOn(FElysiumEntity*);
+	bool IsMoving() override;
 	// slot 167 0x101a67e0 (walked) `CBaseEntity* GetEnemy() const`
 	//   layer 0, story 29c
-	virtual FElysiumEntity* GetEnemy() const;
-	// slot 168 0x10027020 (walked) `CBaseEntity* GetEnemy()`
-	//   layer 1, story 29c
-	virtual FElysiumEntity* GetEnemy();
-	// slot 169 0x10027040 (walked) `void ViewPunch(const QAngle&)`
-	//   layer 0, story 29c
-	virtual void ViewPunch(const FRotator&);
-	// slot 170 0x10027060 (walked) `void VelocityPunch(const Vector&)`
-	//   layer 0, story 29c
-	virtual void VelocityPunch(const FVector&);
-	// slot 171 0x100ad550 (walked) `void SetMovedir()`
-	//   layer 0, story 29c
-	virtual void SetMovedir();
-	// slot 172 0x100a1d20 (sdk) `CBaseEntity* GetNextTarget()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* GetNextTarget();
-	// slot 174 0x100a49d0 (sdk) `void StartTouch(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void StartTouch(FElysiumEntity*);
-	// slot 175 0x100a4af0 (sdk) `void Touch(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Touch(FElysiumEntity*);
-	// slot 176 0x100a4c20 (sdk) `void EndTouch(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void EndTouch(FElysiumEntity*);
-	// slot 177 0x10027080 (sdk) `void StartBlocked(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void StartBlocked(FElysiumEntity*);
-	// slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Blocked(FElysiumEntity*);
-	// slot 179 0x100270a0 (walked) `void EndBlocked()`
-	//   layer 0, story 29c
-	virtual void EndBlocked();
+	FElysiumEntity* GetEnemy() const override;
 	// slot 180 0x1027ca30 (sdk) `void UpdateOnRemove()`
 	//   layer 6, story 29c
-	virtual void UpdateOnRemove();
-	// slot 181 0x100ada20 (sdk) `void Teleport(Vector*, QAngle*, Vector*)`
-	//   layer 0, story 29c
-	virtual void Teleport(FVector*, FRotator*, FVector*);
-	// slot 182 0x100ad8f0 (unsettled) `void vfunc182(int, int, int, int)`
-	//   layer 0, story 29c
-	virtual void Slot182(int32, int32, int32, int32);
-	// slot 183 0x100ad910 (walked) `void NotifySystemEvent(CBaseEntity*, notify_system_event_t,
-	// const notify_system_event_params_t&)`
-	//   takes `notify_system_event_t`
-	//   takes `const notify_system_event_params_t&`
-	//   layer 0, story 29c
-	virtual void NotifySystemEvent(FElysiumEntity*, int32, void*);
-	// slot 184 0x10267260 (walked) `void MakeTracer(const Vector&, const trace_t&, int)`
-	//   takes `const trace_t&`
-	//   layer 4, story 29c
-	virtual void MakeTracer(const FVector&, void*, int32);
-	// slot 185 0x10268900 (walked) `void FireBullets(const FireBulletsInfo_t&)`
-	//   takes `const FireBulletsInfo_t&`
-	//   layer 16, story 29d
-	virtual void FireBullets(void*);
-	// slot 186 0x100270c0 (walked) `bool vfunc186()`
-	//   layer 0, story 29c
-	virtual bool Slot186();
-	// slot 187 0x100270e0 (walked) `CBaseEntity* Respawn()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* Respawn();
-	// slot 188 0x10027100 (walked) `bool IsLockedByMaster()`
-	//   layer 0, story 29c
-	virtual bool IsLockedByMaster();
-	// slot 189 0x100ad850 (sdk) `int GetDamageType() const`
-	//   layer 0, story 29c
-	virtual int32 GetDamageType() const;
-	// slot 190 0x10027120 (walked) `float GetDamage()`
-	//   layer 0, story 29c
-	virtual float GetDamage();
-	// slot 191 0x10027140 (walked) `void SetDamage(float)`
-	//   layer 0, story 29c
-	virtual void SetDamage(float);
-	// slot 192 0x10027160 (walked) `Vector WorldSpaceCenter()`
-	//   layer 8, story 29c
-	virtual FVector WorldSpaceCenter();
-	// slot 194 0x100b4bc0 (walked) `const QAngle& EyeAngles()`
-	//   returns `const QAngle&`
-	//   layer 1, story 29c
-	virtual void* EyeAngles();
-	// slot 195 0x100b4be0 (walked) `const QAngle& LocalEyeAngles()`
-	//   returns `const QAngle&`
-	//   layer 1, story 29c
-	virtual void* LocalEyeAngles();
-	// slot 196 0x100b4c00 (walked) `Vector EarPosition()`
-	//   layer 2, story 29c
-	virtual FVector EarPosition();
+	void UpdateOnRemove() override;
 	// slot 197 0x102789c0 (walked) `Vector BodyTarget(const Vector&, bool, bool)`
 	//   layer 9, story 29c
-	virtual FVector BodyTarget(const FVector&, bool, bool);
-	// slot 198 0x100274b0 (walked) `const Vector& GetLocalVelocity()`
-	//   returns `const Vector&`
-	//   layer 0, story 29c
-	virtual void* GetLocalVelocity();
-	// slot 199 0x10095e50 (sdk) `void GetVelocity(Vector*, AngularImpulse*)`
-	//   takes `AngularImpulse*`
-	//   layer 0, story 29c
-	virtual void GetVelocity(FVector*, void*);
-	// slot 200 0x100ad6e0 (walked) `int Illumination()`
-	//   layer 0, story 29c
-	virtual int32 Illumination();
-	// slot 201 0x100a6fa0 (walked) `bool FVisible(CBaseEntity*, int, CBaseEntity**, int)`
-	//   layer 0, story 29c
-	virtual bool FVisible(FElysiumEntity*, int32, FElysiumEntity*, int32);
-	// slot 203 0x100a1360 (walked) `float GetAttackDamageScale()`
-	//   layer 0, story 29c
-	virtual float GetAttackDamageScale();
-	// slot 204 0x100a1470 (walked) `float GetReceivedDamageScale()`
-	//   layer 0, story 29c
-	virtual float GetReceivedDamageScale();
-	// slot 205 0x10027330 (walked) `bool vfunc205()`
-	//   layer 0, story 29c
-	virtual bool Slot205();
-	// slot 206 0x10027350 (unsettled) `bool vfunc206(int, int, int, int, int)`
-	//   layer 0, story 29c
-	virtual bool Slot206(int32, int32, int32, int32, int32);
-	// slot 207 0x1003d3d0 (sdk) `bool IsCurrentlyTouching() const`
-	//   layer 0, story 29c
-	virtual bool IsCurrentlyTouching() const;
-	// slot 208 0x100b1420 (sdk) `void SetGroundEntity(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void SetGroundEntity(FElysiumEntity*);
-	// slot 209 0x100b1510 (walked) `CBaseEntity* GetGroundEntity()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* GetGroundEntity();
-	// slot 210 0x10027370 (walked) `void GetGroundVelocityToApply(Vector&)`
-	//   layer 0, story 29c
-	virtual void GetGroundVelocityToApply(FVector&);
-	// slot 211 0x100274d0 (sdk) `int GetSolidFlags() const`
-	//   layer 0, story 29c
-	virtual int32 GetSolidFlags() const;
-	// slot 212 0x100b15f0 (sdk) `void SetModelName(string_t)`
-	//   layer 0, story 29c
-	virtual void SetModelName(FName);
-	// slot 213 0x100b1890 (walked) `void SetSize(const Vector&)`
-	//   layer 0, story 29c
-	virtual void SetSize(const FVector&);
-	// slot 214 0x100b1960 (walked) `const Vector& GetSize()`
-	//   returns `const Vector&`
-	//   layer 0, story 29c
-	virtual void* GetSize();
-	// slot 215 0x100b4c30 (walked) `const Vector& WorldSpaceCenter() const`
-	//   returns `const Vector&`
-	//   layer 8, story 29c
-	virtual void* WorldSpaceCenter() const;
-	// slot 216 0x100b2300 (sdk) `void SetAbsOrigin(Vector&)`
-	//   layer 0, story 29c
-	virtual void SetAbsOrigin(FVector&);
-	// slot 217 0x100b31b0 (sdk) `Vector& GetAbsOrigin() const`
-	//   returns `Vector&`
-	//   layer 0, story 29c
-	virtual void* GetAbsOrigin() const;
-	// slot 218 0x100b2510 (sdk) `void SetAbsAngles(QAngle&)`
-	//   layer 0, story 29c
-	virtual void SetAbsAngles(FRotator&);
-	// slot 219 0x100b3280 (sdk) `QAngle& GetAbsAngles() const`
-	//   returns `QAngle&`
-	//   layer 0, story 29c
-	virtual void* GetAbsAngles() const;
-	// slot 220 0x100b3070 (walked) `const Vector& GetOrigin()`
-	//   returns `const Vector&`
-	//   layer 0, story 29c
-	virtual void* GetOrigin();
-	// slot 221 0x100b3110 (walked) `const QAngle& GetAngles()`
-	//   returns `const QAngle&`
-	//   layer 0, story 29c
-	virtual void* GetAngles();
-	// slot 222 0x100a9eb0 (sdk) `Vector GetSoundEmissionOrigin() const`
-	//   layer 0, story 29c
-	virtual FVector GetSoundEmissionOrigin() const;
+	FVector BodyTarget(const FVector&, bool, bool) override;
 	// slot 223 0x10273720 (walked) `bool CreateVPhysics()`
 	//   layer 13, story 29d
-	virtual bool CreateVPhysics();
-	// slot 224 0x100273b0 (walked) `bool ForceVPhysicsCollide(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool ForceVPhysicsCollide(FElysiumEntity*);
-	// slot 225 0x100b5040 (walked) `void VPhysicsDestroyObject()`
-	//   layer 4, story 29c
-	virtual void VPhysicsDestroyObject();
-	// slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
-	//   takes `IPhysicsObject*`
-	//   layer 1, story 29c
-	virtual void VPhysicsUpdate(void*);
-	// slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
-	//   takes `CTakeDamageInfo&`
-	//   layer 0, story 29c
-	virtual int32 VPhysicsTakeDamage(void*);
-	// slot 228 0x10334a50 (sdk) `void VPhysicsShadowCollision(int, gamevcollisionevent_t*)`
-	//   takes `gamevcollisionevent_t*`
-	//   layer 1, story 29c
-	virtual void VPhysicsShadowCollision(int32, void*);
-	// slot 229 0x100273d0 (sdk) `void VPhysicsShadowUpdate(IPhysicsObject*)`
-	//   takes `IPhysicsObject*`
-	//   layer 0, story 29c
-	virtual void VPhysicsShadowUpdate(void*);
-	// slot 230 0x100a6640 (sdk) `void VPhysicsCollision(int, gamevcollisionevent_t*)`
-	//   takes `gamevcollisionevent_t*`
-	//   layer 0, story 29c
-	virtual void VPhysicsCollision(int32, void*);
-	// slot 231 0x100a6800 (sdk) `void VPhysicsFriction(IPhysicsObject*, float, int, int)`
-	//   takes `IPhysicsObject*`
-	//   layer 0, story 29c
-	virtual void VPhysicsFriction(void*, float, int32, int32);
-	// slot 232 0x100a69e0 (sdk) `void UpdatePhysicsShadowToCurrentPosition(float)`
-	//   layer 0, story 29c
-	virtual void UpdatePhysicsShadowToCurrentPosition(float);
-	// slot 233 0x100a6ad0 (sdk) `int VPhysicsGetObjectList(IPhysicsObject**, int)`
-	//   takes `IPhysicsObject**`
-	//   layer 0, story 29c
-	virtual int32 VPhysicsGetObjectList(void*, int32);
-	// slot 234 0x10035780 (sdk) `void PhysicsPushEntity(Vector&, trace_t*)`
-	//   takes `trace_t*`
-	//   layer 0, story 29c
-	virtual void PhysicsPushEntity(FVector&, void*);
-	// slot 235 0x100273f0 (walked) `void OnPhysGunPickup(CBasePlayer*)`
-	//   layer 0, story 29c
-	virtual void OnPhysGunPickup(FElysiumEntity*);
-	// slot 236 0x10027410 (walked) `void OnPhysGunDrop(CBasePlayer*, bool)`
-	//   layer 0, story 29c
-	virtual void OnPhysGunDrop(FElysiumEntity*, bool);
-	// slot 237 0x1003e7a0 (sdk) `unsignedint PhysicsSolidMaskForEntity() const`
-	//   returns `unsignedint`
-	//   layer 0, story 29c
-	virtual int32 PhysicsSolidMaskForEntity() const;
-	// slot 238 0x10039ff0 (sdk) `void PerformCustomPhysics(Vector*, Vector*, QAngle*, QAngle*)`
-	//   layer 0, story 29c
-	virtual void PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotator*);
-	// slot 239 0x100389e0 (sdk) `CBaseEntity* PhysicsPushRotate(float)`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* PhysicsPushRotate(float);
-	// slot 240 0x1014f8b0 (walked) `PyObject* vfunc240()`
-	//   returns `PyObject*`
-	//   layer 0, story 29c
-	virtual void* Slot240();
-	// slot 241 0x1008c170 (walked) `void GetEventName(char*, animevent_t*)`
-	//   takes `animevent_t*`
-	//   layer 0, story 29c
-	virtual void GetEventName(TCHAR*, void*);
-	// slot 242 0x100916a0 (walked) `float GetIdealYawSpeed()`
-	//   layer 0, story 29c
-	virtual float GetIdealYawSpeed();
-	// slot 243 0x10090580 (walked) `void BurnModel(const char*, bool)`
-	//   layer 0, story 29c
-	virtual void BurnModel(const TCHAR*, bool);
-	// slot 244 0x103408e0 (walked) `const char* GetSkeletonModelName()`
-	//   layer 12, story 29d
-	virtual const TCHAR* GetSkeletonModelName();
-	// slot 245 0x1008e0a0 (walked) `void AddExtraAnimationModels(CBaseEntity*, const char*, const
-	// char*, int, int)`
-	//   layer 0, story 29c
-	virtual void AddExtraAnimationModels(FElysiumEntity*, const TCHAR*, const TCHAR*, int32, int32);
-	// slot 246 0x1008e310 (walked) `void RemoveExtraAnimationModels()`
-	//   layer 0, story 29c
-	virtual void RemoveExtraAnimationModels();
-	// slot 247 0x10090c80 (walked) `void SetAttackExtentsForSequence(int)`
-	//   layer 0, story 29c
-	virtual void SetAttackExtentsForSequence(int32);
-	// slot 248 0x10091740 (sdk) `float GetIdealSpeed() const`
-	//   layer 0, story 29c
-	virtual float GetIdealSpeed() const;
-	// slot 249 0x100917e0 (sdk) `float GetIdealAccel() const`
-	//   layer 0, story 29c
-	virtual float GetIdealAccel() const;
-	// slot 250 0x10098bb0 (walked) `float StudioFrameAdvance(float)`
-	//   layer 2, story 29c
-	virtual float StudioFrameAdvance(float);
+	bool CreateVPhysics() override;
 	// slot 251 0x10272900 (walked) `bool IsActivityFinished()`
 	//   layer 0, story 29c
-	virtual bool IsActivityFinished();
-	// slot 252 0x103251c0 (walked) `int SelectWeightedSequenceForStat(Activity, int, int)`
-	//   layer 11, story 29d
-	virtual int32 SelectWeightedSequenceForStat(int32, int32, int32);
-	// slot 253 0x10325440 (walked) `int SelectHeaviestSequenceForStat(Activity, int, int)`
-	//   layer 11, story 29d
-	virtual int32 SelectHeaviestSequenceForStat(int32, int32, int32);
-	// slot 254 0x10325300 (walked) `int SelectSameSequenceForStat(Activity, int, int)`
-	//   layer 11, story 29d
-	virtual int32 SelectSameSequenceForStat(int32, int32, int32);
-	// slot 255 0x10098eb0 (walked) `void GetSkeleton(Vector*, Quaternion*, int)`
-	//   takes `Quaternion*`
-	//   layer 13, story 29d
-	virtual void GetSkeleton(FVector*, void*, int32);
-	// slot 256 0x100927f0 (sdk) `void GetBoneTransform(int, matrix3x4_t&)`
-	//   takes `matrix3x4_t&`
-	//   layer 0, story 29c
-	virtual void GetBoneTransform(int32, void*);
-	// slot 257 0x10092b50 (sdk) `void SetupBones(matrix3x4_t*, int)`
-	//   takes `matrix3x4_t*`
-	//   layer 0, story 29c
-	virtual void SetupBones(void*, int32);
-	// slot 258 0x10098c80 (walked) `void DispatchAnimEvents(float, CBaseAnimating*)`
-	//   layer 2, story 29c
-	virtual void DispatchAnimEvents(float, FElysiumEntity*);
-	// slot 260 0x10091fe0 (walked) `float SetPoseParameter02(int, float)`
-	//   layer 0, story 29c
-	virtual float SetPoseParameter02(int32, float);
-	// slot 261 0x10091f10 (walked) `float SetPoseParameter01(const char*, float)`
-	//   layer 0, story 29c
-	virtual float SetPoseParameter01(const TCHAR*, float);
-	// slot 262 0x10093000 (walked) `bool GetAttachment03(int, matrix3x4_t&)`
-	//   takes `matrix3x4_t&`
-	//   layer 0, story 29c
-	virtual bool GetAttachment03(int32, void*);
-	// slot 263 0x10094870 (sdk) `Vector GetGroundSpeedVelocity()`
-	//   layer 0, story 29c
-	virtual FVector GetGroundSpeedVelocity();
-	// slot 264 0x10096980 (walked) `void DrawServerHitboxes()`
-	//   layer 0, story 29c
-	virtual void DrawServerHitboxes();
-	// slot 265 0x10099690 (walked) `void AddFlinchGesture(Activity, float, float, const char*,
-	// float)`
-	//   layer 6, story 29c
-	virtual void AddFlinchGesture(int32, float, float, const TCHAR*, float);
-	// slot 266 0x100997f0 (walked) `void vfunc266()`
-	//   layer 0, story 29c
-	virtual void Slot266();
-	// slot 267 0x10098a40 (walked) `int GetFirstGestureLayer()`
-	//   layer 0, story 29c
-	virtual int32 GetFirstGestureLayer();
-	// slot 268 0x10099020 (walked) `void SetLayer(int, Activity, int, bool)`
-	//   layer 1, story 29c
-	virtual void SetLayer(int32, int32, int32, bool);
-	// slot 269 0x10099660 (walked) `void RemoveLayer(int)`
-	//   layer 0, story 29c
-	virtual void RemoveLayer(int32);
-	// slot 270 0x10099540 (walked) `bool HasLayer(Activity)`
-	//   layer 2, story 29c
-	virtual bool HasLayer(int32);
-	// slot 271 0x100994c0 (walked) `int FindLayerByOwner(Activity)`
-	//   layer 1, story 29c
-	virtual int32 FindLayerByOwner(int32);
-	// slot 272 0x10099470 (walked) `int AllocateLayer()`
-	//   layer 1, story 29c
-	virtual int32 AllocateLayer();
-	// slot 273 0x10099570 (walked) `void RestartGesture(Activity, bool, bool)`
-	//   layer 4, story 29c
-	virtual void RestartGesture(int32, bool, bool);
-	// slot 274 0x100995e0 (walked) `void RemoveLayerByOwner(Activity)`
-	//   layer 2, story 29c
-	virtual void RemoveLayerByOwner(int32);
-	// slot 275 0x10099630 (walked) `void RemoveAllGestures()`
-	//   layer 0, story 29c
-	virtual void RemoveAllGestures();
-	// slot 276 0x100b5ce0 (sdk) `void Blink()`
-	//   layer 0, story 29c
-	virtual void Blink();
-	// slot 277 0x100b5b00 (walked) `void SetViewtarget(const Vector&)`
-	//   layer 0, story 29c
-	virtual void SetViewtarget(const FVector&);
-	// slot 278 0x100b5b40 (walked) `const Vector& GetViewtarget() const`
-	//   returns `const Vector&`
-	//   layer 0, story 29c
-	virtual void* GetViewtarget() const;
-	// slot 279 0x100b5ba0 (walked) `void SetFlexWeight(int, float)`
-	//   layer 1, story 29c
-	virtual void SetFlexWeight(int32, float);
-	// slot 280 0x100b5b60 (walked) `void SetFlexWeight(char*, float)`
-	//   layer 6, story 29c
-	virtual void SetFlexWeight(TCHAR*, float);
-	// slot 281 0x100b5c50 (walked) `float GetFlexWeight(int)`
-	//   layer 1, story 29c
-	virtual float GetFlexWeight(int32);
-	// slot 282 0x100b5c20 (walked) `float GetFlexWeight(char*)`
-	//   layer 6, story 29c
-	virtual float GetFlexWeight(TCHAR*);
-	// slot 283 0x100b6250 (walked) `void ProcessSceneEvents()`
-	//   layer 9, story 29c
-	virtual void ProcessSceneEvents();
-	// slot 284 0x10105f30 (walked) `void AddSceneExpressions()`
-	//   layer 8, story 29c
-	virtual void AddSceneExpressions();
-	// slot 285 0x100b5d80 (walked) `void ClearSceneEvents(CChoreoScene*)`
-	//   takes `CChoreoScene*`
-	//   layer 1, story 29c
-	virtual void ClearSceneEvents(void*);
-	// slot 286 0x100b5e60 (walked) `void AddSceneEvent(CChoreoScene*, CChoreoEvent*)`
-	//   takes `CChoreoScene*`
-	//   takes `CChoreoEvent*`
-	//   layer 3, story 29c
-	virtual void AddSceneEvent(void*, void*);
-	// slot 287 0x100b6180 (walked) `void RemoveSceneEvent(CChoreoEvent*)`
-	//   takes `CChoreoEvent*`
-	//   layer 1, story 29c
-	virtual void RemoveSceneEvent(void*);
-	// slot 288 0x100b6cf0 (walked) `void AddFlexSetting(const char*, float, const
-	// flexsettinghdr_t*, const flexsettinghdr_t*, bool)`
-	//   takes `const flexsettinghdr_t*`
-	//   takes `const flexsettinghdr_t*`
-	//   layer 6, story 29c
-	virtual void AddFlexSetting(const TCHAR*, float, void*, void*, bool);
-	// slot 289 0x100b6960 (walked) `void AddFlexAnimation(CSceneEventInfo*)`
-	//   takes `CSceneEventInfo*`
-	//   layer 7, story 29c
-	virtual void AddFlexAnimation(void*);
-	// slot 290 0x100b70e0 (walked) `void ProcessSequenceSceneEvent(CSceneEventInfo*)`
-	//   takes `CSceneEventInfo*`
-	//   layer 2, story 29c
-	virtual void ProcessSequenceSceneEvent(void*);
-	// slot 291 0x100b7040 (walked) `void ProcessGestureSceneEvent(CSceneEventInfo*)`
-	//   takes `CSceneEventInfo*`
-	//   layer 3, story 29c
-	virtual void ProcessGestureSceneEvent(void*);
-	// slot 292 0x103229d0 (walked) `void DamageFlinch(const CTakeDamageInfo&, const Vector&,
-	// trace_t*)`
-	//   takes `const CTakeDamageInfo&`
-	//   takes `trace_t*`
-	//   layer 7, story 29c
-	virtual void DamageFlinch(void*, const FVector&, void*);
-	// slot 293 0x1014f6f0 (walked) `CBaseEntity* GetFollowerBoss()`
-	//   layer 0, story 29c
-	virtual FElysiumEntity* GetFollowerBoss();
-	// slot 295 0x103417b0 (walked) `bool CanTalk(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool CanTalk(FElysiumEntity*);
-	// slot 296 0x10348ba0 (walked) `bool vfunc296(int)`
-	//   layer 0, story 29c
-	virtual bool Slot296(int32);
-	// slot 297 0x10332ef0 (walked) `void AdjustDialogReaction(CBaseEntity*, int, const char*)`
-	//   layer 15, story 29d
-	virtual void AdjustDialogReaction(FElysiumEntity*, int32, const TCHAR*);
-	// slot 298 0x10323c20 (walked) `int GetMaxInvenSlotsPerSection(int)`
-	//   layer 0, story 29c
-	virtual int32 GetMaxInvenSlotsPerSection(int32);
-	// slot 299 0x10330d00 (walked) `void CreateDamageEffects(const CTakeDamageInfo&, bool*)`
-	//   takes `const CTakeDamageInfo&`
-	//   takes `bool*`
-	//   layer 20, story 29e
-	virtual void CreateDamageEffects(void*, void*);
-	// slot 300 0x1032c580 (walked) `void Event_TookLife(CBaseCombatCharacter*, bool, bool)`
-	//   layer 5, story 29c
-	virtual void Event_TookLife(FElysiumEntity*, bool, bool);
-	// slot 301 0x1032c0e0 (walked) `void CreateCorpse(const Vector&, const CTakeDamageInfo&)`
-	//   takes `const CTakeDamageInfo&`
-	//   layer 14, story 29d
-	virtual void CreateCorpse(const FVector&, void*);
-	// slot 302 0x10335f60 (walked) `bool Inventory_ShouldAllow_Autopickup(CBaseCombatWeapon*,
-	// bool)`
-	//   layer 0, story 29c
-	virtual bool Inventory_ShouldAllow_Autopickup(FElysiumEntity*, bool);
-	// slot 303 0x10336000 (walked) `bool Inventory_ShouldAllow_AutopickupAmmo(CBaseCombatWeapon*)`
-	//   layer 0, story 29c
-	virtual bool Inventory_ShouldAllow_AutopickupAmmo(FElysiumEntity*);
-	// slot 304 0x1033dde0 (walked) `void GiveBaseFightingItems()`
-	//   layer 11, story 29d
-	virtual void GiveBaseFightingItems();
-	// slot 305 0x1033deb0 (walked) `void RemoveBaseFightingItems()`
-	//   layer 11, story 29d
-	virtual void RemoveBaseFightingItems();
-	// slot 306 0x1033e370 (walked) `void LookAtEntity(CBaseEntity*, bool)`
-	//   layer 5, story 29c
-	virtual void LookAtEntity(FElysiumEntity*, bool);
-	// slot 307 0x10336cd0 (walked) `bool HasUsableMeleeWeapon()`
-	//   layer 2, story 29c
-	virtual bool HasUsableMeleeWeapon();
-	// slot 308 0x10336d70 (walked) `bool HasUsableRangedWeapon()`
-	//   layer 1, story 29c
-	virtual bool HasUsableRangedWeapon();
-	// slot 309 0x10337080 (walked) `CBaseCombatWeapon* GetBestRangedWeapon()`
-	//   layer 1, story 29c
-	virtual FElysiumEntity* GetBestRangedWeapon();
+	bool IsActivityFinished() override;
 	// slot 310 0x102725d0 (sdk) `void SetActivity(Activity)`
 	//   layer 16, story 29d
-	virtual void SetActivity(int32);
+	void SetActivity(int32) override;
 	// slot 311 0x10272400 (walked) `void ForcePreTranslatedSequenceAndActivity(Activity, Activity,
 	// int)`
 	//   layer 6, story 29c
-	virtual void ForcePreTranslatedSequenceAndActivity(int32, int32, int32);
-	// slot 313 0x10322b40 (walked) `void UpdatePresenceEffect()`
-	//   layer 22, story 29e
-	virtual void UpdatePresenceEffect();
-	// slot 314 0x10054060 (walked) `void UpdatePoseParameters(float)`
-	//   layer 2, story 29c
-	virtual void UpdatePoseParameters(float);
-	// slot 315 0x10346cd0 (walked) `void MeleeSwingUpdate()`
-	//   layer 18, story 29d
-	virtual void MeleeSwingUpdate();
-	// slot 316 0x1014f710 (walked) `void vfunc316(CBaseCombatCharacter*, bool, bool)`
-	//   layer 0, story 29c
-	virtual void Slot316(FElysiumEntity*, bool, bool);
-	// slot 317 0x1014f730 (unsettled) `bool vfunc317(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool Slot317(FElysiumEntity*);
-	// slot 318 0x1014f750 (walked) `bool PlayerDefenderBlockReaction(CBaseCombatCharacter*,
-	// melee_dice_roll_result*, CVDmg_t*)`
-	//   takes `melee_dice_roll_result*`
-	//   takes `CVDmg_t*`
-	//   layer 0, story 29c
-	virtual bool PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*);
-	// slot 319 0x1014f770 (walked) `bool PlayerAttackerBlockedReaction(CBaseCombatCharacter*,
-	// melee_dice_roll_result*, CVDmg_t*)`
-	//   takes `melee_dice_roll_result*`
-	//   takes `CVDmg_t*`
-	//   layer 0, story 29c
-	virtual bool PlayerAttackerBlockedReaction(FElysiumEntity*, void*, void*);
-	// slot 320 0x1014f790 (walked) `bool PlayerKnockbackReaction(CBaseCombatCharacter*, Activity)`
-	//   layer 0, story 29c
-	virtual bool PlayerKnockbackReaction(FElysiumEntity*, int32);
-	// slot 321 0x1014f7b0 (walked) `bool vfunc321(CBaseCombatCharacter*)`
-	//   layer 0, story 29c
-	virtual bool Slot321(FElysiumEntity*);
-	// slot 322 0x1014f7d0 (walked) `void vfunc322(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot322(FElysiumEntity*);
-	// slot 323 0x10344dd0 (walked) `int vfunc323(const Vector&)`
-	//   layer 1, story 29c
-	virtual int32 Slot323(const FVector&);
-	// slot 324 0x1014f7f0 (walked) `bool vfunc324()`
-	//   layer 0, story 29c
-	virtual bool Slot324();
-	// slot 325 0x1014f810 (walked) `bool vfunc325()`
-	//   layer 0, story 29c
-	virtual bool Slot325();
-	// slot 326 0x103482e0 (walked) `bool vfunc326(void*, CBaseCombatCharacter*)`
-	//   takes `void*`
-	//   layer 13, story 29d
-	virtual bool Slot326(void*, FElysiumEntity*);
-	// slot 327 0x10345460 (walked) `bool vfunc327()`
-	//   layer 0, story 29c
-	virtual bool Slot327();
-	// slot 328 0x1014f830 (walked) `bool vfunc328()`
-	//   layer 0, story 29c
-	virtual bool Slot328();
-	// slot 329 0x1014f850 (walked) `bool vfunc329()`
-	//   layer 0, story 29c
-	virtual bool Slot329();
-	// slot 330 0x1014f870 (walked) `void vfunc330(float, const FireBulletsInfo_t*)`
-	//   takes `const FireBulletsInfo_t*`
-	//   layer 0, story 29c
-	virtual void Slot330(float, void*);
-	// slot 331 0x10347180 (walked) `bool ChooseMeleeAttackSequence(CBaseCombatWeapon*,
-	// CBaseEntity*, Activity, int*)`
-	//   takes `int*`
-	//   layer 11, story 29d
-	virtual bool ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, int32, void*);
-	// slot 332 0x1014f890 (walked) `void vfunc332(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void Slot332(FElysiumEntity*);
+	void ForcePreTranslatedSequenceAndActivity(int32, int32, int32) override;
 	// slot 333 0x1026b810 (walked) `void MaintainEyeDirection(float)`
 	//   layer 4, story 29c
-	virtual void MaintainEyeDirection(float);
-	// slot 334 0x10330020 (walked) `bool vfunc334(int, int)`
-	//   layer 9, story 29c
-	virtual bool Slot334(int32, int32);
-	// slot 335 0x103415f0 (walked) `void NotifyChangeSizeSmall()`
-	//   layer 0, story 29c
-	virtual void NotifyChangeSizeSmall();
-	// slot 336 0x10341680 (walked) `void NotifyChangeSizeNormal()`
-	//   layer 0, story 29c
-	virtual void NotifyChangeSizeNormal();
+	void MaintainEyeDirection(float) override;
 	// slot 337 0x10270820 (walked) `int GetUsedHullBits()`
 	//   layer 1, story 29c
-	virtual int32 GetUsedHullBits();
-	// slot 338 0x1033cc30 (unsettled) `void AddPreDisciplineEffect(int, int, int)`
-	//   layer 0, story 29c
-	virtual void AddPreDisciplineEffect(int32, int32, int32);
-	// slot 339 0x1033cd70 (unsettled) `void AddDisciplineEffect(int, int, int)`
-	//   layer 0, story 29c
-	virtual void AddDisciplineEffect(int32, int32, int32);
-	// slot 340 0x1033ccd0 (unsettled) `void RemovePreDisciplineEffects(int, int, int)`
-	//   layer 0, story 29c
-	virtual void RemovePreDisciplineEffects(int32, int32, int32);
-	// slot 341 0x1033cef0 (walked) `void RemoveDisciplineEffects(int, int)`
-	//   layer 20, story 29e
-	virtual void RemoveDisciplineEffects(int32, int32);
-	// slot 342 0x10339800 (walked) `bool CanBeFedUponBy(CBaseCombatCharacter*)`
-	//   layer 14, story 29d
-	virtual bool CanBeFedUponBy(FElysiumEntity*);
-	// slot 343 0x10053e20 (walked) `void SetShakyHands(float, float, int)`
-	//   layer 0, story 29c
-	virtual void SetShakyHands(float, float, int32);
-	// slot 344 0x10053fa0 (walked) `float GetShakyHandsIntensity()`
-	//   layer 0, story 29c
-	virtual float GetShakyHandsIntensity();
-	// slot 345 0x1032fb80 (walked) `float SetPoseParameter(const char*, float, bool)`
-	//   layer 1, story 29c
-	virtual float SetPoseParameter(const TCHAR*, float, bool);
-	// slot 346 0x1032fc50 (walked) `float SetPoseParameter(int, float, bool)`
-	//   layer 5, story 29c
-	virtual float SetPoseParameter(int32, float, bool);
-	// slot 347 0x10107120 (walked) `bool GetExpressionEventParams(int, char*, float*, float*,
-	// float*, float*)`
-	//   takes `float*`
-	//   takes `float*`
-	//   takes `float*`
-	//   takes `float*`
-	//   layer 0, story 29c
-	virtual bool GetExpressionEventParams(int32, TCHAR*, void*, void*, void*, void*);
-	// slot 348 0x1032fe60 (walked) `int HealthToPercent()`
-	//   layer 11, story 29d
-	virtual int32 HealthToPercent();
-	// slot 349 0x103412b0 (walked) `void InputBarterBegin(inputdata_t&)`
-	//   takes `inputdata_t&`
-	//   layer 14, story 29d
-	virtual void InputBarterBegin(void*);
-	// slot 350 0x10341450 (walked) `void InputBarterEnd(inputdata_t&)`
-	//   takes `inputdata_t&`
-	//   layer 10, story 29d
-	virtual void InputBarterEnd(void*);
+	int32 GetUsedHullBits() override;
 	// slot 354 0x1026cec0 (walked) `void vfunc354()`
 	//   layer 21, story 29e
-	virtual void Slot354();
+	void Slot354() override;
 	// slot 355 0x1026cf90 (walked) `void vfunc355()`
 	//   layer 8, story 29c
-	virtual void Slot355();
-	// slot 356 0x1033b500 (walked) `void PrayerBegin()`
-	//   layer 1, story 29c
-	virtual void PrayerBegin();
-	// slot 357 0x1033b5f0 (walked) `void vfunc357()`
-	//   layer 14, story 29d
-	virtual void Slot357();
-	// slot 358 0x1033b890 (walked) `void PrayerEnd()`
-	//   layer 1, story 29c
-	virtual void PrayerEnd();
-	// slot 359 0x1014f910 (walked) `int vfunc359(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual int32 Slot359(FElysiumEntity*);
-	// slot 360 0x1014f930 (walked) `bool vfunc360()`
-	//   layer 0, story 29c
-	virtual bool Slot360();
-	// slot 361 0x1014f950 (walked) `bool vfunc361()`
-	//   layer 0, story 29c
-	virtual bool Slot361();
-	// slot 362 0x10326a20 (walked) `bool FInViewCone(const Vector&)`
-	//   layer 8, story 29c
-	virtual bool FInViewCone(const FVector&);
-	// slot 363 0x10326750 (walked) `bool FInViewCone(CBaseEntity*)`
-	//   layer 7, story 29c
-	virtual bool FInViewCone(FElysiumEntity*);
-	// slot 364 0x10326bd0 (walked) `bool FInAimCone(const Vector&)`
-	//   layer 6, story 29c
-	virtual bool FInAimCone(const FVector&);
-	// slot 365 0x10326ae0 (walked) `bool FInAimCone(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual bool FInAimCone(FElysiumEntity*);
-	// slot 366 0x10326d40 (sdk) `bool HandleInteraction(int, void*, CBaseCombatCharacter*)`
-	//   takes `void*`
-	//   layer 0, story 29c
-	virtual bool HandleInteraction(int32, void*, FElysiumEntity*);
-	// slot 367 0x10331880 (sdk) `QAngle BodyAngles()`
-	//   layer 1, story 29c
-	virtual FRotator BodyAngles();
-	// slot 369 0x10331a40 (sdk) `Vector BodyDirection3D()`
-	//   layer 2, story 29c
-	virtual FVector BodyDirection3D();
-	// slot 370 0x10331cb0 (sdk) `Vector HeadDirection2D()`
-	//   layer 4, story 29c
-	virtual FVector HeadDirection2D();
-	// slot 371 0x10331b30 (sdk) `Vector HeadDirection3D()`
-	//   layer 3, story 29c
-	virtual FVector HeadDirection3D();
+	void Slot355() override;
 	// slot 372 0x1026b210 (walked) `Vector EyeDirection2D()`
 	//   layer 5, story 29c
-	virtual FVector EyeDirection2D();
+	FVector EyeDirection2D() override;
 	// slot 373 0x1026b240 (walked) `Vector EyeDirection3D()`
 	//   layer 4, story 29c
-	virtual FVector EyeDirection3D();
-	// slot 374 0x10334180 (walked) `int GiveAmmo(int, int, bool)`
-	//   layer 4, story 29c
-	virtual int32 GiveAmmo(int32, int32, bool);
+	FVector EyeDirection3D() override;
 	// slot 375 0x10271f50 (walked) `Activity NPC_EarlyTranslateActivity(Activity)`
 	//   layer 0, story 29c
-	virtual int32 NPC_EarlyTranslateActivity(int32);
+	int32 NPC_EarlyTranslateActivity(int32) override;
 	// slot 376 0x10271f70 (sdk) `Activity NPC_TranslateActivity(Activity)`
 	//   layer 5, story 29c
-	virtual int32 NPC_TranslateActivity(int32);
-	// slot 377 0x1014f9d0 (walked) `bool vfunc377(CBaseCombatCharacter*, int)`
-	//   layer 0, story 29c
-	virtual bool Slot377(FElysiumEntity*, int32);
-	// slot 378 0x1014f9f0 (walked) `bool vfunc378(CBaseCombatCharacter*, int)`
-	//   layer 0, story 29c
-	virtual bool Slot378(FElysiumEntity*, int32);
-	// slot 381 0x10327ec0 (walked) `Activity Weapon_TranslateActivity(Activity)`
-	//   layer 0, story 29c
-	virtual int32 Weapon_TranslateActivity(int32);
-	// slot 382 0x1032d9b0 (sdk) `bool Weapon_CanUse(CBaseCombatWeapon*)`
-	//   layer 1, story 29c
-	virtual bool Weapon_CanUse(FElysiumEntity*);
-	// slot 383 0x1032d380 (walked) `void Weapon_Equip(CBaseCombatWeapon*, bool)`
-	//   layer 21, story 29e
-	virtual void Weapon_Equip(FElysiumEntity*, bool);
-	// slot 384 0x1032d6e0 (sdk) `bool Weapon_EquipAmmoOnly(CBaseCombatWeapon*)`
-	//   layer 5, story 29c
-	virtual bool Weapon_EquipAmmoOnly(FElysiumEntity*);
-	// slot 385 0x1032d0c0 (walked) `void Weapon_Drop(CBaseCombatWeapon*, const Vector*, bool)`
-	//   layer 11, story 29d
-	virtual void Weapon_Drop(FElysiumEntity*, const FVector*, bool);
-	// slot 386 0x1032ce40 (walked) `void Weapon_Drop()`
-	//   layer 10, story 29d
-	virtual void Weapon_Drop();
-	// slot 387 0x1032d2e0 (walked) `void Weapon_Drop_All()`
-	//   layer 11, story 29d
-	virtual void Weapon_Drop_All();
-	// slot 388 0x1032dde0 (sdk) `bool Weapon_Switch(CBaseCombatWeapon*, int)`
-	//   layer 22, story 29e
-	virtual bool Weapon_Switch(FElysiumEntity*, int32);
-	// slot 389 0x103338c0 (walked) `Vector Weapon_ShootPosition(const Vector&)`
-	//   layer 1, story 29c
-	virtual FVector Weapon_ShootPosition(const FVector&);
+	int32 NPC_TranslateActivity(int32) override;
 	// slot 390 0x10265ed0 (walked) `int OnTakeDamage_Alive(const CTakeDamageInfo&)`
 	//   takes `const CTakeDamageInfo&`
 	//   layer 23, story 29e
-	virtual int32 OnTakeDamage_Alive(void*);
-	// slot 391 0x103315e0 (sdk) `int OnTakeDamage_Dying(CTakeDamageInfo&)`
-	//   takes `CTakeDamageInfo&`
-	//   layer 0, story 29c
-	virtual int32 OnTakeDamage_Dying(void*);
+	int32 OnTakeDamage_Alive(void*) override;
 	// slot 392 0x102664c0 (sdk) `int OnTakeDamage_Dead(CTakeDamageInfo&)`
 	//   takes `CTakeDamageInfo&`
 	//   layer 9, story 29c
-	virtual int32 OnTakeDamage_Dead(void*);
-	// slot 393 0x10327e20 (sdk) `Activity GetDeathActivity()`
-	//   layer 0, story 29c
-	virtual int32 GetDeathActivity();
-	// slot 394 0x10327a90 (walked) `bool CorpseGib()`
-	//   layer 14, story 29d
-	virtual bool CorpseGib();
-	// slot 395 0x10326040 (sdk) `void CorpseFade()`
-	//   layer 6, story 29c
-	virtual void CorpseFade();
-	// slot 396 0x10325f00 (sdk) `bool HasHumanGibs()`
-	//   layer 0, story 29c
-	virtual bool HasHumanGibs();
-	// slot 397 0x10325fa0 (sdk) `bool HasAlienGibs()`
-	//   layer 1, story 29c
-	virtual bool HasAlienGibs();
-	// slot 398 0x10348a60 (walked) `bool HasExplosiveGibs()`
-	//   layer 0, story 29c
-	virtual bool HasExplosiveGibs();
-	// slot 399 0x1014fa30 (walked) `bool vfunc399()`
-	//   layer 0, story 29c
-	virtual bool Slot399();
-	// slot 400 0x1014fa50 (walked) `bool AllowsKnockbackBypass()`
-	//   layer 0, story 29c
-	virtual bool AllowsKnockbackBypass();
-	// slot 401 0x10348b00 (walked) `Activity KnockbackActivity_Default(int)`
-	//   layer 0, story 29c
-	virtual int32 KnockbackActivity_Default(int32);
+	int32 OnTakeDamage_Dead(void*) override;
 	// slot 402 0x102658f0 (walked) `bool Event_Gibbed()`
 	//   layer 15, story 29d
-	virtual bool Event_Gibbed();
-	// slot 403 0x1032bdf0 (sdk) `void Event_Dying()`
-	//   layer 0, story 29c
-	virtual void Event_Dying();
-	// slot 404 0x10333340 (sdk) `Disposition_t IRelationType(CBaseEntity*)`
-	//   returns `Disposition_t`
-	//   layer 13, story 29d
-	virtual int32 IRelationType(FElysiumEntity*);
-	// slot 405 0x10333700 (sdk) `int IRelationPriority(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual int32 IRelationPriority(FElysiumEntity*);
+	bool Event_Gibbed() override;
 	// slot 406 0x1027e740 (walked) `const char* GetStateName(NPC_STATE)`
 	//   layer 1, story 29c
 	virtual const TCHAR* GetStateName(EElysiumNpcState);
@@ -1849,6 +698,6 @@
 	// slot 581 0x102779a0 (walked) `void ReportAIState()`
 	//   layer 4, story 29c
 	virtual void ReportAIState();
-	// slot 582 0x10277d90 (walked) `void ReportOverThinkLimit(float)`
-	//   layer 12, story 29d
-	virtual void ReportOverThinkLimit(float);
+
+	// The inherited overloads of an overridden name stay visible.
+	using FElysiumScriptedCharacter::GetEnemy;

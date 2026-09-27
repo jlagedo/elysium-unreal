@@ -47,7 +47,7 @@ bool FElysiumNpcKernelAnimGestureLayersTest::RunTest(const FString&)
 
 	// `SetLayer` `0x10099020`, field for field.
 	Guard->SetOverlayLayer(0, /*Activity*/ 0x3b, /*Sequence*/ 17, /*bAutoKill*/ true);
-	const FElysiumNpcBase::FAnimOverlayLayer& L0 = Guard->AnimOverlay[0];
+	const FElysiumAnimatingOverlay::FAnimOverlayLayer& L0 = Guard->AnimOverlay[0];
 	TestEqual(TEXT("SetLayer seeds the weight at 0.1"), L0.Weight, ElysiumOverlay::SeedWeight);
 	TestEqual(TEXT("and the ceiling at 1.0"), L0.WeightMax, ElysiumOverlay::WeightMax);
 	TestEqual(TEXT("and 0.2 at both ends of the envelope"), L0.BlendIn,
@@ -143,7 +143,7 @@ bool FElysiumNpcKernelAnimFlinchTest::RunTest(const FString&)
 
 	// Three records of 0x1c bytes at +0x07f4.
 	TestEqual(TEXT("m_Flinch is three records"),
-		static_cast<int32>(UE_ARRAY_COUNT(Guard->Flinch)), FElysiumNpcBase::NumFlinchRecords);
+		static_cast<int32>(UE_ARRAY_COUNT(Guard->Flinch)), FElysiumAnimatingOverlay::NumFlinchRecords);
 
 	// `0x10099690` opens on two refusals in retail's order: `IsAlive()` (slot 158) then
 	// `m_bNoFlinch`. The second is the one a case can drive.
@@ -167,7 +167,7 @@ bool FElysiumNpcKernelAnimFlinchTest::RunTest(const FString&)
 	auto PickVictim = [](const FElysiumNpc& Npc)
 	{
 		int32 Best = 0;
-		for (int32 Candidate = 1; Candidate < FElysiumNpcBase::NumFlinchRecords; ++Candidate)
+		for (int32 Candidate = 1; Candidate < FElysiumAnimatingOverlay::NumFlinchRecords; ++Candidate)
 		{
 			if (Npc.Flinch[Candidate].ExpireTime < Npc.Flinch[Best].ExpireTime)
 			{
@@ -214,7 +214,7 @@ bool FElysiumNpcKernelAnimFlexTest::RunTest(const FString&)
 
 	// `m_flexWeight` is retail's own `float[128]`.
 	TestEqual(TEXT("the flex-weight array is retail's 128"),
-		static_cast<int32>(UE_ARRAY_COUNT(Guard->FlexWeight)), FElysiumNpcBase::NumFlexWeightSlots);
+		static_cast<int32>(UE_ARRAY_COUNT(Guard->FlexWeight)), FElysiumFlex::NumFlexWeightSlots);
 
 	// The studio seams, and what they refuse with.
 	TestEqual(TEXT("GetNumFlexControllers answers an empty table"), Guard->NumFlexControllers(), 0);

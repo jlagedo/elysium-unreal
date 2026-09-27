@@ -287,6 +287,9 @@ def test_the_census_carries_the_shape_29b_landed(model):
 def test_every_slot_has_a_port_callable_and_no_two_share_a_name(model):
     names: dict[str, int] = {}
     for row in model.slots:
+        if row.port_kind == gks.DELETED:
+            assert row.verdict == "dead", f"deleted slot {row.slot} is not dead"
+            continue   # a dead, uncalled, un-overridden stub deleted in 0019/5 step 6
         assert row.port_name, f"slot {row.slot} has no port callable"
         if row.port_kind == gks.PORT:
             continue   # a mapped slot names an existing method, which many slots may not do twice
@@ -321,12 +324,11 @@ def test_check_mode_matches_the_committed_files(model):
         pytest.skip("the census is not committed yet")
     assert gks._emit(REPO.joinpath(*gks.CENSUS_OUTPUT),
                      gks.render_census(model, gks.kl.MODULE), True) == 0
-    for inl, cpp, owner in ((gks.BASE_SLOTS_INL_OUTPUT, gks.BASE_SLOTS_CPP_OUTPUT, "FElysiumNpcBase"),
-                            (gks.SLOTS_INL_OUTPUT, gks.SLOTS_CPP_OUTPUT, "FElysiumNpc")):
-        assert gks._emit(REPO.joinpath(*inl), gks.render_slots_inl(model, gks.kl.MODULE, owner),
-                         True) == 0
-        assert gks._emit(REPO.joinpath(*cpp), gks.render_slots_cpp(model, gks.kl.MODULE, owner),
-                         True) == 0
+    for owner, surface in gks.SLOT_SURFACES.items():
+        assert gks._emit(REPO.joinpath(*surface.inl),
+                         gks.render_slots_inl(model, gks.kl.MODULE, owner), True) == 0
+        assert gks._emit(REPO.joinpath(*surface.cpp),
+                         gks.render_slots_cpp(model, gks.kl.MODULE, owner), True) == 0
 
 
 def test_the_slot_surface_splits_by_layer():
@@ -336,11 +338,12 @@ def test_the_slot_surface_splits_by_layer():
     from dataclasses import replace
 
     row = _slot(hand="FElysiumNpcBase::Slot33")
-    base = replace(row, owner="FElysiumNpcBase", override=False, layers=[])
+    base = replace(row, owner="FElysiumNpcBase", retail="CAI_BaseNPC", override=False, layers=[])
     troika = replace(_slot(), owner="FElysiumNpc", override=True, layers=[], address="0x102b0000")
     row.layers = [base, troika]
     overload = _slot(params="int", params_port=("int32",))
-    overload.layers = [replace(overload, owner="FElysiumNpcBase", override=False, layers=[])]
+    overload.layers = [replace(overload, owner="FElysiumNpcBase", retail="CAI_BaseNPC", override=False,
+                               layers=[])]
     model = gks.Model(words=[], slots=[row, overload], branch=[], classes=[], overrides=[],
                       reserved=set(), family=set(), meta={})
     base_inl = gks.render_slots_inl(model, "vampire.dll", "FElysiumNpcBase")
@@ -354,8 +357,44 @@ def test_the_slot_surface_splits_by_layer():
     # The base's hand body is declared, not defined here; its overload is a base stub.
     assert "int32 FElysiumNpcBase::Slot33()\n" not in base_cpp
     assert "int32 FElysiumNpcBase::Slot33(int32)" in base_cpp
-    assert "FireKernelBaseSlot(TEXT(\"Slot33\")" in base_cpp
-    # The Troika override is its own stub, firing its own address under the unchanged surface text.
+    assert "FireKernelBaseSlot(TEXT(\"CAI_BaseNPC::Slot33\")" in base_cpp
+    # The Troika override is its own stub, firing its own address under its owner's name (step 6).
     assert "int32 FElysiumNpc::Slot33()" in troika_cpp
     assert 'TEXT("0x102b0000")' in troika_cpp
-    assert 'TEXT("CAI_BaseNPCTroika::%s")' in troika_cpp and 'TEXT("CAI_BaseNPCTroika::%s")' in base_cpp
+    assert 'FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot33")' in troika_cpp
+
+
+def test_chain_bodies_split_by_owner_and_collapse_the_toggle():
+    # Story 0019/5 step 6: a slot is declared by its introducer's port class with that class's own
+    # body and overridden where a table refills it. CBaseToggle has no port node: its body stands on
+    # FElysiumAnimating, and CBaseAnimating's own body wins there when it has one.
+    tables = {cls: {} for cls in gks.CHAIN}
+    for cls in gks.CHAIN:
+        tables[cls][10] = "e0"            # every table holds CBaseEntity's body: one row
+        tables[cls][11] = "e1"
+    for cls in gks.CHAIN[1:]:
+        tables[cls][11] = "t1"            # CBaseToggle refills 11, everyone below inherits it
+    for cls in gks.CHAIN[5:]:
+        tables[cls][12] = "c2"            # introduced by CBaseCombatCharacter
+    tables["CAI_BaseNPC"][12] = "n2"      # the NPC base refills it
+    tables["CAI_BaseNPCTroika"][12] = "n2"
+    assert gks.chain_bodies(10, tables) == [("FElysiumEntity", "CBaseEntity", "e0")]
+    assert gks.chain_bodies(11, tables) == [("FElysiumEntity", "CBaseEntity", "e1"),
+                                            ("FElysiumAnimating", "CBaseToggle", "t1")]
+    assert gks.chain_bodies(12, tables) == [("FElysiumCombatCharacter", "CBaseCombatCharacter", "c2"),
+                                            ("FElysiumNpcBase", "CAI_BaseNPC", "n2")]
+
+
+def test_a_subclass_member_is_a_collision_for_the_chain(tmp_path):
+    # A class below the NPC line that declares a chain slot's name overrides or hides the virtual
+    # every entity now inherits; the scan names it, and a local inside a method body is not a member.
+    root = tmp_path / "Source" / "ElysiumUE" / "Private"
+    root.mkdir(parents=True)
+    (root / "Door.h").write_text(
+        "class FElysiumDoor final : public FElysiumEntity\n{\npublic:\n\tvirtual void MoveDone();\n\tvoid Think()\n\t{\n\t\tstatic const FName Local(TEXT(\"x\"));\n\t}\n};\nclass FElysiumNpcThing final : public FElysiumNpc\n{\npublic:\n\tvoid Precache() override;\n};\n",
+        encoding="utf-8")
+    names = gks.chain_subclass_names(tmp_path)
+    assert names["MoveDone"] == {"FElysiumDoor"}
+    assert "Local" not in names
+    assert "Precache" not in names       # the NPC line overrides on purpose
+

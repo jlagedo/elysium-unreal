@@ -24,7 +24,7 @@
     "6d": "The 84 chain-owned hand bodies and their 130-member closure to their owners; requalified direct calls; overlay hand: retargets.",
     "6e": "The eight integrations (slots-step6.tsv special rows).",
     "6f": "Stub dispositions and the diagnostic remaps.",
-    "6g": "FVocalization and ElysiumEntityCaps::SpeciesRows retired; surviving_sites re-keyed (below).",
+    "6g": "No table is retired in step 6 (obsolete_machinery): both candidates still carry a consumer or a live unported rule. surviving_sites is re-keyed to the current tree (below).",
     "6h": "kernel_shape --unported and its pin; census owner tests.",
     "6i": "Regeneration, oracle, records, full gate, delta, smoke, acceptance."
   },
@@ -104,6 +104,44 @@
       "evidence": [
         "slots-step6.tsv verdict dead"
       ]
+    },
+    {
+      "id": "collisions",
+      "finding": "gen_kernel_shape's widened scan (every class deriving from the chain below the NPC line) found eight slot names a subclass also declares. Each is a SLOT_PORT_MAP `accepted` row: 66/67 FElysiumWeapon::Hide/Unhide(FElysiumCombatCharacter*), 86/123 FElysiumCameraCinematic's ShouldTransmit/DrawDebugGeometryOverlays, 107 the deferred maker's ParseMapData(const FString&) (retail CNPCMaker overrides slot 107; the maker fold makes it the override), 133 FElysiumMoverBase::MoveDone (same signature: it becomes the override, retail's shape), 153 FElysiumMoverBase::IsMoving() const and 158 FElysiumPlayer::IsAlive() const (hides by const). Nothing dispatches the hidden forms; the compiler reports each as C4263/C4264. A function-local FName in FElysiumGameSign was a false positive; the scan now reads class-scope lines only.",
+      "evidence": [
+        "gen_kernel_shape.py SLOT_PORT_MAP accepted rows",
+        "step6/build-6c-2.log warnings"
+      ]
+    },
+    {
+      "id": "npc-flags-refcount",
+      "finding": "FElysiumNpcFlags carries m_iIsOblivious (+0x5bb4), a CAI_BaseNPC word, beside the two CBaseCombatCharacter flag words: 'one system rather than three fields' (ElysiumNpcFlags.h). The aggregate moved whole to FElysiumCombatCharacter with its header (now Public/); a combat character that is not an NPC carries a refcount nothing writes. Named transitional aggregation: splitting the refcount onto FElysiumNpcBase is a follow-up.",
+      "evidence": [
+        "Public/ElysiumNpcFlags.h"
+      ]
+    },
+    {
+      "id": "is-alive-latch",
+      "finding": "CBaseEntity::IsAlive 0x100b4dc0 reads m_lifeState (+0x200). The port has no such word: it spells alive as neither the death-transaction latch (bDeathReported, on the combat character) nor Kill's bDead stands. On the entity the body reads the latch through AsCombatCharacter(); an entity that is not a combat character has only bDead.",
+      "evidence": [
+        "ElysiumEntitySlotBodies.cpp IsAlive"
+      ]
+    },
+    {
+      "id": "unported-inventory",
+      "finding": "kernel_shape --unported pins 987 live rules the port does not carry: 59 generated stubs with a rule/present/mechanism verdict, 201 bodies of the ten deferred classes, and 727 species bodies at slots their port class (or a species ancestor) does not override. Dead classes and the lifetime slot are excluded. The step-3 matrix's 161 residue rows are its dispatch-scope subset; story 8's pass R counted the rule rows of its bands. The set must only fall.",
+      "evidence": [
+        "unported-step6.tsv",
+        "kernel_shape.unported_rows"
+      ]
+    },
+    {
+      "id": "header-placement",
+      "finding": "6b declared FElysiumAnimatingOverlay and FElysiumFlex in ElysiumPlayer.h. .claude/rules/cpp.md says a new class never lands in an existing multi-class file; the rule-conformant layout needs FElysiumAnimating moved verbatim into its own header first (the combat character needs the two new classes complete, so they cannot be included from a header that itself needs ElysiumPlayer.h). Recorded as an open follow-up for the owner.",
+      "evidence": [
+        ".claude/rules/cpp.md File granularity",
+        "782a27e6"
+      ]
     }
   ],
   "retail_corrections": [
@@ -111,13 +149,13 @@
       "id": "pedestrian-set-move-type",
       "address": "0x100aad70",
       "correction": "FElysiumNpcPedestrian::OnRestore calls SetMoveType(4, 0), which fired a stub and wrote nothing; it now writes RetailMoveType/RetailMoveCollide (when the type differs), and TestHullSpawn writes through the same seam.",
-      "status": "planned 6e"
+      "status": "applied in 6e"
     },
     {
       "id": "geometry-angles",
       "address": "0x100b3110",
       "correction": "GetAngles returned a null void*, so LocalEyeAngles() == GetAngles() compared two nulls; both answer Angles.",
-      "status": "planned 6e"
+      "status": "applied in 6e"
     }
   ],
   "integrations": {
@@ -130,11 +168,12 @@
     "93 SetMoveType": "seam writer of RetailMoveType/RetailMoveCollide on FElysiumEntity",
     "118 AcceptInput": "implemented by FElysiumEntityWorld::AcceptInput and the registry; the generated virtual goes (SLOT_PORT_MAP row)",
     "388 Weapon_Switch": "stub stays on FElysiumCombatCharacter (finding weapon-switch)",
-    "8 GetModelIndex": "stub stays on FElysiumEntity (no model-precache index)"
+    "8 GetModelIndex": "stub stays on FElysiumEntity (no model-precache index)",
+    "194 EyeAngles / 195 LocalEyeAngles": "hand bodies (verdict overlay) now return const FVector&: slot 219's and slot 221's answers"
   },
   "obsolete_machinery": {
-    "FVocalization": "ElysiumNpcSounds.cpp GSoundsVocalizations / Vocalizations(): no production consumer since step 3 made the rows overrides; its one test (ElysiumNpcKernelSoundsTests.cpp) re-homes onto the class overrides; deleted in 6g.",
-    "ElysiumEntityCaps::SpeciesRows": "ElysiumEntity.cpp rows CAI_Hint and CAI_TestHull: no production caller. The CAI_Hint assertion re-homes to FElysiumHint; the CAI_TestHull case moves to the step-10 compatibility list with the row; decided in 6g."
+    "FVocalization": "RETAINED (step 11). ElysiumNpcSounds.cpp GSoundsVocalizations still has production consumers: the Camera (19 rows), Sabbat leader (2) and Tzimisce (2) overrides call SpeciesVocalize(class, slot), which reads their rows. The survey's 'no production consumer' counted only Vocalizations(); VocalizationFor is live. Inlining each row into its override is the step-11 table removal, not a step-6 deletion.",
+    "ElysiumEntityCaps::SpeciesRows": "RETAINED. No production caller, but the CAI_Hint row (0x102d2ee0, ObjectCaps & ~FCAP_ACROSS_TRANSITION) is a retail override FElysiumHint does not implement yet (a live unported rule; porting it changes what persists across a level change), and the CAI_TestHull row belongs to the step-10 fold. Deleting the table would drop the recovered fact, so it stays with its lifecycle test."
   },
   "surviving_sites": [
     {
@@ -575,5 +614,12 @@
     "ElysiumNpcCamera's own NPCInit writes DesiredMoveYaw (species body).",
     "Fold 9: the senses object.",
     "Retail CBasePlayer/item overrides of chain slots are not modelled: a non-NPC receiver inherits the chain class's own body."
-  ]
+  ],
+  "retired_symbols": [],
+  "unported_pin": {
+    "rows": 987,
+    "stub": 59,
+    "no-override": 928,
+    "file": "unported-step6.tsv"
+  }
 }

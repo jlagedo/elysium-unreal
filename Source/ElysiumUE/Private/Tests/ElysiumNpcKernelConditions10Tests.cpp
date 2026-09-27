@@ -19,7 +19,7 @@
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -468,7 +468,7 @@ bool FElysiumNpcKernelConditions10CanBeFedUponByTest::RunTest(const FString&)
 	// **The feeder argument is never read by the base body.** A null feeder reaches it unchanged and
 	// answers the same as any other, which is the recovered asymmetry the Troika arm compensates for.
 	TestTrue(TEXT("the base body ignores the feeder entirely (0x10339800)"),
-		F.Guard->FElysiumNpcBase::CanBeFedUponBy(nullptr));
+		F.Guard->FElysiumCombatCharacter::CanBeFedUponBy(nullptr));
 	return true;
 }
 

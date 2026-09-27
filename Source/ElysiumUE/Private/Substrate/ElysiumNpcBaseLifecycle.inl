@@ -32,29 +32,6 @@ struct FStandoffConditions
 	bool bCond0x60 = false;  // the 0x21 answer, gated on a 0x31 roll when 0x48 also stands
 };
 
-/** `+0x1ddc`, read by `FUN_10160680` — a float scaled by the compiled constant `DAT_10725c9c`.
- *  **Unrecovered**: the body has one direct caller, no vtable slot, and neither the retail field
- *  name nor the class that owns the offset is settled. Declared by offset, as 29b declares an
- *  unsettled word. */
-float Field_0x1ddc = 0.f;
-
-/** What `CBaseEntity::KeyValue(const char*, const char*)` (`0x1009e430`) did with one key — the
- *  cascade slot 110 runs for `CAISound`, `CAI_Hint`, `CAI_InterestingPlace`,
- *  `CAI_InterestingPlaceConverstation` and `CAI_StandoffGoal`. */
-enum class EKeyValueArm : uint8
-{
-	RenderColor,     // rendercolor / rendercolor32 -> m_clrRender RGB
-	RenderAmt,       // renderamt -> m_clrRender alpha, atoi
-	DisableShadows,  // disableshadows, nonzero -> m_fEffects |= 0x20
-	DisableReceiveShadows,  // disablereceiveshadows, nonzero -> m_fEffects |= 0x80
-	Mins,            // mins -> SetCollisionBounds(value, current maxs)
-	Maxs,            // maxs -> SetCollisionBounds(current mins, value)
-	Angle,           // angle -> rewritten as angles and re-dispatched
-	Angles,          // angles -> vtable +0x368 SetAbsAngles
-	Origin,          // origin -> vtable +0x360 SetAbsOrigin
-	DataMap,         // no literal matched: walk the datamap chain (vtable +0x148)
-};
-
 /** `CAI_Hint::ScriptHide` (`0x102d0860`) — the base `CBaseEntity::ScriptHide` and then the hint's
  *  own `m_iDisabled` (`+0x05e8`) := 1. Pure over family **Hints**' `FHintWords`, because there is no
  *  `CAI_Hint` ENTITY in this substrate to run the base half on; the caller owns that half. */
@@ -76,11 +53,6 @@ static double StandoffGoalSpawnNextThink(double Now);
  *  defaults, turn the angle range into its dot-product test, and fold the group id into a bit.
  *  Pure over family **Hints**' `FHintWords`, which is the hint's datamap. */
 static void HintSpawn(FHintWords& Hint);
-
-/** The recovered classification of one key, with the `#` truncation retail performs FIRST applied to
- *  the name. `OutKey` is the truncated key — a `#` in a key name ends it, so `"origin#2"` is
- *  `"origin"`. */
-static EKeyValueArm ClassifyKeyValue(const FString& Key, FString& OutKey);
 
 /** The `angle` arm's rewrite (`0x1009e430` @ `1009e6f6`): a NEGATIVE value takes a literal, and any
  *  other value becomes `"<current pitch> <value> <current roll>"` — the yaw only. Retail then
@@ -114,11 +86,6 @@ static bool OnRestoreForwardsCheckUntouch(bool bCallerValue);
  *  dispatch, then `CBaseCombatCharacter::UpdateOnRemove`. In that order. */
 void BaseNpcUpdateOnRemove();
 
-/** `FUN_10160680` — `*(float*)(this+0x1ddc) * DAT_10725c9c`. **Unrecovered**: one direct caller, no
- *  slot, and neither the field's retail name nor the constant's value is pinned. The constant is
- *  named at the definition and the scaling is the whole body. */
-float ScaleField_0x1ddc() const;
-
 /** `CAISound::FUN_10026e70`, slot 153 for the five AI-helper classes — is `m_vecVelocity`
  *  (`+0x03d4`) different from the static default vector `DAT_1070d1b0/b4/b8`? That vector is the
  *  always-zero one `GetGroundVelocityToApply` (slot 210) answers, so this is "am I moving at all". */
@@ -141,17 +108,6 @@ static int32 StandoffSelect(FStandoffWords& Words, const FStandoffConditions& Co
 	bool bInCombatState, bool bHasEnemy, FHintWords* Hint, double Now);
 
 
-
-/** `+0x0368 m_CollisionGroup`, a `CBaseEntity` word below the NPC table. The ONE input of slot 91
- *  `ShouldCollide` (`0x100b4de0`). Nothing in this runtime writes it yet: this substrate's collision
- *  is Unreal's channel set on the body, so the retail group number has no producer. Declared so the
- *  rule has the word it reads rather than a guess. Retail's `COLLISION_GROUP_DEBRIS` is 1. */
-int32 CollisionGroup = 0;
-
-/** `+0x0500 m_flDelay`, the `CBaseDelay` trigger delay slot 152 `GetDelay` (`0x1004fc10`) answers.
- *  A `CBaseEntity` word below the NPC table; this runtime carries an output's delay on the wire
- *  (`FElysiumOutputDef`) rather than on the entity, so nothing writes this. */
-float EntityDelay = 0.f;
 
 /** SEAM for `thunk_FUN_101618a0(player)` — the `!playercontroller` half of slot 559
  *  `FindNamedEntity` (`0x10279090`). Retail resolves the player's own scene stand-in from the

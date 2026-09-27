@@ -8,17 +8,7 @@
  *  0x8000000`) clear, no live grapple (`m_GrapplePartner` resolves AND `m_GrappleRole != -1`
  *  refuses), `IsAlive()` (slot 158, `vtable +0x278`) and `!IsUnconscious()`. */
 // Declared by the generated slot surface (`ElysiumNpcBaseSlots.inl`, slot 342); defined by hand as
-// `FElysiumNpcBase::CanBeFedUponBy`.
-
-/** `CBaseCombatCharacter::CanBeFedUpon` (`0x10339a90`) — `GetCharTemplate(this)->+0x95 == 0`.
- *  **SEAM**: `+0x95` has no recovered column name and this runtime's `FElysiumClanTemplate` exposes
- *  none, so this answers TRUE, which is retail's own answer for a template whose byte is zero — the
- *  admitting arm, so nothing is silently refused. */
-bool CanBeFedUponTemplate() const;
-
-/** `CBaseCombatCharacter::IsUnconscious` (`0x10341aa0`) — `(m_iMiscFlags & 1) != 0`, bit 0 of the
- *  name table being `Unconscious` (`Substrate/ElysiumMiscFlags.h`). */
-bool IsUnconsciousMiscFlag() const;
+// `FElysiumCombatCharacter::CanBeFedUponBy`.
 
 /** `0x102ee2e0` — `CAI_Navigator::IsGoalSet()`, `m_pPath(+0x30)->GoalType(+0x10) != 0`. Distinct
  *  from `0x102ee680` (`IsGoalActive`, the current-waypoint test) which family Motor already wires.

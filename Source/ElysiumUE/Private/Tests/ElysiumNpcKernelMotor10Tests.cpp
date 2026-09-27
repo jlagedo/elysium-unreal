@@ -715,7 +715,7 @@ bool FElysiumNpcKernelMotor10TestHullSpawnTest::RunTest(const FString&)
 	const ElysiumStub::FTally* HideRow = Tally.FindByPredicate(
 		[](const ElysiumStub::FTally& Row)
 		{
-			return Row.Kind == TEXT("slot") && Row.Surface == TEXT("CAI_BaseNPCTroika::Hide");
+			return Row.Kind == TEXT("slot") && Row.Surface == TEXT("CBaseEntity::Hide");
 		});
 	if (TestNotNull(TEXT("the tail JMP to slot 66 Hide() dispatched"), HideRow))
 	{

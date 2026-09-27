@@ -780,4 +780,10 @@ public:
 protected:
 	void NotifyOwnerOfTermination(EElysiumOwnedEntityTermination Reason);
 	float SavedNextThink = ELYSIUM_NEVER_THINK;   // restored by ScriptUnhide
+
+public:
+	// The generated slot surface and the hand-written slot bodies of this class's retail node
+	// (0019 story 5 step 6).
+	#include "ElysiumEntitySlots.inl"
+	#include "ElysiumEntitySlotBodies.inl"
 };

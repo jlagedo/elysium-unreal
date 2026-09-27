@@ -13,14 +13,15 @@
 // `docs/vtmb/npc-kernel/`.
 //
 // A stub body says one thing: this slot has no port implementation yet. The tally row
-// carries the retail address and the story that owns it, so `elysium.stubs` joins
-// `docs/vtmb/npc-kernel/functions.md` by address.
+// carries the retail class that owns the body, its address and the story that owns it, so
+// `elysium.stubs` joins `docs/vtmb/npc-kernel/functions.md` by address.
 //
 // A body with a `default:` verdict says something stronger: retail's whole body at that
 // slot is `return <literal>;`, so the port answers the same literal and stops tallying.
 // The literal is a recovered fact, not a written behaviour — the same argument the story
-// makes for a species override of a constant-returning virtual — and `GDefaults` below
-// is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them through.
+// makes for a species override of a constant-returning virtual — and the probe tables in
+// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and
+// `.ShadowedDefaults` call every one of them through.
 
 #include "Substrate/ElysiumNpc.h"
 
@@ -32,15 +33,15 @@ namespace
 	// One shape for every slot stub: the surface is the retail class and method, which is
 	// what the ledger joins on, and never an instance name. Unit-prefixed because the module
 	// builds adaptive-unity and this anonymous namespace is regularly merged with others.
-	void FireKernelSlot(const TCHAR* Method, const TCHAR* Address, const TCHAR* Story,
+	void FireKernelSlot(const TCHAR* Surface, const TCHAR* Address, const TCHAR* Story,
 		const FString& Receiver)
 	{
-		ElysiumStub::FSurface Surface;
-		Surface.Kind = TEXT("slot");
-		Surface.Surface = FString::Printf(TEXT("CAI_BaseNPCTroika::%s"), Method);
-		Surface.Address = Address;
-		Surface.Story = Story;
-		ElysiumStub::Fired(Surface, Receiver, FString(), TEXT("the NPC kernel"));
+		ElysiumStub::FSurface Row;
+		Row.Kind = TEXT("slot");
+		Row.Surface = Surface;
+		Row.Address = Address;
+		Row.Story = Story;
+		ElysiumStub::Fired(Row, Receiver, FString(), TEXT("the NPC kernel"));
 	}
 }
 
@@ -50,7 +51,8 @@ namespace
 //   layer 17, story 29d
 void* FElysiumNpc::Slot5(uint32)
 {
-	FireKernelSlot(TEXT("Slot5"), TEXT("0x1028d5e0"), TEXT("29d"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot5"), TEXT("0x1028d5e0"), TEXT("29d"),
+		DebugString());
 	return {};
 }
 
@@ -261,7 +263,8 @@ int32 FElysiumNpc::Classify()
 //   layer 25, story 29e
 int32 FElysiumNpc::OnTakeDamage(void*)
 {
-	FireKernelSlot(TEXT("OnTakeDamage"), TEXT("0x102bed30"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::OnTakeDamage"), TEXT("0x102bed30"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -270,7 +273,8 @@ int32 FElysiumNpc::OnTakeDamage(void*)
 //   layer 21, story 29e
 void FElysiumNpc::Event_Killed(void*)
 {
-	FireKernelSlot(TEXT("Event_Killed"), TEXT("0x102bf340"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Event_Killed"), TEXT("0x102bf340"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 168 0x102b5360 (walked) `CBaseEntity* GetEnemy()`
@@ -329,7 +333,8 @@ void FElysiumNpc::Event_Killed(void*)
 //   layer 20, story 29e
 void FElysiumNpc::Slot316(FElysiumEntity*, bool, bool)
 {
-	FireKernelSlot(TEXT("Slot316"), TEXT("0x1029fa50"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot316"), TEXT("0x1029fa50"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 317 0x1029fb70 (unsettled) `bool vfunc317(CBaseEntity*)`
@@ -344,8 +349,8 @@ void FElysiumNpc::Slot316(FElysiumEntity*, bool, bool)
 //   layer 20, story 29e
 bool FElysiumNpc::PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)
 {
-	FireKernelSlot(TEXT("PlayerDefenderBlockReaction"), TEXT("0x1029fcf0"), TEXT("29e"),
-		DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::PlayerDefenderBlockReaction"), TEXT("0x1029fcf0"),
+		TEXT("29e"), DebugString());
 	return {};
 }
 
@@ -361,7 +366,8 @@ bool FElysiumNpc::PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)
 //   layer 20, story 29e
 bool FElysiumNpc::PlayerKnockbackReaction(FElysiumEntity*, int32)
 {
-	FireKernelSlot(TEXT("PlayerKnockbackReaction"), TEXT("0x102a01b0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::PlayerKnockbackReaction"), TEXT("0x102a01b0"),
+		TEXT("29e"), DebugString());
 	return {};
 }
 
@@ -432,7 +438,8 @@ bool FElysiumNpc::PlayerKnockbackReaction(FElysiumEntity*, int32)
 //   layer 24, story 29e
 int32 FElysiumNpc::OnTakeDamage_Alive(void*)
 {
-	FireKernelSlot(TEXT("OnTakeDamage_Alive"), TEXT("0x102beda0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::OnTakeDamage_Alive"), TEXT("0x102beda0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -496,28 +503,32 @@ int32 FElysiumNpc::OnTakeDamage_Alive(void*)
 //   layer 26, story 29e
 void FElysiumNpc::NPCThink()
 {
-	FireKernelSlot(TEXT("NPCThink"), TEXT("0x10292de0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::NPCThink"), TEXT("0x10292de0"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 432 0x1028fcc0 (walked) `void RunAI(bool)`
 //   layer 25, story 29e
 void FElysiumNpc::RunAI(bool)
 {
-	FireKernelSlot(TEXT("RunAI"), TEXT("0x1028fcc0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::RunAI"), TEXT("0x1028fcc0"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 433 0x102b27f0 (sdk) `void GatherConditions()`
 //   layer 24, story 29e
 void FElysiumNpc::GatherConditions()
 {
-	FireKernelSlot(TEXT("GatherConditions"), TEXT("0x102b27f0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::GatherConditions"), TEXT("0x102b27f0"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 437 0x102ae920 (walked) `int PreSelectSchedule()`
 //   layer 25, story 29e
 int32 FElysiumNpc::PreSelectSchedule()
 {
-	FireKernelSlot(TEXT("PreSelectSchedule"), TEXT("0x102ae920"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::PreSelectSchedule"), TEXT("0x102ae920"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -527,7 +538,8 @@ int32 FElysiumNpc::PreSelectSchedule()
 //   layer 26, story 29e
 int32 FElysiumNpc::StartTaskSlot442(void*)
 {
-	FireKernelSlot(TEXT("StartTaskSlot442"), TEXT("0x102a1910"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::StartTaskSlot442"), TEXT("0x102a1910"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -537,7 +549,8 @@ int32 FElysiumNpc::StartTaskSlot442(void*)
 //   layer 23, story 29e
 int32 FElysiumNpc::RunTaskSlot444(void*)
 {
-	FireKernelSlot(TEXT("RunTaskSlot444"), TEXT("0x102aacf0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::RunTaskSlot444"), TEXT("0x102aacf0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -896,15 +909,16 @@ bool FElysiumNpc::Slot591()
 //   layer 21, story 29e
 void FElysiumNpc::AcquireNearestHatedTarget()
 {
-	FireKernelSlot(TEXT("AcquireNearestHatedTarget"), TEXT("0x102b4cc0"), TEXT("29e"),
-		DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::AcquireNearestHatedTarget"), TEXT("0x102b4cc0"),
+		TEXT("29e"), DebugString());
 }
 
 // slot 596 0x102b4f60 (walked) `void vfunc596(CBaseEntity*)`
 //   layer 20, story 29e
 void FElysiumNpc::Slot596(FElysiumEntity*)
 {
-	FireKernelSlot(TEXT("Slot596"), TEXT("0x102b4f60"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot596"), TEXT("0x102b4f60"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 597 0x102b4fb0 (walked) `void vfunc597(CBaseEntity*, int)`
@@ -916,7 +930,8 @@ void FElysiumNpc::Slot596(FElysiumEntity*)
 //   layer 20, story 29e
 void FElysiumNpc::Slot598(FElysiumEntity*)
 {
-	FireKernelSlot(TEXT("Slot598"), TEXT("0x102b4fe0"), TEXT("29e"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot598"), TEXT("0x102b4fe0"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 599 0x102b5650 (walked) `bool vfunc599(int)`
@@ -945,7 +960,8 @@ void FElysiumNpc::Slot598(FElysiumEntity*)
 //   layer 0, story 29c
 float FElysiumNpc::Slot603(void*, void*)
 {
-	FireKernelSlot(TEXT("Slot603"), TEXT("0x102b59e0"), TEXT("29c"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot603"), TEXT("0x102b59e0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -999,7 +1015,8 @@ float FElysiumNpc::Slot603(void*, void*)
 //   layer 0, story 29c
 bool FElysiumNpc::Slot613()
 {
-	FireKernelSlot(TEXT("Slot613"), TEXT("0x102c0b60"), TEXT("29c"), DebugString());
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Slot613"), TEXT("0x102c0b60"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -1193,10 +1210,127 @@ namespace ElysiumNpcKernelShape
 			{ 591, TEXT("0x101aa690"), TEXT("Slot591"), TEXT("1"), 1, false,
 				[](FElysiumNpc& Npc) -> int64 { return Npc.Slot591() ? 1 : 0; } },
 		};
+
+		// The constant bodies a Troika instance never dispatches to — a class's own body at a
+		// slot a more-derived class refills — called through a qualified (non-virtual) call on
+		// the same instance, which runs exactly that class's body.
+		constexpr FElysiumNpcSlotDefault GShadowedDefaults[] =
+		{
+			{ 21, TEXT("0x10026530"), TEXT("Slot21"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumEntity::Slot21(Arg0); return 0; } },
+			{ 22, TEXT("0x10026550"), TEXT("Slot22"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumEntity::Slot22(Arg0); return 0; } },
+			{ 23, TEXT("0x10026570"), TEXT("Slot23"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumEntity::Slot23(Arg0); return 0; } },
+			{ 27, TEXT("0x100265f0"), TEXT("Slot27"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumEntity::Slot27(Arg0); return 0; } },
+			{ 30, TEXT("0x10026650"), TEXT("GetStealthHearingDist"), TEXT("0.0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { return static_cast<int64>(Npc.FElysiumEntity::GetStealthHearingDist()); } },
+			{ 35, TEXT("0x100266d0"), TEXT("Slot35"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return static_cast<int64>(Npc.FElysiumEntity::Slot35(Arg0)); } },
+			{ 54, TEXT("0x10026910"), TEXT("Slot54"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return Npc.FElysiumEntity::Slot54(Arg0) ? 1 : 0; } },
+			{ 55, TEXT("0x10026930"), TEXT("Slot55"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; FVector Arg1{}; FVector Arg2{}; Npc.FElysiumEntity::Slot55(Arg0, Arg1, Arg2); return 0; } },
+			{ 56, TEXT("0x10026950"), TEXT("Slot56"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; FVector Arg1{}; FVector Arg2{}; const TCHAR* Arg3{}; Npc.FElysiumEntity::Slot56(Arg0, Arg1, Arg2, Arg3); return 0; } },
+			{ 57, TEXT("0x10026970"), TEXT("Slot57"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; FVector Arg1{}; FVector Arg2{}; Npc.FElysiumEntity::Slot57(Arg0, Arg1, Arg2); return 0; } },
+			{ 58, TEXT("0x10026990"), TEXT("Slot58"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumEntity::Slot58(Arg0); return 0; } },
+			{ 59, TEXT("0x100269b0"), TEXT("Slot59"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; Npc.FElysiumEntity::Slot59(Arg0); return 0; } },
+			{ 60, TEXT("0x100269d0"), TEXT("Slot60"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; Npc.FElysiumEntity::Slot60(Arg0); return 0; } },
+			{ 61, TEXT("0x100269f0"), TEXT("Slot61"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; Npc.FElysiumEntity::Slot61(Arg0); return 0; } },
+			{ 81, TEXT("0x10321980"), TEXT("YouForgotToImplementOrDeclareServerClass"), TEXT("0"),
+				0, false,
+				[](FElysiumNpc& Npc) -> int64 { return static_cast<int64>(Npc.FElysiumCombatCharacter::YouForgotToImplementOrDeclareServerClass()); } },
+			{ 316, TEXT("0x1014f710"), TEXT("Slot316"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; bool Arg1{}; bool Arg2{}; Npc.FElysiumCombatCharacter::Slot316(Arg0, Arg1, Arg2); return 0; } },
+			{ 317, TEXT("0x1014f730"), TEXT("Slot317"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return Npc.FElysiumCombatCharacter::Slot317(Arg0) ? 1 : 0; } },
+			{ 322, TEXT("0x1014f7d0"), TEXT("Slot322"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumCombatCharacter::Slot322(Arg0); return 0; } },
+			{ 330, TEXT("0x1014f870"), TEXT("Slot330"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { float Arg0{}; void* Arg1{}; Npc.FElysiumCombatCharacter::Slot330(Arg0, Arg1); return 0; } },
+			{ 359, TEXT("0x1014f910"), TEXT("Slot359"), TEXT("0xffffffff"), -1, false,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return static_cast<int64>(Npc.FElysiumCombatCharacter::Slot359(Arg0)); } },
+			{ 416, TEXT("0x101a64c0"), TEXT("SetForceFrequentThink"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { bool Arg0{}; Npc.FElysiumNpcBase::SetForceFrequentThink(Arg0); return 0; } },
+			{ 417, TEXT("0x101a64e0"), TEXT("GetForceFrequentThink"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { return Npc.FElysiumNpcBase::GetForceFrequentThink() ? 1 : 0; } },
+			{ 419, TEXT("0x101a6500"), TEXT("UpdateBurstShootPause"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::UpdateBurstShootPause(); return 0; } },
+			{ 452, TEXT("0x1027c2e0"), TEXT("LoadedSchedules"), TEXT("1"), 1, false,
+				[](FElysiumNpc& Npc) -> int64 { return Npc.FElysiumNpcBase::LoadedSchedules() ? 1 : 0; } },
+			{ 462, TEXT("0x101a6700"), TEXT("ShouldGoToIdleState"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { return Npc.FElysiumNpcBase::ShouldGoToIdleState() ? 1 : 0; } },
+			{ 465, TEXT("0x101a6740"), TEXT("OnChangeActivity"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { int32 Arg0{}; Npc.FElysiumNpcBase::OnChangeActivity(Arg0); return 0; } },
+			{ 467, TEXT("0x101a6760"), TEXT("QueryHearSound"), TEXT("1"), 1, false,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; return Npc.FElysiumNpcBase::QueryHearSound(Arg0) ? 1 : 0; } },
+			{ 468, TEXT("0x101a6780"), TEXT("QuerySeeEntity"), TEXT("1"), 1, false,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; return Npc.FElysiumNpcBase::QuerySeeEntity(Arg0) ? 1 : 0; } },
+			{ 472, TEXT("0x101a67a0"), TEXT("OnSeeEntity"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { FElysiumEntity* Arg0{}; Npc.FElysiumNpcBase::OnSeeEntity(Arg0); return 0; } },
+			{ 473, TEXT("0x1026ae90"), TEXT("GetSoundInterests"), TEXT("7"), 7, false,
+				[](FElysiumNpc& Npc) -> int64 { return static_cast<int64>(Npc.FElysiumNpcBase::GetSoundInterests()); } },
+			{ 488, TEXT("0x101a6880"), TEXT("DeathSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::DeathSound(); return 0; } },
+			{ 489, TEXT("0x101a68a0"), TEXT("AlertSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::AlertSound(); return 0; } },
+			{ 490, TEXT("0x101a68c0"), TEXT("IdleSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::IdleSound(); return 0; } },
+			{ 491, TEXT("0x101a68e0"), TEXT("PainSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::PainSound(); return 0; } },
+			{ 492, TEXT("0x101a6900"), TEXT("FearSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::FearSound(); return 0; } },
+			{ 493, TEXT("0x101a6920"), TEXT("LostEnemySound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::LostEnemySound(); return 0; } },
+			{ 494, TEXT("0x101a6940"), TEXT("FoundEnemySound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::FoundEnemySound(); return 0; } },
+			{ 495, TEXT("0x101a6960"), TEXT("SurprisedSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::SurprisedSound(); return 0; } },
+			{ 496, TEXT("0x101a6980"), TEXT("TargetAcquiredSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::TargetAcquiredSound(); return 0; } },
+			{ 497, TEXT("0x101a69a0"), TEXT("Slot497"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::Slot497(); return 0; } },
+			{ 498, TEXT("0x101a69c0"), TEXT("FleeSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::FleeSound(); return 0; } },
+			{ 499, TEXT("0x101a69e0"), TEXT("IdleAgitatedSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::IdleAgitatedSound(); return 0; } },
+			{ 500, TEXT("0x101a6a00"), TEXT("ExertHvySound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::ExertHvySound(); return 0; } },
+			{ 501, TEXT("0x101a6a20"), TEXT("ExertLightSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::ExertLightSound(); return 0; } },
+			{ 502, TEXT("0x101a6a40"), TEXT("RiledSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::RiledSound(); return 0; } },
+			{ 503, TEXT("0x101a6a60"), TEXT("ComfortSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::ComfortSound(); return 0; } },
+			{ 504, TEXT("0x101a6a80"), TEXT("UpsetSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::UpsetSound(); return 0; } },
+			{ 505, TEXT("0x101a6aa0"), TEXT("TargetGiveUpSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::TargetGiveUpSound(); return 0; } },
+			{ 506, TEXT("0x101a6ac0"), TEXT("Slot506"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::Slot506(); return 0; } },
+			{ 507, TEXT("0x101a6ae0"), TEXT("FloatSound"), TEXT("void"), 0, true,
+				[](FElysiumNpc& Npc) -> int64 { Npc.FElysiumNpcBase::FloatSound(); return 0; } },
+			{ 527, TEXT("0x101a6ba0"), TEXT("IsUnusableNode"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; return Npc.FElysiumNpcBase::IsUnusableNode(Arg0) ? 1 : 0; } },
+			{ 566, TEXT("0x1026a8d0"), TEXT("FValidateHintType"), TEXT("0"), 0, false,
+				[](FElysiumNpc& Npc) -> int64 { void* Arg0{}; return Npc.FElysiumNpcBase::FValidateHintType(Arg0) ? 1 : 0; } },
+		};
 	}
 
 	TArrayView<const FElysiumNpcSlotDefault> SlotDefaults()
 	{
 		return MakeArrayView(GDefaults);
+	}
+
+	TArrayView<const FElysiumNpcSlotDefault> ShadowedSlotDefaults()
+	{
+		return MakeArrayView(GShadowedDefaults);
 	}
 }

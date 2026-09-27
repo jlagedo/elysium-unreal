@@ -18,7 +18,8 @@ on the base, and the split's base declarations need the base bodies as their han
   - A Troika-introduced slot is declared on `FElysiumNpc`.
   - Each layer row reads its own body's verdict, address, layer and story.
 - Counts:
-  - Base: 552 slots — 248 stubs, 177 hand, 127 defaults.
+  - Base: 552 slots — 233 stubs, 192 hand, 127 defaults (the committed file's own header;
+    this record first said 248/177, corrected in step 6).
   - Troika: 137 overrides and 33 introduced slots.
 - Stub text is unchanged. Base stubs fire the base address, Troika overrides the Troika one. The
   census and the default probes read the merged row, the body a Troika instance runs.

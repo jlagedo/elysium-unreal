@@ -29,12 +29,6 @@ namespace
 	// (`0x1027a400`) test — bit 11 and bit 9 of the same word.
 	constexpr int32 GSpawnFlagTemplate = 1 << 11;      // 0x800
 	constexpr int32 GSpawnFlagFadeOnDeath = 1 << 9;    // 0x200
-	// `m_iEFlags` bit 0, `EFL_KILLME` — slot 116 `IsMarkedForDeletion` (`0x10027490`).
-	constexpr int32 GEntityFlagKillMe = 1 << 0;
-	// Slot 91 `ShouldCollide` (`0x100b4de0`): the one collision group it refuses for, and the
-	// contents mask bit that overrides the refusal. `1` is Source's `COLLISION_GROUP_DEBRIS`.
-	constexpr int32 GCollisionGroupDebris = 1;
-	constexpr int32 GContentsDebrisOverride = 0x4000000;
 	// `CAI_StandoffGoal::Spawn` (`0x102cd2d0`): `m_flNextThink = curtime + _DAT_1044e658`.
 	constexpr double GStandoffGoalThinkDelaySeconds = ElysiumNpcTunables::HundredthDouble;
 	// `CAI_StandoffBehavior::vfunc13` (`0x102c7600`): the elapsed-seconds threshold the reaction
@@ -106,85 +100,6 @@ namespace
 }
 
 // --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 5) ---
-
-// slot 0 `void SetRefEHandle(const CBaseHandle&)` — 0x10027450
-void FElysiumNpcBase::SetRefEHandle(const FElysiumEntityHandle& InHandle)
-{
-	// Retail's whole body is `*(undefined4*)&this->field_0x448 = *param_1;` — the four-byte entity
-	// handle/serial word at `+0x0448`. This runtime's counterpart is `FElysiumEntity::Handle`, which
-	// the world's registry binds at `Construct`; writing it is exactly what retail does, and the
-	// registry stays the authority over what the handle RESOLVES to.
-	Handle = InHandle;
-}
-
-// slot 3 `IServerNetworkable* GetNetworkable()` — 0x10027630
-void* FElysiumNpcBase::GetNetworkable()
-{
-	// Retail's whole body is `return &this->field_0x2d4;`, the address of the embedded
-	// `CServerNetworkProperty` sub-object. SEAM: this runtime has no network property and no
-	// networkable interface — entities are plain C++ objects with no edict behind them — so there is
-	// no sub-object whose address could be answered. Answers null and names the retail word.
-	return nullptr;
-}
-
-// slot 4 `CBaseEntity* GetBaseEntity()` — 0x10027650
-FElysiumEntity* FElysiumNpcBase::GetBaseEntity()
-{
-	// `return this;`
-	return this;
-}
-
-// slot 91 `bool ShouldCollide(int, int) const` — 0x100b4de0
-bool FElysiumNpcBase::ShouldCollide(int32 CollisionGroupArg, int32 ContentsMask) const
-{
-	// Verbatim: the answer is true unless `m_CollisionGroup == 1` (`+0x0368`) AND bit `0x4000000` of
-	// the contents mask is CLEAR. Retail ignores its first argument entirely, and so does this.
-	(void)CollisionGroupArg;
-	if (CollisionGroup == GCollisionGroupDebris && (ContentsMask & GContentsDebrisOverride) == 0)
-	{
-		return false;
-	}
-	return true;
-}
-
-// slot 116 `bool IsMarkedForDeletion()` — 0x10027490
-bool FElysiumNpcBase::IsMarkedForDeletion()
-{
-	// `return this->m_iEFlags & 1;` — bit 0 of the entity-flags word at `+0x0268`, `EFL_KILLME`.
-	// This runtime spells "killed, and the world will reap the slot" as `FElysiumEntity::bDead`,
-	// which `Kill()` is the sole writer of; that IS the killme bit.
-	return (IsDead() ? GEntityFlagKillMe : 0) != 0;
-}
-
-// slot 137 `CBaseAnimating* GetBaseAnimating()` — 0x1004fc50
-FElysiumEntity* FElysiumNpcBase::GetBaseAnimating()
-{
-	// `return this;` — retail's default answers itself. This leaf IS on the animating chain
-	// (`FElysiumAnimating`), so the answer is the same entity.
-	return this;
-}
-
-// slot 152 `float GetDelay()` — 0x1004fc10
-float FElysiumNpcBase::GetDelay()
-{
-	// `return (float10)*(float *)(param_1 + 0x500);` — a plain read of the `CBaseDelay` field below
-	// the NPC word table. SEAM (declared, unwritten): this runtime carries an output's delay on the
-	// WIRE (`FElysiumOutputDef`) rather than on the entity, so nothing writes `EntityDelay`.
-	return EntityDelay;
-}
-
-// slot 158 `bool IsAlive()` — 0x100b4dc0
-bool FElysiumNpcBase::IsAlive()
-{
-	// `return this->m_lifeState == 0;` — `LIFE_ALIVE`, the int at `+0x0200`.
-	//
-	// This runtime has no `m_lifeState` word: it spells the same fact as two latches, and a body is
-	// alive when NEITHER stands. `bDeathReported` is the death transaction's own one-shot
-	// (`OnKilled` ran; the mind is dead and the death schedule is running), and `bDead` is `Kill`'s
-	// terminal flag. `UpdateEnemyDistances` already reads `m_lifeState` through `IsDead()` for its
-	// own arm, which is why the second term is spelled the same way here.
-	return !HasReportedDeath() && !IsDead();
-}
 
 // slot 423 `bool IsTemplate()` — 0x1027e120
 bool FElysiumNpcBase::IsTemplate()
@@ -368,64 +283,6 @@ void FElysiumNpcBase::HintSpawn(FHintWords& Hint)
 		: -1;
 }
 
-FElysiumNpcBase::EKeyValueArm FElysiumNpcBase::ClassifyKeyValue(const FString& Key, FString& OutKey)
-{
-	// 0x1009e430, arm by arm. The FIRST thing the body does is truncate the key at a `#`
-	// (`FUN_10431f30(param_1, '#')` then `*p = 0`), so every comparison below sees the truncated
-	// name — and `"origin#2"` is `"origin"`.
-	int32 Hash = INDEX_NONE;
-	OutKey = Key.FindChar(TEXT('#'), Hash) ? Key.Left(Hash) : Key;
-
-	// Retail guards the first two with `if (*param_1 == 'r')`, which is an optimisation and not a
-	// rule: a key that reaches them starts with `r` by definition.
-	if (OutKey.Equals(TEXT("rendercolor"), ESearchCase::IgnoreCase)
-		|| OutKey.Equals(TEXT("rendercolor32"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::RenderColor;
-	}
-	if (OutKey.Equals(TEXT("renderamt"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::RenderAmt;
-	}
-	if (OutKey.Equals(TEXT("disableshadows"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::DisableShadows;
-	}
-	if (OutKey.Equals(TEXT("mins"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::Mins;
-	}
-	if (OutKey.Equals(TEXT("maxs"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::Maxs;
-	}
-	if (OutKey.Equals(TEXT("disablereceiveshadows"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::DisableReceiveShadows;
-	}
-	if (OutKey.Equals(TEXT("angle"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::Angle;
-	}
-	if (OutKey.Equals(TEXT("angles"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::Angles;
-	}
-	if (OutKey.Equals(TEXT("origin"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::Origin;
-	}
-	// Nothing matched: retail walks the datamap chain (`vtable +0x148 GetDataDescMap`, following
-	// `baseMap` at `+0xc`) and offers the key to each level's `ParseKeyvalue`. THIS RUNTIME ALREADY
-	// DOES THAT — `FElysiumEntity::Construct` applies each raw keyvalue through the class-chain
-	// field table (`FElysiumClassRegistry::FindField`), which is the same walk over the same data.
-	// So this arm names the port's own path rather than standing a second one.
-	//
-	// **Not ported:** the `ent_debugkeys` cvar arm (`DAT_106cf424`), which `Msg`s every matched and
-	// unmatched key for one classname. It is a console diagnostic with no game-visible effect.
-	return EKeyValueArm::DataMap;
-}
-
 FString FElysiumNpcBase::RewriteAngleKey(float AngleValue, const FVector& CurrentAngles)
 {
 	// 0x1009e430's `angle` arm: `atof` the value, and then — this is the arm order, not a tidy-up —
@@ -528,15 +385,6 @@ void FElysiumNpcBase::BaseNpcUpdateOnRemove()
 		BaseScheduleHost.HintNode = INDEX_NONE;                               // +0x5ddc = 0
 	}
 	// Slot 511 (`+0x7fc`) is a later story's; nothing routes to it yet.
-}
-
-float FElysiumNpcBase::ScaleField_0x1ddc() const
-{
-	// `FUN_10160680` — `(float10)_DAT_10725c9c * (float10)*(float *)(param_1 + 0x1ddc)`.
-	// **Unrecovered:** `_DAT_10725c9c`'s value, the field's retail name and the class that owns the
-	// offset. 1.0 keeps the read observable without claiming a scale.
-	constexpr float Scale = 1.0f;   // _DAT_10725c9c — unrecovered
-	return Field_0x1ddc * Scale;
 }
 
 bool FElysiumNpcBase::HasNonDefaultVelocity() const

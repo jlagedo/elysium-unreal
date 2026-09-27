@@ -231,7 +231,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// payload has to carry what the entity was authored with, because the resolved loadout is
 	// derived from them on the first think. The resolution is `Substrate/ElysiumNpcLoadout.h`; what
 	// each is read for (and which of the three is deliberately unread) is stated on the members.
-	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumNpcBase::bCantDropWeapons,    EElysiumField::Save);
+	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumCombatCharacter::bCantDropWeapons,    EElysiumField::Save);
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)

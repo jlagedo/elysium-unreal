@@ -560,8 +560,8 @@ green, and `coverage.md` shows the change.
   surface, slot numbers in the API (`RunTaskSlot444`), and every NPC carrying every species'
   words. Measured 2026-09-24, outside tests: 110 `RetailClass()` calls, 50 `IsRetailClass`, 68
   lookup calls, 54 dispatch-scope sites, 21 slot-numbered names, about 174 species words on the
-  one class, and 6,013 lines of generated slot surface holding 268 bodies (186 stubs that count
-  calls, 82 one-constant bodies).
+  one class, and 6,013 lines of generated slot surface holding 269 bodies (186 stubs that count
+  calls, 83 one-constant bodies; the 268/82 first measured was one default short).
   The dispatcher also answers the wrong class. Its classname column is a proximity guess in
   `npc_translation_survey.py`, and the "most-derived claimant" rule only undoes its
   over-claims. Nine classnames resolve differently from retail's factories, and seven of those
@@ -596,10 +596,13 @@ green, and `coverage.md` shows the change.
   - *The generated slot bodies.* Each moves to its retail owning class. The entity chain's go
     onto the port's entity, animating and combat-character classes, and the NPC layers' go onto
     `FElysiumNpcBase` or `FElysiumNpc`. The 38 linker-folded bodies go onto the class that
-    first declares the slot. The 8 whose name is already a port entity method merge into that
-    method: `AcceptInput`, `GetAbsOrigin`, `GetAngles`, `GetModelIndex`, `GetOrigin`,
-    `SetMoveType`, `SetOrigin` and `Weapon_Switch`. Stubs keep counting when fired, unreached
-    stubs are deleted, and one-constant bodies stay.
+    first declares the slot. The 8 whose name matches a port concept get audited dispositions,
+    not same-name merges (none is a method on the port chain; step 6 recorded the audit):
+    `GetAbsOrigin`/`GetOrigin`/`GetAngles` answer the entity's `Origin`/`Angles`, `SetOrigin`
+    writes through `SetRuntimeOrigin`, `SetMoveType` is its seam, `AcceptInput` is the world's
+    input chokepoint, and `Weapon_Switch` and `GetModelIndex` stay counting stubs. Stubs keep
+    counting when fired and name their owner; a stub is deleted only when it is dead, uncalled
+    and overridden nowhere; one-constant bodies stay.
   - *Vocalisation* is plain overrides. The live species bodies at 488–508 are one-byte silent
     bodies (Camera, CameraSecurity, Newscaster, FrenzyShadow, WolfMorph), Tzimisce's sentence
     groups and Werewolf's event emits. Every wav-table species is dead. The `FVocalization`
@@ -621,7 +624,7 @@ green, and `coverage.md` shows the change.
     lists the unported `rule` overrides, a number that must only fall. `--residue` already names
     the unsettled layout and slot rows.
   **Execution: [story-5-execution-plan.md](story-5-execution-plan.md)** (reviewed 2026-09-24;
-  steps 0-5 accepted). The plan owns the detailed sequence, phase gates and session
+  steps 0-5 accepted, step 6 in progress). The plan owns the detailed sequence, phase gates and session
   handoff contract so they do not need to be duplicated here.
   Twelve steps on `0019-5-class-tree`: evidence/manifest and rehearsal; dead species deletion;
   species tree and factories; dispatch conversion; the atomic bodies/words/bindings move; base

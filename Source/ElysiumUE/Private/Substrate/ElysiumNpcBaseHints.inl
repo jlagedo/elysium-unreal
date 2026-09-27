@@ -109,7 +109,3 @@ void SetMotorHintYaw(float Yaw);
 
 void ReleaseMotorHintYaw();
 
-/** SEAM for `m_Activity` (`+0xfec`), the currently playing retail `Activity` id that
- *  `RunInterestingPlaceLoop` compares its refreshed id against. Answers -1: this runtime's activity
- *  is an `FElysiumClipIdentity` name pair and carries no retail id. */
-int32 CurrentRetailActivityId() const;

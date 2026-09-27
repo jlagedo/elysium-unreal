@@ -7,7 +7,7 @@
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcTroikaHelpers2Shared.h"
@@ -64,7 +64,7 @@ bool FElysiumNpcBase::HintYaw(int32 HintNode, float& OutYaw) const
 FVector FElysiumNpcBase::HintAttackExtentsUnits() const
 {
 	// Slot 16 (vtable `+0x40`) — the attack-extent margin. **SEAM**: the port already carries the
-	// margin itself (`FElysiumNpc::SetAttackExtents`, `CBaseEntity::SetAttackExtents 0x1009af40`),
+	// margin itself (`FElysiumEntity::SetAttackExtents`, `CBaseEntity::SetAttackExtents 0x1009af40`),
 	// and nothing produces a per-hint one, so this answers the zero margin.
 	return FVector::ZeroVector;
 }

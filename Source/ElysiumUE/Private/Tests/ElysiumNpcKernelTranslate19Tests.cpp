@@ -6,7 +6,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcHengeyokai.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"

@@ -22,7 +22,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLifecycle19Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
@@ -249,7 +249,7 @@ bool FElysiumNpcMingXiaoTentacle::CanStandOn(FElysiumEntity* Other)
 	{
 		return false;
 	}
-	return FElysiumNpcBase::CanStandOn(Other);
+	return FElysiumEntity::CanStandOn(Other);
 }
 
 // Slot 408: `0x1039ece0`, whose miss calls `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.

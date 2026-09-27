@@ -4,7 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 

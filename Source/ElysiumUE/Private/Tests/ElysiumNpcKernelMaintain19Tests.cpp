@@ -12,7 +12,7 @@
 #include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
 	#include "Substrate/ElysiumNpcConditions.h"
-	#include "Substrate/ElysiumNpcFlags.h"
+	#include "ElysiumNpcFlags.h"
 	#include "Substrate/ElysiumSchedule.h"
 	#include "Tests/ElysiumNpcTestFixture.h"
 

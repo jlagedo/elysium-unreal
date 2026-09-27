@@ -8,7 +8,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
@@ -334,7 +334,7 @@ bool FElysiumNpc::CanBeFedUponBy(FElysiumEntity* Feeder)
 	}
 
 	// `102c4a9e`: everything else defers entirely to the base body WITH the feeder.
-	return FElysiumNpcBase::CanBeFedUponBy(Feeder);
+	return FElysiumCombatCharacter::CanBeFedUponBy(Feeder);
 }
 
 // =================================================================================================

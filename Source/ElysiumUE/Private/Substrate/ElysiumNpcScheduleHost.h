@@ -33,8 +33,6 @@ struct FElysiumNpcBaseScheduleHost
 	int32 FailureReason = 0;
 	// The claimed hint's reuse time (hint `+0x5ec`), which a hint release stamps.
 	double HintReusableAt = 0.0;
-	// `CBaseEntity::m_vecAttackExtents` (+0x50..0x58), the additive attack-partition margin, in cm.
-	FVector AttackExtentsCm = FVector::ZeroVector;
 
 	int32 SquadDisconnected = 0; // +0x5bb0; shared-memory routing lands with the squad store
 

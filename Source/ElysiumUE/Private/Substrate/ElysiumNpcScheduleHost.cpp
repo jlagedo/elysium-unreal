@@ -131,7 +131,6 @@ void FElysiumNpcBaseScheduleHost::Serialize(FElysiumSaveArchive& Ar)
 {
 	Ar << FailureReason;
 	Ar << HintReusableAt;
-	Ar << AttackExtentsCm;
 	// The hint claim (`m_pHintNode` +0x5ddc and the claim flag) and the motor's animation-movement
 	// latch (`CAI_Motor+0x28`) are the base's.
 	Ar << HintNode << bOwnsHint;

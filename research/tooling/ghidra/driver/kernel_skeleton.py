@@ -191,12 +191,16 @@ class Names:
     @staticmethod
     def _slots() -> dict[int, tuple[str, str, str]]:
         """slot → (base body address, walk state, retail signature) from the port's slot table."""
-        substrate = repo_root() / "Source" / "ElysiumUE" / "Private" / "Substrate"
+        source = repo_root() / "Source" / "ElysiumUE"
+        substrate = source / "Private" / "Substrate"
         out: dict[int, tuple[str, str, str]] = {}
-        # The Troika layer first: its override is the body a Troika instance runs; the base
-        # layer's declaration answers every slot Troika does not refill (story 5 step 5).
-        for name in ("ElysiumNpcSlots.inl", "ElysiumNpcBaseSlots.inl", "ElysiumNpcKernelSlots.inl"):
-            path = substrate / name
+        # The most-derived layer first: its override is the body a Troika instance runs; each
+        # shallower class's declaration answers every slot the deeper ones do not refill (story 5
+        # steps 5-6).
+        for path in (substrate / "ElysiumNpcSlots.inl", substrate / "ElysiumNpcBaseSlots.inl",
+                     *(source / "Public" / f"Elysium{stem}Slots.inl"
+                       for stem in ("CombatCharacter", "Flex", "AnimatingOverlay", "Animating", "Entity")),
+                     substrate / "ElysiumNpcKernelSlots.inl"):
             if not path.is_file():
                 continue
             for m in SLOT_RE.finditer(path.read_text(encoding="utf-8")):

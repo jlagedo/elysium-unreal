@@ -3,7 +3,7 @@
 #include "Substrate/ElysiumIdNamespace.h"
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumMiscFlags.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumScheduleId.h"
 #include "Substrate/ElysiumScheduleTokenizer.h"
 #include "Substrate/ElysiumSymbolRegistry.h"

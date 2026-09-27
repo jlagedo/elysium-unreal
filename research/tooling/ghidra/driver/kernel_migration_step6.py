@@ -97,7 +97,6 @@ MOVE_COLUMNS = ("member", "kind", "current_owner", "declared_in", "defined_in", 
                 "disposition", "packet", "note")
 MOVE_DISPOSITION = re.compile(r"^(move|stay:.+|investigate)$")
 PACKETS = {"6a", "6b", "6c", "6d", "6e", "6f", "6g", "6h", "6i", "-"}
-RETIRED_SYMBOLS = re.compile(r"\b(FVocalization|GSoundsVocalizations|SpeciesObjectCaps)\b")
 
 SLOT_HEAD = re.compile(r"^\s*// slot (\d+)\s+(0x[0-9a-f]+|no body)\s+\(")
 
@@ -400,12 +399,16 @@ def check_gate(decisions: dict, root: Path) -> int:
     return sum(found.values())
 
 
-def check_retired(root: Path) -> int:
+def check_retired(root: Path, symbols: list[str]) -> int:
+    """No source file names a symbol the step retired (`decisions-step6.json` `retired_symbols`)."""
+    if not symbols:
+        return 0
+    pattern = re.compile(r"\b(" + "|".join(map(re.escape, symbols)) + r")\b")
     hits = []
     for path in sorted((root / SOURCE).rglob("*")):
         if path.suffix in {".cpp", ".h", ".inl"}:
             text = mask_cpp(path.read_text(encoding="utf-8-sig"))
-            if RETIRED_SYMBOLS.search(text):
+            if pattern.search(text):
                 hits.append(path.relative_to(root).as_posix())
     if hits:
         raise km.InvalidManifest("retired tables still referenced: " + ", ".join(hits[:10]))
@@ -463,7 +466,8 @@ def _check_step6(directory: Path, tree: Path) -> dict:
     from kernel_migration_step5 import check_step5
     step5 = check_step5(directory)
     counts = {"slots": dict(check_slots(slots, tree)), "moves": dict(check_moves(moves, tree)),
-              "gate_tokens": check_gate(decisions, tree), "retired": check_retired(tree),
+              "gate_tokens": check_gate(decisions, tree),
+              "retired": check_retired(tree, decisions.get("retired_symbols", [])),
               "unported": check_unported(directory)}
     record = json.loads((directory / "acceptance-step6.json").read_text(encoding="utf-8"))
     if record.get("scope") != "step-6-slot-owners":

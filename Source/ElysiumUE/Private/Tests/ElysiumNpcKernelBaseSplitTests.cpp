@@ -159,7 +159,7 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 	// `0x102993c0` calls `0x1027bc60` first: the record's base half leads, so a base-only reader
 	// recovers the base words from a Troika NPC's record.
 	Npc.BaseScheduleHost.FailureReason = 0x2a;
-	Npc.BaseScheduleHost.AttackExtentsCm = FVector(3.0, 4.0, 5.0);
+	Npc.AttackExtentsCm = FVector(3.0, 4.0, 5.0);
 	Npc.BaseScheduleHost.HintReusableAt = 12.5;
 	TArray<uint8> Bytes;
 	{
@@ -174,7 +174,7 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 		Reader.FElysiumNpcBase::Serialize(Ar);
 	}
 	TestEqual(TEXT("the base half leads the record: failure code"), Reader.BaseScheduleHost.FailureReason, 0x2a);
-	TestEqual(TEXT("attack extents"), Reader.BaseScheduleHost.AttackExtentsCm, FVector(3.0, 4.0, 5.0));
+	TestEqual(TEXT("attack extents"), Reader.AttackExtentsCm, FVector(3.0, 4.0, 5.0));
 	TestEqual(TEXT("hint reuse time"), Reader.BaseScheduleHost.HintReusableAt, 12.5);
 	TestTrue(TEXT("and the Troika half follows it"), Bytes.Num() > 0);
 	return true;

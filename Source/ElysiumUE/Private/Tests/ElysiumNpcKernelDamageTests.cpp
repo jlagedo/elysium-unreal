@@ -47,9 +47,9 @@ namespace
 	// Named apart from the other kernel suites' `DamageU`: a unity blob can put two anonymous ones together.
 	constexpr float DamageU = ElysiumMove::U;
 
-	FElysiumNpcBase::FElysiumTraceHit MakeTrace(int32 HitGroup, const FVector& EndPosUnits)
+	FElysiumEntity::FElysiumTraceHit MakeTrace(int32 HitGroup, const FVector& EndPosUnits)
 	{
-		FElysiumNpcBase::FElysiumTraceHit Trace;
+		FElysiumEntity::FElysiumTraceHit Trace;
 		Trace.HitGroup = HitGroup;
 		Trace.EndPosUnits = EndPosUnits;
 		return Trace;
@@ -269,7 +269,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
 	Info.Damage = 50.f;
 	Info.Attacker = Attacker->Handle;
-	FElysiumNpcBase::FElysiumTraceHit Trace = MakeTrace(2, FVector(10.0, 0.0, 30.0));
+	FElysiumEntity::FElysiumTraceHit Trace = MakeTrace(2, FVector(10.0, 0.0, 30.0));
 	Trace.PhysicsBone = 9;
 	Npc->bNoDamageDecal = true;
 	Npc->TakeDamageMode = 0;
@@ -293,7 +293,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	// 0. The rewrite is observable on the caller's own trace record.
 	Npc->MultiDamageAccumulator.Reset();
 	Npc->SpawnBloodCalls.Reset();
-	FElysiumNpcBase::FElysiumTraceHit Gear = MakeTrace(10, FVector::ZeroVector);
+	FElysiumEntity::FElysiumTraceHit Gear = MakeTrace(10, FVector::ZeroVector);
 	Npc->TraceAttack(&Info, FVector::ForwardVector, &Gear);
 	TestEqual(TEXT("a gear hit rewrites the trace hitgroup to generic"), Gear.HitGroup, 0);
 	TestEqual(TEXT("and m_LastHitGroup kept the ORIGINAL 10, written before the switch"),
@@ -309,7 +309,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo NoDescriptor;
 	NoDescriptor.Damage = 500.f;   // `m_flDamage` is NOT what this body tests
 	NoDescriptor.Attacker = Attacker->Handle;
-	FElysiumNpcBase::FElysiumTraceHit Generic = MakeTrace(0, FVector(1.0, 2.0, 3.0));
+	FElysiumEntity::FElysiumTraceHit Generic = MakeTrace(0, FVector(1.0, 2.0, 3.0));
 	Npc->TraceAttack(&NoDescriptor, FVector::ForwardVector, &Generic);
 	TestEqual(TEXT("a hit under 1.0 spawns no blood"), Npc->SpawnBloodCalls.Num(), 0);
 	TestFalse(TEXT("and it does NOT raise m_fNoDamageDecal: retail raises that flag only on the "
@@ -334,7 +334,7 @@ bool FElysiumNpcKernelDamageTraceAttackTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo WithHead;
 	WithHead.Dmg = &Head;
 	WithHead.Attacker = Attacker->Handle;
-	FElysiumNpcBase::FElysiumTraceHit HeadTrace = MakeTrace(1, FVector(4.0, 5.0, 6.0));
+	FElysiumEntity::FElysiumTraceHit HeadTrace = MakeTrace(1, FVector(4.0, 5.0, 6.0));
 	Npc->TraceAttack(&WithHead, FVector::ForwardVector, &HeadTrace);
 	TestTrue(TEXT("a survived headshot raises m_fNoDamageDecal"), Npc->bNoDamageDecal);
 	TestEqual(TEXT("and spawns no blood"), Npc->SpawnBloodCalls.Num(), 0);
@@ -427,7 +427,7 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand the NPC"));
 		return false;
 	}
-	FElysiumNpcBase::FElysiumTraceHit Trace = MakeTrace(0, FVector(0.0, 0.0, 40.0));
+	FElysiumEntity::FElysiumTraceHit Trace = MakeTrace(0, FVector(0.0, 0.0, 40.0));
 
 	// The three refusals. A refused pass records nothing, because the record is written past the
 	// loop — which is exactly where retail's `return` arms leave it.
@@ -460,14 +460,14 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 	}
 
 	// The noise/count table: `< 10` -> 0.1 and one trace, `< 25` -> 0.2 and two, else 0.3 and four.
-	const auto BandFor = [&](int32 BaseDamage) -> FElysiumNpcBase::FTraceBleedPass
+	const auto BandFor = [&](int32 BaseDamage) -> FElysiumEntity::FTraceBleedPass
 	{
 		FElysiumDmg Dmg = MakeResolvedDmg(BaseDamage, 0x2u);
 		Dmg.BaseDamage = BaseDamage;
 		Npc->TraceBleedPasses.Reset();
 		Npc->TraceBleed(&Dmg, FVector::ForwardVector, &Trace);
 		return Npc->TraceBleedPasses.Num() == 1 ? Npc->TraceBleedPasses[0]
-											    : FElysiumNpcBase::FTraceBleedPass();
+											    : FElysiumEntity::FTraceBleedPass();
 	};
 	TestEqual(TEXT("damage under 10 runs one trace"), BandFor(9).TraceCount, 1);
 	TestEqual(TEXT("at noise 0.1"), BandFor(9).Noise, 0.1f, 0.0001f);
@@ -483,7 +483,7 @@ bool FElysiumNpcKernelDamageTraceBleedTest::RunTest(const FString&)
 	// The trace segment: `endpos` to `endpos + (dir * -1 + jitter) * -172`. With the incoming
 	// direction +X and a jitter under 0.3, the double negation lands the far end at roughly
 	// `endpos + 172` on X — behind the victim, which is what paints a wall.
-	const FElysiumNpcBase::FTraceBleedPass Pass = BandFor(9);
+	const FElysiumEntity::FTraceBleedPass Pass = BandFor(9);
 	TestEqual(TEXT("the trace starts at the trace's endpos"), Pass.LastStartUnits,
 		FVector(0.0, 0.0, 40.0));
 	TestTrue(TEXT("and runs 172 units downrange, give or take the jitter"),

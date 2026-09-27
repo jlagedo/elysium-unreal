@@ -86,18 +86,80 @@ import kernel_ledger as kl  # noqa: E402
 import kernel_shape as ks  # noqa: E402
 
 SUBSTRATE = ("Source", "ElysiumUE", "Private", "Substrate")
+PUBLIC = ("Source", "ElysiumUE", "Public")
 CENSUS_OUTPUT = (*SUBSTRATE, "ElysiumNpcKernelShape.cpp")
-# The slot surface, split by the layer that declares each slot (story 0019/5 step 5): the base
-# class `FElysiumNpcBase` (`CAI_BaseNPC`) declares every slot its table holds, with the body its
-# chain fills; the Troika leaf `FElysiumNpc` declares the slots Troika introduces and overrides
-# the ones it fills with a body of its own.
-BASE_SLOTS_INL_OUTPUT = (*SUBSTRATE, "ElysiumNpcBaseSlots.inl")
-BASE_SLOTS_CPP_OUTPUT = (*SUBSTRATE, "ElysiumNpcBaseSlots.cpp")
-SLOTS_INL_OUTPUT = (*SUBSTRATE, "ElysiumNpcSlots.inl")
-SLOTS_CPP_OUTPUT = (*SUBSTRATE, "ElysiumNpcSlots.cpp")
 # The layer classes and their port types.
 BASE_LAYER = "CAI_BaseNPC"
 LAYER_PORT = {"CAI_BaseNPC": "FElysiumNpcBase", "CAI_BaseNPCTroika": "FElysiumNpc"}
+
+# The retail chain under the Troika leaf, base first, and the port class that stands for each node
+# (story 0019/5 step 6). The port has no `CBaseToggle` node (`gen_kernel_bindings`' stated
+# divergence): a body `CBaseToggle`'s own table holds stands on `FElysiumAnimating`, the nearest port
+# class below it.
+CHAIN = ("CBaseEntity", "CBaseToggle", "CBaseAnimating", "CBaseAnimatingOverlay", "CBaseFlex",
+         "CBaseCombatCharacter", "CAI_BaseNPC", "CAI_BaseNPCTroika")
+CHAIN_PORT = {
+    "CBaseEntity": "FElysiumEntity",
+    "CBaseToggle": "FElysiumAnimating",
+    "CBaseAnimating": "FElysiumAnimating",
+    "CBaseAnimatingOverlay": "FElysiumAnimatingOverlay",
+    "CBaseFlex": "FElysiumFlex",
+    "CBaseCombatCharacter": "FElysiumCombatCharacter",
+    "CAI_BaseNPC": "FElysiumNpcBase",
+    "CAI_BaseNPCTroika": "FElysiumNpc",
+}
+PORT_CHAIN = ("FElysiumEntity", "FElysiumAnimating", "FElysiumAnimatingOverlay", "FElysiumFlex",
+              "FElysiumCombatCharacter", "FElysiumNpcBase", "FElysiumNpc")
+# The class a port class derives from, for the using-declarations that keep an overridden name's
+# other overloads visible. `FElysiumScriptedCharacter` is the port-only node between the combat
+# character and the NPC base; it declares no slot.
+PORT_PARENT = {
+    "FElysiumAnimating": "FElysiumEntity",
+    "FElysiumAnimatingOverlay": "FElysiumAnimating",
+    "FElysiumFlex": "FElysiumAnimatingOverlay",
+    "FElysiumCombatCharacter": "FElysiumFlex",
+    "FElysiumNpcBase": "FElysiumScriptedCharacter",
+    "FElysiumNpc": "FElysiumNpcBase",
+}
+
+
+@dataclass(frozen=True)
+class SlotSurface:
+    """One port class's generated slot surface: the declarations (included inside the class body),
+    their definitions, the header that declares the class, and the unit-unique stub helper."""
+
+    inl: tuple[str, ...]
+    cpp: tuple[str, ...]
+    header: str
+    fire: str
+
+
+# The slot surface, split by the class that owns each body (story 0019/5 step 6; step 5 split it by
+# NPC layer only). A slot is declared on the port class of the retail class that introduces it, with
+# that class's own body; each port class whose retail table refills the slot overrides it.
+SLOT_SURFACES = {
+    "FElysiumEntity": SlotSurface((*PUBLIC, "ElysiumEntitySlots.inl"),
+                                  (*SUBSTRATE, "ElysiumEntitySlots.cpp"),
+                                  "ElysiumEntity.h", "FireEntitySlot"),
+    "FElysiumAnimating": SlotSurface((*PUBLIC, "ElysiumAnimatingSlots.inl"),
+                                     (*SUBSTRATE, "ElysiumAnimatingSlots.cpp"),
+                                     "ElysiumPlayer.h", "FireAnimatingSlot"),
+    "FElysiumAnimatingOverlay": SlotSurface((*PUBLIC, "ElysiumAnimatingOverlaySlots.inl"),
+                                            (*SUBSTRATE, "ElysiumAnimatingOverlaySlots.cpp"),
+                                            "ElysiumPlayer.h", "FireAnimatingOverlaySlot"),
+    "FElysiumFlex": SlotSurface((*PUBLIC, "ElysiumFlexSlots.inl"),
+                                (*SUBSTRATE, "ElysiumFlexSlots.cpp"),
+                                "ElysiumPlayer.h", "FireFlexSlot"),
+    "FElysiumCombatCharacter": SlotSurface((*PUBLIC, "ElysiumCombatCharacterSlots.inl"),
+                                           (*SUBSTRATE, "ElysiumCombatCharacterSlots.cpp"),
+                                           "ElysiumPlayer.h", "FireCombatCharacterSlot"),
+    "FElysiumNpcBase": SlotSurface((*SUBSTRATE, "ElysiumNpcBaseSlots.inl"),
+                                   (*SUBSTRATE, "ElysiumNpcBaseSlots.cpp"),
+                                   "Substrate/ElysiumNpcBase.h", "FireKernelBaseSlot"),
+    "FElysiumNpc": SlotSurface((*SUBSTRATE, "ElysiumNpcSlots.inl"),
+                               (*SUBSTRATE, "ElysiumNpcSlots.cpp"),
+                               "Substrate/ElysiumNpc.h", "FireKernelSlot"),
+}
 
 # The verdict overlay's target spellings that change what the generator emits (story 29c).
 DEFAULT_PREFIX = "default:"
@@ -247,8 +309,32 @@ def lower_type(retail: str, family: set[str]) -> tuple[str, str]:
 PORT = "port"
 SUFFIX = "suffix"
 GENERATED_OVERRIDE = "generated-override"
+# A stub whose body is dead, uncalled and overridden nowhere (0019/5 step 6): no virtual is
+# generated, and the census row stays with an empty port callable.
+DELETED = "deleted"
+# A slot name a class below the NPC line also declares, reviewed as harmless (0019/5 step 6): the
+# virtual is generated under its retail name and the subclass member overrides it (same signature)
+# or hides it (another signature) with nothing dispatching through the hidden form.
+ACCEPTED = "accepted"
 
 SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
+
+# The chain slots whose body is written by hand on the owning chain class, beside the verdict
+# overlay's `hand:` spellings (0019/5 step 6, `decisions-step6.json` `integrations`): slot -> (the
+# port return type where the lowering would lose it, the reason). A reference return the generator
+# lowers to `void*` is restored here, because the port has the value it refers to.
+CHAIN_HAND: dict[int, tuple[str, str]] = {
+    62: ("", "`CBaseEntity::SetOrigin` 0x100b2be0: writes through `SetRuntimeOrigin` when the origin "
+             "differs; the change-tracker byte `+0x1b1` stays the Slot88/89 refusal"),
+    93: ("", "`CBaseEntity::SetMoveType` 0x100aad70: the `RetailMoveType`/`RetailMoveCollide` seam, "
+             "written only when the type differs; the physics-object notify is a refusal"),
+    194: ("const FVector&", "`EyeAngles` 0x100b4bc0: slot 219's answer (hand body, verdict overlay)"),
+    195: ("const FVector&", "`LocalEyeAngles` 0x100b4be0: slot 221's answer (hand body, verdict overlay)"),
+    217: ("const FVector&", "`GetAbsOrigin` 0x100b31b0: `Origin`, in port units"),
+    219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `Angles`, Source degrees"),
+    220: ("const FVector&", "`GetOrigin` 0x100b3070: `Origin`; the port has no local/abs split"),
+    221: ("const FVector&", "`GetAngles` 0x100b3110: `Angles`; the port has no local/abs split"),
+}
 
 
 def _load_slot_map() -> None:
@@ -262,7 +348,7 @@ def _load_slot_map() -> None:
         # A slot whose concern the port already carries on `FElysiumEntity`,
         # `FElysiumAnimating` or `FElysiumCombatCharacter`. The method there IS the slot's body;
         # a second virtual on the leaf would be a second producer of the same state.
-        (15, PORT, "FElysiumNpc::SetAttackExtents", "`CBaseEntity::SetAttackExtents` 0x1009af40"),
+        (15, PORT, "FElysiumEntity::SetAttackExtents", "`CBaseEntity::SetAttackExtents` 0x1009af40"),
         (50, PORT, "FElysiumCombatCharacter::GetCameraViewpointPosition",
          "the dialogue camera's viewpoint source"),
         (51, PORT, "FElysiumCombatCharacter::GetCameraTargetPosition",
@@ -276,6 +362,9 @@ def _load_slot_map() -> None:
         (103, PORT, "FElysiumNpc::Spawn", "the leaf's own spawn"),
         (113, PORT, "FElysiumNpc::Activate", "the leaf's own activate"),
         (117, PORT, "FElysiumEntity::ObjectCaps", "the `FCAP_*` bitfield the port reads one bit of"),
+        (118, PORT, "FElysiumEntityWorld::AcceptInput",
+         "`CBaseEntity::AcceptInput` 0x100abc90 is the datamap INPUT walk; the world's chokepoint and "
+         "the class registry are that walk (0019/5 step 6)"),
         (119, PORT, "FElysiumEntity::Kill", "terminal: mark dead and go inert"),
         (134, PORT, "FElysiumNpc::Think", "`NPCThink` 0x10292de0, the whole pass"),
         (173, PORT, "FElysiumEntity::Use", "the `+use` door"),
@@ -304,6 +393,27 @@ def _load_slot_map() -> None:
          "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),
         (534, PORT, "FElysiumCombatCharacter::EyeLookTargetHandle",
          "the gaze cascade's chosen subject; `EyeLookTarget` beside it is the point it resolved to"),
+        # --- Names a class below the NPC line also declares (0019/5 step 6) -------------------
+        (66, ACCEPTED, "", "`FElysiumWeapon::Hide(FElysiumCombatCharacter*)` is the port's holster "
+         "visual, another signature: it hides the slot on the weapon; nothing calls slot 66 on one"),
+        (67, ACCEPTED, "", "`FElysiumWeapon::Unhide(FElysiumCombatCharacter*)`, as slot 66"),
+        (86, ACCEPTED, "", "`FElysiumCameraCinematic::ShouldTransmit(handle)` is the port's reading "
+         "of the camera's own transmit test, another signature; nothing dispatches slot 86 on it"),
+        (107, ACCEPTED, "", "`FElysiumNpcMaker::ParseMapData(const FString&)` is the deferred maker's "
+         "port of `CNPCMaker::ParseMapData` 0x1034b3c0, retail's override of this slot, under another "
+         "signature: it hides the slot until the maker fold (step 8) makes it the override"),
+        (123, ACCEPTED, "", "`FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32)`, another "
+         "signature, as slot 86"),
+        (133, ACCEPTED, "", "`FElysiumMoverBase::MoveDone()` is the mover line's own `MoveDone` "
+         "(retail's doors and buttons override `CBaseToggle::MoveDone`): same signature, so it "
+         "overrides the chain's slot, which is retail's shape"),
+        (153, ACCEPTED, "", "`FElysiumMoverBase::IsMoving() const` differs by const: it hides the slot "
+         "on the mover line; nothing calls slot 153 on a mover"),
+        (158, ACCEPTED, "", "`FElysiumPlayer::IsAlive() const` differs by const: the player's own "
+         "reading hides the slot on the player; a call through `FElysiumEntity*` runs the chain body"),
+        (582, DELETED, "",
+         "`CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller, overridden nowhere "
+         "(0019/5 step 6)"),
         (614, PORT, "FElysiumNpc::ResetThinkTimers", "the four think stamps, ported in story 21"),
         # `ClearSchedule` is not a slot: retail's 0x10280d30 is a non-virtual the kernel calls
         # directly. `FElysiumNpc::ClearSchedule` stands for it and is declared by hand.
@@ -366,17 +476,20 @@ class Slot:
     verdict_target: str = ""
     default: str = ""        # the retail literal, or `void`, when the body is a constant
     hand: str = ""           # the port method that defines this virtual by hand
-    # The emission by layer (story 0019/5 step 5). `layers` holds the rows the two slot files
-    # emit for this slot: the base's (`owner` `FElysiumNpcBase`, the `CAI_BaseNPC` table's body)
-    # and the Troika's (`owner` `FElysiumNpc`, `override` when the slot is the base's). The merged
-    # row itself — the body a Troika instance runs — is what the census and the probes read.
+    # The emission by owner (story 0019/5 steps 5-6). `layers` holds the rows the slot files emit
+    # for this slot, one per port class whose retail table holds a body of its own there: the
+    # introducer's (`virtual`) and each more-derived class's that refills it (`override`). `retail`
+    # is the retail class that owns the row's body (the most-base table holding that pointer); the
+    # stub names it. The merged row itself — the body a Troika instance runs — is what the census
+    # and the probes read.
     owner: str = "FElysiumNpc"
+    retail: str = "CAI_BaseNPCTroika"
     override: bool = False
     layers: list["Slot"] = field(default_factory=list)
 
     @property
     def generated(self) -> bool:
-        return self.port_kind != PORT
+        return self.port_kind not in (PORT, DELETED)
 
     @property
     def stubbed(self) -> bool:
@@ -545,6 +658,84 @@ def reserved_names(repo: Path) -> set[str]:
     return names
 
 
+# A class declaration and its bases: `class [API] Name [final] : public A, public B {`.
+CLASS_DECL_RE = re.compile(r"^\s*(?:class|struct)\s+(?:\w+_API\s+)?(\w+)(?:\s+final)?\s*:\s*([^{;]+)\{",
+                           re.M)
+# The port classes whose descendants are the NPC line; their names are the surface this generator
+# declares or overrides on purpose.
+NPC_LINE = ("FElysiumScriptedCharacter", "FElysiumNpcBase", "FElysiumNpc")
+
+
+def _class_body(text: str, start: int) -> str:
+    depth, index = 1, start
+    while index < len(text) and depth:
+        depth += {"{": 1, "}": -1}.get(text[index], 0)
+        index += 1
+    return text[start:index - 1]
+
+
+def _class_scope_lines(body: str) -> list[str]:
+    """The lines of a class body at its own brace depth: a local inside an inline method body is
+    not a member."""
+    out, depth = [], 0
+    for line in body.splitlines():
+        if depth == 0:
+            out.append(line)
+        depth += line.count("{") - line.count("}")
+        depth = max(depth, 0)
+    return out
+
+
+def chain_subclass_names(repo: Path) -> dict[str, set[str]]:
+    """Member name -> the classes that declare it, over every class that derives from the chain
+    below the NPC line: the player, items, props, triggers, the makers and directors, the ~50
+    `FElysiumEntity` subclasses (story 0019/5 step 6).
+
+    From step 6 a generated slot on `FElysiumEntity`, `FElysiumAnimating`, the overlay, the flex
+    node or the combat character is a virtual every one of those inherits. A same-name member there
+    would silently override it (same signature) or hide it (another signature), and neither is a
+    default: the collision is a `SLOT_PORT_MAP` decision.
+    """
+    bases: dict[str, list[str]] = {}
+    bodies: dict[str, list[str]] = collections.defaultdict(list)
+    for path in sorted((repo / "Source" / "ElysiumUE").rglob("*")):
+        if path.suffix not in (".h", ".cpp"):
+            continue
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+        for match in CLASS_DECL_RE.finditer(text):
+            name = match.group(1)
+            parents = [re.sub(r"^(?:public|protected|private|virtual)\s+", "", p.strip()).split("<")[0]
+                       for p in match.group(2).split(",")]
+            bases.setdefault(name, []).extend(p.split("::")[-1].strip() for p in parents)
+            bodies[name].append(_class_body(text, match.end()))
+
+    def derives(name: str, target: str, seen: set[str]) -> bool:
+        if name == target:
+            return True
+        if name in seen:
+            return False
+        seen.add(name)
+        return any(derives(parent, target, seen) for parent in bases.get(name, ()))
+
+    names: dict[str, set[str]] = collections.defaultdict(set)
+    for name in bases:
+        if name in PORT_CHAIN or name in PORT_PARENT.values():
+            continue
+        if not derives(name, "FElysiumEntity", set()):
+            continue
+        if any(derives(name, line, set()) for line in NPC_LINE):
+            continue
+        for body in bodies[name]:
+            for line in _class_scope_lines(body):
+                for pattern in (DECL_RE, MEMBER_RE):
+                    match = pattern.match(line)
+                    if match:
+                        names[match.group(1)].add(name)
+    for keyword in ("if", "for", "while", "switch", "return", "sizeof", "static_cast", "else", "catch"):
+        names.pop(keyword, None)
+    return names
+
+
 def check_generated_override(row: Slot) -> None:
     """Fail if the one reviewed interface override loses its signature or hand implementation."""
     if row.port_kind == GENERATED_OVERRIDE and (
@@ -589,36 +780,71 @@ def apply_verdict(row: Slot, ledger) -> None:
             row.hand = row.verdict_target[len(HAND_PREFIX):].strip()
 
 
-def split_layers(row: Slot, ledger) -> None:
-    """The per-layer emission of a generated Troika-line slot (story 0019/5 step 5).
+def chain_tables(ledger) -> dict[str, dict[int, str]]:
+    """Each retail chain node's primary vtable, thunk-resolved, from the corpus. The ledger's own
+    `slot_bodies` covers only the 77 family classes; the entity chain's nodes are below them."""
+    tables: dict[str, dict[int, str]] = {}
+    for cls in CHAIN:
+        rows = ledger.db.execute(
+            "SELECT slot, func FROM vtables WHERE module = ? AND sub = 0 AND cls = ?",
+            (ledger.module, cls))
+        tables[cls] = {r["slot"]: ledger.resolve(r["func"]) for r in rows}
+        if not tables[cls]:
+            raise SystemExit(f"gen_kernel_shape: the corpus has no primary vtable for {cls}")
+    return tables
 
-    A slot inside the `CAI_BaseNPC` table is declared on `FElysiumNpcBase` with the body that
-    table holds; when the Troika table holds another body, `FElysiumNpc` overrides it. A slot past
-    the base's table is Troika's own and declared on `FElysiumNpc`. Each layer row carries its own
-    body's address, layer, story and verdict, so a Troika instance dispatches exactly what the
-    merged row names and a base-only instance runs the base's body.
+
+def chain_bodies(slot: int, tables: dict[str, dict[int, str]]) -> list[tuple[str, str, str]]:
+    """(port class, owning retail class, body) per port class whose body at `slot` differs from the
+    one it inherits, base first. A port class's body is the one its most-derived retail node holds;
+    the owner is the most-base node holding that same pointer."""
+    holders = [cls for cls in CHAIN if slot in tables[cls]]
+    out: list[tuple[str, str, str]] = []
+    previous = None
+    for port in PORT_CHAIN:
+        nodes = [cls for cls in holders if CHAIN_PORT[cls] == port]
+        if not nodes:
+            continue
+        body = tables[nodes[-1]][slot]
+        if body == previous:
+            continue
+        owner = next(cls for cls in holders if tables[cls][slot] == body)
+        out.append((port, owner, body))
+        previous = body
+    return out
+
+
+def split_layers(row: Slot, ledger, tables: dict[str, dict[int, str]]) -> None:
+    """The per-owner emission of a generated Troika-line slot (story 0019/5 steps 5-6).
+
+    A slot is declared on the port class of the retail class that introduces it, with that class's
+    own body; every more-derived port class whose retail table holds another body overrides it
+    (`chain_bodies`). A slot past the base's table is Troika's own and declared on `FElysiumNpc`.
+    Each layer row carries its own body's address, layer, story and verdict, so a Troika instance
+    dispatches exactly what the merged row names and a shallower instance runs its own class's body.
     """
     if not row.generated:
         return
-    bodies = ledger.slot_bodies.get(row.slot, {})
-    base_body = bodies.get(BASE_LAYER, "")
-    troika_body = bodies.get(BASE_TABLE, "")
-    base_slots = ledger.slot_count.get(BASE_LAYER, 0)
 
-    def layer_row(body: str, owner: str, override: bool) -> Slot:
+    def layer_row(body: str, owner: str, retail: str, override: bool) -> Slot:
         layer = replace(row, body=body, address=f"0x{body}" if body else "", owner=owner,
-                        override=override, layers=[], notes=list(row.notes))
+                        retail=retail, override=override, layers=[], notes=list(row.notes))
         layer.layer = ledger.layer_of.get(body, -1)
         layer.story = story_for(layer.layer) if layer.layer >= 0 else ""
         apply_verdict(layer, ledger)
+        if row.slot in CHAIN_HAND and owner == CHAIN_PORT[retail] and owner in SLOT_SURFACES \
+                and owner not in LAYER_PORT.values():
+            layer.hand = f"{owner}::{row.port_name}"
         return layer
 
-    if row.slot < base_slots and base_body:
-        row.layers.append(layer_row(base_body, LAYER_PORT[BASE_LAYER], False))
-        if troika_body and troika_body != base_body:
-            row.layers.append(layer_row(troika_body, LAYER_PORT[BASE_TABLE], True))
+    if row.slot in tables[BASE_LAYER]:
+        for index, (port, retail, body) in enumerate(chain_bodies(row.slot, tables)):
+            row.layers.append(layer_row(body, port, retail, index > 0))
+        # The merged row is the body a Troika instance runs: a chain hand body it inherits is its.
+        if not row.hand and row.layers[-1].hand and row.layers[-1].body == row.body:
+            row.hand = row.layers[-1].hand
     else:
-        row.layers.append(layer_row(row.body, LAYER_PORT[BASE_TABLE], False))
+        row.layers.append(layer_row(row.body, LAYER_PORT[BASE_TABLE], BASE_TABLE, False))
 
 
 def build(repo: Path, module: str, depth: int) -> Model:
@@ -651,6 +877,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
 
     # --- slots -----------------------------------------------------------------------------------
     reserved = reserved_names(repo)
+    tables = chain_tables(ledger)
     family = set(ledger.family)
     slots: list[Slot] = []
     branch: list[Slot] = []
@@ -689,8 +916,9 @@ def build(repo: Path, module: str, depth: int) -> Model:
         if decision is not None:
             kind, port_name, why = decision
             row.port_kind, row.port_why = kind, why
-            row.port_name = port_name if kind == PORT else port_name or f"{name}Slot{row.slot}"
-            if kind == PORT:
+            row.port_name = (port_name if kind in (PORT, DELETED) else name if kind == ACCEPTED
+                             else port_name or f"{name}Slot{row.slot}")
+            if kind in (PORT, DELETED):
                 continue
         elif name in reserved:
             collisions.append(row)
@@ -708,6 +936,10 @@ def build(repo: Path, module: str, depth: int) -> Model:
         if row.ret_port.endswith("&"):
             row.ret_port = "void*"
             note = f"`{row.ret}`"
+        restored = CHAIN_HAND.get(row.slot, ("", ""))[0]
+        if restored:
+            # The port holds the value retail's reference names, so the reference survives.
+            row.ret_port, note = restored, ""
         if note:
             row.notes.append(f"returns {note}")
         for param in [p for p in row.params.split(",") if p.strip()]:
@@ -717,14 +949,26 @@ def build(repo: Path, module: str, depth: int) -> Model:
                 row.notes.append(f"takes {param_note}")
         apply_verdict(row, ledger)
         check_generated_override(row)
-        split_layers(row, ledger)
+        split_layers(row, ledger, tables)
+
+    # A slot the chain now declares below the NPC line is inherited by every entity class; a
+    # same-name member on one of them is a decision, not a default (story 0019/5 step 6).
+    subclass_names = chain_subclass_names(repo)
+    for row in slots:
+        if not row.generated or row.slot in SLOT_PORT_MAP:
+            continue
+        if any(layer.owner not in LAYER_PORT.values() for layer in row.layers)                 and row.port_name in subclass_names:
+            row.notes.append("declared by " + ", ".join(sorted(subclass_names[row.port_name])))
+            collisions.append(row)
 
     if collisions:
         print("gen_kernel_shape: the port's entity chain already declares these slot names; add a "
               "`SLOT_PORT_MAP` row for each (PORT names the method that IS the slot, SUFFIX says "
               "the collision is accidental):")
         for row in collisions:
-            print(f"  {row.slot:4d}  {row.method or '(unnamed)'}  —  {row.declaration}")
+            print(f"  {row.slot:4d}  {row.method or '(unnamed)'}  —  {row.declaration}"
+                  + (f"  [{row.notes[-1]}]" if row.notes and row.notes[-1].startswith("declared by")
+                     else ""))
         raise SystemExit(1)
 
     for row in branch:
@@ -1078,63 +1322,45 @@ def _layer_rows(model: Model, owner: str) -> list[Slot]:
 
 def render_slots_inl(model: Model, module: str, owner: str) -> str:
     rows = _layer_rows(model, owner)
-    generated = [r for r in model.slots if r.generated]
-    base = owner == LAYER_PORT[BASE_LAYER]
-    if base:
-        counts = (f"{len(rows)} of the {len(model.slots)} Troika-line slots are declared here, on "
-                  "`FElysiumNpcBase`: every generated slot the `CAI_BaseNPC` table holds.")
-    else:
-        overrides = len([r for r in rows if r.override])
-        counts = (f"{len(rows)} of the {len(model.slots)} Troika-line slots are declared here, on "
-                  f"`FElysiumNpc`: {len(rows) - overrides} Troika introduces and {overrides} it "
-                  f"overrides with a body of its own. {len(model.slots) - len(generated)} are "
-                  "declared by hand, because the port already implements them under the name "
-                  "`SLOT_PORT_MAP` records.")
+    surface = SLOT_SURFACES[owner]
+    overrides = len([r for r in rows if r.override])
+    retail = sorted({r.retail for r in rows})
+    counts = (f"{len(rows)} generated slot rows of `{owner}` ({', '.join(retail) or 'none'}): "
+              f"{len(rows) - overrides} it introduces and {overrides} it overrides with a body of "
+              "its own.")
     out = _header(module, model.meta, counts)
-    cls, cpp = ((LAYER_PORT[BASE_LAYER], "ElysiumNpcBaseSlots.cpp") if base
-                else (LAYER_PORT[BASE_TABLE], "ElysiumNpcSlots.cpp"))
-    header = "ElysiumNpcBase.h" if base else "ElysiumNpc.h"
+    cpp = surface.cpp[-1]
     out += [
         "//",
-        f"// This file is included INSIDE `class {cls}` (`Substrate/{header}`). It is not",
+        f"// This file is included INSIDE `class {owner}` (`{surface.header}`). It is not",
         "// a header: it has no include guard and declares nothing of its own. One declaration per",
         "// slot, in slot order, with the retail declaration in the comment and the port's lowered",
-        "// signature in the code. A virtual here declares the surface retail dispatches through;",
-        "// species classes override it from story 5 step 3 on.",
+        "// signature in the code.",
         "//",
-    ]
-    if base:
-        out += [
-            "// The base layer (story 0019/5 step 5): `CAI_BaseNPC`'s table, with the body that table",
-            "// holds — the base's own, or the entity chain's it inherits. Where the Troika table holds",
-            "// another body, `ElysiumNpcSlots.inl` overrides the slot on `FElysiumNpc`.",
-            "//",
-        ]
-    else:
-        out += [
-            "// The Troika layer (story 0019/5 step 5): the slots `CAI_BaseNPCTroika` introduces past",
-            "// the base's table (`virtual`), and the base's slots it fills with a body of its own",
-            "// (`override`). The base's declarations are in `ElysiumNpcBaseSlots.inl`.",
-            "//",
-        ]
-    out += [
+        "// Each slot is declared by the port class of the retail class that introduces it, with that",
+        "// class's own body, and overridden by every port class whose retail table holds another",
+        "// body there (story 0019/5 step 6). The stub names the retail class that owns its body.",
+        "//",
         "// A body lands on one of these in 29c/29d/29e. Until then the definition in",
         f"// `{cpp}` tallies `elysium.stubs` with the retail address — except",
         "// where the verdict overlay records that retail's whole body is one literal, which the",
         "// generator emits, or that the body is written by hand in the substrate, in which case no",
         "// definition is generated at all and the linker is what checks the claim.",
     ]
-    if not base:
+    if owner == LAYER_PORT[BASE_TABLE]:
         out += [
             "//",
-            "// The slots NOT declared here are the ones the port already runs. They are listed rather",
-            "// than left implicit, because \"this slot has a body somewhere else\" is exactly the fact a",
-            "// reader of this file needs, and the census carries the same pairing as data:",
+            "// The slots NOT declared anywhere in the generated surface are the ones the port already",
+            "// runs, or a dead stub deleted in 0019/5 step 6. They are listed rather than left",
+            "// implicit, because \"this slot has a body somewhere else\" is exactly the fact a reader",
+            "// needs, and the census carries the same pairing as data:",
         ]
         for row in model.slots:
-            if row.port_kind != PORT:
-                continue
-            out += _comment(f"  slot {row.slot:>3}  {row.address}  {row.port_name} — {row.port_why}")
+            if row.port_kind == PORT:
+                out += _comment(f"  slot {row.slot:>3}  {row.address}  {row.port_name} — "
+                                f"{row.port_why}")
+            elif row.port_kind == DELETED:
+                out += _comment(f"  slot {row.slot:>3}  {row.address}  deleted — {row.port_why}")
     out.append("")
     for row in rows:
         out += _slot_comment(row)
@@ -1142,17 +1368,17 @@ def render_slots_inl(model: Model, module: str, owner: str) -> str:
             out.append(f"\t{row.port_declaration()} override;")
         else:
             out.append(f"\tvirtual {row.port_declaration()};")
-    if not base:
-        # An override of one overload hides the base's others (C++ name lookup stops at the first
-        # scope that declares the name), so a name the base layer declares more than once keeps the
-        # base's set visible here.
-        base_rows = _layer_rows(model, LAYER_PORT[BASE_LAYER])
-        base_counts = collections.Counter(r.port_name for r in base_rows)
-        hidden = sorted({r.port_name for r in rows if r.override and base_counts[r.port_name] > 1})
-        if hidden:
-            out.append("")
-            out.append("\t// The base layer's other overloads of an overridden name stay visible.")
-            out += [f"\tusing {LAYER_PORT[BASE_LAYER]}::{name};" for name in hidden]
+    # An override of one overload hides the inherited others (C++ name lookup stops at the first
+    # scope that declares the name), so a name an ancestor declares more than once keeps its set
+    # visible here.
+    ancestors = PORT_CHAIN[:PORT_CHAIN.index(owner)]
+    inherited = collections.Counter(r.port_name for cls in ancestors for r in _layer_rows(model, cls)
+                                    if not r.override)
+    hidden = sorted({r.port_name for r in rows if r.override and inherited[r.port_name] > 1})
+    if hidden:
+        out.append("")
+        out.append("\t// The inherited overloads of an overridden name stay visible.")
+        out += [f"\tusing {PORT_PARENT[owner]}::{name};" for name in hidden]
     return "\n".join(out) + "\n"
 
 
@@ -1182,53 +1408,88 @@ def _probe_arguments(row: Slot) -> tuple[list[str], str]:
     return locals_, ", ".join(args)
 
 
+def _probe_row(row: Slot, qualifier: str = "") -> list[str]:
+    """One probe initialiser. `qualifier` names the class whose own body a qualified call runs."""
+    _, expression, value = default_body(row)
+    locals_, args = _probe_arguments(row)
+    call = f"{qualifier}{row.port_name}({args})"
+    prologue = " ".join(locals_) + (" " if locals_ else "")
+    if row.default == "void":
+        lambda_body = f"{prologue}Npc.{call}; return 0;"
+    else:
+        lambda_body = f"{prologue}return {expression.format(call=call)};"
+    return _row([str(row.slot), _literal(row.address), _literal(row.port_name),
+                 _literal(row.default), str(value),
+                 "true" if row.default == "void" else "false",
+                 "[](FElysiumNpc& Npc) -> int64 { " + lambda_body + " }"], "\t\t\t")
+
+
+def shadowed_defaults(model: Model) -> list[Slot]:
+    """The generated default bodies a Troika instance never dispatches to: a class's own constant
+    body at a slot a more-derived class refills. The merged probes cannot reach them, so these are
+    probed through a qualified call (story 0019/5 step 6)."""
+    out = []
+    for row in model.slots:
+        for layer in row.layers:
+            if layer.default and layer.body != row.layers[-1].body:
+                out.append(layer)
+    return out
+
+
 def render_slots_cpp(model: Model, module: str, owner: str) -> str:
-    base = owner == LAYER_PORT[BASE_LAYER]
+    surface = SLOT_SURFACES[owner]
+    leaf = owner == LAYER_PORT[BASE_TABLE]
     generated = _layer_rows(model, owner)
     stubbed = [r for r in generated if r.stubbed]
     layer_defaults = [r for r in generated if r.default]
     hand = [r for r in generated if r.hand]
     # The probes call through a Troika instance, so they read the merged rows (the body a Troika
-    # instance runs) and live in the Troika file.
-    defaults = [] if base else [r for r in model.slots if r.generated and r.default]
+    # instance runs) and live in the Troika file, beside the shadowed class bodies they call by name.
+    defaults = [r for r in model.slots if r.generated and r.default] if leaf else []
+    shadowed = shadowed_defaults(model) if leaf else []
     stories = collections.Counter(r.story or "unassigned" for r in stubbed)
     counts = (f"{len(generated)} generated slot bodies of `{owner}`: {len(layer_defaults)} carry "
               f"the retail default story 29c recovered, {len(hand)} are defined by hand in the "
-              f"substrate, and {len(stubbed)} are still stubs — "
-              + ", ".join(f"{count} {story}" for story, count in sorted(stories.items())) + ".")
-    fire = "FireKernelBaseSlot" if base else "FireKernelSlot"
+              f"substrate, and {len(stubbed)} are still stubs"
+              + (" — " + ", ".join(f"{count} {story}" for story, count in sorted(stories.items()))
+                 if stories else "") + ".")
+    fire = surface.fire
     out = _header(module, model.meta, counts)
     out += [
         "//",
         "// A stub body says one thing: this slot has no port implementation yet. The tally row",
-        "// carries the retail address and the story that owns it, so `elysium.stubs` joins",
-        "// `docs/vtmb/npc-kernel/functions.md` by address.",
+        "// carries the retail class that owns the body, its address and the story that owns it, so",
+        "// `elysium.stubs` joins `docs/vtmb/npc-kernel/functions.md` by address.",
         "//",
         "// A body with a `default:` verdict says something stronger: retail's whole body at that",
         "// slot is `return <literal>;`, so the port answers the same literal and stops tallying.",
         "// The literal is a recovered fact, not a written behaviour — the same argument the story",
-        "// makes for a species override of a constant-returning virtual — and `GDefaults` below",
-        "// is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them through.",
+        "// makes for a species override of a constant-returning virtual — and the probe tables in",
+        "// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and",
+        "// `.ShadowedDefaults` call every one of them through.",
         "",
-        f'#include "Substrate/{"ElysiumNpcBase.h" if base else "ElysiumNpc.h"}"',
+        f'#include "{surface.header}"',
         "",
-        '#include "ElysiumStub.h"',
-        '#include "Substrate/ElysiumNpcKernelShape.h"',
-        "",
+    ]
+    if leaf:
+        out += ['#include "ElysiumStub.h"', '#include "Substrate/ElysiumNpcKernelShape.h"', ""]
+    else:
+        out += ['#include "ElysiumStub.h"', ""]
+    out += [
         "namespace",
         "{",
         "\t// One shape for every slot stub: the surface is the retail class and method, which is",
         "\t// what the ledger joins on, and never an instance name. Unit-prefixed because the module",
         "\t// builds adaptive-unity and this anonymous namespace is regularly merged with others.",
-        f"\tvoid {fire}(const TCHAR* Method, const TCHAR* Address, const TCHAR* Story,",
+        f"\tvoid {fire}(const TCHAR* Surface, const TCHAR* Address, const TCHAR* Story,",
         "\t\tconst FString& Receiver)",
         "\t{",
-        "\t\tElysiumStub::FSurface Surface;",
-        "\t\tSurface.Kind = TEXT(\"slot\");",
-        "\t\tSurface.Surface = FString::Printf(TEXT(\"CAI_BaseNPCTroika::%s\"), Method);",
-        "\t\tSurface.Address = Address;",
-        "\t\tSurface.Story = Story;",
-        "\t\tElysiumStub::Fired(Surface, Receiver, FString(), TEXT(\"the NPC kernel\"));",
+        "\t\tElysiumStub::FSurface Row;",
+        "\t\tRow.Kind = TEXT(\"slot\");",
+        "\t\tRow.Surface = Surface;",
+        "\t\tRow.Address = Address;",
+        "\t\tRow.Story = Story;",
+        "\t\tElysiumStub::Fired(Row, Receiver, FString(), TEXT(\"the NPC kernel\"));",
         "\t}",
         "}",
         "",
@@ -1236,8 +1497,11 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
     for row in generated:
         if row.hand:
             out += _slot_comment(row, "")
-            out += _comment(f"verdict `{row.verdict}`: the body is `{row.hand}`, written by hand "
-                            "in the substrate. Declared here, defined there.", "")
+            why = (f"verdict `{row.verdict}`: the body is `{row.hand}`, written by hand in the "
+                   "substrate." if row.verdict_target.startswith(HAND_PREFIX) else
+                   f"the body is `{row.hand}`, written by hand in the substrate: "
+                   f"{CHAIN_HAND.get(row.slot, ('', 'see decisions-step6.json'))[1]}.")
+            out += _comment(f"{why} Declared here, defined there.", "")
             out.append("")
             continue
         out += _slot_comment(row, "")
@@ -1252,15 +1516,15 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
             if statement:
                 out.append(f"\t{statement}")
         else:
-            out += _wrapped(f"{fire}({_literal(row.port_name)}, {_literal(row.address)}, "
-                            f"{_literal(row.story)}, DebugString());", "\t")
+            out += _wrapped(f"{fire}({_literal(f'{row.retail}::{row.port_name}')}, "
+                            f"{_literal(row.address)}, {_literal(row.story)}, DebugString());", "\t")
             tail = _default_return(row.ret_port)
             if tail:
                 out.append(tail)
         out.append("}")
         out.append("")
 
-    if base:
+    if not leaf:
         return "\n".join(out).rstrip("\n") + "\n"
     out += [
         "namespace ElysiumNpcKernelShape",
@@ -1276,27 +1540,33 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
     if defaults:
         out += ["\t\tconstexpr FElysiumNpcSlotDefault GDefaults[] =", "\t\t{"]
         for row in defaults:
-            _, expression, value = default_body(row)
-            locals_, args = _probe_arguments(row)
-            call = f"{row.port_name}({args})"
-            prologue = " ".join(locals_) + (" " if locals_ else "")
-            if row.default == "void":
-                lambda_body = f"{prologue}Npc.{call}; return 0;"
-            else:
-                lambda_body = f"{prologue}return {expression.format(call=call)};"
-            out += _row([str(row.slot), _literal(row.address), _literal(row.port_name),
-                         _literal(row.default), str(value),
-                         "true" if row.default == "void" else "false",
-                         "[](FElysiumNpc& Npc) -> int64 { " + lambda_body + " }"], "\t\t\t")
+            out += _probe_row(row)
         out.append("\t\t};")
     else:
         out.append("\t\t// No slot carries a recovered default yet.")
+    out += [
+        "",
+        "\t\t// The constant bodies a Troika instance never dispatches to — a class's own body at a",
+        "\t\t// slot a more-derived class refills — called through a qualified (non-virtual) call on",
+        "\t\t// the same instance, which runs exactly that class's body.",
+    ]
+    if shadowed:
+        out += ["\t\tconstexpr FElysiumNpcSlotDefault GShadowedDefaults[] =", "\t\t{"]
+        for row in shadowed:
+            out += _probe_row(row, f"{row.owner}::")
+        out.append("\t\t};")
     out += [
         "\t}",
         "",
         "\tTArrayView<const FElysiumNpcSlotDefault> SlotDefaults()",
         "\t{",
         ("\t\treturn MakeArrayView(GDefaults);" if defaults
+         else "\t\treturn TArrayView<const FElysiumNpcSlotDefault>();"),
+        "\t}",
+        "",
+        "\tTArrayView<const FElysiumNpcSlotDefault> ShadowedSlotDefaults()",
+        "\t{",
+        ("\t\treturn MakeArrayView(GShadowedDefaults);" if shadowed
          else "\t\treturn TArrayView<const FElysiumNpcSlotDefault>();"),
         "\t}",
         "}",
@@ -1395,11 +1665,10 @@ def main(argv: list[str] | None = None) -> int:
 
     status = 0
     status |= _emit(repo.joinpath(*CENSUS_OUTPUT), render_census(model, args.module), args.check)
-    for inl, cpp, owner in ((BASE_SLOTS_INL_OUTPUT, BASE_SLOTS_CPP_OUTPUT, LAYER_PORT[BASE_LAYER]),
-                            (SLOTS_INL_OUTPUT, SLOTS_CPP_OUTPUT, LAYER_PORT[BASE_TABLE])):
-        status |= _emit(repo.joinpath(*inl), render_slots_inl(model, args.module, owner),
+    for owner, surface in SLOT_SURFACES.items():
+        status |= _emit(repo.joinpath(*surface.inl), render_slots_inl(model, args.module, owner),
                         args.check)
-        status |= _emit(repo.joinpath(*cpp), render_slots_cpp(model, args.module, owner),
+        status |= _emit(repo.joinpath(*surface.cpp), render_slots_cpp(model, args.module, owner),
                         args.check)
     return status
 

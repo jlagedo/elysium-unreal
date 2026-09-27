@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumNpcConditions.h"   // the interrupt mask a schedule declares
-#include "Substrate/ElysiumNpcFlags.h"        // the flag word `TASK_SET_NPC_FLAG` names
+#include "ElysiumNpcFlags.h"        // the flag word `TASK_SET_NPC_FLAG` names
 #include "Substrate/ElysiumLocalIdSpace.h"    // the class space an id is translated through
 #include "Substrate/ElysiumScheduleId.h"      // local vs global, and the two constants that tell them apart
 #include "Substrate/ElysiumScheduleNumbers.h" // the local ids a C++ body still has to name

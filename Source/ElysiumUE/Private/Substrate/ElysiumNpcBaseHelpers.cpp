@@ -11,7 +11,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -344,24 +344,6 @@ int32 FElysiumNpcBase::GetScriptCustomMoveActivity() const
 	return GBaseHelpersActWalk;
 }
 
-// slot 25 0x100265b0 `void vfunc25(CBaseEntity*)`
-void FElysiumNpcBase::Slot25(FElysiumEntity* Victim)
-{
-	// `CNPC_VZombie` replaces slots 25 and 26 (`FElysiumNpcZombie`, story 5 step 3) with one
-	// `m_OnAttackedVictim` fire and NO base forward.
-	(void)Victim;
-	// `0x100265b0`, the Troika line's own body: ONE byte, `ret`. The overlay's reading was
-	// `default:void` and the body is still exactly that — no member is written and nothing is
-	// tallied, because retail writes nothing either.
-}
-
-// slot 26 0x100265d0 `void vfunc26(CBaseEntity*)`
-void FElysiumNpcBase::Slot26(FElysiumEntity* Victim)
-{
-	(void)Victim;
-	// `0x100265d0`, empty on the Troika line exactly as slot 25 is.
-}
-
 // slot 542 0x10273dd0 `void vfunc542()`
 void FElysiumNpcBase::Slot542()
 {
@@ -419,68 +401,5 @@ const FElysiumEntity* FElysiumNpcBase::RedirectDetectedAttacker(const FElysiumEn
 	return Candidate;
 }
 
-// -------------------------------------------------------------------------------------------------
-// Slot 334 — `CAI_BaseNPC::FUN_10330020` `0x10330020`.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpcBase::Slot334(int32 DisciplineId, int32 Level)
-{
-	// `0x10330020`, arm by arm:
-	//     if (m_iCurFrenzyCount > 0) return false;          // +0x0ec0, the low byte of the count
-	//     DAT_10937cf2 = 0;
-	//     row = DisciplineTableFind(&DAT_10739a4c, id, level);      // 0x101e1250
-	//     if (row != -1) {
-	//         elapsed  = curtime - m_fDisciplineTimers[row];        // +0x146c
-	//         cooldown = record[+0x2c];
-	//         if (cooldown > elapsed) { DAT_10937cf2 = 1; return false; }
-	//     }
-	//     return true;
-	//
-	// **29c's walk has the flag and the answer inverted.** The listing sets the global on the arm
-	// that is STILL COOLING and answers false there; the elapsed-cooldown arm answers true and
-	// leaves the global clear. The first arm's answer is `m_iCurFrenzyCount & 0xffffff00`, whose low
-	// byte is zero — false — and not the count.
-	if (CurFrenzyCount > 0)
-	{
-		return false;
-	}
-	NpcKernelTroikaHelpersShared::GTroikaDisciplineReadyFlag = false;
-	const int32 Row = DisciplineTableFind(DisciplineId, Level);
-	if (Row != INDEX_NONE)
-	{
-		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-		const double Elapsed = Now - DisciplineTimer(Row);
-		if (static_cast<double>(DisciplineTableCooldown(Row)) > Elapsed)
-		{
-			NpcKernelTroikaHelpersShared::GTroikaDisciplineReadyFlag = true;
-			return false;
-		}
-	}
-	return true;
-}
-
 // --- Moved from `ElysiumNpcTroikaHelpers.cpp` (story 5 step 5) ---
 
-int32 FElysiumNpcBase::DisciplineTableFind(int32 DisciplineId, int32 Level) const
-{
-	// `thunk_FUN_101e1250(&DAT_10739a4c, id, level)`. **SEAM**: no global discipline table on this
-	// substrate. `INDEX_NONE` is retail's own `0xffffffff` miss, which slot 334 answers true on.
-	(void)DisciplineId;
-	(void)Level;
-	return INDEX_NONE;
-}
-
-float FElysiumNpcBase::DisciplineTableCooldown(int32 RowIndex) const
-{
-	// `thunk_FUN_101e11c0(&DAT_10739a4c, row)` then the float at record `+0x2c`. **SEAM**, `0.0`.
-	(void)RowIndex;
-	return 0.0f;
-}
-
-double FElysiumNpcBase::DisciplineTimer(int32 RowIndex) const
-{
-	// `m_fDisciplineTimers[row]` (+0x146c). Below the shape map's band and with no producer in this
-	// runtime. **SEAM**, `0.0` — every discipline reads as never cast.
-	(void)RowIndex;
-	return 0.0;
-}

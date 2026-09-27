@@ -25,22 +25,12 @@ namespace
 	constexpr double DamageBleedFloor = ElysiumNpcTunables::OneDouble;
 	constexpr float GearDamage = ElysiumNpcTunables::Hundredth;   // SDK 2013's HITGROUP_GEAR damage
 	constexpr float HeavyDamageThreshold = 20.0f; // _DAT_1044eb0c — `IsHeavyDamage`'s only number
-	constexpr float BleedNoiseLowDamage = 10.0f;  // _DAT_1044e664
-	constexpr float BleedNoiseHighDamage = 25.0f; // _DAT_10462994
-	constexpr float BleedDirFlip = -1.0f;         // _DAT_104492dc — `vecDir * -1`
-	constexpr float BleedTraceReach = -172.0f;    // _DAT_10499514 — SDK 2013's own -172
 	constexpr double DeadDamageScale = ElysiumNpcTunables::TenthDouble;
 	constexpr float DeadImpulseZDrop = 10.0f;     // _DAT_1044e664, reused as a Z offset
 	// `CAI_BaseNPC::TraceAttack`'s own bit masks and ids.
 	constexpr uint32 DmgShock = 0x100u;           // the one bit that suppresses the bleed
 	constexpr int32 HitGroupGeneric = 0;
 	constexpr int32 HitGroupGear = 10;
-	// `CAI_BaseNPC::GiveAmmo`'s cue and its parameters.
-	constexpr const TCHAR* AmmoPickupSound = TEXT("weapons/misc/ammo_pickup.wav");
-	constexpr float AmmoPickupVolume = 1.0f;      // 0x3f800000
-	constexpr float AmmoPickupAttenuation = 0.8f; // 0x3f4ccccd
-	constexpr int32 AmmoPickupPitch = 100;        // 0x64
-	constexpr int32 AmmoSlotCount = 0x20;         // the `param_2 < 0x20` bound
 	// `CAI_BaseNPC::OnTakeDamage_Dead`'s bit test.
 	constexpr uint32 DeadDamageBits = 0xe1u;
 	// The combined `DMG_` bits every body in this family reads: the packet's own word OR'd with the
@@ -92,39 +82,6 @@ bool FElysiumNpcBase::IsHeavyDamage(float Damage, int32 DamageBits)
 	// returns a flat false; this fork's threshold is the divergence and it is the recovered fact.
 	(void)DamageBits;
 	return HeavyDamageThreshold < Damage;
-}
-
-FVector FElysiumNpcBase::GetAttackExtents()
-{
-	// The whole body: copy `m_vecAttackExtents` (+0x50/+0x54/+0x58) into the out-parameter. The
-	// setter's other half — `CBaseEntity::SetAttackExtents` (`0x1009af40`), which also pushes the
-	// margin at the collision partition — is already `FElysiumNpc::SetAttackExtents`, so this reads
-	// the word that one writes. This runtime carries the margin in CENTIMETRES.
-	return BaseScheduleHost.AttackExtentsCm;
-}
-
-int32 FElysiumNpcBase::DamageDecal(int32 DamageBits, int32 GameMaterial)
-{
-	// Arm 1: `m_nRenderMode == kRenderTransAlpha (4)` answers -1 — no decal at all.
-	if (RenderMode == 4)
-	{
-		return INDEX_NONE;
-	}
-	// Arm 2: any other non-normal render mode, on glass (`0x47` = `'G'`), answers the fixed decal
-	// index `0x34`.
-	if (RenderMode != 0 && GameMaterial == 0x47)
-	{
-		return 0x34;
-	}
-	// Arm 3 is a TAIL CALL that rewrites its own two stack arguments to `(0, 4)` before jumping —
-	//     100b4eca  MOV dword ptr [ESP + 0x8],0x4
-	//     100b4ed2  MOV dword ptr [ESP + 0x4],0x0
-	//     100b4edc  JMP dword ptr [EAX + 0x8]
-	// through `*DAT_1070b244` slot 2, which is `IUniformRandomStream::RandomInt`: the same object
-	// whose slot 1 (`+0x4`) `TraceBleed` draws its float spread from. So the ordinary answer is a
-	// uniform decal index in `[0, 4]` and neither argument reaches it.
-	(void)DamageBits;
-	return ElysiumRng::Stream(EElysiumRngStream::Effects).RandRange(0, 4);
 }
 
 void FElysiumNpcBase::TraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace)
@@ -254,106 +211,6 @@ void FElysiumNpcBase::TraceAttack(void* InInfo, const FVector& DirUnits, void* I
 	AddMultiDamage(SubInfo);
 }
 
-void FElysiumNpcBase::TraceBleed(void* InDmg, const FVector& DirUnits, void* InTrace)
-{
-	const FElysiumDmg* Dmg = static_cast<const FElysiumDmg*>(InDmg);
-	const FElysiumTraceHit* Trace = static_cast<const FElysiumTraceHit*>(InTrace);
-	if (Dmg == nullptr || Trace == nullptr)
-	{
-		return;
-	}
-
-	// 1. `BloodColor()` (slot 145) gates the whole body: `DONT_BLEED` (-1) and `BLOOD_COLOR_MECH`
-	//    (0x14) both refuse. Retail asks it TWICE — once per comparison — and again at the decal.
-	const int32 Color = BloodColor();
-	if (Color == INDEX_NONE || Color == 0x14)
-	{
-		return;
-	}
-
-	// 2. The descriptor's word 1 — its AUTHORED base damage, not the applied result — is what the
-	//    noise table is keyed on (`(float)*(int *)(param_1 + 4)`), and a zero refuses.
-	const float BaseDamage = static_cast<float>(Dmg->BaseDamage);
-	if (BaseDamage == NpcKernelDamageShared::DamageZero)
-	{
-		return;
-	}
-
-	// 3. `(m_bdmgTypes & 0xc7) != 0` — DMG_CRUSH|DMG_BULLET|DMG_SLASH|DMG_BLAST|DMG_CLUB. Only the
-	//    LOW BYTE is tested (`*(byte *)(param_1 + 0x10) & 199`), so `DMG_AIRBOAT` and every bit
-	//    above 8 is excluded, exactly as SDK 2013's mask is.
-	if ((Dmg->DmgMask & 0xc7u) == 0)
-	{
-		return;
-	}
-
-	// 4. This fork's own addition to the SDK body: a per-entity decal BUDGET. Slot 158 answering
-	//    false makes the body spend one unit of `+0x208` (`m_iMaxHealth`'s offset in Ghidra's
-	//    struct) and refuse outright once it is exhausted. No word of this substrate stands for that
-	//    counter and slot 158's meaning is UNRECOVERED; the seam is the slot answering TRUE, which
-	//    is the arm that spends nothing.
-	// (nothing to do on the true arm — recorded here so the budget is not rediscovered)
-
-	// 5. The noise/count table, read off `_DAT_1044e664` = 10.0 and `_DAT_10462994` = 25.0 and the
-	//    three denormal float bit patterns the decompiler printed for the integer counts (1, 2, 4):
-	//        damage <  10 -> noise 0.1, 1 trace
-	//        damage <  25 -> noise 0.2, 2 traces
-	//        else         -> noise 0.3, 4 traces
-	float Noise = 0.1f;
-	int32 Count = 1;
-	if (BaseDamage >= BleedNoiseLowDamage)
-	{
-		if (BaseDamage >= BleedNoiseHighDamage)
-		{
-			Noise = 0.3f;
-			Count = 4;
-		}
-		else
-		{
-			Noise = 0.2f;
-			Count = 2;
-		}
-	}
-
-	FTraceBleedPass Pass;
-	Pass.Noise = Noise;
-	Pass.TraceCount = Count;
-
-	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Effects);
-	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	for (int32 i = 0; i < Count; ++i)
-	{
-		// 6. `vecTraceDir = vecDir * -1` (`_DAT_104492dc`) jittered by three independent
-		//    `RandomFloat(-noise, +noise)` draws — three draws per trace, in X, Y, Z order.
-		FVector TraceDir = DirUnits * BleedDirFlip;
-		TraceDir.X += Rng.FRandRange(-Noise, Noise);
-		TraceDir.Y += Rng.FRandRange(-Noise, Noise);
-		TraceDir.Z += Rng.FRandRange(-Noise, Noise);
-
-		// 7. The trace runs from `ptr->endpos` to `endpos + traceDir * -172` (`_DAT_10499514`), mask
-		//    `0x400b` — `MASK_SOLID_BRUSHONLY` with `CONTENTS_GRATE` cleared, which is what keeps
-		//    blood off a grate. The NEGATIVE reach with the already-flipped direction is Valve's own
-		//    double negation and lands the trace behind the victim.
-		const FVector StartUnits = Trace->EndPosUnits;
-		const FVector EndUnits = StartUnits + TraceDir * BleedTraceReach;
-		Pass.LastStartUnits = StartUnits;
-		Pass.LastEndUnits = EndUnits;
-
-		// 8. A trace whose fraction is not 1.0 paints `UTIL_BloodDecalTrace(&tr, BloodColor())`.
-		//    The port's decal seam takes a direction and a range rather than a hit, so the same
-		//    segment is handed to it; headless it answers false, which is a miss.
-		if (Embodiment != nullptr)
-		{
-			const FVector Direction = (EndUnits - StartUnits).GetSafeNormal();
-			const float RangeCm = static_cast<float>((EndUnits - StartUnits).Size()) * ElysiumMove::U;
-			Embodiment->LayShotImpactDecal(StartUnits * ElysiumMove::U, Direction, RangeCm,
-				ElysiumRng::Stream(EElysiumRngStream::Effects).RandRange(
-					1, ElysiumImpactDecals::PoolSize));
-		}
-	}
-	TraceBleedPasses.Add(Pass);
-}
-
 int32 FElysiumNpcBase::OnTakeDamage_Dead(void* InInfo)
 {
 	FElysiumTakeDamageInfo* Info = static_cast<FElysiumTakeDamageInfo*>(InInfo);
@@ -403,60 +260,6 @@ int32 FElysiumNpcBase::OnTakeDamage_Dead(void* InInfo)
 	return 1;
 }
 
-int32 FElysiumNpcBase::GiveAmmo(int32 Count, int32 AmmoIndex, bool bSuppressSound)
-{
-	// Five gates, in retail's order, each answering 0:
-	//   count <= 0;  !g_pGameRules->+0xd4(this, index);  index < 0;  index >= 0x20;
-	//   and finally the clamp itself.
-	if (Count <= 0)
-	{
-		return 0;
-	}
-	if (!GameRulesAllowsAmmo(AmmoIndex))
-	{
-		return 0;
-	}
-	if (AmmoIndex < 0 || AmmoIndex >= AmmoSlotCount)
-	{
-		return 0;
-	}
-
-	// `room = GetAmmoDef()->MaxCarry(index) - m_iAmmo[index]`, then `add = min(count, room)`, and
-	// `add < 1` answers 0 BEFORE the sound. So a full pool is silent as well as fruitless.
-	const FString AmmoName = AmmoTypeNameForIndex(AmmoIndex);
-	const int32 Held = AmmoName.IsEmpty() ? 0 : Inventory.Reserve(AmmoName);
-	const int32 Room = AmmoMaxCarry(AmmoIndex) - Held;
-	const int32 Add = FMath::Min(Count, Room);
-	if (Add < 1)
-	{
-		return 0;
-	}
-
-	// The cue, only when the third argument is clear. `CPASAttenuationFilter` at this body's ear
-	// position, channel 3 (`CHAN_ITEM`), volume 1.0, attenuation 0.8, flags 0, pitch 100.
-	if (!bSuppressSound)
-	{
-		if (IElysiumAudio* Audio = World != nullptr ? World->Audio() : nullptr)
-		{
-			FElysiumBodySound Sound;
-			Sound.Rel = AmmoPickupSound;
-			Sound.Volume = AmmoPickupVolume;
-			Sound.Pitch = 1.0f;   // retail's 100 is the engine's "unmodified" pitch
-			Sound.Channel = EElysiumSoundChannel::Item;
-			Audio->PlayBodySound(Handle, Sound);
-		}
-		(void)AmmoPickupAttenuation;
-		(void)AmmoPickupPitch;
-	}
-
-	// `m_iAmmo[index] += add; return add;`
-	if (!AmmoName.IsEmpty())
-	{
-		Inventory.AddReserve(AmmoName, Add);
-	}
-	return Add;
-}
-
 // --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 5) ---
 
 FVector& FElysiumNpcBase::DeathThrowImpulse()
@@ -504,26 +307,3 @@ void FElysiumNpcBase::AddMultiDamage(const FElysiumTakeDamageInfo& SubInfo)
 	MultiDamageAccumulator.Add(SubInfo);
 }
 
-int32 FElysiumNpcBase::AmmoMaxCarry(int32 AmmoIndex) const
-{
-	// SEAM for `thunk_FUN_10427620` — `GetAmmoDef()->MaxCarry(index)`. UNRECOVERED: this runtime's
-	// reserve is keyed by the authored ammo TYPE NAME and no table joins retail's 0..31 index to it.
-	(void)AmmoIndex;
-	return 0;
-}
-
-FString FElysiumNpcBase::AmmoTypeNameForIndex(int32 AmmoIndex) const
-{
-	// SEAM for the same `CAmmoDef` index order. UNRECOVERED; answers the empty name, which is what
-	// closes `GiveAmmo`'s clamp.
-	(void)AmmoIndex;
-	return FString();
-}
-
-bool FElysiumNpcBase::GameRulesAllowsAmmo(int32 AmmoIndex) const
-{
-	// SEAM for `(*g_pGameRules)->vtable+0xd4`, `GiveAmmo`'s first gate. No rules object here carries
-	// it; TRUE is the permissive arm, so the capacity clamp below is what decides.
-	(void)AmmoIndex;
-	return true;
-}

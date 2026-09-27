@@ -197,20 +197,6 @@ const TCHAR* FElysiumNpcBase::BaseSchedulingErrorName()
 	return TEXT("CAI_BaseNPC");
 }
 
-const TCHAR* FElysiumNpcBase::DebugGetClassName()
-{
-	// slot 14, `CAISound::FUN_1009af00` — four bytes, `return (int)&this->field_0x24;`, the ADDRESS
-	// of the embedded classname buffer at `CBaseEntity+0x0024`. The shape map binds that word as
-	// `FElysiumEntity::Class`, "retail's debug copy of the classname; the registry descriptor
-	// carries it", so the answer is the classname the registry resolved.
-	//
-	// Note this is the address of a fixed-size char array, not a pointer read out of it: retail
-	// answers a non-null string even for an entity whose classname was never written, because the
-	// buffer is always there. Reproduced by answering the empty string rather than null when the
-	// def carries no classname.
-	return Def != nullptr ? *Def->Classname : TEXT("");
-}
-
 // -------------------------------------------------------------------------------------------------
 // Slot 581 `ReportAIState` — `0x102779a0`, the SDK dev dump.
 // -------------------------------------------------------------------------------------------------
@@ -486,19 +472,6 @@ int32 FElysiumNpcBase::RetailNavType() const
 	// `ELYSIUM_NPC_WORD_CHAIN` row onto the motor and no navigation-type word exists; -1 is what
 	// slot 407 names `"None"`.
 	return INDEX_NONE;
-}
-
-FElysiumEntity* FElysiumNpcBase::ActiveWeaponEntity() const
-{
-	// `CBaseCombatCharacter::GetActiveWeapon()` — the inventory's active slot (`+0x19a4`).
-	//
-	// Story 29d, family **Combat10**: this was a seam answering null because "there is no kernel
-	// accessor for the entity", and there is — `FElysiumInventory::Active` is retail's own
-	// `m_hActiveWeapon` resolve and is what `ElysiumNpcCond::WeaponCapability` already reads. The
-	// two `Weapon_Drop` bodies (slots 385/386, `0x1032d0c0` / `0x1032ce40`), the ranged weapon
-	// pre-pass (`0x102b8620`) and `CNPC_VBach::SelectScheduleRangedCombat` (`0x103642f0`) all begin
-	// with this call, so a null answer would have made four recovered bodies no-ops.
-	return Inventory.Active(*this);
 }
 
 // --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 5) ---

@@ -70,7 +70,9 @@ class Definition:
 
 
 # The generated slot surface: one file before story 5 step 5, one per layer after it.
-GENERATED_SLOT_CPP = ('ElysiumNpcKernelSlots.cpp', 'ElysiumNpcBaseSlots.cpp', 'ElysiumNpcSlots.cpp')
+GENERATED_SLOT_CPP = ('ElysiumNpcKernelSlots.cpp', 'ElysiumNpcBaseSlots.cpp', 'ElysiumNpcSlots.cpp',
+                      'ElysiumEntitySlots.cpp', 'ElysiumAnimatingSlots.cpp', 'ElysiumAnimatingOverlaySlots.cpp',
+                      'ElysiumFlexSlots.cpp', 'ElysiumCombatCharacterSlots.cpp')
 
 
 def definitions(text: str, path: str) -> list[Definition]:

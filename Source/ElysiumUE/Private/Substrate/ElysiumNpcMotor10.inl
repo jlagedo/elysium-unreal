@@ -91,11 +91,6 @@ int32 RetailSolidType = 0;
 uint32 RetailSolidFlags = 0;
 int32 RetailSolidSets = 0;
 
-/** SEAM for slot 93 `SetMoveType(MOVETYPE_FLY = 4, MOVECOLLIDE_DEFAULT = 0)`. Slot 93 is a generated
- *  stub on this line and `FElysiumEntity` carries no move type (family Motor's `RetailIsStandable`
- *  states the same); the pair is recorded. */
-int32 RetailMoveType = 0;
-int32 RetailMoveCollide = 0;
 
 /** SEAM for `this->+0x5f44 = 0` (a BYTE store, `102d7449`). The shape map binds `+0x5f44` as an
  *  output block (`ELYSIUM_NPC_WORD_IMPLICIT`, "outputs are fired by name"), which cannot be the

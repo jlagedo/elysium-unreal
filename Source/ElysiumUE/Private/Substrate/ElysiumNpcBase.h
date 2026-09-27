@@ -76,12 +76,6 @@ public:
 	// The running schedule and the variant token its activity picks ride on.
 	FElysiumScheduleState Schedule;
 
-	// `m_bfAINPCFlags` / `m_bfAINPCFlags2` and the obliviousness refcount. Written by
-	// `TASK_SET_NPC_FLAG` / `TASK_MAKE_OBLIVIOUS` and released by every schedule install; saved,
-	// because retail's are datamap members and an NPC left mesmerized across a save must not wake up
-	// conversable.
-	FElysiumNpcFlags NpcFlags;
-
 	// `additionalequipment` (267 authored rows) and `alternateequipment` (184). The corpus authors
 	// ONE classname per row, with the literal `0` as the "none" sentinel on 78 of them; the
 	// resolution is `Substrate/ElysiumNpcLoadout.h`.
@@ -368,14 +362,6 @@ public:
 	// state: schedule restore restarts at task zero because neither the current body pose nor the
 	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
 	FElysiumClipIdentity ScheduleIdealActivity;
-
-	// `cantdropweapons` (78 authored rows; 71 write 0 and 7 write 1).
-	//
-	// SEAM (parsed, unread): the drop it suppresses is the death-time weapon drop, and this runtime
-	// has no such path — `Event_Killed`'s weapon cleanup does not spawn a loose item yet. The
-	// keyfield is carried so an authored NPC round-trips through a save with the policy it was
-	// authored with, and so the drop path has a value to read the day it lands.
-	bool bCantDropWeapons = false;
 
 	virtual bool IsIdealActivityCurrent() const override;
 

@@ -6,77 +6,43 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 552 generated slot bodies of `FElysiumNpcBase`: 127 carry the retail default story 29c recovered,
-// 192 are defined by hand in the substrate, and 233 are still stubs — 193 29c, 23 29d, 17 29e.
+// 204 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
+// 108 are defined by hand in the substrate, and 41 are still stubs — 27 29c, 2 29d, 12 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
 //
 // A stub body says one thing: this slot has no port implementation yet. The tally row
-// carries the retail address and the story that owns it, so `elysium.stubs` joins
-// `docs/vtmb/npc-kernel/functions.md` by address.
+// carries the retail class that owns the body, its address and the story that owns it, so
+// `elysium.stubs` joins `docs/vtmb/npc-kernel/functions.md` by address.
 //
 // A body with a `default:` verdict says something stronger: retail's whole body at that
 // slot is `return <literal>;`, so the port answers the same literal and stops tallying.
 // The literal is a recovered fact, not a written behaviour — the same argument the story
-// makes for a species override of a constant-returning virtual — and `GDefaults` below
-// is what `Elysium.Substrate.NpcKernelSlots.Defaults` calls every one of them through.
+// makes for a species override of a constant-returning virtual — and the probe tables in
+// `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and
+// `.ShadowedDefaults` call every one of them through.
 
 #include "Substrate/ElysiumNpcBase.h"
 
 #include "ElysiumStub.h"
-#include "Substrate/ElysiumNpcKernelShape.h"
 
 namespace
 {
 	// One shape for every slot stub: the surface is the retail class and method, which is
 	// what the ledger joins on, and never an instance name. Unit-prefixed because the module
 	// builds adaptive-unity and this anonymous namespace is regularly merged with others.
-	void FireKernelBaseSlot(const TCHAR* Method, const TCHAR* Address, const TCHAR* Story,
+	void FireKernelBaseSlot(const TCHAR* Surface, const TCHAR* Address, const TCHAR* Story,
 		const FString& Receiver)
 	{
-		ElysiumStub::FSurface Surface;
-		Surface.Kind = TEXT("slot");
-		Surface.Surface = FString::Printf(TEXT("CAI_BaseNPCTroika::%s"), Method);
-		Surface.Address = Address;
-		Surface.Story = Story;
-		ElysiumStub::Fired(Surface, Receiver, FString(), TEXT("the NPC kernel"));
+		ElysiumStub::FSurface Row;
+		Row.Kind = TEXT("slot");
+		Row.Surface = Surface;
+		Row.Address = Address;
+		Row.Story = Story;
+		ElysiumStub::Fired(Row, Receiver, FString(), TEXT("the NPC kernel"));
 	}
 }
-
-// slot 0 0x10027450 (walked) `void SetRefEHandle(const CBaseHandle&)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetRefEHandle`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 1 0x10027470 (sdk) `CBaseHandle& GetRefEHandle() const`
-//   returns `CBaseHandle&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetRefEHandle() const
-{
-	FireKernelBaseSlot(TEXT("GetRefEHandle"), TEXT("0x10027470"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 2 0x10027610 (walked) `ICollideable* GetCollideable()`
-//   returns `ICollideable*`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetCollideable()
-{
-	FireKernelBaseSlot(TEXT("GetCollideable"), TEXT("0x10027610"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 3 0x10027630 (walked) `IServerNetworkable* GetNetworkable()`
-//   returns `IServerNetworkable*`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetNetworkable`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 4 0x10027650 (walked) `CBaseEntity* GetBaseEntity()`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetBaseEntity`, written by hand in the
-// substrate. Declared here, defined there.
 
 // slot 5 0x1027c7f0 (walked) `void* ~CBaseEntity(unsigned int)`
 //   retail `~CBaseEntity` is a lifetime slot; declared by index
@@ -84,470 +50,8 @@ void* FElysiumNpcBase::GetCollideable()
 //   layer 7, story 29c
 void* FElysiumNpcBase::Slot5(uint32)
 {
-	FireKernelBaseSlot(TEXT("Slot5"), TEXT("0x1027c7f0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Slot5"), TEXT("0x1027c7f0"), TEXT("29c"), DebugString());
 	return {};
-}
-
-// slot 6 0x100b11d0 (sdk) `void SetCheckUntouch(bool)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetCheckUntouch(bool)
-{
-	FireKernelBaseSlot(TEXT("SetCheckUntouch"), TEXT("0x100b11d0"), TEXT("29c"), DebugString());
-}
-
-// slot 7 0x100b12e0 (walked) `void SetSentLastFrame(bool)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetSentLastFrame(bool)
-{
-	FireKernelBaseSlot(TEXT("SetSentLastFrame"), TEXT("0x100b12e0"), TEXT("29c"), DebugString());
-}
-
-// slot 8 0x100b17f0 (sdk) `int GetModelIndex() const`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetModelIndex() const
-{
-	FireKernelBaseSlot(TEXT("GetModelIndex"), TEXT("0x100b17f0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 9 0x100b1690 (sdk) `string_t GetModelName() const`
-//   layer 0, story 29c
-FName FElysiumNpcBase::GetModelName() const
-{
-	FireKernelBaseSlot(TEXT("GetModelName"), TEXT("0x100b1690"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 10 0x100b1750 (sdk) `void SetModelIndex(int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetModelIndex(int32)
-{
-	FireKernelBaseSlot(TEXT("SetModelIndex"), TEXT("0x100b1750"), TEXT("29c"), DebugString());
-}
-
-// slot 11 0x1009ac80 (walked) `void DebugSetEntityName(const char*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::DebugSetEntityName(const TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("DebugSetEntityName"), TEXT("0x1009ac80"), TEXT("29c"), DebugString());
-}
-
-// slot 12 0x1009ad70 (walked) `const char* DebugGetEntityName()`
-//   layer 0, story 29c
-const TCHAR* FElysiumNpcBase::DebugGetEntityName()
-{
-	FireKernelBaseSlot(TEXT("DebugGetEntityName"), TEXT("0x1009ad70"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 13 0x1009ae10 (walked) `void DebugSetClassName(const char*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::DebugSetClassName(const TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("DebugSetClassName"), TEXT("0x1009ae10"), TEXT("29c"), DebugString());
-}
-
-// slot 14 0x1009af00 (walked) `const char* DebugGetClassName()`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::DebugGetClassName`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 16 0x1009b030 (walked) `Vector GetAttackExtents()`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::GetAttackExtents`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 17 0x1009b380 (walked) `void TraceMessage(const char*, int) const`
-//   layer 1, story 29c
-void FElysiumNpcBase::TraceMessage(const TCHAR*, int32) const
-{
-	FireKernelBaseSlot(TEXT("TraceMessage"), TEXT("0x1009b380"), TEXT("29c"), DebugString());
-}
-
-// slot 18 0x1009b2c0 (walked) `void TraceMessage(const char*, int)`
-//   layer 1, story 29c
-void FElysiumNpcBase::TraceMessage(const TCHAR*, int32)
-{
-	FireKernelBaseSlot(TEXT("TraceMessage"), TEXT("0x1009b2c0"), TEXT("29c"), DebugString());
-}
-
-// slot 19 0x1009b5a0 (walked) `void TraceMessageBare(const char*) const`
-//   layer 1, story 29c
-void FElysiumNpcBase::TraceMessageBare(const TCHAR*) const
-{
-	FireKernelBaseSlot(TEXT("TraceMessageBare"), TEXT("0x1009b5a0"), TEXT("29c"), DebugString());
-}
-
-// slot 20 0x1009b500 (walked) `void TraceMessageBare(const char*)`
-//   layer 1, story 29c
-void FElysiumNpcBase::TraceMessageBare(const TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("TraceMessageBare"), TEXT("0x1009b500"), TEXT("29c"), DebugString());
-}
-
-// slot 21 0x10026530 (walked) `void vfunc21(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot21(FElysiumEntity*)
-{
-}
-
-// slot 22 0x10026550 (walked) `void vfunc22(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot22(FElysiumEntity*)
-{
-}
-
-// slot 23 0x10026570 (walked) `void vfunc23(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot23(FElysiumEntity*)
-{
-}
-
-// slot 24 0x10026590 (walked) `void OnVictimHitByMe(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::OnVictimHitByMe(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("OnVictimHitByMe"), TEXT("0x10026590"), TEXT("29c"), DebugString());
-}
-
-// slot 25 0x100265b0 (walked) `void vfunc25(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot25`, written by hand in the substrate. Declared
-// here, defined there.
-
-// slot 26 0x100265d0 (walked) `void vfunc26(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot26`, written by hand in the substrate. Declared
-// here, defined there.
-
-// slot 27 0x100265f0 (walked) `void vfunc27(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot27(FElysiumEntity*)
-{
-}
-
-// slot 28 0x10026610 (walked) `float GetStealthVisionScalar()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetStealthVisionScalar()
-{
-	FireKernelBaseSlot(TEXT("GetStealthVisionScalar"), TEXT("0x10026610"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 29 0x10026630 (walked) `float GetStealthVisionCone()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetStealthVisionCone()
-{
-	FireKernelBaseSlot(TEXT("GetStealthVisionCone"), TEXT("0x10026630"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 30 0x10026650 (walked) `float GetStealthHearingDist()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0.0;`
-float FElysiumNpcBase::GetStealthHearingDist()
-{
-	return static_cast<float>(0.0);
-}
-
-// slot 31 0x103222c0 (walked) `void Dump(int)`
-//   layer 12, story 29d
-void FElysiumNpcBase::Dump(int32)
-{
-	FireKernelBaseSlot(TEXT("Dump"), TEXT("0x103222c0"), TEXT("29d"), DebugString());
-}
-
-// slot 32 0x10026670 (walked) `bool CanBeInteractiveUsed(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::CanBeInteractiveUsed(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 33 0x10026690 (walked) `int vfunc33()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0xffffffff;`
-int32 FElysiumNpcBase::Slot33()
-{
-	return static_cast<int32>(0xffffffff);
-}
-
-// slot 34 0x10342800 (walked) `int GetHighlightMaterial(CBaseEntity*)`
-//   layer 2, story 29c
-int32 FElysiumNpcBase::GetHighlightMaterial(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("GetHighlightMaterial"), TEXT("0x10342800"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 35 0x100266d0 (walked) `int vfunc35(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-int32 FElysiumNpcBase::Slot35(FElysiumEntity*)
-{
-	return static_cast<int32>(0);
-}
-
-// slot 36 0x100266f0 (walked) `const char* vfunc36()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-const TCHAR* FElysiumNpcBase::Slot36()
-{
-	return nullptr;
-}
-
-// slot 37 0x10026710 (walked) `float vfunc37()`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot37`, written by hand in the substrate. Declared
-// here, defined there.
-
-// slot 38 0x10026730 (walked) `CBaseEntity* vfunc38(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::Slot38`, written by hand in the substrate. Declared
-// here, defined there.
-
-// slot 39 0x100a4fe0 (walked) `void OnUseBegin(CBaseEntity*)`
-//   layer 8, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::OnUseBegin`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 40 0x10026750 (walked) `void vfunc40(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot40(FElysiumEntity*)
-{
-}
-
-// slot 41 0x10026770 (walked) `void vfunc41(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot41(FElysiumEntity*)
-{
-}
-
-// slot 42 0x100a5030 (walked) `void OnUseEnd(CBaseEntity*)`
-//   layer 8, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::OnUseEnd`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 43 0x10026790 (walked) `void vfunc43(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot43(FElysiumEntity*)
-{
-}
-
-// slot 44 0x100267b0 (walked) `bool vfunc44(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot44(FElysiumEntity*)
-{
-	return true;
-}
-
-// slot 45 0x100a5070 (walked) `bool PassesFindEntityFOVTrace(CBaseEntity*, Vector, Vector, int)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::PassesFindEntityFOVTrace(FElysiumEntity*, FVector, FVector, int32)
-{
-	FireKernelBaseSlot(TEXT("PassesFindEntityFOVTrace"), TEXT("0x100a5070"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 46 0x100267d0 (walked) `void vfunc46()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot46()
-{
-}
-
-// slot 47 0x100267f0 (walked) `void vfunc47()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot47()
-{
-}
-
-// slot 48 0x10026810 (walked) `float vfunc48()`
-//   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpcBase::Slot48`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 49 0x10026830 (walked) `float vfunc49()`
-//   layer 0, story 29c
-// verdict `present`: the body is `FElysiumNpcBase::Slot49`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 54 0x10026910 (walked) `bool vfunc54(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot54(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 55 0x10026930 (walked) `void vfunc55(CBaseEntity*, Vector, Vector)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot55(FElysiumEntity*, FVector, FVector)
-{
-}
-
-// slot 56 0x10026950 (walked) `void vfunc56(CBaseEntity*, Vector, Vector, const char*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot56(FElysiumEntity*, FVector, FVector, const TCHAR*)
-{
-}
-
-// slot 57 0x10026970 (walked) `void vfunc57(CBaseEntity*, Vector, Vector)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot57(FElysiumEntity*, FVector, FVector)
-{
-}
-
-// slot 58 0x10026990 (walked) `void vfunc58(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot58(FElysiumEntity*)
-{
-}
-
-// slot 59 0x100269b0 (walked) `void vfunc59(CSceneEntity*)`
-//   takes `CSceneEntity*`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot59(void*)
-{
-}
-
-// slot 60 0x100269d0 (walked) `void vfunc60(CSceneEntity*)`
-//   takes `CSceneEntity*`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot60(void*)
-{
-}
-
-// slot 61 0x100269f0 (walked) `void vfunc61(CSceneEntity*)`
-//   takes `CSceneEntity*`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot61(void*)
-{
-}
-
-// slot 62 0x100b2be0 (walked) `void SetOrigin(const Vector&)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetOrigin(const FVector&)
-{
-	FireKernelBaseSlot(TEXT("SetOrigin"), TEXT("0x100b2be0"), TEXT("29c"), DebugString());
-}
-
-// slot 63 0x10026a10 (walked) `void SetOrigin(float, float, float)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetOrigin`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 64 0x100b2d00 (walked) `void SetAngles(const QAngle&)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetAngles(const FRotator&)
-{
-	FireKernelBaseSlot(TEXT("SetAngles"), TEXT("0x100b2d00"), TEXT("29c"), DebugString());
-}
-
-// slot 65 0x10026a50 (walked) `void SetAngles(float, float, float)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetAngles`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 66 0x1009d2a0 (walked) `void Hide()`
-//   layer 0, story 29c
-void FElysiumNpcBase::Hide()
-{
-	FireKernelBaseSlot(TEXT("Hide"), TEXT("0x1009d2a0"), TEXT("29c"), DebugString());
-}
-
-// slot 67 0x1009d380 (walked) `void Unhide()`
-//   layer 0, story 29c
-void FElysiumNpcBase::Unhide()
-{
-	FireKernelBaseSlot(TEXT("Unhide"), TEXT("0x1009d380"), TEXT("29c"), DebugString());
-}
-
-// slot 68 0x10340650 (walked) `bool ShouldIgnoreCollision(CBaseEntity*)`
-//   layer 1, story 29c
-bool FElysiumNpcBase::ShouldIgnoreCollision(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("ShouldIgnoreCollision"), TEXT("0x10340650"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 69 0x10026ab0 (walked) `bool NavIgnoreCollision(CBaseEntity*)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::NavIgnoreCollision(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("NavIgnoreCollision"), TEXT("0x10026ab0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 70 0x1009d820 (walked) `bool IsMonster()`
-//   layer 0, story 29c
-bool FElysiumNpcBase::IsMonster()
-{
-	FireKernelBaseSlot(TEXT("IsMonster"), TEXT("0x1009d820"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 71 0x1009d460 (walked) `void PrecacheSoundTable()`
-//   layer 0, story 29c
-void FElysiumNpcBase::PrecacheSoundTable()
-{
-	FireKernelBaseSlot(TEXT("PrecacheSoundTable"), TEXT("0x1009d460"), TEXT("29c"), DebugString());
-}
-
-// slot 72 0x1015dc20 (walked) `bool vfunc72(int)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot72(int32)
-{
-	return true;
-}
-
-// slot 73 0x10340590 (walked) `bool CausesImpactDamage(CBaseEntity*)`
-//   layer 1, story 29c
-bool FElysiumNpcBase::CausesImpactDamage(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("CausesImpactDamage"), TEXT("0x10340590"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 74 0x103404f0 (walked) `bool ReceivesImpactDamage(CBaseEntity*)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::ReceivesImpactDamage(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("ReceivesImpactDamage"), TEXT("0x103404f0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 75 0x100a8400 (walked) `void TakeDamageFromCollision(int, gamevcollisionevent_t*)`
-//   takes `gamevcollisionevent_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::TakeDamageFromCollision(int32, void*)
-{
-	FireKernelBaseSlot(TEXT("TakeDamageFromCollision"), TEXT("0x100a8400"), TEXT("29c"),
-		DebugString());
 }
 
 // slot 76 0x102775e0 (walked) `void DrawDebugStatOverlays()`
@@ -555,298 +59,25 @@ void FElysiumNpcBase::TakeDamageFromCollision(int32, void*)
 // verdict `dead`: the body is `FElysiumNpcBase::DrawDebugStatOverlays`, written by hand in the
 // substrate. Declared here, defined there.
 
-// slot 79 0x10321670 (walked) `datamap_t* GetPredDescMap()`
-//   returns `datamap_t*`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetPredDescMap`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 80 0x10321960 (walked) `ServerClass* GetServerClass()`
-//   returns `ServerClass*`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetServerClass()
-{
-	FireKernelBaseSlot(TEXT("GetServerClass"), TEXT("0x10321960"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 81 0x10321980 (walked) `int YouForgotToImplementOrDeclareServerClass()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-int32 FElysiumNpcBase::YouForgotToImplementOrDeclareServerClass()
-{
-	return static_cast<int32>(0);
-}
-
 // slot 82 0x1027a7c0 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
 //   layer 0, story 29c
 void* FElysiumNpcBase::GetDataDescMap()
 {
-	FireKernelBaseSlot(TEXT("GetDataDescMap"), TEXT("0x1027a7c0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 83 0x100b4ef0 (walked) `int GetEFlags()`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetEFlags()
-{
-	FireKernelBaseSlot(TEXT("GetEFlags"), TEXT("0x100b4ef0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 84 0x100b4f10 (walked) `void SetEFlags(int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetEFlags(int32)
-{
-	FireKernelBaseSlot(TEXT("SetEFlags"), TEXT("0x100b4f10"), TEXT("29c"), DebugString());
-}
-
-// slot 85 0x100b3d10 (walked) `edict_t* GetEdict()`
-//   returns `edict_t*`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetEdict()
-{
-	FireKernelBaseSlot(TEXT("GetEdict"), TEXT("0x100b3d10"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 86 0x103407b0 (walked) `bool ShouldTransmit(int, const edict_t*, const void*, int, int)`
-//   takes `const edict_t*`
-//   takes `const void*`
-//   layer 1, story 29c
-bool FElysiumNpcBase::ShouldTransmit(int32, void*, void*, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("ShouldTransmit"), TEXT("0x103407b0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 87 0x100ab280 (walked) `void SetTransmit(CCheckTransmitInfo*)`
-//   takes `CCheckTransmitInfo*`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetTransmit(void*)
-{
-	FireKernelBaseSlot(TEXT("SetTransmit"), TEXT("0x100ab280"), TEXT("29c"), DebugString());
-}
-
-// slot 88 0x10026b50 (walked) `bool vfunc88()`
-//   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::Slot88`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 89 0x10026b70 (walked) `void vfunc89()`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::Slot89`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 90 0x100aa840 (sdk) `bool IsTransparent() const`
-//   layer 0, story 29c
-bool FElysiumNpcBase::IsTransparent() const
-{
-	FireKernelBaseSlot(TEXT("IsTransparent"), TEXT("0x100aa840"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 91 0x100b4de0 (walked) `bool ShouldCollide(int, int) const`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::ShouldCollide`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 92 0x10027570 (sdk) `SolidType_t GetSolid() const`
-//   returns `SolidType_t`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetSolid() const
-{
-	FireKernelBaseSlot(TEXT("GetSolid"), TEXT("0x10027570"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 93 0x100aad70 (sdk) `void SetMoveType(MoveType_t, MoveCollide_t)`
-//   takes `MoveType_t`
-//   takes `MoveCollide_t`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetMoveType(int32, int32)
-{
-	FireKernelBaseSlot(TEXT("SetMoveType"), TEXT("0x100aad70"), TEXT("29c"), DebugString());
-}
-
-// slot 94 0x100aac30 (sdk) `MoveType_t GetMoveType() const`
-//   returns `MoveType_t`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetMoveType() const
-{
-	FireKernelBaseSlot(TEXT("GetMoveType"), TEXT("0x100aac30"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 95 0x100aacd0 (sdk) `MoveCollide_t GetMoveCollide() const`
-//   returns `MoveCollide_t`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetMoveCollide() const
-{
-	FireKernelBaseSlot(TEXT("GetMoveCollide"), TEXT("0x100aacd0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 96 0x100a9ba0 (walked) `edict_t* GetAimEntEdict()`
-//   returns `edict_t*`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetAimEntEdict()
-{
-	FireKernelBaseSlot(TEXT("GetAimEntEdict"), TEXT("0x100a9ba0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 98 0x100b1ac0 (sdk) `void CalcAbsolutePosition()`
-//   layer 0, story 29c
-void FElysiumNpcBase::CalcAbsolutePosition()
-{
-	FireKernelBaseSlot(TEXT("CalcAbsolutePosition"), TEXT("0x100b1ac0"), TEXT("29c"),
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetDataDescMap"), TEXT("0x1027a7c0"), TEXT("29c"),
 		DebugString());
-}
-
-// slot 99 0x100956e0 (sdk) `bool TestCollision(Ray_t&, unsignedint, trace_t&)`
-//   takes `Ray_t&`
-//   takes `unsignedint`
-//   takes `trace_t&`
-//   layer 0, story 29c
-bool FElysiumNpcBase::TestCollision(void*, int32, void*)
-{
-	FireKernelBaseSlot(TEXT("TestCollision"), TEXT("0x100956e0"), TEXT("29c"), DebugString());
 	return {};
 }
-
-// slot 100 0x10095a20 (sdk) `bool TestHitboxes(Ray_t&, unsignedint, trace_t&)`
-//   takes `Ray_t&`
-//   takes `unsignedint`
-//   takes `trace_t&`
-//   layer 0, story 29c
-bool FElysiumNpcBase::TestHitboxes(void*, int32, void*)
-{
-	FireKernelBaseSlot(TEXT("TestHitboxes"), TEXT("0x10095a20"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 101 0x100ab430 (walked) `void ComputeWorldSpaceSurroundingBox(Vector*, Vector*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
-{
-}
-
-// slot 102 0x100ab450 (walked) `void Physics_TraceEntity(CBaseEntity*, const Vector&, const
-// Vector&, unsigned int, trace_t*)`
-//   takes `trace_t*`
-//   layer 3, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::Physics_TraceEntity`, written by hand in the
-// substrate. Declared here, defined there.
 
 // slot 104 0x1027bb50 (sdk) `void Precache()`
 //   layer 13, story 29d
 // verdict `mechanism`: the body is `FElysiumNpcBase::Precache`, written by hand in the substrate.
 // Declared here, defined there.
 
-// slot 105 0x103409a0 (sdk) `void SetModel(char*)`
-//   layer 10, story 29d
-void FElysiumNpcBase::SetModel(TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("SetModel"), TEXT("0x103409a0"), TEXT("29d"), DebugString());
-}
-
 // slot 106 0x1027bb20 (sdk) `void PostConstructor(char*)`
 //   layer 15, story 29d
 // verdict `mechanism`: the body is `FElysiumNpcBase::PostConstructor`, written by hand in the
 // substrate. Declared here, defined there.
-
-// slot 107 0x1009e280 (sdk) `void ParseMapData(CEntityMapData*)`
-//   takes `CEntityMapData*`
-//   layer 0, story 29c
-void FElysiumNpcBase::ParseMapData(void*)
-{
-	FireKernelBaseSlot(TEXT("ParseMapData"), TEXT("0x1009e280"), TEXT("29c"), DebugString());
-}
-
-// slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
-//   layer 11, story 29d
-// verdict `dead`: the body is `FElysiumNpcBase::KeyValue`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
-//   layer 11, story 29d
-// verdict `dead`: the body is `FElysiumNpcBase::KeyValue`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
-//   layer 10, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::KeyValue`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 111 0x10337ca0 (walked) `void MemberSync()`
-//   layer 13, story 29d
-void FElysiumNpcBase::MemberSync()
-{
-	FireKernelBaseSlot(TEXT("MemberSync"), TEXT("0x10337ca0"), TEXT("29d"), DebugString());
-}
-
-// slot 112 0x10026bd0 (walked) `void vfunc112(int, int)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot112(int32, int32)
-{
-}
-
-// slot 114 0x100ad780 (walked) `void PostClientMessagesSent()`
-//   layer 0, story 29c
-void FElysiumNpcBase::PostClientMessagesSent()
-{
-	FireKernelBaseSlot(TEXT("PostClientMessagesSent"), TEXT("0x100ad780"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 115 0x10026bf0 (walked) `void vfunc115(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot115(FElysiumEntity*)
-{
-}
-
-// slot 116 0x10027490 (walked) `bool IsMarkedForDeletion()`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::IsMarkedForDeletion`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 118 0x100abc90 (sdk) `bool AcceptInput(char*, CBaseEntity*, CBaseEntity*, variant_t, int)`
-//   takes `variant_t`
-//   layer 0, story 29c
-bool FElysiumNpcBase::AcceptInput(TCHAR*, FElysiumEntity*, FElysiumEntity*, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("AcceptInput"), TEXT("0x100abc90"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 120 0x100ace00 (sdk) `void GetInputDispatchEffectPosition(char*, Vector&, QAngle&)`
-//   layer 0, story 29c
-void FElysiumNpcBase::GetInputDispatchEffectPosition(TCHAR*, FVector&, FRotator&)
-{
-	FireKernelBaseSlot(TEXT("GetInputDispatchEffectPosition"), TEXT("0x100ace00"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 121 0x100acab0 (sdk) `bool ReadKeyField(char*, variant_t*)`
-//   takes `variant_t*`
-//   layer 0, story 29c
-bool FElysiumNpcBase::ReadKeyField(TCHAR*, void*)
-{
-	FireKernelBaseSlot(TEXT("ReadKeyField"), TEXT("0x100acab0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 122 0x1009f120 (sdk) `void SetClassname(char*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetClassname(TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("SetClassname"), TEXT("0x1009f120"), TEXT("29c"), DebugString());
-}
 
 // slot 123 0x10275760 (sdk) `void DrawDebugGeometryOverlays()`
 //   layer 8, story 29c
@@ -857,13 +88,6 @@ void FElysiumNpcBase::SetClassname(TCHAR*)
 //   layer 14, story 29d
 // verdict `dead`: the body is `FElysiumNpcBase::DrawDebugTextOverlays`, written by hand in the
 // substrate. Declared here, defined there.
-
-// slot 125 0x1033e7e0 (walked) `void DrawMuzzleOverlay()`
-//   layer 4, story 29c
-void FElysiumNpcBase::DrawMuzzleOverlay()
-{
-	FireKernelBaseSlot(TEXT("DrawMuzzleOverlay"), TEXT("0x1033e7e0"), TEXT("29c"), DebugString());
-}
 
 // slot 126 0x1027bc60 (sdk) `int Save(ISave&)`
 //   takes `ISave&`
@@ -876,7 +100,8 @@ void FElysiumNpcBase::DrawMuzzleOverlay()
 //   layer 9, story 29c
 int32 FElysiumNpcBase::Restore(void*)
 {
-	FireKernelBaseSlot(TEXT("Restore"), TEXT("0x1027c160"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Restore"), TEXT("0x1027c160"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -888,41 +113,9 @@ bool FElysiumNpcBase::ShouldSavePhysics()
 	return false;
 }
 
-// slot 129 0x100aa4e0 (walked) `void OnSave()`
-//   layer 0, story 29c
-void FElysiumNpcBase::OnSave()
-{
-	FireKernelBaseSlot(TEXT("OnSave"), TEXT("0x100aa4e0"), TEXT("29c"), DebugString());
-}
-
 // slot 130 0x1027bf50 (walked) `void OnRestore(bool)`
 //   layer 21, story 29e
 // verdict `mechanism`: the body is `FElysiumNpcBase::OnRestore`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 131 0x10026c10 (walked) `int RequiredEdictIndex()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0xffffffff;`
-int32 FElysiumNpcBase::RequiredEdictIndex()
-{
-	return static_cast<int32>(0xffffffff);
-}
-
-// slot 132 0x10026c30 (walked) `void vfunc132()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot132()
-{
-}
-
-// slot 133 0x101c1720 (walked) `void MoveDone()`
-//   layer 9, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::MoveDone`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 135 0x101c10d0 (walked) `float vfunc135(float)`
-//   layer 1, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::Slot135`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 136 0x101a6860 (walked) `bool vfunc136()`
@@ -931,36 +124,6 @@ void FElysiumNpcBase::Slot132()
 bool FElysiumNpcBase::Slot136()
 {
 	return true;
-}
-
-// slot 137 0x1004fc50 (walked) `CBaseAnimating* GetBaseAnimating()`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetBaseAnimating`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 138 0x100a7a80 (sdk) `Class_T Classify()`
-//   returns `Class_T`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::Classify()
-{
-	FireKernelBaseSlot(TEXT("Classify"), TEXT("0x100a7a80"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 139 0x10026d70 (walked) `void DeathNotice(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::DeathNotice(FElysiumEntity*)
-{
-}
-
-// slot 140 0x100a7aa0 (sdk) `bool PassesDamageFilter(CTakeDamageInfo&)`
-//   takes `CTakeDamageInfo&`
-//   layer 0, story 29c
-bool FElysiumNpcBase::PassesDamageFilter(void*)
-{
-	FireKernelBaseSlot(TEXT("PassesDamageFilter"), TEXT("0x100a7aa0"), TEXT("29c"), DebugString());
-	return {};
 }
 
 // slot 141 0x10266780 (walked) `void TraceAttack(const CTakeDamageInfo&, const Vector&, trace_t*)`
@@ -975,15 +138,8 @@ bool FElysiumNpcBase::PassesDamageFilter(void*)
 //   layer 24, story 29e
 int32 FElysiumNpcBase::OnTakeDamage(void*)
 {
-	FireKernelBaseSlot(TEXT("OnTakeDamage"), TEXT("0x10265e90"), TEXT("29e"), DebugString());
-	return {};
-}
-
-// slot 143 0x1032ebc0 (sdk) `int TakeHealth(float, int)`
-//   layer 1, story 29c
-int32 FElysiumNpcBase::TakeHealth(float, int32)
-{
-	FireKernelBaseSlot(TEXT("TakeHealth"), TEXT("0x1032ebc0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnTakeDamage"), TEXT("0x10265e90"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -992,156 +148,13 @@ int32 FElysiumNpcBase::TakeHealth(float, int32)
 //   layer 20, story 29e
 void FElysiumNpcBase::Event_Killed(void*)
 {
-	FireKernelBaseSlot(TEXT("Event_Killed"), TEXT("0x10265ad0"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Event_Killed"), TEXT("0x10265ad0"), TEXT("29e"),
+		DebugString());
 }
-
-// slot 145 0x1014fa10 (walked) `int BloodColor()`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::BloodColor()
-{
-	FireKernelBaseSlot(TEXT("BloodColor"), TEXT("0x1014fa10"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 146 0x10268ef0 (walked) `void TraceBleed(CVDmg_t*, const Vector&, trace_t*)`
-//   takes `CVDmg_t*`
-//   takes `trace_t*`
-//   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::TraceBleed`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 147 0x10026db0 (walked) `bool IsTriggered(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::IsTriggered(FElysiumEntity*)
-{
-	return true;
-}
-
-// slot 148 0x10026dd0 (walked) `void AddPoints(int, bool)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::AddPoints(int32, bool)
-{
-}
-
-// slot 149 0x10026df0 (walked) `void AddPointsToTeam(int, bool)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::AddPointsToTeam(int32, bool)
-{
-}
-
-// slot 150 0x10026e10 (walked) `bool AddPlayerItem(CBaseCombatWeapon*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::AddPlayerItem(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 151 0x10026e30 (walked) `bool RemovePlayerItem(CBaseCombatWeapon*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::RemovePlayerItem(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 152 0x1004fc10 (walked) `float GetDelay()`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::GetDelay`, written by hand in the substrate.
-// Declared here, defined there.
 
 // slot 153 0x10280300 (walked) `bool IsMoving()`
 //   layer 2, story 29c
 // verdict `mechanism`: the body is `FElysiumNpcBase::IsMoving`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 154 0x100b4ea0 (walked) `int DamageDecal(int, int)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::DamageDecal`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 155 0x100a6c50 (walked) `void DecalTrace(trace_t*, int, bool, int, CBaseEntity*, int, bool)`
-//   takes `trace_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::DecalTrace(void*, int32, bool, int32, FElysiumEntity*, int32, bool)
-{
-	FireKernelBaseSlot(TEXT("DecalTrace"), TEXT("0x100a6c50"), TEXT("29c"), DebugString());
-}
-
-// slot 156 0x10026ee0 (unsettled) `void vfunc156(int)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot156(int32)
-{
-}
-
-// slot 157 0x10026f00 (walked) `bool OnControls(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::OnControls(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 158 0x100b4dc0 (walked) `bool IsAlive()`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::IsAlive`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 159 0x10026f20 (walked) `bool ReflectGauss()`
-//   layer 1, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::ReflectGauss`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::HasTarget(FName)
-{
-	FireKernelBaseSlot(TEXT("HasTarget"), TEXT("0x100a1b40"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 161 0x100a1c30 (walked) `bool HasLinkedDoor(string_t)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::HasLinkedDoor(FName)
-{
-	FireKernelBaseSlot(TEXT("HasLinkedDoor"), TEXT("0x100a1c30"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 162 0x10026f60 (walked) `bool IsPlayer()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::IsPlayer()
-{
-	return false;
-}
-
-// slot 163 0x100a9800 (sdk) `bool IsViewable()`
-//   layer 0, story 29c
-bool FElysiumNpcBase::IsViewable()
-{
-	FireKernelBaseSlot(TEXT("IsViewable"), TEXT("0x100a9800"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 164 0x100b50a0 (walked) `bool IsStandable()`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::IsStandable`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 165 0x10026fb0 (walked) `bool CanStandOn(edict_t*)`
-//   takes `edict_t*`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::CanStandOn`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 166 0x10026f80 (walked) `bool CanStandOn(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::CanStandOn`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 167 0x101a67e0 (walked) `CBaseEntity* GetEnemy() const`
@@ -1149,1011 +162,28 @@ bool FElysiumNpcBase::IsViewable()
 // verdict `rule`: the body is `FElysiumNpcBase::GetEnemy`, written by hand in the substrate.
 // Declared here, defined there.
 
-// slot 168 0x10027020 (walked) `CBaseEntity* GetEnemy()`
-//   layer 1, story 29c
-FElysiumEntity* FElysiumNpcBase::GetEnemy()
-{
-	FireKernelBaseSlot(TEXT("GetEnemy"), TEXT("0x10027020"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 169 0x10027040 (walked) `void ViewPunch(const QAngle&)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::ViewPunch(const FRotator&)
-{
-}
-
-// slot 170 0x10027060 (walked) `void VelocityPunch(const Vector&)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::VelocityPunch(const FVector&)
-{
-}
-
-// slot 171 0x100ad550 (walked) `void SetMovedir()`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetMovedir()
-{
-	FireKernelBaseSlot(TEXT("SetMovedir"), TEXT("0x100ad550"), TEXT("29c"), DebugString());
-}
-
-// slot 172 0x100a1d20 (sdk) `CBaseEntity* GetNextTarget()`
-//   layer 0, story 29c
-FElysiumEntity* FElysiumNpcBase::GetNextTarget()
-{
-	FireKernelBaseSlot(TEXT("GetNextTarget"), TEXT("0x100a1d20"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 174 0x100a49d0 (sdk) `void StartTouch(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::StartTouch(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("StartTouch"), TEXT("0x100a49d0"), TEXT("29c"), DebugString());
-}
-
-// slot 175 0x100a4af0 (sdk) `void Touch(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::Touch(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Touch"), TEXT("0x100a4af0"), TEXT("29c"), DebugString());
-}
-
-// slot 176 0x100a4c20 (sdk) `void EndTouch(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::EndTouch(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("EndTouch"), TEXT("0x100a4c20"), TEXT("29c"), DebugString());
-}
-
-// slot 177 0x10027080 (sdk) `void StartBlocked(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::StartBlocked(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("StartBlocked"), TEXT("0x10027080"), TEXT("29c"), DebugString());
-}
-
-// slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::Blocked(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Blocked"), TEXT("0x100a4d40"), TEXT("29c"), DebugString());
-}
-
-// slot 179 0x100270a0 (walked) `void EndBlocked()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::EndBlocked()
-{
-}
-
 // slot 180 0x1027ca30 (sdk) `void UpdateOnRemove()`
 //   layer 6, story 29c
 void FElysiumNpcBase::UpdateOnRemove()
 {
-	FireKernelBaseSlot(TEXT("UpdateOnRemove"), TEXT("0x1027ca30"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::UpdateOnRemove"), TEXT("0x1027ca30"), TEXT("29c"),
+		DebugString());
 }
-
-// slot 181 0x100ada20 (sdk) `void Teleport(Vector*, QAngle*, Vector*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::Teleport(FVector*, FRotator*, FVector*)
-{
-	FireKernelBaseSlot(TEXT("Teleport"), TEXT("0x100ada20"), TEXT("29c"), DebugString());
-}
-
-// slot 182 0x100ad8f0 (unsettled) `void vfunc182(int, int, int, int)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot182(int32, int32, int32, int32)
-{
-}
-
-// slot 183 0x100ad910 (walked) `void NotifySystemEvent(CBaseEntity*, notify_system_event_t, const
-// notify_system_event_params_t&)`
-//   takes `notify_system_event_t`
-//   takes `const notify_system_event_params_t&`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::NotifySystemEvent(FElysiumEntity*, int32, void*)
-{
-}
-
-// slot 184 0x10267260 (walked) `void MakeTracer(const Vector&, const trace_t&, int)`
-//   takes `const trace_t&`
-//   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::MakeTracer`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 185 0x10268900 (walked) `void FireBullets(const FireBulletsInfo_t&)`
-//   takes `const FireBulletsInfo_t&`
-//   layer 16, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::FireBullets`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 186 0x100270c0 (walked) `bool vfunc186()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot186()
-{
-	return false;
-}
-
-// slot 187 0x100270e0 (walked) `CBaseEntity* Respawn()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-FElysiumEntity* FElysiumNpcBase::Respawn()
-{
-	return nullptr;
-}
-
-// slot 188 0x10027100 (walked) `bool IsLockedByMaster()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::IsLockedByMaster()
-{
-	return false;
-}
-
-// slot 189 0x100ad850 (sdk) `int GetDamageType() const`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetDamageType() const
-{
-	FireKernelBaseSlot(TEXT("GetDamageType"), TEXT("0x100ad850"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 190 0x10027120 (walked) `float GetDamage()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0.0;`
-float FElysiumNpcBase::GetDamage()
-{
-	return static_cast<float>(0.0);
-}
-
-// slot 191 0x10027140 (walked) `void SetDamage(float)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::SetDamage(float)
-{
-}
-
-// slot 192 0x10027160 (walked) `Vector WorldSpaceCenter()`
-//   layer 8, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::WorldSpaceCenter`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 194 0x100b4bc0 (walked) `const QAngle& EyeAngles()`
-//   returns `const QAngle&`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::EyeAngles`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 195 0x100b4be0 (walked) `const QAngle& LocalEyeAngles()`
-//   returns `const QAngle&`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::LocalEyeAngles`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 196 0x100b4c00 (walked) `Vector EarPosition()`
-//   layer 2, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::EarPosition`, written by hand in the substrate.
-// Declared here, defined there.
 
 // slot 197 0x102789c0 (walked) `Vector BodyTarget(const Vector&, bool, bool)`
 //   layer 9, story 29c
 // verdict `rule`: the body is `FElysiumNpcBase::BodyTarget`, written by hand in the substrate.
 // Declared here, defined there.
 
-// slot 198 0x100274b0 (walked) `const Vector& GetLocalVelocity()`
-//   returns `const Vector&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetLocalVelocity()
-{
-	FireKernelBaseSlot(TEXT("GetLocalVelocity"), TEXT("0x100274b0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 199 0x10095e50 (sdk) `void GetVelocity(Vector*, AngularImpulse*)`
-//   takes `AngularImpulse*`
-//   layer 0, story 29c
-void FElysiumNpcBase::GetVelocity(FVector*, void*)
-{
-	FireKernelBaseSlot(TEXT("GetVelocity"), TEXT("0x10095e50"), TEXT("29c"), DebugString());
-}
-
-// slot 200 0x100ad6e0 (walked) `int Illumination()`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::Illumination()
-{
-	FireKernelBaseSlot(TEXT("Illumination"), TEXT("0x100ad6e0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 201 0x100a6fa0 (walked) `bool FVisible(CBaseEntity*, int, CBaseEntity**, int)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::FVisible(FElysiumEntity*, int32, FElysiumEntity*, int32)
-{
-	FireKernelBaseSlot(TEXT("FVisible"), TEXT("0x100a6fa0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 203 0x100a1360 (walked) `float GetAttackDamageScale()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetAttackDamageScale()
-{
-	FireKernelBaseSlot(TEXT("GetAttackDamageScale"), TEXT("0x100a1360"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 204 0x100a1470 (walked) `float GetReceivedDamageScale()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetReceivedDamageScale()
-{
-	FireKernelBaseSlot(TEXT("GetReceivedDamageScale"), TEXT("0x100a1470"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 205 0x10027330 (walked) `bool vfunc205()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot205()
-{
-	return false;
-}
-
-// slot 206 0x10027350 (unsettled) `bool vfunc206(int, int, int, int, int)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot206(int32, int32, int32, int32, int32)
-{
-	return false;
-}
-
-// slot 207 0x1003d3d0 (sdk) `bool IsCurrentlyTouching() const`
-//   layer 0, story 29c
-bool FElysiumNpcBase::IsCurrentlyTouching() const
-{
-	FireKernelBaseSlot(TEXT("IsCurrentlyTouching"), TEXT("0x1003d3d0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 208 0x100b1420 (sdk) `void SetGroundEntity(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetGroundEntity(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("SetGroundEntity"), TEXT("0x100b1420"), TEXT("29c"), DebugString());
-}
-
-// slot 209 0x100b1510 (walked) `CBaseEntity* GetGroundEntity()`
-//   layer 0, story 29c
-FElysiumEntity* FElysiumNpcBase::GetGroundEntity()
-{
-	FireKernelBaseSlot(TEXT("GetGroundEntity"), TEXT("0x100b1510"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 210 0x10027370 (walked) `void GetGroundVelocityToApply(Vector&)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetGroundVelocityToApply`, written by hand in
-// the substrate. Declared here, defined there.
-
-// slot 211 0x100274d0 (sdk) `int GetSolidFlags() const`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetSolidFlags() const
-{
-	FireKernelBaseSlot(TEXT("GetSolidFlags"), TEXT("0x100274d0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 212 0x100b15f0 (sdk) `void SetModelName(string_t)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetModelName(FName)
-{
-	FireKernelBaseSlot(TEXT("SetModelName"), TEXT("0x100b15f0"), TEXT("29c"), DebugString());
-}
-
-// slot 213 0x100b1890 (walked) `void SetSize(const Vector&)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetSize`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 214 0x100b1960 (walked) `const Vector& GetSize()`
-//   returns `const Vector&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetSize()
-{
-	FireKernelBaseSlot(TEXT("GetSize"), TEXT("0x100b1960"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 215 0x100b4c30 (walked) `const Vector& WorldSpaceCenter() const`
-//   returns `const Vector&`
-//   layer 8, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::WorldSpaceCenter`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 216 0x100b2300 (sdk) `void SetAbsOrigin(Vector&)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetAbsOrigin(FVector&)
-{
-	FireKernelBaseSlot(TEXT("SetAbsOrigin"), TEXT("0x100b2300"), TEXT("29c"), DebugString());
-}
-
-// slot 217 0x100b31b0 (sdk) `Vector& GetAbsOrigin() const`
-//   returns `Vector&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetAbsOrigin() const
-{
-	FireKernelBaseSlot(TEXT("GetAbsOrigin"), TEXT("0x100b31b0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 218 0x100b2510 (sdk) `void SetAbsAngles(QAngle&)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetAbsAngles(FRotator&)
-{
-	FireKernelBaseSlot(TEXT("SetAbsAngles"), TEXT("0x100b2510"), TEXT("29c"), DebugString());
-}
-
-// slot 219 0x100b3280 (sdk) `QAngle& GetAbsAngles() const`
-//   returns `QAngle&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetAbsAngles() const
-{
-	FireKernelBaseSlot(TEXT("GetAbsAngles"), TEXT("0x100b3280"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 220 0x100b3070 (walked) `const Vector& GetOrigin()`
-//   returns `const Vector&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetOrigin()
-{
-	FireKernelBaseSlot(TEXT("GetOrigin"), TEXT("0x100b3070"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 221 0x100b3110 (walked) `const QAngle& GetAngles()`
-//   returns `const QAngle&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetAngles()
-{
-	FireKernelBaseSlot(TEXT("GetAngles"), TEXT("0x100b3110"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 222 0x100a9eb0 (sdk) `Vector GetSoundEmissionOrigin() const`
-//   layer 0, story 29c
-FVector FElysiumNpcBase::GetSoundEmissionOrigin() const
-{
-	FireKernelBaseSlot(TEXT("GetSoundEmissionOrigin"), TEXT("0x100a9eb0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
 // slot 223 0x10273720 (walked) `bool CreateVPhysics()`
 //   layer 13, story 29d
 // verdict `mechanism`: the body is `FElysiumNpcBase::CreateVPhysics`, written by hand in the
 // substrate. Declared here, defined there.
 
-// slot 224 0x100273b0 (walked) `bool ForceVPhysicsCollide(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::ForceVPhysicsCollide(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 225 0x100b5040 (walked) `void VPhysicsDestroyObject()`
-//   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::VPhysicsDestroyObject`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
-//   takes `IPhysicsObject*`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::VPhysicsUpdate`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
-//   takes `CTakeDamageInfo&`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::VPhysicsTakeDamage(void*)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsTakeDamage"), TEXT("0x100a1580"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 228 0x10334a50 (sdk) `void VPhysicsShadowCollision(int, gamevcollisionevent_t*)`
-//   takes `gamevcollisionevent_t*`
-//   layer 1, story 29c
-void FElysiumNpcBase::VPhysicsShadowCollision(int32, void*)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsShadowCollision"), TEXT("0x10334a50"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 229 0x100273d0 (sdk) `void VPhysicsShadowUpdate(IPhysicsObject*)`
-//   takes `IPhysicsObject*`
-//   layer 0, story 29c
-void FElysiumNpcBase::VPhysicsShadowUpdate(void*)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsShadowUpdate"), TEXT("0x100273d0"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 230 0x100a6640 (sdk) `void VPhysicsCollision(int, gamevcollisionevent_t*)`
-//   takes `gamevcollisionevent_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::VPhysicsCollision(int32, void*)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsCollision"), TEXT("0x100a6640"), TEXT("29c"), DebugString());
-}
-
-// slot 231 0x100a6800 (sdk) `void VPhysicsFriction(IPhysicsObject*, float, int, int)`
-//   takes `IPhysicsObject*`
-//   layer 0, story 29c
-void FElysiumNpcBase::VPhysicsFriction(void*, float, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsFriction"), TEXT("0x100a6800"), TEXT("29c"), DebugString());
-}
-
-// slot 232 0x100a69e0 (sdk) `void UpdatePhysicsShadowToCurrentPosition(float)`
-//   layer 0, story 29c
-void FElysiumNpcBase::UpdatePhysicsShadowToCurrentPosition(float)
-{
-	FireKernelBaseSlot(TEXT("UpdatePhysicsShadowToCurrentPosition"), TEXT("0x100a69e0"),
-		TEXT("29c"), DebugString());
-}
-
-// slot 233 0x100a6ad0 (sdk) `int VPhysicsGetObjectList(IPhysicsObject**, int)`
-//   takes `IPhysicsObject**`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::VPhysicsGetObjectList(void*, int32)
-{
-	FireKernelBaseSlot(TEXT("VPhysicsGetObjectList"), TEXT("0x100a6ad0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 234 0x10035780 (sdk) `void PhysicsPushEntity(Vector&, trace_t*)`
-//   takes `trace_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::PhysicsPushEntity(FVector&, void*)
-{
-	FireKernelBaseSlot(TEXT("PhysicsPushEntity"), TEXT("0x10035780"), TEXT("29c"), DebugString());
-}
-
-// slot 235 0x100273f0 (walked) `void OnPhysGunPickup(CBasePlayer*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::OnPhysGunPickup(FElysiumEntity*)
-{
-}
-
-// slot 236 0x10027410 (walked) `void OnPhysGunDrop(CBasePlayer*, bool)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return;`
-void FElysiumNpcBase::OnPhysGunDrop(FElysiumEntity*, bool)
-{
-}
-
-// slot 237 0x1003e7a0 (sdk) `unsignedint PhysicsSolidMaskForEntity() const`
-//   returns `unsignedint`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::PhysicsSolidMaskForEntity() const
-{
-	FireKernelBaseSlot(TEXT("PhysicsSolidMaskForEntity"), TEXT("0x1003e7a0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 238 0x10039ff0 (sdk) `void PerformCustomPhysics(Vector*, Vector*, QAngle*, QAngle*)`
-//   layer 0, story 29c
-void FElysiumNpcBase::PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotator*)
-{
-	FireKernelBaseSlot(TEXT("PerformCustomPhysics"), TEXT("0x10039ff0"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 239 0x100389e0 (sdk) `CBaseEntity* PhysicsPushRotate(float)`
-//   layer 0, story 29c
-FElysiumEntity* FElysiumNpcBase::PhysicsPushRotate(float)
-{
-	FireKernelBaseSlot(TEXT("PhysicsPushRotate"), TEXT("0x100389e0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 240 0x1014f8b0 (walked) `PyObject* vfunc240()`
-//   returns `PyObject*`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::Slot240`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 241 0x1008c170 (walked) `void GetEventName(char*, animevent_t*)`
-//   takes `animevent_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::GetEventName(TCHAR*, void*)
-{
-	FireKernelBaseSlot(TEXT("GetEventName"), TEXT("0x1008c170"), TEXT("29c"), DebugString());
-}
-
-// slot 242 0x100916a0 (walked) `float GetIdealYawSpeed()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetIdealYawSpeed()
-{
-	FireKernelBaseSlot(TEXT("GetIdealYawSpeed"), TEXT("0x100916a0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 243 0x10090580 (walked) `void BurnModel(const char*, bool)`
-//   layer 0, story 29c
-void FElysiumNpcBase::BurnModel(const TCHAR*, bool)
-{
-	FireKernelBaseSlot(TEXT("BurnModel"), TEXT("0x10090580"), TEXT("29c"), DebugString());
-}
-
-// slot 244 0x103408e0 (walked) `const char* GetSkeletonModelName()`
-//   layer 12, story 29d
-const TCHAR* FElysiumNpcBase::GetSkeletonModelName()
-{
-	FireKernelBaseSlot(TEXT("GetSkeletonModelName"), TEXT("0x103408e0"), TEXT("29d"),
-		DebugString());
-	return {};
-}
-
-// slot 245 0x1008e0a0 (walked) `void AddExtraAnimationModels(CBaseEntity*, const char*, const
-// char*, int, int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::AddExtraAnimationModels(FElysiumEntity*, const TCHAR*, const TCHAR*, int32,
-	int32)
-{
-	FireKernelBaseSlot(TEXT("AddExtraAnimationModels"), TEXT("0x1008e0a0"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 246 0x1008e310 (walked) `void RemoveExtraAnimationModels()`
-//   layer 0, story 29c
-void FElysiumNpcBase::RemoveExtraAnimationModels()
-{
-	FireKernelBaseSlot(TEXT("RemoveExtraAnimationModels"), TEXT("0x1008e310"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 247 0x10090c80 (walked) `void SetAttackExtentsForSequence(int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetAttackExtentsForSequence(int32)
-{
-	FireKernelBaseSlot(TEXT("SetAttackExtentsForSequence"), TEXT("0x10090c80"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 248 0x10091740 (sdk) `float GetIdealSpeed() const`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetIdealSpeed() const
-{
-	FireKernelBaseSlot(TEXT("GetIdealSpeed"), TEXT("0x10091740"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 249 0x100917e0 (sdk) `float GetIdealAccel() const`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetIdealAccel() const
-{
-	FireKernelBaseSlot(TEXT("GetIdealAccel"), TEXT("0x100917e0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 250 0x10098bb0 (walked) `float StudioFrameAdvance(float)`
-//   layer 2, story 29c
-float FElysiumNpcBase::StudioFrameAdvance(float)
-{
-	FireKernelBaseSlot(TEXT("StudioFrameAdvance"), TEXT("0x10098bb0"), TEXT("29c"), DebugString());
-	return {};
-}
-
 // slot 251 0x10272900 (walked) `bool IsActivityFinished()`
 //   layer 0, story 29c
 // verdict `rule`: the body is `FElysiumNpcBase::IsActivityFinished`, written by hand in the
 // substrate. Declared here, defined there.
-
-// slot 252 0x103251c0 (walked) `int SelectWeightedSequenceForStat(Activity, int, int)`
-//   layer 11, story 29d
-int32 FElysiumNpcBase::SelectWeightedSequenceForStat(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("SelectWeightedSequenceForStat"), TEXT("0x103251c0"), TEXT("29d"),
-		DebugString());
-	return {};
-}
-
-// slot 253 0x10325440 (walked) `int SelectHeaviestSequenceForStat(Activity, int, int)`
-//   layer 11, story 29d
-int32 FElysiumNpcBase::SelectHeaviestSequenceForStat(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("SelectHeaviestSequenceForStat"), TEXT("0x10325440"), TEXT("29d"),
-		DebugString());
-	return {};
-}
-
-// slot 254 0x10325300 (walked) `int SelectSameSequenceForStat(Activity, int, int)`
-//   layer 11, story 29d
-int32 FElysiumNpcBase::SelectSameSequenceForStat(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("SelectSameSequenceForStat"), TEXT("0x10325300"), TEXT("29d"),
-		DebugString());
-	return {};
-}
-
-// slot 255 0x10098eb0 (walked) `void GetSkeleton(Vector*, Quaternion*, int)`
-//   takes `Quaternion*`
-//   layer 13, story 29d
-void FElysiumNpcBase::GetSkeleton(FVector*, void*, int32)
-{
-	FireKernelBaseSlot(TEXT("GetSkeleton"), TEXT("0x10098eb0"), TEXT("29d"), DebugString());
-}
-
-// slot 256 0x100927f0 (sdk) `void GetBoneTransform(int, matrix3x4_t&)`
-//   takes `matrix3x4_t&`
-//   layer 0, story 29c
-void FElysiumNpcBase::GetBoneTransform(int32, void*)
-{
-	FireKernelBaseSlot(TEXT("GetBoneTransform"), TEXT("0x100927f0"), TEXT("29c"), DebugString());
-}
-
-// slot 257 0x10092b50 (sdk) `void SetupBones(matrix3x4_t*, int)`
-//   takes `matrix3x4_t*`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetupBones(void*, int32)
-{
-	FireKernelBaseSlot(TEXT("SetupBones"), TEXT("0x10092b50"), TEXT("29c"), DebugString());
-}
-
-// slot 258 0x10098c80 (walked) `void DispatchAnimEvents(float, CBaseAnimating*)`
-//   layer 2, story 29c
-void FElysiumNpcBase::DispatchAnimEvents(float, FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("DispatchAnimEvents"), TEXT("0x10098c80"), TEXT("29c"), DebugString());
-}
-
-// slot 260 0x10091fe0 (walked) `float SetPoseParameter02(int, float)`
-//   layer 0, story 29c
-float FElysiumNpcBase::SetPoseParameter02(int32, float)
-{
-	FireKernelBaseSlot(TEXT("SetPoseParameter02"), TEXT("0x10091fe0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 261 0x10091f10 (walked) `float SetPoseParameter01(const char*, float)`
-//   layer 0, story 29c
-float FElysiumNpcBase::SetPoseParameter01(const TCHAR*, float)
-{
-	FireKernelBaseSlot(TEXT("SetPoseParameter01"), TEXT("0x10091f10"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 262 0x10093000 (walked) `bool GetAttachment03(int, matrix3x4_t&)`
-//   takes `matrix3x4_t&`
-//   layer 0, story 29c
-bool FElysiumNpcBase::GetAttachment03(int32, void*)
-{
-	FireKernelBaseSlot(TEXT("GetAttachment03"), TEXT("0x10093000"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 263 0x10094870 (sdk) `Vector GetGroundSpeedVelocity()`
-//   layer 0, story 29c
-FVector FElysiumNpcBase::GetGroundSpeedVelocity()
-{
-	FireKernelBaseSlot(TEXT("GetGroundSpeedVelocity"), TEXT("0x10094870"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 264 0x10096980 (walked) `void DrawServerHitboxes()`
-//   layer 0, story 29c
-void FElysiumNpcBase::DrawServerHitboxes()
-{
-	FireKernelBaseSlot(TEXT("DrawServerHitboxes"), TEXT("0x10096980"), TEXT("29c"), DebugString());
-}
-
-// slot 265 0x10099690 (walked) `void AddFlinchGesture(Activity, float, float, const char*, float)`
-//   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::AddFlinchGesture`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 266 0x100997f0 (walked) `void vfunc266()`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::Slot266`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 267 0x10098a40 (walked) `int GetFirstGestureLayer()`
-//   layer 0, story 29c
-// verdict `mechanism`: retail's whole body is `return 0;`
-int32 FElysiumNpcBase::GetFirstGestureLayer()
-{
-	return static_cast<int32>(0);
-}
-
-// slot 268 0x10099020 (walked) `void SetLayer(int, Activity, int, bool)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetLayer`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 269 0x10099660 (walked) `void RemoveLayer(int)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::RemoveLayer`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 270 0x10099540 (walked) `bool HasLayer(Activity)`
-//   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::HasLayer`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 271 0x100994c0 (walked) `int FindLayerByOwner(Activity)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::FindLayerByOwner`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 272 0x10099470 (walked) `int AllocateLayer()`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::AllocateLayer`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 273 0x10099570 (walked) `void RestartGesture(Activity, bool, bool)`
-//   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::RestartGesture`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 274 0x100995e0 (walked) `void RemoveLayerByOwner(Activity)`
-//   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::RemoveLayerByOwner`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 275 0x10099630 (walked) `void RemoveAllGestures()`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::RemoveAllGestures`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 276 0x100b5ce0 (sdk) `void Blink()`
-//   layer 0, story 29c
-void FElysiumNpcBase::Blink()
-{
-	FireKernelBaseSlot(TEXT("Blink"), TEXT("0x100b5ce0"), TEXT("29c"), DebugString());
-}
-
-// slot 277 0x100b5b00 (walked) `void SetViewtarget(const Vector&)`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetViewtarget`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 278 0x100b5b40 (walked) `const Vector& GetViewtarget() const`
-//   returns `const Vector&`
-//   layer 0, story 29c
-void* FElysiumNpcBase::GetViewtarget() const
-{
-	FireKernelBaseSlot(TEXT("GetViewtarget"), TEXT("0x100b5b40"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 279 0x100b5ba0 (walked) `void SetFlexWeight(int, float)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetFlexWeight`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 280 0x100b5b60 (walked) `void SetFlexWeight(char*, float)`
-//   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetFlexWeight`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 281 0x100b5c50 (walked) `float GetFlexWeight(int)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetFlexWeight`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 282 0x100b5c20 (walked) `float GetFlexWeight(char*)`
-//   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::GetFlexWeight`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 283 0x100b6250 (walked) `void ProcessSceneEvents()`
-//   layer 9, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::ProcessSceneEvents`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 284 0x10105f30 (walked) `void AddSceneExpressions()`
-//   layer 8, story 29c
-void FElysiumNpcBase::AddSceneExpressions()
-{
-	FireKernelBaseSlot(TEXT("AddSceneExpressions"), TEXT("0x10105f30"), TEXT("29c"), DebugString());
-}
-
-// slot 285 0x100b5d80 (walked) `void ClearSceneEvents(CChoreoScene*)`
-//   takes `CChoreoScene*`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::ClearSceneEvents`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 286 0x100b5e60 (walked) `void AddSceneEvent(CChoreoScene*, CChoreoEvent*)`
-//   takes `CChoreoScene*`
-//   takes `CChoreoEvent*`
-//   layer 3, story 29c
-void FElysiumNpcBase::AddSceneEvent(void*, void*)
-{
-	FireKernelBaseSlot(TEXT("AddSceneEvent"), TEXT("0x100b5e60"), TEXT("29c"), DebugString());
-}
-
-// slot 287 0x100b6180 (walked) `void RemoveSceneEvent(CChoreoEvent*)`
-//   takes `CChoreoEvent*`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::RemoveSceneEvent`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 288 0x100b6cf0 (walked) `void AddFlexSetting(const char*, float, const flexsettinghdr_t*,
-// const flexsettinghdr_t*, bool)`
-//   takes `const flexsettinghdr_t*`
-//   takes `const flexsettinghdr_t*`
-//   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::AddFlexSetting`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 289 0x100b6960 (walked) `void AddFlexAnimation(CSceneEventInfo*)`
-//   takes `CSceneEventInfo*`
-//   layer 7, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::AddFlexAnimation`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 290 0x100b70e0 (walked) `void ProcessSequenceSceneEvent(CSceneEventInfo*)`
-//   takes `CSceneEventInfo*`
-//   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::ProcessSequenceSceneEvent`, written by hand in
-// the substrate. Declared here, defined there.
-
-// slot 291 0x100b7040 (walked) `void ProcessGestureSceneEvent(CSceneEventInfo*)`
-//   takes `CSceneEventInfo*`
-//   layer 3, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::ProcessGestureSceneEvent`, written by hand in
-// the substrate. Declared here, defined there.
-
-// slot 292 0x103229d0 (walked) `void DamageFlinch(const CTakeDamageInfo&, const Vector&, trace_t*)`
-//   takes `const CTakeDamageInfo&`
-//   takes `trace_t*`
-//   layer 7, story 29c
-void FElysiumNpcBase::DamageFlinch(void*, const FVector&, void*)
-{
-	FireKernelBaseSlot(TEXT("DamageFlinch"), TEXT("0x103229d0"), TEXT("29c"), DebugString());
-}
-
-// slot 293 0x1014f6f0 (walked) `CBaseEntity* GetFollowerBoss()`
-//   layer 0, story 29c
-FElysiumEntity* FElysiumNpcBase::GetFollowerBoss()
-{
-	FireKernelBaseSlot(TEXT("GetFollowerBoss"), TEXT("0x1014f6f0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 295 0x103417b0 (walked) `bool CanTalk(CBaseEntity*)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::CanTalk(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("CanTalk"), TEXT("0x103417b0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 296 0x10348ba0 (walked) `bool vfunc296(int)`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumNpcBase::Slot296`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 297 0x10332ef0 (walked) `void AdjustDialogReaction(CBaseEntity*, int, const char*)`
-//   layer 15, story 29d
-void FElysiumNpcBase::AdjustDialogReaction(FElysiumEntity*, int32, const TCHAR*)
-{
-	FireKernelBaseSlot(TEXT("AdjustDialogReaction"), TEXT("0x10332ef0"), TEXT("29d"),
-		DebugString());
-}
-
-// slot 298 0x10323c20 (walked) `int GetMaxInvenSlotsPerSection(int)`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetMaxInvenSlotsPerSection(int32)
-{
-	FireKernelBaseSlot(TEXT("GetMaxInvenSlotsPerSection"), TEXT("0x10323c20"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 299 0x10330d00 (walked) `void CreateDamageEffects(const CTakeDamageInfo&, bool*)`
-//   takes `const CTakeDamageInfo&`
-//   takes `bool*`
-//   layer 20, story 29e
-void FElysiumNpcBase::CreateDamageEffects(void*, void*)
-{
-	FireKernelBaseSlot(TEXT("CreateDamageEffects"), TEXT("0x10330d00"), TEXT("29e"), DebugString());
-}
-
-// slot 300 0x1032c580 (walked) `void Event_TookLife(CBaseCombatCharacter*, bool, bool)`
-//   layer 5, story 29c
-void FElysiumNpcBase::Event_TookLife(FElysiumEntity*, bool, bool)
-{
-	FireKernelBaseSlot(TEXT("Event_TookLife"), TEXT("0x1032c580"), TEXT("29c"), DebugString());
-}
-
-// slot 301 0x1032c0e0 (walked) `void CreateCorpse(const Vector&, const CTakeDamageInfo&)`
-//   takes `const CTakeDamageInfo&`
-//   layer 14, story 29d
-void FElysiumNpcBase::CreateCorpse(const FVector&, void*)
-{
-	FireKernelBaseSlot(TEXT("CreateCorpse"), TEXT("0x1032c0e0"), TEXT("29d"), DebugString());
-}
-
-// slot 302 0x10335f60 (walked) `bool Inventory_ShouldAllow_Autopickup(CBaseCombatWeapon*, bool)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::Inventory_ShouldAllow_Autopickup(FElysiumEntity*, bool)
-{
-	FireKernelBaseSlot(TEXT("Inventory_ShouldAllow_Autopickup"), TEXT("0x10335f60"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 303 0x10336000 (walked) `bool Inventory_ShouldAllow_AutopickupAmmo(CBaseCombatWeapon*)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::Inventory_ShouldAllow_AutopickupAmmo(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Inventory_ShouldAllow_AutopickupAmmo"), TEXT("0x10336000"),
-		TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 304 0x1033dde0 (walked) `void GiveBaseFightingItems()`
-//   layer 11, story 29d
-void FElysiumNpcBase::GiveBaseFightingItems()
-{
-	FireKernelBaseSlot(TEXT("GiveBaseFightingItems"), TEXT("0x1033dde0"), TEXT("29d"),
-		DebugString());
-}
-
-// slot 305 0x1033deb0 (walked) `void RemoveBaseFightingItems()`
-//   layer 11, story 29d
-void FElysiumNpcBase::RemoveBaseFightingItems()
-{
-	FireKernelBaseSlot(TEXT("RemoveBaseFightingItems"), TEXT("0x1033deb0"), TEXT("29d"),
-		DebugString());
-}
-
-// slot 306 0x1033e370 (walked) `void LookAtEntity(CBaseEntity*, bool)`
-//   layer 5, story 29c
-void FElysiumNpcBase::LookAtEntity(FElysiumEntity*, bool)
-{
-	FireKernelBaseSlot(TEXT("LookAtEntity"), TEXT("0x1033e370"), TEXT("29c"), DebugString());
-}
-
-// slot 307 0x10336cd0 (walked) `bool HasUsableMeleeWeapon()`
-//   layer 2, story 29c
-bool FElysiumNpcBase::HasUsableMeleeWeapon()
-{
-	FireKernelBaseSlot(TEXT("HasUsableMeleeWeapon"), TEXT("0x10336cd0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 308 0x10336d70 (walked) `bool HasUsableRangedWeapon()`
-//   layer 1, story 29c
-bool FElysiumNpcBase::HasUsableRangedWeapon()
-{
-	FireKernelBaseSlot(TEXT("HasUsableRangedWeapon"), TEXT("0x10336d70"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 309 0x10337080 (walked) `CBaseCombatWeapon* GetBestRangedWeapon()`
-//   layer 1, story 29c
-FElysiumEntity* FElysiumNpcBase::GetBestRangedWeapon()
-{
-	FireKernelBaseSlot(TEXT("GetBestRangedWeapon"), TEXT("0x10337080"), TEXT("29c"), DebugString());
-	return {};
-}
 
 // slot 310 0x102725d0 (sdk) `void SetActivity(Activity)`
 //   layer 16, story 29d
@@ -2166,196 +196,11 @@ FElysiumEntity* FElysiumNpcBase::GetBestRangedWeapon()
 // verdict `rule`: the body is `FElysiumNpcBase::ForcePreTranslatedSequenceAndActivity`, written by
 // hand in the substrate. Declared here, defined there.
 
-// slot 313 0x10322b40 (walked) `void UpdatePresenceEffect()`
-//   layer 22, story 29e
-void FElysiumNpcBase::UpdatePresenceEffect()
-{
-	FireKernelBaseSlot(TEXT("UpdatePresenceEffect"), TEXT("0x10322b40"), TEXT("29e"),
-		DebugString());
-}
-
-// slot 314 0x10054060 (walked) `void UpdatePoseParameters(float)`
-//   layer 2, story 29c
-void FElysiumNpcBase::UpdatePoseParameters(float)
-{
-	FireKernelBaseSlot(TEXT("UpdatePoseParameters"), TEXT("0x10054060"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 315 0x10346cd0 (walked) `void MeleeSwingUpdate()`
-//   layer 18, story 29d
-void FElysiumNpcBase::MeleeSwingUpdate()
-{
-	FireKernelBaseSlot(TEXT("MeleeSwingUpdate"), TEXT("0x10346cd0"), TEXT("29d"), DebugString());
-}
-
-// slot 316 0x1014f710 (walked) `void vfunc316(CBaseCombatCharacter*, bool, bool)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot316(FElysiumEntity*, bool, bool)
-{
-}
-
-// slot 317 0x1014f730 (unsettled) `bool vfunc317(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot317(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 318 0x1014f750 (walked) `bool PlayerDefenderBlockReaction(CBaseCombatCharacter*,
-// melee_dice_roll_result*, CVDmg_t*)`
-//   takes `melee_dice_roll_result*`
-//   takes `CVDmg_t*`
-//   layer 0, story 29c
-bool FElysiumNpcBase::PlayerDefenderBlockReaction(FElysiumEntity*, void*, void*)
-{
-	FireKernelBaseSlot(TEXT("PlayerDefenderBlockReaction"), TEXT("0x1014f750"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 319 0x1014f770 (walked) `bool PlayerAttackerBlockedReaction(CBaseCombatCharacter*,
-// melee_dice_roll_result*, CVDmg_t*)`
-//   takes `melee_dice_roll_result*`
-//   takes `CVDmg_t*`
-//   layer 0, story 29c
-bool FElysiumNpcBase::PlayerAttackerBlockedReaction(FElysiumEntity*, void*, void*)
-{
-	FireKernelBaseSlot(TEXT("PlayerAttackerBlockedReaction"), TEXT("0x1014f770"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 320 0x1014f790 (walked) `bool PlayerKnockbackReaction(CBaseCombatCharacter*, Activity)`
-//   layer 0, story 29c
-bool FElysiumNpcBase::PlayerKnockbackReaction(FElysiumEntity*, int32)
-{
-	FireKernelBaseSlot(TEXT("PlayerKnockbackReaction"), TEXT("0x1014f790"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 321 0x1014f7b0 (walked) `bool vfunc321(CBaseCombatCharacter*)`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot321(FElysiumEntity*)
-{
-	return false;
-}
-
-// slot 322 0x1014f7d0 (walked) `void vfunc322(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot322(FElysiumEntity*)
-{
-}
-
-// slot 323 0x10344dd0 (walked) `int vfunc323(const Vector&)`
-//   layer 1, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot323`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 324 0x1014f7f0 (walked) `bool vfunc324()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot324()
-{
-	return true;
-}
-
-// slot 325 0x1014f810 (walked) `bool vfunc325()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot325()
-{
-	return true;
-}
-
-// slot 326 0x103482e0 (walked) `bool vfunc326(void*, CBaseCombatCharacter*)`
-//   takes `void*`
-//   layer 13, story 29d
-bool FElysiumNpcBase::Slot326(void*, FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Slot326"), TEXT("0x103482e0"), TEXT("29d"), DebugString());
-	return {};
-}
-
-// slot 327 0x10345460 (walked) `bool vfunc327()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot327()
-{
-	return true;
-}
-
-// slot 328 0x1014f830 (walked) `bool vfunc328()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot328()
-{
-	return false;
-}
-
-// slot 329 0x1014f850 (walked) `bool vfunc329()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot329()
-{
-	return false;
-}
-
-// slot 330 0x1014f870 (walked) `void vfunc330(float, const FireBulletsInfo_t*)`
-//   takes `const FireBulletsInfo_t*`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return;`
-void FElysiumNpcBase::Slot330(float, void*)
-{
-}
-
-// slot 331 0x10347180 (walked) `bool ChooseMeleeAttackSequence(CBaseCombatWeapon*, CBaseEntity*,
-// Activity, int*)`
-//   takes `int*`
-//   layer 11, story 29d
-bool FElysiumNpcBase::ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, int32, void*)
-{
-	FireKernelBaseSlot(TEXT("ChooseMeleeAttackSequence"), TEXT("0x10347180"), TEXT("29d"),
-		DebugString());
-	return {};
-}
-
-// slot 332 0x1014f890 (walked) `void vfunc332(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot332`, written by hand in the substrate.
-// Declared here, defined there.
-
 // slot 333 0x1026b810 (walked) `void MaintainEyeDirection(float)`
 //   layer 4, story 29c
 void FElysiumNpcBase::MaintainEyeDirection(float)
 {
-	FireKernelBaseSlot(TEXT("MaintainEyeDirection"), TEXT("0x1026b810"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 334 0x10330020 (walked) `bool vfunc334(int, int)`
-//   layer 9, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::Slot334`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 335 0x103415f0 (walked) `void NotifyChangeSizeSmall()`
-//   layer 0, story 29c
-void FElysiumNpcBase::NotifyChangeSizeSmall()
-{
-	FireKernelBaseSlot(TEXT("NotifyChangeSizeSmall"), TEXT("0x103415f0"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 336 0x10341680 (walked) `void NotifyChangeSizeNormal()`
-//   layer 0, story 29c
-void FElysiumNpcBase::NotifyChangeSizeNormal()
-{
-	FireKernelBaseSlot(TEXT("NotifyChangeSizeNormal"), TEXT("0x10341680"), TEXT("29c"),
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::MaintainEyeDirection"), TEXT("0x1026b810"), TEXT("29c"),
 		DebugString());
 }
 
@@ -2363,225 +208,23 @@ void FElysiumNpcBase::NotifyChangeSizeNormal()
 //   layer 1, story 29c
 int32 FElysiumNpcBase::GetUsedHullBits()
 {
-	FireKernelBaseSlot(TEXT("GetUsedHullBits"), TEXT("0x10270820"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 338 0x1033cc30 (unsettled) `void AddPreDisciplineEffect(int, int, int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::AddPreDisciplineEffect(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("AddPreDisciplineEffect"), TEXT("0x1033cc30"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 339 0x1033cd70 (unsettled) `void AddDisciplineEffect(int, int, int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::AddDisciplineEffect(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("AddDisciplineEffect"), TEXT("0x1033cd70"), TEXT("29c"), DebugString());
-}
-
-// slot 340 0x1033ccd0 (unsettled) `void RemovePreDisciplineEffects(int, int, int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::RemovePreDisciplineEffects(int32, int32, int32)
-{
-	FireKernelBaseSlot(TEXT("RemovePreDisciplineEffects"), TEXT("0x1033ccd0"), TEXT("29c"),
-		DebugString());
-}
-
-// slot 341 0x1033cef0 (walked) `void RemoveDisciplineEffects(int, int)`
-//   layer 20, story 29e
-void FElysiumNpcBase::RemoveDisciplineEffects(int32, int32)
-{
-	FireKernelBaseSlot(TEXT("RemoveDisciplineEffects"), TEXT("0x1033cef0"), TEXT("29e"),
-		DebugString());
-}
-
-// slot 342 0x10339800 (walked) `bool CanBeFedUponBy(CBaseCombatCharacter*)`
-//   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::CanBeFedUponBy`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 343 0x10053e20 (walked) `void SetShakyHands(float, float, int)`
-//   layer 0, story 29c
-void FElysiumNpcBase::SetShakyHands(float, float, int32)
-{
-	FireKernelBaseSlot(TEXT("SetShakyHands"), TEXT("0x10053e20"), TEXT("29c"), DebugString());
-}
-
-// slot 344 0x10053fa0 (walked) `float GetShakyHandsIntensity()`
-//   layer 0, story 29c
-float FElysiumNpcBase::GetShakyHandsIntensity()
-{
-	FireKernelBaseSlot(TEXT("GetShakyHandsIntensity"), TEXT("0x10053fa0"), TEXT("29c"),
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetUsedHullBits"), TEXT("0x10270820"), TEXT("29c"),
 		DebugString());
 	return {};
-}
-
-// slot 345 0x1032fb80 (walked) `float SetPoseParameter(const char*, float, bool)`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetPoseParameter`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 346 0x1032fc50 (walked) `float SetPoseParameter(int, float, bool)`
-//   layer 5, story 29c
-// verdict `mechanism`: the body is `FElysiumNpcBase::SetPoseParameter`, written by hand in the
-// substrate. Declared here, defined there.
-
-// slot 347 0x10107120 (walked) `bool GetExpressionEventParams(int, char*, float*, float*, float*,
-// float*)`
-//   takes `float*`
-//   takes `float*`
-//   takes `float*`
-//   takes `float*`
-//   layer 0, story 29c
-bool FElysiumNpcBase::GetExpressionEventParams(int32, TCHAR*, void*, void*, void*, void*)
-{
-	FireKernelBaseSlot(TEXT("GetExpressionEventParams"), TEXT("0x10107120"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 348 0x1032fe60 (walked) `int HealthToPercent()`
-//   layer 11, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::HealthToPercent`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 349 0x103412b0 (walked) `void InputBarterBegin(inputdata_t&)`
-//   takes `inputdata_t&`
-//   layer 14, story 29d
-void FElysiumNpcBase::InputBarterBegin(void*)
-{
-	FireKernelBaseSlot(TEXT("InputBarterBegin"), TEXT("0x103412b0"), TEXT("29d"), DebugString());
-}
-
-// slot 350 0x10341450 (walked) `void InputBarterEnd(inputdata_t&)`
-//   takes `inputdata_t&`
-//   layer 10, story 29d
-void FElysiumNpcBase::InputBarterEnd(void*)
-{
-	FireKernelBaseSlot(TEXT("InputBarterEnd"), TEXT("0x10341450"), TEXT("29d"), DebugString());
 }
 
 // slot 354 0x1026cec0 (walked) `void vfunc354()`
 //   layer 21, story 29e
 void FElysiumNpcBase::Slot354()
 {
-	FireKernelBaseSlot(TEXT("Slot354"), TEXT("0x1026cec0"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Slot354"), TEXT("0x1026cec0"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 355 0x1026cf90 (walked) `void vfunc355()`
 //   layer 8, story 29c
 // verdict `present`: the body is `FElysiumNpcBase::Slot355`, written by hand in the substrate.
 // Declared here, defined there.
-
-// slot 356 0x1033b500 (walked) `void PrayerBegin()`
-//   layer 1, story 29c
-void FElysiumNpcBase::PrayerBegin()
-{
-	FireKernelBaseSlot(TEXT("PrayerBegin"), TEXT("0x1033b500"), TEXT("29c"), DebugString());
-}
-
-// slot 357 0x1033b5f0 (walked) `void vfunc357()`
-//   layer 14, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::Slot357`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 358 0x1033b890 (walked) `void PrayerEnd()`
-//   layer 1, story 29c
-void FElysiumNpcBase::PrayerEnd()
-{
-	FireKernelBaseSlot(TEXT("PrayerEnd"), TEXT("0x1033b890"), TEXT("29c"), DebugString());
-}
-
-// slot 359 0x1014f910 (walked) `int vfunc359(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0xffffffff;`
-int32 FElysiumNpcBase::Slot359(FElysiumEntity*)
-{
-	return static_cast<int32>(0xffffffff);
-}
-
-// slot 360 0x1014f930 (walked) `bool vfunc360()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot360()
-{
-	return false;
-}
-
-// slot 361 0x1014f950 (walked) `bool vfunc361()`
-//   layer 0, story 29c
-// verdict `dead`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot361()
-{
-	return false;
-}
-
-// slot 362 0x10326a20 (walked) `bool FInViewCone(const Vector&)`
-//   layer 8, story 29c
-// verdict `present`: the body is `FElysiumNpcBase::FInViewCone`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 363 0x10326750 (walked) `bool FInViewCone(CBaseEntity*)`
-//   layer 7, story 29c
-bool FElysiumNpcBase::FInViewCone(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("FInViewCone"), TEXT("0x10326750"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 364 0x10326bd0 (walked) `bool FInAimCone(const Vector&)`
-//   layer 6, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::FInAimCone`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 365 0x10326ae0 (walked) `bool FInAimCone(CBaseEntity*)`
-//   layer 0, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::FInAimCone`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 366 0x10326d40 (sdk) `bool HandleInteraction(int, void*, CBaseCombatCharacter*)`
-//   takes `void*`
-//   layer 0, story 29c
-bool FElysiumNpcBase::HandleInteraction(int32, void*, FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("HandleInteraction"), TEXT("0x10326d40"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 367 0x10331880 (sdk) `QAngle BodyAngles()`
-//   layer 1, story 29c
-FRotator FElysiumNpcBase::BodyAngles()
-{
-	FireKernelBaseSlot(TEXT("BodyAngles"), TEXT("0x10331880"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 369 0x10331a40 (sdk) `Vector BodyDirection3D()`
-//   layer 2, story 29c
-FVector FElysiumNpcBase::BodyDirection3D()
-{
-	FireKernelBaseSlot(TEXT("BodyDirection3D"), TEXT("0x10331a40"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 370 0x10331cb0 (sdk) `Vector HeadDirection2D()`
-//   layer 4, story 29c
-FVector FElysiumNpcBase::HeadDirection2D()
-{
-	FireKernelBaseSlot(TEXT("HeadDirection2D"), TEXT("0x10331cb0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 371 0x10331b30 (sdk) `Vector HeadDirection3D()`
-//   layer 3, story 29c
-FVector FElysiumNpcBase::HeadDirection3D()
-{
-	FireKernelBaseSlot(TEXT("HeadDirection3D"), TEXT("0x10331b30"), TEXT("29c"), DebugString());
-	return {};
-}
 
 // slot 372 0x1026b210 (walked) `Vector EyeDirection2D()`
 //   layer 5, story 29c
@@ -2593,17 +236,12 @@ FVector FElysiumNpcBase::HeadDirection3D()
 // verdict `rule`: the body is `FElysiumNpcBase::EyeDirection3D`, written by hand in the substrate.
 // Declared here, defined there.
 
-// slot 374 0x10334180 (walked) `int GiveAmmo(int, int, bool)`
-//   layer 4, story 29c
-// verdict `rule`: the body is `FElysiumNpcBase::GiveAmmo`, written by hand in the substrate.
-// Declared here, defined there.
-
 // slot 375 0x10271f50 (walked) `Activity NPC_EarlyTranslateActivity(Activity)`
 //   layer 0, story 29c
 int32 FElysiumNpcBase::NPC_EarlyTranslateActivity(int32)
 {
-	FireKernelBaseSlot(TEXT("NPC_EarlyTranslateActivity"), TEXT("0x10271f50"), TEXT("29c"),
-		DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::NPC_EarlyTranslateActivity"), TEXT("0x10271f50"),
+		TEXT("29c"), DebugString());
 	return {};
 }
 
@@ -2611,90 +249,7 @@ int32 FElysiumNpcBase::NPC_EarlyTranslateActivity(int32)
 //   layer 5, story 29c
 int32 FElysiumNpcBase::NPC_TranslateActivity(int32)
 {
-	FireKernelBaseSlot(TEXT("NPC_TranslateActivity"), TEXT("0x10271f70"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 377 0x1014f9d0 (walked) `bool vfunc377(CBaseCombatCharacter*, int)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot377(FElysiumEntity*, int32)
-{
-	return true;
-}
-
-// slot 378 0x1014f9f0 (walked) `bool vfunc378(CBaseCombatCharacter*, int)`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 1;`
-bool FElysiumNpcBase::Slot378(FElysiumEntity*, int32)
-{
-	return true;
-}
-
-// slot 381 0x10327ec0 (walked) `Activity Weapon_TranslateActivity(Activity)`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::Weapon_TranslateActivity(int32)
-{
-	FireKernelBaseSlot(TEXT("Weapon_TranslateActivity"), TEXT("0x10327ec0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 382 0x1032d9b0 (sdk) `bool Weapon_CanUse(CBaseCombatWeapon*)`
-//   layer 1, story 29c
-bool FElysiumNpcBase::Weapon_CanUse(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Weapon_CanUse"), TEXT("0x1032d9b0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 383 0x1032d380 (walked) `void Weapon_Equip(CBaseCombatWeapon*, bool)`
-//   layer 21, story 29e
-void FElysiumNpcBase::Weapon_Equip(FElysiumEntity*, bool)
-{
-	FireKernelBaseSlot(TEXT("Weapon_Equip"), TEXT("0x1032d380"), TEXT("29e"), DebugString());
-}
-
-// slot 384 0x1032d6e0 (sdk) `bool Weapon_EquipAmmoOnly(CBaseCombatWeapon*)`
-//   layer 5, story 29c
-bool FElysiumNpcBase::Weapon_EquipAmmoOnly(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("Weapon_EquipAmmoOnly"), TEXT("0x1032d6e0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
-// slot 385 0x1032d0c0 (walked) `void Weapon_Drop(CBaseCombatWeapon*, const Vector*, bool)`
-//   layer 11, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::Weapon_Drop`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 386 0x1032ce40 (walked) `void Weapon_Drop()`
-//   layer 10, story 29d
-// verdict `rule`: the body is `FElysiumNpcBase::Weapon_Drop`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 387 0x1032d2e0 (walked) `void Weapon_Drop_All()`
-//   layer 11, story 29d
-void FElysiumNpcBase::Weapon_Drop_All()
-{
-	FireKernelBaseSlot(TEXT("Weapon_Drop_All"), TEXT("0x1032d2e0"), TEXT("29d"), DebugString());
-}
-
-// slot 388 0x1032dde0 (sdk) `bool Weapon_Switch(CBaseCombatWeapon*, int)`
-//   layer 22, story 29e
-bool FElysiumNpcBase::Weapon_Switch(FElysiumEntity*, int32)
-{
-	FireKernelBaseSlot(TEXT("Weapon_Switch"), TEXT("0x1032dde0"), TEXT("29e"), DebugString());
-	return {};
-}
-
-// slot 389 0x103338c0 (walked) `Vector Weapon_ShootPosition(const Vector&)`
-//   layer 1, story 29c
-FVector FElysiumNpcBase::Weapon_ShootPosition(const FVector&)
-{
-	FireKernelBaseSlot(TEXT("Weapon_ShootPosition"), TEXT("0x103338c0"), TEXT("29c"),
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::NPC_TranslateActivity"), TEXT("0x10271f70"), TEXT("29c"),
 		DebugString());
 	return {};
 }
@@ -2704,16 +259,8 @@ FVector FElysiumNpcBase::Weapon_ShootPosition(const FVector&)
 //   layer 23, story 29e
 int32 FElysiumNpcBase::OnTakeDamage_Alive(void*)
 {
-	FireKernelBaseSlot(TEXT("OnTakeDamage_Alive"), TEXT("0x10265ed0"), TEXT("29e"), DebugString());
-	return {};
-}
-
-// slot 391 0x103315e0 (sdk) `int OnTakeDamage_Dying(CTakeDamageInfo&)`
-//   takes `CTakeDamageInfo&`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::OnTakeDamage_Dying(void*)
-{
-	FireKernelBaseSlot(TEXT("OnTakeDamage_Dying"), TEXT("0x103315e0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnTakeDamage_Alive"), TEXT("0x10265ed0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -2723,106 +270,10 @@ int32 FElysiumNpcBase::OnTakeDamage_Dying(void*)
 // verdict `rule`: the body is `FElysiumNpcBase::OnTakeDamage_Dead`, written by hand in the
 // substrate. Declared here, defined there.
 
-// slot 393 0x10327e20 (sdk) `Activity GetDeathActivity()`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::GetDeathActivity()
-{
-	FireKernelBaseSlot(TEXT("GetDeathActivity"), TEXT("0x10327e20"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 394 0x10327a90 (walked) `bool CorpseGib()`
-//   layer 14, story 29d
-bool FElysiumNpcBase::CorpseGib()
-{
-	FireKernelBaseSlot(TEXT("CorpseGib"), TEXT("0x10327a90"), TEXT("29d"), DebugString());
-	return {};
-}
-
-// slot 395 0x10326040 (sdk) `void CorpseFade()`
-//   layer 6, story 29c
-void FElysiumNpcBase::CorpseFade()
-{
-	FireKernelBaseSlot(TEXT("CorpseFade"), TEXT("0x10326040"), TEXT("29c"), DebugString());
-}
-
-// slot 396 0x10325f00 (sdk) `bool HasHumanGibs()`
-//   layer 0, story 29c
-bool FElysiumNpcBase::HasHumanGibs()
-{
-	FireKernelBaseSlot(TEXT("HasHumanGibs"), TEXT("0x10325f00"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 397 0x10325fa0 (sdk) `bool HasAlienGibs()`
-//   layer 1, story 29c
-bool FElysiumNpcBase::HasAlienGibs()
-{
-	FireKernelBaseSlot(TEXT("HasAlienGibs"), TEXT("0x10325fa0"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 398 0x10348a60 (walked) `bool HasExplosiveGibs()`
-//   layer 0, story 29c
-bool FElysiumNpcBase::HasExplosiveGibs()
-{
-	FireKernelBaseSlot(TEXT("HasExplosiveGibs"), TEXT("0x10348a60"), TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 399 0x1014fa30 (walked) `bool vfunc399()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::Slot399()
-{
-	return false;
-}
-
-// slot 400 0x1014fa50 (walked) `bool AllowsKnockbackBypass()`
-//   layer 0, story 29c
-// verdict `rule`: retail's whole body is `return 0;`
-bool FElysiumNpcBase::AllowsKnockbackBypass()
-{
-	return false;
-}
-
-// slot 401 0x10348b00 (walked) `Activity KnockbackActivity_Default(int)`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::KnockbackActivity_Default(int32)
-{
-	FireKernelBaseSlot(TEXT("KnockbackActivity_Default"), TEXT("0x10348b00"), TEXT("29c"),
-		DebugString());
-	return {};
-}
-
 // slot 402 0x102658f0 (walked) `bool Event_Gibbed()`
 //   layer 15, story 29d
 // verdict `rule`: the body is `FElysiumNpcBase::Event_Gibbed`, written by hand in the substrate.
 // Declared here, defined there.
-
-// slot 403 0x1032bdf0 (sdk) `void Event_Dying()`
-//   layer 0, story 29c
-void FElysiumNpcBase::Event_Dying()
-{
-	FireKernelBaseSlot(TEXT("Event_Dying"), TEXT("0x1032bdf0"), TEXT("29c"), DebugString());
-}
-
-// slot 404 0x10333340 (sdk) `Disposition_t IRelationType(CBaseEntity*)`
-//   returns `Disposition_t`
-//   layer 13, story 29d
-int32 FElysiumNpcBase::IRelationType(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("IRelationType"), TEXT("0x10333340"), TEXT("29d"), DebugString());
-	return {};
-}
-
-// slot 405 0x10333700 (sdk) `int IRelationPriority(CBaseEntity*)`
-//   layer 0, story 29c
-int32 FElysiumNpcBase::IRelationPriority(FElysiumEntity*)
-{
-	FireKernelBaseSlot(TEXT("IRelationPriority"), TEXT("0x10333700"), TEXT("29c"), DebugString());
-	return {};
-}
 
 // slot 406 0x1027e740 (walked) `const char* GetStateName(NPC_STATE)`
 //   layer 1, story 29c
@@ -2864,7 +315,8 @@ void FElysiumNpcBase::Slot411()
 //   layer 1, story 29c
 float FElysiumNpcBase::GetLastUpdateThink()
 {
-	FireKernelBaseSlot(TEXT("GetLastUpdateThink"), TEXT("0x101a6440"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetLastUpdateThink"), TEXT("0x101a6440"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -2872,7 +324,8 @@ float FElysiumNpcBase::GetLastUpdateThink()
 //   layer 1, story 29c
 float FElysiumNpcBase::GetLastNormalThink()
 {
-	FireKernelBaseSlot(TEXT("GetLastNormalThink"), TEXT("0x101a6460"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetLastNormalThink"), TEXT("0x101a6460"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -2880,7 +333,8 @@ float FElysiumNpcBase::GetLastNormalThink()
 //   layer 1, story 29c
 float FElysiumNpcBase::GetLastMoveThink()
 {
-	FireKernelBaseSlot(TEXT("GetLastMoveThink"), TEXT("0x101a6480"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetLastMoveThink"), TEXT("0x101a6480"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -2888,7 +342,8 @@ float FElysiumNpcBase::GetLastMoveThink()
 //   layer 1, story 29c
 float FElysiumNpcBase::GetLastAIThink()
 {
-	FireKernelBaseSlot(TEXT("GetLastAIThink"), TEXT("0x101a64a0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetLastAIThink"), TEXT("0x101a64a0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -2911,7 +366,8 @@ bool FElysiumNpcBase::GetForceFrequentThink()
 //   layer 1, story 29c
 float FElysiumNpcBase::ResolveTaskDistance(float)
 {
-	FireKernelBaseSlot(TEXT("ResolveTaskDistance"), TEXT("0x102702d0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::ResolveTaskDistance"), TEXT("0x102702d0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -2989,21 +445,23 @@ void FElysiumNpcBase::PostNPCInit()
 //   layer 25, story 29e
 void FElysiumNpcBase::NPCThink()
 {
-	FireKernelBaseSlot(TEXT("NPCThink"), TEXT("0x1026ca80"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::NPCThink"), TEXT("0x1026ca80"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 432 0x1026f110 (walked) `void RunAI(bool)`
 //   layer 24, story 29e
 void FElysiumNpcBase::RunAI(bool)
 {
-	FireKernelBaseSlot(TEXT("RunAI"), TEXT("0x1026f110"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::RunAI"), TEXT("0x1026f110"), TEXT("29e"), DebugString());
 }
 
 // slot 433 0x1026ec30 (sdk) `void GatherConditions()`
 //   layer 23, story 29e
 void FElysiumNpcBase::GatherConditions()
 {
-	FireKernelBaseSlot(TEXT("GatherConditions"), TEXT("0x1026ec30"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GatherConditions"), TEXT("0x1026ec30"), TEXT("29e"),
+		DebugString());
 }
 
 // slot 434 0x101a6560 (sdk) `void PrescheduleThink()`
@@ -3036,7 +494,8 @@ void FElysiumNpcBase::OnStartSchedule(int32)
 //   layer 25, story 29e
 int32 FElysiumNpcBase::StartTask(void*)
 {
-	FireKernelBaseSlot(TEXT("StartTask"), TEXT("0x101a65a0"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::StartTask"), TEXT("0x101a65a0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -3046,7 +505,8 @@ int32 FElysiumNpcBase::StartTask(void*)
 //   layer 24, story 29e
 int32 FElysiumNpcBase::StartTaskSlot442(void*)
 {
-	FireKernelBaseSlot(TEXT("StartTaskSlot442"), TEXT("0x102827f0"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::StartTaskSlot442"), TEXT("0x102827f0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -3055,7 +515,8 @@ int32 FElysiumNpcBase::StartTaskSlot442(void*)
 //   layer 23, story 29e
 int32 FElysiumNpcBase::RunTask(void*)
 {
-	FireKernelBaseSlot(TEXT("RunTask"), TEXT("0x101a65e0"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::RunTask"), TEXT("0x101a65e0"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -3065,7 +526,8 @@ int32 FElysiumNpcBase::RunTask(void*)
 //   layer 22, story 29e
 int32 FElysiumNpcBase::RunTaskSlot444(void*)
 {
-	FireKernelBaseSlot(TEXT("RunTaskSlot444"), TEXT("0x10288780"), TEXT("29e"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::RunTaskSlot444"), TEXT("0x10288780"), TEXT("29e"),
+		DebugString());
 	return {};
 }
 
@@ -3099,8 +561,8 @@ int32 FElysiumNpcBase::RunTaskSlot444(void*)
 //   layer 0, story 29c
 TCHAR* FElysiumNpcBase::GetSchedulingErrorName()
 {
-	FireKernelBaseSlot(TEXT("GetSchedulingErrorName"), TEXT("0x101a6660"), TEXT("29c"),
-		DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetSchedulingErrorName"), TEXT("0x101a6660"),
+		TEXT("29c"), DebugString());
 	return {};
 }
 
@@ -3179,7 +641,8 @@ bool FElysiumNpcBase::ShouldGoToIdleState()
 //   layer 0, story 29c
 void FElysiumNpcBase::OnStateChange(EElysiumNpcState, EElysiumNpcState)
 {
-	FireKernelBaseSlot(TEXT("OnStateChange"), TEXT("0x1026e3e0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnStateChange"), TEXT("0x1026e3e0"), TEXT("29c"),
+		DebugString());
 }
 
 // slot 464 0x101a6720 (walked) `NPC_STATE GetState()`
@@ -3198,8 +661,8 @@ void FElysiumNpcBase::OnChangeActivity(int32)
 //   layer 1, story 29c
 bool FElysiumNpcBase::ShouldMaintainActivity()
 {
-	FireKernelBaseSlot(TEXT("ShouldMaintainActivity"), TEXT("0x10272790"), TEXT("29c"),
-		DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::ShouldMaintainActivity"), TEXT("0x10272790"),
+		TEXT("29c"), DebugString());
 	return {};
 }
 
@@ -3224,14 +687,16 @@ bool FElysiumNpcBase::QuerySeeEntity(FElysiumEntity*)
 //   layer 14, story 29d
 void FElysiumNpcBase::OnLooked(int32)
 {
-	FireKernelBaseSlot(TEXT("OnLooked"), TEXT("0x1026a2c0"), TEXT("29d"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnLooked"), TEXT("0x1026a2c0"), TEXT("29d"),
+		DebugString());
 }
 
 // slot 470 0x1026a5e0 (sdk) `void OnListened()`
 //   layer 8, story 29c
 void FElysiumNpcBase::OnListened()
 {
-	FireKernelBaseSlot(TEXT("OnListened"), TEXT("0x1026a5e0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnListened"), TEXT("0x1026a5e0"), TEXT("29c"),
+		DebugString());
 }
 
 // slot 471 0x1026a8a0 (walked) `float GetReactionDelay()`
@@ -3298,7 +763,7 @@ bool FElysiumNpcBase::IsValidEnemy(FElysiumEntity*)
 //   layer 22, story 29e
 void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity*)
 {
-	FireKernelBaseSlot(TEXT("GatherEnemyConditions"), TEXT("0x10270b20"), TEXT("29e"),
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GatherEnemyConditions"), TEXT("0x10270b20"), TEXT("29e"),
 		DebugString());
 }
 
@@ -3531,7 +996,8 @@ bool FElysiumNpcBase::MovementCost(int32, const FVector&, const FVector&, void*)
 //   layer 0, story 29c
 float FElysiumNpcBase::MaxYawSpeed()
 {
-	FireKernelBaseSlot(TEXT("MaxYawSpeed"), TEXT("0x10280bb0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::MaxYawSpeed"), TEXT("0x10280bb0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3570,7 +1036,8 @@ float FElysiumNpcBase::MaxYawSpeed()
 //   layer 0, story 29c
 float FElysiumNpcBase::GetMaxJumpSpeed() const
 {
-	FireKernelBaseSlot(TEXT("GetMaxJumpSpeed"), TEXT("0x101a6b60"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetMaxJumpSpeed"), TEXT("0x101a6b60"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3621,7 +1088,8 @@ bool FElysiumNpcBase::IsUnusableNode(void*)
 //   layer 0, story 29c
 bool FElysiumNpcBase::OnObstructingDoor(void*, FElysiumEntity*, float, void*)
 {
-	FireKernelBaseSlot(TEXT("OnObstructingDoor"), TEXT("0x1027dc80"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::OnObstructingDoor"), TEXT("0x1027dc80"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3634,7 +1102,8 @@ bool FElysiumNpcBase::OnObstructingDoor(void*, FElysiumEntity*, float, void*)
 //   layer 2, story 29c
 FVector FElysiumNpcBase::EyeOffset(int32, int32)
 {
-	FireKernelBaseSlot(TEXT("EyeOffset"), TEXT("0x10274db0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::EyeOffset"), TEXT("0x10274db0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3799,15 +1268,16 @@ void FElysiumNpcBase::OnEndMoveAndShoot()
 //   layer 1, story 29c
 void FElysiumNpcBase::TranslateEnemyChasePosition(FElysiumEntity*, FVector&, void*, void*)
 {
-	FireKernelBaseSlot(TEXT("TranslateEnemyChasePosition"), TEXT("0x10289f20"), TEXT("29c"),
-		DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::TranslateEnemyChasePosition"), TEXT("0x10289f20"),
+		TEXT("29c"), DebugString());
 }
 
 // slot 564 0x10270840 (walked) `bool FCanCheckAttacks()`
 //   layer 2, story 29c
 bool FElysiumNpcBase::FCanCheckAttacks()
 {
-	FireKernelBaseSlot(TEXT("FCanCheckAttacks"), TEXT("0x10270840"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::FCanCheckAttacks"), TEXT("0x10270840"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3845,7 +1315,8 @@ int32 FElysiumNpcBase::GetHintActivity(int16)
 //   layer 1, story 29c
 int32 FElysiumNpcBase::GetCoverActivity(void*)
 {
-	FireKernelBaseSlot(TEXT("GetCoverActivity"), TEXT("0x10274aa0"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetCoverActivity"), TEXT("0x10274aa0"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3854,7 +1325,8 @@ int32 FElysiumNpcBase::GetCoverActivity(void*)
 //   layer 4, story 29c
 int32 FElysiumNpcBase::GetReloadActivity(void*)
 {
-	FireKernelBaseSlot(TEXT("GetReloadActivity"), TEXT("0x10274820"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetReloadActivity"), TEXT("0x10274820"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3867,7 +1339,8 @@ int32 FElysiumNpcBase::GetReloadActivity(void*)
 //   layer 18, story 29d
 void FElysiumNpcBase::SetTurnActivity()
 {
-	FireKernelBaseSlot(TEXT("SetTurnActivity"), TEXT("0x10289d10"), TEXT("29d"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::SetTurnActivity"), TEXT("0x10289d10"), TEXT("29d"),
+		DebugString());
 }
 
 // slot 573 0x1026fcf0 (walked) `bool InnateWeaponLOSCondition(const Vector&, const Vector&, bool)`
@@ -3884,7 +1357,8 @@ void FElysiumNpcBase::SetTurnActivity()
 //   layer 2, story 29c
 bool FElysiumNpcBase::ShouldMoveAndShoot()
 {
-	FireKernelBaseSlot(TEXT("ShouldMoveAndShoot"), TEXT("0x10278c60"), TEXT("29c"), DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::ShouldMoveAndShoot"), TEXT("0x10278c60"), TEXT("29c"),
+		DebugString());
 	return {};
 }
 
@@ -3915,8 +1389,8 @@ void FElysiumNpcBase::NotifyDeadFriend(FElysiumEntity*)
 //   layer 0, story 29c
 void* FElysiumNpcBase::GetClassScheduleIdSpace()
 {
-	FireKernelBaseSlot(TEXT("GetClassScheduleIdSpace"), TEXT("0x101a6d00"), TEXT("29c"),
-		DebugString());
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetClassScheduleIdSpace"), TEXT("0x101a6d00"),
+		TEXT("29c"), DebugString());
 	return {};
 }
 
@@ -3924,11 +1398,3 @@ void* FElysiumNpcBase::GetClassScheduleIdSpace()
 //   layer 4, story 29c
 // verdict `dead`: the body is `FElysiumNpcBase::ReportAIState`, written by hand in the substrate.
 // Declared here, defined there.
-
-// slot 582 0x10277d90 (walked) `void ReportOverThinkLimit(float)`
-//   layer 12, story 29d
-void FElysiumNpcBase::ReportOverThinkLimit(float)
-{
-	FireKernelBaseSlot(TEXT("ReportOverThinkLimit"), TEXT("0x10277d90"), TEXT("29d"),
-		DebugString());
-}

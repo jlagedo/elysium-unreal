@@ -26,7 +26,7 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcCombat10Shared.h"
 #include "Substrate/ElysiumNpcConditionsBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"

@@ -42,26 +42,6 @@ FVector FElysiumNpcBase::EyePosition() const
 	return FElysiumCombatCharacter::EyePosition();
 }
 
-void* FElysiumNpcBase::EyeAngles()
-{
-	// `0x100b4bc0`, EIGHT bytes and no frame:
-	//
-	//     100b4bc0  MOV EAX,dword ptr [ECX]
-	//     100b4bc2  JMP dword ptr [EAX + 0x36c]
-	//
-	// `+0x36c` is slot 219, `GetAbsAngles()`. An NPC's eye angles ARE its body angles in this
-	// engine — there is no separate head orientation at this slot — and 82 classes fill 194 with
-	// this exact tail call.
-	return GetAbsAngles();
-}
-
-void* FElysiumNpcBase::LocalEyeAngles()
-{
-	// `0x100b4be0`, the same eight bytes with `+0x374` — slot 221, `GetAngles()`, the LOCAL angles.
-	// 80 classes fill 195 with it.
-	return GetAngles();
-}
-
 FVector FElysiumNpcBase::BodyTargetAnchor(const FVector& CentreCm, const FVector& OriginCm)
 {
 	// `0x102789c0`'s head, from the listing (`102789c6`..`10278a23`): slot 192 `WorldSpaceCenter()`,
@@ -129,20 +109,6 @@ FVector FElysiumNpcBase::BodyTarget(const FVector& /*PosSrc*/, bool bNoisy, bool
 		Noise2 = Stream.FRandRange(GBodyTargetNoiseMin, GBodyTargetNoiseMax);
 	}
 	return BodyTargetBlend(AnchorCm, EyeCm, bNoisy, bAimAtEyeExactly, Noise1, Noise2);
-}
-
-void FElysiumNpcBase::SetSize(const FVector& InSizeCm)
-{
-	// `0x100b1890`, 146 bytes, of which 132 are the scope-trace push and pop: the body reads
-	// `m_iName` (`+0x026c`) purely to label a crash-report breadcrumb (`"CBaseEntity::SetSize"`,
-	// with `"NULL ENTITY"` for a null `this` and the empty string for an unnamed entity), pushes the
-	// row, writes the three words, and pops. The breadcrumb stack has no observable effect on any
-	// program and is not reproduced.
-	//
-	// The three writes ARE the body: `m_vecSize` (`+0x038c`) and the two words after it. Nothing in
-	// layers 0–9 reads them but slot 214 `GetSize`. Unreal's collision component is the eventual
-	// host for an actor's bounds; until then this member is what the kernel sees.
-	SizeCm = InSizeCm;
 }
 
 uint32 FElysiumNpcBase::DebugOverlayBits() const

@@ -15,7 +15,7 @@
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"

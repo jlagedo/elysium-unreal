@@ -10,7 +10,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"

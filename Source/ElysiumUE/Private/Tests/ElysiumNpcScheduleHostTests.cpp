@@ -81,7 +81,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestEqual(TEXT("inside interrupt reset"), Npc->ScheduleHost.InsideInterruptDistanceSqr, 0.f);
 	TestEqual(TEXT("outside interrupt reset"), Npc->ScheduleHost.OutsideInterruptDistanceSqr, 0.f);
 	TestEqual(TEXT("hint released for five seconds"), Npc->BaseScheduleHost.HintReusableAt, 5.0);
-	TestTrue(TEXT("sleep attack margin restored"), Npc->BaseScheduleHost.AttackExtentsCm.Equals(FVector(10,10,30)));
+	TestTrue(TEXT("sleep attack margin restored"), Npc->AttackExtentsCm.Equals(FVector(10,10,30)));
 	TestFalse(TEXT("TaskFail consumes the prop's kickable permission"), Prop->bNpcKickable);
 	TestFalse(TEXT("TaskFail drops the resolved kick prop handle"), Npc->ScheduleHost.KickProp.IsSet());
 	TestFalse(TEXT("ClearHintNode clears AT_COVER_HINT"), Npc->NpcFlags.Has(EElysiumNpcFlag::AT_COVER_HINT));
@@ -120,7 +120,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->ScheduleHost.SavedSleepExtents = FVector::ZeroVector;
 	Npc->TaskFail(0x0c);
-	TestTrue(TEXT("zero attack margin restores successfully"), Npc->BaseScheduleHost.AttackExtentsCm.IsZero());
+	TestTrue(TEXT("zero attack margin restores successfully"), Npc->AttackExtentsCm.IsZero());
 	Npc->NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN);
@@ -131,7 +131,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	// Slot 435's recovered signature is `void OnScheduleChange(CAI_Schedule*)`; `102a0940` ignores
 	// the argument, and this direct base-body case supplies retail's null schedule pointer.
 	Npc->OnScheduleChange(ElysiumScheduleId::None);
-	TestTrue(TEXT("schedule replacement also restores attack margins"), Npc->BaseScheduleHost.AttackExtentsCm.Equals(FVector(4,5,6)));
+	TestTrue(TEXT("schedule replacement also restores attack margins"), Npc->AttackExtentsCm.Equals(FVector(4,5,6)));
 	TestFalse(TEXT("activity-copy cleanup clears invincibility"), Npc->bInvincible);
 	TestFalse(TEXT("activity-copy bit is consumed by unconditional tail"), Npc->NpcFlags.Has(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN));
 	TestEqual(TEXT("UnOblivious reconnects even without disconnect bookkeeping bit"), Npc->BaseScheduleHost.SquadDisconnected, 0);

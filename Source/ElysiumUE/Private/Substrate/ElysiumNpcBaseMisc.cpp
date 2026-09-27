@@ -9,7 +9,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 
@@ -121,54 +121,6 @@ bool FElysiumNpcBase::StandoffSchedulesLoaded()
 	// keeps the zero its `.data` cell holds. Answering false is the recovered state, not a refusal
 	// invented to close a branch.
 	return false;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 272 `AllocateLayer` — `0x10099470`.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpcBase::AllocateLayer()
-{
-	// `0x10099470`. The listing is the authority here, because the decompilation types the array as
-	// `m_angPrevSeqAngles`: `EDX = (i + i*2) << 4` then `+ ESI + 0x748`, stride `0x30` — the gesture
-	// layer table at `+0x0734` with `m_flWeight` at `+0x14` inside each 0x30-byte record. The scan
-	// starts at `GetFirstGestureLayer()` (slot 267, `0x10098a40`), runs while the index is below 4,
-	// and answers the first slot whose weight equals `_DAT_104454c4` (0.0f), else -1.
-	//
-	// Family **Anim** already carries that table and landed this exact body as
-	// `AllocateGestureLayer()` beside slot 272's stub, precisely so its rows would not search a stub
-	// that answers 0 for "not found". The slot now forwards to it; there is one scan, not two.
-	return AllocateGestureLayer();
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 296 — `0x10348ba0`.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumNpcBase::Slot296(int32 Argument)
-{
-	// `0x10348ba0`, arm by arm:
-	//     if (m_GrappleRole (+0x153c) == -1) return false;
-	//     if (m_GrapplePartner (+0x1538) == INVALID_EHANDLE) return false;
-	//     if (!resolve(m_GrapplePartner)) return false;           // PTR_DAT_10566458, & 0x1fff,
-	//                                                             // generation >> 0xd
-	//     return param_1 == 0xb;
-	//
-	// The three grapple terms are exactly `FElysiumGrappleState::IsPaired()` plus the world resolve
-	// its comment says every consumer that can reach a world must also do.
-	//
-	// **Unrecovered: what `0xb` is.** Slot 296 has no dispatch site anywhere in the image (0d/0v/0c),
-	// so nothing states the argument's domain; it is not a `m_GrappleType` value (those run 0..8).
-	// The literal is reproduced as the literal.
-	if (!Grapple.IsPaired())
-	{
-		return false;
-	}
-	if (World == nullptr || World->Resolve(Grapple.Partner) == nullptr)
-	{
-		return false;
-	}
-	return Argument == 0xb;
 }
 
 // -------------------------------------------------------------------------------------------------

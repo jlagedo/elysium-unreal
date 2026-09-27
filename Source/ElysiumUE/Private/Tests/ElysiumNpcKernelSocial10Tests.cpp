@@ -9,7 +9,7 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcDialogue.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 

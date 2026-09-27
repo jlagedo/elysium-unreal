@@ -10,7 +10,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
@@ -184,19 +184,6 @@ bool FElysiumNpcBase::RetailCollisionExtents(const FElysiumEntity& Entity, FVect
 	return false;
 }
 
-bool FElysiumNpcBase::RetailIsStandable(const FElysiumEntity& Entity)
-{
-	// `CBaseEntity::IsStandable()` slot 164 `0x100b50a0`:
-	//     if (GetSolidFlags() & 0x10) return false;
-	//     int mt = GetMoveType();
-	//     if (mt == 1 || mt == 6 || mt == 2) return true;
-	//     return thunk_FUN_100b5110(this);
-	// **SEAM**: no solid flags and no move type here. It answers FALSE, which is retail's own answer
-	// for the first arm, and `CanStandOn` therefore refuses every non-null candidate.
-	(void)Entity;
-	return false;
-}
-
 uint32 FElysiumNpcBase::ActiveWeaponCapabilityWord() const
 {
 	// The active weapon's vtable +0x5a0 (slot 360, retail body `0x1014f930`). **SEAM**: no such
@@ -285,28 +272,6 @@ bool FElysiumNpcBase::BaseEntityIsMoving(const FElysiumEntity& Entity)
 	return !(Entity.Velocity.X == 0.0 && Entity.Velocity.Y == 0.0 && Entity.Velocity.Z == 0.0);
 }
 
-bool FElysiumNpcBase::CanStandOn(FElysiumEntity* Other)
-{
-	// slot 166, `CAISound::FUN_10026f80` `0x10026f80`, the body slot 166 carries for the whole family
-	// (`CNPC_VMingXiaoTentacle::vfunc166` `0x1039ebd0` overrides it on its C++ class, story 5 step 3):
-	//     if (other && !other->IsStandable()) return false;
-	//     return true;
-	if (Other != nullptr && !RetailIsStandable(*Other))
-	{
-		return false;
-	}
-	return true;
-}
-
-void FElysiumNpcBase::GetGroundVelocityToApply(FVector& OutVelocity)
-{
-	// slot 210. `CAISound::FUN_10027370` `0x10027370` copies the three shared statics
-	// `DAT_1070d1b0/b4/b8` into the out-parameter. All three sit in `.data`'s zero-initialised tail
-	// (the section's raw data ends at `0x106b9000`) and no corpus function writes them, so the
-	// contribution is exactly `vec3_origin`.
-	OutVelocity = FVector::ZeroVector;
-}
-
 bool FElysiumNpcBase::OverrideMove(float Interval)
 {
 	// slot 525. The census holds three species bodies and this leaf dispatches none of them:
@@ -379,26 +344,6 @@ bool FElysiumNpcBase::ValidateNavGoal()
 	return true;
 }
 
-void FElysiumNpcBase::MoveDone()
-{
-	// slot 133. `CAI_BaseNPC::FUN_101c1720` `0x101c1720` (read from the listing — the decompiler
-	// could not recover the tail's jump table):
-	//     MoverData_CurrPos = MoverData_TargetPos;          // +0x498 <- +0x494
-	//     if (m_movementType == 1) LinearMoveDone();        // +0x558
-	//     else if (m_movementType == 2) AngularMoveDone();
-	//     m_movementType = 0;
-	//     if (m_pfnMoveDone) (this->*m_pfnMoveDone)();      // +0x114
-	//
-	// The base slot-133 body `0x10026c50` is the last line alone, a tail JMP through `+0x114`.
-	//
-	// **SEAM.** None of the four words is an NPC's: +0x494/+0x498 and +0x558 are `CBaseEntity`'s
-	// func_-mover state, which this runtime carries on `FElysiumMover` and which an NPC is never a
-	// party to, and +0x114 is a member-function-pointer think vocabulary this runtime does not have.
-	// What is recorded is that the dispatch was reached, which is the whole of what slot 133 does
-	// for an NPC.
-	++MotorSeams.MoveDone;
-}
-
 bool FElysiumNpcBase::AutoMovement()
 {
 	// `CAI_BaseNPC::AutoMovement` `0x10280a50`:
@@ -429,20 +374,6 @@ bool FElysiumNpcBase::AutoMovement()
 		return false;
 	}
 	return MotorApplyIntervalMovement(DeltaUnits, YawDelta);
-}
-
-void FElysiumNpcBase::PerformMovement(float Interval, int32 MoveFlags)
-{
-	// `CAI_BaseNPC::PerformMovement` `0x1026c120` — VProf push/pop and an `rdtsc` pair around ONE
-	// statement: `m_pNavigator->vtable[0x14/4 = 5](param_1, param_2)`, both parameters forwarded
-	// untouched. The profiler bookkeeping is retail's own mechanism; the move step is the rule.
-	//
-	// **SEAM**: `IElysiumNpcMotor` has no per-interval move step to delegate to — it integrates on
-	// the actor tick, which `FElysiumScriptedCharacter::SyncMovingRecord` states as this runtime's
-	// named divergence from retail's "the entity origin IS the body". The delegate is recorded.
-	MotorSeams.PerformMovementInterval = Interval;
-	(void)MoveFlags;
-	++MotorSeams.PerformMovement;
 }
 
 void FElysiumNpcBase::PostRun()

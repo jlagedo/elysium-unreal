@@ -11,7 +11,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -21,163 +21,6 @@
 #include "Visual/ElysiumEyeRig.h"
 
 // --- Moved from `ElysiumNpcClosure.cpp` (story 5 step 5) ---
-
-float FElysiumNpcBase::Slot48()
-{
-	// `0x10026810` -> `ElysiumCameraOverride::DefaultRollDegrees`. `IElysiumCameraOverrideSource`'s
-	// own `GetCameraRoll()` default is the same constant, written FROM this body.
-	return ElysiumCameraOverride::DefaultRollDegrees;
-}
-
-float FElysiumNpcBase::Slot49()
-{
-	// `0x10026830` -> `ElysiumCameraOverride::DefaultFieldOfView`.
-	return ElysiumCameraOverride::DefaultFieldOfView;
-}
-
-void FElysiumNpcBase::SetOrigin(float X, float Y, float Z)
-{
-	// `0x10026a10`, and the whole of it: build a `Vector` on the stack from the three floats and
-	// dispatch `vtable +0xf8` — slot 62, `SetOrigin(const Vector&)`. A compiler-generated forwarding
-	// thunk shared unmodified by about 82 classes, not retail logic, which is why 29c's verdict is
-	// `mechanism` and names `RTTI:VirtualThunk`.
-	//
-	// It forwards VIRTUALLY here too, exactly as retail does: slot 62 (`0x100b2be0`) is another
-	// story's row and is still a generated stub, so this reaches whatever that slot eventually
-	// answers rather than a copy of it. Reproducing the dispatch is the point — a species that
-	// overrides slot 62 must be reached through slot 63 as well.
-	SetOrigin(FVector(X, Y, Z));
-}
-
-void* FElysiumNpcBase::GetPredDescMap()
-{
-	// `0x10321670` -> `&datamap_CBaseCombatCharacter_10619d10`. REFUSAL: no datamap; the port's
-	// save mechanism is `FElysiumSaveArchive`, a per-type `Serialize`, not a descriptor table.
-	++ClosureRefusals.PredDescMap;
-	return nullptr;
-}
-
-bool FElysiumNpcBase::Slot88()
-{
-	// `0x10026b50` is a bare tail jump into `0x10146700` on the eight-byte tracker at `this+0x1b0`
-	// (interval word `+0x4`, countdown `+0x6`, flag bytes `+0x0`/`+0x1`/`+0x2`). `0x10146700` runs
-	// the countdown down by the frame delta, re-arms it and raises `+0x2` when it lapses, and
-	// answers "a change is pending". Slot 89 (`0x10026b70`) zeroes `+0x1`/`+0x2`, and
-	// `SetOrigin` (`0x100b2be0`) sets `+0x1b1`. The tracker's retail NAME is **unrecovered** — no
-	// datamap names it and no corpus body declares it.
-	//
-	// **REFUSAL.** Roughly 80 unrelated non-NPC classes (props, triggers, items) fill this slot with
-	// the same body, which is what says it is engine plumbing rather than an NPC rule; it is the
-	// networked-edict dirty flag, and this substrate has no replication to dirty. No port member
-	// stands `+0x1b0` — the shape map has no row for it, and no other family declared one.
-	//
-	// `false` is not a placeholder: it is what `0x10146700` itself answers for a ZERO-INITIALISED
-	// tracker. With `+0x4` zero the countdown arm never runs, `+0x0` is clear, and the function
-	// takes its `(sVar1 == 0)` exit and returns 0. An NPC that never dirtied has no change pending.
-	++ClosureRefusals.ChangeTracker;
-	return false;
-}
-
-void FElysiumNpcBase::Physics_TraceEntity(FElysiumEntity* Entity, const FVector& StartCm,
-	const FVector& EndCm, uint32 Mask, void* OutTrace)
-{
-	// `0x100ab450`, 121 bytes of which 100 are the crash-report breadcrumb push and pop: the body
-	// writes `"Physics_TraceEntity"` into the scope-trace stack, calls `thunk_FUN_101cd110` with all
-	// five arguments unchanged, and pops. `0x101cd110` issues the trace through the engine trace
-	// service's own vtable (`DAT_1070b254 + 0x14`). There is nothing else in the body, which is 29c's
-	// `mechanism` verdict and why it names `UWorld::LineTraceSingleByChannel`.
-	//
-	// **REFUSAL, and it is the out parameter that forces it.** The port HAS a trace seam — the
-	// embodiment's `QueryLineOfSight` — but retail's fifth argument is a `trace_t*`, a Source
-	// structure (fraction, endpos, plane, surface, hit entity, hitbox, physics bone) that this
-	// substrate stands no counterpart for, so the generator could only type it `void*`. Filling a
-	// buffer whose layout is not the caller's would be worse than filling none, and answering only
-	// the boolean half would silently drop the fraction and the endpos that every retail consumer
-	// of this slot reads. So the trace is NOT issued and `OutTrace` is left exactly as the caller
-	// handed it in — which the case asserts by passing a sentinel-filled buffer.
-	//
-	// What it takes to close: a port `trace_t` and the world trace behind it. Then this becomes a
-	// forward, and the `Mask` (Source's `MASK_*` content flags) becomes a channel choice.
-	(void)Entity;
-	(void)OutTrace;
-	++ClosureRefusals.PhysicsTraceEntity;
-	ClosureRefusals.TraceStartCm = StartCm;
-	ClosureRefusals.TraceEndCm = EndCm;
-	ClosureRefusals.TraceMask = Mask;
-}
-
-void FElysiumNpcBase::MakeTracer(const FVector& StartCm, void* Trace, int32 TracerType)
-{
-	// `0x10267260`, 186 bytes and 497 classes deep — the stock SDK body. It builds a `CPASFilter`
-	// around `param_1` (the tracer's start), and when `param_3 == 1` (`TRACER_LINE`) fires the
-	// bullet-tracer temp entity from that point to the trace's `endpos` (`param_2 + 0xc`) with this
-	// entity's index as the attachment owner, then unwinds the filter's heap. Every other tracer
-	// type builds the filter and fires nothing. A pure visual effect: no condition, no state, no
-	// stamp, and nothing downstream reads anything it writes.
-	//
-	// **REFUSAL, for the same two reasons as slot 102.** `param_2` is a `trace_t&` this substrate
-	// has no type for, so the endpos the tracer would be drawn TO cannot be read; and the PAS filter
-	// is Source's potentially-audible-set broadcast, whose counterpart here is Niagara plus the
-	// engine's own relevance, not a recipient list. 29c's `mechanism` target
-	// (`UGameplayStatics::SpawnEmitterAtLocation`) is the right eventual home and the effect is
-	// visual-only, so adopting it changes no event order — but it needs the endpos first.
-	(void)Trace;
-	++ClosureRefusals.MakeTracer;
-	ClosureRefusals.TracerStartCm = StartCm;
-	ClosureRefusals.TracerType = TracerType;
-}
-
-FVector FElysiumNpcBase::WorldSpaceCenter()
-{
-	// `0x10027160` -> `ElysiumCameraShots::SurroundingBounds`, the port's one bounds accessor.
-	return ElysiumCameraShots::SurroundingBounds(*this).GetCenter();
-}
-
-void* FElysiumNpcBase::WorldSpaceCenter() const
-{
-	// `0x100b4c30`, the `const Vector&` overload of the SAME body. The value is slot 192's; what is
-	// different is that retail hands out an ADDRESS, into its rotating temp-vector ring. The port
-	// caches into `WorldSpaceCentreCacheCm` instead — a named modernization stated in full at the
-	// member's declaration in `Substrate/ElysiumNpcClosure.inl`.
-	WorldSpaceCentreCacheCm = ElysiumCameraShots::SurroundingBounds(*this).GetCenter();
-	return &WorldSpaceCentreCacheCm;
-}
-
-void FElysiumNpcBase::VPhysicsDestroyObject()
-{
-	// `0x100b5040`, 47 bytes, 497 classes: when `m_pPhysicsObject` (`+0x36c`) is set, unregister it
-	// from the physics-object list (`thunk_FUN_1002ee60`), destroy it (`thunk_FUN_10158520`) and
-	// null the pointer. Stock SDK teardown with no VtMB-specific rule.
-	//
-	// **REFUSAL.** There is no `m_pPhysicsObject` here. This substrate stands no rigid body: the
-	// shape map has no row for `+0x36c`, the collision surface it would tear down is Unreal's own
-	// (`UPrimitiveComponent::DestroyPhysicsState`, which the engine calls on component destruction
-	// without being asked), and no port system holds a physics handle to release. With the pointer
-	// null retail's body is `return;` — so answering nothing is not merely the port's answer, it is
-	// retail's for an NPC that never got a physics object, which is every NPC that was never
-	// ragdolled.
-	++ClosureRefusals.VPhysicsDestroyObject;
-}
-
-float FElysiumNpcBase::SetPoseParameter(int32 Index, float Value, bool bWrap)
-{
-	// `CBaseCombatCharacter::SetPoseParameter`, 413 bytes, 85 classes — the stock SDK LOOPING
-	// pose-parameter setter. It walks the two-entry registry at `m_flSet_PoseParameters`, and if the
-	// asked-for index is one of them it stores the value and, when `bWrap` is set and the model
-	// resolves, wraps it using that pose parameter's own bounds (`+0x8`, `+0xc`, `+0x10` off the
-	// `mstudioposeparamdesc_t`) and the fixed SDK wrap fraction `_DAT_10449270`. An index that is
-	// NOT in the registry falls through the loop to `CBaseAnimating::SetPoseParameter02` — slot 260,
-	// `0x10091fe0` — which is the ordinary non-looping setter.
-	//
-	// **The fall-through is the arm this runtime can take, and it is retail's own.** The registry is
-	// filled from the model's studio header, this substrate's animating tier stands no
-	// `studiohdr_t` and therefore no pose-parameter descriptors, so no index is ever a registered
-	// looping parameter and every call takes the miss. That is a refusal of the WRAP, not of the
-	// write: the value still goes where retail sends it on a miss.
-	(void)bWrap;
-	++ClosureRefusals.LoopingPoseParameter;
-	return SetPoseParameter02(Index, Value);
-}
 
 void FElysiumNpcBase::Slot355()
 {
@@ -207,15 +50,6 @@ void FElysiumNpcBase::Slot355()
 	// teardown at this slot keeps no release pose, and `true` is reserved for the anim-event 4006
 	// exit that the event handler, not this slot, takes.
 	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
-}
-
-bool FElysiumNpcBase::FInViewCone(const FVector& PointCm)
-{
-	// `0x10326a20` -> `FElysiumNpcSenses::IsInViewCone(Npc, point)`, the base 3-D apex test. The
-	// scope-trace push and pop around it are the crash-report breadcrumb stack and have no
-	// observable effect. The target cone scalar defaults to 1.0 because a POINT carries no stealth
-	// surface — retail's point overload does not read one either.
-	return FElysiumNpcSenses::IsInViewCone(*this, PointCm);
 }
 
 const TCHAR* FElysiumNpcBase::GetStateName(EElysiumNpcState State)

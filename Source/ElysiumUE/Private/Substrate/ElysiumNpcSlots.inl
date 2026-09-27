@@ -6,9 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 170 of the 617 Troika-line slots are declared here, on `FElysiumNpc`: 33 Troika introduces and
-// 137 it overrides with a body of its own. 32 are declared by hand, because the port already
-// implements them under the name `SLOT_PORT_MAP` records.
+// 170 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 137 it
+// overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -16,12 +15,11 @@
 // This file is included INSIDE `class FElysiumNpc` (`Substrate/ElysiumNpc.h`). It is not
 // a header: it has no include guard and declares nothing of its own. One declaration per
 // slot, in slot order, with the retail declaration in the comment and the port's lowered
-// signature in the code. A virtual here declares the surface retail dispatches through;
-// species classes override it from story 5 step 3 on.
+// signature in the code.
 //
-// The Troika layer (story 0019/5 step 5): the slots `CAI_BaseNPCTroika` introduces past
-// the base's table (`virtual`), and the base's slots it fills with a body of its own
-// (`override`). The base's declarations are in `ElysiumNpcBaseSlots.inl`.
+// Each slot is declared by the port class of the retail class that introduces it, with that
+// class's own body, and overridden by every port class whose retail table holds another
+// body there (story 0019/5 step 6). The stub names the retail class that owns its body.
 //
 // A body lands on one of these in 29c/29d/29e. Until then the definition in
 // `ElysiumNpcSlots.cpp` tallies `elysium.stubs` with the retail address — except
@@ -29,10 +27,11 @@
 // generator emits, or that the body is written by hand in the substrate, in which case no
 // definition is generated at all and the linker is what checks the claim.
 //
-// The slots NOT declared here are the ones the port already runs. They are listed rather
-// than left implicit, because "this slot has a body somewhere else" is exactly the fact a
-// reader of this file needs, and the census carries the same pairing as data:
-// slot 15 0x1009af40 FElysiumNpc::SetAttackExtents — `CBaseEntity::SetAttackExtents` 0x1009af40
+// The slots NOT declared anywhere in the generated surface are the ones the port already
+// runs, or a dead stub deleted in 0019/5 step 6. They are listed rather than left
+// implicit, because "this slot has a body somewhere else" is exactly the fact a reader
+// needs, and the census carries the same pairing as data:
+// slot 15 0x1009af40 FElysiumEntity::SetAttackExtents — `CBaseEntity::SetAttackExtents` 0x1009af40
 // slot 50 0x10332010 FElysiumCombatCharacter::GetCameraViewpointPosition — the dialogue camera's
 // viewpoint source
 // slot 51 0x103320b0 FElysiumCombatCharacter::GetCameraTargetPosition — the dialogue camera's
@@ -45,6 +44,9 @@
 // slot 103 0x10298d30 FElysiumNpc::Spawn — the leaf's own spawn
 // slot 113 0x1028e310 FElysiumNpc::Activate — the leaf's own activate
 // slot 117 0x100b4320 FElysiumEntity::ObjectCaps — the `FCAP_*` bitfield the port reads one bit of
+// slot 118 0x100abc90 FElysiumEntityWorld::AcceptInput — `CBaseEntity::AcceptInput` 0x100abc90 is
+// the datamap INPUT walk; the world's chokepoint and the class registry are that walk (0019/5 step
+// 6)
 // slot 119 0x1033cb90 FElysiumEntity::Kill — terminal: mark dead and go inert
 // slot 134 0x10026c70 FElysiumNpc::Think — `NPCThink` 0x10292de0, the whole pass
 // slot 173 0x100a4e70 FElysiumEntity::Use — the `+use` door
@@ -68,6 +70,8 @@
 // slot 453 0x102ad140 FElysiumNpc::BuildScheduleTestBits — the interrupt mask, ported in story 25
 // slot 534 0x1026b270 FElysiumCombatCharacter::EyeLookTargetHandle — the gaze cascade's chosen
 // subject; `EyeLookTarget` beside it is the point it resolved to
+// slot 582 0x10277d90 deleted — `CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller,
+// overridden nowhere (0019/5 step 6)
 // slot 614 0x102c23f0 FElysiumNpc::ResetThinkTimers — the four think stamps, ported in story 21
 
 	// slot 5 0x1028d5e0 (walked) `void* ~CBaseEntity(unsigned int)`
@@ -632,7 +636,7 @@
 	//   layer 2, story 29c
 	virtual void Slot616();
 
-	// The base layer's other overloads of an overridden name stay visible.
+	// The inherited overloads of an overridden name stay visible.
 	using FElysiumNpcBase::FInViewCone;
 	using FElysiumNpcBase::GetEnemy;
 	using FElysiumNpcBase::TraceMessage;

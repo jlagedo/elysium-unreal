@@ -197,6 +197,9 @@ namespace ElysiumNpcKernelShape
 	// The slots whose body the port generates from the recovered literal, each with the probe the
 	// defaults suite calls it through. Defined beside those bodies in `ElysiumNpcKernelSlots.cpp`.
 	TArrayView<const FElysiumNpcSlotDefault> SlotDefaults();
+	// The constant bodies a Troika instance never dispatches to -- a class's own body at a slot a
+	// more-derived class refills -- each probed through a qualified call (0019 story 5 step 6).
+	TArrayView<const FElysiumNpcSlotDefault> ShadowedSlotDefaults();
 
 	// The ledger's own spelling of a tier (`datamap`, `sdk-order`, `walked`…), which is what the
 	// digest folds and what a diagnostic prints.

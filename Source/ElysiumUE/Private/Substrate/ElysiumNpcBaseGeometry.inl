@@ -39,9 +39,3 @@ static FVector BodyTargetAnchor(const FVector& CentreCm, const FVector& OriginCm
  *  overlay off, and the shipped default. */
 uint32 DebugOverlayBits() const;
 
-/** `+0x038c m_vecSize` and the two words after it — the box `CBaseEntity::SetSize` (`0x100b1890`,
- *  slot 213) writes. A `CBaseEntity` word, below 29b's band, and written by this one body and read
- *  by `GetSize` (slot 214) alone in layers 0–9. CENTIMETRES, like every other length on this
- *  struct; Unreal's collision component is the eventual host and this member is what the kernel
- *  sees until then. */
-FVector SizeCm = FVector::ZeroVector;

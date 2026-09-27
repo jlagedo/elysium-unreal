@@ -9,7 +9,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -20,11 +20,6 @@
 
 namespace
 {
-	// `_DAT_1049e0c8`, a DOUBLE (`10326cbf  FCOMP double ptr [0x1049e0c8]`) with exactly ONE reader
-	// in the image — slot 364. 0.994 is a 6.28-degree half-angle: the aim cone is far narrower than
-	// the view cone (`0.2`, `ElysiumNpcSense::DefaultViewConeDot`), which is what makes
-	// `FInAimCone` a firing test and not a seeing test.
-	constexpr double GAimConeDotFloor = 0.994;
 	// `_DAT_104563b0` = 4096.0f, compared against a SQUARED distance — so the occlusion edge trips
 	// once the enemy has moved 64 Source units from where it was when sight was lost.
 	constexpr float GEnemyWentOccludedDistanceSqUnits = 4096.0f;
@@ -61,91 +56,6 @@ namespace
 }
 
 // --- Moved from `ElysiumNpcSensesBodies.cpp` (story 5 step 5) ---
-
-FVector FElysiumNpcBase::EarPosition()
-{
-	// `0x100b4c00`, 20 bytes: `(**(code**)(*this + 0x304))(out); return out;` — a tail call to slot
-	// 193, `EyePosition`, for the side effect of filling the out-vector, and the same pointer back.
-	// The ear IS the eye on every class in the family: 82 classes fill slot 196 and every one of
-	// them with this body.
-	return EyePosition();
-}
-
-bool FElysiumNpcBase::AimConeAdmits(const FVector& OriginCm, const FVector& TargetCm,
-	const FVector& Aim)
-{
-	// Slot 364's arithmetic, with the three virtual reads lifted out. See `FInAimCone` below for
-	// the listing this transcribes.
-	FVector Delta = TargetCm - OriginCm;
-	Delta.Z = 0.0;
-	if (!Delta.Normalize())
-	{
-		// `VectorNormalize` of a zero vector leaves the components alone and answers length 0;
-		// retail then dots zeros against 0.994, which refuses. Same answer.
-		return false;
-	}
-	return FVector::DotProduct(Delta, Aim) > GAimConeDotFloor;
-}
-
-bool FElysiumNpcBase::FInAimCone(const FVector& TargetCm)
-{
-	// `0x10326bd0`, 283 bytes of which the scope-trace push/pop is 200. The computation, read off
-	// the listing because the decompiler lost two of the three operands:
-	//
-	//     d = target - GetAbsOrigin()          (slot 217, vtable +0x364)
-	//     d.z = 0                              (10326c83  MOV [ESP+0xc],0x0)   <-- BEFORE normalise
-	//     VectorNormalize(&d)                  (PTR_thunk_FUN_10137220)
-	//     return dot(d, EyeDirection2D()) > 0.994   (slot 372, vtable +0x5d0; FCOMP double)
-	//
-	// **The Z is zeroed before the normalise, not after**, so the test is planar in both operands
-	// and a target directly overhead is at dot 0. 29c's walk reads it as a 3-D normalise; the
-	// immediate at `10326c83` says otherwise, and the difference is the whole answer for a target
-	// above or below the shooter.
-	//
-	// The dot's third term survives in the listing (`FLD [ESP+0x20]  FMUL [ESP+0x8]`) and is
-	// `eyeDir.z * 0`, so it contributes nothing — retail computes it anyway and so does this.
-	//
-	// `GetAbsOrigin()` is slot 217; the generated virtual is a declared stub that answers null, and
-	// `FElysiumEntity::Origin` is the word it would hand back — family **BaseHelpers** spells it
-	// the same way at its own slot-217 read.
-	//
-	// **SEAM, named**: `EyeDirection2D()` (slot 372) forwards to `HeadDirection2D()` (slot 370),
-	// which is still a GENERATED STUB answering the zero vector, so every call through this body
-	// refuses today. The refusal is the stub's, not the cone's — `AimConeAdmits` above carries the
-	// recovered rule and is what the suite drives.
-	return AimConeAdmits(Origin, TargetCm, EyeDirection2D());
-}
-
-bool FElysiumNpcBase::FInAimCone(FElysiumEntity* AimTarget)
-{
-	// `0x10326ae0`, 181 bytes. Past the scope trace it is three dispatches and nothing else:
-	//
-	//     eye  = EyePosition()                         (this, slot 193, vtable +0x304)
-	//     aim  = target->BodyTarget(eye, true, false)  (slot 197, vtable +0x314)
-	//     return FInAimCone(aim)                       (this, slot 364, vtable +0x5b0)
-	//
-	// The two literal booleans are pushed at `10326b0c`/`10326b0e` before the eye call, which is
-	// why the decompiler attached them to the wrong callee. `BodyTarget`'s answer, not the target's
-	// origin, is what the cone is measured to — a prone or crouched body aims at a different point.
-	if (AimTarget == nullptr)
-	{
-		// Retail dereferences `*param_1` for the vtable and would fault; every call site in the
-		// closure has already null-checked. Refusing is this port's own guard and changes no
-		// reachable arm.
-		return false;
-	}
-	const FVector EyeCm = EyePosition();
-	// Slot 197 is declared on `FElysiumNpc` only — this runtime stands the Troika line's
-	// `BodyTarget` (`0x102789c0`) and no `CBaseEntity` tier below it. For a non-NPC target the base
-	// `CBaseEntity::BodyTarget` is `WorldSpaceCenter()`, i.e. `GetAbsOrigin() + (mins+maxs)/2`, and
-	// family Motor's `RetailCollisionExtents` — the only source for those extents — is a seam that
-	// answers a zero box, so the centre reduces to the origin. That is a consequence of the extents
-	// seam, not a value invented here.
-	FElysiumNpc* TargetNpc = AimTarget->AsNpc();
-	const FVector AimPointCm = TargetNpc != nullptr
-		? TargetNpc->BodyTarget(EyeCm, true, false) : AimTarget->Origin;
-	return FInAimCone(AimPointCm);
-}
 
 FElysiumEntity* FElysiumNpcBase::GetEnemy() const
 {

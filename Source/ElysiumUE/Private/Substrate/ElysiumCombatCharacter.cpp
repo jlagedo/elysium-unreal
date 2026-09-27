@@ -1307,9 +1307,9 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	// fresh pick, jitter and weighted choice; nothing here is a function of the victim or of how many
 	// times it has been hit.
 	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Reaction);
-	ElysiumReactions::FElysiumFlinch Flinch;
+	ElysiumReactions::FElysiumFlinch Pick;
 	if (!ElysiumReactions::BuildFlinch(Attacker->Origin, Origin,
-		ElysiumSkeletalBasis::FromSourceAngles(Angles).Yaw, Rng, Flinch))
+		ElysiumSkeletalBasis::FromSourceAngles(Angles).Yaw, Rng, Pick))
 	{
 		return;   // horizontally coincident origins name no direction on a yaw fan
 	}
@@ -1326,8 +1326,8 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	// The clip's own length decides nothing — retail evaluates a static pose under that envelope — so
 	// a two-frame hit cell and a long one occupy the channel for exactly the same 0.4 s.
 	FElysiumReactionPlayRequest Reaction;
-	Reaction.Activity = Flinch.Activity();
-	Reaction.HitYawDegrees = Flinch.HitYawDegrees;
+	Reaction.Activity = Pick.Activity();
+	Reaction.HitYawDegrees = Pick.HitYawDegrees;
 	Reaction.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
 	Reaction.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
 	Reaction.bAllowFallbackLadder = false;

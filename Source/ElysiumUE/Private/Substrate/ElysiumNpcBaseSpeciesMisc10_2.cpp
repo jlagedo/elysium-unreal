@@ -17,12 +17,3 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 
-// --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 5) ---
-
-void FElysiumNpcBase::Slot332(FElysiumEntity* SlowTarget)
-{
-	// `CAI_BaseNPC#332` / `CAI_BaseNPCTroika#332` (`0x1014f890`) — the whole Troika-line body is
-	// `return;`. The ONE species override is `CNPC_VTzimisceHeadClaw`'s `0x103c1d80`, on its C++
-	// class (story 5 step 3).
-	(void)SlowTarget;
-}

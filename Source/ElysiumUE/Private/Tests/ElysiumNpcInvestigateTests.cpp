@@ -18,7 +18,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"

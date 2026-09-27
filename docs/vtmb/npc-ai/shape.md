@@ -55,6 +55,42 @@ _Recovered 2026-09-13, story 29b-0._
     `+0x98`. Examples: `0x1026f590`'s flags2 write, `OnDoorBlocked`'s alternate-AI arm, and motor
     slot 18's `m_flDesiredMoveYaw`.
   - On a base-only NPC `AsNpc()` is null, so the null arm is the base's own behaviour.
+- Every generated slot body stands on the port class of its retail owner (0019 story 5 step 6).
+  - The retail chain under the NPC is `CBaseEntity` → `CBaseToggle` → `CBaseAnimating` →
+    `CBaseAnimatingOverlay` → `CBaseFlex` → `CBaseCombatCharacter` → `CAI_BaseNPC` →
+    `CAI_BaseNPCTroika`. The port stands one class per node, except `CBaseToggle`:
+    `FElysiumEntity`, `FElysiumAnimating`, `FElysiumAnimatingOverlay`, `FElysiumFlex`,
+    `FElysiumCombatCharacter`, `FElysiumNpcBase`, `FElysiumNpc`.
+    - `CBaseToggle` introduces no slot, but its own bodies (slots 5, 31, 82, 108–110, 133, 135, 152)
+      stand on `FElysiumAnimating`, the nearest port class below it.
+  - A body's **owner** is the most-base node whose primary vtable holds the same thunk-resolved
+    pointer. Ghidra's namespace label is not an owner: 95 `CBaseEntity`-held bodies are labelled
+    `CAISound::`.
+  - A slot is declared on the port class of its **introducer** (the most-base table holding the
+    slot), with that class's own body. Each port class whose table refills it overrides it.
+    - Of `CAI_BaseNPC`'s 552 generated rows, 347 belong to the chain: `CBaseEntity` 178, `CBaseToggle`
+      and `CBaseAnimating` 25, `CBaseAnimatingOverlay` 14, `CBaseFlex` 15, `CBaseCombatCharacter` 115.
+    - 102 chain rows are a chain class's own body under a more-derived one. The NPC never runs them.
+  - The surfaces are `Public/Elysium<Class>Slots.inl` plus `Private/Substrate/Elysium<Class>Slots.cpp`,
+    with the hand bodies in `Elysium<Class>SlotBodies.*`.
+  - A stub names its owner (`CBaseEntity::GetModelIndex`), with its address and story unchanged.
+  - Eight retail slot names that a subclass also declares are reviewed rows (`gen_kernel_shape`
+    `SLOT_PORT_MAP` `accepted`):
+    - the weapon's `Hide`/`Unhide`;
+    - the cinematic camera's `ShouldTransmit`/`DrawDebugGeometryOverlays`;
+    - the maker's `ParseMapData`;
+    - the mover's `MoveDone`, which overrides slot 133 as retail's doors do, and its `IsMoving`;
+    - the player's `IsAlive`.
+  - The entity-method slots map onto what the port already has:
+    - `GetAbsOrigin`/`GetOrigin` (217/220) answer `Origin`;
+    - `GetAbsAngles`/`GetAngles` (219/221) answer `Angles`, by reference;
+    - `SetOrigin` (62) writes through `SetRuntimeOrigin` when the origin differs;
+    - `SetMoveType` (93) is the `m_MoveType`/`m_MoveCollide` seam;
+    - `AcceptInput` (118) is the world's input chokepoint;
+    - `Weapon_Switch` (388) and `GetModelIndex` (8) stay counting stubs. `SetActiveWeapon` ports
+      only the swap of `0x1032dde0`, and the port has no model-precache index.
+    - Named modernization: the port keeps one origin and no local/abs split, so 220 equals 217 for
+      a parented entity.
 
 **Unrecovered:** nothing.
 

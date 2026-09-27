@@ -141,9 +141,13 @@ bool FElysiumNpcKernelShapeCensusTest::RunTest(const FString&)
 		int32 Unsettled = 0;
 		for (const FElysiumNpcSlot& Slot : Slots())
 		{
+			// A slot with no port callable is a dead stub deleted in story 5 step 6 (`SLOT_PORT_MAP`
+			// `DELETED`): its verdict is `dead`, and nothing else may lose its callable.
+			const bool bDeleted = Slot.PortMethod != nullptr && FCString::Strlen(Slot.PortMethod) == 0
+				&& Slot.Verdict != nullptr && FCString::Strcmp(Slot.Verdict, TEXT("dead")) == 0;
 			TestTrue(TEXT("every slot names its declaration and the port's callable"),
 				Slot.Declaration != nullptr && FCString::Strlen(Slot.Declaration) > 0
-					&& Slot.PortMethod != nullptr && FCString::Strlen(Slot.PortMethod) > 0);
+					&& Slot.PortMethod != nullptr && (FCString::Strlen(Slot.PortMethod) > 0 || bDeleted));
 			if (Slot.Class != nullptr && FCString::Strlen(Slot.Class) > 0)
 			{
 				++Branch;

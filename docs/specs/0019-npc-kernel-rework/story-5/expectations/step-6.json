@@ -1,0 +1,3614 @@
+{
+ "schema_version": 1,
+ "ordered_tests": [],
+ "changes": [
+  {
+   "id": "step6-remap-AssignEnemy-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.AiScriptedSchedule.AssignEnemy",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MoveToGoal-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.AiScriptedSchedule.MoveToGoal",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Precedence-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.AiScriptedSchedule.Precedence",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Refusals-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.AiScriptedSchedule.Refusals",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-RetailChain-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.DialogueCamera.RetailChain",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Capability-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcCombat.Capability",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-IdleAcquisition-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcCombat.IdleAcquisition",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Retaliation-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcCombat.Retaliation",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 target(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 target(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Swing-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcCombat.Swing",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-StateMachine-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcEnemy.StateMachine",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MiscBodies-SetPoseParameter02",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim.MiscBodies",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub SetPoseParameter02 now stands on its retail owner CBaseAnimating (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SceneEvents-AddSceneExpressions",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim.SceneEvents",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::AddSceneExpressions | 0x10105f30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::AddSceneExpressions | 0x10105f30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub AddSceneExpressions now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SelectScheduleMeleeCombatHuman-HasUsableRangedWeapon-6180",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatHuman",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 subject(npc_VHuman) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 subject(npc_VHuman) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SelectScheduleMeleeCombatHuman-HasUsableRangedWeapon-7917",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatHuman",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 cop(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 cop(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SelectScheduleMeleeCombatMingXiao-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatMingXiao",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 subject(npc_VMingXiao) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 subject(npc_VMingXiao) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ShouldPlayIdleSoundZombie-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim10.ShouldPlayIdleSoundZombie",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ZombieLineSetModel-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelAnim10.ZombieLineSetModel",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MeleeRelease-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelBosses.MeleeRelease",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 andrei(npc_VAndreiBlood) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 andrei(npc_VAndreiBlood) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-add-DescriptorChain",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelChainSlots.DescriptorChain",
+   "evidence": "npc_VRat's descriptor chain below CAI_BaseNPC is retail's: CBaseCombatCharacter < CBaseFlex < CBaseAnimatingOverlay < CBaseAnimating < CBaseEntity",
+   "packet": "6h"
+  },
+  {
+   "id": "step6-add-EntityIntegrations",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelChainSlots.EntityIntegrations",
+   "evidence": "slots 194/195/217/219/220/221 answer Origin/Angles by reference; slot 62 SetOrigin 0x100b2be0 writes the origin; slot 93 SetMoveType 0x100aad70 writes both words only when the type differs",
+   "packet": "6h"
+  },
+  {
+   "id": "step6-add-PedestrianRestoreMoveType",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelChainSlots.PedestrianRestoreMoveType",
+   "evidence": "retail correction: CNPC_VPedestrian::OnRestore's load arm calls slot 93 SetMoveType(4, 0) at 103a2816, which now writes MOVETYPE_FLY / MOVECOLLIDE_DEFAULT instead of firing a stub",
+   "packet": "6h"
+  },
+  {
+   "id": "step6-add-StubNamesItsOwner",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelChainSlots.StubNamesItsOwner",
+   "evidence": "slot 8 GetModelIndex 0x100b17f0 stands on FElysiumEntity and tallies as CBaseEntity::GetModelIndex, once per call through the NPC or the entity",
+   "packet": "6h"
+  },
+  {
+   "id": "step6-remap-Factories-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelClass.Factories",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #45 npc_VZombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #45 npc_VZombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Factories-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelClass.Factories",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 npc_payphone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 npc_payphone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PrayerPulse-PrayerEnd",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelCombat10.PrayerPulse",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::PrayerEnd | 0x1033b890 (29c) | on #1 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::PrayerEnd | 0x1033b890 (29c) | on #1 fighter(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub PrayerEnd now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TroikaRanged-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelCombat10.TroikaRanged",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 fighter(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 fighter(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Seams-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDamage.Seams",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TraceAttack-BloodColor",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDamage.TraceAttack",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::BloodColor | 0x1014fa10 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::BloodColor | 0x1014fa10 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub BloodColor now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TraceAttack-DamageFlinch",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDamage.TraceAttack",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::DamageFlinch | 0x103229d0 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::DamageFlinch | 0x103229d0 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub DamageFlinch now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TraceBleed-BloodColor",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDamage.TraceBleed",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::BloodColor | 0x1014fa10 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::BloodColor | 0x1014fa10 (29c) | on #0 npc(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub BloodColor now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ReportAIState-GetGroundEntity",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDebug.ReportAIState",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetGroundEntity | 0x100b1510 (29c) | on #1 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetGroundEntity | 0x100b1510 (29c) | on #1 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetGroundEntity now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ThinkDebugPre-Weapon_ShootPosition",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDebug10.ThinkDebugPre",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Weapon_ShootPosition | 0x103338c0 (29c) | on #1 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::Weapon_ShootPosition | 0x103338c0 (29c) | on #1 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Weapon_ShootPosition now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ZombieTextOverlays-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDebug10.ZombieTextOverlays",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ActiveCamera-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.ActiveCamera",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Crosswalk-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.Crosswalk",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-GotoLineForResponse-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.GotoLineForResponse",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-HandleInteraction-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.HandleInteraction",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MessageSend-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.MessageSend",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PayphoneCanTalk-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.PayphoneCanTalk",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PursuitCounts-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelDialogue.PursuitCounts",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-AnglesAndThink-SetAngles",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.AnglesAndThink",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetAngles | 0x100b2d00 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::SetAngles | 0x100b2d00 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub SetAngles now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Payphone-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.Payphone",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Standable-GetSolid",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.Standable",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolid | 0x10027570 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetSolid | 0x10027570 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetSolid now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Standable-GetSolidFlags",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.Standable",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolidFlags | 0x100274d0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetSolidFlags | 0x100274d0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetSolidFlags now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-VPhysicsUpdate-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelEntityChain.VPhysicsUpdate",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Directions-BodyDirection3D",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelFacing.Directions",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::BodyDirection3D | 0x10331a40 (29c) | on #1 rat(npc_VRat) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::BodyDirection3D | 0x10331a40 (29c) | on #1 rat(npc_VRat) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub BodyDirection3D now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Directions-HeadDirection2D",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelFacing.Directions",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HeadDirection2D now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Directions-HeadDirection3D",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelFacing.Directions",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection3D | 0x10331b30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HeadDirection3D | 0x10331b30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HeadDirection3D now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-BodyTarget-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.BodyTarget",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-EyeOffset-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.EyeOffset",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-EyePosition-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.EyePosition",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-HullBits-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.HullBits",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SetSize-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.SetSize",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesCentre-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.SpeciesCentre",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-StandingOnHead-GetGroundEntity",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.StandingOnHead",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetGroundEntity | 0x100b1510 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetGroundEntity | 0x100b1510 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetGroundEntity now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-StandingOnHead-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelGeometry.StandingOnHead",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-HintTypeSpecies-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelHints.HintTypeSpecies",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #8 CNPC_VZombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #8 CNPC_VZombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Dormancy-GetMoveCollide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.Dormancy",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveCollide | 0x100aacd0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveCollide | 0x100aacd0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveCollide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Dormancy-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.Dormancy",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Dormancy-GetSolid",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.Dormancy",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolid | 0x10027570 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetSolid | 0x10027570 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetSolid now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Dormancy-GetSolidFlags",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle.Dormancy",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetSolidFlags | 0x100274d0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetSolidFlags | 0x100274d0 (29c) | on #0 subject(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetSolidFlags now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-CameraStartNPC-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.CameraStartNPC",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VCamera) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VCamera) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PayphoneNPCInit-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.PayphoneNPCInit",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 subject(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 subject(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesNPCInitSmoke-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.SpeciesNPCInitSmoke",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesNPCInitSmoke-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.SpeciesNPCInitSmoke",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 subject(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #1 subject(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-StartNPC-GetMoveType-6308",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.StartNPC",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 subject(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 subject(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-StartNPC-GetMoveType-4964",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.StartNPC",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VTzimisce) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VTzimisce) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ZombieNPCInit-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.ZombieNPCInit",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 subject(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-OnVictimHitByMe-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMisc.OnVictimHitByMe",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #3 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #3 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesBodies-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMisc.SpeciesBodies",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #6 yukie(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #6 yukie(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MaxYawSpeedTroika-GetIdealYawSpeed",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor.MaxYawSpeedTroika",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealYawSpeed | 0x100916a0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::GetIdealYawSpeed | 0x100916a0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetIdealYawSpeed now stands on its retail owner CBaseAnimating (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Probes-DispatchAnimEvents",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor.Probes",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::DispatchAnimEvents | 0x10098c80 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::DispatchAnimEvents | 0x10098c80 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub DispatchAnimEvents now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Probes-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor.Probes",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Slots-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor.Slots",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Slots-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor.Slots",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MotorMoveGroundStep-GetIdealSpeed",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor10.MotorMoveGroundStep",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetIdealSpeed now stands on its retail owner CBaseAnimating (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MoveGroundExecute-GetIdealSpeed",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor10.MoveGroundExecute",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetIdealSpeed now stands on its retail owner CBaseAnimating (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-NavigatorMoveNormal-GetIdealSpeed",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor10.NavigatorMoveNormal",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::GetIdealSpeed | 0x10091740 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetIdealSpeed now stands on its retail owner CBaseAnimating (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TestHullSpawn-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelMotor10.TestHullSpawn",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WerewolfTeleport-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPositions.WerewolfTeleport",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WerewolfTeleport-IsViewable",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPositions.WerewolfTeleport",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::IsViewable | 0x100a9800 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub IsViewable now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WerewolfTeleport-Unhide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPositions.WerewolfTeleport",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Unhide | 0x1009d380 (29c) | on #0 wolf(npc_VWerewolf) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Unhide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-ArmCoverage-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPrecache10.ArmCoverage",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesThunk-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPrecache10.SpeciesThunk",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Zombie-Hide-7977",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelPrecache10.Zombie",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Maker-Unhide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSaveRestore10.Maker",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Unhide | 0x1009d380 (29c) | on #9 spawned(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Unhide | 0x1009d380 (29c) | on #9 spawned(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Unhide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PreSelectSchedule-SetGroundEntity",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSchedule.PreSelectSchedule",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetGroundEntity | 0x100b1420 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::SetGroundEntity | 0x100b1420 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub SetGroundEntity now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SelectScheduleMeleeCombat-HasUsableRangedWeapon-8719",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSchedule.SelectScheduleMeleeCombat",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 troika(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 troika(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SelectScheduleMeleeCombat-HasUsableRangedWeapon-2706",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSchedule.SelectScheduleMeleeCombat",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 leader(npc_VSabbatLeader) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 leader(npc_VSabbatLeader) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Cones-HeadDirection2D",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses.Cones",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HeadDirection2D | 0x10331cb0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HeadDirection2D now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-FovTrace-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses.FovTrace",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Vision-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses.Vision",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 guard(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-BodyGates-CorpseFade",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses10.BodyGates",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::CorpseFade | 0x10326040 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::CorpseFade | 0x10326040 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub CorpseFade now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-BodyGates-CorpseGib",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses10.BodyGates",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::CorpseGib | 0x10327a90 (29d) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::CorpseGib | 0x10327a90 (29d) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub CorpseGib now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-BodyGates-GetMoveType",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses10.BodyGates",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub GetMoveType now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SpeciesArms-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSenses10.SpeciesArms",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #1 guard(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #1 guard(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-add-ShadowedDefaults",
+   "kind": "addition",
+   "test": "Elysium.Substrate.NpcKernelSlots.ShadowedDefaults",
+   "evidence": "the constant bodies a Troika instance never dispatches to (a chain class's own body under a more-derived one) answer retail's literal through a qualified call, and none tallies",
+   "packet": "6h"
+  },
+  {
+   "id": "step6-remap-BachGates-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.BachGates",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Blacklists-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Blacklists",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-CanPlaySequence-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.CanPlaySequence",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-CensusFactories-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.CensusFactories",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Fleshpile-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Fleshpile",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MeleeQuartet-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.MeleeQuartet",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Newscaster-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Newscaster",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Slot323MoveDirection-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Slot323MoveDirection",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SmallBodies-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.SmallBodies",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-TzimisceCarry-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.TzimisceCarry",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Werewolf-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Werewolf",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredSlot25-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot25",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredSlot26-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot26",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredSlot482CanPlaySequence-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot482CanPlaySequence",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredSlot510ShouldPlayFloatSound-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot510ShouldPlayFloatSound",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 species(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredSlot601-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredSlot601",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 troika(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 troika(CAI_BaseNPCTroika) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-WiredYukieMelee-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.WiredYukieMelee",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 species(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 species(npc_VYukie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Zombie-Hide-7008",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Zombie",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Zombie-Hide-9589",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpecies.Zombie",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #4 zombie(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-PayphoneThink-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSpeciesLifecycle10.PayphoneThink",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 species(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #0 species(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-SquadSlotNameTable-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelSquad.SquadSlotNameTable",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #40 s40(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #40 s40(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Species-Hide",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelTranslate19.Species",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #0 guard(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #0 guard(npc_VZombie) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub Hide now stands on its retail owner CBaseEntity (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-EnterMelee-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelTroikaHelpers.EnterMelee",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 thug(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 thug(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-LeaveMelee-HasUsableRangedWeapon-6399",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelTroikaHelpers.LeaveMelee",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 rat(npc_VRat) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #0 rat(npc_VRat) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-LeaveMelee-HasUsableRangedWeapon-4477",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelTroikaHelpers.LeaveMelee",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 vamp(npc_VVampire) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #1 vamp(npc_VVampire) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-MeleeSlotLine-StudioFrameAdvance",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcKernelTroikaHelpers.MeleeSlotLine",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #3 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #3 phone(npc_payphone) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub StudioFrameAdvance now stands on its retail owner CBaseAnimatingOverlay (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-remap-Consumers-HasUsableRangedWeapon",
+   "kind": "diagnostic_remap",
+   "test": "Elysium.Substrate.NpcWitness.Consumers",
+   "before": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::HasUsableRangedWeapon | 0x10336d70 (29c) | on #2 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "after": [
+    "Warning",
+    "LogElysiumStub: Stub fired!!!!! [slot] CBaseCombatCharacter::HasUsableRangedWeapon | 0x10336d70 (29c) | on #2 guard(npc_VHumanCombatant) | owner: the NPC kernel"
+   ],
+   "evidence": "slot stub HasUsableRangedWeapon now stands on its retail owner CBaseCombatCharacter (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-CameraAnchors",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.CameraAnchors",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1174",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg//line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #3 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #1 attacker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1178",
+     1
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-DialogHolster",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogHolster",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1218",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 talker(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 silent(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 missing_dlg(npc_VPedestrian) stays unarmed: the installed item catalogue carries no 'item_w_fists' record and its authored equipment '(none)' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/holster/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #6 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #11 <noname>(item_w_unarmed) ('item_w_unarmed') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWeapon: #12 <noname>(item_w_test_iron) ('item_w_test_iron') is a weapon-family item whose record authors no Activation block \u2014 it cannot attack",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 talker(npc_VPedestrian): phonemes corpus/views were not prepared for map epoch 1222",
+     1
+    ],
+    [
+     "Warning",
+     "LogStreaming: Failed to read file 'E:/dev/elysium-unreal/Saved/ElysiumTests/DialogHolster/dlg/test/absent.dlg' error.",
+     1
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-DialogueConditionTruthiness",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DialogueConditionTruthiness",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1220",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/test/cond_truth/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Saved/ElysiumTests/DlgCondTruth/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/test/cond_truth/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Truthy(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1224",
+     1
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-FlagSave",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Discipline.FlagSave",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-NpcPersistence",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Discipline.NpcPersistence",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     11
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 victim1(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #2 victim2(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #1 victim1(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #2 victim2(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     11
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 victim0(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 victim1(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #2 victim2(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-DlgAutomatic",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.DlgAutomatic",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1222",
+     4
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacement/line201_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumScene: scene 'character/dlg/replacing/line101_col_e.vcd' not found under E:/dev/elysium-unreal/Content/ElysiumCorpus/scenes",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [method] CBasePlayer.DialogHolster | on #1 !player(player) | owner: dialogue open: no carried item_w_unarmed to switch to",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 1 body scene 'character/dlg/main characters/automatic_test/line1_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 10 body scene 'character/dlg/main characters/automatic_test/line10_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 101 body scene 'character/dlg/replacing/line101_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue #0 line 201 body scene 'character/dlg/replacement/line201_col_e.vcd' did not resolve",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumWorld: dialogue phoneme selection for #0 Jack(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1226",
+     4
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-Feeding",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Feeding",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_bite'/'feeding_victim_tallattacker_front_bite'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_engage'/'feeding_victim_tallattacker_front_engage'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_feed_loop'/'feeding_victim_tallattacker_front_feed_loop'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 victim(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     7
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] CreateCorpse | 0x1032c0e0 (0019/3) | owner: slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] Event_Dying | 0x10339413 (0019/3) | owner: slot 403, dispatched by Die right after Event_Killed",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SOUND_CARCASS | 0x101babc0 (0019/3) | owner: AI sound type 0x20 at the body, volume 384, for 30 seconds",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SUB_StartFadeOut | 0x102695d0 (0019/3) | owner: not-solid, relink, and the SUB_FadeOut think at 0x100152b2",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] ShouldFadeOnDeath | 0x1027a400 (0019/3) | owner: slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SpawnStaticCorpse | 0x1032be80 (0019/3) | owner: the second entity a no-ragdoll body leaves behind",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] corpse removal | 0x1032c0e0 (0019/3) | owner: curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 victim(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #0 victim(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_bite'/'feeding_victim_tallattacker_front_bite'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_engage'/'feeding_victim_tallattacker_front_engage'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumFeed: feed pair #6 !player(player) -> #0 victim(npc_VPedestrian) has only one rendered body; refusing one-sided phase 'feeding_attacker_shortvictim_front_feed_loop'/'feeding_victim_tallattacker_front_feed_loop'",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 victim(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     7
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] CreateCorpse | 0x1032c0e0 (0019/3) | owner: slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] Event_Dying | 0x10339413 (0019/3) | owner: slot 403, dispatched by Die right after Event_Killed",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SOUND_CARCASS | 0x101babc0 (0019/3) | owner: AI sound type 0x20 at the body, volume 384, for 30 seconds",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SUB_StartFadeOut | 0x102695d0 (0019/3) | owner: not-solid, relink, and the SUB_FadeOut think at 0x100152b2",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] ShouldFadeOnDeath | 0x1027a400 (0019/3) | owner: slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SpawnStaticCorpse | 0x1032be80 (0019/3) | owner: the second entity a no-ragdoll body leaves behind",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] corpse removal | 0x1032c0e0 (0019/3) | owner: curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 victim(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-EverySlotReachesThePortAnswer",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelClosure.EverySlotReachesThePortAnswer",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetOrigin | 0x100b2be0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimating::SetPoseParameter02 | 0x10091fe0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "evidence": "slot 62 SetOrigin 0x100b2be0 writes through SetRuntimeOrigin (story 5 step 6): the slot-63 forward no longer fires a stub; the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-SetOriginThunk",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelClosure.SetOriginThunk",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetOrigin | 0x100b2be0 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ]
+   ],
+   "evidence": "slot 62 SetOrigin 0x100b2be0 writes through SetRuntimeOrigin (story 5 step 6): the slot-63 forward no longer fires a stub",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-EyeAngles",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelGeometry.EyeAngles",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetAbsAngles | 0x100b3280 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetAngles | 0x100b3110 (29c) | on #0 guard(npc_VHumanCombatant) | owner: the NPC kernel",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_payphone has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseAnimatingOverlay::StudioFrameAdvance | 0x10098bb0 (29c) | on #2 phone(npc_payphone) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slots 219/221 GetAbsAngles/GetAngles answer Angles by reference (story 5 step 6): EyeAngles/LocalEyeAngles no longer fire stubs (retail correction geometry-angles); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-PedestrianOnRestore",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelLifecycle19.PedestrianOnRestore",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDialogPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #1 subject(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDialogPedestrian has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #1 subject(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-SaveRoundTrip",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcKernelSpeciesBindings.SaveRoundTrip",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     42
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     42
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBrujah has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDialogPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDog has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGuard1 has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatPatrol has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VLasombra has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPlaceholder has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatGunman has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VScurrying has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTaxiDriver has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #25 s25(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::Hide | 0x1009d2a0 (29c) | on #40 s40(npc_VZombie) | owner: the NPC kernel",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #25 s25(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: CAI_BaseNPCTroika has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     42
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     42
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAndreiBlood has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAnimal has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VAsianVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBach has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VBrujah has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCamera has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCameraSecurity has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBros has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosBlade has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VChangBrosClaw has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VCop has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDialogPedestrian has no eye offset in .qc!",
+     3
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VDog has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGargoyle has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGhoulCroucher has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VGuard1 has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHengeyokai has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHuman has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatPatrol has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHumanCombatant has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VHunter has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VLasombra has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VManBat has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiao has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VMingXiaoTentacle has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VNewscaster has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPlaceholder has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VRat has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatGunman has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSabbatLeader has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VScurrying has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VSheriffMan has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTaxiDriver has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisce has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceHeadClaw has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VTzimisceRunner has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampireBoss has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VWerewolf has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VYukie has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VZombie has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #25 s25(npc_VDialogPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::Hide | 0x1009d2a0 (29c) | on #40 s40(npc_VZombie) | owner: the NPC kernel",
+     2
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-NpcMakerLifecycle",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.NpcMakerLifecycle",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     7
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] CreateCorpse | 0x1032c0e0 (0019/3) | owner: slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] Event_Dying | 0x10339413 (0019/3) | owner: slot 403, dispatched by Die right after Event_Killed",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SOUND_CARCASS | 0x101babc0 (0019/3) | owner: AI sound type 0x20 at the body, volume 384, for 30 seconds",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SUB_StartFadeOut | 0x102695d0 (0019/3) | owner: not-solid, relink, and the SUB_FadeOut think at 0x100152b2",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] ShouldFadeOnDeath | 0x1027a400 (0019/3) | owner: slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SpawnStaticCorpse | 0x1032be80 (0019/3) | owner: the second entity a no-ragdoll body leaves behind",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] corpse removal | 0x1032c0e0 (0019/3) | owner: curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #8 child(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #8 child(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     7
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] CreateCorpse | 0x1032c0e0 (0019/3) | owner: slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] Event_Dying | 0x10339413 (0019/3) | owner: slot 403, dispatched by Die right after Event_Killed",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SOUND_CARCASS | 0x101babc0 (0019/3) | owner: AI sound type 0x20 at the body, volume 384, for 30 seconds",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SUB_StartFadeOut | 0x102695d0 (0019/3) | owner: not-solid, relink, and the SUB_FadeOut think at 0x100152b2",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] ShouldFadeOnDeath | 0x1027a400 (0019/3) | owner: slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] SpawnStaticCorpse | 0x1032be80 (0019/3) | owner: the second entity a no-ragdoll body leaves behind",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [npc-death] corpse removal | 0x1032c0e0 (0019/3) | owner: curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #8 child(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-RotatingAttach",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.RotatingAttach",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 understudy(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 no_body(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #0 understudy(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::GetMoveType | 0x100aac30 (29c) | on #2 no_body(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #0 understudy(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CAI_BaseNPCTroika::SetMoveType | 0x100aad70 (29c) | on #2 no_body(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 understudy(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 no_body(npc_VPedestrian) TaskFail 0x15: Bad activity",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceBackAway (0.000000) and FollowerDistanceWalkTo (0.000000) overlap; changing FollowerDistanceWalkTo to 10.000000. NPC is using Follower Type ''",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: FollowerDistanceWalkTo (10.000000) and FollowerDistanceRunTo (0.000000) overlap; changing FollowerDistanceRunTo to 20.000000. NPC is using Follower Type ''",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VPedestrian has no eye offset in .qc!",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #0 understudy(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumStub: Stub fired!!!!! [slot] CBaseEntity::GetMoveType | 0x100aac30 (29c) | on #2 no_body(npc_VPedestrian) | owner: the NPC kernel",
+     1
+    ]
+   ],
+   "evidence": "slot 93 SetMoveType 0x100aad70 is the m_MoveType/m_MoveCollide seam on FElysiumEntity (story 5 step 6): the Pedestrian restore's call and TestHullSpawn's write no longer fire a stub (retail correction pedestrian-set-move-type); the remaining slot stubs name their retail owner (story 5 step 6); address and receiver unchanged",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-SceneJaw",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.SceneJaw",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1338 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumChoreo: #0 scene1(logic_choreographed_scene): phoneme selection for #1 Marked(npc_VVampire): phonemes corpus/views were not prepared for map epoch 1342 (further preparation diagnostics suppressed)",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #1 Marked(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #2 Borrowed(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #3 Faceless(npc_VVampire) TaskFail 0x15: Bad activity",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     3
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-ScriptedSequenceBodyClaim",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.ScriptedSequenceBodyClaim",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1345",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1346",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1347",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1348",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1349",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     5
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1349",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1350",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1351",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1352",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Damsel(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1353",
+     1
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-CrossDispositionTransition",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.CrossDispositionTransition",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1056",
+     2
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1060",
+     2
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  },
+  {
+   "id": "step6-diag-Driver",
+   "kind": "diagnostics",
+   "test": "Elysium.Substrate.Stance.Driver",
+   "before": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1057",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1058",
+     1
+    ]
+   ],
+   "after": [
+    [
+     "Warning",
+     "LogElysiumNpcEnt: #0 Jack(npc_VVampire) TaskFail 0x15: Bad activity",
+     4
+    ],
+    [
+     "Warning",
+     "LogElysiumNpcEnt: WARNING: npc_VVampire has no eye offset in .qc!",
+     2
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1061",
+     1
+    ],
+    [
+     "Warning",
+     "LogElysiumPlayer: #0 Jack(npc_VVampire): disposition expression: expressions corpus/views were not prepared for map epoch 1062",
+     1
+    ]
+   ],
+   "evidence": "map-epoch-only diagnostic shift: the new NpcKernelChainSlots fixture worlds advance the epoch counter (5h did the same)",
+   "packet": "6f"
+  }
+ ]
+}

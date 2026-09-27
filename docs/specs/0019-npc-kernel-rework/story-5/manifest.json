@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "phase": 5,
-  "revision": "step-5-base-troika-split",
+  "phase": 6,
+  "revision": "step-6-slot-owners",
   "source_commit": "cb115e31cc8ec6b985096349398ad910d8395fec",
   "inputs": {
     "module": {
@@ -22,12 +22,12 @@
     "verdicts": {
       "root": "repo",
       "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
-      "sha256": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6"
+      "sha256": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7"
     },
     "registry": {
       "root": "repo",
       "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
-      "sha256": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f"
+      "sha256": "c7d7f611246eda6cf6b27ad3a5a526b8991f3f16ce14da5e8426ffd50a1c547f"
     },
     "stub_registry": {
       "root": "repo",
@@ -231,6 +231,35 @@
       "commit": "e0a71ee3ff8fdc3ff8cd77cbe8196cff6338ff43",
       "acceptance": "acceptance-step5.json",
       "note": "--check step5 reads this tree once it is recorded. The step-5 gate ran on the e0a71ee3 working tree (826f4bb1 + packets 5e-5h), committed unchanged."
+    },
+    "step6_pins": {
+      "note": "pins refreshed by step 6 (6c-6i): 93 overlay targets naming members that moved up the entity chain were retargeted (FElysiumNpcBase::X -> FElysiumEntity/FElysiumAnimating/FElysiumAnimatingOverlay/FElysiumFlex/FElysiumCombatCharacter::X) and the registry's qualified references followed; no verdict changed",
+      "refreshed": {
+        "verdicts": {
+          "path": "research/tooling/ghidra/driver/kernel_verdicts.tsv",
+          "previous_sha256": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6",
+          "sha256": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7"
+        },
+        "registry": {
+          "path": "Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp",
+          "previous_sha256": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f",
+          "sha256": "c7d7f611246eda6cf6b27ad3a5a526b8991f3f16ce14da5e8426ffd50a1c547f"
+        }
+      },
+      "log": [
+        {
+          "input": "verdicts",
+          "from": "a99c26bdfeb704113c10eee32ff31bf7985b68f918ce83bfd533340fc2a037d6",
+          "to": "47cd35bffe82d2a77450a022dcf8010b4f400013d36d012ea0c4ec0dd38a19a7",
+          "note": "step 6: moved-member overlay retargets and requalified registry references"
+        },
+        {
+          "input": "registry",
+          "from": "2d1b102467d6dd9212472f4dedffc4842ae24bd7d4238dfcdc65446a7c3dfe3f",
+          "to": "c7d7f611246eda6cf6b27ad3a5a526b8991f3f16ce14da5e8426ffd50a1c547f",
+          "note": "step 6: moved-member overlay retargets and requalified registry references"
+        }
+      ]
     }
   },
   "step1_packets": {
@@ -287,13 +316,13 @@
   },
   "step6_packets": {
     "6a": "accepted",
-    "6b": "pending",
-    "6c": "pending",
-    "6d": "pending",
-    "6e": "pending",
-    "6f": "pending",
-    "6g": "pending",
-    "6h": "pending",
-    "6i": "pending"
+    "6b": "accepted",
+    "6c": "accepted",
+    "6d": "accepted",
+    "6e": "accepted",
+    "6f": "accepted",
+    "6g": "accepted",
+    "6h": "accepted",
+    "6i": "accepted"
   }
 }

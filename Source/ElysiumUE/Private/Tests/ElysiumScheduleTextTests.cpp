@@ -5,7 +5,7 @@
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumScheduleId.h"
 #include "Substrate/ElysiumScheduleManager.h"
 #include "Substrate/ElysiumScheduleOperands.h"

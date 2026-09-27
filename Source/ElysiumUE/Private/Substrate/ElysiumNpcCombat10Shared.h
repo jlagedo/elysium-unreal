@@ -24,7 +24,7 @@ namespace NpcKernelCombat10Shared
 	inline constexpr int32 GStatListTypeSheet = 0;      // the character sheet — the one this runtime stands
 	inline constexpr int32 GStatWounds = 0x0f;        // ElysiumSlot::Health (15) — damage TAKEN
 	inline constexpr int32 GStatMaxHealth = 0x11;     // ElysiumSlot::MaxHealth (17)
-	inline double Combat10Now(const FElysiumNpcBase& Npc)
+	inline double Combat10Now(const FElysiumEntity& Npc)
 	{
 		return Npc.World != nullptr ? Npc.World->NowSeconds() : 0.0;
 	}

@@ -1,37 +1,34 @@
-# Story 5 — step 6 in progress (6a done); step 5 accepted (`e0a71ee3`)
+# Story 5 — step 6 accepted on the working tree (awaiting commit); step 5 accepted (`e0a71ee3`)
 
-**Step 6 (move available slot bodies to their owners), 2026-09-26.** Plan: §5 step 6 as approved
-this session. Owner decisions:
-- add `FElysiumAnimatingOverlay` and `FElysiumFlex`;
-- stubs name their retail owner;
-- delete only dead, uncalled, un-overridden stubs.
+**Step 6 (every slot body on its retail owner), 2026-09-27.** Record:
+[packets/6-slot-owners.md](packets/6-slot-owners.md).
+- 6a: records and checker, committed `5ddaee2c`.
+- 6b: `FElysiumAnimatingOverlay`/`FElysiumFlex`, committed `782a27e6`.
+- 6c-6i (uncommitted, one commit):
+  - the per-owner generated surface;
+  - 84 hand bodies plus 129 members up the chain;
+  - the eight integrations;
+  - the dead stub 582 deleted;
+  - `kernel_shape --unported` (987 rows pinned);
+  - five new tests.
 
-- **6a done, uncommitted** (records and checker, no C++):
-  - record: [packets/6a-preflight.md](packets/6a-preflight.md), [slots-step6.tsv](slots-step6.tsv)
-    (824 rows), [moves-step6.tsv](moves-step6.tsv) (130 members),
-    [decisions-step6.json](decisions-step6.json);
-  - checker: `kernel_migration_step6.py` and its tests.
-  - Gate: the five generator checks, kernel pytest (142) and `--check factories/step0..5` PASS;
-    `--check step6` PENDING (the records match).
-  - Manifest phase 5; `step6_packets` added.
-  - Awaiting the owner's go to commit as the step-6 prerequisite.
-- **6b done, uncommitted**: [packets/6b-chain-classes.md](packets/6b-chain-classes.md).
-  - `FElysiumAnimatingOverlay`/`FElysiumFlex` in `ElysiumPlayer.h`, with descriptors
-    `CBaseAnimatingOverlay`/`CBaseFlex`.
-  - Runtime gate: 1,274 + 14 + 1, zero failures.
-  - `test_delta` vs step 5: empty.
-  - Checks gate green, after a ledger/lists regeneration (citation line shifts only).
-  - Awaiting the owner's go to commit.
-- **6c drafted outside the repo**: `step6/draft/gen_kernel_shape.py` builds the model:
-  - chain tables from the corpus, the per-owner split, `CHAIN_HAND`, and `DELETED` 582;
-  - `PORT` 118 AcceptInput;
-  - the widened subclass collision scan, with 7 `ACCEPTED` rows and one false positive fixed;
-  - owner-prefixed stubs and `ShadowedSlotDefaults()`.
-  - Apply it to `research/tooling/gen_kernel_shape.py` once 6a/6b are committed.
-- Then 6c-6i as one commit, per `decisions-step6.json` `packets`. Drafting tools are in
-  `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/step6/tools/`: `chain_tables.py`,
-  `draft_slots.py`, `closure6.py --write-moves`, `rekey_sites.py`, `write_slots.py`,
-  `write_decisions.py`.
+Acceptance on the working tree ([acceptance-step6.json](acceptance-step6.json)):
+- Manifest phase 6, revision `step-6-slot-owners`; `--check step6` **PASS**.
+- Runtime gate: 1,279 + 14 + 1, zero failures.
+- `test_delta` vs step 5: passes with 142 expectations (119 owner-prefix remaps, 18 exact diagnostic
+  changes, 5 additions).
+- Checks gate green: five generator checks, pytest (169), `--check factories/step0..5`.
+- Five-map smoke clean (`step6/smoke.json`).
+
+### Handoff
+
+- Awaiting the owner's go to commit 6c-6i as the step-6 commit. Afterwards, record
+  `history.step6.commit` in the manifest so `--check step6` reads the accepted tree.
+- Open for the owner:
+  - `.claude/rules/cpp.md` (one class per file) vs the two chain classes in `ElysiumPlayer.h`: a
+    verbatim move of `FElysiumAnimating` to its own header would allow separate headers.
+  - The `m_iIsOblivious` refcount rides with `NpcFlags` on the combat character.
+- Next: step 7 (the controller fold).
 
 # Step 5 — accepted (`e0a71ee3`)
 

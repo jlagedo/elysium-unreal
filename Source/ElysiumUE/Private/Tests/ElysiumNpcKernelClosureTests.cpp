@@ -13,7 +13,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -150,12 +150,14 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 		{ 63, TEXT("0x10026a10"), TEXT("SetOrigin(float, float, float)"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
-				// The forward is VIRTUAL, onto slot 62 (`0x100b2be0`), which is another story's row
-				// and is still a generated stub — so what proves the dispatch arrived is that slot
-				// 62's own tally advanced by exactly one.
+				// The forward is VIRTUAL, onto slot 62 (`0x100b2be0`), which since story 5 step 6 is
+				// `FElysiumEntity::SetOrigin`'s write through `SetRuntimeOrigin` — so what proves the
+				// dispatch arrived is the origin it wrote, and no stub fired on the way.
 				const int32 Before = ClosureTallyCountForAddress(TEXT("0x100b2be0"));
 				F.Guard->SetOrigin(1.f, 2.f, 3.f);
-				T.TestEqual(L, ClosureTallyCountForAddress(TEXT("0x100b2be0")), Before + 1);
+				T.TestEqual(L, F.Guard->Origin, FVector(1.f, 2.f, 3.f));
+				T.TestEqual(L + TEXT(" tallies no stub"), ClosureTallyCountForAddress(TEXT("0x100b2be0")),
+					Before);
 			} },
 		{ 79, TEXT("0x10321670"), TEXT("GetPredDescMap"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
@@ -614,14 +616,18 @@ bool FElysiumNpcKernelClosureSetOriginThunkTest::RunTest(const FString&)
 	// `0x10026a10` builds a `Vector` on the stack and dispatches `vtable +0xf8` — slot 62,
 	// `SetOrigin(const Vector&)`. The forward is VIRTUAL in retail and virtual here, which matters:
 	// a species that overrides slot 62 has to be reached through slot 63 as well. Slot 62
-	// (`0x100b2be0`) is another story's row and is still a generated stub, so its tally is the proof
-	// that the dispatch arrived — three calls, three tallies, one per forward.
+	// (`0x100b2be0`) is `FElysiumEntity::SetOrigin` since story 5 step 6: it writes the origin only
+	// when it differs, through `SetRuntimeOrigin`. Each forward lands its own vector, and none tallies.
 	const int32 Before = ClosureTallyCountForAddress(TEXT("0x100b2be0"));
 	F.Guard->SetOrigin(1.f, 2.f, 3.f);
+	TestEqual(TEXT("slot 63 forwards to slot 62: the first vector lands"), F.Guard->Origin,
+		FVector(1.f, 2.f, 3.f));
 	F.Guard->SetOrigin(4.f, 5.f, 6.f);
 	F.Guard->SetOrigin(7.f, 8.f, 9.f);
-	TestEqual(TEXT("slot 63 forwards to slot 62, once per call"),
-		ClosureTallyCountForAddress(TEXT("0x100b2be0")), Before + 3);
+	TestEqual(TEXT("slot 63 forwards to slot 62: the last vector lands"), F.Guard->Origin,
+		FVector(7.f, 8.f, 9.f));
+	TestEqual(TEXT("slot 62 is no longer a stub"), ClosureTallyCountForAddress(TEXT("0x100b2be0")),
+		Before);
 	return true;
 }
 

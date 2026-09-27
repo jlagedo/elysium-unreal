@@ -197,9 +197,9 @@ void FElysiumNpc::TestHullSpawn()
 	const uint32 CurrentFlags = RetailSolidFlags & 0xffffu;
 	RetailSolidFlags |= (CurrentFlags | GMotor10SolidNotSolid);
 
-	// 5. `slot 93 SetMoveType(MOVETYPE_FLY = 4, MOVECOLLIDE_DEFAULT = 0)`.
-	RetailMoveType = GMotor10MoveTypeFly;
-	RetailMoveCollide = GMotor10MoveCollideDefault;
+	// 5. `slot 93 SetMoveType(MOVETYPE_FLY = 4, MOVECOLLIDE_DEFAULT = 0)`, through the slot (story 5
+	//    step 6: `FElysiumEntity::SetMoveType` is the `m_MoveType`/`m_MoveCollide` seam).
+	SetMoveType(GMotor10MoveTypeFly, GMotor10MoveCollideDefault);
 
 	// 6. `m_iHealth (+0x210) = 0x32` — **50** — then `AddFlag(0x40000)`. The health store is at
 	//    `102d7438`, after the flag's PUSH and before the call, so the health lands first.

@@ -12,9 +12,3 @@ int32 NavigatorPathTypeWord = -1;   // navigator's path +0x30
 
 int32 NavigatorPathType() const;
 
-/** `+0x8c` — the handle of whoever last began a `+use` on this entity, written by slot 39 and
- *  cleared to `-1` by slot 42 and by a null activator. Not a datamap field and not in
- *  `ElysiumNpcKernelShapeMap.cpp` (which covers the `CAI_BaseNPC` band only); its retail name is
- *  **unrecovered**. It has no reader in this family's closure — the two slots are its only
- *  toucher — so it is carried as the recorded write rather than wired to a consumer. */
-FElysiumEntityHandle UseActivator;   // +0x8c

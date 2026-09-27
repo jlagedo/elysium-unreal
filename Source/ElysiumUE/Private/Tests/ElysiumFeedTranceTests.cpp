@@ -20,7 +20,7 @@
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"

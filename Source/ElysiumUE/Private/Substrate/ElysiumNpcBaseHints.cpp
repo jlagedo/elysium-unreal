@@ -10,7 +10,7 @@
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -196,10 +196,3 @@ void FElysiumNpcBase::SetHintGroup(const FString& NewHintGroup)
 	}
 }
 
-// --- Moved from `ElysiumNpcHints.cpp` (story 5 step 5) ---
-
-int32 FElysiumNpcBase::CurrentRetailActivityId() const
-{
-	// SEAM for `m_Activity` (`+0xfec`).
-	return INDEX_NONE;
-}

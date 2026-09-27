@@ -139,9 +139,11 @@ def test_phase6_member_check_needs_the_final_scope(tmp_path):
 def test_retired_tables_refuse(tmp_path):
     write(tmp_path, s6.SUBSTRATE / "ElysiumNpcSounds.cpp", "static const FVocalization GSoundsVocalizations[] = {};\n")
     with pytest.raises(km.InvalidManifest, match="retired tables"):
-        s6.check_retired(tmp_path)
-    write(tmp_path, s6.SUBSTRATE / "ElysiumNpcSounds.cpp", "// FVocalization retired in step 6\n")
-    assert s6.check_retired(tmp_path) == 0
+        s6.check_retired(tmp_path, ["FVocalization", "GSoundsVocalizations"])
+    # step 6 itself retires nothing (decisions-step6.json `retired_symbols` is empty)
+    assert s6.check_retired(tmp_path, []) == 0
+    write(tmp_path, s6.SUBSTRATE / "ElysiumNpcSounds.cpp", "// FVocalization retired\n")
+    assert s6.check_retired(tmp_path, ["FVocalization"]) == 0
 
 
 def test_the_committed_records_are_complete_and_reviewed():
@@ -151,7 +153,7 @@ def test_the_committed_records_are_complete_and_reviewed():
     slots = s6.read_slots(directory / "slots-step6.tsv")
     moves = s6.read_moves(directory / "moves-step6.tsv")
     assert not [r for r in slots if r["disposition"] == "investigate"]
-    assert len(slots) == 824 and len(moves) == 130
+    assert len(slots) == 824 and len(moves) == 129
     counts = collections.Counter(r["disposition"].split(":")[0] for r in slots)
     assert counts == {"keep": 374, "move": 256, "new-chain-row": 102, "move-hand": 84, "adapter": 5,
                       "seam": 1, "implemented": 1, "delete-dead": 1}

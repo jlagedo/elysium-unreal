@@ -172,7 +172,7 @@ bool HintYaw(int32 HintNode, float& OutYaw) const;
 
 /** SEAM for slot 16 (vtable `+0x40`), the attack-extent margin `FindTacticalHintNode` caches into
  *  `m_vecSavedSleepExtents` (`+0x65d0`) before `SetAbsoluteAttackExtents`. Answers the zero vector,
- *  which is the margin `FElysiumNpc::SetAttackExtents` already stands for. SOURCE units. */
+ *  which is the margin `FElysiumEntity::SetAttackExtents` already stands for. SOURCE units. */
 FVector HintAttackExtentsUnits() const;
 
 /** SEAM for `thunk_FUN_102ee3f0(m_pNavigator)` — the navigator's current LINK activity
@@ -277,21 +277,3 @@ void StandoffVfunc20();
 
 void StandoffVfunc21();
 
-/** `+0x0ec0 m_iCurFrenzyCount` (`CBaseCombatCharacter`) — the discipline gate slot 334 reads
- *  first: a body already mid-frenzy refuses every further cast outright. Below the shape map's
- *  band, so 29b did not bind it, and no landed family had a reader for it. Nothing in this runtime
- *  writes it yet. */
-int32 CurFrenzyCount = 0;
-
-/** SEAM for `thunk_FUN_101e1250(&DAT_10739a4c, disciplineId, arg)` and `thunk_FUN_101e11c0` — the
- *  global discipline table slot 334 looks a discipline up in, and the cooldown float at record
- *  `+0x2c`. There is no such table on this substrate; `Find` answers `INDEX_NONE` and the row
- *  lookup answers `0.0`. */
-int32 DisciplineTableFind(int32 DisciplineId, int32 Level) const;
-
-float DisciplineTableCooldown(int32 RowIndex) const;
-
-/** SEAM for `m_fDisciplineTimers[row]` (`+0x146c`), the per-discipline last-cast stamps slot 334
- *  measures against. Below the shape map's band and with no producer here; answers `0.0`, which
- *  makes every elapsed time `curtime` and so every cooldown expired. */
-double DisciplineTimer(int32 RowIndex) const;

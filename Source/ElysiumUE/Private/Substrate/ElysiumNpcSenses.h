@@ -408,11 +408,11 @@ public:
 	// `TargetConeScalar` is the TARGET's own `m_flStealthVisionCone`, which retail applies inside
 	// this test alongside the observer's own threshold. 1.0 is a target carrying no stealth
 	// surface, which is every character except the player.
-	static bool IsInViewCone(const FElysiumNpcBase& Npc, const FVector& TargetCm,
+	static bool IsInViewCone(const FElysiumEntity& Npc, const FVector& TargetCm,
 		float TargetConeScalar = 1.0f);
 	// The observer's full 3-D forward: Source pitch, inverse Unreal yaw. The cone test's own
 	// axis, exposed so the debug drawings paint the cone that was actually tested.
-	static FVector ViewForward(const FElysiumNpcBase& Npc);
+	static FVector ViewForward(const FElysiumEntity& Npc);
 	// Troika slot 363 (`0x102b4540`): the two sense-off ConVars, then the follower any-angle
 	// seam, then the base body at the target's eye. Look and the `SEE_SOUND_SOURCE` stranger
 	// arm dispatch this.

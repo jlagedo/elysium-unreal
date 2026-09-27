@@ -593,12 +593,10 @@ public:
 	void SetBodyHeld(bool bHeld);
 	void SetBodyAnimationHeld(bool bHeld);
 
-	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
-	void SetAttackExtents(const FVector& MarginCm) { BaseScheduleHost.AttackExtentsCm = MarginCm; }
 	FBox AttackBounds(const FBox& CollisionBounds) const
 	{
-		return FBox(CollisionBounds.Min - BaseScheduleHost.AttackExtentsCm,
-			CollisionBounds.Max + BaseScheduleHost.AttackExtentsCm);
+		return FBox(CollisionBounds.Min - AttackExtentsCm,
+			CollisionBounds.Max + AttackExtentsCm);
 	}
 	void ClearScheduleHint(float ReuseDelay);
 	void ClearOwnedActivityCopyProps();

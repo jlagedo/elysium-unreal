@@ -1,4 +1,4 @@
-#include "Substrate/ElysiumNpcFlags.h"
+#include "ElysiumNpcFlags.h"
 
 #include "ElysiumSaveArchive.h"
 
