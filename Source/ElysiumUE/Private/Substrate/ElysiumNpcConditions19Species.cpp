@@ -85,136 +85,14 @@ void FElysiumNpcAndreiBlood::GatherConditions()
 }
 
 // =================================================================================================
-// 0x10365a70 CNPC_VBach::GatherConditions, 16 bytes, and its tail 0x10365a90
+// 0x10365a70 CNPC_VBach::GatherConditions, 16 bytes (its tail 0x10365a90 is Misc19's row, landed by
+// lane L11 as `BachGatherCamperConditions` in `ElysiumNpcMisc19Species.cpp`)
 // =================================================================================================
 
 void FElysiumNpcBach::GatherConditions()
 {
 	FElysiumNpc::GatherConditions();                                     // 10365a73
-	BachCamperGather();                                                  // 10365a7b JMP 0x1000ce2d -> 0x10365a90
-}
-
-void FElysiumNpcBach::BachCamperGather()
-{
-	// `0x10365a90`.
-	const double Now = Conditions19Now();
-	const FElysiumNpcBase* const ConstThis = this;
-	FElysiumEntity* WatchTarget = ConstThis->GetEnemy();                      // 10365a9b slot 167
-	bool bGrenadeArm = true;                                             // 10365aab
-	bool bNewlyLatched = false;                                          // 10365ab0
-	if (WatchTarget == nullptr)                                               // 10365ab4
-	{
-		WatchTarget = World != nullptr ? static_cast<FElysiumEntity*>(World->FindPlayer()) : nullptr;   // 10365ab6 0x101cda50
-		if (WatchTarget == nullptr)                                           // 10365abf
-		{
-			return;
-		}
-	}
-	// Ten slot-201 probes; the index is FVisible's fourth argument (the probe point on the target,
-	// which the port's slot does not vary: all ten are the same eye-to-eye question).
-	for (int32 Probe = 0; Probe < 10; ++Probe)                           // 10365ac5..10365ae9
-	{
-		if (FVisible(WatchTarget, Cond19EnemyVisibleMask, nullptr, Probe))    // 10365ad7 / 10365adf
-		{
-			// The re-seen arm (`10365f6a`).
-			if (BachWasOccluded == 0)                                    // 10365f70 / 10365f72
-			{
-				return;
-			}
-			BachWasOccluded = 0;                                         // 10365f7a
-			if (!bBachCamperFlag)                                        // 10365f86
-			{
-				return;
-			}
-			// `+0x1b30 / +0x1b34` = `__FILE__` / 0x57b: the selector trace, absent; the line is
-			// recorded.
-			RecordScheduleEvent(TEXT("SetSchedule NPC_VBach.cpp:0x57b"));   // 10365f91 / 10365f9b
-			SetSchedule(0x15f, false);                                   // 10365fa5 0x102ae750
-			return;
-		}
-	}
-	const FVector TargetUnits = WatchTarget->GetAbsOrigin() / ElysiumMove::U;  // slot 217
-	const FVector LastUnits = BachLastOccludeOrigin / ElysiumMove::U;
-	if (BachWasOccluded == 0)                                            // 10365aeb / 10365af5
-	{
-		BachWasOccluded = 1;                                             // 10365afb
-		BachOccludeEnterTime = Now;                                      // 10365b05..10365b10
-		const double Area = FMath::Abs(TargetUnits.X - LastUnits.X) * FMath::Abs(TargetUnits.Y - LastUnits.Y);   // 10365b18..10365b40
-		if (!(Area < 20000.0))                                           // `_DAT_104aaad0`, 10365b42..10365b4d (NaN resets)
-		{
-			BachReusedOccludeCount = 0;                                  // 10365b79
-		}
-		else
-		{
-			++BachReusedOccludeCount;                                    // 10365b4f
-			if (BachReusedOccludeCount > 1)                              // 10365b61
-			{
-				bNewlyLatched = !bBachCamperFlag;                        // 10365b63 / 10365b6b
-				bBachCamperFlag = true;                                  // 10365b70
-			}
-		}
-		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365b7f..10365b9d
-	}
-	else if (Now - BachOccludeEnterTime > 4.0)                           // `_DAT_10450aa0`, 10365ba8..10365bc4
-	{
-		double Moved = FMath::Abs(TargetUnits.X - LastUnits.X);          // 10365bca
-		const double MovedY = FMath::Abs(TargetUnits.Y - LastUnits.Y);
-		if (Moved < MovedY)                                              // the larger of the two axes
-		{
-			Moved = MovedY;
-		}
-		if (Moved < 200.0)                                               // `_DAT_104492b8`, 10365c0c..10365c1b
-		{
-			bNewlyLatched = !bBachCamperFlag;                            // 10365c1d / 10365c25
-			bBachCamperFlag = true;                                      // 10365c2a
-		}
-		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365c31..10365c4e
-		BachOccludeEnterTime = Now;                                      // 10365c5e
-	}
-	if (BachGrenadeActive == 10 || BachGrenadeActive == 7)               // 10365c64..10365c72
-	{
-		bBachCamperFlag = true;                                          // 10365c74
-		bNewlyLatched = true;                                            // 10365c7f
-		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365c84..10365c9d
-		BachOccludeEnterTime = Now;                                      // 10365cad
-	}
-	bool bReachedTail = false;
-	if (bBachCamperFlag)                                                 // 10365cb3 / 10365cbb
-	{
-		if (BachGrenadeActive != 0 && bBachInStartingPosition)           // 10365cc1..10365cd1
-		{
-			switch (BachGrenadeActive)                                   // 10365cd3..10365cdf, table 0x10365fb4
-			{
-			case 5: ThrowGrenade(TEXT("grenade_spawn_5"), 300.f); break; // 10365ce6
-			case 6: ThrowGrenade(TEXT("grenade_spawn_6"), 80.f); break;  // 10365cfc
-			case 7: ThrowGrenade(TEXT("grenade_spawn_7"), -26.f); break; // 10365d0f
-			case 9: ThrowGrenade(TEXT("grenade_spawn_9"), 85.f); break;  // 10365d35
-			case 10: ThrowGrenade(TEXT("grenade_spawn_10"), -26.f); break;   // 10365d22
-			default: break;                                              // 8 and out of range: no throw
-			}
-			bReachedTail = true;
-		}
-		else if (BachGrenadeActive != 0 && !bBachInStartingPosition && BachTeleportState == 0)   // 10365d48..10365d64
-		{
-			if (BachGrenadeActive == 8)                                  // 10365d66
-			{
-				ThrowGrenade(TEXT("grenade_spawn_8"), 15.f);             // 10365d77
-			}
-			bReachedTail = true;
-		}
-	}
-	if (!bReachedTail)
-	{
-		bGrenadeArm = false;                                             // 10365d7e
-	}
-	if (!bNewlyLatched)                                                  // 10365d82 / 10365d86
-	{
-		return;
-	}
-	// `CPASAttenuationFilter` from slot 222 at 0.8, channel 2, volume 1.0, pitch 100 -- the shape the
-	// ported `bach_shield` emission uses.
-	EmitNamedWav(this, 2, bGrenadeArm ? TEXT("Character/Boss/Bach/bach_grenade.wav")   // 10365d96..10365e18
-		: TEXT("Character/Boss/Bach/bach_camp_warn.wav"), 1.f, 0.8f, 100);             // 10365e6e..10365ef0
+	BachGatherCamperConditions();                                        // 10365a7b JMP 0x1000ce2d -> 0x10365a90
 }
 
 // =================================================================================================

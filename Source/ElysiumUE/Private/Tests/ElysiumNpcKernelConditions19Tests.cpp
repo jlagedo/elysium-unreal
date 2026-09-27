@@ -829,9 +829,9 @@ bool FCond19TroikaTailTest::RunTest(const FString&)
 	TestTrue(TEXT("102b301b the latch raises LIGHT_DAMAGE"), Cond19Has(N, EElysiumNpcCond::LightDamage));
 	TestTrue(TEXT("...and stays latched"), N.Cognition.bCondTookDamage);
 
-	// `102b2d67`: NEW_ENEMY standing resets the door. The port's `ElysiumNpcEnemy::SetEnemy` does not
-	// raise NEW_ENEMY (retail `SetEnemy` `0x10279a50` is lane L11's), so the case raises it; the
-	// sticky committed enemy leaves `ChooseEnemy` idle and nothing in the pass clears it.
+	// `102b2d67`: NEW_ENEMY standing resets the door. `SetEnemy` (`0x10279a50`) does not raise
+	// NEW_ENEMY (`ChooseEnemy`'s change work does), so the case raises it; the sticky committed
+	// enemy leaves `ChooseEnemy` idle and nothing in the pass clears it.
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 	N.BlockedDoor = F.Other->Handle;
@@ -937,7 +937,7 @@ bool FCond19BachTest::RunTest(const FString&)
 	const double Now = F.Now();
 	ElysiumNpcEnemy::SetEnemy(*Bach, F.Other->Handle);
 	F.BlindGuard();
-	Bach->BachLastOccludeOrigin = F.Other->Origin;
+	Bach->BachLastOccludeOriginUnits = F.Other->Origin / ElysiumMove::U;   // L11's word, SOURCE units
 	Bach->bBachCamperFlag = false;
 	Bach->NamedWavEmits.Reset();
 

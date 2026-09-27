@@ -223,12 +223,9 @@ void FElysiumNpcBase::GatherConditions()
 		{
 			EnemyMemory.Refresh(*World, Now);                            // 1026ee0d slot 541 / 1026ee15
 		}
-		// `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`, Misc19's row). The port's transaction takes the
-		// Troika leaf; a base-only NPC has no enemy transaction in this runtime.
-		if (FElysiumNpc* const Troika = AsNpc())
-		{
-			ElysiumNpcEnemy::ChooseEnemy(*Troika, Cognition.Conditions, Now);   // 1026ee1c
-		}
+		// `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`, Misc19's row, landed by lane L11): every NPC,
+		// base-only included.
+		ElysiumNpcEnemy::ChooseEnemy(*this);                             // 1026ee1c
 		if (Conditions19BetterWeaponAvailable(Now))                      // 1026ee23 / 1026ee2a
 		{
 			Cognition.Conditions.Set(Cond19BetterWeaponAvailable);       // 1026ee3b SetCondition(0x67)

@@ -187,7 +187,8 @@ has a slot-433 body of its own.
 
 - **`CNPC_VAndreiBlood` `0x1035d180`** (19 bytes): Troika, then clear `0x79 TIME_TO_TELEPORT`
   (`1035d18c`). No setter of 0x79 on this class exists in the image. **Unrecovered:** its producer.
-- **`CNPC_VBach` `0x10365a70`** (16 bytes): Troika, then tail-jump to `0x10365a90`. That routine: the
+- **`CNPC_VBach` `0x10365a70`** (16 bytes): Troika, then tail-jump to `0x10365a90` (Misc19's row; the
+  port body is lane L11's `BachGatherCamperConditions`, which L07's walk agrees with). That routine: the
   target is the slot-167 enemy, else the local player (none → return); ten slot-201 probes with the
   probe index as the fourth argument. Seen: with `m_iWasOccluded (+0x6674)` set, clear it and, with
   `m_bCamperFlag (+0x66a0)`, stamp the selector trace (line `0x57b`) and `SetSchedule(0x15f)`
@@ -278,3 +279,5 @@ double 1.0 `0x10449280` before its one `FSTP float` (`103d049c`).
 does not vary them); Ming Xiao's weapon slot 364 line and `+0xa0`'s writer; the pedestrian weapon's
 crime level (`0x102517e0 +0x3c4`); Scurrying's `+0x6678` / `+0x667c` retail names; the Tzimisce hint
 usability test `0x103bfc20` (a seam answering unusable); the three Werewolf19 updaters (lane L12).
+
+Integration: `CAI_BaseNPC::ChooseEnemy` is lane L11's retail body, called for every NPC.
