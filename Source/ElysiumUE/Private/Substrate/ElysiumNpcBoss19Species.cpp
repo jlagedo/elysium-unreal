@@ -11,3 +11,40 @@
 // Owns (Boss19's `rule` rows): 0x103aa3b0 CNPC_VSabbatLeader::StartTransformation.
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcSabbatLeader.h"
+
+#include "Substrate/ElysiumRelationships.h"
+
+// Story 8, lane L12. Walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+
+namespace NpcKernelBoss19Species
+{
+	// `CBaseCombatCharacter::AddClassRelationship(1, 1, 10)`: class 1 is `CLASS_PLAYER`, the class
+	// family PlayerController spells `"player"` for its own `AddClassRelationship(1, 3, 0)`
+	// (`ElysiumNpcPlayerController.cpp`); disposition 1 is `D_HT`; priority 10.
+	const TCHAR* const GBoss19SpeciesPlayerClass = TEXT("player");
+	constexpr int32 GBoss19SpeciesTransformHatePriority = 10;
+	// The program and the trace line (`NPC_VSabbatLeader.cpp`, `0x1064ed7c`).
+	constexpr int32 GBoss19SpeciesTransformSchedule = 0x163;
+	constexpr int32 GBoss19SpeciesTransformLine = 0x549;
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0x103aa3b0 CNPC_VSabbatLeader::StartTransformation
+// -------------------------------------------------------------------------------------------------
+
+void FElysiumNpcSabbatLeader::SabbatLeaderStartTransformation()
+{
+	using namespace NpcKernelBoss19Species;
+	// `m_bActivated` FIRST: the word slot 461 (`0x103a7450`) gates on, so the state selector starts
+	// answering ALERT/COMBAT on this very think.
+	bSabbatLeaderActivated = true;                                          // 0x103aa409 +0x66b8
+	// A CLASS-wide relationship: every member of class 1 is re-dispositioned at once.
+	Relationships.SetClass(GBoss19SpeciesPlayerClass, EElysiumRelationship::Hate,
+		GBoss19SpeciesTransformHatePriority);                               // 0x103aa410 0x10013cf5
+	// `+0x1b30`/`+0x1b34` := `NPC_VSabbatLeader.cpp`, 0x549 — the selector trace, absent in this
+	// runtime's shape map; recorded the landed way.
+	RecordScheduleEvent(FString::Printf(TEXT("StartTransformation trace NPC_VSabbatLeader.cpp:%d"),
+		GBoss19SpeciesTransformLine));                                      // 0x103aa41e / 0x103aa428
+	SetSchedule(GBoss19SpeciesTransformSchedule, false);                    // 0x103aa432 0x102ae750
+}

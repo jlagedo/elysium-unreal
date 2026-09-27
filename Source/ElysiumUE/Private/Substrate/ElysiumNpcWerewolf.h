@@ -233,7 +233,7 @@ public:
 	int32 WerewolfMoveHintSearchStart = 0;     // +0x66b8 `m_pMoveHintSearchStart`, retail's NULL is 0
 	int32 WerewolfWord66f8 = 0;                // +0x66f8 (retail name unrecovered)
 	int32 WerewolfWord66fc = 0;                // +0x66fc (retail name unrecovered)
-	void WerewolfRearm();
+	// `0x103cac20` is `WerewolfResetHuntState`, declared with the story-8 helpers below.
 
 	// From `ElysiumNpcMisc.inl`.
 	FElysiumEntityHandle WerewolfRotDoor1;   // +0x6684 CNPC_VWerewolf::m_hRotDoor1
@@ -267,11 +267,12 @@ public:
 	bool EnemyCouldSeeHullWerewolf(const FVector& OriginCm, bool bSkipViewCone, bool bUseHitbox,
 		const FVector& ExtentsCm);
 	/** The Werewolf's own gate on slot 617 — `ConVar` `DAT_1093d694` `werewolf_disregard_player_vision`
-	 *  read as `IsCommand() ? 0 : m_nValue` (+0x2c). Shipped "0", which CLOSES the gate and makes the
-	 *  Werewolf's `EnemyCouldSeeHull` answer false without tracing. */
+	 *  read as `IsCommand() ? 0 : m_nValue` (+0x2c). A NON-ZERO value makes the Werewolf's
+	 *  `EnemyCouldSeeHull` answer false without tracing; shipped "0" leaves the gate open (story 8
+	 *  lane L12 corrected the sense, `0x103da230`). */
 	static bool WerewolfSightConVar();
-	/** The enemy predicate the same body asks second: the active enemy's own vtable `+0x278`
-	 *  (slot 158). **SEAM**: answers false. */
+	/** The enemy predicate the same body asks second: the active enemy's own vtable `+0x278`, slot
+	 *  158 `IsAlive` (`0x100b4dc0`) — asked through the slot since story 8 (lane L12). */
 	static bool EnemySightPredicate(const FElysiumEntity& Enemy);
 	/** `CNPC_VWerewolf::TeleportOut` `0x103d4a60`. */
 	void TeleportOut();
@@ -488,6 +489,96 @@ public:
 	 *  sharing the index and the census does not carry its table — so what this fires is
 	 *  **unrecovered**. Counted, and nothing is dispatched. */
 	void FireWerewolfZoneTrigger(FElysiumEntity& Zone);
+
+	// --- 0019/8 Werewolf19 (lane L12): the hint-search and condition helpers ------------------
+	//
+	// No slot holds any of these; the callers are `CNPC_VWerewolf::GatherConditions` (`0x103d0410`),
+	// `StartTask` (`0x103ccda0`), `RunTask` (`0x103cdfb0`) and `SelectSchedule` (`0x103cee70`), other
+	// lanes' rows. Each takes retail's own arguments: a `CAI_Hint*` is the hint's words (`FHintWords`,
+	// resolved through `HintWords`), and every answer is retail's `bool`/`void`. Bodies in
+	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+	//
+	// The words these bodies share, and what the listings say they are (the port's older names stay
+	// because landed suites of other families assert through them):
+	//   * `+0x66a1` `bWerewolfTaskFailed` — the enemy-unreachable latch `IsEnemyUnreachable` answers
+	//     (`TaskFail` `0x103ce8eb` sets it, `0x103da159` sets it, `0x103da1b7` clears it).
+	//   * `+0x66a4` `WerewolfMorphTimerA` — `IsEnemyUnreachable`'s once-per-frame stamp, an ENGINE
+	//     FRAME NUMBER (`0x103da130`), carried in the float word the port declared first.
+	//   * `+0x66a8` `WerewolfSnapWordA` — the previous pass's `HasCondition(0x59)` (`0x103cc3fb`).
+	//   * `+0x66d4` / `+0x66d8` `WerewolfMorphTimerB` / `C` — the hint searches' frame stamp and
+	//     curtime stamp (`0x103d0fba` / `0x103d0fc8`).
+	//   * `+0x66ac` `WerewolfWord66ac` / `+0x66b8` `WerewolfMoveHintSearchStart` — the teleport and
+	//     move search cursors, a `CAI_Hint*` each: the hint's entity index here, `0` for retail's NULL
+	//     (the value `0x103cac20` writes; entity index 0 is `worldspawn`, never a hint).
+
+	/** `CNPC_VWerewolf::UpdateConditionShouldBreakHint` (`0x103cc450`) — condition `0x7b`. */
+	void UpdateConditionShouldBreakHint();
+	/** `CNPC_VWerewolf::FindBreakHint` (`0x103d0ec0`) — the nearest reachable `0x3aa3` hint into
+	 *  `m_pBreakHint` (`+0x66c4`). */
+	bool FindBreakHint();
+	/** `CNPC_VWerewolf::FindEgressHint` (`0x103d1200`) — keep or replace the move hint with a `0x3aa8`
+	 *  hint whose endpoint the enemy could see. Always FALSE after a search. */
+	bool FindEgressHint();
+	/** `CNPC_VWerewolf::IsImperativeMoveHint(CAI_Hint*)` (`0x103d2070`). */
+	bool IsImperativeMoveHint(const FHintWords& Hint);
+	/** `CNPC_VWerewolf::FindTeleportHint` (`0x103d3c20`). */
+	bool FindTeleportHint();
+	/** `CNPC_VWerewolf::IsEnemyUnreachable` (`0x103da0a0`) — answers `+0x66a1`. */
+	bool IsEnemyUnreachable();
+	/** `0x103cac20` — the hunt-state reset `NPCInit` (`0x103caef0`) and `OnRestore` (`0x103cabf0`)
+	 *  share. The retail name is unrecovered; the checklist names it. */
+	void WerewolfResetHuntState();
+	/** `CNPC_VWerewolf::IsImperativeRandomMoveHint(CAI_Hint*)` (`0x103d2810`). */
+	bool IsImperativeRandomMoveHint(const FHintWords& Hint);
+	/** `CNPC_VWerewolf::FindMoveHint` (`0x103d2a10`). */
+	bool FindMoveHint();
+	/** `CNPC_VWerewolf::UpdateConditionEnemyUnreachable` (`0x103cc320`) — conditions `0x59`/`0x79`. */
+	void UpdateConditionEnemyUnreachable();
+	/** `CNPC_VWerewolf::CheckAllRandomMoveHints` (`0x103cf770`). */
+	bool CheckAllRandomMoveHints();
+	/** `CNPC_VWerewolf::FindRandomMoveHint` (`0x103d14f0`). */
+	bool FindRandomMoveHint();
+	/** `CNPC_VWerewolf::UpdateConditionCanSpecialMove` (`0x103cc5c0`) — condition `0x78`. */
+	void UpdateConditionCanSpecialMove();
+
+	/** `CNPC_VWerewolf::CheckAllMoveHints` (`0x103cfc50`) — lane L11's row (Misc19), CALLED by
+	 *  `0x103cc320`. Declared here so this lane compiles; L11 defines it. If L11 declared it too, the
+	 *  integrator keeps one declaration. */
+	bool CheckAllMoveHints();
+
+	/** `0x102cc1f0` — slot 446 `GetScheduleOfType(TranslateSchedule(id))` with the `DevMsg` and the
+	 *  `GetScheduleOfType(1)` fallback on a miss: the PROGRAM `0x103cc5c0` compares `m_pSchedule`
+	 *  against. The port's other stand for this address, `StandoffScheduleForLocalId`
+	 *  (`ElysiumNpcBaseHelpers2.cpp`), reads it as a behaviour-local id and answers `None`. */
+	const void* WerewolfScheduleOfType(int32 RawRetailId);
+	/** Slot 167 `GetEnemy() const` (`vtable +0x29c`), which every body here calls — NOT the Troika
+	 *  slot-168 overload that falls back to `m_hLastEnemy`. */
+	FElysiumEntity* WerewolfSlot167Enemy() const;
+	/** Slot 617 (`vtable +0x9a4`), `CNPC_VWerewolf::EnemyCouldSeeHull` (`0x103da230`), at a SOURCE-unit
+	 *  point with retail's two bools and the `DAT_1070d1b0` extents (`vec3_origin`). */
+	bool WerewolfSlot617(const FVector& PointUnits, bool bSkipViewCone, bool bUseHitbox);
+	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate. The frame seam
+	 *  (`EngineFrameNumber`) answers `INDEX_NONE`, read as "never the same frame", the named decision
+	 *  its declaration states. */
+	bool WerewolfSearchStampedThisFrame() const;
+	/** `+0x66d4 := frame`, `+0x66d8 := curtime` — the stamp every search writes before it walks. */
+	void WerewolfStampSearch(double Now);
+	/** `DAT_10925450` and the `+0x5d8` next link, over the world's hint list (`GlobalHintList`, head
+	 *  first). `INDEX_NONE` is retail's NULL. */
+	int32 WerewolfHintListHead() const;
+	int32 WerewolfHintListNext(int32 HintNode) const;
+	/** `thunk_FUN_100290c0(handles, &m_hClosestPlayer)` — does `+0x628c` resolve? */
+	bool WerewolfClosestPlayerResolves() const;
+	/** Slot 217 `GetAbsOrigin` / slot 220 `GetOrigin`, in SOURCE units (the two agree for an
+	 *  unparented NPC). */
+	FVector WerewolfOriginUnits() const;
+	/** The hint's words by entity index; `bValid` false when the index is not a live hint. */
+	FHintWords WerewolfHintAt(int32 HintNode) const;
+	/** Test script for the `HasPath` seam (`0x102fdcc0`): each call pops the front answer; an empty
+	 *  script answers retail's no-path `false`. The ask is still recorded in `HasPathQueries`. */
+	mutable TArray<bool> WerewolfHasPathAnswers;
+	/** The last `FindTeleportHint` give-up count, the `%d` of its `DevWarning` (a test witness). */
+	int32 WerewolfTeleportGiveUpTries = INDEX_NONE;
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

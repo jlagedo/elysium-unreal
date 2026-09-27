@@ -148,6 +148,17 @@ public:
 	/** `m_nSkin` (`+0x670`) as Hengeyokai's translate body reads it. */
 	int32 HengeyokaiSkin = 0;
 
+	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
+	/** `m_nSkinCrossfade` and `m_flSkinCrossfadeTime` — the two `CBaseAnimating` words
+	 *  `FadeToSkin` (`0x1008d6d0`) and `SetSkinFadeTime` (`0x1008d5f0`) write. The crossfade itself is
+	 *  client-side; the Hengeyokai's morph is their only NPC writer, so they stand on this class. */
+	int32 HengeyokaiSkinCrossfade = 0;
+	float HengeyokaiSkinCrossfadeTime = 0.f;
+	/** `0x103830e0` — the morph entry `RunAI` (`0x10380120`) and `OnTakeDamage_Alive` (`0x103801d0`)
+	 *  share: stamp `NPC_VHengeyokai.cpp:0x985`, install `0x16e` (not forced), `SetSkinFadeTime(0.0)`,
+	 *  `FadeToSkin(1)`. Lane L09's `HengeyokaiEnterMorphSeam` binds to this. */
+	void HengeyokaiEnterMorph();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

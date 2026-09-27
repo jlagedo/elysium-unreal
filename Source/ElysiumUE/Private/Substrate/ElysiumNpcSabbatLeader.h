@@ -146,6 +146,14 @@ public:
 	/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
 	bool bSabbatLeaderActivated = false;
 
+	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
+	/** `CNPC_VSabbatLeader::StartTransformation` (`0x103aa3b0`): `m_bActivated` (`+0x66b8`) = 1 FIRST,
+	 *  the class-wide `AddClassRelationship(CLASS_PLAYER 1, D_HT, 10)`, then stamp
+	 *  `NPC_VSabbatLeader.cpp:0x549` and install `0x163` (not forced). Its retail argument is unread.
+	 *  Body in `ElysiumNpcBoss19Species.cpp`. Reached from `RunTask` `0x103a8990` (lane L05) and from
+	 *  the pending `StartTransformation` input (`ElysiumNpcClasses.cpp`), which the integrator binds. */
+	void SabbatLeaderStartTransformation();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;

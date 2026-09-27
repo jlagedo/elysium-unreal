@@ -241,7 +241,7 @@ void FElysiumNpcWerewolf::NPCInit()
 	MoveHintNode = INDEX_NONE;
 	WerewolfLastUsedMoveHint = INDEX_NONE;
 	WerewolfBreakHintNode = INDEX_NONE;                                   // +0x66c4
-	WerewolfRearm();
+	WerewolfResetHuntState();                                            // 103caef0 tail, 0x103cac20
 }
 
 // Slot 130: `0x103cabf0`, which calls the Troika body first.
@@ -249,7 +249,7 @@ void FElysiumNpcWerewolf::NPCInit()
 void FElysiumNpcWerewolf::OnRestore(bool bFromLoad)
 {
 	TroikaOnRestore(bFromLoad);
-	WerewolfRearm();                                                     // 103cac20
+	WerewolfResetHuntState();                                            // 103cac20
 }
 
 // Slot 104: `0x103cb2a0`.
@@ -1320,8 +1320,12 @@ FVector FElysiumNpcWerewolf::GetHintEndpoint(const FHintWords* Hint) const
 		return GHints10Vec3Origin;
 	}
 	const int32 End = GetHintEndEntity(*Hint);
-	FHintWords EndWords;
-	if (!HintWords(End, EndWords))
+	// Story 8 (lane L12): the end entity is ANY entity (`FindHintEndEntity`'s second hop is uncast),
+	// and retail reads its `GetAbsOrigin` through its own vtable — so it resolves as an entity, not
+	// as a hint's words, which answered the crash-guard origin for a non-hint end.
+	const FElysiumEntity* EndEntity = World != nullptr && World->Entities().IsValidIndex(End)
+		? World->Entities()[End].Get() : nullptr;
+	if (EndEntity == nullptr || EndEntity->IsDead())
 	{
 		// CRASH GUARD, named: retail dereferences the end entity's vtable `+0x364` with NO null
 		// check, so a hint whose end entity does not resolve faults. This runtime cannot fault, and
@@ -1330,7 +1334,7 @@ FVector FElysiumNpcWerewolf::GetHintEndpoint(const FHintWords* Hint) const
 		return GHints10Vec3Origin;
 	}
 	// `GetAbsOrigin` (vtable `+0x364`) copied into the caller's `Vector`.
-	return EndWords.OriginCm;
+	return EndEntity->Origin;
 }
 
 bool FElysiumNpcWerewolf::IsForwardHintExemptType(int32 HintType)
@@ -1492,9 +1496,14 @@ bool FElysiumNpcWerewolf::ReportSearchTimer(bool bPassThrough)
 
 // --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
 
-void FElysiumNpcWerewolf::WerewolfRearm()
+void FElysiumNpcWerewolf::WerewolfResetHuntState()
 {
-	// `0x103cac20`, run from BOTH `CNPC_VWerewolf::NPCInit` and `CNPC_VWerewolf::OnRestore`.
+	// `0x103cac20`, run from BOTH `CNPC_VWerewolf::NPCInit` and `CNPC_VWerewolf::OnRestore`. Story 8
+	// (lane L12) re-read it against the listing (`vtmb_asm 0x103cac20`): 86 instructions, no branch,
+	// every write below in retail's order with its instruction address. It was the port's
+	// `WerewolfRearm`; renamed to the checklist's target, body unchanged. `+0x66a4` is written as the
+	// dword 0 (`MOV [ESI+0x66a4],EBX`) — the enemy-unreachable frame stamp — and `+0x66d4`/`+0x66d8`
+	// are the hint searches' frame and time stamps (see the header's story-8 block).
 	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());    // 103cac2a
 	Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();        // 103cac32 +0x628c
@@ -1703,8 +1712,9 @@ bool FElysiumNpcWerewolf::EnemySightPredicate(const FElysiumEntity& Enemy)
 	// The active enemy's own vtable `+0x278` (slot 158), the second gate of
 	// `CNPC_VWerewolf::EnemyCouldSeeHull`. **SEAM**: unreached today, because the cvar above already
 	// closed the gate; answering false keeps the refusal honest either way.
-	(void)Enemy;
-	return false;
+	// Story 8 (lane L12): vtable `+0x278` is slot 158, `IsAlive` (`0x100b4dc0` on `CBaseEntity`,
+	// `ElysiumEntitySlots.inl`), so the gate is "the enemy is alive". Asked through the slot.
+	return const_cast<FElysiumEntity&>(Enemy).IsAlive();
 }
 
 bool FElysiumNpcWerewolf::EnemyCouldSeeHullWerewolf(const FVector& OriginCm, bool bSkipViewCone,
@@ -1720,7 +1730,13 @@ bool FElysiumNpcWerewolf::EnemyCouldSeeHullWerewolf(const FVector& OriginCm, boo
 	// Note the asymmetry in the second gate: a Werewolf with NO enemy skips it and reaches the base
 	// body, which then refuses for want of an enemy anyway — so the gate only matters when there IS
 	// one and it answers false.
-	if (!WerewolfSightConVar())
+	// Story 8 (lane L12) CORRECTION, read off `vtmb_code 0x103da230`:
+	//     if (!DAT_1093d694->IsCommand() && DAT_1093d694->m_nValue != 0) return false;
+	// The gate REFUSES when `werewolf_disregard_player_vision` is non-zero. The port had it inverted
+	// (refusing at the shipped "0"), which made every slot-617 answer false as shipped. The landed
+	// `NpcKernelPositions` assertions still hold: the cvar reads 0 and, with no enemy, the base body
+	// refuses.
+	if (WerewolfSightConVar())
 	{
 		return false;
 	}
@@ -1997,20 +2013,12 @@ bool FElysiumNpcWerewolf::WerewolfShouldPursueEnemy() const
 
 FVector FElysiumNpcWerewolf::GetHintEndpointUnits(const FHintWords& Hint) const
 {
-	// SEAM for `CNPC_VWerewolf::GetHintEndpoint`: the hint's END entity's origin, resolved through
-	// family Hints' `FindHintEndEntity` (`0x103d6520`). No hint store stands here, so the end entity
-	// never resolves and this answers the hint's OWN origin — which is retail's answer for a hint
-	// whose `target_name` names nothing.
-	if (World != nullptr)
-	{
-		const int32 EndNode = FindHintEndEntity(Hint);
-		FHintWords End;
-		if (EndNode != INDEX_NONE && HintWords(EndNode, End))
-		{
-			return End.OriginCm / ElysiumMove::U;
-		}
-	}
-	return Hint.OriginCm / ElysiumMove::U;
+	// `CNPC_VWerewolf::GetHintEndpoint` (`0x103d6650`) in SOURCE units. Story 8 (lane L12) retired
+	// this seam's own walk: it resolved `FindHintEndEntity` directly and so skipped the `+0x6714`
+	// cache `GetHintEndEntity` (`0x103d6390`) reads first — a port-only twin of the retail body
+	// family Hints10 already landed. It now forwards to that body; a hint whose end entity names
+	// nothing still answers its own origin, because `FindHintEndEntity` falls back to the hint.
+	return GetHintEndpoint(&Hint) / ElysiumMove::U;
 }
 
 float FElysiumNpcWerewolf::GetForwardYawForHint(const FHintWords& Hint) const
@@ -2592,6 +2600,15 @@ bool FElysiumNpcWerewolf::WerewolfHasPath(const FVector& StartUnits, const FVect
 	// own answer for a navigator with no path — and the ask is recorded so a case can read that the
 	// forward happened.
 	HasPathQueries.Add(FHasPathQuery{ StartUnits, EndUnits });
+	// Story 8 (lane L12): a case may script the seam's answers (`WerewolfHasPathAnswers`, popped
+	// front first) to reach the arms behind a successful path; with no script this is retail's
+	// no-path `false`, exactly as before.
+	if (WerewolfHasPathAnswers.Num() > 0)
+	{
+		const bool bAnswer = WerewolfHasPathAnswers[0];
+		WerewolfHasPathAnswers.RemoveAt(0);
+		return bAnswer;
+	}
 	return false;
 }
 

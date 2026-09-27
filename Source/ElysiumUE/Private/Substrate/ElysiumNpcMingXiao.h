@@ -315,6 +315,79 @@ public:
 	 *  writes this substrate CAN make are made and the rest is recorded. */
 	void SeverTentacle(int32 TentacleId);
 
+	// --- 0019/8 Boss19 (lane L12): the head's death, tentacle and damage helpers ---------------
+	//
+	// No slot holds any of these. Callers: `Event_Killed` `0x10395ba0` (the death and the two
+	// sweeps), `OnTakeDamage_Alive` `0x10395ae0` (the damage router), both other lanes' rows.
+	// Bodies in `ElysiumNpcMingXiao.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+
+	/** `+0x6744 CNPC_VMingXiao::m_bPlayedDeathAnim` (walked) — the latch `0x10395ce0` tests. */
+	bool bMingXiaoPlayedDeathAnim = false;
+	/** `+0x6748 CNPC_VMingXiao::m_flIdealRange` — written by the spawner from `0x103986b0`, read by
+	 *  `ResolveTaskDistance` (`0x10392a10`). */
+	float MingXiaoIdealRange = 0.f;
+	/** `+0x6714 CNPC_VMingXiao::m_eLastLostTentacle` — the index the spawner is handed. */
+	int32 MingXiaoLastLostTentacle = 0;
+	/** `+0x66dc CNPC_VMingXiao::m_rflHitPoints[6]` — each tentacle's remaining hit points. */
+	float MingXiaoHitPoints[6] = { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+
+	/** `0x10395c70` — the death entry: stamp `NPC_VMingXiao.cpp:0x916`, install `0x16e` (proxy) or
+	 *  `0x16d` FORCED past the `IsAlive` gate, then `m_lifeState` = 1, `m_bPlayedDeathAnim` = 1 and
+	 *  `m_bInvincible` = 1, in that order. The checklist's `MingXiaoEnterDeath`. */
+	void MingXiaoEnterDeath();
+	/** `0x10395ce0` — `if (!m_bPlayedDeathAnim) MingXiaoEnterDeath();` (a jump), what the sweep
+	 *  `0x10397f00` calls on each proxy. */
+	void MingXiaoEnterDeathOnce();
+	/** `0x10397e90` — every live handle in `m_rhSeveredTentacles[6]` (`+0x66a8`) starts its death
+	 *  (`0x1039ea60`). Six, hard-coded; no handle is cleared. */
+	void MingXiaoKillTentacles();
+	/** `0x10397f00` — every live handle in `m_rhProxies[6]` (`+0x668c`) starts its death
+	 *  (`0x10395ce0`). */
+	void MingXiaoKillSpawnedBodies();
+	/** `0x10397410` — tentacle `TentacleIndex` is lost: install `0x16c`, release a held throwable,
+	 *  burst particles, search a clear spot around the limb's bone and have the map's
+	 *  `TentacleGenerator` maker make the crawling tentacle there, link it back and mark the limb
+	 *  severed. Answers the new tentacle, or null. Retail's argument is a `float` register used as the
+	 *  integer index throughout. */
+	FElysiumNpc* MingXiaoSpawnTentacle(int32 TentacleIndex);
+	/** `0x10395750` — the hitgroup damage router `OnTakeDamage_Alive` runs on its packet copy:
+	 *  `TentacleIndex` is `0x10395650`'s answer (`-2` the head, `-1` none, `0..5` a limb). The
+	 *  signature is lane L09's `MingXiaoApplyTentacleDamageSeam`'s, so the call binds as is. */
+	void MingXiaoApplyTentacleDamage(int32 TentacleIndex, FElysiumTakeDamageInfo& Info,
+		const FElysiumEntity* Weapon);
+	/** `0x103986b0` — the ideal range from the four attack limbs still connected: 400 for each of
+	 *  0 and 1, 300 for each of 2 and 3, averaged over twice the count (retail adds 2 per limb and
+	 *  one term per limb); 300 when none is. Not a row; three lines the spawner calls. */
+	float MingXiaoIdealRangeFromLimbs() const;
+	/** `0x10398680` — the limb's bone name, from the six-entry table at `0x106433ac`. Its guard
+	 *  `(i < 0) && (5 < i)` can never hold (retail defect, reproduced): an out-of-range index reads
+	 *  past the table, which the port refuses by answering the first entry (NAMED CRASH GUARD). */
+	static const TCHAR* MingXiaoLimbBoneName(int32 TentacleIndex);
+	/** SEAM for `0x10398630` — `LookupBone(name)` (bone 0 when it fails) then
+	 *  `GetBonePosition(bone)`: no bone sampler reaches the kernel, so this answers the origin, the
+	 *  root bone's own frame. SOURCE units. */
+	FVector MingXiaoLimbBonePositionUnits(int32 TentacleIndex) const;
+	/** SEAM for the particle dispatches `0x102c42a0` (at an entity's attachment) and `0x102c41d0`
+	 *  (at a point and angles): visual-only, recorded with their arguments. */
+	struct FMingXiaoParticleRequest
+	{
+		FString Effect;
+		FString Attachment;
+		FVector PositionUnits = FVector::ZeroVector;
+	};
+	TArray<FMingXiaoParticleRequest> MingXiaoParticleRequests;
+	/** SEAM for slot 360 (`+0x5a0`) on the damaging WEAPON, a `CBaseCombatWeapon` word the router
+	 *  masks with `0x18000`. No weapon vtable stands here; answers 0, so the melee rescale is skipped
+	 *  and the packet's damage is used unscaled. */
+	uint32 MingXiaoWeaponSlot360(const FElysiumEntity* Weapon) const;
+	/** SEAM for `0x1023e4b0(this, amount)` — a 25-slot global per-entity queue of (handle, int
+	 *  amount) records with a cvar-timed expiry, which the router feeds when the head is not
+	 *  invincible. Its consumer is unrecovered; the amounts are recorded here. */
+	TArray<int32> MingXiaoQueuedBodyDamage;
+	/** The `TentacleGenerator` maker's name (`0x10390d00` binds the static maker reference
+	 *  `DAT_1093bb9c` to it). */
+	static const TCHAR* MingXiaoTentacleMakerName();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

@@ -18,10 +18,28 @@
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
 
-// STORY8-FORWARD slot 330 0x103c43b0 CNPC_VTzimisceRunner::Slot330 — forwarding stub, not the port; the porter replaces this body.
+// Slot 330 `0x103c43b0` `CNPC_VTzimisceRunner::vfunc330(float, FireBulletsInfo_t*)` — story 8, lane
+// L12. 42 bytes and NO jump table (the decompiler's "indirect jump" is the tail `JMP [vtbl+0x500]`):
+// the near-miss bullet reaction becomes slot 320 `PlayerKnockbackReaction(shooter, 0x79)` on this
+// Runner, in place of the base's distance-graded flinch (`0x1029fbe0`). The float is never read.
 void FElysiumNpcTzimisceRunner::Slot330(float Arg0, void* Arg1)
 {
-	FElysiumNpcBaseBoss::Slot330(Arg0, Arg1);
+	(void)Arg0;
+	const FFireBulletsInfo* Info = static_cast<const FFireBulletsInfo*>(Arg1);
+	if (Info == nullptr)
+	{
+		// NAMED CRASH GUARD: retail dereferences the info pointer unconditionally (`0x103c43b6`).
+		return;
+	}
+	// `arg = info->+0x94 ? info->+0x94->+0x9c : 0` — the attacker's cached combat-character pointer.
+	FElysiumEntity* Shooter = nullptr;                                      // 0x103c43b4
+	if (Info->Attacker != nullptr)                                          // 0x103c43b6 / 0x103c43be
+	{
+		Shooter = Info->Attacker->AsCombatCharacter();                      // 0x103c43c0 +0x9c
+	}
+	// The two incoming stack slots are overwritten in place (`0x103c43c8` activity `0x79`,
+	// `0x103c43d0` the shooter) and slot 320 is tail-jumped on THIS object's own vtable.
+	PlayerKnockbackReaction(Shooter, 0x79);                                 // 0x103c43d4 slot 320
 }
 
 // STORY8-FORWARD slot 431 0x103cb590 CNPC_VWerewolf::NPCThink — forwarding stub, not the port; the porter replaces this body.
