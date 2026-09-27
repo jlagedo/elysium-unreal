@@ -21,14 +21,15 @@ namespace ElysiumEntityCaps
 {
 	namespace
 	{
-		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: these classes say "I am never carried
-		// across a level change". Since the base answers `AcrossTransition` and nothing else, both
-		// answer **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same reason.
+		// `& 0xfffffffd` is `& ~FCAP_ACROSS_TRANSITION`: the class says "I am never carried across
+		// a level change". Since the base answers `AcrossTransition` and nothing else, it answers
+		// **0** — the same thing `CBaseCineCam::ObjectCaps` answers, for the same reason.
 		// `CScriptedTarget`'s row (`0x1034d410`) was retired with the class: no map stands one.
+		// `CAI_TestHull`'s (`0x102d7290`) is its own class's override (`FElysiumNpcTestHull`, story 5
+		// fold A1).
 		constexpr FSpeciesRow GSpeciesRows[] =
 		{
 			{ TEXT("CAI_Hint"),             TEXT("0x102d2ee0"), ~AcrossTransition, 0 },
-			{ TEXT("CAI_TestHull"),         TEXT("0x102d7290"), ~AcrossTransition, 0 },
 		};
 	}
 

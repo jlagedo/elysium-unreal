@@ -372,6 +372,9 @@ struct FElysiumNpcRetailClassRow
 
 static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 {
+	// `FElysiumNpcTestHull`: no factory builds it by classname; retail builds it by code, and so does
+	// a test here (`FElysiumEntityDef::InternalFactory`), against this abstract descriptor.
+	{ TEXT("CAI_TestHull"), TEXT("CAI_BaseNPC") },
 	{ TEXT("CNPC_ProneDialog"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VAndreiBlood"), TEXT("CNPC_VVampireBoss") },
 	{ TEXT("CNPC_VAnimal"), TEXT("CAI_BaseNPCTroika") },

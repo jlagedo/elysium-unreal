@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMotor10Shared.h"
+#include "Substrate/ElysiumNpcUsedHullBits.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -521,7 +522,7 @@ void FElysiumNpcBase::SetHullSizeNormal(bool bForce)
 	//    The second call is retail's; it makes the test `(bits & used) != bits`, i.e. "this body's
 	//    hull was never precached".
 	const int32 Bits = RetailHullBits(HullKind);
-	const int32 Used = RetailUsedHullBits();
+	const int32 Used = ElysiumNpcUsedHullBits::Get();
 	const int32 BitsAgain = RetailHullBits(HullKind);
 	if ((Bits & Used) != BitsAgain)
 	{
@@ -605,12 +606,6 @@ FString FElysiumNpcBase::RetailHullName(int32 Hull)
 	// `NAI_Hull::Name(hull)` = `PTR_DAT_1060a750[hull][1]` (`0x102d6230`). **SEAM**: no hull table.
 	(void)Hull;
 	return FString();
-}
-
-int32 FElysiumNpcBase::RetailUsedHullBits()
-{
-	// `FUN_102f9950` — `return DAT_10610be8;`.
-	return NpcKernelMotor10Shared::GMotor10UsedHullBits;
 }
 
 void FElysiumNpcBase::GoalEntityInputActivate(FStandoffGoalWords& Goal)

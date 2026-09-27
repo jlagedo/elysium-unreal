@@ -213,12 +213,19 @@ bool FElysiumNpcBase::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) c
 float FElysiumNpcBase::StepHeight() const
 {
 	// slot 522. `CAI_BaseNPC::StepHeight` `0x101a6b40` returns `_DAT_10453b94` = 18.0 and IS the
-	// body slot 522 carries on the Troika line. `CAI_TestHull::StepHeight` `0x102d72b0` returns
-	// `_DAT_10462950` = 40.0. Three species override it for real outside this pack's rows.
-	const FJumpTunableSpecies* Row = IsRetailClass(TEXT("CAI_TestHull"))
-		? JumpTunableSpeciesOf(TEXT("CAI_TestHull"))
-		: JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
+	// body slot 522 carries on the Troika line. `CAI_TestHull::StepHeight` `0x102d72b0` (40.0) and
+	// three species override it on their own classes.
+	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
 	return Row != nullptr ? Row->StepHeight : NpcKernelMotorShared::GStepHeightBase;
+}
+
+float FElysiumNpcBase::GetMaxJumpSpeed() const
+{
+	// slot 523. `CAI_BaseNPC::GetMaxJumpSpeed` `0x101a6b60` returns `_DAT_10453b94` = 18.0 — the
+	// SAME cell slot 522's `0x101a6b40` reads. The Troika (`0x101aa670`) and
+	// `CAI_TestHull` (`0x102d72d0`) override it on their own classes. Until story 5 fold A1 this was a
+	// generated stub answering 0.
+	return ElysiumNpcTunables::StepHeightBase;
 }
 
 float FElysiumNpcBase::GetJumpGravity() const
@@ -232,10 +239,9 @@ float FElysiumNpcBase::GetJumpGravity() const
 bool FElysiumNpcBase::IsJumpLegal(FVector& StartUnits, FVector& ApexUnits, FVector& EndUnits) const
 {
 	// slot 521. `CAI_BaseNPC::IsJumpLegal` `0x10280880` forwards to the geometry helper with
-	// 80.0 / 250.0 / 160.0; `CAI_TestHull::IsJumpLegal` `0x102d7760` with 1024 / 1024 / 1024.
-	const FJumpTunableSpecies* Row = IsRetailClass(TEXT("CAI_TestHull"))
-		? JumpTunableSpeciesOf(TEXT("CAI_TestHull"))
-		: JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
+	// 80.0 / 250.0 / 160.0; `CAI_TestHull::IsJumpLegal` `0x102d7760` is its own class's override
+	// with 1024 / 1024 / 1024 (`FElysiumNpcTestHull`).
+	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPC"));
 	const float Rise = Row != nullptr ? Row->JumpLegalRise : 80.0f;
 	const float Drop = Row != nullptr ? Row->JumpLegalDrop : 250.0f;
 	const float Distance = Row != nullptr ? Row->JumpLegalDistance : 160.0f;

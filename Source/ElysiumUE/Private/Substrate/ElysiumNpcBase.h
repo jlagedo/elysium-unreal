@@ -18,11 +18,12 @@
 struct FElysiumNpcClass;   // Substrate/ElysiumNpcKernelShape.h — the census row for a retail class
 
 // `CAI_BaseNPC` — the AI base every NPC class derives from (story 5 step 5). `FElysiumNpc`, the
-// `CAI_BaseNPCTroika` line every living `npc_*` classname builds, derives from it; the script
-// directors (`CCineNPC`, `CCineAI`, `CCineAISchedule`) and `CAI_TestHull` sit directly beneath it
-// in retail and fold onto it in steps 9-10 (`docs/vtmb/npc-kernel/classes.md`).
+// `CAI_BaseNPCTroika` line every living `npc_*` classname builds, derives from it; so does
+// `FElysiumNpcTestHull` (`CAI_TestHull`, story 5 fold A1). The script directors (`CCineNPC`,
+// `CCineAI`, `CCineAISchedule`) sit directly beneath it in retail and fold onto it in fold A3
+// (`docs/vtmb/npc-kernel/classes.md`).
 //
-// It carries the base layer's own words (`+0x1a40..+0x5f3c`, `docs/vtmb/npc-kernel/layout.tsv`)
+// It carries the base layer's own words (`+0x1a40..+0x5f40`, `docs/vtmb/npc-kernel/layout.tsv`)
 // and bodies. A base body reaches Troika state only where retail does, through the entity's
 // `+0x98 m_pBaseNPCTroika` (`AsNpc()`, null on a base-only NPC); `+0x94 m_pBaseNPC` is `AsNpcBase()`.
 
@@ -121,7 +122,7 @@ public:
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
 	//
-	// Every word of `CAI_BaseNPC` (`+0x1a40..+0x5f3c`) this class owns that no port system writes
+	// Every word of `CAI_BaseNPC` (`+0x1a40..+0x5f40`) this class owns that no port system writes
 	// yet (`docs/vtmb/npc-kernel/layout.md`), default-initialised, each carrying its offset, its
 	// retail name and the tier that typed it. They are the shape 29b landed so a later story
 	// fills a member instead of inventing one; `ElysiumNpcKernelShapeMap.cpp` binds every one of

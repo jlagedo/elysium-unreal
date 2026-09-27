@@ -35,7 +35,8 @@
 //   * `CAI_StandoffGoal::UpdateOnRemove`'s `inputdata_t` sets `+0x14` to `-1`, not `+0x0c`.
 //   * `CAI_StandoffBehavior#22`'s log is `"NPC in standoff lacks needed low aim activity (%s)"`.
 //   * `CAI_TestHull::Spawn`'s used-mask test is **signed** (`JLE`), so a zero or negative mask
-//     short-circuits to hull 0 without the 22-miss fallback.
+//     short-circuits to hull 0 without the 22-miss fallback. (The body is now its own class's,
+//     `FElysiumNpcTestHull::Spawn`, story 5 fold A1.)
 //   * `CAI_Motor+0x3c` is `m_vecVelocity` (the datamap says so), not a facing-queue count.
 //   * `_DAT_1044e658` is the **double 0.01** and `_DAT_104994e0` is **-30.0f**, both read out of
 //     the pinned image; the oracle had the first listed as unrecovered.
@@ -60,16 +61,6 @@ namespace
 	// `_DAT_10449258`, `00 00 40 40`: **3.0f**, how long that alternate-AI mode lives.
 	constexpr float GMotor10DoorAlternateAiDuration = 3.0f;
 
-	// `CAI_TestHull::Spawn`'s five constants.
-	constexpr int32 GMotor10TestHullCount = 22;          // `CMP EDI,0x16`
-	constexpr int32 GMotor10SolidBbox = 2;               // `SOLID_BBOX`
-	constexpr uint32 GMotor10SolidNotSolid = 0x4;        // `FSOLID_NOT_SOLID`
-	constexpr int32 GMotor10MoveTypeFly = 4;             // `MOVETYPE_FLY`
-	constexpr int32 GMotor10MoveCollideDefault = 0;
-	constexpr int32 GMotor10TestHullHealth = 0x32;       // 50
-	// `0x40000` — the flag `ElysiumCameraAnimated.cpp` records beside `MakeDormant`, i.e. dormancy.
-	constexpr int32 GMotor10FlagDormant = 0x40000;
-
 	// `0x10601e9c` and its `"no weapon"` fallback at `0x10601edc`.
 	const TCHAR* const GMotor10LowAimWarning =
 		TEXT("NPC in standoff lacks needed low aim activity (%s)");
@@ -92,12 +83,6 @@ namespace
 	constexpr int32 GMotor10DoorToggleAtTop = 0;
 	constexpr int32 GMotor10DoorToggleGoingUp = 2;
 	constexpr int32 GMotor10AimrBlockedWorld = -2;
-
-	// --- Units ----------------------------------------------------------------------------------
-
-	// `DAT_1093412c`, the second word `0x102f9900` clears with it. Nothing reads it in this band, so
-	// what it IS stays unrecovered; it is cleared here because the retail body clears it.
-	int32 GMotor10UsedHullCompanion = 0;
 }
 
 // =================================================================================================
@@ -123,97 +108,6 @@ namespace
 // =================================================================================================
 // `0x10273070` / `0x10273180` — the two hull-size bodies.
 // =================================================================================================
-
-// =================================================================================================
-// `0x102d72f0` — `CAI_TestHull::Spawn`, and the hull table it picks from.
-// =================================================================================================
-
-void FElysiumNpc::RetailClearUsedHullBits()
-{
-	// `FUN_102f9900` — `DAT_10610be8 = 0; DAT_1093412c = 0;`. What the companion word IS stays
-	// **unrecovered**; it is cleared because the retail body clears it.
-	NpcKernelMotor10Shared::GMotor10UsedHullBits = 0;
-	GMotor10UsedHullCompanion = 0;
-}
-
-void FElysiumNpc::RetailAddUsedHullBits(int32 Bits)
-{
-	// `FUN_102f9920` — `DAT_10610be8 |= param_1;`.
-	NpcKernelMotor10Shared::GMotor10UsedHullBits |= Bits;
-}
-
-int32 FElysiumNpc::TestHullPickHull(int32 UsedHullBits, TFunctionRef<int32(int32)> HullBits,
-	bool& bOutTookFallback)
-{
-	// `0x102d72f5`–`0x102d732e`, from the listing.
-	bOutTookFallback = false;
-
-	// `TEST EBX,EBX; JLE 0x102d7330` — a SIGNED test, and the target is the store with `EDI` still
-	// zero. A mask of 0 OR of any value with the top bit set therefore takes hull 0 immediately and
-	// never reaches the fallback call. The shipped `.data` initialiser for the mask is
-	// `0xffffffff`, which is exactly such a value.
-	if (UsedHullBits <= 0)
-	{
-		return 0;
-	}
-
-	for (int32 Index = 0; Index < GMotor10TestHullCount; ++Index)
-	{
-		if ((UsedHullBits & HullBits(Index)) != 0)
-		{
-			return Index;
-		}
-	}
-
-	// 22 misses: `PUSH 0; CALL AddUsedHullBits; XOR EDI,EDI`. The OR of zero is a no-op and is
-	// performed anyway, because the body performs it.
-	RetailAddUsedHullBits(0);
-	bOutTookFallback = true;
-	return 0;
-}
-
-void FElysiumNpc::TestHullSpawn()
-{
-	// `CAI_TestHull::Spawn` `0x102d72f0`, slot 103 on `CAI_TestHull`. See
-	// `ElysiumNpcMotor10.inl` for why this lands on `FElysiumNpc` rather than on a new leaf.
-
-	// 1. The hull pick, then `m_eHull` (+0x1568). The store happens at `102d7334`, before the
-	//    `SetHullSizeNormal` call whose argument was already pushed.
-	bool bTookFallback = false;
-	HullKind = TestHullPickHull(RetailUsedHullBits(), [](int32 Hull) { return RetailHullBits(Hull); },
-		bTookFallback);
-
-	// 2. `0x10273070(this, 0)` — resize the bounds to that hull, NOT forced.
-	SetHullSizeNormal(false);
-
-	// 3. `SetSolid(SOLID_BBOX = 2)` on `m_Collision` (+0x270), under a `"CBaseEntity::SetSolid"`
-	//    scope-trace frame.
-	RetailSolidType = GMotor10SolidBbox;
-	++RetailSolidSets;
-
-	// 4. `AddSolidFlags(word[+0x2b4] | 4)` — retail reads the CURRENT 16-bit solid-flag word,
-	//    zero-extends it, ORs `FSOLID_NOT_SOLID` in and passes the WHOLE thing to `AddSolidFlags`,
-	//    which ORs it again. The double-OR is retail's and is reproduced.
-	const uint32 CurrentFlags = RetailSolidFlags & 0xffffu;
-	RetailSolidFlags |= (CurrentFlags | GMotor10SolidNotSolid);
-
-	// 5. `slot 93 SetMoveType(MOVETYPE_FLY = 4, MOVECOLLIDE_DEFAULT = 0)`, through the slot (story 5
-	//    step 6: `FElysiumEntity::SetMoveType` is the `m_MoveType`/`m_MoveCollide` seam).
-	SetMoveType(GMotor10MoveTypeFly, GMotor10MoveCollideDefault);
-
-	// 6. `m_iHealth (+0x210) = 0x32` — **50** — then `AddFlag(0x40000)`. The health store is at
-	//    `102d7438`, after the flag's PUSH and before the call, so the health lands first.
-	Health = GMotor10TestHullHealth;
-	Flags |= GMotor10FlagDormant;
-
-	// 7. `byte [+0x5f44] = 0`. The shape map binds `+0x5f44` as an output block, which a one-byte
-	//    zero cannot be, so what this byte IS stays **unrecovered**.
-	bTestHullByte5f44 = false;
-
-	// 8. `JMP [vtable + 0x108]` — a TAIL jump to slot 66 `Hide()`, so `Hide`'s answer is `Spawn`'s
-	//    and nothing runs after it.
-	Hide();
-}
 
 // =================================================================================================
 // `0x102c87a0` / `0x102c8830` / `0x102cdc50` — `CAI_StandoffGoal`, the goal entity.

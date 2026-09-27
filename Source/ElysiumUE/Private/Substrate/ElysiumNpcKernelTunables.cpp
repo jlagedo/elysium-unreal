@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 51 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
+// 54 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
 
 #include "Substrate/ElysiumNpcKernelTunables.h"
 

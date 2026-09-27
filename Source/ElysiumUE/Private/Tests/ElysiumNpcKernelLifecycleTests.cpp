@@ -373,8 +373,9 @@ bool FElysiumNpcKernelLifecycleObjectCapsTest::RunTest(const FString&)
 	int32 Count = 0;
 	const ElysiumEntityCaps::FSpeciesRow* Rows = ElysiumEntityCaps::SpeciesRows(Count);
 	// Retail has four slot-117 overrides; `CGeneric_NPC_bathack`'s and `CScriptedTarget`'s have no
-	// instance and no row.
-	TestEqual(TEXT("two classes with an instance override slot 117"), Count, 2);
+	// instance and no row, and `CAI_TestHull`'s is its own class's override (`FElysiumNpcTestHull`,
+	// story 5 fold A1; `NpcKernelTestHull.Bodies`).
+	TestEqual(TEXT("one class with an instance and no port class overrides slot 117"), Count, 1);
 	TMap<FString, FString> ByClass;
 	for (int32 i = 0; i < Count; ++i)
 	{
@@ -382,20 +383,18 @@ bool FElysiumNpcKernelLifecycleObjectCapsTest::RunTest(const FString&)
 	}
 	// Every row, by name, with the address that fills slot 117 for it.
 	TestEqual(TEXT("CAI_Hint's body"), ByClass.FindRef(TEXT("CAI_Hint")), FString(TEXT("0x102d2ee0")));
-	TestEqual(TEXT("CAI_TestHull's body"), ByClass.FindRef(TEXT("CAI_TestHull")),
-		FString(TEXT("0x102d7290")));
+	TestNull(TEXT("CAI_TestHull's body is its class's override, not a row"),
+		ElysiumEntityCaps::SpeciesRowOf(TEXT("CAI_TestHull")));
 	TestNull(TEXT("CScriptedTarget has no instance and no row"),
 		ElysiumEntityCaps::SpeciesRowOf(TEXT("CScriptedTarget")));
 	TestNull(TEXT("CGeneric_NPC_bathack has no instance and no row"),
 		ElysiumEntityCaps::SpeciesRowOf(TEXT("CGeneric_NPC_bathack")));
 
 	const int32 Base = ElysiumEntityCaps::AcrossTransition;
-	// The two `& 0xfffffffd` classes end at ZERO from the base's single bit, which is retail
-	// saying "I am never carried across a level change".
+	// The `& 0xfffffffd` class ends at ZERO from the base's single bit, which is retail saying "I am
+	// never carried across a level change".
 	TestEqual(TEXT("CAI_Hint clears the transition bit"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CAI_Hint")), 0);
-	TestEqual(TEXT("CAI_TestHull clears it too"),
-		ElysiumEntityCaps::SpeciesObjectCaps(Base, TEXT("CAI_TestHull")), 0);
 	// The mask is a CLEAR, not a replace: every other bit survives it.
 	TestEqual(TEXT("CAI_Hint leaves the other bits alone"),
 		ElysiumEntityCaps::SpeciesObjectCaps(Base | 0x40, TEXT("CAI_Hint")), 0x40);

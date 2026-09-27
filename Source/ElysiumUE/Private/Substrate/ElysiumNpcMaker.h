@@ -94,12 +94,10 @@ public:
 	EMakerThink InstalledThink = EMakerThink::None;
 	static const TCHAR* MakerThinkName(EMakerThink Think);
 
-	/** SEAM for `CCollisionProperty::SetSolid(SOLID_NONE = 0)` on `m_Collision` (`+0x270`), under a
-	 *  `"CBaseEntity::SetSolid"` scope-trace frame naming this maker's targetname. Family Motor10
-	 *  stands the same seam on `FElysiumNpc` as `RetailSolidType`; a maker is not an `FElysiumNpc`,
-	 *  so it gets its own. Seeded to `SOLID_NONE` because that is what `Spawn` writes and nothing in
-	 *  this runtime writes anything else — a maker is never solid. */
-	int32 RetailSolidType = 0;
+	// `CCollisionProperty::SetSolid(SOLID_NONE = 0)` on `m_Collision` (`+0x270`), which `Spawn`
+	// writes, is the entity's own `m_Collision` seam, `FElysiumEntity::RetailSolidType`
+	// (`ElysiumEntitySlotBodies.inl`) — one home for the `CBaseEntity` word, which the maker's fold
+	// onto the NPC line (story 5 fold A4) inherits rather than shadows. A maker is never solid.
 
 	/** SEAM for `CBaseEntity::Relink` (`0x1001514a`), which re-inserts the entity into the engine's
 	 *  spatial partition. This runtime has no partition to relink into, so the call is counted —

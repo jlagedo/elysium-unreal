@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 203 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
-// 108 are defined by hand in the substrate, and 40 are still stubs — 26 29c, 2 29d, 12 29e.
+// 109 are defined by hand in the substrate, and 39 are still stubs — 25 29c, 2 29d, 12 29e.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -1035,12 +1035,8 @@ float FElysiumNpcBase::MaxYawSpeed()
 
 // slot 523 0x101a6b60 (sdk) `float GetMaxJumpSpeed() const`
 //   layer 0, story 29c
-float FElysiumNpcBase::GetMaxJumpSpeed() const
-{
-	FireKernelBaseSlot(TEXT("CAI_BaseNPC::GetMaxJumpSpeed"), TEXT("0x101a6b60"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `mechanism`: the body is `FElysiumNpcBase::GetMaxJumpSpeed`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 524 0x101a6b80 (sdk) `float GetJumpGravity() const`
 //   layer 0, story 29c
@@ -1986,7 +1982,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, float() const>::Test(&FElysiumNpcBase::StepHeight),
 				nullptr },
 			{ 523, TEXT("0x101a6b60"), TEXT("CAI_BaseNPC"), TEXT("GetMaxJumpSpeed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, float() const>::Test(&FElysiumNpcBase::GetMaxJumpSpeed),
 				nullptr },
 			{ 524, TEXT("0x101a6b80"), TEXT("CAI_BaseNPC"), TEXT("GetJumpGravity"),

@@ -312,3 +312,15 @@ void SetAttackExtents(const FVector& MarginCm) { AttackExtentsCm = MarginCm; }
 // retail writer records what it was asked, and nothing reads them but the tests.
 int32 RetailMoveType = 0;
 int32 RetailMoveCollide = 0;
+
+// SEAM for `m_Collision` (`+0x270`, `CCollisionProperty`) and its solid-flag word `+0x2b4` — the
+// `CBaseEntity` words `SetSolid` / `SetSolidFlags` / `AddSolidFlags` write, each under a
+// `"CBaseEntity::SetSolid"`-style scope-trace frame. This substrate carries no solid type and no
+// solid flags (family Motor's `RetailIsStandable`), so these three record what was asked:
+// `RetailSolidType` the last `SetSolid` value, `RetailSolidFlags` the flag word as the
+// read-OR-pass-back writers leave it, `RetailSolidSets` how many `SetSolid` calls ran. Writers:
+// `CAI_TestHull::Spawn` `0x102d72f0`, `CNPC_VPedestrian::OnRestore` `0x103a25a0`, `CNPCMaker::Spawn`
+// `0x1034afe0`. Independent of `RetailMoveType` above: retail's `SetMoveType` touches neither.
+int32 RetailSolidType = 0;
+uint32 RetailSolidFlags = 0;
+int32 RetailSolidSets = 0;

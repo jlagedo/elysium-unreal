@@ -190,10 +190,9 @@ float FElysiumNpc::GetMaxJumpSpeed() const
 {
 	// slot 523. `CAI_BaseNPCTroika::GetMaxJumpSpeed` `0x101aa670` returns `_DAT_1044faa8` = 36.0 —
 	// a DIFFERENT constant from the base's `0x101a6b60`, which returns the same 18.0 as its step
-	// height. `CAI_TestHull::GetMaxJumpSpeed` `0x102d72d0` returns 40.0.
-	const FJumpTunableSpecies* Row = IsRetailClass(TEXT("CAI_TestHull"))
-		? JumpTunableSpeciesOf(TEXT("CAI_TestHull"))
-		: JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
+	// height. `CAI_TestHull::GetMaxJumpSpeed` `0x102d72d0` is its own class's override
+	// (`FElysiumNpcTestHull`), on the `CAI_BaseNPC` line and never below this one.
+	const FJumpTunableSpecies* Row = JumpTunableSpeciesOf(TEXT("CAI_BaseNPCTroika"));
 	return Row != nullptr ? Row->MaxJumpSpeed : NpcKernelMotorShared::GMaxJumpSpeedTroika;
 }
 

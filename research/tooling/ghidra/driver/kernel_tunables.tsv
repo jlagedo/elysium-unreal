@@ -64,6 +64,9 @@ address	name	type	value	evidence
 1044faa8	MaxJumpSpeedTroika	f32	36.0	`CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523) returns it
 10477ce8	JumpGravity	f32	350.0	`0x101a6b80`; the jump arc's gravity
 10462950	Forty	f32	40.0	`CAI_TestHull::StepHeight 0x102d72b0` and `::GetMaxJumpSpeed 0x102d72d0` both return it
+102d7772	TestHullJumpMaxRise	imm_f32	1024.0	`0x102d7772 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760` (slot 521); the rise bound it passes `FUN_10280790` (the base's 80)
+102d776d	TestHullJumpMaxDrop	imm_f32	1024.0	`0x102d776d PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760` (slot 521); the drop bound it passes `FUN_10280790` (the base's 250)
+102d7768	TestHullJumpMaxDistance	imm_f32	1024.0	`0x102d7768 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760` (slot 521); the distance bound it passes `FUN_10280790` (the base's 160)
 104493d0	TenthDouble	f64	0.1	`FUN_10280790`'s slack, a qword load the x87 widens
 10460020	JumpApexScale	f64	1.25	`FUN_10280790`'s apex scale, a qword load the x87 widens
 1047a3ac	YawSpeedRun	f32	160.0	the yaw-speed ladder `0x10297ce0`'s run arm

@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 51 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
+// 54 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
 
 #pragma once
 
@@ -157,6 +157,18 @@ namespace ElysiumNpcTunables
 	// `0x10462950` f32 — `CAI_TestHull::StepHeight 0x102d72b0` and `::GetMaxJumpSpeed 0x102d72d0` both
 	// return it
 	inline constexpr float Forty = 40.0f;
+
+	// `0x102d7772` imm_f32 — `0x102d7772 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760`
+	// (slot 521); the rise bound it passes `FUN_10280790` (the base's 80)
+	inline constexpr float TestHullJumpMaxRise = 1024.0f;
+
+	// `0x102d776d` imm_f32 — `0x102d776d PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760`
+	// (slot 521); the drop bound it passes `FUN_10280790` (the base's 250)
+	inline constexpr float TestHullJumpMaxDrop = 1024.0f;
+
+	// `0x102d7768` imm_f32 — `0x102d7768 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760`
+	// (slot 521); the distance bound it passes `FUN_10280790` (the base's 160)
+	inline constexpr float TestHullJumpMaxDistance = 1024.0f;
 
 	// `0x104493d0` f64 — `FUN_10280790`'s slack, a qword load the x87 widens
 	inline constexpr double TenthDouble = 0.1;

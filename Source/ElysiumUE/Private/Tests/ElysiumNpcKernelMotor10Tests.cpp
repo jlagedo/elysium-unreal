@@ -12,6 +12,8 @@
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
+#include "Substrate/ElysiumNpcTestHull.h"
+#include "Substrate/ElysiumNpcUsedHullBits.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **Motor10** — `CAI_Motor`, `CAI_Navigator`, the standoff behaviour and goal,
@@ -84,7 +86,7 @@ bool FElysiumNpcKernelMotor10HullNormalTest::RunTest(const FString&)
 	// The self-check runs UNCONDITIONALLY and BEFORE the gate: with `NAI_Hull::Bits` answering 0 and
 	// the used mask 0, `(0 & 0) != 0` is false — so an un-precached hull is NOT reported for a hull
 	// whose bits are themselves zero. That is retail's arithmetic, not a port softening.
-	FElysiumNpc::RetailClearUsedHullBits();
+	ElysiumNpcUsedHullBits::Clear();
 	F.Npc->bIsUsingSmallHull = false;
 	F.Npc->HullNotPrecachedWarnings = 0;
 	F.Npc->SetSizeCalls = 0;
@@ -138,13 +140,13 @@ bool FElysiumNpcKernelMotor10HullNormalTest::RunTest(const FString&)
 	// bits are 0 — it cannot, because 0 & anything is 0. The arm that CAN fire is the one where the
 	// hull table answers a non-zero bit the mask does not carry, which this substrate's seam cannot
 	// produce; the test states that rather than faking one.
-	FElysiumNpc::RetailAddUsedHullBits(0x7fffffff);
+	ElysiumNpcUsedHullBits::Add(0x7fffffff);
 	F.Npc->HullNotPrecachedWarnings = 0;
 	F.Npc->bIsUsingSmallHull = true;
 	F.Npc->SetHullSizeNormal(false);
 	TestEqual(TEXT("the precache ERROR block cannot fire while NAI_Hull::Bits answers 0"),
 		F.Npc->HullNotPrecachedWarnings, 0);
-	FElysiumNpc::RetailClearUsedHullBits();
+	ElysiumNpcUsedHullBits::Clear();
 	return true;
 }
 
@@ -639,74 +641,71 @@ bool FElysiumNpcKernelMotor10TestHullSpawnTest::RunTest(const FString&)
 
 	// A ZERO mask short-circuits — `TEST EBX,EBX; JLE` — to hull 0 **without** the fallback call.
 	TestEqual(TEXT("0x102d72f5: a zero used-hull mask answers hull 0"),
-		FElysiumNpc::TestHullPickHull(0, [](int32) { return 0xff; }, bFallback), 0);
+		FElysiumNpcTestHull::PickHull(0, [](int32) { return 0xff; }, bFallback), 0);
 	TestFalse(TEXT("...without taking the 22-miss fallback"), bFallback);
 
 	// The test is SIGNED, so the shipped `.data` initialiser `0xffffffff` short-circuits the same
 	// way. That is the correction this family made to the walk.
 	TestEqual(TEXT("a NEGATIVE mask (the shipped 0xffffffff) also answers hull 0 at once"),
-		FElysiumNpc::TestHullPickHull(-1, [](int32 Hull) { return Hull == 5 ? 0x20 : 0; }, bFallback),
+		FElysiumNpcTestHull::PickHull(-1, [](int32 Hull) { return Hull == 5 ? 0x20 : 0; }, bFallback),
 		0);
 	TestFalse(TEXT("...and still skips the fallback"), bFallback);
 
 	// A positive mask walks 0..21 and takes the FIRST intersection.
 	TestEqual(TEXT("the first hull whose bits intersect the mask wins"),
-		FElysiumNpc::TestHullPickHull(0x28, [](int32 Hull) { return 1 << Hull; }, bFallback), 3);
+		FElysiumNpcTestHull::PickHull(0x28, [](int32 Hull) { return 1 << Hull; }, bFallback), 3);
 	TestFalse(TEXT("...no fallback"), bFallback);
 	TestEqual(TEXT("a later-only bit still wins when it is the only one"),
-		FElysiumNpc::TestHullPickHull(0x20, [](int32 Hull) { return 1 << Hull; }, bFallback), 5);
+		FElysiumNpcTestHull::PickHull(0x20, [](int32 Hull) { return 1 << Hull; }, bFallback), 5);
 
 	// The walk stops at 22 — hull 22's bit is never reached.
 	TestEqual(TEXT("22 misses fall back to hull 0"),
-		FElysiumNpc::TestHullPickHull(1 << 22, [](int32 Hull) { return 1 << Hull; }, bFallback), 0);
+		FElysiumNpcTestHull::PickHull(1 << 22, [](int32 Hull) { return 1 << Hull; }, bFallback), 0);
 	TestTrue(TEXT("...through the fallback, which ORs 0 (a no-op)"), bFallback);
-	TestEqual(TEXT("...and the no-op OR left the mask alone"), FElysiumNpcBase::RetailUsedHullBits(), 0);
+	TestEqual(TEXT("...and the no-op OR left the mask alone"), ElysiumNpcUsedHullBits::Get(), 0);
 
 	// Hull 21 is the LAST index the walk reaches.
 	TestEqual(TEXT("hull 21 is inside the walk"),
-		FElysiumNpc::TestHullPickHull(1 << 21, [](int32 Hull) { return 1 << Hull; }, bFallback), 21);
+		FElysiumNpcTestHull::PickHull(1 << 21, [](int32 Hull) { return 1 << Hull; }, bFallback), 21);
 
 	// The two mask writers.
-	FElysiumNpc::RetailClearUsedHullBits();
-	TestEqual(TEXT("0x102f9900 clears the mask"), FElysiumNpcBase::RetailUsedHullBits(), 0);
-	FElysiumNpc::RetailAddUsedHullBits(0x6);
-	FElysiumNpc::RetailAddUsedHullBits(0x8);
-	TestEqual(TEXT("0x102f9920 ORs bits in"), FElysiumNpcBase::RetailUsedHullBits(), 0xe);
-	FElysiumNpc::RetailClearUsedHullBits();
+	ElysiumNpcUsedHullBits::Clear();
+	TestEqual(TEXT("0x102f9900 clears the mask"), ElysiumNpcUsedHullBits::Get(), 0);
+	ElysiumNpcUsedHullBits::Add(0x6);
+	ElysiumNpcUsedHullBits::Add(0x8);
+	TestEqual(TEXT("0x102f9920 ORs bits in"), ElysiumNpcUsedHullBits::Get(), 0xe);
+	ElysiumNpcUsedHullBits::Clear();
 
-	// The whole body.
-	FMotor10Fixture F;
-	if (F.Npc == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
-	F.Npc->HullKind = 9;
-	F.Npc->Health = 1;
-	F.Npc->Flags = 0;
-	F.Npc->RetailSolidFlags = 0;
-	F.Npc->RetailSolidType = 0;
-	F.Npc->RetailSolidSets = 0;
-	F.Npc->SetSizeCalls = 0;
-	F.Npc->bTestHullByte5f44 = true;
-	F.Npc->bIsUsingSmallHull = true;
+	// The whole body, on its own class (story 5 fold A1): no classname builds a test hull, so the
+	// case constructs the C++ type directly, as retail's graph-build code does.
+	FElysiumNpcTestHull Hull;
+	Hull.HullKind = 9;
+	Hull.Health = 1;
+	Hull.Flags = 0;
+	Hull.RetailSolidFlags = 0;
+	Hull.RetailSolidType = 0;
+	Hull.RetailSolidSets = 0;
+	Hull.SetSizeCalls = 0;
+	Hull.bUnknown5f44 = true;
+	Hull.bIsUsingSmallHull = true;
 
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
-	F.Npc->TestHullSpawn();
+	// Through the entity's slot 103, as the world's spawn pass calls it.
+	static_cast<FElysiumEntity&>(Hull).Spawn();
 
-	TestEqual(TEXT("0x102d72f0 picks hull 0 through the seam"), F.Npc->HullKind, 0);
-	TestEqual(TEXT("...and resizes the bounds through 0x10273070"), F.Npc->SetSizeCalls, 1);
-	TestFalse(TEXT("...which cleared m_fIsUsingSmallHull"), F.Npc->bIsUsingSmallHull);
-	TestEqual(TEXT("SetSolid(SOLID_BBOX = 2)"), F.Npc->RetailSolidType, 2);
-	TestEqual(TEXT("...once"), F.Npc->RetailSolidSets, 1);
+	TestEqual(TEXT("0x102d72f0 picks hull 0 through the seam"), Hull.HullKind, 0);
+	TestEqual(TEXT("...and resizes the bounds through 0x10273070"), Hull.SetSizeCalls, 1);
+	TestFalse(TEXT("...which cleared m_fIsUsingSmallHull"), Hull.bIsUsingSmallHull);
+	TestEqual(TEXT("SetSolid(SOLID_BBOX = 2)"), Hull.RetailSolidType, 2);
+	TestEqual(TEXT("...once"), Hull.RetailSolidSets, 1);
 	TestEqual(TEXT("AddSolidFlags ORs FSOLID_NOT_SOLID (0x4)"),
-		static_cast<int32>(F.Npc->RetailSolidFlags & 0x4), 0x4);
-	TestEqual(TEXT("slot 93 SetMoveType(MOVETYPE_FLY = 4, ...)"), F.Npc->RetailMoveType, 4);
-	TestEqual(TEXT("...with MOVECOLLIDE_DEFAULT = 0"), F.Npc->RetailMoveCollide, 0);
-	TestEqual(TEXT("m_iHealth (+0x210) = 0x32 = 50"), F.Npc->Health, 50);
-	TestEqual(TEXT("AddFlag(0x40000)"), F.Npc->Flags & 0x40000, 0x40000);
-	TestFalse(TEXT("byte [+0x5f44] = 0"), F.Npc->bTestHullByte5f44);
+		static_cast<int32>(Hull.RetailSolidFlags & 0x4), 0x4);
+	TestEqual(TEXT("slot 93 SetMoveType(MOVETYPE_FLY = 4, ...)"), Hull.RetailMoveType, 4);
+	TestEqual(TEXT("...with MOVECOLLIDE_DEFAULT = 0"), Hull.RetailMoveCollide, 0);
+	TestEqual(TEXT("m_iHealth (+0x210) = 0x32 = 50"), Hull.Health, 50);
+	TestEqual(TEXT("AddFlag(0x40000)"), Hull.Flags & 0x40000, 0x40000);
+	TestFalse(TEXT("byte [+0x5f44] = 0"), Hull.bUnknown5f44);
 
 	// The tail is a JMP to slot 66 `Hide()`. Slot 66 is still one of story 29c's generated stubs, so
 	// what is observable is the stub tally — which is exactly the claim: the tail dispatched.

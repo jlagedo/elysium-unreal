@@ -2509,9 +2509,9 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102e6f98` | docs/vtmb/navigation-jump-links.md:513 |
 | `0x103293c4` | docs/vtmb/stealth.md:540 |
 | `0x1038e5c0` | docs/vtmb/npc-ai/conditions-and-states.md:2390 |
-| `0x10398598` | docs/vtmb/npc-ai/shape.md:2260 |
+| `0x10398598` | docs/vtmb/npc-ai/shape.md:2273 |
 | `0x103cb754` | docs/vtmb/navigation-jump-links.md:827, docs/vtmb/npc-ai/lifecycle.md:223 |
-| `0x10445000` | docs/vtmb/animation_rig_resolution.md:763, docs/vtmb/npc-ai/lifecycle.md:1457, docs/vtmb/npc-ai/shape.md:3353, +1 more |
+| `0x10445000` | docs/vtmb/animation_rig_resolution.md:763, docs/vtmb/npc-ai/lifecycle.md:1457, docs/vtmb/npc-ai/shape.md:3366, +1 more |
 | `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/npc-ai/conditions-and-states.md:1436, docs/vtmb/npc-ai/conditions-and-states.md:1610 |
 | `0x104454c4` | docs/vtmb/footsteps.md:95, docs/vtmb/footsteps.md:966, docs/vtmb/npc-ai/senses.md:1388, +4 more |
 | `0x104454d0` | docs/vtmb/camera-view-modes.md:661, docs/vtmb/entity_io.md:2127, docs/vtmb/footsteps.md:490, +4 more |
@@ -2562,7 +2562,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10453b74` | docs/vtmb/camera-view-modes.md:611, docs/vtmb/camera-view-modes.md:982 |
 | `0x10453b78` | docs/vtmb/camera-view-modes.md:641, docs/vtmb/camera-view-modes.md:3275 |
 | `0x10453b88` | docs/vtmb/camera-view-modes.md:641, docs/vtmb/camera-view-modes.md:3273 |
-| `0x10453b94` | docs/vtmb/navigation-jump-links.md:1013 |
+| `0x10453b94` | docs/vtmb/navigation-jump-links.md:1013, docs/vtmb/npc-ai/shape.md:1351, docs/vtmb/npc-ai/shape.md:1352 |
 | `0x10454028` | docs/vtmb/navigation-jump-links.md:1850 |
 | `0x10454110` | docs/vtmb/animation_and_movers.md:1149, docs/vtmb/npc-ai/rdata-cells.md:28, docs/vtmb/player-entity.md:604 |
 | `0x10454b8c` | docs/vtmb/source_movement.md:397 |
@@ -2693,10 +2693,10 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10568c54` | docs/vtmb/entity_io.md:2572 |
 | `0x1057254c` | docs/vtmb/footsteps.md:339, docs/vtmb/footsteps.md:995 |
 | `0x1057909c` | docs/vtmb/entity_io.md:1100 |
-| `0x10579660` | docs/vtmb/npc-ai/shape.md:3866 |
+| `0x10579660` | docs/vtmb/npc-ai/shape.md:3879 |
 | `0x1057966c` | docs/vtmb/navigation-jump-links.md:2153, docs/vtmb/npc-ai/conditions-and-states.md:490, docs/vtmb/npc-ai/senses.md:1409, +1 more |
 | `0x10579690` | docs/vtmb/combat-and-damage.md:186 |
-| `0x1057ae88` | docs/vtmb/npc-ai/shape.md:4222 |
+| `0x1057ae88` | docs/vtmb/npc-ai/shape.md:4235 |
 | `0x1057ba50` | docs/vtmb/npc-ai/shape.md:1307 |
 | `0x10580f24` | docs/vtmb/player-entity.md:634, docs/vtmb/script_api.md:428 |
 | `0x1058283c` | docs/vtmb/camera-view-modes.md:3047 |
@@ -2724,7 +2724,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1059d5b4` | docs/vtmb/entity_io.md:691 |
 | `0x1059d834` | docs/vtmb/entity_io.md:356 |
 | `0x105a0c78` | docs/vtmb/npc-ai/social.md:841 |
-| `0x105a1518` | docs/vtmb/npc-ai/shape.md:4496 |
+| `0x105a1518` | docs/vtmb/npc-ai/shape.md:4509 |
 | `0x105a1814` | docs/vtmb/npc-ai/conditions-and-states.md:2341 |
 | `0x105a1cb0` | docs/vtmb/npc-ai/lifecycle.md:611 |
 | `0x105a3060` | docs/vtmb/npc-ai/conditions-and-states.md:1995 |
@@ -2749,12 +2749,12 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x105c97b4` | docs/vtmb/npc-ai/conditions-and-states.md:194, docs/vtmb/npc-ai/senses.md:233 |
 | `0x105c97dc` | docs/vtmb/npc-ai/conditions-and-states.md:194, docs/vtmb/npc-ai/conditions-and-states.md:1040 |
 | `0x105c9cf0` | docs/vtmb/npc-ai/schedule-kernel.md:334 |
-| `0x105cc508` | docs/vtmb/npc-ai/shape.md:4739 |
-| `0x105cc510` | docs/vtmb/npc-ai/shape.md:4739 |
-| `0x105cc518` | docs/vtmb/npc-ai/shape.md:4739 |
-| `0x105cc520` | docs/vtmb/npc-ai/shape.md:4738 |
-| `0x105cc8b4` | docs/vtmb/npc-ai/shape.md:4397 |
-| `0x105cc8fc` | docs/vtmb/npc-ai/shape.md:4447 |
+| `0x105cc508` | docs/vtmb/npc-ai/shape.md:4752 |
+| `0x105cc510` | docs/vtmb/npc-ai/shape.md:4752 |
+| `0x105cc518` | docs/vtmb/npc-ai/shape.md:4752 |
+| `0x105cc520` | docs/vtmb/npc-ai/shape.md:4751 |
+| `0x105cc8b4` | docs/vtmb/npc-ai/shape.md:4410 |
+| `0x105cc8fc` | docs/vtmb/npc-ai/shape.md:4460 |
 | `0x105cd440` | docs/vtmb/navigation-jump-links.md:1837 |
 | `0x105cd454` | docs/vtmb/npc-ai/conditions-and-states.md:1688 |
 | `0x105cd458` | docs/vtmb/npc-ai/conditions-and-states.md:1689 |
@@ -2768,8 +2768,8 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x105d8ccc` | docs/vtmb/npc-ai/senses.md:878 |
 | `0x105d8cd0` | docs/vtmb/npc-ai/senses.md:878 |
 | `0x105d9028` | docs/vtmb/npc-ai/shape.md:1308 |
-| `0x105d9bb0` | docs/vtmb/npc-ai/shape.md:4487 |
-| `0x105d9bb8` | docs/vtmb/npc-ai/shape.md:4486 |
+| `0x105d9bb0` | docs/vtmb/npc-ai/shape.md:4500 |
+| `0x105d9bb8` | docs/vtmb/npc-ai/shape.md:4499 |
 | `0x105e8138` | docs/vtmb/retail-defects.md:107 |
 | `0x105f9990` | docs/vtmb/camera-view-modes.md:779, docs/vtmb/camera-view-modes.md:2455, docs/vtmb/camera-view-modes.md:3126 |
 | `0x105fb298` | docs/vtmb/effects.md:533 |
@@ -2791,7 +2791,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10629d80` | docs/vtmb/npc-ai/lifecycle.md:1229 |
 | `0x1062a000` | docs/vtmb/npc-ai/lifecycle.md:1231 |
 | `0x1062a004` | docs/vtmb/npc-ai/lifecycle.md:1229 |
-| `0x10636728` | docs/vtmb/npc-ai/shape.md:4740 |
+| `0x10636728` | docs/vtmb/npc-ai/shape.md:4753 |
 | `0x10639480` | docs/vtmb/npc-ai/lifecycle.md:1274 |
 | `0x10639490` | docs/vtmb/npc-ai/lifecycle.md:1275 |
 | `0x10640ce0` | docs/vtmb/npc-ai/lifecycle.md:1293, docs/vtmb/npc-ai/lifecycle.md:1433 |

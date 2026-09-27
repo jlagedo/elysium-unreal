@@ -22,8 +22,4 @@ namespace NpcKernelMotor10Shared
 	{
 		return FVector(Cm.X / ElysiumMove::U, -Cm.Y / ElysiumMove::U, Cm.Z / ElysiumMove::U);
 	}
-	// The global used-hull mask `DAT_10610be8`. `.data`, initialised on disk to `0xffffffff` and
-	// zeroed by `0x102f9900` at the start of every node-graph build; nothing in this runtime builds
-	// one, so it stands at retail's post-clear value. File-static because it is global in retail.
-	inline int32 GMotor10UsedHullBits = 0;
 }

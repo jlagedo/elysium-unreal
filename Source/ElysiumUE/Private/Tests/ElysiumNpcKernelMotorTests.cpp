@@ -59,12 +59,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorTunablesTest,
 	"Elysium.Substrate.NpcKernelMotor.Tunables", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 {
-	// The species table, every row by name. `CAI_TestHull` is not a spawnable classname in this
-	// port's roster, so its row is exercised through the table's own lookup, which is what the
-	// slot-521/522/523 bodies consult.
+	// The species table, every row by name. `CAI_TestHull`'s answers are its own class's overrides
+	// (`FElysiumNpcTestHull`, story 5 fold A1; `NpcKernelTestHull.Bodies`), not a row.
 	int32 Count = 0;
 	const FElysiumNpcBase::FJumpTunableSpecies* Rows = FElysiumNpc::JumpTunableSpeciesRows(Count);
-	TestEqual(TEXT("three tunable rows: the base line, the Troika line and the test hull"), Count, 3);
+	TestEqual(TEXT("two tunable rows: the base line and the Troika line"), Count, 2);
 	TestNotNull(TEXT("rows"), Rows);
 
 	const FElysiumNpcBase::FJumpTunableSpecies* Troika =
@@ -94,19 +93,8 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 		TestEqual(TEXT("and both are 18"), Base->StepHeight, 18.0f);
 	}
 
-	const FElysiumNpcBase::FJumpTunableSpecies* Hull =
-		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_TestHull"));
-	TestNotNull(TEXT("CAI_TestHull row"), Hull);
-	if (Hull != nullptr)
-	{
-		// `0x102d72b0` / `0x102d72d0` both return `_DAT_10462950` = 40.0; `0x102d7760` passes
-		// 1024/1024/1024.
-		TestEqual(TEXT("test hull step height 40"), Hull->StepHeight, 40.0f);
-		TestEqual(TEXT("test hull jump speed 40"), Hull->MaxJumpSpeed, 40.0f);
-		TestEqual(TEXT("test hull jump rise 1024"), Hull->JumpLegalRise, 1024.0f);
-		TestEqual(TEXT("test hull jump drop 1024"), Hull->JumpLegalDrop, 1024.0f);
-		TestEqual(TEXT("test hull jump distance 1024"), Hull->JumpLegalDistance, 1024.0f);
-	}
+	TestNull(TEXT("the test hull has no row: its class overrides the slots"),
+		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CAI_TestHull")));
 	TestNull(TEXT("a class with no row answers null"),
 		FElysiumNpcBase::JumpTunableSpeciesOf(TEXT("CNPC_VNotAClass")));
 

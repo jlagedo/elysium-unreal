@@ -1347,6 +1347,9 @@ jump arm `0x102e6290` reads it (`102e63dd`) and passes it as the horizontal-spee
 (`../navigation-jump-links.md` § "Triangulate, the ground accounting and the jump arm"). The old label, kept for the cross-references: **Max jump speed**
 (slot 523) is where the two lines differ: `CAI_BaseNPC` (`0x101a6b60`) returns the
 SAME 18.0, while `CAI_BaseNPCTroika` (`0x101aa670`) overrides it with `_DAT_1044faa8 = 36.0`.
+(Port, 2026-09-27, 0019 story 5 fold A1: `FElysiumNpcBase::GetMaxJumpSpeed` had been a generated
+stub answering 0 for `0x101a6b60`; it now answers the `0x10453b94` cell, 18.0 — the listing is
+`FLD float ptr [0x10453b94]; RET`.)
 **Jump gravity** (slot 524, `0x101a6b80`) is `_DAT_10477ce8 = 350.0` and nothing overrides it — zero
 dispatch sites in the closure, but the slot is filled, so the body is not dead. `CAI_TestHull`
 answers 522 and 523 with one constant, `_DAT_10462950 = 40.0` (`0x102d72b0`, `0x102d72d0`).
@@ -1364,6 +1367,16 @@ answers 522 and 523 with one constant, `_DAT_10462950 = 40.0` (`0x102d72b0`, `0x
 
 Arm 2 is unreachable on the base thresholds: a drop big enough to trip 250 is also a distance big
 enough to trip 160, and arm 4 runs on the same delta.
+
+The three bounds are `PUSH imm32` in both bodies, pushed right to left: distance first, then drop,
+then rise. The base's are `0x10280888` (160), `0x1028088d` (250), `0x10280892` (80); the test
+hull's three `PUSH 0x44800000` (1024.0) are `0x102d7768` (distance), `0x102d776d` (drop) and
+`0x102d7772` (rise) — the port reads them as `ElysiumNpcTunables::TestHullJumpMaxDistance`,
+`…MaxDrop`, `…MaxRise` (2026-09-27, 0019 story 5 fold A1). `CAI_TestHull`'s six own bodies (slots
+5, 103, 117, 521, 522, 523) are the overrides of `FElysiumNpcTestHull : FElysiumNpcBase`; no
+classname builds one and no port path constructs one — retail drives its singleton only from
+graph-build code (`CAI_Node::InitLinks 0x102fb4e0`, `0x102f7a90`), which the port replaces with the
+pipeline's baked navigation.
 
 **Unrecovered:** which three species override step height "for real" outside this pack (the ledger
 counts them but the bodies are in other layers), and why the base line's jump speed and step height

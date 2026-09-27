@@ -351,15 +351,8 @@ static int32 RetailHullBits(int32 Hull);
  *  the sixth line of `SetHullSizeNormal`'s ERROR block. **SEAM**: answers an empty string. */
 static FString RetailHullName(int32 Hull);
 
-/** The global used-hull mask `DAT_10610be8` and its two writers, `0x102f9900` (clear to 0, and
- *  `DAT_1093412c` with it) and `0x102f9920` (`|= bits`), read back by `0x102f9950`.
- *
- *  The mask is `.data` whose on-disk initialiser is `0xffffffff` and whose first runtime write is
- *  `0x102f9900`'s zero, at the start of the node-graph build. **Nothing in this runtime builds a
- *  node graph and nothing precaches a hull**, so the accumulator here starts at **0** — retail's own
- *  post-clear, pre-precache value — and the two writers are ported so the pick below has the lever
- *  its own arms need. Static, because the mask is global in retail. */
-static int32 RetailUsedHullBits();
+// The global used-hull mask `DAT_10610be8` (`0x102f9950` / `0x102f9900` / `0x102f9920`) is free
+// functions, not `CAI_BaseNPC` bodies: `Substrate/ElysiumNpcUsedHullBits.h`.
 
 /** `0x10273070` `CAI_BaseNPC::SetHullSizeNormal(bool force)` — nineteen direct callers plus two
  *  outside, the widest-called body in this band. Answers nothing; retail's `RET 0x4` leaves no

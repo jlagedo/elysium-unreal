@@ -227,7 +227,7 @@ float FElysiumNpcDog::MaxYawSpeed()
 	{
 		return NpcKernelMotorShared::GYawDefault;
 	}
-	return NpcKernelMotorShared::GTestHullTunable;          // _DAT_10462950 = 40.0
+	return ElysiumNpcTunables::Forty;                       // _DAT_10462950 = 40.0
 }
 
 // Slot 566: `0x10374aa0`, a replacement that does not chain.

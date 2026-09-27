@@ -53,50 +53,10 @@
 
 // --- `CAI_TestHull`, the hull probe ----------------------------------------------------------------
 //
-// **NAMED DECISION, on the spelling.** A reviewer suggested `FElysiumAiTestHull::Spawn` rather than
-// a method on `FElysiumNpc`. This family keeps it on `FElysiumNpc` as `TestHullSpawn`, on three
-// facts. (1) `CAI_TestHull` is a class on the `CAI_BaseNPC` line in retail — `vtmb_slot 464` and
-// `vtmb_slot 513` list it filling `CAI_BaseNPC::GetState` and `CAI_BaseNPC::CapabilitiesGet`
-// alongside every `CNPC_V*` leaf — so its `Spawn` is an NPC-line body and `FElysiumNpc` is the class
-// that carries NPC-line bodies. (2) The port ALREADY treats it as one: story 29c-1's
-// `FJumpTunableSpecies` table carries a `CAI_TestHull` row (`0x102d72d0`, a 1024/1024/1024 hull) and
-// `MotorTests.Tunables` exercises it by name. (3) A new `FElysiumAiTestHull` would be a substrate
-// class with one method, no spawner, no caller and no state of its own, which is the "second owner
-// for one body" 29c-1 declined for `FNavigator`. The overlay row therefore keeps
-// `FElysiumNpc::TestHullSpawn` and this comment is the argument.
-
-static void RetailClearUsedHullBits();
-static void RetailAddUsedHullBits(int32 Bits);
-
-/** `CAI_TestHull::Spawn`'s hull pick, `0x102d72f5`–`0x102d732e`, as a PURE function so every arm is
- *  reachable from a test without a hull table. `HullBits` is `NAI_Hull::Bits`.
- *
- *  Retail, from the listing: read the used mask; **`TEST mask,mask; JLE`** — a SIGNED test, so a
- *  zero OR NEGATIVE mask short-circuits straight to hull 0 WITHOUT the fallback call; otherwise
- *  walk `i = 0 .. 21` and take the first `i` whose `NAI_Hull::Bits(i)` intersects the mask; after
- *  22 misses call `AddUsedHullBits(0)` — which ORs zero and is a no-op — and answer 0. */
-static int32 TestHullPickHull(int32 UsedHullBits, TFunctionRef<int32(int32)> HullBits,
-	bool& bOutTookFallback);
-
-/** `CAI_TestHull::Spawn` `0x102d72f0`, slot 103 on `CAI_TestHull`. */
-void TestHullSpawn();
-
-/** SEAM for `CCollisionProperty::SetSolid(SOLID_BBOX = 2)` (`this+0x270`, under a
- *  `"CBaseEntity::SetSolid"` scope-trace frame) and `AddSolidFlags(word[+0x2b4] | 4)` — retail reads
- *  the CURRENT 16-bit solid-flag word, ORs `FSOLID_NOT_SOLID` (`0x4`) into it and passes the whole
- *  thing back to `AddSolidFlags`, which ORs it again. Family Motor's `RetailIsStandable` already
- *  records that this substrate carries no solid type and no solid flags; these three record what
- *  was asked. */
-int32 RetailSolidType = 0;
-uint32 RetailSolidFlags = 0;
-int32 RetailSolidSets = 0;
-
-
-/** SEAM for `this->+0x5f44 = 0` (a BYTE store, `102d7449`). The shape map binds `+0x5f44` as an
- *  output block (`ELYSIUM_NPC_WORD_IMPLICIT`, "outputs are fired by name"), which cannot be the
- *  target of a one-byte zero, so **what `+0x5f44` is at byte granularity is unrecovered**. The
- *  store is carried under its offset and read by the test alone. */
-bool bTestHullByte5f44 = false;
+// `CAI_TestHull::Spawn` `0x102d72f0` is its own class's slot 103, `FElysiumNpcTestHull::Spawn`
+// (`Substrate/ElysiumNpcTestHull.h`, story 5 fold A1). The used-hull mask it reads is the free
+// functions of `Substrate/ElysiumNpcUsedHullBits.h`; the solid record it writes is `FElysiumEntity`'s
+// `m_Collision` seam (`ElysiumEntitySlotBodies.inl`).
 
 // --- The two hull-size bodies -----------------------------------------------------------------------
 

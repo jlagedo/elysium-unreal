@@ -78,8 +78,9 @@ void FElysiumNpcMaker::Spawn()
 
 	// 1. `1034b04c LEA ECX,[ESI + 0x270] / CALL 0x1000428c` — `SetSolid(SOLID_NONE)` on
 	//    `m_Collision`, under a `"CBaseEntity::SetSolid"` scope frame naming this maker's
-	//    targetname. SEAM; see the header.
+	//    targetname. SEAM: the entity's `m_Collision` record (`FElysiumEntity::RetailSolidType`).
 	RetailSolidType = 0;
+	++RetailSolidSets;
 
 	// 2. `1034b065 MOV dword ptr [ESI + 0x66b0],0x0` — `m_cLiveChildren`, and it is written BEFORE
 	//    the slot-104 dispatch, not after.

@@ -8,6 +8,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcTestHull.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 5 step 2: the classname -> class map is retail's factories
@@ -15,8 +16,8 @@
 // `vampire.dll`; `docs/vtmb/npc-ai/population.md`, "The classname -> class map, read from the
 // factories"). Every living ordinary-NPC classname builds its own C++ class, which answers its own
 // census row; the retail classes above it are abstract descriptors a map cannot stand; the dead
-// names stay unregistered; the ten deferred classes keep their pre-step-2 factories until their
-// folds (steps 7-10).
+// names stay unregistered; the deferred classes keep their pre-step-2 factories until their folds
+// (commit A; the test hull, which has no classname, stands at fold A1).
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelFactoryFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -258,7 +259,8 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	// The retail classes no classname builds, plus every class a classname descriptor derives
 	// from: a def naming one is refused, never stood as a record or an NPC.
-	TArray<FString> Abstract = { TEXT("CAI_BaseNPC"), TEXT("CAI_BaseNPCTroika"), TEXT("CNPC_VBaseBoss") };
+	TArray<FString> Abstract = { TEXT("CAI_BaseNPC"), TEXT("CAI_BaseNPCTroika"), TEXT("CNPC_VBaseBoss"),
+		TEXT("CAI_TestHull") };
 	for (const FFactoryRow& Row : GStep2Factories)
 	{
 		Abstract.AddUnique(Row.RetailClass);
@@ -281,7 +283,24 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 	}
 
 	// Internal construction builds the class against the abstract descriptor: retail's own
-	// construction by code, which is how the bare Troika line (and at step 10 `CAI_TestHull`) stands.
+	// construction by code, which is how the bare Troika line and `CAI_TestHull` (fold A1) stand.
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("CAI_TestHull");
+		Def.InternalFactory = []() -> TUniquePtr<FElysiumEntity> { return MakeUnique<FElysiumNpcTestHull>(); };
+		TUniquePtr<FElysiumEntity> Entity = Reg.Create(Def, FElysiumEntityHandle(0, 1));
+		FElysiumNpcBase* Hull = Entity.IsValid() ? Entity->AsNpcBase() : nullptr;
+		if (TestNotNull(TEXT("an internally built test hull stands"), Hull))
+		{
+			TestNull(TEXT("on the CAI_BaseNPC line, not the Troika's"), Entity->AsNpc());
+			TestNotNull(TEXT("as its own C++ class"), Hull->AsSpecies<FElysiumNpcTestHull>());
+			const FElysiumNpcClass* Cls = Hull->RetailClass();
+			TestEqual(TEXT("answering CAI_TestHull"), Cls != nullptr ? FString(Cls->Name) : FString(),
+				FString(TEXT("CAI_TestHull")));
+			TestTrue(TEXT("against the abstract CAI_TestHull descriptor"),
+				Entity->Class != nullptr && Entity->Class->ClassName == FName(TEXT("CAI_TestHull")));
+		}
+	}
 	{
 		FElysiumEntityDef Def;
 		Def.Classname = TEXT("CAI_BaseNPCTroika");
@@ -358,14 +377,14 @@ bool FElysiumNpcKernelClassDeadAndDeferredTest::RunTest(const FString&)
 //
 // The registry's NPC line is exactly the factory map: every constructible descriptor under
 // `CAI_BaseNPC` is one of the 45 step-2 classnames hanging from its own retail class, every abstract
-// one is a live census class, and none of the ten deferred classes has an NPC descriptor yet.
+// one is a live census class, and none of the nine still-deferred classes has an NPC descriptor yet
+// (the test hull, fold A1, stands as an abstract live census class).
 namespace
 {
-	// `manifest.json` `deferred_classes`, folded at steps 7 (controller line), 8 (makers),
-	// 9 (directors) and 10 (the test hull).
+	// `manifest.json` `deferred_classes` (git at `a00cd11b`), less the folds commit A has landed:
+	// A1 the test hull; A2 the controller line, A3 the directors and A4 the makers remain.
 	const TCHAR* const GDeferredClasses[] =
 	{
-		TEXT("CAI_TestHull"),
 		TEXT("CCineNPC"),
 		TEXT("CCineAI"),
 		TEXT("CCineAISchedule"),
@@ -452,9 +471,9 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			Abstract.Contains(Row.RetailClass));
 	}
 
-	// The ten deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
-	// their classnames are exactly the nine deferred factory rows (the test hull has none).
-	TestEqual(TEXT("ten classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 10);
+	// The nine deferred classes, explicitly: each is a census class, none is on the NPC line yet, and
+	// their classnames are exactly the nine deferred factory rows.
+	TestEqual(TEXT("nine classes are deferred"), static_cast<int32>(UE_ARRAY_COUNT(GDeferredClasses)), 9);
 	int32 DeferredNames = 0;
 	for (const TCHAR* Name : GDeferredClasses)
 	{
