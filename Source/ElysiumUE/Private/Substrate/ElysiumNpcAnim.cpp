@@ -27,8 +27,9 @@
 //   * **The activity commit** — `SetIdealActivity`, `ResolveActivityToSequence`,
 //     `ForcePreTranslatedSequenceAndActivity`, `IsActivityFinished`, `ShouldMaintainActivity`,
 //     `CanPlaySequence` — is the kernel's own, and lands whole.
-//   * **The species branches** of three slots the generator still carries (245, 246, 259); slot
-//     250's `CAI_BaseHumanoid` branch was deleted by 0019 story 5 step 1 (no instance).
+//   * **The species branches** of slot 259; slots 245/246's branch is `FElysiumNpcPlayerController`'s
+//     (story 5 fold A2) and slot 250's `CAI_BaseHumanoid` branch was deleted by 0019 story 5 step 1
+//     (no instance).
 //
 // The walked prose is `docs/vtmb/npc-ai/shape.md`.
 //
@@ -46,32 +47,6 @@ namespace
 
 	// The schedule id `CAI_BaseNPCTroika::ShouldMaintainActivity` (`0x102bf510`) refuses for.
 	constexpr int32 GScheduleRefusingMaintain = 0xb9;
-
-	// Slots 245/246's species override — the three classes that forward their extra animation models
-	// to a possessing player's own model list. `CNPC_VPlayerController` carries the bodies and the
-	// other two share them.
-	struct FAnimExtraModelRow
-	{
-		const TCHAR* RetailClass;
-		const TCHAR* Body245;
-		const TCHAR* Body246;
-	};
-
-	constexpr FAnimExtraModelRow GExtraModelForwarders[] =
-	{
-		{ TEXT("CNPC_VFrenzyShadow"),     TEXT("0x103a49c0"), TEXT("0x103a4a60") },
-		{ TEXT("CNPC_VPlayerController"), TEXT("0x103a49c0"), TEXT("0x103a4a60") },
-		{ TEXT("CNPC_VWolfMorph"),        TEXT("0x103a49c0"), TEXT("0x103a4a60") },
-	};
-
-	// Retail's two `DevWarning` strings on the extra-model pair, quoted so the port's log line is the
-	// one a reader of the binary would search for.
-	const TCHAR* const GWarnAddExtraModels =
-		TEXT("Player Controller NPC adding extra animations, but is not attached to a player. This ")
-		TEXT("is probably bad.");
-	const TCHAR* const GWarnRemoveExtraModels =
-		TEXT("Player Controller NPC removing extra animations, but is not attached to a player. ")
-		TEXT("This is probably bad.");
 }
 
 // --- The animating-tier seams -------------------------------------------------------------------
@@ -89,56 +64,13 @@ bool FElysiumNpc::SceneEntityForcesCutsceneLod(const void* SceneEntity) const
 	return false;
 }
 
-// --- Slots 245/246's species branch -------------------------------------------------------------
-
-void FElysiumNpc::AddExtraAnimationModelsPlayerController(FElysiumEntity* ExtraModel,
-	const TCHAR* AttachmentA, const TCHAR* AttachmentB, int32 FlagsA, int32 FlagsB)
-{
-	// `CNPC_VPlayerController::AddExtraAnimationModels` `0x103a49c0`, in retail's order:
-	//   1. `CBaseAnimating::AddExtraAnimationModels(...)` — the base's own list (**SEAM**: this
-	//      runtime composes extra models through the character catalog, so the request is recorded).
-	//   2. slot 97 `GetOwnerEntity()`; when it resolves AND its `+0xa8` (`m_pPlayer`, the
-	//      self-downcast cache the `CBasePlayer` constructor fills) is set, forward the same five
-	//      arguments to that player's vtable `+0x3d4` — slot 245 again, on the player.
-	//   3. otherwise `DevWarning` and stop.
-	FExtraAnimationModelRequest Request;
-	Request.Model = ExtraModel != nullptr ? ExtraModel->Handle : FElysiumEntityHandle();
-	Request.AttachmentA = AttachmentA != nullptr ? FString(AttachmentA) : FString();
-	Request.AttachmentB = AttachmentB != nullptr ? FString(AttachmentB) : FString();
-	Request.FlagsA = FlagsA;
-	Request.FlagsB = FlagsB;
-
-	// `+0xa8` is `m_pPlayer`, the self-downcast cache only `CBasePlayer`'s constructor fills, so the
-	// forwarding arm is exactly "the owner IS the player".
-	Request.bForwardedToMaster = OwnerIsThePlayer();
-	const bool bForwarded = Request.bForwardedToMaster;
-	ExtraAnimationModels.Add(MoveTemp(Request));
-
-	if (!bForwarded)
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s"), GWarnAddExtraModels);
-	}
-}
+// --- Slots 245/246's forwarding gate -----------------------------------------------------------
 
 bool FElysiumNpc::OwnerIsThePlayer() const
 {
 	// Slot 97 `GetOwnerEntity()` followed by that entity's `+0xa8`. This runtime's player entity is
 	// the one `FElysiumEntityWorld::PlayerHandle()` names, so the two-step is one comparison.
 	return World != nullptr && OwnerEntity.IsSet() && OwnerEntity == World->PlayerHandle();
-}
-
-void FElysiumNpc::RemoveExtraAnimationModelsPlayerController()
-{
-	// `CNPC_VPlayerController::RemoveExtraAnimationModels` `0x103a4a60` — the exact inverse, read off
-	// the listing: clear the base's own list (`0x1008e310`), ask slot 97 for the owner, and TAIL JUMP
-	// into the owner's `+0xa8` object's `+0x3d8` (slot 246). With no owner, or an owner that is not a
-	// player, the warning is the whole body.
-	ExtraAnimationModels.Reset();
-
-	if (!OwnerIsThePlayer())
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s"), GWarnRemoveExtraModels);
-	}
 }
 
 // --- The gesture-layer table (slots 265, 269, 270, 273, 274, 275) -------------------------------

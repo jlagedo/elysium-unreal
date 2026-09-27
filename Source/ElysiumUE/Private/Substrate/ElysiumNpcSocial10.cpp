@@ -68,9 +68,10 @@ namespace
 
 bool FElysiumNpc::ActivatorControllerBusy(const FElysiumEntity* Activator) const
 {
-	// SEAM — see the `.inl`. `0x10175180` on the ACTIVATOR; the word it reads sits on the NPC here.
-	(void)Activator;
-	return false;
+	// `0x10175180` on the ACTIVATOR (see the `.inl`).
+	const FElysiumPlayer* Player = (World != nullptr && Activator != nullptr
+		&& Activator->Handle == World->PlayerHandle()) ? World->FindPlayer() : nullptr;
+	return Player != nullptr && Player->ControllerNpcBusy();
 }
 
 bool FElysiumNpc::CanTalkObserverPredicate(const FElysiumEntity* Activator) const

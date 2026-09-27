@@ -16,8 +16,8 @@
 //   * **One slot, many bodies.** Slots 599, 600, 601, 602, 606 and 609 each already carry a Troika
 //     body (family **TroikaHelpers**) and a `CNPC_VAndreiBlood`-line twin; this family's rows are
 //     the per-species REPLACEMENTS of those. Each species body lands under its own RETAIL ADDRESS
-//     (`FUN_103c19e0`, …) and, since story 5 step 3, is the body of its class's C++ override; only
-//     the deferred controller line's 599/600 still dispatch here (`SpeciesSlot599/600`).
+//     (`FUN_103c19e0`, …) and, since story 5 step 3, is the body of its class's C++ override (the
+//     controller line's 599/600 since fold A2, on `FElysiumNpcFrenzyShadow`).
 //
 //   * **The class answers.** Since story 5 step 2 every living classname builds its own C++ class
 //     (`Substrate/ElysiumNpcClasses.cpp`, from retail's factories) and `RetailClass()` is that
@@ -120,8 +120,8 @@ int32 ZombieAiType = 0;   // +0x6678 CNPC_VZombie::m_iZombieAIType (datamap, key
 // --- The per-species slot table ---------------------------------------------------------------------
 
 /** One row: the retail class whose vtable carries the body, the slot it fills, and the RETAIL
- *  ADDRESS of that body. Since story 5 step 3 only the deferred classes' rows are left (the
- *  controller line's 599/600 and the Fleshpile maker's 139/617), until their folds (steps 7, 8). */
+ *  ADDRESS of that body. Since story 5 fold A2 only the Fleshpile maker's 139/617 are left, until
+ *  the maker fold (A4). */
 struct FSpeciesSlotRow
 {
 	const TCHAR* RetailClass = nullptr;
@@ -150,33 +150,11 @@ const FSpeciesSlotRow* SpeciesSlotRow(int32 Slot) const;
 // `story-5/decisions-step3.json` `direct_calls`), so the per-slot guard that emulated the thunk is
 // gone.
 
-#if WITH_DEV_AUTOMATION_TESTS
-/** Test-only: stand a bare Troika-line NPC as `RetailClassName` for the species dispatch.
- *
- *  Since story 5 step 2 every living species classname builds its own class, so this latch stands
- *  only the three deferred controller-line classes (FrenzyShadow, PlayerController, WolfMorph) until
- *  their fold (step 7), at the sites `story-5/decisions-step2.json` enumerates; it refuses a species
- *  instance. Removed at step 11. Nothing in the shipping build calls it. */
-void SetRetailClassForTests(const TCHAR* RetailClassName);
-#endif
-
-// --- The slot dispatchers ---------------------------------------------------------------------------
-//
-// Each answers whether a SPECIES body ran, and hands back what it answered: the deferred
-// `CNPC_VFrenzyShadow` rows only (step 7). A dispatcher that answers false means "run the body you
-// already have".
-
-bool SpeciesSlot599(FElysiumEntity* Enemy, bool& OutAnswer);
-bool SpeciesSlot600(FElysiumEntity* Enemy, bool& OutAnswer);
-
 // --- The bodies, by retail address ------------------------------------------------------------------
 //
 // The naming is 29c's overlay target verbatim, so the ledger's `hand:` claim is checkable. A body
 // whose retail name IS recovered says so in its definition comment; none of these has one.
 
-/** `0x10376b70` / `0x10376ba0` — `CNPC_VFrenzyShadow`'s slots 599 and 600. */
-bool FUN_10376b70(FElysiumEntity* Enemy);
-bool FUN_10376ba0(FElysiumEntity* Enemy);
 
 /** `0x103e0980` — `CNPC_VZombie::SetZombieAIType`. */
 void FUN_103e0980(int32 InZombieAiType);

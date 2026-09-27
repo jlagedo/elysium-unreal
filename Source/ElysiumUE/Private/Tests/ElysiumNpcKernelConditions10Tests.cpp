@@ -364,10 +364,9 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 			F.Newscaster->TroikaIRelationType(F.Other), GCond10T_D_HT);
 	}
 
-	// --- `0x103a48b0`, story 29c-1's `SpeciesIRelationType` (family Squad) -------------------------
-	// Three census classes fill slot 404 with it; none of the three is a registered spawn leaf here,
-	// so the dispatcher's case is proved by the census row and the body by family Squad's own suite.
-	// Deferred: the three are story 5 step 7's controller-line folds and have no factory until then.
+	// --- `0x103a48b0`, `FElysiumNpcPlayerController::IRelationType` (story 5 fold A2) --------------
+	// Three census classes fill slot 404 with it: the controller's override, inherited by both
+	// children. The body is proved on a real controller by family Squad's own suite.
 	for (const TCHAR* Name : { TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController"),
 			TEXT("CNPC_VWolfMorph") })
 	{

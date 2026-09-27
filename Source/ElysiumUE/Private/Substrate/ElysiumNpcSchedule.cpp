@@ -94,10 +94,12 @@ namespace
 // Slot 580 `GetClassScheduleIdSpace` — one method and a species table.
 // -------------------------------------------------------------------------------------------------
 //
-// All fourteen bodies are one line: `return &DAT_<class schedule id space>;`. The table below is the
-// ten distinct ones on classes with an instance (`CNPC_VCamera` is shared with
-// `CNPC_VCameraSecurity` and `CNPC_VVampire` with `CNPC_VPlayerController`) plus the Troika line's
-// own `0x101aa790` → `DAT_10924248`. `CNPC_VCombatman` (`0x1036fb10`) and `CNPC_VGangrel`
+// All fourteen bodies are one line: `return &DAT_<class schedule id space>;`. The table below is
+// nine distinct ones on classes with an instance (`CNPC_VCamera` is shared with
+// `CNPC_VCameraSecurity`) plus the Troika line's own `0x101aa790` → `DAT_10924248`. The controller
+// line's three (`CNPC_VPlayerController` sharing `CNPC_VVampire`'s `0x103750e0`,
+// `CNPC_VFrenzyShadow` `0x10375240`, `CNPC_VWolfMorph` `0x103dc750`) have no row since fold A2: each
+// class answers its own space through the corpus, keyed on its C++ class, like every species. `CNPC_VCombatman` (`0x1036fb10`) and `CNPC_VGangrel`
 // (`0x10377070`) have no instance (`population.md` § "NPC classes with no instance") and no row.
 //
 // The ranges are `0x102ea090(isRoot = false)`'s leftovers, exactly as family Squad found for the
@@ -121,9 +123,7 @@ namespace
 		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036f2b0"), TEXT("0x1093a938") },
 		{ TEXT("CNPC_VCop"), TEXT("0x10370930"), TEXT("0x1093ac60") },
 		{ TEXT("CNPC_VDog"), TEXT("0x10373530"), TEXT("0x1093acd8") },
-		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x10375240"), TEXT("0x1093ae48") },
 		{ TEXT("CNPC_VGargoyle"), TEXT("0x10377b20"), TEXT("0x1093aff0") },
-		{ TEXT("CNPC_VPlayerController"), TEXT("0x103750e0"), TEXT("0x1093d258") },
 		{ TEXT("CNPC_VVampire"), TEXT("0x103750e0"), TEXT("0x1093d258") },
 	};
 }
@@ -185,6 +185,10 @@ namespace
 		{ TEXT("CNPC_VDog"), TEXT("0x10373670"), TEXT("0x106368a8") },
 		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x103753e0"), TEXT("0x10637b44") },
 		{ TEXT("CNPC_VGargoyle"), TEXT("0x10377c70"), TEXT("0x106395c0") },
+		// `CNPC_VWolfMorph`'s own `0x103dc8f0` over its flag byte (story 5 fold A2). The controller runs
+		// `CNPC_VVampire`'s `0x103c4a20`, which, like the other species rows outside this table, the
+		// corpus answers per class.
+		{ TEXT("CNPC_VWolfMorph"), TEXT("0x103dc8f0"), TEXT("0x10663bd4") },
 	};
 }
 

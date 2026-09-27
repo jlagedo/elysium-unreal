@@ -117,8 +117,7 @@ int32 FElysiumNpcBase::BestEnemyDistanceKey(const FElysiumEntity& Candidate) con
 FElysiumEntity* FElysiumNpcBase::BestEnemy()
 {
 	// `0x102743c0`, slot 478's base body. The one species arm, `CNPC_VFrenzyShadow#478`
-	// (`0x103766d0`), replaces it; it is routed by `FElysiumNpcBase::BestEnemy` until the controller fold
-	// (step 7) gives it a class.
+	// (`0x103766d0`), replaces it as `FElysiumNpcFrenzyShadow::BestEnemy` (fold A2).
 	if (World == nullptr)
 	{
 		return nullptr;

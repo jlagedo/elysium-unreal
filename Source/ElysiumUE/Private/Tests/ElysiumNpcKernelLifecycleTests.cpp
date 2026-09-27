@@ -217,10 +217,12 @@ bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 	TestEqual(TEXT("!player resolves the player"), Npc->FindNamedEntity(TEXT("!player")), PlayerEnt);
 	TestEqual(TEXT("and the compare is case-insensitive"),
 		Npc->FindNamedEntity(TEXT("!PLAYER")), PlayerEnt);
-	// `!playercontroller` is the player, then `thunk_FUN_101618a0` on it — a SEAM here, which
-	// answers the player itself.
-	TestEqual(TEXT("!playercontroller reaches the seam and answers the player"),
-		Npc->FindNamedEntity(TEXT("!playercontroller")), PlayerEnt);
+	// `!playercontroller` is the player, then `thunk_FUN_101618a0` on it: the player's
+	// `m_hControllerNPC`, or NULL. RETAIL CORRECTION (story 5 fold A2): this was a seam answering the
+	// player itself; with no stand-in created it answers nothing (the creation path's own case is
+	// `Elysium.Substrate.NpcKernelPlayerController.CreationPath`).
+	TestNull(TEXT("!playercontroller with no stand-in answers nothing"),
+		Npc->FindNamedEntity(TEXT("!playercontroller")));
 	// `!enemy` with no committed enemy falls to the tail, which is `this`.
 	TestEqual(TEXT("!enemy with no enemy answers this NPC"),
 		Npc->FindNamedEntity(TEXT("!enemy")), Self);

@@ -35,9 +35,6 @@ namespace
 	constexpr int32 GCond10_D_LI = 3;
 	constexpr int32 GCond10_D_NU = 4;
 
-	// The controller line's slot-404 body, dispatched by census until the controller fold (step 7).
-	constexpr TCHAR GCond10Body_FrenzyShadowRelation[] = TEXT("0x103a48b0");
-
 	// --- `0x1028d990`'s `.rdata`, read out of the pinned image -----------------------------------
 	//
 	// The decompiler folded the argument lists into the 0x8cc-byte stack frame; every string below
@@ -145,20 +142,8 @@ namespace
 int32 FElysiumNpc::IRelationType(FElysiumEntity* Candidate)
 {
 	// slot 404, `vtable +0x650`. Cop `0x10372b70`, Hunter `0x10388bb0`, Pedestrian `0x103a2930`,
-	// Yukie `0x103dd880` and Newscaster `0x103a01b0` override it on their C++ classes (story 5 step 3).
-	// The controller line's `0x103a48b0` (FrenzyShadow, PlayerController, WolfMorph) stays a census
-	// arm until the controller fold (step 7): only a test-latched Troika-line instance reaches it.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 404);
-	if (SlotBody != nullptr)
-	{
-		if (FCString::Strcmp(SlotBody, GCond10Body_FrenzyShadowRelation) == 0)
-		{
-			// `0x103a48b0`, story 29c-1's `SpeciesIRelationType` (family Squad) — slot 404's body
-			// for `CNPC_VFrenzyShadow`, `CNPC_VPlayerController` and `CNPC_VWolfMorph`. Dispatched
-			// to rather than re-ported; it too never chains the Troika body.
-			return SpeciesIRelationType(Candidate);
-		}
-	}
+	// Yukie `0x103dd880` and Newscaster `0x103a01b0` override it on their C++ classes (story 5 step 3),
+	// and the controller line's `0x103a48b0` on `FElysiumNpcPlayerController` (fold A2).
 	return TroikaIRelationType(Candidate);
 }
 

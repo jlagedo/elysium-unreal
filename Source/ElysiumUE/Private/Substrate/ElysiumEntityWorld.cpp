@@ -688,11 +688,31 @@ FElysiumEntity* FElysiumEntityWorld::FindPlayerController() const
 	return const_cast<FElysiumEntityWorld*>(this)->Resolve(PlayerControllerEntity);
 }
 
-FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
+FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity(const TCHAR* Classname)
 {
-	if (FindPlayerController())
+	// `CBasePlayer::GetControllerNPC(classname)` (`0x10161a70`): the player's `m_hControllerNPC`
+	// (`+0x1db0`, this world's `PlayerControllerEntity`) is the cache. A live one of the asked class
+	// (`__strcmpi`) is handed back unchanged; one of another class is warned about and let go with
+	// `ReleaseControllerNpc(false, false)` (`0x101618e0`: nothing copied back, the handle cleared),
+	// and a new one is created.
+	const TCHAR* const Requested = Classname != nullptr ? Classname : TEXT("npc_VPlayerController");
+	if (FElysiumEntity* Existing = FindPlayerController())
 	{
-		return PlayerControllerEntity;
+		const FString ExistingClass = Existing->Def != nullptr ? Existing->Def->Classname : FString();
+		if (ExistingClass.Equals(Requested, ESearchCase::IgnoreCase))
+		{
+			return PlayerControllerEntity;
+		}
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("\nGetControllerNPC() asked for NPC class: %s, but already has NPC of class %s.\n")
+			TEXT(" Deleting old NPC, this better be OK!!\n\n"), Requested, *ExistingClass);
+		Existing->Kill();
+		if (FElysiumCombatCharacter* Old = Existing->AsCombatCharacter(); Old != nullptr && Old->Visual)
+		{
+			Old->Visual->DestroyComponent();
+			Old->Visual = nullptr;
+		}
+		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
 	}
 	FElysiumPlayer* Source = FindPlayer();
 	if (!Source)
@@ -700,9 +720,12 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 		return FElysiumEntityHandle::Invalid();
 	}
 
+	// STEP 2, create: `CreateEntityByName(classname)` — the classname factory (`npc_VPlayerController`
+	// `0x103a4470` builds `FElysiumNpcPlayerController`, and the two children theirs). The keyed model and
+	// angles are the def the runtime spawn replays on a reload; the retail writes follow below, in
+	// retail's order, before `DispatchSpawn`.
 	FElysiumEntityDef Def;
-	Def.Classname = TEXT("npc_VPlayerController");
-	Def.TargetName = TEXT("!playercontroller");
+	Def.Classname = Requested;
 	Def.Origin = Source->Origin;
 	if (!Source->Model.IsEmpty())
 	{
@@ -711,30 +734,67 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 	Def.Keys.Add(TEXT("angles"), FString::Printf(TEXT("%g %g %g"),
 		Source->Angles.X, Source->Angles.Y, Source->Angles.Z));
 
-	PlayerControllerEntity = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
-	FElysiumCombatCharacter* Controller = static_cast<FElysiumCombatCharacter*>(Resolve(PlayerControllerEntity));
+	const FElysiumEntityHandle Created = CreateRuntimeEntityNoSpawn(MoveTemp(Def));
+	FElysiumEntity* const Entity = Resolve(Created);
+	FElysiumNpc* const Controller = Entity != nullptr ? Entity->AsNpc() : nullptr;
 	if (!Controller)
 	{
+		// `"GetControllerNPC() created NULL Entity for :%s"`, and `m_hControllerNPC = -1`.
+		UE_LOG(LogElysiumWorld, Warning, TEXT("GetControllerNPC() created NULL Entity for :%s"),
+			Requested);
 		PlayerControllerEntity = FElysiumEntityHandle::Invalid();
 		return PlayerControllerEntity;
 	}
 
-	// This entity is an embodied duplicate, not a second character. Copy only state that can affect
-	// the performance; the controller leaf has no AI or collision of its own.
+	// The retail sequence (`0x10161b4c`..`0x10161c3f`), in order:
+	//   `npc->m_spawnflags |= 4`;
+	Controller->SpawnFlags |= 4;
+	//   slot 62 `SetOrigin(me->GetAbsOrigin())`, slot 64 `SetAngles(me->GetAngles())`;
 	Controller->Origin = Source->Origin;
 	Controller->Angles = Source->Angles;
+	//   slot 202 `SetOwnerEntity(me)` (`0x10161be1`) — the forwarding arms of the whole controller
+	//   line (slots 245, 246, 300, 142, 390, 442) and `NPCInit`'s `m_hFriendPlayer` read this owner;
+	Controller->SetOwnerEntity(Source->Handle);
+	//   `CopyAnimationDataFrom(npc, me)` (`0x10097310`): `SetModel`, `SetModelIndex`, `m_flCycle`,
+	//   `m_nTopColor`, `m_nBottomColor`, `m_fEffects = me->m_fEffects | 0x10`, `m_nSequence`,
+	//   `m_flAnimTime`, `m_nBody`, `m_nSkin`, `m_nPhysicsChainDisableMask`. The port's player carries
+	//   the model and the skin of those; its sequence, cycle, colour, body, effects and physics-chain
+	//   words have no member, so they are not copied (the effects word reads as 0 and takes the
+	//   `| 0x10`).
 	Controller->Model = Source->Model;
 	Controller->Skin = Source->Skin;
+	Controller->EffectsWord |= 0x10u;
+	// **NAMED DIVERGENCE — the disposition copy.** Retail `GetControllerNPC` `0x10161a70` copies NO
+	// disposition. The port copies the player's because it has no member for `m_nSequence` (the word
+	// `CopyAnimationDataFrom` `0x10097310` copies), and the port picks a body's standing sequence from
+	// its disposition, so this is how the stand-in starts in the player's pose. It is not inert: the
+	// disposition feeds the Troika idle-disposition behaviour and `ApplyDefaultDispositionOnActivate`
+	// (which runs because the stand-in's `Classify` is 2, non-zero). **Open:** whether retail's
+	// stand-in keeps the copied sequence or immediately re-poses from its own (empty) default
+	// disposition is unrecovered; this copy goes when `m_nSequence` has a port member.
 	Controller->Disposition = Source->Disposition;
 	Controller->DispositionLevel = Source->DispositionLevel;
-	Controller->Sheet = Source->Sheet;
-	Controller->Effects = Source->Effects;
-	Controller->Health = Source->Health;
-	Controller->MaxHealth = Source->MaxHealth;
+	//   `npc->m_flSeekDistBase (+0x63b4) = 4096.0f`;
+	Controller->AuthoredVision = 4096.f;
+	//   slot 105 `SetModel(me->GetModelName())` — the model above, which the body build reads;
+	//   `DispatchSpawn(npc)` (`0x101d1280`): `Spawn` then `Activate` (the controller's `Spawn`
+	//   `0x103a4510` and, through `Activate`, its `NPCInit` `0x103a4580`);
 	CallEntitySpawn(*Controller);
-	// **Retail hides the real player's body and suppresses input.** `npc_VPlayerController` 
-	// is the cinematic double; the real pawn receives `EF_NODRAW` (+0x60) and movement is 
-	// blocked because the input layer respects the controller handle (`player + 0x1db0`).
+	//   `npc->m_fEffects |= 0x60` — `EF_NODRAW` (0x40) and 0x20 on the CONTROLLER;
+	Controller->EffectsWord |= 0x60u;
+	//   slot 614 `ResetThinkTimers()` (`+0x998`);
+	Controller->ResetThinkTimers(NowSeconds());
+	//   `m_hControllerNPC = npc->GetRefEHandle()`.
+	PlayerControllerEntity = Created;
+
+	// **Named modernization — who is drawn** (evidence brief open question 1). Retail draws the
+	// PAWN and hides the controller: `m_fEffects |= 0x60` lands on the controller (above, on the
+	// kernel's effects word) and nothing in retail touches the pawn's draw state
+	// (`docs/vtmb/entity_io.md`). The port instead draws the controller's own skeletal body and hides
+	// the pawn, so the scene performs on the body the scripted beats move. Which of the two retail's
+	// client renders during a controller scene (the pawn mirroring the controller through the
+	// `+0x1db0` readers, e.g. `0x10175180`) is unrecovered; until a capture settles it this is the
+	// port's arrangement, kept as a visible behaviour the owner decides.
 	Source->SetHiddenByController(true);
 
 	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
@@ -751,6 +811,17 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 		return false;
 	}
 
+	// Retail's removal is `0x102272b0` (the classname check) then `0x101618e0(player, 1, 1)`: copy
+	// the controller's sequence, anim time, cycle, playback rate, gesture and flinch tables onto the
+	// player (`bCopyAnimation`), its velocity and its origin/angles (`bCopyVelocity`), then arm
+	// `SUB_Remove` (`0x101c0b10`) on the controller at `curtime + 0.01` and clear `m_hControllerNPC`.
+	//
+	// **Named divergence — the same-frame removal.** The port has no think-function slot to host
+	// `SUB_Remove` on an entity, so the controller is killed here, in the frame of the request,
+	// rather than 0.01 s later; nothing in shipped content observes the stand-in in that window
+	// (the handle is cleared at the request in both). The player's pose is the port's own reading of
+	// the copy: its transform, and — as the port's presentation hand-back — model, skin and
+	// disposition, since the port's pawn is the body hidden while the controller performed.
 	if (Dest)
 	{
 		// Apply the final pose anchor before the stand-in disappears. SetModel goes through the
@@ -766,7 +837,7 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 		Dest->Disposition = Controller->Disposition;
 	}
 
-	// Kill first: npc_VPlayerController releases its scripted motor while the skeletal component is
+	// Kill first: the stand-in releases its scripted motor while the skeletal component is
 	// still a valid child of that motor. The visual can then be destroyed without leaving the
 	// engine-side path follower holding a dead attachment.
 	Controller->Kill();
@@ -2384,8 +2455,17 @@ FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 		{
 			return Controller;
 		}
-		// During snapshot reconstruction the relationship handle is rebound after the state walk;
-		// fall through to the entity's literal targetname so scene restore can bind in that window.
+		// Retail resolves `!playercontroller` through the player's `m_hControllerNPC` alone, so with
+		// no stand-in it is nothing. The one port-only window: during snapshot reconstruction the
+		// relationship handle is rebound after the state walk, so scene restore binds through the
+		// stand-in's own targetname — `playercontroller`, the name `CNPC_VPlayerController::Spawn`
+		// (`0x103a4510`) gives it.
+		FElysiumEntity* Named = nullptr;
+		if (bApplyingSnapshot)
+		{
+			ForEachMatch(TEXT("playercontroller"), [&Named](FElysiumEntity& E) { Named = &E; return false; });
+		}
+		return Named;
 	}
 	// FindEntityByName with a null start entity: the first live match in entity-list order, under the
 	// same matching rule everything else uses — so a trailing-`*` name resolves here too.

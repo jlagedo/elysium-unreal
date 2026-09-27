@@ -16,7 +16,8 @@
 // `PlayerAttackerBlockedReaction`, and the per-species death, throw and emitter work of
 // `CNPC_VVampireBoss`, `CNPC_VChangBros`, `CNPC_VSabbatLeader`, `CNPC_VAndreiBlood`,
 // `CNPC_VSheriffMan`, `CNPC_VBach`, `CNPC_VManBat`, `CNPC_VTzimisce`, `CNPC_VMingXiao`,
-// `CNPC_VZombie`, `CNPC_VWerewolf` and `CNPC_VFrenzyShadow`.
+// `CNPC_VZombie` and `CNPC_VWerewolf` (`CNPC_VFrenzyShadow`'s and the player controller's damage
+// bodies are their classes' overrides since story 5 fold A2).
 //
 // FOUR STANDING FACTS OF THIS FAMILY, stated once here rather than at forty call sites.
 //
@@ -169,58 +170,11 @@ int32 CacheDamagePosition();
 static FVector EnergyBallSpawnPoint(const FVector& OriginUnits, const FVector& FwdAxis,
 	const FVector& RightAxis, const FVector& UpAxis);
 
-/** `0x10376ae0`, `0x10376b10`, `0x10376b50` and `0x103a4950` — the `CNPC_VFrenzyShadow` /
- *  `CNPC_VPlayerController` line's four damage-and-death slot arms. Each fills a slot whose
- *  Troika-line body is a LATER story's and is already generated, so they land as named species arms
- *  and the report says so.
- *
- *  All four route through `+0x184`, the controller's stored sub-object: `OnTakeDamage` (slot 142)
- *  forwards the packet to its slot 0x238 and always answers 0; `OnTakeDamage_Alive` (slot 390)
- *  forwards through that object's own `+0x9c` to slot 0x618 and always answers 0; `Event_Killed`
- *  (slot 144) is an EMPTY body — death handling fully suppressed; and `Event_TookLife` (slot 300,
- *  shared with `CNPC_VWolfMorph`) resolves the object's `+0xa8` AI component, builds the killed
- *  entity's debug name and dispatches AI event type 4 at priority -1.0 tagged with the retail
- *  literal `"CNPC_VPlayerController::Event_TookLife"`.
- *
- *  `+0x184` is a `CBasePlayer*` slot no substrate word stands for; the seam below answers null,
- *  which takes the guarded arm of all four. */
-int32 OnTakeDamageSpecies(const FElysiumTakeDamageInfo* Info);
-int32 OnTakeDamage_AliveSpecies(const FElysiumTakeDamageInfo* Info);
-void Event_KilledSpecies(const FElysiumTakeDamageInfo* Info);
-void Event_TookLifeSpecies(const FElysiumEntity* Victim);
-
-/** SEAM for `this->vtable+0x184` — `CNPC_VPlayerController`'s stored controller object, and for the
- *  AI-event dispatch `thunk_FUN_1017e150(component, type, priority, source)` `Event_TookLife` ends
- *  on. No word of this substrate stands for either; the first answers null and the second records
- *  the call. */
-bool HasPlayerControllerObject() const;
-struct FControllerAiEvent
-{
-	int32 EventType = 0;
-	float Priority = 0.f;
-	FString Source;
-	FString VictimName;
-};
-TArray<FControllerAiEvent> ControllerAiEvents;
-
-/** The retail literal `Event_TookLife` tags its dispatch with, `s_CNPC_VPlayerController__Event_To_1064bcc0`. */
-static const TCHAR* TookLifeEventSource();
-
-// --- The flinch hook, and the deferred controller line's slot-300 table ----------------------------
+// --- The flinch hook ------------------------------------------------------------------------------
 
 /** `FElysiumCombatCharacter::StartDamageFlinch`'s NPC hook: whether this class suppresses the generic
  *  flinch for this descriptor. The Troika line answers false; the two species that do override it. */
 virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
-
-/** One row of slot 300's (`Event_TookLife`) species table — the three classes of the
- *  `CNPC_VPlayerController` line that share `0x103a4950`. */
-struct FTookLifeSpecies
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-};
-static const FTookLifeSpecies* TookLifeSpeciesRows(int32& OutCount);
-static const FTookLifeSpecies* TookLifeSpeciesOf(const TCHAR* InRetailClass);
 
 /** How many times a kill/stop body was ASKED. Retail's emitter words are `EHANDLE`s to entities and
  *  nothing in this substrate creates an emitter ENTITY, so every one of them resolves dead and every

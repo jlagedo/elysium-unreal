@@ -731,6 +731,12 @@ plus `_DAT_10454110` (= **5.0f**, float32; read 2026-09-21, `rdata-cells.md`). *
 (`docs/vtmb/combat-and-damage.md` recovers the radius as 150 Source units and the retention as five
 seconds from the same chain); retail's `0xb` state has no counterpart in this port's state set.
 
+**Port correction (0019 story 5 fold A2).** The `IRelationType(attacker)` test is a VIRTUAL
+dispatch (`vt+0x650`) — the ally's OWN relation. The port had called the controller line's body
+`0x103a48b0` for every ally, so an ordinary NPC answered the stand-in's table (D_HT toward any
+visible combat character, D_LI only for a friend player); `FElysiumNpc::AlertNearbyAlly` now
+dispatches slot 404 (`Elysium.Substrate.NpcKernelSquad.AlertNearbyAlly`).
+
 ### `0x103a48b0` — `IRelationType` for `CNPC_VFrenzyShadow` / `CNPC_VPlayerController` / `CNPC_VWolfMorph`
 
 Four answers, in order: a null target is `D_ER` (0); a target equal to the resolved

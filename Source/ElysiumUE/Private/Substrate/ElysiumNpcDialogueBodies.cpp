@@ -329,9 +329,9 @@ FElysiumEntity* FElysiumNpc::CreateControllerNpcEntity(const TCHAR* Classname)
 {
 	// **SEAM** for `CreateEntityByName(classname)` + `DispatchSpawn` (`0x10161b4c` -> the factory,
 	// then `thunk_FUN_101d1280` = `DispatchSpawn` `0x101d1280`). The kernel does not spawn: the
-	// class registry and `FElysiumEntityWorld` do, and a kernel body that reached them would be a
-	// second spawner beside `events_player.CreateControllerNPC`
-	// (`ElysiumEventClasses.cpp`, still a `Note()`-only stub).
+	// class registry and `FElysiumEntityWorld` do — `FElysiumEntityWorld::CreatePlayerControllerEntity`
+	// is the port's live `GetControllerNPC` (fold A2), driven by `events_player.CreateControllerNPC`
+	// — and a kernel body that reached them would be a second spawner beside it.
 	//
 	// Answers null, which is retail's OWN `"GetControllerNPC() created NULL Entity for :%s"` arm.
 	// The body is not refused — that arm runs, the warning is emitted and `m_hControllerNPC` is
@@ -440,7 +440,10 @@ FElysiumEntity* FElysiumNpc::GetControllerNpc(const TCHAR* Classname)
 
 bool FElysiumNpc::ControllerNpcBusy() const
 {
-	// 0x10175180 — 116 bytes, retail name **unrecovered**:
+	// 0x10175180 — 116 bytes, retail name **unrecovered**. This is its reading over the NPC-side
+	// home of `m_hControllerNPC` (`FElysiumNpc::ControllerNpc`, written only by the unwired
+	// `GetControllerNpc` below); the live readers use the world's controller handle through
+	// `FElysiumPlayer::ControllerNpcBusy` until story 5 commit B unifies the two homes:
 	//
 	//     h = m_hControllerNPC (+0x1db0);
 	//     if (h == -1) return false;
@@ -455,11 +458,11 @@ bool FElysiumNpc::ControllerNpcBusy() const
 	// (`0x10178170`), `CAI_BaseNPCTroika::CanTalk` (`0x102c21c0`) and the stealth-kill gate
 	// (`0x101681a0`).
 	//
-	// **Unrecovered**: slot 138 at `+0x228` is `Classify()` by the SDK ordering, but `Class_T == 3`
-	// has no recovered name in this image and no producer in this runtime — nothing here classifies
-	// an entity. The port's `RetailClass()` census is the class TABLE, not `Classify`'s runtime
-	// answer, so it cannot stand in. This reads the seam below and answers false, which is the
-	// not-busy value every consumer's own null arm takes.
+	// Slot 138 at `+0x228` is `Classify()`. `Class_T == 3` has no recovered name, but it has a
+	// producer: `CNPC_VFrenzyShadow::Classify` (`0x10375d70`) answers 3, and `CheckForPlayerFrenzy`
+	// (`0x10162075`) warns when its created controller does not — so "busy" is "a frenzy shadow is
+	// driving this body". Since story 5 fold A2 the controller line's classes answer their own
+	// `Classify` (the controller and the wolf 2, the shadow 3), and the dispatch is made.
 	if (World == nullptr || !ControllerNpc.IsSet())
 	{
 		return false;
@@ -469,9 +472,7 @@ bool FElysiumNpc::ControllerNpcBusy() const
 	{
 		return false;
 	}
-	// **SEAM** for slot 138 `Classify()` on the controller. No port body fills it (the generated
-	// stub answers `{}` = 0), and 0 is not 3.
-	return false;
+	return const_cast<FElysiumEntity*>(Controller)->Classify() == 3;
 }
 
 // =================================================================================================

@@ -174,8 +174,8 @@ FElysiumEntityHandle Spawn(FElysiumEntityWorld& World, const FSpawnRequest& Requ
 	}
 	if (ResolveNpc(World, Handle) == nullptr)
 	{
-		// A registered classname that is not on the NPC leaf — `npc_VPlayerController`, or a
-		// classname the registry resolved to a bare record. It exists, but it will never think.
+		// A registered classname that is not on the NPC leaf — `npc_maker`, or a classname the
+		// registry resolved to a bare record. It exists, but it will never think.
 		OutError = FString::Printf(
 			TEXT("'%s' spawned as a record with no AI leaf — pick an npc_V* combat class"),
 			*Request.Classname);

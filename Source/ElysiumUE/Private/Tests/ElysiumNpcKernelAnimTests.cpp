@@ -840,18 +840,12 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 		TestTrue(TEXT("a CNPC_VCamera swallows it"), CameraNpc->HandleAnimEvent(Unclaimed));
 	}
 
-	// The extra-model pair, whose forwarding arm is "the owner IS the player". A freshly spawned NPC
-	// has no owner, which is the arm that warns.
+	// The extra-model pair's forwarding gate, "the owner IS the player". A freshly spawned NPC has no
+	// owner. The two bodies themselves are `FElysiumNpcPlayerController`'s overrides since story 5
+	// fold A2 (`Elysium.Substrate.NpcKernelPlayerController.ForwardingToOwner`).
 	TestFalse(TEXT("a spawned NPC is not owned by the player"), Guard->OwnerIsThePlayer());
-	Guard->AddExtraAnimationModelsPlayerController(nullptr, TEXT("attach_a"), TEXT("attach_b"), 1, 2);
-	TestEqual(TEXT("the base half still records the request"), Guard->ExtraAnimationModels.Num(), 1);
-	TestFalse(TEXT("and reports that it reached no master"),
-		Guard->ExtraAnimationModels[0].bForwardedToMaster);
-	TestEqual(TEXT("carrying the first attachment name"),
-		Guard->ExtraAnimationModels[0].AttachmentA, FString(TEXT("attach_a")));
-	Guard->RemoveExtraAnimationModelsPlayerController();
-	TestEqual(TEXT("and the remover clears the base list first, as retail does"),
-		Guard->ExtraAnimationModels.Num(), 0);
+	Guard->SetOwnerEntity(Fixture.Player()->Handle);
+	TestTrue(TEXT("an NPC owned by the player is"), Guard->OwnerIsThePlayer());
 	return true;
 }
 

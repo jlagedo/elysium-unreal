@@ -273,14 +273,17 @@ bool FElysiumNpcKernelDialogueControllerNpcTest::RunTest(const FString&)
 	{
 		FElysiumNpcWorldBuilder Builder(TEXT("dialogue_controller"), 29105u);
 		Builder.AddNpc(TEXT("guard"), FVector(0.f, 0.f, 0.f));
-		// `npc_VPlayerController` IS a registered classname (`Substrate/ElysiumNpcClasses.cpp`),
-		// but its leaf is `FElysiumPlayerControllerNpc`, not `FElysiumNpc` — so it is fetched by
-		// name rather than through `Npc()`.
+		// `npc_VPlayerController` builds `FElysiumNpcPlayerController` (story 5 fold A2), whose
+		// `Spawn` (`0x103a4510`) renames it `playercontroller`; the shadow is the class that
+		// `Classify`s as 3.
 		Builder.AddNpc(TEXT("controller"), FVector(10.f, 0.f, 0.f), TEXT("npc_VPlayerController"));
+		Builder.AddNpc(TEXT("shadow"), FVector(20.f, 0.f, 0.f), TEXT("npc_VFrenzyShadow"));
 		return Builder;
 	}());
 	FElysiumNpc* Guard = World.Npc(TEXT("guard"));
-	FElysiumEntity* Controller = World.World.FindByName(TEXT("controller"));
+	FElysiumEntity* Controller = World.NpcOfClass(TEXT("CNPC_VPlayerController"));
+	FElysiumEntity* Shadow = World.NpcOfClass(TEXT("CNPC_VFrenzyShadow"));
+	if (!TestNotNull(TEXT("shadow spawned"), Shadow)) { return false; }
 	if (!TestNotNull(TEXT("guard spawned"), Guard)) { return false; }
 	if (!TestNotNull(TEXT("controller spawned"), Controller)) { return false; }
 	FElysiumNpcWorldFixture::Quiet({ Guard });
@@ -315,10 +318,13 @@ bool FElysiumNpcKernelDialogueControllerNpcTest::RunTest(const FString&)
 	// dialogue partner; 29c's walk is corrected here by name.
 	TestFalse(TEXT("0x10175180: no controller is not busy"), Guard->ControllerNpcBusy());
 	Guard->ControllerNpc = Controller->Handle;
-	// SEAM: slot 138 `Classify()` has no port body, so nothing can answer 3 and the refusal is the
-	// recovered one — the seam IS asked and answers not-busy.
-	TestFalse(TEXT("0x10175180: a live controller answers not-busy — Classify() is a seam"),
+	// Slot 138 `Classify()` through the vtable: the controller answers 2 (`0x103a4890`), not 3.
+	TestFalse(TEXT("0x10175180: a live player controller (Classify 2) answers not-busy"),
 		Guard->ControllerNpcBusy());
+	Guard->ControllerNpc = Shadow->Handle;
+	TestTrue(TEXT("0x10175180: a frenzy shadow (Classify 3, 0x10375d70) answers busy"),
+		Guard->ControllerNpcBusy());
+	Guard->ControllerNpc = FElysiumEntityHandle::Invalid();
 	return true;
 }
 

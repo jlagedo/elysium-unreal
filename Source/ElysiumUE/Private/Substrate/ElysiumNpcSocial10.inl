@@ -45,11 +45,12 @@
 // dispatches slot 404 on the NPC with the activator as the argument, so the question is "what do I
 // think of you", not "what do you think of me".
 
-/** SEAM for `thunk_FUN_10175180(activator)` (gate 10) — "the ACTIVATOR's controller NPC is in state
- *  3". `FElysiumNpc::ControllerNpcBusy` (story 29c-1, family Dialogue) is that body, but the word it
- *  reads (`m_hControllerNPC +0x1db0`) sits on `FElysiumNpc` in this port and the activator here is a
- *  player, which `FElysiumPlayer::CanAttemptStealthKill` already records as a shape gap. This
- *  answers FALSE, the ADMITTING value: retail refuses when the test is true. */
+/** `thunk_FUN_10175180(activator)` (gate 10) — "the ACTIVATOR's controller NPC is in state 3":
+ *  the activator's `m_hControllerNPC` (`+0x1db0`) stand-in answers `Classify() == 3`. The activator
+ *  is the player, whose `+0x1db0` is the world's controller handle (`FElysiumPlayer::
+ *  ControllerNpcBusy`; the word's second, NPC-side home is `FElysiumNpc::ControllerNpc`, written
+ *  only by the unwired `GetControllerNpc` path — story 5 commit B unifies them). A non-player
+ *  activator carries no such word and answers false. Retail refuses when the test is true. */
 bool ActivatorControllerBusy(const FElysiumEntity* Activator) const;
 
 /** SEAM for `thunk_FUN_10146b20(activator, this)` (gate 11) — the cross predicate whose three

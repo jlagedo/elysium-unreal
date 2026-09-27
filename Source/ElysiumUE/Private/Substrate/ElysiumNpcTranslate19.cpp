@@ -13,7 +13,6 @@
 
 namespace
 {
-	constexpr int32 GTranslate19Slot = 440;
 	constexpr uint32 GTranslate19FrenziedBit = 0x100;
 	constexpr int32 GTranslate19HintTypeDoor = 0x2774;
 }
@@ -45,17 +44,9 @@ int32 FElysiumNpc::FrenziedTranslateSchedule(int32 ScheduleNumber)
 
 int32 FElysiumNpc::TranslateScheduleRetail(int32 ScheduleNumber)
 {
-	// Nineteen species classes override this method on their C++ classes (story 5 step 3), each
-	// ending in a direct call into the Troika body `0x102b12f0` (`TroikaTranslateScheduleRetail`).
-	// The controller line's `0x10375f20` (`CNPC_VFrenzyShadow`) stays a census arm until the
-	// controller fold (step 7): only a test-latched Troika-line instance reaches it.
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GTranslate19Slot);
-	if (Override != nullptr && Override->Address != nullptr
-		&& FCString::Strcmp(Override->Address, TEXT("0x10375f20")) == 0)
-	{
-		return FrenzyShadowTranslateSchedule(ScheduleNumber);
-	}
+	// Twenty species classes override this method on their C++ classes (story 5 step 3; the
+	// controller line's `CNPC_VFrenzyShadow` `0x10375f20` since fold A2), each ending in a direct
+	// call into the Troika body `0x102b12f0` (`TroikaTranslateScheduleRetail`).
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
@@ -125,15 +116,4 @@ int32 FElysiumNpc::TranslateSchedule(int32 Id)
 	// Slot 440 returns the number verbatim. Only GetScheduleOfType may decide it is absent.
 	LastTranslateScheduleRetail = TranslateScheduleRetail(Id);
 	return LastTranslateScheduleRetail;
-}
-
-// `0x10375f20`, `CNPC_VFrenzyShadow::TranslateSchedule` — the controller line's, a census arm of
-// `TranslateScheduleRetail` until the controller fold (step 7).
-int32 FElysiumNpc::FrenzyShadowTranslateSchedule(int32 Id)
-{
-	if (const int32 Frenzied = FrenziedTranslateSchedule(Id); Frenzied != 0)
-	{
-		return Frenzied;
-	}
-	return TroikaTranslateScheduleRetail(Id);
 }

@@ -77,6 +77,7 @@ bool FElysiumNpcKernelSpeciesBindingsCountsTest::RunTest(const FString&)
 		{ TEXT("CNPC_VCameraSecurity"), EClass::CameraSecurity },
 		{ TEXT("CNPC_VChangBros"), EClass::ChangBros },
 		{ TEXT("CNPC_VCop"), EClass::Cop },
+		{ TEXT("CNPC_VFrenzyShadow"), EClass::FrenzyShadow },
 		{ TEXT("CNPC_VGargoyle"), EClass::Gargoyle },
 		{ TEXT("CNPC_VGhoulCroucher"), EClass::GhoulCroucher },
 		{ TEXT("CNPC_VGuard1"), EClass::Guard1 },
@@ -96,9 +97,11 @@ bool FElysiumNpcKernelSpeciesBindingsCountsTest::RunTest(const FString&)
 		{ TEXT("CNPC_VTzimisceRunner"), EClass::TzimisceRunner },
 		{ TEXT("CNPC_VVampireBoss"), EClass::VampireBoss },
 		{ TEXT("CNPC_VWerewolf"), EClass::Werewolf },
+		{ TEXT("CNPC_VWolfMorph"), EClass::WolfMorph },
 		{ TEXT("CNPC_VZombie"), EClass::Zombie },
 	};
-	TestEqual(TEXT("the 27 species binding classes"), static_cast<int32>(UE_ARRAY_COUNT(Species)), 27);
+	TestEqual(TEXT("the 29 species binding classes (the controller line's two since fold A2)"),
+		static_cast<int32>(UE_ARRAY_COUNT(Species)), 29);
 	for (const FSpecies& Row : Species)
 	{
 		FElysiumClassDesc D;
@@ -457,7 +460,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		return nullptr;
 	};
 
-	// The 27 species tables' own save rows, by retail class. A class stamps every row of every table
+	// The 29 species tables' own save rows, by retail class. A class stamps every row of every table
 	// its chain declares -- shadow rows included, which share their names with Troika rows and so
 	// cannot be picked out of the chain's save walk by name.
 	TMap<FString, TArray<FName>> TableRows;
@@ -476,20 +479,27 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 			}
 		}
 	}
-	TestEqual(TEXT("the census names the 27 species tables"), TableRows.Num(), 27);
+	TestEqual(TEXT("the census names the 29 species tables"), TableRows.Num(), 29);
 
 	// One NPC per species class a classname builds, plus a live witness every saved handle can
-	// name. The controller line folds in step 7 and has no species table.
+	// name. The controller line's bodies rename themselves `playercontroller` in their `Spawn`
+	// (`0x103a4510`), so each is found by its class (`NpcAt`).
 	TArray<const TCHAR*> Classes;
+	TArray<const TCHAR*> ClassRows;
 	for (const FElysiumNpcClass& Row : ElysiumNpcKernelShape::Classes())
 	{
 		if (Row.ClassnameCount > 0 && FString(Row.Name).StartsWith(TEXT("CNPC_V"))
-			&& FCString::Strcmp(Row.Name, TEXT("CNPC_VPlayerController")) != 0
 			&& Reg.Find(FName(Row.Classnames[0])) != nullptr)
 		{
 			Classes.Add(Row.Classnames[0]);
+			ClassRows.Add(Row.Name);
 		}
 	}
+	auto NpcAt = [&ClassRows](FElysiumNpcWorldFixture& Fixture, int32 Index) -> FElysiumNpc*
+	{
+		FElysiumNpc* Found = Fixture.Npc(*FString::Printf(TEXT("s%d"), Index));
+		return Found != nullptr ? Found : Fixture.NpcOfClass(ClassRows[Index]);
+	};
 	auto Build = [&Classes]()
 	{
 		FElysiumNpcWorldBuilder B(TEXT("species_bindings_roundtrip"), 4006);
@@ -524,7 +534,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 	int32 Salt = 0;
 	for (int32 Index = 0; Index < Classes.Num(); ++Index)
 	{
-		FElysiumNpc* Npc = F.Npc(*FString::Printf(TEXT("s%d"), Index));
+		FElysiumNpc* Npc = NpcAt(F, Index);
 		if (!TestNotNull(FString::Printf(TEXT("%s stands"), Classes[Index]), Npc) || Npc->Class == nullptr)
 		{
 			continue;
@@ -572,7 +582,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 			Written.Add({ Index, Row, Value });
 		}
 	}
-	TestEqual(TEXT("every one of the 27 species tables reaches a standing class"), StampedTables.Num(), 27);
+	TestEqual(TEXT("every one of the 29 species tables reaches a standing class"), StampedTables.Num(), 29);
 
 	FElysiumMapSnapshot Snapshot;
 	F.World.Freeze(Snapshot);
@@ -588,7 +598,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 	int32 Survived = 0;
 	for (const FWritten& W : Written)
 	{
-		FElysiumNpc* Npc = G.Npc(*FString::Printf(TEXT("s%d"), W.Npc));
+		FElysiumNpc* Npc = NpcAt(G, W.Npc);
 		const FElysiumFieldAccessor* Acc = Npc != nullptr && Npc->Class != nullptr
 			? Reg.FindField(*Npc->Class, W.Row) : nullptr;
 		if (Acc == nullptr)

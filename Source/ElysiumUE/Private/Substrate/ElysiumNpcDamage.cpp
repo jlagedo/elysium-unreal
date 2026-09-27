@@ -170,18 +170,6 @@ int32 FElysiumNpc::HitboxSetCount() const
 	return 0;
 }
 
-bool FElysiumNpc::HasPlayerControllerObject() const
-{
-	// SEAM for `this->vtable+0x184` — `CNPC_VPlayerController`'s stored controller object. No word
-	// of this substrate stands for it; null takes the guarded arm of all four species bodies.
-	return false;
-}
-
-const TCHAR* FElysiumNpc::TookLifeEventSource()
-{
-	return TEXT("CNPC_VPlayerController::Event_TookLife");
-}
-
 // =================================================================================================
 // Slot 576 `0x10266630` / slot 577 `0x10266660` — `IsLightDamage` / `IsHeavyDamage`.
 // =================================================================================================

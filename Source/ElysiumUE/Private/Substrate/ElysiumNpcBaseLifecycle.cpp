@@ -537,10 +537,14 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 
 FElysiumEntity* FElysiumNpcBase::PlayerControllerOf(FElysiumEntity* Player) const
 {
-	// SEAM for `thunk_FUN_101618a0(player)`, the `!playercontroller` resolve. Retail hands back the
-	// player's own scene stand-in; this runtime stands that as the `npc_VPlayerController` leaf
-	// (`FElysiumPlayerControllerNpc`), which a map places by name and which the player holds no
-	// pointer to. Answers the player itself, which is the arm that keeps the selector resolving to a
-	// live entity, and names what would settle it: a back-pointer from the player to its duplicate.
-	return Player;
+	// `0x101618a0`, the whole body: `m_hControllerNPC (+0x1db0) == -1` or a stale serial -> NULL,
+	// else the entity. **RETAIL CORRECTION (fold A2):** this was a seam answering the PLAYER itself
+	// ("the player holds no pointer to its duplicate"); the port does hold it — the world's
+	// controller handle, the stand-in `CreatePlayerControllerEntity` builds — so the selector now
+	// answers the stand-in, and NULL when there is none, as retail does.
+	if (World == nullptr || Player == nullptr || Player->Handle != World->PlayerHandle())
+	{
+		return nullptr;
+	}
+	return World->FindPlayerController();
 }

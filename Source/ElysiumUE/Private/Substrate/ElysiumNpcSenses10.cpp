@@ -510,16 +510,3 @@ void FElysiumNpc::ResetSpeciesSuspectGlobals()
 	NpcKernelSenses10Shared::GHunterSuspect = FElysiumEntityHandle::Invalid();
 	NpcKernelSenses10Shared::GHunterSuspectExpiry = 0.0;
 }
-
-FElysiumEntity* FElysiumNpc::BestEnemy()
-{
-	// The one species arm, `CNPC_VFrenzyShadow#478` (`0x103766d0`), REPLACES the base body. It stays
-	// a census arm until the controller fold (step 7): only a test-latched Troika-line instance
-	// reaches it, and it never re-enters this slot.
-	const TCHAR* const SlotBody = ElysiumNpcKernelClass::BodyOf(RetailClass(), 478);
-	if (SlotBody != nullptr && FCString::Strcmp(SlotBody, TEXT("0x103766d0")) == 0)
-	{
-		return FrenzyShadowBestEnemy();
-	}
-	return FElysiumNpcBase::BestEnemy();
-}

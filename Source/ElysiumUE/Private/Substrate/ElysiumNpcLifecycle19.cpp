@@ -23,8 +23,6 @@
 
 namespace
 {
-	constexpr int32 GLifecycle19Slot420 = 420;
-
 	bool GLifecycle19InNpcInit = false;
 	int32 GLifecycle19NodeGraphHull = 0;
 	int32 GLifecycle19NodeIndexErrors = 0;
@@ -216,29 +214,6 @@ float FElysiumNpc::TuningZombieGrappleReadyInterval() const
 	// `0x101e8bf0` → `+0x27c`, `Zombie_Grapple_Info/DelayInitial`, image default 20.0 (the shipped
 	// `rules.txt` authors 10.0, which the rulebook read picks up).
 	return Lifecycle19RulesFloat(*this, TEXT("Zombie_Grapple_Info"), TEXT("DelayInitial"), 20.f);
-}
-
-int32 FElysiumNpc::FrenzyShadowHostileRecount()
-{
-	// `0x10376c10`, the tail `JMP` of `CNPC_VFrenzyShadow::NPCInit`.
-	FrenzyShadowHostileEnemyCount = 0;                                   // 10376c17 +0x6664
-	// `10376c2x`: the relation argument is `m_hFriendPlayer`'s entity `+0xa8`, resolved through the
-	// handle table, or NULL when the handle is stale. Resolved here for the same reason.
-	(void)NpcKernelLifecycle19Shared::Lifecycle19ResolveHandle(*this, FriendPlayer);
-	// `10376c65`–`10376cb5` then walks `DAT_1093ada8[0 .. DAT_1093ae9c)`, counting `slot 404 == D_HT`
-	// and calling slot 544 `UpdateEnemyMemory` per entry. That array is a 32-entry static scratch
-	// list whose ONLY producer is `0x10376d00` — a ±1024/±1024/±128 `EntitiesInBox` sweep filtered
-	// on the ground flag, `+0x340`, slot 158 and `0x100b5190` — which `NPCInit` never calls. On a
-	// fresh map `DAT_1093ae9c` is 0, so the whole loop is skipped and the count reset is the body's
-	// only observable effect. (The unguarded `10376c98 MOV EDX,[ESI]` is therefore unreachable: the
-	// producer admits an entry only when both pointers are non-null.)
-	//
-	// SEAM for that scratch list: this runtime has no `0x10376d00` sweep, so the list is empty and
-	// the loop does not run. Three searches: `0x10376d00` has no port body; `DAT_1093ada8` has no
-	// port datum; no `HostileScratch`/`ShadowScratch` identifier exists in the substrate. Walking
-	// `World->Entities()` instead would seed enemy memory for the whole map at spawn, which retail
-	// does not do.
-	return FrenzyShadowHostileEnemyCount;
 }
 
 int32 FElysiumNpc::FindInterestingPlaceHoldingMe() const
@@ -479,55 +454,13 @@ void FElysiumNpc::TroikaNPCInit()
 }
 
 // =================================================================================================
-// Slot 420 dispatcher
+// Slot 420
 // =================================================================================================
-
-namespace
-{
-	struct FLifecycle19NpcInitArm
-	{
-		const TCHAR* Address = nullptr;
-		void (FElysiumNpc::*Body)() = nullptr;
-	};
-}
-
-bool FElysiumNpc::SpeciesNPCInit()
-{
-	// Story 5 step 3: every introduced class overrides slot 420 on its C++ class. The three rows left
-	// are the deferred controller line (FrenzyShadow, PlayerController, WolfMorph), reached only by a
-	// test-latched Troika-line instance until their fold (step 7).
-	static const FLifecycle19NpcInitArm Arms[] =
-	{
-		{ TEXT("0x10375c80"), &FElysiumNpc::FrenzyShadowNPCInit },
-		{ TEXT("0x103a4580"), &FElysiumNpc::PlayerControllerNPCInit },
-		{ TEXT("0x103dce00"), &FElysiumNpc::WolfMorphNPCInit },
-	};
-	// None of the three calls slot 420 again: each chains `PlayerControllerNPCInit` /
-	// `TroikaNPCInit` directly.
-	const FElysiumNpcClassSlot* Override =
-		ElysiumNpcKernelClass::OverrideOf(RetailClass(), GLifecycle19Slot420);
-	if (Override == nullptr)
-	{
-		return false;
-	}
-	for (const FLifecycle19NpcInitArm& Arm : Arms)
-	{
-		if (FCString::Strcmp(Arm.Address, Override->Address) != 0)
-		{
-			continue;
-		}
-		(this->*Arm.Body)();
-		return true;
-	}
-	return false;
-}
 
 void FElysiumNpc::NPCInit()
 {
-	if (SpeciesNPCInit())
-	{
-		return;
-	}
+	// Every species class that fills slot 420 overrides it on its own C++ class (story 5 step 3; the
+	// controller line since fold A2), so the Troika line's slot is its own body.
 	TroikaNPCInit();
 }
 

@@ -18,7 +18,7 @@
 //     under Troika `0x1029a8b0` (`StartNPC`, slot 422); `CAI_BaseNPC::OnRestore` `0x1027bf50`
 //     (`FElysiumNpcBase::OnRestore`) under Troika `0x102998c0` (`OnRestore`, slot 130).
 //   * **Species `NPCInit` bodies**, each the body of its class's C++ override (story 5 step 3; the
-//     controller line's three stay slot-420 census arms until step 7). Retail's species bodies call
+//     controller line's three since fold A2). Retail's species bodies call
 //     the body they replace through a direct non-virtual thunk, spelled as a direct call here.
 //   * **Species `StartNPC` / `OnRestore` arms** on slots 422 and 130, the same shape.
 //
@@ -62,7 +62,8 @@
 //
 //   1. Last flyer spawned decides the node-graph hull (`DAT_109340d8`).
 //   2. Werewolf teleport-distance floor grows on every `NPCInit` / `OnRestore`.
-//   3. FrenzyShadow ORs `0x40` into a possibly-null weapon (crash guard: named refusal).
+//   3. FrenzyShadow ORs `0x40` into a possibly-null weapon (crash guard: named refusal;
+//      `ElysiumNpcFrenzyShadow.cpp` since fold A2).
 //   4. Camera deletes itself when the engine query refuses.
 //   5. GhoulCroucher pushes `"CNPC_VWerewolf::NPCInit"` on the scope trace.
 //   6. Tzimisce `StartNPC` re-arms the think the base just armed.
@@ -93,10 +94,6 @@ static constexpr float SpeciesShunWindowSeconds = 3.f;   // `_DAT_10449258`
 static constexpr float ShootAtHintRearmMin = 2.f;
 static constexpr float ShootAtHintRearmMax = 2.5f;
 static constexpr int32 LawThresholdNever = 999999;
-static constexpr float FrenzyShadowSpeedScale = 8.f;
-static constexpr uint32 FrenzyShadowFrenziedFlags = 0x5ddfu;
-static constexpr int32 WolfMorphRetailState = 0xc;
-static constexpr int32 WolfMorphActivity = 0x1145;
 static constexpr float StartNpcFloorDropUnits = -256.f;
 static constexpr uint32 CapabilitySpawnEquip = 0x200000u;
 static constexpr int32 TeleportForcedScheduleRetailId = 0xfe;
@@ -164,8 +161,6 @@ int32 RestorePlaceRejections = 0;        // `0x10299a80`
 int32 PatrolPathRevalidations = 0;       // `0x1029f610`
 int32 PatrolPathReleases = 0;            // `0x1029f5d0`
 int32 PedLinkRebinds = 0;
-int32 FrenzyShadowWeaponFlagOrs = 0;     // the unconditional `|= 0x40`
-int32 FrenzyShadowNullWeaponFaults = 0;  // crash-guarded retail fault
 int32 FollowerBossOnStartCalls = 0;      // seam for `0x102c44e0`
 int32 InventoryDestroys = 0;             // `Inventory_Destroy`
 
@@ -191,7 +186,6 @@ void SetFollowerBossByAuthoredName(const FString& Name);
 void SeedStatListOnNpcInit();
 void SeedCriminalLevelWitnessed();
 void SpawnEquipLoadout();
-int32 FrenzyShadowHostileRecount();
 
 /** The four `CVFeatList_t` field getters `NPCInit` and `CNPC_VZombie::NPCInit` read off the
  *  process-global tuning record (`0x10739d08`), which `0x101e6310` fills from `Rules.txt`. They are
@@ -209,11 +203,6 @@ float TuningZombieGrappleReadyInterval() const;
 // -------------------------------------------------------------------------------------------------
 
 void TroikaNPCInit();   // `0x1029a0b0`
-bool SpeciesNPCInit();
-
-void FrenzyShadowNPCInit();         // `0x10375c80`
-void PlayerControllerNPCInit();     // `0x103a4580`
-void WolfMorphNPCInit();            // `0x103dce00`
 
 // -------------------------------------------------------------------------------------------------
 // Slot 422

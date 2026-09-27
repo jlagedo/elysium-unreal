@@ -54,7 +54,7 @@ namespace
 
 	// The registered `npc_*` leaves worth standing in a fight, in the order a picker should offer
 	// them. Not the whole registered set: `npc_VCamera` has no model and `npc_VPlayerController` is
-	// the scene-owned duplicate with no AI at all, so offering either would be offering a character
+	// the player's owned scene stand-in, so offering either would be offering a character
 	// that cannot participate.
 	const TCHAR* const CombatClasses[] = {
 		TEXT("npc_VHumanCombatant"),

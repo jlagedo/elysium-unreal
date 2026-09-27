@@ -520,7 +520,11 @@ writer is the datamap keyfield `teleport_move_timer` (`0x105d6034`), an absolute
 entity exports carry it on 827 NPC rows across 75 maps, `0` on 824 and `2` on three (one in
 `la_crackhouse_1`, two in `sm_diner_1`), so the frequent-think window is open for those three
 bodies during their map's first two seconds and for nobody else. `m_bForceFrequentThink` `+0x63f0`:
-its setter `0x101aa750` has no caller and its only reader is the same function — never set.
+its only reader is the same function; its writers are the player controller line alone —
+`CNPC_VPlayerController::Spawn` `0x103a4510` stores 1 directly and its `NPCInit` `0x103a4580`
+dispatches the setter `0x101aa750` (slot 416, `vt+0x680`) with 1 (`CAI_BaseNPC::LeaveGrappleState`
+`0x1026ce30` dispatches it with 0). **Corrected by 0019 story 5 fold A2**: the earlier "no caller,
+never set" missed both controller bodies.
 `UpdateCharacter` (slot 312): the Troika body `0x10298070` is the boss registry — a
 `m_bIsBossMonster` body whose slot-464 answer is 2 stores its handle in the two-slot global
 `DAT_109247e0` (`DAT_10924fb8` counts, `+0x6497` remembers), and a registered body that is no
@@ -1034,22 +1038,78 @@ ignore at 0.75 s; resolve, `UTIL_Remove` and clear the link handle — **the rem
 when the handle does not resolve**, on a null pointer, which is retail's own unguarded call; then
 clear the carrying-body flag.
 
+## The player controller — `CNPC_VPlayerController`, `CNPC_VFrenzyShadow`, `CNPC_VWolfMorph` (0019 story 5 fold A2)
+
+`CNPC_VPlayerController` is a whole `CAI_BaseNPCTroika` under `CNPC_VVampire`, the player's scene
+stand-in. `CBasePlayer::GetControllerNPC` (`0x10161a70`) builds it and writes, in order:
+`spawnflags |= 4`, origin, angles, `SetOwnerEntity(player)` (`0x10161be1`),
+`CopyAnimationDataFrom`, `m_flSeekDistBase (+0x63b4) = 4096`, `SetModel`, `DispatchSpawn`,
+`m_fEffects |= 0x60` **on the controller** (`0x10161c21`; `0x40` is `EF_NODRAW`), slot 614
+`ResetThinkTimers`, and the handle into `m_hControllerNPC` (`+0x1db0`). Its own bodies:
+
+- `Spawn` `0x103a4510`: `CNPC_VVampire::Spawn` (direct), `AddClassRelationship(1, 3, 0)` (the
+  player's class, liked), `m_bForceFrequentThink = 1` (a direct byte store), `SetName("playercontroller")`,
+  `AddFlag2(0x10)`. Shared by `CNPC_VWolfMorph`; `CNPC_VFrenzyShadow`'s `0x10375c50` adds
+  `CapabilitiesAdd(0x200000)` first.
+- `NPCInit` `0x103a4580`: Troika `NPCInit` (direct), `+0x641c = 0`, the five law thresholds 999999,
+  the dead `SecureType` bytes (`+0x6360/6361/6364`), `+0x6368 = 0`, investigate modes 6/6, slot 416
+  `SetForceFrequentThink(1)`, `m_hFriendPlayer` = the owner or -1, `+0x5b84 = 0`, senses off,
+  `+0x1480 = 0`.
+- `NPCThink` `0x103a4700`: Troika `NPCThink` (direct), then a tail JMP to slot 614
+  `ResetThinkTimers` — the stand-in thinks every frame. Shared by `CNPC_VWolfMorph`.
+- `PreSelectSchedule` `0x103a46b0`: `+0x1b2c = 2`; IDLE answers `0x6b` (107, resolved up the
+  `CNPC_VVampire` space to `SCHED_TROIKA_IDLE_DISPOSITION`), every other state tail-jumps to the
+  Troika body. Shared by both children.
+- Slot 72 answers false (no discipline targets it), `Classify` 2, the four view/aim cones false,
+  the ten sound slots 488-497 bare `RET`s, `IRelationType` `0x103a48b0` (`social.md`), and the
+  forwarding arms 245/246/300 below.
+
+`CNPC_VFrenzyShadow` restores the base cones (362-365), answers `Classify` 3 and carries its own
+`GatherConditions` (local condition 121 on more than one hostile), `SelectSchedule` (353
+`SCHED_VFRENZYSHADOW_FEED` in COMBAT), `StartTask` (task 330 `ATTEMPT_FEED` asks the owner's
+`CBasePlayer::Replenish(1)`), `BestEnemy` (`senses.md`) and a melee quartet 599-602 with every gate
+dropped. `CNPC_VWolfMorph` answers every activity with `ACT_WOLF_MORPH` (`0x1145`), selects local 344
+`SCHED_VWOLFMORPH_MORPH` until it is running it, and empties slot 588. Each child loads its own
+schedule space (local 344 names a different schedule in each); the controller shares
+`CNPC_VVampire`'s.
+
+**Port shape.** `FElysiumNpcPlayerController` / `FElysiumNpcFrenzyShadow` / `FElysiumNpcWolfMorph`;
+`events_player.CreateControllerNPC` runs the sequence above in
+`FElysiumEntityWorld::CreatePlayerControllerEntity`. Named modernizations: the stand-in's Unreal
+motor ignores other character capsules (no retail solidity step), and the port draws the
+controller's body and hides the pawn where retail puts `EF_NODRAW` on the controller (which body
+retail's client shows during a controller scene is unrecovered). Named divergence: removal kills
+the stand-in in the frame of the request rather than through `SUB_Remove` (`0x101c0b10`) 0.01 s
+later. The port's live think pass (`FElysiumNpc::Think`) dispatches none of slots 431, 433, 437 or
+442 for any class, so `NPCThink`/`GatherConditions`/`PreSelectSchedule`/`StartTask` are reached by
+their slot callers and tests. The visible consequence: retail's `GetNewSchedule` `0x1028a260` asks
+slot 437 before slot 438 (and 438 only when 437 answers 0), so an idle retail stand-in takes `0x6b`;
+the port's maintenance pass goes straight to 438, and a live idle stand-in runs the port's generic
+selector instead (story 8 residue).
+
 ## The `CNPC_VPlayerController` line's damage and death arms — `0x10376ae0`, `0x10376b10`, `0x10376b50`, `0x103a4950` (2026-09-13)
 
 Four slot arms on `CNPC_VFrenzyShadow` / `CNPC_VPlayerController` / `CNPC_VWolfMorph`, all routed
-through `+0x184`, the controller's stored sub-object. `OnTakeDamage` (slot 142, `0x10376ae0`)
-forwards the packet to that object's slot `0x238` and **always answers 0**. `OnTakeDamage_Alive`
-(slot 390, `0x10376b10`) forwards one indirection deeper — through the object's own `+0x9c` to slot
-`0x618` — and also always answers 0. `Event_Killed` (slot 144, `0x10376b50`) is **three bytes**: an
-empty body that ignores its parameter, so a frenzy shadow's death handling is fully suppressed
-versus `CAI_BaseNPC::Event_Killed` — no ideal-state change, no corpse, no outputs.
-`Event_TookLife` (slot 300, `0x103a4950`, shared by all three classes) is guarded on BOTH the
-controller object and its AI component (`+0xa8`); inside both it builds the killed entity's debug
-name and dispatches `thunk_FUN_1017e150(component, 4, -1.0, source)` — AI event type 4 at priority
--1.0, tagged with the retail literal `"CNPC_VPlayerController::Event_TookLife"`.
+through `vt+0x184` — **slot 97 `GetOwnerEntity`**, not a stored sub-object: the controller is OWNED
+by the player it stands in for (`CBasePlayer::GetControllerNPC` `0x10161a70` calls
+`SetOwnerEntity(player)` at `0x10161be1`), so every forward reaches the PLAYER. `OnTakeDamage`
+(slot 142, `0x10376ae0`, the frenzy shadow's) forwards the packet to the owner's slot 142 (`+0x238`)
+and **always answers 0**. `OnTakeDamage_Alive` (slot 390, `0x10376b10`) forwards one indirection
+deeper — through the owner's `+0x9c` combat character to its slot 390 (`+0x618`) — and also always
+answers 0. `Event_Killed` (slot 144, `0x10376b50`) is **three bytes**: an empty body that ignores
+its parameter, so a frenzy shadow's death handling is fully suppressed versus
+`CAI_BaseNPC::Event_Killed` — no ideal-state change, no corpse, no outputs. `Event_TookLife`
+(slot 300, `0x103a4950`, shared by all three classes) is guarded on the owner and on its `+0xa8`
+(`m_pPlayer`, the self-downcast only `CBasePlayer` fills); inside both it builds the killed entity's
+debug name (or `"UNKNOWN"`) into `"CNPC_VPlayerController::Event_TookLife %s"` and calls
+`0x1017e150(player, 4, -1.0, reason)` — the PLAYER's criminal-level setter, level 4 with a derived
+duration. A kill the stand-in makes is the player's crime.
 
-**Unrecovered:** `+0x184` itself. No word of this substrate stands for the controller object, so all
-four arms take their guarded path.
+**Corrected by 0019 story 5 fold A2** (both findings from the listing): `+0x184` is slot 97, so the
+"unrecovered controller object" is the owner; and `0x1017e150` is `SetCriminalLevel`, not an AI
+event dispatch of type 4. The port stands the four bodies on `FElysiumNpcPlayerController` /
+`FElysiumNpcFrenzyShadow` and routes `Event_TookLife` through `ElysiumLaw::SetCriminalLevel`
+(`Elysium.Substrate.NpcKernelDamage.PlayerControllerLine`).
 
 ### The expresser factory `0x10312cd0`
 
@@ -2290,12 +2350,23 @@ arms, then a final `ThinkSet(LAB_1000f4e8, 0.0)` that does not restamp `m_flNext
 
 ### `CNPC_VFrenzyShadow::NPCInit` `0x10375c80`
 
-Weapon create (`item_w_fists`) and unconditional `|= 0x40` into the weapon's `+0x19c` BEFORE
-`CNPC_VPlayerController::NPCInit`. A null weapon faults at `10376c98`; the port crash-guards
-that iteration. Then ideal state `0xb`, `SetState(0xb)`, frenzied flags `0x5ddf`, senses on,
-speed scale 8, nav-ignore physics, tail `JMP 0x10376c10` (hostile recount).
+Weapon create (`item_w_fists`, `0x10375c89`), then `Inventory_Can_Insert` ? slot 383
+`Weapon_Equip(w, 0)` : `0x1024f7b0(w)`, and an unconditional `|= 0x40` into the weapon's `+0x19c`
+(`0x10375cb6`, no null test — a failed create faults there) BEFORE
+`CNPC_VPlayerController::NPCInit`. Then ideal state `0xb`, `SetState(0xb)`, frenzied flags
+`0x5ddf`, senses on, `+0x6664 = +0x6668 = 0`, speed scale 8, nav-ignore physics, tail
+`JMP 0x10376c10` (hostile recount).
 
-**Unrecovered:** the weapon entity's `m_fEffects` word (counted, not written).
+The recount walks the static scratch list `DAT_1093ada8[0 .. DAT_1093ae9c)`. **Corrected by 0019
+story 5 fold A2:** the list is NOT empty on the shipped path — `CBasePlayer::CheckForPlayerFrenzy`
+`0x10161fc0` calls its producer `0x10376d00` (a ±1024/±1024/±128 box sweep around the player,
+thunk call at `0x1016201a`) just before it creates the `npc_VFrenzyShadow` (`0x10162050`), so the
+recount counts the entries that hate the friend player and seeds enemy memory with every entry.
+The port has no body for the frenzy check, so its seam for the list answers empty
+(`FElysiumNpcFrenzyShadow::HostileScratchList`).
+
+**Unrecovered:** the port's weapon create (a seam: an entity created from `NPCInit` would grow the
+list the spawn pass walks), and the producer `0x10376d00`'s filter words.
 
 ### `CNPC_VGhoulCroucher::NPCInit` `0x1037b290`
 

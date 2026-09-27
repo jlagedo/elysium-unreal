@@ -109,8 +109,8 @@ static int32 StandoffSelect(FStandoffWords& Words, const FStandoffConditions& Co
 
 
 
-/** SEAM for `thunk_FUN_101618a0(player)` — the `!playercontroller` half of slot 559
- *  `FindNamedEntity` (`0x10279090`). Retail resolves the player's own scene stand-in from the
- *  player; this runtime stands that as the `npc_VPlayerController` leaf, which a map places by name
- *  and which the player holds no pointer to. Answers the player, and names what would settle it. */
+/** `thunk_FUN_101618a0(player)` — the `!playercontroller` half of slot 559 `FindNamedEntity`
+ *  (`0x10279090`): resolve the player's `m_hControllerNPC` (`+0x1db0`) with its serial check, or
+ *  null. The port holds that handle on the world (`FElysiumEntityWorld::PlayerControllerHandle`,
+ *  written by `CreatePlayerControllerEntity`, retail `GetControllerNPC` `0x10161a70`). */
 FElysiumEntity* PlayerControllerOf(FElysiumEntity* Player) const;

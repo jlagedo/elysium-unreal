@@ -47,12 +47,10 @@ FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 // this class's `CAI_ClassScheduleIdSpace` (`0x102ea2d0 SquadSlotLocalToGlobal`), then look the
 // global id up in the one shared squad-slot namespace `DAT_10936c74`
 // (`0x102ea020 CAI_GlobalNamespace::IdToSymbol`). The Troika line skips the translation and looks
-// `slotEN` up directly. Each introduced species' override holds its own id-space row (story 5
-// step 4); the controller line's rows stay in a table the Troika method reads through
-// `ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546)` until the controller fold (step 7).
+// `slotEN` up directly. Each species' override holds its own id-space row (story 5 step 4; the
+// controller line since fold A2).
 
-/** The table: the Troika line and the deferred controller-line classes that override slot 546.
- *  Every introduced species carries its own row in its override (story 5 step 4). */
+/** The table: the Troika line's row alone. Every species carries its own row in its override. */
 static const FSquadSlotSpecies* SquadSlotSpeciesRows(int32& OutCount);
 
 // --- The bodies -----------------------------------------------------------------------------------
@@ -64,12 +62,6 @@ void SetSquad(const FString& NewSquadName);
  *  the detected-attack notice (`m_hDetectedAttacker +0x65c0`). */
 void AlertNearbyAlly(FElysiumEntity* Attacker);
 
-/** `0x103a48b0` — slot 404 `IRelationType`'s SPECIES body, filling `CNPC_VFrenzyShadow#404`,
- *  `CNPC_VPlayerController#404` and `CNPC_VWolfMorph#404`. Not the slot itself: slot 404's
- *  Troika-line body (`0x10299da0`, layer 14) is story 29d's and is still a generated stub, so this
- *  species arm lands under its own name until 29d's body can route to it.
- *  Returns retail `Disposition_t`: 0 `D_ER`, 1 `D_HT`, 2 `D_FR`, 3 `D_LI`, 4 `D_NU`. */
-int32 SpeciesIRelationType(const FElysiumEntity* Candidate) const;
 
 /** `0x102c4470` — adopt `Boss` as the follower boss by name (`!player` for the player, else its
  *  targetname) and store the key in `m_sFollowerBoss` (`+0x6478`).

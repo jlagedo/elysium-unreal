@@ -1435,8 +1435,9 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	Resolve.HitYaw = Request.HitYawDegrees;
 	Resolve.Source = EElysiumAnimSource::Damage;
 	// The chain is the BODY's, and the identity is the world's own player handle — the same test the
-	// weapon transaction uses. `AsNpc()` would answer differently: a `scripted_character` stand-in and
-	// a scene's `!playercontroller` duplicate are both cast bodies with no NPC mind.
+	// weapon transaction uses. `AsNpc()` would answer differently for a `scripted_character`
+	// stand-in, and a scene's `!playercontroller` duplicate is a whole `CNPC_VPlayerController` NPC —
+	// both are cast bodies all the same.
 	Resolve.BodyKind = (World->PlayerHandle() == Handle)
 		? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
 	Resolve.bAllowFallbackLadder = Request.bAllowFallbackLadder;

@@ -8,6 +8,7 @@
 #include "Substrate/ElysiumNpcCameraSecurity.h"
 #include "Substrate/ElysiumNpcChangBros.h"
 #include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
 #include "Substrate/ElysiumNpcGuard1.h"
@@ -27,6 +28,7 @@
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
 #include "Substrate/ElysiumNpcVampireBoss.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcWolfMorph.h"
 #include "Substrate/ElysiumNpcZombie.h"
 
 // One row per record of an introduced species' own datamap, grouped by declaring class and in
@@ -215,6 +217,11 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VCop, 0x6671,
 		FElysiumNpcCop, bCopCountedAlive),  // m_bCountedAlive
 
+	// --- CNPC_VFrenzyShadow ---
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VFrenzyShadow, 0x6664,
+		FElysiumNpcFrenzyShadow, HostileEnemyCount),  // m_iHostileEnemyCount
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VFrenzyShadow, 0x6668,
+		FElysiumNpcFrenzyShadow, bFailedGrapple),  // m_bFailedGrapple
 	// --- CNPC_VGargoyle ---
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VGargoyle, 0x667c,
 		FElysiumNpcGargoyle, GargoylePillarTarget),  // m_hPillarTarget
@@ -600,6 +607,14 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VWerewolf, 0x66f0,
 		FElysiumNpcWerewolf, WerewolfTimeTeleportedOut),  // m_flTimeTeleportedOut
 
+	// --- CNPC_VWolfMorph ---
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VWolfMorph, 0x6664,
+		FElysiumNpcWolfMorph, bFirstThink),  // m_bFirstThink
+	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VWolfMorph, 0x6668,  // m_flNextFleeSoundTime
+		"no port member: its SAVE name is the Troika's m_flNextFleeSoundTime (+0x641c), and the "
+		"registry's save walk keeps one row per name, so binding it would stop the Troika word "
+		"saving on this class; no CNPC_VWolfMorph body reads or writes it (fold A2 walked all "
+		"eleven own bodies)"),
 	// --- CNPC_VZombie ---
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x6675,
 		FElysiumNpcZombie, bZombieShouldRagdoll),  // m_bShouldRagdoll

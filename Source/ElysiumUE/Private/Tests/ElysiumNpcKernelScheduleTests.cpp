@@ -30,7 +30,9 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FScheduleIdSpace* Rows = FElysiumNpc::ScheduleIdSpaceRows(Count);
-	TestEqual(TEXT("the slot-580 table carries thirteen rows"), Count, 13);
+	// Thirteen until story 5 fold A2 dropped the controller line's two rows (each of the three
+	// classes answers its own space through the corpus, keyed on its C++ class).
+	TestEqual(TEXT("the slot-580 table carries eleven rows"), Count, 11);
 
 	// Every row by name: the class resolves in the census, the census agrees the row's body fills
 	// slot 580 for it, and the row carries an id-space global.
@@ -62,9 +64,15 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 	TestEqual(TEXT("CNPC_VCameraSecurity shares CNPC_VCamera's 0x103683b0"),
 		FString(FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VCameraSecurity"))->Body),
 		FString(TEXT("0x103683b0")));
-	TestEqual(TEXT("CNPC_VPlayerController shares CNPC_VVampire's 0x103750e0"),
-		FString(FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VPlayerController"))->Body),
+	// The controller line has no table row since fold A2; the census and the corpus carry it.
+	TestNull(TEXT("CNPC_VPlayerController has no table row"),
+		FElysiumNpc::ScheduleIdSpaceOf(TEXT("CNPC_VPlayerController")));
+	TestEqual(TEXT("CNPC_VPlayerController shares CNPC_VVampire's 0x103750e0 in the census"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VPlayerController")), 580)),
 		FString(TEXT("0x103750e0")));
+	TestEqual(TEXT("CNPC_VWolfMorph fills slot 580 with its own 0x103dc750"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VWolfMorph")), 580)),
+		FString(TEXT("0x103dc750")));
 
 	// --- The LIVE spaces, which are the corpus's ------------------------------------------------
 	//
@@ -170,7 +178,8 @@ bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpc::FScheduleLoadFlag* Rows = FElysiumNpc::LoadedSchedulesRows(Count);
-	TestEqual(TEXT("the slot-452 table carries eleven rows"), Count, 11);
+	// Eleven until story 5 fold A2 added `CNPC_VWolfMorph`'s `0x103dc8f0`.
+	TestEqual(TEXT("the slot-452 table carries twelve rows"), Count, 12);
 
 	for (int32 Index = 0; Index < Count; ++Index)
 	{

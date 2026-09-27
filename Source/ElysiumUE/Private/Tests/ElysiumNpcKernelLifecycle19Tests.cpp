@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcCamera.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -41,16 +42,6 @@ static constexpr EAutomationTestFlags GLifecycle19Flags =
 
 namespace
 {
-	// The three classes story 5 step 2 defers: no classname builds a C++ class of theirs yet, so
-	// their NPC is the bare Troika line with the test-only class latch over it (removed at step 11).
-	bool Lifecycle19IsDeferredClass(const TCHAR* RetailClass)
-	{
-		return RetailClass != nullptr
-			&& (FCString::Strcmp(RetailClass, TEXT("CNPC_VPlayerController")) == 0
-				|| FCString::Strcmp(RetailClass, TEXT("CNPC_VFrenzyShadow")) == 0
-				|| FCString::Strcmp(RetailClass, TEXT("CNPC_VWolfMorph")) == 0);
-	}
-
 	// Clear the counters and latches a case reads, so what it asserts is its own call's effect and
 	// not the spawn's. The spawn already ran the class's own `NPCInit` (`Activate` -> slot 420), so
 	// the species WORDS it wrote are standing too; this does not reset them. A case asserting such a
@@ -66,9 +57,10 @@ namespace
 		Npc.InNpcInit() = false;
 	}
 
-	// One NPC spawned as `RetailClass` through its factory classname (story 5 step 2), stood by
-	// `Lifecycle19Stand`. Null or `CAI_BaseNPCTroika` stands the bare Troika line; a deferred class
-	// stands the bare Troika line and latches the class.
+	// One NPC spawned as `RetailClass` through its factory classname (story 5 step 2; the controller
+	// line since fold A2), stood by `Lifecycle19Stand`. Null or `CAI_BaseNPCTroika` stands the bare
+	// Troika line. A controller-line body renames itself `playercontroller` in its `Spawn`
+	// (`0x103a4510`), so it is found by its class.
 	struct FLifecycle19Fixture
 	{
 		FElysiumNpcWorldFixture World;
@@ -79,19 +71,18 @@ namespace
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_kernel"), 919);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector,
-						Lifecycle19IsDeferredClass(RetailClass) ? nullptr : RetailClass);
+					Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector, RetailClass);
 					return Builder;
 				}())
 		{
 			Npc = World.Npc(TEXT("subject"));
+			if (Npc == nullptr && RetailClass != nullptr)
+			{
+				Npc = World.NpcOfClass(RetailClass);
+			}
 			FElysiumNpcWorldFixture::Quiet({ Npc });
 			if (Npc != nullptr)
 			{
-				if (Lifecycle19IsDeferredClass(RetailClass))
-				{
-					Npc->SetRetailClassForTests(RetailClass);
-				}
 				Lifecycle19Stand(*Npc);
 			}
 		}
@@ -465,9 +456,10 @@ bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 			FString(TEXT("searching")));   // the debug row's word for INDEX_NONE
 	}
 
-	// `0x10376c10` walks a scratch list `NPCInit` never fills, so the recount's only observable
-	// effect is the count reset — it must NOT seed enemy memory for the whole map. (A deferred
-	// class: the fixture stands the bare Troika line and latches it.)
+	// `0x10376c10` walks the scratch list `DAT_1093ada8[0 .. DAT_1093ae9c)`. Retail's shipped path
+	// FILLS it (`CheckForPlayerFrenzy` `0x10161fc0` runs the producer `0x10376d00` before creating
+	// the shadow); the port has no frenzy check, so the list's seam answers empty and the recount on
+	// `NPCInit` only resets the count — it seeds no enemy memory for the map.
 	{
 		FLifecycle19Fixture F(TEXT("CNPC_VFrenzyShadow"));
 		if (F.Npc == nullptr)
@@ -475,11 +467,44 @@ bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 			AddError(TEXT("no NPC"));
 			return false;
 		}
-		F.Npc->FrenzyShadowHostileEnemyCount = 7;
-		F.Npc->NPCInit();
-		TestEqual(TEXT("10376c17 +0x6664 = 0"), F.Npc->FrenzyShadowHostileEnemyCount, 0);
+		FElysiumNpcFrenzyShadow* Shadow = F.As<FElysiumNpcFrenzyShadow>();
+		TestEqual(TEXT("the scratch list's seam answers empty"),
+			FElysiumNpcFrenzyShadow::HostileScratchList().Num(), 0);
+		Shadow->HostileEnemyCount = 7;
+		Shadow->NPCInit();
+		TestEqual(TEXT("10376c17 +0x6664 = 0"), Shadow->HostileEnemyCount, 0);
 		TestEqual(TEXT("...and the empty scratch list touches no other NPC"),
-			F.Npc->EnemyMemory.Records().Num(), 0);
+			Shadow->EnemyMemory.Records().Num(), 0);
+	}
+	// The loop itself, over a list the producer WOULD have filled: an entry that hates the friend
+	// player is counted, and EVERY entry is handed to slot 544 at its origin.
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_recount"), 921);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		Builder.AddNpcOfClass(TEXT("shadow"), FVector::ZeroVector, TEXT("CNPC_VFrenzyShadow"));
+		Builder.AddNpc(TEXT("hater"), FVector(300.f, 0.f, 0.f));
+		Builder.AddNpc(TEXT("bystander"), FVector(-300.f, 0.f, 0.f));
+		FElysiumNpcWorldFixture W(MoveTemp(Builder));
+		FElysiumNpcFrenzyShadow* Shadow = ElysiumTestAsSpecies<FElysiumNpcFrenzyShadow>(
+			W.NpcOfClass(TEXT("CNPC_VFrenzyShadow")));
+		FElysiumNpc* Hater = W.Npc(TEXT("hater"));
+		FElysiumNpc* Bystander = W.Npc(TEXT("bystander"));
+		FElysiumPlayer* Player = W.Player();
+		if (!TestNotNull(TEXT("shadow"), Shadow) || !TestNotNull(TEXT("hater"), Hater)
+			|| !TestNotNull(TEXT("bystander"), Bystander) || !TestNotNull(TEXT("player"), Player))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Shadow, Hater, Bystander });
+		Shadow->FriendPlayer = Player->Handle;
+		Hater->Relationships.SetEntity(Player->Handle, EElysiumRelationship::Hate, 10);
+		Bystander->Relationships.SetEntity(Player->Handle, EElysiumRelationship::Like, 10);
+		FElysiumEntity* const Scratch[] = { Hater, Bystander };
+		TestEqual(TEXT("0x10376c10 counts the one entry that hates the friend player"),
+			Shadow->HostileRecountOver(MakeArrayView(Scratch)), 1);
+		TestEqual(TEXT("...into m_iHostileEnemyCount"), Shadow->HostileEnemyCount, 1);
+		TestEqual(TEXT("...and hands every entry to slot 544 UpdateEnemyMemory"),
+			Shadow->EnemyMemory.Records().Num(), 2);
 	}
 	return true;
 }
@@ -728,12 +753,19 @@ bool FElysiumNpcKernelLifecycle19FrenzyShadowTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-	F.Npc->NPCInit();                                                    // 0x10375c80
-	TestEqual(TEXT("state 0xb"), F.Npc->IdealStateRetail(), 0xb);
-	TestTrue(TEXT("frenzied flags 0x5ddf"), F.Npc->HasFrenzied(0x5ddfu));
-	TestEqual(TEXT("speed scale 8"), F.Npc->NpcSpeedScale, 8.f);
-	TestTrue(TEXT("senses on"), F.Npc->Senses.bCanPerformSenses);
-	TestTrue(TEXT("nav ignore physics"), F.Npc->bNavIgnorePhysicsProps);
+	FElysiumNpcFrenzyShadow* Shadow = F.As<FElysiumNpcFrenzyShadow>();
+	Shadow->FistsNullWeaponFaults = 0;
+	Shadow->bFailedGrapple = true;
+	Shadow->NPCInit();                                                   // 0x10375c80
+	TestEqual(TEXT("state 0xb"), Shadow->IdealStateRetail(), 0xb);
+	TestTrue(TEXT("frenzied flags 0x5ddf"), Shadow->HasFrenzied(0x5ddfu));
+	TestEqual(TEXT("speed scale 8"), Shadow->NpcSpeedScale, 8.f);
+	TestTrue(TEXT("senses on"), Shadow->Senses.bCanPerformSenses);
+	TestTrue(TEXT("nav ignore physics"), Shadow->bNavIgnorePhysicsProps);
+	TestFalse(TEXT("+0x6668 m_bFailedGrapple = 0"), Shadow->bFailedGrapple);
+	TestEqual(TEXT("Weapon_Create(item_w_fists) is the seam's null, so the unconditional |= 0x40 faults"),
+		Shadow->FistsNullWeaponFaults, 1);
+	TestEqual(TEXT("the controller body under it ran: investigate mode 6"), Shadow->InvestigateMode, 6);
 	return true;
 }
 
@@ -1053,9 +1085,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SpeciesSmokeTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.SpeciesNPCInitSmoke", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 {
-	// One call per slot-420 species body, each on a fresh NPC spawned as the row's class (the three
-	// deferred classes — PlayerController, FrenzyShadow, WolfMorph — on the latched bare Troika
-	// line). Distinguishing writes from the listing.
+	// One call per slot-420 species body, each on a fresh NPC spawned as the row's class (the
+	// controller line through its own factories since fold A2). Distinguishing writes from the
+	// listing.
 	struct FRow
 	{
 		const TCHAR* Cls;

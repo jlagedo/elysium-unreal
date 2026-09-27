@@ -59,11 +59,11 @@ void FElysiumNpcBase::ClearSquadSlotOccupied(void* Squad, int32 SquadSlot)
 	(void)SquadSlot;
 }
 
-// slot 546 0x101a6c00 `const char* SquadSlotName(int)`. Thirty-eight species classes override it
-// with their own id-space row (story 5 step 4); the rest inherit one of those. The controller line
-// (`CNPC_VFrenzyShadow` `0x10375440`, `CNPC_VWolfMorph` `0x103dc950`, `CNPC_VPlayerController`
-// sharing `CNPC_VVampire`'s `0x103c4a80`) stays a table arm until the controller fold (step 7):
-// only a test-latched Troika-line instance reaches it.
+// slot 546 0x101a6c00 `const char* SquadSlotName(int)`. The species classes override it with their
+// own id-space row (story 5 step 4; the controller line's `CNPC_VFrenzyShadow` `0x10375440` and
+// `CNPC_VWolfMorph` `0x103dc950` since fold A2, `CNPC_VPlayerController` inheriting
+// `CNPC_VVampire`'s `0x103c4a80`); the rest inherit one of those. The table arm below answers the
+// Troika line alone.
 const TCHAR* FElysiumNpcBase::SquadSlotName(int32 SlotEn)
 {
 	const FElysiumNpcClassSlot* Override = ElysiumNpcKernelClass::OverrideOf(RetailClass(), 546);

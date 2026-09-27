@@ -165,7 +165,11 @@ void FElysiumNpc::AlertNearbyAlly(FElysiumEntity* Attacker)
 	{
 		return;
 	}
-	if (SpeciesIRelationType(Attacker) == 3)
+	// Slot 404, VIRTUAL (`vt+0x650`): the ally's OWN relation to the attacker. **RETAIL CORRECTION
+	// (fold A2):** the port called the controller line's body `0x103a48b0` here for every ally, so an
+	// ordinary NPC answered the stand-in's table (D_HT for any visible combat character, D_LI only for
+	// its friend player) instead of its own.
+	if (IRelationType(Attacker) == 3)
 	{
 		return;
 	}
@@ -191,39 +195,6 @@ void FElysiumNpc::AlertNearbyAlly(FElysiumEntity* Attacker)
 		// compares it against `ElysiumNpcCond::DetectedAttackRetentionSeconds`, the same 5.0.
 		Senses.Memory.DetectedAttackTime = Now;
 	}
-}
-
-int32 FElysiumNpc::SpeciesIRelationType(const FElysiumEntity* Candidate) const
-{
-	// 0x103a48b0, slot 404's body for CNPC_VFrenzyShadow, CNPC_VPlayerController and
-	// CNPC_VWolfMorph:
-	//
-	//   target == NULL                                   -> 0   D_ER
-	//   target == m_hFriendPlayer (+0x60ac, resolved)    -> 3   D_LI
-	//   target->m_pCombatCharacter (+0x9c) != NULL
-	//     && cc->m_bIsBCCTargetable (+0x1480)
-	//     && !cc->m_bScriptHidden   (+0x00f4, 0x100b5190) -> 1  D_HT
-	//   otherwise                                        -> 4   D_NU
-	if (Candidate == nullptr)
-	{
-		return 0;
-	}
-	if (World != nullptr && FriendPlayer.IsSet() && World->Resolve(FriendPlayer) == Candidate)
-	{
-		return 3;
-	}
-	const FElysiumCombatCharacter* Combatant = Candidate->AsCombatCharacter();
-	if (Combatant != nullptr)
-	{
-		// `m_bIsBCCTargetable` has no port field and no recovered clearer, so it reads true — the
-		// same reading `ElysiumNpcConditions.cpp` already takes for the `+0x1480` term.
-		const bool bTargetable = true;
-		if (bTargetable && !Candidate->IsHidden())
-		{
-			return 1;
-		}
-	}
-	return 4;
 }
 
 // -------------------------------------------------------------------------------------------------

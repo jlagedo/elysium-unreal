@@ -530,7 +530,11 @@ public:
 	// four stamps AND `m_flNextThink` to now, so the effect takes hold on the same frame. This is
 	// NOT what `TaskFail` (`0x1029adb0`) does: that one writes the four and deliberately leaves
 	// `m_flNextThink` alone, and the difference is observable -- see `FElysiumNpc::TaskFail`.
-	void ResetThinkTimers(double Now);
+	//
+	// VIRTUAL, as retail's slot is: `CNPC_VPlayerController::NPCThink` (`0x103a4700`) tail-jumps
+	// through `vt+0x998`. Every class in the image fills the slot with `0x102c23f0`, so this one body
+	// is every dispatch's target.
+	virtual void ResetThinkTimers(double Now);
 	// The entity think alone (`m_flNextThink := curtime`), no stamp. The death handoff's entry:
 	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
 	// arms the entity think and nothing else.
@@ -556,8 +560,11 @@ public:
 	// all but three (`2`: one in `la_crackhouse_1`, two in `sm_diner_1`), so the window is open
 	// for those three bodies during the map's first two seconds and for no one else.
 	float TeleportMoveTimer = 0.f;
-	// `m_bForceFrequentThink` (+0x63f0). Its only writer in the image is the bare setter
-	// `0x101aa750`, which has no caller; its only reader is `ShouldThinkFrequently`. Never set.
+	// `m_bForceFrequentThink` (+0x63f0). Its writers are the bare setter `0x101aa750` (slot 416,
+	// dispatched by `CNPC_VPlayerController::NPCInit` `0x103a4580` with 1 and by
+	// `CAI_BaseNPC::LeaveGrappleState` `0x1026ce30` with 0) and `CNPC_VPlayerController::Spawn`
+	// `0x103a4510`'s direct byte store; its only reader is `ShouldThinkFrequently`. So only the player
+	// controller line ever sets it (story 5 fold A2 corrected the earlier "never set").
 	bool bForceFrequentThink = false;
 	// `m_bIsTalking` (+0x64c0) and its end time (+0x64cc), written together by the spoken-line
 	// player `0x102c0520` (`InputPlayDialogFile` passes a zero duration; a scene passes the
@@ -1240,29 +1247,4 @@ protected:
 	int32 AmbientActivityCycle = 0;
 	bool bAmbientArrived = false;
 	TSet<int32> FailedSpotIndices;
-};
-
-// npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored
-// scripted-sequence motor with ordinary NPCs: no dialogue, AI, use body, or autonomous think.
-//
-// It lives beside FElysiumNpc rather than in its own file because the two share exactly one thing:
-// the `elysium.NpcBodies` A/B, which is a file-static in `ElysiumNpc.cpp`.
-
-class FElysiumPlayerControllerNpc final : public FElysiumScriptedCharacter
-{
-public:
-	virtual void Spawn() override;
-
-	virtual void OnRuntimeModelChanged() override;
-
-	virtual void SetIgnoreCharacterCollision(bool) override;
-
-	virtual void OnDormancyChanged() override;
-
-	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
-
-private:
-	// The shared motor build, made non-solid: the duplicate navigates against the world but never
-	// becomes a second solid character.
-	virtual void BuildOwnMotor() override;
 };

@@ -22,6 +22,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29d, family **Senses10** — what the NPC perceives and who its enemy is.
@@ -69,6 +70,11 @@ namespace
 				}())
 		{
 			Guard = World.Npc(TEXT("guard"));
+			if (Guard == nullptr)
+			{
+				// A controller-line guard renames itself `playercontroller` (`0x103a4510`).
+				Guard = World.NpcOfClass(GuardClass);
+			}
 			Other = World.Npc(TEXT("other"));
 			Player = World.Player();
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other });
@@ -947,11 +953,12 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 	}
 
 	// --- `CNPC_VFrenzyShadow#478` (`0x103766d0`) --------------------------------------------------
-	// `CNPC_VFrenzyShadow` is a deferred class with no C++ class of its own yet, so it is still a
-	// bare Troika NPC reclassed by the test-only hook -- the one form that hook admits.
+	// A real frenzy shadow (story 5 fold A2): `npc_VFrenzyShadow` builds `FElysiumNpcFrenzyShadow`,
+	// whose override is the body. Its friend player is the owner `NPCInit` read.
 	{
-		FSenses10Fixture F(TEXT("CAI_BaseNPCTroika"));
-		if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+		FSenses10Fixture F(TEXT("CNPC_VFrenzyShadow"));
+		FElysiumNpcFrenzyShadow* Shadow = ElysiumTestAsSpecies<FElysiumNpcFrenzyShadow>(F.Guard);
+		if (Shadow == nullptr || F.Other == nullptr || F.Player == nullptr)
 		{
 			AddError(TEXT("no fixture"));
 			return false;
@@ -965,15 +972,15 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 		F.Guard->Senses.Memory.bPlayerInOuterBand = false;
 		F.Guard->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 		F.Guard->ShootTargetOverride = F.Other->Handle;
-		F.Guard->SetRetailClassForTests(TEXT("CNPC_VFrenzyShadow"));
 		F.Guard->EnemyMemory.Update(*F.Guard, F.Other->Handle, 1.0);
-		F.Guard->FrenzyShadowHostileEnemyCount = 0;
-		F.Guard->bFrenzyShadowFailedGrapple = true;
-		FElysiumEntity* Chosen = F.Guard->BestEnemy();
+		Shadow->FriendPlayer = F.Player->Handle;
+		Shadow->HostileEnemyCount = 0;
+		Shadow->bFailedGrapple = true;
+		FElysiumEntity* Chosen = F.Guard->BestEnemy();   // slot 478, VIRTUAL through the base
 		TestEqual(TEXT("0x103766d0 the score rescan picks the one eligible candidate"),
 			Chosen, static_cast<FElysiumEntity*>(F.Other));
 		TestFalse(TEXT("0x103769d9 a winner that differs from GetEnemy clears m_bFailedGrapple"),
-			F.Guard->bFrenzyShadowFailedGrapple);
+			Shadow->bFailedGrapple);
 	}
 	return true;
 }

@@ -626,7 +626,7 @@ public:
 	// The same, for the living-NPC leaf. The AI's own producers hand each other base pointers — an
 	// attack notice reaches its victim as an entity handle — and only `FElysiumNpc` carries the
 	// senses, memory and cognition those producers write. It is deliberately NOT a classname test:
-	// `npc_VPlayerController` shares the `npc_` prefix and is a different leaf entirely.
+	// an `npc_` prefix proves nothing (`npc_maker` is not an NPC leaf).
 	//
 	// Retail keeps the same answers as cached self-pointers on `CBaseEntity`: `+0x98
 	// m_pBaseNPCTroika` is `AsNpc()` (the `CAI_BaseNPCTroika` line), `+0x94 m_pBaseNPC` is

@@ -47,7 +47,7 @@
 // so: that the seam is asked and that the refusal is the recovered one.
 //
 // **Both tables are checked before a species answer is asserted.** A class no registered classname
-// builds (`CNPC_VFrenzyShadow`, …) is exercised by RETAIL CLASS NAME through `SpeciesSlotRowOf`;
+// builds (`CNPCMaker_Fleshpile`) is exercised by RETAIL CLASS NAME through `SpeciesSlotRowOf`;
 // every other carrier is spawned by the classname its retail factory builds it from
 // (`Substrate/ElysiumNpcClasses.cpp`), and the Troika side of a wiring case is a bare
 // `CAI_BaseNPCTroika` (0019 story 5 step 2). `npc_VCop`'s factory answer, `CNPC_VCop`, is asserted.
@@ -218,10 +218,10 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 	int32 Count = 0;
 	const FElysiumNpc::FSpeciesSlotRow* Rows = FElysiumNpc::SpeciesSlotRows(Count);
 	// 34 before 0019 story 5 step 1 removed the rows of classes no map stands, 30 until story 5
-	// step 3 turned every introduced class's row into an override on its C++ class: what is left are
-	// the deferred classes' rows (`CNPC_VFrenzyShadow` 599/600 until step 7, `CNPCMaker_Fleshpile`
-	// 139/617 until step 8).
-	TestEqual(TEXT("the table carries the four deferred (class, slot) rows"), Count, 4);
+	// step 3 turned every introduced class's row into an override on its C++ class, 4 until fold A2
+	// moved `CNPC_VFrenzyShadow`'s 599/600 onto `FElysiumNpcFrenzyShadow`: what is left is the
+	// Fleshpile maker's 139/617, until the maker fold (A4).
+	TestEqual(TEXT("the table carries the two deferred (class, slot) rows"), Count, 2);
 
 	// Every row, BY NAME: the class is a census class, and the census agrees that the row's retail
 	// address is the body that fills that slot for it. A row that does not match `slots.md` fails
@@ -249,14 +249,13 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 	TestEqual(TEXT("CNPC_VDog inherits CNPC_VAnimal's slot 482"),
 		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VDog")), 482)),
 		FString(TEXT("0x1035fd40")));
-	// A deferred class keeps its row, and the walk is still the vtable's.
-	const FElysiumNpc::FSpeciesSlotRow* Frenzy =
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599);
-	TestNotNull(TEXT("CNPC_VFrenzyShadow keeps its slot-599 row until the controller fold"), Frenzy);
-	if (Frenzy != nullptr)
-	{
-		TestEqual(TEXT("0x10376b70"), FString(Frenzy->Address), FString(TEXT("0x10376b70")));
-	}
+	// The controller line's rows are gone with fold A2: the census still names the bodies, and the
+	// class carries them as overrides (`Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee`).
+	TestNull(TEXT("CNPC_VFrenzyShadow has no slot-599 table row since fold A2"),
+		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599));
+	TestEqual(TEXT("its census body is still 0x10376b70"),
+		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VFrenzyShadow")), 599)),
+		FString(TEXT("0x10376b70")));
 
 	// And a class with no row at a slot answers null rather than the nearest row of another slot.
 	TestNull(TEXT("CNPC_VAnimal has no slot 599 row"),
@@ -328,9 +327,6 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 	TestTrue(TEXT("a spawned cop's slot-599 row is CNPC_VCop's"),
 		Fixture.Cop->SpeciesSlotRow(599) == FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VCop"), 599));
 	TestNull(TEXT("so it has no species row at slot 599"), Fixture.Cop->SpeciesSlotRow(599));
-	bool Answer = false;
-	TestFalse(TEXT("and the slot-599 dispatcher refuses to run a species body for it"),
-		Fixture.Cop->SpeciesSlot599(nullptr, Answer));
 
 	// `npc_VCamera` is a registered spawn leaf now, answering `CNPC_VCamera`; its own world, so the
 	// shared fixture's spawn order (and its RNG draws) stay what the other cases were written on.
@@ -509,39 +505,29 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 		return false;
 	}
 
-	// --- `CNPC_VFrenzyShadow` / `CNPC_VGargoyle`: every gate dropped, always true --------------
-	// FrenzyShadow (deferred to step 7) keeps its table rows; Gargoyle's are overrides on
-	// `FElysiumNpcGargoyle` (story 5 step 3). The BODIES are called directly here.
-	TestNotNull(TEXT("CNPC_VFrenzyShadow has a slot-599 row"),
-		FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 599));
-	TestNotNull(TEXT("and a slot-600 row"), FElysiumNpc::SpeciesSlotRowOf(TEXT("CNPC_VFrenzyShadow"), 600));
+	// --- `CNPC_VGargoyle`: every gate dropped, always true ----------------------------------------
+	// Gargoyle's are overrides on `FElysiumNpcGargoyle` (story 5 step 3), byte-identical to
+	// `CNPC_VFrenzyShadow`'s `0x10376b70` / `0x10376ba0`, which are `FElysiumNpcFrenzyShadow`'s since
+	// fold A2 (`Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee`).
 	TestEqual(TEXT("CNPC_VGargoyle's slot 599 is 0x10379ef0"),
 		FString(ElysiumNpcKernelClass::BodyOf(ElysiumNpcKernelClass::Find(TEXT("CNPC_VGargoyle")), 599)),
 		FString(TEXT("0x10379ef0")));
-	Npc->bInMelee = false;
-	Npc->MeleeEventFires = 0;
-	TestTrue(TEXT("0x10376b70 (CNPC_VFrenzyShadow 599) always enters melee"),
-		Npc->FUN_10376b70(Enemy));
-	TestTrue(TEXT("and sets m_bInMelee"), Npc->bInMelee);
-	TestEqual(TEXT("having fired the global melee event once"), Npc->MeleeEventFires, 1);
 	Fixture.Gargoyle->bInMelee = false;
 	Fixture.Gargoyle->MeleeEventFires = 0;
-	TestTrue(TEXT("0x10379ef0 (CNPC_VGargoyle 599) is the same body"), Fixture.Gargoyle->FUN_10379ef0(Enemy));
-	TestEqual(TEXT("so it fires the event once too"), Fixture.Gargoyle->MeleeEventFires, 1);
-	// Neither arms a leave timer — the recovered difference from the Troika line.
-	Npc->MeleeMustLeaveTimer = 0.0;
-	Npc->FUN_10376b70(Enemy);
-	TestEqual(TEXT("and neither arms m_flMeleeMustLeaveTimer"), Npc->MeleeMustLeaveTimer, 0.0);
+	TestTrue(TEXT("0x10379ef0 (CNPC_VGargoyle 599) always enters melee"), Fixture.Gargoyle->FUN_10379ef0(Enemy));
+	TestTrue(TEXT("and sets m_bInMelee"), Fixture.Gargoyle->bInMelee);
+	TestEqual(TEXT("having fired the global melee event once"), Fixture.Gargoyle->MeleeEventFires, 1);
+	// No leave timer — the recovered difference from the Troika line.
+	Fixture.Gargoyle->MeleeMustLeaveTimer = 0.0;
+	Fixture.Gargoyle->FUN_10379ef0(Enemy);
+	TestEqual(TEXT("and it arms no m_flMeleeMustLeaveTimer"), Fixture.Gargoyle->MeleeMustLeaveTimer, 0.0);
 
-	Npc->bInMelee = false;
-	Npc->MeleeEventFires = 0;
-	TestTrue(TEXT("0x10376ba0 (CNPC_VFrenzyShadow 600) always accepts"), Npc->FUN_10376ba0(Enemy));
-	TestTrue(TEXT("and sets m_bInMelee"), Npc->bInMelee);
+	Fixture.Gargoyle->bInMelee = false;
 	Fixture.Gargoyle->MeleeEventFires = 0;
-	TestTrue(TEXT("0x10379f20 (CNPC_VGargoyle 600) is the same body"), Fixture.Gargoyle->Slot600(Enemy));
-	TestEqual(TEXT("one event each"), Npc->MeleeEventFires + Fixture.Gargoyle->MeleeEventFires, 2);
-	// Already in melee is NOT a refusal for these two — the Troika line's re-entry guard is gone.
-	TestTrue(TEXT("and a body already in melee still accepts"), Npc->FUN_10376ba0(Enemy));
+	TestTrue(TEXT("0x10379f20 (CNPC_VGargoyle 600) always accepts"), Fixture.Gargoyle->Slot600(Enemy));
+	TestEqual(TEXT("one event"), Fixture.Gargoyle->MeleeEventFires, 1);
+	// Already in melee is NOT a refusal — the Troika line's re-entry guard is gone.
+	TestTrue(TEXT("and a body already in melee still accepts"), Fixture.Gargoyle->Slot600(Enemy));
 
 	// --- `CNPC_VTzimisceHeadClaw` 599: the coordinator alone ------------------------------------
 	// `MeleeCoordinatorAdmits599` is family TroikaHelpers' seam and answers false with no
@@ -643,9 +629,7 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// The animal has no melee body of its own and no deferred row either.
 	if (Fixture.Animal != nullptr)
 	{
-		bool Answer = false;
-		TestFalse(TEXT("an animal has no species slot-599 row"),
-			Fixture.Animal->SpeciesSlot599(Enemy, Answer));
+		TestNull(TEXT("an animal has no species slot-599 row"), Fixture.Animal->SpeciesSlotRow(599));
 	}
 	return true;
 }

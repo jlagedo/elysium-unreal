@@ -27,13 +27,12 @@
 
 // --- Slot 404 `IRelationType` — one slot, five retail bodies -----------------------------------
 //
-// `FElysiumNpc::IRelationType()` (the generated virtual, defined by this family) is the one port
-// method. It resolves the census body for this NPC's retail class
-// (`ElysiumNpcKernelClass::BodyOf(RetailClass(), 404)`) and runs that arm. Eight census rows fill
-// the slot with FIVE distinct bodies, and two of the five are not this family's rows: `0x103a48b0`
-// (`CNPC_VFrenzyShadow`, `CNPC_VPlayerController`, `CNPC_VWolfMorph`) is story 29c-1's
-// `SpeciesIRelationType` in family Squad and is dispatched to, and `0x103a01b0`
-// (`CNPC_VNewscaster`) is an eight-byte `return 4;` answered inline. Neither chains the Troika body.
+// `FElysiumNpc::IRelationType()` (the generated virtual, defined by this family) is the Troika
+// line's slot; every species body is its class's C++ override. Eight census rows fill the slot with
+// FIVE distinct bodies, and two of the five chain nothing: `0x103a48b0` (`CNPC_VPlayerController`,
+// inherited by `CNPC_VFrenzyShadow` and `CNPC_VWolfMorph`) is
+// `FElysiumNpcPlayerController::IRelationType` (fold A2), and `0x103a01b0` (`CNPC_VNewscaster`) is
+// an eight-byte `return 4;`.
 //
 // **Two kinds of chain, and that is the recovered shape.** All four species arms end
 // in a DIRECT non-virtual thunk to `CAI_BaseNPCTroika::IRelationType` (`thunk_FUN_10299da0`), which

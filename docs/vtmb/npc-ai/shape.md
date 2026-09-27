@@ -3022,7 +3022,10 @@ is set. Then, unconditionally and outside both flags:
 `ThinkSet(controller, 0x101c0b10, 0.0)`, `controller->m_flNextThink = curtime + _DAT_1044e658`, and
 `m_hControllerNPC = -1`. Retail arms the one-shot think on the entity it is *letting go of*.
 
-**Unrecovered:** `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`), and what `0x101c0b10` does when that think fires.
+`0x101c0b10` is `SUB_Remove` (`docs/vtmb/entity_io.md`): the released controller removes itself
+0.01 s later (`_DAT_1044e658` = **0.01**, float64; read 2026-09-21, `rdata-cells.md`). The port
+removes the stand-in in the frame of the request instead (a named divergence in
+`FElysiumEntityWorld::RemovePlayerControllerEntity`: no think-function slot hosts `SUB_Remove`).
 
 ### Autoaim — `0x10176520`, `0x10176930`
 

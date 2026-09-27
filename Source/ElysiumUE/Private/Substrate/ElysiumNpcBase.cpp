@@ -44,8 +44,9 @@
 const FElysiumNpcClass* FElysiumNpcBase::RetailClass() const
 {
 	// The C++ class is the answer: the classname's factory built it (story 5 step 2), so nothing
-	// here reads the classname. The test latch stands only for the enumerated deferred classes.
-	return bRetailClassForTests ? RetailClassForTests : OwnRetailClass();
+	// here reads the classname. (The test-only latch that stood the controller line on a bare
+	// Troika NPC went with fold A2.)
+	return OwnRetailClass();
 }
 
 const FElysiumNpcClass* FElysiumNpcBase::OwnRetailClass() const

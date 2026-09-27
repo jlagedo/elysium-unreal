@@ -11,7 +11,6 @@ virtual int32 TranslateScheduleRetail(int32 ScheduleNumber);
 /** `CAI_BaseNPCTroika::TranslateSchedule` (`0x102b12f0`), the body every species body calls
  *  directly on a miss. */
 int32 TroikaTranslateScheduleRetail(int32 ScheduleNumber);
-int32 FrenzyShadowTranslateSchedule(int32 Id);   // `0x10375f20`, the controller line's (step 7)
 int32 LastTranslateScheduleRetail = 0;
 
 /** `FUN_102b11c0`, the frenzied pre-table. Answers 0 for an id it does not name. */

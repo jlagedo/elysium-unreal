@@ -203,7 +203,10 @@ public:
 	// The cutscene stand-in created by events_player. It is one real runtime entity per map epoch,
 	// not a latch: scenes, I/O and scripts resolve it through !playercontroller, and removal transfers
 	// its final embodied state back to the player before killing the stand-in.
-	FElysiumEntityHandle CreatePlayerControllerEntity();
+	// `Classname` is `GetControllerNPC`'s (`0x10161a70`) argument: `events_player.CreateControllerNPC`
+	// asks for `npc_VPlayerController`; retail's frenzy (`0x10161fc0`) and wolf-form paths ask for
+	// `npc_VFrenzyShadow` / `npc_VWolfMorph` and have no port caller yet.
+	FElysiumEntityHandle CreatePlayerControllerEntity(const TCHAR* Classname = TEXT("npc_VPlayerController"));
 	bool RemovePlayerControllerEntity();
 	FElysiumEntity* FindPlayerController() const;
 	FElysiumEntityHandle PlayerControllerHandle() const { return PlayerControllerEntity; }

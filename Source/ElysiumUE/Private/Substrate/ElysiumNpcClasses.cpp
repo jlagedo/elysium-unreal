@@ -28,6 +28,7 @@
 #include "Substrate/ElysiumNpcChangBrosClaw.h"
 #include "Substrate/ElysiumNpcCop.h"
 #include "Substrate/ElysiumNpcDog.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
 #include "Substrate/ElysiumNpcGuard1.h"
@@ -44,6 +45,7 @@
 #include "Substrate/ElysiumNpcPayphone.h"
 #include "Substrate/ElysiumNpcPedestrian.h"
 #include "Substrate/ElysiumNpcPlaceholder.h"
+#include "Substrate/ElysiumNpcPlayerController.h"
 #include "Substrate/ElysiumNpcProneDialog.h"
 #include "Substrate/ElysiumNpcRat.h"
 #include "Substrate/ElysiumNpcSabbatGunman.h"
@@ -57,6 +59,7 @@
 #include "Substrate/ElysiumNpcVampire.h"
 #include "Substrate/ElysiumNpcVampireBoss.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcWolfMorph.h"
 #include "Substrate/ElysiumNpcYukie.h"
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
@@ -84,7 +87,6 @@ bool ElysiumNpcTestHooks::ApplyResolvedTemplate(FElysiumEntity& Entity,
 
 // --- Registration -----------------------------------------------------------------------------
 
-static TUniquePtr<FElysiumEntity> MakeController(){ return MakeUnique<FElysiumPlayerControllerNpc>(); }
 static TUniquePtr<FElysiumEntity> MakeNpcMaker()  { return MakeUnique<FElysiumNpcMaker>(); }
 static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FElysiumInterestingPlace>(); }
 static TUniquePtr<FElysiumEntity> MakeHint()      { return MakeUnique<FElysiumHint>(); }
@@ -389,6 +391,7 @@ static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 	{ TEXT("CNPC_VChangBrosClaw"), TEXT("CNPC_VChangBros") },
 	{ TEXT("CNPC_VCop"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VDog"), TEXT("CNPC_VAnimal") },
+	{ TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController") },
 	{ TEXT("CNPC_VGargoyle"), TEXT("CNPC_VVampire") },
 	{ TEXT("CNPC_VGhoulCroucher"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VGuard1"), TEXT("CNPC_VHuman") },
@@ -404,6 +407,7 @@ static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 	{ TEXT("CNPC_VNewscaster"), TEXT("CAI_BaseNPCTroika") },
 	{ TEXT("CNPC_VPedestrian"), TEXT("CNPC_VHuman") },
 	{ TEXT("CNPC_VPlaceholder"), TEXT("CAI_BaseNPCTroika") },
+	{ TEXT("CNPC_VPlayerController"), TEXT("CNPC_VVampire") },
 	{ TEXT("CNPC_VRat"), TEXT("CNPC_VScurrying") },
 	{ TEXT("CNPC_VSabbatGunman"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VSabbatLeader"), TEXT("CNPC_VVampireBoss") },
@@ -416,6 +420,7 @@ static const FElysiumNpcRetailClassRow GNpcRetailClasses[] =
 	{ TEXT("CNPC_VVampire"), TEXT("CNPC_VHuman") },
 	{ TEXT("CNPC_VVampireBoss"), TEXT("CNPC_VVampire") },
 	{ TEXT("CNPC_VWerewolf"), TEXT("CNPC_VBaseBoss") },
+	{ TEXT("CNPC_VWolfMorph"), TEXT("CNPC_VPlayerController") },
 	{ TEXT("CNPC_VYukie"), TEXT("CNPC_VHumanCombatant") },
 	{ TEXT("CNPC_VZombie"), TEXT("CNPC_VAnimal") },
 	{ TEXT("CPayphone"), TEXT("CAI_BaseNPCTroika") },
@@ -446,6 +451,7 @@ static const FElysiumNpcClassnameRow GNpcClassnames[] =
 	{ TEXT("npc_VCop"), TEXT("CNPC_VCop"), &MakeNpcOf<FElysiumNpcCop> },
 	{ TEXT("npc_VDialogPedestrian"), TEXT("CNPC_VPedestrian"), &MakeNpcOf<FElysiumNpcPedestrian> },
 	{ TEXT("npc_VDog"), TEXT("CNPC_VDog"), &MakeNpcOf<FElysiumNpcDog> },
+	{ TEXT("npc_VFrenzyShadow"), TEXT("CNPC_VFrenzyShadow"), &MakeNpcOf<FElysiumNpcFrenzyShadow> },
 	{ TEXT("npc_VGargoyle"), TEXT("CNPC_VGargoyle"), &MakeNpcOf<FElysiumNpcGargoyle> },
 	{ TEXT("npc_VGhoulCroucher"), TEXT("CNPC_VGhoulCroucher"), &MakeNpcOf<FElysiumNpcGhoulCroucher> },
 	{ TEXT("npc_VGuard1"), TEXT("CNPC_VGuard1"), &MakeNpcOf<FElysiumNpcGuard1> },
@@ -465,6 +471,10 @@ static const FElysiumNpcClassnameRow GNpcClassnames[] =
 	{ TEXT("npc_VNewscaster"), TEXT("CNPC_VNewscaster"), &MakeNpcOf<FElysiumNpcNewscaster> },
 	{ TEXT("npc_VPedestrian"), TEXT("CNPC_VPedestrian"), &MakeNpcOf<FElysiumNpcPedestrian> },
 	{ TEXT("npc_VPlaceholder"), TEXT("CNPC_VPlaceholder"), &MakeNpcOf<FElysiumNpcPlaceholder> },
+	// The player's scene stand-in: `events_player.CreateControllerNPC` builds it through this factory
+	// (`FElysiumEntityWorld::CreatePlayerControllerEntity`, retail `GetControllerNPC` `0x10161a70`).
+	{ TEXT("npc_VPlayerController"), TEXT("CNPC_VPlayerController"),
+		&MakeNpcOf<FElysiumNpcPlayerController> },
 	{ TEXT("npc_VProneDialog"), TEXT("CNPC_ProneDialog"), &MakeNpcOf<FElysiumNpcProneDialog> },
 	{ TEXT("npc_VRat"), TEXT("CNPC_VRat"), &MakeNpcOf<FElysiumNpcRat> },
 	{ TEXT("npc_VSabbatGunman"), TEXT("CNPC_VSabbatGunman"), &MakeNpcOf<FElysiumNpcSabbatGunman> },
@@ -480,6 +490,7 @@ static const FElysiumNpcClassnameRow GNpcClassnames[] =
 	{ TEXT("npc_VVampire"), TEXT("CNPC_VVampire"), &MakeNpcOf<FElysiumNpcVampire> },
 	{ TEXT("npc_VVampireBoss"), TEXT("CNPC_VVampireBoss"), &MakeNpcOf<FElysiumNpcVampireBoss> },
 	{ TEXT("npc_VWerewolf"), TEXT("CNPC_VWerewolf"), &MakeNpcOf<FElysiumNpcWerewolf> },
+	{ TEXT("npc_VWolfMorph"), TEXT("CNPC_VWolfMorph"), &MakeNpcOf<FElysiumNpcWolfMorph> },
 	{ TEXT("npc_VYukie"), TEXT("CNPC_VYukie"), &MakeNpcOf<FElysiumNpcYukie> },
 	{ TEXT("npc_VZombie"), TEXT("CNPC_VZombie"), &MakeNpcOf<FElysiumNpcZombie> },
 };
@@ -519,10 +530,6 @@ struct FElysiumNpcRegistrar
 		{
 			Reg.Register(FName(Row.Classname), FName(Row.RetailClass), Row.Factory);
 		}
-
-		// Created only at runtime by events_player.CreateControllerNPC. It intentionally does not
-		// receive FElysiumNpc's dialogue surface or any AI behavior.
-		Reg.Register(TEXT("npc_VPlayerController"), ElysiumCombatCharacterClassName(), &MakeController);
 
 		static const TCHAR* const MakerClasses[] = { TEXT("npc_maker"), TEXT("npc_maker_fleshpile") };
 		for (const TCHAR* Name : MakerClasses)

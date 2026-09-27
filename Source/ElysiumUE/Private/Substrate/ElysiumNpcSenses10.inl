@@ -28,8 +28,8 @@
 //     `cand` for every combat character and null for everything else.** Every `+0x9c` test in this
 //     family therefore reads "is this a combat character", and every pointer compare against a
 //     `+0x9c` (`CNPC_VZombie::FVisible`, `CNPC_VFrenzyShadow::BestEnemy`) is a compare against the
-//     entity itself. This is what makes `FrenzyShadowBestEnemy` answer an entity rather than a
-//     subobject, and it is why the port can use `FElysiumEntity::AsCombatCharacter()` for both.
+//     entity itself. This is what makes `FElysiumNpcFrenzyShadow::BestEnemy` answer an entity
+//     rather than a subobject, and it is why the port can use `FElysiumEntity::AsCombatCharacter()` for both.
 //   * **`+0x6081` is `m_bSeenInOuterBand` and its ONE writer is slot 594.** The shape map
 //     (`ElysiumNpcKernelShapeMap.cpp`) binds it to `FElysiumNpcMemory::bPlayerInOuterBand`. Slot 594
 //     clears it on entry and sets it when the target is beyond `_DAT_10457f54` (**0.7**) of the
@@ -84,22 +84,9 @@ bool BaseEntityFVisible(const FElysiumEntity& Target, int32 Mask) const;
 
 static void ResetSpeciesSuspectGlobals();
 
-// --- Slot 478 `BestEnemy`: the arbitration words and the one species arm -------------------------
-
-/** `CNPC_VFrenzyShadow::BestEnemy` (`0x103766d0`), slot 478's one species arm: a sticky arm in front
- *  and then a SCORE-based rescan, where the base body is a lexicographic key walk. */
-FElysiumEntity* FrenzyShadowBestEnemy();
-
-/** Slot 478 on the Troika line: the `CNPC_VFrenzyShadow#478` census arm, then the base body. A
- *  transitional override (story 5 step 5): the species arm has no class until the controller fold
- *  (step 7), and a base body does not route to Troika code. */
-FElysiumEntity* BestEnemy() override;
-
-/** `CNPC_VFrenzyShadow::m_iHostileEnemyCount` (`+0x6664`) and `m_bFailedGrapple` (`+0x6668`), the
- *  two words its slot-478 body owns. No port system writes either yet; they are declared here
- *  because this body IS their retail writer. */
-int32 FrenzyShadowHostileEnemyCount = 0;   // +0x6664
-bool bFrenzyShadowFailedGrapple = false;   // +0x6668
+// Slot 478 `BestEnemy`: the Troika line runs `CAI_BaseNPC`'s body (`FElysiumNpcBase::BestEnemy`);
+// its one species arm, `CNPC_VFrenzyShadow#478` (`0x103766d0`), is `FElysiumNpcFrenzyShadow`'s
+// override, with the two words it owns (fold A2).
 
 // --- Slot 574 `GetShootEnemyDir` and the aim point behind it -------------------------------------
 

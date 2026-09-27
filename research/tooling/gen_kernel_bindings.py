@@ -123,12 +123,12 @@ BINDING_CLASSES = (
 # and descendants inherit it through the descriptor chain -- a sibling never sees it.
 SPECIES_TABLES = (
     "CNPC_VAndreiBlood", "CNPC_VAnimal", "CNPC_VAsianVampire", "CNPC_VBach",
-    "CNPC_VCameraSecurity", "CNPC_VChangBros", "CNPC_VCop", "CNPC_VGargoyle",
+    "CNPC_VCameraSecurity", "CNPC_VChangBros", "CNPC_VCop", "CNPC_VFrenzyShadow", "CNPC_VGargoyle",
     "CNPC_VGhoulCroucher", "CNPC_VGuard1", "CNPC_VHengeyokai", "CNPC_VHunter", "CNPC_VLasombra",
     "CNPC_VManBat", "CNPC_VMingXiao", "CNPC_VMingXiaoTentacle", "CNPC_VPedestrian",
     "CNPC_VSabbatLeader", "CNPC_VScurrying", "CNPC_VSheriffMan", "CNPC_VTaxiDriver",
     "CNPC_VTzimisce", "CNPC_VTzimisceHeadClaw", "CNPC_VTzimisceRunner", "CNPC_VVampireBoss",
-    "CNPC_VWerewolf", "CNPC_VZombie",
+    "CNPC_VWerewolf", "CNPC_VWolfMorph", "CNPC_VZombie",
 )
 
 

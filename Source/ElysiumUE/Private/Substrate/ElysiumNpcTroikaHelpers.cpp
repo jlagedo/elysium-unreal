@@ -337,10 +337,9 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 
 bool FElysiumNpc::Slot599(int32)
 {
-	// Four classes replace this slot outright — `CNPC_VGargoyle` `0x10379ef0`,
+	// Five classes replace this slot outright on their C++ classes — `CNPC_VGargoyle` `0x10379ef0`,
 	// `CNPC_VTzimisceHeadClaw` `0x103c19e0`, `CNPC_VTzimisceRunner` `0x103c3960` and `CNPC_VYukie`
-	// on their C++ classes (story 5 step 3); `CNPC_VFrenzyShadow` `0x10376b70` stays a census arm
-	// here until the controller fold (step 7).
+	// (story 5 step 3), and `CNPC_VFrenzyShadow` `0x10376b70` (fold A2).
 	//
 	// The argument: `signatures.md` types slot 599 `bool vfunc599(int)` because THIS body reads it
 	// with no instruction, but the runner's copy casts it to a `CBaseEntity*` and caches
@@ -350,12 +349,6 @@ bool FElysiumNpc::Slot599(int32)
 	// retail's argument and is what the species arm is handed. `+0x29c` is slot **167**, the CONST
 	// overload (`0x101a67e0`, a plain `m_hEnemy` resolve), not the Troika line's mutable 168 with
 	// its last-enemy fallback — so the const one is the one called here.
-	bool SpeciesAnswer = false;
-	if (SpeciesSlot599(static_cast<const FElysiumNpc*>(this)->GetEnemy(), SpeciesAnswer))
-	{
-		return SpeciesAnswer;
-	}
-
 	// `0x102b5650`. The `CNPC_VAndreiBlood`-line copy `0x10385ab0` is BYTE-IDENTICAL (family Bosses
 	// read it and this family re-read it), so `FElysiumNpcHuman::Slot599` calls this body. The
 	// argument is read by nothing in the body.
@@ -427,16 +420,10 @@ bool FElysiumNpc::Slot599(int32)
 
 bool FElysiumNpc::Slot600(FElysiumEntity* Enemy)
 {
-	// The vtable dispatch first: five classes replace this slot (family **Species**' `0x10376ba0`,
+	// Five classes replace this slot on their C++ classes (`CNPC_VFrenzyShadow` `0x10376ba0`,
 	// `0x10379f20`, `0x103c1a60`, `0x103c39e0` and `CNPC_VYukie`'s `0x103dd900`, which is not a
-	// melee-entry body at all). The argument is retail's own and is passed straight through — the
-	// runner's copy caches `m_hPotentialEnemy` from it.
-	bool SpeciesAnswer = false;
-	if (SpeciesSlot600(Enemy, SpeciesAnswer))
-	{
-		return SpeciesAnswer;
-	}
-
+	// melee-entry body at all). The argument is retail's own — the runner's copy caches
+	// `m_hPotentialEnemy` from it.
 	// `0x102b57c0`. `0x10385c30` is BYTE-IDENTICAL, verified against the decompiled C of both, so
 	// one arm carries both lines. The argument is read by nothing in the body.
 	//

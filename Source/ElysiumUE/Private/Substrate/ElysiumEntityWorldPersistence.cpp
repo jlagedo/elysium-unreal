@@ -291,7 +291,9 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	for (const TUniquePtr<FElysiumEntity>& Candidate : EntityList)
 	{
 		if (Candidate && !Candidate->IsDead() && Candidate->Def
-			&& Candidate->Def->Classname.Equals(TEXT("npc_VPlayerController"), ESearchCase::IgnoreCase))
+			&& (Candidate->Def->Classname.Equals(TEXT("npc_VPlayerController"), ESearchCase::IgnoreCase)
+				|| Candidate->Def->Classname.Equals(TEXT("npc_VFrenzyShadow"), ESearchCase::IgnoreCase)
+				|| Candidate->Def->Classname.Equals(TEXT("npc_VWolfMorph"), ESearchCase::IgnoreCase)))
 		{
 			PlayerControllerEntity = Candidate->Handle;
 			break;

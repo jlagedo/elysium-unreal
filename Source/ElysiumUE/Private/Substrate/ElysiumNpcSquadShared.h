@@ -14,10 +14,9 @@
 
 namespace NpcKernelSquadShared
 {
-	// The slot-546 rows no C++ class carries yet: the Troika line, which carries no id space at
-	// all, and the controller line (`CNPC_VFrenzyShadow`, `CNPC_VPlayerController` sharing
-	// `CNPC_VVampire`'s body and space, `CNPC_VWolfMorph`), deferred to the controller fold (step 7).
-	// Every introduced species holds its own row in its `SquadSlotName` override (story 5 step 4).
+	// The slot-546 row no C++ class carries: the Troika line, which carries no id space at all.
+	// Every species holds its own row in its `SquadSlotName` override (story 5 step 4; the
+	// controller line since fold A2, `CNPC_VPlayerController` inheriting `CNPC_VVampire`'s).
 	// Columns: the retail class, the body that fills slot 546 for it (checkable against
 	// `docs/vtmb/npc-kernel/slots.md`) and its own `CAI_ClassScheduleIdSpace`. The three range
 	// fields take the struct's defaults, which ARE the recovered state every one of the 56 spaces
@@ -25,8 +24,5 @@ namespace NpcKernelSquadShared
 	inline constexpr FElysiumNpcBase::FSquadSlotSpecies GNpcKernelSquadSlotSpecies[] = {
 		// The Troika line itself: `CAI_BaseNPC::SquadSlotName` looks the id up directly.
 		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x101a6c00"), TEXT("") },
-		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x10375440"), TEXT("0x1093ae28") },
-		{ TEXT("CNPC_VPlayerController"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") },
-		{ TEXT("CNPC_VWolfMorph"), TEXT("0x103dc950"), TEXT("0x1094028c") },
 	};
 }

@@ -100,17 +100,9 @@ bool SceneEntityForcesCutsceneLod(const void* SceneEntity) const;
 
 // --- The rows that fill no slot -----------------------------------------------------------------
 
-// `CNPC_VPlayerController::AddExtraAnimationModels` `0x103a49c0` — slot 245's species branch. The
-// slot itself is `CBaseAnimating`'s (`0x1008e0a0`) and stays the generator's stub; this is the
-// override `CNPC_VFrenzyShadow`, `CNPC_VPlayerController` and `CNPC_VWolfMorph` share.
-void AddExtraAnimationModelsPlayerController(FElysiumEntity* ExtraModel, const TCHAR* AttachmentA,
-	const TCHAR* AttachmentB, int32 FlagsA, int32 FlagsB);
-
-// `CNPC_VPlayerController::RemoveExtraAnimationModels` `0x103a4a60` — slot 246's species branch.
-void RemoveExtraAnimationModelsPlayerController();
-
 // `CBaseAnimating::AddExtraAnimationModels` / `RemoveExtraAnimationModels` (`0x1008e0a0` /
-// `0x1008e310`), the base halves the two bodies above call first. **SEAM**: this runtime composes
+// `0x1008e310`), the base halves `CNPC_VPlayerController`'s slot 245/246 bodies (`0x103a49c0` /
+// `0x103a4a60`, `FElysiumNpcPlayerController`, fold A2) call first. **SEAM**: this runtime composes
 // extra models through the character catalog rather than through a per-entity list on the NPC, so
 // the request is recorded and the catalog is not touched. Read by the test and by nothing else.
 struct FExtraAnimationModelRequest
@@ -127,7 +119,8 @@ struct FExtraAnimationModelRequest
 TArray<FExtraAnimationModelRequest> ExtraAnimationModels;
 
 // Slot 97 `GetOwnerEntity()` and that entity's `+0xa8` (`m_pPlayer`), which is the forwarding gate
-// both bodies above test. Not a seam: this runtime's player entity is the one the world names.
+// the controller line's bodies test (245, 246, 300, 442). Not a seam: this runtime's player entity
+// is the one the world names.
 bool OwnerIsThePlayer() const;
 
 // `0x102b8a10` — gate `COND_ENEMY_DEAD` (0x58), then answer retail schedule number 8 only when the

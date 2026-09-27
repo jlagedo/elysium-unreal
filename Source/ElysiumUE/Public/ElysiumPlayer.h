@@ -2253,14 +2253,20 @@ public:
 
 	// `0x10175180` — blocks while the entity at `player+0x1db0` is in state 3. That word is
 	// `m_hControllerNPC` (`vtmb_fields CBasePlayer`), the `npc_VPlayerController` driving this body,
-	// NOT a dialogue partner; the predicate is ported as `FElysiumNpc::ControllerNpcBusy`
-	// (`Substrate/ElysiumNpcDialogueBodies.cpp`), over the `ControllerNpc` handle family EntityChain
-	// declared on `FElysiumNpc`.
+	// NOT a dialogue partner. `ControllerNpcBusy` is the predicate; this is its dialogue reader.
+	bool DialogPartnerBlocks() const { return ControllerNpcBusy(); }
+
+	// `0x10175180` over THIS player's `m_hControllerNPC` (`+0x1db0`): resolve the stand-in and ask its
+	// slot 138 `Classify()` (`vt+0x228`) for 3 — the class `CNPC_VFrenzyShadow::Classify`
+	// (`0x10375d70`) answers, so "busy" is "a frenzy shadow is driving this body". Readers: the
+	// dialogue refusal (`0x10178170`), `CAI_BaseNPCTroika::CanTalk` gate 10 (`0x102c21c0`) and the
+	// stealth-kill busy test (`0x101681a0`).
 	//
-	// SEAM, and a SHAPE gap rather than a missing rule: retail's `+0x1db0` is a `CBasePlayer` word
-	// and this port carries it on the NPC, so the player-side predicate has no route to it. It
-	// answers false — the not-busy value — until the word moves or a back-reference exists.
-	bool DialogPartnerBlocks() const { return false; }
+	// `m_hControllerNPC` (`CBasePlayer +0x1db0`) has TWO homes in this port until story 5 commit B
+	// unifies them: the world's `PlayerControllerHandle()` — the live one, written by
+	// `CreatePlayerControllerEntity` (retail `GetControllerNPC` `0x10161a70`) — and the NPC-side
+	// `FElysiumNpc::ControllerNpc`, written only by the unwired `FElysiumNpc::GetControllerNpc` path.
+	bool ControllerNpcBusy() const;
 
 	// The whole predicate, as one readable reason or nullptr when the player may talk. The string
 	// is the refusal's own name and is what the M-REFUSE notification and the logs quote.

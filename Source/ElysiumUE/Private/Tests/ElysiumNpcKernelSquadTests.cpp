@@ -15,6 +15,7 @@
 #include "Substrate/ElysiumNpcKernelClassLookup.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcDeadClasses.h"
+#include "Substrate/ElysiumNpcPlayerController.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29c-1, family **Squad**. The assertions come from the decompiled C of the 74 rows, not from
@@ -38,10 +39,9 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 {
 	int32 Count = 0;
 	const FElysiumNpcBase::FSquadSlotSpecies* Rows = FElysiumNpc::SquadSlotSpeciesRows(Count);
-	// Every introduced species holds its own id-space row in its override (story 5 step 4); the
-	// table keeps the Troika line and the three controller-line classes deferred to step 7.
-	TestEqual(TEXT("the table carries the Troika line plus the three deferred controller classes"),
-		Count, 4);
+	// Every species holds its own id-space row in its override (story 5 step 4; the controller line
+	// since fold A2); the table keeps the Troika line alone.
+	TestEqual(TEXT("the table carries the Troika line alone"), Count, 1);
 
 	// Every table row, by name: the class resolves in the census, the census says the same body
 	// fills slot 546 for it, and the recovered id space translates NOTHING — the local range is the
@@ -107,12 +107,18 @@ bool FElysiumNpcKernelSquadSlotNameTableTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("the census records 44 slot-546 overrides on classes with an instance"),
 		CensusOverrides, 44);
-	TestEqual(TEXT("41 of them are introduced species that carry their own row"), Standing.Num(), 41);
+	TestEqual(TEXT("all 44 are species that carry their own row (the controller line since fold A2)"),
+		Standing.Num(), 44);
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
 	for (int32 Index = 0; Index < Standing.Num(); ++Index)
 	{
 		const FElysiumNpcClassSlot& Override = *Standing[Index];
 		FElysiumNpc* Npc = Fixture.Npc(*FString::Printf(TEXT("s%d"), Index));
+		if (Npc == nullptr)
+		{
+			// A controller-line body renames itself `playercontroller` (`0x103a4510`).
+			Npc = Fixture.NpcOfClass(Override.Class);
+		}
 		if (!TestNotNull(*FString::Printf(TEXT("%s stood through its factory"), Override.Class), Npc))
 		{
 			continue;
@@ -490,8 +496,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSquadRelationsTest,
 	"Elysium.Substrate.NpcKernelSquad.Relations", GElysiumNpcKernelSquadFlags)
 bool FElysiumNpcKernelSquadRelationsTest::RunTest(const FString&)
 {
-	// The three classes `0x103a48b0` fills slot 404 for. The body below runs on an ordinary leaf:
-	// deferred, the three are story 5 step 7's controller-line folds and have no factory until then.
+	// The three classes `0x103a48b0` fills slot 404 for (story 5 fold A2: the controller's override,
+	// inherited by both children). The body runs on a real controller below.
 	for (const TCHAR* Name : { TEXT("CNPC_VFrenzyShadow"), TEXT("CNPC_VPlayerController"),
 			TEXT("CNPC_VWolfMorph") })
 	{
@@ -506,12 +512,14 @@ bool FElysiumNpcKernelSquadRelationsTest::RunTest(const FString&)
 	}
 
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_squad_relations"), 6040);
-	Builder.AddNpc(TEXT("shadow"));
+	Builder.AddNpcOfClass(TEXT("shadow"), FVector::ZeroVector, TEXT("CNPC_VPlayerController"));
 	Builder.AddNpc(TEXT("stranger"), FVector(300.0, 0.0, 0.0));
 	Builder.AddNpc(TEXT("ghost"), FVector(600.0, 0.0, 0.0));
 	Builder.AddCounter(TEXT("crate"));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Npc = Fixture.Npc(TEXT("shadow"));
+	// The controller's `Spawn` (`0x103a4510`) renames it `playercontroller`: found by its class.
+	FElysiumNpcPlayerController* Npc = ElysiumTestAsSpecies<FElysiumNpcPlayerController>(
+		Fixture.NpcOfClass(TEXT("CNPC_VPlayerController")));
 	FElysiumNpc* Stranger = Fixture.Npc(TEXT("stranger"));
 	FElysiumNpc* Ghost = Fixture.Npc(TEXT("ghost"));
 	FElysiumEntity* Crate = Fixture.World.FindByName(TEXT("crate"));
@@ -529,19 +537,19 @@ bool FElysiumNpcKernelSquadRelationsTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Npc, Stranger, Ghost });
 
 	// `0x103a48b0`, its four answers in retail's order.
-	TestEqual(TEXT("a null target is D_ER (0)"), Npc->SpeciesIRelationType(nullptr), 0);
+	// Through slot 404, VIRTUAL, on the controller's own class.
+	FElysiumNpc* Slot = Npc;
+	TestEqual(TEXT("a null target is D_ER (0)"), Slot->IRelationType(nullptr), 0);
 	Npc->FriendPlayer = Player->Handle;
-	TestEqual(TEXT("m_hFriendPlayer is D_LI (3)"), Npc->SpeciesIRelationType(Player), 3);
-	TestEqual(TEXT("any other combat character is D_HT (1)"),
-		Npc->SpeciesIRelationType(Stranger), 1);
+	TestEqual(TEXT("m_hFriendPlayer is D_LI (3)"), Slot->IRelationType(Player), 3);
+	TestEqual(TEXT("any other combat character is D_HT (1)"), Slot->IRelationType(Stranger), 1);
 	Ghost->ScriptHide();
-	TestEqual(TEXT("a script-hidden one falls through to D_NU (4)"),
-		Npc->SpeciesIRelationType(Ghost), 4);
+	TestEqual(TEXT("a script-hidden one falls through to D_NU (4)"), Slot->IRelationType(Ghost), 4);
 	TestEqual(TEXT("and so does an entity that is no combat character at all"),
-		Npc->SpeciesIRelationType(Crate), 4);
+		Npc->PlayerControllerIRelationType(Crate), 4);
 	Npc->FriendPlayer = FElysiumEntityHandle::Invalid();
 	TestEqual(TEXT("with no friend player the player is D_HT like anyone else"),
-		Npc->SpeciesIRelationType(Player), 1);
+		Slot->IRelationType(Player), 1);
 	return true;
 }
 
@@ -583,13 +591,15 @@ bool FElysiumNpcKernelSquadAlertAllyTest::RunTest(const FString&)
 	TestFalse(TEXT("an attacker that is no combat character records nothing"),
 		Ally->Senses.Memory.DetectedAttackAttacker.IsSet());
 
-	// Gate 4: `IRelationType(attacker) != D_LI`. The friend player is the one D_LI answer this
-	// species body gives, so pointing `m_hFriendPlayer` at the attacker refuses the notice.
-	Ally->FriendPlayer = Attacker->Handle;
+	// Gate 4: `IRelationType(attacker) != D_LI` — slot 404, VIRTUAL: the ALLY's own relation (story 5
+	// fold A2 corrected the port's call into the controller line's body here). An ally that likes
+	// the attacker refuses the notice.
+	Ally->Relationships.SetEntity(Attacker->Handle, EElysiumRelationship::Like, 99);
+	TestEqual(TEXT("the ally's own table likes the attacker"), Ally->IRelationType(Attacker), 3);
 	Ally->AlertNearbyAlly(Attacker);
 	TestFalse(TEXT("a D_LI attacker is not reported"),
 		Ally->Senses.Memory.DetectedAttackAttacker.IsSet());
-	Ally->FriendPlayer = FElysiumEntityHandle::Invalid();
+	Ally->Relationships.SetEntity(Attacker->Handle, EElysiumRelationship::Hate, 99);
 
 	// `m_bIgnoreDetectedAttack` (`+0x65f5`), the keyfield `0x102bf560` tests before it writes.
 	Ally->bIgnoreDetectedAttack = true;

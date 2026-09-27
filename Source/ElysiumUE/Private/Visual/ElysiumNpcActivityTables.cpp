@@ -391,12 +391,6 @@ namespace
 
 	constexpr const TCHAR* CNPC_VBach_Classnames[] = { TEXT("npc_VBach") };
 
-	constexpr const TCHAR* CNPC_VBaseBoss_Classnames[] =
-	{
-		TEXT("npc_VMingXiao"), TEXT("npc_VTzimisce"), TEXT("npc_VTzimisceHeadClaw"),
-		TEXT("npc_VTzimisceRunner")
-	};
-
 	constexpr const TCHAR* CNPC_VBatSwarm_Classnames[] = { TEXT("npc_VBatSwarm") };
 
 	constexpr const TCHAR* CNPC_VBrujah_Classnames[] = { TEXT("npc_VBrujah") };
@@ -405,10 +399,7 @@ namespace
 
 	constexpr const TCHAR* CNPC_VCameraSecurity_Classnames[] = { TEXT("npc_VCameraSecurity") };
 
-	constexpr const TCHAR* CNPC_VChangBros_Classnames[] =
-	{
-		TEXT("npc_VChangBros"), TEXT("npc_VChangBrosBlade"), TEXT("npc_VChangBrosClaw")
-	};
+	constexpr const TCHAR* CNPC_VChangBros_Classnames[] = { TEXT("npc_VChangBros") };
 
 	constexpr const TCHAR* CNPC_VChangBrosBlade_Classnames[] = { TEXT("npc_VChangBrosBlade") };
 
@@ -460,10 +451,7 @@ namespace
 		TEXT("npc_VDialogPedestrian"), TEXT("npc_VPedestrian")
 	};
 
-	constexpr const TCHAR* CNPC_VPlayerController_Classnames[] =
-	{
-		TEXT("npc_VFrenzyShadow"), TEXT("npc_VPlayerController"), TEXT("npc_VWolfMorph")
-	};
+	constexpr const TCHAR* CNPC_VPlayerController_Classnames[] = { TEXT("npc_VPlayerController") };
 
 	constexpr const TCHAR* CNPC_VRat_Classnames[] = { TEXT("npc_VRat") };
 
@@ -493,12 +481,7 @@ namespace
 
 	constexpr const TCHAR* CNPC_VVampire_Classnames[] = { TEXT("npc_VVampire") };
 
-	constexpr const TCHAR* CNPC_VVampireBoss_Classnames[] =
-	{
-		TEXT("npc_VAndreiBlood"), TEXT("npc_VAsianVampire"), TEXT("npc_VChangBros"),
-		TEXT("npc_VChangBrosBlade"), TEXT("npc_VChangBrosClaw"), TEXT("npc_VSabbatLeader"),
-		TEXT("npc_VVampireBoss")
-	};
+	constexpr const TCHAR* CNPC_VVampireBoss_Classnames[] = { TEXT("npc_VVampireBoss") };
 
 	constexpr const TCHAR* CNPC_VVentrue_Classnames[] = { TEXT("npc_VVentrue") };
 
@@ -579,7 +562,7 @@ namespace
 			CNPC_VBach_Classnames, 1,
 			2, 12, 16, 18, 6, 35 },
 		{ TEXT("CNPC_VBaseBoss"), TEXT("CAI_BaseNPCTroika"),
-			CNPC_VBaseBoss_Classnames, 4,
+			nullptr, 0,
 			1, 11, 16, 18, 1, 30 },
 		{ TEXT("CNPC_VBatSwarm"), TEXT("CNPC_VVampire"),
 			CNPC_VBatSwarm_Classnames, 1,
@@ -594,7 +577,7 @@ namespace
 			CNPC_VCameraSecurity_Classnames, 1,
 			3, 13, 16, 18, 1, 30 },
 		{ TEXT("CNPC_VChangBros"), TEXT("CNPC_VVampireBoss"),
-			CNPC_VChangBros_Classnames, 3,
+			CNPC_VChangBros_Classnames, 1,
 			2, 12, 16, 18, 7, 36 },
 		{ TEXT("CNPC_VChangBrosBlade"), TEXT("CNPC_VChangBros"),
 			CNPC_VChangBrosBlade_Classnames, 1,
@@ -672,7 +655,7 @@ namespace
 			nullptr, 0,
 			1, 11, 16, 18, 1, 30 },
 		{ TEXT("CNPC_VPlayerController"), TEXT("CNPC_VVampire"),
-			CNPC_VPlayerController_Classnames, 3,
+			CNPC_VPlayerController_Classnames, 1,
 			2, 12, 16, 18, 14, 41 },
 		{ TEXT("CNPC_VRat"), TEXT("CNPC_VScurrying"),
 			CNPC_VRat_Classnames, 1,
@@ -720,7 +703,7 @@ namespace
 			CNPC_VVampire_Classnames, 1,
 			2, 12, 16, 18, 14, 41 },
 		{ TEXT("CNPC_VVampireBoss"), TEXT("CNPC_VVampire"),
-			CNPC_VVampireBoss_Classnames, 7,
+			CNPC_VVampireBoss_Classnames, 1,
 			2, 12, 16, 18, 26, 50 },
 		{ TEXT("CNPC_VVentrue"), TEXT("CNPC_VVampire"),
 			CNPC_VVentrue_Classnames, 1,

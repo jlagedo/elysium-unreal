@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumReactions.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // Story 29c-1, family **Damage**. Every assertion below is read off the decompiled C — or, for
@@ -1388,63 +1389,41 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamageControllerLineTest,
 	"Elysium.Substrate.NpcKernelDamage.PlayerControllerLine", GDamageTestFlags)
 bool FElysiumNpcKernelDamageControllerLineTest::RunTest(const FString&)
 {
-	// Slot 300's table: three classes share `0x103a4950`, none of them spawnable, so all three are
-	// exercised by retail class name.
-	int32 Count = 0;
-	const FElysiumNpc::FTookLifeSpecies* Rows = FElysiumNpc::TookLifeSpeciesRows(Count);
-	TestEqual(TEXT("slot 300 has three species rows"), Count, 3);
-	TestEqual(TEXT("row 0 is CNPC_VFrenzyShadow"), FString(Rows[0].RetailClass),
-		FString(TEXT("CNPC_VFrenzyShadow")));
-	TestEqual(TEXT("row 1 is CNPC_VPlayerController"), FString(Rows[1].RetailClass),
-		FString(TEXT("CNPC_VPlayerController")));
-	TestEqual(TEXT("row 2 is CNPC_VWolfMorph"), FString(Rows[2].RetailClass),
-		FString(TEXT("CNPC_VWolfMorph")));
-	for (int32 i = 0; i < Count; ++i)
-	{
-		TestEqual(TEXT("all three are filled by 0x103a4950"), FString(Rows[i].Body),
-			FString(TEXT("0x103a4950")));
-		TestNotNull(TEXT("and each is reachable by retail class name"),
-			FElysiumNpc::TookLifeSpeciesOf(Rows[i].RetailClass));
-	}
-	TestNull(TEXT("an unrelated class has no row"),
-		FElysiumNpc::TookLifeSpeciesOf(TEXT("CNPC_VHumanCombatant")));
-
+	// Since story 5 fold A2 the four arms are their classes' overrides, and `+0x184` is slot 97
+	// `GetOwnerEntity`: the forwards reach the OWNER, the player. A real frenzy shadow, owned by the
+	// player as `GetControllerNPC` (`0x10161be1`) owns it.
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_controller"), 0x29c1d015);
-	Builder.AddNpc(TEXT("shadow"));
+	Builder.AddNpcOfClass(TEXT("shadow"), FVector::ZeroVector, TEXT("CNPC_VFrenzyShadow"));
 	Builder.AddNpc(TEXT("victim"), FVector(100.0 * DamageU, 0.0, 0.0));
 	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Shadow = Fixture.Npc(TEXT("shadow"));
+	FElysiumNpcFrenzyShadow* Shadow =
+		ElysiumTestAsSpecies<FElysiumNpcFrenzyShadow>(Fixture.NpcOfClass(TEXT("CNPC_VFrenzyShadow")));
 	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
+	FElysiumPlayer* Player = Fixture.Player();
 	FElysiumNpcWorldFixture::Quiet({ Shadow, Victim });
-	if (Shadow == nullptr || Victim == nullptr)
+	if (Shadow == nullptr || Victim == nullptr || Player == nullptr)
 	{
-		AddError(TEXT("fixture did not stand both NPCs"));
+		AddError(TEXT("fixture did not stand the shadow, the victim and the player"));
 		return false;
 	}
+	Shadow->SetOwnerEntity(Player->Handle);
 
-	// The controller-object seam answers null, which takes the guarded arm of all four bodies.
-	TestFalse(TEXT("the +0x184 controller-object seam answers nothing"),
-		Shadow->HasPlayerControllerObject());
-
-	// Both damage forwards ALWAYS answer 0, whatever the object does.
+	// Both damage forwards ALWAYS answer 0, whatever the owner does.
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
 	Info.Damage = 500.f;
-	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamageSpecies(&Info), 0);
-	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"),
-		Shadow->OnTakeDamage_AliveSpecies(&Info), 0);
+	TestEqual(TEXT("0x10376ae0 OnTakeDamage always answers 0"), Shadow->OnTakeDamage(&Info), 0);
+	TestEqual(TEXT("0x10376b10 OnTakeDamage_Alive always answers 0"), Shadow->OnTakeDamage_Alive(&Info), 0);
 
-	// `Event_Killed` is three bytes and does nothing at all.
-	Shadow->ControllerAiEvents.Reset();
-	Shadow->Event_KilledSpecies(&Info);
-	TestEqual(TEXT("Event_Killed writes nothing"), Shadow->ControllerAiEvents.Num(), 0);
+	// `Event_Killed` `0x10376b50` is three bytes and does nothing at all: the shadow stays alive.
+	Shadow->Event_Killed(&Info);
+	TestFalse(TEXT("Event_Killed leaves the shadow alive"), Shadow->bDead);
 
-	// `Event_TookLife` is guarded on the controller object, so it dispatches nothing here.
-	Shadow->Event_TookLifeSpecies(Victim);
-	TestEqual(TEXT("Event_TookLife dispatches nothing without the controller object"),
-		Shadow->ControllerAiEvents.Num(), 0);
-	// The literal it WOULD tag the event with is recovered and asserted by name.
-	TestEqual(TEXT("the retail source literal"), FString(FElysiumNpc::TookLifeEventSource()),
-		FString(TEXT("CNPC_VPlayerController::Event_TookLife")));
+	// `Event_TookLife` `0x103a4950` (RETAIL CORRECTION): the owner player's criminal level 4.
+	Player->Law.Criminal = 0;
+	Shadow->Event_TookLife(Victim, false, false);
+	TestEqual(TEXT("a kill the shadow makes is the player's crime (level 4)"), Player->Law.Criminal, 4);
+	TestEqual(TEXT("the retail reason literal"), FString(FElysiumNpcPlayerController::TookLifeReasonFormat()),
+		FString(TEXT("CNPC_VPlayerController::Event_TookLife %s")));
 	return true;
 }
 
@@ -1521,9 +1500,8 @@ bool FElysiumNpcKernelDamageSeamsTest::RunTest(const FString&)
 	TestEqual(TEXT("the first zombie gib cvar is unrecovered"), Zombie->ZombieGibAmmoTypeCvar(0), 0);
 	TestEqual(TEXT("and the second"), Zombie->ZombieGibAmmoTypeCvar(1), 0);
 
-	// The controller object and the AOE result code.
-	TestFalse(TEXT("the controller object is absent"), Npc->HasPlayerControllerObject());
-	TestEqual(TEXT("and the AOE trace-attack result code is the default arm"),
+	// The AOE result code.
+	TestEqual(TEXT("the AOE trace-attack result code is the default arm"),
 		Npc->AoeTraceAttackResultCode(Npc), 0);
 	return true;
 }

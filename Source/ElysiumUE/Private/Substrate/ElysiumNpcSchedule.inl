@@ -24,8 +24,8 @@
 // **NAMED `ClassScheduleIdSpace`, not `GetClassScheduleIdSpace`.** Slot 580's Troika-line body
 // (`0x101aa790`, which answers `&DAT_10924248`) is defined by family EntityChain in
 // `ElysiumNpcEntityChain.cpp` as `FElysiumNpc::GetClassScheduleIdSpace()`, and it routes into
-// the `ClassScheduleIdSpace()` chain walk below. The twelve SPECIES overrides of that slot land
-// here under their own name, exactly as family Squad's `SpeciesIRelationType` does for slot 404.
+// the `ClassScheduleIdSpace()` chain walk below. The SPECIES overrides of that slot are documented
+// here as a table (the live space is the corpus's, keyed on the C++ class).
 
 /** One row of retail's slot-580 species table: the class, the body that fills the slot for it, and
  *  the `CAI_ClassScheduleIdSpace` that body returns. The three range fields are `CAI_LocalIdSpace`

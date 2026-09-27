@@ -7,13 +7,13 @@
 // CAI_Hint 0x106099f0, CAI_InterestingPlaceConverstation 0x1060c2c0, CNPCMaker_Zombie 0x106253e8,
 // CNPC_VAndreiBlood 0x1062a230, CNPC_VAnimal 0x1062b528, CNPC_VAsianVampire 0x1062c498, CNPC_VBach
 // 0x1062d22c, CNPC_VCameraSecurity 0x1062f928, CNPC_VChangBros 0x1062fbc0, CNPC_VCop 0x10631a88,
-// CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0, CNPC_VGuard1 0x1063b590,
-// CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra 0x10640600, CNPC_VManBat
-// 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle 0x106474f0, CNPC_VPedestrian
-// 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying 0x1064f480, CNPC_VSheriffMan
-// 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130, CNPC_VTzimisceHeadClaw
-// 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418, CNPC_VWerewolf
-// 0x1065f4e0, CNPC_VZombie 0x10664090).
+// CNPC_VFrenzyShadow 0x10637aa8, CNPC_VGargoyle 0x1063949c, CNPC_VGhoulCroucher 0x1063a9f0,
+// CNPC_VGuard1 0x1063b590, CNPC_VHengeyokai 0x1063bdb0, CNPC_VHunter 0x1063fe80, CNPC_VLasombra
+// 0x10640600, CNPC_VManBat 0x10640d40, CNPC_VMingXiao 0x10642e88, CNPC_VMingXiaoTentacle
+// 0x106474f0, CNPC_VPedestrian 0x1064b0b0, CNPC_VSabbatLeader 0x1064c4a8, CNPC_VScurrying
+// 0x1064f480, CNPC_VSheriffMan 0x106504e8, CNPC_VTaxiDriver 0x10651ed8, CNPC_VTzimisce 0x10653130,
+// CNPC_VTzimisceHeadClaw 0x1065ca84, CNPC_VTzimisceRunner 0x1065d6ac, CNPC_VVampireBoss 0x1065e418,
+// CNPC_VWerewolf 0x1065f4e0, CNPC_VWolfMorph 0x10663b38, CNPC_VZombie 0x10664090).
 // The replay carries no module hash line, so the datamap addresses are the provenance this file
 // holds.
 
@@ -35,6 +35,7 @@
 #include "Substrate/ElysiumNpcCameraSecurity.h"
 #include "Substrate/ElysiumNpcChangBros.h"
 #include "Substrate/ElysiumNpcCop.h"
+#include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
 #include "Substrate/ElysiumNpcGuard1.h"
@@ -54,6 +55,7 @@
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
 #include "Substrate/ElysiumNpcVampireBoss.h"
 #include "Substrate/ElysiumNpcWerewolf.h"
+#include "Substrate/ElysiumNpcWolfMorph.h"
 #include "Substrate/ElysiumNpcZombie.h"
 
 #include <type_traits>
@@ -1532,6 +1534,19 @@ namespace ElysiumNpcKernelBindings
 		// map's ABSENT row says why)
 	}
 
+	void AddFrenzyShadowSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_iHostileEnemyCount"),
+			&FElysiumNpcFrenzyShadow::HostileEnemyCount, EElysiumField::Save);  // +0x6664 int
+		ElysiumAddClassField(D, TEXT("m_bFailedGrapple"), &FElysiumNpcFrenzyShadow::bFailedGrapple,
+			EElysiumField::Save);  // +0x6668 bool
+	}
+
 	void AddGargoyleSaveFields(FElysiumClassDesc& D)
 	{
 		// Retail's persistence, and only that: a `SAVE` row with no external name is
@@ -2112,6 +2127,19 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcWerewolf::WerewolfTimeTeleportedOut, EElysiumField::Save);  // +0x66f0 time
 	}
 
+	void AddWolfMorphSaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_bFirstThink"), &FElysiumNpcWolfMorph::bFirstThink,
+			EElysiumField::Save);  // +0x6664 bool
+		// NOT SAVED +0x6668 m_flNextFleeSoundTime (time) — no port member (the species shape map's
+		// ABSENT row says why)
+	}
+
 	void AddZombieFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
@@ -2179,6 +2207,11 @@ namespace ElysiumNpcKernelBindings
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VCop")) == 0)
 		{
 			AddCopSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VFrenzyShadow")) == 0)
+		{
+			AddFrenzyShadowSaveFields(D);
 			return true;
 		}
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VGargoyle")) == 0)
@@ -2277,6 +2310,11 @@ namespace ElysiumNpcKernelBindings
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VWerewolf")) == 0)
 		{
 			AddWerewolfSaveFields(D);
+			return true;
+		}
+		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VWolfMorph")) == 0)
+		{
+			AddWolfMorphSaveFields(D);
 			return true;
 		}
 		if (FCString::Strcmp(RetailClass, TEXT("CNPC_VZombie")) == 0)
@@ -2650,6 +2688,8 @@ namespace ElysiumNpcKernelBindings
 				return TConstArrayView<const TCHAR*>();
 			case EClass::Cop:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::FrenzyShadow:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::Gargoyle:
 				return MakeArrayView(GGargoyleOutputs);
 			case EClass::GhoulCroucher:
@@ -2688,6 +2728,8 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GVampireBossOutputs);
 			case EClass::Werewolf:
 				return MakeArrayView(GWerewolfOutputs);
+			case EClass::WolfMorph:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::Zombie:
 				return MakeArrayView(GZombieOutputs);
 			default:
@@ -2733,6 +2775,8 @@ namespace ElysiumNpcKernelBindings
 				return TConstArrayView<const TCHAR*>();
 			case EClass::Cop:
 				return TConstArrayView<const TCHAR*>();
+			case EClass::FrenzyShadow:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::Gargoyle:
 				return TConstArrayView<const TCHAR*>();
 			case EClass::GhoulCroucher:
@@ -2771,6 +2815,8 @@ namespace ElysiumNpcKernelBindings
 				return MakeArrayView(GVampireBossInputFuncs);
 			case EClass::Werewolf:
 				return MakeArrayView(GWerewolfInputFuncs);
+			case EClass::WolfMorph:
+				return TConstArrayView<const TCHAR*>();
 			case EClass::Zombie:
 				return MakeArrayView(GZombieInputFuncs);
 			default:
@@ -2816,6 +2862,8 @@ namespace ElysiumNpcKernelBindings
 				return {0, 0, 0, 0, 9};
 			case EClass::Cop:
 				return {0, 0, 0, 0, 3};
+			case EClass::FrenzyShadow:
+				return {0, 0, 0, 0, 2};
 			case EClass::Gargoyle:
 				return {0, 0, 1, 0, 4};
 			case EClass::GhoulCroucher:
@@ -2854,6 +2902,8 @@ namespace ElysiumNpcKernelBindings
 				return {1, 0, 1, 1, 16};
 			case EClass::Werewolf:
 				return {0, 0, 5, 1, 8};
+			case EClass::WolfMorph:
+				return {0, 0, 0, 0, 1};
 			case EClass::Zombie:
 				return {3, 0, 1, 1, 2};
 			default:

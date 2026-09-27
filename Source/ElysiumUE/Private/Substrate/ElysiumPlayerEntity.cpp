@@ -51,21 +51,41 @@ bool FElysiumPlayer::IsInStealthPosture() const
 		|| (Embodiment && Embodiment->IsPlayerDucking() && !WasRecentlyObservedByHostile(World->NowSeconds()));
 }
 
+bool FElysiumPlayer::ControllerNpcBusy() const
+{
+	// `0x10175180`, 116 bytes: `h = m_hControllerNPC (+0x1db0); if (h == -1 || stale) return false;
+	// return resolve(h)->vt[+0x228]() == 3;`. This player's `+0x1db0` is the world's controller
+	// handle (see the header for the word's second, NPC-side home).
+	if (World == nullptr || World->PlayerHandle() != Handle)
+	{
+		return false;
+	}
+	FElysiumEntity* Controller = World->FindPlayerController();
+	return Controller != nullptr && Controller->Classify() == 3;
+}
+
 bool FElysiumPlayer::CanAttemptStealthKill() const
 {
-	// `0x101681a0`. Other handles (`+0xfe8`, `+0x1040`, `+0x1eb8`, `+0x19c0`, `+0x19cc`,
-	// menu `0x1023bd00`) and the `0x10175180` skip have no producer here and answer not-busy.
-	// `0x10175180` is now ported — it is `m_hControllerNPC` (`+0x1db0`) in state 3, not a dialogue
-	// partner, and lands as `FElysiumNpc::ControllerNpcBusy` (story 29c-1, family Dialogue) over the
-	// handle `FElysiumNpc` carries. It stays a skip HERE only because that word sits on the NPC in
-	// this port, which `DialogPartnerBlocks` states as a shape gap.
+	// `0x101681a0`, the "player is occupied" test, in retail's order: `0x10175180` FIRST — a frenzy
+	// shadow driving this body (`ControllerNpcBusy`) skips the WHOLE test and answers not-occupied;
+	// otherwise `0x101618a0`, a live `m_hControllerNPC` stand-in, is occupied (story 5 fold A2 wired
+	// both through the world's controller handle); then the other handles (`+0xfe8`, `+0x1040`,
+	// `+0x1eb8`, `+0x19c0`, `+0x19cc`), which have no producer here and answer not-busy; then the
+	// active cine camera; then the menu `0x1023bd00`, also not-busy here.
 	if (!IsAlive() || IsInert())
 	{
 		return false;
 	}
-	if (World && World->CineCameraEntity().IsSet())
+	if (!ControllerNpcBusy())
 	{
-		return false;
+		if (World && World->FindPlayerController() != nullptr)
+		{
+			return false;
+		}
+		if (World && World->CineCameraEntity().IsSet())
+		{
+			return false;
+		}
 	}
 	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	const bool bPosture = IsObfuscatedForSenses()
@@ -1469,7 +1489,7 @@ const TCHAR* FElysiumPlayer::DialogRefusalReason() const
 	{
 		return TEXT("a combat timer is running");
 	}
-	// `0x10175180` — the partner at `player+0x1db0` is in state 3. Seam: answers false.
+	// `0x10175180` — the stand-in at `player+0x1db0` is in state 3 (`Classify() == 3`).
 	if (DialogPartnerBlocks())
 	{
 		return TEXT("the player is already occupied");

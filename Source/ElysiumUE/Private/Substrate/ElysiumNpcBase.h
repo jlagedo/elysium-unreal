@@ -56,8 +56,8 @@ public:
 
 	// This NPC as species class `T` (`Substrate/ElysiumNpc<X>.h`), or null: the typed view a body
 	// takes of ANOTHER instance whose species words it reads (a tentacle's head, a pickup helper's
-	// ManBat). It tests the C++ class's own census row, never the test latch, so a non-null answer
-	// is always an object of class `T`: the species tree mirrors retail's (story 5 step 2).
+	// ManBat). It tests the C++ class's own census row, so a non-null answer is always an object of
+	// class `T`: the species tree mirrors retail's (story 5 step 2).
 	template <class T>
 	T* AsSpecies()
 	{
@@ -436,11 +436,6 @@ public:
 	}
 
 protected:
-	// `FElysiumNpc::SetRetailClassForTests`'s latch (test builds only write it). Kept only for the
-	// enumerated deferred-class cases of story 5 step 2; removed at step 11.
-	const FElysiumNpcClass* RetailClassForTests = nullptr;
-	bool bRetailClassForTests = false;
-
 	// --- Moved from `FElysiumNpc`'s protected section (story 5 step 5) ---
 
 	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).

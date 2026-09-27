@@ -82,8 +82,14 @@ bool FElysiumNpcGargoyle::Slot599(int32 Arg)
 
 bool FElysiumNpcGargoyle::Slot600(FElysiumEntity* Enemy)
 {
-	// `0x10379f20`, `CNPC_VGargoyle`'s slot 600 — byte-identical to `0x10376ba0`.
-	return FUN_10376ba0(Enemy);
+	// `0x10379f20`, `CNPC_VGargoyle`'s slot 600 — byte-identical to `CNPC_VFrenzyShadow`'s
+	// `0x10376ba0` (`FElysiumNpcFrenzyShadow::Slot600`, a sibling class, so the body is restated):
+	//     m_bInMelee = 1; (*DAT_10924edc)->vfunc1(); return true;
+	// Every gate is gone, the re-entry guard included.
+	(void)Enemy;
+	bInMelee = true;
+	++MeleeEventFires;
+	return true;
 }
 
 // Slot 420: `0x103785f0`.
@@ -365,9 +371,16 @@ bool FElysiumNpcGargoyle::GargoyleIgnoresClassname(const FString& Classname)
 bool FElysiumNpcGargoyle::FUN_10379ef0(FElysiumEntity* Enemy)
 {
 	// `0x10379ef0`, `CNPC_VGargoyle`'s slot 599 — byte-identical to `CNPC_VFrenzyShadow`'s
-	// `0x10376b70` above, verified against the decompiled C of both. Two classes, one body, and it
-	// is CALLED rather than restated so the two cannot drift.
-	return FUN_10376b70(Enemy);
+	// `0x10376b70`, verified against the decompiled C of both. Since story 5 fold A2 that body is
+	// `FElysiumNpcFrenzyShadow::Slot599`, on a sibling class, so it is restated here:
+	//     (*DAT_10924edc)->vfunc1();      // the global melee-entered event, FIRST
+	//     m_bInMelee = 1;
+	//     return <EAX>;                   // true: m_bInMelee was set
+	// Every gate the Troika line has is dropped; `Enemy` is read by nothing.
+	(void)Enemy;
+	++MeleeEventFires;
+	bInMelee = true;
+	return true;
 }
 
 // --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---

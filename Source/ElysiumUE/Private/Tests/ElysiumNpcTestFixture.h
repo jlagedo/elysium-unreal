@@ -239,6 +239,23 @@ struct FElysiumNpcWorldFixture
 		return Found ? Found->AsSpecies<T>() : nullptr;
 	}
 
+	// The live NPC whose own C++ class is retail class `RetailClass` (exactly, not a descendant), the
+	// `Nth` in entity-list order. For a body whose `Spawn` renames it the targetname no longer finds
+	// it: the player controller line's `SetName("playercontroller")` (`0x103a4510`, story 5 fold A2).
+	FElysiumNpc* NpcOfClass(const TCHAR* RetailClass, int32 Nth = 0)
+	{
+		const FElysiumNpcClass* Wanted = ElysiumNpcKernelClass::Find(RetailClass);
+		for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
+		{
+			FElysiumNpc* Npc = Entity.IsValid() && !Entity->IsDead() ? Entity->AsNpc() : nullptr;
+			if (Npc != nullptr && Wanted != nullptr && Npc->RetailClass() == Wanted && Nth-- == 0)
+			{
+				return Npc;
+			}
+		}
+		return nullptr;
+	}
+
 	FElysiumPlayer* Player() const { return World.FindPlayer(); }
 
 	// The mind's/entity's inspector row is the read side a Substrate case asserts through, the same
