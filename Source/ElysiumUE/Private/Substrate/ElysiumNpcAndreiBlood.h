@@ -103,4 +103,9 @@ public:
 	virtual void GatherConditions() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19): `CNPC_VAndreiBlood::RunTask` `0x1035d8b0`'s words (datamap).
+	bool bAndreiTriggerUnhide = false;          // +0x66ce m_bTriggerUnhide (SEAM word)
+	double AndreiTeleportWaitStartTime = 0.0;   // +0x66d0 m_fTeleportWaitStartTime
+	bool bAndreiForceTeleport = false;          // +0x66d4 m_bForceTeleport
+	int32 AndreiHitCounter = 0;                 // +0x66d8 m_iHitCounter
 };

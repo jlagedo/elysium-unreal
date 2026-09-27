@@ -220,4 +220,8 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19)
+	/** `+0x66a8 m_flTaskFailTimer` (absolute curtime), which `TASK 0xc9` waits out. **SEAM** word: its
+	 *  writer (`CNPC_VTzimisce::StartTask`) is lane L04's. */
+	double TzimisceTaskFailTimer = 0.0;
 };

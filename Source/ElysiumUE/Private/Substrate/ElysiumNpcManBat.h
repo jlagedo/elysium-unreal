@@ -208,5 +208,32 @@ public:
 	virtual void RunAI(bool Arg0) override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19): what `CNPC_VManBat::RunTask` `0x1038d130` reads that no port
+	// member carried. Each is a SEAM answering retail's "nothing" arm; the three admitting searches
+	// are in `pass-i/L05-report.md`.
+	/** `+0x66b4 m_flCoastTimer` (absolute curtime) -- `TASK 0x163` waits it out. No writer ported. */
+	double ManBatCoastTimer = 0.0;
+	/** `+0x6698 m_iMaxScriptNode` -- the last scripted fly node `TASK 0x15c` walks to. No writer ported. */
+	int32 ManBatMaxScriptNode = 0;
+	/** `FUN_1038c170(this, arg)` `0x1038c170` -- leave flight. Counted. */
+	int32 ManBatLeaveFlightCalls = 0;
+	void ManBatLeaveFlight(int32 Arg);
+	/** `FUN_1038fe30` `0x1038fe30` -- the fly-by sound (reads `m_bHasPlayedFlyBySound`). Counted. */
+	int32 ManBatFlyBySoundCalls = 0;
+	void ManBatFlyBySound();
+	/** `FUN_1038e720(this, vel)` `0x1038e720` -- the flap/glide activity pick for a new move goal.
+	 *  Counted, with the velocity it was handed (SOURCE units). */
+	int32 ManBatFlightActivityPicks = 0;
+	FVector ManBatLastFlightPickVelocity = FVector::ZeroVector;
+	void ManBatPickFlightActivity(const FVector& VelocityUnits);
+	/** `0x100f7b20("Spotlight *", GetOrigin(), 0, 0, 0)` -- the nearest entity by wildcard name. The
+	 *  port's `FindByName` has no nearest or `*` form; answers null. */
+	FElysiumEntity* ManBatNearestSpotlight() const;
+	/** The spotlight kill `TASK 0x15b` runs on a match: skin fade 0 then `FadeToSkin(2)`,
+	 *  `CPropSwitch::InputLock`, the `"Spotlightbeam %d"` search and `0x101c4dd0` on the beam. Counted. */
+	int32 ManBatSpotlightsKilled = 0;
+	void ManBatKillSpotlight(FElysiumEntity& Light);
+	/** The active weapon's slot 326 (`+0x518`, `PrimaryAttack`) `TASK 0x15a` fires. Counted. */
+	int32 ManBatWeaponAttacks = 0;
 	virtual bool OverrideMove(float Arg0) override;
 };

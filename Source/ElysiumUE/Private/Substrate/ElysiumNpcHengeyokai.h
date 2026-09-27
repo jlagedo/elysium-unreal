@@ -182,4 +182,10 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19)
+	/** `+0x6674 m_flTaskFailTimer` (absolute curtime), which `TASK 0xc9` waits out. **SEAM** word. */
+	double HengeyokaiTaskFailTimer = 0.0;
+	/** `FUN_10383470` `0x10383470` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
+	int32 HengeyokaiTask14bCalls = 0;
+	void HengeyokaiTask14b();
 };

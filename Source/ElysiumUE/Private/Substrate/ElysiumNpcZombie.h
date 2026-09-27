@@ -99,4 +99,9 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19)
+	/** `+0x6680 m_vecDeathForceVector` -- the force `TASK 0x14e` hands `CreateCorpse`. **SEAM** word. */
+	FVector ZombieDeathForceVector = FVector::ZeroVector;
+	/** `+0x668c` -- the second `CreateCorpse` argument (its address is passed). Unnamed; **SEAM** word. */
+	int32 ZombieCorpseWord668c = 0;
 };

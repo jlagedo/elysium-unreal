@@ -157,4 +157,14 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19): `CNPC_VSabbatLeader::RunTask` `0x103a8990`.
+	double SabbatLeaderWarningFinishTime = 0.0; // +0x66dc m_fWarningFinishTime (SEAM word)
+	double SabbatLeaderTaskStartTime = 0.0;     // +0x669c m_fTaskStartTime (a VampireBoss word; SEAM)
+	/** `CNPC_VSabbatLeader::StartTransformation` `0x103aa3b0` -- lane Boss19's row. **SEAM**: counted
+	 *  until the integrator redirects the call to its port. */
+	int32 SabbatLeaderTransformationStarts = 0;
+	void RunTask19StartTransformation();
+	/** `_DAT_1093c33c`, the `.data` float `TASK 0x15c` compares `m_flCycle` against before the splash.
+	 *  Zero-initialised and written by nothing the corpus holds: **unrecovered**, answers 0.0. */
+	float SabbatLeaderSplashCycle() const;
 };

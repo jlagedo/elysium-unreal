@@ -168,4 +168,8 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19): `CNPC_VChangBros::RunTask` `0x1036bfc0`'s words (datamap).
+	double ChangUnitedTime = 0.0;               // +0x66d4 m_fUnitedTime (SEAM word)
+	bool bChangEnergyBallSpawned = false;       // +0x66d8 m_bEnergyBallSpawned
+	double ChangEnergyChargeTime = 0.0;         // +0x66f0 m_fEnergyChargeTime
 };

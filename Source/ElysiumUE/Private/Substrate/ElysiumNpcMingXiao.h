@@ -367,4 +367,13 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+	// --- Lane L05 (story 8 RunTask19)
+	/** `+0x6680 m_hRangedWeapon` -- the weapon `TASKS 0x14f..0x152` switch back to. **SEAM** word. */
+	FElysiumEntityHandle MingXiaoRangedWeapon;
+	/** `FUN_1039aa20` `0x1039aa20` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
+	int32 MingXiaoTask14bCalls = 0;
+	void MingXiaoTask14b();
+	/** `FUN_10398db0` `0x10398db0` -- the throw release `TASK 0x158` runs outside mode 3. **SEAM**: counted. */
+	int32 MingXiaoThrowReleases = 0;
+	void MingXiaoThrowRelease();
 };
