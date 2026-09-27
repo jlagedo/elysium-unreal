@@ -123,8 +123,8 @@ def test_phase6_slot_check_finds_the_row_on_its_owner_only(tmp_path):
 
 
 def test_phase6_member_check_needs_the_final_scope(tmp_path):
-    write(tmp_path, s6.CLASS_HEADERS["FElysiumEntity"], "class FElysiumEntity\n{\npublic:\n\tint32 Flinch = 0;\n};\n")
-    write(tmp_path, s6.CLASS_HEADERS["FElysiumNpcBase"],
+    write(tmp_path, s6.CLASS_HEADERS["FElysiumEntity"][0], "class FElysiumEntity\n{\npublic:\n\tint32 Flinch = 0;\n};\n")
+    write(tmp_path, s6.CLASS_HEADERS["FElysiumNpcBase"][0],
           "class FElysiumNpcBase : public FElysiumScriptedCharacter\n{\npublic:\n"
           "\t#include \"Substrate/ElysiumNpcBaseAnim.inl\"\n};\n")
     write(tmp_path, s6.SUBSTRATE / "ElysiumNpcBaseAnim.inl", "int32 Other = 0;\n")

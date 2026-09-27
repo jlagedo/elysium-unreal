@@ -23,7 +23,7 @@
 // `ElysiumNpcSlots.cpp` are what `Elysium.Substrate.NpcKernelSlots.Defaults` and
 // `.ShadowedDefaults` call every one of them through.
 
-#include "ElysiumPlayer.h"
+#include "ElysiumAnimating.h"
 
 #include "ElysiumStub.h"
 

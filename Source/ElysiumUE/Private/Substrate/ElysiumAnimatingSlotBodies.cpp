@@ -2,7 +2,7 @@
 // moved up the chain from `FElysiumNpcBase`. Declarations are generated in
 // `ElysiumAnimatingSlots.inl` (a slot body) or in `ElysiumAnimatingSlotBodies.inl`.
 
-#include "ElysiumPlayer.h"
+#include "ElysiumAnimating.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"

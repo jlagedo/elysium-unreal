@@ -1,6 +1,6 @@
 // `CBaseAnimating (and CBaseToggle)`'s hand-written slot bodies and the members they reach (story 5 step 6),
 // moved up the chain from `FElysiumNpcBase`. Included inside `class FElysiumAnimating`
-// (`ElysiumPlayer.h`), after its generated slot surface; the definitions are in
+// (`ElysiumAnimating.h`), after its generated slot surface; the definitions are in
 // `Private/Substrate/ElysiumAnimatingSlotBodies.cpp`.
 
 /** The `CBaseEntity` mover words slot 135 reads. Not one of them has a port member

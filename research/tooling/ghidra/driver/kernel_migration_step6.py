@@ -77,15 +77,17 @@ SLOT_FILES = {
     "FElysiumNpcBase": (SUBSTRATE / "ElysiumNpcBaseSlots.inl", SUBSTRATE / "ElysiumNpcBaseSlots.cpp"),
     "FElysiumNpc": (SUBSTRATE / "ElysiumNpcSlots.inl", SUBSTRATE / "ElysiumNpcSlots.cpp"),
 }
-# Where each port class's own body is declared, for the member record.
+# Where each port class's own body is declared, for the member record: its own header first, then
+# `ElysiumPlayer.h`, which declared the three middle chain classes in the accepted step-6 tree
+# (`7d63e7fa`) before packet 6r gave each its own header.
 CLASS_HEADERS = {
-    "FElysiumEntity": PUBLIC / "ElysiumEntity.h",
-    "FElysiumAnimating": PUBLIC / "ElysiumPlayer.h",
-    "FElysiumAnimatingOverlay": PUBLIC / "ElysiumPlayer.h",
-    "FElysiumFlex": PUBLIC / "ElysiumPlayer.h",
-    "FElysiumCombatCharacter": PUBLIC / "ElysiumPlayer.h",
-    "FElysiumNpcBase": SUBSTRATE / "ElysiumNpcBase.h",
-    "FElysiumNpc": SUBSTRATE / "ElysiumNpc.h",
+    "FElysiumEntity": (PUBLIC / "ElysiumEntity.h",),
+    "FElysiumAnimating": (PUBLIC / "ElysiumAnimating.h", PUBLIC / "ElysiumPlayer.h"),
+    "FElysiumAnimatingOverlay": (PUBLIC / "ElysiumAnimatingOverlay.h", PUBLIC / "ElysiumPlayer.h"),
+    "FElysiumFlex": (PUBLIC / "ElysiumFlex.h", PUBLIC / "ElysiumPlayer.h"),
+    "FElysiumCombatCharacter": (PUBLIC / "ElysiumPlayer.h",),
+    "FElysiumNpcBase": (SUBSTRATE / "ElysiumNpcBase.h",),
+    "FElysiumNpc": (SUBSTRATE / "ElysiumNpc.h",),
 }
 
 SLOT_COLUMNS = ("slot", "port_name", "signature", "current_owner", "row_class", "body", "kind",
@@ -276,13 +278,26 @@ def check_identity(rows: list[dict], derived: list[dict], what: str) -> None:
 
 # ---- phase-6 source checks -------------------------------------------------------------------------
 
+def _class_start(cls: str, text: str):
+    return re.search(rf"\bclass (?:\w+_API )?{cls}\b[^;{{]*\{{", text)
+
+
+def _class_header(root: Path, cls: str) -> Path | None:
+    """The first of `cls`'s candidate headers that declares it, or None."""
+    for rel in CLASS_HEADERS[cls]:
+        path = root / rel
+        if path.is_file() and _class_start(cls, path.read_text(encoding="utf-8-sig")):
+            return path
+    return None
+
+
 def _class_scope(root: Path, cls: str) -> str:
     """The text of `cls`'s class body plus every `.inl` the body includes."""
-    header = root / CLASS_HEADERS[cls]
+    header = _class_header(root, cls)
+    if header is None:
+        raise km.InvalidManifest(f"{cls} is not declared in any of {CLASS_HEADERS[cls]}")
     text = header.read_text(encoding="utf-8-sig")
-    start = re.search(rf"\bclass (?:\w+_API )?{cls}\b[^;{{]*\{{", text)
-    if not start:
-        raise km.InvalidManifest(f"{cls} is not declared in {CLASS_HEADERS[cls]}")
+    start = _class_start(cls, text)
     mask = mask_cpp(text[start.end():])
     depth, end = 1, 0
     for i, ch in enumerate(mask):
@@ -365,7 +380,7 @@ def _verdict_targets(root: Path) -> dict[str, str]:
 
 def check_moves(rows: list[dict], root: Path) -> collections.Counter:
     scopes = {cls: _scope_members(_class_scope(root, cls)) for cls in PORT_ORDER
-              if (root / CLASS_HEADERS[cls]).is_file()}
+              if _class_header(root, cls) is not None}
     counts: collections.Counter = collections.Counter()
     for row in rows:
         if row["disposition"] == "investigate":

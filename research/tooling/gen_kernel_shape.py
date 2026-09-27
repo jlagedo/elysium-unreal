@@ -143,7 +143,7 @@ SLOT_SURFACES = {
                                   "ElysiumEntity.h", "FireEntitySlot"),
     "FElysiumAnimating": SlotSurface((*PUBLIC, "ElysiumAnimatingSlots.inl"),
                                      (*SUBSTRATE, "ElysiumAnimatingSlots.cpp"),
-                                     "ElysiumPlayer.h", "FireAnimatingSlot"),
+                                     "ElysiumAnimating.h", "FireAnimatingSlot"),
     "FElysiumAnimatingOverlay": SlotSurface((*PUBLIC, "ElysiumAnimatingOverlaySlots.inl"),
                                             (*SUBSTRATE, "ElysiumAnimatingOverlaySlots.cpp"),
                                             "ElysiumPlayer.h", "FireAnimatingOverlaySlot"),
@@ -190,12 +190,13 @@ TROIKA_SLOTS = 617
 STORY_BANDS = ((0, 9, "29c"), (10, 18, "29d"), (19, 99, "29e"))
 
 # The port headers whose declared method names a generated slot name may not silently shadow, and
-# where to stop reading each. `ElysiumPlayer.h` declares `FElysiumAnimating` and
-# `FElysiumCombatCharacter` — two of the NPC's own bases — before `FElysiumPlayer`, which is a
-# sibling leaf: the scan stops where the player's own surface begins, because a name only the
-# player declares is not a name the NPC's chain holds.
+# where to stop reading each. `ElysiumAnimating.h` declares `FElysiumAnimating`, and `ElysiumPlayer.h`
+# declares the NPC's other chain bases before `FElysiumPlayer`, which is a sibling leaf: the scan
+# stops where the player's own surface begins, because a name only the player declares is not a name
+# the NPC's chain holds.
 PORT_CHAIN_HEADERS = (
     ("Source/ElysiumUE/Public/ElysiumEntity.h", None),
+    ("Source/ElysiumUE/Public/ElysiumAnimating.h", None),
     ("Source/ElysiumUE/Public/ElysiumPlayer.h", "class FElysiumPlayer final"),
     ("Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h", None),
     ("Source/ElysiumUE/Private/Substrate/ElysiumScriptedCharacter.h", None),
