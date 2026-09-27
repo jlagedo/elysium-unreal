@@ -225,3 +225,26 @@ def test_packet_keeps_a_one_reader_row_verbatim(work_root):
     assert "Only one reader covered this row (luna)" in text
     (kp.families_dir() / "Fix19-READING.md").write_text(text, encoding="utf-8")
     assert kp.check_packet("Fix19") == []
+
+
+def test_second_judge_rows_join_by_function_or_instruction_address(work_root):
+    """The second judge writes a function address, or an instruction address with its function in
+    parentheses or only its name; all belong to the family (the first-cell-starts-with join
+    dropped 27 of 60)."""
+    A, B = kp.sections(WALK_A), kp.sections(WALK_B)
+    contra2 = "\n".join([
+        "| address | verdict (PACKET / CHECKLIST / BOTH WRONG) | the correct statement in one sentence | listing lines |",
+        "|---|---|---|---|",
+        "| 0x10271b10 CAI_BaseNPC::UpdateTargetPos | PACKET | by function address | 0x10271b10 |",
+        "| 0x1027191d (in CAI_BaseNPC::UpdateEnemyPos 0x10271900) | PACKET | by instruction, function beside it | 0x1027191d |",
+        "| 0x10271a66 (CAI_BaseNPC::UpdateEnemyPos) | CHECKLIST | by instruction alone | 0x10271a66 |",
+        "| 0x10271950 (CAI_BaseNPC::UpdateEnemyPos) | PACKET | inside the body, not an arm or call | 0x10271950 |",
+        "| 0x10399999 (in CNPC_Other::Think 0x10399000) | PACKET | another family's row | 0x10399999 |",
+    ])
+    text, _ = kp.build_packet("Fix19", A, B, {}, "", "A=luna, B=Sol", "", contra2)
+    judged = text.split("### Second judge on the rows above")[1].split("\n## ")[0]
+    assert "| 0x10271b10 CAI_BaseNPC::UpdateTargetPos | PACKET |" in judged
+    assert "| 0x1027191d (in CAI_BaseNPC::UpdateEnemyPos 0x10271900) | PACKET |" in judged
+    assert "| 0x10271a66 (CAI_BaseNPC::UpdateEnemyPos) | CHECKLIST |" in judged
+    assert "| 0x10271950 (CAI_BaseNPC::UpdateEnemyPos) | PACKET |" in judged
+    assert "0x10399999" not in judged and "the correct statement in one sentence" not in judged

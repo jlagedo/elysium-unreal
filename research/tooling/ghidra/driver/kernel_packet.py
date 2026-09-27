@@ -730,17 +730,28 @@ def build_packet(fam: str, A: dict[str, str], B: dict[str, str], drills: dict[st
                    f"`{vv}` | {'yes' if a in rule else 'no — ' + vv} |")
     out += ["", "## Packet versus checklist", "",
             contra.strip() if contra else "_Not yet produced (contra-brief → reader → `--contra`)._", ""]
+    # A second-judge row's first cell holds a function address, or an instruction address with the
+    # function beside it in parentheses (or only its name); it belongs here when any address in that
+    # cell is a row of this family, an arm or call of one of this family's skeletons, or an
+    # instruction inside one of those skeleton bodies (the ranges the pass-R write-back mapped by).
+    mine_rows = {x["at"].lower()[2:] for s in sk.values() for x in s["arms"] + s["calls"]}
+    bodies = [(int(s["addr"], 16), int(s["addr"], 16) + int(s["size"])) for s in sk.values()]
+
+    def _ours(l: str, addrs: set[str], ranges=()) -> bool:
+        if not l.startswith("|") or l.count("|") < 2:
+            return False
+        return any(x.lower() in addrs or any(lo <= int(x, 16) < hi for lo, hi in ranges)
+                   for x in re.findall(r"0x([0-9a-fA-F]{8})", l.split("|")[1]))
+
     if contra2:
-        mine = set(rows_all)
-        kept = [l for l in contra2.splitlines()
-                if (m := re.match(r"\|\s*`?0x([0-9a-fA-F]{8})", l)) and m.group(1).lower() in mine]
+        mine = set(rows_all) | mine_rows
+        kept = [l for l in contra2.splitlines() if _ours(l, mine, bodies)]
         out += ["### Second judge on the rows above where the packet was right or undecided", "",
                 "| address | verdict (PACKET / CHECKLIST / BOTH WRONG) | the correct statement | listing lines |",
                 "|---|---|---|---|"] + kept + [""]
     if neither2:
         # A row's first cell holds the branch or call address; it belongs here when a skeleton
         # of this family has that arm or call.
-        mine_rows = {x["at"].lower()[2:] for s in sk.values() for x in s["arms"] + s["calls"]}
         kept = []
         for l in neither2.splitlines():
             if not l.startswith("|"):
