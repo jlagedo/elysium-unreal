@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import csv
 import datetime as _dt
 import os
 import re
@@ -164,20 +165,34 @@ TUNABLE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 DATA_CELL_RE = re.compile(r"\b_?DAT_(10[0-9a-fA-F]{6})\b")
 JMP_RE = re.compile(r"\bJMP\s+0x([0-9a-fA-F]{8})\b")
 GCLASS_ROW_RE = re.compile(r'\{ TEXT\("(\w+)"\), TEXT\("(\w+)"\),')
-# The reviewed classname -> class map, replayed from retail's 74 factories (story 5 step 0).
+# The reviewed classname -> class map, replayed from retail's 74 factories (story 5 step 0). The
+# replay's evidence columns (factory, constructor, final vtable write, listing hashes) ride in the
+# same table; the ledger reads only the classname -> class join.
 FACTORIES_TSV = Path("docs/specs/0019-npc-kernel-rework/story-5/factories.tsv")
+FACTORY_COLUMNS = ("classname", "retail_class", "factory", "constructor", "constructor_thunks",
+                   "allocation_size", "final_vtable", "final_write", "form",
+                   "factory_listing_sha256", "constructor_listing_sha256", "current_registry",
+                   "prior_census_class")
 
 
 def factory_classnames(repo: Path) -> dict[str, list[str]]:
     """Retail class -> the classnames whose factory builds exactly that class.
 
     Each classname answers one class (the last primary-vtable write on the allocated receiver);
-    a base class answers none of its descendants' names. `kernel_migration --check factories`
-    replays every row against the pinned module."""
-    import kernel_migration as km
-    rows = km.read_table(repo / FACTORIES_TSV, km.FACTORY_COLUMNS, "classname")
+    a base class answers none of its descendants' names."""
+    path = repo / FACTORIES_TSV
+    with path.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\t")
+        if tuple(reader.fieldnames or []) != FACTORY_COLUMNS:
+            raise ValueError(f"{path.name}: unexpected columns")
+        rows = list(reader)
+    seen: set[str] = set()
     names: dict[str, list[str]] = collections.defaultdict(list)
     for row in rows:
+        key = (row.get("classname") or "").casefold()
+        if None in row or any(value is None for value in row.values()) or not key or key in seen:
+            raise ValueError(f"{path.name}: malformed or duplicate classname {key!r}")
+        seen.add(key)
         names[row["retail_class"]].append(row["classname"])
     return {cls: sorted(found, key=str.casefold) for cls, found in names.items()}
 

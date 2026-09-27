@@ -623,25 +623,20 @@ green, and `coverage.md` shows the change.
   that class, and one override per ported (class, slot) `rule` row. A new `kernel_shape` flag
     lists the unported `rule` overrides, a number that must only fall. `--residue` already names
     the unsettled layout and slot rows.
-  **Execution: [story-5-execution-plan.md](story-5-execution-plan.md)** (reviewed 2026-09-24;
-  steps 0-5 accepted, step 6 in progress). The plan owns the detailed sequence, phase gates and session
-  handoff contract so they do not need to be duplicated here.
-  Twelve steps on `0019-5-class-tree`: evidence/manifest and rehearsal; dead species deletion;
-  species tree and factories; dispatch conversion; the atomic bodies/words/bindings move; base
-  split; available slot-owner migration; controller, maker, director and test-hull folds; final
-  compatibility removal and closure. The ten deferred classes keep only explicitly inventoried
-  compatibility until their folds. Step 4 lands in one commit; its bounded work packets may span
-  several sessions without claiming the step is complete.
-  Expected behaviour changes include the seven corrected resolutions, 30 additional active
-  ordinary-NPC classnames, newly effective bindings, controller AI and evidenced corrections
-  found during migration. Exact retail direct callees, field ownership and lifecycle participation
-  are acceptance conditions. Test/report deltas are regression bookkeeping, not equivalence proof.
-  Cheap Python, manifest, ledger and generated-source checks precede the build and the complete
-  Substrate/Content/PlayerWorld gate. The saved 2026-09-24 baseline is 1,268 / 14 / 1 completed
-  tests with zero failures; report provenance and focused observable assertions remain required.
-  Build and session estimates follow the rehearsal rather than a fixed build count. One integration
-  owner controls shared headers and runtime builds; independent evidence review and disjoint
-  tooling may proceed alongside it. Story 8 implementation waits for final closure.
+  **Execution: [story-5-execution-plan.md](story-5-execution-plan.md)**, on `0019-5-class-tree`.
+  Steps 0–6 are accepted (2026-09-24 → 09-27): the dead species deleted, 44 species classes with
+  retail factories, dispatch as overrides with 187 qualified direct calls, bodies/words/bindings on
+  their classes, `CAI_BaseNPC` separated from Troika, every generated slot body on its retail owner
+  and the census asserted in C++ — 46 of the 56 live classes stand. Last gate 1,281 / 14 / 1, zero
+  failures. **Revised 2026-09-27** after the owner's review: the remaining work is **two commits**,
+  A (the ten deferred classes folded: test hull, controller line, directors, makers) and B (the
+  compatibility surface deleted, `gen_kernel_shape` census-only, story-8 handoff). The per-step
+  checkers, expectation files and preflight/record ceremony are retired — the product is guarded by
+  the generator checks, the C++ census tests and the runtime gate, and commit B deletes the
+  `kernel_migration*` / `test_delta` tooling. Expected behaviour changes: the seven corrected
+  resolutions and 30 newly active classnames (landed), newly effective bindings (landed), the
+  controller running retail's AI and the makers' inherited world participation (commit A), plus any
+  evidenced correction found while folding. Story 8 implementation waits for commit B.
   **Order amended 2026-09-23: this story runs before story 8's pass I.** Pass R measured the
   port: 227 of its 295 `rule` rows are species overrides, which on the flat class would each be
   written as a `RetailClass()` prologue and then moved here. The one coupling that put 8 first was

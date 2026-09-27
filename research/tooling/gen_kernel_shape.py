@@ -323,7 +323,7 @@ ACCEPTED = "accepted"
 SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 
 # The chain slots whose body is written by hand on the owning chain class, beside the verdict
-# overlay's `hand:` spellings (0019/5 step 6, `decisions-step6.json` `integrations`): slot -> (the
+# overlay's `hand:` spellings (0019/5 step 6; the audited dispositions are the spec's story-5 job): slot -> (the
 # port return type where the lowering would lose it, the reason). A reference return the generator
 # lowers to `void*` is restored here, because the port has the value it refers to.
 CHAIN_HAND: dict[int, tuple[str, str]] = {
@@ -1512,7 +1512,7 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
             why = (f"verdict `{row.verdict}`: the body is `{row.hand}`, written by hand in the "
                    "substrate." if row.verdict_target.startswith(HAND_PREFIX) else
                    f"the body is `{row.hand}`, written by hand in the substrate: "
-                   f"{CHAIN_HAND.get(row.slot, ('', 'see decisions-step6.json'))[1]}.")
+                   f"{CHAIN_HAND.get(row.slot, ('', 'see spec.md story 5, the generated slot bodies'))[1]}.")
             out += _comment(f"{why} Declared here, defined there.", "")
             out.append("")
             continue

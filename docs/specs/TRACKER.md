@@ -210,10 +210,10 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     - The controller folds in with retail AI.
     - Makers, script directors and the test hull fold in as the last pass.
   - *Reviewed execution plan:*
-    [story-5-execution-plan.md](0019-npc-kernel-rework/story-5-execution-plan.md). Twelve steps;
-    the fixed 28-build estimate was withdrawn. Step 0's source replay, representative build and
-    focused tests passed; evidence and remaining questions are in [progress](0019-npc-kernel-rework/story-5/progress.md). Baseline:
-    `Elysium.Substrate` 1,268 of 1,268, `Elysium.Content` 14 of 14, `Elysium.PlayerWorld` 1 of 1.
+    [story-5-execution-plan.md](0019-npc-kernel-rework/story-5-execution-plan.md). Steps 0–6
+    accepted (2026-09-27, last gate 1,281 / 14 / 1, zero failures); revised the same day to two
+    remaining commits, A (the ten deferred classes folded) and B (closure). The step records,
+    checkers and expectation files were retired the same day; the commits are the record.
 
 ## B — the movement base 0019/6 stands on
 
