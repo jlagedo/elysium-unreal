@@ -16,15 +16,15 @@
 
 bool FElysiumNpcBase::EnemyLastKnownPosition(FVector& OutPositionCm) const
 {
-	// `GetEnemies()` (slot 541) then `thunk_FUN_102dfed0(memory, &out, pEnemy)`. This runtime's
-	// `FElysiumNpcEnemyMemory` is the same store, so the fact is carried; the record's position is
-	// what retail's helper copies out.
-	const FElysiumEntity* Enemy =
-		World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;
+	// `GetEnemy()` (slot 167) then `GetEnemies()` (slot 541) and `CAI_Enemies::GetLastKnownPosition`
+	// (`0x102dfed0`): the enemy's memory RECORD position (record `+0xc`), the last position-only
+	// record's, or `vec3_origin` -- never the enemy's live origin, which this body answered before
+	// story 8 (L07 integration). The false return is the callers' "no enemy" arm, not retail's.
+	const FElysiumEntity* const Enemy = GetEnemy();
 	if (Enemy == nullptr)
 	{
 		return false;
 	}
-	OutPositionCm = Enemy->Origin;
+	OutPositionCm = Conditions19LastKnownPosition(Enemy);                // 0x102dfed0
 	return true;
 }

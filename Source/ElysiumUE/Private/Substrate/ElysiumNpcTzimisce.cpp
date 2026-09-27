@@ -662,7 +662,7 @@ int32 FElysiumNpcTzimisce::DrawDebugTextOverlays()
 	{
 		Distance = static_cast<float>((Carried->Origin - Origin).Size() / ElysiumMove::U);
 	}
-	if (TzimisceIsCarryingBody() && Distance > GDebug10TzimisceLatchUnits)
+	if (TzimisceCarryFormBit() && Distance > GDebug10TzimisceLatchUnits)   // 0x103be130 (bit 5 of +0x14b8)
 	{
 		GDebug10TzimisceLatchDistance = Distance;
 		if (Schedule.IsRunning())
@@ -861,23 +861,6 @@ const TCHAR* FElysiumNpcTzimisce::TzimisceEventName(int32 EventId)
 		return GNpcKernelDebugTzimisceEventNames[Offset];
 	}
 	return nullptr;
-}
-
-// --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
-
-bool FElysiumNpcTzimisce::TzimisceIsCarryingBody() const
-{
-	// `0x103be130`, the carry probe the `Body - …` latch stands behind.
-	//
-	// **No longer a seam.** It was landed as one on the grounds that the body has "no port
-	// counterpart", but the whole of it is
-	//     `return (m_bfAINPCFlags [+0x14b8] >> 5) & 0xffffff01;`
-	// — bit 5 of the NPC flag word, which story 29d (family Conditions10) recovered as
-	// `CARRYING_BODY` alongside `FINDING_BODY` (0x10) while porting `0x103be090`/`0x103be050`. The
-	// port carries that word, so the seam was refusing something it could answer. Ghidra's
-	// `0xffffff01` mask is the `AL`-return artifact: the shift puts bit 5 in the low bit and only
-	// the low bit is read.
-	return NpcFlags.Has(EElysiumNpcFlag::CARRYING_BODY);
 }
 
 // --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---

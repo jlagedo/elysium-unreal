@@ -2048,8 +2048,9 @@ void FElysiumNpc::UpdateEnemyDistances()
 		static_cast<float>(FVector::Dist(Origin, Enemy->Origin)) / ElysiumMove::U;
 	ScheduleHost.EnemyHeightDiffUnits =
 		static_cast<float>(FMath::Abs(Origin.Z - Enemy->Origin.Z)) / ElysiumMove::U;
-	const FElysiumNpcEnemyMemoryRecord* Record = EnemyMemory.Find(BaseMemory.Enemy);
-	const FVector LastKnown = Record ? Record->LastPosition : Enemy->Origin;
+	// `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`): the record's position, else the last
+	// position-only record's, else `vec3_origin` -- not the enemy's live origin (story 8 L07).
+	const FVector LastKnown = Conditions19LastKnownPosition(Enemy);
 	ScheduleHost.EnemyLastKnownDistUnits =
 		static_cast<float>(FVector::Dist(Origin, LastKnown)) / ElysiumMove::U;
 }

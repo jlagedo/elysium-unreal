@@ -34,12 +34,8 @@ int32 Conditions19RefreshGoalCalls = 0;
  *  `m_hTargetEnt`, `0x1028e700(TARGET_OCCLUDED 0x49, &m_flOccludedReportTimeT +0x62d0)`. */
 void Conditions19OcclusionReportUpkeep();
 
-/** `0x1028e700` (checklist-0-9 `rule`, `FElysiumNpc::RefreshOccludedCondition`): while `Cond`
- *  stands, a report stamp at the pooled 0.0 (`0x104454c4`) is armed to `curtime +
- *  m_flOccludedDelay (+0x62c8)`, and the condition is CLEARED while `curtime` is still before the
- *  stamp -- occlusion is reported only once it has lasted the delay. Without the condition the stamp
- *  is zeroed. */
-void RefreshOccludedCondition(EElysiumNpcCond Cond, double& ReportStamp);
+// `0x1028e700` is the landed `RefreshOccludedCondition(Cond, Stamp, Now)`
+// (`ElysiumNpcConditionsBodies.cpp`); `0x1028e790` calls it.
 
 // --- `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`)'s callees -------------------------------
 

@@ -1,24 +1,5 @@
 # Story 8's forwarding bodies (`uv run elysium research kernel_story8_shape`): one row per `STORY8-FORWARD` marker under Source/. A porter replaces the body and drops the marker; the set must only fall to 0.
 family	class	slot	address	file
-Conditions19	CAI_BaseNPC	433	0x1026ec30	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions19.cpp
-Conditions19	CAI_BaseNPC	481	0x10270b20	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions19.cpp
-Conditions19	CAI_BaseNPCTroika	433	0x102b27f0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19.cpp
-Conditions19	CNPC_VAndreiBlood	433	0x1035d180	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VBach	433	0x10365a70	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VChangBros	433	0x1036b590	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VDog	433	0x10374b00	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VGargoyle	433	0x10378df0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VGhoulCroucher	433	0x1037b570	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VHengeyokai	433	0x103803d0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VMingXiao	433	0x10394e40	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VMingXiaoTentacle	433	0x1039ec10	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VPedestrian	433	0x103a2c30	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VSabbatLeader	433	0x103a77f0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VScurrying	433	0x103ac500	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VTzimisce	433	0x103bce40	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VTzimisceHeadClaw	433	0x103c17f0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VTzimisceRunner	433	0x103c35a0	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
-Conditions19	CNPC_VWerewolf	433	0x103d0410	Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp
 Damage19	CAI_BaseNPC	142	0x10265e90	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp
 Damage19	CAI_BaseNPC	390	0x10265ed0	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp
 Damage19	CAI_BaseNPCTroika	142	0x102bed30	Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage19.cpp

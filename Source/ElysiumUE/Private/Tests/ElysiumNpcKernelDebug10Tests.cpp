@@ -1331,7 +1331,7 @@ bool FElysiumNpcKernelDebug10TzimisceTextTest::RunTest(const FString&)
 		TestTrue(TEXT("and the latch is untouched, the carry probe being a seam"),
 			Lines.Last().Text.EndsWith(TEXT("|  0.0|")));
 	}
-	TestFalse(TEXT("the carry probe 0x103be130 answers false"), Npc->TzimisceIsCarryingBody());
+	TestFalse(TEXT("the carry probe 0x103be130 answers false"), Npc->TzimisceCarryFormBit());
 	Npc->PickupTarget = FElysiumEntityHandle();
 	return true;
 }

@@ -426,8 +426,29 @@ void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 		return;
 	}
 	TickSight(Npc, Now);
-	GatherEnemyLos(Npc, Now);
+	GatherEnemyLos(Npc, Now);   // STORY8-TWIN: replaced by 0x10270b20 (slot 481) at wave 2
 	TickHearing(Npc, Now);
+}
+
+bool FElysiumNpcSenses::PerformSensing(FElysiumNpc& Npc, double Now)
+{
+	// `CAI_Senses::PerformSensing` (`0x10310710`): the same prelude and gate as `Tick`, then `Look`
+	// and `Listen` in that order, and nothing else -- the LOS debounce is slot 481's.
+	if (Npc.IsInert() || Npc.World == nullptr)
+	{
+		return false;
+	}
+	if (!Perception.bResolved)
+	{
+		ResolveTuning(Npc);
+	}
+	if (!bCanPerformSenses)
+	{
+		return false;
+	}
+	TickSight(Npc, Now);
+	TickHearing(Npc, Now);
+	return true;
 }
 
 bool FElysiumNpcSenses::IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now)
@@ -675,6 +696,9 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 	if (Npc.Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy)) ++Npc.EnemySightings;
 }
 
+// STORY8-TWIN: replaced by 0x10270b20 (slot 481 `GatherEnemyConditions`) at wave 2 (L13). Its
+// private words (`EnemyLosFailures`, `EnemyLastLosTime`, `bEnemyOccluded`, `bEnemyLosLatched`)
+// duplicate `+0x5b98` and `m_afMemory & 0x20000`; their readers move with the deletion.
 void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 {
 	FElysiumEntityWorld* World = Npc.World;

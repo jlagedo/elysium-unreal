@@ -424,11 +424,9 @@ FVector FElysiumNpcBase::ShootEnemyAimPoint(const FVector& ShootPositionCm)
 	}
 	// `102786e2`: the enemy-memory LKP (`0x102dfed0`) plus the enemy's `BodyTarget(shootPos)` minus
 	// its slot-217 origin.
-	FVector LastKnownCm = Enemy->Origin;
-	if (const FElysiumNpcEnemyMemoryRecord* Record = EnemyMemory.Find(Enemy->Handle))
-	{
-		LastKnownCm = Record->LastPosition;
-	}
+	// `0x102dfed0` itself: the record's position, else the last position-only record's, else
+	// `vec3_origin` -- not the enemy's live origin (story 8 L07).
+	const FVector LastKnownCm = Conditions19LastKnownPosition(Enemy);
 	const FVector BodyTargetCm = Enemy->EyePosition();
 	// `1027879f`: `+_DAT_104994e0` (-30.0, `ElysiumNpcTunables::EnemyAimPointZOffset`) is added to
 	// Z when the enemy's stat `0x0b` reads `5`. SEAM: the `CVStatList_t` join by retail list TYPE

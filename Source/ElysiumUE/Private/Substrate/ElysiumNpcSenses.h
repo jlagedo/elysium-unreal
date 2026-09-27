@@ -375,7 +375,15 @@ public:
 	// One condition-gathering pass. `Look` scans actual candidates on their 0.15/0.25/0.45 s
 	// cadences; the separate closest-player LOS cache remains 2 s. Hearing and the committed-enemy
 	// debounce run every think. Safe with no motor, no body and no services.
+	// STORY8-TWIN: replaced by `PerformSensing` (inside slot 433 `0x1026ec30`) plus slot 481
+	// `0x10270b20` at wave 2 (L13's loop rewire); until then the live loop's only sensing pass.
 	void Tick(FElysiumNpc& Npc, double Now);
+
+	/** `CAI_Senses::PerformSensing` (`0x10310710`) alone: the `m_bCanPerformSenses` gate, `Look`,
+	 *  `Listen` -- `Tick` without the port's committed-enemy LOS debounce (`GatherEnemyLos`), whose
+	 *  retail home is slot 481 `GatherEnemyConditions` (`0x10270b20`), run by slot 433 after the
+	 *  sensing. The Conditions19 slot-433 body calls this one. Answers whether the gate let it run. */
+	bool PerformSensing(FElysiumNpc& Npc, double Now);
 
 	// `SetClosestPlayer` (`0x10293a80`) and `SetPlayerLOS` (`0x10291610`). NOT part of the sense
 	// pass: retail calls both from `NPCThink` on the NORMAL clock, while `CAI_Senses::Look` runs

@@ -55,10 +55,12 @@ m_flOccludedDelay (+0x62c8)` (`1028e72a`), and the condition is CLEARED while `c
 the condition the stamp is zeroed (`1028e754`).
 
 Port: `FElysiumNpcBase::GatherConditions`; the Troika half is `FElysiumNpc::Conditions19TroikaGoalUpkeep`.
-`PerformSensing` runs the port's senses runner `FElysiumNpcSenses::Tick` (which carries
-`m_bCanPerformSenses`), then slot 469's base body (`BaseOnLooked`, the Troika increment being folded
-into `TickSight`'s tail) and the `OnListened` base effect on `m_Conditions` (clear the ten-entry
-`0x105c97b4` table, then OR the promoted `HeardConditions`).
+`PerformSensing` runs `FElysiumNpcSenses::PerformSensing` (the `m_bCanPerformSenses` gate, `Look`,
+`Listen` -- the live `Tick` without the port's committed-enemy LOS debounce, which is slot 481's),
+then slot 469's base body (`BaseOnLooked`, the Troika increment being folded into `TickSight`'s
+tail) and the `OnListened` base effect on `m_Conditions` (clear the ten-entry `0x105c97b4` table,
+then OR the promoted `HeardConditions`). `0x1028e700` is the landed
+`FElysiumNpc::RefreshOccludedCondition` (`ElysiumNpcConditionsBodies.cpp`); `0x1028e790` calls it.
 
 **Unrecovered:** `Weapon_FindUsable`'s search (seam answering none); `UTIL_FindClientInPVS` (the live
 player stands in); `0x1028e480` / `0x1028e980` are `mechanism` rows behind the 0018 nav seam
@@ -94,8 +96,11 @@ the parameter is used where retail uses it. In order:
    velocity equals `vec3_origin` exactly, else `origin - r * velocity`, `r = RandomFloat(-0.05, 0.0)`
    on `[0x1070b244]` (pass R's correction); then the enemy's own slot 363 on this NPC
    (`[enemy+0x9c]` the combat character): true → set 0x56 / clear 0x57, else clear 0x56 / set 0x57.
-8. `limit = m_flDistTooFar (+0x5de4)`, raised to `max(limit, weapon m_fMaxRange1 +0x8c0)` with an
-   active weapon under 0x46; `d < limit` clears `ENEMY_TOO_FAR 0x55`, else (NaN included) sets it.
+8. `limit = m_flDistTooFar (+0x5de4)`, raised to the weapon's `m_fMaxRange1 (+0x8c0)` with an active
+   weapon under 0x46 when that range is (ordered) at or above it (`10271180 TEST AH,5 / JP`); `d <
+   limit` clears `ENEMY_TOO_FAR 0x55`, else (NaN included) sets it. The distance survives the lead arm
+   in `[ESP+0x10]` (`10270efd` / `102711a0`); the C's reuse of one variable there is the
+   decompiler's. Slot 544's third argument is `&enemy->m_vecVelocity (+0x3d4)`.
 9. Slot 564 `FCanCheckAttacks` → slot 561 `GatherAttackConditions(GetEnemy(), d)`, else slot 560
    `ClearAttackConditions`. Then `UpdateEnemyPos` `0x10271900`. `m_pNavigator +0x34` clear AND slot 530
    `IsUnreachable(GetEnemy())` → `SetCondition(ENEMY_UNREACHABLE 0x59)`.
@@ -103,7 +108,8 @@ the parameter is used where retail uses it. In order:
     is not already eluded (`0x102e0210` on `m_hEnemy`) and 0x46 is clear: `lkp =
     GetLastKnownPosition(GetEnemy())` (`0x102dfed0`). With `+0x98` set (every Troika NPC — it is the
     NPC itself), `m_bfAINPCFlags & 0x8000 DONE_EXTRAPOLATING` marks eluded (`0x102dfd90`) and is
-    cleared; on a base-only NPC a 2-D distance to `lkp` under 48 (`_DAT_10447ee8`) marks eluded.
+    cleared; on a base-only NPC a 2-D distance to `lkp` not at-or-above 48 (`_DAT_10447ee8`,
+    `TEST AH,5 / JP` at `10271373`: NaN proceeds) marks eluded.
     Either way, with 0x46 clear and 0x59 set, a ray from `EyePosition` to `lkp` (mask `0x2804091`)
     whose `fraction != 1.0` marks eluded.
 
@@ -163,6 +169,10 @@ Port: `FElysiumNpc::GatherConditions`. `m_vecForward` is NPCThink's `AngleVector
 write, which the port never makes; the forward is derived from the angles at the two readers
 (`FElysiumNpcSenses::ViewForward`). The port's notice record stores the notice stamp where retail
 stores the expiry, so the expiry is read as `stamp + 5.0` and the restamp writes `curtime - 5.0`.
+The wall ray, like the eluded ray and the Hengeyokai / Tzimisce throw lines, runs through
+`Conditions19RayReaches` (the embodiment's `QueryLineOfSight`, world geometry only: the masks'
+monster/debris bits are the named divergence). The timer tests are ordered (`FCOMP` + `AND 0x100`):
+a NaN stamp skips (`102b2e10`, `1028fa6c`).
 
 **Unrecovered:** the corpse query `0x102cabd0` (a seam answering none); the fire particles' `+0x484`
 word (no port system spawns body fire particles); `nav+0x14` (the navigator's route-end distance,
@@ -254,6 +264,15 @@ has a slot-433 body of its own.
   EnemyUnreachable, DeathTriggered, CanSpecialMove, ShouldBreakHint); `0x09` → set 0x60; `0x60` →
   set 0x09; `m_pMoveHint` → `0x78 CAN_SPECIAL_MOVE`; `werewolf_force_teleport` clears 0x51, 0x52,
   0x78, 0x79.
+
+Port notes (integration): `AngleVectors`' right vector in the port frame is Source's with Y
+negated (`Conditions19SpeciesRightVector`), so the Hengeyokai start point is 80 units to the NPC's
+RIGHT and Tzimisce's `-tzimisce_throw_pos_y` likewise. Croucher's `SquadNewEnemy` call counts on
+State19's `SelectIdealStateSquadNewEnemyCalls`. Dog's move-away arm is the ordered `d >= m_flWarnRange`
+(`10374cad..10374cbe`). The Ming Xiao, tentacle and Scurrying timers are ordered `curtime >= stamp`;
+the Tzimisce pounce band refuses only an ordered `d < 40000` or `d > 360000` (`103bf740..103bf75c`),
+its two `+0.1` lifts are the double `0x104493d0`; the Werewolf limit sums at x87 precision with the
+double 1.0 `0x10449280` before its one `FSTP float` (`103d049c`).
 
 **Unrecovered (species):** Andrei's 0x79 producer; Bach's FVisible probe points (the port's slot
 does not vary them); Ming Xiao's weapon slot 364 line and `+0xa0`'s writer; the pedestrian weapon's

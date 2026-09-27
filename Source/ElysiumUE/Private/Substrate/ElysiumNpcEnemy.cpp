@@ -342,6 +342,9 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpcBase& Npc)
 	return Chosen != nullptr;                                              // 0x1027a105 .. 0x1027a1fb
 }
 
+// STORY8-TWIN: replaced by 0x102b27f0 / 0x1026ec30 / 0x10270b20 (the slot-433 virtual
+// `GatherConditions()` and slot 481) at wave 2, when L13 rewires `ElysiumNpc.cpp` RunConditionPass
+// and `ElysiumNpcMaintain19.cpp` to slot 433. The live loop's only condition pass until then.
 void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 {
 	FElysiumNpcConditions& Cond = Npc.Cognition.Conditions;

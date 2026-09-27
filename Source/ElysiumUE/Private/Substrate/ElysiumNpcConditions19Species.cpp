@@ -49,18 +49,20 @@
 
 // --- File-scope helpers, family-prefixed for the unity build -------------------------------------
 
-// `AngleVectors(GetAbsAngles(), NULL, &right, NULL)` (`0x10139610`) in the port's frame. The yaw
-// convention is `FElysiumNpcSenses::ViewForward`'s (the substrate stores the inverse Unreal yaw), so
-// the right vector is the one that agrees with the forward every sense body dots against positions.
+// `AngleVectors(GetAbsAngles(), NULL, &right, NULL)` (`0x10139610`) in the port's frame. `Angles`
+// hold SOURCE angles and port positions are Source's with Y mirrored (the convention
+// `FElysiumNpcSenses::ViewForward` follows), so this is Source's right vector
+// `(-sr*sp*cy + cr*sy, -sr*sp*sy - cr*cy, -sr*cp)` with its Y negated. (The lane's first cut fed the
+// mirrored yaw into Source's formula unmirrored, which answered the LEFT vector.)
 static FVector Conditions19SpeciesRightVector(const FElysiumEntity& Entity)
 {
 	const double Pitch = FMath::DegreesToRadians(static_cast<double>(Entity.Angles.X));
-	const double Yaw = FMath::DegreesToRadians(-static_cast<double>(Entity.Angles.Y));
+	const double Yaw = FMath::DegreesToRadians(static_cast<double>(Entity.Angles.Y));
 	const double Roll = FMath::DegreesToRadians(static_cast<double>(Entity.Angles.Z));
 	const double Sp = FMath::Sin(Pitch), Cp = FMath::Cos(Pitch);
 	const double Sy = FMath::Sin(Yaw), Cy = FMath::Cos(Yaw);
 	const double Sr = FMath::Sin(Roll), Cr = FMath::Cos(Roll);
-	return FVector(-Sr * Sp * Cy + Cr * Sy, -Sr * Sp * Sy - Cr * Cy, -Sr * Cp);
+	return FVector(-Sr * Sp * Cy + Cr * Sy, Sr * Sp * Sy + Cr * Cy, -Sr * Cp);
 }
 
 // The squared SOURCE-unit distance between two port (centimetre) positions.
@@ -97,13 +99,13 @@ void FElysiumNpcBach::BachCamperGather()
 	// `0x10365a90`.
 	const double Now = Conditions19Now();
 	const FElysiumNpcBase* const ConstThis = this;
-	FElysiumEntity* Target = ConstThis->GetEnemy();                      // 10365a9b slot 167
+	FElysiumEntity* WatchTarget = ConstThis->GetEnemy();                      // 10365a9b slot 167
 	bool bGrenadeArm = true;                                             // 10365aab
 	bool bNewlyLatched = false;                                          // 10365ab0
-	if (Target == nullptr)                                               // 10365ab4
+	if (WatchTarget == nullptr)                                               // 10365ab4
 	{
-		Target = World != nullptr ? static_cast<FElysiumEntity*>(World->FindPlayer()) : nullptr;   // 10365ab6 0x101cda50
-		if (Target == nullptr)                                           // 10365abf
+		WatchTarget = World != nullptr ? static_cast<FElysiumEntity*>(World->FindPlayer()) : nullptr;   // 10365ab6 0x101cda50
+		if (WatchTarget == nullptr)                                           // 10365abf
 		{
 			return;
 		}
@@ -112,7 +114,7 @@ void FElysiumNpcBach::BachCamperGather()
 	// which the port's slot does not vary: all ten are the same eye-to-eye question).
 	for (int32 Probe = 0; Probe < 10; ++Probe)                           // 10365ac5..10365ae9
 	{
-		if (FVisible(Target, Cond19EnemyVisibleMask, nullptr, Probe))    // 10365ad7 / 10365adf
+		if (FVisible(WatchTarget, Cond19EnemyVisibleMask, nullptr, Probe))    // 10365ad7 / 10365adf
 		{
 			// The re-seen arm (`10365f6a`).
 			if (BachWasOccluded == 0)                                    // 10365f70 / 10365f72
@@ -131,7 +133,7 @@ void FElysiumNpcBach::BachCamperGather()
 			return;
 		}
 	}
-	const FVector TargetUnits = Target->GetAbsOrigin() / ElysiumMove::U;  // slot 217
+	const FVector TargetUnits = WatchTarget->GetAbsOrigin() / ElysiumMove::U;  // slot 217
 	const FVector LastUnits = BachLastOccludeOrigin / ElysiumMove::U;
 	if (BachWasOccluded == 0)                                            // 10365aeb / 10365af5
 	{
@@ -151,7 +153,7 @@ void FElysiumNpcBach::BachCamperGather()
 				bBachCamperFlag = true;                                  // 10365b70
 			}
 		}
-		BachLastOccludeOrigin = Target->GetAbsOrigin();                  // 10365b7f..10365b9d
+		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365b7f..10365b9d
 	}
 	else if (Now - BachOccludeEnterTime > 4.0)                           // `_DAT_10450aa0`, 10365ba8..10365bc4
 	{
@@ -166,14 +168,14 @@ void FElysiumNpcBach::BachCamperGather()
 			bNewlyLatched = !bBachCamperFlag;                            // 10365c1d / 10365c25
 			bBachCamperFlag = true;                                      // 10365c2a
 		}
-		BachLastOccludeOrigin = Target->GetAbsOrigin();                  // 10365c31..10365c4e
+		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365c31..10365c4e
 		BachOccludeEnterTime = Now;                                      // 10365c5e
 	}
 	if (BachGrenadeActive == 10 || BachGrenadeActive == 7)               // 10365c64..10365c72
 	{
 		bBachCamperFlag = true;                                          // 10365c74
 		bNewlyLatched = true;                                            // 10365c7f
-		BachLastOccludeOrigin = Target->GetAbsOrigin();                  // 10365c84..10365c9d
+		BachLastOccludeOrigin = WatchTarget->GetAbsOrigin();                  // 10365c84..10365c9d
 		BachOccludeEnterTime = Now;                                      // 10365cad
 	}
 	bool bReachedTail = false;
@@ -217,6 +219,8 @@ void FElysiumNpcBach::BachCamperGather()
 
 // =================================================================================================
 // 0x1036b590 CNPC_VChangBros::GatherConditions, 215 bytes (also CNPC_VChangBrosBlade / Claw)
+// (absent `ent_trace_conditions` reads before its three `SetCondition`s: calls 0x1036b614
+// 0x1036b633 0x1036b652)
 // =================================================================================================
 
 void FElysiumNpcChangBros::GatherConditions()
@@ -241,6 +245,8 @@ void FElysiumNpcChangBros::GatherConditions()
 
 // =================================================================================================
 // 0x10374b00 CNPC_VDog::GatherConditions, 508 bytes
+// (absent `ent_trace_conditions` reads before its `SetCondition`s: calls 0x10374b1d 0x10374b65
+// 0x10374ba6 0x10374c86 0x10374ca6 0x10374cc8 0x10374ceb)
 // =================================================================================================
 
 void FElysiumNpcDog::GatherConditions()
@@ -262,7 +268,7 @@ void FElysiumNpcDog::GatherConditions()
 		{
 			return;
 		}
-		C.Set(Cond19DogPlayerMovedAway);                                 // 10374b75 SetCondition(0x7c)
+		C.Set(Cond19DogPlayerMovedAway);                                 // 10374b68 PUSH 0x7c / 10374b6c SetCondition
 		return;
 	}
 	if (AnimalPlayerFriendshipState == 2)                                // 10374b7f +0x665c
@@ -290,7 +296,7 @@ void FElysiumNpcDog::GatherConditions()
 	}
 	// Slot 220 on both, `fabs(sqrt(...))`, SOURCE units.
 	const float Distance = static_cast<float>(FMath::Abs(FMath::Sqrt(
-		Conditions19SpeciesDistSqUnits(Player->GetOrigin(), GetOrigin()))));   // 10374bcc..10374c47
+		Conditions19SpeciesDistSqUnits(Player->GetOrigin(), GetOrigin()))));   // 10374bcc..10374c47 (10374bea slot 220, 10374c36 sqrt)
 	if (ActivityNumber == 0x6e && Distance < AnimalConflictRangeUnits)   // 10374c4e / 10374c54 / 10374c5f
 	{
 		if (AnimalPlayerFriendshipState == 0)                            // 10374c69
@@ -306,7 +312,7 @@ void FElysiumNpcDog::GatherConditions()
 	{
 		C.Set(EElysiumNpcCond::PlayerSnarlRange);                        // 10374ccf SetCondition(0x2b)
 	}
-	else if (!FMath::IsNaN(Distance))                                    // 10374cb1 / 10374cbe
+	else if (Distance >= AnimalWarnRangeUnits)                           // 10374cad..10374cbe `AND 0x100 / JNZ` (ordered >=)
 	{
 		C.Set(Cond19DogPlayerMovedAway);                                 // 10374ccf SetCondition(0x7c)
 	}
@@ -330,7 +336,7 @@ void FElysiumNpcGargoyle::GatherConditions()
 	{
 		return;
 	}
-	const FVector Delta = (Enemy->GetAbsOrigin() - GetAbsOrigin()) / ElysiumMove::U;   // 10378e29..10378e50 slot 217
+	const FVector Delta = (Enemy->GetAbsOrigin() - GetAbsOrigin()) / ElysiumMove::U;   // 10378e29..10378e50 slot 217 (10378e29 / 10378e35)
 	const double Distance2D = FMath::Sqrt(Delta.X * Delta.X + Delta.Y * Delta.Y);        // 10378e57
 	if (Distance2D <= 50.0)                                              // double `0x104493c0`; 10378e6c JP (greater or NaN skips)
 	{
@@ -341,6 +347,8 @@ void FElysiumNpcGargoyle::GatherConditions()
 
 // =================================================================================================
 // 0x1037b570 CNPC_VGhoulCroucher::GatherConditions, 288 bytes
+// (absent: the scope-trace name pick, branches 0x1037b575 0x1037b57f; the `ent_trace_conditions`
+// read before `SetCondition(0x79)`, call 0x1037b67b)
 // =================================================================================================
 
 void FElysiumNpcGhoulCroucher::GatherConditions()
@@ -362,17 +370,21 @@ void FElysiumNpcGhoulCroucher::GatherConditions()
 	}
 	FElysiumNpc::GatherConditions();                                     // 1037b60e
 	const FElysiumNpcBase* const ConstThis = this;
-	if (C.Has(EElysiumNpcCond::NewEnemy)                                 // 1037b617
+	if (C.Has(EElysiumNpcCond::NewEnemy)                                 // 1037b617 / 1037b61e
 		&& SquadDisconnected < 1 && SquadWord() != 0                     // 1037b628 / 1037b632
-		&& ConstThis->GetEnemy() != nullptr)                             // 1037b640 slot 167
+		&& ConstThis->GetEnemy() != nullptr)                             // 1037b638 slot 167 / 1037b640
 	{
-		// `SquadNewEnemy(m_pSquad, GetEnemy())` (`0x103161a0`), the enemy fetched again.
-		++Conditions19SquadNewEnemyCalls;                                // 1037b65b / 1037b664
+		// The squad argument is the inlined `GetSquad()`, `+0x5bb0 > 0` read again (1037b64b JG):
+		// the same connected squad the gate just admitted.
+		// `SquadNewEnemy(m_pSquad, GetEnemy())` (`0x103161a0`), the enemy fetched again. No squad
+		// object stands on the kernel (0002/17); the landed counter for this call is State19's.
+		++SelectIdealStateSquadNewEnemyCalls;                            // 1037b65b / 1037b664
 	}
 }
 
 // =================================================================================================
 // 0x103803d0 CNPC_VHengeyokai::GatherConditions, 114 bytes
+// (absent `ent_trace_conditions` read before `SetCondition(0x1b)`: call 0x10380429)
 // =================================================================================================
 
 bool FElysiumNpcHengeyokai::HengeyokaiThrowLosTest(FElysiumEntity* Enemy)
@@ -382,13 +394,13 @@ bool FElysiumNpcHengeyokai::HengeyokaiThrowLosTest(FElysiumEntity* Enemy)
 	{
 		return false;
 	}
-	const FVector Right = Conditions19SpeciesRightVector(*this);          // 1038204f slot 221 / 10382056 0x10139610
-	// `EyePosition() - right * _DAT_1049a198 (-80.0)`.
-	const FVector StartUnits = EyePosition() / ElysiumMove::U - Right * -80.0;   // 1038205b..103820b3
-	const FVector EndUnits = Enemy->EyePosition() / ElysiumMove::U;      // 103820c0 slot 193
-	FKernelHullTrace Trace;
-	KernelHullTrace(StartUnits, EndUnits, FVector::ZeroVector, FVector::ZeroVector, 0x600400b, Trace);   // 10382182 / 103821a3
-	return Trace.Fraction == ElysiumNpcTunables::One;                    // 103821e9..103821fb (double 1.0)
+	const FVector RightVec = Conditions19SpeciesRightVector(*this);          // 1038204f slot 221 / 10382056 0x10139610
+	// `EyePosition() - right * _DAT_1049a198 (-80.0)`: 80 units to the NPC's right.
+	const FVector StartCm = EyePosition() - RightVec * (-80.0 * ElysiumMove::U);   // 1038205b..103820b3
+	const FVector EndCm = Enemy->EyePosition();                          // 103820c0 slot 193
+	// `TraceRay` mask `0x600400b` (`10382182` / `103821a3`), `fraction == 1.0` against the double
+	// `0x10449280` (`103821e9..103821fb`): the family's live world ray.
+	return Conditions19RayReaches(StartCm, EndCm);
 }
 
 void FElysiumNpcHengeyokai::GatherConditions()
@@ -410,7 +422,8 @@ void FElysiumNpcHengeyokai::GatherConditions()
 }
 
 // =================================================================================================
-// 0x10394e40 CNPC_VMingXiao::GatherConditions, 719 bytes
+// 0x10394e40 CNPC_VMingXiao::GatherConditions, 719 bytes (absent `ent_trace_conditions` reads:
+// calls 0x10394ec9 0x10394ee9 0x103950fc)
 // =================================================================================================
 
 bool FElysiumNpcMingXiao::MingXiaoWeaponLosCondition(FElysiumEntity* Weapon, const FVector& FromCm,
@@ -425,6 +438,7 @@ bool FElysiumNpcMingXiao::MingXiaoWeaponLosCondition(FElysiumEntity* Weapon, con
 void FElysiumNpcMingXiao::GatherConditions()
 {
 	FElysiumNpcConditions& C = Cognition.Conditions;
+	// 10394e4a 0x77, 10394e53 0x78, 10394e5c 0x79, 10394e65 0x7a, 10394e6e 0x7b, 10394e77 0x7c, 10394e80 0x7d
 	for (int32 Ordinal = Cond19MingXiaoCanAttackFirst; Ordinal <= 0x7d; ++Ordinal)   // 10394e4a..10394e80 (0x7e is NOT cleared)
 	{
 		C.ClearOrdinal(Ordinal);
@@ -447,7 +461,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 			}
 		}
 	}
-	if (!bAnySlot)
+	if (!bAnySlot)                                                       // 10394edd / 10394edf
 	{
 		C.Set(Cond19MingXiaoMeleeHelpless);                              // 10394ef0 SetCondition(0x7e)
 	}
@@ -461,7 +475,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 		return;
 	}
 	FElysiumEntity* const WeaponEntity = World != nullptr && MingXiaoRangedWeapon.IsSet()
-		? World->Resolve(MingXiaoRangedWeapon) : nullptr;               // 10394f1d..10394f50 +0x6680
+		? World->Resolve(MingXiaoRangedWeapon) : nullptr;               // 10394f1d..10394f50 +0x6680 (10394f26 `-1`, 10394f46 serial)
 	if (WeaponEntity == nullptr)
 	{
 		return;
@@ -486,7 +500,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 	{
 		return;
 	}
-	if (Now < MingXiaoSpitAttackTimer)                                   // 10394f95 / 10394fa5 +0x66c0
+	if (!(Now >= MingXiaoSpitAttackTimer))                               // 10394f95..10394fa5 +0x66c0 `AND 0x100`: below or NaN returns
 	{
 		return;
 	}
@@ -513,6 +527,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 
 // =================================================================================================
 // 0x1039ec10 CNPC_VMingXiaoTentacle::GatherConditions, 148 bytes
+// (absent `ent_trace_conditions` reads: calls 0x1039ec6b 0x1039ec96)
 // =================================================================================================
 
 void FElysiumNpcMingXiaoTentacle::GatherConditions()
@@ -524,12 +539,12 @@ void FElysiumNpcMingXiaoTentacle::GatherConditions()
 	const double Now = Conditions19Now();
 	const FElysiumNpcBase* const ConstThis = this;
 	if (ConstThis->GetEnemy() != nullptr                                 // 1039ec2e / 1039ec36 slot 167
-		&& !(Now < MingXiaoTentacleFailedEvadeTimer)                     // 1039ec41 / 1039ec4e +0x6678 (NaN skips)
+		&& Now >= MingXiaoTentacleFailedEvadeTimer                       // 1039ec41 / 1039ec4e +0x6678 (ordered; NaN skips)
 		&& ScheduleHost.EnemyDistUnits <= 256.f)                         // 1039ec56 `_DAT_1044ddb0` / 1039ec61 JP
 	{
 		C.Set(Cond19TentacleFlee);                                       // 1039ec72 SetCondition(0x77)
 	}
-	if (!(Now < MingXiaoTentaclePhaseExpireTimer))                       // 1039ec7f / 1039ec8c +0x6674
+	if (Now >= MingXiaoTentaclePhaseExpireTimer)                         // 1039ec7f / 1039ec8c +0x6674 (ordered; NaN skips)
 	{
 		C.Set(Cond19TentaclePhaseExpired);                               // 1039ec9d SetCondition(0x79)
 	}
@@ -537,6 +552,7 @@ void FElysiumNpcMingXiaoTentacle::GatherConditions()
 
 // =================================================================================================
 // 0x103a2c30 CNPC_VPedestrian::GatherConditions, 399 bytes
+// (absent `ent_trace_conditions` read: call 0x103a2dac)
 // =================================================================================================
 
 void FElysiumNpcPedestrian::GatherConditions()
@@ -558,15 +574,16 @@ void FElysiumNpcPedestrian::GatherConditions()
 		return H.IsSet() ? ElysiumNpcCond::ResolveEnemyHandle(*World, H) : nullptr;
 	};
 	const FElysiumEntity* const Heard = ResolveOrNull(BaseMemory.BestSoundSource);   // +0x5b78
+	// `+0x6160` resolved (103a2c66 `-1`, 103a2c80 serial), `+0x5b78` resolved (103a2c91, 103a2cab)
 	if (Heard != ResolveOrNull(Senses.Memory.LastSoundCombat.Source))    // 103a2c57..103a2cb5 +0x6160
 	{
 		if (ResolveOrNull(BaseMemory.BestSoundSource)
-			!= ResolveOrNull(Senses.Memory.LastSoundBulletImpact.Source)) // 103a2cb7..103a2d0f +0x618c
+			!= ResolveOrNull(Senses.Memory.LastSoundBulletImpact.Source)) // 103a2cb7..103a2d0f +0x618c (103a2cc0, 103a2cda; `+0x5b78` 103a2ceb, 103a2d05)
 		{
 			return;
 		}
 	}
-	const FElysiumEntity* const Source = ResolveOrNull(BaseMemory.BestSoundSource);   // 103a2d15..103a2d3b
+	const FElysiumEntity* const Source = ResolveOrNull(BaseMemory.BestSoundSource);   // 103a2d15..103a2d3b (103a2d1e `-1`, 103a2d35 serial)
 	if (Source == nullptr)
 	{
 		return;   // crash guard: retail reads `[0 + 0x9c]` when both handles failed to resolve
@@ -595,6 +612,7 @@ void FElysiumNpcPedestrian::GatherConditions()
 
 // =================================================================================================
 // 0x103a77f0 CNPC_VSabbatLeader::GatherConditions, 152 bytes
+// (absent `ent_trace_conditions` read: call 0x103a7858)
 // =================================================================================================
 
 void FElysiumNpcSabbatLeader::GatherConditions()
@@ -633,15 +651,17 @@ void FElysiumNpcScurrying::GatherConditions()
 			? const_cast<FElysiumEntity*>(ElysiumNpcCond::ResolveEnemyHandle(*World, ScurryingDetected))
 			: nullptr;
 	};
-	if (!(Now < ScurryingDetectGateTime))                                // 103ac519 / 103ac526 +0x6678 (NaN skips)
+	if (Now >= ScurryingDetectGateTime)                                  // 103ac519 / 103ac526 +0x6678 (ordered; NaN skips)
 	{
+		// `+0x667c` resolved (103ac531 `-1`, 103ac54e serial) into 103ac559's `0x103acac0`
 		if (!ScurryingShouldDetect(ResolveDetected()))                   // 103ac528..103ac560 0x103acac0
 		{
 			FElysiumEntity* const Found = ScurryingFindDetectablePlayer();   // 103ac564 0x103aca80
-			ScurryingDetected = Found != nullptr ? Found->Handle : FElysiumEntityHandle::Invalid();   // 103ac571..103ac57e
+			ScurryingDetected = Found != nullptr ? Found->Handle : FElysiumEntityHandle::Invalid();   // 103ac56b / 103ac571..103ac57e
 		}
 	}
-	if (ResolveDetected() != nullptr)                                    // 103ac588..103ac5b3 +0x667c
+	if (ResolveDetected() != nullptr)                                    // 103ac588..103ac5b3 +0x667c (103ac591 `-1`, 103ac5ae serial)
+	// (the `ent_trace_conditions` read before the set, call 0x103ac5bd, is absent)
 	{
 		C.Set(Cond19ScurryingPlayerTooClose);                            // 103ac5c4 SetCondition(0x78)
 	}
@@ -668,13 +688,12 @@ bool FElysiumNpcTzimisce::TzimisceThrowLosTest(FElysiumEntity* Enemy)
 	{
 		return false;
 	}
-	const FVector Right = Conditions19SpeciesRightVector(*this);          // slot 221 + 0x10139610
-	const FVector StartUnits = EyePosition() / ElysiumMove::U
-		- Right * static_cast<double>(TzimisceThrowPosYConVar());         // slot 193 minus right * cvar
-	const FVector EndUnits = Enemy->EyePosition() / ElysiumMove::U;      // the enemy's slot 193
-	FKernelHullTrace Trace;
-	KernelHullTrace(StartUnits, EndUnits, FVector::ZeroVector, FVector::ZeroVector, 0x400b, Trace);   // TraceRay mask 0x400b
-	return Trace.Fraction == ElysiumNpcTunables::One;                    // `fraction == 1.0` (double 0x10449280)
+	const FVector RightVec = Conditions19SpeciesRightVector(*this);          // slot 221 + 0x10139610
+	const FVector StartCm = EyePosition()
+		- RightVec * (static_cast<double>(TzimisceThrowPosYConVar()) * ElysiumMove::U);   // slot 193 minus right * cvar
+	const FVector EndCm = Enemy->EyePosition();                          // the enemy's slot 193
+	// `TraceRay` mask `0x400b`, `fraction == 1.0` (double `0x10449280`): the family's live world ray.
+	return Conditions19RayReaches(StartCm, EndCm);
 }
 
 bool FElysiumNpcTzimisce::TzimiscePounceTest()
@@ -689,11 +708,13 @@ bool FElysiumNpcTzimisce::TzimiscePounceTest()
 	FVector LeadCm = Conditions19LastKnownPosition(Enemy);               // slot 541 / 0x102dfed0
 	float Tolerance = 0.f;
 	ChaseLeadTolerance(Enemy, LeadCm, Tolerance);                        // 0x102c3b50 (SEAM: leaves both)
-	LeadCm.Z += 0.1 * ElysiumMove::U;                                    // `_DAT_104493d0` 0.1
+	LeadCm.Z += ElysiumNpcTunables::TenthDouble * ElysiumMove::U;        // 103bf6d6 `FADD double [0x104493d0]`
 	FVector MeCm = GetOrigin();                                          // slot 220
-	MeCm.Z += 0.1 * ElysiumMove::U;
+	MeCm.Z += ElysiumNpcTunables::TenthDouble * ElysiumMove::U;          // 103bf702 `FADD double [0x104493d0]`
 	const double DistSq = Conditions19SpeciesDistSqUnits(MeCm, LeadCm);
-	if (!(40000.0 <= DistSq && DistSq <= 360000.0))                      // `_DAT_104b73e4` / `_DAT_104cc530`
+	// `103bf740..103bf75c`, `AND 0x4100 / JZ` twice: only an ordered `d < 40000` or `d > 360000`
+	// refuses, so a NaN distance passes.
+	if (40000.0 > DistSq || DistSq > 360000.0)                           // `_DAT_104b73e4` / `_DAT_104cc530`
 	{
 		return false;
 	}
@@ -707,6 +728,8 @@ bool FElysiumNpcTzimisce::TzimiscePounceTest()
 
 void FElysiumNpcTzimisce::GatherConditions()
 {
+	// Absent `ent_trace_conditions` reads before the sets: calls 0x103bcf2b 0x103bcf62 0x103bcf81
+	// 0x103bcff9 0x103bd078 0x103bd08c 0x103bd133.
 	FElysiumNpc::GatherConditions();                                     // 103bce47 (the base FIRST)
 	FElysiumNpcConditions& C = Cognition.Conditions;
 	C.Clear(Cond19TzimisceShouldDropBody);                               // 103bce50 0x77
@@ -716,7 +739,7 @@ void FElysiumNpcTzimisce::GatherConditions()
 	if (TzimisceCarryFormBit())                                          // 103bce69 0x103be130 / 103bce70
 	{
 		const FElysiumEntity* const Pickup = World != nullptr && PickupTarget.IsSet()
-			? ElysiumNpcCond::ResolveEnemyHandle(*World, PickupTarget) : nullptr;   // 103bce76..103bceac +0x6670
+			? ElysiumNpcCond::ResolveEnemyHandle(*World, PickupTarget) : nullptr;   // 103bce76..103bceac +0x6670 (103bce7f / 103bcea3 / 103bcebb / 103bced2)
 		if (Pickup != nullptr
 			&& Conditions19SpeciesDistSqUnits(GetAbsOrigin(), Pickup->GetAbsOrigin()) > 25600.0)   // 103bcedc / 103bcee8 / 103bcf21
 		{
@@ -734,7 +757,7 @@ void FElysiumNpcTzimisce::GatherConditions()
 	}
 	FHintWords Hint;
 	if (BaseScheduleHost.HintNode != INDEX_NONE && HintWords(BaseScheduleHost.HintNode, Hint)   // 103bcf8d / 103bcf95 +0x5ddc
-		&& (Hint.HintType == 0x36b0 || Hint.HintType == 0x36b1))         // 103bcf9b..103bcfad
+		&& (Hint.HintType == 0x36b0 || Hint.HintType == 0x36b1))         // 103bcf9b..103bcfad (103bcfa6)
 	{
 		FElysiumEntity* const Enemy = GetEnemy();                        // 103bcfb7 slot 168
 		if (Enemy == nullptr)                                            // 103bcfc1
@@ -767,12 +790,14 @@ void FElysiumNpcTzimisce::GatherConditions()
 	{
 		TzimiscePounceCheckTimer = Now + 2.5;                            // `_DAT_104629ec`, 103bd0c1
 		bool bPounce = false;
-		if (ElysiumSchedule::MaskHasCondition(Schedule, *this, Cond19CanPounce)   // 103bd0c7 0x10269c70 / 103bd0ce
-			&& ConstThis->GetEnemy() != nullptr)                         // 103bd0d4 slot 167 / 103bd0dc
+		if (ElysiumSchedule::MaskHasCondition(Schedule, *this, Cond19CanPounce)   // 103bd0c7 0x10269c70 / 103bd0ce / 103bd0d0
+			&& ConstThis->GetEnemy() != nullptr)                         // 103bd0d4 slot 167 / 103bd0dc / 103bd0de
 		{
 			// `GetEnemies()->GetLastKnownPosition(GetEnemy())` (103bd0e2..103bd0fa): computed and
 			// handed to `0x103bf660`, which never reads it.
-			(void)Conditions19LastKnownPosition(ConstThis->GetEnemy());
+			(void)Conditions19LastKnownPosition(ConstThis->GetEnemy());  // 103bd0f2 slot 541
+			// `tzimisce_pounce`: `!IsCommand()` (103bd10c) and `m_nValue` (103bd119), then 103bd122
+			// `0x103bf660`.
 			if (TzimiscePounceConVar() != 0 && TzimiscePounceTest())     // 103bd107..103bd129
 			{
 				C.Set(Cond19CanPounce);                                  // 103bd13a SetCondition(0x23)
@@ -835,11 +860,17 @@ void FElysiumNpcWerewolf::Conditions19UpdateConditionShouldBreakHint()
 
 void FElysiumNpcWerewolf::GatherConditions()
 {
+	// Absent: the scope-trace name pick (branches 0x103d0416 0x103d0420) and the
+	// `ent_trace_conditions` reads before the sets (calls 0x103d04ab 0x103d04ec 0x103d053c 0x103d055d
+	// 0x103d057b).
 	FElysiumNpcConditions& C = Cognition.Conditions;
 	const FElysiumNpcBase* const ConstThis = this;
 	FElysiumEntity* const Enemy = ConstThis->GetEnemy();                 // 103d0480 slot 167, BEFORE the base
 	// `m_flTargetHullRadius (+0x66d0) + m_flHullRadius (+0x66cc) + 1.0` (double `0x10449280`).
-	const float Limit = WerewolfTeleportDistanceB + WerewolfTeleportDistanceA + ElysiumNpcTunables::One;   // 103d0486..103d049c
+	// The three terms sum at x87 precision (the last `FADD double [0x10449280]`) before the one
+	// `FSTP float` at `103d049c`.
+	const float Limit = static_cast<float>(static_cast<double>(WerewolfTeleportDistanceB)
+		+ static_cast<double>(WerewolfTeleportDistanceA) + ElysiumNpcTunables::OneDouble);   // 103d0486..103d049c
 	if (Enemy != nullptr)                                                // 103d04a0
 	{
 		C.Set(EElysiumNpcCond::SeeEnemy);                                // 103d04b2 SetCondition(0x46)
@@ -870,7 +901,7 @@ void FElysiumNpcWerewolf::GatherConditions()
 	{
 		C.Set(Cond19WerewolfCanSpecialMove);                             // 103d0582 SetCondition(0x78)
 	}
-	if (WerewolfForceTeleportConVar() != 0)                              // 103d058f..103d05a0 `!IsCommand() && m_nValue`
+	if (WerewolfForceTeleportConVar() != 0)                              // 103d058f..103d05a0 `!IsCommand() && m_nValue` (103d0594)
 	{
 		C.Clear(EElysiumNpcCond::CanMeleeAttack1);                       // 103d05a6 0x51
 		C.Clear(EElysiumNpcCond::CanMeleeAttack2);                       // 103d05af 0x52

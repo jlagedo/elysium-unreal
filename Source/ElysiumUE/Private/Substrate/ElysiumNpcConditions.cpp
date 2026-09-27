@@ -319,6 +319,9 @@ void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherT
 	}
 }
 
+// STORY8-TWIN: replaced by 0x1026e4f0 (`FElysiumNpcBase::Conditions19PerformSensing`, the
+// `0x105c97b4` HEAR clear then the `m_HeardConditions` merge) at wave 2, when L13 rewires the loop
+// to slot 433. Live until then (reached from `ElysiumNpcEnemy::GatherConditions`).
 void ElysiumNpcCond::GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime,
 	FElysiumNpcConditions& Out)
 {
@@ -964,6 +967,8 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 	Memory.NextSeeSoundSourceTime = Now + SeeSoundSourceCadenceSeconds;
 }
 
+// STORY8-TWIN: replaced by 0x10270b20 (`FElysiumNpcBase::GatherEnemyConditions`, slot 481) at
+// wave 2 (L13's loop rewire). Live until then.
 void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)
 {
 	const FElysiumEntityWorld* World = Npc.World;

@@ -105,9 +105,9 @@ void FElysiumNpcBase::Conditions19PerformSensing(double Now)
 		if (FElysiumNpc* const Troika = AsNpc())                         // 1026e56a m_pSenses
 		{
 			// `CAI_Senses::PerformSensing` `0x10310710`: the `m_bCanPerformSenses` gate, `Look` and
-			// `Listen` -- the port's runner, `FElysiumNpcSenses::Tick`, which carries the gate.
-			Senses.Tick(*Troika, Now);
-			if (Senses.bCanPerformSenses)
+			// `Listen` -- `FElysiumNpcSenses::PerformSensing`, the port's `Tick` without its LOS
+			// debounce (that is slot 481's, run by the caller after this).
+			if (Senses.PerformSensing(*Troika, Now))
 			{
 				// `Look`'s tail, slot 469 `OnLooked`: the base body `0x1026a2c0` (`BaseOnLooked`,
 				// the six-entry SEE clear and the classifier). The Troika half of slot 469
@@ -167,14 +167,18 @@ bool FElysiumNpcBase::Conditions19BetterWeaponAvailable(double Now)
 	return Conditions19WeaponFindUsable(Range) != nullptr;               // 1026fba4 / 1026fbab
 }
 
-void FElysiumNpcBase::Conditions19CheckTarget(FElysiumEntity* Target)
+void FElysiumNpcBase::Conditions19CheckTarget(FElysiumEntity* TargetEntity)
 {
-	(void)Target;
+	(void)TargetEntity;
 	++Conditions19CheckTargetCalls;
 }
 
 void FElysiumNpcBase::GatherConditions()
 {
+	// `0x1026ec30`. Skeleton sites with no port line, by the absent-words convention: the
+	// scope-trace name pick (branches 0x1026ec3a 0x1026ec44); the `CAI_BaseNPC::IdleSound` VProf
+	// scope (calls 0x1026ed41 0x1026edd2, branches 0x1026edc0 0x1026edca 0x1026edda); the
+	// `ent_trace_conditions` read before `SetCondition(0x67)` (call 0x1026ee34).
 	const double Now = Conditions19Now();
 	// `m_bConditionsGathered (+0x5ca4) = 1` -- the only field this body writes itself
 	// (`1026eca9`). The shape map binds `+0x5ca4` to `Cognition.GatheredAt`, the port's stamp form of
@@ -246,10 +250,11 @@ void FElysiumNpcBase::GatherConditions()
 	// still an entry, so the lookup is the dead-inclusive one.
 	if (TargetEnt.IsSet() && World != nullptr)                           // 1026ee6a
 	{
-		const FElysiumEntity* const Target = ElysiumNpcCond::ResolveEnemyHandle(*World, TargetEnt);
-		if (Target != nullptr)                                           // 1026ee8a / 1026ee8f
+		const FElysiumEntity* const TargetEntity = ElysiumNpcCond::ResolveEnemyHandle(*World, TargetEnt);
+		if (TargetEntity != nullptr)                                           // 1026ee8a / 1026ee8f
 		{
-			Conditions19CheckTarget(const_cast<FElysiumEntity*>(Target));   // 1026eebc 0x10271d10
+			// The handle re-read for the argument (1026ee9a `-1`, 1026eeb1 serial): the same entity.
+			Conditions19CheckTarget(const_cast<FElysiumEntity*>(TargetEntity));   // 1026eebc 0x10271d10
 		}
 	}
 
@@ -354,7 +359,7 @@ bool FElysiumNpcBase::Conditions19NavNotOnNetwork() const
 	return false;
 }
 
-bool FElysiumNpcBase::Conditions19EludedRayReaches(const FVector& FromCm, const FVector& ToCm) const
+bool FElysiumNpcBase::Conditions19RayReaches(const FVector& FromCm, const FVector& ToCm) const
 {
 	const IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
@@ -365,6 +370,18 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	// `0x10270b20`. The VProf scopes (`CAI_BaseNPC_GatherEnemyConditions`, `_Outputs`, `_SeeEnemy`)
 	// and the RDTSC / vtune tail are absent. Every "GetEnemy()" below is SLOT 167 (`+0x29c`), the
 	// const accessor; the checks run on the PARAMETER where retail uses it.
+	//
+	// Skeleton sites with no port line, by the absent-words convention:
+	// - VProf enter/exit/sub-node and the RDTSC/vtune tail: calls 0x10270b40 0x10270bdb 0x10270c85
+	//   0x10270d38 0x10270e1c 0x10270eb2 0x10270f2f 0x10270f41 0x102710ee 0x1027110e 0x102715d4;
+	//   branches 0x10270c71 0x10270c79 0x10270c8d 0x10270e0a 0x10270e14 0x10270e24 0x10270e9c
+	//   0x10270ea6 0x10270eba 0x10270f09 0x10270f13 0x10270f21 0x102710c7 0x102710d1 0x102710e0
+	//   0x102710e7 0x10271119 0x1027152a 0x10271534 0x10271547 0x10271552 0x102715c6 0x102715cb
+	//   0x102715d0 0x102715e2.
+	// - the `ent_trace_conditions` read `(*DAT_10924a6c)->vfunc1()` before each SetCondition: calls
+	//   0x10270bf5 0x10270cc2 0x10270cf4 0x10270e70 0x10271085 0x102710ad 0x102711b7 0x10271233.
+	// - the eluded ray's debug overlay under `0x10738964` (`NDebugOverlay::Line`): branches
+	//   0x102714b6 0x102714c2, calls 0x102714b1 0x102714e4.
 	if (Enemy == nullptr)
 	{
 		return;   // crash guard: retail dereferences the parameter at `0x10270e5c`
@@ -393,7 +410,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	}
 
 	const bool bEnemyIsPlayer = World != nullptr && ConstThis->GetEnemy() != nullptr
-		&& ConstThis->GetEnemy()->Handle == World->PlayerHandle();       // `[enemy+0xa8] m_pPlayer`
+		&& ConstThis->GetEnemy()->Handle == World->PlayerHandle();       // `[enemy+0xa8] m_pPlayer`: 10270d67 / 10270c25 slot 167
 	if (BaseMemory.EnemyOccludedCheck < Cond19EnemyOccludedLimit)        // 10270bc3 JL -> 10270cba
 	{
 		C.Set(EElysiumNpcCond::HaveEnemyLos);                            // 10270cc9 0x4a
@@ -401,7 +418,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 			&& QuerySeeEntity(Enemy))                                    // 10270ce2 slot 468 / 10270cea
 		{
 			C.Set(EElysiumNpcCond::SeeEnemy);                            // 10270cfb 0x46
-			UpdateEnemyWentOccluded(ConstThis->GetEnemy(), false);       // 10270d0f 0x10270180(GetEnemy(), 0)
+			UpdateEnemyWentOccluded(ConstThis->GetEnemy(), false);       // 10270d06 slot 167 / 10270d0f 0x10270180(GetEnemy(), 0)
 		}
 		// Both refusals above land here too: the found outputs are gated on the memory bit only.
 		if ((BaseScheduleHost.MemoryBits & Cond19MemoryEnemyInSight) == 0)   // 10270d14 / 10270d1e
@@ -413,8 +430,10 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 			static const FName OnFoundEnemy(TEXT("OnFoundEnemy"));
 			if (bEnemyIsPlayer)                                          // 10270d6d / 10270d75
 			{
+				// 10270d80 variant from the EHANDLE, 10270d94 set (type 0xc), 10270da3 copy, 10270daa fire
 				FireOutput(OnFoundPlayer, Handle, FElysiumVariant::Handle(Value));   // 10270d77..10270daa +0x5e9c
 			}
+			// 10270db8 / 10270dcd variant from the EHANDLE, 10270de1 set, 10270df0 copy, 10270df7 fire
 			FireOutput(OnFoundEnemy, Handle, FElysiumVariant::Handle(Value));        // 10270daf..10270df7 +0x5e54
 		}
 		BaseScheduleHost.MemoryBits |= Cond19MemoryEnemyInSight;         // 10270e4c, on EVERY pass below the limit
@@ -424,7 +443,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		// `0x10270aa0(this, blocker)`: the blocker's handle, which the port's slot cannot return.
 		BaseMemory.EnemyOccluder = FElysiumEntityHandle::Invalid();      // 10270be1..10270be8
 		C.Set(EElysiumNpcCond::EnemyOccluded);                           // 10270bfc 0x48
-		UpdateEnemyWentOccluded(ConstThis->GetEnemy(), true);            // 10270c10 0x10270180(GetEnemy(), 1)
+		UpdateEnemyWentOccluded(ConstThis->GetEnemy(), true);            // 10270c07 slot 167 / 10270c10 0x10270180(GetEnemy(), 1)
 		if ((BaseScheduleHost.MemoryBits & Cond19MemoryEnemyInSight) != 0)   // 10270c15 / 10270c1f
 		{
 			static const FName OnLostPlayerLos(TEXT("OnLostPlayerLOS"));
@@ -438,7 +457,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		BaseScheduleHost.MemoryBits &= ~Cond19MemoryEnemyInSight;        // 10270c51..10270c5d, unconditional
 	}
 
-	if (!Enemy->IsAlive())                                               // 10270e5c slot 158 / 10270e62
+	if (!Enemy->IsAlive())                                               // 10270e5a slot 158 / 10270e62
 	{
 		C.Set(EElysiumNpcCond::EnemyDead);                               // 10270e77 0x58
 		C.Clear(EElysiumNpcCond::SeeEnemy);                              // 10270e80
@@ -448,22 +467,26 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 
 	const float Distance = Conditions19EnemyDistanceUnits(*Enemy);       // 10270ef2 0x10270890
 
-	if (C.Has(EElysiumNpcCond::SeeEnemy))                                // 10270f4e / 10270f59
+	if (C.Has(EElysiumNpcCond::SeeEnemy))                                // 10270f4e / 10270f52 / 10270f59
 	{
 		if (BaseMemory.EnemyOccludedCheck == 0)                          // 10270f5f / 10270f67
 		{
 			// Slot 198's velocity against `vec3_origin`: NaN or any non-zero component leads.
-			const FVector& Velocity = Enemy->Velocity;                   // 10270f71
-			if (Velocity.X == 0.0 && Velocity.Y == 0.0 && Velocity.Z == 0.0)   // 10270f77..10270fa6
+			const FVector& EnemyVelocity = Enemy->Velocity;                   // 10270f71
+			if (EnemyVelocity.X == 0.0 && EnemyVelocity.Y == 0.0 && EnemyVelocity.Z == 0.0)   // 10270f77..10270fa6 (10270f86 / 10270f96 JP)
 			{
-				UpdateEnemyMemory(Enemy, Enemy->GetAbsOrigin(), nullptr);   // 10271047..1027105e slot 544
+				// Third argument `&enemy->m_vecVelocity (+0x3d4)` (`1027104b LEA EDX,[EDI+0x3d4]`); the
+				// port's slot takes an informer entity there, which the base body does not read -- the
+				// landed convention (`ElysiumNpcFrenzyShadow.cpp` slot 431) passes none.
+				UpdateEnemyMemory(Enemy, Enemy->GetAbsOrigin(), nullptr);   // 10271047..1027105e slot 544 (10271054 slot 217)
 			}
 			else
 			{
 				const float Lead = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
-					.FRandRange(Cond19EnemyLeadMin, ElysiumNpcTunables::Zero);   // 10270fac..10270fc2
-				const FVector Position = Enemy->GetAbsOrigin() - Velocity * static_cast<double>(Lead);   // 10270fcc..10271030
-				UpdateEnemyMemory(Enemy, Position, nullptr);             // 10271034..1027103f slot 544
+					.FRandRange(Cond19EnemyLeadMin, ElysiumNpcTunables::Zero);   // 10270fac..10270fc2 (10270fbb RandomFloat)
+				// 10270fc6 slot 198 again, 10270ff0 slot 217
+				const FVector Position = Enemy->GetAbsOrigin() - EnemyVelocity * static_cast<double>(Lead);   // 10270fcc..10271030
+				UpdateEnemyMemory(Enemy, Position, nullptr);             // 10271034..1027103f slot 544 (+0x3d4 as above)
 			}
 		}
 		FElysiumCombatCharacter* const EnemyCharacter = Enemy->AsCombatCharacter();   // 10271064 [enemy+0x9c]
@@ -488,11 +511,13 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	{
 		float MaxRange1 = 0.f;
 		const FElysiumNpc* const Troika = AsNpc();
+		// 1027118f GetActiveWeapon again for the read.
 		// SEAM: `+0x8c0` is only carried as `ActiveWeaponMaxRangeUnits`, which answers false (no
 		// weapon record carries a range); unanswered, the limit stays `m_flDistTooFar`.
 		if (Troika != nullptr && Troika->ActiveWeaponMaxRangeUnits(MaxRange1))   // 1027116f / 10271174
 		{
-			Limit = MaxRange1 < DistTooFar ? DistTooFar : MaxRange1;     // 1027117a / 10271183
+			// `FLD max1 / FCOMP limit / TEST AH,5 / JP`: only an ordered `max1 >= limit` takes max1.
+			Limit = MaxRange1 >= DistTooFar ? MaxRange1 : DistTooFar;    // 1027117a / 10271183
 		}
 	}
 	if (Distance < Limit)                                                // 102711a0..102711ad (NaN clears)
@@ -506,7 +531,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 
 	if (FCanCheckAttacks())                                              // 102711d2 slot 564 / 102711da
 	{
-		GatherAttackConditions(ConstThis->GetEnemy(), Distance);         // 102711dc..102711ee slot 561
+		GatherAttackConditions(ConstThis->GetEnemy(), Distance);         // 102711dc..102711ee slot 561 (102711e5 slot 167)
 	}
 	else
 	{
@@ -516,26 +541,28 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	Conditions19UpdateEnemyPos();                                        // 10271202 0x10271900
 
 	if (!Conditions19NavNotOnNetwork()                                   // 10271207..10271212 [[+0x5d34]+0x34]
-		&& IsUnreachable(ConstThis->GetEnemy()))                         // 10271221 slot 530 / 10271229
+		&& IsUnreachable(ConstThis->GetEnemy()))                         // 10271218 slot 167 / 10271221 slot 530 / 10271229
 	{
 		C.Set(EElysiumNpcCond::EnemyUnreachable);                        // 1027123a 0x59
 	}
 
 	// --- The eluded tail --------------------------------------------------------------------------
 	// `curtime - LastTimeSeen(GetEnemy()) > 8.0` (`AND 0x4100 / JNZ`: at or under 8, or NaN, skips).
+	// 1027124b slot 167, 10271256 slot 541, 1027125e `0x102e0150`
 	if (!(Now - Conditions19LastTimeSeen(ConstThis->GetEnemy()) > Cond19ElusionSeconds))   // 1027123f..10271272
 	{
 		return;
 	}
+	// `m_hEnemy (+0x5ce0)` resolved (10271281 `-1`, 1027129e serial), 102712ab slot 541, 102712b3 `0x102e0210`
 	if (EnemyMemory.IsEluded(BaseMemory.Enemy))                          // 10271278..102712ba (m_hEnemy +0x5ce0)
 	{
 		return;
 	}
-	if (C.Has(EElysiumNpcCond::SeeEnemy))                                // 102712c0..102712cb
+	if (C.Has(EElysiumNpcCond::SeeEnemy))                                // 102712c0..102712cb (102712c4)
 	{
 		return;
 	}
-	const FVector LastKnownCm = Conditions19LastKnownPosition(ConstThis->GetEnemy());   // 102712d1..102712ed 0x102dfed0
+	const FVector LastKnownCm = Conditions19LastKnownPosition(ConstThis->GetEnemy());   // 102712d1..102712ed 0x102dfed0 (102712d5 slot 167, 102712e5 slot 541)
 	if (FElysiumNpc* const Troika = AsNpc())                             // 102712f2 [this+0x98] / 102712fa
 	{
 		if (Troika->NpcFlags.Has(EElysiumNpcFlag::DONE_EXTRAPOLATING))   // 102712fc..10271310 flags +0x14b8 & 0x8000
@@ -543,7 +570,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 			Troika->NpcFlags.Clear(EElysiumNpcFlag::DONE_EXTRAPOLATING); // 10271316 / 10271319
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 1027131f..10271399 0x102dfd90
+				EnemyMemory.MarkEluded(Eluding->Handle);                 // 1027131f..10271399 0x102dfd90 (10271323 slot 167, 1027132e slot 541)
 			}
 		}
 	}
@@ -552,24 +579,27 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		const FVector& MyOrigin = GetAbsOrigin();                        // 1027133a slot 217
 		const double DxUnits = (LastKnownCm.X - MyOrigin.X) / ElysiumMove::U;
 		const double DyUnits = (LastKnownCm.Y - MyOrigin.Y) / ElysiumMove::U;
-		if (FMath::Sqrt(DxUnits * DxUnits + DyUnits * DyUnits) < Cond19ElusionRadiusUnits   // 10271340..10271373
-			&& !C.Has(EElysiumNpcCond::SeeEnemy))                        // 10271375..10271380
+		// `FCOMP 48.0 / TEST AH,5 / JP` skips only an ordered `>= 48`; a NaN distance proceeds.
+		if (!(FMath::Sqrt(DxUnits * DxUnits + DyUnits * DyUnits) >= Cond19ElusionRadiusUnits)   // 10271340..10271373 (1027135f sqrt)
+			&& !C.Has(EElysiumNpcCond::SeeEnemy))                        // 10271375..10271380 (10271379)
 		{
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271382..10271399 0x102dfd90
+				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271382..10271399 0x102dfd90 (10271386 slot 167, 10271391 slot 541)
 			}
 		}
 	}
 	// Either mark falls through to the ray.
-	if (!C.Has(EElysiumNpcCond::SeeEnemy)                                // 1027139e..102713a9
-		&& C.Has(EElysiumNpcCond::EnemyUnreachable))                     // 102713af..102713ba
+	if (!C.Has(EElysiumNpcCond::SeeEnemy)                                // 1027139e..102713a9 (102713a2)
+		&& C.Has(EElysiumNpcCond::EnemyUnreachable))                     // 102713af..102713ba (102713b3)
 	{
-		if (!Conditions19EludedRayReaches(EyePosition(), LastKnownCm))   // 102713c9..102714fe (fraction != 1.0)
+		// `Ray_t::Init` (`m_IsSwept` from the delta's length, 10271414), `CTraceFilterSimple`
+		// 10271485, `TraceRay` 102714a6.
+		if (!Conditions19RayReaches(EyePosition(), LastKnownCm))   // 102713c9..102714fe (fraction != 1.0)
 		{
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271500..10271517 0x102dfd90
+				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271500..10271517 0x102dfd90 (10271504 slot 167, 1027150f slot 541)
 			}
 		}
 	}

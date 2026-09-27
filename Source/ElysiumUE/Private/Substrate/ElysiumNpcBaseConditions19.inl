@@ -138,11 +138,14 @@ int32 Conditions19UpdateEnemyPosCalls = 0;
  *  such byte; answers false, the cleared state, so slot 530 `IsUnreachable` is asked. */
 bool Conditions19NavNotOnNetwork() const;
 
-/** The eluded tail's ray (`0x102713c9..0x102714fe`): `EyePosition` to the last known position, mask
- *  `0x2804091`, `CTraceFilterSimple(this, 0)`; true when `tr.fraction == 1.0`. The port's one
- *  world query is the embodiment's `QueryLineOfSight` (world geometry, characters not occluders) --
- *  the mask's `CONTENTS_MONSTER` bit is the named divergence the landed bodies already take. */
-bool Conditions19EludedRayReaches(const FVector& FromCm, const FVector& ToCm) const;
+/** The family's zero-extent `TraceRay`s with `CTraceFilterSimple(this, 0)`: the eluded tail's
+ *  (`0x102713c9..0x102714fe`, mask `0x2804091`), the Troika wall ray (`102b2e2e..102b2fba`, mask
+ *  `0x2000b`), Hengeyokai's (`0x10382020`, `0x600400b`) and Tzimisce's (`0x103be630`, `0x400b`)
+ *  throw lines. True when the ray reaches (`tr.fraction == 1.0`, no start/all-solid). The port's one
+ *  world ray is the embodiment's `QueryLineOfSight` (world geometry, characters not occluders): the
+ *  masks' `CONTENTS_MONSTER`/debris bits are the named divergence the landed slot-201 body already
+ *  takes. No embodiment answers "reaches", retail's clear result. Centimetres. */
+bool Conditions19RayReaches(const FVector& FromCm, const FVector& ToCm) const;
 
 /** `m_afMemory (+0x5d8c)` bit `0x20000`: "the enemy has been in sight" -- set on every pass below the
  *  occlusion limit and cleared on every pass at it; its edges fire the four found/lost outputs. The

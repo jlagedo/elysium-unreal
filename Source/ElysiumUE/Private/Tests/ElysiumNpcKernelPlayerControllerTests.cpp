@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
 #include "Substrate/ElysiumNpcPlayerController.h"
@@ -411,7 +412,11 @@ bool FElysiumNpcKernelPlayerControllerShadowSelectTest::RunTest(const FString&)
 		return false;
 	}
 	const EElysiumNpcCond TwoHostiles = static_cast<EElysiumNpcCond>(0x79);
-	// 433 `0x10375ed0`: local condition 121 on more than one hostile.
+	// 433 `0x10375ed0`: local condition 121 on more than one hostile. Since story 8 (L07) the Troika
+	// gather `0x102b27f0` runs under it, and its `ChooseEnemy` reaches slot 478 `BestEnemy`
+	// (`0x103766d0`), whose rescan zeroes and rebuilds `+0x6664` (`103767a2`); a committed living
+	// enemy keeps the choice sticky so the count the case writes is the one the body reads.
+	ElysiumNpcEnemy::SetEnemy(*Shadow, Enemy->Handle);
 	Shadow->HostileEnemyCount = 2;
 	Shadow->TwoHostilesEventFires = 0;
 	Shadow->GatherConditions();

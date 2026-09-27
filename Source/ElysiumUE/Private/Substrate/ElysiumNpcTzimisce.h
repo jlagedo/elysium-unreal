@@ -80,10 +80,6 @@ public:
 	 *  fall through to `CBaseAnimating::GetEventName`. */
 	static const TCHAR* TzimisceEventName(int32 EventId);
 
-	/** `CNPC_VTzimisce`'s carry bit (`0x103be130`) — the gate on the `Body - …` line's latch. **SEAM**:
-	 *  the body has no verdict row and no port counterpart; answers false, so the latch never updates
-	 *  and the two globals keep whatever the last Tzimisce put there. */
-	bool TzimisceIsCarryingBody() const;
 
 	// From `ElysiumNpcHints.inl`.
 	/** `0x103bfa50` — `CNPC_VTzimisce`'s two-group hint pick (14000 vs 14001 within 200 units, nearer

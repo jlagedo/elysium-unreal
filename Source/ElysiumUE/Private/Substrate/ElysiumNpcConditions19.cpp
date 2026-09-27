@@ -26,58 +26,38 @@
 // The Troika half of `CAI_BaseNPC::GatherConditions` (`0x1026ec30`)
 // =================================================================================================
 
-void FElysiumNpc::Conditions19UpdateApproachGoalPos(FElysiumEntity* Target)
+void FElysiumNpc::Conditions19UpdateApproachGoalPos(FElysiumEntity* GoalEntity)
 {
-	(void)Target;
+	(void)GoalEntity;
 	++Conditions19ApproachGoalCalls;
 }
 
-void FElysiumNpc::Conditions19RefreshGoalPosition(FElysiumEntity* Target)
+void FElysiumNpc::Conditions19RefreshGoalPosition(FElysiumEntity* GoalEntity)
 {
-	(void)Target;
+	(void)GoalEntity;
 	++Conditions19RefreshGoalCalls;
-}
-
-void FElysiumNpc::RefreshOccludedCondition(EElysiumNpcCond Cond, double& ReportStamp)
-{
-	// `0x1028e700`.
-	if (!Cognition.Conditions.Has(Cond))                                 // 1028e709 HasCondition / 1028e710
-	{
-		ReportStamp = 0.0;                                               // 1028e754 `MOV [EAX],0`
-		return;
-	}
-	const double Now = Conditions19Now();
-	// `FCOMP [0x104454c4]` (0.0), `TEST AH,0x44 / JP`: arms on exact equality only.
-	if (ReportStamp == static_cast<double>(ElysiumNpcTunables::Zero))    // 1028e718 / 1028e723
-	{
-		ReportStamp = Now + static_cast<double>(OccludedDelay);          // 1028e72a..1028e733 +0x62c8
-	}
-	// `FLD curtime / FCOMP [stamp] / TEST AH,5 / JP`: the clear runs only while curtime < stamp.
-	if (Now < ReportStamp)                                               // 1028e73e / 1028e745
-	{
-		Cognition.Conditions.Clear(Cond);                                // 1028e74a ClearCondition
-	}
 }
 
 void FElysiumNpc::Conditions19OcclusionReportUpkeep()
 {
 	// `0x1028e790`.
 	const FElysiumNpcBase* const ConstThis = this;
+	const double Now = Conditions19Now();
 	if (ConstThis->GetEnemy() != nullptr)                                // 1028e795 slot 167 / 1028e79d
 	{
-		RefreshOccludedCondition(EElysiumNpcCond::EnemyOccluded, OccludedReportTimeE);   // 1028e7aa +0x62cc
+		RefreshOccludedCondition(EElysiumNpcCond::EnemyOccluded, OccludedReportTimeE, Now);   // 1028e7aa 0x1028e700 +0x62cc
 		if (!Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded))  // 1028e7b3 / 1028e7ba
 		{
 			UpdateEnemyWentOccluded(ConstThis->GetEnemy(), false);       // 1028e7c2 / 1028e7cb 0x10270180
 		}
 	}
 	// `m_hTargetEnt (+0x5ce4)`: `-1`, a serial mismatch or an empty entry skips (dead-inclusive).
-	const FElysiumEntity* const Target = World != nullptr && GetTarget().IsSet()
+	const FElysiumEntity* const TargetEntity = World != nullptr && GetTarget().IsSet()
 		? ElysiumNpcCond::ResolveEnemyHandle(*World, GetTarget())
 		: nullptr;
-	if (Target != nullptr)                                               // 1028e7d6 / 1028e7f5 / 1028e7fa
+	if (TargetEntity != nullptr)                                         // 1028e7d6 / 1028e7f5 / 1028e7fa
 	{
-		RefreshOccludedCondition(FElysiumNpcBase::Cond19TargetOccluded, OccludedReportTimeT);   // 1028e807 +0x62d0
+		RefreshOccludedCondition(FElysiumNpcBase::Cond19TargetOccluded, OccludedReportTimeT, Now);   // 1028e807 0x1028e700 +0x62d0
 	}
 }
 
@@ -100,6 +80,7 @@ void FElysiumNpc::Conditions19TroikaGoalUpkeep()
 			Conditions19UpdateApproachGoalPos(const_cast<FElysiumEntity*>(AgainEntity));   // 1026ef43 0x1028e480
 		}
 		const FElysiumEntityHandle MoveTargetHandle = ScheduleHost.MoveTarget;   // 1026ef48 +0x6240
+		// The handle re-read for the argument (1026ef7b `-1`, 1026ef92 serial): the same entity.
 		const FElysiumEntity* const MoveTargetEntity = MoveTargetHandle.IsSet()
 			? ElysiumNpcCond::ResolveEnemyHandle(*World, MoveTargetHandle)
 			: nullptr;
@@ -136,7 +117,7 @@ int32 FElysiumNpc::Conditions19CorpseQuery(FElysiumEntity** OutCorpses, int32 Ma
 void FElysiumNpc::Conditions19GatherCorpse(double Now)
 {
 	// `0x1028fa50`. `FCOMP [+0x6608]`, `AND 0x100 / JNZ`: only `curtime >= stamp` runs (NaN skips).
-	if (Now < CorpseConditionTime)                                       // 1028fa5f / 1028fa6c
+	if (!(CorpseConditionTime <= Now))                                   // 1028fa5f / 1028fa6c
 	{
 		return;
 	}
@@ -200,7 +181,10 @@ void FElysiumNpc::Conditions19GatherSquad(double Now)
 
 void FElysiumNpc::GatherConditions()
 {
-	// `0x102b27f0`. The scope-trace push/pop (`102b27f0..102b2861`, `102b3020`) is absent.
+	// `0x102b27f0`. The scope-trace push/pop (`102b27f0..102b2861`, `102b3020`; the name pick,
+	// branches 0x102b27fb 0x102b2805) is absent, as is the `ent_trace_conditions` read before each
+	// `SetCondition` (calls 0x102b28ef 0x102b2997 0x102b29f9 0x102b2a65 0x102b2ab9 0x102b2b1d
+	// 0x102b2b8b 0x102b2bcb 0x102b2c98 0x102b2d0b 0x102b2fc4 0x102b3014).
 	FElysiumNpcConditions& C = Cognition.Conditions;
 	C.Clear(EElysiumNpcCond::InvestigateSight);                          // 102b2863 0x26
 	C.Clear(EElysiumNpcCond::Comfort);                                   // 102b286c 0x27
@@ -252,13 +236,13 @@ void FElysiumNpc::GatherConditions()
 		{
 			C.Set(Cond19InsideInterruptDist);                            // 102b299e 0x15
 		}
-		if (Enemy != nullptr && DistSqUnits(*Enemy) < Inside)            // 102b29a5 / 102b29de / 102b29ef
+		if (Enemy != nullptr && DistSqUnits(*Enemy) < Inside)            // 102b29a5 / 102b29ab 102b29b7 slot 220 / 102b29de / 102b29ef
 		{
 			C.Set(Cond19InsideInterruptDistE);                           // 102b2a00 0x17
 		}
 		if (FElysiumEntity* const Boss = GetFollowerBoss())              // 102b2a09 slot 293 / 102b2a11
 		{
-			if (DistSqUnits(*Boss) < Inside)                             // 102b2a4a / 102b2a5b
+			if (DistSqUnits(*Boss) < Inside)                             // 102b2a17 102b2a23 slot 220 / 102b2a4a / 102b2a5b
 			{
 				C.Set(Cond19InsideInterruptDistF);                       // 102b2a6c 0x19
 			}
@@ -272,20 +256,20 @@ void FElysiumNpc::GatherConditions()
 		{
 			C.Set(Cond19OutsideInterruptDist);                           // 102b2ac0 0x14
 		}
-		if (Enemy != nullptr && DistSqUnits(*Enemy) > Outside)           // 102b2ac7 / 102b2b00 / 102b2b13
+		if (Enemy != nullptr && DistSqUnits(*Enemy) > Outside)           // 102b2ac7 / 102b2acd 102b2ad9 slot 220 / 102b2b00 / 102b2b13
 		{
 			C.Set(Cond19OutsideInterruptDistE);                          // 102b2b24 0x16
 		}
 		if (FElysiumEntity* const Boss = GetFollowerBoss())              // 102b2b2d slot 293 (again) / 102b2b35
 		{
-			if (DistSqUnits(*Boss) > Outside)                            // 102b2b6e / 102b2b81
+			if (DistSqUnits(*Boss) > Outside)                            // 102b2b3b 102b2b47 slot 220 / 102b2b6e / 102b2b81
 			{
 				C.Set(Cond19OutsideInterruptDistF);                      // 102b2b92 0x18
 			}
 		}
 	}
 	if (ScheduleHost.InterruptTime > static_cast<double>(ElysiumNpcTunables::Zero)   // 102b2b97..102b2baa
-		&& !(Now < ScheduleHost.InterruptTime))                          // 102b2bac..102b2bc1 (NaN skips)
+		&& ScheduleHost.InterruptTime <= Now)                            // 102b2bb1..102b2bc1 `FCOMP / AND 0x100` (NaN skips)
 	{
 		C.Set(EElysiumNpcCond::InterruptTime);                           // 102b2bd2 0x1a
 	}
@@ -303,7 +287,7 @@ void FElysiumNpc::GatherConditions()
 			// `FLT_EPSILON` to the length), dotted in X/Y with `m_vecForward` (`+0x6290/+0x6294`).
 			// That word is NPCThink's `AngleVectors(GetAngles())` write, which the port never makes;
 			// the same vector is derived from the angles here.
-			FVector Direction = (Enemy->GetAbsOrigin() - GetAbsOrigin()) / ElysiumMove::U;   // 102b2c12..102b2c3a
+			FVector Direction = (Enemy->GetAbsOrigin() - GetAbsOrigin()) / ElysiumMove::U;   // 102b2c12..102b2c3a (102b2c1e slot 217)
 			Direction.Z = 0.0;                                           // 102b2c5d
 			Direction = Direction / (static_cast<double>(ElysiumNpcTunables::FloatEpsilon) + Direction.Size());   // 102b2c65
 			const FVector ForwardVector = FElysiumNpcSenses::ViewForward(*this);
@@ -324,7 +308,7 @@ void FElysiumNpc::GatherConditions()
 	for (int32 Index = 0; Index < Conditions19BodyFireParticleCount; ++Index)   // 102b2cb8 / 102b2cfc / 102b2cff
 	{
 		const FElysiumEntity* const Particle = World != nullptr && BodyFireParticles[Index].IsSet()
-			? ElysiumNpcCond::ResolveEnemyHandle(*World, BodyFireParticles[Index])   // 102b2cc5..102b2ce6
+			? ElysiumNpcCond::ResolveEnemyHandle(*World, BodyFireParticles[Index])   // 102b2cc5..102b2ce6 (102b2cdc serial, 102b2ce1 entry)
 			: nullptr;
 		if (Particle != nullptr && Conditions19FireParticleLive(*Particle))   // 102b2cee / 102b2cf6
 		{
@@ -336,10 +320,10 @@ void FElysiumNpc::GatherConditions()
 	Conditions19GatherSquad(Now);                                        // 102b2d19 0x102b2730
 
 	const FElysiumEntity* const Door = World != nullptr && BlockedDoor.IsSet()
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, BlockedDoor)       // 102b2d1e..102b2d4b
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BlockedDoor)       // 102b2d1e..102b2d4b (102b2d29 `-1`, 102b2d46 serial)
 		: nullptr;
 	if (Door != nullptr
-		&& (C.Has(EElysiumNpcCond::SeeEnemy) || C.Has(EElysiumNpcCond::NewEnemy)))   // 102b2d51 / 102b2d5e
+		&& (C.Has(EElysiumNpcCond::SeeEnemy) || C.Has(EElysiumNpcCond::NewEnemy)))   // 102b2d51 / 102b2d58 / 102b2d5e / 102b2d65
 	{
 		BlockedDoor = FElysiumEntityHandle::Invalid();                   // 102b2d67 +0x5d28 := -1
 	}
@@ -352,29 +336,30 @@ void FElysiumNpc::GatherConditions()
 	if (ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::DetectedAttack)   // 102b2d75 / 102b2d7c
 		&& Now < DetectedAttackExpiry                                    // 102b2d83 / 102b2d91
 		&& World != nullptr && Memory.DetectedAttackAttacker.IsSet()
-		&& ElysiumNpcCond::ResolveEnemyHandle(*World, Memory.DetectedAttackAttacker) != nullptr)   // 102b2d9c..102b2dbe
+		&& ElysiumNpcCond::ResolveEnemyHandle(*World, Memory.DetectedAttackAttacker) != nullptr)   // 102b2d9c..102b2dbe (102b2db9 serial)
 	{
 		const float Delay = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
-			.FRandRange(Cond19DetectedAttackDelayMin, Cond19DetectedAttackDelayMax);   // 102b2dc0..102b2dd5
+			.FRandRange(Cond19DetectedAttackDelayMin, Cond19DetectedAttackDelayMax);   // 102b2dc0..102b2dd5 (102b2dd2 RandomFloat)
 		Conditions19PushDelayedCondition(static_cast<int32>(EElysiumNpcCond::DetectedAttack), Delay, Now);   // 102b2de6 0x102cc6c0
 		Memory.DetectedAttackTime = Now - ElysiumNpcCond::DetectedAttackRetentionSeconds;   // 102b2deb..102b2df4 +0x65c4 := curtime
 	}
 
-	if (!(Now < WeaponThroughWallTime))                                  // 102b2dfa..102b2e10 (NaN skips)
+	// `FLD curtime / FCOMP [+0x6600] / AND 0x100 / JNZ`: C0 is set by "below" AND by unordered, so
+	// only an ordered `curtime >= stamp` runs.
+	if (WeaponThroughWallTime <= Now)                                    // 102b2dfa..102b2e10
 	{
 		WeaponThroughWallTime = Now + Cond19WallTraceInterval;           // 102b2e16..102b2e28
 		// A RAY (zero extents, `m_IsRay = 1` at `102b2ef7`) from slot 193 `EyePosition` along
-		// `m_vecForward * 32`, mask `0x2000b`, `CTraceFilterSimple(this, 0)`. The debug line under
-		// `0x10738964` (`102b2f52..102b2f8a`) is absent.
-		const FVector EyeUnits = EyePosition() / ElysiumMove::U;         // 102b2e2e
-		const FVector EndUnits = EyeUnits
-			+ FElysiumNpcSenses::ViewForward(*this) * static_cast<double>(Cond19WallTraceLengthUnits);   // 102b2e34..102b2e74
-		FKernelHullTrace Trace;
-		KernelHullTrace(EyeUnits, EndUnits, FVector::ZeroVector, FVector::ZeroVector,
-			Cond19WallTraceMask, Trace);                                  // 102b2f4f TraceRay
-		if (Trace.Fraction < ElysiumNpcTunables::One                    // 102b2f92 / 102b2fa4
-			|| Trace.bAllSolid                                           // 102b2fa6..102b2faf tr+0x36
-			|| Trace.bStartSolid)                                        // 102b2fb1..102b2fba tr+0x37
+		// `m_vecForward * 32`, mask `0x2000b` (`Cond19WallTraceMask`), `CTraceFilterSimple(this, 0)`,
+		// through the family's live world ray (`Ray_t::Init`'s `m_IsSwept` at 102b2eb9,
+		// `CTraceFilterSimple` 102b2f2e). The debug line under `0x10738964` (`102b2f52..102b2f8a`:
+		// call 0x102b2f5a, branches 0x102b2f5f 0x102b2f6b) is absent.
+		const FVector EyeCm = EyePosition();                             // 102b2e2e
+		const FVector EndCm = EyeCm + FElysiumNpcSenses::ViewForward(*this)
+			* (static_cast<double>(Cond19WallTraceLengthUnits) * ElysiumMove::U);   // 102b2e34..102b2e74
+		// `fraction < 1.0 || allsolid (tr+0x36) || startsolid (tr+0x37)` (102b2fa4 / 102b2faf): each
+		// is "the ray did not reach".
+		if (!Conditions19RayReaches(EyeCm, EndCm))                       // 102b2f4f TraceRay / 102b2f92..102b2fba
 		{
 			C.Set(EElysiumNpcCond::WeaponThroughWall);                   // 102b2fcb 0x3c
 		}

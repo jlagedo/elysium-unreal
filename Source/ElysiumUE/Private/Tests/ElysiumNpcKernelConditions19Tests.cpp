@@ -95,6 +95,12 @@ namespace
 				}())
 		{
 			Guard = World.Npc(TEXT("guard"));
+			if (Guard == nullptr)
+			{
+				// A class whose `Spawn` renames it (the player-controller line's
+				// `SetName("playercontroller")`, `0x103a4510`) is found by its class.
+				Guard = World.NpcOfClass(GuardClass);
+			}
 			Other = World.Npc(TEXT("other"));
 			Player = World.Player();
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other });
@@ -117,6 +123,13 @@ namespace
 		}
 
 		float Counter(const TCHAR* Name) { return World.Counter(Name); }
+
+		// Move the clock to `To` without letting any think run a pass (the fixture stands at 0.0).
+		void AdvanceQuiet(double To)
+		{
+			FElysiumNpcWorldFixture::Quiet({ Guard, Other });
+			World.World.Tick(To);
+		}
 
 		// `Dominate_BrainWipe` on the guard: slot 201 (`0x102b4630`, `102b469c`) answers false.
 		void BlindGuard()
@@ -703,6 +716,9 @@ bool FCond19TroikaInterruptDistTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Guard;
 	F.HidePlayer();
+	// The fixture stands at curtime 0.0, and `102b2b97..102b2baa` admits only `m_flInterruptTime >
+	// 0.0`: a stamp "at curtime" needs a positive clock (the lane's first cut stamped 0.0).
+	F.AdvanceQuiet(1.0);
 	const double Now = F.Now();
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
 	N.Cognition.Conditions.Set(FElysiumNpcBase::Cond19InsideInterruptDist);
@@ -813,8 +829,11 @@ bool FCond19TroikaTailTest::RunTest(const FString&)
 	TestTrue(TEXT("102b301b the latch raises LIGHT_DAMAGE"), Cond19Has(N, EElysiumNpcCond::LightDamage));
 	TestTrue(TEXT("...and stays latched"), N.Cognition.bCondTookDamage);
 
-	// `102b2d67`: NEW_ENEMY standing (SetEnemy raises it and the sticky enemy keeps it) resets the door.
+	// `102b2d67`: NEW_ENEMY standing resets the door. The port's `ElysiumNpcEnemy::SetEnemy` does not
+	// raise NEW_ENEMY (retail `SetEnemy` `0x10279a50` is lane L11's), so the case raises it; the
+	// sticky committed enemy leaves `ChooseEnemy` idle and nothing in the pass clears it.
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
+	N.Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 	N.BlockedDoor = F.Other->Handle;
 	N.GatherConditions();
 	TestFalse(TEXT("102b2d67 SEE_ENEMY or NEW_ENEMY resets m_hBlockedDoor"), N.BlockedDoor.IsSet());
@@ -1023,6 +1042,11 @@ bool FCond19FrenzyShadowTest::RunTest(const FString&)
 		return false;
 	}
 	F.HidePlayer();
+	// `ChooseEnemy` inside the base gather reaches slot 478 `BestEnemy` (`0x103766d0`), whose rescan
+	// zeroes and rebuilds `+0x6664` (`103767a2`). A committed, living enemy with no SEE_HATE family
+	// keeps the choice sticky, so the count this body reads is the one the case wrote (the lane's
+	// first cut let the rescan zero it).
+	ElysiumNpcEnemy::SetEnemy(*Shadow, F.Other->Handle);
 	Shadow->HostileEnemyCount = 2;
 	Shadow->GatherConditions();
 	TestTrue(TEXT("10375ef0 more than one hostile: 0x79"), Cond19HasOrdinal(*Shadow, 0x79));
@@ -1083,7 +1107,7 @@ bool FCond19GhoulCroucherTest::RunTest(const FString&)
 
 	Ghoul->GatherConditions();
 	TestEqual(TEXT("1037b60e disturbed: the Troika body runs"), Ghoul->Cognition.GatheredAt, Now);
-	TestEqual(TEXT("1037b628 no squad: SquadNewEnemy is not reached"), Ghoul->Conditions19SquadNewEnemyCalls, 0);
+	TestEqual(TEXT("1037b628 no squad: SquadNewEnemy is not reached"), Ghoul->SelectIdealStateSquadNewEnemyCalls, 0);
 	return true;
 }
 
