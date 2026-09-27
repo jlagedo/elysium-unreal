@@ -287,9 +287,12 @@ void FElysiumNpcFrenzyShadow::NPCThink()
 // Slot 433: `0x10375ed0`.
 void FElysiumNpcFrenzyShadow::GatherConditions()
 {
-	// `CALL 0x10013f2f` -> `CAI_BaseNPCTroika::GatherConditions` `0x102b27f0`, DIRECT. Then:
-	//   `+0x6664 > 1` -> `(*DAT_10924a6c)->vfunc1()` and `SetCondition(0x79)` (`0x100041b0`);
-	//   otherwise     -> `ClearCondition(0x79)` (`0x10015839` -> `0x10269b50`).
+	// `CALL 0x10013f2f` -> `CAI_BaseNPCTroika::GatherConditions` `0x102b27f0`, DIRECT. Then
+	// `CMP [+0x6664],1 / JLE` (signed, `0x10375ed8` / `0x10375edf`):
+	//   `m_iHostileEnemyCount > 1` -> the `ent_trace_conditions` read `(*DAT_10924a6c)->vfunc1()`
+	//                                 (answer discarded) and `SetCondition(0x79)` (`0x10375ef0`);
+	//   otherwise                   -> `ClearCondition(0x79)` (`0x10375efb`, `0x10015839` -> `0x10269b50`).
+	// Story 8 lane L07 re-read the listing: the body agrees arm for arm (Conditions19).
 	FElysiumNpc::GatherConditions();
 	if (HostileEnemyCount > 1)
 	{

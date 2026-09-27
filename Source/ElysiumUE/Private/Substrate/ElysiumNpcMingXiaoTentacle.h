@@ -102,6 +102,11 @@ public:
 	 *  2 is a fact of this family's rows. */
 	int32 TentaclePhase = 0;
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `+0x6678 CNPC_VMingXiaoTentacle::m_flFailedEvadeTimer` (datamap, FIELD_TIME). No port writer
+	 *  yet (its writers are the tentacle's schedule bodies), so 0 keeps the evade term open. */
+	double MingXiaoTentacleFailedEvadeTimer = 0.0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

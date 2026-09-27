@@ -315,6 +315,14 @@ public:
 	 *  writes this substrate CAN make are made and the rest is recorded. */
 	void SeverTentacle(int32 TentacleId);
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `+0x6680 CNPC_VMingXiao::m_hRangedWeapon` (datamap). Its writer is `Spawn`'s residue, so the
+	 *  spit arm of `0x10394e40` stays closed until it lands. */
+	FElysiumEntityHandle MingXiaoRangedWeapon;
+	/** SEAM for the weapon's slot 364 `WeaponLOSCondition(ownerPos, targetPos, false)` (`0x1024f330`,
+	 *  `RET 0xc`). No weapon-side line test stands on the kernel; answers true, the clear line. */
+	bool MingXiaoWeaponLosCondition(FElysiumEntity* Weapon, const FVector& FromCm, const FVector& ToCm);
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

@@ -169,6 +169,23 @@ public:
 	// From `ElysiumNpcMotor.inl`.
 	int32 PathMode = 0;
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `0x103be630` (no checklist row): the THROW_LOS line -- from `EyePosition - right *
+	 *  tzimisce_throw_pos_y` to the enemy's eye, mask `0x400b`, `CTraceFilterSimple(this, 0)`; true when
+	 *  `fraction == 1.0`. False for no enemy. */
+	bool TzimisceThrowLosTest(FElysiumEntity* Enemy);
+	/** `0x103bf660` (no checklist row): the pounce test. With an enemy (slot 167): its last known
+	 *  position (`0x102dfed0`) through the lead helper `0x102c3b50`, both points raised by 0.1, the
+	 *  squared distance inside `[40000, 360000]`, then a hull trace (this NPC's hull, mask
+	 *  `0x202400b`) that must end ON the enemy. The argument retail pushes is never read. */
+	bool TzimiscePounceTest();
+	/** SEAM for ConVar `tzimisce_throw_pos_y` (`0x1093cad0`, default "-80"), read as `IsCommand() ? 0.0f
+	 *  : m_fValue`. Not a row of `ElysiumNpcKernelTunables.h` (hot); answers the shipped default. */
+	static float TzimisceThrowPosYConVar();
+	/** SEAM for ConVar `tzimisce_pounce` (`0x1093cce0`, default "1"), read as `!IsCommand() &&
+	 *  m_nValue`. Answers the shipped default. */
+	static int32 TzimiscePounceConVar();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

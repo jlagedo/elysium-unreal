@@ -32,6 +32,11 @@ public:
 	 *  Pedestrian's pre-death bounds are different classes at the same offset. */
 	bool bPlayerAttackedMe = false;
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `+0x665c CNPC_VAnimal::m_iPlayerFriendshipState` (datamap): 0 unknown, 1 wary, 2 befriended.
+	 *  `CNPC_VDog::GatherConditions` (`0x10374b00`) is its writer. */
+	int32 AnimalPlayerFriendshipState = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;

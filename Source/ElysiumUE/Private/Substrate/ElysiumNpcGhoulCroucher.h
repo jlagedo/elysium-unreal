@@ -87,6 +87,11 @@ public:
 	void BurnPlayer(FElysiumEntity* Target, float Damage);
 	TArray<FBurnHitboxCall> BurnHitboxCalls;
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** SEAM for `SquadNewEnemy(m_pSquad, GetEnemy())` (`0x103161a0`) at `0x1037b664`: no squad object
+	 *  stands on the kernel (0002/17), so the call is counted. */
+	int32 Conditions19SquadNewEnemyCalls = 0;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;

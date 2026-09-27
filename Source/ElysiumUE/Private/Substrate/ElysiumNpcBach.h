@@ -107,6 +107,8 @@ public:
 	/** +0x66a1 `m_bBachInStartingPosition`: `Spawn` `0x10363850` and `StartTask` `0x103645a0` write
 	 *  it (other lanes' rows). */
 	bool bBachInStartingPosition = false;
+	/** L07's name for `0x10365a90` (replaced by `BachGatherCamperConditions` at integration). */
+	void BachCamperGather();
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

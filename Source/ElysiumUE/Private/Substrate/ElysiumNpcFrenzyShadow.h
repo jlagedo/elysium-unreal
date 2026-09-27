@@ -98,8 +98,10 @@ public:
 	int32 FistsNoDrawWrites = 0;
 	int32 FistsNullWeaponFaults = 0;
 
-	/** SEAM for `(*DAT_10924a6c)->vfunc1()` — the global "two hostiles" event `GatherConditions`
-	 *  fires before setting local condition 121. The event object is unrecovered; counted. */
+	/** `(*DAT_10924a6c)->vfunc1()` before `SetCondition(0x79)` (`0x10375ee3`): NOT an event -- it is
+	 *  the `ent_trace_conditions` ConVar (`0x10924a68`, `ElysiumNpcConditions10.inl`) read before
+	 *  every `SetCondition` in the image (130 sites), its answer discarded. Counted only because
+	 *  `ElysiumNpcKernelPlayerControllerTests.cpp` pins the count; it has no observable. */
 	int32 TwoHostilesEventFires = 0;
 
 	/** SEAM for the owner player's slot 424, `CBasePlayer::Replenish(1)` (`0x10168320`, reached through

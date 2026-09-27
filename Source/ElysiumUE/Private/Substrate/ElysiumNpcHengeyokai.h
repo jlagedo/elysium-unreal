@@ -148,6 +148,12 @@ public:
 	/** `m_nSkin` (`+0x670`) as Hengeyokai's translate body reads it. */
 	int32 HengeyokaiSkin = 0;
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `0x10382020` (no checklist row): the throw line -- from `EyePosition + 80 * right` (the right
+	 *  vector of slot 221's angles, `_DAT_1049a198` = -80.0 subtracted) to the enemy's eye, mask
+	 *  `0x600400b`, `CTraceFilterSimple(this, 0)`; true when `fraction == 1.0`. False for no enemy. */
+	bool HengeyokaiThrowLosTest(FElysiumEntity* Enemy);
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

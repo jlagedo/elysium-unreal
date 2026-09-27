@@ -498,6 +498,19 @@ public:
 	 *  **unrecovered**. Counted, and nothing is dispatched. */
 	void FireWerewolfZoneTrigger(FElysiumEntity& Zone);
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** SEAMS for the three Werewolf19 rows lane L12 ports in parallel:
+	 *  `UpdateConditionEnemyUnreachable` (`0x103cc320`), `UpdateConditionCanSpecialMove`
+	 *  (`0x103cc5c0`) and `UpdateConditionShouldBreakHint` (`0x103cc450`). The integrator redirects each
+	 *  to L12's body; until then each records its call. */
+	void Conditions19UpdateConditionEnemyUnreachable();
+	void Conditions19UpdateConditionCanSpecialMove();
+	void Conditions19UpdateConditionShouldBreakHint();
+	int32 Conditions19WerewolfUpdaterCalls = 0;
+	/** SEAM for ConVar `werewolf_force_teleport` (`0x1093f9a0`, default "0"), read as `!IsCommand() &&
+	 *  m_nValue`. Not a row of `ElysiumNpcKernelTunables.h` (hot); answers the shipped default. */
+	static int32 WerewolfForceTeleportConVar();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage(void* Arg0) override;

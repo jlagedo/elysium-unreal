@@ -56,6 +56,15 @@ public:
 	bool ScurryingFindFleeDestination(const FVector& ThreatPosCm, float DistanceUnits,
 		FVector* OutDestinationCm);
 
+	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
+	/** `+0x6678` (FIELD_TIME, no datamap row, no writer in the corpus: always 0, so the detect gate is
+	 *  always open) and `+0x667c` (the detected player's EHANDLE, read by StartTask `0x103ac740`). */
+	double ScurryingDetectGateTime = 0.0;
+	FElysiumEntityHandle ScurryingDetected;
+	/** `0x103aca80` (no checklist row): `UTIL_PlayerByIndex(1)` (`0x101cd9e0`), answered only when
+	 *  `ScurryingShouldDetect` (`0x103acac0`) admits it; else null. */
+	FElysiumEntity* ScurryingFindDetectablePlayer();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void GatherConditions() override;
