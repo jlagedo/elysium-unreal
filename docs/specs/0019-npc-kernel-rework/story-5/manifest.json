@@ -263,9 +263,9 @@
     },
     "step6": {
       "acceptance": "acceptance-step6.json",
-      "note": "--check step6 reads this tree once recorded. The step-6 gate ran on the 7d63e7fa working tree (782a27e6 + packets 6c-6i), committed unchanged. Packet 6r (the review follow-up, acceptance-step6r.json) is in progress: history.step6.commit is re-recorded as the 6r commit once it lands.",
+      "note": "--check step6 reads this tree. The step-6 gate ran on the 7d63e7fa working tree (782a27e6 + packets 6c-6i), committed unchanged; the 6r gate ran on the 9f52fbad working tree (bdcfc197 + packet 6r, acceptance-step6r.json), committed unchanged.",
       "accepted_6c_6i": "7d63e7fadffe6e68a9de717911364238e81724d2",
-      "commit": ""
+      "commit": "9f52fbadb5312809f0a8db2d3c293e578c28469e"
     },
     "step6r_pins": {
       "note": "step 6r: kernel_verdicts.tsv gains the Weapon_Switch 0x1032dde0 rule row (finding weapon-switch-verdict) and 0x101aa790 retargets to FElysiumNpc::ClassScheduleIdSpace (finding slot-580-typed); no other verdict changed",
