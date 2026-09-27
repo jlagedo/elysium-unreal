@@ -107,6 +107,9 @@ public:
 	 *  yet (its writers are the tentacle's schedule bodies), so 0 keeps the evade term open. */
 	double MingXiaoTentacleFailedEvadeTimer = 0.0;
 
+	// --- 0019/8 Damage19 (lane L09): the word `OnTakeDamage_Alive` `0x1039e890` zeroes -------
+	double TentacleHideReadyTimer = 0.0;         // +0x6680 m_flHideReadyTimer (datamap, FIELD_TIME)
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;
