@@ -15,6 +15,7 @@ import shutil
 from elysium_pipeline import workspace_lock
 from elysium_pipeline.asset_paths import baked_level_path
 from elysium_pipeline.paths import saved_debug_root
+from elysium_pipeline.process import ProcessTimeout
 from elysium_pipeline.importers import map_geometry
 
 
@@ -53,10 +54,28 @@ TEST_TIERS = {
 #: "forever", which is what a wedged commandlet costs without it.
 TEST_TIMEOUT_SECONDS = 900.0
 
+#: How long an automation launch may print nothing before the watchdog kills it. A single
+#: Substrate test finishes in well under a second and the editor logs every test's start and
+#: completion, so two minutes of silence is a hung test, not a slow one. Without this bound a
+#: test that wedges costs the whole `TEST_TIMEOUT_SECONDS` (a 14-minute silence on 2026-09-28)
+#: and the failure names only the deadline. The hard deadline stays as the outer bound for a
+#: run that keeps talking but never finishes.
+TEST_IDLE_TIMEOUT_SECONDS = 120.0
+
+#: The automation controller's per-test start and completion lines, as the editor logs them:
+#: `LogAutomationController: Display: Test Started. Name={Leaf} Path={Full.Test.Path}`.
+_TEST_STARTED = re.compile(r"Test Started\. Name=\{[^}]*\} Path=\{([^}]*)\}")
+_TEST_COMPLETED = re.compile(r"Test Completed\..*? Path=\{([^}]*)\}")
+
 #: Deadlines for the unattended launches a profile run drives. A commandlet that wedges before
 #: its own logging starts produces no diagnostic and no exit, so every launch carries a bound
 #: sized to the work it does. `process.run` kills the child on the deadline and raises
 #: `ProcessTimeout`, which names the command and its bound.
+#:
+#: None of these launches carries an idle bound (`process.run(idle_timeout=)`): UnrealBuildTool
+#: prints nothing for minutes while one large translation unit or the link compiles, and a
+#: commandlet's DDC fill or Nanite build can sit on one asset just as long. Silence there is
+#: work, so only the automation run, whose tests each log a start and a completion, uses one.
 BUILD_TIMEOUT_SECONDS = 3600.0
 #: Generating the compile database is a UnrealBuildTool run that compiles nothing -- it filters
 #: the actions the build already planned and writes them out, about two seconds here. The bound
@@ -102,7 +121,7 @@ _HEADLESS_EDITOR_ARGS = ("-NoLiveCoding", "-noP4", "-nosound")
 
 
 def _run(config, runner, executable: Path | str, args: Sequence[str], *,
-         timeout: float | None = None) -> None:
+         timeout: float | None = None, idle_timeout: float | None = None) -> None:
     arguments = list(map(str, args))
     executable_name = Path(executable).name.casefold()
     tail_lines = None
@@ -118,9 +137,14 @@ def _run(config, runner, executable: Path | str, args: Sequence[str], *,
         if "-unattended" in lowered:
             arguments.extend(flag for flag in _HEADLESS_EDITOR_ARGS
                              if flag.casefold() not in lowered)
+    # Passed only when set: every launch but the automation run leaves it unset, and a runner
+    # stand-in written against the older signature keeps working for them.
+    bounds = {"timeout": timeout}
+    if idle_timeout is not None:
+        bounds["idle_timeout"] = idle_timeout
     result = runner.run(
         [str(executable), *arguments], cwd=config.repo_root, tail_lines=tail_lines,
-        timeout=timeout,
+        **bounds,
     )
     if result.returncode:
         raise UnrealFailure(f"{executable} exited with {result.returncode}")
@@ -182,6 +206,8 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     if mode == "analyze":
         arguments.append("-StaticAnalyzer=Default")
     arguments.extend(extra)
+    # A deadline and no idle bound: UnrealBuildTool is legitimately silent for minutes while
+    # one large translation unit or the link runs, so silence here is not a hang.
     _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script,
          arguments, timeout=BUILD_TIMEOUT_SECONDS)
 
@@ -938,8 +964,14 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
     ]
     if parity_stems:
         arguments.insert(2, "-ElysiumParityStems=" + ",".join(parity_stems))
-    _run(config, runner, editor_executable(config, commandlet=True), arguments,
-         timeout=TEST_TIMEOUT_SECONDS)
+    try:
+        _run(config, runner, editor_executable(config, commandlet=True), arguments,
+             timeout=TEST_TIMEOUT_SECONDS, idle_timeout=TEST_IDLE_TIMEOUT_SECONDS)
+    except ProcessTimeout as exc:
+        # A killed run leaves a report directory the caller would otherwise never be pointed
+        # at, and the only statement of which test wedged is in the streamed output: the last
+        # line is whatever the test logged before it hung, not the controller's start line.
+        raise exc.annotate(_killed_run_context(exc.result.output, report))
     summary = summarize_test_report(report)
     summary["report_path"] = str(report.resolve())
     if not summary["total"]:
@@ -959,6 +991,37 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
             f"(report: {summary['report_path']})"
         )
     return summary
+
+
+def automation_test_in_flight(output: str) -> str | None:
+    """The path of the last automation test that logged a start and no completion."""
+
+    running: str | None = None
+    for line in output.splitlines():
+        started = _TEST_STARTED.search(line)
+        if started:
+            running = started.group(1)
+            continue
+        completed = _TEST_COMPLETED.search(line)
+        if completed and completed.group(1) == running:
+            running = None
+    return running
+
+
+def _killed_run_context(output: str, report: Path) -> str:
+    running = automation_test_in_flight(output)
+    if running is not None:
+        test = f"test in flight: {running}"
+    elif _TEST_STARTED.search(output):
+        test = "no test in flight (the last one started also completed)"
+    else:
+        # The retained output is a bounded tail (`EDITOR_TAIL_LINES`); a test that logged more
+        # than that before hanging pushed its start line out of it. The run log has every line.
+        test = "test in flight: unknown (no 'Test Started' line in the retained output; see the log)"
+    index = report / "index.json"
+    written = ("partial index.json written" if index.is_file()
+               else "no index.json; the commandlet writes it on completion")
+    return f"{test}; automation report: {report.resolve()} ({written})"
 
 
 def prune_test_reports(reports_dir: Path, keep: int = TEST_REPORT_RETENTION) -> int:

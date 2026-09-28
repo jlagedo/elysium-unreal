@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 
-from elysium_pipeline.process import ProcessTimeout, run_process
+from elysium_pipeline.process import ProcessIdle, ProcessTimeout, run_process
 
 
 class _CountingLog(io.StringIO):
@@ -133,3 +133,87 @@ def test_a_child_that_finishes_in_time_is_unaffected() -> None:
     )
     assert result.returncode == 0
     assert "done" in result.output
+
+
+def test_a_child_that_goes_silent_is_killed_and_named_by_its_last_line() -> None:
+    # A hung automation test keeps the editor alive but stops its output; the idle bound kills
+    # it long before the whole-run deadline, and the message says what it printed last.
+    script = (
+        "import time; "
+        "print('Test Started. Name={Hang} Path={Elysium.Substrate.Hang}', flush=True); "
+        "print('', flush=True); "
+        "time.sleep(30)"
+    )
+    with pytest.raises(ProcessIdle) as caught:
+        run_process(
+            [sys.executable, "-c", script],
+            cwd=Path.cwd(),
+            timeout=60,
+            idle_timeout=1.0,
+        )
+    message = str(caught.value)
+    assert "printed nothing for 1s" in message
+    # The blank line reset the clock but is not a statement of what the child was doing.
+    assert "Test Started. Name={Hang} Path={Elysium.Substrate.Hang}" in message
+    assert caught.value.last_line == "Test Started. Name={Hang} Path={Elysium.Substrate.Hang}"
+    assert caught.value.idle_timeout == 1.0
+    assert caught.value.result.duration_seconds < 20
+    # Existing handlers of a killed child still catch it.
+    assert isinstance(caught.value, ProcessTimeout)
+
+
+def test_a_child_silent_from_the_start_names_no_line() -> None:
+    with pytest.raises(ProcessIdle, match=r"last output line: \(none\)"):
+        run_process(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            cwd=Path.cwd(),
+            idle_timeout=0.5,
+        )
+
+
+def test_a_child_that_keeps_talking_outlives_the_idle_span() -> None:
+    # Every line resets the clock, so a run longer than the idle span but never silent for it
+    # finishes normally.
+    script = (
+        "import time\n"
+        "for i in range(5):\n"
+        "    print(f'tick-{i}', flush=True)\n"
+        "    time.sleep(0.4)\n"
+    )
+    result = run_process(
+        [sys.executable, "-c", script],
+        cwd=Path.cwd(),
+        timeout=60,
+        idle_timeout=1.0,
+    )
+    assert result.returncode == 0
+    assert result.duration_seconds > 1.0
+    assert [line for line in result.output.splitlines()] == [f"tick-{i}" for i in range(5)]
+
+
+def test_the_deadline_still_kills_a_child_that_never_goes_idle() -> None:
+    script = (
+        "import time\n"
+        "while True:\n"
+        "    print('tick', flush=True)\n"
+        "    time.sleep(0.1)\n"
+    )
+    with pytest.raises(ProcessTimeout) as caught:
+        run_process(
+            [sys.executable, "-c", script],
+            cwd=Path.cwd(),
+            timeout=1.0,
+            idle_timeout=5.0,
+        )
+    assert not isinstance(caught.value, ProcessIdle)
+    assert "deadline" in str(caught.value)
+    assert caught.value.result.duration_seconds < 20
+
+
+def test_idle_timeout_must_be_positive() -> None:
+    with pytest.raises(ValueError):
+        run_process(
+            [sys.executable, "-c", "pass"],
+            cwd=Path.cwd(),
+            idle_timeout=0,
+        )
