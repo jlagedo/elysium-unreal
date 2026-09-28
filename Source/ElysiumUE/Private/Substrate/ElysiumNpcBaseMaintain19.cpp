@@ -47,6 +47,18 @@ void FElysiumNpcBase::TaskMovementComplete()
 
 bool FElysiumNpcBase::MaintainSchedule(double Now, bool bReduced)
 {
+	// `0x102817c0`, as `RunAI` (`0x1026f302`) calls it. A Troika body goes through the port's owner
+	// routing first (`FElysiumNpc::RouteScheduleMaintenance`, its STORY8-TWIN survivors named there),
+	// which reaches the interpreter below for every body the schedule owns.
+	if (FElysiumNpc* const Troika = AsNpc())
+	{
+		return Troika->RouteScheduleMaintenance(Now, bReduced);
+	}
+	return MaintainScheduleRetail(Now, bReduced);
+}
+
+bool FElysiumNpcBase::MaintainScheduleRetail(double Now, bool bReduced)
+{
 	return ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions, bReduced); // 0x102817c0
 }
 

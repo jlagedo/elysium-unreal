@@ -187,13 +187,13 @@ bool FElysiumNpcKernelSenses10Slot594Test::RunTest(const FString&)
 	// `102b4790`: **the correction.** The range block is skipped for a COMBAT body whose
 	// `m_bEnemyWentOccluded` (`+0x5bc5`) is clear — NOT its ten-failure debounce (`bEnemyOccluded`),
 	// which is what the port read. The fixture's guard is IDLE, so the combat half of the gate is
-	// false either way; what this pins is that the DEBOUNCE alone changes nothing, which is exactly
-	// what the old reader made it do.
-	F.Guard->Senses.Memory.bEnemyOccluded = true;
+	// false either way; what this pins is that the DEBOUNCE (slot 481's `+0x5b98` count) alone
+	// changes nothing, which is exactly what the old reader made it do.
+	F.Guard->BaseMemory.EnemyOccludedCheck = 10;
 	F.Guard->BaseMemory.bEnemyWentOccluded = false;
 	TestFalse(TEXT("0x102b479b the ten-failure debounce alone does not bypass the range block"),
 		F.Guard->Slot594(F.Other, 0x2804091, nullptr, 0));
-	F.Guard->Senses.Memory.bEnemyOccluded = false;
+	F.Guard->BaseMemory.EnemyOccludedCheck = 0;
 
 	// `102b47a9`: the other half of the same gate — `m_flStealthVisionOverrideTime` ABOVE curtime
 	// skips the range block outright, and it is testable on an idle body.
@@ -384,14 +384,8 @@ bool FElysiumNpcKernelSenses10BaseOnLookedTest::RunTest(const FString&)
 	TestTrue(TEXT("...and the D_HT priority arms still raise SEE_HATE"),
 		Out.Has(EElysiumNpcCond::SeeHate));
 
-	// `GatherCommittedEnemy` no longer raises it: the condition is `OnLooked`'s alone.
-	FElysiumNpcConditions Committed;
-	ElysiumNpcCond::GatherCommittedEnemy(*F.Guard, Committed);
-	TestFalse(TEXT("GatherCommittedEnemy raises no SEE_ENEMY of its own"),
-		Committed.Has(EElysiumNpcCond::SeeEnemy));
-	TestTrue(TEXT("...but still answers the LOS debounce"),
-		Committed.Has(EElysiumNpcCond::HaveEnemyLos)
-			|| Committed.Has(EElysiumNpcCond::EnemyOccluded));
+	// (The port's `GatherCommittedEnemy`, whose SEE_ENEMY this case also pinned as absent, went with
+	// its twin gather at story 8 wave 2: slot 481 `0x10270b20` never writes 0x46 either.)
 	return true;
 }
 

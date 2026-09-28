@@ -226,14 +226,6 @@ struct FElysiumNpcMemory
 	FElysiumEntityHandle DetectedAttackAttacker;
 	double DetectedAttackTime = -1.0;
 
-	// --- Committed-enemy LOS (`GatherEnemyConditions`) -----------------------------------------
-	int32 EnemyLosFailures = 0;                // consecutive failed checks, capped at the limit
-	double EnemyLastLosTime = -1.0;
-	bool bEnemyOccluded = false;               // the debounce has flipped to ENEMY_OCCLUDED
-	// The retained memory bit that makes the found/lost outputs edge-triggered rather than
-	// per-think. One acquisition episode fires `OnFoundEnemy` once and `OnLostEnemyLOS` once.
-	bool bEnemyLosLatched = false;
-
 	// --- Closest player + its LOS cache (`SetClosestPlayer` / `SetPlayerLOS`) -------------------
 	// The nearest-player cache is NOT hostility admission and fires no output on its own.
 	FElysiumEntityHandle ClosestPlayer;
@@ -245,9 +237,6 @@ struct FElysiumNpcMemory
 	// `COND_SEE_PLAYER` stand-in — the law lane and the melee-notice route read it, and it is false
 	// unless the player is in front of this NPC and near enough to matter.
 	bool bPlayerVisible = false;
-	// `COND_WAS_BUMPED`'s commit time. `FElysiumNpc::OnBumped` writes it; `ElysiumNpcCond::
-	// GatherBump` turns it into the condition for exactly one full pass.
-	double LastBumpTime = -1.0;
 	// `m_bInPlayerPVS` (+0x6278) and `m_bInPlayerLOS` (+0x6279). These are the CADENCE's inputs,
 	// not a sighting: retail's `SetPlayerLOS` (`0x10291610`) carries no cone term, so `bPlayerLos`
 	// is true for a player standing behind this NPC with a clear line to its eye. Reading it as
@@ -372,17 +361,11 @@ public:
 	// and idempotent: the resolution is authored data, not runtime state.
 	void ResolveTuning(FElysiumNpc& Npc);
 
-	// One condition-gathering pass. `Look` scans actual candidates on their 0.15/0.25/0.45 s
-	// cadences; the separate closest-player LOS cache remains 2 s. Hearing and the committed-enemy
-	// debounce run every think. Safe with no motor, no body and no services.
-	// STORY8-TWIN: replaced by `PerformSensing` (inside slot 433 `0x1026ec30`) plus slot 481
-	// `0x10270b20` at wave 2 (L13's loop rewire); until then the live loop's only sensing pass.
-	void Tick(FElysiumNpc& Npc, double Now);
-
-	/** `CAI_Senses::PerformSensing` (`0x10310710`) alone: the `m_bCanPerformSenses` gate, `Look`,
-	 *  `Listen` -- `Tick` without the port's committed-enemy LOS debounce (`GatherEnemyLos`), whose
-	 *  retail home is slot 481 `GatherEnemyConditions` (`0x10270b20`), run by slot 433 after the
-	 *  sensing. The Conditions19 slot-433 body calls this one. Answers whether the gate let it run. */
+	/** `CAI_Senses::PerformSensing` (`0x10310710`): the `m_bCanPerformSenses` gate, `Look`, `Listen`.
+	 *  `Look` scans actual candidates on their 0.15/0.25/0.45 s cadences. The committed-enemy LOS
+	 *  debounce is slot 481 `GatherEnemyConditions` (`0x10270b20`), run by slot 433 after this. The
+	 *  Conditions19 slot-433 body calls this one. Answers whether the gate let it run. Safe with no
+	 *  motor, no body and no services. */
 	bool PerformSensing(FElysiumNpc& Npc, double Now);
 
 	// `SetClosestPlayer` (`0x10293a80`) and `SetPlayerLOS` (`0x10291610`). NOT part of the sense
@@ -395,7 +378,6 @@ public:
 
 	// The three halves, exposed so a test can drive one without the others.
 	void TickSight(FElysiumNpc& Npc, double Now);
-	void GatherEnemyLos(FElysiumNpc& Npc, double Now);
 	void TickHearing(FElysiumNpc& Npc, double Now);
 	const TArray<FElysiumEntityHandle>& Sighted() const { return SeenThisPass; }
 	void CommitBestSound(FElysiumNpc& Npc, const FElysiumNpcConditions& Conditions);

@@ -4,6 +4,9 @@
 
 /** `CAI_BaseNPC::MaintainSchedule` (`0x102817c0`) through the engine-neutral schedule kernel. */
 bool MaintainSchedule(double Now, bool bReduced);
+/** The schedule interpreter itself (`ElysiumSchedule::Tick`, `0x102817c0`), with no owner routing:
+ *  what `MaintainSchedule` reaches for a body the schedule owns. */
+bool MaintainScheduleRetail(double Now, bool bReduced);
 
 /** `TaskMovementComplete` (`0x10273ec0`), including all four task-status arms. */
 void TaskMovementComplete();

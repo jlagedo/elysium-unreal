@@ -634,7 +634,11 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 
 	// --- the SECOND pass delegates to the Troika body --------------------------------------------
 	// `FElysiumNpc::Slot606` is family TroikaHelpers'; the gate's job is to reach it.
+	// The base body draws on the schedule stream, so both calls start from the same stream state.
+	TArray<ElysiumRng::FState> Streams;
+	ElysiumRng::Snapshot(Streams);
 	const int32 Base = Npc->FElysiumNpc::Slot606(0);
+	ElysiumRng::Restore(Streams);
 	TestEqual(TEXT("the second pass delegates to the base slot 606"), Npc->Slot606(0), Base);
 	TestTrue(TEXT("and leaves the flag armed"), Npc->bBachFireOccluded);
 

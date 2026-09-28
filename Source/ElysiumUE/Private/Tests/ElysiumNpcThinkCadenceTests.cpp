@@ -622,21 +622,24 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 	// The guard's own program does not list `WAS_BUMPED`, and retail's producer consults
 	// `ConditionInterruptsCurrentSchedule` (`0x10269c70`) before it sets the bit -- so nothing is
 	// recorded at all. That refusal is the recovered behaviour, not an omission.
-	Guard->OnBumped(1.0);
-	TestTrue(TEXT("a program that does not list the bit records no bump"),
-		Guard->Senses.Memory.LastBumpTime < 0.0);
+	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::WasBumped);
+	TestFalse(TEXT("a program that does not list the bit gets no bump"), Guard->OnBumped(1.0));
+	TestFalse(TEXT("...and the bit is not set"), Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 
-	// Written by hand, the reconstruction behaves like the damage pair: live for the first pass
-	// that reads it, gone for the second.
-	Guard->Senses.Memory.LastBumpTime = 5.0;
-	FElysiumNpcConditions Out;
-	ElysiumNpcCond::GatherBump(*Guard, 4.0, Out);
-	TestTrue(TEXT("a bump newer than the last pass is decision input"),
-		Out.Has(EElysiumNpcCond::WasBumped));
-	FElysiumNpcConditions Second;
-	ElysiumNpcCond::GatherBump(*Guard, 6.0, Second);
-	TestFalse(TEXT("...and is gone by the pass after it"),
-		Second.Has(EElysiumNpcCond::WasBumped));
+	// The bit's one-pass life is `RunAI`'s (`0x1026f110`): a reduced pass leaves it standing, the
+	// end of a full pass clears it (`0x1026f323 ClearCondition(0x38)`). (Story 8 wave 2: the port's
+	// `LastBumpTime` + `GatherBump` reconstruction went with its gather.)
+	// Two full passes first, so the reduced pass below continues an installed program rather than
+	// installing one (`SetSchedule` `0x10280e50` zeroes the whole condition word).
+	Guard->RunAI(false);
+	Guard->RunAI(false);
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::WasBumped);
+	Guard->RunAI(true);
+	TestTrue(TEXT("0x1026f30b a reduced pass keeps the bump"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
+	Guard->RunAI(false);
+	TestFalse(TEXT("0x1026f323 the full pass clears it at its end"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 
 	// The producer: the player's touch handler `0x10147690`, drained off the bodies once a frame
 	// beside `SyncFromBody`. The player-side half lands; the NPC-side half meets the same mask
@@ -647,15 +650,15 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	Guard->Senses.Memory.LastBumpTime = -1.0;
+	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::WasBumped);
 	F.Services.PlayerTouchContacts.Add(Guard->Handle);
 	F.Advance(F.World.NowSeconds() + 0.05);
 	TestTrue(TEXT("the frame's contacts are drained by the poll"),
 		F.Services.PlayerTouchContacts.IsEmpty() && F.Services.Saw(TEXT("DrainPlayerTouchContacts")));
 	TestTrue(TEXT("...the toucher takes Obf_Bumped_Object"),
 		ElysiumMiscFlags::Has(Player->MiscFlags, ElysiumMiscFlags::ObfBumpedObject));
-	TestTrue(TEXT("...and a guard whose program lists no WAS_BUMPED still records no bump"),
-		Guard->Senses.Memory.LastBumpTime < 0.0);
+	TestFalse(TEXT("...and a guard whose program lists no WAS_BUMPED still records no bump"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 	return true;
 }
 

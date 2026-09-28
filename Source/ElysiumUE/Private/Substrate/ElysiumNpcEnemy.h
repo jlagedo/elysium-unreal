@@ -43,14 +43,6 @@ namespace ElysiumNpcEnemy
 	bool RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, double Now);
 
 	/**
-	 * `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), in its recovered five-step order. This is the
-	 * whole decision-pass input side: it rebuilds `Npc.Cognition.Conditions` from scratch, runs the
-	 * enemy transaction in the middle of it, and finishes with the committed enemy's own conditions
-	 * so the schedule selection that follows reads the enemy this pass chose, not last pass's.
-	 */
-	void GatherConditions(FElysiumNpc& Npc, double Now);
-
-	/**
 	 * `ShouldChooseNewEnemy` (`0x10279d00`).
 	 *
 	 * Searches when there is no current enemy, when that actor is dead, when its enemy-memory record

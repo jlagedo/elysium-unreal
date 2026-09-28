@@ -1491,7 +1491,13 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 	}
 
 	World.Tick(1.01);
-	TestTrue(TEXT("the next server frame consumes the due AI think"), JackEnt->NextThink > 1.01f);
+	// Story 8 wave 2: the due think is `NPCInitThink` (`0x10273aa0`, the think `NPCInit` installs),
+	// whose `StartNPC` re-installs the ordinary think; past the map's first second it arms it at
+	// `curtime` (`StartNPC`'s second arm), so the next frame runs `NPCThink`.
+	const FElysiumNpcBase* JackNpc = JackEnt->AsNpcBase();
+	TestTrue(TEXT("the next server frame consumes the due think (NPCInitThink -> StartNPC)"),
+		JackNpc != nullptr && JackNpc->ThinkFunctionName == FElysiumNpcBase::StartNpcThinkFunction());
+	TestTrue(TEXT("...and the ordinary think is armed no earlier than that frame"), JackEnt->NextThink >= 1.01f);
 
 	// Retail consumes an invalid EHANDLE as a no-op. The project warning is expected, and neither
 	// the transform nor the pre-existing think deadline is replaced.

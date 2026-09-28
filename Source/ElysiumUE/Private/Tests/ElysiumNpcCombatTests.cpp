@@ -564,6 +564,10 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		}
 		F.RunAdmissionAndLoadout();
 		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
+		// The weapon-sight occlusion is slot 481's `+0x5b98` debounce, which `NPCInit` seeds at its
+		// limit of ten (`BaseMemory.EnemyOccludedCheck = 10`); a visible check zeroes it
+		// (`0x10270bb1`). This case drives slot 561 alone, so the enemy is stated in sight.
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
 		FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
 		if (!TestNotNull(TEXT("the fighter holds its pistol"), Weapon))
 		{
@@ -611,7 +615,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 
 		// The occlusion latch drives the line-of-fire arm.
 		Weapon->MagazineCount = 6;
-		F.Fighter->Senses.Memory.bEnemyOccluded = true;
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;   // slot 481's `+0x5b98` at its limit
 		Cond.Reset();
 		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
 		TestTrue(TEXT("the occlusion latch raises WEAPON_SIGHT_OCCLUDED"),
@@ -632,6 +636,10 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		}
 		F.RunAdmissionAndLoadout();
 		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
+		// The weapon-sight occlusion is slot 481's `+0x5b98` debounce, which `NPCInit` seeds at its
+		// limit of ten (`BaseMemory.EnemyOccludedCheck = 10`); a visible check zeroes it
+		// (`0x10270bb1`). This case drives slot 561 alone, so the enemy is stated in sight.
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
 		// A real notice, delivered: the record is written, and the response policy still raises
 		// nothing, because the policy is what is unrecovered.
 		TestTrue(TEXT("a swing from 100 cm is inside the recovered 150-unit notice radius"),
@@ -746,10 +754,18 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// Well beyond the pistol's authored range.
 	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
 	F.CommitToTarget(10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
-	TestTrue(TEXT("a distant enemy raises TOO_FAR_TO_ATTACK"),
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
+	// Story 8 wave 2 (the retail pass, slot 433 -> slot 481 `0x10270b20`): past `m_flDistTooFar`
+	// slot 481 raises ENEMY_TOO_FAR (`0x102711be`), `FCanCheckAttacks` (`0x10270840`) refuses on it,
+	// and slot 560 clears the attack set -- so no TOO_FAR_TO_ATTACK is raised at this range; the port's
+	// old gather ran the attack conditions unconditionally.
+	TestTrue(TEXT("0x102711be a distant enemy raises ENEMY_TOO_FAR"),
+		F.Fighter->Cognition.Conditions.Has(ECond::EnemyTooFar));
+	TestFalse(TEXT("0x102711fa ...and the attack set is cleared, TOO_FAR_TO_ATTACK included"),
 		F.Fighter->Cognition.Conditions.Has(ECond::TooFarToAttack));
-	TestEqual(TEXT("...and the ranged selector chases"), F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_CHASE_ENEMY);
+	// The Troika ranged ladder then falls through to HAVE_ENEMY_LOS with a ranged weapon.
+	TestEqual(TEXT("0x102b00ee ...and the ranged selector answers FORCED_RANGE_ATTACK1 0xf0"),
+		F.Fighter->SelectSchedule(), 0xf0);
 
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
@@ -794,7 +810,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// Back in the band, the attack window opens.
 	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
 	F.Fighter->BaseMemory.Enemy = F.Target->Handle;
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 11.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 11.0);
 	TestTrue(TEXT("an enemy back inside the band is shootable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
 	// The shot itself is slot 605's arm and is asserted there; what this case owns is that the
@@ -821,8 +837,12 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	}
 	F.RunAdmissionAndLoadout();
 	F.CommitToTarget(0.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 0.0);
-	TestTrue(TEXT("an enemy in reach and faced is attackable"),
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 0.0);
+	// Story 8 wave 2 (the retail pass): the Troika `FCanCheckAttacks` (`0x102953a0`) refuses for a
+	// melee-armed body that is not yet `m_bInMelee` (+0x6078), so slot 481 runs slot 560's clear and
+	// the full pass raises no CAN_MELEE_ATTACK1; the port's old gather ran the attack conditions
+	// unconditionally. The melee ladder takes its approach from SEE_ENEMY regardless (below).
+	TestFalse(TEXT("0x102953a0 a melee body not in melee gathers no CAN_MELEE_ATTACK1"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
 	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
@@ -971,7 +991,7 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 	F.RunAdmissionAndLoadout();
 	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
 	F.CommitToTarget(10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
 
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
@@ -1078,7 +1098,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Fighter));
 
 	F.Fighter->Senses.TickSight(*F.Fighter, 20.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 20.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 20.0);
 	TestTrue(TEXT("the idle program does not starve the acquisition"),
 		F.Fighter->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...and the pass raises NEW_ENEMY"),
@@ -1168,8 +1188,8 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// Drive the actual sensory producer after moving the player. `GatherConditions` consumes the
 	// cached result; it does not itself run the Look cadence.
 	Victim.Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	Victim.Senses.Tick(Victim, 1.0);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	// (Sensing runs inside slot 433: `PerformSensing` `0x1026e4f0` at `0x1026ee04`.)
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.0);
 	TestTrue(TEXT("the pass raises the damage condition"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...commits the attacker as the enemy"),
@@ -1202,7 +1222,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// fight is no longer new, so the approach's own `LIGHT_DAMAGE` interrupt no longer fires and the
 	// program reaches its terminal swing. Re-gathering rather than reusing the selection pass's
 	// conditions is what makes that sequencing part of the assertion.
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.1);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.1);
 	TestFalse(TEXT("the damage packet is not gathered twice"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...and the enemy stays committed"),
@@ -1232,7 +1252,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 		static_cast<int32>(EElysiumRelationship::Like));
 	TestEqual(TEXT("...and a row that can never win was not stored at all"),
 		Friend.Relationships.NumDerivedRules(), 0);
-	ElysiumNpcEnemy::GatherConditions(Friend, 1.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Friend, 1.0);
 	TestFalse(TEXT("...so it acquires no enemy"), Friend.BaseMemory.Enemy.IsSet());
 
 	// --- The arms with no attacker to remember ---------------------------------------------------
@@ -1296,12 +1316,12 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 		Victim.EnemyMemory.Find(F.Player->Handle));
 	TestEqual(TEXT("damage did not fabricate a relationship row"), Victim.Relationships.NumDerivedRules(), 0);
 	Victim.Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	Victim.Senses.Tick(Victim, 1.0);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	// (Sensing runs inside slot 433: `PerformSensing` `0x1026e4f0` at `0x1026ee04`.)
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.0);
 	TestNotNull(TEXT("the subsequent sight pass writes the actor record"),
 		Victim.EnemyMemory.Find(F.Player->Handle));
 	TestTrue(TEXT("the pass commits the attacker"), Victim.BaseMemory.Enemy == F.Player->Handle);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1000.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1000.0);
 	TestNotNull(TEXT("the actor record has no time expiry"), Victim.EnemyMemory.Find(F.Player->Handle));
 	TestTrue(TEXT("...and the hostile enemy remains committed"),
 		Victim.BaseMemory.Enemy == F.Player->Handle);
@@ -1389,9 +1409,13 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 			return false;
 		}
 		F.CommitToTarget(10.0);
-		ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
+		FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
 		TestTrue(TEXT("an enemy inside the NPC's own reach is too close to shoot"),
 			F.Fighter->Cognition.Conditions.Has(ECond::TooCloseToAttack));
+		// `ShouldDodgeRangedAttack` (`0x102b7f40`) rolls under 75 at `0x102b7f5f` unless
+		// COND_STOP_BACKUP (0x2c) stands; the condition pins that arm shut so the answer does not ride
+		// the schedule stream's draw (the discipline seam and WEAPON_THROUGH_WALL answer no).
+		F.Fighter->Cognition.Conditions.Set(ECond::StopBackup);
 		// 0xf0 `SCHED_TROIKA_FORCED_RANGE_ATTACK1` is the recovered slot-605 answer here.
 		TestEqual(TEXT("...and the ranged selector answers its recovered program"),
 			F.Fighter->SelectSchedule(), 0xf0);

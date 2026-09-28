@@ -490,7 +490,7 @@ namespace
 		"hints are node indices here, as HintNode is; NOT the shoot-target override at +0x5ba8"),
 	ELYSIUM_NPC_WORD(0x6448, FElysiumNpcScheduleHost, HintCoverObject),
 	ELYSIUM_NPC_WORD_NOTED(0x644c, FElysiumNpc, AlternateAi,
-		"RunAlternateAi has no stored mode yet"),
+		"RunAlternateAI 0x1028fd80 mode, 0..4"),
 	ELYSIUM_NPC_WORD_NOTED(0x6450, FElysiumNpc, AlternateAiExpireTime,
 		"FIELD_TIME; an absolute stamp"),
 	ELYSIUM_NPC_WORD(0x6454, FElysiumNpc, PreOpenDoorActivity),

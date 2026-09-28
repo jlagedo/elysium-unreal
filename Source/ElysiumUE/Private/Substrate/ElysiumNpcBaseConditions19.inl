@@ -80,7 +80,7 @@ void Conditions19FlushDelayedConditions(double Now);
 /** `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`): `m_iIsOblivious < 1` gates
  *  `CAI_Senses::PerformSensing` (`0x10310710`: Look, whose tail is slot 469 `OnLooked`, then Listen,
  *  whose tail is slot 470 `OnListened`), and slot 459 `RemoveIgnoredConditions` runs on every path.
- *  The senses runner is the Troika's (`Senses.Tick`, which takes `FElysiumNpc&`); a base-only NPC
+ *  The senses runner is the Troika's (`Senses.PerformSensing`, which takes `FElysiumNpc&`); a base-only NPC
  *  (`CAI_TestHull`, the script directors) runs slot 459 alone. */
 void Conditions19PerformSensing(double Now);
 

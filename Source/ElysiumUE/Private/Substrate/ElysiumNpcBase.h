@@ -493,10 +493,7 @@ public:
 protected:
 	// --- Moved from `FElysiumNpc`'s protected section (story 5 step 5) ---
 
-	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).
-	EElysiumNpcState LastStateChange = EElysiumNpcState::Idle;
 
-	bool bStateChangeSeen = false;
 
 	FElysiumNpcMind Mind;
 

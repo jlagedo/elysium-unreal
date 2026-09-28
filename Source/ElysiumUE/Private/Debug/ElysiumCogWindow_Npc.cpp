@@ -878,15 +878,15 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 	{
 		Row(TEXT("enemy"), NameOf(World, Npc.BaseMemory.Enemy));
 		Row(TEXT("last enemy"), NameOf(World, Npc.BaseMemory.LastEnemy));
-		Row(TEXT("last had LOS"), AgeOf(Memory.EnemyLastLosTime, Now));
-		// The debounce, spelled as a fraction of its own limit. Ten consecutive failures is what
-		// flips `HAVE_ENEMY_LOS` to `ENEMY_OCCLUDED`, and a counter at 7 is a character about to
-		// lose one it currently believes it can see.
+		// Slot 481's debounce (`+0x5b98`, `0x10270b20`), spelled as a fraction of its own limit. Ten
+		// consecutive failures is what flips `HAVE_ENEMY_LOS` to `ENEMY_OCCLUDED`.
+		const int32 OccludedCheck = Npc.BaseMemory.EnemyOccludedCheck;
+		const bool bOccludedNow = OccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
 		Row(TEXT("LOS failures"), FString::Printf(TEXT("%d / %d"),
-			Memory.EnemyLosFailures, ElysiumNpcSense::EnemyLosFailureLimit),
-			Memory.EnemyLosFailures > 0 ? &ElysiumCogStyle::ColWarn : nullptr);
-		Row(TEXT("occluded"), Memory.bEnemyOccluded ? TEXT("yes") : TEXT("no"),
-			Memory.bEnemyOccluded ? &ElysiumCogStyle::ColWarn : nullptr);
+			OccludedCheck, ElysiumNpcSense::EnemyLosFailureLimit),
+			OccludedCheck > 0 ? &ElysiumCogStyle::ColWarn : nullptr);
+		Row(TEXT("occluded"), bOccludedNow ? TEXT("yes") : TEXT("no"),
+			bOccludedNow ? &ElysiumCogStyle::ColWarn : nullptr);
 		ImGui::EndTable();
 	}
 
@@ -1233,7 +1233,7 @@ void FElysiumCogWindow_Npc::DrawWorldOverlay() const
 				// Amber for a character acting on MEMORY, red for one that can currently see its
 				// enemy. That is the occlusion debounce made visible, and it is the difference
 				// between "the AI is chasing nothing" and "the AI remembers where you went".
-				const bool bOccluded = Npc->Senses.Memory.bEnemyOccluded;
+				const bool bOccluded = Npc->BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
 				DrawDebugLine(World3D, From, To,
 					bOccluded ? FColor(200, 140, 60) : FColor(230, 90, 90),
 					false, -1.0f, 0, bOccluded ? 1.0f : 2.5f);

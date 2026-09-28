@@ -756,256 +756,58 @@ void FElysiumNpc::LeaveGrappleState()
 
 void FElysiumNpc::Think()
 {
-	// One `NPCThink` (`0x10292de0`), in its recovered order. The four stamps on `ScheduleHost`
-	// decide what runs, and the tail at the bottom is the ONLY writer of `NextThink`.
+	// The entity think IS slot 431 `NPCThink`: `CAI_BaseNPCTroika::NPCThink` (`0x10292de0`), or the
+	// species override where the class has one (story 8 wave 2, L13). What stands around the call is
+	// the port's own, each piece named:
+	//
+	//  - `IsInert`: an entity the world has not activated or has removed (port lifecycle).
+	//  - `ThinkDead`: the death program's runner. STORY8-TWIN: replaced by the live death path through
+	//    slot 144 and the TASK_DIE arms (group f) at wave 2.
+	//  - The three lifecycle one-shots retail runs in `NPCInit` and this runtime cannot run at spawn
+	//    (an item entity created inside the world's spawn pass invalidates the array being iterated;
+	//    admission establishes idle and would wipe a director's forced state applied ahead of it).
+	//    Retail's first `NPCThink` sees their results, so they run before slot 431 on the first
+	//    normal-due think of an enabled body. Admission no longer suppresses that think's AI pass:
+	//    `0x10292de0` has no such arm (the old `bJustAdmitted` gate is deleted).
+	//  - After the think, the body hold: this runtime's body is integrated by the movement component
+	//    on the actor tick, not by `PerformMovement` inside the think, so the two think-level
+	//    freezes retail gets for free are stated (see below).
 	if (IsInert())
 	{
 		return;
 	}
-	// `CPayphone::vfunc431` (`0x101aabf0`) REPLACES this body outright — it never calls
-	// `CAI_BaseNPCTroika::NPCThink` — so it is `FElysiumNpcPayphone::Think` (story 5 step 3).
-	// Death owns the pass outright and is tested before the cadence, not inside it: retail's
-	// corpse carries no think function at all, so there is no clock a stamp could name for it.
-	// A running death program keeps its own poll; a terminal one ends the think.
 	const EDeadThink Dead = ThinkDead();
-	if (Dead == EDeadThink::Terminal)
+	if (Dead != EDeadThink::NotDead)
 	{
 		return;
 	}
-	// `flags2 &= ~SCHEDULE_CHANGED`, at the TOP. That position is what makes the bit pin the
-	// cadence only for an install that happened INSIDE a think: an install from outside one is
-	// cleared here before `CalcNextNormalThink` can read it, and re-arms the pass through
-	// `ResetThinkTimers` instead.
-	NpcFlags.Clear(EElysiumNpcFlag2::SCHEDULE_CHANGED);
-	// `if (m_bDisableAI) return`, at `NPCThink`'s own position. Retail leaves `m_flNextThink`
-	// alone here; this runtime's `RunThinks` cleared it before entering, so the silence is stated.
-	// `SetDisableAi(false)` re-arms through `ResetThinkTimers`.
-	//
-	// The return is also the freeze: retail's body moves and animates only from inside this
-	// function, so a think that ends here leaves it where it stands, in the pose it has, with its
-	// route intact -- and this runtime's body, which runs on the actor tick, has to be told both
-	// halves. Released by the first pass that gets through both gates, below.
-	if (bDisableAi)
+	if (!bDisableAi && IsNormalThinkDue())
 	{
-		SetBodyHeld(true);
-		SetBodyAnimationHeld(true);
-		NextThink = ELYSIUM_NEVER_THINK;
-		return;
-	}
-	if (Dead == EDeadThink::Running)
-	{
-		return;
-	}
-
-	const double Now = World ? World->NowSeconds() : 0.0;
-	const double Frame = World ? World->FrameSeconds() : ElysiumWorldClock::DefaultFrameSeconds;
-	const bool bNormalDue = ElysiumNpcThink::IsDue(ScheduleHost.NextNormal, Now, Frame);
-	// Computed UNCONDITIONALLY and read on both paths, exactly as `0x10292de0` does: the update
-	// clock floors at 0.03 s against the normal clock's 0.1 s, so it is the earlier stamp most of
-	// the time and a think woken by it alone must still do the update work.
-	const bool bUpdateDue = ElysiumNpcThink::IsDue(ScheduleHost.NextUpdate, Now, Frame);
-
-	if (bNormalDue)
-	{
-		// --- The port's own one-shot lifecycle, ahead of everything that reads its results -------
-		// Retail does all three at spawn (`NPCInit`); this runtime cannot, because creating an item
-		// entity inside the world's spawn pass invalidates the array being iterated, and because
-		// admission establishes idle and would wipe a director's forced state applied ahead of it.
-		// They stay one-shots on the first normal-due think, and admission suppresses only the AI
-		// pass -- the body, motor and animation are untouched by it either way.
-		const bool bJustAdmitted = RunAdmissionBarrier();
+		RunAdmissionBarrier();
 		ResolveLoadout();
 		ReplayDeferredScriptedOrder();
-
-		// `SetClosestPlayer` (`0x10293a80`), the enemy triple, then `SetPlayerLOS` (`0x10291610`),
-		// OUTSIDE the sense pass, which is where retail runs them: they answer on the normal clock
-		// while `CAI_Senses::Look` answers on the AI clock. None is gated by obliviousness --
-		// `m_iIsOblivious` gates `PerformSensing`, not these -- and none is a sighting.
-		Senses.SetClosestPlayer(*this, Now);
-		UpdateEnemyDistances();
-		Senses.SetPlayerLos(*this, Now);
-
-		// The arms of `0x10292de0` between `SetPlayerLOS` and the AI gate that this runtime does
-		// not run here, each with the story that owns it:
-		//  - `CacheInterruptConditions`: built inside the schedule tick (`BuildScheduleTestBits`).
-		//  - `AutoMovement` under `ANIM_MOVEMENT 0x4000`: the anim graph's root motion (visual).
-		//  - hint upkeep -- `m_flOccludedDelay` from cover/normal, and `ClearHintNode(5.0)` +
-		//    `SetCondition(COND_HINT_INVALID 0x29)` when the hint is invalid or its cover object is
-		//    my enemy: 12a/12b, with the hint store.
-		//  - the shoot-target override (`+0x6444` -> `m_hShootTargetOverride`): 0008 (ranged-bottles).
-		//  - the 1 % `"Scream_Death"` roll under `frenzied & 0x8000`: 16c, with the frenzy word.
-		//  - `ResolveStandingOnHead`, fall-to-ground unless `DONT_FALL_TO_GROUND`, the `move_yaw`
-		//    pose under `debug_allow_move_facing`: the movement component and anim graph own the
-		//    body's contact, gravity and turn pose (named modernization, the motor, 0002's navigator half).
-		//  - the `MOVE_FACE_ENEMY` (`flags2 0x400`) move-facing under the same cvar (default `"1"`,
-		//    so live in retail): slot 517 `0x10278d90` forwards `(enemy, its last-known position,
-		//    1.0, 0.8, 0)` to `CAI_Motor` slot 12, the motor's facing target while a leg is in
-		//    flight. The motor (0002's navigator half), with the turn pose above: this runtime's motor has no
-		//    facing-while-moving request yet, and the flag's writers are the combat programs.
-		// `DISAPPEAR 0x20000000` is run: the flag word (8) has consumers, and this is one of them.
-		if (NpcFlags.Has(EElysiumNpcFlag2::DISAPPEAR) && ShouldDisappearNow())
-		{
-			Kill();   // `UTIL_Remove` `0x101cd940`
-			return;
-		}
-		// The AI console gate `0x1026c3d0`. Retail's `g_AIDisabled` bit 0 (`DAT_1092053c`) is set
-		// by `SetAIEnabled(false)` `0x10265680`, which a player's `FeedBegin` and the level-change
-		// fade both call. On the refuse arm the gate first dispatches slot 310 `SetActivity` with
-		// `1` = `ACT_IDLE` (`0x10295750` -> `0x102725d0` -> `SetActivityAndSequence 0x10272490`:
-		// the ideal written, the sequence reset, slot 465 `OnChangeActivity`), then the think runs
-		// none of `RunAI`, `PerformMovement`, `PostRun` or the four laws and returns without
-		// writing `m_flNextThink` -- with the node graph built (`DAT_1093408c`, always true here)
-		// that is "stand idle and stop thinking until `SetAIEnabled(true)` re-bases every NPC".
-		//
-		// The idle is `PlayActivity`, retail's `SetActivity` through this runtime's claim
-		// arbitration: a body a grapple or a scene owns refuses the clip and keeps its owner's,
-		// while the ideal is written either way. The movement hold is retail's. The animation
-		// clock is deliberately NOT stopped on this arm (it is on the `m_bDisableAI` one): with a
-		// stopped clock the blend into idle would park at 0 % and the body would stand mid-stride,
-		// and a feed victim's clip, which the feeder syncs every pulse, must keep advancing. So the
-		// port's idle LOOPS where retail holds its first frame -- a named visual-only
-		// modernization; nothing the bytecode reads differs (the ideal is idle, nothing moves, an
-		// idle loop raises no gameplay anim event).
-		if (World != nullptr && !World->IsAiEnabled())
-		{
-			PlayActivity(TEXT("ACT_IDLE"));
-			SetBodyHeld(true);
-			NextThink = ELYSIUM_NEVER_THINK;
-			return;
-		}
-		// Through both gates: the body is integrated by this think again. Retail's release is
-		// nothing more than `PerformMovement` and `PostRun` running, so it is taken back here,
-		// ahead of anything below that could issue a move.
-		SetBodyHeld(false);
-		SetBodyAnimationHeld(false);
-
-		// `bReduced = !IsThinkDue(NextAI)`: the AI clock declining to think. Read after the normal
-		// gate and before the pass it governs.
-		const bool bReduced = !ElysiumNpcThink::IsDue(ScheduleHost.NextAI, Now, Frame);
-		if (!RunAlternateAi(Now) && !bJustAdmitted)
-		{
-			RunAi(Now, bReduced);
-		}
-		// `PostRun` -> `PerformMovement(interval)` has no counterpart here: this runtime's bodies
-		// are integrated by the movement component on the actor tick, not by the think.
-		ElysiumNpcThink::CalcNextMoveThink(ScheduleHost, Now);
-		ElysiumNpcThink::CalcNextAiThink(ScheduleHost, ElysiumNpcThink::GatherInputs(*this), Now,
-			Frame);
 	}
 
-	if (bUpdateDue)
+	// The installed think function. `NPCInit` (`0x10273390`, `10273a5x`) installs `NPCInitThink`
+	// (`0x10273aa0`) for the map's first second; that think runs `StartNPC`, which re-installs the
+	// ordinary one (`CallNPCThink` -> slot 431). So a map-start NPC's first think is NOT an AI pass
+	// -- the retail home of the port's old admission-think suppression.
+	if (ThinkFunctionName == NpcInitThinkFunction())
 	{
-		UpdateCharacter(Now);
-	}
-	// Gathered once for both remaining laws, and AFTER the body: `SCHEDULE_CHANGED` and the LOS
-	// byte the pass above may have moved are inputs, so reading them earlier would cost the think
-	// that installed a program its own pin.
-	const ElysiumNpcThink::FInputs Inputs = ElysiumNpcThink::GatherInputs(*this);
-	ElysiumNpcThink::CalcNextUpdateThink(ScheduleHost, Inputs, Now, Frame);
-	ElysiumNpcThink::CalcNextNormalThink(ScheduleHost, Inputs, Now, Frame);
-	// `m_flNextThink = min(NextUpdate, NextNormal)`. Retail follows it with one clamp, `m_bJumping
-	// -> curtime + 0.01`; that one is NOT ported, because the jump is 19's flight service and no
-	// think reads the body mid-flight. The port's own clamp is `HardThinkDeadline`, POLLED rather
-	// than pushed: nothing registers a deadline, the tail asks.
-	NextThink = static_cast<float>(FMath::Min3(
-		ScheduleHost.NextUpdate, ScheduleHost.NextNormal, HardThinkDeadline(Now)));
-}
-
-bool FElysiumNpc::RunAlternateAi(double Now)
-{
-	// `RunAlternateAI` (`0x1028fd80`): a transaction that owns this body and replaces the AI pass.
-	// A mode-3 grapple pair -- the attacker owns both bodies; do not sense or replace an animation.
-	if (Grapple.bOwnsStealthAction)
-	{
-		if (ResolveGrapplePartner())
-		{
-			return true;
-		}
-		LeaveGrappleState();
-	}
-	// A feed pair advances from the feeder's think and nothing else moves either actor.
-	if (TickFeed(Now))
-	{
-		return true;
-	}
-	// A scripted move whose owning beat stopped advancing it. The beat drives the move; this only
-	// watches, and releases the body rather than freezing it when the watchdog expires.
-	if (TickScriptWatchdog())
-	{
-		return true;
-	}
-	// The recovered `switch (m_eAlternateAI)` this dispatcher ends in (`0x1028fd80` cases 1-4).
-	// Story 29c-1, family Conditions ported case 1, the door-opening transaction (`0x10290040`);
-	// cases 2 (`0x10290200`), 3 (`0x102902e0`) and 4 (`0x10290350`) are not this family's rows and
-	// are named here rather than folded into a default.
-	if (AlternateAi == 1)
-	{
-		return RunAlternateAiOpeningDoor(Now);
-	}
-	return false;
-}
-
-void FElysiumNpc::RunAi(double Now, bool bReduced)
-{
-	// `RunAI(bReduced)` (`0x1026f110`).
-	RunConditionPass(Now, bReduced);
-	// Retail's `OnStateChange` edge (vtable slot 463), after the pass that can move the state and
-	// after `ResolveLoadout` above -- the first fire has to see the weapon the loadout equipped, or
-	// a guard would spawn idle with nothing to put away and draw it on the first alert only. It is
-	// an EDGE detector, so it runs on a reduced pass too: a state moved by an external producer
-	// between two full passes must still fire its virtual.
-	PumpStateChange();
-	// `MaintainSchedule(this, bReduced)`, reached through this runtime's routing. The four arms are
-	// mutually exclusive and each ends in `ThinkStanceOrIdle`, the only one that ticks a program.
-	if (ThinkInDialog(Now, bReduced))
-	{
+		NpcInitThink();                                                       // 0x10273aa0
 		return;
 	}
-	if (ThinkScriptOwned(Now))
-	{
-		return;
-	}
-	if (ThinkSchedulePolicy(Now, bReduced))
-	{
-		return;
-	}
-	ThinkAutonomous(Now, bReduced);
-}
+	NPCThink();                                                               // slot 431
 
-void FElysiumNpc::UpdateCharacter(double)
-{
-	// Slot 312, on the update clock. The Troika body `0x10298070` is the boss registry: a
-	// `m_bIsBossMonster` body registers its handle in the two-slot global table `DAT_109247e0`
-	// (`DAT_10924fb8` counts) once its slot-464 answer is 2, and a body that was registered and is
-	// no longer a boss removes itself; then `CBaseCombatCharacter::UpdateCharacter` `0x103246d0`:
-	// `UpdateDisciplineVisuals` (0006), slot 313, `UpdateVampHeal_HOT` (0005's regen),
-	// `UpdateExpressions` for a player or an NPC whose slot-513 word carries `0x800000`, the
-	// scripted eye direction or slot 333, slots 314 and 315, and the `m_nRenderFX` 0x1a / 0x25
-	// expiries after `_DAT_10449198` seconds (the fade-out and fade-in render effects, 0006).
-	// Every one of those is owned and driven elsewhere in this runtime (the discipline visuals,
-	// the heal pulse, the expression and gaze passes run on their own owners' clocks), so this arm
-	// is deliberately empty here; the boss registry has no reader in the port until a boss story
-	// wants it. `NPCThink` follows the call with `FinishTalking` when `m_bIsTalking &&
-	// !IsInDialog()`, which `TalkingUntil` expresses without a sweep.
-}
-
-double FElysiumNpc::HardThinkDeadline(double Now) const
-{
-	// Retail's precedent is `m_bJumping -> m_flNextThink = curtime + 0.01`: one body-level
-	// transaction that needs a faster answer than the laws give. This runtime's are polled instead
-	// of pushed, so nothing has to register or unregister a deadline.
-	double At = static_cast<double>(ELYSIUM_NEVER_THINK);
-	// Not the feed pulse: an NPC feeder's transaction advances inside `RunAlternateAI`, which only
-	// a normal-due think reaches, so a deadline here would wake the entity without running it.
-	// Retail has no feed clamp either -- a feeding NPC pulses on its own cadence.
-	//
-	// An abandoned scripted move. Redundant while a script phase pins `ShouldThinkFrequently` to
-	// the 0.01 s floor, and kept because the watchdog must not depend on that pin staying true.
-	if (ScriptPhase != EScriptPhase::None)
-	{
-		At = FMath::Min(At, ScriptWatchdogAt);
-	}
-	return At;
+	// The body hold (named modernization, the motor): retail's body moves and animates only from
+	// inside `NPCThink`, so the `m_bDisableAI` return (`0x10292e6c`) freezes it in place and pose, and
+	// the refused AI console gate (`0x1026c3d0`, `g_AIDisabled`) stops `PerformMovement` while
+	// slot 310 `SetActivity(ACT_IDLE)` stands it idle. The animation clock is NOT stopped on the
+	// gate arm: a stopped clock would park the blend into idle mid-stride and freeze a feed
+	// victim's synced clip (the port's idle loops where retail holds its first frame -- visual only).
+	const bool bAiConsoleRefused = World != nullptr && !World->IsAiEnabled();
+	SetBodyHeld(bDisableAi || bAiConsoleRefused);
+	SetBodyAnimationHeld(bDisableAi);
 }
 
 FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
@@ -1125,49 +927,6 @@ void FElysiumNpc::ReplayDeferredScriptedOrder()
 	}
 }
 
-void FElysiumNpc::RunConditionPass(double Now, bool bReduced)
-{
-	// --- `GatherConditions`, slot 433 ---
-	// `RunAI` (`0x1026f110`) runs it only when `!bReduced && m_hDialogPartner invalid`. Both arms
-	// are a plain SKIP with no clear: the standing condition set survives a suppressed pass, which
-	// is what lets a reduced think still be interrupted by a stimulus the last full pass gathered.
-	//
-	// The dialogue-partner half is MAPPED, not transcribed: this runtime spells "something else is
-	// driving this body's pose" as a scripted owner or an in-flight scripted move.
-	if (!bReduced && !ScriptOwner.IsSet() && ScriptPhase == EScriptPhase::None)
-	{
-		const double SenseNow = Now;
-		// `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`) runs the sense pass only when
-		// `m_iIsOblivious < 1`. This is the first and largest of the refcount's four consumers: an
-		// oblivious body takes in NO sight, sound or scent at all — it is not merely uninterested in
-		// what it senses, it senses nothing. That is what makes a mesmerized victim stand through a
-		// gunfight, and it is a strictly stronger statement than `DONT_INVESTIGATE` below.
-		if (!IsOblivious())
-		{
-			Senses.Tick(*this, SenseNow);
-		}
-		// The rest of the recovered decision pass, in `RunAI`'s own order — condition
-		// gathering (which contains the enemy transaction), then the schedule work. Retail's one
-		// `MaintainSchedule` loop owns ideal-state selection and commits it before reselection.
-		ElysiumNpcEnemy::GatherConditions(*this, SenseNow);
-		return;
-	}
-	if (bReduced)
-	{
-		// The one thing a reduced pass still derives. Retail raises `LIGHT_DAMAGE` / `HEAVY_DAMAGE`
-		// INSIDE the damage transaction, so the bit is live on a reduced think and
-		// `IsScheduleValid` interrupts on it that same pass. This runtime has no mid-pass hook and
-		// reconstructs the one-pass life from `Cognition.GatheredAt` instead, which a frozen set
-		// cannot express -- so the damage lane alone is re-derived. It costs two floats off
-		// `Senses.Memory`: no senses, no traces, no enemy transaction.
-		//
-		// `GatheredAt` is deliberately NOT advanced. It belongs to the next FULL pass to consume,
-		// and advancing it here would swallow the edge.
-		ElysiumNpcCond::GatherDamage(*this, Cognition.GatheredAt, Cognition.Conditions);
-		ElysiumNpcCond::GatherBump(*this, Cognition.GatheredAt, Cognition.Conditions);
-	}
-}
-
 bool FElysiumNpc::OnBumped(double Now)
 {
 	// The NPC half of the player's touch handler `0x10147690`. Its whole body, in order: the
@@ -1178,14 +937,16 @@ bool FElysiumNpc::OnBumped(double Now)
 	// contact, off the bodies' own `NotifyHit` records.
 	//
 	// That guard is the recovered fact worth having: retail does NOT raise `WAS_BUMPED`
-	// unconditionally. The bit never stands on an NPC whose running program does not list it, so
-	// no program in this runtime observes a bump today -- and the day 10d/10e lands one that does,
-	// this answers without a second producer being invented.
+	// unconditionally. The bit never stands on an NPC whose running program does not list it.
+	// When it passes, the handler sets the bit itself (`SetCondition(0x38)`); its one-pass life is
+	// `RunAI`'s end-of-pass clear (`0x1026f323`). The port's old `LastBumpTime` stamp, which a
+	// gather re-derived the bit from, went with that gather (story 8 wave 2).
+	(void)Now;
 	if (!ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::WasBumped))
 	{
 		return false;
 	}
-	Senses.Memory.LastBumpTime = Now;
+	Cognition.Conditions.Set(EElysiumNpcCond::WasBumped);
 	return true;
 }
 
@@ -1200,8 +961,8 @@ bool FElysiumNpc::TickScriptWatchdog()
 	const double Now = World ? World->NowSeconds() : 0.0;
 	if (Now < ScriptWatchdogAt)
 	{
-		// The deadline is PULLED by the cadence tail (`HardThinkDeadline`) rather than written
-		// here: this phase owns the pass, not the clock.
+		// No deadline is pushed: a script-driven body is a `ShouldThinkFrequently` body, so the
+		// cadence laws already hold it at their 0.01 s floor.
 		return true;
 	}
 	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
@@ -1224,6 +985,33 @@ bool FElysiumNpc::TickScriptWatchdog()
 	ReleaseAnimSegment();
 	ResetAnimToIdle();
 	return true;
+}
+
+bool FElysiumNpc::RouteScheduleMaintenance(double Now, bool bReduced)
+{
+	// `MaintainSchedule` (`0x102817c0`) as `RunAI` (`0x1026f302`) reaches it on a Troika body. Retail
+	// runs the schedule interpreter alone: a scripted beat is `SCHED_AISCRIPT`, a patrol is the patrol
+	// path's program, an interesting place is its program. This runtime still drives four of those
+	// owners outside the interpreter, so they are routed here, ahead of it:
+	//
+	// STORY8-TWIN: the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`) is replaced by
+	// `SCHED_AISCRIPT` and `CCineAISchedule`'s schedule fix `0x101a98c0` -- spec 0003 stories 1-2 build
+	// them; until then the director drives the beat and the interpreter must not fight it.
+	// STORY8-TWIN: the dialogue clip hold (`ThinkInDialog`) is replaced by the dialogue family's
+	// `m_hDialogPartner` path (RunAI's gather skip is already retail's, `0x1026f1f0`).
+	// STORY8-TWIN: the patrol and interesting-place executors (`ThinkSchedulePolicy`,
+	// `ThinkAutonomous`) are replaced by the patrol arms 0x7a..0x7e and the interesting-place
+	// program at wave 2, group (g).
+	if (TickScriptWatchdog())
+	{
+		return Schedule.IsRunning();
+	}
+	if (ThinkInDialog(Now, bReduced) || ThinkScriptOwned(Now) || ThinkSchedulePolicy(Now, bReduced))
+	{
+		return Schedule.IsRunning();
+	}
+	ThinkAutonomous(Now, bReduced);
+	return Schedule.IsRunning();
 }
 
 bool FElysiumNpc::ThinkInDialog(double Now, bool bReduced)
@@ -1349,22 +1137,6 @@ int32 FElysiumNpc::SelectSchedule()
 	return SelectNewScheduleRetail();
 }
 
-void FElysiumNpc::PumpStateChange()
-{
-	const EElysiumNpcState Now = Mind.State();
-	if (bStateChangeSeen && Now == LastStateChange)
-	{
-		return;
-	}
-	const EElysiumNpcState Previous = LastStateChange;
-	bStateChangeSeen = true;
-	LastStateChange = Now;
-	// Story 29c-1, family Conditions: the edge dispatches slot 463 WHOLE, not just the weapon half.
-	// `OnStateChange` is the species pre-step (of which `ApplyStateWeaponVisibility` is one shape)
-	// followed by `CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`) and the base body under it.
-	OnStateChange(Previous, Now);
-}
-
 void FElysiumNpc::UpdateIdealState(double Now)
 {
 	if (!Mind.IsAdmitted())
@@ -1418,7 +1190,7 @@ void FElysiumNpc::UpdateIdealState(double Now)
 
 void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 {
-	if (MaintainSchedule(Now, bReduced))
+	if (MaintainScheduleRetail(Now, bReduced))
 	{
 		return;
 	}
@@ -1853,57 +1625,6 @@ bool FElysiumNpc::WaitPvs()
 	// firing a burst of overdue thinks on the frame it wakes.
 	ResetAllThinkStamps(World->NowSeconds());
 	return true;
-}
-
-void FElysiumNpc::UpdateEnemyDistances()
-{
-	// `0x10292de0`, right after `SetClosestPlayer`: `GetEnemy()` null or with a nonzero
-	// `m_lifeState` (+0x200) -> all three `5000.0`; else the 3-D distance to the enemy, the
-	// absolute height difference, and the distance to the memory's last-known position for that
-	// enemy (`0x102dfed0`).
-	constexpr float None = 5000.f;
-	const FElysiumEntity* Enemy =
-		BaseMemory.Enemy.IsSet() && World ? World->Resolve(BaseMemory.Enemy) : nullptr;
-	if (Enemy == nullptr || Enemy->IsDead())
-	{
-		ScheduleHost.EnemyDistUnits = ScheduleHost.EnemyHeightDiffUnits =
-			ScheduleHost.EnemyLastKnownDistUnits = None;
-		return;
-	}
-	ScheduleHost.EnemyDistUnits =
-		static_cast<float>(FVector::Dist(Origin, Enemy->Origin)) / ElysiumMove::U;
-	ScheduleHost.EnemyHeightDiffUnits =
-		static_cast<float>(FMath::Abs(Origin.Z - Enemy->Origin.Z)) / ElysiumMove::U;
-	// `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`): the record's position, else the last
-	// position-only record's, else `vec3_origin` -- not the enemy's live origin (story 8 L07).
-	const FVector LastKnown = Conditions19LastKnownPosition(Enemy);
-	ScheduleHost.EnemyLastKnownDistUnits =
-		static_cast<float>(FVector::Dist(Origin, LastKnown)) / ElysiumMove::U;
-}
-
-bool FElysiumNpc::ShouldDisappearNow() const
-{
-	// `0x10292de0`: `if (flags2 & DISAPPEAR) { if (!PVS(closest player, this) || !FVisible
-	// (closest player)) UTIL_Remove(this); }`. A missing closest player fails the PVS test (the
-	// engine test answers false for a null entity) and the body is removed.
-	const FElysiumPlayer* Player =
-		Senses.Memory.ClosestPlayer.IsSet() && World ? World->FindPlayer() : nullptr;
-	if (Player == nullptr || Player->IsInert() || Player->Handle != Senses.Memory.ClosestPlayer)
-	{
-		return true;
-	}
-	const IElysiumEmbodiment* Embodiment = World->Embodiment();
-	if (Embodiment == nullptr)
-	{
-		return false;   // headless: everything shares a PVS and every line is clear
-	}
-	if (!Embodiment->ArePointsInSamePvs(Player->Origin, Origin))
-	{
-		return true;
-	}
-	// The BASE `CBaseEntity::FVisible`, not the Troika senses' one: a plain eye-to-eye trace with
-	// no range, cone or concealment term.
-	return !Embodiment->QueryLineOfSight(EyePosition(), Player->EyePosition());
 }
 
 void FElysiumNpc::InputDisableThink(const FElysiumInputArgs& Args)
@@ -3626,12 +3347,11 @@ void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
 	RestorePatrolAndAmbient();
 	RestoreMindState();
 
-	// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory above on
-	// the first think after the load. What has to be stamped is the pass CLOCK -- the edge every
-	// stimulus producer measures against. Leaving it at -1 would make an hour-old remembered gunshot
-	// look new and promote a restored NPC to alert on the strength of it.
+	// Conditions are not saved (`ElysiumNpcConditions.h`): slot 433 rebuilds them on the first pass.
+	// `m_bConditionsGathered` (+0x5ca4) is not saved either: a restored body has not gathered. (The
+	// old stamp-the-load-time edge served the port's re-deriving gather, deleted at story 8 wave 2.)
 	Cognition.Conditions.Reset();
-	Cognition.GatheredAt = InWorld.NowSeconds();
+	Cognition.GatheredAt = -1.0;
 	RestoreDeathBodyState();
 	// The restored `m_fEffects` decides whether the body is transmitted (`ShouldTransmit` `0x100ab020`).
 	RefreshVisualGate();
@@ -3972,7 +3692,8 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: TEXT("(none)"));
 	Out.Emplace(TEXT("Enemy"), BaseMemory.Enemy.IsSet()
 		? FString::Printf(TEXT("%s (%s, %d failed LOS checks%s)"), *BaseMemory.Enemy.ToString(),
-			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures,
+			BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit ? TEXT("OCCLUDED")
+				: TEXT("has LOS"), BaseMemory.EnemyOccludedCheck,
 			EnemyMemory.IsEluded(BaseMemory.Enemy) ? TEXT(", ELUDED") : TEXT(""))
 		: TEXT("(none)"));
 	Out.Emplace(TEXT("Last enemy"), BaseMemory.LastEnemy.IsSet()

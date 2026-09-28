@@ -641,21 +641,11 @@ namespace ElysiumNpcCond
 
 	// `LIGHT_DAMAGE` / `HEAVY_DAMAGE` / `REPEATED_DAMAGE` from the last committed packet.
 	void GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
-	// `COND_WAS_BUMPED`, reconstructed the same way and for the same reason as the damage pair:
-	// retail sets the bit inside the touch and clears it when a non-reduced `RunAI` ends, so it is
-	// decision input for exactly one full pass.
-	void GatherBump(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
-
-	// The `HEAR_*` family from the last accepted stimulus, by the same category mapping the
-	// senses output selection uses.
-	void GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
 
 	// The seen set joined to the relationship table: `SEE_HATE` / `SEE_FEAR`, and the last-seen
 	// memory slots those categories own. Writes `Npc.BaseMemory.LastSeen*`.
 	void GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
 
-	// `HAVE_ENEMY_LOS` / `ENEMY_OCCLUDED` / `ENEMY_DEAD` / `SEE_ENEMY` for the committed enemy.
-	void GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);
 
 	// --- Weapon capability ------------------------------------------------------------------------
 	/**

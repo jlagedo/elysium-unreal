@@ -210,12 +210,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << LastHeardCategory;
 	Ar << LastHeardTime;
 	Ar << LastDamageAmount;
-	Ar << EnemyLosFailures;
-	Ar << EnemyLastLosTime;
-	uint8 Occluded = bEnemyOccluded ? 1 : 0;
-	uint8 Latched = bEnemyLosLatched ? 1 : 0;
-	Ar << Occluded;
-	Ar << Latched;
 	uint8 InRange = bPlayerInRange ? 1 : 0;
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
@@ -224,7 +218,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << OuterBand;
 	Ar << InCone;
 	Ar << PlayerVisible;
-	Ar << LastBumpTime;
 	SerializeSound(LastSoundCombat);
 	SerializeSound(LastSoundBulletImpact);
 	SerializeSound(LastSoundFlinch);
@@ -237,8 +230,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << DetectedAttackTime;
 	if (Ar.IsLoading())
 	{
-		bEnemyOccluded = Occluded != 0;
-		bEnemyLosLatched = Latched != 0;
 		bPlayerInRange = InRange != 0;
 		bPlayerInOuterBand = OuterBand != 0;
 		bPlayerInCone = InCone != 0;
@@ -292,8 +283,6 @@ void FElysiumNpcBaseMemory::Rebase(const FElysiumEntityWorld& World)
 void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World, const FElysiumNpcBaseMemory& Base)
 {
 	// A value another build wrote is refused rather than trusted (see the base half).
-	EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0, ElysiumNpcSense::EnemyLosFailureLimit);
-	// The LOS latch travels with the enemy it was taken for, so it drops with it (below).
 	LastHeardSource = World.RebaseSavedHandle(LastHeardSource);
 	auto RebaseSoundOwner = [&World](FElysiumGameSoundEvent& Sound)
 	{
@@ -318,12 +307,6 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World, const FElysiumN
 		// The record names one attacker; with no attacker there is nothing the five-second window
 		// could still be counting down for.
 		DetectedAttackTime = -1.0;
-	}
-	if (!Base.Enemy.IsSet())
-	{
-		EnemyLosFailures = 0;
-		bEnemyOccluded = false;
-		bEnemyLosLatched = false;
 	}
 }
 
@@ -403,31 +386,6 @@ bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FElysiumEntit
 	// set, skip the cone. A player does not write `+0x98`, so a Look at the player cannot take
 	// this arm. 16a owns the follower handle; `SetPlayerLOS` owns the target's LOS byte.
 	return IsInViewCone(Npc, Target.EyePosition(), TargetConeScalar);
-}
-
-void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
-{
-	if (Npc.IsInert() || Npc.World == nullptr)
-	{
-		return;
-	}
-	if (!Perception.bResolved)
-	{
-		// A leaf constructed at runtime (an `npc_maker` child) reaches its first think without an
-		// Activate of its own having run yet. Resolving here rather than reading zeroes is the
-		// same authored data, one think later.
-		ResolveTuning(Npc);
-	}
-	// `CAI_Senses::PerformSensing` (`0x10310710`) — its whole body, past the VProf scope, is this
-	// gate and then `Look(m_LookDist)` followed by `Listen()`, in that order. Story 29c-1, family
-	// Lifecycle. The gate stood unported: this pass ran unconditionally.
-	if (!bCanPerformSenses)
-	{
-		return;
-	}
-	TickSight(Npc, Now);
-	GatherEnemyLos(Npc, Now);   // STORY8-TWIN: replaced by 0x10270b20 (slot 481) at wave 2
-	TickHearing(Npc, Now);
 }
 
 bool FElysiumNpcSenses::PerformSensing(FElysiumNpc& Npc, double Now)
@@ -653,7 +611,11 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		if (!Due[Channel]) continue;
 		const float Scalar = bPlayer && Player ? TargetVisionScalar(*Player) : 1.f;
 		const float ConeScalar = bPlayer && Player ? TargetConeScalar(*Player) : 1.f;
-		const bool bRangeBypass = Npc.GetMind().State() == EElysiumNpcState::Combat && !Memory.bEnemyOccluded;
+		// `m_NPCState == 2` and `m_bEnemyWentOccluded` (`+0x5bc5`) CLEAR -- the occlusion edge, as the
+		// recovered `GetVisionDistance` arm reads it (the port's old ten-failure debounce went with
+		// its twin at story 8 wave 2).
+		const bool bRangeBypass = Npc.GetMind().State() == EElysiumNpcState::Combat
+			&& !Npc.BaseMemory.bEnemyWentOccluded;
 		const bool bDamageOverride = Now < Memory.StealthVisionOverrideUntil;
 		const float EyeDistance = FVector::Dist(Npc.EyePosition(), Candidate->EyePosition());
 		if (!bRangeBypass && !bDamageOverride && EyeDistance > Perception.VisionDistanceCm * Scalar)
@@ -696,90 +658,6 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 	if (Npc.Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy)) ++Npc.EnemySightings;
 }
 
-// STORY8-TWIN: replaced by 0x10270b20 (slot 481 `GatherEnemyConditions`) at wave 2 (L13). Its
-// private words (`EnemyLosFailures`, `EnemyLastLosTime`, `bEnemyOccluded`, `bEnemyLosLatched`)
-// duplicate `+0x5b98` and `m_afMemory & 0x20000`; their readers move with the deletion.
-void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
-{
-	FElysiumEntityWorld* World = Npc.World;
-	if (World == nullptr)
-	{
-		return;
-	}
-	if (!Npc.BaseMemory.Enemy.IsSet())
-	{
-		// No committed enemy is the state every NPC is in until enemy selection lands. The
-		// debounce and its edge latch belong to one acquisition episode, so they clear with it.
-		Memory.EnemyLosFailures = 0;
-		Memory.bEnemyOccluded = false;
-		Memory.bEnemyLosLatched = false;
-		return;
-	}
-	const FElysiumEntity* Enemy = World->Resolve(Npc.BaseMemory.Enemy);
-	if (Enemy == nullptr || Enemy->IsInert())
-	{
-		// A dead or hidden enemy is enemy SELECTION's transaction (`ENEMY_DEAD` / `LOST_ENEMY`),
-		// not this debounce's. Nothing is inferred here.
-		return;
-	}
-
-	const bool bIsPlayer = Npc.BaseMemory.Enemy == World->PlayerHandle();
-	// The committed enemy is tracked, not discovered, so this is the raw LOS query the recovered
-	// body runs — no cone and no range gate, which are the ADMISSION stage's rules.
-	const bool bClear = IsVisible(Npc, *Enemy, Now);
-
-	if (bClear)
-	{
-		Memory.EnemyLosFailures = 0;
-		Memory.bEnemyOccluded = false;
-		Memory.EnemyLastLosTime = Now;
-		if (!Memory.bEnemyLosLatched)
-		{
-			Memory.bEnemyLosLatched = true;
-			static const FName OnFoundEnemy(TEXT("OnFoundEnemy"));
-			static const FName OnFoundPlayer(TEXT("OnFoundPlayer"));
-			Npc.FireOutput(OnFoundEnemy, Npc.BaseMemory.Enemy);
-			if (bIsPlayer)
-			{
-				// This edge publishes detection. OnLooked/unknown attention own EnemySightings.
-				Npc.FireOutput(OnFoundPlayer, Npc.BaseMemory.Enemy);
-			}
-			Npc.RecordScheduleEvent(FString::Printf(TEXT("OnFoundEnemy%s: %s"),
-				bIsPlayer ? TEXT(" + OnFoundPlayer") : TEXT(""), *Npc.BaseMemory.Enemy.ToString()));
-		}
-		return;
-	}
-
-	if (Memory.EnemyLosFailures < ElysiumNpcSense::EnemyLosFailureLimit)
-	{
-		++Memory.EnemyLosFailures;
-	}
-	if (Memory.EnemyLosFailures < ElysiumNpcSense::EnemyLosFailureLimit)
-	{
-		return;   // below ten: HAVE_ENEMY_LOS is retained, which is why nothing fires here
-	}
-	if (Memory.bEnemyOccluded)
-	{
-		return;   // already flipped; the eleventh failure is not a second edge
-	}
-	Memory.bEnemyOccluded = true;
-	if (Memory.bEnemyLosLatched)
-	{
-		Memory.bEnemyLosLatched = false;
-		static const FName OnLostEnemyLos(TEXT("OnLostEnemyLOS"));
-		static const FName OnLostPlayerLos(TEXT("OnLostPlayerLOS"));
-		Npc.FireOutput(OnLostEnemyLos, Npc.BaseMemory.Enemy);
-		if (bIsPlayer)
-		{
-			Npc.FireOutput(OnLostPlayerLos, Npc.BaseMemory.Enemy);
-		}
-		// `OnLostPlayer`/`OnLostEnemy` are deliberately NOT fired here: they belong to enemy
-		// selection's eluded/went-null transaction, and losing sight neither clears the enemy
-		// nor forgets the player.
-		Npc.RecordScheduleEvent(FString::Printf(TEXT("OnLostEnemyLOS%s after %d failed checks"),
-			bIsPlayer ? TEXT(" + OnLostPlayerLOS") : TEXT(""), Memory.EnemyLosFailures));
-	}
-}
 
 void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 {
@@ -977,11 +855,8 @@ float FElysiumNpcSenses::EffectiveVisionDistanceCm(const FElysiumNpc& Npc, doubl
 	//   1. `curtime < m_flStealthVisionOverrideTime` (`+0x6604`) — the damage/sound override window.
 	//   2. `m_NPCState == 2` (COMBAT) **and** `m_bEnemyWentOccluded` (`+0x5bc5`) is CLEAR.
 	//
-	// The second arm reads the occlusion EDGE (`+0x5bc5`), not the ten-failure debounce
-	// `m_bEnemyOccluded`. `FElysiumNpcSenses::TickSight`'s own `bRangeBypass` reads the debounce for
-	// the same retail arm, which is a divergence this story RECORDS and does not silently change:
-	// the sight pass is not this row and rewriting it here would put two readings of the same arm
-	// in the tree. This body is the recovered one.
+	// The second arm reads the occlusion EDGE (`+0x5bc5`); `TickSight`'s `bRangeBypass` reads the
+	// same word since story 8 wave 2.
 	float Distance = Perception.VisionDistanceCm;
 	const bool bStealthOverride = Now < Memory.StealthVisionOverrideUntil;
 	const bool bCombatUnoccluded = Npc.GetMind().State() == EElysiumNpcState::Combat

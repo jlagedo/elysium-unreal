@@ -4544,10 +4544,11 @@ bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 	TestFalse(TEXT("both weapons deploy drawn"), CombatantGun->IsHidden());
 	TestFalse(TEXT("both weapons deploy drawn"), VampireGun->IsHidden());
 
-	// The first edge is retail's own spawn-time `SetState(IDLE)`: the mind starts idle, and the
-	// first pump announces it.
-	Combatant->PumpStateChange();
-	Vampire->PumpStateChange();
+	// Retail's spawn-time edge is `NPCInit`'s `SetState(IDLE)` (`0x1026e340`), which fires slot 463
+	// itself; these weapons were handed over after spawn, so the IDLE edge is dispatched directly.
+	// (The port's polled `PumpStateChange` went with the old loop at story 8 wave 2.)
+	Combatant->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Idle);
+	Vampire->OnStateChange(EElysiumNpcState::Idle, EElysiumNpcState::Idle);
 	TestTrue(TEXT("an idle combatant has put its weapon away"), CombatantGun->IsHidden());
 	TestFalse(TEXT("an idle vampire has not"), VampireGun->IsHidden());
 

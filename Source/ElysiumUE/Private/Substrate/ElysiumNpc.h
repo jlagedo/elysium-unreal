@@ -356,6 +356,10 @@ public:
 
 	virtual void Think() override;
 
+	// The port's schedule-owner routing ahead of the interpreter, reached from `MaintainSchedule`
+	// (`0x102817c0`) on a Troika body; its STORY8-TWIN survivors are named at the definition.
+	bool RouteScheduleMaintenance(double Now, bool bReduced);
+
 	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
 	int32 SelectSchedule();
 
@@ -382,12 +386,8 @@ public:
 	// ahead of the switch. So "an armed class holsters while idle and draws when it goes alert" is a
 	// property of SEVEN concrete classes and of nothing else.
 	//
-	// **A polled edge rather than a callback**, because this runtime's state is written from three
-	// places (the ideal-state pass, `forcestate`, and the body arbiter's scripted push) and a hook on
-	// each is three chances to forget one. `bStateChangeSeen` starts false so the FIRST think fires
-	// it, which is retail's own spawn-time `SetState(IDLE)` — that is what puts a freshly spawned
-	// guard's weapon away. Public so a fixture can drive the edge without a whole think.
-	void PumpStateChange();
+	// Fired on the state EDGE by `SetState` (`0x1026e340`) itself; the port's polled pump
+	// (`PumpStateChange`) went with the old loop at story 8 wave 2.
 
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now, bool bReduced);
@@ -546,12 +546,6 @@ public:
 	double TalkingUntil = -1.0;
 	bool IsTalking(double Now) const { return Now <= TalkingUntil; }
 	virtual void OnDialogFilePlayed(double DurationSeconds) override;
-	// `NPCThink`'s enemy triple (`+0x6268/+0x626c/+0x6270`), refreshed on every normal-due think
-	// from the committed enemy and its memory record; `5000.0` when there is none.
-	void UpdateEnemyDistances();
-	// `NPCThink`'s `DISAPPEAR` test: out of the closest player's PVS (`0x101d1a90`), or not
-	// `FVisible` to that player (mask `0x2804091`, eye to eye). True removes the body.
-	bool ShouldDisappearNow() const;
 	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0`: a bool input feeds `SetDisableAI`; any
 	// other variant type feeds it `false`.
 	void InputDisableThink(const FElysiumInputArgs& Args);
@@ -891,7 +885,7 @@ public:
 	// +0x6435 m_bStayEntrenched (datamap) — step 2 of the interest predicate, whose keyfield is
 	// not parsed yet
 	bool bStayEntrenched = false;
-	// +0x644c m_eAlternateAI (datamap) — RunAlternateAi has no stored mode yet
+	// +0x644c m_eAlternateAI (datamap) — `RunAlternateAI` (`0x1028fd80`)'s mode, 0..4
 	int32 AlternateAi = 0;
 	// +0x6450 m_flAlternateAIExpireTimer (datamap) — FIELD_TIME; an absolute stamp
 	double AlternateAiExpireTime = 0.0;
@@ -1060,11 +1054,7 @@ public:
 // Protected, not private: the species classes (`Substrate/ElysiumNpc<X>.h`) are the retail
 // subclasses of this line, and their bodies reach the Troika state as retail's do (story 5 step 4).
 protected:
-	// --- Think(), phase by phase, in `NPCThink`'s (`0x10292de0`) order ---------------------------
-	//
-	// A phase that ends the PASS is not a phase that ends the THINK. Only `IsInert`, the
-	// `m_bDisableAI` gate and a terminal `ThinkDead` return out of `Think()`; every other phase
-	// falls through to the cadence tail, which is the sole writer of `NextThink`.
+	// --- Think(): the port's lifecycle around slot 431 `NPCThink` (`0x10292de0`) -----------------
 
 	// A dead NPC's whole think. FIRST in the pass and outside the cadence entirely, because a
 	// corpse in retail carries no think function at all -- there is no clock a stamp could name
@@ -1073,36 +1063,15 @@ protected:
 	enum class EDeadThink : uint8 { NotDead, Running, Terminal };
 	EDeadThink ThinkDead();
 
-	// The activation barrier: the mind is admitted on its first frozen-time think. Returns true on
-	// the think that admitted, which suppresses the AI pass and nothing else.
+	// The activation barrier: the mind is admitted on its first frozen-time think (retail's
+	// `NPCInit` home; see `Think`). Returns true on the think that admitted.
 	bool RunAdmissionBarrier();
-
-	// `RunAlternateAI` (`0x1028fd80`): a transaction that owns this body outright and replaces the
-	// AI pass. Non-zero suppresses `RunAi` and NOTHING else -- the cadence tail still runs, which
-	// is what keeps a feeding NPC's stamps advancing.
-	bool RunAlternateAi(double Now);
-
-	// `RunAI(bReduced)` (`0x1026f110`). Reduced skips `GatherConditions` whole and bounds schedule
-	// maintenance at one task completion instead of ten.
-	void RunAi(double Now, bool bReduced);
-
-	// `UpdateCharacter`, slot 312, on the update clock. Only `FinishTalking` is recovered of its
-	// body; the rest is UNRECOVERED and deliberately left empty rather than invented.
-	void UpdateCharacter(double Now);
-
-	// The one clamp on the cadence tail, retail's own shape (`m_bJumping -> curtime + 0.01`).
-	// Polled rather than registered: nothing subscribes, the tail asks.
-	double HardThinkDeadline(double Now) const;
 
 	// The combat loadout, resolved once on the first ordinary think after admission.
 	void ResolveLoadout();
 
 	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
-
-	// Senses and the recovered decision pass. Suppressed where retail suppresses `GatherConditions`
-	// (slot 433), and suppression is a plain SKIP: the standing condition set survives it.
-	void RunConditionPass(double Now, bool bReduced);
 
 	// Watches a beat that stopped advancing its own move and releases the body rather than
 	// freezing it.

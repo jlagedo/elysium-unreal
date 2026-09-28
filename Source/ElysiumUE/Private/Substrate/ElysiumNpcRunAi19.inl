@@ -17,8 +17,7 @@
  *  `AutoMovement` for nine ideal activities and answers TRUE either way; otherwise `m_eAlternateAI`
  *  (`+0x644c`) 1..4 hands the pass to its door-transaction arm, anything else answers FALSE.
  *
- *  Retail casing on purpose: `RunAlternateAi(double)` (`ElysiumNpc.cpp`) is the port's twin that the
- *  loop rewire deletes; this is the retail body. */
+ *  (The port's `RunAlternateAi(double)` twin was deleted by the story 8 wave-2 loop rewire.) */
 bool RunAlternateAI(bool bReduced);
 
 /** `FUN_1028fc90`, the per-pass stealth-surface reset `RunAI` (`0x1028fcc0`) runs first:

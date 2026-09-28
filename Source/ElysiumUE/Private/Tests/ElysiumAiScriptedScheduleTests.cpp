@@ -438,9 +438,10 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 	// A previous acquisition episode, so the last-enemy transfer (and the absence of any latch reset)
 	// is observable rather than vacuous.
 	F.Guard->BaseMemory.Enemy = F.Victim->Handle;
-	F.Guard->Senses.Memory.bEnemyLosLatched = true;
-	F.Guard->Senses.Memory.EnemyLosFailures = 7;
-	F.Guard->Senses.Memory.bEnemyOccluded = true;
+	// Slot 481's episode words (`0x10270b20`): the found latch `m_afMemory & 0x20000` and the
+	// `+0x5b98` occlusion count.
+	F.Guard->BaseScheduleHost.MemoryBits |= 0x20000u;
+	F.Guard->BaseMemory.EnemyOccludedCheck = 7;
 	F.Guard->Cognition.Conditions.Reset();
 
 	F.FireStartSchedule();
@@ -454,10 +455,9 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 	// forgot the latch, the debounce and the occlusion flag here — port-invented; the episode is
 	// `GatherEnemyConditions`' (`0x10270b20`). Corrected to retail in the story 8 L11 integration.
 	TestTrue(TEXT("...and SetEnemy leaves the previous LOS episode's latch to the gather pass"),
-		F.Guard->Senses.Memory.bEnemyLosLatched);
-	TestEqual(TEXT("...along with its failure debounce"),
-		F.Guard->Senses.Memory.EnemyLosFailures, 7);
-	TestTrue(TEXT("...and its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
+		(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
+	TestEqual(TEXT("...along with its occlusion count (+0x5b98)"),
+		F.Guard->BaseMemory.EnemyOccludedCheck, 7);
 
 	// "injects native condition 0x54".
 	TestTrue(TEXT("NEW_ENEMY (0x54) is injected"),

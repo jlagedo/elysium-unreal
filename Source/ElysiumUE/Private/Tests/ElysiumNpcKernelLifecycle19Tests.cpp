@@ -859,8 +859,12 @@ bool FElysiumNpcKernelLifecycle19StartNpcTest::RunTest(const FString&)
 		AddError(TEXT("no Tzimisce"));
 		return false;
 	}
+	// The map-start think already ran `NPCInitThink` (`0x10273aa0` -> slot 422) once (story 8 wave 2:
+	// the entity think dispatches it), so the explicit call is the second re-arm.
+	const int32 RearmsBefore = Tzimisce.As<FElysiumNpcTzimisce>()->TzimisceStartNpcRearms;
 	Tzimisce.Npc->StartNPC();                                            // 0x103b9270
-	TestEqual(TEXT("Tzimisce redundant re-arm"), Tzimisce.As<FElysiumNpcTzimisce>()->TzimisceStartNpcRearms, 1);
+	TestEqual(TEXT("Tzimisce redundant re-arm"), Tzimisce.As<FElysiumNpcTzimisce>()->TzimisceStartNpcRearms,
+		RearmsBefore + 1);
 	return true;
 }
 

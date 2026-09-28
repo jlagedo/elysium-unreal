@@ -203,7 +203,7 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
 	F.ThugA->bDead = true;
 
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 
 	const FElysiumNpcConditions& Cond = F.Guard->Cognition.Conditions;
 	TestTrue(TEXT("the dead committed enemy raises ENEMY_DEAD in the same pass"),
@@ -226,8 +226,9 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestFalse(TEXT("...and ENEMY_UNREACHABLE is never set — it has no producer"),
 		Cond.Has(EElysiumNpcCond::EnemyUnreachable));
 
-	// The pass clock advanced, which is what makes a stimulus edge-triggered.
-	TestTrue(TEXT("the pass stamps its own clock"), F.Guard->Cognition.GatheredAt == 10.0);
+	// `m_bConditionsGathered` latched (`0x1026eca9`), in the stamp form: the pass's own `curtime`.
+	TestTrue(TEXT("the pass latches m_bConditionsGathered at curtime"),
+		F.Guard->Cognition.GatheredAt == F.World.NowSeconds());
 	return true;
 }
 
@@ -537,7 +538,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 
 	F.Guard->Senses.TickSight(*F.Guard, 10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 	TestFalse(TEXT("the unseen hostile tutorial-distance player has no memory record"),
 		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
 	TestFalse(TEXT("...and relationship alone cannot select it"),
@@ -562,7 +563,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	F.Player->Origin = FVector(Cm(500.f), 0.0, 0.0);
 	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
 	F.Guard->Senses.TickSight(*F.Guard, 11.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 11.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 11.0);
 	TestTrue(TEXT("a seen hostile player gains the actor record"),
 		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
 	TestTrue(TEXT("...and can now be selected"),
@@ -659,11 +660,12 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 
 	// One acquisition episode against the player: the found edge fires once and latches.
 	F.Guard->BaseMemory.Enemy = F.Player->Handle;
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
+	F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
 	F.Flush(1.0);
 	TestEqual(TEXT("the first committed-enemy LOS fires OnFoundEnemy"),
 		F.Counter(TEXT("c_foundenemy")), 1.f);
-	TestTrue(TEXT("...and latches"), F.Guard->Senses.Memory.bEnemyLosLatched);
+	TestTrue(TEXT("...and latches m_afMemory 0x20000 (0x10270d1e)"),
+		(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
 	// The LOS edge publishes detection; it does NOT count a sighting. Retail's two writers of
 	// `m_iEnemySightings` are both in the sense pass (see `LookaroundChance`).
 	const int32 SightingsAfterFirst = F.Guard->EnemySightings;
@@ -675,17 +677,15 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	// nothing else: the LOS episode is NOT reset here (the port's old body forgot the latch, the
 	// debounce and the occlusion flag -- port-invented; the episode belongs to
 	// `GatherEnemyConditions` `0x10270b20`, lane L07). Corrected to retail.
-	F.Guard->Senses.Memory.EnemyLosFailures = 3;
-	F.Guard->Senses.Memory.bEnemyOccluded = true;
+	F.Guard->BaseMemory.EnemyOccludedCheck = 3;
 	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.ThugA->Handle);
 	TestTrue(TEXT("the old handle goes through the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.Player->Handle);
 	TestTrue(TEXT("the new handle is committed"),
 		F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 	TestTrue(TEXT("the LOS latch is not SetEnemy's to clear"),
-		F.Guard->Senses.Memory.bEnemyLosLatched);
-	TestEqual(TEXT("...nor its debounce"), F.Guard->Senses.Memory.EnemyLosFailures, 3);
-	TestTrue(TEXT("...nor its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
+		(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
+	TestEqual(TEXT("...nor its debounce (+0x5b98)"), F.Guard->BaseMemory.EnemyOccludedCheck, 3);
 	TestEqual(TEXT("the non-null write runs the discipline sweep (0x10279b0c)"),
 		F.Guard->SetEnemyDisciplineStripCalls, 1);
 	return true;
@@ -766,11 +766,11 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		}
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 		F.Guard->BaseMemory.Enemy = F.Player->Handle;
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
+		F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
 		F.Services.bLineOfSightClear = false;
 		for (int32 i = 0; i <= ElysiumNpcSense::EnemyLosFailureLimit; ++i)
 		{
-			F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
+			F.Guard->GatherEnemyConditions(F.Player);
 		}
 		F.Flush(20.0);
 		TestEqual(TEXT("a full LOS debounce fires neither lost-the-actor output"),
@@ -1117,9 +1117,10 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	Sound.TypeMask = ElysiumGameSounds::Combat;
 	Sound.Position = F.Guard->EyePosition();
 	F.World.GameSounds().Emit(Sound, 3.0);
-	F.Guard->Senses.TickHearing(*F.Guard, 3.0);
-	F.Guard->Senses.TickHearing(*F.Guard, 3.91);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 3.91);
+	// Two retail passes: slot 433's `PerformSensing` (`0x1026ee04`) hears at 3.0 and promotes the
+	// delayed sound on the pass at 3.91, whose `OnListened` merge raises the HEAR bit.
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 3.0);
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 3.91);
 	TestTrue(TEXT("the heard stimulus raises HEAR_COMBAT"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::HearCombat));
 	{
@@ -1156,7 +1157,11 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	// The guard is unarmed — a content-free fixture installs no item catalogue. Story 8 L06
 	// integration (corrected to retail): `CNPC_VHuman::SelectSchedule` then reads weapon word 0
 	// (`0x10385008`) and asks the RANGED slot 605 (`0x10385022`), not the melee one.
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 4.0);
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 4.0);
+	// NEW_ENEMY, set above for the promotion, stands until `SetSchedule` (`0x10280e50`) zeroes the
+	// word -- the retail pass clears nothing it does not own -- and the Troika combat ladder answers
+	// its own NEW_ENEMY arm first. The next program install clears it; stated here.
+	F.Guard->Cognition.Conditions.Clear(EElysiumNpcCond::NewEnemy);
 	TestTrue(TEXT("a distant committed enemy raises TOO_FAR_TO_ATTACK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
 	// The recovered slot-605 body's own answer, a loaded program.
@@ -1208,13 +1213,14 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 
 		// The committed-enemy LOS edge is NOT a writer, however many times it fires.
 		F.Guard->BaseMemory.Enemy = F.Player->Handle;
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
-		TestTrue(TEXT("the found edge latched"), F.Guard->Senses.Memory.bEnemyLosLatched);
+		F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
+		TestTrue(TEXT("the found edge latched (m_afMemory 0x20000)"),
+			(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
 		TestEqual(TEXT("...but the LOS edge does not count a sighting: retail has no writer there"),
 			F.Guard->EnemySightings, 0);
 		for (int32 i = 0; i < 5; ++i)
 		{
-			F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
+			F.Guard->GatherEnemyConditions(F.Player);
 		}
 		TestEqual(TEXT("...nor does staying in sight"), F.Guard->EnemySightings, 0);
 
@@ -1500,9 +1506,9 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	// load, which is what the recovered pass does on every think anyway.
 	TestTrue(TEXT("the gathered conditions do not travel in the payload"),
 		G.Guard->Cognition.Conditions.IsEmpty());
-	// ...and the pass clock is stamped rather than left at "nothing has ever run", so a remembered
-	// stimulus from before the save cannot read as new.
-	TestTrue(TEXT("the pass clock is stamped on restore"), G.Guard->Cognition.GatheredAt >= 0.0);
+	// `m_bConditionsGathered` (+0x5ca4) is not a datamap row: a restored body has not gathered. (The
+	// port's old stamp-the-load-time edge served its re-deriving gather, deleted at story 8 wave 2.)
+	TestTrue(TEXT("m_bConditionsGathered is clear on restore"), G.Guard->Cognition.GatheredAt < 0.0);
 
 	// The hook's own half: a record whose actor the restored world no longer carries is dropped
 	// rather than left naming a dead index (`FElysiumNpcEnemyMemory::Rebase`).

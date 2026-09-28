@@ -1193,8 +1193,8 @@ bool FElysiumNpcKernelLifecycleSenseGateTest::RunTest(const FString&)
 	// close the player is standing. The ON path is the `Elysium.Substrate.NpcSenses.*` suite's own
 	// subject and is not re-asserted here.
 	N.Senses.bCanPerformSenses = false;
-	N.Senses.Tick(N, 1.0);
-	N.Senses.Tick(N, 2.0);
+	N.Senses.PerformSensing(N, 1.0);   // `CAI_Senses::PerformSensing` 0x10310710 (the old `Tick` twin is gone)
+	N.Senses.PerformSensing(N, 2.0);
 	TestEqual(TEXT("a gated-off pass sights nothing"), N.Senses.Sighted().Num(), 0);
 	// The tuning resolve is NOT behind the gate — it is the port's own pre-step, and retail's gate
 	// sits inside `CAI_Senses::PerformSensing`, below `InitPerceptionDistances`.
