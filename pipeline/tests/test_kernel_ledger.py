@@ -165,13 +165,14 @@ class _FixtureLedger(kl.Ledger):
         self.functions = functions
         self.layer_of = layers
         self.verdicts = verdicts
-        self.checklists = ("0-9",)
         self.closure = {a: 0 for a in functions}
         self.closure_edges = set()
         self.all_callers = {}
         self.family = {"CAI_BaseNPC"}
         self.helpers = ["CAISound"]
         self.interior = {}
+        self._cite_members = {}
+        self._cite_memo = {}
         self.port_addr = {a: [kl.Citation("ElysiumNpc.cpp", 1, False, "")] for a in port}
         self.oracle_addr = {a: [kl.Citation("docs/vtmb/npc-ai/senses.md", 1, False, "")]
                             for a in oracle}
@@ -211,6 +212,25 @@ def test_band_stats_counts_a_verdict_as_a_citation():
 
     # The band bounds are the `order.md` layer, so layer 12 is in neither of the two.
     assert ledger.band_stats(10, 18)["core"] == 1
+
+
+def test_cites_keeps_its_own_tables_interior_sites_once():
+    # `interior` pools the inside-a-body citations of every table; `cites` hands a table back its
+    # own, after the start-address ones, each line once and in scan order.
+    ledger = _band_fixture({})
+    start = ledger.port_addr["10000002"][0]
+    site = kl.Citation("ElysiumNpc.cpp", 9, False, "0x10000005")
+    prose = kl.Citation("docs/vtmb/npc-ai/senses.md", 2, False, "0x10000006")
+    ledger.port_addr["10000005"] = [site]
+    ledger.oracle_addr["10000006"] = [prose]
+    ledger.interior = {"10000002": [site, start, prose, site]}
+
+    assert ledger.cites(ledger.port_addr, "10000002") == [start, site]
+    assert ledger.cites(ledger.oracle_addr, "10000002") == [prose]
+    assert ledger.cites(ledger.oracle_addr, "10000001") == []
+    # The memo hands out copies: a caller's edit does not reach the next answer.
+    ledger.cites(ledger.port_addr, "10000002").clear()
+    assert ledger.cites(ledger.port_addr, "10000002") == [start, site]
 
 
 def test_band_stats_counts_unsettled_apart_from_the_four_verdicts():

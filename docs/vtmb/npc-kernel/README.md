@@ -2,7 +2,20 @@
 
 The whole of `CAI_BaseNPC`'s family in `vampire.dll` — every class, vtable slot, field and
 reachable function — as generated tables, so a story starts from a query instead of a
-re-discovery. Everything else in this directory is written by
+re-discovery.
+
+The whole generated surface — these tables, the two lists, the shape tables, the pin and the project
+source the generators emit — is regenerated or checked by one command:
+
+    uv run elysium research kernel --check   # the gate: every tool's --check, nothing written
+    uv run elysium research kernel           # regenerate, repeating until the gate holds
+
+It builds the ledger, the shape and the census model once and renders all seven tools from them
+(`research/tooling/kernel.py`); run one by one, each tool rebuilds everything under it. A
+regeneration already ends on the gate, so a `--check` after it adds nothing. The single tools below
+remain for their other options.
+
+Everything else in this directory is written by
 
     uv run elysium research kernel_ledger          # regenerate
     uv run elysium research kernel_ledger --check  # verify the committed tables, write nothing

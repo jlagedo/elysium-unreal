@@ -239,7 +239,7 @@ class Function:
         return bool(PLACEHOLDER_RE.match(self.name))
 
 
-@dataclass
+@dataclass(frozen=True)
 class Citation:
     path: str
     line: int
@@ -436,7 +436,10 @@ class Ledger:
         self.stale_kinds: dict[str, str] = {}
         self.unsettled: dict[str, str] = {}   # addr -> why the naming pass left it unnamed
         self.verdicts: dict[str, Verdict] = load_verdicts(_HERE / VERDICTS_TSV)
-        self.checklists: tuple[str, ...] = CHECKLIST_BANDS
+        # `cites()`'s memo: the citation tables are fixed once `citations()` has run, and the
+        # render passes ask for the same function tens of thousands of times.
+        self._cite_members: dict[int, set[Citation]] = {}   # id(table) -> every citation it holds
+        self._cite_memo: dict[tuple[int, str], list[Citation]] = {}
 
     # -- loading -------------------------------------------------------------------------------
 
@@ -789,12 +792,26 @@ class Ledger:
                     self.stale_kinds[addr] = kind
 
     def cites(self, table: dict[str, list[Citation]], addr: str) -> list[Citation]:
-        """Citations of a function: its start address and every site inside its body."""
-        found = list(table.get(addr, []))
-        for c in self.interior.get(addr, []):
-            if c not in found and any(c in v for v in table.values()):
-                found.append(c)
-        return found
+        """Citations of a function: its start address and every site inside its body.
+
+        `interior` holds the inside-a-body citations of all three tables together, so a table
+        keeps the ones it holds itself. That membership is one set per table and the answer is
+        memoised per (table, address): asked as a scan of the whole table, it was 98% of a run.
+        """
+        key = (id(table), addr)
+        found = self._cite_memo.get(key)
+        if found is None:
+            members = self._cite_members.get(id(table))
+            if members is None:
+                members = self._cite_members[id(table)] = {c for v in table.values() for c in v}
+            found = list(table.get(addr, []))
+            seen = set(found)
+            for c in self.interior.get(addr, []):
+                if c not in seen and c in members:
+                    seen.add(c)
+                    found.append(c)
+            self._cite_memo[key] = found
+        return list(found)
 
     def _scan_citations(self, path: Path, by_addr: dict, by_off: dict,
                         member: bool = False, sections: bool = False) -> None:
@@ -892,9 +909,11 @@ class Ledger:
 
     # -- rendering -----------------------------------------------------------------------------
 
-    def render(self) -> dict[str, str]:
+    def render(self, extra: tuple[str, ...] = ()) -> dict[str, str]:
+        """Every committed table, plus a checklist for each `extra` band (`--checklist`)."""
+        bands = CHECKLIST_BANDS + tuple(b for b in extra if b not in CHECKLIST_BANDS)
         return {
-            **{f"checklist-{band}.md": self._render_checklist(band) for band in self.checklists},
+            **{f"checklist-{band}.md": self._render_checklist(band) for band in bands},
             "classes.md": self._render_classes(),
             "slots.md": self._render_slots(),
             "fields.md": self._render_fields(),
@@ -1581,9 +1600,7 @@ def main(argv: list[str] | None = None) -> int:
     repo = repo_root()
     out_dir = Path(args.out) if args.out else repo.joinpath(*DEFAULT_OUTPUT)
     ledger = build(args.module, args.depth, repo)
-    extra = tuple(b for b in args.checklist if b not in CHECKLIST_BANDS)
-    ledger.checklists = CHECKLIST_BANDS + extra
-    rendered = ledger.render()
+    rendered = ledger.render(tuple(args.checklist))
     print(f"family {len(ledger.family)} classes, {len(ledger.slot_bodies)} slots, "
           f"closure {len(ledger.closure)} functions, {len(ledger.closure_edges)} edges, "
           f"{len(ledger.fields)} fields, {len(ledger.layers)} layers, "
