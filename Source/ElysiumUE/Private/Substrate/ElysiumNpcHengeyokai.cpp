@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -291,7 +292,7 @@ void FElysiumNpcHengeyokai::TaskFail(int32 Reason)
 // (story 5 step 3). Every miss is a direct call into the Troika body `0x102b12f0`.
 int32 FElysiumNpcHengeyokai::TranslateScheduleRetail(int32 ScheduleNumber)
 {
-	if (ScheduleNumber != 0x16e && HengeyokaiSkin == 1)
+	if (ScheduleNumber != 0x16e && Skin == 1)   // m_nSkin +0x670
 	{
 		++HengeyokaiThawCalls;
 	}
@@ -633,3 +634,36 @@ void FElysiumNpcHengeyokai::ClearLinkActivity()
 
 // --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
 
+
+// --- Story 8, lane L12: Boss19 `0x103830e0` ----------------------------------------------------
+
+void FElysiumNpcHengeyokai::HengeyokaiEnterMorph()
+{
+	// `0x103830e0` (`FElysiumNpc::HengeyokaiEnterMorph` in the checklist), 55 bytes, no branch. The
+	// order is the rule: the morph program is installed BEFORE the skin flips, and the fade time is
+	// written BEFORE the target skin, so both land on the same think and the swap is instant.
+	// `+0x1b30`/`+0x1b34` := `NPC_VHengeyokai.cpp`, 0x985 — absent in the shape map; recorded.
+	RecordScheduleEvent(TEXT("EnterMorph trace NPC_VHengeyokai.cpp:2437"));  // 0x103830ea / 0x103830f4
+	// `0x16e`, the morph program — the same class-local id this class's `TranslateScheduleRetail`
+	// gates its skin test on above.
+	constexpr int32 MorphSchedule = 0x16e;
+	SetSchedule(MorphSchedule, false);                                       // 0x103830e5 / 0x103830fe 0x102ae750
+	// `CBaseAnimating::SetSkinFadeTime(0.0)` (`0x1008d5f0`): a time at or below `_DAT_1044fab0`
+	// (a DOUBLE, 0.0 in the image) stores the floor, so the fade time is 0.0 (`0x1008d61f FCOMP` /
+	// `0x1008d67e`). Review of lane L12: the lane read the cell as 0.01.
+	constexpr float SkinFadeTime = 0.0f;
+	HengeyokaiSkinCrossfadeTime = SkinFadeTime > static_cast<float>(ElysiumNpcTunables::ZeroDouble)
+		? SkinFadeTime : static_cast<float>(ElysiumNpcTunables::ZeroDouble);   // 0x10383107
+	// `CBaseAnimating::FadeToSkin(1)` (`0x1008d6d0`): only on a real change, `DevMsg`, then the old
+	// skin into `m_nSkinCrossfade` and the new into `m_nSkin`.
+	constexpr int32 MorphSkin = 1;
+	// `m_nSkin` (`+0x670`) is `FElysiumAnimating::Skin`, the `skin` keyfield (review of lane L12: the
+	// species carried a twin, `HengeyokaiSkin`, deleted).
+	if (Skin != MorphSkin)                                                   // 0x10383110
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Fading to skin %d over %.2f"), MorphSkin,
+			HengeyokaiSkinCrossfadeTime);
+		HengeyokaiSkinCrossfade = Skin;                                      // 0x1008d73f +0x674
+		Skin = MorphSkin;                                                    // 0x1008d770 +0x670
+	}
+}

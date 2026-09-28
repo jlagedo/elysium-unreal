@@ -10,4 +10,17 @@
 //
 // Owns (Werewolf19's `rule` rows): 0x10271d10 CAI_BaseNPC::CheckTarget.
 
-// helper declarations of the Werewolf19 porter go here
+// --- Story 8, lane L12 -------------------------------------------------------------------------
+
+/** `CAI_BaseNPC::CheckTarget(CBaseEntity*)` (`0x10271d10`): clear `COND 0x4b` HAVE_TARGET_LOS and
+ *  `0x49` TARGET_OCCLUDED, ask slot 201 `FVisible(target, 0x2804091, NULL, 0)` once, set `0x4b` on a
+ *  clear line or `0x49` otherwise, then `UpdateTargetPos` unconditionally. No debounce. */
+void CheckTarget(FElysiumEntity* Target);
+
+/** SEAM for `CAI_BaseNPC::UpdateTargetPos` (`0x10271b10`): re-aim or re-path the navigator's
+ *  target goal at `m_hTargetEnt` (`+0x5ce4`). It acts only when the navigator's goal type (`+0x5d34`
+ *  `+0x18`) is neither 3 nor 1 AND `GetGoalType` (`0x102ee620`, family Motor's `NavGoalState()`)
+ *  answers 1; this runtime stands no navigator goal object, so `NavGoalState` answers -1 and the body
+ *  takes retail's "no target goal" arm and returns. Counted. */
+void UpdateTargetPos();
+int32 UpdateTargetPosCalls = 0;

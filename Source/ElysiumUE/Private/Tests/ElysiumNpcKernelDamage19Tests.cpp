@@ -974,13 +974,15 @@ bool FElysiumNpcKernelDamage19HengeyokaiAliveTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	// `0x103830e0`'s `FadeToSkin(1)` (`0x10383110`) is the morph's witness: skin 0 -> 1.
+	H->Skin = 0;
 	FElysiumNpcBase::FElysiumTakeDamageInfo FromNpc = Damage19Packet(F.Other, 2.f);
 	TestEqual(TEXT("10380262 returns the chain's answer"), H->OnTakeDamage_Alive(&FromNpc), 1);
-	TestEqual(TEXT("10380259 not an explosion: no morph"), H->HengeyokaiEnterMorphCalls, 0);
+	TestEqual(TEXT("10380259 not an explosion: no morph"), H->Skin, 0);
 	TestEqual(TEXT("103801da the chain ran FIRST"), H->LastTakeDamageInfo.Damage, 2.f);
 	FElysiumNpcBase::FElysiumTakeDamageInfo Blast = Damage19Packet(Boom, 3.f);
 	H->OnTakeDamage_Alive(&Blast);
-	TestEqual(TEXT("1038025d a point_explosion attacker runs 0x103830e0"), H->HengeyokaiEnterMorphCalls, 1);
+	TestEqual(TEXT("1038025d a point_explosion attacker runs 0x103830e0 (FadeToSkin(1))"), H->Skin, 1);
 	return true;
 }
 
@@ -1037,20 +1039,31 @@ bool FElysiumNpcKernelDamage19MingXiaoTest::RunTest(const FString&)
 	TestEqual(TEXT("10395309 ...and to -1 with 5 severed too"), M->MingXiaoMeleeTentacleIndex(), -1);
 	M->MingXiaoSeveredTentacleMask = 0;
 	M->LastHitGroup = 2;
-	TestEqual(TEXT("1039538d the spread draw against a 0 chance never passes"), M->MingXiaoMeleeTentacleIndex(), -1);
+	// `0x1039539f`: `RandomInt(0, 99) < MeleeTentacleHitPercent` (Rules.txt, default 20,
+	// `0x101e7405`): a pass walks 1,0,3,2,5,4 and answers limb 1 (all connected); a miss answers -1.
+	const int32 Spread = M->MingXiaoMeleeTentacleIndex();
+	TestTrue(TEXT("1039538d the spread draw answers limb 1 or -1"), Spread == 1 || Spread == -1);
+	TestEqual(TEXT("103952b0 the draw's ceiling is the tuning record's +0x2c"), M->MingXiaoMeleeSpreadChance(), 20);
 
 	// The head: the packet copy goes through the router, then the chain.
 	M->MingXiaoTentacleId = INDEX_NONE;
 	M->LastHitGroup = 4;
+	for (float& Hp : M->MingXiaoHitPoints)
+	{
+		Hp = 100.f;
+	}
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(nullptr, 7.f);
 	M->OnTakeDamage_Alive(&Info);
-	TestEqual(TEXT("10395b3b the head runs 0x10395750 on the copy"), M->MingXiaoApplyTentacleDamageCalls, 1);
-	TestEqual(TEXT("10395b2d ...with the mapped index"), M->MingXiaoLastAppliedTentacleIndex, 1);
-	TestEqual(TEXT("10395b47 ...then chains the copy"), M->LastTakeDamageInfo.Damage, 7.f);
+	TestEqual(TEXT("10395b3b the head runs 0x10395750 on the copy: limb 1 (10395b2d) takes the hit"),
+		M->MingXiaoHitPoints[1], 93.f);
+	TestEqual(TEXT("10395881 ...which zeroes the copy's damage before the chain (10395b47)"),
+		M->LastTakeDamageInfo.Damage, 0.f);
+	TestEqual(TEXT("...and the caller's packet is untouched"), Info.Damage, 7.f);
 	// A proxy chains unmodified, with no router.
 	M->MingXiaoTentacleId = 2;
 	M->OnTakeDamage_Alive(&Info);
-	TestEqual(TEXT("10395af6 a proxy skips the router"), M->MingXiaoApplyTentacleDamageCalls, 1);
+	TestEqual(TEXT("10395af6 a proxy skips the router"), M->MingXiaoHitPoints[1], 93.f);
+	TestEqual(TEXT("10395af6 ...and chains the packet as is"), M->LastTakeDamageInfo.Damage, 7.f);
 	return true;
 }
 

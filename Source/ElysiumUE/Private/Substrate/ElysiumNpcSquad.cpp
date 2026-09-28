@@ -218,11 +218,11 @@ void FElysiumNpc::SetFollowerBossName(const FElysiumEntity* Boss)
 	}
 	const bool bIsPlayer = World != nullptr && Boss->Handle == World->PlayerHandle();
 	const FString Name = bIsPlayer ? FString(TEXT("!player")) : Boss->TargetName;
-	// `SetFollowerBoss(const char*)` (`0x102c44e0`) resolves the name through slot 559, refuses
-	// `this`, `Error`s on a squad member and sets `m_bfNPCFrenziedFlags |= 0x3008`. It is a row of
-	// its own and is NOT ported here; `m_hFollowerBoss` (`+0x647c`) therefore stays unwritten and
-	// `GetFollowerBoss()` keeps answering nothing.
-	FollowerBossName = Name.IsEmpty() ? FString() : Name;
+	// `SetFollowerBoss(const char*)` (`0x102c44e0`, Werewolf19, story 8 lane L12) resolves the name
+	// through slot 559 into `m_hFollowerBoss` (`+0x647c`), refuses `this`, `Error`s on a squad member
+	// and on acceptance resets the AI and sets `m_bfNPCFrenziedFlags |= 0x3008`.
+	SetFollowerBoss(Name);                                              // 0x102c449b thunk 0x100061ae
+	FollowerBossName = Name.IsEmpty() ? FString() : Name;               // 0x102c44a0..0x102c44a8 +0x6478
 }
 
 void FElysiumNpc::SetFollowerType(const FString& NewFollowerType)

@@ -123,7 +123,7 @@ void FElysiumNpcPedestrian::OnRestore(bool bFromLoad)
 		(void)PedestrianPreDeathMaxsUnits;
 	}
 	NPCInit();                                                           // slot 420
-	ClearFollowerBossName();                                             // 102c4430 ""
+	SetFollowerBossName(FString());                                      // 102c4430 ""
 	Origin = InitialPosition;                                            // 101cf5c0 +0x62a8
 	Angles = InitialAngles;                                              // 103a264e slot 64 +0x62b4
 	// `103a26b4`–`103a27ff`: the collision block. `SetSolidFlags(0)`, then two `AddSolidFlags` of

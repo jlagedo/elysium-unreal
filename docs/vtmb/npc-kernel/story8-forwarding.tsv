@@ -1,7 +1,6 @@
 # Story 8's forwarding bodies (`uv run elysium research kernel_story8_shape`): one row per `STORY8-FORWARD` marker under Source/. A porter replaces the body and drops the marker; the set must only fall to 0.
 family	class	slot	address	file
 Damaged19	CNPC_VCop	442	0x10371b70	Source/ElysiumUE/Private/Substrate/ElysiumNpcDamaged19Species.cpp
-Damaged19	CNPC_VTzimisceRunner	330	0x103c43b0	Source/ElysiumUE/Private/Substrate/ElysiumNpcDamaged19Species.cpp
 Damaged19	CNPC_VWerewolf	431	0x103cb590	Source/ElysiumUE/Private/Substrate/ElysiumNpcDamaged19Species.cpp
 RunAi19	CAI_BaseNPC	432	0x1026f110	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi19.cpp
 RunAi19	CAI_BaseNPCTroika	432	0x1028fcc0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19.cpp

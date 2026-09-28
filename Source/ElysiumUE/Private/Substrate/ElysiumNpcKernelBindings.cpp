@@ -1811,6 +1811,8 @@ namespace ElysiumNpcKernelBindings
 			"m_rhSeveredTentacles has 6 elements");
 		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoAttackTimers)> == 6,
 			"m_rflAttackTimers has 6 elements");
+		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoHitPoints)> == 6,
+			"m_rflHitPoints has 6 elements");
 		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoRegrowTimers)> == 6,
 			"m_rflRegrowTimers has 6 elements");
 		ElysiumAddClassField(D, TEXT("m_iTentacleID"), &FElysiumNpcMingXiao::MingXiaoTentacleId,
@@ -1873,6 +1875,18 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[4]; }, EElysiumField::Save);  // +0x66c4[4] time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[5]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[5]; }, EElysiumField::Save);  // +0x66c4[5] time
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[0]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[0]; }, EElysiumField::Save);  // +0x66dc[0] float
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[1]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[1]; }, EElysiumField::Save);  // +0x66dc[1] float
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[2]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[2]; }, EElysiumField::Save);  // +0x66dc[2] float
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[3]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[3]; }, EElysiumField::Save);  // +0x66dc[3] float
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[4]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[4]; }, EElysiumField::Save);  // +0x66dc[4] float
+		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[5]"),
+			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[5]; }, EElysiumField::Save);  // +0x66dc[5] float
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[0]; }, EElysiumField::Save);  // +0x66f4[0] time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[1]"),
@@ -1889,6 +1903,8 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcMingXiao::MingXiaoConnectedTentacleCount, EElysiumField::Save);  // +0x670c int
 		ElysiumAddClassField(D, TEXT("m_iSeveredTentacleMask"),
 			&FElysiumNpcMingXiao::MingXiaoSeveredTentacleMask, EElysiumField::Save);  // +0x6710 int
+		ElysiumAddClassField(D, TEXT("m_eLastLostTentacle"),
+			&FElysiumNpcMingXiao::MingXiaoLastLostTentacle, EElysiumField::Save);  // +0x6714 int
 		ElysiumAddClassField(D, TEXT("m_hThrowObject"), &FElysiumNpcMingXiao::MingXiaoThrowObject,
 			EElysiumField::Save);  // +0x6718 ehandle
 		ElysiumAddClassField(D, TEXT("m_eThrowingTentacle"),
@@ -1903,20 +1919,16 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcMingXiao::MingXiaoThrowableObjectMode, EElysiumField::Save);  // +0x673c int
 		ElysiumAddClassField(D, TEXT("m_iCoordinateTentacleID"),
 			&FElysiumNpcMingXiao::CoordinateTentacleId, EElysiumField::Save);  // +0x6740 int
+		ElysiumAddClassField(D, TEXT("m_bPlayedDeathAnim"),
+			&FElysiumNpcMingXiao::bMingXiaoPlayedDeathAnim, EElysiumField::Save);  // +0x6744 bool
+		ElysiumAddClassField(D, TEXT("m_flIdealRange"), &FElysiumNpcMingXiao::MingXiaoIdealRange,
+			EElysiumField::Save);  // +0x6748 float
 		ElysiumAddClassField(D, TEXT("m_flChargeReadyTime"),
 			&FElysiumNpcMingXiao::MingXiaoChargeReadyTime, EElysiumField::Save);  // +0x674c time
 		ElysiumAddClassField(D, TEXT("m_bBlockedByFriend"), &FElysiumNpcMingXiao::bBlockedByFriend,
 			EElysiumField::Save);  // +0x6750 bool
 		// NOT SAVED +0x6670 m_hParentMingZhao (ehandle) — no port member (the species shape map's
 		// ABSENT row says why)
-		// NOT SAVED +0x66dc m_rflHitPoints (float) — no port member (the species shape map's ABSENT
-		// row says why)
-		// NOT SAVED +0x6714 m_eLastLostTentacle (int) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x6744 m_bPlayedDeathAnim (bool) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x6748 m_flIdealRange (float) — no port member (the species shape map's ABSENT
-		// row says why)
 	}
 
 	void AddMingXiaoTentacleSaveFields(FElysiumClassDesc& D)
@@ -1946,6 +1958,8 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcMingXiaoTentacle::bIgnoreCollisionSpecies, EElysiumField::Save);  // +0x6688 bool
 		ElysiumAddClassField(D, TEXT("m_vecScatterCenter"),
 			&FElysiumNpc::TentacleScatterCenterUnits, EElysiumField::Save);  // +0x668c vector
+		ElysiumAddClassField(D, TEXT("m_bPlayedDeathAnim"),
+			&FElysiumNpcMingXiaoTentacle::bTentaclePlayedDeathAnim, EElysiumField::Save);  // +0x6699 bool
 		// NOT SAVED +0x6678 m_flFailedEvadeTimer (time) — no port member (the species shape map's
 		// ABSENT row says why)
 		// NOT SAVED +0x667c m_flUpdateEvadeTimer (time) — no port member (the species shape map's
@@ -1953,8 +1967,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x6684 m_flIgnoreCollisionTimer (time) — no port member (the species shape
 		// map's ABSENT row says why)
 		// NOT SAVED +0x6698 m_bHitGroundSound (bool) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x6699 m_bPlayedDeathAnim (bool) — no port member (the species shape map's
 		// ABSENT row says why)
 	}
 
@@ -3033,9 +3045,9 @@ namespace ElysiumNpcKernelBindings
 			case EClass::ManBat:
 				return {0, 0, 0, 2, 14};
 			case EClass::MingXiao:
-				return {0, 0, 0, 1, 47};
+				return {0, 0, 0, 1, 56};
 			case EClass::MingXiaoTentacle:
-				return {0, 0, 0, 0, 10};
+				return {0, 0, 0, 0, 11};
 			case EClass::Pedestrian:
 				return {1, 0, 0, 0, 3};
 			case EClass::SabbatLeader:

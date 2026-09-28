@@ -372,3 +372,103 @@ void FElysiumNpcMingXiaoTentacle::FUN_1039e800(FElysiumEntity* Arg)
 		(void)Arg;
 	}
 }
+
+// =================================================================================================
+// Story 8, lane L12 — Boss19's `CNPC_VMingXiaoTentacle` rows. Arms carry the instruction address
+// they came from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// =================================================================================================
+
+namespace NpcKernelBoss19Tentacle
+{
+	// The three death programs `0x1039e970` chooses between, and their `NPC_VMingXiaoTentacle.cpp`
+	// trace lines.
+	constexpr int32 GBoss19TentacleDieA = 0x16a;
+	constexpr int32 GBoss19TentacleDieDefault = 0x16b;
+	constexpr int32 GBoss19TentacleDieNoSequence = 0x16c;
+	constexpr int32 GBoss19TentacleLineDefault = 0x589;
+	constexpr int32 GBoss19TentacleLinePhase2 = 0x590;
+	constexpr int32 GBoss19TentacleLinePhase3Sequence = 0x598;
+	constexpr int32 GBoss19TentacleLinePhase3NoSequence = 0x59d;
+	// The activity phase 3 asks a sequence of (`0x1039e99a PUSH 0x1d`).
+	constexpr int32 GBoss19TentacleDeathActivity = 0x1d;
+	constexpr int32 GBoss19TentacleLifeDying = 1;
+	// The one-entry table at `0x106477cc` (the directory name carries a SPACE): the flop LOOP that
+	// `0x1039f1a0` starts (flags 0) and `0x1039f310` stops (flags `SND_STOP` 4, `0x1039f399`).
+	const TCHAR* const GBoss19TentacleDeathSounds[] = {
+		TEXT("character/monster/ming xiao/tentacle_flopping_loop.wav"),
+	};
+}
+
+void FElysiumNpcMingXiaoTentacle::MingXiaoTentacleEnterDeath()
+{
+	using namespace NpcKernelBoss19Tentacle;
+	int32 Program = GBoss19TentacleDieDefault;
+	int32 Line = GBoss19TentacleLineDefault;
+	switch (TentaclePhase)                                                   // 0x1039e973..0x1039e97e
+	{
+	case 2:
+		Line = GBoss19TentacleLinePhase2;                                    // 0x1039e987
+		Program = GBoss19TentacleDieA;                                       // 0x1039e991
+		break;
+	case 3:
+		// `0x10295460(this, 0x1d, false)`: a death sequence present picks `0x16a`, none `0x16c`.
+		if (TentacleSequenceForActivity(GBoss19TentacleDeathActivity) == INDEX_NONE)   // 0x1039e99e / 0x1039e9a3 / 0x1039e9b4
+		{
+			Line = GBoss19TentacleLinePhase3NoSequence;                      // 0x1039e9c7
+			Program = GBoss19TentacleDieNoSequence;                          // 0x1039e9d1
+		}
+		else
+		{
+			Line = GBoss19TentacleLinePhase3Sequence;                        // 0x1039e9b6
+			Program = GBoss19TentacleDieA;                                   // 0x1039e9c0
+		}
+		break;
+	default:
+		// Phases 0, 1 and anything above 3 (`0x1039e97c JA` and the jump table's first two rows):
+		// the death sound first, then `0x16b`.
+		MingXiaoTentacleDeathSound();                                        // 0x1039e9da 0x1039f310
+		break;                                                               // 0x1039e9e1 / 0x1039e9eb
+	}
+	// `+0x1b30`/`+0x1b34` := `NPC_VMingXiaoTentacle.cpp`, line — absent in the shape map; recorded.
+	RecordScheduleEvent(FString::Printf(TEXT("EnterDeath trace NPC_VMingXiaoTentacle.cpp:%d"), Line));   // 0x1039e9aa / 0x1039e9f2
+	SetSchedule(Program, true);                                              // 0x1039e9fc 0x102ae750, FORCED
+	LifeStateRetail = GBoss19TentacleLifeDying;                              // 0x1039ea01 +0x200
+	bTentaclePlayedDeathAnim = true;                                         // 0x1039ea0b +0x6699
+	bInvincible = true;                                                      // 0x1039ea12 +0x63d8
+}
+
+void FElysiumNpcMingXiaoTentacle::BeginTentacleDefeatOnce()
+{
+	if (!bTentaclePlayedDeathAnim)                                           // 0x1039ea60 / 0x1039ea68
+	{
+		MingXiaoTentacleEnterDeath();                                        // 0x1039ea6a
+	}
+}
+
+void FElysiumNpcMingXiaoTentacle::MingXiaoTentacleDeathSound()
+{
+	using namespace NpcKernelBoss19Tentacle;
+	// `0x1039f310`: a `CPASAttenuationFilter` built at slot 222 `GetSoundEmissionOrigin` (the
+	// recipient cull single-player never runs), the entity index (`0x1039f382`), then
+	// `EmitSound(filter, index, CHAN_VOICE 2, table[RandomInt(0, 0)], 1.0, 0.8, SND_STOP 4, 100)`
+	// (`0x1039f390`..`0x1039f3bf`, flags `PUSH 0x4` at `0x1039f399`): it STOPS the flop loop the
+	// tentacle's `0x1039f1a0` started (review of lane L12: the lane played it). `RandomInt(0, 0)` is
+	// drawn and can only answer 0. `StopEntitySounds` is the port's stop-by-entity verb, as
+	// `ElysiumNpcMisc19.cpp`'s `SND_STOP` arm uses it.
+	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	const int32 Pick = Stream.RandRange(0, 0);                               // 0x1039f3b0
+	(void)GBoss19TentacleDeathSounds[Pick];                                  // 0x1039f3b3
+	IElysiumAudio* Audio = World != nullptr ? World->Audio() : nullptr;
+	if (Audio == nullptr)
+	{
+		return;
+	}
+	Audio->StopEntitySounds(Handle, static_cast<int32>(EElysiumSoundChannel::Voice));   // 0x1039f399 SND_STOP, 0x1039f3bf channel 2
+}
+
+int32 FElysiumNpcMingXiaoTentacle::TentacleSequenceForActivity(int32 RetailActivity) const
+{
+	// SEAM; see the declaration.
+	(void)RetailActivity;
+	return INDEX_NONE;
+}

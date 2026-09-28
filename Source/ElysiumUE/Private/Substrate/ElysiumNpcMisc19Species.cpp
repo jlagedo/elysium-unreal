@@ -844,13 +844,6 @@ namespace
 	constexpr int32 Misc19WerewolfMoveHintSchedules[] = { 0x15f, 0x15b, 0x15a, 0x160 };
 }
 
-bool FElysiumNpcWerewolf::CheckAllMoveHintsImperativeSeam(const FHintWords& Hint) const
-{
-	// SEAM for `IsImperativeMoveHint` (`0x103d2070`, lane L12) — see the declaration.
-	(void)Hint;
-	return false;
-}
-
 bool FElysiumNpcWerewolf::CheckAllMoveHints()
 {
 	// `0x103cfc50`, inside its named scope-trace frame (absent: `0x103cfc5b` JZ null this ->
@@ -865,11 +858,9 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 		// TRUE) and `m_pSchedule` re-tested between them (`0x103cfce0` / `0x103cfcfe` / `0x103cfd1c`).
 		for (const int32 RetailId : Misc19WerewolfMoveHintSchedules)     // 0x103cfcd1 / cfef / d0d / d25
 		{
-			const void* Program = GetScheduleOfType(TranslateScheduleRetail(RetailId));
-			if (Program == nullptr)
-			{
-				Program = GetScheduleOfType(ElysiumSched::IDLE_STAND);    // 0x102cc227
-			}
+			// `0x102cc1f0` whole (slot 440, slot 446, the `DevMsg` and the schedule-1 fallback) is
+			// `WerewolfScheduleOfType` (lane L12).
+			const void* Program = WerewolfScheduleOfType(RetailId);
 			if (Program != nullptr && Program == Running)
 			{
 				return true;                                              // 0x103d0143
@@ -924,7 +915,7 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 		{
 			continue;   // crash guard: the port's hint list can name an unresolvable node
 		}
-		if (CheckAllMoveHintsImperativeSeam(Hint))                        // 0x103cfe8a / 0x103cfe93
+		if (IsImperativeMoveHint(Hint))                        // 0x103cfe8a / 0x103cfe93
 		{
 			ClearMoveHint();                                              // 0x103d00c8
 			SetMoveHint(Node, false);                                     // 0x103d00d2

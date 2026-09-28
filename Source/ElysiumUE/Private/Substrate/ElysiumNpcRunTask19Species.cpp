@@ -164,30 +164,6 @@ void FElysiumNpcManBat::ManBatKillSpotlight(FElysiumEntity& Light)
 	++ManBatSpotlightsKilled;
 }
 
-bool FElysiumNpcWerewolf::RunTask19FindMoveHint()
-{
-	++WerewolfRunTaskHintSeamCalls;   // `0x103d2a10` -- SEAM
-	return false;
-}
-
-bool FElysiumNpcWerewolf::RunTask19FindRandomMoveHint()
-{
-	++WerewolfRunTaskHintSeamCalls;   // `0x103d14f0` -- SEAM
-	return false;
-}
-
-bool FElysiumNpcWerewolf::RunTask19FindEgressHint()
-{
-	++WerewolfRunTaskHintSeamCalls;   // `0x103d1200` -- SEAM
-	return false;
-}
-
-bool FElysiumNpcWerewolf::RunTask19FindTeleportHint()
-{
-	++WerewolfRunTaskHintSeamCalls;   // `0x103d3c20` -- SEAM
-	return false;
-}
-
 void FElysiumNpcHengeyokai::HengeyokaiTask14b()
 {
 	// `0x10383470` -- SEAM. The body is recovered: when `m_flProteanTransformStartTime (+0x1560)
@@ -233,11 +209,6 @@ bool FElysiumNpcMingXiaoTentacle::TentacleHintClear(const FVector& PositionCm) c
 	KernelHullTrace(AtUnits, AtUnits, Mins, Maxs, TentacleClearMask, Trace);
 	Self.bForceNpcCheck = false;
 	return Trace.Fraction >= 1.0f && !Trace.bAllSolid && !Trace.bStartSolid;
-}
-
-void FElysiumNpcSabbatLeader::RunTask19StartTransformation()
-{
-	++SabbatLeaderTransformationStarts;   // `0x103aa3b0` -- SEAM
 }
 
 float FElysiumNpcSabbatLeader::SabbatLeaderSplashCycle() const
@@ -1572,7 +1543,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 			&& NpcKernelMotor2Shared::Length2D((Player->Origin - Origin) / ElysiumMove::U) <= 500.0f) // 0x103a8a28 `DAT_104c3cd0`
 			// same arm: 0x103a8a2f JZ
 		{
-			RunTask19StartTransformation();                                        // 0x103a8a48
+			SabbatLeaderStartTransformation();                                        // 0x103a8a48
 			// same arm: 0x103a8a59 JG, 0x103a8a5f JZ, 0x103a8a6a JG, 0x103a8a70 JZ, 0x103a8a7a JA
 			//   0x103a8a84 JMP
 		}
@@ -1977,13 +1948,13 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		return 0;
 	case 0x14c:
 	{
-		if (WerewolfShouldPursueEnemy() && RunTask19FindMoveHint())                // 0x103ce0a7 / 0x103ce0b2
+		if (WerewolfShouldPursueEnemy() && FindMoveHint())                // 0x103ce0a7 / 0x103ce0b2
 		// same arm: 0x103ce0ae JZ, 0x103ce0b9 JZ
 		{
 			TaskComplete(false);                                                   // 0x103ce0be
 			return 0;
 		}
-		if (!WerewolfShouldPursueEnemy() && RunTask19FindRandomMoveHint())         // 0x103ce0d2 / 0x103ce0dd
+		if (!WerewolfShouldPursueEnemy() && FindRandomMoveHint())         // 0x103ce0d2 / 0x103ce0dd
 		// same arm: 0x103ce0d9 JNZ, 0x103ce0e4 JZ
 		{
 			TaskComplete(false);                                                   // 0x103ce0e9
@@ -2014,7 +1985,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 				TaskComplete(false);                                               // 0x103ce266
 				return 0;
 			}
-			if (RunTask19FindEgressHint())                                         // 0x103ce27a
+			if (FindEgressHint())                                         // 0x103ce27a
 			// same arm: 0x103ce283 JZ
 			{
 				TaskComplete(false);                                               // 0x103ce286
@@ -2041,7 +2012,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 				TaskComplete(false);                                               // 0x103ce1e1
 				return 0;
 			}
-			if (RunTask19FindEgressHint())                                         // 0x103ce1f5
+			if (FindEgressHint())                                         // 0x103ce1f5
 			// same arm: 0x103ce1fe JZ
 			{
 				TaskComplete(false);                                               // 0x103ce201
@@ -2054,7 +2025,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	case 0x14d:
-		if (RunTask19FindTeleportHint())                                           // 0x103ce2bf
+		if (FindTeleportHint())                                           // 0x103ce2bf
 		// same arm: 0x103ce2c6 JZ
 		{
 			TaskComplete(false);                                                   // 0x103ce2cf

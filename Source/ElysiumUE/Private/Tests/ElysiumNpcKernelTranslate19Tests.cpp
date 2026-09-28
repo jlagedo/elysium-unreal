@@ -226,7 +226,7 @@ bool FElysiumNpcKernelTranslate19SpeciesTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcHengeyokai& N = *ElysiumTestAsSpecies<FElysiumNpcHengeyokai>(F.Guard);
-	N.HengeyokaiSkin = 1;
+	N.Skin = 1;   // m_nSkin +0x670
 	const int32 ThawsBefore = N.HengeyokaiThawCalls;
 	N.TranslateScheduleRetail(0x5b);
 	TestEqual(TEXT("1037ffa0 translating any id but 0x16e thaws a skin-1 hengeyokai"),

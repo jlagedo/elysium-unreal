@@ -146,6 +146,14 @@ public:
 	/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
 	bool bSabbatLeaderActivated = false;
 
+	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
+	/** `CNPC_VSabbatLeader::StartTransformation` (`0x103aa3b0`): `m_bActivated` (`+0x66b8`) = 1 FIRST,
+	 *  the class-wide `AddClassRelationship(CLASS_PLAYER 1, D_HT, 10)`, then stamp
+	 *  `NPC_VSabbatLeader.cpp:0x549` and install `0x163` (not forced). Its retail argument is unread.
+	 *  Body in `ElysiumNpcBoss19Species.cpp`. Reached from `RunTask` `0x103a8990` (lane L05) and from
+	 *  the pending `StartTransformation` input (`ElysiumNpcClasses.cpp`), which the integrator binds. */
+	void SabbatLeaderStartTransformation();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
@@ -160,10 +168,8 @@ public:
 	// --- Lane L05 (story 8 RunTask19): `CNPC_VSabbatLeader::RunTask` `0x103a8990`.
 	double SabbatLeaderWarningFinishTime = 0.0; // +0x66dc m_fWarningFinishTime (SEAM word)
 	double SabbatLeaderTaskStartTime = 0.0;     // +0x669c m_fTaskStartTime (a VampireBoss word; SEAM)
-	/** `CNPC_VSabbatLeader::StartTransformation` `0x103aa3b0` -- lane Boss19's row. **SEAM**: counted
-	 *  until the integrator redirects the call to its port. */
-	int32 SabbatLeaderTransformationStarts = 0;
-	void RunTask19StartTransformation();
+	// `CNPC_VSabbatLeader::StartTransformation` `0x103aa3b0` is Boss19's `SabbatLeaderStartTransformation`
+	// above (the L05 seam was redirected at L12's integration).
 	/** `_DAT_1093c33c`, the `.data` float `TASK 0x15c` compares `m_flCycle` against before the splash:
 	 *  33.0 / 60.0 = 0.55f, stored by the static initialiser `0x103a5870`. */
 	float SabbatLeaderSplashCycle() const;

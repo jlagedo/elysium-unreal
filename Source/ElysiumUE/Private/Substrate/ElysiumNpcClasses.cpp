@@ -316,8 +316,15 @@ static void AddSpeciesPendingInputs(FElysiumClassDesc& D, const TCHAR* RetailCla
 	}
 	else if (Is(TEXT("CNPC_VSabbatLeader")))
 	{
-		ELYSIUM_PENDING_INPUT_ON("CNPC_VSabbatLeader", FElysiumNpc, StartTransformation,
-			"0019 story 8 — CNPC_VSabbatLeader::StartTransformation 0x103aa3b0");
+		// The datamap INPUT `StartTransformation` is `0x103aa3b0` itself (`RET 0x4`: the inputdata
+		// argument is unread), ported in story 8 lane L12 (Boss19).
+		D.Input(TEXT("StartTransformation"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{
+				if (FElysiumNpcSabbatLeader* Leader = static_cast<FElysiumNpc&>(E).AsSpecies<FElysiumNpcSabbatLeader>())
+				{
+					Leader->SabbatLeaderStartTransformation();
+				}
+			});
 	}
 	else if (Is(TEXT("CNPC_VSheriffMan")))
 	{

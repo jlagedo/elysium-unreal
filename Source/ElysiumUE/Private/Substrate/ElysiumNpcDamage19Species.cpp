@@ -467,12 +467,6 @@ int32 FElysiumNpcGhoulCroucher::OnTakeDamage_Alive(void* Arg0)
 // Slot 390 — `CNPC_VHengeyokai::vfunc390` `0x103801d0`, 154 bytes.
 // =================================================================================================
 
-void FElysiumNpcHengeyokai::HengeyokaiEnterMorphSeam()
-{
-	// SEAM (header): L12's `0x103830e0`, counted.
-	++HengeyokaiEnterMorphCalls;
-}
-
 int32 FElysiumNpcHengeyokai::OnTakeDamage_Alive(void* Arg0)
 {
 	// 1. The Troika chain runs FIRST; its answer is this body's answer.
@@ -493,7 +487,7 @@ int32 FElysiumNpcHengeyokai::OnTakeDamage_Alive(void* Arg0)
 	const FString Classname = Attacker->Def != nullptr ? Attacker->Def->Classname : FString(); // 0x103801e4 / 0x10380224
 	if (Classname.Equals(GDamage19HengeyokaiExplosion, ESearchCase::IgnoreCase)) // 0x1038022f / 0x10380259
 	{
-		HengeyokaiEnterMorphSeam();                                         // 0x1038025d
+		HengeyokaiEnterMorph();                                             // 0x1038025d
 	}
 	return Result;                                                          // 0x10380262
 }
@@ -524,8 +518,8 @@ int32 FElysiumNpcManBat::OnTakeDamage_Alive(void* Arg0)
 
 int32 FElysiumNpcMingXiao::MingXiaoMeleeSpreadChance() const
 {
-	// SEAM (header): the tuning record's `+0x2c` cell answers 0.
-	return 0;
+	// `+0x2c` "MeleeTentacleHitPercent" (`0x101e7405 PUSH 0x14` / `0x101e7411`), an int cell.
+	return static_cast<int32>(Select19MingXiaoTuningField(0x2c));
 }
 
 int32 FElysiumNpcMingXiao::MingXiaoMeleeTentacleIndex()
@@ -588,16 +582,6 @@ int32 FElysiumNpcMingXiao::MingXiaoHitTentacleIndex(const FElysiumEntity* Weapon
 	}
 }
 
-void FElysiumNpcMingXiao::MingXiaoApplyTentacleDamageSeam(int32 TentacleIndex,
-	FElysiumTakeDamageInfo& Info, const FElysiumEntity* Weapon)
-{
-	// SEAM (header): L12's `0x10395750`, counted.
-	(void)Info;
-	(void)Weapon;
-	++MingXiaoApplyTentacleDamageCalls;
-	MingXiaoLastAppliedTentacleIndex = TentacleIndex;
-}
-
 int32 FElysiumNpcMingXiao::OnTakeDamage_Alive(void* Arg0)
 {
 	// 1. A proxy (`m_iTentacleID != -1`, `0x10398870`) chains with the packet unmodified.
@@ -620,7 +604,7 @@ int32 FElysiumNpcMingXiao::OnTakeDamage_Alive(void* Arg0)
 	// 3. The tentacle index, then the damage router on the COPY, then the Troika chain with the
 	//    MODIFIED copy — the base never sees the original packet.
 	const int32 TentacleIndex = MingXiaoHitTentacleIndex(Weapon);           // 0x10395b2d
-	MingXiaoApplyTentacleDamageSeam(TentacleIndex, Copy, Weapon);           // 0x10395b3b
+	MingXiaoApplyTentacleDamage(TentacleIndex, Copy, Weapon);           // 0x10395b3b
 	return FElysiumNpc::OnTakeDamage_Alive(&Copy);                          // 0x10395b47
 }
 

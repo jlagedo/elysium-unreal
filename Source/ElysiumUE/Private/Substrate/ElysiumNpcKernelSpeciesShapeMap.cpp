@@ -414,18 +414,16 @@ namespace
 		FElysiumNpcMingXiao, MingXiaoSpitAttackTimer),  // m_flSpitAttackTimer
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66c4,
 		FElysiumNpcMingXiao, MingXiaoAttackTimers),  // m_rflAttackTimers
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x66dc,  // m_rflHitPoints
-		"no port member: the ported reader is a named SEAM answering the retail default (the "
-		"sever 0x10397930 SEAM); retail accessors: none recorded"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66dc,
+		FElysiumNpcMingXiao, MingXiaoHitPoints),  // m_rflHitPoints (story 8 lane L12)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66f4,
 		FElysiumNpcMingXiao, MingXiaoRegrowTimers),  // m_rflRegrowTimers
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x670c,
 		FElysiumNpcMingXiao, MingXiaoConnectedTentacleCount),  // m_iConnectedTentacleCount
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6710,
 		FElysiumNpcMingXiao, MingXiaoSeveredTentacleMask),  // m_iSeveredTentacleMask
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6714,  // m_eLastLostTentacle
-		"no port member: no ported body reads or writes the word (the lost-tentacle bodies are "
-		"story-8 residue); retail accessors: 0x10392d80 MingXiao::StartTask (task arm)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6714,
+		FElysiumNpcMingXiao, MingXiaoLastLostTentacle),  // m_eLastLostTentacle (story 8 lane L12)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6718,
 		FElysiumNpcMingXiao, MingXiaoThrowObject),  // m_hThrowObject
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x671c,
@@ -440,15 +438,10 @@ namespace
 		FElysiumNpcMingXiao, MingXiaoThrowableObjectMode),  // m_eThrowableObjectMode
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6740,
 		FElysiumNpcMingXiao, CoordinateTentacleId),  // m_iCoordinateTentacleID
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6744,  // m_bPlayedDeathAnim
-		"no port member: no ported body reads or writes the word (the death-anim bodies are "
-		"story-8 residue); retail accessors: 0x103927a0 MingXiao::Spawn (residue), 0x10395ba0 "
-		"MingXiao::Event_Killed (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6748,  // m_flIdealRange
-		"no port member: the ported reader is a named SEAM answering the retail default "
-		"(ResolveTaskDistance m_flIdealRange SEAM); retail accessors: 0x103927a0 MingXiao::Spawn "
-		"(residue), 0x10392a10 MingXiao::vfunc418 (override), 0x10394990 MingXiao::NPCThink "
-		"(residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6744,
+		FElysiumNpcMingXiao, bMingXiaoPlayedDeathAnim),  // m_bPlayedDeathAnim (story 8 lane L12)
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6748,
+		FElysiumNpcMingXiao, MingXiaoIdealRange),  // m_flIdealRange (story 8 lane L12)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x674c,
 		FElysiumNpcMingXiao, MingXiaoChargeReadyTime),  // m_flChargeReadyTime
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6750,
@@ -493,10 +486,8 @@ namespace
 		"no port member: no ported body reads or writes the word (the ground-hit sound bodies "
 		"are story-8 residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), "
 		"0x1039e3d0 MingXiaoTentacle::RunAI (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6699,  // m_bPlayedDeathAnim
-		"no port member: no ported body reads or writes the word (the death-anim bodies are "
-		"story-8 residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), "
-		"0x1039e900 MingXiaoTentacle::Event_Killed (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6699,
+		FElysiumNpcMingXiaoTentacle, bTentaclePlayedDeathAnim),  // m_bPlayedDeathAnim (story 8 lane L12)
 
 	// --- CNPC_VPedestrian ---
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VPedestrian, 0x6660,

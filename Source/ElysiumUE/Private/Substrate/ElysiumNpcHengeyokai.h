@@ -155,8 +155,6 @@ public:
 
 	/** `CNPC_VHengeyokai` thaw side-effect count (`0x10383130`). */
 	int32 HengeyokaiThawCalls = 0;
-	/** `m_nSkin` (`+0x670`) as Hengeyokai's translate body reads it. */
-	int32 HengeyokaiSkin = 0;
 
 	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
 	/** `0x10382020` (no checklist row): the throw line -- from `EyePosition + 80 * right` (the right
@@ -164,12 +162,17 @@ public:
 	 *  `0x600400b`, `CTraceFilterSimple(this, 0)`; true when `fraction == 1.0`. False for no enemy. */
 	bool HengeyokaiThrowLosTest(FElysiumEntity* Enemy);
 
-	// --- 0019/8 Damage19 (lane L09): `OnTakeDamage_Alive` `0x103801d0`'s one call ----------
-	/** SEAM for `FUN_103830e0` (`FElysiumNpc::HengeyokaiEnterMorph`, Boss19's row, lane L12): stamp
-	 *  `NPC_VHengeyokai.cpp:0x985`, `SetSchedule(0x16e, false)`, `SetSkinFadeTime(0.0)`,
-	 *  `FadeToSkin(1)`. Counted; the integrator binds this call to L12's body and deletes the seam. */
-	int32 HengeyokaiEnterMorphCalls = 0;
-	void HengeyokaiEnterMorphSeam();
+
+	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
+	/** `m_nSkinCrossfade` and `m_flSkinCrossfadeTime` — the two `CBaseAnimating` words
+	 *  `FadeToSkin` (`0x1008d6d0`) and `SetSkinFadeTime` (`0x1008d5f0`) write. The crossfade itself is
+	 *  client-side; the Hengeyokai's morph is their only NPC writer, so they stand on this class. */
+	int32 HengeyokaiSkinCrossfade = 0;
+	float HengeyokaiSkinCrossfadeTime = 0.f;
+	/** `0x103830e0` — the morph entry `RunAI` (`0x10380120`) and `OnTakeDamage_Alive` (`0x103801d0`)
+	 *  share: stamp `NPC_VHengeyokai.cpp:0x985`, install `0x16e` (not forced), `SetSkinFadeTime(0.0)`,
+	 *  `FadeToSkin(1)`. Lane L09's `OnTakeDamage_Alive` calls it at `0x1038025d`. */
+	void HengeyokaiEnterMorph();
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

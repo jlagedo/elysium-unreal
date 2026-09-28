@@ -101,12 +101,6 @@ bool Conditions19BetterWeaponAvailable(double Now);
 FElysiumEntity* Conditions19WeaponFindUsable(const FVector& RangeUnits);
 int32 Conditions19WeaponFindUsableCalls = 0;
 
-/** SEAM for `CAI_BaseNPC::CheckTarget` (`0x10271d10`, Werewolf19's row, lane L12, ported in parallel):
- *  the call site `0x1026eebc` hands it the resolved `m_hTargetEnt`. The integrator redirects this to
- *  L12's body; until then it records the call and changes nothing. */
-void Conditions19CheckTarget(FElysiumEntity* Target);
-int32 Conditions19CheckTargetCalls = 0;
-
 /** The tunables `0x1026fb40` reads. */
 static constexpr int32 Cond19CapWeaponSearch = 0x200000;              // slot 513 bit, `TEST EAX,0x200000`
 static constexpr double Cond19WeaponSearchInterval = 2.0;             // `_DAT_10452dc4`

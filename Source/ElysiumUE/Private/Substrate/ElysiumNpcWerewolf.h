@@ -14,11 +14,8 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VWerewolf", FElysiumNpcBaseBoss)
 
 	// --- Select19 (story 0019/8 lane L06): the two Werewolf19 rows `SelectSchedule` calls ---------
-	/** SEAM for `CNPC_VWerewolf::CheckAllRandomMoveHints` (`0x103cf770`) and
-	 *  `CNPC_VWerewolf::FindRandomMoveHint` (`0x103d14f0`), rows of family Werewolf19 (lane L12). Until
-	 *  those land these answer false (no hint found); the integrator redirects both to L12's bodies. */
-	bool Select19CheckAllRandomMoveHints();
-	bool Select19FindRandomMoveHint();
+	// `SelectSchedule` (`0x103cee70`) calls `CheckAllRandomMoveHints` (`0x103cf770`) and
+	// `FindRandomMoveHint` (`0x103d14f0`), Werewolf19's rows, declared with the lane-L12 block below.
 
 	// The constructor `0x103ca4b0`: its hull store (`docs/vtmb/data/class_hulls.json`).
 	FElysiumNpcWerewolf();
@@ -146,9 +143,9 @@ public:
 	/** `CNPC_VWerewolf::IsImperativeTeleportHint` (`0x103d3360`) — the authored-name ladder that says a
 	 *  teleport hint must be taken. */
 	bool IsImperativeTeleportHint(const FHintWords& Hint) const;
-	/** SEAM for the Werewolf's vtable `+0x9a4` trace (slot 617), the last gate of the
-	 *  `jump_to_platform` arm. Answers true — retail's "trace was blocked" answer, which is the arm that
-	 *  does NOT call the hint imperative. */
+	/** The Werewolf's vtable `+0x9a4` dispatch (slot 617, `EnemyCouldSeeHull` `0x103da230`) at a
+	 *  CENTIMETRE point with the `(bSkipViewCone 1, bUseHitbox 0, vec3_origin)` arguments its three hint
+	 *  predicates push — the last gate of the `jump_to_platform` and `0x3aa8` arms. */
 	bool WerewolfHintTrace(const FVector& PositionCm) const;
 	/** `CNPC_VWerewolf::IsValidBreakHint` (`0x103d8550`). */
 	bool IsValidBreakHint(const FHintWords& Hint, double Now) const;
@@ -240,7 +237,7 @@ public:
 	int32 WerewolfMoveHintSearchStart = 0;     // +0x66b8 `m_pMoveHintSearchStart`, retail's NULL is 0
 	int32 WerewolfWord66f8 = 0;                // +0x66f8 (retail name unrecovered)
 	int32 WerewolfWord66fc = 0;                // +0x66fc (retail name unrecovered)
-	void WerewolfRearm();
+	// `0x103cac20` is `WerewolfResetHuntState`, declared with the story-8 helpers below.
 
 	// From `ElysiumNpcMisc.inl`.
 	FElysiumEntityHandle WerewolfRotDoor1;   // +0x6684 CNPC_VWerewolf::m_hRotDoor1
@@ -274,11 +271,12 @@ public:
 	bool EnemyCouldSeeHullWerewolf(const FVector& OriginCm, bool bSkipViewCone, bool bUseHitbox,
 		const FVector& ExtentsCm);
 	/** The Werewolf's own gate on slot 617 — `ConVar` `DAT_1093d694` `werewolf_disregard_player_vision`
-	 *  read as `IsCommand() ? 0 : m_nValue` (+0x2c). Shipped "0", which CLOSES the gate and makes the
-	 *  Werewolf's `EnemyCouldSeeHull` answer false without tracing. */
+	 *  read as `IsCommand() ? 0 : m_nValue` (+0x2c). A NON-ZERO value makes the Werewolf's
+	 *  `EnemyCouldSeeHull` answer false without tracing; shipped "0" leaves the gate open (story 8
+	 *  lane L12 corrected the sense, `0x103da230`). */
 	static bool WerewolfSightConVar();
-	/** The enemy predicate the same body asks second: the active enemy's own vtable `+0x278`
-	 *  (slot 158). **SEAM**: answers false. */
+	/** The enemy predicate the same body asks second: the active enemy's own vtable `+0x278`, slot
+	 *  158 `IsAlive` (`0x100b4dc0`) — asked through the slot since story 8 (lane L12). */
 	static bool EnemySightPredicate(const FElysiumEntity& Enemy);
 	/** `CNPC_VWerewolf::TeleportOut` `0x103d4a60`. */
 	void TeleportOut();
@@ -448,10 +446,6 @@ public:
 	 *  path TRUE; otherwise the global hint walk, first imperative or first valid hint passing the four
 	 *  distance/path tests taken. Body in `ElysiumNpcMisc19Species.cpp`. */
 	bool CheckAllMoveHints();
-	/** SEAM for `CNPC_VWerewolf::IsImperativeMoveHint` (`0x103d2070`), family Werewolf19's row (lane
-	 *  L12), which had no port body when `CheckAllMoveHints` landed: answers false — the arm that
-	 *  goes on to `IsValidMoveHint`. The integrator redirects it to L12's body. */
-	bool CheckAllMoveHintsImperativeSeam(const FHintWords& Hint) const;
 	/** `CNPC_VWerewolf::HasPath` (`0x103d0db0`). 120 of its 138 bytes are the scope-trace frame; the
 	 *  body is one call, `0x102ee380(m_pNavigator, start, end)`, which stamps the navigator cache twice
 	 *  — `+8` from the NPC's own `+0x156c` hull and `+0xc` from the global frame word, then the same
@@ -506,17 +500,94 @@ public:
 	void FireWerewolfZoneTrigger(FElysiumEntity& Zone);
 
 	// --- 0019/8 lane L07, Conditions19 ---------------------------------------------------------
-	/** SEAMS for the three Werewolf19 rows lane L12 ports in parallel:
-	 *  `UpdateConditionEnemyUnreachable` (`0x103cc320`), `UpdateConditionCanSpecialMove`
-	 *  (`0x103cc5c0`) and `UpdateConditionShouldBreakHint` (`0x103cc450`). The integrator redirects each
-	 *  to L12's body; until then each records its call. */
-	void Conditions19UpdateConditionEnemyUnreachable();
-	void Conditions19UpdateConditionCanSpecialMove();
-	void Conditions19UpdateConditionShouldBreakHint();
-	int32 Conditions19WerewolfUpdaterCalls = 0;
 	/** SEAM for ConVar `werewolf_force_teleport` (`0x1093f9a0`, default "0"), read as `!IsCommand() &&
 	 *  m_nValue`. Not a row of `ElysiumNpcKernelTunables.h` (hot); answers the shipped default. */
 	static int32 WerewolfForceTeleportConVar();
+
+	// --- 0019/8 Werewolf19 (lane L12): the hint-search and condition helpers ------------------
+	//
+	// No slot holds any of these; the callers are `CNPC_VWerewolf::GatherConditions` (`0x103d0410`),
+	// `StartTask` (`0x103ccda0`), `RunTask` (`0x103cdfb0`) and `SelectSchedule` (`0x103cee70`), other
+	// lanes' rows. Each takes retail's own arguments: a `CAI_Hint*` is the hint's words (`FHintWords`,
+	// resolved through `HintWords`), and every answer is retail's `bool`/`void`. Bodies in
+	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+	//
+	// The words these bodies share, and what the listings say they are (the port's older names stay
+	// because landed suites of other families assert through them):
+	//   * `+0x66a1` `bWerewolfTaskFailed` — the enemy-unreachable latch `IsEnemyUnreachable` answers
+	//     (`TaskFail` `0x103ce8eb` sets it, `0x103da159` sets it, `0x103da1b7` clears it).
+	//   * `+0x66a4` `WerewolfMorphTimerA` — `IsEnemyUnreachable`'s once-per-frame stamp, an ENGINE
+	//     FRAME NUMBER (`0x103da130`), carried in the float word the port declared first.
+	//   * `+0x66a8` `WerewolfSnapWordA` — the previous pass's `HasCondition(0x59)` (`0x103cc3fb`).
+	//   * `+0x66d4` / `+0x66d8` `WerewolfMorphTimerB` / `C` — the hint searches' frame stamp and
+	//     curtime stamp (`0x103d0fba` / `0x103d0fc8`).
+	//   * `+0x66ac` `WerewolfWord66ac` / `+0x66b8` `WerewolfMoveHintSearchStart` — the teleport and
+	//     move search cursors, a `CAI_Hint*` each: the hint's entity index here, `0` for retail's NULL
+	//     (the value `0x103cac20` writes; entity index 0 is `worldspawn`, never a hint).
+
+	/** `CNPC_VWerewolf::UpdateConditionShouldBreakHint` (`0x103cc450`) — condition `0x7b`. */
+	void UpdateConditionShouldBreakHint();
+	/** `CNPC_VWerewolf::FindBreakHint` (`0x103d0ec0`) — the nearest reachable `0x3aa3` hint into
+	 *  `m_pBreakHint` (`+0x66c4`). */
+	bool FindBreakHint();
+	/** `CNPC_VWerewolf::FindEgressHint` (`0x103d1200`) — keep or replace the move hint with a `0x3aa8`
+	 *  hint whose endpoint the enemy could see. Always FALSE after a search. */
+	bool FindEgressHint();
+	/** `CNPC_VWerewolf::IsImperativeMoveHint(CAI_Hint*)` (`0x103d2070`). */
+	bool IsImperativeMoveHint(const FHintWords& Hint);
+	/** `CNPC_VWerewolf::FindTeleportHint` (`0x103d3c20`). */
+	bool FindTeleportHint();
+	/** `CNPC_VWerewolf::IsEnemyUnreachable` (`0x103da0a0`) — answers `+0x66a1`. */
+	bool IsEnemyUnreachable();
+	/** `0x103cac20` — the hunt-state reset `NPCInit` (`0x103caef0`) and `OnRestore` (`0x103cabf0`)
+	 *  share. The retail name is unrecovered; the checklist names it. */
+	void WerewolfResetHuntState();
+	/** `CNPC_VWerewolf::IsImperativeRandomMoveHint(CAI_Hint*)` (`0x103d2810`). */
+	bool IsImperativeRandomMoveHint(const FHintWords& Hint);
+	/** `CNPC_VWerewolf::FindMoveHint` (`0x103d2a10`). */
+	bool FindMoveHint();
+	/** `CNPC_VWerewolf::UpdateConditionEnemyUnreachable` (`0x103cc320`) — conditions `0x59`/`0x79`. */
+	void UpdateConditionEnemyUnreachable();
+	/** `CNPC_VWerewolf::CheckAllRandomMoveHints` (`0x103cf770`). */
+	bool CheckAllRandomMoveHints();
+	/** `CNPC_VWerewolf::FindRandomMoveHint` (`0x103d14f0`). */
+	bool FindRandomMoveHint();
+	/** `CNPC_VWerewolf::UpdateConditionCanSpecialMove` (`0x103cc5c0`) — condition `0x78`. */
+	void UpdateConditionCanSpecialMove();
+
+	/** `0x102cc1f0` — slot 446 `GetScheduleOfType(TranslateSchedule(id))` with the `DevMsg` and the
+	 *  `GetScheduleOfType(1)` fallback on a miss: the PROGRAM `0x103cc5c0` compares `m_pSchedule`
+	 *  against. The port's other stand for this address, `StandoffScheduleForLocalId`
+	 *  (`ElysiumNpcBaseHelpers2.cpp`), reads it as a behaviour-local id and answers `None`. */
+	const void* WerewolfScheduleOfType(int32 RawRetailId);
+	/** Slot 167 `GetEnemy() const` (`vtable +0x29c`), which every body here calls — NOT the Troika
+	 *  slot-168 overload that falls back to `m_hLastEnemy`. */
+	FElysiumEntity* WerewolfSlot167Enemy() const;
+	/** Slot 617 (`vtable +0x9a4`), `CNPC_VWerewolf::EnemyCouldSeeHull` (`0x103da230`), at a SOURCE-unit
+	 *  point with retail's two bools and the `DAT_1070d1b0` extents (`vec3_origin`). */
+	bool WerewolfSlot617(const FVector& PointUnits, bool bSkipViewCone, bool bUseHitbox);
+	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate. The frame seam
+	 *  (`EngineFrameNumber`) answers `INDEX_NONE`, read as "never the same frame", the named decision
+	 *  its declaration states. */
+	bool WerewolfSearchStampedThisFrame() const;
+	/** `+0x66d4 := frame`, `+0x66d8 := curtime` — the stamp every search writes before it walks. */
+	void WerewolfStampSearch(double Now);
+	/** `DAT_10925450` and the `+0x5d8` next link, over the world's hint list (`GlobalHintList`, head
+	 *  first). `INDEX_NONE` is retail's NULL. */
+	int32 WerewolfHintListHead() const;
+	int32 WerewolfHintListNext(int32 HintNode) const;
+	/** `thunk_FUN_100290c0(handles, &m_hClosestPlayer)` — does `+0x628c` resolve? */
+	bool WerewolfClosestPlayerResolves() const;
+	/** Slot 217 `GetAbsOrigin` / slot 220 `GetOrigin`, in SOURCE units (the two agree for an
+	 *  unparented NPC). */
+	FVector WerewolfOriginUnits() const;
+	/** The hint's words by entity index; `bValid` false when the index is not a live hint. */
+	FHintWords WerewolfHintAt(int32 HintNode) const;
+	/** Test script for the `HasPath` seam (`0x102fdcc0`): each call pops the front answer; an empty
+	 *  script answers retail's no-path `false`. The ask is still recorded in `HasPathQueries`. */
+	mutable TArray<bool> WerewolfHasPathAnswers;
+	/** The last `FindTeleportHint` give-up count, the `%d` of its `DevWarning` (a test witness). */
+	int32 WerewolfTeleportGiveUpTries = INDEX_NONE;
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
@@ -527,15 +598,10 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
-	// --- Lane L05 (story 8 RunTask19): the hint movers `CNPC_VWerewolf::RunTask` `0x103cdfb0` calls.
-	// `CheckAllMoveHints` `0x103cfc50` is lane Misc19's body (called directly); `FindMoveHint`
-	// `0x103d2a10`, `FindRandomMoveHint` `0x103d14f0`, `FindEgressHint` `0x103d1200` and
-	// `FindTeleportHint` `0x103d3c20` are lane Werewolf19's (L12) rows with no port body yet: each is
-	// a SEAM answering false (no hint found). The `TASK 0x14c` ConVar (`DAT_1093f9a4`) is
-	// `werewolf_force_teleport`, read through `WerewolfForceTeleportConVar` above.
-	int32 WerewolfRunTaskHintSeamCalls = 0;
-	bool RunTask19FindMoveHint();
-	bool RunTask19FindRandomMoveHint();
-	bool RunTask19FindEgressHint();
-	bool RunTask19FindTeleportHint();
+	// --- Lane L05 (story 8 RunTask19): `CNPC_VWerewolf::RunTask` `0x103cdfb0` calls
+	// `CheckAllMoveHints` `0x103cfc50` (Misc19) and Werewolf19's `FindMoveHint` `0x103d2a10`,
+	// `FindRandomMoveHint` `0x103d14f0`, `FindEgressHint` `0x103d1200` and `FindTeleportHint`
+	// `0x103d3c20` directly (the lane-L12 block above; the L05 seams were redirected at L12's
+	// integration). The `TASK 0x14c` ConVar (`DAT_1093f9a4`) is `werewolf_force_teleport`, read
+	// through `WerewolfForceTeleportConVar` above.
 };

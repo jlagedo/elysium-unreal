@@ -103,6 +103,28 @@ bool FElysiumRelationships::SetClass(const FString& Classname,
 	return true;
 }
 
+void FElysiumRelationships::AddClassRelationship(const FString& Classname,
+	EElysiumRelationship Value, int32 Priority)
+{
+	// `0x10332aa0`: an existing class row has its disposition (`+8`) and priority (`+0xc`) written
+	// with no compare; otherwise a row is appended.
+	FString Key = Classname;
+	Key.TrimStartAndEndInline();
+	Key.ToLowerInline();
+	if (Key.IsEmpty())
+	{
+		return;
+	}
+	if (FElysiumClassRelationship* Existing = ClassRules.FindByPredicate(
+		[&Key](const FElysiumClassRelationship& Row) { return Row.Classname == Key; }))
+	{
+		Existing->Value = Value;
+		Existing->Priority = Priority;
+		return;
+	}
+	ClassRules.Add({ MoveTemp(Key), Value, Priority });
+}
+
 bool FElysiumRelationships::SetDerivedEntity(const FElysiumEntityHandle& Target,
 	EElysiumRelationship Value, int32 Priority, double ExpiresAt)
 {

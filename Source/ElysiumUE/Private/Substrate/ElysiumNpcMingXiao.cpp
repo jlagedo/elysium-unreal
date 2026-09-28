@@ -19,6 +19,7 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -34,6 +35,8 @@
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
+#include "Substrate/ElysiumNpcMaker.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -504,13 +507,9 @@ float FElysiumNpcMingXiao::ResolveTaskDistance(float Distance)
 {
 	if (static_cast<int32>(Distance) == -1000004)
 	{
-		// SEAM: `m_flIdealRange` is a SPECIES word above `+0x665c` with no port member and no
-		// producer; family Squad declares the four species words its bodies read and this is not
-		// one of them.
-		ElysiumStub::Fired(TEXT("species"),
-			TEXT("CNPC_VMingXiao::ResolveTaskDistance m_flIdealRange +0x6748"), DebugString(),
-			TEXT("-1000004"), TEXT("0002/29c-1: no MingXiao ideal range"));
-		return 0.0f;
+		// `m_flIdealRange` (`+0x6748`). Story 8 (lane L12) gave the word its member and its producer,
+		// the tentacle spawner `0x10397410` (`0x103977d4`), which retires the stub this arm fired.
+		return MingXiaoIdealRange;
 	}
 	return FElysiumNpc::ResolveTaskDistance(Distance);
 }
@@ -1928,15 +1927,466 @@ void FElysiumNpcMingXiao::CoordinateTroops()
 
 void FElysiumNpcMingXiao::SeverTentacle(int32 TentacleId)
 {
-	// SEAM for `0x10397930`, which is no family's row. The two writes this substrate can make are
-	// made (`m_rhProxies[id]` and `m_rhSeveredTentacles[id]`, family Squad's members); the hit
-	// points, the attack and regrow timers, `m_rbProxyRegistered` and the bodygroup set are records.
+	// SEAM for `0x10397930`, which is no family's row. The writes this substrate can make are made
+	// (`m_rhSeveredTentacles[id]` and `m_rhProxies[id]`, family Squad's members, and since story 8
+	// lane L12 `m_rflHitPoints[id]` from the tuning record's `+0x4` "TentacleHPRegrown"); the attack
+	// and regrow timers, `m_rbProxyRegistered` (`+0x6684`) and the gesture are records.
 	LastSeveredTentacle = TentacleId;
 	if (TentacleId >= 0 && TentacleId < 6)
 	{
-		SeveredTentacles[TentacleId] = FElysiumEntityHandle::Invalid();
-		Proxies[TentacleId] = FElysiumEntityHandle::Invalid();
+		SeveredTentacles[TentacleId] = FElysiumEntityHandle::Invalid();   // 0x10397930 +0x66a8 = -1
+		Proxies[TentacleId] = FElysiumEntityHandle::Invalid();            // +0x668c = -1
+		MingXiaoHitPoints[TentacleId] = Select19MingXiaoTuningField(0x4); // +0x66dc = record +0x4
 		// `m_rflAttackTimers[id] = curtime + _DAT_1044e664` — that cell lives past `.data`'s raw
 		// size and is **unrecovered**, so the stamp is left alone rather than guessed.
 	}
+}
+
+// =================================================================================================
+// Story 8, lane L12 — Boss19's `CNPC_VMingXiao` rows. Arms carry the instruction address they came
+// from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// =================================================================================================
+
+namespace NpcKernelBoss19MingXiao
+{
+	// The death programs: `0x16d` for the head, `0x16e` for a proxy (`0x10398870`).
+	constexpr int32 GBoss19MingXiaoDieSchedule = 0x16d;
+	constexpr int32 GBoss19MingXiaoDieProxySchedule = 0x16e;
+	// The lost-limb and head-hit programs.
+	constexpr int32 GBoss19MingXiaoLostLimbSchedule = 0x16c;
+	constexpr int32 GBoss19MingXiaoHeadHitSchedule = 0x16b;
+	// `NPC_VMingXiao.cpp` trace lines.
+	constexpr int32 GBoss19MingXiaoDeathLine = 0x916;
+	constexpr int32 GBoss19MingXiaoSpawnLine = 0xcac;
+	constexpr int32 GBoss19MingXiaoHeadHitLine = 0x8a5;
+	// `m_lifeState` LIFE_DYING.
+	constexpr int32 GBoss19LifeDying = 1;
+	// Both sweeps walk six handles, hard-coded (`MOV EDI,0x6`).
+	constexpr int32 GBoss19MingXiaoSweepCount = 6;
+	// The limb bone table at `0x106433ac`, six entries.
+	const TCHAR* const GBoss19MingXiaoLimbBones[6] = {
+		TEXT("Bip01 R Forearm"),
+		TEXT("Bip01 L Forearm"),
+		TEXT("Bip01 R ForearmPiercing"),
+		TEXT("Bip01 L ForearmPiercing"),
+		TEXT("Bip01 R ForearmThrowing"),
+		TEXT("Bip01 L ForearmThrowing"),
+	};
+	// The spawn search: the hull `0x11`, the mask `0x2400b`, the radius seeded 20.0 and grown by
+	// `_DAT_1044eb0c` (20.0) after each full compass, and the `DevMsg` threshold `0x20` tries.
+	constexpr int32 GBoss19TentacleHull = 0x11;
+	constexpr int32 GBoss19TentacleSpotMask = 0x2400b;
+	constexpr float GBoss19TentacleSearchRadiusSeed = 20.0f;   // 0x10397517 `0x41a00000`
+	constexpr float GBoss19TentacleSearchRadiusStep = 20.0f;   // `_DAT_1044eb0c`
+	constexpr int32 GBoss19TentacleSearchWarnTries = 0x20;
+	// NAMED CRASH GUARD: retail's search never gives up (it `DevMsg`s past 32 tries and loops); a
+	// substrate whose area test never clears would hang the frame, so the port stops here and answers
+	// retail's own "no tentacle" null. A clearing area test is reached long before.
+	constexpr int32 GBoss19TentacleSearchGuardTries = 4096;
+	// The launch: direction scaled by `_DAT_10450564` (100.0), jittered by `RandomFloat(-10, 10)` on
+	// X and Y and `RandomFloat(5, 20)` on Z, then scaled by `_DAT_104491b4` (0.1).
+	constexpr float GBoss19TentacleLaunchJitter = 10.0f;
+	constexpr float GBoss19TentacleLaunchLiftMin = 5.0f;
+	constexpr float GBoss19TentacleLaunchLiftMax = 20.0f;
+	constexpr float GBoss19TentacleLaunchScale = 0.1f;          // `_DAT_104491b4`
+	// `0x103986b0`'s two cells: `_DAT_1046bad0` (400.0) for limbs 0 and 1, `_DAT_10462b84` (300.0)
+	// for limbs 2 and 3 and for the none-connected answer.
+	constexpr float GBoss19IdealRangeNear = 400.0f;
+	constexpr float GBoss19IdealRangeFar = 300.0f;
+	// The router's weapon mask and its tuning cells (`FUN_101e8da0(0x10739d08)` +0x28 / +0x24, the
+	// `Ming_Xiao_Info/General` "MeleeDamageScalar" / "NohitDamageDivide" rows, `0x101e73f8` / `0x101e73e1`).
+	constexpr uint32 GBoss19RouterMeleeMask = 0x18000u;
+	constexpr int32 GBoss19TuningMeleeScaleCell = 0x28;
+	constexpr int32 GBoss19TuningDamageDivisorCell = 0x24;
+	const TCHAR* const GBoss19BurstEmitter = TEXT("Ming_xiao_tentacle_burst_emitter");
+	const TCHAR* const GBoss19DamageEmitter = TEXT("Ming_xiao_tentacle_damage_emitter");
+	const TCHAR* const GBoss19TentacleMaker = TEXT("TentacleGenerator");
+}
+
+const TCHAR* FElysiumNpcMingXiao::MingXiaoTentacleMakerName()
+{
+	return NpcKernelBoss19MingXiao::GBoss19TentacleMaker;
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0x10395c70 — the death entry, and 0x10395ce0 its latch
+// -------------------------------------------------------------------------------------------------
+
+void FElysiumNpcMingXiao::MingXiaoEnterDeath()
+{
+	using namespace NpcKernelBoss19MingXiao;
+	RecordScheduleEvent(FString::Printf(TEXT("EnterDeath trace NPC_VMingXiao.cpp:%d"),
+		GBoss19MingXiaoDeathLine));                                          // 0x10395c73 / 0x10395c7d
+	const int32 Program = IsMingXiaoProxy()                                  // 0x10395c87 / 0x10395c92
+		? GBoss19MingXiaoDieProxySchedule : GBoss19MingXiaoDieSchedule;      // 0x10395c94 / 0x10395c9b
+	// FORCED: only an already-dead `m_NPCState`/`m_IdealNPCState` can refuse a death program.
+	SetSchedule(Program, true);                                              // 0x10395c90 / 0x10395ca0
+	LifeStateRetail = GBoss19LifeDying;                                      // 0x10395ca5 +0x200
+	bMingXiaoPlayedDeathAnim = true;                                         // 0x10395caf +0x6744
+	bInvincible = true;                                                      // 0x10395cb6 +0x63d8
+}
+
+void FElysiumNpcMingXiao::BeginDefeatSequenceOnce()
+{
+	if (!bMingXiaoPlayedDeathAnim)                                           // 0x10395ce0 / 0x10395ce8
+	{
+		MingXiaoEnterDeath();                                                // 0x10395cea
+	}
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0x10397e90 / 0x10397f00 — the two six-handle sweeps
+// -------------------------------------------------------------------------------------------------
+
+void FElysiumNpcMingXiao::MingXiaoKillTentacles()
+{
+	using namespace NpcKernelBoss19MingXiao;
+	for (int32 Index = 0; Index < GBoss19MingXiaoSweepCount; ++Index)       // 0x10397e98 / 0x10397ed0
+	{
+		// The handle-table resolve: `-1`, a stale serial and a null entity each skip.
+		FElysiumEntity* Entity = World != nullptr && SeveredTentacles[Index].IsSet()   // 0x10397e9f / 0x10397ea2
+			? World->Resolve(SeveredTentacles[Index]) : nullptr;             // 0x10397ebf / 0x10397ec5
+		if (Entity == nullptr)
+		{
+			continue;
+		}
+		// Retail calls the TENTACLE's `0x1039ea60` on whatever the handle holds; the array only ever
+		// holds tentacles (the spawner is its one writer), and anything else is refused here.
+		FElysiumNpc* Npc = Entity->AsNpc();
+		FElysiumNpcMingXiaoTentacle* Tentacle = Npc != nullptr
+			? Npc->AsSpecies<FElysiumNpcMingXiaoTentacle>() : nullptr;
+		if (Tentacle != nullptr)
+		{
+			Tentacle->BeginTentacleDefeatOnce();                      // 0x10397ec7 0x1039ea60
+		}
+	}
+	// No handle is cleared afterwards.
+}
+
+void FElysiumNpcMingXiao::MingXiaoKillSpawnedBodies()
+{
+	using namespace NpcKernelBoss19MingXiao;
+	for (int32 Index = 0; Index < GBoss19MingXiaoSweepCount; ++Index)       // 0x10397f08 / 0x10397f40
+	{
+		FElysiumEntity* Entity = World != nullptr && Proxies[Index].IsSet()  // 0x10397f0f / 0x10397f12
+			? World->Resolve(Proxies[Index]) : nullptr;                      // 0x10397f2f / 0x10397f35
+		if (Entity == nullptr)
+		{
+			continue;
+		}
+		FElysiumNpc* Npc = Entity->AsNpc();
+		FElysiumNpcMingXiao* Proxy = Npc != nullptr ? Npc->AsSpecies<FElysiumNpcMingXiao>() : nullptr;
+		if (Proxy != nullptr)
+		{
+			Proxy->BeginDefeatSequenceOnce();                                 // 0x10397f37 0x10395ce0
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0x10397410 — the lost limb becomes a crawling tentacle
+// -------------------------------------------------------------------------------------------------
+
+const TCHAR* FElysiumNpcMingXiao::MingXiaoLimbBoneName(int32 TentacleIndex)
+{
+	// `0x10398680`: `if ((i < 0) && (5 < i)) return table[0]; return table[i];` — a guard that can
+	// never hold, reproduced as the named crash guard the declaration states.
+	using namespace NpcKernelBoss19MingXiao;
+	if (TentacleIndex < 0 || TentacleIndex >= static_cast<int32>(UE_ARRAY_COUNT(GBoss19MingXiaoLimbBones)))
+	{
+		return GBoss19MingXiaoLimbBones[0];
+	}
+	return GBoss19MingXiaoLimbBones[TentacleIndex];
+}
+
+FVector FElysiumNpcMingXiao::MingXiaoLimbBonePositionUnits(int32 TentacleIndex) const
+{
+	// SEAM for `0x10398630`; see the declaration. The bone name is still resolved, so a bone sampler
+	// arriving later changes only this body.
+	(void)MingXiaoLimbBoneName(TentacleIndex);
+	return Origin / ElysiumMove::U;
+}
+
+float FElysiumNpcMingXiao::MingXiaoIdealRangeFromLimbs() const
+{
+	// `0x103986b0`, read off the listing (the C lost the x87 accumulator): each connected limb adds 2
+	// to the divisor but ONE term to the sum, so the answer is half the limbs' mean — retail's.
+	using namespace NpcKernelBoss19MingXiao;
+	float Sum = ElysiumNpcTunables::Zero;                                    // 0x103986b1
+	int32 Count = 0;
+	if (IsTentacleConnected(0))                                              // 0x103986c2
+	{
+		Sum = GBoss19IdealRangeNear;                                         // 0x103986cd
+		Count = 2;
+	}
+	if (IsTentacleConnected(1))                                              // 0x103986e0
+	{
+		Sum += GBoss19IdealRangeNear;                                        // 0x103986e9
+		Count += 2;
+	}
+	if (IsTentacleConnected(2))                                              // 0x103986fa
+	{
+		Sum += GBoss19IdealRangeFar;                                         // 0x10398703
+		Count += 2;
+	}
+	if (IsTentacleConnected(3))                                              // 0x10398714
+	{
+		Sum += GBoss19IdealRangeFar;                                         // 0x1039871d
+		Count += 2;
+	}
+	if (Count > 0)                                                           // 0x1039872e
+	{
+		return Sum / static_cast<float>(Count);                              // 0x10398730
+	}
+	return GBoss19IdealRangeFar;                                             // 0x10398738
+}
+
+FElysiumNpc* FElysiumNpcMingXiao::MingXiaoSpawnTentacle(int32 TentacleIndex)
+{
+	using namespace NpcKernelBoss19MingXiao;
+	MingXiaoLastLostTentacle = TentacleIndex;                                // 0x10397424 +0x6714
+	RecordScheduleEvent(FString::Printf(TEXT("SpawnTentacle trace NPC_VMingXiao.cpp:%d"),
+		GBoss19MingXiaoSpawnLine));                                          // 0x1039742a / 0x10397434
+	SetSchedule(GBoss19MingXiaoLostLimbSchedule, false);                     // 0x1039743e 0x102ae750
+	switch (MingXiaoThrowableObjectMode)                                     // 0x10397443..0x1039744f (0x1039744d JA: outside 1..4)
+	{
+	case 1:
+	case 2:
+		MingXiaoThrowCleanup();                                              // 0x10397458 0x10398fd0
+		break;
+	case 3:
+	case 4:
+		if (TentacleIndex == MingXiaoThrowingTentacle)                       // 0x1039745f / 0x10397465
+		{
+			MingXiaoThrowCleanup();                                          // 0x10397469 0x10398fd0
+		}
+		break;
+	default:
+		break;
+	}
+	// The burst at the limb's bone: `0x102c42a0(this, name, this, 0)` — visual-only.
+	MingXiaoParticleRequests.Add(FMingXiaoParticleRequest{ GBoss19BurstEmitter,
+		MingXiaoLimbBoneName(TentacleIndex), Origin / ElysiumMove::U });     // 0x10397471 / 0x10397480
+	const FVector BoneUnits = MingXiaoLimbBonePositionUnits(TentacleIndex);  // 0x1039748d 0x10398630
+	FVector MyAngles = GetAbsAngles();                                       // 0x10397496 slot 219
+	FVector HullMins = FVector::ZeroVector;
+	FVector HullMaxs = FVector::ZeroVector;
+	RetailHullExtents(GBoss19TentacleHull, EElysiumHullExtents::Full, HullMins, HullMaxs);   // 0x103974b2 / 0x103974cd
+	// The search. The first test is at the bone itself; then the compass, one step per miss.
+	// `CAI_BaseNPCTroika::IsAreaClear(pos, 0x2400b, mins, maxs)` (`0x102a0fb0`) with the hull `0x11`
+	// box: `m_bForceNPCCheck` (`+0x63da`) raised for one stationary hull trace, clear when the
+	// fraction reaches 1.0 and neither all- nor start-solid. The port's `IsAreaClear` takes only the
+	// OBB, so the body is spelled here with the explicit box, as L05's `TentacleHintClear`
+	// (`0x1039ee20`) spells the same call (integration review: the lane dropped the box).
+	auto IsSpotClear = [this, &HullMins, &HullMaxs](const FVector& AtUnits)
+	{
+		bForceNpcCheck = true;                                               // 0x102a0fb0 +0x63da = 1
+		FKernelHullTrace Trace;
+		KernelHullTrace(AtUnits, AtUnits, HullMins, HullMaxs, GBoss19TentacleSpotMask, Trace);
+		bForceNpcCheck = false;                                              // +0x63da = 0
+		return Trace.Fraction >= ElysiumNpcTunables::One && !Trace.bAllSolid && !Trace.bStartSolid;
+	};
+	FVector SpotUnits = BoneUnits;
+	float Radius = GBoss19TentacleSearchRadiusSeed;                          // 0x10397517
+	int32 Direction = 0;
+	int32 Tries = 0;                                                         // 0x1039751f
+	bool bClear = IsSpotClear(SpotUnits);                                    // 0x10397523
+	while (!bClear)                                                          // 0x1039752a / 0x1039762c
+	{
+		switch (Direction)                                                   // 0x10397530 / 0x10397533 JA / 0x10397539
+		{
+		case 0: SpotUnits.X = BoneUnits.X + Radius; SpotUnits.Y = BoneUnits.Y + Radius; break;  // 0x10397540
+		case 1: SpotUnits.X = BoneUnits.X + Radius; SpotUnits.Y = BoneUnits.Y; break;           // 0x10397551
+		case 2: SpotUnits.X = BoneUnits.X + Radius; SpotUnits.Y = BoneUnits.Y - Radius; break;  // 0x10397567
+		case 3: SpotUnits.X = BoneUnits.X; SpotUnits.Y = BoneUnits.Y - Radius; break;           // 0x1039757d
+		case 4: SpotUnits.X = BoneUnits.X - Radius; SpotUnits.Y = BoneUnits.Y - Radius; break;  // 0x1039758f
+		case 5: SpotUnits.X = BoneUnits.X - Radius; SpotUnits.Y = BoneUnits.Y; break;           // 0x103975a5
+		case 6: SpotUnits.X = BoneUnits.X - Radius; SpotUnits.Y = BoneUnits.Y + Radius; break;  // 0x103975bb
+		case 7: SpotUnits.X = BoneUnits.X; SpotUnits.Y = BoneUnits.Y + Radius; break;           // 0x103975c9
+		default: break;
+		}
+		++Direction;                                                         // 0x103975dd
+		if (Direction > 7)                                                   // 0x103975e1
+		{
+			Radius += GBoss19TentacleSearchRadiusStep;                       // 0x103975e7
+			Direction = 0;                                                   // 0x103975ed
+		}
+		++Tries;                                                             // 0x103975f7
+		if (Tries >= GBoss19TentacleSearchWarnTries)                         // 0x103975f8 / 0x103975ff
+		{
+			UE_LOG(LogElysiumNpcEnt, Verbose,
+				TEXT("ERROR:  FAILED TO FIND SPAWN LOC FOR TENTACLE."));      // 0x10397606
+		}
+		if (Tries >= GBoss19TentacleSearchGuardTries)
+		{
+			return nullptr;   // the named crash guard (see its constant)
+		}
+		bClear = IsSpotClear(SpotUnits);                                     // 0x10397625
+	}
+
+	// `0x10310cf0(&TentacleGenerator, spot)`: resolve the maker by name (`0x10310bc0`), make one NPC
+	// through its slot 617 `MakeNPC(true)` and place it with slot 62 `SetOrigin(spot)`.
+	FElysiumEntity* MakerEntity = World != nullptr ? World->FindByName(GBoss19TentacleMaker) : nullptr;
+	FElysiumNpc* MakerNpc = MakerEntity != nullptr ? MakerEntity->AsNpc() : nullptr;
+	FElysiumNpcMaker* Maker = MakerNpc != nullptr ? MakerNpc->AsSpecies<FElysiumNpcMaker>() : nullptr;
+	if (Maker == nullptr)
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Could not find NPCMaker( %s )"), GBoss19TentacleMaker);
+		return nullptr;                                                      // 0x10397659 -> 0x103977da
+	}
+	FElysiumNpc* Tentacle = Maker->MakeNPC(true);
+	if (Tentacle == nullptr)
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Failed to spawn with NPCMaker( %s )"),
+			GBoss19TentacleMaker);
+		return nullptr;                                                      // 0x10397659 -> 0x103977da
+	}
+	Tentacle->SetOrigin(SpotUnits * ElysiumMove::U);                         // 0x10397650 (slot 62 inside)
+	// Slot 218 `SetAbsAngles` is still the 29c stub; the port's angle word is `Angles` (Source
+	// degrees), which the other placements write directly (`ElysiumNpcPedestrian.cpp` slot 64).
+	Tentacle->Angles = MyAngles;                                             // 0x10397668 slot 218
+	// The launch: from MY origin toward the BONE (not the cleared spot), normalised and scaled.
+	const FVector MyOriginUnits = Origin / ElysiumMove::U;                   // 0x10397672 slot 217
+	FVector Launch = (BoneUnits - MyOriginUnits).GetSafeNormal()             // 0x10397678..0x103976b4
+		* ElysiumNpcTunables::Hundred;                                       // 0x103976c0 `_DAT_10450564`
+	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	Launch.X += Stream.FRandRange(-GBoss19TentacleLaunchJitter, GBoss19TentacleLaunchJitter);   // 0x103976f8
+	Launch.Y += Stream.FRandRange(-GBoss19TentacleLaunchJitter, GBoss19TentacleLaunchJitter);   // 0x10397715
+	Launch.Z += Stream.FRandRange(GBoss19TentacleLaunchLiftMin, GBoss19TentacleLaunchLiftMax);  // 0x10397732
+	Launch *= GBoss19TentacleLaunchScale;                                    // 0x1039773d..0x1039775c
+	// `CBaseEntity::SetAbsVelocity` (`0x1000489a`): the port's velocity word, CENTIMETRES.
+	Tentacle->Velocity = Launch * ElysiumMove::U;                            // 0x10397766
+	Tentacle->ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);   // 0x1039776f slot 614
+	FElysiumNpcMingXiaoTentacle* TentacleClass = Tentacle->AsSpecies<FElysiumNpcMingXiaoTentacle>();
+	if (TentacleClass != nullptr)
+	{
+		TentacleClass->TentacleId = TentacleIndex;                           // 0x10397778 +0x6660
+	}
+	ShareEnemyWithAlly(Tentacle);                                            // 0x1039777e 0x10397380
+	if (TentacleClass != nullptr)
+	{
+		TentacleClass->TentacleMingXiao = Handle;                            // 0x10397787 / 0x1039778c +0x665c
+	}
+	if (TentacleIndex >= 0 && TentacleIndex < static_cast<int32>(UE_ARRAY_COUNT(SeveredTentacles)))
+	{
+		SeveredTentacles[TentacleIndex] = Tentacle->Handle;                  // 0x10397796 / 0x103977a2 +0x66a8
+		MingXiaoSeveredTentacleMask |= 1u << (static_cast<uint32>(TentacleIndex) & 0x1fu);   // 0x103977b7 / 0x103977ba
+	}
+	--MingXiaoConnectedTentacleCount;                                        // 0x103977b9 / 0x103977c2 +0x670c
+	BodyGroup();                                                             // 0x103977c8 0x10398800
+	MingXiaoIdealRange = MingXiaoIdealRangeFromLimbs();                      // 0x103977cf / 0x103977d4 +0x6748
+	return Tentacle;                                                         // 0x103977da
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0x10395750 — the hitgroup damage router
+// -------------------------------------------------------------------------------------------------
+
+uint32 FElysiumNpcMingXiao::MingXiaoWeaponSlot360(const FElysiumEntity* Weapon) const
+{
+	// Slot 360 (`+0x5a0`) on the weapon, of which the router keeps only `& 0x18000`. The port's reading
+	// of those bits is the weapon record's family, the same read `0x10395650`'s melee test makes
+	// (`Damage19SpeciesWeaponIsMelee`, `ElysiumNpcDamage19Species.cpp`): a controllable melee weapon
+	// answers the mask, anything else 0.
+	const FElysiumItem* Item = Weapon != nullptr ? Weapon->AsItem() : nullptr;
+	const FElysiumItemDef* Record = Item != nullptr ? Item->Data() : nullptr;
+	return (Record != nullptr && Record->IsControllableWeapon() && Record->Type == EElysiumItemType::WeaponMelee)
+		? NpcKernelBoss19MingXiao::GBoss19RouterMeleeMask : 0u;
+}
+
+void FElysiumNpcMingXiao::MingXiaoApplyTentacleDamage(int32 TentacleIndex, FElysiumTakeDamageInfo& Info,
+	const FElysiumEntity* Weapon)
+{
+	using namespace NpcKernelBoss19MingXiao;
+	// The packet's magnitude, as every reader of it spells it: `CVDmg_t::GetDmg()` (`0x10006e15`) when
+	// the packet carries a descriptor (`[EDI]`), `m_flDamage` (`+0x30`) when it does not. Retail
+	// inlines the read at each of its five uses: `0x10395777`/`0x10395779` (melee rescale),
+	// `0x103957c8`/`0x103957ca` (hit points), `0x1039585a`/`0x1039585c` (the queue),
+	// `0x10395898`/`0x1039589a` (severed limb) and `0x10395991`/`0x10395993` (the `<= -1` rescale).
+	auto Magnitude = [&Info]()
+	{
+		return Info.Dmg != nullptr ? static_cast<float>(Info.Dmg->GetDmg()) : Info.Damage;
+	};
+	// The tail two arms share: `m_flDamage = (int)max((int)dmg / Tuning[0x24], 1.0)`. Retail carries it
+	// twice, byte for byte: the severed-limb copy `0x10395896`..`0x10395923` (`__ftol` `0x103958ac`, the
+	// record `0x103958c2` / `0x103958e2`, `0x103958db JNZ` to the 1.0 floor, `__ftol` `0x103958ee` /
+	// `0x1039590d`) and the `<= -1` copy `0x1039598d`..`0x103959fc` (the addresses below).
+	auto RescaleTail = [this, &Info, &Magnitude]()
+	{
+		const int32 Truncated = static_cast<int32>(Magnitude());             // 0x103959a5 `__ftol`
+		const float Divisor = Select19MingXiaoTuningField(GBoss19TuningDamageDivisorCell);   // 0x103959bb / 0x103959db
+		if (Divisor == ElysiumNpcTunables::Zero)
+		{
+			// NAMED CRASH GUARD: "NohitDamageDivide" defaults to 4.0 (`0x101e73d7 PUSH 0x40800000`); only
+			// an authored 0 reaches here, where retail's float division feeds `__ftol` an infinity. The
+			// division is skipped and the packet keeps its damage.
+			return;
+		}
+		float Ratio = static_cast<float>(Truncated) / Divisor;               // 0x103959c3
+		if (!(Ratio > ElysiumNpcTunables::One))                              // 0x103959c7..0x103959d4
+		{
+			Ratio = ElysiumNpcTunables::One;                                 // 0x103959e9
+		}
+		Info.Damage = static_cast<float>(static_cast<int32>(Ratio));          // 0x103959ef..0x103959fc
+	};
+
+	if (Weapon != nullptr                                                    // 0x10395760 / 0x10395762
+		&& (MingXiaoWeaponSlot360(Weapon) & GBoss19RouterMeleeMask) != 0u)  // 0x10395766 / 0x1039576c / 0x10395771
+	{
+		const float Before = Magnitude();                                    // 0x10395775..0x1039578f
+		Info.Damage = Select19MingXiaoTuningField(GBoss19TuningMeleeScaleCell) * Before;   // 0x10395798..0x103957a4
+	}
+
+	if (TentacleIndex <= -1)                                                 // 0x103957ab / 0x103957ae
+	{
+		if (TentacleIndex == -2 && MingXiaoConnectedTentacleCount <= 2)      // 0x10395926 / 0x10395929 / 0x1039592b / 0x10395932
+		{
+			RecordScheduleEvent(FString::Printf(TEXT("HeadHit trace NPC_VMingXiao.cpp:%d"),
+				GBoss19MingXiaoHeadHitLine));                                // 0x1039593d / 0x10395947
+			SetSchedule(GBoss19MingXiaoHeadHitSchedule, false);              // 0x10395951 0x102ae750
+			switch (MingXiaoThrowableObjectMode)                             // 0x10395956..0x10395966 (0x10395960 JA: outside 1..4)
+			{
+			case 1:
+			case 2:
+			case 3:
+			case 4:
+				MingXiaoThrowCleanup();                                      // 0x1039596f / 0x1039597f
+				break;
+			default:
+				break;                                                       // 0x103959ff
+			}
+			return;
+		}
+		RescaleTail();                                                       // 0x1039598d
+		return;
+	}
+	if (TentacleIndex >= static_cast<int32>(UE_ARRAY_COUNT(MingXiaoHitPoints)))
+	{
+		// NAMED CRASH GUARD: `0x10395650` answers 0..5 here; retail would index past the array.
+		return;
+	}
+
+	if (!IsTentacleConnected(TentacleIndex))                                 // 0x103957b7 / 0x103957c0
+	{
+		RescaleTail();                                                       // 0x10395896 (the first copy, 0x10395898..0x103958fb)
+		return;
+	}
+	MingXiaoHitPoints[TentacleIndex] -= Magnitude();                         // 0x103957c6..0x103957e3 +0x66dc
+	// `<= 0.0`, ordered: `TEST AH,0x41 / JP` skips only above zero or unordered.
+	if (MingXiaoHitPoints[TentacleIndex] <= ElysiumNpcTunables::Zero)        // 0x103957ea..0x103957f5
+	{
+		MingXiaoSpawnTentacle(TentacleIndex);                                // 0x103957fa 0x10397410
+	}
+	// The damage emitter at the packet's position (`+0x1c`) and my angles (slot 219). The port's
+	// packet carries no position word, so the head's own origin stands in (visual-only).
+	MingXiaoParticleRequests.Add(FMingXiaoParticleRequest{ GBoss19DamageEmitter, FString(),
+		Origin / ElysiumMove::U });                                          // 0x10395803 / 0x10395847
+	if (!bInvincible)                                                        // 0x1039584c / 0x10395854
+	{
+		MingXiaoQueuedBodyDamage.Add(static_cast<int32>(Magnitude()));       // 0x1039586e / 0x10395875 0x1023e4b0
+	}
+	Info.Damage = ElysiumNpcTunables::Zero;                                  // 0x10395881 +0x30
+	// `0x10395888`: `0x101c2b10(info, 1)` writes the packet's byte `+0x4a`; `FElysiumTakeDamageInfo`
+	// carries no such word, so the write has nowhere to land (SEAM, named; its reader is
+	// unrecovered).
 }

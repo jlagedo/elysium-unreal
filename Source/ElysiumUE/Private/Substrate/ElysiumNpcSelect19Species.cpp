@@ -1014,12 +1014,24 @@ float FElysiumNpcMingXiao::Select19MingXiaoTuningField(int32 Offset) const
 	const TCHAR* const Block = TEXT("Ming_Xiao_Info.General");
 	switch (Offset)
 	{
+	case 0x0:    // `+0x2bc` "TentacleHPInitial", GetFloat, default 200.0 (`0x101e730b`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("TentacleHPInitial"), 200.f) : 200.f;
+	case 0x4:    // `+0x2c0` "TentacleHPRegrown", GetFloat, default 160.0 (`0x101e7322`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("TentacleHPRegrown"), 160.f) : 160.f;
 	case 0x8:    // `+0x2c4` "ThrowChance", GetInt, default 0x3c (`0x101e7337`)
 		return static_cast<float>(Rules != nullptr ? Rules->Rules().Int(Block, TEXT("ThrowChance"), 60) : 60);
 	case 0xc:    // `+0x2c8` "ChargeResetTimeNormal", GetFloat, default 10.0 (`0x101e734b`)
 		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("ChargeResetTimeNormal"), 10.f) : 10.f;
 	case 0x10:   // `+0x2cc` "ChargeResetTimeDesperate", GetFloat, default 10.0 (`0x101e7362`)
 		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("ChargeResetTimeDesperate"), 10.f) : 10.f;
+	// Story 8 lane L12 integration: the cells the damage router `0x10395750` and the melee spread
+	// `0x103952b0` read.
+	case 0x24:   // `+0x2e0` "NohitDamageDivide", GetFloat, default 4.0 (`0x101e73d7`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("NohitDamageDivide"), 4.f) : 4.f;
+	case 0x28:   // `+0x2e4` "MeleeDamageScalar", GetFloat, default 2.0 (`0x101e73ee`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("MeleeDamageScalar"), 2.f) : 2.f;
+	case 0x2c:   // `+0x2e8` "MeleeTentacleHitPercent", GetInt, default 0x14 (`0x101e7405`)
+		return static_cast<float>(Rules != nullptr ? Rules->Rules().Int(Block, TEXT("MeleeTentacleHitPercent"), 20) : 20);
 	default:
 		return 0.f;
 	}
@@ -1798,16 +1810,6 @@ int32 FElysiumNpcTzimisceRunner::SpeciesSelectSchedule()
 // `CNPC_VWerewolf::SelectSchedule` `0x103cee70`, 1481 bytes.
 // =================================================================================================
 
-bool FElysiumNpcWerewolf::Select19CheckAllRandomMoveHints()
-{
-	return false;
-}
-
-bool FElysiumNpcWerewolf::Select19FindRandomMoveHint()
-{
-	return false;
-}
-
 int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
@@ -1897,7 +1899,7 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 			TeleportOut();                                         // 0x103cf3ae
 			return SelectTrace(GFileWerewolf, 0x98c, 0x158);
 		}
-		if (Select19CheckAllRandomMoveHints())                     // 0x103cf3d8 CALL 0x103cf770 / 0x103cf3e9
+		if (CheckAllRandomMoveHints())                     // 0x103cf3d8 CALL 0x103cf770 / 0x103cf3e9
 		{
 			SelectTrace(GFileWerewolf, 0x991, 0);
 			return SelectScheduleForHint(MoveHintNode);            // 0x103cf3fe
@@ -1920,7 +1922,7 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 		}
 		if (!Cond.Has(GCondWolfCanSpecialMove))                    // 0x103cf2e7 / 0x103cf2f0
 		{
-			if (Select19FindRandomMoveHint())                      // 0x103cf34f CALL 0x103d14f0 / 0x103cf360
+			if (FindRandomMoveHint())                      // 0x103cf34f CALL 0x103d14f0 / 0x103cf360
 			{
 				SelectTrace(GFileWerewolf, 0x97d, 0);
 				return SelectScheduleForHint(MoveHintNode);        // 0x103cf375

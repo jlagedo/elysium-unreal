@@ -947,3 +947,10 @@ void FElysiumCombatCharacter::Slot332(FElysiumEntity* SlowTarget)
 	// class (story 5 step 3).
 	(void)SlowTarget;
 }
+
+void FElysiumCombatCharacter::Slot354()
+{
+	// `CBaseCombatCharacter` slot 354 (`0x1014f8d0`) is a lone `RET`: a victim that is not a
+	// `CAI_BaseNPC` does nothing on feed begin (`FeedBegin` `0x10339d90` dispatches it,
+	// `CALL [EDX+0x588]`). Hand body since story 8 lane L11; overlay row `hand:` (lane L12 integration).
+}

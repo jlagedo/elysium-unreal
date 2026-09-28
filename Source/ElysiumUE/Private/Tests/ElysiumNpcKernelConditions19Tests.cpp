@@ -401,15 +401,18 @@ bool FCond19BaseGatherTailTest::RunTest(const FString&)
 	N.SetTarget(FElysiumEntityHandle::Invalid());
 	N.ScheduleHost.MoveTarget = FElysiumEntityHandle::Invalid();
 	N.Senses.Memory.BestSeeUnknown = FElysiumEntityHandle::Invalid();
+	// `CheckTarget` `0x10271d10` ends in `UpdateTargetPos` `0x10271b10` unconditionally
+	// (`0x10271db7`), so its counter witnesses the call.
+	const int32 UpdateTargetPosBefore = N.UpdateTargetPosCalls;
 	N.GatherConditions();
-	TestEqual(TEXT("1026ee6a no target, no CheckTarget"), N.Conditions19CheckTargetCalls, 0);
+	TestEqual(TEXT("1026ee6a no target, no CheckTarget"), N.UpdateTargetPosCalls, UpdateTargetPosBefore);
 	TestEqual(TEXT("1026ef51 no move target, no 0x1028e980"), N.Conditions19RefreshGoalCalls, 0);
 	TestEqual(TEXT("1026eee3 no see-unknown, no 0x1028e480"), N.Conditions19ApproachGoalCalls, 0);
 
 	N.SetTarget(F.Other->Handle);
 	N.ScheduleHost.MoveTarget = F.Other->Handle;
 	N.GatherConditions();
-	TestEqual(TEXT("1026eebc CheckTarget(target)"), N.Conditions19CheckTargetCalls, 1);
+	TestEqual(TEXT("1026eebc CheckTarget(target)"), N.UpdateTargetPosCalls, UpdateTargetPosBefore + 1);
 	TestEqual(TEXT("1026ef9d 0x1028e980(move target)"), N.Conditions19RefreshGoalCalls, 1);
 	return true;
 }
@@ -1364,17 +1367,32 @@ bool FCond19WerewolfTest::RunTest(const FString&)
 	F.HidePlayer();
 	Wolf->MoveHintNode = INDEX_NONE;
 	Wolf->Cognition.Conditions.Clear(FElysiumNpcBase::Cond19WerewolfCanSpecialMove);
-	Wolf->Conditions19WerewolfUpdaterCalls = 0;
+	// Witness of the three Werewolf19 updaters: `0x103cc450` CLEARS `0x7b` first thing (`0x103cc4c2`)
+	// and, with `+0x66e8` bit 2 clear, sets nothing back; `0x103cc320` sets exactly one of `0x59` /
+	// `0x79` (`0x103cc3a1` / `0x103cc3c9`).
+	const EElysiumNpcCond ShouldBreakHint = static_cast<EElysiumNpcCond>(0x7b);
+	const EElysiumNpcCond EnemyReachable = static_cast<EElysiumNpcCond>(0x79);
+	Wolf->WerewolfHintFlags = 0;
+	Wolf->Cognition.Conditions.Set(ShouldBreakHint);
+	Wolf->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyUnreachable);
+	Wolf->Cognition.Conditions.Clear(EnemyReachable);
 	Wolf->GatherConditions();
-	TestEqual(TEXT("103d04ff no enemy: the updaters do not run"), Wolf->Conditions19WerewolfUpdaterCalls, 0);
+	TestTrue(TEXT("103d04ff no enemy: 0x103cc450 does not run (0x7b kept)"), Cond19Has(*Wolf, ShouldBreakHint));
+	TestFalse(TEXT("103d04ff no enemy: 0x103cc320 does not run (no 0x79)"), Cond19Has(*Wolf, EnemyReachable));
 	TestEqual(TEXT("103d052b..103d0564 TOO_FAR_FOR_MELEE and TOO_FAR_TO_ATTACK agree afterwards"),
 		Cond19Has(*Wolf, EElysiumNpcCond::TooFarForMelee), Cond19Has(*Wolf, EElysiumNpcCond::TooFarToAttack));
 
 	ElysiumNpcEnemy::SetEnemy(*Wolf, F.Other->Handle);
 	Wolf->MoveHintNode = 7;
+	// With `0x103cc5c0` now live (lane L12), a held move hint with no path is cleared at
+	// `0x103cc797` before `0x103d0569` reads `m_pMoveHint`. `m_fEffects & 0x40` returns from
+	// `0x103cc5c0` at its second gate (`0x103cc6a4` / `0x103cc6af`), which keeps the hint for the
+	// `0x103d0582` arm this case pins.
+	Wolf->EffectsWord |= 0x40u;
 	Wolf->GatherConditions();
-	TestEqual(TEXT("103d050d / 103d051b / 103d0522 the three L12 updaters run with an enemy"),
-		Wolf->Conditions19WerewolfUpdaterCalls, 3);
+	TestFalse(TEXT("103d0522 0x103cc450 ran: 0x7b cleared"), Cond19Has(*Wolf, ShouldBreakHint));
+	TestTrue(TEXT("103d050d 0x103cc320 ran: one of 0x59 / 0x79 set"),
+		Cond19Has(*Wolf, EElysiumNpcCond::EnemyUnreachable) != Cond19Has(*Wolf, EnemyReachable));
 	TestNotNull(TEXT("103d04cc slot 544 remembered the enemy before the base"), Wolf->EnemyMemory.Find(F.Other->Handle));
 	TestTrue(TEXT("103d0582 m_pMoveHint: CAN_SPECIAL_MOVE"), Cond19Has(*Wolf, FElysiumNpcBase::Cond19WerewolfCanSpecialMove));
 	return true;

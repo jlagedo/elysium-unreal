@@ -74,6 +74,10 @@ public:
 	void AddEntityRelationship(const FElysiumEntityHandle& Target, EElysiumRelationship Value,
 		int32 Priority);
 	bool SetClass(const FString& Classname, EElysiumRelationship Value, int32 Priority);
+	// `CBaseCombatCharacter::AddClassRelationship` (`0x10332aa0`): the class's row is overwritten at
+	// ANY priority, else a row is appended — the class twin of `AddEntityRelationship`. `SetClass`
+	// refuses a lower priority. Same key normalisation as `SetClass`.
+	void AddClassRelationship(const FString& Classname, EElysiumRelationship Value, int32 Priority);
 
 	// Install or refresh the derived row toward `Target`, expiring at the absolute `ExpiresAt`.
 	//

@@ -110,6 +110,25 @@ public:
 	// --- 0019/8 Damage19 (lane L09): the word `OnTakeDamage_Alive` `0x1039e890` zeroes -------
 	double TentacleHideReadyTimer = 0.0;         // +0x6680 m_flHideReadyTimer (datamap, FIELD_TIME)
 
+	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
+	/** `+0x6699 CNPC_VMingXiaoTentacle::m_bPlayedDeathAnim` (walked) — `0x1039ea60`'s latch. */
+	bool bTentaclePlayedDeathAnim = false;
+	/** `0x1039e970` — the tentacle's death entry: the program and trace line picked by `m_ePhase`
+	 *  (`+0x6670`), installed FORCED, then `m_lifeState` = 1, `+0x6699` = 1, `m_bInvincible` = 1.
+	 *  Called by `Event_Killed` `0x1039e900` (lane L08) and through `0x1039ea60`. */
+	void MingXiaoTentacleEnterDeath();
+	/** `0x1039ea60` — `if (!+0x6699) MingXiaoTentacleEnterDeath();`, a jump. The ledger's (and lane
+	 *  L11's) `BeginTentacleDefeatOnce`. */
+	void BeginTentacleDefeatOnce();
+	/** `0x1039f310` — the tentacle's death sound: `EmitSound` through a `CPASAttenuationFilter` at
+	 *  slot 222 `GetSoundEmissionOrigin`, channel 2, volume 1.0, attenuation 0.8, pitch 100, sample
+	 *  `RandomInt(0, 0)` of the one-entry table at `0x106477cc`. */
+	void MingXiaoTentacleDeathSound();
+	/** SEAM for `0x10295460(this, activity, false)` — the activity's sequence, `-1` when the model
+	 *  has none. The port's activity vocabulary is names, not retail ids; answers -1, as family
+	 *  FrenzyShadow's `SequenceForActivity` does for the same call. */
+	int32 TentacleSequenceForActivity(int32 RetailActivity) const;
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

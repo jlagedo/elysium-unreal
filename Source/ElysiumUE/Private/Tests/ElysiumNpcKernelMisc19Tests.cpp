@@ -1160,8 +1160,8 @@ bool FElysiumNpcKernelMisc19CheckAllMoveHintsTest::RunTest(const FString&)
 	Wolf->MoveHintNode = INDEX_NONE;
 	TestFalse(TEXT("0x103d008a an empty walk reports FALSE"), Wolf->CheckAllMoveHints());
 	TestEqual(TEXT("0x103d00c8 no hint was set"), Wolf->MoveHintNode, static_cast<int32>(INDEX_NONE));
-	TestFalse(TEXT("0x103d2070 the imperative seam answers false"),
-		Wolf->CheckAllMoveHintsImperativeSeam(FElysiumNpcBase::FHintWords()));
+	TestFalse(TEXT("0x103d235b IsImperativeMoveHint: no +0x66e8 gate bit, not imperative"),
+		Wolf->IsImperativeMoveHint(FElysiumNpcBase::FHintWords()));
 	return true;
 }
 

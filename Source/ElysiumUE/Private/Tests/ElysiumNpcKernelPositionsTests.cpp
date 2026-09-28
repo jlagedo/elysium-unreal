@@ -860,9 +860,9 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	// The sight seams.
 	TestFalse(TEXT("the enemy view cone answers false"),
 		FElysiumNpcBaseBoss::EnemyInViewCone(*Npc, FVector::ZeroVector));
-	TestFalse(TEXT("werewolf_disregard_player_vision ships 0 and closes the Werewolf's gate"),
+	TestFalse(TEXT("werewolf_disregard_player_vision ships 0: the Werewolf's gate stays open (0x103da2b4)"),
 		FElysiumNpcWerewolf::WerewolfSightConVar());
-	TestFalse(TEXT("so its EnemyCouldSeeHull refuses without tracing"),
+	TestFalse(TEXT("with no enemy it falls through to the boss body, which refuses (0x103da33a)"),
 		Wolf->EnemyCouldSeeHullWerewolf(FVector::ZeroVector, true, false, FVector::ZeroVector));
 	FVector Mins;
 	FVector Maxs;

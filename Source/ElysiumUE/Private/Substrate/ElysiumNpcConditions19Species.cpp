@@ -721,21 +721,6 @@ int32 FElysiumNpcWerewolf::WerewolfForceTeleportConVar()
 	return 0;       // `werewolf_force_teleport` default "0"
 }
 
-void FElysiumNpcWerewolf::Conditions19UpdateConditionEnemyUnreachable()
-{
-	++Conditions19WerewolfUpdaterCalls;
-}
-
-void FElysiumNpcWerewolf::Conditions19UpdateConditionCanSpecialMove()
-{
-	++Conditions19WerewolfUpdaterCalls;
-}
-
-void FElysiumNpcWerewolf::Conditions19UpdateConditionShouldBreakHint()
-{
-	++Conditions19WerewolfUpdaterCalls;
-}
-
 void FElysiumNpcWerewolf::GatherConditions()
 {
 	// Absent: the scope-trace name pick (branches 0x103d0416 0x103d0420) and the
@@ -762,10 +747,10 @@ void FElysiumNpcWerewolf::GatherConditions()
 	if (Enemy != nullptr)                                                // 103d04ff / 103d0502 (captured before the base)
 	{
 		UpdateConditionCanTeleport();                                    // 103d0506 0x103cc0d0
-		Conditions19UpdateConditionEnemyUnreachable();                   // 103d050d 0x103cc320
+		UpdateConditionEnemyUnreachable();                               // 103d050d 0x103cc320
 		UpdateConditionDeathTriggered();                                 // 103d0514 0x103cc890
-		Conditions19UpdateConditionCanSpecialMove();                     // 103d051b 0x103cc5c0
-		Conditions19UpdateConditionShouldBreakHint();                    // 103d0522 0x103cc450
+		UpdateConditionCanSpecialMove();                                 // 103d051b 0x103cc5c0
+		UpdateConditionShouldBreakHint();                                // 103d0522 0x103cc450
 	}
 	if (C.Has(EElysiumNpcCond::TooFarForMelee))                          // 103d052b / 103d0532
 	{

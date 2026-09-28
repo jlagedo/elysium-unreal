@@ -176,12 +176,6 @@ bool FElysiumNpcBase::Conditions19BetterWeaponAvailable(double Now)
 	return Conditions19WeaponFindUsable(Range) != nullptr;               // 1026fba4 / 1026fbab
 }
 
-void FElysiumNpcBase::Conditions19CheckTarget(FElysiumEntity* TargetEntity)
-{
-	(void)TargetEntity;
-	++Conditions19CheckTargetCalls;
-}
-
 void FElysiumNpcBase::GatherConditions()
 {
 	// `0x1026ec30`. Skeleton sites with no port line, by the absent-words convention: the
@@ -260,7 +254,7 @@ void FElysiumNpcBase::GatherConditions()
 		if (TargetEntity != nullptr)                                           // 1026ee8a / 1026ee8f
 		{
 			// The handle re-read for the argument (1026ee9a `-1`, 1026eeb1 serial): the same entity.
-			Conditions19CheckTarget(const_cast<FElysiumEntity*>(TargetEntity));   // 1026eebc 0x10271d10
+			CheckTarget(const_cast<FElysiumEntity*>(TargetEntity));   // 1026eebc 0x10271d10
 		}
 	}
 

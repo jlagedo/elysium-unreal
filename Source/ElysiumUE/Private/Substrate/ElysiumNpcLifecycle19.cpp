@@ -99,22 +99,6 @@ int32 FElysiumNpc::ResolveCombatStartActivity(const FString& Name) const
 	return ActivityIdForName(Name);                                      // 10412520
 }
 
-void FElysiumNpc::ClearFollowerBossName()
-{
-	// `0x102c4430("")`: SetFollowerBoss then `m_sFollowerBoss = NULL` when empty.
-	SetFollowerBossByAuthoredName(FString());
-	FollowerBossName.Reset();
-}
-
-void FElysiumNpc::SetFollowerBossByAuthoredName(const FString& Name)
-{
-	// SEAM for `0x102c44e0`. Overlay row of another family; Squad's `SetFollowerBossName` is
-	// `0x102c4470` and already states this body is unported; `FollowerBoss` (`+0x647c`) has no
-	// writer. Counted so StartNPC's call is observable.
-	++FollowerBossOnStartCalls;
-	(void)Name;
-}
-
 void FElysiumNpc::SeedStatListOnNpcInit()
 {
 	++StatListSeeds;
@@ -477,7 +461,7 @@ void FElysiumNpc::TroikaStartNPC()
 {
 	FElysiumNpcBase::StartNPC();                                                      // 10273ad0
 	ThinkSet(StartNpcThinkFunction(), 0.0);                              // re-arm
-	SetFollowerBossByAuthoredName(FollowerBossName);                     // 102c44e0
+	SetFollowerBoss(FollowerBossName);                                   // 102c44e0
 	SetFollowerType(FollowerType);                                       // 102c4680
 	Senses.SetClosestPlayer(*this, NpcKernelLifecycle19Shared::Lifecycle19Now(*this));               // 10293a80
 }
@@ -525,7 +509,7 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	const float Jitter = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
 		.FRandRange(ShootAtHintRearmMin, ShootAtHintRearmMax);
 	ScheduleHost.NextShootAtHintSearchTime = Now + static_cast<double>(Jitter);
-	SetFollowerBossByAuthoredName(FollowerBossName);                     // 102c44e0
+	SetFollowerBoss(FollowerBossName);                                   // 102c44e0
 	SetFollowerType(FollowerType);                                       // 102c4680
 	CombatStartActivityId = ResolveCombatStartActivity(CombatStartActivity);  // 1029f340 -> +0x65e4
 	bSpawnCalled = true;                                                 // 10299xxx +0x62e9 = 1

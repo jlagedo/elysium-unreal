@@ -524,14 +524,17 @@ bool FElysiumNpcKernelHintsWerewolfTest::RunTest(const FString&)
 		TestTrue(TEXT("and fulldoor_a_3_breakthrough_f at 0x3a99"),
 			Npc->IsImperativeTeleportHint(Hint));
 
-		// The one arm with a trace behind it. The trace seam answers "blocked", so the arm refuses —
-		// and that refusal IS the recovered answer for a trace that never ran.
+		// The one arm with a trace behind it: slot 617 (`0x103da230`) at the hint's origin
+		// (`0x103d38a7`), and `0x103d38ad TEST AL,AL / JNZ 0x103d38c3` refuses only when the enemy
+		// COULD see it. Story 8 lane L12 integration: the slot has its body, and a Werewolf with no
+		// enemy falls through to the boss body, which refuses — so the arm is imperative. (The test
+		// used to pin the seam's "blocked" answer.)
 		Npc->WerewolfDoorState = 2;
 		Hint.HintType = 0x3aa4;
 		Hint.Name = TEXT("jump_to_platform_hint_1");
-		TestFalse(TEXT("the jump_to_platform arm asks the +0x9a4 trace seam, which blocks"),
+		TestTrue(TEXT("0x103d38af the jump_to_platform arm: slot 617 answers false with no enemy, imperative"),
 			Npc->IsImperativeTeleportHint(Hint));
-		TestTrue(TEXT("and the seam it asks is the blocked side"),
+		TestFalse(TEXT("0x103da33a slot 617 with no enemy: the boss body refuses"),
 			Npc->WerewolfHintTrace(FVector::ZeroVector));
 	}
 

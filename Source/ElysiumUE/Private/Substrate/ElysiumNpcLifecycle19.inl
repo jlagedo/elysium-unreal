@@ -153,7 +153,6 @@ int32 RestorePlaceRejections = 0;        // `0x10299a80`
 int32 PatrolPathRevalidations = 0;       // `0x1029f610`
 int32 PatrolPathReleases = 0;            // `0x1029f5d0`
 int32 PedLinkRebinds = 0;
-int32 FollowerBossOnStartCalls = 0;      // seam for `0x102c44e0`
 int32 InventoryDestroys = 0;             // `Inventory_Destroy`
 
 /** `0x102db5e0` — the interesting place whose marker table names this NPC, or `INDEX_NONE`. */
@@ -165,15 +164,6 @@ void ValidateRestoredInterestingPlace();
 /** `0x1029f340` — the null guard plus `ActivityNameToId` (`0x10412520`), which family Hints already
  *  stands as `ActivityIdForName`. */
 int32 ResolveCombatStartActivity(const FString& Name) const;
-
-/** `0x102c4430("")` — SetFollowerBoss then `m_sFollowerBoss = NULL`. */
-void ClearFollowerBossName();
-
-/** SEAM for `0x102c44e0`. Squad's `SetFollowerBossName` is `0x102c4470` and already states this
- *  row is unported. Counted; handle stays unwritten. Three searches: address `0x102c44e0` is an
- *  overlay row of another family, `SetFollowerBoss` identifier is absent, `+0x647c` is
- *  `FollowerBoss` with no writer. */
-void SetFollowerBossByAuthoredName(const FString& Name);
 
 void SeedStatListOnNpcInit();
 void SeedCriminalLevelWitnessed();

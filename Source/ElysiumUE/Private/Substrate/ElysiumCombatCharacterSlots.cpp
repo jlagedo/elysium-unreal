@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 139 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 17 are defined by hand in the substrate, and 103 are still stubs — 63 29c, 27 29d, 7
-// 29e, 6 unassigned.
+// recovered, 18 are defined by hand in the substrate, and 102 are still stubs — 63 29c, 27 29d, 7
+// 29e, 5 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -800,10 +800,8 @@ void FElysiumCombatCharacter::InputBarterEnd(void*)
 }
 
 // slot 354 0x1014f8d0 (walked) `void vfunc354()`
-void FElysiumCombatCharacter::Slot354()
-{
-	// `0x1014f8d0` is a lone `RET`: a victim that is not a `CAI_BaseNPC` does nothing on feed begin.
-}
+// verdict `rule`: the body is `FElysiumCombatCharacter::Slot354`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 355 0x1014f8f0 (walked) `void vfunc355()`
 void FElysiumCombatCharacter::Slot355()
@@ -1587,7 +1585,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(void*)>::Test(&FElysiumCombatCharacter::InputBarterEnd),
 				nullptr },
 			{ 354, TEXT("0x1014f8d0"), TEXT("CBaseCombatCharacter"), TEXT("Slot354"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void()>::Test(&FElysiumCombatCharacter::Slot354),
 				nullptr },
 			{ 355, TEXT("0x1014f8f0"), TEXT("CBaseCombatCharacter"), TEXT("Slot355"),
