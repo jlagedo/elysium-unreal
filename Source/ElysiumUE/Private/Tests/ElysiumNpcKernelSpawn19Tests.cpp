@@ -374,7 +374,7 @@ bool FElysiumNpcKernelSpawn19TentacleEventKilledTest::RunTest(const FString&)
 	// First kill (0x1039e90b taken): LIFE_DYING and the death schedule, no base death.
 	Tentacle->bTentaclePlayedDeathAnim = false;
 	Tentacle->Event_Killed(&Info);
-	TestEqual(TEXT("m_lifeState = 1 (0x1039e92e)"), Tentacle->AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("m_lifeState = 1 (0x1039e92e)"), Tentacle->LifeState, 1);
 	// `0x1039e938 -> 0x1039e970` (Boss19's `MingXiaoTentacleEnterDeath`) raises `+0x6699`.
 	TestTrue(TEXT("0x1039e970 ran: m_bPlayedDeathAnim (0x6699) raised"), Tentacle->bTentaclePlayedDeathAnim);
 	TestFalse(TEXT("no base death on the first kill"), Tentacle->HasReportedDeath());
@@ -398,7 +398,7 @@ bool FElysiumNpcKernelSpawn19MingXiaoEventKilledTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Spawn19Info(F);
 	Ming->bMingXiaoPlayedDeathAnim = false;
 	Ming->Event_Killed(&Info);
-	TestEqual(TEXT("m_lifeState = 1 (0x10395c29)"), Ming->AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("m_lifeState = 1 (0x10395c29)"), Ming->LifeState, 1);
 	// `0x10395c33 -> 0x10395c70` (Boss19's `MingXiaoEnterDeath`) raises `+0x6744`.
 	TestTrue(TEXT("0x10395c70 ran: m_bPlayedDeathAnim (0x6744) raised"), Ming->bMingXiaoPlayedDeathAnim);
 	TestFalse(TEXT("no base death on the first kill"), Ming->HasReportedDeath());

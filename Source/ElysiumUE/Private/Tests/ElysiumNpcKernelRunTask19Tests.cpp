@@ -415,12 +415,12 @@ bool FElysiumNpcKernelRunTask19BaseDieTest::RunTest(const FString&)
 	FinishActivity(N);
 	N.SequenceCycle = 0.5f;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
-	TestNotEqual(TEXT("0x10288fe9: a cycle below 1.0 waits"), N.AnimEventLifeStateWord, 2);
+	TestNotEqual(TEXT("0x10288fe9: a cycle below 1.0 waits"), N.LifeState, 2);
 	N.SequenceCycle = 1.f;
 	N.SpawnFlags &= ~0x200;
 	const int32 Sizes = N.SetSizeCalls;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
-	TestEqual(TEXT("0x10288ff7 m_lifeState = 2"), N.AnimEventLifeStateWord, 2);
+	TestEqual(TEXT("0x10288ff7 m_lifeState = 2"), N.LifeState, 2);
 	TestEqual(TEXT("0x102890a3 UTIL_SetSize"), N.SetSizeCalls, Sizes + 1);
 	TestEqual(TEXT("the maxs are (4,4,1)"), N.LastSetSizeMaxsUnits, FVector(4.f, 4.f, 1.f));
 	TestEqual(TEXT("0x102890e1 SOUND_CARCASS"), N.InsertedAiSoundType, 0x20);
@@ -671,7 +671,7 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abbbe: neither gate arm -> no Die"), N.RunTaskDieCalls, 0);
 	N.IdealActivityNumber = 1;
-	N.AnimEventLifeStateWord = 1;
+	N.LifeState = 1;
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abc1e Die"), N.RunTaskDieCalls, 1);
 	TestTrue(TEXT("0x102abc03: TASK_DIE credits itself"), N.LastDieCredit == N.Handle);
@@ -679,7 +679,7 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	// runs its whole body on that non-DEAD word (`0x10339330`): slot 144 re-enters `Event_Killed`
 	// (`0x1033940d`), whose `0x1032b9b0` writes LIFE_DYING again and whose `0x10265d29` stores the
 	// packet's attacker -- the credit -- in `m_hLastDamageEnt`.
-	TestEqual(TEXT("0x1032b9b0: Die's Event_Killed writes LIFE_DYING again"), N.AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x1032b9b0: Die's Event_Killed writes LIFE_DYING again"), N.LifeState, 1);
 	TestTrue(TEXT("0x10265d29: m_hLastDamageEnt is the credit (itself)"), N.BaseMemory.LastDamageAttacker == N.Handle);
 	TestTrue(TEXT("0x1032c0e0: the corpse is made"), N.IsCorpse());
 	TestFalse(TEXT("no completion"), Completed(N));
@@ -1339,7 +1339,7 @@ bool FElysiumNpcKernelRunTask19WerewolfTest::RunTest(const FString&)
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
-	TestEqual(TEXT("0x103ce491 m_lifeState = 2"), N.AnimEventLifeStateWord, 2);
+	TestEqual(TEXT("0x103ce491 m_lifeState = 2"), N.LifeState, 2);
 	TestTrue(TEXT("0x103ce49b completes"), Completed(N));
 	return true;
 }

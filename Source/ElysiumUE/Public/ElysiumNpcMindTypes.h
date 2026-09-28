@@ -21,7 +21,6 @@ enum class EElysiumBodyOwner : uint8
 {
 	None,
 	Schedule,
-	Patrol,
 	Ambient,
 	Sequence,
 	ScriptedSchedule,
@@ -60,7 +59,6 @@ inline const TCHAR* LexToString(EElysiumBodyOwner Owner)
 	{
 	case EElysiumBodyOwner::None:              return TEXT("None");
 	case EElysiumBodyOwner::Schedule:          return TEXT("Schedule");
-	case EElysiumBodyOwner::Patrol:            return TEXT("Patrol");
 	case EElysiumBodyOwner::Ambient:           return TEXT("Ambient");
 	case EElysiumBodyOwner::Sequence:          return TEXT("Sequence");
 	case EElysiumBodyOwner::ScriptedSchedule:  return TEXT("ScriptedSchedule");

@@ -142,6 +142,17 @@ namespace ElysiumNpcKernelBindings
 		// shipped map authors the key
 	}
 
+	void AddBaseEntitySaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_lifeState"), &FElysiumEntity::LifeState,
+			EElysiumField::Save);  // +0x200 int
+	}
+
 	void AddToggleFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
@@ -2992,7 +3003,7 @@ namespace ElysiumNpcKernelBindings
 		switch (Class)
 		{
 			case EClass::BaseEntity:
-				return {27, 11, 2, 10, 0};
+				return {27, 11, 2, 10, 1};
 			case EClass::Toggle:
 				return {0, 9, 2, 4, 0};
 			case EClass::Animating:

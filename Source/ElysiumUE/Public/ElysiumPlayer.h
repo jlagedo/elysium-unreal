@@ -1066,12 +1066,13 @@ public:
 	// The health arithmetic of `CBaseCombatCharacter::OnTakeDamage_Alive` (`0x103302e0`, from
 	// `0x10330733`): `HealthBuffer` absorbs first (Bloodshield ends when it exhausts), then the
 	// unkillable cap, then the damage counter, then Kindred aggravated tracking, then `m_iHealth`
-	// (slot 348 `HealthToPercent`). Answers whether a health track took anything.
+	// (slot 348 `HealthToPercent`). Answers whether a health track took anything. The aggravated
+	// test reads `Dmg.DmgMask` as `m_bitsDamageType` (the NPC route ORs the packet's bits into it).
 	bool CommitDamageHealth(const FElysiumDmg& Dmg);
 
 	// Build retail's `CTakeDamageInfo` for an NPC victim and dispatch slot 142 `OnTakeDamage` on
 	// it (story 8 wave 2). `Dmg` may be null (the scalar route: `Scalar` is the packet's `+0x30`).
-	void DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar, FElysiumCombatCharacter* Attacker,
+	void DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar,
 		const FElysiumEntityHandle& AttackerHandle, bool bDisallowFirearmsToBashing);
 
 	// `CBaseAnimating::BecomeClientRagdoll` `0x10090180`, the tail of slot 301 `CreateCorpse`: the
@@ -1085,7 +1086,6 @@ public:
 	// Player mode-3 completion (0x10165d90): SetBaseToStatValue(Health, MaxHealth),
 	// Event_Killed, Event_Dying. It bypasses OnTakeDamage and its soak/buffer/flinch path.
 	void CommitStealthDeath(const FElysiumEntityHandle& Attacker);
-	FElysiumEntityHandle DeathAttacker;
 	bool bStealthDeathCommitted = false;
 
 	// `CBaseCombatCharacter::DamageFlinch`, from the one health commit. Picks the head or
@@ -1949,14 +1949,6 @@ ENUM_CLASS_FLAGS(EElysiumViewFlags)
 // `respawn()` itself (`0x10352ed0`) is a `RET` when both single-player `gpGlobals` bytes are 0. The
 // only exit retail has is a load, which runs `CHL2_Player::Spawn` (slot 103, `0x1016d260`); in the
 // port that is the game-over screen's load-or-quit (RC14 §5.6).
-enum class EElysiumLifeState : uint8
-{
-	Alive = 0,
-	Dying = 1,
-	Dead = 2,
-	Respawnable = 3,
-};
-
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
@@ -2428,11 +2420,11 @@ public:
 
 	// === The death sequence (RC14, `docs/vtmb/camera-view-modes.md` -> "The death view") =========
 	//
-	// `m_lifeState` (`CBasePlayer+0x200`), and the think that walks it. Retail has **no** death
-	// camera and no observer mode: `Event_Killed` freezes the player where he stands, and the view
-	// stays on his own eye. What is camera-visible is the FOV write, the velocity the friction below
-	// bleeds, and the fact that nothing here touches the scripted camera slot.
-	EElysiumLifeState LifeState = EElysiumLifeState::Alive;
+	// `m_lifeState` (`+0x200`) is the entity's own `LifeState` (`ElysiumLifeState`), and this is the
+	// think that walks it. Retail has **no** death camera and no observer mode: `Event_Killed`
+	// freezes the player where he stands, and the view stays on his own eye. What is camera-visible
+	// is the FOV write, the velocity the friction below bleeds, and the fact that nothing here
+	// touches the scripted camera slot.
 
 	// `m_iRespawnFrames` (`+0x20ec`) — **a float incremented by 1.0 per server frame**, not a
 	// timer, compared against `_DAT_104492a4` = 60.0.
@@ -2450,10 +2442,6 @@ public:
 	// returns, exactly as `PreThink` returns after it.
 	void PlayerDeathThink();
 
-	// Slot 158, `CBaseEntity::IsAlive` `0x100b4dc0`: `m_lifeState == LIFE_ALIVE`, read from the
-	// player's own `m_lifeState` (`LifeState`). The slot's override on the player (it hid the slot as
-	// a `const` method before, story 5 commit B).
-	virtual bool IsAlive() override { return LifeState == EElysiumLifeState::Alive; }
 	// =============================================================================================
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).

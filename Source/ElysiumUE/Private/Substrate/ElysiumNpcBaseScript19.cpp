@@ -51,5 +51,5 @@ bool FElysiumNpcBase::LifeStateIsDying() const
 {
 	// `m_lifeState == LIFE_DYING` on the word itself (story 8 wave 2: `Event_Killed` `0x1032b9b0`
 	// writes it); `Kill` removes the entity (`bDead`), which retail's `UTIL_Remove` does.
-	return AnimEventLifeStateWord == 1 && !IsDead();
+	return LifeState == 1 && !IsDead();
 }

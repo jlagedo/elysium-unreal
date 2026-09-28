@@ -747,7 +747,7 @@ void FElysiumNpcMingXiaoTentacle::Event_Killed(void* Arg0)
 {
 	if (!bTentaclePlayedDeathAnim)                                                       // 0x1039e903 / 0x1039e90b
 	{
-		AnimEventLifeStateWord = GSpawn19LifeDying;                                      // 0x1039e92e m_lifeState = 1
+		LifeState = GSpawn19LifeDying;                                      // 0x1039e92e m_lifeState = 1
 		MingXiaoTentacleEnterDeath();                                                    // 0x1039e938 -> 0x1039e970
 		return;                                                                          // 0x1039e93e
 	}
@@ -769,7 +769,7 @@ void FElysiumNpcMingXiao::Event_Killed(void* Arg0)
 {
 	if (!bMingXiaoPlayedDeathAnim)                                                       // 0x10395ba3 / 0x10395bab
 	{
-		AnimEventLifeStateWord = GSpawn19LifeDying;                                      // 0x10395c29 m_lifeState = 1
+		LifeState = GSpawn19LifeDying;                                      // 0x10395c29 m_lifeState = 1
 		MingXiaoEnterDeath();                                                            // 0x10395c33 -> 0x10395c70
 		return;                                                                          // 0x10395c39
 	}

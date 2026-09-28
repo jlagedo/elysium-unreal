@@ -124,8 +124,8 @@ void FElysiumNpcBase::NPCThink()
 	{
 		RunAI(false);                                                       // 0x1026cc2a slot 432
 	}
-	PostRun();                                                              // 0x1026cc32 0x1026c7c0
-	// `PerformMovement(RunAnimation(), 0)`: `0x1026c540` advances the sequence clock and re-picks a
-	// finished idle; its interval is this runtime's 0.0.
-	PerformMovement(RunAnimation(), 0);                                     // 0x1026cc3b 0x1026c540 / 0x1026cc43 0x1026c120
+	// `PerformMovement(PostRun(), 0)`: `PostRun` runs `RunAnimation` (the sequence clock and the idle
+	// re-pick) and the anim events, and answers the interval (`0x1026cc37 FSTP`).
+	const float Interval = PostRun();                                       // 0x1026cc32 0x1026c7c0
+	PerformMovement(Interval, 0);                                           // 0x1026cc43 0x1026c120
 }

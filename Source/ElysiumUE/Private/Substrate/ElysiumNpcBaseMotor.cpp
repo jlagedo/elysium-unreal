@@ -385,21 +385,18 @@ bool FElysiumNpcBase::AutoMovement()
 	return MotorApplyIntervalMovement(DeltaUnits, YawDelta);
 }
 
-void FElysiumNpcBase::PostRun()
+float FElysiumNpcBase::PostRun()
 {
-	// `CAI_BaseNPC::PostRun` `0x1026c7c0`. Everything but two lines is VProf scaffolding; the
-	// retail content is the PAIRING and its ORDER:
-	//     float dt = thunk_FUN_1026c540(this);        // the elapsed animation interval
-	//     vtable[0x408/4 = 258](dt, this);            // DispatchAnimEvents, `0x10098c80`
-	//     CBaseCombatCharacter::Weapon_FrameUpdate(dt);   // with the SAME number
-	// The port's comment at `ElysiumNpc.cpp:895` discussed this ordering; this is the body.
-	//
-	// **SEAM**: `thunk_FUN_1026c540`'s interval is the animating tier's, which this substrate does
-	// not publish to the kernel, so the pair runs with 0.0 and the ORDER is what is ported.
-	const float Interval = 0.f;
-	DispatchAnimEvents(Interval, this);
+	// `CAI_BaseNPC::PostRun` `0x1026c7c0`. Everything but three lines is VProf scaffolding:
+	//     float dt = RunAnimation();                  // `0x1026c8c4 CALL 0x1000ed63` -> 0x1026c540
+	//     vtable[0x408/4 = 258](dt, this);            // DispatchAnimEvents, `0x1026c8d8`
+	//     CBaseCombatCharacter::Weapon_FrameUpdate(dt);   // `0x1026c8e0`, with the SAME number
+	// and the interval is the answer the think hands to `PerformMovement`.
+	const float Interval = RunAnimation();                                      // 0x1026c8c4
+	DispatchAnimEvents(Interval, this);                                          // 0x1026c8d8 slot 258
 	MotorSeams.PostRunInterval = Interval;
-	++MotorSeams.PostRunWeaponUpdates;
+	++MotorSeams.PostRunWeaponUpdates;                                           // 0x1026c8e0 Weapon_FrameUpdate
+	return Interval;
 }
 
 void FElysiumNpcBase::CheckOnGround()

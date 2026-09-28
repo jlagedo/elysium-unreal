@@ -115,12 +115,6 @@ bool PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const;
  *  is finished, which is the byte retail leaves in `AL`. */
 bool RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, double Now);
 
-/** SEAM for `m_bSequenceFinished` (`+0x65c`) and `m_bSequenceLoops` (`+0x65d`), the two animation
- *  bytes `RunInterestingPlaceLoop` reads. The port's clip phase is not wired to this seam yet, so
- *  both answer false. */
-bool IsHintSequenceFinished() const;
-bool DoesHintSequenceLoop() const;
-
 /** SEAM for the interest loop's body block: `0x102db760` (the place's occupied marker),
  *  `0x102dcc20` (the NPC standing on it), `0x10279cc0` (align to it), `0x102e2020` / `0x102e1e20`
  *  (the motor yaw set and release) and `MoveToBoneOriginAngles("Bip01", false, true)`. None of them

@@ -638,7 +638,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		{
 			return 0;
 		}
-		AnimEventLifeStateWord = LifeDead;                                                // 0x10288ff7
+		LifeState = LifeDead;                                                // 0x10288ff7
 		ThinkSet(nullptr, 0.0);                                                    // 0x10289001
 		if (FElysiumNpc* Troika = AsNpc())
 		{

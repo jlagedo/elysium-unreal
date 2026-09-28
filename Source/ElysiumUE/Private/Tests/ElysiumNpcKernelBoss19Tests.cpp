@@ -208,7 +208,7 @@ bool FElysiumNpcKernelBoss19MingXiaoEnterDeathTest::RunTest(const FString&)
 	Head->MingXiaoEnterDeath();
 	TestEqual(TEXT("0x10395c9b the head installs 0x16d"), Head->LastSetScheduleRetail, 0x16d);
 	TestTrue(TEXT("0x10395c90 FORCED"), Head->bLastSetScheduleForce);
-	TestEqual(TEXT("0x10395ca5 m_lifeState = LIFE_DYING"), Head->AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x10395ca5 m_lifeState = LIFE_DYING"), Head->LifeState, 1);
 	TestTrue(TEXT("0x10395caf m_bPlayedDeathAnim"), Head->bMingXiaoPlayedDeathAnim);
 	TestTrue(TEXT("0x10395cb6 m_bInvincible"), Head->bInvincible);
 
@@ -238,7 +238,7 @@ bool FElysiumNpcKernelBoss19TentacleEnterDeathTest::RunTest(const FString&)
 	T->MingXiaoTentacleEnterDeath();
 	TestEqual(TEXT("0x1039e991 phase 2 installs 0x16a"), T->LastSetScheduleRetail, 0x16a);
 	TestTrue(TEXT("0x1039e9fc FORCED"), T->bLastSetScheduleForce);
-	TestEqual(TEXT("0x1039ea01 m_lifeState = LIFE_DYING"), T->AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x1039ea01 m_lifeState = LIFE_DYING"), T->LifeState, 1);
 	TestTrue(TEXT("0x1039ea0b +0x6699"), T->bTentaclePlayedDeathAnim);
 	TestTrue(TEXT("0x1039ea12 m_bInvincible"), T->bInvincible);
 

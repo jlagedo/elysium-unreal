@@ -345,7 +345,7 @@ bool FElysiumNpcKernelMisc19ChooseEnemyDeadTest::RunTest(const FString&)
 	// The port's `Kill()` is `UTIL_Remove` (the handle stops resolving); the life-state word is what
 	// slot 158 reads (`FElysiumEntity::IsAlive`), so the case stands the word (LIFE_DYING, as
 	// `Event_Killed` `0x1032b9b0` writes it).
-	F.Other->AnimEventLifeStateWord = 1;
+	F.Other->LifeState = 1;
 	if (!TestNotNull(TEXT("the dead enemy still resolves this frame"),
 			static_cast<const FElysiumNpcBase&>(N).GetEnemy()))
 	{
@@ -854,10 +854,10 @@ bool FElysiumNpcKernelMisc19BaseHandleAnimEventTest::RunTest(const FString&)
 	N.WriteNpcStateRetail(4);
 	N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(1000));
 	TestEqual(TEXT("0x10274e82 m_iHealth := 0"), N.Health, 0);
-	TestEqual(TEXT("0x10274e78 m_lifeState := 1"), N.AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x10274e78 m_lifeState := 1"), N.LifeState, 1);
 	N.FElysiumNpcBase::HandleAnimEvent(Misc19Ev(0x3f2));
 	TestEqual(TEXT("0x10274eb2 m_iHealth := m_iMaxHealth"), N.Health, 100);
-	TestEqual(TEXT("0x10274ea8 m_lifeState := 0"), N.AnimEventLifeStateWord, 0);
+	TestEqual(TEXT("0x10274ea8 m_lifeState := 0"), N.LifeState, 0);
 	N.WriteNpcStateRetail(1);
 
 	// Sound scripts.

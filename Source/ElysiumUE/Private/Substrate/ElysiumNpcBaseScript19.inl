@@ -18,7 +18,7 @@
  *  `CancelScript` (`0x101a8c30`) on a live `m_hCine` and answers TRUE, the no-script case included. */
 bool ExitScriptedSequence();
 
-/** `m_lifeState (+0x200) == LIFE_DYING (1)`, read off the word (`AnimEventLifeStateWord`), with the
+/** `m_lifeState (+0x200) == LIFE_DYING (1)`, read off the word (`LifeState`), with the
  *  entity not yet removed. */
 bool LifeStateIsDying() const;
 

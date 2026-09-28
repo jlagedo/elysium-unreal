@@ -74,11 +74,13 @@ int32 RunDialogActivity();
 int32 BloodExplodeCalls = 0;
 void BloodExplode();
 
-/** `CBaseCombatCharacter::Die(attacker, 0, 0)` (`0x103392c0`) as the Troika death arms call it. The
- *  port's commit is `CommitDeath` (no credit argument); the credited entity is recorded here. */
+/** `CBaseCombatCharacter::Die(credit, 0, 0)` (`0x103392c0`), the whole body, as the Troika death arms
+ *  call it: a packet crediting `Credit`, `SetBaseToStatValue(0xf, 0x11)`, slot 144, slot 403 -- on a
+ *  body whose `m_lifeState` is not LIFE_DEAD. The two flag bytes (`info+0x48/+0x49`) are 0 at every
+ *  caller here and are not carried. The credit and a call count are kept for the tests. */
 FElysiumEntityHandle LastDieCredit;
 int32 RunTaskDieCalls = 0;
-void RunTaskDie(const FElysiumEntity* Credit);
+void Die(const FElysiumEntity* Credit);
 
 /** `CAI_InterestingPlace +0x571 m_bHolsterWeapon` (key `holster_weapon`) and the weapon's slot 315
  *  (`+0x4ec`) the two interest arms call when it is set. **SEAM**: `FElysiumInterestingPlace` carries

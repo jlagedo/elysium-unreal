@@ -53,6 +53,7 @@ namespace ElysiumNpcKernelBindings
 	void AddScurryingFields(FElysiumClassDesc& D);
 	void AddVampireBossFields(FElysiumClassDesc& D);
 	void AddZombieFields(FElysiumClassDesc& D);
+	void AddBaseEntitySaveFields(FElysiumClassDesc& D);
 	void AddNpcBaseSaveFields(FElysiumClassDesc& D);
 	void AddNpcSaveFields(FElysiumClassDesc& D);
 	void AddScriptedSequenceSaveFields(FElysiumClassDesc& D);

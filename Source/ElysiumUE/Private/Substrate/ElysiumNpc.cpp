@@ -273,7 +273,7 @@ void FElysiumNpc::KilledBy(const FElysiumEntityHandle& Attacker)
 	// slot 144 on a living body is `0x1032ef60`'s alive arm, and a body whose `m_lifeState` is not
 	// LIFE_ALIVE takes the dying/dead arms there instead -- so a body already dying is not killed
 	// again (the life-state split, not a corpse refusal).
-	if (AnimEventLifeStateWord != 0)
+	if (LifeState != 0)
 	{
 		return;
 	}

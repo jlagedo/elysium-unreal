@@ -2,17 +2,25 @@
 // moved from `ElysiumNpcAnim*.inl`. Included inside `class FElysiumNpcBase`
 // (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseAnim.cpp`.
 
-// +0x065c m_bSequenceFinished — the byte `IsActivityFinished` (slot 251) tests first. Family Hints
-// reaches the same word through its own read-only seam `IsHintSequenceFinished()`, which answers
-// false because no port member carried it; this IS the member, and the two should be joined the day
-// the animating tier advances a sequence.
+// +0x065c m_bSequenceFinished — the byte `IsActivityFinished` (slot 251) tests first and slot 250
+// `StudioFrameAdvance` raises; family Hints' interest loop reads it too (`0x102aa25b`).
 bool bSequenceFinished = false;
 
-// The sequence clock (story 8 wave 2, L13). Retail's `StudioFrameAdvance` (slot 250) advances
-// `m_flCycle` and raises `m_bSequenceFinished` when the cycle wraps or reaches 1; this runtime's
-// playback belongs to the clip player, so the kernel keeps only WHEN the committed clip ends — the
-// curtime its first pass completes, or negative for none — and `RunAnimation` raises the byte off it.
-double SequenceFinishesAt = -1.0;
+// `GetSequenceCycleRate(m_nSequence)` (`0x10091230`): `1 / SequenceDuration` when the duration is
+// positive, else 10.0 (`_DAT_1044e664`). Retail asks the model on every frame advance; this runtime's
+// sequence length is the committed clip's, which the sequence bridge answers at `ResetSequenceInfo`,
+// so the rate is cached there. 0 is the named seam: a sequence whose length is unknown to the kernel
+// (a row never played on this body) does not advance its cycle.
+float SequenceCycleRate = 0.f;
+
+// `+0x650` -- the sequence `ResetSequenceInfo` last set the attack extents for (`0x10090a92..
+// 0x10090ab0`: a different `m_nSequence` dispatches slot 247 and stores the new one).
+int32 AttackExtentsSequence = INDEX_NONE;
+
+// Slot 250 for an NPC: `CBaseAnimatingOverlay::StudioFrameAdvance` `0x10098bb0` -> `CBaseAnimating::
+// StudioFrameAdvance` `0x1008f120`, over the sequence words this port keeps on the NPC (`+0x65c`,
+// `+0x65d`, `+0x6f0`, `+0x6f4`, `+0x6f8`, `+0x170`, `+0x174`). Answers the frame interval.
+float StudioFrameAdvance(float Interval) override;
 
 // The sequence bridge's play hook (a named modernization: the studio sequence index is swapped for
 // the name-keyed clip resolver). `ResetSequence` (`0x10260a50` -> `ResetSequenceInfo` `0x10090950`)
@@ -26,12 +34,11 @@ virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops
 	return false;
 }
 
-// `CAI_BaseNPC::RunAnimation` `0x1026c540`: `StudioFrameAdvance(0)` (the sequence clock), the
-// `CAP_AIM_GUN` (`0x20000000`) arm into slot 538 `AimGun`, and the idle re-pick — a body outside
+// `CAI_BaseNPC::RunAnimation` `0x1026c540`: slot 250 `StudioFrameAdvance(0)` (the sequence clock),
+// the `CAP_AIM_GUN` (`0x20000000`) arm into slot 538 `AimGun`, and the idle re-pick — a body outside
 // SCRIPT/DEAD whose `m_Activity` is `ACT_IDLE` (1) and whose sequence has finished picks the next
 // idle sequence of `m_TranslatedActivity` (weighted when the sequence loops, heaviest otherwise)
-// and resets onto it. Answers the frame interval, which stays this runtime's 0.0 (the clip player
-// owns the playback rate): `NPCThink` hands it to `PerformMovement`.
+// and resets onto it. Answers the frame interval slot 250 answered; its one caller is `PostRun`.
 float RunAnimation();
 
 // +0x06f0 m_nSequence and +0x06f8 m_flCycle — the playing sequence index and its phase.

@@ -2131,7 +2131,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 	case 0x15f:
 		if (IsActivityFinished())                                                  // 0x103ce484 / 0x103ce48e
 		{
-			AnimEventLifeStateWord = 2;                                                   // 0x103ce491 `m_lifeState = LIFE_DEAD`
+			LifeState = 2;                                                   // 0x103ce491 `m_lifeState = LIFE_DEAD`
 			TaskComplete(false);                                                   // 0x103ce49b
 			FElysiumEntity* Enemy = RunTask19Species::Enemy167(*this);             // 0x103ce4a6
 			FireOutput(FName(TEXT("OnFinishCrushAnimation")),                      // 0x103ce4b3 `0x100cd660`

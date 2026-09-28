@@ -315,8 +315,6 @@ public:
 	// point is never addressed by targetname.
 	const FElysiumEntity* FindPatrolPoint(const FString& Name) const;
 
-	virtual void CommitDeath();
-
 	virtual float RandomSeconds(float Max);
 
 	/**
@@ -496,10 +494,10 @@ protected:
 	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
 	bool bDeathHandoffDone = false;
 
-	// `TASK_DIE`'s commit has run. Retail has no such flag: there, the commit re-enters `Event_Killed`
-	// and `CreateCorpse` (`0x1032c0e0`) takes the entity out of the world, so the parked task simply
-	// stops existing along with the NPC. This runtime has no corpse entity and no removal, so the
-	// flag is what stands in for "the body this program was running on is gone".
+	// `BecomeClientRagdoll` (`0x10090180`, the ragdoll arm of `CreateCorpse` `0x1032c0e0`) has run:
+	// the body went to physics. Retail has no such flag -- its client ragdoll is a separate entity --
+	// so this marks the port's own body as the corpse (`IsCorpse`), which the think's
+	// `SUB_PVSRemove` later removes.
 	bool bDeathCommitted = false;
 
 	// When the death clip `PlayDeathActivity` started runs out. `TASK_DIE`'s gate waits on it; zero

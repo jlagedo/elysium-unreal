@@ -1530,7 +1530,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 	case TASK_DIE:                                                       // arm 0x4f, 0x10286801
 	case TASK_DIE_IMMEDIATE:
 		StartTaskClearGoal();                                            // 0x10286807  0x102ee270
-		AnimEventLifeStateWord = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
+		LifeState = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
 		return 0;
 
 	case TASK_WAIT_FOR_SCRIPT:                                           // arm 0x50, 0x102868f2 0x1028690c

@@ -402,7 +402,7 @@ bool FElysiumStealthKillBusyTest::RunTest(const FString&)
 	TestFalse(TEXT("a live cine camera is busy"), F.Player->CanAttemptStealthKill());
 	TestNull(TEXT("...and FindVictim refuses"), F.Rules.FindVictim(*F.Player));
 	F.World.SetCineCamera(FElysiumEntityHandle::Invalid(), 0, false, TEXT(""));
-	F.Player->LifeState = EElysiumLifeState::Dead;
+	F.Player->LifeState = ElysiumLifeState::Dead;
 	F.World.Tick(2.0);
 	TestFalse(TEXT("a dead player is not eligible"), F.Player->CanAttemptStealthKill());
 	return true;

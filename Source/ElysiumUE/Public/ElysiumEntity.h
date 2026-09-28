@@ -98,6 +98,15 @@ struct FElysiumFlexWrite
 // contract (python_bridge.md), the whole-entity dormancy switch, and the three base
 // inputs (Kill/ScriptHide/ScriptUnhide) that reach every subclass through the class chain.
 // Leaf classes derive from this and register their own inputs/fields.
+// `m_lifeState`'s values (`LIFE_ALIVE` .. `LIFE_RESPAWNABLE`), as the `int` retail stores.
+namespace ElysiumLifeState
+{
+	inline constexpr int32 Alive = 0;
+	inline constexpr int32 Dying = 1;
+	inline constexpr int32 Dead = 2;
+	inline constexpr int32 Respawnable = 3;
+}
+
 class FElysiumEntity
 {
 public:
@@ -140,6 +149,12 @@ public:
 	int32   SpawnFlags = 0;
 	int32   Health = 0;
 	int32   MaxHealth = 0;
+	// `m_lifeState` (`+0x200`, `CBaseEntity`, datamap `SAVE int`) -- THE life-state word, one per
+	// entity as retail's is (`ElysiumLifeState`). Slot 158 `IsAlive` reads it, `0x1032ef60` splits
+	// on it, `CBaseCombatCharacter::Event_Killed` (`0x1032ba31`) writes LIFE_DYING, `NPCInit` and the
+	// player's `Spawn` write LIFE_ALIVE, the death arms and the player's death think walk it. The
+	// generated SAVE walk carries it (`m_lifeState`, `AddBaseEntitySaveFields`).
+	int32   LifeState = ElysiumLifeState::Alive;
 	int32   Flags = 0;
 	// `m_fFlags2` (`+0x438`, `CBaseEntity`), the second flag word beside `Flags` (`+0x434`).
 	// `AddFlag2` (`0x100b3840`) ORs, `RemoveFlag2` (`0x100b3900`) clears; `GetFlags2` reads it.

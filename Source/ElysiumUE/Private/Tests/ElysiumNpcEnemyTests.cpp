@@ -189,7 +189,7 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	// Corrected to retail (story 8 wave 2): a dead enemy is `m_lifeState != 0` while its handle
 	// still resolves (slot 158 `IsAlive` false); the port's `bDead` is `UTIL_Remove`, after which the
 	// handle resolves nothing and no ENEMY_DEAD can be raised off it.
-	F.ThugA->AnimEventLifeStateWord = 1;
+	F.ThugA->LifeState = 1;
 
 	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 

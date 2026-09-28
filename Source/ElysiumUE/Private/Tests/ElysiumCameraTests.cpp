@@ -3127,7 +3127,7 @@ bool FElysiumDeathViewTest::RunTest(const FString&)
 	ReplicateFov();
 
 	TestEqual(TEXT("the life state is LIFE_DYING"), static_cast<int32>(Player->LifeState),
-		static_cast<int32>(EElysiumLifeState::Dying));
+		static_cast<int32>(ElysiumLifeState::Dying));
 	TestTrue(TEXT("Event_Killed wrote m_iFOV"), Services.PlayerFovOverride.IsSet());
 	TestEqual(TEXT("...and what it wrote is ZERO — cancel the weapon zoom, not a death FOV"),
 		Services.PlayerFovOverride.Get(-1), 0);
@@ -3177,24 +3177,24 @@ bool FElysiumDeathViewTest::RunTest(const FString&)
 		World.RunPlayerThink(0.0);
 	}
 	TestEqual(TEXT("59 frames in, the player is still LIFE_DYING"),
-		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Dying));
+		static_cast<int32>(Player->LifeState), static_cast<int32>(ElysiumLifeState::Dying));
 	TestTrue(TEXT("and the friction has bled the body to a standstill and left it there"),
 		FMath::IsNearlyEqual(Services.PlayerBodySpeedCm, 0.0f, 0.01f));
 
 	World.RunPlayerThink(0.0);
 	TestEqual(TEXT("the 60th frame is the transition to LIFE_DEAD"),
-		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Dead));
+		static_cast<int32>(Player->LifeState), static_cast<int32>(ElysiumLifeState::Dead));
 	TestTrue(TEXT("...carrying interface/final_death.wav, the sequence's one cue"),
 		Services.Saw(TEXT("Submit interface/final_death.wav")));
 
 	World.RunPlayerThink(0.0);
 	TestEqual(TEXT("a held button keeps it there"), static_cast<int32>(Player->LifeState),
-		static_cast<int32>(EElysiumLifeState::Dead));
+		static_cast<int32>(ElysiumLifeState::Dead));
 
 	World.SetPlayerButtons(0);
 	World.RunPlayerThink(0.0);
 	TestEqual(TEXT("the first button-free frame reaches LIFE_RESPAWNABLE"),
-		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Respawnable));
+		static_cast<int32>(Player->LifeState), static_cast<int32>(ElysiumLifeState::Respawnable));
 
 	// And there it stays. `StartDeathCam`, `mp_forcerespawn` and `respawn()` are all behind
 	// `CHalfLife2::IsMultiplayer()` = `return 0`, so nothing in the game ends the state.
@@ -3203,7 +3203,7 @@ bool FElysiumDeathViewTest::RunTest(const FString&)
 		World.RunPlayerThink(0.0);
 	}
 	TestEqual(TEXT("two more seconds of frames do not respawn, re-camera or advance anything"),
-		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Respawnable));
+		static_cast<int32>(Player->LifeState), static_cast<int32>(ElysiumLifeState::Respawnable));
 	TestTrue(TEXT("the eye never moved through any of it"), Player->Origin.Equals(DiedAt, 0.01f));
 
 	// The one exit: a load, which runs `CHL2_Player::Spawn` (slot 103).

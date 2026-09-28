@@ -1679,7 +1679,7 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 
 	TestTrue(TEXT("every animation-channel claim the character held goes back"),
 		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
-	TestEqual(TEXT("0x1032b9b0 m_lifeState = LIFE_DYING"), F.Fighter->AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x1032b9b0 m_lifeState = LIFE_DYING"), F.Fighter->LifeState, 1);
 	TestFalse(TEXT("...so slot 158 IsAlive answers false"), F.Fighter->IsAlive());
 	TestTrue(TEXT("the mind is dead, current (0x10265dba SetState(7)) and ideal (0x10265d06) both"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Dead

@@ -137,19 +137,6 @@ uint8 FElysiumNpcBase::NpcStateFlags() const
 	return FElysiumNpcFlags::NpcStateFlagsForRetailState(RetailState);
 }
 
-// `TASK_DIE`'s commit. Retail: target the NPC itself, write `m_lifeState` 1 -> 0, and call
-// `CBaseCombatCharacter::Die` (`0x103392c0`), which re-enters `Event_Killed` -- and it is that
-// SECOND `Event_Killed` whose `CreateCorpse` (`0x1032c0e0`) makes the corpse and takes the entity
-// out of the world.
-//
-// This runtime has the handoff half of that and none of the entity half, so the handoff runs here
-// and `bDeathCommitted` stands in for the removal. The task itself still does not complete, because
-// retail's does not.
-void FElysiumNpcBase::CommitDeath()
-{
-	bDeathCommitted = true;
-	CompleteDeathHandoff();
-}
 
 float FElysiumNpcBase::RandomSeconds(float Max)
 {

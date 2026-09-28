@@ -1112,7 +1112,7 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 		// sets render FX 0x17 and clears its think, and `m_lifeState` stays LIFE_DYING, so
 		// `0x1032ef60`'s dying arm (`[+0x61c]`) is what a packet meets.
 		FElysiumDmg Packet = Dmg;
-		DispatchTakeDamagePacket(&Packet, 0.f, Attacker,
+		DispatchTakeDamagePacket(&Packet, 0.f,
 			Attacker != nullptr ? Attacker->Handle : Dmg.Source, bDisallowFirearmsToBashing);
 		return;
 	}
@@ -1147,7 +1147,7 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 		// The scalar packet (word 0 null, `+0x30` the amount) into slot 142, as above. No amount
 		// gate: retail's zero tests are `0x103302e0`'s `<= 0.0` and the Troika's zero-damage arm
 		// (`0x102bef4d`), both inside the transaction.
-		DispatchTakeDamagePacket(nullptr, Amount, nullptr, FElysiumEntityHandle::Invalid(), false);
+		DispatchTakeDamagePacket(nullptr, Amount, FElysiumEntityHandle::Invalid(), false);
 		return;
 	}
 	if (Amount <= 0.f)
@@ -1160,22 +1160,19 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 }
 
 void FElysiumCombatCharacter::DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar,
-	FElysiumCombatCharacter* Attacker, const FElysiumEntityHandle& AttackerHandle,
-	bool bDisallowFirearmsToBashing)
+	const FElysiumEntityHandle& AttackerHandle, bool bDisallowFirearmsToBashing)
 {
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
 	Info.Dmg = Dmg;                                      // +0x00, null on the scalar route
 	Info.Attacker = AttackerHandle;                      // +0x2c
 	Info.Damage = Scalar;                                // +0x30
-	Info.ResolverAttacker = Attacker;
 	Info.bDisallowFirearmsToBashing = bDisallowFirearmsToBashing;
 	(void)OnTakeDamage(&Info);                           // slot 142
 	// The Troika's slot-390 body cached the packet verbatim (`+0x660c`, `0x102bedab`); its word 0
-	// and the port-only resolver pointer named this dispatch's stack, so they are not kept.
+	// named this dispatch's stack, so it is not kept.
 	if (FElysiumNpc* Troika = AsNpc())
 	{
 		Troika->LastTakeDamageInfo.Dmg = nullptr;
-		Troika->LastTakeDamageInfo.ResolverAttacker = nullptr;
 	}
 }
 
@@ -1315,12 +1312,10 @@ int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
 	//    so it runs on every packet past the two gates, whatever the packet commits.
 	ElysiumDisciplines::NotifyDamaged(*this);
 
-	// 4. The life-state split on `m_lifeState` (`+0x200`), the NPC's raw word.
-	const FElysiumNpcBase* const NpcBase = AsNpcBase();
-	const int32 LifeState = NpcBase != nullptr ? NpcBase->AnimEventLifeStateWord : 0;
-	if (LifeState != 0)
+	// 4. The life-state split on `m_lifeState` (`+0x200`).
+	if (LifeState != ElysiumLifeState::Alive)
 	{
-		if (LifeState == 1)
+		if (LifeState == ElysiumLifeState::Dying)
 		{
 			return OnTakeDamage_Dying(Info);                                     // slot 391 (+0x61c)
 		}
@@ -1395,11 +1390,8 @@ void FElysiumCombatCharacter::Event_Killed(void* InInfo)
 	// producer re-checks, and a dying character re-checks nothing (the body-claim arbiter).
 	ReleaseHeldReaction();
 
-	// 1. `m_lifeState = LIFE_DYING` (`+0x200`), the NPC's raw word.
-	if (FElysiumNpcBase* const NpcBase = AsNpcBase())
-	{
-		NpcBase->AnimEventLifeStateWord = 1;
-	}
+	// 1. `m_lifeState = LIFE_DYING` (`0x1032ba31 MOV [ESI+0x200],EBP`).
+	LifeState = ElysiumLifeState::Dying;
 
 	// 2. Slot 385 `Weapon_Drop(active weapon)` (`+0x604`) — the drop of the held weapon.
 	FElysiumEntity* const ActiveWeaponEntity =

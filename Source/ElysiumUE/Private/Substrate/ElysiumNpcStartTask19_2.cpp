@@ -783,7 +783,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 
 	// --- index 0x5d: TASK_SET_DYING --------------------------------------------------------------
 	case TASK_SET_DYING:
-		AnimEventLifeStateWord = 1;                                      // 0x102a778e +0x200 = LIFE_DYING
+		LifeState = 1;                                      // 0x102a778e +0x200 = LIFE_DYING
 		StartTask19Complete();                                  // 0x102a7798 -> 0x102a66d7
 		return 0;
 

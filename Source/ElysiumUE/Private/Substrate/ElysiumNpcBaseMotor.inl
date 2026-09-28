@@ -198,10 +198,11 @@ bool IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const;
  *  modernization has to keep; the extraction underneath it is Unreal's. */
 bool AutoMovement();
 
-/** `CAI_BaseNPC::PostRun` `0x1026c7c0` — the PAIRING and its ORDER: dispatch own vtable +0x408 with
- *  the elapsed interval from `thunk_FUN_1026c540`, then `CBaseCombatCharacter::Weapon_FrameUpdate`
- *  with the same number. */
-void PostRun();
+/** `CAI_BaseNPC::PostRun` `0x1026c7c0` — `RunAnimation` (`0x1026c8c4`, its one caller), then own
+ *  vtable +0x408 (slot 258 `DispatchAnimEvents`, `0x1026c8d8`) with that interval, then
+ *  `CBaseCombatCharacter::Weapon_FrameUpdate` (`0x1026c8e0`) with the same number. Answers the
+ *  interval, which the think hands to `PerformMovement`. */
+float PostRun();
 
 /** `CAI_BaseNPC::CheckOnGround` `0x1026e5e0` — the gated ground hull-trace and the two writes it
  *  can make (clear the ground entity, or adopt the traced one). */

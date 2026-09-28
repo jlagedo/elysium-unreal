@@ -444,8 +444,6 @@ def _load_slot_map() -> None:
          "(retail's doors and buttons override `CBaseToggle::MoveDone`)"),
         (153, OVERRIDDEN_BELOW, "", "`FElysiumMoverBase::IsMoving()`: `CBaseEntity::IsMoving` "
          "0x10026e70 (`m_vecVelocity != 0`), which on a mover is a move in flight"),
-        (158, OVERRIDDEN_BELOW, "", "`FElysiumPlayer::IsAlive()`: `CBaseEntity::IsAlive` 0x100b4dc0 "
-         "over the player's own `m_lifeState`"),
         (582, DELETED, "",
          "`CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller, overridden nowhere "
          "(0019/5 step 6)"),

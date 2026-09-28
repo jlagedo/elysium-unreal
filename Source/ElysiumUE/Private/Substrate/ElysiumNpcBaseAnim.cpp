@@ -24,6 +24,13 @@ namespace
 	constexpr int32 GAnimActIdle = 9;                  // the sequence fallback both misses take
 	constexpr int32 GAnimActRun = 0x13;                // rewritten to `GAnimActIdle` by the run-to-walk rung
 	constexpr int32 GAnimActScriptCustomMove = 0x18;   // ACT_SCRIPT_CUSTOM_MOVE
+	// `StudioFrameAdvance` `0x1008f120`'s literals: a zero interval argument becomes 0.1
+	// (`0x1008f1ca MOV [ESP+0x10],0x3dcccccd`), and an advance at or under 0.001 (the DOUBLE
+	// `_DAT_1044f020`) answers 0. `GetSequenceCycleRate`'s zero-duration answer is 10.0
+	// (`0x100912c8 FLD [0x1044e664]`).
+	constexpr float GAnimDefaultFrameInterval = 0.1f;
+	constexpr double GAnimMinFrameInterval = 0.001;
+	constexpr float GAnimZeroDurationCycleRate = 10.f;
 }
 
 // --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 5) ---
@@ -55,7 +62,6 @@ void FElysiumNpcBase::ResetSequenceInfo()
 	// `m_flGroundSpeed` (+0x654): the clip player's speeds in this runtime (visual-only halves).
 	float Seconds = 0.f;
 	bool bLoops = false;
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	// The sequence bridge's play hook (a named modernization) answers the sequence's length and its
 	// `STUDIO_LOOPING` bit.
 	const bool bKnown = PlaySequenceClip(SequenceNumber, Seconds, bLoops);
@@ -70,16 +76,16 @@ void FElysiumNpcBase::ResetSequenceInfo()
 	bSequenceFinished = false;                                         // 0x10090a37 +0x65c
 	// `+0x658 = 0` (`0x10090a3d`) has no port word; `+0x70c` -> `ResetClientsideFrame`
 	// (`0x10090a53`) is the client's.
-	SequenceFinishesAt = -1.0;
-	if (bKnown)
+	// `GetSequenceCycleRate` for the frame advance: `1 / duration`, or 10.0 for a zero-length
+	// sequence (`0x100912c8`) -- which is what this runtime's row 0 is (it plays nothing, so it
+	// finishes on the first advance). A row whose length is unknown does not advance (the seam).
+	if (bKnown || SequenceNumber == 0)
 	{
-		SequenceFinishesAt = Seconds > 0.f ? Now + static_cast<double>(Seconds) : Now;
+		SequenceCycleRate = (bKnown && Seconds > 0.f) ? 1.f / Seconds : GAnimZeroDurationCycleRate;
 	}
-	else if (SequenceNumber == 0)
+	else
 	{
-		// Retail's floor sequence plays the model's sequence 0 and finishes; this runtime's row 0
-		// plays nothing, so it has finished at once (the next `RunAnimation` raises the byte).
-		SequenceFinishesAt = Now;
+		SequenceCycleRate = 0.f;
 	}
 	// `UTIL_Remove(m_hAnimFollowModel)` (`0x10090a58..0x10090a87`): the ornament an animation event
 	// hung on this body goes with every sequence reset (the handle is left to go stale).
@@ -92,8 +98,13 @@ void FElysiumNpcBase::ResetSequenceInfo()
 		}
 		AnimFollowModel.Reset();
 	}
-	// `+0x650 != m_nSequence` -> slot 247 `SetAttackExtentsForSequence` and `+0x650 = m_nSequence`
-	// (`0x10090a92..0x10090ab0`): see the header batch (the word lands with its member).
+	// `+0x650 != m_nSequence` -> slot 247 `SetAttackExtentsForSequence(m_nSequence)` and
+	// `+0x650 = m_nSequence` (`0x10090a92..0x10090ab0`).
+	if (AttackExtentsSequence != SequenceNumber)                          // 0x10090a9b
+	{
+		SetAttackExtentsForSequence(SequenceNumber);                      // 0x10090aa4 slot 247
+		AttackExtentsSequence = SequenceNumber;                           // 0x10090ab0
+	}
 }
 
 void FElysiumNpcBase::CommitForcedSequence(int32 Sequence)
@@ -107,19 +118,16 @@ void FElysiumNpcBase::CommitForcedSequence(int32 Sequence)
 
 float FElysiumNpcBase::RunAnimation()
 {
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	// `StudioFrameAdvance(0)` (slot 250, `0x1026c55f`): the committed clip's first pass ends at
-	// `SequenceFinishesAt`; reaching it raises `m_bSequenceFinished`, which stays up until the next
-	// `ResetSequence` (retail's wrap test raises it for a looping sequence too).
-	if (SequenceFinishesAt >= 0.0 && Now >= SequenceFinishesAt)
+	// Slot 250 `StudioFrameAdvance(0)` (`0x1026c5a0`), the sequence clock; its answer is the interval.
+	float Interval = StudioFrameAdvance(0.f);                              // 0x1026c5a0 / 0x1026c5ab FSTP
+	// `DAT_1092053c & 2` (the `ai_step` debug bit, `0x1026c5a6` / `0x1026c5af`) with
+	// `0x102ee6a0(navigator)` false (`0x1026c5b9`) zeroes the interval (`0x1026c5c2`). No console
+	// command this runtime carries sets the bit, so it stands clear, as a normal session's does.
+	constexpr bool bAiStepBit = false;
+	if (bAiStepBit && !NavigatorGoalIsActive())
 	{
-		bSequenceFinished = true;
-		SequenceFinishesAt = -1.0;
+		Interval = 0.f;
 	}
-	// `DAT_1092053c & 2` (the `ai_step` bit, `0x1026c5a6` / `0x1026c5af`) with `0x102ee6a0(navigator)`
-	// false (`0x1026c5b9`) zeroes the interval (`0x1026c5c2`): the interval is already this
-	// runtime's 0.0.
-	const float Interval = 0.f;
 	// Slot 513 `CapabilitiesGet` bit `0x20000000` (`CAP_AIM_GUN`) -> slot 538 `AimGun`.
 	if ((static_cast<uint32>(CapabilitiesGet()) & 0x20000000u) != 0)          // 0x1026c5ce slot 513 / 0x1026c5d4 TEST
 	{
@@ -141,6 +149,56 @@ float FElysiumNpcBase::RunAnimation()
 		}
 	}
 	return Interval;
+}
+
+float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
+{
+	// `CBaseAnimatingOverlay::StudioFrameAdvance` `0x10098bb0` runs `CBaseAnimating`'s body
+	// (`0x1008f120`) and then the four overlay layers (`CAnimationLayer::StudioFrameAdvance` per
+	// live layer, slot 112 on a finished auto-kill layer); the layers are not carried by this port's
+	// NPC (named gap). `0x1008f120`, in its order:
+	const float Now = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f;
+	const bool bWasFinished = bSequenceFinished;                          // 0x1008f18c
+	if (PrevAnimTime == 0.f)                                              // 0x1008f192..0x1008f1a3
+	{
+		AnimTime = Now;                                                   // 0x1008f1ad +0x174
+		PrevAnimTime = Now;                                               // 0x1008f1b3 +0x170
+	}
+	float Interval = IntervalArg;
+	if (Interval == 0.f)                                                  // 0x1008f1bd..0x1008f1c8
+	{
+		Interval = GAnimDefaultFrameInterval;                             // 0x1008f1ca 0.1
+	}
+	Interval = (Interval + Now) - AnimTime;                               // 0x1008f1d8..0x1008f1e5
+	if (!(static_cast<double>(Interval) > GAnimMinFrameInterval))         // 0x1008f1e9 FCOMP 0.001 / 0x1008f1f4
+	{
+		return 0.f;                                                       // 0x1008f1fc
+	}
+	PrevAnimTime = AnimTime;                                              // 0x1008f21b
+	const FElysiumNpc* const Troika = AsNpc();
+	const float PlaybackRate = Troika != nullptr ? Troika->SequencePlaybackRate : 1.f;   // +0x6f4
+	const float Cycle = SequenceCycleRate * PlaybackRate * Interval + SequenceCycle;     // 0x1008f221..0x1008f230
+	SequenceCycle = Cycle;                                                // 0x1008f236
+	AnimTime = Interval + AnimTime;                                       // 0x1008f23c..0x1008f246
+	if (static_cast<double>(Cycle) < 0.0 || static_cast<double>(Cycle) >= 1.0)   // 0x1008f24c / 0x1008f259
+	{
+		if (bSequenceLoopedOnce)                                          // 0x1008f289 +0x65d
+		{
+			SequenceCycle = Cycle - static_cast<float>(static_cast<int32>(Cycle));   // 0x1008f295..0x1008f2a4
+		}
+		else
+		{
+			SequenceCycle = Cycle < 0.f ? 0.f : 1.f;                      // 0x1008f2ae..0x1008f2c9
+		}
+		bSequenceFinished = true;                                         // 0x1008f2cf +0x65c
+	}
+	// Else `m_fSequencePastHalf` (+0x568) = cycle >= 0.5 (`0x1008f268..0x1008f280`): no port word
+	// (the Tzimisce's `Select19SequencePastHalf` seam stands for its one reader).
+	// `m_flYawSpeed` / `m_flGroundSpeed` from the sequence (`0x1008f2e5`, `0x1008f2fa`): the clip
+	// player's speeds. `OnSequenceFinished` on the rising edge (`0x1008f316`) is an empty body
+	// (`0x10091c80`).
+	(void)bWasFinished;
+	return Interval;                                                      // 0x1008f321
 }
 
 int32 FElysiumNpcBase::GrowSceneEventCapacity(int32 Current, int32 GrowSize, int32 Needed)

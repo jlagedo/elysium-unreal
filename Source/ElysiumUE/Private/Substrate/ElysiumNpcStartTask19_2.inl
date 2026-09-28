@@ -50,7 +50,7 @@ int32 TaskTailNavGoalCalls = 0;
  *  (`0x102edaa0`), `StartTaskFindCoverPos` (`0x102edc80`), `StartTaskHintFacing` (`0x102d11f0`),
  *  `StartTaskSetArrivalActivity` / `StartTaskSetArrivalDirection` (`0x102ee410` / `0x102ee530`),
  *  `Conditions19LastKnownPosition` (`0x102dfed0`), `StartTaskAngleMod` (`0x10288590`), and the
- *  `m_lifeState` word `AnimEventLifeStateWord`. */
+ *  `m_lifeState` word `LifeState`. */
 bool TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoalFlags);
 
 /** SEAM for `0x102a9c60` -> `0x102a9f20` -> `0x102a9ee0` / `0x102a9f00` -- the current waypoint,

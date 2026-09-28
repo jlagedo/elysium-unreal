@@ -737,17 +737,10 @@ bool FElysiumEntity::IsMarkedForDeletion()
 // slot 158 `bool IsAlive()` — 0x100b4dc0
 bool FElysiumEntity::IsAlive()
 {
-	// `return this->m_lifeState == 0;` — `LIFE_ALIVE`, the int at `+0x0200`. An NPC carries the word
-	// (`AnimEventLifeStateWord`, story 8 wave 2); `Kill`'s terminal flag (`bDead`) is the removal
-	// retail's `UTIL_Remove` makes, after which no handle resolves the entity at all. Any other
-	// combat character spells the word as its death latch (the player overrides with its own
-	// `LifeState`); an entity that is neither has only `bDead`.
-	if (const FElysiumNpcBase* const Npc = AsNpcBase())
-	{
-		return Npc->AnimEventLifeStateWord == 0 && !IsDead();
-	}
-	const FElysiumCombatCharacter* const Character = AsCombatCharacter();
-	return !(Character != nullptr && Character->HasReportedDeath()) && !IsDead();
+	// `return this->m_lifeState == 0;` — `LIFE_ALIVE`, the int at `+0x0200`, the entity's one
+	// `LifeState` word. `Kill`'s terminal flag (`bDead`) is the removal retail's `UTIL_Remove` makes,
+	// after which no handle resolves the entity at all.
+	return LifeState == ElysiumLifeState::Alive && !IsDead();
 }
 
 float FElysiumEntity::ScaleField_0x1ddc() const

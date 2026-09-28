@@ -361,10 +361,10 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 	{
 		RunAI(bReduced);                                                    // 0x1029357c slot 432
 	}
-	PostRun();                                                              // 0x10293584 0x1026c7c0
-	// `PerformMovement(RunAnimation(), !bMoveDue)`: `0x1026c540` advances the sequence clock and
-	// re-picks a finished idle; its interval is this runtime's 0.0.
-	PerformMovement(RunAnimation(), bMoveDue ? 0 : 1);                      // 0x1029358b 0x1026c540 / 0x1029359e 0x1026c120
+	// `PerformMovement(PostRun(), !bMoveDue)`: `PostRun` runs `RunAnimation` and the anim events and
+	// answers the interval (`0x1029358d FSTP`).
+	const float Interval = PostRun();                                       // 0x10293584 0x1026c7c0
+	PerformMovement(Interval, bMoveDue ? 0 : 1);                            // 0x10293597 SETZ / 0x1029359e 0x1026c120
 	const double Frame = World != nullptr ? World->FrameSeconds() : ElysiumWorldClock::DefaultFrameSeconds;
 	ElysiumNpcThink::CalcNextMoveThink(ScheduleHost, Now);                  // 0x10293632 0x10290fc0
 	ElysiumNpcThink::CalcNextAiThink(ScheduleHost, ElysiumNpcThink::GatherInputs(*this), Now, Frame);  // 0x1029363e 0x10291230

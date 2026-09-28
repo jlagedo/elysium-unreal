@@ -885,9 +885,9 @@ void FElysiumScriptedSequence::CineCleanup(FElysiumNpcBase& Npc)
 	Npc.SetTarget(FElysiumEntityHandle::Invalid());
 	Npc.BaseScheduleHost.GoalEnt = FElysiumEntityHandle::Invalid();
 
-	// `m_lifeState != LIFE_DYING`. SEAM: the port carries no NPC `m_lifeState` word (its death
-	// transaction is `FElysiumNpcBase::CommitDeath`), so the dying arm — health 0, not-solid,
-	// `SetState(DEAD)`, the corpse bounds — is not reached from here.
+	// `m_lifeState != LIFE_DYING` (the entity's `LifeState`). NAMED GAP: the dying arm -- health 0,
+	// not-solid, `SetState(DEAD)`, the corpse bounds -- is not ported in this body yet, so it is not
+	// reached from here.
 	// With `m_iszPlay` and `m_sequenceStarted`, retail puts the body at the played sequence's bone 0
 	// (spawnflag `0x2000`: `MoveToBoneOriginAngles("Bip01")`; spawnflag `0x80` skips the placement).
 	// SEAM: the animation driver exposes no played-clip root, so the body stays where it stands.

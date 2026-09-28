@@ -61,4 +61,4 @@ int32 EnemyStoreClearedRecords = INDEX_NONE;
 FString EnemyStoreClearReason;
 
 /** `m_lifeState` (`+0x200`), which the Boss19 death entries write LIFE_DYING (1) into, is family
- *  Misc19's `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`): one word (StartTask19 integration). */
+ *  the entity's `LifeState` (`ElysiumEntity.h`): one word (StartTask19 integration). */

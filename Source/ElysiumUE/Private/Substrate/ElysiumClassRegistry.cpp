@@ -184,6 +184,8 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		// is the `INPUT` bit and not `KEY` (`docs/vtmb/python_bridge.md` § "The write path"). Spawn
 		// keyvalue application ignores the gate either way, so an authored key still lands.
 		ElysiumNpcKernelBindings::AddBaseEntityFields(D);
+		// And the chain's one generated SAVE row, `m_lifeState` (`+0x200`), under its member name.
+		ElysiumNpcKernelBindings::AddBaseEntitySaveFields(D);
 
 		// The two rows the replay does not put on `CBaseEntity`. Retail declares `use_icon` and
 		// `locked_icon` on `CBaseButton`, `CBaseDoor`, `CPushable`, `CPropSwitch` and kin, one copy

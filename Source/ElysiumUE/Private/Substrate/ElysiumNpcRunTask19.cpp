@@ -326,7 +326,7 @@ void FElysiumNpc::BloodExplode()
 	++BloodExplodeCalls;
 }
 
-void FElysiumNpc::RunTaskDie(const FElysiumEntity* Credit)
+void FElysiumNpc::Die(const FElysiumEntity* Credit)
 {
 	// `CBaseCombatCharacter::Die(credit, 0, 0)` `0x103392c0`, the whole body: on a body whose
 	// `m_lifeState` is not LIFE_DEAD (2), a `CVDmg_t` with `SetSrc(this)`, `m_iDiceAmt = 1`,
@@ -336,7 +336,7 @@ void FElysiumNpc::RunTaskDie(const FElysiumEntity* Credit)
 	// `SetBaseToStatValue(0xf, 0x11)`; then slot 144 `Event_Killed(info)` and slot 403 `Event_Dying`.
 	++RunTaskDieCalls;
 	LastDieCredit = Credit != nullptr ? Credit->Handle : FElysiumEntityHandle::Invalid();
-	if (AnimEventLifeStateWord == 2)                                   // 0x10339330 m_lifeState != 2
+	if (LifeState == 2)                                   // 0x10339330 m_lifeState != 2
 	{
 		return;
 	}
@@ -715,12 +715,12 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		{
 			Credit = this;
 		}
-		if (AnimEventLifeStateWord == 1)                                                  // 0x102abc05
+		if (LifeState == 1)                                                  // 0x102abc05
 		// same arm: 0x102abc0b JNZ
 		{
-			AnimEventLifeStateWord = 0;                                                   // 0x102abc0d
+			LifeState = 0;                                                   // 0x102abc0d
 		}
-		RunTaskDie(Credit);                                                        // 0x102abc1e
+		Die(Credit);                                                               // 0x102abc1e
 		if (Id == TaskDieGib || Id == TaskDieExplodeGib)                           // 0x102abc26 / 0x102abc2d
 		// same arm: 0x102abc2b JZ, 0x102abc32 JNZ
 		{
@@ -1258,7 +1258,7 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 
 	// --- index 0x23 `0x102abc76`: 0xdf `TASK_DIE_IMMEDIATE` ---------------------------------------
 	case TaskDieImmediate:
-		RunTaskDie(nullptr);                                                       // 0x102abc7e `Die(0,0,0)`
+		Die(nullptr);                                                              // 0x102abc7e `Die(0,0,0)`
 		return 0;
 
 	// --- index 0x24 / 0x26 `0x102ab420` / `0x102ab474`: 0xe1, 0xe3 ------------------------------

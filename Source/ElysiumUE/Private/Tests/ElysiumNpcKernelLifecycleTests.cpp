@@ -72,11 +72,11 @@ bool FElysiumNpcKernelLifecycleIsAliveTest::RunTest(const FString&)
 	TestTrue(TEXT("a standing NPC is alive"), Fix.Npc->IsAlive());
 
 	// Corrected to retail (story 8 wave 2): the word itself, `m_lifeState` (`+0x200`).
-	Fix.Npc->AnimEventLifeStateWord = 1;
+	Fix.Npc->LifeState = 1;
 	TestFalse(TEXT("a LIFE_DYING body is not alive"), Fix.Npc->IsAlive());
-	Fix.Npc->AnimEventLifeStateWord = 2;
+	Fix.Npc->LifeState = 2;
 	TestFalse(TEXT("...nor a LIFE_DEAD one"), Fix.Npc->IsAlive());
-	Fix.Npc->AnimEventLifeStateWord = 0;
+	Fix.Npc->LifeState = 0;
 	TestTrue(TEXT("...and LIFE_ALIVE is alive again"), Fix.Npc->IsAlive());
 
 	// `Kill` is the other half of the same word.
