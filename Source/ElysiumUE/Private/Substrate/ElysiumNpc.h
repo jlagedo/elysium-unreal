@@ -441,25 +441,7 @@ public:
 
 	// --- IElysiumScheduleRunner: the task bodies -------------------------------------------------
 
-	// `TASK_SPECIAL_IDLE_ACTIVITY`. One stance selection played on the body; the schedule holds the
-	// task open for the clip's own length, which is retail's cadence -- the idle task re-requests
-	// `ACT_DISPOSITION` only once the current sequence has finished, so nothing re-enters mid-clip.
-	virtual float RunSpecialIdleActivity(double Now) override;
-
-	virtual bool IsBodyVisible() const override;
-	// `TASK_WAIT_PVS`'s `RunTask` arm (`0x102aacf0`, task 5): `SF_NPC_ALWAYSTHINK 0x400` or
-	// `ShouldThinkFrequently()` completes at once; else the engine PVS test `0x101d1a90` against
-	// the closest player -- false keeps waiting, true re-bases the whole clock (slot 614 plus every
-	// `Last` stamp) so the body does not fire a burst of overdue thinks on the frame it wakes.
-	virtual bool WaitPvs() override;
-
-	virtual float PlayActivity(const FString& Activity) override;
-
-	// One rung of `TASK_PLAY_DEATH_SEQUENCE`'s ladder. It goes through the same Reaction-band
-	// producer every other combat reaction does, because a death pose has to replace whatever owns
-	// the base channel and hold it — `PlayActivity`'s ambient claim is outranked by the next
-	// locomotion publish, which would stand a corpse back up.
-	virtual float PlayDeathActivity(const FString& Activity) override;
+	virtual float PlayActivity(const FString& Activity);
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body. SEAM: the task-body callers are 0003's
 	// scripted family, the non-task callers 25a's; no body in this runtime asks yet, so the request
@@ -480,21 +462,15 @@ public:
 
 	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
 
-	virtual bool FaceSavePosition() override;
-
-	virtual bool StepAwayFromSavePosition(float DistanceCm) override;
-
 	// --- The combat task bodies -----------------------------------------------------------------
 	// Every one that drives the body claims `EElysiumBodyOwner::Schedule` through the arbiter first
 	// and answers false when the claim is refused, which fails its task by name. The token is given
 	// back once, where the program ends (`ReleaseScheduleBody`).
 
-	virtual EElysiumTaskResult StopMovingTask() override;
 	virtual void TaskStarting() override { BaseScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
-	virtual void SetGoalTolerance(float Units) override;
+	virtual void SetGoalTolerance(float Units);
 	virtual void TaskFail(int32 Reason) override;
 	virtual void ScheduleDone() override;
-	virtual int32 TaskFailureReason() const override { return ScheduleHost.PendingFailureReason; }
 	FElysiumNpcScheduleHost ScheduleHost;
 
 	// --- The think cadence's own state (`Substrate/ElysiumNpcThinkCadence.h`) --------------------
@@ -576,29 +552,9 @@ public:
 	void ClearOwnedActivityCopyProps();
 	void EndDisciplineSchedule();
 
-	virtual bool GetPathToEnemy(float ToleranceUnits) override;
-
-	virtual void RunPath() override;
-
-	virtual EElysiumMoveWatch WaitForMovement() override;
-
-	virtual bool FaceEnemy() override;
-
-	virtual bool AnnounceAttack(float Param) override;
-
-	virtual bool MeleeAttack1() override;
-
-	virtual bool RangeAttack1() override;
-
-	virtual void RememberFact(uint32 MemoryMask) override;
-	virtual bool FindCoverFromEnemy(float MoveWait) override;
-
 	bool GetPathToScriptedGoal();
-	virtual void RunPatrolPathTask() override;
 
 	// --- The incapacitation task bodies and the install rules -----------------------------------
-
-	virtual void SetNpcFlag(uint32 EncodedFlag) override;
 
 	virtual void ClearConditions() override;
 
@@ -1149,7 +1105,6 @@ protected:
 	 * foot the shared chain throws away.
 	 */
 	bool NpcStep(int32 EventId, bool bHeavy);
-
 
 	// This NPC's `stattemplate` record, RESOLVED through `ParentTemplateName` and latched at the one
 	// site that already resolves it (`ApplyResolvedTemplate`). Retail re-resolves per footfall

@@ -243,6 +243,12 @@ void FElysiumAnimating::PerformMovement(float Interval, int32 MoveFlags)
 	MotorSeams.PerformMovementInterval = Interval;
 	(void)MoveFlags;
 	++MotorSeams.PerformMovement;
+	// The navigator's own step (`m_pNavigator->vtable[5]`, `CAI_Navigator::Move` `0x102eff40`) on an
+	// NPC: the route's end reaches the task that waits on it (story 8 wave 2).
+	if (FElysiumNpcBase* const Npc = AsNpcBase())
+	{
+		Npc->NavigatorMoveStep();
+	}
 }
 
 // --- Moved from `ElysiumNpcBaseSounds10.cpp` (story 5 step 6) ---

@@ -312,11 +312,12 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	TestTrue(TEXT("the entity think is the earlier of the two written clocks"),
 		FMath::IsNearlyEqual(static_cast<double>(Guard->NextThink),
 			FMath::Min(Guard->ScheduleHost.NextUpdate, Guard->ScheduleHost.NextNormal), 1e-3));
-	// This headless guard has no activity resolver, so its idle program failed into base `FAIL`
-	// (story 25), which now holds on `WAIT_PVS` out of the player's PVS. No program is installed
-	// inside these thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
-	TestEqual(TEXT("the hidden body holds FAIL's PVS wait rather than reselecting each pass"),
-		Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
+	// The guard holds its idle program: the Troika `TASK_SPECIAL_IDLE_ACTIVITY` arm (`0x102a49bc`)
+	// does not fail a body with no stance clips (story 8 wave 2; the port's op verb failed it into
+	// base `FAIL`, which is what this case pinned before). No program is installed inside these
+	// thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
+	TestEqual(TEXT("the hidden body holds its idle program rather than reselecting each pass"),
+		Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 	TestTrue(TEXT("...so its normal clock is off the in-think install pin"),
 		Guard->ScheduleHost.NextNormal - Now > 0.1 + 1e-3);
 	return true;
@@ -559,17 +560,31 @@ bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
 	const double Now = F.World.NowSeconds();
 
 	// --- WAIT_PVS ---------------------------------------------------------------------------
+	// Troika `RunTask`'s arm for task 5 (`0x102aad7e`), reached through slot 444 (story 8 wave 2:
+	// the port's `WaitPvs` verb deleted). True when the arm completed the task.
+	FElysiumScheduleStep WaitPvsStep;
+	if (const FElysiumLocalIdSpace* TaskSpace = Guard->IdSpace(EElysiumIdCategory::Task))
+	{
+		WaitPvsStep.TaskId = TaskSpace->LocalToGlobal(0x05);
+	}
+	auto RunWaitPvs = [Guard, &WaitPvsStep]()
+	{
+		Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+		Guard->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+		Guard->RunTaskSlot444(&WaitPvsStep);
+		return Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete;
+	};
 	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
 	Prime(*Guard, Now);
-	TestFalse(TEXT("out of the player's PVS the task keeps waiting"), Guard->WaitPvs());
+	TestFalse(TEXT("out of the player's PVS the task keeps waiting"), RunWaitPvs());
 	TestTrue(TEXT("...and touches no stamp"), Untouched(*Guard, Now));
 	F.Services.PvsQuery = nullptr;
-	TestTrue(TEXT("in PVS the task completes"), Guard->WaitPvs());
+	TestTrue(TEXT("in PVS the task completes"), RunWaitPvs());
 	TestTrue(TEXT("...re-basing all eight stamps"), NextStampsAt(*Guard, Now) && LastStampsAt(*Guard, Now));
 	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
 	Guard->SpawnFlags |= 0x400;   // SF_NPC_ALWAYSTHINK
 	Prime(*Guard, Now);
-	TestTrue(TEXT("SF_NPC_ALWAYSTHINK completes at once, out of PVS"), Guard->WaitPvs());
+	TestTrue(TEXT("SF_NPC_ALWAYSTHINK completes at once, out of PVS"), RunWaitPvs());
 	TestTrue(TEXT("...with no clock work"), Untouched(*Guard, Now));
 	Guard->SpawnFlags &= ~0x400;
 

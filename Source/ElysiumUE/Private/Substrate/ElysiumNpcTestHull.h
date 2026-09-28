@@ -22,7 +22,6 @@ class FElysiumNpcTestHull : public FElysiumNpcBase
 public:
 	ELYSIUM_NPC_CLASS("CAI_TestHull", FElysiumNpcBase)
 
-
 	// Slot 103 `0x102d72f0`.
 	virtual void Spawn() override;
 	// Slot 117 `0x102d7290`.
@@ -52,12 +51,5 @@ public:
 	 *  unrecovered**. It is carried under its offset and read by the test alone. */
 	bool bUnknown5f44 = false;
 
-	// --- The port's schedule-runner hooks (`IElysiumScheduleRunner`) --------------------------------
-	//
-	// Not retail slots: the port's interface between the task bodies and whoever owns the body. A test
-	// hull runs no schedule — retail's `Spawn` leaves it hidden, dormant and non-solid — so each
-	// answers the interface's "this body has none" value.
-	virtual float RunSpecialIdleActivity(double Now) override;
-	virtual bool IsBodyVisible() const override;
-	virtual float PlayActivity(const FString& Activity) override;
+	virtual float PlayActivity(const FString& Activity);
 };

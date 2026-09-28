@@ -315,13 +315,9 @@ public:
 	// point is never addressed by targetname.
 	const FElysiumEntity* FindPatrolPoint(const FString& Name) const;
 
-	virtual void BeginDying() override;
+	virtual void CommitDeath();
 
-	virtual bool IsDeathPerformanceFinished() const override;
-
-	virtual void CommitDeath() override;
-
-	virtual float RandomSeconds(float Max) override;
+	virtual float RandomSeconds(float Max);
 
 	/**
 	 * `ClearSchedule` (`0x10280d30`) — the one door out of a running program.
@@ -338,8 +334,6 @@ public:
 	void ClearSchedule();
 
 	virtual int32 ResolveScheduleId(int32 Id) const override;
-
-	virtual EElysiumTaskResult BeginStopMovingTask() override;
 
 	// `CAI_BaseNPC::TaskFail` `0x10273fc0` (slot 448's base body): `m_bShouldMove = 0`, the
 	// failure code at `+0x5c50`, `SetCondition(0x5c TASK_FAILED)`. The Troika override
@@ -401,8 +395,6 @@ public:
 	// own request, for a director writing ANOTHER NPC's ideal state (`PossessEntity`,
 	// `FixScriptNPCSchedule`).
 	void RequestIdealStateRetail(int32 RetailId, int32 SourceLine);
-
-	virtual void MakeOblivious(bool bOblivious) override;
 
 	// --- `m_iIsOblivious` (`+0x5bb4`) -------------------------------------------------------------
 	// A `CAI_BaseNPC` word. Its bookkeeping bit `MADE_OBLIVIOUS` is in the combat character's
@@ -471,11 +463,11 @@ public:
 	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
 	FElysiumClipIdentity ScheduleIdealActivity;
 
-	virtual bool IsIdealActivityCurrent() const override;
+	virtual bool IsIdealActivityCurrent() const;
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
 
-	virtual void StopMoving() override;
+	virtual void StopMoving();
 
 	/**
 	 * `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`) — the sole reader of `D_IS_BUSY`,
@@ -492,8 +484,6 @@ public:
 
 protected:
 	// --- Moved from `FElysiumNpc`'s protected section (story 5 step 5) ---
-
-
 
 	FElysiumNpcMind Mind;
 

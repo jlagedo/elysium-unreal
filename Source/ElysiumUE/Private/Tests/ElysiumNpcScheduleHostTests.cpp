@@ -44,14 +44,27 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestTrue(TEXT("npc_kickable is loaded from the authored key"), Prop->bNpcKickable);
 	Npc->ScheduleHost.KickProp = Prop->Handle;
 	Motor.Navigation.bActiveGoal = true;
-	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
 	Motor.Navigation.bGrounded = false;
-	Motor.Navigation.VelocityCmPerSecond = FVector(1,0,0);
-	TestTrue(TEXT("a moving jump remains in StopMoving"), Npc->StopMovingTask() == EElysiumTaskResult::Running);
-	Motor.Navigation.VelocityCmPerSecond = FVector(0.01 * ElysiumMove::U,0,0);
-	TestTrue(TEXT("stuck threshold equality fails"), Npc->StopMovingTask() == EElysiumTaskResult::Failed);
-	TestEqual(TEXT("the task supplies FAIL_STUCK_ONTOP"), Npc->TaskFailureReason(), 0x1c);
-	TestTrue(TEXT("stuck StopMoving switches to ground before failure"), Motor.Navigation.Type == EElysiumNpcNavType::Ground);
+	// `TASK_STOP_MOVING` (0x69)'s RunTask arm is base `0x102888d4` (story 8 wave 2: the port's
+	// `StopMovingTask` twin was deleted); it reads the navigator's type word and this body's speed.
+	const FElysiumLocalIdSpace* TaskSpace = Npc->IdSpace(EElysiumIdCategory::Task);
+	FElysiumScheduleStep Stop;
+	Stop.TaskId = TaskSpace != nullptr ? TaskSpace->LocalToGlobal(0x69) : INDEX_NONE;
+	Npc->NavSetType(1);                              // NAV_JUMP
+	Npc->Velocity = FVector(1, 0, 0);                // above 0.01 Source units per second
+	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+	Npc->FElysiumNpcBase::RunTaskSlot444(&Stop);
+	TestTrue(TEXT("0x1028893a a moving jump remains in StopMoving"),
+		Npc->Schedule.TaskStatus == EElysiumTaskStatus::Running
+		&& !Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+	Npc->Velocity = FVector(0.01 * ElysiumMove::U, 0, 0);   // exactly 0.01: `> 0.01` refuses
+	Npc->FElysiumNpcBase::RunTaskSlot444(&Stop);
+	TestTrue(TEXT("0x10288963 stuck threshold equality fails"),
+		Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+	TestEqual(TEXT("the task supplies FAIL_STUCK_ONTOP"), Npc->BaseScheduleHost.FailureReason, 0x1c);
+	TestEqual(TEXT("0x10288944 stuck StopMoving switches to ground before failure"), Npc->NavGetType(), 0);
+	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
 	// A direct navigator failure still in Jump has a different preservation result.
 	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
 	Npc->NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
@@ -96,17 +109,30 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestEqual(TEXT("reason retained for diagnostics"), Npc->BaseScheduleHost.FailureReason, 0x29);
 	Npc->TaskStarting();
 	TestEqual(TEXT("starting a task clears the previous failure reason"), Npc->BaseScheduleHost.FailureReason, 0);
+	// `TASK_STOP_MOVING`'s start arm is base `0x10282d71` and its run arm `0x102888d4`, both through
+	// the vtable (story 8 wave 2: the port's `BeginStopMovingTask` / `StopMovingTask` twins deleted).
+	auto StopStatus = [Npc]() { return Npc->Schedule.TaskStatus; };
 	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
+	Npc->NavSetType(1);                                   // NAV_JUMP
 	Motor.Navigation.bActiveGoal = false;
-	TestTrue(TEXT("StopMoving with no goal completes without probing jump failure"), Npc->BeginStopMovingTask() == EElysiumTaskResult::Complete);
+	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+	Npc->StartTaskSlot442(&Stop);
+	TestTrue(TEXT("0x10282dcc StopMoving with no goal completes without probing jump failure"),
+		StopStatus() == EElysiumTaskStatus::Complete);
 	Motor.Navigation.bActiveGoal = true;
-	Motor.Navigation.VelocityCmPerSecond = FVector(10,0,0);
-	TestTrue(TEXT("StartTask clears the goal and keeps the moving jump running"), Npc->BeginStopMovingTask() == EElysiumTaskResult::Running);
+	Npc->Velocity = FVector(10, 0, 0);
+	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+	Npc->StartTaskSlot442(&Stop);
+	TestTrue(TEXT("0x10282d86 StartTask clears the goal and keeps the moving jump running"),
+		StopStatus() == EElysiumTaskStatus::Running);
 	TestFalse(TEXT("the goal was cleared independently from nav type"), Motor.Navigation.bActiveGoal);
-	Motor.Navigation.VelocityCmPerSecond = FVector::ZeroVector;
-	TestTrue(TEXT("RunTask still detects a stuck jump after the goal clear"), Npc->StopMovingTask() == EElysiumTaskResult::Failed);
+	Npc->Velocity = FVector::ZeroVector;
+	Npc->RunTaskSlot444(&Stop);
+	TestTrue(TEXT("0x10288963 RunTask still detects a stuck jump after the goal clear"),
+		Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	Npc->NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
-	Npc->TaskFail(Npc->TaskFailureReason());
+	Npc->TaskFail(Npc->BaseScheduleHost.FailureReason);
 	TestFalse(TEXT("StopMoving failure observes the ground transition"), Npc->NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 	Npc->ReconnectToSquad();
 	TestEqual(TEXT("reconnect clamps a missing disconnect at zero"), Npc->BaseScheduleHost.SquadDisconnected, 0);

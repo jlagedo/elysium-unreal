@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
@@ -751,6 +752,10 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		return false;
 	}
 
+	// The world's clock past the map's first moment: `TASK_WAIT_FOR_MOVEMENT`'s Troika start arm runs
+	// its teleport rescue while `curtime <= m_flTeleportMoveTimer` (+0x65dc, `0x102a1e6a`), and a
+	// clock at zero reads a never-armed timer as live.
+	F.World.Tick(10.0);
 	// Well beyond the pistol's authored range.
 	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
 	F.CommitToTarget(10.0);
@@ -779,13 +784,13 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	TestTrue(TEXT("the path was issued at the enemy's feet"),
 		Motor->RequestedFeet.Equals(F.Target->Origin));
-	TestTrue(TEXT("...at the schedule's recovered tolerance of 24 Source units"),
-		F.Services.Log().Contains(FString::Printf(TEXT("radius=%.1f"), 24.0f * ElysiumMove::U)));
-	TestTrue(TEXT("...and at running speed"),
-		FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed));
-	// The chase asks the activity seam for ACT_RUN and plays whatever label it answers with; this
-	// fixture resolves none, so what reaches the body is the stated retail-label fallback.
-	TestTrue(TEXT("run locomotion went onto the body"), F.Services.Saw(TEXT("PlayNpcClip")));
+	// Story 8 wave 2: the chase runs through the retail arms. `TASK_RUN_PATH` (base `0x102863f1`)
+	// writes the path's movement activity (`0x102ee250`): ACT_RUN when the body has a run sequence
+	// (`SelectWeightedSequence(ACT_RUN)` at `0x102863f9`), else ACT_WALK -- that probe is the
+	// kernel's SEAM answering -1, so this fixture's chase walks. The tolerance and gait words the old
+	// op verbs pinned here are the StartTask19 suite's (EnemyGoalArms / ToleranceArms).
+	TestTrue(TEXT("0x1028640e RUN_PATH wrote the path's movement activity"),
+		F.Fighter->ScheduleHost.NavigationActivity != INDEX_NONE);
 
 	// Still travelling: the watch holds the task rather than advancing it.
 	TestTrue(TEXT("an in-flight path keeps the schedule open"),
@@ -796,6 +801,9 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// `10281980` raises SCHEDULE_DONE and the same loop reaches `10281b89` selection. The target is
 	// still too far, so the replacement is another chase rather than a caller-visible empty gap.
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
+	// `OnNavComplete` (`0x102eea90`) and `TaskMovementComplete` (`0x10273ec0`).
+	F.Fighter->NavigatorMoveStep();
 	TestTrue(TEXT("arrival completes and reselects in the same retail loop"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,
 			&F.Fighter->Cognition.Conditions));
@@ -809,8 +817,14 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 
 	// Back in the band, the attack window opens.
 	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
+	if (FElysiumRecordingNpcMotor* TargetMotor = F.MotorFor(F.Target))
+	{
+		TargetMotor->Feet = F.Target->Origin;   // the world's per-frame sync reads the body
+	}
 	F.Fighter->BaseMemory.Enemy = F.Target->Handle;
-	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 11.0);
+	// A later pass: `Look` (inside slot 433's `PerformSensing`) runs on its own cadence, so the
+	// clock moves on for the sighting that raises SEE_ENEMY (slot 481 `0x10270cfb`).
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Fighter, F.World.NowSeconds() + 0.5);
 	TestTrue(TEXT("an enemy back inside the band is shootable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
 	// The shot itself is slot 605's arm and is asserted there; what this case owns is that the
@@ -882,9 +896,10 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0,
 		&F.Fighter->Cognition.Conditions);
 
-	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK wrote the victim's detected-attack record"),
-		ElysiumNpcCond::HasDetectedAttack(*F.Target, 0.0));
-	TestTrue(TEXT("...naming the attacker"),
+	// Story 8 wave 2: `TASK_ANNOUNCE_ATTACK`'s arm is base `0x10286cd9`, `TaskComplete` alone; the
+	// port's op verb that also wrote the victim's detected-attack record was a twin. The record's
+	// producer is the swing's opposed staging (the weapon's melee callback), not the announce.
+	TestFalse(TEXT("0x10286cd9 TASK_ANNOUNCE_ATTACK writes no detected-attack record"),
 		F.Target->Senses.Memory.DetectedAttackAttacker == F.Fighter->Handle);
 
 	FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
@@ -1498,8 +1513,9 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	TestNotEqual(TEXT("the failed swing left its own program"), F.Fighter->Schedule.Current,
 		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING));
 
-	// The announce still landed: opponent reservation changes no health and does not need a weapon.
-	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK still delivered its notice"),
+	// `TASK_ANNOUNCE_ATTACK` (base `0x10286cd9`) is `TaskComplete` alone: no notice without a swing
+	// (story 8 wave 2; the port's op verb that delivered one was a twin).
+	TestFalse(TEXT("0x10286cd9 TASK_ANNOUNCE_ATTACK delivers no notice of its own"),
 		ElysiumNpcCond::HasDetectedAttack(*F.Target, 0.0));
 	return true;
 }

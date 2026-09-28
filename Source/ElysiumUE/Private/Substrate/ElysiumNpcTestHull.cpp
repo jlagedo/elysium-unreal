@@ -115,19 +115,6 @@ float FElysiumNpcTestHull::GetMaxJumpSpeed() const
 	return ElysiumNpcTunables::Forty;
 }
 
-float FElysiumNpcTestHull::RunSpecialIdleActivity(double Now)
-{
-	// "Negative when this body has no stance machine" (`IElysiumScheduleRunner`).
-	(void)Now;
-	return -1.0f;
-}
-
-bool FElysiumNpcTestHull::IsBodyVisible() const
-{
-	// Retail's `Spawn` ends in `Hide()`; the hull is never a rendered body.
-	return false;
-}
-
 float FElysiumNpcTestHull::PlayActivity(const FString& Activity)
 {
 	// "Negative when unresolvable" (`IElysiumScheduleRunner`): a test hull has no model to play on.

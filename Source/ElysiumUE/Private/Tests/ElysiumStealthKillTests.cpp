@@ -342,7 +342,7 @@ bool FElysiumStealthKillObliviousTest::RunTest(const FString&)
 	if (!TestTrue(TEXT("armed"), F.Arm(TEXT("item_w_sk_fists")))) return false;
 	F.StandInFront();
 	TestNull(TEXT("front-facing is refused while the victim senses"), F.Rules.FindVictim(*F.Player));
-	F.Guard->MakeOblivious(true);
+	F.Guard->AddOblivious();   // `m_iIsOblivious++` (TASK_MAKE_OBLIVIOUS's arm `0x102a72e3` is the schedule's route to it)
 	F.World.Tick(1.0);
 	TestEqual(TEXT("m_iIsOblivious bypasses only the rear-arc test"), F.Rules.FindVictim(*F.Player), F.Guard);
 	F.Guard->bInvincible = true;

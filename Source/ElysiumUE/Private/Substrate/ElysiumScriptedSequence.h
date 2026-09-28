@@ -34,7 +34,6 @@ class FElysiumScriptedSequence : public FElysiumNpcBase
 public:
 	ELYSIUM_NPC_CLASS("CCineNPC", FElysiumNpcBase)
 
-
 	// --- The own vtable slots (`CCineNPC`, `0x104771e4`) -----------------------------------------
 	// Slot 72 `0x101a6e20` — `XOR AL,AL`: no discipline targets a director.
 	virtual bool Slot72(int32 Discipline) override;
@@ -258,11 +257,7 @@ public:
 	/** What `Activate` printed, verbatim in retail's order, dividers included. */
 	TArray<FString> ActivateDiagnostics;
 
-	// --- The port's schedule-runner hooks (`IElysiumScheduleRunner`) --------------------------------
-	// Not retail slots. A director runs no schedule, so each answers "this body has none".
-	virtual float RunSpecialIdleActivity(double Now) override;
-	virtual bool IsBodyVisible() const override;
-	virtual float PlayActivity(const FString& Activity) override;
+	virtual float PlayActivity(const FString& Activity);
 
 protected:
 	// `SUB_Remove` `0x101c0b10` as the port stands it: slot 180, then the entity's terminal `Kill`.

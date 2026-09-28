@@ -466,18 +466,21 @@ bool FElysiumScheduleTextTaskOpsTest::RunTest(const FString&)
 {
 	FScratchClass Scratch;
 
+	// The arm census (story 8 wave 2): a task has a body when some class's slot 442/444 switch has an
+	// arm for it. The scratch census arms five of the nine names; one armed id no name registers.
 	FElysiumTaskOpTable Table;
-	Table.Build(Scratch.Tasks);
+	const TSet<int32> ArmedIds = { ElysiumScheduleId::GlobalBase + 0x00, ElysiumScheduleId::GlobalBase + 0x01,
+		ElysiumScheduleId::GlobalBase + 0x02, ElysiumScheduleId::GlobalBase + 0x03,
+		ElysiumScheduleId::GlobalBase + 0x04, ElysiumScheduleId::GlobalBase + 0x77 };
+	Table.BuildFromArmed(Scratch.Tasks, ArmedIds);
 
-	// Of the nine names the scratch class registers, five are tasks this runtime has a body for.
-	TestEqual(TEXT("the bound identities"), Table.NumPorted(), 5);
+	TestEqual(TEXT("the armed identities"), Table.NumPorted(), 5);
 	TestEqual(TEXT("the unported ones"), Table.NumUnported(), 4);
-	TestTrue(TEXT("a bound id answers its op"),
-		Table.Find(ElysiumScheduleId::GlobalBase + 0x00) == EElysiumTaskOp::Wait);
-	TestTrue(TEXT("an unbound id answers Unknown -- which is the measurement, not an error"),
-		Table.Find(ElysiumScheduleId::GlobalBase + 0x08) == EElysiumTaskOp::Unknown);
-	TestTrue(TEXT("an id the table never saw answers Unknown too"),
-		Table.Find(12345) == EElysiumTaskOp::Unknown);
+	TestTrue(TEXT("an armed id answers true"), Table.HasArm(ElysiumScheduleId::GlobalBase + 0x00));
+	TestFalse(TEXT("an unarmed id answers false -- which is the measurement, not an error"),
+		Table.HasArm(ElysiumScheduleId::GlobalBase + 0x08));
+	TestFalse(TEXT("an arm no registered name holds is not a ported identity"),
+		Table.HasArm(ElysiumScheduleId::GlobalBase + 0x77));
 	TestEqual(TEXT("every identity keeps its retail name"),
 		Table.NameOf(ElysiumScheduleId::GlobalBase + 0x08), FString(TEXT("TASK_DIST")));
 

@@ -1681,17 +1681,6 @@ void FElysiumScriptedSequence::GetDebugState(TArray<TPair<FString, FString>>& Ou
 	Out.Emplace(TEXT("Diagnostics"), FString::Join(Diagnostics, TEXT(" | ")));
 }
 
-float FElysiumScriptedSequence::RunSpecialIdleActivity(double Now)
-{
-	(void)Now;
-	return -1.0f;
-}
-
-bool FElysiumScriptedSequence::IsBodyVisible() const
-{
-	return false;
-}
-
 float FElysiumScriptedSequence::PlayActivity(const FString& Activity)
 {
 	(void)Activity;

@@ -155,20 +155,7 @@ namespace
 	struct FKernelRunner final : IElysiumScheduleRunner
 	{
 		TArray<FString> Calls;
-		bool bVisible = false;   // WAIT_PVS holds, so a program stays mid-flight
-
-		virtual float RunSpecialIdleActivity(double) override
-		{
-			Calls.Add(TEXT("SpecialIdleActivity"));
-			return 2.f;
-		}
-		virtual bool IsBodyVisible() const override { return bVisible; }
-		virtual float PlayActivity(const FString& Activity) override
-		{
-			Calls.Add(FString::Printf(TEXT("SetActivity %s"), *Activity));
-			return 1.f;
-		}
-		virtual float RandomSeconds(float Max) override { return Max; }
+		bool bVisible = false;
 		virtual void RecordScheduleEvent(const FString& Row) override
 		{
 			Calls.Add(FString::Printf(TEXT("trace: %s"), *Row));
@@ -180,10 +167,8 @@ namespace
 	};
 }
 
-
 // The recovered `GatherConditions` order: a stale enemy's death is seen by ChooseEnemy in
 // the SAME pass, and the committed-enemy conditions describe the enemy that pass chose.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyGatherOrderTest,
 	"Elysium.Substrate.NpcEnemy.GatherOrder", GElysiumTestFlags)
@@ -232,9 +217,7 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	return true;
 }
 
-
 // `ShouldChooseNewEnemy`: the trigger set, and the deliberate SEE_FEAR omission.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyShouldChooseTest,
 	"Elysium.Substrate.NpcEnemy.ShouldChoose", GElysiumTestFlags)
@@ -284,10 +267,8 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The starvation rule: the active schedule's interrupt mask is consulted BEFORE any
 // search, and an uninterested schedule keeps ownership of the enemy it has.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyScheduleGateTest,
 	"Elysium.Substrate.NpcEnemy.ScheduleGate", GElysiumTestFlags)
@@ -392,9 +373,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 	return true;
 }
 
-
 // `BestEnemy`: eligibility and the four arbitration rules.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyBestEnemyTest,
 	"Elysium.Substrate.NpcEnemy.BestEnemy", GElysiumTestFlags)
@@ -519,7 +498,6 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-
 // CAI_Memory is admission, not a relationship-world scan. The tutorial's thug is about 2380
 // Source units from Jack's dialogue; its 540-unit sight admission leaves a hostile player absent
 // from both the store and selection until an actual sight pass writes the record.
@@ -642,10 +620,8 @@ bool FElysiumNpcEnemyDamageMemoryTest::RunTest(const FString&)
 	return true;
 }
 
-
 // `SetEnemy` and the `ChooseEnemy` effects: the last-enemy transfer, NEW_ENEMY, the
 // forgotten LOS claim, and the two lost-the-actor outputs.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySetEnemyTest,
 	"Elysium.Substrate.NpcEnemy.SetEnemy", GElysiumTestFlags)
@@ -691,10 +667,8 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The went-null / eluded transaction: `OnLostPlayer` and `OnLostEnemy`, once each, on the
 // real transition and not on losing sight.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLostOutputsTest,
 	"Elysium.Substrate.NpcEnemy.LostOutputs", GElysiumTestFlags)
@@ -781,7 +755,6 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The damage conditions, and the recovered 15%-in-one-second repeated-damage window.
 //
 // STORY8-TWIN: this case pins `ElysiumNpcCond::AccumulateDamage` / `GatherDamage`, the damage twin
@@ -791,7 +764,6 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 // (_DAT_1047b868) < m_flSumDamage`, reset when `curtime - m_flLastDamageTime >= 1.0` (`0x1026632e`,
 // `0x102662a8`) — pinned by `Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_*`.
 // Delete this case with the twin at wave 2 (L13).
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,
 	"Elysium.Substrate.NpcEnemy.DamageConditions", GElysiumTestFlags)
@@ -880,14 +852,12 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	return true;
 }
 
-
 // `SelectIdealState`, both layers. Corrected to retail: `CAI_BaseNPCTroika::SelectIdealState`
 // (`0x102ad660`) gates every arm but four on `HasInterruptCondition` (`0x10269d30`), whose FIRST
 // statement is `if (*(int *)(this + 0x5c38) == 0) return 0;` — so with no program installed a
 // committed enemy does NOT take combat from idle and idle damage does not promote. The exceptions
 // are the four flee arms (`0x21` at `0x452b`/`0x456b`, `0x1f` at `0x4532`/`0x4573`) and case
 // `0xe`'s damage arms (`0x45f0`), which call the bare `HasCondition` (`0x10269aa0`) instead.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
 	"Elysium.Substrate.NpcEnemy.IdealState", GElysiumTestFlags)
@@ -1082,10 +1052,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The state machine end to end on a real NPC: Alert and Combat are admitted, the mind
 // records the transitions, and combat selects a real fight program.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyStateMachineTest,
 	"Elysium.Substrate.NpcEnemy.StateMachine", GElysiumTestFlags)
@@ -1175,9 +1143,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The alert-lookaround chance and its new producer.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLookaroundChanceTest,
 	"Elysium.Substrate.NpcEnemy.LookaroundChance", GElysiumTestFlags)
@@ -1278,10 +1244,8 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The interrupt mask on the kernel: a masked condition aborts into reselection, and an
 // empty mask finishes despite the same conditions.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyInterruptTest,
 	"Elysium.Substrate.NpcEnemy.Interrupts", GElysiumTestFlags)
@@ -1396,9 +1360,7 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The bitset itself, and what a save carries of the new memory.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyConditionSetTest,
 	"Elysium.Substrate.NpcEnemy.ConditionSet", GElysiumTestFlags)

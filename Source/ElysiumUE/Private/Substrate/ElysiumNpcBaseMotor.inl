@@ -17,8 +17,8 @@ struct FNavigator
 	int32 NavType = 0;
 
 	// `CAI_Navigator+0x1c` — set to 1 by `OnNavFailed` (`0x102eeae0`, `CAI_Navigator#10`) and by
-	// nothing else in the closure. Retail's "this navigator has failed" latch; no consumer in this
-	// substrate reads it yet.
+	// `OnNavComplete` (`0x102eea90`, `CAI_Navigator#8`): the "this route has ended" latch; no
+	// consumer in this substrate reads it yet.
 	bool bNavFailed = false;
 
 	// `CAI_Navigator::vfunc3` (`0x102ecb50`) copies three of the owner NPC's own pointers —
@@ -101,6 +101,16 @@ void NavSnapshotOwnerPointers(int32 Argument);
  *  `TaskFail` (slot 448) with the caller's reason, re-plays the resolved link activity through
  *  `SetIdealActivity`, and sets the failed latch. */
 void NavOnNavFailed(int32 FailReason);
+
+/** `CAI_Navigator::Move` (`0x102eff40`, navigator slot 5), which `PerformMovement` (`0x1026c120`)
+ *  dispatches from `NPCThink`. NAMED DIVERGENCE: this runtime's mover integrates the route on the
+ *  actor tick, so what the think still owes the route is its END, sampled here: an arrival runs
+ *  `OnNavComplete` (navigator slot 8 `0x102eea90`: the reset `0x102eeb70`, the owner's
+ *  `TaskMovementComplete` `0x10273ec0` through `0x102eccc0`, `+0x1c = 1`); a route the mover gave up
+ *  runs `OnNavFailed(0xc)` (slot 10, `Move`'s own `(0xc, 1)` at `0x102f0180`). No active goal, no
+ *  work (`Move`'s `0x102ee2e0` gate). Story 8 wave 2 (L13): the retail task arms now read the
+ *  navigator's goal words, so the route's end has to reach them. */
+void NavigatorMoveStep();
 
 /** `thunk_FUN_102ee680(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`. The port's mover
  *  answers the same question through `SampleNavigation().bActiveGoal`. */

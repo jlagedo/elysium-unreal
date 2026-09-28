@@ -94,18 +94,23 @@ namespace
 		double				  WaitPvsDelaySeconds = 0.0;
 		int32				  WaitPvsCalls = 0;
 
-		virtual float RunSpecialIdleActivity(double) override { return 1.f; }
-		virtual bool  IsBodyVisible() const override { return false; }
-		virtual float PlayActivity(const FString&) override { return 1.f; }
-		virtual float RandomSeconds(float Max) override { return Max; }
-		virtual bool WaitPvs() override
+		// Slot 442 stand-in: a `TASK_WAIT_PVS` step (the scopes below) completes in its start arm, as
+		// the base arm does for a visible body; its cost is the configurable delay. (Story 8 wave 2:
+		// the kernel reaches task bodies only through slots 442/444 now.)
+		virtual void StartTaskForMaintenance(FElysiumScheduleState& RunState, const FElysiumScheduleStep& Step, double Now) override
 		{
+			static const int32 WaitPvsId = FElysiumScheduleCorpus::Get()
+				.Namespace(EElysiumIdCategory::Task).Find(TEXT("TASK_WAIT_PVS"));
+			if (Step.TaskId != WaitPvsId)
+			{
+				return;
+			}
 			++WaitPvsCalls;
 			if (WaitPvsDelaySeconds > 0.0)
 			{
 				FPlatformProcess::Sleep(static_cast<float>(WaitPvsDelaySeconds));
 			}
-			return true;
+			RunState.TaskStatus = EElysiumTaskStatus::Complete;   // `TaskComplete` 0x10273e80
 		}
 		virtual void  ClearConditions() override { Conditions.Reset(); }
 		virtual bool  HasMaintenanceCondition(EElysiumNpcCond Cond) const override

@@ -530,6 +530,26 @@ void FElysiumNpcBase::NavOnNavFailed(int32 FailReason)
 	Navigator.bNavFailed = true;
 }
 
+void FElysiumNpcBase::NavigatorMoveStep()
+{
+	if (Motor == nullptr || !NavigatorGoalIsActive())                        // 0x102eff7c 0x102ee2e0
+	{
+		return;
+	}
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	if (Status == EElysiumNpcMoveStatus::Reached)
+	{
+		// `OnNavComplete` (`0x102eea90`): `0x102eeb70` (the goal words and the path's reset -- the
+		// mover's own clear inside `TaskMovementComplete`), then the owner's `TaskMovementComplete`.
+		TaskMovementComplete();                                              // 0x102eccc0 -> 0x10273ec0
+		Navigator.bNavFailed = true;                                         // +0x1c = 1
+	}
+	else if (Status == EElysiumNpcMoveStatus::Failed || Status == EElysiumNpcMoveStatus::Unavailable)
+	{
+		NavOnNavFailed(0xc);                                                 // 0x102f0180 slot 10 (FAIL_NO_ROUTE, 1)
+	}
+}
+
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 5) ---
 
 bool FElysiumNpcBase::NavGoalPosition(FVector& OutGoalUnits) const
