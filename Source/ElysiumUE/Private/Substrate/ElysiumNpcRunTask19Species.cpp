@@ -19,7 +19,7 @@
 // class retail's direct thunk names (`CAI_BaseNPC::RunTask` for ManBat, `CAI_BaseNPCTroika::RunTask`,
 // `CNPC_VHuman::RunTask`, `CNPC_VAnimal::RunTask` or `CNPC_VVampireBoss::RunTask`), written as the
 // qualified call. The retail scope-trace push/pop some bodies bracket themselves with is the debug
-// stack this runtime does not stand. Species task ids are compared against `Step->TaskId` as the
+// stack this runtime does not stand. Species task ids are compared as the class-LOCAL id (`RunTask19Species::LocalTaskOf`, slot 450), as the
 // landed `FElysiumNpcFrenzyShadow::StartTaskSlot442` compares them (the class-local id). Walked
 // prose: `docs/vtmb/npc-ai/story8/RunTask19.md`.
 
@@ -71,6 +71,16 @@ namespace RunTask19Species
 	const FElysiumScheduleStep* StepOf(void* Task)
 	{
 		return static_cast<const FElysiumScheduleStep*>(Task);
+	}
+
+	/** Retail's `pTask->iTask`: the CLASS-LOCAL number every species switch compares. The step
+	 *  carries the GLOBAL id (stated divergence, `ElysiumScheduleText.h`), so it is translated back
+	 *  through the receiving class's task space -- slot 450 `GetLocalTaskId` (`0x101a6640`, no
+	 *  override on any class), the translation StartTask19's species bodies use (`Species19TaskLocal`).
+	 *  -1 for an id no space in the chain holds. */
+	int32 LocalTaskOf(FElysiumNpcBase& Npc, const FElysiumScheduleStep* Step)
+	{
+		return Step != nullptr ? Npc.GetLocalTaskId(Step->TaskId) : INDEX_NONE;
 	}
 
 	double NowOf(const FElysiumNpc& Npc)
@@ -228,7 +238,7 @@ int32 FElysiumNpcAndreiBlood::RunTaskSlot444(void* Arg0)
 		return 0;   // crash guard: retail reads the task id first
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x1035d915
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x1035d915
 	// same arm: 0x1035d90f JA
 	{
 	case 0x150:
@@ -296,7 +306,7 @@ int32 FElysiumNpcAnimal::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x1035f961
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x1035f961
 	// same arm: 0x1035f953 JA
 	{
 	case 0x36:
@@ -344,7 +354,7 @@ int32 FElysiumNpcAsianVampire::RunTaskSlot444(void* Arg0)
 	{
 		return 0;
 	}
-	switch (Step->TaskId)                                                          // 0x10361350
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x10361350
 	// same arm: 0x10361342 JA
 	{
 	case 0x13a:
@@ -382,7 +392,7 @@ int32 FElysiumNpcBach::RunTaskSlot444(void* Arg0)
 	{
 		return 0;
 	}
-	const int32 Id = Step->TaskId;
+	const int32 Id = RunTask19Species::LocalTaskOf(*this, Step);
 	const double Now = RunTask19Species::NowOf(*this);
 	if (Id >= 0xb0 && Id <= 0xb1)                                                  // 0x103652c2 / 0x103652c9
 	{
@@ -478,7 +488,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 		StoreArenaCenter();                                                        // 0x1036c022
 		// same arm: 0x1036c039 JA
 	}
-	switch (Step->TaskId)                                                          // 0x1036c047
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x1036c047
 	{
 	case 0x8b:
 	{
@@ -632,7 +642,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 int32 FElysiumNpcDog::RunTaskSlot444(void* Arg0)
 {
 	const FElysiumScheduleStep* Step = RunTask19Species::StepOf(Arg0);
-	if (Step != nullptr && (Step->TaskId == 2 || Step->TaskId == 0x67)             // 0x10374a2d / 0x10374a32
+	if (Step != nullptr && (RunTask19Species::LocalTaskOf(*this, Step) == 2 || RunTask19Species::LocalTaskOf(*this, Step) == 0x67)             // 0x10374a2d / 0x10374a32
 		&& NpcStateRetail() == 3)                                                  // 0x10374a34 `m_NPCState == ALERT`
 		// same arm: 0x10374a3b JNZ
 	{
@@ -653,7 +663,7 @@ int32 FElysiumNpcGargoyle::RunTaskSlot444(void* Arg0)
 	{
 		return 0;
 	}
-	if (Step->TaskId == 0x31)                                                      // 0x103793ec
+	if (RunTask19Species::LocalTaskOf(*this, Step) == 0x31)                                                      // 0x103793ec
 	{
 		RunTask19Species::TurnUnlessMemory(*this);                                 // 0x10379416 / 0x1037941c
 		MotorUpdateYaw(RunTask19Species::UpdateYawDefault);                        // 0x1037942a
@@ -663,7 +673,7 @@ int32 FElysiumNpcGargoyle::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	}
-	if (Step->TaskId == 0x12f)                                                     // 0x103793f3
+	if (RunTask19Species::LocalTaskOf(*this, Step) == 0x12f)                                                     // 0x103793f3
 	{
 		if (IsActivityFinished())                                                  // 0x10379405
 		{
@@ -682,7 +692,7 @@ int32 FElysiumNpcGhoulCroucher::RunTaskSlot444(void* Arg0)
 	{
 		return 0;
 	}
-	if (Step->TaskId == 0x14a)                                                     // 0x1037ba65
+	if (RunTask19Species::LocalTaskOf(*this, Step) == 0x14a)                                                     // 0x1037ba65
 	// same arm: 0x1037b9f5 JZ, 0x1037b9ff JNZ
 	{
 		if (IsActivityFinished())                                                  // 0x1037ba98 / 0x1037baa0
@@ -691,7 +701,7 @@ int32 FElysiumNpcGhoulCroucher::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	}
-	if (Step->TaskId == 0x14b)                                                     // 0x1037ba68
+	if (RunTask19Species::LocalTaskOf(*this, Step) == 0x14b)                                                     // 0x1037ba68
 	{
 		if (IsActivityFinished())                                                  // 0x1037ba81 / 0x1037ba89
 		{
@@ -712,7 +722,7 @@ int32 FElysiumNpcHengeyokai::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)
+	switch (RunTask19Species::LocalTaskOf(*this, Step))
 	{
 	case 0x31:
 	case 0xc8:
@@ -800,7 +810,7 @@ int32 FElysiumNpcHuman::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x10384acd
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x10384acd
 	// same arm: 0x10384ac7 JA
 	{
 	case 0x89:
@@ -923,7 +933,7 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 		FElysiumEntity* Target = World != nullptr ? World->Resolve(ManBatFlyByTarget) : nullptr;
 		return Target != nullptr && Target->IsAlive() ? Target : nullptr;           // slot 158
 	};
-	switch (Step->TaskId)                                                          // 0x1038d15b
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x1038d15b
 	// same arm: 0x1038d14d JA
 	{
 	case 0x14a:
@@ -1210,7 +1220,7 @@ int32 FElysiumNpcMingXiao::RunTaskSlot444(void* Arg0)
 			}
 		}
 	};
-	switch (Step->TaskId)                                                          // 0x10393957
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x10393957
 	// same arm: 0x10393949 JA
 	{
 	case 0x89:
@@ -1371,7 +1381,7 @@ int32 FElysiumNpcMingXiaoTentacle::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x1039d77a
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x1039d77a
 	// same arm: 0x1039d76c JA
 	{
 	case 0x8b:
@@ -1548,7 +1558,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 			//   0x103a8a84 JMP
 		}
 	}
-	const int32 Id = Step->TaskId;
+	const int32 Id = RunTask19Species::LocalTaskOf(*this, Step);
 	auto FaceEnemyOrigin = [this](float Speed)
 	{
 		if (FElysiumEntity* Enemy = RunTask19Species::Enemy167(*this))
@@ -1703,7 +1713,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 int32 FElysiumNpcSheriffMan::RunTaskSlot444(void* Arg0)
 {
 	const FElysiumScheduleStep* Step = RunTask19Species::StepOf(Arg0);
-	if (Step != nullptr && Step->TaskId == 0x154)                                  // 0x103af7d4 / 0x103af7da
+	if (Step != nullptr && RunTask19Species::LocalTaskOf(*this, Step) == 0x154)                                  // 0x103af7d4 / 0x103af7da
 	{
 		// Swallowed: no movement, no completion.
 		return 0;
@@ -1715,7 +1725,7 @@ int32 FElysiumNpcSheriffMan::RunTaskSlot444(void* Arg0)
 int32 FElysiumNpcTaxiDriver::RunTaskSlot444(void* Arg0)
 {
 	const FElysiumScheduleStep* Step = RunTask19Species::StepOf(Arg0);
-	if (Step == nullptr || Step->TaskId != 0xb9)                                   // 0x103b38a9 / 0x103b38b1
+	if (Step == nullptr || RunTask19Species::LocalTaskOf(*this, Step) != 0xb9)                                   // 0x103b38a9 / 0x103b38b1
 	{
 		return FElysiumNpcHuman::RunTaskSlot444(Arg0);                             // 0x103b38b4
 	}
@@ -1738,7 +1748,7 @@ int32 FElysiumNpcTzimisce::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x103bb204
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x103bb204
 	// same arm: 0x103bb1f6 JA, 0x103bb20f CALL, 0x103bb21f CALL, 0x103bb227 CALL
 	{
 	case 0x89:
@@ -1844,7 +1854,7 @@ int32 FElysiumNpcTzimisce::RunTaskSlot444(void* Arg0)
 		// same arm: 0x103bb4e3 JZ, 0x103bb503 JZ
 			&& ActivityNumber == RunTask19Species::TranslatedActivity(             // 0x103bb512..0x103bb534
 			// same arm: 0x103bb51d CALL, 0x103bb528 CALL
-				*this, Step->TaskId == 0xcd ? 0x104 : 0x105))
+				*this, RunTask19Species::LocalTaskOf(*this, Step) == 0xcd ? 0x104 : 0x105))
 		{
 			TaskComplete(false);                                                   // 0x103bb53e
 		}
@@ -1879,7 +1889,7 @@ int32 FElysiumNpcTzimisce::RunTaskSlot444(void* Arg0)
 int32 FElysiumNpcTzimisceRunner::RunTaskSlot444(void* Arg0)
 {
 	const FElysiumScheduleStep* Step = RunTask19Species::StepOf(Arg0);
-	if (Step == nullptr || Step->TaskId < 0x122 || Step->TaskId > 0x124)           // 0x103c3881 / 0x103c388c
+	if (Step == nullptr || RunTask19Species::LocalTaskOf(*this, Step) < 0x122 || RunTask19Species::LocalTaskOf(*this, Step) > 0x124)           // 0x103c3881 / 0x103c388c
 	{
 		return FElysiumNpc::RunTaskSlot444(Arg0);                                  // 0x103c3924
 	}
@@ -1903,7 +1913,7 @@ int32 FElysiumNpcTzimisceRunner::RunTaskSlot444(void* Arg0)
 int32 FElysiumNpcVampireBoss::RunTaskSlot444(void* Arg0)
 {
 	const FElysiumScheduleStep* Step = RunTask19Species::StepOf(Arg0);
-	if (Step != nullptr && Step->TaskId == 0x14d)                                  // 0x103c5f94 / 0x103c5f9a
+	if (Step != nullptr && RunTask19Species::LocalTaskOf(*this, Step) == 0x14d)                                  // 0x103c5f94 / 0x103c5f9a
 	{
 		WaitForTransformation();                                                   // 0x103c5fac `0x103c63c0`
 		return 0;
@@ -1920,13 +1930,13 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	(void)TaskName(Step->TaskId);                                                  // 0x103ce029 slot 449, answer unused
+	(void)TaskName(RunTask19Species::LocalTaskOf(*this, Step));                                                  // 0x103ce029 slot 449, answer unused
 	// same arm: 0x103cdfb9 JZ, 0x103cdfc3 JNZ, 0x103ce039 JA
 	// `PUSH 0x10661dac` / slot 448: the SDK's text fail code (`MakeFailCode(const char*)`), the
 	// string's address standing as the reason. The port's text-fail accessor is family Misc19's
 	// `TaskFailText` (L05 integration: was the raw address as an int code).
 	const TCHAR* const FailNotOutOfSight = TEXT("Did not path out of player's sight");
-	switch (Step->TaskId)                                                          // 0x103ce03f
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x103ce03f
 	{
 	case 0x14a:
 	case 0x157:
@@ -2146,7 +2156,7 @@ int32 FElysiumNpcZombie::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	switch (Step->TaskId)                                                          // 0x103e01e7
+	switch (RunTask19Species::LocalTaskOf(*this, Step))                                                          // 0x103e01e7
 	// same arm: 0x103e01e1 JA
 	{
 	case 0x14c:

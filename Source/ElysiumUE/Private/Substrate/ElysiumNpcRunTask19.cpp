@@ -445,7 +445,9 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		NpcFlags.AssignAiFlagsWord(NpcFlags.RawWord1() & ~Mask);                   // `+0x14b8`
 	};
 
-	const int32 Id = Step->TaskId;
+	// Retail's `pTask->iTask` is CLASS-LOCAL; the step carries the GLOBAL id, translated once through
+	// slot 450 `GetLocalTaskId` (`0x101a6640`), as `StartTaskSlot442` (`0x102a1923`) does.
+	const int32 Id = GetLocalTaskId(Step->TaskId);                                 // 0x102aad03 slot 450
 	switch (Id)
 	{
 	// --- index 0x00 `0x102aad61`: 0x2, 0x67, 0x68 ------------------------------------------------

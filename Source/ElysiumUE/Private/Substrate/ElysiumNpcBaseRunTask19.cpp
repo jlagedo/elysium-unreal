@@ -306,7 +306,10 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		return Goal;
 	};
 
-	const int32 Id = Step->TaskId;
+	// `[EDI]` is retail's `Task_t::iTask`, the CLASS-LOCAL id; the step carries the GLOBAL id (stated
+	// divergence, `ElysiumScheduleText.h`), translated once here through slot 450 `GetLocalTaskId`
+	// (`0x101a6640`) exactly as `StartTaskSlot442` does (the StartTask19 integration's fix).
+	const int32 Id = GetLocalTaskId(Step->TaskId);                                 // 0x1028878a slot 450
 	switch (Id)
 	{
 	case TaskWait:

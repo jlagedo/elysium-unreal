@@ -102,10 +102,15 @@ namespace RunTask19TestShared
 		double Now() const { return World.World.NowSeconds(); }
 	};
 
-	FElysiumScheduleStep Step(int32 TaskId, float Data = 0.f)
+	// A step as the runner hands it: the GLOBAL task id. The cases name retail's class-LOCAL number
+	// (what `pTask->iTask` holds and what the switches compare), so it is translated forward through
+	// the receiving class's task space -- the inverse of the slot-450 `GetLocalTaskId` (`0x101a6640`)
+	// every RunTask body now applies first.
+	FElysiumScheduleStep Step(const FElysiumNpcBase& Npc, int32 LocalTask, float Data = 0.f)
 	{
 		FElysiumScheduleStep Out;
-		Out.TaskId = TaskId;
+		const FElysiumLocalIdSpace* Space = Npc.IdSpace(EElysiumIdCategory::Task);
+		Out.TaskId = Space != nullptr ? Space->LocalToGlobal(LocalTask) : INDEX_NONE;
 		Out.Data = Data;
 		return Out;
 	}
@@ -149,7 +154,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x02);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x02);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() + 5.0;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -157,7 +162,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitTest::RunTest(const FString&)
 	N.BaseScheduleHost.WaitFinished = F.Now();
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10288c34: at the stamp it completes"), Completed(N));
-	S = Step(0x67);
+	S = Step(*F.Npc, 0x67);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("TASK_WAIT_RANDOM shares the arm"), Completed(N));
@@ -174,7 +179,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitFaceEnemyTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x04);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x04);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() + 5.0;
 	N.MotorYawClock = 3.f;
@@ -196,7 +201,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitPvsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x05);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x05);
 	Reset(N);
 	N.SpawnFlags |= 0x400;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -213,7 +218,7 @@ bool FElysiumNpcKernelRunTask19BaseMoveToTargetRangeTest::RunTest(const FString&
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x0b, 64.f);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x0b, 64.f);
 	Reset(N);
 	N.SetTarget(FElysiumEntityHandle::Invalid());
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -234,16 +239,16 @@ bool FElysiumNpcKernelRunTask19BaseNoEntryArmsTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x1f, 0x68, 0x76, 0x77 })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
 		TestFalse(FString::Printf(TEXT("task 0x%x keeps running"), Id), Completed(N));
 	}
-	FElysiumScheduleStep S = Step(0x49);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x49);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10289713: the default arm completes"), Completed(N));
-	S = Step(0x500);
+	S = Step(*F.Npc, 0x500);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10288798: an id past 0xb1 takes the same arm"), Completed(N));
@@ -260,7 +265,7 @@ bool FElysiumNpcKernelRunTask19BasePathArmsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x24);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x24);
 	Reset(N);
 	N.BaseScheduleHost.bShouldMove = true;
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
@@ -269,7 +274,7 @@ bool FElysiumNpcKernelRunTask19BasePathArmsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x10288eff completes"), Completed(N));
 	TestFalse(TEXT("0x1028963f clears m_bShouldMove"), N.BaseScheduleHost.bShouldMove);
 	TestEqual(TEXT("0x10288f0a clears the goal"), N.NavigationGoalClears, Clears + 1);
-	S = Step(0x25, 0.f);
+	S = Step(*F.Npc, 0x25, 0.f);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10289602: at the goal the range test passes"), Completed(N));
@@ -288,7 +293,7 @@ bool FElysiumNpcKernelRunTask19BaseActivityArmsTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x2a, 0x39, 0x52, 0x34, 0x3e, 0x55 })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.bSequenceFinished = false;
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -298,7 +303,7 @@ bool FElysiumNpcKernelRunTask19BaseActivityArmsTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("0x%x completes once it finishes"), Id), Completed(N));
 	}
 	const int32 Reissues = N.TroikaMotor.MoveReissues;
-	FElysiumScheduleStep S = Step(0x34);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x34);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10289280: the attack arm aims the motor (0x102e1c10)"),
@@ -319,14 +324,14 @@ bool FElysiumNpcKernelRunTask19BaseFacingArmsTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x2b, 0x2f, 0x66, 0x6a, 0x2e })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		const int32 Updates = N.MotorUpdateYawCalls;
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
 		TestTrue(FString::Printf(TEXT("0x%x turned the motor"), Id), N.MotorUpdateYawCalls > Updates);
 		TestTrue(FString::Printf(TEXT("0x%x completes facing the ideal"), Id), Completed(N));
 	}
-	FElysiumScheduleStep S = Step(0x2d);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x2d);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() + 5.0;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -347,17 +352,17 @@ bool FElysiumNpcKernelRunTask19BaseHintAndWeaponFailsTest::RunTest(const FString
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x30);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x30);
 	Reset(N);
 	N.BaseScheduleHost.HintNode = INDEX_NONE;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10288893 TaskFail(4)"), Failed(N, 4));
-	S = Step(0x72);
+	S = Step(*F.Npc, 0x72);
 	Reset(N);
 	N.SetTarget(FElysiumEntityHandle::Invalid());
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10288f33 TaskFail(3)"), Failed(N, 3));
-	S = Step(0x71);
+	S = Step(*F.Npc, 0x71);
 	Reset(N);
 	FinishActivity(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -375,7 +380,7 @@ bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x38);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x38);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -383,7 +388,7 @@ bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&
 	FinishActivity(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("and completes"), Completed(N));
-	S = Step(0x4b);
+	S = Step(*F.Npc, 0x4b);
 	Reset(N);
 	N.SequenceNumber = 3;
 	N.IdealSequence = 4;
@@ -405,7 +410,7 @@ bool FElysiumNpcKernelRunTask19BaseDieTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x5f);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x5f);
 	Reset(N);
 	FinishActivity(N);
 	N.SequenceCycle = 0.5f;
@@ -434,11 +439,11 @@ bool FElysiumNpcKernelRunTask19BaseScriptArmsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x60);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x60);
 	Reset(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestTrue(TEXT("a dead cine completes"), Completed(N));
-	S = Step(0x62);
+	S = Step(*F.Npc, 0x62);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -459,7 +464,7 @@ bool FElysiumNpcKernelRunTask19BaseStopAndMovementTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x69);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x69);
 	Reset(N);
 	N.NavSetType(0);
 	N.BaseScheduleHost.bShouldMove = true;
@@ -469,13 +474,13 @@ bool FElysiumNpcKernelRunTask19BaseStopAndMovementTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10288983 the stopped activity is ACT_IDLE"), N.IdealActivityNumber, 1);
 	// The default fixture provides no mover (`bProvideNpcMotor` false): no goal, the flag arm.
 	{
-		S = Step(0x6e);
+		S = Step(*F.Npc, 0x6e);
 		Reset(N);
 		const int32 Clears = N.NavigationGoalClears;
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
 		TestTrue(TEXT("0x10288eff: no goal completes"), Completed(N));
 		TestEqual(TEXT("0x10288f0a ClearGoal"), N.NavigationGoalClears, Clears + 1);
-		S = Step(0x74);
+		S = Step(*F.Npc, 0x74);
 		Reset(N);
 		N.Flags &= ~1;
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
@@ -501,16 +506,16 @@ bool FElysiumNpcKernelRunTask19TroikaChainsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x02);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x02);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("TASK_WAIT completes through the base arm"), Completed(N));
-	S = Step(0x49);
+	S = Step(*F.Npc, 0x49);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x49 reaches the base default"), Completed(N));
-	S = Step(0xed);
+	S = Step(*F.Npc, 0xed);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x102aad71: TASK_DO_COMFORT_LOOP keeps running"), Completed(N));
@@ -529,7 +534,7 @@ bool FElysiumNpcKernelRunTask19TroikaWaitFaceEnemyTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x04, 0x128 })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.ShootTargetOverride = FElysiumEntityHandle::Invalid();
 		ElysiumNpcEnemy::SetEnemy(N, FElysiumEntityHandle::Invalid());
@@ -548,7 +553,7 @@ bool FElysiumNpcKernelRunTask19TroikaWaitPvsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x05);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x05);
 	Reset(N);
 	N.SpawnFlags |= 0x400;
 	N.RunTaskSlot444(&S);
@@ -568,16 +573,16 @@ bool FElysiumNpcKernelRunTask19TroikaFacingArmsTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x2e, 0xa7, 0x11d, 0x12e, 0xf7 })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.RunTaskSlot444(&S);
 		TestTrue(FString::Printf(TEXT("0x%x completes facing"), Id), Completed(N));
 	}
-	FElysiumScheduleStep S = Step(0xb2);
+	FElysiumScheduleStep S = Step(*F.Npc, 0xb2);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102ab961 TaskFail(0x22)"), Failed(N, 0x22));
-	S = Step(0xb4);
+	S = Step(*F.Npc, 0xb4);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102aba59 TaskFail(0x23)"), Failed(N, 0x23));
@@ -596,7 +601,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x34, 0x35, 0x36, 0x92, 0x93 })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.BurstFireCount = 0;
 		N.bSequenceFinished = false;
@@ -606,7 +611,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 		N.RunTaskSlot444(&S);
 		TestTrue(FString::Printf(TEXT("0x%x completes"), Id), Completed(N));
 	}
-	FElysiumScheduleStep S = Step(0x34);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x34);
 	Reset(N);
 	N.BurstFireCount = 2;
 	N.bSequenceFinished = false;
@@ -629,7 +634,7 @@ bool FElysiumNpcKernelRunTask19TroikaSetActivityTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x4b);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x4b);
 	Reset(N);
 	N.SequenceNumber = 1;
 	N.IdealSequence = 2;
@@ -639,7 +644,7 @@ bool FElysiumNpcKernelRunTask19TroikaSetActivityTest::RunTest(const FString&)
 	N.BaseScheduleHost.WaitFinished = F.Now() - 0.1;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102aad4f completes on the watchdog"), Completed(N));
-	S = Step(0xe7);
+	S = Step(*F.Npc, 0xe7);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("TASK_SET_COWER has no watchdog"), Completed(N));
@@ -659,7 +664,7 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x5f);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x5f);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.IdealActivityNumber = 7;
@@ -672,7 +677,7 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102abc03: TASK_DIE credits itself"), N.LastDieCredit == N.Handle);
 	TestEqual(TEXT("0x102abc0d: m_lifeState 1 -> 0"), N.AnimEventLifeStateWord, 0);
 	TestFalse(TEXT("no completion"), Completed(N));
-	S = Step(0xdf);
+	S = Step(*F.Npc, 0xdf);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abc7e Die(0,0,0)"), N.RunTaskDieCalls, 2);
@@ -691,7 +696,7 @@ bool FElysiumNpcKernelRunTask19TroikaMovementTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	// The default fixture provides no mover (`bProvideNpcMotor` false): no goal, the flag arm.
 	{
-		FElysiumScheduleStep S = Step(0x6e);
+		FElysiumScheduleStep S = Step(*F.Npc, 0x6e);
 		Reset(N);
 		N.BaseScheduleHost.bShouldMove = true;
 		N.RunTaskSlot444(&S);
@@ -707,13 +712,13 @@ bool FElysiumNpcKernelRunTask19TroikaMovementTest::RunTest(const FString&)
 	N.PatrolPathCell.Path = nullptr;
 	N.PatrolPathHuntCell.Path = &HuntPath;
 	{
-		FElysiumScheduleStep S = Step(0x7b);
+		FElysiumScheduleStep S = Step(*F.Npc, 0x7b);
 		Reset(N);
 		N.RunTaskSlot444(&S);
 		TestFalse(TEXT("0x102ab033: the hunt path's -1 node returns without a fail"),
 			N.Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	}
-	FElysiumScheduleStep S = Step(0x7a);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x7a);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102ab018: no m_sppPatrolPath fails 0x1d"), Failed(N, 0x1d));
@@ -735,7 +740,7 @@ bool FElysiumNpcKernelRunTask19TroikaKnockbackAndJumpTest::RunTest(const FString
 	// the `FL_ONGROUND` flag arm.
 	for (const int32 Id : { 0x94, 0x13a })
 	{
-		FElysiumScheduleStep S = Step(Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.NavSetType(1);
 		N.Flags |= 1;
@@ -759,7 +764,7 @@ bool FElysiumNpcKernelRunTask19TroikaFinishingMoveTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x99);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x99);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.FinishingMoveBoneTrackLastTime = -5.0;
@@ -771,7 +776,7 @@ bool FElysiumNpcKernelRunTask19TroikaFinishingMoveTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102ac496 completes"), Completed(N));
 	for (const int32 Id : { 0x9c, 0x9d, 0x9e })
 	{
-		S = Step(Id);
+		S = Step(*F.Npc, Id);
 		Reset(N);
 		FinishActivity(N);
 		N.RunTaskSlot444(&S);
@@ -800,7 +805,7 @@ bool FElysiumNpcKernelRunTask19TroikaFlagArmsTest::RunTest(const FString&)
 	};
 	for (const FRow& Row : Rows)
 	{
-		FElysiumScheduleStep S = Step(Row.Id);
+		FElysiumScheduleStep S = Step(*F.Npc, Row.Id);
 		Reset(N);
 		FinishActivity(N);
 		N.IdealActivityNumber = Row.Ideal;
@@ -811,7 +816,7 @@ bool FElysiumNpcKernelRunTask19TroikaFlagArmsTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("0x%x clears its bits"), Row.Id),
 			(N.NpcFlags.RawWord1() & Row.Cleared) == 0u);
 	}
-	FElysiumScheduleStep S = Step(0x107);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x107);
 	Reset(N);
 	FinishActivity(N);
 	N.IdealActivityNumber = 0xf1d;
@@ -831,14 +836,14 @@ bool FElysiumNpcKernelRunTask19TroikaCircleArmsTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x11b);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x11b);
 	Reset(N);
 	N.ScheduleHost.DesiredMoveYaw = 30.f;
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102ab931 completes"), Completed(N));
 	TestEqual(TEXT("0x102abda9 m_flDesiredMoveYaw = 0"), N.ScheduleHost.DesiredMoveYaw, 0.f);
-	S = Step(0x122);
+	S = Step(*F.Npc, 0x122);
 	Reset(N);
 	FinishActivity(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() + 5.0;
@@ -857,13 +862,13 @@ bool FElysiumNpcKernelRunTask19TroikaDialogTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0xb9);
+	FElysiumScheduleStep S = Step(*F.Npc, 0xb9);
 	Reset(N);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::HearPlayer);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x102ab313 completes"), Completed(N));
 	TestFalse(TEXT("0x102ab31c ClearCondition(0x6f)"), N.Cognition.Conditions.Has(EElysiumNpcCond::HearPlayer));
-	S = Step(0xba);
+	S = Step(*F.Npc, 0xba);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
@@ -885,7 +890,7 @@ bool FElysiumNpcKernelRunTask19AnimalTest::RunTest(const FString&)
 	TFixture<FElysiumNpc> F(TEXT("CNPC_VRat"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x89, 2.f);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x89, 2.f);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.LastAttackTime = F.Now() - 1.0;
@@ -894,7 +899,7 @@ bool FElysiumNpcKernelRunTask19AnimalTest::RunTest(const FString&)
 	N.LastAttackTime = F.Now() - 3.0;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("three seconds completes"), Completed(N));
-	S = Step(0x8b);
+	S = Step(*F.Npc, 0x8b);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
@@ -911,7 +916,7 @@ bool FElysiumNpcKernelRunTask19DogTest::RunTest(const FString&)
 	TFixture<FElysiumNpcDog> F(TEXT("CNPC_VDog"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcDog& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x02);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x02);
 	Reset(N);
 	N.SetState(3);
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
@@ -932,13 +937,13 @@ bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 	TFixture<FElysiumNpcZombie> F(TEXT("CNPC_VZombie"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcZombie& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14e);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14e);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x103e0204 completes"), Completed(N));
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (N.MiscFlags & 0x80000u) != 0);
-	S = Step(0x151);
+	S = Step(*F.Npc, 0x151);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
@@ -957,15 +962,15 @@ bool FElysiumNpcKernelRunTask19HumanTest::RunTest(const FString&)
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcHuman& N = *F.Npc;
 	ElysiumNpcEnemy::SetEnemy(N, FElysiumEntityHandle::Invalid());
-	FElysiumScheduleStep S = Step(0x8d);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x8d);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("no enemy completes"), Completed(N));
-	S = Step(0x8b);
+	S = Step(*F.Npc, 0x8b);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x10384b55: no enemy keeps the swing running"), Completed(N));
-	S = Step(0x8e);
+	S = Step(*F.Npc, 0x8e);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.NextAttackTime = F.Now() + 5.0;
@@ -986,11 +991,11 @@ bool FElysiumNpcKernelRunTask19GargoyleTest::RunTest(const FString&)
 	TFixture<FElysiumNpcGargoyle> F(TEXT("CNPC_VGargoyle"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcGargoyle& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x31);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x31);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1037943e completes"), Completed(N));
-	S = Step(0x12f);
+	S = Step(*F.Npc, 0x12f);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.RunTaskSlot444(&S);
@@ -1010,7 +1015,7 @@ bool FElysiumNpcKernelRunTask19GhoulCroucherTest::RunTest(const FString&)
 	TFixture<FElysiumNpcGhoulCroucher> F(TEXT("CNPC_VGhoulCroucher"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcGhoulCroucher& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14b);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14b);
 	Reset(N);
 	N.bSequenceFinished = false;
 	N.bUnawareExited = false;
@@ -1032,7 +1037,7 @@ bool FElysiumNpcKernelRunTask19TaxiDriverTest::RunTest(const FString&)
 	TFixture<FElysiumNpcTaxiDriver> F(TEXT("CNPC_VTaxiDriver"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcTaxiDriver& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0xb9);
+	FElysiumScheduleStep S = Step(*F.Npc, 0xb9);
 	Reset(N);
 	N.bTaxiFirstThink = true;
 	N.RunTaskSlot444(&S);
@@ -1051,12 +1056,12 @@ bool FElysiumNpcKernelRunTask19VampireBossAndSheriffTest::RunTest(const FString&
 	TFixture<FElysiumNpcSheriffMan> F(TEXT("CNPC_VSheriffMan"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcSheriffMan& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x154);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x154);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x154 is swallowed"), Completed(N));
-	S = Step(0x8e);
+	S = Step(*F.Npc, 0x8e);
 	Reset(N);
 	FinishActivity(N);
 	N.FElysiumNpcVampireBoss::RunTaskSlot444(&S);
@@ -1073,13 +1078,13 @@ bool FElysiumNpcKernelRunTask19AndreiBloodTest::RunTest(const FString&)
 	TFixture<FElysiumNpcAndreiBlood> F(TEXT("CNPC_VAndreiBlood"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcAndreiBlood& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x154);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x154);
 	Reset(N);
 	FinishActivity(N);
 	N.bAndreiForceTeleport = false;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1035d9e8 m_bForceTeleport = 1"), N.bAndreiForceTeleport);
-	S = Step(0x156);
+	S = Step(*F.Npc, 0x156);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1035da3b completes"), Completed(N));
@@ -1095,13 +1100,13 @@ bool FElysiumNpcKernelRunTask19AsianVampireTest::RunTest(const FString&)
 	TFixture<FElysiumNpcAsianVampire> F(TEXT("CNPC_VAsianVampire"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcAsianVampire& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x150);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x150);
 	Reset(N);
 	N.bAsianVampirePathBlocked = true;
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x10361369 m_bPathBlocked = 0"), N.bAsianVampirePathBlocked);
 	TestTrue(TEXT("0x10361370 completes"), Completed(N));
-	S = Step(0x151);
+	S = Step(*F.Npc, 0x151);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x151 runs on"), Completed(N));
@@ -1118,7 +1123,7 @@ bool FElysiumNpcKernelRunTask19ChangBrosTest::RunTest(const FString&)
 	TFixture<FElysiumNpcChangBros> F(TEXT("CNPC_VChangBros"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcChangBros& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x156);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x156);
 	Reset(N);
 	N.ChangEnergyChargeTime = F.Now() + 5.0;
 	N.RunTaskSlot444(&S);
@@ -1126,7 +1131,7 @@ bool FElysiumNpcKernelRunTask19ChangBrosTest::RunTest(const FString&)
 	N.ChangEnergyChargeTime = F.Now();
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1036c081 completes"), Completed(N));
-	S = Step(0x157);
+	S = Step(*F.Npc, 0x157);
 	Reset(N);
 	N.bChangEnergyBallSpawned = false;
 	N.SequenceCycle = 0.6f;
@@ -1145,12 +1150,12 @@ bool FElysiumNpcKernelRunTask19SabbatLeaderTest::RunTest(const FString&)
 	TFixture<FElysiumNpcSabbatLeader> F(TEXT("CNPC_VSabbatLeader"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcSabbatLeader& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x15e);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x15e);
 	Reset(N);
 	N.SabbatLeaderWarningFinishTime = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x103a9079 completes"), Completed(N));
-	S = Step(0x162);
+	S = Step(*F.Npc, 0x162);
 	Reset(N);
 	N.SabbatLeaderTaskStartTime = F.Now() - 0.5;
 	N.RunTaskSlot444(&S);
@@ -1160,7 +1165,7 @@ bool FElysiumNpcKernelRunTask19SabbatLeaderTest::RunTest(const FString&)
 	N.SabbatLeaderTaskStartTime = F.Now() - 1.5;
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("past one second completes"), Completed(N));
-	S = Step(0x15d);
+	S = Step(*F.Npc, 0x15d);
 	Reset(N);
 	FinishActivity(N);
 	N.EffectsWord |= 0x20u;
@@ -1180,7 +1185,7 @@ bool FElysiumNpcKernelRunTask19ManBatTest::RunTest(const FString&)
 	TFixture<FElysiumNpcManBat> F(TEXT("CNPC_VManBat"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcManBat& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x163);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x163);
 	Reset(N);
 	N.ManBatCoastTimer = F.Now() + 3.0;
 	N.RunTaskSlot444(&S);
@@ -1188,12 +1193,12 @@ bool FElysiumNpcKernelRunTask19ManBatTest::RunTest(const FString&)
 	N.ManBatCoastTimer = F.Now();
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1038dc74 completes"), Completed(N));
-	S = Step(0x159);
+	S = Step(*F.Npc, 0x159);
 	Reset(N);
 	N.ManBatFlyByTarget = FElysiumEntityHandle::Invalid();
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1038d6e8 TaskFail(1)"), Failed(N, 1));
-	S = Step(0x49);
+	S = Step(*F.Npc, 0x49);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x1038dc89 the base default"), Completed(N));
@@ -1209,11 +1214,11 @@ bool FElysiumNpcKernelRunTask19MingXiaoTest::RunTest(const FString&)
 	TFixture<FElysiumNpcMingXiao> F(TEXT("CNPC_VMingXiao"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcMingXiao& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14b);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14b);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x10393b1d"), N.MingXiaoTask14bCalls, 1);
-	S = Step(0x158);
+	S = Step(*F.Npc, 0x158);
 	Reset(N);
 	FinishActivity(N);
 	N.MingXiaoThrowableObjectMode = 1;
@@ -1233,14 +1238,14 @@ bool FElysiumNpcKernelRunTask19MingXiaoTentacleTest::RunTest(const FString&)
 	TFixture<FElysiumNpcMingXiaoTentacle> F(TEXT("CNPC_VMingXiaoTentacle"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcMingXiaoTentacle& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14c);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14c);
 	Reset(N);
 	if (N.NumFlexControllers() <= 1)
 	{
 		N.RunTaskSlot444(&S);
 		TestTrue(TEXT("0x1039da11 completes"), Completed(N));
 	}
-	S = Step(0x154);
+	S = Step(*F.Npc, 0x154);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
@@ -1257,16 +1262,16 @@ bool FElysiumNpcKernelRunTask19TzimisceTest::RunTest(const FString&)
 	TFixture<FElysiumNpcTzimisce> F(TEXT("CNPC_VTzimisce"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcTzimisce& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0xc1);
+	FElysiumScheduleStep S = Step(*F.Npc, 0xc1);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x103bb2ec completes"), Completed(N));
-	S = Step(0xc8);
+	S = Step(*F.Npc, 0xc8);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x103bb36a completes facing"), Completed(N));
-	S = Step(0xa7);
+	S = Step(*F.Npc, 0xa7);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0xa7 only aims"), Completed(N));
@@ -1282,7 +1287,7 @@ bool FElysiumNpcKernelRunTask19TzimisceRunnerTest::RunTest(const FString&)
 	TFixture<FElysiumNpcTzimisceRunner> F(TEXT("CNPC_VTzimisceRunner"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcTzimisceRunner& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x123);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x123);
 	Reset(N);
 	N.ScheduleHost.DesiredMoveYaw = 12.f;
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
@@ -1302,16 +1307,16 @@ bool FElysiumNpcKernelRunTask19WerewolfTest::RunTest(const FString&)
 	TFixture<FElysiumNpcWerewolf> F(TEXT("CNPC_VWerewolf"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcWerewolf& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14a);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14a);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x14a completes"), Completed(N));
-	S = Step(0x14b);
+	S = Step(*F.Npc, 0x14b);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x103ce078 TaskFail(4)"), Failed(N, 4));
-	S = Step(0x15f);
+	S = Step(*F.Npc, 0x15f);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
@@ -1329,13 +1334,13 @@ bool FElysiumNpcKernelRunTask19BachTest::RunTest(const FString&)
 	TFixture<FElysiumNpcBach> F(TEXT("CNPC_VBach"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcBach& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x14a);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x14a);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("0x103652d0: 0x14a runs on"), Completed(N));
 	if (N.ActiveWeaponEntity() == nullptr)
 	{
-		S = Step(0xb0);
+		S = Step(*F.Npc, 0xb0);
 		Reset(N);
 		N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
 		N.RunTaskSlot444(&S);
@@ -1353,16 +1358,16 @@ bool FElysiumNpcKernelRunTask19HengeyokaiTest::RunTest(const FString&)
 	TFixture<FElysiumNpcHengeyokai> F(TEXT("CNPC_VHengeyokai"));
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpcHengeyokai& N = *F.Npc;
-	FElysiumScheduleStep S = Step(0x134);
+	FElysiumScheduleStep S = Step(*F.Npc, 0x134);
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0x10380dcc completes"), Completed(N));
-	S = Step(0x14b);
+	S = Step(*F.Npc, 0x14b);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x10380e90"), N.HengeyokaiTask14bCalls, 1);
-	S = Step(0xc8);
+	S = Step(*F.Npc, 0xc8);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestTrue(TEXT("0xc8 completes facing"), Completed(N));
