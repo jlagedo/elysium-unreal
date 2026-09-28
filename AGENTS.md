@@ -40,7 +40,6 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 
 ## Editing files
 
-- Edit/Write for ordinary changes, C++ included.
 - `ast-grep` (structural search/rewrite) and `sd` (regex replace) are installed if useful.
 
 ## Project rules
