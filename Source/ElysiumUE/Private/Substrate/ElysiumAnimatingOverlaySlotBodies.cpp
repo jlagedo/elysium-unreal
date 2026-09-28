@@ -314,12 +314,16 @@ int32 FElysiumAnimatingOverlay::FindLayerByOwner(int32 Activity)
 
 // --- Moved from `ElysiumNpcBaseFacing.cpp` (story 5 step 6) ---
 
-int32 FElysiumAnimatingOverlay::SelectWeightedSequenceForActivity(int32) const
+int32 FElysiumAnimatingOverlay::SelectWeightedSequenceForActivity(int32 Activity) const
 {
 	// `CBaseAnimating::SelectWeightedSequence(Activity, -1)` on the base line, `0x10295460` on the
-	// Troika line. **SEAM**: this substrate resolves activities by NAME and stands no sequence
-	// index at the kernel tier, so nothing is authored and the ladder walks to its `ACT_IDLE` tail —
-	// retail's own answer for a body with no turn clips.
+	// Troika line. The sequence bridge (story 8 wave 2, a named modernization): a Troika body's
+	// resolver numbers the clip it answers for the activity; any other body stands no sequence
+	// table and answers retail's own -1.
+	if (const FElysiumNpc* Npc = AsNpc())
+	{
+		return const_cast<FElysiumNpc*>(Npc)->SequenceForActivity(Activity);
+	}
 	return -1;
 }
 

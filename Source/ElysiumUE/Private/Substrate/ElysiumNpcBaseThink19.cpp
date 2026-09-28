@@ -124,7 +124,7 @@ void FElysiumNpcBase::NPCThink()
 		RunAI(false);                                                       // 0x1026cc2a slot 432
 	}
 	PostRun();                                                              // 0x1026cc32 0x1026c7c0
-	// `PerformMovement(PostRun's interval, 0)`: the interval source `0x1026c540` is a seam in this
-	// runtime (`PostRun` returns void and dispatches 0.0), so 0.0 is passed.
-	PerformMovement(0.f, 0);                                                // 0x1026cc43 0x1026c120
+	// `PerformMovement(RunAnimation(), 0)`: `0x1026c540` advances the sequence clock and re-picks a
+	// finished idle; its interval is this runtime's 0.0.
+	PerformMovement(RunAnimation(), 0);                                     // 0x1026cc3b 0x1026c540 / 0x1026cc43 0x1026c120
 }

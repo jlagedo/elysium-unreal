@@ -992,6 +992,11 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		World.Tick(T);
 		T = 1.2; World.Tick(T);
 		TestEqual(TEXT("the scene is running"), CounterValue(Count), 1001.f);
+		// Story 8 wave 2 (corrected to retail): the actor's first think is `NPCInitThink`
+		// (`0x10273aa0`), which has no `m_bDisableAI` test and whose `StartNPC` re-arms the think; the
+		// NEXT think is `NPCThink`, whose `m_bDisableAI` return (`0x10292e6c`) leaves `m_flNextThink`
+		// at the engine's pre-think `TICK_NEVER_THINK` — the park.
+		T = 1.25; World.Tick(T);
 		TestTrue(TEXT("position_start parked the actor's think"),
 			Actor != nullptr && Actor->NextThink == ELYSIUM_NEVER_THINK);
 

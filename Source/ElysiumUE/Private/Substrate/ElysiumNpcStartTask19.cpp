@@ -22,6 +22,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumNpcFlags.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumRetailActivities.h"
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumInterestingPlace.h"
@@ -867,9 +868,12 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 	case StartTask19A::TaskSetActivity:
 	{
 		// Arm `0x102a1c0f` (index 0x0b). `act = (int)flTaskData` (`0x102a1c12 __ftol`). The port's
-		// activity operand is the corpus's INTERNED id (`FElysiumSymbolRegistry`, not retail's
-		// `Activity` number), so retail's `act == 0` test is the name `ACT_RESET` (Activity 0) or no
-		// name at all, and `SetIdealActivity(act)` is the port's name-keyed activity request.
+		// activity operand is the corpus's INTERNED id (`FElysiumSymbolRegistry`), so the operand's
+		// NAME is translated to retail's `Activity` value (`ActivityList_IndexForName`, the parse
+		// retail does at schedule load). Retail's `act == 0` test is `ACT_RESET` or no name at all.
+		// A name retail's shared enum does not carry was a PRIVATE activity in retail (registered at
+		// `g_HighestActivity + 1` by the loader): no model authors a sequence for it, which is what
+		// -1 resolves to through the ladder.
 		const FString* ActivityName =
 			FElysiumScheduleCorpus::Get().Activities().NameOf(static_cast<int32>(TaskData));
 		if (ActivityName == nullptr || ActivityName->IsEmpty()
@@ -879,7 +883,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 		}
 		else
 		{
-			(void)PlayActivity(*ActivityName);                                // 0x102a1c1e SetIdealActivity
+			SetIdealActivity(ElysiumRetailActivities::ValueOf(*ActivityName)); // 0x102a1c1e SetIdealActivity
 		}
 		BaseScheduleHost.WaitFinished = Now + StartTask19A::SetActivityWatchdogSeconds;                     // 0x102a1c38..41 +0x5db4
 		if (NpcStateRetail() == 4)                                            // 0x102a1c47 slot 464, CMP 4 / 0x102a1c50

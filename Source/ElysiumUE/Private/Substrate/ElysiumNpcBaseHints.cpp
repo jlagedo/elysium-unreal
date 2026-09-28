@@ -3,6 +3,7 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumRetailActivities.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
@@ -142,9 +143,9 @@ FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWo
 
 int32 FElysiumNpcBase::ActivityIdForName(const FString& ActivityName) const
 {
-	// SEAM for `ActivityNameToId` (`0x10412520`). -1 is retail's own "not in the table" answer.
-	(void)ActivityName;
-	return INDEX_NONE;
+	// `ActivityList_IndexForName` (`0x10412520`) over retail's registered enum, case-folded; -1 is
+	// retail's own "not in the table" answer.
+	return ElysiumRetailActivities::ValueOf(ActivityName);
 }
 
 void FElysiumNpcBase::SetMotorHintYaw(float Yaw)

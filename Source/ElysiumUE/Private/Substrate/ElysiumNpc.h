@@ -71,6 +71,32 @@ public:
 
 	int32 ScheduleActivityCycle = 0;
 
+	// --- The sequence bridge (story 8 wave 2, L13) ---
+	// A named modernization: retail's studio sequence table (an index per `.mdl` sequence, an
+	// activity and a weight each) is swapped for this runtime's name-keyed clip resolver. The kernel
+	// still deals in sequence NUMBERS; this table gives every clip the resolver answered for this body
+	// a stable number, so `m_nSequence` / `m_nIdealSequence` compare and `ResetSequence` plays. Row 0
+	// is retail's floor sequence ("even ACT_DISPOSITION missed") and plays nothing. Session state:
+	// a restored body re-resolves its rows on demand.
+	struct FSequenceRow
+	{
+		FString OwnerStem;    // empty: a clip of this body's own model (the stance set)
+		FString Label;
+		bool bLoops = false;
+		float Seconds = 0.f;  // the first-pass length the clip player last reported; 0 = not yet played
+	};
+	TArray<FSequenceRow> SequenceRows;
+
+	/** The row number for a clip, added on first sight. */
+	int32 SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops);
+
+	/** `SelectWeightedSequence(activity)` through the resolver: the retail activity NUMBER is named
+	 *  by the corpus's activity namespace, resolved for this body, and numbered. -1 when the body
+	 *  authors no clip for it (retail's own answer). */
+	int32 SequenceForActivity(int32 Activity);
+
+	virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops) override;
+
 	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
 	// program it started. Session state, not save state — the reasoning is on the struct.

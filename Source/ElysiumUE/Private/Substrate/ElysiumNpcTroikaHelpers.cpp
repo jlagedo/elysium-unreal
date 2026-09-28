@@ -927,10 +927,10 @@ int32 FElysiumNpc::Slot611()
 	// are the same four words. So this slot CALLS it rather than standing a second selector beside
 	// it, and the decision, the rolls and the latch writes are the landed ones.
 	//
-	// What cannot be answered is the RETURN: retail answers a studio sequence index and this runtime
-	// answers clip NAMES. Retail's own fallback for an unresolved sequence is `m_nSequence`
-	// (`+0x6f0`, family **Anim**'s `SequenceNumber`), and that is what lands — it is retail's value
-	// for exactly the case this runtime is always in.
+	// The RETURN is the chosen clip's number in the sequence bridge (`SequenceRows`): retail answers
+	// a studio sequence index, this runtime a clip name, and the bridge numbers the name. Retail's
+	// own fallback for an unresolved sequence is `m_nSequence` (`+0x6f0`, family **Anim**'s
+	// `SequenceNumber`): `return seq == -1 ? m_nSequence : seq`.
 	if (!EnsureStanceResolved())
 	{
 		// No stance set on this body at all: retail's table lookup would have taken the default row.
@@ -939,9 +939,13 @@ int32 FElysiumNpc::Slot611()
 		return SequenceNumber;
 	}
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	ElysiumStance::Select(StanceClips, StanceTuning, Stance, IsTalking(Now), Now,
-		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
-	return SequenceNumber;
+	const FElysiumStanceChoice Choice = ElysiumStance::Select(StanceClips, StanceTuning, Stance,
+		IsTalking(Now), Now, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
+	if (!Choice.IsSet())
+	{
+		return SequenceNumber;
+	}
+	return SequenceRowFor(FString(), Choice.Clip, Choice.bLoop);
 }
 
 // -------------------------------------------------------------------------------------------------

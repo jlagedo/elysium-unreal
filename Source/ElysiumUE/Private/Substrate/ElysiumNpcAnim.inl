@@ -130,9 +130,7 @@ bool OwnerIsThePlayer() const;
 int32 IdleSequenceGate() const;
 
 // `0x10295a80`, the Troika disposition resolver `ResolveActivityToSequence` hands ACT_DISPOSITION
-// to when `m_pBaseNPCTroika` (+0x98) is set — which it always is on a spawned NPC. **SEAM**: the
-// stance machine that answers it is `ElysiumStance::Select` and it answers by CLIP NAME, so there
-// is no sequence index to give back; it leaves the sequence at -1 and the ladder falls through to
-// retail's own `"%s has no sequence for act ACT_DISPOSITION"` arm.
+// to when `m_pBaseNPCTroika` (+0x98) is set — which it always is on a spawned NPC: `*seq = slot 611`
+// (`0x102c12a0`, the stance machine), whose clip the sequence bridge numbers.
 void ResolveDispositionActivity(int32& OutSequence, int32& OutTranslatedActivity) const;
 

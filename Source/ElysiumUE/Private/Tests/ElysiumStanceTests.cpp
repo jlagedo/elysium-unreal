@@ -318,8 +318,12 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		World.SpawnPlayer();
 		World.Activate(0.0);
 
+		// Story 8 wave 2 (L13): the stance clip is now the retail loop's — `NPCInit` finds no ACT_IDLE
+		// sequence, the idle program's `TASK_SPECIAL_IDLE_ACTIVITY` (Troika `RunTask` `0x102ab369`)
+		// restarts `ACT_DISPOSITION` once the floor sequence has finished, and `MaintainActivity`
+		// commits it through slot 611 (`0x10295a80` -> `0x102c12a0`). That is the fifth think, 0.4 s.
 		double Now = 0.0;
-		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+		for (int32 i = 0; i < 5; ++i) { World.Tick(Now); Now += 0.1; }
 
 		TestTrue(TEXT("the table is resolved through the disposition row, not a raw name"),
 			Services.Saw(TEXT("ResolveDisposition Neutral")));
@@ -351,18 +355,19 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 			}
 		}
 
-		// Past the 3 s change floor with an 80 % roll, the stance has to move — and a move plays the
-		// authored transition rather than snapping to the destination idle.
+		// Past the 3 s change floor with an 80 % roll, the stance has to move. Corrected to retail
+		// (story 8 wave 2): the idle task's restart resolves `ACT_DISPOSITION` TWICE — at
+		// `SetIdealActivity` (`0x10272650`) and again at `MaintainActivity`'s re-resolve
+		// (`0x102727d0`, ahead of `AdvanceToIdealActivity`) — and slot 611 rolls on each. The first
+		// roll's change answers the transition and raises `m_bTransition`; the second settles on the
+		// DESTINATION idle and clears it (`0x102c12a0`), and the second is what commits. So the
+		// stance moves by a snap onto the new idle; the authored transition clip is not what this
+		// path plays. (The port's retired idle executor asked once per clip and played it.)
 		for (int32 i = 0; i < 400; ++i) { World.Tick(Now); Now += 0.1; }
-		if (!Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Trans_1_2 loop=0")))
-		{
-			for (const FString& Call : Services.Calls)
-				if (Call.StartsWith(TEXT("PlayNpcClip smiling_jack Stance_"))) AddInfo(Call);
-		}
-		TestTrue(TEXT("the stance eventually changes, through its authored transition"),
-			Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Trans_1_2 loop=0")));
-		TestTrue(TEXT("and settles onto the destination idle after it"),
+		TestTrue(TEXT("the stance eventually changes, onto the destination idle"),
 			Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Idle_2 loop=1")));
+		TestFalse(TEXT("...with no transition clip: the second resolve supersedes the first roll's"),
+			Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Trans_1_2 loop=0")));
 	}
 
 	// --- A body with no stance set is not left unscheduled -----------------------------------

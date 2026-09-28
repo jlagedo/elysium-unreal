@@ -44,16 +44,76 @@ int32 FElysiumNpcBase::SequenceActivityOf(int32 Sequence) const
 
 void FElysiumNpcBase::ResetSequenceInfo()
 {
-	// `CBaseAnimating::ResetSequenceInfo` (`0x10090950`). **SEAM**: this runtime's clip funnel owns
-	// the playback rate and the clip length, so there is nothing to re-read.
+	// `CBaseAnimating::ResetSequenceInfo` (`0x10090950`): `m_nSequence == -1` becomes 0, the
+	// finished byte drops, `m_bSequenceLoops (+0x65d) = GetSequenceFlags(seq) & 1`, the playback
+	// rate is 1.0. The yaw/ground speeds and the playback rate are the clip player's in this runtime;
+	// the sequence's own loop bit and its length come back from the play hook (the sequence bridge).
+	if (SequenceNumber == INDEX_NONE)
+	{
+		SequenceNumber = 0;
+	}
+	bSequenceFinished = false;
+	SequenceFinishesAt = -1.0;
+	float Seconds = 0.f;
+	bool bLoops = false;
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	if (PlaySequenceClip(SequenceNumber, Seconds, bLoops))
+	{
+		bSequenceLoopedOnce = bLoops;                                   // +0x65d m_bSequenceLoops
+		SequenceFinishesAt = Seconds > 0.f ? Now + static_cast<double>(Seconds) : Now;
+	}
+	else if (SequenceNumber == 0)
+	{
+		// Retail's floor sequence plays the model's sequence 0 and finishes; this runtime's row 0
+		// plays nothing, so it has finished at once (the next `RunAnimation` raises the byte). A
+		// numbered clip the body could not play (another owner holds it) keeps the clock unarmed.
+		bSequenceLoopedOnce = false;
+		SequenceFinishesAt = Now;
+	}
 }
 
 void FElysiumNpcBase::CommitForcedSequence(int32 Sequence)
 {
-	// `0x10260a50`, the `SetSequence`-plus-bookkeeping helper
-	// `ForcePreTranslatedSequenceAndActivity` hands its forced sequence to. **SEAM**: the number is
-	// stored on the kernel's own `m_nSequence` word and nothing downstream reads it yet.
+	// `ResetSequence` `0x10260a50`: the debug line (`+0x224 < 0` with a Troika self-cast) is absent;
+	// `m_nSequence = seq`, then `ResetSequenceInfo` (`0x10090950`), which is where this runtime's
+	// sequence bridge starts the clip.
 	SequenceNumber = Sequence;
+	ResetSequenceInfo();
+}
+
+float FElysiumNpcBase::RunAnimation()
+{
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	// `StudioFrameAdvance(0)` (slot 250, `0x1026c55f`): the committed clip's first pass ends at
+	// `SequenceFinishesAt`; reaching it raises `m_bSequenceFinished`, which stays up until the next
+	// `ResetSequence` (retail's wrap test raises it for a looping sequence too).
+	if (SequenceFinishesAt >= 0.0 && Now >= SequenceFinishesAt)
+	{
+		bSequenceFinished = true;
+		SequenceFinishesAt = -1.0;
+	}
+	// `DAT_1092053c & 2` with `0x102ee6a0(navigator)` false zeroes the interval: the interval is
+	// already this runtime's 0.0.
+	const float Interval = 0.f;
+	// Slot 513 `CapabilitiesGet` bit `0x20000000` (`CAP_AIM_GUN`) -> slot 538 `AimGun`.
+	if ((static_cast<uint32>(CapabilitiesGet()) & 0x20000000u) != 0)          // 0x1026c5a6 / 0x1026c5ae
+	{
+		AimGun();                                                          // 0x1026c5b8 slot 538
+	}
+	// The idle re-pick: not SCRIPT (4) or DEAD (7), `m_Activity == ACT_IDLE` (1), slot 251.
+	const int32 State = NpcStateRetail();
+	if (State != 4 && State != 7 && ActivityNumber == 1                      // 0x1026c5bd..0x1026c5d0
+		&& IsActivityFinished())                                           // 0x1026c5d4 slot 251
+	{
+		const int32 Sequence = !bSequenceLoopedOnce                         // 0x1026c5e0 +0x65d
+			? SelectHeaviestSequence(TranslatedActivity, INDEX_NONE)        // 0x1026c5f2
+			: SelectWeightedSequenceForActivity(TranslatedActivity);        // 0x1026c602
+		if (Sequence != INDEX_NONE)                                        // 0x1026c609
+		{
+			CommitForcedSequence(Sequence);                                // 0x1026c611 0x10260a50
+		}
+	}
+	return Interval;
 }
 
 int32 FElysiumNpcBase::GrowSceneEventCapacity(int32 Current, int32 GrowSize, int32 Needed)

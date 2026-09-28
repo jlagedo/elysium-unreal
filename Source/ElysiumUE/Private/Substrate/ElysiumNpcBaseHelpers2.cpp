@@ -95,12 +95,11 @@ uint32 FElysiumNpcBase::StandoffOwnerCapabilityWord() const
 
 int32 FElysiumNpcBase::SelectHeaviestSequence(int32 Activity, int32 CurrentSequence) const
 {
-	// `CBaseAnimating::SelectHeaviestSequence(owner, 8, -1)`. **SEAM**: the animating tier publishes
-	// no weighted sequence set to the kernel (family **Facing** records the same gap for
-	// `SelectWeightedSequence`). `INDEX_NONE`, which is retail's `< 0` refusal.
-	(void)Activity;
+	// `CBaseAnimating::SelectHeaviestSequence(activity, -1)`. The sequence bridge (story 8 wave 2):
+	// this runtime's resolver has no weights, so the heaviest sequence is the resolver's own first
+	// (primary) answer for the activity, which is also what the weighted pick answers here.
 	(void)CurrentSequence;
-	return INDEX_NONE;
+	return SelectWeightedSequenceForActivity(Activity);
 }
 
 int32 FElysiumNpcBase::DisciplineCastCounter() const

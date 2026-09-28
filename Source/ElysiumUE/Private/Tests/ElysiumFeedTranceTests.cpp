@@ -315,14 +315,15 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 		F.Guard->NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
 	TestFalse(TEXT("the unresolved activity does not fake a body presentation"),
 		F.Services.Saw(TEXT("PlayNpcClip")));
-	TestTrue(TEXT("TASK_SET_ACTIVITY records the resolver miss without failing"),
-		F.Guard->GetMind().Trace().ContainsByPredicate([](const FString& Row)
-		{
-			return Row.Contains(TEXT("TASK_SET_ACTIVITY ACT_DISPOSITION_MESMERIZED unresolved"));
-		}));
 	TestEqual(TEXT("OnIncapacitatedStart fired once"), F.Counter(TEXT("incap_start")), 1.0f);
-	TestTrue(TEXT("the unresolved activity is running, not routed to a fail schedule"),
-		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex == 4);
+	// Corrected to retail (story 8 wave 2): `TASK_SET_ACTIVITY`'s start arm (`0x102a1c0f`) is
+	// `SetIdealActivity(act)`; a body with no sequence for ACT_DISPOSITION_MESMERIZED resolves its
+	// ideal through the ladder's ACT_DISPOSITION retry to slot 611's `m_nSequence` fallback, so the
+	// run arm's `m_nSequence == m_nIdealSequence` (`0x102aad2d`) completes it in the same maintain
+	// pass — not a failure, and not the watchdog. (The port's retired arm wrote an "unresolved" trace
+	// row and waited out the second.)
+	TestTrue(TEXT("the unresolved activity completes into the authored wait, not a fail schedule"),
+		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex == 5);
 
 	Now += 1.0;
 	F.Step(Now);

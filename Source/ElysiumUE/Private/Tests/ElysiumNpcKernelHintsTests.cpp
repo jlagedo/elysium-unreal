@@ -822,8 +822,12 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	}
 
 	// The remaining seams, each asked once so a future implementer sees the call site in a trace.
-	TestEqual(TEXT("ActivityIdForName answers retail's own -1"),
-		Npc->ActivityIdForName(TEXT("ACT_IDLE")), int32(INDEX_NONE));
+	// `ActivityList_IndexForName` (`0x10412520`) is real since story 8 wave 2: retail's enum
+	// (`0x104126e0`'s first registration is ACT_IDLE = 1), case-folded, -1 for a name it lacks.
+	TestEqual(TEXT("ActivityIdForName: ACT_IDLE is 1"), Npc->ActivityIdForName(TEXT("ACT_IDLE")), 1);
+	TestEqual(TEXT("...case-folded (__strcmpi)"), Npc->ActivityIdForName(TEXT("act_idle")), 1);
+	TestEqual(TEXT("...and retail's own -1 for a name it never registered"),
+		Npc->ActivityIdForName(TEXT("ACT_NOT_A_REGISTERED_NAME")), int32(INDEX_NONE));
 	TestFalse(TEXT("IsHintSequenceFinished answers false"), Npc->IsHintSequenceFinished());
 	TestFalse(TEXT("DoesHintSequenceLoop answers false"), Npc->DoesHintSequenceLoop());
 	TestNull(TEXT("InterestingPlaceMarkerOccupant answers nothing"),

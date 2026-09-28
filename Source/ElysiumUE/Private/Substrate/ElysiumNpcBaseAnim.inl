@@ -8,6 +8,32 @@
 // the animating tier advances a sequence.
 bool bSequenceFinished = false;
 
+// The sequence clock (story 8 wave 2, L13). Retail's `StudioFrameAdvance` (slot 250) advances
+// `m_flCycle` and raises `m_bSequenceFinished` when the cycle wraps or reaches 1; this runtime's
+// playback belongs to the clip player, so the kernel keeps only WHEN the committed clip ends — the
+// curtime its first pass completes, or negative for none — and `RunAnimation` raises the byte off it.
+double SequenceFinishesAt = -1.0;
+
+// The sequence bridge's play hook (a named modernization: the studio sequence index is swapped for
+// the name-keyed clip resolver). `ResetSequence` (`0x10260a50` -> `ResetSequenceInfo` `0x10090950`)
+// hands the committed sequence here; a body that can play it answers the clip's first-pass length
+// and its OWN loop bit (`GetSequenceFlags & 1`, `+0x65d`). The base plays nothing.
+virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
+{
+	(void)Sequence;
+	(void)OutSeconds;
+	(void)bOutLoops;
+	return false;
+}
+
+// `CAI_BaseNPC::RunAnimation` `0x1026c540`: `StudioFrameAdvance(0)` (the sequence clock), the
+// `CAP_AIM_GUN` (`0x20000000`) arm into slot 538 `AimGun`, and the idle re-pick — a body outside
+// SCRIPT/DEAD whose `m_Activity` is `ACT_IDLE` (1) and whose sequence has finished picks the next
+// idle sequence of `m_TranslatedActivity` (weighted when the sequence loops, heaviest otherwise)
+// and resets onto it. Answers the frame interval, which stays this runtime's 0.0 (the clip player
+// owns the playback rate): `NPCThink` hands it to `PerformMovement`.
+float RunAnimation();
+
 // +0x06f0 m_nSequence and +0x06f8 m_flCycle — the playing sequence index and its phase.
 // `IsActivityFinished` compares the first against `IdealSequence` (+0x5ccc);
 // `ForcePreTranslatedSequenceAndActivity` and the Troika scene-event arm write both.

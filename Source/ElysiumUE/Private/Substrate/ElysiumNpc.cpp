@@ -781,13 +781,8 @@ void FElysiumNpc::Think()
 	const bool bAiConsoleRefused = World != nullptr && !World->IsAiEnabled();
 	SetBodyHeld(bDisableAi || bAiConsoleRefused);
 	SetBodyAnimationHeld(bDisableAi);
-	// The refused gate's slot 310 `SetActivity(ACT_IDLE)` writes the activity words; this runtime
-	// has no activity-number-to-clip bridge on the body yet, so the idle is also put on the body by
-	// name (the same named visual modernization; nothing the bytecode reads differs).
-	if (bAiConsoleRefused && !bDisableAi)
-	{
-		PlayActivity(TEXT("ACT_IDLE"));
-	}
+	// (The refused gate's slot 310 `SetActivity(ACT_IDLE)` puts the idle on the body through the
+	// sequence bridge; the by-name play that stood in for it is gone.)
 }
 
 FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()

@@ -9,6 +9,8 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumRetailActivities.h"
+#include "ElysiumAnimationIntent.h"
 
 // Story 29c-1, family **Anim** — the animation layers, the flex/expression controllers and the
 // scene-event queue of `order.md` layers 0–9.
@@ -304,11 +306,109 @@ void FElysiumNpc::ResolveDispositionActivity(int32& OutSequence, int32& OutTrans
 {
 	// `0x10295a80`, the Troika resolver `ACT_DISPOSITION` is handed to when `m_pBaseNPCTroika`
 	// (+0x98) is set — which it is on every spawned NPC, so this arm is always the one taken for
-	// 0xf1. **SEAM**: the stance machine that answers it here is `ElysiumStance::Select`, which
-	// answers by CLIP NAME and has no sequence index to give back. The sequence is left at -1 and the
-	// ladder falls through to retail's own `"has no sequence for act ACT_DISPOSITION"` arm.
-	OutSequence = INDEX_NONE;
+	// 0xf1: `*param_2 = slot 611()` (`0x10295a83`), the translated activity untouched by the body.
+	// Slot 611 is the stance machine and it ROLLS on every call, as retail's does — the ladder asks
+	// once at `SetIdealActivity` and again at `SetActivity`, and so does retail's.
+	OutSequence = const_cast<FElysiumNpc*>(this)->Slot611();                 // 0x10295a83 slot 611
 	OutTranslatedActivity = NpcKernelAnimShared::GAnimActDisposition;
+}
+
+// --- The sequence bridge (story 8 wave 2, L13) ------------------------------------------------
+//
+// A named modernization: the studio sequence table is swapped for the name-keyed clip resolver.
+// Every clip the resolver (or the stance machine) answered for this body gets a stable number the
+// kernel's sequence words carry; `ResetSequence` plays it.
+
+int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops)
+{
+	if (SequenceRows.IsEmpty())
+	{
+		SequenceRows.AddDefaulted();   // row 0: retail's floor sequence, which plays nothing here
+	}
+	for (int32 Index = 1; Index < SequenceRows.Num(); ++Index)
+	{
+		const FSequenceRow& Row = SequenceRows[Index];
+		if (Row.OwnerStem == OwnerStem && Row.Label == Label && Row.bLoops == bLoops)
+		{
+			return Index;
+		}
+	}
+	FSequenceRow& Row = SequenceRows.AddDefaulted_GetRef();
+	Row.OwnerStem = OwnerStem;
+	Row.Label = Label;
+	Row.bLoops = bLoops;
+	return SequenceRows.Num() - 1;
+}
+
+int32 FElysiumNpc::SequenceForActivity(int32 Activity)
+{
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return INDEX_NONE;
+	}
+	// `ACT_DISPOSITION` (0xf1): the sequences a retail model tags with it are its stance clips, which
+	// this runtime resolves as the stance set rather than through the activity resolver. The
+	// weighted pick answers the current stance's idle — it does NOT roll the stance machine; only
+	// slot 611 (through `0x10295a80`) does.
+	if (Activity == NpcKernelAnimShared::GAnimActDisposition)
+	{
+		if (!EnsureStanceResolved())
+		{
+			return INDEX_NONE;
+		}
+		const int32 Current = FMath::Clamp(Stance.Current, 0, ElysiumStance::Count - 1);
+		return StanceClips.Idle[Current].IsEmpty() ? INDEX_NONE
+			: SequenceRowFor(FString(), StanceClips.Idle[Current], /*bLoops=*/true);
+	}
+	// The retail activity VALUE, named by retail's own enum (`ActivityList_NameForIndex`
+	// `0x10412550` over `ActivityList_RegisterSharedActivities`' 4,460 registrations).
+	const TCHAR* Name = ElysiumRetailActivities::NameOf(Activity);
+	if (Name == nullptr)
+	{
+		return INDEX_NONE;
+	}
+	FElysiumActivityClipRequest Request;
+	FillActivityClipRequest(Request);
+	Request.Activity = Name;
+	Request.Variant = 0;   // the resolver's primary answer: this runtime carries no sequence weights
+	Request.BodyKind = EElysiumAnimBodyKind::Cast;
+	FElysiumActivityClip Clip;
+	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
+	{
+		return INDEX_NONE;   // the body authors no clip for it: retail's own -1
+	}
+	return SequenceRowFor(Clip.OwnerStem, Clip.Label, Clip.bLooping);
+}
+
+bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
+{
+	if (!SequenceRows.IsValidIndex(Sequence) || Sequence == 0)
+	{
+		return false;   // row 0 and an unknown number play nothing
+	}
+	// The body-claim arbitration (port policy, carried from the retired idle executor): a body a
+	// scene, a scripted beat or a pairing owns is animated by that owner; the kernel's commit does
+	// not overwrite it. Retail's cine holds the NPC in SCRIPT, where `RunAnimation` re-picks nothing.
+	const EElysiumBodyOwner BodyOwner = Mind.Owner();
+	if (BodyOwner != EElysiumBodyOwner::None && BodyOwner != EElysiumBodyOwner::Dialogue)
+	{
+		return false;
+	}
+	FSequenceRow& Row = SequenceRows[Sequence];
+	float Seconds = 0.f;
+	if (!PlayAnimClip(Row.Label, Row.bLoops, &Seconds))
+	{
+		return false;
+	}
+	Row.Seconds = Seconds;
+	if (!Row.OwnerStem.IsEmpty())
+	{
+		ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
+	}
+	OutSeconds = Seconds;
+	bOutLoops = Row.bLoops;
+	return true;
 }
 
 bool FElysiumNpc::ShouldMaintainActivity()
