@@ -6,6 +6,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumOverlayStack.h"
 #include "ElysiumRng.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAnimShared.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -44,32 +45,55 @@ int32 FElysiumNpcBase::SequenceActivityOf(int32 Sequence) const
 
 void FElysiumNpcBase::ResetSequenceInfo()
 {
-	// `CBaseAnimating::ResetSequenceInfo` (`0x10090950`): `m_nSequence == -1` becomes 0, the
-	// finished byte drops, `m_bSequenceLoops (+0x65d) = GetSequenceFlags(seq) & 1`, the playback
-	// rate is 1.0. The yaw/ground speeds and the playback rate are the clip player's in this runtime;
-	// the sequence's own loop bit and its length come back from the play hook (the sequence bridge).
-	if (SequenceNumber == INDEX_NONE)
+	// `CBaseAnimating::ResetSequenceInfo` (`0x10090950`), in its order.
+	if (SequenceNumber == INDEX_NONE)                                  // 0x100909c3
 	{
-		SequenceNumber = 0;
+		SequenceNumber = 0;                                            // 0x100909c8
 	}
-	bSequenceFinished = false;
-	SequenceFinishesAt = -1.0;
+	bGroundSpeedFromIntervalMovement = false;                          // 0x100909d8 +0x5ac
+	// `GetSequenceYawSpeed` -> `m_flYawSpeed` (+0x560) and `GetSequenceGroundSpeed` ->
+	// `m_flGroundSpeed` (+0x654): the clip player's speeds in this runtime (visual-only halves).
 	float Seconds = 0.f;
 	bool bLoops = false;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	if (PlaySequenceClip(SequenceNumber, Seconds, bLoops))
+	// The sequence bridge's play hook (a named modernization) answers the sequence's length and its
+	// `STUDIO_LOOPING` bit.
+	const bool bKnown = PlaySequenceClip(SequenceNumber, Seconds, bLoops);
+	bSequenceLoopedOnce = bLoops;                                      // 0x10090a14 +0x65d, unconditional
+	if (FElysiumNpc* const Troika = AsNpc())
 	{
-		bSequenceLoopedOnce = bLoops;                                   // +0x65d m_bSequenceLoops
+		Troika->SequencePlaybackRate = 1.f;                            // 0x10090a23 m_flPlaybackRate = 1.0
+		// `m_fEffects |= +0x5b0 | 0x300` (`0x10090a1a..0x10090a43`), then `+0x5b0 = 0`
+		// (`0x10090a49`): the pending-effects word has no port member, so only the constant bits land.
+		Troika->EffectsWord |= 0x300u;
+	}
+	bSequenceFinished = false;                                         // 0x10090a37 +0x65c
+	// `+0x658 = 0` (`0x10090a3d`) has no port word; `+0x70c` -> `ResetClientsideFrame`
+	// (`0x10090a53`) is the client's.
+	SequenceFinishesAt = -1.0;
+	if (bKnown)
+	{
 		SequenceFinishesAt = Seconds > 0.f ? Now + static_cast<double>(Seconds) : Now;
 	}
 	else if (SequenceNumber == 0)
 	{
 		// Retail's floor sequence plays the model's sequence 0 and finishes; this runtime's row 0
-		// plays nothing, so it has finished at once (the next `RunAnimation` raises the byte). A
-		// numbered clip the body could not play (another owner holds it) keeps the clock unarmed.
-		bSequenceLoopedOnce = false;
+		// plays nothing, so it has finished at once (the next `RunAnimation` raises the byte).
 		SequenceFinishesAt = Now;
 	}
+	// `UTIL_Remove(m_hAnimFollowModel)` (`0x10090a58..0x10090a87`): the ornament an animation event
+	// hung on this body goes with every sequence reset (the handle is left to go stale).
+	if (!AnimFollowModel.IsEmpty())
+	{
+		IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+		if (Embodiment != nullptr && Visual != nullptr)
+		{
+			Embodiment->DetachOrnamentModel(Visual);
+		}
+		AnimFollowModel.Reset();
+	}
+	// `+0x650 != m_nSequence` -> slot 247 `SetAttackExtentsForSequence` and `+0x650 = m_nSequence`
+	// (`0x10090a92..0x10090ab0`): see the header batch (the word lands with its member).
 }
 
 void FElysiumNpcBase::CommitForcedSequence(int32 Sequence)
@@ -92,25 +116,28 @@ float FElysiumNpcBase::RunAnimation()
 		bSequenceFinished = true;
 		SequenceFinishesAt = -1.0;
 	}
-	// `DAT_1092053c & 2` with `0x102ee6a0(navigator)` false zeroes the interval: the interval is
-	// already this runtime's 0.0.
+	// `DAT_1092053c & 2` (the `ai_step` bit, `0x1026c5a6` / `0x1026c5af`) with `0x102ee6a0(navigator)`
+	// false (`0x1026c5b9`) zeroes the interval (`0x1026c5c2`): the interval is already this
+	// runtime's 0.0.
 	const float Interval = 0.f;
 	// Slot 513 `CapabilitiesGet` bit `0x20000000` (`CAP_AIM_GUN`) -> slot 538 `AimGun`.
-	if ((static_cast<uint32>(CapabilitiesGet()) & 0x20000000u) != 0)          // 0x1026c5a6 / 0x1026c5ae
+	if ((static_cast<uint32>(CapabilitiesGet()) & 0x20000000u) != 0)          // 0x1026c5ce slot 513 / 0x1026c5d4 TEST
 	{
-		AimGun();                                                          // 0x1026c5b8 slot 538
+		AimGun();                                                          // 0x1026c5df slot 538
 	}
 	// The idle re-pick: not SCRIPT (4) or DEAD (7), `m_Activity == ACT_IDLE` (1), slot 251.
 	const int32 State = NpcStateRetail();
-	if (State != 4 && State != 7 && ActivityNumber == 1                      // 0x1026c5bd..0x1026c5d0
-		&& IsActivityFinished())                                           // 0x1026c5d4 slot 251
+	if (State != 4 && State != 7 && ActivityNumber == 1                      // 0x1026c5e5..0x1026c5fc
+		&& IsActivityFinished())                                           // 0x1026c602 slot 251
 	{
-		const int32 Sequence = !bSequenceLoopedOnce                         // 0x1026c5e0 +0x65d
-			? SelectHeaviestSequence(TranslatedActivity, INDEX_NONE)        // 0x1026c5f2
-			: SelectWeightedSequenceForActivity(TranslatedActivity);        // 0x1026c602
-		if (Sequence != INDEX_NONE)                                        // 0x1026c609
+		// `+0x65d` (`0x1026c60c`) set takes the weighted pick (`0x1026c621`), clear the heaviest
+		// (`0x1026c628`), both over `m_TranslatedActivity` (+0xff4).
+		const int32 Sequence = !bSequenceLoopedOnce
+			? SelectHeaviestSequence(TranslatedActivity, INDEX_NONE)        // 0x1026c628
+			: SelectWeightedSequenceForActivity(TranslatedActivity);        // 0x1026c621
+		if (Sequence != INDEX_NONE)                                        // 0x1026c62d
 		{
-			CommitForcedSequence(Sequence);                                // 0x1026c611 0x10260a50
+			CommitForcedSequence(Sequence);                                // 0x1026c635 0x10260a50
 		}
 	}
 	return Interval;

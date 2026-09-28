@@ -662,13 +662,15 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("so ACT_SCRIPT_CUSTOM_MOVE walks the ordinary ladder to the floor"), Sequence, 0);
 
 	// The disposition resolver, asserted directly: a body with no stance set answers slot 611's
-	// fallback, `m_nSequence`, and names ACT_DISPOSITION.
+	// fallback, `m_nSequence`. Corrected (L13 wave-2 fixes, review note 43): `0x10295a80` writes
+	// `*param_2` alone (`0x10295a88..0x10295a8e`, `RET 0x10`), so the translated activity is left as
+	// the caller held it.
 	int32 DispSequence = 7;
 	int32 DispActivity = 7;
 	Guard->SequenceNumber = 5;
 	Guard->ResolveDispositionActivity(DispSequence, DispActivity);
 	TestEqual(TEXT("0x102c12a0 no stance sequence: slot 611 answers m_nSequence"), DispSequence, 5);
-	TestEqual(TEXT("and names ACT_DISPOSITION"), DispActivity, 0xf1);
+	TestEqual(TEXT("0x10295a8e: the translated activity is not written"), DispActivity, 7);
 	return true;
 }
 

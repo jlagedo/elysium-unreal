@@ -310,7 +310,9 @@ void FElysiumNpc::ResolveDispositionActivity(int32& OutSequence, int32& OutTrans
 	// Slot 611 is the stance machine and it ROLLS on every call, as retail's does — the ladder asks
 	// once at `SetIdealActivity` and again at `SetActivity`, and so does retail's.
 	OutSequence = const_cast<FElysiumNpc*>(this)->Slot611();                 // 0x10295a83 slot 611
-	OutTranslatedActivity = NpcKernelAnimShared::GAnimActDisposition;
+	// `0x10295a88..0x10295a8e`, `RET 0x10`: `*param_2` is the only write; the translated activity
+	// stays whatever the caller holds.
+	(void)OutTranslatedActivity;
 }
 
 // --- The sequence bridge (story 8 wave 2, L13) ------------------------------------------------
@@ -361,9 +363,11 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 		return StanceClips.Idle[Current].IsEmpty() ? INDEX_NONE
 			: SequenceRowFor(FString(), StanceClips.Idle[Current], /*bLoops=*/true);
 	}
-	// The retail activity VALUE, named by retail's own enum (`ActivityList_NameForIndex`
-	// `0x10412550` over `ActivityList_RegisterSharedActivities`' 4,460 registrations).
-	const TCHAR* Name = ElysiumRetailActivities::NameOf(Activity);
+	// The retail activity VALUE, keyed by the name its registration pushed
+	// (`ActivityList_RegisterSharedActivities`' 4,460 registrations): the shared rows' name table
+	// entry, or for one of the 29 grapple rows (which name nothing in retail's table) the name the
+	// registration pushed -- the grapple activities resolve by id.
+	const TCHAR* Name = ElysiumRetailActivities::RegistrationNameOf(Activity);
 	if (Name == nullptr)
 	{
 		return INDEX_NONE;
@@ -396,28 +400,39 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 	{
 		return false;   // row 0 and an unknown number play nothing
 	}
-	// The body-claim arbitration (port policy, carried from the retired idle executor): a body a
-	// scene, a scripted beat or a pairing owns is animated by that owner; the kernel's commit does
-	// not overwrite it. Retail's cine holds the NPC in SCRIPT, where `RunAnimation` re-picks nothing.
-	const EElysiumBodyOwner BodyOwner = Mind.Owner();
-	if (BodyOwner != EElysiumBodyOwner::None && BodyOwner != EElysiumBodyOwner::Dialogue)
-	{
-		return false;
-	}
 	FSequenceRow& Row = SequenceRows[Sequence];
-	float Seconds = 0.f;
-	if (!PlayAnimClip(Row.Label, Row.bLoops, &Seconds))
-	{
-		return false;
-	}
-	Row.Seconds = Seconds;
-	if (!Row.OwnerStem.IsEmpty())
-	{
-		ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
-	}
-	OutSeconds = Seconds;
+	// `GetSequenceFlags(seq) & 1` (`STUDIO_LOOPING`, `0x10090a12` -> +0x65d) is the row's own bit,
+	// known whoever holds the body.
 	bOutLoops = Row.bLoops;
-	return true;
+	// The body-claim arbitration (a NAMED MODERNIZATION of playback only): a body a scene, a scripted
+	// beat or a pairing owns is animated by that owner, so the kernel's commit does not overwrite the
+	// owner's clip on it. The kernel's SEQUENCE still runs -- retail's `StudioFrameAdvance` (slot 250,
+	// `0x1026c5a0`) advances `m_flCycle` and raises `m_bSequenceFinished` on every body -- so the
+	// sequence's length is answered either way: from this play, or from the length the clip player
+	// reported the last time this body played the row.
+	const EElysiumBodyOwner BodyOwner = Mind.Owner();
+	if (BodyOwner == EElysiumBodyOwner::None || BodyOwner == EElysiumBodyOwner::Dialogue)
+	{
+		float Seconds = 0.f;
+		if (PlayAnimClip(Row.Label, Row.bLoops, &Seconds))
+		{
+			Row.Seconds = Seconds;
+			if (!Row.OwnerStem.IsEmpty())
+			{
+				ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
+			}
+			OutSeconds = Seconds;
+			return true;
+		}
+	}
+	if (Row.Seconds > 0.f)
+	{
+		OutSeconds = Row.Seconds;
+		return true;
+	}
+	// SEAM: the row has never played on this body, so its length is unknown to the kernel and the
+	// sequence's cycle does not advance (the caller's named arm).
+	return false;
 }
 
 bool FElysiumNpc::ShouldMaintainActivity()

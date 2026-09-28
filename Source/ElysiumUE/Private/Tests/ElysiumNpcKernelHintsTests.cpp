@@ -6,6 +6,7 @@
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumRetailActivities.h"
 #include "Substrate/ElysiumNpcAsianVampire.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcChangBros.h"
@@ -656,6 +657,17 @@ bool FElysiumNpcKernelHintsInterestTest::RunTest(const FString&)
 		Npc->RunInterestingPlaceLoop(Spot, 110.0));
 	TestEqual(TEXT("it moves to the OUTOF phase (retail +0x6304 == 3)"),
 		Npc->GetAmbientPhaseForDebug(), 4);
+	// The OUTOF clip ends on the live `m_bSequenceFinished` (+0x65c, `0x102aa25b`) of a non-looping
+	// sequence (+0x65d clear, `0x102aa235`): the INTO flag is released and the wait ends now.
+	Npc->bSequenceLoopedOnce = false;
+	Npc->bSequenceFinished = false;
+	Npc->RunInterestingPlaceLoop(Spot, 111.0);
+	TestTrue(TEXT("0x102aa25b: an OUTOF still playing keeps INTERESTING_INTO"),
+		Npc->NpcFlags.Has(EElysiumNpcFlag::INTERESTING_INTO));
+	Npc->bSequenceFinished = true;
+	Npc->RunInterestingPlaceLoop(Spot, 112.0);
+	TestFalse(TEXT("0x102aa25b: a finished OUTOF releases INTERESTING_INTO"),
+		Npc->NpcFlags.Has(EElysiumNpcFlag::INTERESTING_INTO));
 
 	// `ResolvePatrolInterestPlace` (`0x1029f780`) — the cache at `+0x6300`, and the seam under it.
 	Npc->ScheduleHost.Unknown6300 = 0;
@@ -825,11 +837,21 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	// `ActivityList_IndexForName` (`0x10412520`) is real since story 8 wave 2: retail's enum
 	// (`0x104126e0`'s first registration is ACT_IDLE = 1), case-folded, -1 for a name it lacks.
 	TestEqual(TEXT("ActivityIdForName: ACT_IDLE is 1"), Npc->ActivityIdForName(TEXT("ACT_IDLE")), 1);
-	TestEqual(TEXT("...case-folded (__strcmpi)"), Npc->ActivityIdForName(TEXT("act_idle")), 1);
+	TestEqual(TEXT("...case-folded (the table comparator LAB_10006636, installed by 0x1024a230, is not in the listing: the fold is the port's reading, unproven)"), Npc->ActivityIdForName(TEXT("act_idle")), 1);
 	TestEqual(TEXT("...and retail's own -1 for a name it never registered"),
 		Npc->ActivityIdForName(TEXT("ACT_NOT_A_REGISTERED_NAME")), int32(INDEX_NONE));
-	TestFalse(TEXT("IsHintSequenceFinished answers false"), Npc->IsHintSequenceFinished());
-	TestFalse(TEXT("DoesHintSequenceLoop answers false"), Npc->DoesHintSequenceLoop());
+	// The 29 grapple registrations (`0x10412590`) store their value only; the name table insert
+	// `0x10412260` is reached from `0x104123a0` / `0x104124b0` alone, so `0x10412420` answers -1 for
+	// a grapple name, while the grapple list still holds the value.
+	TestEqual(TEXT("0x10412590: a grapple name is not in the name table"),
+		Npc->ActivityIdForName(TEXT("ACT_FINISHING_MOVE")), int32(INDEX_NONE));
+	TestTrue(TEXT("0x104126a0: ...but its value is a grapple activity"), ElysiumRetailActivities::IsGrapple(148));
+	TestNull(TEXT("0x10412550: ...and names nothing"), ElysiumRetailActivities::NameOf(148));
+	TestEqual(TEXT("the bridge resolves it by id (the registration's own name)"),
+		FString(ElysiumRetailActivities::RegistrationNameOf(148)), FString(TEXT("ACT_FINISHING_MOVE")));
+	// (`IsHintSequenceFinished` / `DoesHintSequenceLoop` are gone: `0x102aa210` reads the live words
+	// `m_bSequenceFinished` +0x65c (`0x102aa25b`) and `m_bSequenceLoops` +0x65d (`0x102aa235`,
+	// `0x102aa45c`), which the sequence bridge carries.)
 	TestNull(TEXT("InterestingPlaceMarkerOccupant answers nothing"),
 		Npc->InterestingPlaceMarkerOccupant(nullptr));
 	TestEqual(TEXT("CurrentRetailActivityId answers -1"), Npc->CurrentRetailActivityId(),

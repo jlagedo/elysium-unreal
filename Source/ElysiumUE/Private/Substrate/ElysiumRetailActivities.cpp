@@ -4479,46 +4479,75 @@ namespace
 	};
 }
 
+namespace
+{
+	// The first row registered for a value, in value order, among the rows `bGrappleToo` admits.
+	const TCHAR* RetailActivityNameOf(int32 Value, bool bGrappleToo)
+	{
+		int32 Low = 0;
+		int32 High = UE_ARRAY_COUNT(GRetailActivities) - 1;
+		while (Low <= High)
+		{
+			const int32 Mid = (Low + High) / 2;
+			const int32 At = GRetailActivities[Mid].Value;
+			if (At == Value)
+			{
+				int32 First = Mid;
+				while (First > 0 && GRetailActivities[First - 1].Value == Value)
+				{
+					--First;
+				}
+				for (int32 Row = First; Row < UE_ARRAY_COUNT(GRetailActivities) && GRetailActivities[Row].Value == Value; ++Row)
+				{
+					if (bGrappleToo || !GRetailActivities[Row].bGrapple)
+					{
+						return GRetailActivities[Row].Name;
+					}
+				}
+				return nullptr;
+			}
+			if (At < Value)
+			{
+				Low = Mid + 1;
+			}
+			else
+			{
+				High = Mid - 1;
+			}
+		}
+		return nullptr;
+	}
+}
+
 const TCHAR* ElysiumRetailActivities::NameOf(int32 Value)
 {
-	// `ActivityList_NameForIndex` (`0x10412550`). The table is value-ordered.
-	int32 Low = 0;
-	int32 High = UE_ARRAY_COUNT(GRetailActivities) - 1;
-	while (Low <= High)
-	{
-		const int32 Mid = (Low + High) / 2;
-		const int32 At = GRetailActivities[Mid].Value;
-		if (At == Value)
-		{
-			// Two names can share a value; the first registered in value order answers.
-			int32 First = Mid;
-			while (First > 0 && GRetailActivities[First - 1].Value == Value)
-			{
-				--First;
-			}
-			return GRetailActivities[First].Name;
-		}
-		if (At < Value)
-		{
-			Low = Mid + 1;
-		}
-		else
-		{
-			High = Mid - 1;
-		}
-	}
-	return nullptr;
+	// `ActivityList_NameForIndex` (`0x10412550`) over the name table `0x10412260` fills: the shared
+	// registrations only (`0x104123a0`); a grapple registration (`0x10412590`) names nothing.
+	return RetailActivityNameOf(Value, /*bGrappleToo=*/false);
+}
+
+const TCHAR* ElysiumRetailActivities::RegistrationNameOf(int32 Value)
+{
+	// Not retail's: the name any registration pushed, grapple rows included -- the sequence
+	// bridge's clip key (a named modernization: the studio sequence table is swapped for the
+	// name-keyed clip resolver, so a grapple activity finds its clip by its id's registered name).
+	return RetailActivityNameOf(Value, /*bGrappleToo=*/true);
 }
 
 int32 ElysiumRetailActivities::ValueOf(const FString& Name)
 {
-	// `ActivityList_IndexForName` (`0x10412520`): the symbol table folds case (`__strcmpi`).
+	// `ActivityList_IndexForName` (`0x10412520`) over the same shared-only name table: a grapple
+	// name answers -1, as `0x10412420` does. The fold is the table comparator's (`LAB_10006636`,
+	// installed by `0x1024a230`, not in the listing database): case-insensitive, unproven.
 	static const TMap<FString, int32> ByName = []()
 	{
 		TMap<FString, int32> Map;
 		for (const FRetailActivityRow& Row : GRetailActivities)
 		{
-			Map.FindOrAdd(FString(Row.Name).ToUpper(), Row.Value);
+			if (!Row.bGrapple)
+			{
+				Map.FindOrAdd(FString(Row.Name).ToUpper(), Row.Value);
+			}
 		}
 		return Map;
 	}();
