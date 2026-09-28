@@ -783,7 +783,7 @@ green, and `coverage.md` shows the change.
   Consumes: 3 (the programs say which tasks a class reaches). Provides: 0002's scope.
   Size: S–M. Effort: Sonnet / medium.
 
-- [ ] **8. 29e closes under the strict verdict.**
+- [x] **8. 29e closes under the strict verdict.** (2026-09-28)
   Job: the 19–29 checklist re-verdicted by 1 before the twelve remaining families land; each
   family ported as rules only, its `dead` and `mechanism` arms skipped with the verdict as the
   record; the in-flight Conditions19 reviewed against the pass before it merges. 29e keeps its
@@ -1106,7 +1106,27 @@ green, and `coverage.md` shows the change.
       The tool fixes are on `main`: `research kernel` runs the seven generators in one process
       (`937d975d`, `kernel_ledger` 470 s → 7 s); `kernel_gate --all` builds one Source index
       (`b87058da`); `elysium test` has an idle watchdog (`9cdf6b5a`).
-    - *Smoke:* <smoke: …>.
+    - *Smoke* (`pass-i/L13-smoke.md`, two runs on 2026-09-28): `sp_tutorial_1` and `sm_hub_1`, driven
+      through the `elysium` MCP. The first run, on the wave-2 tree, found one real divergence: no NPC
+      whose `NPCInit` ran after the map's first second ever thought, because `CAI_BaseNPC::NPCInit
+      0x10273390`'s late arm (`0x10273a5x`) calls `NPCInitThink 0x10273aa0` inline and the port's else
+      arm only counted; `CNPC_VCamera::NPCInit 0x103692c0` has the same arms. Fixed as `2fcc21cb` (the
+      think, `0x10273760` and `InputSetRelationship 0x10273790` moved to the base, which owns them;
+      test `NpcKernelLifecycle19.LateNPCInitThinksInline`). The second run, on `main` at `2fcc21cb`:
+      every maker child and every travelled-to hub NPC is admitted and thinking, hub pedestrians walk,
+      `havenbum`'s OnMapLoad greeting opens; the porch controller is created and removed at +5 s, the
+      idle `0x6b` loop runs; 0 ensure/assert, 0 `No StartTask entry` / `No RunTask entry`, the only
+      TaskFails are three `0xc` "Don't have a route" on `patrol_cop_north`. Stub tally against the
+      60-surface baseline: one new surface, `CBaseAnimating::SetAttackExtentsForSequence 0x10090c80`
+      (fires at every spawn); 54 baseline surfaces unreached because the smoke has no combat or death.
+      Open questions, recorded for the RE backlog and the navigator/place stories (0018/4, 0018/5):
+      patrols stall (the interesting-place loop takes `sentry2` after node 1 of `FOLLOW_PATROL_PATH_WALK
+      0x67`; `monk_upstairs_podium` parks at node 5/5 re-issuing a zero-length move; the type-0
+      `info_node_patrol_point` route of `patrol_cop_north` never builds); the think cadence of
+      `NPCThink 0x10292de0`'s `CalcNextUpdateThink`/`CalcNextNormalThink` minimum (dialogue NPCs think
+      every frame, distant ones every 12–16 s); `NPCInit` compares `gpGlobals->curtime` against 1.0,
+      which restarts per level, while the port's clock does not; `GatherConditions` never observed on
+      three thinking NPCs (`bAI = IsThinkDue(m_flNextAIThink)` at `0x10290700`).
   - *Tests:* `Elysium.Substrate` **1,326 → 1,613, 0 failed**, at StartTask19
     (`reports/tests/20260928T032303.105515Z-elysium-substrate`). Family suites: Misc19 31, Script19
     23, Conditions19 32, Damage19 28, Select19 32, RunTask19 46, Werewolf19 17, Boss19 12, StartTask19
@@ -1117,12 +1137,13 @@ green, and `coverage.md` shows the change.
     as an override; it held at 467 through pass I. After wave 2, forwarding is **210 → 0** (71 → 0
     in wave 2), and `unported.tsv` is **778 → 449**: 467 → 451 at Spawn19, where slots 617/618 went
     virtual, then 451 → 449 once `ScriptHide` / `ScriptUnhide` went virtual.
-  - **Owed before the box is ticked:**
-    1. The map smoke: the tutorial porch controller, guard schedules on the retail loop, the stealth
-       lesson's patrols, and `sm_hub_1`'s makers, pedestrians, cop and payphone, with the
-       `elysium.stubs` tally. `L13-smoke.md` did not run: the shared `ElysiumBaked` plugin was
-       emptied, so the editor did not boot.
-    2. Pass C's rename commit: drop the `19` suffix as a pure move.
+  - **Pass C landed 2026-09-28.** The map smoke above; the rename commit: `ccefc765` (108 pure moves,
+    100 % similarity: the `19` suffix dropped, bare-digit parts where a concern file existed, Boss 2,
+    Conditions 2, Damage 2/3, Lifecycle 2, Misc 2, Werewolf 2, and the four Tests files) and
+    `6376f797` (references: the `.inl` includes, `kernel_gate` / `kernel_story8_shape`, the docs).
+    Suite-name strings keep `19`. After the rename: checks 7/7, gates 13/13, the seventeen family
+    suites 446/446 (equal to their wave-2 counts), pytest 4,279. Closed on `main` with the final
+    joined launch recorded in the tracker.
 
 ## Build order
 1 → 2 → 3 → 4, with 8's pass R in parallel from 1 on → 5 → 8's passes I and C → 6 → 7 (amended

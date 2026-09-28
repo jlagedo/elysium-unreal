@@ -685,7 +685,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   ghoul's touch burn deals no health damage, because `BurnPlayer` faithfully builds a family-less
   `FElysiumDmg` (`1037c140 PUSH 0x0`) and this port's damage resolver rejects a descriptor with no
   family — that join is `CBaseEntity::TakeDamage`'s, not this band's.
-- [ ] **29e. The loop and the state machine: layers 19–26.**
+- [x] **29e. The loop and the state machine: layers 19–26.** (closed under 0019 story 8, 2026-09-28)
   Retail: 354 core functions, 90 unnamed, 8 damaged, 106 already cited by the oracle — the
   interpreter itself: `SetState 0x1026e340`, `SelectIdealState 0x1026f660` / Troika `0x102ad660`
   / `CNPC_VHuman 0x103851e0`, `NPCInit 0x10273390` / `0x1029a0b0` and the species inits,

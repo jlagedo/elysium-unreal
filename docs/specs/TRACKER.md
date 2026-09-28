@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 06's pass I landed 2026-09-28, waves 1 and 2, so row 06's pass C is next: the map smoke, then the rename commit). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 06 closed 2026-09-28; row 07, 0018/4, is next and needs the decision noted on it). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0002/29e 16 of 16 families ported (row 06's pass C open).
+Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 06 closed 2026-09-28).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -142,7 +142,7 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     was `83b8402b` hand-editing the generated `layout.md` (the two hull words) instead of the
     `kernel_fields.tsv` overlay; the recovery now lives in the overlay, a `doc`-tier row may
     annotate a datamap word, and the tables are regenerated.
-- [ ] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
+- [x] **06 · 0019/8 = 0002/29e** — The 12 remaining families, rules only. XL · Opus or Fable/high.
   Absorbs 0002's 25c, 26, 16b's ideal state, 10d's selector, 21c's loop half. After 04 and 05 so
   no family types a program id or an inline constant by hand.
   **Status 2026-09-23: pass R complete (below); passes I and C wait for row 06b, the class tree,
@@ -193,11 +193,15 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   142/390 and death through 144. 82 `STORY8-TWIN` markers are down to 4 named survivors.
   Forwarding is 210 → 0 and unported 778 → 449. `Elysium.Substrate` is 1,710 / 0; pytest 4,224
   passed. The walked prose is folded, and `docs/vtmb/npc-ai/story8/` is gone.
-  - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
-    Row 06 stays open for two items:
-    - the map smoke (tutorial, `sm_hub_1`, the stub tally), which did not run because the shared
-      `ElysiumBaked` plugin was emptied;
-    - the rename commit, which drops the `19` suffix as a pure move.
+  - [x] **Pass C** (2026-09-28) — Misc19 (31/34), the absorbed stories' sentences, the ticks, the
+    rename commit (`ccefc765` moves, `6376f797` references) and the map smoke, twice: the first run
+    found late `NPCInit 0x10273390` never starting its NPC (maker children and every travelled-to
+    hub NPC stood on FLT_MAX), fixed as `2fcc21cb`; the second run on `main` confirms it, hub
+    pedestrians walk, 0 ensure/assert. Open questions (patrol stalls under `0x67`, think cadence,
+    the per-level clock, `SetAttackExtentsForSequence 0x10090c80`) are in the spec's smoke paragraph.
+    Content note: the four gitignored trees were deleted twice by `git worktree remove` recursing
+    through junctions; restored from `exports_v2`, 102 of 108 maps baked (six refused by the pipeline
+    on retail data: five zero-width ropes, one missing `particles/flare3` sprite).
 - [x] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **Landed 2026-09-27.**
   Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
   Moved up from row 10 on 2026-09-23 (decision recorded under "Where this differs"). Its inputs
