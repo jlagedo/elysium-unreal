@@ -86,6 +86,25 @@ public:
 	virtual bool PlayerKnockbackReaction(FElysiumEntity* Arg0, int32 Arg1) override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
 	virtual void RunAI(bool Arg0) override;
+
+	// --- RunAi19 (story 0019/8 lane L13a): what slot 432 `0x10378b80` calls ---------------------
+	/** The reaction half of `0x10378b80` (`0x10378b90`..`0x10378bba`): a null blocker does nothing;
+	 *  kind 1 takes the step-up `0x10379e80`, any other kind the obstacle handler `0x10379b40`. */
+	void RunAi19GargoyleReact(FElysiumEntity* Blocker, int32 Kind);
+	/** `0x10379b40` -- the obstacle handler: a `prop_dynamic` (case-insensitive `FClassnameIs`) is
+	 *  BROKEN by the gargoyle (slot 266 on the prop, `CBreakableProp::Break(this)` `0x1018fb90`) and
+	 *  nothing else happens; anything else takes the shared physics push with the gargoyle ConVars. */
+	void RunAi19GargoyleObstacle(FElysiumEntity* Blocker);
+	/** SEAM for slot 266 on a `prop_dynamic` blocker, `CBreakableProp::Break(breaker)`. The port's
+	 *  break is `FElysiumProp::InputBreak` (the `OnBreak` output and the visual); the prop's own
+	 *  damage, gibs and explosion are not stood here. Counted. */
+	void RunAi19GargoyleBreakProp(FElysiumEntity* Prop);
+	int32 RunAi19GargoylePropBreaks = 0;
+	/** SEAMS for `gargoyle_obstruction_lookahead` (`0x1093af60`, "24"), `gargoyle_obstruction_scalar`
+	 *  (`0x1093afa8`, "5") and `gargoyle_obstruction_z` (`0x1093b050`, "75"). */
+	static float& GargoyleObstructionLookaheadConVar();
+	static float& GargoyleObstructionScalarConVar();
+	static float& GargoyleObstructionZConVar();
 	virtual void GatherConditions() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
