@@ -2054,7 +2054,12 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			/*bAllowPartialPath=*/false, Gait);
 		return bMoveIssued;
 	};
-	if (Troika != nullptr && bHaveDest && Motor != nullptr
+	// A pushed `aiscripted_schedule` order already holds the body for its own program (modes 1/2 set
+	// their goal through this very call, `ScheduledMoveToGoalEntity` `0x102800c0`), so the build runs
+	// under that claim rather than asking for an ordinary schedule one the director outranks.
+	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
+		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
+	if (Troika != nullptr && bHaveDest && Motor != nullptr && !bScriptedOrderHolds
 		&& !Troika->AcquireScheduleBody(TEXT("SetGoal 0x102ecd20")))
 	{
 		return false;

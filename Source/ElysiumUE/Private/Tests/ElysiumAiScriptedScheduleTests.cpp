@@ -359,8 +359,13 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		TestEqual(TEXT("...at the running gait mode 2 chose"),
 			Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed);
 		F.Step(0.1);
-		TestEqual(TEXT("Troika's translated program then selects its patrol gait"),
-			Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::WalkSpeed);
+		// Corrected (L13 wave-2 fixes): mode 2 is retail's `ScheduledMoveToGoalEntity` (`0x101a998f`),
+		// which installs program 2 FIRST and then `SetGoal`s; the route build completes the current
+		// task unless it is a continuous move (`0x102f1ece` slot 529, `0x102f1ede` navigator slot 2),
+		// so the translated program's `TASK_PATROL_PATH` is finished before it ever starts and its
+		// patrol gait never lands. The run activity mode 2 chose (`0x101a9960`) stands.
+		TestEqual(TEXT("0x102f1ede: the patrol task is completed by SetGoal, the run gait stands"),
+			Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed);
 
 		// Arrival ends the program, which is what releases the claim.
 		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
@@ -564,7 +569,9 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 
 	// A body that will not take the route reports it once.
 	{
-		AddExpectedError(TEXT("could not take the route an aiscripted_schedule pushed"),
+		// Corrected (L13 wave-2 fixes): modes 1/2 are retail's `ScheduledMoveToGoalEntity`, whose
+		// false answer prints retail's own line once (`0x101a99c5`, string `0x10595230`).
+		AddExpectedError(TEXT("ScheduledMoveToGoalEntity to goal entity"),
 			EAutomationExpectedErrorFlags::Contains, 1);
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 2;

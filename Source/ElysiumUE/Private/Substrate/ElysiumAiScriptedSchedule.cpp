@@ -104,9 +104,12 @@ void FElysiumAiScriptedSchedule::FixScriptNPCSchedule(FElysiumNpcBase& Npc)
 			*GoalEntity, *DebugString());
 		return;
 	}
-	// The executor is the Troika's (`FElysiumNpc::BeginScriptedSchedule`, the port's program host for
-	// `ScheduledMoveToGoalEntity` `0x102800c0` / `ScheduledFollowPath` `0x102801e0` / `SetEnemy`). A
-	// base-only NPC has no port executor: SEAM, it receives nothing.
+	// The push lands on the Troika (`FElysiumNpc::BeginScriptedSchedule`), which defers it to the NPC's
+	// first think when needed and then runs retail's mode arms: `ScheduledMoveToGoalEntity`
+	// `0x102800c0` for modes 1/2, `SetEnemy` + slot 544 + `SetCondition(0x54)` for mode 3, and for
+	// modes 4/5 the leg-walking executor that stands for `ScheduledFollowPath` `0x102801e0` (the
+	// navigator builds no path-corner goal). A base-only NPC has no Troika host: SEAM, it receives
+	// nothing.
 	FElysiumNpc* Troika = Npc.AsNpc();
 	if (Troika == nullptr || World == nullptr)
 	{
