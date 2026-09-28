@@ -1444,10 +1444,11 @@ void FElysiumNpcTzimisce::FUN_103bf560()
 	// with the sentinel that means "use the live heading", which the motor computes by `ftol`-ing
 	// the current angle.
 	//
-	// Family **Hints** stands the same retail call as `ReleaseMotorHintYaw()` and family **Motor**
-	// found `0x10382d20` to be the identical one-liner on another class. It is called rather than
-	// restated. Retail name unrecovered; single caller (`0x103bb1e0`), no vtable slot.
-	ReleaseMotorHintYaw();
+	// Family **Motor** found `0x10382d20` to be the identical one-liner on another class. Retail name
+	// unrecovered; single caller (`0x103bb1e0`, the RunTask arm 0xbf/0xc0), no vtable slot. Story 8
+	// (L05 integration): RunTask19's `MotorUpdateYaw` is `0x102e1e20` itself (family Hints'
+	// `ReleaseMotorHintYaw` stays an inert seam for its live callers; see there).
+	MotorUpdateYaw(-1);
 }
 
 // -------------------------------------------------------------------------------------------------

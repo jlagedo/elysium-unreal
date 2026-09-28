@@ -1819,6 +1819,7 @@ bool FElysiumNpc::IsBodyVisible() const
 	return Embodiment == nullptr || Embodiment->IsNpcBodyVisible(Visual);
 }
 
+// STORY8-TWIN: replaced by 0x102aad7e (Troika RunTask idx 2, `ElysiumNpcRunTask19.cpp`) at wave 2
 bool FElysiumNpc::WaitPvs()
 {
 	// `RunTask` `0x102aacf0`, task 5 `TASK_WAIT_PVS`, in order.
@@ -2398,6 +2399,7 @@ bool FElysiumNpc::StartScheduleId(int32 Id, const FString& Surface, const FStrin
 	return ElysiumSchedule::Start(Schedule, Id, *this);
 }
 
+// STORY8-TWIN: replaced by 0x102888d4 (base RunTask 0x69, `ElysiumNpcBaseRunTask19.cpp`) at wave 2
 EElysiumTaskResult FElysiumNpc::StopMovingTask()
 {
 	ScheduleHost.PendingFailureReason = 0;
@@ -2712,6 +2714,7 @@ bool FElysiumNpc::GazeHeardSound(FVector& OutPoint) const
 	return true;
 }
 
+// STORY8-TWIN: replaced by 0x102aaf2e (Troika RunTask idx 0x0b) / 0x10288f43 (base 0x6e) at wave 2
 EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 {
 	if (Motor == nullptr)

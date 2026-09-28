@@ -68,10 +68,11 @@ virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
  *  same forward for 3000..3999; the base's default route needs it for 3000..0xfa2. */
 bool WeaponHandleAnimEventMisc19(const struct FElysiumAnimEvent& Event);
 
-/** SEAM for `m_lifeState` (`+0x200`) as the script anim events `1000` (`SCRIPT_EVENT_DEAD`, := 1
- *  `LIFE_DYING`) and `0x3f2` (`NOT_DEAD`, := 0) write it. The NPC carries no life-state word (its
- *  life is `bDead` / the death latch, and `bDead` is `Kill`'s inert terminal), so the value is
- *  kept here and nothing reads it yet. */
+/** SEAM for `m_lifeState` (`+0x200`) as retail's raw id: the script anim events `1000`
+ *  (`SCRIPT_EVENT_DEAD`, := 1 `LIFE_DYING`) and `0x3f2` (`NOT_DEAD`, := 0) write it, and so do the
+ *  RunTask19 death arms (base `0x10288ff7` := 2, Werewolf `0x103ce491` := 2; the Troika arm
+ *  `0x102abc05` clears a 1). The NPC's life is otherwise `bDead` / the death latches
+ *  (`LifeStateIsDying`); `Event_Killed`'s LIFE_DYING write is not mirrored here. */
 int32 AnimEventLifeStateWord = 0;
 
 /** SEAM for `CBaseEntity::EmitSound(const char* soundscript)` (`0x101b0c10`): `IElysiumAudio`

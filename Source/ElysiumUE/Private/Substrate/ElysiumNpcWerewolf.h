@@ -528,18 +528,14 @@ public:
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
 	// --- Lane L05 (story 8 RunTask19): the hint movers `CNPC_VWerewolf::RunTask` `0x103cdfb0` calls.
-	// Their rows are lane Misc19's (`CheckAllMoveHints` `0x103cfc50`) and lane Werewolf19's
-	// (`FindMoveHint` `0x103d2a10`, `FindRandomMoveHint` `0x103d14f0`, `FindEgressHint` `0x103d1200`,
-	// `FindTeleportHint` `0x103d3c20`); until the integrator redirects these calls to their ports each
-	// is a SEAM answering false (no hint found).
+	// `CheckAllMoveHints` `0x103cfc50` is lane Misc19's body (called directly); `FindMoveHint`
+	// `0x103d2a10`, `FindRandomMoveHint` `0x103d14f0`, `FindEgressHint` `0x103d1200` and
+	// `FindTeleportHint` `0x103d3c20` are lane Werewolf19's (L12) rows with no port body yet: each is
+	// a SEAM answering false (no hint found). The `TASK 0x14c` ConVar (`DAT_1093f9a4`) is
+	// `werewolf_force_teleport`, read through `WerewolfForceTeleportConVar` above.
 	int32 WerewolfRunTaskHintSeamCalls = 0;
-	bool RunTask19CheckAllMoveHints();
 	bool RunTask19FindMoveHint();
 	bool RunTask19FindRandomMoveHint();
 	bool RunTask19FindEgressHint();
 	bool RunTask19FindTeleportHint();
-	/** The ConVar at `DAT_1093f9a4` `TASK 0x14c` reads (`!IsCommand() && m_nValue != 0`). Its name and
-	 *  default are **unrecovered** (not among the 48 tunables); answers false, an unconstructed
-	 *  ConVar's own value. */
-	bool WerewolfEgressConVarSet() const;
 };

@@ -59,7 +59,10 @@ int32 Conditions19CorpseQuery(FElysiumEntity** OutCorpses, int32 MaxCorpses);
 void Conditions19GatherSquad(double Now);
 
 /** SEAM for `m_pNavigator +0x14`, the squared distance to the route's end written by `0x102ed430`.
- *  Read only behind `NavigatorGoalIsActive()`, which is itself a seam answering false; answers 0. */
+ *  Read only behind `NavigatorGoalIsActive()` (`0x102ee6a0`), which reads the mover's active-goal
+ *  bit since the L05 integration; answers 0. With a route live and `+0x6324` above zero this raises
+ *  `COND 0x15` (`102b297f`); nothing in the port writes `+0x6324` non-zero yet, and the mover keeps
+ *  no readable route end (`NavGoalPosition` answers none) to measure. */
 float Conditions19NavPathEndDistSqrUnits() const;
 
 /** `+0x0ff8 m_hBodyFireParticles[18]` (CBaseAnimating's burning-body particle handles). No port

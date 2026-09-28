@@ -181,11 +181,11 @@ bool FElysiumNpcBase::FCanCheckAttacksBase() const
 
 void FElysiumNpcBase::SetAlternateAiIdealYaw(float YawDegrees)
 {
-	// SEAM for `0x102e0b40` (reset steering) + `0x102e1c10(motor, yaw, -1.0)` (set the ideal yaw,
-	// unlimited turn rate). Family Hints stands `SetMotorHintYaw` over the same absent motor word;
-	// this one is kept separate because it is a different retail call with a different turn-rate
-	// argument, and folding them would hide that.
-	(void)YawDegrees;
+	// `0x102e0b40` (the motor's yaw clock reset) then `0x102e1c10(motor, yaw, -1.0)` (set the ideal
+	// yaw and update). Story 8 (L05 integration): the two are RunTask19's motor primitives now.
+	// `YawDegrees` is a RETAIL (Source) yaw, the `motor+0x34` convention.
+	MotorMoveStop();                                     // 0x102e0b40
+	MotorSetIdealYawAndUpdate(YawDegrees, -1.0f);        // 0x102e1c10
 }
 
 bool FElysiumNpcBase::StartOpeningDoor(FElysiumEntity& Door)

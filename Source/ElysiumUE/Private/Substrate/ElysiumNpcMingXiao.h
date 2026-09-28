@@ -368,12 +368,13 @@ public:
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
 	// --- Lane L05 (story 8 RunTask19)
-	/** `+0x6680 m_hRangedWeapon` -- the weapon `TASKS 0x14f..0x152` switch back to. **SEAM** word. */
-	FElysiumEntityHandle MingXiaoRangedWeapon;
+	// (`+0x6680 m_hRangedWeapon`, the weapon `TASKS 0x14f..0x152` switch back to, is L07's
+	// `MingXiaoRangedWeapon` above.)
 	/** `FUN_1039aa20` `0x1039aa20` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
 	int32 MingXiaoTask14bCalls = 0;
 	void MingXiaoTask14b();
-	/** `FUN_10398db0` `0x10398db0` -- the throw release `TASK 0x158` runs outside mode 3. **SEAM**: counted. */
-	int32 MingXiaoThrowReleases = 0;
-	void MingXiaoThrowRelease();
+	/** `FUN_10398db0` `0x10398db0` -- the tentacle GRAB (the `phys_animlink` on
+	 *  `Bip01_[RL]_ThrowingTenticle5`, then mode 3) `TASK 0x158` runs outside mode 3. **SEAM**: counted
+	 *  on family Misc19's `MingXiaoGrabCalls`, the one recorder for this address (L05 integration). */
+	void MingXiaoTentacleGrab();
 };

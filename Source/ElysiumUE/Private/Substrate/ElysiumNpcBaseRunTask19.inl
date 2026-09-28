@@ -27,7 +27,7 @@ float MotorYawClock = 0.f;
 
 /** `CAI_Motor` `+0x38` -- the per-call yaw speed `0x102e1c10` stores when its speed argument is
  *  neither `-1.0` nor the `-2.0` "keep the current speed" sentinel (`_DAT_10462978`). */
-float MotorYawSpeed = 0.f;
+float MotorYawSpeedWord = 0.f;   // (family Debug's `MotorYawSpeed()` reads it; the L05 integration renamed it off that accessor's name)
 
 /** How many times `0x102e1e20` ran; the tests assert the turn happened. */
 int32 MotorUpdateYawCalls = 0;
@@ -75,11 +75,9 @@ void NavClearGoal();
 
 // --- The remaining calls with no port body -------------------------------------------------------------
 
-/** `FUN_101d1800` `0x101d1800` -- `UTIL_FindClientInPVS(edict)`, the base `TASK_WAIT_PVS` test.
- *  The Troika arm's `0x101d1a90` is `FElysiumNpc::WaitPvs`'s engine test; the base NPC has no
- *  closest-player word, so this asks the embodiment whether the player shares this body's PVS
- *  (the same `ArePointsInSamePvs` question) and answers false with no player. */
-bool FindClientInPvs() const;
+// `FUN_101d1800` `0x101d1800` -- `UTIL_FindClientInPVS(edict)`, the base `TASK_WAIT_PVS` test -- is
+// family Conditions19's `Conditions19ClientInPvs()` (one body for the one call; the L05 integration
+// folded this lane's second body into it).
 
 /** `FUN_10279420` `0x10279420` -- the "flat bounding box" test `TASK_DIE` asks before resizing the
  *  hull. **SEAM**: answers false (the `(4,4,1)/(-4,-4,0)` arm), the arm every NPC without a
@@ -104,8 +102,8 @@ int32 WeaponFinishReloadCalls = 0;
 void WeaponFinishReload(FElysiumEntity& Weapon);
 
 /** `FUN_102521f0` `0x102521f0` on the `__RTDynamicCast`-to-`CBaseCombatWeapon` of `m_hTargetEnt`
- *  (`TASK_WEAPON_PICKUP`): the weapon's owner. **SEAM**: answers null (unowned), the arm that
- *  completes the task. */
+ *  (`TASK_WEAPON_PICKUP`): the weapon's owner (`+0x88c`) as its combat character, through the
+ *  port weapon's `OwnerCharacter()`; null when the target is not a weapon or is unowned. */
 FElysiumEntity* TargetWeaponOwner(FElysiumEntity* Target) const;
 
 /** `CBaseEntity::GetFlags() & FL_ONGROUND` (`0x100b3700`, bit 1). The entity's `Flags` word carries
@@ -114,8 +112,6 @@ FElysiumEntity* TargetWeaponOwner(FElysiumEntity* Target) const;
  *  motor answers the `Flags` bit. */
 bool IsOnGroundFlag() const;
 
-/** `+0x200 m_lifeState` as retail's raw id. This runtime spells life as the `bDead` /
- *  `HasReportedDeath` latches (`FElysiumEntity::IsAlive`), which have no "dead and settled" (2)
- *  value; the base death arm of `0x10288780` writes 2 here and the Troika death arm reads/clears 1.
- *  **SEAM** word: nothing else reads it. */
-int32 RetailLifeState = 0;
+// `+0x200 m_lifeState` as retail's raw id is family Misc19's `AnimEventLifeStateWord` (one word; the
+// L05 integration folded this lane's second copy into it): the base death arm writes 2
+// (`0x10288ff7`), the Troika death arm reads/clears 1 (`0x102abc05`), Werewolf `0x15f` writes 2.

@@ -186,7 +186,7 @@ public:
 	/** `0x1038e720` -- the wing/turn selector over the flight velocity (SOURCE units, this world's
 	 *  axes): refuses five activities; `vel.z >= 30` flaps (`0x1038e640`); a yaw turn in `[30, 330]`
 	 *  takes `0x1038e6a0` below 180 and `0x1038e6e0` above; otherwise activity `0x24` flaps and anything
-	 *  else glides (`0x1038e670`). Its only caller is `0x1038b1a0`, and no family row carries it. */
+	 *  else glides (`0x1038e670`). Its callers are `0x1038b1a0` and RunTask `0x1038daa6` (`TASK 0x15c`). */
 	void ManBatWingTurnSelect(const FVector& VelocityUnits);
 	/** `cvar_manbat_stun` (`0x1093b858`, "manbat_stun", default "0", `FUN_1038ae50`): its `m_nValue`
 	 *  (`+0x2c`). SEAM: the kernel ConVar table (`ElysiumNpcKernelTunables.h`, generated) has no row
@@ -221,11 +221,8 @@ public:
 	/** `FUN_1038fe30` `0x1038fe30` -- the fly-by sound (reads `m_bHasPlayedFlyBySound`). Counted. */
 	int32 ManBatFlyBySoundCalls = 0;
 	void ManBatFlyBySound();
-	/** `FUN_1038e720(this, vel)` `0x1038e720` -- the flap/glide activity pick for a new move goal.
-	 *  Counted, with the velocity it was handed (SOURCE units). */
-	int32 ManBatFlightActivityPicks = 0;
-	FVector ManBatLastFlightPickVelocity = FVector::ZeroVector;
-	void ManBatPickFlightActivity(const FVector& VelocityUnits);
+	// (`FUN_1038e720(this, vel)`, the flap/glide pick `TASK 0x15c` runs, is `ManBatWingTurnSelect`
+	// above -- the L05 integration dropped this lane's recording seam.)
 	/** `0x100f7b20("Spotlight *", GetOrigin(), 0, 0, 0)` -- the nearest entity by wildcard name. The
 	 *  port's `FindByName` has no nearest or `*` form; answers null. */
 	FElysiumEntity* ManBatNearestSpotlight() const;

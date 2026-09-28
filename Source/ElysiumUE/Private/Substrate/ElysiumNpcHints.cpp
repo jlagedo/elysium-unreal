@@ -7,6 +7,7 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -357,8 +358,8 @@ void FElysiumNpc::ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bC
 	//    `m_fMinStayTime` / `m_fMaxStayTime` (`+0x568` / `+0x56c`).
 	BaseScheduleHost.WaitFinished = Now + Stream.FRandRange(Place->MinTime, Place->MaxTime);
 
-	// 6. `thunk_FUN_102e0b40(m_pMotor)` — the motor's yaw hold.
-	ReleaseMotorHintYaw();
+	// 6. `thunk_FUN_102e0b40(m_pMotor)` — the motor's yaw clock reset (`motor+0x2c = -1.0`).
+	MotorMoveStop();
 
 	// 7. `m_bMatchOrientation` (`+0x570`): face the place. Retail has two sources for the yaw and
 	//    the decompiler cannot tell them apart — the branch keys on a register (`unaff_retaddr`)
@@ -431,8 +432,8 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 		{
 			// `thunk_FUN_10279cc0(this, other)` then, with the marker's `+0x514` byte set, a motor
 			// yaw toward the other body. Both are seams; the ordering is retail's.
-			SetMotorHintYaw(static_cast<float>(
-				(Occupant->Origin - Origin).Rotation().Yaw));
+			// A RETAIL yaw (the `motor+0x34` convention; L05 integration: was the Unreal yaw).
+			SetMotorHintYaw(CalcIdealYaw(Occupant->Origin));   // `0x102e2020` -> `0x102e2750` slot 515
 		}
 	}
 

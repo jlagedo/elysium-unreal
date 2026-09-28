@@ -116,8 +116,8 @@ public:
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
 	// --- Lane L05 (story 8 RunTask19): `CNPC_VBach::RunTask` `0x103652b0`'s words with no port member.
-	int32 BachWasOccluded = 0;              // +0x6674 m_iWasOccluded (SEAM word: no writer ported)
-	int32 BachReusedOccludeCount = 0;       // +0x6678 m_iReusedOccludeCount
+	// (`+0x6674` / `+0x6678` are L11's `BachWasOccluded` / `BachReusedOccludeCount` above, written by
+	// the camper pass `0x10365a90`.)
 	double BachWarningTime = 0.0;           // +0x6694 m_flWarningTime, an absolute curtime
 	bool bBachShotLatch = false;            // +0x66a4, the unnamed byte the snipe arm sets to 1
 };

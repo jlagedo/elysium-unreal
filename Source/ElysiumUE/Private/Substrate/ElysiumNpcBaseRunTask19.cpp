@@ -164,7 +164,7 @@ void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed
 	{
 		if (YawSpeed != -2.0f)
 		{
-			MotorYawSpeed = YawSpeed;   // `+0x38`
+			MotorYawSpeedWord = YawSpeed;   // `+0x38` (`0x102e1ca8`)
 		}
 	}
 	// With `-1.0` retail first runs `0x102e1cf0` (unrecovered; SEAM: nothing), then both arms end in
@@ -174,8 +174,9 @@ void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed
 
 void FElysiumNpcBase::MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float YawSpeed)
 {
-	// `0x102e20b0`: `0x102e2750` (the ideal yaw to the point, from this body) then `0x102e1c10`.
-	const float Yaw = NpcKernelFacingShared::RetailYawOf(TargetCm - Origin, static_cast<float>(Angles.Y));
+	// `0x102e20b0`: `0x102e2750` -- `JMP [outer vtbl+0x80c]`, slot 515 `CalcIdealYaw` (`0x10274b30`,
+	// `VecToYaw` of the delta; 0 for a zero one) -- then `0x102e1c10`.
+	const float Yaw = CalcIdealYaw(TargetCm);
 	MotorSetIdealYawAndUpdate(Yaw, YawSpeed);
 }
 
@@ -219,18 +220,6 @@ void FElysiumNpcBase::NavClearGoal()
 	++NavigationGoalClears;
 }
 
-bool FElysiumNpcBase::FindClientInPvs() const
-{
-	// `0x101d1800(edict)` -- see the declaration.
-	const FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr;
-	if (Player == nullptr || Player->IsInert())
-	{
-		return false;
-	}
-	const IElysiumEmbodiment* Embodiment = World->Embodiment();
-	return Embodiment == nullptr || Embodiment->ArePointsInSamePvs(Player->Origin, Origin);
-}
-
 bool FElysiumNpcBase::DeathHullIsFlat() const
 {
 	// `0x10279420` -- SEAM (declaration).
@@ -259,12 +248,12 @@ void FElysiumNpcBase::WeaponFinishReload(FElysiumEntity& Weapon)
 	++WeaponFinishReloadCalls;
 }
 
-FElysiumEntity* FElysiumNpcBase::TargetWeaponOwner(FElysiumEntity* Target) const
+FElysiumEntity* FElysiumNpcBase::TargetWeaponOwner(FElysiumEntity* TargetEntity) const
 {
 	// `__RTDynamicCast(target, CBaseEntity -> CBaseCombatWeapon)` then `0x102521f0`: the weapon's
 	// `m_hOwner` (`+0x88c`) resolved, answered as its combat character (`+0x9c`). The port's weapon
 	// answers its owner as that character directly.
-	FElysiumItem* Item = Target != nullptr ? Target->AsItem() : nullptr;
+	FElysiumItem* Item = TargetEntity != nullptr ? TargetEntity->AsItem() : nullptr;
 	FElysiumWeapon* Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
 	return Weapon != nullptr ? Weapon->OwnerCharacter() : nullptr;
 }
@@ -301,12 +290,13 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	{
 		return static_cast<const FElysiumNpcBase*>(this)->GetEnemy();
 	};
-	// `GetEnemies()->LastKnownPosition(enemy)` (`0x102dfed0`); a miss answers `vec3_origin`.
+	// `GetEnemies()->LastKnownPosition(enemy)` (`0x102dfed0`), called with a NULL enemy too: the
+	// enemy's record, else the last position-only record ("danger pos"), else `vec3_origin`.
+	// (L05 integration: was `EnemyLastKnownPosition`, whose no-enemy arm answered the zero vector
+	// without the record walk.)
 	auto EnemyLkp = [this]() -> FVector
 	{
-		FVector Lkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(Lkp);
-		return Lkp;
+		return Conditions19LastKnownPosition(static_cast<const FElysiumNpcBase*>(this)->GetEnemy());
 	};
 	// `0x102ee140` (the goal point) with this body's origin standing in when the seam answers none.
 	auto GoalUnits = [this]() -> FVector
@@ -321,8 +311,9 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	{
 	case TaskWait:
 	case TaskWaitRandom:
-		// `0x10288bb6`: complete once curtime is no longer below `m_flWaitFinished` (`AND 0x100`).
-		if (!(Now < BaseScheduleHost.WaitFinished))                             // 0x10288c2a
+		// `0x10288bb6`: `10288c1d FCOMP [+0x5db4]` / `10288c25 AND EAX,0x100`: below or UNORDERED keeps
+		// running, so only an ordered `curtime >= m_flWaitFinished` completes.
+		if (Now >= BaseScheduleHost.WaitFinished)                                  // 0x10288c2a
 		{
 			TaskComplete(false);                                                   // 0x10288c34
 		}
@@ -340,7 +331,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		{
 			MotorSetIdealYawToTargetAndUpdate(Lkp, YawSpeedHold);                  // 0x10288c10
 		}
-		if (!(Now < BaseScheduleHost.WaitFinished))                             // 0x10288c2a
+		if (Now >= BaseScheduleHost.WaitFinished)                                  // 0x10288c1d / 0x10288c2a (unordered runs)
 		{
 			TaskComplete(false);                                                   // 0x10288c34
 		}
@@ -353,7 +344,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 			TaskComplete(false);                                                   // 0x10289713
 			return 0;
 		}
-		if (FindClientInPvs())                                                     // 0x10288b93 / 0x10288b9d
+		if (Conditions19ClientInPvs())                                             // 0x10288b93 / 0x10288b9d
 		{
 			TaskComplete(false);                                                   // 0x10288ba7
 		}
@@ -361,8 +352,8 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 
 	case TaskMoveToTargetRange:
 	{
-		FElysiumEntity* Target = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
-		if (Target == nullptr)                                                     // 0x10288c4c..0x10288c6f
+		FElysiumEntity* TargetEntity = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
+		if (TargetEntity == nullptr)                                                     // 0x10288c4c..0x10288c6f
 		// same arm: 0x10288c69 JNZ
 		{
 			Fail(LineNoTarget, FailNoTarget);                                      // 0x10288c8b
@@ -376,7 +367,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		// same arm: 0x10288d07 JZ, 0x10288d24 JNZ, 0x10288d34 CALL
 		if (!bReaim)
 		{
-			const FVector TargetUnits = NpcKernelMotor2Shared::MotorTailSourceOf(Target->Origin);
+			const FVector TargetUnits = NpcKernelMotor2Shared::MotorTailSourceOf(TargetEntity->Origin);
 			Goal = GoalUnits();                                                    // 0x10288d3e
 			const float Drift = NpcKernelMotor2Shared::Length3D(Goal - TargetUnits); // 0x10288d6d
 			bReaim = Range * ElysiumNpcTunables::HalfDouble < Drift;              // 0x10288d77 / 0x10288d87
@@ -386,10 +377,10 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 			// `0x10288d8d`: the distance becomes the 2-D distance to the target, and the goal is
 			// same arm: 0x10288d96 JZ, 0x10288db3 JNZ, 0x10288dbf CALL, 0x10288dcb CALL
 			// re-aimed at the target's `GetAbsOrigin`.
-			const FVector TargetUnits = NpcKernelMotor2Shared::MotorTailSourceOf(Target->Origin);
+			const FVector TargetUnits = NpcKernelMotor2Shared::MotorTailSourceOf(TargetEntity->Origin);
 			Distance = NpcKernelMotor2Shared::Length2D(TargetUnits - Here);        // 0x10288ded
 			// same arm: 0x10288e03 JZ, 0x10288e20 JNZ, 0x10288e30 CALL
-			NavUpdateGoalPos(Target->Origin);                                      // 0x10288e39
+			NavUpdateGoalPos(TargetEntity->Origin);                                      // 0x10288e39
 		}
 		if (Distance < Range)                                                      // 0x10288e4d JNP
 		{
@@ -412,9 +403,10 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 
 	case TaskWalkPathTimed:
 	case TaskRunPathTimed:
-		// `0x10289614`: keep running while curtime is at or below `m_flWaitFinished` and the goal is
-		// set (`AND 0x4100`); otherwise stop, complete and clear the goal.
-		if (Now <= BaseScheduleHost.WaitFinished && NavIsGoalActive())            // 0x1028962a / 0x10289639
+		// `0x10289614`: `1028961d FCOMP` / `10289625 AND EAX,0x4100` / `1028962a JZ`: only an ordered
+		// `curtime > m_flWaitFinished` goes straight to the stop; at or below it, or unordered, the goal
+		// test decides. Otherwise stop, complete and clear the goal.
+		if (!(Now > BaseScheduleHost.WaitFinished) && NavIsGoalActive())         // 0x1028962a / 0x10289639
 		// same arm: 0x10289632 CALL
 		{
 			return 0;
@@ -431,7 +423,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		// same arm: 0x102895ad CALL
 		const float Distance = NpcKernelMotor2Shared::Length3D(Here - GoalUnits()); // 0x102895dc
 		const float Range = ResolveTaskDistance(Step->Data);                       // 0x102895f1
-		if (Range < Distance)                                                      // 0x10289602
+		if (!(Range >= Distance))                                                  // 0x102895f7 FCOMP / 0x102895fd AND 0x100 / 0x10289602 (unordered runs)
 		{
 			return 0;
 		}
@@ -464,17 +456,24 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 
 	case TaskFacePlayer:
 	{
-		// `engine->PEntityOfEntIndex(1)`, else index 0, then `CBaseEntity::Instance` (`0x100ab250`).
+		// `engine->PEntityOfEntIndex(1)`, else (`0x10288a7c JNZ` not taken) `PEntityOfEntIndex(0)` --
+		// the world edict -- then `CBaseEntity::Instance` (`0x10004d13`). With no player retail faces
+		// WORLDSPAWN's origin, `(0,0,0)`; the port stands no world entity, so its origin is the
+		// constant. The `TaskFail(0x17)` at `0x10288b22..0x10288b3c` needs the world edict to have no
+		// entity, which a loaded map never has; it is carried unreachable. (L05 integration: the port
+		// failed the task whenever the player was absent.)
 		FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr; // 0x10288a22..0x10288a8e
 		// same arm: 0x10288a7c JNZ, 0x10288a87 CALL
-		if (Player == nullptr)                                                     // 0x10288aa4
+		const bool bWorldEntityMissing = World == nullptr;                         // 0x10288aa4
+		if (bWorldEntityMissing)
 		{
 			Fail(LineNoPlayer, FailNoPlayer);                                      // 0x10288b3c
 			return 0;
 		}
+		const FVector FacePoint = Player != nullptr ? Player->Origin : FVector::ZeroVector; // 0x10288ac0 slot 217
 		MotorMoveStop();                                                           // 0x10288aac
 		// same arm: 0x10288ac0 CALL
-		MotorSetIdealYawToTargetAndUpdate(Player->Origin, YawSpeedHold);           // 0x10288ac9
+		MotorSetIdealYawToTargetAndUpdate(FacePoint, YawSpeedHold);                // 0x10288ac9
 		SetTurnActivity();                                                         // 0x10288ad2
 		if (Now > BaseScheduleHost.WaitFinished                                    // 0x10288aed
 			&& MotorDeltaIdealYaw() < FacePlayerYawBound)                          // 0x10288af9 / 0x10288b09
@@ -619,7 +618,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 			MotorMoveStop();                                                       // 0x102887f5
 			const FVector Delta = Face->Origin - Origin;                           // 0x102887fe / 0x1028880a
 			// `UTIL_VecToYaw` (`0x101d2c70`) answers 0 for a zero vector.
-			const float Yaw = NpcKernelFacingShared::RetailYawOf(Delta, 0.f);      // 0x10288854
+			const float Yaw = NpcKernelFacingShared::RetailVecToYaw(Delta);        // 0x10288854
 			MotorSetIdealYawAndUpdate(Yaw, YawSpeedHold);                          // 0x1028885e
 		}
 		AutoMovement();                                                            // 0x10288865
@@ -632,11 +631,11 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 
 	case TaskDie:
 	{
-		if (!IsActivityFinished() || SequenceCycle < ElysiumNpcTunables::One)     // 0x10288fd0 / 0x10288fe9
+		if (!IsActivityFinished() || !(SequenceCycle >= ElysiumNpcTunables::One)) // 0x10288fc8 slot 251 / 0x10288fd0 / 0x10288fdc FCOMP / 0x10288fe4 AND 0x100 / 0x10288fe9 (unordered runs)
 		{
 			return 0;
 		}
-		RetailLifeState = LifeDead;                                                // 0x10288ff7
+		AnimEventLifeStateWord = LifeDead;                                                // 0x10288ff7
 		ThinkSet(nullptr, 0.0);                                                    // 0x10289001
 		if (FElysiumNpc* Troika = AsNpc())
 		{
@@ -663,9 +662,9 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		// same arm: 0x102890b9 JZ
 		{
 			StartFadeOut();                                                        // 0x102890bb
-			// same arm: 0x102890d8 CALL
 			return 0;
 		}
+		// The origin argument is slot 220 (`0x102890d8 CALL [EDX+0x370]`); the seam records no origin.
 		InsertAiSound(SoundCarcass, Origin, SoundCarcassVolume,                   // 0x102890e1
 			ElysiumNpcTunables::Thirty);
 		return 0;
@@ -796,15 +795,17 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	case TaskWaitForMovementStep:
 	{
 		const float Limit = Step->Data;
+		// `10288f4e TEST AH,0x44` / `10288f51 JNP`: only an ordered `data == 0` skips the timer; then
+		// `10288f66 AND EAX,0x4100` / `10288f6b JZ`: only an ordered `elapsed > data` completes, an
+		// unordered compare goes on to the goal test.
 		if ((Limit == ElysiumNpcTunables::Zero                                     // 0x10288f46 / 0x10288f51
-				|| static_cast<float>(Now - Schedule.TaskStartedAt) <= Limit)      // 0x10288f5e / 0x10288f6b
+				|| !(static_cast<float>(Now - Schedule.TaskStartedAt) > Limit))    // 0x10288f5e / 0x10288f6b
 			&& NavIsGoalActive())                                                  // 0x10288f77 / 0x10288f7e
 		{
 			if (NavigatorGoalIsActive())                                           // 0x10288f8a
 			// same arm: 0x10288f93 JNZ
 			{
 				ValidateNavGoal();                                                 // 0x10288fb4 slot 528
-				// same arm: 0x10288fc8 CALL
 				return 0;
 			}
 			BaseScheduleHost.bShouldMove = false;                                  // 0x10288f95
@@ -820,14 +821,15 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	case TaskWeaponPickup:
 	{
 		if (!IsActivityFinished())                                                 // 0x1028964f
-		// same arm: 0x10289657 JZ, 0x10289666 JZ, 0x10289683 JNZ
+		// same arm: 0x10289657 JZ
 		{
 			return 0;
 		}
-		FElysiumEntity* Target = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
+		// `m_hTargetEnt` resolved: 0x10289666 JZ, 0x10289683 JNZ.
+		FElysiumEntity* TargetEntity = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
 		// Crash guard: a target that is null or not a weapon casts to null and retail's
 		// `0x102521f0` reads `+0x88c` through it; the port answers "unowned" and completes.
-		if (TargetWeaponOwner(Target) != nullptr)                                  // 0x1028969a / 0x102896a4
+		if (TargetWeaponOwner(TargetEntity) != nullptr)                                  // 0x1028969a / 0x102896a4
 		// same arm: 0x102896ad JZ
 		{
 			Fail(LineWeaponOwnedPickup, FailWeaponOwned);                          // 0x102896c7
@@ -839,14 +841,16 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 
 	case TaskWeaponRunPath:
 	{
-		FElysiumEntity* Target = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
-		if (Target == nullptr)                                                     // 0x10288e89..0x10288eae
+		FElysiumEntity* TargetEntity = World != nullptr ? World->Resolve(TargetEnt) : nullptr;
+		if (TargetEntity == nullptr)                                                     // 0x10288e89..0x10288eae
 		// same arm: 0x10288ea8 JNZ
 		{
 			Fail(LineWeaponMissing, FailWeaponMissing);                            // 0x10288f33
 			return 0;
 		}
-		if (Target->GetOwnerEntity().IsSet())                                      // 0x10288eb4 slot 97
+		// Slot 97 (`+0x184`, `GetOwnerEntity`) answers the RESOLVED owner, so a stale handle is no
+		// owner (L05 integration: the port tested the raw handle).
+		if (World->Resolve(TargetEntity->GetOwnerEntity()) != nullptr)            // 0x10288eb4 slot 97 / 0x10288eba
 		// same arm: 0x10288ebc JZ
 		{
 			Fail(LineWeaponOwnedRunPath, FailWeaponOwned);                         // 0x10288ed8

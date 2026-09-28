@@ -616,10 +616,11 @@ bool FElysiumNpcHengeyokai::FormBitTimerExpired() const
 
 void FElysiumNpcHengeyokai::MotorCancelLinkFacing()
 {
-	// `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s whole body. **SEAM**: the Facing family
-	// established that this mover keeps no facing queue (`m_facingQueue`, motor+0x54), so the cancel
-	// is recorded and cancels nothing.
+	// `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s whole body: `CAI_Motor::UpdateYaw(-1)`,
+	// the per-pass turn toward the motor's ideal yaw (not a facing-queue cancel). Story 8 (L05
+	// integration): RunTask19's `MotorUpdateYaw` is that primitive; the ledger still counts the call.
 	++MotorSeams.LinkFacingCancels;
+	MotorUpdateYaw(-1);
 }
 
 void FElysiumNpcHengeyokai::ClearLinkActivity()

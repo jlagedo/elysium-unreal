@@ -241,9 +241,9 @@ void FElysiumNpcVampireBoss::VampireBossNPCInit()
 void FElysiumNpcVampireBoss::CommitSetupJump()
 {
 	// `thunk_FUN_102c4e80(this)` — the commit every `SetupJump`/`SetupSuperJump` ends on, which
-	// takes the three jump words just written and starts the leap. **SEAM**: recorded, starts
-	// nothing.
-	++MotorSeams.SetupJumpCommits;
+	// takes the three jump words just written and starts the leap. It is RunTask19's `JumpCommit`
+	// (one seam for the one call; story 8 L05 integration): recorded, starts nothing.
+	JumpCommit();
 }
 
 // --- Moved from `ElysiumNpcKernelMotor2.cpp` (story 5 step 4) ---

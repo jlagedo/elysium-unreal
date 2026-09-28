@@ -575,8 +575,9 @@ const TCHAR* FElysiumNpcBase::GlobalTaskName(int32 GlobalTaskId)
 
 float FElysiumNpcBase::MotorYawSpeed() const
 {
-	// SEAM for `CAI_Motor::m_YawSpeed` (`m_pMotor` `+0x38`), the STORED yaw speed `SetYawSpeed`
-	// writes. Slot 516 `MaxYawSpeed` computes a different word — the CEILING — and answering with
-	// it would be an invention, so this answers 0.
-	return 0.f;
+	// `CAI_Motor::m_YawSpeed` (`m_pMotor` `+0x38`), the STORED yaw speed `SetYawSpeed` writes. Slot
+	// 516 `MaxYawSpeed` computes a different word — the CEILING. Since story 8 (RunTask19) the word
+	// stands as `MotorYawSpeedWord`, written by `0x102e1c10` (`0x102e1ca8`); `0x102e1cf0`'s
+	// recalculation (the `-1.0` arm) is still a seam, so it holds the last explicit speed or 0.
+	return MotorYawSpeedWord;
 }

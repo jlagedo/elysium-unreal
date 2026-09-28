@@ -86,8 +86,26 @@ every in-range id the byte table sends there, is the default `0x102896f5`.
 27. **default** (`0x102896f5`): `DevMsg("No RunTask entry for %s\n", slot 449 TaskName(id))`,
     **complete** (`0x10289713`).
 
-**Unrecovered:** `0x10279420`'s predicate; `0x102ee220`'s re-aim (no port navigator goal);
-`_DAT_1049a17c` (slot 571's walk/run split; the port's `Slot571` stands at 0.0, the packet reads 190.0).
+**Integration notes (L05, pass I).**
+- `_DAT_1049a17c` is the `.rdata` float **190.0** (`0x433e0000`, read from the image; no writer).
+  Slot 571 (`0x10289ce0`) answers ACT_WALK only on an ordered `distance < 190.0`
+  (`10289cec TEST AH,0x5` / `10289cf4 JNP`); at or beyond it, and on NaN, ACT_RUN.
+- The wait gates (`0x10288c1d` / `0x10288c25 AND 0x100`), the timed walk (`0x10289625 AND 0x4100`),
+  the within-distance walk (`0x102895fd AND 0x100`), the death cycle (`0x10288fe4 AND 0x100`) and
+  the 0x6e timer (`0x10288f66 AND 0x4100`) all keep the task RUNNING on an unordered compare.
+- `0x102dfed0` is called with a NULL enemy too (arms 1, 10, 12, 13): the record walk answers the
+  last position-only ("danger") record before `vec3_origin`.
+- 0x2d with no player faces worldspawn (`PEntityOfEntIndex(0)`, `0x10288a7e..0x10288a8e`); the
+  `TaskFail(0x17)` needs the world edict to have no entity.
+- 0x72's slot 97 (`+0x184`) answers the RESOLVED owner (`0x10288eb4`).
+- `0x102e20b0` -> `0x102e2750` is `JMP [outer vtbl+0x80c]`, slot 515 `CalcIdealYaw` (`0x10274b30`),
+  whose answer is `VecToYaw` (`0x101d2c70`) in `[0, 360)`. `0x102e2020` is `0x102e2750` then the
+  `+0x28` flip and the `+0x1c == 180` direct store. `0x102e1cf0` stores `(motor+0x10)->vfunc0()` into
+  `motor+0x38` (the recalculated yaw speed).
+- `m_lifeState` (`+0x200`) is one port word, `AnimEventLifeStateWord` (family Misc19's).
+
+**Unrecovered:** `0x10279420`'s predicate (four corner traces, mask `0x2400b`, not walked);
+`0x102ee220`'s re-aim (no port navigator goal); the vfunc behind `0x102e1cf0`.
 
 ## `0x102aacf0` CAI_BaseNPCTroika::RunTask
 
@@ -177,9 +195,23 @@ index 0x38 and every out-of-range id tail-call `CAI_BaseNPC::RunTask`. Arms by i
   (-1.0), motor `+0x30 = 0`, running while `vz >= 0` or `0x102c4eb0` refuses; landing: motor slot 8,
   `NAV_GROUND`, `m_bJumping = 0`, complete.
 
+**Integration notes (L05, pass I).**
+- 0x7a / 0x7b call lane Script19's `0x102aa860` port (`IssuePatrolMoveRun`) on `+0x658c` / `+0x6594`.
+- 0xb4: inside `0x102b53d0(this, 1, ...)`, with `+0x62e8` arrived, `0x102b54f1..0x102b5500` fire the
+  NPC's `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator the place) before `0x102da600(place, this,
+  1, fired)`.
+- 0xb5: `0x102da600(place, this, 0, arrived)` (`0x102abad3..0x102abae2`, EBX = 0): with its second
+  argument 0 it only fires the place's `OnNPCLeft` (`+0x468`) when arrived; no claimant removal.
+- The unordered compares keep running at `0x102aad3c` (the shared wait), `0x102abead` (0x96),
+  `0x102abbb1` (the death cycle: NaN is not finished) and `0x102ab19c TEST AH,0x41` (the burst's
+  next-attack gate); 0xbc/0xbd's player distance (`0x102ab3a0..0x102ab3ab`) takes the slot-588 path
+  on greater OR unordered.
+- `0x102c1400` answers -1 only when `IsInDialog()` (`0x102c1170`) is false; inside a dialogue it runs
+  the dialogue upkeep and answers `m_Activity` or 0xf1 / 1 (the dialogue family's body).
+
 **Unrecovered:** `0x102f2ea0`'s tolerance source; `0x102a0870`, `0x102a0490`'s traces;
-`0x103454c0`/`0x10345480`'s studio link words; `0x102c1400`; `0x102c4e80`; the arg of
-`LeaveInterestingPlace` (`1` here); `place+0x571`'s holster slot 315 on the weapon.
+`0x103454c0`/`0x10345480`'s studio link words; `0x102c4e80`; the rest of `0x102b53d0` (its two
+sounds, the `+0x14b8`/`+0x14bc` bit clears, `0x102ae310`); `place+0x571`'s holster slot 315.
 
 ## Species
 
@@ -243,8 +275,26 @@ index 0x38 and every out-of-range id tail-call `CAI_BaseNPC::RunTask`. Arms by i
   past the wait `m_flDesiredMoveYaw = 0`, complete.
 - **`0x103cdfb0` CNPC_VWerewolf**: the hint movers (0x14b..0x14d), the anim-point snaps, the fake hull,
   `TeleportOut` + `SetSchedule(0x158)` on activity 0x10b, `m_lifeState 2` + `OnFinishCrushAnimation`
-  (0x15f); its `TaskFail("Did not path out of player's sight")` passes the STRING as the reason code.
+  (0x15f); its `TaskFail("Did not path out of player's sight")` is the SDK's text fail code (the
+  string's address as the reason), the port's `TaskFailText`. `DAT_1093f9a4` is ConVar
+  `werewolf_force_teleport` (`0x1093f9a0`).
 
-**Unrecovered:** `0x103498b0`'s thresholds; `IsMeleeSwingOver` / the event walk inputs (no studio
-data at the kernel tier); `0x1039aa20`, `0x10398db0`, `0x10383470`, `0x1038c170`, `0x1038fe30`,
-`0x1038e720`; the ConVar at `DAT_1093f9a4`; `_DAT_1093c33c`; `m_iWasOccluded`'s producer.
+**Integration notes (L05, pass I).**
+- `0x103498b0`: margin = roll `+4 - +0xc - +8`, then four `FCOMP` / `TEST AH,0x41` / `JP` rungs
+  against `_DAT_10739fa0..fac` -- the `rules.txt` defender thresholds (`ClassifyDefender`'s ladder,
+  one lower): an ordered `margin <= T` answers 0..3, else 4.
+- `GetMeleeDiceRolls` (`0x10345980`) searches the ATTACKER's array (`+0xa88`, filled by
+  `CalcAndStoreMeleeDiceRolls 0x10346380` keyed by the defender); Human and ChangBros 0x8b ask the
+  enemy for its swing at this NPC.
+- `_DAT_1093c33c` = 33.0 / 60.0 = 0.55f (static initialiser `0x103a5870`, `0x104c3cf4` / `0x104c3cf8`).
+- `0x1039aa20` / `0x10383470`: when `+0x1560 + 2.0 < curtime` (ordered), the type-0 stat list
+  `Set(0xf, 0)`, Hengeyokai also `+0x6694 = 1`, then `TaskComplete(0)`. `0x10398db0` is the tentacle
+  GRAB (`phys_animlink`, mode 3). `0x1038e720` is lane Script19's wing selector.
+- `0x1039ee20` is `IsAreaClear(pos, 0x202400b, mins, maxs)` over hull 15 with X and Y doubled
+  (Z not); Tentacle 0x150's goal is type 4, activity 0x13, tolerance -1.0, `SetGoal(goal, 0)`.
+- ChangBros 0x15b creates `chang_center_emitter` through `0x100fbc90`, the named-emitter create.
+- SabbatLeader 0x15e / 0x162 complete only on an ordered `>` (`0x103a906b AND 0x4100`).
+
+**Unrecovered:** `IsMeleeSwingOver` / the event walk inputs (no studio data at the kernel tier);
+`0x1038c170`, `0x1038fe30`; the goal target word `DAT_1093bd30`; `m_iWasOccluded`'s producer beyond
+Bach's camper pass.

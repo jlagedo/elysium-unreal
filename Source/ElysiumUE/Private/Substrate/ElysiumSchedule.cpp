@@ -418,6 +418,8 @@ namespace
 	// not do this yet. Each row is a real body with a recovered address, tallied once per death so
 	// `elysium.stubs` answers "what does dying still not do" with the same readout every other
 	// unported surface uses.
+	// STORY8-TWIN: the SUB_StartFadeOut / SOUND_CARCASS rows replaced by 0x10288fc4 (base TASK_DIE,
+	// `StartFadeOut` 0x102890bb / `InsertAiSound` 0x102890e1) at wave 2
 	void DeathChainStubs(IElysiumScheduleRunner& Runner)
 	{
 		struct FRow { const TCHAR* Surface; const TCHAR* Address; const TCHAR* What; };
@@ -454,10 +456,13 @@ namespace
 	{
 		switch (OpOf(Step))
 		{
+		// STORY8-TWIN: replaced by 0x102aad7e (Troika idx 2) / 0x10288b7b (base) at wave 2
 		case EElysiumTaskOp::WaitPvs:
 			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+		// STORY8-TWIN: replaced by 0x102888d4 (base 0x69) at wave 2
 		case EElysiumTaskOp::StopMoving:
 			return Runner.StopMovingTask();
+		// STORY8-TWIN: replaced by 0x102aaf2e (Troika idx 0x0b) / 0x10288f43 (base 0x6e/0x6f) at wave 2
 		case EElysiumTaskOp::WaitForMovement:
 		{
 			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
@@ -465,9 +470,11 @@ namespace
 				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
 					: EElysiumTaskResult::Running);
 		}
+		// STORY8-TWIN: replaced by 0x102aad1f (Troika idx 8) / 0x102889a2 (base 0x4b) at wave 2
 		case EElysiumTaskOp::SetActivity:
 			return Runner.IsIdealActivityCurrent() || Now >= State.TaskEndsAt
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+		// STORY8-TWIN: replaced by 0x102abb90 (Troika idx 0x0a) / 0x10288fc4 (base 0x5f) at wave 2
 		case EElysiumTaskOp::Die:
 		{
 			// Troika's `RunTask` arm `0x102abb90`. This is the body that runs on every VtMB NPC: they
@@ -489,6 +496,8 @@ namespace
 		default:
 			break;
 		}
+		// STORY8-TWIN: the timed default (TASK_WAIT / TASK_WAIT_RANDOM) replaced by 0x102aad61 (Troika
+		// idx 0) / 0x10288bb6 (base) at wave 2
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
 

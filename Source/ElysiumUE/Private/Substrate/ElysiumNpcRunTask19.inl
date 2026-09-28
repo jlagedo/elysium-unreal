@@ -28,12 +28,9 @@ void JumpHaltMotion();
 
 // --- Seams (the port has no body for the retail call; each answers retail's "nothing" arm) --------
 
-/** `FUN_102aa860` `0x102aa860(this, &m_sppPatrolPath | &m_sppPatrolPathHunt)` -- the patrol goal
- *  step of `TASK_GET_PATH_TO_PATROL_POINT(_HUNT)`. **SEAM**: the row is lane Script19's (L10); the
- *  integrator redirects this call to its port. Records the call. */
-int32 PatrolPathStepCalls = 0;
-bool bLastPatrolPathStepHunt = false;
-void PatrolPathStep(bool bHuntPath);
+// `FUN_102aa860` `0x102aa860(this, &m_sppPatrolPath | &m_sppPatrolPathHunt)`, the patrol goal step
+// of `TASK_GET_PATH_TO_PATROL_POINT(_HUNT)`, is lane Script19's `IssuePatrolMoveRun` (the L05
+// integration redirected the arms and dropped this lane's recording seam).
 
 /** `FUN_102f2ea0` `0x102f2ea0` -- `CAI_Navigator`: the goal is within tolerance (2-D distance to the
  *  goal under the tolerance and the height gap within `StepHeight`), and on success it dispatches the
@@ -64,9 +61,8 @@ int32 SequenceLinkedLand() const;
  *  **SEAM** for the trace arm, which answers "no ground". */
 bool KnockbackLanded();
 
-/** `FUN_102c4e80` `0x102c4e80` -- the jump commit. **SEAM**: counted (family VampireBoss's
- *  `CommitSetupJump` records the same call -- the integrator should point it here). */
-int32 JumpCommits = 0;
+/** `FUN_102c4e80` `0x102c4e80` -- the jump commit. **SEAM**: counted on `MotorSeams.SetupJumpCommits`
+ *  (family VampireBoss's `CommitSetupJump` forwards here). */
 void JumpCommit();
 
 /** `FUN_102c1400` `0x102c1400` -- `TASK_RUN_DIALOG`'s activity for the current dialogue line, or -1
@@ -98,10 +94,9 @@ bool bLastDisciplineResist = false;
  *  Troika think stamps. **SEAM** word: no port member carried it and nothing reads it. */
 double EntityLastThink = 0.0;
 
-/** `+0x0ff8 m_hBodyFireParticles[18]` (`CBaseCombatCharacter`), the burn emitters `TASK_ON_FIRE_LOOP`
- *  stops. **SEAM** words: no port producer writes them, so the stop loop finds none. The stop
- *  (the emitter's slot 242, then `0x100fbbb0(emitter, 2.0)`) is counted. */
-FElysiumEntityHandle BodyFireParticles[18];
+// `+0x0ff8 m_hBodyFireParticles[18]`, the burn emitters `TASK_ON_FIRE_LOOP` stops, is family
+// Conditions19's `BodyFireParticles` (one word; the L05 integration dropped this lane's second copy).
+// The stop (the emitter's slot 242, then `0x100fbbb0(emitter, 2.0)`) is counted.
 int32 BodyFireParticleStops = 0;
 
 /** The damage force `TASK_MELEE_HIT_BY_FINISHING_MOVE` writes into its `CTakeDamageInfo` (`+0x10`):
@@ -118,9 +113,9 @@ FVector FinishingMoveDamageForce = FVector::ZeroVector;
  *  the swing task end. */
 bool EnemyMeleeSwingOver(const FElysiumCombatCharacter& Enemy) const;
 
-/** `FUN_103498b0` `0x103498b0` -- the dice roll's band (0..4) against the four `_DAT_10739fa0..fac`
- *  thresholds; band 0 arms the swing task's completion. **SEAM**: the thresholds and the roll word
- *  it `__ftol`s are unrecovered; answers 0. */
+/** `FUN_103498b0` `0x103498b0` -- the dice roll's band (0..4): the roll's margin against the four
+ *  `_DAT_10739fa0..fac` defender thresholds of `rules.txt` (`ElysiumWeapons::ClassifyDefender`'s
+ *  ladder, one lower); band 0 arms the swing task's completion. */
 int32 MeleeRollBand(const FElysiumMeleeRoll& Roll) const;
 
 /** The sequence-event walk `TASK 0x8d` (`CNPC_VHuman`) and `TASK 0x8e` (`CNPC_VMingXiao`,

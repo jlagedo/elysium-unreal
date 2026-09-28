@@ -410,12 +410,12 @@ bool FElysiumNpcKernelRunTask19BaseDieTest::RunTest(const FString&)
 	FinishActivity(N);
 	N.SequenceCycle = 0.5f;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
-	TestNotEqual(TEXT("0x10288fe9: a cycle below 1.0 waits"), N.RetailLifeState, 2);
+	TestNotEqual(TEXT("0x10288fe9: a cycle below 1.0 waits"), N.AnimEventLifeStateWord, 2);
 	N.SequenceCycle = 1.f;
 	N.SpawnFlags &= ~0x200;
 	const int32 Sizes = N.SetSizeCalls;
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
-	TestEqual(TEXT("0x10288ff7 m_lifeState = 2"), N.RetailLifeState, 2);
+	TestEqual(TEXT("0x10288ff7 m_lifeState = 2"), N.AnimEventLifeStateWord, 2);
 	TestEqual(TEXT("0x102890a3 UTIL_SetSize"), N.SetSizeCalls, Sizes + 1);
 	TestEqual(TEXT("the maxs are (4,4,1)"), N.LastSetSizeMaxsUnits, FVector(4.f, 4.f, 1.f));
 	TestEqual(TEXT("0x102890e1 SOUND_CARCASS"), N.InsertedAiSoundType, 0x20);
@@ -666,11 +666,11 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abbbe: neither gate arm -> no Die"), N.RunTaskDieCalls, 0);
 	N.IdealActivityNumber = 1;
-	N.RetailLifeState = 1;
+	N.AnimEventLifeStateWord = 1;
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abc1e Die"), N.RunTaskDieCalls, 1);
 	TestTrue(TEXT("0x102abc03: TASK_DIE credits itself"), N.LastDieCredit == N.Handle);
-	TestEqual(TEXT("0x102abc0d: m_lifeState 1 -> 0"), N.RetailLifeState, 0);
+	TestEqual(TEXT("0x102abc0d: m_lifeState 1 -> 0"), N.AnimEventLifeStateWord, 0);
 	TestFalse(TEXT("no completion"), Completed(N));
 	S = Step(0xdf);
 	Reset(N);
@@ -698,11 +698,26 @@ bool FElysiumNpcKernelRunTask19TroikaMovementTest::RunTest(const FString&)
 		TestTrue(TEXT("0x102aaff2 completes"), Completed(N));
 		TestFalse(TEXT("0x102aafeb m_bShouldMove = 0"), N.BaseScheduleHost.bShouldMove);
 	}
-	FElysiumScheduleStep S = Step(0x7b);
+	// 0x7a / 0x7b reach `0x102aa860` (L10's `IssuePatrolMoveRun`) on `+0x658c` / `+0x6594`. A cell
+	// with no path fails `0x1d` (`0x102aa97d`); a path whose current node is -1 returns silently
+	// (`0x102aa88a`). The hunt cell holds such a path, the plain cell none.
+	FElysiumNpc::FPatrolPathRecord HuntPath;
+	HuntPath.Count = 1;
+	HuntPath.Nodes[0] = -1;
+	N.PatrolPathCell.Path = nullptr;
+	N.PatrolPathHuntCell.Path = &HuntPath;
+	{
+		FElysiumScheduleStep S = Step(0x7b);
+		Reset(N);
+		N.RunTaskSlot444(&S);
+		TestFalse(TEXT("0x102ab033: the hunt path's -1 node returns without a fail"),
+			N.Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+	}
+	FElysiumScheduleStep S = Step(0x7a);
 	Reset(N);
 	N.RunTaskSlot444(&S);
-	TestEqual(TEXT("0x102ab033 patrol step"), N.PatrolPathStepCalls, 1);
-	TestTrue(TEXT("on m_sppPatrolPathHunt"), N.bLastPatrolPathStepHunt);
+	TestTrue(TEXT("0x102ab018: no m_sppPatrolPath fails 0x1d"), Failed(N, 0x1d));
+	N.PatrolPathHuntCell.Path = nullptr;
 	return true;
 }
 
@@ -1140,9 +1155,11 @@ bool FElysiumNpcKernelRunTask19SabbatLeaderTest::RunTest(const FString&)
 	N.SabbatLeaderTaskStartTime = F.Now() - 0.5;
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("half a second keeps running"), Completed(N));
-	N.SabbatLeaderTaskStartTime = F.Now() - 1.0;
+	// `0x103a906b AND EAX,0x4100` / `0x103a9070 JNZ`: only an ordered `elapsed > 1.0` completes
+	// (L05 integration: the case stood at exactly one second, which retail keeps running).
+	N.SabbatLeaderTaskStartTime = F.Now() - 1.5;
 	N.RunTaskSlot444(&S);
-	TestTrue(TEXT("one second completes"), Completed(N));
+	TestTrue(TEXT("past one second completes"), Completed(N));
 	S = Step(0x15d);
 	Reset(N);
 	FinishActivity(N);
@@ -1201,7 +1218,7 @@ bool FElysiumNpcKernelRunTask19MingXiaoTest::RunTest(const FString&)
 	FinishActivity(N);
 	N.MingXiaoThrowableObjectMode = 1;
 	N.RunTaskSlot444(&S);
-	TestEqual(TEXT("0x10393d16 the release"), N.MingXiaoThrowReleases, 1);
+	TestEqual(TEXT("0x10393d16 the tentacle grab 0x10398db0"), N.MingXiaoGrabCalls, 1);
 	TestTrue(TEXT("0x10393d1f completes"), Completed(N));
 	return true;
 }
@@ -1298,7 +1315,7 @@ bool FElysiumNpcKernelRunTask19WerewolfTest::RunTest(const FString&)
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
-	TestEqual(TEXT("0x103ce491 m_lifeState = 2"), N.RetailLifeState, 2);
+	TestEqual(TEXT("0x103ce491 m_lifeState = 2"), N.AnimEventLifeStateWord, 2);
 	TestTrue(TEXT("0x103ce49b completes"), Completed(N));
 	return true;
 }

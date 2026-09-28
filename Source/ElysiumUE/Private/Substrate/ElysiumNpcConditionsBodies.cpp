@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -304,10 +305,10 @@ bool FElysiumNpc::RunAlternateAiOpeningDoor(double Now)
 	}
 
 	// 3. Face it — `0x102e0b40` on the motor, `VecToYaw` (`0x101d2c70`) over the returned direction,
-	//    then `0x102e1c10(motor, yaw, -1.0)`. The yaw arithmetic is retail's and is done here; the
-	//    write is a seam.
-	SetAlternateAiIdealYaw(
-		static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(PointCm.Y, PointCm.X))));
+	//    then `0x102e1c10(motor, yaw, -1.0)`. `VecToYaw` answers a RETAIL yaw (Source's Y is this
+	//    world's -Y; L05 integration: was the Unreal yaw, harmless while the write was a seam), and
+	//    0 for a zero direction.
+	SetAlternateAiIdealYaw(NpcKernelFacingShared::RetailVecToYaw(PointCm));   // 0x101d2c70
 
 	// 4. Only once FACING does the transaction advance. Both advance arms set mode 2 and stamp an
 	//    expiry; the WAIT arm uses 1.0 s and the open arm 5.0 s, and the wait arm does not run the

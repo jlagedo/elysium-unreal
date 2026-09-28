@@ -266,8 +266,10 @@ FElysiumEntity* FElysiumNpcPayphone::ResolveDialogPartner() const
 void FElysiumNpcPayphone::DialogUpkeepTick()
 {
 	// SEAM for `FUN_102c1400`. Counted; see the `.inl` for what the real body does and why it is not
-	// one of this family's rows.
+	// one of this family's rows. The one stand-in for the address is RunTask19's
+	// `RunDialogActivity` (story 8 L05 integration folded the two); the payphone ignores its answer.
 	++DialogUpkeepTicks;
+	(void)RunDialogActivity();
 }
 
 bool FElysiumNpcPayphone::PayphoneThink()

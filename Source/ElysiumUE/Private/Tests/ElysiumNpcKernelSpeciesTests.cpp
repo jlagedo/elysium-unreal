@@ -1368,7 +1368,7 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	Tzim->DeathSound();   // fires the recorded event; the tail call is slot 487's
 
 	// --- `0x103bf560`: the motor yaw release ------------------------------------------------------
-	Tzim->FUN_103bf560();   // reaches family Hints' ReleaseMotorHintYaw seam
+	Tzim->FUN_103bf560();   // `0x102e1e20(-1)`: RunTask19's MotorUpdateYaw
 	return true;
 }
 

@@ -244,11 +244,17 @@ void FElysiumNpcBase::SaveWriteFields(void* Archive, FAiExtendedSaveHeader& Head
 
 bool FElysiumNpcBase::NavigatorGoalIsActive() const
 {
-	// SEAM for `thunk_FUN_102ee6a0(m_pNavigator)`, header bit `0x4`. Nothing in this runtime stands
-	// a `CAI_Navigator` goal object — family Senses records the same absence for the node graph —
-	// so the bit is never set. Named rather than inlined so the day a navigator lands the bit moves
-	// with it.
-	return false;
+	// `thunk_FUN_102ee6a0(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`:
+	// `102ee6a0 MOV EAX,[ECX+0x30]` (`m_pPath`), `102ee6a5 JZ`, `102ee6a7 MOV ECX,[EAX+0x24]` (the
+	// path's current waypoint), `102ee6ac JZ` -> 0, else 1. Read by the RunTask spines (Troika
+	// `0x102aaf72`, base `0x10288f8a`), the interrupt-distance gates of `0x102b27f0` and save header
+	// bit `0x4`.
+	//
+	// Wired (story 8 L05 integration) to the mover's navigation sample, the same bit family Motor's
+	// `NavIsGoalActive` (`0x102ee680`, `m_pPath->+0x5c` goal type != 0) reads. The port's mover keeps
+	// one "a route is being followed" fact (`bActiveGoal`) and does not separate a set goal from a
+	// route with a current waypoint, so the two navigator queries answer alike here.
+	return Motor != nullptr && Motor->SampleNavigation().bActiveGoal;
 }
 
 // The `AIExtendedSaveHeader_t` half of `CAI_BaseNPC::Save 0x1027bc60`, on its own so the two save

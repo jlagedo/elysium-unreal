@@ -45,6 +45,7 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcZombie.h"
 
+#include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
@@ -90,12 +91,12 @@ namespace RunTask19Species
 		return static_cast<const FElysiumNpcBase&>(Npc).GetEnemy();
 	}
 
-	// `GetEnemies()->LastKnownPosition(enemy)` (`0x102dfed0`); a miss answers `vec3_origin`.
+	// `GetEnemies()->LastKnownPosition(enemy)` (`0x102dfed0`), called with a NULL enemy too: the
+	// record, else the last position-only record, else `vec3_origin` (L05 integration: was
+	// `EnemyLastKnownPosition`, which skipped the walk with no enemy).
 	FVector EnemyLkp(const FElysiumNpc& Npc)
 	{
-		FVector Lkp = FVector::ZeroVector;
-		Npc.EnemyLastKnownPosition(Lkp);
-		return Lkp;
+		return Npc.Conditions19LastKnownPosition(Enemy167(Npc));
 	}
 
 	// The shared facing block: slot 167, `0x102dfed0`, `0x102e20b0(motor, lkp, speed)`.
@@ -150,13 +151,6 @@ void FElysiumNpcManBat::ManBatFlyBySound()
 	++ManBatFlyBySoundCalls;
 }
 
-void FElysiumNpcManBat::ManBatPickFlightActivity(const FVector& VelocityUnits)
-{
-	// `0x1038e720` -- SEAM (declaration).
-	++ManBatFlightActivityPicks;
-	ManBatLastFlightPickVelocity = VelocityUnits;
-}
-
 FElysiumEntity* FElysiumNpcManBat::ManBatNearestSpotlight() const
 {
 	// `0x100f7b20("Spotlight *", ...)` -- SEAM (declaration).
@@ -168,12 +162,6 @@ void FElysiumNpcManBat::ManBatKillSpotlight(FElysiumEntity& Light)
 	// The spotlight kill -- SEAM (declaration).
 	(void)Light;
 	++ManBatSpotlightsKilled;
-}
-
-bool FElysiumNpcWerewolf::RunTask19CheckAllMoveHints()
-{
-	++WerewolfRunTaskHintSeamCalls;   // `0x103cfc50` -- SEAM
-	return false;
 }
 
 bool FElysiumNpcWerewolf::RunTask19FindMoveHint()
@@ -200,40 +188,51 @@ bool FElysiumNpcWerewolf::RunTask19FindTeleportHint()
 	return false;
 }
 
-bool FElysiumNpcWerewolf::WerewolfEgressConVarSet() const
-{
-	// `DAT_1093f9a4` -- SEAM (declaration).
-	return false;
-}
-
 void FElysiumNpcHengeyokai::HengeyokaiTask14b()
 {
-	++HengeyokaiTask14bCalls;         // `0x10383470` -- SEAM
+	// `0x10383470` -- SEAM. The body is recovered: when `m_flProteanTransformStartTime (+0x1560)
+	// + 2.0 (_DAT_104b6808) < curtime` (`10383489 TEST AH,5` / `1038348c JP`: ordered), the type-0
+	// stat list (`+0x13bc/+0x13c0`, else the global `0x109f0b40`) `Set(0xf, 0)` (`0x1000ccd9`),
+	// `+0x6694 m_bInSharkForm = 1`, `TaskComplete(0)`. It stays a counter because `+0x1560` is a
+	// Troika word the port carries on `FElysiumNpcVampireBoss` only (`ProteanTransformStartTime`),
+	// and moving it is a hot-header change (listed for L13).
+	++HengeyokaiTask14bCalls;
 }
 
 void FElysiumNpcMingXiao::MingXiaoTask14b()
 {
-	++MingXiaoTask14bCalls;           // `0x1039aa20` -- SEAM
+	// `0x1039aa20` -- SEAM. Recovered: the same body as Hengeyokai's `0x10383470` without the
+	// `+0x6694` write (`+0x1560 + 2.0 (_DAT_10452dc4) < curtime`, `Set(0xf, 0)`, `TaskComplete(0)`).
+	// Blocked on `+0x1560`, as there.
+	++MingXiaoTask14bCalls;
 }
 
-void FElysiumNpcMingXiao::MingXiaoThrowRelease()
+void FElysiumNpcMingXiao::MingXiaoTentacleGrab()
 {
-	++MingXiaoThrowReleases;          // `0x10398db0` -- SEAM
+	++MingXiaoGrabCalls;              // `0x10398db0` -- SEAM (family Misc19's recorder)
 }
 
 bool FElysiumNpcMingXiaoTentacle::TentacleHintClear(const FVector& PositionCm) const
 {
-	// `0x1039ee20` -- SEAM (declaration).
-	(void)PositionCm;
-	return true;
-}
-
-bool FElysiumNpcMingXiaoTentacle::TentacleSetShootGoal(const FVector& PositionCm)
-{
-	// `CAI_Navigator::SetGoal` -- SEAM (declaration).
-	(void)PositionCm;
-	++TentacleShootGoalRequests;
-	return false;
+	// `0x1039ee20` (L05 integration: was a seam answering true). `NAI_Hull::Mins(15)` / `Maxs(15)`
+	// (`0x102d6100` / `0x102d6120`) with X and Y doubled -- Z is NOT -- then
+	// `CAI_BaseNPCTroika::IsAreaClear(pos, 0x202400b, &mins, &maxs)` (`0x102a0fb0`): the stationary
+	// hull test with `m_bForceNPCCheck` (`+0x63da`) raised for the one trace. The port's
+	// `IsAreaClear` takes only the OBB, so its body is spelled here with the explicit box.
+	constexpr int32 TentacleHull = 15;
+	constexpr int32 TentacleClearMask = 0x202400b;
+	FVector Mins = FVector::ZeroVector;
+	FVector Maxs = FVector::ZeroVector;
+	RetailHullExtents(TentacleHull, EElysiumHullExtents::Full, Mins, Maxs);
+	Mins.X *= 2.0; Mins.Y *= 2.0;
+	Maxs.X *= 2.0; Maxs.Y *= 2.0;
+	FElysiumNpcMingXiaoTentacle& Self = const_cast<FElysiumNpcMingXiaoTentacle&>(*this);
+	Self.bForceNpcCheck = true;
+	FKernelHullTrace Trace;
+	const FVector AtUnits = PositionCm / ElysiumMove::U;
+	KernelHullTrace(AtUnits, AtUnits, Mins, Maxs, TentacleClearMask, Trace);
+	Self.bForceNpcCheck = false;
+	return Trace.Fraction >= 1.0f && !Trace.bAllSolid && !Trace.bStartSolid;
 }
 
 void FElysiumNpcSabbatLeader::RunTask19StartTransformation()
@@ -243,7 +242,10 @@ void FElysiumNpcSabbatLeader::RunTask19StartTransformation()
 
 float FElysiumNpcSabbatLeader::SabbatLeaderSplashCycle() const
 {
-	return 0.f;                           // `_DAT_1093c33c` -- SEAM, unrecovered
+	// `_DAT_1093c33c`, written once by the static initialiser `0x103a5870`: `FLD [0x104c3cf4]` (33.0f)
+	// / `FDIV [0x104c3cf8]` (60.0f) / `FSTP float` -- frame 33 of a 60-frame splash, 0.55f (both
+	// constants read from the image; L05 integration: was an "unrecovered" 0.0).
+	return static_cast<float>(33.0f / 60.0f);
 }
 
 // --- `CNPC_VAndreiBlood::RunTask` `0x1035d8b0`, 430 bytes --------------------------------------------
@@ -384,8 +386,11 @@ int32 FElysiumNpcAsianVampire::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	case 0x150:
-		// `SetupJump(m_pHintNode)` (`0x10361a70`); the port's signature carries the word as a float.
-		AsianVampireSetupJump(static_cast<float>(BaseScheduleHost.HintNode));      // 0x10361360
+		// `SetupJump(m_pHintNode)` (`0x10361357 MOV EAX,[+0x5ddc]` / `PUSH EAX`, `0x10361a70`): the
+		// pointer's bits reach a float parameter that the body only tests against 0.0, i.e. "a hint
+		// node is held". The port holds a node INDEX, so it hands that fact over as 1.0 / 0.0 (L05
+		// integration: the index itself was cast, so no node read -1.0 and node 0 read 0.0).
+		AsianVampireSetupJump(BaseScheduleHost.HintNode != INDEX_NONE ? 1.0f : 0.0f); // 0x10361360
 		bAsianVampirePathBlocked = false;                                          // 0x10361369
 		TaskComplete(false);                                                       // 0x10361370
 		return 0;
@@ -471,7 +476,7 @@ int32 FElysiumNpcBach::RunTaskSlot444(void* Arg0)
 			//   0x10365581 JZ, 0x10365585 JZ, 0x10365588 CALL
 			// `0x10365840` is a one-byte `RET`.
 		}
-		if (Now < BaseScheduleHost.WaitFinished)                                   // 0x1036559a / 0x103655a7
+		if (!(Now >= BaseScheduleHost.WaitFinished))                               // 0x1036559a / 0x103655a2 AND 0x100 / 0x103655a7 (NaN runs)
 		{
 			return 0;
 		}
@@ -515,7 +520,11 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		RunTask19Species::FaceEnemyLkp(*this, RunTask19Species::YawSpeedHold);    // 0x1036c346
-		const FElysiumMeleeRoll* Roll = Enemy->FindMeleeRoll(Handle);              // 0x1036c34e `GetMeleeDiceRolls`
+		// `GetMeleeDiceRolls` on the ENEMY (`0x10345980`: the attacker's array `+0xa88`, keyed by the
+		// defender, which `CalcAndStoreMeleeDiceRolls 0x10346380` fills) keyed by this body: the
+		// enemy's swing at this NPC. The port stores that record on the DEFENDER keyed by the
+		// attacker, so it is this body's row for the enemy (L05 integration: was inverted).
+		const FElysiumMeleeRoll* Roll = FindMeleeRoll(Enemy->Handle);              // 0x1036c34e `GetMeleeDiceRolls`
 		if (Roll != nullptr && MeleeRollBand(*Roll) == 0)                          // 0x1036c353 / 0x1036c359
 		// same arm: 0x1036c355 JZ, 0x1036c360 JNZ
 		{
@@ -562,7 +571,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 	case 0x156:
 		MotorUpdateYaw(RunTask19Species::UpdateYawDefault);                        // 0x1036c056
 		AutoMovement();                                                            // 0x1036c05d
-		if (!(Now < ChangEnergyChargeTime))                                        // 0x1036c06a / 0x1036c077
+		if (Now >= ChangEnergyChargeTime)   /* NaN runs: 0x1036c072 AND 0x100 */                                        // 0x1036c06a / 0x1036c077
 		{
 			TaskComplete(false);                                                   // 0x1036c081
 		}
@@ -610,10 +619,14 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 		// `0x100fbc90("chang_center_emitter", m_vArenaCenter + (0, 0, 50.0), vec3_angle, -1.0)`.
 		FVector CenterUnits = ChangArenaCenter / ElysiumMove::U;
 		CenterUnits.Z += 50.0f;                                                    // 0x1036c11b `_DAT_104ada5c`
-		const FElysiumEntityHandle Emitter =
-			CreateNamedEntity(TEXT("chang_center_emitter"), CenterUnits);          // 0x1036c14c
+		// `0x1036c14c CALL 0x1000389b` -> `0x100fbc90`, the named-emitter create (family Damage's
+		// `CreateNamedEmitter`; L05 integration: was the classname `CreateNamedEntity` seam, which
+		// made no particle). The port's emitter is an effect, not an entity, so no `GetRefEHandle`
+		// (`0x1036c15c`) answers: `m_hCenterEmitter` takes retail's null arm, -1 (`0x1036c184`).
+		CreateNamedEmitter(TEXT("chang_center_emitter"), CenterUnits, /*AttachMode*/ 0,
+			FElysiumEntityHandle(), nullptr);                                      // 0x1036c14c
 			// same arm: 0x1036c156 JZ, 0x1036c15c CALL
-		ChangCenterEmitter = Emitter.IsSet() ? Emitter : FElysiumEntityHandle::Invalid(); // 0x1036c165 / 0x1036c184
+		ChangCenterEmitter = FElysiumEntityHandle::Invalid();                      // 0x1036c165 / 0x1036c184
 		TaskComplete(false);                                                       // 0x1036c16b / 0x1036c18e
 		return 0;
 	}
@@ -754,7 +767,7 @@ int32 FElysiumNpcHengeyokai::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		if (Cognition.Conditions.HasOrdinal(0x1b)                                  // 0x10380d4a / 0x10380d51
-			|| !(Now < HengeyokaiTaskFailTimer))                                   // 0x10380d5c / 0x10380d69
+			|| Now >= HengeyokaiTaskFailTimer)   /* NaN runs: 0x10380d64 AND 0x100 */                                   // 0x10380d5c / 0x10380d69
 		{
 			TaskComplete(false);                                                   // 0x10380d73 / 0x10380dcc
 		}
@@ -841,7 +854,9 @@ int32 FElysiumNpcHuman::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		RunTask19Species::FaceEnemyLkp(*this, RunTask19Species::YawSpeedHold);    // 0x10384b9a
-		const FElysiumMeleeRoll* Roll = Enemy->FindMeleeRoll(Handle);              // 0x10384ba2 `GetMeleeDiceRolls`
+		// The enemy's swing at this NPC (see ChangBros 0x8b; `0x10384b9f PUSH ESI` / `MOV ECX,EDI`):
+		// the port keeps it on the defender keyed by the attacker (L05 integration: was inverted).
+		const FElysiumMeleeRoll* Roll = FindMeleeRoll(Enemy->Handle);              // 0x10384ba2 `GetMeleeDiceRolls`
 		bool bOver = false;
 		if (IdealActivityNumber == 0x1157)                                         // 0x10384ba7 / 0x10384bb1
 		{
@@ -903,7 +918,7 @@ int32 FElysiumNpcHuman::RunTaskSlot444(void* Arg0)
 			RunTask19Species::FaceEnemyLkp(*this, RunTask19Species::YawSpeedHold); // 0x10384c97
 		}
 		if (IsActivityFinished()                                                   // 0x10384ca0 / 0x10384ca8
-			|| !(Now < NextAttackTime))                                            // 0x10384cb2 `m_flNextAttack` +0x1564
+			|| Now >= NextAttackTime)   /* NaN runs: 0x10384cba AND 0x100 */                                            // 0x10384cb2 `m_flNextAttack` +0x1564
 			// same arm: 0x10384cbf JNZ
 		{
 			TaskComplete(false);                                                   // 0x10384cc9
@@ -1035,10 +1050,10 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 	case 0x159:
 	case 0x160:
 	{
-		FElysiumEntity* Target = FlyByTargetAlive();                               // 0x1038d494..0x1038d4fa
+		FElysiumEntity* TargetEntity = FlyByTargetAlive();                               // 0x1038d494..0x1038d4fa
 		// same arm: 0x1038d4b8 JNZ, 0x1038d4c2 JZ, 0x1038d4d1 JZ, 0x1038d4e8 JNZ, 0x1038d4f2 CALL
 		//   0x1038d509 JZ, 0x1038d526 JNZ
-		if (Target == nullptr)
+		if (TargetEntity == nullptr)
 		{
 			TaskFail(1);                                                           // 0x1038d6e8
 			// same arm: 0x1038d704 JZ, 0x1038d728 JNZ, 0x1038d72e JZ, 0x1038d739 JZ, 0x1038d750 JNZ
@@ -1046,7 +1061,7 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 			//   0x1038d795 CALL
 			return 0;
 		}
-		if (World != nullptr && Target == World->FindPlayer())                     // 0x1038d536 `target+0xa8`
+		if (World != nullptr && TargetEntity == World->FindPlayer())                     // 0x1038d536 `target+0xa8`
 		{
 			ManBatFlyBySound();                                                    // 0x1038d53a `0x1038fe30`
 		}
@@ -1056,7 +1071,7 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		// Ten units beyond the target, on this body's side, standing on the target's box.
-		FVector Pos = NpcKernelMotor2Shared::MotorTailSourceOf(Target->Origin);                             // 0x1038d57d
+		FVector Pos = NpcKernelMotor2Shared::MotorTailSourceOf(TargetEntity->Origin);                             // 0x1038d57d
 		FVector Away = NpcKernelMotor2Shared::MotorTailSourceOf(Origin) - Pos;                              // 0x1038d59b..0x1038d5aa
 		Away.Z = 0.0;
 		Away.Normalize();                                                          // 0x1038d5c4 `VectorNormalize`
@@ -1065,7 +1080,7 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 		// same arm: 0x1038d5ff JZ, 0x1038d619 JNZ, 0x1038d630 JZ, 0x1038d647 JNZ
 		FVector Mins = FVector::ZeroVector;
 		FVector Maxs = FVector::ZeroVector;
-		RetailCollisionExtents(*Target, Mins, Maxs);                               // 0x1038d65b / 0x1038d664
+		RetailCollisionExtents(*TargetEntity, Mins, Maxs);                               // 0x1038d65b / 0x1038d664
 		Pos.Z = (Maxs.Z - Mins.Z) + Pos.Z + 1.0;                                   // 0x1038d66a..0x1038d67a
 		MotorSetOriginToTraceEnd(Pos);                                             // 0x1038d684 slot 216
 		SetIdealActivity(0x4b);                                                    // 0x1038d68e
@@ -1141,14 +1156,14 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 		bManBatReachedMoveGoal = false;                                            // 0x1038da7f
 		FVector VelocityUnits = FVector::ZeroVector;
 		FUN_1038b370(0.f, VelocityUnits);                                          // 0x1038da86
-		ManBatPickFlightActivity(VelocityUnits);                                   // 0x1038daa6 `0x1038e720`
+		ManBatWingTurnSelect(VelocityUnits);                                       // 0x1038daa6 `0x1038e720` (L10's body)
 		return 0;
 	}
 	case 0x161:
 	{
-		FElysiumEntity* Target = FlyByTargetAlive();                               // 0x1038dad8..0x1038db3e
+		FElysiumEntity* TargetEntity = FlyByTargetAlive();                               // 0x1038dad8..0x1038db3e
 		// same arm: 0x1038dafc JNZ, 0x1038db06 JZ, 0x1038db15 JZ, 0x1038db2c JNZ, 0x1038db36 CALL
-		if (Target == nullptr)
+		if (TargetEntity == nullptr)
 		{
 			TaskFail(1);                                                           // 0x1038dc3f
 			Flap();                                                                // 0x1038dc47
@@ -1160,14 +1175,14 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		// `ThrowModel(target->GetModelName(), "Bip01 R Neck", 20.0, 0)`; the port's form takes two.
-		if (!ThrowModel(Target->Model, TEXT("Bip01 R Neck")))                      // 0x1038db8b / 0x1038dba8
+		if (!ThrowModel(TargetEntity->Model, TEXT("Bip01 R Neck")))                      // 0x1038db8b / 0x1038dba8
 		// same arm: 0x1038db92 JNZ, 0x1038dbaf JZ, 0x1038dbba JZ, 0x1038dbd7 JNZ
 		{
 			TaskFail(1);                                                           // 0x1038dc1f
 			Flap();                                                                // 0x1038dc27
 			return 0;
 		}
-		Target->Kill();                                                            // 0x1038dbe1 slot 119
+		TargetEntity->Kill();                                                            // 0x1038dbe1 slot 119
 		ManBatMoveGoalNodeId = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(1, 3); // 0x1038dbf3
 		TaskComplete(false);                                                       // 0x1038dc00
 		Flap();                                                                    // 0x1038dc07
@@ -1175,8 +1190,8 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 	}
 	case 0x162:
 	{
-		FElysiumEntity* Target = FlyByTargetAlive();
-		if (Target == nullptr)
+		FElysiumEntity* TargetEntity = FlyByTargetAlive();
+		if (TargetEntity == nullptr)
 		{
 			TaskFail(1);
 			return 0;
@@ -1189,7 +1204,7 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	case 0x163:
-		if (!(Now < ManBatCoastTimer))                                             // 0x1038dc61 / 0x1038dc6e
+		if (Now >= ManBatCoastTimer)   /* NaN runs: 0x1038dc69 AND 0x100 */                                             // 0x1038dc61 / 0x1038dc6e
 		{
 			TaskComplete(false);                                                   // 0x1038dc74
 		}
@@ -1335,7 +1350,7 @@ int32 FElysiumNpcMingXiao::RunTaskSlot444(void* Arg0)
 			if (MingXiaoThrowableObjectMode != 3)                                  // 0x10393d0b
 			// same arm: 0x10393d12 JZ
 			{
-				MingXiaoThrowRelease();                                            // 0x10393d16 `0x10398db0`
+				MingXiaoTentacleGrab();                                            // 0x10393d16 `0x10398db0`
 			}
 			TaskComplete(false);                                                   // 0x10393d1f
 		}
@@ -1433,7 +1448,9 @@ int32 FElysiumNpcMingXiaoTentacle::RunTaskSlot444(void* Arg0)
 		// `engine->Time()` (slot 119) minus `timeCurTaskStarted`, clamped to [0, 4]. The port's
 		// engine clock is curtime (named divergence: retail reads the engine's own time).
 		float Blend = static_cast<float>(Now - Schedule.TaskStartedAt);           // 0x1039d8ed / 0x1039d8f3
-		if (!(Blend <= 4.0f))                                                      // 0x1039d8fb `_DAT_10450aa0`
+		// `1039d903 AND EAX,0x4100` / `1039d908 JNZ`: only an ordered `Blend > 4.0` clamps high; the low
+		// clamp is `TEST AH,5` / `JP` (an ordered `< 0.0`). A NaN blend passes both (L05 integration).
+		if (Blend > 4.0f)                                                          // 0x1039d8fb `_DAT_10450aa0`
 		// same arm: 0x1039d908 JNZ
 		{
 			Blend = 4.0f;                                                          // 0x1039d90a
@@ -1456,7 +1473,7 @@ int32 FElysiumNpcMingXiaoTentacle::RunTaskSlot444(void* Arg0)
 			SetFlexWeight(Name.GetCharArray().GetData(), Weight);                  // 0x1039d9ac slot 280
 			EffectsWord |= 0x10u;                                                  // 0x1039d9b8 `m_fEffects`
 		}
-		if (Blend < 4.0f)                                                          // 0x1039d9cf / 0x1039d9dc
+		if (!(Blend >= 4.0f))                                                      // 0x1039d9cf / 0x1039d9d7 AND 0x100 / 0x1039d9dc (NaN runs)
 		{
 			return 0;
 		}
@@ -1490,7 +1507,18 @@ int32 FElysiumNpcMingXiaoTentacle::RunTaskSlot444(void* Arg0)
 			if (TentacleHintClear(Words.OriginCm))                                 // 0x1039da87 / 0x1039daa8
 			// same arm: 0x1039daaf JZ
 			{
-				if (TentacleSetShootGoal(Words.OriginCm))                          // 0x1039db3b
+				// `CAI_Navigator::SetGoal(goal, 0)` (`0x1039db3b` -> `0x102ecd20`), the goal built at
+				// `0x1039dab5..0x1039db34`: type 4, the hint's origin, activity 0x13, tolerance -1.0
+				// (`_DAT_104bde70`), flags 0. The goal's target word is `DAT_1093bd30` (unrecovered;
+				// no handle). Lane Script19's `Script19SetGoal` is that body (L05 integration: was a
+				// recording seam that always refused).
+				FScript19NavGoal ShootGoal;
+				ShootGoal.Type = 4;                                                // 0x1039db0d
+				ShootGoal.PositionCm = Words.OriginCm;                             // 0x1039dac1..0x1039dadf
+				ShootGoal.Activity = 0x13;                                         // 0x1039db19
+				ShootGoal.Tolerance = NavGoalToleranceKeep;                        // 0x1039dae3 / 0x1039db08
+				ShootGoal.Flags = 0;
+				if (Script19SetGoal(ShootGoal, 0, TEXT("tentacle shoot hint (0x1039d750)"))) // 0x1039db3b
 				// same arm: 0x1039db42 JZ
 				{
 					TaskComplete(false);                                           // 0x1039db48
@@ -1561,7 +1589,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 	{
 	case 0x15c:
 	{
-		const float Yaw = NpcKernelFacingShared::RetailYawOf(Velocity, 0.f);       // 0x103a8d0c slot 198 / 0x103a8d18
+		const float Yaw = NpcKernelFacingShared::RetailVecToYaw(Velocity);          // 0x103a8d0c slot 198 / 0x103a8d18
 		MotorSetIdealYawAndUpdate(Yaw, RunTask19Species::YawSpeedDefault);         // 0x103a8d22
 		TroikaMotor.MoveInterval = 0.f;                                            // motor +0x30
 		Flags &= ~1;                                                               // 0x103a8d34 `RemoveFlag(FL_ONGROUND)`
@@ -1662,7 +1690,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 		TaskComplete(false);                                                       // 0x103a8ffd
 		return 0;
 	case 0x15e:
-		if (!(Now < SabbatLeaderWarningFinishTime))                                // 0x103a901f
+		if (Now > SabbatLeaderWarningFinishTime)                                   // 0x103a901f -> 0x103a906b AND 0x4100 / 0x103a9070 JNZ (only ordered >)
 		{
 			TaskComplete(false);                                                   // 0x103a9079
 		}
@@ -1689,7 +1717,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	case 0x162:
-		if (!(static_cast<float>(Now - SabbatLeaderTaskStartTime) < 1.0f))        // 0x103a9063 / 0x103a9070 `_DAT_104c3d08`
+		if (static_cast<float>(Now - SabbatLeaderTaskStartTime) > 1.0f)           // 0x103a9063 / 0x103a906b AND 0x4100 / 0x103a9070 `_DAT_104c3d08` (only ordered >)
 		{
 			TaskComplete(false);                                                   // 0x103a9079
 		}
@@ -1806,7 +1834,7 @@ int32 FElysiumNpcTzimisce::RunTaskSlot444(void* Arg0)
 			return 0;
 		}
 		if (Cognition.Conditions.HasOrdinal(0x1b)                                  // 0x103bb3d9 / 0x103bb3e0
-			|| !(Now < TzimisceTaskFailTimer))                                     // 0x103bb3ef
+			|| Now >= TzimisceTaskFailTimer)   /* NaN runs: 0x103bb3f7 AND 0x100 */                                     // 0x103bb3ef
 		{
 			TaskComplete(false);                                                   // 0x103bb53e
 		}
@@ -1892,7 +1920,7 @@ int32 FElysiumNpcTzimisceRunner::RunTaskSlot444(void* Arg0)
 		MotorSetIdealYawToTargetAndUpdate(Enemy->Origin, RunTask19Species::YawSpeedDefault); // 0x103c38c0 / 0x103c38ea
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	if (!(Now < BaseScheduleHost.WaitFinished))                                    // 0x103c38f8 / 0x103c3905
+	if (Now >= BaseScheduleHost.WaitFinished)                                     // 0x103c38f8 / 0x103c3900 AND 0x100 / 0x103c3905 (NaN runs)
 	{
 		ScheduleHost.DesiredMoveYaw = 0.f;                                         // 0x103c390b
 		TaskComplete(false);                                                       // 0x103c3915
@@ -1923,9 +1951,10 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 	const double Now = RunTask19Species::NowOf(*this);
 	(void)TaskName(Step->TaskId);                                                  // 0x103ce029 slot 449, answer unused
 	// same arm: 0x103cdfb9 JZ, 0x103cdfc3 JNZ, 0x103ce039 JA
-	// The string `TaskFail` retail passes to slot 448 (`PUSH 0x10661dac`): the int reason is the
-	// string's address. Reproduced as the defect it is.
-	constexpr int32 FailNotOutOfSight = 0x10661dac;
+	// `PUSH 0x10661dac` / slot 448: the SDK's text fail code (`MakeFailCode(const char*)`), the
+	// string's address standing as the reason. The port's text-fail accessor is family Misc19's
+	// `TaskFailText` (L05 integration: was the raw address as an int code).
+	const TCHAR* const FailNotOutOfSight = TEXT("Did not path out of player's sight");
 	switch (Step->TaskId)                                                          // 0x103ce03f
 	{
 	case 0x14a:
@@ -1938,7 +1967,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 			MotorUpdateYaw(RunTask19Species::UpdateYawDefault);                    // 0x103ce093
 			return 0;
 		}
-		if (RunTask19CheckAllMoveHints())                                          // 0x103ce056 `0x103cfc50`
+		if (CheckAllMoveHints())                                                   // 0x103ce056 `0x103cfc50` (L11's body)
 		// same arm: 0x103ce05f JZ
 		{
 			TaskComplete(false);                                                   // 0x103ce062
@@ -1979,7 +2008,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 			// same arm: 0x103ce179 JZ
 		{
 			BaseScheduleHost.bShouldMove = false;                                  // 0x103ce244
-			if (WerewolfEgressConVarSet())                                         // 0x103ce252..0x103ce261
+			if (WerewolfForceTeleportConVar() != 0)                                         // 0x103ce252..0x103ce261
 			// same arm: 0x103ce257 JNZ
 			{
 				TaskComplete(false);                                               // 0x103ce266
@@ -1991,7 +2020,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 				TaskComplete(false);                                               // 0x103ce286
 				return 0;
 			}
-			TaskFail(FailNotOutOfSight);                                           // 0x103ce29f
+			TaskFailText(FailNotOutOfSight);                                             // 0x103ce29f
 			NavClearGoal();                                                        // 0x103ce2ab
 			return 0;
 		}
@@ -2006,7 +2035,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		// same arm: 0x103ce1bd JZ
 		{
 			BaseScheduleHost.bShouldMove = false;                                  // 0x103ce1bf
-			if (WerewolfEgressConVarSet())                                         // 0x103ce1cd..0x103ce1dc
+			if (WerewolfForceTeleportConVar() != 0)                                         // 0x103ce1cd..0x103ce1dc
 			// same arm: 0x103ce1d2 JNZ
 			{
 				TaskComplete(false);                                               // 0x103ce1e1
@@ -2018,7 +2047,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 				TaskComplete(false);                                               // 0x103ce201
 				return 0;
 			}
-			TaskFail(FailNotOutOfSight);                                           // 0x103ce21a
+			TaskFailText(FailNotOutOfSight);                                             // 0x103ce21a
 			return 0;
 		}
 		ValidateNavGoal();                                                         // 0x103ce231 slot 528
@@ -2105,7 +2134,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 	case 0x15f:
 		if (IsActivityFinished())                                                  // 0x103ce484 / 0x103ce48e
 		{
-			RetailLifeState = 2;                                                   // 0x103ce491 `m_lifeState = LIFE_DEAD`
+			AnimEventLifeStateWord = 2;                                                   // 0x103ce491 `m_lifeState = LIFE_DEAD`
 			TaskComplete(false);                                                   // 0x103ce49b
 			FElysiumEntity* Enemy = RunTask19Species::Enemy167(*this);             // 0x103ce4a6
 			FireOutput(FName(TEXT("OnFinishCrushAnimation")),                      // 0x103ce4b3 `0x100cd660`
@@ -2193,9 +2222,9 @@ int32 FElysiumNpcZombie::RunTaskSlot444(void* Arg0)
 				// same arm: 0x103e02cf JZ, 0x103e02ec JNZ
 			if (Player != nullptr)
 			{
-				// `0x102e2020(motor, player->GetAbsOrigin())`: family Hints' seam for that motor write.
-				SetMotorHintYaw(NpcKernelFacingShared::RetailYawOf(Player->Origin - Origin,
-					static_cast<float>(Angles.Y)));                                // 0x103e02ff / 0x103e0308
+				// `0x102e2020(motor, player->GetAbsOrigin())`: `0x102e2750` (slot 515 `CalcIdealYaw`), then
+				// the flip and the `+0x34` store -- family Hints' `SetMotorHintYaw` is that tail.
+				SetMotorHintYaw(CalcIdealYaw(Player->Origin));                         // 0x103e02ff / 0x103e0308
 				MotorUpdateYaw(RunTask19Species::UpdateYawDefault);                // 0x103e0315
 			}
 		}

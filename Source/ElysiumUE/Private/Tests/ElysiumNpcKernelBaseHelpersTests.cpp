@@ -221,7 +221,11 @@ bool FElysiumNpcKernelBaseHelpersGeometryTest::RunTest(const FString&)
 		F.Npc->NavGoalState(), INDEX_NONE);
 	F.Npc->Origin = FVector::ZeroVector;
 	TestEqual(TEXT("+X is yaw 0"), F.Npc->CalcIdealYaw(FVector(100.0, 0.0, 0.0)), 0.f, 1.0e-3f);
-	TestEqual(TEXT("+Y is yaw 90"), F.Npc->CalcIdealYaw(FVector(0.0, 100.0, 0.0)), 90.f, 1.0e-3f);
+	// This world's +Y is Source's -Y, and `VecToYaw` (`0x101d2c70`) folds into [0, 360)
+	// (`0x101d2cb4 FADD 360.0`), so +Y is the RETAIL yaw 270 (L05 integration: the case read the
+	// Unreal-convention 90 the body answered before its first caller landed).
+	TestEqual(TEXT("+Y is retail yaw 270"), F.Npc->CalcIdealYaw(FVector(0.0, 100.0, 0.0)), 270.f, 1.0e-3f);
+	TestEqual(TEXT("-Y is retail yaw 90"), F.Npc->CalcIdealYaw(FVector(0.0, -100.0, 0.0)), 90.f, 1.0e-3f);
 	TestEqual(TEXT("-X is yaw 180"), FMath::Abs(F.Npc->CalcIdealYaw(FVector(-100.0, 0.0, 0.0))),
 		180.f, 1.0e-3f);
 	F.Npc->Origin = FVector(100.0, 0.0, 0.0);
@@ -542,10 +546,14 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("and the wait flag (+0x5d30)"), F.Npc->bOpeningDoorWait);
 
 	// Slot 571 (`0x10289ce0`): ACT_WALK below the distance constant, ACT_RUN at or beyond it.
-	// `_DAT_1049a17c` is UNRECOVERED and stands at zero, so every non-negative distance runs.
-	TestEqual(TEXT("slot 571 answers ACT_RUN at or beyond the distance constant"),
-		F.Npc->Slot571(100.f), 0x13);
-	TestEqual(TEXT("and ACT_WALK below it"), F.Npc->Slot571(-1.f), 9);
+	// `_DAT_1049a17c` is 190.0f in the image (`0x433e0000`); `10289cec TEST AH,0x5` / `10289cf4 JNP`
+	// walks only on an ordered `<` (C0 alone), so a NaN distance runs. (Corrected at the L05
+	// integration: the old case read the unrecovered 0.0 stand-in and expected ACT_RUN at 100.)
+	TestEqual(TEXT("slot 571 answers ACT_RUN at the distance constant"),
+		F.Npc->Slot571(190.f), 0x13);
+	TestEqual(TEXT("and ACT_WALK below it"), F.Npc->Slot571(100.f), 9);
+	TestEqual(TEXT("and ACT_RUN on an unordered distance"),
+		F.Npc->Slot571(std::numeric_limits<float>::quiet_NaN()), 0x13);
 
 	// Slot 529 (`0x10280330`): no task answers TRUE; a running task the seam cannot number answers
 	// false, which is retail's answer for a task that is not 0x6e / 0x0b / 0x72.

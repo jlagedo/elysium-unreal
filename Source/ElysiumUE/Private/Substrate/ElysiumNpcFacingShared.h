@@ -47,6 +47,24 @@ namespace NpcKernelFacingShared
 		return FMath::RadiansToDegrees(
 			static_cast<float>(FMath::Atan2(-PortDelta.Y, PortDelta.X)));
 	}
+	// `UTIL_VecToYaw` `0x101d2c70` itself over a delta in THIS world's axes: `(x, y) == (0, 0)`
+	// answers 0 (Z is not read); else `atan2(y, x)` in degrees with Source's `y` (this world's `-Y`),
+	// `+ 360.0` (`0x101d2cb4 FADD [0x10450568]`) when negative, so the answer is in `[0, 360)`.
+	inline float RetailVecToYaw(const FVector& PortDelta)
+	{
+		const double SourceX = PortDelta.X;
+		const double SourceY = -PortDelta.Y;
+		if (SourceY == 0.0 && SourceX == 0.0)
+		{
+			return 0.f;
+		}
+		float Yaw = FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(SourceY, SourceX)));
+		if (Yaw < 0.f)
+		{
+			Yaw += 360.f;
+		}
+		return Yaw;
+	}
 	// `VectorAngles` `0x10139970`: Source `[pitch yaw roll]` for a direction in this world's axes.
 	inline FVector FacingRetailVectorAngles(const FVector& PortDir)
 	{

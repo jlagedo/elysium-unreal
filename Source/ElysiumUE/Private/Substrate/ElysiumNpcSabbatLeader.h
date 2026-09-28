@@ -164,7 +164,7 @@ public:
 	 *  until the integrator redirects the call to its port. */
 	int32 SabbatLeaderTransformationStarts = 0;
 	void RunTask19StartTransformation();
-	/** `_DAT_1093c33c`, the `.data` float `TASK 0x15c` compares `m_flCycle` against before the splash.
-	 *  Zero-initialised and written by nothing the corpus holds: **unrecovered**, answers 0.0. */
+	/** `_DAT_1093c33c`, the `.data` float `TASK 0x15c` compares `m_flCycle` against before the splash:
+	 *  33.0 / 60.0 = 0.55f, stored by the static initialiser `0x103a5870`. */
 	float SabbatLeaderSplashCycle() const;
 };

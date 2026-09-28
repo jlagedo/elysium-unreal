@@ -146,15 +146,30 @@ int32 FElysiumNpcBase::ActivityIdForName(const FString& ActivityName) const
 
 void FElysiumNpcBase::SetMotorHintYaw(float Yaw)
 {
-	// SEAM for `0x102e0a80` / `0x102e2020` — the motor's yaw write (`CAI_Motor+0x34`), with retail's
-	// `+0x1c == 180.0f` sentinel choosing between an immediate assign and a clamped step.
-	(void)Yaw;
+	// `0x102e2020`'s tail after its yaw computation (`0x10014f0b`, done by the caller): the `+0x28`
+	// animation-movement flip (`102e202d..102e205d`, `AND EAX,0x100`: below 180.0 or unordered adds
+	// the half turn), then `102e2061 CMP [+0x1c],180.0f` -> `102e206e` the direct store into
+	// `motor+0x34`. The clamped arm (`0x102e0a80`) needs the `+0x1c` max-yaw word no port motor
+	// carries, so the direct store is the arm taken, as `NPCInit` / `0x102e1c10` take it. No
+	// `UpdateYaw`: `0x102e2020` does not call it. `Yaw` is a RETAIL (Source) yaw. (Story 8 L05
+	// integration: was an empty seam.)
+	float Ideal = Yaw;
+	if (BaseScheduleHost.bMotorAnimationMovement)
+	{
+		Ideal = !(Ideal >= MotorYawHalfTurn) ? Ideal + MotorYawHalfTurn : Ideal - MotorYawHalfTurn;
+	}
+	MotorIdealYaw = Ideal;                               // 102e206e motor+0x34
 }
 
 void FElysiumNpcBase::ReleaseMotorHintYaw()
 {
-	// SEAM for `0x102e1e20(motor, -1)` — the yaw-hold release the interest bodies end with, and
-	// `0x102e0b40(motor)` which the claim opens with.
+	// `0x102e1e20(motor, -1)` — `UpdateYaw(-1)`, the turn toward `motor+0x34` the interest bodies
+	// end with. (The claim's opening `0x102e0b40` is `MotorMoveStop()`, called at its site.)
+	//
+	// STILL A SEAM (story 8 L05 integration, listed for L13): `MotorUpdateYaw` would hand
+	// `MotorIdealYaw` to the mover, but no port navigator writes `motor+0x34` while it walks
+	// (retail's `MoveExecute` keeps it at the travel yaw), so the word is stale after any walk and
+	// the body would snap to it. Wire this to `MotorUpdateYaw(-1)` once the mover keeps the word.
 }
 
 FVector FElysiumNpcBase::HintComparePosition(const FElysiumEntity* Entity) const

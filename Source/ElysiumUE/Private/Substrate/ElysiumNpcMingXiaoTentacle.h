@@ -121,12 +121,8 @@ public:
 	// --- Lane L05 (story 8 RunTask19)
 	// `DAT_1093bd34`, the cursor `TASK 0x150` resumes its type-19000 hint walk from, is family
 	// Lifecycle19's `MingXiaoTentacleCache()` (the same global, invalidated on restore).
-	/** `FUN_1039ee20(this, &pos)` `0x1039ee20` -- the doubled-hull clearance test at a hint. **SEAM**:
-	 *  answers true (clear), the arm that goes on to set the goal. */
+	/** `FUN_1039ee20(this, &pos)` `0x1039ee20` -- the doubled-hull (X/Y) clearance test at a hint:
+	 *  `IsAreaClear(pos, 0x202400b, 2*mins(15), 2*maxs(15))`. (`TASK 0x150`'s goal goes through lane
+	 *  Script19's `Script19SetGoal`.) */
 	bool TentacleHintClear(const FVector& PositionCm) const;
-	/** `CAI_Navigator::SetGoal` (`0x102ecd20`) with the goal `TASK 0x150` builds (type 4, the hint's
-	 *  origin, activity `0x13`, tolerance `-1.0`). **SEAM**: the port's navigator takes no goal record;
-	 *  answers false (not set) and records the request. */
-	int32 TentacleShootGoalRequests = 0;
-	bool TentacleSetShootGoal(const FVector& PositionCm);
 };

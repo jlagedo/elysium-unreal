@@ -133,7 +133,6 @@ static const TCHAR* GlobalConditionName(int32 GlobalConditionId);
  *  other id. */
 static const TCHAR* GlobalTaskName(int32 GlobalTaskId);
 
-/** `CAI_Motor::m_YawSpeed` (`m_pMotor` `+0x38`), what `ReportAIState` prints as `Yaw speed`.
- *  **SEAM**: `m_pMotor` is an `ELYSIUM_NPC_WORD_CHAIN` row and no port member carries the motor's
- *  stored yaw speed — slot 516 `MaxYawSpeed` COMPUTES one, which is a different word. Answers 0. */
+/** `CAI_Motor::m_YawSpeed` (`m_pMotor` `+0x38`), what `ReportAIState` prints as `Yaw speed`: the
+ *  word `MotorYawSpeedWord` (RunTask19's `0x102e1c10` writes it). */
 float MotorYawSpeed() const;

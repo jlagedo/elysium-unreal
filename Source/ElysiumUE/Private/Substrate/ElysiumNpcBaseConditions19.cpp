@@ -92,9 +92,18 @@ void FElysiumNpcBase::Conditions19PushDelayedCondition(int32 Cond, float Delay, 
 
 bool FElysiumNpcBase::Conditions19ClientInPvs() const
 {
-	// SEAM (`0x101d1800`, `UTIL_FindClientInPVS`): the live player stands in for the PVS client.
+	// SEAM (`0x101d1800`, `UTIL_FindClientInPVS`): the live player stands in for the PVS client,
+	// and the embodiment answers whether it shares this body's PVS (the `ArePointsInSamePvs`
+	// question `0x101d1a90` asks too); with no embodiment the player admits. Also the base
+	// `TASK_WAIT_PVS` arm's test (`0x10288b93`, RunTask19) -- the L05 integration folded that lane's
+	// second body for this address into this one.
 	const FElysiumPlayer* const Player = World != nullptr ? World->FindPlayer() : nullptr;
-	return Player != nullptr && !Player->IsInert();
+	if (Player == nullptr || Player->IsInert())
+	{
+		return false;
+	}
+	const IElysiumEmbodiment* const Embodiment = World->Embodiment();
+	return Embodiment == nullptr || Embodiment->ArePointsInSamePvs(Player->Origin, Origin);
 }
 
 void FElysiumNpcBase::Conditions19PerformSensing(double Now)

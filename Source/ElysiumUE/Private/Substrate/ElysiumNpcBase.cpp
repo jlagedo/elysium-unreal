@@ -155,6 +155,7 @@ void FElysiumNpcBase::BeginDying()
 // `TASK_PLAY_DEATH_SEQUENCE` in the named Discipline schedules, and from Troika's interesting-place
 // death activity (`+0x6308`) -- so an NPC that reaches this task with nothing playing is idle and
 // commits on its first think, exactly as retail's does.
+// STORY8-TWIN: replaced by 0x102abb90 (Troika RunTask idx 0x0a's gate) / 0x10288fc4 (base 0x5f) at wave 2
 bool FElysiumNpcBase::IsDeathPerformanceFinished() const
 {
 	// UNPORTED, and named rather than approximated: `IsActivityFinished` (slot 251, `0x10272900`) and

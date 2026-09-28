@@ -11,6 +11,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumScriptedSequence.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
@@ -43,7 +44,7 @@ namespace
 	constexpr float GDatUnreachableSeconds = 3.0f;           // _DAT_10449258
 	// UNRECOVERED literals. Each is named so the arm reads as retail's and the value is the one
 	// thing waiting; each site says what the stand-in does.
-	constexpr float GDatFollowRunDistanceUnits = 0.f;        // _DAT_1049a17c — slot 571's walk/run
+	constexpr float GDatFollowRunDistanceUnits = 190.f;      // _DAT_1049a17c = 0x433e0000 (190.0f, .rdata; no writer) — slot 571's walk/run
 	constexpr int32 GBaseHelpersActWalk = 9;                // ACT_WALK
 	constexpr int32 GBaseHelpersActRun = 0x13;              // ACT_RUN
 	// `CBaseEntity::GetFlags()` bit 0.
@@ -220,30 +221,35 @@ float FElysiumNpcBase::CalcIdealYaw(const FVector& TargetPos)
 	//
 	// `GetOrigin()` is slot 220 (vtable `+0x370`), the raw `m_vecOrigin`, not `GetAbsOrigin`.
 	// `NavGoalState()` is family Motor's seam and answers -1, so the default arm is what runs.
+	//
+	// The arithmetic is retail's in SOURCE axes (this world's Y negated; the answer is a RETAIL yaw,
+	// the `motor+0x34` convention), then `VecToYaw` (`0x1000612c` -> `0x101d2c70`, `[0, 360)`).
+	// (Story 8 L05 integration: the body answered an Unreal-convention yaw in `(-180, 180]`; nothing
+	// called it until RunTask19's `0x102e20b0` / `0x102e2750` route did.)
 	const int32 NavState = NavGoalState();
+	const double Px = TargetPos.X;
+	const double Py = -TargetPos.Y;
+	const double Ox = Origin.X;
+	const double Oy = -Origin.Y;
 	double Dx = 0.0;
 	double Dy = 0.0;
-	if (NavState == 0x37)
+	if (NavState == 0x37)                                  // 10274b41
 	{
-		Dx = -TargetPos.Y - Origin.X;
-		Dy = TargetPos.X - Origin.Y;
+		Dx = -Py - Ox;                                     // 10274b53 FCHS / 10274b67
+		Dy = Px - Oy;                                      // 10274b71
 	}
-	else if (NavState == 0x38)
+	else if (NavState == 0x38)                             // 10274b8c
 	{
-		Dx = TargetPos.Y - Origin.X;
-		Dy = TargetPos.X - Origin.Y;
+		Dx = Py - Ox;                                      // 10274bb0
+		Dy = Px - Oy;                                      // 10274bba
 	}
 	else
 	{
-		Dx = TargetPos.X - Origin.X;
-		Dy = TargetPos.Y - Origin.Y;
+		Dx = Px - Ox;                                      // 10274c08
+		Dy = Py - Oy;                                      // 10274c11
 	}
-	// `VecToYaw`: `atan2(y, x)` in degrees, and zero for a zero-length 2-D vector.
-	if (Dx == 0.0 && Dy == 0.0)
-	{
-		return 0.f;
-	}
-	return static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Dy, Dx)));
+	// Back into this world's axes for the shared `VecToYaw` (which negates Y again).
+	return NpcKernelFacingShared::RetailVecToYaw(FVector(Dx, -Dy, 0.0));   // 10274c3f
 }
 
 // 0x10274ca0 `CAI_BaseNPC::SetDefaultEyeOffset`
@@ -363,9 +369,11 @@ int32 FElysiumNpcBase::Slot571(float Distance)
 	// caller is `CAI_BaseNPC::RunTask` (`0x10288780`) task 0x0b, which passes the distance to the
 	// move target and makes the answer both the movement and the ideal activity.
 	//
-	// `_DAT_1049a17c` is UNRECOVERED; at the 0.0 stand-in every non-negative distance answers
-	// `ACT_RUN`, which is the arm the task takes for any real separation.
-	return Distance >= GDatFollowRunDistanceUnits ? GBaseHelpersActRun : GBaseHelpersActWalk;
+	// `_DAT_1049a17c` is the `.rdata` float 190.0 (`0x433e0000`, read from the image; its three
+	// referrers only read it). The distance is in SOURCE units (the 0x0b arm's `Length2D`).
+	// `10289ce4 FCOMP` / `10289cec TEST AH,0x5` / `10289cf4 JNP`: ACT_WALK (9) only when C0 alone is
+	// set (ordered `Distance < 190.0`); at or beyond it, and on an unordered (NaN) distance, ACT_RUN.
+	return Distance < GDatFollowRunDistanceUnits ? GBaseHelpersActWalk : GBaseHelpersActRun;
 }
 
 bool FElysiumNpcBase::HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const
