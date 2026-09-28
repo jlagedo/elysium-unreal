@@ -75,7 +75,8 @@ themselves. `path+0x20` is written by `0x102f2fe0` (the tolerance tails, the LKP
   (`0x10289eee`); then `SetIdealActivity(act)` (`0x10289efc` → `0x10272650`).
 - `0x1028a150` GetCurTask: the running schedule's task at `m_iScheduleIndex`; NULL with no schedule.
   The port's steps carry retail's global task ids, so the running step answers it.
-- `0x102dfed0` CAI_Enemies::GetLastKnownPosition: the entity's record `+0xc`; else the LAST record
+- `0x102dfed0` CAI_Enemies::GetLastKnownPosition (one port body, family Conditions19's
+  `Conditions19LastKnownPosition`): the entity's record `+0xc`; else the LAST record
   flagged `+0x34` with `DevWarning(2, "Asking LastKnownPosition for enemy (%s) that's not in my memory
   (using danger pos)!!\n")` (`0x1060e248`); else `vec3_origin` (`DAT_1070d1b0`, zeroed by
   `0x101370b0`) with `DevWarning(2, "Asking LastKnownPosition for enemy (%s) that's not in my

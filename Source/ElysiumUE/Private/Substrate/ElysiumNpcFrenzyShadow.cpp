@@ -409,7 +409,7 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 	// copy the owner's `m_bFrenzyHunger` (`+0x1474`) into this body's own.
 	if (World != nullptr && OwnerIsThePlayer())
 	{
-		if (const FElysiumEntity* Owner = World->Resolve(GetOwnerEntity()))
+		if (const FElysiumEntity* Owner = World->Resolve(GetOwnerEntity())) // 0x10375f5b +0x184 / 0x10375f63 JZ / 0x10375f6d JZ (+0xa8)
 		{
 			bFrenzyHunger = OwnerFrenzyHunger(*Owner);
 		}
@@ -423,7 +423,7 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 	// GLOBAL id, so it goes back through slot 450 first (0019/8 L04: the landed body compared raw
 	// global ids, which no retail task ever equals once a schedule is installed).
 	const int32 TaskLocal = GetLocalTaskId(Step->TaskId);             // 0x10375f7f MOV EAX,[EDI]
-	switch (TaskLocal)
+	switch (TaskLocal) // 0x10375f81 CMP 0xae; 0x10375f86 JG / 0x10375f8c JZ / 0x10375f98 JA; 0x10375fa6 / 0x1037617c JA / 0x10376186 table jumps
 	{
 	case GShadowTaskAttackA:
 	case GShadowTaskAttackB:
@@ -438,17 +438,17 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		// arguments `(0xf18, 1, 1)` are pushed BEFORE the task-0x37 compare (`0x1037604b`..`0x10376052`,
 		// then `0x1037605f CMP EAX,0x37`), so both call sites make the same call (0019/8 pass R
 		// correction; the landed body passed a task-0x37 flag instead).
-		if (bFrenzyHunger)
+		if (bFrenzyHunger) // 0x1037601e JNZ -> default
 		{
 			break;
 		}
-		const FElysiumEntity* Weapon = ActiveWeaponEntity();
-		if (Weapon != nullptr && (ActiveWeaponCapabilityWord() & GShadowMeleeWeaponBits) != 0)
+		const FElysiumEntity* Weapon = ActiveWeaponEntity(); // 0x10376026 GetActiveWeapon
+		if (Weapon != nullptr && (ActiveWeaponCapabilityWord() & GShadowMeleeWeaponBits) != 0) // 0x1037602f JZ / 0x10376035 +0x5a0 / 0x10376040 JZ; 0x10376064 JZ (task 0x37: same call)
 		{
 			LastAttackTime = Now;                                         // 0x10376057 +0x5d9c
 			return WeaponAttackDispatch(GShadowWeaponDispatchArg0, 1, 1);  // 0x10376068 / 0x1037607a +0x5d0
 		}
-		Fail(GShadowLineNoWeapon, GShadowFailNoWeapon);
+		Fail(GShadowLineNoWeapon, GShadowFailNoWeapon); // 0x103760a4 +0x700
 		return 0;
 	}
 	case GShadowTaskGoalTolA:
@@ -481,22 +481,22 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		// route starts at this body's `GetOrigin`. With neither the route is asked with NO goal. The
 		// port has no local/abs split, so `GetOrigin` is `Origin`. A refused route fails with `0x20`
 		// and STILL falls into `CNPC_VHuman::StartTask`; a built one completes and ALSO falls into it.
-		FElysiumEntity* HuntGoal = GetEnemy();
+		FElysiumEntity* HuntGoal = GetEnemy(); // 0x103760b8 slot 168 / 0x103760c2 JNZ
 		if (HuntGoal == nullptr)
 		{
-			HuntGoal = NearestHuntEntity();
+			HuntGoal = NearestHuntEntity(); // 0x103760cd +0x370 / 0x103760d9 0x100101c7 (256) / 0x103760e0 JZ; the goal 0x103760e6 +0x370
 		}
 		FVector GoalUnits = FVector::ZeroVector;
 		if (HuntGoal != nullptr)
 		{
 			GoalUnits = HuntGoal->Origin / ElysiumMove::U;
 		}
-		if (!BuildHuntRoute(HuntGoal != nullptr ? &GoalUnits : nullptr))
+		if (!BuildHuntRoute(HuntGoal != nullptr ? &GoalUnits : nullptr)) // 0x10376114 +0x370 / 0x1037611e 0x1000f538 / 0x10376127 JZ
 		{
-			Fail(GShadowLineNoRoute, GShadowFailNoRoute);
-			return FElysiumNpcHuman::StartTaskSlot442(Task);
+			Fail(GShadowLineNoRoute, GShadowFailNoRoute); // 0x1037615a +0x700
+			return FElysiumNpcHuman::StartTaskSlot442(Task); // 0x10376163
 		}
-		TaskComplete(false);
+		TaskComplete(false); // 0x1037612b; then 0x10376133 the VHuman body
 		return FElysiumNpcHuman::StartTaskSlot442(Task);
 	}
 	case GShadowTaskHuntTarget:
@@ -505,18 +505,18 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		// neither, fail with `0x20` and fall into `CNPC_VHuman::StartTask`. Otherwise complete and
 		// fall into it too. The word holds the target's slot 220 `GetOrigin` (`+0x370`, not
 		// `GetAbsOrigin`; the port has no local/abs split), in Source units.
-		FElysiumEntity* HuntGoal = GetEnemy();
+		FElysiumEntity* HuntGoal = GetEnemy(); // 0x10376191 slot 168 / 0x10376199 JNZ
 		if (HuntGoal == nullptr)
 		{
-			HuntGoal = NearestHuntEntity();
+			HuntGoal = NearestHuntEntity(); // 0x103761a4 +0x370 / 0x103761b0 0x100101c7 / 0x103761b7 JZ
 			if (HuntGoal == nullptr)
 			{
-				Fail(GShadowLineNoTarget, GShadowFailNoRoute);
+				Fail(GShadowLineNoTarget, GShadowFailNoRoute); // 0x10376208 +0x700
 				return FElysiumNpcHuman::StartTaskSlot442(Task);
 			}
 		}
-		HuntPatrolTarget = HuntGoal->Origin / ElysiumMove::U;
-		TaskComplete(false);
+		HuntPatrolTarget = HuntGoal->Origin / ElysiumMove::U; // 0x103761bd +0x370
+		TaskComplete(false); // 0x103761e9 -> 0x1037612b; then 0x10376211 on the fail arm, 0x10376133 here
 		return FElysiumNpcHuman::StartTaskSlot442(Task);
 	}
 	case GShadowTaskTurnA:
@@ -528,34 +528,34 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		// clearance sweep `0x102a1650(act, 0.0, m_flWaitFinishedDelta)` decides: clear -> zero
 		// `m_flDesiredMoveYaw`, `m_flWaitFinished = curtime + delta`, `RestartIdealActivity(act)`;
 		// blocked -> fail with `0xe`. The no-enemy arm returns after the activity lookup.
-		(void)ResolveTaskDistance(Step->Data);
-		const bool bNoEnemy = GetEnemy() == nullptr;
+		(void)ResolveTaskDistance(Step->Data); // 0x1037622f slot 418; its only reader is the dead 0x103762c8 JP / 0x103762cc / 0x103762d3 JZ / 0x103762d7 / 0x103762de GetActiveWeapon calls (answers unused)
+		const bool bNoEnemy = GetEnemy() == nullptr; // 0x1037623d slot 168 / 0x10376245 JZ; with one, 0x1037624b / 0x10376257 +0x364 and 0x10376287 sqrt: a distance nothing reads
 		if (bNoEnemy)
 		{
-			Fail(GShadowLineNoEnemy, GShadowFailNoEnemy);
+			Fail(GShadowLineNoEnemy, GShadowFailNoEnemy); // 0x103762ae +0x700 (then tries = 1000)
 		}
 		int32 Activity = GShadowActTurnPrimary;
-		if (SequenceForActivity(Activity) == INDEX_NONE)
+		if (SequenceForActivity(Activity) == INDEX_NONE) // 0x103762e9 0x10009c14(0x13, 0) / 0x103762f1 JNZ
 		{
 			Activity = GShadowActTurnFallback;
-			if (SequenceForActivity(Activity) == INDEX_NONE)
+			if (SequenceForActivity(Activity) == INDEX_NONE) // 0x103762fd 0x10009c14(9, 0) / 0x10376305 JNZ
 			{
-				Fail(GShadowLineNoActivity, GShadowFailNoActivity);
+				Fail(GShadowLineNoActivity, GShadowFailNoActivity); // 0x10376321 +0x700
 				return 0;
 			}
 		}
-		if (bNoEnemy)
+		if (bNoEnemy) // 0x10376334 JGE (tries 1000) / 0x10376357 JZ -> return
 		{
 			return 0;
 		}
-		if (TraceMoveClearanceAtYaw(Activity, 0.f, ScheduleHost.WaitFinishedDelta))
+		if (TraceMoveClearanceAtYaw(Activity, 0.f, ScheduleHost.WaitFinishedDelta)) // 0x10376342 0x10005353 / 0x10376349 JNZ / 0x1037634f JL (one try)
 		{
 			ScheduleHost.DesiredMoveYaw = 0.f;
 			BaseScheduleHost.WaitFinished = Now + ScheduleHost.WaitFinishedDelta;
-			RestartIdealActivityId(Activity);
+			RestartIdealActivityId(Activity); // 0x103763a9 0x10014524
 			return 0;
 		}
-		Fail(GShadowLineNoClearance, GShadowFailNoClearance);
+		Fail(GShadowLineNoClearance, GShadowFailNoClearance); // 0x10376377 +0x700
 		return 0;
 	}
 	case GShadowTaskAttemptFeed:
@@ -564,19 +564,19 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		// (`+0x6a0`). Accepted -> `player+0x1476 = 1`, `0x1033f6d0(player)`, `m_bFailedGrapple = 0`;
 		// refused -> `m_bFailedGrapple = 1`. With no owner player neither word moves. Every arm
 		// completes the task.
-		FElysiumPlayer* Player = (World != nullptr && OwnerIsThePlayer()) ? World->FindPlayer() : nullptr;
+		FElysiumPlayer* Player = (World != nullptr && OwnerIsThePlayer()) ? World->FindPlayer() : nullptr; // 0x103763bc +0x184 / 0x103763c4 JZ / 0x103763ce JZ (+0xa8)
 		if (Player != nullptr)
 		{
-			if (OwnerReplenish(*Player))
+			if (OwnerReplenish(*Player)) // 0x103763d6 +0x6a0 Replenish(1) / 0x103763de JZ
 			{
-				++OwnerFeedAcceptances;
+				++OwnerFeedAcceptances; // 0x103763e9 0x1000c185 -> 0x1033f6d0
 				bFailedGrapple = false;
-				TaskComplete(false);
+				TaskComplete(false); // 0x103763f9 (+0x6668 = 0)
 				return 0;
 			}
 			bFailedGrapple = true;
 		}
-		TaskComplete(false);
+		TaskComplete(false); // 0x10376413 (+0x6668 = 1 on refusal, 0x10376408)
 		return 0;
 	}
 	default:

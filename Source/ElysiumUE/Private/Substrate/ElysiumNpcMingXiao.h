@@ -445,9 +445,8 @@ public:
 	void MingXiaoTentacleGrab();
 
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
-	/** `+0x6680 CNPC_VMingXiao::m_hRangedWeapon` (datamap): `StartTask` `0x10392d80` task `0x155`
-	 *  switches to it. (Rebinds the species shape map's `ABSENT` row.) */
-	FElysiumEntityHandle MingXiaoRangedWeapon;
+	// `+0x6680 m_hRangedWeapon`, which `StartTask` `0x10392d80` task `0x155` switches to, is lane
+	// L07's `MingXiaoRangedWeapon` above.
 	/** `+0x6714 CNPC_VMingXiao::m_eLastLostTentacle` (datamap): task `0x15c` aims `hit_yaw` at its
 	 *  bone. (Rebinds the `ABSENT` row.) */
 	int32 MingXiaoLastLostTentacle = 0;

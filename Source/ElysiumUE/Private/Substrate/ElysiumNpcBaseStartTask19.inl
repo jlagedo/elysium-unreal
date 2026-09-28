@@ -226,10 +226,8 @@ bool StartTaskFindLateralCover(const FVector& ThreatEyeCm, const FElysiumEntity*
 bool StartTaskTestLateralCover(const FVector& ThreatEyeCm, const FVector& PointCm,
 	const FElysiumEntity* Ignore);
 
-/** `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`) over this NPC's memory (slot 541 answers the
- *  NPC's own store while squads are absent): the entity's record, else the last position-only
- *  record with its DevWarning, else the zero vector with the other DevWarning. */
-FVector StartTaskLastKnownPosition(const FElysiumEntity* Entity);
+/** `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`) is family Conditions19's
+ *  `Conditions19LastKnownPosition` (`ElysiumNpcBaseConditions19.inl`): one body for every caller. */
 
 /** `CAI_BaseNPC::GetFlinchActivity` (`0x10265970`): the last hit group (`+0x1594`) picks
  *  `0x66/0x68/0x69/0x6a/0x6b/0x6c` for groups 1/3/4/5/6/7, else `0x49`; a model with no sequence for

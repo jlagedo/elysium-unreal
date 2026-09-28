@@ -30,9 +30,7 @@ public:
 	int32 Select19TzimisceMeleeRetreatContinuation();
 	/** `0x103bcc00` — the attack continuation. */
 	int32 Select19TzimisceMeleeAttackContinuation();
-	/** SEAM for `0x103bf660`, the pounce hull probe (a `TraceHull` from the enemy's last known position
-	 *  toward this body, mask `0x202400b`). No hull trace stands on the kernel; answers false, which
-	 *  withholds the pounce. */
+	/** `0x103bf660`, the pounce probe: family Conditions19's `TzimiscePounceTest` below. */
 	bool Select19TzimiscePounceProbe();
 	/** SEAM for slot 627 (`vtable +0x9cc`, `0x103b9e30`), the fidget-voice body only this class fills
 	 *  (`SPI_FIDGET` through the three `tzimisce_voice_*` ConVars when slot 486 allows). Counted. */
@@ -229,8 +227,8 @@ public:
 	/** `+0x66a8 CNPC_VTzimisce::m_flTaskFailTimer` (datamap): `StartTask` `0x103ba7c0` task `0xc9` arms
 	 *  it to curtime + 1.0 when the grab gate refuses. (Rebinds the species shape map's `ABSENT` row.) */
 	double TzimisceTaskFailTimer = 0.0;
-	/** SEAMS for `0x103bf440` (the carry facing) and `0x103bf660` (the pounce hull check, answers true);
-	 *  see the definitions. Neither is this lane's row. */
+	/** SEAM for `0x103bf440` (the carry facing), counted; `0x103bf660` is `TzimiscePounceTest`
+	 *  (family Conditions19), counted here for the StartTask19 tests. */
 	void FUN_103bf440();
 	bool FUN_103bf660();
 	int32 Fun103bf440Calls = 0;

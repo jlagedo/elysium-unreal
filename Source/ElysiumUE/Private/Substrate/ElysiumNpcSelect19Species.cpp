@@ -1286,7 +1286,9 @@ bool FElysiumNpcTzimisce::Select19TzimisceFindBody()
 
 bool FElysiumNpcTzimisce::Select19TzimiscePounceProbe()
 {
-	return false;
+	// `0x103bf660` is family Conditions19's `TzimiscePounceTest` (StartTask19 integration: this was a
+	// second stand-in for the same body).
+	return TzimiscePounceTest();
 }
 
 bool FElysiumNpcTzimisce::Select19SequencePastHalf() const

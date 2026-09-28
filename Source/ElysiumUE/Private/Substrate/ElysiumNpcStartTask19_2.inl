@@ -49,7 +49,7 @@ int32 TaskTailNavGoalCalls = 0;
  *  (`0x10288670` / `0x102e2020`), `StartTaskFindLateralCover` (`0x102784a0`), `StartTaskFindLosPos`
  *  (`0x102edaa0`), `StartTaskFindCoverPos` (`0x102edc80`), `StartTaskHintFacing` (`0x102d11f0`),
  *  `StartTaskSetArrivalActivity` / `StartTaskSetArrivalDirection` (`0x102ee410` / `0x102ee530`),
- *  `StartTaskLastKnownPosition` (`0x102dfed0`), `StartTaskAngleMod` (`0x10288590`), and the
+ *  `Conditions19LastKnownPosition` (`0x102dfed0`), `StartTaskAngleMod` (`0x10288590`), and the
  *  `m_lifeState` word `NpcLifeStateWord`. */
 bool TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoalFlags);
 

@@ -149,8 +149,8 @@ public:
 	/** `+0x667c CNPC_VMingXiaoTentacle::m_flUpdateEvadeTimer` -- the evade re-arm deadline tasks `0x14f`
 	 *  (`RandomFloat(1, 2)` ahead), `0x151` and `0x152` (600 ahead) write. Walked from `0x1039c4c0`. */
 	double TentacleUpdateEvadeTimer = 0.0;
-	/** `+0x6680 CNPC_VMingXiaoTentacle::m_flHideReadyTimer` -- task `0x151`'s `RandomFloat(5, 15)` ahead. */
-	double TentacleHideReadyTimer = 0.0;
+	// `+0x6680 m_flHideReadyTimer` (task `0x151`'s `RandomFloat(5, 15)` ahead) is the Damage19
+	// member `TentacleHideReadyTimer` above.
 	/** SEAM for `0x102c41d0(this, name, &position, 0, 0)` -- the named particle emitter; recorded. */
 	void TentacleCreateEmitter(const TCHAR* Name, const FVector& PositionUnits);
 	TArray<FTeleportEmitterPlacement> TentacleEmitterPlacements;

@@ -466,7 +466,7 @@ FElysiumInterestingPlace* FElysiumNpc::TaskTailPlaceAt(int32 EntityIndex) const
 void FElysiumNpc::TaskTailMovementActivity(int32 Activity)
 {
 	// `0x102a5904`.
-	StartTaskSetMovementActivity(Activity);                       // 0x102a590e 0x102ee250(nav, act)
+	StartTaskSetMovementActivity(Activity);                       // 0x102a590e 0x102ee250(nav, act) / 0x102a5907 GetNavigator
 	BaseScheduleHost.MemoryBits &= ~0x2u;                         // 0x102a5917 0x102a98e0(this, 2)
 	TaskComplete(false);                                          // 0x102a5920
 }
@@ -484,6 +484,15 @@ void FElysiumNpc::TaskTailLookAt(const FVector& PositionUnits, float TaskSeconds
 
 int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 {
+	// `0x1029f730` / `0x1029f780` are handed `&m_sppPatrolPath` (`+0x658c`); their reader `0x1029f6c0`
+	// (a seam, `PatrolNodeInterestRecord`) takes the path's current node. The port's own patrol route
+	// (`PatrolIndex`) is a STORY8-TWIN and not what retail reads.
+	auto TaskTailPatrolNode = [this]() -> int32
+	{
+		const FPatrolPathRecord* Path = PatrolPathCell.Path;
+		return Path != nullptr && Path->Current >= 0 && Path->Current < PatrolPathNodeCapacity
+			? Path->Nodes[Path->Current] : INDEX_NONE;
+	};
 	using namespace StartTask19_2Ids;
 	using namespace StartTask19_2Consts;
 
@@ -512,7 +521,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		// No write: the task stays RUNNING and `RunTask` owns all three.        // 0x102a77ea
 		return 0;
 
-	// --- index 0x1d: `0x102a66d7` (the arm Ghidra dropped) --------------------------------------
+	// --- index 0x1d: `0x102a66d7` (the arm Ghidra dropped) -------------------------------------- / 0x102a66db TaskComplete
 	case TASK_MELEE_DODGE:
 	case TASK_SET_SHOOT_TARGET_OVERRIDE:
 		StartTask19Complete();                                  // 0x102a66d7
@@ -621,7 +630,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FElysiumInterestingPlace* Place = CurrentAmbientSpot();   // 0x102a634a +0x62ec
 		if (Place == nullptr)                                     // 0x102a6354
 		{
-			StartTask19Fail(0x3848, 0x22);                        // 0x102a6396
+			StartTask19Fail(0x3848, 0x22);                        // 0x102a6396 / 0x102a63aa slot 448
 			return 0;
 		}
 		++TaskTailHolsterChecks;                                  // 0x102a6356 0x102ae310
@@ -630,9 +639,9 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			TaskComplete(false);                                  // 0x102a636a -> 0x102a6873
 			return 0;
 		}
-		StartTaskMotorHoldYaw();                                  // 0x102a6377
+		StartTaskMotorHoldYaw();                                  // 0x102a6377 / 0x102a6370 GetMotor
 		// `0x102a9e60(place)` = the place's `GetAbsAngles().y`, through `0x10288590` (AngleMod).
-		const float Yaw = StartTaskAngleMod(static_cast<float>(Place->Angles.Y));   // 0x102a638b
+		const float Yaw = StartTaskAngleMod(static_cast<float>(Place->Angles.Y));   // 0x102a638b / 0x102a6382 0x102a9e60
 		StartTaskMotorSetIdealYaw(Yaw);                                     // 0x102a6390 -> 0x102a63fc
 		return 0;
 	}
@@ -640,9 +649,9 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	// --- index 0x39: TASK_FACE_PATROL_INTEREST ---------------------------------------------------
 	case TASK_FACE_PATROL_INTEREST:
 	{
-		const int32 Hint = FUN_1029f730(PatrolIndex);             // 0x102a63c6 (&m_sppPatrolPath)
+		const int32 Hint = FUN_1029f730(TaskTailPatrolNode());   // 0x102a63c6 (&m_sppPatrolPath)
 		FElysiumInterestingPlace* Place =
-			TaskTailPlaceAt(ResolvePatrolInterestPlace(PatrolIndex));   // 0x102a63d0 0x1029f780
+			TaskTailPlaceAt(ResolvePatrolInterestPlace(TaskTailPatrolNode()));   // 0x102a63d0 0x1029f780
 		if (Place == nullptr)                                     // 0x102a63d9
 		{
 			TaskComplete(false);                                  // 0x102a643c
@@ -655,10 +664,10 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			TaskComplete(false);                                  // 0x102a6427
 			return 0;
 		}
-		StartTaskMotorHoldYaw();                                  // 0x102a63ef
+		StartTaskMotorHoldYaw();                                  // 0x102a63ef / 0x102a63e8 GetMotor
 		float HintYawDegrees = 0.f;
 		(void)StartTaskHintYaw(Hint, HintYawDegrees);             // 0x102a63f6 0x102d12e0 (node or own yaw)
-		StartTaskMotorSetIdealYaw(HintYawDegrees);                          // -> 0x102a63fc / 0x102a6408
+		StartTaskMotorSetIdealYaw(HintYawDegrees);                          // -> 0x102a63fc / 0x102a6408 / 0x102a6401 GetMotor
 		return 0;
 	}
 
@@ -669,7 +678,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FElysiumInterestingPlace* Place = CurrentAmbientSpot();   // 0x102a644e
 		if (Place == nullptr)                                     // 0x102a6462
 		{
-			StartTask19Fail(0x3874, 0x22);                        // 0x102a647f
+			StartTask19Fail(0x3874, 0x22);                        // 0x102a647f / 0x102a6493 slot 448
 			return 0;
 		}
 		// `0x102a9f40(this, place, 0, 1)`.
@@ -680,9 +689,9 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	// --- index 0x3b: TASK_DO_PATROL_INTEREST_ACTIVITY --------------------------------------------
 	case TASK_DO_PATROL_INTEREST_ACTIVITY:
 	{
-		const int32 Hint = FUN_1029f730(PatrolIndex);             // 0x102a64af
+		const int32 Hint = FUN_1029f730(TaskTailPatrolNode());   // 0x102a64af
 		FElysiumInterestingPlace* Place =
-			TaskTailPlaceAt(ResolvePatrolInterestPlace(PatrolIndex));   // 0x102a64b9
+			TaskTailPlaceAt(ResolvePatrolInterestPlace(TaskTailPatrolNode()));   // 0x102a64b9
 		if (Place == nullptr)                                     // 0x102a64c4
 		{
 			TaskComplete(false);                                  // 0x102a64c4 -> 0x102a6875
@@ -704,7 +713,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		const int32 Base = TaskId == TASK_DO_LOITER_ACTIVITY ? ActIdle : ActWalk;   // 0x102a64e0/e6
 		int32 WeaponActivity = 0;
 		const int32 Activity = TranslateActivityNumber(Base, WeaponActivity);   // 0x102a64ea
-		StartTaskSetMovementActivity(Activity);                  // 0x102a64f9 0x102ee250
+		StartTaskSetMovementActivity(Activity);                  // 0x102a64f9 0x102ee250 / 0x102a64f2 GetNavigator
 		return 0;
 	}
 
@@ -757,7 +766,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		Info.Damage = DamageInfoScale;
 		Info.DamageBits = 0;
 		Info.AmmoType = INDEX_NONE;
-		OnTakeDamage(&Info);                                      // 0x102a50fd slot 142
+		OnTakeDamage(&Info);                                      // 0x102a50fd slot 142 / 0x102a510a the info's destructor
 		TaskComplete(false);                                      // 0x102a5113
 		return 0;
 	}
@@ -767,9 +776,9 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_SET_COWER:
 	{
 		const int32 Activity = StartTask19_2Ftol(Operand);        // 0x102a5128 / 0x102a516f
-		if (Activity == ActCowerInto)                             // 0x102a512f / 0x102a5176
+		if (Activity == ActCowerInto)                             // 0x102a512f / 0x102a5176 / 0x102a5135 / 0x102a517c JNZ
 		{
-			CowerAnimOffset = StartTask19_2RandomInt(0, 2) * 3;   // 0x102a5143 / 0x102a5149
+			CowerAnimOffset = StartTask19_2RandomInt(0, 2) * 3;   // 0x102a5143 / 0x102a5149 / 0x102a518a RandomInt
 		}
 		if (TaskId == TASK_PLAY_COWER)
 		{
@@ -811,7 +820,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	// --- index 0x60 / 0x61: the resist activities -----------------------------------------------
 	case TASK_PLAY_PARTIAL_RESIST_ACTIVITY:
 	{
-		int32 Activity = ActPartialResistDem;                     // 0x102a5223 / 0x102a5269
+		int32 Activity = ActPartialResistDem;                     // 0x102a5223 / 0x102a5269 / 0x102a522b JZ
 		if (LastDisciplineHitBy == DisciplineDominate)            // 0x102a522e
 		{
 			Activity = ActPartialResistDom;                       // 0x102a524f
@@ -825,7 +834,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	}
 	case TASK_PLAY_FULL_RESIST_ACTIVITY:
 	{
-		int32 Activity = ActFullResistDem;                        // 0x102a5289 / 0x102a52cf
+		int32 Activity = ActFullResistDem;                        // 0x102a5289 / 0x102a52cf / 0x102a5291 JZ
 		if (LastDisciplineHitBy == DisciplineDominate)            // 0x102a5294
 		{
 			Activity = ActFullResistDom;                          // 0x102a52b5
@@ -875,30 +884,30 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_SUPERNATURAL_ACT:
 		// `0x102ca2a0(DAT_109253f8, 2, this, pos, 2, <operand bits>, 0, this, 0)`: the act's
 		// duration is the operand's raw word handed on unchanged.
-		++TaskTailSupernaturalActs;                               // 0x102a53cf
+		++TaskTailSupernaturalActs;                               // 0x102a53cf / 0x102a53a0 GetAbsOrigin
 		TaskTailLastSupernaturalActDuration = Operand;
 		// `CSoundEnt::InsertSound(8, pos, table[0x1b], 10.0, flag[0x1b], this)`.
-		++TaskTailDangerSounds;                                   // 0x102a5408
+		++TaskTailDangerSounds;                                   // 0x102a5408 / 0x102a53db / 0x102a53e9 row 0x1b; 0x102a5400 GetAbsOrigin
 		TaskComplete(false);                                      // 0x102a5414
 		return 0;
 
 	// --- index 0x68: TASK_FACE_NEXT_NODE ---------------------------------------------------------
 	case TASK_FACE_NEXT_NODE:
 	{
-		if (!NavigatorGoalIsActive())                             // 0x102a542f 0x102ee6a0 / 0x102a5436
+		if (!NavigatorGoalIsActive())                             // 0x102a542f 0x102ee6a0 / 0x102a5436 / 0x102a5428 GetNavigator
 		{
 			EmitDevMsg(TEXT("No route to face!\n"), TEXT("No route to face!\n"));   // 0x102a543f DevWarning(2, ...)
 			StartTask19Fail(0x3599, 0xc);                         // 0x102a5462
 			return 0;
 		}
 		FVector WaypointUnits = FVector::ZeroVector;
-		if (!TaskTailNavFacingWaypoint(WaypointUnits))            // 0x102a548e
+		if (!TaskTailNavFacingWaypoint(WaypointUnits))            // 0x102a548e / 0x102a5477 / 0x102a547e / 0x102a5485 / 0x102a5492 / 0x102a5499
 		{
 			StartTask19Fail(0x35b9, 0xc);                         // 0x102a5502
 			return 0;
 		}
-		StartTaskMotorHoldYaw();                                  // 0x102a54a6
-		StartTaskMotorSetIdealYawToTarget(WaypointUnits * ElysiumMove::U);                 // 0x102a54be 0x102e2020
+		StartTaskMotorHoldYaw();                                  // 0x102a54a6 / 0x102a549f GetMotor
+		StartTaskMotorSetIdealYawToTarget(WaypointUnits * ElysiumMove::U);                 // 0x102a54be 0x102e2020 / 0x102a54af / 0x102a54b7
 		if (FacingIdeal())                                        // 0x102a54c5 / 0x102a54cc
 		{
 			TaskComplete(false);                                  // 0x102a54d6
@@ -929,7 +938,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 				SoundUnits = StartTask19_2Units(Owner->Origin);
 			}
 		}
-		TaskTailLookAt(SoundUnits, Operand, Now);                 // 0x102a552a -> 0x102a7744
+		TaskTailLookAt(SoundUnits, Operand, Now);                 // 0x102a552a -> 0x102a7744 / 0x102a5525 0x101b99d0 the sound's position
 		return 0;
 	}
 
@@ -956,7 +965,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			StartTask19Fail(0x35e2, 0x17);                        // 0x102a55d0
 			return 0;
 		}
-		TaskTailLookAt(StartTask19_2Units(Player->Origin), Operand, Now);   // 0x102a55b1 -> 0x102a773a
+		TaskTailLookAt(StartTask19_2Units(Player->Origin), Operand, Now);   // 0x102a55b1 -> 0x102a773a / 0x102a55ac GetAbsOrigin
 		return 0;
 	}
 
@@ -964,7 +973,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_LOOK_AT_BEST_UNKNOWN:
 	{
 		const FElysiumEntity* Best =
-			World != nullptr ? World->Resolve(GetBestSeeUnknown()) : nullptr;   // 0x102a55ef slot 586
+			World != nullptr ? World->Resolve(GetBestSeeUnknown()) : nullptr;   // 0x102a55ef slot 586 / 0x102a55f7 the handle resolve
 		if (Best != nullptr)                                      // 0x102a55fe
 		{
 			TaskTailLookAt(StartTask19_2Units(Best->Origin), Operand, Now);   // -> 0x102a773a
@@ -974,7 +983,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			&& World->Resolve(Senses.Memory.LastSeeUnknown) != nullptr;   // 0x102a560b 0x1028ac10(h, 0)
 		if (bLastLive)                                            // 0x102a5614
 		{
-			TaskTailLookAt(StartTask19_2Units(Senses.Memory.LastSeeUnknownPosition), Operand, Now);   // 0x102a561d +0x6090
+			TaskTailLookAt(StartTask19_2Units(Senses.Memory.LastSeeUnknownPosition), Operand, Now);   // 0x102a561d +0x6090 / 0x102a5625
 			return 0;
 		}
 		StartTask19Fail(0x35f7, 0x21);                            // 0x102a564f
@@ -1003,13 +1012,13 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		// -> ACT_IDLE. `0x102a56ab` / `0x102a575d` `JA`, tables `0x102a7c10` / `0x102a7c34`.
 		const uint32 Face = static_cast<uint32>(FaceAnim);
 		const bool bTurn = Face >= 1u && Face <= 8u;
-		SetIdealActivity(bTurn ? ActAlertFrontOutof + static_cast<int32>(Face) - 1 : ActIdle);   // 0x102a56f0 / 0x102a5815
-		const float Yaw = TaskTailAbsYaw();                       // 0x102a56f9 / 0x102a5826
+		SetIdealActivity(bTurn ? ActAlertFrontOutof + static_cast<int32>(Face) - 1 : ActIdle);   // 0x102a56f0 / 0x102a5815 / 0x102a56ad / 0x102a5763 table jumps / 0x102a577b / 0x102a5794 / 0x102a57aa / 0x102a57c0 / 0x102a57d6 / 0x102a57ec / 0x102a5802 the per-face SetIdealActivity
+		const float Yaw = TaskTailAbsYaw();                       // 0x102a56f9 / 0x102a5826 / 0x102a5700 / 0x102a582d
 		NpcFlags.Set(EElysiumNpcFlag::PLAYING_FACE_ANIM);         // 0x102a5710 / 0x102a583d
-		StartTaskMotorHoldYaw();                                  // 0x102a571e / 0x102a584b
+		StartTaskMotorHoldYaw();                                  // 0x102a571e / 0x102a584b / 0x102a5717 GetMotor / 0x102a5844 GetMotor
 		if (TaskId == TASK_UNLOOK_AT)
 		{
-			StartTaskMotorSetIdealYaw(Yaw - FaceYawDiff);          // 0x102a5727 FSUB +0x63e8 / 0x102a573a
+			StartTaskMotorSetIdealYaw(Yaw - FaceYawDiff);          // 0x102a5727 FSUB +0x63e8 / 0x102a573a / 0x102a5733 GetMotor
 		}
 		else
 		{
@@ -1100,7 +1109,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_FLIP_NEXT_IDEAL_YAW:
 		// `0x102a99c0(GetMotor(), operand != 0.0)` -- `motor+0x28`, the port's
 		// `bMotorAnimationMovement`.
-		BaseScheduleHost.bMotorAnimationMovement = Operand != 0.f;   // 0x102a59fb / 0x102a5a06 / 0x102a5a2a
+		BaseScheduleHost.bMotorAnimationMovement = Operand != 0.f;   // 0x102a59fb / 0x102a5a06 / 0x102a5a2a / 0x102a59ff GetMotor / 0x102a5a23 GetMotor
 		TaskComplete(false);                                      // 0x102a5a0f / 0x102a5a33
 		return 0;
 
@@ -1108,7 +1117,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_ATTEMPT_DIVE:
 	{
 		FVector GoalUnits = FVector::ZeroVector;
-		(void)NavGoalPosition(GoalUnits);                         // 0x102a5a4e 0x102ee140
+		(void)NavGoalPosition(GoalUnits);                         // 0x102a5a4e 0x102ee140 / 0x102a5a47 GetNavigator
 		const FVector Delta = GoalUnits - StartTask19_2Units(Origin);   // 0x102a5a6b / 0x102a5a93
 		const float Len2 = static_cast<float>(Delta.X * Delta.X + Delta.Y * Delta.Y);   // 0x102a5a98..a8
 		if (Len2 < DiveMinDistSqr)                                // 0x102a5aaa / 0x102a5ab7
@@ -1154,7 +1163,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FMotorMoveTrace Trace;
 		if (SelectWeightedSequenceForActivity(ActDiveRight) != INDEX_NONE   // 0x102a5bc0 / 0x102a5bca
 			&& MotorMoveTraceSweep(0, FromUnits, RightEnd, MaskNpcSolid, DiveProbeExtent, nullptr,
-				Trace))                                           // 0x102a5c04 / 0x102a5c0b
+				Trace))                                           // 0x102a5c04 / 0x102a5c0b / 0x102a5bd0 the trace record's ctor; 0x102a5bfd GetMoveProbe
 		{
 			NpcFlags.Set(EElysiumNpcFlag::ANIM_MOVEMENT);         // 0x102a5c14
 			SetIdealActivity(ActDiveRight);                       // 0x102a5c20
@@ -1162,7 +1171,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		}
 		if (SelectWeightedSequenceForActivity(ActDiveLeft) != INDEX_NONE    // 0x102a5c3b / 0x102a5c42
 			&& MotorMoveTraceSweep(0, FromUnits, LeftEnd, MaskNpcSolid, DiveProbeExtent, nullptr,
-				Trace))                                           // 0x102a5c79 / 0x102a5c80
+				Trace))                                           // 0x102a5c79 / 0x102a5c80 / 0x102a5c48 the trace record's ctor; 0x102a5c72 GetMoveProbe
 		{
 			NpcFlags.Set(EElysiumNpcFlag::ANIM_MOVEMENT);         // 0x102a5c89
 			SetIdealActivity(ActDiveLeft);                        // 0x102a5c95
@@ -1181,7 +1190,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FMotorMoveTrace Trace;
 		if (SelectWeightedSequenceForActivity(ActDiveForward) != INDEX_NONE   // 0x102a5d3d / 0x102a5d45
 			&& MotorMoveTraceSweep(0, FromUnits, End, MaskNpcSolid, DiveProbeExtent, nullptr,
-				Trace))                                           // 0x102a5d7f / 0x102a5d86
+				Trace))                                           // 0x102a5d7f / 0x102a5d86 / 0x102a5d4b the trace record's ctor; 0x102a5d78 GetMoveProbe
 		{
 			NpcFlags.Set(EElysiumNpcFlag::ANIM_MOVEMENT);         // 0x102a5d8f
 			SetIdealActivity(ActDiveForward);                     // 0x102a5d9b
@@ -1220,7 +1229,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			World != nullptr ? World->Resolve(ShootTargetOverride) : nullptr;   // 0x102a5e5b +0x5ba8
 		if (Override != nullptr)                                  // 0x102a5e62
 		{
-			AimUnits = StartTask19_2Units(Override->Origin);      // 0x102a5e6f / 0x102a5e7a
+			AimUnits = StartTask19_2Units(Override->Origin);      // 0x102a5e6f / 0x102a5e7a / 0x102a5e66
 		}
 		else
 		{
@@ -1231,7 +1240,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			{
 				// Both null compares EQUAL -- retail then asks the memory for a null enemy's LKP and
 				// aims at the origin. Reproduced.
-				AimUnits = StartTask19_2Units(StartTaskLastKnownPosition(TaskTailEnemy167()));   // 0x102a5e9c / 0x102a5eb7
+				AimUnits = StartTask19_2Units(Conditions19LastKnownPosition(TaskTailEnemy167()));   // 0x102a5e9c / 0x102a5eb7 / 0x102a5eaf slot 541 / 0x102a5ec1 the copy
 			}
 			else
 			{
@@ -1243,8 +1252,8 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			TaskComplete(false);                                  // 0x102a6873
 			return 0;
 		}
-		StartTaskMotorHoldYaw();                                  // 0x102a5eef
-		StartTaskMotorSetIdealYawToTarget(AimUnits * ElysiumMove::U);                      // 0x102a5f04
+		StartTaskMotorHoldYaw();                                  // 0x102a5eef / 0x102a5ee8 GetMotor
+		StartTaskMotorSetIdealYawToTarget(AimUnits * ElysiumMove::U);                      // 0x102a5f04 / 0x102a5efd GetMotor
 		return 0;
 	}
 
@@ -1292,8 +1301,8 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		const FString HintTargetName = TaskTailHintTargetName();      // 0x102a5fec 0x102a9c40
 		if (!HintTargetName.IsEmpty())                                // 0x102a5ff1 / 0x102a5ff4
 		{
-			ScheduleHost.KickProp = TaskTailFindEntityByName(HintTargetName);   // 0x102a6013 / 0x102a601b
-			if (World == nullptr || World->Resolve(ScheduleHost.KickProp) == nullptr)   // 0x102a6024 0x102c63b0(h, 0)
+			ScheduleHost.KickProp = TaskTailFindEntityByName(HintTargetName);   // 0x102a6013 / 0x102a601b / 0x102a6006
+			if (World == nullptr || World->Resolve(ScheduleHost.KickProp) == nullptr)   // 0x102a6024 0x102c63b0(h, 0) / 0x102a602b JZ
 			{
 				// RETAIL DEFECT, reproduced: `0x102a602d` pushes the format and NO arguments, so the
 				// two `%s` read whatever the stack holds. Transcribed as the bare format.
@@ -1303,18 +1312,18 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		if (FElysiumEntity* Prop =
 				World != nullptr ? World->Resolve(ScheduleHost.KickProp) : nullptr)   // 0x102a6045 / 0x102a604c
 		{
-			const FVector PropUnits = StartTask19_2Units(Prop->Origin);   // 0x102a605d
+			const FVector PropUnits = StartTask19_2Units(Prop->Origin);   // 0x102a605d / 0x102a6054 the handle's entity
 			const FVector MeUnits = StartTask19_2Units(Origin);          // 0x102a6069
-			const FVector D = MeUnits - PropUnits;                   // 0x102a607d..0x102a608a
+			const FVector D = MeUnits - PropUnits;                   // 0x102a607d..0x102a608a / 0x102a6078
 			const float Dist2 = static_cast<float>(D.X * D.X + D.Y * D.Y + D.Z * D.Z);
 			if (Dist2 <= KickPropMaxDistSqr)                         // 0x102a609d / 0x102a60ae JP only past 128
 			{
-				++TaskTailKicks;                                     // 0x102a60ba 0x102b6890(this, prop)
+				++TaskTailKicks;                                     // 0x102a60ba 0x102b6890(this, prop) / 0x102a60b2 the handle's entity
 				TaskTailLastKicked = Prop->Handle;
 			}
 			else
 			{
-				EmitDevMsg(GStartTask19_2KickTooFar, GStartTask19_2KickTooFar);   // 0x102a60c1, no arguments either
+				EmitDevMsg(GStartTask19_2KickTooFar, GStartTask19_2KickTooFar);   // 0x102a60c1, no arguments either / 0x102a60c6
 			}
 			ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();   // 0x102a60d3 0x1028ac80(h, 0)
 		}
@@ -1332,29 +1341,29 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			StartTask19Fail(0x3812, 0x25);                        // 0x102a6276
 			return 0;
 		}
-		FElysiumEntity* Enemy = TaskTailEnemy167();               // 0x102a6143
+		FElysiumEntity* Enemy = TaskTailEnemy167();               // 0x102a6143 / 0x102a615e slot 167
 		if (Enemy == nullptr)                                     // 0x102a614b
 		{
 			StartTask19Fail(0x380d, 6);                           // 0x102a624d
 			return 0;
 		}
-		const FVector PropUnits = StartTask19_2Units(Prop->Origin);   // 0x102a616a
+		const FVector PropUnits = StartTask19_2Units(Prop->Origin);   // 0x102a616a / 0x102a6153 the handle's entity
 		FVector Dir = StartTask19_2Units(Enemy->Origin) - PropUnits;  // 0x102a617a / 0x102a6182
 		Dir.Normalize();                                          // 0x102a618b
 		// `0x102a9c80(&goal, 10, -1, -1.0, 0, DAT_10923dd8)`, then the type word OVERWRITTEN to 4
 		// (`0x102a61b4 MOV [ESP+0xa4],4`) and the target word zeroed (`0x102a620f`).
 		FTaskTailNavGoal Goal;
-		Goal.Type = GoalTypeKickProp;                             // 0x102a61a2
+		Goal.Type = GoalTypeKickProp;                             // 0x102a61a2 / 0x102a61ad 0x102a9c80
 		Goal.Activity = INDEX_NONE;                               // 0x102a61a0
 		Goal.Tolerance = GoalToleranceDefault;                    // 0x102a6196
 		Goal.GoalFlags = 0;
-		Goal.Type = GoalTypeLocation;                             // 0x102a61b4
+		Goal.Type = GoalTypeLocation;                             // 0x102a61b4 / 0x102a61bf the handle's entity
 		// `0x102a61d7` `dir * 64`, then `0x102a61f1` `0x1001395d` = prop - (dir * 64): the kick spot is
 		// on the far side of the prop from the enemy (the same subtract helper `0x102a5a93` uses for
 		// goal - origin).
-		Goal.DestUnits = PropUnits - Dir * KickPropGoalReach;     // 0x102a61d7 / 0x102a61f1 / 0x102a61fe
+		Goal.DestUnits = PropUnits - Dir * KickPropGoalReach;     // 0x102a61d7 / 0x102a61f1 / 0x102a61fe / 0x102a61e9 GetAbsOrigin
 		Goal.Target = FElysiumEntityHandle::Invalid();            // 0x102a620f
-		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a6221, answer unread
+		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a6221, answer unread / 0x102a621a GetNavigator
 		return 0;
 	}
 
@@ -1378,7 +1387,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			return 0;
 		}
 		RestartIdealActivityId(ActKick);                          // 0x102a62f5
-		++TaskTailKicks;                                          // 0x102a6304 0x102b6890(this, prop)
+		++TaskTailKicks;                                          // 0x102a6304 0x102b6890(this, prop) / 0x102a62fc the handle's entity
 		TaskTailLastKicked = Prop->Handle;
 		ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();  // 0x102a630d
 		return 0;
@@ -1393,9 +1402,9 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			StartTask19Fail(0x38c3, 0xc);                         // 0x102a6681
 			return 0;
 		}
-		FTaskTailNavGoal Goal;                                    // 0x102a65a6 0x102a9d20(&goal, lkp, -1, -1.0, 0, ...)
+		FTaskTailNavGoal Goal;                                    // 0x102a65a6 0x102a9d20(&goal, lkp, -1, -1.0, 0, ...) / 0x102a65ad GetNavigator
 		Goal.Type = GoalTypeLocation;
-		Goal.DestUnits = StartTask19_2Units(StartTaskLastKnownPosition(EnemyEntity));           // 0x102a6591 / 0x102a6599
+		Goal.DestUnits = StartTask19_2Units(Conditions19LastKnownPosition(EnemyEntity));           // 0x102a6591 / 0x102a6599
 		Goal.Activity = INDEX_NONE;
 		Goal.Tolerance = GoalToleranceDefault;
 		// The fourth argument is seeded from `0x102f2fc0` (`0x102a65b4`, path `+0x20`,
@@ -1414,14 +1423,14 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		Goal.DestUnits = StartTask19_2Units(ChaseCm);
 		// A built route is completed by `SetGoal`'s own route build (navigator slot 2) and then again
 		// here; a refused one is failed by `OnNavFailed(0xc)` and then again here -- both retail.
-		if (!TaskTailNavSetGoal(Goal, SetGoalFlagsLkp))           // 0x102a65f0 / 0x102a65f7
+		if (!TaskTailNavSetGoal(Goal, SetGoalFlagsLkp))           // 0x102a65f0 / 0x102a65f7 / 0x102a65e9 GetNavigator
 		{
 			EmitDevMsg(TEXT("GetPathToLastEnemyLKP failed!!\n"), TEXT("GetPathToLastEnemyLKP failed!!\n"));   // 0x102a6629 DevWarning(2, ...)
 			RememberUnreachable(EnemyEntity);                          // 0x102a6635 0x10274080
 			StartTask19Fail(0x38d8, 0xc);                         // 0x102a6654
 			return 0;
 		}
-		NavPathScalar20 = ScalarCm / ElysiumMove::U;              // 0x102a6607 0x102f2fe0
+		NavPathScalar20 = ScalarCm / ElysiumMove::U;              // 0x102a6607 0x102f2fe0 / 0x102a6600 GetNavigator
 		TaskComplete(false);                                      // 0x102a6610
 		return 0;
 	}
@@ -1446,7 +1455,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		// `0x102edc80(nav, threat->GetAbsOrigin(), threat->EyePosition(), 0.0, radius, &out,
 		// threat)` -- `CAI_Navigator::FindCoverPos`, family StartTask19's one port body.
 		const bool bFound = StartTaskFindCoverPos(Threat->Origin, ThreatEyeCm, 0.f, RadiusUnits,
-			CoverCm);                                             // 0x102a6733
+			CoverCm);                                             // 0x102a6733 / 0x102a6718 slot 193 / 0x102a6723 GetAbsOrigin / 0x102a672c GetNavigator
 		if (!bFound)                                              // 0x102a673a
 		{
 			StartTask19Fail(0x3907, 8);                           // 0x102a67ee
@@ -1457,13 +1466,13 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		Goal.DestUnits = StartTask19_2Units(CoverCm);
 		Goal.Activity = ActRun;
 		Goal.Tolerance = GoalToleranceHull;
-		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a6780, answer unread
+		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a6780, answer unread / 0x102a6779 GetNavigator
 		if (BaseScheduleHost.HintNode != INDEX_NONE)              // 0x102a6785 / 0x102a678d
 		{
-			StartTaskSetArrivalActivity(GetCoverActivity(&BaseScheduleHost.HintNode)); // 0x102a6798 slot 569 / 0x102a67a8 0x102ee410
+			StartTaskSetArrivalActivity(GetCoverActivity(&BaseScheduleHost.HintNode)); // 0x102a6798 slot 569 / 0x102a67a8 0x102ee410 / 0x102a67a1 GetNavigator
 			FVector Direction = FVector::ZeroVector;
 			StartTaskHintFacing(BaseScheduleHost.HintNode, Direction);   // 0x102a67bb 0x102d11f0
-			StartTaskSetArrivalDirection(Direction);              // 0x102a67ca 0x102ee530
+			StartTaskSetArrivalDirection(Direction);              // 0x102a67ca 0x102ee530 / 0x102a67c3 GetNavigator
 		}
 		BaseScheduleHost.MoveWaitFinished = Now + Operand;        // 0x102a76a9..0x102a76b5
 		return 0;
@@ -1521,7 +1530,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		if (SelectWeightedSequenceForActivity(Activity) == INDEX_NONE)    // 0x102a68f5 / 0x102a68fd
 		{
 			const int32 TurnActivity = bRun ? ActRun : ActWalk;   // 0x102a6903..0x102a6920
-			if (!TraceMoveClearanceAtYaw(TurnActivity, ElysiumNpcTunables::OneEighty, Delta))   // 0x102a6924 0x102a1650
+			if (!TraceMoveClearanceAtYaw(TurnActivity, ElysiumNpcTunables::OneEighty, Delta))   // 0x102a6924 0x102a1650 / 0x102a692d JZ
 			{
 				StartTask19Fail(0x396f, 0x15);                    // 0x102a697b
 				return 0;
@@ -1540,7 +1549,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FVector HullMaxs = FVector::ZeroVector;
 		(void)RetailCollisionExtents(*this, HullMins, HullMaxs);  // 0x102a6a23 / 0x102a6a2b (+0x270)
 		FKernelHullTrace Trace;                                   // 0x102a6a0b
-		(void)KernelHullTrace(FromUnits, ToUnits, HullMins, HullMaxs, MaskNpcSolid, Trace);   // 0x102a6a47 0x102a99e0
+		(void)KernelHullTrace(FromUnits, ToUnits, HullMins, HullMaxs, MaskNpcSolid, Trace);   // 0x102a6a47 0x102a99e0 / 0x102a6a40 GetMoveProbe
 		if (Trace.Fraction != 1.f)                                // 0x102a6a4c / 0x102a6a5e
 		{
 			StartTask19Fail(0x3997, 0xe);                         // 0x102a6aa4
@@ -1553,7 +1562,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 
 	// --- index 0x8c: TASK_FACE_LASTANGLE ---------------------------------------------------------
 	case TASK_FACE_LASTANGLE:
-		StartTaskMotorHoldYaw();                                  // 0x102a6fe1
+		StartTaskMotorHoldYaw();                                  // 0x102a6fe1 / 0x102a6fda GetMotor
 		StartTaskMotorSetIdealYaw(StartTaskAngleMod(static_cast<float>(LastFacing.Y)));   // 0x102a6fee 0x102a95e0(1) / 0x102a6ff6 AngleMod -> 0x102a63fc
 		return 0;
 
@@ -1572,7 +1581,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		const FVector ToCm = FromCm + (EyePosition() - Origin);   // 0x102a7045 +0x184
 		FVector OutCm = FVector::ZeroVector;                      // 0x102a7029
 		// `0x102edaa0(nav, from, to, 0.0, 4096.0, 1.0, 1, &out)` -- `CAI_Navigator::FindLosPos`.
-		if (!StartTaskFindLosPos(FromCm, ToCm, 0.f, 4096.f, OutCm))   // 0x102a706f 0x102edaa0 / 0x102a7076
+		if (!StartTaskFindLosPos(FromCm, ToCm, 0.f, 4096.f, OutCm))   // 0x102a706f 0x102edaa0 / 0x102a7076 / 0x102a7068 GetNavigator
 		{
 			StartTask19Fail(0x3ac1, 0xb);                         // 0x102a70d3
 			return 0;
@@ -1582,7 +1591,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		Goal.DestUnits = StartTask19_2Units(OutCm);
 		Goal.Activity = ActRun;
 		Goal.Tolerance = GoalToleranceHull;
-		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a70a7, answer unread
+		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a70a7, answer unread / 0x102a70a0 GetNavigator
 		return 0;
 	}
 
@@ -1592,12 +1601,12 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		{
 			NpcFlags.SetRawWord2Bits(Flag2SleepBoundingBox);      // 0x102a70fd 0x102a9800
 			ScheduleHost.SavedSleepExtents = GetAttackExtents();  // 0x102a710e slot 16 / 0x102a7118 +0x65d0
-			SetAttackExtents(FVector(SleepExtentsXY, SleepExtentsXY, SleepExtentsZ) * ElysiumMove::U);   // 0x102a713d slot 15
+			SetAttackExtents(FVector(SleepExtentsXY, SleepExtentsXY, SleepExtentsZ) * ElysiumMove::U);   // 0x102a713d slot 15 / 0x102a7135 the Vector
 			StartTask19Complete();                              // 0x102a7140 -> 0x102a66d7
 			return 0;
 		}
 		SetAttackExtents(ScheduleHost.SavedSleepExtents);         // 0x102a714e slot 15
-		ScheduleHost.SavedSleepExtents = FVector(SleepExtentsCleared);   // 0x102a716f
+		ScheduleHost.SavedSleepExtents = FVector(SleepExtentsCleared);   // 0x102a716f / 0x102a7167 the Vector
 		NpcFlags.ClearRawWord2Bits(Flag2SleepBoundingBox);        // 0x102a717b 0x102a9830
 		StartTask19Complete();                                  // 0x102a7180 -> 0x102a66d7
 		return 0;
@@ -1612,12 +1621,12 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			Tries = CircleFailSuppressed;                         // 0x102a6aeb, and the arm goes on
 		}
 		int32 Side = TaskTailCoordinatorCircleSide(TaskTailEnemy167());   // 0x102a6af4 / 0x102a6b02
-		if (Side == 0)                                            // 0x102a6b0b
+		if (Side == 0)                                            // 0x102a6b0b / 0x102a6b0f JNZ
 		{
 			Side = StartTask19_2RandomInt(0, 1) != 0 ? -1 : 1;    // 0x102a6b1c..0x102a6b28
 		}
 		const float Delta = ScheduleHost.WaitFinishedDelta;
-		while (Tries < CircleTries)                               // 0x102a6b2d / 0x102a6b83
+		while (Tries < CircleTries)                               // 0x102a6b2d / 0x102a6b83 / 0x102a6b30 JGE
 		{
 			const float Yaw = StartTask19_2RandomFloat(Side * CircleFirstYaw,
 				Side * CircleSecondYaw);                          // 0x102a6b32..0x102a6b56
@@ -1635,7 +1644,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		{
 			return 0;                                             // -> 0x102a77ea
 		}
-		StartTask19Fail(0x39d5, 0xe);                             // 0x102a6b91 -> 0x102a6ba5
+		StartTask19Fail(0x39d5, 0xe);                             // 0x102a6b91 -> 0x102a6ba5 / 0x102a6bab slot 448
 		return 0;
 	}
 
@@ -1649,7 +1658,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		if (FElysiumEntity* EnemyEntity = GetEnemy())                  // 0x102a6c17 slot 168 / 0x102a6c23
 		{
 			Distance = static_cast<float>(FVector::Dist(StartTask19_2Units(EnemyEntity->Origin),
-				StartTask19_2Units(Origin)));                     // 0x102a6c3c 0x102a9570
+				StartTask19_2Units(Origin)));                     // 0x102a6c3c 0x102a9570 / 0x102a6c29 / 0x102a6c34 GetAbsOrigin
 		}
 		else
 		{
@@ -1660,12 +1669,12 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		{
 			Radius = TaskTailCircleDistOverride();                // 0x102a6c8a
 		}
-		if (Radius == CircleRadiusSentinel && ActiveWeaponEntity() != nullptr)   // 0x102a6c97 / 0x102a6cad
+		if (Radius == CircleRadiusSentinel && ActiveWeaponEntity() != nullptr)   // 0x102a6c97 / 0x102a6cad / 0x102a6ca2 JP / 0x102a6ca6 GetActiveWeapon
 		{
 			float MaxRange = 0.f;
 			float MinRange = 0.f;
-			(void)ActiveWeaponMaxRangeUnits(MaxRange);            // 0x102a6cb6 +0x8c0
-			(void)TaskTailWeaponMinRangeUnits(MinRange);          // 0x102a6ccd +0x8b8
+			(void)ActiveWeaponMaxRangeUnits(MaxRange);            // 0x102a6cb6 +0x8c0 / 0x102a6cb1 GetActiveWeapon
+			(void)TaskTailWeaponMinRangeUnits(MinRange);          // 0x102a6ccd +0x8b8 / 0x102a6cc8 GetActiveWeapon
 			Radius = static_cast<float>(MaxRange * CircleMaxRangeWeight
 				+ MinRange * CircleMinRangeWeight);               // 0x102a6cbc..0x102a6cdd
 		}
@@ -1680,7 +1689,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			}
 		}
 		const float Delta = ScheduleHost.WaitFinishedDelta;
-		while (Tries < CircleTries)                               // 0x102a6d3a / 0x102a6d73
+		while (Tries < CircleTries)                               // 0x102a6d3a / 0x102a6d73 / 0x102a6d3d JGE
 		{
 			const float Yaw = Slot603(&Distance, &Radius);        // 0x102a6d4d slot 603
 			if (TraceMoveClearanceAtYaw(Activity, Yaw, Delta))    // 0x102a6d66 / 0x102a6d6d
@@ -1711,7 +1720,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		ScheduleHost.GoalToleranceCm = ToleranceUnits * ElysiumMove::U;   // 0x102a59c1 +0x6320
 		// `0x102ee1c0(nav, tol)` (path `+0x28`, `0x102a59d1`) and, at the shared tail `0x102a42df`,
 		// `0x102f2fe0(nav, m_flGoalTolerance)` (path `+0x20`) -- family StartTask19's tolerance tail.
-		StartTask19SetNavTolerances(ToleranceUnits, ToleranceUnits);   // 0x102a59d1 / 0x102a42df
+		StartTask19SetNavTolerances(ToleranceUnits, ToleranceUnits);   // 0x102a59d1 / 0x102a42df / 0x102a59ca / 0x102a59df GetNavigator
 		TaskComplete(false);                                      // 0x102a42e8
 		return 0;
 	}
@@ -1723,7 +1732,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		const int32 Draw = StartTask19_2RandomInt(0, 1);          // 0x102a71a5
 		// 0 -> ACT_IDLE, 1 -> 3; any other draw reads an uninitialised local (`0x102a71be`), which
 		// `RandomInt(0, 1)` never answers.
-		const int32 Base = Draw == 0 ? ActIdle : ActRangeAttack2Alt;   // 0x102a71ab / 0x102a71b0 / 0x102a71b7
+		const int32 Base = Draw == 0 ? ActIdle : ActRangeAttack2Alt;   // 0x102a71ab / 0x102a71b0 / 0x102a71b7 / 0x102a71ae JNZ
 		int32 WeaponActivity = 0;
 		RestartIdealActivityId(TranslateActivityNumber(Base, WeaponActivity));   // 0x102a71ca / 0x102a71d2
 		return 0;
@@ -1759,8 +1768,8 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 
 	// --- index 0x9a: TASK_FACE_SAVEPOSITION ------------------------------------------------------
 	case TASK_FACE_SAVEPOSITION:
-		StartTaskMotorHoldYaw();                                  // 0x102a72b0
-		StartTaskMotorSetIdealYawToTarget(SavePosition);   // 0x102a72c7 0x102e2020(motor, +0x5dd0, 0)
+		StartTaskMotorHoldYaw();                                  // 0x102a72b0 / 0x102a72a9 GetMotor
+		StartTaskMotorSetIdealYawToTarget(SavePosition);   // 0x102a72c7 0x102e2020(motor, +0x5dd0, 0) / 0x102a72c0 GetMotor
 		SetTurnActivity();                                        // 0x102a72d0 slot 572
 		return 0;
 
@@ -1801,7 +1810,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_SQUAD_NEW_ENEMY:
 		if (ConnectedSquad() != nullptr && TaskTailEnemy167() != nullptr)   // 0x102a73a2 0x102a9910 / 0x102a73b5
 		{
-			// `SquadNewEnemy(squad, GetEnemy())` (`0x103161a0`, 0x102a73d0) -- no squad object
+			// `SquadNewEnemy(squad, GetEnemy())` (`0x103161a0`, 0x102a73d0) -- no squad object / 0x102a73c7 slot 167
 			// stands here, so `ConnectedSquad` answers null and this arm is unreachable.
 		}
 		StartTask19Complete();                                  // 0x102a73ab / 0x102a73bd / 0x102a73d5
@@ -1809,7 +1818,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 
 	// --- index 0x9e..0xa1: the jump set ----------------------------------------------------------
 	case TASK_PRE_JUMP:
-		StartTaskMotorHoldYaw();                                  // 0x102a73e3
+		StartTaskMotorHoldYaw();                                  // 0x102a73e3 / 0x102a73dc GetMotor
 		RestartIdealActivityId(ActPreJump);                       // 0x102a73ec
 		return 0;
 	case TASK_JUMP:
@@ -1817,7 +1826,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		FVector VelocityUnits = FVector::ZeroVector;              // 0x102a7402
 		Gravity = JumpGravity;                                    // 0x102a7410 0x102a9750
 		(void)TaskTailSolveJump(VelocityUnits);                   // 0x102a7431 0x102c4c50
-		++TaskTailJumpApplies;                                    // 0x102a7446 motor vtable +0x18
+		++TaskTailJumpApplies;                                    // 0x102a7446 motor vtable +0x18 / 0x102a7438 GetMotor
 		if (Motor != nullptr)
 		{
 			Motor->Launch(VelocityUnits * ElysiumMove::U);
@@ -1827,25 +1836,25 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		return 0;
 	}
 	case TASK_LAND:
-		StartTaskMotorHoldYaw();                                  // 0x102a7471
+		StartTaskMotorHoldYaw();                                  // 0x102a7471 / 0x102a746a GetMotor
 		RestartIdealActivityId(ActLand);                          // 0x102a747a
 		return 0;
 	case TASK_LAND_HARD:
-		StartTaskMotorHoldYaw();                                  // 0x102a7495
+		StartTaskMotorHoldYaw();                                  // 0x102a7495 / 0x102a748e GetMotor
 		RestartIdealActivityId(ActLandHard);                      // 0x102a749e
 		return 0;
 
 	// --- index 0xa2: TASK_SET_INVINCIBLE ---------------------------------------------------------
 	case TASK_SET_INVINCIBLE:
 		// No complete and no fail: the task is left RUNNING (`0x102a74cb` / `0x102a74e0`).
-		bInvincible = Operand != 0.f;                             // 0x102a74c5 / 0x102a74da +0x63d8
+		bInvincible = Operand != 0.f;                             // 0x102a74c5 / 0x102a74da +0x63d8 / 0x102a74be JNP
 		return 0;
 
 	// --- index 0xa3..0xa9: the activity copy-prop set -------------------------------------------
 	case TASK_ACTIVITY_COPY_PROP_SPAWN:
 		// `0x1018e790(this, 0x102a9860(task))` -- the operand's low word through the symbol table
 		// `0x10936b74`, as a model name.
-		++TaskTailCopyPropCalls;                                  // 0x102a74f6
+		++TaskTailCopyPropCalls;                                  // 0x102a74f6 / 0x102a74ef the handle's entity
 		TaskTailLastCopyPropCall = 0x1018e790u;
 		StartTask19Complete();                                  // 0x102a74fe
 		return 0;
@@ -1860,7 +1869,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		StartTask19Complete();                                  // 0x102a7523
 		return 0;
 	case TASK_ACTIVITY_COPY_PROP_SET_RANDOM:
-		++TaskTailCopyPropCalls;                                  // 0x102a753c / 0x102a754d 0x1018eab0
+		++TaskTailCopyPropCalls;                                  // 0x102a753c / 0x102a754d 0x1018eab0 / 0x102a7536 JNP
 		TaskTailLastCopyPropCall = 0x1018eab0u;
 		StartTask19Complete();                                  // 0x102a7544 / 0x102a7555
 		return 0;
@@ -1899,20 +1908,20 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_FIND_COVER_FROM_UNKNOWN_ATTACKER:
 	{
 		const FElysiumEntity* Attacker = World != nullptr
-			? World->Resolve(BaseMemory.LastDamageAttacker) : nullptr;   // 0x102a75ec +0x5b7c
+			? World->Resolve(BaseMemory.LastDamageAttacker) : nullptr;   // 0x102a75ec +0x5b7c / 0x102a75df the Vector
 		if (Attacker == nullptr)                                  // 0x102a75f3
 		{
 			StartTask19Fail(0x3be0, 0x21);                        // 0x102a770f
 			return 0;
 		}
-		const FVector AttackerCm = Attacker->Origin;              // 0x102a7604
+		const FVector AttackerCm = Attacker->Origin;              // 0x102a7604 / 0x102a75fb / 0x102a7620 the handle's entity
 		const FVector AttackerEyeCm = Attacker->EyePosition();    // 0x102a7631 slot 193
 		const float RadiusUnits = CoverRadius();                  // 0x102a7641 slot 550
 		// `0x102edc80(nav, origin, eye, 32.0, radius, &out, this)` -- `CAI_Navigator::FindCoverPos`,
 		// family StartTask19's one port body (the threat handed is THIS NPC, `0x102a763d PUSH ESI`).
 		FVector CoverCm = FVector::ZeroVector;
 		const bool bFound = StartTaskFindCoverPos(AttackerCm, AttackerEyeCm, UnknownCoverMinDist,
-			RadiusUnits, CoverCm);                                // 0x102a7666
+			RadiusUnits, CoverCm);                                // 0x102a7666 / 0x102a765f GetNavigator
 		if (!bFound)                                              // 0x102a766d
 		{
 			StartTask19Fail(0x3bdb, 8);                           // 0x102a76e2
@@ -1923,7 +1932,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		Goal.DestUnits = StartTask19_2Units(CoverCm);
 		Goal.Activity = ActRun;
 		Goal.Tolerance = GoalToleranceHull;
-		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a76a4, answer unread
+		(void)TaskTailNavSetGoal(Goal, 0);                        // 0x102a76a4, answer unread / 0x102a769d GetNavigator
 		BaseScheduleHost.MoveWaitFinished = Now + Operand;        // 0x102a76a9..0x102a76b5
 		return 0;
 	}
@@ -1938,7 +1947,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			StartTask19Fail(0x3bee, 0x21);                        // 0x102a777b
 			return 0;
 		}
-		TaskTailLookAt(StartTask19_2Units(Attacker->Origin), Operand, Now);   // 0x102a773a..0x102a774f
+		TaskTailLookAt(StartTask19_2Units(Attacker->Origin), Operand, Now);   // 0x102a773a..0x102a774f / 0x102a7735 the handle's entity / 0x102a773e GetAbsOrigin
 		return 0;
 	}
 
