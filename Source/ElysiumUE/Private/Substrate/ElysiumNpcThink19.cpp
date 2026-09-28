@@ -361,8 +361,10 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 		}
 		return false;                                                       // 0x10293447 -> 0x102937c6
 	}
-	// `0x102906e0` -- the move clock's due test, a bare `return true`.
-	const bool bMoveDue = true;                                             // 0x1029349e
+	// The move clock's due test: `0x1029349e CALL 0x10004a34`, a thunk (`JMP 0x102906e0`) to a body
+	// that is `MOV AL,0x1 / RET` and nothing else, called DIRECT (no slot, no species override).
+	// Retail computes nothing here; the constant IS the port, not a seam.
+	const bool bMoveDue = true;                                             // 0x1029349e / 0x102934a3
 	const bool bAiDue = IsAiThinkDue();                                     // 0x102934a9 0x10290700
 	const bool bReduced = !bAiDue;                                          // 0x10293566 / 0x10293568 SETZ
 	// `RunAlternateAI(bReduced)` (`0x1028fd80`), then slot 432 with the same byte on a FALSE answer.

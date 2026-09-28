@@ -197,6 +197,14 @@ def test_tests_fail_on_count_and_missing_file(tree):
     assert kg.check_tests(family(tree), index(tree)).status == kg.FAIL
 
 
+def test_tests_count_a_rule_tested_beside_its_sibling_family(tree):
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelFake19Tests.cpp", TESTS.split("IMPLEMENT_CUSTOM")[0])
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelSibling19Tests.cpp", "// Beta 0x10000020, full test\n")
+    c = kg.check_tests(family(tree), index(tree))
+    assert c.status == kg.PASS, c.lines
+    assert c.data["tests"] == 1 and c.data["tested_beside"] == ["0x10000020"]
+
+
 # 7. Twins ------------------------------------------------------------------------------------
 
 

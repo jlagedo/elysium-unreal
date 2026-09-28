@@ -52,7 +52,7 @@ public:
 	 *  (slot 78, the particle's own `ScriptUnhide`). Retail does NOT clear the handle. */
 	void GhoulCroucherScriptUnhideTail();
 	/** `CNPC_VGhoulCroucher::ScriptHide` (`0x1037c1c0`, slot 77) -- `CAI_BaseNPCTroika::ScriptHide`
-	 *  (`0x102c1ce0`, this runtime's `FElysiumEntity::ScriptHide`) DIRECT, then slot 77 on the entity
+	 *  (`0x102c1ce0`, `FElysiumNpc::ScriptHide`) DIRECT, then slot 77 on the entity
 	 *  `m_hBurningParticle` (`+0x6670`) resolves to, when it resolves live. The handle is not cleared.
 	 *  The `ScriptHide` override below is this body. */
 	void GhoulCroucherScriptHide();

@@ -715,6 +715,30 @@ Scope-trace push keyed on `m_iName` (`0x1037c1c5..0x1037c227`); `CAI_BaseNPCTroi
 slot 77 on the particle (`0x1037c286`); the re-validation's null-receiver arm (`0x1037c295`) is dead; the
 handle is not cleared. **Unrecovered:** none.
 
+### `0x102c1ce0` CAI_BaseNPCTroika::ScriptHide (369 bytes, slot 77)
+
+_Recovered 2026-09-28, 0019 story 8 wave 2 (family Damaged19); port `FElysiumNpc::ScriptHide`._
+
+No jump table: the "indirect jump" is the tail `JMP [vtbl+0x134]` (`0x102c1e48`). Arms in order:
+
+1. Warn gate: `m_NPCState (+0x5cc0) == 4` (`0x102c1cf1`) enters the warn arm; otherwise `m_hCine
+   (+0x5d74)` resolved (`0x102c1cfc` -1, `0x102c1d1a` serial, `0x102c1d23` null) and only a live cine
+   enters; a dead handle goes straight to the base half (`0x102c1e29`).
+2. Sequence name: a live cine's `GetDebugName` (`0x102c1d77`), else `"**UNKNOWN**"` (`0x105477a4`,
+   `0x102c1d87`). The `GetDebugName(NULL)` re-resolve arm (`0x102c1d7e`) is dead.
+3. Two warnings through `[0x109f364c]`: `"Attempting to ScriptHide an NPC (%s) playing a scripted
+   sequence (%s).  Satan will eat your babies if you continue to do this.\n"` with `GetDebugName(this)`
+   and the name (`0x102c1d9b`), then `"Cancelling script...\n"` (`0x102c1da2`).
+4. Live cine → `CancelScript 0x101a8c30` on it (`0x102c1e00`); dead handle → `CineCleanup 0x1027d170`
+   on this NPC (`0x102c1e12`). `CancelScript(NULL)` (`0x102c1e09`) is dead.
+5. Unless `m_NPCState == 7` (`0x102c1e1e`), `0x102ae7f0(0x6b)`: `m_iForcedSchedule (+0x65c8) :=
+   SCHED_TROIKA_IDLE_DISPOSITION` — a store, nothing installed.
+6. Every path: `CBaseEntity::ScriptHide 0x100a8710` (`0x102c1e2b`), then `GetActiveWeapon 0x1032e7b0`
+   twice (`0x102c1e32` test, `0x102c1e3d` receiver) and slot 77 on the weapon (`0x102c1e48`).
+
+`CNPC_VGhoulCroucher::ScriptHide 0x1037c1c0` reaches this body through thunk `0x10006d11`
+(`0x1037c229`). **Unrecovered:** none.
+
 ## Story 8, family Boss19, the discipline helpers — `ResetAiState` `0x102b52a0`, `DoPossession` `0x102c51a0`, `DoFrenzy` `0x102c5310` (2026-09-27)
 
 _Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._

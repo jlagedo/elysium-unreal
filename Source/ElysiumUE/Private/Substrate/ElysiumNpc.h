@@ -258,6 +258,11 @@ public:
 	virtual void BecomeClientRagdoll() override;
 	virtual bool IsCorpse() const override { return bDeathCommitted; }
 
+	/** Slot 77 `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`, family Damaged19): the live-cine
+	 *  warning and cancel, `m_iForcedSchedule := 0x6b` unless DEAD, then `CBaseEntity::ScriptHide`
+	 *  and slot 77 on the active weapon. Body in `ElysiumNpcDamaged19.cpp`. */
+	virtual void ScriptHide() override;
+
 	/**
 	 * `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the FOOTSTEP arm of it, and nothing else yet.
 	 *

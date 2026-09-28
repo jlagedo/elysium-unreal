@@ -28,7 +28,8 @@ tree and the branch diff:
 6. **tests** — `Tests/ElysiumNpcKernel<Family>Tests*.cpp` exist, register at least as many
    automation tests as the family has `rule` rows, and either every test name carries a retail
    address or the tests cite every `rule` address. A citation in another (non-census) test file
-   counts and is listed: a rule tested beside its sibling family is still tested.
+   counts and is listed: a rule tested beside its sibling family is still tested, so it also counts
+   toward the registration floor when no family test name carries its address.
 7. **twins** — no Substrate `.cpp` cites a `rule` address in a comment that also says
    "CHOSEN, NOT RECOVERED", "port-only" or "stand-in" (WARN: the body must replace, not shadow).
 
@@ -785,13 +786,20 @@ def check_tests(fam: Family, src: SourceIndex) -> Check:
     unresolved = [a for a in uncited if not elsewhere[a]]
     unnamed = [n for _, _, n in tests if not NAMED_RE.search(n.lower())]
     names_ok = bool(tests) and not unnamed
+    # A rule whose tests live beside its sibling family (cited in another non-census test file) and
+    # that no family test name carries counts toward the floor: the family file need not re-register it.
+    names = " ".join(n.lower() for _, _, n in tests)
+    beside = [a for a in fam.rules if a not in names and src.cited(a, other)]
     c.data = {"files": files, "tests": len(tests), "rules": len(fam.rules),
+              "tested_beside": [f"0x{a}" for a in beside],
               "names_with_address": len(tests) - len(unnamed),
               "uncited_in_family_files": [f"0x{a}" for a in uncited],
               "uncited_anywhere": [f"0x{a}" for a in unresolved]}
     c.lines.append("files: " + ", ".join(f.rsplit("/", 1)[-1] for f in files))
     line = f"{len(tests)} test registrations for {len(fam.rules)} rule rows"
-    if len(tests) < len(fam.rules):
+    if beside:
+        line += f" (+{len(beside)} rule(s) tested in another test file)"
+    if len(tests) + len(beside) < len(fam.rules):
         c.fail("TOO FEW " + line)
     else:
         c.lines.append(line)
