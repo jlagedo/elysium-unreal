@@ -355,9 +355,8 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 	const bool bMoveDue = true;                                             // 0x1029349e
 	const bool bAiDue = IsAiThinkDue();                                     // 0x102934a9 0x10290700
 	const bool bReduced = !bAiDue;                                          // 0x10293566 / 0x10293568 SETZ
-	// `RunAlternateAI(bReduced)`. The port's `RunAlternateAi(Now)` does not take the flag (lane L13a
-	// owns `0x1028fd80`); the flag is passed on to slot 432 as retail does.
-	if (!RunAlternateAi(Now))                                               // 0x1029356e / 0x10293575
+	// `RunAlternateAI(bReduced)` (`0x1028fd80`), then slot 432 with the same byte on a FALSE answer.
+	if (!RunAlternateAI(bReduced))                                          // 0x1029356e / 0x10293575
 	{
 		RunAI(bReduced);                                                    // 0x1029357c slot 432
 	}

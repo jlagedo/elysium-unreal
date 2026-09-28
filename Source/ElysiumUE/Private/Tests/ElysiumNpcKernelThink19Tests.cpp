@@ -683,6 +683,11 @@ bool FElysiumNpcKernelThink19CameraTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10369161 gate refused with the graph built: no stamp"), N.NextThink, 42.f);
 	F.W.World.SetAiEnabled(true);
 
+	// One accepted think first, so the camera's program is installed and its opening tasks have run:
+	// a task failing inside `RunAI` runs slot 448's stamp reset (`0x1029adb0` writes `+0x6244..+0x6250`
+	// to curtime) BEFORE the copies at `0x10369189..0x103691b3`, which would then copy curtime.
+	N.NPCThink();
+
 	N.ScheduleHost.NextUpdate = Now + 1.0;
 	N.ScheduleHost.NextNormal = Now + 2.0;
 	N.ScheduleHost.NextMove = Now + 3.0;
@@ -749,9 +754,13 @@ bool FElysiumNpcKernelThink19MingXiaoTest::RunTest(const FString&)
 	}
 	M->MingXiaoThrowableObjectMode = 0;
 	M->NPCThink();
-	TestTrue(TEXT("0x10394b0b mode 0: flags2 |= 0x80000400"),
-		M->NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY)
-		&& M->NpcFlags.HasRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31));
+	// `0x10394b0b` ORs `0x80000400`, then the Troika body it tail-calls (`0x10394c5e`) clears
+	// `0x80000004` at `0x10292e5e AND ECX,0x7ffffffb`: after the whole think MOVE_FACE_ENEMY stands
+	// and bit 31 is gone again.
+	TestTrue(TEXT("0x10394b0b mode 0: MOVE_FACE_ENEMY set"),
+		M->NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY));
+	TestFalse(TEXT("0x10292e5e the Troika think clears bit 31 the OR set"),
+		M->NpcFlags.HasRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31));
 
 	M->MingXiaoThrowableObjectMode = 1;
 	const int32 FacingBefore = M->FacingTargetRequests.Num();

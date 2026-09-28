@@ -221,8 +221,8 @@ void FElysiumNpcMingXiao::NPCThink()
 		// `flags2 &= 0x7ffffbff` -- MOVE_FACE_ENEMY and bit 31 -- then slot 518 at my origin plus the
 		// saved pickup forward (Source units, carried as the sibling `+0x6720` word is).
 		NpcFlags.ClearRawWord2Bits(GThink19MingFaceEnemyBits);              // 0x10394a9c / 0x10394aa2
-		const FVector Target = Origin + MingXiaoPickupSavedForward * ElysiumMove::U;   // 0x10394aaa slot 217 / 0x10394ab0..0x10394adb
-		AddFacingTarget(Target, GThink19MingPickupFaceDuration, GThink19MingPickupFaceRamp,
+		const FVector FaceTarget = Origin + MingXiaoPickupSavedForward * ElysiumMove::U;   // 0x10394aaa slot 217 / 0x10394ab0..0x10394adb
+		AddFacingTarget(FaceTarget, GThink19MingPickupFaceDuration, GThink19MingPickupFaceRamp,
 			GThink19MingPickupFaceTolerance);                               // 0x10394b03 slot 518
 		break;
 	}

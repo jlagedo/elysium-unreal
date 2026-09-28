@@ -507,10 +507,10 @@ void FElysiumNpcPedestrian::RunAI(bool bReduced)
 		return;
 	}
 	Senses.Memory.NextFleeSoundTime = Now + RunAi19FleeSoundPeriodSeconds;    // 0x103a36b4 / 0x103a36c7
-	FVector Forward = FVector::ZeroVector;
-	StartTaskAngleVectors(GetAngles(), &Forward, nullptr);                    // 0x103a36cd slot 221 / 0x103a36d4 0x10139610
+	FVector FleeForward = FVector::ZeroVector;
+	StartTaskAngleVectors(GetAngles(), &FleeForward, nullptr);                    // 0x103a36cd slot 221 / 0x103a36d4 0x10139610
 	const FVector BehindCm = GetOrigin()
-		- Forward * (RunAi19FleeSoundBackUnits * ElysiumMove::U);             // 0x103a36dd..0x103a3729, 0x103a370a slot 220
+		- FleeForward * (RunAi19FleeSoundBackUnits * ElysiumMove::U);             // 0x103a36dd..0x103a3729, 0x103a370a slot 220
 	// `CSoundEnt::InsertSound(SOUND_DANGER 8, &point, DAT_1072bc8c, 10.0, DAT_1072bcc3, this)`: the
 	// two cells are `sound_volume_table.txt` row 27, `NPC_DISCIPLINE_ALERT` (radius and occlusion),
 	// which the bus resolves from the category.

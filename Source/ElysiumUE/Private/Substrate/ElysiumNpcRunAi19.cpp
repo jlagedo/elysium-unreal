@@ -164,8 +164,8 @@ FElysiumEntity* FElysiumNpc::RunAi19ObstructionSweep(float LookaheadUnits, bool 
 	// arms (`0x103796ac`..`0x103798a2` / `0x10380fcc`..`0x103811c2`) plus the re-trace below.
 	FVector StartUnits = NpcKernelMotorShared::SourceOf(GetOrigin());        // 0x103c016d slot 220
 	StartUnits.Z += RunAi19SweepRaiseUnits;                                   // 0x103c0189
-	const FVector Forward = AngleVectorsForward(RetailGetAnglesDegrees());    // 0x103c01a2 slot 221 / 0x103c01a9 0x10139610
-	FVector EndUnits = StartUnits + Forward * LookaheadUnits;                 // 0x103c01ae..0x103c01ce the lookahead ConVar
+	const FVector SweepForward = AngleVectorsForward(RetailGetAnglesDegrees());   // 0x103c01a2 slot 221 / 0x103c01a9 0x10139610
+	FVector EndUnits = StartUnits + SweepForward * LookaheadUnits;                // 0x103c01ae..0x103c01ce the lookahead ConVar
 	// `CTraceFilterSimpleTwoEnt(this, GetIgnoreCollisionEntity(), m_CollisionGroup)`
 	// (`0x103c01d7`..`0x103c0227`): `KernelHullTrace` takes no filter and the port has no
 	// `+0x368` word -- named, the trace is the family Motor seam.
