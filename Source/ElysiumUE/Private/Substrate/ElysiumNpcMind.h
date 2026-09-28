@@ -4,7 +4,7 @@
 #include "ElysiumNpcMindTypes.h"
 
 // The bounded first NPC mind: deterministic admission plus K7 body arbitration. It deliberately
-// contains no navigation, animation, actor or UObject access. Patrol, ambient and sequence remain
+// contains no navigation, animation, actor or UObject access. Schedule, ambient and sequence remain
 // executors on FElysiumNpc and may act only while holding the token this class issued.
 class FElysiumNpcMind
 {
