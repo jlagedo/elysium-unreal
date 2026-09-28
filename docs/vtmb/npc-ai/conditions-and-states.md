@@ -1578,7 +1578,9 @@ Enemy sight: `GatherEnemyConditions 0x10270b20` → slot 201 `FVisible` eye to e
 is shot through, a friendly one sets `WEAPON_BLOCKED_BY_FRIEND 0x63`, anything else
 `WEAPON_SIGHT_OCCLUDED 0x66` (collision-group-4 breakables are skipped and re-traced). Unarmed:
 `0x1026fcf0`, from `origin + m_vecViewOffset`. `WEAPON_THROUGH_WALL 0x3c` is neither: Troika
-`GatherConditions` sweeps 32 units forward of the origin at mask `0x2000b` every 3.0 s.
+`GatherConditions` casts a RAY (zero extents, `m_IsRay` at `102b2ef7`) 32 units along `m_vecForward`
+from `EyePosition` at mask `0x2000b` every 3.0 s — not a hull from the origin, as this item first
+said (corrected 2026-09-27, 0019 story 8 lane L07; § "Story 8, family Conditions19").
 
 **5. Light is `> 0`, heavy is `> 20`, repeated is `> 30 %`** (`ElysiumNpcConditions.h:544` picks a
 fifth of the pool). Slot 576 `0x10266630`: `damage > 0.0`; slot 577 `0x10266660`: `damage > 20.0`
