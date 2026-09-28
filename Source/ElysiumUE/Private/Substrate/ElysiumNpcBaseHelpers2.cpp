@@ -79,11 +79,10 @@ int32 FElysiumNpcBase::NavCurrentLinkActivity() const
 
 int32 FElysiumNpcBase::StandoffScheduleForLocalId(int32 LocalId) const
 {
-	// `thunk_FUN_102cc1f0(this, localId)` — `CAI_Behavior::GetSchedule(localId)`. **SEAM**: there is
-	// no behaviour-local id space on this substrate. `None`, so the compare against a RUNNING
-	// program fails and neither `vfunc20` nor `vfunc21` clears its condition.
-	(void)LocalId;
-	return ElysiumScheduleId::None;
+	// `thunk_FUN_102cc1f0(this, id)`: slot 440 `TranslateSchedule`, slot 446 `GetScheduleOfType`,
+	// and a miss's `GetScheduleOfType(1)` fallback — the one body `Spawn19ScheduleOfType` carries
+	// (hoisted here at story 8 wave 2; it was a seam answering `None`).
+	return const_cast<FElysiumNpcBase*>(this)->Spawn19ScheduleOfType(LocalId);
 }
 
 uint32 FElysiumNpcBase::StandoffOwnerCapabilityWord() const
@@ -538,9 +537,7 @@ void FElysiumNpcBase::StandoffClearNewEnemyOnLocalSchedule()
 	//         && owner->m_pSchedule == GetSchedule(this, 0x17))          // 0x102cc1f0
 	//         ClearCondition(owner, COND_NEW_ENEMY 0x54);                // 0x10269f30
 	//
-	// `StandoffScheduleForLocalId` is a seam answering `None`, so a running program never matches
-	// and the condition is never cleared. That is the recovered refusal: the behaviour-local id
-	// space has no source here.
+	// `StandoffScheduleForLocalId` is `0x102cc1f0` itself (story 8 wave 2).
 	if (Schedule.Current == ElysiumScheduleId::None)
 	{
 		return;

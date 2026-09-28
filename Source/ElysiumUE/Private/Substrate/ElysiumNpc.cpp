@@ -817,17 +817,22 @@ bool FElysiumNpc::RouteScheduleMaintenance(double Now, bool bReduced)
 {
 	// `MaintainSchedule` (`0x102817c0`) as `RunAI` (`0x1026f302`) reaches it on a Troika body. Retail
 	// runs the schedule interpreter alone: a scripted beat is `SCHED_AISCRIPT`, a patrol is the patrol
-	// path's program, an interesting place is its program. This runtime still drives four of those
-	// owners outside the interpreter, so they are routed here, ahead of it:
+	// path's program (story 8 wave 2: it is, here too), an interesting place is its program. This
+	// runtime still drives three owners outside the interpreter, routed here ahead of it — each a
+	// named survivor of the story-8 rewire, with the reason it stays:
 	//
-	// STORY8-TWIN: the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`) is replaced by
-	// `SCHED_AISCRIPT` and `CCineAISchedule`'s schedule fix `0x101a98c0` -- spec 0003 stories 1-2 build
-	// them; until then the director drives the beat and the interpreter must not fight it.
-	// STORY8-TWIN: the dialogue clip hold (`ThinkInDialog`) is replaced by the dialogue family's
-	// `m_hDialogPartner` path (RunAI's gather skip is already retail's, `0x1026f1f0`).
-	// STORY8-TWIN: the patrol and interesting-place executors (`ThinkSchedulePolicy`,
-	// `ThinkAutonomous`) are replaced by the patrol arms 0x7a..0x7e and the interesting-place
-	// program at wave 2, group (g).
+	// STORY8-TWIN (survivor): the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`) is
+	// replaced by `SCHED_AISCRIPT` and the director's own schedule arms — spec 0003 stories 1-2 build
+	// them; until then the beat drives the body and the interpreter must not fight it.
+	// STORY8-TWIN (survivor): the dialogue clip hold (`ThinkInDialog`) is replaced by the dialogue
+	// family's `m_hDialogPartner` path (RunAI's gather skip is already retail's, `0x1026f1f0`); the
+	// per-line VCD body clip it protects has no retail schedule stand yet.
+	// STORY8-TWIN (survivor): the interesting-place executor (`ThinkAutonomous`'s ambient arm, and
+	// the hand-over in `ThinkSchedulePolicy` that also serves the pushed `aiscripted_schedule` order)
+	// is replaced by the interesting-place programs (`SelectSchedule` case 1's `0xff` walk-to-place
+	// setup and its `FIND/GET_PATH_TO_INTERESTING_PLACE` arms, ported). It stays because the visit's
+	// claim and its into/dwell/out activity phases are the executor's own state, which the retail
+	// arms read (`ClaimAmbientSpot`, `CurrentSpotIndex`) but do not yet drive end to end.
 	if (TickScriptWatchdog())
 	{
 		return Schedule.IsRunning();
@@ -1579,10 +1584,14 @@ void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
 	ReleaseScriptedScheduleBody(Reason);
 }
 
-// STORY8-TWIN: replaced by 0x102800c0 / 0x102801e0 (ScheduledMoveToGoalEntity / ScheduledFollowPath),
-// called from CCineAISchedule 0x101a98c0 (Misc19), at wave 2. Not redirected at L10: the director
-// path here starts the program itself (a second ChangeSchedule), walks a multi-leg route, and
-// writes `m_flGoalTolerance` (+0x6320) where retail's SetGoal writes the path's +0x28.
+// STORY8-TWIN (survivor): retail's `CCineAISchedule::vfunc586` (`0x101a98c0`, recovered: `SetState`
+// on the force state, then mode 1/2 `ScheduledMoveToGoalEntity(2, goal, walk|run|fly)`, mode 3
+// `SetEnemy` + slot 544 + `SetCondition(0x54)`, mode 4/5 `ScheduledFollowPath(2, goal, ...)`) and
+// Script19's `ScheduledMoveToGoalEntity` `0x102800c0` / `ScheduledFollowPath` `0x102801e0` are
+// ported, but the follow-path modes need the navigator's path-corner goal (the path walks the
+// `path_corner` chain), which this runtime's navigator does not build; this order executor walks the
+// chain leg by leg instead, and writes `m_flGoalTolerance` (+0x6320) where retail's SetGoal writes
+// the path's +0x28.
 bool FElysiumNpc::GetPathToScriptedGoal()
 {
 	if (!ScriptedScheduleOrder.IsSet())
@@ -1738,7 +1747,8 @@ bool FElysiumNpc::StartScheduleId(int32 Id, const FString& Surface, const FStrin
 	return ElysiumSchedule::Start(Schedule, Id, *this);
 }
 
-// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4289 (writes +0x6320) / base arm 0x43 0x10286c69 (writes path+0x28 NavPathToleranceCm) at wave 2
+// The `+0x6320 m_flGoalTolerance` store the species arms make directly (`FSTP +0x6320`: the frenzy
+// shadow `0x10375fe5`, the werewolf `0x103ccec1`); the Troika arm `0x102a4289` writes the same word.
 void FElysiumNpc::SetGoalTolerance(float Units)
 {
 	ScheduleHost.GoalToleranceCm = Units * ElysiumMove::U;
