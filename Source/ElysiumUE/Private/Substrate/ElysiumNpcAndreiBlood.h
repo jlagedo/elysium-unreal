@@ -107,5 +107,6 @@ public:
 	bool bAndreiTriggerUnhide = false;          // +0x66ce m_bTriggerUnhide (SEAM word)
 	double AndreiTeleportWaitStartTime = 0.0;   // +0x66d0 m_fTeleportWaitStartTime
 	bool bAndreiForceTeleport = false;          // +0x66d4 m_bForceTeleport
-	int32 AndreiHitCounter = 0;                 // +0x66d8 m_iHitCounter
+	// (`+0x66d8 m_iHitCounter` is L09's `AndreiHitCounter` above; the rebase onto Damage19 dropped
+	// this lane's copy.)
 };
