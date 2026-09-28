@@ -295,6 +295,10 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		Npc.TargetName = TEXT("Jack");
 		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/smiling_jack.mdl"));
 		Npc.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
+		// `CNPC_VVampire::Spawn` (`0x103c4ef9`) hates the player's class; every shipped `npc_VVampire`
+		// (157 of 157 in the maps) authors `player_reaction`, 107 of them `D_NU 0` -- a standing
+		// NPC is one of those. (Integrator correction, story 8 L08: the spawn chain is live.)
+		Npc.Keys.Add(TEXT("player_reaction"), TEXT("D_NU 0"));
 		Defs.Defs.Add(MoveTemp(Npc));
 	};
 

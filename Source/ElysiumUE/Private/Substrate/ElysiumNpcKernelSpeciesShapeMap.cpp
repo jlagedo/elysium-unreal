@@ -141,19 +141,12 @@ namespace
 		FElysiumNpcAndreiBlood, bAndreiActivated),  // m_bActivated
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66cd,
 		FElysiumNpcAndreiBlood, bAndreiDead),  // m_bDead, set at 0x1035e84e (Damage19)
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66ce,  // m_bTriggerUnhide
-		"no port member: no ported body reads or writes the word (Andrei unhide bodies are "
-		"story-8 residue); retail accessors: 0x1035cc20 AndreiBlood::Spawn (residue), 0x1035d1b0 "
-		"AndreiBlood::StartTask (task arm), 0x1035d8b0 AndreiBlood::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66d0,  // m_fTeleportWaitStartTime
-		"no port member: no ported body reads or writes the word (Andrei teleport wait is "
-		"story-8 residue); retail accessors: 0x1035cc20 AndreiBlood::Spawn (residue), 0x1035d1b0 "
-		"AndreiBlood::StartTask (task arm), 0x1035d8b0 AndreiBlood::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VAndreiBlood, 0x66d4,  // m_bForceTeleport
-		"no port member: the ported reader is a named SEAM answering the retail default "
-		"(AndreiBloodSelectSchedule 0x1035d010 SEAM); retail accessors: 0x1035cc20 "
-		"AndreiBlood::Spawn (residue), 0x1035d010 AndreiBlood::SelectSchedule (override), "
-		"0x1035d8b0 AndreiBlood::RunTask (task arm)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66ce,
+		FElysiumNpcAndreiBlood, bAndreiTriggerUnhide),  // m_bTriggerUnhide, written by Spawn 0x1035cc20 (Spawn19)
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66d0,
+		FElysiumNpcAndreiBlood, AndreiTeleportWaitStartTime),  // m_fTeleportWaitStartTime, written by Spawn 0x1035cc20 (Spawn19)
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66d4,
+		FElysiumNpcAndreiBlood, bAndreiForceTeleport),  // m_bForceTeleport, written by Spawn 0x1035cc20 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66d8,
 		FElysiumNpcAndreiBlood, AndreiHitCounter),  // m_iHitCounter, ++ at 0x1035e83f (Damage19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VAndreiBlood, 0x66dc,
@@ -207,24 +200,18 @@ namespace
 		FElysiumNpcBach, BachNextWeaponSwitchTime),  // m_flNextWeaponSwitchTime
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6690,
 		FElysiumNpcBach, BachNextHolyLightTime),  // m_flNextHolyLightTime
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6694,  // m_flWarningTime
-		"no port member: no ported body reads or writes the word (Bach warning bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm), 0x103652b0 Bach::RunTask (task arm)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x6698,  // m_flSkipToWarningTime
-		"no port member: no ported body reads or writes the word (Bach warning bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6694,
+		FElysiumNpcBach, BachWarningTime),  // m_flWarningTime, written by Spawn 0x10363850 (Spawn19)
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x6698,
+		FElysiumNpcBach, BachSkipToWarningTime),  // m_flSkipToWarningTime, written by Spawn 0x10363850 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x669c,
 		FElysiumNpcBach, BachTeleportState),  // m_iBachTeleportState
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a0,
 		FElysiumNpcBach, bBachCamperFlag),  // m_bCamperFlag
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a1,
 		FElysiumNpcBach, bBachInStartingPosition),  // m_bBachInStartingPosition
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VBach, 0x66a2,  // m_bSkipToWarning
-		"no port member: no ported body reads or writes the word (Bach warning bodies are "
-		"story-8 residue); retail accessors: 0x10363850 Bach::Spawn (residue), 0x103645a0 "
-		"Bach::StartTask (task arm)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a2,
+		FElysiumNpcBach, bBachSkipToWarning),  // m_bSkipToWarning, written by Spawn 0x10363850 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a3,
 		FElysiumNpcBach, bBachFireOccluded),  // m_bFireOccluded
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VBach, 0x66a5,
@@ -391,10 +378,8 @@ namespace
 		FElysiumNpcManBat, bHasPlayedFlyBySound),  // m_bHasPlayedFlyBySound
 
 	// --- CNPC_VMingXiao ---
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6670,  // m_hParentMingZhao
-		"no port member: no ported body reads or writes the word (the Ming Zhao parent link is "
-		"story-8 residue); retail accessors: 0x103927a0 MingXiao::Spawn (residue), 0x10395ba0 "
-		"MingXiao::Event_Killed (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6670,
+		FElysiumNpcMingXiao, MingXiaoParentMingZhao),  // m_hParentMingZhao, written by Spawn / Event_Killed 0x10395ba0 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6674,
 		FElysiumNpcMingXiao, MingXiaoTentacleId),  // m_iTentacleID
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6678,
@@ -402,7 +387,7 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x667c,
 		FElysiumNpcMingXiao, MingXiaoMeleeWeapon),  // m_hMeleeWeapon
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6680,
-		FElysiumNpcMingXiao, MingXiaoRangedWeapon),  // m_hRangedWeapon
+		FElysiumNpcMingXiao, MingXiaoRangedWeapon),  // m_hRangedWeapon, written by Spawn (Spawn19); read by 0x10394e40 (Conditions19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6684,
 		FElysiumNpcMingXiao, bProxyRegistered),  // m_rbProxyRegistered[6]
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x668c, FElysiumNpcMingXiao, Proxies),  // m_rhProxies
@@ -415,7 +400,7 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66c4,
 		FElysiumNpcMingXiao, MingXiaoAttackTimers),  // m_rflAttackTimers
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66dc,
-		FElysiumNpcMingXiao, MingXiaoHitPoints),  // m_rflHitPoints (story 8 lane L12)
+		FElysiumNpcMingXiao, MingXiaoHitPoints),  // m_rflHitPoints (story 8 lane L12), written by Spawn 0x1039283f (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x66f4,
 		FElysiumNpcMingXiao, MingXiaoRegrowTimers),  // m_rflRegrowTimers
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x670c,
@@ -439,11 +424,11 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6740,
 		FElysiumNpcMingXiao, CoordinateTentacleId),  // m_iCoordinateTentacleID
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6744,
-		FElysiumNpcMingXiao, bMingXiaoPlayedDeathAnim),  // m_bPlayedDeathAnim (story 8 lane L12)
+		FElysiumNpcMingXiao, bMingXiaoPlayedDeathAnim),  // m_bPlayedDeathAnim, written by Spawn / Event_Killed 0x10395ba0 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6748,
-		FElysiumNpcMingXiao, MingXiaoIdealRange),  // m_flIdealRange (story 8 lane L12)
+		FElysiumNpcMingXiao, MingXiaoIdealRange),  // m_flIdealRange, written by Spawn (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x674c,
-		FElysiumNpcMingXiao, MingXiaoChargeReadyTime),  // m_flChargeReadyTime
+		FElysiumNpcMingXiao, MingXiaoChargeReadyTime),  // m_flChargeReadyTime, written by Spawn (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6750,
 		FElysiumNpcMingXiao, bBlockedByFriend),  // m_bBlockedByFriend
 
@@ -462,32 +447,25 @@ namespace
 		FElysiumNpcMingXiaoTentacle, TentaclePhase),  // m_ePhase
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6674,
 		FElysiumNpcMingXiaoTentacle, MingXiaoTentaclePhaseExpireTimer),  // m_flPhaseExpireTimer
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6678,  // m_flFailedEvadeTimer
-		"no port member: no ported body reads or writes the word (the evade bodies are story-8 "
-		"residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), 0x1039de20 "
-		"MingXiaoTentacle::SelectSchedule (override), 0x1039ec10 "
-		"MingXiaoTentacle::GatherConditions (residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x667c,  // m_flUpdateEvadeTimer
-		"no port member: no ported body reads or writes the word (the evade bodies are story-8 "
-		"residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), 0x1039c4c0 "
-		"MingXiaoTentacle::StartTask (task arm), 0x1039e3d0 MingXiaoTentacle::RunAI (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6678,
+		FElysiumNpcMingXiaoTentacle, MingXiaoTentacleFailedEvadeTimer),  // m_flFailedEvadeTimer, written by Spawn (Spawn19); read by Conditions19
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x667c,
+		FElysiumNpcMingXiaoTentacle, TentacleUpdateEvadeTimer),  // m_flUpdateEvadeTimer, written by Spawn (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6680,
 		FElysiumNpcMingXiaoTentacle, TentacleHideReadyTimer),  // m_flHideReadyTimer, zeroed at 0x1039e89a (Damage19)
 	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6684,  // m_flIgnoreCollisionTimer
-		"no port member: no ported body reads or writes the word (the tentacle's own collision "
-		"timer (not Troika's +0x6458); its bodies are story-8 residue); retail accessors: none "
-		"recorded"),
+		"port member FElysiumNpcMingXiaoTentacle::TentacleIgnoreCollisionTimer (written by Spawn, Spawn19) "
+		"left unbound: its save name is the Troika's +0x6458 word's, and the registry keeps one save row "
+		"per name (gen_kernel_bindings check_species_save_names), so binding it would stop +0x6458 saving"),
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6688,
 		FElysiumNpcMingXiaoTentacle, bIgnoreCollisionSpecies),  // m_bIgnoreCollision
 	ELYSIUM_NPC_SPECIES_WORD_NOTED(CNPC_VMingXiaoTentacle, 0x668c, FElysiumNpc,
 		TentacleScatterCenterUnits,
 		"stay:troika reader -- written by NotifyScatterCenter, a Troika notification"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiaoTentacle, 0x6698,  // m_bHitGroundSound
-		"no port member: no ported body reads or writes the word (the ground-hit sound bodies "
-		"are story-8 residue); retail accessors: 0x1039c380 MingXiaoTentacle::Spawn (residue), "
-		"0x1039e3d0 MingXiaoTentacle::RunAI (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6698,
+		FElysiumNpcMingXiaoTentacle, bTentacleHitGroundSound),  // m_bHitGroundSound, written by Spawn (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiaoTentacle, 0x6699,
-		FElysiumNpcMingXiaoTentacle, bTentaclePlayedDeathAnim),  // m_bPlayedDeathAnim (story 8 lane L12)
+		FElysiumNpcMingXiaoTentacle, bTentaclePlayedDeathAnim),  // m_bPlayedDeathAnim, written by Spawn / Event_Killed 0x1039e900 (Spawn19)
 
 	// --- CNPC_VPedestrian ---
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VPedestrian, 0x6660,
@@ -671,7 +649,7 @@ namespace
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x667c,
 		FElysiumNpcZombie, bZombieNeedsCrawlOutOfGround),  // m_iNeedsCrawlOutOfGround
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x6680,
-		FElysiumNpcZombie, ZombieDeathForceVector),  // m_vecDeathForceVector
+		FElysiumNpcZombie, ZombieDeathForceVector),  // m_vecDeathForceVector, written by CreateCorpse 0x103dfbb0 (Spawn19)
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66d8,
 		FElysiumNpcZombie, ZombieGrappleReadyTimer),  // m_flGrappleReadyTimer
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66dc,

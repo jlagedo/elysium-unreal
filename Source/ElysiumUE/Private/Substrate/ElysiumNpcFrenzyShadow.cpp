@@ -88,8 +88,8 @@ void FElysiumNpcFrenzyShadow::Spawn()
 {
 	// `CapabilitiesAdd(0x200000)` (`0x10012855`), then `JMP 0x10010a91` -> the controller's
 	// `Spawn` `0x103a4510`, DIRECT.
-	CapabilityWord |= GShadowSpawnCapability;
-	FElysiumNpcPlayerController::Spawn();
+	CapabilityWord |= GShadowSpawnCapability;                              // 0x10375c58 CapabilitiesAdd(0x200000)
+	FElysiumNpcPlayerController::Spawn();                                 // 0x10375c60 JMP -> 0x103a4510
 }
 
 // Slot 138: `0x10375d70`.

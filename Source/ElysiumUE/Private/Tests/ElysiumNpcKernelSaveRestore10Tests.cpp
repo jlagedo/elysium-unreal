@@ -977,8 +977,12 @@ bool FElysiumNpcKernelSaveRestore10MakerTest::RunTest(const FString&)
 	TestEqual(TEXT("hearing 1.00"), Child->AuthoredHearing, 1.0f);
 	TestEqual(TEXT("npc_perception 3"), Child->AuthoredPerception, 3);
 	TestTrue(TEXT("use_interesting 1"), Child->bUseInteresting);
-	TestEqual(TEXT("percent_occluded_wait 10"), Child->PercentOccludedWait, 10);
-	TestEqual(TEXT("percent_occluded_cover 30"), Child->PercentOccludedCover, 30);
+	// The copy (`0x1034ba0f..0x1034ba45`) precedes `DispatchSpawn` (`0x1034ba7a`), so the child's Troika
+	// `Spawn` renormalises the copied 10 / 30 / 0 / 0 / 0 into its cumulative ladder (`0x10299120..
+	// 0x10299185`, sum 40, truncating IDIV): wait 25, cover 100. (Integrator correction, story 8 L08:
+	// the raw copy was asserted before the Troika body ran at spawn.)
+	TestEqual(TEXT("percent_occluded_wait 10 -> 25 by the spawn ladder"), Child->PercentOccludedWait, 25);
+	TestEqual(TEXT("percent_occluded_cover 30 -> 100 by the spawn ladder"), Child->PercentOccludedCover, 100);
 	TestTrue(TEXT("allow_alert_lookaround 1"), Child->bAllowAlertLookaround);
 	TestTrue(TEXT("allow_kick_hint_use 1"), Child->ScheduleHost.bAllowKickHintUse);
 	TestTrue(TEXT("+0x65f4 m_bCameFromSpawner is the last write of the body"), Child->bCameFromSpawner);
@@ -1009,11 +1013,13 @@ bool FElysiumNpcKernelSaveRestore10MakerTest::RunTest(const FString&)
 		TestEqual(TEXT("+0x63b4"), Second->AuthoredVision, 512.f);
 		TestEqual(TEXT("+0x63bc"), Second->AuthoredHearing, 256.f);
 		TestFalse(TEXT("+0x63d9"), Second->bUseInteresting);
-		TestEqual(TEXT("+0x6420"), Second->PercentOccludedWait, 11);
-		TestEqual(TEXT("+0x6424"), Second->PercentOccludedCover, 22);
-		TestEqual(TEXT("+0x6428"), Second->PercentOccludedWalk, 33);
-		TestEqual(TEXT("+0x642c"), Second->PercentOccludedFlank, 44);
-		TestEqual(TEXT("+0x6430"), Second->PercentOccludedChase, 55);
+		// 11 / 22 / 33 / 44 / 55 copied, then the spawn ladder (sum 165, chase forced to 100 first):
+		// 1100/165 = 6, +2200/165 = 19, +3300/165 = 39, 4400/165 + 39 = 65.
+		TestEqual(TEXT("+0x6420"), Second->PercentOccludedWait, 6);
+		TestEqual(TEXT("+0x6424"), Second->PercentOccludedCover, 19);
+		TestEqual(TEXT("+0x6428"), Second->PercentOccludedWalk, 39);
+		TestEqual(TEXT("+0x642c"), Second->PercentOccludedFlank, 65);
+		TestEqual(TEXT("+0x6430"), Second->PercentOccludedChase, 100);
 		TestFalse(TEXT("+0x6434"), Second->bAllowAlertLookaround);
 		TestTrue(TEXT("+0x6435"), Second->bStayEntrenched);
 		TestFalse(TEXT("+0x6436"), Second->ScheduleHost.bAllowKickHintUse);
@@ -1104,11 +1110,15 @@ bool FElysiumNpcKernelSaveRestore10SequenceActivateTest::RunTest(const FString&)
 		return false;
 	}
 
-	// An actor that resolves and has no model takes the "has no model" arm — three diagnostic lines
-	// (divider, message, divider) and NO precache. A headless fixture's NPC authors no model.
-	TestEqual(TEXT("the no-model arm prints the bracketed diagnostic"),
-		FElysiumNpcWorldFixture::Debug(FoundBeat, TEXT("Activate diagnostics")), FString(TEXT("3")));
-	TestTrue(TEXT("and issues no sequence precache"),
+	// A headless fixture's NPC authors no model, but its Troika `Spawn` runs `Precache` (`0x10298d9c` ->
+	// `0x10298ad0`), which names an unset model `models/error/error.mdl` (`SetModelName`) before the
+	// beat activates. So the actor resolves WITH a model and takes the precache arm: no diagnostic,
+	// and the sequence precaches. (Integrator correction, story 8 L08: the lane's Troika `Spawn` is
+	// live at spawn now. Whether retail's `GetModelPtr` resolves `error.mdl` is unrecovered; this
+	// runtime's seam asks for a non-empty model name.)
+	TestEqual(TEXT("the error-model actor prints no diagnostic"),
+		FElysiumNpcWorldFixture::Debug(FoundBeat, TEXT("Activate diagnostics")), FString(TEXT("0")));
+	TestFalse(TEXT("and issues the sequence precaches"),
 		FElysiumNpcWorldFixture::Debug(FoundBeat, TEXT("Activate precaches")).IsEmpty());
 
 	// An actor that resolves to nothing takes the "could not find" arm, which also prints three

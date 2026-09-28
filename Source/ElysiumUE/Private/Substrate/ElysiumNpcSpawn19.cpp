@@ -94,21 +94,24 @@ void FElysiumNpc::TroikaSpawnBody()
 	// A non-empty `m_statTemplate` (`+0x10e4`) is applied through the template manager
 	// (`0x10206c30` on `DAT_1074f028` -> `0x10206aa0`, `SetCharTemplate`). The port's application is
 	// `SeedSheet`, which tests the empty template itself; its unconditional `stats.txt` default seed
-	// is the combat character's constructor-time work in retail (listed for the integrator).
+	// is the combat character's constructor-time work in retail (listed for the integrator). The
+	// inline `strcmp(STRING(m_statTemplate), "")` (`0x10298d4c` null default, the byte loop
+	// `0x10298d59` / `0x10298d5d` / `0x10298d67` / `0x10298d71`, and `0x10298d88`'s second null
+	// default) is `SeedSheet`'s own empty-template test.
 	SeedSheet();                                                                         // 0x10298d7e / 0x10298d93
 
 	Precache();                                                                          // 0x10298d9c slot 104
 
 	// `AddToTeam(m_sTeamName)` only on a non-empty team string.
 	const FString TeamName = Spawn19TeamName();
-	if (!TeamName.IsEmpty())                                                             // 0x10298db1
+	if (!TeamName.IsEmpty())                                                             // 0x10298daa null default / 0x10298db1
 	{
 		Spawn19AddToTeam(TeamName);                                                      // 0x10298db6 -> 0x103239a0
 	}
 
 	// `SetModel(STRING(GetModelName()))`. Slot 9 is the generated stub; the word it answers,
 	// `m_ModelName`, is `FElysiumEntity::Model`.
-	Spawn19SetModel(Model);                                                              // 0x10298dc4 / 0x10298dd4 slot 105
+	Spawn19SetModel(Model);                                                              // 0x10298dc4 / 0x10298dcb null default / 0x10298dd4 slot 105
 
 	BloodColorWord = Spawn19BloodColor;                                                  // 0x10298dde
 	FieldOfViewDot = Spawn19TroikaFieldOfView;                                           // 0x10298de8
@@ -119,7 +122,8 @@ void FElysiumNpc::TroikaSpawnBody()
 	CurrentSpotIndex = INDEX_NONE;                                                       // 0x10298e2a m_pInterestingPlace = 0
 	bAmbientArrived = false;                                                             // 0x10298e30
 
-	// The four `m_Collision` writes, each under its own scope-trace frame.
+	// The four `m_Collision` writes, each under its own scope-trace frame (their `m_iName` null
+	// defaults `0x10298e37`, `0x10298ea6`, `0x10298f17`, `0x10298f89` are the absent debug stack).
 	RetailSolidFlags = 0u;                                                               // 0x10298e8d SetSolidFlags(0)
 	RetailSolidFlags |= (RetailSolidFlags & 0xffffu) | Spawn19SolidFlagA;               // 0x10298efe AddSolidFlags(w | 1)
 	RetailSolidFlags |= (RetailSolidFlags & 0xffffu) | Spawn19SolidFlagB;               // 0x10298f70 AddSolidFlags(w | 0x40)
@@ -169,6 +173,8 @@ void FElysiumNpc::TroikaSpawnBody()
 		}
 	}
 
+	// Each string is read through `STRING()`, the null default `DAT_106b8540` (`0x1029920c`,
+	// `0x10299223`, `0x1029923a`); an empty `FString` is that default here.
 	SetInterestingPlaceGroups(InterestingPlaceGroups);                                   // 0x10299216 -> 0x10298910
 	SetHintGroups(ScheduleHost.HintGroups);                                              // 0x1029922d -> 0x102989e0
 	CombatStartActivityId = ResolveCombatStartActivity(CombatStartActivity);             // 0x10299244 / 0x1029924f
@@ -188,31 +194,31 @@ void FElysiumNpc::RepairPoliceLevels()
 	if (PlInvestigate < 1)                                                               // 0x1029907c / 0x10368d2d
 	{
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("Warning: Invalid m_iPLInvestigateLevel ('pl_investigate' in world craft)"));
+			TEXT("Warning: Invalid m_iPLInvestigateLevel ('pl_investigate' in world craft)")); // 0x10299084 / 0x10368d35 DevMsg
 		PlInvestigate = Spawn19PlLevelRepair;                                            // 0x10299089
 	}
 	if (PlCriminalFlee < 1)                                                              // 0x10299095 / 0x10368d46
 	{
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("Warning: Invalid m_iPLCriminalFleeLevel ('pl_criminal_flee' in world craft)"));
+			TEXT("Warning: Invalid m_iPLCriminalFleeLevel ('pl_criminal_flee' in world craft)")); // 0x1029909d / 0x10368d4e DevMsg
 		PlCriminalFlee = Spawn19PlLevelRepair;                                           // 0x102990a2
 	}
 	if (PlCriminalAttack < 1)                                                            // 0x102990ae / 0x10368d5f
 	{
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("Warning: Invalid m_iPLCriminalAttackLevel ('pl_criminal_attack' in world craft)"));
+			TEXT("Warning: Invalid m_iPLCriminalAttackLevel ('pl_criminal_attack' in world craft)")); // 0x102990b6 / 0x10368d67 DevMsg
 		PlCriminalAttack = Spawn19PlLevelRepair;                                         // 0x102990bb
 	}
 	if (PlSupernaturalFlee < 1)                                                          // 0x102990c7 / 0x10368d78
 	{
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("Warning: Invalid m_iPLSupernaturalFleeLevel ('pl_supernatural_flee' in world craft)"));
+			TEXT("Warning: Invalid m_iPLSupernaturalFleeLevel ('pl_supernatural_flee' in world craft)")); // 0x102990cf / 0x10368d80 DevMsg
 		PlSupernaturalFlee = Spawn19PlLevelRepair;                                       // 0x102990d4
 	}
 	if (PlSupernaturalAttack < 1)                                                        // 0x102990e0 / 0x10368d91
 	{
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("Warning: Invalid m_iPLSupernaturalAttackLevel ('pl_supernatural_attack' in world craft)"));
+			TEXT("Warning: Invalid m_iPLSupernaturalAttackLevel ('pl_supernatural_attack' in world craft)")); // 0x102990e8 / 0x10368d99 DevMsg
 		PlSupernaturalAttack = Spawn19PlLevelRepair;                                     // 0x102990ed
 	}
 }

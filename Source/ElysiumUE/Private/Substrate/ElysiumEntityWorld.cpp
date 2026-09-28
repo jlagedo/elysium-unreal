@@ -215,9 +215,17 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	// Spawn pass — keyvalues are already applied (Construct); Spawn() is the leaf class's own
 	// wiring (no-op for base/inert records). Then attach the brush body: after
 	// Spawn() so a leaf class can have adjusted its own state first.
+	//
+	// By index over the map's own entities, not a ranged-for: a `Spawn` may create an entity (the
+	// Troika `Spawn` `0x10298d30` runs `NPCInit` and `CAI_BaseNPC::Spawn`'s `Weapon_Create`
+	// `0x10273306`), which appends to `EntityList` and would invalidate a range iterator. The creator
+	// spawns what it creates (`CallEntitySpawn` runs its `Spawn` and `PostSpawn`), so both passes stop
+	// at the map's count, as retail's map parse spawns only the map's own entities.
 	const bool bBuildBodies = CVarBrushBodies.GetValueOnGameThread() != 0;
-	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	const int32 MapEntityCount = EntityList.Num();
+	for (int32 Index = 0; Index < MapEntityCount; ++Index)
 	{
+		FElysiumEntity* const Ent = EntityList[Index].Get();
 		if (Ent)
 		{
 			Ent->bSpawnCalled = true;
@@ -232,8 +240,9 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 
 	// Second pass (Source's Activate()): every entity has Spawn()'d and every body exists, so a
 	// constraint (phys_hinge) can now resolve and wire its attached bodies.
-	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	for (int32 Index = 0; Index < MapEntityCount; ++Index)
 	{
+		FElysiumEntity* const Ent = EntityList[Index].Get();
 		if (Ent && !Ent->IsDead())
 		{
 			Ent->PostSpawn();

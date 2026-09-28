@@ -168,6 +168,7 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeEntryDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -248,6 +249,7 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeEntryDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -416,6 +418,7 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 	Services.ItemGroundModelStates.Add(TEXT("models/weapons/w_null.mdl"),
 		EElysiumItemGroundModelState::Geometryless);
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeEntryDefs(*DialogName));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

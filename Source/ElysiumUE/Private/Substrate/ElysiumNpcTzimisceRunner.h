@@ -44,7 +44,6 @@ public:
 	static constexpr float RunnerAttackExtentX = 50.f;
 	static constexpr float RunnerAttackExtentY = 50.f;
 	static constexpr float RunnerAttackExtentZ = 82.f;
-	int32 Flag2Removals = 0;                 // `RemoveFlag2(4)`
 
 	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VTzimisceRunner`'s own two.

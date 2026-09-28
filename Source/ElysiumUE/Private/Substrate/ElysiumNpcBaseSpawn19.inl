@@ -45,12 +45,18 @@ void Spawn19InsertCarcassSound();
  *  port's body build is `FElysiumAnimating`'s presentation, run by the Troika leaf). */
 void Spawn19CombatCharacterSpawn();
 
+/* `m_lifeState` (`+0x200`) is `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`), the one word; its
+ * main writer, `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` (LIFE_DYING), is still the 29e stub, so
+ * slot 158 `IsAlive` and `LifeStateIsDying` keep reading the death latches until it lands (L13). */
+
 // --- Seams (each with the three searches in the L08 report) ---
 
 /** SEAM for `g_pGameRules->FAllowNPCs()` -- `DAT_1070ba0c` slot 74 (`+0x128`), the first gate of
- *  `0x10273200` (`0x10273272`). No game-rules object stands here; answers TRUE, the admitting arm
- *  (false runs `UTIL_Remove` and spawns nothing). */
+ *  `0x10273200` (`0x10273272`) and of `CNPC_VCamera::NPCInit` (`0x103692f8`). No game-rules object
+ *  stands here; answers `bSpawn19GameRulesAllowNpcs`, TRUE by default, the admitting arm (false runs
+ *  `UTIL_Remove`). Tests may refuse. */
 bool Spawn19GameRulesAllowNpcs() const;
+bool bSpawn19GameRulesAllowNpcs = true;
 
 /** SEAM for `CBaseCombatCharacter::Weapon_Create` (`0x1032e120`), which `0x10273306` calls with
  *  `m_spawnEquipment`. No port body creates a weapon by classname for a base-only NPC; the request is

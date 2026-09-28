@@ -1026,8 +1026,10 @@ bool FElysiumNpcKernelEntityChainClosestNpcTest::RunTest(const FString&)
 	Player->Observer.Observer = FElysiumEntityHandle::Invalid();
 	Player->Observer.DistanceCm = 5.f;
 	Npc.UpdateClosestNpc(Fixture.Other, 4000.f);
-	TestEqual(TEXT("the reset distance is the 0x47c34ff3 immediate, 100000.0"),
-		Player->Observer.DistanceCm, 100000.f);
+	// `0x101828f0 MOV [+0x1cc4],0x47c34ff3`: the float 99999.8984375, not 100000.0 (integrator
+	// correction, story 8 L08: the constant was rounded).
+	TestEqual(TEXT("the reset distance is the 0x47c34ff3 immediate, 99999.8984375"),
+		Player->Observer.DistanceCm, 99999.8984375f);
 
 	// The acceptance ladder. SEAM: `GetModelPtr()` answers false with no studio header, and that
 	// rung REFUSES — so the recovered answer today is that no candidate is ever cached. The test

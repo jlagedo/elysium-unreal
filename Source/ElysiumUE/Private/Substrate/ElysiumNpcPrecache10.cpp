@@ -228,10 +228,10 @@ void FElysiumNpc::Precache()
 	// body calls `TroikaPrecache` first, retail's direct call into `0x10298ad0`. The three maker
 	// bodies are their classes' overrides (story 5 fold A4), each chaining `CAI_BaseNPC::Precache`.
 	//
-	// NOTHING IN THIS RUNTIME CALLS `Precache()` YET, and that is deliberate rather than an
-	// oversight: this substrate acquires assets for the whole map epoch before any NPC stands
-	// (`FElysiumMapActor::PreparePropAndWieldModels`), so wiring a per-entity precache into
-	// `Spawn` would ADD an event retail's order does not have here. The body is ported whole and is
-	// driven by `Elysium.Substrate.NpcKernelPrecache10.*`; the caller lands with the asset path.
+	// Its caller is slot 103: `CAI_BaseNPCTroika::Spawn` (`0x10298d9c`, `TroikaSpawnBody`) and
+	// `CNPC_VCamera::Spawn` (`0x10368b85`), live since story 8 (Spawn19). The body's writes (the
+	// error-model name, the disposition index) are retail's; the acquisition stays the seam
+	// (`IssuePrecache` records), because this substrate acquires assets for the whole map epoch before
+	// any NPC stands (`FElysiumMapActor::PreparePropAndWieldModels`).
 	TroikaPrecache();
 }

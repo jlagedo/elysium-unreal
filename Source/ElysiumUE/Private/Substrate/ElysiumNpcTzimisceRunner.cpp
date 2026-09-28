@@ -155,10 +155,11 @@ bool FElysiumNpcTzimisceRunner::Slot602()
 // `0x103c3c40`
 void FElysiumNpcTzimisceRunner::OnRestore(bool bFromLoad)
 {
-	TroikaOnRestore(bFromLoad);
-	SetAttackExtents(FVector(RunnerAttackExtentX, RunnerAttackExtentY, RunnerAttackExtentZ)
-		* ElysiumMove::U);
-	++Flag2Removals;                                                     // RemoveFlag2(4)
+	TroikaOnRestore(bFromLoad);                                          // 0x103c3c4b
+	// `0x103c3c6f CALL 0x10001a50` -> `CBaseEntity::SetAbsoluteAttackExtents` `0x1009b060` (the
+	// absolute extents minus half the collision box), not slot 15 directly.
+	SetAbsoluteAttackExtents(FVector(RunnerAttackExtentX, RunnerAttackExtentY, RunnerAttackExtentZ)); // 0x103c3c54..0x103c3c67
+	RemoveFlag2(4u);                                                     // 0x103c3c78 -> 0x1000df44 RemoveFlag2(4)
 }
 
 // Slot 104: `0x103c31e0`.

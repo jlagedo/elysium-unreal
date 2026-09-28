@@ -72,7 +72,9 @@ bool WeaponHandleAnimEventMisc19(const struct FElysiumAnimEvent& Event);
  *  (`SCRIPT_EVENT_DEAD`, := 1 `LIFE_DYING`) and `0x3f2` (`NOT_DEAD`, := 0) write it, and so do the
  *  RunTask19 death arms (base `0x10288ff7` := 2, Werewolf `0x103ce491` := 2; the Troika arm
  *  `0x102abc05` clears a 1). The NPC's life is otherwise `bDead` / the death latches
- *  (`LifeStateIsDying`); `Event_Killed`'s LIFE_DYING write is not mirrored here. */
+ *  (`LifeStateIsDying`); `Event_Killed`'s LIFE_DYING write is not mirrored here. Spawn19's Ming Xiao / tentacle
+ *  `Event_Killed` (`0x10395c29`, `0x1039e92e` := 1) and Boss19's death entries write it too (the
+ *  one word; L08's `NpcLifeStateWord` and L12's `LifeStateRetail` folded here). */
 int32 AnimEventLifeStateWord = 0;
 
 /** SEAM for `CBaseEntity::EmitSound(const char* soundscript)` (`0x101b0c10`): `IElysiumAudio`

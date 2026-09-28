@@ -351,6 +351,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	{
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -416,6 +417,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Camera;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -517,6 +519,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		FElysiumEntityDefs Defs = MakeFeedTestDefs();
 		Defs.Defs[0].Keys.Add(TEXT("model"), TEXT("models/test/feed_victim.mdl"));
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -601,6 +604,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	{
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
 		TUniquePtr<FElysiumOrderedIOSink> OwnedSink = MakeUnique<FElysiumOrderedIOSink>();
@@ -655,6 +659,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	{
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -690,6 +695,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	{
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld A(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(A, -FElysiumNpcBase::NpcInitThinkDelay);
 		A.Load(MakeFeedTestDefs());
 		A.SpawnPlayer();
 		A.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -864,6 +870,7 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 
 	FElysiumRecordingServices Services;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

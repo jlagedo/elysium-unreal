@@ -110,6 +110,7 @@ bool FElysiumSaveRefusedInDialogueTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeSaveTestDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

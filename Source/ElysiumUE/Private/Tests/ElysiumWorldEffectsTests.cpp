@@ -991,6 +991,7 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		Prop.TargetName = TEXT("statue");
 		Prop.Origin = FVector(300.f, 0.f, 0.f);
 		Defs.Defs.Add(MoveTemp(Prop));
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1490,6 +1491,7 @@ bool FElysiumGazeDialogueTest::RunTest(const FString&)
 		Prop.TargetName = TEXT("statue");
 		Prop.Origin = FVector(300.f, 0.f, 0.f);
 		Defs.Defs.Add(MoveTemp(Prop));
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

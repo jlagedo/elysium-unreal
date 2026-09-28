@@ -149,6 +149,7 @@ namespace
 			Services.SurfaceSounds.Add(FName(TEXT("glass")), PoollessRow());
 			World = MakeUnique<FElysiumEntityWorld>(static_cast<AActor*>(nullptr),
 				static_cast<UElysiumSessionSubsystem*>(nullptr), Services.Bundle());
+			ElysiumStandSpawnClock(*World, -FElysiumNpcBase::NpcInitThinkDelay);
 			World->Load(MakeFootstepDefs());
 			World->Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 			// One deterministic think, no executor action: `Activate` only ARMS the mind's admission

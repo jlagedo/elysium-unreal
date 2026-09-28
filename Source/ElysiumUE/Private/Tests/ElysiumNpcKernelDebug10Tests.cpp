@@ -482,7 +482,11 @@ bool FElysiumNpcKernelDebug10TroikaTextTest::RunTest(const FString&)
 		Npc->TroikaDrawDebugTextOverlays(), 0);
 	TestEqual(TEXT("and emits nothing"), FElysiumNpc::EndDebugCapture().Num(), 0);
 
-	// Bit 0 set. The base body's five lines come first, then the Troika body's own.
+	// Bit 0 set. The base body's five lines come first, then the Troika body's own. The model is
+	// cleared first: the Troika `Spawn`'s `Precache` (`0x10298d9c` -> `0x10298ad0`) named the unset
+	// model `models/error/error.mdl`, and this half of the case is the no-model arm. (Integrator
+	// correction, story 8 L08.)
+	Npc->Model.Empty();
 	Npc->DebugOverlays = 0x1;
 	FElysiumNpc::BeginDebugCapture();
 	const int32 Total = Npc->TroikaDrawDebugTextOverlays();

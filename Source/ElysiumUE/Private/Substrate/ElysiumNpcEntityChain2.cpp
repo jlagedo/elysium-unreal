@@ -22,7 +22,7 @@ namespace
 	constexpr float GChain2Zero = ElysiumNpcTunables::Zero;
 	constexpr float GChain2One = ElysiumNpcTunables::One;
 	constexpr float GChain2AutoaimNewWeight = 0.7f;   // _DAT_10457f54
-	constexpr float GChain2ClosestNpcReset = 100000.0f;   // the 0x47c34ff3 immediate
+	constexpr float GChain2ClosestNpcReset = 99999.8984375f;   // MOV [+0x1cc4],0x47c34ff3 (0x101828f0 / 0x1018292a / 0x10182a0f)
 	constexpr float GChain2AutoaimDistance = 16384.0f;    // the 0x46800000 immediate
 	constexpr float GChain2AutoaimWrap = 360.0f;          // _DAT_10450568
 	constexpr float GChain2AutoaimHalfWrap = ElysiumNpcTunables::OneEighty;   // negated, `_DAT_10462948`

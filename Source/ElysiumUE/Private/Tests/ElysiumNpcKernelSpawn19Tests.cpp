@@ -31,8 +31,7 @@
 // CNPC_VHengeyokai::Spawn, 0x103887a0 CNPC_VHunter::Spawn, 0x10389390 CNPC_VLasombra::Spawn,
 // 0x1038b030 CNPC_VManBat::Spawn, 0x103a4510 CNPC_VPlayerController::Spawn, 0x103a6c80
 // CNPC_VSabbatLeader::Spawn, 0x103ad630 CNPC_VRat::Spawn, 0x103ae630 CNPC_VSheriffMan::Spawn,
-// 0x103dd620 CNPC_VYukie::Spawn, 0x10375c50 CNPC_VFrenzyShadow::Spawn; and 0x1037c1c0
-// CNPC_VGhoulCroucher::ScriptHide.
+// 0x103dd620 CNPC_VYukie::Spawn, 0x10375c50 CNPC_VFrenzyShadow::Spawn.
 
 #include "Misc/AutomationTest.h"
 
@@ -179,9 +178,13 @@ bool FElysiumNpcKernelSpawn19BaseEventKilledTest::RunTest(const FString&)
 	// 0x10265d06 / 0x10265dba: the ideal and the current state are both DEAD.
 	TestEqual(TEXT("m_IdealNPCState = 7 (0x10265db0)"), F.Npc->IdealStateRetail(), 7);
 	TestEqual(TEXT("SetState(7) (0x10265dba)"), F.Npc->NpcStateRetail(), 7);
-	// 0x10265d32: `m_hLastDamageEnt` is the attacker's handle; 0x10265d46 `m_bCondTookDamage`.
+	// 0x10265d32: `m_hLastDamageEnt` is the attacker's handle. 0x10265d46 writes `m_bCondTookDamage`
+	// (+0x5b80) = 1, but the tail's `SetState(7)` (0x10265dba -> 0x1026e340) changes the state and so
+	// dispatches slot 463, whose Troika body `0x102ae140` clears +0x5b80 in its unconditional tail:
+	// on a Troika NPC the word ends 0. (Integrator correction: the lane asserted 1.)
 	TestTrue(TEXT("m_hLastDamageEnt = the attacker"), F.Npc->BaseMemory.LastDamageAttacker == F.Player->Handle);
-	TestTrue(TEXT("m_bCondTookDamage = 1"), F.Npc->Cognition.bCondTookDamage);
+	TestFalse(TEXT("m_bCondTookDamage: 1 at 0x10265d46, then 0 from OnStateChange 0x102ae140"),
+		F.Npc->Cognition.bCondTookDamage);
 	TestTrue(TEXT("SetCondition(0x4c LIGHT_DAMAGE) (0x10265d1f)"),
 		F.Npc->Cognition.Conditions.Has(EElysiumNpcCond::LightDamage));
 	// 0x10265cc8 -> 0x10265a90: the one-shot OnDeath latch.
@@ -371,8 +374,9 @@ bool FElysiumNpcKernelSpawn19TentacleEventKilledTest::RunTest(const FString&)
 	// First kill (0x1039e90b taken): LIFE_DYING and the death schedule, no base death.
 	Tentacle->bTentaclePlayedDeathAnim = false;
 	Tentacle->Event_Killed(&Info);
-	TestEqual(TEXT("m_lifeState = 1 (0x1039e92e)"), Tentacle->NpcLifeStateWord, 1);
-	TestEqual(TEXT("0x1039e970 once"), Tentacle->Spawn19DeathScheduleStarts, 1);
+	TestEqual(TEXT("m_lifeState = 1 (0x1039e92e)"), Tentacle->AnimEventLifeStateWord, 1);
+	// `0x1039e938 -> 0x1039e970` (Boss19's `MingXiaoTentacleEnterDeath`) raises `+0x6699`.
+	TestTrue(TEXT("0x1039e970 ran: m_bPlayedDeathAnim (0x6699) raised"), Tentacle->bTentaclePlayedDeathAnim);
 	TestFalse(TEXT("no base death on the first kill"), Tentacle->HasReportedDeath());
 	// Second kill: the latch stands, the base runs.
 	Tentacle->bTentaclePlayedDeathAnim = true;
@@ -394,15 +398,38 @@ bool FElysiumNpcKernelSpawn19MingXiaoEventKilledTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Spawn19Info(F);
 	Ming->bMingXiaoPlayedDeathAnim = false;
 	Ming->Event_Killed(&Info);
-	TestEqual(TEXT("m_lifeState = 1 (0x10395c29)"), Ming->NpcLifeStateWord, 1);
-	TestEqual(TEXT("0x10395c70 once"), Ming->Spawn19DeathAnimStarts, 1);
+	TestEqual(TEXT("m_lifeState = 1 (0x10395c29)"), Ming->AnimEventLifeStateWord, 1);
+	// `0x10395c33 -> 0x10395c70` (Boss19's `MingXiaoEnterDeath`) raises `+0x6744`.
+	TestTrue(TEXT("0x10395c70 ran: m_bPlayedDeathAnim (0x6744) raised"), Ming->bMingXiaoPlayedDeathAnim);
 	TestFalse(TEXT("no base death on the first kill"), Ming->HasReportedDeath());
-	// The HEAD (`m_iTentacleID == -1`) runs the two grub teardowns under `ming_xiao_grub_death` "1".
+	// The HEAD (`m_iTentacleID == -1`) runs the two grub teardowns under `ming_xiao_grub_death` "1":
+	// `0x10397e90` defeats every severed tentacle (`0x1039ea60`), `0x10397f00` every spawned body
+	// (`0x10395ce0`). One of each stands for the sweep.
+	FElysiumEntityDef TentacleDef;
+	TentacleDef.Classname = TEXT("npc_VMingXiaoTentacle");
+	const FElysiumEntityHandle TentacleHandle = F.World.World.SpawnRuntimeEntity(MoveTemp(TentacleDef));
+	FElysiumEntityDef BodyDef;
+	BodyDef.Classname = TEXT("npc_VMingXiao");
+	const FElysiumEntityHandle BodyHandle = F.World.World.SpawnRuntimeEntity(MoveTemp(BodyDef));
+	FElysiumEntity* const TentacleEntity = F.World.World.Resolve(TentacleHandle);
+	FElysiumEntity* const BodyEntity = F.World.World.Resolve(BodyHandle);
+	FElysiumNpcMingXiaoTentacle* const Severed = TentacleEntity != nullptr && TentacleEntity->AsNpc() != nullptr
+		? TentacleEntity->AsNpc()->AsSpecies<FElysiumNpcMingXiaoTentacle>() : nullptr;
+	FElysiumNpcMingXiao* const Spawned = BodyEntity != nullptr && BodyEntity->AsNpc() != nullptr
+		? BodyEntity->AsNpc()->AsSpecies<FElysiumNpcMingXiao>() : nullptr;
+	if (!TestNotNull(TEXT("a severed tentacle stands"), Severed) || !TestNotNull(TEXT("a spawned body stands"), Spawned))
+	{
+		return false;
+	}
+	Severed->bTentaclePlayedDeathAnim = false;
+	Spawned->bMingXiaoPlayedDeathAnim = false;
+	Ming->SeveredTentacles[0] = TentacleHandle;
+	Ming->Proxies[0] = BodyHandle;
 	Ming->bMingXiaoPlayedDeathAnim = true;
 	Ming->MingXiaoTentacleId = INDEX_NONE;
 	Ming->Event_Killed(&Info);
-	TestEqual(TEXT("0x10397e90 once"), Ming->Spawn19GrubDeathACalls, 1);
-	TestEqual(TEXT("0x10397f00 once"), Ming->Spawn19GrubDeathBCalls, 1);
+	TestTrue(TEXT("0x10395c0b -> 0x10397e90: the severed tentacle is defeated"), Severed->bTentaclePlayedDeathAnim);
+	TestTrue(TEXT("0x10395c12 -> 0x10397f00: the spawned body is defeated"), Spawned->bMingXiaoPlayedDeathAnim);
 	TestTrue(TEXT("then the Troika death (0x10395c1e)"), Ming->HasReportedDeath());
 	return true;
 }
@@ -591,9 +618,14 @@ bool FElysiumNpcKernelSpawn19BaseSpawnTest::RunTest(const FString&)
 	// A Troika NPC (`m_pBaseNPCTroika` set, 0x1027329b) never takes the equipment arm.
 	F.Npc->CapabilityWord |= FElysiumNpcBase::Spawn19CapUseWeapons;
 	F.Npc->AdditionalEquipment = TEXT("item_w_knife");
+	// The map's spawn pass already ran the Troika body (`FElysiumNpc::Spawn` -> `0x10299006`), so
+	// the counts are taken relative to it.
+	const int32 WeaponRequestsBefore = F.Npc->Spawn19WeaponCreateRequests;
+	const int32 CombatSpawnsBefore = F.Npc->Spawn19CombatCharacterSpawns;
 	F.Npc->FElysiumNpcBase::Spawn();
-	TestEqual(TEXT("no Weapon_Create on the Troika line"), F.Npc->Spawn19WeaponCreateRequests, 0);
-	TestEqual(TEXT("CBaseCombatCharacter::Spawn once (0x10273328)"), F.Npc->Spawn19CombatCharacterSpawns, 1);
+	TestEqual(TEXT("no Weapon_Create on the Troika line"), F.Npc->Spawn19WeaponCreateRequests, WeaponRequestsBefore);
+	TestEqual(TEXT("CBaseCombatCharacter::Spawn once (0x10273328)"), F.Npc->Spawn19CombatCharacterSpawns,
+		CombatSpawnsBefore + 1);
 
 	// A plain CAI_BaseNPC with the capability and a real classname takes it (0x10273306).
 	F.Hull->CapabilityWord |= FElysiumNpcBase::Spawn19CapUseWeapons;
@@ -637,7 +669,7 @@ bool FElysiumNpcKernelSpawn19TroikaSpawnTest::RunTest(const FString&)
 	TestTrue(TEXT("capabilities 1, 0x800000, 8"), Spawn19HasCaps(*F.Npc, 0x800009));
 	TestEqual(TEXT("m_bloodColor = 0xf7"), F.Npc->BloodColorWord, 0xf7);
 	TestEqual(TEXT("m_flFieldOfView = 0.2"), F.Npc->FieldOfViewDot, 0.2f);
-	TestEqual(TEXT("m_HackedGunPos.z = 55"), F.Npc->HackedGunPosUnits.Z, 55.f);
+	TestEqual(TEXT("m_HackedGunPos.z = 55"), F.Npc->HackedGunPosUnits.Z, 55.0);
 	TestEqual(TEXT("SetSolid(SOLID_BBOX)"), F.Npc->RetailSolidType, 2);
 	TestTrue(TEXT("solid flags 1 and 0x40"), (F.Npc->RetailSolidFlags & 0x41u) == 0x41u);
 	TestEqual(TEXT("SetMoveType(4)"), F.Npc->RetailMoveType, 4);
@@ -672,43 +704,76 @@ bool FElysiumNpcKernelSpawn19TroikaSpawnTest::RunTest(const FString&)
 // =================================================================================================
 
 // A capability-only row: clear the word, re-run the class's own Spawn, read the mask.
-#define ELYSIUM_SPAWN19_CAPS_TEST(TestName, PrettyName, RetailClass, SpeciesType, Mask)           \
-	IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19##TestName##Test, PrettyName,           \
-		GSpawn19TestFlags)                                                                           \
-	bool FElysiumNpcKernelSpawn19##TestName##Test::RunTest(const FString&)                           \
-	{                                                                                                \
-		FSpawn19Fixture F(TEXT(RetailClass));                                                        \
-		SpeciesType* const Subject = F.As<SpeciesType>();                                            \
-		if (!TestNotNull(TEXT("the subject stands as its class"), Subject))                          \
-		{                                                                                            \
-			return false;                                                                            \
-		}                                                                                            \
-		Subject->CapabilityWord = 0;                                                                 \
-		Subject->Spawn();                                                                            \
-		TestTrue(TEXT("the listing's capability mask"), Spawn19HasCaps(*Subject, Mask));             \
-		return true;                                                                                 \
+template <class TSpecies>
+static bool Spawn19CapsCase(FAutomationTestBase& Test, const TCHAR* RetailClass, int32 Mask)
+{
+	FSpawn19Fixture F(RetailClass);
+	TSpecies* const Subject = F.As<TSpecies>();
+	if (!Test.TestNotNull(TEXT("the subject stands as its class"), Subject))
+	{
+		return false;
 	}
+	Subject->CapabilityWord = 0;
+	Subject->Spawn();
+	Test.TestTrue(TEXT("the listing's capability mask"), Spawn19HasCaps(*Subject, Mask));
+	return true;
+}
 
-ELYSIUM_SPAWN19_CAPS_TEST(AnimalSpawn, "Elysium.Substrate.NpcKernelSpawn19.AnimalSpawn_0x1035f510",
-	"CNPC_VAnimal", FElysiumNpcAnimal, 0x4000000)
-ELYSIUM_SPAWN19_CAPS_TEST(HumanSpawn, "Elysium.Substrate.NpcKernelSpawn19.HumanSpawn_0x10384690",
-	"CNPC_VHuman", FElysiumNpcHuman, 0xc200d00)
-ELYSIUM_SPAWN19_CAPS_TEST(HumanCombatantSpawn,
-	"Elysium.Substrate.NpcKernelSpawn19.HumanCombatantSpawn_0x10387110",
-	"CNPC_VHumanCombatant", FElysiumNpcHumanCombatant, 0xc200d40)
-ELYSIUM_SPAWN19_CAPS_TEST(PedestrianSpawn, "Elysium.Substrate.NpcKernelSpawn19.PedestrianSpawn_0x103a2540",
-	"CNPC_VPedestrian", FElysiumNpcPedestrian, 0xc200d00)
-ELYSIUM_SPAWN19_CAPS_TEST(HunterSpawn, "Elysium.Substrate.NpcKernelSpawn19.HunterSpawn_0x103887a0",
-	"CNPC_VHunter", FElysiumNpcHunter, 0xc200d40)
-ELYSIUM_SPAWN19_CAPS_TEST(AsianVampireSpawn,
-	"Elysium.Substrate.NpcKernelSpawn19.AsianVampireSpawn_0x10360c50",
-	"CNPC_VAsianVampire", FElysiumNpcAsianVampire, 0xc201d40)
-ELYSIUM_SPAWN19_CAPS_TEST(ChangBrosSpawn, "Elysium.Substrate.NpcKernelSpawn19.ChangBrosSpawn_0x1036afc0",
-	"CNPC_VChangBros", FElysiumNpcChangBros, 0xc209d40)
-ELYSIUM_SPAWN19_CAPS_TEST(SheriffManSpawn, "Elysium.Substrate.NpcKernelSpawn19.SheriffManSpawn_0x103ae630",
-	"CNPC_VSheriffMan", FElysiumNpcSheriffMan, 0xc201d40)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19AnimalSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.AnimalSpawn_0x1035f510", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19AnimalSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcAnimal>(*this, TEXT("CNPC_VAnimal"), 0x4000000);
+}
 
-#undef ELYSIUM_SPAWN19_CAPS_TEST
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HumanSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.HumanSpawn_0x10384690", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19HumanSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcHuman>(*this, TEXT("CNPC_VHuman"), 0xc200d00);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HumanCombatantSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.HumanCombatantSpawn_0x10387110", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19HumanCombatantSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcHumanCombatant>(*this, TEXT("CNPC_VHumanCombatant"), 0xc200d40);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19PedestrianSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.PedestrianSpawn_0x103a2540", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19PedestrianSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcPedestrian>(*this, TEXT("CNPC_VPedestrian"), 0xc200d00);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HunterSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.HunterSpawn_0x103887a0", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19HunterSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcHunter>(*this, TEXT("CNPC_VHunter"), 0xc200d40);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19AsianVampireSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.AsianVampireSpawn_0x10360c50", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19AsianVampireSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcAsianVampire>(*this, TEXT("CNPC_VAsianVampire"), 0xc201d40);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ChangBrosSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.ChangBrosSpawn_0x1036afc0", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19ChangBrosSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcChangBros>(*this, TEXT("CNPC_VChangBros"), 0xc209d40);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19SheriffManSpawnTest,
+	"Elysium.Substrate.NpcKernelSpawn19.SheriffManSpawn_0x103ae630", GSpawn19TestFlags)
+bool FElysiumNpcKernelSpawn19SheriffManSpawnTest::RunTest(const FString&)
+{
+	return Spawn19CapsCase<FElysiumNpcSheriffMan>(*this, TEXT("CNPC_VSheriffMan"), 0xc201d40);
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19VampireSpawnTest,
 	"Elysium.Substrate.NpcKernelSpawn19.VampireSpawn_0x103c4ef0", GSpawn19TestFlags)
@@ -1112,6 +1177,15 @@ bool FElysiumNpcKernelSpawn19MingXiaoSpawnTest::RunTest(const FString&)
 	TestTrue(TEXT("m_bNeverMeleeOpponent = 1 (0x1039291c)"), Ming->bNeverMeleeOpponent);
 	TestEqual(TEXT("m_flFieldOfView = -0.5"), Ming->FieldOfViewDot, -0.5f);
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (Ming->MiscFlags & 0x80000u) != 0u);
+	// `0x10392830..0x1039283f`: each limb's hit points = the tuning record's `+0x0` TentacleHPInitial.
+	Ming->MingXiaoHitPoints[3] = -1.f;
+	Ming->Spawn();
+	TestEqual(TEXT("m_rflHitPoints[3] = TentacleHPInitial (0x1039283f)"), Ming->MingXiaoHitPoints[3],
+		Ming->Select19MingXiaoTuningField(0));
+	TestTrue(TEXT("...a positive record cell"), Ming->MingXiaoHitPoints[0] > 0.f);
+	// `0x10392935 -> 0x103986b0`: the ideal range from the connected attack limbs.
+	TestEqual(TEXT("m_flIdealRange = 0x103986b0's answer (0x1039293a)"), Ming->MingXiaoIdealRange,
+		Ming->MingXiaoIdealRangeFromLimbs());
 	return true;
 }
 
@@ -1213,28 +1287,6 @@ bool FElysiumNpcKernelSpawn19FrenzyShadowSpawnTest::RunTest(const FString&)
 	}
 	// `CapabilitiesAdd(0x200000)` BEFORE the controller body (the landed body `ElysiumNpcFrenzyShadow.cpp`).
 	TestTrue(TEXT("0x200000 then the controller chain"), Spawn19HasCaps(*Shadow, 0xc200d40));
-	return true;
-}
-
-// =================================================================================================
-// 0x1037c1c0 CNPC_VGhoulCroucher::ScriptHide
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19GhoulCroucherScriptHideTest,
-	"Elysium.Substrate.NpcKernelSpawn19.GhoulCroucherScriptHide_0x1037c1c0", GSpawn19TestFlags)
-bool FElysiumNpcKernelSpawn19GhoulCroucherScriptHideTest::RunTest(const FString&)
-{
-	FSpawn19Fixture F(TEXT("CNPC_VGhoulCroucher"));
-	FElysiumNpcGhoulCroucher* const Ghoul = F.As<FElysiumNpcGhoulCroucher>();
-	if (!TestNotNull(TEXT("the croucher stands"), Ghoul) || !TestNotNull(TEXT("the particle stands"), F.Prop))
-	{
-		return false;
-	}
-	Ghoul->BurningParticle = F.Prop->Handle;
-	Ghoul->ScriptHide();
-	TestTrue(TEXT("the body hides (0x1037c229)"), Ghoul->IsHidden());
-	TestTrue(TEXT("the burning particle hides with it (0x1037c286)"), F.Prop->IsHidden());
-	TestTrue(TEXT("the handle is not cleared"), Ghoul->BurningParticle.IsSet());
 	return true;
 }
 

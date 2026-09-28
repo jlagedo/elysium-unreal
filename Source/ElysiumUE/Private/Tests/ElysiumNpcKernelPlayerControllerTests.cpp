@@ -167,7 +167,7 @@ bool FElysiumNpcKernelPlayerControllerSpawnInitTest::RunTest(const FString&)
 	}
 	// `Spawn` `0x103a4510`, what it left.
 	TestEqual(TEXT("SetName(\"playercontroller\")"), Controller->TargetName, FString(TEXT("playercontroller")));
-	TestEqual(TEXT("AddFlag2(0x10), on the seam word"), Controller->Flags2Added, 0x10u);
+	TestTrue(TEXT("AddFlag2(0x10) on m_fFlags2 (0x103a454d)"), (Controller->EntityFlags2Word & 0x10u) != 0u);
 	EElysiumRelationship PlayerClassValue = EElysiumRelationship::Neutral;
 	int32 PlayerClassPriority = -1;
 	if (TestTrue(TEXT("AddClassRelationship(1, 3, 0) wrote the player's class row"),

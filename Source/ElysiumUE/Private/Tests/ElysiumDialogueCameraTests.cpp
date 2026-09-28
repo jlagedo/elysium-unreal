@@ -13,6 +13,7 @@
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Tests/ElysiumTestServices.h"
 
 #include "Camera/CameraTypes.h"
 #include "Engine/Engine.h"
@@ -166,6 +167,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	auto ProbeOpener = [](FName Input, int32 Argument)
 	{
 		FElysiumEntityWorld Probe(nullptr, nullptr);
+		ElysiumStandSpawnClock(Probe, -FElysiumNpcBase::NpcInitThinkDelay);
 		Probe.Load(MakeDialogueWorldDefs());
 		Probe.SpawnPlayer();
 		Probe.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -197,6 +199,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	FElysiumWorldServices Services;
 	Services.Camera = &Camera;
 	FElysiumEntityWorld World(nullptr, nullptr, Services);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -264,6 +267,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 
 	// A null-camera world retains the dialogue and event seam without manufacturing camera state.
 	FElysiumEntityWorld HeadlessWorld(nullptr, nullptr);
+	ElysiumStandSpawnClock(HeadlessWorld, -FElysiumNpcBase::NpcInitThinkDelay);
 	HeadlessWorld.Load(MakeDialogueWorldDefs());
 	HeadlessWorld.SpawnPlayer();
 	HeadlessWorld.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -280,6 +284,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 		FElysiumWorldServices TeardownServices;
 		TeardownServices.Camera = &TeardownCamera;
 		FElysiumEntityWorld TeardownWorld(nullptr, nullptr, TeardownServices);
+		ElysiumStandSpawnClock(TeardownWorld, -FElysiumNpcBase::NpcInitThinkDelay);
 		TeardownWorld.Load(MakeDialogueWorldDefs());
 		TeardownWorld.SpawnPlayer();
 		TeardownWorld.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -352,6 +357,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodyOwnerLifecycleTest,
 bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
 {
 	FElysiumEntityWorld World(nullptr, nullptr);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -557,6 +563,7 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 	FElysiumWorldServices Services;
 	Services.Camera = &Camera;
 	FElysiumEntityWorld World(nullptr, nullptr, Services);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -718,6 +725,7 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 	}
 
 	FElysiumEntityWorld World(nullptr, nullptr);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

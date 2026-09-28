@@ -1598,10 +1598,12 @@ void FElysiumNpcWerewolf::TriggerWerewolfZone()
 
 uint32 FElysiumNpcWerewolf::RetailFlags2(const FElysiumEntity& Entity)
 {
-	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`). **SEAM**: `FElysiumEntity::Flags` is the
-	// first word (+0x434) only.
-	(void)Entity;
-	return 0;
+	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`). An NPC carries the word as
+	// `FElysiumNpc::EntityFlags2Word`; **SEAM** for every other entity: `FElysiumEntity::Flags` is
+	// the first word (+0x434) only, so a non-NPC answers 0 (lifting the word to `FElysiumEntity`
+	// is listed for L13, with `FElysiumScriptedSequence::Flags2Added`).
+	const FElysiumNpc* const Npc = const_cast<FElysiumEntity&>(Entity).AsNpc();
+	return Npc != nullptr ? Npc->EntityFlags2Word : 0u;
 }
 
 // --- Moved from `ElysiumNpcKernelMotor2.cpp` (story 5 step 4) ---

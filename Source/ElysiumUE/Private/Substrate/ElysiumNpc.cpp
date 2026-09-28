@@ -289,6 +289,11 @@ void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 	ElysiumNpcCond::AccumulateDamage(BaseMemory, Dmg.CommittedDamage(), Now);
 }
 
+// STORY8-TWIN: replaced by 0x102bf340 / 0x10265ad0 (slot 144 `Event_Killed`, Spawn19) at wave 2. The
+// callers (`ElysiumCombatCharacter.cpp` damage commit, `ElysiumFeed.cpp` drain, `ElysiumGrapple.cpp`)
+// move to slot 144 with an `FElysiumTakeDamageInfo` once `CBaseCombatCharacter::Event_Killed`
+// `0x1032b9b0` is ported and the loop (L13) selects the DEAD schedule from `SetState(DEAD)`: this
+// body starts `DIE` itself, which the retail chain leaves to the think.
 void FElysiumNpc::OnKilled()
 {
 	// Retail's own first clause: "an NPC already in the death schedule ignores a duplicate kill". The
@@ -3376,22 +3381,18 @@ void FElysiumNpc::SeedSheet()
 
 void FElysiumNpc::Spawn()
 {
-	SeedSheet();
-	// The two hull words the body is sized from below were written by the class's constructor
-	// (retail's constructors store them; story 5 commit B), so they stand before `BuildMotor`.
-	// Keyfields (model/angles/use_interesting/stattemplate) are already applied. Stand the body:
-	// out/npc/<stem>.glb, playing the standing idle `default_disposition` selects, spread across
-	// the three VtMB authors per disposition and seeded from this entity's own index — a cop that
-	// stood with its arms crossed must still be doing so after a reload. All of that is
-	// FElysiumAnimating's; the cvar is this leaf's A/B.
-	if (CVarNpcBodies.GetValueOnGameThread() == 0)
-	{
-		return;   // gated off: a bodiless record whose I/O still resolves
-	}
-	BuildBody();
-	BuildMotor();
-	// Spawn constructs presentation only. Activate arms the first deterministic admission think;
-	// no autonomous decision, controller wake or activity write occurs in this phase.
+	// Slot 103 is `CAI_BaseNPCTroika::Spawn` (`0x10298d30`), every arm in `TroikaSpawnBody`
+	// (`ElysiumNpcSpawn19.cpp`): the stat template, `Precache`, `SetModel`, the Troika words, the
+	// collision, `CAI_BaseNPC::Spawn` (`0x10299006`), the initial position, `NPCInit` (`0x10299057`),
+	// the police-level repair, the occluded ladder and `AddFlag2(4)`. Every species body that retail
+	// chains to `0x10298d30` calls this qualified.
+	//
+	// The skeletal body and its motor are stood by the body's own slot-105 `SetModel` (`0x10298dd4`
+	// -> `TroikaSetModel` `0x10298ce0` -> `SetRuntimeModel`, whose body-follow hook builds them, gated
+	// by `elysium.NpcBodies`): the presentation follows retail's model write, after the sheet seed and
+	// `Precache` and before `NPCInit`, and `CNPC_VCamera::Spawn` (`0x10368b70`), which never reaches
+	// this body, stands its own through the same slot (`0x10368bab`).
+	TroikaSpawnBody();
 }
 
 void FElysiumNpc::Activate()
@@ -3402,18 +3403,15 @@ void FElysiumNpc::Activate()
 	// 29c-1, family Lifecycle; the body is `ApplyDefaultDispositionOnActivate`.
 	ApplyDefaultDispositionOnActivate();
 	SeedPlayerRelationship();
-	// `InitPerceptionDistances` runs once, on authored data that is already applied, and
-	// the hearing cursor starts at the live head so an NPC never hears the map's own load.
-	Senses.ResolveTuning(*this);
+	// The hearing cursor starts at the live head so an NPC never hears the map's own load.
 	Senses.StartSoundCursorAtHead(*this);
 	Mind.ArmAdmission();
-	// Slot 420 `NPCInit` (`0x1029a0b0`) is the retail writer of the eight think stamps, the PVS/LOS
-	// seeds and `m_flNextThink`. The port-only fragment that used to stand here is deleted; the real
-	// body runs, and with it retail's first-second arm — `ThinkSet(NPCInitThink, 0)` and
-	// `m_flNextThink = curtime + 0.1` (`10273a5x`, `_DAT_104493d0`). The first think is therefore
-	// due a tenth of a second after the map stands up, exactly as it is in retail, and nothing
-	// re-arms it here.
-	NPCInit();
+	// Slot 420 `NPCInit` (`0x1029a0b0`) -- the writer of the eight think stamps, the PVS/LOS seeds,
+	// `m_flNextThink` and `InitPerceptionDistances` (`0x1029a6a4`) -- is NOT called here: retail runs
+	// it inside `Spawn` (`CAI_BaseNPCTroika::Spawn` `0x10299057`; `CNPC_VCamera::Spawn` `0x10368cf1`),
+	// so its first-second arm (`ThinkSet(NPCInitThink, 0)`, `m_flNextThink = curtime + 0.1`,
+	// `10273a5x`, `_DAT_104493d0`) stamps from the map's spawn clock, and a restored NPC (which is
+	// not re-spawned in retail) is not re-initialised over its snapshot.
 }
 
 void FElysiumNpc::SetDisableAi(bool bDisable)

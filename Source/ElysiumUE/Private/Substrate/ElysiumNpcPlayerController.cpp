@@ -78,17 +78,15 @@ void FElysiumNpcPlayerController::Spawn()
 	// `CNPC_VPlayerController::Spawn`, in retail's order:
 	//
 	//   1. `CALL 0x10014876` -> `CNPC_VVampire::Spawn` `0x103c4ef0` (DIRECT). That body is
-	//      `AddClassRelationship(1, 1, 0)` then `CNPC_VHuman::Spawn` `0x10384690` then
-	//      `CapabilitiesAdd(0x40)`. **No port body stands for `0x103c4ef0` or `0x10384690`**: they
-	//      are the census's unported `CNPC_VVampire#103` / `CNPC_VHuman#103` rows. The qualified
-	//      call runs what the port runs for every `CNPC_VVampire` — `FElysiumNpc::Spawn`, the leaf's
-	//      sheet seed, hull words and body — and picks the retail body up the day it lands.
-	FElysiumNpcVampire::Spawn();
+	//      `AddClassRelationship(1, 1, 0)` then `CNPC_VHuman::Spawn` `0x10384690` (which runs the
+	//      Troika `Spawn` `0x10298d30`, `NPCInit` included) then `CapabilitiesAdd(0x40)`; both are
+	//      ported (Spawn19, `ElysiumNpcSpawn19Species.cpp`).
+	FElysiumNpcVampire::Spawn();                                           // 0x103a4514 -> 0x10014876
 
 	//   2. `AddClassRelationship(1, 3, 0)` — the player's class, liked. It REPLACES the `(1, 1, 0)`
 	//      the Vampire body wrote a moment earlier (the class row is keyed on the class), which is
 	//      why the controller is friendly where a plain vampire hates.
-	Relationships.SetClass(GControllerPlayerClass, EElysiumRelationship::Like,
+	Relationships.AddClassRelationship(GControllerPlayerClass, EElysiumRelationship::Like,
 		GControllerPlayerClassPriority);
 
 	//   3. `MOV byte ptr [ESI+0x63f0],0x1` — `m_bForceFrequentThink`, written DIRECTLY (not through
@@ -100,15 +98,15 @@ void FElysiumNpcPlayerController::Spawn()
 	//      (`+0x1db0`), not through this name (`lifecycle.md`).
 	if (World != nullptr)
 	{
-		World->RenameEntity(*this, GControllerName);
+		World->RenameEntity(*this, GControllerName);                       // 0x103a4537 -> 0x10002095 SetName
 	}
 	else
 	{
 		TargetName = GControllerName;
 	}
 
-	//   5. `AddFlag2(0x10)` — the seam word (see the header).
-	Flags2Added |= GControllerFlags2;
+	//   5. `AddFlag2(0x10)` (`0x103a454d` -> `0x100b3840`) on `m_fFlags2`.
+	AddFlag2(GControllerFlags2);
 
 	// **Named modernization — the non-solid stand-in** (header): the motor `FElysiumNpc::Spawn`
 	// built ignores other character capsules.

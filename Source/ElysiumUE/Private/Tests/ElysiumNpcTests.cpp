@@ -1086,6 +1086,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		Services.NpcWalkSpeedCmPerSecond = BodyWalkSpeed;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1154,6 +1155,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		// mistakenly re-derived this speed from the fan would read the wrong number.
 		Services.ResolvedNpcGroundSpeedCmPerSecond = 210.0f;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1204,6 +1206,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		Services.NpcRunSpeedCmPerSecond = 500.0f;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1317,6 +1320,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		Services.ResolvedNpcActivityLabel = TEXT("relaxed_walk");
 		Services.ResolvedNpcActivityClip = TEXT("relaxed_walk_0");
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1375,6 +1379,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		Services.ResolvedNpcActivityClip = TEXT("smoke_0");
 		Services.ClipSeconds = 3.25f;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1453,6 +1458,7 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.bProvideNpcMotor = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	FElysiumEntity* JackEnt = World.FindByName(TEXT("Jack"));
@@ -1525,6 +1531,7 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__spawn_test__");
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));   // empty map — everything here is runtime-created
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 

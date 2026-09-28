@@ -77,7 +77,7 @@ void FElysiumNpcCamera::NPCInit()
 	InNpcInit() = true;
 	++CameraEngineQueries;
 	InitialPosition = Origin;                                            // slot 220
-	if (!bCameraEngineQueryAnswer)
+	if (!Spawn19GameRulesAllowNpcs())                                    // 103692f0 / 103692f8 slot 74
 	{
 		// `10369302 CALL UTIL_Remove` then `RET`. The refuse arm does NOT clear `DAT_10937cf1` —
 		// there is no `MOV byte ptr [0x10937cf1],0` on this path — so the process-wide in-NPCInit

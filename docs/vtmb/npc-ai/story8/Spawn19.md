@@ -113,6 +113,12 @@ and trailing flag have no port field; the Python import behind `[0x109f36fc]` is
 19. `0x10299255` -- `0x10207e60(this)`: `PrecacheModel(GetCharTemplate(this)->+0x78, 0)`.
 20. `0x1029925e` -- `AddFlag2(4)`.
 
+In the port `FElysiumNpc::Spawn` is this walk (`TroikaSpawnBody`); `NPCInit` therefore runs at
+spawn, as here, and `FElysiumNpc::Activate` no longer calls it. The skeletal body and motor are
+stood by step 5's slot-105 `SetModel` (`TroikaSetModel` `0x10298ce0` -> `SetRuntimeModel`, whose
+body-follow hook builds them), so the presentation follows retail's model write; the camera's own
+`SetModel` (`0x10368bab`) does the same for `CNPC_VCamera::Spawn`.
+
 **Unrecovered:** the template column `+0x78` `0x10207e60` precaches; the meaning of `m_fFlags2` bit 4.
 
 ## Species `Spawn` bodies over 64 bytes (slot 103)
@@ -186,8 +192,11 @@ and trailing flag have no port field; the Python import behind `[0x109f36fc]` is
   `CNPC_VVampire::Spawn`; `AddClassRelationship(1, 3, 0)`; `m_bForceFrequentThink = 1`;
   `SetName("playercontroller")`; `AddFlag2(0x10)`.
 
-**Unrecovered:** `0x103986b0` (Ming Xiao's ideal range), `GetBestMeleeWeapon`'s NPC pick, the Ming Xiao
-tuning record `0x10739d08`'s fields, the names of the Dog's `+0x6688` / `+0x6674`, the Scurrying's
+The Ming Xiao arms read Boss19's bodies (L12): `0x103986b0` is `MingXiaoIdealRangeFromLimbs`, and the
+tuning record `0x10739d08` is `Select19MingXiaoTuningField` (`+0x0` TentacleHPInitial writes each limb's
+`m_rflHitPoints`, `0x10392830..0x1039283f`).
+
+**Unrecovered:** `GetBestMeleeWeapon`'s NPC pick (a seam answering null), the names of the Dog's `+0x6688` / `+0x6674`, the Scurrying's
 `+0x668c`, the Werewolf's `+0x66a9` / `+0x66ac`, the Bach byte `+0x66a4`.
 
 ## Species `Event_Killed` bodies over 64 bytes (slot 144)
@@ -247,8 +256,9 @@ reachable today.
    traces `npc_VVampireBoss.cpp:0x205` / `0x206`; `0x103c623e` `0x102ae750(0x158, false)` ON THE
    NEW BODY.
 7. `0x103c6243..0x103c62c4` -- the five police levels and the five occluded percents copied across.
-8. `0x103c62ca`/`0x103c62e1` -- `__RTDynamicCast(new, CAI_BaseNPCTroika)` hit: new `+0x66b0`
-   (`m_hTransformPartner`) = us.
+8. `0x103c62ca`/`0x103c62e1` -- `__RTDynamicCast(new, CNPC_VVampireBoss)` (type descriptor
+   `0x1062a654`, the cast `WaitForTransformation 0x103c63c0` also makes): on a hit, new `+0x66b0`
+   (`m_hTransformPartner`) = us; a non-boss body casts null and the write is skipped.
 9. `0x103c62e7`/`0x103c62f1`/`0x103c6304` -- OUR `m_nRenderFX = 0x1e`, `m_nRenderMode = 2`, and
    `m_hProteanTransformOther` = the new body, LAST.
 
@@ -267,10 +277,5 @@ port has (model, skin, sequence, cycle, anim time, effects).
 
 ## `0x1037c1c0` `CNPC_VGhoulCroucher::ScriptHide` (slot 77, 232 bytes)
 
-`0x1037c229` `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`); then `m_hBurningParticle` (`+0x6670`)
-resolving (`0x1037c237..0x1037c280`, the handle read twice): slot 77 on the particle (`0x1037c286`).
-A failed second resolve dispatches slot 77 through a null receiver (`0x1037c299`), a retail fault. The
-handle is not cleared.
-
-**Unrecovered:** why the null-receiver arm was left in; the Troika `ScriptHide` body is family
-Damaged19's unported row.
+Script19's row; the walk is in `Script19.md` and the body is `GhoulCroucherScriptHide`
+(`ElysiumNpcScript19Species.cpp`). This lane's duplicate body was folded into it at integration.

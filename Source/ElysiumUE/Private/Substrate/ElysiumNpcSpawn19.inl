@@ -11,13 +11,9 @@
 // Owns (Spawn19's `rule` rows): 0x102bf340 CAI_BaseNPCTroika::Event_Killed, 0x10298d30
 // CAI_BaseNPCTroika::Spawn.
 
-/** `CAI_BaseNPCTroika::Spawn` (`0x10298d30`), slot 103's Troika body, arm by arm.
- *
- *  **Not yet `FElysiumNpc::Spawn`.** The port's `FElysiumNpc::Spawn` (`ElysiumNpc.cpp`, a file this
- *  lane does not own) is presentation only -- the sheet seed, `BuildBody`, `BuildMotor`. This is the
- *  retail body under its own name so the lane compiles; the integrator makes `FElysiumNpc::Spawn`
- *  run it (then the presentation as the named visual modernization) and drops `NPCInit` from
- *  `FElysiumNpc::Activate`, since retail's `NPCInit` runs HERE (`0x10299057`). See the L08 report. */
+/** `CAI_BaseNPCTroika::Spawn` (`0x10298d30`), slot 103's Troika body, arm by arm; `FElysiumNpc::Spawn`
+ *  (`ElysiumNpc.cpp`) is this. `NPCInit` runs HERE (`0x10299057`), not in `FElysiumNpc::Activate`, and
+ *  the skeletal body is stood by its slot-105 `SetModel` (`0x10298dd4`). */
 void TroikaSpawnBody();
 
 /** `CBaseCombatCharacter::ApplyDisciplineSpawnFlags` (`0x1033df80`): spawnflags bits 5, 6, 12, 13, 14
@@ -55,10 +51,6 @@ int32 Spawn19RelinkCalls = 0;
 /** `CCollisionProperty::UpdatePartition` (`0x100ddd90` on `m_Collision` `+0x270`) calls -- the same
  *  absent spatial partition. */
 int32 Spawn19CollisionPartitionUpdates = 0;
-/** `m_lifeState` (`+0x200`, `CBaseEntity`). This runtime spells liveness as `bDeathReported` / `bDead`
- *  (`FElysiumEntity::IsAlive`); the Ming Xiao and tentacle death deferrals write `LIFE_DYING` (1)
- *  here. Listed for the integrator: `IsAlive` should read it. */
-int32 NpcLifeStateWord = 0;
 /** `m_bNeverMeleeOpponent` (`+0x1482`, `CBaseCombatCharacter`). */
 bool bNeverMeleeOpponent = false;
 /** `m_bAllowsInterpenetratingAttacks` (`+0x0fe0`, `CBaseCombatCharacter`). */

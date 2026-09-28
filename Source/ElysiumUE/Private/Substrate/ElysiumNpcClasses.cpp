@@ -335,10 +335,11 @@ static void AddSpeciesPendingInputs(FElysiumClassDesc& D, const TCHAR* RetailCla
 	}
 	else if (Is(TEXT("CNPC_VVampireBoss")))
 	{
-		// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT), the protean swap's trigger.
-		// Its only stand-in was the `npc_VVampireBoss` stub row this class supersedes.
-		ELYSIUM_PENDING_INPUT_ON("CNPC_VVampireBoss", FElysiumNpc, TransformModel,
-			"0019 story 8 — the vampire boss's protean swap");
+		// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT, slot 617 `0x103c75f0`), the protean
+		// swap's trigger -- ported in Spawn19 (`ElysiumNpcSpawn19Species.cpp`), virtual so the Sabbat
+		// leader's descriptor dispatches to its own class.
+		D.Input(TEXT("TransformModel"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+			{ static_cast<FElysiumNpcVampireBoss&>(E).InputTransformModel(Args); });
 	}
 	else if (Is(TEXT("CNPC_VWerewolf")))
 	{

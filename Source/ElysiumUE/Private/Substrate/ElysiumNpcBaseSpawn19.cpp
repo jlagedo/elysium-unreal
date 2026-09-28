@@ -42,6 +42,8 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 	// The scripted-sequence arm, only in NPC_STATE_SCRIPT with a live `m_hCine` (`+0x5d74`).
 	if (NpcStateRetail() == Spawn19StateScript)                                          // 0x10265afb
 	{
+		// `m_hCine` is resolved afresh at each read (`0x10265b0e`, `0x10265b22`, `0x10265b3c`,
+		// `0x10265c0e` -> `0x10009c8c`); nothing runs between the reads, so one resolve stands for all.
 		if (FElysiumScriptedSequence* const Cine = ResolveCine())                        // 0x10265b15
 		{
 			// A started sequence (`+0x5f91`) whose spawnflags are not exactly `0x80` of `0x2080`
@@ -53,7 +55,8 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 				// `0x10265b57..0x10265bf9`: the packet's word 0 is the `CVDmg_t*`; this port's
 				// `m_DeferredDeathInfo` is typed as the damage descriptor that word points at, so the
 				// copy is the descriptor. The scalar words (inflictor, attacker, damage, bits, ammo,
-				// the three flag bytes) have no slot on `FElysiumDmg` -- listed as unrecovered.
+				// the three flag bytes) have no slot on `FElysiumDmg` -- listed as unrecovered. The two
+				// embedded vector copies (`0x10265b88`, `0x10265b97` -> `0x1000da76`) are among them.
 				DeferredDeathInfo = (Info != nullptr && Info->Dmg != nullptr) ? *Info->Dmg : FElysiumDmg();
 				return;                                                                  // 0x10265c04
 			}
@@ -61,7 +64,7 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 			Cine->CancelScript();                                                        // 0x10265c15
 			// The death impulse: `npc_vphysics` and a physics object, then slot 39 on the object
 			// with slot 263 `GetGroundSpeedVelocity()`.
-			if (Spawn19DeathVPhysicsArmed())                                             // 0x10265c27 / 0x10265c34 / 0x10265c3e
+			if (Spawn19DeathVPhysicsArmed())                                             // 0x10265c22 IsCommand / 0x10265c27 / 0x10265c34 / 0x10265c3e
 			{
 				(void)GetGroundSpeedVelocity();                                          // 0x10265c49
 				// slot 39 on `m_pPhysicsObject` (`0x10265c6e`) -- unreachable, see the seam.
@@ -89,7 +92,7 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 	const FElysiumEntityHandle Attacker = Info != nullptr ? Info->Attacker : FElysiumEntityHandle::Invalid();
 	FireOnDeathOnce(Attacker);                                                           // 0x10265cc8 -> 0x10265a90
 
-	if ((Flags & Spawn19BecomeDeadFlag) != 0)                                            // 0x10265cd7
+	if ((Flags & Spawn19BecomeDeadFlag) != 0)                                            // 0x10265ccf GetFlags / 0x10265cd7
 	{
 		// `m_pfnTouch = NULL` (`+0x1ec`, `0x10265cdb`): this runtime has no per-entity touch
 		// function word (`ElysiumNpcBaseSpeciesLifecycle10.cpp`'s `TouchFunctionCalls` seam), so
@@ -109,7 +112,7 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 	Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);                              // 0x10265d1f SetCondition(0x4c)
 
 	// `m_hLastDamageEnt` (`+0x5b7c`): the attacker's handle, or `-1` with no attacker.
-	BaseMemory.LastDamageAttacker = Attacker.IsSet() ? Attacker : FElysiumEntityHandle::Invalid(); // 0x10265d29 / 0x10265d32 / 0x10265d3a
+	BaseMemory.LastDamageAttacker = Attacker.IsSet() ? Attacker : FElysiumEntityHandle::Invalid(); // 0x10265d29 / 0x10265d2d GetRefEHandle / 0x10265d32 / 0x10265d3a
 	Cognition.bCondTookDamage = true;                                                    // 0x10265d46
 
 	VacateSquadSlot();                                                                   // 0x10265d4d -> 0x1028ae60
@@ -166,8 +169,8 @@ int32 FElysiumNpcBase::Spawn19ScheduleOfType(int32 RetailId)
 	{
 		return GlobalId;
 	}
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s GetScheduleOfType(): No CASE for %d"),
-		*DebugString(), Translated);
+	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s GetScheduleOfType(): No CASE for Schedule Type %d!"),
+		*DebugString(), Translated);                                                     // 0x102cc215
 	return ResolveScheduleId(Spawn19SchedMissFallback);
 }
 
@@ -205,8 +208,8 @@ bool FElysiumNpcBase::Spawn19DeathVPhysicsArmed() const
 
 void FElysiumNpcBase::Spawn()
 {
-	// The scope-trace frame (`0x10273205..0x1027326a`, `m_iName` or `"NULL ENTITY"`) is the debug
-	// stack this runtime does not carry.
+	// The scope-trace frame (`0x10273205..0x1027326a`, `m_iName` or `"NULL ENTITY"`, its null-name
+	// default `0x1027320f JNZ`) is the debug stack this runtime does not carry.
 
 	// `g_pGameRules->FAllowNPCs()`: false removes the entity and spawns nothing.
 	if (!Spawn19GameRulesAllowNpcs())                                                    // 0x10273272 / 0x1027327a
@@ -216,7 +219,9 @@ void FElysiumNpcBase::Spawn()
 	}
 
 	// The spawn-equipment grant, for a PLAIN `CAI_BaseNPC` only: `m_pBaseNPCTroika` (`+0x98`) set
-	// skips it, so no Troika-line NPC is ever equipped here.
+	// skips it, so no Troika-line NPC is ever equipped here. `m_spawnEquipment` (`+0x5dec`) read as
+	// `STRING()` substitutes `DAT_106b8540` for null before each compare (`0x102732ba`,
+	// `0x102732db`, `0x102732fc`), unreachable after the `0x102732b6` null test.
 	if (AsNpc() == nullptr)                                                              // 0x1027329b
 	{
 		if ((CapabilitiesGet() & Spawn19CapUseWeapons) != 0                              // 0x102732a1 / 0x102732ac
@@ -251,7 +256,7 @@ void FElysiumNpcBase::Spawn19CombatCharacterSpawn()
 
 bool FElysiumNpcBase::Spawn19GameRulesAllowNpcs() const
 {
-	return true;
+	return bSpawn19GameRulesAllowNpcs;
 }
 
 FElysiumEntity* FElysiumNpcBase::Spawn19WeaponCreate(const FString& ClassName)

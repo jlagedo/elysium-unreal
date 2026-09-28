@@ -306,10 +306,12 @@ bool FElysiumNpcKernelMotor10ObstructingDoorTest::RunTest(const FString&)
 		F.Npc->ConnectedSquad() == nullptr);
 
 	// Arm 3: a SCRIPTED body (slot 464 `GetState() == 4`) whose capabilities do NOT carry the full
-	// `0xd00`. `CapabilitiesGet()` answers 0 on an untouched body, so the arm is open. The state is
+	// `0xd00`. The spawn chain now runs (`CNPC_VHuman::Spawn` `0x10384690` adds `0xc200d00`), so the
+	// case clears the three bits to open the arm (integrator correction, story 8 L08). The state is
 	// pushed through the one public writer this leaf has — an `aiscripted_schedule`'s `forcestate`,
 	// which is `Mind.RequestState` and admits `Scripted`.
 	F.Npc->OpeningDoor = FElysiumEntityHandle();
+	F.Npc->CapabilityWord &= ~0xd00;
 	FElysiumScriptedScheduleOrder Order;
 	F.Npc->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, EElysiumNpcState::Scripted);
 	if (!TestEqual(TEXT("the body is in retail NPC_STATE_SCRIPT (4)"),
@@ -374,8 +376,8 @@ bool FElysiumNpcKernelMotor10ObstructingDoorTest::RunTest(const FString&)
 	// with a zero capability word the body answers FALSE having written nothing more. It is not
 	// reachable past arm 4 without a capability word, which this substrate has no writer for — the
 	// arm is exercised through the seam it depends on being stated.
-	TestEqual(TEXT("CapabilitiesGet() answers 0 on an untouched body, which closes arms 3-5"),
-		F.Npc->CapabilitiesGet(), 0);
+	TestEqual(TEXT("with 0xd00 cleared (above), CapabilitiesGet() carries none of it, which closes arms 3-5"),
+		F.Npc->CapabilitiesGet() & 0xd00, 0);
 
 	// The pathfinder and the splice are seams: `0x10304130` answers NOT FOUND, which is the arm
 	// that reaches the door-type split.

@@ -1453,16 +1453,16 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x66cc bool
 		ElysiumAddClassField(D, TEXT("m_bDead"), &FElysiumNpcAndreiBlood::bAndreiDead,
 			EElysiumField::Save);  // +0x66cd bool
+		ElysiumAddClassField(D, TEXT("m_bTriggerUnhide"),
+			&FElysiumNpcAndreiBlood::bAndreiTriggerUnhide, EElysiumField::Save);  // +0x66ce bool
+		ElysiumAddClassField(D, TEXT("m_fTeleportWaitStartTime"),
+			&FElysiumNpcAndreiBlood::AndreiTeleportWaitStartTime, EElysiumField::Save);  // +0x66d0 time
+		ElysiumAddClassField(D, TEXT("m_bForceTeleport"),
+			&FElysiumNpcAndreiBlood::bAndreiForceTeleport, EElysiumField::Save);  // +0x66d4 bool
 		ElysiumAddClassField(D, TEXT("m_iHitCounter"), &FElysiumNpcAndreiBlood::AndreiHitCounter,
 			EElysiumField::Save);  // +0x66d8 int
 		ElysiumAddClassField(D, TEXT("m_iHitMax"), &FElysiumNpcAndreiBlood::AndreiHitMax,
 			EElysiumField::Save);  // +0x66dc int
-		// NOT SAVED +0x66ce m_bTriggerUnhide (bool) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x66d0 m_fTeleportWaitStartTime (time) — no port member (the species shape
-		// map's ABSENT row says why)
-		// NOT SAVED +0x66d4 m_bForceTeleport (bool) — no port member (the species shape map's
-		// ABSENT row says why)
 	}
 
 	void AddAnimalFields(FElysiumClassDesc& D)
@@ -1544,12 +1544,18 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcBach::BachNextWeaponSwitchTime, EElysiumField::Save);  // +0x668c time
 		ElysiumAddClassField(D, TEXT("m_flNextHolyLightTime"),
 			&FElysiumNpcBach::BachNextHolyLightTime, EElysiumField::Save);  // +0x6690 time
+		ElysiumAddClassField(D, TEXT("m_flWarningTime"), &FElysiumNpcBach::BachWarningTime,
+			EElysiumField::Save);  // +0x6694 time
+		ElysiumAddClassField(D, TEXT("m_flSkipToWarningTime"),
+			&FElysiumNpcBach::BachSkipToWarningTime, EElysiumField::Save);  // +0x6698 float
 		ElysiumAddClassField(D, TEXT("m_iBachTeleportState"), &FElysiumNpcBach::BachTeleportState,
 			EElysiumField::Save);  // +0x669c int
 		ElysiumAddClassField(D, TEXT("m_bCamperFlag"), &FElysiumNpcBach::bBachCamperFlag,
 			EElysiumField::Save);  // +0x66a0 bool
 		ElysiumAddClassField(D, TEXT("m_bBachInStartingPosition"),
 			&FElysiumNpcBach::bBachInStartingPosition, EElysiumField::Save);  // +0x66a1 bool
+		ElysiumAddClassField(D, TEXT("m_bSkipToWarning"), &FElysiumNpcBach::bBachSkipToWarning,
+			EElysiumField::Save);  // +0x66a2 bool
 		ElysiumAddClassField(D, TEXT("m_bFireOccluded"), &FElysiumNpcBach::bBachFireOccluded,
 			EElysiumField::Save);  // +0x66a3 bool
 		ElysiumAddClassField(D, TEXT("m_bShieldActive"), &FElysiumNpcBach::bBachShieldActive,
@@ -1558,12 +1564,6 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x66a7 bool
 		ElysiumAddClassField(D, TEXT("m_bCanFightYet"), &FElysiumNpcBach::bCanFightYet,
 			EElysiumField::Save);  // +0x66a8 bool
-		// NOT SAVED +0x6694 m_flWarningTime (time) — no port member (the species shape map's ABSENT
-		// row says why)
-		// NOT SAVED +0x6698 m_flSkipToWarningTime (float) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x66a2 m_bSkipToWarning (bool) — no port member (the species shape map's
-		// ABSENT row says why)
 	}
 
 	void AddCameraSecurityFields(FElysiumClassDesc& D)
@@ -1815,6 +1815,8 @@ namespace ElysiumNpcKernelBindings
 			"m_rflHitPoints has 6 elements");
 		static_assert(std::extent_v<decltype(FElysiumNpcMingXiao::MingXiaoRegrowTimers)> == 6,
 			"m_rflRegrowTimers has 6 elements");
+		ElysiumAddClassField(D, TEXT("m_hParentMingZhao"),
+			&FElysiumNpcMingXiao::MingXiaoParentMingZhao, EElysiumField::Save);  // +0x6670 ehandle
 		ElysiumAddClassField(D, TEXT("m_iTentacleID"), &FElysiumNpcMingXiao::MingXiaoTentacleId,
 			EElysiumField::Save);  // +0x6674 int
 		ElysiumAddClassField(D, TEXT("m_bHasTransformed"),
@@ -1927,8 +1929,6 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcMingXiao::MingXiaoChargeReadyTime, EElysiumField::Save);  // +0x674c time
 		ElysiumAddClassField(D, TEXT("m_bBlockedByFriend"), &FElysiumNpcMingXiao::bBlockedByFriend,
 			EElysiumField::Save);  // +0x6750 bool
-		// NOT SAVED +0x6670 m_hParentMingZhao (ehandle) — no port member (the species shape map's
-		// ABSENT row says why)
 	}
 
 	void AddMingXiaoTentacleSaveFields(FElysiumClassDesc& D)
@@ -1952,22 +1952,22 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6670 int
 		ElysiumAddClassField(D, TEXT("m_flPhaseExpireTimer"),
 			&FElysiumNpcMingXiaoTentacle::MingXiaoTentaclePhaseExpireTimer, EElysiumField::Save);  // +0x6674 time
+		ElysiumAddClassField(D, TEXT("m_flFailedEvadeTimer"),
+			&FElysiumNpcMingXiaoTentacle::MingXiaoTentacleFailedEvadeTimer, EElysiumField::Save);  // +0x6678 time
+		ElysiumAddClassField(D, TEXT("m_flUpdateEvadeTimer"),
+			&FElysiumNpcMingXiaoTentacle::TentacleUpdateEvadeTimer, EElysiumField::Save);  // +0x667c time
 		ElysiumAddClassField(D, TEXT("m_flHideReadyTimer"),
 			&FElysiumNpcMingXiaoTentacle::TentacleHideReadyTimer, EElysiumField::Save);  // +0x6680 time
 		ElysiumAddClassField(D, TEXT("m_bIgnoreCollision"),
 			&FElysiumNpcMingXiaoTentacle::bIgnoreCollisionSpecies, EElysiumField::Save);  // +0x6688 bool
 		ElysiumAddClassField(D, TEXT("m_vecScatterCenter"),
 			&FElysiumNpc::TentacleScatterCenterUnits, EElysiumField::Save);  // +0x668c vector
+		ElysiumAddClassField(D, TEXT("m_bHitGroundSound"),
+			&FElysiumNpcMingXiaoTentacle::bTentacleHitGroundSound, EElysiumField::Save);  // +0x6698 bool
 		ElysiumAddClassField(D, TEXT("m_bPlayedDeathAnim"),
 			&FElysiumNpcMingXiaoTentacle::bTentaclePlayedDeathAnim, EElysiumField::Save);  // +0x6699 bool
-		// NOT SAVED +0x6678 m_flFailedEvadeTimer (time) — no port member (the species shape map's
-		// ABSENT row says why)
-		// NOT SAVED +0x667c m_flUpdateEvadeTimer (time) — no port member (the species shape map's
-		// ABSENT row says why)
 		// NOT SAVED +0x6684 m_flIgnoreCollisionTimer (time) — no port member (the species shape
 		// map's ABSENT row says why)
-		// NOT SAVED +0x6698 m_bHitGroundSound (bool) — no port member (the species shape map's
-		// ABSENT row says why)
 	}
 
 	void AddPedestrianFields(FElysiumClassDesc& D)
@@ -3015,13 +3015,13 @@ namespace ElysiumNpcKernelBindings
 			case EClass::NpcMakerZombie:
 				return {3, 0, 0, 0, 0};
 			case EClass::AndreiBlood:
-				return {0, 0, 0, 1, 7};
+				return {0, 0, 0, 1, 10};
 			case EClass::Animal:
 				return {3, 0, 0, 0, 1};
 			case EClass::AsianVampire:
 				return {0, 0, 0, 0, 7};
 			case EClass::Bach:
-				return {0, 0, 0, 3, 17};
+				return {0, 0, 0, 3, 20};
 			case EClass::CameraSecurity:
 				return {1, 0, 0, 0, 0};
 			case EClass::ChangBros:
@@ -3045,9 +3045,9 @@ namespace ElysiumNpcKernelBindings
 			case EClass::ManBat:
 				return {0, 0, 0, 2, 14};
 			case EClass::MingXiao:
-				return {0, 0, 0, 1, 56};
+				return {0, 0, 0, 1, 57};
 			case EClass::MingXiaoTentacle:
-				return {0, 0, 0, 0, 11};
+				return {0, 0, 0, 0, 14};
 			case EClass::Pedestrian:
 				return {1, 0, 0, 0, 3};
 			case EClass::SabbatLeader:

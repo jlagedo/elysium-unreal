@@ -1326,6 +1326,7 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 	Jack.TargetName = TEXT("Jack");
 	Jack.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 	Defs.Defs.Add(MoveTemp(Jack));
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1431,6 +1432,7 @@ bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
 		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 		Defs.Defs.Add(MoveTemp(Npc));
 	}
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1713,6 +1715,7 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Waveover.Keys.Add(TEXT("m_iszPlay"), TEXT("waveover01"));
 	Waveover.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
 	Defs.Defs.Add(MoveTemp(Waveover));
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

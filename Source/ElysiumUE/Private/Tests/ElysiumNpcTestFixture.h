@@ -197,16 +197,17 @@ struct FElysiumNpcWorldFixture
 		: World(nullptr, nullptr, Services.Bundle())
 	{
 		Configure(Services);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Builder.Defs));
 		World.SpawnPlayer();
 		// The map stands up a tenth of a second BEFORE the case's zero. `CAI_BaseNPCTroika::NPCInit`
-		// (`0x1029a0b0`) runs from Activate and its first-second arm puts the first think at
-		// `curtime + 0.1` (`_DAT_104493d0`), not at curtime — an NPC that has not reached that stamp
-		// has not run `StartNPC`, is still in `NPC_STATE_NONE` (`1029a0f5`) and has not passed this
-		// runtime's admission barrier, so it refuses every body claim. Activating at `-0.1` is the
-		// honest way to say "the map has been up for a tenth of a second": the retail delay is kept
-		// intact and the first think lands on the frame at zero, which is the clock every case
-		// measures its absolute stamps from.
+		// (`0x1029a0b0`) runs inside `Spawn` (`0x10299057`) and its first-second arm puts the first
+		// think at `curtime + 0.1` (`_DAT_104493d0`), not at curtime — an NPC that has not reached
+		// that stamp has not run `StartNPC`, is still in `NPC_STATE_NONE` (`1029a0f5`) and has not
+		// passed this runtime's admission barrier, so it refuses every body claim. Spawning (and
+		// activating) at `-0.1` is the honest way to say "the map has been up for a tenth of a
+		// second": the retail delay is kept intact and the first think lands on the frame at zero,
+		// which is the clock every case measures its absolute stamps from.
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
 	}

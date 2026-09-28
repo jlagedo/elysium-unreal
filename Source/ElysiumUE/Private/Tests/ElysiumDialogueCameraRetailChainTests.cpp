@@ -257,6 +257,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -318,6 +319,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -381,6 +383,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -413,6 +416,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -455,6 +459,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -514,6 +519,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -581,6 +587,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -669,6 +676,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -727,6 +735,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -781,6 +790,7 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bHasPlayer = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

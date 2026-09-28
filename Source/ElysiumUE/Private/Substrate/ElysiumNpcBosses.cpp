@@ -99,8 +99,16 @@ void FElysiumNpc::WirePhysAnimlink(const FElysiumEntityHandle& Link, int32 Carri
 
 void FElysiumNpc::RemovePhysAnimlink(const FElysiumEntityHandle& Link)
 {
-	// SEAM for `thunk_FUN_101cd970(link)`, the `UTIL_Remove` of the link entity.
-	(void)Link;
+	// `thunk_FUN_101cd970(link)` -- `UTIL_RemoveImmediate` (`+0x268 |= 1`, slot `0x2d0`, then the
+	// deleting destructor, slot 5) on the resolved link. Every caller resolves the handle first
+	// (`0x1038291f`); this runtime's removal is `Kill()`. (Was a no-op seam; story 8 L08 integration.)
+	if (World != nullptr && Link.IsSet())
+	{
+		if (FElysiumEntity* const Entity = World->Resolve(Link))
+		{
+			Entity->Kill();
+		}
+	}
 }
 
 void FElysiumNpc::SolveThrowImpulse(const FVector& FromUnits, const FVector& ToUnits,

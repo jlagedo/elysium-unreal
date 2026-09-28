@@ -18,6 +18,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumMoveSolve.h"     // HullHalfWidth/StandHeight — the character box the sweep reaches
@@ -28,6 +29,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumBodyAnimInstance.h"   // the live clip-phase forward below
+#include "Visual/ElysiumCharacterModel.h"
 #include "Visual/ElysiumNpcVisual.h"          // RevealPosedBody: the real reveal rule
 
 #include "Components/PointLightComponent.h"
@@ -450,6 +452,26 @@ struct FElysiumRecordingServices final
 	// layer under the substrate's own pass — a graph-backed body on a baked mesh — sets this, and
 	// the entity chain then drives that body instead of a stand-in it cannot animate.
 	USkeletalMeshComponent* PrebuiltNpcVisual = nullptr;
+
+	// Character admission, as the live map answers it (`AElysiumMapActor::RequestCharacterModel`): the
+	// one model no catalogue carries is `models/error/error.mdl`, the name `CAI_BaseNPCTroika::Precache`
+	// (`0x10298ad0`, run by the Troika `Spawn` at `0x10298d9c`) gives an NPC authored with no model.
+	// The live admission fails it (no native asset), so the NPC stands bodiless; this headless
+	// embodiment refuses it the same way rather than handing it a stand-in body. Every other model id
+	// is admitted at once, the interface's headless default.
+	virtual EElysiumCharacterModelAdmission RequestCharacterModel(const FElysiumEntityHandle& Entity,
+		const FString& ModelId, uint64 Generation, FString& OutError) override
+	{
+		(void)Entity;
+		(void)Generation;
+		OutError.Reset();
+		if (ModelId == ElysiumCharacterModel::IdFromSource(TEXT("models/error/error.mdl")))
+		{
+			OutError = TEXT("no native asset for the error model");
+			return EElysiumCharacterModelAdmission::Rejected;
+		}
+		return EElysiumCharacterModelAdmission::Ready;
+	}
 
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override
@@ -2325,5 +2347,16 @@ private:
 		return Entity.Def ? Entity.Def->Classname : FString(TEXT("?"));
 	}
 };
+
+// The map's spawn clock. `CAI_BaseNPCTroika::Spawn` runs `NPCInit` (`0x10299057`; the camera's
+// `0x10368cf1`), and `NPCInit` stamps its think clocks and its first think (`curtime + 0.1`) from
+// curtime AT SPAWN -- for a map, its load. A headless world (no game state) answers `NowSeconds()` from
+// its last activation or tick, and `Activate` is the one public door that sets it before `Load`:
+// activating the still-empty world stands the clock at `Seconds` (nothing is listed, so nothing is
+// activated), then `Load` clears `bActive` and spawns the map at that clock.
+inline void ElysiumStandSpawnClock(FElysiumEntityWorld& World, double Seconds)
+{
+	World.Activate(Seconds);
+}
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

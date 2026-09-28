@@ -802,6 +802,11 @@ bool FAnim10HengeyokaiEarlyTranslateTest::RunTest(const FString&)
 		N.NPC_EarlyTranslateActivity(GTActWalk), GTActPickupLightCarry);
 	TestEqual(TEXT("0x10381b50: ACT_RUN becomes ACT_PICKUP_LIGHTCARRY too"),
 		N.NPC_EarlyTranslateActivity(GTActRun), GTActPickupLightCarry);
+	// The spawn chain now runs (`0x1037fa06` -> Vampire -> `CNPC_VHuman::Spawn` `0x10384690`, which adds
+	// `0x8000000`), and with that capability the Troika pre-translate hands ACT_COVER to its cover
+	// delegate (`0x10295655` / `0x1029565f`). The fall-through is asserted with the bit cleared, where
+	// the human and Troika bodies leave the request as it came. (Integrator correction, story 8 L08.)
+	N.CapabilityWord &= ~0x8000000;
 	TestEqual(TEXT("0x10381b50: every other request falls to the human body"),
 		N.NPC_EarlyTranslateActivity(GTActCover), GTActCover);
 	N.NpcFlags.Clear(EElysiumNpcFlag::CARRYING_BODY);

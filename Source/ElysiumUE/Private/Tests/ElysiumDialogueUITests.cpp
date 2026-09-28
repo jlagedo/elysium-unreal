@@ -19,6 +19,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Tests/ElysiumTestServices.h"
 #include "ElysiumViewState.h"
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumDialogueScreen.h"
@@ -639,6 +640,7 @@ bool FElysiumDialogueChoiceCarriesLineIdTest::RunTest(const FString&)
 	Speaker.TargetName = TEXT("dlg_owner");
 	Defs.Defs.Add(MoveTemp(Speaker));
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	// `Activate` only ARMS the mind's admission barrier; an unadmitted NPC refuses

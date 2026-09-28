@@ -29,8 +29,8 @@
 // 0x10389390 CNPC_VLasombra::Spawn, 0x1038b030 CNPC_VManBat::Spawn, 0x103a4510
 // CNPC_VPlayerController::Spawn, 0x103a6c80 CNPC_VSabbatLeader::Spawn, 0x103ad630 CNPC_VRat::Spawn,
 // 0x103ae630 CNPC_VSheriffMan::Spawn, 0x103dd620 CNPC_VYukie::Spawn, 0x10375c50
-// CNPC_VFrenzyShadow::Spawn; and 0x1037c1c0 CNPC_VGhoulCroucher::ScriptHide (Script19's row, ported
-// here by the lane card).
+// CNPC_VFrenzyShadow::Spawn. (`0x1037c1c0 CNPC_VGhoulCroucher::ScriptHide` is Script19's body,
+// `GhoulCroucherScriptHide` in `ElysiumNpcScript19Species.cpp`; the lane's duplicate was folded.)
 
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"
@@ -181,14 +181,6 @@ namespace
 		return Entity.World != nullptr ? Entity.World->NowSeconds() : 0.0;
 	}
 
-	// `thunk_FUN_101e8da0(0x10739d08)` -- the Ming Xiao tuning record (`CVFeatList_t`), read by field
-	// offset. SEAM, as in families Facing and Bosses2: this substrate holds no such table, so every
-	// field answers 0.
-	float Spawn19MingXiaoTuningField(int32)
-	{
-		return 0.f;
-	}
-
 	// `vstdlib RandomFloat` / `RandomInt` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream.
 	float Spawn19RandomFloat(float Min, float Max)
 	{
@@ -241,8 +233,8 @@ void FElysiumNpcHumanCombatant::Spawn()
 // 0x103c4ef0 CNPC_VVampire::Spawn -- also CNPC_VBrujah, CNPC_VGargoyle, CNPC_VVampireBoss.
 void FElysiumNpcVampire::Spawn()
 {
-	Relationships.SetClass(GSpawn19PlayerClass, EElysiumRelationship::Hate,
-		GSpawn19VampirePriority);                                                        // 0x103c4ef9 AddClassRelationship(1, 1, 0)
+	Relationships.AddClassRelationship(GSpawn19PlayerClass, EElysiumRelationship::Hate,
+		GSpawn19VampirePriority);                                                        // 0x103c4ef9 -> 0x10013cf5 -> 0x10332aa0 (1, 1, 0)
 	FElysiumNpcHuman::Spawn();                                                           // 0x103c4f00 -> 0x10384690
 	CapabilityWord |= GSpawn19CapMoveShoot;                                              // 0x103c4f09
 }
@@ -372,12 +364,12 @@ void FElysiumNpcBach::Spawn()
 	BaseScheduleHost.WaitFinished = 0.0;                                                 // 0x103638a6 +0x5db4 m_flWaitFinished
 	BachSkipToWarningTime = 0.f;                                                         // 0x103638ac +0x6698
 	BachTeleportState = 0;                                                               // 0x103638b2 +0x669c
-	bBachByte66a4 = false;                                                               // 0x103638b8 +0x66a4
+	bBachShotLatch = false;                                                              // 0x103638b8 +0x66a4
 	bBachShieldFlagB = false;                                                            // 0x103638be +0x66a6
 	BachWasOccluded = 0;                                                                 // 0x103638c4 +0x6674
 	BachOccludeEnterTime = 0.0;                                                          // 0x103638ca +0x6670
 	BachReusedOccludeCount = 0;                                                          // 0x103638d0 +0x6678
-	BachLastOccludeOrigin = FVector::ZeroVector;                                         // 0x103638d6..0x103638e2 +0x6664
+	BachLastOccludeOriginUnits = FVector::ZeroVector;                                       // 0x103638d6..0x103638e2 +0x6664
 	bBachCamperFlag = false;                                                             // 0x103638e8 +0x66a0
 	BachGrenadeActive = 0;                                                               // 0x103638ee +0x667c
 	bBachMovementSpot = false;                                                           // 0x103638f4 +0x66a7
@@ -392,7 +384,7 @@ void FElysiumNpcChangBros::Spawn()
 	FElysiumNpcVampire::Spawn();                                                         // 0x1036b01f -> 0x103c4ef0
 }
 
-// 0x1037fa00 CNPC_VHengeyokai::Spawn -- the only vampire spawn here with no CapabilitiesAdd.
+// 0x1037fa00 CNPC_VHengeyokai::Spawn -- no CapabilitiesAdd (as Lasombra and ManBat).
 void FElysiumNpcHengeyokai::Spawn()
 {
 	FElysiumNpcVampire::Spawn();                                                         // 0x1037fa06 -> 0x103c4ef0
@@ -413,8 +405,8 @@ void FElysiumNpcManBat::Spawn()
 {
 	FElysiumNpcVampire::Spawn();                                                         // 0x1038b033 -> 0x103c4ef0
 	SetForceFrequentThink(true);                                                         // 0x1038b03e slot 416
-	Relationships.SetClass(GSpawn19PlayerClass, EElysiumRelationship::Hate,
-		GSpawn19ManBatPriority);                                                         // 0x1038b04c AddClassRelationship(1, 1, 10)
+	Relationships.AddClassRelationship(GSpawn19PlayerClass, EElysiumRelationship::Hate,
+		GSpawn19ManBatPriority);                                                         // 0x1038b04c -> 0x10332aa0 (1, 1, 10)
 }
 
 // 0x103a6c80 CNPC_VSabbatLeader::Spawn -- the capability and the template BEFORE the base.
@@ -483,6 +475,7 @@ void FElysiumNpcZombie::Spawn()
 // 0x103caa30 CNPC_VWerewolf::Spawn
 void FElysiumNpcWerewolf::Spawn()
 {
+	// The scope-trace frame (`0x103caa35` null-this, `0x103caa3f` null-name) is the absent debug stack.
 	StatTemplate = GSpawn19TemplateWerewolf;                                             // 0x103caaaa +0x10e4, BEFORE the base
 	FElysiumNpc::Spawn();                                                                // 0x103caab0 -> 0x10298d30
 	Flags |= GSpawn19WerewolfFlag;                                                       // 0x103caabc AddFlag(0x2000)
@@ -556,7 +549,7 @@ void FElysiumNpcMingXiaoTentacle::Spawn()
 	TentaclePhase = 0;                                                                   // 0x1039c3b0 +0x6670
 	bInvincible = true;                                                                  // 0x1039c3b6 +0x63d8
 	MingXiaoTentaclePhaseExpireTimer = 0.0;                                              // 0x1039c3bc +0x6674
-	TentacleFailedEvadeTimer = 0.0;                                                      // 0x1039c3c2 +0x6678
+	MingXiaoTentacleFailedEvadeTimer = 0.0;                                                    // 0x1039c3c2 +0x6678
 	TentacleUpdateEvadeTimer = 0.0;                                                      // 0x1039c3c8 +0x667c
 	TentacleHideReadyTimer = 0.0;                                                        // 0x1039c3ce +0x6680
 	bIgnoreCollisionSpecies = true;                                                      // 0x1039c3e5 +0x6688
@@ -579,7 +572,9 @@ void FElysiumNpcMingXiao::Spawn()
 	bMingXiaoHasTransformed = false;                                                     // 0x103927ef +0x6678
 	MingXiaoSeveredTentacleMask = 0u;                                                    // 0x103927f5 +0x6710
 	MingXiaoProxyReadyTimer = 0.0;                                                       // 0x103927fb +0x66a4
-	MingXiaoSpitAttackTimer = FUN_10397f70(Spawn19MingXiaoTuningField)
+	// `thunk_FUN_101e8da0(0x10739d08)`, the Ming Xiao tuning record, is `Select19MingXiaoTuningField`
+	// (the Rules.txt `Ming_Xiao_Info` slice, L06/L12).
+	MingXiaoSpitAttackTimer = FUN_10397f70([this](int32 Offset) { return Select19MingXiaoTuningField(Offset); })
 		+ Spawn19SpeciesNow(*this);                                                      // 0x10392801 / 0x10392816 +0x66c0
 	for (int32 Slot = 0; Slot < 6; ++Slot)                                               // 0x10392850 JL
 	{
@@ -587,15 +582,15 @@ void FElysiumNpcMingXiao::Spawn()
 		bProxyRegistered[Slot] = false;                                                  // 0x10392823 +0x6684
 		Proxies[Slot] = FElysiumEntityHandle::Invalid();                                 // 0x1039282a +0x668c
 		MingXiaoAttackTimers[Slot] = 0.0;                                                // 0x10392835 +0x66c4
-		MingXiaoTentacleHitPoints[Slot] = Spawn19MingXiaoTuningField(0);                 // 0x10392838 / 0x1039283f +0x66dc
+		MingXiaoHitPoints[Slot] = Select19MingXiaoTuningField(0);                        // 0x10392830 / 0x10392838 / 0x1039283f +0x66dc = TentacleHPInitial
 		MingXiaoRegrowTimers[Slot] = static_cast<double>(TNumericLimits<float>::Max());  // 0x10392842 +0x66f4 = FLT_MAX
 	}
 	MingXiaoConnectedTentacleCount = 6;                                                  // 0x10392854 +0x670c
 	BodyGroup();                                                                         // 0x1039285e -> 0x10398800
 	FElysiumEntity* const Melee = Spawn19BestMeleeWeapon();                              // 0x10392865
-	MingXiaoMeleeWeapon = Melee != nullptr ? Melee->Handle : FElysiumEntityHandle::Invalid(); // 0x1039286c / 0x10392877 / 0x1039287f
+	MingXiaoMeleeWeapon = Melee != nullptr ? Melee->Handle : FElysiumEntityHandle::Invalid(); // 0x1039286c / 0x10392872 GetRefEHandle / 0x10392877 / 0x1039287f
 	FElysiumEntity* const Ranged = GetBestRangedWeapon();                                // 0x1039288d slot 309
-	MingXiaoRangedWeapon = Ranged != nullptr ? Ranged->Handle : FElysiumEntityHandle::Invalid(); // 0x10392895 / 0x103928a0 / 0x103928a8
+	MingXiaoRangedWeapon = Ranged != nullptr ? Ranged->Handle : FElysiumEntityHandle::Invalid(); // 0x10392895 / 0x1039289b GetRefEHandle / 0x103928a0 / 0x103928a8
 	FElysiumEntity* const Switch = (World != nullptr && MingXiaoRangedWeapon.IsSet())
 		? World->Resolve(MingXiaoRangedWeapon) : nullptr;                                // 0x103928bb / 0x103928d8 / 0x103928de
 	Weapon_Switch(Switch, 0);                                                            // 0x103928f0 slot 388
@@ -604,7 +599,7 @@ void FElysiumNpcMingXiao::Spawn()
 	MingXiaoThrowableObjectMode = 0;                                                     // 0x10392923 +0x673c
 	CoordinateTentacleId = 0;                                                            // 0x10392929 +0x6740
 	bMingXiaoPlayedDeathAnim = false;                                                    // 0x1039292f +0x6744
-	MingXiaoIdealRange = Spawn19IdealRangePick();                                        // 0x10392935 / 0x1039293a +0x6748
+	MingXiaoIdealRange = MingXiaoIdealRangeFromLimbs();                                  // 0x10392935 -> 0x103986b0 / 0x1039293a +0x6748
 	MingXiaoChargeReadyTime = 0.0;                                                       // 0x10392940 +0x674c
 	bBlockedByFriend = false;                                                            // 0x10392946 +0x6750
 }
@@ -614,18 +609,13 @@ FElysiumEntity* FElysiumNpcMingXiao::Spawn19BestMeleeWeapon()
 	return nullptr;
 }
 
-float FElysiumNpcMingXiao::Spawn19IdealRangePick() const
-{
-	return ElysiumNpcTunables::Zero;
-}
-
 // 0x10368b70 CNPC_VCamera::Spawn -- also CNPC_VCameraSecurity. A camera runs no Troika and no base
 // spawn: it is its own whole body.
 void FElysiumNpcCamera::Spawn()
 {
 	CapabilityWord |= GSpawn19CapSquad;                                                  // 0x10368b7c
 	Precache();                                                                          // 0x10368b85 slot 104
-	Spawn19SetModel(Model);                                                              // 0x10368b94 / 0x10368bab slot 9 then 105
+	Spawn19SetModel(Model);                                                              // 0x10368b94 / 0x10368ba2 null default / 0x10368bab slot 9 then 105
 	BloodColorWord = Spawn19BloodColor;                                                  // 0x10368bb1 +0x1570
 	EffectsWord = 0u;                                                                    // 0x10368bbb m_fEffects = 0
 	Health = 1;                                                                          // 0x10368bc1 +0x210
@@ -634,6 +624,8 @@ void FElysiumNpcCamera::Spawn()
 	HackedGunPosUnits = FVector::ZeroVector;                                             // 0x10368bdb..0x10368be7
 	Senses.ResetListenClock();                                                           // 0x10368bf3 m_flNextListenTime = 0
 	CurrentSpotIndex = INDEX_NONE;                                                       // 0x10368bfb m_pInterestingPlace = 0
+	// The two `m_Collision` scope-trace frames' null-name defaults (`0x10368c01`, `0x10368c70`) are
+	// the absent debug stack.
 	RetailSolidFlags = 0u;                                                               // 0x10368c57 SetSolidFlags(0)
 	RetailSolidType = 0;                                                                 // 0x10368cc0 SetSolid(SOLID_NONE)
 	++RetailSolidSets;
@@ -653,6 +645,8 @@ void FElysiumNpcCamera::Spawn()
 // 0x101aa9c0 CPayphone::Spawn -- BBOX plus NOT_SOLID and 80000 health: usable, never destroyed.
 void FElysiumNpcPayphone::Spawn()
 {
+	// The two `m_Collision` scope-trace frames' null-name defaults (`0x101aa9f3`, `0x101aaaa5`) are
+	// the absent debug stack.
 	FElysiumNpc::Spawn();                                                                // 0x101aa9c4 -> 0x10298d30
 	ArmThinkAt(Spawn19SpeciesNow(*this) + GSpawn19PayphoneThinkDelay);                  // 0x101aa9d4..0x101aa9df m_flNextThink
 	SetMoveType(0, 0);                                                                   // 0x101aa9e5 slot 93 MOVETYPE_NONE
@@ -726,7 +720,7 @@ void FElysiumNpcManBat::Event_Killed(void* Arg0)
 	{
 		if (World->Resolve(ManBatScreechCone) != nullptr)                                // 0x1038e90c / 0x1038e912
 		{
-			Spawn19UtilRemove(World->Resolve(ManBatScreechCone));                        // 0x1038e91d..0x1038e93d UTIL_Remove
+			Spawn19UtilRemove(World->Resolve(ManBatScreechCone));                        // 0x1038e91d / 0x1038e934 re-resolve / 0x1038e93d UTIL_Remove
 			ManBatScreechCone = FElysiumEntityHandle::Invalid();                         // 0x1038e945
 		}
 	}
@@ -754,8 +748,8 @@ void FElysiumNpcMingXiaoTentacle::Event_Killed(void* Arg0)
 {
 	if (!bTentaclePlayedDeathAnim)                                                       // 0x1039e903 / 0x1039e90b
 	{
-		NpcLifeStateWord = GSpawn19LifeDying;                                            // 0x1039e92e m_lifeState = 1
-		Spawn19StartDeathSchedule();                                                     // 0x1039e938 -> 0x1039e970
+		AnimEventLifeStateWord = GSpawn19LifeDying;                                      // 0x1039e92e m_lifeState = 1
+		MingXiaoTentacleEnterDeath();                                                    // 0x1039e938 -> 0x1039e970
 		return;                                                                          // 0x1039e93e
 	}
 	if (FElysiumEntity* const Head = MingXiaoTentacleHead())                             // 0x1039e90d -> 0x1039ede0 / 0x1039e914
@@ -771,18 +765,13 @@ void FElysiumNpcMingXiaoTentacle::Spawn19NotifyHeadOfDeath(FElysiumEntity* Head)
 	++Spawn19HeadDeathNotices;
 }
 
-void FElysiumNpcMingXiaoTentacle::Spawn19StartDeathSchedule()
-{
-	++Spawn19DeathScheduleStarts;
-}
-
 // 0x10395ba0 CNPC_VMingXiao::Event_Killed -- deferred to the death animation's second pass.
 void FElysiumNpcMingXiao::Event_Killed(void* Arg0)
 {
 	if (!bMingXiaoPlayedDeathAnim)                                                       // 0x10395ba3 / 0x10395bab
 	{
-		NpcLifeStateWord = GSpawn19LifeDying;                                            // 0x10395c29 m_lifeState = 1
-		Spawn19StartDeathAnim();                                                         // 0x10395c33 -> 0x10395c70
+		AnimEventLifeStateWord = GSpawn19LifeDying;                                      // 0x10395c29 m_lifeState = 1
+		MingXiaoEnterDeath();                                                            // 0x10395c33 -> 0x10395c70
 		return;                                                                          // 0x10395c39
 	}
 	// A live parent Ming Zhao hears about this proxy first.
@@ -793,34 +782,20 @@ void FElysiumNpcMingXiao::Event_Killed(void* Arg0)
 		if (FElysiumNpcMingXiao* const Parent = ParentNpc != nullptr
 			? ParentNpc->AsSpecies<FElysiumNpcMingXiao>() : nullptr)
 		{
-			Parent->FUN_10397a50(this, Spawn19MingXiaoTuningField);                      // 0x10395bdd -> 0x10397a50
+			Parent->FUN_10397a50(this, [Parent](int32 Offset)
+				{ return Parent->Select19MingXiaoTuningField(Offset); });              // 0x10395bdd -> 0x10397a50
 		}
 	}
 	// `ming_xiao_grub_death` read as `IsCommand() ? 0 : m_nValue`; only the HEAD tears its grubs down.
-	if (GSpawn19MingXiaoGrubDeathDefault != 0)                                           // 0x10395bef / 0x10395bfc
+	if (GSpawn19MingXiaoGrubDeathDefault != 0)                                           // 0x10395bea IsCommand / 0x10395bef / 0x10395bfc
 	{
 		if (!IsMingXiaoProxy())                                                          // 0x10395c00 -> 0x10398870 / 0x10395c07
 		{
-			Spawn19GrubDeathA();                                                         // 0x10395c0b -> 0x10397e90
-			Spawn19GrubDeathB();                                                         // 0x10395c12 -> 0x10397f00
+			MingXiaoKillTentacles();                                                     // 0x10395c0b -> 0x10397e90
+			MingXiaoKillSpawnedBodies();                                                 // 0x10395c12 -> 0x10397f00
 		}
 	}
 	FElysiumNpc::Event_Killed(Arg0);                                                     // 0x10395c1e -> 0x102bf340
-}
-
-void FElysiumNpcMingXiao::Spawn19GrubDeathA()
-{
-	++Spawn19GrubDeathACalls;
-}
-
-void FElysiumNpcMingXiao::Spawn19GrubDeathB()
-{
-	++Spawn19GrubDeathBCalls;
-}
-
-void FElysiumNpcMingXiao::Spawn19StartDeathAnim()
-{
-	++Spawn19DeathAnimStarts;
 }
 
 // 0x103be010 CNPC_VTzimisce::Event_Killed
@@ -965,9 +940,9 @@ void FElysiumNpcVampireBoss::TransformationStart()
 	New->PercentOccludedWalk = PercentOccludedWalk;                                      // 0x103c6299 / 0x103c629f
 	New->PercentOccludedFlank = PercentOccludedFlank;                                    // 0x103c62a5 / 0x103c62b0
 	New->PercentOccludedChase = PercentOccludedChase;                                    // 0x103c62b6 / 0x103c62c4
-	// `__RTDynamicCast(new, CAI_BaseNPCTroika)` then `+0x66b0` -- `m_hTransformPartner`, a
-	// `CNPC_VVampireBoss` word. The cast always succeeds on a Troika body; the port writes the word only
-	// where it exists (a non-boss body would take a scribble in retail).
+	// `__RTDynamicCast(new, CNPC_VVampireBoss)` (descriptor `0x1062a654`, `0x103c62ca`), then
+	// `+0x66b0` `m_hTransformPartner`; the cast is null on a non-boss body, which skips the write --
+	// retail's own gate, not a crash guard.
 	if (NewBoss != nullptr)                                                              // 0x103c62ca / 0x103c62d6
 	{
 		NewBoss->TransformPartner = Handle;                                              // 0x103c62dc / 0x103c62e1 +0x66b0
@@ -991,25 +966,4 @@ void FElysiumNpcSabbatLeader::TransformationStart()
 	SetHullSizeNormal(true);                                                             // 0x103ab3a9 -> 0x10273070(1)
 	++Spawn19RelinkCalls;                                                                // 0x103ab3af -> 0x101cf600
 	FElysiumNpcVampireBoss::TransformationStart();                                       // 0x103ab3b9 -> 0x103c60a0
-}
-
-// =================================================================================================
-// Slot 77 -- `CNPC_VGhoulCroucher::ScriptHide` `0x1037c1c0`
-// =================================================================================================
-
-void FElysiumNpcGhoulCroucher::ScriptHide()
-{
-	// `CAI_BaseNPCTroika::ScriptHide` `0x102c1ce0` first. Its Troika body is family Damaged19's
-	// unported row; `FElysiumEntity::ScriptHide` is the port's base half it ends in.
-	FElysiumEntity::ScriptHide();                                                        // 0x1037c229 -> 0x102c1ce0
-	// The burning particle hides with the body; the handle is NOT cleared.
-	if (World != nullptr && BurningParticle.IsSet())                                     // 0x1037c237
-	{
-		if (FElysiumEntity* const Particle = World->Resolve(BurningParticle))            // 0x1037c259 / 0x1037c25e / 0x1037c269 / 0x1037c280
-		{
-			Particle->ScriptHide();                                                      // 0x1037c286 slot 77 on the particle
-		}
-		// `0x1037c299`: the re-resolve failing dispatches slot 77 through a null receiver -- a retail
-		// fault; the port does nothing (named crash guard).
-	}
 }

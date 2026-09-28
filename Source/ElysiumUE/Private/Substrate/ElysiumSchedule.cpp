@@ -458,6 +458,9 @@ namespace
 			  TEXT("the second entity a no-ragdoll body leaves behind") },
 			{ TEXT("Event_Dying"),        TEXT("0x10339413"),
 			  TEXT("slot 403, dispatched by Die right after Event_Killed") },
+			// STORY8-TWIN: replaced by 0x10265ad0 at wave 2 -- the next three rows are `CAI_BaseNPC::Event_Killed`'s
+			// arms (`0x10265d66` slot 552, `0x10265d72` fade, `0x10265d90` carcass sound), ported in Spawn19;
+			// they leave this list when the death path runs slot 144 instead of `FElysiumNpc::OnKilled` (L13).
 			{ TEXT("ShouldFadeOnDeath"),  TEXT("0x1027a400"),
 			  TEXT("slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound") },
 			{ TEXT("SUB_StartFadeOut"),   TEXT("0x102695d0"),

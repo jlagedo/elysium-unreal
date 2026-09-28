@@ -2488,6 +2488,7 @@ static TUniquePtr<FLockWorld> StandLock(const TCHAR* LockClass, const TCHAR* Par
 	Fixture->Services.bHasPlayer = true;
 	Fixture->Services.PlayerLocation = LockOrigin + FVector(60.0, 0.0, 0.0);
 	Fixture->World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Fixture->Services.Bundle());
+	ElysiumStandSpawnClock(*Fixture->World, -FElysiumNpcBase::NpcInitThinkDelay);
 	Fixture->World->Load(MoveTemp(Defs));
 	Fixture->Player = Fixture->World->SpawnPlayer();
 	Fixture->World->Activate(-FElysiumNpcBase::NpcInitThinkDelay);

@@ -652,6 +652,7 @@ CameraShotTable { Jack
 		FElysiumRecordingServices Services;
 		Services.bHasPlayer = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MakeAnchorWorldDefs());
 		FElysiumEntity* Walker = World.FindByName(TEXT("attacker"));
 		UElysiumCameraComponent* Camera = NewObject<UElysiumCameraComponent>();

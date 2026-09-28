@@ -47,8 +47,6 @@ CNPC_VAndreiBlood	434	0x10385a30	rule	no-override	FElysiumNpcAndreiBlood
 CNPC_VAndreiBlood	473	0x103846e0	rule	no-override	FElysiumNpcAndreiBlood
 CNPC_VAndreiBlood	525	0x103c5fe0	rule	no-override	FElysiumNpcAndreiBlood
 CNPC_VAndreiBlood	580	0x1035c230	rule	no-override	FElysiumNpcAndreiBlood
-CNPC_VAndreiBlood	617	0x103c75f0	rule	no-override	FElysiumNpcAndreiBlood
-CNPC_VAndreiBlood	618	0x103c60a0	rule	no-override	FElysiumNpcAndreiBlood
 CNPC_VAnimal	82	0x1035eb10	mechanism	no-override	FElysiumNpcAnimal
 CNPC_VAnimal	138	0x1035f560	rule	no-override	FElysiumNpcAnimal
 CNPC_VAnimal	366	0x103601e0	rule	no-override	FElysiumNpcAnimal
@@ -64,8 +62,6 @@ CNPC_VAsianVampire	434	0x10385a30	rule	no-override	FElysiumNpcAsianVampire
 CNPC_VAsianVampire	473	0x103846e0	rule	no-override	FElysiumNpcAsianVampire
 CNPC_VAsianVampire	525	0x103c5fe0	rule	no-override	FElysiumNpcAsianVampire
 CNPC_VAsianVampire	580	0x103603d0	rule	no-override	FElysiumNpcAsianVampire
-CNPC_VAsianVampire	617	0x103c75f0	rule	no-override	FElysiumNpcAsianVampire
-CNPC_VAsianVampire	618	0x103c60a0	rule	no-override	FElysiumNpcAsianVampire
 CNPC_VBach	82	0x10363720	mechanism	no-override	FElysiumNpcBach
 CNPC_VBach	138	0x10363990	rule	no-override	FElysiumNpcBach
 CNPC_VBach	376	0x103858b0	present	no-override	FElysiumNpcBach
@@ -114,8 +110,6 @@ CNPC_VChangBros	473	0x103846e0	rule	no-override	FElysiumNpcChangBros
 CNPC_VChangBros	525	0x103c5fe0	rule	no-override	FElysiumNpcChangBros
 CNPC_VChangBros	530	0x1036e6f0	rule	no-override	FElysiumNpcChangBros
 CNPC_VChangBros	580	0x1036a1b0	rule	no-override	FElysiumNpcChangBros
-CNPC_VChangBros	617	0x103c75f0	rule	no-override	FElysiumNpcChangBros
-CNPC_VChangBros	618	0x103c60a0	rule	no-override	FElysiumNpcChangBros
 CNPC_VChangBrosBlade	82	0x1036eb30	mechanism	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosBlade	138	0x1036a190	rule	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosBlade	376	0x103858b0	present	no-override	FElysiumNpcChangBrosBlade
@@ -125,8 +119,6 @@ CNPC_VChangBrosBlade	473	0x103846e0	rule	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosBlade	525	0x103c5fe0	rule	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosBlade	530	0x1036e6f0	rule	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosBlade	580	0x1036eab0	rule	no-override	FElysiumNpcChangBrosBlade
-CNPC_VChangBrosBlade	617	0x103c75f0	rule	no-override	FElysiumNpcChangBrosBlade
-CNPC_VChangBrosBlade	618	0x103c60a0	rule	no-override	FElysiumNpcChangBrosBlade
 CNPC_VChangBrosClaw	82	0x1036f330	mechanism	no-override	FElysiumNpcChangBrosClaw
 CNPC_VChangBrosClaw	138	0x1036a190	rule	no-override	FElysiumNpcChangBrosClaw
 CNPC_VChangBrosClaw	376	0x103858b0	present	no-override	FElysiumNpcChangBrosClaw
@@ -136,8 +128,6 @@ CNPC_VChangBrosClaw	473	0x103846e0	rule	no-override	FElysiumNpcChangBrosClaw
 CNPC_VChangBrosClaw	525	0x103c5fe0	rule	no-override	FElysiumNpcChangBrosClaw
 CNPC_VChangBrosClaw	530	0x1036e6f0	rule	no-override	FElysiumNpcChangBrosClaw
 CNPC_VChangBrosClaw	580	0x1036f2b0	rule	no-override	FElysiumNpcChangBrosClaw
-CNPC_VChangBrosClaw	617	0x103c75f0	rule	no-override	FElysiumNpcChangBrosClaw
-CNPC_VChangBrosClaw	618	0x103c60a0	rule	no-override	FElysiumNpcChangBrosClaw
 CNPC_VCop	82	0x10370460	mechanism	no-override	FElysiumNpcCop
 CNPC_VCop	138	0x10371b50	rule	no-override	FElysiumNpcCop
 CNPC_VCop	376	0x103858b0	present	no-override	FElysiumNpcCop
@@ -331,8 +321,6 @@ CNPC_VSabbatLeader	463	0x103a6f70	present	no-override	FElysiumNpcSabbatLeader
 CNPC_VSabbatLeader	473	0x103846e0	rule	no-override	FElysiumNpcSabbatLeader
 CNPC_VSabbatLeader	525	0x103c5fe0	rule	no-override	FElysiumNpcSabbatLeader
 CNPC_VSabbatLeader	580	0x103a5ca0	rule	no-override	FElysiumNpcSabbatLeader
-CNPC_VSabbatLeader	617	0x103c75f0	rule	no-override	FElysiumNpcSabbatLeader
-CNPC_VSabbatLeader	618	0x103ab310	rule	no-override	FElysiumNpcSabbatLeader
 CNPC_VScurrying	82	0x103aba70	mechanism	no-override	FElysiumNpcScurrying
 CNPC_VScurrying	138	0x103ac470	rule	no-override	FElysiumNpcScurrying
 CNPC_VScurrying	366	0x103601e0	rule	no-override	FElysiumNpcScurrying
@@ -350,8 +338,6 @@ CNPC_VSheriffMan	434	0x10385a30	rule	no-override	FElysiumNpcSheriffMan
 CNPC_VSheriffMan	473	0x103846e0	rule	no-override	FElysiumNpcSheriffMan
 CNPC_VSheriffMan	525	0x103c5fe0	rule	no-override	FElysiumNpcSheriffMan
 CNPC_VSheriffMan	580	0x103ae4b0	rule	no-override	FElysiumNpcSheriffMan
-CNPC_VSheriffMan	617	0x103c75f0	rule	no-override	FElysiumNpcSheriffMan
-CNPC_VSheriffMan	618	0x103c60a0	rule	no-override	FElysiumNpcSheriffMan
 CNPC_VTaxiDriver	72	0x103b2f50	rule	no-override	FElysiumNpcTaxiDriver
 CNPC_VTaxiDriver	82	0x103b2fb0	mechanism	no-override	FElysiumNpcTaxiDriver
 CNPC_VTaxiDriver	138	0x103b3630	rule	no-override	FElysiumNpcTaxiDriver
@@ -420,8 +406,6 @@ CNPC_VVampireBoss	434	0x10385a30	rule	no-override	FElysiumNpcVampireBoss
 CNPC_VVampireBoss	473	0x103846e0	rule	no-override	FElysiumNpcVampireBoss
 CNPC_VVampireBoss	525	0x103c5fe0	rule	no-override	FElysiumNpcVampireBoss
 CNPC_VVampireBoss	580	0x1035c1b0	rule	no-override	FElysiumNpcVampireBoss
-CNPC_VVampireBoss	617	0x103c75f0	rule	no-override	FElysiumNpcVampireBoss
-CNPC_VVampireBoss	618	0x103c60a0	rule	no-override	FElysiumNpcVampireBoss
 CNPC_VWerewolf	70	0x103ccb50	rule	no-override	FElysiumNpcWerewolf
 CNPC_VWerewolf	78	0x103d4a20	rule	no-override	FElysiumNpcWerewolf
 CNPC_VWerewolf	82	0x103c87d0	mechanism	no-override	FElysiumNpcWerewolf

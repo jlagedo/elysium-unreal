@@ -224,7 +224,7 @@ bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 			AddError(TEXT("no camera"));
 			return false;
 		}
-		Camera.As<FElysiumNpcCamera>()->bCameraEngineQueryAnswer = true;
+		Camera.As<FElysiumNpcCamera>()->bSpawn19GameRulesAllowNpcs = true;
 		// The spawn's own `NPCInit` already wrote all three, so each is dirtied first.
 		Camera.Npc->OccludedDelayNormal = 0.f;
 		Camera.Npc->OccludedDelayCover = 0.f;
@@ -243,7 +243,7 @@ bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 			AddError(TEXT("no camera"));
 			return false;
 		}
-		Camera.As<FElysiumNpcCamera>()->bCameraEngineQueryAnswer = false;
+		Camera.As<FElysiumNpcCamera>()->bSpawn19GameRulesAllowNpcs = false;
 		Camera.Npc->NPCInit();
 		TestTrue(TEXT("10369302 the refuse arm leaves DAT_10937cf1 SET"), Camera.Npc->InNpcInit());
 		Camera.Npc->InNpcInit() = false;
@@ -561,7 +561,7 @@ bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	F.As<FElysiumNpcCamera>()->bCameraEngineQueryAnswer = true;
+	F.As<FElysiumNpcCamera>()->bSpawn19GameRulesAllowNpcs = true;
 	// The spawn's own `NPCInit` already wrote every word read below, so each is dirtied first.
 	CameraNpc->OccludedDelayNormal = 0.f;
 	CameraNpc->OccludedDelayCover = 0.f;
@@ -579,7 +579,7 @@ bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 		AddError(TEXT("no second camera"));
 		return false;
 	}
-	Refused.As<FElysiumNpcCamera>()->bCameraEngineQueryAnswer = false;
+	Refused.As<FElysiumNpcCamera>()->bSpawn19GameRulesAllowNpcs = false;
 	const int32 Before = Refused.As<FElysiumNpcCamera>()->CameraSelfRemovals;
 	Refused.Npc->NPCInit();
 	TestEqual(TEXT("engine refuse deletes the camera"), Refused.As<FElysiumNpcCamera>()->CameraSelfRemovals, Before + 1);
@@ -1074,9 +1074,9 @@ bool FElysiumNpcKernelLifecycle19RunnerRestoreTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	const int32 Before = F.As<FElysiumNpcTzimisceRunner>()->Flag2Removals;
+	TzimisceRunner->EntityFlags2Word = 0x14u;
 	TzimisceRunner->OnRestore(true);                                              // 0x103c3c40
-	TestEqual(TEXT("RemoveFlag2(4)"), F.As<FElysiumNpcTzimisceRunner>()->Flag2Removals, Before + 1);
+	TestEqual(TEXT("RemoveFlag2(4) (0x103c3c78)"), TzimisceRunner->EntityFlags2Word, 0x10u);
 	return true;
 }
 

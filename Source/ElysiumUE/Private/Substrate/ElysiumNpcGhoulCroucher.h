@@ -87,14 +87,6 @@ public:
 	void BurnPlayer(FElysiumEntity* Target, float Damage);
 	TArray<FBurnHitboxCall> BurnHitboxCalls;
 
-	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
-	// in the L08 report) ---
-	/** Slot 77 `0x1037c1c0` `CNPC_VGhoulCroucher::ScriptHide`. `FElysiumEntity::ScriptHide` is NOT
-	 *  virtual, so this HIDES rather than overrides; the integrator makes the base `virtual` (retail
-	 *  dispatches slot 77 through `+0x134`: the Troika tail `0x102c1e48`, and this body's own `0x1037c286`
-	 *  on the particle). Until then only a caller holding the species type reaches it. */
-	void ScriptHide();
-
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;

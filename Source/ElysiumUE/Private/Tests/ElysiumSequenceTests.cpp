@@ -387,6 +387,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(Counter));
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	// The first think — and the mind admission every body claim needs — falls at
@@ -465,6 +466,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	PlayerDefs.Defs.Add(MoveTemp(Counter2));
 
 	FElysiumEntityWorld World2(nullptr, nullptr);
+	ElysiumStandSpawnClock(World2, -FElysiumNpcBase::NpcInitThinkDelay);
 	World2.Load(MoveTemp(PlayerDefs));
 	World2.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	// The first think — and the mind admission every body claim needs — falls at
@@ -555,6 +557,7 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcActivityClip = TEXT("walk_0");
 		Services.ResolvedNpcGroundSpeedCmPerSecond = 136.7f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -620,6 +623,7 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcActivityClip = TEXT("walk_0");
 		Services.ResolvedNpcGroundSpeedCmPerSecond = 0.f;   // older sidecar: clip, no motion block
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -694,6 +698,7 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.ResolvedNpcSequenceAnimName = TEXT("sneak_0");
 		Services.ResolvedNpcSequenceGroundSpeedCmPerSecond = 72.2f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -735,6 +740,7 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		Services.bProvideNpcMotor = true;
 		Services.bNpcSequenceClipsResolve = false;   // the stub carries no motion for this clip
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -796,6 +802,7 @@ bool FElysiumPlayerControllerSequenceLocomotionTest::RunTest(const FString&)
 	Services.bHasPlayer = true;
 	Services.bProvideNpcMotor = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -940,6 +947,7 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -977,6 +985,7 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1043,6 +1052,7 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
@@ -1128,6 +1138,10 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Npc.TargetName = TEXT("Damsel");
 		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/downtown/damsel/damsel.mdl"));
 		Npc.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
+		// `CNPC_VVampire::Spawn` (`0x103c4ef9`) hates the player's class; every shipped `npc_VVampire`
+		// (157 of 157) authors `player_reaction`, 107 of them `D_NU 0`. (Integrator correction, story 8
+		// L08: the spawn chain is live.)
+		Npc.Keys.Add(TEXT("player_reaction"), TEXT("D_NU 0"));
 		Defs.Defs.Add(MoveTemp(Npc));
 
 		FElysiumEntityDef Seq;
@@ -1179,6 +1193,7 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.DispositionRow = SeqNeutralTuning();
 		Services.ClipSeconds = 2.0f;   // every clip, the beat's `m_iszPlay` included
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		// A player, as every retail map has one: the idle program's `TASK_WAIT_PVS` asks the
 		// engine PVS test about `m_hClosestPlayer`, and with none it never completes -- the stance
@@ -1252,6 +1267,7 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.DispositionRow = SeqNeutralTuning();
 		Services.ClipSeconds = 2.0f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1317,6 +1333,7 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.DispositionRow = SeqNeutralTuning();
 		Services.ClipSeconds = 2.0f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1423,6 +1440,7 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1458,6 +1476,7 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1537,6 +1556,7 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
@@ -1590,6 +1610,7 @@ bool FElysiumMontageSlotRunTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.ClipSeconds = 0.5f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at

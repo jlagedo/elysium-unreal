@@ -173,7 +173,6 @@ public:
 	 *  share: stamp `NPC_VHengeyokai.cpp:0x985`, install `0x16e` (not forced), `SetSkinFadeTime(0.0)`,
 	 *  `FadeToSkin(1)`. Lane L09's `OnTakeDamage_Alive` calls it at `0x1038025d`. */
 	void HengeyokaiEnterMorph();
-
 	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
 	// in the L08 report) ---
 	/** `FUN_103828a0` (`0x103828a0`) -- the carried-body drop `Event_Killed` runs first: with the carry

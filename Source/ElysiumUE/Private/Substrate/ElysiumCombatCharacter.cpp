@@ -1855,6 +1855,10 @@ void FElysiumCombatCharacter::EndBloodshield()
 	}
 }
 
+// STORY8-TWIN: replaced by 0x10265a90 (`FElysiumNpcBase::FireOnDeathOnce`, the attacker as activator)
+// and 0x1032b9b0 (`CBaseCombatCharacter::Event_Killed`, still the stub at
+// `ElysiumCombatCharacterSlots.cpp`) at wave 2, for the NPC leaf. Its `OnDeath` fires with this
+// entity as activator where retail passes the damage packet's attacker (`0x10265cc8`).
 void FElysiumCombatCharacter::OnKilled()
 {
 	if (bDeathReported)

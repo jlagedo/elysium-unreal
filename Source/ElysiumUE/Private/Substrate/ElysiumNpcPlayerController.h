@@ -83,12 +83,9 @@ public:
 	 *  it is kept here for the record and read by the test alone. */
 	FString LastTookLifeReason;
 
-	/** SEAM for `AddFlag2(0x10)` (`0x100027bb` at `0x103a454d`) — `CBaseEntity::m_fFlags2`
-	 *  (`+0x438`). `FElysiumEntity::Flags` is the first word (`+0x434`) only, and no port member
-	 *  stands for the second; the bits the controller's `Spawn` ORs in are carried here, under the
-	 *  class that writes them, until the word has an owner. The meaning of bit `0x10` is
-	 *  unrecovered. */
-	uint32 Flags2Added = 0;
+	// `AddFlag2(0x10)` (`0x100027bb` at `0x103a454d`) writes `CBaseEntity::m_fFlags2` (`+0x438`),
+	// which is `FElysiumNpc::EntityFlags2Word` (`ElysiumNpcSpawn19.inl`); the class's own seam word
+	// was folded into it (story 8 L08 integration). The meaning of bit `0x10` is unrecovered.
 
 	/** The `+0x6360` / `+0x6361` bytes and the `+0x6364` word `NPCInit` writes after the five law
 	 *  thresholds: story 1's dead `SecureType` scrambler (`0x10009408` over 0, XOR/AND-mixed into
