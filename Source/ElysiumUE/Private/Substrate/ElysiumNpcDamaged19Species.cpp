@@ -57,17 +57,6 @@ void FElysiumNpcWerewolf::WerewolfDrawHintOverlay()
 	++WerewolfDrawHintOverlayCalls;
 }
 
-int32 FElysiumNpcWerewolf::WerewolfThinkEngineTick() const
-{
-	// NAMED DIVERGENCE (see the declaration): whole frames on the world clock.
-	if (World == nullptr)
-	{
-		return 0;
-	}
-	const double Frame = World->FrameSeconds();
-	return Frame > 0.0 ? FMath::FloorToInt32(World->NowSeconds() / Frame) : 0;
-}
-
 // Slot 431: `0x103cb590`, 404 bytes (story 8 lane L13b). The decompiler's "unrecovered jumptable" is
 // the tick-mod-5 round robin through the five-dword table `0x103cb754`; every arm rejoins `0x103cb6cf`.
 void FElysiumNpcWerewolf::NPCThink()
@@ -105,7 +94,7 @@ void FElysiumNpcWerewolf::NPCThink()
 		{
 			// `tick % 5`, a signed `IDIV`. NAMED CRASH GUARD: a negative remainder would index before
 			// the table in retail; it dispatches nothing here.
-			const int32 Arm = WerewolfThinkEngineTick() % 5;                // 0x103cb6b3 slot 120 / 0x103cb6b9..0x103cb6bf
+			const int32 Arm = EngineFrameNumber() % 5;                // 0x103cb6b3 slot 120 / 0x103cb6b9..0x103cb6bf
 			WerewolfLastRoundRobinArm = Arm >= 0 ? Arm : INDEX_NONE;
 			switch (Arm)                                                    // 0x103cb6c1 JMP [EDX*4 + 0x103cb754]
 			{

@@ -465,9 +465,9 @@ void FElysiumNpcMingXiaoTentacle::RunAI(bool bReduced)
 	}
 
 	// (2) The collision release: CLEAR the flag first, then test the area; a blocked area re-arms it.
-	//     `AND 0x100` on `curtime < timer`: an equal stamp has expired.
+	//     `AND 0x100` on `curtime < timer`: an equal stamp has expired, an unordered one has not.
 	if (bIgnoreCollisionSpecies                                               // 0x1039e5a4 +0x6688
-		&& !(Now < TentacleIgnoreCollisionTimer))                             // 0x1039e5bc +0x6684
+		&& Now >= TentacleIgnoreCollisionTimer)                               // 0x1039e5bc +0x6684
 	{
 		bIgnoreCollisionSpecies = false;                                      // 0x1039e5cb
 		if (!IsAreaClear(GetAbsOrigin(), RunAi19TentacleClearMask))           // 0x1039e5d2 slot 217 / 0x1039e5db 0x102a0fb0 / 0x1039e5e2
@@ -502,7 +502,7 @@ void FElysiumNpcPedestrian::RunAI(bool bReduced)
 		return;
 	}
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	if (Now < Senses.Memory.NextFleeSoundTime)                                // 0x103a369e +0x641c / 0x103a36ab
+	if (!(Now >= Senses.Memory.NextFleeSoundTime))                            // 0x103a369e +0x641c / 0x103a36ab (AND 0x100: unordered returns)
 	{
 		return;
 	}
@@ -641,9 +641,9 @@ void FElysiumNpcZombie::RunAI(bool bReduced)
 		&& Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy)                // 0x103df8d5 0x10269aa0(0x46) / 0x103df8dc
 		// `FLD min; FCOMP dist; TEST AH,0x41; JP`: min at or below the distance continues.
 		&& RunAi19ZombieFloat(*this, TEXT("LungeDistanceMin"), 98.0f) <= PlayerDistAfter      // 0x103df8e7 0x101e8a90 / 0x103df8f7
-		// `FLD max; FCOMP dist; AND 0x100`: max below the distance stops.
-		&& !(RunAi19ZombieFloat(*this, TEXT("LungeDistanceMax"), 160.0f) < PlayerDistAfter)   // 0x103df902 0x101e8ab0 / 0x103df914
-		&& !(Now < ZombieGrappleReadyTimer))                                  // 0x103df923 +0x66d8 / 0x103df930
+		// `FLD max; FCOMP dist; AND 0x100`: max below the distance, or unordered, stops.
+		&& RunAi19ZombieFloat(*this, TEXT("LungeDistanceMax"), 160.0f) >= PlayerDistAfter      // 0x103df902 0x101e8ab0 / 0x103df914
+		&& Now >= ZombieGrappleReadyTimer)                                    // 0x103df923 +0x66d8 / 0x103df930
 	{
 		FElysiumEntity* const Closest = World->Resolve(Senses.Memory.ClosestPlayer);   // 0x103df932 +0x628c / 0x103df93b / 0x103df957 / 0x103df95d
 		// `+0xa8` (the entity's player record) set: the closest is the player.

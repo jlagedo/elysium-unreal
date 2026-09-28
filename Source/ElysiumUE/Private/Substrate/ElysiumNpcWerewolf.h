@@ -400,16 +400,12 @@ public:
 	// `0x103d9c90`.
 	int32 WerewolfChaseFrame = INDEX_NONE;                        // +0x6670 (walked)
 	FVector WerewolfChasePosUnits = FVector::ZeroVector;          // +0x6674/+0x6678/+0x667c (walked)
-	/** SEAM for `(**(code **)(*DAT_1070b22c + 0x1e0))()` — the ENGINE FRAME NUMBER `0x103d9c90`
-	 *  memoises its chase position on. This runtime's clock is `FElysiumEntityWorld::NowSeconds()` and
-	 *  carries no frame counter at all.
-	 *
-	 *  **NAMED DECISION**: this answers `INDEX_NONE`, and the body reads that as "the stamp can never
-	 *  match", so the cache is ALWAYS STALE and the position is recomputed on every call. Retail calls
-	 *  the body at most once per frame per NPC, so recomputing per call is retail's own answer at
-	 *  retail's own call rate; answering a CONSTANT frame instead would freeze the cache after its
-	 *  first fill and hand every later caller a stale point, which is the one behaviour retail never
-	 *  has. The word `+0x6670` is still written, so a frame counter arriving later needs no other edit. */
+	/** `(*DAT_1070b22c)->+0x1e0` (`0x103cb6b3`, `0x103cfdc8`, `0x103da116`) — the ENGINE FRAME NUMBER:
+	 *  the think's round robin divides it by 5, `0x103d9c90` memoises its chase position on it and the
+	 *  hint searches stamp `+0x66d4` with it. NAMED DIVERGENCE: this runtime has no engine frame
+	 *  counter; the count of whole frames on the world clock (`NowSeconds / FrameSeconds`, the fixed
+	 *  step the world ticks at, counted from 1) stands in for it. One accessor for all three readers
+	 *  (story 8 L13 review: the think had grown a second seam for the same word). */
 	int32 EngineFrameNumber() const;
 	/** `0x103d1e50` — `CNPC_VWerewolf`: are the two door halves near enough to count as shut? */
 	bool FUN_103d1e50() const;
@@ -566,9 +562,7 @@ public:
 	/** Slot 617 (`vtable +0x9a4`), `CNPC_VWerewolf::EnemyCouldSeeHull` (`0x103da230`), at a SOURCE-unit
 	 *  point with retail's two bools and the `DAT_1070d1b0` extents (`vec3_origin`). */
 	bool WerewolfSlot617(const FVector& PointUnits, bool bSkipViewCone, bool bUseHitbox);
-	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate. The frame seam
-	 *  (`EngineFrameNumber`) answers `INDEX_NONE`, read as "never the same frame", the named decision
-	 *  its declaration states. */
+	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate (`EngineFrameNumber`). */
 	bool WerewolfSearchStampedThisFrame() const;
 	/** `+0x66d4 := frame`, `+0x66d8 := curtime` — the stamp every search writes before it walks. */
 	void WerewolfStampSearch(double Now);
@@ -627,11 +621,6 @@ public:
 	 *  counted. The early RETURN that follows it in the think is ported. */
 	void WerewolfDrawHintOverlay();
 	int32 WerewolfDrawHintOverlayCalls = 0;
-	/** The engine tick the think's round robin divides by 5 (`(*0x1070b22c)` slot 120,
-	 *  `0x103cb6b3`). NAMED DIVERGENCE: this runtime has no engine frame counter
-	 *  (`EngineFrameNumber` answers `INDEX_NONE`, which a signed `% 5` would turn into an index BEFORE
-	 *  the table); the count of whole frames on the world clock stands in for it. */
-	int32 WerewolfThinkEngineTick() const;
 	/** Which of the five round-robin arms the last think dispatched (0..4), `INDEX_NONE` for none. */
 	int32 WerewolfLastRoundRobinArm = INDEX_NONE;
 };

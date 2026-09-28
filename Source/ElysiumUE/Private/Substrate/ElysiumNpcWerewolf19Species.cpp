@@ -201,7 +201,7 @@ bool FElysiumNpcWerewolf::WerewolfSlot617(const FVector& PointUnits, bool bSkipV
 bool FElysiumNpcWerewolf::WerewolfSearchStampedThisFrame() const
 {
 	const int32 Frame = EngineFrameNumber();
-	return Frame != INDEX_NONE && WerewolfMorphTimerB == static_cast<float>(Frame);
+	return WerewolfMorphTimerB == static_cast<float>(Frame);
 }
 
 void FElysiumNpcWerewolf::WerewolfStampSearch(double Now)

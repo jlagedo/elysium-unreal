@@ -2437,9 +2437,15 @@ void FElysiumNpcWerewolf::WerewolfCheckStuck(EStuckEscape Escape)
 
 int32 FElysiumNpcWerewolf::EngineFrameNumber() const
 {
-	// SEAM. See the declaration: `INDEX_NONE` is "no frame number", which the one caller reads as
-	// "the cache is stale", so it recomputes on every call.
-	return INDEX_NONE;
+	// NAMED DIVERGENCE (see the declaration): whole frames on the world clock, counted from 1 --
+	// retail's engine count is already past 0 when any map entity exists, so a spawn-zeroed stamp
+	// (`+0x66d4`, `+0x66a4`) never reads as "this frame".
+	if (World == nullptr)
+	{
+		return 1;
+	}
+	const double Frame = World->FrameSeconds();
+	return 1 + (Frame > 0.0 ? FMath::FloorToInt32(World->NowSeconds() / Frame) : 0);
 }
 
 bool FElysiumNpcWerewolf::FUN_103d1e50() const
@@ -2541,16 +2547,9 @@ void FElysiumNpcWerewolf::FUN_103d9c90(FVector& OutPositionUnits)
 	//   * the goal tolerance is read into a local, handed to `0x102c3b50` and then **dropped** — the
 	//     helper's only other output is the position, so the tolerance round-trip is dead.
 	//
-	// **Seam:** `EngineFrameNumber()` answers `INDEX_NONE`, which never equals the stored stamp, so
-	// the recompute runs on every call. That is the named decision on the declaration: at retail's
-	// one-call-per-frame rate it is retail's own behaviour, and the alternative — a constant stamp —
-	// would freeze the cache after its first fill, which is the one thing retail never does.
+	// `field_0x6670 != framecount`: the stamp starts at -1 (never a frame), so the first ask fills.
 	const int32 Frame = EngineFrameNumber();
-	// `INDEX_NONE` is the seam's "there is no frame number", and it is the STORED value on a body
-	// that has never been asked — so a bare `!=` would read "fresh" on the very first call and
-	// answer a zero vector for ever. The staleness test is therefore explicit: no frame number
-	// means always stale, which is the named decision on the declaration.
-	const bool bStale = Frame == INDEX_NONE || WerewolfChaseFrame != Frame;
+	const bool bStale = WerewolfChaseFrame != Frame;
 	if (bStale)
 	{
 		FElysiumEntity* Enemy = World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;

@@ -100,15 +100,16 @@ namespace
 		return 0;
 	}
 
-	// `__ftol` (`0x10431320`): truncation toward zero; a value outside `int32` is the x87 "integer
-	// indefinite" `0x80000000`.
+	// `__ftol` (`0x10431320`): a 64-bit `FISTP qword` (truncating) whose LOW dword is `EAX`. A value
+	// in `[2^31, 2^63)` answers its low 32 bits; NaN or anything outside `int64` is the x87 integer
+	// indefinite `0x8000000000000000`, whose low dword is 0.
 	int32 Think19Ftol(float Value)
 	{
-		if (!(Value >= -2147483648.f && Value < 2147483648.f))
+		if (!(Value >= -9223372036854775808.f && Value < 9223372036854775808.f))
 		{
-			return MIN_int32;
+			return 0;
 		}
-		return static_cast<int32>(Value);
+		return static_cast<int32>(static_cast<uint32>(static_cast<uint64>(static_cast<int64>(Value))));
 	}
 }
 
@@ -378,7 +379,7 @@ void FElysiumNpcZombie::NPCThink()
 	}
 	FElysiumNpc::NPCThink();                                                // 0x103dfabe 0x10292de0
 	// `__ftol(m_flNextThink) <= 0` -> slot 614. RETAIL QUIRK reproduced: during the map's first
-	// second (or for a never-think stamp, whose `__ftol` is `0x80000000`) every think resets the
+	// second (or for a never-think stamp, whose `__ftol` low dword is 0) every think resets the
 	// four clocks.
 	if (Think19Ftol(NextThink) <= 0)                                        // 0x103dfac3 / 0x103dfac9 / 0x103dfad0
 	{
