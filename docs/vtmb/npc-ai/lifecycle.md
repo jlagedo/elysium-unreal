@@ -2761,6 +2761,17 @@ is tallied through `ElysiumStub` at the commit so `elysium.stubs` names it: `Cre
 timers. Because retail's `TASK_DIE` never completes and this runtime has no entity removal, the
 commit tears the program down in place of the corpse swap.
 
+_Superseded in part 2026-09-28 (0019 story 8 wave 2, `a5b91c72`, merged as `d1d93773`):_ NPC death
+now runs through slot 144. `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` is ported, and so is
+`CreateCorpse` `0x1032c0e0` with all three arms. The player self-cast (`+0xa8`, `0x1032c22d`) and
+`MiscFlag 0x80000` (`0x1032c288`) arms spawn a static corpse through `SpawnStaticCorpse`
+`0x1032be80`; the `0x80000` arm then runs slot 66 `Hide` and `SUB_Remove` at +0.5 s. Otherwise the
+arm is `BecomeClientRagdoll`. The tail thinks `SUB_Remove` for a burning corpse, else
+`SUB_PVSRemove` `0x102696f0`, both at +10 s, and fires OnDeath crediting `m_hLastEnemy` (`+0x1a94`,
+`0x1032c1aa`). `TASK_DIE` commits through `Die` `0x103392c0` (slot 144, then slot 403). The stealth
+kill builds `0x10165d90`'s packet, with the player as inflictor and attacker. `SUB_StartFadeOut`
+`0x102695d0` stays a counted seam. The walks of the NPC-side bodies follow this section.
+
 **No spec story owns this chain.** 0014 (ragdoll) scopes the rig, the impulse and the handoff, and
 defers "the death family" to 0005; 0005 story 4 is closed and what it built was the port's invented
 death ladder, which pass D deleted. The corpse chain above needs an owner.
@@ -2768,6 +2779,134 @@ death ladder, which pass D deleted. The corpse chain above needs an owner.
 **Unrecovered:** `SUB_FadeOut`'s body (label `0x100152b2`, identified through the `CBaseEntity`
 datamap builder `0x1001311a`); the concrete `.wav` behind the vdata "Death" entry, whose trail ends
 at the VSnd variant resolver `0x101f4600`; the death-force envelope composed in `0x1032b9b0`.
+
+### `0x10265ad0` `CAI_BaseNPC::Event_Killed`, arm by arm (slot 144, 759 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Walked
+from the listing with `families-19-29/Spawn19-READING.md` beside it. Port: `ElysiumNpcBaseSpawn19.cpp`.
+It extends step 2 and step 4 of "The ordered chain" above.
+
+1. `0x10265adf`/`0x10265aee` -- `m_pSchedule` is non-null and equals `0x102cc1f0(0x3a)`. That call
+   goes through slot 440, then slot 446; a miss prints `"GetScheduleOfType(): No CASE for Schedule
+   Type %d!"` (`0x102cc215`) and answers schedule 1. When the running schedule is `NPC_FREEZE`, the
+   body returns at once and writes nothing.
+2. `0x10265afb` -- `m_NPCState` (`+0x5cc0`) `== 4` SCRIPT and `m_hCine` (`+0x5d74`) resolves
+   (`0x10265b15`). The cine's `m_sequenceStarted` (`+0x5f91`) is set and its spawnflags
+   `& 0x2080 != 0x80` (`0x10265b2f`, `0x10265b51`): the whole `CTakeDamageInfo` is copied into
+   `m_DeferredDeathInfo` (`+0x1a48..+0x1a92`, two vectors through `0x1003e4b0`) and the body RETURNS
+   (`0x10265c04`). The NPC stays alive, and nothing reads the deferred packet back. Otherwise it
+   calls `CancelScript` (`0x101a8c30`) on the cine. Then the impulse arm: the ConVar at
+   `DAT_106bbaa4` (`IsCommand() ? 0 : m_nValue`, `0x10265c27`/`0x10265c34`) and `m_pPhysicsObject`
+   (`+0x36c`, `0x10265c3e`) both set dispatch slot 39 on the physics object, passing slot 263
+   `GetGroundSpeedVelocity()`.
+3. `0x10265c78` -- slot 511 `StopLoopingSounds`.
+4. `0x10265c85..0x10265cb2` -- slot 488 `DeathSound` plays when `m_GrappleRole` (`+0x153c`) is
+   `-1`, or `m_GrapplePartner` (`+0x1538`) is `-1`, stale or null. A live grapple partner silences it.
+5. `0x10265cc8` -- `0x10265a90(attacker)`: behind the `+0x5bd4` latch, `m_OnDeath` (`+0x5e24`)
+   fires with the attacker as activator, then the latch is set.
+6. `0x10265cd7` -- `GetFlags() & 0x2000`: `m_pfnTouch = NULL`, then `BecomeDead` (`0x10265a40`:
+   `m_iHealth = m_iMaxHealth / 2`, `m_takedamage = 2`, `m_iMaxHealth = 5`, `SetMoveType(6, 0)`).
+7. `0x10265ced` -- `CBaseCombatCharacter::Event_Killed(info)` (`0x1032b9b0`), DIRECT.
+8. `0x10265cf2..0x10265d06` -- the ideal-state trace `AI_BaseNPC.cpp:0x217`, `m_IdealNPCState = 7`.
+9. `0x10265d18` -- a global object's slot 1, called through `DAT_10924a6c`; the answer is discarded.
+10. `0x10265d1f` -- `SetCondition(0x4c LIGHT_DAMAGE)`.
+11. `0x10265d29..0x10265d3a` -- `m_hLastDamageEnt` (`+0x5b7c`) = the attacker's handle, or `-1`.
+12. `0x10265d46` -- `m_bCondTookDamage` (`+0x5b80`) = 1. It does not stay 1: step 15's `SetState(7)`
+    dispatches slot 463, and Troika's `0x102ae140` clears `+0x5b80` (`0x102ae272`).
+13. `0x10265d4d` -- `0x1028ae60` vacates the squad slot; `0x10265d5a`: when `m_pSquad` is set,
+    `RemoveFromSquad` (`0x103158f0`).
+14. `0x10265d66`/`0x10265d70` -- slot 552 `ShouldFadeOnDeath` (spawnflag bit 9). True runs
+    `SUB_StartFadeOut` (`0x102695d0`); false runs `InsertSound(SOUND_CARCASS 0x20, origin, 0x180,
+    30.0, NULL)` (`0x101babc0`).
+15. `0x10265d9c..0x10265dba` -- the trace `AI_BaseNPC.cpp:0x241`, `m_IdealNPCState = 7` again (the
+    double write is retail's), then `SetState(7)` (`0x1026e340`).
+
+Reads `+0x5c38`, `+0x5cc0`, `+0x5d74`, cine `+0x5f91`/`+0x204`, `+0x36c`, `+0x153c`, `+0x1538`,
+`+0x5da4`, info `+0x2c`. Writes `+0x1a48..+0x1a92`, `+0x1ec`, `+0x1b3c/+0x1b40` (absent), `+0x5cc4`,
+`+0x5b7c`, `+0x5b80`, and through its callees `+0x5bd4`, `+0x210`, `+0x1fc`, `+0x208`, `+0x5cc0`.
+
+**Unrecovered:** the ConVar at `DAT_106bbaa4` (the SDK names it `npc_vphysics`; this image's name
+and default are not read); the object behind `DAT_10924a6c` and its slot 1; `m_DeferredDeathInfo`'s
+scalar words have no slot on the port's `FElysiumDmg`.
+
+### `0x102bf340` `CAI_BaseNPCTroika::Event_Killed` (slot 144, 261 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
+`ElysiumNpcSpawn19.cpp`.
+
+1. `0x102bf34d`/`0x102bf354` -- `0x101c2af0(info)` answers `info+0x49`. A zero answer broadcasts the
+   death act through `0x102ca2a0` on `DAT_109253f8`, with type 1 (criminal), source this, the slot-217
+   origin with Z `+ 16.0` (`_DAT_10451ad0`), level 3, radius `100000.0`, offender NULL, victim this,
+   and 1. The store caps at 64 records (`+0xa04 < 0x40`).
+2. `0x102bf3a8` -- `CAI_BaseNPC::Event_Killed` (above), DIRECT.
+3. `0x102bf3b4` -- `ClearHintNode(5.0)`.
+4. `0x102bf3be` -- slot 601 with `this`, unconditional.
+5. `0x102bf3cd` -- `0x102b53d0(0, "Leaving interesting place (Event_Killed)")`.
+6. `0x102bf3d4`/`0x102bf3df` -- when `IsInDialog()` is true: `0x102c0bb0` (stop the dialogue).
+7. `0x102bf3ec..0x102bf3fa` -- when `m_iName` is set: `PyRun_SimpleString(va("MarkAsDead(\"%s\")", name))`.
+8. `0x102bf40c..0x102bf438` -- when `m_hClosestPlayer` (`+0x628c`) is live: `0x101828b0(this,
+   0x47c34ff3)` on that player. The player's closest-NPC cache is offered this NPC at
+   `99999.8984375`.
+
+**Unrecovered:** the port's damage packet carries no `+0x49` byte; the act record's radius, victim
+and trailing flag have no port field; the Python import behind `[0x109f36fc]` is outside the corpus
+(its identity as `PyRun_SimpleString` is from the verdict).
+
+### The species `Event_Killed` bodies over 64 bytes (slot 144) — `0x1038e8c0`, `0x10395ba0`, `0x1039e900`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
+`ElysiumNpcSpawn19Species.cpp`. The Ming Xiao death entries are Boss19's bodies (§ "Story 8, family
+Boss19" below), bound at the integration.
+
+#### `CNPC_VManBat::Event_Killed` `0x1038e8c0` (159 bytes)
+
+`0x1038f020(1)` releases the slowed victim, `0x1038c170(2)` sets fly mode, `0x1038f660` drops the
+carried body and `0x1038fd40` turns the scared minions. When the screech-cone handle `+0x66a4`
+resolves, the body runs `UTIL_Remove` on it and writes `-1`. Then it runs the Troika body.
+
+#### `CNPC_VMingXiao::Event_Killed` `0x10395ba0` (156 bytes)
+
+When `m_bPlayedDeathAnim` (`+0x6744`) is clear: `m_lifeState = 1` and `0x10395c70`
+`MingXiaoEnterDeath` (the death animation, which sets the latch). The base is NOT reached. When it
+is set: a live `m_hParentMingZhao` (`+0x6670`) runs `0x10397a50(parent, this)`. Then comes a gate:
+the ConVar `ming_xiao_grub_death` (default `"1"`, read `IsCommand() ? 0 : m_nValue` through the
+object's `+4`) must be on, and `0x10398870` must answer head (`m_iTentacleID == -1`). When it passes,
+the two sweeps `0x10397e90` and `0x10397f00` run. Then the Troika body.
+
+#### `CNPC_VMingXiaoTentacle::Event_Killed` `0x1039e900` (65 bytes)
+
+When `m_bPlayedDeathAnim` (`+0x6699`) is clear: `m_lifeState = 1` and `0x1039e970`
+`MingXiaoTentacleEnterDeath` (the death schedule), then return. When it is set: `0x1039ede0` resolves
+the head and `0x103979d0(head, this)` runs. Then the Troika body.
+
+**Unrecovered:** `0x1038c170`, `0x1038f660` and `0x1038fd40` have no port body; `0x103979d0` (the
+head's own handling of a dying tentacle) has none either. `0x1039ede0` is 13 bytes and resolves
+`m_hMingXiao` (`+0x665c`); the port's two tentacle seams answer null, so a dying tentacle does not
+notify its head yet.
+
+### `0x103dfbb0` `CNPC_VZombie::CreateCorpse` (slot 301, 363 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
+`ElysiumNpcSpawn19Species.cpp`.
+
+1. `0x103dfbd7..0x103dfc86` -- COPY first. `m_vecDeathForceVector` (`+0x6680`) takes the force.
+   The whole `0x13`-dword `CTakeDamageInfo` goes into `m_DeathDamageInfo` (`+0x668c..+0x66d6`)
+   through a stack copy. The port types that word as `FElysiumTakeDamageInfo`, not `FElysiumDmg`.
+2. `0x103dfc89` -- `SelectWeightedSequence(0x21, -1)`, asked once.
+3. `0x103dfc96`/`0x103dfc9b` -- `m_bShouldGib` (`+0x66e0`) is clear AND there is a sequence. When
+   `m_bShouldRagdoll` (`+0x6675`) is set, `CBaseCombatCharacter::CreateCorpse` runs with the SAVED
+   words (`0x103dfcab`). When it is clear, the body stamps `NPC_VZombie.cpp:0x2eb`, installs `0x162`
+   with force (`0x103dfcd5`), then `ThinkSet(LAB_1000f4e8, 0)` and slot 614. No corpse is made.
+4. `0x103dfd02`/`0x103dfd09` -- gibbing, or no sequence: slot 394 `CorpseGib`, then
+   `UTIL_Remove(this)`.
+
+The zombie's own collapse path (`AddMiscFlag(0x80000)` at `0x103e0210`, then `CreateCorpse`
+`0x103e0225`) reaches `0x1032c0e0`'s static-corpse arm, not the ragdoll arm (the L13 review; the
+RunTask19 Zombie case asserts it).
+
+**Unrecovered:** nothing in the body. At the L08 integration the port's sequence seam answered -1,
+so only the gib arm was reachable. Since wave 2 the pick goes through the sequence bridge
+(`SelectWeightedSequenceForActivity`), so a model with an `0x21` sequence reaches arm 3.
 
 ## Story 8, family Boss19 — Ming Xiao's tentacles and death, the Sabbat leader's transformation, the Tzimisce runner's slot 330 (2026-09-27)
 
@@ -2878,8 +3017,8 @@ The tuning cells are the `Ming_Xiao_Info/General` rows of `Rules.txt` (`0x101e63
 "TentacleHPRegrown" (160.0) and `+0x0` "TentacleHPInitial" (200.0). The weapon's slot 360 word is
 read as the weapon record's family (melee -> `0x18000`), as `0x10395650`'s port reads it.
 **Unrecovered:** `0x1023e4b0`'s consumer (a 25-slot global queue; recorded); the packet's `+0x1c`
-position and `+0x4a` byte (no field); the initial `m_rflHitPoints` writer (`Spawn` `0x103927a0`,
-lane L08) — until it lands the words start at 0.
+position and `+0x4a` byte (no field). The initial `m_rflHitPoints` writer (`Spawn` `0x103927a0`,
+lane L08) landed with Spawn19 and reads TentacleHPInitial (§ "Story 8, family Spawn19").
 
 ### `0x103c43b0` `CNPC_VTzimisceRunner::vfunc330` (42 bytes, Damaged19)
 
@@ -2890,3 +3029,266 @@ arguments with `(shooter, 0x79)` and tail-jump slot 320 `PlayerKnockbackReaction
 The float is never read; there is no jump table.
 
 **Unrecovered:** nothing named by the walk.
+
+## Story 8, family Spawn19 — slot 103 `Spawn` (base, Troika, the species), slots 617 / 618 (the boss swap) (2026-09-28)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L08, integrated as `14697e2b`._
+
+Each section is one `rule` row of `families-19-29/Spawn19-READING.md`, walked arm by arm off the
+listing (`vtmb_asm`), every body over 64 bytes, arms in retail order. Port:
+`ElysiumNpcBaseSpawn19.cpp`, `ElysiumNpcSpawn19.cpp`, `ElysiumNpcSpawn19Species.cpp`. The family's
+slot-144 death bodies and `CNPC_VZombie::CreateCorpse` are walked under § "The death chain, kill to
+corpse" above, because that section already owns `0x10265ad0`. `CNPC_VGhoulCroucher::ScriptHide`
+`0x1037c1c0` is Script19's row (`authored-control.md` § "Story 8, family Script19, the script
+directors"). The lane's duplicate body was folded into `GhoulCroucherScriptHide` at the integration.
+
+### `0x10273200` `CAI_BaseNPC::Spawn` (slot 103, 312 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._
+
+1. `0x10273272`/`0x1027327a` -- when `g_pGameRules` (`DAT_1070ba0c`) slot 74 (`FAllowNPCs`) is
+   false: `UTIL_Remove(this)` and return. The port has one seam for it (`Spawn19GameRulesAllowNpcs`),
+   shared with the camera's `0x103692f8`.
+2. `0x1027329b` -- this arm runs only when `m_pBaseNPCTroika` (`+0x98`) is NULL. It needs
+   `CapabilitiesGet() & 0x200000` (`0x102732ac`) and a non-null `m_spawnEquipment` (`+0x5dec`,
+   `0x102732b6`) that is neither the 2-byte `"0"` (`0x102732d1`) nor the 15-byte `"item_w_unarmed"`
+   (`0x102732f2`). It then calls `Weapon_Create` and, when a weapon comes back, slot 383
+   `Weapon_Equip(weapon, false)`. The world's spawn pass is indexed over the map's own count,
+   because a `Spawn` may now create entities (`0x10273306`).
+3. `0x10273320` -- slot 223 `CreateVPhysics`.
+4. `0x10273328` -- `CBaseCombatCharacter::Spawn` (`0x10323a90`: `AddToTeam` on a non-empty
+   `m_sTeamName`, then `CBaseAnimating::Spawn`).
+
+**Unrecovered:** nothing in the body; `CBaseAnimating::Spawn`'s own content is outside the family;
+`Weapon_Create` `0x1032e120` is a seam answering no weapon.
+
+### `0x10298d30` `CAI_BaseNPCTroika::Spawn` (slot 103, 1336 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._
+
+1. `0x10298d3d` -- `m_bInitialized` (`+0x62e9`) = 1.
+2. `0x10298d59..0x10298d93` -- a non-empty `m_statTemplate` (`+0x10e4`) goes to the template
+   manager (`0x10206c30` on `DAT_1074f028`, which applies it through `0x10206aa0`).
+3. `0x10298d9c` -- slot 104 `Precache` (`0x10298ad0`). With no model set, it names
+   `models/error/error.mdl`.
+4. `0x10298db1`/`0x10298db6` -- `AddToTeam(m_sTeamName)` on a non-empty string.
+5. `0x10298dc4`/`0x10298dd4` -- slot 105 `SetModel(STRING(GetModelName()))`.
+6. `0x10298dde`/`0x10298de8` -- `m_bloodColor = 0xf7`, `m_flFieldOfView = 0.2`.
+7. `0x10298df2`/`0x10298dfe`/`0x10298e07` -- `CapabilitiesAdd` `1`, `0x800000`, `8`.
+8. `0x10298e0c..0x10298e30` -- `m_HackedGunPos = (0, 0, 55.0)`, `m_pInterestingPlace = 0`,
+   `m_bInterestingPlaceArrived = 0`.
+9. `0x10298e8d`/`0x10298efe`/`0x10298f70`/`0x10298fd7` -- four calls on `m_Collision`, each in its
+   own scope-trace frame: `SetSolidFlags(0)`, `AddSolidFlags(w | 1)`, `AddSolidFlags(w | 0x40)`,
+   `SetSolid(SOLID_BBOX)`.
+10. `0x10298fed`/`0x10298ff6`/`0x10298ffc` -- slot 93 `SetMoveType(4, 0)`, `SetHullSizeNormal(false)`,
+    `Relink`.
+11. `0x10299006` -- `CAI_BaseNPC::Spawn` (above).
+12. `0x10299017..0x1029904d` -- `m_vecInitialPosition` = slot 217, `m_qaInitialAngles` = slot 219.
+13. `0x10299057`/`0x1029905f` -- slot 420 `NPCInit`, then `ApplyDisciplineSpawnFlags`
+    (`0x1033df80`), which ORs `1, 2, 4, 8, 0x10, 0x20` into `+0x0eac` for spawnflags bits 5, 6 and
+    12..15.
+14. `0x1029907c..0x102990ed` -- each `m_iPL…Level` (`+0x6348..+0x6358`) below 1 gets
+    `DevMsg("Warning: Invalid m_iPL… ('pl_…' in world craft)")` and is set to 6.
+15. `0x10299120` -- when the occluded sum is positive, chase = 100 and wait / cover / walk / flank
+    become the CUMULATIVE `x * 100 / sum` ladder (truncating `IDIV`).
+16. `0x10299194`/`0x102991d4` -- when chase is not 100: `Warning("Occluded target reaction
+    percentages for %s (%f, %f, %f) do not add up to 100%")`, with the debug name and the initial
+    position. If chase is still `<= 0`, the ladder resets to 10 / 40 / 50 / 70 / 100. The port
+    reproduces the order: chase is forced to 100 before the check.
+17. `0x10299216`/`0x1029922d` -- `0x10298910(m_sInterestingPlaceGroups)`, `0x102989e0(m_sHintGroups)`.
+18. `0x10299244`/`0x1029924f` -- `m_iCombatStartActivity = 0x1029f340(m_sCombatStartActivity)`.
+19. `0x10299255` -- `0x10207e60(this)`: `PrecacheModel(GetCharTemplate(this)->+0x78, 0)`.
+20. `0x1029925e` -- `AddFlag2(4)`.
+
+In the port, `FElysiumNpc::Spawn` is this walk (`TroikaSpawnBody`). So `NPCInit` runs at spawn, as
+it does here, and `FElysiumNpc::Activate` no longer calls it or `Senses.ResolveTuning` (retail runs
+`InitPerceptionDistances` inside `NPCInit`, `0x1029a6a4`). Step 5's slot-105 `SetModel` builds the
+skeletal body and motor (`TroikaSetModel` `0x10298ce0` -> `SetRuntimeModel`, whose body-follow
+hook builds them), so the presentation follows retail's model write. The camera's own `SetModel`
+(`0x10368bab`) does the same for `CNPC_VCamera::Spawn`. `NPCInit` stamps from the spawn clock, so a
+headless world spawns at `-0.1` (`ElysiumStandSpawnClock`).
+
+**Unrecovered:** the template column `+0x78` that `0x10207e60` precaches; the meaning of
+`m_fFlags2` bits 4, `0x10` and `0x20`; whether retail's `GetModelPtr` resolves `error.mdl`.
+
+### The species `Spawn` bodies over 64 bytes (slot 103) — `0x10368b70` … `0x103a4510`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._ "The Troika spawn" below is `0x10298d30`.
+
+#### `CNPC_VCamera::Spawn` `0x10368b70` (589 bytes)
+
+`CapabilitiesAdd(0x4000000)`; slot 104; slot 105 with slot 9. `m_bloodColor = 0xf7`,
+`m_fEffects = 0`, `m_iHealth = 1`, `m_flFieldOfView = 0.2`, `m_NPCState = 0`, `m_HackedGunPos = 0`,
+`m_flNextListenTime = 0`, `m_pInterestingPlace = 0` (`0x10368bb1..0x10368bfb`). Then
+`SetSolidFlags(0)`, `SetSolid(SOLID_NONE)`, `SetMoveType(4, 0)`, `SetHullSizeNormal(false)`,
+`Relink`, slot 420, `InitPerceptionDistances` and `ApplyDisciplineSpawnFlags`.
+`m_hEyeLookTarget = -1`, `m_RelativeEyeTarget = 0`. The five police-level repairs follow (identical
+strings), then slot 66 `Hide` and `AddFlag2(0x10)`. There is no Troika spawn and no base spawn.
+
+#### `CPayphone::Spawn` `0x101aa9c0` (357 bytes)
+
+The Troika spawn, then `m_flNextThink = curtime + 0.1` (`_DAT_104491b4`). Then `SetMoveType(0, 0)`,
+`SetSolid(SOLID_BBOX)`, `m_iHealth = 80000`, `m_takedamage = 0`, `AddFlag(0x10000)`,
+`m_nSequence = 0`, `ResetSequenceInfo`, `m_flCycle = 0`, `AddSolidFlags(w | FSOLID_NOT_SOLID)`,
+`RemoveFlag2(4)` and `AddFlag2(0x10)`.
+
+#### `CNPC_VMingXiao::Spawn` `0x103927a0` (436 bytes)
+
+Caps `0x4000000` and `0x200000`, then the Troika spawn and `AddMiscFlag(0x80000)`. FOV `-0.5`.
+`m_hParentMingZhao = -1`, `m_iTentacleID = -1`, `m_bHasTransformed = 0`,
+`m_iSeveredTentacleMask = 0`, `m_flProxyReadyTimer = 0`, and
+`m_flSpitAttackTimer = 0x10397f70() + curtime`.
+
+Six slots are seeded (`0x1039281c..0x10392850`): severed `-1`, registered 0, proxy `-1`, attack
+timer 0, hit points and regrow timer `FLT_MAX`. The hit points come from the tuning record
+`0x10739d08` (`Select19MingXiaoTuningField`): `+0x0` TentacleHPInitial is written into each limb's
+`m_rflHitPoints` (`0x10392830 MOV ECX,0x10739d08`, `0x1039283f FSTP [EDI+0x50]`).
+
+Then `m_iConnectedTentacleCount = 6`, `0x10398800` (the bodygroup), `m_hMeleeWeapon` from
+`GetBestMeleeWeapon`, `m_hRangedWeapon` from slot 309, and slot 388 `Weapon_Switch(ranged, 0)`.
+`SetAbsoluteAttackExtents(120, 120, 92)`, `m_bNeverMeleeOpponent = 1`. Throwable mode 0, coordinate
+tentacle 0, `m_bPlayedDeathAnim = 0`. `m_flIdealRange = 0x103986b0()`, which is Boss19's
+`MingXiaoIdealRangeFromLimbs`. Charge-ready 0, blocked-by-friend 0.
+
+#### `CNPC_VMingXiaoTentacle::Spawn` `0x1039c380` (134 bytes)
+
+Caps `0x4000000` and `0x200000`; the Troika spawn; `AddMiscFlag(0x80000)`. `m_ePhase = 0`,
+`m_bInvincible = 1` (`+0x63d8`), the four timers 0, `m_bIgnoreCollision = 1` (`+0x6688`),
+`m_bHitGroundSound = 0` (`+0x6698`), `m_bPlayedDeathAnim = 0` (`+0x6699`),
+`m_flIgnoreCollisionTimer = curtime + 5.0` (`+0x6684`). Then `RemoveFlag2(4)`.
+
+#### `CNPC_VTzimisce::Spawn` `0x103b9060` (132 bytes)
+
+The Troika spawn FIRST. FOV `-0.5`. The head-forward basis `+0x1074` is rotated
+`(x, y, z) -> (-y, x, z)`. Then `SetAbsoluteAttackExtents(60, 60, 100)`, `RemoveFlag2(4)` and
+`m_bInMelee = 1`.
+
+#### `CNPC_VTzimisceHeadClaw::Spawn` `0x103c1b90` (180 bytes) and `CNPC_VTzimisceRunner::Spawn` `0x103c3b30` (193 bytes)
+
+BEFORE the Troika spawn, both set `m_statTemplate` (`TzimisceCreation2` / `TzimisceCreation3`),
+`m_sPlayerReaction = "D_HT 10"` and occluded 0 / 0 / 0 / 0 / 100. After it, the head claw adds caps
+`0x4000000` and `0x200000`; the runner adds only `0x4000000`. Both set
+`m_bfNPCFrenziedFlags |= 0x80`. The runner also clears `+0x6672`, sets
+`m_bAllowsInterpenetratingAttacks` and writes `m_hPotentialEnemy = -1`. Extents `(45, 45, 100)` /
+`(50, 50, 82)`, then `RemoveFlag2(4)`.
+
+#### `CNPC_VWerewolf::Spawn` `0x103caa30` (217 bytes)
+
+`m_statTemplate = "Werewolf"` BEFORE the Troika spawn. After it: `AddFlag(0x2000)`,
+`m_bIsBCCTargetable = 1`, `m_bPlayFrustration` (`+0x66a9`) `= 0`, `m_pTeleportHintSearchStart`
+(`+0x66ac`) `= 0`, `m_DoorState = 0`. Then the `m_Collision` partition update (`0x100ddd90`),
+`RemoveFlag2(4)` and `AddFlag2(0x10)`.
+
+#### `CNPC_VDog::Spawn` `0x10374000` (90 bytes)
+
+`RandomFloat(0, 1)` first, then `+0x6688 = 0` and `+0x6674 = curtime + that`. Caps `0x4000000`,
+`0x200000` and `0x8000`, then `CNPC_VAnimal::Spawn`.
+
+#### `CNPC_VZombie::Spawn` `0x103df170` (183 bytes)
+
+Caps `0x4000000`, `0x200000` and `0x8000`. `m_altEquipment = m_spawnEquipment = NULL`,
+`m_flNextFleeSoundTime` (`+0x641c`) `= 0`, and the five police levels (`+0x6348..+0x6358`) `999999`.
+Then the encoded witnessed level (`0x1042fde0(0)`), whose two tag bytes are read from UNINITIALISED
+stack (a retail defect; the port writes 0). `m_iPLSupernaturalLevelWitnessed` (`+0x6368`) `= 0`.
+`CNPC_VAnimal::Spawn` runs LAST.
+
+#### `CNPC_VAndreiBlood::Spawn` `0x1035cc20` (176 bytes)
+
+`CapabilitiesAdd(0x200000)`, then `CNPC_VVampire::Spawn`. The runner and kill counts are 0; the
+activated, dead and trigger-unhide flags are 0; `m_fTeleportWaitStartTime = curtime`;
+`m_bForceTeleport = 1`; the hit counter is 0. Then `0x1035e950` rolls `m_iHitMax`.
+
+#### `CNPC_VAsianVampire::Spawn` `0x10360c50`, `CNPC_VChangBros::Spawn` `0x1036afc0`, `CNPC_VSheriffMan::Spawn` `0x103ae630` (109 bytes each)
+
+One `CapabilitiesAdd` (`0x201000`, `0x209000`, `0x201000`), then `CNPC_VVampire::Spawn`, in a
+scope-trace frame. `CNPC_VVampire::Spawn` `0x103c4ef0` sets the player's class to hate through
+`AddClassRelationship` (`0x103c4ef9` -> `0x10332aa0`, overwriting at any priority).
+
+#### `CNPC_VBach::Spawn` `0x10363850` (184 bytes)
+
+`CapabilitiesAdd(0x200000)`, `CapabilitiesRemove(1)`, then `CNPC_VVampire::Spawn`. Then twenty-two
+seeds, all 0 except `m_bBachInStartingPosition` (`+0x66a1`) = 1. The zeroed seeds include
+`m_flWaitFinished` (`+0x5db4`) and the three words of `m_vecLastOccludeOrigin` (SOURCE units).
+
+#### `CNPC_VGhoulCroucher::Spawn` `0x1037b040` (267 bytes)
+
+Caps `0x4000000`, `0x200000` and `0x8000`, and `m_altEquipment = m_spawnEquipment = NULL`. The
+template is picked FIRST by `m_bSpawnBurning` (`+0x6665`, `MalkMansionStalkerBurning`), then
+`m_bSpawnDisturbed` (`+0x6664`, `MalkMansionStalker`), else `MalkMansionCroucher`. Then
+`CNPC_VHumanCombatant::Spawn`. With disturbed set again, `+0x6666 = +0x6667 = 1` and the stalker
+model; otherwise both are 0 and the female model is used. Burning beats disturbed for the template,
+but disturbed alone picks the model (retail, reproduced). Then `m_nUnawareType = RandomInt(0, 3)`
+and the five police levels `999999`.
+
+#### `CNPC_VHengeyokai::Spawn` `0x1037fa00` (70 bytes)
+
+`CNPC_VVampire::Spawn`; extents `(50, 50, 100)`; `RemoveFlag2(4)`; `AddFlag2(0x20)`.
+
+#### `CNPC_VSabbatLeader::Spawn` `0x103a6c80` (129 bytes)
+
+`CapabilitiesAdd(0x209000)`, `m_statTemplate = "VampireSabbatLeader"`, then `CNPC_VVampire::Spawn`.
+
+#### `CNPC_VPlayerController::Spawn` `0x103a4510` (69 bytes, landed before this story)
+
+`CNPC_VVampire::Spawn`; `AddClassRelationship(1, 3, 0)` (`0x103a4519`); `m_bForceFrequentThink = 1`;
+`SetName("playercontroller")`; `AddFlag2(0x10)`. The player controller's own section is
+§ "The player controller — `CNPC_VPlayerController`, `CNPC_VFrenzyShadow`, `CNPC_VWolfMorph`".
+
+**Unrecovered:** `GetBestMeleeWeapon`'s NPC pick (`0x10336f20`, a seam answering null); the names of
+the Dog's `+0x6688` / `+0x6674` and the Scurrying's `+0x668c`; the Bach byte `+0x66a4` (bound as
+`bBachShotLatch`, its retail name unread).
+
+### `0x103c75f0` `CNPC_VVampireBoss::InputTransformModel` (slot 617, 135 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._ The `TransformModel` input is bound to slot 617.
+
+1. `0x103c763f` -- `m_pszMonsterClassname` (`+0x6694`) = `"npc_VVampireBoss"`, UNCONDITIONALLY
+   (a retail defect: the classname is set even with no morph model).
+2. `0x103c7652`/`0x103c7659` -- when `m_MorphModelName` (`+0x667c`, null read as `""`) is non-empty:
+   `m_pMonsterModelName` (`+0x6680`) = it, and `0x102ae750(0x159, false)`.
+
+**Unrecovered:** nothing.
+
+### `0x103c60a0` `CNPC_VVampireBoss::TransformationStart` (slot 618, 632 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._
+
+1. `0x103c60fa`/`0x103c610a` -- the entity factory `0x10136580` runs on `m_pszMonsterClassname`, and
+   the body takes the new entity's `+0x98`. A miss leaves NULL, and retail faults at `0x103c6110`;
+   the port counts the miss and removes the orphan (a crash guard).
+2. `0x103c611b` -- new `m_spawnflags |= 4`. Then `0x103c612e` slot 62 with our slot 217,
+   `0x103c6143` slot 64 with our slot 221, `0x103c614e` slot 202 (owner = us) and `0x103c6157`
+   `CopyAnimationDataFrom(us)`. `0x103c615e`: new `m_flSeekDistBase` (`+0x63b4`) = 4096.0.
+3. `0x103c6171` -- slot 105 `SetModel(m_pMonsterModelName)`; `0x103c6178` `DispatchSpawn`.
+4. `0x103c618d`/`0x103c6193` -- new `m_fEffects |= 0x60`, slot 614; `0x103c61a4` slot 105 AGAIN (a
+   retail defect: `SetModel` runs on both sides of `DispatchSpawn`); `0x103c61bb`
+   `m_fEffects &= ~0x60`, alpha 1, `m_nRenderFX = 0x1f`, `m_nRenderMode = 2`.
+5. `0x103c61e0` -- new `m_hProteanTransformOther` (`+0x155c`) = us; `0x103c61fe`/`0x103c6204`
+   `m_flProteanTransformStartTime` (`+0x1560`) = curtime on BOTH.
+6. `0x103c620a..0x103c6234` -- new `m_NPCState = m_IdealNPCState = 5`, `m_bIsBCCTargetable`
+   (`+0x1480`) = 1, traces `npc_VVampireBoss.cpp:0x205` / `0x206`; `0x103c623e`
+   `0x102ae750(0x158, false)` ON THE NEW BODY.
+7. `0x103c6243..0x103c62c4` -- the five police levels and the five occluded percents copied across.
+8. `0x103c62ca`/`0x103c62e1` -- `__RTDynamicCast(new, CNPC_VVampireBoss)` (type descriptor
+   `0x1062a654`, the same cast `WaitForTransformation 0x103c63c0` makes). On a hit, new `+0x66b0`
+   (`m_hTransformPartner`) = us. A non-boss body casts to null and the write is skipped: the gate
+   is retail, not a crash guard.
+9. `0x103c62e7`/`0x103c62f1`/`0x103c6304` -- OUR `m_nRenderFX = 0x1e`, `m_nRenderMode = 2`, and
+   `m_hProteanTransformOther` = the new body, LAST.
+
+**Unrecovered:** nothing in the body. The port's `CopyAnimationDataFrom` carries only the words the
+port has (model, skin, sequence, cycle, anim time, effects). The protean start time `+0x1560` is a
+`CBaseCombatCharacter` word (`CBasePlayer::PostThink 0x1016be10` reads it) held on the port's
+`FElysiumNpc`.
+
+### `0x103ab310` `CNPC_VSabbatLeader::TransformationStart` (slot 618, 183 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._
+
+`0x103ab36a` slot 105 `SetModel(".../andrei/andrei_no_mouth.mdl")`; `0x103ab377`
+`SetIdealActivity(0x113e)`; `0x103ab38b` `m_fEffects |= 0x10`. Then `m_nRenderFX = 0`,
+`m_nRenderMode = 0`, `m_eHull = 0`, `m_eDefaultHull = 0` (`0x103ab391..0x103ab3a3`);
+`0x103ab3a9` `SetHullSizeNormal(true)`; `0x103ab3af` `Relink`; `0x103ab3b9`
+`CNPC_VVampireBoss::TransformationStart`, DIRECT. The boss body's render writes land last.
+
+**Unrecovered:** nothing.

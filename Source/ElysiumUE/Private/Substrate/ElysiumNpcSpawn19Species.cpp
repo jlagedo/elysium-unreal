@@ -8,7 +8,8 @@
 // the instruction it came from. A body whose retail listing calls its parent's slot DIRECTLY calls the
 // parent here the same way (`FElysiumNpcVampire::Spawn()` for `0x103c4ef0`, `FElysiumNpc::Spawn()` for
 // the Troika body `0x10298d30`, whose port body the integrator swaps -- see `TroikaSpawnBody`).
-// Walked prose: `docs/vtmb/npc-ai/story8/Spawn19.md`.
+// Walked prose: `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Spawn19" (Spawn, 617 / 618) and
+// § "The death chain, kill to corpse" (Event_Killed, CreateCorpse).
 //
 // Owns (Spawn19's `rule` rows): 0x103c60a0 CNPC_VVampireBoss::TransformationStart, 0x103c75f0
 // CNPC_VVampireBoss::InputTransformModel, 0x103dfbb0 CNPC_VZombie::CreateCorpse, 0x103ab310

@@ -12,8 +12,8 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
 | … cited by the port | 2694 |
-| … cited by the oracle | 2660 |
-| … cited by neither | 2112 |
+| … cited by the oracle | 2661 |
+| … cited by neither | 2111 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -467,7 +467,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10009b06` | CNPC_VAnimal::StartTask | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:23 |
 | `0x10009b8d` | thunk_FUN_100f7b20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1927 |
 | `0x10009c14` | thunk_FUN_10295460 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:545, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:548 |
-| `0x10009c8c` | thunk_FUN_100290c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1186, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1291 |
+| `0x10009c8c` | thunk_FUN_100290c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1186, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1291 |
 | `0x10009caf` | CBaseEntity::StartTouch | Source/ElysiumUE/Private/Substrate/ElysiumNpcGhoulCroucher.cpp:185 |
 | `0x10009d1d` | thunk_FUN_103dc280 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:945, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:521 |
 | `0x10009db3` | thunk_FUN_1038c250 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1712 |
@@ -510,7 +510,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000d585` | CNPC_VSabbatLeader::SelectTeleportArchway | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2659 |
 | `0x1000d774` | CNPC_VSabbatLeader::SelectDiveOutPoint | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2663 |
 | `0x1000d9fe` | thunk_FUN_10395ce0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2085 |
-| `0x1000da76` | thunk_FUN_1003e4b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:59 |
+| `0x1000da76` | thunk_FUN_1003e4b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:60 |
 | `0x1000dc06` | thunk_FUN_1042fe90 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:442, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:923 |
 | `0x1000dcba` | CNPC_VHumanCombatant::NPCInit | Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:147 |
 | `0x1000de7c` | CNPC_VVampireBoss::StartTask | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:729, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:769, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1245, +2 more |
@@ -583,7 +583,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1001395d` | thunk_FUN_10146190 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1351, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1535, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTask19Tests_2.cpp:605 |
 | `0x10013aca` | CNPC_VSabbatLeader::PlayerInNoJumpZone | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2700 |
 | `0x10013b24` | CNPC_VVampireBoss::CausePlayerAOEDamage | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1239 |
-| `0x10013cf5` | CBaseCombatCharacter::AddClassRelationship | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:236 |
+| `0x10013cf5` | CBaseCombatCharacter::AddClassRelationship | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:237 |
 | `0x10013f2f` | CAI_BaseNPCTroika::GatherConditions | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp:4, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:298 |
 | `0x1001402e` | thunk_FUN_102ee1c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:553, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:609, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2054, +2 more |
 | `0x100140b5` | thunk_FUN_101c29b0 | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1593 |
@@ -1620,7 +1620,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1032c580` CBaseCombatCharacter::Event_TookLife | `0x1017fb30` CBasePlayer::Event_TookLife |
 | `0x1032cbe0` CBaseCombatCharacter::Weapon_Detach | `0x101743f0` CBasePlayer::FUN_101743f0 |
 | `0x1032d890` CBaseCombatCharacter::Weapon_OwnsThisType | `0x100da230` FUN_100da230, `0x10171f50` CBasePlayer::FUN_10171f50, `0x10173f90` FUN_10173f90, `0x10177210` CBasePlayer::Weapon_CanUse |
-| `0x1032e120` CBaseCombatCharacter::Weapon_Create | `0x1016de10` CBasePlayer::FUN_1016de10, `0x101772b0` CBasePlayer::Weapon_Switch, `0x10177900` CBasePlayer::FUN_10177900, `0x1021fc90` FUN_1021fc90, +1 more |
 | `0x1032e890` FUN_1032e890 | `0x103228c0` CBaseCombatCharacter::UpdateOccultPowers |
 | `0x1032e8b0` CBaseCombatCharacter::GetWeapon | `0x100b7fe0` CBasePlayer::FUN_100b7fe0, `0x100d5be0` FUN_100d5be0, `0x100d5d10` FUN_100d5d10, `0x100d8220` FUN_100d8220, +18 more |
 | `0x1032e9f0` CBaseCombatCharacter::SetWeapon | `0x1032ead0` CBaseCombatCharacter::RemoveAllWeapons, `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront |
@@ -1895,7 +1894,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:110 | ``/** `CVFeatList_t` (`0x10739d08`, loaded by `0x101e6310` from `Rules.txt`) fields the zombie's`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:1225 | ``// `thunk_FUN_101e8da0(0x10739d08)`, MingXiao's tuning record: no table stands here, every field`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1007 | ``// `thunk_FUN_101e8da0(0x10739d08)` is `LEA EAX,[ECX+0x2bc]` — the `Ming_Xiao_Info/General` slice`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:574 | ``// `thunk_FUN_101e8da0(0x10739d08)`, the Ming Xiao tuning record, is `Select19MingXiaoTuningField``` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:575 | ``// `thunk_FUN_101e8da0(0x10739d08)`, the Ming Xiao tuning record, is `Select19MingXiaoTuningField``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1977 | ``/** `thunk_FUN_101e8da0(0x10739d08)` -- `CNPC_VMingXiao`'s tuning record, read by field offset. The`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3996 | ``/** `CVFeatList_t` (`0x10739d08`) fields, loaded by `0x101e6310` from `Rules.txt` with`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossesTests.cpp:35 | ``// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s tuning record, read by field offset.`` |
@@ -2309,7 +2308,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:201 | ``// back to the lazily built global `0x109f0b40` (`0x10363bc9` init bit, `0x10363bda` constructor,`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:182 | ``// type-0 stat list (`+0x13bc/+0x13c0`, else the global `0x109f0b40`) `Set(0xf, 0)``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:221 | ``// `RandomInt(0, 0xff)` through the import `[0x109f3868]`; ONLY the exact value 0x80 fidgets,`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:183 | ``// `vstdlib RandomFloat` / `RandomInt` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream.`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:184 | ``// `vstdlib RandomFloat` / `RandomInt` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:257 | ``static float Value = 24.0f;   // "24" `0x1063986c``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:263 | ``static float Value = 5.0f;    // "5" `0x1056d814``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp:269 | ``static float Value = 75.0f;   // "75" `0x106398e4``` |
@@ -2382,8 +2381,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:393 | ``// `0x10294870`, slot 498. The second concept the corpus left unnamed (`0x105d8cd0`), read out`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:264 | ``// cell past the three-byte placeholder `"???"` at `0x105d8ccc` — through `DAT_10923dd5` /`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:394 | ``// of the pinned image as `"Flee"` — one cell past the placeholder `"???"` at `0x105d8ccc`.`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19.cpp:65 | ``FElysiumEntityHandle::Invalid());                                        // 0x102bf3fa [0x109f36fc]`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:123 | ``const TCHAR* const GSpawn19TemplateRat = TEXT("Rat");                              // `0x10650370``` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19.cpp:66 | ``FElysiumEntityHandle::Invalid());                                        // 0x102bf3fa [0x109f36fc]`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:124 | ``const TCHAR* const GSpawn19TemplateRat = TEXT("Rat");                              // `0x10650370``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:207 | ``constexpr float HintSearchPadUnits = 8192.0f; // `0x1049ae70``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:226 | ``constexpr float HintLeanDegrees = 45.0f;           // `0x1049949c``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:227 | ``constexpr float HalfTurnDegrees = 180.0f;          // `0x1044c3a8``` |

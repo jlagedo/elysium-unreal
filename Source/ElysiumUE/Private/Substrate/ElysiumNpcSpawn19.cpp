@@ -8,7 +8,8 @@
 // `ElysiumNpcSlots.inl` for a slot body.
 //
 // Owns (Spawn19's `rule` rows): 0x102bf340 CAI_BaseNPCTroika::Event_Killed, 0x10298d30
-// CAI_BaseNPCTroika::Spawn. Walked prose: `docs/vtmb/npc-ai/story8/Spawn19.md`.
+// CAI_BaseNPCTroika::Spawn. Walked prose: `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Spawn19"
+// (Spawn) and § "The death chain, kill to corpse" (Event_Killed).
 
 #include "Substrate/ElysiumNpc.h"
 
