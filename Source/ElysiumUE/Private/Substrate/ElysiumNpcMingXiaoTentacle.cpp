@@ -376,7 +376,8 @@ void FElysiumNpcMingXiaoTentacle::FUN_1039e800(FElysiumEntity* Arg)
 
 // =================================================================================================
 // Story 8, lane L12 — Boss19's `CNPC_VMingXiaoTentacle` rows. Arms carry the instruction address
-// they came from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// they came from (`vtmb_asm`); walked prose in
+// `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 // =================================================================================================
 
 namespace NpcKernelBoss19Tentacle

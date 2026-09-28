@@ -506,7 +506,8 @@ public:
 	// `StartTask` (`0x103ccda0`), `RunTask` (`0x103cdfb0`) and `SelectSchedule` (`0x103cee70`), other
 	// lanes' rows. Each takes retail's own arguments: a `CAI_Hint*` is the hint's words (`FHintWords`,
 	// resolved through `HintWords`), and every answer is retail's `bool`/`void`. Bodies in
-	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in
+	// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 	//
 	// The words these bodies share, and what the listings say they are (the port's older names stay
 	// because landed suites of other families assert through them):

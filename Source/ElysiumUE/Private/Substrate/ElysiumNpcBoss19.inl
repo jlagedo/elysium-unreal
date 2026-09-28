@@ -15,7 +15,8 @@
 // --- Story 8, lane L12: the Troika-line helpers of Boss19 ----------------------------------------
 //
 // No slot holds these. Bodies in `ElysiumNpcBoss19.cpp`; walked prose in
-// `docs/vtmb/npc-ai/story8/Boss19.md`. The two bools of `ResetAiState` are retail's two `char`
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
+// The two bools of `ResetAiState` are retail's two `char`
 // arguments, kept as the codebase's other retail helpers keep theirs (`SetSchedule`, `SetMoveHint`).
 
 /** `0x102b52a0` — the AI teardown `DoPossession`, `DoFrenzy` and `SetFollowerBoss` share: drop the

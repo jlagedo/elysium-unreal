@@ -12,7 +12,8 @@
 // CNPC_VManBat::OverrideMove and its body 0x1038b1a0. The director rows the shape commit listed here
 // (0x101a7140, 0x101a7880, 0x101a9080, 0x101a82d0, 0x101a9510, 0x101a9790) are the directors' own
 // class files (`ElysiumScriptedSequence.cpp`, `ElysiumAiScriptedSequence.cpp`,
-// `ElysiumAiScriptedSchedule.cpp`). Walked prose: `docs/vtmb/npc-ai/story8/Script19.md`.
+// `ElysiumAiScriptedSchedule.cpp`). Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "family Script19, the Troika's movement helpers".
 
 #include "Substrate/ElysiumNpcManBat.h"
 #include "ElysiumEntityWorld.h"

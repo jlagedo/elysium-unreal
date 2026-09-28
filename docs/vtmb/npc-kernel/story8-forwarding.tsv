@@ -1,18 +1,2 @@
 # Story 8's forwarding bodies (`uv run elysium research kernel_story8_shape`): one row per `STORY8-FORWARD` marker under Source/. A porter replaces the body and drops the marker; the set must only fall to 0.
 family	class	slot	address	file
-RunAi19	CAI_BaseNPC	432	0x1026f110	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi19.cpp
-RunAi19	CAI_BaseNPCTroika	432	0x1028fcc0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19.cpp
-RunAi19	CNPC_VAndreiBlood	432	0x1035e980	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VAsianVampire	432	0x10361110	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VBach	432	0x10363b60	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VDog	432	0x103747e0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VGargoyle	432	0x10378b80	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VHengeyokai	432	0x10380120	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VManBat	432	0x1038e990	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VMingXiaoTentacle	432	0x1039e3d0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VPedestrian	432	0x103a3670	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VSabbatLeader	432	0x103a75c0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VSheriffMan	432	0x103aebd0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VTzimisce	432	0x103bdef0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VTzimisceHeadClaw	432	0x103c1d20	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-RunAi19	CNPC_VZombie	432	0x103df850	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp

@@ -14,7 +14,7 @@
 // --- Story 8, lane L12: the Troika-line helpers of Werewolf19 -----------------------------------
 //
 // No slot holds these. Bodies in `ElysiumNpcWerewolf19.cpp`; walked prose in
-// `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 
 /** `0x102c44e0` `SetFollowerBoss(const char*)`: slot 559 `FindNamedEntity` resolves the name into
  *  `m_hFollowerBoss` (`+0x647c`); a miss, a dead handle, this NPC itself, or a connected squad member

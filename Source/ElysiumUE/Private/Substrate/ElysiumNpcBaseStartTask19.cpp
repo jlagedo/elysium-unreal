@@ -12,7 +12,8 @@
 // Lane L03 (pass I): the body is `CAI_BaseNPC::StartTask` `0x102827f0`, 18330 bytes, read off the
 // listing (`uv run elysium --verbose research corpus asm 0x102827f0`) arm by arm in the order of its
 // arm table `0x10286f8c` (107 entries, reached through the byte table `0x10287138` indexed `iTask-1`).
-// The walked account is `docs/vtmb/npc-ai/story8/StartTask19-Base.md`.
+// The walked account is
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPC::StartTask` `0x102827f0`".
 //
 // Every `TaskFail` site first writes the source file (`AI_BaseNPC_Schedule.cpp`, `0x105cde88`) into
 // `+0x1b44` and its line into `+0x1b48`; those words are ABSENT in this runtime (shape map), so the

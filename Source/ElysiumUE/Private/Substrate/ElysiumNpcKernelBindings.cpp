@@ -1215,9 +1215,10 @@ namespace ElysiumNpcKernelBindings
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x6578 m_nEyeFidgetStep (int) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x658c m_sppPatrolPath (custom) — the port member exists but its owner keeps
-		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
-		// it, which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x658c m_sppPatrolPath (custom) — `m_sppPatrolPath` is a FIELD_CUSTOM row (the
+		// pooled path record `BuildPatrolPath` `0x1029f460` builds), and this port's
+		// `FElysiumNpc::PatrolPathCell` is carried with the hunt cell by the NPC's own typed patrol
+		// block (`SerializePatrolBlock`), which writes the node records rather than a pointer
 		// NOT SAVED +0x6594 m_sppPatrolPathHunt (custom) — a FIELD_EMBEDDED row: retail's datamap
 		// points at a second `datamap_t` and recurses, and this port's matching member carries its
 		// own typed `Serialize`, which is the same shape

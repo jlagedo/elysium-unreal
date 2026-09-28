@@ -18,7 +18,9 @@
 // `scripted_sequence` — `CCineNPC`, the script director (story 5 fold A3). Every body below is the
 // retail body at the address its comment names, read off the decompilation and, where a branch
 // mattered, the listing (`vtmb_asm`). The walked prose is `docs/vtmb/npc-ai/authored-control.md`
-// § "Scripted control and authority", `docs/vtmb/npc-ai/story8/Script19.md` and
+// § "Scripted control and authority",
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Script19, the script directors"
+// and
 // `docs/specs/0003-scripted-sequence/spec.md`.
 //
 // The outputs are the load-bearing half: across the exported maps 88 wires leave these entities,

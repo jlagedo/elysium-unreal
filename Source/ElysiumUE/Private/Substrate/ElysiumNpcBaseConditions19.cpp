@@ -2,7 +2,7 @@
 //
 // Declarations are in `ElysiumNpcBaseConditions19.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Walked prose:
-// `docs/vtmb/npc-ai/story8/Conditions19.md`.
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 //
 // Owns (Conditions19's `rule` rows): 0x10270b20 CAI_BaseNPC::GatherEnemyConditions, 0x1026ec30
 // CAI_BaseNPC::GatherConditions.

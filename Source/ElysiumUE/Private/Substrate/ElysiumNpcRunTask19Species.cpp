@@ -21,7 +21,7 @@
 // qualified call. The retail scope-trace push/pop some bodies bracket themselves with is the debug
 // stack this runtime does not stand. Species task ids are compared as the class-LOCAL id (`RunTask19Species::LocalTaskOf`, slot 450), as the
 // landed `FElysiumNpcFrenzyShadow::StartTaskSlot442` compares them (the class-local id). Walked
-// prose: `docs/vtmb/npc-ai/story8/RunTask19.md`.
+// prose: `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family RunTask19".
 
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"

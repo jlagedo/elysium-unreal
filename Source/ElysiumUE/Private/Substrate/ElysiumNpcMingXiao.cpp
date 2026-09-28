@@ -1945,7 +1945,7 @@ void FElysiumNpcMingXiao::SeverTentacle(int32 TentacleId)
 
 // =================================================================================================
 // Story 8, lane L12 — Boss19's `CNPC_VMingXiao` rows. Arms carry the instruction address they came
-// from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 // =================================================================================================
 
 namespace NpcKernelBoss19MingXiao

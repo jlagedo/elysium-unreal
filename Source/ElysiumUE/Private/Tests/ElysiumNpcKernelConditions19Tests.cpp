@@ -2,7 +2,9 @@
 //
 // Test names carry `Elysium.Substrate.NpcKernelConditions19.` and the retail address. Every
 // assertion is read off the listing (`vtmb_asm`) or the decompiled C of the body it names; the
-// walked prose is `docs/vtmb/npc-ai/story8/Conditions19.md`. The bodies are driven directly (the
+// walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
+// The bodies are driven directly (the
 // virtual on the NPC), with the NPCs quiet so no think competes with the pass a case drives.
 //
 // Owns (Conditions19's `rule` rows): 0x10270b20 CAI_BaseNPC::GatherEnemyConditions, 0x1026ec30

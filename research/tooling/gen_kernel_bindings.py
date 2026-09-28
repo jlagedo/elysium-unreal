@@ -466,6 +466,10 @@ SAVE_UNBOUND: dict[int, str] = {
     0x61E4: "EMBEDDED",
     0x6210: "EMBEDDED",
     0x6594: "EMBEDDED",
+    0x658C: "`m_sppPatrolPath` is a FIELD_CUSTOM row (the pooled path record `BuildPatrolPath` "
+            "`0x1029f460` builds), and this port's `FElysiumNpc::PatrolPathCell` is carried with the "
+            "hunt cell by the NPC's own typed patrol block (`SerializePatrolBlock`), which writes the "
+            "node records rather than a pointer",
     0x5DDC: "`m_pHintNode` is a FIELD_CLASSPTR: retail saves the pointer through its own entity "
             "table, and this port holds the hint as a handle the navigator re-resolves",
     0x5DE8: "`m_pGoalEnt` is a FIELD_CLASSPTR, the same case as `m_pHintNode`",

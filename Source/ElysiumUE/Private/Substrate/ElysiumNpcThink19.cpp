@@ -8,7 +8,8 @@
 // `ElysiumNpcSlots.inl` for a slot body.
 //
 // Owns (Think19's `rule` rows): 0x10298070 CAI_BaseNPCTroika::UpdateCharacter, 0x10292de0
-// CAI_BaseNPCTroika::NPCThink. Walked prose: `docs/vtmb/npc-ai/story8/Think19.md`.
+// CAI_BaseNPCTroika::NPCThink. Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family Think19".
 //
 // This is the retail pass. The live loop still runs the port's `FElysiumNpc::Think`
 // (`ElysiumNpc.cpp`); the story-8 wave-2 rewire points the entity think at slot 431 and deletes that

@@ -3,7 +3,9 @@
 // Declarations are in `ElysiumNpcBaseDamage19.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Every arm carries the address of the
 // retail instruction it came from (`vampire.dll`, image base `0x10000000`, read off `vtmb_asm`); the
-// walked prose is `docs/vtmb/npc-ai/story8/Damage19.md`. The debug ring, the scope-trace stack and
+// walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".
+// The debug ring, the scope-trace stack and
 // the `__FILE__`/`__LINE__` stamps stay absent, as in every landed story-8 family.
 //
 // Owns (Damage19's `rule` rows): 0x10265ed0 CAI_BaseNPC::OnTakeDamage_Alive, 0x10265e90

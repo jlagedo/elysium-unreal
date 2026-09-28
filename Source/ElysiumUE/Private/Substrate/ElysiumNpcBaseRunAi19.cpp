@@ -2,7 +2,7 @@
 //
 // Declarations are in `ElysiumNpcBaseRunAi19.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Walked prose:
-// `docs/vtmb/npc-ai/story8/RunAi19.md`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family RunAi19".
 //
 // Owns (RunAi19's `rule` rows): 0x1026f110 CAI_BaseNPC::RunAI.
 

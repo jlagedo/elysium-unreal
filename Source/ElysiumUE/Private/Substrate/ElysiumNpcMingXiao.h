@@ -354,7 +354,8 @@ public:
 	//
 	// No slot holds any of these. Callers: `Event_Killed` `0x10395ba0` (the death and the two
 	// sweeps), `OnTakeDamage_Alive` `0x10395ae0` (the damage router), both other lanes' rows.
-	// Bodies in `ElysiumNpcMingXiao.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+	// Bodies in `ElysiumNpcMingXiao.cpp`; walked prose in
+	// `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 
 	/** `+0x6744 CNPC_VMingXiao::m_bPlayedDeathAnim` (walked) — the latch `0x10395ce0` tests. */
 	bool bMingXiaoPlayedDeathAnim = false;

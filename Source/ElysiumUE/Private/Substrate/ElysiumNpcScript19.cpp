@@ -14,7 +14,7 @@
 // 0x102aa640 / 0x102aa860 (`IssuePatrolMoveStart` / `IssuePatrolMoveRun`). The director rows the
 // shape commit listed here live in `ElysiumScriptedSequence.cpp`, 0x1027d0a0 in
 // `ElysiumNpcBaseScript19.cpp`, 0x1038b1a0 in `ElysiumNpcScript19Species.cpp`. Walked prose:
-// `docs/vtmb/npc-ai/story8/Script19.md`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "family Script19, the Troika's movement helpers".
 
 #include "Substrate/ElysiumNpc.h"
 #include "ElysiumEntityWorld.h"

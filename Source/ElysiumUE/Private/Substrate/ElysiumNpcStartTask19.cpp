@@ -12,7 +12,8 @@
 // boundaries, one `switch`, retail's default arm once. This file carries the dispatch prologue and
 // the arms whose start address lies in `[0x102a1943, 0x102a5046)` (packet chunks 1-3, 68 arms,
 // lane L01); every other in-range id goes to `StartTaskTroikaTail` (lane L02), whose `default:` is
-// the base forward. Walked prose: `docs/vtmb/npc-ai/story8/StartTask19-TroikaA.md`.
+// the base forward. Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "StartTask `0x102a1910` — the dispatch".
 //
 // Owns (StartTask19's `rule` rows): 0x102a1910 CAI_BaseNPCTroika::StartTask.
 

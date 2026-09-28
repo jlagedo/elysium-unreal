@@ -14,7 +14,8 @@
 // 57-entry jump table `0x102ac760`; the arms below are in jump-table index order (the order the
 // decompiler prints them), each with its arm address and case ids. Every branch sense was read off
 // the listing (`vtmb_asm 0x102aacf0`); the packet's chunk walks (`bench/pair-read/passR/giant*`)
-// name the ids per arm. Walked prose: `docs/vtmb/npc-ai/story8/RunTask19.md` § `0x102aacf0`.
+// name the ids per arm. Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPCTroika::RunTask` `0x102aacf0`".
 
 #include "Substrate/ElysiumNpc.h"
 

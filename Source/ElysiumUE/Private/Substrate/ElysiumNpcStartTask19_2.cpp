@@ -15,7 +15,7 @@
 // the two shared tails `0x102a66d7` / `0x102a77ea` and the base forward `0x102a77e2` included), read
 // off the listing of `0x102a1910`. The switch is in retail's table order (ascending task id); each
 // arm carries the address of the instruction it came from. The walked prose is
-// `docs/vtmb/npc-ai/story8/StartTask19-TroikaB.md`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "StartTask `0x102a1910` — the second part".
 //
 // The four exits are retail's: `TaskComplete(false)` (`0x10273e80`, directly or through the shared
 // break tail `0x102a66d7` = `StartTask19Complete()`), `TaskFail(reason)` behind the `+0x1b44` /

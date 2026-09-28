@@ -16,7 +16,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumScheduleNumbers.h"
 
-// Story 8, lane L12. Walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// Story 8, lane L12. Walked prose in `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 
 namespace NpcKernelBoss19Species
 {

@@ -14,7 +14,8 @@
 // CNPC_VAndreiBlood::NPCThink, 0x10361490 CNPC_VAsianVampire::NPCThink, 0x1036c6c0
 // CNPC_VChangBros::NPCThink, 0x10375e50 CNPC_VFrenzyShadow::NPCThink, 0x103af830
 // CNPC_VSheriffMan::NPCThink. (`0x10375e50` landed earlier in `ElysiumNpcFrenzyShadow.cpp`; lane
-// L13b re-read it against the listing and it stands.) Walked prose: `docs/vtmb/npc-ai/story8/Think19.md`.
+// L13b re-read it against the listing and it stands.) Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family Think19".
 
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAsianVampire.h"

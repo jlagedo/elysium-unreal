@@ -15,7 +15,9 @@
 // Story 8, lane L12. The three Troika-line rows (`0x102b52a0`, `0x102c51a0`, `0x102c5310`) are here;
 // the species rows are on their classes (`ElysiumNpcMingXiao.cpp`, `ElysiumNpcMingXiaoTentacle.cpp`,
 // `ElysiumNpcHengeyokai.cpp`, `ElysiumNpcBoss19Species.cpp`). Arms carry the instruction address
-// they came from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`. The
+// they came from (`vtmb_asm`); walked prose in
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
+// The
 // `+0x1b3c`/`+0x1b40` ideal-state trace stamps are the mind's transition trace
 // (`RequestIdealStateRetail`, retail source line carried).
 

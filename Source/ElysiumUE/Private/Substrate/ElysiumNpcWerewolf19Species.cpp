@@ -20,7 +20,8 @@
 //
 // Story 8, lane L12. Every body is ported arm by arm from the decompiled C and the packet
 // (`families-19-29/Werewolf19-READING.md`); each arm carries the address of the instruction it came
-// from. The walked prose is `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+// from. The walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 //
 // The retail helpers these bodies call are already ported on the class (`ElysiumNpcWerewolf.h`):
 // `IsValidBreakHint` 0x103d8550, `GetHintGroundpoint` 0x103d6770, `GetHintTargetGroundpoint`

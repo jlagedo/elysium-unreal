@@ -11,7 +11,7 @@
 //
 // Lane L05 (pass I). The body is read off the listing (`vtmb_asm 0x10288780`) arm by arm; the
 // packet's merged walk and its two judges' corrections decided every branch sense. Walked prose:
-// `docs/vtmb/npc-ai/story8/RunTask19.md` § `0x10288780`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPC::RunTask` `0x10288780`".
 
 #include "Substrate/ElysiumNpcBase.h"
 

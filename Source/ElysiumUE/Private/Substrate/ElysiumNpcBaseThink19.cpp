@@ -8,7 +8,8 @@
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 //
 // Owns (Think19's `rule` rows): 0x1026ca80 CAI_BaseNPC::NPCThink. Also the AI console gate
-// `0x1026c3d0` the three `NPCThink` bodies share. Walked prose: `docs/vtmb/npc-ai/story8/Think19.md`.
+// `0x1026c3d0` the three `NPCThink` bodies share. Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family Think19".
 
 #include "Substrate/ElysiumNpcBase.h"
 

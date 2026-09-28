@@ -10,7 +10,7 @@
 // the marker.
 //
 // Owns (Script19's `rule` rows): 0x1027d0a0 FUN_1027d0a0. Walked prose:
-// `docs/vtmb/npc-ai/story8/Script19.md`.
+// `docs/vtmb/npc-ai/authored-control.md` § "`0x1027d0a0` ExitScriptedSequence".
 
 #include "Substrate/ElysiumNpcBase.h"
 #include "ElysiumEntityWorld.h"

@@ -2,7 +2,7 @@
 //
 // Test names carry `Elysium.Substrate.NpcKernelDamage19.` and the retail address. One case per
 // `rule` row at least, each assertion read off the listing (`vtmb_asm`) with the address beside it.
-// The walked prose is `docs/vtmb/npc-ai/story8/Damage19.md`.
+// The walked prose is `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".
 //
 // Two standing facts shape the cases:
 //   * `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) and `OnTakeDamage_Alive` (`0x103302e0`)

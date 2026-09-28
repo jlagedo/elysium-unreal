@@ -4,7 +4,7 @@
 // through a thirteen-byte forwarder (`CNPC_VChangBros` `0x10385a10`, `CNPC_VAnimal` `0x10360160`), the
 // forwarder is a bare `JMP` to `CAI_BaseNPCTroika::RunAI 0x1028fcc0`, and the port's parent class
 // inherits `FElysiumNpc::RunAI`, so `Parent::RunAI` is that forward. Walked prose:
-// `docs/vtmb/npc-ai/story8/RunAi19.md`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family RunAi19".
 //
 // Owns (RunAi19's `rule` rows): 0x1039e3d0 CNPC_VMingXiaoTentacle::RunAI, 0x103bdef0
 // CNPC_VTzimisce::vfunc432, 0x103c1d20 CNPC_VTzimisceHeadClaw::vfunc432, 0x1035e980

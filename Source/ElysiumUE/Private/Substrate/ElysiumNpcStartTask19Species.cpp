@@ -4,7 +4,9 @@
 // Every body is the retail `StartTask` (slot 442) at the address its definition comment names, read
 // off the listing (`vtmb_asm`) and the reading packet
 // `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/StartTask19-READING.md`; the walked
-// prose is `docs/vtmb/npc-ai/story8/StartTask19-Species.md`. Each arm carries the address of the
+// prose is
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "The species `StartTask` overrides (slot 442)".
+// Each arm carries the address of the
 // instruction it came from.
 //
 // **The task number.** Retail's schedule parser stores the CLASS-LOCAL task id in `Task_t::iTask`

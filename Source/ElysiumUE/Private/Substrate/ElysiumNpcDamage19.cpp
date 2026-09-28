@@ -3,7 +3,8 @@
 // Declarations are in `ElysiumNpcDamage19.inl` (included inside `class FElysiumNpc`) or generated
 // in `ElysiumNpcSlots.inl` for a slot body. Every arm carries the address of the retail instruction
 // it came from (`vampire.dll`, read off `vtmb_asm`); the walked prose is
-// `docs/vtmb/npc-ai/story8/Damage19.md`. The `__FILE__`/`__LINE__` stamps retail writes into
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".
+// The `__FILE__`/`__LINE__` stamps retail writes into
 // `m_SelectScheduleTrace` (`+0x1b30`/`+0x1b34`) are ABSENT shape words; as in slot 442's landed
 // body the retail line is recorded through `RecordScheduleEvent`.
 //

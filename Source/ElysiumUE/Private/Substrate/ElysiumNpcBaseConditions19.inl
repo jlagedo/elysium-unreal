@@ -5,7 +5,8 @@
 // `ElysiumNpcBaseConditions19.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Conditions19's `rule` rows): 0x10270b20 CAI_BaseNPC::GatherEnemyConditions, 0x1026ec30
-// CAI_BaseNPC::GatherConditions. Walked prose: `docs/vtmb/npc-ai/story8/Conditions19.md`.
+// CAI_BaseNPC::GatherConditions. Walked prose:
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 
 // --- The condition identities `EElysiumNpcCond` does not spell -------------------------------------
 //
