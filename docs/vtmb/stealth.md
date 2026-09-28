@@ -241,6 +241,51 @@ focused live acceptance. Static code proves ordinary paired enter/leave and gene
 teardown rules, but does not yet prove which edge rebuilds or releases this specialized contribution
 across every abnormal teardown.
 
+### Retail defect: removing an occupied stealth volume leaves its bonus behind
+
+The installed **retail** `Vampire/maps/sm_warehouse_1.bsp` (SHA-256
+`4dba4f8faefcd1d83a62e69784bb1295a44efbd24400001b1e786f078b32a42d`) contains a
+reachable removal wire. Entity 1681 is `trigger_stealth_mod` named `window_sneak`, with
+`stealth_modifier=10`, `StartDisabled=0`, brush model `*234` and origin `(180,1128,-28.5)`.
+Entity 1680, relay `stealth failed`, sends `window_sneak,Kill,,0,-1,,` on `OnTrigger`.
+Several `npc_VHumanCombatant` entities, including the office thug at
+`(145.869,982.492,-52)`, send `stealth failed,Trigger` on `OnFoundPlayer`. These are
+the BSP entity lump's own records, not an Unofficial Patch replacement.
+
+The failure is conditional on the player still touching `window_sneak` when that relay fires:
+
+1. `CStealthModifier::StartTouch` (`0x101cba00`, slot 174) calls
+   `CBaseCombatCharacter::IncrementStealthModifier` (`0x1032f930`), adding 10 to the player's
+   `m_nStealthBonus` (`+0x1084`). Ordinary `EndTouch` (`0x101cba40`, slot 176) subtracts 10 through
+   `0x1032f9f0`.
+2. `InputKill` (`0x100acef0`) dispatches `Kill` (`0x100acf90`) into deferred `UTIL_Remove`
+   (`0x101cd940` → `0x101cd8c0`). `CStealthModifier` inherits base `UpdateOnRemove`
+   (`0x100a47d0`, slot 180); that path does not call its `EndTouch`.
+3. `CBaseEntity::~CBaseEntity` (`0x1009df20`) calls `PhysicsRemoveTouchedList`
+   (`0x1003d8f0`). For each link, `PhysicsNotifyOtherOfUntouch` (`0x1003d640`) calls
+   `PhysicsRemoveToucher` (`0x1003d770`) on the **other** entity. The player's link
+   toward a trigger has its begin/end flag clear (`PhysicsMarkEntityAsTouched`,
+   `0x1003dc70`), so even the player's slot-176 `EndTouch` is skipped. The trigger's
+   own link is freed directly, without its slot-176 body. Both links are gone and no
+   later exit edge can subtract the 10.
+
+The zero-delay relay output runs during `CEventQueue::ServiceEvents` (step 6 of
+`CServerGameDLL::GameFrame`, `0x1011abc0`); the post-entity-think untouch pass is step 4
+and the deferred delete-list drain (`0x100f6ce0`) is step 9. In this route the
+ordinary untouch pass cannot intervene between `Kill` and destruction.
+
+This bonus also survives a subsequent save/load: the `CBaseCombatCharacter` datamap marks
+`m_nStealthBonus` as `SAVE` (type `int`, offset `0x1084`), and player restore
+`0x1016ebd0` → combat-character restore `0x10348890` → base restore `0x100aa140`
+reads that datamap without clearing the field. The player/combat-character `OnRestore`
+chain (`0x1016de10` → `0x10323b60`) has no compensating write.
+
+This is a static, map-reachable defect, not a captured play session. A live reproduction
+should stand inside `window_sneak`, force an `OnFoundPlayer`/`stealth failed` event,
+then inspect Sneaking before and after leaving and after saving/reloading. The separate
+Unofficial Patch README report about saving *inside an intact* stealth bonus volume
+still needs its own restore-edge investigation.
+
 ## HUD observability is not authority
 
 The player retains a nearest eligible hostile observer handle, distance, and meter/status at

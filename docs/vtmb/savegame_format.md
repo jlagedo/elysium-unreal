@@ -678,6 +678,11 @@ only the native platform write is asynchronous. No importer is introduced in thi
 
 ## Open questions
 
+`stealth.md` records a map-reachable retail state defect at `sm_warehouse_1`'s
+`window_sneak`: removing the occupied trigger skips its own `EndTouch`, leaving the
+player's datamap-`SAVE` `m_nStealthBonus` in subsequent savegames. That removal path
+is distinct from the still-unverified save/load-inside-an-intact-volume case.
+
 - **Decal `flags` bits.** `1` marks authored decals and `4` impact decals in every record seen;
   what other bits exist, and what the client does with them, is unrecovered.
 - **`ASSIGNED_QUEST+0x3c`.** Written `1` on every journal write (unread / "new" marker);
