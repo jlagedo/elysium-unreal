@@ -169,18 +169,24 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     (`Super::` where retail called the base directly, per the packet's skeleton); the Damaged19
     rows land on their own classes, so the "which family" question dissolves. Lanes as below.
   - [ ] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
-    - [ ] Conditions19 (20/23)
-    - [ ] RunAi19 (17/34)
-    - [ ] StartTask19 (27/28)
-    - [ ] RunTask19 (23/24)
-    - [ ] Select19 (31/39)
-    - [ ] Think19 (15/15)
+    - [x] Conditions19 (20/23) — `617497a1`, `72b64eca`
+    - [ ] RunAi19 (17/34) — wave 2
+    - [x] StartTask19 (27/28) — `86ceba23`
+    - [x] RunTask19 (23/24) — `8cc9e23a`
+    - [x] Select19 (31/39) — `abfae21c`
+    - [ ] Think19 (15/15) — wave 2
   - [ ] **Pass I, lane B** (independent of the loop; Boss and Werewolf after lane A's base bodies)
-    - [ ] Spawn19 (48/60)
-    - [ ] Damage19 (26/26)
-    - [ ] Script19 (20/32)
-    - [ ] Boss19 (11/19)
-    - [ ] Werewolf19 (17/17)
+    - [ ] Spawn19 (48/60) — integrated on `story8/int-4` `9bbbb196`, not on `main`
+    - [x] Damage19 (26/26) — `414545a6`
+    - [x] Script19 (20/32) — `576a06fc`
+    - [x] Boss19 (11/19) — `2eca094a`
+    - [x] Werewolf19 (17/17) — `2eca094a`
+  **2026-09-28: pass I wave 1 landed** (twelve lanes in worktrees, not the two lanes above). Nine
+  families are on `main`, 204 `rule` rows plus two Damaged19 rows. Misc19 was ported in pass I too,
+  30 of 31 (`a17ed6a9`); `0x101a98c0` is open. Tests `Elysium.Substrate` 1,326 → 1,613.
+  `story8-forwarding.tsv` 210 → 71. The walked prose is folded into the oracle. Open: Spawn19's
+  merge, wave 2 (RunAi19, Think19, the loop wiring, the 82 `STORY8-TWIN` twins), then pass C. The
+  record is the spec's § "Pass I landed 2026-09-28".
   - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
 - [x] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **Landed 2026-09-27.**
   Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.

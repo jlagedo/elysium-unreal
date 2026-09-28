@@ -867,6 +867,23 @@ the retail contract the code must match, the job, what it consumes or provides, 
   **Passes (2026-09-23).** The remaining twelve families run as 0019 story 8's three passes — R the
   retrieval packets, I the two-lane implementation, C the close — with the scope counted after the
   strict verdict (286 `rule` rows of 351) and the retrieval method as piloted, all recorded there.
+  **Pass I, wave 1 (2026-09-28).** The record is 0019 story 8's landing text, § "Pass I landed
+  2026-09-28" in [the 0019 spec](../0019-npc-kernel-rework/spec.md). It holds per family the
+  commit, the review's findings, the named divergences and what waits for wave 2. Rows on `main`,
+  ported of the family's `rule` rows:
+  - Conditions19 20/20
+  - StartTask19 27/27, with `CNPC_VCop::StartTask`
+  - RunTask19 23/23
+  - Select19 31/31
+  - Damage19 26/26, not yet on the live damage path
+  - Script19 20/20
+  - Boss19 11/11
+  - Werewolf19 17/17
+  - Misc19 30/31
+  - Damaged19: `CNPC_VCop::StartTask` `0x10371b70` and TzimisceRunner slot 330 `0x103c43b0`
+  Spawn19 (48/48) is integrated but not merged. RunAi19 (17) and Think19 (15) are wave 2. The loop
+  still runs the port's twins until wave 2 wires slots 431/433/437/442/444. The story stays open for
+  wave 2 and pass C.
 
 ### The mind
 

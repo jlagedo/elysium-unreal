@@ -170,6 +170,51 @@ bump and interrupt keys with `TASK_RUN_DIALOG` and `TASK_MELEE_KNOCKBACK`;
 the `TASK_ATTEMPT_DIVE_*` arms and `PLAYER_ON_HEAD`'s producer; the `ON_FIRE_*` trio and
 `TASK_JUMP` / `TASK_LAND`.)
 
+### The pre-selector's thirteen steps, as ported (0019 story 8 pass I, 2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06, family Select19)._
+
+The body walked whole from the listing and ported as `FElysiumNpc`'s slot 437; the rest of
+family Select19 is in `schedule-kernel.md` § "Story 8, family Select19". Conventions: "sel N"
+is the `+0x1b2c` selector id, "trace L" the `+0x1b30`/`+0x1b34` `__FILE__`/`__LINE__` stamp
+(absent in the port), `Has(c)` is `HasCondition` and `Int(c)` `HasInterruptCondition`.
+
+sel 2 at entry on every path; `m_InvestigateSound` reset (`0x101b9880`: handle -1, origin
+vec3_origin, the rest 0). In order:
+
+1. `m_iForcedSchedule` non-zero → zeroed and returned, **no trace stamp** (pass R correction).
+2. Squad (`m_iSquadDisconnected < 1`, `m_pSquad`, flags2 `SQUAD_NEW_ENEMY`): clear the bit (and
+   bit 31); `+0x65e4 != -1` and not frenzied `0x80` → `0xeb START_COMBAT_SQUAD` (0x481b); else
+   `SquadNewEnemy` with slot 167's enemy.
+3. `Int(WAS_BUMPED)` → `0x101e3df0` (remove every active discipline effect whose record byte
+   `+0x33` is set; port `ElysiumDisciplines::NotifyBumped`).
+4. Running schedule is `GetScheduleOfType(0x14a D_MESMERIZE)` → `0x101e3ee0` (record byte `+0x34`
+   `InterruptSchedule` sweep).
+5. State 2: `Int(0x22)` → when the closest player IS the supernatural offender (both null
+   compares equal), `PlayerSupernaturalIncident(player, witnessed level, this, location)` and the
+   processed count; then slot 596 and slot 597(offender, 5). `Int(0x20)` mirrors it with the
+   decoded criminal level. ON_FIRE → `0x151` (0x4850). No slot-167 enemy → `SetState(no_alert ? 1 :
+   3)`, trace 0x4862, re-enter `0x1028a260`. flags1 `ATTACK_UNKNOWN` → cleared; flags2 `0x80` clear
+   and not frenzied → `0x5b` (0x4884), else flags2 `&= 0x7fffff7f`. NEW_ENEMY and not frenzied →
+   `0xea START_COMBAT` (0x488c).
+6. Any state: PLAYER_ON_HEAD `0x3b` and not busy with a discipline → cleared; no live dialog
+   partner → `debug_player_on_head` (default 3): 0 → `0x7b`, 1 → `0x79`, 2 → `0x7a`, 3 →
+   `RandomInt(0,99) < 0x50 ? 0x79 : 0x7a`; above 3 falls through.
+7. State 0xe: the criminal half of 5 (slot 596 only, no slot 597), ON_FIRE (0x48c4), no enemy
+   (0x48d6).
+8. Base `0x1028a2a0`; non-zero returns.
+9. flags2 `FINISH_SPECIAL_NAV` → clear flags1 `PRESERVE_PATH` and it; nav type 3 → `0xfc`, 1 →
+   `0xfd`.
+10. State 2, `m_bStayEntrenched`, slot 592 `CanSeekCover` → `0x102b7690(1,0,0,0)` non-zero returns.
+11. flags1 `DO_STARTLED` → cleared, `0xf1`.
+12. State 1: KNOCKBACK → `0x14c`, COMFORT → `0x12f`, D_CALM → `0x130`, D_FOLLOW → `0x131`,
+    D_POSSESSED → `0x131`, live dialog partner → `0x6a`; state 2: KNOCKBACK → `0x14c`; state 3:
+    `0x102b8a10` non-zero returns.
+13. `m_fSavePositionWalk` → cleared, `0x89`; else 0 (`0x102af39a`, no stamp).
+
+**Unrecovered:** the discipline record byte `+0x34` has no port surface (the sweep is counted);
+the squad object does not exist here.
+
 ### `COND_PLAYER_ON_HEAD 0x3b`: the producer and the two dive tasks (2026-09-21, story 28)
 
 _A Codex worker's walk (`$ELYSIUM_WORK_ROOT/codex/re2/wp06-on-head-dive`); the single-producer
@@ -1533,7 +1578,9 @@ Enemy sight: `GatherEnemyConditions 0x10270b20` → slot 201 `FVisible` eye to e
 is shot through, a friendly one sets `WEAPON_BLOCKED_BY_FRIEND 0x63`, anything else
 `WEAPON_SIGHT_OCCLUDED 0x66` (collision-group-4 breakables are skipped and re-traced). Unarmed:
 `0x1026fcf0`, from `origin + m_vecViewOffset`. `WEAPON_THROUGH_WALL 0x3c` is neither: Troika
-`GatherConditions` sweeps 32 units forward of the origin at mask `0x2000b` every 3.0 s.
+`GatherConditions` casts a RAY (zero extents, `m_IsRay` at `102b2ef7`) 32 units along `m_vecForward`
+from `EyePosition` at mask `0x2000b` every 3.0 s — not a hull from the origin, as this item first
+said (corrected 2026-09-27, 0019 story 8 lane L07; § "Story 8, family Conditions19").
 
 **5. Light is `> 0`, heavy is `> 20`, repeated is `> 30 %`** (`ElysiumNpcConditions.h:544` picks a
 fifth of the pool). Slot 576 `0x10266630`: `damage > 0.0`; slot 577 `0x10266660`: `damage > 20.0`
@@ -2587,3 +2634,1118 @@ the crime level of the player's active weapon at `weaponData +0x3c4` (`0x102517e
 `EElysiumNpcState` member; the raw id is stored beside the typed word. The `m_SelectIdealStateTrace`
 `__FILE__`/`__LINE__` pair (`+0x1b3c`/`+0x1b40`) is ABSENT in the shape map; only the selector tag
 `+0x1b38` is stood.
+
+## Story 8, family Conditions19 — slot 433 `GatherConditions` `0x1026ec30` / `0x102b27f0`, slot 481 `GatherEnemyConditions` `0x10270b20`, the species gathers (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L07, integrated as `617497a1` and `72b64eca`._
+
+Every body below is ported arm by arm into
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions19.cpp` (the two `CAI_BaseNPC` bodies),
+`ElysiumNpcConditions19.cpp` (the Troika body and the Troika half of the base body) and
+`ElysiumNpcConditions19Species.cpp` (the species overrides); the tests are
+`Tests/ElysiumNpcKernelConditions19Tests.cpp`, suite `Elysium.Substrate.NpcKernelConditions19.`.
+Condition names are the base registrar's (§ "The base condition table"); addresses are
+`vampire.dll`.
+
+### `CAI_BaseNPC::GatherConditions` — `0x1026ec30` (slot 433, 987 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L07)._
+
+The base body under every Troika override. In order:
+
+1. `m_bConditionsGathered (+0x5ca4) = 1` (`1026eca9`) — the only word the body writes itself. The
+   scope-trace push, the `rdtsc` bracket into `DAT_109204a0/a4` and the VProf pair are dead.
+2. `0x102cc760(&m_DelayedConditionList +0x1a9c, this)` (`1026ecc1`): every entry stamped at or before
+   `curtime` is promoted by `SetCondition` and removed by `0x102cc730`, which copies the LAST entry
+   into the vacated slot; the walk re-examines that slot. A later (or NaN) stamp waits.
+3. `m_NPCState (+0x5cc0)` 0 or 7 (`1026ecce` / `1026ecd7`) jumps to the epilogue: nothing below runs,
+   not even `CheckAmmo`.
+4. The sense gate: `m_spawnflags & 0x400` (`1026ece8`) OR `UTIL_FindClientInPVS` `0x101d1800`
+   non-null (`1026ecfb`) OR `m_bfNPCStateFlags (+0x5b64) & 1` (`1026ed03`). None of them → slot 477
+   `ClearSenseConditions` (`1026ed09`, the fourteen-entry `0x105c97dc` table) and the block is skipped.
+5. The block: `CheckOnGround` `0x1026e5e0` (`1026ed16`); slot 509 `ShouldPlayIdleSound` (`1026ed1f`)
+   gates the cascade — state-flags bit 1 → slot 499 `IdleAgitatedSound` (`1026ed57`); else
+   `m_bfAINPCFlags2 & 0x10000` (`D_CALM`) → slot 504 `UpsetSound` (`1026ed75`; the checklist had the
+   polarity inverted, the second judge settled it); else a running schedule whose slot 447
+   `GetLocalScheduleId(m_pSchedule+0x1c)` is `0x12f` → slot 503 `ComfortSound` (`1026eda0`); else slot
+   490 `IdleSound` (`1026edac`). Then `PerformSensing` `0x1026e4f0` (`1026ee04`: `m_iIsOblivious < 1`
+   gates `CAI_Senses::PerformSensing`, and slot 459 `RemoveIgnoredConditions` runs on every path at
+   `1026e573`), `CAI_Memory::RefreshMemories` on slot 541 `GetEnemies` (`1026ee15`), `ChooseEnemy`
+   `0x10279dd0` (`1026ee1c`), and the better-weapon search `0x1026fb40` (`1026ee23`) whose true
+   answer sets `BETTER_WEAPON_AVAILABLE 0x67` (`1026ee3b`).
+6. Both paths: slot 167 `GetEnemy` non-null → slot 481 `GatherEnemyConditions(GetEnemy())`
+   (`1026ee5b`); a live `m_hTargetEnt (+0x5ce4)` → `CheckTarget` `0x10271d10` (`1026eebc`); on the
+   Troika (`+0x98`): slot 586 `GetBestSeeUnknown` resolved → `0x1028e480` (`1026ef43`), the handle at
+   `+0x6240` (`m_hMoveTargetEnt`) resolved → `0x1028e980` (`1026ef9d`), then `0x1028e790`
+   unconditionally (`1026efa4`); last, slot 565 `CheckAmmo` (`1026efad`).
+
+`0x1026fb40`, 123 bytes: slot 513 `CapabilitiesGet() & 0x200000` (`1026fb4e`); `m_flNextWeaponSearchTime
+(+0x5da0) < curtime` strictly (`1026fb69`), then re-armed `curtime + 2.0` (`_DAT_10452dc4`,
+`1026fb76`); `GetActiveWeapon()` null (`1026fb83`); `Weapon_FindUsable((300, 300, 100))` (`1026fba4`)
+non-null answers true.
+
+`0x1028e790`, 126 bytes: with an enemy (slot 167), `0x1028e700(ENEMY_OCCLUDED 0x48,
+&m_flOccludedReportTimeE +0x62cc)` (`1028e7aa`), then, when 0x48 no longer stands, the occlusion
+edge `0x10270180(GetEnemy(), false)` (`1028e7cb`); with a live `m_hTargetEnt`,
+`0x1028e700(TARGET_OCCLUDED 0x49, &m_flOccludedReportTimeT +0x62d0)` (`1028e807`).
+
+`0x1028e700`, 99 bytes (checklist-0-9's `RefreshOccludedCondition`): with the condition standing,
+a stamp equal to the pooled `0.0` (`0x104454c4`, `TEST AH,0x44`) is armed to `curtime +
+m_flOccludedDelay (+0x62c8)` (`1028e72a`), and the condition is CLEARED while `curtime < stamp`
+(`TEST AH,5 / JP` at `1028e745`) — occlusion is reported only once it has lasted the delay. Without
+the condition the stamp is zeroed (`1028e754`).
+
+Port: `FElysiumNpcBase::GatherConditions`; the Troika half is `FElysiumNpc::Conditions19TroikaGoalUpkeep`.
+`PerformSensing` runs `FElysiumNpcSenses::PerformSensing` (the `m_bCanPerformSenses` gate, `Look`,
+`Listen` -- the live `Tick` without the port's committed-enemy LOS debounce, which is slot 481's),
+then slot 469's base body (`BaseOnLooked`, the Troika increment being folded into `TickSight`'s
+tail) and the `OnListened` base effect on `m_Conditions` (clear the ten-entry `0x105c97b4` table,
+then OR the promoted `HeardConditions`). `0x1028e700` is the landed
+`FElysiumNpc::RefreshOccludedCondition` (`ElysiumNpcConditionsBodies.cpp`); `0x1028e790` calls it.
+
+**Unrecovered:** `Weapon_FindUsable`'s search (seam answering none); `UTIL_FindClientInPVS` (the live
+player stands in); `0x1028e480` / `0x1028e980` are `mechanism` rows behind the 0018 nav seam
+(counted, nothing moved); `CheckTarget` `0x10271d10` is lane L12's body (the call is a counted seam
+until the integrator redirects it).
+
+### `CAI_BaseNPC::GatherEnemyConditions` — `0x10270b20` (slot 481, 2807 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L07)._
+
+Called by `0x1026ec30` with slot 167's enemy. Every later "GetEnemy()" is slot 167 again (`+0x29c`),
+the parameter is used where retail uses it. In order:
+
+1. Clear `ENEMY_FACING_ME 0x56`, `BEHIND_ENEMY 0x57`, `HAVE_ENEMY_LOS 0x4a`, `ENEMY_OCCLUDED 0x48`
+   (`10270b4a..10270b65`); `SEE_ENEMY 0x46` is NOT cleared, so OnLooked's bit is what the body reads.
+   `0x10270aa0(this, NULL)` resets `m_hEnemyOccluder (+0x5d90)` (`10270b71`).
+2. Slot 201 `FVisible(enemy, 0x2804091, &blocker, m_eEnemyOccludedCheck)`: visible zeroes
+   `m_eEnemyOccludedCheck (+0x5b98)` (`10270bb1`); a miss increments it, saturating at 10
+   (`10270ba6` signed `JGE`).
+3. Below 10 (`10270bc3`): `SetCondition(0x4a)`; slot 363 `FInViewCone` AND slot 468
+   `QuerySeeEntity` → `SetCondition(0x46)` and `0x10270180(GetEnemy(), 0)` (snapshot the enemy
+   origin, clear `m_bEnemyWentOccluded`). Whatever the cone said, while `m_afMemory (+0x5d8c) &
+   0x20000` is clear the outputs fire — `m_OnFoundPlayer` (only for `[enemy+0xa8] m_pPlayer`) then
+   `m_OnFoundEnemy`, each carrying the enemy EHANDLE as its value, activator and caller this NPC —
+   and the bit is set on EVERY pass below the limit (`10270e4c`).
+4. At 10: `m_hEnemyOccluder` := the blocker (`10270be1`), `SetCondition(0x48)`, `0x10270180(GetEnemy(),
+   1)` (latches `m_bEnemyWentOccluded` once the enemy drifts past 64 units — 4096 squared — from the
+   snapshot); with the bit set, `m_OnLostPlayerLOS` (player only) then `m_OnLostEnemyLOS`; the bit is
+   cleared unconditionally (`10270c5d`).
+5. Slot 158 `IsAlive` false on the parameter (`10270e62`): `SetCondition(0x58)`, clear 0x46 and 0x48,
+   RETURN.
+6. `d = 0x10270890(enemy)`: the two slot-217 origins, the vertical term replaced by the gap between
+   the two surrounding boxes (`E.mins.z - M.maxs.z` above, `E.maxs.z - M.mins.z` below, else 0).
+7. Under 0x46: with `+0x5b98 == 0`, slot 544 `UpdateEnemyMemory` with the enemy origin when its
+   velocity equals `vec3_origin` exactly, else `origin - r * velocity`, `r = RandomFloat(-0.05, 0.0)`
+   on `[0x1070b244]` (pass R's correction); then the enemy's own slot 363 on this NPC
+   (`[enemy+0x9c]` the combat character): true → set 0x56 / clear 0x57, else clear 0x56 / set 0x57.
+8. `limit = m_flDistTooFar (+0x5de4)`, raised to the weapon's `m_fMaxRange1 (+0x8c0)` with an active
+   weapon under 0x46 when that range is (ordered) at or above it (`10271180 TEST AH,5 / JP`); `d <
+   limit` clears `ENEMY_TOO_FAR 0x55`, else (NaN included) sets it. The distance survives the lead arm
+   in `[ESP+0x10]` (`10270efd` / `102711a0`); the C's reuse of one variable there is the
+   decompiler's. Slot 544's third argument is `&enemy->m_vecVelocity (+0x3d4)`.
+9. Slot 564 `FCanCheckAttacks` → slot 561 `GatherAttackConditions(GetEnemy(), d)`, else slot 560
+   `ClearAttackConditions`. Then `UpdateEnemyPos` `0x10271900`. `m_pNavigator +0x34` clear AND slot 530
+   `IsUnreachable(GetEnemy())` → `SetCondition(ENEMY_UNREACHABLE 0x59)`.
+10. The eluded tail, only when `curtime - LastTimeSeen(GetEnemy()) > 8.0` (`_DAT_1045597c`), the enemy
+    is not already eluded (`0x102e0210` on `m_hEnemy`) and 0x46 is clear: `lkp =
+    GetLastKnownPosition(GetEnemy())` (`0x102dfed0`). With `+0x98` set (every Troika NPC — it is the
+    NPC itself), `m_bfAINPCFlags & 0x8000 DONE_EXTRAPOLATING` marks eluded (`0x102dfd90`) and is
+    cleared; on a base-only NPC a 2-D distance to `lkp` not at-or-above 48 (`_DAT_10447ee8`,
+    `TEST AH,5 / JP` at `10271373`: NaN proceeds) marks eluded.
+    Either way, with 0x46 clear and 0x59 set, a ray from `EyePosition` to `lkp` (mask `0x2804091`)
+    whose `fraction != 1.0` marks eluded.
+
+`CAI_Enemies` helpers, from the listing: `LastTimeSeen 0x102e0150` — the matching record's time,
+else the last position-only record's, else 0.0 with `"Asking LastTimeSeen for enemy that's not in
+my memory!!"`; `GetLastKnownPosition 0x102dfed0` — the record's `+0xc`, else the last
+position-only record's with the "(using danger pos)" warning, else `vec3_origin`.
+
+Port: `FElysiumNpcBase::GatherEnemyConditions`. Reproduced: the found outputs fire on every
+below-limit pass while the bit is clear, not only on a cone admission; the dead enemy keeps
+`HAVE_ENEMY_LOS` and has already fired its outputs; the 48-unit arm is unreachable on the Troika line.
+
+**Unrecovered:** `CBaseEntity::FVisible`'s use of its fourth argument; the blocker cell (the port's
+slot 201 cannot return one, so the at-limit write is an invalid handle); `m_fMaxRange1` (the seam
+answers none, so the limit stays `m_flDistTooFar`); `m_pNavigator +0x34`; `UpdateEnemyPos` (a
+`mechanism` row behind the nav seam); the `CAI_Enemies` notifier calls (`vfunc 0xe4 / 0xe8`,
+`0x10316ab0 / 0x10316bc0`); the ray's `CONTENTS_MONSTER` bit (the embodiment's line query stands in).
+
+### `CAI_BaseNPCTroika::GatherConditions` — `0x102b27f0` (slot 433, 2133 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L07)._
+
+1. Clear `INVESTIGATE_SIGHT 0x26`, `COMFORT 0x27`, `0x01..0x07` (the see-unknown family), `ON_FIRE
+   0x30`, `DETECTED_ATTACK 0x0b` (`102b2863..102b28bd`).
+2. `CAI_BaseNPC::GatherConditions` `0x1026ec30`, direct (`102b28c4`). Its delayed flush can re-raise
+   a due 0x0b this very pass.
+3. Slot 168 `GetEnemy` once (reused below); alive false → `SetCondition(0x58)`, clear 0x46, 0x48.
+4. The law sweep `0x1028efc0` (`102b290f`), then the SEE_CORPSE sweep `0x1028fa50` (`102b2916`; the
+   verdict called it a second law sweep): `curtime >= m_flCorpseConditionTimer (+0x6608)` re-arms it
+   `curtime + RandomFloat(2.0, 2.5)`, clears `SEE_CORPSE 0x3d` / `SEE_CORPSE_FRIEND 0x3e`, and walks
+   the corpse query (`0x102cabd0`, up to four) from the last: no corpse or no `+0x98` → 0x3e and 0x3d;
+   slot 404 `IRelationType` 3/4 → 0x3e and 0x3d, 1/2 → 0x3d (jump table `0x1028fb20`).
+5. Clear `0x15, 0x14, 0x17, 0x16, 0x19, 0x18`. `m_flInsideInterruptDistanceSqr (+0x6324) > 0`: the
+   navigator's route (`0x102ee6a0`) with `nav+0x14 <` it → `INSIDE_INTERRUPT_DIST 0x15`; the enemy's
+   squared slot-220 distance `<` it → 0x17; slot 293 `GetFollowerBoss`'s → 0x19. The same three on
+   `+0x6328` with `>` → 0x14, 0x16, 0x18. `m_flInterruptTime (+0x632c) > 0` and `<= curtime` →
+   `INTERRUPT_TIME 0x1a`.
+6. The three sweeps in order: see-unknown `0x102b15c0`, comfort `0x102b1a20`, sound `0x102b1cd0`.
+7. `0x10269c70` (the running program's mask lists `STOP_BACKUP 0x2c`): clear it, then with an enemy
+   the X/Y dot of the normalised horizontal enemy direction with `m_vecForward (+0x6290)` AT OR BELOW
+   0.707 (double `0x1049ae78`) sets it (pass R's correction); without the mask it is cleared.
+8. `RefreshCombatConditions` `0x102b2570`. The eighteen `m_hBodyFireParticles (+0x0ff8)`: the first
+   live one whose `+0x484` is non-zero sets 0x30 and breaks.
+9. The squad sweep `0x102b2730`: only with a connected squad (`+0x5bb0 < 1`, `+0x5da4`): an enemy
+   seen within 0.2 s (`_DAT_10451ab4`) of curtime sets `SQUAD_SEE_ENEMY 0x31`, and `SQUAD_LOS_ENEMY
+   0x32` under `HAVE_ENEMY_LOS`; it clears neither.
+10. `m_hBlockedDoor (+0x5d28)` resolving live AND (0x46 OR `NEW_ENEMY 0x54`) → reset to -1.
+11. The program masks 0x0b, `curtime < +0x65c4` (the notice's expiry) and `+0x65c0` resolves → push a
+    delayed 0x0b at `RandomFloat(0.9, 1.3)` (`0x102cc6c0`: at most eight entries; an existing entry
+    keeps the earlier stamp) and `+0x65c4 := curtime`.
+12. `curtime >= m_flWeaponThroughWallTime (+0x6600)`: re-arm `+ 3.0`, then a RAY (not a hull: zero
+    extents, `m_IsRay` at `102b2ef7`) from `EyePosition` along `m_vecForward * 32` with mask `0x2000b`
+    and `CTraceFilterSimple(this, 0)`; `fraction < 1.0`, allsolid or startsolid → set
+    `WEAPON_THROUGH_WALL 0x3c`, else clear.
+13. Any of `0x4c/0x4d/0x4e` → `m_bCondTookDamage (+0x5b80) = 1`; else a set latch raises
+    `LIGHT_DAMAGE 0x4c` (the latch is not cleared here).
+
+Port: `FElysiumNpc::GatherConditions`. `m_vecForward` is NPCThink's `AngleVectors(GetAngles())`
+write, which the port never makes; the forward is derived from the angles at the two readers
+(`FElysiumNpcSenses::ViewForward`). The port's notice record stores the notice stamp where retail
+stores the expiry, so the expiry is read as `stamp + 5.0` and the restamp writes `curtime - 5.0`.
+The wall ray, like the eluded ray and the Hengeyokai / Tzimisce throw lines, runs through
+`Conditions19RayReaches` (the embodiment's `QueryLineOfSight`, world geometry only: the masks'
+monster/debris bits are the named divergence). The timer tests are ordered (`FCOMP` + `AND 0x100`):
+a NaN stamp skips (`102b2e10`, `1028fa6c`).
+
+**Unrecovered:** the corpse query `0x102cabd0` (a seam answering none); the fire particles' `+0x484`
+word (no port system spawns body fire particles); `nav+0x14` (the navigator's route-end distance,
+read only behind the idle `0x102ee6a0` seam); who clears `0x31` / `0x32`; `0x1028efc0` is served by
+the port's `ElysiumNpcWitness::GatherLawConditions`, not re-transcribed in this lane.
+
+### Species overrides of slot 433 — `0x1035d180` … `0x103d0410`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L07)._
+
+Every species body calls `0x102b27f0` directly (`CALL 0x10013f2f`); no intermediate class
+(`CNPC_VVampire`, `CNPC_VVampireBoss`, `CNPC_VAnimal`, `CNPC_VHuman(Combatant)`, `CNPC_VBaseBoss`)
+has a slot-433 body of its own.
+
+- **`CNPC_VAndreiBlood` `0x1035d180`** (19 bytes): Troika, then clear `0x79 TIME_TO_TELEPORT`
+  (`1035d18c`). No setter of 0x79 on this class exists in the image. **Unrecovered:** its producer.
+- **`CNPC_VBach` `0x10365a70`** (16 bytes): Troika, then tail-jump to `0x10365a90` (Misc19's row; the
+  port body is lane L11's `BachGatherCamperConditions`, which L07's walk agrees with). That routine: the
+  target is the slot-167 enemy, else the local player (none → return); ten slot-201 probes with the
+  probe index as the fourth argument. Seen: with `m_iWasOccluded (+0x6674)` set, clear it and, with
+  `m_bCamperFlag (+0x66a0)`, stamp the selector trace (line `0x57b`) and `SetSchedule(0x15f)`
+  (`10365fa5`). Unseen and newly occluded: `m_iWasOccluded = 1`, `m_flOccludeEnterTime (+0x6670) =
+  curtime`, the axis-aligned area to `m_vecLastOccludeOrigin (+0x6664)` at or above 20000 (or NaN)
+  resets `m_iReusedOccludeCount (+0x6678)`, below it increments and a count above 1 latches the
+  camper flag; the origin is re-snapshotted. Still occluded after more than 4.0 s: the larger axis
+  move under 200 latches; origin and time re-snapshotted. `m_iGrenadeActive (+0x667c)` 10 or 7
+  forces the latch (and the warning, every pass). Latched: grenade active and
+  `m_bBachInStartingPosition (+0x66a1)` → `ThrowGrenade("grenade_spawn_5|6|7|9|10", 300|80|-26|85|
+  -26)` (8 throws nothing); grenade active, not in the starting position and `m_iBachTeleportState
+  == 0` → `grenade_spawn_8` at 15 when active is 8; either reaches the tail with the grenade arm,
+  anything else without it. A NEW latch plays `bach_grenade.wav` (grenade arm) or
+  `bach_camp_warn.wav` on channel 2, volume 1.0, attenuation 0.8, pitch 100.
+- **`CNPC_VChangBros` `0x1036b590`** (also Blade and Claw): Troika, `UpdateFacingTimer`
+  `0x1036d600`, clear `0x79 TIME_TO_JUMP_ATTACK` and `0x7c TIME_TO_UNITED_ATTACK`, then
+  `CheckForJumpAttack` → 0x79, `CheckForTeleport` → `0x7a TIME_TO_TELEPORT` (never cleared here: it
+  latches), `CheckForUnited` → 0x7c.
+- **`CNPC_VDog` `0x10374b00`**: Troika; `m_bPlayerAttackedMe (+0x6660)` → `0x7e PLAYER_ATTACKED`;
+  friendship level `(+0x6664) == 6` returns; neither `HEAR_PLAYER` nor `SEE_PLAYER` → return, after
+  `0x7c PLAYER_MOVEDAWAY` when snarling (`m_Activity == 0x6e`); `m_iPlayerFriendshipState (+0x665c)
+  == 2` → `0x7d PLAYER_BEFRIENDED` and return; state 0 with level 5 → state 2 and 0x7d (the body goes
+  on), level 4 → state 1; the local player's slot-220 distance: snarling inside
+  `m_flConflictRange` → state 0 becomes 1, state 1 raises `0x78 PLAYER_TOOCLOSE`; else inside
+  `m_flWarnRange` → `PLAYER_SNARL_RANGE 0x2b`; else (not NaN) → 0x7c; the distance is stored at
+  `+0x667c`. The port's enum carries 0x78/0x7c/0x7d/0x7e under State19's placeholder names.
+- **`CNPC_VFrenzyShadow` `0x10375ed0`**: Troika; `m_iHostileEnemyCount (+0x6664) > 1` (signed) → set
+  `0x79 TWO_HOSTILES`, else clear. Ported before this story (`ElysiumNpcFrenzyShadow.cpp`); re-read
+  here and found arm-for-arm; the "global event" it counted is the `ent_trace_conditions` read.
+- **`CNPC_VGargoyle` `0x10378df0`**: Troika; clear `0x0f, 0x0c, 0x0d`; with an enemy, the 2-D
+  distance AT OR BELOW 50.0 (double `0x104493c0`) clears `0x5f` and `0x0e`.
+- **`CNPC_VGhoulCroucher` `0x1037b570`**: undisturbed (`+0x6666` clear): `NEW_ENEMY` (the previous
+  pass's) → `OnDisturbed(this)` and return; else `0x79 UNAWARE` and return — the Troika body does not
+  run for an unaware croucher. Disturbed: Troika, then `NEW_ENEMY` with a connected squad and an
+  enemy → `SquadNewEnemy` `0x103161a0`.
+- **`CNPC_VHengeyokai` `0x103803d0`**: Troika; clear `0x0f, 0x0c, 0x0d`; `CARRYING_BODY` and
+  `HAVE_ENEMY_LOS` and the throw line `0x10382020` (eye + 80·right to the enemy's eye, mask
+  `0x600400b`, clear) → set `HAVE_ENEMY_THROW_LOS 0x1b` (a base condition, not a species one) and
+  return; else clear 0x1b.
+- **`CNPC_VMingXiao` `0x10394e40`**: clear `0x77..0x7d` (`0x7e MELEE_HELPLESS` latches); Troika;
+  idle returns; six attack slots through `0x10398030(i, false)` then `(i, true)` → `0x77 + i`, none
+  admitting → 0x7e; then the spit test: `m_flPlayerDist > 200`, not `m_bBlockedByFriend (+0x6750)`,
+  `m_hRangedWeapon (+0x6680)` and its `+0xa0` weapon, an enemy, `m_flNextPrimaryAttack (+0x730) <=
+  curtime`, `curtime >= m_flSpitAttackTimer (+0x66c0)`, and the weapon's slot 364 line from this
+  origin to both sides of the enemy's `BodyTarget` (± 0.3 × its OBB width) → `0x7d CAN_ATTACK_SPIT`.
+- **`CNPC_VMingXiaoTentacle` `0x1039ec10`**: clear `0x77 FLEE`, `0x79 PHASE_EXPIRED`; Troika; an enemy
+  with `curtime >= m_flFailedEvadeTimer (+0x6678)` and `m_flEnemyDist <= 256` → 0x77;
+  `curtime >= m_flPhaseExpireTimer (+0x6674)` → 0x79.
+- **`CNPC_VPedestrian` `0x103a2c30`**: clear `PASS_OUT 0x24`; Troika; under `SEE_SOUND_SOURCE 0x2d`,
+  the committed sound owner `+0x5b78` equal (as resolved pointers) to the last combat or
+  bullet-impact sound's owner; its combat character with an active weapon whose crime level
+  (`0x102517e0 +0x3c4`) is at or above `m_iPLCriminalFleeLevel (+0x634c)` → `0x1028ea60` with its
+  slot-220 origin, and `CRIMINAL_FLEE_LEVEL 0x1f`.
+- **`CNPC_VSabbatLeader` `0x103a77f0`**: Troika; `CheckForJumpCondition` → `0x79 TIME_TO_JUMP`; clear
+  `0x0f, 0x0c, 0x0e`.
+- **`CNPC_VScurrying` `0x103ac500`** (also `CNPC_VRat`): clear `0x78 PLAYER_TOOCLOSE`; Troika;
+  `curtime >= +0x6678` (no writer: always open) and the `+0x667c` target no longer detectable →
+  `+0x667c := 0x103aca80()` (player 1 when detectable, else -1); a resolving `+0x667c` → 0x78.
+- **`CNPC_VTzimisce` `0x103bce40`**: Troika FIRST; clear `0x77 SHOULD_DROP_BODY`, `0x1b`, `0x78
+  FORCE_THROW_BODY`; carrying: the pickup target farther than 25600 squared → 0x77;
+  `HAVE_ENEMY_LOS` and the throw line `0x103be630` → 0x1b; `0x103be150` → 0x78. A claw hint
+  (`m_pHintNode` type 14000/14001): no slot-168 enemy → set 0x1c and 0x1d; a usable hint
+  (`0x103bfc20`) → clear both; else set 0x1c and set 0x1d when the hint-to-enemy squared distance is
+  below 10000, above 40000 or unordered, clearing it only inside [10000, 40000] (the second judge's
+  correction). `curtime > +0x66ac`: re-arm `+ 2.5`; the program masks `CAN_POUNCE 0x23`, an enemy,
+  `tzimisce_pounce` and the pounce test `0x103bf660` (a hull trace from here to the lead-translated
+  last known position, both raised 0.1, inside [40000, 360000] squared, that must end on the enemy)
+  → set 0x23, else clear. `curtime > +0x66b0`: `m_iShunnedFindBody = 0`, re-arm `+ 10`.
+- **`CNPC_VTzimisceHeadClaw` `0x103c17f0`, `CNPC_VTzimisceRunner` `0x103c35a0`**: Troika, clear
+  `0x0f`, `0x0e`.
+- **`CNPC_VWerewolf` `0x103d0410`**: the enemy (slot 167) BEFORE the Troika body: set 0x46, slot 544
+  with its slot-220 origin, and `m_flPlayerDist < m_flTargetHullRadius + m_flHullRadius + 1.0` →
+  0x5f; Troika; with that (pre-gather) enemy, the five updaters in order (CanTeleport,
+  EnemyUnreachable, DeathTriggered, CanSpecialMove, ShouldBreakHint); `0x09` → set 0x60; `0x60` →
+  set 0x09; `m_pMoveHint` → `0x78 CAN_SPECIAL_MOVE`; `werewolf_force_teleport` clears 0x51, 0x52,
+  0x78, 0x79.
+
+Port notes (integration): `AngleVectors`' right vector in the port frame is Source's with Y
+negated (`Conditions19SpeciesRightVector`), so the Hengeyokai start point is 80 units to the NPC's
+RIGHT and Tzimisce's `-tzimisce_throw_pos_y` likewise. Croucher's `SquadNewEnemy` call counts on
+State19's `SelectIdealStateSquadNewEnemyCalls`. Dog's move-away arm is the ordered `d >= m_flWarnRange`
+(`10374cad..10374cbe`). The Ming Xiao, tentacle and Scurrying timers are ordered `curtime >= stamp`;
+the Tzimisce pounce band refuses only an ordered `d < 40000` or `d > 360000` (`103bf740..103bf75c`),
+its two `+0.1` lifts are the double `0x104493d0`; the Werewolf limit sums at x87 precision with the
+double 1.0 `0x10449280` before its one `FSTP float` (`103d049c`).
+
+Integration: `CAI_BaseNPC::ChooseEnemy` is lane L11's retail body, called for every NPC.
+
+**Unrecovered (species):** Andrei's 0x79 producer; Bach's FVisible probe points (the port's slot
+does not vary them); Ming Xiao's weapon slot 364 line and `+0xa0`'s writer; the pedestrian weapon's
+crime level (`0x102517e0 +0x3c4`); Scurrying's `+0x6678` / `+0x667c` retail names; the Tzimisce hint
+usability test `0x103bfc20` (a seam answering unusable); the three Werewolf19 updaters (lane L12).
+
+## Story 8, family Damage19 — slots 142 / 390, the Troika melee reactions 316 / 318 / 320, the species damage bodies (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L09, integrated as `414545a6`._
+
+The bodies of the NPC damage entry: slot 142 (`OnTakeDamage`), slot 390 (`OnTakeDamage_Alive`), the
+three Troika melee-reaction slots 316 / 318 / 320, the species `UpdatePresenceEffect` (slot 313)
+and every species override of 142 / 320 / 390. Read off the `vampire.dll` listing (`vtmb_asm`); the
+port is `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp`, `ElysiumNpcDamage19.cpp`
+and `ElysiumNpcDamage19Species.cpp`, the cases `Tests/ElysiumNpcKernelDamage19Tests.cpp`.
+
+**The chain.** `CBaseEntity::TakeDamage` → slot 142. The Troika-line slot 142 (`0x102bed30`) is
+the invincibility gate and tails to `CAI_BaseNPC::OnTakeDamage` (`0x10265e90`), which runs
+`CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`, the life-state dispatcher into slot 390/391/392)
+and then `RemoveIgnoredConditions`. Slot 390 is the Troika `0x102beda0` (the corpus labels it
+"OnTakeDamage"; pass R's second judge settled it is slot 390), which caches the packet and calls
+`CAI_BaseNPC::OnTakeDamage_Alive` (`0x10265ed0`), which calls `CBaseCombatCharacter::OnTakeDamage_Alive`
+(`0x103302e0`, the health commit; one exit, `0x10330abe`, answering 1). Every species slot-390 body
+reaches `0x102beda0` through `0x10001b45 → 0x10385a50 → 0x10012611`.
+
+**The packet** (`CTakeDamageInfo`, 0x4c bytes; `Init` `0x101c2890`): `+0x00` the `CVDmg_t*`,
+`+0x04..+0x24` force / position / reported-position vectors, `+0x28` inflictor, `+0x2c` attacker
+(defaults to the inflictor), `+0x30` damage, `+0x34` max damage, `+0x38` damage bits, `+0x3c`,
+`+0x40` ammo type, `+0x44` a float 1.0, `+0x48..+0x4a` three bytes. Every body reads the amount as
+`CVDmg_t::GetDmg()` when word 0 is set and `+0x30` otherwise, and the bits as the descriptor's
+`m_bdmgTypes` (`+0x10`) OR'd onto `+0x38`.
+
+### `0x10265ed0` `CAI_BaseNPC::OnTakeDamage_Alive` (slot 390, 1184 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+1. Slot 491 `PainSound()` (`0x10265ed9`), then `m_afMemory &= ~2` (INCOVER, `0x10265eea`).
+2. `CBaseCombatCharacter::OnTakeDamage_Alive(info)` (`0x10265ef5`); 0 returns 0 (`0x10265efc`).
+3. `m_OnDamaged` (this, this, 0) unless `m_flLastDamageTime == curtime` (`0x10265f1a`, `TEST AH,0x44 /
+   JNP`: ordered-equal skips, unordered fires).
+4. `m_OnHalfHealth` when `m_iHealth <= m_iMaxHealth / 2` (C division, `0x10265f3e`).
+5. `FL_NPC` clear on this body → return 1 (`0x10265f59`). No attacker at `+0x2c` → return 1
+   (`0x10265f64`, no sound).
+6. Attacker flags lacking `0x2080` (`FL_CLIENT | FL_NPC`) → straight to the sound tail
+   (`0x10265f74`), skipping 7–12.
+7. Seen = slot 363 `FInViewCone(attacker)` && slot 201 `FVisible(attacker, 0x2804091, 0, 0)`.
+   Both arms write `m_vecLastDamageAttackPos`: the inflictor's origin, or with no inflictor this
+   body's origin + `_DAT_1070ba40..48` (the file-static death-throw direction) × 64.0.
+8. Unseen only: with a live enemy, the attacker unknown to slot 541's memory (`0x102dfa20`) and
+   `SEE_ENEMY` (0x46) clear → slot 544 `UpdateEnemyMemory(GetEnemy(), pos, &DAT_1070d1b0)`
+   (`0x10266135`); otherwise membership is asked again and slot 544 gets the attacker if known,
+   NULL if not (`0x1026616c`). Seen: no memory call.
+9. With a live enemy (both paths): `0x102e0b40(m_pMotor)`, the enemy's LKP (`0x102dfed0`), then
+   `0x102e2020(m_pMotor, &lkp, 0)` (`0x10266186..0x102661b9`).
+10. `m_hLastDamageEnt` = attacker handle (`0x102661cc`), `m_bCondTookDamage = 1` (`0x102661de`).
+11. Slot 576 `IsLightDamage` (`0.0 < dmg`) sets 0x4c, slot 577 `IsHeavyDamage` (`20.0 < dmg`) sets
+    0x4d (`0x10266239`, `0x10266293`).
+12. `m_flSumDamage` resets to this hit when `curtime - m_flLastDamageTime >= 1.0` (double
+    `0x10449280`; unordered resets) else accumulates; `m_flLastDamageTime = curtime` (`0x10266310`);
+    0x4e when `m_iMaxHealth * 0.3 < m_flSumDamage` (double `0x1047b868`, strict, `0x1026631d`).
+13. Tail: `CSoundEnt::InsertSound(SOUND_COMBAT, origin, DAT_1072bc84, 0.2, DAT_1072bcc1, this)`
+    (`0x1026635b`), return 1.
+
+Reads `+0x5d8c`, `+0x5d98`, `+0x5d94`, `+0x208`, `+0x210`, `+0x5d44`; writes `+0x5d8c`, `+0x5b9c`,
+`+0x5b7c`, `+0x5b80`, `+0x5d94`, `+0x5d98`.
+
+**Unrecovered:** the ConVar at `DAT_10924a6c` polled (slot 1, discarded) before each SetCondition;
+the runtime-filled sound cells `DAT_1072bc84` / `DAT_1072bcc1` (no corpus writer; the port uses the
+`NPC_TAKE_DAMAGE` volume row).
+
+### `0x10265e90` `CAI_BaseNPC::OnTakeDamage` (slot 142, 33 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+`CBaseCombatCharacter::OnTakeDamage(info)` (`0x10265e99`), then slot 459 `RemoveIgnoredConditions`
+unconditionally (`0x10265ea4`); returns the first answer.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x102bed30` `CAI_BaseNPCTroika::OnTakeDamage` (slot 142, 66 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+`m_bInvincible` (`+0x63d8`) clear → tail to `0x10265e90` (`0x102bed6d`). Set → when
+`m_flLastDamageTime != curtime` (`0x102bed4e`): stamp it (`0x102bed56`) and fire `m_OnDamaged`
+(`0x102bed63`); return 0. A refused NPC still fires OnDamaged, at most once a tick.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x102beda0` `CAI_BaseNPCTroika::OnTakeDamage_Alive` (slot 390, 535 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+1. Cache the whole packet at `+0x660c..+0x6656` (`0x102bedab..0x102bee48`).
+2. `CAI_BaseNPC::OnTakeDamage_Alive` (`0x102bee50`); 0 → return it.
+3. Amount `> 0.0` (`0x102bee84`; `<=` and unordered go to 7):
+   `AddExpressionForEvent(0)` (`0x102bee8e`); `m_bfAINPCFlags & 0x40000000` → slot 144
+   `Event_Killed(info)` and return (`0x102beea4`); an interesting place (`+0x62ec`) whose type has a
+   death activity (`0x102daf50`): when `m_iInterestingDeathActivity == -1` (`0x102beed7`) resolve the
+   type's activity name (`0x102daf20`) through `0x10412520` into `+0x6308` (`0x102beef2`); `-1` →
+   DevWarning `"Can not find interest death activity '%s' in the activity list.  Dying
+   immediately.\n"` and `Event_Killed` (`0x102bef13`); otherwise stamp line `0x6121` and
+   `SetSchedule(0x104, false)` (`0x102bef3f`). **Every** place sub-arm returns without the tail —
+   including an activity already resolved (`JNZ 0x102bef44`), which installs no program.
+4. Neither → the tail.
+7. Zero/unordered: `SetCondition(0x4c)` (`0x102bef5c`), `m_hLastDamageEnt` (`0x102bef6f`/`0x102bef77`),
+   `m_bCondTookDamage = 1` (`0x102bef81`), then the tail.
+8. Tail: a live attacker extends the FVisible override by 5.0 s (`0x1028e8b0`, `0x102bef97`), then
+   slot 600 with `GetEnemy()` (`0x102befa9`). Every exit returns step 2's answer.
+
+**Unrecovered:** the interesting-place type row's death-activity byte (`+0x19c`) and name
+(`+0xd0`/`+0xd4`) have no `interestingplacetypelist.txt` key recovered; `0x10411f90` before the
+DevWarning.
+
+### `0x1029fa50` `CAI_BaseNPCTroika` slot 316 (217 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+`SetCondition(0x0a BEING_ATTACKED)` first (`0x1029fa63`); null target returns. Dodge arm:
+`bCheckDodge && target->IsMeleeSwingInRange(GetAbsOrigin()) && IsHoldingMeleeWeapon() && slot 325`
+→ `SetCondition(0x0c)` (`0x1029faba`) and, when slot 590 `OkToInterruptForMelee` agrees, stamp line
+`0x28e0` and `SetSchedule(0xd5, false)` (`0x1029faea`). Block arm: `bCheckBlock &&
+IsHoldingMeleeWeapon() && slot 324` → `SetCondition(0x0d)` (`0x1029fb1f`), no range, no program.
+`IsMeleeSwingInRange` (`0x10345760`): the swinger's 2-D distance to the point `<= 100.0
+(_DAT_1049e048) + seqdesc(m_nSequence)+0x2d0`. `IsHoldingMeleeWeapon` (`0x10345d00`): active
+weapon's slot 360 `& 0x18000`.
+
+**Unrecovered:** the sequence descriptor's `+0x2d0` swing reach (the port answers 0).
+
+### `0x1029fcf0` `PlayerDefenderBlockReaction` (slot 318, 137 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+Null roll → false (`0x1029fcfa`); `0x1028a190` refusing → its false (`0x1029fd0c`); class
+`0x103498b0(roll)` (margin `word1 - word3 - word2` against the four `Melee_Reactions` cells) 3 →
+line `0x2935`, `0xd8`; else line `0x2939`, `0xd7` (`0x1029fd4d`, unforced); `m_flNextAttack =
+(0.3 - 1.5) + 1.5 + curtime` (`0x1029fd52..0x1029fd6f`) — the constant-folded remains of a lerp
+whose parameter is 1, so the delay is **0.3 s**, not a random draw; returns true.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x102a01b0` `PlayerKnockbackReaction` (slot 320, 170 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+`0x1028a190` false or `IsInDialog` → false (`0x102a01bb`, `0x102a01ca`); `TranslateActivity(act, 0)`
+then `SelectHeaviestSequence(translated, -1) < 0` → false with nothing written (`0x102a01ea`);
+`m_knockbackType = act` (`0x102a01f0`), slot 614 `ResetThinkTimers` (`0x102a01f6`), line `0x29b5`;
+`0x8a < act < 0x94` (`0x10344da0`) → knockback velocity `0x102a0290(attacker, act)` and `0x14d`, else
+`0x14c`; true.
+
+**Unrecovered:** nothing named by the walk.
+
+### Species slot 320 — `0x10378d30` Gargoyle, `0x10380320` Hengeyokai, `0x103c43f0` TzimisceRunner
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+- `0x10378d30` Gargoyle: `m_iCanKnockback` (`+0x6688`) 0 → false; `RandomInt(1,100) > 50` → false;
+  else the Troika body and **true** whatever it answered.
+- `0x10380320` Hengeyokai: the same with no `m_iCanKnockback` test.
+- `0x103c43f0` TzimisceRunner: the Troika body with activity `0x79` replacing the caller's,
+  tail-returned.
+
+**Unrecovered:** nothing named by the walk.
+
+### Species slot 313 (`0x1037a5b0` Gargoyle, `0x10381b10` Hengeyokai, `0x103ab270` SabbatLeader)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+`0x101e3ff0(&DAT_10739a4c, this)` — dismiss the running discipline-10 (Presence) effect through the
+lazily cached masks `DAT_10739478` / `DAT_10739484` and the effect word `+0xeb4` — then zero `+0xe80`
+`m_iFriendPresenceEffect`, `+0xe88` `m_iEnemyPresenceEffect`, `+0xe84` `m_flEnemeyPresencePercent`.
+The leader's copy is wrapped in a scope-trace push/pop (121 bytes).
+
+**Unrecovered:** the per-target effect word `+0xeb4` and the mask table (the port dismisses nothing).
+
+### Species slot 390 — `0x1035e6d0` … `0x103b0e90`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+- `0x1035e6d0` AndreiBlood (452 bytes): copy the packet; amount; stat `0x11` (cap) and `0x0f`
+  (wounds). Activated (`+0x66cc`): `++m_iHitCounter` (`+0x66d8`); `cap <= wounds + amount` →
+  `m_bDead` (`+0x66cd`) and neuter, else the copy goes on untouched. Not activated: always
+  neutered. Neuter = copy `+0x30 = 0` and, through the SHARED descriptor, `m_iDiceAmt` (`+0x4`) and
+  `m_iToHitSuccesses` (`+0xc`) = 0. Chains the copy; returns its answer.
+- `0x103601a0` Animal (Dog, Rat, Scurrying, Zombie inherit): attacker's `+0xa8` equal to the local
+  player → `m_bPlayerAttackedMe = 1` (`+0x6660`, never cleared here); chains unchanged.
+- `0x10363c70` Bach (pass R: both readings wrong): `m_bCanFightYet` (`+0x66a8`) clear → 0;
+  `+0x66a6 = 1`; bits `& 0x4000002`: `m_bShieldActive` (`+0x66a5`) → chain a copy with `+0x30`,
+  `+0x34` zeroed; else zero `+0x6688` and chain; other bits → zero `+0x6690` and chain.
+- `0x10378c10` Gargoyle: `m_iCanKnockback = 1`, 0 on bit `0x4000000`; unconditionally
+  `AddEntityRelationship(m_hClosestPlayer or NULL, D_HT, 10)`; chain.
+- `0x1037bc90` GhoulCroucher: `OnDisturbed(attacker)`, `m_bUnawareExited = 1`, chain.
+- `0x103801d0` Hengeyokai: chain FIRST; attacker classname `== "point_explosion"` (case-insensitive;
+  the `+0x26c` and `'*'` arms are dead for this literal) → `0x103830e0` (line `0x985`,
+  `SetSchedule(0x16e, false)`, `SetSkinFadeTime(0)`, `FadeToSkin(1)`); returns the chain's answer.
+- `0x1038e880` ManBat: `m_iHealth < 25` and a non-player attacker → return 1, chain refused.
+- `0x10395ae0` MingXiao: a proxy (`m_iTentacleID != -1`) chains unmodified; the head copies the
+  packet, takes the copy's `+0x28` object's `+0xa0` weapon, maps the hit with `0x10395650`
+  (melee weapon → `0x103952b0`; else hitgroup 1→-2, 4→1, 5→0, 6→5, 7→4, 8→3, 9→2, else -1), runs
+  `0x10395750` on the copy and chains the modified copy.
+- `0x1039e890` MingXiaoTentacle: `m_flHideReadyTimer = 0` (`+0x6680`), line `0x549`,
+  `SetSchedule(0x168, false)` on every hit, chain.
+- `0x103aa480` SabbatLeader: a pure forward.
+- `0x103b0e90` SheriffMan (471 bytes): copy, amount, cap, wounds; `cap <= wounds + amount` →
+  `m_takedamage = 0`, `SetCondition(0x79)`, `m_bDead` (`+0x66e5`), neuter; else `m_bTeleporting`
+  (`+0x66e4`) → neuter; chain the copy.
+
+`0x103952b0` (the melee map): hitgroup 1 → -2; 4 → tentacle 1 if connected (`0x10398000`) else
+falls into 8's block: 3, else 5 or -1; 5 → 0 else falls into 9's: 2, else into 7's: 4 or -1; 6 →
+5 or -1; any other → `RandomInt(0,99) < tuning+0x2c` then the first connected of 1,0,3,2,5,4, else -1.
+
+**Unrecovered:** the Ming Xiao tuning record (`0x101e8da0(0x10739d08)+0x2c`).
+
+### Species slot 142 — `0x103cccc0` Werewolf, `0x103e06d0` Zombie
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L09)._
+
+- `0x103cccc0` Werewolf: default-construct a packet, copy the caller's over it, zero the copy's
+  `+0x44`, then chain `0x102bed30` with the ORIGINAL — observationally a pure forward; the werewolf
+  does not modify incoming damage.
+- `0x103e06d0` Zombie (491 bytes): stat 0x0f then 0x11; amount; head threshold `cvar - wounds + cap`
+  (`DAT_1094049c`, 0 when its slot 1 answers true); `threshold < amount` → `m_bShouldGib` (`+0x66e0`);
+  chain `0x102bed30` with the original; with a nonzero answer and a running schedule whose
+  class-local id is not `0x161` → line `0x469`, `SetSchedule(0x164, false)`; otherwise, unless
+  `m_bShouldRagdoll` (`+0x6675`), line `0x46e`, `SetSchedule(0x162, true)`; head-hit byte `+0x66e1` →
+  `zombie_headshot_dmg_emitter` (nonzero answer) or `zombie_headshot_death_emitter` through
+  `0x103e05e0` (a `CPASFilter` particle at the look data); returns the chain's answer.
+
+**Unrecovered:** the ConVar object at `DAT_1094049c` (never constructed in the corpus).
+
+## Story 8, family Misc19 — `SetEnemy` `0x10279a50`, `ChooseEnemy` `0x10279dd0`, the grapple and forget slots, `HandleAnimEvent` (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L11, integrated as `a17ed6a9`._
+
+The `rule` bodies of family Misc19 over 64 bytes. Source of truth:
+`$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/Misc19-READING.md` and the
+listings it cites. Port bodies: `ElysiumNpcEnemy.cpp`, `ElysiumNpcBaseMisc19.cpp`,
+`ElysiumNpcMisc19.cpp`, `ElysiumNpcMisc19Species.cpp`, `ElysiumLaw.cpp`. The anim-event bands the
+two `HandleAnimEvent` bodies claim are catalogued in `../animation_events.md`.
+
+### `CAI_BaseNPC::SetEnemy` `0x10279a50`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Reads `m_hEnemy` (`+0x5ce0`) and resolves it; `-1` (`0x10279a63`) or a stale serial (`0x10279a7d`)
+is a null old enemy.
+
+1. When the resolved old enemy differs from the argument (`0x10279a8b`): only a LIVE old handle
+   (`0x10279a96`, `0x10279ab2`, `0x10279ab7`) reaches `0x10279b70`, which writes the old enemy's
+   handle into `m_hLastEnemy` (`+0x1a94`); then slot 560 `ClearAttackConditions` runs on EVERY
+   change, a change from null included (`0x10279aed`).
+2. A non-null argument writes its handle into `m_hEnemy` (`0x10279b01`) and runs the discipline
+   manager's break-on-notice sweep `0x101e3d70(&DAT_10739a4c, this)` (`0x10279b0c`) — on every
+   non-null write, an unchanged enemy included. A null argument writes `-1` (`0x10279b16`).
+
+`0x10279b70` is `m_hLastEnemy := arg ? arg->GetRefEHandle() : -1`.
+
+**Unrecovered:** the break flag the sweep tests (record `+0x32`); the port counts the sweep.
+
+### `CAI_BaseNPC::ChooseEnemy` `0x10279dd0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Reads slot 167 `GetEnemy`, `m_afMemory` (`+0x5d8c`), `m_pSchedule` (`+0x5c38`), slot 541's
+eluded flag and slot 158 `IsAlive`.
+
+1. `bHadEnemy = (m_afMemory & 0x18000) != 0` (`0x10279e6b`). With it set and no current enemy the
+   enemy WENT NULL (`0x10279e8b`) and counts as lost; otherwise a current enemy that `IsEluded`
+   (`0x10279efa`) counts as lost. `bDead` is a current enemy whose slot 158 answers false.
+2. With no running schedule the three interrupt answers (NEW_ENEMY 0x54, LOST_ENEMY 0x47,
+   ENEMY_DEAD 0x58) are forced true (`0x10279eb9`); otherwise each is
+   `ConditionInterruptsCurrentSchedule` `0x10269c70` (mask only).
+3. The gate, unless the enemy is dead and ENEMY_DEAD interrupts (`0x10279f18`/`f1c`): the went-null
+   case only `DevMsg(2, "WARNING: AI enemy went NULL but schedule (%s) is not interested\n")` when
+   neither NEW_ENEMY nor LOST_ENEMY interrupts a running program, and FALLS THROUGH
+   (`0x10279fd7`); every other case RETURNS `current != null` when NEW_ENEMY does not interrupt and
+   either LOST_ENEMY does not or nothing was lost (`0x10279f30`-`0x10279f44`).
+4. Slot 480 `ShouldChooseNewEnemy` false keeps the current enemy; true asks slot 478 `BestEnemy` and
+   passes the answer through `0x102707d0` (a summoned body — its Troika answering `Classify() == 3`
+   — hands the hate to its owner, slot 97). The change work runs when the candidate differs, OR when
+   the enemy went null (the saved byte `[ESP+0x13]`, `0x1027a00d`-`0x1027a013`) — the one case
+   where old and new are both null.
+5. The change work, in order: `m_afMemory &= 0xfffe7fff` (`0x1027a027`); the OLD enemy non-null and
+   dead SETS ENEMY_DEAD (`0x1027a04c`; nothing here clears 0x58); NEW_ENEMY set for a non-null
+   choice, cleared otherwise (`0x1027a06f` / `0x1027a059`); `SetEnemy(choice)` (`0x1027a077`); with
+   `bHadEnemy`, `0x1028ae60` (vacate the squad slot) and `m_afMemory &= 0xfffdffff`
+   (`0x1027a086`/`a08b`); a null choice, when lost, sets LOST_ENEMY and slot 493 `LostEnemySound`
+   (`0x1027a0b0`/`a0b9`), then fires `m_OnLostPlayer` (`+0x5ecc`) when the ENTRY word had
+   `0x10000`, else `m_OnLostEnemy` (`+0x5e84`), with `this` as activator and caller; a non-null
+   choice ORs `0x10000` for the player (its `+0xa8` `m_pPlayer`), else `0x8000` (`0x1027a0ff`).
+6. Answers whether an enemy is held.
+
+`ShouldChooseNewEnemy` (`0x10279d00`, slot 480) tests the enemy with slot 158 `IsAlive`
+(`0x10279d33`), `m_lifeState`; the port's old `IsInert` (dead-or-hidden) test was corrected in the
+L11 integration. Its first arm, `m_bfAINPCFlags2`-area bit `+0x14bc & 0x10000` answering FALSE
+(`0x10279d13`), still has no port word.
+
+**Unrecovered:** slot 1 of `DAT_10924a6c` before each `SetCondition` is the `ent_trace_conditions`
+ConVar touch, with no observable.
+
+### `CAI_BaseNPC::EnterGrappleState` `0x1026cdc0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Three unconditional statements: `0x1026d130` (`SetEnemy(NULL)`, `DisconnectFromSquad` `0x1026d050`,
+`++m_iIsOblivious` `+0x5bb4`), `m_OnGrappleBegin` (`+0x5bd8`) with the partner as activator
+(`0x1026cdd7`), then `CBaseCombatCharacter::EnterGrappleState` `0x10329760` with every argument; its
+`AL` is the answer.
+
+`DisconnectFromSquad` (`0x1026d050`) only leaves the squad when not already disconnected
+(`0x1026d05b`) and increments `m_iSquadDisconnected` (`+0x5bb0`); it writes no flag. The port's
+extra `D_DISCONNECT_SQUAD` write was removed in the L11 integration (bit 23 is set by the task at
+`0x102a536e`, not here).
+
+**Unrecovered:** `0x102dfc10(DAT_109203f0, …)` inside `DisconnectFromSquad` (a global pending-record
+flush).
+
+### `CAI_BaseNPC` slot 354 `0x1026cec0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The victim's feed-begin callback (`CBaseCombatCharacter::FeedBegin` `0x10339d90` dispatches it on
+the victim). `0x1026d130` first. Then, reading `m_GrapplePartner` (`+0x1538`), `m_GrappleRole`
+(`+0x153c`) and `m_GrappleType` (`+0x1540`): a LIVE partner with a role and type 8
+(`BeFedOnByZombie`) returns having fired nothing (`0x1026cf0a`); a live partner with no role, or no
+role at all, fires `m_OnFedUponBegin` (`+0x5c08`) with a null activator; otherwise the partner handle
+is re-resolved and fired as activator (null when stale).
+
+The feed wires both callbacks: `FeedBegin` (`0x10339d90`) dispatches the victim's slot 354 (the
+body above), and the feed end (`FeedInterrupt` `0x1033a9e0` -> slot 355 `0x1026cf90`) fires
+`OnFedUponEnd` and then runs `0x1026d160` unconditionally, releasing the obliviousness slot 354
+took. `CBaseCombatCharacter`'s slot 354 (`0x1014f8d0`) is a lone `RET`.
+
+**Unrecovered:** none.
+
+### `CAI_BaseNPCTroika` slot 595 `0x102b4cc0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+`UTIL_EntitiesInBox` (`0x101ccc80`) over its slot-217 origin ± (1024, 1024, 128) with mask `0x40`
+against `m_edtDerivedType` (`+0x4c`, a bit the Troika constructor `0x1028d230` sets), at most 32.
+Per candidate, in order: its `+0x9c` combat character, `GetFlags() & 0x8000` (`FL_NOTARGET`) clear,
+`m_bIsBCCTargetable` (`+0x1480`), slot 158 `IsAlive`, `0x100b5190` (`m_bScriptHidden` `+0xf4`)
+clear, not itself, slot 404 `IRelationType` exactly `D_HT`. The strictly nearest (squared distance,
+from FLT_MAX) goes to slot 596 (`0x102b4ea8`). No NPC word written.
+
+**Unrecovered:** the partition's enumeration order; retail tests bounds overlap, the port origins.
+
+### `CAI_BaseNPCTroika` slot 598 `0x102b4fe0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The forget-this-entity route: `AddEntityRelationship(entity, D_NU 4, 0)` FIRST; `SetEnemy(NULL)`
+when slot 167 is that entity; `0x10279b70(NULL)` when `m_hLastEnemy` resolves to it;
+`CAI_Enemies::ClearMemory` (`0x102dfaa0`) on slot 541 with a `"%s(%d) :"` debug reason.
+`AddEntityRelationship` (`0x10332ca0`) overwrites the entity's row at any priority (a lower
+priority is not refused), so the forget always lands. `ClearMemory` unlinks the first record whose
+handle resolves to the entity (a null entity removes nothing).
+
+**Unrecovered:** `ClearMemory`'s notify target (`+0xe0` / `0x103169a0`).
+
+### `CAI_BaseNPCTroika::EnterGrappleState` `0x102b5c00`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+A non-empty queued-burn list (`+0x65a8`, count `+0x65b4`, 0x4c-byte records) is written in place
+(`+0x2c` inflictor and `+0x28` attacker := this), each record gets hitbox `RandomInt(0,1) ? 4 : 5`
+(`0x101c2a10`) and is handed to the PARTNER's `TakeDamage`; the grapple is then REFUSED (FALSE) and
+the list left standing. Otherwise `CAI_BaseNPC::EnterGrappleState`; on TRUE: `IsInDialog`
+(`0x102c1170`) → `0x102c0bb0`; a live `m_hCine` → `CancelScript` (`0x101a8c30`) and, when
+`m_NPCState != m_IdealNPCState`, `SetState(ideal)`; `ClearSchedule` (`0x10280d30`); TRUE.
+
+**Unrecovered:** none (the hit group has no field on the port's damage packet).
+
+### `CNPC_VCop` slot 598 `0x10372dd0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Runs only when the argument IS the entity `m_hClosestPlayer` (`+0x628c`) resolves to (a stale handle
+and a null argument match): `AddEntityRelationship(player, D_NU, 0)`, `m_eOldPlayerRelationType`
+(`+0x6668`) := 0, `SetEnemy(NULL)` / `0x10279b70(NULL)` when the enemy / last enemy is the player,
+`ClearMemory`, then `InputSetRelationship("Player D_NU 10", 0)`. Anything else goes to the Troika
+body `0x102b4fe0` with none of that.
+
+**Unrecovered:** none.
+
+### `CNPC_VCop` slot 596 `0x10372c50` / `CAI_BaseNPCTroika` slot 596 `0x102b4f60`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The Troika body: a null argument does nothing; otherwise `0x102707d0`, `SetEnemy`, then slot 544
+`UpdateEnemyMemory(entity, slot 217 origin, &entity->+0x3d4)` — the enemy set before the memory row
+is written. The cop runs the same three steps and then calls the Troika body DIRECT with the
+resolved entity, which repeats them.
+
+**Unrecovered:** why retail pushes `&entity->+0x3d4` as slot 544's third argument.
+
+### `CNPC_VPedestrian` slot 27 `0x103a3850`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The Troika slot 27 `0x1029f8f0` direct, slot 596 with the same entity, the ideal-state trace (line
+`0x405`), `m_IdealNPCState := 8` by DIRECT write (no `SetState`, no state-change virtual), and
+`0x102ae7f0(0x15a)` — `m_iForcedSchedule` (`+0x65c8`) := 0x15a.
+
+**Unrecovered:** nothing named by the walk.
+
+### `CNPC_VAndreiBlood::Activate` `0x1035dc30`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The Troika `Activate` `0x1028e310` direct, then `m_NPCState` and `m_IdealNPCState` := 2 by DIRECT
+write (no `m_flLastStateChangeTime` stamp, no slot 463), the schedule trace (line `0x1cc`), and
+`0x102ae750(0x6b, false)`.
+
+**Unrecovered:** nothing named by the walk.
+
+### `CNPC_VGhoulCroucher::EnterGrappleState` `0x1037b500`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+With `m_bSpawnBurning` (`+0x6665`) set and a grappler whose `+0xa8` `m_pPlayer` is non-null:
+`BurnPlayer(player, 10.0)` and FALSE — the grapple is refused. Otherwise the Troika body direct.
+
+**Unrecovered:** nothing named by the walk.
+
+### `PlayerSupernaturalIncident` `0x1017f4a0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+0. `debug_show_cs_acts` (`DAT_107258dc`, shipped "0") enabled: the witness's
+   `m_flSupernaturalWitnessedTimer` (`+0x63a8`) := curtime + 20.0 and
+   `DevMsg("CSActs:    %6.1f - Supernatural act witnessed by %s at %f\n")` (`**UNKNOWN**` for a null
+   witness). The stamp is inside the debug guard: dead on a shipped build.
+1. `0x1023bd00()` non-null with `+0x49c` (area type) non-zero, else return.
+2. `m_flMasqueradeTimerNext` (`+0x1dbc`) `<=` curtime: `ChangeMasqueradeLevel(+1)` (`0x1022dea0`) and
+   `+0x1dbc := curtime + debug_masquerade_timer` (`DAT_10723984`).
+3. Independently, `debug_supernatural_cop_spawn` (`DAT_10725804`) enabled: `0x1017ed00` (the police
+   response).
+
+**Unrecovered:** the `debug_masquerade_timer` default (`DAT_10588678`).
+
+### `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Slot 259's base body, a two-band switch; every id it names returns at `0x102754d1` without the
+base, guard failures included. `0x3fc..0x3fe`: `DevMsg("Bodygroup!\n")`. `1000`
+(`SCRIPT_EVENT_DEAD`) and `0x3f2` (`NOT_DEAD`), only in `m_NPCState` 4: `m_lifeState := 1`,
+`m_iHealth := 0` / `m_lifeState := 0`, `m_iHealth := m_iMaxHealth`. `0x3e9`/`0x3ea`: a live
+`m_hCine` gets `AllowInterrupt(0/1)` (`0x101a8890`). `0x3eb`: the Troika's interesting place
+(`+0x98`→`+0x62ec`) is read first; `atoi(options)` goes to the live cine's `OnScriptEvent0<n>`
+(`0x101a7230`), else to `m_pHintNode`'s `OnAnimEvent<n>` (`0x102d09b0`, `+0x4e4+0x18n`), else to the
+place's `OnAnimEvent<n>` (`0x102db3e0`, `(3n+0x8d)*8`); each fires only for n in 1..8, the NPC as
+activator of the hint and place outputs; with no target the event is still claimed. `0x7e6` and
+`0x7fa..0x7fc` test the options pointer only, so an empty option reaches `atoi("") = 0`. `0x3ec`/`0x3f0`: `EmitSound(options)` (`0x101b0c10`).
+`0x3f1`: `RandomInt(0,2)`, zero returns, non-zero falls into `0x3ed`: `SENTENCEG_PlayRndSz(edict,
+options, 1.0, 80, 0, 100)`. `0x7d1`/`0x7d2` (2001/2002), only with `FL_ONGROUND`:
+`AI_BaseNPC.BodyDrop_Light` / `_Heavy` (2001 is LIGHT). `0x7da`: `AI_BaseNPC.SwishSound`. `0x7e4`:
+`SetIdealActivity(ACT_IDLE)`, `m_afMemory &= ~0x2000`, `SetBoneController(0, GetAngles().y)`,
+`m_fEffects |= EF_NOINTERP`. `0x7e6`: `SetIdealYawAndUpdate(GetAbsAngles().y + atoi, -1)`.
+`0x7f8` (pickup): the nearest entity named by the option within 256 units (a miss is "stolen", no
+fallback), else `m_hTargetEnt`; its weapon (`+0xa0`); an owned weapon fails "Weapon in use by
+someone else" (line 0x1f06), `Weapon_CanUse` false "Can't use this weapon type" (0x1f0e), no weapon
+"Weapon stolen by someone else" (0x1f19); success: weapon slot 341 `OnPickedUp`, `Weapon_Equip`,
+`TaskComplete`. `0x7f9`: the named lookup and its `WorldSpaceCenter` are discarded;
+`Weapon_Drop(active, NULL, false)`. `0x7fa`/`0x7fb`/`0x7fc`: weapon-model sequence / activity.
+`0x802..0x805`: `0x1026d460(this, 0 | 1)`. Default: an id in `3000..0xfa2` (or from another owner)
+goes to `Weapon_HandleAnimEvent`, everything else to `CBaseCombatCharacter::HandleAnimEvent`.
+
+**Unrecovered:** the NPC's `m_lifeState` word, soundscript emission, the weapon model's
+sequences, `OnPickedUp`, `FL_ONGROUND` on NPCs.
+
+### `CAI_BaseNPCTroika::HandleAnimEvent` `0x1029b290`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+`GetCurTask` (`0x1028a150`) first. `0x80c`: `sscanf("%s %f %f %f")` (defaults 1.0/0.2/0.2), fewer
+than two fields or a total `<= 0` return; fades exceeding the total are rescaled; hold = total -
+fades (floored at 0), at x87 width against the image's 0.0 cell `0x104454c4`;
+`SetExpression(name, 0, in, hold, out, 1.0)`. `0x7d5`: `EmitSound` with the
+option as the sample, `CHAN_AUTO`, 1.0, soundlevel 0x42, pitch 100. `0x7d6`: an inlined
+`CBaseCombatCharacter::Die` without its life-state guard — a `CVDmg_t` sourced on this NPC, a
+`CTakeDamageInfo` whose attacker is `m_hClosestPlayer`, the sheet's wounds := max health,
+`Event_Killed` then `Event_Dying`. `0x7e5`: `m_afMemory &= ~0x2000`. `0x7f8`: `m_hTargetEnt` as a
+`CBaseCombatWeapon`, owned -> "in use", `Weapon_CanUse` false -> "can't use", none -> "stolen";
+else `Weapon_Equip` and `TaskComplete`. `0x80d`: `SetExpression(option, 0, 0, SequenceDuration *
+m_flCycle + 0.1, 0, 1.0)` (the time ELAPSED; 0.1 is the double `0x104493d0`). `0x1036/0x1037/0x103a/0x103b`, only in
+`TASK_DO_INTEREST_ACTIVITY` (0xb4): `Interesting_places/<male|female>/<opt>.wav` when that file
+exists, else `Interesting_places/<opt>.wav`, channel 4 (0x1036/0x103a) or 2. `0x1038/0x1039`, same
+gate: STOP channel 4 / 2. Everything else: the base body.
+
+**Unrecovered:** `SetExpression`'s partner-scale constants; `CTakeDamageInfo +0x48`.
+
+### Species slot 259 bodies — `0x10374280` … `0x103d88e0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+- **Dog `0x10374280`:** `0xbb9` with an active weapon runs the bite `0x10374f40` and
+  `Msg("Gots a doggie bite!\n")`; without one the event is swallowed. Everything else: Troika.
+- **Gargoyle `0x103786c0`:** `0x802/0x803` shake (2.0, 0.2, 0.2, 1024) and a stomp (slot 617);
+  2 the roar; 1 swallowed; the rest to the Troika.
+- **Hengeyokai `0x1037fb60`:** `0xbbd` releases the carried body when carrying; `0x802/0x803` only
+  in shark form: shake and stomp; `0x7f8` attaches the pickup animlink unless carrying; failed
+  guards are swallowed; `0x804/0x805` go to the Troika.
+- **ManBat `0x1038e000`:** 1 wingflap, 2 screech, 3 heavy exert.
+- **MingXiao `0x10392a70`:** `0xbbd` throws in mode 4 (else a DevMsg); `0xbd7` the vomit emitter
+  then the Troika; `0x835` shake (15, 1, 1.5, 1024); `0x7f8` the tentacle grab in mode 2 (else a
+  DevMsg); `0x802/0x803` swallowed; `0x834` shake (5, 0.6, 0.2, 512).
+- **SabbatLeader `0x103a7000`:** `0x802/0x803` slot 620 `FootstepSound`.
+- **Tzimisce `0x103ba410`:** `0xbbd` release when carrying; `0xbbb` swish (channel 1); `0x802/0x803`
+  shake and footstep; `0x7f8` pickup unless carrying; ids 2..9 the voice slots (2 and 3 only in
+  state 1), with expression 2 after 6, 7 and 9: `0x103b9f90(2, t)` is
+  `SetExpression("scream", 0, 0.15, max(t - 0.3, 0), 0.15, 1.0)` (names `0x10653120` {normal,
+  angry, scream, dead}; 0.3 the double `0x1047b868`).
+- **TzimisceHeadClaw `0x103c1540`:** `0x802` shake (1.3) and slot 619(1) (Foot_Step3/4); `0x803`
+  shake and slot 619(0) (Foot_Step1/2).
+- **Werewolf `0x103d88e0`:** `0x835` the activity voice `0x103d8df0`; `0x836..0x83d` swallowed;
+  `0x834` air shake (16, 2, 2, 1500) at `Bip01`; `0x3eb` fires the held teleport / move / break
+  hint's `OnAnimEvent<n>` (`0x102d09b0`); `0x802..0x805` the footstep `0x103d8c10`, whose sound and
+  shake (centred on slot 192 `WorldSpaceCenter`) are behind `werewolf_footstep_sounds` / `_shakes`,
+  both shipped "0".
+
+**Unrecovered:** the dog bite and Ming Xiao grab bodies; the `Bip01` bone position (the port's
+`RetailBonePosition` seam answers false, so the origin stands in).
+
+### `CNPC_VBach` camper pass `0x10365a90`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+The target is `GetEnemy` or the local player; ten `FVisible` asks. Any visible answer: nothing
+occluded returns; otherwise `m_iWasOccluded := 0` and, with the camper flag set, schedule `0x15f`
+(line 0x57b). Ten failures: the first occluded pass stamps the enter time and compares
+`|dx| * |dy|` against 20000 (below: `++m_iReusedOccludeCount`, at 2 the flag); a later pass after
+MORE than 4.0 s compares `max(|dx|, |dy|)` against 200 (below: the flag); both refresh the saved
+origin. Grenade zones 10 and 7 force the flag AND the sound edge every pass. With the flag: zones
+5/6/7/9/10 throw from `grenade_spawn_N` (300 / 80 / -26 / 85 / -26) in the starting position, zone
+8 (`grenade_spawn_8`, 15) out of it with no teleport state. On the edge: `bach_grenade.wav` when a
+spawn arm was entered, else `bach_camp_warn.wav`, CHAN_VOICE, 1.0 / 0.8 / 100.
+
+**Unrecovered:** nothing named by the walk.
+
+### `CNPC_VWerewolf::CheckAllMoveHints` `0x103cfc50`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L11)._
+
+Running one of the four move-hint programs (0x15f, 0x15b, 0x15a, 0x160 through `GetScheduleOfType`)
+answers TRUE; `ShouldPursueEnemy` refusing FALSE; a held hint whose target groundpoint has a path
+to the enemy point TRUE. Then the search (timer, `+0x66d4` frame, `+0x66b8 := 0`, `+0x66d8 :=
+curtime`) over the global hint list with `werewolf_pursuit_distance` as both limits: an imperative
+hint is taken at once; a valid one not yet seen must be within limit B of us, its target
+groundpoint within limit A of the enemy point, with both paths; every non-taken iteration appends
+the local vector (an invalid hint appends the STALE one). Exhaustion: `DevWarning("CNPC_VWerewolf::
+CheckAllMoveHints FAILED.\n")`, FALSE.
+
+**Unrecovered:** `IsImperativeMoveHint` (lane L12); the uninitialised first stale vector.
+
+## Story 8, family Werewolf19 — the Werewolf's hint finders and condition updaters, `CheckTarget` `0x10271d10` (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
+
+Each section is one `rule` row of `families-19-29/Werewolf19-READING.md` over 64 bytes,
+walked arm by arm off the decompiled C and the listing (`vtmb_code` / `vtmb_asm`). Port:
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp` (species),
+`ElysiumNpcWerewolf19.cpp` (Troika line), `ElysiumNpcBaseWerewolf19.cpp` (`CAI_BaseNPC`),
+`ElysiumNpcWerewolf.cpp` (`0x103cac20`, walked in `lifecycle.md` § "`CNPC_VWerewolf::NPCInit`
+`0x103caef0` and re-arm `0x103cac20`"). This file's § "Hints10 — `FValidateHintType` and the
+Werewolf's hint endpoints" holds the validators these finders call.
+
+Shared words, as the listings use them (the port keeps older names landed suites assert through):
+`+0x66a1` the enemy-unreachable latch (`bWerewolfTaskFailed`); `+0x66a4` its once-per-frame stamp, an
+engine frame number (`WerewolfMorphTimerA`); `+0x66a8` the previous pass's `HasCondition(0x59)`
+(`WerewolfSnapWordA`); `+0x66a9` `m_bPlayFrustration`; `+0x66ac` the teleport search cursor
+(`WerewolfWord66ac`); `+0x66b8` the move search cursor (`WerewolfMoveHintSearchStart`); `+0x66d4` /
+`+0x66d8` the searches' frame stamp and curtime stamp (`WerewolfMorphTimerB` / `C`); `+0x66e8` the
+hint-gate bit word (`WerewolfHintFlags`); `+0x6708` / `+0x670c` the move / random-move node zones.
+The engine frame count (`(*DAT_1070b22c)->vfunc 0x1e0`) is a seam answering `INDEX_NONE`, read as
+"never the same frame" — retail's answer at retail's one-call-per-frame rate.
+
+The global hint list is `DAT_10925450` with the `+0x5d8` next link (the world's `HintList`, head =
+last authored). `HasPath` (`0x103d0db0`) forwards to the navigator's `0x102fdcc0`, a seam answering
+false (no path object). Slot 617 is `CNPC_VWerewolf::EnemyCouldSeeHull` (`0x103da230`).
+
+### `0x103cc450` `CNPC_VWerewolf::UpdateConditionShouldBreakHint` (281 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. `ClearCondition(0x7b)` unconditionally (`0x103cc4c2`).
+2. `+0x66e8 & 2` clear: `m_pBreakHint` (`+0x66c4`) := NULL (`0x103cc4d2` / `0x103cc4d4`).
+3. No break hint: return (`0x103cc4e6`).
+4. `IsValidBreakHint` (`0x103d8550`) false: return (`0x103cc4f2`).
+5. `HasPath(GetAbsOrigin, GetHintGroundpoint(hint))` false: return (`0x103cc546`).
+6. Slot 1 on `DAT_10924a6c` (`ent_trace_conditions`, object `0x10924a68`), result discarded
+   (`0x103cc550`); `SetCondition(0x7b)` (`0x103cc557`).
+
+Reads `+0x66e8`, `+0x66c4`. Writes `+0x66c4`, condition `0x7b`.
+**Unrecovered:** nothing in the body; the meaning of `+0x66e8` bit 2 ("a break hint is held") is the
+zone logic's.
+
+### `0x103d0ec0` `CNPC_VWerewolf::FindBreakHint` (644 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. A held `m_pBreakHint` that `IsValidBreakHint` accepts and `HasPath(origin, groundpoint)` reaches:
+   return true (`0x103d0f37` / `0x103d0f43` / `0x103d0f97` -> `0x103d0fab`), no stamp.
+2. Stamp `+0x66d4` = frame (`0x103d0fba`), `+0x66d8` = curtime (`0x103d0fc8`).
+3. Empty hint list: false (`0x103d0fd6`). `m_hClosestPlayer` (`+0x628c`) not resolving: false
+   (`0x103d0ff4` / `0x103d100f` / `0x103d1014`).
+4. Best distance `FLT_MAX` (`0x103d102d`), origin (`0x103d1035`), reference = the chase point
+   `0x103d9c90` (`0x103d1056`).
+5. Walk the whole list (`0x103d105f` / `0x103d1121`): `IsValidBreakHint` (`0x103d106f`); groundpoint
+   (`0x103d107d`); distance reference->groundpoint (`0x103d10b4`); keep only a strictly smaller one
+   (`0x103d10d0`) that `HasPath(origin, groundpoint)` reaches (`0x103d110d`). Distance is tested
+   first, path second.
+6. `m_pBreakHint` := winner or NULL (`0x103d1127`); answer whether one was found.
+
+The early-false exits (3) leave `m_pBreakHint` untouched. **Unrecovered:** none.
+
+### `0x103d1200` `CNPC_VWerewolf::FindEgressHint` (581 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. With a move hint (`+0x66bc`, `0x103d1277`) and an enemy (slot 167, `0x103d1289`): true only if
+   `HasPath(origin, groundpoint)` (`0x103d12e1`) AND `HasPath(GetHintEndpoint(hint), enemy origin)`
+   (`0x103d133f`). Any failure, or no enemy: `ClearMoveHint` (`0x103d1356`).
+2. Walk the list (`0x103d1363` / `0x103d142c`) for type `0x3aa8` (`0x103d1373`): `HasPath(origin,
+   groundpoint)` must pass (`0x103d13c5`); then slot 617 at the hint's ENDPOINT with `(0, 0,
+   vec3_origin)` (`0x103d1410`): false BREAKS the walk (`0x103d1418`), true runs `SetMoveHint(hint, 0)`
+   (`0x103d141f`) and the walk goes on — the last seen hint stays held.
+3. The walk always answers false (`0x103d1444`).
+
+**Unrecovered:** none.
+
+### `0x103d2070` `CNPC_VWerewolf::IsImperativeMoveHint(CAI_Hint*)` (1547 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Four gates over `+0x66e8` in retail order.
+
+- A (`0x103d20f7` bit 0x100 set, `0x103d2101` bit 4 clear): with bit 0x80 (`0x103d210a`) and
+  `0x103d1e50` true (`0x103d2115`), type `0x3aaa` answers true (`0x103d2121`) and any other type skips to
+  B WITHOUT the next test; otherwise type `0x3aa6` answers true (`0x103d2142`), no path asked.
+- B (bit 0x200, `0x103d2158`): `m_iDisabled` (`+0x5e8`) set answers false (`0x103d2166`); else the
+  eight `(type, m_iName)` pairs through `0x102d1220` (`0x103d217f`..`0x103d2216`) and, on a match,
+  `HasPath(GetOrigin, groundpoint)` true answers true (`0x103d2265`).
+- C (bit 0x400, `0x103d227d`): same shape with the five tramdoor pairs (`0x103d22a4`..`0x103d2347`).
+- D: bit 4 SET and bit 0x100 CLEAR, else false (`0x103d235b` / `0x103d236b`). `0x3aa7` goes straight
+  to the path test (`0x103d237e`). Else with `0x103d1e50` true (`0x103d23aa`): `0x3aa5` with a path is
+  true (`0x103d23b5` / `0x103d2404`); then only `0x3aa4` named `jump_to_platform_hint_1`/`_2` passes
+  (`0x103d2414`..`0x103d2600`). With it false: only `0x3a9c` named `archway_a_5_squeeze_front` /
+  `archway_b_6_squeeze_front` (`0x103d250e`..`0x103d2600`). The last `HasPath` decides (`0x103d264f`).
+
+`0x102d1220` compares the hint's TYPE and its `m_iName` (`+0x26c`) — the pointer-equal fast path, then
+`_strnicmp` over `len-1` for a literal ending in `*`, `_stricmp` otherwise. **Correction to the
+checklist:** it names `m_strGroup`; the listing reads `+0x26c`. **Unrecovered:** what each `+0x66e8` bit
+means in the zone logic.
+
+### `0x103d3c20` `CNPC_VWerewolf::FindTeleportHint` (1791 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. `StartSearchTimer` (`0x103d3c94`). Same frame as `+0x66d4`: false (`0x103d3cad`). curtime below
+   `+0x66d8 + 0.15` (`_DAT_104aaac4`): false (`0x103d3ce2`). A held teleport hint: true (`0x103d3d01`).
+2. Stamp `+0x66d4` / `+0x66d8` (`0x103d3d28` / `0x103d3d36`). Empty list, or no closest player: false.
+3. Resume at `+0x66ac`'s successor, else the head (`0x103d3d92` / `0x103d3d9c`). Best NULL, priority 0,
+   distance `FLT_MAX`; reference = chase point (`0x103d3db7`), or the break hint's groundpoint with
+   `+0x66e8 & 2` and a break hint (`0x103d3e2e` / `0x103d3e38`).
+4. Per hint: `IsImperativeTeleportHint` wins at once (`0x103d3e65`). An invalid hint
+   (`IsValidTeleportHint`, `0x103d3e75`) appends the STALE target point to the reject list unless the
+   last valid candidate left the accept flag set (retail defect, reproduced). A valid hint past 9
+   tries (`0x103d3e82`) ends the walk: with no best yet it stores `+0x66ac` = this hint, `DevWarning`s
+   "Werewolf giving up after %d teleport searches!" and answers `ReportSearchTimer(0)` (`0x103d42a7`..).
+   Otherwise: groundpoint, `GetHintEndEntity` (discarded), target groundpoint; distance target->reference
+   (`0x103d3f04`); priority (`0x103d3f1a`); a target already rejected is rejected AGAIN (`0x103d3f6a`);
+   `dist < best && bestPriority < priority` (`0x103d3f7f` / `0x103d3f8f`) else reject. Accept flag: an
+   already-accepted target (`0x103d3fe1`), or `werewolf_force_teleport_in_time` ("25.0") +
+   `m_flTimeTeleportedOut` (`+0x66f0`) < curtime (`0x103d401a`); else `werewolf_teleport_full_path_check`
+   ("1") counts a try and asks `HasPath(target, reference)` (`0x103d4052` / `0x103d4087`) — the other
+   arm is `0x103d0e70`, both nodes' `+0x94` zones — and a failure rejects; success records the target
+   as accepted. Then one more try (`0x103d40f4`) and slot 617 at the groundpoint with
+   `werewolf_teleport_ignore_viewcone` ("1") (`0x103d4152`): only FALSE installs the hint as best.
+5. Advance on `+0x5d8`, wrapping to the head when `+0x66ac` is set (`0x103d41dc` / `0x103d41e4`); stop
+   on returning to `+0x66ac` (`0x103d41f2`).
+6. `+0x66ac` := best (`0x103d4203`); `SetTeleportHint(best)` when non-null (`0x103d4213`); answer
+   `ReportSearchTimer(best != NULL)` (`0x103d4224`).
+
+**Correction to the packet:** its walk of `0x103d401a` labels the not-taken arm "threshold has not
+passed"; `TEST AH,5 / JP` is taken on `>=` or unordered, so the fall-through that sets the flag is
+`stamp + allowance < curtime`, as the decompiled C says. **Unrecovered:** the three cvars are not in
+the 0019/4 tunables table (names and defaults read from their constructors `0x103c8500`,
+`0x103d3bb0`, `0x103d3b20`).
+
+### `0x103da0a0` `CNPC_VWerewolf::IsEnemyUnreachable` (306 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. `+0x66a4` equal to the frame: answer `+0x66a1` (`0x103da122`).
+2. `+0x66a4` := frame (`0x103da136`).
+3. No enemy (slot 167) or slot 530 `IsUnreachable(enemy)`: `+0x66a1` := 1 (`0x103da148` / `0x103da157`
+   -> `0x103da159`). Never written 0 here.
+4. With the latch set (`0x103da168`): `HasPath(origin, chase point)` true clears it (`0x103da1b5` ->
+   `0x103da1b7`).
+5. Answer `+0x66a1`.
+
+**Unrecovered:** none.
+
+### `0x103d2810` `CNPC_VWerewolf::IsImperativeRandomMoveHint(CAI_Hint*)` (388 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Type exactly `0x3aa8` (`0x103d288e`), `m_flPlayerDist` (`+0x6264`) above `werewolf_pursuit_distance`
+(`0x103d28bf`), slot 617 at the hint's ENDPOINT with `(1, 0, vec3_origin)` answering FALSE
+(`0x103d2916`), and `HasPath(GetOrigin, groundpoint)` (`0x103d2964`): true (`0x103d2978`). Anything
+else answers `IsImperativeMoveHint(hint)` (`0x103d297e`). **Unrecovered:** none.
+
+### `0x103d2a10` `CNPC_VWerewolf::FindMoveHint` (1643 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. Same frame: false (`0x103d2a99`). curtime below `+0x66d8 + 0.5` (`_DAT_104454d0`): false
+   (`0x103d2ace`). Held move hint: true (`0x103d2aed`). `ShouldPursueEnemy` false: false (`0x103d2b0f`).
+2. `StartSearchTimer`; stamps (`0x103d2b3d` / `0x103d2b4b`); empty list / no closest player: false.
+3. Resume at `+0x66b8`'s successor, else head. Best NULL, distance seeded 2500.0 (`0x103d2bc6`);
+   origin; reference = chase point, or the break hint's groundpoint under `+0x66e8 & 2`.
+4. Per hint: `IsImperativeMoveHint` wins (`0x103d2c8b`); `IsValidMoveHint` gates (`0x103d2c9b`) —
+   an invalid hint appends NOTHING. Past 14 tries (`0x103d2ca6`): with no best, `+0x66b8` := this hint
+   and `ReportSearchTimer(0)` (`0x103d3023`), else stop with the best. Distance origin->groundpoint
+   (`0x103d2d31`); admitted when below the best OR the type is `0x3aa5` (`0x103d2d47` / `0x103d2d4f`); a
+   rejected target is rejected again (`0x103d2d9c`); an accepted target WINS with no path test
+   (`0x103d2de9` -> `0x103d2ebf`); else a try and `HasPath(target, reference)` (`0x103d2e36`), a try
+   and `HasPath(origin, groundpoint)` (`0x103d2e80`) — both pass: accept and win; a loser's target is
+   appended to the reject list (`0x103d2ed1`).
+5. At the list's end with a cursor: `0x103d0ad0`'s cached nearest node, when present, writes its `+0x94`
+   into `+0x6708` (`0x103d2f43`); restart at the head. Stop on returning to `+0x66b8`.
+6. `+0x66b8` := winner (`0x103d2f61`); `SetMoveHint(winner, false)` (`0x103d2f72`);
+   `ReportSearchTimer(found)` (`0x103d2f83`).
+
+**Unrecovered:** the node graph `0x103d0ad0` reads (seam `CachedNearestNodeZone`, no node).
+
+### `0x10397380` `ShareEnemyWithAlly(CBaseEntity* ally)` (98 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+No enemy (slot 167, `0x10397390`): nothing. Else, on the ALLY: `AddEntityRelationship(enemy, D_HT, 5)`
+(`0x1039739e`), slot 596 with the enemy (`0x103973a8`), `SetCondition(0x54 NEW_ENEMY)` (`0x103973bd`);
+then only when THIS NPC is in a connected squad (`+0x5bb0 < 1`, `+0x5da4`), `SquadNewEnemy`
+(`0x103973d8`). **Unrecovered:** no squad object stands in the port.
+
+### `0x103cc320` `CNPC_VWerewolf::UpdateConditionEnemyUnreachable` (239 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+`IsEnemyUnreachable` false: clear `0x59`, set `0x79` (`0x103cc3b5` / `0x103cc3c9`); true: set `0x59`,
+clear `0x79` (`0x103cc3a1` / `0x103cc3aa`). Then with `+0x66a8` clear (`0x103cc3d6`) and `0x59` now set
+(`0x103cc3e3`), `CheckAllMoveHints` (`0x103cc3e7`, lane L11's row) finding none sets `+0x66a9`
+(`0x103cc3f0`). Finally `+0x66a8` := `HasCondition(0x59)` (`0x103cc400`) — the search runs once per
+unreachable episode. **Unrecovered:** none.
+
+### `0x103cf770` `CNPC_VWerewolf::CheckAllRandomMoveHints` (986 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. Held move hint: `HasPath(origin, target groundpoint)` true answers true (`0x103cf840`), else
+   `ClearMoveHint` (`0x103cf858`).
+2. `StartSearchTimer`; `+0x66d4` = frame (`0x103cf874`), `+0x66b8` = NULL (`0x103cf885`), `+0x66d8` =
+   curtime (`0x103cf88b`); origin.
+3. The WHOLE list from the head: an `IsImperativeRandomMoveHint` hint wins (`ClearMoveHint`,
+   `SetMoveHint(hint, 1)`, `ReportSearchTimer(1)`, `0x103cfa9c`..). An `IsValidRandomMoveHint` hint whose
+   target point is not yet visited (`0x103cf957`), whose OWN origin is within 1500.0 (`_DAT_10462b70`,
+   `0x103cf9a9`) and reachable (`HasPath(origin, groundpoint)`, `0x103cf9ef`) wins the same way.
+4. Every non-winner appends the target point — for an invalid hint, the stale one (retail defect,
+   reproduced). Off the end: `ReportSearchTimer(0)` (`0x103cfa48`).
+
+**Unrecovered:** retail's stale point before any valid hint is an uninitialised stack read; the port
+seeds `vec3_origin` (named divergence).
+
+### `0x103d14f0` `CNPC_VWerewolf::FindRandomMoveHint` (1554 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+As `FindMoveHint` with: retry 0.25 (`_DAT_1044bef8`, `0x103d15ae`); no pursue gate; budget 5 valid
+candidates (`0x103d176f`); best distance seeded `FLT_MAX` and measured target->reference
+(`0x103d17f4`); an accepted target wins without a path (`0x103d1936`); otherwise one try and
+`HasPath(origin, groundpoint)` (`0x103d18f7`); an invalid hint appends the stale point unless the last
+candidate won (`0x103d194f`); at the list end with a cursor, `+0x670c` takes the cached node's `+0x94`
+(`0x103d19b1`), `DevMsg("FindRandomMoveHint() looped through the entire list")` (`0x103d19bc`) and the
+walk restarts; the winner is installed with `SetMoveHint(winner, 1)` (`0x103d19ef`).
+**Unrecovered:** as `FindMoveHint`.
+
+### `0x10271d10` `CAI_BaseNPC::CheckTarget(CBaseEntity*)` (418 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Clear `0x4b` then `0x49` (`0x10271d6e` / `0x10271d77`); slot 201 `FVisible(target, 0x2804091, NULL, 0)`
+(`0x10271d8e`); set `0x4b` on a clear line, `0x49` otherwise (`0x10271db0`); `UpdateTargetPos`
+(`0x10271db7`) unconditionally. No debounce. The VProf scope is profiler bookkeeping.
+**Unrecovered:** `UpdateTargetPos` (`0x10271b10`) needs the navigator goal object (type `+0x18`,
+`GetGoalType`, goal target, goal flags); it stands as a seam taking the "no target goal" arm.
+
+### `0x103cc5c0` `CNPC_VWerewolf::UpdateConditionCanSpecialMove` (568 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. `m_pSchedule` equal to `0x102cc1f0`'s program for `0x15f`, `0x15b`, `0x15a` or `0x160` (a null
+   schedule stops the compares): do nothing (`0x103cc636`..`0x103cc69e`).
+2. `m_fEffects & 0x40`: do nothing (`0x103cc6af`).
+3. A `0x3aa5` move hint `0x103d1e50` refuses is cleared (`0x103cc6bd`..`0x103cc6d8`).
+4. A held move hint: `IsImperativeMoveHint` sets `0x78` and returns (`0x103cc706`); else
+   `HasPath(target groundpoint, chase point)` sets `0x78` and returns (`0x103cc783`); else
+   `ClearMoveHint` (`0x103cc797`).
+5. `0x59` absent: `ClearMoveHint`, return (`0x103cc7e6`). A hint still held: return. Else
+   `ShouldPursueEnemy` ? `FindMoveHint` : `FindRandomMoveHint` (`0x103cc7c0` / `0x103cc7d2`).
+
+`0x78` is only ever SET here. **Unrecovered:** the corpus names of the four programs.
+
+### Werewolf19 — the retail defects reproduced (`0x103cac20`, `0x103d3c20`, `0x103d2a10`, `0x103d14f0`, `0x103cf770`)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+- `0x103cac20`: the teleport floor `+0x66cc`/`+0x66d0` accumulates on every `NPCInit`/`OnRestore`.
+- `0x103d3c20`, `0x103d14f0`, `0x103cf770`: an invalid hint appends a stale point to the reject list.
+- `0x103d3c20`, `0x103d2a10`, `0x103d14f0`: a rejected point is appended again on each revisit.
+- `0x103d2a10`: an accepted point wins without re-testing its paths.
+
+**Unrecovered:** nothing named by the walk.

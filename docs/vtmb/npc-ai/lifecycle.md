@@ -2526,8 +2526,17 @@ the nearest-node-to-player pair `+0x6700`/`+0x6704`; then `+= sqrt(hullHalfX² +
 `+= sqrt(512)` onto `+0x66cc`/`+0x66d0` — the load path `0x103cabf0` runs the same helper, so the
 floor grows on every save/load.
 
+**`0x103cac20` walked again from the listing (0019 story 8 pass I, lane L12, 2026-09-27).**
+No branch. `SetEnemy(NULL)`; `m_hClosestPlayer` = -1; `+0x66a4` = 0; bytes `+0x66a1`, `+0x66a8`,
+`+0x66a9` = 0; `+0x66d4`, `+0x66d8` = 0; `+0x66dc..e4` = `vec3_origin`; `+0x66ec`, `+0x66f4` = curtime;
+`+0x66b8`, `+0x66ac` = 0; `+0x6708`, `+0x670c` = -1; `+0x66e8`, `+0x66f8`, `+0x66fc`, `+0x6700`,
+`+0x6704` = 0 (`0x103cac2a`..`0x103cacd5`). Then `+0x66cc += sqrt(dx² + dy²)` over the hull `+0x1568`'s
+half-extents (`0x103cad59`) and `+0x66d0 += sqrt(512.0)` (`_DAT_104704c0`, a double, `0x103cad6d`).
+Both are `+=` and the body runs from `NPCInit` and `OnRestore`: the floor grows with every load
+(retail defect, reproduced).
+
 **Unrecovered:** the hull half-extents `0x102d6100` / `0x102d6120` (the first `+=` term is 0
-without a hull).
+without a hull); the helper's retail name (the port's `WerewolfResetHuntState`); `+0x66f8`/`+0x66fc` meaning.
 
 ### `CNPC_VCamera::StartNPC` `0x10369930`
 
@@ -2759,3 +2768,125 @@ death ladder, which pass D deleted. The corpse chain above needs an owner.
 **Unrecovered:** `SUB_FadeOut`'s body (label `0x100152b2`, identified through the `CBaseEntity`
 datamap builder `0x1001311a`); the concrete `.wav` behind the vdata "Death" entry, whose trail ends
 at the VSnd variant resolver `0x101f4600`; the death-force envelope composed in `0x1032b9b0`.
+
+## Story 8, family Boss19 — Ming Xiao's tentacles and death, the Sabbat leader's transformation, the Tzimisce runner's slot 330 (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
+
+Each section is one `rule` row of `families-19-29/Boss19-READING.md` (and Damaged19's
+`0x103c43b0`), walked arm by arm off the decompiled C and the listing. Port:
+`ElysiumNpcMingXiao.cpp`, `ElysiumNpcMingXiaoTentacle.cpp`, `ElysiumNpcHengeyokai.cpp`,
+`ElysiumNpcBoss19Species.cpp` (SabbatLeader), `ElysiumNpcDamaged19Species.cpp` (TzimisceRunner).
+The family's three Troika discipline helpers are in `authored-control.md` § "Story 8, family
+Boss19, the discipline helpers".
+
+`0x102ae750` is `SetSchedule(id, force)`: translate (slot 440), resolve (slot 446, fallback 1), refuse
+in state 7, and — unless `force` — refuse when slot 158 `IsAlive` is false. The `+0x1b30`/`+0x1b34`
+and `+0x1b3c`/`+0x1b40` file/line stamps are recorded in the schedule / mind traces.
+
+### `0x10395c70` `MingXiaoEnterDeath` (79 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Stamp `NPC_VMingXiao.cpp:0x916` (`0x10395c73`); `0x10398870` (`m_iTentacleID != -1`, a proxy) picks
+`0x16e`, else `0x16d` (`0x10395c92`); `SetSchedule(id, TRUE)` — forced past `IsAlive` (`0x10395ca0`);
+`m_lifeState` = 1 (`0x10395ca5`), `m_bPlayedDeathAnim` (`+0x6744`) = 1 (`0x10395caf`), `m_bInvincible`
+(`+0x63d8`) = 1 (`0x10395cb6`). `0x10395ce0` is the latch in front of it.
+**Unrecovered:** nothing in the listing. In the port `m_lifeState` is `AnimEventLifeStateWord` (the
+lane's `LifeStateRetail` was folded onto it at the StartTask19 integration); the port's `IsAlive`
+does not read it yet (it reads the death latches).
+
+### `0x1039e970` `MingXiaoTentacleEnterDeath` (171 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Switch on `m_ePhase` (`+0x6670`, `0x1039e97c`): 2 answers `0x16a` at line `0x590`; 3 asks
+`0x10295460(0x1d, false)` — a sequence answers `0x16a` at `0x598`, none `0x16c` at `0x59d`
+(`0x1039e9a3`); everything else first runs `0x1039f310` then answers `0x16b` at `0x589`. Install forced
+(`0x1039e9fc`); `m_lifeState` = 1, `+0x6699` = 1, `m_bInvincible` = 1 (`0x1039ea01`..`0x1039ea12`).
+`0x1039f310` emits `table[RandomInt(0, 0)]` of the ONE-entry table `0x106477cc`
+(`character/monster/ming xiao/tentacle_flopping_loop.wav`) on channel 2 at volume 1.0, attenuation 0.8,
+pitch 100, with flags `SND_STOP` (`PUSH 0x4`, `0x1039f399`): it STOPS the flop loop that `0x1039f1a0`
+starts with flags 0 (integration review; the packet and the lane read it as playing a death sound). **Unrecovered:** the port has no retail-id sequence table (`0x10295460` seam answers -1).
+
+### `0x103aa3b0` `CNPC_VSabbatLeader::StartTransformation` (146 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+`m_bActivated` (`+0x66b8`) = 1 FIRST (`0x103aa409`) — slot 461's gate; `AddClassRelationship(1 player,
+D_HT, 10)` (`0x103aa410`, `0x10013cf5` -> `0x10332aa0`, which overwrites the class row at any
+priority); stamp `NPC_VSabbatLeader.cpp:0x549`; `SetSchedule(0x163, false)` (`0x103aa432`). The body
+is the datamap INPUT `StartTransformation` itself (`RET 0x4`, the inputdata argument unread); the port
+binds the input to it.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x10397410` `MingXiaoSpawnTentacle(index)` (981 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. `+0x6714` = index (`0x10397424`); stamp line `0xcac`; `SetSchedule(0x16c, false)` (`0x1039743e`).
+2. Throwable mode 1/2: the throw cleanup `0x10398fd0`; 3/4: only when index == `m_eThrowingTentacle`
+   (`0x1039745f`); else nothing.
+3. The burst emitter at the limb's bone (`0x10398680` names it, `0x102c42a0`, `0x10397480`); the bone
+   position (`0x10398630`: `LookupBone`, bone 0 on a miss); my angles (slot 219); the hull `0x11`
+   extents.
+4. The search (`0x10397523`..`0x1039762c`): `IsAreaClear(spot, 0x2400b, mins, maxs)` first at the bone,
+   then the compass `(+r,+r) (+r,0) (+r,-r) (0,-r) (-r,-r) (-r,0) (-r,+r) (0,+r)` with r from 20.0
+   growing by 20.0 per ring; Z never changes; `DevMsg("ERROR:  FAILED TO FIND SPAWN LOC FOR TENTACLE.")`
+   on every try past 31; never gives up.
+5. `0x10310cf0`: the maker entity named `TentacleGenerator` (`0x10390d00` binds the static reference)
+   makes one NPC (`MakeNPC(1)`) and places it at the spot; none: return NULL.
+6. Its angles := mine (slot 218); its velocity := (normalize(bone - my origin) * 100 + (RandomFloat(-10,
+   10), RandomFloat(-10, 10), RandomFloat(5, 20))) * 0.1 (`0x103976b4`..`0x10397766`); slot 614; its
+   `m_iTentacleID` (`+0x6660`) = index; `ShareEnemyWithAlly` (`0x1039777e`); its `m_hMingXiao`
+   (`+0x665c`) = me; `m_rhSeveredTentacles[index]` = it; mask `|= 1 << index`; connected count `-= 1`;
+   `BodyGroup`; `m_flIdealRange` (`+0x6748`) = `0x103986b0` (`0x103977d4`).
+
+`0x103986b0`: 400 for each of limbs 0/1 and 300 for each of 2/3 summed, divided by TWICE the count;
+300 when none. **Corrections to the packet:** the random jitter is on the VELOCITY, not the spawn
+spot; the two sub-object writes are `+0x6660` and `+0x665c` (`[0x17]+0x330`/`+0x32c` at a
+`0x450`-byte stride). **Unrecovered:** bone positions (seam: origin); the port's `IsAreaClear` takes
+the NPC's own extents, not the `0x11` hull.
+
+### `0x10397e90` / `0x10397f00` — the six-handle sweeps (69 bytes each)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+`m_rhSeveredTentacles[6]` (`+0x66a8`) -> each live tentacle's `0x1039ea60`; `m_rhProxies[6]`
+(`+0x668c`) -> each live proxy's `0x10395ce0`. Six hard-coded; nothing cleared.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x10395750` `MingXiaoApplyTentacleDamage(index, info, weapon)` (696 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+1. A weapon whose slot 360 word has `0x18000`: `m_flDamage` = tuning `+0x28` * magnitude
+   (`0x10395766`..`0x103957a4`).
+2. index <= -1 (`0x103957ae`): `-2` with at most 2 limbs (`0x10395926` / `0x10395932`) stamps line
+   `0x8a5`, `SetSchedule(0x16b, false)` and runs the throw cleanup for modes 1..4, damage untouched;
+   anything else rescales: `m_flDamage = (int)max((int)magnitude / tuning +0x24, 1.0)`.
+3. A connected limb (`0x103957c0`): `m_rflHitPoints[i] -= magnitude`; at or below 0.0 (ordered,
+   `0x103957f5`) the limb is lost (`0x10397410`); the damage emitter at the packet position with my
+   angles; not invincible: `0x1023e4b0(this, (int)magnitude)`; `m_flDamage` = 0; `0x101c2b10(info, 1)`.
+4. A severed limb: the rescale.
+
+The tuning cells are the `Ming_Xiao_Info/General` rows of `Rules.txt` (`0x101e6310`): `+0x24`
+"NohitDamageDivide" (default 4.0, `0x101e73d7`), `+0x28` "MeleeDamageScalar" (2.0, `0x101e73ee`);
+`0x103952b0`'s `+0x2c` is "MeleeTentacleHitPercent" (int, 20, `0x101e7405`); `0x10397930`'s `+0x4` is
+"TentacleHPRegrown" (160.0) and `+0x0` "TentacleHPInitial" (200.0). The weapon's slot 360 word is
+read as the weapon record's family (melee -> `0x18000`), as `0x10395650`'s port reads it.
+**Unrecovered:** `0x1023e4b0`'s consumer (a 25-slot global queue; recorded); the packet's `+0x1c`
+position and `+0x4a` byte (no field); the initial `m_rflHitPoints` writer (`Spawn` `0x103927a0`,
+lane L08) — until it lands the words start at 0.
+
+### `0x103c43b0` `CNPC_VTzimisceRunner::vfunc330` (42 bytes, Damaged19)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+`shooter = info->+0x94 ? info->+0x94->+0x9c : 0` (`0x103c43b6`..`0x103c43c0`); overwrite the two stack
+arguments with `(shooter, 0x79)` and tail-jump slot 320 `PlayerKnockbackReaction` (`0x103c43d4`).
+The float is never read; there is no jump table.
+
+**Unrecovered:** nothing named by the walk.

@@ -2036,3 +2036,2269 @@ which is retail's own "no move" arm (shared with 4). The cine itself is NOT a se
 `__FILE__`/`__LINE__` into `+0x1b30`/`+0x1b34` before answering and the default arm writes neither —
 the pair records "this class decided". The shape map calls it ABSENT; the mind's transition trace
 carries the same account.
+
+## Story 8, family StartTask19 — slot 442 `StartTask`: base `0x102827f0`, Troika `0x102a1910`, the species overrides (2026-09-28)
+
+_Recovered 2026-09-28, 0019 story 8 pass I: lanes L03 (`cb0ed36a`), L01 (`7bb820fb`), L02 (`a97ce8f6`), L04 (`a059d04c`), integrated as `86ceba23`._
+
+The 26 `rule` rows of family StartTask19 and `CNPC_VCop::StartTask` `0x10371b70` (family
+Damaged19), walked from the pass-R packet
+(`$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/StartTask19-READING.md`) and the
+listings (`vtmb_asm`) by four porter lanes, then integrated as one commit. The first three sections
+below are what the integration recovered across the lanes; the four after them are the lane parts.
+
+| part | rows | port | tests |
+|---|---|---|---|
+| `CAI_BaseNPC::StartTask` `0x102827f0` (lane L03) | 107 arm-table entries | `ElysiumNpcBaseStartTask19.cpp` | `NpcKernelStartTask19.Base.*` |
+| `CAI_BaseNPCTroika::StartTask` `0x102a1910`, first part (lane L01) | the prologue, arms `[0x102a1943, 0x102a5046)` | `ElysiumNpcStartTask19.cpp` | `NpcKernelStartTask19.*` |
+| `0x102a1910`, second part (lane L02) | arms `[0x102a5046, 0x102a77f7]`, the two shared tails, the base forward | `ElysiumNpcStartTask19_2.cpp` | `NpcKernelStartTask19.TroikaTail.*` |
+| the species overrides (lane L04) | the 25 species bodies, `CNPC_VCop` `0x10371b70`, FrenzyShadow `0x10375f50` | `ElysiumNpcStartTask19Species.cpp`, `ElysiumNpcFrenzyShadow.cpp` | `NpcKernelStartTask19.Species.*` |
+
+### The dispatch, checked against the image — `0x102827f0`, `0x102a1910`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (integration of lanes L01–L04)._
+
+- Base `0x102827f0`: `iTask - 1` into the byte table `0x10287138` (0x120 entries), then the arm
+  table `0x10286f8c` (107 entries). Arms `0x00..0x69` take 153 ids; entry `0x6a` (`0x10286f63`,
+  `DevMsg("No StartTask entry for %s\n")`, the task left running) takes the other 166 and every id
+  past the table (`0x1028280e JA`).
+- Troika `0x102a1910`: `id - 5 > 0x144` goes to the base (`0x102a77e2`); otherwise the byte table
+  `0x102a7ab8` (index `id - 5`) into the arm table `0x102a77f8` (176 entries). 74 ids reach the 68
+  arms below `0x102a5046` (the first switch); 115 reach arms at or past it (`StartTaskTroikaTail`),
+  among them the shared tails `0x102a66d7` (ids `0x8b`, `0x125`: complete) and `0x102a77ea` (ids
+  `0x05`, `0xea`, `0xeb`: left running); the remaining 136 in-range ids take `0x102a77e2`, the base
+  forward, which is `StartTaskTroikaTail`'s `default:`. The two switches are disjoint and together
+  complete.
+
+**Unrecovered:** nothing named by the walk.
+
+### `CAI_Navigator::SetGoal` `0x102ecd20` (one body), with `0x102f1dc0` and `0x102f28a0`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (integration of lanes L01–L04)._
+
+Every StartTask arm that routes, and family Script19's builders, reach one port body
+(`FElysiumNpcBase::StartTaskSetGoal`); the Troika halves and Script19 only convert their goal
+literals into its record.
+
+1. Nav `+0x8` := the owner's PATHING hull `+0x156c`, `+0xc` := curtime (`0x102ecd2c`), then navigator
+   slot 7 (`0x102eea70`, the reset).
+2. SetGoal flag 1 → `0x102f28a0` (below). Else flag 2 → the path's target handle and dest words
+   reset (`path+0x30..+0x3c`).
+3. Goal `[5]` (the MOVEMENT activity) `!= -1` → `0x102ee250` (`path+0x2c`).
+4. The tolerance, `path+0x28`: `[8] == -2.0` (`_DAT_1049d980`) the pathing hull's width
+   (`0x102d61b0`: `row+0x18 - row+0xc`); `[8] != -1.0` the literal; `[8] == -1.0` keeps the path's
+   own unless it is `0.0`, when the hull width is written and, for an entity goal (type 1
+   `m_hTargetEnt`, 2 `GetEnemy`, 7 `GetBestSeeUnknown`) whose entity is an NPC, averaged with that
+   NPC's `m_eHull` width (`* 0.5`, `0x102ecebd`).
+5. Path `+0x40` := hull * 0.5; the arrival-direction triple `[11..13]`; path `+0x8`/`+0x4` := `[14]`/`[15]`.
+6. Goal flag 2 → a node route (`0x102f3c10` / `0x102f41b0` / `0x102fd240`) and return, bypassing
+   `0x102f1dc0`.
+7. Path goal type := `[0]`, `path+0x60` := `[9]`; the target entity by type; the dest words when
+   `[1..3]` is not the default triple `0x1093404c..54`, else the node `[4]` (`0x102ee9c0`).
+8. `0x102f1dc0` (the route build, below). Refused: flag 4 → `0x102f28a0`; return false. Built: goal
+   flag 1 → `0x102e0b40` + `0x102e2020` toward the path goal; `0x102f13d0(this, 1)`; arrival
+   activity `[6]`, else arrival sequence `[7]`, else arrival activity 1.
+
+**`0x102f1dc0`** — with `m_afMemory` bit `0x20` clear: a built route (`0x102f2330`) clears the bit and,
+unless slot 529 `IsCurTaskContinuousMove` answers true, completes the task through the navigator's
+slot 2 (`0x102623c0` → `TaskComplete(false)`), answering true; a refused one fails the task
+`OnNavFailed(0xc, 1)` (`0x102f1f00`) when nav `+0x40` is `0.0`, else sets bit `0x20`, `+0x4c :=
+curtime + +0x44`, `+0x48 := curtime + +0x40`, and answers false. With the bit set: past `+0x48`
+→ `OnNavFailed(0xc, 1)`; past `+0x4c` → rebuild, whose success clears the bit and completes the
+task unless the current task is `0x6e` (`0x1028a150`); else false.
+
+**`0x102f28a0`** — nav `+0x40`, `+0x44`, `+0x48`, `+0x4c` := 0, `m_afMemory &= ~0x20`, then the path
+reset `0x1030bb30` (its tolerance `+0x28` among it). **`0x102886f0`** (`TASK_SET_ROUTE_SEARCH_TIME`)
+is the only writer of `+0x40`; nothing but `0x102f28a0` writes `+0x44`.
+
+`path+0x28` is written also by `0x102ee1c0` (base `TASK_SET_TOLERANCE_DISTANCE` `0x10286c84`,
+`TASK_SET_MELEE_TOLERANCE_DISTANCE` `0x10286cd4`, the Troika tolerance tails, the species
+`0x9f` arms); it is not `m_flGoalTolerance` (`+0x6320`), which only the Troika/species arms write
+themselves. `path+0x20` is written by `0x102f2fe0` (the tolerance tails, the LKP chase arms).
+
+**Unrecovered:** `0x102f13d0`; the arrival activity / sequence bodies `0x1030b550` / `0x1030b5b0`; the path byte `+0x10` (`0x102ee2c0` clears it, `0x102ee2e0` reads it); the BSS goal defaults `0x1093404c..54`; goal flag 2's node route (`0x102f3c10`, `0x102f41b0`, `0x102fd240`) and the node position `0x102ee9c0` — the port takes the location arm.
+
+### Helpers the lanes shared — `0x10289ee0`, `0x1028a150`, `0x102dfed0`, `0x102d1180`, `0x10278220`, `0x102784a0`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (integration of lanes L01–L04)._
+
+- `0x10289ee0` RestartIdealActivity: `m_Activity (+0xfec) == act` → `m_Activity = 0`
+  (`0x10289eee`); then `SetIdealActivity(act)` (`0x10289efc` → `0x10272650`).
+- `0x1028a150` GetCurTask: the running schedule's task at `m_iScheduleIndex`; NULL with no schedule.
+  The port's steps carry retail's global task ids, so the running step answers it.
+- `0x102dfed0` CAI_Enemies::GetLastKnownPosition (one port body, family Conditions19's
+  `Conditions19LastKnownPosition`): the entity's record `+0xc`; else the LAST record
+  flagged `+0x34` with `DevWarning(2, "Asking LastKnownPosition for enemy (%s) that's not in my memory
+  (using danger pos)!!\n")` (`0x1060e248`); else `vec3_origin` (`DAT_1070d1b0`, zeroed by
+  `0x101370b0`) with `DevWarning(2, "Asking LastKnownPosition for enemy (%s) that's not in my
+  memory!!\n")` (`0x1060e1f8`). Before either warning it notifies `this+0` vtable `+0xe8` or
+  `0x10316bc0(this+4)` by `this+8` (unrecovered target).
+- `0x102d1180` (the hint's LOS endpoint): `m_nNodeID (+0x5e4) == -1` → the hint's `GetAbsOrigin`;
+  else the network node's position `0x102f46d0(DAT_1093407c, ...)`.
+- `0x10278220` TestLateralCover and `0x102784a0` FindLateralCover are `CAI_BaseNPC`'s, one port body
+  each (`StartTaskTestLateralCover` / `StartTaskFindLateralCover`), reached by the base arm `0x48`,
+  the Troika arms `0x83..0x85`, and `FindCoverFromEnemy`.
+
+**Unrecovered:** `0x102f13d0`; `0x1030b550` / `0x1030b5b0` (arrival activity / sequence); the path
+byte `+0x10` (`0x102ee2c0` clears it, `0x102ee2e0` reads it); the BSS goal defaults `0x1093404c..54`,
+`0x10923a30`, `0x10934060..68`; `0x102e0290`'s second vector (read by the target-lead query as a
+velocity, answered as a position by the Troika arms); the `0x102dfed0` miss notification target;
+the node network (`0x102f3c10`, `0x102f41b0`, `0x102fd240`, `0x102f46d0`, `0x102ee9c0`).
+
+### `CAI_BaseNPC::StartTask` `0x102827f0`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (lane L03)._
+
+Slot 442 on the base line; port body `FElysiumNpcBase::StartTaskSlot442`
+(`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask19.cpp`), helpers in
+`ElysiumNpcBaseStartTask19.inl`.
+
+18330 bytes, 4992 instructions. Callers: `MaintainSchedule` (`0x102817c0`) through slot 442, and
+`CAI_BaseNPCTroika::StartTask` (`0x102a1910`) from its own default arm.
+
+#### Dispatch
+
+`0x10282806`: `(iTask - 1) > 0x11f` (unsigned) jumps to the default arm `0x10286f63`; otherwise the
+byte table `0x10287138[iTask - 1]` selects one of 107 entries of the arm table `0x10286f8c`
+(`0x10282821`). The byte table was re-read from the image for this walk: 166 ids of `1..0x120` land on
+the default (`0x45`, `0x4f`, and `0x78..0x11f` minus `0x9f`/`0xac`/`0xad`). `EDI` is preloaded with the
+source-file string `0x105cde88` (`AI_BaseNPC_Schedule.cpp`) for every failure site.
+
+#### Shared services
+
+- **Failure** — every site stores `+0x1b44 = file`, `+0x1b48 = line`, then calls slot 448
+  `TaskFail(code)`. Three sites pass a string's address as the code: `"No Sound!"` `0x105ce038`,
+  `"No sound in list"` `0x105ce024`, `"gah"` `0x105cdfe4`.
+- **Completion** — `TaskComplete(0)` (`0x10273e80`) everywhere; a failure raised earlier on the pass
+  blocks it.
+- **The goal record** (`AI_NavGoal_t`, 16 dwords): `[0]` type, `[1..3]` dest, `[4]` destNode, `[5]`
+  **movement** activity, `[6]` arrival activity, `[7]` arrival sequence, `[8]` tolerance, `[9]`
+  flags, `[10]` pTarget, `[11..13]` defaults `0x10934060/64/68`, `[14..15]` zero. Read off
+  `SetGoal` `0x102ecd20`: `[5]` goes to `SetMovementActivity` `0x102ee250`, `[6]` to `0x1030b550`,
+  `[7]` to `0x1030b5b0`, the default arrival activity is 1. Tolerance `-2.0` (`0x1049a164`) is the
+  hull width (`0x102d61b0`: hull row `+0x18 - +0xc`, maxs.y − mins.y); anything but `-1.0`
+  (`0x1049a160`) is taken as given; `-1.0` keeps the path's tolerance (`path+0x28`) unless it is 0,
+  then the hull width, averaged with the goal entity's hull for entity goals.
+- **SetGoal completes and fails tasks itself.** The route builder `0x102f1dc0`: a built route
+  clears `m_afMemory` bit `0x20` and, unless slot 529 `IsCurTaskContinuousMove` answers true, calls
+  the navigator's slot 2 (`TaskComplete(0)` on the owner); a refused route with route search time
+  (`nav+0x40`) `0.0` calls `OnNavFailed(0xc)` (`0x102eeae0` → `TaskFail(0xc)`), otherwise sets bit
+  `0x20` and defers. So the arms below that "return without completing" after a `SetGoal` still
+  complete through the navigator when the route is built.
+- **The weapon range clamp** (arms `0x0a` mode 1, `0x0d`, `0x10`, `0x1a`): unarmed `0.0 .. 2000.0`;
+  armed `max = max(+0x8c0, +0x8c4)` (ties to `+0x8c4`, `TEST AH,5 / JP`), `min = min(+0x8b8, +0x8bc)`
+  (ties to `+0x8bc`, `AND 0x4100 / JNZ`); then `max = min(max, m_flDistTooFar +0x5de4)`.
+- **The motor yaw store** (`0x10288670`, and the tail of `0x102e2020`): flip by 180 when
+  `motor+0x28` is set (`+180` below 180, `−180` otherwise), then `motor+0x1c == 180.0f` stores
+  straight into `motor+0x34`, else through `0x102e0a80`. Every facing arm opens with `0x102e0b40`
+  (`motor+0x2c = −1.0`). `UTIL_AngleMod` is `0x10288590` (`((int)(y·65536/360) & 0xffff)·360/65536`).
+
+#### Arms, in arm-table order
+
+| arm | address | task ids | body | exit |
+|---|---|---|---|---|
+| 0x00 | 0x10282828 | 1 RESET_ACTIVITY | `m_Activity +0xfec = 0` | complete |
+| 0x01 | 0x10286505 | 2 WAIT, 4 WAIT_FACE_ENEMY | `m_flWaitFinished +0x5db4 = curtime + data`, no floor | running |
+| 0x02 | 0x10286cd9 | 3 ANNOUNCE_ATTACK | — | complete |
+| 0x03 | 0x10286f7d | 5, 0x68, 0x74 | the epilogue | running |
+| 0x04 | 0x10286c0d | 6 SUGGEST_STATE | `+0x1b3c/40 = file:0xa9b`; `m_IdealNPCState +0x5cc4 = (int)data` | complete |
+| 0x05 | 0x10283ed5 | 7 TARGET_PLAYER | `FindEntityByName("!player")`; null → fail 0x17 @0x67a; `SetTarget` | complete |
+| 0x06 | 0x10283f36 | 8, 9, 0xa | target null → fail 1 @0x686; `dist < 1.0` → complete; activity 9 / 0x13 / `GetScriptCustomMoveActivity`; no sequence (except 0x18) → complete; target re-tested → fail 1 @0x6a7; goal type 1, [5] = activity, tol −1; in SCRIPT state `+0x5d7c != −1` → [6] = it, else `+0x5d80` set → [7] = `LookupSequence`; `SetGoal(..,4)` false → fail 0xc @0x6be, true → `SetArrivalDirection(target->GetAbsAngles())`; **every exit** runs the tail `0x102841f2`: `+0x5d7c = −1`, `+0x5d80 = 0` | complete (tail) |
+| 0x07 | 0x10283dde | 0xb MOVE_TO_TARGET_RANGE | target null → fail 1 @0x669; `dist < 1.0` → complete | running |
+| 0x08 | 0x1028611a | 0xc MOVE_AWAY_PATH | angles with yaw `motor+0x34 + 180`; dest = origin + fwd·`ResolveTaskDistance`; goal type 4, [5] 9, tol −1; `SetGoal(..,0)` → complete; else `FindCoverPos(origin, eye, 0, CoverRadius)` miss → fail 8 @0x94b; hit → type 4, [5] 0x13, `SetGoal` discarded; `m_flMoveWaitFinished = curtime + 2.0` | running |
+| 0x09 | 0x102847a3 | 0xd SET_GOAL | `(int)data` through table `0x10287258`: 0 enemy (fail 6 @0x75f) type 2, target = enemy; 1 target (fail 1 @0x77f) type 1; 2 enemy LKP (fail 6 @0x76f) type 4; 3 target LKP in the enemy memory (fail 1 @0x78f) type 4; 4 save position type 4; `> 4` → complete; the five write `+0x5df4..+0x5e08`, then `SetMovementActivity(0x13)` | complete |
+| 0x0a | 0x10284ae8 | 0xe GET_PATH_TO_GOAL | goal = stored type, target `+0x5df4`, tol −2; mode 0 stored point; 1 clamp + `FindLosPos(stored, aim)` (fail 0xb @0x7de); 2 lateral cover → move-wait + complete, else `FindCoverPos` hit → `SetGoal` (dest **not** copied) + move-wait, miss → fail 8 @0x807 **then** fail 0xc @0x816; other → fail 0xc @0x816; tail: `SetGoal` true → complete, false → fail 0xc @0x816 | per mode |
+| 0x0b | 0x1028509b | 0xf GET_PATH_TO_ENEMY | `IsUnreachable(GetEnemy())` first → fail 0xc @0x83a; null → fail 6 @0x842; goal type 2 tol −1; false → `DevWarning "GetPathToEnemy failed!!"`, `RememberUnreachable`, fail 0xc @0x84f | complete |
+| 0x0c | 0x10284349 | 0x10 ENEMY_LKP | `IsUnreachable` → fail 0xc @0x712; type 4 at LKP tol −1; `TranslateEnemyChasePosition(enemy, &dest, &tol, &scalar)` with `path+0x20`; `SetGoal(..,2)` true → `path+0x20 = scalar`, complete; false → DevWarning, unreachable mark, fail 0xc @0x724 | complete |
+| 0x0d | 0x102844d1 | 0x11 ENEMY_LKP_LOS | null → fail 6 @0x72d; clamp; aim = LKP + enemy view offset; `FindLosPos(lkp, aim)` miss → fail 0xb @0x74e; type 4, [5] 0x13, tol −2, `SetGoal(..,2)`; `SetArrivalDirection(lkp − dest)` | running |
+| 0x0e | 0x1028523a | 0x12 ENEMY_CORPSE | dest = LKP − fwd·64; type 4 tol −1; `SetGoal(..,2)` discarded | running |
+| 0x0f | 0x10285387 | 0x13 GET_PATH_TO_PLAYER | `!player` unchecked; type 4 at `WorldSpaceCenter`, pTarget = player; `SetGoal` discarded | running |
+| 0x10 | 0x1028545a | 0x14 ENEMY_LOS | null → fail 6 @0x86f; clamp; `FindLosPos(enemy origin, enemy eye)` miss → fail 0xb @0x891; type 4, [5] 0x13, tol −2; hint → `SetArrivalActivity(GetCoverActivity)`; `SetArrivalDirection(enemy origin − dest)` | running |
+| 0x11 | 0x10285949 | 0x15 GET_PATH_TO_TARGET | null → fail 1 @0x8bf; type 4 at the target, pTarget = target, tol −1 | running |
+| 0x12 | 0x10285a9e | 0x16 GET_PATH_TO_HINTNODE | no hint → fail 4 @0x8cf; type 4 at `0x102d1180(hint)`, [5] 0x13 | running |
+| 0x13 | 0x10282afd | 0x17 | `+0x5db8 = GetOrigin`, `+0x5dc4 = GetAngles` | complete |
+| 0x14 | 0x10282b5b | 0x18 | both from the zero vectors `0x1070d1b0` / `0x1070d9d0` | complete |
+| 0x15 | 0x10282bb7 | 0x19 | `m_vSavePosition +0x5dd0 = GetOrigin` | complete |
+| 0x16 | 0x10282bf1 | 0x1a | `GetBestSound` null → fail "No Sound!" @0x492; savepos = sound+0x20, plus twice the owner's slot 199 `GetVelocity` | complete |
+| 0x17 | 0x10282cc7 | 0x1b | null enemy → fail 6 @0x4a7; savepos = enemy origin | complete |
+| 0x18 | 0x10285bb0 | 0x1c | type 4 at `m_vecLastPosition`; false → fail 0xc @0x8df; true → `SetArrivalDirection(m_qaLastFacing)` | running |
+| 0x19 | 0x10285cb9 | 0x1d | type 4 at save position; discarded | running |
+| 0x1a | 0x1028570b | 0x1e | clamp; aim = savepos + OWN view offset; `FindLosPos` miss → fail 0xb @0x8b6; type 4, [5] 0x13, tol −2 | running |
+| 0x1b | 0x10285d7f | 0x1f | `SetRandomGoal(ResolveTaskDistance, BodyDirection2D)` false → fail 0x18 @0x8f7 | complete |
+| 0x1c / 0x1d | 0x10285df8 / 0x10285ef8 | 0x20 / 0x21 | best sound (fail 0x12 @0x905) / best scent (fail 0x13 @0x915); type 4 at sound+0x20 tol −1 | running |
+| 0x1e | 0x102863f1 | 0x22 RUN_PATH | 0x13 if the model has it else 9; `m_afMemory &= ~2` | complete |
+| 0x1f | 0x10286438 | 0x23 WALK_PATH | 0x22 on FLY/FLYGRAVITY when present, else 9, else 0x13; `&= ~2` | complete |
+| 0x20..0x23 | 0x102864f1 / af / d0 / 0x10286523 | 0x24..0x27 | `m_bShouldMove = 1`; 9 / 9 / 0x13 / 0x13; the TIMED pair also stamp `m_flWaitFinished` | running |
+| 0x24 | 0x10286556 | 0x28 STRAFE_PATH | `m_bShouldMove = 1`; 2-D right · (waypoint − origin), both normalised; `<= 0` → 0x37 else 0x38 | complete |
+| 0x25 | 0x10284218 | 0x29 | `m_flMoveWaitFinished = curtime` | complete |
+| 0x26 | 0x102867e5 | 0x2a SMALL_FLINCH | `SetIdealActivity(GetFlinchActivity 0x10265970)` | running |
+| 0x27 | 0x10283cd5 | 0x2b FACE_IDEAL | hold; `SetTurnActivity` | running |
+| 0x28 | 0x10283cf7 | 0x2c FACE_PATH | no goal → `DevWarning "No route to face!"`, fail 0xc @0x63e; hold; ideal yaw to the waypoint; `|DeltaIdealYaw| > 15.0` (double `0x1049a170`) → turn, else complete | either |
+| 0x29 | 0x10286537 | 0x2d FACE_PLAYER | `m_flWaitFinished = curtime + data` | running |
+| 0x2a | 0x10283c66 | 0x2e FACE_ENEMY | `FInAimCone(LKP)` → complete; else hold, yaw to LKP, turn | either |
+| 0x2b | 0x10283a36 | 0x2f FACE_HINTNODE | hold; yaw `0x102d12e0(hint)` into the store; turn | running |
+| 0x2c | 0x10282dfb | 0x30 | `SetIdealActivity(GetHintActivity(hint+0x5dc))` | running |
+| 0x2d | 0x10283b9e | 0x31 FACE_TARGET | null → fail **1** @0x61c; hold; yaw to target; turn | running |
+| 0x2e | 0x10283aad | 0x32 | hold; yaw to `m_vecLastPosition`; turn | running |
+| 0x2f | 0x10283ae3 | 0x33 | hold; `AngleMod(GetAngles().y)` into the store | complete |
+| 0x30..0x36 | 0x10284286 … 0x102842fb | 0x34..0x3f | `m_flLastAttackTime = curtime` (not RELOAD / SPECIAL); `RestartIdealActivity` 0x19, 0x1b, 0x4b, 0x4e, 0x54, 0x5e, 0x5f | running |
+| 0x37 | 0x10282a17 | 0x40, 0x41 | hint held → complete; else `0x102d1af0(this, 0, type, 2000)`, null → fail 4 @0x45a; 0x40 returns, 0x41 falls into 0x39 | — |
+| 0x38 | 0x10282d44 | 0x42 | `0x102d1420(hint, 0.0)`; hint = 0 | complete |
+| 0x39 | 0x10282a79 | 0x43 | no hint → fail 4 @0x465; `0x102d1350` false → fail 0x11 @0x46d **and** hint = 0 | complete |
+| 0x3a..0x3e | 0x102868a3 … | 0x44, 0x46..0x49 | `DevMsg "SOUND"` / slots 490, 489, 491, 488 | complete |
+| 0x3f | 0x102868c9 | 0x4a | slot 508 `SpeakSentence((int)data)` | complete |
+| 0x40 | 0x10284311 | 0x4b SET_ACTIVITY | nonzero → `SetIdealActivity`, zero → `m_Activity = 0` | running |
+| 0x41 | 0x10282e27 | 0x4c SET_SCHEDULE | `0x102cc1f0` (slot 440 then 446, miss DevMsgs and takes schedule 1); null → fail 5 @0x507; `+0x1b2c = 1`, `+0x1b34 = 0x4fc`; `m_IdealSchedule = (int)data` untranslated; `SetSchedule 0x10280e50` | running |
+| 0x42 / 0x45 | 0x10286c45 / 0x10286d58 | 0x4d / 0x51 | `m_failSchedule = (int)data` / `= 0` | complete |
+| 0x43 | 0x10286c69 | 0x4e | `0x102ee1c0`: path `+0x28` = `ResolveTaskDistance(data)` | complete |
+| 0x44 | 0x10286d1a | 0x50 | `nav+0x40 = (float)(int)data` | complete |
+| 0x46 | 0x10282dde | 0x52..0x56 | `SetIdealActivity((int)data)` | running |
+| 0x47 | 0x102838e7 | 0x57 | no sound → fail "No sound in list" @0x5eb; `FindCoverPos(sound, sound, (float)m_iVolume, CoverRadius)` miss → fail 8 @0x5fb; type 4, [5] 0x13, tol −2; move-wait | running |
+| 0x48 | 0x10283558 | 0x58 | threat = enemy or self; lateral cover → move-wait + complete; `FindCoverPos(threat, threat eye, 0, CoverRadius)` miss → fail 8 @0x5a6; type 6, [5] 0x13, tol −2; hint arrival; move-wait | running |
+| 0x49 | 0x102836fa | 0x59 | threat = `m_hEnemy` raw or self; lateral cover only; false → fail 8 @0x5c2; move-wait | complete |
+| 0x4a | 0x10282eab | 0x5a | no enemy → fail 6 @0x510; `0x102edae0(&savepos, 0, 30000)` false → fail 7 @0x519; type 4 [5] 0x13 tol −1; false → fail 0xc @0x524 | complete |
+| 0x4b..0x4d | 0x102833ac / 0x10283035 / 0x102831ea | 0x5b / 0x5c / 0x5d | fail 6 @0x566/0x52d/0x549; radii (0, CoverRadius) / (0, ResolveTaskDistance) / (ResolveTaskDistance, CoverRadius); fail 8 @0x57a/0x541/0x55e; type 6 [5] 0x13, tol −1/−1/−2; hint arrival | running |
+| 0x4e | 0x102837c9 | 0x5e | `FindCoverPos(origin, eye, 0, CoverRadius)` miss → fail 8 @0x5d5; type 4 [5] 0x13 tol −2; move-wait | running |
+| 0x4f | 0x10286801 | 0x5f, 0xdf | `ClearGoal`; `m_lifeState = 1` | running |
+| 0x50 | 0x102868f2 | 0x60 | cine pre-idle set → slot 584 `StartSequence`, `strcmp(play, idle) == 0` → `m_flPlaybackRate = 0`; else `m_scriptState != 6` → `SetIdealActivity(1)` | running |
+| 0x51 | 0x102869e0 | 0x61 | pick `m_iszPlay`, else `m_iszPostIdle`; `+0x5d7c = −1`, `+0x5d80 = 0`; `+0x5d7c = ActivityList_IndexForName`, −1 parks the name in `+0x5d80` | complete |
+| 0x52 / 0x53 | 0x10286adb / 0x10286b0a | 0x62 / 0x63 | `HasMovement(GetSequence())` discarded, empty `0x1027f270`; `m_scriptState = 0` / `2` | running |
+| 0x54 | 0x10286b2a | 0x64 | `DelayStart(cine, 0)` | complete |
+| 0x55 | 0x10286b54 | 0x65 | target → slot 62 `SetOrigin(target->GetAbsOrigin())` | complete |
+| 0x56 | 0x10286b96 | 0x66 | target → hold, `AngleMod(target->GetAngles().y)` into the store; `m_scriptState != 6` → turn; `ClearGoal` | running |
+| 0x57 | 0x10283dae | 0x67 | `m_flWaitFinished = curtime + RandomFloat(0.1, data)` | running |
+| 0x58 | 0x10282d71 | 0x69 STOP_MOVING | no goal → `m_bShouldMove = 0`, complete; else `ClearGoal`, `move_yaw` present → `SetPoseParameter(move_yaw, 0)` | either |
+| 0x59 / 0x5a | 0x10282926 / 0x10282848 | 0x6a / 0x6b | hold; `AngleMod(AngleMod(yaw) ± data)` into the store; turn | running |
+| 0x5b / 0x5c | 0x102829bd / 0x102829e9 | 0x6c / 0x6d | `m_afMemory |= / &= ~(int)data` | complete |
+| 0x5d | 0x10286749 | 0x6e | `path+0x10` cleared; no waypoint → `m_bShouldMove = 0`, complete, `ClearGoal`; goal active → `m_bShouldMove = 1`, slot 528; else `m_bShouldMove = 0`, `SetIdealActivity(GetStoppedActivity)` | either |
+| 0x5e | 0x102866bf | 0x6f | refresh; no goal or slot 251 finished → `m_bShouldMove = 0`, complete; else `= 1`, slot 528 | either |
+| 0x5f | 0x10286d78 | 0x70 | `Weapon_FindUsable(1000³)`; `SetTarget`; null → fail 3 @0xaca | complete |
+| 0x60 / 0x61 | 0x10286df5 / 0x102864d7 | 0x71 / 0x72 | `SetIdealActivity(0x5c)` / `SetMovementActivity(0x13)` | running |
+| 0x62 | 0x10286e0b | 0x73 | `SetHullSizeSmall(0)` | complete |
+| 0x63 | 0x10284e4a | 0x75 | ray origin+fwd·256 → −500 z, mask `0x46004003`; type 4 at endpos tol −1; `SetGoal(..,2)` true → complete ×2; false → fail "gah" @0x82f, then complete | complete |
+| 0x64 | 0x10286ec2 | 0x76 WANDER | `SetWanderGoal(n/10000, n%10000)` false → fail 0x18 @0xb05 | complete |
+| 0x65 | 0x102869a6 | 0x77 FREEZE | `m_flPlaybackRate = 0` | running |
+| 0x66 | 0x10286c9f | 0x9f | no weapon → fail 3 @0xab3; `0x102ee1c0`: path `+0x28` = `(float)(int)(weapon+0x8c0 · data)` | complete |
+| 0x67 / 0x68 | 0x10286e2a / 0x10286e76 | 0xac / 0xad | `ChooseBest{Melee,Ranged}Weapon` false → fail 0x1f @0xae6/0xaf1 | complete |
+| 0x69 | 0x10285ff8 | 0x120 PATHCORNER | `m_target` empty → fail **0x13** @0x921; type 3 at `m_pGoalEnt->GetOrigin` (unchecked), [5] = fly ? 0x22 : 9, tol −1, flags 1; false → `DevWarning "Can't Create Route!"` | running |
+| 0x6a | 0x10286f63 | the rest | `DevMsg "No StartTask entry for %s"` (slot 449) | running |
+
+#### Reads and writes (base words)
+
+Reads `m_hTargetEnt +0x5ce4`, `m_hEnemy +0x5ce0` (arm 0x49 only; elsewhere slot 167), `m_hCine +0x5d74`,
+`m_scriptState +0x5d70`, `+0x5d7c`/`+0x5d80`, `m_pHintNode +0x5ddc`, `m_vecLastPosition`,
+`m_qaLastFacing`, `m_vSavePosition`, `+0x5df4..+0x5e04`, `m_flDistTooFar +0x5de4`, `m_target +0x20c`,
+`m_pGoalEnt +0x5de8`, `m_LastHitGroup +0x1594`, `motor+0x28/+0x34/+0x1c`. Writes the fields listed in the
+table plus `+0x1b2c..+0x1b48` (the trace words, ABSENT in the port).
+
+#### Retail defects reproduced
+
+- `TASK_GET_PATH_TO_GOAL` mode 2 hands `SetGoal` a record whose dest was never filled (the cover
+  point stays on the stack at `+0x7c`).
+- `TASK_GET_PATH_TO_GOAL` mode 2's cover miss fails twice (8 then 0xc); the second reason stands.
+- `TASK_GET_PATH_TO_PATHCORNER` fails an empty `m_target` with `FAIL_NO_SCENT`.
+- `TASK_GET_DROPSHIP_DEPLOY_PATH` completes after failing (blocked) and twice on success.
+- `TASK_LOCK_HINTNODE`'s claim failure also drops the hint.
+
+#### Port
+
+Named divergences: `FindCoverPos` honours the maximum radius only (`IElysiumNpcMotor::FindNodeCover`);
+the arrival activity / direction and the route-search deferral are recorded and not executed (the
+mover has neither); `m_flPlaybackRate` / `path+0x2c` live on the Troika record
+(`FElysiumNpc::SequencePlaybackRate`, `ScheduleHost.NavigationActivity`), so a base-only NPC has
+neither; `path+0x28` is the base's `NavPathToleranceCm` (arms `0x43` / `0x66` write it through
+`0x102ee1c0`, not `m_flGoalTolerance`); `SetGoal` claims the Troika's schedule body before commanding the mover.
+Crash guards replace the unguarded reads of arms 0x0f, 0x2b, 0x2c, 0x50, 0x51, 0x54, 0x69 and the
+null `Task_t`.
+
+**Unrecovered:** the BSS default dest / pTarget words (`0x1093404c..54`, `0x10923a30`); the fourth
+goal word's meaning beyond "arrival sequence"; `0x1030b550`/`0x1030b5b0`/`0x102f13d0` (arrival
+activity / sequence setters, the navigator's post-route call); the deferred-route retry
+(`0x102f1dc0`'s bit-`0x20` arm, `nav+0x44/+0x48/+0x4c`); `path+0x10`'s meaning (cleared by
+`0x102ee2c0`); `path+0x20`'s meaning; the `+0x1c`-not-180 arm `0x102e0a80`; `CAI_Enemies`'s slot
+`+0xe8` call on a missed `GetLastKnownPosition`; the retail activity numbering of an `Activity:`
+operand (the port interns names); `motor+0x28`'s retail name.
+
+### `CAI_BaseNPCTroika::StartTask` `0x102a1910` — the dispatch and the arms in `[0x102a1943, 0x102a5046)`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (lane L01)._
+
+Slot 442 on the Troika line (`FElysiumNpc::StartTaskSlot442`,
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp`). The arms from `0x102a5046` on are
+the next section's (`StartTaskTroikaTail`, `ElysiumNpcStartTask19_2.cpp`). Every statement cites the
+listing; the per-arm long form is `walk-19-29-pack-13.md` in the research tree, corrected where
+listed at the end.
+
+#### The contract
+
+`param_1` is the compiled `Task_t` (`[0]` task id, `[1]` the operand word). Every arm leaves by one of:
+`TaskComplete(false)` (`0x10273e80`, the shared `break` tail `0x102a66d7`, or `0x102a4e51` inside
+this range); `TaskFail(reason)` (slot 448, `vtable +0x700`), preceded at every site but three by
+`+0x1b44 = "E:\Vampire\main\dlls\AI_BaseNPCTroika.cpp"` (`0x105da024`) and `+0x1b48 = line`; a plain
+return to `0x102a77ea` that leaves the task RUNNING for `RunTask` (`0x102aacf0`); or the base forward.
+The three fail sites with no line pair are `0x102a1eef` (`TaskFail(0x1a)`), `0x102a6ba5`
+(`TaskFail(0xe)`) and the dialog pair `0x102a4dcc` (`0x17`) / `0x102a4e67` (`0x15`).
+
+#### The dispatch
+
+`EDI = task` (`0x102a191a`); `ECX = [EDI] - 5` (`0x102a1925`); `CMP ECX,0x144; JA 0x102a77e2`
+(`0x102a1928`): an id past `0x149` goes to `CAI_BaseNPC::StartTask 0x102827f0` with the task
+pointer. Otherwise `MOV DL,[ECX+0x102a7ab8]` (the 325-byte index table) and
+`JMP [EDX*4+0x102a77f8]` (176 arm addresses, ascending id). Ghidra prints the index as the case
+label.
+
+#### The shared tails this range uses
+
+| tail | body |
+|---|---|
+| `0x102a66d7` | `TaskComplete(false)`, return |
+| `0x102a4e51` | the same, reached from `0x102a33cf`, `0x102a4928`, `0x102a4e51` |
+| `0x102a44d1` | motor stop-turn `0x102e0b40`; `0x102e2020(motor, &point, 0)`; slot 572 `SetTurnActivity`; return RUNNING |
+| `0x102a76a4` | `SetGoal(goal, 0)` (answer dropped), then `0x102a76a9` `m_flMoveWaitFinished (+0x5cf0) = curtime + data`; return RUNNING |
+| `0x102a4186` | goal literal type 4, activity `0x13`, tolerance `-2.0` (`0x1049a1b0`), then `SetGoal(goal, flags)` with the caller's pushed flags; answer dropped; RUNNING. `0x102a4178` stores the two literal words `+0x24`/`+0x3c` first |
+| `0x102a42c0` / `0x102a42c7` / `0x102a42df` | write `m_flGoalTolerance (+0x6320)`, `0x102ee1c0(nav, tol)` (the path's goal tolerance), `0x102f2fe0(nav, +0x6320)` (the arrival distance), `TaskComplete`. `0x102a42c7` is entered with a HALVED value for `0x102ee1c0` only |
+| `0x102a46d0` | `+0x1b44` file, `TaskFail(0x1f)`, then `CAI_BaseNPC::AutoMovement 0x10280a50` |
+| `0x102a6ba5` | `TaskFail(0xe)` |
+
+The goal literal (`AI_NavGoal_t`, 0x40 bytes) is read by `SetGoal 0x102ecd20` as: `+0x00` type
+(1 `m_hTargetEnt`, 2 the enemy, 7 slot 586 `GetBestSeeUnknown`, anything else the destination),
+`+0x04` destination, `+0x10` destNode, `+0x14` movement activity (`-1` keeps it, else
+`0x102ee250`), `+0x18`/`+0x1c` arrival activity/sequence, `+0x20` tolerance (`-2` hull width
+`0x102d61b0(+0x156c)`; `-1` keeps the path's `+0x28`, or the hull width when that is zero), `+0x24`
+goal flags (bit 1 routes node to node through `0x102f3c10`/`0x102f41b0`/`0x102fd240`), `+0x28` the
+target entity (`DAT_10923dd8` in every literal here but `0x102a4d8f`), `+0x2c..+0x34` the arrival
+direction (`DAT_10934060..68`). The second `SetGoal` argument's bit 2 calls `0x102f28a0` on a refused
+route.
+
+#### The arms, ascending task id
+
+**`0x06` TASK_SUGGEST_STATE — `0x102a1b2b`.** Stamps the selector pair `+0x1b3c/+0x1b40 = 0x2dff`;
+`m_IdealNPCState (+0x5cc4) = (int)data` (`0x102a1b43`/`0x102a1b4e`). `m_bfNPCFrenziedFlags (+0x5b84)
+& 1` (`0x102a1b54`): ideal 1 -> line `0x2e05`, ideal `0xb` (`0x102a1ba6`); ideal 3 -> line `0x2e06`,
+ideal `0xb` (`0x102a1b76`); any other -> complete. Not frenzied: `m_bNoAlertState (+0x65f6)` and
+ideal 3 -> line `0x2e0e`, ideal 1 (`0x102a1bed`). Every arm completes.
+
+**`0x0f` TASK_GET_PATH_TO_ENEMY — `0x102a33f9`.** Slot 530 `IsUnreachable(GetEnemy())` -> line
+`0x3101`, `TaskFail(0xc)`. No enemy -> line `0x3109`, `TaskFail(6)`. Goal type 2, destination the
+`DAT_1093404c` sentinel, tolerance -1, `SetGoal(goal, 0)`: true completes; false ->
+`DevWarning(2, "GetPathToEnemy failed!!\n")`, `RememberUnreachable(GetEnemy())` (`0x10274080`), line
+`0x311a`, `TaskFail(0xc)`.
+
+**`0x16` TASK_GET_PATH_TO_HINTNODE — `0x102a371d`.** `m_pHintNode (+0x5ddc) == 0` -> line `0x314a`,
+`TaskFail(4)`. `0x102b6120(this, &pos, 0)` (the lean offset), goal type 4, activity `0x13`,
+tolerance -1, `SetGoal(goal, 0)`, RUNNING, answer dropped.
+
+**`0x2e` TASK_FACE_ENEMY — `0x102a4417`.** `m_hShootTargetOverride (+0x5ba8)` resolved -> its
+`GetAbsOrigin`; else the enemy's LKP (`GetEnemies()->0x102dfed0`). Slot 364 `FInAimCone(point)`:
+true completes (`0x102a44cb`), false is the turn tail at that point.
+
+**`0x2f` TASK_FACE_HINTNODE — `0x102a382a`.** Motor stop-turn. `m_pHintNode` is dereferenced
+UNGUARDED (`0x102a3841 CMP [hint+0x5dc],0x27d8`). Type `0x27d8`: yaw = `0x102d12e0(hint)` `+45.0`
+(`0x1049949c`) when `m_bLeaningLeft (+0x63fd)`, `-45.0` otherwise; other types: the hint yaw as is.
+`motor+0x28` set flips it: `< 180 ? +180 : -180` (`0x1044c3a8`). `motor+0x1c == 180.0f` stores it
+straight to `motor+0x34` (`0x102a38a9`), else `motor+0x34 = 0x102e0a80(motor, yaw)` (`0x102a399f`).
+Slot 572, RUNNING.
+
+**`0x34` TASK_RANGE_ATTACK1 — `0x102a4505`.** A weapon AND `m_bfAINPCFlags2 (+0x14bc)` bit 15
+(`DISABLE_BURST_FIRE`) clear (`NOT; TEST AH,AH; JNS`) -> `m_iBurstFireCount (+0x6490) =
+RandomInt(data+0x3a4, data+0x3a8)` over the weapon's data (`0x10003d91`); otherwise 1. RUNNING.
+
+**`0x35` TASK_RANGE_ATTACK2 — `0x102a4576`.** `m_flLastAttackTime (+0x5d9c) = curtime`,
+`RestartIdealActivity(0x1b)`, RUNNING.
+
+**`0x36`/`0x37` TASK_MELEE_ATTACK1/2 — `0x102a45c6`.** Motor stop-turn. A weapon whose slot `+0x5a0`
+carries `0x18000` -> `m_flLastAttackTime = curtime`, weapon slot `+0x51c` for `0x37` else `+0x518`,
+`AutoMovement`, RUNNING. Otherwise line `0x3302` -> `0x102a46d0`.
+
+**`0x3e`/`0x3f` TASK_SPECIAL_ATTACK1/2 — `0x102a459a` / `0x102a45b0`.** `RestartIdealActivity(0x5e)` /
+`(0x5f)`, RUNNING.
+
+**`0x4b` TASK_SET_ACTIVITY — `0x102a1c0f`.** `act = (int)data`; 0 writes `m_Activity (+0xfec) = 0`,
+else `SetIdealActivity(act)` (`0x10272650`). `m_flWaitFinished (+0x5db4) = curtime + 1.0`. Slot 464
+`GetState() == 4` -> `AdvanceToIdealActivity 0x102726a0`. No exit: RUNNING either way.
+
+**`0x4e` TASK_SET_TOLERANCE_DISTANCE — `0x102a4289`.** `m_flGoalTolerance = 0x102d61b0(m_eHull
++0x1568) * 0.5` (`0x10449270`, double), `+= ResolveTaskDistance(data)`, tail `0x102a42c0`.
+`0x102d61b0(hull)` is `hullTable[hull]+0x18 - +0xc`, the hull's X width.
+
+**`0x4f` TASK_SET_TOLERANCE_DISTANCE_ABS — `0x102a42fa`.** `m_flGoalTolerance =
+ResolveTaskDistance(data)`, the same two writes, complete.
+
+**`0x5a` TASK_FIND_BACKAWAY_FROM_SAVEPOSITION — `0x102a1c6a`.** `d = ResolveTaskDistance(data)`;
+`0x102edae0(nav, &m_vSavePosition (+0x5dd0), d, 64.0, &out)`; false -> line `0x2e3f`,
+`TaskFail(7)`. Goal type 4, activity `0x13`, tolerance -1, `SetGoal(goal, 0)`: true completes, false
+-> line `0x2e4a`, `TaskFail(0xc)`.
+
+**`0x6e` TASK_WAIT_FOR_MOVEMENT — `0x102a1dcc`.** (1) `0x102ee2e0(nav)` reads `CAI_Path+0x10`, a byte;
+set -> `0x102bf7e0`, which clears that byte (`0x102ee2c0` -> `0x1030bea0 MOV byte [path+0x10],0`)
+and sets `m_bShouldMove`. (2) `0x102ee620(nav)` = `path+0x5c`, the goal TYPE `SetGoal` stores through
+`0x1030ba50` (with `path+0x58 = 1`): zero -> `m_bShouldMove = 0`, complete, `0x102ee270` (clear the
+goal). (3) else `0x102ee6a0` (path and its `+0x24` current waypoint both live) false ->
+`m_bShouldMove = 0`, `SetIdealActivity(0x1027a6c0())`, complete. (4) else `0x102f2ea0` (planar
+distance² to the goal, stored at `nav+0x14`, under the path tolerance and the height gap under slot
+522, then the navigator's `+0x20`) true -> `m_bShouldMove = 0`, complete; false -> `m_bShouldMove =
+1`, slot 528 `ValidateNavGoal`. Then, after every arm: `FCOMP curtime` against
+`m_flTeleportMoveTimer (+0x65dc)`, `TEST AH,0x41; JP` — returns when `curtime > timer`, so the
+rescue runs INSIDE the window: `0x102e7880(moveProbe, 0x102ee140(nav), 0x202400b, 1.0, -1024.0,
+&out, &hit)` false -> `TaskFail(0x1a)`; no hit entity, or a hit whose `+0x94` (`m_pBaseNPC`) is set
+-> `TaskFail(0xe)`; otherwise slot 216 `SetAbsOrigin(out)`.
+
+**`0x79` TASK_GET_PATH_TO_BESTUNKNOWN — `0x102a3599`.** Slot 586 handle dead -> line `0x3127`,
+`TaskFail(0x21)`. Goal type 7, tolerance -1, `SetGoal(goal, 0)`: true completes; false ->
+`DevWarning(2, "GetPathToBestUnknown failed!!\n")`, `0x10274080(this, u)`, line `0x3134`,
+`TaskFail(0xc)`.
+
+**`0x7a`/`0x7b` TASK_GET_PATH_TO_PATROL_POINT(_HUNT) — `0x102a39be` / `0x102a39d9`.**
+`0x102aa640(this, &m_sppPatrolPath)` with the smart pointer's address, `+0x658c` / `+0x6594`; the
+helper owns the exit.
+
+**`0x7c` TASK_GET_FULL_PATROL_PATH — `0x102a39f4`.** `p = [+0x6590]` (the pointee); null -> line
+`0x3186`, `TaskFail(0x1d)`. `node = p[p[+0x10]*4 + 0x14]`; -1 -> RUNNING. The navigator's node array
+(`nav+0x2c`, count `[0]`, entries `[1]`) bounds-checks it; out of range increments
+`DAT_106c994c` and yields null — and `0x102fb0d0 CAI_Node::GetPosition(m_eHull)` is then called on
+null (a crash). Goal type 4, destination the node position, destNode -1, activity -1, tolerance -1,
+flags 0, `SetGoal(goal, 2)`: true completes; false -> `DevWarning(2, "%s can't reach patrol
+point\n", GetDebugName())`, line `0x31a0`, `TaskFail(0xc)`.
+
+**`0x7d`/`0x7e` TASK_NEXT_PATROL_POINT(_HUNT) — `0x102a3b91` / `0x102a3bac`.**
+`0x102aa9e0(this, &m_sppPatrolPath(+0x658c) / Hunt(+0x6594))`.
+
+**`0x7f`/`0x80` TASK_GET_DIRECTED_PATH_TO_ENEMY_LKP(_RND) — `0x102a3d48`.** No enemy -> line
+`0x3205`, `TaskFail(6)`. `d` = the RAW operand; `0x80` only: `d = RandomFloat(d*0.5, d)`.
+`GetEnemies()->0x102e0290(enemy, &lkp, &seen)` false -> line `0x323a`, `TaskFail(6)`.
+`bOk = 0x102ee300(nav, this, &lkp, &seen, d, &point)`. The literal (type 4, activity -1, tolerance
+-1), then slot 563 `TranslateEnemyChasePosition(enemy, &goal.dest, &goal.tolerance, &tol)` with `tol`
+a copy of `m_flGoalTolerance` — unconditionally. `bOk && SetGoal(goal, 2)` -> `0x102ee1c0(tol)`,
+`0x102f2fe0(tol)`, complete; otherwise `DevWarning(2, "GetDirectedPathToEnemyLKP failed!!\n")`,
+`0x10274080(this, GetEnemy())`, line `0x3235`, `TaskFail(0xc)`.
+
+**`0x81` TASK_GET_DIRECTED_PATH_TO_ENEMY_LKP_LOS — `0x102a3f84`.** No enemy -> `0x3245`,
+`TaskFail(6)`; no LKP -> `0x3276`, `TaskFail(6)`; `0x102ee300(nav, this, &lkp, &seen, data, &dir)`
+false -> `0x3271`, `TaskFail(0xb)`. Range: max 2000.0 (`0x44fa0000`), min 0; armed: max =
+`max(w+0x8c0, w+0x8c4)`, min = `min(w+0x8b8, w+0x8bc)` (the SMALLER, `0x102a40a3 AND 0x4100; JNZ`);
+max clamped down to `m_flDistTooFar (+0x5de4)`. `0x102edaa0(nav, &dir, &dir+enemy view offset
+(+0x184), min, max, 1.0, 0, &out)`: false -> RUNNING with no fail; true -> `0x102a4186` flags 2.
+
+**`0x83`/`0x84` TASK_GET_PATH_TO_FLEE_NODE / TASK_GET_PATH_TO_COWER_NODE — `0x102a2882`.** Target =
+enemy or this. `d = ResolveTaskDistance(data)`, `max = d + 8192.0` (`0x1049ae70`), `mid = (max +
+d) * 0.5`. A held hint -> `ClearHintNode(1.0)`. `m_pHintNode = 0x102d1af0(this, 0x2774, 2, max, 0,
+0)`; found: `0x102d1350(hint, this)` refused -> `m_pHintNode = 0`; claimed -> `0x102d1180(hint,
+this, &pos)`, goal type 4, activity `0x13`, tolerance -1, `SetGoal(goal, 0)`: true -> slot 16's
+extents into `m_vecSavedSleepExtents (+0x65d0)`, `SetAbsoluteAttackExtents((40,40,80))`
+(`0x1009b060`: `SetAttackExtents(abs - (maxs-mins)*0.5)`), complete; false -> `ClearHintNode(5.0)`.
+Still holding a hint -> return (`0x102a2a68`). `0x84` only: `m_bfAINPCFlags |= 0x200`
+(`COWER_PATH`). `0x102edc80(nav, target->GetOrigin(), target->EyePosition(), mid, max, &out,
+target)`, retried with `(d, max)`; both false -> line `0x2fe8`, `TaskFail(0x18)`. Success: goal type
+6, activity `0x13`, tolerance -2, `SetGoal(goal, 0)`, RUNNING.
+
+**`0x85` TASK_GET_PATH_TO_COWER_NODE_SAVE_POS — `0x102a2bd8`.** `COWER_PATH` set unconditionally
+(`0x102a2bfc`). From = `m_vSavePosition`, to = it + this body's view offset (`+0x184..+0x18c`).
+`0x102edc80(from, to, (max+d)*0.5, max, &out, this)` then `(from, to, d, max, &out, this)`; both
+false -> line `0x3023`, `TaskFail(0x18)`. Goal type 6, activity `0x13`, tolerance -2, flags 0,
+RUNNING.
+
+**`0x86` TASK_FIND_FOLLOWER_BACKAWAY_SIMPLE — `0x102a2d9b`.** `m_hFollowerBoss (+0x647c)` dead ->
+line `0x3051`, `TaskFail(0x29)`. `yaw = UTIL_VecToYaw(self - boss)` (`0x1000612c`) +
+`RandomFloat(-45, 45)`; candidate = `SELF + m_flFollowerDistanceBackAway (+0x6484) *
+UTIL_YawToVector(yaw)` (`0x1000ecd2`; the sum's base is `[ESP+0x28]`, this body's origin). A 14-dword
+trace is zeroed, `0x102e6d70(moveProbe, 0, self, candidate, 0x202400b, 0, 100.0, 0, &trace, 0, 0)`:
+false -> line `0x304c`, `TaskFail(7)`; true -> `0x102a4178` with flags 0.
+
+**`0x87` TASK_FIND_FOLLOWER_BACKAWAY_NODE — `0x102a2f94`.** Boss dead -> `0x306f`, `TaskFail(0x29)`.
+`0x102edae0(nav, bossOrigin, m_flFollowerDistanceWalkTo (+0x6488) - 10.0, 50000.0, &out)`: false ->
+`0x306a`, `TaskFail(7)`; true -> `0x102a4186` flags 0.
+
+**`0x88` TASK_FIND_FOLLOWER_BACKAWAY_ASTAR — `0x102a3096`.** The same through `0x102edbb0`; lines
+`0x308c` / `0x3087`.
+
+**`0x9a` TASK_MELEE_KICK — `0x102a464d`.** Motor stop-turn; `cast = __RTDynamicCast(weapon, 0,
+0x1055f710, 0x105da324, 0)`. Weapon AND `slot(+0x5a0) >> 30 & 1` AND cast -> `m_flLastAttackTime`,
+`cast->+0x5d0(0x53, 0, 0)`, `AutoMovement`, RUNNING; otherwise line `0x331d` -> `0x102a46d0`.
+
+**`0x9f` TASK_SET_MELEE_TOLERANCE_DISTANCE — `0x102a434a`.** `hull = enemy ? enemy+0x9c ->
++0x1568 : 0`. Armed: `m_flGoalTolerance = 0x102d61b0(hull) * 0.5 + weapon+0x8c0 * data` (RAW
+operand); unarmed: `+ ResolveTaskDistance(data)` into `0x102a42c0`. Complete.
+
+**`0xa0` TASK_FIND_FAST_COVER_FROM_ENEMY — `0x102a20dc`.** Threat = enemy or this.
+`0x102784a0(threat->EyePosition(), threat)` true -> `m_flMoveWaitFinished = curtime + data`,
+complete. Else `0x102edc80(nav, threat->GetOrigin(), threat->EyePosition(), 0, 150.0, &out,
+threat)`: false -> `0x2ef8`, `TaskFail(8)`; true -> goal type 6, activity `0x13`, tolerance -2,
+`0x102a76a4`.
+
+**`0xa1` TASK_FIND_FORWARD_COVER_FROM_ENEMY — `0x102a232e`.** The same lateral test, then
+`0x102edd50(nav, origin, eye, &m_vecForward (+0x6290), 0.0, CoverRadius() * 0.25, &out, threat)`:
+false -> `0x2f32`, `TaskFail(8)`; true -> goal type 6, `0x102a76a4`.
+
+**`0xa2` TASK_FIND_COVER_FROM_SAVEPOSITION — `0x102a2231`.** `0x102edc80(nav, &m_vSavePosition,
+&m_vSavePosition, 32.0, CoverRadius(), &out, this)`: false -> `0x2f0b`, `TaskFail(8)`; true -> goal
+type 4, activity `0x13`, tolerance -2, `0x102a76a4`.
+
+**`0xa3` TASK_FIND_FLANK_NODE_TO_ENEMY — `0x102a24b1`.** No enemy -> `0x2f3c`, `TaskFail(6)`. LKP
+(`0x102dfed0`); range as `0x81` (max 2000 / `max(0x8c0,0x8c4)`, min `min(0x8b8,0x8bc)`, clamp to
+`m_flDistTooFar`). `curtime - 0x102e0150(enemy) >= 2.0` (`0x10452dc4`) -> `0x102edaa0(nav, &lkp,
+&lkp+enemy view offset, min, max, 1.0, 0, &out)`; fresher -> the enemy's forward
+(`0x10139610(enemy->GetAbsAngles())`) and `0x102ed9c0(..., min, max, 1.0, &fwd, 0, &out)`. False ->
+`0x2f71`, `TaskFail(0xb)`. True -> goal type 4, activity `0x13`, tolerance -2, `SetGoal(goal, 2)`,
+then `0x102ee530(nav, lkp - out)`; RUNNING.
+
+**`0xa4` TASK_FIND_INTERESTING_PLACE — `0x102a1f23`.** `m_pInterestingPlace (+0x62ec) =
+PickRandomInterestingPlace(this)` (`0x102db590`); null -> `0x2eaf`, `TaskFail(0x22)`.
+`PickSpotFor(place, this, &m_vecInterestingPlace (+0x62f0), 1)` (`0x102da0d0`): false -> `+0x62ec =
+0`, `0x2eaa`, `TaskFail(0x22)`; true completes.
+
+**`0xa5` TASK_GET_PATH_TO_INTERESTING_PLACE — `0x102a1fc3`.** No place -> `0x2ed0`,
+`TaskFail(0x22)`. Goal type 8, destination `m_vecInterestingPlace`, activity -1, tolerance -1,
+`SetGoal(goal, 0)`: complete / `0x2ecb`, `TaskFail(0xc)`.
+
+**`0xa6` TASK_PAUSE_MOVING — `0x102a1f06`.** `0x102bf770(this)`, complete.
+
+**`0xa7` TASK_TEST1 — `0x102a1943`.** With a weapon: `debug_test_switch1` (`DAT_1092467c`,
+`!IsCommand() && m_nValue`) -> weapon `+0x10c`, else `+0x108`. `origin.x/y += RandomFloat(-200,
+200)`; `0x10142aa0` draws a ±2 box; then the turn tail at that point.
+
+**`0xa8` TASK_TEST2 — `0x102a1a60`.** `v = debug_test_switch2` (`DAT_10924634`); `DEC; CMP 3; JA`,
+four-entry table `0x102a7c00`: 1 -> 5, 2 -> `0x1118`, 3 -> `0x19`, 4 -> `0x58`, else 1;
+`RestartIdealActivity(v)`, complete.
+
+**`0xae`/`0xaf` TASK_CREATE_HUNT_PATROL_LIST / TASK_FIND_HUNT_PATROL_TARGET — `0x102a3bc7` /
+`0x102a3c5d`.** Slot 168 (`+0x2a0`) target's origin or null; `m_pPathfinder (+0x5d3c)->0x10306700
+(this, origin, target, 256.0)` / `0x10306f60(..., &m_vecHuntPatrolTarget (+0x645c))`: complete /
+`0x31cd` / `0x31e8`, `TaskFail(0x20)`.
+
+**`0xb0`/`0xb1` TASK_WAIT_ATTACK_TIME1/2 — `0x102a337d`.** No weapon -> complete.
+`m_flWaitFinished = 0x10252450(weapon, id == 0xb1) + 0x102c5730(this, weapon)`; `<= curtime` ->
+complete (`0x102a4e51`); a held hint -> RUNNING; else `RestartIdealActivity(5)`, RUNNING.
+
+**`0xb9` TASK_RUN_DIALOG — `0x102a496b`.** `a = 0x102c1400(this)`; -1 completes; else slot 310
+`SetActivity(a)`, motor stop-turn, `0x102e1e20(motor, -1)`, RUNNING.
+
+**`0xba`/`0xbc` TASK_RUN_DISPOSITION / TASK_SPECIAL_IDLE_ACTIVITY — `0x102a49bc`.**
+`m_flWaitFinished = curtime + data`, RUNNING. **`0xbb`/`0xbd` — `0x102a49da`.** `= RandomFloat(0,
+data) + curtime`, RUNNING.
+
+**`0xbe` TASK_ADD_EVENT_EXPRESSION — `0x102a4a07`.** `i = (int)data`; `0 <= i < 2` ->
+`AddExpressionForEvent(i)` (`0x101072b0`), complete; else `"Invalid event expression: %d\n"` with `i`
+(through the print import `[0x109f364c]`, not the DevWarning import `[0x109f3658]`), complete.
+
+**`0xc4` TASK_SET_PRESERVE_PATH — `0x102a3cfa`.** `(int)data` non-zero -> `m_bfAINPCFlags |= 8`, else
+`&= ~8`; complete.
+
+**`0xc5` TASK_SET_ENEMY_ELUDED — `0x102a46fa`.** No enemy -> `0x3333`, `TaskFail(6)`;
+`GetEnemies()->0x102dfd90(enemy)`, complete. **`0xc6` TASK_SET_TARGET_ELUDED — `0x102a4763`.**
+`m_hTargetEnt (+0x5ce4)` dead -> `0x3341`, `TaskFail(1)`; the same write, complete.
+
+**`0xc7` TASK_GET_PATH_TO_ENEMY_CLOSEST — `0x102a4812`.** No enemy -> `0x334c`, `TaskFail(6)`. Goal
+type 4, destination `enemy->GetOrigin()` (slot 220), activity -1, tolerance -1, goal flags 2,
+`SetGoal(goal, 0)`: complete (`0x102a4e51`) / `DevWarning(2, "GetPathToEnemy failed!!\n")`,
+`0x335a`, `TaskFail(0xc)`.
+
+**`0xcf`/`0xd0` TASK_SET_INSIDE/OUTSIDE_INTERRUPT_DIST — `0x102a4a5b` / `0x102a4a97`.**
+`i = (int)ResolveTaskDistance(data)`; `+0x6324` / `+0x6328` = `(float)(i*i)` (`IMUL`); complete.
+
+**`0xd3`/`0xd4`/`0xd5` interrupt time — `0x102a4ad3` / `0x102a4afb` / `0x102a4b2e`.**
+`m_flInterruptTime (+0x632c) = curtime + data` / `+= RandomFloat(0, data)` / `= 0`; complete.
+
+**`0xd6` TASK_WALK_RUN_PATH — `0x102a4b4e`.** `d = ResolveTaskDistance(data)`; `d*d <= nav+0x14`
+-> `act = TranslateActivity(0x13)`; otherwise `act` is an UNINITIALISED stack word
+(`0x102a4b83 MOV EDI,[ESP+0x104]`). `0x10295460(act, -1) == -1` -> `TranslateActivity(9)`.
+`0x102ee250(nav, act)`, `m_afMemory (+0x5d8c) &= ~2`, complete.
+
+**`0xd7` TASK_WALK_RUN_PATH_COMBAT_SOUND — `0x102a4bd8`.** `+0x60b4` (the `m_BestSound` record's
+second word) is 1 or `0x10` AND `TranslateActivity(0x13) != -1` AND its sequence exists -> run; else
+`TranslateActivity(9)`. The same two writes, complete.
+
+**`0xd8` TASK_GET_PATH_TO_PLAYER_FOR_DIALOG — `0x102a4c7a`.** `m_hMoveTargetEnt (+0x6240) =
+closest player ? its handle : -1`. Goal type 4, tolerance -1, target = `0x100d1590(&m_hMoveTargetEnt)`,
+destination = the move target's `GetOrigin` — called through a NULL pointer when the handle is dead
+(`0x102a4d74`). `GetNavigator()->SetGoal(goal, 0)`, RUNNING.
+
+**`0xd9` TASK_WALK_RUN_PATH_FOR_DIALOG — `0x102a4db7`.** `0x102c6460(&m_hClosestPlayer, 0)` (the
+handle is null) -> `TaskFail(0x17)` with no line pair. `dist = 0x102a9570(selfOrigin,
+playerOrigin)`; `dist >= m_flSpecialDistanceAccum (+0x5bac)` or no ACT_WALK sequence -> ACT_RUN, or
+`TaskFail(0x15)` (no pair) when it has none; else ACT_WALK. `0x102ee250(nav, act)`, `0x102a98e0(this,
+2)` (`m_afMemory &= ~2`), complete.
+
+**`0xda` TASK_START_PLAYER_DIALOG — `0x102a4e7e`.** The closest player and slot 295 `CanTalk(p)` ->
+`p->+0x678(this)`, complete; any miss is the break tail — complete, never a fail.
+
+**`0xdb` TASK_SET_TOLERANCE_DIST_DLG — `0x102a4c47`.** `m_flGoalTolerance = 160.0 +
+ResolveTaskDistance(data)`; `0x102a42c7` with HALF of it for `0x102ee1c0`, the whole for
+`0x102f2fe0`; complete.
+
+**`0xdc` TASK_DIE_IF_PLAYER_CANT_SEE — `0x102a3198`.** `TaskComplete(false)` FIRST (`0x102a31ca`). No
+closest player -> the removal. Else `ResolveTaskDistance(data)` against `m_flPlayerDist (+0x6264)`:
+`TEST AH,0x41; JP` returns when the distance is GREATER. Else trace own eye (slot 220 + `+0x184`) to
+the player's, mask `0x4091` (`0x1004f7a0`, `0x101d3190`, enginetrace `+0x10`; a debug line when
+`0x10005b87(0x10738960)`); fraction `== 1.0` -> return. Removal: `0x102b53d0(this, 0, "Leaving
+interesting place (TASK_DIE_IF_PLAYER_CANT_SEE)")` then `UTIL_Remove(this)` (`0x101cd940`).
+
+**`0xdd` TASK_KNOCKOUT — `0x102a3339`.** `m_bfAINPCFlags |= 0x440a0000`, `RestartIdealActivity(0x1050)`,
+RUNNING. **`0xde` TASK_UNKNOCKOUT — `0x102a3364`.** `RestartIdealActivity(0x1052)`, RUNNING.
+
+**`0xe0` TASK_DO_JUMP_ACTIVITY — `0x102a4ec7`.** Slot 310 `SetActivity(0x1089)`, RUNNING.
+
+**`0xe1` TASK_DO_LOOP_ACTIVITY — `0x102a4ee3`.** `a = (int)data`; `0x10272130(this, a, &seq, …)`;
+`seq > 0` (`JG`) -> slot 310 `SetActivity(a)`, RUNNING; else complete.
+
+**`0xe2`/`0xe3` TASK_DO_BLEND(_LOOP)_ACTIVITY — `0x102a4f38` / `0x102a4fb1`.** Two byte-identical
+bodies. `cycle = 0`; slot 271 `FindLayerByOwner(a - 1) != -1` -> `cycle = m_AnimOverlay[layer].m_flCycle`
+(`+0x740 + layer*0x30`), slot 274 `RemoveLayerByOwner(a - 1)`. `0x10272130(a)`; `seq > 0` -> slot 310
+`SetActivity(a)`, `m_flCycle (+0x6f8) = cycle`, RUNNING; else complete.
+
+#### Corrections to the older record
+
+- `0x102a1b4e`: the ideal state is `+0x5cc4`, not `+0x200`; `0x102a1c41`: `m_flWaitFinished` is
+  `+0x5db4`, not `+0x5cc4`.
+- `0x102a1e7d`: the teleport rescue runs while `curtime <= m_flTeleportMoveTimer`, not after it.
+- `0x102a1dd2`: `0x102ee2e0` tests `CAI_Path+0x10` and `0x102ee2c0` CLEARS it (`0x1030bea0`); it is
+  not `IsGoalSet`/`StopMoving`. `0x102ee620` is the goal type `path+0x5c` (`0x1030ba50`).
+- `0x102a1a86`: TASK_TEST2's table is `0x102a7c00`, four entries; the 22-entry reading ran into the
+  neighbouring table.
+- `0x102a259c` / `0x102a40a3`: the minimum range is the SMALLER of `+0x8b8`/`+0x8bc`.
+- `0x102a2ebb`: the follower backaway candidate is built from this body's origin, not the boss's.
+- `0x102a3a2d..3b29`: TASK_GET_FULL_PATROL_PATH's goal activity is -1, not 0.
+- `0x102a39be` / `0x102a3b91`: the patrol arms pass `&m_sppPatrolPath` at `+0x658c` (the smart
+  pointer), whose pointee is `+0x6590`.
+- `0x102a4bb3`: `m_afMemory` is `+0x5d8c`; `0x102a98e0(this, 2)` is `m_afMemory &= ~2`.
+- `0x102a454c`: `m_iBurstFireCount` is `+0x6490`; `+0x6320` is `m_flGoalTolerance`.
+- `0x102a4f0c`: TASK_DO_LOOP_ACTIVITY tests the resolved SEQUENCE (`> 0`), not a count.
+- `0x102a4a3c`: the invalid-expression line goes through the import `[0x109f364c]`, not `DevWarning`'s `[0x109f3658]`.
+- `0x102a3551` / `0x102a492e`: the string is `"GetPathToEnemy failed!!\n"` (two `!`).
+
+**Unrecovered:** the `CAI_Path+0x10` byte's meaning (`0x102ee2e0`); what `0x102edae0` /
+`0x102edbb0` / `0x102edd50` / `0x102edaa0` / `0x102ed9c0` / `0x102ee300` search internally; the
+weapon words `+0x3a4`/`+0x3a8`/`+0x8b8..+0x8c4` and slots `+0x518`/`+0x51c`/`+0x5d0` by name; the
+kick cast's target class `0x105da324`; `0x10252450` and `0x102c5730`; `0x102c1400`; the second
+vector `0x102e0290` copies (`record+0x18`, read as the last SEEN position); the `+0x60b4` values 1 and
+`0x10` by name; `debug_test_switch1/2`'s default string `0x105399a0`; `0x10142aa0`'s colour
+arguments' meaning beyond a debug box.
+
+### `CAI_BaseNPCTroika::StartTask` `0x102a1910` — the second part (arms `0x102a5046`..`0x102a77f7`)
+
+_Recovered 2026-09-28, 0019 story 8 pass I (lane L02)._
+
+Port: `FElysiumNpc::StartTaskTroikaTail`
+(`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp`), reached from the first part's
+switch default. Helpers and seams: `ElysiumNpcStartTask19_2.inl`. Tests:
+`Elysium.Substrate.NpcKernelStartTask19.TroikaTail.*`.
+
+The dispatch (`id - 5 > 0x144` → base; byte table `0x102a7ab8` → dword table `0x102a77f8`) is the
+first part's. This part carries 108 arm entries of the 176: every arm whose start lies in
+`[0x102a5046, 0x102a77f7]`, including the two shared tails and the base forward. Arms below are in
+retail table order (ascending task id). "Complete" is `TaskComplete(false)` (`0x10273e80`, directly
+or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseNPCTroika.cpp"`,
+`+0x1b48 = line`, slot 448 `TaskFail(r)`; "running" is a bare return.
+
+#### The tails
+
+- `0x102a77ea` — ids `0x05`, `0xea`, `0xeb`: running, no write.
+- `0x102a66d7` — ids `0x8b`, `0x125` (index `0x1d`, the arm Ghidra drops): complete.
+- `0x102a77e2` — the base forward, 133 in-range ids plus every out-of-range id.
+- `0x102a5904` — the movement-activity tail: `0x102ee250(nav, act)` (path `+0x2c`),
+  `0x102a98e0(this, 2)` (`m_afMemory &= ~2`), complete.
+- `0x102a7744` — the look tail: `0x10297940(pos)` then `0x102a18a0(task)` (`m_flWaitFinished =
+  curtime + operand`, or `+ _DAT_10447ee0` for a non-positive operand).
+- `0x102a63fc` — the facing tail: `0x10288670(motor, yaw)`, running.
+- `0x102a76a9` — `m_flMoveWaitFinished (+0x5cf0) = curtime + operand`, running.
+
+`0x10297940` (face a point with a turn animation): `0x102e0b40` (motor `+0x2c = -1`), `0x102e2020`
+(ideal yaw toward the point), `0x10297a20` (the face-anim pick, writing `m_eFaceAnim` and
+`m_flFaceYawDiff`), `m_bfAINPCFlags |= 0x8000000` (`PLAYING_FACE_ANIM`), then ideal yaw =
+`GetAbsAngles().y + m_flFaceYawDiff`, flipped by 180 under `motor+0x28`, stored directly when
+`motor+0x1c == 180` else through `0x102e0a80`.
+
+#### The arms
+
+- `0x102a733f` `0x8c` MELEE_DODGE_ATTACK: `RestartIdealActivity(0x1155)`, running.
+- `0x102a6de4` `0x92` MELEE_KNOCKBACK: slot 266, `RestartIdealActivity(m_knockbackType +0x6068)`.
+- `0x102a6e09` `0x93` FLYING_KNOCKBACK_INTO: slot 266; `m_flGravity (+0x3ec) = m_fJumpGravity`;
+  `SetAbsVelocity(m_KnockbackVelocity)` (`0x102a96b0`; no separate `m_vecVelocity` store); slot 208
+  `SetGroundEntity(0)`; nav type 1 (`0x1027d9b0`); `m_bJumping = 1`; restart `m_knockbackType`.
+- `0x102a6e70` `0x94` FLYING_KNOCKBACK_IDLE: `n = 0x10345480()`; `n < 0` → restart `0x8f`, else slot
+  311 `ForcePreTranslatedSequenceAndActivity(0x8f, 0x8f, n)`.
+- `0x102a6ef7` `0x95`/`0x98`: `0x102c41b0(this, "impact_dust_emitter", 0, 0, 0)`.
+- `0x102a6eb4` `0x96`: `m_fKnockbackWallHitFallTime (+0x6014) = curtime + 0.01`.
+- `0x102a6ed5` `0x97`: `0x102c4e80` (`SetMoveType(4, 0)`, `m_flGravity = m_fJumpGravity`), then
+  `SetAbsVelocity(m_KnockbackVelocity)`.
+- `0x102a6f16` `0x99`: `GetBonePosition01("Bip01 Spine2")`; `+0x6018 = curtime`; `+0x601c = pos`.
+- `0x102a6fc5` `0x9b`: `m_flLastMeleeStepbackTime (+0x606c) = curtime`; complete.
+- `0x102a6f70` / `0x102a6f93` / `0x102a6fac` `0x9c..0x9e`: (`FearSound` first on `0x9c`)
+  `SetIdealActivity(0x1082 / 0x1083 / 0x1084)`.
+- `0x102a634a` `0xb2` FACE_INTEREST: no `m_pInterestingPlace (+0x62ec)` → fail(0x3848, 0x22);
+  `0x102ae310` (weapon holster policy); `m_bMatchOrientation (+0x570)` clear → complete; set →
+  stop-turn, yaw = `AngleMod(place GetAbsAngles().y)`, facing tail.
+- `0x102a63bd` `0xb3`: hint `0x1029f730(&patrol)`, place `0x1029f780(&patrol)`; no place →
+  complete; match-orientation clear → `+0x6300 = +0x659c = 0`, complete; set → stop-turn, yaw =
+  `0x102d12e0(hint)`, facing tail.
+- `0x102a644e` `0xb4`: `+0x6308 = -1` first; no place → fail(0x3874, 0x22); else
+  `0x102a9f40(place, 0, 1)`.
+- `0x102a64a6` `0xb5`: no patrol place → complete; else `0x102a9f40(place, hint, 0)` — the third
+  argument (the marker byte) is 0 (`0x102a64c2 PUSH 0`); `0xb4` passes 1.
+- `0x102a64de` / `0x102a64e4` `0xb6`/`0xb7`: `TranslateActivity(1 / 9)` into `0x102ee250`, running.
+- `0x102a650b` `0xb8`: `+0x6308 == -1` → clear `INTERESTING_INTO` (`0x20000000`), complete; else
+  restart it.
+- `0x102a5046` `0xe4` ADD_GESTURE: `SelectWeightedSequence((int)op) < 0` → break tail; else
+  `0x10099250(act, 2.45, 0)`, complete.
+- `0x102a5087` `0xe5` DO_DAMAGE: `n = (int)op`, negative → `m_iLastStoredDmg (+0xfdc)`; `CVDmg_t`
+  `SetSrc(this)`, `Set(1, 0x80, n)`, `+0xc = 1`; `0x101c26d0(this, this, 1.0, 0, 0, dmg, -1)`; slot
+  142 on itself; complete.
+- `0x102a5125` / `0x102a516c` `0xe6`/`0xe7`: `act == 0x1097` → `m_iCowerAnimOffset (+0x6414) =
+  RandomInt(0,2)*3`; Set / Restart `act + offset`; running.
+- `0x102a778e` `0xe8` SET_DYING: `m_lifeState = 1`; complete.
+- `0x102a51b3` `0xec`: `act = RandomInt(0,1)*3 + 0x106a`, `SelectWeightedSequence` discarded,
+  `SetIdealActivity(act)`.
+- `0x102a51e8` `0xed`/`0xee`: `m_Activity + 1 == 0` → `m_Activity = 0`; else
+  `SetIdealActivity(m_Activity + 1)`.
+- `0x102a521d` / `0x102a5283` `0xef`/`0xf0`: on `m_iLastDisciplineHitBy (+0xfd4)`: 6 → `0x108e` /
+  `0x1091`, 12 → `0x108f` / `0x1092`, 5 and anything else → `0x108d` / `0x1090`.
+- `0x102a52e9` `0xf1`: `m_knockbackType = (int)op`; complete.
+- `0x102a530d` `0xf2`: slot 387 `Weapon_Drop_All`; complete. `0x102a532d` `0xf3`: slot 304; complete.
+- `0x102a534d` `0xf4` CLEAR_HATRED: `0x102b52a0(this, 1, 1)`; complete.
+- `0x102a536e` `0xf5`: `DisconnectFromSquad` (`0x1026d050`), `+0x14bc |= 0x80800000` (raw, bit 31
+  included); complete.
+- `0x102a5397` `0xf6`: `0x102ca2a0(registry, 2, this, pos, 2, op-bits, 0, this, 0)`;
+  `InsertSound(8, pos, table[0x1b], 10.0, flag[0x1b], this)`; complete.
+- `0x102a5426` `0xf7` FACE_NEXT_NODE: no route → `DevWarning(2, "No route to face!\n")`,
+  fail(0x3599, 0xc); no waypoint → fail(0x35b9, 0xc); else the waypoint (or its successor),
+  stop-turn, `0x102e2020`, `FacingIdeal()` → complete, else running.
+- `0x102a5515` `0xf8`/`0xf9`: slot 474 null → fail(0x35cb, 0x12) (unreachable on the Troika line:
+  slot 474 answers `&m_BestSound`); else `0x101b99d0` (owner origin for types `0x10`/`0x400` with a
+  live owner, else the sound's origin), look tail.
+- `0x102a555c` `0xfa`: `0x1010e530(&v, -100, 100)` (CRT `rand()` per axis) — around the WORLD
+  origin — look tail.
+- `0x102a5599` `0xfb`: `m_hClosestPlayer (+0x628c)` dead → fail(0x35e2, 0x17); else look.
+- `0x102a55e3` `0xfc`: slot 586 live → look; else `m_hLastSeeUnknown (+0x608c)` live → look at
+  `+0x6090`; else fail(0x35f7, 0x21).
+- `0x102a5662` `0xfd`: `+0x65c0` dead → fail(0x3607, 0x21); else look.
+- `0x102a56a2` `0xfe` / `0x102a5754` `0xff`: `m_eFaceAnim` 1..8 → `0x1100..0x1107`, else ACT_IDLE;
+  `SetIdealActivity`; yaw = `GetAbsAngles().y`; `PLAYING_FACE_ANIM`; stop-turn; ideal yaw = yaw −
+  `m_flFaceYawDiff` (`0xfe`) or yaw + {0, 0, 45, 90, 135, −45, −90, −135, 180}[face] (`0xff`);
+  `0x102a18a0`; running.
+- `0x102a585d` `0x100`: raw mask `>= 0` → `+0x14b8 |= mask`, else `+0x14bc |= mask`; complete.
+- `0x102a58ae` `0x101`: the mirror (`&= ~mask`); complete.
+- `0x102a5886` `0x102`: `AddMiscFlag(1 << (raw & 31))`; complete.
+- `0x102a58d7` `0x103`: `TranslateActivity(0x1093)`, no sequence → `TranslateActivity(0x13)`; tail.
+- `0x102a5932` `0x104`: `0x10295460(0x1115)` (untranslated) `== -1` → 9; tail.
+- `0x102a594d` `0x105` / `0x102a5956` `0x126`: `TranslateActivity(0x1115 / 0x1121)`, no sequence →
+  `TranslateActivity(9)`; tail.
+- `0x102a59eb` `0x106`: `motor+0x28 = (op != 0)`; complete.
+- `0x102a5a45` `0x107` ATTEMPT_DIVE: `d = navGoal − GetAbsOrigin()`, 2-D `len2`: `< 4096` →
+  complete; `> 12100` → complete (`TEST AH,0x41; JP` at `0x102a5ac4` is taken when neither C0 nor
+  C3 is set); in the band `dot2D(norm(d.xy), m_vecRight)`: `> 0.98` →
+  `ANIM_MOVEMENT` + `SetIdealActivity(0x110b)`; `< −0.98` → `0x110a`; else complete.
+- `0x102a5b32` `0x108`: from = origin + (0, 0, StepHeight*0.5); right/left = from ± `m_vecRight*60`;
+  `0x110b` with a sequence and a clear move probe (kind 0, mask `0x202400b`, 100.0) →
+  `ANIM_MOVEMENT` + `0x110b`; else `0x110a` likewise; else fail(0x3736, 0xe).
+- `0x102a5cd4` `0x109`: forward `m_vecForward*96`, activity `0xf1d`; else fail(0x3759, 0xe).
+- `0x102a5dda` `0x10a` / `0x102a5e1c` `0x10c`: the cover-anim restart (`0x102a1560` / `0x102a15c0`)
+  true → running; false → complete. `0x102a5dff` `0x10b`: `0x102a1590`, complete.
+- `0x102a5e41` `0x10d` PLAY_COVER_AIM: `0x102a15f0`; point = `m_hShootTargetOverride` origin if
+  live; else if `m_hHintCoverObject (+0x6448) == GetEnemy()` (null == null included) → the enemy's
+  LKP (`0x102dfed0`); else complete and fall through with the zero point; `FInAimCone(point)` →
+  complete; else stop-turn + `0x102e2020(point)`, running.
+- `0x102a5f16` `0x10e`: no `m_pHintNode` → fail(0x37aa, 4); else `0x102b6120(&pos, 0)`, slot 62
+  `SetOrigin(pos)`, complete.
+- `0x102a5f86` `0x10f`: no hint → fail(0x37bd, 4); `RestartIdealActivity(0xc84)`; hint output
+  `0x102d0910`; `ClearHintNode(60.0)`; running.
+- `0x102a5fcc` `0x110`: no hint → fail(0x37f4, 4); restart `0xc84`; a hint target name → find it,
+  store in `m_hKickPhysicsProp (+0x643c)`, `DevMsg` (no arguments pushed) if not found; a live prop
+  within 128 units → `0x102b6890(prop)`, else `DevMsg`; clear the handle; hint output; clear hint 60.
+- `0x102a6128` `0x111`: dead prop → fail(0x3812, 0x25); no enemy → fail(0x380d, 6); goal
+  `0x102a9c80(10, -1, -1.0, 0, …)` whose type word is then OVERWRITTEN to 4 (`0x102a61b4`), dest =
+  prop − norm(enemy − prop) * 64 (`0x102a61f1` → `0x1001395d` = `0x10146190`, FSUB: the far side
+  of the prop), target 0; `SetGoal(goal, 0)`; running.
+- `0x102a6289` `0x112`: dead prop → fail(0x381f, 0x25); else complete.
+- `0x102a62db` `0x113`: dead prop → fail(0x3832, 0x25); restart `0xc84`; kick; clear; running.
+- `0x102a654b` `0x114`: slot 168 null or slot 530 unreachable → fail(0x38c3, 0xc); goal
+  `0x102a9d20(lkp, -1, -1.0, 0)`, t = nav arrival (`0x102f2fc0`); slot 563(t, &dest, &goal.tol, &t);
+  `SetGoal(goal, 2)` false → `DevWarning("GetPathToLastEnemyLKP failed!!\n")`,
+  `RememberUnreachable`, fail(0x38d8, 0xc); true → `0x102f2fe0(nav, t)`, complete.
+- `0x102a6694` `0x115`: t = slot 168 or this; `FindLateralCover(t eye, t)` (`0x102784a0`) → move
+  wait + complete; else `0x102edc80(origin, eye, 0.0, CoverRadius, &out, t)` false →
+  fail(0x3907, 8); goal `0x102a9dc0(6, out, 0x13, -2.0)`, `SetGoal(goal, 0)`; with a hint: slot 569
+  → `0x102ee410`, `0x102d11f0` → `0x102ee530`; move wait; running.
+- `0x102a6801..0x102a6861` `0x116..0x118`: `0x102a9770(0x40000)` answers 1 when `BOTCHED_ATTACK` is
+  CLEAR, and that arm completes. Set: `0x116` restarts `0x55`; `0x117` `0x102a1620`; `0x118`
+  `0x102a1560` true → running, else `0x102a1620`.
+- `0x102a68a8` `0x119`: `+0x6334 = 1`, `+0x6330 = op`; complete. `0x102a68bd` `0x11a`: `+0x6330 +=
+  RandomFloat(0, op)`; complete.
+- `0x102a68df` `0x11b`/`0x11c`: act `0x10`/`0x14`; no sequence → turn act `9`/`0x13`,
+  `0x102a1650(act, 180, delta)` false → fail(0x396f, 0x15); true → `+0x63ec = 180`,
+  `m_flWaitFinished = curtime + delta`, restart. With a sequence: hull trace from origin +
+  half step height to `− m_vecForward*50*delta` (`0x102a69ff`, the same subtract helper; mask
+  `0x202400b`, collision mins/maxs); fraction
+  `!= 1.0` → fail(0x3997, 0xe); else wait + restart.
+- `0x102a6fd8` `0x11d`: stop-turn; yaw = `AngleMod(m_qaLastFacing.y)`; facing tail.
+- `0x102a7000` `0x11e`: `0x101f5950(&DAT_1073dc28, this, (int)op, 2, 1.0, 1.25)`; complete.
+- `0x102a7025` `0x11f`: from `m_vSavePosition`, to = from + `m_vecViewOffset`;
+  `0x102edaa0(from, to, 0, 4096, 1.0, 1, &out)` false → fail(0x3ac1, 0xb); goal
+  `0x102a9d20(out, 0x13, -2.0)`, `SetGoal(0)`; running.
+- `0x102a70e6` `0x121`: op != 0 → `+0x14bc |= 0x80000001`, `+0x65d0 = GetAttackExtents()`,
+  `SetAttackExtents(60, 60, 80)`; op == 0 → `SetAttackExtents(+0x65d0)`, `+0x65d0 = (-1,-1,-1)`,
+  `+0x14bc &= ~0x80000001`; complete.
+- `0x102a6ab7` `0x122`: no `0x1121` sequence → fail(0x39a7, 0x15) AND tries = 1000 (the arm goes
+  on); side = `0x1025df40(coordinator, this, enemy)`, 0 → `RandomInt(0,1) ? -1 : 1`; while tries <
+  2: yaw = `RandomFloat(side*80, side*120)`, `0x102a1650(0x1121, yaw, delta)` true → `+0x63ec = yaw`,
+  wait, restart `0x1121`; false → side = −side. tries == 1000 → running; else fail(0x39d5, 0xe).
+- `0x102a6bf7` `0x123`/`0x124`: radius = slot 418(op); t = slot 168: dist computed, or
+  fail(0x39ec, 6) + tries = 1000; `debug_circle_dist_override > 0` replaces radius; radius == −1
+  with a weapon → `w[0x8c0]*0.75 + w[0x8b8]*0.25`; act `0x1121`, else 9, else fail(0x3a06, 0x15)
+  (returns); up to two slot-603 yaws through `0x102a1650`; tries == 1000 → running; else
+  fail(0x3a30, 0xe).
+- `0x102a597f` `0x127`: `+0x6320 = debug_melee_advance_combatmove_dist + RandomFloat(0,
+  slot418(op))`; then the tolerance tail: `0x102ee1c0` (path `+0x28`) and `0x102f2fe0` (path
+  `+0x20`) with the same value (`0x102a59d1`, `0x102a42df..0x102a42e8`); complete.
+- `0x102a7185` `0x128`: `m_flWaitFinished = delta + curtime`; `RandomInt(0,1)` 0 → ACT 1, 1 → 3;
+  `RestartIdealActivity(TranslateActivity(act))`.
+- `0x102a71e4..0x102a721c` `0x129..0x12d`: `m_flSpecialDistanceAccum (+0x5bac)` set / += / += rand /
+  −= / −= rand of slot 418(op); complete.
+- `0x102a72a7` `0x12e`: stop-turn, `0x102e2020(m_vSavePosition)`, slot 572; running.
+- `0x102a72e3` `0x131`: op != 0 → `+0x14bc |= 0x80001000`, `0x1026d130` (`SetEnemy(NULL)`,
+  `DisconnectFromSquad`, `++m_iIsOblivious`), fire `+0x5fd4`; op == 0 → `0x1026d160`
+  (`--m_iIsOblivious` floored, `ReconnectToSquad`), `&= ~0x80001000`, fire `+0x5fec`; complete.
+- `0x102a7358` `0x137`: `0x10295460(+0x65e4, 1) == 0` → `TaskFail(0x15)` with no line write; else
+  restart `+0x65e4`. (A -1 "no sequence" answer is NOT refused — retail defect.)
+- `0x102a73a0` `0x138`: squad and enemy → `SquadNewEnemy`; complete.
+- `0x102a73da` / `0x102a7468` / `0x102a748c` `0x139`/`0x13b`/`0x13c`: stop-turn, restart
+  `0x2b`/`0x30`/`0x32`.
+- `0x102a73fe` `0x13a`: `m_flGravity = m_fJumpGravity`; `0x102c4c50` solves the arc; motor `+0x18`
+  applies it; nav type 1; `m_bJumping = 1`; running.
+- `0x102a74b0` `0x13d`: `m_bInvincible (+0x63d8) = (op != 0)`; running (no complete).
+- `0x102a74ed..0x102a7586` `0x13e..0x144`: the activity copy-prop calls; all complete except
+  `0x142`, which keeps running when `0x1018eb50` answers 0.
+- `0x102a7598` `0x145`: `BurnModel(GetSkeletonModelName(), false)`; complete.
+- `0x102a75b2` `0x146`: `+0x5db8 = +0x62a8`, `+0x5dc4 = +0x62b4`; complete.
+- `0x102a75db` `0x147`: `m_hLastDamageEnt (+0x5b7c)` dead → fail(0x3be0, 0x21); `0x102edc80(origin,
+  eye, 32.0, CoverRadius, &out, this)` false → fail(0x3bdb, 8); goal `0x102a9d20(out, 0x13, -2.0)`,
+  `SetGoal(0)` (answer unread), move wait; running.
+- `0x102a7722` `0x148`: dead → fail(0x3bee, 0x21); else look at it.
+- `0x102a779d` `0x149`: `(int)op`, no sequence → `0x1d`, none → 1; `SetIdealActivity`; ACT_IDLE →
+  complete, else running.
+
+#### Reads and writes
+
+Reads: the task's two words; `+0xfd4`, `+0xfdc`, `+0xfec`, `+0x14b8`, `+0x5b7c`, `+0x5ba8`,
+`+0x5d8c`, `+0x5dc4`, `+0x5dd0`, `+0x5ddc`, `+0x6004`, `+0x6068`, `+0x608c`, `+0x6090`, `+0x60b0`,
+`+0x628c`, `+0x6290`, `+0x629c`, `+0x62a8`, `+0x62b4`, `+0x62ec`, `+0x6300`, `+0x6308`, `+0x6330`,
+`+0x63e4`, `+0x63e8`, `+0x643c`, `+0x6448`, `+0x649c..+0x64b8`, `+0x658c`, `+0x65c0`, `+0x65d0`,
+`+0x65e4`, `+0x65e8`, motor `+0x1c`/`+0x28`, navigator path `+0x20`/`+0x24`.
+Writes: `+0x200`, `+0x3d4`, `+0x3ec`, `+0xfec`, `+0x14b8`, `+0x14bc`, `+0x1b44/+0x1b48` (debug),
+`+0x5bac`, `+0x5bb4`, `+0x5cf0`, `+0x5db4`, `+0x5db8`, `+0x5dc4`, `+0x6014`, `+0x6018`, `+0x601c`,
+`+0x6068`, `+0x606c`, `+0x6300`, `+0x6308`, `+0x6320`, `+0x6330`, `+0x6334`, `+0x6414`, `+0x63d8`,
+`+0x63ec`, `+0x643c`, `+0x6498`, `+0x659c`, `+0x65d0`, motor `+0x28`/`+0x2c`/`+0x34`, navigator
+path `+0x20`/`+0x28`/`+0x2c`.
+
+**Unrecovered:** the category name of sound-table row `0x1b` (`DAT_1072bc20`, `0x102a9ea0` /
+`0x102a9ec0`); the `+0xb0` word `0x1029f780` caches from a place; `0x102b6890`'s kick impulse;
+`0x102c4c50`'s arc solve; the `activity_copy_prop` bodies `0x1018e790..0x1018ecf0`; the default
+string of `cvar_debug_circle_dist_override` (`0x105399a0`); `0x10345480`'s studio-header read; the
+eluded-record fallback inside `0x102dfed0`; `0x102ae310` (weapon holster policy) in full.
+
+### The species `StartTask` overrides (slot 442) — `0x103c1820` … `0x10375f50`
+
+_Recovered 2026-09-28, 0019 story 8 pass I (lane L04)._
+
+This walks every species `StartTask` override the retail
+`vampire.dll` ships, plus `CNPC_VCop::StartTask` (family Damaged19). It also covers the
+verification of `CNPC_VFrenzyShadow::StartTask`.
+
+- **Port:** `Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp`. FrenzyShadow is
+  in `ElysiumNpcFrenzyShadow.cpp`.
+- **Tests:** `Tests/ElysiumNpcKernelStartTask19Tests_4.cpp`, suite
+  `Elysium.Substrate.NpcKernelStartTask19.Species.*`.
+- **Packet:** `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/StartTask19-READING.md`.
+  VCop is in `Damaged19-READING.md`.
+
+Every body below has instruction addresses in the port's trailing comments. This page states the
+behaviour; the addresses stay in the code.
+
+#### Shared facts
+
+**Task number.**
+- Retail's `Task_t::iTask` is the class-LOCAL task id, and every species switch compares local
+  numbers.
+- The port stores the GLOBAL id. Each body therefore translates the id back through slot 450
+  `GetLocalTaskId` (`0x101a6640`) before it switches.
+- A task a body builds on its own stack is translated forward before it is handed on. The head
+  claw's `{0x4b, 1.0}` is the one case.
+
+**Parent chains.** Every chain in these bodies is a DIRECT thunk, so the port makes an explicit
+base call:
+
+| Thunk | Target |
+|---|---|
+| `0x10010695` | `CAI_BaseNPCTroika::StartTask` `0x102a1910` |
+| `0x10013336`, `0x1000a0c9` | `CNPC_VHuman::StartTask` `0x103847f0` |
+| `0x10009b06` | `CNPC_VAnimal::StartTask` `0x1035f650` |
+| `0x1000de7c` | `CNPC_VVampireBoss::StartTask` `0x103c5ac0` |
+
+**Failure trace.**
+- A traced failure writes `+0x1b44` (the source file) and `+0x1b48` (the line), then calls slot 448
+  `TaskFail`. The port records `StartTask fail trace <file>:<line>` in the mind trace.
+- A bare failure calls slot 448 alone.
+
+**Motor facing idiom.**
+- `0x102e0b40(m_pMotor)` resets the motor yaw-speed override (`motor+0x2c = -1`). At integration
+  the species sites, like the base and Troika ones, call the one base helper
+  `StartTaskMotorHoldYaw`, which is family RunTask19's `MotorMoveStop`.
+- `0x102e2020(m_pMotor, target)` sets the ideal yaw at a point. `0x102e20b0` does the same with a
+  speed. Both land in `SetMotorHintYaw`.
+
+**`RestartIdealActivity` (`0x10289ee0`).**
+- Retail: when `m_Activity == act`, it sets `m_Activity = 0`, then calls `SetIdealActivity(act)`.
+- Ported at integration as `RestartIdealActivityId` (`ElysiumNpcBaseHints.cpp`); it had been a
+  no-op seam of family Hints, so the arms that test `m_IdealActivity` afterwards now read retail's
+  word.
+
+**`SetGoal` (`0x102ecd20`).**
+- Arms build an `AI_NavGoal_t` on the stack and submit it to `SetGoal 0x102ecd20`, the family's one
+  port body (§ "`CAI_Navigator::SetGoal` `0x102ecd20` (one body)" above).
+- A tolerance of -1.0 keeps the PATH's tolerance (`path+0x28`, not `m_flGoalTolerance +0x6320`), or
+  the pathing hull's width when that is 0.0.
+
+#### `CNPC_VTzimisceHeadClaw::StartTask` `0x103c1820`
+
+- **Tasks 0x122, 0x123, 0x124:** the task is REPLACED. A stack `Task_t {0x4b, 1.0}` goes to the
+  Troika body, and the original id is never passed on.
+- **Tasks 0x36, 0x37:** slot 618 plays the exertion: `EmitSound` on channel 4, volume 1.0,
+  attenuation 0.8, pitch 100, one of three `TC_FatGuy/Exert_Heavy_N.wav` picked by
+  `RandomInt(0, 2)`. The task then falls into the Troika body.
+- **Everything else:** the Troika body.
+
+#### `CNPC_VTzimisceRunner::StartTask` `0x103c35d0`
+
+- **Tasks 0x122–0x124:** `RestartIdealActivity(1)`, then
+  `m_flWaitFinished = m_flWaitFinishedDelta + curtime`. The body returns WITHOUT calling the base.
+- **Task 0x130:**
+  - A live `m_hPotentialEnemy` (+0x6678): its slot 220 origin goes into `m_vSavePosition`, then
+    `TaskComplete`, and the base STILL runs.
+  - A dead handle goes straight to the base.
+- **Tasks 0x36, 0x37:** the `TC_Runner` exertion, then the base.
+
+#### `CNPC_VTaxiDriver::StartTask` `0x103b36d0`
+
+- **Tasks completed at once, without the base:** 0x2b, 0x2e, 0x2f, 0x31, 0xb2, 0xba–0xbd, 0xf8,
+  0xf9, 0xfb–0xfd, 0x11b and 0x11d.
+- **Task 0xb9:** runs the dialogue upkeep `0x102c1400`.
+  - An answer of -1 (not in dialogue) completes the task.
+  - Any other answer calls slot 310 `SetActivity(0x114e)` and leaves the task running.
+
+#### `CNPC_VSabbatGunman::StartTask` `0x103a5650`
+
+- **Tasks 0x11b, 0x11c, 0x122–0x124:**
+  `m_flWaitFinishedDelta *= 1.0 / sabbat_gunman_speed_scalar`, with the ConVar read as
+  `IsCommand ? 0.0 : m_fValue`. The IsCommand arm divides by zero; that is the retail defect.
+  Then the VHuman body.
+
+#### `CNPC_VCop::StartTask` `0x10371b70`
+
+- **Task 0x107:** `TaskComplete` (tail jump).
+- **Task 0x14a:** `m_hClosestPlayer` (null when stale) is handed to slot 598 by tail jump. No
+  completion.
+- **Everything else:** VHuman.
+
+#### `CNPC_VDog::StartTask` `0x10374940`
+
+- **Task 0x36:**
+  1. `AutoMovement`.
+  2. The motor facing at the enemy's last-known position, at speed -2.0.
+  3. `RestartIdealActivity(0x4b)`.
+  4. `TaskComplete` only if slot 251 `IsActivityFinished` answers true.
+- **Task 0xbc:** `SetActivity(3)`, then the Animal body.
+- **Everything else:** Animal.
+
+#### `CNPC_VGhoulCroucher::StartTask` `0x1037b8b0`
+
+- **Task 0x14a:** `RestartIdealActivity(table A)` (`0x1037b870`). If `m_IdealActivity` did not
+  take, `TaskFail(0x15)`.
+- **Task 0x14b:** the same over table B (`0x1037b890`). A refusal also sets `m_bUnawareExited`
+  (+0x6667).
+- Neither task completes.
+- **Everything else:** VHuman.
+
+#### `CNPC_VHuman::StartTask` `0x103847f0`
+
+- **Tasks 0x89, 0x8a:** `m_flLastAttackTime = curtime`, then `RestartIdealActivity(0x4b)`.
+- **Task 0x8b** (a downed enemy):
+  - With an enemy that has a combat character, face its last-known position.
+  - Play the enemy sequence's paired activity (descriptor `+0x2d8`) when it is non-negative, else
+    0x51.
+- **Tasks 0x8d, 0x8e, 0x8f, 0x90, 0x91:** activities 0x1154, 0x52, 0x1156, 0x1152 and 0x1153.
+- **Task 0x9f:**
+  - No weapon: line 0x138, `TaskFail(3)`.
+  - Otherwise the tolerance is `weapon+0x8c0 * data + 2 * NAI_Hull::Width(m_eHull)`, then
+    `TaskComplete`.
+- **Everything else:** Troika.
+
+#### `CNPC_VAnimal::StartTask` `0x1035f650`
+
+- **Tasks 0x89, 0x8a, 0x8b, 0x8e, 0x9f:** as VHuman, with activities 0x4b / 0x4b / 0x50 / 0x52.
+  The 0x9f failure is at line 0x165.
+- **Task 0xa5:**
+  - No `m_pInterestingPlace`: line 0x19e, `TaskFail(0x22)`.
+  - Otherwise a goal of type 9 at `m_vecInterestingPlace`, with activity words -1 and tolerance
+    -1.0. Accepted: complete. Refused: line 0x199, `TaskFail(0xc)`.
+- **Everything else:** Troika.
+
+#### `CNPC_VAndreiBlood::StartTask` `0x1035d1b0`
+
+- **Task 0x14b** (unhide at the hint):
+  - No hint: line 0x130, `TaskFail(4)`.
+  - Otherwise, in order: `SetAbsOrigin(hint)`, slot 181 `Teleport`, slot 62, `SetHullSizeNormal(1)`,
+    `m_bTriggerUnhide = 1`, `m_fEffects &= ~0x20`, `RemoveSolidFlags(4)`, `ForceTransmit`, `Relink`,
+    `m_fEffects |= 0x10`, complete.
+- **Task 0x150:** nothing.
+- **Tasks 0x151, 0x152:** the teleport-out / teleport-in wav on channel 2 (0.8), the matching blood
+  emitter, then activity 0x113c / 0x113b. No completion.
+- **Task 0x153:** `m_pHintNode = SelectTeleportNode()`, complete.
+- **Task 0x154:** the summon wav, activity 0x113a, the summon emitter. Then the nearest
+  `npc_maker_fleshpile` within 1024 of the origin makes a runner. No completion.
+- **Task 0x155:** `m_OnDeath` fires with the closest player as activator, then `UTIL_Remove(this)`.
+- **Task 0x156:** `+0x66d0 = curtime`.
+- **Everything else:** VampireBoss.
+
+#### `CNPC_VAsianVampire::StartTask` `0x103611a0`
+
+- **Task 0x150:** consumed.
+- **Tasks 0x151, 0x152:** `m_pHintNode` from `SelectLedgeNode` / `SelectJumpbaseNode`.
+  - A null result stamps line 0x110 / 0x118 and calls `TaskFail(1)`.
+  - Both paths then reach the ONE shared `TaskComplete(0)`. After a failure `COND_TASK_FAILED`
+    refuses it.
+- **Everything else:** VampireBoss.
+
+#### `CNPC_VBach::StartTask` `0x103645a0`
+
+The dispatch is three nested compares: above 0x14c, equal to 0x14c, and the low range.
+
+- **Tasks 0x34, 0x35:**
+  - Holding a non-rifle: the VHuman body runs, then `+0x66a4` is cleared.
+  - Holding the rifle (`item_w_rem_m_700_bach`, compared with `__strcmpi`) or nothing:
+    - `+0x66a4` clear: complete. Bach does not turn while aimed.
+    - `+0x66a4` set: the VHuman body, then clear.
+- **Tasks 0xb0, 0xb1** (the sniper wait):
+  - No weapon: complete.
+  - A non-rifle: `+0x66a4 = 1`, the VHuman body, then `m_flWaitFinished -= 0.35`.
+  - The rifle, with the camper flag `+0x66a0` set:
+    - Occluded (`+0x6674` non-zero): wait = curtime + 1e9, and the warning time equals it.
+    - Not occluded: wait = curtime + 0.15, clear the flag and `+0x6678`, warning = wait + 1e9.
+  - The rifle, with the camper flag clear:
+    1. Without skip-to-warning: wait = curtime + 0.2 + (enemy feat 0xc, 1 with no enemy) * 0.08.
+    2. With it: wait = curtime + `+0x6698`, then clear both skip words.
+    3. Both paths then add max(enemy feat 10, feat 9) * 0.1.
+    4. warning = wait, then wait += 1.5.
+  - With no hint, `RestartIdealActivity(5)`.
+- **Tasks 0xba–0xbd:** complete.
+- **Task 0x14a:** the rifle via `Inventory_Find` and slot 388, `+0x66a4 = 0`,
+  `+0x668c = curtime + 0.5`, complete.
+- **Task 0x14b:** the katana, `+0x668c = curtime + 0.5`, complete.
+- **Task 0x14c:** the holy-light equip `0x103656a0`, its wav, `+0x66a1 = 0`, complete.
+- **Task 0x14d:**
+  - With a weapon: type-3 stat 0xf base 1, then weapon `+0x518` and `+0x4f0(0)`.
+  - Always completes.
+- **Task 0x14e:** the teleport-ring hint for `m_iBachTeleportState` 0..3 (types 0x4268..0x426b),
+  searched with flags 2. Any other state: line 0x350, `TaskFail(4)`.
+- **Task 0x14f** (the teleport):
+  - No hint: line 0x355, fail 4.
+  - Otherwise, in order:
+    1. Capability 1 off, `+0x66a7 = 0`.
+    2. `SetAbsOrigin`, `Teleport`, slot 62.
+    3. The state advances, wrapping above 3.
+    4. Stat 0xd = 5.
+    5. `+0x6690 += 6`, the shield up, `+0x6680 = curtime + 3`.
+    6. The shield wav, complete.
+- **Task 0x150:**
+
+  | State | Effect |
+  |---|---|
+  | 1 | capability 1, hint 0x426c, movement spot |
+  | 0 | capability 1, hint 0x426d |
+  | 3 | capability 1, movement spot, then as state 2 |
+  | 2 | skip-to-warning at `0x1062d210[state]` = {1.3, 1.0, 1.2, 1.2}, line 0x387, fail 4 |
+
+- **Task 0x151:** without a movement spot, capability 1 off. Then the rifle, `+0x66a4 = 0`, skip
+  at the state's time, complete.
+
+#### `CNPC_VChangBros::StartTask` `0x1036b750`
+
+Also the body of the Blade and Claw classes.
+
+- **Task 0x13b:** in sector 3, `+0x66cc = curtime`. Then the base.
+- **Task 0x150:** motor reset, `AddSolidFlags(4)`, activity 0x1148, then FALLS THROUGH into 0x151.
+- **Task 0x151:** motor reset, the teleport-in emitter, `RecordHealthPercent`,
+  `+0x66d0 = curtime`.
+- **Task 0x152:** teleport node, complete.
+- **Task 0x153:** ground nav, `m_bJumping = 0`, `flags2 &= 0x7ffffffd`, `CommitSetupJump`, the
+  teleport-out emitter, activity 0x1149.
+- **Task 0x154:** ledge node. A null result stamps line 0x1aa and fails 1. Both paths complete; a
+  failure refuses the completion.
+- **Task 0x155:** `SetupSuperJump(hint pointer)` (the pointer is tested as a float), complete.
+- **Task 0x156:**
+  1. Face the closest player.
+  2. Activity 0x114c.
+  3. `+0x66f0 = curtime + 1.5`.
+  4. The charge emitters.
+- **Task 0x157:** `+0x66d8 = 0`, activity 0x114a, `m_flLastAttackTime`.
+- **Task 0x158:** `CheckJumpPathToHintNode`: complete, or line 0x1ce and fail 1.
+- **Task 0x159:** the united node, complete.
+- **Task 0x15a:** nothing.
+- **Task 0x15b:** `AddSolidFlags(4)`, activity 0x114b, face the stored centre,
+  `+0x66d4 = curtime + 4`.
+- **Task 0x15c:** activity 0x114c.
+- **Task 0x15d:**
+  1. `+0x66ec = curtime`, activity 0x114d, `RemoveSolidFlags(4)`.
+  2. Only when `m_ChangType == 0`: the blast emitter 50 above the arena centre.
+  3. Then, unless the closest player is in sector 4 or the template is negative:
+     `CausePlayerAOEDamage(point, 1000, template+0xcc)`.
+- **Everything else:** VampireBoss.
+
+#### `CNPC_VGargoyle::StartTask` `0x103790d0`
+
+- **Task 0x12f:** activity 0x5e.
+- **Task 0x130:** a live pillar's origin into `m_vSavePosition`, complete. With no pillar, nothing
+  happens and the task keeps running.
+- **Tasks 0xe9, 0xea:**
+  1. `m_iDoingGibDeath = 1`.
+  2. With a physics object: the impulse `velocity + forward * 400 + (0, 0, 100)` and
+     `m_OnGibDeath`.
+  3. The VHuman body.
+- **Task 0x31:** with a pillar, face it and call `SetTurnActivity`. Complete only if
+  `FacingIdeal`.
+- **Tasks 0x36, 0x37:** the gargoyle exertion, then VHuman.
+
+#### `CNPC_VHengeyokai::StartTask` `0x103805d0`
+
+- **Task 0x135:** drop the carried body (`0x103828a0`), complete.
+- **Task 0x136:** the thaw (`0x10383130`), complete.
+- **Task 0x14a:** the shark form (`0x103831c0`), complete.
+- **Task 0x14b:** nothing.
+- **Task 0x14c:** the hengeyokai model, `m_fEffects |= 0x10`, render words 0, hull 0x12,
+  `SetHullSizeNormal`, complete.
+- **Task 0x14d:** `SUB_Remove` think at curtime + 0.01, complete.
+- **Task 0x14e:** `m_bfAINPCFlags2 |= 0x80000800`, complete. The packet row claimed `+0x19c`; the
+  word is `+0x14bc`.
+- **Task 0x134:** activity 0x127.
+- **Tasks 0x36, 0x37:** the exertion, then VHuman.
+- **Task 0xc8:** face the pickup target. Complete only once `FacingIdeal`.
+- **Task 0xc9:**
+  - `COND 0x1b` and `0x103822a0` both answer: complete.
+  - Otherwise: face, `SetTurnActivity`, `+0x6674 = curtime + 1`.
+- **Task 0xca:** the same over slot 168, with no condition gate and no timer.
+- **Task 0x130:**
+  1. `+0x6680 = 2`.
+  2. A live target: its origin into `m_vSavePosition`, the tolerance pushed, complete.
+  3. A dead target: line 0x3b3, fail 1.
+- **Tasks 0x132, 0x133:** the carry facing `0x10382bb0`, activity 0x126.
+
+#### `CNPC_VManBat::StartTask` `0x1038c390`
+
+**Mode word.** The mode is a secure word:
+- `+0x6670` holds `0x103908c0(0x1042fb50(mode))`.
+- The port also keeps the decoded mode (`ManBatMoveGoalNodeMode`).
+
+**Fly-node searches.** Each is `0x102d1af0(this, 20000, type, 5000.0, 0, 0)`, and the result goes
+into `m_pFlyNode` (+0x6688).
+
+**Tasks:**
+- **0x14a:** ideal 0x28, plus `0x1038c250(node)` when there is a fly node.
+- **0x14b:** the first flap (ideal 0x22, flap timer 2.3), then the steer `0x1038b370` and the flap
+  selector `0x1038e720`.
+- **0x14c:** in order:
+  1. Release the carried object.
+  2. Ground switch 2.
+  3. Mode 5.
+  4. Ideal 0x2f.
+  5. A ballistic velocity to the fly node.
+- **0x14d:** yaw `RandomInt(-180, 180)`, quantised to the 16-bit angle; speed 500; climb
+  `RandomFloat(0.1, 0.5) * 500`. Then `SetAbsVelocity` and the flap selector.
+- **0x14e:** mode 1, search type 2. Found: complete. Not found: fail 4.
+- **0x14f:**
+  - With no node: mode 0, search, else node id 1 and search again. Still none: fail 4.
+  - Otherwise: node id + 1, complete.
+- **0x150:** ideal 0x30, velocity zero.
+- **0x151:** mode 2, node id `RandomInt(1, 3)`, search. Complete, or fail 4.
+- **0x152:** mode 3, search. Steer and flap, or fail 4.
+- **0x153:** the throw row `RandomInt(1, 4)` of four overlapping tables, via `0x1038f2c0`.
+  Complete, or fail 1.
+- **0x154:** a node id `RandomInt(1, 3)` different from the current one. With a node, set the
+  origin to it, clear the node, complete. Otherwise fail 4.
+- **0x155:** mode 4, search, then ideal 0x116f, or fail 4.
+- **0x156:** face the closest player (pitch 0, roll kept), ideal 0xb0.
+- **0x157:** mode 6, clear the node.
+- **0x158:** ideal 0x1170, the screech cone.
+- **0x159 / 0x162:** mode 7, fly-by target = closest player.
+- **0x15a / 0x161:** ideal 0x4b.
+- **0x15b:** ideal 0x1054.
+- **0x15c:** mode 8, node id 1, search, then steer or fail 4, then FALL THROUGH into 0x15d.
+- **0x15d:** origin z + 10, the first flap, complete.
+- **0x15e / 0x15f:** `0x1038fc80` / `0x1038fd40`, complete.
+- **0x160:** the nearest entity named "Cop" becomes the fly-by target. Live: mode 7. Otherwise
+  fail 1.
+- **0x163:** mode 9, coast timer curtime + 1.
+- **0x164:** clear the fly-by sound flag, complete.
+- **Everything else:** VHuman.
+
+#### `CNPC_VMingXiao::StartTask` `0x10392d80`
+
+- **Tasks 0x89, 0x8a, 0x8b, 0x8e, 0x9f:** as VHuman. The 0x9f failure is at line 0x296.
+- **Task 0x14a:** the transform `0x1039a750`, complete.
+- **Task 0x14b:** nothing.
+- **Task 0x14c:** `MingXiao.mdl`, 0x10, hull 0xf, `+0x6678 = 1`, complete.
+- **Task 0x14d:** `SUB_Remove`, complete.
+- **Task 0x14e:** `BeginDefeatSequenceOnce` (Misc19), complete.
+- **Tasks 0x14f–0x152:** the throw attack for tentacles 0..3, with activities 0x112a..0x112d.
+- **Tasks 0x153, 0x154:** the motor clamp around the current yaw (range 20), activity 0x1131 /
+  0x1130.
+- **Task 0x155:**
+  1. Switch to `m_hRangedWeapon`.
+  2. Activity 0x19.
+  3. `+0x66c0 = 0x10397f70() + curtime`.
+- **Task 0x156:** the throwable-object mode from the data word (0..4, anything else 0), complete.
+- **Task 0x157:** a goal of type 4 at `+0x6720`, running. The answer is the return value.
+- **Task 0x158:** activity 0x112f for tentacle 4, else 0x112e.
+- **Task 0x159:** modes 3/4 run the throw clean-up; always completes.
+- **Task 0x15a:** clamp, then 0x1131 / 0x1130 by tentacle.
+- **Task 0x15b:** `hit_yaw = RandomFloat(-90, 90)`, activity 0x73.
+- **Task 0x15c:** `hit_yaw = -VecToYaw(origin - bone) + RandomFloat(-15, 15)`, activity 0x74. The
+  FCHS negation is retail's.
+- **Tasks 0x15d, 0x15e, 0x15f:** the damage / death / proxy-death emitters, complete.
+
+#### `CNPC_VMingXiaoTentacle::StartTask` `0x1039c4c0`
+
+- **Tasks 0x8b, 0x8e:** as MingXiao.
+- **Task 0x9f:**
+  - No weapon: line 0x181, fail 3.
+  - Otherwise the tolerance is `self hull mins.x + enemy hull mins.x + range * data`.
+    `0x102d6100` answers `&row.mins`.
+- **Task 0x14a:** when `(int)data` differs from `m_ePhase`:
+  1. The teardown `0x1039f310`.
+  2. Phase 1 is invincible, phase 2 is vulnerable, phase 3 and anything else (stored as 0) are
+     invincible. Each clears `+0x6674`.
+  3. Always completes.
+- **Task 0x14b:** the form swap on `(int)data`:
+
+  | Data | Model | Model index | Hull | Attack extents | Emitter |
+  |---|---|---|---|---|---|
+  | 2 | grub | `+0x6668` | 0x11 | 0 | none |
+  | 3 | transformation | `+0x666c` | 0xf | 64/64/32 | baby-transform |
+  | other | grub | `+0x6664` | 0x11 | 0 | tentacle-transform |
+
+  Then `SetHullSizeNormal`, complete.
+- **Task 0x14c:** `SetForceFrequentThink(1)`.
+- **Task 0x14d:** complete.
+- **Task 0x14e:** `0x1039ef10`, complete.
+- **Task 0x14f** (the evade):
+  1. No enemy: line 0x200, fail 6.
+  2. The navigator node search around the enemy (512, 30000). None: line 0x20b, fail 7.
+  3. Jitter bands on the dominant axis: 0..60 away from the enemy, and ±80 across it.
+  4. Up to 5 candidates. Z is lifted by half the step height; Y is drawn before X; each is tested
+     with `IsAreaClear` against `0x202400b`. After the fifth refusal the original node is kept.
+  5. A run goal there. Refused: line 0x26b, fail 0xc.
+  6. Accepted: `+0x667c = RandomFloat(1, 2) + curtime`, complete.
+- **Task 0x150:** nothing.
+- **Task 0x151** (hide behind the companion):
+  1. No companion or enemy: line 0x2a0, fail 1.
+  2. Draw `RandomFloat(-20, 20)` three times: z, then y, then x.
+  3. The point is `companion + normalize(companion - enemy) * 200 + jitter`.
+  4. Not clear: line 0x29a, fail 0x1a.
+  5. A run goal. Refused: line 0x294, fail 0xc.
+  6. Accepted: `+0x667c = curtime + 600`, `+0x6680 = RandomFloat(5, 15) + curtime`, complete.
+- **Task 0x152** (scatter):
+  1. An enemy within 512 of this body: search at `(enemy * 3 + scatter centre) / 4`.
+  2. Otherwise, or when that search fails: search at the scatter centre. Failure: line 0x2c6,
+     fail 7.
+  3. A goal. Refused: line 0x2d4, fail 0xc.
+  4. Accepted: `+0x667c = curtime + 600`, complete.
+- **Task 0x153:** notify the owner, complete.
+- **Task 0x154:** activity 0x49.
+- **Task 0x155:** the baby death emitter, complete.
+- **Task 0x156:** `0x1039ea60` (Misc19), complete.
+
+#### `CNPC_VSabbatLeader::StartTask` `0x103a78c0`
+
+**Prologue** (every task): a spawned nova particle (`+0x66e4`) is killed unless the task is 0x161
+or 0x162.
+
+**Tasks:**
+- **0x36, 0x37:** slot 621 `AttackSound`, then the base.
+- **0x6e, 0x92, 0x93, 0xe5:** `CommitSetupJump`. A body still on the jump nav type is stopped
+  (motor slot 8), put back on ground nav, and `m_bJumping` is cleared. Then the base.
+- **0x14e:** `+0x66b8 = 1`, `m_bIsBossMonster = 1`, `m_flLastAttackTime`, then the base.
+- **0x150–0x153, 0x159:** `SelectHintNode` with (0x3e80, 2), (0x3e80, 4), (0x3e81, 2), (0x3e82, 2)
+  and (0x3e83, 2).
+- **0x154:** the dive-in point. None: line 0x25a, fail 1. Found: complete.
+- **0x155:** the teleport archway, complete.
+- **0x156:** the dive-out point, complete.
+- **0x157:** the ambient run loop, complete.
+- **0x158:** `StopSound(2, ambient_run)`, complete.
+- **0x15a:** jump origin/target to the hint, height 200, track and dive cleared, complete.
+- **0x15b:** needs a live closest player outside the no-jump zone, else line 0x28d, fail 1. Then
+  `SetJumpOriginAndTarget(player, 35, 25)`, the leap wav, track the player, complete.
+- **0x15c** (dive in):
+  1. Gravity 0.1, dive on, activity 0x113f.
+  2. `EF_NODRAW`, not solid.
+  3. Velocity = delta / 1.1, with Z replaced by `gravity * sv_gravity * 1.1 / 2`.
+  4. Jump nav, `m_bJumping`.
+- **0x15d** (dive out):
+  1. Dive off, `Unhide`, 0x10.
+  2. Face the player at speed 50.
+  3. The splash wav, the blood pool at the hint.
+  4. Activity 0x1140.
+- **0x15e:** teleport onto the hint, the warning wav, `+0x66dc = curtime + 1`.
+- **0x15f:** `flags2 |= 0x80000800`, complete.
+- **0x160:** roar, activity 0x1141.
+- **0x161:** nova on, body emitters, particle spawned, activity 0x1142.
+- **0x162:** activity 0x1143.
+- **0x163:** the blast emitter 80 above the origin, the AOE over 350 when the template resolves,
+  activity 0x1144, `m_flLastAttackTime`.
+- **Everything else:** VampireBoss.
+
+#### `CNPC_VScurrying::StartTask` `0x103ac740`
+
+Also the body of `CNPC_VRat`.
+
+- **Task 0xbc:** `SetActivity(3)`.
+- **Task 0x14b:** complete.
+- **Task 0x14a** (flee):
+  1. A scarer that does not resolve AND a spent scare stamp: line 0xe9, fail 6.
+  2. Flee from the scarer at 2 * detection distance, or from the stored scare point at the fright
+     distance.
+  3. The destination search `0x103acba0`. None: line 0xfa, fail 7.
+  4. A run goal. Refused: line 0x107, fail 0xc. Accepted: complete.
+- **Everything else:** Animal.
+
+#### `CNPC_VSheriffMan::StartTask` `0x103aec70`
+
+- **Task 0x13b:** the land-blast emitter and the AOE over 300 at the origin, then the base.
+- **Task 0x150** (teleport out):
+  1. `m_bTeleporting`.
+  2. The weapon hidden and made non-solid.
+  3. The teleport emitter.
+  4. `Hide`, `EF_NODRAW`, not solid.
+- **Tasks 0x151, 0x155, 0x156, 0x157:** the teleport, centre, ledge(0) and ledge(1) nodes. None
+  stamps lines 0x192, 0x1ac, 0x1b4 and 0x1bc and fails 1. Both paths reach the completion.
+- **Task 0x152:** only with no hint held: the selection, or line 0x19c and fail 1. No completion.
+- **Task 0x153** (teleport in, retail's order):
+  1. Onto the hint.
+  2. The weapon shown and made solid.
+  3. `Unhide`, visible, solid.
+  4. The best melee weapon, `KillTeleportBats`, `MatchOriginAnglesToAnimation("bip01", 1, 1)`.
+  5. `m_bTeleporting = 0`, 0x10, `RecordHealthPercent`.
+  6. The emitter, `m_flLastAttackTime`.
+- **Task 0x154:** `OnFinishTransformation`.
+- **Task 0x158:** a start-solid stand trace stamps line 0x1c8 and fails 1. The body STILL sets up
+  the jump, stamps the attack time and completes; the failure refuses the completion.
+
+#### `CNPC_VTzimisce::StartTask` `0x103ba7c0`
+
+- **Task 0x3:** complete.
+- **Task 0xf:** `m_ePathMode = 1`, then the base.
+- **Tasks 0x89, 0x8a, 0x8b, 0x8e:** as Animal.
+- **Task 0xa7:** face the enemy's last-known position, `SetTurnActivity`.
+- **Tasks 0xbf, 0xc0:** the carry facing `0x103bf440`, activity 0xf2 / 0xf4.
+- **Task 0xc1:** 0xf6 for a heavy body, else 0xf8.
+- **Task 0xc2:** the gib clean-up, complete.
+- **Task 0xc3:**
+  1. `m_ePathMode = 2`.
+  2. A live target: `m_vSavePosition = +0x6674`, then the lead helper `0x102c3b50`, the tolerance
+     pushed twice, complete.
+  3. Otherwise: line 0x722, fail 1.
+- **Tasks 0xc8, 0xc9, 0xca:** as Hengeyokai, with timer `+0x66a8` and predicate `0x103be8e0`.
+- **Task 0xcb:** `AutoMovement`, face at speed -2, stamp, activity 0x102. Complete when finished.
+- **Task 0xcc:**
+  1. No enemy: line 0x78c, fail 6.
+  2. The pounce check `0x103bf660`. Refused: line 0x7ab, fail 0x1a.
+  3. Face, stamp, activity 0x103.
+  4. When finished, complete only if the translated activity (slots 375 → 381 → 376) equals
+     `m_Activity`.
+- **Task 0xcd:** as 0xcc, without the pounce check (no enemy: line 0x7b5), activity 0x104.
+- **Task 0xce:** activity 0x105, the same completion.
+- **Task 0xd1:** `+0x6324 = (ResolveTaskDistance(data) + 150)^2`, complete.
+- **Task 0xd2:** `SetIdealActivity((int)data)`.
+
+#### `CNPC_VVampireBoss::StartTask` `0x103c5ac0`
+
+**Prologue:** `+0x669c = curtime` on EVERY task.
+
+**Tasks:**
+- **0x2f:** face the hint, `SetTurnActivity`.
+- **0x14a:**
+  - No hint: line 0xee, fail 4.
+  - Otherwise: `SetHullSizeSmall(1)`, `Hide`, `EF_NODRAW`, complete.
+- **0x14b:**
+  - No hint: line 0xfd, fail 4.
+  - Otherwise, in order: onto the hint, `SetHullSizeNormal`, `Unhide`, visible, solid,
+    `MatchOriginAnglesToAnimation("bip01")`, 0x10, complete.
+- **0x14c:** slot 618 (virtual), complete.
+- **0x14d:** nothing.
+- **0x14e:**
+  - No monster model: line 0x131, fail 4.
+  - Otherwise: the model, 0x10, render words 0, hull 0 in both words, `SetHullSizeNormal`,
+    complete.
+  - The packet named `m_fEffects` as `+0x168`; it is `+0x19c`.
+- **0x14f:** `SUB_Remove`, complete.
+- **Everything else:** VHuman.
+
+#### `CNPC_VWerewolf::StartTask` `0x103ccda0`
+
+The hint machine. The dispatch splits at 0x154, 0x14d and 0x14a, then uses two jump tables:
+0x14e..0x153 and 0x155..0x161.
+
+**Tasks 2, 0x4e, 0x100, 0x14a–0x14d:**
+- **Task 2:** the Werewolf's own only while `m_pSchedule` is the schedule
+  `0x102cc1f0(0x158)` resolves to. It then sets `m_flWaitFinished = curtime +
+  werewolf_teleport_in_time` ("2.0", object `0x1093d6f0`, read `IsCommand ? 0 : m_fValue`) and
+  does NOT complete. Otherwise the base runs.
+- **Task 0x4e:** `m_flGoalTolerance = ResolveTaskDistance(data) + (+0x66d0) + (+0x66cc) + 5.0`,
+  pushed twice, complete.
+- **Task 0x100:** the Troika body FIRST, then `m_bfAINPCFlags &= ~0x10000`.
+- **Task 0x14a:** with no enemy, or an empty `+0x6720`:
+  1. `SetClosestPlayer`.
+  2. For a live player: `+0x6710` = (template == `Player_Malkavian`),
+     `AddEntityRelationship(player, D_HT, 10)`, `SetEnemy`, `SetTarget`, slot 600.
+  3. Still no enemy: `DevWarning "%s could not find an enemy... oh well!"`.
+  4. Always completes.
+- **Task 0x14b:**
+  1. The activity: zone bit 0 SET gives a random roar. Otherwise the enemy inside the view cone
+     gives 0x100, and outside it the random roar.
+  2. The random roar is `RandomInt(0, 1)`: non-zero gives 0x124, zero gives 0x125.
+  3. `RestartIdealActivity`, then face the enemy. No completion.
+  4. The packet's verdict line had the bit-0 arm backwards.
+- **Task 0x14c** (path out of sight): the `TASK_WAIT_FOR_MOVEMENT` start shape.
+  1. `COND 0x77`: complete.
+  2. A set goal is stopped.
+  3. Goal type 0: `m_bShouldMove = 0`, `TaskFail("Did not path out of player's sight")` (the code
+     is the string's address `0x10661dac`), then clear the goal.
+  4. Goal not active: `m_bShouldMove = 0`, `SetIdealActivity(GetStoppedActivity)`.
+  5. Not at the goal (`0x102f2ea0`): `m_bShouldMove = 1`, `ValidateNavGoal`.
+  6. At the goal: `m_bShouldMove = 0` and the string failure.
+- **Task 0x14d:** nothing.
+
+**Tasks 0x14e–0x153** (teleport and move hints):
+- **0x14e:** `TeleportIn`, complete.
+- **0x14f:** `dt = max(curtime - +0x66ec, 0)`. With `dt >= 1.0` (or unordered), `TeleportOut`,
+  complete. Otherwise fail 0x1a.
+- **0x150:**
+  - No teleport hint: fail 4.
+  - Type 0x3aa9: complete.
+  - Otherwise `SetHintActivity`: running, or fail 0x15.
+- **0x151:**
+  1. No teleport hint: complete.
+  2. Blacklist it for 5 s, remember it (`+0x66b4`), release it, clear it.
+  3. Resolve `lastused.m_strTargetName` with `FindEntityByName` + `RTDynamicCast<CAI_Hint>` and set
+     that hint.
+  4. None: complete. Otherwise `SnapToAnimationPoint`, then `SetHintActivity`: running, or
+     complete.
+- **0x152:** zone 0, blacklist for 5 s unless listed (`0x10366400` also evicts an expired row),
+  clear, `SetHullSizeSmall(1)`, `+0x66ec = curtime`, complete.
+- **0x153:** needs a move hint, else fail 4. Then the hint debug string (discarded), then the
+  hint's groundpoint into `m_vSavePosition`, complete.
+
+**Tasks 0x154–0x161** (move, break and leap hints):
+- **0x154:** needs a move hint, else fail 4. The hint's yaw (slot 219, `+4`), flipped by 180 when
+  motor `+0x28` is set, stored into motor `+0x34`, then `0x102e1e20(-1)`. No completion.
+- **0x155:**
+  1. `SetHintActivity(move)`, else fail 0x15.
+  2. For type 0x3aa0 only: add a 15 s blacklist row when `0x10366490` answers exactly 0. An
+     absent hint (-1) is NOT added. This is the retail bug, reproduced.
+  3. Always keeps running.
+- **0x156:**
+  1. No move hint: complete.
+  2. Release it, remember it (`+0x66c0`), add a 3 s row when its index is 0, clear it.
+  3. Chain by name: `SetMoveHint(next, m_bRandomHint)`.
+  4. None: complete. Otherwise `SetHintActivity`, or `TaskFail(0x15)`, which then FALLS INTO
+     `TaskComplete` (the retail defect).
+- **0x157:** blacklist for 3 s unless listed, zone 0, clear, `SetHullSizeSmall(1)`, complete.
+- **0x158:** `FindBreakHint`, else fail 4. The break hint's groundpoint into `m_vSavePosition`,
+  complete.
+- **0x159:** needs a break hint and `SetHintActivity`, else fail 0x15.
+- **0x15a** (the leap):
+  1. Needs a move hint, else fail 4.
+  2. Jump origin = the origin; jump target = the hint's endpoint; gravity 2.
+  3. Height = `atof(m_iszUserData)` plus a rise term:
+     - `dz > 0`: `dz + 100`.
+     - Otherwise (including `dz == 0` and unordered): `(|dy| + |dx|) * 0.25`.
+  4. Complete.
+- **0x15b** (the landing):
+  1. `CheckStuck(0)`.
+  2. Zone 0, gravity 1.
+  3. A 15 s blacklist row UNCONDITIONALLY.
+  4. Clear the move hint, `+0x66a8 = 0`, complete.
+- **0x15c–0x161:** `RestartIdealActivity` of 0x11c, 0x11d, 0x11f, 0x11e, 0x120 and 0x121, then
+  fail 0x15 unless `m_IdealActivity` took. 0x15c first runs `PositionAtHint`. 0x15f, when the
+  activity took, also runs `AddSolidFlags(4)` and fires `m_OnBeginCrushAnimation` with the enemy.
+
+**Everything else:** Troika.
+
+#### `CNPC_VZombie::StartTask` `0x103dfd80`
+
+Walked in the body's own compare order.
+
+- **Task 0x151:** `m_bShouldMove = 1`, navigator movement activity 0x1014, and
+  `m_flWaitFinished = RandomFloat(min, max) + curtime`. The bounds come from the lunge-distance
+  fields `+0x250` / `+0x254`; the max getter runs first. A wait drawn from DISTANCE fields is what
+  retail does.
+- **Task 0x152:** a closest player with a player record: its slot 425 `BeFedOnByZombie(this)`.
+  Always completes.
+- **Task 0x153:** variant 1/2/3 plays 0x1098 / 0x109b / 0x109e; any other variant keeps
+  `m_Activity`. Fail 0x15 unless it took.
+- **Task 0x150:** the nearest node. None: fail 0x18. Found: a type-4 goal there, whose answer is
+  ignored.
+- **Tasks 0x14f, 0x14e:** `SetIdealActivity` 0x4a / 0x1081.
+- **Task 0x36:** as Dog.
+- **Task 0x14c:** clear the crawl-out flag, `Unhide`, activity 0x1053.
+- **Everything else:** Animal.
+
+#### `CNPC_VFrenzyShadow::StartTask` `0x10375f50` (verified)
+
+The landed body was checked against the packet and the listing. Three corrections were made:
+
+1. **Local ids.** The switch compared raw global ids; it now switches on `GetLocalTaskId`. The
+   PlayerController tests that set raw 0x14a were corrected.
+2. **Attack arguments.** `(0xf18, 1, 1)` is pushed BEFORE the task-0x37 compare (pass R), so every
+   attack task makes the same `+0x5d0` call. The port no longer passes a task-0x37 flag.
+3. **Tolerance.** `0x102d61b0(0)` is `NAI_Hull::Width` of hull 0 (26.0), multiplied by the DOUBLE
+   0.2. The interim store to `+0x6320` comes before slot 418. The landed body used 0.
+
+The other arms matched the listing:
+- the prologue's owner hunger copy;
+- the 0xae/0xaf hunt;
+- the 0x123/0x124 turn with its no-enemy sentinel 1000 and the single clearance try;
+- the grapple.
+
+The packet's verdict line named `+0x6320` for `m_vecHuntPatrolTarget`; the listing writes
+`+0x645c`.
+
+#### What stays unrecovered across the species bodies
+
+At integration `0x103d0ec0` (`FindBreakHint`), `0x10395ce0` and `0x1039ea60` (the two defeat
+latches) and `0x10289ee0` stopped being seams here: family Werewolf19 / Boss19's bodies and the
+base `RestartIdealActivityId` answer them.
+
+**Unrecovered:**
+- The weapon's maximum range (`+0x8c0`) has no port carrier; the 0x9f tolerances drop that term.
+- Motor words `+0x18`, `+0x1c`, `+0x28`, `+0x2c` and `+0x38` (clamp centre, clamp range, facing
+  flip, yaw-speed override, yaw speed) have no port carrier.
+- The navigator:
+  - `0x102f2ea0` (at-goal) is a seam that answers false.
+  - `0x102edae0` (the node search) answers false.
+  - `0x102ee620` / `0x102ee6a0` both read the mover's single goal latch.
+- The player's character template (`GetCharTemplate` against `Player_Malkavian`) is a seam that
+  answers not-Malkavian.
+- The template AOE's third argument (`template+0xcc`) is dropped. The port's
+  `CausePlayerAOEDamage` takes two arguments.
+- These calls are counted seams: MingXiao `0x1039a750` and `0x10397f70`; the Tentacle helpers
+  `0x1039f310` and `0x1039ef10`; the ManBat helpers; the Hengeyokai helpers; the Bach
+  holy light and weapon `+0x518` / `+0x4f0`.
+- The ManBat throw's bone and float cells: `ThrowModel` takes only (model, parent).
+
+## Story 8, family RunTask19 — slot 444 `RunTask`: base `0x10288780`, Troika `0x102aacf0`, the species overrides (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L05, integrated as `8cc9e23a` (rebased onto Damage19 `c9977c23` and Select19 `1769381c`)._
+
+Walked from the listings (`vtmb_asm`) with the pass-R packet
+(`families-19-29/RunTask19-READING.md`) and its chunk walks. Every body answers nothing useful;
+the task's status is what it writes (`TaskComplete` `0x10273e80` = `fTaskStatus 4`, `TaskFail`
+slot 448 = `m_bShouldMove 0`, `+0x5c50`, `COND_TASK_FAILED`). A body that returns without either
+leaves the task **running**. Only `TaskFail` sites stamp the `+0x1b44`/`+0x1b48` file/line trace;
+completions never do. Port: `ElysiumNpcBaseRunTask19.cpp`, `ElysiumNpcRunTask19.cpp`,
+`ElysiumNpcRunTask19Species.cpp`.
+
+Shared vocabulary: `0x102e0b40` writes `motor+0x2c = -1.0` (the yaw clock); `0x102e1c10(yaw, speed)`
+stores the ideal yaw `motor+0x34` (flipped 180 under the `+0x28` latch; direct store when
+`+0x1c == 180.0`), stores `speed` at `+0x38` unless it is -1.0 or -2.0, and ends in `UpdateYaw(-1)`
+`0x102e1e20`; `0x102e20b0(pos, speed)` is `0x102e1c10(yaw-to(pos), speed)`. `0x102ee620` is the
+path's goal type and `0x102ee680` is exactly its non-zero test; `0x102ee6a0` is "the path has a
+waypoint". `0x102dfed0` answers the enemy memory's last-known position, `vec3_origin` on a miss.
+
+### `CAI_BaseNPC::RunTask` `0x10288780`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L05)._
+
+Dispatch `id - 2 <= 0xaf` through byte table `0x10289794` into `0x10289724`; anything else, and
+every in-range id the byte table sends there, is the default `0x102896f5`.
+
+1. **2 / 0x67** (`0x10288bb6`): complete when `!(curtime < m_flWaitFinished)`.
+2. **4 / 0xb0 / 0xb1** (`0x10288bc1`): `0x102e0b40`; LKP of slot 167 `GetEnemy`; when slot 364
+   `FInAimCone(lkp)` refuses, `0x102e20b0(lkp, -2.0)`; then the wait test.
+3. **5** (`0x10288b7b`): spawnflag 0x400 completes; else `UTIL_FindClientInPVS(edict)` `0x101d1800`
+   completes on non-zero, runs otherwise.
+4. **0xb** (`0x10288c43`): no live `m_hTargetEnt` → `TaskFail(1)` line 0xc09. `range = slot 418(data)`;
+   `d = |goal - GetOrigin()|2D`. When `d < range`, or when `|goal - target|3D > range * 0.5`,
+   `d` becomes the 2-D distance to the target and the goal is re-aimed at it (`0x102ee220`). Then
+   `d < range` → complete + `ClearGoal` `0x102ee270`; else `act = slot 571(d)`, navigator movement
+   activity `0x102ee250(act)`, `SetIdealActivity(act)`.
+5. **0x1f / 0x68 / 0x76 / 0x77**: the epilogue `0x10289718` — running.
+6. **0x24 / 0x27** (`0x10289614`): running while `curtime <= m_flWaitFinished` and the goal type is
+   set; else `m_bShouldMove (+0x1a40) = 0`, complete, `ClearGoal`.
+7. **0x25 / 0x26** (`0x10289599`): running while `slot 418(data) < |GetOrigin() - goal|3D`; else the
+   same stop/complete/clear.
+8. **0x2a** (`0x102891cf`): complete on slot 251 `IsActivityFinished`.
+9. **0x2b / 0x2c / 0x2f / 0x31 / 0x32 / 0x66** (`0x10288b4c`) and **0x6a / 0x6b** (`0x102887ad`):
+   `UpdateYaw(-1)`; complete on `FacingIdeal` `0x10278c80`.
+10. **0x2d** (`0x10288a18`): player = engine `PEntityOfEntIndex(1)` else `(0)`, `CBaseEntity::Instance`;
+    none → `TaskFail(0x17)` line 0xbc7. Else `0x102e0b40`, `0x102e20b0(player, -2.0)`, slot 572
+    `SetTurnActivity`; complete only when `curtime > m_flWaitFinished` (strict) and
+    `DeltaIdealYaw` `0x102e1f90` `< 10.0` (`_DAT_1044e664`).
+11. **0x2e** (`0x102889b5`): `0x102e0b40`; `0x102e20b0(lkp, -1.0)`; complete on `FacingIdeal`.
+12. **0x30** (`0x1028886f`): no `m_pHintNode` (`+0x5ddc`) → `TaskFail(4)` line 0xb5c and retail then
+    faults reading the null hint's `m_hHintOwner`. A hint owned by someone else →
+    `DevMsg("Hint node (%s) being used by non-owner!\n")`. Complete on `IsActivityFinished`.
+13. **0x34..0x37 / 0x3e / 0x3f** (`0x102891f4`): `AutoMovement`, `0x102e0b40`, LKP; for id 0x34 or 0x38
+    (0x38 never reaches this arm) with capability bit 0x20000000 and `FInAimCone(lkp)`, hold the
+    current motor yaw `0x102e1c10(motor+0x34, -2.0)`; else `0x102e20b0(lkp, -2.0)`. Complete on
+    `IsActivityFinished`.
+14. **0x38 / 0x3d** (`0x102890f3`): `AutoMovement`; for 0x38 also stop and aim at `m_hEnemy`'s LKP
+    (-2.0). On `IsActivityFinished`: with an active weapon `m_bInReload (+0x898) = 1`, weapon slot 322,
+    `ClearCondition(0x40)`, `ClearCondition(0x41)`, complete; with none, complete.
+15. **0x39..0x3c / 0x52 / 0x53** (`0x102891c8`): `AutoMovement`, then 0x2a's test.
+16. **0x4b** (`0x102889a2`): complete when `m_nSequence (+0x6f0) == m_nIdealSequence (+0x5ccc)`.
+17. **0x54 / 0x55 / 0x56** (`0x102887c6`): the face target is `m_hTargetEnt` for 0x56 and slot 167
+    otherwise; when it exists `0x102e0b40` and `0x102e1c10(VecToYaw(target - GetOrigin()), -2.0)`.
+    `AutoMovement`; complete on `IsActivityFinished`.
+18. **0x5f** (`0x10288fc4`): on `IsActivityFinished` with `m_flCycle >= 1.0`: `m_lifeState = 2`,
+    `ThinkSet(NULL)`, `m_flPlaybackRate = 0`, `UTIL_SetSize` to `(-4,-4,0)/(4,4,1)` or, when
+    `0x10279420` answers true, to the collision mins and `(maxs.x, maxs.y, mins.z + 1)`; then
+    `SUB_StartFadeOut` `0x102695d0` when slot 552 `ShouldFadeOnDeath`, else
+    `CSoundEnt::InsertSound(0x20, GetOrigin(), 0x180, 30.0)`. Never completes.
+19. **0x60** (`0x102892aa`): a live cine whose `IsTimeToStart` `0x101a7540` answers yes: complete,
+    `StartScript` `0x101a81a0`, the (re-resolved) director's slot 584 `StartSequence(this, m_iszPlay,
+    true)`, `ClearSchedule` when `m_bSequenceFinished`, `m_flPlaybackRate = 1.0`. A live cine not yet
+    due runs. A dead handle → `DevMsg("Cine died!\n")`, complete.
+20. **0x62** (`0x10289439`): `AutoMovement`; on `m_bSequenceFinished (+0x65c)`: `SequenceDone`
+    `0x101a8460` on a live cine and complete; with none, complete.
+21. **0x63** (`0x102894e2`): when the sequence finished, or the cine's `m_hNextCine (+0x5f94)` is live,
+    `Finish` `0x101a8640` (null director on a dead handle). Retail reads `+0x5f94` of a null director.
+22. **0x69** (`0x102888d4`): in `NAV_JUMP`: on the ground → `NAV_GROUND`; airborne with speed
+    `> 0.01` → running; else `NAV_GROUND` and `TaskFail(0x1c)` line 0xb81 — and the arm goes on.
+    Unless `NAV_CLIMB`: `SetIdealActivity(0x1027a6c0())`, `m_bShouldMove = 0`, `TaskComplete` (which
+    a raised failure refuses).
+23. **0x6e / 0x6f** (`0x10288f43`): while `(data == 0 || curtime - timeCurTaskStarted <= data)` and the
+    goal type is set: a waypoint → slot 528 `ValidateNavGoal`; none → `m_bShouldMove = 0`,
+    `SetIdealActivity(GetStoppedActivity)`. Otherwise stop, complete, `ClearGoal`.
+24. **0x71** (`0x1028964b`): on `IsActivityFinished`, `m_hTargetEnt` cast to `CBaseCombatWeapon` and
+    `0x102521f0` (its owner) non-null → `TaskFail(2)` line 0xd35; else complete.
+25. **0x72** (`0x10288e80`): no target → `TaskFail(3)` line 0xc3a; target slot 97 owner set →
+    `TaskFail(2)` line 0xc30; goal type set → running; else complete + `ClearGoal`.
+26. **0x74** (`0x102896d7`): complete on `FL_ONGROUND`.
+27. **default** (`0x102896f5`): `DevMsg("No RunTask entry for %s\n", slot 449 TaskName(id))`,
+    **complete** (`0x10289713`).
+
+**Integration notes (L05, pass I).**
+- `_DAT_1049a17c` is the `.rdata` float **190.0** (`0x433e0000`, read from the image; no writer).
+  Slot 571 (`0x10289ce0`) answers ACT_WALK only on an ordered `distance < 190.0`
+  (`10289cec TEST AH,0x5` / `10289cf4 JNP`); at or beyond it, and on NaN, ACT_RUN.
+- The wait gates (`0x10288c1d` / `0x10288c25 AND 0x100`), the timed walk (`0x10289625 AND 0x4100`),
+  the within-distance walk (`0x102895fd AND 0x100`), the death cycle (`0x10288fe4 AND 0x100`) and
+  the 0x6e timer (`0x10288f66 AND 0x4100`) all keep the task RUNNING on an unordered compare.
+- `0x102dfed0` is called with a NULL enemy too (arms 1, 10, 12, 13): the record walk answers the
+  last position-only ("danger") record before `vec3_origin`.
+- 0x2d with no player faces worldspawn (`PEntityOfEntIndex(0)`, `0x10288a7e..0x10288a8e`); the
+  `TaskFail(0x17)` needs the world edict to have no entity.
+- 0x72's slot 97 (`+0x184`) answers the RESOLVED owner (`0x10288eb4`).
+- `0x102e20b0` -> `0x102e2750` is `JMP [outer vtbl+0x80c]`, slot 515 `CalcIdealYaw` (`0x10274b30`),
+  whose answer is `VecToYaw` (`0x101d2c70`) in `[0, 360)`. `0x102e2020` is `0x102e2750` then the
+  `+0x28` flip and the `+0x1c == 180` direct store. `0x102e1cf0` stores `(motor+0x10)->vfunc0()` into
+  `motor+0x38` (the recalculated yaw speed).
+- `m_lifeState` (`+0x200`) is one port word, `AnimEventLifeStateWord` (family Misc19's).
+
+**Unrecovered:** `0x10279420`'s predicate (four corner traces, mask `0x2400b`, not walked);
+`0x102ee220`'s re-aim (no port navigator goal); the vfunc behind `0x102e1cf0`.
+
+### `CAI_BaseNPCTroika::RunTask` `0x102aacf0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L05)._
+
+Dispatch `id - 2 <= 0x147` through byte table `0x102ac844` into the 57-entry table `0x102ac760`;
+index 0x38 and every out-of-range id tail-call `CAI_BaseNPC::RunTask`. Arms by index:
+
+- **0x00** `0x102aad61` (2, 0x67, 0x68): `0x102aab70` (with `m_bfAINPCFlags2 & 0x10` aim at the
+  enemy's LKP, else with `& 0x20` at `m_hTargetEnt`, each only outside the aim cone, -2.0), then the base.
+- **0x01** `0x102ab659` (4, 0xb0, 0xb1): aim at the live shoot-target override, else the enemy's LKP,
+  else `TaskFail(6)` line 0x407c **and still aim at the uninitialised point**; steer unless in the aim
+  cone (-2.0); the wait test.
+- **0x02** `0x102aad7e` (5 `TASK_WAIT_PVS`): spawnflag 0x400 or `ShouldThinkFrequently` completes;
+  else `0x101d1a90(m_hClosestPlayer, this)`: false → running; true → slot 614, `m_flLastThink` and
+  the four `+0x6254..+0x6260` stamps = curtime, complete.
+- **0x03** `0x102aae43` (0x2b, 0x31): `SetTurnActivity` unless `m_afMemory & 0x2000`, then the base.
+- **0x04** `0x102aae61` (0x2e): the turn test; aim at the override or the enemy's LKP (-1.0); complete
+  on `FacingIdeal`.
+- **0x05** `0x102ab0a9` (0x34): `AutoMovement`, aim (-2.0). With `m_iBurstFireCount > 0`: no weapon →
+  complete (and retail then reads the null weapon); next attack time `0x10252450` still ahead →
+  running; else decrement, `0x102aaa60` (the hint idle re-arm; stamps `m_flLastAttackTime`) true →
+  running, false → complete. With no burst, complete on the activity.
+- **0x06** `0x102ab1e5` (0x35, 0x3e, 0x3f): `AutoMovement`, aim (-2.0), complete on the activity.
+- **0x07** `0x102ab2b2` (0x36, 0x37, 0x8c, 0x9a): `AutoMovement`; with an enemy and slot 591, aim at
+  its origin (-2.0); complete on the activity.
+- **0x08** `0x102aad1f` (0x4b): complete on the ideal sequence, else the wait test.
+- **0x09** `0x102ab4c5` (0x54..0x56): face `m_hTargetEnt` (0x56; a stale handle is a null deref) or
+  the override or the enemy's LKP with `0x102e1c10(VecToYaw, -2.0)`; `AutoMovement`; the activity.
+- **0x0a** `0x102abb90` (0x5f, 0xe9, 0xeb) and **0x28** `0x102abb89` (0xea, `BloodExplode` first):
+  gate `(IsActivityFinished && m_flCycle >= 1.0) || m_IdealActivity == 1`; credit
+  `m_hClosestPlayer` (self for 0xe9/0x5f); `m_lifeState` 1 → 0; `Die(credit, 0, 0)`; 0xe9/0xea slot
+  402; 0xeb with non-zero data slot 77. Never completes.
+- **0x0b** `0x102aaf2e` (0x6e): timeout (`data != 0 && data < elapsed`) or no goal type → stop,
+  complete, `ClearGoal`; no waypoint → stop, stopped activity, **complete**; `0x102f2ea0` not arrived
+  → slot 528; arrived → stop, complete.
+- **0x0c / 0x0d** (0x7a / 0x7b): `0x102aa860` on `m_sppPatrolPath` / `m_sppPatrolPathHunt`.
+- **0x0e** `0x102ab83c` (0x92, 0x95, 0x98, 0xe6, 0xec, 0xee, 0xef, 0xf0, 0x10f, 0x110, 0x113):
+  `AutoMovement`, the activity. **0x0f** `0x102ab2a3` (0x93, 0xe0): the activity.
+- **0x10** `0x102ac4ef` (0x94): unless `NAV_JUMP` on the ground: `0x102a0870`; the wall probe
+  `0x102a0490` → `ACT 0x91` (linked sequence or restart), yaw from the wall normal, `0x102c4e30`,
+  `m_KnockbackVelocity = normal * 100`, `SetSchedule(0x14e)`; motor `+0x30 = 0`; running while
+  `vz >= 0` or `0x102c4eb0` refuses. Landing: linked sequence `0x10345480`, motor slot 8,
+  `NAV_GROUND`, `m_bJumping = 0`, complete, `ACT 0x90`.
+- **0x11** `0x102abea5` (0x96): `SetSchedule(0x14f)` once `m_fKnockbackWallHitFallTime` passes.
+- **0x12** `0x102abedb` (0x97): the playing sequence's activity 0x91 finished → `ACT 0x92`; the same
+  airborne test; landing → `ACT 0x93` then complete.
+- **0x13** `0x102ac2ed` (0x99): `AutoMovement`, `Bip01 Spine2`; unfinished → stamp the bone time and
+  position; finished → `0x102c4e80`, a `CVDmg_t` (dice 1, to-hit 1, source this), damage info
+  `(this, this, 1.0, 0, 0, dmg, -1)` with force `normalize(last - bone) * (last time - curtime) *
+  50000`, stat list 0 `SetBaseToStatValue(0xf, 0x11)`, slot 144, slot 403, complete.
+- **0x14 / 0x16** (0x9c / 0x9e): complete on the activity, else `AutoMovement`. **0x15** (0x9d):
+  finished → drain `m_QueuedBurnDamage` (take record 0, swap the last in), when alive stop and fade
+  (2.0) every live `m_hBodyFireParticles[18]` whose `+0x484` is set, slot 616, complete.
+- **0x17** `0x102ab900` (0xa7, 0x11d, 0x12e), **0x2a** `0x102ab63b` (0xf7): the turn test,
+  `UpdateYaw(-1)`, `FacingIdeal`. **0x18** (0xb2): the same after `TaskFail(0x22)` line 0x4105 with
+  no interesting place.
+- **0x19** (0xb3): no patrol interest place → complete; else turn, `FacingIdeal` → `+0x6300 = +0x659c
+  = 0`, complete. **0x1a** (0xb4): no place → `TaskFail(0x23)` line 0x4141; `0x102aa210` done → the
+  holster (`place+0x571`), `LeaveInterestingPlace(1, "…(RunTask-WaitFinished)")`, complete. **0x1b**
+  (0xb5): the patrol twin, firing `m_OnInterestingPlaceLeft` when arrived, `0x102da600`, clearing the
+  place words.
+- **0x1c** (0xb6, 0xb7): finished → navigator movement activity `TranslateActivity(9)`, complete.
+  **0x1d** (0xb8): finished → clear flag 0x20000000, `MoveToBoneOriginAngles("Bip01")`, complete.
+- **0x1e** (0xb9): `0x102c1400` activity → `SetActivity` + `UpdateYaw(-1)`; -1 → complete and
+  `ClearCondition(0x6f)`. **0x1f** (0xba, 0xbb): slot 588, the wait test. **0x20** (0xbc, 0xbd): with
+  a live closest player within 128 and `COND 0x5a`, on a finished activity restart `0x10f7` **when no
+  weighted sequence exists** else slot 588; otherwise slot 588; the wait test.
+- **0x21** (0xdd), **0x25** (0xe2, 0x149, after `AutoMovement`): the activity. **0x22** (0xde):
+  finished and ideal 0x1068 → complete, flags `&= 0xbbf5ffff`; finished otherwise → restart 0x1068.
+  **0x23** (0xdf): `Die(0,0,0)`. **0x24 / 0x26** (0xe1 / 0xe3): `SetActivity(ftol(data))` unless
+  `m_bLastDisciplineResist` and finished → complete. **0x27** (0xe7): the ideal sequence.
+  **0x29** (0xed): the epilogue — running.
+- **0x2b** (0xf8..0xff, 0x148): `UpdateYaw(-1)`; when the wait passed or the activity finished and
+  `FacingIdeal`, clear 0x08000000, complete. **0x2c** (0x107..0x109): finished → ideal 0xf1d →
+  `SetIdealActivity(0x1052)`; else clear 0x4000, complete. **0x2d** (0x10a..0x10c): `0x102aab70`,
+  `AutoMovement`, the activity. **0x2e** (0x10d): `AutoMovement`; override → aim; cover object is
+  the enemy → LKP; else **complete and aim at an uninitialised point**; `FacingIdeal` → complete.
+- **0x2f / 0x30** (0x116 / 0x117): finished → complete, clear 0x40000. **0x31** (0x118): ideal is the
+  hint's `0x102a13d0` → `0x102a1620`; is `0x102a1510` with non-zero data → `0x102a15c0`; else
+  complete, clear 0x40000.
+- **0x32** (0x11b, 0x11c, 0x123): `AutoMovement`, aim at the enemy (-1.0), past the wait →
+  `m_flDesiredMoveYaw = 0`, complete. **0x33** (0x122, 0x124): the same aim; finished and inside the
+  wait without `COND 0xe`: `ACT 0x1121`, else 9, else `TaskFail(0x15)` line 0x4255, restart it;
+  otherwise the yaw clear and complete.
+- **0x34** (0x128): the 0x01 aim (`TaskFail(6)` line 0x4304); past the wait, the activity.
+  **0x35** (0x137): `AutoMovement`, aim at the enemy (-1.0), the activity. **0x36** (0x139, 0x13b,
+  0x13c): `UpdateYaw(-1)`, the activity. **0x37** (0x13a): unless landed: yaw from the local velocity
+  (-1.0), motor `+0x30 = 0`, running while `vz >= 0` or `0x102c4eb0` refuses; landing: motor slot 8,
+  `NAV_GROUND`, `m_bJumping = 0`, complete.
+
+**Integration notes (L05, pass I).**
+- 0x7a / 0x7b call lane Script19's `0x102aa860` port (`IssuePatrolMoveRun`) on `+0x658c` / `+0x6594`.
+- 0xb4: inside `0x102b53d0(this, 1, ...)`, with `+0x62e8` arrived, `0x102b54f1..0x102b5500` fire the
+  NPC's `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator the place) before `0x102da600(place, this,
+  1, fired)`.
+- 0xb5: `0x102da600(place, this, 0, arrived)` (`0x102abad3..0x102abae2`, EBX = 0): with its second
+  argument 0 it only fires the place's `OnNPCLeft` (`+0x468`) when arrived; no claimant removal.
+- The unordered compares keep running at `0x102aad3c` (the shared wait), `0x102abead` (0x96),
+  `0x102abbb1` (the death cycle: NaN is not finished) and `0x102ab19c TEST AH,0x41` (the burst's
+  next-attack gate); 0xbc/0xbd's player distance (`0x102ab3a0..0x102ab3ab`) takes the slot-588 path
+  on greater OR unordered.
+- `0x102c1400` answers -1 only when `IsInDialog()` (`0x102c1170`) is false; inside a dialogue it runs
+  the dialogue upkeep and answers `m_Activity` or 0xf1 / 1 (the dialogue family's body).
+
+**Unrecovered:** `0x102f2ea0`'s tolerance source; `0x102a0870`, `0x102a0490`'s traces;
+`0x103454c0`/`0x10345480`'s studio link words; `0x102c4e80`; the rest of `0x102b53d0` (its two
+sounds, the `+0x14b8`/`+0x14bc` bit clears, `0x102ae310`); `place+0x571`'s holster slot 315.
+
+### The species `RunTask` overrides (slot 444) — `0x1035f940` … `0x103cdfb0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L05)._
+
+- **`0x1035f940` CNPC_VAnimal** (Rat, Scurrying): 0x36/0x37 `AutoMovement`, face LKP (-2.0),
+  activity; 0x89/0x8a the same, completing also when `curtime - m_flLastAttackTime > data`;
+  0x8b/0x8e `AutoMovement`, activity; else Troika.
+- **`0x10374a20` CNPC_VDog**: tasks 2/0x67 in `m_NPCState == 3` aim at `UTIL_GetLocalPlayer`'s origin
+  (-2.0); always `CNPC_VAnimal::RunTask`.
+- **`0x103e01d0` CNPC_VZombie**: 0x14c/0x14f/0x150 activity; 0x14e activity → complete,
+  `AddMiscFlag(0x80000)`, non-virtual `CreateCorpse(&m_vecDeathForceVector, this+0x668c)`; 0x151
+  wait passed or no goal → stop, complete, `ClearGoal`; 0x153 activity, else (AI type 7) aim the motor
+  at the closest player (`0x102e2020` + `UpdateYaw(-1)`); else `CNPC_VAnimal`.
+- **`0x10384ab0` CNPC_VHuman** (28 human classes): 0x89/0x8a as Animal; 0x8b the melee swing (enemy
+  and its `+0x9c` combat view, `GetMeleeDiceRolls`; ideal 0x1157 → `IsMeleeSwingOver`, else
+  `m_flCycle` against 0.5 with a roll (band `0x103498b0 == 0` arms completion) or 1.0 without, then
+  the activity; finish → 0x1155 has a sequence and armed → complete, else `TaskFail(0x21)` line 0x1da);
+  0x8d no enemy → complete, else wait for every event of the enemy's sequence; 0x8e..0x91 face when
+  the enemy has a combat view, complete on the activity or `m_flNextAttack` passed; else Troika.
+- **`0x103793e0` CNPC_VGargoyle**: 0x31 turn, `UpdateYaw(-1)`, `FacingIdeal`; 0x12f activity; else Human.
+- **`0x1037b9f0` CNPC_VGhoulCroucher**: 0x14a activity; 0x14b activity → `m_bUnawareExited = 1`; else Human.
+- **`0x103b38a0` CNPC_VTaxiDriver**: 0xb9 `0x102c1400 == -1` → complete, `ClearCondition(0x6f)`,
+  `m_bFirstThink = 0`, `SetActivity(1)`; else Human.
+- **`0x103c5f40` CNPC_VVampireBoss**: 0x14d `WaitForTransformation`; else Human.
+- **`0x103af780` CNPC_VSheriffMan**: 0x154 swallowed (running); else VampireBoss.
+- **`0x1035d8b0` CNPC_VAndreiBlood**: 0x150 `FacePlayerAdvance`; 0x151 `m_takedamage = 0` at cycle
+  0.5, activity; 0x152 the unhide (slot 67, `m_takedamage 2`, counters reset), face, activity; 0x154
+  activity → `m_bForceTeleport`, complete; 0x156 force, hit cap or 5 s since the wait start → complete;
+  else VampireBoss.
+- **`0x103612e0` CNPC_VAsianVampire**: 0x13a VampireBoss then restart 0x2d when not in it and
+  `vz <= 250`; 0x150 `SetupJump(m_pHintNode)`, `m_bPathBlocked = 0`, complete; 0x151/0x152 running.
+- **`0x1036bfc0` CNPC_VChangBros**: `StoreArenaCenter` first; 0x8b the Human swing variant (line
+  0x295); 0x13a as AsianVampire at 500; 0x150/0x151/0x153/0x15d `UpdateYaw`, `AutoMovement`,
+  activity; 0x156 until `m_fEnergyChargeTime`; 0x157 the energy ball at cycle 0.591; 0x15a the other
+  brother's `ReadyForUnited` (none → `TaskFail(1)` line 0x255); 0x15b the emitters and the centre
+  emitter at arena centre + 50; 0x15c the united time (none → `TaskFail(1)` line 0x26b).
+- **`0x103a8990` CNPC_VSabbatLeader**: prologue `andrei_force_awaken` → `StartTransformation` with a
+  player within 500 (2-D); 0x15c the dive-in (yaw from velocity, splash emitters and wav at
+  `_DAT_1093c33c`, landing gravity 1, `NAV_GROUND`, slot 66, complete); 0x139 the retreat wav then
+  VampireBoss; 0x13a landing stamps and the jump steer, then VampireBoss; 0x13c the normalized
+  100-unit velocity toward the player (face speed 50), then VampireBoss; 0xbc/0xbd running in
+  dialogue; 0x15d the emerge (slot 67, `m_fEffects &= ~0x20`, not-solid cleared, complete); 0x15e
+  the warning time; 0x36/0x37/0x9a/0x160 face the enemy at speed 10, activity; 0x161/0x163
+  activity; 0x162 one second after the task start.
+- **`0x1038d130` CNPC_VManBat** (falls to `CAI_BaseNPC::RunTask` DIRECT): 0x14a aims at the SUM of
+  its origin and the fly node's, activity → complete + flap; 0x14b arrived → teleport onto the node
+  when the descrambled mode equals `fold(0xfa0b0695)`, clear the node, complete; 0x14c on the
+  ground → stop, leave flight, complete, `ACT 0x1171`, `fall.wav`; 0x14d aim along velocity; 0x150
+  land; 0x152/0x155/0x157 on arrival; 0x156 release the carried body; 0x158 flap; 0x159/0x160 the
+  fly-by landing onto a live target (`TaskFail(1)` without the file trace otherwise); 0x15a the
+  melee weapon attack (`TaskFail(0x1f)` line 0x4e1); 0x15b the spotlight kill; 0x15c the next
+  script node (`TaskFail(4)` on a missing hint); 0x161 the throw (`ThrowModel`, target `Kill`); 0x162
+  the fly-by sound; 0x163 the coast timer.
+- **`0x10393930` CNPC_VMingXiao** / **`0x1039d750` CNPC_VMingXiaoTentacle**: the melee/throw arms
+  (weapon switch back, throw release, attack timers from `0x103983d0`), the 0x8e event walk, the
+  tentacle's flex blend `F%02d` over `[0, 4]` s and its type-19000 shoot-hint walk from the shared
+  cursor `DAT_1093bd34`.
+- **`0x103bb1e0` CNPC_VTzimisce** / **`0x10380cb0` CNPC_VHengeyokai**: the claw/grab arms
+  (`0x103be8e0` / `0x103822a0`, `COND 0x1b`, `m_flTaskFailTimer`), the translated-activity
+  completions (slots 375 → 381 → 376), the hint-usable test `TaskFail(0x1a)` line 0x911.
+- **`0x103c3870` CNPC_VTzimisceRunner**: 0x122..0x124 `AutoMovement`, stop + face the enemy (-1.0),
+  past the wait `m_flDesiredMoveYaw = 0`, complete.
+- **`0x103cdfb0` CNPC_VWerewolf**: the hint movers (0x14b..0x14d), the anim-point snaps, the fake hull,
+  `TeleportOut` + `SetSchedule(0x158)` on activity 0x10b, `m_lifeState 2` + `OnFinishCrushAnimation`
+  (0x15f); its `TaskFail("Did not path out of player's sight")` is the SDK's text fail code (the
+  string's address as the reason), the port's `TaskFailText`. `DAT_1093f9a4` is ConVar
+  `werewolf_force_teleport` (`0x1093f9a0`).
+
+**Integration notes (L05, pass I).**
+- `0x103498b0`: margin = roll `+4 - +0xc - +8`, then four `FCOMP` / `TEST AH,0x41` / `JP` rungs
+  against `_DAT_10739fa0..fac` -- the `rules.txt` defender thresholds (`ClassifyDefender`'s ladder,
+  one lower): an ordered `margin <= T` answers 0..3, else 4.
+- `GetMeleeDiceRolls` (`0x10345980`) searches the ATTACKER's array (`+0xa88`, filled by
+  `CalcAndStoreMeleeDiceRolls 0x10346380` keyed by the defender); Human and ChangBros 0x8b ask the
+  enemy for its swing at this NPC.
+- `_DAT_1093c33c` = 33.0 / 60.0 = 0.55f (static initialiser `0x103a5870`, `0x104c3cf4` / `0x104c3cf8`).
+- `0x1039aa20` / `0x10383470`: when `+0x1560 + 2.0 < curtime` (ordered), the type-0 stat list
+  `Set(0xf, 0)`, Hengeyokai also `+0x6694 = 1`, then `TaskComplete(0)`. `0x10398db0` is the tentacle
+  GRAB (`phys_animlink`, mode 3). `0x1038e720` is lane Script19's wing selector.
+- `0x1039ee20` is `IsAreaClear(pos, 0x202400b, mins, maxs)` over hull 15 with X and Y doubled
+  (Z not); Tentacle 0x150's goal is type 4, activity 0x13, tolerance -1.0, `SetGoal(goal, 0)`.
+- ChangBros 0x15b creates `chang_center_emitter` through `0x100fbc90`, the named-emitter create.
+- SabbatLeader 0x15e / 0x162 complete only on an ordered `>` (`0x103a906b AND 0x4100`).
+
+**Unrecovered:** `IsMeleeSwingOver` / the event walk inputs (no studio data at the kernel tier);
+`0x1038c170`, `0x1038fe30`; the goal target word `DAT_1093bd30`; `m_iWasOccluded`'s producer beyond
+Bach's camper pass.
+
+## Story 8, family Select19 — slots 437 / 438: `0x1028a260`, `0x1028a380`, `0x102af660`, the species selectors (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L06, integrated as `abfae21c`._
+
+The schedule selectors: slot 437 `PreSelectSchedule` and slot 438 `SelectSchedule`, the base
+`CAI_BaseNPC` body, the `CAI_BaseNPCTroika` pair, and the species overrides. Read off the listing
+(`vtmb_asm`) and the decompile; schedule names are each class's own corpus registrations
+(`Content/ElysiumCorpus/ai/schedules/<unit>/space.json`).
+
+Conventions below: "trace L" is the `+0x1b30`/`+0x1b34` `__FILE__`/`__LINE__` stamp (ABSENT in the
+port; recorded through `RecordScheduleEvent`); "sel N" is the `+0x1b2c` selector id
+(`SelectScheduleSelector`, carried as a word — the agreed visual-only modernization). `Has(c)` is
+`HasCondition 0x10269aa0`, `Int(c)` is `HasInterruptCondition 0x10269d30` (needs the bit in the
+running schedule's mask). States are retail's `m_NPCState` numbers.
+
+Slot 437's Troika body `0x102ae920` is walked where the oracle already held it: `conditions-and-states.md`
+§ "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`".
+
+### `GetNewSchedule` `0x1028a260` — the selector pair (no verdict row)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+`+0x1b2c = 0`; slot 437; when it answers 0, slot 438 as a tail jump. `GetNewSchedule 0x102814d0`
+calls it, and three Select19 bodies re-enter through it (base case 2, Troika case 2, Troika
+PreSelect state 2 / 0xe). Port: `FElysiumNpcBase::SelectNewScheduleRetail`.
+
+**Unrecovered:** nothing named by the walk.
+
+### `0x1028a380` `CAI_BaseNPC::SelectSchedule`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+sel 1, then `switch (m_NPCState)`, table `0x1028a9f4`.
+
+- **1 IDLE**: any of HEAR_DANGER/COMBAT/WORLD/BULLET_IMPACT/PLAYER → 6 `ALERT_FACE` (0xe5b);
+  GIVE_WAY → `0x38` (0xe60); navigator path type (`0x102ee620`) 0 → 1 `IDLE_STAND` (0xe65);
+  LIGHT_DAMAGE with a sequence for ACT 0x49 → clear `m_bCondTookDamage`, `0x14 SMALL_FLINCH`
+  (0xe6b); else 2 `IDLE_WALK` (0xe70).
+- **2 COMBAT**: NEW_ENEMY → 5 `WAKE_ANGRY`; ENEMY_DEAD → `SetEnemy(NULL)`, `ChooseEnemy`: chosen →
+  clear 0x58 and re-enter `0x1028a260`; not → `SetState(3)` and re-enter; damage (0x4c/0x4d) with
+  `m_afMemory & 0x40` clear and an ACT 0x49 sequence → `0x14`; `IRelationType(GetEnemy()) == D_FR`
+  → `0xd FEAR_FACE` unless SEE_ENEMY/0x4c/0x4d, then `FearSound` and `0x1b RUN_FROM_ENEMY`; no
+  SEE_ENEMY → `0xb COMBAT_FACE` or, occluded, `0xf CHASE_ENEMY`; then 0x5f → `0x15`, 0x4f → `0x21`,
+  0x50 → `0x22`, 0x51 → `0x1f`, 0x52 → `0x20`, 0x61 → `0xb`, and neither 0x4f nor 0x51 → `0xf`
+  (always, the ladder already answered both); otherwise DevWarning "No suitable combat schedule!".
+- **3 ALERT**: ENEMY_DEAD with ACT 0x61 → 8 `ALERT_SCAN`; no damage → hear family 6, else 9
+  `ALERT_STAND`; damage → clear `m_bCondTookDamage`; `|DeltaIdealYaw| < (1.0 - m_flFieldOfView) *
+  60.0` → `0x19 TAKE_COVER_FROM_ORIGIN`, else an ACT 0x49 sequence → 7, else 6.
+- **4 SCRIPT**: live `m_hCine` → `0x2e AISCRIPT`; else DevWarning "Script failed for %s",
+  `CineCleanup`, 1.
+- **6** → 1; **7 DEAD** → `BecomeClientRagdoll` ? `0x2c` : `0x2b`; **0xc** → 1; **0, 5, 8..0xb, >0xc**
+  → DevWarning (`NPC_STATE_IS_NONE!` / `Invalid State for SelectSchedule!`) and `0x43 FAIL` (0xf21).
+
+**Unrecovered:** nothing in the body. The port answers `BecomeClientRagdoll` false (no client
+ragdoll forms; the death handoff is `CompleteDeathHandoff`) and the navigator path type `-1`.
+
+### `0x102af660` `CAI_BaseNPCTroika::SelectSchedule`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+sel 2; `switch (m_NPCState - 1)` over 1..0xe, table `0x102b0bf0`; 0, 4..7, 9, 0xa, >0xe → base.
+
+- **1 IDLE**: busy with a discipline or in a choreo scene → `0x6b` (0x49d2). Slot 607 (follower
+  ladder) non-zero is **returned** (`0x102af6b0 JNZ 0x102b0af5`). Patrol path `+0x6590`: its
+  `m_iSchedule` non-zero → `0x1029f650`, returned (0x498d); zero → DevMsg "WARNING:  Patrol path
+  for '%s' has no schedule." and `0x1029f5d0`. `m_bUseInteresting`: path type != 8 and no place →
+  `0xff` (0x49a9); else Int(0x13) → `0x102`, Int(0x10) → `0x106`, Int(0x11) → `0x105`, else
+  `0x100`. `m_bAllowAlertLookaround`: `RandomInt(0,99) < min(0x1e, (sightings+2)*5)` → `0x4f`.
+  A live `m_hBlockedDoor` or `m_hCondHitByDoor` → `SelectDoorObstructionSchedule` non-zero
+  returns. `m_bReturnToInitialPos` → consumed, `0x45`. Else `0x6b`.
+- **2 COMBAT**: clear `m_bCondTookDamage`. ENEMY_DEAD as the base (traces 0x4abf / 0x4acb). Damage
+  flinch `0x14` (0x4ad5). D_FR → `0xd` / `FearSound` + `0x1b`. NO_PRIMARY_AMMO with a weapon whose
+  reserve (`0x103346c0(+0x744)`) > 0 → `0x28 HIDE_AND_RELOAD`. The gate `+0x6444` (unnamed dword)
+  zero or WAITING_ATTACK_TIME → the ladder; else a `0x6000` weapon → `0xec`, otherwise the base.
+  Ladder: no SEE_ENEMY → `0xb` / occluded `0xb1`; 0x08 or 0x5f → a `0x6000` weapon with neither
+  0x2f nor 0x63 → `0x102b7f40` ? `0xef` : `0xf0`, else `0xb8`; 0x4f → `0x101e3f50` → `0xef`, or
+  `RandomInt < 0x14` with no hint node and `m_flEnemyDist < 800.0` → `0xef`, else `0xed`; 0x50 →
+  `0xee`; 0x51 → `0xdc`; 0x52 → `0xdf`; 0x61 → `0xb`; 0x60 → `0xb1`; 0x63 or 0x2f → `0xbc`; 0x59
+  → `0x17`; 0x66 with a `0x6000` weapon → `0xf0`; 0x4a with a weapon → `0x6000` → `0xf0`, `0x18000`
+  → `0xca`; else `0xbf`.
+- **3 ALERT**: `0x102b8a60`, `0x102b8c40`, DETECTED_ATTACK → `0x56`, `0x102b7370`, `0x102b9060`,
+  else `m_bGoToIdleState = m_bForceStateChange = 1` and **`0x4b ALERT_WAIT`** (0x4a08).
+- **8 FLEE**: COVER_FAILURE `0x39` → `0x73`. None of SEE_ENEMY, SEE_FEAR, 0x4c, 0x4d, 0x4e, 0x21,
+  0x1f → DETECTED_ATTACK `0x56`, INVESTIGATE_SOUND (clear INITIAL_FLEE, investigate clock +2.0,
+  `CommitBestSound`) `0x48`, else `0x77`. Otherwise clear `m_bCondTookDamage`; no INITIAL_FLEE →
+  `0x73`; else clear it, flee-sound clock `RandomFloat(10,20)`, `FleeSound`; damage → `0x72`;
+  supernatural flee `0x21` → offender to slot 596; player != offender → live offender `0x73`, else
+  save the location `0x76`; player == offender → `InsertSound(8,…)`, then the incident (or, flee
+  only with SEE_PLAYER, `0x1017fd60`) and the processed count; `m_flPlayerDist <= 512` and
+  `RandomInt < 0x50` → `0x71`, else `0x70`. Criminal `0x1f` mirrors it. SEE_FEAR → slot 596 on
+  `m_hLastSeenFearEnt`; `0x72`.
+- **0xb HUNT**: Int(1)/Int(0x26) → `0x81`; `0x102b8c40`; Int(2) → `0x82`; Int(sound family) →
+  investigate clock, `CommitBestSound`, (0x6d or 0x70) and `RandomInt < 100` → `0x7f`, else
+  `0x80`; Int(0x72) → `CommitBestSound`, `0x50`; SEE_SOUND_SOURCE → `0x102b8d20(0x84, 0x73)`; no
+  hunt path `+0x6598` → clear `MADE_HUNT_PATH`; bit clear → curtime at/past `m_flHuntExpireTimer`
+  → `0x85`, a live slot-168 enemy → `0x7c`, else `0x7d`; bit set → `0x7e`.
+- **0xc** → `0x6b`; **0xd** → `0x44`; **0xe** → the `m_iSubState` walk (default → 1 `0x116`, 1 → 2
+  `0x117`, 2 → 3 `0x118`, 3 → 4 `0x119`, 4 → 5 SEE_ENEMY ? `0x11b` : `0x11a`, 5 → 2 `0x117`).
+
+**Unrecovered:** the patrol-path object (no port `CAI_PatrolPath`), `InsertSound`'s two globals.
+
+### Helpers `0x102b8a60`, `0x102b9060`, `0x102b8d20` (no verdict rows)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+- `0x102b8a60`: Int(IGNORE_UNKNOWN) while not investigating (`m_afMemory & 0x8000000`) → `0x60`;
+  Int(SEE_UNKNOWN) / Int(UNKNOWN_ADVANCING) / Has(INVESTIGATE_SIGHT) → alert level 3, then not
+  investigating `0x59`, LOOKED_AT_UNKNOWN → UNKNOWN_RUN_TIMER ? `0x5e` : `0x5c`, else `0x5a`;
+  Int(LOST_UNKNOWN) → investigating with the run timer `0x5f`, else `0x5d`; LOOKED_AT_UNKNOWN →
+  `0x5c`; else 0.
+- `0x102b9060`: Int(INVESTIGATE_SOUND): combat or bullet → clock, `CommitBestSound`, level 3,
+  investigating → `0x52`, not frenzied `0x10000` and `RandomInt < 100` → `0x50`, else `0x51`;
+  HEAR_WORLD → `m_BestSound = m_LastSoundWorld`, `m_InvestigateSound = m_BestSound`, `0x51`;
+  player or danger → `CommitBestSound`, then TAIL-JUMPS into `0x102b8980`, whose answer IS the
+  schedule (`0x4c`/`0x4d`/`0x51`/`0x52`). Then SEE_SOUND_SOURCE → `0x102b8d20(0x89, 0x73)`; not
+  frenzied `0x10000` and Int(HEAR_FLINCH) → `CommitBestSound`, `0x50`; else 0.
+- `0x102b8d20(hated, feared)` (`RET 0x8`; the answers are the two stack arguments): the best-sound
+  source's enemy; `D_HT` → the source's memory of the enemy (when the source made the last combat
+  or bullet sound) or its forward × 128 + origin into `m_vSavePosition`, `hated`; `D_FR` →
+  `feared`; else investigate clock `curtime + 20.0`, 0. A dead source answers 0 with no re-arm.
+
+**Unrecovered:** nothing named by the walk.
+
+### The species selectors (slots 437 / 438) — `0x1035fb50` … `0x10375d90`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+- `0x1035fb50` **CNPC_VAnimal** (sel 5): DO_STARTLED → cleared, `0x15d`; idle: patrol node schedule
+  (no stamp); use_interesting: path type != 9 and no place → `0x156`, else `0x157`; alert:
+  `0x102b8a60`, `0x102b9060`; then the Troika body.
+- `0x103742d0` **CNPC_VDog** (sel 0xd): SHOULD_SNARL `0x7b` → cleared, `0x166`; idle: patrol node,
+  no use_interesting → `0x164`; combat clears `m_bCondTookDamage` and skips; idle/alert:
+  Int(PLAYER_BEFRIENDED `0x7d`) → `0x167`; the animal's `0x6b` becomes `0x164`.
+- `0x103ac610` **CNPC_VScurrying** (sel 0x20): inside `m_flFrightEndTime` → `0x162`; PLAYER_TOOCLOSE
+  `0x78` → `0x162`; HEAR_BULLET_IMPACT → fright origin from the bullet sound, end time = now +
+  duration, `0x162`; the animal's `0x6b` becomes `0x161`.
+- `0x103df2e0` **CNPC_VZombie** (sel 0x2b): crawl-out → `0x161`; EF_NODRAW → slot 67 `Unhide`; not
+  alive → `CreateCorpse(death force, death info)`; AI type 7/8: provoked (0x4c, 0x4c again, 0x4d,
+  `0x79`) → type 1, else without GIVE_WAY → `0x16b`; idle: type 1 → `SetState(2)`, SEE_ENEMY ?
+  `0x165` : `0x169`; type 5 → `0x169`; patrol node; combat/alert: a player enemy seen and not
+  obfuscated (`0x10146a80`) → `0x165`, else `0x169`; then the animal.
+- `0x10384ee0` **CNPC_VHuman** (sel 0x14): combat only — clear `m_bCondTookDamage`; DETECTED_ATTACK:
+  no memory of the attacker → `0x56` (0x269), last seen at least 1.0 s ago → `0x56` (0x261); then
+  the weapon word `& 0x18000` → slot 604, else slot 605, both given the word; non-zero returns;
+  else the Troika body.
+- `0x103872d0` **CNPC_VHumanCombatant** (sel 0x15), `0x103dd6b0` **CNPC_VYukie** (sel 0x2a): combat →
+  clear the flag, the weapon split; else the parent.
+- `0x10387d20` **CNPC_VHumanCombatPatrol** (sel 0x16): combat, not busy, not seeing (or occluded),
+  a patrol node → its schedule as it stands (0x121); then the weapon split; alert, not busy, a
+  node → its schedule (0x116); else the combatant.
+- `0x1037bd60` **CNPC_VGhoulCroucher** (no sel): not disturbed → `0x158`; not exited → `0x159`;
+  else the combatant.
+- `0x1037d130` **CNPC_VGuard1** (sel 0x12): DO_STARTLED → `0xf1` (no stamp); state 0xc: Int(0x1e)
+  and a live closest player → `0x1017e6f0(player, 0)`, `0x6d`; else `SetState(1)`; the human.
+- `0x10371ee0` **CNPC_VCop** (sel 0xc): idle and from a spawner: with no patrol node, or a player
+  that is not in heightened alert and has no cops in pursuit → the budget: the `+0x6672` claim
+  byte clear and `[0x1093acac] - [0x1093acb0] <= 3` → `0x170`; else claim it, `++[0x1093acb0]`,
+  `0x16e`; state 0xc as Guard1; else the combatant.
+- `0x103a29f0` **CNPC_VPedestrian** (sel 0x1d): first think → `0xfe`; PASS_OUT not busy → `0xfa`;
+  DO_STARTLED → `0xf1`; idle/alert INVESTIGATE_SOUND → clock, `CommitBestSound`; the SQUARED
+  distance to `m_BestSound`'s origin at least 256.0, `SKIPPED_SOUND` clear and `RandomInt < 0x19`
+  → set it, `0x158`; else clear it, set INITIAL_FLEE, `0x157`; else the human.
+- `0x10360eb0` **CNPC_VAsianVampire** (sel 6): a closest player not hated → the human;
+  `asianvamp_force_jump_up` → `0x15a`; path not blocked: not stationary too long and not standing
+  on the player → the human; blocked in melee → slot 601 on the enemy, `0x15c`; else
+  `GetJumpSchedule`.
+- `0x1036b250` **CNPC_VChangBros** (sel 10): a closest player not hated → the human; the three force
+  ConVars `0x15e`/`0x15a`/`0x15c`; conditions `0x7c` → `0x15e`, `0x79` → `0x15c`, `0x7a` →
+  `0x15a`, ENEMY_UNREACHABLE → `0x15d`; else the human.
+- `0x103788d0` **CNPC_VGargoyle** (sel 0x11): the stat-list dead test → `0x15c`; combat: a
+  reachable enemy with a path → the human; else `0x10378f80` (pillar found → FINDING_BODY,
+  `0x15a`; else `+0x6680 = 2`); else the human.
+- `0x1037fca0` **CNPC_VHengeyokai** (sel 0x13): state 5 → `0x16f`; combat: ENEMY_DEAD while
+  carrying → `0x15e`; finding a body: clear it; Int(0x51) or Int(0x5f)/Int(8) → release the pickup
+  target, re-arm the collision ignore at 0, `0x10382f60`; else `0x10382d40` or `0x15f`; carrying:
+  timer expired and reachable → `0x161`, occluded or unseen → `0x166`, too close → `0x15e`, no throw
+  LOS → `0x166`, the one fake throw (`RandomInt < 5`) → `0x164`/`0x162`, else `0x163`/`0x160`;
+  otherwise clear PRESERVE_PATH, `0x10382d40`; unreachable → `0x167`; occluded → `0x165`;
+  TOO_FAR_FOR_MELEE → SEE_ENEMY ? `0x169` : `0x165`; else the human.
+- `0x10394120` **CNPC_VMingXiao::PreSelectSchedule** (sel 0x19): state 5 → `0x157`; else
+  `Weapon_Switch(ranged weapon or NULL, 0)`, 0.
+- `0x103941e0` **CNPC_VMingXiao::SelectSchedule** (sel 0x19): idle/alert → `0x44`; combat: the
+  grabbed-object arm; tentacle conditions `0x77+i` → `0x158+i`; spit → `0x15e`; occluded →
+  `0x160`; `0x10396bc0`; a proxy → `0x162`; `ming_xiao_charge` and enemy nearer than 120: ready →
+  re-arm from the tuning record, `0x15f`; MELEE_HELPLESS → now, then the tentacle gate 2/3/0/1 →
+  `0x15a`/`0x15b`/`0x158`/`0x159`; else `0x165`; other states the Troika body.
+- `0x103aa510` **CNPC_VSabbatLeader::PreSelectSchedule** (sel 0x1f): combat with no enemy → the two
+  state words written 1 directly (not `SetState`); the Troika pre-selector.
+- `0x103a70c0` **CNPC_VSabbatLeader::SelectSchedule** (sel 0x1f): state 5 → `0x158`;
+  `andrei_force_player_collision` → reset to 0, SetAbsOrigin(player + 20 x); `CheckStuck`; no roars
+  → refill 3, `0x165`; activated: force jump → `0x15b`, force charge → `0x166`, TIME_TO_JUMP → not
+  after a nova `RandomInt(0,2)` 0 → `0x164`, 1 → `0x15b`, 2 → `0x166`; after a nova
+  `RandomInt(0,1)` 0 → `0x164`, else `0x15b`; else the human.
+- `0x103ae8c0` **CNPC_VSheriffMan** (sel 0x21): activated: `CategorizeHeights`; state 5 → `0x158`;
+  alive: `sheriff_force_teleport > 0` → reset, `0x15a`; player low and self high → `0x15c`; player
+  high and self low → `0x15d`; health lost since the record `< 0.05` and not idle 3.0 s → the human,
+  else `0x15a`; dead → `KillSheriff`; the human.
+- `0x103bb7c0` **CNPC_VTzimisce** (sel 0x26): DO_STARTLED → `0x187`; `RandomInt(0,99) < 0x32` →
+  slot 627; combat: drop/throw arms `0x198`/`0x195` while carrying, first NEW_ENEMY → 5; not
+  finding a body: carrying ladder (`0x193`, `0x169`, `0x198`, `0x169`, fake throw
+  `0x196`/`0x194`, `0x195`/`0x192`); else clear PRESERVE_PATH, `0x103bc4e0`, unreachable → the hint
+  pick (`0x17c`/`0x17e`/`0x17f`/`0x180`/`0x16a`), occluded `0x167`, reachable: pounce `0x186`,
+  TOO_FAR `0x168`/`0x167`; the running-program continuations `0x103bca20`/`0x103bcaf0`/
+  `0x103bcb60`/`0x103bcc00`; else `0x170`; finding a body: clear it, the melee-attack pick on
+  Int(0x51) or Int(0x5f)/Int(8), else `0x103bc4e0` or `0x170`; alert: the two Troika helpers; hunt
+  (0xb): carrying `0x198`, SEE_UNKNOWN `0x15d`, sound `0x15c`, the roll (`0x15f`/`0x160`/`0x161`),
+  MADE_HUNT_PATH `0x15b`, no enemy `0x15a`, the hint pick, `0x159`/`0x15a`; else the Troika body.
+- `0x103c1610` **CNPC_VTzimisceHeadClaw** (no sel): combat: SHOULD_CHARGE → `0x158`; ranged word:
+  slow running or `RandomInt(0,100) < 0x28` → `0xca`, else slot 605; melee word: slot 604.
+- `0x103c3310` **CNPC_VTzimisceRunner** (no sel): combat: slot 604; a live potential enemy discards
+  the answer unless it is 199/200/`0xe4`/`0xe7`/`0x156` and the enemy is beyond 256 in 2-D (then
+  `0x157`); else the Troika body.
+- `0x103cee70` **CNPC_VWerewolf** (sel 0x29): slot 461 first; `werewolf_force_teleport` →
+  `ClearMoveHint`, `0x157`; not viewable → `0x158`; states 0/1 → enemy ? `0x157` : `0x156`; 2, 3,
+  8, 10, 0xe → no enemy `0x156`, dead enemy `0x157`, CAN_TELEPORT `TeleportOut` `0x158`,
+  SHOULD_BREAKHINT without hint flag `0x100` → `0x15e`, TOO_CLOSE → `0xd3`, frustration → `0x15d`,
+  special move with no melee and unreachable → the move hint's schedule, unreachable → `0x157`; 7
+  → not alive `0x162`, DEATH_TRIGGERED `0x161`; 9 → teleport, random move hints, `0x157`; 0xb →
+  death, teleport, break-hint, then special move / random hint; else the Troika body.
+- `0x10375d90` **CNPC_VFrenzyShadow**, `0x103dceb0` **CNPC_VWolfMorph**, `0x103a46b0`
+  **CNPC_VPlayerController::PreSelectSchedule** landed in story 5 fold A2 (their class files);
+  their tail into `CNPC_VHuman` is an integrator redirect.
+
+**Unrecovered:** the Tzimisce body search (`0x103be180`) and pounce hull probe (`0x103bf660`), the
+Hengeyokai fish search (`0x10381cd0`), the Gargoyle pillar search (`0x100f7b20`) and navigator path
+test (`0x102ee380`), slot 627's fidget voice, `m_fSequencePastHalf`, and the Werewolf
+random-move-hint pair (family Werewolf19's rows) — each a named seam answering retail's "nothing".
+
+### The selector pair wired live, and the integration's corrections — `0x1028a260`, `0x102b4fb0`, `0x10396bc0`
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L06)._
+
+Wiring, read off the listing:
+
+- `FElysiumNpc::SelectSchedule` is `0x1028a260` (`SelectNewScheduleRetail`): the maintenance pass now
+  asks slot 437 before slot 438, so every species pre-selector runs. The port's guessed selector
+  (dead guard, species-first composition, the law branch at the outermost entry) and its
+  `SelectIdleSchedule` / `SelectAlertSchedule` / `SelectCombatSchedule` and
+  `ElysiumNpcWitness::SelectLawSchedule` are deleted.
+- Slot 438 on the bare Troika line (`FElysiumNpc::SpeciesSelectSchedule`) is `0x102af660`.
+- `0x10375d90` FrenzyShadow and `0x103dceb0` WolfMorph tail-jump `0x10015ad2` = `JMP 0x10384ee0`
+  (`CNPC_VHuman`), not the base. FrenzyShadow writes sel 0xf first (`0x10375d99`).
+- `0x103a46b0` writes sel 2 at `0x103a46b6`, before the state test: both arms.
+- The player-side bump no longer runs the NPC's `0x101e3df0` sweep; the NPC's own
+  `0x102ae920` `WAS_BUMPED` arm (`0x102ae9ec` / `0x102ae9f4`) does, at its next selection.
+- The witnessed-incident consumers are retail's: idle + COND 0x1f/0x21 → state 8 through
+  `0x102ad660`, then `0x102af660` case 8 submits and answers FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)
+  `0x70`/`0x71`; COND 0x20/0x22 are consumed only by `0x102ae920` in COMBAT (mask-admitted), with
+  slot 596 then slot 597 `(offender, 5)`.
+
+Corrections made while reading bodies against the listing:
+
+- `0x102b4fb0` slot 597 is `AddEntityRelationship 0x10332ca0` (overwrite at any priority), not the
+  refusing `SetEntity`.
+- `0x10396bc0` (Ming Xiao throw search): `0x10396c4d CALL 0x10014df8` is `HasCondition(9)` with the
+  answer discarded, not a clear.
+- `0x101e8da0(0x10739d08)` is `LEA EAX,[ECX+0x2bc]`, the `Ming_Xiao_Info/General` slice of the
+  Rules.txt feat list: `+0x8` ThrowChance (60), `+0xc` / `+0x10` ChargeResetTimeNormal /
+  ChargeResetTimeDesperate (10.0, 10.0).
+- `0x102b8980` answers a schedule id (`0x4c`, `0x4d`, `0x51`/`0x52`), not a grade letter.
+- `0x10382d40` (Hengeyokai fish) and `0x103bc4e0` (Tzimisce body): the found arm is now ported
+  whole. The enemy's last known position (`0x102dfed0`) is compared against the target. When it is
+  nearer, the pickup target is released, `0x102c43b0(0)` is called and the helper answers 0.
+- `0x103bc820`: the near test is `AND 0x4100` on the x87-extended distance (NaN takes the near
+  answer).
+- `0x10384ee0`: at or past `seen + 1.0` → `0x56`; unordered keeps selecting.
+- `0x10378ec0`: with no enemy it answers false without writing `+0x667c`.
+- `0x103df2e0`: `CreateCorpse` is called directly (`0x103df349 CALL 0x10007c7a`).
+
+**Unrecovered (integration):** `SelectWeightedSequence` still has no sequence index at the kernel
+tier (`ElysiumAnimatingOverlaySlotBodies.cpp`), so every `SMALL_FLINCH`/`ALERT_SMALL_FLINCH`/
+`ALERT_SCAN` arm gated on it (`0x1028a48a`, `0x1028a6d1`, `0x1028a4ff`, `0x1028a615`, `0x102afcdb`)
+is unreachable. The `+0x6590` patrol path object is unstood, so the idle patrol arm never answers.
+An idle `use_interesting` or patrolling NPC still runs the port's ambient/patrol executor ahead of
+selection (`FElysiumNpc::Think` -> `ThinkAmbient`), so case 1's interesting-place answers
+(`0xff`..`0x106`) are reached only when selection is — L13's loop wiring.
+
+## Story 8, family Script19, the Troika's movement helpers — `0x1029f460`, `0x1038b1a0`, `0x10278220`, `0x102800c0`, `0x102aa640` (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L10, integrated as `576a06fc`._
+
+The movement half of family Script19: the patrol-path builder and its moves, the hidden-position
+probe, the two scheduled moves the `aiscripted_schedule` director issues, and the ManBat's flight
+override. Every one reaches `SetGoal` `0x102ecd20` (§ "`CAI_Navigator::SetGoal` `0x102ecd20` (one body), with `0x102f1dc0` and `0x102f28a0`" above). The
+director bodies of the same family are in `authored-control.md` § "Story 8, family Script19, the
+script directors". Port: `ElysiumNpcBaseScript19.cpp`, `ElysiumNpcScript19.cpp`,
+`ElysiumNpcScript19Species.cpp`; tests `Elysium.Substrate.NpcKernelScript19.*`.
+
+### `0x1029f460` BuildPatrolPath (277 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+Args `(cell, repeat, type, schedule, nodeIds, bReplace)`; the cell is `m_sppPatrolPath +0x658c` or
+`m_sppPatrolPathHunt +0x6594` (owned byte `+0`, `CAI_PatrolPath*` `+4`).
+
+1. `m_NPCState == 7` → return (`0x1029f46b`); null cell → return (`0x1029f477`).
+2. `bReplace` clear (`0x1029f486`): an existing path skips straight to step 5 (`0x1029f4d1`); an empty
+   cell allocates (`0x10307d30`, `0x1029f4d3`), writes the owned byte (`0x1029f4dd`), resets
+   (`0x10307aa0`: `type := -1, schedule := 0, count := 0`), FORCES `type := 0` and `repeat := 0`
+   (`0x1029f4ea`). A dry pool leaves a null path that the reset then faults on.
+3. `bReplace` set: allocate when empty (`0x1029f48c`, owned byte `0x1029f494`); still null →
+   `DevMsg("Failed to create patrol path for %s\n")` and return (`0x1029f49c..0x1029f4b6`); else reset
+   and `repeat := arg` (`0x1029f4c9`).
+4. `type := arg` (`0x10307b40`, `0x1029f4f4`).
+5. Append every id to the `-1` terminator (`0x10307bf0`, `0x1029f500..0x1029f51b`).
+6. `current := min(count - 1, DAT_1049df28[type])` (`0x10307b60` / `0x10307c20`); the type table
+   `DAT_1049df20` rows are `{id, name, start, step, next}` = `{0,"0",0,1,0}`, `{1,"1",0x7fff,-1,1}`,
+   `{2,"2",0,1,3}`, `{3,"3",0x7fff,-1,2}` — types 1 and 3 start at the last node.
+7. Non-zero `schedule` → `path+4 := schedule` (`0x1029f531`).
+8. `path+4` non-zero → `0x1029f650(this, this+0x658c)` (always the PATROL cell, `0x1029f547`), stamp
+   `AI_BaseNPCTroika.cpp:0x27a1` (`0x1029f54c` / `0x1029f556`), `SetSchedule 0x102ae750(path+4, 0)`
+   (`0x1029f56b`).
+
+The pool (`0x10307d30`): 32 slots of `0x114` bytes at `0x10934158`, in-use bytes `DAT_109363d8`,
+cursor `DAT_109363f8`; allocation scans from the cursor and bumps the CURSOR by one; a cursor above
+`0x1f` is `Error("Patrol path pool is dry.  It will store up to %d paths.  Change
+PATROL_PATH_POOL_MAX_PATHS to increase this amount.\n", 0x20)`. `0x10307db0` frees a slot and lowers the
+cursor to it; `0x10307d00` resets it. **Unrecovered:** the network node ids the inputs pass
+(`0x102d2900`) — the port stands a node id as the patrol hint's entity index.
+
+### `0x1038b1a0` ManBatOverrideMoveFly (366 bytes) and `0x1038b120` OverrideMove (96 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+`0x1038b120`: navigator type (`0x1027d990`) 2 → `0x1038b1a0(interval)`, TRUE (`0x1038b12b..0x1038b13c`);
+otherwise `0x1042fbf0(ladder(+0x6670)) == 0x1042fbf0(0xfa0b0699)` (`0x1038b13f..0x1038b179`).
+
+`0x1038b1a0`:
+1. `cvar_manbat_stun` (`0x1093b858`, "manbat_stun", default "0"): not a command and `m_nValue` set
+   (`0x1038b1a6..0x1038b1c1`) → stamp `NPC_VManBat.cpp:0x1ad`, `0x102ae750(0x15b, 0)`, `ConVar::SetValue(0)`,
+   return (`0x1038b1cc..0x1038b1f6`).
+2. Interval above 1.0 → 1.0 (`0x1038b1f9..0x1038b20c`; NaN is kept).
+3. `0x1038b370(this, &vel, interval)` (`0x1038b220`), `SetAbsVelocity(vel)` (`0x1038b240`).
+4. `m_Activity (+0xfec)` in `{0x30, 0xb0, 0x4b, 0x1171}` → return (`0x1038b24e..0x1038b26d`).
+5. `0x102e1c10(motor, VecToYaw(vel), -1.0)` (`0x1038b283` / `0x1038b28d`): the `+0x28` flip, the
+   `+0x1c == 180` direct write else `0x102e0a80`; the rate `-1.0` equals `_DAT_104492dc` and takes
+   `0x102e1cf0` (motor `+0x38 := MaxYawSpeed()`) — it does NOT leave the rate alone — then `0x102e1e20(-1)`.
+   `0x102e1cf0` is the same call on the same `m_pMotor (+0x5d44)` that `SetActivityAndSequence 0x10272490`
+   ends in (`0x10272569` / `0x10272575`); the port counts both on one seam (`NavigatorActivityNotices`).
+6. `GetAngles` with pitch `:= VecToPitch(vel)` (`0x101d2ce0`) through `SetAngles` (`0x1038b296..0x1038b2ca`).
+7. `m_flFlapTimer (+0x6678) <= curtime` (`0x1038b2d6..0x1038b2e4`) → `0x1038e720(vel)` (`0x1038b301`).
+
+`0x1038e720` (the selector): refuses activities `0x28, 0x30, 0xb0, 0x4b, 0x1171`; `vel.z >= 30.0`
+(`_DAT_104492a8` f32 — the VELOCITY's z, not the interval) → `0x1038e640` (act `0x22`, 2.3 s); else
+`turn = VecToYaw(vel) - angles.yaw` (+360 when negative); `!(turn < 30) && !(turn > 330)` — an unordered
+turn stays in the band (`0x1038e7cb` leaves on C0 alone, `0x1038e7da` on C0=C3=0) — (f64 cells `0x1044dcf0`,
+`0x104bc6a0`) → `0x1038e6a0` (act `0x116d`, 0.2 s) below 180 (`0x10452918`) else `0x1038e6e0` (`0x116e`,
+0.2 s); otherwise activity `0x24` → `0x1038e640`, anything else `0x1038e670` (`0x24`, 4.0 s).
+`UTIL_VecToYaw 0x101d2c70` answers 0 for a vertical vector and wraps into `[0, 360)`; `UTIL_VecToPitch
+0x101d2ce0` answers 180 (z < 0) / -180 (else) for a vertical vector, else `atan2(-z, len2d)`.
+**Unrecovered:** the motor `+0x1c` word (the port's `MotorIdealYaw` takes the direct write).
+
+### `0x10278220` TryMoveToHiddenPosition (505 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. Trace `threat → candidate + m_vecViewOffset (+0x184..0x18c)`, mask `0x2804091`, filter
+   `CTraceFilterSimpleTwoEnt(this, param_3)` (`0x10278239..0x102782b8`); the `0x10738960` overlay is a
+   developer line.
+2. Fraction == 1.0 → FALSE (`0x102782f1..0x10278303`: `TEST AH,0x44 / JNP` jumps on C3 alone).
+3. Slot 548 `IsValidCover(candidate, NULL)` false → FALSE (`0x10278310` / `0x10278318`).
+4. `0x102e6d70` on `m_pMoveProbe` from slot 220 to the candidate, mask `0x202400b`, 100.0; non-zero
+   `fStatus` → FALSE (`0x10278359` / `0x10278365`).
+5. Goal `{type 4, candidate, activity 0x13, tolerance -1.0 (_DAT_104994a0), flags 0, target
+   DAT_1090fdb4}` through `SetGoal(goal, 1)`; its `AL` is the answer (`0x102783ca..0x102783fd`). Flag 1
+   (`0x102ecd74`) runs `0x102f28a0` first, which zeroes navigator `+0x40..+0x4c` and, through `0x1030bb30`,
+   the path's tolerance `+0x28`: the -1.0 "keep" word therefore always resolves to the hull width here.
+
+`SetGoal 0x102ecd20` writes the path's tolerance (`CAI_Path +0x28`, `0x102ecec7`), never
+`m_flGoalTolerance (+0x6320)`. A refused route (`0x102f1dc0`) with navigator `+0x40
+m_timePathRebuildMax == 0.0` (`0x102f1ee8`) calls `OnNavFailed(0xc)` (`0x102f1f00` → `0x102eeae0`):
+`TaskFail(0xc)` inside `SetGoal`, whatever the caller then does with the FALSE. `+0x40` is written only by
+`TASK_SET_ROUTE_SEARCH_TIME` (`0x102886f0`, from `StartTask 0x102827f0`) and zeroed by `0x102f28a0`; the
+navigator constructor `0x102eca50` does not write it.
+
+**Unrecovered:** `DAT_1090fdb4`'s identity (a null handle in practice).
+
+### `0x102800c0` ScheduledMoveToGoalEntity / `0x102801e0` ScheduledFollowPath (213 bytes each)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+`0x10280de0(schedule)`; `m_pGoalEnt (+0x5de8) := goal`; goal `{type 4 (0x102800ec; 0x102801e0: type 3
+GOALTYPE_PATHCORNER, 0x10280205), goal->slot 217 origin (0x102801e0: slot 220), [4..7] -1 except [5] := param_3 = the MOVEMENT ACTIVITY (9 / 0x13 / 0x22 from
+0x101a98c0) — not a goal type, tolerance 128.0 (0x102801e0: -1.0), flags 1, target DAT_10923a2c}`; slot 563
+`(goal, &dest, &tolerance, &param_1)`; `SetGoal(goal, 0)`, whose `AL` is returned (the caller
+`0x101a98c0` tests it). **Unrecovered:** `DAT_10923a2c` (zero-initialised; a null handle).
+
+### `0x102aa640` / `0x102aa860` IssuePatrolMove (432 / 299 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+`0x102aa640` (StartTask `0x7a..0x7e` on `+0x658c` / `+0x6594`): no cell or no path → `+0x1b48 = 0x3d39`,
+`TaskFail(0x1d)`; node `nodes[current]` == -1 → `0x3d65`, `0x1d`; outside `network (+0x5d34)->+0x2c`'s
+count → `++DAT_106c994c`; out of range or a null node → `0x3d60`, `0x1d`; else goal `{4, GetPosition(node,
+m_eHull), activity -1, tolerance -1.0, flags 0}` through `SetGoal(goal, 2)`: TRUE → `TaskComplete(0)`, FALSE
+→ `DevWarning(2, "%s can't reach patrol point\n")`, `0x3d55`, `TaskFail(0xc)`.
+
+`0x102aa860` (RunTask `0x7a` / `0x7b`): no path → `0x3d73`, `TaskFail(0x1d)`; node -1 → return silently;
+out of range → `++DAT_106c994c` and a NULL node into `GetPosition` (a retail fault; the port returns);
+goal `{4, position, -1, NAI_Hull::Width(m_eHull), 0}` through `SetGoal(goal, 0)`, answer ignored — but a
+refused route still fails the task inside `SetGoal` (`OnNavFailed(0xc)`, above).
+**Unrecovered:** the AI network (0018 story 4); the port stands a node id as a patrol hint's entity index.

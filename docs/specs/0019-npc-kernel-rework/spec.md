@@ -913,6 +913,145 @@ green, and `coverage.md` shows the change.
     (25b, 25c, 26, 16b, 10d), the `[x]` on 29e and here, the build-order line, and the file rename
     dropping the `19` suffix as a separate pure-move commit, allocating numbered parts where a
     concern file already exists (Lifecycle, Conditions) and keeping every file.
+  **Pass I landed 2026-09-28** (wave 1; the method is
+  [story-8-execution-plan.md](story-8-execution-plan.md)). Twelve porter lanes, L01–L12, each in its
+  own worktree on the shape commit `6497a0ce`. That commit declared every pass-I override and made it
+  forwarding, created the 80 family files empty, took `unported.tsv` 778 → 467 and pinned
+  `story8-forwarding.tsv` at 210 rows. Each lane was gated by `kernel_gate` (addresses, skeleton arm
+  coverage, seam searches, hot-header freeze, residue, tests, twins). Each was then integrated by a
+  fresh full read of every body against `vtmb_asm` / `vtmb_code` before its one commit on `main`.
+  **Nine families are on `main`: 204 `rule` rows, plus two Damaged19 rows.** Spawn19 is integrated
+  but not merged. RunAi19 and Think19 are wave 2. Reports:
+  `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/pass-i/` (`L<nn>-report.md`, `L<nn>-integration.md`,
+  `StartTask19-integration.md`). The walked prose is folded into the oracle, one section per retail
+  address, under `schedule-kernel.md`, `conditions-and-states.md`, `lifecycle.md` and
+  `authored-control.md` § "Story 8, family …".
+  - *Misc19* (L11, `a17ed6a9`): 28 of 31 rows. L12 then ported the two defeat latches `0x10395ce0` /
+    `0x1039ea60`, making **30 of 31**. `CCineAISchedule::vfunc586` `0x101a98c0` stays open; it drives
+    L10's movers. `SetEnemy` `0x10279a50` and `ChooseEnemy` `0x10279dd0` are now retail's for every
+    NPC, base-only included. The review fixed six things:
+    - Slot 598 `0x102b4fe0` and Cop `0x10372dd0` forget through `AddEntityRelationship` `0x10332ca0`,
+      which overwrites at any priority. The port's `SetEntity` had refused a lower one.
+    - `ClearMemory` `0x102dfaa0` now unlinks the record.
+    - `ShouldChooseNewEnemy` tests slot 158 `IsAlive`, not dead-or-hidden.
+    - `DisconnectFromSquad` `0x1026d050` writes no flag.
+    - Anim events 0x3e9–0x3eb reach `AllowInterrupt` and the cine, hint and place outputs.
+    - The feed end runs `0x1026d160`. Before, every fed NPC stayed oblivious.
+  - *Script19* (L10, `576a06fc`): **20 of 20**. The review found:
+    - `ScheduledFollowPath` uses goal type 3.
+    - `SetGoal`'s flag 1 clears the path tolerance. The tolerance is the path's `+0x28`, not
+      `m_flGoalTolerance +0x6320`.
+    - A refused route fails through `OnNavFailed(0xc)`.
+    - `CCineNPC` and `CCineAI` save and restore `m_fEffects`, with `EF_NOINTERP` on the teleport.
+    - `ExitScriptedSequence` is wired at both SCRIPT arms.
+  - *Conditions19* (L07, `617497a1`, rebased as `72b64eca`): **20 of 20**. The review found:
+    - **The throw lines ran on the wrong side.** The right vector was the left vector, so the
+      Hengeyokai's line started 80 units to its left, and Tzimisce's `-tzimisce_throw_pos_y` was
+      mirrored the same way.
+    - The wall ray and both throw lines ran on a hull seam that never hits. They now use the live
+      world ray.
+    - `0x102dfed0` answered the enemy's live origin in three places. Retail answers the memory
+      record, else the last position-only record, else `vec3_origin`.
+    - The NaN edges of eleven ordered compares were wrong.
+    - Sensing is split: `PerformSensing` `0x10310710` stands alone, so slot 481 is the only producer
+      of the LOS debounce.
+  - *Damage19* (L09, `414545a6`): **26 of 26**, with 279 of 279 arm sites cited. Slots 318 and 319 are
+    unified on the margin ladder. **It is not yet on the live path.** Nothing in play reaches slots
+    142 or 390, because `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60` and `0x103302e0` are still
+    29e stubs. The port's `OnDamageCommitted`, `RememberDamage`, `AccumulateDamage` and `GatherDamage`
+    therefore still run, marked `STORY8-TWIN`.
+  - *Select19* (L06, `abfae21c`): **31 of 31**. **The selector pair `0x1028a260` is wired live**: it
+    clears `+0x1b2c`, runs slot 437, then slot 438. `FElysiumNpc::SelectSchedule` is now
+    `SelectNewScheduleRetail`, and slot 438 on the bare Troika line is `0x102af660`. Deleted: the
+    port's guessed selector ("CHOSEN, NOT RECOVERED"), `SelectIdle/Alert/CombatSchedule` and
+    `SelectLawSchedule`. The review found:
+    - Slot 597 `0x102b4fb0` overwrites at any priority.
+    - Ming Xiao's `HasCondition(9)` is a read, not a clear, and its tuning is the
+      `Ming_Xiao_Info/General` slice of Rules.txt.
+    - The Hengeyokai and Tzimisce found arms were stand-ins; both are ported whole.
+    - The witnessed-incident consumers are now retail's.
+    - The landed tests that pinned port-invented selections are corrected to the listing.
+  - *RunTask19* (L05, `8cc9e23a`, rebased as `c9977c23` and `1769381c`): **23 of 23**. Both jump tables
+    were decoded from the image (base 28 entries, Troika 57). The review found:
+    - About twenty compares had the wrong NaN or equality edge.
+    - The last-known-position walk did not handle a null enemy.
+    - With no player, the facing falls back to worldspawn.
+    - The melee roll was read from this NPC's array; retail reads the enemy's.
+    - `0x103498b0` is ported.
+    - Two constants read from the image: `_DAT_1049a17c` is 190.0, and the SabbatLeader cell
+      `0x1093c33c` is 0.55.
+    - The yaw chain runs through slot 515 in retail's frame.
+  - *Werewolf19, Boss19 and Damaged19 slot 330* (L12, `2eca094a`): **17 + 11 + 1 rows**. The review
+    found:
+    - `ShareEnemyWithAlly` and `StartTransformation` overwrite through `AddEntityRelationship` and the
+      new `AddClassRelationship` `0x10332aa0`.
+    - The tentacle "death sound" `0x1039f310` stops the flop loop (`SND_STOP`). The packet and the
+      checklist had it playing.
+    - The morph fade floor is 0.0.
+    - `HengeyokaiSkin` is folded onto `m_nSkin`.
+    - The clear-all `0x102dfc10` runs slot 56 once per record.
+    Every stand-in the other lanes left for L12 is now bound to the real body.
+  - *StartTask19* (L01–L04, lane commits `cb0ed36a`, `7bb820fb`, `a97ce8f6`, `a059d04c`; integrated as
+    `86ceba23`): **27 of 27**, the 26 rows plus `CNPC_VCop` `0x10371b70`. 3,460 of 3,460 skeleton sites
+    are cited. Two review findings changed the bodies:
+    - **A task-id-kind defect all three giants shared.** `FElysiumScheduleStep::TaskId` is the GLOBAL
+      id, but retail's `iTask` is class-local. Base, Troika and Troika-tail switched on the raw id, so
+      a real step would have hit `default:` every time; their fixtures built local ids, which hid it.
+      Now one `GlobalToLocalId` through slot 450 translates the id, and `CurrentRetailTaskNumber`
+      `0x1028a150` answers the class-local id.
+    - **The `SetGoal` unification.** Five lane adapters (L01, L02, L03, L04, L10) became one
+      `0x102ecd20` body, with `0x102f1dc0`'s route window and `0x102f28a0`'s clear. The tolerance
+      goes to `path+0x28`, not `m_flGoalTolerance`.
+    The review also found:
+    - `RestartIdealActivity` `0x10289ee0` is ported.
+    - Slot 216 `SetAbsOrigin`, at seven sites, called an unported stub, so the body never moved.
+    - The Ghoul unaware tables are read off the image.
+    - The kick goal and the step-back ran in the wrong direction.
+    - `m_lifeState` is now one word.
+    - The lateral-cover pair is one body.
+  - *Spawn19* (L08): 48 rows, integrated on `story8/int-4` as `9bbbb196`, with Troika `Spawn`
+    `0x10298d30` live and `NPCInit` run at spawn, not at `Activate`. **Not on `main`.**
+    <wave 2: the Spawn19 merge and its line here>.
+  - *Named divergences*, each named at its line:
+    - Crash guards where retail dereferences null or stale data.
+    - A zero, NaN or `vec3_origin` where retail reads uninitialised stack.
+    - Bounds on the round-robin hint walks and the tentacle spot search.
+    - A refused body claim in `SetGoal` counts as "no route attempted".
+    - Goal flag 2's node route takes the location arm; there is no node graph.
+    - The CRT `rand()` draw uses the port's `NpcSchedule` stream.
+    - The Tentacle clock is `curtime`.
+    - The SabbatLeader prologue measures from the origin.
+    - `bDeathCommitted` fires once.
+    - The world ray ignores `CONTENTS_MONSTER`.
+  - *Modernizations*, visual-only:
+    - `MotorUpdateYaw` drives `Motor->Face`.
+    - The selector, ideal-state and `TaskFail` stamps are carried as retail-address members, with
+      the `__FILE__`/`__LINE__` words absent (the agreed modernization).
+    - DevMsg and DevWarning go to the schedule trace.
+  - *What stays partial pending wave 2.* The bodies are reached by tests and direct slot calls. The
+    running loop still runs the port's twins: **82 `STORY8-TWIN` markers in 13 files**. They are:
+    - the `ElysiumSchedule.cpp` `BeginTask` / `ContinueTask` cases (the op list is in
+      `StartTask19-integration.md`) and their verbs in `ElysiumNpc.cpp` and `ElysiumNpcBase.cpp`;
+    - `ElysiumNpcEnemy::GatherConditions`;
+    - `ElysiumNpcSenses` `Tick` and `GatherEnemyLos`;
+    - `GatherHearing` and `GatherCommittedEnemy`;
+    - the damage twins;
+    - the patrol inputs and `BeginScriptedSchedule`;
+    - `FElysiumNpc::OnKilled`.
+    Also carried to L13:
+    - RunTask19's switches still compare the raw global id, the defect fixed on the StartTask side.
+    - `ReleaseMotorHintYaw` stays inert until the mover keeps `motor+0x34`.
+    - `MotorDeltaIdealYaw` answers 0, so every facing arm completes on its first pass.
+    <wave 2: L13's result — RunAi19 (17), Think19 (15), Damaged19's two `NPCThink`s, the loop wiring
+    `NPCThink → RunAI → 433 → MaintainSchedule → 437/438 → 442/444`, the twins retired, the first
+    smoke>.
+  - *Tests:* `Elysium.Substrate` **1,326 → 1,613, 0 failed**, at StartTask19
+    (`reports/tests/20260928T032303.105515Z-elysium-substrate`). Family suites: Misc19 31, Script19
+    23, Conditions19 32, Damage19 28, Select19 32, RunTask19 46, Werewolf19 17, Boss19 12, StartTask19
+    66. <wave 2: `Elysium.Substrate` after L13, and the smoke>.
+  - *Pins:* `story8-forwarding.tsv` **210 → 71** (RunAi19 16, Think19 13, Spawn19 41, Damaged19 1).
+    `kernel_shape --unported` **778 → 467** at the shape commit, since a forwarding override counts
+    as an override; it held at 467 through pass I. <wave 2: forwarding 71 → N; unported 467 → N>.
 
 ## Build order
 1 → 2 → 3 → 4, with 8's pass R in parallel from 1 on → 5 → 8's passes I and C → 6 → 7 (amended
