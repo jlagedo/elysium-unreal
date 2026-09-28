@@ -224,9 +224,6 @@ public:
 	double TzimisceTaskFailTimer = 0.0;
 
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
-	/** `+0x66a8 CNPC_VTzimisce::m_flTaskFailTimer` (datamap): `StartTask` `0x103ba7c0` task `0xc9` arms
-	 *  it to curtime + 1.0 when the grab gate refuses. (Rebinds the species shape map's `ABSENT` row.) */
-	double TzimisceTaskFailTimer = 0.0;
 	/** SEAM for `0x103bf440` (the carry facing), counted; `0x103bf660` is `TzimiscePounceTest`
 	 *  (family Conditions19), counted here for the StartTask19 tests. */
 	void FUN_103bf440();

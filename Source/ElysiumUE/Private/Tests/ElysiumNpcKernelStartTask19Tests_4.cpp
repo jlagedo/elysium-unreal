@@ -371,7 +371,7 @@ bool FElysiumNpcKernelStartTask19SpeciesTaxiTest::RunTest(const FString&)
 	}
 	// 0xb9 outside dialogue: the upkeep answers -1 and the task completes.
 	TestFalse(TEXT("the driver is not in dialogue"), Taxi->IsInDialog());
-	TestEqual(TEXT("the upkeep's out-of-dialogue answer"), Taxi->TaxiDialogUpkeep(), INDEX_NONE);
+	TestEqual(TEXT("the upkeep's out-of-dialogue answer"), Taxi->RunDialogActivity(), INDEX_NONE);   // 0x102c1400
 	F.Start(0xb9);
 	TestTrue(TEXT("0xb9 out of dialogue completes"), F.Completed());
 	return true;
@@ -1284,9 +1284,10 @@ bool FElysiumNpcKernelStartTask19SpeciesMingXiaoTest::RunTest(const FString&)
 	F.Start(0x14d);
 	TestEqual(TEXT("0x14d: the next think"), Ming->NextThink, static_cast<float>(F.Now() + static_cast<double>(0.01f)));
 	TestTrue(TEXT("0x14d completes"), F.Completed());
-	Before = Ming->BeginDefeatSequenceOnceCalls;
+	// `0x10395ce0` `BeginDefeatSequenceOnce` (lane L12): the latch `+0x6744` gates `0x10395c70` once.
+	Ming->bMingXiaoPlayedDeathAnim = false;
 	F.Start(0x14e);
-	TestEqual(TEXT("0x14e: the defeat sequence"), Ming->BeginDefeatSequenceOnceCalls, Before + 1);
+	TestTrue(TEXT("0x14e: the defeat sequence latches"), Ming->bMingXiaoPlayedDeathAnim);
 	TestTrue(TEXT("0x14e completes"), F.Completed());
 	for (const int32 Task : { 0x14f, 0x150, 0x151, 0x152 })
 	{
@@ -1417,9 +1418,10 @@ bool FElysiumNpcKernelStartTask19SpeciesTentacleTest::RunTest(const FString&)
 		FString(TEXT("Ming_xiao_baby_death_emitter")));
 	TestEqual(TEXT("0x155: one emitter"), Tentacle->TentacleEmitterPlacements.Num(), Emitters + 1);
 	TestTrue(TEXT("0x155 completes"), F.Completed());
-	Count = Tentacle->Fun1039ea60Calls;
+	// `0x1039ea60` `BeginTentacleDefeatOnce` (lane L12): the latch gates the death entry once.
+	Tentacle->bTentaclePlayedDeathAnim = false;
 	F.Start(0x156);
-	TestEqual(TEXT("0x156: 0x1039ea60"), Tentacle->Fun1039ea60Calls, Count + 1);
+	TestTrue(TEXT("0x156: 0x1039ea60 latches"), Tentacle->bTentaclePlayedDeathAnim);
 	TestTrue(TEXT("0x156 completes"), F.Completed());
 	return true;
 }
@@ -1741,13 +1743,18 @@ bool FElysiumNpcKernelStartTask19SpeciesTzimisceTest::RunTest(const FString&)
 	F.Start(0xcd);
 	TestEqual(TEXT("0xcd without an enemy fails 6"), F.Failure(), 6);
 	TestTrue(TEXT("stamped at line 0x7b5"), F.Traced(TEXT("NPC_VTzimisce.cpp"), 0x7b5));
-	// 0xcc with one: the pounce check (admits), the stamp.
+	// 0xcc with one: the pounce check `0x103bf660` (family Conditions19's `TzimiscePounceTest`). Here it
+	// refuses -- the enemy has no memory record, so its LKP is `vec3_origin` (`0x102dfed0`), inside the
+	// `d < 40000` floor (`0x103bf740`) -- and the arm fails 0x1a at line 0x7ab (`0x103bad57`) without
+	// stamping the attack time.
 	ElysiumNpcEnemy::SetEnemy(*Tzim, F.Other->Handle);
 	const int32 Pounces = Tzim->Fun103bf660Calls;
 	Tzim->LastAttackTime = -1.0;
 	F.Start(0xcc);
 	TestEqual(TEXT("0xcc: the pounce check"), Tzim->Fun103bf660Calls, Pounces + 1);
-	TestEqual(TEXT("0xcc stamps m_flLastAttackTime"), Tzim->LastAttackTime, F.Now());
+	TestEqual(TEXT("0x103bad6b the refused pounce fails 0x1a"), F.Failure(), 0x1a);
+	TestTrue(TEXT("stamped at line 0x7ab"), F.Traced(TEXT("NPC_VTzimisce.cpp"), 0x7ab));
+	TestEqual(TEXT("0xcc refused: no m_flLastAttackTime stamp"), Tzim->LastAttackTime, -1.0);
 	F.Start(0xce);
 	TestTrue(TEXT("0xce unfinished keeps running"), F.Running());
 	// 0xd1: `(ResolveTaskDistance(data) + 150)^2`, complete.

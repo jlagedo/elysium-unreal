@@ -447,17 +447,12 @@ public:
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
 	// `+0x6680 m_hRangedWeapon`, which `StartTask` `0x10392d80` task `0x155` switches to, is lane
 	// L07's `MingXiaoRangedWeapon` above.
-	/** `+0x6714 CNPC_VMingXiao::m_eLastLostTentacle` (datamap): task `0x15c` aims `hit_yaw` at its
-	 *  bone. (Rebinds the `ABSENT` row.) */
-	int32 MingXiaoLastLostTentacle = 0;
 	/** SEAMS for the `StartTask` helpers no row of this lane owns: `0x1039a750` (the transform),
-	 *  `0x10395ce0` (family Misc19's `BeginDefeatSequenceOnce`), `0x10398630` (a tentacle's bone
-	 *  position) and the `0x102c4310`/`0x102c42a0` emitters. */
+	 *  `0x10398630` (a tentacle's bone position) and the `0x102c4310`/`0x102c42a0` emitters.
+	 *  (`0x10395ce0` is `BeginDefeatSequenceOnce` above, lane L12's body.) */
 	void FUN_1039a750();
-	void MingXiaoBeginDefeatSequenceOnce();
 	bool MingXiaoTentacleBonePosition(int32 Tentacle, FVector& OutCm) const;
 	void MingXiaoEmitter(const TCHAR* Name, const TCHAR* Attachment);
 	int32 Fun1039a750Calls = 0;
-	int32 BeginDefeatSequenceOnceCalls = 0;
 	TArray<FString> MingXiaoEmitters;
 };

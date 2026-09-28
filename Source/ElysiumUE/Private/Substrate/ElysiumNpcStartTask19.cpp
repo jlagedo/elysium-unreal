@@ -568,11 +568,6 @@ FElysiumEntity* FElysiumNpc::StartTask19ClosestPlayer() const
 	return World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;
 }
 
-int32 FElysiumNpc::StartTask19DialogActivity()
-{
-	return INDEX_NONE;   // SEAM for `0x102c1400`.
-}
-
 void FElysiumNpc::StartTask19PlayerStartDialog(FElysiumEntity& Player)
 {
 	// `player->vtable[0x678](this)`: the player starts talking to this NPC.
@@ -1672,7 +1667,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 	case StartTask19A::TaskRunDialog:
 	{
 		// Arm `0x102a496b` (index 0x3f).
-		const int32 DialogActivity = StartTask19DialogActivity();             // 0x102a496d 0x102c1400
+		const int32 DialogActivity = RunDialogActivity();                      // 0x102a496d 0x102c1400
 		if (DialogActivity == INDEX_NONE)                                     // 0x102a4977 / 0x102a4979
 		{
 			return StartTask19Complete();                                     // 0x102a497d

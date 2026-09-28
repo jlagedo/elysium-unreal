@@ -27,8 +27,6 @@ public:
 	virtual int32 RunTaskSlot444(void* Arg0) override;
 
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
-	/** SEAM for `FUN_102c1400` (`0x102c1400`), the Troika dialogue upkeep `StartTask` `0x103b36d0` task
-	 *  `0xb9` tests against -1. Its not-in-dialog arm (-1) is evaluated; the in-dialog upkeep is
-	 *  unported and answers `m_Activity` (`+0xfec`). */
-	int32 TaxiDialogUpkeep();
+	// `0x102c1400` (the dialogue upkeep task `0xb9` tests against -1) is family RunTask19's
+	// `RunDialogActivity`.
 };

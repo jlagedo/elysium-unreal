@@ -309,8 +309,14 @@ int32 FElysiumNpc::RunDialogActivity()
 	// `IsInDialog()` (`0x102c1170`) is false; inside a dialogue it runs the upkeep (the `+0x6554`
 	// handle release, `FinishTalking`, `0x102c0520`, the `+0x65c` disposition lookup through slot
 	// 611 answering 0xf1 or 1, `CDialog::ShowPlayerChoices`) and answers `m_Activity` (`+0xfec`) or
-	// that 0xf1 / 1. The dialogue family owns that body; until it lands, -1 (the not-in-dialog arm).
-	return INDEX_NONE;
+	// that 0xf1 / 1. The dialogue family owns that body. Its FIRST arm is evaluated (StartTask19
+	// integration: folded from L04's `TaxiDialogUpkeep`): not in a dialogue answers -1; inside one the
+	// unported upkeep answers `m_Activity`, what the body returns when neither disposition arm fires.
+	if (!IsInDialog())
+	{
+		return INDEX_NONE;
+	}
+	return ActivityNumber;
 }
 
 void FElysiumNpc::BloodExplode()

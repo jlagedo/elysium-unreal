@@ -158,15 +158,12 @@ static void Species19MotorIdealYawTo(FElysiumNpcBase& Npc, const FVector& Target
 	Npc.StartTaskMotorSetIdealYawToTarget(TargetCm);
 }
 
-/** `0x102e20b0(m_pMotor, target, speed)`: `CalcIdealYaw(target)` then `0x102e1c10(motor, yaw, speed)`
- *  -- the same `+0x28` half-turn and `motor+0x34` store as `0x10288670` (`StartTaskMotorSetIdealYaw`),
- *  then the yaw-speed word (`+0x38`, no port carrier; SEAM) and the `0x102e1e20(-1)` queue release
- *  (family Hints' `ReleaseMotorHintYaw` seam). */
+/** `0x102e20b0(m_pMotor, target, speed)` is family RunTask19's `MotorSetIdealYawToTargetAndUpdate`
+ *  (`CalcIdealYaw(target)` then `0x102e1c10(yaw, speed)`: the flip, the store, the `+0x38` speed word,
+ *  `UpdateYaw`). */
 static void Species19MotorIdealYawToAtSpeed(FElysiumNpcBase& Npc, const FVector& TargetCm, float Speed)
 {
-	(void)Speed;
-	Npc.StartTaskMotorSetIdealYaw(Npc.CalcIdealYaw(TargetCm));
-	Npc.ReleaseMotorHintYaw();
+	Npc.MotorSetIdealYawToTargetAndUpdate(TargetCm, Speed);
 }
 
 /** `CAI_Navigator::SetGoal` `0x102ecd20` over the `AI_NavGoal_t` a species arm builds on its stack:
@@ -329,21 +326,6 @@ int32 FElysiumNpcTzimisceRunner::StartTaskSlot442(void* Task)
 // CNPC_VTaxiDriver -- 0x103b36d0, 101 bytes
 // =================================================================================================
 
-int32 FElysiumNpcTaxiDriver::TaxiDialogUpkeep()
-{
-	// SEAM for `FUN_102c1400` (`0x102c1400`), the Troika dialogue upkeep (`ElysiumNpcPayphone.h`'s
-	// `DialogUpkeepTick` names the same body). Its FIRST arm is evaluated: not `IsInDialog()` runs
-	// `0x102c0360` and answers -1. The in-dialog arm -- the scene-entity release, `FinishTalking`, the
-	// queued-line pump, the disposition switch to `0xf1` and `ShowPlayerChoices` -- is not this lane's
-	// row and is unported; it answers `m_Activity` (`+0xfec`, `param_1[0x3fb]`), which is what the
-	// body returns when neither disposition arm fires.
-	if (!IsInDialog())
-	{
-		return INDEX_NONE;
-	}
-	return ActivityNumber;
-}
-
 // Slot 442: `0x103b36d0`.
 int32 FElysiumNpcTaxiDriver::StartTaskSlot442(void* Task)
 {
@@ -371,7 +353,7 @@ int32 FElysiumNpcTaxiDriver::StartTaskSlot442(void* Task)
 		TaskComplete(false);                                              // 0x103b36f6
 		return 0;                                                         // 0x103b36fc
 	case 0xb9:
-		if (TaxiDialogUpkeep() == INDEX_NONE)                             // 0x103b3701 / 0x103b370b
+		if (RunDialogActivity() == INDEX_NONE)                            // 0x103b3701 0x102c1400 / 0x103b370b
 		{
 			TaskComplete(false);                                          // 0x103b370f
 			return 0;                                                     // 0x103b3715
@@ -2006,14 +1988,6 @@ void FElysiumNpcMingXiao::FUN_1039a750()
 	++Fun1039a750Calls;
 }
 
-void FElysiumNpcMingXiao::MingXiaoBeginDefeatSequenceOnce()
-{
-	// SEAM for `0x10395ce0` -- family Misc19's `rule` row (`BeginDefeatSequenceOnce`): run `0x10395c70`
-	// only while the latch `+0x6744` is clear. Counted until that row lands; the integrator redirects
-	// this call to it.
-	++BeginDefeatSequenceOnceCalls;
-}
-
 bool FElysiumNpcMingXiao::MingXiaoTentacleBonePosition(int32 Tentacle, FVector& OutCm) const
 {
 	// SEAM for `0x10398630`: `LookupBone(0x10398680(tentacle))` (a negative bone reads bone 0), then
@@ -2106,7 +2080,7 @@ int32 FElysiumNpcMingXiao::StartTaskSlot442(void* Task)
 		TaskComplete(false);                                              // 0x10392fa6
 		return 0;
 	case 0x14e:
-		MingXiaoBeginDefeatSequenceOnce();                                // 0x10392fb6 0x1000d9fe -> 0x10395ce0
+		BeginDefeatSequenceOnce();                                        // 0x10392fb6 0x1000d9fe -> 0x10395ce0
 		TaskComplete(false);                                              // 0x10392fbf
 		return 0;
 	case 0x14f:
@@ -2261,13 +2235,6 @@ void FElysiumNpcMingXiaoTentacle::FUN_1039ef10()
 {
 	// SEAM for `0x1039ef10` (task `0x14e`). Not this lane's row; counted.
 	++Fun1039ef10Calls;
-}
-
-void FElysiumNpcMingXiaoTentacle::FUN_1039ea60()
-{
-	// SEAM for `0x1039ea60` -- family Misc19's `rule` row (task `0x156`). Counted until it lands; the
-	// integrator redirects this call to it.
-	++Fun1039ea60Calls;
 }
 
 // Slot 442: `0x1039c4c0`.
@@ -2572,7 +2539,7 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 		TaskComplete(false);                                              // 0x1039d21a
 		return 0;
 	case 0x156:
-		FUN_1039ea60();                                                   // 0x1039d22e 0x10007266
+		BeginTentacleDefeatOnce();                                        // 0x1039d22e 0x10007266
 		TaskComplete(false);                                              // 0x1039d237
 		return 0;
 	default:
@@ -3556,15 +3523,6 @@ static void Species19WerewolfStoreSavePosition(FElysiumNpcWerewolf& Npc, const F
 	Npc.SavePosition = FElysiumNpcWerewolf::IsVec3Invalid(GroundUnits) ? GroundUnits : GroundUnits * ElysiumMove::U;
 }
 
-/** SEAM for `CNPC_VWerewolf::FindBreakHint` (`0x103d0ec0`), family Werewolf19's row (lane L12). It
- *  writes `m_pBreakHint` (`+0x66c4`) on success. Answers false -- no break hint -- until the
- *  integrator redirects this call to the landed body. */
-static bool Species19WerewolfFindBreakHint(FElysiumNpcWerewolf& Npc)
-{
-	(void)Npc;
-	return false;
-}
-
 /** SEAM for `GetCharTemplate(player) == TemplateIndex("Player_Malkavian")` (`0x10337860` against
  *  `0x101d5bd0(0x10738d10, "Player_Malkavian")`). The player's sheet carries its clan but no
  *  character-template index, and the template table has no port; answers false (not the Malkavian
@@ -3907,7 +3865,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 		TaskComplete(false);                                              // 0x103cd7f9
 		return 0;
 	case 0x158:
-		if (!Species19WerewolfFindBreakHint(*this))                       // 0x103cd811 0x103d0ec0; 0x103cd818
+		if (!FindBreakHint())                                             // 0x103cd811 0x103d0ec0; 0x103cd818
 		{
 			Species19FailBare(*this, 4);                                  // 0x103cd57f (the 0x154 fail block)
 			return 0;

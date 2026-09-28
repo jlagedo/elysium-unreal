@@ -160,7 +160,5 @@ public:
 	/** SEAM for `0x1039ef10` (task `0x14e`); counted. */
 	void FUN_1039ef10();
 	int32 Fun1039ef10Calls = 0;
-	/** SEAM for `0x1039ea60` (task `0x156`; family Misc19's row); counted. */
-	void FUN_1039ea60();
-	int32 Fun1039ea60Calls = 0;
+	// `0x1039ea60` (task `0x156`) is `BeginTentacleDefeatOnce` above, lane L12's body.
 };

@@ -1529,7 +1529,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 	case TASK_DIE:                                                       // arm 0x4f, 0x10286801
 	case TASK_DIE_IMMEDIATE:
 		StartTaskClearGoal();                                            // 0x10286807  0x102ee270
-		NpcLifeStateWord = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
+		AnimEventLifeStateWord = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
 		return 0;
 
 	case TASK_WAIT_FOR_SCRIPT:                                           // arm 0x50, 0x102868f2 0x1028690c
@@ -2185,39 +2185,23 @@ FVector FElysiumNpcBase::StartTaskCurWaypointPos() const
 
 void FElysiumNpcBase::StartTaskMotorHoldYaw()
 {
+	// `0x102e0b40` is family RunTask19's `MotorMoveStop` (`motor+0x2c = -1.0`); counted for the tests.
 	++StartTaskNav.MotorYawHolds;
+	MotorMoveStop();
 }
 
 void FElysiumNpcBase::StartTaskMotorSetIdealYaw(float Yaw)
 {
-	// `0x10288670`: the `+0x28` flip — `+180` below 180, `-180` at or above — then the `+0x1c`
-	// sentinel store into `+0x34`.
-	float Stored = Yaw;
-	if (BaseScheduleHost.bMotorAnimationMovement)
-	{
-		if (Stored < ElysiumNpcTunables::OneEighty)
-		{
-			Stored += ElysiumNpcTunables::OneEighty;
-		}
-		else
-		{
-			Stored -= ElysiumNpcTunables::OneEighty;
-		}
-	}
-	MotorIdealYaw = Stored;
-	// The port's motor turns the body toward its ideal yaw only when told (`IElysiumNpcMotor::Face`;
-	// nothing reads `MotorIdealYaw` to turn), so the store is pushed onto it, under the Troika line's
-	// body claim.
-	FElysiumNpc* Troika = AsNpc();
-	if (Motor != nullptr && (Troika == nullptr || Troika->AcquireScheduleBody(TEXT("CAI_Motor ideal yaw (0x10288670)"))))
-	{
-		Motor->Face(Stored);
-	}
+	// `0x10288670`: the `+0x28` flip then the `+0x1c == 180` direct store into `motor+0x34` -- the same
+	// tail as `0x102e2020`'s, which family Hints' `SetMotorHintYaw` carries (a RETAIL-frame yaw). No
+	// `UpdateYaw`: neither body calls it; the turn is the motor's own (`ReleaseMotorHintYaw`, L13).
+	SetMotorHintYaw(Yaw);
 }
 
 void FElysiumNpcBase::StartTaskMotorSetIdealYawToTarget(const FVector& TargetCm)
 {
-	StartTaskMotorSetIdealYaw(CalcIdealYaw(TargetCm));
+	// `0x102e2020`: `0x102e2750` = slot 515 `CalcIdealYaw` (retail frame, `[0, 360)`), then the tail.
+	SetMotorHintYaw(CalcIdealYaw(TargetCm));
 }
 
 float FElysiumNpcBase::StartTaskAngleMod(float Yaw)

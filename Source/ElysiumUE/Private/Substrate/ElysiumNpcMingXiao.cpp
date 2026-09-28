@@ -2021,7 +2021,7 @@ void FElysiumNpcMingXiao::MingXiaoEnterDeath()
 		? GBoss19MingXiaoDieProxySchedule : GBoss19MingXiaoDieSchedule;      // 0x10395c94 / 0x10395c9b
 	// FORCED: only an already-dead `m_NPCState`/`m_IdealNPCState` can refuse a death program.
 	SetSchedule(Program, true);                                              // 0x10395c90 / 0x10395ca0
-	LifeStateRetail = GBoss19LifeDying;                                      // 0x10395ca5 +0x200
+	AnimEventLifeStateWord = GBoss19LifeDying;                                      // 0x10395ca5 +0x200
 	bMingXiaoPlayedDeathAnim = true;                                         // 0x10395caf +0x6744
 	bInvincible = true;                                                      // 0x10395cb6 +0x63d8
 }

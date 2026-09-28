@@ -428,13 +428,6 @@ FString FElysiumNpc::TaskTailHintTargetName() const
 	return FString();
 }
 
-void FElysiumNpc::TaskTailResetAiState(int32 First, int32 Second)
-{
-	// SEAM for `0x102b52a0` (Boss19, lane L12): counted with its arguments.
-	++TaskTailResetAiStateCalls;
-	TaskTailLastResetAiStateArgs = FIntPoint(First, Second);
-}
-
 int32 FElysiumNpc::TaskTailCopyPropFadeout(uint32 RawOperand)
 {
 	// SEAM for `0x1018eb50`: no `activity_copy_prop` entity; answers 0, the arm that keeps running.
@@ -793,7 +786,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 
 	// --- index 0x5d: TASK_SET_DYING --------------------------------------------------------------
 	case TASK_SET_DYING:
-		NpcLifeStateWord = 1;                                      // 0x102a778e +0x200 = LIFE_DYING
+		AnimEventLifeStateWord = 1;                                      // 0x102a778e +0x200 = LIFE_DYING
 		StartTask19Complete();                                  // 0x102a7798 -> 0x102a66d7
 		return 0;
 
@@ -869,7 +862,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_CLEAR_HATRED:
 		// `0x102b52a0(this, 1, 1)` -- Boss19's `ResetAiState`, lane L12's body. Reached through the
 		// seam below until that body lands (the integrator redirects it).
-		TaskTailResetAiState(1, 1);                               // 0x102a5353
+		ResetAiState(true, true);                                 // 0x102a5353
 		TaskComplete(false);                                      // 0x102a535c
 		return 0;
 

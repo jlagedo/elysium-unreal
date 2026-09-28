@@ -50,7 +50,7 @@ int32 TaskTailNavGoalCalls = 0;
  *  (`0x102edaa0`), `StartTaskFindCoverPos` (`0x102edc80`), `StartTaskHintFacing` (`0x102d11f0`),
  *  `StartTaskSetArrivalActivity` / `StartTaskSetArrivalDirection` (`0x102ee410` / `0x102ee530`),
  *  `Conditions19LastKnownPosition` (`0x102dfed0`), `StartTaskAngleMod` (`0x10288590`), and the
- *  `m_lifeState` word `NpcLifeStateWord`. */
+ *  `m_lifeState` word `AnimEventLifeStateWord`. */
 bool TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoalFlags);
 
 /** SEAM for `0x102a9c60` -> `0x102a9f20` -> `0x102a9ee0` / `0x102a9f00` -- the current waypoint,
@@ -134,12 +134,7 @@ FElysiumEntityHandle TaskTailFindEntityByName(const FString& Name) const;
 /** SEAM for `0x102a9c40` -- the hint's target name (`+0x468 m_strTargetName`), empty with no hint. */
 FString TaskTailHintTargetName() const;
 
-/** SEAM for `0x102b52a0(this, 1, 1)` -- `TASK_CLEAR_HATRED`'s reset (memory bits `0x08038000`, the
- *  ideal state back to IDLE with its `+0x1b3c` trace). The body is Boss19's (lane L12, "ResetAiState");
- *  this stands until it lands and the integrator redirects the call. Counted. */
-void TaskTailResetAiState(int32 First, int32 Second);
-int32 TaskTailResetAiStateCalls = 0;
-FIntPoint TaskTailLastResetAiStateArgs = FIntPoint::ZeroValue;
+/** `0x102b52a0(this, 1, 1)`, `TASK_CLEAR_HATRED`'s reset, is family Boss19's `ResetAiState`. */
 
 /** SEAM for `0x102b6890(this, prop)` -- the physics kick applied to a prop. Counted, with the prop. */
 int32 TaskTailKicks = 0;

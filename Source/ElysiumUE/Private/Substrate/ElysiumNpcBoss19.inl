@@ -49,7 +49,5 @@ void ClearEnemyMemoryStore(const FString& Reason);
 int32 EnemyStoreClearedRecords = INDEX_NONE;
 FString EnemyStoreClearReason;
 
-/** `m_lifeState` (`+0x200`). SEAM: this runtime spells liveness as the death latches
- *  (`FElysiumEntity::IsAlive`, `ElysiumEntitySlotBodies.cpp`) and has no `m_lifeState` word; the
- *  Boss19 death entries write `LIFE_DYING` (1) here and `IsAlive` does not read it. */
-int32 LifeStateRetail = 0;
+/** `m_lifeState` (`+0x200`), which the Boss19 death entries write LIFE_DYING (1) into, is family
+ *  Misc19's `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`): one word (StartTask19 integration). */

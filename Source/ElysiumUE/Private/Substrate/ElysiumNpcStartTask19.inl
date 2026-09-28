@@ -215,9 +215,8 @@ double StartTask19WeaponNextAttackTime(bool bSecondary) const;
 /** `m_hClosestPlayer` resolved (`0x102c6420` / `0x102c64d0`) -- `Senses.Memory.ClosestPlayer`. */
 FElysiumEntity* StartTask19ClosestPlayer() const;
 
-/** SEAM for `0x102c1400(this)`, the dialogue activity `TASK_RUN_DIALOG` asks for (-1 = none). The
- *  dialogue upkeep is `FElysiumNpcDialogue`'s and exposes no retail activity; answers -1. */
-int32 StartTask19DialogActivity();
+/** `0x102c1400(this)`, the dialogue activity `TASK_RUN_DIALOG` asks for, is family RunTask19's
+ *  `RunDialogActivity`. */
 
 /** `CBaseCombatCharacter::AddExpressionForEvent` (`0x101072b0`, thunk `0x1000afc9`) with an event
  *  index in `[0, 2)`. SEAM: this runtime names its expressions (`DefExpression`) and carries no

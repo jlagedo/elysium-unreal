@@ -235,9 +235,6 @@ public:
 	virtual bool OverrideMove(float Arg0) override;
 
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
-	/** `+0x66b4 CNPC_VManBat::m_flCoastTimer` (datamap): `StartTask` `0x1038c390` task `0x163` arms it
-	 *  to curtime + 1.0. */
-	double ManBatCoastTimer = 0.0;
 	/** The words `StartTask` writes on every flight arm: the secure mode word (both the encoded
 	 *  `+0x6670` and the port's decoded carrier) and `m_iMoveGoalNodeID` (both port carriers). */
 	void ManBatSetMode(int32 Mode);

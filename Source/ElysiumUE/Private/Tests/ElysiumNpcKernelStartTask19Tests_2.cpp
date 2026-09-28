@@ -337,7 +337,7 @@ bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 
 	// 0xe8 `0x102a778e`: `m_lifeState = 1`, then the break tail.
 	F.Run(0xe8);
-	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.NpcLifeStateWord, 1);
+	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.AnimEventLifeStateWord, 1);
 	TestTrue(TEXT("0x102a7798 completes"), F.Completed());
 
 	// 0xe5 `0x102a5087`: the self-damage completes.
@@ -351,10 +351,12 @@ bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102a533b completes"), F.Completed());
 
 	// 0xf4 `0x102a534d`: `0x102b52a0(this, 1, 1)`, complete.
-	const int32 ResetsBefore = Npc.TaskTailResetAiStateCalls;
+	// `0x102b52a0` (family Boss19's `ResetAiState`): `m_afMemory &= 0xf7fc7fff` (`0x102b52c5`) and,
+	// with its second argument 1, `m_IdealNPCState = IDLE` (`0x102b5305`).
+	Npc.BaseScheduleHost.MemoryBits = 0xffffffffu;
 	F.Run(0xf4);
-	TestEqual(TEXT("0x102a5353 the reset is reached"), Npc.TaskTailResetAiStateCalls, ResetsBefore + 1);
-	TestTrue(TEXT("with (1, 1)"), Npc.TaskTailLastResetAiStateArgs == FIntPoint(1, 1));
+	TestEqual(TEXT("0x102a5353 the reset strips m_afMemory"), Npc.BaseScheduleHost.MemoryBits, 0xf7fc7fffu);
+	TestEqual(TEXT("0x102b5305 the ideal state goes IDLE"), Npc.IdealStateRetail(), 1);
 	TestTrue(TEXT("0x102a535c completes"), F.Completed());
 
 	// 0xf5 `0x102a536e`: the disconnect and the RAW word-two OR, routing bit included.

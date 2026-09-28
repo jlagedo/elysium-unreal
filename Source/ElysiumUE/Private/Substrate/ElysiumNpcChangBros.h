@@ -174,15 +174,6 @@ public:
 	double ChangEnergyChargeTime = 0.0;         // +0x66f0 m_fEnergyChargeTime
 
 	// --- 0019/8 L04 (StartTask19 species): private helpers ---
-	/** `+0x66d4 CNPC_VChangBros::m_fUnitedTime` (datamap): `StartTask` `0x1036b750` task `0x15b` arms it
-	 *  to curtime + 4.0. (Rebinds the species shape map's `ABSENT` row.) */
-	double ChangUnitedTime = 0.0;
-	/** `+0x66d8 CNPC_VChangBros::m_bEnergyBallSpawned` (datamap): task `0x157` clears it. (Rebinds the
-	 *  `ABSENT` row.) */
-	bool bChangEnergyBallSpawned = false;
-	/** `+0x66f0 CNPC_VChangBros::m_fEnergyChargeTime` (datamap): task `0x156` arms it to curtime + 1.5.
-	 *  (Rebinds the `ABSENT` row.) */
-	double ChangEnergyChargeTime = 0.0;
 	/** SEAM for `thunk_FUN_102c41b0(this, name, &position)`, recorded (see the definition). */
 	void ChangCreateEmitter(const TCHAR* Name, const FVector* PositionUnits);
 	TArray<FTeleportEmitterPlacement> ChangEmitterPlacements;

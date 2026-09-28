@@ -432,7 +432,7 @@ void FElysiumNpcMingXiaoTentacle::MingXiaoTentacleEnterDeath()
 	// `+0x1b30`/`+0x1b34` := `NPC_VMingXiaoTentacle.cpp`, line — absent in the shape map; recorded.
 	RecordScheduleEvent(FString::Printf(TEXT("EnterDeath trace NPC_VMingXiaoTentacle.cpp:%d"), Line));   // 0x1039e9aa / 0x1039e9f2
 	SetSchedule(Program, true);                                              // 0x1039e9fc 0x102ae750, FORCED
-	LifeStateRetail = GBoss19TentacleLifeDying;                              // 0x1039ea01 +0x200
+	AnimEventLifeStateWord = GBoss19TentacleLifeDying;                              // 0x1039ea01 +0x200
 	bTentaclePlayedDeathAnim = true;                                         // 0x1039ea0b +0x6699
 	bInvincible = true;                                                      // 0x1039ea12 +0x63d8
 }

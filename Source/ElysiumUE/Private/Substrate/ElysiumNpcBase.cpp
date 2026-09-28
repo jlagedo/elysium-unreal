@@ -138,7 +138,7 @@ uint8 FElysiumNpcBase::NpcStateFlags() const
 }
 
 // `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal, write `m_lifeState = 1`.
-// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (StartTaskClearGoal + NpcLifeStateWord = 1) at wave 2
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (StartTaskClearGoal + AnimEventLifeStateWord = 1) at wave 2
 void FElysiumNpcBase::BeginDying()
 {
 	// The navigator reset is the port's stop -- `0x102ee270` clears the goal and the path, which is

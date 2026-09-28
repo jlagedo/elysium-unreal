@@ -128,11 +128,9 @@ bool NavBuildRoute(bool bHaveDest, const FVector& DestCm, float ToleranceCm);
  *  `TranslateEnemyChasePosition` in `TASK_GET_PATH_TO_ENEMY_LKP`. Retail name unrecovered. */
 float NavPathScalar20 = 0.f;
 
-/** `CBaseEntity::m_lifeState` (`+0x200`) as `TASK_DIE`'s start arm (`0x1028680c`) and the Troika's
- *  `TASK_SET_DYING` (`0x102a778e`) write it: 1 = LIFE_DYING. The NPC line has no other owner of the
- *  word (the player's is `FElysiumPlayer::LifeState`); the mind's dead state is this runtime's account
- *  of the rest of the lifecycle. One name for the word across the StartTask and Spawn families. */
-int32 NpcLifeStateWord = 0;
+/** `CBaseEntity::m_lifeState` (`+0x200`), which `TASK_DIE`'s start arm (`0x1028680c`) and the Troika's
+ *  `TASK_SET_DYING` (`0x102a778e`) write 1 (LIFE_DYING) into, is family Misc19's
+ *  `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`): one word. */
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`) as the StartTask arms drive it, onto this runtime's
  *  navigator (`IElysiumNpcMotor`). `SetGoalFlags` is the call's second argument (0, 2, or 4). On a
@@ -164,13 +162,13 @@ void StartTaskSetArrivalDirectionAngles(const FVector& ArrivalAngles);
 FVector StartTaskCurWaypointPos() const;
 
 /** `0x102e0b40` — `m_pMotor+0x2c = -1.0`, the yaw-speed hold every facing arm opens with (reached
- *  through thunk `0x10009980`). **SEAM**: no motor word; counted. */
+ *  through thunk `0x10009980`): family RunTask19's `MotorMoveStop`, counted here for the tests. */
 void StartTaskMotorHoldYaw();
 
 /** The motor's ideal-yaw store as `0x10288670` / the tail of `0x102e2020` write it: flip by 180
  *  when `motor+0x28` is set, then `motor+0x1c == 180.0f` stores straight into `motor+0x34`
- *  (`MotorIdealYaw`) while anything else goes through `0x102e0a80`. No `+0x1c` word stands here, so
- *  the direct store is what runs (the same call `NPCInit` makes). */
+ *  (`MotorIdealYaw`) while anything else goes through `0x102e0a80`: family Hints' `SetMotorHintYaw`
+ *  (a RETAIL-frame yaw). */
 void StartTaskMotorSetIdealYaw(float Yaw);
 
 /** `CAI_Motor::SetIdealYawToTarget(pos, 0)` (`0x102e2020`): `CalcIdealYaw` (slot 515, through
