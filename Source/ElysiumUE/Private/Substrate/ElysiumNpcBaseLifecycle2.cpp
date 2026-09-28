@@ -3,6 +3,7 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
@@ -30,6 +31,42 @@ const TCHAR* FElysiumNpcBase::NpcInitThinkFunction()
 const TCHAR* FElysiumNpcBase::StartNpcThinkFunction()
 {
 	return TEXT("LAB_1000f4e8");
+}
+
+void FElysiumNpcBase::ReapplyRelationshipString()
+{
+	// `0x10273760`: `InputSetRelationship(this, m_RelationshipString ?: "", 0)`.
+	const FString Line = AuthoredRelationshipString();
+	if (!Line.IsEmpty())
+	{
+		// The port's `InputSetRelationship` warns on an empty line, which retail's parser passes
+		// silently; an empty line changes nothing on either side, so it is not dispatched.
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(Line);
+		InputSetRelationship(Args);
+	}
+}
+
+void FElysiumNpcBase::NpcInitThink()
+{
+	// `0x10273aa0` (story 8 wave 2, L13: the entity think dispatches it for the map's first second;
+	// past that second `NPCInit` `0x10273a5x` and `CNPC_VCamera::NPCInit` `0x10369xxx` call it
+	// inline -- the pass-C smoke found every maker-spawned and travelled-to NPC parked on FLT_MAX).
+	ReapplyRelationshipString();                                            // 0x10273aa3 0x10273760
+	StartNPC();                                                             // 0x10273aac slot 422
+	PostNPCInit();                                                          // 0x10273ab7 JMP slot 421
+}
+
+FString FElysiumNpcBase::AuthoredRelationshipString() const
+{
+	// SEAM; see the declaration. `FString` keys hash and compare case-insensitively, as the def's
+	// keyvalue names are authored in any case.
+	if (Def == nullptr)
+	{
+		return FString();
+	}
+	const FString* Line = Def->Keys.Find(TEXT("Relationship"));
+	return Line != nullptr ? *Line : FString();
 }
 
 void FElysiumNpcBase::ThinkSet(const TCHAR* Function, double Delay)
@@ -199,7 +236,8 @@ void FElysiumNpcBase::NPCInit()
 	}
 	else
 	{
-		++NpcInitInlineThinkCalls;                                       // inline 10273aa0
+		NpcInitThink();                                                  // inline 10273aa0
+		++NpcInitInlineThinkCalls;
 	}
 	Mind.ClearForceStateChange();                                        // +0x1b28
 	Unknown5b58 = 0;                                                     // +0x5b58

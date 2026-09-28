@@ -165,6 +165,34 @@ bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
 }
 
 // The two words retail does NOT write in this body, each asserted as an absence.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19LateNpcInitTest,
+	"Elysium.Substrate.NpcKernelLifecycle19.LateNPCInitThinksInline", GLifecycle19Flags)
+bool FElysiumNpcKernelLifecycle19LateNpcInitTest::RunTest(const FString&)
+{
+	// `0x10273390` at `0x10273a5x`: `if (curtime <= 1.0) { ThinkSet(NPCInitThink, 0); m_flNextThink =
+	// curtime + 0.1; } else { NPCInitThink(this); }` -- past the map's first second the init think
+	// runs INLINE (`0x10273760`, slot 422 `StartNPC`, slot 421), so a maker child or an NPC on a map
+	// reached by travel is started by its own `NPCInit`. `CNPC_VCamera::NPCInit` `0x103692c0` has the
+	// same two arms. The pass-C smoke found the port's else arm empty: every late NPC stood on FLT_MAX.
+	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
+	if (F.Npc == nullptr)
+	{
+		AddError(TEXT("no NPC"));
+		return false;
+	}
+	F.World.Advance(2.0);
+	const int32 InlineBefore = F.Npc->NpcInitInlineThinkCalls;
+	const int32 ThinkSetsBefore = F.Npc->ThinkSetCalls;
+	F.Npc->ThinkFunctionName.Reset();
+	F.Npc->NPCInit();                                                    // 0x1029a0b0 -> 0x10273390
+	TestEqual(TEXT("10273a5x else arm ran NPCInitThink inline"), F.Npc->NpcInitInlineThinkCalls, InlineBefore + 1);
+	TestTrue(TEXT("10273aac slot 422 StartNPC re-armed the ordinary think"), F.Npc->ThinkSetCalls > ThinkSetsBefore);
+	TestEqual(TEXT("1029a8b0 StartNPC installed LAB_1000f4e8"), F.Npc->ThinkFunctionName,
+		FString(FElysiumNpcBase::StartNpcThinkFunction()));
+	TestTrue(TEXT("late NPC is armed to think"), F.Npc->NextThink < ELYSIUM_NEVER_THINK);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TroikaNPCInitAbsences", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest::RunTest(const FString&)

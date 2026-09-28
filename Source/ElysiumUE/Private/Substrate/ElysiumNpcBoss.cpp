@@ -99,41 +99,6 @@ void FElysiumNpc::ResetAiState(bool bReapplyRelationships, bool bSetIdleIdeal)
 	}
 }
 
-void FElysiumNpc::ReapplyRelationshipString()
-{
-	// `0x10273760`: `InputSetRelationship(this, m_RelationshipString ?: "", 0)`.
-	const FString Line = AuthoredRelationshipString();
-	if (!Line.IsEmpty())
-	{
-		// The port's `InputSetRelationship` warns on an empty line, which retail's parser passes
-		// silently; an empty line changes nothing on either side, so it is not dispatched.
-		FElysiumInputArgs Args;
-		Args.Param = FElysiumVariant::String(Line);
-		InputSetRelationship(Args);
-	}
-}
-
-void FElysiumNpc::NpcInitThink()
-{
-	// `0x10273aa0` (story 8 wave 2, L13: the entity think dispatches it; `NPCInit` has always
-	// installed it by name, `ThinkSet(NpcInitThinkFunction())`, but nothing ran it).
-	ReapplyRelationshipString();                                            // 0x10273aa3 0x10273760
-	StartNPC();                                                             // 0x10273aac slot 422
-	PostNPCInit();                                                          // 0x10273ab7 JMP slot 421
-}
-
-FString FElysiumNpc::AuthoredRelationshipString() const
-{
-	// SEAM; see the declaration. `FString` keys hash and compare case-insensitively, as the def's
-	// keyvalue names are authored in any case.
-	if (Def == nullptr)
-	{
-		return FString();
-	}
-	const FString* Line = Def->Keys.Find(TEXT("Relationship"));
-	return Line != nullptr ? *Line : FString();
-}
-
 void FElysiumNpc::ClearEnemyMemoryStore(const FString& Reason)
 {
 	// `0x102dfc10` on slot 541 `GetEnemies()` (`0x102b52f0 CALL [EAX+0x874]`), the store L11's

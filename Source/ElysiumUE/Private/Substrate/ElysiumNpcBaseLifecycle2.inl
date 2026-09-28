@@ -87,6 +87,27 @@ static const TCHAR* NpcInitThinkFunction();    // `0x10273aa0`
 
 static const TCHAR* StartNpcThinkFunction();   // `LAB_1000f4e8`
 
+/** `0x10273790` `CAI_BaseNPC::InputSetRelationship`: target D_* priority triples onto the
+ *  relationship table (`Relationships`, a base member). Moved from `FElysiumNpc` (story 8 pass C):
+ *  `NPCInitThink` `0x10273aa0` reaches it from the base `NPCInit`. */
+void InputSetRelationship(const FElysiumInputArgs& Args);
+
+/** SEAM for `m_RelationshipString` (`+0x1584`), the authored `Relationship` keyvalue
+ *  `0x10273760` re-applies. The port parses the line through `InputSetRelationship` at spawn and keeps
+ *  no string member (`ElysiumNpcKernelBindings.cpp` UNBOUND row); this answers the authored key from
+ *  the entity's own def, which is the string retail stored, or empty. */
+FString AuthoredRelationshipString() const;
+
+/** `0x10273760` — `InputSetRelationship(this, m_RelationshipString (+0x1584) ?: "", 0)`: re-apply the
+ *  authored relationship line. Reached from `ResetAiState` and from `NPCInitThink` `0x10273aa0`. */
+void ReapplyRelationshipString();
+
+/** `0x10273aa0` — the think `NPCInit` installs for the map's first second (`ThinkSet(NPCInitThink)`,
+ *  `curtime + 0.1`): `0x10273760`, slot 422 `StartNPC`, then a tail jump into slot 421
+ *  `PostNPCInit`. `StartNPC` re-installs the ordinary think (`LAB_1000f4e8`, `CallNPCThink` ->
+ *  slot 431), so `NPCThink` runs from the NEXT think on. */
+void NpcInitThink();
+
 /** SEAM for `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe`. No hull sweep stands here:
  *  answers the found-floor arm and leaves the origin where it was. */
 bool MoveProbeFloorDrop(FVector& InOutOriginUnits);

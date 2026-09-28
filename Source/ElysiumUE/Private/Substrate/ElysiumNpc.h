@@ -294,8 +294,6 @@ public:
 
 	void SeedPlayerRelationship();
 
-	void InputSetRelationship(const FElysiumInputArgs& Args);
-
 	/**
 	 * `ChangeSchedule` / `StartSchedule` — the two policy-level commands that name a native schedule
 	 * (`docs/vtmb/npc-ai/authored-control.md` -> "Direct schedule changes"). One handler serves

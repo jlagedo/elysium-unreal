@@ -372,7 +372,7 @@ void FElysiumNpc::SeedPlayerRelationship()
 	Relationships.SetEntity(Player, Value, FCString::Atoi(*Tokens[1]));
 }
 
-void FElysiumNpc::InputSetRelationship(const FElysiumInputArgs& Args)
+void FElysiumNpcBase::InputSetRelationship(const FElysiumInputArgs& Args)
 {
 	TArray<FString> Tokens;
 	Args.Param.ToString().ParseIntoArrayWS(Tokens);

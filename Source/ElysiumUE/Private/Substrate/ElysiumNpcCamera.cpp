@@ -132,6 +132,7 @@ void FElysiumNpcCamera::NPCInit()
 	}
 	else
 	{
+		NpcInitThink();                                                  // 10369xxx inline 10273aa0
 		++NpcInitInlineThinkCalls;
 	}
 	Mind.ClearForceStateChange();
