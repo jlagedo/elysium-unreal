@@ -167,12 +167,10 @@ void FElysiumNpcBase::SetMotorHintYaw(float Yaw)
 void FElysiumNpcBase::ReleaseMotorHintYaw()
 {
 	// `0x102e1e20(motor, -1)` — `UpdateYaw(-1)`, the turn toward `motor+0x34` the interest bodies
-	// end with. (The claim's opening `0x102e0b40` is `MotorMoveStop()`, called at its site.)
-	//
-	// STILL A SEAM (story 8 L05 integration, listed for L13): `MotorUpdateYaw` would hand
-	// `MotorIdealYaw` to the mover, but no port navigator writes `motor+0x34` while it walks
-	// (retail's `MoveExecute` keeps it at the travel yaw), so the word is stale after any walk and
-	// the body would snap to it. Wire this to `MotorUpdateYaw(-1)` once the mover keeps the word.
+	// end with. (The claim's opening `0x102e0b40` is `MotorMoveStop()`, called at its site.) Wired
+	// at story 8 wave 2: the navigator step keeps `motor+0x34` at the travel yaw while a route runs
+	// (`NavigatorMoveStep`, retail's `MoveExecute`), so the word is live after a walk.
+	MotorUpdateYaw(-1);
 }
 
 FVector FElysiumNpcBase::HintComparePosition(const FElysiumEntity* Entity) const

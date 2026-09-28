@@ -134,7 +134,7 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	Guard->BaseScheduleHost.MemoryBits = 0;
 	Guard->IdealActivityNumber = 0;
 	Guard->bAllowTurningAnims = false;
-	Guard->MotorIdealYawDelta = -100.f;
+	Guard->Angles.Y = 0.0; Guard->MotorIdealYaw = -100.f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	Guard->SetTurnActivity();
 	TestEqual(TEXT("with the gate closed the body still lands on ACT_IDLE"),
 		Guard->IdealActivityNumber, 1);
@@ -153,20 +153,20 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("and still tags nothing"),
 		static_cast<int32>(Guard->BaseScheduleHost.MemoryBits & 0x2000), 0);
 
-	// The motor seam: `CAI_Motor::DeltaIdealYaw` has no source, so it stands at retail's
-	// already-aligned answer.
-	Guard->MotorIdealYawDelta = 0.f;
-	TestEqual(TEXT("the motor's yaw-delta seam answers retail's aligned value"),
+	// `CAI_Motor::DeltaIdealYaw` (`0x102e1f90`) over its two live inputs (story 8 wave 2): the body
+	// standing on its ideal yaw is aligned.
+	Guard->Angles.Y = 0.0; Guard->MotorIdealYaw = 0.f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
+	TestEqual(TEXT("a body on its ideal yaw answers the aligned 0"),
 		Guard->MotorDeltaIdealYaw(), 0.f);
 
 	// `FacingIdeal` `0x10278c80` — `|delta| <= 0.006`, and the tolerance is a DOUBLE in `.rdata`.
 	TestTrue(TEXT("aligned is facing ideal"), Guard->FacingIdeal());
-	Guard->MotorIdealYawDelta = 0.006f;
+	Guard->Angles.Y = 0.0; Guard->MotorIdealYaw = 0.006f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	TestTrue(TEXT("the tolerance is inclusive — the listing's compare is <=, not <"),
 		Guard->FacingIdeal());
-	Guard->MotorIdealYawDelta = 0.0061f;
+	Guard->Angles.Y = 0.0; Guard->MotorIdealYaw = 0.0061f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	TestFalse(TEXT("just past it is not"), Guard->FacingIdeal());
-	Guard->MotorIdealYawDelta = -0.005f;
+	Guard->Angles.Y = 0.0; Guard->MotorIdealYaw = -0.005f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	TestTrue(TEXT("and the test is on the absolute value"), Guard->FacingIdeal());
 
 	return true;

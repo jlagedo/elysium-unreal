@@ -22,10 +22,15 @@ float FElysiumNpcBase::MotorDeltaIdealYaw() const
 	// with `UTIL_AngleMod(a) = 0.0054931640625f * (int(a * 65536/360) & 65535)` — the 16-bit
 	// quantisation, whose leading constant is `_DAT_1044ffdc`.
 	//
-	// `IElysiumNpcMotor` takes a commanded yaw through `Face()` and keeps no `m_IdealYaw`, so the
-	// seam's stored answer stands in for the whole expression; the formula is recorded here for the
-	// day the mover carries one.
-	return MotorIdealYawDelta;
+	// Story 8 wave 2 (L13): both inputs stand -- `m_IdealYaw` is `MotorIdealYaw` (motor `+0x34`,
+	// kept at the travel yaw by the navigator step while a route runs, `NavigatorMoveStep`) and the
+	// body's yaw is the entity's retail-frame `Angles.Y`, synced off the mover every frame.
+	const float Current = StartTaskAngleMod(static_cast<float>(Angles.Y));
+	if (Current == MotorIdealYaw)                                        // _DAT_104454c4 arm
+	{
+		return 0.f;
+	}
+	return NpcKernelFacingShared::FacingRetailAngleDiff(MotorIdealYaw, Current);   // 0x1013d580
 }
 
 void FElysiumNpcBase::MotorAddFacingTarget(const FFacingTargetRequest& Request)

@@ -23,12 +23,6 @@ struct FFacingTargetRequest
 // registered number, which is what its bodies compare and write.
 int32 IdealActivityNumber = 0;
 
-// `CAI_Motor::DeltaIdealYaw` (`0x102e1f90`): `AngleDiff(m_IdealYaw, AngleMod(GetLocalAngles().y))`,
-// and exactly 0 when the two are equal. **SEAM** — nothing in this substrate writes it, so it
-// stands at retail's "already facing the ideal" answer, 0. It is a field rather than a query so the
-// ladders below can be driven against a live number the day the mover carries one.
-float MotorIdealYawDelta = 0.f;
-
 TArray<FFacingTargetRequest> FacingTargetRequests;
 
 struct FTurnActivityPick

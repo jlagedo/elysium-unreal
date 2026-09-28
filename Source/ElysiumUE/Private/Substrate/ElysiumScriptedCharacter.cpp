@@ -157,7 +157,9 @@ void FElysiumScriptedCharacter::SyncMovingRecord()
 	FVector Feet = Origin;
 	float Yaw = -Angles.Y;
 	Motor->SampleTransform(Feet, Yaw);
-	if (Feet.Equals(Origin, 0.01) && FMath::IsNearlyEqual(-Yaw, Angles.Y, 0.01f))
+	// The yaw is compared tight: `CAI_Motor::DeltaIdealYaw`'s `FacingIdeal` tolerance is 0.006
+	// degrees (`0x10278c80`), so a record left 0.01 behind a settled body would never face.
+	if (Feet.Equals(Origin, 0.01) && FMath::IsNearlyEqual(-Yaw, Angles.Y, 1.0e-4f))
 	{
 		return;   // a standing body costs nothing
 	}

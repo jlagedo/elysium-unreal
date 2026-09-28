@@ -537,6 +537,10 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		return;
 	}
 	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
+	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken
+	// through `UTIL_AngleMod` as the motor stores it (named divergence: the mover's, not the path's).
+	MotorIdealYaw = StartTaskAngleMod(static_cast<float>(Angles.Y));
 	if (Status == EElysiumNpcMoveStatus::Reached)
 	{
 		// `OnNavComplete` (`0x102eea90`): `0x102eeb70` (the goal words and the path's reset -- the
