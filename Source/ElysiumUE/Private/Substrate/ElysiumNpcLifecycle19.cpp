@@ -24,7 +24,6 @@ namespace
 {
 	bool GLifecycle19InNpcInit = false;
 	int32 GLifecycle19NodeGraphHull = 0;
-	int32 GLifecycle19NodeIndexErrors = 0;
 	FElysiumEntityHandle GLifecycle19FleshpileAndrei;
 
 	bool Lifecycle19IsNoneSentinel(const FString& Authored)
@@ -79,7 +78,9 @@ int32& FElysiumNpc::NodeGraphHullIndex()
 
 int32& FElysiumNpc::NodeIndexErrorCount()
 {
-	return GLifecycle19NodeIndexErrors;
+	// `DAT_106c994c` is ONE global: the ped-link restore, the node-network validation `0x10307ac0`
+	// and the patrol steps all bump the same word, which family Script19 carries in the patrol pool.
+	return PatrolNodeMissCounter();
 }
 
 FElysiumEntityHandle& FElysiumNpc::FleshpileAndreiSingleton()
@@ -484,15 +485,31 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	auto Revalidate = [this](FPatrolPathCell& Cell)
 	{
 		++PatrolPathRevalidations;
-		if (Cell.Path == nullptr)
+		if (Cell.Path == nullptr)                                        // 0x1029f614 / 0x1029f61c
 		{
 			return;
 		}
-		bool bValid = true;
-		for (int32 Index = 0; Index < Cell.Path->Count && Index < PatrolPathNodeCapacity; ++Index)
+		// `0x10307ac0(path, m_pNavigator->+0x2c)`: a null network answers false with nothing counted;
+		// per node, `id < 0` answers false with nothing counted, `id >= count` bumps `DAT_106c994c`
+		// and answers false, a null network slot answers false.
+		bool bValid = World != nullptr;
+		for (int32 Index = 0; bValid && Index < Cell.Path->Count && Index < PatrolPathNodeCapacity; ++Index)
 		{
+			const int32 NodeId = Cell.Path->Nodes[Index];
+			if (NodeId < 0)                                                  // 0x10307ac0 `(int)id < 0`
+			{
+				bValid = false;
+				break;
+			}
 			FVector Position = FVector::ZeroVector;
-			if (PatrolNodePosition(Cell.Path->Nodes[Index], Position) != EPatrolNode::Found)
+			const EPatrolNode Node = PatrolNodePosition(NodeId, Position);
+			if (Node == EPatrolNode::OutOfRange)                             // `*network <= id`
+			{
+				++PatrolNodeMissCounter();                                   // `DAT_106c994c++`
+				bValid = false;
+				break;
+			}
+			if (Node != EPatrolNode::Found)                                  // `network[1][id] == 0`
 			{
 				bValid = false;
 				break;

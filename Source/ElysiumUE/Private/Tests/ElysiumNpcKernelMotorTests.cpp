@@ -570,10 +570,11 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestTrue(TEXT("the snapshot is recorded"), Guard->Navigator.bSnapshotTaken);
 	TestEqual(TEXT("with its argument"), Guard->Navigator.SnapshotArgument, 7);
 
-	// `FUN_1027a6c0` `0x1027a6c0` — the link's cached activity, or `ACT_IDLE` 1. The link is a SEAM,
-	// so the answer is always the fallback.
+	// `FUN_1027a6c0` `0x1027a6c0` — the navigator goal's movement activity, or `ACT_IDLE` 1. The pair
+	// is `0x102ee6a0` (`IsGoalActive`) then `0x102ee510` (the path's movement activity); this guard
+	// has no active goal, so `0x102ee6a0` refuses and the answer is the fallback.
 	int32 Activity = 0;
-	TestFalse(TEXT("the link seam refuses"), Guard->NavLinkActivity(Activity));
+	TestFalse(TEXT("0x102ee6a0: no active goal refuses"), Guard->NavLinkActivity(Activity));
 	TestEqual(TEXT("so the resolved activity is ACT_IDLE"), Guard->ResolveLinkActivity(), 1);
 
 	// `FUN_10382d20` `0x10382d20` — the cancel half of the same unrecovered link object.

@@ -286,7 +286,11 @@ int32 FElysiumNpc::PatrolTypeForName(const FString& Name)
 			return Row;
 		}
 	}
-	UE_LOG(LogElysiumNpcEnt, Error, TEXT("Invalid Path Type String.  Valid types: 0123"));
+	// `0x10307a39`: the valid names concatenated (`strcat`, no separator) into `'%s'`, then tier0
+	// `Error()`, which is fatal in retail; its tail (`0x10307a47 XOR EAX,EAX`) answers type 0, which
+	// is what this crash guard carries on (named: the port logs instead of terminating).
+	UE_LOG(LogElysiumNpcEnt, Error, TEXT("Invalid Path Type String.\nValid types are '%s'"),
+		TEXT("0123"));                                            // 0x10611a0c
 	return 0;
 }
 
@@ -305,15 +309,15 @@ int32 FElysiumNpc::PatrolScheduleForName(const FString& Token) const
 	}
 	if (Global == INDEX_NONE)
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find schedule '%s'"),
-			*DebugString(), *Token);
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Could not find schedule '%s'"),
+			*DebugString(), *Token);                                                // 0x1029f3e7 0x105da098
 		return 0;
 	}
 	const int32 Local = const_cast<FElysiumNpc*>(this)->GetLocalScheduleId(Global); // 0x1029f3d9 slot 580 / 0x102ea280
 	if (Local == INDEX_NONE)
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not convert schedule '%s' to a local id"),
-			*DebugString(), *Token);
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Could not convert schedule '%s' to local"),
+			*DebugString(), *Token);                                                // 0x1029f40e 0x105da058
 		return 0;
 	}
 	return Local;

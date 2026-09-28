@@ -337,11 +337,16 @@ bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 	const int32 Revalidations = N.PatrolPathRevalidations;
 	const int32 Releases = N.PatrolPathReleases;
 	const int32 Scans = N.RestorePlaceScans;
+	const int32 MissesBefore = FElysiumNpc::PatrolNodeMissCounter();
 	N.OnRestore(true);
 	// `102998c0` validates BOTH pairs (`0x1029f610`) and releases each on its own (`0x1029f5d0`).
 	TestEqual(TEXT("1029f610 is asked for both routes"),
 		N.PatrolPathRevalidations, Revalidations + 2);
 	TestEqual(TEXT("1029f5d0 releases the stored hunt route"), N.PatrolPathReleases, Releases + 1);
+	// Node 0 is inside the network but names no node: `0x10307ac0`'s null-slot arm answers false
+	// without touching `DAT_106c994c`. (The restore's ped-link arm bumps the same global on its own,
+	// so the node arm is measured against this restore's delta below.)
+	const int32 BaselineDelta = FElysiumNpc::PatrolNodeMissCounter() - MissesBefore;
 	// `102db5e0` answers the place that holds this NPC — none here, which is `INDEX_NONE`.
 	TestEqual(TEXT("102db5e0 runs once per restore"), N.RestorePlaceScans, Scans + 1);
 	TestEqual(TEXT("...and with no place holding this NPC it answers nothing"),
@@ -349,6 +354,13 @@ bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 		FString(TEXT("searching")));   // the debug row's word for INDEX_NONE
 	// `+0x62e9 = 1` is the entity's own spawn-called byte.
 	TestTrue(TEXT("10299xxx +0x62e9 = 1"), N.bSpawnCalled);
+	// An id at or past the network's count takes the other arm: `DAT_106c994c++`, then false.
+	{ const int32 FarIds[] = { 1000000, -1 }; N.BuildPatrolPath(&N.PatrolPathHuntCell, 0, 0, 0, FarIds, FElysiumNpc::EPatrolPathBuild::Replace); }
+	const int32 MissesBeforeFar = FElysiumNpc::PatrolNodeMissCounter();
+	N.OnRestore(true);
+	TestEqual(TEXT("10307ac0: `*network <= id` bumps DAT_106c994c once more than the in-range empty slot"),
+		FElysiumNpc::PatrolNodeMissCounter() - MissesBeforeFar, BaselineDelta + 1);
+	TestNull(TEXT("...and the route is released"), N.PatrolPathHuntCell.Path);
 	return true;
 }
 

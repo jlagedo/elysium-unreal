@@ -104,11 +104,19 @@ int32 FElysiumNpcBase::NavGoalState() const
 
 bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 {
-	// `thunk_FUN_102ee6a0` (the pending link is valid) and `thunk_FUN_102ee510` (its cached
-	// activity), the pair `FUN_1027a6c0` reads. **SEAM**, and the link object's retail identity is
-	// **unrecovered** — the ledger itemises nothing past the `m_pNavigator` chain redirect.
-	(void)OutActivity;
-	return false;
+	// The pair `FUN_1027a6c0` reads off `m_pNavigator` (+0x5d34): `0x102ee6a0` is
+	// `CAI_Navigator::IsGoalActive` (`m_pPath` +0x30 and its current waypoint +0x24 both set,
+	// `NavigatorGoalIsActive`), and `0x102ee510` answers the path's movement activity
+	// (`0x1030b520(m_pPath)`), which this runtime's goal record carries as the Troika host's
+	// `NavigationActivity` (written by `SetGoal`'s activity word, `0x102ee250`). A base-only body has
+	// no host record and answers -1, which `0x1027a6c0` turns into ACT_IDLE.
+	if (!NavigatorGoalIsActive())                                        // 0x102ee6a0
+	{
+		return false;
+	}
+	const FElysiumNpc* const Troika = AsNpc();
+	OutActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;   // 0x102ee510
+	return true;
 }
 
 bool FElysiumNpcBase::MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta)
@@ -537,14 +545,19 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		return;
 	}
 	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
-	// The goal's move step (`0x102ef760`, slot 5 of the move goal under `CAI_Navigator::Move`):
-	// `SetIdealActivity(0x1027a6c0())` — the path's movement activity while a goal is active and it
-	// names one, else ACT_IDLE (1). This is what walks a body in its WALK/RUN clip: the maintained
-	// ideal activity commits the movement sequence (the sequence bridge plays it).
+	// The goal's move step (`0x102ef760`, slot 5 of the move goal under `CAI_Navigator::Move`).
+	// First the owner's movement sink (`[npc+0x19b0]`, `CAI_DefMovementSink`) is asked through its
+	// slot 5 (`+0x14`): a true answer returns 1 with no activity written (0x102ef771..0x102ef781).
+	// `CAI_DefMovementSink`'s slot 5 is `0x101a63c0`, `XOR AL,AL; RET 4`, and no port class replaces
+	// that secondary table, so the sink answers false and the step goes on.
+	constexpr bool bMovementSinkHandled = false;                             // 0x102ef777 CALL [EAX+0x14]
+	if (!bMovementSinkHandled)                                               // 0x102ef77a / 0x102ef77c JZ
 	{
-		const FElysiumNpc* const Troika = AsNpc();
-		const int32 MovementActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
-		SetIdealActivity(MovementActivity != INDEX_NONE ? MovementActivity : 1);   // 0x102ef787 0x1027a6c0 / 0x102ef790
+		// `SetIdealActivity(0x1027a6c0())` — `ResolveLinkActivity`, the one body of `0x1027a6c0`: the
+		// path's movement activity while the navigator's goal is active (`0x102ee6a0`) and it names
+		// one, else ACT_IDLE (1). This is what walks a body in its WALK/RUN clip: the maintained ideal
+		// activity commits the movement sequence (the sequence bridge plays it).
+		SetIdealActivity(ResolveLinkActivity());                             // 0x102ef78a 0x1027a6c0 / 0x102ef793
 	}
 	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
 	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken

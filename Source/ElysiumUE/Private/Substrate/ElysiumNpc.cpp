@@ -431,33 +431,40 @@ void FElysiumNpc::InputSetupPatrolType(const FElysiumInputArgs& Args)
 	{
 		return;
 	}
-	// `strtok` on the delimiter set `DAT_105c7ed4`: repeat, type, schedule.
+	// `strtok` on the delimiter set `DAT_105c7ed4`: repeat, type, schedule. Named crash guards (both
+	// patrol inputs): the whitespace split stands for `strtok` over `Q_strncpy(buf, param, 0x100)`
+	// (no 256-byte truncation here), a missing third token answers schedule 0 where retail hands
+	// `0x1029f370` a NULL, and `InputFollowPatrolPath` stops at 64 ids where retail overruns
+	// `aiStack_204[65]` (`0x1029eb73..0x1029ebb6`, `0x1029ee5a`).
+	const FString Param = Args.Param.ToString();
 	TArray<FString> Tokens;
-	Args.Param.ToString().ParseIntoArrayWS(Tokens);
-	if (Tokens.Num() < 2)                                                     // 0x1029ebd5
+	Param.ParseIntoArrayWS(Tokens);
+	if (Tokens.Num() < 2)                                                     // 0x1029ebb8 / 0x1029ebc0
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Argument to InputSetupPatrolType must be "
-			"\"<repeat> <type> <schedule>\""), *DebugString());
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Argument to InputSetupPatrolType(%s) is in the "
+			"wrong format.\nShould be 'RepeatCount PathType Schedule'"), *DebugString(), *Param);   // 0x1029ece8 0x105d9df0
 		return;
 	}
-	const int32 Repeat = FCString::Atoi(*Tokens[0]);                          // 0x1029ebe7 _atoi
-	if (Repeat < 0)                                                           // 0x1029ebef
+	const int32 Repeat = FCString::Atoi(*Tokens[0]);                          // 0x1029ebc9 _atoi
+	if (Repeat < 0)                                                           // 0x1029ebd3 / 0x1029ebd5
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not get repeat count from '%s'"),
-			*DebugString(), *Args.Param.ToString());
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Could not get repeat type %s (in "
+			"InputSetupPatrolType (%s))"), *DebugString(), *Tokens[1], *Param);   // 0x1029ec31 0x105d9ed8
 		return;
 	}
-	const int32 Type = PatrolTypeForName(Tokens[1]);                          // 0x1029ec2b 0x103079c0
-	const int32 ScheduleId = Tokens.IsValidIndex(2) ? PatrolScheduleForName(Tokens[2]) : 0;  // 0x1029ec3a 0x1029f370
-	if (ScheduleId == 0)                                                      // 0x1029ec43
+	// `0x103079c0` never answers -1: its miss is `Error()` then 0 (the crash guard `PatrolTypeForName`
+	// names), so the `-1` arm at `0x1029ec02` (the same 0x105d9ed8 message) is unreachable here too.
+	const int32 Type = PatrolTypeForName(Tokens[1]);                          // 0x1029ebf8 0x103079c0
+	const int32 ScheduleId = Tokens.IsValidIndex(2) ? PatrolScheduleForName(Tokens[2]) : 0;  // 0x1029ec53 0x1029f370
+	if (ScheduleId == 0)                                                      // 0x1029ec58
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find schedule '%s' in '%s'"),
-			*DebugString(), Tokens.IsValidIndex(2) ? *Tokens[2] : TEXT("(none)"),
-			*Args.Param.ToString());
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Could not find schedule '%s' (in "
+			"InputSetupPatrolType (%s))"), *DebugString(),
+			Tokens.IsValidIndex(2) ? *Tokens[2] : TEXT("(null)"), *Param);    // 0x1029ec82 0x105d9e80
 		return;
 	}
 	BuildPatrolPath(&PatrolPathCell, Repeat, Type, ScheduleId, nullptr,
-		EPatrolPathBuild::Replace);                                           // 0x1029ec57 0x1029f460(..., 1)
+		EPatrolPathBuild::Replace);                                           // 0x1029ecb1 0x1029f460(..., 1)
 }
 
 void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
@@ -467,12 +474,13 @@ void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
 	{
 		return;
 	}
+	const FString Param = Args.Param.ToString();
 	TArray<FString> Tokens;
-	Args.Param.ToString().ParseIntoArrayWS(Tokens);
-	if (Tokens.IsEmpty())                                                     // 0x1029ee0c
+	Param.ParseIntoArrayWS(Tokens);
+	if (Tokens.IsEmpty())                                                     // 0x1029edfe
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Argument to InputFollowPatrolPath is empty"),
-			*DebugString());
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Argument to InputFollowPatrolPath(%s) is in the "
+			"wrong format.\nShould be 'NodeID1 [NodeID2 [NodeID3 [...]]]'"), *DebugString(), *Param);   // 0x1029ee24 0x105d9f90
 		return;
 	}
 	// Up to 64 ids and the -1 terminator (`aiStack_204[65]`).
@@ -484,18 +492,18 @@ void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
 		{
 			break;   // retail's stack array overruns here; crash guard
 		}
-		const int32 Id = PatrolNodeIdFor(Token);                              // 0x1029ee4b 0x102d2900
-		if (Id == INDEX_NONE)                                                 // 0x1029ee55
+		const int32 Id = PatrolNodeIdFor(Token);                              // 0x1029ee4f 0x102d2900
+		if (Id == INDEX_NONE)                                                 // 0x1029ee57 / 0x1029ee61
 		{
 			// A miss logs and returns BEFORE the builder: no partial path is installed.
-			UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find node with name '%s' in '%s'"),
-				*DebugString(), *Token, *Args.Param.ToString());
+			UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s - Could not find node with id '%s' (in "
+				"InputSetPatrolPath (%s))"), *DebugString(), *Token, *Param);   // 0x1029eed4 0x105d9f30
 			return;
 		}
 		Ids[Count++] = Id;
 	}
-	Ids[Count] = -1;
-	BuildPatrolPath(&PatrolPathCell, 0, -1, 0, Ids, EPatrolPathBuild::Extend); // 0x1029eef0 0x1029f460(..., 0)
+	Ids[Count] = -1;                                                          // 0x1029ee8f
+	BuildPatrolPath(&PatrolPathCell, 0, -1, 0, Ids, EPatrolPathBuild::Extend); // 0x1029ee9a 0x1029f460(..., 0)
 }
 
 void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
@@ -1392,11 +1400,9 @@ bool FElysiumNpc::AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerT
 	// A token from a claim that was displaced (a scripted beat took the body mid-chase) is retired
 	// here rather than carried: the arbiter would refuse a release against it anyway.
 	Token.Reset();
-	// A patrol route is SUSPENDED rather than taken: the arbiter parks it, the release below restores
-	// it, and the route continues from the point it reached. An interesting-place visit is not
-	// parkable in that sense — it owns a claimed place — so `Think`'s hand-over finishes it first.
-	const bool bParkPatrol = Mind.Owner() == EElysiumBodyOwner::Patrol;
-	return Mind.Acquire(Owner, bParkPatrol, Token, Reason);
+	// Nothing is parked: an interesting-place visit owns a claimed place, so `Think`'s hand-over
+	// finishes it first, and the patrol claims no body since it became the path object's program.
+	return Mind.Acquire(Owner, /*bSuspendCurrent=*/false, Token, Reason);
 }
 
 void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
@@ -2694,10 +2700,6 @@ void FElysiumNpc::RestoreMindState()
 	if (!FElysiumNpcMind::IsSupportedState(State) || !FElysiumNpcMind::IsResumableOwner(Owner))
 	{
 		Owner = EElysiumBodyOwner::None;
-	}
-	if (Owner == EElysiumBodyOwner::Patrol)
-	{
-		Owner = EElysiumBodyOwner::None;   // no patrol executor claims a body since story 8 wave 2
 	}
 	if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
 	{

@@ -15,10 +15,10 @@ bool FElysiumNpcMindAdmissionTest::RunTest(const FString&)
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken Token;
 	TestFalse(TEXT("spawn does not admit an executor"),
-		Mind.Acquire(EElysiumBodyOwner::Patrol, false, Token, TEXT("pre-activation")));
+		Mind.Acquire(EElysiumBodyOwner::Ambient, false, Token, TEXT("pre-activation")));
 	Mind.ArmAdmission();
 	TestFalse(TEXT("activation arms but does not decide"),
-		Mind.Acquire(EElysiumBodyOwner::Patrol, false, Token, TEXT("before first think")));
+		Mind.Acquire(EElysiumBodyOwner::Ambient, false, Token, TEXT("before first think")));
 	TestTrue(TEXT("first frozen think admits once"), Mind.Admit());
 	TestFalse(TEXT("admission is idempotent"), Mind.Admit());
 	TestEqual(TEXT("admission establishes idle"), Mind.State(), EElysiumNpcState::Idle);
@@ -38,12 +38,14 @@ bool FElysiumNpcMindAdmissionTest::RunTest(const FString&)
 	TestTrue(TEXT("the mind returns to idle on request"),
 		Mind.RequestState(EElysiumNpcState::Idle, TEXT("test")));
 
-	// An ordinary body owner is not a cognitive transition: an alert NPC that takes a patrol token
+	// An ordinary body owner is not a cognitive transition: an alert NPC that takes a schedule token
 	// stays alert, or the ideal-state pass and the arbiter would fight for the state every think.
+	// (The patrol owner these cases used is deleted: the patrol is the path object's program since
+	// story 8 wave 2 and claims no body.)
 	Mind.RequestState(EElysiumNpcState::Alert, TEXT("test"));
-	FElysiumBodyOwnerToken Patrol;
-	TestTrue(TEXT("patrol acquires the free body"),
-		Mind.Acquire(EElysiumBodyOwner::Patrol, false, Patrol, TEXT("patrol")));
+	FElysiumBodyOwnerToken ScheduleToken;
+	TestTrue(TEXT("a schedule acquires the free body"),
+		Mind.Acquire(EElysiumBodyOwner::Schedule, false, ScheduleToken, TEXT("schedule")));
 	TestEqual(TEXT("...without resetting the cognitive state"), Mind.State(),
 		EElysiumNpcState::Alert);
 	return true;
@@ -58,44 +60,44 @@ bool FElysiumNpcBodyOwnerTest::RunTest(const FString&)
 	Mind.ArmAdmission();
 	Mind.Admit();
 
-	FElysiumBodyOwnerToken Patrol;
-	TestTrue(TEXT("patrol acquires a free body"),
-		Mind.Acquire(EElysiumBodyOwner::Patrol, false, Patrol, TEXT("patrol")));
+	FElysiumBodyOwnerToken Held;
+	TestTrue(TEXT("schedule acquires a free body"),
+		Mind.Acquire(EElysiumBodyOwner::Schedule, false, Held, TEXT("schedule")));
 	FElysiumBodyOwnerToken Ambient;
-	TestFalse(TEXT("ambient cannot steal patrol"),
+	TestFalse(TEXT("ambient cannot steal a schedule"),
 		Mind.Acquire(EElysiumBodyOwner::Ambient, false, Ambient, TEXT("ambient")));
 
 	FElysiumBodyOwnerToken Sequence;
-	TestTrue(TEXT("sequence explicitly suspends patrol"),
+	TestTrue(TEXT("sequence explicitly suspends the schedule"),
 		Mind.Acquire(EElysiumBodyOwner::Sequence, true, Sequence, TEXT("sequence")));
-	TestEqual(TEXT("suspended owner is retained"), Mind.SuspendedOwner(), EElysiumBodyOwner::Patrol);
+	TestEqual(TEXT("suspended owner is retained"), Mind.SuspendedOwner(), EElysiumBodyOwner::Schedule);
 	TestEqual(TEXT("sequence establishes scripted state"), Mind.State(), EElysiumNpcState::Scripted);
-	TestFalse(TEXT("displaced patrol token is stale"), Mind.Release(Patrol, TEXT("stale patrol")));
+	TestFalse(TEXT("displaced schedule token is stale"), Mind.Release(Held, TEXT("stale schedule")));
 	TestTrue(TEXT("sequence releases its own generation"), Mind.Release(Sequence, TEXT("sequence end")));
-	TestEqual(TEXT("patrol restores after sequence"), Mind.Owner(), EElysiumBodyOwner::Patrol);
+	TestEqual(TEXT("schedule restores after sequence"), Mind.Owner(), EElysiumBodyOwner::Schedule);
 
-	const FElysiumBodyOwnerToken RestoredPatrol = Mind.CurrentToken();
-	TestFalse(TEXT("pre-suspension token cannot release restored patrol"),
-		Mind.Release(Patrol, TEXT("old generation")));
-	TestTrue(TEXT("restored patrol has a new valid token"),
-		Mind.Release(RestoredPatrol, TEXT("clear patrol")));
+	const FElysiumBodyOwnerToken RestoredHeld = Mind.CurrentToken();
+	TestFalse(TEXT("pre-suspension token cannot release restored schedule"),
+		Mind.Release(Held, TEXT("old generation")));
+	TestTrue(TEXT("restored schedule has a new valid token"),
+		Mind.Release(RestoredHeld, TEXT("clear schedule")));
 
-	FElysiumBodyOwnerToken DialoguePatrol;
-	TestTrue(TEXT("patrol can reacquire before dialogue"),
-		Mind.Acquire(EElysiumBodyOwner::Patrol, false, DialoguePatrol, TEXT("patrol resume")));
+	FElysiumBodyOwnerToken DialogueHeld;
+	TestTrue(TEXT("schedule can reacquire before dialogue"),
+		Mind.Acquire(EElysiumBodyOwner::Schedule, false, DialogueHeld, TEXT("schedule resume")));
 	FElysiumBodyOwnerToken Dialogue;
-	TestTrue(TEXT("dialogue explicitly suspends patrol"),
+	TestTrue(TEXT("dialogue explicitly suspends the schedule"),
 		Mind.Acquire(EElysiumBodyOwner::Dialogue, true, Dialogue, TEXT("dialogue")));
 	TestEqual(TEXT("dialogue remembers the autonomous owner"),
-		Mind.SuspendedOwner(), EElysiumBodyOwner::Patrol);
+		Mind.SuspendedOwner(), EElysiumBodyOwner::Schedule);
 	FElysiumBodyOwnerToken Unsupported;
 	TestFalse(TEXT("unimplemented follower owner is refused"),
 		Mind.Acquire(EElysiumBodyOwner::Follower, false, Unsupported, TEXT("follower")));
 	TestTrue(TEXT("dialogue releases its generation"), Mind.Release(Dialogue, TEXT("dialogue end")));
-	TestEqual(TEXT("patrol restores after dialogue"), Mind.Owner(), EElysiumBodyOwner::Patrol);
-	const FElysiumBodyOwnerToken PatrolAfterDialogue = Mind.CurrentToken();
-	TestTrue(TEXT("restored patrol can be cleared"),
-		Mind.Release(PatrolAfterDialogue, TEXT("ambient setup")));
+	TestEqual(TEXT("schedule restores after dialogue"), Mind.Owner(), EElysiumBodyOwner::Schedule);
+	const FElysiumBodyOwnerToken HeldAfterDialogue = Mind.CurrentToken();
+	TestTrue(TEXT("restored schedule can be cleared"),
+		Mind.Release(HeldAfterDialogue, TEXT("ambient setup")));
 
 	FElysiumBodyOwnerToken AmbientOwner;
 	TestTrue(TEXT("ambient acquires only a free body"),
@@ -125,10 +127,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMindRestoreTest,
 bool FElysiumNpcMindRestoreTest::RunTest(const FString&)
 {
 	FElysiumNpcMind Mind;
-	Mind.Restore(EElysiumNpcState::Idle, EElysiumBodyOwner::Patrol);
+	Mind.Restore(EElysiumNpcState::Idle, EElysiumBodyOwner::Ambient);
 	TestEqual(TEXT("restore admits the saved mind"), Mind.Admission(),
 		FElysiumNpcMind::EAdmission::Admitted);
-	TestEqual(TEXT("patrol intent is resumable"), Mind.Owner(), EElysiumBodyOwner::Patrol);
+	TestEqual(TEXT("ambient intent is resumable"), Mind.Owner(), EElysiumBodyOwner::Ambient);
 	TestTrue(TEXT("restored intent receives a fresh transient token"), Mind.CurrentToken().IsSet());
 
 	Mind.Restore(EElysiumNpcState::Scripted, EElysiumBodyOwner::Dialogue);
