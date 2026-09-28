@@ -35,14 +35,6 @@ struct FElysiumDmg;
 namespace ElysiumNpcEnemy
 {
 	/**
-	 * The damage half of `CAI_BaseNPC::OnTakeDamageAlive` (`0x10265ed0`): the target's attacker is
-	 * inserted into CAI_Memory through slot 544. It does not add a D_HT relationship. The Troika
-	 * override's separate five-second `m_flStealthVisionOverrideTime` write is a later sensing seam.
-	 * Returns true only when the attacker gains its first record.
-	 */
-	bool RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, double Now);
-
-	/**
 	 * `ShouldChooseNewEnemy` (`0x10279d00`).
 	 *
 	 * Searches when there is no current enemy, when that actor is dead, when its enemy-memory record

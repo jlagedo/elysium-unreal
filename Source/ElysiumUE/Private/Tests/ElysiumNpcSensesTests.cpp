@@ -710,8 +710,7 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	Mem.LastHeardCategory = TEXT("PLAYER_GUNSHOT_BASE");
 	Mem.LastHeardTime = 7.25;
 	F.Guard->BaseMemory.LastDamageAttacker = F.Player->Handle;
-	F.Guard->BaseMemory.LastDamageTime = 3.5;
-	Mem.LastDamageAmount = 9;
+	F.Guard->BaseMemory.RepeatedDamageWindowStart = 3.5;     // +0x5d98 m_flLastDamageTime
 	F.Guard->BaseMemory.EnemyOccludedCheck = 4;              // +0x5b98 m_eEnemyOccludedCheck (datamap)
 	F.Guard->BaseScheduleHost.MemoryBits |= 0x20000u;       // m_afMemory's found latch (slot 481)
 	Mem.PlayerLosLastClearTime = 6.0;
@@ -731,8 +730,8 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 		FString(TEXT("PLAYER_GUNSHOT_BASE")));
 	TestTrue(TEXT("...with its position"),
 		Restored.LastHeardPosition.Equals(FVector(11.0, 22.0, 33.0)));
-	TestEqual(TEXT("the last damage amount survives"), Restored.LastDamageAmount, 9);
-	TestTrue(TEXT("...and its attacker"), G.Guard->BaseMemory.LastDamageAttacker == G.Player->Handle);
+	TestEqual(TEXT("m_flLastDamageTime (+0x5d98) survives"), G.Guard->BaseMemory.RepeatedDamageWindowStart, 3.5);
+	TestTrue(TEXT("...and m_hLastDamageEnt (+0x5b7c)"), G.Guard->BaseMemory.LastDamageAttacker == G.Player->Handle);
 	TestEqual(TEXT("the debounce counter (+0x5b98) survives"), G.Guard->BaseMemory.EnemyOccludedCheck, 4);
 	TestTrue(TEXT("...and the edge latch (m_afMemory 0x20000), so a restore does not re-fire OnFoundEnemy"),
 		(G.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);

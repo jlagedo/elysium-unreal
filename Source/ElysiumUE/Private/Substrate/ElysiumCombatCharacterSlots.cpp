@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 139 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 18 are defined by hand in the substrate, and 102 are still stubs — 63 29c, 27 29d, 7
+// recovered, 20 are defined by hand in the substrate, and 100 are still stubs — 63 29c, 27 29d, 5
 // 29e, 5 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -231,12 +231,10 @@ void FElysiumCombatCharacter::OnRestore(bool)
 // slot 142 0x1032ef60 (sdk) `int OnTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 23, story 29e
-int32 FElysiumCombatCharacter::OnTakeDamage(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::OnTakeDamage"), TEXT("0x1032ef60"),
-		TEXT("29e"), DebugString());
-	return {};
-}
+// the body is `FElysiumCombatCharacter::OnTakeDamage`, written by hand in the substrate:
+// `CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the life-state
+// split into slots 390/391/392 and the death arm (story 8 wave 2, L13). Declared here, defined
+// there.
 
 // slot 143 0x1032ebc0 (sdk) `int TakeHealth(float, int)`
 //   layer 1, story 29c
@@ -1056,12 +1054,9 @@ FVector FElysiumCombatCharacter::Weapon_ShootPosition(const FVector&)
 // slot 390 0x103302e0 (walked) `int OnTakeDamage_Alive(const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
 //   layer 22, story 29e
-int32 FElysiumCombatCharacter::OnTakeDamage_Alive(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive"), TEXT("0x103302e0"),
-		TEXT("29e"), DebugString());
-	return {};
-}
+// the body is `FElysiumCombatCharacter::OnTakeDamage_Alive`, written by hand in the substrate:
+// `CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed health commit
+// (story 8 wave 2, L13). Declared here, defined there.
 
 // slot 391 0x103315e0 (sdk) `int OnTakeDamage_Dying(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -1293,7 +1288,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(bool)>::Test(&FElysiumCombatCharacter::OnRestore),
 				nullptr },
 			{ 142, TEXT("0x1032ef60"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(void*)>::Test(&FElysiumCombatCharacter::OnTakeDamage),
 				nullptr },
 			{ 143, TEXT("0x1032ebc0"), TEXT("CBaseCombatCharacter"), TEXT("TakeHealth"),
@@ -1719,7 +1714,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, FVector(const FVector&)>::Test(&FElysiumCombatCharacter::Weapon_ShootPosition),
 				nullptr },
 			{ 390, TEXT("0x103302e0"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage_Alive"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(void*)>::Test(&FElysiumCombatCharacter::OnTakeDamage_Alive),
 				nullptr },
 			{ 391, TEXT("0x103315e0"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage_Dying"),

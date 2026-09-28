@@ -92,7 +92,8 @@ namespace
 		};
 		Wire(TEXT("OnDamaged"), TEXT("damagedcount"), TEXT("Add"), TEXT("1"));
 		Wire(TEXT("OnHalfHealth"), TEXT("halfcount"), TEXT("Add"), TEXT("1"));
-		// The activator probe: the descriptor's Source is what `!activator` has to resolve to.
+		// The activator probe: retail's `!activator` is the NPC itself (`0x10265f26`), which has no
+		// `MoneyAdd`, so the player's money is the witness that the Source is NOT the activator.
 		Wire(TEXT("OnDamaged"), TEXT("!activator"), TEXT("MoneyAdd"), TEXT("7"));
 		Defs.Defs.Add(MoveTemp(Victim));
 
@@ -483,7 +484,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageProducersTest, "Elysium.Substrate
 	GElysiumTestFlags)
 bool FElysiumDamageProducersTest::RunTest(const FString&)
 {
-	// --- OnDamaged / OnHalfHealth, through the queue, with the descriptor's Source as activator --
+	// --- OnDamaged / OnHalfHealth, through the queue, from the NPC's own slot-390 body ----------
+	// Corrected to retail (story 8 wave 2): an NPC's pair is `0x10265ed0`'s — `m_OnDamaged` with the
+	// NPC as activator and caller (`0x10265f26`, `FireOutput(this, this, 0)`), and only when
+	// `m_flLastDamageTime` differs from curtime (`0x10265f1a`), which `NPCInit` zeroes
+	// (`0x10273628`): a hit at curtime 0.0, or a second hit on the same tick, fires no OnDamaged.
 	{
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
@@ -501,6 +506,7 @@ bool FElysiumDamageProducersTest::RunTest(const FString&)
 		}
 		SeedHealth(*Victim, 100);
 		Player->Money = 0;
+		World.Tick(1.0);
 
 		FElysiumDmg Dmg = DirectDmg(EElysiumDmgFamily::Bashing, 10);
 		Dmg.Source = Player->Handle;
@@ -510,17 +516,19 @@ bool FElysiumDamageProducersTest::RunTest(const FString&)
 		// Producers enqueue; only queue service delivers (K11), so no wire has landed yet.
 		TestEqual(TEXT("the output has not been delivered inside the commit"),
 			SaveTestCounterValue(World.FindByName(TEXT("damagedcount"))), 0.0f);
-		World.Tick(0.0);
+		World.Tick(1.0);
 		TestEqual(TEXT("OnDamaged fires once per damaging hit"),
 			SaveTestCounterValue(World.FindByName(TEXT("damagedcount"))), 1.0f);
-		TestEqual(TEXT("...with the descriptor's Source as the activator"), Player->Money, 7);
+		TestEqual(TEXT("...with the NPC itself as the activator (0x10265f26), not the descriptor's Source"),
+			Player->Money, 0);
 		TestEqual(TEXT("OnHalfHealth stays quiet above half health"),
 			SaveTestCounterValue(World.FindByName(TEXT("halfcount"))), 0.0f);
 
 		FElysiumDmg Big = DirectDmg(EElysiumDmgFamily::Bashing, 45);
 		Big.Source = Player->Handle;
+		World.Tick(2.0);
 		Victim->TakeDamage(Big, Player);
-		World.Tick(0.0);
+		World.Tick(2.0);
 		TestEqual(TEXT("OnDamaged fires again"),
 			SaveTestCounterValue(World.FindByName(TEXT("damagedcount"))), 2.0f);
 		TestEqual(TEXT("OnHalfHealth is offered once health reaches half"),

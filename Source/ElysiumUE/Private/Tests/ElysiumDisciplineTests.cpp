@@ -1405,7 +1405,16 @@ bool FElysiumDisciplineInterruptionTest::RunTest(const FString&)
 			return false;
 		}
 		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
-		Victim->TakeDamage(5.0f);
+		// With an attacker: an NPC's `NPC_TAKE_DAMAGE` is `0x10265ed0`'s tail (`0x10266352`), which
+		// a packet with no attacker never reaches (`0x10265f64` answers 1 first). Corrected to
+		// retail (story 8 wave 2): the scalar, attacker-less hit this case used makes no sound.
+		FElysiumDmg Hit;
+		Hit.Family = EElysiumDmgFamily::Bashing;
+		Hit.Flags = ElysiumDamage::FlagDirectInput;
+		Hit.ExtraInput = 5;
+		Hit.ForcedSoak = 0;
+		Hit.Source = Player->Handle;
+		Victim->TakeDamage(Hit, Player);
 		// The bus delivers nothing; the poll happens on the owner's think. `Tick` runs every OTHER
 		// entity's think — `RunThinks` skips the player, whose think the map actor drives from the
 		// pre-move pass — so the player's own poll is reached through that same entry.

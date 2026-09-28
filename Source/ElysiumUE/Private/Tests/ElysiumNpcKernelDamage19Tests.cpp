@@ -5,10 +5,10 @@
 // The walked prose is `docs/vtmb/npc-ai/story8/Damage19.md`.
 //
 // Two standing facts shape the cases:
-//   * `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) is still the generated 29e stub and
-//     answers 0, so every slot-142 chain answers 0 here; `CBaseCombatCharacter::OnTakeDamage_Alive`
-//     (`0x103302e0`) answers retail's only value, 1, through
-//     `FElysiumNpcBase::CombatCharacterOnTakeDamageAlive`, so the slot-390 chains run whole.
+//   * `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) and `OnTakeDamage_Alive` (`0x103302e0`)
+//     are hand bodies since story 8 wave 2 (`ElysiumCombatCharacter.cpp`): the slot-142 chains
+//     answer what `0x1032ef60` answers, and `0x103302e0` answers its one value, 1, so the slot-390
+//     chains run whole.
 //   * The see/unseen split of `0x10265ed0` is decided by the NPC's own slot 363 / slot 201. A case
 //     asks the same two virtuals first and asserts the arm that answer selects, rather than
 //     assuming a headless trace outcome.
@@ -161,6 +161,11 @@ namespace
 				Guard->RecomputeSheet();
 				Guard->MaxHealth = 100;
 				Guard->Health = 100;
+				// `DAMAGE_EVENTS_ONLY`: the cases exercise the NPC bodies ABOVE the combat character's
+				// commit. Since story 8 wave 2 `0x103302e0` is a hand body, and on this setting it
+				// commits nothing (`m_takedamage == 1`), so the health and ceiling a case sets stand;
+				// every gate of `0x1032ef60` still passes (it refuses only `DAMAGE_NO`).
+				Guard->TakeDamageMode = 1;
 			}
 		}
 
@@ -245,15 +250,22 @@ bool FElysiumNpcKernelDamage19BaseOnTakeDamageTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Guard;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
+	N.LastTakeDamageInfo.Damage = -1.f;
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 10.f);
 	const int32 Result = N.FElysiumNpcBase::OnTakeDamage(&Info);
-	TestEqual(TEXT("10265e99 CBaseCombatCharacter::OnTakeDamage runs first"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
-	TestEqual(TEXT("10265eae returns what 0x1032ef60 answered (the 29e stub's 0)"), Result, 0);
+	// `0x1032ef60`'s alive arm dispatches slot 390; the Troika's `0x102beda0` caches the packet
+	// (`0x102bedab`), which is the witness that the chain ran.
+	TestEqual(TEXT("10265e99 CBaseCombatCharacter::OnTakeDamage runs first (its slot 390 cached the packet)"),
+		N.LastTakeDamageInfo.Damage, 10.f);
+	TestEqual(TEXT("10265eae returns what 0x1032ef60 answered (slot 390's 1, 0x1032f0bf)"), Result, 1);
 	// 10265ea4 slot 459 runs unconditionally; outside NPC_STATE_SCRIPT 0x1026d7f0 writes nothing.
 	TestTrue(TEXT("10265ea4 RemoveIgnoredConditions outside SCRIPT leaves conditions alone"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::LightDamage));
+	// `DAMAGE_NO`: `0x1032ef60` answers 0 at its first test, and this body returns that 0.
+	N.TakeDamageMode = 0;
+	N.LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("1032efa9 m_takedamage == DAMAGE_NO answers 0"), N.FElysiumNpcBase::OnTakeDamage(&Info), 0);
+	TestEqual(TEXT("...and no slot 390 ran"), N.LastTakeDamageInfo.Damage, -1.f);
 	return true;
 }
 
@@ -454,23 +466,25 @@ bool FElysiumNpcKernelDamage19TroikaOnTakeDamageTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 10.f);
 
 	// Not invincible: tail to CAI_BaseNPC::OnTakeDamage, whose answer is returned.
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("102bed6d not invincible: the base's answer"), N.OnTakeDamage(&Info), 0);
-	TestEqual(TEXT("...through 0x10265e90 -> 0x1032ef60"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+	N.LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("102bed6d not invincible: the base's answer (0x1032ef60's slot-390 1)"), N.OnTakeDamage(&Info), 1);
+	TestEqual(TEXT("...through 0x10265e90 -> 0x1032ef60 -> slot 390 (the packet cached, 0x102bedab)"),
+		N.LastTakeDamageInfo.Damage, 10.f);
 	F.Deliver();
-	TestEqual(TEXT("...which fires no output here"), F.World.Counter(TEXT("damaged")), 0.f);
+	TestEqual(TEXT("...whose 0x10265ed0 fires m_OnDamaged (0x10265f26)"), F.World.Counter(TEXT("damaged")), 1.f);
 
 	// Invincible: refused with 0, but m_OnDamaged fires at most once a tick and the stamp is written.
+	// A later tick, so the stamp `0x10266310` just wrote differs from curtime.
+	F.World.Advance(F.Now() + 1.0);
+	N.LastTakeDamageInfo.Damage = -1.f;
 	N.bInvincible = true;
 	TestEqual(TEXT("102bed68 invincible answers 0"), N.OnTakeDamage(&Info), 0);
 	TestEqual(TEXT("102bed56 m_flLastDamageTime = curtime"), N.BaseMemory.RepeatedDamageWindowStart, F.Now());
 	N.OnTakeDamage(&Info);
 	F.Deliver();
 	TestEqual(TEXT("102bed63 m_OnDamaged once per tick however many packets land"),
-		F.World.Counter(TEXT("damaged")), 1.f);
-	TestEqual(TEXT("...and the chain never ran"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+		F.World.Counter(TEXT("damaged")), 2.f);
+	TestEqual(TEXT("...and the chain never ran"), N.LastTakeDamageInfo.Damage, -1.f);
 	return true;
 }
 
@@ -1154,10 +1168,10 @@ bool FElysiumNpcKernelDamage19WerewolfTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 13.f, 0x80u);
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("103ccd55 returns 0x102bed30's answer"), W->OnTakeDamage(&Info), 0);
-	TestEqual(TEXT("...which reached the base chain"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+	W->LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("103ccd55 returns 0x102bed30's answer (the chain's slot-390 1)"), W->OnTakeDamage(&Info), 1);
+	TestEqual(TEXT("...which reached the base chain (slot 390 cached the packet)"),
+		W->LastTakeDamageInfo.Damage, 13.f);
 	TestEqual(TEXT("103ccd4d the werewolf does NOT modify the damage"), Info.Damage, 13.f);
 	TestEqual(TEXT("...or its bits"), Info.DamageBits, 0x80u);
 	return true;
@@ -1177,12 +1191,15 @@ bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 	Z->bZombieShouldGib = false;
 	Z->bZombieShouldRagdoll = false;
 	Z->bZombieHeadHit = false;
+	// `DAMAGE_NO` makes `0x1032ef60` answer 0 at its first test, so the Troika chain's answer is 0 —
+	// the arm these two cases exercise.
+	Z->TakeDamageMode = 0;
 	FElysiumNpcBase::FElysiumTakeDamageInfo Fifteen = Damage19Packet(nullptr, 15.f);
 	const int32 Before = Z->SetScheduleRetailCalls;
 	const int32 EmittersBefore = Z->EmitterCalls.Num();
 	const int32 Result = Z->OnTakeDamage(&Fifteen);
 	TestFalse(TEXT("103e07ff 15 is not above the head threshold 20"), Z->bZombieShouldGib);
-	TestEqual(TEXT("103e080b the Troika chain's answer (the 29e stub's 0)"), Result, 0);
+	TestEqual(TEXT("103e080b the Troika chain's answer (0x1032ef60's DAMAGE_NO 0)"), Result, 0);
 	TestEqual(TEXT("103e0857 a zero answer takes the fallback program"), Z->SetScheduleRetailCalls, Before + 1);
 	TestEqual(TEXT("103e086d ...0x162"), Z->LastSetScheduleRetail, 0x162);
 	TestTrue(TEXT("103e0861 ...FORCED"), Z->bLastSetScheduleForce);

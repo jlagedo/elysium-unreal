@@ -35,58 +35,6 @@ int32 ElysiumNpcEnemy::RelationPriority(const FElysiumNpc& Npc, const FElysiumEn
 	return Npc.Relationships.ResolvePriority(Candidate.Handle, NpcEnemyClassnameOf(Candidate));
 }
 
-// STORY8-TWIN: replaced by 0x10265ed0 (the unseen-attacker slot-544 arms, 0x102660f6..0x1026616c) at
-// wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
-bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, double Now)
-{
-	FElysiumEntityWorld* World = Npc.World;
-	const FElysiumEntity* Attacker = World ? World->Resolve(Dmg.Source) : nullptr;
-	if (Attacker == nullptr || Attacker->AsCombatCharacter() == nullptr || Attacker->Handle == Npc.Handle)
-	{
-		return false;
-	}
-	FElysiumEntity* Inflictor = World->Resolve(Dmg.Inflictor);
-	FElysiumItem* HeldItem = Inflictor ? Inflictor->AsItem() : nullptr;
-	FElysiumWeapon* HeldWeapon = HeldItem ? HeldItem->AsWeapon() : nullptr;
-	FVector HeldPosition = FVector::ZeroVector;
-	const bool bHeldPosition = HeldWeapon && HeldWeapon->HeldSourcePosition(HeldPosition);
-	const bool bGenericInflictorPosition = Inflictor != nullptr && HeldWeapon == nullptr
-		&& !Inflictor->IsInert();
-	const bool bHasPosition = Dmg.bHasAttackPosition || bHeldPosition || bGenericInflictorPosition;
-	if (!bHasPosition)
-	{
-		return false; // identity is known, but held/projectile position is not yet available
-	}
-	// Weapon_Equip -> weapon slot 298 sets MoveType FOLLOW, aim/owner = character; PhysicsFollow
-	// copies the aim entity's absolute origin with zero offset. This is a held-item rule only.
-	const FVector AttackPosition = bHeldPosition ? HeldPosition
-		: (bGenericInflictorPosition ? Inflictor->Origin : Dmg.AttackPosition);
-	const bool bVisible = FElysiumNpcSenses::IsInViewCone(Npc, Attacker->Origin)
-		&& (World->Embodiment() == nullptr
-			|| World->Embodiment()->QueryLineOfSight(Npc.EyePosition(), Attacker->EyePosition()));
-	if (bVisible)
-	{
-		return false;
-	}
-	const FElysiumEntityHandle Current = Npc.BaseMemory.Enemy;
-	const FElysiumEntity* CurrentEntity = World->Resolve(Current);
-	if (CurrentEntity != nullptr && Npc.EnemyMemory.Find(Dmg.Source) == nullptr
-		&& !Npc.Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))
-	{
-		Npc.EnemyMemory.UpdateAtPosition(Npc, Current, AttackPosition, Now);
-		return true;
-	}
-	if (Npc.EnemyMemory.Find(Dmg.Source) != nullptr)
-	{
-		Npc.EnemyMemory.UpdateAtPosition(Npc, Dmg.Source, AttackPosition, Now);
-	}
-	else
-	{
-		Npc.EnemyMemory.UpdatePositionOnly(AttackPosition, Now);
-	}
-	return true;
-}
-
 bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpcBase& Npc, const FElysiumNpcConditions& Cond)
 {
 	if (!Npc.BaseMemory.Enemy.IsSet() || Npc.World == nullptr)

@@ -912,10 +912,11 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 				*NameOf(World, Memory.LastHeardSource), *AgeOf(Memory.LastHeardTime, Now)));
 		Row(TEXT("heard at"), Memory.LastHeardTime < 0.0
 			? FString(TEXT("—")) : Memory.LastHeardPosition.ToCompactString());
-		Row(TEXT("last damage"), Npc.BaseMemory.LastDamageTime < 0.0
+		Row(TEXT("last damage"), !Npc.BaseMemory.LastDamageAttacker.IsSet()
 			? FString(TEXT("(none)"))
-			: FString::Printf(TEXT("%d from %s   %s"), Memory.LastDamageAmount,
-				*NameOf(World, Npc.BaseMemory.LastDamageAttacker), *AgeOf(Npc.BaseMemory.LastDamageTime, Now)));
+			: FString::Printf(TEXT("from %s   %s"),
+				*NameOf(World, Npc.BaseMemory.LastDamageAttacker),
+				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		Row(TEXT("repeated-damage window"), Npc.BaseMemory.RepeatedDamageWindowStart < 0.0
 			? FString(TEXT("closed"))
 			: FString::Printf(TEXT("%d accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,

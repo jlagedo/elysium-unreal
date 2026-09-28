@@ -211,13 +211,6 @@ public:
 	// (`docs/vtmb/combat-and-damage.md` -> "Who may be knocked back").
 	virtual bool BypassesKnockbackEligibility() const override;
 
-	// Retail's NPC override saves the complete incoming damage packet before composing the base
-	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
-	// schedule/senses consumers that read it arrive with the combat AI.
-	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override;
-
-	// The authored `invincible` refusal, tested before anything else damage-side.
-	virtual bool RejectsAllDamage() const override { return bInvincible; }
 
 	/**
 	 * `CAI_BaseNPC::Event_Killed`'s NPC override (`0x10265ad0`) plus the Troika one over it

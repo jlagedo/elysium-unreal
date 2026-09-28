@@ -197,7 +197,7 @@ namespace
 	ELYSIUM_NPC_WORD(0x5d90, FElysiumNpcBaseMemory, EnemyOccluder),
 	ELYSIUM_NPC_WORD(0x5d94, FElysiumNpcBaseMemory, RepeatedDamageAccumulated),
 	ELYSIUM_NPC_WORD_NOTED(0x5d98, FElysiumNpcBaseMemory, RepeatedDamageWindowStart,
-		"the port cites +0x5d98 here; LastDamageTime beside it is the typed commit's own stamp"),
+		"m_flLastDamageTime, an absolute curtime stamp carried as double"),
 	ELYSIUM_NPC_WORD_NOTED(0x5d9c, FElysiumNpcBase, LastAttackTime,
 		"an absolute curtime stamp, carried as double"),
 	ELYSIUM_NPC_WORD_NOTED(0x5da0, FElysiumNpcBase, NextWeaponSearchTime,
@@ -610,9 +610,8 @@ namespace
 	ELYSIUM_NPC_WORD(0x6604, FElysiumNpcMemory, StealthVisionOverrideUntil),
 	ELYSIUM_NPC_WORD_NOTED(0x6608, FElysiumNpc, CorpseConditionTime,
 		"FIELD_TIME; an absolute stamp"),
-	ELYSIUM_NPC_WORD_NOTED(0x660c, FElysiumNpcMemory, LastDamageAmount,
-		"m_LastTakeDamageInfo, the Troika's saved packet: kept as the LastDamage triple, whose "
-		"attacker is the base word +0x5b7c (FElysiumNpcBase::BaseMemory.LastDamageAttacker)"),
+	ELYSIUM_NPC_WORD_NOTED(0x660c, FElysiumNpc, LastTakeDamageInfo,
+		"m_LastTakeDamageInfo, the Troika's saved packet (0x102bedab), the port's typed packet"),
 	ELYSIUM_NPC_WORD_NOTED(0x6658, FElysiumNpc, bUnread6658,
 		"unsettled in 29b-0: a constructor-zeroed byte with no reader; declared so the census "
 			"stays whole"),

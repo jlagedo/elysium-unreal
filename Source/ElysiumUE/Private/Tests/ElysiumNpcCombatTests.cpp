@@ -1183,8 +1183,6 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	Dmg.Flags = ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = 10;
 	Dmg.Source = F.Player->Handle;
-	Dmg.AttackPosition = F.Player->Origin;
-	Dmg.bHasAttackPosition = true;
 	Victim.TakeDamage(Dmg, F.Player);
 
 	if (!TestTrue(TEXT("the punch committed damage"), F.DamageTaken(&Victim) > 0))
@@ -1210,7 +1208,12 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestTrue(TEXT("...commits the attacker as the enemy"),
 		Victim.BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...raises NEW_ENEMY"), Victim.Cognition.Conditions.Has(ECond::NewEnemy));
-	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
+	// Corrected to retail: the Troika's slot 564 `FCanCheckAttacks` (`0x102953a0`) refuses a
+	// melee-capable body (slot 513 bit `0x8000`) holding an active weapon while `m_bInMelee`
+	// (`+0x6078`) is clear, so slot 481 runs `ClearAttackConditions` (`0x102711fa`) instead of the
+	// attack gather: melee range alone raises no CAN_MELEE_ATTACK1 before the melee coordinator
+	// (slot 600) has admitted the body. (The port's old gather raised it on range and facing.)
+	TestFalse(TEXT("...but an armed melee body not yet in melee gathers no attack (0x102953a0)"),
 		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 
 	// The interrupt stands against the installed mask — `IsScheduleValid 0x10280ff0` answers false
@@ -1236,7 +1239,12 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// The next decision pass, in the order `ThinkStanceOrIdle` runs it: the packet that started the
 	// fight is no longer new, so the approach's own `LIGHT_DAMAGE` interrupt no longer fires and the
 	// program reaches its terminal swing. Re-gathering rather than reusing the selection pass's
-	// conditions is what makes that sequencing part of the assertion.
+	// conditions is what makes that sequencing part of the assertion. The first pass ends as RunAI's
+	// does: its end-of-pass clear takes LIGHT/HEAVY_DAMAGE (`0x1026f311` / `0x1026f31a`), which is
+	// what gives the packet's bits their one-pass life (corrected to retail: the deleted twin rebuilt
+	// that edge from a gather timestamp).
+	Victim.Cognition.Conditions.Clear(ECond::LightDamage);
+	Victim.Cognition.Conditions.Clear(ECond::HeavyDamage);
 	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.1);
 	TestFalse(TEXT("the damage packet is not gathered twice"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
@@ -1322,8 +1330,6 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 	Dmg.Flags = ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = 10;
 	Dmg.Source = F.Player->Handle;
-	Dmg.AttackPosition = F.Player->Origin;
-	Dmg.bHasAttackPosition = true;
 
 	F.Flush(1.0);
 	Victim.TakeDamage(Dmg, F.Player);

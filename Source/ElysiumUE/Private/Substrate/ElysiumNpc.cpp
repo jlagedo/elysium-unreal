@@ -262,32 +262,6 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 	return true;
 }
 
-// STORY8-TWIN: replaced by 0x10265ed0 (CAI_BaseNPC::OnTakeDamage_Alive) + 0x102beda0 (the Troika
-// slot-390 body) at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
-// Still the one that runs; delete it with `RememberDamage` and `AccumulateDamage`.
-void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
-{
-	const double Now = World ? World->NowSeconds() : 0.0;
-	BaseMemory.LastDamageAttacker = Dmg.Source;
-	BaseMemory.LastDamageTime = Now;
-	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
-	// The other half of step 3 — "records the attack position and attacker, updates enemy memory".
-	// The record above is the transient damage notice; `RememberDamage` selects the recovered
-	// persistent CAI_Memory-style record. Its observed-actor lifetime is not a five-second
-	// relationship window (0x10265ed0 calls into the memory component; 0x102df320 removes only
-	// invalid/dead handles).
-	// Troika's separate surviving-damage tail (0x102beda0 -> 0x1028e8b0 -> 0x1028e940) max-writes
-	// the live FVisible range-override deadline. It neither creates a relation nor expires memory.
-	if (Dmg.CommittedDamage() > 0 && World != nullptr && World->Resolve(Dmg.Source) != nullptr)
-	{
-		Senses.ExtendVisionOverride(*this, Dmg.Source, Now, 5.0);
-	}
-	ElysiumNpcEnemy::RememberDamage(*this, Dmg, Now);
-	// Step 5 of the recovered damage-to-AI transaction: the one-second accumulation window
-	// `REPEATED_DAMAGE` is derived from. The window arithmetic is the conditions layer's rule.
-	ElysiumNpcCond::AccumulateDamage(BaseMemory, Dmg.CommittedDamage(), Now);
-}
-
 // STORY8-TWIN: replaced by 0x102bf340 / 0x10265ad0 (slot 144 `Event_Killed`, Spawn19) at wave 2. The
 // callers (`ElysiumCombatCharacter.cpp` damage commit, `ElysiumFeed.cpp` drain, `ElysiumGrapple.cpp`)
 // move to slot 144 with an `FElysiumTakeDamageInfo` once `CBaseCombatCharacter::Event_Killed`
@@ -3217,11 +3191,11 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		? TEXT("(nothing)")
 		: FString::Printf(TEXT("%s at %s, t=%.2f"), *Mem.LastHeardCategory,
 			*Mem.LastHeardPosition.ToString(), Mem.LastHeardTime));
-	Out.Emplace(TEXT("Last damage"), BaseMemory.LastDamageTime < 0.0
+	Out.Emplace(TEXT("Last damage"), !BaseMemory.LastDamageAttacker.IsSet()
 		? TEXT("(none)")
-		: FString::Printf(TEXT("%d from %s at t=%.2f (window sum %d)"), Mem.LastDamageAmount,
-			*BaseMemory.LastDamageAttacker.ToString(), BaseMemory.LastDamageTime,
-			BaseMemory.RepeatedDamageAccumulated));
+		: FString::Printf(TEXT("from %s, m_flLastDamageTime t=%.2f (m_flSumDamage %d, packet %.1f)"),
+			*BaseMemory.LastDamageAttacker.ToString(), BaseMemory.RepeatedDamageWindowStart,
+			BaseMemory.RepeatedDamageAccumulated, LastTakeDamageInfo.Damage));
 
 	// --- Decision pass ---
 	Out.Emplace(TEXT("Conditions"), FString::Printf(TEXT("%s (gathered t=%.2f)"),

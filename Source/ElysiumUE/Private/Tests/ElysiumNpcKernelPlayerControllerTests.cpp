@@ -329,14 +329,20 @@ bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 		StubFires(TEXT("CBaseAnimating::RemoveExtraAnimationModels")), RemoveBefore + 1);
 
 	// Slots 142 / 390 `0x10376ae0` / `0x10376b10`: the owner takes the damage; the shadow answers 0.
-	const int32 TakeBefore = StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamage(nullptr), 0);
-	TestEqual(TEXT("after forwarding to the owner's slot 142"),
-		StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage")), TakeBefore + 1);
-	const int32 AliveBefore = StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive"));
-	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"), Shadow->OnTakeDamage_Alive(nullptr), 0);
-	TestEqual(TEXT("after forwarding to the owner's combat character slot 390"),
-		StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive")), AliveBefore + 1);
+	// Since story 8 wave 2 the owner's slot 142 is `CBaseCombatCharacter::OnTakeDamage`
+	// (`0x1032ef60`, a hand body; the player's own `0x10163020` override is not carried) and its
+	// slot 390 `0x103302e0`, whose slot 299 `CreateDamageEffects` (`+0x4ac`, still a 29e stub) is
+	// the forward's witness: it runs on the OWNER on every alive packet, before any commit.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Packet;
+	Packet.Damage = 0.f;   // nothing to commit: the witness is the dispatch, not the health
+	const int32 TakeBefore = StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects"));
+	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamage(&Packet), 0);
+	TestEqual(TEXT("after forwarding to the owner's slot 142 (0x1032ef60 -> slot 390 -> slot 299)"),
+		StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects")), TakeBefore + 1);
+	const int32 AliveBefore = StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects"));
+	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"), Shadow->OnTakeDamage_Alive(&Packet), 0);
+	TestEqual(TEXT("after forwarding to the owner's combat character slot 390 (0x103302e0 -> slot 299)"),
+		StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects")), AliveBefore + 1);
 	// Slot 144 `0x10376b50` is three bytes.
 	const int32 KilledBefore = StubFires(TEXT("CAI_BaseNPCTroika::Event_Killed"));
 	Shadow->Event_Killed(nullptr);

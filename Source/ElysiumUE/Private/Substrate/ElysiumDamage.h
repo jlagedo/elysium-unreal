@@ -94,12 +94,10 @@ struct FElysiumDmg
 	FString SourceTrait;
 	FString AttackFeat;                                   // words 9..12 — the attack feat/reference
 	FElysiumEntityHandle Source;                          // word 13
-	// Packet `m_hInflictor` / attack-position seam for CAI_Memory's damage producer. Existing
-	// descriptor producers do not yet carry a distinct projectile/weapon body or impact vector, so
-	// absence remains explicit; it must never be guessed from Source/Attacker.
+	// Packet `m_hInflictor` (`+0x28`): the weapon or projectile body, read by `0x10265ed0`'s attack
+	// position (the inflictor's slot-217 origin). An absent one stays absent; it must never be
+	// guessed from Source/Attacker.
 	FElysiumEntityHandle Inflictor;
-	FVector AttackPosition = FVector::ZeroVector;
-	bool bHasAttackPosition = false;
 	// Word 14 — a forced soak value. NEGATIVE selects the normal soak resolver.
 	int32 ForcedSoak = -1;
 	// Word 15 — the accumulated template damage filter. Populated where the victim's data allows
@@ -171,6 +169,12 @@ namespace ElysiumDamage
 	// neither a recovered bit nor that alias carries no bit — authored data rather than a failure, so
 	// it reports at Verbose.
 	FElysiumDmg ParseDmg(const FString& Authored);
+
+	// The scalar packet's descriptor (`CTakeDamageInfo` word 0 null, `+0x30` the amount): retail's
+	// alive commit takes its damage from the scalar directly, so this route never enters the
+	// resolver. Direct input, no mask (hence no aggravated tracking and no soak bypass), a forced
+	// soak of zero, and the truncated amount as the applied result.
+	FElysiumDmg ScalarDescriptor(float Amount);
 
 	// The soak feat's `feats.txt` InternalName for a family/creature/falling combination — the
 	// 8-row table in `combat-and-damage.md` § "Soak selection". Returns nullptr for family None.

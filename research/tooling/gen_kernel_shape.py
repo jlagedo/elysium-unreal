@@ -344,6 +344,17 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `Angles`, Source degrees"),
     220: ("const FVector&", "`GetOrigin` 0x100b3070: `Origin`; the port has no local/abs split"),
     221: ("const FVector&", "`GetAngles` 0x100b3110: `Angles`; the port has no local/abs split"),
+    142: ("", "`CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the "
+              "life-state split into slots 390/391/392 and the death arm (story 8 wave 2, L13)"),
+    390: ("", "`CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed "
+              "health commit (story 8 wave 2, L13)"),
+}
+
+# A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
+# hold a body at the slot keep theirs as generated: slot -> the port owner.
+CHAIN_HAND_OWNER: dict[int, str] = {
+    142: "FElysiumCombatCharacter",
+    390: "FElysiumCombatCharacter",
 }
 
 
@@ -861,7 +872,8 @@ def split_layers(row: Slot, ledger, tables: dict[str, dict[int, str]]) -> None:
         layer.story = story_for(layer.layer) if layer.layer >= 0 else ""
         apply_verdict(layer, ledger)
         if row.slot in CHAIN_HAND and owner == CHAIN_PORT[retail] and owner in SLOT_SURFACES \
-                and owner not in LAYER_PORT.values():
+                and owner not in LAYER_PORT.values() \
+                and CHAIN_HAND_OWNER.get(row.slot, owner) == owner:
             layer.hand = f"{owner}::{row.port_name}"
         return layer
 

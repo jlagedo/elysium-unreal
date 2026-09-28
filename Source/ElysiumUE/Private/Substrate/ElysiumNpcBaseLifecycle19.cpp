@@ -214,7 +214,7 @@ void FElysiumNpcBase::NPCInit()
 	bInChoreoScene = false;
 	UpdateEnemyWentOccluded(nullptr, false);                             // 10270180(NULL, 0)
 	++BaseInitChoreoClears;
-	BaseMemory.LastDamageTime = 0.0;
+	BaseMemory.RepeatedDamageWindowStart = 0.0;                          // 0x10273628 +0x5d98 m_flLastDamageTime
 	LastAttackTime = 0.0;
 	BaseMemory.SoundWaitTime = 0.0;
 	NextEyeLookTime = 0.f;                                               // +0x5d6c

@@ -125,17 +125,15 @@ struct FElysiumNpcBaseMemory
 	// sound the NPC decided to act on, which the selector commits (10d), one pass earlier.
 	FElysiumEntityHandle BestSoundSource;
 
-	// Retail's NPC override saves the complete incoming packet before composing the base
-	// transaction, and a surviving positive hit remembers its attacker. The typed commit
-	// (`FElysiumNpc::OnDamageCommitted`) is the one writer.
+	// `+0x5b7c m_hLastDamageEnt`: the attacker of the last packet `0x10265ed0` (`0x102661cc`) or the
+	// Troika's zero-damage arm (`0x102bef6f`) recorded; `NPCInit` writes `-1` (`0x1027339f`).
 	FElysiumEntityHandle LastDamageAttacker;
 
-	double LastDamageTime = -1.0;
-
-	// The repeated-damage window (`+0x5d94` accumulated, `+0x5d98` window root). Damage sums for one
-	// second; a sum over 15 percent of Source max health raises `REPEATED_DAMAGE`, and an expired
-	// window is RESET rather than decayed. The rule lives on `ElysiumNpcCond::AccumulateDamage`;
-	// these are the two bytes it keeps. Negative start means "no window open".
+	// `+0x5d94 m_flSumDamage` / `+0x5d98 m_flLastDamageTime`: `0x10265ed0` resets the sum to the hit
+	// when `curtime - m_flLastDamageTime >= 1.0` and accumulates otherwise (`0x102662a8`), then
+	// stamps the time (`0x10266310`); a sum over `m_iMaxHealth * 0.3` raises `REPEATED_DAMAGE`
+	// (`0x1026632e`). `NPCInit` zeroes the stamp (`0x10273628`); the Troika's invincible arm
+	// (`0x102bed56`) stamps it too.
 	double RepeatedDamageWindowStart = -1.0;
 
 	int32 RepeatedDamageAccumulated = 0;
@@ -210,8 +208,6 @@ struct FElysiumNpcMemory
 	// gate above, this field's single writer IS the sweep, so it is complete here.
 	double NextSeeSoundSourceTime = 0.0;
 
-	// --- Last damage ---------------------------------------------------------------------------
-	int32 LastDamageAmount = 0;
 
 	// --- The incoming-attack notice ------------------------------------------------------------
 	// Retail's melee acquisition sends the aimed target an incoming-melee notice, and the NPC notice

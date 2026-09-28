@@ -209,7 +209,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << LastHeardPosition;
 	Ar << LastHeardCategory;
 	Ar << LastHeardTime;
-	Ar << LastDamageAmount;
 	uint8 InRange = bPlayerInRange ? 1 : 0;
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
@@ -256,7 +255,6 @@ void FElysiumNpcBaseMemory::Serialize(FElysiumSaveArchive& Ar)
 	{
 		Ar << LastSeenTime[i];
 	}
-	Ar << LastDamageTime;
 }
 
 void FElysiumNpcBaseMemory::Rebase(const FElysiumEntityWorld& World)

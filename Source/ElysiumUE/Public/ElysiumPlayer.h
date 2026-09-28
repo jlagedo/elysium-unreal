@@ -1056,18 +1056,23 @@ public:
 	// builds a direct-input descriptor whose result is the rounded amount and commits it.
 	void TakeDamage(float Amount);
 
-	// Total, pre-emptive damage refusal. `CNPC_VVampire::OnTakeDamage` (`0x102bed30`) tests the
-	// authored `invincible` keyfield as its very first act and returns without reaching life state,
-	// the resolver or the health commit, so an invincible character is not "healed back" — the damage
-	// never happens. Both `TakeDamage` overloads answer to this because retail's scalar `TakeDamage`
-	// input reaches the same virtual. The base character is never invincible; the NPC leaf overrides.
-	virtual bool RejectsAllDamage() const { return false; }
-
-	// The one typed health commit (`docs/vtmb/combat-and-damage.md` § "Health commit"):
-	// `HealthBuffer` absorbs first, then the unkillable cap, then the damage counter, then Kindred
-	// aggravated tracking, then the outputs and the death test. Nothing else writes the health
-	// slots from a damage path.
+	// The player's typed health commit (`docs/vtmb/combat-and-damage.md` § "Health commit"): the
+	// arithmetic (`CommitDamageHealth`), then the sound, the flinch, the discipline interruption,
+	// the outputs and the death test. An NPC does not come here: since story 8 wave 2 its damage
+	// enters retail's slot 142 `OnTakeDamage` (`DispatchTakeDamagePacket`), whose slot-390 chain
+	// ends in `CBaseCombatCharacter::OnTakeDamage_Alive` (`0x103302e0`) and the same arithmetic.
 	void CommitDamage(const FElysiumDmg& Dmg);
+
+	// The health arithmetic of `CBaseCombatCharacter::OnTakeDamage_Alive` (`0x103302e0`, from
+	// `0x10330733`): `HealthBuffer` absorbs first (Bloodshield ends when it exhausts), then the
+	// unkillable cap, then the damage counter, then Kindred aggravated tracking, then `m_iHealth`
+	// (slot 348 `HealthToPercent`). Answers whether a health track took anything.
+	bool CommitDamageHealth(const FElysiumDmg& Dmg);
+
+	// Build retail's `CTakeDamageInfo` for an NPC victim and dispatch slot 142 `OnTakeDamage` on
+	// it (story 8 wave 2). `Dmg` may be null (the scalar route: `Scalar` is the packet's `+0x30`).
+	void DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar, FElysiumCombatCharacter* Attacker,
+		const FElysiumEntityHandle& AttackerHandle, bool bDisallowFirearmsToBashing);
 	// Player mode-3 completion (0x10165d90): SetBaseToStatValue(Health, MaxHealth),
 	// Event_Killed, Event_Dying. It bypasses OnTakeDamage and its soak/buffer/flinch path.
 	void CommitStealthDeath(const FElysiumEntityHandle& Attacker);
@@ -1769,9 +1774,8 @@ protected:
 	// funnel. The base does nothing.
 	virtual void OnDamageEntered() {}
 
-	// Called by `CommitDamage` once the health commit has landed, before the outputs fire. The NPC
-	// leaf records the attacker/time/amount its senses and memory read; the base does nothing,
-	// because the player has no memory of who hit it.
+	// Called by the player's `CommitDamage` once the health commit has landed, before the outputs
+	// fire. The base does nothing; an NPC's damage record is written by its own slot-390 bodies.
 	virtual void OnDamageCommitted(const FElysiumDmg& /*Dmg*/) {}
 
 	// Drop the Bloodshield effect an exhausted `HealthBuffer` ends, and rebuild the effect layer.

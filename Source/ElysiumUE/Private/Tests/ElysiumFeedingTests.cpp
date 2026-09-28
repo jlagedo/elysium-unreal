@@ -681,9 +681,16 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		// Hitting the VICTIM tears the pair down through its attacker.
+		// Corrected to retail (story 8 wave 2): hitting the VICTIM does not tear the pair down. The
+		// damage callers of `FeedInterrupt` (`0x1033a9e0`) are `CBasePlayer::OnTakeDamage`
+		// (`0x10163020`) alone; an NPC's damage is its slot-142 transaction, which calls no feed
+		// teardown (`docs/vtmb/feeding.md`: "incoming player damage while paired").
 		Victim->TakeDamage(5.0f);
 		World.Tick(1.05);
+		TestTrue(TEXT("damage to the victim leaves the pair standing"), Player->IsFeedPaired());
+		// Hitting the PLAYER does, before the damage commits.
+		Player->TakeDamage(5.0f);
+		World.Tick(1.1);
 		TestFalse(TEXT("incoming damage broke the pair"), Player->IsFeedPaired());
 		TestEqual(TEXT("...and fired OnFedUponEnd once"),
 			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);

@@ -572,54 +572,6 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageMemoryTest,
-	"Elysium.Substrate.NpcEnemy.DamageMemory", GElysiumTestFlags)
-bool FElysiumNpcEnemyDamageMemoryTest::RunTest(const FString&)
-{
-	auto Damage = [](FElysiumNpc& Npc, const FElysiumEntityHandle& Source, const FVector& Position)
-	{
-		FElysiumDmg Dmg;
-		Dmg.Source = Source;
-		Dmg.AttackPosition = Position;
-		Dmg.bHasAttackPosition = true;
-		return ElysiumNpcEnemy::RememberDamage(Npc, Dmg, 10.0);
-	};
-	// Unknown, unseen attacker writes only an anonymous position record.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		TestTrue(TEXT("unknown unseen damage enters the producer"),
-			Damage(*F.Guard, F.Player->Handle, FVector(77.f, 0.f, 0.f)));
-		TestFalse(TEXT("unknown damage does not manufacture an actor record"),
-			F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
-		TestTrue(TEXT("...but retains its position-only record"),
-			F.Guard->EnemyMemory.Records()[0].bPositionOnly);
-	}
-	// A known attacker refreshes its actor record at the packet attack position.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 0.0);
-		Damage(*F.Guard, F.Player->Handle, FVector(88.f, 0.f, 0.f));
-		TestEqual(TEXT("known damage updates that actor's position"),
-			F.Guard->EnemyMemory.Find(F.Player->Handle)->LastPosition, FVector(88.f, 0.f, 0.f));
-	}
-	// An unknown attacker with a current unseen enemy refreshes that committed target instead.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player || !F.ThugA) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		F.Guard->EnemyMemory.Update(*F.Guard, F.ThugA->Handle, 0.0);
-		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
-		Damage(*F.Guard, F.Player->Handle, FVector(99.f, 0.f, 0.f));
-		TestEqual(TEXT("current enemy receives the unknown attack position"),
-			F.Guard->EnemyMemory.Find(F.ThugA->Handle)->LastPosition, FVector(99.f, 0.f, 0.f));
-	}
-	return true;
-}
-
 // `SetEnemy` and the `ChooseEnemy` effects: the last-enemy transfer, NEW_ENEMY, the
 // forgotten LOS claim, and the two lost-the-actor outputs.
 
@@ -755,15 +707,16 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 	return true;
 }
 
-// The damage conditions, and the recovered 15%-in-one-second repeated-damage window.
-//
-// STORY8-TWIN: this case pins `ElysiumNpcCond::AccumulateDamage` / `GatherDamage`, the damage twin
-// that still runs from the typed commit (no live path reaches slots 142/390 yet). Its 20 % heavy
-// and 15 % repeated fractions are the twin's, not retail's: `0x10265ed0` raises HEAVY through slot
-// 577 (`> 20.0`, `_DAT_1044eb0c`) at `0x10266293` and REPEATED at `m_iMaxHealth * 0.3
-// (_DAT_1047b868) < m_flSumDamage`, reset when `curtime - m_flLastDamageTime >= 1.0` (`0x1026632e`,
-// `0x102662a8`) — pinned by `Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_*`.
-// Delete this case with the twin at wave 2 (L13).
+// The damage conditions from the live damage entry (story 8 wave 2, L13). `TakeDamage` builds
+// retail's packet and dispatches slot 142 on the body (Troika `0x102bed30` -> `0x10265e90` ->
+// `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60` -> slot 390 -> `0x102beda0` -> `0x10265ed0`),
+// which raises the three conditions itself, on the packet, with no gather in between:
+//   LIGHT_DAMAGE  slot 576 `0.0 < damage` (`0x10266630`), set at `0x10266239`;
+//   HEAVY_DAMAGE  slot 577 `20.0 < damage` (`_DAT_1044eb0c`, `0x10266660`), set at `0x10266293`;
+//   REPEATED      `m_iMaxHealth * 0.3 (_DAT_1047b868) < m_flSumDamage`, set at `0x1026632e`, the sum
+//                 RESET to the hit when `curtime - m_flLastDamageTime >= 1.0` (`0x102662a8`).
+// Corrected to retail: the port's deleted twin (`AccumulateDamage` / `GatherDamage`) raised HEAVY at
+// a chosen 20 % of max health and REPEATED at 15 %, and rebuilt the edge from a gather timestamp.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,
 	"Elysium.Substrate.NpcEnemy.DamageConditions", GElysiumTestFlags)
@@ -774,81 +727,58 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcMemory& Mem = F.Guard->Senses.Memory;
-
-	auto Hit = [&Mem, &F](int32 Amount, double At)
+	if (F.Player == nullptr)
 	{
-		Mem.LastDamageAmount = Amount;
-		F.Guard->BaseMemory.LastDamageTime = At;
-		ElysiumNpcCond::AccumulateDamage(F.Guard->BaseMemory, Amount, At);
+		return false;
+	}
+	FElysiumNpc& Guard = *F.Guard;
+	if (!TestEqual(TEXT("the fixture guard carries the default Max_Health"), Guard.MaxHealth, 100))
+	{
+		return false;
+	}
+	// A packet WITH an attacker: `0x10265ed0` answers 1 before any condition when `info+0x2c` is null
+	// (`0x10265f64`). The descriptor is direct input with a forced soak of 0, so the resolver's
+	// answer is the amount.
+	auto Hit = [&F, &Guard](int32 Amount, double At)
+	{
+		F.Flush(At);
+		Guard.Cognition.Conditions.Reset();
+		FElysiumDmg Dmg;
+		Dmg.Family = EElysiumDmgFamily::Bashing;
+		Dmg.Flags = ElysiumDamage::FlagDirectInput;
+		Dmg.ExtraInput = Amount;
+		Dmg.ForcedSoak = 0;
+		Dmg.Source = F.Player->Handle;
+		Guard.TakeDamage(Dmg, F.Player);
 	};
+	auto Has = [&Guard](EElysiumNpcCond Cond) { return Guard.Cognition.Conditions.Has(Cond); };
 
-	// A small hit inside the pass window is LIGHT and nothing else. 5 of 100 is below both the
-	// chosen 20% heavy threshold and the recovered 15% repeated sum.
-	Hit(5, 10.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, /*PreviousGatherTime=*/9.0, C);
-		TestTrue(TEXT("any committed packet raises LIGHT_DAMAGE"),
-			C.Has(EElysiumNpcCond::LightDamage));
-		TestFalse(TEXT("...but a small one is not HEAVY_DAMAGE"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-		TestFalse(TEXT("...and one hit is not REPEATED_DAMAGE"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
+	// 20 is light and NOT heavy (strict `20.0 < damage`); 20 of 100 is not over 30.
+	Hit(20, 10.0);
+	TestTrue(TEXT("0x10266239 LIGHT_DAMAGE on 20"), Has(EElysiumNpcCond::LightDamage));
+	TestFalse(TEXT("0x10266660 20 is not HEAVY_DAMAGE (20.0 < damage, strict)"), Has(EElysiumNpcCond::HeavyDamage));
+	TestFalse(TEXT("0x1026631d a sum of 20 is not over 100 * 0.3"), Has(EElysiumNpcCond::RepeatedDamage));
+	TestTrue(TEXT("0x102661de m_bCondTookDamage"), Guard.Cognition.bCondTookDamage);
 
-	// The same memory read by a LATER pass is not a new packet: the condition lives for one pass.
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, /*PreviousGatherTime=*/10.0, C);
-		TestFalse(TEXT("a packet already consumed by a pass is not gathered twice"),
-			C.Has(EElysiumNpcCond::LightDamage));
-	}
+	// 10 more inside the second: the sum 30 is NOT over 30 (strict `<`).
+	Hit(10, 10.5);
+	TestEqual(TEXT("0x102662c6 inside 1.0 s the sum ACCUMULATES"), Guard.BaseMemory.RepeatedDamageAccumulated, 30);
+	TestFalse(TEXT("0x1026631d a sum of exactly 30 % is not REPEATED_DAMAGE"), Has(EElysiumNpcCond::RepeatedDamage));
 
-	// A second hit inside the one-second window carries the sum past 15 of 100.
-	Hit(12, 10.5);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 10.4, C);
-		TestEqual(TEXT("the window accumulates rather than replacing"),
-			F.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
-		TestTrue(TEXT("a window sum over 15% of Source max health raises REPEATED_DAMAGE"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
+	// 21 inside the window: heavy, and the sum 51 is over 30.
+	Hit(21, 10.9);
+	TestTrue(TEXT("0x10266293 HEAVY_DAMAGE on 21"), Has(EElysiumNpcCond::HeavyDamage));
+	TestTrue(TEXT("...and LIGHT_DAMAGE with it"), Has(EElysiumNpcCond::LightDamage));
+	TestTrue(TEXT("0x1026632e REPEATED_DAMAGE when the sum exceeds 30 % of m_iMaxHealth"),
+		Has(EElysiumNpcCond::RepeatedDamage));
 
-	// A hit past the window RESETS it rather than decaying it, so the sum starts over.
-	Hit(12, 12.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 11.9, C);
-		TestEqual(TEXT("an expired window is reset, not decayed"),
-			F.Guard->BaseMemory.RepeatedDamageAccumulated, 12);
-		TestFalse(TEXT("...so the sum no longer clears the threshold"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
-
-	// A single big packet is HEAVY. The threshold itself is CHOSEN, NOT RECOVERED; what is asserted
-	// here is that the predicate reads the Source max-health pool and not a bare number.
-	Hit(25, 20.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 19.0, C);
-		TestTrue(TEXT("a packet at or over the heavy fraction raises HEAVY_DAMAGE"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-		TestTrue(TEXT("...and LIGHT_DAMAGE with it"), C.Has(EElysiumNpcCond::LightDamage));
-	}
-
-	// A body with no health ceiling cannot answer the heavy question and does not guess.
-	F.Guard->MaxHealth = 0;
-	Hit(25, 30.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 29.0, C);
-		TestTrue(TEXT("a body with no Source ceiling still takes light damage"),
-			C.Has(EElysiumNpcCond::LightDamage));
-		TestFalse(TEXT("...but the heavy predicate declines rather than inventing a pool"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-	}
+	// A full second after the last stamp the sum RESETS to the new hit rather than decaying.
+	Hit(5, 11.9);
+	TestEqual(TEXT("0x102662a8 curtime - m_flLastDamageTime >= 1.0 resets the sum"),
+		Guard.BaseMemory.RepeatedDamageAccumulated, 5);
+	TestFalse(TEXT("...so the sum no longer clears the threshold"), Has(EElysiumNpcCond::RepeatedDamage));
+	TestEqual(TEXT("0x10266310 m_flLastDamageTime = curtime"), Guard.BaseMemory.RepeatedDamageWindowStart,
+		F.World.NowSeconds());
 	return true;
 }
 
