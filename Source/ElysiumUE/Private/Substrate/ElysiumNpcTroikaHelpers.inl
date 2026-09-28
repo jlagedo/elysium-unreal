@@ -199,9 +199,11 @@ bool ApplyHintLeanOffset(FVector& InOutPointUnits, bool bStanding) const;
  *  extents. `SearchType` is retail's one argument. */
 bool FindTacticalHintNode(uint32 SearchType);
 
-/** `0x102b8980` — advance `m_eAlertLevel` (`+0x63f4`) one rung and answer the retail GRADE letter
- *  that rung shows. `m_bFullInvestigate` (`+0x6340`) forces the top rung before the switch. */
-TCHAR AdvanceAlertLevelGrade();
+/** `0x102b8980` — advance `m_eAlertLevel` (`+0x63f4`) one rung and answer the Troika schedule that
+ *  rung selects: 0x4c, 0x4d, then 0x51 (`SCHED_TROIKA_INVESTIGATE_SOUND`) or 0x52 (`..._OTHER_SOUND`)
+ *  (`MOV EAX,imm32`; `0x102b9060` tail-jumps here at `0x102b9204`, so the value is its answer).
+ *  `m_bFullInvestigate` (`+0x6340`) forces the top rung before the switch. */
+int32 AdvanceAlertLevelGrade();
 
 /** `0x102bf560` — record who attacked me, unless `m_bIgnoreDetectedAttack` (`+0x65f5`) is set:
  *  `m_hDetectedAttacker` (`+0x65c0`) and `m_flDetectedAttackTime` (`+0x65c4`). NAMED for the two

@@ -306,37 +306,35 @@ void FElysiumNpcFrenzyShadow::GatherConditions()
 // Slot 438: `0x10375d90`.
 int32 FElysiumNpcFrenzyShadow::SpeciesSelectSchedule()
 {
-	// `+0x1b2c = 0xf` on every arm. Then, only in `m_NPCState == 2` (COMBAT):
+	// `+0x1b2c = 0xf` on every arm (`0x10375d99`). Then, only in `m_NPCState == 2` (COMBAT):
 	//   1. `m_bCondTookDamage (+0x5b80) = 0`;
 	//   2. `m_iHostileEnemyCount <= 1` AND `GetEnemy()` (slot 167) AND the enemy `IsAlive()` (slot 158,
 	//      `+0x278` on the enemy) AND NOT `HasCondition(0x59 COND_ENEMY_UNREACHABLE)` AND NOT
 	//      `m_bFailedGrapple` -> trace `:0x133` and answer `0x161` (353 SCHED_VFRENZYSHADOW_FEED);
-	// every other arm tail-jumps to `CNPC_VHuman::SelectSchedule` `0x10384ee0`. That body has no port
-	// body (the census's unported `CNPC_VHuman#438`): the port's selector runs its base branch for
-	// every VHuman, which is what answering 0 here hands back to (`FElysiumNpc::SelectSchedule`).
-	RecordScheduleEvent(FString::Printf(TEXT("SelectSchedule +0x1b2c = 0x%x (CNPC_VFrenzyShadow 0x10375d90)"),
-		GShadowSelectTraceId));
-	if (NpcStateRetail() != GShadowRetailStateCombat)
+	// every other arm tail-jumps `0x10375e13 JMP 0x10015ad2` -> `CNPC_VHuman::SelectSchedule`
+	// `0x10384ee0` (story 8 Select19).
+	SelectScheduleSelector = GShadowSelectTraceId;                 // 0x10375d99
+	if (NpcStateRetail() != GShadowRetailStateCombat)             // 0x10375da3 / 0x10375da6
 	{
-		return 0;
+		return FElysiumNpcHuman::SpeciesSelectSchedule();          // 0x10375e13
 	}
-	Cognition.bCondTookDamage = false;
-	if (HostileEnemyCount > 1)
+	Cognition.bCondTookDamage = false;                             // 0x10375dae
+	if (HostileEnemyCount > 1)                                     // 0x10375db5 / 0x10375db8 JG
 	{
-		return 0;
+		return FElysiumNpcHuman::SpeciesSelectSchedule();
 	}
-	FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();
-	if (Enemy == nullptr || !Enemy->IsAlive())
+	FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10375dbc slot 167 (again 0x10375dca)
+	if (Enemy == nullptr || !Enemy->IsAlive())                     // 0x10375dc4 / 0x10375dd4 slot 158 / 0x10375ddc JZ
 	{
-		return 0;
+		return FElysiumNpcHuman::SpeciesSelectSchedule();
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::EnemyUnreachable) || bFailedGrapple)
+	if (Cognition.Conditions.Has(EElysiumNpcCond::EnemyUnreachable) || bFailedGrapple)   // 0x10375de2 / 0x10375de9 JNZ / 0x10375deb / 0x10375df3 JNZ
 	{
-		return 0;
+		return FElysiumNpcHuman::SpeciesSelectSchedule();
 	}
 	RecordScheduleEvent(FString::Printf(TEXT("SelectSchedule trace %s:%d -> 0x%x"), GShadowFile,
 		GShadowSelectLine, GShadowSchedFeed));
-	return GShadowSchedFeed;
+	return GShadowSchedFeed;                                       // 0x10375e09
 }
 
 // Slot 440: `0x10375f20`.

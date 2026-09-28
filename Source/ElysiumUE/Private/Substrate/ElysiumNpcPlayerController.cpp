@@ -328,19 +328,11 @@ int32 FElysiumNpcPlayerController::PreSelectSchedule()
 	//   state != IDLE -> `JMP 0x1000df2b` -> `CAI_BaseNPCTroika::PreSelectSchedule` `0x102ae920`,
 	//                    DIRECT (a tail jump);
 	//   state == IDLE -> trace `NPC_VPlayerController.cpp:0xe6` and answer `0x6b` (107).
-	//
-	// RESIDUE (story 8): no live code dispatches slot 437. Retail's `GetNewSchedule` `0x1028a260`
-	// writes `+0x1b2c = 0`, asks slot 437 `PreSelectSchedule`, and asks slot 438 `SelectSchedule`
-	// only when 437 answered 0; the port's maintenance pass (`SelectScheduleForMaintenance`,
-	// `ElysiumNpcMaintain19.cpp`) goes straight to slot 438. So a live idle stand-in runs the port's
-	// generic selector instead of this `0x6b`, until that wire is built Troika-wide.
-	const int32 State = NpcStateRetail();
-	RecordScheduleEvent(FString::Printf(
-		TEXT("PreSelectSchedule +0x1b2c = %d (CNPC_VPlayerController 0x103a46b0)"),
-		GControllerPreSelectTraceId));
-	if (State != GControllerRetailStateIdle)
+	const int32 State = NpcStateRetail();                         // 0x103a46b0
+	SelectScheduleSelector = GControllerPreSelectTraceId;         // 0x103a46b6 MOV [ECX+0x1b2c],2
+	if (State != GControllerRetailStateIdle)                       // 0x103a46c0 DEC / 0x103a46c1 JZ
 	{
-		return FElysiumNpc::PreSelectSchedule();
+		return FElysiumNpc::PreSelectSchedule();                   // 0x103a46c3 JMP 0x1000df2b
 	}
 	RecordScheduleEvent(FString::Printf(
 		TEXT("PreSelectSchedule trace NPC_VPlayerController.cpp:%d -> 0x%x"),

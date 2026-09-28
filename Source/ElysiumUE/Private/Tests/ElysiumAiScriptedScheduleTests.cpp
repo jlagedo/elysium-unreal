@@ -486,8 +486,12 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 		Selected == ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestTrue(TEXT("...into a loaded combat program"),
 		ElysiumScheduleFor(ElysiumScheduleGlobalId(Selected)) != nullptr);
-	TestTrue(TEXT("...which is one of the Troika melee family"),
-		FString(ElysiumScheduleName(ElysiumScheduleGlobalId(Selected))).Contains(TEXT("MELEE")));
+	// Story 8 L06 integration (corrected to retail): the injected NEW_ENEMY is answered by the
+	// pre-selector before slot 438 runs — `0x102ae920` COMBAT arm `0x102aedf0` HasCondition(0x54),
+	// not frenzied (`0x102aee01`) -> START_COMBAT `0xea` (`0x102aee03`). The unarmed guard's weapon
+	// split would take slot 605 (`0x10385008`), never a melee program.
+	TestEqual(TEXT("...which is the pre-selector's START_COMBAT 0xea (0x102aee03)"),
+		static_cast<int32>(Selected), 0xea);
 	return true;
 }
 

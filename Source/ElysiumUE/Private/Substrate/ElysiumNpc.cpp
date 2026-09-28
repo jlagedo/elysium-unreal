@@ -1270,7 +1270,7 @@ bool FElysiumNpc::ThinkSchedulePolicy(double Now, bool bReduced)
 	// Schedule selection pre-empts an autonomous executor.
 	// A committed enemy or an authored director outranks this NPC's own patrol route and
 	// interesting-place visit: without this routing a patrolling guard that acquired an enemy
-	// would keep walking its route and never reach `SelectCombatSchedule`.
+	// would keep walking its route and never reach combat selection.
 	//
 	// The hand-over lives in the ROUTING and not in either executor: the arbiter already carries
 	// both shapes (patrol suspends and resumes, ambient owns a claimed place that has to be given
@@ -1333,199 +1333,15 @@ void FElysiumNpc::ThinkAutonomous(double Now, bool bReduced)
 	}
 }
 
-int32 FElysiumNpc::SelectIdleSchedule()
-{
-	// 0. A disposition transition clip is on the body. Not retail's -- this runtime's stance
-	//    machine plays a transition where retail cuts -- and it used to be expressed by holding
-	//    `NextThink` past the clip. The think cadence owns that field now, so the hold is stated
-	//    where it belongs: selection declines while the clip runs, and the ordinary cadence keeps
-	//    asking until it ends.
-	if (World && World->NowSeconds() < StanceTransitionUntil)
-	{
-		return ElysiumScheduleId::None;
-	}
-
-	// 1. Choreo scene or busy with a discipline -- `CAI_BaseNPCTroika::SelectSchedule`
-	//    (`0x102af660`) case 1 opens with `if (IsBusyWithDiscipline() || m_bInChoreoScene) return
-	//    0x6b`. `m_bInChoreoScene` maps onto the scripted body owner we already issue; the busy
-	//    half is the `D_IS_BUSY` bit, which every discipline-victim schedule and the post-feed
-	//    trance set with `TASK_SET_NPC_FLAG`.
-	//
-	//    This step is HOW AN INCAPACITATING SCHEDULE ENDS. Those programs carry no teardown tasks:
-	//    when one completes, the NPC is still busy, so it selects the disposition idle here, and
-	//    that install's schedule-change virtual is what releases the bit (`FElysiumNpcFlags::
-	//    OnScheduleChange`). One hop through 0x6b, then ordinary selection -- retail's exact exit.
-	if (Mind.Owner() == EElysiumBodyOwner::Sequence || IsBusyWithDiscipline())
-	{
-		return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
-	}
-
-	// 2. The follower controller at virtual `+0x97c`. Refused: `EElysiumBodyOwner::Follower` is
-	//    already rejected by the mind, and the three `follower_type` radii it compares against
-	//    are unrecovered.
-	//
-	// 3. Patrol, and 4. `use_interesting`. Both keep their existing executors rather than being
-	//    re-expressed as task programs -- they own the body through the mind's own token, which
-	//    is the arbitration this selection order would otherwise duplicate.
-	if (bPatrolActive || bUseInteresting)
-	{
-		return ElysiumScheduleId::None;
-	}
-
-	// 5. Alert lookaround. `m_iEnemySightings` counts committed-enemy acquisition episodes against
-	//    the player, so an NPC that has never had one reads the flat 10% floor and a veteran of
-	//    four or more reads the 30% cap. `no_alert_state` does NOT suppress this route: the
-	//    recovered base `SelectIdealState` carries no such test.
-	if (bAllowAlertLookaround)
-	{
-		const int32 Chance = ElysiumNpcCond::AlertLookaroundChance(EnemySightings);
-		if (ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
-		{
-			return ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI;
-		}
-	}
-
-	// 6. Door obstruction (`CAI_BaseNPCTroika::SelectDoorObstructionSchedule`).
-	if (const int32 Door = SelectDoorObstructionSchedule();
-		Door != ElysiumScheduleId::None)
-	{
-		return Door;
-	}
-
-	// 7. Return-to-initial, else the disposition stance. Retail's producer is `OnStateChange`
-	//    (`0x102ae140`), which arms `m_bReturnToInitialPos` (`+0x6494`) on entry to ALERT or COMBAT
-	//    only -- SCRIPT falls into the case that does not -- and the selector consumes it one-shot.
-	//    This runtime has no producer, so the flag is permanently clear and this always resolves to
-	//    the stance. That is the correct answer for an NPC that has only ever idled or been script-
-	//    driven; what is missing is the walk-home a real alert or combat episode should arm, which
-	//    needs `SCHED_TROIKA_IDLE_RETURN_TO_INITIAL` and a captured initial position to exist first.
-	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
-}
-
 int32 FElysiumNpc::SelectSchedule()
 {
-	// A dead NPC selects nothing, ever. `ThinkDead` consumes the whole pass before anything can
-	// reach here, so this is unreachable through the think — it is stated anyway because selection
-	// has a second door (`StartNamedSchedule`, which a script's `ChangeSchedule` and a discipline's
-	// `AI_Schedule` channel both reach), and "the corpse stopped choosing" has to be a property of
-	// the selector rather than of one caller's ordering.
-	if (Mind.State() == EElysiumNpcState::Dead)
-	{
-		return ElysiumScheduleId::None;
-	}
-	// Story 29c-1, family Schedule: the species half of slot 438. Five classes replace the WHOLE
-	// selector — `CNPC_VAndreiBlood`, `CNPC_VCamera`/`CNPC_VCameraSecurity`, `CNPC_VManBat`,
-	// `CNPC_VMingXiaoTentacle` and `CNPC_VPlaceholder` — so the species answer is asked ahead of
-	// everything the base selector does, the chosen law position included. Each answers a RAW
-	// retail schedule number; a number this runtime registers no program for falls through to the
-	// base branch with the miss tallied, which is the rule `TranslateSchedule` already applies to
-	// an unported id rather than installing some other program under a recovered number.
-	if (const int32 SpeciesRetailId = SpeciesSelectSchedule(); SpeciesRetailId != 0)
-	{
-		const int32 Species = SpeciesRetailId;
-		if (Species != ElysiumScheduleId::None)
-		{
-			return Species;
-		}
-		ElysiumStub::Fired(TEXT("schedule"), TEXT("slot 438 species SelectSchedule"), DebugString(),
-			FString::Printf(TEXT("0x%x"), SpeciesRetailId),
-			TEXT("0002/29c-1: the species schedule is not registered"));
-	}
-	// The law branch of schedule selection.
-	// "Schedule branches, not condition gathering, call the two player incident consumers." This is
-	// the only place in the runtime that reaches them from an NPC.
-	//
-	// CHOSEN, NOT RECOVERED — the POSITION. The recovered idle branch (`0x102af660` case 1) is
-	// decoded step by step and contains no law step, so the branch cannot be inserted into that
-	// order without contradicting a decoded body; the recovered material says only "schedule
-	// selection/translation". It therefore sits at the outermost selection entry, ahead of the state
-	// switch, which is the one point every state passes through and which displaces no decoded
-	// order. It declines by returning `None` on all but the flee arm, so an NPC that witnessed
-	// nothing takes the ordinary selection.
-	if (const int32 Law =
-			ElysiumNpcWitness::SelectLawSchedule(*this, World ? World->NowSeconds() : 0.0);
-		Law != ElysiumScheduleId::None)
-	{
-		return Law;
-	}
-	switch (Mind.State())
-	{
-	case EElysiumNpcState::Combat:  return SelectCombatSchedule();
-	case EElysiumNpcState::Alert:   return SelectAlertSchedule();
-	default:                        return SelectIdleSchedule();
-	}
-}
-
-int32 FElysiumNpc::SelectAlertSchedule()
-{
-	// The executors keep their bodies in alert exactly as they do in idle: a patrol or an ambient
-	// place is owned through the mind's token, and re-expressing it as a task program here would
-	// duplicate the arbitration.
-	if (bPatrolActive || bUseInteresting)
-	{
-		return ElysiumScheduleId::None;
-	}
-	if (!Cognition.bReportedAlertRefusal)
-	{
-		Cognition.bReportedAlertRefusal = true;
-		// The recovered alert branch's damage reactions, refused BY NAME rather than approximated.
-		// Two of the three programs are registered (`TAKE_COVER_FROM_ORIGIN` 0x19 and
-		// `ALERT_SMALL_FLINCH` 0x07, both minimal and marked in
-		// `Substrate/ElysiumNpcCombatSchedules.cpp`) and `ALERT_FACE` is not — but what is missing
-		// here is the SELECTION, not the programs: the branch turns on "when the attack origin lies
-		// within its recovered facing test", and the survey names that test without stating its
-		// threshold (`docs/vtmb/combat-and-damage.md` -> "Incapacitation, feeding, grapple, and
-		// death"). Choosing between cover and a flinch on an invented angle would be a behaviour.
-		RecordScheduleEvent(TEXT("alert: the damage branch's recovered facing test has no decoded "
-			"threshold — holding on the lookaround"));
-	}
-	// CHOSEN, NOT RECOVERED: the alert state's ordinary (undamaged) selection. Retail's case 3 body
-	// is not decoded past the three damage reactions above, so the alert idle is taken to be the
-	// lookaround — the one alert-named program the survey does decode, and the one the idle branch
-	// already reaches on a chance roll. `m_bAllowAlertLookaround` deliberately does NOT gate it: the
-	// recovered keyfield gates step 5 of the IDLE selector, not the alert state itself.
-	return ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI;
-}
-
-int32 FElysiumNpc::SelectCombatSchedule()
-{
-	// An NPC running the patrol or interesting-place executor DOES reach this function: `Think`
-	// routes a Combat state to schedule selection ahead of either executor, the patrol route is
-	// suspended through the arbiter and resumes when the program ends, and an interesting-place visit
-	// gives its claimed place back. The hand-over lives in the routing, not here.
-	const double Now = World ? World->NowSeconds() : 0.0;
-
-	// The recovered split: a weapon reporting `0x18000` enters the melee selector at `0x10385e40`,
-	// every other weapon the ranged one at `0x10386560`. An NPC the item catalogue could not arm
-	// takes the melee branch with bare-hands defaults, and its attack tasks then fail by name — the
-	// marked unarmed path, which is a visible refusal rather than an NPC that mimes a fight.
-	const ElysiumNpcCond::ECapability Capability = ElysiumNpcCond::WeaponCapability(*this);
-	const int32 Chosen = Capability == ElysiumNpcCond::ECapability::Ranged
-		? ElysiumNpcCombat::SelectRangedSchedule(*this, Now)
-		: ElysiumNpcCombat::SelectMeleeSchedule(*this, Now);
-	if (Chosen != ElysiumScheduleId::None)
-	{
-		return Chosen;
-	}
-
-	// --- The composition rule -------------------------------------------------------------------
-	// "A selector returning zero falls through to `CAI_BaseNPCTroika::SelectSchedule`, so the weapon
-	// policy composes with damage, door, fear and base state reactions rather than replacing them."
-	// What follows is that base branch, in the same order the idle selector runs it.
-	if (const int32 Door = SelectDoorObstructionSchedule();
-		Door != ElysiumScheduleId::None)
-	{
-		return Door;
-	}
-	// "The base idle/combat selectors may choose `SMALL_FLINCH` (0x14)."
-	if (Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage)
-		|| Cognition.Conditions.Has(EElysiumNpcCond::LightDamage))
-	{
-		return ElysiumSched::SMALL_FLINCH;
-	}
-	// SEAM (comment only): the base branch's fear reaction. The `COWER`/`FLEE` families are 24
-	// schedules whose contents the survey does not decode, and `SEE_FEAR` alone does not say which.
-	return ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION;
+	// Story 8 Select19: retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): `+0x1b2c = 0`,
+	// slot 437 `PreSelectSchedule`, then slot 438 `SelectSchedule` when 437 answered 0. It replaces
+	// the port's guessed selector (the dead-state guard, the species-first composition and the law
+	// branch at the outermost entry, all deleted): a dead NPC answers base case 7
+	// (`0x1028a8ec`), and the incident consumers are reached from retail's own arms (`0x102ae920`
+	// state 2 / crim-suspicion, `0x102af660` case 8).
+	return SelectNewScheduleRetail();
 }
 
 void FElysiumNpc::PumpStateChange()

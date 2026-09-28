@@ -482,9 +482,19 @@ bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 
 	// The flee-only branch queues a player-owned scare record instead of submitting, and the copy
 	// still happens so the same sighting is not re-queued every pass.
+	// Story 8 L06 integration (corrected to retail): the flee level is consumed in the FLEE state.
+	// `CAI_BaseNPCTroika::SelectIdealState` `0x102ad660` case 1 takes an idle NPC holding COND 0x21
+	// to state 8 with INITIAL_FLEE (line 0x452b); `SelectSchedule` `0x102af660` case 8's supernatural
+	// arm (`0x102b0425`) then, the offender being the player and the record flee-only, calls
+	// `0x1017fd60` on SEE_PLAYER (`0x102b05f5` / `0x102b063a`) and answers
+	// FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR) (`0x102b0678` / `0x102b0696`). The port's RUN_AWAY answer
+	// (`SelectLawSchedule`) has no retail counterpart and is deleted.
+	F.Guard->UpdateIdealState(0.1);
+	TestEqual(TEXT("COND 0x21 takes the idle NPC to FLEE (0x102ad660, line 0x452b)"),
+		F.Guard->NpcStateRetail(), 8);
 	const int32 Selected = F.Guard->SelectSchedule();
-	TestEqual(TEXT("the flee arm selects the run-away program"),
-		static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
+	TestTrue(TEXT("the flee arm selects FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR) 0x70/0x71"),
+		Selected == 0x70 || Selected == 0x71);
 	TestEqual(TEXT("one scare record was queued on the player"), F.Player->ScareQueue.Num(), 1);
 	if (F.Player->ScareQueue.Num() == 1)
 	{
@@ -768,15 +778,26 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 		TestFalse(TEXT("the disabled attack threshold raises nothing"),
 			F.Has(ECond::CriminalAttackLevel));
 
+		// Story 8 L06 integration (corrected to retail): `0x102ad660` case 1 takes the idle NPC holding
+		// COND 0x1f to state 8 with INITIAL_FLEE (line 0x4532); `0x102af660` case 8's criminal arm
+		// (`0x102b0746`) adopts the offender (slot 596, `0x102b07a9`), submits (`0x102b08f6`), copies
+		// the act count (`0x102b0929`) and, the offender being the player, answers
+		// FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR) (`0x102b095b` / `0x102b0979`). Retail writes the save
+		// position only when the offender is NOT the player (`0x102b09dc`); the port's RUN_AWAY
+		// answer stamped away from the crime (`SelectLawSchedule`) has no retail counterpart.
+		F.Guard->UpdateIdealState(0.0);
+		TestEqual(TEXT("COND 0x1f takes the idle NPC to FLEE (0x102ad660, line 0x4532)"),
+			F.Guard->NpcStateRetail(), 8);
 		const int32 Selected = F.Guard->SelectSchedule();
-		TestEqual(TEXT("31 routes selection into the run-away family"),
-			static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
-		TestTrue(TEXT("the retreat is stamped away from where the crime was witnessed"),
-			FVector::Dist(F.Guard->SavePosition, F.Player->Origin) < 1.0);
-		// The retreat program is registered, so selection can actually start it.
-		TestNotNull(TEXT("the run-away program exists"),
-			ElysiumScheduleFor(ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY)));
-		// An NPC that witnessed nothing takes exactly the selection it took before.
+		TestTrue(TEXT("31 routes selection into FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR) 0x70/0x71"),
+			Selected == 0x70 || Selected == 0x71);
+		TestTrue(TEXT("...submitting the incident on the way (0x102b08f6)"),
+			F.Player->Police.bResponsePending);
+		TestTrue(TEXT("...having adopted the offender as its enemy (slot 596, 0x102b07a9)"),
+			F.Guard->BaseMemory.Enemy == F.Player->Handle);
+		TestNotNull(TEXT("the flee program exists"), ElysiumScheduleFor(ElysiumScheduleGlobalId(Selected)));
+		// An NPC that witnessed nothing takes exactly the selection it took before: case 1's last
+		// exit, `0x102af8dc` IDLE_DISPOSITION.
 		FWitnessFixture Q;
 		if (Q.Guard != nullptr)
 		{
@@ -808,34 +829,38 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 			static_cast<int32>(F.Guard->Relationships.Resolve(F.Player->Handle, TEXT("player"))),
 			static_cast<int32>(EElysiumRelationship::Neutral));
 
-		const int32 Selected = F.Guard->SelectSchedule();
-		// The attack arm returns no program of its own: the ordinary selection below it runs.
-		TestNotEqual(TEXT("the attack arm does not select the retreat"),
-			static_cast<int32>(Selected), static_cast<int32>(ElysiumSched::SCHED_TROIKA_RUN_AWAY_FROM_ENEMY));
-		TestEqual(TEXT("32 installs a D_HT row toward the player"),
+		// Story 8 L06 integration (corrected to retail): COND 0x20 is consumed ONLY by the
+		// pre-selector `0x102ae920` in COMBAT, and only when the running schedule's mask admits it
+		// (`0x102aeb92` HasInterrupt(0x20)): submit (`0x102aec5e`), copy (`0x102aec97`), slot 596
+		// adopts the offender as the enemy (`0x102aecd2`) and slot 597 writes `D_HT` at priority 5
+		// (`0x102aed0d` -> `0x102b4fb0` -> `AddEntityRelationship 0x10332ca0`). The port's idle-state
+		// consumer that installed the row from the selector's outermost entry (`SelectLawSchedule`,
+		// "CHOSEN, NOT RECOVERED") is deleted: an idle NPC's selection writes no relationship.
+		TestEqual(TEXT("idle selection answers the disposition idle (0x102af8dc)"),
+			F.Guard->SelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
+		TestEqual(TEXT("...and writes no relationship"),
 			static_cast<int32>(F.Guard->Relationships.Resolve(F.Player->Handle, TEXT("player"))),
-			static_cast<int32>(EElysiumRelationship::Hate));
-		TestEqual(TEXT("...at IRelationPriority's own default for a live actor"),
-			F.Guard->Relationships.ResolvePriority(F.Player->Handle, TEXT("player")),
-			EW::AttackRelationPriority);
-
-		// The ordinary enemy transaction does the rest, on the next pass and through its own gate.
-		F.LookAndGather(0.1);
-		TestTrue(TEXT("the enemy transaction commits the player as the enemy"),
-			F.Guard->BaseMemory.Enemy == F.Player->Handle);
+			static_cast<int32>(EElysiumRelationship::Neutral));
+		F.Guard->SetState(2);
 		{
 			FElysiumNpcConditions Mask;
-			Mask.Set(ECond::NewEnemy);
+			Mask.Set(ECond::CriminalAttackLevel);
 			const ElysiumSchedule::FInterruptMaskScope Scope(ElysiumSched::IDLE_STAND, Mask);
 			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::IDLE_STAND, *F.Guard);
-			F.Guard->Cognition.Conditions.Set(ECond::NewEnemy);
-			F.Guard->UpdateIdealState(0.1);
+			F.Guard->Cognition.Conditions.Set(ECond::CriminalAttackLevel);
+			F.Guard->PreSelectSchedule();
 		}
-		// A committed enemy is what promotes the NPC to combat, and the combat branch is what
-		// selects a fighting program rather than the disposition idle.
-		TestNotEqual(TEXT("the promoted NPC no longer selects its disposition idle"),
-			static_cast<int32>(F.Guard->SelectSchedule()),
-			static_cast<int32>(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
+		TestTrue(TEXT("the combat pre-selector submitted the incident (0x102aec5e)"),
+			F.Player->Police.bResponsePending);
+		TestEqual(TEXT("...copied the act count (0x102aec97)"),
+			F.Guard->Witness.Channel(EChannel::Criminal).Processed, F.Player->CriminalActCount());
+		TestTrue(TEXT("...adopted the player as its enemy (slot 596, 0x102aecd2)"),
+			F.Guard->BaseMemory.Enemy == F.Player->Handle);
+		TestEqual(TEXT("...and slot 597 installed a D_HT row toward the player (0x102aed0d)"),
+			static_cast<int32>(F.Guard->Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+			static_cast<int32>(EElysiumRelationship::Hate));
+		TestEqual(TEXT("...at the priority the arm pushes, 5"),
+			F.Guard->Relationships.ResolvePriority(F.Player->Handle, TEXT("player")), 5);
 	}
 	return true;
 }
@@ -874,6 +899,10 @@ bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 		F.Guard->Witness.Channel(EChannel::Criminal).Processed, -1);
 
 	// --- Schedule selection submits ---------------------------------------------------------------
+	// Story 8 L06 integration: in the FLEE state (`0x102ad660` case 1, COND 0x1f -> 8, line 0x4532),
+	// by `0x102af660` case 8's criminal arm (`0x102b08f6` submit, `0x102b0929` copy).
+	F.Guard->UpdateIdealState(0.0);
+	TestEqual(TEXT("the flee level takes the NPC to FLEE"), F.Guard->NpcStateRetail(), 8);
 	F.Guard->SelectSchedule();
 	TestTrue(TEXT("selection submitted the incident into the police admission"),
 		F.Player->Police.bResponsePending);
@@ -909,7 +938,11 @@ bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 		// A retained record whose offender no longer resolves to the player is dropped rather than
 		// submitted against whoever occupies that slot now.
 		G.Guard->Witness.Channel(EChannel::Criminal).Offender = G.Guard->Handle;
-		G.Guard->SelectSchedule();
+		// Case 8's criminal arm with a resolving non-player offender: FLEE_AND_COWER at `0x102b09be`,
+		// no submission (`0x102b07e9..0x102b080d` player != offender).
+		G.Guard->UpdateIdealState(0.0);
+		TestEqual(TEXT("an offender record that resolves elsewhere still flees, to FLEE_AND_COWER"),
+			G.Guard->SelectSchedule(), 0x73);
 		TestFalse(TEXT("an incident whose offender is not the player is not submitted"),
 			G.Player->Police.bResponsePending);
 	}

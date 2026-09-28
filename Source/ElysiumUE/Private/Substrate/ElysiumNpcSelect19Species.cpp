@@ -58,11 +58,15 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
+#include "Substrate/ElysiumNpcPositionsShared.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleNumbers.h"
 
@@ -105,6 +109,9 @@ namespace NpcSelect19Species
 	constexpr float GMeleeFarSqr = 160000.0f;          // `_DAT_104b73e8` f32
 	constexpr float GMeleeNearSqr = 40000.0f;          // `_DAT_104b73e4` f32
 	constexpr float GMingXiaoChargeRange = ElysiumNpcTunables::OneTwenty;   // `_DAT_1044f00c` = 120.0
+	constexpr double GTzimisceBodyAngleLimit = 120.0;  // `_DAT_104cc510` f64 (`0x103bc6d5 FCOMP double`)
+	constexpr float GTzimisceBodyLkpFraction = 0.2f;   // `_DAT_10451ab4` f32
+	constexpr float GTzimisceBodyNearSqr = 90000.0f;   // `_DAT_104cc508` f32, compared SQUARED
 
 	// Class-local conditions (each class's own `space.json` registrations).
 	constexpr EElysiumNpcCond GCondDogShouldSnarl = static_cast<EElysiumNpcCond>(0x7b);         // COND_VDOG_SHOULD_SNARL
@@ -191,42 +198,42 @@ namespace NpcSelect19Species
 int32 FElysiumNpcAnimal::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 5;                                    // 0x1035fb5a
-	if (NpcFlags.Has(EElysiumNpcFlag::DO_STARTLED))                // 0x1035fb6b
+	SelectScheduleSelector = 5;                                    // 0x1035fb59
+	if (NpcFlags.Has(EElysiumNpcFlag::DO_STARTLED))                // 0x1035fb65..0x1035fb6b (flags & 2) == 2
 	{
-		NpcFlags.Clear(EElysiumNpcFlag::DO_STARTLED);              // 0x1035fb77
-		return SelectTrace(GFileAnimal, 0x204, 0x15d);             // 0x1035fb7d SCHED_VANIMAL_STARTLED
+		NpcFlags.Clear(EElysiumNpcFlag::DO_STARTLED);              // 0x1035fb6d / 0x1035fb79
+		return SelectTrace(GFileAnimal, 0x204, 0x15d);             // 0x1035fb89 SCHED_VANIMAL_STARTLED
 	}
-	const int32 State = NpcStateRetail();
-	if (State == GStateIdle)                                       // 0x1035fb97
+	const int32 State = NpcStateRetail();                          // 0x1035fb90
+	if (State == GStateIdle)                                       // 0x1035fb97 JZ
 	{
 		int32 PatrolSchedule = 0;
-		if (SelectPatrolPathObject(PatrolSchedule))                // 0x1035fb9c (+0x6590)
+		if (SelectPatrolPathObject(PatrolSchedule))                // 0x1035fbc4 (+0x6590)
 		{
-			return PatrolSchedule;                                 // 0x1035fba1 — no stamp
+			return PatrolSchedule;                                 // 0x1035fbc6 [path+4] — no stamp
 		}
-		if (bUseInteresting)                                       // 0x1035fbc4
+		if (bUseInteresting)                                       // 0x1035fbd3 (+0x63d9)
 		{
-			if (NavigatorPathType() != 9                           // 0x1035fbd3
-				&& CurrentSpotIndex == INDEX_NONE)                 // 0x1035fbe3 (+0x62ec)
+			if (NavigatorPathType() != 9                           // 0x1035fbdb CALL 0x102ee620 / 0x1035fbe3
+				&& CurrentSpotIndex == INDEX_NONE)                 // 0x1035fbed (+0x62ec m_pInterestingPlace)
 			{
-				return SelectTrace(GFileAnimal, 0x217, 0x156);     // 0x1035fbe5 SCHED_VANIMAL_WALK_TO_INTERESTING_PLACE_SETUP
+				return SelectTrace(GFileAnimal, 0x217, 0x156);     // 0x1035fc03 SCHED_VANIMAL_WALK_TO_INTERESTING_PLACE_SETUP
 			}
-			return SelectTrace(GFileAnimal, 0x213, 0x157);         // 0x1035fbef SCHED_VANIMAL_WALK_TO_INTERESTING_PLACE
+			return SelectTrace(GFileAnimal, 0x213, 0x157);         // 0x1035fc1e SCHED_VANIMAL_WALK_TO_INTERESTING_PLACE
 		}
 	}
-	else if (State == GStateAlert)                                 // 0x1035fba7 / 0x1035fbb2
+	else if (State == GStateAlert)                                 // 0x1035fb99 / 0x1035fb9c
 	{
-		if (const int32 Unknown = SelectUnknownAlertSchedule(); Unknown != 0)   // 0x1035fba9 CALL 0x102b8a60
+		if (const int32 Unknown = SelectUnknownAlertSchedule(); Unknown != 0)   // 0x1035fba0 CALL 0x102b8a60 / 0x1035fba7
 		{
 			return Unknown;
 		}
-		if (const int32 Sound = SelectSoundAlertSchedule(); Sound != 0)   // 0x1035fbb4? CALL 0x102b9060
+		if (const int32 Sound = SelectSoundAlertSchedule(); Sound != 0)   // 0x1035fbab CALL 0x102b9060 / 0x1035fbb2
 		{
 			return Sound;
 		}
 	}
-	return TroikaSelectSchedule();                                 // 0x1035fc0a JMP 0x10015596
+	return TroikaSelectSchedule();                                 // 0x1035fbb7 JMP 0x10015596
 }
 
 // =================================================================================================
@@ -236,11 +243,11 @@ int32 FElysiumNpcAnimal::SpeciesSelectSchedule()
 int32 FElysiumNpcDog::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 0xd;                                  // 0x103742d6
-	if (Cognition.Conditions.Has(GCondDogShouldSnarl))             // 0x103742e6
+	SelectScheduleSelector = 0xd;                                  // 0x103742d5
+	if (Cognition.Conditions.Has(GCondDogShouldSnarl))             // 0x103742df / 0x103742e6
 	{
-		Cognition.Conditions.Clear(GCondDogShouldSnarl);           // 0x103742ea CALL 0x10269b50
-		return 0x166;                                              // 0x103742f2 SCHED_VDOG_SNARL
+		Cognition.Conditions.Clear(GCondDogShouldSnarl);           // 0x103742ec CALL 0x10269b50
+		return 0x166;                                              // 0x103742f1 SCHED_VDOG_SNARL
 	}
 	bool bAskBefriended = false;
 	switch (NpcStateRetail())                                      // 0x103742f8
@@ -248,34 +255,34 @@ int32 FElysiumNpcDog::SpeciesSelectSchedule()
 	case GStateIdle:                                               // 0x103742ff
 	{
 		int32 PatrolSchedule = 0;
-		if (SelectPatrolPathObject(PatrolSchedule))                // 0x10374302 (+0x6590)
+		if (SelectPatrolPathObject(PatrolSchedule))                // 0x1037433d (+0x6590)
 		{
-			return PatrolSchedule;                                 // 0x10374314
+			return PatrolSchedule;                                 // 0x1037433f [path+4]
 		}
-		if (!bUseInteresting)                                      // 0x10374305 (+0x63d9)
+		if (!bUseInteresting)                                      // 0x1037434c (+0x63d9)
 		{
-			return 0x164;                                          // 0x10374307 SCHED_VDOG_LOITER
+			return 0x164;                                          // 0x1037432e SCHED_VDOG_LOITER
 		}
-		bAskBefriended = true;
+		bAskBefriended = true;                                     // 0x1037434e JMP 0x10374307
 		break;
 	}
-	case GStateCombat:                                             // 0x1037431b
-		Cognition.bCondTookDamage = false;
+	case GStateCombat:                                             // 0x10374302
+		Cognition.bCondTookDamage = false;                         // 0x1037431b (+0x5b80)
 		break;
-	case GStateAlert:                                              // 0x10374312
+	case GStateAlert:                                              // 0x10374305
 		bAskBefriended = true;
 		break;
 	default:
 		break;
 	}
-	if (bAskBefriended && HasInterrupt(*this, GCondDogPlayerBefriended))   // 0x10374322 / 0x1037432c
+	if (bAskBefriended && HasInterrupt(*this, GCondDogPlayerBefriended))   // 0x1037430b / 0x10374312
 	{
-		return 0x167;                                              // SCHED_VDOG_MADEFRIEND
+		return 0x167;                                              // 0x10374314 SCHED_VDOG_MADEFRIEND
 	}
-	const int32 Animal = FElysiumNpcAnimal::SpeciesSelectSchedule();   // 0x1037433d CALL 0x1035fb50
-	if (Animal == ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)     // 0x1037434c CMP EAX,0x6b
+	const int32 Animal = FElysiumNpcAnimal::SpeciesSelectSchedule();   // 0x10374324 CALL 0x1035fb50
+	if (Animal == ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)     // 0x10374329 CMP EAX,0x6b / 0x1037432c JNZ
 	{
-		return 0x164;                                              // SCHED_VDOG_LOITER
+		return 0x164;                                              // 0x1037432e SCHED_VDOG_LOITER
 	}
 	return Animal;
 }
@@ -293,18 +300,18 @@ int32 FElysiumNpcScurrying::SpeciesSelectSchedule()
 	{
 		return SelectTrace(GFileScurrying, 0xbe, 0x162);           // 0x103ac632 SCHED_VSCURRYING_EVADE
 	}
-	if (Cognition.Conditions.Has(GCondScurryPlayerTooClose))       // 0x103ac658
+	if (Cognition.Conditions.Has(GCondScurryPlayerTooClose))       // 0x103ac651 CALL / 0x103ac658
 	{
 		return SelectTrace(GFileScurrying, 0xc3, 0x162);           // 0x103ac65a
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::HearBulletImpact))   // 0x103ac680
+	if (Cognition.Conditions.Has(EElysiumNpcCond::HearBulletImpact))   // 0x103ac679 CALL / 0x103ac680
 	{
 		// `0x101b99d0(&m_LastSoundBulletImpact)` — the sound record's origin.
-		ScurryingFrightOrigin = Senses.Memory.LastSoundBulletImpact.Position;   // 0x103ac68b..0x103ac6a6
+		ScurryingFrightOrigin = Senses.Memory.LastSoundBulletImpact.Position;   // 0x103ac688 CALL 0x100019ab / 0x103ac68b..0x103ac6a6
 		ScurryingFrightEndTime = static_cast<double>(ScurryingFrightDurationSeconds) + T;   // 0x103ac6c9
 		return SelectTrace(GFileScurrying, 0xca, 0x162);           // 0x103ac6ae
 	}
-	int32 Animal = FElysiumNpcAnimal::SpeciesSelectSchedule();     // 0x103ac6d7
+	int32 Animal = FElysiumNpcAnimal::SpeciesSelectSchedule();     // 0x103ac6d7 / 0x103ac6d9 CALL 0x10002b71
 	if (Animal == ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION)     // 0x103ac6e1
 	{
 		SelectTrace(GFileScurrying, 0xd1, 0x161);                  // 0x103ac6e3
@@ -330,21 +337,23 @@ int32 FElysiumNpcZombie::SpeciesSelectSchedule()
 	{
 		Unhide();                                                  // 0x103df325 slot 67, vtable +0x10c
 	}
-	if (!IsAlive())                                                // 0x103df32d slot 158 / 0x103df337
+	if (!IsAlive())                                                // 0x103df32f slot 158 / 0x103df337
 	{
-		CreateCorpse(ZombieDeathForceVector, &ZombieDeathDamageInfo);   // 0x103df349 slot 301
+		// DIRECT call (`0x103df349 CALL 0x10007c7a` -> `CNPC_VZombie::CreateCorpse 0x103dfbb0`), not the
+		// slot-301 dispatch; the virtual lands on the same body (no class derives from the zombie).
+		FElysiumNpcZombie::CreateCorpse(ZombieDeathForceVector, &ZombieDeathDamageInfo);   // 0x103df349
 	}
 	if (ZombieAiType == 8 || ZombieAiType == 7)                    // 0x103df357 / 0x103df35c
 	{
 		// `LIGHT_DAMAGE` is asked twice in a row (`0x103df369`, `0x103df376`); retail's, reproduced.
-		if (Cond.Has(EElysiumNpcCond::LightDamage)                 // 0x103df369
-			|| Cond.Has(EElysiumNpcCond::LightDamage)              // 0x103df376
-			|| Cond.Has(EElysiumNpcCond::HeavyDamage)              // 0x103df383
-			|| Cond.Has(GCondZombiePlayerAttacked))                // 0x103df390
+		if (Cond.Has(EElysiumNpcCond::LightDamage)                 // 0x103df362 / 0x103df369
+			|| Cond.Has(EElysiumNpcCond::LightDamage)              // 0x103df36f / 0x103df376
+			|| Cond.Has(EElysiumNpcCond::HeavyDamage)              // 0x103df37c / 0x103df383
+			|| Cond.Has(GCondZombiePlayerAttacked))                // 0x103df389 / 0x103df390
 		{
 			ZombieAiType = 1;                                      // 0x103df3bb
 		}
-		else if (!Cond.Has(EElysiumNpcCond::GiveWay))              // 0x103df39d
+		else if (!Cond.Has(EElysiumNpcCond::GiveWay))              // 0x103df396 / 0x103df39d
 		{
 			return SelectTrace(GFileZombie, 0x160, 0x16b);         // 0x103df39f SCHED_VZOMBIE_FEAR_SOMETHING
 		}
@@ -352,41 +361,41 @@ int32 FElysiumNpcZombie::SpeciesSelectSchedule()
 	const int32 State = NpcStateRetail();                          // 0x103df3c5
 	if (State == GStateIdle)                                       // 0x103df3ce
 	{
-		if (ZombieAiType == 1)                                     // 0x103df44e
+		if (ZombieAiType == 1)                                     // 0x103df447 / 0x103df44e
 		{
-			SetState(GStateCombat);                                // 0x103df457 CALL 0x1026e340(2)
-			if (Cond.Has(EElysiumNpcCond::SeeEnemy))               // 0x103df45d
+			SetState(GStateCombat);                                // 0x103df4a2 CALL 0x10002554 -> 0x1026e340(2)
+			if (Cond.Has(EElysiumNpcCond::SeeEnemy))               // 0x103df4ab / 0x103df4b2
 			{
-				return SelectTrace(GFileZombie, 0x171, 0x165);     // SCHED_VZOMBIE_MELEE_ATTACK
+				return SelectTrace(GFileZombie, 0x171, 0x165);     // 0x103df4b4 SCHED_VZOMBIE_MELEE_ATTACK
 			}
-			return SelectTrace(GFileZombie, 0x175, 0x169);         // SCHED_VZOMBIE_IDLE
+			return SelectTrace(GFileZombie, 0x175, 0x169);         // 0x103df4d0 SCHED_VZOMBIE_IDLE
 		}
 		if (ZombieAiType == 5)                                     // 0x103df453
 		{
 			return SelectTrace(GFileZombie, 0x17b, 0x169);         // 0x103df482
 		}
 		int32 PatrolSchedule = 0;
-		if (SelectPatrolPathObject(PatrolSchedule))                // 0x103df4b2 (+0x6590)
+		if (SelectPatrolPathObject(PatrolSchedule))                // 0x103df455 / 0x103df45d (+0x6590)
 		{
-			return SelectTrace(GFileZombie, 0x181, PatrolSchedule);   // 0x103df4b4
+			return SelectTrace(GFileZombie, 0x181, PatrolSchedule);   // 0x103df45f
 		}
 	}
 	else if (State > GStateIdle && State < 4)                      // 0x103df3d0 JLE / 0x103df3d9 JG
 	{
 		// Slot 167's enemy and its `+0xa8 m_pPlayer`: only a PLAYER enemy passes, and then only when
 		// `0x10146a80(player)` (the obfuscation test) answers false.
-		FElysiumEntity* const Enemy = Slot167Enemy(*this);         // 0x103df3df
+		FElysiumEntity* const Enemy = Slot167Enemy(*this);         // 0x103df3e3 slot 167
 		FElysiumPlayer* const Player = World != nullptr ? World->FindPlayer() : nullptr;
 		const bool bPlayerEnemy = Enemy != nullptr && Player != nullptr
 			&& static_cast<FElysiumEntity*>(Player) == Enemy;      // 0x103df3eb / 0x103df3f5
-		if (bPlayerEnemy && Cond.Has(EElysiumNpcCond::SeeEnemy)    // 0x103df402
-			&& !Player->IsObfuscatedForSenses())                   // 0x103df40d CALL 0x10146a80
+		if (bPlayerEnemy && Cond.Has(EElysiumNpcCond::SeeEnemy)    // 0x103df3fb / 0x103df402
+			&& !Player->IsObfuscatedForSenses())                   // 0x103df406 CALL 0x1000e971 -> 0x10146a80 / 0x103df40d
 		{
 			return SelectTrace(GFileZombie, 400, 0x165);           // 0x103df40f
 		}
 		return SelectTrace(GFileZombie, 0x194, 0x169);             // 0x103df42b
 	}
-	return FElysiumNpcAnimal::SpeciesSelectSchedule();             // 0x103df4d0 JMP 0x1035fb50
+	return FElysiumNpcAnimal::SpeciesSelectSchedule();             // 0x103df479 / 0x103df47d JMP 0x10002b71 -> 0x1035fb50
 }
 
 // =================================================================================================
@@ -405,20 +414,26 @@ int32 FElysiumNpcHuman::SpeciesSelectSchedule()
 		{
 			// `GetEnemies()` (slot 541) `0x102dfa20(memory, attacker)` — does this NPC's enemy memory
 			// hold the detected attacker? (`+0x65c0`, resolved; a stale handle is a null entity.)
-			FElysiumEntity* const Attacker = Resolve(*this, Senses.Memory.DetectedAttackAttacker);   // 0x10384f12..3e
+			FElysiumEntity* const Attacker = Resolve(*this, Senses.Memory.DetectedAttackAttacker);   // 0x10384f12..3e (0x10384f1b / 0x10384f38)
 			const FElysiumNpcEnemyMemoryRecord* const Record =
 				Attacker != nullptr ? EnemyMemory.Find(Attacker->Handle) : nullptr;   // 0x10384f45 / 0x10384f4d
 			if (Record == nullptr)                                 // 0x10384f54
 			{
 				return SelectTrace(GFileHuman, 0x269, 0x56);       // 0x10384fcf SCHED_TROIKA_ALERT_TURN_TO_DETECTED_ATTACK
 			}
+			// 0x10384f56..0x10384f89: the attacker re-resolved (0x10384f5f / 0x10384f7c) and slot 541
+			// asked again (0x10384f89 CALL [EAX+0x874]) before `0x102e0150` reads the record's time.
 			// `0x102e0150` LastTimeSeen; `FLD 1.0 / FADD / FLD curtime / FCOMPP / AND 0x100` — below
 			// `seen + 1.0` (or unordered) keeps selecting; at or past it turns to the attack.
-			if (!(Now(*this) < Record->LastSeenTime + ElysiumNpcTunables::OneDouble))   // 0x10384f91..0x10384fb2
+			// `Now >= seen + 1.0` is that test with NaN folded in: an unordered compare sets C0 and
+			// keeps selecting (integration review: `!(Now < x)` answered 0x56 for it).
+			if (Now(*this) >= Record->LastSeenTime + ElysiumNpcTunables::OneDouble)   // 0x10384f91..0x10384fb2
 			{
 				return SelectTrace(GFileHuman, 0x261, 0x56);       // 0x10384fb4
 			}
 		}
+		// 0x10384fec..0x1038502a: active weapon (0x10384ff3 JZ, 0x10384ff7 CALL), its +0x5a0 word
+		// (0x10385000), `TEST EAX,0x18000` (0x10385014 JZ), slot 604 (0x10385016, 0x1038501e JZ) or 605.
 		if (const int32 Weapon = WeaponSplit(*this); Weapon != 0)  // 0x10384fec..0x1038502a
 		{
 			return Weapon;
@@ -439,12 +454,14 @@ int32 FElysiumNpcHumanCombatant::SpeciesSelectSchedule()
 	if (NpcStateRetail() == GStateCombat)                          // 0x103872e6
 	{
 		Cognition.bCondTookDamage = false;                         // 0x103872e8
+		// 0x103872ef / 0x103872fa CALL (active weapon, 0x103872f6 JZ), 0x10387303 +0x5a0 word,
+		// 0x10387317 JZ on 0x18000, 0x10387319 slot 604 (0x10387321 JZ) / 0x10387325 slot 605.
 		if (const int32 Weapon = WeaponSplit(*this); Weapon != 0)  // 0x103872f6..0x1038732d
 		{
 			return Weapon;                                         // 0x10387324
 		}
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1038732f
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1038732f / 0x10387332 JMP 0x10015ad2
 }
 
 // =================================================================================================
@@ -458,12 +475,14 @@ int32 FElysiumNpcYukie::SpeciesSelectSchedule()
 	if (NpcStateRetail() == GStateCombat)                          // 0x103dd6c6
 	{
 		Cognition.bCondTookDamage = false;                         // 0x103dd6c8
+		// 0x103dd6cf / 0x103dd6da CALL (active weapon, 0x103dd6d6 JZ), 0x103dd6e3 +0x5a0 word,
+		// 0x103dd6f7 JZ on 0x18000, 0x103dd6f9 slot 604 (0x103dd701 JZ) / 0x103dd705 slot 605.
 		if (const int32 Weapon = WeaponSplit(*this); Weapon != 0)  // 0x103dd6d6..0x103dd70d
 		{
 			return Weapon;                                         // 0x103dd704
 		}
 	}
-	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x103dd70f
+	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x103dd70f / 0x103dd712 JMP 0x1000b10e
 }
 
 // =================================================================================================
@@ -479,26 +498,28 @@ int32 FElysiumNpcHumanCombatPatrol::SpeciesSelectSchedule()
 	int32 PatrolSchedule = 0;
 	if (State == GStateCombat)                                     // 0x10387d36
 	{
-		if (!IsBusyWithDiscipline()                                // 0x10387d7c
-			&& (!Cond.Has(EElysiumNpcCond::SeeEnemy)               // 0x10387d89
-				|| Cond.Has(EElysiumNpcCond::EnemyOccluded))       // 0x10387d96
+		if (!IsBusyWithDiscipline()                                // 0x10387d75 CALL / 0x10387d7c
+			&& (!Cond.Has(EElysiumNpcCond::SeeEnemy)               // 0x10387d82 CALL / 0x10387d89
+				|| Cond.Has(EElysiumNpcCond::EnemyOccluded))       // 0x10387d8f CALL / 0x10387d96
 			&& SelectPatrolPathObject(PatrolSchedule))             // 0x10387da0 (+0x6590)
 		{
 			// The node's `m_iSchedule` is returned as it stands, zero included (no `+4 != 0` test here).
 			return SelectTrace(GFileCombatPatrol, 0x121, PatrolSchedule);   // 0x10387da2
 		}
+		// 0x10387dbd / 0x10387dc8 CALL (active weapon, 0x10387dc4 JZ), 0x10387dd1 +0x5a0 word,
+		// 0x10387de5 JZ on 0x18000, 0x10387de7 slot 604 (0x10387def JZ) / 0x10387df3 slot 605.
 		if (const int32 Weapon = WeaponSplit(*this); Weapon != 0)  // 0x10387dc4..0x10387dfb
 		{
 			return Weapon;                                         // 0x10387df2
 		}
 	}
 	else if (State == GStateAlert                                  // 0x10387d39
-		&& !IsBusyWithDiscipline()                                 // 0x10387d46
+		&& !IsBusyWithDiscipline()                                 // 0x10387d3f CALL / 0x10387d46
 		&& SelectPatrolPathObject(PatrolSchedule))                 // 0x10387d54
 	{
 		return SelectTrace(GFileCombatPatrol, 0x116, PatrolSchedule);   // 0x10387d5a
 	}
-	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x10387e01
+	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x10387e01 / 0x10387e04 JMP 0x1000b10e
 }
 
 // =================================================================================================
@@ -508,6 +529,8 @@ int32 FElysiumNpcHumanCombatPatrol::SpeciesSelectSchedule()
 int32 FElysiumNpcGhoulCroucher::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
+	// 0x1037bd63..0x1037bdc7: the VPROF scope push (`GetClassname`, `this` null test 0x1037bd65 JZ,
+	// `m_iClassname` null test 0x1037bd6f JNZ) — a profiler record, no behaviour; not carried.
 	if (!IsDisturbed())                                            // 0x1037bdc9 / 0x1037bdd0
 	{
 		return SelectTrace(GFileGhoulCroucher, 0x23f, 0x158);      // 0x1037bdd2 SCHED_VGHOUL_CROUCHER_UNAWARE
@@ -516,7 +539,7 @@ int32 FElysiumNpcGhoulCroucher::SpeciesSelectSchedule()
 	{
 		return SelectTrace(GFileGhoulCroucher, 0x243, 0x159);      // 0x1037be01 SCHED_VGHOUL_CROUCHER_UNAWARE_EXIT
 	}
-	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x1037be26
+	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x1037be26 / 0x1037be28 CALL 0x1000b10e
 }
 
 // =================================================================================================
@@ -534,11 +557,11 @@ int32 FElysiumNpcGuard1::SpeciesSelectSchedule()
 	}
 	if (NpcStateRetail() == GStateCrimSusp)                        // 0x1037d163
 	{
-		if (HasInterrupt(*this, EElysiumNpcCond::InvestigateLevel)   // 0x1037d174
+		if (HasInterrupt(*this, EElysiumNpcCond::InvestigateLevel)   // 0x1037d16d CALL / 0x1037d174
 			&& Resolve(*this, Senses.Memory.ClosestPlayer) != nullptr)   // 0x1037d17f / 0x1037d1a1 / 0x1037d1a7
 		{
 			// The second, serial-only resolution (`0x1037d1b2` / `0x1037d1c9`) cannot fail once the
-			// first passed; its null arm (`0x1037d1db`, helper on a null `this`) is unreachable here.
+			// first passed; its null arm (`0x1037d1db`, `0x1037d1de CALL` on a null `this`) is unreachable here.
 			ClearPlayerInvestigateLevel(SelectResolvePlayer(Senses.Memory.ClosestPlayer));   // 0x1037d1cf CALL 0x1000c838
 			return 0x6d;                                           // 0x1037d1d4 SCHED_TROIKA_START_PLAYER_DIALOG
 		}
@@ -554,25 +577,25 @@ int32 FElysiumNpcGuard1::SpeciesSelectSchedule()
 int32 FElysiumNpcCop::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 0xc;                                  // 0x10371ee6
-	const int32 State = NpcStateRetail();
-	if (State == GStateIdle)                                       // 0x10371ef6
+	SelectScheduleSelector = 0xc;                                  // 0x10371eeb
+	const int32 State = NpcStateRetail();                          // 0x10371ee5
+	if (State == GStateIdle)                                       // 0x10371ef5 DEC / 0x10371ef6 JZ
 	{
-		if (bCameFromSpawner)                                      // 0x10371eff
+		if (bCameFromSpawner)                                      // 0x10371f99 / 0x10371fa1 (+0x65f4)
 		{
 			int32 PatrolSchedule = 0;
-			const bool bPatrol = SelectPatrolPathObject(PatrolSchedule);   // 0x10371f05 (+0x6590)
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x10371f0e..3f
-			bool bBudget = !bPatrol;                               // 0x1037204b
+			const bool bPatrol = SelectPatrolPathObject(PatrolSchedule);   // 0x10371fa3..0x10371faf (+0x6590, 0x10371fad JNZ: BL = path null)
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x10371fb1..0x10371fe3 (+0x628c; 0x10371fba / 0x10371fde; re-resolved 0x10371fee / 0x10372005 and 0x1037201f / 0x1037203c)
+			bool bBudget = !bPatrol;                               // 0x1037204d TEST BL / 0x1037204f JZ
 			if (Player != nullptr
-				&& !PlayerHeightenedAlert(Player)                  // 0x10371fd0 CALL 0x1017f8d0 / 0x10371fde
-				&& PlayerCopsInPursuitCount(Player) == 0)          // 0x1037201f CALL 0x1017f770 / 0x1037204b
+				&& !PlayerHeightenedAlert(Player)                  // 0x1037200d CALL 0x1017f8d0 / 0x10372014
+				&& PlayerCopsInPursuitCount(Player) == 0)          // 0x10372044 CALL 0x1017f770 / 0x1037204b
 			{
 				bBudget = true;
 			}
 			if (bBudget)                                           // LAB_10372055
 			{
-				if (!bCopCountedSecond)                            // 0x10372055 / 0x1037205d (+0x6672)
+				if (!bCopCountedSecond)                            // 0x10372055 / 0x1037205d (+0x6672; re-tested 0x10372091)
 				{
 					if (CopAliveCensus() - CopSecondCensus() <= 3)   // 0x1037205f..0x10372070 JG
 					{
@@ -585,17 +608,18 @@ int32 FElysiumNpcCop::SpeciesSelectSchedule()
 			}
 		}
 	}
-	else if (State == GStateCrimSusp)                              // 0x10371f86? / 0x10371fa1
+	else if (State == GStateCrimSusp)                              // 0x10371efc SUB 0xb / 0x10371eff JNZ
 	{
-		if (HasInterrupt(*this, EElysiumNpcCond::InvestigateLevel)   // 0x10371fba
-			&& Resolve(*this, Senses.Memory.ClosestPlayer) != nullptr)
+		if (HasInterrupt(*this, EElysiumNpcCond::InvestigateLevel)   // 0x10371f07 / 0x10371f0e
+			&& Resolve(*this, Senses.Memory.ClosestPlayer) != nullptr)   // 0x10371f10..0x10371f3f (0x10371f19 / 0x10371f39)
 		{
-			ClearPlayerInvestigateLevel(SelectResolvePlayer(Senses.Memory.ClosestPlayer));   // CALL 0x1017e6f0
-			return 0x6d;                                           // SCHED_TROIKA_START_PLAYER_DIALOG
+			// Re-resolved (0x10371f4a / 0x10371f61); the null arm 0x10371f75 / 0x10371f78 CALL cannot be reached here.
+			ClearPlayerInvestigateLevel(SelectResolvePlayer(Senses.Memory.ClosestPlayer));   // 0x10371f67 CALL 0x1000c838 -> 0x1017e6f0
+			return 0x6d;                                           // 0x10371f6e SCHED_TROIKA_START_PLAYER_DIALOG
 		}
-		SetState(GStateIdle);                                      // CALL 0x1026e340(1)
+		SetState(GStateIdle);                                      // 0x10371f8a CALL 0x10002554 -> 0x1026e340(1)
 	}
-	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // LAB_10371f8f
+	return FElysiumNpcHumanCombatant::SpeciesSelectSchedule();     // 0x10371f94 JMP 0x1000b10e -> 0x103872d0
 }
 
 // =================================================================================================
@@ -612,8 +636,8 @@ int32 FElysiumNpcPedestrian::SpeciesSelectSchedule()
 		bPedestrianFirstThink = false;                             // 0x103a2a07
 		return SelectTrace(GFilePedestrian, 0x1b4, 0xfe);          // SCHED_TROIKA_START_WAITING
 	}
-	if (Cond.Has(EElysiumNpcCond::PassOut)                         // 0x103a2a34
-		&& !IsBusyWithDiscipline())                                // 0x103a2a3f
+	if (Cond.Has(EElysiumNpcCond::PassOut)                         // 0x103a2a2d CALL / 0x103a2a34
+		&& !IsBusyWithDiscipline())                                // 0x103a2a38 CALL / 0x103a2a3f
 	{
 		return SelectTrace(GFilePedestrian, 0x1b9, 0xfa);          // 0x103a2a41 SCHED_TROIKA_KNOCKOUT
 	}
@@ -624,16 +648,16 @@ int32 FElysiumNpcPedestrian::SpeciesSelectSchedule()
 	}
 	const int32 State = NpcStateRetail();
 	if ((State == GStateIdle || State == GStateAlert)              // 0x103a2a96 / 0x103a2a9b
-		&& Cond.Has(EElysiumNpcCond::InvestigateSound))            // 0x103a2aac
+		&& Cond.Has(EElysiumNpcCond::InvestigateSound))            // 0x103a2aa5 CALL / 0x103a2aac
 	{
 		Senses.Memory.NextInvestigateSoundTime = Now(*this) + GInvestigateSoundDelay;   // 0x103a2ac1
-		Senses.CommitBestSound(*this, Cognition.Conditions);       // 0x103a2ac7
+		Senses.CommitBestSound(*this, Cognition.Conditions);       // 0x103a2ac9 CALL 0x1000bff5
 		// Slot 220 `GetOrigin()` against `m_BestSound.m_vecOrigin` (`+0x60d0`), SQUARED against 256.0
 		// (second judge: C0 set — below or unordered — goes straight to `0x157`).
 		const float DistSqr = DistSqrUnits(Origin, Senses.Memory.BestSound.Position);   // 0x103a2ad2..0x103a2b15
 		if (DistSqr >= GPedestrianSoundNearSqr                     // 0x103a2b15 JNZ
 			&& !NpcFlags.Has(EElysiumNpcFlag::SKIPPED_SOUND)       // 0x103a2b25
-			&& Roll(0, 99) < 0x19)                                 // 0x103a2b39 JGE
+			&& Roll(0, 99) < 0x19)                                 // 0x103a2b33 CALL / 0x103a2b39 JGE
 		{
 			SelectTrace(GFilePedestrian, 0x1d7, 0x158);            // 0x103a2b3b
 			NpcFlags.Set(EElysiumNpcFlag::SKIPPED_SOUND);          // 0x103a2b50 OR 0x100000
@@ -644,7 +668,7 @@ int32 FElysiumNpcPedestrian::SpeciesSelectSchedule()
 		NpcFlags.Set(EElysiumNpcFlag::INITIAL_FLEE);               //            OR 0x100
 		return 0x157;                                              // SCHED_VPEDESTRIAN_TURN_TO_SOUND
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103a2b96
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103a2b96 / 0x103a2b99 JMP 0x10015ad2
 }
 
 // =================================================================================================
@@ -654,28 +678,30 @@ int32 FElysiumNpcPedestrian::SpeciesSelectSchedule()
 int32 FElysiumNpcAsianVampire::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 6;                                    // 0x10360f07
-	FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x10360f14..37
-	if (Player != nullptr && IRelationType(Player) != GDispositionHate)   // 0x10360f41 slot 404 / 0x10360f47
+	// 0x10360eb0..0x10360eff: the `0x109f3620` call-name ring push (and its pops at each RET) — the
+	// debugger stack, an ABSENT word like the `+0x1b30` stamps.
+	SelectScheduleSelector = 6;                                    // 0x10360f01
+	FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x10360f0b..0x10360f37 (+0x628c; 0x10360f14 / 0x10360f31)
+	if (Player != nullptr && IRelationType(Player) != GDispositionHate)   // 0x10360f3e slot 404 / 0x10360f47
 	{
-		return FElysiumNpcHuman::SpeciesSelectSchedule();          // 0x10360f49
+		return FElysiumNpcHuman::SpeciesSelectSchedule();          // 0x10360f4b CALL 0x10384ee0
 	}
-	if (Select19ConVarEnabled(ESelect19ConVar::AsianVampForceJumpUp))   // 0x10360f67 / 0x10360f73
+	if (Select19ConVarEnabled(ESelect19ConVar::AsianVampForceJumpUp))   // 0x10360f62 / 0x10360f67 / 0x10360f73
 	{
-		return 0x15a;                                              // 0x10360f75 SCHED_VASIANVAMPIRE_JUMP_UP
+		return 0x15a;                                              // 0x10360f80 SCHED_VASIANVAMPIRE_JUMP_UP
 	}
-	if (!bAsianVampirePathBlocked)                                 // 0x10360f90 (+0x66d4)
+	if (!bAsianVampirePathBlocked)                                 // 0x10360f86 / 0x10360f90 (+0x66d4)
 	{
-		if (!StationaryForTooLong()                                // 0x10360fc7
-			&& !StandingOnPlayer())                                // 0x10360fd2
+		if (!StationaryForTooLong()                                // 0x10360fc0 CALL 0x10362670 / 0x10360fc7
+			&& !StandingOnPlayer())                                // 0x10360fcb CALL 0x10362730 / 0x10360fd2
 		{
-			return FElysiumNpcHuman::SpeciesSelectSchedule();      // 0x10360fd4
+			return FElysiumNpcHuman::SpeciesSelectSchedule();      // 0x10360fd6 CALL 0x10384ee0
 		}
 	}
-	else if (bInMelee)                                             // 0x10360f9a (+0x6078)
+	else if (bInMelee)                                             // 0x10360f92 / 0x10360f9a (+0x6078)
 	{
-		Slot601(Slot167Enemy(*this));                              // 0x10360fa9 vtable +0x964
-		return 0x15c;                                              // 0x10360faf SCHED_VASIANVAMPIRE_SWITCH_TO_RANGED
+		Slot601(Slot167Enemy(*this));                              // 0x10360f9f slot 167 / 0x10360fa8 vtable +0x964
+		return 0x15c;                                              // 0x10360fba SCHED_VASIANVAMPIRE_SWITCH_TO_RANGED
 	}
 	return GetJumpSchedule();                                      // 0x10360fe7 CALL 0x10362430
 }
@@ -689,44 +715,45 @@ int32 FElysiumNpcChangBros::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
 	const FElysiumNpcConditions& Cond = Cognition.Conditions;
-	SelectScheduleSelector = 10;                                   // 0x1036b2b2
+	// 0x1036b250..0x1036b29f: the `0x109f3620` call-name ring push (ABSENT, as above).
+	SelectScheduleSelector = 10;                                   // 0x1036b2a7
 	// `0x100290c0(g_EntityList, &m_hClosestPlayer)` — the handle resolved.
-	if (FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer))   // 0x1036b2bf
+	if (FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer))   // 0x1036b2b8 / 0x1036b2bf
 	{
-		if (IRelationType(Player) != GDispositionHate)             // 0x1036b2c8 slot 404 / 0x1036b2cf
+		if (IRelationType(Player) != GDispositionHate)             // 0x1036b2c6 slot 404 / 0x1036b2cf
 		{
-			return FElysiumNpcHuman::SpeciesSelectSchedule();      // LAB_1036b3d2
+			return FElysiumNpcHuman::SpeciesSelectSchedule();      // 0x1036b3d4 CALL 0x10384ee0
 		}
 	}
-	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceUnitedAttack))   // 0x1036b2e2 / 0x1036b2ef
+	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceUnitedAttack))   // 0x1036b2dd CALL / 0x1036b2e2 / 0x1036b2ef
 	{
-		return 0x15e;                                              // SCHED_VCHANGBROS_UNITED_MOVE
+		return 0x15e;                                              // 0x1036b2fc SCHED_VCHANGBROS_UNITED_MOVE
 	}
-	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceTeleport))       // 0x1036b30f / 0x1036b31b
+	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceTeleport))       // 0x1036b30a CALL / 0x1036b30f / 0x1036b31b
 	{
-		return 0x15a;                                              // SCHED_VCHANGBROS_TELEPORT
+		return 0x15a;                                              // 0x1036b328 SCHED_VCHANGBROS_TELEPORT
 	}
-	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceLedgeAttack))    // 0x1036b33b / 0x1036b347
+	if (Select19ConVarEnabled(ESelect19ConVar::ChangBrosForceLedgeAttack))    // 0x1036b336 CALL / 0x1036b33b / 0x1036b347
 	{
-		return 0x15c;                                              // SCHED_VCHANGBROS_JUMP_TO_LEDGE
+		return 0x15c;                                              // 0x1036b354 SCHED_VCHANGBROS_JUMP_TO_LEDGE
 	}
-	if (Cond.Has(GCondChangUnited))                                // 0x1036b365
+	if (Cond.Has(GCondChangUnited))                                // 0x1036b35e / 0x1036b365
 	{
-		return 0x15e;
+		return 0x15e;                                              // 0x1036b372
 	}
-	if (Cond.Has(GCondChangJumpAttack))                            // 0x1036b383
+	if (Cond.Has(GCondChangJumpAttack))                            // 0x1036b37c / 0x1036b383
 	{
-		return 0x15c;
+		return 0x15c;                                              // 0x1036b390
 	}
-	if (Cond.Has(GCondChangTeleport))                              // 0x1036b3a1
+	if (Cond.Has(GCondChangTeleport))                              // 0x1036b39a / 0x1036b3a1
 	{
-		return 0x15a;
+		return 0x15a;                                              // 0x1036b3ae
 	}
-	if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))               // 0x1036b3bf
+	if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))               // 0x1036b3b8 / 0x1036b3bf (0x59)
 	{
-		return 0x15d;                                              // SCHED_VCHANGBROS_SUPER_JUMP
+		return 0x15d;                                              // 0x1036b3cc SCHED_VCHANGBROS_SUPER_JUMP
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1036b3d2 CALL 0x10384ee0
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1036b3d4 CALL 0x10384ee0
 }
 
 // =================================================================================================
@@ -735,6 +762,13 @@ int32 FElysiumNpcChangBros::SpeciesSelectSchedule()
 
 bool FElysiumNpcGargoyle::Select19GargoyleFindPillar()
 {
+	// `0x10378ec0`: with no enemy (slot 167) it answers false and leaves `+0x667c` untouched; with
+	// one, `0x100f7b20("pillar", enemy->vfunc(+0x370), ...)` runs and a miss writes `+0x667c = -1`.
+	// The search itself is the unrecovered seam: it finds nothing, so the miss arm is taken.
+	if (NpcSelect19Species::Slot167Enemy(*this) == nullptr)   // 0x10378ec0 slot 167
+	{
+		return false;
+	}
 	GargoylePillarTarget = FElysiumEntityHandle::Invalid();       // `0x10378ec0` miss arm: `+0x667c = -1`
 	return false;
 }
@@ -749,41 +783,44 @@ bool FElysiumNpcGargoyle::Select19GargoyleHasPath(const FVector& FromUnits, cons
 int32 FElysiumNpcGargoyle::Select19GargoyleFindPillarSchedule()
 {
 	// `0x10378f80`.
-	if (Select19GargoyleFindPillar())                              // CALL 0x10378ec0
+	if (Select19GargoyleFindPillar())                              // 0x10378f83 CALL 0x10378ec0 / 0x10378f8a
 	{
-		NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);               // CALL 0x10379000(1): `+0x14b8 |= 0x10`
-		return 0x15a;                                              // SCHED_VGARGOYLE_FIND_PILLAR
+		NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);               // 0x10378f90 CALL 0x10379000(1): `+0x14b8 |= 0x10`
+		return 0x15a;                                              // 0x10378f95 SCHED_VGARGOYLE_FIND_PILLAR
 	}
-	GargoyleShunnedFindPillar = 2;                                 // `+0x6680 = 2`
-	return 0;
+	GargoyleShunnedFindPillar = 2;                                 // 0x10378f9c `+0x6680 = 2`
+	return 0;                                                      // 0x10378fa6
 }
 
 int32 FElysiumNpcGargoyle::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
 	SelectScheduleSelector = 0x11;                                 // 0x103788d8
-	// 0x103788e0..0x10378946: the first stat list whose `+0x10` is 0 (else the lazily-built empty
-	// global `DAT_109f0b40`) and `CVStatList_t::IsEqual(list, 0x0f, 0x11)` — the dead test, which this
-	// runtime spells `IsInert() || HasReportedDeath()` (family Anim10, `PlayReaction`).
+	// 0x103788e2..0x10378934: the first stat list whose `+0x10` is 0 (loop 0x103788ea JLE / 0x103788fb JZ /
+	// 0x10378903 JL; else the lazily-built empty (0x1037890f JNZ guard, 0x10378922 / 0x1037892c)
+	// global `DAT_109f0b40`) and `CVStatList_t::IsEqual(list, 0x0f, 0x11)` (0x1037893f) — the dead
+	// test, which this runtime spells `IsInert() || HasReportedDeath()` (family Anim10, `PlayReaction`).
 	if (IsInert() || HasReportedDeath())                           // 0x10378946
 	{
-		return SelectTrace(GFileGargoyle, 0x174, 0x15c);           // 0x10378948 SCHED_VGARGOYLE_DEATH
+		return SelectTrace(GFileGargoyle, 0x174, 0x15c);           // 0x1037895c SCHED_VGARGOYLE_DEATH
 	}
-	if (NpcStateRetail() == GStateCombat)                          // 0x10378974
+	if (NpcStateRetail() == GStateCombat)                          // 0x1037896b / 0x10378974
 	{
-		FElysiumEntity* const Enemy = Slot167Enemy(*this);         // 0x1037897a
+		FElysiumEntity* const Enemy = Slot167Enemy(*this);         // 0x1037897a slot 167
+		// `0x102ee380(m_pNavigator, GetAbsOrigin(), enemy->GetAbsOrigin())` — slot 217 (`+0x364`)
+		// is `CBaseEntity::GetAbsOrigin` on both (`0x1037899f`, `0x103789aa`).
 		if (Enemy != nullptr                                       // 0x10378984
 			&& !IsUnreachable(Enemy)                               // 0x1037898b slot 530 / 0x10378993
-			&& Select19GargoyleHasPath(Origin / ElysiumMove::U, Enemy->Origin / ElysiumMove::U))   // 0x103789b8 CALL 0x102ee380 / 0x103789bf
+			&& Select19GargoyleHasPath(Origin / ElysiumMove::U, Enemy->Origin / ElysiumMove::U))   // 0x103789b3 CALL 0x102ee380 / 0x103789bf
 		{
-			return FElysiumNpcHuman::SpeciesSelectSchedule();      // LAB_103789cc
+			return FElysiumNpcHuman::SpeciesSelectSchedule();      // 0x103789d2 JMP 0x10384ee0
 		}
 		if (const int32 Pillar = Select19GargoyleFindPillarSchedule(); Pillar != 0)   // 0x103789c3 / 0x103789ca
 		{
 			return Pillar;
 		}
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103789cc CALL 0x10384ee0
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103789d2 JMP 0x10384ee0
 }
 
 // =================================================================================================
@@ -835,13 +872,32 @@ int32 FElysiumNpcHengeyokai::Select19HengeyokaiFindFishSchedule()
 		const int32 Threshold = bHengeyokaiJustFoundFish ? 0x28 : 0x50;
 		bSearch = Roll(0, 99) < Threshold;
 	}
-	if (bSearch && Select19HengeyokaiFindFish())                   // CALL 0x10381cd0
+	if (bSearch && Select19HengeyokaiFindFish())                   // 0x10382d9f CALL 0x10381cd0 / 0x10382da6
 	{
-		// The found-fish arm (distance compare against the enemy's last known position, the
-		// `FINDING_BODY` set and `0x16b`) is unreachable while the search seam answers false.
-		NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);               // 0x10381ba0(this, 1)
-		bHengeyokaiJustFoundFish = true;
-		return 0x16b;                                              // SCHED_VHENGEYOKAI_FIND_FISH
+		// 0x10382dc1..0x10382e24: the pickup target `+0x6664` resolved (retail dereferences it
+		// unguarded; a null here is retail's fault arm — crash guard, the compare is skipped) and the
+		// fish-minus-self vector through slot 220 `GetOrigin`.
+		FElysiumEntity* const FishEntity = Resolve(*this, HengeyokaiPickupTarget);
+		if (!bUnreachable && Enemy != nullptr && FishEntity != nullptr)   // 0x10382e28 / 0x10382e34
+		{
+			// 0x10382e44 slot 541 `GetEnemies()` + 0x10382e4c `0x102dfed0` last known position of the
+			// enemy. A missing record takes `0x102dfed0`'s fallbacks: the last `+0x34`-flagged record
+			// (no port word; unrecovered) else `vec3_origin` (`DAT_1070d1b0`), which is used here.
+			const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle);
+			const FVector LastKnownCm = Record != nullptr ? Record->LastPosition : FVector::ZeroVector;
+			// 0x10382e9b FCOMPP / AND 0x4100: `|lkp - self|^2 <= |fish - self|^2` (or unordered) →
+			// the enemy is no farther than the fish: drop the pickup and answer 0 with no `+0x6678`
+			// / `+0x667c` write.
+			if (!(DistSqrUnits(LastKnownCm, Origin) > DistSqrUnits(FishEntity->Origin, Origin)))
+			{
+				HengeyokaiPickupTarget = FElysiumEntityHandle::Invalid();   // 0x10382eb0
+				SetIgnoreCollisionExpiry(0.0f);                        // 0x10382eba CALL 0x102c43b0(0)
+				return 0;                                              // 0x10382ec0
+			}
+		}
+		NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);               // 0x10382ecb 0x10381ba0(this, 1)
+		bHengeyokaiJustFoundFish = true;                           // 0x10382ed0 `+0x667c = 1`
+		return 0x16b;                                              // 0x10382ed8 SCHED_VHENGEYOKAI_FIND_FISH
 	}
 	HengeyokaiShunnedFindFish = 2;                                 // LAB_10382da8: `+0x6678 = 2`
 	bHengeyokaiJustFoundFish = false;                              //              `+0x667c = 0`
@@ -860,10 +916,10 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 		{
 			return FElysiumNpcHuman::SpeciesSelectSchedule();      // 0x1037fef3
 		}
-		return 0x16f;                                              // SCHED_VHENGEYOKAI_TRANSFORM
+		return 0x16f;                                              // 0x1037fcc2 SCHED_VHENGEYOKAI_TRANSFORM
 	}
-	Cognition.bCondTookDamage = false;                             // 0x1037fcc2
-	if (Cond.Has(EElysiumNpcCond::EnemyDead)                       // 0x1037fcdc
+	Cognition.bCondTookDamage = false;                             // 0x1037fcce
+	if (Cond.Has(EElysiumNpcCond::EnemyDead)                       // 0x1037fcd5 / 0x1037fcdc
 		&& HengeyokaiCarryFormBit())                               // 0x1037fce0 CALL 0x10381c80 / 0x1037fce7
 	{
 		return 0x15e;                                              // SCHED_VHENGEYOKAI_DROP_FISH
@@ -877,8 +933,8 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 			SetIgnoreCollisionExpiry(0.0f);                        // 0x1037fd24 CALL 0x102c43b0
 			return Select19HengeyokaiMeleeAttackSchedule();        // 0x1037fd2d tail JMP 0x10382f60
 		}
-		if (!HasInterrupt(*this, EElysiumNpcCond::TooCloseToAttack)   // 0x1037fd3b
-			&& !HasInterrupt(*this, EElysiumNpcCond::TooCloseForRanged))   // 0x1037fd48
+		if (!HasInterrupt(*this, EElysiumNpcCond::TooCloseToAttack)   // 0x1037fd34 / 0x1037fd3b
+			&& !HasInterrupt(*this, EElysiumNpcCond::TooCloseForRanged))   // 0x1037fd41 / 0x1037fd48
 		{
 			if (const int32 Fish = Select19HengeyokaiFindFishSchedule(); Fish != 0)   // 0x1037fd4c / 0x1037fd53
 			{
@@ -895,21 +951,21 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 	if (HengeyokaiCarryFormBit())                                  // 0x1037fd8f / 0x1037fd98
 	{
 		if (FormBitTimerExpired()                                  // 0x1037fd9e CALL 0x10381ca0 / 0x1037fda5
-			&& !IsUnreachable(Slot167Enemy(*this)))                // 0x1037fdb4 slot 530 / 0x1037fdbc
+			&& !IsUnreachable(Slot167Enemy(*this)))                // 0x1037fdab slot 167 / 0x1037fdb4 slot 530 / 0x1037fdbc
 		{
 			return 0x161;                                          // SCHED_VHENGEYOKAI_FACE_THROW_TARGET_FORCED
 		}
-		if (Cond.Has(EElysiumNpcCond::EnemyOccluded)               // 0x1037fdd1
-			|| !Cond.Has(EElysiumNpcCond::SeeEnemy))               // 0x1037fde2
+		if (Cond.Has(EElysiumNpcCond::EnemyOccluded)               // 0x1037fdca / 0x1037fdd1
+			|| !Cond.Has(EElysiumNpcCond::SeeEnemy))               // 0x1037fddb / 0x1037fde2
 		{
 			return 0x166;                                          // SCHED_VHENGEYOKAI_CHASE_ENEMY_LKP_FISH
 		}
-		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack)            // 0x1037fdf3
-			|| Cond.Has(EElysiumNpcCond::TooCloseForRanged))       // 0x1037fe04
+		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack)            // 0x1037fdec / 0x1037fdf3
+			|| Cond.Has(EElysiumNpcCond::TooCloseForRanged))       // 0x1037fdfd / 0x1037fe04
 		{
 			return 0x15e;                                          // SCHED_VHENGEYOKAI_DROP_FISH
 		}
-		if (!Cond.Has(GCondHaveEnemyThrowLos))                     // 0x1037fe15
+		if (!Cond.Has(GCondHaveEnemyThrowLos))                     // 0x1037fe0e / 0x1037fe15
 		{
 			return 0x166;
 		}
@@ -917,9 +973,9 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 			&& Roll(0, 99) < 5)                                    // 0x1037fe2d / 0x1037fe33
 		{
 			bHengeyokaiDidFakeThrow = true;                        // 0x1037fe35
-			return FUN_103822a0(Slot167Enemy(*this)) ? 0x164 : 0x162;   // 0x1037fe49 FAKE / FORCED... `& 2`
+			return FUN_103822a0(Slot167Enemy(*this)) ? 0x164 : 0x162;   // 0x1037fe40 slot 167 / 0x1037fe49 FAKE / FORCED... `& 2`
 		}
-		return FUN_103822a0(Slot167Enemy(*this)) ? 0x163 : 0x160;   // 0x1037fe6a THROW_FISH / FACE_THROW_TARGET
+		return FUN_103822a0(Slot167Enemy(*this)) ? 0x163 : 0x160;   // 0x1037fe61 slot 167 / 0x1037fe6a THROW_FISH / FACE_THROW_TARGET
 	}
 	NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);                // 0x1037fe86 AND 0xfffffff7
 	const int32 Fish = Select19HengeyokaiFindFishSchedule();       // 0x1037fe8d CALL 0x10382d40
@@ -927,19 +983,19 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 	{
 		return Fish;
 	}
-	if (IsUnreachable(Slot167Enemy(*this)))                        // 0x1037fea7 slot 530 / 0x1037feaf
+	if (IsUnreachable(Slot167Enemy(*this)))                        // 0x1037fe9e slot 167 / 0x1037fea7 slot 530 / 0x1037feaf
 	{
 		return 0x167;                                              // SCHED_VHENGEYOKAI_CHASE_ENEMY_FAILED
 	}
-	if (Cond.Has(EElysiumNpcCond::EnemyOccluded))                  // 0x1037fec4
+	if (Cond.Has(EElysiumNpcCond::EnemyOccluded))                  // 0x1037febd / 0x1037fec4
 	{
 		return 0x165;                                              // SCHED_VHENGEYOKAI_CHASE_ENEMY_LKP
 	}
-	if (Cond.Has(EElysiumNpcCond::TooFarForMelee))                 // 0x1037fed9
+	if (Cond.Has(EElysiumNpcCond::TooFarForMelee))                 // 0x1037fed2 / 0x1037fed9
 	{
-		return Cond.Has(EElysiumNpcCond::SeeEnemy) ? 0x169 : 0x165;   // `(-(c != 0) & 4) + 0x165`
+		return Cond.Has(EElysiumNpcCond::SeeEnemy) ? 0x169 : 0x165;   // 0x1037fedf / `(-(c != 0) & 4) + 0x165`
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1037fef3 JMP 0x10015ad2
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x1037fef3 / 0x1037fef7 JMP 0x10015ad2
 }
 
 // =================================================================================================
@@ -948,8 +1004,25 @@ int32 FElysiumNpcHengeyokai::SpeciesSelectSchedule()
 
 float FElysiumNpcMingXiao::Select19MingXiaoTuningField(int32 Offset) const
 {
-	(void)Offset;
-	return 0.f;
+	// `thunk_FUN_101e8da0(0x10739d08)` is `LEA EAX,[ECX+0x2bc]` — the `Ming_Xiao_Info/General` slice
+	// of the process-global `CVFeatList_t`, which `0x101e6310` fills from `vdata/system/Rules.txt`
+	// (`0x101e72dd`..`0x101e7373`, the same record family Lifecycle19 reads through the rulebook).
+	// Integration review: the lane stood this as a seam answering 0; the rulebook holds it.
+	// Defaults are the loader's immediates.
+	UElysiumSessionSubsystem* const GameState = World != nullptr ? World->GetGameState() : nullptr;
+	UElysiumRulebookSubsystem* const Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+	const TCHAR* const Block = TEXT("Ming_Xiao_Info.General");
+	switch (Offset)
+	{
+	case 0x8:    // `+0x2c4` "ThrowChance", GetInt, default 0x3c (`0x101e7337`)
+		return static_cast<float>(Rules != nullptr ? Rules->Rules().Int(Block, TEXT("ThrowChance"), 60) : 60);
+	case 0xc:    // `+0x2c8` "ChargeResetTimeNormal", GetFloat, default 10.0 (`0x101e734b`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("ChargeResetTimeNormal"), 10.f) : 10.f;
+	case 0x10:   // `+0x2cc` "ChargeResetTimeDesperate", GetFloat, default 10.0 (`0x101e7362`)
+		return Rules != nullptr ? Rules->Rules().Flt(Block, TEXT("ChargeResetTimeDesperate"), 10.f) : 10.f;
+	default:
+		return 0.f;
+	}
 }
 
 int32 FElysiumNpcMingXiao::PreSelectSchedule()
@@ -977,30 +1050,30 @@ int32 FElysiumNpcMingXiao::SpeciesSelectSchedule()
 	const FElysiumNpcConditions& Cond = Cognition.Conditions;
 	const double T = Now(*this);
 	const int32 State = NpcStateRetail();
-	SelectScheduleSelector = 0x19;                                 // 0x103941e9
+	SelectScheduleSelector = 0x19;                             // 0x103941ea
 	if (State != GStateIdle)                                       // 0x103941f5
 	{
 		if (State == GStateCombat)                                 // 0x103941fc
 		{
-			Cognition.bCondTookDamage = false;                     // 0x10394206
-			if (const int32 Grabbed = FUN_10396dc0(); Grabbed != 0)   // 0x1039420d / 0x1039421c
+			Cognition.bCondTookDamage = false;                 // 0x1039420e
+			if (const int32 Grabbed = FUN_10396dc0(); Grabbed != 0) // 0x10394215 CALL 0x10396dc0 / 0x1039421c
 			{
 				return Grabbed;
 			}
 			for (int32 Slot = 0; Slot < 6; ++Slot)                 // 0x10394224..0x10394237 JL
 			{
-				if (Cond.Has(static_cast<EElysiumNpcCond>(static_cast<int32>(GCondMingCanAttackFirst) + Slot)))   // 0x10394231
+				if (Cond.Has(static_cast<EElysiumNpcCond>(static_cast<int32>(GCondMingCanAttackFirst) + Slot)))   // 0x1039422a CALL / 0x10394231
 				{
-					return SelectTrace(GFileMingXiao, 0x530, 0x158 + Slot);   // 0x10394262 TENTACLE_ATTACK_*
+					return SelectTrace(GFileMingXiao, 0x530, 0x158 + Slot); // 0x10394262 LEA EAX,[EDI+0x158] TENTACLE_ATTACK_*
 				}
 			}
-			if (Cond.Has(GCondMingCanSpit))                        // 0x10394244
+			if (Cond.Has(GCondMingCanSpit))                    // 0x1039423d / 0x10394244
 			{
-				return SelectTrace(GFileMingXiao, 0x53d, 0x15e);   // 0x10394246 SCHED_VMING_XIAO_ATTACK_SPIT
+				return SelectTrace(GFileMingXiao, 0x53d, 0x15e); // 0x1039425b SCHED_VMING_XIAO_ATTACK_SPIT
 			}
-			if (Cond.Has(EElysiumNpcCond::EnemyOccluded))          // 0x1039428a
+			if (Cond.Has(EElysiumNpcCond::EnemyOccluded))      // 0x10394283 / 0x1039428a
 			{
-				return SelectTrace(GFileMingXiao, 0x543, 0x160);   // 0x1039428c SCHED_VMING_XIAO_CHASE_ENEMY_LKP
+				return SelectTrace(GFileMingXiao, 0x543, 0x160); // 0x103942a1 SCHED_VMING_XIAO_CHASE_ENEMY_LKP
 			}
 			// `0x10396bc0`. The port's body takes the `RandomInt(0, 99)` draw and the tuning ceiling
 			// from its caller; retail draws AFTER the live-object and two timer gates, so the draw is
@@ -1008,61 +1081,61 @@ int32 FElysiumNpcMingXiao::SpeciesSelectSchedule()
 			const bool bThrowGateOpen = Resolve(*this, MingXiaoThrowObject) == nullptr
 				&& !(T < MingXiaoAttackTimers[5]) && !(T < MingXiaoAttackTimers[4]);
 			const int32 Draw = bThrowGateOpen ? Roll(0, 99) : 0;
-			const int32 Ceiling = static_cast<int32>(Select19MingXiaoTuningField(8));
-			if (const int32 Throw = MingXiaoFindThrowObject(Draw, Ceiling); Throw != 0)   // 0x103942aa / 0x103942b1
+			const int32 Ceiling = static_cast<int32>(Select19MingXiaoTuningField(8));   // `+0x2c4` ThrowChance (int)
+			if (const int32 Throw = MingXiaoFindThrowObject(Draw, Ceiling); Throw != 0) // 0x103942aa CALL 0x10396bc0 / 0x103942b1
 			{
 				return Throw;
 			}
 			if (IsMingXiaoProxy())                                 // 0x103942b9 CALL 0x10398870 / 0x103942c0
 			{
-				return SelectTrace(GFileMingXiao, 0x55a, 0x162);   // 0x103942c2 SCHED_VMING_XIAO_CLOSE_DISTANCE
+				return SelectTrace(GFileMingXiao, 0x55a, 0x162); // 0x103942d7 SCHED_VMING_XIAO_CLOSE_DISTANCE
 			}
-			if (Select19ConVarEnabled(ESelect19ConVar::MingXiaoCharge)   // 0x103942eb / 0x103942fc
-				&& ScheduleHost.EnemyDistUnits < GMingXiaoChargeRange)   // 0x10394313 JP (+0x6268 < 120.0)
+			if (Select19ConVarEnabled(ESelect19ConVar::MingXiaoCharge)   // 0x103942e6 CALL / 0x103942eb / 0x103942fc
+				&& ScheduleHost.EnemyDistUnits < GMingXiaoChargeRange) // 0x10394302..0x10394313 JP (+0x6268 < 120.0; NaN fails)
 			{
-				if (MingXiaoChargeReadyTime <= T)                  // 0x1039432e
+				if (MingXiaoChargeReadyTime <= T)              // 0x1039431e..0x1039432e (curtime < ready, or NaN -> 0x1039439e)
 				{
-					if (MingXiaoConnectedTentacleCount < 3         // 0x10394337 JGE
-						&& Select19ConVarEnabled(ESelect19ConVar::MingXiaoCharge))   // 0x10394340 / 0x1039434c
+					if (MingXiaoConnectedTentacleCount < 3     // 0x10394330 / 0x10394337 JGE (+0x670c)
+						&& Select19ConVarEnabled(ESelect19ConVar::MingXiaoCharge))   // 0x1039433b CALL / 0x10394340 / 0x1039434c
 					{
-						MingXiaoChargeReadyTime = static_cast<double>(Select19MingXiaoTuningField(0x10)) + T;   // 0x1039435e
+						MingXiaoChargeReadyTime = static_cast<double>(Select19MingXiaoTuningField(0x10)) + T; // 0x10394353 CALL 0x10008e7c / 0x10394358 [+0x10] / 0x1039437c
 					}
 					else
 					{
-						MingXiaoChargeReadyTime = static_cast<double>(Select19MingXiaoTuningField(0xc)) + T;   // 0x10394366
+						MingXiaoChargeReadyTime = static_cast<double>(Select19MingXiaoTuningField(0xc)) + T; // 0x1039436b CALL 0x10008e7c / 0x10394370 [+0xc] / 0x1039437c
 					}
-					return SelectTrace(GFileMingXiao, 0x56c, 0x15f);   // 0x10394380 SCHED_VMING_XIAO_CHARGE_ATTACK
+					return SelectTrace(GFileMingXiao, 0x56c, 0x15f); // 0x10394397 SCHED_VMING_XIAO_CHARGE_ATTACK
 				}
-				if (Cond.Has(GCondMingMeleeHelpless))              // 0x103943a9
+				if (Cond.Has(GCondMingMeleeHelpless))          // 0x103943a2 / 0x103943a9
 				{
-					MingXiaoChargeReadyTime = T;                   // 0x103943b5
+					MingXiaoChargeReadyTime = T;               // 0x103943bb
 					int32 Unused = 0;
-					if (FUN_10398030(2, false, Unused))            // 0x103943c3 / 0x103943ca
+					if (FUN_10398030(2, false, Unused))        // 0x103943c3 CALL 0x10398030 / 0x103943ca
 					{
 						return SelectTrace(GFileMingXiao, 0x578, 0x15a);
 					}
-					if (FUN_10398030(3, false, Unused))            // 0x103943f5
+					if (FUN_10398030(3, false, Unused))        // 0x103943ee / 0x103943f5
 					{
 						return SelectTrace(GFileMingXiao, 0x57c, 0x15b);
 					}
-					if (FUN_10398030(0, false, Unused))            // 0x10394420
+					if (FUN_10398030(0, false, Unused))        // 0x10394419 / 0x10394420
 					{
 						return SelectTrace(GFileMingXiao, 0x580, 0x158);
 					}
-					if (FUN_10398030(1, false, Unused))            // 0x1039444b
+					if (FUN_10398030(1, false, Unused))        // 0x10394444 / 0x1039444b
 					{
 						return SelectTrace(GFileMingXiao, 0x584, 0x159);
 					}
 				}
 			}
-			return SelectTrace(GFileMingXiao, 0x58a, 0x165);       // 0x10394469 SCHED_VMING_XIAO_HOLD_DISTANCE
+			return SelectTrace(GFileMingXiao, 0x58a, 0x165);   // 0x1039447e SCHED_VMING_XIAO_HOLD_DISTANCE
 		}
 		if (State != GStateAlert)                                  // 0x103941ff
 		{
-			return TroikaSelectSchedule();                         // 0x10394205 JMP 0x10015596
+			return TroikaSelectSchedule();                     // 0x10394207 JMP 0x10015596
 		}
 	}
-	return SelectTrace(GFileMingXiao, 0x51c, ElysiumSched::SCHED_TROIKA_IDLE_STAND);   // 0x10394485 0x44
+	return SelectTrace(GFileMingXiao, 0x51c, ElysiumSched::SCHED_TROIKA_IDLE_STAND); // 0x1039448f 0x44
 }
 
 // =================================================================================================
@@ -1072,14 +1145,15 @@ int32 FElysiumNpcMingXiao::SpeciesSelectSchedule()
 int32 FElysiumNpcSabbatLeader::PreSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 0x1f;                                 // 0x103aa566
-	if (NpcStateRetail() == GStateCombat                           // 0x103aa574
-		&& Slot167Enemy(*this) == nullptr)                         // 0x103aa57c / 0x103aa582
+	// 0x103aa510..0x103aa55f: the `0x109f3620` call-name ring push (ABSENT, the debugger stack).
+	SelectScheduleSelector = 0x1f;                                 // 0x103aa56a
+	if (NpcStateRetail() == GStateCombat                           // 0x103aa561 / 0x103aa574
+		&& Slot167Enemy(*this) == nullptr)                         // 0x103aa57a slot 167 / 0x103aa582
 	{
-		WriteNpcStateRetail(GStateIdle);                           // 0x103aa584 `m_NPCState = 1` — a raw write,
-		WriteIdealStateRetail(GStateIdle);                         // 0x103aa58e `m_IdealNPCState = 1`, not SetState
+		WriteNpcStateRetail(GStateIdle);                           // 0x103aa589 `m_NPCState = 1` — a raw write,
+		WriteIdealStateRetail(GStateIdle);                         // 0x103aa58f `m_IdealNPCState = 1`, not SetState
 	}
-	return FElysiumNpc::PreSelectSchedule();                       // 0x103aa595 CALL 0x102ae920
+	return FElysiumNpc::PreSelectSchedule();                       // 0x103aa597 CALL 0x102ae920
 }
 
 // =================================================================================================
@@ -1089,19 +1163,19 @@ int32 FElysiumNpcSabbatLeader::PreSelectSchedule()
 int32 FElysiumNpcSabbatLeader::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 0x1f;                                 // 0x103a711a
+	SelectScheduleSelector = 0x1f;                                 // 0x103a711d
 	if (NpcStateRetail() == GStateTransform)                       // 0x103a7127
 	{
 		return 0x158;                                              // 0x103a7129 SCHED_VVAMPIREBOSS_TRANSFORM
 	}
-	if (Select19ConVarEnabled(ESelect19ConVar::AndreiForcePlayerCollision))   // 0x103a714a / 0x103a7157
+	if (Select19ConVarEnabled(ESelect19ConVar::AndreiForcePlayerCollision))   // 0x103a7145 CALL / 0x103a714a / 0x103a7157
 	{
-		SetSelect19ConVar(ESelect19ConVar::AndreiForcePlayerCollision, 0);    // 0x103a7162 ConVar::SetValue(0)
-		if (FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer))   // 0x103a716e / 0x103a7179
+		SetSelect19ConVar(ESelect19ConVar::AndreiForcePlayerCollision, 0);    // 0x103a7160 ConVar::SetValue(0)
+		if (FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer))   // 0x103a7172 CALL 0x10009c8c / 0x103a7179
 		{
 			// Slot 217 `GetAbsOrigin()` + (20.0, 0, 0), then slot 216 `SetAbsOrigin` (`vtable +0x360`).
-			FVector Target = Player->Origin + FVector(GSabbatPlayerOffsetUnits * ElysiumMove::U, 0.0, 0.0);
-			SetAbsOrigin(Target);                                  // 0x103a71ad
+			FVector LeaderTarget = Player->Origin + FVector(GSabbatPlayerOffsetUnits * ElysiumMove::U, 0.0, 0.0);   // 0x103a717f slot 217 / 0x103a7192
+			SetAbsOrigin(LeaderTarget);                            // 0x103a71b0
 		}
 	}
 	CheckStuck();                                                  // 0x103a71b8 CALL 0x103ab580
@@ -1112,33 +1186,33 @@ int32 FElysiumNpcSabbatLeader::SpeciesSelectSchedule()
 	}
 	if (bSabbatLeaderActivated)                                    // 0x103a71ed
 	{
-		if (Select19ConVarEnabled(ESelect19ConVar::AndreiForceJumpAttack))   // 0x103a7200 / 0x103a720c
+		if (Select19ConVarEnabled(ESelect19ConVar::AndreiForceJumpAttack))   // 0x103a71fb CALL / 0x103a7200 / 0x103a720c
 		{
 			return 0x15b;                                          // SCHED_VSABBATLEADER_RUN_TO_BOTTOM
 		}
 		if (bSabbatLeaderActivated)                                // 0x103a722a (retail re-reads it)
 		{
-			if (Select19ConVarEnabled(ESelect19ConVar::AndreiForceChargeAttack))   // 0x103a723d / 0x103a7249
+			if (Select19ConVarEnabled(ESelect19ConVar::AndreiForceChargeAttack))   // 0x103a7238 CALL / 0x103a723d / 0x103a7249
 			{
 				return 0x166;                                      // SCHED_VSABBATLEADER_CHARGE_ATTACK
 			}
 			if (bSabbatLeaderActivated                             // 0x103a7267
-				&& Cognition.Conditions.Has(GCondSabbatTimeToJump))   // 0x103a7274
+				&& Cognition.Conditions.Has(GCondSabbatTimeToJump))   // 0x103a726d CALL / 0x103a7274
 			{
 				if (!bSabbatLeaderLastAttackWasNova)               // 0x103a7284
 				{
-					const int32 Pick = Roll(0, 2);                 // 0x103a7292
-					if (Pick == 0)                                 // 0x103a7298
+					const int32 Pick = Roll(0, 2);                 // 0x103a72ad
+					if (Pick == 0)                                 // 0x103a72b3
 					{
 						return 0x164;                              // SCHED_VSABBATLEADER_DIVE_IN
 					}
 					return Pick != 1 ? 0x166 : 0x15b;              // 0x103a72b3 / 0x103a72bd
 				}
-				return Roll(0, 1) == 0 ? 0x164 : 0x15b;            // 0x103a72a7..0x103a72cc
+				return Roll(0, 1) == 0 ? 0x164 : 0x15b;            // 0x103a728c / 0x103a7298
 			}
 		}
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103a72e0 CALL 0x10384ee0
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103a72e2 CALL 0x10015ad2 -> 0x10384ee0
 }
 
 // =================================================================================================
@@ -1148,12 +1222,12 @@ int32 FElysiumNpcSabbatLeader::SpeciesSelectSchedule()
 int32 FElysiumNpcSheriffMan::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
-	SelectScheduleSelector = 0x21;                                 // 0x103ae919
+	SelectScheduleSelector = 0x21;                                 // 0x103ae91c
 	if (bSheriffActivated)                                         // 0x103ae926
 	{
 		int32 PlayerHeight = 0;
 		int32 SelfHeight = 0;
-		CategorizeHeights(PlayerHeight, SelfHeight);               // 0x103ae93c CALL 0x103b1680
+		CategorizeHeights(PlayerHeight, SelfHeight);               // 0x103ae944 CALL 0x103b1680
 		if (NpcStateRetail() == GStateTransform)                   // 0x103ae950
 		{
 			return 0x158;                                          // SCHED_VVAMPIREBOSS_TRANSFORM
@@ -1161,9 +1235,9 @@ int32 FElysiumNpcSheriffMan::SpeciesSelectSchedule()
 		if (!bSheriffDead)                                         // 0x103ae96e
 		{
 			// `sheriff_force_teleport` is read as `0 < m_nValue`, not `!= 0` (`0x103ae9a4 JLE`).
-			if (Select19ConVarInt(ESelect19ConVar::SheriffForceTeleport) > 0)   // 0x103ae998 / 0x103ae9a4
+			if (Select19ConVarInt(ESelect19ConVar::SheriffForceTeleport) > 0)   // 0x103ae993 CALL / 0x103ae998 / 0x103ae9a4
 			{
-				SetSelect19ConVar(ESelect19ConVar::SheriffForceTeleport, 0);    // ConVar::SetValue(0)
+				SetSelect19ConVar(ESelect19ConVar::SheriffForceTeleport, 0);    // 0x103ae9ad ConVar::SetValue(0)
 				return 0x15a;                                      // SCHED_VSHERIFFMAN_TELEPORT
 			}
 			if (PlayerHeight == 0)                                 // 0x103ae9cc
@@ -1177,16 +1251,16 @@ int32 FElysiumNpcSheriffMan::SpeciesSelectSchedule()
 			{
 				return 0x15d;                                      // SCHED_VSHERIFFMAN_EXTREME_JUMP_UP
 			}
-			if (HealthPercentLostSinceRecord() < GSheriffHealthLostFloor   // 0x103aea0a CALL 0x103c6a20 / 0x103aea1e
+			if (HealthPercentLostSinceRecord() < GSheriffHealthLostFloor   // 0x103aea0c CALL 0x103c6a20 / 0x103aea1e
 				&& !LastAttackTimeElapsed(GSheriffAttackIdleSeconds))      // 0x103aea29 CALL 0x103c67f0 / 0x103aea30
 			{
 				return FElysiumNpcHuman::SpeciesSelectSchedule();  // LAB_103ae977
 			}
 			return 0x15a;                                          // 0x103aea36
 		}
-		KillSheriff();                                             // 0x103ae970 CALL 0x103b10f0
+		KillSheriff();                                             // 0x103ae972 CALL 0x103b10f0
 	}
-	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103ae977 CALL 0x10384ee0
+	return FElysiumNpcHuman::SpeciesSelectSchedule();              // 0x103ae977 / 0x103ae979 CALL 0x10384ee0
 }
 
 // =================================================================================================
@@ -1214,7 +1288,7 @@ int32 FElysiumNpcTzimisce::Select19TzimisceFindBodySchedule()
 	// `0x103bc4e0`. Enemy null answers "unreachable" (`cVar3 = 1`).
 	FElysiumEntity* const Enemy = Slot167Enemy(*this);             // 0x103bc4e6 slot 167
 	const bool bUnreachable = Enemy == nullptr || IsUnreachable(Enemy);   // 0x103bc4f4 slot 530
-	const bool bTooFar = Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee);   // 0x103bc50a
+	const bool bTooFar = Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee);   // 0x103bc50a HasCondition(9), always asked
 	bool bSearch = true;
 	if (!bUnreachable)
 	{
@@ -1230,180 +1304,224 @@ int32 FElysiumNpcTzimisce::Select19TzimisceFindBodySchedule()
 			bSearch = Roll(0, 99) < Threshold;
 		}
 	}
-	if (bSearch && Select19TzimisceFindBody())                     // CALL 0x103be180
+	if (!bSearch || !Select19TzimisceFindBody())                   // CALL 0x103be180 / 0x103bc554
 	{
-		// The found-body arm (the enemy LKP distance and angle test, `m_hPickupTarget` release on a
-		// refusal, `0x103be050(this, 1)`, and `0x18f` / `0x190` by `90000.0` squared units) is
-		// unreachable while the search seam answers false.
-		NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);               // 0x103bc719 CALL 0x103be050(1)
-		bTzimisceJustFoundBody = true;                             // `+0x66bc = 1`
-		return 0x18f;                                              // SCHED_VTZIMISCE_FIND_BODY
+		TzimisceShunnedFindBody = 2;                               // 0x103bc556 `+0x66b8 = 2`
+		bTzimisceJustFoundBody = false;                            // 0x103bc560 `+0x66bc = 0`
+		return 0;                                                  // 0x103bc568
 	}
-	TzimisceShunnedFindBody = 2;                                   // LAB_103bc556: `+0x66b8 = 2`
-	bTzimisceJustFoundBody = false;                                //               `+0x66bc = 0`
-	return 0;
+	// The found-body arm (integration review: the lane left it as a one-line stand-in because the
+	// search seam answers false; ported whole). `m_hPickupTarget` (+0x6670) resolved; slot 220
+	// (`+0x370`) is `CBaseEntity::GetOrigin` on both. The body delta is `body - this`.
+	// Retail dereferences the resolved body unguarded (`0x103bc5a9`); a null is a crash guard here.
+	const FElysiumEntity* const FoundBody = Resolve(*this, PickupTarget);   // 0x103bc56f..0x103bc59d
+	const FVector BodyDelta = FoundBody != nullptr ? FoundBody->Origin - Origin : FVector::ZeroVector;   // 0x103bc5a3 / 0x103bc5b0
+	const float BodyDistSqr = DistSqrUnits(FoundBody != nullptr ? FoundBody->Origin : Origin, Origin);   // 0x103bc5e6..0x103bc60a
+	bool bAccept = true;
+	if (!bUnreachable && Enemy != nullptr)                         // 0x103bc60e TEST BL / 0x103bc61a
+	{
+		// Slot 541 `GetEnemies()` then `0x102dfed0` — the enemy's last known position in the memory.
+		// A missing record leaves retail's stack vector unwritten (its DevWarning arm); the enemy's
+		// origin stands in there (crash guard).
+		const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle);   // 0x103bc62a / 0x103bc632
+		const FVector Lkp = Record != nullptr ? Record->LastPosition : Enemy->Origin;
+		const FVector LkpDelta = Lkp - Origin;                     // 0x103bc63b slot 220 / 0x103bc641..0x103bc66d
+		const float LkpDistSqr = DistSqrUnits(Lkp, Origin);        // 0x103bc671..0x103bc695
+		bAccept = false;
+		if (BodyDistSqr < LkpDistSqr)                              // 0x103bc69d FCOMP / 0x103bc6a6 JP (ge or NaN rejects)
+		{
+			// `UTIL_AngleDiff(VecToYaw(body delta), VecToYaw(lkp delta))` (`0x101d2c70` twice,
+			// `0x1013d580`), FABS, against the DOUBLE `_DAT_104cc510` = 120.0; `AND 0x4100` accepts
+			// below, equal and unordered.
+			const float BodyYaw = static_cast<float>(NpcKernelPositionsShared::RetailVectorAngles(BodyDelta).Y);   // 0x103bc6bb
+			const float LkpYaw = static_cast<float>(NpcKernelPositionsShared::RetailVectorAngles(LkpDelta).Y);     // 0x103bc6ad
+			const double Diff = FMath::Abs(static_cast<double>(
+				NpcKernelPositionsShared::RetailAngleDiff(BodyYaw, LkpYaw)));   // 0x103bc6ce / 0x103bc6d3 FABS
+			// `lkpDistSqr * 0.2f` (`_DAT_10451ab4`) against the body's; `AND 0x4100` accepts at or below.
+			bAccept = !(Diff > GTzimisceBodyAngleLimit)            // 0x103bc6d5 / 0x103bc6e5
+				|| !(LkpDistSqr * GTzimisceBodyLkpFraction > BodyDistSqr);   // 0x103bc6eb / 0x103bc6fc
+		}
+		if (!bAccept)
+		{
+			PickupTarget = FElysiumEntityHandle::Invalid();        // 0x103bc702 `+0x6670 = -1`
+			SetIgnoreCollisionExpiry(0.0f);                        // 0x103bc70c CALL 0x102c43b0(0.0)
+			return 0;                                              // 0x103bc712
+		}
+	}
+	NpcFlags.Set(EElysiumNpcFlag::FINDING_BODY);                   // 0x103bc71d CALL 0x103be050(1): `+0x14b8 |= 0x10`
+	bTzimisceJustFoundBody = true;                                 // 0x103bc72c `+0x66bc = 1`
+	// `_DAT_104cc508` f32 = 90000.0 (300 units, squared); below it (or unordered) is the near answer.
+	if (!(BodyDistSqr >= GTzimisceBodyNearSqr))                    // 0x103bc726 FCOMP / 0x103bc744 (C0: below or NaN)
+	{
+		return SelectTrace(GFileTzimisce, 0xb1a, 0x190);           // 0x103bc75b
+	}
+	return SelectTrace(GFileTzimisce, 0xb16, 0x18f);               // 0x103bc751 SCHED_VTZIMISCE_FIND_BODY
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceMeleeAttackSchedule()
 {
 	using namespace NpcSelect19Species;
 	// `0x103bc820`.
-	TzimisceShunnedFindBody = 0;                                   // `+0x66b8 = 0`
-	if (Cognition.Conditions.Has(EElysiumNpcCond::CanMeleeAttack1))
+	TzimisceShunnedFindBody = 0;                                   // 0x103bc825 `+0x66b8 = 0`
+	if (Cognition.Conditions.Has(EElysiumNpcCond::CanMeleeAttack1))   // 0x103bc82f HasCondition(0x51) / 0x103bc836
 	{
-		return SelectTrace(GFileTzimisce, 0xb2c, 0x177);           // SCHED_VTZIMISCE_MELEE_ATTACK1_STATIONARY
+		return SelectTrace(GFileTzimisce, 0xb2c, 0x177);           // 0x103bc84c SCHED_VTZIMISCE_MELEE_ATTACK1_STATIONARY
 	}
-	if (HasInterrupt(*this, EElysiumNpcCond::InterruptTime))
+	if (HasInterrupt(*this, EElysiumNpcCond::InterruptTime))       // 0x103bc857 HasInterruptCondition(0x1a) / 0x103bc85e
 	{
-		return SelectTrace(GFileTzimisce, 0xb32, 0x178);           // SCHED_VTZIMISCE_MELEE_ATTACK1
+		return SelectTrace(GFileTzimisce, 0xb32, 0x178);           // 0x103bc874 SCHED_VTZIMISCE_MELEE_ATTACK1
 	}
-	FElysiumEntity* const Enemy = Slot167Enemy(*this);
-	if (Enemy == nullptr)
+	FElysiumEntity* const Enemy = Slot167Enemy(*this);             // 0x103bc87f slot 167
+	if (Enemy == nullptr)                                          // 0x103bc887
 	{
-		return SelectTrace(GFileTzimisce, 0xb5c, 0x178);
+		return SelectTrace(GFileTzimisce, 0xb5c, 0x178);           // 0x103bc9a4
 	}
-	const float DistSqr = DistSqrUnits(Origin, Enemy->Origin);     // slot 220 on both
-	if (GMeleeFarSqr < DistSqr)
+	// Slot 220 `GetOrigin` on both (`0x103bc89c`, `0x103bc8a8`); the sum stays in x87 extended
+	// precision (`FSTP ST3`, no store), so it is compared as a double, not rounded to float.
+	const double DistSqr = FVector::DistSquared(Origin, Enemy->Origin) / (ElysiumMove::U * ElysiumMove::U);
+	// `FCOM 160000.0; AND 0x4100` — at or below (or unordered) is the near half.
+	if (DistSqr > static_cast<double>(GMeleeFarSqr))               // 0x103bc8d5 / 0x103bc8e2
 	{
-		if (Roll(0, 99) < 0x46)
+		if (Roll(0, 99) < 0x46)                                    // 0x103bc8f2 RandomInt(0,99) / 0x103bc902 JGE
 		{
-			return SelectTrace(GFileTzimisce, 0xb40, 0x178);
+			return SelectTrace(GFileTzimisce, 0xb40, 0x178);       // 0x103bc90e
 		}
-		return SelectTrace(GFileTzimisce, 0xb44, 0x179);           // SCHED_VTZIMISCE_MELEE_ATTACK1_WALK
+		return SelectTrace(GFileTzimisce, 0xb44, 0x179);           // 0x103bc91f SCHED_VTZIMISCE_MELEE_ATTACK1_WALK
 	}
-	if (DistSqr <= GMeleeNearSqr)
+	if (!(DistSqr > static_cast<double>(GMeleeNearSqr)))           // 0x103bc926 FCOMP 40000.0 / 0x103bc933 (at/below or NaN)
 	{
-		return SelectTrace(GFileTzimisce, 0xb58, 0x179);
+		return SelectTrace(GFileTzimisce, 0xb58, 0x179);           // 0x103bc989
 	}
-	if (Roll(0, 99) < 0x28)
+	if (Roll(0, 99) < 0x28)                                        // 0x103bc941 / 0x103bc951 JGE
 	{
-		return SelectTrace(GFileTzimisce, 0xb4e, 0x178);
+		return SelectTrace(GFileTzimisce, 0xb4e, 0x178);           // 0x103bc95d
 	}
-	return SelectTrace(GFileTzimisce, 0xb52, 0x179);
+	return SelectTrace(GFileTzimisce, 0xb52, 0x179);               // 0x103bc96e
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceMeleeIdleContinuation()
 {
 	using namespace NpcSelect19Species;
-	// `0x103bca20`.
-	if (HasInterrupt(*this, EElysiumNpcCond::ShouldDodge))         // `0xc`
+	// `0x103bca20` (`RET 0x4`: the caller's one stack argument is unread).
+	if (HasInterrupt(*this, EElysiumNpcCond::ShouldDodge))         // 0x103bca25 HasInterruptCondition(0xc) / 0x103bca2c
 	{
-		return SelectTrace(GFileTzimisce, 0xb66, 0x173);           // SCHED_VTZIMISCE_MELEE_DODGE
+		return SelectTrace(GFileTzimisce, 0xb66, 0x173);           // 0x103bca42 SCHED_VTZIMISCE_MELEE_DODGE
 	}
-	if (HasInterrupt(*this, EElysiumNpcCond::BeingAttacked)        // `0xa`
-		|| HasInterrupt(*this, EElysiumNpcCond::ShouldBlock))      // `0xd`
+	if (HasInterrupt(*this, EElysiumNpcCond::BeingAttacked)        // 0x103bca4f (0xa) / 0x103bca56
+		|| HasInterrupt(*this, EElysiumNpcCond::ShouldBlock))      // 0x103bca5c (0xd) / 0x103bca63
 	{
-		return SelectTrace(GFileTzimisce, 0xb6a, 0x174);           // SCHED_VTZIMISCE_MELEE_BLOCK
+		return SelectTrace(GFileTzimisce, 0xb6a, 0x174);           // 0x103bcaae SCHED_VTZIMISCE_MELEE_BLOCK
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))   // `0x5d`
+	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))   // 0x103bca69 HasCondition(0x5d) / 0x103bca70
 	{
-		return Select19TzimisceMeleeAttackSchedule();              // tail 0x103bc820
+		return Select19TzimisceMeleeAttackSchedule();              // 0x103bca74 CALL 0x103bc820
 	}
-	return SelectTrace(GFileTzimisce, 0xb7c, 0x170);               // SCHED_VTZIMISCE_MELEE_IDLE
+	return SelectTrace(GFileTzimisce, 0xb7c, 0x170);               // 0x103bca91 SCHED_VTZIMISCE_MELEE_IDLE
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceMeleeAdvanceContinuation()
 {
 	using namespace NpcSelect19Species;
 	// `0x103bcaf0`: done -> MELEE_IDLE, else the running program's own local id again
-	// (`GetScheduleId(space, m_pSchedule->+0x1c)` through slot 580's space, `0x102ea280`).
-	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))
+	// (`0x102ea280(slot 580's space, m_pSchedule->+0x1c)` — the global-to-local translation slot 447
+	// `GetLocalScheduleId` makes).
+	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))   // 0x103bcaf5 / 0x103bcafc
 	{
-		return SelectTrace(GFileTzimisce, 0xb85, 0x170);
+		return SelectTrace(GFileTzimisce, 0xb85, 0x170);           // 0x103bcb12
 	}
-	return GetLocalScheduleId(Schedule.Current);
+	return GetLocalScheduleId(Schedule.Current);                   // 0x103bcb1b..0x103bcb32
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceMeleeRetreatContinuation()
 {
 	using namespace NpcSelect19Species;
 	// `0x103bcb60`.
-	if (Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded))
+	if (Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded))  // 0x103bcb65 HasCondition(0x48) / 0x103bcb6c
 	{
-		return SelectTrace(GFileTzimisce, 0xb93, 0x171);           // SCHED_VTZIMISCE_MELEE_ADVANCE
+		return SelectTrace(GFileTzimisce, 0xb93, 0x171);           // 0x103bcb82 SCHED_VTZIMISCE_MELEE_ADVANCE
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))
+	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))   // 0x103bcb8f / 0x103bcb96
 	{
-		return SelectTrace(GFileTzimisce, 0xb98, 0x170);
+		return SelectTrace(GFileTzimisce, 0xb98, 0x170);           // 0x103bcbac
 	}
-	return GetLocalScheduleId(Schedule.Current);
+	return GetLocalScheduleId(Schedule.Current);                   // 0x103bcbb5..0x103bcbcc
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceMeleeAttackContinuation()
 {
 	using namespace NpcSelect19Species;
 	// `0x103bcc00`: `m_fSequencePastHalf` (`+0x568`) skips the two interrupt tests.
-	if (!Select19SequencePastHalf()
-		&& (HasInterrupt(*this, EElysiumNpcCond::BeingAttacked)
-			|| HasInterrupt(*this, EElysiumNpcCond::ShouldBlock)))
+	if (!Select19SequencePastHalf()                                // 0x103bcc03 / 0x103bcc0b
+		&& (HasInterrupt(*this, EElysiumNpcCond::BeingAttacked)    // 0x103bcc0f (0xa) / 0x103bcc16
+			|| HasInterrupt(*this, EElysiumNpcCond::ShouldBlock))) // 0x103bcc1c (0xd) / 0x103bcc23
 	{
-		return SelectTrace(GFileTzimisce, 0xbd6, 0x174);
+		return SelectTrace(GFileTzimisce, 0xbd6, 0x174);           // 0x103bcc39
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))
+	if (Cognition.Conditions.Has(EElysiumNpcCond::ScheduleDone))   // 0x103bcc46 / 0x103bcc4d
 	{
-		BaseScheduleHost.MemoryBits &= 0xbfffffffu;                // `m_afMemory &= ~0x40000000`
-		return SelectTrace(GFileTzimisce, 0xbde, 0x170);
+		BaseScheduleHost.MemoryBits &= 0xbfffffffu;                // 0x103bcc5f / 0x103bcc6e `m_afMemory &= ~0x40000000`
+		return SelectTrace(GFileTzimisce, 0xbde, 0x170);           // 0x103bcc74
 	}
-	return Select19TzimisceMeleeAttackSchedule();                  // tail 0x103bc820
+	return Select19TzimisceMeleeAttackSchedule();                  // 0x103bcc7f CALL 0x103bc820
 }
 
 int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
 	const FElysiumNpcConditions& Cond = Cognition.Conditions;
-	SelectScheduleSelector = 0x26;                                 // 0x103bb7d0
-	if (NpcFlags.Has(EElysiumNpcFlag::DO_STARTLED))                // 0x103bb7e0
+	SelectScheduleSelector = 0x26;                                 // 0x103bb7ce
+	if (NpcFlags.Has(EElysiumNpcFlag::DO_STARTLED))                // 0x103bb7c8 / 0x103bb7e0
 	{
-		NpcFlags.Clear(EElysiumNpcFlag::DO_STARTLED);
+		NpcFlags.Clear(EElysiumNpcFlag::DO_STARTLED);              // 0x103bb7ee
 		return SelectTrace(GFileTzimisce, 0x939, 0x187);           // 0x103bb7e2 SCHED_VTZIMISCE_STARTLED
 	}
 	if (Roll(0, 99) < 0x32)                                        // 0x103bb816 / 0x103bb81c JGE
 	{
-		++Select19TzimisceFidgetCalls;                             // 0x103bb822 slot 627 (seam)
+		++Select19TzimisceFidgetCalls;                             // 0x103bb822 CALL [EAX+0x9cc] slot 627 (seam)
 	}
 	const int32 State = NpcStateRetail();
 	if (State == GStateCombat)                                     // 0x103bb831
 	{
 		Cognition.bCondTookDamage = false;                         // 0x103bbb21
-		if (Cond.Has(EElysiumNpcCond::EnemyDead) && TzimisceCarryFormBit())   // 0x103bbb33 / 0x103bbb3e
+		if (Cond.Has(EElysiumNpcCond::EnemyDead) && TzimisceCarryFormBit())   // 0x103bbb2c / 0x103bbb33 / 0x103bbb37 / 0x103bbb3e
 		{
 			return SelectTrace(GFileTzimisce, 0x962, 0x198);       // SCHED_VTZIMISCE_DROP_BODY
 		}
-		if (Cond.Has(GCondTzimDropBody) && TzimisceCarryFormBit()) // 0x103bbb6b / 0x103bbb76
+		if (Cond.Has(GCondTzimDropBody) && TzimisceCarryFormBit()) // 0x103bbb64 / 0x103bbb6b / 0x103bbb6f / 0x103bbb76
 		{
 			return SelectTrace(GFileTzimisce, 0x96a, 0x198);
 		}
-		if (Cond.Has(GCondTzimForceThrow) && TzimisceCarryFormBit())   // 0x103bbba3 / 0x103bbbae
+		if (Cond.Has(GCondTzimForceThrow) && TzimisceCarryFormBit())   // 0x103bbb9c / 0x103bbba3 / 0x103bbba7 / 0x103bbbae
 		{
 			return SelectTrace(GFileTzimisce, 0x972, 0x195);       // SCHED_VTZIMISCE_THROW_BODY
 		}
 		if (!bTzimisceFirstEnemy                                   // 0x103bbbd8 (+0x6689)
-			&& Cond.Has(EElysiumNpcCond::NewEnemy))                // 0x103bbbe5
+			&& Cond.Has(EElysiumNpcCond::NewEnemy))                // 0x103bbbde / 0x103bbbe5
 		{
 			return SelectTrace(GFileTzimisce, 0x980, 5);           // 0x103bbbe7 WAKE_ANGRY
 		}
-		// 0x103bbc09..0x103bbc1d: the active weapon's slot `+0x5a0` word is read and discarded.
+		// 0x103bbc09..0x103bbc1d (0x103bbc10 JZ, 0x103bbc14 CALL): the active weapon's slot `+0x5a0` word is read and discarded.
 		if (!NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY))          // 0x103bbc2b CALL 0x103be090 / 0x103bbc34
 		{
 			if (TzimisceCarryFormBit())                            // 0x103bbce9 / 0x103bbcf2
 			{
 				if (FUN_103be150()                                 // 0x103bbcf8 / 0x103bbcff
-					&& !IsUnreachable(Slot167Enemy(*this)))        // 0x103bbd0e slot 530 / 0x103bbd16
+					&& !IsUnreachable(Slot167Enemy(*this)))        // 0x103bbd05 slot 167 / 0x103bbd0e slot 530 / 0x103bbd16
 				{
 					return SelectTrace(GFileTzimisce, 0x9c3, 0x193);   // SCHED_VTZIMISCE_FACE_THROW_TARGET_FORCED
 				}
-				if ((Cond.Has(EElysiumNpcCond::EnemyOccluded)      // 0x103bbd43
-						|| !Cond.Has(EElysiumNpcCond::SeeEnemy))   // 0x103bbd50
-					&& !Cond.Has(GCondHaveEnemyThrowLos))          // 0x103bbd5d
+				if ((Cond.Has(EElysiumNpcCond::EnemyOccluded)      // 0x103bbd3c / 0x103bbd43
+						|| !Cond.Has(EElysiumNpcCond::SeeEnemy))   // 0x103bbd49 / 0x103bbd50
+					&& !Cond.Has(GCondHaveEnemyThrowLos))          // 0x103bbd56 / 0x103bbd5d
 				{
 					return SelectTrace(GFileTzimisce, 0x9cb, 0x169);   // SCHED_VTZIMISCE_CHASE_ENEMY_LKP_BODY
 				}
-				if (Cond.Has(EElysiumNpcCond::TooCloseToAttack)    // 0x103bbd8a
-					|| Cond.Has(EElysiumNpcCond::TooCloseForRanged))   // 0x103bbd9b
+				if (Cond.Has(EElysiumNpcCond::TooCloseToAttack)    // 0x103bbd83 / 0x103bbd8a
+					|| Cond.Has(EElysiumNpcCond::TooCloseForRanged))   // 0x103bbd94 / 0x103bbd9b
 				{
 					return SelectTrace(GFileTzimisce, 0x9d0, 0x198);
 				}
-				if (!Cond.Has(GCondHaveEnemyThrowLos))             // 0x103bbdac
+				if (!Cond.Has(GCondHaveEnemyThrowLos))             // 0x103bbda5 / 0x103bbdac
 				{
 					return SelectTrace(GFileTzimisce, 0x9ec, 0x169);
 				}
@@ -1411,27 +1529,27 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 					&& Roll(0, 99) < 5)                            // 0x103bbdc8 / 0x103bbdce
 				{
 					bTzimisceDidFakeThrow = true;
-					if (FUN_103be8e0(Slot167Enemy(*this)))         // 0x103bbde4 / 0x103bbdf5
+					if (FUN_103be8e0(Slot167Enemy(*this)))         // 0x103bbddb slot 167 / 0x103bbde4 / 0x103bbdf5
 					{
 						return SelectTrace(GFileTzimisce, 0x9df, 0x196);   // SCHED_VTZIMISCE_THROW_BODY_FAKE
 					}
 					return SelectTrace(GFileTzimisce, 0x9dc, 0x194);       // SCHED_VTZIMISCE_FACE_THROW_TARGET_FAKE
 				}
-				if (FUN_103be8e0(Slot167Enemy(*this)))             // 0x103bbe30 / 0x103bbe41
+				if (FUN_103be8e0(Slot167Enemy(*this)))             // 0x103bbe27 slot 167 / 0x103bbe30 / 0x103bbe41
 				{
 					return SelectTrace(GFileTzimisce, 0x9e8, 0x195);
 				}
 				return SelectTrace(GFileTzimisce, 0x9e5, 0x192);   // SCHED_VTZIMISCE_FACE_THROW_TARGET
 			}
 			NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);        // 0x103bbeaf AND 0xfffffff7
-			const int32 Body = Select19TzimisceFindBodySchedule(); // 0x103bbeb6 CALL 0x103bc4e0
-			if (Body != 0)                                         // 0x103bbebd
+			const int32 FoundBody = Select19TzimisceFindBodySchedule(); // 0x103bbeb6 CALL 0x103bc4e0
+			if (FoundBody != 0)                                         // 0x103bbebd
 			{
-				return Body;
+				return FoundBody;
 			}
-			if (IsUnreachable(Slot167Enemy(*this)))                // 0x103bbed0 slot 530 / 0x103bbeda
+			if (IsUnreachable(Slot167Enemy(*this)))                // 0x103bbec7 slot 167 / 0x103bbed0 slot 530 / 0x103bbeda
 			{
-				switch (SelectTzimisceHintNode(Slot167Enemy(*this)))   // 0x103bbeeb CALL 0x103bfa50 / 0x103bbef8
+				switch (SelectTzimisceHintNode(Slot167Enemy(*this)))   // 0x103bbee2 slot 167 / 0x103bbeeb CALL 0x103bfa50 / 0x103bbef8 / 0x103bbf06 table
 				{
 				case 14000:
 					return SelectTrace(GFileTzimisce, 0xa03, 0x17c);   // SCHED_VTZIMISCE_CLAW_LEFT_ATTACK_SETUP
@@ -1445,50 +1563,52 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 					return SelectTrace(GFileTzimisce, 0xa07, 0x16a);   // SCHED_VTZIMISCE_CHASE_ENEMY_FAILED
 				}
 			}
-			if (Cond.Has(EElysiumNpcCond::EnemyOccluded))          // 0x103bbfb6
+			if (Cond.Has(EElysiumNpcCond::EnemyOccluded))          // 0x103bbfaf / 0x103bbfb6
 			{
 				return SelectTrace(GFileTzimisce, 0xa0e, 0x167);   // SCHED_VTZIMISCE_CHASE_ENEMY_LKP
 			}
-			if (!IsUnreachable(Slot167Enemy(*this)))               // 0x103bbfed
+			if (!IsUnreachable(Slot167Enemy(*this)))               // 0x103bbfdc slot 167 / 0x103bbfe5 slot 530 / 0x103bbfed
 			{
-				// 0x103bbffa `GetEnemies()->GetLastKnownPosition(enemy)`: read, unused.
-				if (Select19ConVarEnabled(ESelect19ConVar::TzimiscePounce)   // 0x103bc021 / 0x103bc02e
+				// 0x103bbff7 slot 167, 0x103bc007 `GetEnemies()`, 0x103bc00f `GetLastKnownPosition(enemy)`: read, unused.
+				if (Select19ConVarEnabled(ESelect19ConVar::TzimiscePounce)   // 0x103bc01c CALL / 0x103bc021 / 0x103bc02e
 					&& Select19TzimiscePounceProbe())              // 0x103bc037 CALL 0x103bf660 / 0x103bc03e
 				{
 					TzimisceShunnedFindBody = 0;                   // 0x103bc040 `m_iShunnedFindBody = 0`
 					return SelectTrace(GFileTzimisce, 0xa1a, 0x186);   // SCHED_VTZIMISCE_POUNCE_ATTACK
 				}
-				if (Cond.Has(EElysiumNpcCond::TooFarForMelee))     // 0x103bc075
+				if (Cond.Has(EElysiumNpcCond::TooFarForMelee))     // 0x103bc06e / 0x103bc075
 				{
-					if (!Cond.Has(EElysiumNpcCond::SeeEnemy))      // 0x103bc08c
+					if (!Cond.Has(EElysiumNpcCond::SeeEnemy))      // 0x103bc07b / 0x103bc08c
 					{
 						return SelectTrace(GFileTzimisce, 0xa27, 0x167);
 					}
 					return SelectTrace(GFileTzimisce, 0xa22, 0x168);   // SCHED_VTZIMISCE_CHASE_ENEMY_TIMED
 				}
 			}
-			// The running-program continuations (`m_pSchedule == GetScheduleOfType(id)`).
+			// The running-program continuations (`m_pSchedule == GetScheduleOfType(id)`); retail re-tests
+			// `m_pSchedule` before each compare (0x103bc0e9 / 0x103bc116 / 0x103bc138 / 0x103bc15a /
+			// 0x103bc174 / 0x103bc18e / 0x103bc1a8 JZ), always non-null once 0x103bc0c2 passed.
 			if (Schedule.Current != ElysiumScheduleId::None)       // 0x103bc0c2
 			{
-				if (SelectRunningScheduleIs(0x170))                // 0x103bc0d6
+				if (SelectRunningScheduleIs(0x170))                // 0x103bc0cf / 0x103bc0d6
 				{
-					return Select19TzimisceMeleeIdleContinuation();    // CALL 0x103bca20
+					return Select19TzimisceMeleeIdleContinuation();    // 0x103bc0db CALL -> 0x103bca20
 				}
-				if (SelectRunningScheduleIs(0x171))                // 0x103bc103
+				if (SelectRunningScheduleIs(0x171))                // 0x103bc0fc / 0x103bc103
 				{
-					return Select19TzimisceMeleeAdvanceContinuation(); // CALL 0x103bcaf0
+					return Select19TzimisceMeleeAdvanceContinuation(); // 0x103bc108 CALL -> 0x103bcaf0
 				}
-				if (SelectRunningScheduleIs(0x172)                 // 0x103bc130
-					|| SelectRunningScheduleIs(0x174)              // 0x103bc152
-					|| SelectRunningScheduleIs(0x173))             // 0x103bc170
+				if (SelectRunningScheduleIs(0x172)                 // 0x103bc129 / 0x103bc130
+					|| SelectRunningScheduleIs(0x174)              // 0x103bc14b / 0x103bc152
+					|| SelectRunningScheduleIs(0x173))             // 0x103bc169 / 0x103bc170
 				{
-					return Select19TzimisceMeleeRetreatContinuation(); // LAB_103bc1ed CALL 0x103bcb60
+					return Select19TzimisceMeleeRetreatContinuation(); // LAB_103bc1ed, 0x103bc1f0 CALL -> 0x103bcb60
 				}
-				if (SelectRunningScheduleIs(0x178)                 // 0x103bc18a
-					|| SelectRunningScheduleIs(0x179)              // 0x103bc1a4
-					|| SelectRunningScheduleIs(0x17a))             // 0x103bc1bc
+				if (SelectRunningScheduleIs(0x178)                 // 0x103bc183 / 0x103bc18a
+					|| SelectRunningScheduleIs(0x179)              // 0x103bc19d / 0x103bc1a4
+					|| SelectRunningScheduleIs(0x17a))             // 0x103bc1b1 / 0x103bc1bc
 				{
-					return Select19TzimisceMeleeAttackContinuation();  // LAB_103bc1de CALL 0x103bcc00
+					return Select19TzimisceMeleeAttackContinuation();  // LAB_103bc1de, 0x103bc1e1 CALL -> 0x103bcc00
 				}
 			}
 			return SelectTrace(GFileTzimisce, 0xa53, 0x170);       // 0x103bc1be SCHED_VTZIMISCE_MELEE_IDLE
@@ -1507,9 +1627,9 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 			SetIgnoreCollisionExpiry(0.0f);                        // 0x103bbcd6
 			return Select19TzimisceMeleeAttackSchedule();          // 0x103bbcdd
 		}
-		if (const int32 Body = Select19TzimisceFindBodySchedule(); Body != 0)   // 0x103bbc89 / 0x103bbc90
+		if (const int32 FoundBody = Select19TzimisceFindBodySchedule(); FoundBody != 0)   // 0x103bbc89 / 0x103bbc90
 		{
-			return Body;
+			return FoundBody;
 		}
 		PickupTarget = FElysiumEntityHandle::Invalid();
 		SetIgnoreCollisionExpiry(0.0f);                            // 0x103bbca3
@@ -1536,11 +1656,11 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 		{
 			return SelectTrace(GFileTzimisce, 0xa66, 0x15d);       // SCHED_VTZIMISCE_HUNT_INVESTIGATE_UNKNOWN
 		}
-		if (Cond.Has(EElysiumNpcCond::HearDanger)                  // 0x103bb8aa
-			|| Cond.Has(EElysiumNpcCond::HearCombat)               // 0x103bb8bb
-			|| Cond.Has(EElysiumNpcCond::HearWorld)                // 0x103bb8cc
-			|| Cond.Has(EElysiumNpcCond::HearBulletImpact)         // 0x103bb8dd
-			|| Cond.Has(EElysiumNpcCond::HearPlayer))              // 0x103bb8ee
+		if (Cond.Has(EElysiumNpcCond::HearDanger)                  // 0x103bb8a3 / 0x103bb8aa
+			|| Cond.Has(EElysiumNpcCond::HearCombat)               // 0x103bb8b4 / 0x103bb8bb
+			|| Cond.Has(EElysiumNpcCond::HearWorld)                // 0x103bb8c5 / 0x103bb8cc
+			|| Cond.Has(EElysiumNpcCond::HearBulletImpact)         // 0x103bb8d6 / 0x103bb8dd
+			|| Cond.Has(EElysiumNpcCond::HearPlayer))              // 0x103bb8e7 / 0x103bb8ee
 		{
 			Senses.Memory.NextInvestigateSoundTime = Now(*this) + GInvestigateSoundDelay;   // 0x103bbac9
 			Senses.CommitBestSound(*this, Cognition.Conditions);   // 0x103bbad0
@@ -1568,7 +1688,7 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 		{
 			return SelectTrace(GFileTzimisce, 0xa92, 0x15a);       // SCHED_VTZIMISCE_HUNT_SETUP_NO_ENEMY
 		}
-		switch (SelectTzimisceHintNode(Enemy))                     // 0x103bb9b4 / 0x103bb9c1 / table 0x103bc1fc
+		switch (SelectTzimisceHintNode(Enemy))                     // 0x103bb9b4 / 0x103bb9c1 / 0x103bb9cf table 0x103bc1fc
 		{
 		case 14000:
 			return SelectTrace(GFileTzimisce, 0xa9a, 0x17c);
@@ -1587,7 +1707,7 @@ int32 FElysiumNpcTzimisce::SpeciesSelectSchedule()
 		}
 		return SelectTrace(GFileTzimisce, 0xaa0, 0x15a);
 	}
-	return TroikaSelectSchedule();                                 // 0x103bbb15 JMP 0x10015596
+	return TroikaSelectSchedule();                                 // 0x103bbb15 CALL 0x10015596 -> 0x102af660
 }
 
 // =================================================================================================
@@ -1604,25 +1724,25 @@ int32 FElysiumNpcTzimisceHeadClaw::SpeciesSelectSchedule()
 		{
 			return 0x158;                                          // 0x103c1635 SCHED_TZIMISCEHEADCLAW_CHARGE
 		}
-		const uint32 Word = SelectActiveWeaponWord();              // 0x103c163d..0x103c165d
-		if ((Word & GWeaponMeleeBits) == 0)                        // 0x103c1667
+		const uint32 Word = SelectActiveWeaponWord();              // 0x103c163d..0x103c165d (0x103c163f / 0x103c1646 JZ / 0x103c164a, +0x5a0 at 0x103c1653)
+		if ((Word & GWeaponMeleeBits) == 0)                        // 0x103c165f / 0x103c1667
 		{
-			if (FUN_103c24a0()                                     // 0x103c1669 / 0x103c1674
-				|| Roll(0, 100) < 0x28)                            // 0x103c1680 / 0x103c1694 JL — RandomInt(0, 100)
+			if (FUN_103c24a0()                                     // 0x103c1679 CALL 0x103c24a0 / 0x103c1680
+				|| Roll(0, 100) < 0x28)                            // 0x103c168e / 0x103c1694 JL — RandomInt(0, 100)
 			{
-				return 0xca;                                       // SCHED_TROIKA_MELEE_ADVANCE
+				return 0xca;                                       // 0x103c16ae SCHED_TROIKA_MELEE_ADVANCE
 			}
-			if (const int32 Ranged = SelectScheduleRangedCombat(static_cast<int32>(Word)); Ranged != 0)   // 0x103c169d / 0x103c16a3
+			if (const int32 Ranged = SelectScheduleRangedCombat(static_cast<int32>(Word)); Ranged != 0)   // 0x103c169b slot 605 / 0x103c16a3
 			{
 				return Ranged;
 			}
 		}
-		else if (const int32 Melee = SelectScheduleMeleeCombat(static_cast<int32>(Word)); Melee != 0)   // 0x103c1679
+		else if (const int32 Melee = SelectScheduleMeleeCombat(static_cast<int32>(Word)); Melee != 0)   // 0x103c166c slot 604 / 0x103c1674
 		{
 			return Melee;
 		}
 	}
-	return TroikaSelectSchedule();                                 // 0x103c16a5 JMP 0x10015596
+	return TroikaSelectSchedule();                                 // 0x103c16a9 JMP 0x10015596
 }
 
 // =================================================================================================
@@ -1635,11 +1755,11 @@ int32 FElysiumNpcTzimisceRunner::SpeciesSelectSchedule()
 	if (NpcStateRetail() == GStateCombat)                          // 0x103c331e
 	{
 		Cognition.bCondTookDamage = false;                         // 0x103c3324
-		const int32 Melee = SelectScheduleMeleeCombat(static_cast<int32>(SelectActiveWeaponWord()));   // 0x103c3347 slot 604
-		FElysiumEntity* const Potential = Resolve(*this, RunnerPotentialEnemy);   // 0x103c335d..0x103c338a (+0x6678)
+		const int32 Melee = SelectScheduleMeleeCombat(static_cast<int32>(SelectActiveWeaponWord()));   // 0x103c332b..0x103c334e slot 604 (0x103c3332 JZ / 0x103c3336 / 0x103c333f +0x5a0)
+		FElysiumEntity* const Potential = Resolve(*this, RunnerPotentialEnemy);   // 0x103c3354..0x103c338a (+0x6678; 0x103c335d / 0x103c3381; re-resolved 0x103c33b8 / 0x103c33d2)
 		if (Potential == nullptr)
 		{
-			if (Melee != 0)                                        // 0x103c342f
+			if (Melee != 0)                                        // 0x103c342d / 0x103c342f
 			{
 				return Melee;
 			}
@@ -1649,7 +1769,7 @@ int32 FElysiumNpcTzimisceRunner::SpeciesSelectSchedule()
 			// A live potential enemy DISCARDS the melee answer unless it is one of five ids and the
 			// potential enemy stands more than 256 units away in 2-D (then `0x157`): every other case
 			// falls to the Troika body with the melee answer thrown away. Retail's, reproduced.
-			switch (Melee)                                         // 0x103c3390..0x103c33a0 JA
+			switch (Melee)                                         // 0x103c3390..0x103c33a8 (0x103c339a JA; byte table 0x103c3444: 0xc7, 0xc8, 0xe4, 0xe7, 0x156 -> 0x103c33af)
 			{
 			case 199:
 			case 200:
@@ -1660,9 +1780,9 @@ int32 FElysiumNpcTzimisceRunner::SpeciesSelectSchedule()
 				// Slot 217 on both; `sqrt(dx*dx + dy*dy)` (`PTR_thunk_FUN_101371d0`) against 256.0.
 				const double Dx = (Potential->Origin.X - Origin.X) / ElysiumMove::U;
 				const double Dy = (Potential->Origin.Y - Origin.Y) / ElysiumMove::U;
-				if (GRunnerAdvanceDistance < FMath::Sqrt(Dx * Dx + Dy * Dy))   // 0x103c341c / 0x103c3422
+				if (GRunnerAdvanceDistance < FMath::Sqrt(Dx * Dx + Dy * Dy))   // 0x103c33de / 0x103c33ea slot 217, 0x103c340c sqrt, 0x103c3412 / 0x103c3422
 				{
-					return 0x157;                                  // SCHED_VTZIMISCERUNNER_ADVANCE_ON_POTENTIAL_ENEMY
+					return 0x157;                                  // 0x103c3424 SCHED_VTZIMISCERUNNER_ADVANCE_ON_POTENTIAL_ENEMY
 				}
 				break;
 			}
@@ -1671,7 +1791,7 @@ int32 FElysiumNpcTzimisceRunner::SpeciesSelectSchedule()
 			}
 		}
 	}
-	return TroikaSelectSchedule();                                 // 0x103c3431 JMP 0x10015596
+	return TroikaSelectSchedule();                                 // 0x103c3436 JMP 0x10015596
 }
 
 // =================================================================================================
@@ -1692,9 +1812,11 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 {
 	using namespace NpcSelect19Species;
 	const FElysiumNpcConditions& Cond = Cognition.Conditions;
-	SelectScheduleSelector = 0x29;                                 // 0x103ceedb
+	// 0x103cee73..0x103ceeda: the VPROF scope push (`this` null 0x103cee75 JZ, `m_iClassname` null
+	// 0x103cee7f JNZ) — a profiler record, no behaviour; not carried.
+	SelectScheduleSelector = 0x29;                                 // 0x103ceede
 	SelectIdealStateRetail();                                      // 0x103ceee8 slot 461 (`vtable +0x734`), answer discarded
-	if (Select19ConVarEnabled(ESelect19ConVar::WerewolfForceTeleport))   // 0x103ceefb / 0x103cef07
+	if (Select19ConVarEnabled(ESelect19ConVar::WerewolfForceTeleport))   // 0x103ceef6 CALL / 0x103ceefb / 0x103cef07
 	{
 		ClearMoveHint();                                           // 0x103cef0b
 		return SelectTrace(GFileWerewolf, 0x8d8, 0x157);           // SCHED_VWEREWOLF_RUN_TO_TELEPORT
@@ -1703,11 +1825,11 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 	{
 		return SelectTrace(GFileWerewolf, 0x8dd, 0x158);           // SCHED_VWEREWOLF_DO_TELEPORT
 	}
-	switch (NpcStateRetail())                                      // 0x103cef71 JA / table 0x103cf43c
+	switch (NpcStateRetail())                                      // 0x103cef71 JA / 0x103cef7f table 0x103cf43c
 	{
 	case 0:
 	case 1:                                                        // 0x103cefef
-		if (Slot167Enemy(*this) == nullptr)                        // 0x103ceff3
+		if (Slot167Enemy(*this) == nullptr)                        // 0x103ceff3 / 0x103cf005 JNZ
 		{
 			return SelectTrace(GFileWerewolf, 0x8f8, 0x156);       // SCHED_VWEREWOLF_CONSIDER_SITUATION
 		}
@@ -1722,21 +1844,21 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 		{
 			return SelectTrace(GFileWerewolf, 0x909, 0x156);
 		}
-		if (FElysiumEntity* const Enemy = Slot167Enemy(*this); Enemy != nullptr && !Enemy->IsAlive())   // 0x103cf07c / 0x103cf08c / 0x103cf094
+		if (FElysiumEntity* const Enemy = Slot167Enemy(*this); Enemy != nullptr && !Enemy->IsAlive())   // 0x103cf074 / 0x103cf07c / 0x103cf082 / 0x103cf08c / 0x103cf094
 		{
 			return SelectTrace(GFileWerewolf, 0x915, 0x157);
 		}
-		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf0c8
+		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf0bf / 0x103cf0c8
 		{
 			TeleportOut();                                         // 0x103cf0ca
 			return SelectTrace(GFileWerewolf, 0x91d, 0x158);
 		}
-		if (Cond.Has(GCondWolfShouldBreakHint)                     // 0x103cf0fd
+		if (Cond.Has(GCondWolfShouldBreakHint)                     // 0x103cf0f6 / 0x103cf0fd
 			&& (WerewolfHintFlags & 0x100u) == 0)                  // 0x103cf10f (+0x66e8)
 		{
 			return SelectTrace(GFileWerewolf, 0x928, 0x15e);       // SCHED_VWEREWOLF_PLAYER_ON_BREAKABLE
 		}
-		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack))           // 0x103cf141
+		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack))           // 0x103cf13a / 0x103cf141
 		{
 			return SelectTrace(GFileWerewolf, 0x92f, ElysiumSched::SCHED_TROIKA_MELEE_STEPBACK);   // 0xd3
 		}
@@ -1745,15 +1867,15 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 			bWerewolfPlayFrustration = false;
 			return SelectTrace(GFileWerewolf, 0x935, 0x15d);       // SCHED_VWEREWOLF_UNREACHABLE
 		}
-		if (Cond.Has(GCondWolfCanSpecialMove)                      // 0x103cf1a9
-			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack1)         // 0x103cf1b6
-			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack2)         // 0x103cf1c3
-			&& Cond.Has(EElysiumNpcCond::EnemyUnreachable))        // 0x103cf1d0
+		if (Cond.Has(GCondWolfCanSpecialMove)                      // 0x103cf1a2 / 0x103cf1a9
+			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack1)         // 0x103cf1af / 0x103cf1b6
+			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack2)         // 0x103cf1bc / 0x103cf1c3
+			&& Cond.Has(EElysiumNpcCond::EnemyUnreachable))        // 0x103cf1c9 / 0x103cf1d0
 		{
 			SelectTrace(GFileWerewolf, 0x93f, 0);
 			return SelectScheduleForHint(MoveHintNode);            // 0x103cf1ef CALL 0x103ce9b0
 		}
-		if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))           // 0x103cf209
+		if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))           // 0x103cf202 / 0x103cf209
 		{
 			return SelectTrace(GFileWerewolf, 0x947, 0x157);
 		}
@@ -1764,13 +1886,13 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 		{
 			return SelectTrace(GFileWerewolf, 0x8e8, 0x162);       // SCHED_VWEREWOLF_PLAY_DEAD
 		}
-		if (Cond.Has(GCondWolfDeathTriggered))                     // 0x103cefc4
+		if (Cond.Has(GCondWolfDeathTriggered))                     // 0x103cefbd / 0x103cefc4
 		{
 			return SelectTrace(GFileWerewolf, 0x8ed, 0x161);       // SCHED_VWEREWOLF_DO_DEATH_FINALE
 		}
 		break;
 	case 9:                                                        // 0x103cf39f
-		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf3ac
+		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf3a3 / 0x103cf3ac
 		{
 			TeleportOut();                                         // 0x103cf3ae
 			return SelectTrace(GFileWerewolf, 0x98c, 0x158);
@@ -1782,21 +1904,21 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 		}
 		return SelectTrace(GFileWerewolf, 0x995, 0x157);           // 0x103cf40d
 	case 0xb:                                                      // 0x103cf234
-		if (Cond.Has(GCondWolfDeathTriggered))                     // 0x103cf23f
+		if (Cond.Has(GCondWolfDeathTriggered))                     // 0x103cf238 / 0x103cf23f
 		{
 			return SelectTrace(GFileWerewolf, 0x95b, 0x161);
 		}
-		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf273
+		if (Cond.Has(GCondWolfCanTeleport))                        // 0x103cf26a / 0x103cf273
 		{
 			TeleportOut();                                         // 0x103cf275
 			return SelectTrace(GFileWerewolf, 0x961, 0x158);
 		}
-		if (Cond.Has(GCondWolfShouldBreakHint)                     // 0x103cf2a8
+		if (Cond.Has(GCondWolfShouldBreakHint)                     // 0x103cf2a1 / 0x103cf2a8
 			&& (WerewolfHintFlags & 0x100u) == 0)                  // 0x103cf2bc
 		{
 			return SelectTrace(GFileWerewolf, 0x96b, 0x15e);
 		}
-		if (!Cond.Has(GCondWolfCanSpecialMove))                    // 0x103cf2f0
+		if (!Cond.Has(GCondWolfCanSpecialMove))                    // 0x103cf2e7 / 0x103cf2f0
 		{
 			if (Select19FindRandomMoveHint())                      // 0x103cf34f CALL 0x103d14f0 / 0x103cf360
 			{
@@ -1805,9 +1927,9 @@ int32 FElysiumNpcWerewolf::SpeciesSelectSchedule()
 			}
 			return SelectTrace(GFileWerewolf, 0x981, 0x157);       // 0x103cf384
 		}
-		if (!Cond.Has(EElysiumNpcCond::CanMeleeAttack1)            // 0x103cf2fb
-			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack2)         // 0x103cf30c
-			&& Cond.Has(EElysiumNpcCond::EnemyUnreachable))        // 0x103cf31d
+		if (!Cond.Has(EElysiumNpcCond::CanMeleeAttack1)            // 0x103cf2f4 / 0x103cf2fb
+			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack2)         // 0x103cf305 / 0x103cf30c
+			&& Cond.Has(EElysiumNpcCond::EnemyUnreachable))        // 0x103cf316 / 0x103cf31d
 		{
 			SelectTrace(GFileWerewolf, 0x977, 0);
 			return SelectScheduleForHint(MoveHintNode);            // 0x103cf340

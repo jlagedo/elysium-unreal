@@ -29,8 +29,9 @@
 
 namespace
 {
-	// `s_E__Vampire_main_dlls_AI_BaseNPC__105cde88`, the `+0x1b30` file every exit of this body stamps.
-	const TCHAR* const GBaseSelectFile = TEXT("AI_BaseNPC.cpp");
+	// `0x105cde88` "E:\Vampire\main\dlls\AI_BaseNPC_Schedule.cpp", the `+0x1b30` file every exit of
+	// this body stamps.
+	const TCHAR* const GBaseSelectFile = TEXT("AI_BaseNPC_Schedule.cpp");
 
 	// `0x1049a1a0` f64 = 60.0 — the case-3 facing test's scale (`0x1028a5d1 FMUL double ptr`). Not a
 	// row of `ElysiumNpcKernelTunables.h` (its 60.0 is the f32 cell `0x104492a4`, a different cell);
@@ -68,12 +69,12 @@ namespace
 
 }
 
-int32 FElysiumNpcBase::SelectTrace(const TCHAR* File, int32 Line, int32 Schedule)
+int32 FElysiumNpcBase::SelectTrace(const TCHAR* File, int32 Line, int32 Answer)
 {
 	// `+0x1b30 = __FILE__`, `+0x1b34 = __LINE__` — ABSENT words; the account goes to the trace.
 	RecordScheduleEvent(FString::Printf(TEXT("SelectSchedule sel %d %s:0x%x -> 0x%x"),
-		SelectScheduleSelector, File, Line, Schedule));
-	return Schedule;
+		SelectScheduleSelector, File, Line, Answer));
+	return Answer;
 }
 
 bool FElysiumNpcBase::SelectBecomeClientRagdoll()
@@ -115,18 +116,18 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 	switch (NpcStateRetail())                       // 0x1028a383 / 0x1028a396 JA / 0x1028a39c table
 	{
 	case 0:                                         // 0x1028a3a3
-		Warning = TEXT("NPC_STATE_IS_NONE!\n");
+		Warning = TEXT("NPC_STATE IS NONE!\n");         // 0x105ce114, verbatim
 		break;
 	case 1:                                         // 0x1028a3c8 — IDLE
-		if (Cond.Has(EElysiumNpcCond::HearDanger)           // 0x1028a3d3
-			|| Cond.Has(EElysiumNpcCond::HearCombat)        // 0x1028a3e4
-			|| Cond.Has(EElysiumNpcCond::HearWorld)         // 0x1028a3f5
-			|| Cond.Has(EElysiumNpcCond::HearBulletImpact)  // 0x1028a406
-			|| Cond.Has(EElysiumNpcCond::HearPlayer))       // 0x1028a417
+		if (Cond.Has(EElysiumNpcCond::HearDanger)           // 0x1028a3cc CALL / 0x1028a3d3
+			|| Cond.Has(EElysiumNpcCond::HearCombat)        // 0x1028a3dd CALL / 0x1028a3e4
+			|| Cond.Has(EElysiumNpcCond::HearWorld)         // 0x1028a3ee CALL / 0x1028a3f5
+			|| Cond.Has(EElysiumNpcCond::HearBulletImpact)  // 0x1028a3ff CALL / 0x1028a406
+			|| Cond.Has(EElysiumNpcCond::HearPlayer))       // 0x1028a410 CALL / 0x1028a417
 		{
 			return SelectTrace(GBaseSelectFile, 0xe5b, GBaseSchedAlertFace);   // 0x1028a4c9
 		}
-		if (Cond.Has(EElysiumNpcCond::GiveWay))             // 0x1028a428
+		if (Cond.Has(EElysiumNpcCond::GiveWay))             // 0x1028a421 CALL / 0x1028a428
 		{
 			return SelectTrace(GBaseSelectFile, 0xe60, GBaseSchedGiveWay);     // 0x1028a42a
 		}
@@ -134,7 +135,7 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 		{
 			return SelectTrace(GBaseSelectFile, 0xe65, ElysiumSched::IDLE_STAND);  // 0x1028a454
 		}
-		if (Cond.Has(EElysiumNpcCond::LightDamage)          // 0x1028a47a
+		if (Cond.Has(EElysiumNpcCond::LightDamage)          // 0x1028a473 CALL / 0x1028a47a
 			&& SelectWeightedSequenceForActivity(GBaseSelectActSmallFlinch) != INDEX_NONE)  // 0x1028a48a
 		{
 			Cognition.bCondTookDamage = false;              // 0x1028a48c
@@ -143,20 +144,15 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 		return SelectTrace(GBaseSelectFile, 0xe70, ElysiumSched::IDLE_WALK);   // 0x1028a4ae
 	case 2:                                         // 0x1028a639 — COMBAT
 	{
-		if (Cond.Has(EElysiumNpcCond::NewEnemy))                    // 0x1028a644
+		if (Cond.Has(EElysiumNpcCond::NewEnemy))                    // 0x1028a63d CALL / 0x1028a644
 		{
 			return SelectTrace(GBaseSelectFile, 0xe9d, GBaseSchedWakeAngry);   // 0x1028a646
 		}
-		if (Cond.Has(EElysiumNpcCond::EnemyDead))           // 0x1028a66e
+		if (Cond.Has(EElysiumNpcCond::EnemyDead))           // 0x1028a665 CALL / 0x1028a66e
 		{
 			ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());   // 0x1028a672
-			// 0x1028a679 `ChooseEnemy` — the port's body takes the Troika NPC (it is the only
-			// line that stands one); a base-only NPC has no candidate store and chooses nothing.
-			FElysiumNpc* const Troika = AsNpc();
-			const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-			const bool bChose = Troika != nullptr
-				&& ElysiumNpcEnemy::ChooseEnemy(*Troika, Cognition.Conditions, Now);
-			if (bChose)                                     // 0x1028a682
+			// 0x1028a679 `ChooseEnemy` (`0x10279dd0`, ported by L11 on the base).
+			if (ElysiumNpcEnemy::ChooseEnemy(*this))        // 0x1028a682
 			{
 				Cognition.Conditions.Clear(EElysiumNpcCond::EnemyDead);   // 0x1028a686
 				return SelectNewScheduleRetail();           // 0x1028a68e tail JMP 0x1028a260
@@ -164,8 +160,8 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			SetState(3);                                    // 0x1028a695 CALL 0x1026e340(3)
 			return SelectNewScheduleRetail();               // 0x1028a69d tail JMP 0x1028a260
 		}
-		if ((Cond.Has(EElysiumNpcCond::LightDamage)         // 0x1028a6ab
-				|| Cond.Has(EElysiumNpcCond::HeavyDamage))  // 0x1028a6b8
+		if ((Cond.Has(EElysiumNpcCond::LightDamage)         // 0x1028a6a4 CALL / 0x1028a6ab
+				|| Cond.Has(EElysiumNpcCond::HeavyDamage))  // 0x1028a6b1 CALL / 0x1028a6b8
 			&& (BaseScheduleHost.MemoryBits & 0x40u) == 0   // 0x1028a6c1 TEST byte [+0x5d8c],0x40
 			&& SelectWeightedSequenceForActivity(GBaseSelectActSmallFlinch) != INDEX_NONE)  // 0x1028a6d1
 		{
@@ -175,9 +171,9 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 		FElysiumEntity* const Enemy = GetEnemy();           // 0x1028a6fa slot 167
 		if (IRelationType(Enemy) == GBaseSelectDispositionFear)   // 0x1028a703 slot 404 / 0x1028a711
 		{
-			if (!Cond.Has(EElysiumNpcCond::SeeEnemy)            // 0x1028a71a
-				&& !Cond.Has(EElysiumNpcCond::LightDamage)      // 0x1028a727
-				&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a734
+			if (!Cond.Has(EElysiumNpcCond::SeeEnemy)            // 0x1028a713 CALL / 0x1028a71a
+				&& !Cond.Has(EElysiumNpcCond::LightDamage)      // 0x1028a720 CALL / 0x1028a727
+				&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a72d CALL / 0x1028a734
 			{
 				return SelectTrace(GBaseSelectFile, 0xec5, GBaseSchedFearFace);   // 0x1028a736
 			}
@@ -185,41 +181,44 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			FearSound();                                    // 0x1028a75c slot 492
 			return SelectTrace(GBaseSelectFile, 0xec1, GBaseSchedRunFromEnemy);   // 0x1028a762
 		}
-		if (!Cond.Has(EElysiumNpcCond::SeeEnemy))           // 0x1028a786
+		if (!Cond.Has(EElysiumNpcCond::SeeEnemy))           // 0x1028a77d CALL / 0x1028a786
 		{
-			if (!Cond.Has(EElysiumNpcCond::EnemyOccluded))  // 0x1028a79b
+			// ENEMY_OCCLUDED set -> `0x1028a7ae` (0xed4 CHASE_ENEMY); clear -> `0x1028a79d` (0xecf
+			// COMBAT_FACE).
+			if (!Cond.Has(EElysiumNpcCond::EnemyOccluded))  // 0x1028a78a CALL / 0x1028a79b
 			{
-				return SelectTrace(GBaseSelectFile, 0xecf, GBaseSchedCombatFace);   // 0x1028a7ae
+				return SelectTrace(GBaseSelectFile, 0xecf, GBaseSchedCombatFace);   // 0x1028a79d
 			}
-			return SelectTrace(GBaseSelectFile, 0xed4, GBaseSchedChaseEnemy);      // 0x1028a79d
+			return SelectTrace(GBaseSelectFile, 0xed4, GBaseSchedChaseEnemy);      // 0x1028a7ae
 		}
-		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack))    // 0x1028a7c8
+		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack))    // 0x1028a7c1 CALL / 0x1028a7c8
 		{
 			return SelectTrace(GBaseSelectFile, 0xed9, GBaseSchedBackAwayFromEnemy);         // 0x1028a7ca
 		}
-		if (Cond.Has(EElysiumNpcCond::CanRangeAttack1))     // 0x1028a7f0
+		if (Cond.Has(EElysiumNpcCond::CanRangeAttack1))     // 0x1028a7e9 CALL / 0x1028a7f0
 		{
 			return SelectTrace(GBaseSelectFile, 0xee0, GBaseSchedRangeAttack1);     // 0x1028a7f2
 		}
-		if (Cond.Has(EElysiumNpcCond::CanRangeAttack2))     // 0x1028a818
+		if (Cond.Has(EElysiumNpcCond::CanRangeAttack2))     // 0x1028a811 CALL / 0x1028a818
 		{
 			return SelectTrace(GBaseSelectFile, 0xee4, GBaseSchedRangeAttack2);     // 0x1028a81a
 		}
-		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack1))     // 0x1028a840
+		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack1))     // 0x1028a839 CALL / 0x1028a840
 		{
 			return SelectTrace(GBaseSelectFile, 0xee8, GBaseSchedMeleeAttack1);     // 0x1028a842
 		}
-		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack2))     // 0x1028a868
+		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack2))     // 0x1028a861 CALL / 0x1028a868
 		{
 			return SelectTrace(GBaseSelectFile, 0xeec, GBaseSchedMeleeAttack2);     // 0x1028a86a
 		}
-		if (Cond.Has(EElysiumNpcCond::NotFacingAttack))     // 0x1028a890
+		if (Cond.Has(EElysiumNpcCond::NotFacingAttack))     // 0x1028a889 CALL / 0x1028a890
 		{
 			return SelectTrace(GBaseSelectFile, 0xef0, GBaseSchedCombatFace);       // 0x1028a892
 		}
 		// 0x1028a8b8 / 0x1028a8c5 — re-tests 0x4f and 0x51, which the ladder above has already
 		// answered, so this pair is always false here: retail's own dead half, reproduced.
-		if (!Cond.Has(EElysiumNpcCond::CanRangeAttack1) && !Cond.Has(EElysiumNpcCond::CanMeleeAttack1))
+		if (!Cond.Has(EElysiumNpcCond::CanRangeAttack1)     // 0x1028a8b1 CALL / 0x1028a8b8
+			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack1)) // 0x1028a8be CALL / 0x1028a8c5
 		{
 			return SelectTrace(GBaseSelectFile, 0xef6, GBaseSchedChaseEnemy);      // 0x1028a8c7
 		}
@@ -227,19 +226,19 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 		break;
 	}
 	case 3:                                         // 0x1028a4e4 — ALERT
-		if (Cond.Has(EElysiumNpcCond::EnemyDead)            // 0x1028a4ef
+		if (Cond.Has(EElysiumNpcCond::EnemyDead)            // 0x1028a4e8 CALL / 0x1028a4ef
 			&& SelectWeightedSequenceForActivity(GBaseSelectActEnemyDead) != INDEX_NONE)  // 0x1028a4ff
 		{
 			return SelectTrace(GBaseSelectFile, 0xe79, GBaseSchedAlertScan);  // 0x1028a501
 		}
-		if (!Cond.Has(EElysiumNpcCond::LightDamage)         // 0x1028a527
-			&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a538
+		if (!Cond.Has(EElysiumNpcCond::LightDamage)         // 0x1028a520 CALL / 0x1028a527
+			&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a531 CALL / 0x1028a538
 		{
-			if (!Cond.Has(EElysiumNpcCond::HearDanger)          // 0x1028a545
-				&& !Cond.Has(EElysiumNpcCond::HearPlayer)       // 0x1028a552
-				&& !Cond.Has(EElysiumNpcCond::HearWorld)        // 0x1028a55f
-				&& !Cond.Has(EElysiumNpcCond::HearBulletImpact) // 0x1028a56c
-				&& !Cond.Has(EElysiumNpcCond::HearCombat))      // 0x1028a579
+			if (!Cond.Has(EElysiumNpcCond::HearDanger)          // 0x1028a53e CALL / 0x1028a545
+				&& !Cond.Has(EElysiumNpcCond::HearPlayer)       // 0x1028a54b CALL / 0x1028a552
+				&& !Cond.Has(EElysiumNpcCond::HearWorld)        // 0x1028a558 CALL / 0x1028a55f
+				&& !Cond.Has(EElysiumNpcCond::HearBulletImpact) // 0x1028a565 CALL / 0x1028a56c
+				&& !Cond.Has(EElysiumNpcCond::HearCombat))      // 0x1028a572 CALL / 0x1028a579
 			{
 				return SelectTrace(GBaseSelectFile, 0xe95, GBaseSchedAlertStand);   // 0x1028a57b
 			}
@@ -272,7 +271,7 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			return SelectTrace(GBaseSelectFile, 0xf13, GBaseSchedAiScript);         // 0x1028a991
 		}
 		// 0x1028a959 GetClassname / 0x1028a966 DevWarning(2, ...)
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Script failed for %s"),
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Script failed for %s"),   // 0x105ce0d4
 			Def != nullptr ? *Def->Classname : TEXT(""));
 		FElysiumScriptedSequence::CineCleanup(*this);   // 0x1028a971 CALL 0x1027d170
 		return SelectTrace(GBaseSelectFile, 0xf10, ElysiumSched::IDLE_STAND);       // 0x1028a976

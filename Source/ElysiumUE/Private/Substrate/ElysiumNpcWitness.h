@@ -146,13 +146,6 @@ namespace ElysiumNpcWitness
 	// of a new supernatural activity count."
 	inline constexpr int32 NosferatuSeverity = 2;
 
-	// The priority the attack arm's `D_HT` row carries. `IRelationPriority` (`0x10333700`) "returns
-	// the row's raw integer, and otherwise returns 5 for a non-null actor" — so 5 is the value an NPC
-	// with no row already arbitrates at, and it is what the corpus's dominant hostile
-	// `player_reaction D_HT 5` (96 rows) writes. Choosing anything else would make a law-driven
-	// hostility outrank or lose to an authored one for no recovered reason.
-	inline constexpr int32 AttackRelationPriority = 5;
-
 	// How long a published global law record stays acceptable.
 	//
 	// CHOSEN, NOT RECOVERED: the records are "expiring" / "short-lived" with no stated lifetime. 4.0 s
@@ -387,42 +380,4 @@ namespace ElysiumNpcWitness
 	// predicate exists so the two have one named home rather than being absent.
 	bool IsLawPassSuppressed(const FElysiumNpc& Npc);
 
-	// ------------------------------------------------------------------------------------------
-	// The select half — the only side that submits an incident
-	// ------------------------------------------------------------------------------------------
-
-	/**
-	 * Schedule selection's law branch. Returns the flee program when one applies and `None`
-	 * otherwise, and performs the recovered submission transaction on the way past:
-	 *
-	 *   * require the retained offender still be the player;
-	 *   * submit the retained severity/origin to `ElysiumLaw`'s consumer (or, on the supernatural
-	 *     flee-only path, queue the player-owned scare record instead);
-	 *   * copy the player's current act count into this NPC's processed count.
-	 *
-	 * CHOSEN, NOT RECOVERED — the hostility mechanism behind conditions 32/34. The recovered material
-	 * states that the attack thresholds are tested and that the corresponding condition is raised,
-	 * and names no schedule and no enemy write for the result. What this installs instead is a `D_HT`
-	 * entity relationship row toward the player at priority 5, and then nothing: the ordinary enemy
-	 * transaction (`ElysiumNpcEnemy`) does the rest on the next pass. The reasoning is that
-	 * `BestEnemy`'s eligibility gate is exactly `D_HT`/`D_FR`, so a relationship row is the ONLY
-	 * documented way for a non-hostile NPC to become able to select the player at all, and priority 5
-	 * is `IRelationPriority`'s own no-row default for a live actor — the value the corpus's dominant
-	 * `player_reaction D_HT 5` also writes. Force-setting `m_hEnemy` here would bypass the interrupt
-	 * gate, the stickiness test and the arbitration the recovered transaction is built out of, which
-	 * is a larger invention than the row.
-	 *
-	 * CHOSEN, NOT RECOVERED — attack outranks flee when a channel raises both. Nothing states an
-	 * order. The corpus barely poses the question (the two non-6 populations are near-disjoint: 103
-	 * rows author `pl_criminal_attack 1` while 92 author `pl_criminal_flee 5`), and an NPC that
-	 * turned hostile and then ran the retreat program in the same pass would abandon the fight it
-	 * just started.
-	 *
-	 * SEAM (named, not implemented): the recovered `CRIMSUSP` family is six schedules whose contents
-	 * the survey does not decode, and the `FLEE`/`COWER` families are eleven and thirteen more in the
-	 * same state. `SCHED_TROIKA_RUN_AWAY` (`0xb9`) is the one registered retreat program in this
-	 * runtime and is what the flee arm selects; it is a stand-in for a named family, and it is the
-	 * program that changes when one of those is decoded, not the branch.
-	 */
-	int32 SelectLawSchedule(FElysiumNpc& Npc, double Now);
 }

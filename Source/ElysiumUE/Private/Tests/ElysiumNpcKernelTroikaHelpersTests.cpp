@@ -648,29 +648,28 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 		return false;
 	}
 
-	// `0x102b8980` — the alert rung ladder, letter by letter.
+	// `0x102b8980` — the alert rung ladder: each rung's schedule id (0x4c, 0x4d, 0x51/0x52).
 	Npc->FullInvestigate = 0;
 	Npc->AlertLevel = 0;
 	Npc->BaseScheduleHost.MemoryBits = 0;
 	TestEqual(TEXT("level 0 advances to 1 and grades L"),
-		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('L')));
+		Npc->AdvanceAlertLevelGrade(), 0x4c);
 	TestEqual(TEXT("and wrote m_eAlertLevel 1"), Npc->AlertLevel, 1);
 	TestEqual(TEXT("level 1 advances to 2 and grades M"),
-		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('M')));
+		Npc->AdvanceAlertLevelGrade(), 0x4d);
 	TestEqual(TEXT("and wrote m_eAlertLevel 2"), Npc->AlertLevel, 2);
 	TestEqual(TEXT("level 2 pins at 3 and grades Q"),
-		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('Q')));
+		Npc->AdvanceAlertLevelGrade(), 0x51);
 	TestEqual(TEXT("and wrote m_eAlertLevel 3"), Npc->AlertLevel, 3);
 	Npc->BaseScheduleHost.MemoryBits = 0x8000000u;
 	TestEqual(TEXT("the +0x5d8c bit 0x8000000 turns Q into R"),
-		static_cast<int32>(Npc->AdvanceAlertLevelGrade()),
-		static_cast<int32>(TEXT('R')));
+		Npc->AdvanceAlertLevelGrade(), 0x52);
 	// `m_bFullInvestigate` writes the level BEFORE the switch reads it, so it always lands on 'Q'.
 	Npc->BaseScheduleHost.MemoryBits = 0;
 	Npc->AlertLevel = 0;
 	Npc->FullInvestigate = 1;
 	TestEqual(TEXT("full_investigate forces rung 3 ahead of the switch"),
-		static_cast<int32>(Npc->AdvanceAlertLevelGrade()), static_cast<int32>(TEXT('Q')));
+		Npc->AdvanceAlertLevelGrade(), 0x51);
 	Npc->FullInvestigate = 0;
 
 	// `0x102bf560` — the detected-attack notice. `m_bIgnoreDetectedAttack` refuses everything;

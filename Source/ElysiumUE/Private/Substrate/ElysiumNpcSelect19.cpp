@@ -233,6 +233,10 @@ bool FElysiumNpc::SelectRunningScheduleIs(int32 RetailId)
 
 uint32 FElysiumNpc::SelectActiveWeaponWord() const
 {
+	// The weapon `+0x5a0` word (slot 360). No weapon, no word (`0x10385008 XOR EAX,EAX`); else the
+	// weapon record's capability. DUPLICATE READ, listed for consolidation: family Motor's
+	// `ActiveWeaponCapabilityWord` is a seam answering 0 for the same word, and answering the real
+	// word there moves the Combat10 ranged pre-pass (`0x102b86ba`) and its tests — not this lane's.
 	if (ActiveWeaponEntity() == nullptr)
 	{
 		return 0;
@@ -291,69 +295,84 @@ int32 FElysiumNpc::PreSelectSchedule()
 		{
 			return SelectTrace(GTroikaFile, 0x481b, GSchedStartCombatSquad);   // 0x102ae9a5
 		}
-		if (Slot167Enemy(*this) != nullptr)                        // 0x102ae9cd
+		if (Slot167Enemy(*this) != nullptr)                        // 0x102ae9c5 CALL [+0x29c] / 0x102ae9cd
 		{
+			// 0x102ae9d3 CALL [+0x29c] (the enemy re-read as the argument), then SquadNewEnemy.
 			++PreSelectSquadNewEnemyCalls;                         // 0x102ae9dc CALL SquadNewEnemy
 		}
 	}
 
-	if (HasInterrupt(EElysiumNpcCond::WasBumped))                  // 0x102ae9ec
+	if (HasInterrupt(EElysiumNpcCond::WasBumped))                  // 0x102ae9e5 CALL 0x1001482b / 0x102ae9ec
 	{
 		// `0x101e3df0(&DAT_10739a4c, this)`: every active discipline effect whose record byte
 		// `+0x33` is set (`ShouldRemove_OnWasBumped`) is removed.
 		ElysiumDisciplines::NotifyBumped(*this);                   // 0x102ae9f4
 	}
 	if (Schedule.Current != ElysiumScheduleId::None                // 0x102aea01
-		&& SelectRunningScheduleIs(GSchedMesmerize))               // 0x102aea15
+		&& SelectRunningScheduleIs(GSchedMesmerize))               // 0x102aea0a CALL 0x10014f6a / 0x102aea15
 	{
 		++PreSelectMesmerizeSweeps;                                // 0x102aea1d CALL 0x101e3ee0 (seam)
 	}
 
 	if (NpcStateRetail() == GStateCombat)                          // 0x102aea29
 	{
-		if (HasInterrupt(EElysiumNpcCond::SupernaturalAttackLevel))   // 0x102aea3a
+		if (HasInterrupt(EElysiumNpcCond::SupernaturalAttackLevel))   // 0x102aea33 CALL / 0x102aea3a
 		{
 			FElysiumNpcWitnessChannel& Channel = Witness.Channel(ElysiumNpcWitness::EChannel::Supernatural);
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102aea4f..69
-			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);          // 0x102aea7a..92
+			// `m_hClosestPlayer` (+0x628c) resolved: 0x102aea4f JZ / 0x102aea69 JNZ serial.
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);
+			// The offender (+0x6390) resolved: 0x102aea7a JZ / 0x102aea92 JNZ serial.
+			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);
 			if (Player == Offender)                                // 0x102aea9c — equal INCLUDING both null
 			{
 				// `PlayerSupernaturalIncident(player, m_iPLSupernaturalLevelWitnessed, this,
-				// m_vecPLSupernaturalLocation)` (`0x102aead5`, `0x1017f4a0`). Retail calls it on a
-				// null player when both handles fail; the port skips the call there (crash guard).
+				// m_vecPLSupernaturalLocation)` (`0x102aead5`, `0x1017f4a0`), the receiver re-resolved
+				// from +0x628c (0x102aeaa7 JZ / 0x102aeabe JNZ). Retail calls it on a null player when
+				// both handles fail; the port skips the call there (crash guard).
 				if (FElysiumPlayer* const Receiver = SelectResolvePlayer(Senses.Memory.ClosestPlayer))
 				{
 					ElysiumLaw::PlayerSupernaturalIncident(*Receiver, Channel.Level, Handle, Channel.Location);
 				}
-				Channel.Processed = SupernaturalActCount();       // 0x102aeb0e CALL 0x1017e740
+				// The act count off the player re-resolved again (0x102aeae3 JZ / 0x102aeb00 JNZ),
+				// 0x102aeb08 CALL 0x10003116 -> 0x1017e740, stored at 0x102aeb0d (+0x6370).
+				Channel.Processed = SupernaturalActCount();
 			}
+			// Offender re-resolved for each call: 0x102aeb22 JZ / 0x102aeb39 JNZ, 0x102aeb55 JZ /
+			// 0x102aeb72 JNZ.
 			Slot596(Resolve(*this, Channel.Offender));             // 0x102aeb46 vtable +0x950
 			Slot597(Resolve(*this, Channel.Offender), 5);          // 0x102aeb81 vtable +0x954
 		}
-		if (HasInterrupt(EElysiumNpcCond::CriminalAttackLevel))    // 0x102aeb92
+		if (HasInterrupt(EElysiumNpcCond::CriminalAttackLevel))    // 0x102aeb8b CALL / 0x102aeb92
 		{
 			FElysiumNpcWitnessChannel& Channel = Witness.Channel(ElysiumNpcWitness::EChannel::Criminal);
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102aeba7..c1
-			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);          // 0x102aebd2..ea
+			// +0x628c resolved (0x102aeba7 JZ / 0x102aebc1 JNZ); offender +0x638c (0x102aebd2 JZ /
+			// 0x102aebea JNZ).
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);
+			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);
 			if (Player == Offender)                                // 0x102aebf4
 			{
-				// The level is `0x1042fe90` over the `+0x6364` unscramble; the port stores it PLAIN
-				// (`FElysiumNpcWitnessChannel::Level`, `SecureUnscrambleLevel`), so the decode is the
-				// identity here.
+				// The level is `0x1042fe90` over the `+0x6364` unscramble (0x102aec53 CALL
+				// 0x100090f2); the port stores it PLAIN (`FElysiumNpcWitnessChannel::Level`,
+				// `SecureUnscrambleLevel`), so the decode is the identity here. Receiver re-resolved
+				// from +0x628c (0x102aec09 JZ / 0x102aec20 JNZ).
 				if (FElysiumPlayer* const Receiver = SelectResolvePlayer(Senses.Memory.ClosestPlayer))
 				{
 					ElysiumLaw::PlayerCriminalIncident(*Receiver, Channel.Level, Handle, Channel.Location);   // 0x102aec5e
 				}
-				Channel.Processed = CriminalActCount();            // 0x102aec97 CALL 0x1017e720
+				// Player re-resolved (0x102aec6c JZ / 0x102aec89 JNZ), 0x102aec91 CALL 0x10006bc2 ->
+				// 0x1017e720, stored at 0x102aec96 (+0x636c).
+				Channel.Processed = CriminalActCount();
 			}
+			// Offender re-resolved for each call: 0x102aecab JZ / 0x102aecc5 JNZ, 0x102aece1 JZ /
+			// 0x102aecfe JNZ.
 			Slot596(Resolve(*this, Channel.Offender));             // 0x102aecd2
 			Slot597(Resolve(*this, Channel.Offender), 5);          // 0x102aed0d
 		}
-		if (Cond.Has(EElysiumNpcCond::OnFire))                     // 0x102aed1e
+		if (Cond.Has(EElysiumNpcCond::OnFire))                     // 0x102aed17 CALL / 0x102aed1e
 		{
 			return SelectTrace(GTroikaFile, 0x4850, GSchedOnFire); // 0x102aed20
 		}
-		if (Slot167Enemy(*this) == nullptr)                        // 0x102aed48
+		if (Slot167Enemy(*this) == nullptr)                        // 0x102aed40 CALL [+0x29c] / 0x102aed48
 		{
 			SetState(bNoAlertState ? GStateIdle : GStateAlert);    // 0x102aed54 / 0x102aed5c CALL 0x1026e340
 			SelectTrace(GTroikaFile, 0x4862, 0);                   // 0x102aed61
@@ -370,20 +389,21 @@ int32 FElysiumNpc::PreSelectSchedule()
 			NpcFlags.Clear(EElysiumNpcFlag2::NO_UNKNOWN_ATTACK);   // 0x102aeddf AND 0x7fffff7f
 			NpcFlags.ClearRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31);
 		}
-		if (Cond.Has(EElysiumNpcCond::NewEnemy)                    // 0x102aedf0
+		if (Cond.Has(EElysiumNpcCond::NewEnemy)                    // 0x102aede9 CALL / 0x102aedf0
 			&& !HasFrenzied(GFrenziedNoCombatStart))               // 0x102aee01
 		{
 			return SelectTrace(GTroikaFile, 0x488c, GSchedStartCombat);   // 0x102aee03
 		}
 	}
 
-	if (Cond.Has(GCondPlayerOnHead)                                // 0x102aee2a
-		&& !IsBusyWithDiscipline())                                // 0x102aee39
+	if (Cond.Has(GCondPlayerOnHead)                                // 0x102aee23 CALL / 0x102aee2a
+		&& !IsBusyWithDiscipline())                                // 0x102aee32 CALL 0x1000caae / 0x102aee39
 	{
 		Cognition.Conditions.Clear(GCondPlayerOnHead);             // 0x102aee43 CALL 0x10269b50
 		if (!HasLiveDialogPartner())                               // 0x102aee51 / 0x102aee6e / 0x102aee73
 		{
-			// 0x102aee81 `cvar_debug_player_on_head` slot 1 (`IsCommand`, false) then `[0xb]`.
+			// 0x102aee81 `cvar_debug_player_on_head` slot 1 (`IsCommand`, false for a ConVar;
+			// 0x102aee86 JZ — true would read mode 0) then `[0xb]`.
 			const uint32 Mode = static_cast<uint32>(Select19ConVarInt(ESelect19ConVar::DebugPlayerOnHead));
 			if (Mode <= 3)                                         // 0x102aee98 JA
 			{
@@ -408,26 +428,33 @@ int32 FElysiumNpc::PreSelectSchedule()
 
 	if (NpcStateRetail() == GStateCrimSuspicion)                   // 0x102aef42
 	{
-		if (HasInterrupt(EElysiumNpcCond::CriminalAttackLevel))    // 0x102aef53
+		if (HasInterrupt(EElysiumNpcCond::CriminalAttackLevel))    // 0x102aef4c CALL / 0x102aef53
 		{
 			FElysiumNpcWitnessChannel& Channel = Witness.Channel(ElysiumNpcWitness::EChannel::Criminal);
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102aef68..82
-			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);          // 0x102aef93..ab
+			// +0x628c resolved (0x102aef68 JZ / 0x102aef82 JNZ); offender +0x638c (0x102aef93 JZ /
+			// 0x102aefab JNZ).
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);
+			FElysiumEntity* const Offender = Resolve(*this, Channel.Offender);
 			if (Player == Offender)                                // 0x102aefb5
 			{
+				// Level decode 0x102aefdf CALL 0x1000dc06 (identity, see the COMBAT arm); receiver
+				// re-resolved from +0x628c (0x102aeff0 JZ / 0x102af00d JNZ).
 				if (FElysiumPlayer* const Receiver = SelectResolvePlayer(Senses.Memory.ClosestPlayer))
 				{
 					ElysiumLaw::PlayerCriminalIncident(*Receiver, Channel.Level, Handle, Channel.Location);   // 0x102af01e
 				}
-				Channel.Processed = CriminalActCount();            // 0x102af057
+				// Player re-resolved (0x102af02c JZ / 0x102af049 JNZ), 0x102af051 CALL 0x10006bc2,
+				// stored at 0x102af056 (+0x636c).
+				Channel.Processed = CriminalActCount();
 			}
+			// Offender re-resolved (0x102af06b JZ / 0x102af082 JNZ).
 			Slot596(Resolve(*this, Channel.Offender));             // 0x102af08f — no slot 597 in this arm
 		}
-		if (Cond.Has(EElysiumNpcCond::OnFire))                     // 0x102af0a0
+		if (Cond.Has(EElysiumNpcCond::OnFire))                     // 0x102af099 CALL / 0x102af0a0
 		{
 			return SelectTrace(GTroikaFile, 0x48c4, GSchedOnFire); // 0x102af0a2
 		}
-		if (Slot167Enemy(*this) == nullptr)                        // 0x102af0ca
+		if (Slot167Enemy(*this) == nullptr)                        // 0x102af0c2 CALL [+0x29c] / 0x102af0ca
 		{
 			SetState(bNoAlertState ? GStateIdle : GStateAlert);    // 0x102af0d6 / 0x102af0de
 			SelectTrace(GTroikaFile, 0x48d6, 0);
@@ -473,11 +500,11 @@ int32 FElysiumNpc::PreSelectSchedule()
 	switch (NpcStateRetail())                                      // 0x102af1f5
 	{
 	case GStateIdle:                                               // 0x102af1fc -> 0x102af26d
-		if (Cond.Has(EElysiumNpcCond::Knockback))                  // 0x102af278
+		if (Cond.Has(EElysiumNpcCond::Knockback))                  // 0x102af271 CALL / 0x102af278
 		{
 			return SelectTrace(GTroikaFile, 0x4915, GSchedKnockback);   // 0x102af27a
 		}
-		if (Cond.Has(EElysiumNpcCond::Comfort))                    // 0x102af2a1
+		if (Cond.Has(EElysiumNpcCond::Comfort))                    // 0x102af29a CALL / 0x102af2a1
 		{
 			return SelectTrace(GTroikaFile, 0x4919, GSchedComfort);     // 0x102af2a3
 		}
@@ -499,7 +526,7 @@ int32 FElysiumNpc::PreSelectSchedule()
 		}
 		break;
 	case GStateCombat:                                             // 0x102af1ff -> 0x102af244
-		if (Cond.Has(EElysiumNpcCond::Knockback))                  // 0x102af24f
+		if (Cond.Has(EElysiumNpcCond::Knockback))                  // 0x102af248 CALL / 0x102af24f
 		{
 			return SelectTrace(GTroikaFile, 0x493c, GSchedKnockback);   // 0x102af251
 		}
@@ -537,7 +564,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 	};
 
 	SelectScheduleSelector = 2;                                    // 0x102af66c MOV [ESI+0x1b2c],2
-	switch (NpcStateRetail())                                      // 0x102af676 DEC / 0x102af67a JA / table 0x102b0bf0
+	switch (NpcStateRetail())                                      // 0x102af676 DEC / 0x102af67a JA / 0x102af680 table 0x102b0bf0
 	{
 	// ---------------------------------------------------------------------------------------------
 	case GStateIdle:                                               // 0x102af687
@@ -562,7 +589,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 				return SelectTrace(GTroikaFile, 0x498d, PatrolSchedule);   // 0x102af743
 			}
 			UE_LOG(LogElysiumNpcEnt, Log, TEXT("WARNING:  Patrol path for '%s' has no schedule."),
-				*DebugString());                                   // 0x102af6d4 DevMsg
+				*DebugString());                                   // 0x102af6c9 GetDebugName / 0x102af6d4 DevMsg
 			++SelectPatrolPathReleases;                            // 0x102af6e6 CALL 0x1029f5d0
 		}
 		if (bUseInteresting)                                       // 0x102af6f3
@@ -572,15 +599,15 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 			{
 				return SelectTrace(GTroikaFile, 0x49a9, GSchedWalkToPlaceSetup);   // 0x102af713
 			}
-			if (HasInterrupt(EElysiumNpcCond::CrosswalkDontWalk))  // 0x102af76a
+			if (HasInterrupt(EElysiumNpcCond::CrosswalkDontWalk))  // 0x102af763 / 0x102af76a
 			{
 				return SelectTrace(GTroikaFile, 0x4998, GSchedWaitAtCrosswalk);    // 0x102af76c
 			}
-			if (HasInterrupt(EElysiumNpcCond::ShouldInteract))     // 0x102af795
+			if (HasInterrupt(EElysiumNpcCond::ShouldInteract))     // 0x102af78e / 0x102af795
 			{
 				return SelectTrace(GTroikaFile, 0x499c, GSchedInteract);           // 0x102af797
 			}
-			if (HasInterrupt(GCondShouldLoiter))                   // 0x102af7ca
+			if (HasInterrupt(GCondShouldLoiter))                   // 0x102af7b9 / 0x102af7ca
 			{
 				return SelectTrace(GTroikaFile, 0x49a0, GSchedLoiter);             // 0x102af7cc
 			}
@@ -588,7 +615,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		}
 		if (bAllowAlertLookaround)                                 // 0x102af7fc
 		{
-			const int32 Chance = FMath::Min((EnemySightings + 2) * 5, 0x1e);   // 0x102af804..0x102af811
+			const int32 Chance = FMath::Min((EnemySightings + 2) * 5, 0x1e);   // 0x102af804..0x102af811 (0x102af80f JL)
 			if (Roll(99) < Chance)                                 // 0x102af822 / 0x102af827 JLE
 			{
 				return SelectTrace(GTroikaFile, 0x49b4, GSchedAlertLookAround);    // 0x102af829
@@ -616,7 +643,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		if (Cond.Has(EElysiumNpcCond::EnemyDead))                  // 0x102afc2f / 0x102afc38
 		{
 			ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());   // 0x102afc3c
-			if (ElysiumNpcEnemy::ChooseEnemy(*this, Cognition.Conditions, Now))  // 0x102afc43 / 0x102afc4c
+			if (ElysiumNpcEnemy::ChooseEnemy(*this))                   // 0x102afc43 / 0x102afc4c
 			{
 				Cognition.Conditions.Clear(EElysiumNpcCond::EnemyDead);   // 0x102afc50
 				SelectTrace(GTroikaFile, 0x4abf, 0);
@@ -626,8 +653,8 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 			SelectTrace(GTroikaFile, 0x4acb, 0);
 			return SelectNewScheduleRetail();                      // 0x102afca7 JMP 0x10008f80
 		}
-		if ((Cond.Has(EElysiumNpcCond::LightDamage)                // 0x102afcb5
-				|| Cond.Has(EElysiumNpcCond::HeavyDamage))         // 0x102afcc2
+		if ((Cond.Has(EElysiumNpcCond::LightDamage)                // 0x102afcae / 0x102afcb5
+				|| Cond.Has(EElysiumNpcCond::HeavyDamage))         // 0x102afcbb / 0x102afcc2
 			&& (BaseScheduleHost.MemoryBits & GMemoryFlinchSuppressed) == 0   // 0x102afccb
 			&& SelectWeightedSequenceForActivity(GActSmallFlinch) != INDEX_NONE)  // 0x102afcd3 / 0x102afcdb
 		{
@@ -636,9 +663,9 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		}
 		if (IRelationType(Slot167Enemy(*this)) == GDispositionFear)   // 0x102afd06 / 0x102afd0f / 0x102afd1a
 		{
-			if (!Cond.Has(EElysiumNpcCond::SeeEnemy)               // 0x102afd25
-				&& !Cond.Has(EElysiumNpcCond::LightDamage)         // 0x102afd32
-				&& !Cond.Has(EElysiumNpcCond::HeavyDamage))        // 0x102afd3f
+			if (!Cond.Has(EElysiumNpcCond::SeeEnemy)               // 0x102afd1e / 0x102afd25
+				&& !Cond.Has(EElysiumNpcCond::LightDamage)         // 0x102afd2b / 0x102afd32
+				&& !Cond.Has(EElysiumNpcCond::HeavyDamage))        // 0x102afd38 / 0x102afd3f
 			{
 				return SelectTrace(GTroikaFile, 0x4ae6, GSchedFearFace);   // 0x102afd41
 			}
@@ -646,37 +673,39 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 			FearSound();                                           // 0x102afd6a slot 492
 			return SelectTrace(GTroikaFile, 0x4ae2, GSchedRunFromEnemy);   // 0x102afd70
 		}
-		if (Cond.Has(EElysiumNpcCond::NoPrimaryAmmo)               // 0x102afd97
-			&& ActiveWeaponEntity() != nullptr                     // 0x102afda2
-			&& ActiveWeaponReserveAmmo() > 0)                      // 0x102afdb4 CALL 0x103346c0(weapon+0x744) / 0x102afdbb JLE
+		if (Cond.Has(EElysiumNpcCond::NoPrimaryAmmo)               // 0x102afd90 / 0x102afd97
+			&& ActiveWeaponEntity() != nullptr                     // 0x102afd9b / 0x102afda2
+			&& ActiveWeaponReserveAmmo() > 0)                      // 0x102afda6 / 0x102afdb4 CALL 0x103346c0(weapon+0x744) / 0x102afdbb JLE
 		{
 			return SelectTrace(GTroikaFile, 0x4aeb, GSchedHideAndReload);   // 0x102afdbd
 		}
 		// The gate is the unnamed dword `+0x6444` (`ShootAtHintNode`); the ladder runs when it is
 		// zero or `WAITING_ATTACK_TIME` stands (second judge, pass R).
 		if (ScheduleHost.ShootAtHintNode != 0                      // 0x102afddb / 0x102afde3
-			&& !Cond.Has(EElysiumNpcCond::WaitingAttackTime))      // 0x102afdf0
+			&& !Cond.Has(EElysiumNpcCond::WaitingAttackTime))      // 0x102afde9 / 0x102afdf0
 		{
+			// 0x102afdf4 / 0x102afe03 weapon, 0x102afe0c `+0x5a0` capability word.
 			if ((SelectActiveWeaponWord() & GWeaponRangedBits) != 0)   // 0x102afdfb / 0x102afe15 TEST AH,0x60
 			{
 				return SelectTrace(GTroikaFile, 0x4af3, GSchedShootAtHint);   // 0x102afe1b
 			}
 			break;                                                 // 0x102afdfb / 0x102afe15 -> 0x102b0be3
 		}
-		if (!Cond.Has(EElysiumNpcCond::SeeEnemy))                  // 0x102afe46
+		if (!Cond.Has(EElysiumNpcCond::SeeEnemy))                  // 0x102afe3d / 0x102afe46
 		{
-			if (!Cond.Has(EElysiumNpcCond::EnemyOccluded))         // 0x102afe5b
+			if (!Cond.Has(EElysiumNpcCond::EnemyOccluded))         // 0x102afe4a / 0x102afe5b
 			{
 				return SelectTrace(GTroikaFile, 0x4b02, GSchedCombatFace);    // 0x102afe5d
 			}
 			return SelectTrace(GTroikaFile, 0x4b07, GSchedChaseEnemy);        // 0x102afe71
 		}
-		if (Cond.Has(EElysiumNpcCond::TooCloseForRanged)           // 0x102afe8e
-			|| Cond.Has(EElysiumNpcCond::TooCloseToAttack))        // 0x102afe9f
+		if (Cond.Has(EElysiumNpcCond::TooCloseForRanged)           // 0x102afe87 / 0x102afe8e
+			|| Cond.Has(EElysiumNpcCond::TooCloseToAttack))        // 0x102afe98 / 0x102afe9f
 		{
+			// 0x102b0180 / 0x102b018b weapon, 0x102b0194 `+0x5a0` capability word.
 			if ((SelectActiveWeaponWord() & GWeaponRangedBits) != 0   // 0x102b0187 / 0x102b019d
-				&& !Cond.Has(EElysiumNpcCond::WaitingAttackTime)   // 0x102b01aa
-				&& !Cond.Has(EElysiumNpcCond::WeaponBlockedByFriend))   // 0x102b01b7
+				&& !Cond.Has(EElysiumNpcCond::WaitingAttackTime)   // 0x102b01a3 / 0x102b01aa
+				&& !Cond.Has(EElysiumNpcCond::WeaponBlockedByFriend))   // 0x102b01b0 / 0x102b01b7
 			{
 				if (ShouldDodgeRangedAttack())                     // 0x102b01bb CALL 0x102b7f40 / 0x102b01cc
 				{
@@ -686,7 +715,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 			}
 			return SelectTrace(GTroikaFile, 0x4b1f, GSchedBackAwayFromEnemy);              // 0x102b01f6
 		}
-		if (Cond.Has(EElysiumNpcCond::CanRangeAttack1))            // 0x102afeb0
+		if (Cond.Has(EElysiumNpcCond::CanRangeAttack1))            // 0x102afea9 / 0x102afeb0
 		{
 			if (RangedDisciplineGate(this))                        // 0x102afebc CALL 0x101e3f50 / 0x102afec3
 			{
@@ -700,48 +729,48 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 			}
 			return SelectTrace(GTroikaFile, 0x4b32, GSchedRangeAttack1);                   // 0x102aff32
 		}
-		if (Cond.Has(EElysiumNpcCond::CanRangeAttack2))            // 0x102aff5b
+		if (Cond.Has(EElysiumNpcCond::CanRangeAttack2))            // 0x102aff54 / 0x102aff5b
 		{
 			return SelectTrace(GTroikaFile, 0x4b37, GSchedRangeAttack2);      // 0x102aff5d
 		}
-		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack1))            // 0x102aff86
+		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack1))            // 0x102aff7f / 0x102aff86
 		{
 			return SelectTrace(GTroikaFile, 0x4b3b, GSchedMeleeAttack1);      // 0x102aff88
 		}
-		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack2))            // 0x102affb1
+		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack2))            // 0x102affaa / 0x102affb1
 		{
 			return SelectTrace(GTroikaFile, 0x4b3f, GSchedMeleeAttack2);      // 0x102affb3
 		}
-		if (Cond.Has(EElysiumNpcCond::NotFacingAttack))            // 0x102affdc
+		if (Cond.Has(EElysiumNpcCond::NotFacingAttack))            // 0x102affd5 / 0x102affdc
 		{
 			return SelectTrace(GTroikaFile, 0x4b43, GSchedCombatFace);        // 0x102affde
 		}
-		if (Cond.Has(EElysiumNpcCond::TooFarToAttack))             // 0x102b0007
+		if (Cond.Has(EElysiumNpcCond::TooFarToAttack))             // 0x102b0000 / 0x102b0007
 		{
 			return SelectTrace(GTroikaFile, 0x4b48, GSchedChaseEnemy);        // 0x102b0009
 		}
-		if (Cond.Has(EElysiumNpcCond::WeaponBlockedByFriend)       // 0x102b0032
-			|| Cond.Has(EElysiumNpcCond::WaitingAttackTime))       // 0x102b0043
+		if (Cond.Has(EElysiumNpcCond::WeaponBlockedByFriend)       // 0x102b002b / 0x102b0032
+			|| Cond.Has(EElysiumNpcCond::WaitingAttackTime))       // 0x102b003c / 0x102b0043
 		{
 			return SelectTrace(GTroikaFile, 0x4b4d, GSchedWaitForClearShot);  // 0x102b0160
 		}
-		if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))           // 0x102b0054
+		if (Cond.Has(EElysiumNpcCond::EnemyUnreachable))           // 0x102b004d / 0x102b0054
 		{
 			return SelectTrace(GTroikaFile, 0x4b52, GSchedTakeCoverFromEnemy);   // 0x102b0056
 		}
-		if (Cond.Has(EElysiumNpcCond::WeaponSightOccluded)         // 0x102b007f
-			&& (SelectActiveWeaponWord() & GWeaponRangedBits) != 0)   // 0x102b008a / 0x102b00a0
+		if (Cond.Has(EElysiumNpcCond::WeaponSightOccluded)         // 0x102b0078 / 0x102b007f
+			&& (SelectActiveWeaponWord() & GWeaponRangedBits) != 0)   // 0x102b0083 / 0x102b008e / 0x102b0097 / 0x102b008a / 0x102b00a0
 		{
 			return SelectTrace(GTroikaFile, 0x4b60, GSchedForcedRangeAttack1);   // 0x102b00a2
 		}
-		if (Cond.Has(EElysiumNpcCond::HaveEnemyLos)                // 0x102b00cb
-			&& ActiveWeaponEntity() != nullptr)                    // 0x102b00d6
+		if (Cond.Has(EElysiumNpcCond::HaveEnemyLos)                // 0x102b00c4 / 0x102b00cb
+			&& ActiveWeaponEntity() != nullptr)                    // 0x102b00cf / 0x102b00d6
 		{
-			if ((SelectActiveWeaponWord() & GWeaponRangedBits) != 0)   // 0x102b00ec
+			if ((SelectActiveWeaponWord() & GWeaponRangedBits) != 0)   // 0x102b00da / 0x102b00e3 / 0x102b00ec
 			{
 				return SelectTrace(GTroikaFile, 0x4b73, GSchedForcedRangeAttack1);   // 0x102b00ee
 			}
-			if ((SelectActiveWeaponWord() & GWeaponMeleeBits) != 0)    // 0x102b0122
+			if ((SelectActiveWeaponWord() & GWeaponMeleeBits) != 0)    // 0x102b010e / 0x102b0117 / 0x102b0122
 			{
 				return SelectTrace(GTroikaFile, 0x4b77, GSchedMeleeAdvance);         // 0x102b0124
 			}
@@ -759,7 +788,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		{
 			return Damage;
 		}
-		if (Cond.Has(EElysiumNpcCond::DetectedAttack))             // 0x102af923
+		if (Cond.Has(EElysiumNpcCond::DetectedAttack))             // 0x102af91c / 0x102af923
 		{
 			return SelectTrace(GTroikaFile, 0x49e8, GSchedTurnToDetectedAttack);   // 0x102af925
 		}
@@ -778,23 +807,23 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 	// ---------------------------------------------------------------------------------------------
 	case 8:                                                        // 0x102b0250 — FLEE
 	{
-		if (Cond.Has(GCondCoverFailure))                           // 0x102b025b
+		if (Cond.Has(GCondCoverFailure))                           // 0x102b0254 / 0x102b025b
 		{
 			return SelectTrace(GTroikaFile, 0x4be4, GSchedFleeAndCower);   // 0x102b025d
 		}
-		if (!Cond.Has(EElysiumNpcCond::SeeEnemy)                   // 0x102b0286
-			&& !Cond.Has(EElysiumNpcCond::SeeFear)                 // 0x102b0297
-			&& !Cond.Has(EElysiumNpcCond::LightDamage)             // 0x102b02a8
-			&& !Cond.Has(EElysiumNpcCond::HeavyDamage)             // 0x102b02b9
-			&& !Cond.Has(EElysiumNpcCond::RepeatedDamage)          // 0x102b02ca
-			&& !Cond.Has(EElysiumNpcCond::SupernaturalFleeLevel)   // 0x102b02db
-			&& !Cond.Has(EElysiumNpcCond::CriminalFleeLevel))      // 0x102b02ec
+		if (!Cond.Has(EElysiumNpcCond::SeeEnemy)                   // 0x102b027f / 0x102b0286
+			&& !Cond.Has(EElysiumNpcCond::SeeFear)                 // 0x102b0290 / 0x102b0297
+			&& !Cond.Has(EElysiumNpcCond::LightDamage)             // 0x102b02a1 / 0x102b02a8
+			&& !Cond.Has(EElysiumNpcCond::HeavyDamage)             // 0x102b02b2 / 0x102b02b9
+			&& !Cond.Has(EElysiumNpcCond::RepeatedDamage)          // 0x102b02c3 / 0x102b02ca
+			&& !Cond.Has(EElysiumNpcCond::SupernaturalFleeLevel)   // 0x102b02d4 / 0x102b02db
+			&& !Cond.Has(EElysiumNpcCond::CriminalFleeLevel))      // 0x102b02e5 / 0x102b02ec
 		{
-			if (Cond.Has(EElysiumNpcCond::DetectedAttack))         // 0x102b02fd
+			if (Cond.Has(EElysiumNpcCond::DetectedAttack))         // 0x102b02f6 / 0x102b02fd
 			{
 				return SelectTrace(GTroikaFile, 0x4c78, GSchedTurnToDetectedAttack);   // 0x102b02ff
 			}
-			if (Cond.Has(EElysiumNpcCond::InvestigateSound))       // 0x102b0328
+			if (Cond.Has(EElysiumNpcCond::InvestigateSound))       // 0x102b0321 / 0x102b0328
 			{
 				NpcFlags.Clear(EElysiumNpcFlag::INITIAL_FLEE);     // 0x102b0340 AND AH,0xfe
 				Senses.Memory.NextInvestigateSoundTime = Now + GInvestigateSoundDelay;   // 0x102b0349
@@ -812,89 +841,95 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		Senses.Memory.NextFleeSoundTime = Now                      // 0x102b03cc RandomFloat / 0x102b03db
 			+ ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(GFleeSoundMin, GFleeSoundMax);
 		FleeSound();                                               // 0x102b03e1 slot 498
-		if (Cond.Has(EElysiumNpcCond::LightDamage)                 // 0x102b03f2
-			|| Cond.Has(EElysiumNpcCond::HeavyDamage)              // 0x102b0403
-			|| Cond.Has(EElysiumNpcCond::RepeatedDamage))          // 0x102b0414
+		if (Cond.Has(EElysiumNpcCond::LightDamage)                 // 0x102b03eb / 0x102b03f2
+			|| Cond.Has(EElysiumNpcCond::HeavyDamage)              // 0x102b03fc / 0x102b0403
+			|| Cond.Has(EElysiumNpcCond::RepeatedDamage))          // 0x102b040d / 0x102b0414
 		{
 			return SelectTrace(GTroikaFile, 0x4c00, GSchedFleeScream);   // 0x102b0a80
 		}
-		if (Cond.Has(EElysiumNpcCond::SupernaturalFleeLevel))      // 0x102b0425
+		if (Cond.Has(EElysiumNpcCond::SupernaturalFleeLevel))      // 0x102b041e / 0x102b0425
 		{
 			FElysiumNpcWitnessChannel& Channel = Witness.Channel(ElysiumNpcWitness::EChannel::Supernatural);
-			if (FElysiumEntity* const Offender = Resolve(*this, Channel.Offender))   // 0x102b043a..59
+			if (FElysiumEntity* const Offender = Resolve(*this, Channel.Offender))   // 0x102b043a..59 (0x102b0454 / 0x102b0459)
 			{
-				Slot596(Offender);                                 // 0x102b0488 vtable +0x950
+				Slot596(Offender);                                 // 0x102b0464 / 0x102b047b re-resolve, 0x102b0488 vtable +0x950
 			}
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102b049d..b7
-			if (Player != Resolve(*this, Channel.Offender))        // 0x102b04c8..0x102b04ec
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102b049d..b7 (0x102b04b7)
+			if (Player != Resolve(*this, Channel.Offender))        // 0x102b04c8..0x102b04ec (0x102b04e2)
 			{
-				if (Resolve(*this, Channel.Offender) != nullptr)   // 0x102b06bd..0x102b06d9
+				if (Resolve(*this, Channel.Offender) != nullptr)   // 0x102b06bd..0x102b06d9 (0x102b06d4)
 				{
 					return SelectTrace(GTroikaFile, 0x4c2c, GSchedFleeAndCower);   // 0x102b06db
 				}
 				SavePosition = Channel.Location;                   // 0x102b06f9..0x102b0718
 				return SelectTrace(GTroikaFile, 0x4c31, GSchedFleeNoEnemy);        // 0x102b071e
 			}
-			if (Player != nullptr)                                 // 0x102b04fb..0x102b051a
+			if (Player != nullptr)                                 // 0x102b04fb..0x102b051a (0x102b0515)
 			{
+				// 0x102b0534 / 0x102b054b re-resolve, 0x102b0561 slot 217 (`+0x364`) on the player.
 				++SelectFleeDangerSounds;                          // 0x102b056a CALL 0x1000bca8 (seam)
 			}
 			if (!Witness.bSupernaturalFleeOnly)                    // 0x102b0580
 			{
+				// 0x102b058b / 0x102b05a2 the player re-resolved as the receiver.
 				if (FElysiumPlayer* const Receiver = SelectResolvePlayer(Senses.Memory.ClosestPlayer))
 				{
 					ElysiumLaw::PlayerSupernaturalIncident(*Receiver, Channel.Level, Handle, Channel.Location);   // 0x102b05b9
 				}
-				Channel.Processed = SupernaturalActCount();        // 0x102b0646 / 0x102b064b
+				Channel.Processed = SupernaturalActCount();        // 0x102b05c7 / 0x102b05e4 / 0x102b0646 / 0x102b064b
 			}
-			else if (Cond.Has(EElysiumNpcCond::SeePlayer))         // 0x102b05f5
+			else if (Cond.Has(EElysiumNpcCond::SeePlayer))         // 0x102b05ee / 0x102b05f5
 			{
-				RememberScaredNpc(Channel.Level, this);            // 0x102b0629 / 0x102b063a CALL 0x1017fd60
+				RememberScaredNpc(Channel.Level, this);            // 0x102b0600 / 0x102b061d / 0x102b0629 / 0x102b063a CALL 0x1017fd60
 				Channel.Processed = SupernaturalActCount();        // 0x102b05be -> 0x102b064b
 			}
 			// 0x102b0651 `m_flPlayerDist (+0x6264) <= 512.0` (FCOMP / TEST AH,0x41 / JP), then the roll.
 			if (Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U <= ElysiumNpcTunables::FiveHundredTwelve
-				&& Roll(99) < 0x50)                                // 0x102b0662 / 0x102b0676 JGE
+				&& Roll(99) < 0x50)                                // 0x102b0662 / 0x102b0670 / 0x102b0676 JGE
 			{
 				return SelectTrace(GTroikaFile, 0x4c23, GSchedFleeTurnToPlayerNear);   // 0x102b0678
 			}
 			return SelectTrace(GTroikaFile, 0x4c27, GSchedFleeTurnToPlayer);           // 0x102b0696
 		}
-		if (Cond.Has(EElysiumNpcCond::CriminalFleeLevel))          // 0x102b0746
+		if (Cond.Has(EElysiumNpcCond::CriminalFleeLevel))          // 0x102b073f / 0x102b0746
 		{
 			FElysiumNpcWitnessChannel& Channel = Witness.Channel(ElysiumNpcWitness::EChannel::Criminal);
-			if (FElysiumEntity* const Offender = Resolve(*this, Channel.Offender))   // 0x102b075b..7a
+			if (FElysiumEntity* const Offender = Resolve(*this, Channel.Offender))   // 0x102b075b..7a (0x102b0775 / 0x102b077a)
 			{
-				Slot596(Offender);                                 // 0x102b07a9
+				Slot596(Offender);                                 // 0x102b0785 / 0x102b079c re-resolve, 0x102b07a9
 			}
-			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102b07be..d8
-			if (Player != Resolve(*this, Channel.Offender))        // 0x102b07e9..0x102b080d
+			FElysiumEntity* const Player = Resolve(*this, Senses.Memory.ClosestPlayer);   // 0x102b07be..d8 (0x102b07d8)
+			if (Player != Resolve(*this, Channel.Offender))        // 0x102b07e9..0x102b080d (0x102b0803)
 			{
-				if (Resolve(*this, Channel.Offender) != nullptr)   // 0x102b09a0..0x102b09bc
+				if (Resolve(*this, Channel.Offender) != nullptr)   // 0x102b09a0..0x102b09bc (0x102b09b7)
 				{
 					return SelectTrace(GTroikaFile, 0x4c56, GSchedFleeAndCower);   // 0x102b09be
 				}
 				SavePosition = Channel.Location;                   // 0x102b09dc..0x102b09fb
 				return SelectTrace(GTroikaFile, 0x4c5b, GSchedFleeNoEnemy);        // 0x102b0a01
 			}
-			if (Player != nullptr)                                 // 0x102b081c..0x102b083b
+			if (Player != nullptr)                                 // 0x102b081c..0x102b083b (0x102b0836)
 			{
+				// 0x102b0855 / 0x102b086c re-resolve, 0x102b0882 slot 217 (`+0x364`) on the player.
 				++SelectFleeDangerSounds;                          // 0x102b088b CALL 0x1000bca8 (seam)
 			}
+			// 0x102b08b7 `0x1000dc06` decodes the `+0x6364` scrambled level (stored plain here);
+			// 0x102b08c8 / 0x102b08e5 the player re-resolved as the receiver.
 			if (FElysiumPlayer* const Receiver = SelectResolvePlayer(Senses.Memory.ClosestPlayer))
 			{
 				ElysiumLaw::PlayerCriminalIncident(*Receiver, Channel.Level, Handle, Channel.Location);   // 0x102b08f6
 			}
-			Channel.Processed = CriminalActCount();                // 0x102b0929 / 0x102b093a
+			Channel.Processed = CriminalActCount();                // 0x102b0904 / 0x102b0921 / 0x102b0929 / 0x102b093a
 			if (Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U <= ElysiumNpcTunables::FiveHundredTwelve
-				&& Roll(99) < 0x50)                                // 0x102b0945 / 0x102b0959
+				&& Roll(99) < 0x50)                                // 0x102b0945 / 0x102b0953 / 0x102b0959
 			{
 				return SelectTrace(GTroikaFile, 0x4c4d, GSchedFleeTurnToPlayerNear);   // 0x102b095b
 			}
 			return SelectTrace(GTroikaFile, 0x4c51, GSchedFleeTurnToPlayer);           // 0x102b0979
 		}
-		if (Cond.Has(EElysiumNpcCond::SeeFear))                    // 0x102b0a29
+		if (Cond.Has(EElysiumNpcCond::SeeFear))                    // 0x102b0a22 / 0x102b0a29
 		{
+			// 0x102b0a34 / 0x102b0a4f resolve (a stale handle passes NULL, 0x102b0a55).
 			Slot596(Resolve(*this, BaseMemory.Seen(FElysiumNpcBaseMemory::ESeen::Fear)));   // 0x102b0a5c m_hLastSeenFearEnt
 		}
 		return SelectTrace(GTroikaFile, 0x4c69, GSchedFleeScream);     // 0x102b0a62
@@ -902,8 +937,8 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 	// ---------------------------------------------------------------------------------------------
 	case 0xb:                                                      // 0x102af98d — HUNT
 	{
-		if (HasInterrupt(EElysiumNpcCond::SeeUnknown)              // 0x102af998
-			|| HasInterrupt(EElysiumNpcCond::InvestigateSight))    // 0x102af9a9
+		if (HasInterrupt(EElysiumNpcCond::SeeUnknown)              // 0x102af991 / 0x102af998
+			|| HasInterrupt(EElysiumNpcCond::InvestigateSight))    // 0x102af9a2 / 0x102af9a9
 		{
 			return SelectTrace(GTroikaFile, 0x4a1a, GSchedHuntInvestigateUnknown);   // 0x102afc06
 		}
@@ -911,34 +946,34 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		{
 			return Damage;
 		}
-		if (HasInterrupt(EElysiumNpcCond::LostUnknown))            // 0x102af9c9
+		if (HasInterrupt(EElysiumNpcCond::LostUnknown))            // 0x102af9c2 / 0x102af9c9
 		{
 			return SelectTrace(GTroikaFile, 0x4a26, GSchedHuntInvestigateUnknownLost);   // 0x102af9cb
 		}
-		if (HasInterrupt(EElysiumNpcCond::InvestigateSound)        // 0x102af9f4
-			|| HasInterrupt(EElysiumNpcCond::HearDanger)           // 0x102afa05
-			|| HasInterrupt(EElysiumNpcCond::HearCombat)           // 0x102afa16
-			|| HasInterrupt(EElysiumNpcCond::HearWorld)            // 0x102afa27
-			|| HasInterrupt(EElysiumNpcCond::HearBulletImpact)     // 0x102afa38
-			|| HasInterrupt(EElysiumNpcCond::HearPlayer))          // 0x102afa49
+		if (HasInterrupt(EElysiumNpcCond::InvestigateSound)        // 0x102af9ed / 0x102af9f4
+			|| HasInterrupt(EElysiumNpcCond::HearDanger)           // 0x102af9fe / 0x102afa05
+			|| HasInterrupt(EElysiumNpcCond::HearCombat)           // 0x102afa0f / 0x102afa16
+			|| HasInterrupt(EElysiumNpcCond::HearWorld)            // 0x102afa20 / 0x102afa27
+			|| HasInterrupt(EElysiumNpcCond::HearBulletImpact)     // 0x102afa31 / 0x102afa38
+			|| HasInterrupt(EElysiumNpcCond::HearPlayer))          // 0x102afa42 / 0x102afa49
 		{
 			Senses.Memory.NextInvestigateSoundTime = Now + GInvestigateSoundDelay;   // 0x102afb91
 			Senses.CommitBestSound(*this, Cognition.Conditions);   // 0x102afb97
 			// `RandomInt(0, 99) < 100` always passes; the draw is retail's and is consumed.
-			if ((Cond.Has(EElysiumNpcCond::HearCombat)             // 0x102afba7
-					|| Cond.Has(EElysiumNpcCond::HearBulletImpact))   // 0x102afbb4
+			if ((Cond.Has(EElysiumNpcCond::HearCombat)             // 0x102afba0 / 0x102afba7
+					|| Cond.Has(EElysiumNpcCond::HearBulletImpact))   // 0x102afbad / 0x102afbb4
 				&& Roll(99) < 100)                                 // 0x102afbc2 / 0x102afbc8
 			{
 				return SelectTrace(GTroikaFile, 0x4a39, GSchedHuntInvestigateFlinch);   // 0x102afbca
 			}
 			return SelectTrace(GTroikaFile, 0x4a3d, GSchedHuntInvestigate);             // 0x102afbe8
 		}
-		if (HasInterrupt(EElysiumNpcCond::HearFlinch))             // 0x102afa5c
+		if (HasInterrupt(EElysiumNpcCond::HearFlinch))             // 0x102afa53 / 0x102afa5c
 		{
 			Senses.CommitBestSound(*this, Cognition.Conditions);   // 0x102afa5e
 			return SelectTrace(GTroikaFile, 0x4a43, GSchedInvestigateSoundFlinch);      // 0x102afa63
 		}
-		if (Cond.Has(EElysiumNpcCond::SeeSoundSource))             // 0x102afa8a
+		if (Cond.Has(EElysiumNpcCond::SeeSoundSource))             // 0x102afa83 / 0x102afa8a
 		{
 			if (const int32 Source = SelectSoundSourceSchedule(GSchedHuntRunToSaved, GSchedFleeAndCower);
 				Source != 0)                                       // 0x102afa95 PUSH 0x73 / PUSH 0x84 / 0x102afa9c
@@ -946,7 +981,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 				return Source;
 			}
 		}
-		if (HuntPatrolPoints.IsEmpty())                            // 0x102afaa2 m_sppPatrolPathHunt.m_pPath (+0x6598)
+		if (HuntPatrolPoints.IsEmpty())                            // 0x102afaa2 / 0x102afaaa m_sppPatrolPathHunt.m_pPath (+0x6598)
 		{
 			NpcFlags.Clear(EElysiumNpcFlag::MADE_HUNT_PATH);       // 0x102afab2 AND AH,0xef
 		}
@@ -959,7 +994,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 				return SelectTrace(GTroikaFile, 0x4a9a, GSchedHuntFinish);   // 0x102afae3
 			}
 			FElysiumEntity* const Enemy = GetEnemy();              // 0x102afb05 slot 168, vtable +0x2a0
-			if (Enemy != nullptr && Enemy->IsAlive())              // 0x102afb0d / 0x102afb1d slot 158 / 0x102afb25
+			if (Enemy != nullptr && Enemy->IsAlive())              // 0x102afb0d / 0x102afb13 slot 168 again / 0x102afb1d slot 158 / 0x102afb25
 			{
 				return SelectTrace(GTroikaFile, 0x4aa3, GSchedHuntSetup);        // 0x102afb27
 			}
@@ -974,7 +1009,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		return SelectTrace(GTroikaFile, 0x4bdb, GSchedIdleStand);
 	// ---------------------------------------------------------------------------------------------
 	case GStateCrimSuspicion:                                      // 0x102b0abc — the m_iSubState walk
-		switch (SubState)                                          // 0x102b0abc / 0x102b0ac5 JA / table 0x102b0c28
+		switch (SubState)                                          // 0x102b0abc / 0x102b0ac5 JA / 0x102b0acb table 0x102b0c28
 		{
 		case 1:
 			SubState = 2;                                          // 0x102b0ad2
@@ -1002,7 +1037,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 	default:                                                       // 0, 4..7, 9, 0xa, > 0xe
 		break;
 	}
-	return BaseSelectSchedule();                                   // 0x102b0be3 JMP 0x10001d57
+	return BaseSelectSchedule();                                   // 0x102b0be3 / 0x102b0beb JMP 0x10001d57
 }
 
 // =================================================================================================
@@ -1106,10 +1141,9 @@ int32 FElysiumNpc::SelectSoundAlertSchedule()
 		{
 			Senses.CommitBestSound(*this, Cognition.Conditions);   // 0x102b91e8
 			// `0x102b91ed` stamps line 0x6063, then TAIL-JUMPS into `0x102b8980`, whose answer IS the
-			// schedule (0x4c / 0x4d / 0x51 / 0x52) — the port's body types it as the grade letter it
-			// equals ('L' 'M' 'Q' 'R').
+			// schedule (0x4c / 0x4d / 0x51 / 0x52).
 			SelectTrace(GTroikaFile, 0x6063, 0);
-			return static_cast<int32>(AdvanceAlertLevelGrade());   // 0x102b9204 JMP 0x100158a7
+			return AdvanceAlertLevelGrade();                       // 0x102b9204 JMP 0x100158a7
 		}
 	}
 	if (Cond.Has(EElysiumNpcCond::SeeSoundSource))                 // 0x102b92b6
@@ -1170,8 +1204,8 @@ int32 FElysiumNpc::SelectSoundSourceSchedule(int32 HatedAnswer, int32 FearedAnsw
 			}
 			// 0x102b8e5e: `AngleVectors(source->GetAngles())` (slot 221, `0x10139610`) × 128.0 +
 			// `source->GetAbsOrigin()` (slot 217). Source units scaled onto this runtime's cm.
-			const FVector Forward = AngleVectorsForward(Source->Angles);
-			SavePosition = Source->Origin + Forward * (GSoundSourceLookAhead * ElysiumMove::U);   // 0x102b8f26..0x102b8f32
+			const FVector SourceForward = AngleVectorsForward(Source->Angles);
+			SavePosition = Source->Origin + SourceForward * (GSoundSourceLookAhead * ElysiumMove::U);   // 0x102b8f26..0x102b8f32
 			SelectTrace(GTroikaFile, 0x6003, HatedAnswer);
 			return HatedAnswer;                                    // 0x102b8f17 MOV EAX,[ESP+0x2c]
 		}

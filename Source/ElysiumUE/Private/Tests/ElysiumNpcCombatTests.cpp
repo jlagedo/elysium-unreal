@@ -469,13 +469,17 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		TestEqual(TEXT("ranged capability does not enter the melee selector"),
 			F.Fighter->SelectScheduleRangedCombat(0), ElysiumScheduleId::None);
 		// Story 8 L06: the ranged zero falls through `CNPC_VHuman::SelectSchedule` (`0x1038502f`) to
-		// `CAI_BaseNPCTroika::SelectSchedule` case 2, whose no-`SEE_ENEMY` arm answers `0xb
-		// COMBAT_FACE` (`0x102afe5d`), not the idle the port's composition rule chose.
-		TestNotEqual(TEXT("...so the Troika combat ladder answers, not the idle"),
-			F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
+		// `CAI_BaseNPCTroika::SelectSchedule` case 2, whose no-`SEE_ENEMY`, no-`ENEMY_OCCLUDED` arm
+		// answers `0xb COMBAT_FACE` (`0x102afe5d`), not the idle the port's composition rule chose.
+		TestEqual(TEXT("...so the Troika combat ladder answers COMBAT_FACE (0x102afe5d)"),
+			F.Fighter->SelectSchedule(), 0xb);
 	}
 
-	// --- Unarmed takes the melee branch with bare-hands defaults -------------------------------
+	// --- Unarmed: no weapon entity, weapon word 0, slot 605 ---------------------------------------
+	// Story 8 L06 integration (corrected to retail): `CNPC_VHuman::SelectSchedule` reads the weapon
+	// word through the active weapon (`0x10384fec`); with none it is 0 (`0x10385008 XOR EAX,EAX`),
+	// `TEST EAX,0x18000` fails and the ranged slot 605 answers (`0x10385022 CALL [EDX+0x974]`). The
+	// port's "unarmed takes the melee branch" was its own composition rule (CHOSEN).
 	{
 		FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
 		if (F.Fighter == nullptr || F.Target == nullptr)
@@ -486,8 +490,10 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 		F.CommitToTarget(10.0);
 		F.Fighter->Cognition.Conditions.Reset();
 		F.Fighter->Cognition.Conditions.Set(ECond::ShouldBlock);
-		TestEqual(TEXT("an unarmed NPC still fights, on the melee branch"),
-			F.Fighter->SelectSchedule(), F.Fighter->SelectScheduleMeleeCombat(0));
+		const int32 Ranged605 = F.Fighter->SelectScheduleRangedCombat(0);
+		TestNotEqual(TEXT("slot 605 answers for the unarmed fighter"), Ranged605, 0);
+		TestEqual(TEXT("an unarmed NPC takes slot 605's answer (0x10385022)"),
+			F.Fighter->SelectSchedule(), Ranged605);
 	}
 	return true;
 }
@@ -701,11 +707,19 @@ bool FElysiumNpcCombatSelectorCompositionTest::RunTest(const FString&)
 	TestTrue(TEXT("...and that number names a loaded program"),
 		ElysiumScheduleFor(ElysiumScheduleGlobalId(Ranged)) != nullptr);
 
-	// A zero return falls through to the Troika base selector: the composition rule.
-	TestEqual(TEXT("merely waiting on the attack timer composes down to the base idle"),
-		Select({ ECond::WaitingAttackTime }), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
-	TestEqual(TEXT("...and the base branch's damage reaction is SMALL_FLINCH (0x14)"),
-		Select({ ECond::WaitingAttackTime, ECond::HeavyDamage }), ElysiumSched::SMALL_FLINCH);
+	// A zero return falls through to the Troika selector (`0x1038502f JMP 0x10015596`).
+	// Story 8 L06 integration (corrected to retail): the fall-through lands in `0x102af660` case 2
+	// (COMBAT), not the idle: with no SEE_ENEMY and no ENEMY_OCCLUDED its answer is COMBAT_FACE
+	// `0xb` (`0x102afe5d`).
+	TestEqual(TEXT("merely waiting on the attack timer falls to the Troika combat face (0x102afe5d)"),
+		Select({ ECond::WaitingAttackTime }), 0xb);
+	// The damage arm (`0x102afcb5`..`0x102afcdb`) flinches only when `SelectWeightedSequence
+	// (ACT_SMALL_FLINCH 0x49)` finds a sequence; this substrate's `SelectWeightedSequenceForActivity`
+	// is a seam answering -1 (no sequence index at the kernel tier), so it too faces.
+	TestEqual(TEXT("no ACT_SMALL_FLINCH sequence is found"),
+		F.Fighter->SelectWeightedSequenceForActivity(0x49), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("...so heavy damage also reaches COMBAT_FACE (0x102afcdb JZ -> 0x102afe5d)"),
+		Select({ ECond::WaitingAttackTime, ECond::HeavyDamage }), 0xb);
 	return true;
 }
 
@@ -1172,8 +1186,11 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	Victim.UpdateIdealState(1.0);
 	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
 		Victim.GetMind().State() == EElysiumNpcState::Combat);
-	TestEqual(TEXT("...and combat selection picks a melee program, not an idle"),
-		Victim.SelectSchedule(), 0xe7);
+	// Story 8 L06 integration (corrected to retail): the pass left NEW_ENEMY standing, and the
+	// pre-selector `0x102ae920` answers it first in COMBAT: `0x102aedf0` HasCondition(NEW_ENEMY),
+	// not frenzied (`0x102aee01`) -> START_COMBAT `0xea` (`0x102aee03`), ahead of slot 438.
+	TestEqual(TEXT("...and combat selection starts the fight (START_COMBAT 0xea, 0x102aee03)"),
+		Victim.SelectSchedule(), 0xea);
 
 	// --- The terminal task presses the same weapon transaction the player uses --------------------
 	FElysiumWeapon* Fists = F.ActiveWeapon(&Victim);

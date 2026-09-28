@@ -244,21 +244,21 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 // `0x102b8980` — the alert-level rung and its grade letter.
 // -------------------------------------------------------------------------------------------------
 
-TCHAR FElysiumNpc::AdvanceAlertLevelGrade()
+int32 FElysiumNpc::AdvanceAlertLevelGrade()
 {
 	// `0x102b8980`, the whole body:
 	//     if (m_bFullInvestigate) SetAlertLevel(3);                 // +0x6340, 0x102b5dc0
 	//     switch (m_eAlertLevel) {                                  // +0x63f4, READ AFTER the write
-	//         default: SetAlertLevel(1); return 'L';
-	//         case 1:  SetAlertLevel(2); return 'M';
+	//         default: SetAlertLevel(1); return 0x4c;
+	//         case 1:  SetAlertLevel(2); return 0x4d;
 	//         case 2:
-	//         case 3:  SetAlertLevel(3); return 'Q' + ((m_afMemory & 0x8000000) != 0);
+	//         case 3:  SetAlertLevel(3); return 0x51 + ((m_afMemory & 0x8000000) != 0);
 	//     }
 	//
 	// `m_bFullInvestigate` writes the level BEFORE the switch reads it, so a full-investigate NPC
-	// always lands on the 2/3 arm and answers 'Q' or 'R'. The letters are the whole of the return:
-	// L, M, Q and R, in rung order, and they are retail's — the grade string they belong to is
-	// **unrecovered**.
+	// always lands on the 2/3 arm and answers 0x51 or 0x52. The answers are Troika schedule ids,
+	// not letters (story 8 L06: `0x102b9060` tail-jumps here at `0x102b9204` and returns this value
+	// as its schedule; 0x51/0x52 are SCHED_TROIKA_INVESTIGATE_SOUND / _OTHER_SOUND).
 	if (FullInvestigate != 0)
 	{
 		AlertLevel = 3;
@@ -267,19 +267,18 @@ TCHAR FElysiumNpc::AdvanceAlertLevelGrade()
 	{
 	case 1:
 		AlertLevel = 2;
-		return TEXT('M');
+		return 0x4d;
 	case 2:
 	case 3:
 		AlertLevel = 3;
-		// `m_afMemory & 0x8000000` (+0x5d8c, `FElysiumNpcScheduleHost::MemoryBits`) adds one to the
-		// letter, so 'Q' becomes 'R'. The bit's name is **unrecovered**.
-		return static_cast<TCHAR>(TEXT('Q')
-			+ ((BaseScheduleHost.MemoryBits & 0x8000000u) != 0 ? 1 : 0));
+		// `m_afMemory & 0x8000000` (+0x5d8c, `FElysiumNpcScheduleHost::MemoryBits`) adds one, so
+		// 0x51 becomes 0x52. The bit's name is **unrecovered**.
+		return 0x51 + ((BaseScheduleHost.MemoryBits & 0x8000000u) != 0 ? 1 : 0);
 	default:
 		break;
 	}
 	AlertLevel = 1;
-	return TEXT('L');
+	return 0x4c;
 }
 
 // -------------------------------------------------------------------------------------------------

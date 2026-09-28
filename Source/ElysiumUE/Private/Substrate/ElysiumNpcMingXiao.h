@@ -14,17 +14,16 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VMingXiao", FElysiumNpcBaseBoss)
 
 	// --- Select19 (story 0019/8 lane L06): the words and seams `0x10394120` / `0x103941e0` read ---
-	/** `+0x6680 CNPC_VMingXiao::m_hRangedWeapon` (datamap), read by `PreSelectSchedule` `0x10394120`.
-	 *  The shape map carried it ABSENT ("story-8 residue"); its writer is `Spawn` `0x103927a0`, which
-	 *  is not ported, so it stands unset and the pre-selector takes retail's `Weapon_Switch(NULL, 0)`
-	 *  arm. */
-	FElysiumEntityHandle MingXiaoRangedWeapon;
+	// `+0x6680 m_hRangedWeapon` (`MingXiaoRangedWeapon`, declared with lane L07's block below) is also
+	// read by `PreSelectSchedule` `0x10394120`: unset until `Spawn` `0x103927a0` lands, so the
+	// pre-selector takes retail's `Weapon_Switch(NULL, 0)` arm.
 	/** `+0x674c CNPC_VMingXiao::m_flChargeReadyTime` (FIELD_TIME), the charge cooldown
 	 *  `SelectSchedule` `0x103941e0` reads and writes; ABSENT in the shape map until now. */
 	double MingXiaoChargeReadyTime = 0.0;
-	/** SEAM for `thunk_FUN_101e8da0(0x10739d08)` — the class tuning record, read by byte offset
-	 *  (`+0x8` the pickup-draw ceiling, `+0xc` / `+0x10` the two charge cooldowns). The substrate holds
-	 *  no such record (families Facing and Bosses answer 0 for the same record); answers 0. */
+	/** `thunk_FUN_101e8da0(0x10739d08)` — `LEA EAX,[ECX+0x2bc]`, the `Ming_Xiao_Info/General` slice of
+	 *  the Rules.txt feat list (`0x101e6310`), read by byte offset: `+0x8` ThrowChance (the pickup-draw
+	 *  ceiling), `+0xc` / `+0x10` ChargeResetTimeNormal / ChargeResetTimeDesperate. Read from the
+	 *  session rulebook with the loader's defaults (60, 10.0, 10.0). */
 	float Select19MingXiaoTuningField(int32 Offset) const;
 
 	// The constructor `0x10390ee0`: its hull store (`docs/vtmb/data/class_hulls.json`).

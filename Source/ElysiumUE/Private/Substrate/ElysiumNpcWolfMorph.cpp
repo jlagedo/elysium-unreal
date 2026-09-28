@@ -53,17 +53,16 @@ void FElysiumNpcWolfMorph::NPCInit()
 int32 FElysiumNpcWolfMorph::SpeciesSelectSchedule()
 {
 	// `m_pSchedule (+0x5c38)` non-null AND `stricmp(m_pSchedule->m_pszName (+0x40),
-	// "SCHED_VWOLFMORPH_MORPH") == 0` -> tail `JMP` into `CNPC_VHuman::SelectSchedule` `0x10384ee0`;
-	// otherwise answer `0x158`. So the wolf morphs first, and only a body already running the morph
-	// selects normally. `0x10384ee0` has no port body (the census's unported `CNPC_VHuman#438`): the
-	// port's selector runs its base branch for every VHuman, which answering 0 hands back to.
+	// "SCHED_VWOLFMORPH_MORPH") == 0` -> tail `JMP` into `CNPC_VHuman::SelectSchedule` `0x10384ee0`
+	// (`0x103dced5 JMP 0x10015ad2`); otherwise answer `0x158` (`0x103dceda`). So the wolf morphs
+	// first, and only a body already running the morph selects normally. No `+0x1b2c` write.
 	const TCHAR* const Running =
-		Schedule.Current != ElysiumScheduleId::None ? ElysiumScheduleName(Schedule.Current) : nullptr;
-	if (Running != nullptr && FCString::Stricmp(Running, GWolfMorphSchedMorphName) == 0)
+		Schedule.Current != ElysiumScheduleId::None ? ElysiumScheduleName(Schedule.Current) : nullptr;   // 0x103dceb3 / 0x103dcebb JZ
+	if (Running != nullptr && FCString::Stricmp(Running, GWolfMorphSchedMorphName) == 0)   // 0x103dcec6 / 0x103dced0 JNZ
 	{
-		return 0;
+		return FElysiumNpcHuman::SpeciesSelectSchedule();          // 0x103dced5
 	}
-	return GWolfMorphSchedMorph;
+	return GWolfMorphSchedMorph;                                   // 0x103dceda
 }
 
 // Slot 546: `0x103dc950`, the class's own squad-slot id space.

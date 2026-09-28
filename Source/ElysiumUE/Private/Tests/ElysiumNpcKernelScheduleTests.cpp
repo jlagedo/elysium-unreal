@@ -591,8 +591,11 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 	TestEqual(TEXT("and past it too — retail's test is `count < 2.0`, not `count != 2`"),
 		Andrei->SpeciesSelectSchedule(), 0x15c);
 	Andrei->ActiveRunnerCount = 0;
-	TestEqual(TEXT("a class with no slot-438 species body has no opinion"),
-		Guard->SpeciesSelectSchedule(), 0);
+	// Story 8 L06 integration (corrected to retail): there is no "no opinion" slot 438. A class
+	// with no species body inherits `CAI_BaseNPCTroika::SelectSchedule` `0x102af660`, whose idle
+	// case ends at `0x102af8dc` IDLE_DISPOSITION.
+	TestEqual(TEXT("a class with no slot-438 species body runs the Troika selector (0x102af8dc)"),
+		Guard->SpeciesSelectSchedule(), ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	FElysiumNpcWorldBuilder CameraBuilder(TEXT("npc_kernel_schedule_select_camera"), 4107);
 	CameraBuilder.AddNpc(TEXT("camera"), FVector::ZeroVector, TEXT("npc_VCamera"));
 	FElysiumNpcWorldFixture CameraWorld(MoveTemp(CameraBuilder));

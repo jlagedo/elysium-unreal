@@ -1577,8 +1577,10 @@ int32 FElysiumNpcMingXiao::MingXiaoFindThrowObject(int32 PedestalCvarDraw, int32
 		return 0;
 	}
 	// 3. With an enemy, `+0x848` runs — the per-species float family Bosses records as one of the
-	//    four overrides of that virtual. Then `ClearCondition(9)`, unconditionally.
-	Cognition.Conditions.Clear(EElysiumNpcCond::TooFarForMelee);   // retail's ClearCondition(9)
+	//    four overrides of that virtual. Then `PUSH 0x9 / CALL 0x10014df8` (`0x10396c49`/`0x10396c4d`)
+	//    — `HasCondition(9)`, its answer discarded (story 8 L06 integration: the port had it as a
+	//    `ClearCondition`; `0x10014df8` is the `HasCondition` thunk `0x10375de2` also calls). No write.
+	(void)Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee);   // 0x10396c4d
 
 	// 4. `RandomInt(...)` against the tuning record's `+8` cell: the search runs ONLY on a draw
 	//    strictly below it. The caller hands both in so the gate is measurable; the record itself

@@ -401,11 +401,8 @@ namespace
 		FElysiumNpcMingXiao, bMingXiaoHasTransformed),  // m_bHasTransformed
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x667c,
 		FElysiumNpcMingXiao, MingXiaoMeleeWeapon),  // m_hMeleeWeapon
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x6680,  // m_hRangedWeapon
-		"no port member: no ported body reads or writes the word (the ranged-weapon bodies are "
-		"story-8 residue); retail accessors: 0x103927a0 MingXiao::Spawn (residue), 0x10392d80 "
-		"MingXiao::StartTask (task arm), 0x10393930 MingXiao::RunTask (task arm), 0x10394120 "
-		"MingXiao::PreSelectSchedule (residue), 0x10394e40 MingXiao::GatherConditions (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6680,
+		FElysiumNpcMingXiao, MingXiaoRangedWeapon),  // m_hRangedWeapon
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6684,
 		FElysiumNpcMingXiao, bProxyRegistered),  // m_rbProxyRegistered[6]
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x668c, FElysiumNpcMingXiao, Proxies),  // m_rhProxies
@@ -452,10 +449,8 @@ namespace
 		"(ResolveTaskDistance m_flIdealRange SEAM); retail accessors: 0x103927a0 MingXiao::Spawn "
 		"(residue), 0x10392a10 MingXiao::vfunc418 (override), 0x10394990 MingXiao::NPCThink "
 		"(residue)"),
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VMingXiao, 0x674c,  // m_flChargeReadyTime
-		"no port member: no ported body reads or writes the word (the charge bodies are story-8 "
-		"residue); retail accessors: 0x103927a0 MingXiao::Spawn (residue), 0x103941e0 "
-		"MingXiao::SelectSchedule (residue)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x674c,
+		FElysiumNpcMingXiao, MingXiaoChargeReadyTime),  // m_flChargeReadyTime
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VMingXiao, 0x6750,
 		FElysiumNpcMingXiao, bBlockedByFriend),  // m_bBlockedByFriend
 
@@ -684,10 +679,8 @@ namespace
 		"deferred:8 -- the zombie maker writes it through SetZombieAIType 0x1034cf20"),
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x667c,
 		FElysiumNpcZombie, bZombieNeedsCrawlOutOfGround),  // m_iNeedsCrawlOutOfGround
-	ELYSIUM_NPC_SPECIES_WORD_ABSENT(CNPC_VZombie, 0x6680,  // m_vecDeathForceVector
-		"no port member: no ported body reads or writes the word (the death-force bodies are "
-		"story-8 residue); retail accessors: 0x103df2e0 Zombie::SelectSchedule (residue), "
-		"0x103dfbb0 Zombie::CreateCorpse (residue), 0x103e01d0 Zombie::RunTask (task arm)"),
+	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x6680,
+		FElysiumNpcZombie, ZombieDeathForceVector),  // m_vecDeathForceVector
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66d8,
 		FElysiumNpcZombie, ZombieGrappleReadyTimer),  // m_flGrappleReadyTimer
 	ELYSIUM_NPC_SPECIES_WORD(CNPC_VZombie, 0x66dc,

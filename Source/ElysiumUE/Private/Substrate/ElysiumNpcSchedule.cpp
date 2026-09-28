@@ -286,9 +286,11 @@ float FElysiumNpc::ResolveTaskDistance(float Distance)
 
 int32 FElysiumNpc::SpeciesSelectSchedule()
 {
-	// No species body on the Troika line: 0 lets the Troika selector run. Five classes override this
-	// hook with their replacement selectors (story 5 step 3).
-	return 0;
+	// Slot 438 on the bare Troika line (`CAI_BaseNPCTroika`, `CNPCMaker*`, `CNPC_VBaseBoss`,
+	// `CNPC_VNewscaster` and every class that inherits the slot unchanged) is
+	// `CAI_BaseNPCTroika::SelectSchedule` `0x102af660`, ported as `TroikaSelectSchedule`
+	// (`ElysiumNpcSelect19.cpp`, story 8 Select19). Species bodies override this virtual.
+	return TroikaSelectSchedule();
 }
 
 // -------------------------------------------------------------------------------------------------

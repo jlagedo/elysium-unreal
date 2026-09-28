@@ -1116,15 +1116,10 @@ void FElysiumPlayer::PollTouchContacts(double Now)
 		// authored `ShouldRemove_OnWasBumped`. Retail's own read site is 0006's (first-disciplines) to recover.
 		ElysiumDisciplines::NotifyBumped(*this);
 		const bool bRecorded = Npc->OnBumped(Now);
-		// The touched NPC's side of the same reader. Every authored `ShouldRemove_OnWasBumped 1`
-		// row is a TARGET effect (Hysteria, Trance, Nightwisp Ravens...), so the effect that breaks
-		// sits on the NPC, and it is run on the one NPC-side event retail raises here -- the
-		// mask-admitted `WAS_BUMPED`. Whether retail's effect reader keys on that condition or on a
-		// misc flag of the victim's own is 0006's (first-disciplines) to recover; this follows the handler.
-		if (bRecorded)
-		{
-			ElysiumDisciplines::NotifyBumped(*Npc);
-		}
+		// The touched NPC's side of the same reader is retail's own: `CAI_BaseNPCTroika::
+		// PreSelectSchedule` `0x102ae920` runs `0x101e3df0` (the `ShouldRemove_OnWasBumped` sweep) on
+		// the mask-admitted `WAS_BUMPED` interrupt (`0x102ae9ec` / `0x102ae9f4`) at the NPC's next
+		// schedule selection (story 8 Select19), not at the producer.
 		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s bumped %s (misc 0x%x, WAS_BUMPED %s)"),
 			*DebugString(), *Npc->DebugString(), MiscFlags,
 			bRecorded ? TEXT("recorded") : TEXT("refused by the mask"));

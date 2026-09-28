@@ -1214,19 +1214,22 @@ bool FElysiumNpcKernelDamageMingXiaoTest::RunTest(const FString&)
 	Ming->MingXiaoAttackTimers[5] = 0.0;
 	Ming->MingXiaoAttackTimers[4] = Now + 10.0;
 	TestEqual(TEXT("a live cooldown A answers 0"), Ming->MingXiaoFindThrowObject(0, 100), 0);
-	// Past both cooldowns the condition-9 clear runs unconditionally, and the search only with a
+	// Past both cooldowns the condition-9 READ runs unconditionally, and the search only with a
 	// draw strictly below the ceiling. Neither arm can find a pedestal here, so both answer 0.
+	// Story 8 L06 integration (corrected to retail): `0x10396c49 PUSH 0x9 / 0x10396c4d CALL
+	// 0x10014df8` is `HasCondition(9)` with its answer discarded — the same thunk `0x10375de2` and
+	// `0x10384f05` test with — not a `ClearCondition`; condition 9 survives the call.
 	Ming->MingXiaoAttackTimers[4] = 0.0;
 	Ming->Cognition.Conditions.Set(EElysiumNpcCond::TooFarForMelee);
 	TestEqual(TEXT("with no pedestal in reach the search answers 0"),
 		Ming->MingXiaoFindThrowObject(0, 100), 0);
-	TestFalse(TEXT("but condition 9 was cleared on the way"),
+	TestTrue(TEXT("and condition 9 is only read on the way (0x10396c4d)"),
 		Ming->Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee));
 	// A draw at or above the ceiling skips the search entirely.
 	Ming->Cognition.Conditions.Set(EElysiumNpcCond::TooFarForMelee);
 	TestEqual(TEXT("a draw at the ceiling also answers 0"),
 		Ming->MingXiaoFindThrowObject(100, 100), 0);
-	TestFalse(TEXT("and still clears condition 9, which is ahead of the draw"),
+	TestTrue(TEXT("and still leaves condition 9 standing (a read, ahead of the draw)"),
 		Ming->Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee));
 
 	// `0x10397000` — slot 166.

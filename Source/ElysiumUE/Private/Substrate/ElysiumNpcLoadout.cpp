@@ -138,8 +138,9 @@ ElysiumNpcLoadout::EResult ElysiumNpcLoadout::Resolve(FElysiumNpc& Npc)
 		// is a supported state, not a failure, and it is what an NPC in a Substrate-tier fixture
 		// runs in.
 		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("%s stays unarmed: no `vdata/items` catalogue is installed. Combat selection takes "
-				 "the melee branch with bare-hands defaults and its attack tasks fail by name"),
+			TEXT("%s stays unarmed: no `vdata/items` catalogue is installed. With no weapon the "
+				 "selector's weapon word is 0 and combat selection asks the ranged slot 605 "
+				 "(CNPC_VHuman 0x10385008)"),
 			*Npc.DebugString());
 	}
 	else

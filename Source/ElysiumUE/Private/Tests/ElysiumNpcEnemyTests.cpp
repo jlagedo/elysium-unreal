@@ -1153,22 +1153,20 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 
-	// The guard is unarmed — a content-free fixture installs no item catalogue — so the recovered
-	// capability split takes the melee branch with bare-hands defaults, and thug A standing 500
-	// Source units away is what the melee selector's distance arm answers.
+	// The guard is unarmed — a content-free fixture installs no item catalogue. Story 8 L06
+	// integration (corrected to retail): `CNPC_VHuman::SelectSchedule` then reads weapon word 0
+	// (`0x10385008`) and asks the RANGED slot 605 (`0x10385022`), not the melee one.
 	ElysiumNpcEnemy::GatherConditions(*F.Guard, 4.0);
 	TestTrue(TEXT("a distant committed enemy raises TOO_FAR_TO_ATTACK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
-	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
-	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
-	// Every number those bodies answer is a loaded program now.
-	TestEqual(TEXT("combat selects the recovered melee approach rather than an idle stance"),
-		F.Guard->SelectSchedule(), 0xe7);
-	TestEqual(TEXT("...which is SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE"),
-		FString(ElysiumScheduleName(ElysiumScheduleGlobalId(0xe7))),
-		FString(TEXT("SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE")));
+	// The recovered slot-605 body's own answer, a loaded program.
+	const int32 Ranged605 = F.Guard->SelectScheduleRangedCombat(0);
+	TestNotEqual(TEXT("slot 605 answers for the unarmed guard"), Ranged605, 0);
+	TestEqual(TEXT("combat selects slot 605's answer rather than an idle stance"),
+		F.Guard->SelectSchedule(), Ranged605);
+	TestNotNull(TEXT("...a loaded program"), ElysiumScheduleFor(ElysiumScheduleGlobalId(Ranged605)));
 	TestEqual(TEXT("...and does so every pass, with no once-latched refusal in the way"),
-		F.Guard->SelectSchedule(), 0xe7);
+		F.Guard->SelectSchedule(), Ranged605);
 	return true;
 }
 
@@ -1256,7 +1254,9 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 			int32 Count = 0;
 			for (int32 i = 0; i < 400; ++i)
 			{
-				if (F.Guard->SelectIdleSchedule() == ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI)
+				// Story 8 L06 integration: the roll is `0x102af660` case 1's (`0x102af804..0x102af829`);
+				// the port-only `SelectIdleSchedule` is deleted.
+				if (F.Guard->TroikaSelectSchedule() == ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI)
 				{
 					++Count;
 				}

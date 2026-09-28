@@ -243,6 +243,52 @@ sel 2; `switch (m_NPCState - 1)` over 1..0xe, table `0x102b0bf0`; 0, 4..7, 9, 0x
 
 **Unrecovered:** the Tzimisce body search (`0x103be180`) and pounce hull probe (`0x103bf660`), the
 Hengeyokai fish search (`0x10381cd0`), the Gargoyle pillar search (`0x100f7b20`) and navigator path
-test (`0x102ee380`), the Ming Xiao tuning record (`0x101e8da0(0x10739d08)`), slot 627's fidget voice,
-`m_fSequencePastHalf`, and the Werewolf random-move-hint pair (family Werewolf19's rows) — each a
-named seam answering retail's "nothing".
+test (`0x102ee380`), slot 627's fidget voice, `m_fSequencePastHalf`, and the Werewolf
+random-move-hint pair (family Werewolf19's rows) — each a named seam answering retail's "nothing".
+
+## Integration (pass I, lane L06)
+
+Wiring, read off the listing:
+
+- `FElysiumNpc::SelectSchedule` is `0x1028a260` (`SelectNewScheduleRetail`): the maintenance pass now
+  asks slot 437 before slot 438, so every species pre-selector runs. The port's guessed selector
+  (dead guard, species-first composition, the law branch at the outermost entry) and its
+  `SelectIdleSchedule` / `SelectAlertSchedule` / `SelectCombatSchedule` and
+  `ElysiumNpcWitness::SelectLawSchedule` are deleted.
+- Slot 438 on the bare Troika line (`FElysiumNpc::SpeciesSelectSchedule`) is `0x102af660`.
+- `0x10375d90` FrenzyShadow and `0x103dceb0` WolfMorph tail-jump `0x10015ad2` = `JMP 0x10384ee0`
+  (`CNPC_VHuman`), not the base. FrenzyShadow writes sel 0xf first (`0x10375d99`).
+- `0x103a46b0` writes sel 2 at `0x103a46b6`, before the state test: both arms.
+- The player-side bump no longer runs the NPC's `0x101e3df0` sweep; the NPC's own
+  `0x102ae920` `WAS_BUMPED` arm (`0x102ae9ec` / `0x102ae9f4`) does, at its next selection.
+- The witnessed-incident consumers are retail's: idle + COND 0x1f/0x21 → state 8 through
+  `0x102ad660`, then `0x102af660` case 8 submits and answers FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)
+  `0x70`/`0x71`; COND 0x20/0x22 are consumed only by `0x102ae920` in COMBAT (mask-admitted), with
+  slot 596 then slot 597 `(offender, 5)`.
+
+Corrections made while reading bodies against the listing:
+
+- `0x102b4fb0` slot 597 is `AddEntityRelationship 0x10332ca0` (overwrite at any priority), not the
+  refusing `SetEntity`.
+- `0x10396bc0` (Ming Xiao throw search): `0x10396c4d CALL 0x10014df8` is `HasCondition(9)` with the
+  answer discarded, not a clear.
+- `0x101e8da0(0x10739d08)` is `LEA EAX,[ECX+0x2bc]`, the `Ming_Xiao_Info/General` slice of the
+  Rules.txt feat list: `+0x8` ThrowChance (60), `+0xc` / `+0x10` ChargeResetTimeNormal /
+  ChargeResetTimeDesperate (10.0, 10.0).
+- `0x102b8980` answers a schedule id (`0x4c`, `0x4d`, `0x51`/`0x52`), not a grade letter.
+- `0x10382d40` (Hengeyokai fish) and `0x103bc4e0` (Tzimisce body): the found arm is now ported
+  whole. The enemy's last known position (`0x102dfed0`) is compared against the target. When it is
+  nearer, the pickup target is released, `0x102c43b0(0)` is called and the helper answers 0.
+- `0x103bc820`: the near test is `AND 0x4100` on the x87-extended distance (NaN takes the near
+  answer).
+- `0x10384ee0`: at or past `seen + 1.0` → `0x56`; unordered keeps selecting.
+- `0x10378ec0`: with no enemy it answers false without writing `+0x667c`.
+- `0x103df2e0`: `CreateCorpse` is called directly (`0x103df349 CALL 0x10007c7a`).
+
+**Unrecovered (integration):** `SelectWeightedSequence` still has no sequence index at the kernel
+tier (`ElysiumAnimatingOverlaySlotBodies.cpp`), so every `SMALL_FLINCH`/`ALERT_SMALL_FLINCH`/
+`ALERT_SCAN` arm gated on it (`0x1028a48a`, `0x1028a6d1`, `0x1028a4ff`, `0x1028a615`, `0x102afcdb`)
+is unreachable. The `+0x6590` patrol path object is unstood, so the idle patrol arm never answers.
+An idle `use_interesting` or patrolling NPC still runs the port's ambient/patrol executor ahead of
+selection (`FElysiumNpc::Think` -> `ThinkAmbient`), so case 1's interesting-place answers
+(`0xff`..`0x106`) are reached only when selection is — L13's loop wiring.

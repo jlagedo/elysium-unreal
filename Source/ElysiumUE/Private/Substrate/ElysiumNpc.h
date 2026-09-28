@@ -356,34 +356,8 @@ public:
 
 	virtual void Think() override;
 
-	/**
-	 * `CAI_BaseNPCTroika::SelectSchedule` case 1, in recovered priority order
-	 * (`docs/vtmb/npc-ai/conditions-and-states.md` -> "The idle branch, decided"). First match wins.
-	 *
-	 * The steps this runtime cannot answer refuse by name rather than guessing, and the refusal
-	 * records what would settle it -- a refusal that says nothing is indistinguishable from a step
-	 * that silently did not apply.
-	 */
-	int32 SelectIdleSchedule();
-
-	// The state switch of the base selector (`0x1028a380`): case 1 idle, case 3 alert, case 2
-	// combat. Everything else keeps the idle branch, which is where a state with no selector of its
-	// own belongs.
+	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
 	int32 SelectSchedule();
-
-	// Case 3. The recovered alert branch's own damage reactions are refused by name; what remains
-	// is the lookaround program, which alert state is what makes reachable.
-	int32 SelectAlertSchedule();
-
-	/**
-	 * Case 2 — the concrete combat branch.
-	 *
-	 * `CNPC_VHuman::SelectSchedule` (`0x10384ee0`) queries the active weapon's capability bits and
-	 * routes to one of two selectors; either may return zero, and a zero falls through to
-	 * `CAI_BaseNPCTroika::SelectSchedule` so the weapon policy COMPOSES with the door, damage and
-	 * idle reactions rather than replacing them. That composition is the tail of this function.
-	 */
-	int32 SelectCombatSchedule();
 
 	// `SelectIdealState` run for real: the two-layer rule over this pass's conditions, committed
 	// through the mind's ordinary transition path.

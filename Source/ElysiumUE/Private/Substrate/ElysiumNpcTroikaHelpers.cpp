@@ -325,9 +325,14 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 	// the `"Player D_HT 10"` relationship write IN FRONT of this body and then calls it directly.
 	if (Other == nullptr)
 	{
+		// Crash guard: retail hands a null `other` straight to `0x10332ca0`.
 		return;
 	}
-	Relationships.SetEntity(Other->Handle, EElysiumRelationship::Hate, Priority);
+	// `0x102b4fbc CALL 0x10005849` -> `0x10332ca0`, which overwrites the target's row at ANY priority
+	// (story 8 L06 integration: `SetEntity` refused a lower priority, which `0x10332ca0` never does;
+	// the L11 finding for slot 598, same callee). `PreSelectSchedule` `0x102ae920` reaches this from
+	// its two combat incident arms (`0x102aeb81` / `0x102aed0d`, priority 5).
+	Relationships.AddEntityRelationship(Other->Handle, EElysiumRelationship::Hate, Priority);
 }
 
 // -------------------------------------------------------------------------------------------------

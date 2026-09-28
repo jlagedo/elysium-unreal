@@ -27,7 +27,7 @@ int32 SelectTrace(const TCHAR* File, int32 Line, int32 Schedule);
 
 /** `CAI_BaseNPC::SelectSchedule` (`0x1028a380`), slot 438's base body: the per-state ladder the
  *  Troika switch's `default:` and every Troika state it does not own tail-jump into
- *  (`0x10015596` / `0x10015ad2`). Not virtual: slot 438's dispatch on the Troika line is
+ *  (`0x102b0be3 JMP 0x10001d57`). Not virtual: slot 438's dispatch on the Troika line is
  *  `FElysiumNpc::SpeciesSelectSchedule`, and a base-only NPC reaches this through
  *  `SelectNewScheduleRetail`. */
 int32 BaseSelectSchedule();

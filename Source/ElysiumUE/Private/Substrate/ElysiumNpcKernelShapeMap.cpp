@@ -47,9 +47,9 @@ namespace
 	ELYSIUM_NPC_WORD(0x1b24, FElysiumNpcBaseScheduleHost, CacheInterruptTime),
 	ELYSIUM_NPC_WORD_PRIVATE(0x1b28, "FElysiumNpcMind::bForceStateChange",
 		"private to its owner: m_bForceStateChange"),
-	ELYSIUM_NPC_WORD_ABSENT(0x1b2c,
-		"retail's file/line selector trace; this runtime records selections in the mind's "
-			"transition trace"),
+	ELYSIUM_NPC_WORD_NOTED(0x1b2c, FElysiumNpcBase, SelectScheduleSelector,
+		"m_SelectScheduleTrace.m_iSelector only (story 8 Select19, visual-only modernization); the "
+			"file/line pair +0x1b30/+0x1b34 stays absent, each exit's line goes to the schedule trace"),
 	ELYSIUM_NPC_WORD_ABSENT(0x1b38,
 		"retail's file/line ideal-state trace; the mind's transition trace carries the same "
 			"account"),

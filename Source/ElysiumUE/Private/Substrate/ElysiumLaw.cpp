@@ -498,8 +498,8 @@ void ApplyWorldAreaTransition(FElysiumEntityWorld& World, int32 NewArea)
 // The two consumers below are reached from an NPC's schedule branch, after condition gathering set
 // one of the four law conditions (`COND_CRIMINAL_FLEE_LEVEL` 31, `COND_CRIMINAL_ATTACK_LEVEL` 32,
 // `COND_SUPERNATURAL_FLEE_LEVEL` 33, `COND_SUPERNATURAL_ATTACK_LEVEL` 34) by comparing the player's
-// act counts against that NPC's own processed counts. That producer is
-// `ElysiumNpcWitness::SelectLawSchedule`; the act counts it reads are public through
+// act counts against that NPC's own processed counts. Their callers are
+// `CAI_BaseNPCTroika::PreSelectSchedule` / `SelectSchedule` (`0x102ae920` / `0x102af660`); the act counts it reads are public through
 // `FElysiumPlayer::CriminalActCount()` / `SupernaturalActCount()`, and the entry points below take
 // exactly the severity, witness and position the NPC's retained incident record carries.
 
