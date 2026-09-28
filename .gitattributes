@@ -1,3 +1,7 @@
+# Text files are LF in the index and the working tree on every platform, so exact-match
+# edits never trip on a stray CRLF. Git's binary detection still leaves binaries alone.
+* text=auto eol=lf
+
 # Windows batch files must be CRLF: cmd.exe seeks by byte offset assuming \r\n,
 # so an LF-only .bat is parsed with drifting offsets and leading characters are lost.
 *.bat text eol=crlf

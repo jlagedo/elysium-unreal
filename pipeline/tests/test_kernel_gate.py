@@ -1,14 +1,16 @@
 """`kernel_gate` on a synthetic family: a fake row file, verdicts, skeleton and source tree.
 
 Checks 1 (addresses), 2 (arms), 4 (hot headers) and 6 (tests) are exercised pass and fail on the
-pure check functions; the seam searches (3), the residue delta (5) and the driver's exit code run
-end to end on a throwaway git repository.
+pure check functions; the seam searches (3, opt-in), the residue delta (5), the driver's exit code
+and `--all` (one index, one seams pass, one residue table, one summary) run end to end on a
+throwaway git repository. The one-pass source index is held to the regexes it replaced.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -244,6 +246,13 @@ def test_driver_end_to_end(tree, capsys):
             "--skeletons", str(tree["skeletons"]), "--verdicts", str(tree["verdicts"]),
             "--fresh-unported", str(fresh), "--json", str(out)]
 
+    # Check 3 is opt-in: without --seams it is reported, not run.
+    assert kg.main(base) == 1
+    skipped = next(c for c in json.loads(out.read_text(encoding="utf-8"))["checks"] if c["key"] == "seams")
+    assert skipped["status"] == "SKIP" and skipped["lines"][-1] == "SKIP seams (--seams to run)"
+    assert "seams=SKIP" in capsys.readouterr().out
+    base.append("--seams")
+
     assert kg.main(base) == 1                     # the hot header fails the gate
     result = json.loads(out.read_text(encoding="utf-8"))
     status = {c["key"]: c["status"] for c in result["checks"]}
@@ -263,6 +272,9 @@ def test_driver_end_to_end(tree, capsys):
     assert "TOUCHED Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h" in report
 
     assert kg.main([*base, "--allow-hot"]) == 0
+    assert kg.main([*base, "--lane", "wave2-integrator"]) == 0     # the lane presets --allow-hot
+    hot = next(c for c in json.loads(out.read_text(encoding="utf-8"))["checks"] if c["key"] == "hot")
+    assert hot["status"] == "WARN" and hot["lines"] == [f"ALLOWED {SUB}/ElysiumNpcBase.h"]
 
     # A rule row still unported, and a row the pin lacks, both fail the residue.
     write(repo.parent, "fresh.tsv", "C\t433\t0x10000020\trule\tstub\tFElysiumNpc\n"
@@ -272,3 +284,115 @@ def test_driver_end_to_end(tree, capsys):
     assert residue["status"] == "FAIL"
     assert len(residue["data"]["family_rows"]) == 1 and len(residue["data"]["rose"]) == 1
     assert kg.main([*base, "--allow-hot", "--no-residue"]) == 0
+
+
+# The one-pass index against the per-file / per-line regexes it replaces ----------------------
+
+TRICKY = """\
+// 0x10000024 FUN_10000028 dat_1000002A LAB_1000002b sub_1000002c
+x10000031 g10000032 10000033_tail 10000034g a0x10000035 0x1000003600 afun_10000036
+FUN_10000037() 0X10000038 \t10000039; 10000024 twice 0x10000024\r\nnext 10000041\x0cform 10000042
+\u2028sep 10000043 \u0130dotted 10000044 \u212a10000045
+"""
+
+
+def old_tokens(text: str) -> set[str]:
+    """The pre-index citation set: HEX8_RE over the whole lower-cased file."""
+    return set(kg.HEX8_RE.findall(text.lower()))
+
+
+def old_arms_missing(fam: kg.Family, t: dict) -> dict[str, list[str]]:
+    """Check 2 as it ran before the index: the union of every Private/ file's HEX8_RE tokens."""
+    tokens: set[str] = set()
+    for p in (t["repo"] / "Source").rglob("*"):
+        rel = p.relative_to(t["repo"]).as_posix()
+        if p.suffix.lower() in kg.SOURCE_SUFFIXES and kg.under(rel, kg.PRIVATE):
+            tokens |= old_tokens(p.read_text(encoding="utf-8"))
+    return {f"0x{a}": [f"0x{s}" for s, _ in kg.skeleton_sites(fam.skeleton[a]) if s not in tokens]
+            for a in fam.rules if a in fam.skeleton}
+
+
+def test_index_matches_the_regexes_it_replaces(tree):
+    write(tree["repo"], f"{SUB}/Tricky.cpp", TRICKY.encode().decode("unicode_escape"))
+    src = index(tree)
+    rel = f"{SUB}/Tricky.cpp"
+    text = src.files[rel]
+    assert src.tokens[rel] == old_tokens(text)
+    assert src.tokens[rel] >= {"10000024", "10000028", "1000002a", "1000002b", "1000002c", "10000037",
+                               "10000038", "10000039", "10000041", "10000042", "10000043", "10000044"}
+    assert not src.tokens[rel] & {"10000031", "10000032", "10000033", "10000034", "10000035"}
+    assert "10000036" in src.tokens[rel]           # `_` is not a letter: `afun_10000036` cites
+    lines = text.splitlines()
+    for tok in {m.lower() for m in re.findall(r"[0-9a-fA-F]{8}", text)}:
+        pat = re.compile(rf"(?<![0-9a-f]){tok}(?![0-9a-f])", re.IGNORECASE)
+        want = [(rel, i) for i, ln in enumerate(lines, 1) if pat.search(ln)]
+        assert [s for s in src.runs.get(tok, ()) if s[0] == rel] == want, tok
+        cite = [(rel, i) for i, ln in enumerate(lines, 1) if tok in old_tokens(ln)]
+        assert [s for s in src.cites.get(tok, ()) if s[0] == rel] == cite, tok
+
+
+def test_index_based_arms_match_the_old_scan(tree):
+    fam = family(tree)
+    assert {k: v["missing"] for k, v in kg.check_arms(fam, index(tree), 100.0).data["functions"].items()} \
+        == old_arms_missing(fam, tree) == {"0x10000010": [], "0x10000020": ["0x10000024", "0x10000028"]}
+    # Spellings the citation bound accepts (FUN_, upper case) and rejects (a letter-glued run).
+    write(tree["repo"], f"{TST}/Extra.cpp", "// FUN_10000024 g10000028\n")
+    fam = family(tree)
+    got = {k: v["missing"] for k, v in kg.check_arms(fam, index(tree), 100.0).data["functions"].items()}
+    assert got == old_arms_missing(fam, tree) == {"0x10000010": [], "0x10000020": ["0x10000028"]}
+
+
+# --all: one index, one seams pass, one residue, one table ------------------------------------
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
+def test_all_families_in_one_run(tree, capsys, monkeypatch):
+    repo = tree["repo"]
+    write(tree["families"], "Fake29.tsv", "# Fake29\n10000010\trule\t19-29\tFElysiumNpc::Alpha\tx\n")
+    write(tree["skeletons"], "Fake29.json", json.dumps(SKELETON[:1]))
+    write(repo, f"{TST}/ElysiumNpcKernelFake29Tests.cpp",
+          'IMPLEMENT_SIMPLE_AUTOMATION_TEST(FA, "Elysium.Substrate.NpcKernelFake29.Alpha 0x10000010", F)\n')
+    write(repo, "docs/vtmb/npc-kernel/unported.tsv", "class\tslot\taddress\tverdict\tkind\tport_class\n")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    git(repo, "checkout", "-q", "-b", "story")
+    write(repo, f"{SUB}/ElysiumNpcFake19.inl", "/** `m_iNew` +0x10. */\nint32 NewSeam = 0;\n")
+    fresh = write(repo.parent, "fresh.tsv", "class\tslot\taddress\tverdict\tkind\tport_class\n")
+    common = ["--repo", str(repo), "--families", str(tree["families"]), "--skeletons", str(tree["skeletons"]),
+              "--verdicts", str(tree["verdicts"]), "--fresh-unported", str(fresh)]
+    residues = []
+    make_residue = kg.make_residue
+    monkeypatch.setattr(kg, "make_residue", lambda *a: residues.append(a) or make_residue(*a))
+    monkeypatch.setattr(kg, "ALL_FAMILIES", ("Fake19", "Fake29"))
+    jdir, summary = repo.parent / "gates", repo.parent / "summary.json"
+
+    assert kg.main(["--all", *common, "--json-dir", str(jdir), "--json", str(summary)]) == 1
+    report = capsys.readouterr().out
+    assert len(residues) == 1                                  # the residue table, made once
+    assert report.count("] seams: ") == 1                      # seams on under --all, printed once
+    assert "NewSeam" in report
+    table = report[report.rindex("=" * 100):].splitlines()
+    assert table[1].split() == ["family", "addresses", "arms", "seams", "hot", "residue", "tests", "twins",
+                                "gate"]
+    assert table[2].split()[0] == "Fake19" and table[2].split()[-1] == "FAIL"
+    assert table[3].split()[0] == "Fake29" and table[3].split()[-1] == "PASS"
+    assert table[-1] == "== FAIL  1/2 families pass; failing: Fake19"
+    assert json.loads(summary.read_text(encoding="utf-8")) == {"pass": False, "families": {
+        "Fake19": {"pass": False, "checks": {"addresses": "FAIL", "arms": "FAIL", "seams": "PASS", "hot": "PASS",
+                                             "residue": "PASS", "tests": "FAIL", "twins": "PASS"}},
+        "Fake29": {"pass": True, "checks": {"addresses": "PASS", "arms": "PASS", "seams": "PASS", "hot": "PASS",
+                                            "residue": "PASS", "tests": "PASS", "twins": "PASS"}}}}
+
+    # Each family's JSON under --all is the single-family --seams --json result, byte for byte.
+    for name in ("Fake19", "Fake29"):
+        one = repo.parent / f"{name}-alone.json"
+        kg.main(["--family", name, "--seams", *common, "--json", str(one)])
+        assert (jdir / f"{name}.json").read_text(encoding="utf-8") == one.read_text(encoding="utf-8")
+
+    # A comma list gates the same families; seams stay opt-in there.
+    capsys.readouterr()
+    assert kg.main(["--family", "Fake19,Fake29", *common]) == 1
+    assert "SKIP seams (--seams to run)" in capsys.readouterr().out
+    assert kg.main(["--all", "--no-seams", *common]) == 1
+    assert "NewSeam" not in capsys.readouterr().out

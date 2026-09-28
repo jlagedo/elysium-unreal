@@ -19,6 +19,9 @@ tree and the branch diff:
    any `m_…` retail name in the Substrate `.inl` files. A hit is a WARN a reader judges; a hit
    on a line the same diff adds (the new definition citing its own address) is listed, not warned.
    The diff is `git diff <merge-base>` against the working tree, plus untracked files.
+   **Opt-in**: it depends on the diff alone, never on the family, and on a wide integration diff
+   it prints the same thousand-odd lines for every family; it runs under `--seams` or `--all`
+   and is otherwise reported `SKIP seams (--seams to run)`.
 4. **hot** — the diff does not touch the frozen hot headers and generated census files.
 5. **residue** — a fresh `kernel_shape --unported` carries none of the family's `rule` addresses,
    and no row that the committed `docs/vtmb/npc-kernel/unported.tsv` lacks (nothing rose).
@@ -33,22 +36,44 @@ Usage::
 
     uv run elysium research kernel_gate --family Conditions19
     uv run elysium research kernel_gate --family Lifecycle19 --no-residue --arms 0%
-    uv run elysium research kernel_gate --family Spawn19 --base main --json out.json
+    uv run elysium research kernel_gate --family Spawn19 --base main --json out.json --seams
+    uv run elysium research kernel_gate --family RunAi19,Think19
+    uv run elysium research kernel_gate --all --json-dir gates/
+    uv run elysium research kernel_gate --all --lane wave2-integrator
 
-Exit 0 only when no check FAILs (WARN and SKIP do not fail the gate). Through the `elysium` CLI a
-failing tool surfaces as exit 7 and the report is filtered; pass `-v` (`uv run elysium -v research
-kernel_gate ...`) to see it whole, or `--json` for the structured result.
+`--all` gates every story-8 family (`ALL_FAMILIES`) in one process; `--family A,B` gates a list.
+Several families share one run: the source index and the diff are built once, the seams check
+(on by default under `--all`, `--no-seams` to drop it) is computed and printed once, and the
+residue table (`kernel_shape --unported`, in process, through the same memoized `build`
+attributes `research/tooling/kernel.py` shares) is made once and joined per family. The report
+ends in one family x check table; `--json-dir` writes one `<Family>.json` per family in the
+`--json` shape, and `--json` then holds that table.
+
+`--lane wave2-integrator` is the one lane allowed to edit the hot headers (the wave-2 integrator
+runs alone on `main`'s successor and batches its header pass): it presets `--allow-hot` with no
+argument, so every hot touch is `ALLOWED` (WARN) instead of FAIL. Every other lane leaves it off.
+
+Exit 0 only when no check FAILs (WARN and SKIP do not fail the gate); with several families, 1 when
+any family fails. Through the `elysium` CLI a failing tool surfaces as exit 7 and the report is
+filtered; pass `-v` (`uv run elysium -v research kernel_gate ...`) to see it whole, or `--json` for
+the structured result. The tool's own `-v` (`uv run elysium -v research kernel_gate --family X -v`)
+appends the time each stage and check took.
 """
 
 from __future__ import annotations
 
 import argparse
+import bisect
+import contextlib
 import dataclasses
+import io
 import json
 import re
 import subprocess
 import sys
 import tempfile
+import time
+import traceback
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -77,6 +102,12 @@ HOT_FILES = tuple(str(SUBSTRATE / n).replace("\\", "/") for n in (
     "ElysiumNpcKernelShapeMap.cpp", "ElysiumNpcBaseSlots.cpp", "ElysiumNpcSlots.cpp",
 ))
 HOT_PREFIXES = ("research/tooling/gen_kernel_shape.py",)
+# Lanes that preset `--allow-hot`: lane -> the allowed hot files ([] = every one).
+LANES = {"wave2-integrator": []}
+
+# The story-8 families `--all` gates, in landing order.
+ALL_FAMILIES = ("Conditions19", "RunAi19", "StartTask19", "RunTask19", "Select19", "Think19", "Spawn19",
+                "Damage19", "Script19", "Boss19", "Werewolf19", "Misc19", "Damaged19")
 
 TWIN_MARKERS = ("chosen, not recovered", "port-only", "stand-in")
 
@@ -86,6 +117,13 @@ TEST_MACRO_RE = re.compile(
 # An address as the port cites it, on lower-cased text: `0x10273ad0`, the bare `10273ad0`, or
 # Ghidra's `FUN_10273ad0` / `DAT_…` / `LAB_…` spelling.
 HEX8_RE = re.compile(r"(?<![0-9a-z])(?:0x|fun_|dat_|lab_|sub_)?([0-9a-f]{8})(?![0-9a-z_])")
+# Every HEX8_RE match is a run of exactly eight hex digits bounded by non-hex characters (a `0x`,
+# `fun_` … prefix ends in a non-hex character), so one pass over these runs answers both HEX8_RE
+# and the seam address search `(?<![0-9a-f])<addr>(?![0-9a-f])`; `_is_citation` narrows a run to
+# HEX8_RE's stricter bounds.
+RUN8_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{8}(?![0-9a-f])")
+_ALNUM = frozenset("0123456789abcdefghijklmnopqrstuvwxyz")
+_CITE_PREFIXES = ("0x", "fun_", "dat_", "lab_", "sub_")
 NAMED_RE = re.compile(r"0x[0-9a-f]{8}(?![0-9a-f])")
 RETAIL_VA_RE = re.compile(r"(?:0x|FUN_|DAT_|LAB_)(10[0-9a-fA-F]{6})(?![0-9a-fA-F])")
 OFFSET_RE = re.compile(r"\+\s*0x([0-9a-fA-F]{1,5})(?![0-9a-fA-F])")
@@ -142,31 +180,81 @@ def load_family(name: str, families: Path, skeletons: Path, verdicts: Path) -> F
     return Family(name, rows, rules, verdict, skel)
 
 
+def _is_citation(low: str, s: int, e: int) -> bool:
+    """Whether the eight-digit run `low[s:e]` is a HEX8_RE match (a port's citation)."""
+    if e < len(low) and (low[e] in _ALNUM or low[e] == "_"):
+        return False
+    if s == 0 or low[s - 1] not in _ALNUM:
+        return True
+    for p in _CITE_PREFIXES:
+        at = s - len(p)
+        if at >= 0 and low.startswith(p, at) and (at == 0 or low[at - 1] not in _ALNUM):
+            return True
+    return False
+
+
 class SourceIndex:
-    """Every source file under a root, read once: lower-cased text and its 8-hex-digit tokens."""
+    """Every source file under a root, read once, and one address index built in one regex pass.
+
+    `tokens` is each file's set of HEX8_RE citations; `where` the files citing an address and
+    `cites` its (file, line) sites, both in file order; `runs` every (file, line) holding the
+    address as a bare eight-hex-digit run (the seam search's looser bound). Lines are 1-based and
+    counted as `str.splitlines` counts them; a line appears once per address however often it
+    repeats it.
+    """
 
     def __init__(self, repo: Path, root: Path):
         self.repo = repo
         self.files: dict[str, str] = {}          # repo-relative posix path -> original text
         self.tokens: dict[str, set[str]] = {}
+        self.where: dict[str, list[str]] = {}
+        self.cites: dict[str, list[tuple[str, int]]] = {}
+        self.runs: dict[str, list[tuple[str, int]]] = {}
+        self.order: dict[str, int] = {}
+        self._lines: dict[str, list[str]] = {}
+        self._lower: dict[str, str] = {}
         base = repo / root
         if base.is_dir():
             for p in sorted(base.rglob("*")):
                 if p.suffix.lower() in SOURCE_SUFFIXES and p.is_file():
                     rel = p.relative_to(repo).as_posix()
-                    text = p.read_text(encoding="utf-8", errors="replace")
-                    self.files[rel] = text
-                    self.tokens[rel] = set(HEX8_RE.findall(text.lower()))
+                    self._add(rel, p.read_text(encoding="utf-8", errors="replace"))
+
+    def _add(self, rel: str, text: str) -> None:
+        self.order[rel] = len(self.files)
+        self.files[rel] = text
+        low = text.lower()
+        self._lower[rel] = low
+        toks: set[str] = set()
+        starts = [0]
+        for ln in low.splitlines(keepends=True):
+            starts.append(starts[-1] + len(ln))
+        for m in RUN8_RE.finditer(low):
+            tok = m.group()
+            site = (rel, bisect.bisect_right(starts, m.start()))
+            runs = self.runs.setdefault(tok, [])
+            if not runs or runs[-1] != site:
+                runs.append(site)
+            if not _is_citation(low, m.start(), m.end()):
+                continue
+            if tok not in toks:
+                toks.add(tok)
+                self.where.setdefault(tok, []).append(rel)
+            cites = self.cites.setdefault(tok, [])
+            if not cites or cites[-1] != site:
+                cites.append(site)
+        self.tokens[rel] = toks
+
+    def lines(self, rel: str) -> list[str]:
+        if rel not in self._lines:
+            self._lines[rel] = self.files[rel].splitlines()
+        return self._lines[rel]
+
+    def lower(self, rel: str) -> str:
+        return self._lower[rel]
 
     def cited(self, addr: str, keep=lambda rel: True) -> list[str]:
-        return [rel for rel, toks in self.tokens.items() if addr in toks and keep(rel)]
-
-    def all_tokens(self, keep=lambda rel: True) -> set[str]:
-        out: set[str] = set()
-        for rel, toks in self.tokens.items():
-            if keep(rel):
-                out |= toks
-        return out
+        return [rel for rel in self.where.get(addr, ()) if keep(rel)]
 
 
 def is_census(rel: str) -> bool:
@@ -266,7 +354,7 @@ def check_arms(fam: Family, src: SourceIndex, threshold: float) -> Check:
     label = "all" if threshold >= 100.0 else f"{threshold:g}%"
     c = Check("arms", f"skeleton branch and call sites cited under Source/ElysiumUE/Private/ "
                       f"(threshold {label} per function)")
-    tokens = src.all_tokens(lambda rel: under(rel, PRIVATE))
+    private = lambda rel: under(rel, PRIVATE)
     per_fn = {}
     total_cov = total_all = 0
     for a in fam.rules:
@@ -276,7 +364,7 @@ def check_arms(fam: Family, src: SourceIndex, threshold: float) -> Check:
             per_fn[f"0x{a}"] = {"covered": 0, "total": None, "missing": []}
             continue
         sites = skeleton_sites(fn)
-        missing = [(s, k) for s, k in sites if s not in tokens]
+        missing = [(s, k) for s, k in sites if not src.cited(s, private)]
         covered = len(sites) - len(missing)
         total_cov += covered
         total_all += len(sites)
@@ -420,12 +508,18 @@ class Hit:
     text: str
 
 
-def grep(src: SourceIndex, pattern: re.Pattern, keep, exclude: set[tuple[str, int]]) -> list[Hit]:
+def grep(src: SourceIndex, pattern: re.Pattern, keep, exclude: set[tuple[str, int]],
+         needle: str | None = None) -> list[Hit]:
+    """Every line of a kept file `pattern` finds. `needle` is a substring every hit must hold
+    (lower-cased when the pattern ignores case): a file without it is not split into lines."""
     out = []
+    folded = bool(pattern.flags & re.IGNORECASE)
     for rel, text in src.files.items():
         if not keep(rel):
             continue
-        for i, ln in enumerate(text.splitlines(), 1):
+        if needle is not None and needle not in (src.lower(rel) if folded else text):
+            continue
+        for i, ln in enumerate(src.lines(rel), 1):
             if (rel, i) in exclude:
                 continue
             if pattern.search(ln):
@@ -433,9 +527,24 @@ def grep(src: SourceIndex, pattern: re.Pattern, keep, exclude: set[tuple[str, in
     return out
 
 
+def grep_address(src: SourceIndex, addr: str, keep, exclude: set[tuple[str, int]]) -> list[Hit]:
+    """`grep` for `(?<![0-9a-f])<addr>(?![0-9a-f])`, case-folded, answered from the run index."""
+    return [Hit(rel, i, src.lines(rel)[i - 1].strip()) for rel, i in src.runs.get(addr, ())
+            if keep(rel) and (rel, i) not in exclude]
+
+
+SEAMS_TITLE = ("the three lessons-block searches for every added Substrate declaration "
+               "(address in Source/, offset in the shape map, name in the .inl files)")
+
+
+def skip_seams() -> Check:
+    c = Check("seams", SEAMS_TITLE, status=SKIP)
+    c.lines.append("SKIP seams (--seams to run)")
+    return c
+
+
 def check_seams(diff: Diff | None, repo: Path, src_all: SourceIndex, limit: int = 8) -> Check:
-    c = Check("seams", "the three lessons-block searches for every added Substrate declaration "
-                       "(address in Source/, offset in the shape map, name in the .inl files)")
+    c = Check("seams", SEAMS_TITLE)
     if diff is None:
         c.status = SKIP
         c.lines.append("no diff (git unavailable)")
@@ -446,7 +555,10 @@ def check_seams(diff: Diff | None, repo: Path, src_all: SourceIndex, limit: int 
         if not under(rel, SUBSTRATE) or Path(rel).suffix.lower() not in (".h", ".inl"):
             continue
         p = repo / rel
-        post = p.read_text(encoding="utf-8", errors="replace").splitlines() if p.is_file() else []
+        if rel in src_all.files:
+            post = src_all.lines(rel)
+        else:
+            post = p.read_text(encoding="utf-8", errors="replace").splitlines() if p.is_file() else []
         for lineno, text in added:
             name = declared_name(text)
             if not name:
@@ -467,25 +579,27 @@ def check_seams(diff: Diff | None, repo: Path, src_all: SourceIndex, limit: int 
         names = [name] + sorted(set(RETAIL_NAME_RE.findall(ctx + "\n" + text)) - {name})
         rec = {"file": rel, "line": lineno, "decl": text, "name": name, "searches": []}
         c.lines.append(f"{rel}:{lineno}  {name}  <- {text[:110]}")
+        # (command, search) -- each search answers the command's `rg` over the one in-memory tree.
         searches = []
         for a in addrs:
             searches.append((f'rg -n -i "(0x|FUN_|DAT_)?{a}" Source/',
-                             re.compile(rf"(?<![0-9a-f]){a}(?![0-9a-f])", re.IGNORECASE),
-                             lambda r: r.startswith("Source/")))
+                             lambda a=a: grep_address(src_all, a, lambda r: r.startswith("Source/"),
+                                                      exclude)))
         if not addrs:
             c.lines.append("    (a) no retail address in the declaration's comment")
         for o in offs:
             searches.append((f'rg -n -i "0x0*{o}\\b" {shape_map}',
-                             re.compile(rf"0x0*{o}(?![0-9a-f])", re.IGNORECASE),
-                             lambda r: r == shape_map))
+                             lambda o=o: grep(src_all, re.compile(rf"0x0*{o}(?![0-9a-f])", re.IGNORECASE),
+                                              lambda r: r == shape_map, exclude, needle=o)))
         if not offs:
             c.lines.append("    (b) no +0x offset in the declaration's comment")
         for n in names:
             searches.append((f'rg -n -w "{n}" {SUBSTRATE.as_posix()} -g "*.inl"',
-                             re.compile(rf"\b{re.escape(n)}\b"),
-                             lambda r: under(r, SUBSTRATE) and r.endswith(".inl")))
-        for cmd, pat, keep in searches:
-            found = grep(src_all, pat, keep, exclude)
+                             lambda n=n: grep(src_all, re.compile(rf"\b{re.escape(n)}\b"),
+                                              lambda r: under(r, SUBSTRATE) and r.endswith(".inl"),
+                                              exclude, needle=n)))
+        for cmd, search in searches:
+            found = search()
             # A hit on a line this same diff adds is the port itself (the definition citing its
             # own address), not a prior accessor; it is listed but does not raise the WARN.
             hits = [h for h in found if (h.rel, h.line) not in ours]
@@ -547,39 +661,89 @@ def read_unported(path: Path) -> list[tuple[str, ...]]:
     return out
 
 
-def check_residue(fam: Family, repo: Path, fresh: Path | None, skip: bool) -> Check:
-    c = Check("residue", "fresh kernel_shape --unported: no family rule rows, nothing rose "
-                         "over docs/vtmb/npc-kernel/unported.tsv")
-    if skip:
-        c.status = SKIP
-        c.lines.append("--no-residue")
-        return c
+RESIDUE_TITLE = ("fresh kernel_shape --unported: no family rule rows, nothing rose "
+                 "over docs/vtmb/npc-kernel/unported.tsv")
+
+
+@dataclasses.dataclass
+class Residue:
+    """The fresh unported table against the pin, made once and joined per family."""
+    head: list[str]                          # lines every family's check opens with
+    failure: list[str] | None = None         # the table could not be made: FAIL with these lines
+    now: list[tuple[str, ...]] = dataclasses.field(default_factory=list)
+    before: list[tuple[str, ...]] = dataclasses.field(default_factory=list)
+
+
+def _share_kernel_builds() -> None:
+    """Memoize the ledger/shape/census builds exactly as `research/tooling/kernel.py` does."""
+    tooling = str(_HERE.parents[1])
+    if tooling not in sys.path:
+        sys.path.insert(0, tooling)
+    import kernel
+    if not all(hasattr(m.build, "cache_clear") for m in kernel.SHARED_BUILDS):
+        kernel.share_builds()
+
+
+def write_unported(path: Path) -> tuple[int, str, str]:
+    """`kernel_shape --unported <path>` in this process, on the shared builds: (exit, out, err)."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            _share_kernel_builds()
+            import kernel_shape
+            code = kernel_shape.main(["--unported", str(path)]) or 0
+        except SystemExit as stop:
+            code = stop.code if isinstance(stop.code, int) else (0 if stop.code is None else 1)
+            if not isinstance(stop.code, (int, type(None))):
+                err.write(f"{stop.code}\n")
+        except Exception:                       # noqa: BLE001 -- a failed build is the check's FAIL
+            code = 1
+            err.write(traceback.format_exc())
+    return code, out.getvalue(), err.getvalue()
+
+
+def make_residue(repo: Path, fresh: Path | None) -> Residue:
     pin = repo / UNPORTED_PIN
     if not pin.is_file():
-        c.fail(f"no committed pin {UNPORTED_PIN.as_posix()}")
-        return c
+        return Residue([], [f"no committed pin {UNPORTED_PIN.as_posix()}"])
+    head: list[str] = []
     tmp_dir = None
     if fresh is None:
         tmp_dir = tempfile.TemporaryDirectory()
         fresh = Path(tmp_dir.name) / "unported.tsv"
-        cmd = [sys.executable, str(repo / KERNEL_SHAPE), "--unported", str(fresh)]
-        r = subprocess.run(cmd, cwd=repo, check=False, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace")
-        if r.returncode or not fresh.is_file():
-            c.fail(f"kernel_shape --unported failed (exit {r.returncode})")
-            c.lines += ["    " + ln for ln in (r.stdout + r.stderr).strip().splitlines()[-12:]]
-            return c
-        c.lines.append(r.stdout.strip())
+        code, stdout, stderr = write_unported(fresh)
+        if code or not fresh.is_file():
+            tmp_dir.cleanup()
+            return Residue([], [f"kernel_shape --unported failed (exit {code})",
+                                *("    " + ln for ln in (stdout + stderr).strip().splitlines()[-12:])])
+        head.append(stdout.strip())
     try:
         now = read_unported(fresh)
-        before = set(read_unported(pin))
+        before = read_unported(pin)
     finally:
         if tmp_dir is not None:
             tmp_dir.cleanup()
+    return Residue(head, None, now, before)
+
+
+def check_residue(fam: Family, residue: Residue | None) -> Check:
+    """`residue` is None under `--no-residue`."""
+    c = Check("residue", RESIDUE_TITLE)
+    if residue is None:
+        c.status = SKIP
+        c.lines.append("--no-residue")
+        return c
+    if residue.failure:
+        c.fail(residue.failure[0])
+        c.lines += residue.failure[1:]
+        return c
+    c.lines += residue.head
+    now, before = residue.now, set(residue.before)
     rules = {f"0x{a}" for a in fam.rules}
     mine = [r for r in now if len(r) > 2 and r[2].lower() in rules]
     rose = [r for r in now if r not in before]
-    fell = [r for r in before if r not in set(now)]
+    now_set = set(now)
+    fell = [r for r in dict.fromkeys(residue.before) if r not in now_set]     # in pin order
     c.data = {"fresh": len(now), "pinned": len(before), "family_rows": ["\t".join(r) for r in mine],
               "rose": ["\t".join(r) for r in rose], "fell": ["\t".join(r) for r in fell]}
     c.lines.append(f"fresh {len(now)} rows, pinned {len(before)}; fell {len(fell)}, rose {len(rose)}")
@@ -669,24 +833,22 @@ def _comment_block(lines: list[str], idx: int) -> str:
 def check_twins(fam: Family, src: SourceIndex) -> Check:
     c = Check("twins", "no Substrate .cpp cites a rule address in a CHOSEN, NOT RECOVERED / "
                        "port-only / stand-in comment")
-    rules = set(fam.rules)
+    # Every line of a Substrate .cpp (outside the census) that cites a rule address, from the index.
+    sites: dict[tuple[str, int], set[str]] = {}
+    for a in set(fam.rules):
+        for rel, n in src.cites.get(a, ()):
+            if under(rel, SUBSTRATE) and rel.endswith(".cpp") and not is_census(rel):
+                sites.setdefault((rel, n), set()).add(a)
     found = []
-    for rel, text in src.files.items():
-        if not under(rel, SUBSTRATE) or not rel.endswith(".cpp") or is_census(rel):
-            continue
-        if not rules & src.tokens[rel]:
-            continue
-        lines = text.splitlines()
-        for i, ln in enumerate(lines):
-            hit = rules & set(HEX8_RE.findall(ln.lower()))
-            if not hit:
-                continue
-            block = _comment_block(lines, i).lower()
-            marks = [m for m in TWIN_MARKERS if m in block]
-            if marks:
-                for a in sorted(hit):
-                    found.append(f"{rel}:{i + 1}")
-                    c.warn(f"0x{a} {rel}:{i + 1} [{', '.join(marks)}]: {ln.strip()[:120]}")
+    for rel, n in sorted(sites, key=lambda site: (src.order[site[0]], site[1])):
+        lines = src.lines(rel)
+        i, ln = n - 1, lines[n - 1]
+        block = _comment_block(lines, i).lower()
+        marks = [m for m in TWIN_MARKERS if m in block]
+        if marks:
+            for a in sorted(sites[(rel, n)]):
+                found.append(f"{rel}:{i + 1}")
+                c.warn(f"0x{a} {rel}:{i + 1} [{', '.join(marks)}]: {ln.strip()[:120]}")
     c.data = {"hits": found}
     if not found:
         c.lines.append("none")
@@ -697,36 +859,116 @@ def check_twins(fam: Family, src: SourceIndex) -> Check:
 # Driver.
 
 
-def run_gate(args: argparse.Namespace) -> tuple[list[Check], Family]:
+class Clock:
+    """Seconds per stage and check, summed over families (`-v`)."""
+
+    def __init__(self) -> None:
+        self.times: dict[str, float] = {}
+
+    @contextlib.contextmanager
+    def __call__(self, label: str):
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.times[label] = self.times.get(label, 0.0) + time.perf_counter() - start
+
+    def render(self, total: float) -> str:
+        cells = "  ".join(f"{k} {v:.2f}" for k, v in self.times.items())
+        return f"-- timings (s): {cells}  | total {total:.2f}"
+
+
+@dataclasses.dataclass
+class Shared:
+    """What every family's gate reads from one run: the tree, the diff's two checks, the residue."""
+    src: SourceIndex
+    seams: Check
+    hot: Check
+    residue: Residue | None
+
+
+def hot_allowance(args: argparse.Namespace) -> list[str] | None:
+    """`--allow-hot` joined with the `--lane` preset ([] = every hot file allowed)."""
+    if args.lane is None:
+        return args.allow_hot
+    preset = LANES[args.lane]
+    if args.allow_hot is None:
+        return list(preset)
+    if not preset or not args.allow_hot:
+        return []
+    return [*preset, *args.allow_hot]
+
+
+def prepare(args: argparse.Namespace, clock: Clock) -> Shared:
     repo = Path(args.repo).resolve()
-    families = Path(args.families) if args.families else _default_families()
-    skeletons = Path(args.skeletons) if args.skeletons else families.parent / "skeletons-19-29"
-    verdicts = Path(args.verdicts) if args.verdicts else repo / VERDICTS
-    fam = load_family(args.family, families, skeletons, verdicts)
-    src = SourceIndex(repo, Path("Source"))   # every check filters by path
-
+    with clock("index"):
+        src = SourceIndex(repo, Path("Source"))   # every check filters by path
     diff: Diff | None
-    diff_note = ""
-    try:
-        diff = collect_diff(repo, args.base)
-        diff_note = f"diff base {diff.base[:12]} ({args.base or 'merge-base with main'}), " \
-                    f"{len(diff.changed)} changed file(s)"
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        diff = None
-        diff_note = f"no diff: {exc}"
+    with clock("diff"):
+        try:
+            diff = collect_diff(repo, args.base)
+            diff_note = f"diff base {diff.base[:12]} ({args.base or 'merge-base with main'}), " \
+                        f"{len(diff.changed)} changed file(s)"
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            diff = None
+            diff_note = f"no diff: {exc}"
+    with clock("seams"):
+        seams = check_seams(diff, repo, src) if args.seams else skip_seams()
+    seams.lines.insert(0, diff_note)
+    with clock("hot"):
+        hot = check_hot(diff.changed if diff else None, hot_allowance(args))
+    with clock("residue"):
+        residue = None if args.no_residue else make_residue(
+            repo, Path(args.fresh_unported) if args.fresh_unported else None)
+    return Shared(src, seams, hot, residue)
 
-    checks = [
-        check_addresses(fam, src),
-        check_arms(fam, src, args.arms),
-        check_seams(diff, repo, src),
-        check_hot(diff.changed if diff else None, args.allow_hot),
-        check_residue(fam, repo, Path(args.fresh_unported) if args.fresh_unported else None,
-                      args.no_residue),
-        check_tests(fam, src),
-        check_twins(fam, src),
-    ]
-    checks[2].lines.insert(0, diff_note)
-    return checks, fam
+
+def gate_family(fam: Family, shared: Shared, args: argparse.Namespace, clock: Clock) -> list[Check]:
+    src = shared.src
+    with clock("addresses"):
+        addresses = check_addresses(fam, src)
+    with clock("arms"):
+        arms = check_arms(fam, src, args.arms)
+    with clock("residue-join"):
+        residue = check_residue(fam, shared.residue)
+    with clock("tests"):
+        tests = check_tests(fam, src)
+    with clock("twins"):
+        twins = check_twins(fam, src)
+    return [addresses, arms, shared.seams, shared.hot, residue, tests, twins]
+
+
+def failed(checks: list[Check]) -> bool:
+    return any(c.status == FAIL for c in checks)
+
+
+def family_json(fam: Family, checks: list[Check]) -> dict:
+    return {
+        "family": fam.name, "rows": len(fam.rows), "rules": [f"0x{a}" for a in fam.rules],
+        "pass": not failed(checks),
+        "checks": [{"key": c.key, "title": c.title, "status": c.status, "lines": c.lines,
+                    "data": c.data} for c in checks],
+    }
+
+
+def family_head(fam: Family) -> str:
+    return f"kernel_gate {fam.name}: {len(fam.rows)} rows, {len(fam.rules)} rule (kernel_verdicts.tsv)"
+
+
+def family_summary(checks: list[Check]) -> str:
+    return f"== {'FAIL' if failed(checks) else 'PASS'}  " + "  ".join(f"{c.key}={c.status}" for c in checks)
+
+
+def summary_table(results: list[tuple[Family, list[Check]]]) -> list[str]:
+    """One row per family, one column per check, and the family's verdict."""
+    keys = [c.key for c in results[0][1]]
+    width = max(len("family"), *(len(fam.name) for fam, _ in results))
+    cols = [max(len(k), 4) for k in keys]
+    out = ["  ".join([f"{'family':<{width}}", *(f"{k:<{w}}" for k, w in zip(keys, cols)), "gate"])]
+    for fam, checks in results:
+        out.append("  ".join([f"{fam.name:<{width}}", *(f"{c.status:<{w}}" for c, w in zip(checks, cols)),
+                              FAIL if failed(checks) else PASS]))
+    return out
 
 
 def _default_families() -> Path:
@@ -734,15 +976,30 @@ def _default_families() -> Path:
     return research_root() / "npc-kernel-checklist" / "families-19-29"
 
 
+def family_names(args: argparse.Namespace) -> list[str]:
+    if args.all:
+        return list(ALL_FAMILIES)
+    return list(dict.fromkeys(n.strip() for n in args.family.split(",") if n.strip()))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--family", required=True, help="family stem (Conditions19)")
+    which = p.add_mutually_exclusive_group(required=True)
+    which.add_argument("--family", help="family stem (Conditions19), or several comma-separated")
+    which.add_argument("--all", action="store_true",
+                       help="every story-8 family (ALL_FAMILIES) in one process; seams on unless --no-seams")
     p.add_argument("--base", help="git rev the branch is diffed against (merge-base; default main)")
-    p.add_argument("--json", help="write the structured result here")
+    p.add_argument("--json", help="write the structured result here (several families: the summary table)")
+    p.add_argument("--json-dir", help="write one <Family>.json per family here, in the --json shape")
     p.add_argument("--arms", type=parse_threshold, default=100.0, help="all | N%% per function (default all)")
+    p.add_argument("--seams", action=argparse.BooleanOptionalAction, default=None,
+                   help="run check 3, the seam searches (default: only under --all)")
     p.add_argument("--allow-hot", nargs="*", default=None, metavar="PATH",
                    help="downgrade hot-file touches to WARN: every one (no argument) or the named ones")
+    p.add_argument("--lane", choices=sorted(LANES),
+                   help="preset --allow-hot for the one lane that may edit the hot headers")
     p.add_argument("--no-residue", action="store_true", help="skip the kernel_shape --unported check")
+    p.add_argument("-v", "--verbose", action="store_true", help="print the time each stage and check took")
     p.add_argument("--fresh-unported", help=argparse.SUPPRESS)   # a pre-made fresh table (tests)
     p.add_argument("--repo", default=str(DEFAULT_REPO), help=argparse.SUPPRESS)
     p.add_argument("--families", help="directory of family row files (default families-19-29)")
@@ -752,25 +1009,72 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    start = time.perf_counter()
     args = build_parser().parse_args(sys.argv[1:] if argv is None else argv)
-    checks, fam = run_gate(args)
-    failed = [c.key for c in checks if c.status == FAIL]
-    print(f"kernel_gate {fam.name}: {len(fam.rows)} rows, {len(fam.rules)} rule "
-          f"(kernel_verdicts.tsv)")
-    for c in checks:
+    if args.seams is None:
+        args.seams = args.all
+    repo = Path(args.repo).resolve()
+    families = Path(args.families) if args.families else _default_families()
+    skeletons = Path(args.skeletons) if args.skeletons else families.parent / "skeletons-19-29"
+    verdicts = Path(args.verdicts) if args.verdicts else repo / VERDICTS
+    clock = Clock()
+    with clock("families"):
+        fams = [load_family(n, families, skeletons, verdicts) for n in family_names(args)]
+    if not fams:
+        raise SystemExit("--family names no family")
+    shared = prepare(args, clock)
+    results = [(fam, gate_family(fam, shared, args, clock)) for fam in fams]
+
+    if len(results) == 1:
+        fam, checks = results[0]
+        print(family_head(fam))
+        for c in checks:
+            print()
+            print(c.render())
         print()
-        print(c.render())
-    print()
-    summary = "  ".join(f"{c.key}={c.status}" for c in checks)
-    print(f"== {'FAIL' if failed else 'PASS'}  {summary}")
+        print(family_summary(checks))
+    else:
+        print(f"kernel_gate: {len(results)} families: {', '.join(f.name for f, _ in results)}")
+        print("\n-- the diff's checks, computed once for every family")
+        for c in (shared.seams, shared.hot):
+            print()
+            print(c.render())
+        for fam, checks in results:
+            print()
+            print("-" * 100)
+            print(family_head(fam))
+            for c in checks:
+                if c is not shared.seams and c is not shared.hot:
+                    print()
+                    print(c.render())
+            print()
+            print(family_summary(checks))
+        print()
+        print("=" * 100)
+        for line in summary_table(results):
+            print(line)
+        bad = [fam.name for fam, checks in results if failed(checks)]
+        print()
+        print(f"== {'FAIL' if bad else 'PASS'}  {len(results) - len(bad)}/{len(results)} families pass"
+              + (f"; failing: {', '.join(bad)}" if bad else ""))
+
+    if args.json_dir:
+        out_dir = Path(args.json_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for fam, checks in results:
+            (out_dir / f"{fam.name}.json").write_text(json.dumps(family_json(fam, checks), indent=1),
+                                                      encoding="utf-8")
     if args.json:
-        Path(args.json).write_text(json.dumps({
-            "family": fam.name, "rows": len(fam.rows), "rules": [f"0x{a}" for a in fam.rules],
-            "pass": not failed,
-            "checks": [{"key": c.key, "title": c.title, "status": c.status, "lines": c.lines,
-                        "data": c.data} for c in checks],
-        }, indent=1), encoding="utf-8")
-    return 1 if failed else 0
+        if len(results) == 1:
+            payload = family_json(*results[0])
+        else:
+            payload = {"pass": not any(failed(cs) for _, cs in results),
+                       "families": {f.name: {"pass": not failed(cs), "checks": {c.key: c.status for c in cs}}
+                                    for f, cs in results}}
+        Path(args.json).write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    if args.verbose:
+        print(clock.render(time.perf_counter() - start))
+    return 1 if any(failed(checks) for _, checks in results) else 0
 
 
 if __name__ == "__main__":

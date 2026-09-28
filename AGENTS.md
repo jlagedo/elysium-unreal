@@ -38,6 +38,18 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `docs/vtmb/` — the oracle: recovered retail facts and addresses. Never port narrative.
 - `docs/contracts/` — the seam data formats shared by the pipeline and the runtime.
 
+## Editing files
+
+- Edit/Write for ordinary changes, C++ included.
+- `ast-grep` for structural bulk rewrites across C++ files; `sd` for plain regex replacements.
+  Call it `ast-grep` (`sg` is deprecated). A `$$$` capture in `-r` reflows a multi-line
+  argument list onto one line; to keep layout, rewrite only the changed node with a YAML rule
+  (`ast-grep scan -r rule.yml`: `kind` + `inside` + `fix`).
+- Preview before applying (`ast-grep` without `-U`, `sd -p`), start from a clean tree, review
+  `git diff` after.
+- No ad-hoc Python edit scripts. Python stays for edits that need logic (per-match decisions,
+  cross-file reads, generation from data).
+
 ## Project rules
 
 - Save game files are disposable, we have not released and don't try to migrate or keep compatibility
