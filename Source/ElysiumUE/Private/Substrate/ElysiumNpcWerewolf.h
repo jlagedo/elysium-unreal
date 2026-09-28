@@ -609,4 +609,29 @@ public:
 	/** `+0x6710` -- set by task `0x14a` to whether the closest player's character template is
 	 *  `Player_Malkavian`. Not in the datamap; name from the packet walk (`m_bPlayerIsMalkavian`). */
 	bool bWerewolfPlayerIsMalkavian = false;
+
+	// --- Story 8 lane L13b (Think19/Damaged19): `NPCThink` 0x103cb590's words and seams -------------
+	/** `+0x66a0` (`m_bHintDataInitialized` in the kernel shape; not in the class datamap, so not
+	 *  saved): set once `InitializeHintData` and the zone opener `0x103cade0` have run from the think
+	 *  (`0x103cb675`). Not Bach's `m_bCamperFlag` at the same offset. */
+	bool bWerewolfHintDataInitialized = false;
+	/** SEAM for `EnableDebugStuff` `0x103dbad0` (cdecl, `this` pushed), the `werewolf_show_debug`
+	 *  one-shot (`DAT_1093fac4`) that sets the debug-overlay bits on self and player, several ConVars
+	 *  (`meleedebug`, `volume`, `entity_debug_stats`, `think_limit`, `r_cloth`, `r_shadows`, ...) and four
+	 *  key binds -- developer tooling behind a ConVar shipped "0". Counted. */
+	void WerewolfEnableDebugStuff();
+	int32 WerewolfEnableDebugStuffCalls = 0;
+	/** SEAM for `0x103cb4b0`, the `werewolf_draw_hints` hint overlay: the global hint chain
+	 *  (`DAT_10925450`, next `+0x5d8`) filtered by the ConVar's value through the six
+	 *  `IsImperative*` / `IsValid*` predicates, `DrawDebugHintInfo` on each pass. Debug drawing;
+	 *  counted. The early RETURN that follows it in the think is ported. */
+	void WerewolfDrawHintOverlay();
+	int32 WerewolfDrawHintOverlayCalls = 0;
+	/** The engine tick the think's round robin divides by 5 (`(*0x1070b22c)` slot 120,
+	 *  `0x103cb6b3`). NAMED DIVERGENCE: this runtime has no engine frame counter
+	 *  (`EngineFrameNumber` answers `INDEX_NONE`, which a signed `% 5` would turn into an index BEFORE
+	 *  the table); the count of whole frames on the world clock stands in for it. */
+	int32 WerewolfThinkEngineTick() const;
+	/** Which of the five round-robin arms the last think dispatched (0..4), `INDEX_NONE` for none. */
+	int32 WerewolfLastRoundRobinArm = INDEX_NONE;
 };

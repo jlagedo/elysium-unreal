@@ -317,8 +317,8 @@ void FElysiumNpcPlayerController::NPCThink()
 	//   `JMP dword ptr [EAX+0x998]` -> slot 614 `ResetThinkTimers`, VIRTUAL, as a tail call.
 	// Every class in the image fills slot 614 with `0x102c23f0`; the port's one body is the virtual
 	// `FElysiumNpc::ResetThinkTimers`.
-	FElysiumNpc::NPCThink();
-	ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);
+	FElysiumNpc::NPCThink();                                                // 0x103a4703 CALL 0x10002a7c
+	ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0);         // 0x103a470d JMP [EAX+0x998] slot 614
 }
 
 // Slot 437: `0x103a46b0`, shared by both children.

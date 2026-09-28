@@ -113,4 +113,12 @@ public:
 	 *  answers false (the refusal). */
 	bool ZombieBeFedOnByZombie(class FElysiumPlayer& Player);
 	int32 ZombieBeFedOnCalls = 0;
+
+	// --- Story 8 lane L13b (Think19): the helper `NPCThink` 0x103dfa20 calls -------------------------
+	/** `0x103e0a00` (retail name unrecovered), the type-1 zombie's per-think reacquire. With no enemy
+	 *  (or one with no combat-character cache `+0x9c`): the live closest player (`+0x628c`) answering
+	 *  the obfuscate test `0x10146a80` becomes the enemy through `SetEnemy` `0x10279a50`, otherwise it
+	 *  is handed to slot 596. With an enemy: not obfuscated -> slot 544 `UpdateEnemyMemory` at its
+	 *  origin; obfuscated and remembered (`0x102dfa20`) -> `0x10279c20`, the memory's `MarkAsEluded`. */
+	void ZombieReacquireEnemy();
 };
