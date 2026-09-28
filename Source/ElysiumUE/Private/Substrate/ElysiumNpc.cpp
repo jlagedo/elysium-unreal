@@ -269,8 +269,11 @@ void FElysiumNpc::OnKilled()
 
 void FElysiumNpc::KilledBy(const FElysiumEntityHandle& Attacker)
 {
-	// A corpse is out of the world in retail; nothing reaches it to kill it twice.
-	if (bDeathCommitted)
+	// The port's packet-less kill entry (the feed's kill, a scripted kill). Retail's only route to
+	// slot 144 on a living body is `0x1032ef60`'s alive arm, and a body whose `m_lifeState` is not
+	// LIFE_ALIVE takes the dying/dead arms there instead -- so a body already dying is not killed
+	// again (the life-state split, not a corpse refusal).
+	if (AnimEventLifeStateWord != 0)
 	{
 		return;
 	}
@@ -303,7 +306,8 @@ void FElysiumNpc::BecomeClientRagdoll()
 	SetBodyAnimationHeld(false);
 	// The pose goes to physics (`ACT_DIERAGDOLL`'s seed in retail; this runtime's current pose).
 	CompleteDeathHandoff();
-	// The think stops: `BecomeClientRagdoll` leaves the entity no think function.
+	// The think stops: `0x10090180` clears it. `CreateCorpse`'s tail (`0x1032c404..0x1032c423`) then
+	// re-arms `SUB_PVSRemove` at +10 s (or `SUB_Remove` for a burning corpse).
 	ThinkSet(nullptr, 0.0);
 	NextThink = ELYSIUM_NEVER_THINK;
 }
@@ -657,6 +661,52 @@ void FElysiumNpc::LeaveGrappleState()
 	ResetThinkTimers(World ? World->NowSeconds() : 0.0);
 }
 
+namespace
+{
+	// The two removal thinks by the name `ThinkSet` records (the function's retail address, as the
+	// species tasks that install `SUB_Remove` spell it).
+	const TCHAR* NpcSubRemoveThinkName() { return TEXT("0x101c0b10"); }
+	const TCHAR* NpcSubPvsRemoveThinkName() { return TEXT("0x102696f0"); }
+	// `_DAT_1044e664`, a float 10.0: `SUB_PVSRemove`'s re-arm and `CreateCorpse`'s corpse delay.
+	constexpr float GNpcCorpseThinkDelaySeconds = 10.f;
+
+	// `SUB_Remove` `0x101c0b10`: `if (m_iHealth > 0) { m_iHealth = 0; DevWarning(2, ...); }` then
+	// `UTIL_Remove(this)` (`0x101cd940`), whose first act is slot 180 `UpdateOnRemove`.
+	void NpcSubRemove(FElysiumNpc& Npc)
+	{
+		if (Npc.Health > 0)
+		{
+			Npc.Health = 0;
+			UE_LOG(LogElysiumNpcEnt, Log, TEXT("SUB_Remove called on entity with health > 0"));   // 0x1059c3a4
+		}
+		Npc.UpdateOnRemove();
+		Npc.Kill();
+	}
+
+	// `SUB_PVSRemove` `0x102696f0` (the datamap's `CBaseEntitySUB_PVSRemove`, thunk `0x10009c9b`):
+	// for each player, its slot 363 `FInViewCone(this)`, the engine PVS test `0x101d1a90(this,
+	// player)` and its slot 201 `FVisible(this, 0x2804091)`; a player that passes all three re-arms
+	// the think at `curtime + 10.0` (`_DAT_1044e664`) and keeps the corpse. Nobody seeing it:
+	// `UTIL_Remove(this)`. The player's view cone and line of sight are the embodiment's
+	// player-visibility queries (the ones the NPC maker's spawn guard asks); a headless world has no
+	// view, so nothing sees the corpse there.
+	void NpcSubPvsRemove(FElysiumNpc& Npc, double Now)
+	{
+		const FElysiumPlayer* const Player = Npc.World != nullptr ? Npc.World->FindPlayer() : nullptr;
+		const IElysiumEmbodiment* const Embodiment = Npc.World != nullptr ? Npc.World->Embodiment() : nullptr;
+		if (Player != nullptr && Embodiment != nullptr
+			&& Embodiment->IsNpcMakerInPlayerViewCone(Npc.Origin)                  // player slot 363 (+0x5ac)
+			&& Embodiment->ArePointsInSamePvs(Player->Origin, Npc.Origin)          // 0x101d1a90
+			&& Embodiment->IsNpcMakerVisibleFromPlayer(Npc.Origin))                // player slot 201 (+0x324)
+		{
+			Npc.NextThink = static_cast<float>(Now + static_cast<double>(GNpcCorpseThinkDelaySeconds));   // param_1[0x5f] = curtime + 10.0
+			return;
+		}
+		Npc.UpdateOnRemove();                                                    // 0x101cd940 UTIL_Remove
+		Npc.Kill();
+	}
+}
+
 void FElysiumNpc::Think()
 {
 	// The entity think IS slot 431 `NPCThink`: `CAI_BaseNPCTroika::NPCThink` (`0x10292de0`), or the
@@ -664,9 +714,12 @@ void FElysiumNpc::Think()
 	// the port's own, each piece named:
 	//
 	//  - `IsInert`: an entity the world has not activated or has removed (port lifecycle).
-	//  - The corpse: `CreateCorpse` (`BecomeClientRagdoll`) leaves the entity no think in retail and
-	//    takes it out of the world; this runtime keeps it, so a think that still arrives (a feed
-	//    pair's release re-arms one) re-freezes the body and turns the think off again.
+	//  - The two removal thinks retail installs by function pointer, dispatched here by the name
+	//    `ThinkSet` recorded: `SUB_Remove` (`0x101c0b10`, the static-corpse arm of `CreateCorpse`, a
+	//    burning corpse, and the species tasks that ThinkSet it) and `SUB_PVSRemove` (`0x102696f0`,
+	//    the ragdoll corpse's think `CreateCorpse`'s tail arms at +10 s). A committed corpse whose
+	//    think name was not carried (a load) runs `SUB_PVSRemove`, the ragdoll arm's think; the body
+	//    stays frozen and non-solid to characters either way.
 	//  - The three lifecycle one-shots retail runs in `NPCInit` and this runtime cannot run at spawn
 	//    (an item entity created inside the world's spawn pass invalidates the array being iterated;
 	//    admission establishes idle and would wipe a director's forced state applied ahead of it).
@@ -680,11 +733,19 @@ void FElysiumNpc::Think()
 	{
 		return;
 	}
-	if (bDeathCommitted)
+	if (ThinkFunctionName == NpcSubRemoveThinkName())
 	{
-		SetBodyFrozen(true);
-		SetIgnoreCharacterCollision(true);
-		NextThink = ELYSIUM_NEVER_THINK;
+		NpcSubRemove(*this);                                                  // 0x101c0b10
+		return;
+	}
+	if (bDeathCommitted || ThinkFunctionName == NpcSubPvsRemoveThinkName())
+	{
+		if (bDeathCommitted)
+		{
+			SetBodyFrozen(true);
+			SetIgnoreCharacterCollision(true);
+		}
+		NpcSubPvsRemove(*this, World != nullptr ? World->NowSeconds() : 0.0); // 0x102696f0
 		return;
 	}
 	if (!bDisableAi && IsNormalThinkDue())

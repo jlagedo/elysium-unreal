@@ -29,6 +29,7 @@
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
 #include "Substrate/ElysiumLaw.h"           // FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumNpc.h"           // FElysiumNpcBase::GetMind — the cast body's own state
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumReactions.h"     // the damage flinch's pure rules
 #include "Substrate/ElysiumRulebook.h"
@@ -1107,12 +1108,9 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 		// slot 390 and the resolver inside `0x103302e0`. The feed break and the held-use drop below
 		// are the PLAYER's (`CBasePlayer::OnTakeDamage` 0x10163020 is the damage caller of
 		// `FeedInterrupt` 0x1033a9e0 and of the `+use` drop 0x10163126); no NPC body calls either.
-		// A corpse (`CreateCorpse` ran) is out of the world in retail: nothing can hand it a packet.
-		// A DYING body still takes them, through `0x1032ef60`'s life-state split.
-		if (IsCorpse())
-		{
-			return;
-		}
+		// A corpse takes packets too: `BecomeClientRagdoll` (`0x10090180`) only makes it non-solid,
+		// sets render FX 0x17 and clears its think, and `m_lifeState` stays LIFE_DYING, so
+		// `0x1032ef60`'s dying arm (`[+0x61c]`) is what a packet meets.
 		FElysiumDmg Packet = Dmg;
 		DispatchTakeDamagePacket(&Packet, 0.f, Attacker,
 			Attacker != nullptr ? Attacker->Handle : Dmg.Source, bDisallowFirearmsToBashing);
@@ -1149,10 +1147,6 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 		// The scalar packet (word 0 null, `+0x30` the amount) into slot 142, as above. No amount
 		// gate: retail's zero tests are `0x103302e0`'s `<= 0.0` and the Troika's zero-damage arm
 		// (`0x102bef4d`), both inside the transaction.
-		if (IsCorpse())
-		{
-			return;   // as above
-		}
 		DispatchTakeDamagePacket(nullptr, Amount, nullptr, FElysiumEntityHandle::Invalid(), false);
 		return;
 	}
@@ -1210,6 +1204,59 @@ namespace
 		Row.Surface = Surface;
 		Row.Address = Address;
 		ElysiumStub::Fired(Row, Self.DebugString(), Params, TEXT("the NPC kernel"));
+	}
+
+	// `_DAT_1044e664`, a float 10.0: the corpse's removal think delay in `CreateCorpse`'s tail.
+	constexpr float GCombatCorpseThinkDelaySeconds = 10.f;
+
+	// `CBaseCombatCharacter::SpawnStaticCorpse` `0x1032be80`: `CreateNoSpawn("prop_base", origin,
+	// angles)` (slots 219 / 218), `CopyAnimationDataFrom(this)` twice around its slot 103 `Spawn`,
+	// `SetOccludesSound(0)`, `SetSolid(SOLID_NONE)`, `SetSolidFlags(0)`, `m_fEffects = this->m_fEffects
+	// | 0xb0`, `ForceTransmit`, and the act store's corpse registration `0x102ca6c0(DAT_109253f8, this,
+	// corpse)`. Here: a runtime `prop_base` record at this body's origin, angles and model. NAMED GAPS:
+	// no class answers `prop_base`, so the record carries no body and no think (the pose copy and the
+	// render words are visual-only); the act-store registration is the same unported store the
+	// corpse query seam (`ElysiumNpcConditions19.inl`) stands for, and answers nothing.
+	FElysiumEntity* CombatSpawnStaticCorpse(FElysiumCombatCharacter& Self)
+	{
+		if (Self.World == nullptr)
+		{
+			return nullptr;
+		}
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("prop_base");
+		Def.Origin = Self.Origin;
+		FElysiumEntity* const Corpse = Self.World->Resolve(Self.World->SpawnRuntimeEntity(MoveTemp(Def)));
+		if (Corpse != nullptr)
+		{
+			Corpse->Angles = Self.Angles;
+			Corpse->Model = Self.Model;
+		}
+		return Corpse;
+	}
+
+	// `0x10207df0`: the character's template (`0x101d5f10` over `DAT_10738d10`) authors
+	// `General/Has_Burning_Death` (`+0x98`), OR the character is Kindred (`0x10337f30`) and the
+	// template does not author `General/Disallow_Kindred_Death` (`+0x9d`) -- the parse is `0x101d4520`.
+	bool CombatCorpseBurnsAway(FElysiumCombatCharacter& Self)
+	{
+		bool bHasBurningDeath = false;
+		bool bDisallowKindredDeath = false;
+		const FElysiumNpc* const Npc = Self.AsNpc();
+		UElysiumSessionSubsystem* const GameState = Self.World != nullptr ? Self.World->GetGameState() : nullptr;
+		UElysiumRulebookSubsystem* const Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+		FElysiumClanTemplate Resolved;
+		if (Npc != nullptr && Rules != nullptr && !Npc->StatTemplate.IsEmpty()
+			&& Rules->Clans().Resolve(Npc->StatTemplate, Resolved))
+		{
+			bHasBurningDeath = Resolved.GeneralInt(TEXT("Has_Burning_Death")) != 0;
+			bDisallowKindredDeath = Resolved.GeneralInt(TEXT("Disallow_Kindred_Death")) != 0;
+		}
+		if (bHasBurningDeath)
+		{
+			return true;
+		}
+		return Self.IsKindred() && !bDisallowKindredDeath;
 	}
 
 	// `Rules.txt` `VampFrenzy_Info`, which `0x101e6310` loads into the process-global `CVFeatList_t`
@@ -1382,7 +1429,7 @@ void FElysiumCombatCharacter::Event_Killed(void* InInfo)
 	//    takes none, as `CompleteDeathHandoff` has always stated. Then slot 301 `CreateCorpse`.
 	CreateCorpse(FVector::ZeroVector, Info);
 
-	// 8. `m_iCurFrenzyCount = 0` (`+0xec0`).
+	// 8. `m_iCurFrenzyCount = 0` (`0x1032bcba MOV [ESI+0x146c],0`).
 	CurFrenzyCount = 0;
 
 	// 9. The attacker's (`info+0x2c`, its `+0x9c` combat character) slot 300 `Event_TookLife(this,
@@ -1393,7 +1440,10 @@ void FElysiumCombatCharacter::Event_Killed(void* InInfo)
 		{
 			if (FElysiumCombatCharacter* const Killer = Attacker->AsCombatCharacter())
 			{
-				Killer->Event_TookLife(this, false, false);
+				// Retail passes the packet's two bytes `+0x48` / `+0x49` (`0x1032bcd9` -> `0x101c2af0`,
+				// `0x1032bce3` -> `0x101c2ab0`); the port's packet carries neither (unrecovered words,
+				// no current body reads them), so both go as false.
+				Killer->Event_TookLife(this, false, false);                      // 0x1032bcec slot 300
 			}
 		}
 	}
@@ -1409,19 +1459,94 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
 	const FInfo* const Info = static_cast<const FInfo*>(InInfo);
 	(void)Force;
-	// `OnDeath` once more through the Troika self-cast (`+0x98`, `0x10265a90` with the `+0x1a94`
-	// handle): latched by the first fire in `CAI_BaseNPC::Event_Killed`, so a no-op on that path.
-	if (FElysiumNpcBase* const NpcBase = AsNpcBase())
+	(void)Info;
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumNpcBase* const NpcBase = AsNpcBase();
+
+	// 1. `OnDeath` once more through the Troika self-cast (`+0x98`, `0x10265a90`), crediting the
+	//    self-cast's `m_hLastEnemy` (`+0x1a94`, `0x1032c1aa..0x1032c1d9`) -- not the packet's attacker.
+	//    Latched by the first fire in `CAI_BaseNPC::Event_Killed`, so a no-op on that path.
+	if (NpcBase != nullptr)
 	{
-		NpcBase->FireOnDeathOnce(Info != nullptr ? Info->Attacker : FElysiumEntityHandle::Invalid());
+		NpcBase->FireOnDeathOnce(NpcBase->BaseMemory.LastEnemy);
 	}
-	// The ragdoll seed bone (the packet's hit bone, else `Bip01 Spine2`) and the force are the
-	// client ragdoll's; neither reaches this runtime's physics handoff (UNRECOVERED here).
-	// A non-player body with `MiscFlag 0x80000` spawns a STATIC corpse (`SpawnStaticCorpse`) and
-	// thinks on; every other one becomes a client ragdoll. The static corpse is UNRECOVERED here: the
-	// ragdoll arm is taken. The corpse entity's fade/burn think, the burning-death sound and the
-	// `m_hAnimFollowModel` removal are UNRECOVERED here as well.
-	BecomeClientRagdoll();
+	// 2. The ragdoll seed bone (`0x101c2a30`: the packet's hit bone, else `Bip01 Spine2`) and the
+	//    force are the client ragdoll's; neither reaches this runtime's physics handoff.
+
+	// 3. The corpse, by three arms (`0x1032c22d..0x1032c2e4`).
+	FElysiumEntity* Corpse = nullptr;
+	const bool bIsPlayer = World != nullptr && Handle == World->PlayerHandle();   // `+0xa8`, the player self-cast
+	if (bIsPlayer)                                                             // 0x1032c22d / 0x1032c237 JZ
+	{
+		// A player's body leaves a static corpse (`0x1032c23a`), and its 18 body-fire particle
+		// handles (`m_hBodyFireParticles`) are each `UTIL_Remove`d (`0x1032c24c..0x1032c283`) -- the
+		// player carries no such handles here, so the loop has nothing to take.
+		Corpse = CombatSpawnStaticCorpse(*this);
+	}
+	else if ((MiscFlags & 0x80000u) != 0)                                      // 0x1032c288 HasMiscFlag(0x80000)
+	{
+		Corpse = CombatSpawnStaticCorpse(*this);                               // 0x1032c2af 0x10001c03
+		Hide();                                                                // 0x1032c2ba slot 66
+		// `ThinkSet(SUB_Remove)` (`0x10015b68` -> `0x101c0b10`), `m_flNextThink = curtime + 0.5`
+		// (`_DAT_104454d0`): the body is removed and the static corpse stays.
+		if (NpcBase != nullptr)
+		{
+			NpcBase->ThinkSet(TEXT("0x101c0b10"), 0.0);                        // 0x1032c2cb
+		}
+		NextThink = static_cast<float>(Now + static_cast<double>(ElysiumNpcTunables::Half));
+	}
+	else
+	{
+		BecomeClientRagdoll();                                                 // 0x1032c29c 0x10090180
+		Corpse = this;                                                         // 0x1032c2a5 slot 137 answers `this`
+	}
+
+	// 4. The corpse's own removal (`0x1032c2e4..0x1032c423`), for a non-player corpse. A corpse that
+	//    burns away (`0x10207df0`) is removed outright at +10 s with the burning-death visuals and
+	//    sound; any other is `SUB_PVSRemove`d at +10 s -- removed once no player can see it.
+	if (Corpse != nullptr)
+	{
+		const bool bCorpseIsPlayer = World != nullptr && Corpse->Handle == World->PlayerHandle();   // corpse `+0xa8`
+		FElysiumNpcBase* const CorpseNpc = Corpse->AsNpcBase();
+		const bool bBurns = CombatCorpseBurnsAway(*this);                     // 0x1032c2f6 0x10207df0
+		if (!bCorpseIsPlayer)
+		{
+			if (bBurns)
+			{
+				// `0x1032c30f..0x1032c3fe`: the corpse's slot 243 takes this body's slot 244(1) (the
+				// burn material, visual), `ThinkSet(SUB_Remove)` at +10 s, and the
+				// `"character/vampire burning death.wav"` emission (`0x1061fff0`, volume 1.0,
+				// attenuation 0.8) -- the render and the sound are not carried (visual/audio only).
+				if (CorpseNpc != nullptr)
+				{
+					CorpseNpc->ThinkSet(TEXT("0x101c0b10"), 0.0);              // 0x1032c33c
+				}
+			}
+			else if (CorpseNpc != nullptr)
+			{
+				CorpseNpc->ThinkSet(TEXT("0x102696f0"), 0.0);                  // 0x1032c40f ThinkSet(0x10009c9b SUB_PVSRemove)
+			}
+			// `curtime + _DAT_1044e664` (10.0) on either arm (`0x1032c347`, `0x1032c41a..0x1032c423`).
+			// A static `prop_base` corpse is a record-only entity here (no class answers
+			// `prop_base`), so it carries no think: its SUB_PVSRemove is not run (named gap).
+			if (CorpseNpc != nullptr)
+			{
+				Corpse->NextThink = static_cast<float>(Now + static_cast<double>(GCombatCorpseThinkDelaySeconds));
+			}
+		}
+		// `UTIL_Remove(m_hAnimFollowModel)` and the handle reset (`0x1032c429..0x1032c45e`): the
+		// ornament an animation event hung on this body goes with the death.
+		if (!AnimFollowModel.IsEmpty())
+		{
+			IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+			if (Embodiment != nullptr && Visual != nullptr)
+			{
+				Embodiment->DetachOrnamentModel(Visual);
+			}
+			AnimFollowModel.Reset();
+		}
+		// `ForceTransmit(this)` / `ForceTransmit(corpse)`: network transmission, nothing to do here.
+	}
 }
 
 // `CBaseAnimating::BecomeClientRagdoll` `0x10090180` for a character: the pose goes to physics,

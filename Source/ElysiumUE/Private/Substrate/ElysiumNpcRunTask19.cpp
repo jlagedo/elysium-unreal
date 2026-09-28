@@ -328,15 +328,33 @@ void FElysiumNpc::BloodExplode()
 
 void FElysiumNpc::RunTaskDie(const FElysiumEntity* Credit)
 {
-	// `CBaseCombatCharacter::Die(credit, 0, 0)`. Retail's `Die` returns at once on a body whose
-	// `m_lifeState` is already 2, and the corpse `Event_Killed` makes removes the entity, so the
-	// commit runs once; `bDeathCommitted` is the port's stand-in for that removal (`ElysiumNpcBase.h`).
+	// `CBaseCombatCharacter::Die(credit, 0, 0)` `0x103392c0`, the whole body: on a body whose
+	// `m_lifeState` is not LIFE_DEAD (2), a `CVDmg_t` with `SetSrc(this)`, `m_iDiceAmt = 1`,
+	// `m_iToHitSuccesses = 1`; the packet `0x101c26d0(info, 0, credit, 1.0, 0, 0, &dmg, -1)` (no
+	// inflictor, the credit as attacker); its `+0x48` / `+0x49` bytes from the two flag arguments
+	// (`0x101c2a90` / `0x101c2ad0`, both 0 here, and words the port's packet does not carry);
+	// `SetBaseToStatValue(0xf, 0x11)`; then slot 144 `Event_Killed(info)` and slot 403 `Event_Dying`.
 	++RunTaskDieCalls;
 	LastDieCredit = Credit != nullptr ? Credit->Handle : FElysiumEntityHandle::Invalid();
-	if (!bDeathCommitted)
+	if (AnimEventLifeStateWord == 2)                                   // 0x10339330 m_lifeState != 2
 	{
-		CommitDeath();
+		return;
 	}
+	FElysiumDmg Dmg;
+	Dmg.Source = Handle;                                               // SetSrc(this)
+	Dmg.BaseDamage = 1;                                                // m_iDiceAmt
+	Dmg.ExtraInput = 1;                                                // m_iToHitSuccesses
+	FElysiumTakeDamageInfo Info;
+	Info.Dmg = &Dmg;
+	Info.Attacker = LastDieCredit;
+	Info.Damage = 1.f;
+	Info.DamageBits = 0;
+	Info.AmmoType = INDEX_NONE;
+	Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health,
+		TypedStatValue(0, ElysiumSlot::MaxHealth));                    // 0x103393ff SetBaseToStatValue(0xf, 0x11)
+	RecomputeSheet();
+	Event_Killed(&Info);                                               // 0x1033940d slot 144 (+0x240)
+	Event_Dying();                                                     // 0x10339417 slot 403 (+0x64c)
 }
 
 bool FElysiumNpc::EnemyMeleeSwingOver(const FElysiumCombatCharacter& Enemy) const

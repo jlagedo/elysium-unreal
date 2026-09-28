@@ -1661,6 +1661,9 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
 	F.Services.ResolvedNpcActivityOwner = TEXT("misc");
 	F.Services.OneShotSeconds = 2.0f;
+	// The player can see where the body falls, so `SUB_PVSRemove` (`0x102696f0`) keeps the corpse.
+	F.Services.bNpcMakerInViewCone = true;
+	F.Services.bNpcMakerVisible = true;
 	F.Services.Calls.Reset();
 
 	// --- The transaction itself -------------------------------------------------------------------
@@ -1697,7 +1700,13 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
 		F.Services.Saw(TEXT("HoldBodyFinalPose")));
 	TestFalse(TEXT("no death program runs: the corpse's think is gone"), F.Fighter->Schedule.IsRunning());
-	TestEqual(TEXT("BecomeClientRagdoll leaves no think"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	// Corrected (L13 wave-2 fixes): `BecomeClientRagdoll` (`0x10090180`) clears the think, and
+	// `CreateCorpse`'s tail re-arms it -- `ThinkSet(SUB_PVSRemove)` at `curtime + 10.0`
+	// (`0x1032c404..0x1032c423`) for a corpse that does not burn.
+	TestEqual(TEXT("0x1032c40f: CreateCorpse's tail installs SUB_PVSRemove"),
+		F.Fighter->ThinkFunctionName, FString(TEXT("0x102696f0")));
+	TestEqual(TEXT("0x1032c41a..0x1032c423: ...at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(F.World.NowSeconds() + 10.0));
 	TestEqual(TEXT("the death draws from the Reaction stream not at all"),
 		Reaction.GetCurrentSeed(), ReactionSeedBefore);
 	TestFalse(TEXT("...and plays no death clip"), F.Services.Saw(TEXT("PlayNpcClip")));
@@ -1716,7 +1725,9 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestFalse(TEXT("...no stance machine runs"), F.Services.Saw(TEXT("ResolveStanceClips")));
 	TestFalse(TEXT("...no activity is resolved"), F.Services.Saw(TEXT("ResolveNpcActivityClip")));
 	TestFalse(TEXT("...and the handoff is not repeated"), F.Services.Saw(TEXT("StartBodyRagdoll")));
-	TestEqual(TEXT("the think stays off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: a corpse the player sees re-arms at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(13.0 + 10.0));
+	TestFalse(TEXT("...and stays in the world"), F.Fighter->IsInert());
 
 	// Selection has a SECOND door, and the corpse has to refuse there too: a script's
 	// `ChangeSchedule` and a discipline's `AI_Schedule` channel both arrive through this one, after
@@ -1745,9 +1756,17 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestTrue(TEXT("a body handed back to a corpse is frozen again by its next think"),
 		Motor->bFrozen);
 	TestTrue(TEXT("...and still ignores the character channel"), Motor->bIgnoreCharacterCollision);
-	TestEqual(TEXT("...and the think goes back off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: ...and SUB_PVSRemove re-arms at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(20.0 + 10.0));
 	TestFalse(TEXT("...without handing the body to physics a second time"),
 		F.Services.Saw(TEXT("StartBodyRagdoll")));
+
+	// --- Nobody sees it: `UTIL_Remove` ------------------------------------------------------------
+	F.Services.bNpcMakerVisible = false;
+	F.Fighter->NextThink = 0.0f;
+	F.World.Tick(40.0);
+	TestTrue(TEXT("0x102696f0: a corpse no player sees is removed (0x101cd940 UTIL_Remove)"),
+		F.Fighter->IsDead());
 	return true;
 }
 
@@ -1779,13 +1798,18 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
 		F.Services.ResolvedNpcActivityOwner = TEXT("misc");
 		F.Services.OneShotSeconds = 2.0f;
+		// The player sees the corpse, so `SUB_PVSRemove` (`0x102696f0`) keeps it and re-arms.
+		F.Services.bNpcMakerInViewCone = true;
+		F.Services.bNpcMakerVisible = true;
 
 		F.Fighter->OnKilled();
 		F.World.Tick(0.0);
 		F.Fighter->NextThink = 0.0f;
 		F.World.Tick(F.Services.OneShotSeconds + 0.1);
-		if (!TestEqual(TEXT("the corpse is saved with its think off"),
-			F.Fighter->NextThink, ELYSIUM_NEVER_THINK))
+		// Corrected (L13 wave-2 fixes): a corpse is not saved with its think off -- `CreateCorpse`'s
+		// tail armed `SUB_PVSRemove`, which re-arms at `curtime + 10.0` while a player sees it.
+		if (!TestEqual(TEXT("0x102696f0: the seen corpse is saved with its removal think re-armed"),
+			F.Fighter->NextThink, static_cast<float>(F.Services.OneShotSeconds + 0.1 + 10.0)))
 		{
 			return false;
 		}
@@ -1815,6 +1839,8 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		return false;
 	}
 	TestFalse(TEXT("...which starts unfrozen, as a live NPC's does"), Motor->bFrozen);
+	G.Services.bNpcMakerInViewCone = true;
+	G.Services.bNpcMakerVisible = true;
 	G.Services.Calls.Reset();
 
 	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
@@ -1828,10 +1854,9 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		G.Services.Saw(TEXT("HoldBodyFinalPose")));
 	TestTrue(TEXT("...still visible, because a corpse is not hidden"), Motor->bEnabled);
 	// The restore does NOT buy a think to do this with: the saved cadence is authoritative, and for a
-	// corpse it is `never`. A restored corpse that re-armed a think would also be a restored corpse
-	// whose payload failed its own round trip.
+	// corpse it is the removal think's `curtime + 10.0`.
 	TestEqual(TEXT("the saved cadence survives the restore"),
-		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+		G.Fighter->NextThink, static_cast<float>(2.0 + 0.1 + 10.0));
 	TestFalse(TEXT("and no schedule restarts on a corpse whose program had already ended"),
 		G.Fighter->Schedule.IsRunning());
 
@@ -1854,8 +1879,8 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		G.Fighter->Schedule.IsRunning());
 	TestFalse(TEXT("...and no activity is resolved"),
 		G.Services.Saw(TEXT("ResolveNpcActivityClip")));
-	TestEqual(TEXT("...and the think goes back off"),
-		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: ...and the restored corpse re-arms its removal think (the think name is not saved; a committed corpse runs SUB_PVSRemove)"),
+		G.Fighter->NextThink, static_cast<float>(32.0 + 10.0));
 	return true;
 }
 

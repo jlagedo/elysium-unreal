@@ -462,7 +462,10 @@ bool FElysiumStealthKillCommitTest::RunTest(const FString&)
 	TestTrue(TEXT("finished attacker commits death"), F.Guard->HasReportedDeath());
 	TestEqual(TEXT("retail damage counter copied from ceiling"),
 		F.Guard->Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health), 100);
-	TestTrue(TEXT("death attributed to attacker"), F.Guard->DeathAttacker == F.Player->Handle);
+	// Corrected (L13 wave-2 fixes): `0x10165d90` builds the packet with the player as inflictor and
+	// attacker, so the kill's `Event_Killed` stores the player in `m_hLastDamageEnt` (`0x10265d29`).
+	TestTrue(TEXT("0x10265d29: death attributed to attacker"),
+		F.Guard->BaseMemory.LastDamageAttacker == F.Player->Handle);
 	TestFalse(TEXT("attacker released"), F.Player->IsGrappling());
 	TestFalse(TEXT("victim released"), F.Guard->IsGrappling());
 	F.Player->TickStealthKill();

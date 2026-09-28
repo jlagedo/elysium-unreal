@@ -675,12 +675,19 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abc1e Die"), N.RunTaskDieCalls, 1);
 	TestTrue(TEXT("0x102abc03: TASK_DIE credits itself"), N.LastDieCredit == N.Handle);
-	TestEqual(TEXT("0x102abc0d: m_lifeState 1 -> 0"), N.AnimEventLifeStateWord, 0);
+	// Corrected (L13 wave-2 fixes): `0x102abc0d` writes LIFE_ALIVE, and `Die` (`0x103392c0`) then
+	// runs its whole body on that non-DEAD word (`0x10339330`): slot 144 re-enters `Event_Killed`
+	// (`0x1033940d`), whose `0x1032b9b0` writes LIFE_DYING again and whose `0x10265d29` stores the
+	// packet's attacker -- the credit -- in `m_hLastDamageEnt`.
+	TestEqual(TEXT("0x1032b9b0: Die's Event_Killed writes LIFE_DYING again"), N.AnimEventLifeStateWord, 1);
+	TestTrue(TEXT("0x10265d29: m_hLastDamageEnt is the credit (itself)"), N.BaseMemory.LastDamageAttacker == N.Handle);
+	TestTrue(TEXT("0x1032c0e0: the corpse is made"), N.IsCorpse());
 	TestFalse(TEXT("no completion"), Completed(N));
 	S = Step(*F.Npc, 0xdf);
 	Reset(N);
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102abc7e Die(0,0,0)"), N.RunTaskDieCalls, 2);
+	TestFalse(TEXT("0x10265d29: no credit -> m_hLastDamageEnt -1"), N.BaseMemory.LastDamageAttacker.IsSet());
 	return true;
 }
 
@@ -941,11 +948,20 @@ bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
-	// 0x103e0204 completes, then 0x103e0225 `CreateCorpse` (a hand body since story 8 wave 2) takes
-	// the body out of the world: the corpse's program is cleared with its think, so the witness of
-	// the arm is the corpse itself.
-	TestTrue(TEXT("0x103e0204 completes and 0x103e0225 CreateCorpse makes the corpse"), N.IsCorpse());
+	// 0x103e0204 completes, 0x103e0210 raises misc flag 0x80000, and 0x103e0225 `CreateCorpse` takes
+	// its static-corpse arm (`0x1032c288 HasMiscFlag(0x80000)`): `SpawnStaticCorpse` (`0x1032c2af`,
+	// a `prop_base`), slot 66 `Hide` (`0x1032c2ba`) and `ThinkSet(SUB_Remove)` at +0.5 s -- NOT the
+	// ragdoll (corrected: the witness was the ragdoll arm's corpse mark).
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (N.MiscFlags & 0x80000u) != 0);
+	TestFalse(TEXT("0x1032c296: the static-corpse arm makes no ragdoll"), N.IsCorpse());
+	bool bStaticCorpse = false;
+	for (const TUniquePtr<FElysiumEntity>& Ent : F.World.World.Entities())
+	{
+		bStaticCorpse |= Ent.IsValid() && Ent->Def != nullptr && Ent->Def->Classname == TEXT("prop_base");
+	}
+	TestTrue(TEXT("0x1032c2af SpawnStaticCorpse stood a prop_base"), bStaticCorpse);
+	TestEqual(TEXT("0x1032c2cb: the body thinks SUB_Remove"), N.ThinkFunctionName, FString(TEXT("0x101c0b10")));
+	TestEqual(TEXT("0x1032c2d6: ...at curtime + 0.5"), N.NextThink, static_cast<float>(F.Now() + 0.5));
 	S = Step(*F.Npc, 0x151);
 	Reset(N);
 	N.BaseScheduleHost.WaitFinished = F.Now() - 1.0;
