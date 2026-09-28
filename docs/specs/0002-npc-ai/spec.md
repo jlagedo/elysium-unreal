@@ -884,6 +884,18 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Spawn19 (48/48) is integrated but not merged. RunAi19 (17) and Think19 (15) are wave 2. The loop
   still runs the port's twins until wave 2 wires slots 431/433/437/442/444. The story stays open for
   wave 2 and pass C.
+  **Wave 2 landed; the band is ported (2026-09-28).** The record is 0019 story 8, its § "Pass I
+  landed 2026-09-28" and the wave-2 block under it. Every `rule` row of band 19–29 is ported:
+  **380** = the four 2026-09-14 families (85) + the twelve (295).
+  - *The four 2026-09-14 families:* State19 21, Translate19 22, Lifecycle19 34, Maintain19 8.
+  - *The twelve:* Misc19 31, Script19 20, Conditions19 20, Damage19 26, Select19 31, RunTask19 23,
+    Werewolf19 17 + Boss19 11, StartTask19 27, Spawn19 48, RunAi19 17, Think19 15 + Damaged19 9.
+  The retail loop is live: `NPCThink → RunAI → 433 → MaintainSchedule → 437/438 → 442/444`.
+  Damage enters through slots 142/390, and death runs through slot 144. 82 `STORY8-TWIN` markers
+  are down to 4 named survivors. `Elysium.Substrate` is 1,710 with 0 failed.
+  **The box stays open for two items:**
+  - the map smoke (tutorial and `sm_hub_1`, with the stub tally), which has not run;
+  - pass C's rename commit, which drops the `19` suffix as a pure move.
 
 ### The mind
 

@@ -1009,9 +1009,16 @@ green, and `coverage.md` shows the change.
     - The kick goal and the step-back ran in the wrong direction.
     - `m_lifeState` is now one word.
     - The lateral-cover pair is one body.
-  - *Spawn19* (L08): 48 rows, integrated on `story8/int-4` as `9bbbb196`, with Troika `Spawn`
-    `0x10298d30` live and `NPCInit` run at spawn, not at `Activate`. **Not on `main`.**
-    <wave 2: the Spawn19 merge and its line here>.
+  - *Spawn19* (L08, replayed from `story8/int-4` onto `main` as `14697e2b`): **48 of 48**, with 373 of
+    373 arm sites cited. Troika `Spawn` `0x10298d30` is live as `FElysiumNpc::Spawn`, and `NPCInit`
+    runs at spawn, not at `Activate`. The review found:
+    - The ScriptHide, `m_lifeState` and `m_fFlags2` twins; each is folded onto one body or word.
+    - The runner's `OnRestore` calls `SetAbsoluteAttackExtents` `0x1009b060`.
+    - The anim-link removal is `UTIL_RemoveImmediate`.
+    - The closest-NPC offer is `0x47c34ff3`.
+    - Three `SetClass` sites are `AddClassRelationship`.
+    L12's death bodies and TentacleHPInitial are wired to it. The walk is in `lifecycle.md`
+    § "Story 8, family Spawn19" and § "The death chain, kill to corpse".
   - *Named divergences*, each named at its line:
     - Crash guards where retail dereferences null or stale data.
     - A zero, NaN or `vec3_origin` where retail reads uninitialised stack.
@@ -1042,16 +1049,80 @@ green, and `coverage.md` shows the change.
     - RunTask19's switches still compare the raw global id, the defect fixed on the StartTask side.
     - `ReleaseMotorHintYaw` stays inert until the mover keeps `motor+0x34`.
     - `MotorDeltaIdealYaw` answers 0, so every facing arm completes on its first pass.
-    <wave 2: L13's result — RunAi19 (17), Think19 (15), Damaged19's two `NPCThink`s, the loop wiring
-    `NPCThink → RunAI → 433 → MaintainSchedule → 437/438 → 442/444`, the twins retired, the first
-    smoke>.
+  - **Wave 2 landed 2026-09-28.** The porters were L13a and L13b, and the L13 integrator worked on
+    `story8/int-3`, merged as `d1d93773` (`e24e5ef9` carries the verification). Reports:
+    `L13a-report.md`, `L13b-report.md`, `L13-review.md`, `L13-checks.md`, `L13-suites.md`,
+    `L13-postmortem.md`.
+    - *RunAi19* (L13a): **17 of 17**. It covers base `RunAI` `0x1026f110`, Troika `0x1028fcc0`,
+      `RunAlternateAI` `0x1028fd80` with door modes 2 and 3, and the fourteen species overrides.
+    - *Think19* (L13b): **17 rows**, the 15 plus Damaged19's two `NPCThink`s (Werewolf `0x103cb590`
+      and PlayerController). It covers Troika `NPCThink` `0x10292de0` in retail phases, base
+      `0x1026ca80`, the AI gate `0x1026c3d0`, `UpdateCharacter` `0x10298070` and the species.
+    - **The loop is live.** It runs `NPCThink` (431) → `RunAI` (432) → 433 → `MaintainSchedule` →
+      437/438 → 442/444.
+      - NPC damage enters slots 142 and 390 through the `0x1032ef60` / `0x103302e0` hand bodies.
+      - Death runs through slot 144 (`0x1032b9b0`, `CreateCorpse` `0x1032c0e0`, `Die` `0x103392c0`).
+      - The patrol is the path object's program.
+      - Slot 444 now switches on the class-local task id, closing RunTask19's half of the id defect.
+      - Troika `ScriptHide` `0x102c1ce0` is ported, which closes Damaged19.
+    - **The twins are deleted: 82 `STORY8-TWIN` markers → 4 named survivors.** Each survivor carries
+      its reason at its site:
+      - the scripted-beat owner, which waits for spec 0003's `SCHED_AISCRIPT`;
+      - the dialogue clip hold;
+      - the interesting-place executor;
+      - the leg walker for `0x101a98c0` modes 4 and 5. The navigator builds no path-corner goal for
+        `ScheduledFollowPath` `0x102801e0`. Modes 1 and 2 now run retail's `ScheduledMoveToGoalEntity`
+        `0x102800c0`.
+    - **The review** (`L13-review.md`, 49 rows read against the listing) found material defects, and
+      each one is fixed:
+      - **Dead NPCs revived after a load.** Slot 158 `IsAlive` read `m_lifeState` (`+0x200`), which
+        nothing saved. `+0x200` is now one word bound to its datamap `SAVE` row.
+      - `CreateCorpse` never took its static-corpse arm. It now takes all three arms: the player
+        self-cast `+0xa8` and `MiscFlag 0x80000` (`0x1032c22d`, `0x1032c288`) take
+        `SpawnStaticCorpse` `0x1032be80`, and the ragdoll arm is the rest.
+      - The stealth kill had no attacker. It now builds `0x10165d90`'s packet with the player as
+        inflictor and attacker, then runs slot 144 and slot 403.
+      - The `HealthBuffer` arm was invented. It is now `0x103302e0`'s:
+        `trunc(DAT_10739a68 × dmg × 0.01)`, `SubBase` or `SetBase` plus the Bloodshield end
+        (`0x10330746..0x10330847`).
+      - `RunAnimation` `0x1026c540` ran after `PostRun`. It now runs inside `PostRun`
+        (`0x1026c8c4`), ahead of the anim events.
+      The flinch order (row 8) stays a named event-order divergence until a hit producer dispatches
+      slot 141.
+    - *Verification:*
+      - `research kernel --check` 7/7; `kernel_gate --all` 13/13 families.
+      - `Elysium.Substrate` **1,710 / 0 failed** (`reports/tests/20260928T135654.944946Z-elysium-substrate`);
+        `Elysium.Substrate.Npc` 1,135 / 0; `Elysium.Content` 14 / 0; `Elysium.PlayerWorld` 1 / 0.
+      - pipeline pytest 4,224 passed.
+      - Two stale assertions were corrected to retail (`NpcKernelMotor.Probes` `0x1008f120`; slot 158
+        `0x100b4dc0`).
+    - *Post-mortem* (`L13-postmortem.md`): about an hour of the six-hour session was avoidable under
+      the existing rules. The lessons:
+      - Batch every hot-header edit into one pass and one rebuild.
+      - Before deleting a declaration, grep its callers, `Tests/` included, and fix them in the same
+        edit.
+      - Run the full suite once, after the last source change, with family filters in between.
+      - Regenerate once, at the end.
+      The tool fixes are on `main`: `research kernel` runs the seven generators in one process
+      (`937d975d`, `kernel_ledger` 470 s → 7 s); `kernel_gate --all` builds one Source index
+      (`b87058da`); `elysium test` has an idle watchdog (`9cdf6b5a`).
+    - *Smoke:* <smoke: …>.
   - *Tests:* `Elysium.Substrate` **1,326 → 1,613, 0 failed**, at StartTask19
     (`reports/tests/20260928T032303.105515Z-elysium-substrate`). Family suites: Misc19 31, Script19
     23, Conditions19 32, Damage19 28, Select19 32, RunTask19 46, Werewolf19 17, Boss19 12, StartTask19
-    66. <wave 2: `Elysium.Substrate` after L13, and the smoke>.
+    66. After wave 2, `Elysium.Substrate` stands at **1,710, 0 failed**. The thirteen story-8
+    family suites pass 273/273 + 117/117, and Schedule plus the landed families pass 88/88.
   - *Pins:* `story8-forwarding.tsv` **210 → 71** (RunAi19 16, Think19 13, Spawn19 41, Damaged19 1).
     `kernel_shape --unported` **778 → 467** at the shape commit, since a forwarding override counts
-    as an override; it held at 467 through pass I. <wave 2: forwarding 71 → N; unported 467 → N>.
+    as an override; it held at 467 through pass I. After wave 2, forwarding is **210 → 0** (71 → 0
+    in wave 2), and `unported.tsv` is **778 → 449**: 467 → 451 at Spawn19, where slots 617/618 went
+    virtual, then 451 → 449 once `ScriptHide` / `ScriptUnhide` went virtual.
+  - **Owed before the box is ticked:**
+    1. The map smoke: the tutorial porch controller, guard schedules on the retail loop, the stealth
+       lesson's patrols, and `sm_hub_1`'s makers, pedestrians, cop and payphone, with the
+       `elysium.stubs` tally. `L13-smoke.md` did not run: the shared `ElysiumBaked` plugin was
+       emptied, so the editor did not boot.
+    2. Pass C's rename commit: drop the `19` suffix as a pure move.
 
 ## Build order
 1 → 2 → 3 → 4, with 8's pass R in parallel from 1 on → 5 → 8's passes I and C → 6 → 7 (amended

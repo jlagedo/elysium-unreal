@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 06b landed 2026-09-27, so row 06's pass I is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 06's pass I landed 2026-09-28, waves 1 and 2, so row 06's pass C is next: the map smoke, then the rename commit). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0002/29e 4 of 16 families.
+Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0002/29e 16 of 16 families ported (row 06's pass C open).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -165,18 +165,18 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
       one-sided rows filled in by the other reader. The 38 rows where the packet corrects the
       checklist are written back as `CORRECTED` clauses on the verdict evidence (32 rows), the
       checklist regenerated, both ledger checks green.
-  - [ ] **Pass I** — after row 06b. Each family ports onto its retail classes as overrides
+  - [x] **Pass I** — after row 06b. Each family ports onto its retail classes as overrides
     (`Super::` where retail called the base directly, per the packet's skeleton); the Damaged19
     rows land on their own classes, so the "which family" question dissolves. Lanes as below.
-  - [ ] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
+  - [x] **Pass I, lane A** (the interpreter, in order; gate then full read then commit per family)
     - [x] Conditions19 (20/23) — `617497a1`, `72b64eca`
-    - [ ] RunAi19 (17/34) — wave 2
+    - [x] RunAi19 (17/34) — wave 2, L13a, merged as `d1d93773`
     - [x] StartTask19 (27/28) — `86ceba23`
     - [x] RunTask19 (23/24) — `8cc9e23a`
     - [x] Select19 (31/39) — `abfae21c`
-    - [ ] Think19 (15/15) — wave 2
-  - [ ] **Pass I, lane B** (independent of the loop; Boss and Werewolf after lane A's base bodies)
-    - [ ] Spawn19 (48/60) — integrated on `story8/int-4` `9bbbb196`, not on `main`
+    - [x] Think19 (15/15) — wave 2, L13b (+ Damaged19's two `NPCThink`s), merged as `d1d93773`
+  - [x] **Pass I, lane B** (independent of the loop; Boss and Werewolf after lane A's base bodies)
+    - [x] Spawn19 (48/60) — `14697e2b` (replayed from `story8/int-4`)
     - [x] Damage19 (26/26) — `414545a6`
     - [x] Script19 (20/32) — `576a06fc`
     - [x] Boss19 (11/19) — `2eca094a`
@@ -187,7 +187,17 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   `story8-forwarding.tsv` 210 → 71. The walked prose is folded into the oracle. Open: Spawn19's
   merge, wave 2 (RunAi19, Think19, the loop wiring, the 82 `STORY8-TWIN` twins), then pass C. The
   record is the spec's § "Pass I landed 2026-09-28".
+  **2026-09-28: wave 2 landed** (`d1d93773`). RunAi19 17 and Think19 17 (with the Werewolf and
+  PlayerController `NPCThink`s) are ported, and Spawn19 is on `main` (`14697e2b`). The retail loop
+  is live: `NPCThink → RunAI → 433 → MaintainSchedule → 437/438 → 442/444`, with damage through
+  142/390 and death through 144. 82 `STORY8-TWIN` markers are down to 4 named survivors.
+  Forwarding is 210 → 0 and unported 778 → 449. `Elysium.Substrate` is 1,710 / 0; pytest 4,224
+  passed. The walked prose is folded, and `docs/vtmb/npc-ai/story8/` is gone.
   - [ ] **Pass C** — Misc19 (31/34), the absorbed stories' sentences, the ticks, the rename commit.
+    Row 06 stays open for two items:
+    - the map smoke (tutorial, `sm_hub_1`, the stub tally), which did not run because the shared
+      `ElysiumBaked` plugin was emptied;
+    - the rename commit, which drops the `19` suffix as a pure move.
 - [x] **06b · 0019/5** — The class tree, one port class per live retail class. XL · Opus/high. **Landed 2026-09-27.**
   Alone on a branch; witness green before and after; nothing else touches `ElysiumNpc.h`.
   Moved up from row 10 on 2026-09-23 (decision recorded under "Where this differs"). Its inputs
