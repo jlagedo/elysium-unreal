@@ -19,6 +19,8 @@ the opening sequence:
   the bespoke SoundScheme ambience/music system, DSP rooms.
 - `docs/vtmb/animation_and_movers.md` — skeletal `.mdl` v2531 animation (bones, the RLE
   keyframe tracks, skinning) and brush movers (doors/buttons/spinners).
+- `docs/vtmb/multiplayer.md` — the cut "CounterBite" vampires-vs-hunters mode: what ships of it
+  (`DT_PlayerResource` round fields, hunter templates, Numina), what doesn't, and fan restorations.
 
 Evidence is tagged where it matters: **[VtMB]** = read from the user's own DLLs
 (strings/symbols/addresses); **[SDK]** = Source SDK 2013 reference; **[data]** =
@@ -628,6 +630,7 @@ behaviour rather than silently taken:
   `mp-condotierre`, `mp-inquisitor`). The sheet's 2..8 clan encoding, the clan sigil set and the
   player-body lookup all stop short of them, so the route is filtered out of the popup rather than
   left to open a path that dead-ends. Reversible: the data is parsed and the filter is one name.
+  The templates are the cut multiplayer mode's hunter side — `docs/vtmb/multiplayer.md`.
 - **`AUTO-SPEND POINTS` is drawn disabled.** Its handler is not recovered, and the obvious
   candidate is not one: the clan's `<Clan>_CharGen` leveling template **is** the baseline and has
   already run by the time the pools exist, so no authored spend order remains to follow. A
