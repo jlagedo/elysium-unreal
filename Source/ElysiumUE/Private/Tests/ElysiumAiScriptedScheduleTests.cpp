@@ -179,11 +179,18 @@ namespace
 			}
 			if (Setup.bPatrol)
 			{
+				// Story 8 wave 2: a patrol is the path object's own program. `SetupPatrolType`
+				// (`0x1029eb30`) names it and `FollowPatrolPath` (`0x1029ed90`) lays the nodes, in the
+				// level scripts' order; each build installs the program at once (`0x1029f56b`).
+				World.AcceptInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
+					FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")),
+					Guard ? Guard->Handle : FElysiumEntityHandle::Invalid(),
+					Guard ? Guard->Handle : FElysiumEntityHandle::Invalid());
 				World.AcceptInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 					FElysiumVariant::String(TEXT("route_1 route_2")),
 					Guard ? Guard->Handle : FElysiumEntityHandle::Invalid(),
 					Guard ? Guard->Handle : FElysiumEntityHandle::Invalid());
-				Step(0.0);   // the patrol executor takes its token and issues the first leg
+				Step(0.0);   // the patrol program's first tasks issue the first leg
 			}
 			Quiet();
 		}
@@ -737,14 +744,18 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		TestTrue(TEXT("the patrol executor owns the body first"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
+		// Corrected to retail (story 8 wave 2): the patrol is a PROGRAM, not a parked body owner.
+		auto OnPatrolProgram = [&F]()
+		{
+			return FString(ElysiumScheduleName(F.Guard->Schedule.Current)).Contains(TEXT("FOLLOW_PATROL_PATH_WALK"));
+		};
+		TestTrue(TEXT("the patrol path's program runs first (0x1029f56b)"), OnPatrolProgram());
 
 		F.FireStartSchedule();
 		TestTrue(TEXT("the director displaces it"),
 			F.Guard->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule);
-		TestTrue(TEXT("...and the route is PARKED rather than lost"),
-			F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
+		TestTrue(TEXT("...and the path object survives the program change"),
+			F.Guard->IsPatrolActiveForDebug());
 
 		F.Step(0.1);
 		FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard);
@@ -758,11 +769,14 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
 		F.Step(0.2);
 		F.Step(0.3);
-		TestTrue(TEXT("the route comes back when the program ends"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 		Motor->SampleStatus = EElysiumNpcMoveStatus::Moving;
 		F.Step(0.4);
-		TestTrue(TEXT("...and the resumed route re-issues its own leg"),
+		F.Step(0.5);
+		// `SelectSchedule` case 1 step 3 (`0x102af6b6`) answers the surviving path's schedule word
+		// once the director's program is done.
+		TestTrue(TEXT("the patrol program comes back through selection when the program ends"),
+			OnPatrolProgram());
+		TestTrue(TEXT("...and re-issues a leg toward a patrol point"),
 			Motor->RequestedFeet.Equals(FVector(0.0, -200.0, 0.0))
 			|| Motor->RequestedFeet.Equals(FVector(0.0, -400.0, 0.0)));
 	}
@@ -795,41 +809,9 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 	}
 
-	// Three deep: a beat over a combat claim over a patrol route.
-	// The arbiter has ONE parked slot. A combat schedule that took the body off a route is holding
-	// that route in it, so a beat parking the SCHEDULE on top would discard the route and strand the
-	// mind owning a claim whose token the leaf has already retired.
-	{
-		FAiScheduleFixture::FSetup Setup;
-		Setup.bPatrol = true;
-		FAiScheduleFixture F(Setup);
-		if (F.Guard == nullptr || F.Victim == nullptr)
-		{
-			return false;
-		}
-		F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
-		F.Guard->BaseMemory.Enemy = F.Victim->Handle;
-		// `0x102ad660` needs `HasInterruptCondition`; a patrol executor has no schedule mask.
-		// These cases are about the body arbiter, so the state write is `SetState(2)`.
-		F.Guard->SetState(2);
-		F.Step(0.6);
-		// Driven directly: the arbiter is the subject, not which program selection picked. See
-		// `CombatPreemption` for why the claim no longer rides on a selected program's task.
-		TestTrue(TEXT("the combat claim took the route"),
-			F.Guard->AcquireScheduleBody(TEXT("test: the combat claim")));
-		TestTrue(TEXT("...and parked it"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule
-			&& F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
-
-		TestTrue(TEXT("a beat takes it from the combat claim"),
-			F.Guard->ClaimScriptBody(TEXT("test beat")));
-		TestTrue(TEXT("...and the ROUTE is what stays parked, not the schedule"),
-			F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
-
-		F.Guard->ReleaseScriptBody(TEXT("test beat ended"));
-		TestTrue(TEXT("the route survives the whole stack and comes back"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
-	}
+	// (Deleted with the patrol executor, story 8 wave 2: "three deep — a beat over a combat claim over
+	// a patrol route" asserted the arbiter's one parked slot holding the route's token. Retail's patrol
+	// is a schedule, so there is no route token to park; the case had no retail counterpart.)
 	return true;
 }
 
@@ -852,8 +834,9 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestTrue(TEXT("the guard starts on its route"),
-		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
+	// Corrected to retail (story 8 wave 2): the route is the patrol path's program.
+	TestTrue(TEXT("the guard starts on its route (the patrol path's program, 0x1029f56b)"),
+		FString(ElysiumScheduleName(F.Guard->Schedule.Current)).Contains(TEXT("FOLLOW_PATROL_PATH_WALK")));
 
 	// Commit an enemy the way `MaintainSchedule 0x102817c0` does — `SetState(m_IdealNPCState)`
 	// (`0x1026e340`) — exactly as `FCombatFixture` does. A patrol executor installs no schedule
@@ -875,6 +858,10 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	// zeroing the six dwords at `+0x5c5c` that `SetCondition` (`0x10269a20`) writes. A post-install
 	// snapshot of the set is empty in retail too, so the old spelling of this assertion was reading a
 	// slot the install had legitimately wiped. The claim under test is unchanged.
+	// The patrol program walked the guard to its first point (story 8 wave 2), so the enemy is
+	// stood inside its reach and cone for the producer's question.
+	F.Victim->Origin = F.Guard->Origin + FVector(Cm(20.0), 0.0, 0.0);
+	F.Guard->Angles.Y = 0.0;
 	FElysiumNpcConditions Attack;
 	ElysiumNpcCond::GatherAttackConditions(*F.Guard, 0.6, Attack);
 	TestTrue(TEXT("the committed enemy raises CAN_MELEE_ATTACK1"),
@@ -882,19 +869,10 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestTrue(TEXT("a patrolling NPC in combat is running a schedule at all"),
 		F.Guard->Schedule.IsRunning());
 
-	// The ARBITER is what this case is about, and the claim is driven directly rather than through
-	// whichever program selection lands on. It used to ride on `SCHED_TROIKA_MELEE_ATTACK1`'s
-	// `TASK_FACE_ENEMY`, reached because the port folded every unregistered selector answer back to
-	// a program it did carry; the recovered slot body answers its own program now, and most of
-	// those programs' tasks have no body in this runtime yet -- which the coverage meter counts and
-	// this case must not depend on.
-	TestTrue(TEXT("a program's movement claim displaces the route"),
-		F.Guard->AcquireScheduleBody(TEXT("test: the program's movement claim")));
-	TestTrue(TEXT("...so the schedule owns the body"),
-		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule);
-	TestTrue(TEXT("...with the route PARKED rather than lost"),
-		F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
-	F.Guard->ReleaseScheduleBody(TEXT("test: the claim ends"));
+	// (Story 8 wave 2: the arbiter's parked-route assertions are deleted with the patrol executor —
+	// retail's patrol is a schedule, which the combat program replaced; what survives the change is
+	// the path object, and selection returns to its program.)
+	TestTrue(TEXT("the path object survives the combat program"), F.Guard->IsPatrolActiveForDebug());
 
 	// The enemy dies. The transaction clears it, the ideal state falls back, and the route resumes.
 	F.Victim->Kill();
@@ -911,8 +889,17 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 		static_cast<const FElysiumNpcBase&>(*F.Guard).GetEnemy());
 	TestFalse(TEXT("the mind has left combat"),
 		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
-	TestTrue(TEXT("the parked patrol route owns the body again"),
-		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
+	// Out of combat with no enemy the ideal state falls to ALERT (`0x1026f660` case 2), whose
+	// selection carries no patrol arm; `SelectSchedule` case 1 step 3 (`0x102af6b6`) answers the
+	// surviving path's program once the NPC is back in IDLE.
+	TestTrue(TEXT("the path object survives the fight"), F.Guard->IsPatrolActiveForDebug());
+	for (int32 i = 0; i < 120 && !FString(ElysiumScheduleName(F.Guard->Schedule.Current)).Contains(
+		TEXT("FOLLOW_PATROL_PATH_WALK")); ++i)
+	{
+		F.Step(1.5 + 0.5 * i);
+	}
+	TestTrue(TEXT("the patrol program comes back through selection"),
+		FString(ElysiumScheduleName(F.Guard->Schedule.Current)).Contains(TEXT("FOLLOW_PATROL_PATH_WALK")));
 	return true;
 }
 

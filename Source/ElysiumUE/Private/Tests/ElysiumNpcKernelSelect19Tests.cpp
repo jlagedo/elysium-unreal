@@ -581,7 +581,7 @@ bool FElysiumNpcKernelSelect19TroikaHuntTest::RunTest(const FString&)
 	N.NpcFlags.Set(EElysiumNpcFlag::MADE_HUNT_PATH);
 	TestEqual(TEXT("0x102afab2 no hunt path clears MADE_HUNT_PATH first"), N.TroikaSelectSchedule(), 0x7d);
 	TestFalse(TEXT("0x102afab5"), N.NpcFlags.Has(EElysiumNpcFlag::MADE_HUNT_PATH));
-	N.HuntPatrolPoints.Add(FVector::ZeroVector);
+	{ const int32 HuntIds[] = { 0, -1 }; N.BuildPatrolPath(&N.PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 	N.NpcFlags.Set(EElysiumNpcFlag::MADE_HUNT_PATH);
 	TestEqual(TEXT("0x102afb63 a made hunt path -> 0x7e HUNT"), N.TroikaSelectSchedule(), 0x7e);
 	return true;

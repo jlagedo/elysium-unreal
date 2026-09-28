@@ -343,8 +343,8 @@ void FElysiumNpc::TroikaUpdateOnRemove()
 
 	// 5. Both patrol arrays, `m_sppPatrolPath` (`+0x658c`) FIRST and `m_sppPatrolPathHunt`
 	//    (`+0x6594`) second — `0x1029f5d0` clears the count byte and frees the block.
-	PatrolPoints.Reset();
-	HuntPatrolPoints.Reset();
+	ReleasePatrolPath(&PatrolPathCell);
+	ReleasePatrolPath(&PatrolPathHuntCell);
 
 	// 6. `JMP thunk CAI_BaseNPC::UpdateOnRemove` — story 29c-1's `BaseNpcUpdateOnRemove`.
 	BaseNpcUpdateOnRemove();

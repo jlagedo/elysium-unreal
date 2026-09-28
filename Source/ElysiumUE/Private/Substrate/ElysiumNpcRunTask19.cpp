@@ -1033,8 +1033,8 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 
 	// --- index 0x19 `0x102ab974`: 0xb3 `TASK_FACE_PATROL_INTEREST` --------------------------------
 	case TaskFacePatrolInterest:
-		// `0x1029f780(this, &m_sppPatrolPath)`: the path's current node is `PatrolIndex` here.
-		if (ResolvePatrolInterestPlace(PatrolIndex) == 0)                          // 0x102ab97d / 0x102ab984
+		// `0x1029f780(this, &m_sppPatrolPath)`: the path's current node.
+		if (ResolvePatrolInterestPlace(PatrolCurrentNode(PatrolPathCell)) == 0)    // 0x102ab97d / 0x102ab984
 		{
 			TaskComplete(false);                                                   // 0x102ac11b
 			// same arm: 0x102ac11f CALL
@@ -1097,7 +1097,7 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 	// --- index 0x1b `0x102aba6c`: 0xb5 `TASK_DO_PATROL_INTEREST_ACTIVITY` -------------------------
 	case TaskDoPatrolInterestActivity:
 	{
-		const int32 PlaceIndex = ResolvePatrolInterestPlace(PatrolIndex);          // 0x102aba75
+		const int32 PlaceIndex = ResolvePatrolInterestPlace(PatrolCurrentNode(PatrolPathCell)); // 0x102aba75
 		if (PlaceIndex == 0)                                                       // 0x102aba82
 		{
 			TaskComplete(false);                                                   // 0x102abb10

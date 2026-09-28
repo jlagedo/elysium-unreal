@@ -42,13 +42,32 @@ struct FPatrolPathCell
 	FPatrolPathRecord* Path = nullptr;     // +0x4
 };
 
-/** `+0x658c m_sppPatrolPath`. The port's own patrol route (`PatrolPoints`, `PatrolNames`,
- *  `PatrolIndex`, `bPatrolActive`, the shape map's `0x658c` row) still stands at this offset and is
- *  what runs: nothing reaches `BuildPatrolPath` / `IssuePatrolMove*` until the Troika StartTask /
- *  RunTask arms `0x7a..0x7e` are wired (wave 2, L13). The route is marked `STORY8-TWIN` there. */
+/** `+0x658c m_sppPatrolPath` — the patrol route (story 8 wave 2: the one route; the port's point
+ *  list and its executor are deleted). */
 FPatrolPathCell PatrolPathCell;
-/** `+0x6594 m_sppPatrolPathHunt` -- the sibling cell (`HuntPatrolPoints` today). */
+/** `+0x6594 m_sppPatrolPathHunt` -- the hunt sibling. */
 FPatrolPathCell PatrolPathHuntCell;
+
+/** `0x1029f5d0` -- release a cell: a cell holding a path clears its owned byte, frees the pooled
+ *  record (`0x10307db0`) and nulls the pointer. A null cell or an empty one is left alone. */
+static void ReleasePatrolPath(FPatrolPathCell* Cell);
+
+/** The node id a cell's path currently points at (`path+0x14[path+0x10]`), -1 for none. */
+static int32 PatrolCurrentNode(const FPatrolPathCell& Cell);
+
+/** `0x103079c0` -- a patrol type name against the table `DAT_1049df20` (`"0".."3"`, `__strcmpi`).
+ *  Retail's miss is the engine's fatal `Error("Invalid Path Type String...")`; this runtime logs it
+ *  at Error and answers the `0` the call returns after it. */
+static int32 PatrolTypeForName(const FString& Name);
+
+/** `0x1029f370` -- a schedule token as given, then `SCHED_<token>`, then `SCHED_TROIKA_<token>`
+ *  (`0x102cadb0`, the case-insensitive registry), translated to this class's local id through
+ *  slot 580's space (`0x102ea280`). 0 on a miss, with retail's DevMsg. */
+int32 PatrolScheduleForName(const FString& Token) const;
+
+/** `0x102d2900` -- a patrol token to its network node id: `FindPatrolPoint` (`0x102d2840`)'s hint,
+ *  whose node id in this runtime is the hint's entity index (`PatrolNodePosition`). -1 on a miss. */
+int32 PatrolNodeIdFor(const FString& Token) const;
 
 /** The pool's size, `0x10307d30`'s `0x1f < cursor` bound and its `Error(..., 0x20)`. */
 static constexpr int32 PatrolPathPoolSize = 0x20;

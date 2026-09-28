@@ -373,12 +373,21 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 	Request.Activity = Name;
 	Request.Variant = 0;   // the resolver's primary answer: this runtime carries no sequence weights
 	Request.BodyKind = EElysiumAnimBodyKind::Cast;
-	FElysiumActivityClip Clip;
-	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
+	// The answer is a pure function of the request (the model, the activity, the class, the weapon
+	// and the state the armed/alert branch reads), and the navigator asks every frame a body moves,
+	// so it is cached on those words.
+	const FString Key = FString::Printf(TEXT("%s|%s|%s|%s|%d"), *Request.Stem, Name,
+		*Request.ActorClassname, *Request.WeaponClassname, static_cast<int32>(Request.ActorState));
+	if (const int32* Cached = SequenceResolveCache.Find(Key))
 	{
-		return INDEX_NONE;   // the body authors no clip for it: retail's own -1
+		return *Cached;
 	}
-	return SequenceRowFor(Clip.OwnerStem, Clip.Label, Clip.bLooping);
+	FElysiumActivityClip Clip;
+	const int32 Row = Embodiment->ResolveNpcActivityClip(Request, Clip)
+		? SequenceRowFor(Clip.OwnerStem, Clip.Label, Clip.bLooping)
+		: INDEX_NONE;   // the body authors no clip for it: retail's own -1
+	SequenceResolveCache.Add(Key, Row);
+	return Row;
 }
 
 bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)

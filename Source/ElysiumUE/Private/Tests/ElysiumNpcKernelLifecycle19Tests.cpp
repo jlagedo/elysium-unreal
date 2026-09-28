@@ -189,9 +189,9 @@ bool FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest::RunTest(const FStrin
 	TestEqual(TEXT("1029a43e +0x6418 IS cleared"), F.Npc->Senses.Memory.NextSeeSoundSourceTime, 0.0);
 	TestEqual(TEXT("+0x641c is NOT written by 0x1029a0b0"),
 		F.Npc->Senses.Memory.NextFleeSoundTime, 7.0);
-	// The two resolved patrol routes ARE dropped (`1029a236`..`1029a248`).
+	// The two patrol path pairs ARE zeroed (`1029a236`..`1029a248`).
 	TestEqual(TEXT("1029a236 the patrol route is dropped"), F.Npc->NumPatrolPointsForDebug(), 0);
-	TestEqual(TEXT("1029a242 the hunt route with it"), F.Npc->HuntPatrolPoints.Num(), 0);
+	TestNull(TEXT("1029a242 the hunt route with it"), F.Npc->PatrolPathHuntCell.Path);
 	return true;
 }
 
@@ -331,7 +331,8 @@ bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	N.HuntPatrolPoints.Add(FVector::ZeroVector);
+	// A hunt path whose node id (entity 0, the world) names no network node: `0x1029f610` fails it.
+	{ const int32 HuntIds[] = { 0, -1 }; N.BuildPatrolPath(&N.PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 	N.bSpawnCalled = false;
 	const int32 Revalidations = N.PatrolPathRevalidations;
 	const int32 Releases = N.PatrolPathReleases;

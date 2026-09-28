@@ -138,9 +138,9 @@ bool FElysiumNpc::HintIdleActivityGate() const
 
 bool FElysiumNpc::PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const
 {
-	// SEAM for `0x1029f730` — the patrol node's interest record. There is no patrol-node graph on
-	// this substrate (patrol is a point list, `FElysiumNpc::PatrolPoints`), so there is no record
-	// and no `+0x468` name on it.
+	// SEAM for `0x1029f730` — the patrol node's interest record. The node ids are this runtime's
+	// hint entity indices (`PatrolNodePosition`), and no node carries an interest record, so there is
+	// no `+0x468` name on it.
 	(void)PatrolNode;
 	(void)OutName;
 	return false;

@@ -86,6 +86,9 @@ public:
 		float Seconds = 0.f;  // the first-pass length the clip player last reported; 0 = not yet played
 	};
 	TArray<FSequenceRow> SequenceRows;
+	// The resolver's answers by request (model, activity, class, weapon, state), `INDEX_NONE` for a
+	// miss. Session state, as the rows are.
+	TMap<FString, int32> SequenceResolveCache;
 
 	/** The row number for a clip, added on first sight. */
 	int32 SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops);
@@ -204,9 +207,6 @@ public:
 	// one bit per group id, parsed by `0x10298910`, ZERO for an empty or `"0"` list. `0x102dad60`
 	// reads it against the place's own folded mask, which `AcceptsAmbientGroup` is.
 	uint32 InterestingPlaceGroupMask = 0;
-	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
-	FString PatrolPath;               // authored space-separated info_node_patrol_point names
-	int32 PatrolIndex = 0;            // next point in the looping authored sequence
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it come from the chain: FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
@@ -343,15 +343,15 @@ public:
 	// dormancy and death; idempotent, so every one of those may call it.
 	void EndScriptedSchedule(const TCHAR* Reason);
 
+	// `CAI_BaseNPCTroika::InputSetupPatrolType` `0x1029eb30`: `"<repeat> <type> <schedule>"` into
+	// `BuildPatrolPath(&m_sppPatrolPath, repeat, type, schedule, NULL, replace)`.
 	void InputSetupPatrolType(const FElysiumInputArgs& Args);
 
+	// `InputFollowPatrolPath` `0x1029ed90`: the node list into `BuildPatrolPath(..., extend)`.
 	void InputFollowPatrolPath(const FElysiumInputArgs& Args);
 
+	// `InputClearPatrolPath` `0x1029ef60`: `0x1029f5d0(&m_sppPatrolPath)`.
 	void InputClearPatrolPath(const FElysiumInputArgs&);
-
-	bool ResolvePatrolPoints();
-
-	bool IssuePatrolMove();
 
 	bool StartWalkingAnimation(bool bRunning = false);
 
@@ -414,8 +414,6 @@ public:
 
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now, bool bReduced);
-
-	void ThinkPatrol(double Now);
 
 	FElysiumInterestingPlace* CurrentAmbientSpot() const;
 
@@ -775,11 +773,13 @@ public:
 		return static_cast<int32>(AmbientPhase);
 	}
 
-	// Read side for the automation tests and the inspector: whether `FollowPatrolPath` armed a
-	// route on this leaf, and how many points that route resolved to (the count is kept whether
-	// or not the route is currently armed).
-	bool IsPatrolActiveForDebug() const { return bPatrolActive; }
-	int32 NumPatrolPointsForDebug() const { return PatrolPoints.Num(); }
+	// Read side for the automation tests and the inspector: whether `m_sppPatrolPath` holds a path
+	// object, and how many node ids it carries.
+	bool IsPatrolActiveForDebug() const { return PatrolPathCell.Path != nullptr; }
+	int32 NumPatrolPointsForDebug() const
+	{
+		return PatrolPathCell.Path != nullptr ? PatrolPathCell.Path->Count : 0;
+	}
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
 	//
@@ -903,9 +903,6 @@ public:
 	float TargetLeadWeightScale = 0.f;  // +0x656c m_flTargetLeadWeightScale (walked)
 	// +0x6574 m_flLoudExpressionTime (datamap) — FIELD_TIME; the loud-line expression cooldown
 	double LoudExpressionTime = 0.0;
-	// +0x6594 m_sppPatrolPathHunt (datamap) — the hunt sibling of the patrol route, in the same
-	// resolved-points form
-	TArray<FVector> HuntPatrolPoints;
 	// +0x65a4 m_fNextDodgeTimer (datamap) — FIELD_TIME; an absolute stamp
 	double NextDodgeTime = 0.0;
 	// +0x65a8 m_QueuedBurnDamage (doc) — CTakeDamageInfo maps to this port's damage packet
@@ -1085,10 +1082,6 @@ protected:
 
 	// ---------------------------------------------------------------------------------------------
 
-	// A suspended patrol route comes back with a fresh generation, so the leaf's own token is
-	// re-stamped wherever a release hands the body back to the route.
-	void RestampPatrolToken();
-
 	// The two program claims (`Schedule` and `ScriptedSchedule`) share one arbitration shape:
 	// idempotent for a token already held, the patrol route parked rather than taken, and the
 	// release stops whatever the program had the body doing. `Token` is the leaf's member for
@@ -1139,15 +1132,11 @@ protected:
 	bool bReportedNoStepSurface = false;
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
-	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken ScheduleOwner;
 	FElysiumBodyOwnerToken ScriptedScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
-	TArray<FString> PatrolNames;
-	TArray<FVector> PatrolPoints;
-	bool bPatrolActive = false;
 	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
 	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue
 	// lock is stamped synchronously, the arbiter claim can arrive a think later.

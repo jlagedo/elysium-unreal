@@ -340,7 +340,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
 	F.Npc->bGoToIdleState = true;
 	F.Npc->Cognition.bCondTookDamage = true;
-	F.Npc->HuntPatrolPoints = { FVector::ZeroVector, FVector::OneVector };
+	{ const int32 HuntIds[] = { 0, -1 }; F.Npc->BuildPatrolPath(&F.Npc->PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 
 	F.Npc->OnStateChangeTroika(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 
@@ -355,7 +355,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 		F.Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
 	TestFalse(TEXT("m_bGoToIdleState is cleared"), F.Npc->bGoToIdleState);
 	TestFalse(TEXT("m_bCondTookDamage is cleared"), F.Npc->Cognition.bCondTookDamage);
-	TestEqual(TEXT("the hunt patrol route is released"), F.Npc->HuntPatrolPoints.Num(), 0);
+	TestNull(TEXT("the hunt patrol route is released (0x1029f5d0)"), F.Npc->PatrolPathHuntCell.Path);
 
 	// --- COMBAT arms it too; every other reachable state does NOT ---
 	F.Npc->bReturnToInitialPos = false;

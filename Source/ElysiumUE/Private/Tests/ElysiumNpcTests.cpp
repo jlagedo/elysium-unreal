@@ -998,31 +998,32 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		TEXT("SCHED_TROIKA_MESMERIZED"), TEXT("Npc.Classes ownership fixture"), FString()));
 	// The Python surface calls these exact names on sm_hub_1's two cops. The recording motor keeps
 	// the route engine-neutral while making its move/stop requests observable in this tier.
+	// Delivered in the order the shipped level scripts send them, each on its own tick (sm_hub_1
+	// sends `FollowPatrolPath` 0.1 s after `SetupPatrolType`).
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
 		FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
+	World.Tick(1.0);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 		FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
-	World.Tick(0.0);
-	TestTrue(TEXT("named patrol resolves and arms both authored points"),
-		JackNpc && JackNpc->IsPatrolActiveForDebug() && JackNpc->PatrolIndex == 0
-			&& JackNpc->NumPatrolPointsForDebug() == 2);
-	World.Tick(0.05);
-	// Arming a patrol is not the same as walking one. Jack's body belongs to the schedule arbiter
-	// here, so the armed route is parked and NOTHING is commanded -- the arbiter, not the patrol,
-	// decides who drives. The moving half of the rule is `Elysium.Substrate.Npc.TravelSpeed`,
-	// whose walker has no schedule to park it.
-	TestTrue(TEXT("the forced program stays running while a patrol is armed"),
-		ScheduledJack->Schedule.Current == ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
+	World.Tick(1.1);
+	// Story 8 wave 2 (corrected to retail): the patrol is `m_sppPatrolPath`'s pooled record.
+	// `SetupPatrolType` (`0x1029eb30`) builds it with the repeat, the type and the schedule, and
+	// `FollowPatrolPath` (`0x1029ed90`) appends the two node ids; each `BuildPatrolPath`
+	// (`0x1029f460`) whose record carries a schedule installs it AT ONCE (`0x1029f56b`,
+	// `SetSchedule(path+4, 0)`), replacing the running program (`0x102ae780` refuses only a dead NPC).
+	TestTrue(TEXT("named patrol resolves both authored points into the path object"),
+		JackNpc && JackNpc->IsPatrolActiveForDebug() && JackNpc->PatrolPathCell.Path->Current == 0
+			&& JackNpc->NumPatrolPointsForDebug() == 2 && JackNpc->PatrolPathCell.Path->Repeat == 255);
+	TestTrue(TEXT("0x1029f56b the patrol path's own program replaces the trance"),
+		FString(ElysiumScheduleName(ScheduledJack->Schedule.Current)).Contains(TEXT("FOLLOW_PATROL_PATH_WALK")));
 	FElysiumRecordingNpcMotor* JackMotor = Services.NpcMotors.IsEmpty()
 		? nullptr : Services.NpcMotors[0].Get();
 	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))
 	{
 		TestTrue(TEXT("the NPC motor retains Jack rather than player identity"),
 			JackMotor->Owner == JackHandle);
-		TestFalse(TEXT("an armed patrol on a schedule-owned body commands no movement"),
-			JackMotor->bMoving);
 	}
 
 	FElysiumMapSnapshot PatrolSnapshot;
@@ -1035,11 +1036,10 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	}
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("ClearPatrolPath")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
-	World.Tick(0.05);
-	if (JackMotor)
-	{
-		TestFalse(TEXT("clearing a patrol leaves nothing commanded"), JackMotor->bMoving);
-	}
+	World.Tick(1.2);
+	// `InputClearPatrolPath` (`0x1029ef60`) is `0x1029f5d0` and nothing else: the path object goes;
+	// the running program is not touched.
+	TestFalse(TEXT("0x1029ef66 ClearPatrolPath releases the path object"), JackNpc->IsPatrolActiveForDebug());
 
 	return true;
 }
@@ -1067,6 +1067,10 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		Walker.Classname = TEXT("npc_VVampire");
 		Walker.TargetName = TEXT("walker");
 		Walker.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		// `CNPC_VVampire::Spawn` (`0x103c4ef9`) hates the player's class unless `player_reaction` is
+		// authored; the shipped patrol cops author it. (Story 8 wave 2: the patrol is a schedule, and
+		// a hostile walker would leave it for combat on its first sight pass.)
+		Walker.Keys.Add(TEXT("player_reaction"), TEXT("D_NU 0"));
 		Defs.Defs.Add(MoveTemp(Walker));
 
 		for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
@@ -1085,6 +1089,9 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		Services.bHasPlayer = true;
 		Services.bProvideNpcMotor = true;
 		Services.NpcWalkSpeedCmPerSecond = BodyWalkSpeed;
+		// The body authors its walk: `TASK_WALK_PATH` (`0x10286438`) walks only when
+		// `SelectWeightedSequence(ACT_WALK)` finds a sequence, and runs otherwise.
+		Services.bNpcActivitiesResolve = true;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Defs));
@@ -1096,14 +1103,23 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		{
 			return 0.f;
 		}
+		// Delivered in the level scripts' order, each on its own tick: `SetupPatrolType` rebuilds the
+		// path object (`0x1029f460` with replace), so it has to land before the node list does.
+		World.Tick(0.0);
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
 			FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
 			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.Tick(0.05);
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 			FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
 			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
-		World.Tick(0.0);
-		World.Tick(0.05);
+		// Story 8 wave 2: the patrol is the path object's own program (`0x1029f56b`); its
+		// `GET_PATH_TO_PATROL_POINT` (`0x102aa640`) and `WALK_PATH` start the leg on the NPC's first
+		// `NPCThink`s after `NPCInitThink`, so the world is run a second.
+		for (double T = 0.1; T <= 1.0; T += 0.05)
+		{
+			World.Tick(T);
+		}
 
 		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
 		if (!TestNotNull(TEXT("the walker owns a motor"), Motor))
@@ -1291,6 +1307,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		Walker.Classname = TEXT("npc_VVampire");
 		Walker.TargetName = TEXT("walker");
 		Walker.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Walker.Keys.Add(TEXT("player_reaction"), TEXT("D_NU 0"));   // a shipped patrol cop's; see TravelSpeed
 		Defs.Defs.Add(MoveTemp(Walker));
 
 		for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
@@ -1330,14 +1347,21 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// Story 8 wave 2: the patrol is the path object's own program; its `TASK_WALK_PATH`
+		// (`0x10286438`) asks `SelectWeightedSequence(ACT_WALK)` through the sequence bridge, and the
+		// maintained movement activity plays what it answered.
+		World.Tick(0.0);
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
 			FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
 			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.Tick(0.05);
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 			FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
 			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
-		World.Tick(0.0);
-		World.Tick(0.05);
+		for (double T = 0.1; T <= 1.0; T += 0.05)
+		{
+			World.Tick(T);
+		}
 
 		FString Resolve;
 		for (const FString& Call : Services.Calls)
@@ -1361,8 +1385,11 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		TestTrue(TEXT("...and walking the cast chain, not the player's one pass"),
 			Resolve.EndsWith(TEXT("body=cast")));
 
+		// The loop bit is the resolved row's own (`ResetSequenceInfo` `0x10090950`: `m_bSequenceLoops
+		// = GetSequenceFlags & 1`); the retired walker forced a loop. This fixture's row is authored
+		// non-looping.
 		TestTrue(TEXT("the resolved vocabulary label is what reaches the clip player"),
-			Services.Saw(TEXT("PlayNpcClip jack relaxed_walk loop=1")));
+			Services.Saw(TEXT("PlayNpcClip jack relaxed_walk loop=0")));
 		TestFalse(TEXT("the concrete bank cell is not mistaken for a vocabulary label"),
 			Services.Saw(TEXT("PlayNpcClip jack relaxed_walk_0")));
 	}

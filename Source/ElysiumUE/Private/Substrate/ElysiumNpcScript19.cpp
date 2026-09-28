@@ -255,6 +255,76 @@ void FElysiumNpc::BuildPatrolPath(FPatrolPathCell* Cell, int32 Repeat, int32 Typ
 	}
 }                                                             // 0x1029f572
 
+// --- `0x1029f5d0` and the patrol inputs' helpers ------------------------------------------------------
+
+void FElysiumNpc::ReleasePatrolPath(FPatrolPathCell* Cell)
+{
+	if (Cell == nullptr || Cell->Path == nullptr)             // 0x1029f5d4 / 0x1029f5d9
+	{
+		return;
+	}
+	Cell->bOwned = false;                                     // 0x1029f5dd
+	FreePatrolPath(Cell->Path);                               // 0x1029f5e0 0x10307db0
+	Cell->Path = nullptr;                                     // 0x1029f5e8
+}
+
+int32 FElysiumNpc::PatrolCurrentNode(const FPatrolPathCell& Cell)
+{
+	const FPatrolPathRecord* Path = Cell.Path;
+	return Path != nullptr && Path->Current >= 0 && Path->Current < PatrolPathNodeCapacity
+		? Path->Nodes[Path->Current] : INDEX_NONE;
+}
+
+int32 FElysiumNpc::PatrolTypeForName(const FString& Name)
+{
+	// `DAT_1049df20`, five dwords a row: `{id, name, start, step, next}`; the names are the ids.
+	static const TCHAR* const Names[] = { TEXT("0"), TEXT("1"), TEXT("2"), TEXT("3") };
+	for (int32 Row = 0; Row < UE_ARRAY_COUNT(Names); ++Row)
+	{
+		if (Name.Equals(Names[Row], ESearchCase::IgnoreCase))    // __strcmpi
+		{
+			return Row;
+		}
+	}
+	UE_LOG(LogElysiumNpcEnt, Error, TEXT("Invalid Path Type String.  Valid types: 0123"));
+	return 0;
+}
+
+int32 FElysiumNpc::PatrolScheduleForName(const FString& Token) const
+{
+	const FElysiumIdNamespace& Schedules =
+		FElysiumScheduleCorpus::Get().Namespace(EElysiumIdCategory::Schedule);
+	int32 Global = Schedules.Find(Token);                                          // 0x1029f37a
+	if (Global == INDEX_NONE)
+	{
+		Global = Schedules.Find(FString::Printf(TEXT("SCHED_%s"), *Token));         // 0x1029f39a
+	}
+	if (Global == INDEX_NONE)
+	{
+		Global = Schedules.Find(FString::Printf(TEXT("SCHED_TROIKA_%s"), *Token));  // 0x1029f3bb
+	}
+	if (Global == INDEX_NONE)
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find schedule '%s'"),
+			*DebugString(), *Token);
+		return 0;
+	}
+	const int32 Local = const_cast<FElysiumNpc*>(this)->GetLocalScheduleId(Global); // 0x1029f3d9 slot 580 / 0x102ea280
+	if (Local == INDEX_NONE)
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not convert schedule '%s' to a local id"),
+			*DebugString(), *Token);
+		return 0;
+	}
+	return Local;
+}
+
+int32 FElysiumNpc::PatrolNodeIdFor(const FString& Token) const
+{
+	const FElysiumEntity* Hint = FindPatrolPoint(Token);
+	return Hint != nullptr ? Hint->Handle.Index : INDEX_NONE;
+}
+
 // --- The node graph seam ---------------------------------------------------------------------------
 
 FElysiumNpc::EPatrolNode FElysiumNpc::PatrolNodePosition(int32 NodeId, FVector& OutPositionCm) const

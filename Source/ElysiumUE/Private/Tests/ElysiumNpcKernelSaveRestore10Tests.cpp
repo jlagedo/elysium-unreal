@@ -643,7 +643,7 @@ bool FElysiumNpcKernelSaveRestore10UpdateOnRemoveTest::RunTest(const FString&)
 	N.AttackCoordinator = 0;
 	N.TalkingUntil = -1.0;
 	N.Dialogue.bInDialog = false;
-	N.HuntPatrolPoints.Add(FVector(1.0, 2.0, 3.0));
+	{ const int32 HuntIds[] = { 0, -1 }; N.BuildPatrolPath(&N.PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 	const int32 DialogStopsBefore = N.DialogStopScheduleRequests;
 	const int32 ReleasesBefore = N.InterestingPlaceReleases;
 	N.UpdateOnRemove();
@@ -651,7 +651,7 @@ bool FElysiumNpcKernelSaveRestore10UpdateOnRemoveTest::RunTest(const FString&)
 		N.InterestingPlaceReleases, ReleasesBefore + 1);
 	TestEqual(TEXT("a quiet NPC's dialogue arm does not run"),
 		N.DialogStopScheduleRequests, DialogStopsBefore);
-	TestTrue(TEXT("the hunt patrol array is released"), N.HuntPatrolPoints.IsEmpty());
+	TestNull(TEXT("the hunt patrol path is released (0x1029f5d0)"), N.PatrolPathHuntCell.Path);
 
 	// Step 4: `IsInDialog()` is the four-term gate, and a talking body takes the arm.
 	N.TalkingUntil = N.World != nullptr ? N.World->NowSeconds() + 10.0 : 10.0;

@@ -331,11 +331,9 @@ void FElysiumNpc::TroikaNPCInit()
 	NextPedInteractTime = 0.0;                                           // 1029a230 +0x631c
 	// `1029a236`–`1029a248`: the two `sPatrolPath` smart-pointer pairs — `m_sppPatrolPath`
 	// (`+0x658c` byte, `+0x6590` pointer) and `m_sppPatrolPathHunt` (`+0x6594`, `+0x6598`) — are
-	// zeroed whole. This runtime carries each pair as the route resolved to its points, so dropping
-	// the points IS dropping the pair. The authored route NAME is a keyfield and is not touched.
-	// STORY8-TWIN: replaced by zeroing PatrolPathCell / PatrolPathHuntCell (0x1029f460's cells) at wave 2
-	PatrolPoints.Reset();                                                // 1029a236 / 1029a23c
-	HuntPatrolPoints.Reset();                                            // 1029a242 / 1029a248
+	// zeroed whole, WITHOUT a release: a pooled record they held stays marked in use (reproduced).
+	PatrolPathCell = FPatrolPathCell();                                  // 1029a236 / 1029a23c
+	PatrolPathHuntCell = FPatrolPathCell();                              // 1029a242 / 1029a248
 	ScheduleHost.Unknown659c = 0;                                        // 1029a24e
 	ScheduleHost.bPatrolPathUseHint = false;                             // 1029a254 +0x65a0
 	ScheduleHost.GoalToleranceCm = 0.f;
@@ -481,22 +479,33 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 {
 	// `102998cx`: `0x1029f610` validates a stored route against the node network (`0x10307ac0`) and
 	// `0x1029f5d0` releases it when that fails — the two pairs `m_sppPatrolPath` and
-	// `m_sppPatrolPathHunt`, each checked and released on its own. SEAM: no node network stands
-	// here, so a stored route cannot validate and is released, which is retail's answer for a path
-	// the network no longer carries.
-	// STORY8-TWIN: replaced by 0x1029f5d0 on PatrolPathCell / PatrolPathHuntCell at wave 2
-	++PatrolPathRevalidations;
-	if (PatrolPoints.Num() > 0)
+	// `m_sppPatrolPathHunt`, each checked and released on its own. The network is this runtime's
+	// node seam (`PatrolNodePosition`): a path any of whose ids no longer names a node is released.
+	auto Revalidate = [this](FPatrolPathCell& Cell)
 	{
-		PatrolPoints.Reset();                                            // 1029f5d0(&m_sppPatrolPath)
-		++PatrolPathReleases;
-	}
-	++PatrolPathRevalidations;
-	if (HuntPatrolPoints.Num() > 0)
-	{
-		HuntPatrolPoints.Reset();                                        // 1029f5d0(&…PathHunt)
-		++PatrolPathReleases;
-	}
+		++PatrolPathRevalidations;
+		if (Cell.Path == nullptr)
+		{
+			return;
+		}
+		bool bValid = true;
+		for (int32 Index = 0; Index < Cell.Path->Count && Index < PatrolPathNodeCapacity; ++Index)
+		{
+			FVector Position = FVector::ZeroVector;
+			if (PatrolNodePosition(Cell.Path->Nodes[Index], Position) != EPatrolNode::Found)
+			{
+				bValid = false;
+				break;
+			}
+		}
+		if (!bValid)
+		{
+			ReleasePatrolPath(&Cell);                                    // 1029f5d0
+			++PatrolPathReleases;
+		}
+	};
+	Revalidate(PatrolPathCell);
+	Revalidate(PatrolPathHuntCell);
 	FElysiumNpcBase::OnRestore(bFromLoad);                                            // 1027bf50
 	++RestorePlaceScans;
 	CurrentSpotIndex = FindInterestingPlaceHoldingMe();                  // 102db5e0 -> +0x62ec

@@ -478,13 +478,10 @@ void FElysiumNpc::TaskTailLookAt(const FVector& PositionUnits, float TaskSeconds
 int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 {
 	// `0x1029f730` / `0x1029f780` are handed `&m_sppPatrolPath` (`+0x658c`); their reader `0x1029f6c0`
-	// (a seam, `PatrolNodeInterestRecord`) takes the path's current node. The port's own patrol route
-	// (`PatrolIndex`) is a STORY8-TWIN and not what retail reads.
+	// (a seam, `PatrolNodeInterestRecord`) takes the path's current node.
 	auto TaskTailPatrolNode = [this]() -> int32
 	{
-		const FPatrolPathRecord* Path = PatrolPathCell.Path;
-		return Path != nullptr && Path->Current >= 0 && Path->Current < PatrolPathNodeCapacity
-			? Path->Nodes[Path->Current] : INDEX_NONE;
+		return PatrolCurrentNode(PatrolPathCell);
 	};
 	using namespace StartTask19_2Ids;
 	using namespace StartTask19_2Consts;

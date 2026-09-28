@@ -537,6 +537,15 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		return;
 	}
 	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	// The goal's move step (`0x102ef760`, slot 5 of the move goal under `CAI_Navigator::Move`):
+	// `SetIdealActivity(0x1027a6c0())` — the path's movement activity while a goal is active and it
+	// names one, else ACT_IDLE (1). This is what walks a body in its WALK/RUN clip: the maintained
+	// ideal activity commits the movement sequence (the sequence bridge plays it).
+	{
+		const FElysiumNpc* const Troika = AsNpc();
+		const int32 MovementActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
+		SetIdealActivity(MovementActivity != INDEX_NONE ? MovementActivity : 1);   // 0x102ef787 0x1027a6c0 / 0x102ef790
+	}
 	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
 	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken
 	// through `UTIL_AngleMod` as the motor stores it (named divergence: the mover's, not the path's).

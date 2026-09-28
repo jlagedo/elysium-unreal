@@ -424,111 +424,83 @@ void FElysiumNpc::InputSetRelationship(const FElysiumInputArgs& Args)
 		Relationships.NumEntityRules(), Relationships.NumClassRules()));
 }
 
-// STORY8-TWIN: replaced by 0x1029eb30 (InputSetupPatrolType over BuildPatrolPath 0x1029f460) at wave 2
 void FElysiumNpc::InputSetupPatrolType(const FElysiumInputArgs& Args)
 {
-	PatrolType = Args.Param.ToString();
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s SetupPatrolType(%s)"),
-		*DebugString(), *PatrolType);
+	// `0x1029eb30`. A dead NPC takes no patrol (`m_NPCState != 7`, `0x1029eb3a`).
+	if (NpcStateRetail() == 7)
+	{
+		return;
+	}
+	// `strtok` on the delimiter set `DAT_105c7ed4`: repeat, type, schedule.
+	TArray<FString> Tokens;
+	Args.Param.ToString().ParseIntoArrayWS(Tokens);
+	if (Tokens.Num() < 2)                                                     // 0x1029ebd5
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Argument to InputSetupPatrolType must be "
+			"\"<repeat> <type> <schedule>\""), *DebugString());
+		return;
+	}
+	const int32 Repeat = FCString::Atoi(*Tokens[0]);                          // 0x1029ebe7 _atoi
+	if (Repeat < 0)                                                           // 0x1029ebef
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not get repeat count from '%s'"),
+			*DebugString(), *Args.Param.ToString());
+		return;
+	}
+	const int32 Type = PatrolTypeForName(Tokens[1]);                          // 0x1029ec2b 0x103079c0
+	const int32 ScheduleId = Tokens.IsValidIndex(2) ? PatrolScheduleForName(Tokens[2]) : 0;  // 0x1029ec3a 0x1029f370
+	if (ScheduleId == 0)                                                      // 0x1029ec43
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find schedule '%s' in '%s'"),
+			*DebugString(), Tokens.IsValidIndex(2) ? *Tokens[2] : TEXT("(none)"),
+			*Args.Param.ToString());
+		return;
+	}
+	BuildPatrolPath(&PatrolPathCell, Repeat, Type, ScheduleId, nullptr,
+		EPatrolPathBuild::Replace);                                           // 0x1029ec57 0x1029f460(..., 1)
 }
 
-// STORY8-TWIN: replaced by 0x1029ed90 (InputFollowPatrolPath over BuildPatrolPath 0x1029f460) at wave 2
 void FElysiumNpc::InputFollowPatrolPath(const FElysiumInputArgs& Args)
 {
-	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	PatrolPath = Args.Param.ToString();
-	PatrolIndex = 0;
-	bPatrolActive = ResolvePatrolPoints();
-	bMoveIssued = false;
-	if (bPatrolActive && Mind.IsAdmitted() && Mind.Owner() == EElysiumBodyOwner::None
-		&& !PatrolOwner.IsSet())
+	// `0x1029ed90`. A dead NPC takes no patrol.
+	if (NpcStateRetail() == 7)
 	{
-		bPatrolActive = Mind.Acquire(EElysiumBodyOwner::Patrol, /*bSuspendCurrent=*/false,
-			PatrolOwner, TEXT("FollowPatrolPath"));
+		return;
 	}
-	// No clock reset: not a slot-614 site. The route starts on the next cadence think.
-	UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s FollowPatrolPath: %d/%d points (%s)"),
-		*DebugString(), PatrolPoints.Num(), PatrolNames.Num(),
-		bPatrolActive ? TEXT("armed") : TEXT("not armed"));
+	TArray<FString> Tokens;
+	Args.Param.ToString().ParseIntoArrayWS(Tokens);
+	if (Tokens.IsEmpty())                                                     // 0x1029ee0c
+	{
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Argument to InputFollowPatrolPath is empty"),
+			*DebugString());
+		return;
+	}
+	// Up to 64 ids and the -1 terminator (`aiStack_204[65]`).
+	int32 Ids[PatrolPathNodeCapacity + 1];
+	int32 Count = 0;
+	for (const FString& Token : Tokens)
+	{
+		if (Count >= PatrolPathNodeCapacity)
+		{
+			break;   // retail's stack array overruns here; crash guard
+		}
+		const int32 Id = PatrolNodeIdFor(Token);                              // 0x1029ee4b 0x102d2900
+		if (Id == INDEX_NONE)                                                 // 0x1029ee55
+		{
+			// A miss logs and returns BEFORE the builder: no partial path is installed.
+			UE_LOG(LogElysiumNpcEnt, Log, TEXT("ERROR: %s: Could not find node with name '%s' in '%s'"),
+				*DebugString(), *Token, *Args.Param.ToString());
+			return;
+		}
+		Ids[Count++] = Id;
+	}
+	Ids[Count] = -1;
+	BuildPatrolPath(&PatrolPathCell, 0, -1, 0, Ids, EPatrolPathBuild::Extend); // 0x1029eef0 0x1029f460(..., 0)
 }
 
-// STORY8-TWIN: replaced by the retail clear of m_sppPatrolPath (0x1029f5d0 on +0x658c) at wave 2
 void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 {
-	bPatrolActive = false;
-	bMoveIssued = false;
-	PatrolIndex = 0;
-	PatrolPath.Reset();
-	PatrolNames.Reset();
-	PatrolPoints.Reset();
-	if (PatrolOwner.IsSet())
-	{
-		if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-		{
-			Mind.Release(PatrolOwner, TEXT("ClearPatrolPath"));
-		}
-		else
-		{
-			Mind.ForgetSuspended(EElysiumBodyOwner::Patrol, TEXT("ClearPatrolPath"));
-		}
-		PatrolOwner.Reset();
-	}
-	// A cutscene beat outranks the route inputs: clearing the route while a script owns the
-	// body drops the route only, and leaves the beat's travel and its cycle running.
-	if (ScriptPhase == EScriptPhase::None)
-	{
-		if (Motor)
-		{
-			Motor->Stop();
-		}
-		ResetAnimToIdle();
-	}
-	// No clock reset: not a slot-614 site.
-}
-
-// STORY8-TWIN: replaced by 0x1029f460 (BuildPatrolPath; node ids for FindPatrolPoint 0x102d2900) at wave 2
-bool FElysiumNpc::ResolvePatrolPoints()
-{
-	PatrolNames.Reset();
-	PatrolPoints.Reset();
-	PatrolPath.ParseIntoArrayWS(PatrolNames);
-	if (!World)
-	{
-		return false;
-	}
-	for (const FString& Name : PatrolNames)
-	{
-		if (const FElysiumEntity* Point = FindPatrolPoint(Name))
-		{
-			PatrolPoints.Add(Point->Origin);
-		}
-		else
-		{
-			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s patrol point '%s' does not resolve"),
-				*DebugString(), *Name);
-		}
-	}
-	PatrolIndex = PatrolPoints.IsEmpty() ? 0 : PatrolIndex % PatrolPoints.Num();
-	return !PatrolPoints.IsEmpty();
-}
-
-// STORY8-TWIN: replaced by 0x102aa640 / 0x102aa860 (IssuePatrolMoveStart / Run) at wave 2
-bool FElysiumNpc::IssuePatrolMove()
-{
-	if (!Motor || !bPatrolActive || PatrolPoints.IsEmpty())
-	{
-		return false;
-	}
-	PatrolIndex = FMath::Clamp(PatrolIndex, 0, PatrolPoints.Num() - 1);
-	MoveGoal = PatrolPoints[PatrolIndex];
-	bMoveIssued = Motor->MoveTo(PatrolPoints[PatrolIndex], /*AcceptanceRadiusCm=*/20.0f,
-		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
-		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);
-	if (bMoveIssued && !bWalkingAnimation)
-	{
-		bWalkingAnimation = StartWalkingAnimation();
-	}
-	return bMoveIssued;
+	ReleasePatrolPath(&PatrolPathCell);                                       // 0x1029ef66 0x1029f5d0
 }
 
 bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
@@ -557,16 +529,6 @@ bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 	return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
 }
 
-void FElysiumNpc::RestampPatrolToken()
-{
-	// A suspended route came back with a fresh generation. The leaf's own token has to be
-	// re-stamped or the patrol executor would hold one the arbiter no longer honours.
-	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-	{
-		PatrolOwner = Mind.CurrentToken();
-	}
-}
-
 bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
 {
 	// A pushed scripted order is DROPPED rather than parked, for the same reason dialogue drops it:
@@ -580,7 +542,7 @@ bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
 	// mind owning a claim whose token this leaf has retired. Releasing first restores the route, and
 	// the claim below then parks the thing that is actually resumable.
 	ReleaseScheduleBody(Reason);
-	return Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
+	return Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/false,
 		SequenceOwner, Reason);
 }
 
@@ -592,7 +554,6 @@ void FElysiumNpc::ReleaseSequenceBody(const TCHAR* Reason)
 	}
 	Mind.Release(SequenceOwner, Reason);
 	SequenceOwner.Reset();
-	RestampPatrolToken();
 }
 
 bool FElysiumNpc::ClaimScriptMove()
@@ -951,37 +912,13 @@ bool FElysiumNpc::ThinkSchedulePolicy(double Now, bool bReduced)
 	{
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
 	}
-	if (bPatrolActive && bMoveIssued && !ScheduleOwner.IsSet() && !ScriptedScheduleOwner.IsSet())
-	{
-		// The route's outstanding request stops once, on the hand-over. The TOKEN is not released
-		// here: the claim that takes the body suspends it through the arbiter, which is what lets
-		// the route resume at the same point when the program is done.
-		if (Motor != nullptr)
-		{
-			Motor->Stop();
-		}
-		bMoveIssued = false;
-		bWalkingAnimation = false;
-	}
 	ThinkStanceOrIdle(Now, bReduced);
 	return true;
 }
 
 void FElysiumNpc::ThinkAutonomous(double Now, bool bReduced)
 {
-	if (bPatrolActive && !PatrolOwner.IsSet())
-	{
-		if (!Mind.Acquire(EElysiumBodyOwner::Patrol, /*bSuspendCurrent=*/false,
-			PatrolOwner, TEXT("patrol executor admission")))
-		{
-			return;   // re-asked on the cadence, like every other arm
-		}
-	}
-	if (bPatrolActive && !PatrolPoints.IsEmpty())
-	{
-		ThinkPatrol(Now);
-	}
-	else if (bUseInteresting)
+	if (bUseInteresting)
 	{
 		ThinkAmbient(Now);
 	}
@@ -1082,41 +1019,6 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
 	// `MaintainSchedule` already selected, installed and ran the replacement inside its one loop.
 	// A false answer here is the retail missing-schedule exit or a selector that deliberately
 	// returned none; the ordinary cadence asks again.
-}
-
-// STORY8-TWIN: replaced by the Troika StartTask/RunTask arms 0x7a..0x7e (0x102a39c7 / 0x102ab018) at wave 2
-void FElysiumNpc::ThinkPatrol(double Now)
-{
-	if (!bPatrolActive || PatrolPoints.IsEmpty())
-	{
-		return;
-	}
-	if (!Motor)
-	{
-		return;   // re-asked on the cadence
-	}
-
-	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
-
-	if (Status == EElysiumNpcMoveStatus::Reached)
-	{
-		PatrolIndex = (PatrolIndex + 1) % PatrolPoints.Num();
-		bMoveIssued = false;
-	}
-	else if (Status == EElysiumNpcMoveStatus::Failed
-		|| Status == EElysiumNpcMoveStatus::Unavailable)
-	{
-		bMoveIssued = false; // preserve the point and retry; never silently skip authored route data
-	}
-
-	if (!bMoveIssued)
-	{
-		IssuePatrolMove();
-	}
-	// No cadence write. A travelling body used to be polled at 0.05 s so `SampleMotorIntoEntity`
-	// kept the record on the body; the world now samples every moving NPC once per FRAME
-	// (`FElysiumEntityWorld::SyncMovingNpcRecords`), which is both faster and independent of how
-	// often this executor is asked. 10g retires the executor itself.
 }
 
 FElysiumInterestingPlace* FElysiumNpc::CurrentAmbientSpot() const
@@ -1523,7 +1425,6 @@ void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerT
 		Mind.Release(Token, Reason);
 	}
 	Token.Reset();
-	RestampPatrolToken();
 }
 
 bool FElysiumNpc::AcquireScheduleBody(const TCHAR* Reason)
@@ -1906,7 +1807,7 @@ void FElysiumNpc::ScheduleDone()
 	// families this runtime currently represents as executors outside the program registry. Their
 	// old handoff lived after Tick returned false; latch it at retail's actual completion edge so
 	// the single MaintainSchedule loop does not replace them with an idle program first.
-	bReturnToExternalExecutorAfterSchedule = bPatrolActive || bUseInteresting
+	bReturnToExternalExecutorAfterSchedule = bUseInteresting
 		|| ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
 }
 
@@ -2359,15 +2260,10 @@ FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
 	// for the same one-slot reason it does at `AcquireSequenceBody`.
 	EndScriptedSchedule(TEXT("dialogue opened"));
 	ReleaseScheduleBody(TEXT("dialogue opened"));
-	if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
+	if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/false,
 		DialogueBodyOwner, TEXT("dialogue open")))
 	{
 		return FElysiumBodyOwnerToken();
-	}
-	if (Motor && bPatrolActive)
-	{
-		Motor->Stop();
-		bMoveIssued = false;
 	}
 	Dialogue.bInDialog = true;
 	return DialogueBodyOwner;
@@ -2381,7 +2277,6 @@ void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bo
 		Mind.Release(DialogueBodyOwner, bSilent ? TEXT("dialogue silent close")
 			: TEXT("dialogue normal close"));
 		DialogueBodyOwner.Reset();
-		RestampPatrolToken();
 	}
 	if (bSilent)
 	{
@@ -2404,11 +2299,6 @@ void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bo
 bool FElysiumNpc::PrepareBodyForDialogue()
 {
 	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	if (Motor && bPatrolActive)
-	{
-		Motor->Stop();
-		bMoveIssued = false;
-	}
 	return BeginDialogueBodySession().IsSet();
 }
 
@@ -2601,7 +2491,6 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	ReleaseScheduleBody(Reason);
 	ClearSchedule();
 	Mind.Invalidate(Reason, bDeadMind);
-	PatrolOwner.Reset();
 	AmbientOwner.Reset();
 	SequenceOwner.Reset();
 	ScheduleOwner.Reset();
@@ -2772,26 +2661,14 @@ void FElysiumNpc::RestartRestoredSchedule()
 
 // A restored body stands where the record puts it, so no in-flight travel survives the load; a beat
 // cannot be in flight across a save at all (`FElysiumScriptedSequence::SaveBlockReason`, a named
-// modernization). Then the authored patrol
-// route is resolved again from the `PatrolPath` keyfield the field walk restored.
-//
-// **Divergence, stated:** `TroikaOnRestore` releases both stored routes, because retail persists
-// the RESOLVED route and cannot rebuild one whose nodes the network no longer carries
-// (`0x1029f610` / `0x1029f5d0`). This port persists the authored token string instead, so it can
-// and does rebuild -- which reaches the authored intent retail could only fail to.
+// modernization). The patrol path objects come back with the record (`SerializePatrolBlock`) and
+// `TroikaOnRestore` validates them (`0x1029f610`).
 void FElysiumNpc::RestorePatrolAndAmbient()
 {
 	EndScriptMove();
-	bPatrolActive = bPatrolActive && ResolvePatrolPoints();
 	bMoveIssued = false;
 	bWalkingAnimation = false;
-	if (bPatrolActive)
-	{
-		CurrentSpotIndex = INDEX_NONE;
-		AmbientPhase = EAmbientPhase::None;
-		bAmbientArrived = false;
-	}
-	if (!bPatrolActive && AmbientPhase != EAmbientPhase::None)
+	if (AmbientPhase != EAmbientPhase::None)
 	{
 		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
 		if (!Spot || !Spot->Claim(Handle))
@@ -2816,17 +2693,15 @@ void FElysiumNpc::RestoreMindState()
 	{
 		Owner = EElysiumBodyOwner::None;
 	}
-	if (Owner == EElysiumBodyOwner::Patrol && !bPatrolActive)
+	if (Owner == EElysiumBodyOwner::Patrol)
 	{
-		Owner = EElysiumBodyOwner::None;
+		Owner = EElysiumBodyOwner::None;   // no patrol executor claims a body since story 8 wave 2
 	}
 	if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
 	{
 		Owner = EElysiumBodyOwner::None;
 	}
 	Mind.Restore(State, Owner);
-	PatrolOwner = Owner == EElysiumBodyOwner::Patrol
-		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 	AmbientOwner = Owner == EElysiumBodyOwner::Ambient
 		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 	// A restore never resumes `Schedule` ownership either: `FElysiumNpcBase::OnRestore` re-found the program by
@@ -2873,10 +2748,43 @@ void FElysiumNpc::RestoreDeathBodyState()
 // `RestorePatrolAndAmbient`; nothing here is port state retail has a row for.
 void FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 {
-	Ar << PatrolType;
-	Ar << PatrolPath;
-	Ar << PatrolIndex;
-	Ar << bPatrolActive;
+	// The two patrol path objects (`m_sppPatrolPath` / `m_sppPatrolPathHunt`, retail's custom save
+	// ops): whether the cell holds one, then the record's words. A loaded record takes a pool slot.
+	for (FPatrolPathCell* Cell : { &PatrolPathCell, &PatrolPathHuntCell })
+	{
+		bool bHasPath = Cell->Path != nullptr;
+		Ar << bHasPath;
+		if (!bHasPath)
+		{
+			if (Ar.IsLoading())
+			{
+				ReleasePatrolPath(Cell);
+			}
+			continue;
+		}
+		FPatrolPathRecord Record = Cell->Path != nullptr ? *Cell->Path : FPatrolPathRecord();
+		Ar << Record.Type;
+		Ar << Record.Schedule;
+		Ar << Record.Repeat;
+		Ar << Record.Count;
+		Ar << Record.Current;
+		for (int32& Node : Record.Nodes)
+		{
+			Ar << Node;
+		}
+		if (Ar.IsLoading())
+		{
+			if (Cell->Path == nullptr)
+			{
+				Cell->Path = AllocPatrolPath();
+				Cell->bOwned = Cell->Path != nullptr;
+			}
+			if (Cell->Path != nullptr)
+			{
+				*Cell->Path = Record;
+			}
+		}
+	}
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
 	Ar << SavedAmbientPhase;
 	Ar << CurrentSpotIndex;
@@ -3046,9 +2954,11 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			ScriptedScheduleOrder.Leg, ScriptedScheduleOrder.Route.Num(),
 			World ? *World->DescribeHandle(ScriptedScheduleOrder.Goal) : TEXT("(no world)"))
 		: TEXT("(none)"));
-	Out.Emplace(TEXT("Patrol"), bPatrolActive
-		? FString::Printf(TEXT("point %d/%d: %s"), PatrolIndex + 1, PatrolPoints.Num(), *PatrolPath)
-		: TEXT("inactive"));
+	Out.Emplace(TEXT("Patrol"), PatrolPathCell.Path != nullptr
+		? FString::Printf(TEXT("type %d node %d/%d (id %d) repeat %d, schedule 0x%x"),
+			PatrolPathCell.Path->Type, PatrolPathCell.Path->Current + 1, PatrolPathCell.Path->Count,
+			PatrolCurrentNode(PatrolPathCell), PatrolPathCell.Path->Repeat, PatrolPathCell.Path->Schedule)
+		: TEXT("(no path)"));
 	Out.Emplace(TEXT("Ambient place"), CurrentSpotIndex == INDEX_NONE
 		? TEXT("searching")
 		: FString::Printf(TEXT("#%d phase=%d"), CurrentSpotIndex,

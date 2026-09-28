@@ -164,12 +164,12 @@ namespace
 			}
 			if (Setup.bPatrol)
 			{
+				// Story 8 wave 2: the patrol is the path object's own program (`SetupPatrolType`
+				// `0x1029eb30` then `FollowPatrolPath` `0x1029ed90`, each install at `0x1029f56b`).
+				World.AcceptInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
+					FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), Guard->Handle, Guard->Handle);
 				World.AcceptInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
 					FElysiumVariant::String(TEXT("route_1 route_2")), Guard->Handle, Guard->Handle);
-				// The headless guard carries no stance clips, so its idle program failed into base
-				// `FAIL` during the settle thinks (story 25): SET_ACTIVITY's one-second watchdog,
-				// WAIT 1, WAIT_PVS. The executor takes its token and issues the first leg once that
-				// program ends.
 				for (SettledAt = 0.0; SettledAt <= 5.0 && !Services.Saw(TEXT("NpcMotor MoveTo"));
 					SettledAt += 0.5)
 				{
@@ -450,8 +450,10 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	TestTrue(TEXT("...and suppresses dialogue"), F.Guard->HasDialogSuppressFlag());
 	TestTrue(TEXT("...and blocks investigation"),
 		F.Guard->NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
-	TestTrue(TEXT("the unresolved activity is still running, without a fail schedule"),
-		F.Guard->Schedule.TaskIndex == 4);
+	// (`0x102aad2d`: the unresolved activity's fallback commit completes TASK_SET_ACTIVITY in its own
+	// maintain pass, as `FeedTrance.Standing` asserts.)
+	TestTrue(TEXT("the unresolved activity completed into the authored wait, without a fail schedule"),
+		F.Guard->Schedule.TaskIndex == 5);
 	TestEqual(TEXT("no patrol leg is issued while the activity waits"),
 		F.Services.Count(TEXT("NpcMotor MoveTo")), MovesBefore);
 
@@ -469,9 +471,10 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	const double Held = F.RunOutTrance(Now);
 	TestTrue(TEXT("the trance ended inside the recovered bound"), Held >= 30.0 && Held <= 151.0);
 	TestFalse(TEXT("the bits are released"), F.Guard->IsBusyWithDiscipline());
-	// The headless guard's reselected idle fails on one pass, routes into base `FAIL` on the next
-	// (story 25), and `FAIL` stands its watchdog, `WAIT 1` and PVS hold before the route resumes.
-	for (int32 i = 0; i < 4; ++i)
+	// The next install releases the bits through the disposition idle (`0x6b`, case 1 while still
+	// busy); after it, `SelectSchedule` case 1 step 3 (`0x102af6b6`) answers the surviving path's
+	// program, whose first leg is a new move.
+	for (int32 i = 0; i < 20 && F.Services.Count(TEXT("NpcMotor MoveTo")) <= MovesBefore; ++i)
 	{
 		Now += 1.0;
 		F.Step(Now);
