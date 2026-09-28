@@ -2195,7 +2195,7 @@ int32 FElysiumNpcZombie::RunTaskSlot444(void* Arg0)
 			MiscFlags |= 0x80000u;                                                 // 0x103e0210 `AddMiscFlag(0x80000)`
 			// `CBaseCombatCharacter::CreateCorpse(&m_vecDeathForceVector, this + 0x668c)`, called
 			// non-virtually (`0x10005c90`), so it is the combat character's body and not this class's.
-			FElysiumCombatCharacter::CreateCorpse(ZombieDeathForceVector, &ZombieCorpseWord668c); // 0x103e0225
+			FElysiumCombatCharacter::CreateCorpse(ZombieDeathForceVector, &ZombieDeathDamageInfo); // 0x103e0225
 		}
 		return 0;
 	case 0x151:
