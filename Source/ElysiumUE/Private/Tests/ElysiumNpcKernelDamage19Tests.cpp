@@ -1218,4 +1218,57 @@ bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 	return true;
 }
 
+// =================================================================================================
+// 0x1032ef60 / 0x103302e0 — `BeginVampHeal_HOT` and the Kindred frenzy arm (L13 review row 9).
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19CombatAliveFrenzyTest,
+	"Elysium.Substrate.NpcKernelDamage19.CombatAliveFrenzy_103302e0", GDamage19TestFlags)
+bool FElysiumNpcKernelDamage19CombatAliveFrenzyTest::RunTest(const FString&)
+{
+	FDamage19Fixture F;
+	if (!TestNotNull(TEXT("the guard stands"), F.Guard) || !TestNotNull(TEXT("the enemy stands"), F.Enemy))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Guard;
+	// A Kindred body that commits (`DAMAGE_YES`), with a ceiling no hit here reaches.
+	N.bHasKindredTemplate = true;
+	N.bKindredTemplate = true;
+	N.TakeDamageMode = 2;
+	N.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 1000);
+	N.RecomputeSheet();
+	const TCHAR* const Hot = TEXT("CBaseCombatCharacter::BeginVampHeal_HOT");
+	const TCHAR* const Frenzy = TEXT("CBaseCombatCharacter::FrenzyCheck");
+
+	// 0x1032f17a: every alive packet asks the heal-over-time seam after the two stat reads.
+	const int32 HotBefore = Damage19StubCount(Hot);
+	const int32 FrenzyBefore = Damage19StubCount(Frenzy);
+	FElysiumNpcBase::FElysiumTakeDamageInfo Small = Damage19Packet(F.Enemy, 10.f);
+	N.OnTakeDamage(&Small);
+	TestEqual(TEXT("0x1032f17a BeginVampHeal_HOT is asked on the alive arm"), Damage19StubCount(Hot), HotBefore + 1);
+	TestEqual(TEXT("0x10330a50: 10 is below Dmg_Amount 0x39 and not aggravated: no FrenzyCheck"),
+		Damage19StubCount(Frenzy), FrenzyBefore);
+
+	// 0x10330a3a / 0x10330a50: at or above `VampFrenzy_Info/Dmg_Amount` (image default 0x39) the check runs.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Heavy = Damage19Packet(F.Enemy, 60.f);
+	N.OnTakeDamage(&Heavy);
+	TestEqual(TEXT("0x10330aa9 FrenzyCheck on a heavy hit from a live attacker"),
+		Damage19StubCount(Frenzy), FrenzyBefore + 1);
+
+	// 0x10330a78 / 0x10330a90: at or above AggrDmg_Amount (0x1d) only an aggravated hit checks.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Mid = Damage19Packet(F.Enemy, 30.f);
+	N.OnTakeDamage(&Mid);
+	TestEqual(TEXT("0x10330a9a: a plain 30 does not check"), Damage19StubCount(Frenzy), FrenzyBefore + 1);
+	FElysiumNpcBase::FElysiumTakeDamageInfo MidAggravated = Damage19Packet(F.Enemy, 30.f, 0x8u);
+	N.OnTakeDamage(&MidAggravated);
+	TestEqual(TEXT("0x10330a90: an aggravated (0xc8000008) 30 checks"), Damage19StubCount(Frenzy), FrenzyBefore + 2);
+
+	// 0x103309fb: no attacker, no check, however heavy.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Anonymous = Damage19Packet(nullptr, 60.f);
+	N.OnTakeDamage(&Anonymous);
+	TestEqual(TEXT("0x10330a00: an attacker-less packet never checks"), Damage19StubCount(Frenzy), FrenzyBefore + 2);
+	return true;
+}
+
 #endif  // WITH_DEV_AUTOMATION_TESTS

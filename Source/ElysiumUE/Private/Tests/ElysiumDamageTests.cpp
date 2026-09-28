@@ -17,6 +17,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumDice.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
@@ -391,8 +392,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageCommitTest, "Elysium.Substrate.Da
 	GElysiumTestFlags)
 bool FElysiumDamageCommitTest::RunTest(const FString&)
 {
-	// 1. HealthBuffer absorbs first; a partial absorption only reduces it.
+	// 1. HealthBuffer absorbs first. Corrected (L13 wave-2 fixes) to `0x103302e0`: a non-zero buffer
+	//    absorbs `trunc(DAT_10739a68 * damage * 0.01)` (`0x10330746..0x10330756`) -- the process-global
+	//    Bloodshield block percentage -- and the damage loses exactly that, uncapped by the buffer
+	//    (`0x1033076f`). Less than the buffer spends it (`0x10330847 SubBase`); otherwise the buffer is
+	//    zeroed and Bloodshield ends (`0x103307d9` / `0x103307e9`).
 	{
+		// The values keep every product off an integer, so no precision question decides a case.
+		int32& BlockPercent = ElysiumDisciplines::HealthBufferBlockPercent();
+		const int32 SavedPercent = BlockPercent;
+		BlockPercent = 90;
 		FElysiumPlayer Victim;
 		SeedHealth(Victim, 100);
 		Victim.Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, 10);
@@ -400,18 +409,37 @@ bool FElysiumDamageCommitTest::RunTest(const FString&)
 		Victim.RecomputeSheet();
 
 		Victim.CommitDamage(ResolvedDmg(EElysiumDmgFamily::Bashing, 4));
-		TestEqual(TEXT("a partial absorption only reduces the buffer"),
-			Trait(Victim, ElysiumSlot::HealthBuffer), 6);
-		TestEqual(TEXT("...and no damage reaches the health counter"),
-			Trait(Victim, ElysiumSlot::Health), 0);
+		TestEqual(TEXT("0x10330847: trunc(90 * 4 * 0.01) = 3 only reduces the buffer"),
+			Trait(Victim, ElysiumSlot::HealthBuffer), 7);
+		TestEqual(TEXT("...and the other 1 reaches the health counter"),
+			Trait(Victim, ElysiumSlot::Health), 1);
 		TestEqual(TEXT("...so Bloodshield is still up"), Victim.Effects.Num(), 1);
 
-		// Exhausting it clears the counter, ends Bloodshield and spends the overflow on health.
-		Victim.CommitDamage(ResolvedDmg(EElysiumDmgFamily::Bashing, 10));
-		TestEqual(TEXT("an exhausted buffer clears"), Trait(Victim, ElysiumSlot::HealthBuffer), 0);
-		TestEqual(TEXT("...the overflow lands on the damage counter"),
-			Trait(Victim, ElysiumSlot::Health), 4);
-		TestEqual(TEXT("...and Bloodshield ends"), Victim.Effects.Num(), 0);
+		// trunc(90 * 11 * 0.01) = 9 is past the buffer of 7: the buffer clears and Bloodshield ends,
+		// and the damage still loses all 9 -- the remainder is not `damage - buffer`.
+		Victim.CommitDamage(ResolvedDmg(EElysiumDmgFamily::Bashing, 11));
+		TestEqual(TEXT("0x103307d9: an exhausted buffer clears"), Trait(Victim, ElysiumSlot::HealthBuffer), 0);
+		TestEqual(TEXT("0x1033076f: the remainder is damage - absorbed (11 - 9), uncapped by the buffer"),
+			Trait(Victim, ElysiumSlot::Health), 3);
+		TestEqual(TEXT("0x103307e9: ...and Bloodshield ends"), Victim.Effects.Num(), 0);
+
+		// Half the hit at 50 %: 9 -> trunc(4.5) = 4 absorbed, 5 on the damage counter.
+		BlockPercent = 50;
+		FElysiumPlayer Half;
+		SeedHealth(Half, 100);
+		Half.Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, 10);
+		Half.RecomputeSheet();
+		Half.CommitDamage(ResolvedDmg(EElysiumDmgFamily::Bashing, 9));
+		TestEqual(TEXT("0x10330756: trunc(50 * 9 * 0.01) = 4 is spent from the buffer"),
+			Trait(Half, ElysiumSlot::HealthBuffer), 6);
+		TestEqual(TEXT("...and the other 5 reach the damage counter"), Trait(Half, ElysiumSlot::Health), 5);
+
+		// A percentage no hit record ever wrote (the `.bss` 0) absorbs nothing: the buffer stands.
+		BlockPercent = 0;
+		Half.CommitDamage(ResolvedDmg(EElysiumDmgFamily::Bashing, 3));
+		TestEqual(TEXT("0 %: SubBase(0x19, 0) leaves the buffer"), Trait(Half, ElysiumSlot::HealthBuffer), 6);
+		TestEqual(TEXT("...and the whole hit lands"), Trait(Half, ElysiumSlot::Health), 8);
+		BlockPercent = SavedPercent;
 	}
 
 	// 2. Unkillable caps the damage-TAKEN counter at the retail literal 75 — not at one hit point.
@@ -469,7 +497,9 @@ bool FElysiumDamageCommitTest::RunTest(const FString&)
 			Trait(Victim, ElysiumSlot::Health), 40);
 
 		Victim.TakeDamage(1000.f);
-		TestEqual(TEXT("the counter stops at the ceiling"), Trait(Victim, ElysiumSlot::Health), 100);
+		// Corrected (L13 wave-2 fixes): `0x1033096b AddBase(0xf, amount)` -> `CVStatList_t::AddBase`
+		// `0x10200fc0` adds to the base with no clamp; this rules-less sheet has no cap to read back.
+		TestEqual(TEXT("0x10200fc0: AddBase does not clamp the damage counter"), Trait(Victim, ElysiumSlot::Health), 1040);
 		TestEqual(TEXT("...health runs out"), Victim.Health, 0);
 		TestTrue(TEXT("...and the death latch reports once"), Victim.HasReportedDeath());
 	}

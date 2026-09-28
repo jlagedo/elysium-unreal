@@ -1200,6 +1200,29 @@ namespace
 		return GNoTeamSymbol;
 	}
 
+	// A retail body this substrate does not carry, called at its retail position: the stub tally
+	// (`elysium.stubs`) records the call, and nothing else happens -- the seam answers "nothing".
+	void CombatFireSeam(const FElysiumCombatCharacter& Self, const TCHAR* Surface, const TCHAR* Address,
+		const FString& Params)
+	{
+		ElysiumStub::FSurface Row;
+		Row.Kind = TEXT("method");
+		Row.Surface = Surface;
+		Row.Address = Address;
+		ElysiumStub::Fired(Row, Self.DebugString(), Params, TEXT("the NPC kernel"));
+	}
+
+	// `Rules.txt` `VampFrenzy_Info`, which `0x101e6310` loads into the process-global `CVFeatList_t`
+	// (`0x10739d08`); the defaults are that loader's immediates (`0x101e644d` / `0x101e6457` /
+	// `0x101e647b`): `Dmg_Amount` 0x39 (`+0x348`, getter `0x101e8dc0`), `AggrDmg_Amount` 0x1d
+	// (`+0x34c`, `0x101e8de0`), `Default_Difficulty` 5 (`+0x35c`, `0x101e8e60`).
+	int32 CombatVampFrenzyRule(const FElysiumCombatCharacter& Self, const TCHAR* Key, int32 ImageDefault)
+	{
+		UElysiumSessionSubsystem* GameState = Self.World != nullptr ? Self.World->GetGameState() : nullptr;
+		UElysiumRulebookSubsystem* Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+		return Rules != nullptr ? Rules->Rules().Int(TEXT("VampFrenzy_Info"), Key, ImageDefault) : ImageDefault;
+	}
+
 	// `0x10323930`: both characters on the same team (a non-`0xffff` symbol, equal on both).
 	bool CombatSameTeam(const FElysiumCombatCharacter& Self, const FElysiumCombatCharacter* Other)
 	{
@@ -1274,8 +1297,11 @@ int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
 	using EC = EElysiumTraitContainer;
 	const int32 Taken = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);       // GetValue(0xf)
 	const int32 Ceiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);  // GetValue(0x11)
-	// `BeginVampHeal_HOT(this)` — UNRECOVERED here: the vampire heal-over-time a hit starts is not
-	// carried by this substrate; nothing answers for it.
+	// `CBaseCombatCharacter::BeginVampHeal_HOT` `0x10324ba0` (`0x1032f17a`, after both stat reads):
+	// `CanVampHeal_HOT` then `m_flLastBloodHealHOTUpdate = now + VampHeal_HOT_Delay`. SEAM: the vampire
+	// heal-over-time is not carried by this substrate (no `+0xa84` clock, no HOT update), so the call
+	// is tallied and nothing is written.
+	CombatFireSeam(*this, TEXT("CBaseCombatCharacter::BeginVampHeal_HOT"), TEXT("0x10324ba0"), FString());
 
 	// 7. Still standing: `CreatePotenceHitEffect` (graded 1/2/3 by the damage bands) when a player
 	//    attacker (`+0xa8`) holding a weapon whose slot-360 flags carry `0x18000` has Potence
@@ -1447,12 +1473,18 @@ int32 FElysiumCombatCharacter::OnTakeDamage_Alive(void* InInfo)
 
 	// The amount: `CVDmg_t::Apply` on word 0 (the resolver), else the packet's scalar `+0x30`;
 	// nothing at or below 0.0 is committed.
+	// `CVDmg_t::Apply` takes its attacker from the packet (`0x103306a6 CALL 0x100140b5` ->
+	// `0x101c29b0`, `info+0x2c`), so every producer that builds its own packet resolves the same way.
+	FElysiumEntity* const PacketAttacker =
+		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
+	FElysiumCombatCharacter* const AttackerCharacter =
+		PacketAttacker != nullptr ? PacketAttacker->AsCombatCharacter() : nullptr;
 	FElysiumDmg Scalar;
 	const FElysiumDmg* Committed = nullptr;
 	if (Info->Dmg != nullptr)
 	{
-		if (!ElysiumDamage::Apply(*Info->Dmg, Info->ResolverAttacker, *this,
-			FElysiumDamageContext::FromCharacter(*this), Info->bDisallowFirearmsToBashing))
+		if (!ElysiumDamage::Apply(*Info->Dmg, AttackerCharacter, *this,
+			FElysiumDamageContext::FromCharacter(*this), Info->bDisallowFirearmsToBashing))   // 0x103306b0
 		{
 			return 1;   // a family-less descriptor: Apply reported why
 		}
@@ -1469,16 +1501,53 @@ int32 FElysiumCombatCharacter::OnTakeDamage_Alive(void* InInfo)
 	}
 
 	// The arithmetic: HealthBuffer (0x19), the unkillable `0x4b` cap, `AddBase(0xf)`, Kindred
-	// aggravated (0x10) and `m_iHealth = HealthToPercent()` (slot 348).
-	if (!CommitDamageHealth(*Committed))
+	// aggravated (0x10) and `m_iHealth = HealthToPercent()` (slot 348). The aggravated test reads
+	// `m_bitsDamageType` (+0xe98), the descriptor's mask OR'd with the packet's bits
+	// (`0x1033059a..0x103305a7`).
+	FElysiumDmg BitsDamageType = *Committed;
+	BitsDamageType.DmgMask |= Info->DamageBits;
+	if (!CommitDamageHealth(BitsDamageType))
 	{
 		return 1;
 	}
-	// `FrenzyCheck` on a Kindred victim with an attacker — UNRECOVERED here.
 
-	// The damage flinch. Named divergence: retail reaches slot 292 `DamageFlinch` from
-	// `CAI_BaseNPC::TraceAttack` (`0x10266780`), which the port's hit producers do not dispatch;
-	// the flinch stands here, after the commit, so a landed hit still flinches.
+	// The Kindred frenzy arm (`0x103309fb..0x10330aa9`), past the aggravated add: a live attacker
+	// whose `+0x9c` combat character stands (`0x103309fb` / `0x10330a06`), and the hit measured as
+	// the descriptor's `GetDmg()` or else the packet's float (`0x10330a14..0x10330a31`). At or above
+	// `VampFrenzy_Info/Dmg_Amount` (`0x10330a3a`, `FCOMP; TEST AH,0x41; JNP`) the check runs; else at
+	// or above `AggrDmg_Amount` (`0x10330a78`, `JP` skips) it runs only for an aggravated hit
+	// (`0x10330a90 TEST [+0xe98],0xc8000008`). The check is `FrenzyCheck(Default_Difficulty)`
+	// (`0x10330aa1` / `0x10330aa9`).
+	if (IsKindred() && AttackerCharacter != nullptr)                             // 0x10330979 / 0x10330a0e
+	{
+		const float Measured = Info->Dmg != nullptr ? static_cast<float>(Info->Dmg->GetDmg()) : Info->Damage;
+		bool bFrenzyCheck = false;
+		if (static_cast<float>(CombatVampFrenzyRule(*this, TEXT("Dmg_Amount"), 0x39)) <= Measured)          // 0x10330a50 JNP
+		{
+			bFrenzyCheck = true;
+		}
+		else if (static_cast<float>(CombatVampFrenzyRule(*this, TEXT("AggrDmg_Amount"), 0x1d)) <= Measured // 0x10330a8e JP
+			&& (BitsDamageType.DmgMask & ElysiumDamage::NoSoakMask) != 0)                                  // 0x10330a90
+		{
+			bFrenzyCheck = true;
+		}
+		if (bFrenzyCheck)
+		{
+			// `CBaseCombatCharacter::FrenzyCheck` `0x1033eb60` (1,270 bytes) -- SEAM: the frenzy roll
+			// and its outcome are not carried by this substrate; the call is tallied with the
+			// difficulty it was handed and nothing is written.
+			const int32 Difficulty = CombatVampFrenzyRule(*this, TEXT("Default_Difficulty"), 5);          // 0x10330aa1 0x101e8e60
+			CombatFireSeam(*this, TEXT("CBaseCombatCharacter::FrenzyCheck"), TEXT("0x1033eb60"),
+				FString::Printf(TEXT("difficulty=%d"), Difficulty));                                      // 0x10330aa9
+		}
+	}
+
+	// The damage flinch. NAMED EVENT-ORDER DIVERGENCE, not a modernization (L13 review row 8,
+	// deferred): `0x103302e0..0x10330ad4` calls no slot 292; retail reaches `DamageFlinch` from
+	// `CAI_BaseNPC::TraceAttack` (`0x10266780`, ported) BEFORE the transaction, and only for a
+	// traced hit. The port's hit producers dispatch no slot 141 (they carry no trace and there is no
+	// multi-damage accumulator to take `AddMultiDamage`'s packet), so the flinch stands here, after
+	// the commit and for every packet, until that wire is built.
 	StartDamageFlinch(*Committed);
 	return 1;
 }
@@ -1568,47 +1637,70 @@ bool FElysiumCombatCharacter::CommitDamageHealth(const FElysiumDmg& Dmg)
 		return false;
 	}
 
-	// 1. HealthBuffer (stat 0x19) absorbs first. Exhausting it clears the counter and ends
-	//    Bloodshield (`0x101e3c10(..., "Thaumaturgy_Bloodshield")`); a partial absorption only
-	//    reduces it.
+	// `0x103302e0`'s commit, arm by arm (`0x10330733..0x10330ab8`). The amount is the float retail
+	// carries in `[ESP+0x14]`; the descriptor's committed integer here.
+	float Amount = static_cast<float>(Remaining);
+
+	// 1. HealthBuffer (stat 0x19, the CURRENT value, `0x10330737 GetValue`): a non-zero buffer
+	//    (`0x10330740 JZ`, not `> 0`) absorbs `trunc(DAT_10739a68 * amount * 0.01)` -- the
+	//    process-global Bloodshield block percentage (`0x10330746 FILD`, `0x1033074c`/`0x10330750`
+	//    FMUL, `0x10330756 __ftol`) -- and the amount loses exactly that, uncapped by the buffer
+	//    (`0x1033076f FSUBR`). Less than the buffer spends it (`0x10330847 SubBase(0x19, absorbed)`);
+	//    otherwise the buffer is zeroed (`0x103307d9 SetBase(0x19, 0)`) and Bloodshield ends
+	//    (`0x103307e9`, `"Thaumaturgy_Bloodshield"`). No projection runs here.
 	const int32 Buffer = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::HealthBuffer);
-	if (Buffer > 0)
+	if (Buffer != 0)                                                                   // 0x10330740
 	{
-		const int32 Absorbed = FMath::Min(Buffer, Remaining);
-		Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, Buffer - Absorbed);
-		Remaining -= Absorbed;
-		if (Buffer - Absorbed <= 0)
+		// Evaluated in single precision, the port's convention for the x87 chain (the precision-control
+		// word retail runs under is not recovered, so a product that lands a hair under an integer
+		// -- `0.01f` is 0.0099999998 -- is not guaranteed to truncate the way retail's did).
+		const int32 Absorbed = static_cast<int32>(static_cast<float>(ElysiumDisciplines::HealthBufferBlockPercent())
+			* Amount * 0.01f);                                                         // 0x10330746..0x10330756
+		Amount -= static_cast<float>(Absorbed);                                        // 0x1033076f
+		if (Absorbed < Buffer)                                                         // 0x1033076d / 0x10330777 JL
 		{
-			EndBloodshield();
+			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer,
+				Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthBuffer) - Absorbed);   // 0x10330847 SubBase
 		}
-		Project();
+		else
+		{
+			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, 0);             // 0x103307d9 SetBase(0x19, 0)
+			EndBloodshield();                                                          // 0x103307e9
+		}
 	}
-
-	if (Remaining > 0)
+	// 2. Nothing left at or below 0.0 ends the body (`0x1033084c FCOMP 0.0` -> `0x10330abe`), before
+	//    `m_iHealth` is projected.
+	if (Amount <= 0.f)
 	{
-		const int32 Taken = Sheet.GetBase(EC::Attributes, ElysiumSlot::Health);
-		// 2. Unkillable caps the damage-TAKEN counter at the retail literal `0x4b`. It is not a
-		//    one-hit-point floor and not a percentage: with the default Max_Health of 100 it leaves 25.
-		const int32 Cap = bUnkillable ? ElysiumDamage::UnkillableDamageCap
-			: (bRetailNpcCommit ? SheetCeiling : MaxHealth);
-		// 3. The remainder lands on the damage counter (`AddBase(0xf)`). The authored ceiling is
-		//    `Max_Health`, which the sheet's own clamp applies whenever the rules table is loaded;
-		//    the clamp here keeps a bare (rulebook-less) world reading the same numbers.
-		const int32 Committed = FMath::Clamp(Taken + Remaining, 0, FMath::Max(Cap, 0));
-		Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, Committed);
-
-		// 4. A Kindred victim also accumulates aggravated damage (stat 0x10) for the mask that takes
-		//    no soak (`m_bitsDamageType & 0xc8000008`).
-		if (IsKindred() && Dmg.TakesNoSoak())
-		{
-			const int32 Aggravated = Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthAggDmg);
-			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthAggDmg,
-				Aggravated + (Committed - Taken));
-		}
-		// 5. `m_iHealth = HealthToPercent()` (slot 348) — the sheet pair projected back onto the
-		//    engine-space keyfields.
-		Project();
+		Sheet.RecomputeCurrent(SheetRules(), SheetEffects());
+		return false;
 	}
+	// 3. Unkillable (`+0xfc8`): the damage TAKEN, read as its current value (`0x103308cd GetValue(0xf)`),
+	//    plus the truncated amount may not pass the retail literal `0x4b`; past it the amount becomes
+	//    `0x4b - taken` (`0x103308e9..0x103308fd`). Not a one-hit-point floor and not a percentage.
+	const int32 TakenCurrent = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
+	if (bUnkillable && static_cast<int32>(Amount) + TakenCurrent > ElysiumDamage::UnkillableDamageCap)
+	{
+		Amount = static_cast<float>(ElysiumDamage::UnkillableDamageCap - TakenCurrent);
+	}
+	// 4. `AddBase(0xf, trunc(amount))` (`0x1033096b`, `CVStatList_t::AddBase` `0x10200fc0`): no clamp
+	//    here -- the sheet's own rules-table clamp is whatever `AddBase` meets.
+	const int32 Committed = static_cast<int32>(Amount);                                // 0x1033095f __ftol
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health,
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Health) + Committed);
+	// 5. A Kindred victim (`0x10330972 IsKindred`) whose `m_bitsDamageType` (+0xe98, the descriptor
+	//    mask OR'd with the packet's bits, `0x1033059a..0x103305a7`) carries `0xc8000008` also takes
+	//    the SAME amount as aggravated damage (`0x103309f6 AddBase(0x10, EBX)`).
+	if (IsKindred() && (Dmg.DmgMask & ElysiumDamage::NoSoakMask) != 0)                   // 0x1033097f TEST 0xc8000008
+	{
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthAggDmg,
+			Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthAggDmg) + Committed);
+	}
+	// 6. `m_iHealth = HealthToPercent()` (slot 348, `0x10330ab2`) -- the sheet pair projected back.
+	//    (The Kindred frenzy arm `0x103309fb..0x10330aa9` runs between 5 and 6 in retail; it is the
+	//    caller's, `OnTakeDamage_Alive`, because it reads the packet's attacker. `FrenzyCheck` is a
+	//    seam that writes nothing, so nothing observes the projection landing first.)
+	Project();
 	return true;
 }
 

@@ -329,10 +329,13 @@ bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 		StubFires(TEXT("CBaseAnimating::RemoveExtraAnimationModels")), RemoveBefore + 1);
 
 	// Slots 142 / 390 `0x10376ae0` / `0x10376b10`: the owner takes the damage; the shadow answers 0.
-	// Since story 8 wave 2 the owner's slot 142 is `CBaseCombatCharacter::OnTakeDamage`
-	// (`0x1032ef60`, a hand body; the player's own `0x10163020` override is not carried) and its
-	// slot 390 `0x103302e0`, whose slot 299 `CreateDamageEffects` (`+0x4ac`, still a 29e stub) is
-	// the forward's witness: it runs on the OWNER on every alive packet, before any commit.
+	// The owner's slot 142 here is `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`, a hand body)
+	// and its slot 390 `0x103302e0`, whose slot 299 `CreateDamageEffects` (`+0x4ac`, still a 29e stub)
+	// is the forward's witness: it runs on the OWNER on every alive packet, before any commit.
+	// NAMED GAP (not a retail route): retail's player slot 142 is `CBasePlayer::OnTakeDamage`
+	// `0x10163020` (`vtmb_callers 0x1033a9e0`), whose refusals, feed teardown and `+use` drop wrap the
+	// call into `0x1032ef60`; the port's player carries no slot-142 body, so this route pins the
+	// forward, not the player's whole transaction.
 	FElysiumNpcBase::FElysiumTakeDamageInfo Packet;
 	Packet.Damage = 0.f;   // nothing to commit: the witness is the dispatch, not the health
 	const int32 TakeBefore = StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects"));

@@ -119,6 +119,13 @@ namespace ElysiumDisciplines
 	// --- Interruption -------------------------------------------------------------------------
 	// `ShouldRemove_OnTakeDamage`: called from the one typed health commit.
 	void NotifyDamaged(FElysiumCombatCharacter& Char);
+
+	// `DAT_10739a68` — the PROCESS-GLOBAL HealthBuffer block percentage. The hit applier `0x101de660`
+	// writes it from every applied hit record's `Health_Buffer_Block_Percent` (`record+0x30`,
+	// parsed by `0x101ddfb0` at `0x101de0a3`), and `0x103302e0` absorbs
+	// `trunc(pct * damage * 0.01)` of a hit against a non-zero buffer (`0x10330746`). One word for
+	// every character, as retail's is; `.bss`, so 0 until a hit record writes it.
+	int32& HealthBufferBlockPercent();
 	// `ShouldRemove_OnHearCombat`: polled against the substrate sound-event bus from the owner's
 	// think, which is where every other bus consumer reads (§2.5.3 — the bus delivers nothing).
 	void PollHeardCombat(FElysiumCombatCharacter& Char, double Now);

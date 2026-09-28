@@ -104,6 +104,13 @@ int32 FElysiumNpcFrenzyShadow::OnTakeDamage(void* Info)
 	// `owner = GetOwnerEntity()` (slot 97); when it resolves, `owner->OnTakeDamage(info)` (slot 142,
 	// `+0x238`, VIRTUAL on the OWNER — the player takes the shadow's damage); then ALWAYS `XOR EAX,EAX`:
 	// a frenzy shadow never reports damage taken, whatever the owner answered.
+	//
+	// UNRECOVERED GAP, named: the owner is the player, whose retail slot 142 is
+	// `CBasePlayer::OnTakeDamage` `0x10163020` -- its god-mode/`FL_GODMODE 0x4000` refusals, the
+	// grapple teardown (slot 353 / `EndGrapple`), the held-`+use` drop (`0x1017c6d0` / `0x10167fd0`),
+	// the blood-steal refund, the damage bookkeeping and the hurt sound, around a DIRECT call into
+	// `0x1032ef60`. The port's player has no slot-142 body of its own (its typed damage route carries
+	// the feed break and the `+use` drop instead), so this forward reaches `0x1032ef60` without them.
 	if (FElysiumEntity* Owner = World != nullptr ? World->Resolve(GetOwnerEntity()) : nullptr)
 	{
 		Owner->OnTakeDamage(Info);
