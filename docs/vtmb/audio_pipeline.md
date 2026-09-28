@@ -289,6 +289,32 @@ a safe area, combat scoring raises the `Combat` stem; the server signals the cli
 `sound/radio/radio_loop_[1-5].mp3` loops (the patch adds `.lip` sidecars for a
 talking-radio prop).
 
+### Listed UP issue: radio playback resets on load
+
+The Unofficial Patch 11.5 README's **Open Gameplay Issues** says, at line 4690,
+"Loading will remove Bach's holy light effect and reset the radio." The radio half has
+a narrow static explanation in retail. The installed retail `sm_pawnshop_1.bsp`
+(SHA-256 `5e4a518f4428cb2f86ac14988bde09510125daabbcb5f65366bc3b47efb3dcc3`)
+authors entity 414, `prop_radio` named `Radio1`, with `spawnflags=1` (starts on),
+`radius=800`, `volume=1.0`, and a GehtoBlaster model.
+
+`CPropRadio::ObjectCaps` (`0x1022c660`) returns `8`, admitting the entity to the
+ordinary save walk. Its slots 126/127 are inherited `CBaseEntity::Save`/`Restore`
+(`0x100a9f70`/`0x100aa140`), and its datamap saves only `m_bActivated` (`+0x734`),
+`m_UseIcon` (`+0x730`), `m_flVolume` (`+0x750`), and `m_flRadius` (`+0x754`).
+Slot 130 is generic `CBaseAnimating::OnRestore` (`0x1008df10`), with no radio seek.
+There is no playback timestamp or MP3 cursor in that record or in the five
+`.HL1` save blocks (`savegame_format.md`); the client save has no sound-channel block.
+`CPropRadio::Precache` (`0x1022bd60`) reloads `radio_data.txt` and selects the first
+dependency-true show; `Activate` (`0x1022c4a0`) emits that show with no seek argument.
+The on/off flag is persisted, but the position within the broadcast cannot be
+recovered from a save. This is a concrete playback-state gap consistent with the
+listed reset; it does not establish the exact audible restart timing.
+
+This establishes the missing restore datum and the map that exercises it. A live
+save/load playback capture is still needed to pin the exact audible restart point
+and the engine/client channel creation order.
+
 ## 7. Point sounds — `ambient_generic`
 
 **1,631 instances across 95 maps** [data]. Stock Source `ambient_generic` with VtMB

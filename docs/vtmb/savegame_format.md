@@ -439,6 +439,9 @@ character that can punch.
 - **No `vdata` values.** The sheet stores *indices* into the rulebook tables; the tables
   themselves are read fresh from `vdata/` at load. A patched rulebook therefore re-applies to an
   existing save.
+- **No radio playback cursor.** `CPropRadio` saves its activated flag, use icon, volume, and radius,
+  while the MP3 channel position is absent from its datamap and from the block set. See
+  `audio_pipeline.md` § "Listed UP issue: radio playback resets on load".
 - **No dialogue text or `.dlg` state** beyond what the scripts wrote into `G`.
 
 ## Tooling
