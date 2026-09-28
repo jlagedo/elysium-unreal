@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 from elysium_pipeline import unreal
+from elysium_pipeline.process import ProcessIdle, ProcessResult, ProcessTimeout
 from elysium_pipeline.unreal import TEST_ABSTENTION_TOKEN, summarize_test_report
 
 
@@ -161,6 +162,108 @@ def test_partial_abstention_still_passes() -> None:
         ])
         assert summary["executed"] == 1
         assert summary["abstained"] == 1
+
+
+def _killed_result(output: str) -> ProcessResult:
+    return ProcessResult(
+        argv=("UnrealEditor-Cmd.exe",),
+        cwd=Path.cwd(),
+        returncode=1,
+        started_at="2026-09-28T09:15:14+00:00",
+        duration_seconds=121.0,
+        output=output,
+    )
+
+
+_HUNG_OUTPUT = "\n".join([
+    "LogAutomationController: Display: Test Started. Name={Activate} "
+    "Path={Elysium.Substrate.NpcKernelLifecycle.Activate}",
+    "LogAutomationController: Display: Test Completed. Result={Success} Name={Activate} "
+    "Path={Elysium.Substrate.NpcKernelLifecycle.Activate}",
+    "LogAutomationController: Display: Test Started. Name={Dormancy} "
+    "Path={Elysium.Substrate.NpcKernelLifecycle.Dormancy}",
+    "LogElysiumNpcEnt: Warning: Occluded target reaction percentages do not add up to 100%",
+]) + "\n"
+
+
+def test_the_automation_launch_carries_an_idle_bound_and_the_deadline() -> None:
+    seen: dict = {}
+
+    def recording_run(config, runner, executable, arguments, **kwargs):
+        seen.update(kwargs)
+        reporter([make_entry("Elysium.Substrate.Case")])(config, runner, executable,
+                                                         arguments)
+
+    with TemporaryDirectory() as temp:
+        config = stub_config(Path(temp))
+        with (
+            mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
+            mock.patch.object(unreal, "_run", side_effect=recording_run),
+        ):
+            unreal.run_tests(config, None, "Substrate")
+    assert seen == {"timeout": unreal.TEST_TIMEOUT_SECONDS,
+                    "idle_timeout": unreal.TEST_IDLE_TIMEOUT_SECONDS}
+    assert unreal.TEST_IDLE_TIMEOUT_SECONDS == 120.0
+    assert unreal.TEST_TIMEOUT_SECONDS == 900.0
+
+
+def test_an_idle_kill_names_the_hung_test_and_the_report() -> None:
+    # The last line the editor printed is a warning the hung test logged; the test in flight
+    # comes from the controller's start line with no completion after it.
+    def hanging_run(_config, _runner, _executable, arguments, **_kwargs):
+        switch = next(value for value in arguments
+                      if str(value).startswith("-ReportExportPath="))
+        Path(str(switch).split("=", 1)[1]).mkdir(parents=True)
+        raise ProcessIdle(_killed_result(_HUNG_OUTPUT), 3, 120.0,
+                          _HUNG_OUTPUT.splitlines()[-1], 900.0)
+
+    with TemporaryDirectory() as temp:
+        config = stub_config(Path(temp))
+        with (
+            mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
+            mock.patch.object(unreal, "_run", side_effect=hanging_run),
+            pytest.raises(ProcessIdle) as caught,
+        ):
+            unreal.run_tests(config, None, "Substrate")
+        message = str(caught.value)
+        report_root = (config.work_root / "reports" / "tests").resolve()
+        assert "printed nothing for 120s" in message
+        assert "Occluded target reaction percentages" in message
+        assert "test in flight: Elysium.Substrate.NpcKernelLifecycle.Dormancy" in message
+        assert f"automation report: {report_root}" in message
+        assert "no index.json" in message
+        # The type and category survive, so the CLI still prints the retained tail.
+        assert caught.value.category == 3
+        assert caught.value.result.output == _HUNG_OUTPUT
+
+
+def test_a_deadline_kill_is_annotated_the_same_way() -> None:
+    def slow_run(_config, _runner, _executable, arguments, **_kwargs):
+        switch = next(value for value in arguments
+                      if str(value).startswith("-ReportExportPath="))
+        report = Path(str(switch).split("=", 1)[1])
+        report.mkdir(parents=True)
+        (report / "index.json").write_text("{}", encoding="utf-8")
+        raise ProcessTimeout(_killed_result(_HUNG_OUTPUT), 3, 900.0)
+
+    with TemporaryDirectory() as temp:
+        config = stub_config(Path(temp))
+        with (
+            mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
+            mock.patch.object(unreal, "_run", side_effect=slow_run),
+            pytest.raises(ProcessTimeout, match="900s deadline") as caught,
+        ):
+            unreal.run_tests(config, None, "Substrate")
+        assert "Elysium.Substrate.NpcKernelLifecycle.Dormancy" in str(caught.value)
+        assert "partial index.json written" in str(caught.value)
+
+
+def test_a_completed_test_is_not_in_flight() -> None:
+    finished = "\n".join(_HUNG_OUTPUT.splitlines()[:2])
+    assert unreal.automation_test_in_flight(finished) is None
+    assert unreal.automation_test_in_flight(_HUNG_OUTPUT) == \
+        "Elysium.Substrate.NpcKernelLifecycle.Dormancy"
+    assert unreal.automation_test_in_flight("no automation lines at all") is None
 
 
 def test_only_the_newest_reports_survive() -> None:

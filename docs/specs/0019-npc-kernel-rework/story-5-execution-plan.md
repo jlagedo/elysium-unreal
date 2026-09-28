@@ -131,11 +131,7 @@ records (`packets/`, `acceptance-*.json`, `progress.md`), git at `a00cd11b`. Las
 ### 4.1 Before the build
 
 ```text
-uv run elysium research kernel_shape --check
-uv run elysium research kernel_ledger --check
-uv run elysium research kernel_lists --check
-uv run elysium research gen_kernel_shape --check
-uv run elysium research gen_kernel_bindings --check
+uv run elysium research kernel --check
 uv run pytest pipeline/tests/test_kernel_ledger.py pipeline/tests/test_kernel_shape.py pipeline/tests/test_gen_kernel_shape.py
 ```
 
