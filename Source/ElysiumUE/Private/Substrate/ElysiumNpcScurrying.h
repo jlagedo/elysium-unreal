@@ -68,6 +68,11 @@ public:
 	/** `0x103aca80` (no checklist row): `UTIL_PlayerByIndex(1)` (`0x101cd9e0`), answered only when
 	 *  `ScurryingShouldDetect` (`0x103acac0`) admits it; else null. */
 	FElysiumEntity* ScurryingFindDetectablePlayer();
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** `+0x668c`, the spawn-time stamp `CNPC_VScurrying::Spawn` (`0x103ac451`) seeds with curtime.
+	 *  No datamap row; the name is unrecovered. */
+	double ScurryingSpawnStamp = 0.0;        // +0x668c (walked)
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

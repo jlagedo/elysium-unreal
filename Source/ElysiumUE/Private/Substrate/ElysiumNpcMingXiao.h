@@ -422,6 +422,12 @@ public:
 	/** The `TentacleGenerator` maker's name (`0x10390d00` binds the static maker reference
 	 *  `DAT_1093bb9c` to it). */
 	static const TCHAR* MingXiaoTentacleMakerName();
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	FElysiumEntityHandle MingXiaoParentMingZhao;   // +0x6670 CNPC_VMingXiao::m_hParentMingZhao (datamap)
+	/** SEAM for `CBaseCombatCharacter::GetBestMeleeWeapon` (`0x10336f20`). No inventory pick stands for
+	 *  an NPC here; answers null, retail's own "no melee weapon" arm (`m_hMeleeWeapon = -1`). */
+	FElysiumEntity* Spawn19BestMeleeWeapon();
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

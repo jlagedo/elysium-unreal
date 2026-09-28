@@ -16,9 +16,11 @@ public:
 	// --- Select19 (story 0019/8 lane L06): the words `SelectSchedule` `0x103df2e0` passes ----------
 	/** `+0x6680 m_vecDeathForceVector` (datamap) and `+0x668c m_DeathDamageInfo` (walked), the two
 	 *  arguments of the dead-zombie `CreateCorpse` call; both ABSENT in the shape map until now, and
-	 *  no ported body writes them yet (the death-force bodies are story-8 residue). */
+	 *  their writer is `CreateCorpse` `0x103dfbb0` itself (Spawn19), which saves both before its split.
+	 *  `+0x668c` is a whole `CTakeDamageInfo` (`0x103dfbe9..0x103dfc86` copy 0x4c bytes), so it is the
+	 *  port's typed packet, as `CreateCorpse`'s `void*` reads it back (L08 integration). */
 	FVector ZombieDeathForceVector = FVector::ZeroVector;
-	FElysiumDmg ZombieDeathDamageInfo;
+	FElysiumTakeDamageInfo ZombieDeathDamageInfo;
 
 	virtual void Slot25(FElysiumEntity* Victim) override;
 	virtual void Slot26(FElysiumEntity* Victim) override;
@@ -89,7 +91,6 @@ public:
 	 *  (`vtmb_globals 1094049c`: two readers, no writer), so its name and default are unrecovered;
 	 *  an unconstructed ConVar reads 0, which is the answer. */
 	int32 ZombieHeadThresholdCvar() const;
-
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual int32 OnTakeDamage(void* Arg0) override;

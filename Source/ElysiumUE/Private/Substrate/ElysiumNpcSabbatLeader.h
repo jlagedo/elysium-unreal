@@ -153,6 +153,10 @@ public:
 	 *  Body in `ElysiumNpcBoss19Species.cpp`. Reached from `RunTask` `0x103a8990` (lane L05) and from
 	 *  the pending `StartTransformation` input (`ElysiumNpcClasses.cpp`), which the integrator binds. */
 	void SabbatLeaderStartTransformation();
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	// Slot 618 `0x103ab310` -- this class's own `TransformationStart`.
+	virtual void TransformationStart() override;
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

@@ -109,6 +109,14 @@ public:
 
 	// --- 0019/8 Damage19 (lane L09): the word `OnTakeDamage_Alive` `0x1039e890` zeroes -------
 	double TentacleHideReadyTimer = 0.0;         // +0x6680 m_flHideReadyTimer (datamap, FIELD_TIME)
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	double TentacleIgnoreCollisionTimer = 0.0; // +0x6684 m_flIgnoreCollisionTimer (datamap, FIELD_TIME)
+	bool bTentacleHitGroundSound = false;      // +0x6698 m_bHitGroundSound (datamap)
+	/** SEAM for `thunk_FUN_103979d0(head, this)` -- the Ming Xiao head's own handling of a dying
+	 *  tentacle (`Event_Killed` `0x1039e919`). No port body; counted. */
+	void Spawn19NotifyHeadOfDeath(FElysiumEntity* Head);
+	int32 Spawn19HeadDeathNotices = 0;
 
 	// --- 0019/8 Boss19 (lane L12) --------------------------------------------------------------
 	/** `+0x6699 CNPC_VMingXiaoTentacle::m_bPlayedDeathAnim` (walked) — `0x1039ea60`'s latch. */

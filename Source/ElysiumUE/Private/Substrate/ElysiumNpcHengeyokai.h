@@ -174,6 +174,14 @@ public:
 	 *  `FadeToSkin(1)`. Lane L09's `OnTakeDamage_Alive` calls it at `0x1038025d`. */
 	void HengeyokaiEnterMorph();
 
+	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each
+	// in the L08 report) ---
+	/** `FUN_103828a0` (`0x103828a0`) -- the carried-body drop `Event_Killed` runs first: with the carry
+	 *  bit (`0x10381c80`) set, `m_hPickupTarget = -1`, the 0.75 s collision re-arm (`0x102c43b0`),
+	 *  `UTIL_Remove` of a live `m_hPhysicsAnimlink`, the link to -1, and `FormBit(false)`
+	 *  (`0x10381c00`). Every call is an existing port body. */
+	void HengeyokaiDropCarriedBody();
+
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Event_Killed(void* Arg0) override;

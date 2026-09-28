@@ -93,7 +93,6 @@ public:
 	// Neither had a port word (the header's `+0x66cc` `bAndreiActivated` did).
 	bool bAndreiDead = false;                    // +0x66cd m_bDead (datamap), set at 0x1035e84e
 	int32 AndreiHitCounter = 0;                  // +0x66d8 m_iHitCounter (datamap), ++ at 0x1035e83f
-
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;
 	virtual void Activate() override;
