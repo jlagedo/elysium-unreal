@@ -36,7 +36,7 @@ or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseN
 - `0x102a733f` `0x8c` MELEE_DODGE_ATTACK: `RestartIdealActivity(0x1155)`, running.
 - `0x102a6de4` `0x92` MELEE_KNOCKBACK: slot 266, `RestartIdealActivity(m_knockbackType +0x6068)`.
 - `0x102a6e09` `0x93` FLYING_KNOCKBACK_INTO: slot 266; `m_flGravity (+0x3ec) = m_fJumpGravity`;
-  `m_vecVelocity (+0x3d4) = m_KnockbackVelocity`; `SetAbsVelocity(m_KnockbackVelocity)`; slot 208
+  `SetAbsVelocity(m_KnockbackVelocity)` (`0x102a96b0`; no separate `m_vecVelocity` store); slot 208
   `SetGroundEntity(0)`; nav type 1 (`0x1027d9b0`); `m_bJumping = 1`; restart `m_knockbackType`.
 - `0x102a6e70` `0x94` FLYING_KNOCKBACK_IDLE: `n = 0x10345480()`; `n < 0` → restart `0x8f`, else slot
   311 `ForcePreTranslatedSequenceAndActivity(0x8f, 0x8f, n)`.
@@ -56,7 +56,8 @@ or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseN
   `0x102d12e0(hint)`, facing tail.
 - `0x102a644e` `0xb4`: `+0x6308 = -1` first; no place → fail(0x3874, 0x22); else
   `0x102a9f40(place, 0, 1)`.
-- `0x102a64a6` `0xb5`: no patrol place → complete; else `0x102a9f40(place, hint, 0)`.
+- `0x102a64a6` `0xb5`: no patrol place → complete; else `0x102a9f40(place, hint, 0)` — the third
+  argument (the marker byte) is 0 (`0x102a64c2 PUSH 0`); `0xb4` passes 1.
 - `0x102a64de` / `0x102a64e4` `0xb6`/`0xb7`: `TranslateActivity(1 / 9)` into `0x102ee250`, running.
 - `0x102a650b` `0xb8`: `+0x6308 == -1` → clear `INTERESTING_INTO` (`0x20000000`), complete; else
   restart it.
@@ -128,7 +129,8 @@ or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseN
   within 128 units → `0x102b6890(prop)`, else `DevMsg`; clear the handle; hint output; clear hint 60.
 - `0x102a6128` `0x111`: dead prop → fail(0x3812, 0x25); no enemy → fail(0x380d, 6); goal
   `0x102a9c80(10, -1, -1.0, 0, …)` whose type word is then OVERWRITTEN to 4 (`0x102a61b4`), dest =
-  prop + norm(enemy − prop) * 64, target 0; `SetGoal(goal, 0)`; running.
+  prop − norm(enemy − prop) * 64 (`0x102a61f1` → `0x1001395d` = `0x10146190`, FSUB: the far side
+  of the prop), target 0; `SetGoal(goal, 0)`; running.
 - `0x102a6289` `0x112`: dead prop → fail(0x381f, 0x25); else complete.
 - `0x102a62db` `0x113`: dead prop → fail(0x3832, 0x25); restart `0xc84`; kick; clear; running.
 - `0x102a654b` `0x114`: slot 168 null or slot 530 unreachable → fail(0x38c3, 0xc); goal
@@ -147,7 +149,8 @@ or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseN
 - `0x102a68df` `0x11b`/`0x11c`: act `0x10`/`0x14`; no sequence → turn act `9`/`0x13`,
   `0x102a1650(act, 180, delta)` false → fail(0x396f, 0x15); true → `+0x63ec = 180`,
   `m_flWaitFinished = curtime + delta`, restart. With a sequence: hull trace from origin +
-  half step height to `+ m_vecForward*50*delta` (mask `0x202400b`, collision mins/maxs); fraction
+  half step height to `− m_vecForward*50*delta` (`0x102a69ff`, the same subtract helper; mask
+  `0x202400b`, collision mins/maxs); fraction
   `!= 1.0` → fail(0x3997, 0xe); else wait + restart.
 - `0x102a6fd8` `0x11d`: stop-turn; yaw = `AngleMod(m_qaLastFacing.y)`; facing tail.
 - `0x102a7000` `0x11e`: `0x101f5950(&DAT_1073dc28, this, (int)op, 2, 1.0, 1.25)`; complete.
@@ -167,7 +170,8 @@ or through the break tail `0x102a66d7`); "fail(line, r)" is `+0x1b44 = "AI_BaseN
   (returns); up to two slot-603 yaws through `0x102a1650`; tries == 1000 → running; else
   fail(0x3a30, 0xe).
 - `0x102a597f` `0x127`: `+0x6320 = debug_melee_advance_combatmove_dist + RandomFloat(0,
-  slot418(op))`; `0x102ee1c0`; `0x102f2fe0`; complete.
+  slot418(op))`; then the tolerance tail: `0x102ee1c0` (path `+0x28`) and `0x102f2fe0` (path
+  `+0x20`) with the same value (`0x102a59d1`, `0x102a42df..0x102a42e8`); complete.
 - `0x102a7185` `0x128`: `m_flWaitFinished = delta + curtime`; `RandomInt(0,1)` 0 → ACT 1, 1 → 3;
   `RestartIdealActivity(TranslateActivity(act))`.
 - `0x102a71e4..0x102a721c` `0x129..0x12d`: `m_flSpecialDistanceAccum (+0x5bac)` set / += / += rand /

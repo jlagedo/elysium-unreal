@@ -37,6 +37,8 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumLocalIdSpace.h"
+#include "Substrate/ElysiumScheduleId.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
@@ -66,7 +68,10 @@ namespace
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("starttask19_kernel"), 1910);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CAI_BaseNPCTroika"));
+					// A model, so the requested recording motor is built (no model, no body, no motor):
+					// retail's navigator always stands.
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CAI_BaseNPCTroika"))
+						.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 					return Builder;
 				}(),
 				[](FElysiumRecordingServices& Services) { Services.bProvideNpcMotor = true; })
@@ -77,6 +82,14 @@ namespace
 			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
 		}
 
+		// The class-LOCAL task (the registrar's number the switch compares) as the GLOBAL id a schedule
+		// step carries (`ElysiumScheduleText.h`); the body translates it back (slot 450's body).
+		int32 GlobalTask(int32 LocalTask) const
+		{
+			const FElysiumLocalIdSpace* Space = Guard->IdSpace(EElysiumIdCategory::Task);
+			return Space != nullptr ? Space->LocalToGlobal(LocalTask) : LocalTask;
+		}
+
 		// Clear the three words an exit writes, then run slot 442 on one step.
 		void Start(int32 TaskId, float Data = 0.f)
 		{
@@ -84,7 +97,7 @@ namespace
 			Guard->BaseScheduleHost.FailureReason = 0;
 			Guard->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
 			FElysiumScheduleStep Step;
-			Step.TaskId = TaskId;
+			Step.TaskId = GlobalTask(TaskId);
 			Step.Data = Data;
 			Guard->StartTaskSlot442(&Step);
 		}
@@ -131,10 +144,14 @@ bool FElysiumNpcKernelStartTask19ArmTableTest::RunTest(const FString&)
 	FElysiumScheduleCorpus& Corpus = FElysiumScheduleCorpus::Get();
 	if (Corpus.EnsureLoaded())
 	{
+		// The namespace answers the GLOBAL id; the switch compares retail's class-local `iTask`. The
+		// root and Troika task spaces are seeded contiguously from the global base (`0x102ea0e0`), so
+		// the local id is the global one less `ElysiumScheduleId::GlobalBase`.
 		for (const FElysiumNpc::FStartTask19ArmRow& Row : Rows)
 		{
 			TestEqual(FString::Printf(TEXT("%s is registered at 0x%x"), Row.TaskName, Row.TaskId),
-				Corpus.Namespace(EElysiumIdCategory::Task).Find(Row.TaskName), Row.TaskId);
+				Corpus.Namespace(EElysiumIdCategory::Task).Find(Row.TaskName) - ElysiumScheduleId::GlobalBase,
+				Row.TaskId);
 		}
 	}
 	return true;
@@ -271,13 +288,13 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 	// TASK_SET_TOLERANCE_DISTANCE `0x102a4289`: hull*0.5 + resolved, both navigator words.
 	F.Start(0x4e, 40.f);
 	TestEqual(TEXT("0x102a42c0 m_flGoalTolerance"), N.ScheduleHost.GoalToleranceCm, (HalfHull + Resolved) * ElysiumMove::U, 0.01f);
-	TestEqual(TEXT("0x102a42cd goal tolerance"), N.StartTask19NavGoalToleranceUnits, HalfHull + Resolved, 0.001f);
-	TestEqual(TEXT("0x102a42df arrival distance"), N.StartTask19NavArrivalDistanceUnits, HalfHull + Resolved, 0.001f);
+	TestEqual(TEXT("0x102a42cd goal tolerance"), N.NavPathToleranceCm / ElysiumMove::U, HalfHull + Resolved, 0.001f);
+	TestEqual(TEXT("0x102a42df arrival distance"), N.NavPathScalar20, HalfHull + Resolved, 0.001f);
 	TestTrue(TEXT("0x4e completes"), F.Completed());
 
 	// TASK_SET_TOLERANCE_DISTANCE_ABS `0x102a42fa`: resolved alone.
 	F.Start(0x4f, 40.f);
-	TestEqual(TEXT("0x102a4316"), N.StartTask19NavGoalToleranceUnits, Resolved, 0.001f);
+	TestEqual(TEXT("0x102a4316"), N.NavPathToleranceCm / ElysiumMove::U, Resolved, 0.001f);
 	TestTrue(TEXT("0x4f completes"), F.Completed());
 
 	// TASK_SET_MELEE_TOLERANCE_DISTANCE `0x102a434a` with no enemy: hull 0, no weapon -> resolved.
@@ -287,15 +304,15 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 	// With a weapon the addend is `weapon+0x8c0 * data` (the range word answers 0.0); without, the
 	// resolved distance (`0x102a43fe`).
 	const float MeleeAddend = N.ActiveWeaponEntity() != nullptr ? 0.f : Resolved;
-	TestEqual(TEXT("0x102a4376 / 0x102a43e2 hull(0)*0.5 + addend"), N.StartTask19NavGoalToleranceUnits, HalfHull0 + MeleeAddend, 0.001f);
+	TestEqual(TEXT("0x102a4376 / 0x102a43e2 hull(0)*0.5 + addend"), N.NavPathToleranceCm / ElysiumMove::U, HalfHull0 + MeleeAddend, 0.001f);
 	TestTrue(TEXT("0x9f completes"), F.Completed());
 
 	// TASK_SET_TOLERANCE_DIST_DLG `0x102a4c47`: 160 + resolved; HALF to the goal tolerance, full to
 	// the arrival distance.
 	F.Start(0xdb, 40.f);
 	TestEqual(TEXT("0x102a4c66 m_flGoalTolerance"), N.ScheduleHost.GoalToleranceCm, (160.f + Resolved) * ElysiumMove::U, 0.01f);
-	TestEqual(TEXT("0x102a42cd half"), N.StartTask19NavGoalToleranceUnits, (160.f + Resolved) * 0.5f, 0.001f);
-	TestEqual(TEXT("0x102a42df full"), N.StartTask19NavArrivalDistanceUnits, 160.f + Resolved, 0.001f);
+	TestEqual(TEXT("0x102a42cd half"), N.NavPathToleranceCm / ElysiumMove::U, (160.f + Resolved) * 0.5f, 0.001f);
+	TestEqual(TEXT("0x102a42df full"), N.NavPathScalar20, 160.f + Resolved, 0.001f);
 	TestTrue(TEXT("0xdb completes"), F.Completed());
 	return true;
 }
@@ -478,12 +495,16 @@ bool FElysiumNpcKernelStartTask19CoverArmsTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102a2afa the retry's inner radius is the resolved distance"),
 		N.StartTask19LastCoverMinUnits, Resolved);
 	TestEqual(TEXT("0x102a28ae outer radius d + 8192"), N.StartTask19LastCoverMaxUnits, Resolved + 8192.f);
+	// 0x84 raises `COWER_PATH` (`0x102a2a7c OR AH,2`) and then fails 0x18; the failure's own mask
+	// (`TaskFail 0x1029adb0`: `m_bfAINPCFlags &= 0xa3f40178`) clears bit 0x200 again, so the flag is
+	// not observable after a refused search.
 	F.Start(0x84, 10.f);
-	TestTrue(TEXT("0x102a2a7c cower sets COWER_PATH"), N.NpcFlags.Has(EElysiumNpcFlag::COWER_PATH));
+	TestFalse(TEXT("0x102a2a7c cower's COWER_PATH is cleared by the fail mask 0xa3f40178"),
+		N.NpcFlags.Has(EElysiumNpcFlag::COWER_PATH));
 	TestTrue(TEXT("0x84 -> 0x18"), F.FailedWith(0x18));
-	N.NpcFlags.Clear(EElysiumNpcFlag::COWER_PATH);
 	F.Start(0x85, 10.f);
-	TestTrue(TEXT("0x102a2bfc save-pos cower sets COWER_PATH"), N.NpcFlags.Has(EElysiumNpcFlag::COWER_PATH));
+	TestFalse(TEXT("0x102a2bfc save-pos cower's COWER_PATH is cleared by the fail mask"),
+		N.NpcFlags.Has(EElysiumNpcFlag::COWER_PATH));
 	TestTrue(TEXT("0x102a2d70 -> 0x18"), F.FailedWith(0x18));
 
 	// TASK_GET_PATH_TO_HINTNODE `0x102a371d` with no hint: fail 4.
@@ -520,9 +541,13 @@ bool FElysiumNpcKernelStartTask19PatrolArmsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102aa9e0 null path -> 0x1d"), F.FailedWith(0x1d));
 	F.Start(0x7e);
 	TestTrue(TEXT("0x7e -> 0x1d"), F.FailedWith(0x1d));
-	N.HuntPatrolPoints.Add(FVector(100.f, 0.f, 0.f));
+	// `0x102a3bac LEA EDX,[ESI+0x6594]`: the arm hands `m_sppPatrolPathHunt` (the pooled record,
+	// family Script19's `PatrolPathHuntCell`), not the port's own `HuntPatrolPoints` route.
+	FElysiumNpc::FPatrolPathRecord HuntRecord;
+	N.PatrolPathHuntCell.Path = &HuntRecord;
 	F.Start(0x7e);
 	TestTrue(TEXT("0x102aa9e0 a live hunt path completes"), F.Completed());
+	N.PatrolPathHuntCell.Path = nullptr;
 
 	// Follower backaway without a boss: 0x29 at each arm's own line.
 	N.FollowerBoss = FElysiumEntityHandle::Invalid();

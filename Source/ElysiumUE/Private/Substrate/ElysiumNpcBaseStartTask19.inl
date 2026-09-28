@@ -86,19 +86,53 @@ struct FStartTaskNavRecord
 
 FStartTaskNavRecord StartTaskNav;
 
-/** `CAI_Navigator +0x40` — the route search time `SetRouteSearchTime` (`0x102886f0`) writes and the
- *  route builder `0x102f1dc0` reads: 0 fails a missing route at once (`OnNavFailed(0xc)`), anything
- *  else defers it and sets `m_afMemory` bit `0x20`. Seconds. */
+/** `CAI_Navigator +0x40` — the route search time `SetRouteSearchTime` (`0x102886f0`, reached from
+ *  `TASK_SET_ROUTE_SEARCH_TIME`) writes and the route builder `0x102f1dc0` reads: 0 fails a missing
+ *  route at once (`0x102f1f00` `OnNavFailed(0xc, 1)`), anything else defers it and sets `m_afMemory`
+ *  bit `0x20`. Zeroed by `0x102f28a0`; the navigator constructor `0x102eca50` leaves it alone.
+ *  Seconds. */
 float NavRouteSearchTime = 0.f;
+
+/** `CAI_Navigator +0x44` — the retry interval `0x102f1dc0` adds to `curtime` for `+0x4c`. Nothing in
+ *  the image writes it but `0x102f28a0`'s zero, so it is always 0.0. Seconds. */
+float NavRouteRetryInterval = 0.f;
+
+/** `CAI_Navigator +0x48` — the deferred route's give-up time (`curtime + +0x40`, `0x102f1f36`); past
+ *  it the next build fails with `OnNavFailed(0xc, 1)` (`0x102f1f5a`). */
+double NavRouteGiveUpTime = 0.0;
+
+/** `CAI_Navigator +0x4c` — the deferred route's next retry time (`curtime + +0x44`). */
+double NavRouteRetryTime = 0.0;
+
+/** `CAI_Path +0x28`, the goal tolerance of the navigator's path (`m_pNavigator +0x30`), which
+ *  `SetGoal 0x102ecd20` resolves from goal word `[8]` and writes (`0x102ecec7`), and whose -1.0
+ *  "keep" arm reads back. This runtime has no `CAI_Path` (0018 story 4); the word is NOT
+ *  `m_flGoalTolerance` (`+0x6320`, `FElysiumNpcScheduleHost::GoalToleranceCm`), which `SetGoal` never
+ *  touches. Written also by `0x102ee1c0` (the tolerance tails of `0x102a1910`); zeroed by the path
+ *  reset `0x1030bb30` (through `0x102f28a0`). Centimetres. */
+float NavPathToleranceCm = 0.f;
+
+/** `0x102f28a0` — the navigator's route clear: `+0x40`, `+0x44`, `+0x48`, `+0x4c` := 0, `m_afMemory`
+ *  bit `0x20` cleared, then `0x1030bb30` resets the path (its tolerance `+0x28` among the words; the
+ *  port's route clear is `IElysiumNpcMotor::ClearNavigationGoal`). */
+void NavClearRoute();
+
+/** `0x102f1dc0` — the route build `SetGoal` ends on, with its deferred-route window: a built route
+ *  clears `m_afMemory` bit `0x20` and, unless slot 529 answers a continuous move, completes the task
+ *  through the navigator's slot 2 (`0x102623c0` → `TaskComplete(false)`); a refused one fails the task
+ *  (`OnNavFailed(0xc, 1)`) when `+0x40` is 0.0, else opens the window. `DestCm` / `ToleranceCm` are
+ *  what the path was given; answers whether a route stands. */
+bool NavBuildRoute(bool bHaveDest, const FVector& DestCm, float ToleranceCm);
 
 /** `CAI_Path +0x20` — the scalar `0x102f2fc0` reads and `0x102f2fe0` writes around slot 563
  *  `TranslateEnemyChasePosition` in `TASK_GET_PATH_TO_ENEMY_LKP`. Retail name unrecovered. */
 float NavPathScalar20 = 0.f;
 
-/** `CBaseEntity::m_lifeState` (`+0x200`) as `TASK_DIE`'s start arm (`0x1028680c`) writes it: 1 =
- *  LIFE_DYING. The NPC line has no other owner of the word (the player's is `FElysiumPlayer::
- *  LifeState`); the mind's dead state is this runtime's account of the rest of the lifecycle. */
-int32 LifeStateRetail = 0;
+/** `CBaseEntity::m_lifeState` (`+0x200`) as `TASK_DIE`'s start arm (`0x1028680c`) and the Troika's
+ *  `TASK_SET_DYING` (`0x102a778e`) write it: 1 = LIFE_DYING. The NPC line has no other owner of the
+ *  word (the player's is `FElysiumPlayer::LifeState`); the mind's dead state is this runtime's account
+ *  of the rest of the lifecycle. One name for the word across the StartTask and Spawn families. */
+int32 NpcLifeStateWord = 0;
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`) as the StartTask arms drive it, onto this runtime's
  *  navigator (`IElysiumNpcMotor`). `SetGoalFlags` is the call's second argument (0, 2, or 4). On a

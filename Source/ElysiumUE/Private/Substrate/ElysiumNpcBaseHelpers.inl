@@ -126,13 +126,13 @@ struct FNavPathSample
 	float RadiusUnits = 0.f;
 };
 
-/** SEAM for `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` runs its LOS ray to.
- *  Answers false; the caller then has no endpoint and takes its own refusal. */
+/** `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` runs its LOS ray to: an unbound
+ *  hint's origin; a network-bound one is a SEAM answering false (no AI network). */
 bool HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const;
 
-/** SEAM for `GetCurTask()->iTask` (`0x1028a150`), the retail task NUMBER of the running program's
- *  current step. `EElysiumTask` carries no registered numbers, so this answers false and
- *  `IsCurTaskContinuousMove` reads that as retail's "a task that is not one of the three". */
+/** `GetCurTask()->iTask` (`0x1028a150`), the retail task NUMBER of the running program's current
+ *  step: `FElysiumScheduleStep::TaskId`, which is retail's global id. False with no running step
+ *  (retail's NULL task). */
 bool CurrentRetailTaskNumber(int32& OutTaskNumber) const;
 
 /** SEAM for `0x102d1540` — "is this hint free, or already mine?". Retail: the hint's `m_hHintOwner`

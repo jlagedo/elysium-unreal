@@ -138,6 +138,7 @@ uint8 FElysiumNpcBase::NpcStateFlags() const
 }
 
 // `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal, write `m_lifeState = 1`.
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (StartTaskClearGoal + NpcLifeStateWord = 1) at wave 2
 void FElysiumNpcBase::BeginDying()
 {
 	// The navigator reset is the port's stop -- `0x102ee270` clears the goal and the path, which is
@@ -276,6 +277,7 @@ FString FElysiumNpcBase::DescribeNpcFlags() const
 	return Words == TEXT("-") ? Count : Words + TEXT("|") + Count;
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72e3 (the raw 0x80001000 mask) at wave 2
 void FElysiumNpcBase::MakeOblivious(bool bOblivious)
 {
 	// `CAI_BaseNPC` `0x1026d130` (set) and `0x1026d160` (clear), in their recovered order.

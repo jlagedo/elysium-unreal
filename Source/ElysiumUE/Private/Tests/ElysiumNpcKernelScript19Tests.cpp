@@ -858,27 +858,27 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 
 	F.Services.bLineOfSightClear = true;
 	TestFalse(TEXT("0x10278303 a candidate the threat SEES (fraction 1.0) is refused"),
-		Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
+		Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 
 	F.Services.bLineOfSightClear = false;
 	Guard->BaseScheduleHost.HintGroup = TEXT("north");
 	TestFalse(TEXT("0x10278318 slot 548 refuses (hint group with no hint)"),
-		Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
+		Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 	Guard->BaseScheduleHost.HintGroup.Reset();
 
 	Motor->bLateralCoverReachable = false;
-	TestFalse(TEXT("0x10278365 the move probe refuses"), Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
+	TestFalse(TEXT("0x10278365 the move probe refuses"), Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 
 	Motor->bLateralCoverReachable = true;
 	TestTrue(TEXT("0x102783fb a hidden, valid, reachable spot: SetGoal's TRUE"),
-		Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
+		Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 	TestTrue(TEXT("0x102783f6 the goal is the candidate"), Motor->RequestedFeet.Equals(Candidate, 0.01));
 	TestEqual(TEXT("0x102783d2 activity ACT_RUN (0x13)"), Guard->ScheduleHost.NavigationActivity, 0x13);
 
 	// SetGoal flag 1 (`0x102ecd74` -> `0x102f28a0` -> `0x1030bb30`) zeroes the path tolerance before
 	// the -1.0 "keep" word is resolved: a standing one is NOT kept, the hull width is taken.
 	Guard->NavPathToleranceCm = 77.f;
-	Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr);
+	Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr);
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
 	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
@@ -886,7 +886,7 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 		static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
 
 	Motor->bAcceptMoves = false;
-	TestFalse(TEXT("0x102783fd SetGoal's FALSE is the answer"), Guard->TryMoveToHiddenPosition(Threat, Candidate, nullptr));
+	TestFalse(TEXT("0x102783fd SetGoal's FALSE is the answer"), Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 	return true;
 }
 

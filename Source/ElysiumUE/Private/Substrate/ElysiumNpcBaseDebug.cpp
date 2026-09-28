@@ -232,7 +232,8 @@ void FElysiumNpcBase::ReportAIState()
 
 	// 3. `if (!m_pSchedule) DevMsg("No Schedule, ")` else the name (or `"Unknown"` for a null name
 	//    pointer) and, when `GetCurTask()` answers a task, `"Task %d (#%d), "` with the task's
-	//    retail NUMBER and `m_ScheduleState`. The number is `CurrentRetailTaskNumber`'s seam.
+	//    retail NUMBER and `m_ScheduleState`. The number is `CurrentRetailTaskNumber` (`0x1028a150`:
+	//    the running step's class-local id).
 	if (!Schedule.IsRunning())
 	{
 		EmitDevMsg(TEXT("No Schedule, "), TEXT("No Schedule, "));

@@ -35,6 +35,8 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumHint.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
@@ -121,6 +123,12 @@ namespace
 				}())
 		{
 			Guard = World.Npc(TEXT("guard"));
+			if (Guard == nullptr)
+			{
+				// A `Spawn` that renames the body (the player-controller line's `SetName`,
+				// `0x103a4510`, FrenzyShadow among it) is found by its class instead.
+				Guard = World.NpcOfClass(GuardClass);
+			}
 			Other = World.Npc(TEXT("other"));
 			Player = World.Player();
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other, World.Npc(TEXT("Cop")) });
@@ -194,10 +202,52 @@ namespace
 
 		FElysiumEntity* Entity(const TCHAR* Name) { return World.World.FindByName(Name); }
 
+		// The two weapons the cases hand out, as a case-local item table (the automation process loads
+		// no vdata item table; `ElysiumItems::Install` keeps the table by reference, so the fixture owns
+		// it and uninstalls it with itself, as the BlockReaction suite does). Bach's rifle keeps retail's
+		// classname because `0x103645a0` compares it (`0x105c1c70`); the blade is any melee weapon.
+		FElysiumItemTable Items;
+		bool bItemsInstalled = false;
+
+		void InstallItems()
+		{
+			if (bItemsInstalled)
+			{
+				return;
+			}
+			bItemsInstalled = true;
+			FElysiumItemDef Blade;
+			Blade.Classname = TEXT("item_w_st19_blade");
+			Blade.PrintName = Blade.Classname;
+			Blade.Type = EElysiumItemType::WeaponMelee;
+			Blade.bWieldable = true;
+			Items.Items.Add(MoveTemp(Blade));
+			FElysiumItemDef Rifle;
+			Rifle.Classname = TEXT("item_w_rem_m_700_bach");
+			Rifle.PrintName = Rifle.Classname;
+			Rifle.Type = EElysiumItemType::WeaponFirearm;
+			Rifle.bWieldable = true;
+			Rifle.AmmoType = TEXT("StartTask19TestRound");
+			Rifle.MagazineSize = 5;
+			Rifle.DefaultAmmo = 5;
+			Items.Items.Add(MoveTemp(Rifle));
+			Items.Reindex();
+			ElysiumItems::Install(Items);
+		}
+
+		~FStartTask19SpeciesFixture()
+		{
+			if (bItemsInstalled)
+			{
+				ElysiumItems::Uninstall(Items);
+			}
+		}
+
 		// The active weapon after `GiveNamedItem(classname)` and, when it did not become active, slot
 		// 388 `Weapon_Switch`.
 		FElysiumEntity* GiveWeapon(const TCHAR* Classname)
 		{
+			InstallItems();
 			const FElysiumEntityHandle Handle = Guard->Inventory.GiveNamedItem(*Guard, FString(Classname));
 			FElysiumEntity* Item = World.World.Resolve(Handle);
 			if (Item != nullptr && Guard->ActiveWeaponEntity() != Item)
@@ -213,7 +263,7 @@ namespace
 	{
 		FVector Mins = FVector::ZeroVector;
 		FVector Maxs = FVector::ZeroVector;
-		Npc.RetailHullExtents(Hull, EElysiumHullExtents::Full, Mins, Maxs);
+		Npc.RetailHullExtents(Hull, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs);
 		return static_cast<float>(Maxs.Y - Mins.Y);
 	}
 }
@@ -232,7 +282,6 @@ bool FElysiumNpcKernelStartTask19SpeciesHeadClawTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
 	// 0x36/0x37: slot 618 -- the exertion (channel 4, 1.0, 0.8, pitch 100) from the fat guy's table.
 	for (const int32 Task : { 0x36, 0x37 })
 	{
@@ -273,7 +322,6 @@ bool FElysiumNpcKernelStartTask19SpeciesRunnerTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
 	// 0x122..0x124: `m_flWaitFinished = m_flWaitFinishedDelta + curtime`, no base, no completion.
 	Runner->ScheduleHost.WaitFinishedDelta = 2.5f;
 	for (const int32 Task : { 0x122, 0x123, 0x124 })
@@ -343,7 +391,6 @@ bool FElysiumNpcKernelStartTask19SpeciesGunmanTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
 	// `m_flWaitFinishedDelta *= 1 / sabbat_gunman_speed_scalar` (shipped "3.0") before the base.
 	const float Scalar = ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::SabbatGunmanSpeedScalar);
 	for (const int32 Task : { 0x11b, 0x11c, 0x122, 0x123, 0x124 })
@@ -394,7 +441,6 @@ bool FElysiumNpcKernelStartTask19SpeciesDogTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
 	// 0x36: the attack -- completes only when slot 251 `IsActivityFinished` answers true.
 	Dog->bSequenceFinished = false;
 	F.Start(0x36);
@@ -422,24 +468,21 @@ bool FElysiumNpcKernelStartTask19SpeciesGhoulTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
-	// 0x14a: `RestartIdealActivity(table A)`, and a failure 0x15 when it did not take.
+	// 0x14a: `RestartIdealActivity(table A)`, and a failure 0x15 when it did not take. The restart
+	// (`0x10289ee0` -> `SetIdealActivity 0x10272650`) stores `m_IdealActivity` for every non-zero id,
+	// and both tables (`0x1063abcc` / `0x1063abdc`: 0x1059.. / 0x105a..) hold no zero, so the 0x15
+	// arm is unreachable here: whatever the ideal was, it is the table's after the restart.
 	Ghoul->IdealActivityNumber = Ghoul->UnawareTableA() + 1;
 	F.Start(0x14a);
-	TestEqual(TEXT("0x14a: an ideal that did not take fails 0x15"), F.Failure(), 0x15);
-	Ghoul->IdealActivityNumber = Ghoul->UnawareTableA();
-	F.Start(0x14a);
+	TestEqual(TEXT("0x14a: the restart stores the ideal"), Ghoul->IdealActivityNumber, Ghoul->UnawareTableA());
 	TestEqual(TEXT("0x14a: an ideal that took does not fail"), F.Failure(), 0);
 	TestTrue(TEXT("0x14a never completes"), F.Running());
-	// 0x14b: the same over table B, and a refusal also sets `m_bUnawareExited` (+0x6667).
+	// 0x14b: the same over table B; the refusal arm (which also sets `m_bUnawareExited` +0x6667,
+	// `0x1037b95f`) is likewise unreachable for a non-zero entry.
 	Ghoul->bUnawareExited = false;
 	Ghoul->IdealActivityNumber = Ghoul->UnawareTableB() + 1;
 	F.Start(0x14b);
-	TestEqual(TEXT("0x14b: fails 0x15"), F.Failure(), 0x15);
-	TestTrue(TEXT("0x14b: the exit flag is set"), Ghoul->bUnawareExited);
-	Ghoul->bUnawareExited = false;
-	Ghoul->IdealActivityNumber = Ghoul->UnawareTableB();
-	F.Start(0x14b);
+	TestEqual(TEXT("0x14b: the restart stores the ideal"), Ghoul->IdealActivityNumber, Ghoul->UnawareTableB());
 	TestEqual(TEXT("0x14b: no failure"), F.Failure(), 0);
 	TestFalse(TEXT("0x14b: the exit flag stays clear"), Ghoul->bUnawareExited);
 	return true;
@@ -481,11 +524,13 @@ bool FElysiumNpcKernelStartTask19SpeciesHumanTest::RunTest(const FString&)
 	TestEqual(TEXT("0x9f without a weapon fails 3"), F.Failure(), 3);
 	TestTrue(TEXT("stamped at line 0x138"), F.Traced(TEXT("NPC_VHuman.cpp"), 0x138));
 	// 0x9f with one: `weapon+0x8c0 * data + 2 * Width(m_eHull)` (the range word's seam answers 0).
-	if (TestNotNull(TEXT("a weapon is active"), F.GiveWeapon(TEXT("item_w_katana"))))
+	if (TestNotNull(TEXT("a weapon is active"), F.GiveWeapon(TEXT("item_w_st19_blade"))))
 	{
 		F.Start(0x9f, 1.f);
 		const float Width = StartTask19SpeciesHullWidth(*Human, Human->HullKind);
-		TestEqual(TEXT("0x9f: the tolerance is twice the hull width"), Human->ScheduleHost.GoalToleranceCm,
+		// `0x1038485b` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance
+		// (`path+0x28`), not `m_flGoalTolerance` (+0x6320).
+		TestEqual(TEXT("0x9f: the path tolerance is twice the hull width"), Human->NavPathToleranceCm,
 			(Width + Width) * ElysiumMove::U);
 		TestTrue(TEXT("0x9f with a weapon completes"), F.Completed());
 	}
@@ -941,7 +986,6 @@ bool FElysiumNpcKernelStartTask19SpeciesGargoyleTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	AddExpectedError(TEXT("TaskFail"), EAutomationExpectedErrorFlags::Contains, 0);
 	F.Start(0x12f);
 	TestTrue(TEXT("0x12f keeps running"), F.Running());
 	// 0x130: no pillar -- nothing written, running; a pillar -- its origin saved, complete.
@@ -1458,7 +1502,9 @@ bool FElysiumNpcKernelStartTask19SpeciesSabbatLeaderTest::RunTest(const FString&
 	TestFalse(TEXT("0x15d: not diving"), Leader->bSabbatDiving);
 	TestEqual(TEXT("0x15d: 0x10"), Leader->EffectsWord & 0x10u, 0x10u);
 	TestTrue(TEXT("0x15d keeps running"), F.Running());
-	// 0x15e: onto the hint, the warning.
+	// 0x15e: onto the hint, the warning. 0x15b's failure released the hint (Troika `TaskFail
+	// 0x1029adb0` -> `ClearScheduleHint`), so it is stood again.
+	Leader->BaseScheduleHost.HintNode = F.HintIndex(TEXT("hint"));
 	F.Start(0x15e);
 	TestEqual(TEXT("0x15e: at the hint"), Leader->Origin, F.Entity(TEXT("hint"))->Origin);
 	TestEqual(TEXT("0x15e: +0x66dc"), Leader->SabbatWarningFinishTime, F.Now() + 1.0);
@@ -1823,6 +1869,9 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 	F.Start(0x4e, 32.f);
 	TestEqual(TEXT("0x4e: the tolerance"), Wolf->ScheduleHost.GoalToleranceCm,
 		static_cast<float>(Expected) * ElysiumMove::U);
+	// `0x103ccece` `0x102ee1c0` and `0x103ccee0` `0x102f2fe0`: the same value into the navigator's path.
+	TestEqual(TEXT("0x4e: the path tolerance"), Wolf->NavPathToleranceCm, static_cast<float>(Expected) * ElysiumMove::U);
+	TestEqual(TEXT("0x4e: path +0x20"), Wolf->NavPathScalar20, static_cast<float>(Expected));
 	TestTrue(TEXT("0x4e completes"), F.Completed());
 	// 0x100: the base first, then m_bfAINPCFlags &= ~0x10000.
 	Wolf->NpcFlags.Set(EElysiumNpcFlag::FORCE_RELAXED_ANIMS);
@@ -1998,7 +2047,9 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 	TestEqual(TEXT("0x15b: the move hint cleared"), Wolf->MoveHintNode, INDEX_NONE);
 	TestEqual(TEXT("0x15b: +0x66a8 cleared"), Wolf->WerewolfSnapWordA, 0);
 	TestTrue(TEXT("0x15b completes"), F.Completed());
-	// 0x15c..0x161: the ideal must take or the task fails 0x15; 0x15f also goes non-solid.
+	// 0x15c..0x161: the ideal must take or the task fails 0x15; 0x15f also goes non-solid. The restart
+	// (`0x10289ee0` -> `0x10272650`) stores every non-zero id, so the 0x15 arm is unreachable for
+	// these constants: a preset ideal is overwritten and the task runs.
 	const struct { int32 Task; int32 Activity; } Plays[] = {
 		{ 0x15c, 0x11c }, { 0x15d, 0x11d }, { 0x15e, 0x11f }, { 0x15f, 0x11e }, { 0x160, 0x120 }, { 0x161, 0x121 } };
 	for (const auto& Row : Plays)
@@ -2006,7 +2057,8 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 		Wolf->MoveHintNode = Fence;
 		Wolf->IdealActivityNumber = Row.Activity + 0x100;
 		F.Start(Row.Task);
-		TestEqual(FString::Printf(TEXT("0x%x: a refused ideal fails 0x15"), Row.Task), F.Failure(), 0x15);
+		TestEqual(FString::Printf(TEXT("0x%x: the restart stores the ideal"), Row.Task), Wolf->IdealActivityNumber, Row.Activity);
+		TestEqual(FString::Printf(TEXT("0x%x: so no 0x15"), Row.Task), F.Failure(), 0);
 		Wolf->IdealActivityNumber = Row.Activity;
 		Wolf->SolidFlagsWord = 0u;
 		F.Start(Row.Task);
@@ -2049,14 +2101,17 @@ bool FElysiumNpcKernelStartTask19SpeciesZombieTest::RunTest(const FString&)
 	F.Start(0x152);
 	TestEqual(TEXT("0x152 with no player calls nothing"), Zombie->ZombieBeFedOnCalls, Feeds + 1);
 	TestTrue(TEXT("0x152 with no player completes"), F.Completed());
-	// 0x153: the variant's activity must take.
+	// 0x153: the variant's activity must take -- and the restart (`0x10289ee0` -> `0x10272650`)
+	// stores every non-zero id, so for variants 1..3 the 0x15 arm is unreachable.
 	const struct { int32 Variant; int32 Activity; } Feeds3[] = { { 1, 0x1098 }, { 2, 0x109b }, { 3, 0x109e } };
 	for (const auto& Row : Feeds3)
 	{
 		Zombie->ZombieFeedVariant = Row.Variant;
 		Zombie->IdealActivityNumber = Row.Activity + 1;
 		F.Start(0x153);
-		TestEqual(FString::Printf(TEXT("0x153 variant %d refused fails 0x15"), Row.Variant), F.Failure(), 0x15);
+		TestEqual(FString::Printf(TEXT("0x153 variant %d: the restart stores the ideal"), Row.Variant),
+			Zombie->IdealActivityNumber, Row.Activity);
+		TestEqual(FString::Printf(TEXT("0x153 variant %d: no 0x15"), Row.Variant), F.Failure(), 0);
 		Zombie->IdealActivityNumber = Row.Activity;
 		F.Start(0x153);
 		TestEqual(FString::Printf(TEXT("0x153 variant %d taken runs"), Row.Variant), F.Failure(), 0);
@@ -2109,6 +2164,9 @@ bool FElysiumNpcKernelStartTask19SpeciesFrenzyShadowTest::RunTest(const FString&
 		F.Start(Task, 40.f);
 		TestEqual(FString::Printf(TEXT("0x%x: the tolerance carries the hull term"), Task),
 			Shadow->ScheduleHost.GoalToleranceCm, Expected * ElysiumMove::U);
+		// `0x10375fec` `0x102ee1c0` / `0x10375ffe` `0x102f2fe0`: the same word into the navigator's path.
+		TestEqual(FString::Printf(TEXT("0x%x: the path tolerance"), Task), Shadow->NavPathToleranceCm,
+			Expected * ElysiumMove::U);
 		TestTrue(FString::Printf(TEXT("0x%x completes"), Task), F.Completed());
 	}
 	TestEqual(TEXT("hull 0 is 26 wide"), StartTask19SpeciesHullWidth(*Shadow, 0), 26.f);

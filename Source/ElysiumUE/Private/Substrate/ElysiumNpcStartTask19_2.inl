@@ -21,11 +21,6 @@ int32 LastDisciplineHitBy = 0;
  *  reads it when its operand is negative. No port producer writes it yet. */
 int32 LastStoredDamage = 0;
 
-/** SEAM word: `+0x0200 m_lifeState` (`CBaseEntity`). `TASK_SET_DYING` (`0x102a778e`) writes 1
- *  (`LIFE_DYING`). The runtime carries death in the mind's dead state and `FElysiumEntity::bDead`
- *  (the reap flag), neither of which is this word; it is held here verbatim. */
-int32 LifeStateRetail = 0;
-
 // --- The navigator goal literal (`AI_NavGoal_t`, built by `0x102a9c80` / `0x102a9d20` /
 // `0x102a9dc0`) ----------------------------------------------------------------------------------
 
@@ -46,49 +41,23 @@ FTaskTailNavGoal TaskTailLastNavGoal;
 uint32 TaskTailLastNavGoalFlags = 0;
 int32 TaskTailNavGoalCalls = 0;
 
-/** `CAI_Navigator::SetGoal` (`0x102ecd20`) as this runtime's navigator is reached: the body's motor
- *  (`IElysiumNpcMotor::MoveTo`), the same service `GetPathToEnemy` drives, under the schedule body
- *  claim. The goal is recorded first. Answers false with no motor, a refused claim or a refused
- *  path -- retail's "no route" answer. */
+/** `CAI_Navigator::SetGoal` (`0x102ecd20`): this half's goal literal (SOURCE units) handed to the ONE
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`). The goal is recorded
+ *  first and converted; the body carries every arm (the route build `0x102f1dc0`, its complete through
+ *  the navigator's slot 2 and its `OnNavFailed(0xc)`). The navigator services this half calls are the
+ *  base's too: `StartTaskMotorHoldYaw` (`0x102e0b40`), `StartTaskMotorSetIdealYaw(ToTarget)`
+ *  (`0x10288670` / `0x102e2020`), `StartTaskFindLateralCover` (`0x102784a0`), `StartTaskFindLosPos`
+ *  (`0x102edaa0`), `StartTaskFindCoverPos` (`0x102edc80`), `StartTaskHintFacing` (`0x102d11f0`),
+ *  `StartTaskSetArrivalActivity` / `StartTaskSetArrivalDirection` (`0x102ee410` / `0x102ee530`),
+ *  `StartTaskLastKnownPosition` (`0x102dfed0`), `StartTaskAngleMod` (`0x10288590`), and the
+ *  `m_lifeState` word `NpcLifeStateWord`. */
 bool TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoalFlags);
-
-/** SEAM for `0x102ee410` / `0x102ee530` -- the navigator's arrival activity and arrival direction
- *  (`m_pPath` words). The mover keeps neither; recorded only. */
-int32 TaskTailArrivalActivity = INDEX_NONE;
-float TaskTailArrivalYaw = 0.f;
 
 /** SEAM for `0x102a9c60` -> `0x102a9f20` -> `0x102a9ee0` / `0x102a9f00` -- the current waypoint,
  *  replaced by its successor when one exists, and its position. Answers false (no waypoint). */
 bool TaskTailNavFacingWaypoint(FVector& OutPositionUnits) const;
 
-/** SEAM for `0x102edaa0` -- the navigator's LOS-position finder `TASK_GET_PATH_TO_SAVEPOSITION_LOS`
- *  asks (`from, to, 0.0, 4096.0, 1.0, 1, &out`). No node graph here; answers false. */
-bool TaskTailFindLosPosition(const FVector& FromUnits, const FVector& ToUnits, FVector& OutUnits) const;
-
-/** SEAM for `FindLateralCover(threatEye, threat)` (`0x102784a0`, `RET 8`): the lateral-cover search
- *  (origin, then five 48-unit steps each side) that sets its own goal on success. Its port body lives
- *  only inline inside `FElysiumNpc::FindCoverFromEnemy` (`ElysiumNpc.cpp`); answers false, the arm
- *  that goes on to the node-cover search. */
-bool TaskTailFindLateralCover(const FVector& ThreatEyeUnits, const FElysiumEntity* Threat);
-
-/** SEAM for `0x102d11f0` -- the hint's facing direction the cover arm hands to the navigator.
- *  Answers false (no hint store). */
-bool TaskTailHintDirection(FVector& OutDirection) const;
-
 // --- Motor and facing ----------------------------------------------------------------------------
-
-/** `0x102e0b40` -- `motor+0x2c = -1.0`, the motor's turn hold reset. The port's motor stands it as
- *  `ResetSteering` (the landed `MaintainSchedule` / `TaskFail` reading). */
-void TaskTailMotorStopTurn();
-
-/** `0x10288670` -- the motor's `SetIdealYaw`: flip by 180 under `motor+0x28`
- *  (`bMotorAnimationMovement`), then store `m_IdealYaw` (`MotorIdealYaw`) and turn the body toward
- *  it (`IElysiumNpcMotor::Face`, the motor service `FaceSavePosition` uses). */
-void TaskTailMotorSetIdealYaw(float YawDegrees);
-
-/** `0x102e2020` -- the motor's ideal yaw toward a point (`0x102e2750` is the yaw to the point),
- *  then the same tail as `0x10288670`. SOURCE units. */
-void TaskTailMotorFacePosition(const FVector& PositionUnits);
 
 /** `0x10297940` -- face a point WITH a turn animation: stop-turn, ideal yaw toward the point, the
  *  face-anim pick `FUN_10297a20`, `PLAYING_FACE_ANIM` (`0x8000000`) into `m_bfAINPCFlags`, then
@@ -122,11 +91,6 @@ int32 TaskTailFlyingIdleSequence() const;
 /** Slot 167 `GetEnemy()` (`0x101a67e0`) dispatched as retail does from a Troika body -- the
  *  base-pointer const overload, which the Troika's non-const slot 168 hides by name. */
 FElysiumEntity* TaskTailEnemy167() const;
-
-/** `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`) through slot 541: the memory record's
- *  position for `Target`, else the zero vector (retail's miss arm). SOURCE units. The eluded-record
- *  fallback and its two `DevWarning`s are not reproduced (no record carries `+0x34`). */
-FVector TaskTailEnemyLkpUnits(const FElysiumEntity* Target) const;
 
 /** SEAM for `0x1025df40(m_pAttackCoordinator, this, enemy)` -- the coordinator's side pick for a
  *  melee circle. `+0x65e8` is an index with no object behind it; answers 0, retail's "no opinion"
@@ -209,5 +173,3 @@ void TaskTailMovementActivity(int32 Activity);
 /** The look tail `0x102a7744`: `0x10297940(pos)` then `0x102a18a0(task)`. SOURCE units. */
 void TaskTailLookAt(const FVector& PositionUnits, float TaskSeconds, double Now);
 
-/** The facing tail `0x102a63fc`: `0x10288670(motor, yaw)`, return running. */
-void TaskTailFaceYaw(float YawDegrees) { TaskTailMotorSetIdealYaw(YawDegrees); }

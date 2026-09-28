@@ -125,16 +125,13 @@ public:
 	/** `+0x66a4 CNPC_VBach` (walked; no datamap name): the sniper-wait latch `StartTask` `0x103645a0`
 	 *  tasks `0x34`/`0x35`/`0xb0`/`0xb1`/`0x14a`/`0x151` raise and clear. */
 	bool bBachSniperWait = false;
-	/** `+0x66a1 m_bBachInStartingPosition`, `+0x66a2 m_bSkipToWarning`, `+0x6698 m_flSkipToWarningTime`,
-	 *  `+0x6694 m_flWarningTime`, `+0x6674 m_iWasOccluded`, `+0x6678 m_iReusedOccludeCount` (datamap) --
-	 *  the sniper-wait words `StartTask` reads and writes. (Each rebinds its species shape map `ABSENT`
-	 *  row.) */
-	bool bBachInStartingPosition = false;
+	/** `+0x66a2 m_bSkipToWarning`, `+0x6698 m_flSkipToWarningTime`, `+0x6694 m_flWarningTime` (datamap)
+	 *  -- the sniper-wait words `StartTask` reads and writes beside `+0x66a1` / `+0x6674` / `+0x6678`,
+	 *  which are the L11 members above (`bBachInStartingPosition`, `BachWasOccluded`,
+	 *  `BachReusedOccludeCount`). */
 	bool bBachSkipToWarning = false;
 	float BachSkipToWarningTime = 0.f;
 	double BachWarningTime = 0.0;
-	int32 BachWasOccluded = 0;
-	int32 BachReusedOccludeCount = 0;
 	/** SEAMS for the calls `StartTask` makes that no port body answers: the enemy feat-row value
 	 *  (`0x101e56e0`), the type-3 stat list's `SetBase`, the holy-light equip `0x103656a0`, and the
 	 *  active weapon's `+0x518` / `+0x4f0`. See the definitions. */

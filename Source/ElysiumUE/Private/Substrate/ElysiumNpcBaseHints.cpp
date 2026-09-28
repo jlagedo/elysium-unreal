@@ -103,12 +103,15 @@ bool FElysiumNpcBase::IsHintUnusable(int32 HintNode, double Now) const
 
 void FElysiumNpcBase::RestartIdealActivityId(int32 RetailActivityId)
 {
-	// SEAM for `RestartIdealActivity` (`0x10289ee0`). This runtime resolves activities by NAME
-	// (`FElysiumClipIdentity`) and carries no retail `Activity` enum table — the same reason 29b
-	// left `m_IdealTranslatedActivity` (`+0x5cd0`) an opaque `int32`. Every body in this file
-	// DECIDES the id retail would have passed and hands it here; the decision is what the tests
-	// assert, and the play is what this seam does not do.
-	(void)RetailActivityId;
+	// `CAI_BaseNPC::RestartIdealActivity` `0x10289ee0`, the whole body: when `m_Activity` (`+0xfec`)
+	// already IS the activity asked for it is reset to 0 so the change re-triggers
+	// (`0x10289ee4..0x10289eee`), then `SetIdealActivity(act)` (`0x10289efc JMP 0x100097d2` ->
+	// `0x10272650`). The play that follows is the maintain loop's, off the ideal activity.
+	if (ActivityNumber == RetailActivityId)                  // 0x10289eea CMP [ECX+0xfec],EAX
+	{
+		ActivityNumber = 0;                                  // 0x10289eee
+	}
+	SetIdealActivity(RetailActivityId);                      // 0x10289efc
 }
 
 FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWords& Hint)

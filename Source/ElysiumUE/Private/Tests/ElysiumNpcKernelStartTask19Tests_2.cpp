@@ -25,6 +25,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumMiscFlags.h"
+#include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
@@ -66,18 +67,26 @@ namespace
 
 		double Now() const { return World.World.NowSeconds(); }
 
+		// The class-LOCAL task (the registrar's number the switch compares) as the GLOBAL id a schedule
+		// step carries (`ElysiumScheduleText.h`); the body translates it back (slot 450's body).
+		int32 GlobalTask(int32 LocalTask) const
+		{
+			const FElysiumLocalIdSpace* Space = Npc->IdSpace(EElysiumIdCategory::Task);
+			return Space != nullptr ? Space->LocalToGlobal(LocalTask) : LocalTask;
+		}
+
 		// A fresh task: RUNNING, no raised failure.
 		int32 Run(int32 TaskId, float Data = 0.f)
 		{
 			FElysiumScheduleStep Step;
-			Step.TaskId = TaskId;
+			Step.TaskId = GlobalTask(TaskId);
 			Step.Data = Data;
 			return RunStep(Step);
 		}
 		int32 RunRaw(int32 TaskId, uint32 Raw)
 		{
 			FElysiumScheduleStep Step;
-			Step.TaskId = TaskId;
+			Step.TaskId = GlobalTask(TaskId);
 			Step.SetRawWord(Raw);
 			return RunStep(Step);
 		}
@@ -139,8 +148,11 @@ bool FElysiumNpcKernelStartTask19TailKnockbackTest::RunTest(const FString&)
 	}
 	FElysiumNpc& Npc = *F.Npc;
 
-	// 0x92 `0x102a6de4`: no completion.
+	// 0x92 `0x102a6de4`: `RestartIdealActivity(m_knockbackType)` (`0x102a6df7`, `0x10289ee0`), no
+	// completion.
+	Npc.KnockbackType = 0x57;
 	F.Run(0x92);
+	TestEqual(TEXT("0x102a6df7 the ideal activity is m_knockbackType"), Npc.IdealActivityNumber, 0x57);
 	TestFalse(TEXT("0x92 leaves the task running"), F.Completed());
 
 	// 0x93 `0x102a6e09`: gravity from `m_fJumpGravity`, the jump nav type and `m_bJumping`.
@@ -232,6 +244,7 @@ bool FElysiumNpcKernelStartTask19TailInterestTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102a6539 completes"), F.Completed());
 	Npc.InterestingDeathActivity = 0x1d;
 	F.Run(0xb8);
+	TestEqual(TEXT("0x102a6519 RestartIdealActivity(+0x6308)"), Npc.IdealActivityNumber, 0x1d);
 	TestFalse(TEXT("0x102a6519 a stored activity leaves the task running"), F.Completed());
 	return true;
 }
@@ -324,7 +337,7 @@ bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 
 	// 0xe8 `0x102a778e`: `m_lifeState = 1`, then the break tail.
 	F.Run(0xe8);
-	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.LifeStateRetail, 1);
+	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.NpcLifeStateWord, 1);
 	TestTrue(TEXT("0x102a7798 completes"), F.Completed());
 
 	// 0xe5 `0x102a5087`: the self-damage completes.
@@ -572,14 +585,28 @@ bool FElysiumNpcKernelStartTask19TailKickTest::RunTest(const FString&)
 	Npc.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	F.Run(0x111);
 	TestEqual(TEXT("0x102a624d no enemy fails 6"), F.Failure(), 6);
+	// That failure released the prop (Troika `TaskFail 0x1029adb0` clears `m_hKickPhysicsProp`
+	// `+0x643c`); the next cases stand it again.
+	TestFalse(TEXT("0x1029adb0 the failure releases the kick prop"), Npc.ScheduleHost.KickProp.IsSet());
+	Npc.ScheduleHost.KickProp = F.Other->Handle;
 	F.Run(0x112);
 	TestTrue(TEXT("0x102a629e a live prop completes"), F.Completed());
 	const int32 KicksBefore = Npc.TaskTailKicks;
 	F.Run(0x113);
+	TestEqual(TEXT("0x102a62f5 RestartIdealActivity(ACT_KICK)"), Npc.IdealActivityNumber, 0xc84);
 	TestEqual(TEXT("0x102a6304 the kick"), Npc.TaskTailKicks, KicksBefore + 1);
 	TestTrue(TEXT("at the prop"), Npc.TaskTailLastKicked == F.Other->Handle);
 	TestFalse(TEXT("0x102a630d the handle cleared"), Npc.ScheduleHost.KickProp.IsSet());
 	TestFalse(TEXT("0x113 leaves the task running"), F.Completed());
+
+	// 0x111 with a prop (this body, at the origin) and an enemy (other, on +X): the goal is the prop
+	// minus 64 units along the prop->enemy direction -- `0x102a61f1` is `0x1001395d` = `0x10146190`,
+	// `FSUB`: the kick spot is on the far side of the prop.
+	Npc.ScheduleHost.KickProp = Npc.Handle;
+	Npc.BaseMemory.Enemy = F.Other->Handle;
+	F.Run(0x111);
+	TestEqual(TEXT("0x102a61b4 goal type 4"), Npc.TaskTailLastNavGoal.Type, 4);
+	TestEqual(TEXT("0x102a61f1 dest x = prop - 64"), Npc.TaskTailLastNavGoal.DestUnits.X, -64.0, 1e-3);
 	return true;
 }
 
@@ -626,6 +653,10 @@ bool FElysiumNpcKernelStartTask19TailCoverTest::RunTest(const FString&)
 	{
 		F.Run(Id);
 		TestFalse(FString::Printf(TEXT("0x%x bit set does not complete"), Id), F.Completed());
+		if (Id == 0x116)
+		{
+			TestEqual(TEXT("0x102a6829 RestartIdealActivity(0x55)"), Npc.IdealActivityNumber, 0x55);
+		}
 	}
 	return true;
 }
@@ -719,22 +750,29 @@ bool FElysiumNpcKernelStartTask19TailCirclesTest::RunTest(const FString&)
 
 	// 0x122: no 0x1121 sequence -> `TaskFail(0x15)` AND the 1000 sentinel, which skips the tries --
 	// so neither the yaw nor the wait moves, and no second failure is raised.
+	// The yaw word is no witness: the failure itself zeroes it (Troika `TaskFail 0x1029adb0`,
+	// `ElysiumNpc.cpp`, `DesiredMoveYaw = 0`). The sweep's other write, the wait, is.
 	Npc.ScheduleHost.DesiredMoveYaw = 7.f;
+	Npc.BaseScheduleHost.WaitFinished = 123.0;
 	F.Run(0x122);
 	TestEqual(TEXT("0x102a6ae5 fail 0x15"), F.Failure(), 0x15);
-	TestEqual(TEXT("0x102a6aeb the sentinel skips the sweep"), Npc.ScheduleHost.DesiredMoveYaw, 7.f);
+	TestEqual(TEXT("0x102a6aeb the sentinel skips the sweep: no wait written"), Npc.BaseScheduleHost.WaitFinished, 123.0);
+	TestEqual(TEXT("0x1029adb0 the failure zeroes the yaw word"), Npc.ScheduleHost.DesiredMoveYaw, 0.f);
 
 	// 0x123: no enemy -> fail 6; then neither 0x1121 nor ACT_WALK has a sequence -> fail 0x15.
 	Npc.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	F.Run(0x123, 50.f);
 	TestEqual(TEXT("0x102a6d23 the activity refusal is the last word"), F.Failure(), 0x15);
 
-	// 0x127: `m_flGoalTolerance = debug_melee_advance_combatmove_dist + RandomFloat(0, 50)`.
+	// 0x127: `m_flGoalTolerance = debug_melee_advance_combatmove_dist + RandomFloat(0, 50)`, then the
+	// path's two words: `0x102a59d1` `0x102ee1c0` (path +0x28) and `0x102a42df` `0x102f2fe0` (path
+	// +0x20) -- not the runner's `Schedule.ToleranceUnits`.
 	F.Run(0x127, 50.f);
-	const float Tolerance = Npc.Schedule.ToleranceUnits;
+	const float Tolerance = Npc.ScheduleHost.GoalToleranceCm / ElysiumMove::U;
 	TestTrue(TEXT("0x102a59b3 100 <= tolerance <= 150"), Tolerance >= 100.f && Tolerance <= 150.f);
-	TestEqual(TEXT("0x102a59c1 +0x6320 in cm"), Npc.ScheduleHost.GoalToleranceCm, Tolerance * ElysiumMove::U, 1e-3f);
-	TestTrue(TEXT("0x102a42df completes"), F.Completed());
+	TestEqual(TEXT("0x102a59d1 path +0x28 in cm"), Npc.NavPathToleranceCm, Npc.ScheduleHost.GoalToleranceCm, 1e-3f);
+	TestEqual(TEXT("0x102a42df path +0x20"), Npc.NavPathScalar20, Tolerance, 1e-3f);
+	TestTrue(TEXT("0x102a42e8 completes"), F.Completed());
 
 	// 0x128: `m_flWaitFinished = delta + curtime`, no completion.
 	Npc.ScheduleHost.WaitFinishedDelta = 2.f;
@@ -808,6 +846,7 @@ bool FElysiumNpcKernelStartTask19TailLateTest::RunTest(const FString&)
 
 	// 0x8c: `RestartIdealActivity(0x1155)`, no completion.
 	F.Run(0x8c);
+	TestEqual(TEXT("0x102a7346 ACT 0x1155"), Npc.IdealActivityNumber, 0x1155);
 	TestFalse(TEXT("0x102a7346 running"), F.Completed());
 
 	// 0x137: the retail `== 0` test -- a model with no sequence (-1) does NOT fail.
@@ -819,11 +858,14 @@ bool FElysiumNpcKernelStartTask19TailLateTest::RunTest(const FString&)
 	F.Run(0x138);
 	TestTrue(TEXT("0x102a73ab completes"), F.Completed());
 
-	// 0x139 / 0x13b / 0x13c: running.
-	for (const int32 Id : { 0x139, 0x13b, 0x13c })
+	// 0x139 / 0x13b / 0x13c: `RestartIdealActivity(0x2b / 0x30 / 0x32)`, running.
+	struct FJumpRow { int32 Task; int32 Activity; };
+	for (const FJumpRow& Row : { FJumpRow{ 0x139, 0x2b }, FJumpRow{ 0x13b, 0x30 }, FJumpRow{ 0x13c, 0x32 } })
 	{
-		F.Run(Id);
-		TestFalse(FString::Printf(TEXT("0x%x running"), Id), F.Completed());
+		F.Run(Row.Task);
+		TestEqual(FString::Printf(TEXT("0x%x RestartIdealActivity(0x%x)"), Row.Task, Row.Activity),
+			Npc.IdealActivityNumber, Row.Activity);                  // 0x102a73ec / 0x102a747a / 0x102a749e
+		TestFalse(FString::Printf(TEXT("0x%x running"), Row.Task), F.Completed());
 	}
 	// 0x13a: gravity, nav type, `m_bJumping`.
 	Npc.JumpGravity = 0.5f;

@@ -467,8 +467,11 @@ int32 FElysiumNpcFrenzyShadow::StartTaskSlot442(void* Task)
 		const float Scaled = static_cast<float>(HullTerm * GShadowGoalToleranceScale);   // 0x10375fb4 FMUL double
 		ScheduleHost.GoalToleranceCm = Scaled * ElysiumMove::U;           // 0x10375fbf FSTP +0x6320 (the interim store)
 		const float Tolerance = ResolveTaskDistance(Step->Data) + Scaled;              // 0x10375fcb slot 418; 0x10375fd1 FADD
-		SetGoalTolerance(Tolerance);
-		TaskComplete(false);
+		SetGoalTolerance(Tolerance);                                      // 0x10375fe5 FSTP +0x6320
+		// The same word into the navigator's path, twice: `0x10375fec` `0x102ee1c0` (path `+0x28`) and
+		// `0x10375ffe` `0x102f2fe0` (path `+0x20`).
+		StartTask19SetNavTolerances(Tolerance, Tolerance);
+		TaskComplete(false);                                              // 0x10376007
 		return 0;
 	}
 	case GShadowTaskHuntPath:

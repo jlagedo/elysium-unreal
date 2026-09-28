@@ -175,6 +175,7 @@ namespace
 	{
 		switch (OpOf(Step))
 		{
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a49bc (task 0xbc) at wave 2
 		case EElysiumTaskOp::SpecialIdleActivity:
 		{
 			const float Seconds = Runner.RunSpecialIdleActivity(Now);
@@ -188,9 +189,11 @@ namespace
 			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.25f, Seconds));
 			return EElysiumTaskResult::Running;
 		}
+		// STORY8-TWIN: replaced by Troika 0x102a1910 tail 0x102a77ea / base 0x102827f0 arm 0x03 0x10286f7d (task 5) at wave 2
 		case EElysiumTaskOp::WaitPvs:
 			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a1c0f / base arm 0x40 0x10284311 (task 0x4b) at wave 2
 		case EElysiumTaskOp::SetActivity:
 		{
 			const FString Activity = ActivityOf(Step);
@@ -215,10 +218,12 @@ namespace
 			return Runner.IsIdealActivityCurrent() ? EElysiumTaskResult::Complete
 				: EElysiumTaskResult::Running;
 		}
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x01 0x10286505 (task 2; Werewolf 0x103ccda0 under schedule 0x158) at wave 2
 		case EElysiumTaskOp::Wait:
 			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.f, Step.Data));
 			return Step.Data > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x57 0x10283dae (task 0x67) at wave 2
 		case EElysiumTaskOp::WaitRandom:
 		{
 			// `m_flWaitFinished = curtime + RandomFloat(0.1, arg)`: the operand goes to the draw as
@@ -227,54 +232,65 @@ namespace
 			State.TaskEndsAt = Now + static_cast<double>(Seconds);
 			return Seconds > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
 		}
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72a7 at wave 2
 		case EElysiumTaskOp::FaceSavePosition:
 			return Runner.FaceSavePosition() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x08 0x1028611a (TASK_MOVE_AWAY_PATH 0x0c) at wave 2
 		case EElysiumTaskOp::MoveAwayFromSavePosition:
 			return Runner.StepAwayFromSavePosition(Step.Data)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
 		// The combat vocabulary.
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x42 0x10286c45 (task 0x4d) at wave 2
 		case EElysiumTaskOp::SetFailSchedule:
 			// Bookkeeping, not work: it redirects this run's failure route and completes. The
 			// operand is stored LOCAL, which is what `m_failSchedule` holds.
 			State.FailScheduleOverride = ScheduleOperandOf(Step);
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4289 / base arm 0x43 0x10286c69 (task 0x4e; Werewolf, FrenzyShadow 0x10375f50) at wave 2
 		case EElysiumTaskOp::SetToleranceDistance:
 			State.ToleranceUnits = Step.Data;
 			Runner.SetGoalTolerance(Step.Data);
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x58 0x10282d71 (task 0x69) at wave 2
 		case EElysiumTaskOp::StopMoving:
 			return Runner.BeginStopMovingTask();
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x5b 0x102829bd (task 0x6c) at wave 2
 		case EElysiumTaskOp::Remember:
 			// `Memory:` resolves through the signed-converted path, so the word comes back out of
 			// the float the same way it went in.
 			Runner.RememberFact(static_cast<uint32>(static_cast<int32>(Step.Data)));
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72e3 (task 0x131) at wave 2
 		case EElysiumTaskOp::MakeOblivious:
 			// The operand is the compiler's float: `TRUE`/`ON` -> 1.0, `FALSE`/`OFF` -> 0.0. Retail
 			// compares against 0.0 exactly and takes the clear branch on equality.
 			Runner.MakeOblivious(Step.Data != 0.f);
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a585d (task 0x100) at wave 2
 		case EElysiumTaskOp::SetNpcFlag:
 			// One of the three prefixes that store the raw 32-bit word rather than a converted
 			// float, which is why this reads `RawWord` and its neighbours read `Data`.
 			Runner.SetNpcFlag(Step.RawWord());
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a33f9 / base arm 0x0b 0x1028509b (task 0x0f) at wave 2
 		case EElysiumTaskOp::GetPathToEnemy:
 			return Runner.GetPathToEnemy(State.ToleranceUnits)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a594d -> 0x102a5904 (task 0x105) at wave 2
 		case EElysiumTaskOp::PatrolPath:
 			Runner.RunPatrolPathTask();
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x48 0x10283558 (task 0x58) at wave 2
 		case EElysiumTaskOp::FindCoverFromEnemy:
 		{
 			const bool bFound = Runner.FindCoverFromEnemy(Step.Data);
@@ -285,10 +301,12 @@ namespace
 			return bFound ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 		}
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x1e 0x102863f1 (task 0x22) at wave 2
 		case EElysiumTaskOp::RunPath:
 			Runner.RunPath();
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a1dcc / base arm 0x5d 0x10286749 (task 0x6e) at wave 2
 		case EElysiumTaskOp::WaitForMovement:
 		{
 			// Sampled on the first ask too: a body already standing on its goal must not cost the
@@ -298,6 +316,7 @@ namespace
 				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
 					: EElysiumTaskResult::Running);
 		}
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4417 / base arm 0x2a 0x10283c66 (task 0x2e) at wave 2
 		case EElysiumTaskOp::FaceEnemy:
 			// A turn-in-place completes the task rather than holding it. Retail's own melee approach
 			// puts `TASK_STOP_MOVING` after the face and transfers straight to the swing, so the
@@ -305,21 +324,26 @@ namespace
 			// decides whether the NPC was pointed at anything.
 			return Runner.FaceEnemy() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x02 0x10286cd9 (task 3) at wave 2
 		case EElysiumTaskOp::AnnounceAttack:
 			return Runner.AnnounceAttack(Step.Data)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a45c6 / base arm 0x32 0x1028423d (task 0x36; species 0x36/0x37 overrides) at wave 2
 		case EElysiumTaskOp::MeleeAttack1:
 			return Runner.MeleeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4505 / base arm 0x30 0x10284286 (task 0x34; species overrides) at wave 2
 		case EElysiumTaskOp::RangeAttack1:
 			return Runner.RangeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x41 0x10282e27 (task 0x4c) at wave 2
 		case EElysiumTaskOp::SetSchedule:
 			// Handled by the caller: a transfer replaces the running program, which is a change to
 			// the state this function only advances.
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a779d at wave 2
 		case EElysiumTaskOp::PlayDeathSequence:
 		{
 			// The recovered ladder, in order: "try the argument as an activity, then `ACT_DIESIMPLE`,
@@ -381,6 +405,7 @@ namespace
 			return EElysiumTaskResult::Running;
 		}
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x3e 0x10286843 (task 0x49) at wave 2
 		case EElysiumTaskOp::SoundDie:
 			// `0x10286843`, whole. The operand is authored `0` on both texts that name the task and the
 			// arm never reads it. `TaskComplete` follows the hook with no gate, so the task is done on
@@ -389,6 +414,7 @@ namespace
 			Runner.DeathSound();
 			return EElysiumTaskResult::Complete;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (task 0x5f) at wave 2
 		case EElysiumTaskOp::Die:
 			// `0x10286801`, whole -- and then nothing. Retail's arm clears the navigator goal, writes
 			// `m_lifeState = 1`, and RETURNS: no `TaskComplete`, no `TaskFail`, no wait deadline. The
@@ -396,6 +422,7 @@ namespace
 			Runner.BeginDying();
 			return EElysiumTaskResult::Running;
 
+		// STORY8-TWIN: replaced by base 0x102827f0 default 0x10286f63 (DevMsg, the task left running) at wave 2
 		case EElysiumTaskOp::Unknown:
 			break;
 		}
@@ -949,6 +976,7 @@ const TCHAR* ElysiumSchedule::RetreatResultName(ERetreat Result)
 	return TEXT("unknown");
 }
 
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x08 0x1028611a at wave 2
 ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcMotor* Motor,
 	const FVector& Origin, const FVector& SavePosition, float DistanceCm, FVector& OutDestination)
 {

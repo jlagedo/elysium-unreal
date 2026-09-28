@@ -1767,6 +1767,7 @@ bool FElysiumNpc::SetDisposition(const FString& NewDisposition, int32 NewLevel)
 	return true;
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a49bc (task 0xbc) at wave 2
 float FElysiumNpc::RunSpecialIdleActivity(double Now)
 {
 	// The task writes a clip onto the body, so it runs only while this NPC's own idle owns it.
@@ -1999,6 +2000,7 @@ void FElysiumNpc::DebugScheduleInstalled(int32 InstalledSchedule)
 	ElysiumNpcDebugLogging::ScheduleInstalled(*this, InstalledSchedule);
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72a7 at wave 2
 bool FElysiumNpc::FaceSavePosition()
 {
 	if (Motor == nullptr)
@@ -2014,6 +2016,7 @@ bool FElysiumNpc::FaceSavePosition()
 	return true;
 }
 
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x08 0x1028611a (TASK_MOVE_AWAY_PATH: motor ideal yaw + 180, never the save position) at wave 2
 bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 {
 	// A retreat is body movement, so it claims the body first. The near-door family reaches this
@@ -2425,6 +2428,7 @@ EElysiumTaskResult FElysiumNpc::StopMovingTask()
 	return EElysiumTaskResult::Complete;
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4289 (writes +0x6320) / base arm 0x43 0x10286c69 (writes path+0x28 NavPathToleranceCm) at wave 2
 void FElysiumNpc::SetGoalTolerance(float Units)
 {
 	ScheduleHost.GoalToleranceCm = Units * ElysiumMove::U;
@@ -2530,6 +2534,7 @@ void FElysiumNpc::EndDisciplineSchedule()
 		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a33f9 / base arm 0x0b 0x1028509b at wave 2
 bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 {
 	ScheduleHost.PendingFailureReason = 0;
@@ -2573,6 +2578,7 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 	return bMoveIssued;
 }
 
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x1e 0x102863f1 at wave 2
 void FElysiumNpc::RunPath()
 {
 	// Locomotion, not permission: a bank with no run clip still travels. The miss is recorded so a
@@ -2584,6 +2590,7 @@ void FElysiumNpc::RunPath()
 	}
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a594d -> 0x102a5904 at wave 2
 void FElysiumNpc::RunPatrolPathTask()
 {
 	// TASK_PATROL_PATH 0x105, 0x102a594d -> 0x102a595d -> 0x102a5904. Translate
@@ -2601,6 +2608,8 @@ void FElysiumNpc::RunPatrolPathTask()
 	BaseScheduleHost.MemoryBits &= ~0x2u;
 }
 
+// STORY8-TWIN: replaced by 0x10283558 (base StartTask 0x102827f0 arm 0x48, `StartTaskFindLateralCover` /
+// `StartTaskFindCoverPos` / `StartTaskSetGoal`) at wave 2.
 bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
 {
 	// Base StartTask 0x10283558; Troika forwards task 0x58 unchanged. No enemy means self,
@@ -2623,11 +2632,12 @@ bool FElysiumNpc::FindCoverFromEnemy(float MoveWait)
 		if (!bMoveIssued) TaskFail(0x0c); // SetGoal -> OnNavFailed, synchronous before the next candidate
 		return bMoveIssued;
 	};
-	// Each lateral candidate is `0x10278220` (`TryMoveToHiddenPosition`, family Script19): the
-	// threat's eye, the candidate, and the threat as the trace filter's second entity.
+	// Each lateral candidate is `0x10278220` (`CAI_BaseNPC::TestLateralCover`, family StartTask19's
+	// `StartTaskTestLateralCover`): the threat's eye, the candidate, and the threat as the trace
+	// filter's second entity.
 	auto TryLateral = [this, &ThreatEye, Threat](const FVector& Point)
 	{
-		return TryMoveToHiddenPosition(ThreatEye, Point, Threat);
+		return StartTaskTestLateralCover(ThreatEye, Point, Threat);
 	};
 	bool bFound = TryLateral(Origin);
 	// Source AngleVectors' right after the pipeline's Y reflection, z deliberately unchanged.
@@ -2714,7 +2724,8 @@ bool FElysiumNpc::GazeHeardSound(FVector& OutPoint) const
 	return true;
 }
 
-// STORY8-TWIN: replaced by 0x102aaf2e (Troika RunTask idx 0x0b) / 0x10288f43 (base 0x6e) at wave 2
+// STORY8-TWIN: replaced by Troika StartTask 0x102a1910 arm 0x102a1dcc / base arm 0x5d 0x10286749 (the start half) and
+// RunTask 0x102aaf2e (Troika idx 0x0b) / 0x10288f43 (base 0x6e) (the run half) at wave 2
 EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 {
 	if (Motor == nullptr)
@@ -2747,6 +2758,7 @@ EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 	}
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4417 / base arm 0x2a 0x10283c66 at wave 2
 bool FElysiumNpc::FaceEnemy()
 {
 	const FElysiumEntity* Enemy = World
@@ -2788,6 +2800,7 @@ bool FElysiumNpc::FaceEnemy()
 	return true;
 }
 
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x02 0x10286cd9 at wave 2
 bool FElysiumNpc::AnnounceAttack(float Param)
 {
 	FElysiumEntity* Enemy = World ? World->Resolve(BaseMemory.Enemy) : nullptr;
@@ -2820,6 +2833,7 @@ namespace
 	}
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a45c6 / base arm 0x32 0x1028423d at wave 2
 bool FElysiumNpc::MeleeAttack1()
 {
 	FElysiumWeapon* Weapon = ElysiumNpcActiveWeapon(*this);
@@ -2839,6 +2853,7 @@ bool FElysiumNpc::MeleeAttack1()
 	return Verdict == FElysiumWeapon::EVerdict::Accepted;
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4505 / base arm 0x30 0x10284286 at wave 2
 bool FElysiumNpc::RangeAttack1()
 {
 	FElysiumWeapon* Weapon = ElysiumNpcActiveWeapon(*this);
@@ -2857,12 +2872,14 @@ bool FElysiumNpc::RangeAttack1()
 	return Verdict == FElysiumWeapon::EVerdict::Accepted;
 }
 
+// STORY8-TWIN: replaced by base 0x102827f0 arm 0x5b 0x102829bd at wave 2
 void FElysiumNpc::RememberFact(uint32 MemoryMask)
 {
 	BaseScheduleHost.MemoryBits |= MemoryMask;
 	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), MemoryMask));
 }
 
+// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a585d (the raw mask, bit 31 included) at wave 2
 void FElysiumNpc::SetNpcFlag(uint32 EncodedFlag)
 {
 	// 0x102a585d -> 0x102a97a0 / 0x102a9800. The sign bit selects the second word;

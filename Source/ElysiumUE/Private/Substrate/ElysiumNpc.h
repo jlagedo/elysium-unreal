@@ -1044,6 +1044,7 @@ public:
 	#include "Substrate/ElysiumNpcConditions19.inl"
 	#include "Substrate/ElysiumNpcRunAi19.inl"
 	#include "Substrate/ElysiumNpcStartTask19.inl"
+	#include "Substrate/ElysiumNpcStartTask19_2.inl"
 	#include "Substrate/ElysiumNpcRunTask19.inl"
 	#include "Substrate/ElysiumNpcSelect19.inl"
 	#include "Substrate/ElysiumNpcThink19.inl"

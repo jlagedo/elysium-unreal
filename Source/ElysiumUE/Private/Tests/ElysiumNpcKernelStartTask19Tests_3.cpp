@@ -16,6 +16,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcBase.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -55,6 +56,14 @@ namespace
 			FElysiumNpcWorldFixture::Quiet({ Guard, Other });
 		}
 
+		// The class-LOCAL task (the registrar's number the switch compares) as the GLOBAL id a schedule
+		// step carries (`ElysiumScheduleText.h`); the body translates it back (slot 450's body).
+		int32 GlobalTask(int32 LocalTask) const
+		{
+			const FElysiumLocalIdSpace* Space = Guard->IdSpace(EElysiumIdCategory::Task);
+			return Space != nullptr ? Space->LocalToGlobal(LocalTask) : LocalTask;
+		}
+
 		// One StartTask call on the BASE body, from a clean task status.
 		void Run(int32 TaskId, float Data = 0.f)
 		{
@@ -62,7 +71,7 @@ namespace
 			Guard->Schedule.TaskStatus = EElysiumTaskStatus::New;
 			Guard->BaseScheduleHost.FailureReason = 0;
 			FElysiumScheduleStep Step;
-			Step.TaskId = TaskId;
+			Step.TaskId = GlobalTask(TaskId);
 			Step.Data = Data;
 			Guard->FElysiumNpcBase::StartTaskSlot442(&Step);
 		}
@@ -757,9 +766,9 @@ bool FElysiumNpcKernelStartTask19BaseMovementTest::RunTest(const FString&)
 
 	for (const int32 TaskId : { 0x5f, 0xdf })                            // 0x10286801
 	{
-		F.Guard->LifeStateRetail = 0;
+		F.Guard->NpcLifeStateWord = 0;
 		F.Run(TaskId);
-		TestEqual(FString::Printf(TEXT("0x%x writes LIFE_DYING"), TaskId), F.Guard->LifeStateRetail, 1);
+		TestEqual(FString::Printf(TEXT("0x%x writes LIFE_DYING"), TaskId), F.Guard->NpcLifeStateWord, 1);
 		TestFalse(FString::Printf(TEXT("0x%x parks the program"), TaskId), F.Completed() || F.Failed());
 	}
 
@@ -803,8 +812,10 @@ bool FElysiumNpcKernelStartTask19BaseSearchesTest::RunTest(const FString&)
 	TestEqual(TEXT("RANDOM_NODE: 0x18"), F.Reason(), 0x18);
 
 	F.Run(0x4e, 120.f);                                                  // 0x10286c69
+	// `0x10286c84` -> `0x102ee1c0`: `MOV EAX,[ECX+0x30]; MOV [EAX+0x28],ECX` -- the PATH's tolerance,
+	// not `m_flGoalTolerance` (`+0x6320`), which this arm never writes.
 	TestEqual(TEXT("SET_TOLERANCE_DISTANCE writes the path tolerance"),
-		F.Guard->ScheduleHost.GoalToleranceCm, F.Guard->ResolveTaskDistance(120.f) * ElysiumMove::U);
+		F.Guard->NavPathToleranceCm, F.Guard->ResolveTaskDistance(120.f) * ElysiumMove::U);
 	TestTrue(TEXT("... and completes"), F.Completed());
 	return true;
 }

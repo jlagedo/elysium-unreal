@@ -123,29 +123,20 @@ struct FScript19NavGoal
 	int32 Flags = 0;
 	FElysiumEntityHandle Target;
 };
-/** SEAM for `CAI_Path::+0x28`, the goal tolerance of the navigator's path (`m_pNavigator +0x30`),
- *  which `0x102ecd20` resolves from `[8]` and writes, and whose -1.0 "keep" arm reads back. This
- *  runtime has no `CAI_Path` (0018 story 4); the word is NOT `m_flGoalTolerance` (`+0x6320`,
- *  `ScheduleHost.GoalToleranceCm`), which `SetGoal` never touches. Cleared by `SetGoal` flag 1
- *  (`0x102f28a0` -> `0x1030bb30`); retail's other path resets (the navigator's own `ClearGoal`
- *  callers) are not carried. Centimetres. */
-float NavPathToleranceCm = 0.f;
+/** `CAI_Path +0x28` is `FElysiumNpcBase::NavPathToleranceCm` (`ElysiumNpcBaseStartTask19.inl`): the
+ *  navigator lives on `CAI_BaseNPC`, and `SetGoal 0x102ecd20` has one body there. */
 /** `0x102ecd20`'s tolerance sentinels, `_DAT_1049d980` and `_DAT_1049d97c`. */
 static constexpr float NavGoalToleranceHull = -2.0f;
 static constexpr float NavGoalToleranceKeep = -1.0f;
-/** `CAI_Navigator::SetGoal` (`0x102ecd20`) onto this runtime's navigator, the motor's route request
- *  (`IElysiumNpcMotor::MoveTo`), which is what every port goal submission already calls. Carried:
- *  the tolerance resolution (`[8]` sentinels against `0x102d61b0(m_eHull)`), the movement activity
- *  (`0x102ee250`, `ScheduleHost.NavigationActivity`), the route answer. Not carried (no navigator
- *  object): the `SetGoalFlags` 1 / 2 / 4 route-clearing arms and the node-route build of goal flag 2. */
+/** `CAI_Navigator::SetGoal` (`0x102ecd20`): the Script19 builders' goal record handed to the ONE
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`). This only converts the
+ *  record (centimetres, the tolerance sentinels passed through) and names the caller for the body
+ *  claim; every retail arm of `0x102ecd20` / `0x102f1dc0` is in that body. */
 bool Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFlags, const TCHAR* Reason);
 
-/** `0x10278220` (`TryMoveToHiddenPosition`; the port's comments call it `TestLateralCover`). `ThreatCm`
- *  is the point the threat sees from, `CandidateCm` the feet position tried, `IgnoreEntity` the second
- *  entity of the two-entity trace filter. True only when the candidate is HIDDEN from the threat,
- *  passes slot 548 and the move probe, and `SetGoal` takes the type-4 goal. */
-bool TryMoveToHiddenPosition(const FVector& ThreatCm, const FVector& CandidateCm,
-	const FElysiumEntity* IgnoreEntity);
+/** `0x10278220` (`TryMoveToHiddenPosition` in the port's earlier comments) is `CAI_BaseNPC::
+ *  TestLateralCover`, `FElysiumNpcBase::StartTaskTestLateralCover` (`ElysiumNpcBaseStartTask19.inl`):
+ *  one body, on the class retail defines it on. */
 
 /** `0x102800c0` -- `SetSchedule(Schedule)`, `m_pGoalEnt := Goal`, and a type-4 goal at the goal's
  *  `GetAbsOrigin` (slot 217) with tolerance 128 and `Activity`, through slot 563 and `SetGoal(goal, 0)`.

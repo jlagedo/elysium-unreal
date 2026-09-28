@@ -103,7 +103,7 @@ source-file string `0x105cde88` (`AI_BaseNPC_Schedule.cpp`) for every failure si
 | 0x40 | 0x10284311 | 0x4b SET_ACTIVITY | nonzero → `SetIdealActivity`, zero → `m_Activity = 0` | running |
 | 0x41 | 0x10282e27 | 0x4c SET_SCHEDULE | `0x102cc1f0` (slot 440 then 446, miss DevMsgs and takes schedule 1); null → fail 5 @0x507; `+0x1b2c = 1`, `+0x1b34 = 0x4fc`; `m_IdealSchedule = (int)data` untranslated; `SetSchedule 0x10280e50` | running |
 | 0x42 / 0x45 | 0x10286c45 / 0x10286d58 | 0x4d / 0x51 | `m_failSchedule = (int)data` / `= 0` | complete |
-| 0x43 | 0x10286c69 | 0x4e | `SetGoalTolerance(ResolveTaskDistance(data))` | complete |
+| 0x43 | 0x10286c69 | 0x4e | `0x102ee1c0`: path `+0x28` = `ResolveTaskDistance(data)` | complete |
 | 0x44 | 0x10286d1a | 0x50 | `nav+0x40 = (float)(int)data` | complete |
 | 0x46 | 0x10282dde | 0x52..0x56 | `SetIdealActivity((int)data)` | running |
 | 0x47 | 0x102838e7 | 0x57 | no sound → fail "No sound in list" @0x5eb; `FindCoverPos(sound, sound, (float)m_iVolume, CoverRadius)` miss → fail 8 @0x5fb; type 4, [5] 0x13, tol −2; move-wait | running |
@@ -131,7 +131,7 @@ source-file string `0x105cde88` (`AI_BaseNPC_Schedule.cpp`) for every failure si
 | 0x63 | 0x10284e4a | 0x75 | ray origin+fwd·256 → −500 z, mask `0x46004003`; type 4 at endpos tol −1; `SetGoal(..,2)` true → complete ×2; false → fail "gah" @0x82f, then complete | complete |
 | 0x64 | 0x10286ec2 | 0x76 WANDER | `SetWanderGoal(n/10000, n%10000)` false → fail 0x18 @0xb05 | complete |
 | 0x65 | 0x102869a6 | 0x77 FREEZE | `m_flPlaybackRate = 0` | running |
-| 0x66 | 0x10286c9f | 0x9f | no weapon → fail 3 @0xab3; `SetGoalTolerance((float)(int)(weapon+0x8c0 · data))` | complete |
+| 0x66 | 0x10286c9f | 0x9f | no weapon → fail 3 @0xab3; `0x102ee1c0`: path `+0x28` = `(float)(int)(weapon+0x8c0 · data)` | complete |
 | 0x67 / 0x68 | 0x10286e2a / 0x10286e76 | 0xac / 0xad | `ChooseBest{Melee,Ranged}Weapon` false → fail 0x1f @0xae6/0xaf1 | complete |
 | 0x69 | 0x10285ff8 | 0x120 PATHCORNER | `m_target` empty → fail **0x13** @0x921; type 3 at `m_pGoalEnt->GetOrigin` (unchecked), [5] = fly ? 0x22 : 9, tol −1, flags 1; false → `DevWarning "Can't Create Route!"` | running |
 | 0x6a | 0x10286f63 | the rest | `DevMsg "No StartTask entry for %s"` (slot 449) | running |
@@ -157,9 +157,10 @@ table plus `+0x1b2c..+0x1b48` (the trace words, ABSENT in the port).
 
 Named divergences: `FindCoverPos` honours the maximum radius only (`IElysiumNpcMotor::FindNodeCover`);
 the arrival activity / direction and the route-search deferral are recorded and not executed (the
-mover has neither); `m_flPlaybackRate` / `path+0x2c` / `path+0x28` live on the Troika record
-(`FElysiumNpc::SequencePlaybackRate`, `ScheduleHost.NavigationActivity`, `ScheduleHost.GoalToleranceCm`),
-so a base-only NPC has none; `SetGoal` claims the Troika's schedule body before commanding the mover.
+mover has neither); `m_flPlaybackRate` / `path+0x2c` live on the Troika record
+(`FElysiumNpc::SequencePlaybackRate`, `ScheduleHost.NavigationActivity`), so a base-only NPC has
+neither; `path+0x28` is the base's `NavPathToleranceCm` (arms `0x43` / `0x66` write it through
+`0x102ee1c0`, not `m_flGoalTolerance`); `SetGoal` claims the Troika's schedule body before commanding the mover.
 Crash guards replace the unguarded reads of arms 0x0f, 0x2b, 0x2c, 0x50, 0x51, 0x54, 0x69 and the
 null `Task_t`.
 

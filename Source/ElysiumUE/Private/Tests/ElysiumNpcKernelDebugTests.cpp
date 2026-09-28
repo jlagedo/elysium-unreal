@@ -456,7 +456,8 @@ bool FElysiumNpcKernelDebugReportAIStateTest::RunTest(const FString&)
 	Npc->IdealActivityNumber = INDEX_NONE;
 
 	// With a schedule installed the "No Schedule, " arm is replaced by the schedule name, and the
-	// task line does NOT appear because `CurrentRetailTaskNumber` is a seam that answers false.
+	// task line appears: `GetCurTask()` (`0x1028a150`) answers the running step, whose number
+	// `CurrentRetailTaskNumber` now answers (the step's global id translated to the class-local one).
 	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
 	FElysiumNpc::BeginDebugCapture();
 	Npc->ReportAIState();
@@ -464,7 +465,7 @@ bool FElysiumNpcKernelDebugReportAIStateTest::RunTest(const FString&)
 	const FString Order = DebugRetailOrder(WithSchedule);
 	TestTrue(TEXT("the schedule arm replaces the no-schedule arm"),
 		Order.Contains(TEXT("Schedule %s, ")) && !Order.Contains(TEXT("No Schedule, ")));
-	TestFalse(TEXT("and the task line stays absent: the task NUMBER is a seam"),
+	TestTrue(TEXT("and the task line follows: GetCurTask 0x1028a150 answers the running step"),
 		Order.Contains(TEXT("Task %d (#%d), ")));
 	return true;
 }

@@ -59,14 +59,11 @@ struct FStartTask19NavGoal
 static constexpr float StartTask19DefaultTolerance = -1.f;
 static constexpr float StartTask19HullTolerance = -2.f;
 
-/** `CAI_Navigator::SetGoal` (`0x102ecd20`) over the port's mover, which IS this runtime's navigator
- *  (family Motor's standing fact). Resolves the goal's destination by type the way `0x102ecd20`
- *  does (2 the enemy, 1 `m_hTargetEnt`, 7 `GetBestSeeUnknown`, anything else `DestUnits`), its
- *  tolerance (`-2` the pathing hull's width, `-1` the navigator's own goal tolerance or else the
- *  hull's), takes the `Schedule` body claim (the port's arbitration), and asks `IElysiumNpcMotor::
- *  MoveTo` at the gait the goal's activity names (`0x13` ACT_RUN runs, anything else walks). The
- *  answer is `MoveTo`'s: false when there is no motor, no destination, a refused claim or a refused
- *  path -- retail's `0x102f1dc0` route-build failure. Every call is recorded for the tests. */
+/** `CAI_Navigator::SetGoal` (`0x102ecd20`): this half's goal literal (SOURCE units) handed to the ONE
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`), which carries every
+ *  arm of `0x102ecd20` and its route build `0x102f1dc0` (the task's complete through the navigator's
+ *  slot 2, `OnNavFailed(0xc)` on a refusal). This converts the record and records the call for the
+ *  tests; nothing else. An entity goal (types 1, 2, 7) leaves `+0x04` at the default triple. */
 bool StartTask19SetGoal(const FStartTask19NavGoal& Goal, uint32 SetGoalFlags);
 int32 StartTask19SetGoalCalls = 0;
 FStartTask19NavGoal StartTask19LastGoal;
@@ -91,23 +88,9 @@ FVector StartTask19LastFacePointUnits = FVector::ZeroVector;
 
 // --- Retail helpers these arms call that had no named port body ------------------------------------
 
-/** `0x102784a0` -- the lateral-cover search `TASK_FIND_FAST_COVER_FROM_ENEMY` /
- *  `TASK_FIND_FORWARD_COVER_FROM_ENEMY` test first (`(threatEye, threat)`): this body's own origin,
- *  then left/right of it at 48-unit steps five times, each through `TestLateralCover 0x10278220`
- *  (sight from the threat's eye, `IsValidCover` slot 548, the motor's `MoveLimit`, then `SetGoal`,
- *  whose refusal raises `TaskFail(0xc)` synchronously). Lifted verbatim from the port's
- *  `FElysiumNpc::FindCoverFromEnemy` (base `0x10283558`'s lambda), which the integrator redirects
- *  here. True when a lateral point took the goal. */
-bool FindLateralCover(const FVector& ThreatEyeCm, const FElysiumEntity& Threat);
-
 /** `0x102d61b0(hull)` -- `hullTable[hull]+0x18 - +0xc`, the hull's X width, answered from the
  *  replayed `NAI_Hull` table (`RetailHullExtents`, full box). SOURCE units. */
 float StartTask19HullWidthUnits(int32 Hull) const;
-
-/** `CAI_Navigator` `0x102ee250(nav, act)` (thunk `0x10006fd7`) -- the path's movement activity
- *  (`path+0x2c`), `ScheduleHost.NavigationActivity`, pushed onto the mover as its gait (`0x13`
- *  ACT_RUN runs, anything else walks) through `IElysiumNpcMotor::SetTravelGait`. */
-void StartTask19SetMovementActivity(int32 Activity);
 
 /** SEAM for `0x102f2ea0` on the navigator -- "the body stands at the goal": the planar distance to the
  *  goal under the path's tolerance and the height gap under slot 522 `StepHeight`, then the
@@ -130,12 +113,10 @@ bool StartTask19TeleportProbe(FVector& InOutUnits, bool& bOutLandedOnNonNpc);
 bool StartTask19EnemyLkp(const FElysiumEntity& Enemy, FVector& OutLkpUnits, FVector& OutSeenUnits) const;
 
 /** The navigator's two tolerance words the tolerance tails write: `0x102ee1c0(nav, tol)` (the path's
- *  goal tolerance, `path+0x28`, which `SetGoal`'s `-1` literal keeps) and `0x102f2fe0(nav, dist)` (the
- *  arrival distance). SOURCE units. `m_flGoalTolerance` (`+0x6320`) is `ScheduleHost.GoalToleranceCm`
- *  and is written by the arms themselves. */
+ *  goal tolerance, `path+0x28` = `NavPathToleranceCm`, which `SetGoal`'s `-1` literal keeps) and
+ *  `0x102f2fe0(nav, dist)` (`path+0x20` = `NavPathScalar20`). SOURCE units in. `m_flGoalTolerance`
+ *  (`+0x6320`) is `ScheduleHost.GoalToleranceCm` and is written by the arms themselves. */
 void StartTask19SetNavTolerances(float GoalToleranceUnits, float ArrivalDistanceUnits);
-float StartTask19NavGoalToleranceUnits = 0.f;
-float StartTask19NavArrivalDistanceUnits = 0.f;
 
 // --- The seams (each after the three searches in the L01 report) -------------------------------------
 
@@ -189,10 +170,9 @@ bool StartTask19BuildHuntPatrolList(const FVector& OriginUnits, const FVector* T
 bool StartTask19FindHuntPatrolTarget(const FVector& OriginUnits, const FVector* TargetUnits,
 	float RadiusUnits, FVector& OutUnits);
 
-/** SEAM for `0x102aa640(this, &m_sppPatrolPath)` -- the patrol-point goal `TASK_GET_PATH_TO_PATROL_
- *  POINT(_HUNT)` forwards to, which owns the task's complete/fail. It is lane L10's row (Script19,
- *  `FUN_102aa640`) and has no port body in this lane's tree; the integrator redirects this to it.
- *  Until then it answers retail's missing-path arm, `TaskFail(0x1d)`. */
+/** `0x102aa640(this, bHunt ? &m_sppPatrolPathHunt : &m_sppPatrolPath)` -- the patrol-point goal
+ *  `TASK_GET_PATH_TO_PATROL_POINT(_HUNT)` forwards to, which owns the task's complete/fail: family
+ *  Script19's `IssuePatrolMoveStart` over `PatrolPathHuntCell` / `PatrolPathCell`. */
 void StartTask19PatrolPointGoal(bool bHunt);
 
 // --- The weapon words these arms read (`CBaseCombatWeapon`, no port member) ---

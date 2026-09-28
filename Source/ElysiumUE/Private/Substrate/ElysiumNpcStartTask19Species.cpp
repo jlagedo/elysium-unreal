@@ -139,63 +139,51 @@ static float Species19HullWidthUnits(const FElysiumNpcBase& Npc, int32 Hull)
 {
 	FVector Mins = FVector::ZeroVector;
 	FVector Maxs = FVector::ZeroVector;
-	Npc.RetailHullExtents(Hull, EElysiumHullExtents::Full, Mins, Maxs);
+	Npc.RetailHullExtents(Hull, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs);
 	return static_cast<float>(Maxs.Y - Mins.Y);
 }
 
-/** SEAM for `0x102e0b40(m_pMotor)`: `motor+0x2c = -1.0f`, the motor's yaw-speed override reset every
- *  species facing arm opens with. `IElysiumNpcMotor` carries no yaw-speed override word (its
- *  `ResetSteering` is `0x102e0a60`'s `+0x1c = 180.0`, a different word), so this writes nothing. */
+/** `0x102e0b40(m_pMotor)`: `motor+0x2c = -1.0f`, the yaw-speed hold every species facing arm opens
+ *  with -- family StartTask19's one port body, `FElysiumNpcBase::StartTaskMotorHoldYaw`. */
 static void Species19MotorYawSpeedReset(FElysiumNpcBase& Npc)
 {
-	(void)Npc;
+	Npc.StartTaskMotorHoldYaw();
 }
 
-/** `0x102e2020(m_pMotor, target)`: the motor's ideal yaw at `target` -- `0x102e2750` is the outer
- *  NPC's slot 515 `CalcIdealYaw` (vtable `+0x80c`), and the store (`motor+0x34`, with the `+0x28`
- *  half-turn and the `+0x1c == 180.0` clamp) is family Hints' `SetMotorHintYaw` seam. */
+/** `0x102e2020(m_pMotor, target)`: the motor's ideal yaw at `target` (`0x102e2750` = slot 515
+ *  `CalcIdealYaw`, the `+0x28` half-turn, the `+0x34` store) -- `FElysiumNpcBase::
+ *  StartTaskMotorSetIdealYawToTarget`, the one port body. */
 static void Species19MotorIdealYawTo(FElysiumNpcBase& Npc, const FVector& TargetCm)
 {
-	Npc.SetMotorHintYaw(Npc.CalcIdealYaw(TargetCm));
+	Npc.StartTaskMotorSetIdealYawToTarget(TargetCm);
 }
 
 /** `0x102e20b0(m_pMotor, target, speed)`: `CalcIdealYaw(target)` then `0x102e1c10(motor, yaw, speed)`
- *  -- the same `motor+0x34` store plus the yaw-speed word (`+0x38`) and the `0x102e1e20(-1)` queue
- *  release. The store is `SetMotorHintYaw`'s seam; the speed word has no port carrier. */
+ *  -- the same `+0x28` half-turn and `motor+0x34` store as `0x10288670` (`StartTaskMotorSetIdealYaw`),
+ *  then the yaw-speed word (`+0x38`, no port carrier; SEAM) and the `0x102e1e20(-1)` queue release
+ *  (family Hints' `ReleaseMotorHintYaw` seam). */
 static void Species19MotorIdealYawToAtSpeed(FElysiumNpcBase& Npc, const FVector& TargetCm, float Speed)
 {
 	(void)Speed;
-	Npc.SetMotorHintYaw(Npc.CalcIdealYaw(TargetCm));
+	Npc.StartTaskMotorSetIdealYaw(Npc.CalcIdealYaw(TargetCm));
+	Npc.ReleaseMotorHintYaw();
 }
 
-/** `CAI_Navigator::SetGoal` `0x102ecd20` over an `AI_NavGoal_t` the arm built on its stack. The port's
- *  navigator IS the motor (`IElysiumNpcMotor::MoveTo`), exactly as `FElysiumNpc::GetPathToEnemy` and
- *  the cover search submit a goal. The goal's type word (retail's `GOALTYPE_*`) names only where the
- *  position came from, and the position is what the motor takes. The activity word picks the gait:
- *  `0x13 ACT_RUN` runs, anything else (`-1` = keep the navigator's movement activity, `9 ACT_WALK`)
- *  walks -- named choice. A tolerance <= 0 is the goal record's "use the default" (`-1.0`,
- *  `0x104a8730`): the schedule's `m_flGoalTolerance` when one is set, else the hull width, the same
- *  rule the port's scripted-route submit states for `0x102801e0`. `Motor`/`bMoveIssued` are protected
- *  on the NPC, so the calling member hands them in. */
-static bool Species19SetGoal(FElysiumNpc& Npc, IElysiumNpcMotor* Motor, bool& bMoveIssued,
-	const FVector& GoalCm, int32 Activity, float ToleranceUnits, const TCHAR* Reason)
+/** `CAI_Navigator::SetGoal` `0x102ecd20` over the `AI_NavGoal_t` a species arm builds on its stack:
+ *  family StartTask19's one port body, `FElysiumNpcBase::StartTaskSetGoal` (the route build
+ *  `0x102f1dc0` with its navigator slot-2 complete and `OnNavFailed(0xc)`). Every species literal is a
+ *  location goal (`GoalType` 4, or 9 for the interesting place), dest words `[4]` / `[6]` / `[7]` -1,
+ *  flags 0; `ToleranceUnits` is `[8]` (the -1.0 / -2.0 sentinels pass through). */
+static bool Species19SetGoal(FElysiumNpcBase& Npc, int32 GoalType, const FVector& GoalCm, int32 Activity,
+	float ToleranceUnits, int32 SetGoalFlags)
 {
-	if (Motor == nullptr || !Npc.AcquireScheduleBody(Reason))
-	{
-		return false;
-	}
-	float ToleranceCm = ToleranceUnits * ElysiumMove::U;
-	if (ToleranceUnits <= 0.f)
-	{
-		ToleranceCm = Npc.ScheduleHost.GoalToleranceCm > 0.f
-			? Npc.ScheduleHost.GoalToleranceCm
-			: Species19HullWidthUnits(Npc, Npc.HullKind) * ElysiumMove::U;
-	}
-	const EElysiumNpcGaitKind Gait = Activity == 0x13 ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
-	Npc.MoveGoal = GoalCm;
-	bMoveIssued = Motor->MoveTo(GoalCm, ToleranceCm, ElysiumNpcGait::TravelSpeed(Motor, Gait),
-		/*bAllowPartialPath=*/false, Gait);
-	return bMoveIssued;
+	FElysiumNpcBase::FStartTaskNavGoal Goal;
+	Goal.Type = GoalType;
+	Goal.DestCm = GoalCm;
+	Goal.bDestSet = true;
+	Goal.MovementActivity = Activity;
+	Goal.ToleranceUnits = ToleranceUnits;
+	return Npc.StartTaskSetGoal(Goal, SetGoalFlags);
 }
 
 /** SEAM for `CBaseAnimating::GetSeqDesc(enemy->m_nSequence)` (`0x1000b4f6`) then the descriptor's
@@ -426,7 +414,7 @@ int32 FElysiumNpcSabbatGunman::StartTaskSlot442(void* Task)
 	default:
 		break;
 	}
-	return FElysiumNpcHumanCombatant::StartTaskSlot442(Task);            // 0x103a56a7 (CNPC_VHuman::StartTask)
+	return FElysiumNpcHuman::StartTaskSlot442(Task);                     // 0x103a56a7 -> 0x103847f0 CNPC_VHuman::StartTask
 }
 
 // =================================================================================================
@@ -450,7 +438,7 @@ int32 FElysiumNpcCop::StartTaskSlot442(void* Task)
 		Slot598(Closest);                                                 // 0x10371bc2 JMP [EDX+0x958]
 		return 0;
 	}
-	return FElysiumNpcHumanCombatant::StartTaskSlot442(Task);            // 0x10371b86 JMP 0x1000a0c9 (CNPC_VHuman::StartTask)
+	return FElysiumNpcHuman::StartTaskSlot442(Task);                     // 0x10371b86 JMP 0x1000a0c9 -> 0x10387290 -> 0x103847f0 CNPC_VHuman::StartTask
 }
 
 // =================================================================================================
@@ -472,9 +460,9 @@ int32 FElysiumNpcDog::StartTaskSlot442(void* Task)
 	}
 	AutoMovement();                                                       // 0x10374975
 	Species19MotorYawSpeedReset(*this);                                   // 0x10374980 0x102e0b40(m_pMotor)
-	(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10374989 slot 167 (the LKP's key)
+	const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10374989 slot 167 (the LKP's key)
 	FVector EnemyLkp = FVector::ZeroVector;                               // `vec3_origin` on a miss (0x102dfed0)
-	EnemyLastKnownPosition(EnemyLkp);                                     // 0x10374999 slot 541; 0x103749a1
+	EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                     // 0x10374999 slot 541; 0x103749a1 -> 0x102dfed0
 	Species19MotorIdealYawToAtSpeed(*this, EnemyLkp, -2.0f);              // 0x103749b6 0x102e20b0(motor, &lkp, 0xc0000000)
 	RestartIdealActivityId(0x4b);                                         // 0x103749bf
 	if (IsActivityFinished())                                             // 0x103749c8 slot 251; 0x103749d0
@@ -514,7 +502,7 @@ int32 FElysiumNpcGhoulCroucher::StartTaskSlot442(void* Task)
 		}
 		return 0;                                                         // 0x1037b974 / 0x1037b9a7
 	}
-	return FElysiumNpcHumanCombatant::StartTaskSlot442(Task);            // 0x1037b92d CALL 0x1000a0c9 (CNPC_VHuman::StartTask)
+	return FElysiumNpcHuman::StartTaskSlot442(Task);                     // 0x1037b92d CALL 0x1000a0c9 -> 0x103847f0 CNPC_VHuman::StartTask
 }
 
 // =================================================================================================
@@ -531,12 +519,12 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 	switch (TaskLocal)                                                   // 0x103847fe ADD -0x89; JA 0x103849cc
 	{
 	case 0x89:
-		LastAttackTime = Species19Now(*this);                             // 0x103848c6 +0x5d9c = curtime
-		RestartIdealActivityId(0x4b);                                     // 0x103848ce
+		LastAttackTime = Species19Now(*this);                             // 0x103848a8 +0x5d9c = curtime
+		RestartIdealActivityId(0x4b);                                     // 0x103848ae
 		return 0;
 	case 0x8a:
-		LastAttackTime = Species19Now(*this);                             // 0x103848a8
-		RestartIdealActivityId(0x4b);                                     // 0x103848ae
+		LastAttackTime = Species19Now(*this);                             // 0x103848c6
+		RestartIdealActivityId(0x4b);                                     // 0x103848ce
 		return 0;
 	case 0x8b:
 	{
@@ -547,9 +535,9 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 		if (Enemy != nullptr && Enemy->AsCombatCharacter() != nullptr)    // 0x103848ed / 0x103848f7 enemy+0x9c
 		{
 			Species19MotorYawSpeedReset(*this);                           // 0x103848ff 0x102e0b40
-			(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10384908 slot 167 again
+			const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10384908 slot 167 again
 			FVector EnemyLkp = FVector::ZeroVector;
-			EnemyLastKnownPosition(EnemyLkp);                             // 0x10384918 slot 541; 0x10384920
+			EnemyLkp = StartTaskLastKnownPosition(LkpKey);                             // 0x10384918 slot 541; 0x10384920 -> 0x102dfed0
 			Species19MotorIdealYawTo(*this, EnemyLkp);                    // 0x10384932 0x102e2020
 			const int32 Paired = Species19EnemySequencePairedActivity(*Enemy);   // 0x10384940 GetSeqDesc; 0x10384949 +0x2d8
 			if (Paired >= 0)                                              // 0x10384951 JL
@@ -577,9 +565,10 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 		return 0;
 	case 0x9f:
 	{
-		// With a weapon: `m_flGoalTolerance = weapon->+0x8c0 * data + 2 * NAI_Hull::Width(m_eHull)`,
-		// pushed through `0x102ee1c0` (the navigator's tolerance), then `TaskComplete`. Without one:
-		// line 0x138, `TaskFail(3)`.
+		// With a weapon: `weapon->+0x8c0 * data + 2 * NAI_Hull::Width(m_eHull)` into the navigator's
+		// PATH tolerance (`0x1038485b` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator +0x5d34`:
+		// `path+0x28`, `NavPathToleranceCm`; `m_flGoalTolerance +0x6320` is not written), then
+		// `TaskComplete`. Without one: line 0x138, `TaskFail(3)`.
 		if (ActiveWeaponEntity() == nullptr)                              // 0x1038481d GetActiveWeapon; 0x10384824
 		{
 			Species19Fail(*this, GSpecies19FileHuman, 0x138, 3);          // 0x10384878 / 0x10384882 / 0x1038488c
@@ -588,7 +577,7 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 		const float Width = Species19HullWidthUnits(*this, HullKind);    // 0x10384833 0x102d61b0(m_eHull)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x10384843; 0x10384848 FLD [EAX+0x8c0]
-		SetGoalTolerance(WeaponRangeUnits * Step->Data + (Width + Width));   // 0x1038484e FMUL; 0x10384838 FADD ST0,ST0; 0x1038485b
+		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1038484e FMUL; 0x10384838 FADD ST0,ST0; 0x1038485b 0x102ee1c0
 		TaskComplete(false);                                              // 0x10384864
 		return 0;
 	}
@@ -633,7 +622,8 @@ int32 FElysiumNpcAnimal::StartTaskSlot442(void* Task)
 		const float Width = Species19HullWidthUnits(*this, HullKind);    // 0x1035f693 0x102d61b0(m_eHull)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x1035f6a3; 0x1035f6a8 FLD [EAX+0x8c0]
-		SetGoalTolerance(WeaponRangeUnits * Step->Data + (Width + Width));   // 0x1035f6ae / 0x1035f698 / 0x1035f6bb
+		// `0x1035f6bb` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
+		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1035f6ae / 0x1035f698 / 0x1035f6bb
 		TaskComplete(false);                                              // 0x1035f6c4
 		return 0;
 	}
@@ -648,8 +638,9 @@ int32 FElysiumNpcAnimal::StartTaskSlot442(void* Task)
 			Species19Fail(*this, GSpecies19FileAnimal, 0x19e, 0x22);      // 0x1035f82d / 0x1035f837 / 0x1035f841
 			return 0;
 		}
-		if (Species19SetGoal(*this, Motor, bMoveIssued, InterestingPlacePosition, INDEX_NONE,
-				-1.f, TEXT("CNPC_VAnimal::StartTask 0xa5")))              // 0x1035f76b..0x1035f7e8 0x102ecd20
+		// `m_vecInterestingPlace` is SOURCE units (`TASK_FIND_INTERESTING_PLACE` `0x102a1f42` writes it).
+		if (Species19SetGoal(*this, 9, InterestingPlacePosition * ElysiumMove::U, INDEX_NONE,
+				-1.f, 0))                                                 // 0x1035f76b..0x1035f7e8 0x102ecd20
 		{
 			TaskComplete(false);                                          // 0x1035f7f4
 			return 0;
@@ -695,7 +686,7 @@ int32 FElysiumNpcAndreiBlood::StartTaskSlot442(void* Task)
 			return 0;
 		}
 		FVector HintOrigin = Hint.OriginCm;
-		SetAbsOrigin(HintOrigin);                                         // 0x1035d42f slot 217; 0x1035d438 slot 216
+		SetOrigin(HintOrigin);                                         // 0x1035d42f slot 217; 0x1035d438 slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 		FVector Placed = Origin;                                          // 0x1035d442 slot 220
 		Teleport(&Placed, nullptr, nullptr);                              // 0x1035d469 slot 181
 		SetOrigin(Placed);                                                // 0x1035d478 slot 62
@@ -905,7 +896,7 @@ int32 FElysiumNpcBach::StartTaskSlot442(void* Task)
 			CapabilityWord &= ~GSpecies19BachCapabilityBit;               // 0x10364c32 CapabilitiesRemove(1)
 			bBachMovementSpot = false;                                    // 0x10364c3f +0x66a7 = 0
 			FVector HintOrigin = Hint.OriginCm;
-			SetAbsOrigin(HintOrigin);                                     // 0x10364c47 slot 217; 0x10364c50 slot 216
+			SetOrigin(HintOrigin);                                     // 0x10364c47 slot 217; 0x10364c50 slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 			FVector Placed = Origin;                                      // 0x10364c5a slot 220
 			Teleport(&Placed, nullptr, nullptr);                          // 0x10364c7f slot 181
 			SetOrigin(Placed);                                            // 0x10364c8e slot 62
@@ -1338,12 +1329,12 @@ int32 FElysiumNpcGargoyle::StartTaskSlot442(void* Task)
 			// `GetVelocity`. Source convention: X pitch, Y yaw.
 			const float Pitch = FMath::DegreesToRadians(static_cast<float>(Angles.X));
 			const float Yaw = FMath::DegreesToRadians(static_cast<float>(Angles.Y));
-			const FVector Forward(FMath::Cos(Pitch) * FMath::Cos(Yaw), FMath::Cos(Pitch) * FMath::Sin(Yaw),
+			const FVector ForwardDir(FMath::Cos(Pitch) * FMath::Cos(Yaw), FMath::Cos(Pitch) * FMath::Sin(Yaw),
 				-FMath::Sin(Pitch));                                      // 0x1037920a / 0x10379211
 			FVector Impulse = Velocity / ElysiumMove::U;                  // 0x10379224 slot 199
-			Impulse.X += Forward.X * GSpecies19GargoyleGibForwardScale;   // 0x1037922e / 0x10379268
-			Impulse.Y += Forward.Y * GSpecies19GargoyleGibForwardScale;   // 0x1037924a / 0x10379274
-			Impulse.Z += Forward.Z * GSpecies19GargoyleGibForwardScale + ElysiumNpcTunables::Hundred;   // 0x10379258 / 0x1037925e / 0x10379280
+			Impulse.X += ForwardDir.X * GSpecies19GargoyleGibForwardScale;   // 0x1037922e / 0x10379268
+			Impulse.Y += ForwardDir.Y * GSpecies19GargoyleGibForwardScale;   // 0x1037924a / 0x10379274
+			Impulse.Z += ForwardDir.Z * GSpecies19GargoyleGibForwardScale + ElysiumNpcTunables::Hundred;   // 0x10379258 / 0x1037925e / 0x10379280
 			GargoyleGibImpulse(Impulse, FVector::ZeroVector);             // 0x1037928c vtable +0xa4
 			FireOutput(FName(TEXT("OnGibDeath")), Handle);                // 0x1037929c 0x100cd660(+0x6664, this, this, 0)
 		}
@@ -1485,10 +1476,10 @@ int32 FElysiumNpcHengeyokai::StartTaskSlot442(void* Task)
 	case 0xc8:
 	{
 		// Face the live pickup target; complete only once `FacingIdeal`.
-		if (FElysiumEntity* Target = World != nullptr ? World->Resolve(HengeyokaiPickupTarget) : nullptr)   // 0x10380710..0x1038073b
+		if (FElysiumEntity* PickupEntity = World != nullptr ? World->Resolve(HengeyokaiPickupTarget) : nullptr)   // 0x10380710..0x1038073b
 		{
 			Species19MotorYawSpeedReset(*this);                           // 0x10380743 0x102e0b40
-			Species19MotorIdealYawTo(*this, Target->Origin);              // 0x10380780 slot 220; 0x10380789 0x102e2020
+			Species19MotorIdealYawTo(*this, PickupEntity->Origin);              // 0x10380780 slot 220; 0x10380789 0x102e2020
 			SetTurnActivity();                                            // 0x10380792 slot 572
 		}
 		if (FacingIdeal())                                                // 0x1038079a 0x10278c80
@@ -1503,7 +1494,7 @@ int32 FElysiumNpcHengeyokai::StartTaskSlot442(void* Task)
 		// otherwise face the position, `SetTurnActivity`, and arm `m_flTaskFailTimer = curtime + 1.0`.
 		FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x103807bc slot 167
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103807ce slot 541; 0x103807d6 0x102dfed0
+		EnemyLkp = StartTaskLastKnownPosition(Enemy);                                 // 0x103807ce slot 541; 0x103807d6 0x102dfed0
 		if (Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x1b))  // 0x103807df HasCondition(0x1b)
 			&& FUN_103822a0(Enemy))                                       // 0x103807eb 0x103822a0
 		{
@@ -1521,7 +1512,7 @@ int32 FElysiumNpcHengeyokai::StartTaskSlot442(void* Task)
 		// The same over slot 168 `GetEnemy`, with no condition gate and no fail timer.
 		FElysiumEntity* Enemy = GetEnemy();                               // 0x1038084c slot 168
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x1038085e slot 541; 0x10380866 0x102dfed0
+		EnemyLkp = StartTaskLastKnownPosition(Enemy);                                 // 0x1038085e slot 541; 0x10380866 0x102dfed0
 		if (FUN_103822a0(Enemy))                                          // 0x1038086e / 0x10380875 JNZ 0x103807f4
 		{
 			TaskComplete(false);                                          // 0x103807f8
@@ -1538,16 +1529,17 @@ int32 FElysiumNpcHengeyokai::StartTaskSlot442(void* Task)
 		// `m_vSavePosition`, `m_flGoalTolerance` into the navigator (`0x102ee1c0`, then `0x102f2fe0`),
 		// `TaskComplete`. Dead: line 0x3b3, `TaskFail(1)`.
 		HengeyokaiPathMode = 2;                                           // 0x10380626 +0x6680
-		FElysiumEntity* Target = World != nullptr ? World->Resolve(HengeyokaiPickupTarget) : nullptr;   // 0x10380630..0x10380667
-		if (Target == nullptr)
+		FElysiumEntity* PickupEntity = World != nullptr ? World->Resolve(HengeyokaiPickupTarget) : nullptr;   // 0x10380630..0x10380667
+		if (PickupEntity == nullptr)
 		{
 			Species19Fail(*this, GSpecies19FileHengeyokai, 0x3b3, 1);     // 0x103806ee / 0x103806f8 / 0x10380702
 			return 0;
 		}
-		SavePosition = Target->Origin;                                    // 0x10380693 slot 220; 0x10380699..0x103806ad
-		// `0x102ee1c0` and `0x102f2fe0` both take `m_flGoalTolerance` (+0x6320); the port's navigator
-		// tolerance IS that word (`SetGoalTolerance`), so the push re-states it.
-		SetGoalTolerance(ScheduleHost.GoalToleranceCm / ElysiumMove::U);  // 0x103806c0 / 0x103806d2
+		SavePosition = PickupEntity->Origin;                                    // 0x10380693 slot 220; 0x10380699..0x103806ad
+		// `0x102ee1c0` (path `+0x28`) and `0x102f2fe0` (path `+0x20`) both take `m_flGoalTolerance`
+		// (+0x6320, `0x103806b3` / `0x103806c5`) -- the navigator's words, not the schedule's.
+		StartTask19SetNavTolerances(ScheduleHost.GoalToleranceCm / ElysiumMove::U,
+			ScheduleHost.GoalToleranceCm / ElysiumMove::U);               // 0x103806c0 / 0x103806d2
 		TaskComplete(false);                                              // 0x103806db
 		return 0;
 	}
@@ -1930,7 +1922,7 @@ int32 FElysiumNpcManBat::StartTaskSlot442(void* Task)
 	{
 		FVector Lifted = Origin;                                          // 0x1038cc18 slot 217
 		Lifted.Z += GSpecies19ManBatLift * ElysiumMove::U;                // 0x1038cc2f / 0x1038cc32 FADD [0x1044e664]
-		SetAbsOrigin(Lifted);                                             // 0x1038cc41 slot 216
+		SetOrigin(Lifted);                                             // 0x1038cc41 slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 		FlapFirst();                                                      // 0x1038cc49 0x10012e4f
 		TaskComplete(false);                                              // 0x1038cc51
 		return 0;
@@ -2062,9 +2054,9 @@ int32 FElysiumNpcMingXiao::StartTaskSlot442(void* Task)
 		if (Enemy != nullptr && Enemy->AsCombatCharacter() != nullptr)    // 0x10392e90 / 0x10392e9a +0x9c
 		{
 			Species19MotorYawSpeedReset(*this);                           // 0x10392ea2
-			(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();      // 0x10392eab
+			const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();      // 0x10392eab
 			FVector EnemyLkp = FVector::ZeroVector;
-			EnemyLastKnownPosition(EnemyLkp);                             // 0x10392ebb / 0x10392ec3
+			EnemyLkp = StartTaskLastKnownPosition(LkpKey);                             // 0x10392ebb / 0x10392ec3 -> 0x102dfed0
 			Species19MotorIdealYawTo(*this, EnemyLkp);                    // 0x10392ed5 0x102e2020
 		}
 		RestartIdealActivityId(0x51);                                     // 0x10392ede, always
@@ -2083,7 +2075,8 @@ int32 FElysiumNpcMingXiao::StartTaskSlot442(void* Task)
 		const float Width = Species19HullWidthUnits(*this, HullKind);    // 0x10392dc5 0x102d61b0
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x10392dd5; 0x10392dda +0x8c0
-		SetGoalTolerance(WeaponRangeUnits * Step->Data + (Width + Width));   // 0x10392de0 / 0x10392dca / 0x10392ded
+		// `0x10392ded` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
+		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x10392de0 / 0x10392dca / 0x10392ded
 		TaskComplete(false);                                              // 0x10392df6
 		return 0;
 	}
@@ -2164,8 +2157,8 @@ int32 FElysiumNpcMingXiao::StartTaskSlot442(void* Task)
 		// Goal type 4 at `m_vecPickupTargetPos` (+0x6720, SOURCE units), activity word `0x13`, three
 		// -1 words, tolerance -1.0 (`0x104bc6cc`), flags 0: `SetGoal(record, 0)` and its answer is the
 		// return value -- no completion, no failure.
-		return Species19SetGoal(*this, Motor, bMoveIssued, MingXiaoPickupTargetPos * ElysiumMove::U, 0x13,
-			-1.f, TEXT("CNPC_VMingXiao::StartTask 0x157")) ? 1 : 0;    // 0x10393183..0x10393211 0x102ecd20
+		return Species19SetGoal(*this, 4, MingXiaoPickupTargetPos * ElysiumMove::U, 0x13,
+			-1.f, 0) ? 1 : 0;    // 0x10393183..0x10393211 0x102ecd20
 	case 0x158:
 		RestartIdealActivityId(MingXiaoThrowingTentacle == 4 ? 0x112f : 0x112e);   // 0x1039321f +0x671c; 0x10393231 / 0x10393244
 		return 0;
@@ -2288,7 +2281,8 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 	// the other three -1, tolerance `_DAT_104bde70` (-1.0), flags 0.
 	auto EvadeGoal = [this](const FVector& PointUnits, const TCHAR* Reason)
 	{
-		return Species19SetGoal(*this, Motor, bMoveIssued, PointUnits * ElysiumMove::U, 0x13, -1.f, Reason);
+		(void)Reason;
+		return Species19SetGoal(*this, 4, PointUnits * ElysiumMove::U, 0x13, -1.f, 0);
 	};
 
 	switch (TaskLocal)                                                   // 0x1039c4d5 ADD -0x8b; JA 0x1039d249
@@ -2299,9 +2293,9 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 		if (Enemy != nullptr && Enemy->AsCombatCharacter() != nullptr)    // 0x1039c5c5 / 0x1039c5cf +0x9c
 		{
 			Species19MotorYawSpeedReset(*this);                           // 0x1039c5d7
-			(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();      // 0x1039c5e0
+			const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();      // 0x1039c5e0
 			FVector EnemyLkp = FVector::ZeroVector;
-			EnemyLastKnownPosition(EnemyLkp);                             // 0x1039c5f0 / 0x1039c5f8
+			EnemyLkp = StartTaskLastKnownPosition(LkpKey);                             // 0x1039c5f0 / 0x1039c5f8 -> 0x102dfed0
 			Species19MotorIdealYawTo(*this, EnemyLkp);                    // 0x1039c60a 0x102e2020
 		}
 		RestartIdealActivityId(0x51);                                     // 0x1039c613, always
@@ -2334,7 +2328,9 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 		RetailHullExtents(EnemyHull, EElysiumHullExtents::Full, EnemyMins, EnemyMaxs);   // 0x1039c548
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x1039c556; 0x1039c55b +0x8c0
-		SetGoalTolerance(static_cast<float>(MyMins.X + EnemyMins.X) + WeaponRangeUnits * Step->Data);   // 0x1039c561 FMUL; 0x1039c569 / 0x1039c56c / 0x1039c570; 0x1039c575
+		// `0x1039c575` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
+		NavPathToleranceCm = (static_cast<float>(MyMins.X + EnemyMins.X) + WeaponRangeUnits * Step->Data)
+			* ElysiumMove::U;                                             // 0x1039c561 FMUL; 0x1039c569 / 0x1039c56c / 0x1039c570; 0x1039c575
 		TaskComplete(false);                                              // 0x1039c57e
 		return 0;
 	}
@@ -2801,7 +2797,7 @@ int32 FElysiumNpcSabbatLeader::StartTaskSlot442(void* Task)
 		if (HintWords(BaseScheduleHost.HintNode, Hint))                   // 0x103a81ed (unchecked in retail: crash guard)
 		{
 			FVector HintOrigin = Hint.OriginCm;
-			SetAbsOrigin(HintOrigin);                                     // 0x103a81f7 slot 217; 0x103a8200 slot 216
+			SetOrigin(HintOrigin);                                     // 0x103a81f7 slot 217; 0x103a8200 slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 			FVector Placed = Origin;                                      // 0x103a820a slot 220
 			Teleport(&Placed, nullptr, nullptr);                          // 0x103a8231 slot 181
 			SetOrigin(Placed);                                            // 0x103a8240 slot 62
@@ -2899,8 +2895,7 @@ int32 FElysiumNpcScurrying::StartTaskSlot442(void* Task)
 	}
 	// Goal type 4 at the destination, activity word `0x13` (ACT_RUN, record `+0x14`), the other three
 	// words -1, tolerance -1.0 (`0x104c4910`), flags 0; `SetGoal(record, 0)`.
-	if (Species19SetGoal(*this, Motor, bMoveIssued, DestinationCm, 0x13, -1.f,
-			TEXT("CNPC_VScurrying::StartTask 0x14a")))                   // 0x103ac8d2..0x103ac967 0x102ecd20
+	if (Species19SetGoal(*this, 4, DestinationCm, 0x13, -1.f, 0))                   // 0x103ac8d2..0x103ac967 0x102ecd20
 	{
 		TaskComplete(false);                                              // 0x103ac974
 		return 0;
@@ -2926,9 +2921,11 @@ void FElysiumNpcSheriffMan::SheriffCreateEmitter(const TCHAR* Name, const FVecto
 
 void FElysiumNpcSheriffMan::SheriffChooseBestMeleeWeapon()
 {
-	// SEAM for `CBaseCombatCharacter::ChooseBestMeleeWeapon` (`0x1000600a`): the combat character's
-	// melee pick has no port body; counted.
+	// `CBaseCombatCharacter::ChooseBestMeleeWeapon` (`0x1000600a` -> `0x10337230`), answer unread: family
+	// StartTask19's one stand for that address, `FElysiumNpcBase::StartTaskChooseBestMeleeWeapon` (a
+	// seam: no melee pick yet). Counted here for this class's tests.
 	++ChooseBestMeleeWeaponCalls;
+	(void)StartTaskChooseBestMeleeWeapon();
 }
 
 void FElysiumNpcSheriffMan::ShowAndSolidifyWeapon(const FElysiumEntityHandle& Weapon)
@@ -3015,7 +3012,7 @@ int32 FElysiumNpcSheriffMan::StartTaskSlot442(void* Task)
 		if (BaseScheduleHost.HintNode != INDEX_NONE && HintWords(BaseScheduleHost.HintNode, Hint))   // 0x103aee69 / 0x103aee71
 		{
 			FVector HintOrigin = Hint.OriginCm;
-			SetAbsOrigin(HintOrigin);                                     // 0x103aee77 slot 217; 0x103aee80 slot 216
+			SetOrigin(HintOrigin);                                     // 0x103aee77 slot 217; 0x103aee80 slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 			FVector Placed = Origin;                                      // 0x103aee8a slot 220
 			Teleport(&Placed, nullptr, nullptr);                          // 0x103aeeb1 slot 181
 			SetOrigin(Placed);                                            // 0x103aeec0 slot 62
@@ -3152,9 +3149,9 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 		return 0;
 	case 0xa7:
 	{
-		(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103ba7eb slot 167
+		const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103ba7eb slot 167
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103ba7fb slot 541; 0x103ba803 0x102dfed0
+		EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                 // 0x103ba7fb slot 541; 0x103ba803 0x102dfed0
 		Species19MotorYawSpeedReset(*this);                               // 0x103baba3 0x102e0b40
 		Species19MotorIdealYawTo(*this, EnemyLkp);                        // 0x103babb5 0x102e2020
 		SetTurnActivity();                                                // 0x103babbe slot 572
@@ -3183,25 +3180,26 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 		// helper `0x102c3b50` over the target (writing the save position and `m_flGoalTolerance`), then
 		// the tolerance into the navigator twice and `TaskComplete`. Dead: line 0x722, `TaskFail(1)`.
 		PathMode = 2;                                                     // 0x103ba91c
-		FElysiumEntity* Target = World != nullptr ? World->Resolve(PickupTarget) : nullptr;   // 0x103ba926..0x103ba95a
-		if (Target == nullptr)
+		FElysiumEntity* PickupEntity = World != nullptr ? World->Resolve(PickupTarget) : nullptr;   // 0x103ba926..0x103ba95a
+		if (PickupEntity == nullptr)
 		{
 			Species19Fail(*this, GSpecies19FileTzimisce, 0x722, 1);       // 0x103baa10 / 0x103baa1a / 0x103baa24
 			return 0;
 		}
 		SavePosition = PickupTargetPos * ElysiumMove::U;                  // 0x103ba960..0x103ba97d (+0x6674 is SOURCE units)
 		float ToleranceUnits = ScheduleHost.GoalToleranceCm / ElysiumMove::U;
-		ChaseLeadTolerance(Target, SavePosition, ToleranceUnits);         // 0x103ba9d8 0x100041d3 -> 0x102c3b50
-		SetGoalTolerance(ToleranceUnits);                                 // 0x103ba9e6 0x102ee1c0 / 0x103ba9f4 0x102f2fe0
+		ChaseLeadTolerance(PickupEntity, SavePosition, ToleranceUnits);         // 0x103ba9d8 0x100041d3 -> 0x102c3b50, &+0x6320
+		ScheduleHost.GoalToleranceCm = ToleranceUnits * ElysiumMove::U;   // the helper's out-word, `LEA EDI,[ESI+0x6320]` 0x103ba9ae
+		StartTask19SetNavTolerances(ToleranceUnits, ToleranceUnits);      // 0x103ba9e6 0x102ee1c0 / 0x103ba9f4 0x102f2fe0, both [EDI]
 		TaskComplete(false);                                              // 0x103ba9fd
 		return 0;
 	}
 	case 0xc8:
 	{
-		if (FElysiumEntity* Target = World != nullptr ? World->Resolve(PickupTarget) : nullptr)   // 0x103baa32..0x103baa5d
+		if (FElysiumEntity* PickupEntity = World != nullptr ? World->Resolve(PickupTarget) : nullptr)   // 0x103baa32..0x103baa5d
 		{
 			Species19MotorYawSpeedReset(*this);                           // 0x103baa65
-			Species19MotorIdealYawTo(*this, Target->Origin);              // 0x103baaa2 slot 220; 0x103baaab 0x102e2020
+			Species19MotorIdealYawTo(*this, PickupEntity->Origin);              // 0x103baaa2 slot 220; 0x103baaab 0x102e2020
 			SetTurnActivity();                                            // 0x103baab4 slot 572
 		}
 		if (FacingIdeal())                                                // 0x103baabc 0x10278c80; 0x103baac3
@@ -3214,7 +3212,7 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 	{
 		FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x103baade slot 167
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103baaf0 / 0x103baaf8
+		EnemyLkp = StartTaskLastKnownPosition(Enemy);                                 // 0x103baaf0 / 0x103baaf8 -> 0x102dfed0
 		if (Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x1b))  // 0x103bab01 HasCondition(0x1b)
 			&& FUN_103be8e0(Enemy))                                       // 0x103bab0d 0x1000f6aa
 		{
@@ -3229,10 +3227,10 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 	}
 	case 0xca:
 	{
-		FElysiumEntity* Target = GetEnemy();                              // 0x103bab6e slot 168
+		FElysiumEntity* EnemyEntity = GetEnemy();                              // 0x103bab6e slot 168
 		FVector TargetLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(TargetLkp);                                // 0x103bab80 / 0x103bab88
-		if (FUN_103be8e0(Target))                                         // 0x103bab90; 0x103bab97 JNZ 0x103bad40
+		TargetLkp = StartTaskLastKnownPosition(EnemyEntity);                                // 0x103bab80 / 0x103bab88 -> 0x102dfed0
+		if (FUN_103be8e0(EnemyEntity))                                         // 0x103bab90; 0x103bab97 JNZ 0x103bad40
 		{
 			TaskComplete(false);                                          // 0x103bad44
 			return 0;
@@ -3246,9 +3244,9 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 	{
 		AutoMovement();                                                   // 0x103babce
 		Species19MotorYawSpeedReset(*this);                               // 0x103babd9
-		(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103babe2 slot 167
+		const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103babe2 slot 167
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103babf2 / 0x103babfa
+		EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                 // 0x103babf2 / 0x103babfa -> 0x102dfed0
 		Species19MotorIdealYawToAtSpeed(*this, EnemyLkp, -2.0f);          // 0x103bac0f 0x102e20b0(0xc0000000)
 		LastAttackTime = Species19Now(*this);                             // 0x103bac24
 		RestartIdealActivityId(0x102);                                    // 0x103bac2a
@@ -3266,9 +3264,9 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 			return 0;
 		}
 		AutoMovement();                                                   // 0x103bac88
-		(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103bac91
+		const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103bac91
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103baca1 / 0x103baca9
+		EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                 // 0x103baca1 / 0x103baca9 -> 0x102dfed0
 		if (!FUN_103bf660())                                              // 0x103bacb5 0x10013769; 0x103bacbc
 		{
 			Species19Fail(*this, GSpecies19FileTzimisce, 0x7ab, 0x1a);    // 0x103bad57 / 0x103bad61 / 0x103bad6b
@@ -3292,9 +3290,9 @@ int32 FElysiumNpcTzimisce::StartTaskSlot442(void* Task)
 			return 0;
 		}
 		AutoMovement();                                                   // 0x103badaf
-		(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103badb8
+		const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();          // 0x103badb8
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103badc8 / 0x103badd0
+		EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                 // 0x103badc8 / 0x103badd0 -> 0x102dfed0
 		Species19MotorYawSpeedReset(*this);                               // 0x103baddb
 		Species19MotorIdealYawToAtSpeed(*this, EnemyLkp, -2.0f);          // 0x103badf0
 		RestartIdealActivityId(0x104);                                    // 0x103badfc
@@ -3402,7 +3400,7 @@ int32 FElysiumNpcVampireBoss::StartTaskSlot442(void* Task)
 			return 0;
 		}
 		FVector HintOrigin = Hint.OriginCm;
-		SetAbsOrigin(HintOrigin);                                         // 0x103c5b94 slot 217; 0x103c5b9d slot 216
+		SetOrigin(HintOrigin);                                         // 0x103c5b94 slot 217; 0x103c5b9d slot 216 (0x100b2300 unparented: m_vecOrigin; slot 216 is an unported stub, slot 62's body is the one origin write)
 		FVector Placed = Origin;                                          // 0x103c5ba7 slot 220; 0x103c5bad..0x103c5bc1
 		Teleport(&Placed, nullptr, nullptr);                              // 0x103c5bce slot 181 (pos, 0, 0)
 		SetOrigin(Placed);                                                // 0x103c5bdd slot 62
@@ -3471,8 +3469,6 @@ static constexpr double GSpecies19WerewolfTeleportOutUnseen = 1.0;
 static constexpr float GSpecies19WerewolfTeleportBlacklist = 5.0f;
 static constexpr float GSpecies19WerewolfMoveBlacklist = 3.0f;
 static constexpr float GSpecies19WerewolfLeapBlacklist = 15.0f;
-// `_DAT_1044c3a8` 180.0 -- the half-turn task 0x154 flips a hint yaw by.
-static constexpr float GSpecies19WerewolfHalfTurn = 180.0f;
 // `_DAT_10450564` 100.0 and `_DAT_1044bef8` 0.25 -- task 0x15a's jump-height terms.
 static constexpr float GSpecies19WerewolfJumpRise = 100.0f;
 static constexpr float GSpecies19WerewolfJumpRun = 0.25f;
@@ -3582,23 +3578,14 @@ static bool Species19WerewolfPlayerIsMalkavianTemplate(const FElysiumEntity& Pla
 	return false;
 }
 
-/** SEAM for `0x102f2ea0(m_pNavigator)` -- "already at the goal": not climbing/jumping (nav type 3
- *  or 1), the 2D distance to the goal (`0x102ee140`) inside the path tolerance (`0x102f2fc0`) and
- *  the height difference within slot 522, in which case it also runs the navigator's `+0x20`
- *  arrival. The mover keeps no readable goal (`NavGoalPosition` answers false), so this answers
- *  false -- not at the goal. */
-static bool Species19WerewolfNavAtGoal(const FElysiumNpcBase& Npc)
+/** `0x102f2ea0(m_pNavigator)` -- "already at the goal": not climbing/jumping (nav type 3 or 1), the
+ *  2D distance to the goal (`0x102ee140`) inside the path tolerance (`0x102f2fc0`) and the height
+ *  difference within slot 522, in which case it also runs the navigator's `+0x20` arrival. Family
+ *  StartTask19 answers this address once, `FElysiumNpc::StartTask19NavArrived` (the port mover's own
+ *  arrival sample). */
+static bool Species19WerewolfNavAtGoal(FElysiumNpcWerewolf& Npc)
 {
-	(void)Npc;
-	return false;
-}
-
-/** SEAM for `CAI_Motor+0x28`, the byte that makes a hint yaw face the other way. No motor word
- *  carries it; answers false (the hint yaw is taken unchanged). */
-static bool Species19MotorYawFlipped(const FElysiumNpcBase& Npc)
-{
-	(void)Npc;
-	return false;
+	return Npc.StartTask19NavArrived();
 }
 
 // Slot 442: `0x103ccda0`.
@@ -3642,7 +3629,8 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 			+ static_cast<double>(WerewolfTeleportDistanceB)               // 0x103ccea7 FADD +0x66d0
 			+ static_cast<double>(WerewolfTeleportDistanceA)               // 0x103ccead FADD +0x66cc
 			+ GSpecies19WerewolfToleranceSlack;                            // 0x103cceb3 FADD [0x1044ffd0]
-		SetGoalTolerance(static_cast<float>(Tolerance));                  // 0x103ccec1 +0x6320; 0x103ccece 0x102ee1c0; 0x103ccee0 0x102f2fe0
+		SetGoalTolerance(static_cast<float>(Tolerance));                  // 0x103ccec1 FSTP +0x6320
+		StartTask19SetNavTolerances(static_cast<float>(Tolerance), static_cast<float>(Tolerance));   // 0x103ccece 0x102ee1c0; 0x103ccee0 0x102f2fe0
 		TaskComplete(false);                                              // 0x103ccee8
 		return 0;
 	}
@@ -3725,10 +3713,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 			BaseScheduleHost.bShouldMove = false;                         // 0x103cd1b3 +0x1a40
 			BaseScheduleHost.FailText = GSpecies19WerewolfPathOutOfSightText;
 			TaskFail(GSpecies19WerewolfPathOutOfSightFail);               // 0x103cd1b9 slot 448 (0x10661dac)
-			if (Motor != nullptr)
-			{
-				Motor->ClearNavigationGoal();                             // 0x103cd1c5 0x102ee270
-			}
+			StartTaskClearGoal();                                         // 0x103cd1c5 0x102ee270
 			return 0;
 		}
 		if (!NavIsGoalActive())                                           // 0x103cd1e1 0x102ee6a0
@@ -3828,7 +3813,10 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 		Species19WerewolfBlacklistUnlessListed(*this, TeleportHintNode, GSpecies19WerewolfTeleportBlacklist);   // 0x103cd4da 0x10366400; 0x103cd4f9 0x103662d0(5.0)
 		ClearTeleportHint();                                              // 0x103cd500
 		SetHullSizeSmall(true);                                           // 0x103cd509 0x10273180(1)
+		// `+0x66ec` is one retail word the port carries twice (`WerewolfLastSeenTime` / Lifecycle's
+		// `WerewolfUnhideStamp`); both take the stamp, as `ElysiumNpcWerewolf.cpp` 0x103cac89 does.
 		WerewolfLastSeenTime = Now;                                       // 0x103cd50e / 0x103cd517 +0x66ec
+		WerewolfUnhideStamp = Now;
 		TaskComplete(false);                                              // 0x103cd51f
 		return 0;
 	case 0x153:
@@ -3855,14 +3843,12 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 		}
 		Species19MotorYawSpeedReset(*this);                               // 0x103cd59c 0x102e0b40
 		const FHintWords Hint = Species19WerewolfHintWords(*this, MoveHintNode);
-		float Yaw = static_cast<float>(Hint.Angles.Y);                    // 0x103cd5a9 slot 219; 0x103cd5b5 [EAX+4]
-		if (Species19MotorYawFlipped(*this))                              // 0x103cd5b8 motor+0x28; 0x103cd5c1
-		{
-			Yaw = Yaw < GSpecies19WerewolfHalfTurn                        // 0x103cd5c7 FCOMP 180.0; 0x103cd5d8
-				? Yaw + GSpecies19WerewolfHalfTurn                        // 0x103cd5e2
-				: Yaw - GSpecies19WerewolfHalfTurn;                       // 0x103cd5da
-		}
-		SetMotorHintYaw(Yaw);                                             // 0x103cd5ec motor+0x1c == 180.0: 0x103cd5fb raw / 0x103cd621 0x102e0a80
+		const float Yaw = static_cast<float>(Hint.Angles.Y);              // 0x103cd5a9 slot 219; 0x103cd5b5 [EAX+4]
+		// `0x103cd5b8..0x103cd626` inline `0x10288670`: the motor `+0x28` half-turn (`0x103cd5c7` FCOMP
+		// 180.0), then `+0x1c == 180.0` stores `+0x34` raw (`0x103cd5fb`) or through `0x102e0a80`
+		// (`0x103cd621`) -- family StartTask19's `StartTaskMotorSetIdealYaw` (the `+0x28` byte is
+		// `BaseScheduleHost.bMotorAnimationMovement`).
+		StartTaskMotorSetIdealYaw(Yaw);
 		ReleaseMotorHintYaw();                                            // 0x103cd604 / 0x103cd631 0x102e1e20(-1)
 		return 0;                                                         // no completion
 	}
@@ -4139,8 +4125,7 @@ int32 FElysiumNpcZombie::StartTaskSlot442(void* Task)
 			Species19FailBare(*this, 0x18);                               // 0x103dffb3
 			return 0;
 		}
-		Species19SetGoal(*this, Motor, bMoveIssued, NodeUnits * ElysiumMove::U, INDEX_NONE, -1.f,
-			TEXT("CNPC_VZombie::StartTask 0x150"));                       // 0x103dff9f 0x102ecd20 (result discarded)
+		Species19SetGoal(*this, 4, NodeUnits * ElysiumMove::U, INDEX_NONE, -1.f, 4);                       // 0x103dff9f 0x102ecd20 (result discarded)
 		return 0;
 	}
 	if (TaskLocal > 0x14e)                                               // 0x103dfd9f CMP 0x14e; JG 0x103dfe7a
@@ -4161,9 +4146,9 @@ int32 FElysiumNpcZombie::StartTaskSlot442(void* Task)
 	{
 		AutoMovement();                                                   // 0x103dfdf2
 		Species19MotorYawSpeedReset(*this);                               // 0x103dfdfd 0x102e0b40
-		(void)static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x103dfe06 slot 167
+		const FElysiumEntity* LkpKey = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x103dfe06 slot 167
 		FVector EnemyLkp = FVector::ZeroVector;
-		EnemyLastKnownPosition(EnemyLkp);                                 // 0x103dfe16 slot 541; 0x103dfe1e 0x102dfed0
+		EnemyLkp = StartTaskLastKnownPosition(LkpKey);                                 // 0x103dfe16 slot 541; 0x103dfe1e 0x102dfed0
 		Species19MotorIdealYawToAtSpeed(*this, EnemyLkp, -2.0f);          // 0x103dfe33 0x102e20b0(motor, &lkp, 0xc0000000)
 		RestartIdealActivityId(0x4b);                                     // 0x103dfe3c
 		if (IsActivityFinished())                                         // 0x103dfe45 slot 251

@@ -781,9 +781,8 @@ bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 		N.HasNonDefaultVelocity());
 	N.Velocity = FVector::ZeroVector;
 
-	// The two unaware tables (0x1037b870 / 0x1037b890, `CNPC_VGhoulCroucher`) — the INDEXING is
-	// recovered, the contents are not. Both answer 0 through the named seam and neither faults on any
-	// index.
+	// The two unaware tables (0x1037b870 / 0x1037b890, `CNPC_VGhoulCroucher`): the indexing and the
+	// contents (retail `Activity` ids, `StartTask 0x1037b8b0`'s restarts).
 	{
 		FLifecycleFixture GhoulFix(TEXT("npc_VGhoulCroucher"));
 		FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulFix.Npc);
@@ -791,13 +790,15 @@ bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// The two rows read off the image: `DAT_1063abcc` = {0x1059, 0x105d, 0x1079, 0x1059},
+		// `DAT_1063abdc` = {0x105a, 0x105e, 0x107a, 0x105a}.
 		Ghoul->UnawareType = 3;
-		TestEqual(TEXT("UnawareTableA answers its seam"), Ghoul->UnawareTableA(), 0);
-		TestEqual(TEXT("UnawareTableB answers its seam"), Ghoul->UnawareTableB(), 0);
+		TestEqual(TEXT("UnawareTableA reads DAT_1063abcc[3]"), Ghoul->UnawareTableA(), 0x1059);
+		TestEqual(TEXT("UnawareTableB reads DAT_1063abdc[3]"), Ghoul->UnawareTableB(), 0x105a);
 	}
-	TestEqual(TEXT("and the seam is the same for both, by name"),
-		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abcc"), 3),
-		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abdc"), 3));
+	TestEqual(TEXT("the rows are adjacent: DAT_1063abcc[4] is DAT_1063abdc[0]"),
+		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abcc"), 4),
+		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abdc"), 0));
 
 	// The werewolf search timer — a STATIC pair, shared by every instance rather than per NPC. That
 	// is the recovered fact, and this is what asserts it: the report passes its argument through and

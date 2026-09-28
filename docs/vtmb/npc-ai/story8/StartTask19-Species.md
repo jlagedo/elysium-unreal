@@ -51,10 +51,10 @@ base call:
 - Arms that test `m_IdealActivity` afterwards therefore see the word as the caller left it.
 
 **`SetGoal` (`0x102ecd20`).**
-- Arms build an `AI_NavGoal_t` on the stack and submit it to the port's motor (`MoveTo`).
-- Activity `0x13` (ACT_RUN) runs. Anything else walks.
-- A tolerance of -1.0 means the schedule's `m_flGoalTolerance`, or the hull width when that is not
-  set.
+- Arms build an `AI_NavGoal_t` on the stack and submit it to `SetGoal 0x102ecd20`, the family's one
+  port body (see [StartTask19.md](StartTask19.md)).
+- A tolerance of -1.0 keeps the PATH's tolerance (`path+0x28`, not `m_flGoalTolerance +0x6320`), or
+  the pathing hull's width when that is 0.0.
 
 ## CNPC_VTzimisceHeadClaw -- 0x103c1820
 

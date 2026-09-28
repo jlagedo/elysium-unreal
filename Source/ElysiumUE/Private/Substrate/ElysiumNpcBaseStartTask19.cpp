@@ -37,7 +37,7 @@ namespace ElysiumStartTask19Base
 	// `0x10282816`).
 	const TCHAR* const File = TEXT("AI_BaseNPC_Schedule.cpp");
 
-	// --- Task ids: the registrar `FUN_10316ff0`'s numbers (the global task id `Step->TaskId`) -----
+	// --- Task ids: the registrar `FUN_10316ff0`'s numbers, retail's class-local `iTask` (the step's global id translated) ---
 	constexpr int32 TASK_RESET_ACTIVITY = 0x01;
 	constexpr int32 TASK_WAIT = 0x02;
 	constexpr int32 TASK_ANNOUNCE_ATTACK = 0x03;
@@ -185,6 +185,7 @@ namespace ElysiumStartTask19Base
 	constexpr int32 GOALTYPE_PATHCORNER = 3;
 	constexpr int32 GOALTYPE_LOCATION = 4;
 	constexpr int32 GOALTYPE_LOCATION_NEAREST_NODE = 6;
+	constexpr int32 GOALTYPE_BESTSEEUNKNOWN = 7;
 	// `0x1049a160` (-1.0, read 2026-09-27 off the image) — keep the path's tolerance.
 	constexpr float NavToleranceKeep = -1.0f;
 	// `0x1049a164` (-2.0) — the hull's tolerance.
@@ -250,7 +251,12 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		++StartTaskNav.CrashGuards;
 		return 0;
 	}
-	const int32 TaskId = Step->TaskId;                                   // 0x10282803
+	// `[EDI]` is retail's `Task_t::iTask`, the CLASS-LOCAL id (the parser `0x1030d850` stores
+	// `0x102ea280(space+0x18, global)`). This runtime's step carries the GLOBAL id (stated divergence,
+	// `ElysiumScheduleText.h`), so it is translated here through this class's task space -- the body
+	// of slot 450 `GetLocalTaskId` (`0x101a6640`), which no class overrides. For the root and Troika
+	// spaces the local id is the registrar's number the arms compare.
+	const int32 TaskId = GlobalToLocalId(IdSpace(EElysiumIdCategory::Task), Step->TaskId); // 0x10282803
 	const float Data = Step->Data;                                       // pTask->flTaskData (+0x4)
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;     // gpGlobals->curtime (+0xc)
 	const float U = ElysiumMove::U;
@@ -395,6 +401,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		}
 		FStartTaskNavGoal Goal = MakeGoal(GOALTYPE_TARGETENT, NavToleranceKeep); // 0x10284109
 		Goal.MovementActivity = Activity;                                // 0x10284115  [5]
+		Goal.Target = TargetEnt;                                         // 0x10284121  [10] = the resolved target
 		// Only in `NPC_STATE_SCRIPT` (slot 464 == 4): a pushed arrival activity goes to [6]; failing
 		// that, a pushed sequence NAME goes through `LookupSequence` into [7].
 		if (GetState() == EElysiumNpcState::Scripted)                    // 0x10284135
@@ -665,12 +672,21 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		FStartTaskNavGoal Goal = MakeGoal(GOALTYPE_LOCATION, NavToleranceKeep);
 		Goal.DestCm = StartTaskLastKnownPosition(E);                     // 0x102843b3
 		Goal.bDestSet = true;
-		float Scalar = NavPathScalar20;                                  // 0x10284424  0x102f2fc0: path+0x20
-		// Slot 563 `TranslateEnemyChasePosition(enemy, &goal.dest, &goal.tolerance, &scalar)`.
-		TranslateEnemyChasePosition(E, Goal.DestCm, &Goal.ToleranceUnits, &Scalar); // 0x10284441
+		// Slot 563 `TranslateEnemyChasePosition(enemy, &goal.dest, &goal.tolerance, &scalar)`
+		// (`0x1028443e..0x10284441`), the scalar seeded from `0x102f2fc0` (path+0x20, `0x10284424`).
+		// The port's slot-563 bodies read and write both words in CENTIMETRES (`ElysiumNpcPositions2.cpp`:
+		// the hull width `* U`, `GoalToleranceCm`); the goal's word is SOURCE units with the -1.0 "keep"
+		// sentinel, which a body that writes nothing leaves standing.
+		float ToleranceScratchCm = Goal.ToleranceUnits;
+		float ScalarCm = NavPathScalar20 * U;
+		TranslateEnemyChasePosition(E, Goal.DestCm, &ToleranceScratchCm, &ScalarCm); // 0x10284441
+		if (ToleranceScratchCm != Goal.ToleranceUnits)
+		{
+			Goal.ToleranceUnits = ToleranceScratchCm / U;
+		}
 		if (StartTaskSetGoal(Goal, 2))                                   // 0x10284454  SetGoal(.., 2)
 		{
-			NavPathScalar20 = Scalar;                                    // 0x10284468  0x102f2fe0
+			NavPathScalar20 = ScalarCm / U;                              // 0x10284468  0x102f2fe0
 			TaskComplete(false);                                         // 0x10284470
 			return 0;
 		}
@@ -799,11 +815,14 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			Fail(0x8cf, FAIL_NO_HINT_NODE);                              // 0x10285ac4
 			return 0;
 		}
+		// `0x102d1180(hint, this, &out)` (`0x10285add`): the hint's `GetAbsOrigin`, or with a network
+		// node (`+0x5e4 != -1`) the node's position. When the port cannot answer, no destination is
+		// set (the route is refused) rather than routing to the zero vector.
 		FVector Approach = FVector::ZeroVector;
-		HintLosEndpoint(BaseScheduleHost.HintNode, Approach);            // 0x10285add  0x102d1180
+		const bool bApproach = HintLosEndpoint(BaseScheduleHost.HintNode, Approach); // 0x10285add  0x102d1180
 		FStartTaskNavGoal Goal = MakeGoal(GOALTYPE_LOCATION, NavToleranceKeep);
 		Goal.DestCm = Approach;
-		Goal.bDestSet = true;
+		Goal.bDestSet = bApproach;
 		Goal.MovementActivity = ACT_RUN;                                 // 0x10285b5e
 		StartTaskSetGoal(Goal, 0);                                       // 0x10285b9e  result discarded
 		return 0;
@@ -1309,7 +1328,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		return 0;
 
 	case TASK_SET_TOLERANCE_DISTANCE:                                    // arm 0x43, 0x10286c69
-		SetGoalTolerance(ResolveTaskDistance(Data));                     // 0x10286c71 slot 418 / 0x10286c84 0x102ee1c0, untruncated
+		NavPathToleranceCm = ResolveTaskDistance(Data) * ElysiumMove::U; // 0x10286c71 slot 418 / 0x10286c84 0x102ee1c0 path+0x28, untruncated
 		TaskComplete(false);                                             // 0x10286c8d
 		return 0;
 
@@ -1510,7 +1529,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 	case TASK_DIE:                                                       // arm 0x4f, 0x10286801
 	case TASK_DIE_IMMEDIATE:
 		StartTaskClearGoal();                                            // 0x10286807  0x102ee270
-		LifeStateRetail = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
+		NpcLifeStateWord = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
 		return 0;
 
 	case TASK_WAIT_FOR_SCRIPT:                                           // arm 0x50, 0x102868f2
@@ -1525,8 +1544,9 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		if (!Cine->PreIdle.IsEmpty())                                    // 0x1028693f  m_iszIdle != NULL_STRING
 		{
 			Cine->StartSequence(*this, Cine->PreIdle, false);            // 0x10286966  slot 584
-			// `strcmp(STRING(m_iszPlay), STRING(m_iszIdle)) == 0` (`0x10288560`) -> arm 0x65's store.
-			if (Cine->Play.Equals(Cine->PreIdle, ESearchCase::CaseSensitive)) // 0x10286996
+			// `_strcmpi(STRING(m_iszPlay), STRING(m_iszIdle)) == 0` (`0x10288560`: `__strcmpi`, case-
+			// insensitive) -> arm 0x65's store.
+			if (Cine->Play.Equals(Cine->PreIdle, ESearchCase::IgnoreCase)) // 0x10286996
 			{
 				if (FElysiumNpc* Troika = AsNpc())
 				{
@@ -1800,7 +1820,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		StartTaskWeaponRangeWords(*HeldWeapon, Words);
 		// `(float)(int)(weapon->+0x8c0 * flTaskData)` — the FMUL at `0x10286cb7` the decompiler drops.
 		const float MeleeTolerance = static_cast<float>(static_cast<int32>(Words[2] * Data)); // 0x10286cb1..0x10286cca
-		SetGoalTolerance(MeleeTolerance);                                     // 0x10286cd4  0x102ee1c0
+		NavPathToleranceCm = MeleeTolerance * ElysiumMove::U;                 // 0x10286cd4  0x102ee1c0 path+0x28
 		TaskComplete(false);                                             // 0x10286cdd
 		return 0;
 	}
@@ -1868,33 +1888,36 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 {
 	using namespace ElysiumStartTask19Base;
 
-	// `CAI_Navigator::SetGoal` `0x102ecd20`, in its order.
+	// `CAI_Navigator::SetGoal` `0x102ecd20`, in its order. The ONE port body: the Troika halves
+	// (`StartTask19SetGoal`, `TaskTailNavSetGoal`) and family Script19 (`Script19SetGoal`) convert
+	// their literals and call this.
 	++StartTaskNav.SetGoalCalls;
 	StartTaskNav.LastGoal = Goal;
 	StartTaskNav.LastSetGoalFlags = SetGoalFlags;
 	const float U = ElysiumMove::U;
 	FElysiumNpc* Troika = AsNpc();
 
-	// `this->vtable[0x1c]()` — navigator slot 7, the reset (`0x102eea70`).
-	FUN_102eea70();
-	// Flag 1 clears the path (`0x102f28a0`); flag 2 resets the path's target handle and dest words
-	// (`path+0x30..+0x3c`), which this runtime's mover does not keep.
-	if ((SetGoalFlags & 1) != 0 && Motor != nullptr)
+	// `0x102ecd20..0x102ecd62`: nav `+0x8` := the owner's hull, `+0xc` := curtime (twice, through
+	// `0x102ecc00`) -- words the port's mover does not keep -- then `this->vtable[0x1c]()`,
+	// navigator slot 7, the reset (`0x102eea70`).
+	FUN_102eea70();                                                      // 0x102ecd66
+	if ((SetGoalFlags & 1) != 0)                                         // 0x102ecd6e TEST AL,0x1
 	{
-		Motor->ClearNavigationGoal();
+		NavClearRoute();                                                 // 0x102ecd74 0x102f28a0
 	}
-	// [5] -> `SetMovementActivity`.
+	// Flag 2 (`0x102ecd7b`): the path's target handle (`path+0x30`, `0x100a0ae0(.., NULL)`) and its
+	// dest words (`path+0x34..+0x3c` := `DAT_1070d1b0..b8`). The port's mover keeps neither; the goal
+	// below replaces whatever route it was on.
+
+	// [5] -> `SetMovementActivity` (`0x102ecdaa` / `0x102ecdb2` `0x102ee250`).
 	if (Goal.MovementActivity != INDEX_NONE)
 	{
 		StartTaskSetMovementActivity(Goal.MovementActivity);
 	}
 
-	// The tolerance (`path+0x28`): -2.0 the hull's, anything but -1.0 as given, -1.0 the path's own
-	// unless that is 0.0, when the hull's (averaged with the goal entity's for entity goals) stands.
-	FVector MinsUnits = FVector::ZeroVector;
-	FVector MaxsUnits = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, MinsUnits, MaxsUnits);
-	const float HullWidthUnits = static_cast<float>(MaxsUnits.Y - MinsUnits.Y); // 0x102d61b0: row+0x18 - row+0xc
+	// The goal entity by type (`0x102ecd20`'s two resolutions share it): 1 `m_hTargetEnt`
+	// (`+0x5ce4`), 2 slot 167 `GetEnemy()` (vtable `+0x29c`), 7 `GetBestSeeUnknown()` through
+	// `+0x98` (vtable `+0x928`, the Troika's slot 586).
 	FElysiumEntity* GoalEntity = nullptr;
 	if (World != nullptr)
 	{
@@ -1906,34 +1929,58 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		{
 			GoalEntity = static_cast<const FElysiumNpcBase*>(this)->GetEnemy(); // owner slot 167
 		}
-	}
-	float ToleranceUnits = Goal.ToleranceUnits;
-	if (Goal.ToleranceUnits == NavToleranceHull)
-	{
-		ToleranceUnits = HullWidthUnits;
-	}
-	else if (Goal.ToleranceUnits == NavToleranceKeep)
-	{
-		ToleranceUnits = Troika != nullptr ? Troika->ScheduleHost.GoalToleranceCm / U : 0.f;
-		if (ToleranceUnits == 0.f)
+		else if (Goal.Type == GOALTYPE_BESTSEEUNKNOWN && Troika != nullptr)
 		{
-			ToleranceUnits = HullWidthUnits;
-			const FElysiumNpcBase* GoalNpc = GoalEntity != nullptr ? GoalEntity->AsNpcBase() : nullptr;
-			if (GoalNpc != nullptr)
-			{
-				FVector OtherMins = FVector::ZeroVector;
-				FVector OtherMaxs = FVector::ZeroVector;
-				RetailHullExtents(GoalNpc->HullKind, EElysiumHullExtents::Full, OtherMins, OtherMaxs);
-				ToleranceUnits = (static_cast<float>(OtherMaxs.Y - OtherMins.Y) + HullWidthUnits)
-					* ElysiumNpcTunables::Half;
-			}
+			GoalEntity = World->Resolve(Troika->GetBestSeeUnknown());     // +0x98 vtable +0x928
 		}
 	}
-	SetGoalTolerance(ToleranceUnits);
-	StartTaskNav.LastSetGoalToleranceUnits = ToleranceUnits;
 
-	// The destination: an entity goal reads the entity (the goal's own dest overrides it when set);
-	// a location goal reads its dest; the default triple with no node names nothing to go to.
+	// The tolerance (`path+0x28`, `NavPathToleranceCm`): -2.0 (`_DAT_1049d980`) the hull's width,
+	// anything but -1.0 (`_DAT_1049d97c`) as given, -1.0 keeps the path's own unless that is 0.0,
+	// when the hull's is written -- and, for an entity goal whose entity is an NPC
+	// (`+0x9c` non-null), the average of the two hulls (`* _DAT_10449270` 0.5).
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	// Nav `+0x8` is the owner's PATHING hull, `+0x156c` (`0x102ecd2c`), not `m_eHull` (`+0x1568`); the
+	// goal NPC's side below reads its `m_eHull` (`[+0x9c]+0x1568`, `0x102ece99`).
+	const int32 PathingHull = Troika != nullptr ? Troika->PathingHullKind : HullKind;
+	RetailHullExtents(PathingHull, EElysiumHullExtents::Full, MinsUnits, MaxsUnits);
+	const float HullWidthUnits = static_cast<float>(MaxsUnits.X - MinsUnits.X); // 0x102d61b0: row+0x18 - row+0xc
+	if (Goal.ToleranceUnits == NavToleranceHull)
+	{
+		NavPathToleranceCm = HullWidthUnits * U;                         // 0x102ecdc9 -> 0x102ecec7
+	}
+	else if (Goal.ToleranceUnits != NavToleranceKeep)
+	{
+		NavPathToleranceCm = Goal.ToleranceUnits * U;                    // 0x102ecde4 -> 0x102ecec7
+	}
+	else if (NavPathToleranceCm == ElysiumNpcTunables::Zero)             // 0x102ecdf1 == _DAT_104454c4
+	{
+		NavPathToleranceCm = HullWidthUnits * U;                         // 0x102ece0e
+		const FElysiumNpcBase* GoalNpc = GoalEntity != nullptr ? GoalEntity->AsNpcBase() : nullptr;
+		if (GoalNpc != nullptr)                                          // 0x102ece90 +0x9c
+		{
+			FVector OtherMins = FVector::ZeroVector;
+			FVector OtherMaxs = FVector::ZeroVector;
+			RetailHullExtents(GoalNpc->HullKind, EElysiumHullExtents::Full, OtherMins, OtherMaxs);
+			NavPathToleranceCm = (static_cast<float>(OtherMaxs.X - OtherMins.X) + HullWidthUnits)
+				* ElysiumNpcTunables::Half * U;                          // 0x102ecebd FMUL 0.5
+		}
+	}
+	const float ToleranceCm = NavPathToleranceCm;
+	StartTaskNav.LastSetGoalToleranceUnits = ToleranceCm / U;
+	// `0x102ececa`: path `+0x40` := hull * 0.5; `[11..13]` != `DAT_10934060..68` -> `0x1030be20`
+	// (arrival direction; every caller passes the sentinel); path `+0x8` / `+0x4` := `[14]` / `[15]`
+	// (zero at every caller). None has a port word.
+	//
+	// Goal flag 2 (`0x102ecf2e TEST [goal+0x24],0x2`) builds a NODE route (`0x102f3c10` /
+	// `0x102f41b0` nearest nodes, `0x102fd240` the route) and returns without `0x102f1dc0`. This
+	// runtime has no node graph (0018 story 4): the goal takes the location arm below and the mover
+	// plans it (named divergence).
+
+	// The destination: an entity goal routes to the entity (`path+0x30`), its dest words written
+	// only when the goal's own dest is not the default triple; a location goal takes `[1..3]`, or
+	// with the default triple the node `[4]` (`0x102ee9c0`; no node graph, so nothing).
 	bool bHaveDest = false;
 	FVector DestCm = FVector::ZeroVector;
 	if (Goal.bDestSet)
@@ -1948,58 +1995,27 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	}
 	StartTaskNav.LastSetGoalDestCm = DestCm;
 
-	// The route (`0x102f1dc0`). The port's navigator is `IElysiumNpcMotor`; the Troika line's body
-	// arbitration (`AcquireScheduleBody`) is the port's condition for commanding it.
-	bool bRoute = false;
-	if (bHaveDest && Motor != nullptr
-		&& (Troika == nullptr || Troika->AcquireScheduleBody(TEXT("SetGoal 0x102ecd20"))))
-	{
-		const int32 MoveActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
-		const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
-		bRoute = Motor->MoveTo(DestCm, ToleranceUnits * U, ElysiumNpcGait::TravelSpeed(Motor, Gait),
-			/*bAllowPartialPath=*/false, Gait);
-	}
-	bMoveIssued = bRoute;
-	if (Troika != nullptr && bRoute)
-	{
-		Troika->MoveGoal = DestCm;
-	}
+	// `0x102ed11e` `0x102f1dc0(this, goal flags bit 3)`.
+	const bool bRoute = NavBuildRoute(bHaveDest, DestCm, ToleranceCm);
 	StartTaskNav.bLastSetGoalResult = bRoute;
-
 	if (!bRoute)
 	{
-		// `0x102f1dc0` with `m_afMemory & 0x20` clear: a zero route search time fails the task at
-		// once through `OnNavFailed(0xc)`; otherwise the bit is set and the search deferred (the
-		// retry is the route builder's re-entry, unrecovered for this runtime's mover).
-		if (NavRouteSearchTime == ElysiumNpcTunables::Zero)
+		// Flag 4: a refused goal clears the route (`0x102ed131` `0x102f28a0`).
+		if ((SetGoalFlags & 4) != 0)
 		{
-			NavOnNavFailed(FAIL_NO_ROUTE);
-		}
-		else
-		{
-			BaseScheduleHost.MemoryBits |= MemoryPathFailed;
-		}
-		// Flag 4: a refused goal clears the path (`0x102f28a0`).
-		if ((SetGoalFlags & 4) != 0 && Motor != nullptr)
-		{
-			Motor->ClearNavigationGoal();
+			NavClearRoute();
 		}
 		return false;
 	}
-	// A built route clears the deferred bit and, unless slot 529 answers a continuous move, the
-	// navigator's own slot 2 completes the running task.
-	BaseScheduleHost.MemoryBits &= ~MemoryPathFailed;
-	if (!IsCurTaskContinuousMove())
-	{
-		MotorTaskComplete(false);
-	}
-	// Goal flag bit 0: face the path (`0x102e0b40`, `0x102e2020` toward the route).
+	// Goal flag bit 0: face the path (`0x102ed14b` `0x102e0b40`, `0x102ed15f` `0x102e2020` toward
+	// the path's goal `0x1030ba30`).
 	if ((Goal.GoalFlags & 1) != 0)
 	{
 		StartTaskMotorHoldYaw();
 		StartTaskMotorSetIdealYawToTarget(DestCm);
 	}
-	// [6] / [7] / the default arrival activity 1.
+	// `0x102ed168` `0x102f13d0(this, 1)` -- unrecovered, no port word. Then [6] / [7] / the default
+	// arrival activity 1 (`0x1030b550` / `0x1030b5b0`).
 	if (Goal.ArrivalActivity != INDEX_NONE)
 	{
 		StartTaskSetArrivalActivity(Goal.ArrivalActivity);
@@ -2009,6 +2025,97 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		StartTaskSetArrivalActivity(ACT_IDLE);
 	}
 	return true;
+}
+
+bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float ToleranceCm)
+{
+	using namespace ElysiumStartTask19Base;
+
+	// `0x102f1dc0`. The build itself (`0x102f2330`) is the port's mover: `IElysiumNpcMotor::MoveTo`,
+	// under the Troika line's body arbitration (`AcquireScheduleBody`, port-only). A refused claim is
+	// not a route failure -- no route was attempted and no retail word moves.
+	FElysiumNpc* Troika = AsNpc();
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	auto Build = [this, Troika, bHaveDest, &DestCm, ToleranceCm]() -> bool
+	{
+		if (!bHaveDest || Motor == nullptr)
+		{
+			bMoveIssued = false;
+			return false;                                            // no target / no navigator: no route
+		}
+		const int32 MoveActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
+		const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+		if (Troika != nullptr)
+		{
+			Troika->MoveGoal = DestCm;
+		}
+		bMoveIssued = Motor->MoveTo(DestCm, ToleranceCm, ElysiumNpcGait::TravelSpeed(Motor, Gait),
+			/*bAllowPartialPath=*/false, Gait);
+		return bMoveIssued;
+	};
+	if (Troika != nullptr && bHaveDest && Motor != nullptr
+		&& !Troika->AcquireScheduleBody(TEXT("SetGoal 0x102ecd20")))
+	{
+		return false;
+	}
+	// `0x102f1de4` `0x10319ee0(path+0x24)`, `path+0x44 := -1`: the path's waypoint list, the mover's.
+	if ((BaseScheduleHost.MemoryBits & MemoryPathFailed) == 0)                  // 0x102f1e0a TEST [+0x5d8c],0x20
+	{
+		if (Build())                                                            // 0x102f1e15 0x102f2330
+		{
+			BaseScheduleHost.MemoryBits &= ~MemoryPathFailed;                    // 0x102f1e22
+			if (!IsCurTaskContinuousMove())                                     // 0x102f1e2c slot 529
+			{
+				MotorTaskComplete(false);                                       // 0x102f1e38 nav slot 2 -> 0x102623c0
+			}
+			return true;
+		}
+		if (NavRouteSearchTime == ElysiumNpcTunables::Zero)                     // 0x102f1ee8 +0x40 == 0.0
+		{
+			NavOnNavFailed(FAIL_NO_ROUTE);                                      // 0x102f1f00 vtable+0x28 (0xc, 1)
+			return false;
+		}
+		BaseScheduleHost.MemoryBits |= MemoryPathFailed;                        // 0x102f1f12
+		NavRouteRetryTime = Now + NavRouteRetryInterval;                        // 0x102f1f27 +0x4c
+		NavRouteGiveUpTime = Now + NavRouteSearchTime;                          // 0x102f1f36 +0x48
+		return false;
+	}
+	if (NavRouteGiveUpTime < Now)                                               // 0x102f1f4d +0x48 < curtime
+	{
+		NavOnNavFailed(FAIL_NO_ROUTE);                                          // 0x102f1f5a (0xc, 1)
+		return false;
+	}
+	if (NavRouteRetryTime < Now)                                                // 0x102f1f73 +0x4c < curtime
+	{
+		if (Build())                                                            // 0x102f1f80 0x102f2330
+		{
+			BaseScheduleHost.MemoryBits &= ~MemoryPathFailed;                    // 0x102f1f8d
+			int32 TaskNumber = INDEX_NONE;
+			if (!CurrentRetailTaskNumber(TaskNumber) || TaskNumber != TASK_WAIT_FOR_MOVEMENT) // 0x102f1f97 0x1028a150, != 0x6e
+			{
+				MotorTaskComplete(false);                                       // 0x102f1fa6 nav slot 2
+			}
+			return true;
+		}
+		NavRouteRetryTime = Now + NavRouteRetryInterval;                        // 0x102f1fc5 +0x4c
+	}
+	return false;
+}
+
+void FElysiumNpcBase::NavClearRoute()
+{
+	// `0x102f28a0`.
+	NavRouteSearchTime = 0.f;                                                   // +0x40
+	NavRouteGiveUpTime = 0.0;                                                   // +0x48
+	NavRouteRetryTime = 0.0;                                                    // +0x4c
+	NavRouteRetryInterval = 0.f;                                                // +0x44
+	BaseScheduleHost.MemoryBits &= ~ElysiumStartTask19Base::MemoryPathFailed;   // +0x5d8c &= ~0x20
+	// `0x1030bb30(path)`: the path reset -- its tolerance `+0x28` with it; the port's route clear.
+	NavPathToleranceCm = 0.f;
+	if (Motor != nullptr)
+	{
+		Motor->ClearNavigationGoal();
+	}
 }
 
 void FElysiumNpcBase::StartTaskClearGoal()
@@ -2098,6 +2205,14 @@ void FElysiumNpcBase::StartTaskMotorSetIdealYaw(float Yaw)
 		}
 	}
 	MotorIdealYaw = Stored;
+	// The port's motor turns the body toward its ideal yaw only when told (`IElysiumNpcMotor::Face`;
+	// nothing reads `MotorIdealYaw` to turn), so the store is pushed onto it, under the Troika line's
+	// body claim.
+	FElysiumNpc* Troika = AsNpc();
+	if (Motor != nullptr && (Troika == nullptr || Troika->AcquireScheduleBody(TEXT("CAI_Motor ideal yaw (0x10288670)"))))
+	{
+		Motor->Face(Stored);
+	}
 }
 
 void FElysiumNpcBase::StartTaskMotorSetIdealYawToTarget(const FVector& TargetCm)
@@ -2286,11 +2401,12 @@ FVector FElysiumNpcBase::StartTaskLastKnownPosition(const FElysiumEntity* Subjec
 	if (PositionOnly != nullptr)
 	{
 		StartTaskDevMessage(FString::Printf(
-			TEXT("Asking LastKnownPosition for enemy that's not in my memory!! (%s) — position-only record\n"), *Name));
+			TEXT("Asking LastKnownPosition for enemy (%s) that's not in my memory (using danger pos)!!\n"),
+			*SubjectName));                                              // 0x1060e248
 		return PositionOnly->LastPosition;
 	}
 	StartTaskDevMessage(FString::Printf(
-		TEXT("Asking LastKnownPosition for enemy that's not in my memory!! (%s)\n"), *Name));
+		TEXT("Asking LastKnownPosition for enemy (%s) that's not in my memory!!\n"), *SubjectName)); // 0x1060e1f8
 	return FVector::ZeroVector;
 }
 

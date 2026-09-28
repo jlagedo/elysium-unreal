@@ -57,9 +57,9 @@ public:
 	 *  Slot 77 is not virtual in this runtime: the integrator routes this class's hide here. */
 	void GhoulCroucherScriptHide();
 	/** `CNPC_VGhoulCroucher`'s two static tables, indexed by `m_nUnawareType` (`+0x6668`):
-	 *  `DAT_1063abcc` (`0x1037b870`) and `DAT_1063abdc` (`0x1037b890`). **Unrecovered**: the tables'
-	 *  purpose — message, sound or activity selection — is not settled and neither table's contents are
-	 *  read anywhere the corpus pins. The INDEXING is the whole recovered body and is what lands. */
+	 *  `DAT_1063abcc` (`0x1037b870`) and `DAT_1063abdc` (`0x1037b890`): retail `Activity` ids
+	 *  (`{0x1059, 0x105d, 0x1079, 0x1059}` / `{0x105a, 0x105e, 0x107a, 0x105a}`, read off the image),
+	 *  which `StartTask 0x1037b8b0` restarts for tasks `0x14a` / `0x14b`. */
 	int32 UnawareTableA() const;
 	int32 UnawareTableB() const;
 	/** SEAM for the two tables above. Both answer 0 and name their retail global; the day either is

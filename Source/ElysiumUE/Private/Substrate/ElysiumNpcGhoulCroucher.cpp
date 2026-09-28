@@ -292,12 +292,18 @@ void FElysiumNpcGhoulCroucher::GhoulCroucherScriptUnhideTail()
 
 int32 FElysiumNpcGhoulCroucher::UnawareTableEntry(const TCHAR* RetailTable, int32 Index)
 {
-	// SEAM for `DAT_1063abcc` and `DAT_1063abdc`. **Unrecovered:** neither table's contents nor its
-	// purpose (message, sound or activity selection) is settled anywhere in the corpus. The indexing
-	// is the recovered body and is above; this is the row it would read.
-	(void)RetailTable;
-	(void)Index;
-	return 0;
+	// `DAT_1063abcc` and `DAT_1063abdc`, read off the image (2026-09-28): two adjacent 4-dword rows of
+	// retail `Activity` ids, the ones `StartTask 0x1037b8b0` restarts (tasks `0x14a` / `0x14b`,
+	// `0x1037b979` / `0x1037b93f`). Contiguous as retail's are, so an index past the first row reads
+	// into the second exactly as `[table + index*4]` does; past both is a crash guard answering 0
+	// (retail reads whatever follows).
+	static const int32 Rows[8] = {
+		0x1059, 0x105d, 0x1079, 0x1059,   // DAT_1063abcc
+		0x105a, 0x105e, 0x107a, 0x105a,   // DAT_1063abdc
+	};
+	const int32 First = FCString::Strcmp(RetailTable, TEXT("DAT_1063abdc")) == 0 ? 4 : 0;
+	const int32 Slot = First + Index;
+	return Slot >= 0 && Slot < 8 ? Rows[Slot] : 0;
 }
 
 int32 FElysiumNpcGhoulCroucher::UnawareTableA() const

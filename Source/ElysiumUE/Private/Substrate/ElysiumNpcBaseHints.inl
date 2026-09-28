@@ -78,11 +78,9 @@ static bool IsHintUnusable(const FHintWords& Hint, double Now, bool bOwnerAlive)
 /** The node-index form of the above. Answers true — an unresolvable hint is not usable. */
 bool IsHintUnusable(int32 HintNode, double Now) const;
 
-/** SEAM for `RestartIdealActivity` (`0x10289ee0`), which every hint body calls with a retail
- *  `Activity` enum id. This runtime's activity vocabulary is NAMES (`FElysiumClipIdentity`) and
- *  carries no retail-id table — the same reason 29b left `m_IdealTranslatedActivity` (`+0x5cd0`) an
- *  opaque `int32`. The ported bodies therefore DECIDE the id (that half is tested) and hand it here,
- *  which records nothing. */
+/** `CAI_BaseNPC::RestartIdealActivity` (`0x10289ee0`): `m_Activity` (`+0xfec`, `ActivityNumber`) back
+ *  to 0 when it already is the id, then `SetIdealActivity(id)` (`0x10272650`). Ids are retail's
+ *  `Activity` numbers. */
 void RestartIdealActivityId(int32 RetailActivityId);
 
 /** `CAI_Hint::OnRestore` (`0x102d3ec0`). The hint's own save-restore fixup, handed over from family

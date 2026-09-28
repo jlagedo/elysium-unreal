@@ -307,12 +307,24 @@ bool FElysiumNpcBase::IsCurTaskContinuousMove()
 
 bool FElysiumNpcBase::CurrentRetailTaskNumber(int32& OutTaskNumber) const
 {
-	// SEAM for `GetCurTask()->iTask` (`0x1028a150`, the `Task_t` at `+0x00`). This runtime's task
-	// vocabulary is `EElysiumTask`, a 30-odd identity subset of retail's 441-entry library with no
-	// registered numbers — `ElysiumSchedule.h` names the retail id in a COMMENT beside a few tasks
-	// and nowhere in the data. So a running task cannot be numbered and this answers false.
+	// `GetCurTask()->iTask` (`0x1028a150`: the running schedule's `Task_t` at `m_iScheduleIndex`,
+	// its `+0x00`). The runner's steps carry retail's own global task ids (`FElysiumScheduleStep::
+	// TaskId`, the registrar `0x10316ff0`'s numbers), so the running step answers it. No schedule, or an
+	// index past its task list, is retail's NULL task.
 	OutTaskNumber = INDEX_NONE;
-	return false;
+	if (!Schedule.IsRunning())
+	{
+		return false;
+	}
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(Schedule.Current);
+	if (Program == nullptr || !Program->Tasks.IsValidIndex(Schedule.TaskIndex))
+	{
+		return false;
+	}
+	// The step's id is GLOBAL (`ElysiumScheduleText.h`); retail's `iTask` is class-local, the
+	// translation slot 450 carries.
+	OutTaskNumber = GlobalToLocalId(IdSpace(EElysiumIdCategory::Task), Program->Tasks[Schedule.TaskIndex].TaskId);
+	return true;
 }
 
 // 0x10289fe0 `CAI_BaseNPC::GetScriptCustomMoveActivity`
@@ -378,10 +390,17 @@ int32 FElysiumNpcBase::Slot571(float Distance)
 
 bool FElysiumNpcBase::HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const
 {
-	// SEAM for `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` rays to.
-	(void)HintNode;
-	(void)OutPointCm;
-	return false;
+	// `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` rays to: a hint bound to no
+	// network node (`m_nNodeID +0x5e4 == -1`) answers its own `GetAbsOrigin()` (vtable `+0x364`);
+	// a bound one asks the network `0x102f46d0(DAT_1093407c, &out, npc, node)`. **SEAM** for that
+	// arm only: no AI network stands here (0018 story 4), so a node-bound hint answers false.
+	FHintWords Words;
+	if (!HintWords(HintNode, Words) || Words.NodeId != INDEX_NONE)
+	{
+		return false;
+	}
+	OutPointCm = Words.OriginCm;
+	return true;
 }
 
 bool FElysiumNpcBase::IsHintAvailableToMe(int32 HintNode) const
