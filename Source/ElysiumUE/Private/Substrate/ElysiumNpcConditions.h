@@ -423,12 +423,10 @@ struct FElysiumNpcCognition
 	// the load time so an hour-old remembered gunshot does not promote a restored NPC to alert.
 	double GatheredAt = -1.0;
 
-	// One report each, per NPC.
 	// Story 29e, family State19: there is no `bWarnedCombatWithoutEnemy` latch. Retail's
 	// `DevWarning(2, "***Combat state with no enemy!")` (`105cc04c`) is emitted unlatched by all
 	// five bodies that carry it — `0x1026f660`, `0x1035fe80`, `0x103851e0`, `0x103b4ff0`,
 	// `0x103bd690` — and `CNPC_VAnimal`'s fires even on the passes where its arm did not take.
-	bool bReportedAlertRefusal = false;
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
 	int32 StarvedScheduleNumber = -1;
@@ -599,28 +597,9 @@ namespace ElysiumNpcCond
 	const FElysiumEntity* ResolveEnemyHandle(const FElysiumEntityWorld& World,
 		const FElysiumEntityHandle& Handle);
 
-	// --- Damage ------------------------------------------------------------------------------------
-	// CHOSEN, NOT RECOVERED: the heavy-damage threshold. `CAI_BaseNPC::OnTakeDamageAlive` asks "the
-	// class light/heavy predicates" to set `LIGHT_DAMAGE` (0x4c) and `HEAVY_DAMAGE` (0x4d)
-	// (`docs/vtmb/combat-and-damage.md`), and neither predicate body is recovered — so the fraction
-	// of Source max health that makes a hit heavy is ours. A fifth of the pool is picked because it
-	// sits below the recovered 15%-in-one-second repeated-damage rule's per-window sum while still
-	// requiring a real hit. Decompiling either predicate settles it; replace this constant, not the
-	// shape around it.
-	inline constexpr float HeavyDamageFraction = 0.20f;
-
-	// Recovered: damage is accumulated for a one-second window and a sum over 15 percent of Source
-	// max health sets `REPEATED_DAMAGE` (0x4e); an expired window is reset rather than decayed.
-	inline constexpr double RepeatedDamageWindowSeconds = 1.0;
-	inline constexpr float RepeatedDamageFraction = 0.15f;
-
 	// `_DAT_104454d0`, the sound sweep's `SEE_SOUND_SOURCE` stranger-arm re-arm: `+0x6418 =
 	// curtime + 0.5`. Written and read only by that arm.
 	inline constexpr double SeeSoundSourceCadenceSeconds = 0.5;
-
-	// The accumulator half of that rule, run from the typed damage commit. Kept here rather than on
-	// the leaf so the window arithmetic has one owner and one test.
-	void AccumulateDamage(FElysiumNpcBaseMemory& Memory, int32 CommittedDamage, double Now);
 
 	// --- Sound categories ---------------------------------------------------------------------------
 	// CHOSEN, NOT RECOVERED (stated once here because both hearing and the condition
@@ -639,23 +618,10 @@ namespace ElysiumNpcCond
 	// tail, exactly as `FUN_102b1cd0` does (see its own header). `PreviousGatherTime` is the edge: a
 	// stimulus stamped after the previous pass is new to this one.
 
-	// `LIGHT_DAMAGE` / `HEAVY_DAMAGE` / `REPEATED_DAMAGE` from the last committed packet.
-	void GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
-	// `COND_WAS_BUMPED`, reconstructed the same way and for the same reason as the damage pair:
-	// retail sets the bit inside the touch and clears it when a non-reduced `RunAI` ends, so it is
-	// decision input for exactly one full pass.
-	void GatherBump(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
-
-	// The `HEAR_*` family from the last accepted stimulus, by the same category mapping the
-	// senses output selection uses.
-	void GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
-
 	// The seen set joined to the relationship table: `SEE_HATE` / `SEE_FEAR`, and the last-seen
 	// memory slots those categories own. Writes `Npc.BaseMemory.LastSeen*`.
 	void GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
 
-	// `HAVE_ENEMY_LOS` / `ENEMY_OCCLUDED` / `ENEMY_DEAD` / `SEE_ENEMY` for the committed enemy.
-	void GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);
 
 	// --- Weapon capability ------------------------------------------------------------------------
 	/**

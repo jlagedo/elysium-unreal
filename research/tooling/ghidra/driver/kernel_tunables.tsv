@@ -129,3 +129,15 @@ address	name	type	value	evidence
 10924358	DebugShowNpcSkeletons	convar_i32	0	`debug_show_npc_skeletons` read through `DAT_1092435c` (object + 4): +0x2c int, think-pre's mode selector (1 -> `0x1028e030`, 2 -> `0x1028e060`); a dead debug body (0019/1)
 10924f20	DebugShowBodyTargets	convar_i32	0	`debug_show_body_targets` read through `DAT_10924f24` (object + 4): +0x2c int, the geometry overlay's five enemy body-target boxes; a dead debug body (0019/1)
 10924a68	EntTraceConditions	convar_i32	1	`ent_trace_conditions` ctor `0x1028bde0`, read through `DAT_10924a6c` (object + 4): +0x2c int > 0 gates the CONDS: block of the condition debug string `0x1028d990`; a dead debug body (0019/1). Ships ON
+104491b4	Tenth	f32	0.1	the pooled float 0.1; `_DAT_104491b4` in `ComputeKnockbackVelocity`'s raw-attack scale, ManBat's probe scale, Ming Xiao's pedestal tolerance and tentacle launch scale (story 8 wave 2)
+104aaac4	FifteenHundredths	f32	0.15	the pooled float 0.15; `_DAT_104aaac4` in Werewolf `FindTeleportHint`'s retry delay and Bach's `0x1036544f` wait (story 8 wave 2)
+1044bef8	Quarter	f32	0.25	the pooled float 0.25; `_DAT_1044bef8` in `BodyTarget`'s anchor drop, slot 467's cowering hearing scale, Payphone `101aacae`, Werewolf's random-hint retry (story 8 wave 2)
+10462b70	FifteenHundred	f32	1500.0	the pooled float 1500.0; `_DAT_10462b70`, Werewolf's random-hint reach (story 8 wave 2)
+103d2bc6	WerewolfMoveHintSeedDistance	imm_f32	2500.0	`0x103d2bc6 MOV [ESP+..], 0x451c4000`; Werewolf's move-hint search seeds its best distance (`fStack_28`) with it
+1046bad0	FourHundred	f32	400.0	the pooled float 400.0; `_DAT_1046bad0`, `0x103986b0`'s ideal range for limbs 0 and 1 (story 8 wave 2)
+10462b84	ThreeHundred	f32	300.0	the pooled float 300.0; `_DAT_10462b84`, `0x103986b0`'s ideal range for limbs 2 and 3, Ming Xiao's far band (story 8 wave 2)
+1044eb0c	Twenty	f32	20.0	the pooled float 20.0; `_DAT_1044eb0c` in `IsHeavyDamage 0x10266660`, `OnDoorBlocked`'s long retry, the witness timer, Ming Xiao's aim-point Z bonus and many species cones (story 8 wave 2)
+1093b9b0	MingXiaoGrubDeath	convar_i32	1	`ming_xiao_grub_death`, read through `DAT_1093b9b4` (object + 4); readers `0x10395bea` (`CNPC_VMingXiao` death: `IsCommand() ? 0 : m_nValue`): `+0x2c` int
+1093d458	WerewolfForceTeleportInTime	convar_f32	25.0	`werewolf_force_teleport_in_time` ctor `0x103c8500`, read through `DAT_1093d45c` (object + 4); readers Werewolf `FindTeleportHint`: `+0x28` float
+1093fa38	WerewolfTeleportFullPathCheck	convar_i32	1	`werewolf_teleport_full_path_check` ctor `0x103d3bb0`, read through `DAT_1093fa3c` (object + 4); readers Werewolf `FindTeleportHint`: `+0x2c` int
+1093f780	WerewolfTeleportIgnoreViewcone	convar_i32	1	`werewolf_teleport_ignore_viewcone` ctor `0x103d3b20`, read through `DAT_1093f784` (object + 4); readers Werewolf `FindTeleportHint`: `+0x2c` int

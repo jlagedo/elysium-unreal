@@ -10,7 +10,7 @@
 // the marker.
 //
 // Owns (Script19's `rule` rows): 0x1027d0a0 FUN_1027d0a0. Walked prose:
-// `docs/vtmb/npc-ai/story8/Script19.md`.
+// `docs/vtmb/npc-ai/authored-control.md` § "`0x1027d0a0` ExitScriptedSequence".
 
 #include "Substrate/ElysiumNpcBase.h"
 #include "ElysiumEntityWorld.h"
@@ -49,7 +49,7 @@ bool FElysiumNpcBase::ExitScriptedSequence()
 
 bool FElysiumNpcBase::LifeStateIsDying() const
 {
-	// `Event_Killed` wrote LIFE_DYING (`bDeathReported`); `TASK_DIE`'s commit writes LIFE_DEAD
-	// (`bDeathCommitted`); `Kill` removes the entity (`bDead`), which retail's `UTIL_Remove` does.
-	return HasReportedDeath() && !bDeathCommitted && !IsDead();
+	// `m_lifeState == LIFE_DYING` on the word itself (story 8 wave 2: `Event_Killed` `0x1032b9b0`
+	// writes it); `Kill` removes the entity (`bDead`), which retail's `UTIL_Remove` does.
+	return LifeState == 1 && !IsDead();
 }

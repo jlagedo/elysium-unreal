@@ -3,7 +3,9 @@
 // Declarations are in `ElysiumNpcBaseDamage19.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Every arm carries the address of the
 // retail instruction it came from (`vampire.dll`, image base `0x10000000`, read off `vtmb_asm`); the
-// walked prose is `docs/vtmb/npc-ai/story8/Damage19.md`. The debug ring, the scope-trace stack and
+// walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".
+// The debug ring, the scope-trace stack and
 // the `__FILE__`/`__LINE__` stamps stay absent, as in every landed story-8 family.
 //
 // Owns (Damage19's `rule` rows): 0x10265ed0 CAI_BaseNPC::OnTakeDamage_Alive, 0x10265e90
@@ -15,10 +17,12 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 namespace
 {
@@ -108,14 +112,6 @@ namespace
 	}
 }
 
-int32 FElysiumNpcBase::CombatCharacterOnTakeDamageAlive(void* Info)
-{
-	// SEAM (header). The generated 29e slot body is dispatched for its tally; its `{}` is NOT the
-	// answer, because `0x103302e0`'s only exit (`0x10330abe`) returns 1 on every path.
-	(void)FElysiumCombatCharacter::OnTakeDamage_Alive(Info);
-	return 1;
-}
-
 // =================================================================================================
 // Slot 142 — `CAI_BaseNPC::OnTakeDamage` `0x10265e90`, 33 bytes.
 // =================================================================================================
@@ -153,7 +149,7 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 
 	// 2. `CBaseCombatCharacter::OnTakeDamage_Alive(info)`; a zero answer returns 0 with nothing
 	//    below run.
-	if (CombatCharacterOnTakeDamageAlive(Info) == 0)                        // 0x10265ef5
+	if (FElysiumCombatCharacter::OnTakeDamage_Alive(Info) == 0)             // 0x10265ef5 -> 0x103302e0, DIRECT
 	{
 		return 0;                                                           // 0x10265efc -> 0x10265f03
 	}
@@ -206,7 +202,16 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 		FVector AttackPositionCm = FVector::ZeroVector;
 		if (FElysiumEntity* Inflictor = Damage19BaseInflictor(*this, *Info))
 		{
-			AttackPositionCm = Inflictor->GetAbsOrigin();                   // 0x10265fb9 / 0x10266056
+			// Slot 217 on the inflictor. A HELD weapon's absolute origin is its owner's: weapon slot
+			// 298 (`Weapon_Equip`) sets MOVETYPE_FOLLOW and `PhysicsFollow` copies the aim entity's
+			// origin with zero offset. The port's weapon does not copy it per frame, so
+			// `HeldSourcePosition` answers it; a loose weapon answers its own origin.
+			FElysiumItem* const HeldItem = Inflictor->AsItem();
+			FElysiumWeapon* const HeldWeapon = HeldItem != nullptr ? HeldItem->AsWeapon() : nullptr;
+			if (HeldWeapon == nullptr || !HeldWeapon->HeldSourcePosition(AttackPositionCm))
+			{
+				AttackPositionCm = Inflictor->GetAbsOrigin();               // 0x10265fb9 / 0x10266056
+			}
 		}
 		else
 		{
@@ -287,12 +292,10 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 		const bool bAccumulate = Elapsed < ElysiumNpcTunables::OneDouble;  // 0x102662a8 / 0x102662b3
 		const float Sum = bAccumulate
 			? Damage19BaseMagnitude(*Info)
-				+ static_cast<float>(BaseMemory.RepeatedDamageAccumulated)  // 0x102662c6 / 0x102662d1
+				+ BaseMemory.RepeatedDamageAccumulated                      // 0x102662c6 / 0x102662d1
 			: Damage19BaseMagnitude(*Info);                                 // 0x102662e6 / 0x102662ec
-		// `m_flSumDamage` is a float in retail and an int on the port's word (`+0x5d94`,
-		// `FElysiumNpcBaseMemory::RepeatedDamageAccumulated`); the stored sum truncates, the compare
-		// below reads the float exactly as retail's `FSTP`/`FLD` round trip does.
-		BaseMemory.RepeatedDamageAccumulated = static_cast<int32>(Sum);    // 0x102662ef
+		// `m_flSumDamage` (`+0x5d94`), a float word as retail's.
+		BaseMemory.RepeatedDamageAccumulated = Sum;                        // 0x102662ef
 		BaseMemory.RepeatedDamageWindowStart = Now;                        // 0x10266310
 
 		// 16. REPEATED_DAMAGE (0x4e) when `m_iMaxHealth * 0.3 < m_flSumDamage` (strict; `FCOMPP` +

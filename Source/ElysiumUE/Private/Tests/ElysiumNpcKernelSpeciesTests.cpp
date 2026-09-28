@@ -634,7 +634,11 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 
 	// --- the SECOND pass delegates to the Troika body --------------------------------------------
 	// `FElysiumNpc::Slot606` is family TroikaHelpers'; the gate's job is to reach it.
+	// The base body draws on the schedule stream, so both calls start from the same stream state.
+	TArray<ElysiumRng::FState> Streams;
+	ElysiumRng::Snapshot(Streams);
 	const int32 Base = Npc->FElysiumNpc::Slot606(0);
+	ElysiumRng::Restore(Streams);
 	TestEqual(TEXT("the second pass delegates to the base slot 606"), Npc->Slot606(0), Base);
 	TestTrue(TEXT("and leaves the flag armed"), Npc->bBachFireOccluded);
 
@@ -879,8 +883,8 @@ bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 	TestFalse(TEXT("a door half that does not resolve answers false"), Npc->FUN_103d1e50());
 
 	// --- `0x103d9c90`: the chase cache ------------------------------------------------------------
-	// `EngineFrameNumber()` answers INDEX_NONE — the named decision — so the stamp never matches and
-	// the position is recomputed on every call, which is retail's behaviour at retail's call rate.
+	// `field_0x6670 != framecount` recomputes; the same frame answers the memo (story 8 L13: the
+	// engine frame is `EngineFrameNumber()`, whole world frames, not the old always-stale INDEX_NONE).
 	Npc->BaseMemory.Enemy = DoorA->Handle;
 	DoorA->Origin = FVector(300.0 * ElysiumMove::U, 0.0, 0.0);
 	FVector Out = FVector::ZeroVector;
@@ -888,17 +892,23 @@ bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 	TestEqual(TEXT("the chase point is the enemy's origin in SOURCE units"), Out,
 		FVector(300.0, 0.0, 0.0));
 	TestEqual(TEXT("and the cache holds it"), Npc->WerewolfChasePosUnits, FVector(300.0, 0.0, 0.0));
-	// Moving the enemy and asking again recomputes, because the stamp never matches.
+	TestEqual(TEXT("the stamp is this frame"), Npc->WerewolfChaseFrame, Npc->EngineFrameNumber());
+	// Same frame: the memo is answered even though the enemy moved.
 	DoorA->Origin = FVector(500.0 * ElysiumMove::U, 0.0, 0.0);
 	Npc->FUN_103d9c90(Out);
-	TestEqual(TEXT("moving the enemy moves the answer — the cache is always stale"), Out,
-		FVector(500.0, 0.0, 0.0));
+	TestEqual(TEXT("the same frame answers the memoised point"), Out, FVector(300.0, 0.0, 0.0));
+	// A later frame (the stamp no longer matches) recomputes.
+	Npc->WerewolfChaseFrame = Npc->EngineFrameNumber() - 1;
+	Npc->FUN_103d9c90(Out);
+	TestEqual(TEXT("a new frame moves the answer"), Out, FVector(500.0, 0.0, 0.0));
 	// **With no enemy the stamp is still written and the PREVIOUS point is what is answered** — the
 	// retail detail the walk leaves out.
 	Npc->BaseMemory.Enemy = FElysiumEntityHandle();
+	Npc->WerewolfChaseFrame = Npc->EngineFrameNumber() - 1;
 	Npc->FUN_103d9c90(Out);
 	TestEqual(TEXT("with no enemy the last cached point is answered, not a zero"), Out,
 		FVector(500.0, 0.0, 0.0));
+	TestEqual(TEXT("and the stamp is still written"), Npc->WerewolfChaseFrame, Npc->EngineFrameNumber());
 	return true;
 }
 

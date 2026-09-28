@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
@@ -564,6 +565,10 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		}
 		F.RunAdmissionAndLoadout();
 		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
+		// The weapon-sight occlusion is slot 481's `+0x5b98` debounce, which `NPCInit` seeds at its
+		// limit of ten (`BaseMemory.EnemyOccludedCheck = 10`); a visible check zeroes it
+		// (`0x10270bb1`). This case drives slot 561 alone, so the enemy is stated in sight.
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
 		FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
 		if (!TestNotNull(TEXT("the fighter holds its pistol"), Weapon))
 		{
@@ -611,7 +616,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 
 		// The occlusion latch drives the line-of-fire arm.
 		Weapon->MagazineCount = 6;
-		F.Fighter->Senses.Memory.bEnemyOccluded = true;
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;   // slot 481's `+0x5b98` at its limit
 		Cond.Reset();
 		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
 		TestTrue(TEXT("the occlusion latch raises WEAPON_SIGHT_OCCLUDED"),
@@ -632,6 +637,10 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		}
 		F.RunAdmissionAndLoadout();
 		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
+		// The weapon-sight occlusion is slot 481's `+0x5b98` debounce, which `NPCInit` seeds at its
+		// limit of ten (`BaseMemory.EnemyOccludedCheck = 10`); a visible check zeroes it
+		// (`0x10270bb1`). This case drives slot 561 alone, so the enemy is stated in sight.
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
 		// A real notice, delivered: the record is written, and the response policy still raises
 		// nothing, because the policy is what is unrecovered.
 		TestTrue(TEXT("a swing from 100 cm is inside the recovered 150-unit notice radius"),
@@ -743,13 +752,25 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		return false;
 	}
 
+	// The world's clock past the map's first moment: `TASK_WAIT_FOR_MOVEMENT`'s Troika start arm runs
+	// its teleport rescue while `curtime <= m_flTeleportMoveTimer` (+0x65dc, `0x102a1e6a`), and a
+	// clock at zero reads a never-armed timer as live.
+	F.World.Tick(10.0);
 	// Well beyond the pistol's authored range.
 	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
 	F.CommitToTarget(10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
-	TestTrue(TEXT("a distant enemy raises TOO_FAR_TO_ATTACK"),
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
+	// Story 8 wave 2 (the retail pass, slot 433 -> slot 481 `0x10270b20`): past `m_flDistTooFar`
+	// slot 481 raises ENEMY_TOO_FAR (`0x102711be`), `FCanCheckAttacks` (`0x10270840`) refuses on it,
+	// and slot 560 clears the attack set -- so no TOO_FAR_TO_ATTACK is raised at this range; the port's
+	// old gather ran the attack conditions unconditionally.
+	TestTrue(TEXT("0x102711be a distant enemy raises ENEMY_TOO_FAR"),
+		F.Fighter->Cognition.Conditions.Has(ECond::EnemyTooFar));
+	TestFalse(TEXT("0x102711fa ...and the attack set is cleared, TOO_FAR_TO_ATTACK included"),
 		F.Fighter->Cognition.Conditions.Has(ECond::TooFarToAttack));
-	TestEqual(TEXT("...and the ranged selector chases"), F.Fighter->SelectSchedule(), ElysiumSched::SCHED_TROIKA_CHASE_ENEMY);
+	// The Troika ranged ladder then falls through to HAVE_ENEMY_LOS with a ranged weapon.
+	TestEqual(TEXT("0x102b00ee ...and the ranged selector answers FORCED_RANGE_ATTACK1 0xf0"),
+		F.Fighter->SelectSchedule(), 0xf0);
 
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
@@ -763,13 +784,13 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	TestTrue(TEXT("the path was issued at the enemy's feet"),
 		Motor->RequestedFeet.Equals(F.Target->Origin));
-	TestTrue(TEXT("...at the schedule's recovered tolerance of 24 Source units"),
-		F.Services.Log().Contains(FString::Printf(TEXT("radius=%.1f"), 24.0f * ElysiumMove::U)));
-	TestTrue(TEXT("...and at running speed"),
-		FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed));
-	// The chase asks the activity seam for ACT_RUN and plays whatever label it answers with; this
-	// fixture resolves none, so what reaches the body is the stated retail-label fallback.
-	TestTrue(TEXT("run locomotion went onto the body"), F.Services.Saw(TEXT("PlayNpcClip")));
+	// Story 8 wave 2: the chase runs through the retail arms. `TASK_RUN_PATH` (base `0x102863f1`)
+	// writes the path's movement activity (`0x102ee250`): ACT_RUN when the body has a run sequence
+	// (`SelectWeightedSequence(ACT_RUN)` at `0x102863f9`), else ACT_WALK -- that probe is the
+	// kernel's SEAM answering -1, so this fixture's chase walks. The tolerance and gait words the old
+	// op verbs pinned here are the StartTask19 suite's (EnemyGoalArms / ToleranceArms).
+	TestTrue(TEXT("0x1028640e RUN_PATH wrote the path's movement activity"),
+		F.Fighter->ScheduleHost.NavigationActivity != INDEX_NONE);
 
 	// Still travelling: the watch holds the task rather than advancing it.
 	TestTrue(TEXT("an in-flight path keeps the schedule open"),
@@ -780,6 +801,9 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// `10281980` raises SCHEDULE_DONE and the same loop reaches `10281b89` selection. The target is
 	// still too far, so the replacement is another chase rather than a caller-visible empty gap.
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
+	// `OnNavComplete` (`0x102eea90`) and `TaskMovementComplete` (`0x10273ec0`).
+	F.Fighter->NavigatorMoveStep();
 	TestTrue(TEXT("arrival completes and reselects in the same retail loop"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,
 			&F.Fighter->Cognition.Conditions));
@@ -793,8 +817,14 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 
 	// Back in the band, the attack window opens.
 	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
+	if (FElysiumRecordingNpcMotor* TargetMotor = F.MotorFor(F.Target))
+	{
+		TargetMotor->Feet = F.Target->Origin;   // the world's per-frame sync reads the body
+	}
 	F.Fighter->BaseMemory.Enemy = F.Target->Handle;
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 11.0);
+	// A later pass: `Look` (inside slot 433's `PerformSensing`) runs on its own cadence, so the
+	// clock moves on for the sighting that raises SEE_ENEMY (slot 481 `0x10270cfb`).
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Fighter, F.World.NowSeconds() + 0.5);
 	TestTrue(TEXT("an enemy back inside the band is shootable"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
 	// The shot itself is slot 605's arm and is asserted there; what this case owns is that the
@@ -821,8 +851,12 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	}
 	F.RunAdmissionAndLoadout();
 	F.CommitToTarget(0.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 0.0);
-	TestTrue(TEXT("an enemy in reach and faced is attackable"),
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 0.0);
+	// Story 8 wave 2 (the retail pass): the Troika `FCanCheckAttacks` (`0x102953a0`) refuses for a
+	// melee-armed body that is not yet `m_bInMelee` (+0x6078), so slot 481 runs slot 560's clear and
+	// the full pass raises no CAN_MELEE_ATTACK1; the port's old gather ran the attack conditions
+	// unconditionally. The melee ladder takes its approach from SEE_ENEMY regardless (below).
+	TestFalse(TEXT("0x102953a0 a melee body not in melee gathers no CAN_MELEE_ATTACK1"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
 	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
@@ -862,9 +896,10 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0,
 		&F.Fighter->Cognition.Conditions);
 
-	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK wrote the victim's detected-attack record"),
-		ElysiumNpcCond::HasDetectedAttack(*F.Target, 0.0));
-	TestTrue(TEXT("...naming the attacker"),
+	// Story 8 wave 2: `TASK_ANNOUNCE_ATTACK`'s arm is base `0x10286cd9`, `TaskComplete` alone; the
+	// port's op verb that also wrote the victim's detected-attack record was a twin. The record's
+	// producer is the swing's opposed staging (the weapon's melee callback), not the announce.
+	TestFalse(TEXT("0x10286cd9 TASK_ANNOUNCE_ATTACK writes no detected-attack record"),
 		F.Target->Senses.Memory.DetectedAttackAttacker == F.Fighter->Handle);
 
 	FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
@@ -971,7 +1006,7 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 	F.RunAdmissionAndLoadout();
 	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
 	F.CommitToTarget(10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
 
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
@@ -1078,7 +1113,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Fighter));
 
 	F.Fighter->Senses.TickSight(*F.Fighter, 20.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Fighter, 20.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 20.0);
 	TestTrue(TEXT("the idle program does not starve the acquisition"),
 		F.Fighter->BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...and the pass raises NEW_ENEMY"),
@@ -1148,8 +1183,6 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	Dmg.Flags = ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = 10;
 	Dmg.Source = F.Player->Handle;
-	Dmg.AttackPosition = F.Player->Origin;
-	Dmg.bHasAttackPosition = true;
 	Victim.TakeDamage(Dmg, F.Player);
 
 	if (!TestTrue(TEXT("the punch committed damage"), F.DamageTaken(&Victim) > 0))
@@ -1168,14 +1201,19 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// Drive the actual sensory producer after moving the player. `GatherConditions` consumes the
 	// cached result; it does not itself run the Look cadence.
 	Victim.Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	Victim.Senses.Tick(Victim, 1.0);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	// (Sensing runs inside slot 433: `PerformSensing` `0x1026e4f0` at `0x1026ee04`.)
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.0);
 	TestTrue(TEXT("the pass raises the damage condition"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...commits the attacker as the enemy"),
 		Victim.BaseMemory.Enemy == F.Player->Handle);
 	TestTrue(TEXT("...raises NEW_ENEMY"), Victim.Cognition.Conditions.Has(ECond::NewEnemy));
-	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
+	// Corrected to retail: the Troika's slot 564 `FCanCheckAttacks` (`0x102953a0`) refuses a
+	// melee-capable body (slot 513 bit `0x8000`) holding an active weapon while `m_bInMelee`
+	// (`+0x6078`) is clear, so slot 481 runs `ClearAttackConditions` (`0x102711fa`) instead of the
+	// attack gather: melee range alone raises no CAN_MELEE_ATTACK1 before the melee coordinator
+	// (slot 600) has admitted the body. (The port's old gather raised it on range and facing.)
+	TestFalse(TEXT("...but an armed melee body not yet in melee gathers no attack (0x102953a0)"),
 		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 
 	// The interrupt stands against the installed mask — `IsScheduleValid 0x10280ff0` answers false
@@ -1201,8 +1239,13 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	// The next decision pass, in the order `ThinkStanceOrIdle` runs it: the packet that started the
 	// fight is no longer new, so the approach's own `LIGHT_DAMAGE` interrupt no longer fires and the
 	// program reaches its terminal swing. Re-gathering rather than reusing the selection pass's
-	// conditions is what makes that sequencing part of the assertion.
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.1);
+	// conditions is what makes that sequencing part of the assertion. The first pass ends as RunAI's
+	// does: its end-of-pass clear takes LIGHT/HEAVY_DAMAGE (`0x1026f311` / `0x1026f31a`), which is
+	// what gives the packet's bits their one-pass life (corrected to retail: the deleted twin rebuilt
+	// that edge from a gather timestamp).
+	Victim.Cognition.Conditions.Clear(ECond::LightDamage);
+	Victim.Cognition.Conditions.Clear(ECond::HeavyDamage);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.1);
 	TestFalse(TEXT("the damage packet is not gathered twice"),
 		Victim.Cognition.Conditions.Has(ECond::LightDamage));
 	TestTrue(TEXT("...and the enemy stays committed"),
@@ -1232,7 +1275,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 		static_cast<int32>(EElysiumRelationship::Like));
 	TestEqual(TEXT("...and a row that can never win was not stored at all"),
 		Friend.Relationships.NumDerivedRules(), 0);
-	ElysiumNpcEnemy::GatherConditions(Friend, 1.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Friend, 1.0);
 	TestFalse(TEXT("...so it acquires no enemy"), Friend.BaseMemory.Enemy.IsSet());
 
 	// --- The arms with no attacker to remember ---------------------------------------------------
@@ -1287,8 +1330,6 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 	Dmg.Flags = ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = 10;
 	Dmg.Source = F.Player->Handle;
-	Dmg.AttackPosition = F.Player->Origin;
-	Dmg.bHasAttackPosition = true;
 
 	F.Flush(1.0);
 	Victim.TakeDamage(Dmg, F.Player);
@@ -1296,12 +1337,12 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 		Victim.EnemyMemory.Find(F.Player->Handle));
 	TestEqual(TEXT("damage did not fabricate a relationship row"), Victim.Relationships.NumDerivedRules(), 0);
 	Victim.Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	Victim.Senses.Tick(Victim, 1.0);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	// (Sensing runs inside slot 433: `PerformSensing` `0x1026e4f0` at `0x1026ee04`.)
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1.0);
 	TestNotNull(TEXT("the subsequent sight pass writes the actor record"),
 		Victim.EnemyMemory.Find(F.Player->Handle));
 	TestTrue(TEXT("the pass commits the attacker"), Victim.BaseMemory.Enemy == F.Player->Handle);
-	ElysiumNpcEnemy::GatherConditions(Victim, 1000.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(Victim, 1000.0);
 	TestNotNull(TEXT("the actor record has no time expiry"), Victim.EnemyMemory.Find(F.Player->Handle));
 	TestTrue(TEXT("...and the hostile enemy remains committed"),
 		Victim.BaseMemory.Enemy == F.Player->Handle);
@@ -1389,9 +1430,13 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 			return false;
 		}
 		F.CommitToTarget(10.0);
-		ElysiumNpcEnemy::GatherConditions(*F.Fighter, 10.0);
+		FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
 		TestTrue(TEXT("an enemy inside the NPC's own reach is too close to shoot"),
 			F.Fighter->Cognition.Conditions.Has(ECond::TooCloseToAttack));
+		// `ShouldDodgeRangedAttack` (`0x102b7f40`) rolls under 75 at `0x102b7f5f` unless
+		// COND_STOP_BACKUP (0x2c) stands; the condition pins that arm shut so the answer does not ride
+		// the schedule stream's draw (the discipline seam and WEAPON_THROUGH_WALL answer no).
+		F.Fighter->Cognition.Conditions.Set(ECond::StopBackup);
 		// 0xf0 `SCHED_TROIKA_FORCED_RANGE_ATTACK1` is the recovered slot-605 answer here.
 		TestEqual(TEXT("...and the ranged selector answers its recovered program"),
 			F.Fighter->SelectSchedule(), 0xf0);
@@ -1474,8 +1519,9 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	TestNotEqual(TEXT("the failed swing left its own program"), F.Fighter->Schedule.Current,
 		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING));
 
-	// The announce still landed: opponent reservation changes no health and does not need a weapon.
-	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK still delivered its notice"),
+	// `TASK_ANNOUNCE_ATTACK` (base `0x10286cd9`) is `TaskComplete` alone: no notice without a swing
+	// (story 8 wave 2; the port's op verb that delivered one was a twin).
+	TestFalse(TEXT("0x10286cd9 TASK_ANNOUNCE_ATTACK delivers no notice of its own"),
 		ElysiumNpcCond::HasDetectedAttack(*F.Target, 0.0));
 	return true;
 }
@@ -1615,14 +1661,27 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
 	F.Services.ResolvedNpcActivityOwner = TEXT("misc");
 	F.Services.OneShotSeconds = 2.0f;
+	// The player can see where the body falls, so `SUB_PVSRemove` (`0x102696f0`) keeps the corpse.
+	F.Services.bNpcMakerInViewCone = true;
+	F.Services.bNpcMakerVisible = true;
 	F.Services.Calls.Reset();
 
 	// --- The transaction itself -------------------------------------------------------------------
+	// Corrected to retail (story 8 wave 2): the kill is slot 144 — Troika `0x102bf340` ->
+	// `CAI_BaseNPC::Event_Killed` `0x10265ad0` -> `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`,
+	// which ends in slot 301 `CreateCorpse` (`0x1032c0e0`) -> `BecomeClientRagdoll`: the corpse is
+	// made INSIDE the transaction, from the current pose, and its think stops. No `DIE` program runs
+	// for it (the port's retired transaction started `DIE` and handed over at its end — the named
+	// divergence `CompleteDeathHandoff` used to carry).
+	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
+	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
 	F.Fighter->OnKilled();
 
 	TestTrue(TEXT("every animation-channel claim the character held goes back"),
 		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
-	TestTrue(TEXT("the mind is dead, current and ideal both"),
+	TestEqual(TEXT("0x1032b9b0 m_lifeState = LIFE_DYING"), F.Fighter->LifeState, 1);
+	TestFalse(TEXT("...so slot 158 IsAlive answers false"), F.Fighter->IsAlive());
+	TestTrue(TEXT("the mind is dead, current (0x10265dba SetState(7)) and ideal (0x10265d06) both"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Dead
 			&& F.Fighter->GetMind().IdealState() == EElysiumNpcState::Dead);
 	TestTrue(TEXT("...and it owns nothing"),
@@ -1636,46 +1695,21 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestFalse(TEXT("nothing disabled the body"),
 		F.Services.Saw(TEXT("NpcMotor SetEnabled 0")));
 	TestFalse(TEXT("the entity is not killed or hidden by dying"), F.Fighter->IsInert());
-
-	TestTrue(TEXT("the death schedule is selected from the death commit itself"),
-		F.Fighter->Schedule.IsRunning());
-	// Retail's BASE schedule names carry no `SCHED_` prefix -- only Troika's do. The corpus spells
-	// this one `DIE`, and the port reads the name off the loaded program rather than its own table.
-	TestEqual(TEXT("...and it is base DIE"),
-		FString(ElysiumScheduleName(F.Fighter->Schedule.Current)), FString(TEXT("DIE")));
-
-	// --- The program runs, and it is retail's three tasks -----------------------------------------
-	// `DIE` (`0x2b`) is `TASK_STOP_MOVING`, `TASK_SOUND_DIE`, `TASK_DIE`. It names NO activity task,
-	// so nothing in this program plays a death clip and nothing here draws from the Reaction stream.
-	// Retail's only ordinary death pose is the `ACT_DIERAGDOLL` seed inside `BecomeClientRagdoll`
-	// (`0x10090180`), which is the handoff below, not a task.
-	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
-	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
-
-	F.Services.Calls.Reset();
-	F.World.Tick(0.0);
-
-	TestEqual(TEXT("base DIE draws from the Reaction stream not at all"),
-		Reaction.GetCurrentSeed(), ReactionSeedBefore);
-	TestFalse(TEXT("...and plays no death clip, because it names no activity task"),
-		F.Services.Saw(TEXT("ResolveNpcActivityClip")));
-
-	// --- TASK_DIE's commit ------------------------------------------------------------------------
-	// The Troika `RunTask` gate (`0x102abb90`) is
-	// `(IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE`. With no death
-	// performance running the second arm is already open, so the whole program -- stop, sound, die,
-	// commit -- resolves inside the first dead think rather than waiting out a clip.
-	TestTrue(TEXT("the body is offered to physics, seeded from its current pose"),
+	TestTrue(TEXT("0x1032c0e0 the body is offered to physics, seeded from its current pose"),
 		F.Services.Saw(TEXT("StartBodyRagdoll -> 0")));
 	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
 		F.Services.Saw(TEXT("HoldBodyFinalPose")));
-	// Retail's task is STILL RUNNING here and stays running forever: the commit calls `Die` and
-	// returns without completing. What ends the NPC there is `CreateCorpse` (`0x1032c0e0`) taking the
-	// entity out of the world -- unbuilt here, so the commit tears the program down in its place.
-	TestFalse(TEXT("the program is torn down by the commit, standing in for the corpse swap"),
-		F.Fighter->Schedule.IsRunning());
-	TestEqual(TEXT("and nothing on a dead NPC schedules work again"),
-		F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestFalse(TEXT("no death program runs: the corpse's think is gone"), F.Fighter->Schedule.IsRunning());
+	// Corrected (L13 wave-2 fixes): `BecomeClientRagdoll` (`0x10090180`) clears the think, and
+	// `CreateCorpse`'s tail re-arms it -- `ThinkSet(SUB_PVSRemove)` at `curtime + 10.0`
+	// (`0x1032c404..0x1032c423`) for a corpse that does not burn.
+	TestEqual(TEXT("0x1032c40f: CreateCorpse's tail installs SUB_PVSRemove"),
+		F.Fighter->ThinkFunctionName, FString(TEXT("0x102696f0")));
+	TestEqual(TEXT("0x1032c41a..0x1032c423: ...at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(F.World.NowSeconds() + 10.0));
+	TestEqual(TEXT("the death draws from the Reaction stream not at all"),
+		Reaction.GetCurrentSeed(), ReactionSeedBefore);
+	TestFalse(TEXT("...and plays no death clip"), F.Services.Saw(TEXT("PlayNpcClip")));
 
 	// --- No reselection, however hard the world ticks ---------------------------------------------
 	F.Services.Calls.Reset();
@@ -1691,7 +1725,9 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestFalse(TEXT("...no stance machine runs"), F.Services.Saw(TEXT("ResolveStanceClips")));
 	TestFalse(TEXT("...no activity is resolved"), F.Services.Saw(TEXT("ResolveNpcActivityClip")));
 	TestFalse(TEXT("...and the handoff is not repeated"), F.Services.Saw(TEXT("StartBodyRagdoll")));
-	TestEqual(TEXT("the think stays off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: a corpse the player sees re-arms at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(13.0 + 10.0));
+	TestFalse(TEXT("...and stays in the world"), F.Fighter->IsInert());
 
 	// Selection has a SECOND door, and the corpse has to refuse there too: a script's
 	// `ChangeSchedule` and a discipline's `AI_Schedule` channel both arrive through this one, after
@@ -1720,9 +1756,17 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestTrue(TEXT("a body handed back to a corpse is frozen again by its next think"),
 		Motor->bFrozen);
 	TestTrue(TEXT("...and still ignores the character channel"), Motor->bIgnoreCharacterCollision);
-	TestEqual(TEXT("...and the think goes back off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: ...and SUB_PVSRemove re-arms at curtime + 10.0"), F.Fighter->NextThink,
+		static_cast<float>(20.0 + 10.0));
 	TestFalse(TEXT("...without handing the body to physics a second time"),
 		F.Services.Saw(TEXT("StartBodyRagdoll")));
+
+	// --- Nobody sees it: `UTIL_Remove` ------------------------------------------------------------
+	F.Services.bNpcMakerVisible = false;
+	F.Fighter->NextThink = 0.0f;
+	F.World.Tick(40.0);
+	TestTrue(TEXT("0x102696f0: a corpse no player sees is removed (0x101cd940 UTIL_Remove)"),
+		F.Fighter->IsDead());
 	return true;
 }
 
@@ -1754,13 +1798,18 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
 		F.Services.ResolvedNpcActivityOwner = TEXT("misc");
 		F.Services.OneShotSeconds = 2.0f;
+		// The player sees the corpse, so `SUB_PVSRemove` (`0x102696f0`) keeps it and re-arms.
+		F.Services.bNpcMakerInViewCone = true;
+		F.Services.bNpcMakerVisible = true;
 
 		F.Fighter->OnKilled();
 		F.World.Tick(0.0);
 		F.Fighter->NextThink = 0.0f;
 		F.World.Tick(F.Services.OneShotSeconds + 0.1);
-		if (!TestEqual(TEXT("the corpse is saved with its think off"),
-			F.Fighter->NextThink, ELYSIUM_NEVER_THINK))
+		// Corrected (L13 wave-2 fixes): a corpse is not saved with its think off -- `CreateCorpse`'s
+		// tail armed `SUB_PVSRemove`, which re-arms at `curtime + 10.0` while a player sees it.
+		if (!TestEqual(TEXT("0x102696f0: the seen corpse is saved with its removal think re-armed"),
+			F.Fighter->NextThink, static_cast<float>(F.Services.OneShotSeconds + 0.1 + 10.0)))
 		{
 			return false;
 		}
@@ -1790,6 +1839,8 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		return false;
 	}
 	TestFalse(TEXT("...which starts unfrozen, as a live NPC's does"), Motor->bFrozen);
+	G.Services.bNpcMakerInViewCone = true;
+	G.Services.bNpcMakerVisible = true;
 	G.Services.Calls.Reset();
 
 	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
@@ -1803,10 +1854,9 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		G.Services.Saw(TEXT("HoldBodyFinalPose")));
 	TestTrue(TEXT("...still visible, because a corpse is not hidden"), Motor->bEnabled);
 	// The restore does NOT buy a think to do this with: the saved cadence is authoritative, and for a
-	// corpse it is `never`. A restored corpse that re-armed a think would also be a restored corpse
-	// whose payload failed its own round trip.
+	// corpse it is the removal think's `curtime + 10.0`.
 	TestEqual(TEXT("the saved cadence survives the restore"),
-		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+		G.Fighter->NextThink, static_cast<float>(2.0 + 0.1 + 10.0));
 	TestFalse(TEXT("and no schedule restarts on a corpse whose program had already ended"),
 		G.Fighter->Schedule.IsRunning());
 
@@ -1829,8 +1879,8 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 		G.Fighter->Schedule.IsRunning());
 	TestFalse(TEXT("...and no activity is resolved"),
 		G.Services.Saw(TEXT("ResolveNpcActivityClip")));
-	TestEqual(TEXT("...and the think goes back off"),
-		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x102696f0: ...and the restored corpse re-arms its removal think (the think name is not saved; a committed corpse runs SUB_PVSRemove)"),
+		G.Fighter->NextThink, static_cast<float>(32.0 + 10.0));
 	return true;
 }
 

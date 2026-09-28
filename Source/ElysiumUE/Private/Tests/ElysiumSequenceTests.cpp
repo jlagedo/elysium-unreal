@@ -722,8 +722,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, 72.2f, 0.01f));
 		TestTrue(TEXT("the speed came from the named clip, not a weighted activity"),
 			Services.Saw(TEXT("ResolveNpcSequenceClip isaac sneak_0")));
-		TestFalse(TEXT("the custom gait never asks the activity resolver"),
-			Services.Saw(TEXT("ResolveNpcActivityClip")));
+		// Narrowed (story 8 wave 2): the kernel's own activity maintenance now asks the resolver
+		// for the body's idle (the sequence bridge), so the witness is the GAIT's activity — the
+		// custom move never resolves a walk.
+		TestFalse(TEXT("the custom gait never asks the activity resolver for a walk"),
+			Services.Saw(TEXT("ResolveNpcActivityClip isaac ACT_WALK")));
 	}
 
 	// The stub reports no motion record for the named clip: the beat falls back to
@@ -1216,8 +1219,10 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 
 		// The NPC settles onto its own stance idle first: that is the schedule the beat displaces.
 		// A stance machine that keeps writing after the beat starts overwrites `m_iszPlay` mid-beat.
+		// (Story 8 wave 2: the retail loop commits the first stance at the fifth think, 0.4 s — the
+		// idle task restarts ACT_DISPOSITION once the floor sequence has finished.)
 		double Now = 0.0;
-		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+		for (int32 i = 0; i < 5; ++i) { World.Tick(Now); Now += 0.1; }
 		const int32 StanceBefore = Services.Count(StancePrefix);
 		TestTrue(*(Case + TEXT(": the NPC's own stance machine is running before the beat")),
 			StanceBefore > 0);
@@ -1286,8 +1291,10 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 			return false;
 		}
 
+		// (Story 8 wave 2: the retail loop commits the first stance at the fifth think, 0.4 s — the
+		// idle task restarts ACT_DISPOSITION once the floor sequence has finished.)
 		double Now = 0.0;
-		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+		for (int32 i = 0; i < 5; ++i) { World.Tick(Now); Now += 0.1; }
 		const int32 StanceBefore = Services.Count(StancePrefix);
 
 		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,

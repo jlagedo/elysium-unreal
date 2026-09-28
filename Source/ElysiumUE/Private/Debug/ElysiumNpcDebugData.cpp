@@ -170,8 +170,8 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 
 	bHasEnemy = Npc.BaseMemory.Enemy.IsSet();
 	Enemy = HandleLabel(World, Npc.BaseMemory.Enemy);
-	bEnemyOccluded = Memory.bEnemyOccluded;
-	EnemyLosFailures = Memory.EnemyLosFailures;
+	EnemyLosFailures = Npc.BaseMemory.EnemyOccludedCheck;   // slot 481's `+0x5b98`
+	bEnemyOccluded = EnemyLosFailures >= ElysiumNpcSense::EnemyLosFailureLimit;
 	if (const FElysiumEntity* EnemyEntity = ElysiumNpcCond::ResolveEnemyHandle(World, Npc.BaseMemory.Enemy))
 	{
 		EnemyPosition = EnemyEntity->EyePosition();

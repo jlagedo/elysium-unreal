@@ -97,19 +97,21 @@ namespace
 		return 0;
 	}
 
-	// A controller whose slot 614 records how many times the Troika think stub had fired at the
-	// moment it ran, so `0x103a4700`'s ORDER (the direct think, THEN the virtual reset) is observable.
+	// A controller whose slot 614 records whether the Troika think had already run when it did, so
+	// `0x103a4700`'s ORDER (the direct think, THEN the virtual reset) is observable. Story 8 lane
+	// L13b ported `0x10292de0`, which no longer tallies a stub: the witness is its first write,
+	// `m_bfAINPCFlags2 &= 0x7ffffffb` (`0x10292e5e`), which runs before its `m_bDisableAI` return.
 	class FControllerThinkOrderProbe final : public FElysiumNpcPlayerController
 	{
 	public:
 		virtual void ResetThinkTimers(double Now) override
 		{
 			++Resets;
-			TroikaThinksAtReset = StubFires(TEXT("CAI_BaseNPCTroika::NPCThink"));
+			bScheduleChangedAtReset = NpcFlags.Has(EElysiumNpcFlag2::SCHEDULE_CHANGED);
 			FElysiumNpcPlayerController::ResetThinkTimers(Now);
 		}
 		int32 Resets = 0;
-		int32 TroikaThinksAtReset = -1;
+		bool bScheduleChangedAtReset = true;
 	};
 }
 
@@ -225,11 +227,13 @@ bool FElysiumNpcKernelPlayerControllerThinkOrderTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Probe });
-	const int32 Before = StubFires(TEXT("CAI_BaseNPCTroika::NPCThink"));
+	Probe->NpcFlags.Set(EElysiumNpcFlag2::SCHEDULE_CHANGED);
 	Probe->Resets = 0;
 	Probe->NPCThink();
 	TestEqual(TEXT("slot 614 ran once"), Probe->Resets, 1);
-	TestEqual(TEXT("AFTER the direct Troika think had run"), Probe->TroikaThinksAtReset, Before + 1);
+	// `0x10292e5e`: the Troika think clears SCHEDULE_CHANGED first; slot 614 saw it clear.
+	TestFalse(TEXT("AFTER the direct Troika think had run (0x10292e5e cleared the bit)"),
+		Probe->bScheduleChangedAtReset);
 	return true;
 }
 
@@ -325,14 +329,23 @@ bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 		StubFires(TEXT("CBaseAnimating::RemoveExtraAnimationModels")), RemoveBefore + 1);
 
 	// Slots 142 / 390 `0x10376ae0` / `0x10376b10`: the owner takes the damage; the shadow answers 0.
-	const int32 TakeBefore = StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamage(nullptr), 0);
-	TestEqual(TEXT("after forwarding to the owner's slot 142"),
-		StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage")), TakeBefore + 1);
-	const int32 AliveBefore = StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive"));
-	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"), Shadow->OnTakeDamage_Alive(nullptr), 0);
-	TestEqual(TEXT("after forwarding to the owner's combat character slot 390"),
-		StubFires(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive")), AliveBefore + 1);
+	// The owner's slot 142 here is `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`, a hand body)
+	// and its slot 390 `0x103302e0`, whose slot 299 `CreateDamageEffects` (`+0x4ac`, still a 29e stub)
+	// is the forward's witness: it runs on the OWNER on every alive packet, before any commit.
+	// NAMED GAP (not a retail route): retail's player slot 142 is `CBasePlayer::OnTakeDamage`
+	// `0x10163020` (`vtmb_callers 0x1033a9e0`), whose refusals, feed teardown and `+use` drop wrap the
+	// call into `0x1032ef60`; the port's player carries no slot-142 body, so this route pins the
+	// forward, not the player's whole transaction.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Packet;
+	Packet.Damage = 0.f;   // nothing to commit: the witness is the dispatch, not the health
+	const int32 TakeBefore = StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects"));
+	TestEqual(TEXT("OnTakeDamage always answers 0"), Shadow->OnTakeDamage(&Packet), 0);
+	TestEqual(TEXT("after forwarding to the owner's slot 142 (0x1032ef60 -> slot 390 -> slot 299)"),
+		StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects")), TakeBefore + 1);
+	const int32 AliveBefore = StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects"));
+	TestEqual(TEXT("OnTakeDamage_Alive always answers 0"), Shadow->OnTakeDamage_Alive(&Packet), 0);
+	TestEqual(TEXT("after forwarding to the owner's combat character slot 390 (0x103302e0 -> slot 299)"),
+		StubFires(TEXT("CBaseCombatCharacter::CreateDamageEffects")), AliveBefore + 1);
 	// Slot 144 `0x10376b50` is three bytes.
 	const int32 KilledBefore = StubFires(TEXT("CAI_BaseNPCTroika::Event_Killed"));
 	Shadow->Event_Killed(nullptr);

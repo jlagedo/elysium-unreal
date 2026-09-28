@@ -1078,7 +1078,7 @@ double FElysiumCombatCharacter::FeedThinkDeadline(double Now) const
 	// The transaction's next boundary: the phase deadline, and the blood pulse while it is
 	// actually draining. Split out of `ScheduleFeedThink` because an NPC half no longer writes its
 	// own think -- the NPC think cadence owns `NextThink` and PULLS this through
-	// `FElysiumNpc::HardThinkDeadline`. The player half still writes it, below.
+	// nothing: an NPC victim's think is `NPCThink`'s own (its AI pass skipped by `RunAlternateAI`'s grapple-victim arm, `0x1028fe1f`). The player half still writes it, below.
 	if (FeedState.Phase == EElysiumFeedPhase::None)
 	{
 		return static_cast<double>(ELYSIUM_NEVER_THINK);

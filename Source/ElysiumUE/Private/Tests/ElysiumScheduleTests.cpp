@@ -19,6 +19,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumNpc.h"          // the Troika slot-440 arm, asked on a stood-up leaf
 #include "Tests/ElysiumNpcTestFixture.h"   // the world that leaf stands in
 #include "Tests/ElysiumTestServices.h"   // the recording motor TASK_MOVE_AWAY_PATH projects through
@@ -31,15 +32,14 @@ namespace
 	// One line per task body call, so a program's shape is asserted rather than its side effects.
 	struct FRecordingRunner final : IElysiumScheduleRunner
 	{
-		FRecordingRunner() { Motor.Calls = &Calls; }
-
 		TArray<FString> Calls;
 		TArray<int32> FailureReasons;
 		int32 CompletedSchedules = 0;
 		const FElysiumScheduleState* ObservedState = nullptr;
 		TArray<int32> OutgoingSchedules;
-		EElysiumMoveWatch MovementResult = EElysiumMoveWatch::Failed;
-		virtual EElysiumMoveWatch WaitForMovement() override { return MovementResult; }
+		// `TASK_WAIT_FOR_MOVEMENT`'s scripted outcome: still travelling, arrived, or failed.
+		enum class EMove : uint8 { Moving, Arrived, Failed };
+		EMove MovementResult = EMove::Failed;
 		// The one condition the kernel itself raises. `TaskFail` (`0x10273fc0`) sets `TASK_FAILED` and
 		// the install (`SetSchedule`) zeroes it; a case passes `&Conditions` on the tick after a
 		// failure, as the NPC's think passes its own gathered set.
@@ -77,59 +77,117 @@ namespace
 		// Knobs a test turns to drive each branch.
 		bool bVisible = true;
 		float IdleClipSeconds = 2.f;
-		float ActivitySeconds = 1.f;
 		bool bIdleAvailable = true;
-		bool bActivityResolves = true;
 		bool bIdealActivityCurrent = true;
-		bool bMotor = true;
 		// `WAIT_RANDOM` draws through the NPC schedule stream in the real runner; here it is fixed
 		// so a duration is a literal in the test rather than a seed to reverse-engineer.
 		float RandomFraction = 1.f;
 
-		// `TASK_MOVE_AWAY_PATH` runs the REAL rule rather than a double of it: the runner
-		// supplies the two positions and a recording motor, and
-		// `ElysiumSchedule::StepAwayFromSavePosition` does the extrapolating, the projecting and the
-		// re-testing. The NPC stands 200 cm out from what obstructed it, so a retreat is +X.
-		FElysiumRecordingNpcMotor Motor;
-		FVector Origin = FVector(200.0, 0.0, 0.0);
-		FVector SavePosition = FVector::ZeroVector;
-		ElysiumSchedule::ERetreat LastRetreat = ElysiumSchedule::ERetreat::Moving;
-
-		virtual float RunSpecialIdleActivity(double Now) override
-		{
-			Calls.Add(TEXT("SpecialIdleActivity"));
-			return bIdleAvailable ? IdleClipSeconds : -1.f;
-		}
-		virtual bool IsBodyVisible() const override { return bVisible; }
 		// A body that asks for `ClearSchedule` from inside its `TASK_SET_ACTIVITY` arm, the shape of
 		// the task-body callers.
 		bool bClearFromActivityTask = false;
-		virtual float PlayActivity(const FString& Activity) override
+		// `WAIT_RANDOM` draws `RandomFloat(0.1, arg)`; here it is fixed so a duration is a literal.
+		float RandomSeconds(float Max) const { return 0.1f + (Max - 0.1f) * RandomFraction; }
+
+		// --- The scripted task body (slots 442 / 444) ---------------------------------------------
+		//
+		// Story 8 wave 2: the kernel reaches task bodies only through `StartTaskForMaintenance` /
+		// `RunTaskForMaintenance` (the retail `StartTask` / `RunTask` dispatch at `0x10281e10` /
+		// `0x1028202c`). The kernel's contract -- WHEN it asks, what a status it reads back does, the
+		// fail route, the loop bounds -- is what these cases assert, so the body here is a small
+		// script keyed on the task's retail name, standing for the retail arms whose own semantics
+		// the `NpcKernelStartTask19` / `NpcKernelRunTask19` suites assert on a real NPC. A task the
+		// script does not name completes on its start.
+		static FString TaskName(const FElysiumScheduleStep& Step)
 		{
-			Calls.Add(FString::Printf(TEXT("SetActivity %s"), *Activity));
-			if (bClearFromActivityTask)
+			return FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId);
+		}
+		static void Complete(FElysiumScheduleState& State) { State.TaskStatus = EElysiumTaskStatus::Complete; }
+		virtual void StartTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step,
+			double Now) override
+		{
+			const FString Name = TaskName(Step);
+			if (Name == TEXT("TASK_SPECIAL_IDLE_ACTIVITY"))
 			{
-				bRequestClear = true;
+				Calls.Add(TEXT("SpecialIdleActivity"));
+				if (!bIdleAvailable)
+				{
+					TaskFail(0x15);
+					return;
+				}
+				State.TaskEndsAt = Now + IdleClipSeconds;
 			}
-			return bActivityResolves ? ActivitySeconds : -1.f;
+			else if (Name == TEXT("TASK_SET_ACTIVITY"))
+			{
+				const FString* Activity =
+					FElysiumScheduleCorpus::Get().Activities().NameOf(static_cast<int32>(Step.Data));
+				Calls.Add(FString::Printf(TEXT("SetActivity %s"), Activity != nullptr ? **Activity : TEXT("?")));
+				if (bClearFromActivityTask)
+				{
+					bRequestClear = true;
+				}
+				State.TaskEndsAt = Now + 1.0;   // the Troika arm's one-second watchdog
+			}
+			else if (Name == TEXT("TASK_WAIT"))
+			{
+				State.TaskEndsAt = Now + Step.Data;
+			}
+			else if (Name == TEXT("TASK_WAIT_RANDOM"))
+			{
+				State.TaskEndsAt = Now + RandomSeconds(Step.Data);
+			}
+			else if (Name == TEXT("TASK_WAIT_PVS") || Name == TEXT("TASK_WAIT_FOR_MOVEMENT"))
+			{
+				// Their start arms do nothing; the run arms decide.
+			}
+			else if (Name == TEXT("TASK_MAKE_OBLIVIOUS"))
+			{
+				Calls.Add(FString::Printf(TEXT("MakeOblivious %s"), Step.Data != 0.f ? TEXT("TRUE") : TEXT("FALSE")));
+				if (Step.Data != 0.f) { AddOblivious(); } else { RemoveOblivious(); }
+				Complete(State);
+			}
+			else if (Name == TEXT("TASK_SET_NPC_FLAG"))
+			{
+				const uint32 EncodedFlag = Step.RawWord();
+				if ((EncodedFlag & 0x80000000u) != 0)
+				{
+					Flags.Set(static_cast<EElysiumNpcFlag2>(EncodedFlag & 0x7fffffffu));
+				}
+				else
+				{
+					const EElysiumNpcFlag Flag = static_cast<EElysiumNpcFlag>(EncodedFlag);
+					Calls.Add(FString::Printf(TEXT("SetNpcFlag %s"), FElysiumNpcFlags::LexToString(Flag)));
+					Flags.Set(Flag);
+				}
+				Complete(State);
+			}
+			else
+			{
+				Complete(State);
+			}
 		}
-		virtual bool IsIdealActivityCurrent() const override { return bIdealActivityCurrent; }
-		virtual bool FaceSavePosition() override
+		virtual void RunTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step,
+			double Now) override
 		{
-			Calls.Add(TEXT("FaceSavePosition"));
-			return bMotor;
+			const FString Name = TaskName(Step);
+			if (Name == TEXT("TASK_SET_ACTIVITY"))
+			{
+				if (bIdealActivityCurrent || Now >= State.TaskEndsAt) { Complete(State); }
+			}
+			else if (Name == TEXT("TASK_WAIT_PVS"))
+			{
+				if (bVisible) { Complete(State); }
+			}
+			else if (Name == TEXT("TASK_WAIT_FOR_MOVEMENT"))
+			{
+				if (MovementResult == EMove::Arrived) { Complete(State); }
+				else if (MovementResult == EMove::Failed) { TaskFail(0x0c); }
+			}
+			else if (Now >= State.TaskEndsAt)
+			{
+				Complete(State);
+			}
 		}
-		virtual bool StepAwayFromSavePosition(float DistanceCm) override
-		{
-			FVector Destination = FVector::ZeroVector;
-			LastRetreat = ElysiumSchedule::StepAwayFromSavePosition(bMotor ? &Motor : nullptr,
-				Origin, SavePosition, DistanceCm, Destination);
-			Calls.Add(FString::Printf(TEXT("StepAway %.0f -> %s"), DistanceCm,
-				ElysiumSchedule::RetreatResultName(LastRetreat)));
-			return LastRetreat == ElysiumSchedule::ERetreat::Moving;
-		}
-		// `RandomFloat(0.1, Max)`: the fraction spans the retail range, floor included.
-		virtual float RandomSeconds(float Max) override { return 0.1f + (Max - 0.1f) * RandomFraction; }
 
 		// `ClearSchedule` from inside a task: the next task step the kernel runs asks and consumes it.
 		bool bRequestClear = false;
@@ -143,17 +201,6 @@ namespace
 		{
 			Calls.Add(TEXT("ClearPreservePath"));
 			Flags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
-		}
-
-		// The death ladder's one rung. `PlayableDeathActivities` is this body's vocabulary:
-		// EMPTY but for `ACT_IDLE` is the shipped corpus, where `ACT_DIESIMPLE` resolves on zero
-		// bodies. FString comparison is case-insensitive, like every other vocabulary key here.
-		TSet<FString> PlayableDeathActivities = { FString(TEXT("ACT_IDLE")) };
-		float DeathClipSeconds = 3.f;
-		virtual float PlayDeathActivity(const FString& Activity) override
-		{
-			Calls.Add(FString::Printf(TEXT("DeathActivity %s"), *Activity));
-			return PlayableDeathActivities.Contains(Activity) ? DeathClipSeconds : -1.f;
 		}
 
 		virtual void RecordScheduleEvent(const FString& Row) override
@@ -179,30 +226,6 @@ namespace
 			Flags.Clear(EElysiumNpcFlag2::MADE_OBLIVIOUS);
 		}
 		int32 ConditionClears = 0;
-		virtual void MakeOblivious(bool bOblivious) override
-		{
-			Calls.Add(FString::Printf(TEXT("MakeOblivious %s"),
-				bOblivious ? TEXT("TRUE") : TEXT("FALSE")));
-			if (bOblivious)
-			{
-				AddOblivious();
-			}
-			else
-			{
-				RemoveOblivious();
-			}
-		}
-		virtual void SetNpcFlag(uint32 EncodedFlag) override
-		{
-			if ((EncodedFlag & 0x80000000u) != 0)
-			{
-				Flags.Set(static_cast<EElysiumNpcFlag2>(EncodedFlag & 0x7fffffffu));
-				return;
-			}
-			const EElysiumNpcFlag Flag = static_cast<EElysiumNpcFlag>(EncodedFlag);
-			Calls.Add(FString::Printf(TEXT("SetNpcFlag %s"), FElysiumNpcFlags::LexToString(Flag)));
-			Flags.Set(Flag);
-		}
 		virtual void ClearConditions() override
 		{
 			++ConditionClears;
@@ -254,89 +277,6 @@ namespace
 }
 
 // ============================================================================================
-// `SCHED_TROIKA_ALERT_LOOK_AROUND_NI` is the schedule whose whole shape is its task order:
-// `SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND; WAIT 3; WAIT_RANDOM 3; SET_ACTIVITY ACT_IDLE;
-//  WAIT_RANDOM 2`. Both activities must play, in that order, with the waits actually holding.
-// ============================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTaskOrderTest,
-	"Elysium.Substrate.Schedule.TaskOrder", GElysiumScheduleTestFlags)
-bool FElysiumScheduleTaskOrderTest::RunTest(const FString&)
-{
-	FRecordingRunner Runner;
-	FElysiumScheduleState State;
-	double Now = 0.0;
-
-	TestTrue(TEXT("the alert lookaround schedule is registered"),
-		ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI, Runner));
-	TestTrue(TEXT("starting one traces its retail number"),
-		Runner.Saw(TEXT("SCHED_TROIKA_ALERT_LOOK_AROUND_NI")));
-
-	RunToEnd(State, Runner, Now);
-
-	// The two activities, in order, with nothing between them but waits.
-	const TArray<FString> Activities = Runner.Calls.FilterByPredicate([](const FString& C)
-	{
-		return C.StartsWith(TEXT("SetActivity"));
-	});
-	if (TestEqual(TEXT("the schedule plays exactly two activities"), Activities.Num(), 2))
-	{
-		TestEqual(TEXT("the lookaround fidget is first"), Activities[0],
-			FString(TEXT("SetActivity ACT_ALERT_FIDGET_LOOKAROUND")));
-		TestEqual(TEXT("and it returns to idle after"), Activities[1],
-			FString(TEXT("SetActivity ACT_IDLE")));
-	}
-
-	// WAIT 3 + WAIT_RANDOM 3 + WAIT_RANDOM 2, with the draw pinned to its maximum.
-	TestTrue(TEXT("the authored waits actually hold the schedule open"), Now >= 8.0);
-	TestFalse(TEXT("the schedule ends rather than looping"), State.IsRunning());
-	return true;
-}
-
-// ============================================================================================
-// `TASK_WAIT_PVS` is the throttle. It is the one task with no clock, so it holds until the body is
-// visible however long that takes — and the schedule must not advance past it meanwhile. This is
-// the branch nothing else exercises: the recording services default to visible, because a headless
-// run has no renderer to answer the question.
-// ============================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleWaitPvsTest,
-	"Elysium.Substrate.Schedule.WaitPvs", GElysiumScheduleTestFlags)
-bool FElysiumScheduleWaitPvsTest::RunTest(const FString&)
-{
-	FRecordingRunner Runner;
-	Runner.bVisible = false;
-	Runner.IdleClipSeconds = 1.f;
-	FElysiumScheduleState State;
-	double Now = 0.0;
-
-	ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, Runner);
-
-	// Long past the stance clip's end, so the only thing still holding is the PVS task. The step is
-	// the case's own: the kernel proposes no cadence (retail's `MaintainSchedule` never informs the
-	// think clocks), and how often an unseen body is asked is the NPC think cadence's answer, not
-	// this task's.
-	for (int32 i = 0; i < 60; ++i)
-	{
-		TestTrue(TEXT("an unseen NPC's idle schedule stays open"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-		Now = FMath::Max(Now + 0.5, State.TaskEndsAt);
-	}
-	const int32 SelectionsWhileUnseen = Runner.Calls.FilterByPredicate([](const FString& C)
-	{
-		return C == TEXT("SpecialIdleActivity");
-	}).Num();
-	TestEqual(TEXT("and selects exactly once — the throttle is the whole point"),
-		SelectionsWhileUnseen, 1);
-	TestTrue(TEXT("...however long it is held open for"), Now >= 25.0);
-
-	// Coming back into view releases it, and the schedule ends so the NPC selects again.
-	Runner.bVisible = true;
-	TestFalse(TEXT("becoming visible completes the wait and ends the schedule"),
-		ElysiumSchedule::Tick(State, Runner, Now));
-	TestFalse(TEXT("the state is cleared for the next selection"), State.IsRunning());
-	return true;
-}
-
-// ============================================================================================
 // A task that cannot run fails the schedule by name. `TASK_SPECIAL_IDLE_ACTIVITY` failing is the
 // real case: a model carrying no `Stance_*` clips has no stance machine, and its idle schedule must
 // end — reporting why — rather than holding the NPC in a program that will never advance.
@@ -365,47 +305,6 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 			ElysiumScheduleGlobalId(ElysiumSched::FAIL));
 	}
 
-	// --- A TASK_SET_ACTIVITY miss still advances the program -----------------------------------
-	// Troika StartTask arm 0x102a1c0f has no TaskFail branch. Its RunTask arm waits for the current
-	// sequence or a one-second watchdog. The cover program has a fail schedule, which makes it the
-	// control: an unresolved activity must advance through the watchdog without taking it.
-	{
-		FRecordingRunner Runner;
-		Runner.bActivityResolves = false;   // preserve the real negative return from PlayActivity
-		Runner.bIdealActivityCurrent = false;
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		// `SCHED_TROIKA_ALERT_LOOK_AROUND_NI`, whose FIRST task is the activity:
-		// `TASK_SET_ACTIVITY ACTIVITY:ACT_ALERT_FIDGET_LOOKAROUND`, then `TASK_WAIT 3`. (The cover
-		// program used to be the control here; its real text opens with `TASK_SET_TOLERANCE_DISTANCE`
-		// and `TASK_GET_PATH_TO_HINTNODE`, which this runtime has no body for.)
-		ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI, Runner);
-		TestTrue(TEXT("the unresolved activity starts without failing"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-		TestTrue(TEXT("the trace records the body's unresolved activity"),
-			Runner.Saw(TEXT("TASK_SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND unresolved")));
-		TestTrue(TEXT("the miss is not reported as a failed task"),
-			Runner.FailureReasons.IsEmpty());
-		TestEqual(TEXT("the original schedule holds at its activity before the watchdog"), State.Current,
-			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI));
-		TestEqual(TEXT("the unresolved activity is still the current task"), State.TaskIndex, 0);
-		TestFalse(TEXT("no fail route is taken"), Runner.Saw(TEXT("FAIL")));
-
-		Now = 0.5;
-		TestTrue(TEXT("the miss waits until the one-second watchdog"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-		TestEqual(TEXT("it remains on the activity before the deadline"), State.TaskIndex, 0);
-
-		Now = 1.0;
-		TestTrue(TEXT("the watchdog completes into the authored wait"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-		TestEqual(TEXT("the original schedule advances to its wait"), State.Current,
-			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_ALERT_LOOK_AROUND_NI));
-		TestEqual(TEXT("the wait is the second task after the watchdog"), State.TaskIndex, 1);
-		TestFalse(TEXT("the watchdog still does not take a fail route"), Runner.Saw(TEXT("FAIL")));
-	}
-
 	// --- An unregistered schedule installs IDLE_STAND (`SetSchedule(int)` 0x102cc1f0) -----------
 	{
 		FRecordingRunner Runner;
@@ -416,369 +315,6 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 			ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
 		TestTrue(TEXT("the trace names the miss"), Runner.Saw(TEXT("GetScheduleOfType(): No CASE")));
 		TestTrue(TEXT("a miss is not a task failure"), Runner.FailureReasons.IsEmpty());
-	}
-	return true;
-}
-
-// ============================================================================================
-// The near-door reaction, whose task bodies are motor verbs. It must face what obstructed it before
-// retreating — backing away from something the NPC is not looking at is the wrong shape — and it
-// must fail rather than pretend when there is no motor to do either.
-// ============================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleDoorTest,
-	"Elysium.Substrate.Schedule.DoorBackAway", GElysiumScheduleTestFlags)
-bool FElysiumScheduleDoorTest::RunTest(const FString&)
-{
-	{
-		FRecordingRunner Runner;
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		// Retail's own text, and it is not the program this port invented. It opens
-		// `TASK_SET_FAIL_SCHEDULE SCHEDULE:SCHED_TROIKA_BACK_AWAY_FROM_DOOR_RUN_NE`, then
-		// `TASK_FACE_SAVEPOSITION`, and its retreat is eight `TASK_STEP_BACK`s paced by
-		// `TASK_WAIT_FINISH_SET` / `TASK_WAIT_FINISH_ADD_RANDOM` -- none of which this runtime has a
-		// body for. **`TASK_MOVE_AWAY_PATH`, the task the port DID implement for this family, is
-		// named by no shipped text at all.**
-		ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE, Runner);
-		RunToEnd(State, Runner, Now);
-
-		TestTrue(TEXT("the NPC faces the obstruction first, which is the one ported task here"),
-			Runner.Calls.Contains(TEXT("FaceSavePosition")));
-		TestFalse(TEXT("and TASK_MOVE_AWAY_PATH is never reached: no text names it"),
-			Runner.Calls.ContainsByPredicate([](const FString& C)
-			{
-				return C.StartsWith(TEXT("StepAway"));
-			}));
-		TestTrue(TEXT("the program stops on the first task with no body in this runtime"),
-			Runner.Saw(TEXT("TASK_WAIT_FINISH_SET has no body")));
-	}
-	{
-		// No motor: the tasks fail rather than reporting a retreat that never happened.
-		FRecordingRunner Runner;
-		Runner.bMotor = false;
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		ElysiumSchedule::Start(State, ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE, Runner);
-		TestTrue(TEXT("a bodiless NPC cannot back away, and the pass ends on the failure"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-		TestTrue(TEXT("the next pass routes it into FAIL"),
-			ElysiumSchedule::Tick(State, Runner, Now + 0.1, &Runner.Conditions));
-		// NOT base `FAIL`: the program's own first task set its route, which is exactly what
-		// `TASK_SET_FAIL_SCHEDULE` is for and what the port's `FElysiumSchedule::FailSchedule`
-		// field -- an invention, since no retail text declares one -- used to stand in for.
-		TestEqual(TEXT("the route is the one TASK_SET_FAIL_SCHEDULE named"), State.Current,
-			ElysiumScheduleGlobalId(0x93));
-		TestEqual(TEXT("...which is SCHED_TROIKA_BACK_AWAY_FROM_DOOR_RUN_NE"),
-			FString(ElysiumScheduleName(State.Current)),
-			FString(TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_RUN_NE")));
-		TestTrue(TEXT("the trace names the motor task that failed"),
-			Runner.Saw(TEXT("TASK_FACE_SAVEPOSITION failed")));
-		TestTrue(TEXT("...with the generic task-failure reason"),
-			Runner.FailureReasons.Contains(0x0c));
-	}
-	return true;
-}
-
-// ============================================================================================
-// 11.14 — `TASK_MOVE_AWAY_PATH` asks the world where the step back actually lands, then re-tests
-// what came back. The re-test is the whole point: projection answers "where can someone stand",
-// not "is this still away from the door", so a navigable point that is no longer a retreat has to
-// fail the schedule rather than walk the NPC into the swing it was told to leave.
-// ============================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleRetreatProjectionTest,
-	"Elysium.Substrate.Schedule.RetreatProjection", GElysiumScheduleTestFlags)
-bool FElysiumScheduleRetreatProjectionTest::RunTest(const FString&)
-{
-	// --- Open floor: the projection returns the point, the re-test passes, the body moves --------
-	{
-		FElysiumRecordingNpcMotor Motor;
-		FVector Destination = FVector::ZeroVector;
-		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
-			&Motor, /*Origin*/ FVector(200.0, 0.0, 0.0), /*SavePosition*/ FVector::ZeroVector,
-			/*DistanceCm*/ 100.f, Destination);
-		TestEqual(TEXT("a projectable retreat moves"), Result, ElysiumSchedule::ERetreat::Moving);
-		TestTrue(TEXT("and it steps directly away from what obstructed it"),
-			Destination.Equals(FVector(300.0, 0.0, 0.0)));
-		TestTrue(TEXT("the destination handed to the motor is the PROJECTED point"),
-			Motor.RequestedFeet.Equals(Destination));
-	}
-
-	// --- The projection pulls the point back through the doorway: no longer a retreat ------------
-	{
-		FElysiumRecordingNpcMotor Motor;
-		// The only navigable ground near the extrapolated point is BEHIND the NPC, closer to the
-		// obstruction than it already stands.
-		Motor.ProjectedOverride = FVector(150.0, 0.0, 0.0);
-		FVector Destination = FVector::ZeroVector;
-		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
-			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
-		TestEqual(TEXT("a projection that gained no ground is refused"), Result,
-			ElysiumSchedule::ERetreat::NotARetreat);
-		TestFalse(TEXT("and no movement request is issued at all"), Motor.bMoving);
-	}
-
-	// --- A sideways slide is not a step back either ----------------------------------------------
-	{
-		FElysiumRecordingNpcMotor Motor;
-		// Projected along the wall: navigable, and exactly as far from the obstruction as before.
-		Motor.ProjectedOverride = FVector(200.0, 100.0, 0.0);
-		FVector Destination = FVector::ZeroVector;
-		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
-			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
-		// 223.6 cm out against 200 standing: it gained ground, so it IS a retreat. The margin only
-		// rejects a projection that gained less than `RetreatMarginCm`.
-		TestEqual(TEXT("a slide that still gains ground remains a retreat"), Result,
-			ElysiumSchedule::ERetreat::Moving);
-
-		FElysiumRecordingNpcMotor Flat;
-		Flat.ProjectedOverride = FVector(200.0, 10.0, 0.0);   // 200.25 cm out — inside the margin
-		const ElysiumSchedule::ERetreat Refused = ElysiumSchedule::StepAwayFromSavePosition(
-			&Flat, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
-		TestEqual(TEXT("...but one inside the margin has gained nothing"), Refused,
-			ElysiumSchedule::ERetreat::NotARetreat);
-	}
-
-	// --- Nothing navigable there, and nothing to ask at all ---------------------------------------
-	{
-		FElysiumRecordingNpcMotor Motor;
-		Motor.bProjectsToNavigable = false;
-		FVector Destination = FVector(-1.0, -1.0, -1.0);
-		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
-			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
-		TestEqual(TEXT("an unprojectable retreat fails rather than pathing to a guess"), Result,
-			ElysiumSchedule::ERetreat::Unprojectable);
-		TestTrue(TEXT("and the out-parameter is left untouched"),
-			Destination.Equals(FVector(-1.0, -1.0, -1.0)));
-
-		TestEqual(TEXT("no motor is its own answer, distinct from an unprojectable point"),
-			ElysiumSchedule::StepAwayFromSavePosition(nullptr, FVector(200.0, 0.0, 0.0),
-				FVector::ZeroVector, 100.f, Destination),
-			ElysiumSchedule::ERetreat::NoMotor);
-
-		// Standing exactly on what obstructed it: there is no direction to leave in, and inventing
-		// one would be arithmetic standing in for a decision.
-		FElysiumRecordingNpcMotor Coincident;
-		TestEqual(TEXT("a coincident save position is refused before the world is asked"),
-			ElysiumSchedule::StepAwayFromSavePosition(&Coincident, FVector::ZeroVector,
-				FVector::ZeroVector, 100.f, Destination),
-			ElysiumSchedule::ERetreat::Degenerate);
-	}
-
-	// --- No shipped text reaches this task ------------------------------------------------------
-	//
-	// The block that used to stand here drove the refusal through
-	// `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE`, whose second task the port believed was
-	// `TASK_MOVE_AWAY_PATH`. Retail's text for that program names `TASK_STEP_BACK` instead, and
-	// `TASK_MOVE_AWAY_PATH` is named by NO text in the corpus -- it is a registered identity with
-	// no content behind it. So the retreat rule above is exercised directly, which is where it was
-	// always the honest place to exercise it: the body is a kernel rule, and the task that would
-	// have called it is not shipped.
-	{
-		const int32 MoveAway = FElysiumScheduleCorpus::Get()
-			.Namespace(EElysiumIdCategory::Task).Find(TEXT("TASK_MOVE_AWAY_PATH"));
-		TestTrue(TEXT("TASK_MOVE_AWAY_PATH is a registered task identity"), MoveAway != INDEX_NONE);
-		int32 Reached = 0;
-		for (const FElysiumScheduleProgram& Program :
-			FElysiumScheduleCorpus::Get().Manager().Programs())
-		{
-			for (const FElysiumScheduleStep& Step : Program.Tasks)
-			{
-				Reached += Step.TaskId == MoveAway ? 1 : 0;
-			}
-		}
-		TestEqual(TEXT("...that no shipped text names"), Reached, 0);
-	}
-	return true;
-}
-
-// ============================================================================================
-// `TASK_PLAY_DEATH_SEQUENCE` (0x149) and `SCHED_DIE`.
-//
-// The recovered ladder is "try the argument as an activity, then `ACT_DIESIMPLE`, then `ACT_IDLE`,
-// and pass the surviving choice to `SetIdealActivity`"
-// (`docs/vtmb/animation_and_movers.md` -> the `RunTask` activity table). Its outcome on the shipped
-// game is the point of these cases: `ACT_DIESIMPLE` is absent from the ENTIRE 167-body corpus, so
-// a death with no argument resolves the floor rung.
-//
-// **No shipped program reaches this task without passing an unported one first.** Base `DIE` runs
-// `TASK_STOP_MOVING; TASK_SOUND_DIE; TASK_DIE` and never names it; the fourteen Troika texts that
-// do name it are the Discipline death families, and every one of them opens with
-// `TASK_SET_PRESERVE_PATH`, `TASK_SET_DYING` or `TASK_SET_MISC_FLAG` -- none of which this runtime
-// has a body for yet. So the ladder is driven against a borrowed task list: it is a KERNEL rule,
-// the borrow is the same one `FInterruptMaskScope` makes for a mask, and the day one of those
-// families is ported these cases become content-driven again.
-// ============================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleDeathLadderTest,
-	"Elysium.Substrate.Schedule.DeathLadder", GElysiumScheduleTestFlags)
-bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
-{
-	auto DeathRungs = [](const FRecordingRunner& Runner)
-	{
-		return Runner.Calls.FilterByPredicate([](const FString& C)
-		{
-			return C.StartsWith(TEXT("DeathActivity"));
-		});
-	};
-
-	// Borrow base `DIE`'s task list for the length of a case and stand one
-	// `TASK_PLAY_DEATH_SEQUENCE` in it. Nothing outside a test may write a compiled program.
-	struct FDeathProgramScope
-	{
-		FElysiumScheduleProgram* Program = nullptr;
-		TArray<FElysiumScheduleStep> Saved;
-
-		FDeathProgramScope()
-		{
-			Program = FElysiumScheduleCorpus::Get().MutableProgram(
-				ElysiumScheduleGlobalId(ElysiumSched::DIE));
-			if (Program == nullptr)
-			{
-				return;
-			}
-			Saved = MoveTemp(Program->Tasks);
-			FElysiumScheduleStep Step;
-			Step.TaskId = FElysiumScheduleCorpus::Get()
-				.Namespace(EElysiumIdCategory::Task).Find(TEXT("TASK_PLAY_DEATH_SEQUENCE"));
-			// "No argument" is an id no activity was ever minted for. It is NOT zero: zero is the
-			// first name the registry interned, and an operand of zero names it.
-			Step.Data = static_cast<float>(INDEX_NONE);
-			Program->Tasks.Add(Step);
-		}
-		~FDeathProgramScope()
-		{
-			if (Program != nullptr)
-			{
-				Program->Tasks = MoveTemp(Saved);
-			}
-		}
-	};
-
-	// --- The shipped corpus: no argument, no ACT_DIESIMPLE, so the floor rung answers -------------
-	{
-		const FDeathProgramScope Death;
-		FRecordingRunner Runner;
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		TestTrue(TEXT("the death schedule is loaded"),
-			ElysiumSchedule::Start(State, ElysiumSched::DIE, Runner));
-		TestTrue(TEXT("starting it traces its name"), Runner.Saw(TEXT("DIE")));
-
-		TestFalse(TEXT("the program ends inside its first think"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-
-		const TArray<FString> Rungs = DeathRungs(Runner);
-		if (TestEqual(TEXT("the ladder tries exactly two rungs"), Rungs.Num(), 2))
-		{
-			TestEqual(TEXT("ACT_DIESIMPLE is first — an absent argument is a rung that is not "
-				"there, not a rung that missed"), Rungs[0],
-				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
-			TestEqual(TEXT("and ACT_IDLE is the floor"), Rungs[1],
-				FString(TEXT("DeathActivity ACT_IDLE")));
-		}
-		TestTrue(TEXT("the trace names what the ladder resolved"),
-			Runner.Saw(TEXT("TASK_PLAY_DEATH_SEQUENCE arg='(none)' -> ACT_IDLE")));
-		// The floor rung is retail saying "this body has no death performance", and its ragdoll
-		// supersedes the choice at once — so the task does not wait out an idle.
-		TestEqual(TEXT("the floor rung completes at once rather than holding for a clip"), Now, 0.0);
-		TestFalse(TEXT("nothing is left running"), State.IsRunning());
-	}
-
-	// --- A body that DOES author ACT_DIESIMPLE stops at that rung ---------------------------------
-	{
-		const FDeathProgramScope Death;
-		FRecordingRunner Runner;
-		Runner.PlayableDeathActivities.Add(TEXT("ACT_DIESIMPLE"));
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		ElysiumSchedule::Start(State, ElysiumSched::DIE, Runner);
-		TestTrue(TEXT("a real death clip holds the task open for its own length"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-
-		const TArray<FString> Rungs = DeathRungs(Runner);
-		if (TestEqual(TEXT("the ladder stops at the first rung that resolves"), Rungs.Num(), 1))
-		{
-			TestEqual(TEXT("and that rung is ACT_DIESIMPLE"), Rungs[0],
-				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
-		}
-		// The hold is the task's own deadline. It used to be read back through the kernel's
-		// `OutNextThinkDelay`, which the think cadence retired -- retail's `MaintainSchedule` never
-		// informs the think clocks.
-		TestEqual(TEXT("the hold is the resolved clip's own length"), State.TaskEndsAt - Now,
-			static_cast<double>(Runner.DeathClipSeconds), 1e-6);
-
-		Now += Runner.DeathClipSeconds;
-		TestFalse(TEXT("and the program ends when the clip does"),
-			ElysiumSchedule::Tick(State, Runner, Now));
-	}
-
-	// --- The argument rung wins over both fixed ones ----------------------------------------------
-	// The operand is installed for the length of this case: no registered program authors one,
-	// because retail spells it as an activity-index number this runtime has no decoded table for.
-	{
-		const FDeathProgramScope Death;
-		const ElysiumSchedule::FTaskActivityScope Argument(ElysiumSched::DIE, 0,
-			TEXT("ACT_DEATH_INTO"));
-		TestTrue(TEXT("the death program has a task to carry the operand"), Argument.IsInstalled());
-
-		FRecordingRunner Runner;
-		Runner.PlayableDeathActivities.Add(TEXT("ACT_DIESIMPLE"));
-		Runner.PlayableDeathActivities.Add(TEXT("ACT_DEATH_INTO"));
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		ElysiumSchedule::Start(State, ElysiumSched::DIE, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now);
-
-		const TArray<FString> Rungs = DeathRungs(Runner);
-		if (TestEqual(TEXT("the argument is tried alone when it resolves"), Rungs.Num(), 1))
-		{
-			TestEqual(TEXT("and it is the argument, ahead of ACT_DIESIMPLE"), Rungs[0],
-				FString(TEXT("DeathActivity ACT_DEATH_INTO")));
-		}
-	}
-
-	// --- An argument that misses falls through the whole ladder in order --------------------------
-	{
-		const FDeathProgramScope Death;
-		const ElysiumSchedule::FTaskActivityScope Argument(ElysiumSched::DIE, 0,
-			TEXT("ACT_DEATH_INTO"));
-		FRecordingRunner Runner;
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		ElysiumSchedule::Start(State, ElysiumSched::DIE, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now);
-
-		const TArray<FString> Rungs = DeathRungs(Runner);
-		if (TestEqual(TEXT("all three rungs are tried"), Rungs.Num(), 3))
-		{
-			TestEqual(TEXT("argument first"), Rungs[0], FString(TEXT("DeathActivity ACT_DEATH_INTO")));
-			TestEqual(TEXT("then ACT_DIESIMPLE"), Rungs[1],
-				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
-			TestEqual(TEXT("then ACT_IDLE"), Rungs[2], FString(TEXT("DeathActivity ACT_IDLE")));
-		}
-	}
-
-	// --- A body whose vocabulary carries none of the three still COMPLETES -------------------------
-	// The ragdoll handoff that follows the program is what death is; failing the task would send a
-	// corpse to a fail schedule instead.
-	{
-		const FDeathProgramScope Death;
-		FRecordingRunner Runner;
-		Runner.PlayableDeathActivities.Reset();
-		FElysiumScheduleState State;
-		double Now = 0.0;
-
-		ElysiumSchedule::Start(State, ElysiumSched::DIE, Runner);
-		TestFalse(TEXT("the program ends"), ElysiumSchedule::Tick(State, Runner, Now));
-		TestTrue(TEXT("and it ended by completing, not by failing"),
-			Runner.FailureReasons.IsEmpty());
-		TestTrue(TEXT("the trace says nothing resolved"),
-			Runner.Saw(TEXT("-> (nothing resolved)")));
 	}
 	return true;
 }
@@ -986,10 +522,10 @@ bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 	TestTrue(TEXT("schedule change observes the outgoing program"),
 		Runner.OutgoingSchedules.Last()
 			== ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
-	Runner.MovementResult = EElysiumMoveWatch::Arrived;
+	Runner.MovementResult = FRecordingRunner::EMove::Arrived;
 	TestFalse(TEXT("an immediately arrived goal finishes the program"), ElysiumSchedule::Tick(State, Runner, 0.0));
 	TestEqual(TEXT("schedule done is emitted once at the last completion"), Runner.CompletedSchedules, 1);
-	Runner.MovementResult = EElysiumMoveWatch::Moving;
+	Runner.MovementResult = FRecordingRunner::EMove::Moving;
 	ElysiumSchedule::Start(State, 0x46, Runner);
 	TestTrue(TEXT("a continuing path yields at the maintenance bound"), ElysiumSchedule::Tick(State, Runner, 1.0));
 	TestTrue(TEXT("the bounded pass retains the path program"), State.Current == ElysiumScheduleGlobalId(0x46));

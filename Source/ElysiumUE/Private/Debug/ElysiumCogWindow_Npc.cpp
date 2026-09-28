@@ -878,15 +878,15 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 	{
 		Row(TEXT("enemy"), NameOf(World, Npc.BaseMemory.Enemy));
 		Row(TEXT("last enemy"), NameOf(World, Npc.BaseMemory.LastEnemy));
-		Row(TEXT("last had LOS"), AgeOf(Memory.EnemyLastLosTime, Now));
-		// The debounce, spelled as a fraction of its own limit. Ten consecutive failures is what
-		// flips `HAVE_ENEMY_LOS` to `ENEMY_OCCLUDED`, and a counter at 7 is a character about to
-		// lose one it currently believes it can see.
+		// Slot 481's debounce (`+0x5b98`, `0x10270b20`), spelled as a fraction of its own limit. Ten
+		// consecutive failures is what flips `HAVE_ENEMY_LOS` to `ENEMY_OCCLUDED`.
+		const int32 OccludedCheck = Npc.BaseMemory.EnemyOccludedCheck;
+		const bool bOccludedNow = OccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
 		Row(TEXT("LOS failures"), FString::Printf(TEXT("%d / %d"),
-			Memory.EnemyLosFailures, ElysiumNpcSense::EnemyLosFailureLimit),
-			Memory.EnemyLosFailures > 0 ? &ElysiumCogStyle::ColWarn : nullptr);
-		Row(TEXT("occluded"), Memory.bEnemyOccluded ? TEXT("yes") : TEXT("no"),
-			Memory.bEnemyOccluded ? &ElysiumCogStyle::ColWarn : nullptr);
+			OccludedCheck, ElysiumNpcSense::EnemyLosFailureLimit),
+			OccludedCheck > 0 ? &ElysiumCogStyle::ColWarn : nullptr);
+		Row(TEXT("occluded"), bOccludedNow ? TEXT("yes") : TEXT("no"),
+			bOccludedNow ? &ElysiumCogStyle::ColWarn : nullptr);
 		ImGui::EndTable();
 	}
 
@@ -912,13 +912,14 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 				*NameOf(World, Memory.LastHeardSource), *AgeOf(Memory.LastHeardTime, Now)));
 		Row(TEXT("heard at"), Memory.LastHeardTime < 0.0
 			? FString(TEXT("—")) : Memory.LastHeardPosition.ToCompactString());
-		Row(TEXT("last damage"), Npc.BaseMemory.LastDamageTime < 0.0
+		Row(TEXT("last damage"), !Npc.BaseMemory.LastDamageAttacker.IsSet()
 			? FString(TEXT("(none)"))
-			: FString::Printf(TEXT("%d from %s   %s"), Memory.LastDamageAmount,
-				*NameOf(World, Npc.BaseMemory.LastDamageAttacker), *AgeOf(Npc.BaseMemory.LastDamageTime, Now)));
+			: FString::Printf(TEXT("from %s   %s"),
+				*NameOf(World, Npc.BaseMemory.LastDamageAttacker),
+				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		Row(TEXT("repeated-damage window"), Npc.BaseMemory.RepeatedDamageWindowStart < 0.0
 			? FString(TEXT("closed"))
-			: FString::Printf(TEXT("%d accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,
+			: FString::Printf(TEXT("%.1f accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,
 				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		// The incoming-attack notice: written by `TASK_ANNOUNCE_ATTACK`, and read by the diagnostics
 		// only — its four `SHOULD_*` consumers are a policy the survey does not decode. Shown so the
@@ -1233,7 +1234,7 @@ void FElysiumCogWindow_Npc::DrawWorldOverlay() const
 				// Amber for a character acting on MEMORY, red for one that can currently see its
 				// enemy. That is the occlusion debounce made visible, and it is the difference
 				// between "the AI is chasing nothing" and "the AI remembers where you went".
-				const bool bOccluded = Npc->Senses.Memory.bEnemyOccluded;
+				const bool bOccluded = Npc->BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
 				DrawDebugLine(World3D, From, To,
 					bOccluded ? FColor(200, 140, 60) : FColor(230, 90, 90),
 					false, -1.0f, 0, bOccluded ? 1.0f : 2.5f);

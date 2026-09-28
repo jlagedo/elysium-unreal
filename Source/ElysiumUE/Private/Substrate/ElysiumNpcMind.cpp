@@ -48,7 +48,6 @@ bool FElysiumNpcMind::IsSupportedState(EElysiumNpcState State)
 bool FElysiumNpcMind::IsResumableOwner(EElysiumBodyOwner Owner)
 {
 	return Owner == EElysiumBodyOwner::None
-		|| Owner == EElysiumBodyOwner::Patrol
 		|| Owner == EElysiumBodyOwner::Ambient;
 }
 
@@ -178,21 +177,16 @@ bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
 	}
 	switch (Requested)
 	{
-	case EElysiumBodyOwner::Patrol:
 	case EElysiumBodyOwner::Ambient:
 		return CurrentOwner == EElysiumBodyOwner::None;
-	// The combat schedule families' movement claim. It displaces this NPC's own autonomous
-	// executors: `FElysiumNpc::Think` routes a committed enemy to schedule selection ahead of the
-	// patrol and interesting-place executors, and the arbiter has to be able to grant what that
-	// routing decided — otherwise a patrolling guard would select a chase and then refuse itself the
-	// body. Patrol is suspended by the claim and resumes on release; an interesting-place visit is
-	// finished at the claim site instead, because ambient owns a claimed place rather than a
-	// resumable route.
+	// The combat schedule families' movement claim. It displaces this NPC's own interesting-place
+	// executor, which is finished at the claim site because ambient owns a claimed place rather than a
+	// resumable route. (The patrol is the path object's program since story 8 wave 2 and claims no
+	// body of its own.)
 	//
 	// It does NOT displace `ScriptedSchedule`: an authored director outranks instinct.
 	case EElysiumBodyOwner::Schedule:
 		return CurrentOwner == EElysiumBodyOwner::None
-			|| CurrentOwner == EElysiumBodyOwner::Patrol
 			|| CurrentOwner == EElysiumBodyOwner::Ambient;
 	// `aiscripted_schedule`'s movement claim. It outranks both autonomous executors and an ordinary
 	// combat `Schedule`, because the map author asked for this movement by name and the combat
@@ -200,18 +194,15 @@ bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
 	// conversation own the body outright, and a director pushing a goal does not.
 	case EElysiumBodyOwner::ScriptedSchedule:
 		return CurrentOwner == EElysiumBodyOwner::None
-			|| CurrentOwner == EElysiumBodyOwner::Patrol
 			|| CurrentOwner == EElysiumBodyOwner::Ambient
 			|| CurrentOwner == EElysiumBodyOwner::Schedule;
 	case EElysiumBodyOwner::Sequence:
 		return CurrentOwner == EElysiumBodyOwner::None
-			|| CurrentOwner == EElysiumBodyOwner::Patrol
 			|| CurrentOwner == EElysiumBodyOwner::Ambient
 			|| CurrentOwner == EElysiumBodyOwner::Schedule
 			|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule;
 	case EElysiumBodyOwner::Dialogue:
 		return CurrentOwner == EElysiumBodyOwner::None
-			|| CurrentOwner == EElysiumBodyOwner::Patrol
 			|| CurrentOwner == EElysiumBodyOwner::Schedule
 			|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule;
 	default:
@@ -241,7 +232,7 @@ void FElysiumNpcMind::RefreshStateFromOwner()
 		// starts; the next decision pass re-derives alert or combat from its conditions.
 		SetCurrentStateTyped(EElysiumNpcState::Idle);
 	}
-	// An ordinary owner change is NOT a cognitive transition (K7 separates the two): a patrol token
+	// An ordinary owner change is NOT a cognitive transition (K7 separates the two): a schedule token
 	// taken by an alert NPC must not reset it to idle, or the ideal-state pass and the body arbiter
 	// would fight for the state every think.
 	SetDesiredStateTyped(CurrentState);

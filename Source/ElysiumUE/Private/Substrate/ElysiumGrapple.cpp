@@ -206,11 +206,26 @@ void FElysiumPlayer::TickStealthKill()
 void FElysiumCombatCharacter::CommitStealthDeath(const FElysiumEntityHandle& Attacker)
 {
 	if (HasReportedDeath()) return;
+	// `0x10165d90`, past the finished-sequence and partner tests its caller already made: a `CVDmg_t`
+	// with `SetSrc(player)`, `m_iDiceAmt = 1`, `m_iToHitSuccesses = 1`; the packet
+	// `0x101c26d0(info, player, player, 1.0, 0, 0, &dmg, -1)` -- inflictor AND attacker the player.
+	FElysiumDmg Dmg;
+	Dmg.Source = Attacker;                                    // SetSrc(this)
+	Dmg.Inflictor = Attacker;
+	Dmg.BaseDamage = 1;                                       // m_iDiceAmt
+	Dmg.ExtraInput = 1;                                       // m_iToHitSuccesses
+	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
+	Info.Dmg = &Dmg;
+	Info.Attacker = Attacker;
+	Info.Damage = 1.f;
+	Info.DamageBits = 0;
+	Info.AmmoType = INDEX_NONE;
+	// `SetBaseToStatValue(0xf, 0x11)` on the victim's first type-0 stat list: wounds := max health.
 	using EC = EElysiumTraitContainer;
 	const int32 Ceiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);
 	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, Ceiling);
-	DeathAttacker = Attacker;
 	bStealthDeathCommitted = true;
 	RecomputeSheet();
-	OnKilled(); // virtual Event_Killed +0x240; NPC Event_Dying +0x64c is empty (0x1032bdf0).
+	Event_Killed(&Info);                                      // victim slot 144 (`CALL [+0x240]`)
+	Event_Dying();                                            // victim slot 403 (`CALL [+0x64c]`)
 }

@@ -337,7 +337,7 @@ bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 
 	// 0xe8 `0x102a778e`: `m_lifeState = 1`, then the break tail.
 	F.Run(0xe8);
-	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.AnimEventLifeStateWord, 1);
+	TestEqual(TEXT("0x102a778e +0x200 = LIFE_DYING"), Npc.LifeState, 1);
 	TestTrue(TEXT("0x102a7798 completes"), F.Completed());
 
 	// 0xe5 `0x102a5087`: the self-damage completes.

@@ -188,6 +188,20 @@ public:
 	virtual bool PlayerKnockbackReaction(FElysiumEntity* Arg0, int32 Arg1) override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
 	virtual void RunAI(bool Arg0) override;
+
+	// --- RunAi19 (story 0019/8 lane L13a): what slot 432 `0x10380120` calls ---------------------
+	/** The reaction half of `0x10380120` (`0x10380130`..`0x1038014b`): a null blocker does nothing;
+	 *  kind 1 takes the step-up `0x103816e0`, any other kind the push `0x10381460`. */
+	void RunAi19HengeyokaiReact(FElysiumEntity* Blocker, int32 Kind);
+	/** SEAMS for `hengeyokai_obstruction_lookahead` (`0x1093b238`, "24"),
+	 *  `hengeyokai_obstruction_scalar` (`0x1093b298`, "5"), `hengeyokai_obstruction_z` (`0x1093b1f0`,
+	 *  "75"), and `hengeyokai_stun` (`0x1093b2e0`, "0", no help string) -- the one-shot console
+	 *  trigger `RunAI` reads as `GetInt() != 0` and resets through `ConVar::SetValue(0)`
+	 *  (`0x10246160`). The `FElysiumNpcManBat::ManBatStunConVar` pattern. */
+	static float& HengeyokaiObstructionLookaheadConVar();
+	static float& HengeyokaiObstructionScalarConVar();
+	static float& HengeyokaiObstructionZConVar();
+	static int32& HengeyokaiStunConVar();
 	virtual void GatherConditions() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
@@ -195,7 +209,7 @@ public:
 	// --- Lane L05 (story 8 RunTask19)
 	/** `+0x6674 m_flTaskFailTimer` (absolute curtime), which `TASK 0xc9` waits out. **SEAM** word. */
 	double HengeyokaiTaskFailTimer = 0.0;
-	/** `FUN_10383470` `0x10383470` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
+	/** `FUN_10383470` `0x10383470` -- `TASK 0x14b`'s whole arm (the counter records each run). */
 	int32 HengeyokaiTask14bCalls = 0;
 	void HengeyokaiTask14b();
 

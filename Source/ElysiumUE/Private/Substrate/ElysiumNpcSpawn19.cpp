@@ -75,6 +75,15 @@ void FElysiumNpc::Event_Killed(void* InInfo)
 			UpdateClosestNpc(this, Spawn19ClosestNpcOffer);                              // 0x102bf438 -> 0x101828b0
 		}
 	}
+
+	// Port bookkeeping, after retail's whole body (so `SetState(7)`'s slot-463 dispatch at
+	// `0x10265dba` runs exactly as retail orders it): a body `CreateCorpse` took out of the world
+	// vacates the port's arbiter — every body-owner token, the running program, a pushed order, an
+	// open conversation — and its mind refuses every later acquisition.
+	if (bDeathCommitted)
+	{
+		ReleaseAllBodyOwnership(TEXT("killed"), /*bDeadMind=*/true);
+	}
 }
 
 bool FElysiumNpc::Spawn19DamageInfoSuppressesStimulus(const FElysiumTakeDamageInfo* Info) const

@@ -71,6 +71,35 @@ public:
 
 	int32 ScheduleActivityCycle = 0;
 
+	// --- The sequence bridge (story 8 wave 2, L13) ---
+	// A named modernization: retail's studio sequence table (an index per `.mdl` sequence, an
+	// activity and a weight each) is swapped for this runtime's name-keyed clip resolver. The kernel
+	// still deals in sequence NUMBERS; this table gives every clip the resolver answered for this body
+	// a stable number, so `m_nSequence` / `m_nIdealSequence` compare and `ResetSequence` plays. Row 0
+	// is retail's floor sequence ("even ACT_DISPOSITION missed") and plays nothing. Session state:
+	// a restored body re-resolves its rows on demand.
+	struct FSequenceRow
+	{
+		FString OwnerStem;    // empty: a clip of this body's own model (the stance set)
+		FString Label;
+		bool bLoops = false;
+		float Seconds = 0.f;  // the first-pass length the clip player last reported; 0 = not yet played
+	};
+	TArray<FSequenceRow> SequenceRows;
+	// The resolver's answers by request (model, activity, class, weapon, state), `INDEX_NONE` for a
+	// miss. Session state, as the rows are.
+	TMap<FString, int32> SequenceResolveCache;
+
+	/** The row number for a clip, added on first sight. */
+	int32 SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops);
+
+	/** `SelectWeightedSequence(activity)` through the resolver: the retail activity NUMBER is named
+	 *  by the corpus's activity namespace, resolved for this body, and numbered. -1 when the body
+	 *  authors no clip for it (retail's own answer). */
+	int32 SequenceForActivity(int32 Activity);
+
+	virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops) override;
+
 	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
 	// program it started. Session state, not save state — the reasoning is on the struct.
@@ -178,9 +207,6 @@ public:
 	// one bit per group id, parsed by `0x10298910`, ZERO for an empty or `"0"` list. `0x102dad60`
 	// reads it against the place's own folded mask, which `AcceptsAmbientGroup` is.
 	uint32 InterestingPlaceGroupMask = 0;
-	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
-	FString PatrolPath;               // authored space-separated info_node_patrol_point names
-	int32 PatrolIndex = 0;            // next point in the looping authored sequence
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it come from the chain: FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
@@ -211,29 +237,31 @@ public:
 	// (`docs/vtmb/combat-and-damage.md` -> "Who may be knocked back").
 	virtual bool BypassesKnockbackEligibility() const override;
 
-	// Retail's NPC override saves the complete incoming damage packet before composing the base
-	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
-	// schedule/senses consumers that read it arrive with the combat AI.
-	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override;
-
-	// The authored `invincible` refusal, tested before anything else damage-side.
-	virtual bool RejectsAllDamage() const override { return bInvincible; }
 
 	/**
-	 * `CAI_BaseNPC::Event_Killed`'s NPC override (`0x10265ad0`) plus the Troika one over it
-	 * (`0x102bf340`) — the whole death transaction, run once (`docs/vtmb/combat-and-damage.md` ->
-	 * "NPC and player death transaction").
-	 *
-	 * The shared body's output, owner notification and log are the base's and stay there. What this
-	 * adds is everything the recovered override does with the BODY and the MIND: every animation
-	 * channel claim goes back, every body-owner token is vacated, current and ideal state become
-	 * dead, the body is frozen where it stands and stops answering the character channel, and the
-	 * death schedule starts. Nothing after this selects, senses or attacks.
-	 *
-	 * A duplicate kill is ignored, which is retail's own first clause — the base's `bDeathReported`
-	 * latch is the same guard reached through one door.
+	 * A kill with no damage packet — the feed drain, a script, a test — enters the NPC's death
+	 * transaction where retail's does: slot 144 `Event_Killed` (Troika `0x102bf340` ->
+	 * `CAI_BaseNPC::Event_Killed` `0x10265ad0` -> `CBaseCombatCharacter::Event_Killed`
+	 * `0x1032b9b0` -> slot 301 `CreateCorpse`) with an empty packet. A corpse is killed once.
 	 */
 	virtual void OnKilled() override;
+
+	/** Slot 144 with a packet naming the attacker (`OnDeath`'s activator, `0x10265cc8`). */
+	void KilledBy(const FElysiumEntityHandle& Attacker);
+
+	/**
+	 * `BecomeClientRagdoll` `0x10090180`, `CreateCorpse`'s tail: the pose goes to physics (the
+	 * handoff), the body stops being solid, and the think stops. What this runtime keeps that retail
+	 * does not — the entity itself — is what `bDeathCommitted` marks, and the port's arbiter (every
+	 * body-owner token, the mind) is vacated with it.
+	 */
+	virtual void BecomeClientRagdoll() override;
+	virtual bool IsCorpse() const override { return bDeathCommitted; }
+
+	/** Slot 77 `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`, family Damaged19): the live-cine
+	 *  warning and cancel, `m_iForcedSchedule := 0x6b` unless DEAD, then `CBaseEntity::ScriptHide`
+	 *  and slot 77 on the active weapon. Body in `ElysiumNpcDamaged19.cpp`. */
+	virtual void ScriptHide() override;
 
 	/**
 	 * `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the FOOTSTEP arm of it, and nothing else yet.
@@ -320,15 +348,15 @@ public:
 	// dormancy and death; idempotent, so every one of those may call it.
 	void EndScriptedSchedule(const TCHAR* Reason);
 
+	// `CAI_BaseNPCTroika::InputSetupPatrolType` `0x1029eb30`: `"<repeat> <type> <schedule>"` into
+	// `BuildPatrolPath(&m_sppPatrolPath, repeat, type, schedule, NULL, replace)`.
 	void InputSetupPatrolType(const FElysiumInputArgs& Args);
 
+	// `InputFollowPatrolPath` `0x1029ed90`: the node list into `BuildPatrolPath(..., extend)`.
 	void InputFollowPatrolPath(const FElysiumInputArgs& Args);
 
+	// `InputClearPatrolPath` `0x1029ef60`: `0x1029f5d0(&m_sppPatrolPath)`.
 	void InputClearPatrolPath(const FElysiumInputArgs&);
-
-	bool ResolvePatrolPoints();
-
-	bool IssuePatrolMove();
 
 	bool StartWalkingAnimation(bool bRunning = false);
 
@@ -356,6 +384,10 @@ public:
 
 	virtual void Think() override;
 
+	// The port's schedule-owner routing ahead of the interpreter, reached from `MaintainSchedule`
+	// (`0x102817c0`) on a Troika body; its STORY8-TWIN survivors are named at the definition.
+	bool RouteScheduleMaintenance(double Now, bool bReduced);
+
 	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
 	int32 SelectSchedule();
 
@@ -382,17 +414,11 @@ public:
 	// ahead of the switch. So "an armed class holsters while idle and draws when it goes alert" is a
 	// property of SEVEN concrete classes and of nothing else.
 	//
-	// **A polled edge rather than a callback**, because this runtime's state is written from three
-	// places (the ideal-state pass, `forcestate`, and the body arbiter's scripted push) and a hook on
-	// each is three chances to forget one. `bStateChangeSeen` starts false so the FIRST think fires
-	// it, which is retail's own spawn-time `SetState(IDLE)` — that is what puts a freshly spawned
-	// guard's weapon away. Public so a fixture can drive the edge without a whole think.
-	void PumpStateChange();
+	// Fired on the state EDGE by `SetState` (`0x1026e340`) itself; the port's polled pump
+	// (`PumpStateChange`) went with the old loop at story 8 wave 2.
 
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now, bool bReduced);
-
-	void ThinkPatrol(double Now);
 
 	FElysiumInterestingPlace* CurrentAmbientSpot() const;
 
@@ -441,25 +467,7 @@ public:
 
 	// --- IElysiumScheduleRunner: the task bodies -------------------------------------------------
 
-	// `TASK_SPECIAL_IDLE_ACTIVITY`. One stance selection played on the body; the schedule holds the
-	// task open for the clip's own length, which is retail's cadence -- the idle task re-requests
-	// `ACT_DISPOSITION` only once the current sequence has finished, so nothing re-enters mid-clip.
-	virtual float RunSpecialIdleActivity(double Now) override;
-
-	virtual bool IsBodyVisible() const override;
-	// `TASK_WAIT_PVS`'s `RunTask` arm (`0x102aacf0`, task 5): `SF_NPC_ALWAYSTHINK 0x400` or
-	// `ShouldThinkFrequently()` completes at once; else the engine PVS test `0x101d1a90` against
-	// the closest player -- false keeps waiting, true re-bases the whole clock (slot 614 plus every
-	// `Last` stamp) so the body does not fire a burst of overdue thinks on the frame it wakes.
-	virtual bool WaitPvs() override;
-
-	virtual float PlayActivity(const FString& Activity) override;
-
-	// One rung of `TASK_PLAY_DEATH_SEQUENCE`'s ladder. It goes through the same Reaction-band
-	// producer every other combat reaction does, because a death pose has to replace whatever owns
-	// the base channel and hold it — `PlayActivity`'s ambient claim is outranked by the next
-	// locomotion publish, which would stand a corpse back up.
-	virtual float PlayDeathActivity(const FString& Activity) override;
+	virtual float PlayActivity(const FString& Activity);
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body. SEAM: the task-body callers are 0003's
 	// scripted family, the non-task callers 25a's; no body in this runtime asks yet, so the request
@@ -480,21 +488,15 @@ public:
 
 	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
 
-	virtual bool FaceSavePosition() override;
-
-	virtual bool StepAwayFromSavePosition(float DistanceCm) override;
-
 	// --- The combat task bodies -----------------------------------------------------------------
 	// Every one that drives the body claims `EElysiumBodyOwner::Schedule` through the arbiter first
 	// and answers false when the claim is refused, which fails its task by name. The token is given
 	// back once, where the program ends (`ReleaseScheduleBody`).
 
-	virtual EElysiumTaskResult StopMovingTask() override;
 	virtual void TaskStarting() override { BaseScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
-	virtual void SetGoalTolerance(float Units) override;
+	virtual void SetGoalTolerance(float Units);
 	virtual void TaskFail(int32 Reason) override;
 	virtual void ScheduleDone() override;
-	virtual int32 TaskFailureReason() const override { return ScheduleHost.PendingFailureReason; }
 	FElysiumNpcScheduleHost ScheduleHost;
 
 	// --- The think cadence's own state (`Substrate/ElysiumNpcThinkCadence.h`) --------------------
@@ -508,9 +510,7 @@ public:
 	// through `vt+0x998`. Every class in the image fills the slot with `0x102c23f0`, so this one body
 	// is every dispatch's target.
 	virtual void ResetThinkTimers(double Now);
-	// The entity think alone (`m_flNextThink := curtime`), no stamp. The death handoff's entry:
-	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
-	// arms the entity think and nothing else.
+	// The entity think alone (`m_flNextThink := curtime`), no stamp.
 	void ArmThinkNow(double Now);
 	// Slot 584 `0x1028d910`: slot 614 and then every `Last` mirror := now. The broadcast form
 	// (`SetAIEnabled(true)`, the node-graph rebuild) and `TASK_WAIT_PVS`'s completion use it.
@@ -546,12 +546,6 @@ public:
 	double TalkingUntil = -1.0;
 	bool IsTalking(double Now) const { return Now <= TalkingUntil; }
 	virtual void OnDialogFilePlayed(double DurationSeconds) override;
-	// `NPCThink`'s enemy triple (`+0x6268/+0x626c/+0x6270`), refreshed on every normal-due think
-	// from the committed enemy and its memory record; `5000.0` when there is none.
-	void UpdateEnemyDistances();
-	// `NPCThink`'s `DISAPPEAR` test: out of the closest player's PVS (`0x101d1a90`), or not
-	// `FVisible` to that player (mask `0x2804091`, eye to eye). True removes the body.
-	bool ShouldDisappearNow() const;
 	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0`: a bool input feeds `SetDisableAI`; any
 	// other variant type feeds it `false`.
 	void InputDisableThink(const FElysiumInputArgs& Args);
@@ -582,29 +576,9 @@ public:
 	void ClearOwnedActivityCopyProps();
 	void EndDisciplineSchedule();
 
-	virtual bool GetPathToEnemy(float ToleranceUnits) override;
-
-	virtual void RunPath() override;
-
-	virtual EElysiumMoveWatch WaitForMovement() override;
-
-	virtual bool FaceEnemy() override;
-
-	virtual bool AnnounceAttack(float Param) override;
-
-	virtual bool MeleeAttack1() override;
-
-	virtual bool RangeAttack1() override;
-
-	virtual void RememberFact(uint32 MemoryMask) override;
-	virtual bool FindCoverFromEnemy(float MoveWait) override;
-
 	bool GetPathToScriptedGoal();
-	virtual void RunPatrolPathTask() override;
 
 	// --- The incapacitation task bodies and the install rules -----------------------------------
-
-	virtual void SetNpcFlag(uint32 EncodedFlag) override;
 
 	virtual void ClearConditions() override;
 
@@ -804,11 +778,13 @@ public:
 		return static_cast<int32>(AmbientPhase);
 	}
 
-	// Read side for the automation tests and the inspector: whether `FollowPatrolPath` armed a
-	// route on this leaf, and how many points that route resolved to (the count is kept whether
-	// or not the route is currently armed).
-	bool IsPatrolActiveForDebug() const { return bPatrolActive; }
-	int32 NumPatrolPointsForDebug() const { return PatrolPoints.Num(); }
+	// Read side for the automation tests and the inspector: whether `m_sppPatrolPath` holds a path
+	// object, and how many node ids it carries.
+	bool IsPatrolActiveForDebug() const { return PatrolPathCell.Path != nullptr; }
+	int32 NumPatrolPointsForDebug() const
+	{
+		return PatrolPathCell.Path != nullptr ? PatrolPathCell.Path->Count : 0;
+	}
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
 	//
@@ -891,7 +867,7 @@ public:
 	// +0x6435 m_bStayEntrenched (datamap) — step 2 of the interest predicate, whose keyfield is
 	// not parsed yet
 	bool bStayEntrenched = false;
-	// +0x644c m_eAlternateAI (datamap) — RunAlternateAi has no stored mode yet
+	// +0x644c m_eAlternateAI (datamap) — `RunAlternateAI` (`0x1028fd80`)'s mode, 0..4
 	int32 AlternateAi = 0;
 	// +0x6450 m_flAlternateAIExpireTimer (datamap) — FIELD_TIME; an absolute stamp
 	double AlternateAiExpireTime = 0.0;
@@ -932,9 +908,6 @@ public:
 	float TargetLeadWeightScale = 0.f;  // +0x656c m_flTargetLeadWeightScale (walked)
 	// +0x6574 m_flLoudExpressionTime (datamap) — FIELD_TIME; the loud-line expression cooldown
 	double LoudExpressionTime = 0.0;
-	// +0x6594 m_sppPatrolPathHunt (datamap) — the hunt sibling of the patrol route, in the same
-	// resolved-points form
-	TArray<FVector> HuntPatrolPoints;
 	// +0x65a4 m_fNextDodgeTimer (datamap) — FIELD_TIME; an absolute stamp
 	double NextDodgeTime = 0.0;
 	// +0x65a8 m_QueuedBurnDamage (doc) — CTakeDamageInfo maps to this port's damage packet
@@ -1060,49 +1033,18 @@ public:
 // Protected, not private: the species classes (`Substrate/ElysiumNpc<X>.h`) are the retail
 // subclasses of this line, and their bodies reach the Troika state as retail's do (story 5 step 4).
 protected:
-	// --- Think(), phase by phase, in `NPCThink`'s (`0x10292de0`) order ---------------------------
-	//
-	// A phase that ends the PASS is not a phase that ends the THINK. Only `IsInert`, the
-	// `m_bDisableAI` gate and a terminal `ThinkDead` return out of `Think()`; every other phase
-	// falls through to the cadence tail, which is the sole writer of `NextThink`.
+	// --- Think(): the port's lifecycle around slot 431 `NPCThink` (`0x10292de0`) -----------------
 
-	// A dead NPC's whole think. FIRST in the pass and outside the cadence entirely, because a
-	// corpse in retail carries no think function at all -- there is no clock a stamp could name
-	// for it, and routing one through the distance laws would delay the ragdoll handoff by up to
-	// six seconds for a body the player is not near.
-	enum class EDeadThink : uint8 { NotDead, Running, Terminal };
-	EDeadThink ThinkDead();
 
-	// The activation barrier: the mind is admitted on its first frozen-time think. Returns true on
-	// the think that admitted, which suppresses the AI pass and nothing else.
+	// The activation barrier: the mind is admitted on its first frozen-time think (retail's
+	// `NPCInit` home; see `Think`). Returns true on the think that admitted.
 	bool RunAdmissionBarrier();
-
-	// `RunAlternateAI` (`0x1028fd80`): a transaction that owns this body outright and replaces the
-	// AI pass. Non-zero suppresses `RunAi` and NOTHING else -- the cadence tail still runs, which
-	// is what keeps a feeding NPC's stamps advancing.
-	bool RunAlternateAi(double Now);
-
-	// `RunAI(bReduced)` (`0x1026f110`). Reduced skips `GatherConditions` whole and bounds schedule
-	// maintenance at one task completion instead of ten.
-	void RunAi(double Now, bool bReduced);
-
-	// `UpdateCharacter`, slot 312, on the update clock. Only `FinishTalking` is recovered of its
-	// body; the rest is UNRECOVERED and deliberately left empty rather than invented.
-	void UpdateCharacter(double Now);
-
-	// The one clamp on the cadence tail, retail's own shape (`m_bJumping -> curtime + 0.01`).
-	// Polled rather than registered: nothing subscribes, the tail asks.
-	double HardThinkDeadline(double Now) const;
 
 	// The combat loadout, resolved once on the first ordinary think after admission.
 	void ResolveLoadout();
 
 	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
-
-	// Senses and the recovered decision pass. Suppressed where retail suppresses `GatherConditions`
-	// (slot 433), and suppression is a plain SKIP: the standing condition set survives it.
-	void RunConditionPass(double Now, bool bReduced);
 
 	// Watches a beat that stopped advancing its own move and releases the body rather than
 	// freezing it.
@@ -1145,10 +1087,6 @@ protected:
 
 	// ---------------------------------------------------------------------------------------------
 
-	// A suspended patrol route comes back with a fresh generation, so the leaf's own token is
-	// re-stamped wherever a release hands the body back to the route.
-	void RestampPatrolToken();
-
 	// The two program claims (`Schedule` and `ScriptedSchedule`) share one arbitration shape:
 	// idempotent for a token already held, the patrol route parked rather than taken, and the
 	// release stops whatever the program had the body doing. `Token` is the leaf's member for
@@ -1181,7 +1119,6 @@ protected:
 	 */
 	bool NpcStep(int32 EventId, bool bHeavy);
 
-
 	// This NPC's `stattemplate` record, RESOLVED through `ParentTemplateName` and latched at the one
 	// site that already resolves it (`ApplyResolvedTemplate`). Retail re-resolves per footfall
 	// (`1026d4a0`); the port resolves once, because `FElysiumClanTable::Resolve` merges seven maps
@@ -1200,15 +1137,11 @@ protected:
 	bool bReportedNoStepSurface = false;
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
-	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken ScheduleOwner;
 	FElysiumBodyOwnerToken ScriptedScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
-	TArray<FString> PatrolNames;
-	TArray<FVector> PatrolPoints;
-	bool bPatrolActive = false;
 	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
 	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue
 	// lock is stamped synchronously, the arbiter claim can arrive a think later.
@@ -1216,10 +1149,6 @@ protected:
 	bool bScriptBodyHeld = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
-	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is
-	// a HOLD, not a cadence -- it used to be spelled as a `NextThink` write, which the think
-	// cadence now owns. Session state, the same posture `AmbientNextActivityAt` beside it takes.
-	double StanceTransitionUntil = 0.0;
 	// The interesting-place visit's phase machine and the state riding on it.
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

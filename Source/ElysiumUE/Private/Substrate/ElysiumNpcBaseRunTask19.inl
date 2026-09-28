@@ -112,6 +112,6 @@ FElysiumEntity* TargetWeaponOwner(FElysiumEntity* Target) const;
  *  motor answers the `Flags` bit. */
 bool IsOnGroundFlag() const;
 
-// `+0x200 m_lifeState` as retail's raw id is family Misc19's `AnimEventLifeStateWord` (one word; the
+// `+0x200 m_lifeState` as retail's raw id is the entity's `LifeState` (`ElysiumEntity.h`; one word; the
 // L05 integration folded this lane's second copy into it): the base death arm writes 2
 // (`0x10288ff7`), the Troika death arm reads/clears 1 (`0x102abc05`), Werewolf `0x15f` writes 2.

@@ -491,6 +491,18 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 // found/lost outputs edges rather than a per-think stream.
 
 
+// Slot 481 `GatherEnemyConditions` (`0x10270b20`) as slot 433 dispatches it (`0x1026ee44`: only
+// with a committed enemy, slot 167). Story 8 wave 2: the port's `Senses.GatherEnemyLos` debounce
+// twin was deleted; its words are retail's `+0x5b98` count and `m_afMemory & 0x20000`.
+static void SensesTestEnemyLos(FElysiumNpc& Npc)
+{
+	const FElysiumNpcBase& ConstNpc = Npc;
+	if (FElysiumEntity* const Enemy = ConstNpc.GetEnemy())
+	{
+		Npc.GatherEnemyConditions(Enemy);
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesEnemyLosTest,
 	"Elysium.Substrate.NpcSenses.EnemyLos", GElysiumTestFlags)
 bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
@@ -503,7 +515,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	}
 
 	// Nothing has been committed, so the debounce is inert and no output has an occasion to fire.
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 0.0);
+	SensesTestEnemyLos(*F.Guard);
 	F.Flush(0.0);
 	TestEqual(TEXT("no committed enemy means no found edge"), F.Counter(TEXT("c_foundenemy")), 0.f);
 
@@ -512,7 +524,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	F.Guard->BaseMemory.Enemy = F.Player->Handle;
 
 	// --- The first admitted LOS is one edge, and it fires both surfaces for the player ----------
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
+	SensesTestEnemyLos(*F.Guard);
 	F.Flush(1.0);
 	TestEqual(TEXT("the first admitted committed-enemy LOS fires OnFoundEnemy"),
 		F.Counter(TEXT("c_foundenemy")), 1.f);
@@ -522,7 +534,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	// The bit is retained: staying visible is not a stream of found edges.
 	for (int32 i = 0; i < 5; ++i)
 	{
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
+		SensesTestEnemyLos(*F.Guard);
 	}
 	F.Flush(8.0);
 	TestEqual(TEXT("continued sight does not re-fire the found edge"),
@@ -532,19 +544,19 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	F.Services.bLineOfSightClear = false;
 	for (int32 i = 0; i < ElysiumNpcSense::EnemyLosFailureLimit - 1; ++i)
 	{
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 10.0 + i);
+		SensesTestEnemyLos(*F.Guard);
 	}
 	F.Flush(20.0);
-	TestEqual(TEXT("nine consecutive failures still count"),
-		F.Guard->Senses.Memory.EnemyLosFailures, ElysiumNpcSense::EnemyLosFailureLimit - 1);
+	TestEqual(TEXT("nine consecutive failures still count (+0x5b98, 0x10270ba8)"),
+		F.Guard->BaseMemory.EnemyOccludedCheck, ElysiumNpcSense::EnemyLosFailureLimit - 1);
 	TestFalse(TEXT("...but the enemy is not occluded yet"),
-		F.Guard->Senses.Memory.bEnemyOccluded);
+		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
 	TestEqual(TEXT("...and nothing has been lost"), F.Counter(TEXT("c_lostenemylos")), 0.f);
 
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 30.0);
+	SensesTestEnemyLos(*F.Guard);
 	F.Flush(30.0);
-	TestTrue(TEXT("the tenth failure flips to ENEMY_OCCLUDED"),
-		F.Guard->Senses.Memory.bEnemyOccluded);
+	TestTrue(TEXT("the tenth failure flips to ENEMY_OCCLUDED (0x10270bfc)"),
+		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
 	TestEqual(TEXT("...and fires OnLostEnemyLOS"), F.Counter(TEXT("c_lostenemylos")), 1.f);
 	TestEqual(TEXT("...plus OnLostPlayerLOS for the player"),
 		F.Counter(TEXT("c_lostplayerlos")), 1.f);
@@ -552,7 +564,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	// The eleventh failure is not a second edge.
 	for (int32 i = 0; i < 5; ++i)
 	{
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 31.0 + i);
+		SensesTestEnemyLos(*F.Guard);
 	}
 	F.Flush(40.0);
 	TestEqual(TEXT("further failures do not re-fire the loss edge"),
@@ -562,10 +574,10 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 
 	// --- Regaining sight is a new acquisition episode --------------------------------------------
 	F.Services.bLineOfSightClear = true;
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 50.0);
+	SensesTestEnemyLos(*F.Guard);
 	F.Flush(50.0);
-	TestEqual(TEXT("the debounce resets on a clear check"),
-		F.Guard->Senses.Memory.EnemyLosFailures, 0);
+	TestEqual(TEXT("the debounce resets on a clear check (0x10270bb1)"),
+		F.Guard->BaseMemory.EnemyOccludedCheck, 0);
 	TestEqual(TEXT("...and a re-acquisition is a fresh found edge"),
 		F.Counter(TEXT("c_foundenemy")), 2.f);
 
@@ -582,7 +594,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 			return false;
 		}
 		G.Guard->BaseMemory.Enemy = Other->Handle;
-		G.Guard->Senses.GatherEnemyLos(*G.Guard, 1.0);
+		SensesTestEnemyLos(*G.Guard);
 		G.Flush(1.0);
 		TestEqual(TEXT("a non-player enemy fires OnFoundEnemy"),
 			G.Counter(TEXT("c_foundenemy")), 1.f);
@@ -698,10 +710,9 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	Mem.LastHeardCategory = TEXT("PLAYER_GUNSHOT_BASE");
 	Mem.LastHeardTime = 7.25;
 	F.Guard->BaseMemory.LastDamageAttacker = F.Player->Handle;
-	F.Guard->BaseMemory.LastDamageTime = 3.5;
-	Mem.LastDamageAmount = 9;
-	Mem.EnemyLosFailures = 4;
-	Mem.bEnemyLosLatched = true;
+	F.Guard->BaseMemory.RepeatedDamageWindowStart = 3.5;     // +0x5d98 m_flLastDamageTime
+	F.Guard->BaseMemory.EnemyOccludedCheck = 4;              // +0x5b98 m_eEnemyOccludedCheck (datamap)
+	F.Guard->BaseScheduleHost.MemoryBits |= 0x20000u;       // m_afMemory's found latch (slot 481)
 	Mem.PlayerLosLastClearTime = 6.0;
 
 	ElysiumRoundTripSnapshot(F.World, G.World);
@@ -719,33 +730,15 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 		FString(TEXT("PLAYER_GUNSHOT_BASE")));
 	TestTrue(TEXT("...with its position"),
 		Restored.LastHeardPosition.Equals(FVector(11.0, 22.0, 33.0)));
-	TestEqual(TEXT("the last damage amount survives"), Restored.LastDamageAmount, 9);
-	TestTrue(TEXT("...and its attacker"), G.Guard->BaseMemory.LastDamageAttacker == G.Player->Handle);
-	TestEqual(TEXT("the debounce counter survives"), Restored.EnemyLosFailures, 4);
-	TestTrue(TEXT("...and the edge latch, so a restore does not re-fire OnFoundEnemy"),
-		Restored.bEnemyLosLatched);
+	TestEqual(TEXT("m_flLastDamageTime (+0x5d98) survives"), G.Guard->BaseMemory.RepeatedDamageWindowStart, 3.5);
+	TestTrue(TEXT("...and m_hLastDamageEnt (+0x5b7c)"), G.Guard->BaseMemory.LastDamageAttacker == G.Player->Handle);
+	TestEqual(TEXT("the debounce counter (+0x5b98) survives"), G.Guard->BaseMemory.EnemyOccludedCheck, 4);
+	TestTrue(TEXT("...and the edge latch (m_afMemory 0x20000), so a restore does not re-fire OnFoundEnemy"),
+		(G.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
 
-	// The hook's own half: a remembered enemy the restored world no longer has drops, and the
-	// latch and debounce it was taken for drop with it (`FElysiumNpcMemory::Rebase`).
-	{
-		FSensesFixture H;
-		FSensesFixture I;
-		if (H.Guard == nullptr || I.Guard == nullptr)
-		{
-			return false;
-		}
-		// An index no world ever had: the applier answers Invalid, as it does for a killed entity.
-		H.Guard->BaseMemory.Enemy = FElysiumEntityHandle(9999, 1);
-		H.Guard->Senses.Memory.EnemyLosFailures = 3;
-		H.Guard->Senses.Memory.bEnemyLosLatched = true;
-		ElysiumRoundTripSnapshot(H.World, I.World);
-		TestFalse(TEXT("an enemy the restored world does not carry comes back unset"),
-			I.Guard->BaseMemory.Enemy.IsSet());
-		TestEqual(TEXT("...and the debounce taken for it drops with it"),
-			I.Guard->Senses.Memory.EnemyLosFailures, 0);
-		TestFalse(TEXT("...and so does the edge latch"),
-			I.Guard->Senses.Memory.bEnemyLosLatched);
-	}
+	// (The port's rebase half -- dropping the debounce and latch with a remembered enemy the restored
+	// world lacks -- went with its twin words at story 8 wave 2: retail's restore of `+0x5b98` and
+	// `m_afMemory` is the datamap walk alone, with no such drop.)
 	return true;
 }
 
@@ -809,17 +802,17 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		}
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 		F.Guard->bHidden = true;
-		F.Guard->Senses.Tick(*F.Guard, 10.0);
+		F.Guard->Senses.PerformSensing(*F.Guard, 10.0);
 		TestFalse(TEXT("a hidden body does not see"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		F.Guard->bHidden = false;
 		F.Guard->bDead = true;
-		F.Guard->Senses.Tick(*F.Guard, 20.0);
+		F.Guard->Senses.PerformSensing(*F.Guard, 20.0);
 		TestFalse(TEXT("a dead body does not see"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		// Alive and unhidden, the same pass does see — so the two above are the gate, not the setup.
 		F.Guard->bDead = false;
-		F.Guard->Senses.Tick(*F.Guard, 30.0);
+		F.Guard->Senses.PerformSensing(*F.Guard, 30.0);
 		TestTrue(TEXT("...and a live one does"), F.Guard->Senses.Memory.bPlayerVisible);
 	}
 	return true;
@@ -1139,17 +1132,17 @@ bool FElysiumNpcSensesOverrideDebounceTest::RunTest(const FString&)
 	TestFalse(TEXT("override expires at equality"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
 	F.Player->Origin.X = Cm(100.f);
 	F.Guard->BaseMemory.Enemy = F.Player->Handle;
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 12.0);
+	SensesTestEnemyLos(*F.Guard);
 	FElysiumActiveDisciplineEffect BrainWipe;
 	BrainWipe.Record = TEXT("Dominate_BrainWipe");
 	F.Guard->Disciplines.TargetEffects.Add(BrainWipe);
-	for (int32 Count = 0; Count < 9; ++Count) F.Guard->Senses.GatherEnemyLos(*F.Guard, 13.0 + Count * .1);
-	TestFalse(TEXT("BrainWipe retains LOS below ten failed samples"), F.Guard->Senses.Memory.bEnemyOccluded);
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 14.0);
-	TestTrue(TEXT("the tenth BrainWipe sample becomes occluded despite clear geometry"), F.Guard->Senses.Memory.bEnemyOccluded);
+	for (int32 Count = 0; Count < 9; ++Count) SensesTestEnemyLos(*F.Guard);
+	TestFalse(TEXT("BrainWipe retains LOS below ten failed samples"), F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
+	SensesTestEnemyLos(*F.Guard);
+	TestTrue(TEXT("the tenth BrainWipe sample becomes occluded despite clear geometry"), F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
 	F.Guard->Disciplines.TargetEffects.Reset();
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 14.1);
-	TestFalse(TEXT("removing the effect restores actual visibility"), F.Guard->Senses.Memory.bEnemyOccluded);
+	SensesTestEnemyLos(*F.Guard);
+	TestFalse(TEXT("removing the effect restores actual visibility"), F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
 	return true;
 }
 

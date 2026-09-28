@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -188,7 +189,7 @@ int32 FElysiumNpcBase::PreSelectSchedule()
 	if (Cognition.Conditions.Has(EElysiumNpcCond::NpcFreeze))
 	{
 		RecordScheduleEvent(TEXT("PreSelectSchedule AI_BaseNPC.cpp:3627 -> 0x3a NPC_FREEZE"));
-		return 0x3a;
+		return ElysiumSched::NPC_FREEZE;
 	}
 	if (Cognition.Conditions.Has(EElysiumNpcCond::OnFire))
 	{

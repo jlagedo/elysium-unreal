@@ -23,10 +23,6 @@ namespace
 	class FTestHullBaseOnlyNpc final : public FElysiumNpcBase
 	{
 	public:
-		virtual float RunSpecialIdleActivity(double) override { return 0.f; }
-		virtual bool IsBodyVisible() const override { return false; }
-		virtual float PlayActivity(const FString&) override { return 0.f; }
-		virtual float RandomSeconds(float) override { return 0.f; }
 	};
 }
 

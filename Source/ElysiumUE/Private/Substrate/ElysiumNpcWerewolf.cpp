@@ -60,6 +60,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
 
@@ -1049,15 +1050,16 @@ int32 FElysiumNpcWerewolf::SelectScheduleForHint(const FHintWords* Hint, float D
 	}
 	switch (Hint->HintType)
 	{
-	case 0x3aa4:  return 0x15f;   // 15012
-	case 0x3aa5:  return 0x160;   // 15013
+	case 0x3aa4:  return ElysiumSched::SCHED_VWEREWOLF_DO_JUMP_HINT;    // 15012
+	case 0x3aa5:  return ElysiumSched::SCHED_VWEREWOLF_DO_DEATH_HINT;   // 15013
 	case 0x3aaa:  return 0x164;   // 15018
 	default:      break;
 	}
 	// The tail: `sqrt(|m_vSavePosition - GetAbsOrigin()|^2) > m_flGoalTolerance`. Retail takes the
 	// square root and compares the DISTANCE, not the squared distance, so the threshold is in the
 	// same units as `m_flGoalTolerance` — reproduced rather than optimised into a squared compare.
-	return DistToSavePositionUnits > GoalToleranceUnits ? 0x15a : 0x15b;
+	return DistToSavePositionUnits > GoalToleranceUnits ? ElysiumSched::SCHED_VWEREWOLF_RUN_TO_SPECIAL_MOVEMENT
+		: ElysiumSched::SCHED_VWEREWOLF_DO_SPECIAL_MOVEMENT;
 }
 
 int32 FElysiumNpcWerewolf::SelectScheduleForHint(int32 HintNode) const
@@ -1598,12 +1600,8 @@ void FElysiumNpcWerewolf::TriggerWerewolfZone()
 
 uint32 FElysiumNpcWerewolf::RetailFlags2(const FElysiumEntity& Entity)
 {
-	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`). An NPC carries the word as
-	// `FElysiumNpc::EntityFlags2Word`; **SEAM** for every other entity: `FElysiumEntity::Flags` is
-	// the first word (+0x434) only, so a non-NPC answers 0 (lifting the word to `FElysiumEntity`
-	// is listed for L13, with `FElysiumScriptedSequence::Flags2Added`).
-	const FElysiumNpc* const Npc = const_cast<FElysiumEntity&>(Entity).AsNpc();
-	return Npc != nullptr ? Npc->EntityFlags2Word : 0u;
+	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`), on every entity.
+	return Entity.EntityFlags2Word;
 }
 
 // --- Moved from `ElysiumNpcKernelMotor2.cpp` (story 5 step 4) ---
@@ -2437,9 +2435,15 @@ void FElysiumNpcWerewolf::WerewolfCheckStuck(EStuckEscape Escape)
 
 int32 FElysiumNpcWerewolf::EngineFrameNumber() const
 {
-	// SEAM. See the declaration: `INDEX_NONE` is "no frame number", which the one caller reads as
-	// "the cache is stale", so it recomputes on every call.
-	return INDEX_NONE;
+	// NAMED DIVERGENCE (see the declaration): whole frames on the world clock, counted from 1 --
+	// retail's engine count is already past 0 when any map entity exists, so a spawn-zeroed stamp
+	// (`+0x66d4`, `+0x66a4`) never reads as "this frame".
+	if (World == nullptr)
+	{
+		return 1;
+	}
+	const double Frame = World->FrameSeconds();
+	return 1 + (Frame > 0.0 ? FMath::FloorToInt32(World->NowSeconds() / Frame) : 0);
 }
 
 bool FElysiumNpcWerewolf::FUN_103d1e50() const
@@ -2541,16 +2545,9 @@ void FElysiumNpcWerewolf::FUN_103d9c90(FVector& OutPositionUnits)
 	//   * the goal tolerance is read into a local, handed to `0x102c3b50` and then **dropped** — the
 	//     helper's only other output is the position, so the tolerance round-trip is dead.
 	//
-	// **Seam:** `EngineFrameNumber()` answers `INDEX_NONE`, which never equals the stored stamp, so
-	// the recompute runs on every call. That is the named decision on the declaration: at retail's
-	// one-call-per-frame rate it is retail's own behaviour, and the alternative — a constant stamp —
-	// would freeze the cache after its first fill, which is the one thing retail never does.
+	// `field_0x6670 != framecount`: the stamp starts at -1 (never a frame), so the first ask fills.
 	const int32 Frame = EngineFrameNumber();
-	// `INDEX_NONE` is the seam's "there is no frame number", and it is the STORED value on a body
-	// that has never been asked — so a bare `!=` would read "fresh" on the very first call and
-	// answer a zero vector for ever. The staleness test is therefore explicit: no frame number
-	// means always stale, which is the named decision on the declaration.
-	const bool bStale = Frame == INDEX_NONE || WerewolfChaseFrame != Frame;
+	const bool bStale = WerewolfChaseFrame != Frame;
 	if (bStale)
 	{
 		FElysiumEntity* Enemy = World != nullptr ? World->Resolve(BaseMemory.Enemy) : nullptr;

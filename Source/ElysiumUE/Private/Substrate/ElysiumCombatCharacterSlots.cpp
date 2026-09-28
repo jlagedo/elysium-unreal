@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 139 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 18 are defined by hand in the substrate, and 102 are still stubs — 63 29c, 27 29d, 7
+// recovered, 22 are defined by hand in the substrate, and 98 are still stubs — 63 29c, 25 29d, 5
 // 29e, 5 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -231,12 +231,10 @@ void FElysiumCombatCharacter::OnRestore(bool)
 // slot 142 0x1032ef60 (sdk) `int OnTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 23, story 29e
-int32 FElysiumCombatCharacter::OnTakeDamage(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::OnTakeDamage"), TEXT("0x1032ef60"),
-		TEXT("29e"), DebugString());
-	return {};
-}
+// the body is `FElysiumCombatCharacter::OnTakeDamage`, written by hand in the substrate:
+// `CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the life-state
+// split into slots 390/391/392 and the death arm (story 8 wave 2, L13). Declared here, defined
+// there.
 
 // slot 143 0x1032ebc0 (sdk) `int TakeHealth(float, int)`
 //   layer 1, story 29c
@@ -250,11 +248,10 @@ int32 FElysiumCombatCharacter::TakeHealth(float, int32)
 // slot 144 0x1032b9b0 (sdk) `void Event_Killed(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 15, story 29d
-void FElysiumCombatCharacter::Event_Killed(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::Event_Killed"), TEXT("0x1032b9b0"),
-		TEXT("29d"), DebugString());
-}
+// the body is `FElysiumCombatCharacter::Event_Killed`, written by hand in the substrate:
+// `CBaseCombatCharacter::Event_Killed` 0x1032b9b0: LIFE_DYING, the weapon drop, the grapple
+// partner's feed teardown, the owner notice and slot 301 (story 8 wave 2, L13). Declared here,
+// defined there.
 
 // slot 145 0x1014fa10 (walked) `int BloodColor()`
 //   layer 0, story 29c
@@ -403,11 +400,9 @@ void FElysiumCombatCharacter::Event_TookLife(FElysiumEntity*, bool, bool)
 // slot 301 0x1032c0e0 (walked) `void CreateCorpse(const Vector&, const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
 //   layer 14, story 29d
-void FElysiumCombatCharacter::CreateCorpse(const FVector&, void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::CreateCorpse"), TEXT("0x1032c0e0"),
-		TEXT("29d"), DebugString());
-}
+// the body is `FElysiumCombatCharacter::CreateCorpse`, written by hand in the substrate:
+// `CBaseCombatCharacter::CreateCorpse` 0x1032c0e0: the ragdoll corpse, `BecomeClientRagdoll` (story
+// 8 wave 2, L13). Declared here, defined there.
 
 // slot 302 0x10335f60 (walked) `bool Inventory_ShouldAllow_Autopickup(CBaseCombatWeapon*, bool)`
 //   layer 0, story 29c
@@ -1056,12 +1051,9 @@ FVector FElysiumCombatCharacter::Weapon_ShootPosition(const FVector&)
 // slot 390 0x103302e0 (walked) `int OnTakeDamage_Alive(const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
 //   layer 22, story 29e
-int32 FElysiumCombatCharacter::OnTakeDamage_Alive(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::OnTakeDamage_Alive"), TEXT("0x103302e0"),
-		TEXT("29e"), DebugString());
-	return {};
-}
+// the body is `FElysiumCombatCharacter::OnTakeDamage_Alive`, written by hand in the substrate:
+// `CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed health commit
+// (story 8 wave 2, L13). Declared here, defined there.
 
 // slot 391 0x103315e0 (sdk) `int OnTakeDamage_Dying(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -1293,7 +1285,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(bool)>::Test(&FElysiumCombatCharacter::OnRestore),
 				nullptr },
 			{ 142, TEXT("0x1032ef60"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(void*)>::Test(&FElysiumCombatCharacter::OnTakeDamage),
 				nullptr },
 			{ 143, TEXT("0x1032ebc0"), TEXT("CBaseCombatCharacter"), TEXT("TakeHealth"),
@@ -1301,7 +1293,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(float, int32)>::Test(&FElysiumCombatCharacter::TakeHealth),
 				nullptr },
 			{ 144, TEXT("0x1032b9b0"), TEXT("CBaseCombatCharacter"), TEXT("Event_Killed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(void*)>::Test(&FElysiumCombatCharacter::Event_Killed),
 				nullptr },
 			{ 145, TEXT("0x1014fa10"), TEXT("CBaseCombatCharacter"), TEXT("BloodColor"),
@@ -1378,7 +1370,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(FElysiumEntity*, bool, bool)>::Test(&FElysiumCombatCharacter::Event_TookLife),
 				nullptr },
 			{ 301, TEXT("0x1032c0e0"), TEXT("CBaseCombatCharacter"), TEXT("CreateCorpse"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(const FVector&, void*)>::Test(&FElysiumCombatCharacter::CreateCorpse),
 				nullptr },
 			{ 302, TEXT("0x10335f60"), TEXT("CBaseCombatCharacter"),
@@ -1719,7 +1711,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, FVector(const FVector&)>::Test(&FElysiumCombatCharacter::Weapon_ShootPosition),
 				nullptr },
 			{ 390, TEXT("0x103302e0"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage_Alive"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(void*)>::Test(&FElysiumCombatCharacter::OnTakeDamage_Alive),
 				nullptr },
 			{ 391, TEXT("0x103315e0"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage_Dying"),

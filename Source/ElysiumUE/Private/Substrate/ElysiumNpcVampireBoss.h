@@ -108,7 +108,7 @@ public:
 	 *  WOUND counter; then fire the transform partner's `+0x6664` output with this as both activator and
 	 *  caller; then `TaskComplete(false)`. */
 	void WaitForTransformation();
-	double ProteanTransformStartTime = 0.0;      // `m_flProteanTransformStartTime`
+	// `m_flProteanTransformStartTime` (`+0x1560`) is the Troika word `FElysiumNpc::ProteanTransformStartTime`.
 	FElysiumEntityHandle TransformPartner;       // `m_hTransformPartner`
 	/** `0x103c6a00` — `m_HealthPercentRecord (+0x6698) = GetCurrHealthPercent()`, the boss line's
 	 *  snapshot taken before a phase. Five direct callers across the boss species. */

@@ -182,7 +182,13 @@ bool FElysiumScheduleCorpus::LoadFrom(const FString& Directory, FString& OutErro
 		LoadUnit(Directory, *Unit);
 	}
 
-	Ops.Build(Namespace(EElysiumIdCategory::Task));
+	// The arm census (story 8 wave 2): each arm row binds through its class's task space, the class's
+	// own or the Troika line's, as slot 580 falls for a class with no space of its own.
+	Ops.Build(Namespace(EElysiumIdCategory::Task), [this](const TCHAR* RetailClass)
+	{
+		const FElysiumLocalIdSpace* Own = SpaceFor(FString(RetailClass), EElysiumIdCategory::Task);
+		return Own != nullptr ? Own : SpaceFor(TEXT("CAI_BaseNPCTroika"), EElysiumIdCategory::Task);
+	});
 
 	Measured.PortedTasks = Ops.NumPorted();
 	Measured.UnportedTasks = Ops.NumUnported();
@@ -570,7 +576,7 @@ FString FElysiumScheduleCorpus::DescribeCensus() const
 		Identities > 0 ? (100.0f * Measured.PortedTasks) / Identities : 0.0f;
 	return FString::Printf(
 		TEXT("schedules %d in %d spaces (%d skipped), %d parse failure(s); ")
-		TEXT("tasks %d steps over %d identities, %d ported (%.0f%%), %d unported reached by %d step(s)"),
+		TEXT("tasks %d steps over %d identities, %d with a slot 442/444 arm (%.0f%%), %d unarmed reached by %d step(s)"),
 		Measured.Programs, Measured.Units, Measured.UnitsSkipped, Measured.ParseFailures,
 		Measured.Steps, Identities, Measured.PortedTasks, PortedShare,
 		Measured.UnportedTasks, Measured.UnportedSteps);

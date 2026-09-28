@@ -6,7 +6,8 @@
 //
 // Owns (Conditions19's `rule` rows): 0x102b27f0 CAI_BaseNPCTroika::GatherConditions. The named
 // condition constants the family pushes by number are in `ElysiumNpcBaseConditions19.inl` (the base
-// class), which this class inherits. Walked prose: `docs/vtmb/npc-ai/story8/Conditions19.md`.
+// class), which this class inherits. Walked prose:
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 
 // --- The Troika half of `CAI_BaseNPC::GatherConditions` (`0x1026ec30`, `1026eec1..1026efa4`) --------
 

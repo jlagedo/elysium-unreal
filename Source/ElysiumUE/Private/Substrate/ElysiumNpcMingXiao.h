@@ -354,7 +354,8 @@ public:
 	//
 	// No slot holds any of these. Callers: `Event_Killed` `0x10395ba0` (the death and the two
 	// sweeps), `OnTakeDamage_Alive` `0x10395ae0` (the damage router), both other lanes' rows.
-	// Bodies in `ElysiumNpcMingXiao.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+	// Bodies in `ElysiumNpcMingXiao.cpp`; walked prose in
+	// `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 
 	/** `+0x6744 CNPC_VMingXiao::m_bPlayedDeathAnim` (walked) — the latch `0x10395ce0` tests. */
 	bool bMingXiaoPlayedDeathAnim = false;
@@ -442,7 +443,7 @@ public:
 	// --- Lane L05 (story 8 RunTask19)
 	// (`+0x6680 m_hRangedWeapon`, the weapon `TASKS 0x14f..0x152` switch back to, is L07's
 	// `MingXiaoRangedWeapon` above.)
-	/** `FUN_1039aa20` `0x1039aa20` -- `TASK 0x14b`'s whole arm. **SEAM**: counted. */
+	/** `FUN_1039aa20` `0x1039aa20` -- `TASK 0x14b`'s whole arm (the counter records each run). */
 	int32 MingXiaoTask14bCalls = 0;
 	void MingXiaoTask14b();
 	/** `FUN_10398db0` `0x10398db0` -- the tentacle GRAB (the `phys_animlink` on

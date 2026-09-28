@@ -15,7 +15,8 @@
 // --- Story 8, lane L12: the Troika-line helpers of Boss19 ----------------------------------------
 //
 // No slot holds these. Bodies in `ElysiumNpcBoss19.cpp`; walked prose in
-// `docs/vtmb/npc-ai/story8/Boss19.md`. The two bools of `ResetAiState` are retail's two `char`
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
+// The two bools of `ResetAiState` are retail's two `char`
 // arguments, kept as the codebase's other retail helpers keep theirs (`SetSchedule`, `SetMoveHint`).
 
 /** `0x102b52a0` — the AI teardown `DoPossession`, `DoFrenzy` and `SetFollowerBoss` share: drop the
@@ -39,6 +40,16 @@ void DoFrenzy(FElysiumEntity* Caster);
  *  the entity's own def, which is the string retail stored, or empty. */
 FString AuthoredRelationshipString() const;
 
+/** `0x10273760` — `InputSetRelationship(this, m_RelationshipString (+0x1584) ?: "", 0)`: re-apply the
+ *  authored relationship line. Reached from `ResetAiState` and from `NPCInitThink` `0x10273aa0`. */
+void ReapplyRelationshipString();
+
+/** `0x10273aa0` — the think `NPCInit` installs for the map's first second (`ThinkSet(NPCInitThink)`,
+ *  `curtime + 0.1`): `0x10273760`, slot 422 `StartNPC`, then a tail jump into slot 421
+ *  `PostNPCInit`. `StartNPC` re-installs the ordinary think (`LAB_1000f4e8`, `CallNPCThink` ->
+ *  slot 431), so `NPCThink` runs from the NEXT think on. */
+void NpcInitThink();
+
 /** `0x102dfc10` over slot 541 `GetEnemies()`: the `CAI_Enemies` clear-all. Retail walks the record
  *  list, hands each record and the reason to the owner's forget callback (slot 56; the squad's
  *  `0x103169a0` is unreached, no squad-shared store stands) and frees it. The store is emptied
@@ -50,4 +61,4 @@ int32 EnemyStoreClearedRecords = INDEX_NONE;
 FString EnemyStoreClearReason;
 
 /** `m_lifeState` (`+0x200`), which the Boss19 death entries write LIFE_DYING (1) into, is family
- *  Misc19's `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`): one word (StartTask19 integration). */
+ *  the entity's `LifeState` (`ElysiumEntity.h`): one word (StartTask19 integration). */

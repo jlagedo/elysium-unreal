@@ -766,9 +766,9 @@ bool FElysiumNpcKernelStartTask19BaseMovementTest::RunTest(const FString&)
 
 	for (const int32 TaskId : { 0x5f, 0xdf })                            // 0x10286801
 	{
-		F.Guard->AnimEventLifeStateWord = 0;
+		F.Guard->LifeState = 0;
 		F.Run(TaskId);
-		TestEqual(FString::Printf(TEXT("0x%x writes LIFE_DYING"), TaskId), F.Guard->AnimEventLifeStateWord, 1);
+		TestEqual(FString::Printf(TEXT("0x%x writes LIFE_DYING"), TaskId), F.Guard->LifeState, 1);
 		TestFalse(FString::Printf(TEXT("0x%x parks the program"), TaskId), F.Completed() || F.Failed());
 	}
 

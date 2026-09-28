@@ -312,11 +312,12 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	TestTrue(TEXT("the entity think is the earlier of the two written clocks"),
 		FMath::IsNearlyEqual(static_cast<double>(Guard->NextThink),
 			FMath::Min(Guard->ScheduleHost.NextUpdate, Guard->ScheduleHost.NextNormal), 1e-3));
-	// This headless guard has no activity resolver, so its idle program failed into base `FAIL`
-	// (story 25), which now holds on `WAIT_PVS` out of the player's PVS. No program is installed
-	// inside these thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
-	TestEqual(TEXT("the hidden body holds FAIL's PVS wait rather than reselecting each pass"),
-		Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::FAIL));
+	// The guard holds its idle program: the Troika `TASK_SPECIAL_IDLE_ACTIVITY` arm (`0x102a49bc`)
+	// does not fail a body with no stance clips (story 8 wave 2; the port's op verb failed it into
+	// base `FAIL`, which is what this case pinned before). No program is installed inside these
+	// thinks, so nothing sets `SCHEDULE_CHANGED` and the normal clock leaves the pin.
+	TestEqual(TEXT("the hidden body holds its idle program rather than reselecting each pass"),
+		Guard->Schedule.Current, ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION));
 	TestTrue(TEXT("...so its normal clock is off the in-think install pin"),
 		Guard->ScheduleHost.NextNormal - Now > 0.1 + 1e-3);
 	return true;
@@ -559,17 +560,31 @@ bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
 	const double Now = F.World.NowSeconds();
 
 	// --- WAIT_PVS ---------------------------------------------------------------------------
+	// Troika `RunTask`'s arm for task 5 (`0x102aad7e`), reached through slot 444 (story 8 wave 2:
+	// the port's `WaitPvs` verb deleted). True when the arm completed the task.
+	FElysiumScheduleStep WaitPvsStep;
+	if (const FElysiumLocalIdSpace* TaskSpace = Guard->IdSpace(EElysiumIdCategory::Task))
+	{
+		WaitPvsStep.TaskId = TaskSpace->LocalToGlobal(0x05);
+	}
+	auto RunWaitPvs = [Guard, &WaitPvsStep]()
+	{
+		Guard->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+		Guard->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+		Guard->RunTaskSlot444(&WaitPvsStep);
+		return Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete;
+	};
 	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
 	Prime(*Guard, Now);
-	TestFalse(TEXT("out of the player's PVS the task keeps waiting"), Guard->WaitPvs());
+	TestFalse(TEXT("out of the player's PVS the task keeps waiting"), RunWaitPvs());
 	TestTrue(TEXT("...and touches no stamp"), Untouched(*Guard, Now));
 	F.Services.PvsQuery = nullptr;
-	TestTrue(TEXT("in PVS the task completes"), Guard->WaitPvs());
+	TestTrue(TEXT("in PVS the task completes"), RunWaitPvs());
 	TestTrue(TEXT("...re-basing all eight stamps"), NextStampsAt(*Guard, Now) && LastStampsAt(*Guard, Now));
 	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
 	Guard->SpawnFlags |= 0x400;   // SF_NPC_ALWAYSTHINK
 	Prime(*Guard, Now);
-	TestTrue(TEXT("SF_NPC_ALWAYSTHINK completes at once, out of PVS"), Guard->WaitPvs());
+	TestTrue(TEXT("SF_NPC_ALWAYSTHINK completes at once, out of PVS"), RunWaitPvs());
 	TestTrue(TEXT("...with no clock work"), Untouched(*Guard, Now));
 	Guard->SpawnFlags &= ~0x400;
 
@@ -622,21 +637,24 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 	// The guard's own program does not list `WAS_BUMPED`, and retail's producer consults
 	// `ConditionInterruptsCurrentSchedule` (`0x10269c70`) before it sets the bit -- so nothing is
 	// recorded at all. That refusal is the recovered behaviour, not an omission.
-	Guard->OnBumped(1.0);
-	TestTrue(TEXT("a program that does not list the bit records no bump"),
-		Guard->Senses.Memory.LastBumpTime < 0.0);
+	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::WasBumped);
+	TestFalse(TEXT("a program that does not list the bit gets no bump"), Guard->OnBumped(1.0));
+	TestFalse(TEXT("...and the bit is not set"), Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 
-	// Written by hand, the reconstruction behaves like the damage pair: live for the first pass
-	// that reads it, gone for the second.
-	Guard->Senses.Memory.LastBumpTime = 5.0;
-	FElysiumNpcConditions Out;
-	ElysiumNpcCond::GatherBump(*Guard, 4.0, Out);
-	TestTrue(TEXT("a bump newer than the last pass is decision input"),
-		Out.Has(EElysiumNpcCond::WasBumped));
-	FElysiumNpcConditions Second;
-	ElysiumNpcCond::GatherBump(*Guard, 6.0, Second);
-	TestFalse(TEXT("...and is gone by the pass after it"),
-		Second.Has(EElysiumNpcCond::WasBumped));
+	// The bit's one-pass life is `RunAI`'s (`0x1026f110`): a reduced pass leaves it standing, the
+	// end of a full pass clears it (`0x1026f323 ClearCondition(0x38)`). (Story 8 wave 2: the port's
+	// `LastBumpTime` + `GatherBump` reconstruction went with its gather.)
+	// Two full passes first, so the reduced pass below continues an installed program rather than
+	// installing one (`SetSchedule` `0x10280e50` zeroes the whole condition word).
+	Guard->RunAI(false);
+	Guard->RunAI(false);
+	Guard->Cognition.Conditions.Set(EElysiumNpcCond::WasBumped);
+	Guard->RunAI(true);
+	TestTrue(TEXT("0x1026f30b a reduced pass keeps the bump"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
+	Guard->RunAI(false);
+	TestFalse(TEXT("0x1026f323 the full pass clears it at its end"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 
 	// The producer: the player's touch handler `0x10147690`, drained off the bodies once a frame
 	// beside `SyncFromBody`. The player-side half lands; the NPC-side half meets the same mask
@@ -647,15 +665,15 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	Guard->Senses.Memory.LastBumpTime = -1.0;
+	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::WasBumped);
 	F.Services.PlayerTouchContacts.Add(Guard->Handle);
 	F.Advance(F.World.NowSeconds() + 0.05);
 	TestTrue(TEXT("the frame's contacts are drained by the poll"),
 		F.Services.PlayerTouchContacts.IsEmpty() && F.Services.Saw(TEXT("DrainPlayerTouchContacts")));
 	TestTrue(TEXT("...the toucher takes Obf_Bumped_Object"),
 		ElysiumMiscFlags::Has(Player->MiscFlags, ElysiumMiscFlags::ObfBumpedObject));
-	TestTrue(TEXT("...and a guard whose program lists no WAS_BUMPED still records no bump"),
-		Guard->Senses.Memory.LastBumpTime < 0.0);
+	TestFalse(TEXT("...and a guard whose program lists no WAS_BUMPED still records no bump"),
+		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 	return true;
 }
 

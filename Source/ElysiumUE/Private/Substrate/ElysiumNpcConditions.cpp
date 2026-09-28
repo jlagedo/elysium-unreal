@@ -251,87 +251,6 @@ bool ElysiumNpcCond::IsHearFamily(EElysiumNpcCond Cond)
 		|| Cond == EElysiumNpcCond::HearThumper || Cond == EElysiumNpcCond::HearBugbait;
 }
 
-// STORY8-TWIN: replaced by 0x10265ed0 (m_flSumDamage reset when `curtime - m_flLastDamageTime >= 1.0`,
-// 0x1026629f..0x10266310) at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
-void ElysiumNpcCond::AccumulateDamage(FElysiumNpcBaseMemory& Memory, int32 CommittedDamage, double Now)
-{
-	if (CommittedDamage <= 0)
-	{
-		return;
-	}
-	// Recovered: the window is RESET when it expires, not decayed — a hit one second and one frame
-	// after the previous one starts a fresh window carrying only itself.
-	if (Memory.RepeatedDamageWindowStart < 0.0
-		|| (Now - Memory.RepeatedDamageWindowStart) > RepeatedDamageWindowSeconds)
-	{
-		Memory.RepeatedDamageWindowStart = Now;
-		Memory.RepeatedDamageAccumulated = 0;
-	}
-	Memory.RepeatedDamageAccumulated += CommittedDamage;
-}
-
-void ElysiumNpcCond::GatherBump(const FElysiumNpc& Npc, double PreviousGatherTime,
-	FElysiumNpcConditions& Out)
-{
-	// The same one-pass reconstruction `GatherDamage` uses below, against the same clock. Retail
-	// raises the bit inside the player's touch (`0x10147690`) and clears it at the end of the next
-	// non-reduced `RunAI`; this runtime rebuilds the whole set each full pass, so the life is
-	// expressed as "the bump is newer than the last pass that read one".
-	const double LastBump = Npc.Senses.Memory.LastBumpTime;
-	if (LastBump >= 0.0 && LastBump > PreviousGatherTime)
-	{
-		Out.Set(EElysiumNpcCond::WasBumped);
-	}
-}
-
-// STORY8-TWIN: replaced by 0x10265ed0 (LIGHT 0x4c via slot 576 at 0x10266239, HEAVY 0x4d via slot
-// 577 at 0x10266293, REPEATED 0x4e at `m_iMaxHealth * 0.3 < m_flSumDamage`, 0x1026632e) and the
-// Troika zero-damage arm 0x102bef5c at wave 2 (L13, once the typed commit dispatches slot 142 `OnTakeDamage`; today no live path reaches slots 142/390).
-void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime,
-	FElysiumNpcConditions& Out)
-{
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-
-	// The edge: retail sets these inside the damage transaction and clears them when the decision
-	// pass that read them ends, so a packet is decision input exactly once. This runtime has no
-	// mid-pass hook to set a bit in, so the same one-pass life is reconstructed from the commit's
-	// own timestamp against the previous pass's. That is a mechanism difference with no behavioural
-	// one: the condition is live for the first pass after the hit and gone for the second.
-	const bool bNewPacket = Npc.BaseMemory.LastDamageTime >= 0.0 && Npc.BaseMemory.LastDamageTime > PreviousGatherTime;
-	if (bNewPacket && Memory.LastDamageAmount > 0)
-	{
-		Out.Set(EElysiumNpcCond::LightDamage);
-		// See `HeavyDamageFraction` — the predicate itself is unrecovered. A body with no Source
-		// health ceiling (a record that never seeded a sheet) cannot answer the question at all, so
-		// it takes light damage only rather than guessing a pool.
-		if (Npc.MaxHealth > 0
-			&& static_cast<float>(Memory.LastDamageAmount)
-				>= HeavyDamageFraction * static_cast<float>(Npc.MaxHealth))
-		{
-			Out.Set(EElysiumNpcCond::HeavyDamage);
-		}
-	}
-
-	// `REPEATED_DAMAGE` is the window's own answer, not an edge: while the accumulated sum inside a
-	// live one-second window is over 15 percent of Source max health the condition stands.
-	if (Npc.MaxHealth > 0 && Npc.BaseMemory.RepeatedDamageWindowStart >= 0.0
-		&& Npc.BaseMemory.LastDamageTime >= 0.0
-		&& (Npc.BaseMemory.LastDamageTime - Npc.BaseMemory.RepeatedDamageWindowStart) <= RepeatedDamageWindowSeconds
-		&& static_cast<float>(Npc.BaseMemory.RepeatedDamageAccumulated)
-			> RepeatedDamageFraction * static_cast<float>(Npc.MaxHealth))
-	{
-		Out.Set(EElysiumNpcCond::RepeatedDamage);
-	}
-}
-
-// STORY8-TWIN: replaced by 0x1026e4f0 (`FElysiumNpcBase::Conditions19PerformSensing`, the
-// `0x105c97b4` HEAR clear then the `m_HeardConditions` merge) at wave 2, when L13 rewires the loop
-// to slot 433. Live until then (reached from `ElysiumNpcEnemy::GatherConditions`).
-void ElysiumNpcCond::GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime,
-	FElysiumNpcConditions& Out)
-{
-	if (!Npc.IsOblivious()) Out |= Npc.HeardConditions;
-}
 bool ElysiumNpcCond::ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate,
 	bool bCombatMode)
 {
@@ -517,10 +436,10 @@ void ElysiumNpcCond::GatherSeeUnknown(FElysiumNpc& Npc, double Now, FElysiumNpcC
 {
 	FElysiumEntityWorld* World = Npc.World;
 	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	// Retail's outer `GatherConditions` (`0x102b27f0`) clears every condition this sweep owns before
-	// the sense pass runs; `Cond.Reset()` at the top of `ElysiumNpcEnemy::GatherConditions` already
-	// does that for the whole pass, so nothing here needs its own unconditional clear except the
-	// mid-function retraction below, which retail performs inside this very function.
+	// Retail's outer `GatherConditions` (`0x102b27f0`, `FElysiumNpc::GatherConditions`) clears every
+	// condition this sweep owns (`0x102b2863..0x102b28ab`) before the sense pass runs, so nothing here
+	// needs its own unconditional clear except the mid-function retraction below, which retail
+	// performs inside this very function.
 	if (!Out.Has(EElysiumNpcCond::SeeUnknown))
 	{
 		// `FUN_1028e360`: no best-see-unknown handle at all, or one that no longer resolves, answers
@@ -972,52 +891,6 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 	Memory.NextSeeSoundSourceTime = Now + SeeSoundSourceCadenceSeconds;
 }
 
-// STORY8-TWIN: replaced by 0x10270b20 (`FElysiumNpcBase::GatherEnemyConditions`, slot 481) at
-// wave 2 (L13's loop rewire). Live until then.
-void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)
-{
-	const FElysiumEntityWorld* World = Npc.World;
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
-	{
-		return;
-	}
-	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy);
-	if (Enemy == nullptr)
-	{
-		// The handle is gone entirely rather than dead. That is `LOST_ENEMY`, and it belongs to the
-		// enemy transaction that ran before this step — asserting anything about a committed enemy
-		// that is not there is exactly the plausible fallback the recovered gate refuses.
-		return;
-	}
-	if (Enemy->IsInert())
-	{
-		// Dead, or hidden — the two collapse here for the same reason the senses debounce collapses
-		// them: an entity the world has taken off the board is not fightable, and VtMB carries no
-		// hidden-NPC state distinct from removed. The senses debounce deliberately declines to
-		// infer this (it is enemy SELECTION's transaction), which is why it lands here.
-		Out.Set(EElysiumNpcCond::EnemyDead);
-		return;
-	}
-
-	// The debounce's own two answers, straight off the latch senses maintains: below ten
-	// consecutive failures the committed enemy retains `HAVE_ENEMY_LOS`; at ten it flips.
-	Out.Set(Memory.bEnemyOccluded ? EElysiumNpcCond::EnemyOccluded : EElysiumNpcCond::HaveEnemyLos);
-
-	// `SEE_ENEMY` (`0x46`) is NOT raised here. Its one retail writer is `CAI_BaseNPC::OnLooked`
-	// (`0x1026a2c0`, `1026a3dd`), inside the per-entity loop and behind both the skip-entity
-	// exclusion and the `relation != D_NU` gate — so a neutral committed enemy, or one that is this
-	// pass's skipped unknown, does not raise it however plainly it is seen. `GatherSight` carries
-	// it; this body raised it unconditionally off the seen set, which was the divergence. Story
-	// 29d, family Senses10.
-
-	// SEAM (comment only, never set): `ENEMY_UNREACHABLE` (0x59). It needs a path query — "can this
-	// body reach that actor" — and `IElysiumNpcMotor` carries no reachability verb yet. The door
-	// obstruction selector's step 2 and the melee selector's take-cover branch both gate on it, and
-	// both currently decline for exactly this reason. Never set a plausible default here: an
-	// unreachable enemy the NPC can in fact reach re-routes the whole combat branch.
-}
-
 // --- Weapon capability ---
 
 const TCHAR* ElysiumNpcCond::CapabilityName(ECapability Capability)
@@ -1165,9 +1038,8 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpcBase& Npc, double N
 	FElysiumNpcConditions& Out)
 {
 	const FElysiumEntityWorld* World = Npc.World;
-	// The weapon-sight occlusion is the senses runner's LOS debounce (`SensesObject()`).
-	const FElysiumNpcSenses* const Senses = Npc.SensesObject();
-	const bool bEnemyOccluded = Senses != nullptr && Senses->Memory.bEnemyOccluded;
+	// The weapon-sight occlusion is slot 481's LOS debounce (`+0x5b98`, `0x10270b20`) at its limit.
+	const bool bEnemyOccluded = Npc.BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
 	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return;

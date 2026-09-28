@@ -137,50 +137,6 @@ uint8 FElysiumNpcBase::NpcStateFlags() const
 	return FElysiumNpcFlags::NpcStateFlagsForRetailState(RetailState);
 }
 
-// `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal, write `m_lifeState = 1`.
-// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (StartTaskClearGoal + AnimEventLifeStateWord = 1) at wave 2
-void FElysiumNpcBase::BeginDying()
-{
-	// The navigator reset is the port's stop -- `0x102ee270` clears the goal and the path, which is
-	// what `StopMoving` already does here. `m_lifeState` has no field in this runtime: the mind's
-	// dead state carries it, and `OnKilled` set that before the program ever started.
-	StopMoving();
-	Mind.RecordExternal(TEXT("TASK_DIE: dying, waiting out the death performance"));
-}
-
-// `TASK_DIE`'s Troika gate (`0x102abb90`):
-//   (IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE
-//
-// The second arm decides the ordinary case. Base `DIE` names NO activity task -- retail's only
-// death poses come from `BecomeClientRagdoll`'s `ACT_DIERAGDOLL` seed, from
-// `TASK_PLAY_DEATH_SEQUENCE` in the named Discipline schedules, and from Troika's interesting-place
-// death activity (`+0x6308`) -- so an NPC that reaches this task with nothing playing is idle and
-// commits on its first think, exactly as retail's does.
-// STORY8-TWIN: replaced by 0x102abb90 (Troika RunTask idx 0x0a's gate) / 0x10288fc4 (base 0x5f) at wave 2
-bool FElysiumNpcBase::IsDeathPerformanceFinished() const
-{
-	// UNPORTED, and named rather than approximated: `IsActivityFinished` (slot 251, `0x10272900`) and
-	// `m_flCycle` are sequence-level state this runtime does not mirror, so the first arm of retail's
-	// gate has no input here. What stands in is the one death performance this port CAN see -- the
-	// clip `PlayDeathActivity` started -- which is the same set of producers retail's first arm is
-	// waiting on. When none is running, both retail and this answer "finished" immediately.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return Now >= DeathPerformanceEndsAt;
-}
-
-// `TASK_DIE`'s commit. Retail: target the NPC itself, write `m_lifeState` 1 -> 0, and call
-// `CBaseCombatCharacter::Die` (`0x103392c0`), which re-enters `Event_Killed` -- and it is that
-// SECOND `Event_Killed` whose `CreateCorpse` (`0x1032c0e0`) makes the corpse and takes the entity
-// out of the world.
-//
-// This runtime has the handoff half of that and none of the entity half, so the handoff runs here
-// and `bDeathCommitted` stands in for the removal. The task itself still does not complete, because
-// retail's does not.
-void FElysiumNpcBase::CommitDeath()
-{
-	bDeathCommitted = true;
-	CompleteDeathHandoff();
-}
 
 float FElysiumNpcBase::RandomSeconds(float Max)
 {
@@ -196,23 +152,6 @@ void FElysiumNpcBase::ClearSchedule()
 	// `ElysiumSchedule::ClearSchedule`'s; what this adds is the name, so no site clears the
 	// schedule record directly and skips the release the dispatch performs.
 	ElysiumSchedule::ClearSchedule(Schedule, *this);
-}
-
-EElysiumTaskResult FElysiumNpcBase::BeginStopMovingTask()
-{
-	// StartTask 0x10282d71: only an active goal enters RunTask. Clearing the goal must
-	// retain nav type and flight velocity, which RunTask still reads in this same think.
-	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
-	if (!Nav.bActiveGoal)
-	{
-		bMoveIssued = false;
-		return EElysiumTaskResult::Complete;
-	}
-	Motor->ClearNavigationGoal();
-	// `0x10282d71` zeroes the `move_yaw` pose parameter (`LookupPoseParameter` + slot 345), not the
-	// Troika's `m_flDesiredMoveYaw` (story 5 step 5 correction).
-	SetPoseParameterByName(TEXT("move_yaw"), 0.f);
-	return StopMovingTask();
 }
 
 void FElysiumNpcBase::DisconnectFromSquad()
@@ -275,39 +214,6 @@ FString FElysiumNpcBase::DescribeNpcFlags() const
 	}
 	const FString Count = FString::Printf(TEXT("oblivious=%d"), ObliviousCount);
 	return Words == TEXT("-") ? Count : Words + TEXT("|") + Count;
-}
-
-// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72e3 (the raw 0x80001000 mask) at wave 2
-void FElysiumNpcBase::MakeOblivious(bool bOblivious)
-{
-	// `CAI_BaseNPC` `0x1026d130` (set) and `0x1026d160` (clear), in their recovered order.
-	if (bOblivious)
-	{
-		// 1. `SetEnemy(NULL)`. Through the ordinary transaction, so the last-enemy transfer, the
-		//    slot and the lost-output effects all happen — an incapacitated NPC forgetting its enemy
-		//    is the same operation as any other forgetting, not a field poke.
-		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
-		// 2. Squad disconnect (`0x1026d050`: leave the squad and `++m_iSquadDisconnected`; it sets no
-		//    flag).
-		//
-		// SEAM (named, no substrate): this runtime has no squad object for an NPC to leave, so there
-		// is nothing to disconnect from.
-		DisconnectFromSquad();
-		// 3. The refcount and its bookkeeping bit.
-		AddOblivious();
-		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
-		//    (`docs/vtmb/npc-ai/README.md`), so this is a real content surface and not a
-		//    diagnostic. The NPC is both caller and activator: nothing else is in scope at the arm.
-		FireOutput(FName(TEXT("OnIncapacitatedStart")), Handle);
-	}
-	else
-	{
-		RemoveOblivious();
-		ReconnectToSquad();
-		FireOutput(FName(TEXT("OnIncapacitatedEnd")), Handle);
-	}
-	RecordScheduleEvent(FString::Printf(TEXT("TASK_MAKE_OBLIVIOUS %s -> %s"),
-		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *DescribeNpcFlags()));
 }
 
 void FElysiumNpcBase::ArmThinkAt(double Stamp)

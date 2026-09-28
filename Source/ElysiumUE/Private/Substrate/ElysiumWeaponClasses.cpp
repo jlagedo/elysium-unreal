@@ -2889,7 +2889,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	Dmg.Source = Attacker.Handle;
 	// CBaseCombatWeapon::102579f0 writes packet+0x28 from weapon `this` after 101c2770 seeds
 	// the attacker. Identity is valid even while the held-weapon spatial seam has not supplied a
-	// packet position; RememberDamage keeps those two facts separate.
+	// packet position; `0x10265ed0` reads the inflictor's origin (the held weapon's is its owner's).
 	Dmg.Inflictor = Handle;
 	// The direct-damage route: the value above IS the damage-success count, so the resolver's damage
 	// roll is bypassed. Its soak test still runs.

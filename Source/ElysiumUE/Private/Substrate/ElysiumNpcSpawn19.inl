@@ -38,11 +38,6 @@ int32 BloodColorWord = 0;
 /** `m_HackedGunPos` (`+0x1578`, `CBaseCombatCharacter`), SOURCE units. Troika `Spawn` writes
  *  `(0, 0, 55.0)`, the camera zeroes it. */
 FVector HackedGunPosUnits = FVector::ZeroVector;
-/** `m_fFlags2` (`+0x438`, `CBaseEntity`). `FElysiumEntity::Flags` is the first word only; the
- *  per-class seams `FElysiumNpcPlayerController::Flags2Added`, `FElysiumScriptedSequence::Flags2Added`
- *  and `FElysiumNpcTzimisceRunner::Flag2Removals` stand for this same word (listed for the
- *  integrator to fold). `AddFlag2` (`0x100b3840`) ORs, `RemoveFlag2` (`0x100b3900`) clears. */
-uint32 EntityFlags2Word = 0;
 /** `m_iDisciplineContextTgtFlags` (`+0x0eac`, `CBaseCombatCharacter`) -- `ApplyDisciplineSpawnFlags`'
  *  one write. No port reader yet. */
 int32 DisciplineContextTgtFlags = 0;
@@ -63,18 +58,18 @@ int32 RenderFxWord = 0;
 /** `m_clrRender`'s alpha byte (`+0x01a3`, `CBaseEntity`); Source's default render colour is opaque. */
 uint8 RenderAlphaByte = 255;
 /** `m_hProteanTransformOther` (`+0x155c`, `CBaseCombatCharacter`), the protean swap's partner the
- *  boss writes LAST (`0x103c6304`). The `+0x1560` start time is `FElysiumNpcVampireBoss::
- *  ProteanTransformStartTime`. */
+ *  boss writes LAST (`0x103c6304`). */
 FElysiumEntityHandle ProteanTransformOther;
+/** `m_flProteanTransformStartTime` (`+0x1560`, `CAI_BaseNPCTroika`): the vampire boss stamps it on
+ *  both bodies (`0x103c61fe` / `0x103c6204`); `TASK 0x14b` reads it on the boss
+ *  (`0x103c63c0`), Hengeyokai (`0x10383470`) and Ming Xiao (`0x1039aa20`). NPCInit leaves it 0. */
+double ProteanTransformStartTime = 0.0;
 
 /** The five police-level repairs `CAI_BaseNPCTroika::Spawn` (`0x10299064..0x102990ed`) and
  *  `CNPC_VCamera::Spawn` (`0x10368d15..0x10368d9e`) share, verbatim: each `m_iPL…Level` below 1 is
  *  `DevMsg`'d and forced to 6. */
 void RepairPoliceLevels();
 
-/** `CBaseEntity::AddFlag2` (`0x100b3840`) / `RemoveFlag2` (`0x100b3900`) over `EntityFlags2Word`. */
-void AddFlag2(uint32 Bits) { EntityFlags2Word |= Bits; }
-void RemoveFlag2(uint32 Bits) { EntityFlags2Word &= ~Bits; }
 
 // --- `Event_Killed` (`0x102bf340`) seams and counters -------------------------------------------
 

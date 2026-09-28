@@ -134,7 +134,7 @@ namespace
 		{
 			if (Guard)
 			{
-				ElysiumNpcEnemy::GatherConditions(*Guard, Now);
+				FElysiumNpcWorldFixture::GatherConditionsTickedTo(*Guard, Now);
 			}
 		}
 		void LookAndGather(double Now)

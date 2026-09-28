@@ -400,16 +400,12 @@ public:
 	// `0x103d9c90`.
 	int32 WerewolfChaseFrame = INDEX_NONE;                        // +0x6670 (walked)
 	FVector WerewolfChasePosUnits = FVector::ZeroVector;          // +0x6674/+0x6678/+0x667c (walked)
-	/** SEAM for `(**(code **)(*DAT_1070b22c + 0x1e0))()` — the ENGINE FRAME NUMBER `0x103d9c90`
-	 *  memoises its chase position on. This runtime's clock is `FElysiumEntityWorld::NowSeconds()` and
-	 *  carries no frame counter at all.
-	 *
-	 *  **NAMED DECISION**: this answers `INDEX_NONE`, and the body reads that as "the stamp can never
-	 *  match", so the cache is ALWAYS STALE and the position is recomputed on every call. Retail calls
-	 *  the body at most once per frame per NPC, so recomputing per call is retail's own answer at
-	 *  retail's own call rate; answering a CONSTANT frame instead would freeze the cache after its
-	 *  first fill and hand every later caller a stale point, which is the one behaviour retail never
-	 *  has. The word `+0x6670` is still written, so a frame counter arriving later needs no other edit. */
+	/** `(*DAT_1070b22c)->+0x1e0` (`0x103cb6b3`, `0x103cfdc8`, `0x103da116`) — the ENGINE FRAME NUMBER:
+	 *  the think's round robin divides it by 5, `0x103d9c90` memoises its chase position on it and the
+	 *  hint searches stamp `+0x66d4` with it. NAMED DIVERGENCE: this runtime has no engine frame
+	 *  counter; the count of whole frames on the world clock (`NowSeconds / FrameSeconds`, the fixed
+	 *  step the world ticks at, counted from 1) stands in for it. One accessor for all three readers
+	 *  (story 8 L13 review: the think had grown a second seam for the same word). */
 	int32 EngineFrameNumber() const;
 	/** `0x103d1e50` — `CNPC_VWerewolf`: are the two door halves near enough to count as shut? */
 	bool FUN_103d1e50() const;
@@ -510,7 +506,8 @@ public:
 	// `StartTask` (`0x103ccda0`), `RunTask` (`0x103cdfb0`) and `SelectSchedule` (`0x103cee70`), other
 	// lanes' rows. Each takes retail's own arguments: a `CAI_Hint*` is the hint's words (`FHintWords`,
 	// resolved through `HintWords`), and every answer is retail's `bool`/`void`. Bodies in
-	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in
+	// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 	//
 	// The words these bodies share, and what the listings say they are (the port's older names stay
 	// because landed suites of other families assert through them):
@@ -566,9 +563,7 @@ public:
 	/** Slot 617 (`vtable +0x9a4`), `CNPC_VWerewolf::EnemyCouldSeeHull` (`0x103da230`), at a SOURCE-unit
 	 *  point with retail's two bools and the `DAT_1070d1b0` extents (`vec3_origin`). */
 	bool WerewolfSlot617(const FVector& PointUnits, bool bSkipViewCone, bool bUseHitbox);
-	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate. The frame seam
-	 *  (`EngineFrameNumber`) answers `INDEX_NONE`, read as "never the same frame", the named decision
-	 *  its declaration states. */
+	/** `this+0x66d4 == engine frame` — the searches' once-per-frame gate (`EngineFrameNumber`). */
 	bool WerewolfSearchStampedThisFrame() const;
 	/** `+0x66d4 := frame`, `+0x66d8 := curtime` — the stamp every search writes before it walks. */
 	void WerewolfStampSearch(double Now);
@@ -609,4 +604,24 @@ public:
 	/** `+0x6710` -- set by task `0x14a` to whether the closest player's character template is
 	 *  `Player_Malkavian`. Not in the datamap; name from the packet walk (`m_bPlayerIsMalkavian`). */
 	bool bWerewolfPlayerIsMalkavian = false;
+
+	// --- Story 8 lane L13b (Think19/Damaged19): `NPCThink` 0x103cb590's words and seams -------------
+	/** `+0x66a0` (`m_bHintDataInitialized` in the kernel shape; not in the class datamap, so not
+	 *  saved): set once `InitializeHintData` and the zone opener `0x103cade0` have run from the think
+	 *  (`0x103cb675`). Not Bach's `m_bCamperFlag` at the same offset. */
+	bool bWerewolfHintDataInitialized = false;
+	/** SEAM for `EnableDebugStuff` `0x103dbad0` (cdecl, `this` pushed), the `werewolf_show_debug`
+	 *  one-shot (`DAT_1093fac4`) that sets the debug-overlay bits on self and player, several ConVars
+	 *  (`meleedebug`, `volume`, `entity_debug_stats`, `think_limit`, `r_cloth`, `r_shadows`, ...) and four
+	 *  key binds -- developer tooling behind a ConVar shipped "0". Counted. */
+	void WerewolfEnableDebugStuff();
+	int32 WerewolfEnableDebugStuffCalls = 0;
+	/** SEAM for `0x103cb4b0`, the `werewolf_draw_hints` hint overlay: the global hint chain
+	 *  (`DAT_10925450`, next `+0x5d8`) filtered by the ConVar's value through the six
+	 *  `IsImperative*` / `IsValid*` predicates, `DrawDebugHintInfo` on each pass. Debug drawing;
+	 *  counted. The early RETURN that follows it in the think is ported. */
+	void WerewolfDrawHintOverlay();
+	int32 WerewolfDrawHintOverlayCalls = 0;
+	/** Which of the five round-robin arms the last think dispatched (0..4), `INDEX_NONE` for none. */
+	int32 WerewolfLastRoundRobinArm = INDEX_NONE;
 };

@@ -327,7 +327,7 @@ bool FElysiumNpcKernelBaseHelpersFaceAnimTest::RunTest(const FString&)
 	FBaseHelpersFixture F;
 	if (F.Npc != nullptr)
 	{
-		F.Npc->MotorIdealYawDelta = 20.f;
+		F.Npc->Angles.Y = 0.0; F.Npc->MotorIdealYaw = 20.f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 		F.Npc->FaceAnim = 99;
 		F.Npc->FUN_10297a20();
 		TestEqual(TEXT("the body writes m_eFaceAnim (+0x63e4) from the pick"), F.Npc->FaceAnim,

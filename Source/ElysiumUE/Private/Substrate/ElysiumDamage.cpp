@@ -193,6 +193,20 @@ namespace ElysiumDamage
 		}
 	}
 
+	FElysiumDmg ScalarDescriptor(float Amount)
+	{
+		FElysiumDmg Dmg;
+		Dmg.Family = EElysiumDmgFamily::Bashing;
+		Dmg.Flags = FlagDirectInput;
+		Dmg.ExtraInput = FMath::TruncToInt(Amount);
+		Dmg.ForcedSoak = 0;
+		Dmg.RolledSuccesses = Dmg.ExtraInput;
+		Dmg.Remainder = Dmg.ExtraInput;
+		Dmg.AppliedDamage = Dmg.ExtraInput;
+		Dmg.bResolved = true;
+		return Dmg;
+	}
+
 	FElysiumDmg ParseDmg(const FString& Authored)
 	{
 		FElysiumDmg Out;

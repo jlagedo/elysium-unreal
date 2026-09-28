@@ -342,7 +342,7 @@ bool FElysiumStealthKillObliviousTest::RunTest(const FString&)
 	if (!TestTrue(TEXT("armed"), F.Arm(TEXT("item_w_sk_fists")))) return false;
 	F.StandInFront();
 	TestNull(TEXT("front-facing is refused while the victim senses"), F.Rules.FindVictim(*F.Player));
-	F.Guard->MakeOblivious(true);
+	F.Guard->AddOblivious();   // `m_iIsOblivious++` (TASK_MAKE_OBLIVIOUS's arm `0x102a72e3` is the schedule's route to it)
 	F.World.Tick(1.0);
 	TestEqual(TEXT("m_iIsOblivious bypasses only the rear-arc test"), F.Rules.FindVictim(*F.Player), F.Guard);
 	F.Guard->bInvincible = true;
@@ -402,7 +402,7 @@ bool FElysiumStealthKillBusyTest::RunTest(const FString&)
 	TestFalse(TEXT("a live cine camera is busy"), F.Player->CanAttemptStealthKill());
 	TestNull(TEXT("...and FindVictim refuses"), F.Rules.FindVictim(*F.Player));
 	F.World.SetCineCamera(FElysiumEntityHandle::Invalid(), 0, false, TEXT(""));
-	F.Player->LifeState = EElysiumLifeState::Dead;
+	F.Player->LifeState = ElysiumLifeState::Dead;
 	F.World.Tick(2.0);
 	TestFalse(TEXT("a dead player is not eligible"), F.Player->CanAttemptStealthKill());
 	return true;
@@ -462,7 +462,10 @@ bool FElysiumStealthKillCommitTest::RunTest(const FString&)
 	TestTrue(TEXT("finished attacker commits death"), F.Guard->HasReportedDeath());
 	TestEqual(TEXT("retail damage counter copied from ceiling"),
 		F.Guard->Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health), 100);
-	TestTrue(TEXT("death attributed to attacker"), F.Guard->DeathAttacker == F.Player->Handle);
+	// Corrected (L13 wave-2 fixes): `0x10165d90` builds the packet with the player as inflictor and
+	// attacker, so the kill's `Event_Killed` stores the player in `m_hLastDamageEnt` (`0x10265d29`).
+	TestTrue(TEXT("0x10265d29: death attributed to attacker"),
+		F.Guard->BaseMemory.LastDamageAttacker == F.Player->Handle);
 	TestFalse(TEXT("attacker released"), F.Player->IsGrappling());
 	TestFalse(TEXT("victim released"), F.Guard->IsGrappling());
 	F.Player->TickStealthKill();

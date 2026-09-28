@@ -7,7 +7,7 @@
 // parent call is spelled `FElysiumNpc::GatherConditions()`. The `(*DAT_10924a6c)->vfunc1()` read
 // before every `SetCondition` is the `ent_trace_conditions` ConVar with its answer discarded
 // (`ElysiumNpcConditions10.inl`), and is absent here, as are the scope-trace frames. Walked prose:
-// `docs/vtmb/npc-ai/story8/Conditions19.md`.
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 //
 // Owns (Conditions19's `rule` rows): 0x1035d180 CNPC_VAndreiBlood::GatherConditions, 0x10365a70
 // CNPC_VBach::GatherConditions, 0x1036b590 CNPC_VChangBros::GatherConditions, 0x10374b00

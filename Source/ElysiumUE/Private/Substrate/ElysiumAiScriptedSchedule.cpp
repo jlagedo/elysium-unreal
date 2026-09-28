@@ -95,24 +95,33 @@ FElysiumEntity* FElysiumAiScriptedSchedule::ResolveGoal()
 // simply not applied and an unknown mode installs nothing, exactly as retail's two switches fall out.
 void FElysiumAiScriptedSchedule::FixScriptNPCSchedule(FElysiumNpcBase& Npc)
 {
+	// `0x101a98ce` JNZ / `0x101a98e0` `0x1000b9b0` the goal search with `m_sGoalEnt` (+0x608c, "" when
+	// null) and this director as the searcher; `0x101a98e9` JNZ on a found goal.
 	FElysiumEntity* Goal = ResolveGoal();
 	if (Goal == nullptr)
 	{
+		// `0x101a98f5` JNZ ("" for a null name) / `0x101a98fe` GetDebugName / `0x101a990c` DevMsg:
 		// `DevMsg(1, …)` in retail; a Warning here because it fires in shipped content (`sm_medical_1`'s
 		// `guard_to_cs` names `cs_target`, which that map does not contain).
 		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Can't find goal entity %s\nCan't execute script %s"),
 			*GoalEntity, *DebugString());
 		return;
 	}
-	// The executor is the Troika's (`FElysiumNpc::BeginScriptedSchedule`, the port's program host for
-	// `ScheduledMoveToGoalEntity` `0x102800c0` / `ScheduledFollowPath` `0x102801e0` / `SetEnemy`). A
-	// base-only NPC has no port executor: SEAM, it receives nothing.
+	// The push lands on the Troika (`FElysiumNpc::BeginScriptedSchedule`), which defers it to the NPC's
+	// first think when needed and then runs retail's mode arms: `ScheduledMoveToGoalEntity`
+	// `0x102800c0` for modes 1/2, `SetEnemy` + slot 544 + `SetCondition(0x54)` for mode 3, and for
+	// modes 4/5 the leg-walking executor that stands for `ScheduledFollowPath` `0x102801e0` (the
+	// navigator builds no path-corner goal). A base-only NPC has no Troika host: SEAM, it receives
+	// nothing.
 	FElysiumNpc* Troika = Npc.AsNpc();
 	if (Troika == nullptr || World == nullptr)
 	{
 		return;
 	}
-	// `forcestate` 1 -> 1, 2 -> 3, 3 -> 2 through `SetState` (`0x1026e340`); anything else, none.
+	// `forcestate` 1 -> 1, 2 -> 3, 3 -> 2 through `SetState` (`0x1026e340`); anything else, none:
+	// `0x101a9927` / `0x101a992a` / `0x101a992d` the DEC chain on +0x6094, `0x101a993b` the SetState
+	// call. Then `0x101a994c` JA (mode - 1 above 4 installs nothing) / `0x101a9952` the table jump on
+	// `m_iMode` (+0x6090) into the mode arms `BeginScriptedSchedule` carries.
 	EElysiumNpcState Forced = EElysiumNpcState::Idle;
 	const bool bHasForced = ElysiumAiScriptedSchedule::ForcedState(ForceState, Forced);
 

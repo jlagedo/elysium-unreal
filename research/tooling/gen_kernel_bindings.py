@@ -229,6 +229,16 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
     },
 }
 
+# The entity chain's own `SAVE`-only rows the port binds, keyed by retail class then offset, as
+# (port type, member). The chain's other save rows stay the port classes' own business (they persist
+# what they carry by hand), so a row joins the generated walk only when it is listed here -- and the
+# one listed is the word every entity shares and nothing else saved: `m_lifeState` (`CBaseEntity`
+# +0x200, datamap flags `SAVE`), which slot 158 `IsAlive`, `0x1032ef60`'s life-state split and the
+# death arms all read. It registers under its retail member name, as the NPC walk's rows do.
+CHAIN_SAVE_MEMBERS: dict[tuple[str, int], tuple[str, str]] = {
+    ("CBaseEntity", 0x0200): ("FElysiumEntity", "LifeState"),
+}
+
 # The one reason the nine `CBaseToggle` rows share, expanded from the `TOGGLE` marker below.
 TOGGLE_REASON = (
     "retail derives `CBaseCombatCharacter` from `CBaseToggle`, so every character inherits the "
@@ -466,6 +476,10 @@ SAVE_UNBOUND: dict[int, str] = {
     0x61E4: "EMBEDDED",
     0x6210: "EMBEDDED",
     0x6594: "EMBEDDED",
+    0x658C: "`m_sppPatrolPath` is a FIELD_CUSTOM row (the pooled path record `BuildPatrolPath` "
+            "`0x1029f460` builds), and this port's `FElysiumNpc::PatrolPathCell` is carried with the "
+            "hunt cell by the NPC's own typed patrol block (`SerializePatrolBlock`), which writes the "
+            "node records rather than a pointer",
     0x5DDC: "`m_pHintNode` is a FIELD_CLASSPTR: retail saves the pointer through its own entity "
             "table, and this port holds the hint as a handle the navigator re-resolves",
     0x5DE8: "`m_pGoalEnt` is a FIELD_CLASSPTR, the same case as `m_pHintNode`",
@@ -660,9 +674,9 @@ class ClassModel:
     unbound: list[Row] = field(default_factory=list)
     outputs: list[Row] = field(default_factory=list)
     inputfuncs: list[Row] = field(default_factory=list)
-    # The `SAVE`-only rows: retail's persistence, which no name resolves. Only the NPC binding
-    # class fills these -- the chain classes' save rows belong to the port classes that own those
-    # words, and their persistence is already theirs.
+    # The `SAVE`-only rows: retail's persistence, which no name resolves. The NPC binding classes
+    # fill these, and a chain class only with the rows `CHAIN_SAVE_MEMBERS` lists -- the rest of the
+    # chain's save rows belong to the port classes that own those words.
     saved: list[Row] = field(default_factory=list)
     save_unbound: list[Row] = field(default_factory=list)
 
@@ -830,8 +844,13 @@ def classify(replay: dict, repo: Path, model_offsets: set[int]) -> list[ClassMod
                 base = dict(cls=cls, name=record["name"], type=record["typeName"],
                             offset=offset, external=external or "", flags=flags)
                 if not external:
-                    # Only the NPC's own two tables are this story's save walk; the chain's save
-                    # rows are the port classes' own, and those classes already persist them.
+                    # The NPC's own two tables are this story's save walk; of the chain's save rows
+                    # only `CHAIN_SAVE_MEMBERS` join it -- the rest are the port classes' own, and
+                    # those classes already persist them.
+                    chain_member = CHAIN_SAVE_MEMBERS.get((cls, offset))
+                    if chain_member is not None and "SAVE" in flags:
+                        model.saved.append(Row(kind="save", binding=chain_member, **base))
+                        continue
                     if binding in ("NpcBase", "Npc") and "SAVE" in flags:
                         row = _classify_save(cls, record, base, bound, no_member)
                         if row.via is not None or row.binding is not None:

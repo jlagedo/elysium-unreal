@@ -66,6 +66,8 @@ namespace ElysiumSched
 	inline constexpr int32 SCRIPTED_FACE = 0x33;
 
 	inline constexpr int32 SCHED_FLINCH_PHYSICS = 0x42;
+	/** `CAI_BaseNPC::PreSelectSchedule`'s freeze answer (`AI_BaseNPC.cpp:3627`). */
+	inline constexpr int32 NPC_FREEZE = 0x3a;
 
 	/** The failure route every schedule falls to, and the one id a selector must be able to name.
 	 *  The decompiler leaves it unnamed; it is `0x10608410`, cell 0 of the base's text table. */
@@ -112,6 +114,43 @@ namespace ElysiumSched
 	/** The post-feed trance, from its one producer `CBaseCombatCharacter::FeedInterrupt`
 	 *  (`0x1033a9e0`), which is the only `SetSchedule(0xfb)` site in the image. */
 	inline constexpr int32 SCHED_TROIKA_MESMERIZED = 0xfb;
+
+	// --- Species spaces, local ids from 0x156. The same number names a DIFFERENT program in each
+	// class's space (0x16b is Ming Xiao's HIT_IN_HEAD and the tentacle's EXPLODE_DIE), so every
+	// constant carries its class in its name and its unit in its row. ----------------------------
+
+	// `CNPC_VVampireBoss` (`cnpc_vvampireboss`)
+	inline constexpr int32 SCHED_VVAMPIREBOSS_TRANSFORM = 0x158;
+	inline constexpr int32 SCHED_VVAMPIREBOSS_TRANSFORM_TO_BEAST = 0x159;
+
+	// `CNPC_VWerewolf` (`cnpc_vwerewolf`)
+	inline constexpr int32 SCHED_VWEREWOLF_RUN_TO_SPECIAL_MOVEMENT = 0x15a;
+	inline constexpr int32 SCHED_VWEREWOLF_DO_SPECIAL_MOVEMENT = 0x15b;
+	inline constexpr int32 SCHED_VWEREWOLF_DO_JUMP_HINT = 0x15f;
+	inline constexpr int32 SCHED_VWEREWOLF_DO_DEATH_HINT = 0x160;
+
+	// `CNPC_VGargoyle` (`cnpc_vgargoyle`)
+	inline constexpr int32 SCHED_VGARGOYLE_DEATH = 0x15c;
+
+	// `CNPC_VZombie` (`cnpc_vzombie`)
+	inline constexpr int32 SCHED_VZOMBIE_ANIMATED_DEATH = 0x162;
+
+	// `CNPC_VSabbatLeader` (`cnpc_vsabbatleader`)
+	inline constexpr int32 SCHED_VSABBATLEADER_TRANSFORM_TO_BEAST = 0x163;
+
+	// `CNPC_VMingXiao` (`cnpc_vmingxiao`)
+	inline constexpr int32 SCHED_VMING_XIAO_HIT_IN_HEAD = 0x16b;
+	inline constexpr int32 SCHED_VMING_XIAO_HIT_IN_TENTACLE = 0x16c;
+	inline constexpr int32 SCHED_VMING_XIAO_DIE = 0x16d;
+	inline constexpr int32 SCHED_VMING_XIAO_DIE_PROXY = 0x16e;
+
+	// `CNPC_VMingXiaoTentacle` (`cnpc_vmingxiaotentacle`)
+	inline constexpr int32 SCHED_VMING_XIAO_TENTACLE_DELAYED_DIE = 0x16a;
+	inline constexpr int32 SCHED_VMING_XIAO_TENTACLE_EXPLODE_DIE = 0x16b;
+	inline constexpr int32 SCHED_VMING_XIAO_TENTACLE_SIMPLE_DIE = 0x16c;
+
+	// `CNPC_VHengeyokai` (`cnpc_vhengeyokai`)
+	inline constexpr int32 SCHED_VHENGEYOKAI_STUNNED = 0x16e;
 
 	/** Every row above, for `VerifyNumbers`. A constant that is not in this table is not checked,
 	 *  which is the one way to get a hand-decoded number back into the runtime -- so adding a

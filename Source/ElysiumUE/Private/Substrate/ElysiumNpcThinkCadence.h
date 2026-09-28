@@ -26,12 +26,6 @@ struct FElysiumNpcScheduleHost;
 // Oracle: `docs/vtmb/npc-ai/lifecycle.md` -> "The think cadence, decoded".
 namespace ElysiumNpcThink
 {
-	// A corpse's death program is not on any of the four clocks -- retail's dead body carries no
-	// think at all -- so this is the one interval in the NPC leaf that is not derived from a stamp.
-	// 0.1 s because the handoff to physics happens at the program's end and a slower poll is
-	// visible as a corpse hanging on its last animated frame.
-	inline constexpr double DeadProgramPollSeconds = 0.1;
-
 	// `IsThinkDue` `0x10290660`. Equality IS due: the compare is `FCOMP` + `TEST AH,0x41`.
 	inline bool IsDue(double Stamp, double Now, double FrameSeconds)
 	{

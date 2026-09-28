@@ -330,6 +330,7 @@ bool FElysiumNpcKernelWerewolf19FindTeleportHintTest::RunTest(const FString&)
 	TestFalse(TEXT("0x103d3ce2 inside the 0.15 s retry interval answers false"), N.FindTeleportHint());
 
 	N.WerewolfMorphTimerC = -1.f;
+	N.WerewolfMorphTimerB = -1.f;   // a later frame: `+0x66d4 != framecount` (the search's once-per-frame gate)
 	N.TeleportHintNode = Tele;
 	TestTrue(TEXT("0x103d3d01 a held teleport hint answers true"), N.FindTeleportHint());
 	TestEqual(TEXT("0x103d3d19 before the stamp"), N.WerewolfMorphTimerC, -1.f);
@@ -344,6 +345,7 @@ bool FElysiumNpcKernelWerewolf19FindTeleportHintTest::RunTest(const FString&)
 	N.TeleportHintNode = INDEX_NONE;
 	N.WerewolfWord66ac = 0;
 	N.WerewolfMorphTimerC = -1.f;
+	N.WerewolfMorphTimerB = -1.f;   // a later frame: `+0x66d4 != framecount` (the search's once-per-frame gate)
 	N.WerewolfTimeTeleportedOut = F.W.World.NowSeconds();
 	N.WerewolfHasPathAnswers = { false };
 	TestFalse(TEXT("0x103d409e a failed full-path check rejects the only hint"), N.FindTeleportHint());
@@ -368,11 +370,15 @@ bool FElysiumNpcKernelWerewolf19IsEnemyUnreachableTest::RunTest(const FString&)
 	N.bWerewolfTaskFailed = false;
 	TestTrue(TEXT("0x103da159 no enemy sets the +0x66a1 latch"), N.IsEnemyUnreachable());
 	TestEqual(TEXT("0x103da1ae and asks a path to the chase point"), N.HasPathQueries.Num(), 1);
+	// The same frame answers the latch without asking again (`0x103da122` `+0x66a4 == framecount`).
 	N.WerewolfHasPathAnswers = { true };
+	TestTrue(TEXT("0x103da122 the same frame answers the memoised latch"), N.IsEnemyUnreachable());
+	TestEqual(TEXT("0x103da122 and asks no second path"), N.HasPathQueries.Num(), 1);
+	N.WerewolfMorphTimerA = -1.f;   // a later frame
 	TestFalse(TEXT("0x103da1b7 a path clears the latch"), N.IsEnemyUnreachable());
 	TestFalse(TEXT("0x103da1be the latch is the answer"), N.bWerewolfTaskFailed);
-	TestEqual(TEXT("0x103da136 +0x66a4 takes the frame seam's value"), N.WerewolfMorphTimerA,
-		static_cast<float>(INDEX_NONE));
+	TestEqual(TEXT("0x103da136 +0x66a4 takes the engine frame"), N.WerewolfMorphTimerA,
+		static_cast<float>(N.EngineFrameNumber()));
 	return true;
 }
 
@@ -462,6 +468,7 @@ bool FElysiumNpcKernelWerewolf19FindMoveHintTest::RunTest(const FString&)
 	TestFalse(TEXT("0x103d2ace inside the 0.5 s retry interval"), N.FindMoveHint());
 
 	N.WerewolfMorphTimerC = -1.f;
+	N.WerewolfMorphTimerB = -1.f;   // a later frame: `+0x66d4 != framecount` (the search's once-per-frame gate)
 	N.WerewolfHasPathAnswers = { true, true };
 	TestTrue(TEXT("0x103d2f83 a valid hint with both paths is chosen"), N.FindMoveHint());
 	TestEqual(TEXT("0x103d2f72 SetMoveHint(hint, false)"), N.MoveHintNode, Move);
@@ -470,6 +477,7 @@ bool FElysiumNpcKernelWerewolf19FindMoveHintTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103d2e2f / 0x103d2e79 two path asks"), N.HasPathQueries.Num(), 2);
 
 	N.WerewolfMorphTimerC = -1.f;
+	N.WerewolfMorphTimerB = -1.f;   // a later frame: `+0x66d4 != framecount` (the search's once-per-frame gate)
 	TestTrue(TEXT("0x103d2b05 a held move hint answers true"), N.FindMoveHint());
 	return true;
 }
@@ -575,6 +583,7 @@ bool FElysiumNpcKernelWerewolf19UpdateConditionEnemyUnreachableTest::RunTest(con
 	TestEqual(TEXT("0x103cc400 +0x66a8 = HasCondition(0x59)"), N.WerewolfSnapWordA, 1);
 
 	N.WerewolfHasPathAnswers = { true };
+	N.WerewolfMorphTimerA = -1.f;   // a later frame: `IsEnemyUnreachable`'s memo (`+0x66a4`) is stale
 	N.UpdateConditionEnemyUnreachable();
 	TestFalse(TEXT("0x103cc3b5 reachable clears 0x59"), N.Cognition.Conditions.Has(Cond(0x59)));
 	TestTrue(TEXT("0x103cc3c9 and sets 0x79"), N.Cognition.Conditions.Has(Cond(0x79)));

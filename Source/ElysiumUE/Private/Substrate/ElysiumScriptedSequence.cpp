@@ -18,7 +18,9 @@
 // `scripted_sequence` — `CCineNPC`, the script director (story 5 fold A3). Every body below is the
 // retail body at the address its comment names, read off the decompilation and, where a branch
 // mattered, the listing (`vtmb_asm`). The walked prose is `docs/vtmb/npc-ai/authored-control.md`
-// § "Scripted control and authority", `docs/vtmb/npc-ai/story8/Script19.md` and
+// § "Scripted control and authority",
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Script19, the script directors"
+// and
 // `docs/specs/0003-scripted-sequence/spec.md`.
 //
 // The outputs are the load-bearing half: across the exported maps 88 wires leave these entities,
@@ -170,7 +172,7 @@ void FElysiumScriptedSequence::Spawn()
 	bSequenceStarted = false;
 	NextCine = FElysiumEntityHandle::Invalid();
 	LastFoundEntity = FElysiumEntityHandle::Invalid();
-	Flags2Added |= GCineFlags2;
+	AddFlag2(GCineFlags2);                                  // 0x101a70bb m_fFlags2 (+0x438)
 }
 
 // Slot 113: `0x101a8de0`. Plays NOTHING: retail's pre-idle belongs to `TASK_WAIT_FOR_SCRIPT`.
@@ -883,9 +885,9 @@ void FElysiumScriptedSequence::CineCleanup(FElysiumNpcBase& Npc)
 	Npc.SetTarget(FElysiumEntityHandle::Invalid());
 	Npc.BaseScheduleHost.GoalEnt = FElysiumEntityHandle::Invalid();
 
-	// `m_lifeState != LIFE_DYING`. SEAM: the port carries no NPC `m_lifeState` word (its death
-	// transaction is `FElysiumNpcBase::CommitDeath`), so the dying arm — health 0, not-solid,
-	// `SetState(DEAD)`, the corpse bounds — is not reached from here.
+	// `m_lifeState != LIFE_DYING` (the entity's `LifeState`). NAMED GAP: the dying arm -- health 0,
+	// not-solid, `SetState(DEAD)`, the corpse bounds -- is not ported in this body yet, so it is not
+	// reached from here.
 	// With `m_iszPlay` and `m_sequenceStarted`, retail puts the body at the played sequence's bone 0
 	// (spawnflag `0x2000`: `MoveToBoneOriginAngles("Bip01")`; spawnflag `0x80` skips the placement).
 	// SEAM: the animation driver exposes no played-clip root, so the body stays where it stands.
@@ -1679,17 +1681,6 @@ void FElysiumScriptedSequence::GetDebugState(TArray<TPair<FString, FString>>& Ou
 		[](const FSequenceSoundPrecache& Row) { return Row.SequenceName; }));
 	Out.Emplace(TEXT("Activate diagnostics"), FString::FromInt(ActivateDiagnostics.Num()));
 	Out.Emplace(TEXT("Diagnostics"), FString::Join(Diagnostics, TEXT(" | ")));
-}
-
-float FElysiumScriptedSequence::RunSpecialIdleActivity(double Now)
-{
-	(void)Now;
-	return -1.0f;
-}
-
-bool FElysiumScriptedSequence::IsBodyVisible() const
-{
-	return false;
 }
 
 float FElysiumScriptedSequence::PlayActivity(const FString& Activity)

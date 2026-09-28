@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 1091 live own bodies the port carries as overrides, of 1510 live (class, slot) own-body rows on
-// live classes; `kernel_shape --unported` lists the other 419.
+// 1093 live own bodies the port carries as overrides, of 1510 live (class, slot) own-body rows on
+// live classes; `kernel_shape --unported` lists the other 417.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -2299,6 +2299,16 @@ namespace
 			TEXT("FElysiumNpcGhoulCroucher"), TEXT("FElysiumNpcGhoulCroucher"),
 			TEXT("OnVictimHitByMe"), &FElysiumNpcGhoulCroucher::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcGhoulCroucher, void(FElysiumEntity*)>::Test(&FElysiumNpcGhoulCroucher::OnVictimHitByMe),
+			std::is_base_of_v<FElysiumNpcGhoulCroucher, FElysiumNpcGhoulCroucher> },
+		{ TEXT("CNPC_VGhoulCroucher"), 77, TEXT("0x1037c1c0"), TEXT("rule"),
+			TEXT("FElysiumNpcGhoulCroucher"), TEXT("FElysiumNpcGhoulCroucher"), TEXT("ScriptHide"),
+			&FElysiumNpcGhoulCroucher::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcGhoulCroucher, void()>::Test(&FElysiumNpcGhoulCroucher::ScriptHide),
+			std::is_base_of_v<FElysiumNpcGhoulCroucher, FElysiumNpcGhoulCroucher> },
+		{ TEXT("CNPC_VGhoulCroucher"), 78, TEXT("0x1037c2f0"), TEXT("rule"),
+			TEXT("FElysiumNpcGhoulCroucher"), TEXT("FElysiumNpcGhoulCroucher"),
+			TEXT("ScriptUnhide"), &FElysiumNpcGhoulCroucher::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcGhoulCroucher, void()>::Test(&FElysiumNpcGhoulCroucher::ScriptUnhide),
 			std::is_base_of_v<FElysiumNpcGhoulCroucher, FElysiumNpcGhoulCroucher> },
 		{ TEXT("CNPC_VGhoulCroucher"), 103, TEXT("0x1037b040"), TEXT("rule"),
 			TEXT("FElysiumNpcGhoulCroucher"), TEXT("FElysiumNpcGhoulCroucher"), TEXT("Spawn"),

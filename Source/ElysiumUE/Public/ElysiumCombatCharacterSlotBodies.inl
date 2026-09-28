@@ -95,7 +95,7 @@ static constexpr int32 PrayerActivityId = 0x132;
 
 TArray<FPoseParameterWrite> PoseParameterWrites;
 
-/** `+0x0ec0 m_iCurFrenzyCount` (`CBaseCombatCharacter`) — the discipline gate slot 334 reads
+/** `+0x146c m_iCurFrenzyCount` (`CBaseCombatCharacter` datamap; `0x10330024 MOV EAX,[EDI+0x146c]`) — the discipline gate slot 334 reads
  *  first: a body already mid-frenzy refuses every further cast outright. Below the shape map's
  *  band, so 29b did not bind it, and no landed family had a reader for it. Nothing in this runtime
  *  writes it yet. */
@@ -227,7 +227,7 @@ int32 DisciplineTableFind(int32 DisciplineId, int32 Level) const;
 
 float DisciplineTableCooldown(int32 RowIndex) const;
 
-/** SEAM for `m_fDisciplineTimers[row]` (`+0x146c`), the per-discipline last-cast stamps slot 334
+/** SEAM for `m_fDisciplineTimers[row]` (`+0x0ec0`, float[60]; `0x1033006b FSUB [EDI+ESI*4+0xec0]`), the per-discipline last-cast stamps slot 334
  *  measures against. Below the shape map's band and with no producer here; answers `0.0`, which
  *  makes every elapsed time `curtime` and so every cooldown expired. */
 double DisciplineTimer(int32 RowIndex) const;

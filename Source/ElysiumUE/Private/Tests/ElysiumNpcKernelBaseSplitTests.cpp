@@ -27,14 +27,10 @@ static constexpr EAutomationTestFlags GBaseSplitTestFlags =
 
 namespace
 {
-	// The interface's four pure hooks answer the inert value; nothing here runs a schedule.
+	// A bare base-line body; nothing here runs a schedule.
 	class FBaseOnlyNpc final : public FElysiumNpcBase
 	{
 	public:
-		virtual float RunSpecialIdleActivity(double) override { return 0.f; }
-		virtual bool IsBodyVisible() const override { return false; }
-		virtual float PlayActivity(const FString&) override { return 0.f; }
-		virtual float RandomSeconds(float) override { return 0.f; }
 	};
 
 	struct FBaseSplitFixture

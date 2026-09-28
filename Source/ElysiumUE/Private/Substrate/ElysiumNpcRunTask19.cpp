@@ -14,7 +14,8 @@
 // 57-entry jump table `0x102ac760`; the arms below are in jump-table index order (the order the
 // decompiler prints them), each with its arm address and case ids. Every branch sense was read off
 // the listing (`vtmb_asm 0x102aacf0`); the packet's chunk walks (`bench/pair-read/passR/giant*`)
-// name the ids per arm. Walked prose: `docs/vtmb/npc-ai/story8/RunTask19.md` § `0x102aacf0`.
+// name the ids per arm. Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPCTroika::RunTask` `0x102aacf0`".
 
 #include "Substrate/ElysiumNpc.h"
 
@@ -325,17 +326,35 @@ void FElysiumNpc::BloodExplode()
 	++BloodExplodeCalls;
 }
 
-void FElysiumNpc::RunTaskDie(const FElysiumEntity* Credit)
+void FElysiumNpc::Die(const FElysiumEntity* Credit)
 {
-	// `CBaseCombatCharacter::Die(credit, 0, 0)`. Retail's `Die` returns at once on a body whose
-	// `m_lifeState` is already 2, and the corpse `Event_Killed` makes removes the entity, so the
-	// commit runs once; `bDeathCommitted` is the port's stand-in for that removal (`ElysiumNpcBase.h`).
+	// `CBaseCombatCharacter::Die(credit, 0, 0)` `0x103392c0`, the whole body: on a body whose
+	// `m_lifeState` is not LIFE_DEAD (2), a `CVDmg_t` with `SetSrc(this)`, `m_iDiceAmt = 1`,
+	// `m_iToHitSuccesses = 1`; the packet `0x101c26d0(info, 0, credit, 1.0, 0, 0, &dmg, -1)` (no
+	// inflictor, the credit as attacker); its `+0x48` / `+0x49` bytes from the two flag arguments
+	// (`0x101c2a90` / `0x101c2ad0`, both 0 here, and words the port's packet does not carry);
+	// `SetBaseToStatValue(0xf, 0x11)`; then slot 144 `Event_Killed(info)` and slot 403 `Event_Dying`.
 	++RunTaskDieCalls;
 	LastDieCredit = Credit != nullptr ? Credit->Handle : FElysiumEntityHandle::Invalid();
-	if (!bDeathCommitted)
+	if (LifeState == 2)                                   // 0x10339330 m_lifeState != 2
 	{
-		CommitDeath();
+		return;
 	}
+	FElysiumDmg Dmg;
+	Dmg.Source = Handle;                                               // SetSrc(this)
+	Dmg.BaseDamage = 1;                                                // m_iDiceAmt
+	Dmg.ExtraInput = 1;                                                // m_iToHitSuccesses
+	FElysiumTakeDamageInfo Info;
+	Info.Dmg = &Dmg;
+	Info.Attacker = LastDieCredit;
+	Info.Damage = 1.f;
+	Info.DamageBits = 0;
+	Info.AmmoType = INDEX_NONE;
+	Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health,
+		TypedStatValue(0, ElysiumSlot::MaxHealth));                    // 0x103393ff SetBaseToStatValue(0xf, 0x11)
+	RecomputeSheet();
+	Event_Killed(&Info);                                               // 0x1033940d slot 144 (+0x240)
+	Event_Dying();                                                     // 0x10339417 slot 403 (+0x64c)
 }
 
 bool FElysiumNpc::EnemyMeleeSwingOver(const FElysiumCombatCharacter& Enemy) const
@@ -445,7 +464,9 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		NpcFlags.AssignAiFlagsWord(NpcFlags.RawWord1() & ~Mask);                   // `+0x14b8`
 	};
 
-	const int32 Id = Step->TaskId;
+	// Retail's `pTask->iTask` is CLASS-LOCAL; the step carries the GLOBAL id, translated once through
+	// slot 450 `GetLocalTaskId` (`0x101a6640`), as `StartTaskSlot442` (`0x102a1923`) does.
+	const int32 Id = GetLocalTaskId(Step->TaskId);                                 // 0x102aad03 slot 450
 	switch (Id)
 	{
 	// --- index 0x00 `0x102aad61`: 0x2, 0x67, 0x68 ------------------------------------------------
@@ -694,12 +715,12 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		{
 			Credit = this;
 		}
-		if (AnimEventLifeStateWord == 1)                                                  // 0x102abc05
+		if (LifeState == 1)                                                  // 0x102abc05
 		// same arm: 0x102abc0b JNZ
 		{
-			AnimEventLifeStateWord = 0;                                                   // 0x102abc0d
+			LifeState = 0;                                                   // 0x102abc0d
 		}
-		RunTaskDie(Credit);                                                        // 0x102abc1e
+		Die(Credit);                                                               // 0x102abc1e
 		if (Id == TaskDieGib || Id == TaskDieExplodeGib)                           // 0x102abc26 / 0x102abc2d
 		// same arm: 0x102abc2b JZ, 0x102abc32 JNZ
 		{
@@ -1031,8 +1052,8 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 
 	// --- index 0x19 `0x102ab974`: 0xb3 `TASK_FACE_PATROL_INTEREST` --------------------------------
 	case TaskFacePatrolInterest:
-		// `0x1029f780(this, &m_sppPatrolPath)`: the path's current node is `PatrolIndex` here.
-		if (ResolvePatrolInterestPlace(PatrolIndex) == 0)                          // 0x102ab97d / 0x102ab984
+		// `0x1029f780(this, &m_sppPatrolPath)`: the path's current node.
+		if (ResolvePatrolInterestPlace(PatrolCurrentNode(PatrolPathCell)) == 0)    // 0x102ab97d / 0x102ab984
 		{
 			TaskComplete(false);                                                   // 0x102ac11b
 			// same arm: 0x102ac11f CALL
@@ -1095,7 +1116,7 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 	// --- index 0x1b `0x102aba6c`: 0xb5 `TASK_DO_PATROL_INTEREST_ACTIVITY` -------------------------
 	case TaskDoPatrolInterestActivity:
 	{
-		const int32 PlaceIndex = ResolvePatrolInterestPlace(PatrolIndex);          // 0x102aba75
+		const int32 PlaceIndex = ResolvePatrolInterestPlace(PatrolCurrentNode(PatrolPathCell)); // 0x102aba75
 		if (PlaceIndex == 0)                                                       // 0x102aba82
 		{
 			TaskComplete(false);                                                   // 0x102abb10
@@ -1237,7 +1258,7 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 
 	// --- index 0x23 `0x102abc76`: 0xdf `TASK_DIE_IMMEDIATE` ---------------------------------------
 	case TaskDieImmediate:
-		RunTaskDie(nullptr);                                                       // 0x102abc7e `Die(0,0,0)`
+		Die(nullptr);                                                              // 0x102abc7e `Die(0,0,0)`
 		return 0;
 
 	// --- index 0x24 / 0x26 `0x102ab420` / `0x102ab474`: 0xe1, 0xe3 ------------------------------

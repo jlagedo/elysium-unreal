@@ -12,7 +12,8 @@
 // Lane L03 (pass I): the body is `CAI_BaseNPC::StartTask` `0x102827f0`, 18330 bytes, read off the
 // listing (`uv run elysium --verbose research corpus asm 0x102827f0`) arm by arm in the order of its
 // arm table `0x10286f8c` (107 entries, reached through the byte table `0x10287138` indexed `iTask-1`).
-// The walked account is `docs/vtmb/npc-ai/story8/StartTask19-Base.md`.
+// The walked account is
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPC::StartTask` `0x102827f0`".
 //
 // Every `TaskFail` site first writes the source file (`AI_BaseNPC_Schedule.cpp`, `0x105cde88`) into
 // `+0x1b44` and its line into `+0x1b48`; those words are ABSENT in this runtime (shape map), so the
@@ -1529,7 +1530,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 	case TASK_DIE:                                                       // arm 0x4f, 0x10286801
 	case TASK_DIE_IMMEDIATE:
 		StartTaskClearGoal();                                            // 0x10286807  0x102ee270
-		AnimEventLifeStateWord = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
+		LifeState = LifeStateDying;                                // 0x1028680c  m_lifeState = 1
 		return 0;
 
 	case TASK_WAIT_FOR_SCRIPT:                                           // arm 0x50, 0x102868f2 0x1028690c
@@ -2053,7 +2054,12 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			/*bAllowPartialPath=*/false, Gait);
 		return bMoveIssued;
 	};
-	if (Troika != nullptr && bHaveDest && Motor != nullptr
+	// A pushed `aiscripted_schedule` order already holds the body for its own program (modes 1/2 set
+	// their goal through this very call, `ScheduledMoveToGoalEntity` `0x102800c0`), so the build runs
+	// under that claim rather than asking for an ordinary schedule one the director outranks.
+	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
+		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
+	if (Troika != nullptr && bHaveDest && Motor != nullptr && !bScriptedOrderHolds
 		&& !Troika->AcquireScheduleBody(TEXT("SetGoal 0x102ecd20")))
 	{
 		return false;
@@ -2336,19 +2342,25 @@ bool FElysiumNpcBase::StartTaskTestLateralCover(const FVector& ThreatEyeCm, cons
 	const FElysiumEntity* Ignore)
 {
 	using namespace ElysiumStartTask19Base;
-	(void)Ignore;   // the trace filter's ignore entity; the port's sight service takes none
+	(void)Ignore;   // the trace filter's ignore entity (`0x10278239` CTraceFilterSimple(this, param_3));
+	                // the port's sight service takes none
 	++StartTaskNav.LateralCoverTests;
-	// The ray from the threat's eye to the point at THIS NPC's eye height, mask `0x2804091`: a clear
-	// ray (`fraction == 1.0`) is not cover. No collision world means no cover.
+	// The ray from the threat's eye to the point at THIS NPC's eye height (`0x10278294` Ray_t::Init
+	// with point + view offset +0x184..+0x18c; `0x102782b8` enginetrace slot 4 TraceRay), mask
+	// `0x2804091`: a clear ray (`fraction == 1.0`) is not cover. No collision world means no cover.
+	// `0x102782c0` ConVar 0x10738960 test / `0x102782c7` JZ / `0x102782e9` the debug-overlay line of
+	// the trace: not ported (a developer overlay, nothing the bytecode observes).
 	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	if (Embodiment == nullptr || Embodiment->QueryLineOfSight(ThreatEyeCm, PointCm + (EyePosition() - Origin)))
 	{
 		return false;
 	}
-	if (!IsValidCover(PointCm, nullptr))                                 // slot 548
+	if (!IsValidCover(PointCm, nullptr))                                 // slot 548 (`0x10278310`)
 	{
 		return false;
 	}
+	// `0x10278336` slot 220 GetAbsOrigin as the probe start; `0x10278359` MoveLimit(NAV_GROUND,
+	// start, point, mask 0x202400b, no target, 100.0).
 	if (Motor == nullptr || !Motor->CanReachLateralCover(PointCm))       // MoveLimit, mask 0x202400b
 	{
 		return false;

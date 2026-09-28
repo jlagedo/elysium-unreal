@@ -11,7 +11,7 @@
 //
 // Lane L05 (pass I). The body is read off the listing (`vtmb_asm 0x10288780`) arm by arm; the
 // packet's merged walk and its two judges' corrections decided every branch sense. Walked prose:
-// `docs/vtmb/npc-ai/story8/RunTask19.md` § `0x10288780`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "`CAI_BaseNPC::RunTask` `0x10288780`".
 
 #include "Substrate/ElysiumNpcBase.h"
 
@@ -306,7 +306,10 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		return Goal;
 	};
 
-	const int32 Id = Step->TaskId;
+	// `[EDI]` is retail's `Task_t::iTask`, the CLASS-LOCAL id; the step carries the GLOBAL id (stated
+	// divergence, `ElysiumScheduleText.h`), translated once here through slot 450 `GetLocalTaskId`
+	// (`0x101a6640`) exactly as `StartTaskSlot442` does (the StartTask19 integration's fix).
+	const int32 Id = GetLocalTaskId(Step->TaskId);                                 // 0x1028878a slot 450
 	switch (Id)
 	{
 	case TaskWait:
@@ -635,7 +638,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		{
 			return 0;
 		}
-		AnimEventLifeStateWord = LifeDead;                                                // 0x10288ff7
+		LifeState = LifeDead;                                                // 0x10288ff7
 		ThinkSet(nullptr, 0.0);                                                    // 0x10289001
 		if (FElysiumNpc* Troika = AsNpc())
 		{

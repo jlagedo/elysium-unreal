@@ -696,11 +696,11 @@ void FElysiumCombatCharacter::SetPoseParameterByName(const TCHAR* Name, float Va
 bool FElysiumCombatCharacter::Slot334(int32 DisciplineId, int32 Level)
 {
 	// `0x10330020`, arm by arm:
-	//     if (m_iCurFrenzyCount > 0) return false;          // +0x0ec0, the low byte of the count
+	//     if (m_iCurFrenzyCount > 0) return false;          // +0x146c (0x10330024), XOR AL,AL
 	//     DAT_10937cf2 = 0;
 	//     row = DisciplineTableFind(&DAT_10739a4c, id, level);      // 0x101e1250
 	//     if (row != -1) {
-	//         elapsed  = curtime - m_fDisciplineTimers[row];        // +0x146c
+	//         elapsed  = curtime - m_fDisciplineTimers[row];        // +0xec0 (0x1033006b)
 	//         cooldown = record[+0x2c];
 	//         if (cooldown > elapsed) { DAT_10937cf2 = 1; return false; }
 	//     }
@@ -747,7 +747,7 @@ float FElysiumCombatCharacter::DisciplineTableCooldown(int32 RowIndex) const
 
 double FElysiumCombatCharacter::DisciplineTimer(int32 RowIndex) const
 {
-	// `m_fDisciplineTimers[row]` (+0x146c). Below the shape map's band and with no producer in this
+	// `m_fDisciplineTimers[row]` (+0xec0, float[60]). Below the shape map's band and with no producer in this
 	// runtime. **SEAM**, `0.0` — every discipline reads as never cast.
 	(void)RowIndex;
 	return 0.0;

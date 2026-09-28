@@ -90,18 +90,6 @@ bool FElysiumNpc::ValidateHintCoverRange(const FHintWords& Hint, const FElysiumE
 	return false;
 }
 
-bool FElysiumNpc::IsHintSequenceFinished() const
-{
-	// SEAM for `m_bSequenceFinished` (`+0x65c`).
-	return false;
-}
-
-bool FElysiumNpc::DoesHintSequenceLoop() const
-{
-	// SEAM for `m_bSequenceLoops` (`+0x65d`).
-	return false;
-}
-
 FElysiumNpc* FElysiumNpc::InterestingPlaceMarkerOccupant(const FElysiumInterestingPlace* Place) const
 {
 	// SEAM for `0x102db760` (the place's occupied marker record) and `0x102dcc20` (the NPC that
@@ -138,9 +126,9 @@ bool FElysiumNpc::HintIdleActivityGate() const
 
 bool FElysiumNpc::PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const
 {
-	// SEAM for `0x1029f730` — the patrol node's interest record. There is no patrol-node graph on
-	// this substrate (patrol is a point list, `FElysiumNpc::PatrolPoints`), so there is no record
-	// and no `+0x468` name on it.
+	// SEAM for `0x1029f730` — the patrol node's interest record. The node ids are this runtime's
+	// hint entity indices (`PatrolNodePosition`), and no node carries an interest record, so there is
+	// no `+0x468` name on it.
 	(void)PatrolNode;
 	(void)OutName;
 	return false;
@@ -387,9 +375,11 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 	//   * with NO refresh pending (`+0x63d4 == -1.0f`) or a non-looping sequence, the decision is
 	//     "has the sequence finished" and the PHASE advances;
 	//   * otherwise it is the timer plus `m_bSequenceFinished`.
-	if (AmbientNextActivityAt == GHintsNoActivityRefresh || !DoesHintSequenceLoop())
+	// The two animation bytes are the sequence bridge's live words: `m_bSequenceLoops` (+0x65d,
+	// `0x102aa235`) and `m_bSequenceFinished` (+0x65c, `0x102aa25b`).
+	if (AmbientNextActivityAt == GHintsNoActivityRefresh || !bSequenceLoopedOnce)
 	{
-		if (!IsHintSequenceFinished())
+		if (!bSequenceFinished)
 		{
 			// Still playing. No refresh, no phase advance.
 		}
@@ -418,7 +408,7 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 			bRefreshActivity = true;
 		}
 	}
-	else if (Now >= AmbientNextActivityAt && IsHintSequenceFinished())
+	else if (Now >= AmbientNextActivityAt && bSequenceFinished)
 	{
 		bRefreshActivity = true;
 	}
@@ -452,7 +442,7 @@ bool FElysiumNpc::RunInterestingPlaceLoop(FElysiumInterestingPlace* Place, doubl
 		}
 		// Retail restarts only when the id differs from `m_Activity` (`+0xfec`) OR the current
 		// sequence does not loop — a looping idle already playing is left alone.
-		if (Activity != CurrentRetailActivityId() || !DoesHintSequenceLoop())
+		if (Activity != CurrentRetailActivityId() || !bSequenceLoopedOnce)                // 0x102aa45c +0x65d
 		{
 			RestartIdealActivityId(Activity);
 		}

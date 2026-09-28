@@ -315,13 +315,7 @@ public:
 	// point is never addressed by targetname.
 	const FElysiumEntity* FindPatrolPoint(const FString& Name) const;
 
-	virtual void BeginDying() override;
-
-	virtual bool IsDeathPerformanceFinished() const override;
-
-	virtual void CommitDeath() override;
-
-	virtual float RandomSeconds(float Max) override;
+	virtual float RandomSeconds(float Max);
 
 	/**
 	 * `ClearSchedule` (`0x10280d30`) — the one door out of a running program.
@@ -338,8 +332,6 @@ public:
 	void ClearSchedule();
 
 	virtual int32 ResolveScheduleId(int32 Id) const override;
-
-	virtual EElysiumTaskResult BeginStopMovingTask() override;
 
 	// `CAI_BaseNPC::TaskFail` `0x10273fc0` (slot 448's base body): `m_bShouldMove = 0`, the
 	// failure code at `+0x5c50`, `SetCondition(0x5c TASK_FAILED)`. The Troika override
@@ -401,8 +393,6 @@ public:
 	// own request, for a director writing ANOTHER NPC's ideal state (`PossessEntity`,
 	// `FixScriptNPCSchedule`).
 	void RequestIdealStateRetail(int32 RetailId, int32 SourceLine);
-
-	virtual void MakeOblivious(bool bOblivious) override;
 
 	// --- `m_iIsOblivious` (`+0x5bb4`) -------------------------------------------------------------
 	// A `CAI_BaseNPC` word. Its bookkeeping bit `MADE_OBLIVIOUS` is in the combat character's
@@ -471,11 +461,11 @@ public:
 	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
 	FElysiumClipIdentity ScheduleIdealActivity;
 
-	virtual bool IsIdealActivityCurrent() const override;
+	virtual bool IsIdealActivityCurrent() const;
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
 
-	virtual void StopMoving() override;
+	virtual void StopMoving();
 
 	/**
 	 * `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`) — the sole reader of `D_IS_BUSY`,
@@ -493,11 +483,6 @@ public:
 protected:
 	// --- Moved from `FElysiumNpc`'s protected section (story 5 step 5) ---
 
-	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).
-	EElysiumNpcState LastStateChange = EElysiumNpcState::Idle;
-
-	bool bStateChangeSeen = false;
-
 	FElysiumNpcMind Mind;
 
 	// `m_hTargetEnt` (`+0x5ce4`); see `SetTarget`.
@@ -509,10 +494,10 @@ protected:
 	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
 	bool bDeathHandoffDone = false;
 
-	// `TASK_DIE`'s commit has run. Retail has no such flag: there, the commit re-enters `Event_Killed`
-	// and `CreateCorpse` (`0x1032c0e0`) takes the entity out of the world, so the parked task simply
-	// stops existing along with the NPC. This runtime has no corpse entity and no removal, so the
-	// flag is what stands in for "the body this program was running on is gone".
+	// `BecomeClientRagdoll` (`0x10090180`, the ragdoll arm of `CreateCorpse` `0x1032c0e0`) has run:
+	// the body went to physics. Retail has no such flag -- its client ragdoll is a separate entity --
+	// so this marks the port's own body as the corpse (`IsCorpse`), which the think's
+	// `SUB_PVSRemove` later removes.
 	bool bDeathCommitted = false;
 
 	// When the death clip `PlayDeathActivity` started runs out. `TASK_DIE`'s gate waits on it; zero

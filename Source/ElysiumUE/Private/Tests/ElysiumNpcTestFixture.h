@@ -336,6 +336,29 @@ struct FElysiumNpcWorldFixture
 		}
 	}
 
+	// Slot 433 `GatherConditions` (story 8 wave 2: the retail pass replaced the port's
+	// `ElysiumNpcEnemy::GatherConditions(Npc, Now)`). The retail bodies read `curtime`, which is the
+	// world's clock; `Now` names the case's intended stamp and is not pushed onto the world (a tick
+	// would run the world's own frame work -- motor sampling, other thinks -- over what the case set
+	// up). A case that needs the clock moved advances the world itself. Like retail, the pass clears
+	// nothing it does not own: a bit no lane re-derives stands until `SetSchedule` zeroes the word.
+	static void GatherConditionsAt(FElysiumNpc& Npc, double Now)
+	{
+		(void)Now;
+		Npc.GatherConditions();
+	}
+
+	// The same pass with the world's clock first ticked forward to `Now` (quiet NPCs think nothing
+	// on that tick), for a case whose stimuli are timed: record expiry, the hearing cadence.
+	static void GatherConditionsTickedTo(FElysiumNpc& Npc, double Now)
+	{
+		if (Npc.World != nullptr && Npc.World->NowSeconds() < Now)
+		{
+			Npc.World->Tick(Now);
+		}
+		Npc.GatherConditions();
+	}
+
 	// The Source health ceiling the damage predicates read, plus a cleared schedule — the opt-in
 	// seeding a case performs before driving a schedule/interrupt pass directly rather than through
 	// admission. A headless world has no rulebook behind `SeedSheet`, so it is stated here rather

@@ -20,7 +20,8 @@
 //
 // Story 8, lane L12. Every body is ported arm by arm from the decompiled C and the packet
 // (`families-19-29/Werewolf19-READING.md`); each arm carries the address of the instruction it came
-// from. The walked prose is `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+// from. The walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 //
 // The retail helpers these bodies call are already ported on the class (`ElysiumNpcWerewolf.h`):
 // `IsValidBreakHint` 0x103d8550, `GetHintGroundpoint` 0x103d6770, `GetHintTargetGroundpoint`
@@ -90,28 +91,25 @@ namespace NpcKernelWerewolf19Species
 	constexpr int32 GWerewolf19Hint3aaa = 0x3aaa;
 
 	// The four Werewolf programs `0x103cc5c0` leaves alone, in the listing's compare order
-	// (`0x103cc63f`, `0x103cc65d`, `0x103cc67b`, `0x103cc693`). Class-local registrar ids; the corpus
-	// names are unrecovered here, and `ElysiumScheduleNumbers.h` carries no Werewolf row.
-	constexpr int32 GWerewolf19SchedulesThatHoldTheHint[4] = { 0x15f, 0x15b, 0x15a, 0x160 };
+	// (`0x103cc63f`, `0x103cc65d`, `0x103cc67b`, `0x103cc693`): 0x15f, 0x15b, 0x15a, 0x160, the
+	// class-local ids `ElysiumScheduleNumbers.h` checks against the corpus.
+	constexpr int32 GWerewolf19SchedulesThatHoldTheHint[4] = {
+		ElysiumSched::SCHED_VWEREWOLF_DO_JUMP_HINT, ElysiumSched::SCHED_VWEREWOLF_DO_SPECIAL_MOVEMENT,
+		ElysiumSched::SCHED_VWEREWOLF_RUN_TO_SPECIAL_MOVEMENT, ElysiumSched::SCHED_VWEREWOLF_DO_DEATH_HINT };
 
-	// Retail constants that the 0019/4 tunables table does not carry (read out of the pinned image).
-	constexpr float GWerewolf19TeleportRetrySeconds = 0.15f;   // `_DAT_104aaac4`
-	constexpr float GWerewolf19RandomRetrySeconds = 0.25f;     // `_DAT_1044bef8`
-	constexpr float GWerewolf19MoveHintSeedDistance = 2500.0f; // `0x103d2bc6` immediate `0x451c4000`
-	constexpr float GWerewolf19RandomHintReach = 1500.0f;      // `_DAT_10462b70`
+	// Retail constants, bound to the tunables table (story 8 wave 2).
+	constexpr float GWerewolf19TeleportRetrySeconds = ElysiumNpcTunables::FifteenHundredths;   // `_DAT_104aaac4`
+	constexpr float GWerewolf19RandomRetrySeconds = ElysiumNpcTunables::Quarter;             // `_DAT_1044bef8`
+	constexpr float GWerewolf19MoveHintSeedDistance = ElysiumNpcTunables::WerewolfMoveHintSeedDistance; // `0x103d2bc6`
+	constexpr float GWerewolf19RandomHintReach = ElysiumNpcTunables::FifteenHundred;         // `_DAT_10462b70`
 	constexpr int32 GWerewolf19TeleportTryBudget = 9;          // `0x103d3e82` `CMP 10, JGE`
 	constexpr int32 GWerewolf19MoveTryBudget = 0xe;            // `0x103d2ca6` `0xe < tries`
 	constexpr int32 GWerewolf19RandomTryBudget = 4;            // `0x103d176f` `4 < tries`
 
-	// The three `ConVar`s `FindTeleportHint` reads that the tunables table does not list. Each is
-	// read `IsCommand() ? 0 : value`, and nothing in the shipped config sets them, so the default is
-	// what retail runs (strings read out of the pinned image at the constructors' pushes).
-	//   `werewolf_force_teleport_in_time` "25.0" (object `0x1093d458`, ctor `0x103c8500`), `+0x28`
-	//   `werewolf_teleport_full_path_check` "1"  (object `0x1093fa38`, ctor `0x103d3bb0`), `+0x2c`
-	//   `werewolf_teleport_ignore_viewcone` "1"  (object `0x1093f780`, ctor `0x103d3b20`), `+0x2c`
-	constexpr float GWerewolf19ForceTeleportInTime = 25.0f;
-	constexpr int32 GWerewolf19TeleportFullPathCheck = 1;
-	constexpr int32 GWerewolf19TeleportIgnoreViewcone = 1;
+	// The three `ConVar`s `FindTeleportHint` reads (`werewolf_force_teleport_in_time` `+0x28`,
+	// `werewolf_teleport_full_path_check` and `werewolf_teleport_ignore_viewcone` `+0x2c`) are the
+	// tunables table's `WerewolfForceTeleportInTime`, `WerewolfTeleportFullPathCheck` and
+	// `WerewolfTeleportIgnoreViewcone` (story 8 wave 2), read at each use.
 
 	// `vec3_origin`, `DAT_1070d1b0/b4/b8` (`staticinit_101370b0` zeroes it): the seed of the
 	// searches' candidate points and the slot-617 extents.
@@ -201,7 +199,7 @@ bool FElysiumNpcWerewolf::WerewolfSlot617(const FVector& PointUnits, bool bSkipV
 bool FElysiumNpcWerewolf::WerewolfSearchStampedThisFrame() const
 {
 	const int32 Frame = EngineFrameNumber();
-	return Frame != INDEX_NONE && WerewolfMorphTimerB == static_cast<float>(Frame);
+	return WerewolfMorphTimerB == static_cast<float>(Frame);
 }
 
 void FElysiumNpcWerewolf::WerewolfStampSearch(double Now)
@@ -634,14 +632,14 @@ bool FElysiumNpcWerewolf::FindTeleportHint()
 					bAccepted = true;                                       // 0x103d3fe1
 				}
 				// `werewolf_force_teleport_in_time` plus `m_flTimeTeleportedOut` (`+0x66f0`) already past.
-				if (GWerewolf19ForceTeleportInTime + static_cast<float>(WerewolfTimeTeleportedOut)   // 0x103d3fef 0x(IsCommand)
+				if (ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfForceTeleportInTime) + static_cast<float>(WerewolfTimeTeleportedOut)   // 0x103d3fef 0x(IsCommand)
 					< static_cast<float>(Now))                              // 0x103d3ff4 / 0x103d401a
 				{
 					bAccepted = true;                                       // 0x103d401c
 				}
 				else if (!bAccepted)                                        // 0x103d4029
 				{
-					if (GWerewolf19TeleportFullPathCheck != 0)              // 0x103d403c / 0x103d4048 0x103d4037 0x(IsCommand)
+					if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfTeleportFullPathCheck) != 0)              // 0x103d403c / 0x103d4048 0x103d4037 0x(IsCommand)
 					{
 						++Tries;                                            // 0x103d4052
 						bAccepted = WerewolfHasPath(TargetUnits, ReferenceUnits);   // 0x103d4087
@@ -666,7 +664,7 @@ bool FElysiumNpcWerewolf::FindTeleportHint()
 				if (bAccepted)
 				{
 					++Tries;                                                // 0x103d40f4
-					const bool bSkipViewCone = GWerewolf19TeleportIgnoreViewcone != 0;  // 0x103d40fb / 0x103d4100
+					const bool bSkipViewCone = ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfTeleportIgnoreViewcone) != 0;  // 0x103d40fb / 0x103d4100
 					if (!WerewolfSlot617(GroundUnits, bSkipViewCone, false))   // 0x103d4152 / 0x103d415c
 					{
 						Best = Node;                                        // 0x103d415e

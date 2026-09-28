@@ -45,7 +45,7 @@ void Spawn19InsertCarcassSound();
  *  port's body build is `FElysiumAnimating`'s presentation, run by the Troika leaf). */
 void Spawn19CombatCharacterSpawn();
 
-/* `m_lifeState` (`+0x200`) is `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`), the one word; its
+/* `m_lifeState` (`+0x200`) is the entity's `LifeState` (`ElysiumEntity.h`), the one word; its
  * main writer, `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` (LIFE_DYING), is still the 29e stub, so
  * slot 158 `IsAlive` and `LifeStateIsDying` keep reading the death latches until it lands (L13). */
 

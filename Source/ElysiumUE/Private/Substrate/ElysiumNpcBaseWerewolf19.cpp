@@ -15,7 +15,8 @@
 
 #include "Substrate/ElysiumNpcConditions.h"
 
-// Story 8, lane L12. Walked prose in `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+// Story 8, lane L12. Walked prose in
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 
 namespace NpcKernelBaseWerewolf19
 {

@@ -52,10 +52,19 @@ public:
 	 *  (slot 78, the particle's own `ScriptUnhide`). Retail does NOT clear the handle. */
 	void GhoulCroucherScriptUnhideTail();
 	/** `CNPC_VGhoulCroucher::ScriptHide` (`0x1037c1c0`, slot 77) -- `CAI_BaseNPCTroika::ScriptHide`
-	 *  (`0x102c1ce0`, this runtime's `FElysiumEntity::ScriptHide`) DIRECT, then slot 77 on the entity
+	 *  (`0x102c1ce0`, `FElysiumNpc::ScriptHide`) DIRECT, then slot 77 on the entity
 	 *  `m_hBurningParticle` (`+0x6670`) resolves to, when it resolves live. The handle is not cleared.
-	 *  Slot 77 is not virtual in this runtime: the integrator routes this class's hide here. */
+	 *  The `ScriptHide` override below is this body. */
 	void GhoulCroucherScriptHide();
+	/** Slot 77, `0x1037c1c0` (virtual since story 8 wave 2: every dispatch reaches it). */
+	virtual void ScriptHide() override { GhoulCroucherScriptHide(); }
+	/** Slot 78, `0x1037c2f0`: `CAI_BaseNPCTroika::ScriptUnhide` DIRECT (`0x1037c359` -> `0x102c1ec0`,
+	 *  unported: the entity base stands for it), then the particle's. */
+	virtual void ScriptUnhide() override
+	{
+		FElysiumEntity::ScriptUnhide();
+		GhoulCroucherScriptUnhideTail();
+	}
 	/** `CNPC_VGhoulCroucher`'s two static tables, indexed by `m_nUnawareType` (`+0x6668`):
 	 *  `DAT_1063abcc` (`0x1037b870`) and `DAT_1063abdc` (`0x1037b890`): retail `Activity` ids
 	 *  (`{0x1059, 0x105d, 0x1079, 0x1059}` / `{0x105a, 0x105e, 0x107a, 0x105a}`, read off the image),
@@ -96,4 +105,14 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- Story 8 lane L13b (Think19): the burning emitter's rate, `NPCThink` 0x1037b3f0 -------------
+	/** SEAM for `0x100fb980` on the burning particle (`m_hBurningParticle` +0x6670): a negative rate
+	 *  warns (`"%s rate scale set to %.2f must be ..."`) and becomes 0, the emitter's `+0x48c` takes the
+	 *  rate (times the ConVar `DAT_107083dc` when its `+0x4a1` byte), and `+0x494` the engine tick. No
+	 *  port particle carries that direct setter (`FElysiumEnvParticle::InputSetRateScale` is the ramped
+	 *  INPUT, a different body); the rate is recorded here, which is what a test reads. */
+	void GhoulSetParticleRateScale(FElysiumEntity* Particle, float Rate);
+	float GhoulLastParticleRateScale = -1.f;
+	int32 GhoulParticleRateScaleCalls = 0;
 };

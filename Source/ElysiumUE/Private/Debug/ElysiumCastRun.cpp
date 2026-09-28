@@ -660,14 +660,16 @@ bool FElysiumCastRun::IsCourseArmed() const
 	{
 		return false;
 	}
-	// The mind's own account of who is driving the body. `FollowPatrolPath` and `BeginSequence` both
-	// answer by acquiring it, and both return quietly when they cannot — which is the failure this
-	// window exists to catch, because the recording that follows is a body standing still while its
-	// record says a course ran.
-	const EElysiumBodyOwner Owner = Npc->GetMind().Owner();
-	return Course.Order == ElysiumCastCourses::EOrder::Patrol
-		? Owner == EElysiumBodyOwner::Patrol
-		: Owner == EElysiumBodyOwner::Sequence;
+	// Whether the order took. A patrol is the path object's own program since story 8 wave 2: the
+	// path stands and a program is running (the route's own, or whatever replaced it). A beat answers
+	// through the mind's account of who drives the body. Both inputs return quietly when they cannot
+	// — which is the failure this window exists to catch, because the recording that follows is a
+	// body standing still while its record says a course ran.
+	if (Course.Order == ElysiumCastCourses::EOrder::Patrol)
+	{
+		return Npc->IsPatrolActiveForDebug() && Npc->Schedule.IsRunning();
+	}
+	return Npc->GetMind().Owner() == EElysiumBodyOwner::Sequence;
 }
 
 bool FElysiumCastRun::Sample()

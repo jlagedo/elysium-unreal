@@ -104,11 +104,19 @@ int32 FElysiumNpcBase::NavGoalState() const
 
 bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 {
-	// `thunk_FUN_102ee6a0` (the pending link is valid) and `thunk_FUN_102ee510` (its cached
-	// activity), the pair `FUN_1027a6c0` reads. **SEAM**, and the link object's retail identity is
-	// **unrecovered** — the ledger itemises nothing past the `m_pNavigator` chain redirect.
-	(void)OutActivity;
-	return false;
+	// The pair `FUN_1027a6c0` reads off `m_pNavigator` (+0x5d34): `0x102ee6a0` is
+	// `CAI_Navigator::IsGoalActive` (`m_pPath` +0x30 and its current waypoint +0x24 both set,
+	// `NavigatorGoalIsActive`), and `0x102ee510` answers the path's movement activity
+	// (`0x1030b520(m_pPath)`), which this runtime's goal record carries as the Troika host's
+	// `NavigationActivity` (written by `SetGoal`'s activity word, `0x102ee250`). A base-only body has
+	// no host record and answers -1, which `0x1027a6c0` turns into ACT_IDLE.
+	if (!NavigatorGoalIsActive())                                        // 0x102ee6a0
+	{
+		return false;
+	}
+	const FElysiumNpc* const Troika = AsNpc();
+	OutActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;   // 0x102ee510
+	return true;
 }
 
 bool FElysiumNpcBase::MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta)
@@ -377,21 +385,18 @@ bool FElysiumNpcBase::AutoMovement()
 	return MotorApplyIntervalMovement(DeltaUnits, YawDelta);
 }
 
-void FElysiumNpcBase::PostRun()
+float FElysiumNpcBase::PostRun()
 {
-	// `CAI_BaseNPC::PostRun` `0x1026c7c0`. Everything but two lines is VProf scaffolding; the
-	// retail content is the PAIRING and its ORDER:
-	//     float dt = thunk_FUN_1026c540(this);        // the elapsed animation interval
-	//     vtable[0x408/4 = 258](dt, this);            // DispatchAnimEvents, `0x10098c80`
-	//     CBaseCombatCharacter::Weapon_FrameUpdate(dt);   // with the SAME number
-	// The port's comment at `ElysiumNpc.cpp:895` discussed this ordering; this is the body.
-	//
-	// **SEAM**: `thunk_FUN_1026c540`'s interval is the animating tier's, which this substrate does
-	// not publish to the kernel, so the pair runs with 0.0 and the ORDER is what is ported.
-	const float Interval = 0.f;
-	DispatchAnimEvents(Interval, this);
+	// `CAI_BaseNPC::PostRun` `0x1026c7c0`. Everything but three lines is VProf scaffolding:
+	//     float dt = RunAnimation();                  // `0x1026c8c4 CALL 0x1000ed63` -> 0x1026c540
+	//     vtable[0x408/4 = 258](dt, this);            // DispatchAnimEvents, `0x1026c8d8`
+	//     CBaseCombatCharacter::Weapon_FrameUpdate(dt);   // `0x1026c8e0`, with the SAME number
+	// and the interval is the answer the think hands to `PerformMovement`.
+	const float Interval = RunAnimation();                                      // 0x1026c8c4
+	DispatchAnimEvents(Interval, this);                                          // 0x1026c8d8 slot 258
 	MotorSeams.PostRunInterval = Interval;
-	++MotorSeams.PostRunWeaponUpdates;
+	++MotorSeams.PostRunWeaponUpdates;                                           // 0x1026c8e0 Weapon_FrameUpdate
+	return Interval;
 }
 
 void FElysiumNpcBase::CheckOnGround()
@@ -528,6 +533,44 @@ void FElysiumNpcBase::NavOnNavFailed(int32 FailReason)
 	TaskFail(FailReason);
 	SetIdealActivityNumber(ResolveLinkActivity());
 	Navigator.bNavFailed = true;
+}
+
+void FElysiumNpcBase::NavigatorMoveStep()
+{
+	if (Motor == nullptr || !NavigatorGoalIsActive())                        // 0x102eff7c 0x102ee2e0
+	{
+		return;
+	}
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	// The goal's move step (`0x102ef760`, slot 5 of the move goal under `CAI_Navigator::Move`).
+	// First the owner's movement sink (`[npc+0x19b0]`, `CAI_DefMovementSink`) is asked through its
+	// slot 5 (`+0x14`): a true answer returns 1 with no activity written (0x102ef771..0x102ef781).
+	// `CAI_DefMovementSink`'s slot 5 is `0x101a63c0`, `XOR AL,AL; RET 4`, and no port class replaces
+	// that secondary table, so the sink answers false and the step goes on.
+	constexpr bool bMovementSinkHandled = false;                             // 0x102ef777 CALL [EAX+0x14]
+	if (!bMovementSinkHandled)                                               // 0x102ef77a / 0x102ef77c JZ
+	{
+		// `SetIdealActivity(0x1027a6c0())` — `ResolveLinkActivity`, the one body of `0x1027a6c0`: the
+		// path's movement activity while the navigator's goal is active (`0x102ee6a0`) and it names
+		// one, else ACT_IDLE (1). This is what walks a body in its WALK/RUN clip: the maintained ideal
+		// activity commits the movement sequence (the sequence bridge plays it).
+		SetIdealActivity(ResolveLinkActivity());                             // 0x102ef78a 0x1027a6c0 / 0x102ef793
+	}
+	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
+	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken
+	// through `UTIL_AngleMod` as the motor stores it (named divergence: the mover's, not the path's).
+	MotorIdealYaw = StartTaskAngleMod(static_cast<float>(Angles.Y));
+	if (Status == EElysiumNpcMoveStatus::Reached)
+	{
+		// `OnNavComplete` (`0x102eea90`): `0x102eeb70` (the goal words and the path's reset -- the
+		// mover's own clear inside `TaskMovementComplete`), then the owner's `TaskMovementComplete`.
+		TaskMovementComplete();                                              // 0x102eccc0 -> 0x10273ec0
+		Navigator.bNavFailed = true;                                         // +0x1c = 1
+	}
+	else if (Status == EElysiumNpcMoveStatus::Failed || Status == EElysiumNpcMoveStatus::Unavailable)
+	{
+		NavOnNavFailed(0xc);                                                 // 0x102f0180 slot 10 (FAIL_NO_ROUTE, 1)
+	}
 }
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 5) ---

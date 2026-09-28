@@ -159,8 +159,6 @@ CNPC_VGargoyle	434	0x10385a30	rule	no-override	FElysiumNpcGargoyle
 CNPC_VGargoyle	473	0x10378640	rule	no-override	FElysiumNpcGargoyle
 CNPC_VGargoyle	580	0x10377b20	rule	no-override	FElysiumNpcGargoyle
 CNPC_VGargoyle	615	0x10377ae0	rule	no-override	FElysiumNpcGargoyle
-CNPC_VGhoulCroucher	77	0x1037c1c0	rule	no-override	FElysiumNpcGhoulCroucher
-CNPC_VGhoulCroucher	78	0x1037c2f0	rule	no-override	FElysiumNpcGhoulCroucher
 CNPC_VGhoulCroucher	82	0x1037a6e0	mechanism	no-override	FElysiumNpcGhoulCroucher
 CNPC_VGhoulCroucher	138	0x103871a0	rule	no-override	FElysiumNpcGhoulCroucher
 CNPC_VGhoulCroucher	174	0x1037bf60	rule	no-override	FElysiumNpcGhoulCroucher

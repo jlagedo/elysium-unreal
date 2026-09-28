@@ -34,7 +34,6 @@ class FElysiumScriptedSequence : public FElysiumNpcBase
 public:
 	ELYSIUM_NPC_CLASS("CCineNPC", FElysiumNpcBase)
 
-
 	// --- The own vtable slots (`CCineNPC`, `0x104771e4`) -----------------------------------------
 	// Slot 72 `0x101a6e20` — `XOR AL,AL`: no discipline targets a director.
 	virtual bool Slot72(int32 Discipline) override;
@@ -180,10 +179,6 @@ public:
 	// `0x101a7760` under spawnflag `0x400`.
 	FElysiumEntityHandle LastFoundEntity;
 
-	/** SEAM for `AddFlag2(0x10)` (`Spawn`, `0x101a70bb`) — `CBaseEntity::m_fFlags2` (`+0x438`), a word
-	 *  with no port owner (the controller line carries the same seam, fold A2). The meaning of bit
-	 *  `0x10` is unrecovered. */
-	uint32 Flags2Added = 0;
 
 	// `m_scriptState` (`+0x5d70`) — an NPC word, held here on the director that owns the NPC
 	// (`m_hCine`). It has no meaning without one: `CineCleanup` zeroes it in the same pass that clears
@@ -258,11 +253,7 @@ public:
 	/** What `Activate` printed, verbatim in retail's order, dividers included. */
 	TArray<FString> ActivateDiagnostics;
 
-	// --- The port's schedule-runner hooks (`IElysiumScheduleRunner`) --------------------------------
-	// Not retail slots. A director runs no schedule, so each answers "this body has none".
-	virtual float RunSpecialIdleActivity(double Now) override;
-	virtual bool IsBodyVisible() const override;
-	virtual float PlayActivity(const FString& Activity) override;
+	virtual float PlayActivity(const FString& Activity);
 
 protected:
 	// `SUB_Remove` `0x101c0b10` as the port stands it: slot 180, then the entity's terminal `Kill`.

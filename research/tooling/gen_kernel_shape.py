@@ -311,13 +311,12 @@ def lower_type(retail: str, family: set[str]) -> tuple[str, str]:
 #
 # A retail slot name the port's entity chain already declares is a decision. `PORT` says the
 # existing method IS that slot's body and no virtual is generated for it; `SUFFIX` says the
-# collision is accidental and the slot takes `<Name>Slot<N>`. `GENERATED_OVERRIDE` retains the
-# generated declaration that deliberately overrides a runner interface; it is not a second
-# implementation or an inherited base body. The last column records why.
+# collision is accidental and the slot takes `<Name>Slot<N>`. The last column records why. (The one
+# `generated-override` row, slot 488 over the schedule runner's `DeathSound` hook, retired with that
+# hook at story 8 wave 2: slot 488 is an ordinary generated slot now.)
 
 PORT = "port"
 SUFFIX = "suffix"
-GENERATED_OVERRIDE = "generated-override"
 # A stub whose body is dead, uncalled and overridden nowhere (0019/5 step 6): no virtual is
 # generated, and the census row stays with an empty port callable.
 DELETED = "deleted"
@@ -344,6 +343,23 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `Angles`, Source degrees"),
     220: ("const FVector&", "`GetOrigin` 0x100b3070: `Origin`; the port has no local/abs split"),
     221: ("const FVector&", "`GetAngles` 0x100b3110: `Angles`; the port has no local/abs split"),
+    142: ("", "`CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the "
+              "life-state split into slots 390/391/392 and the death arm (story 8 wave 2, L13)"),
+    390: ("", "`CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed "
+              "health commit (story 8 wave 2, L13)"),
+    144: ("", "`CBaseCombatCharacter::Event_Killed` 0x1032b9b0: LIFE_DYING, the weapon drop, the "
+              "grapple partner's feed teardown, the owner notice and slot 301 (story 8 wave 2, L13)"),
+    301: ("", "`CBaseCombatCharacter::CreateCorpse` 0x1032c0e0: the ragdoll corpse, "
+              "`BecomeClientRagdoll` (story 8 wave 2, L13)"),
+}
+
+# A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
+# hold a body at the slot keep theirs as generated: slot -> the port owner.
+CHAIN_HAND_OWNER: dict[int, str] = {
+    142: "FElysiumCombatCharacter",
+    390: "FElysiumCombatCharacter",
+    144: "FElysiumCombatCharacter",
+    301: "FElysiumCombatCharacter",
 }
 
 
@@ -413,9 +429,6 @@ def _load_slot_map() -> None:
         (461, PORT, "FElysiumNpcBase::SelectIdealStateRetail",
          "0019/8 shape: the typed `SelectIdealState()` wrapper keeps the census name; the slot's "
          "virtual is the Retail one"),
-        (488, GENERATED_OVERRIDE, "DeathSound",
-         "IElysiumScheduleRunner's void DeathSound() is implemented by the generated declaration "
-         "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),
         (534, PORT, "FElysiumCombatCharacter::EyeLookTargetHandle",
          "the gaze cascade's chosen subject; `EyeLookTarget` beside it is the point it resolved to"),
         # --- Slots a class below the NPC line overrides (0019/5 commit B) ---------------------
@@ -431,8 +444,6 @@ def _load_slot_map() -> None:
          "(retail's doors and buttons override `CBaseToggle::MoveDone`)"),
         (153, OVERRIDDEN_BELOW, "", "`FElysiumMoverBase::IsMoving()`: `CBaseEntity::IsMoving` "
          "0x10026e70 (`m_vecVelocity != 0`), which on a mover is a move in flight"),
-        (158, OVERRIDDEN_BELOW, "", "`FElysiumPlayer::IsAlive()`: `CBaseEntity::IsAlive` 0x100b4dc0 "
-         "over the player's own `m_lifeState`"),
         (582, DELETED, "",
          "`CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller, overridden nowhere "
          "(0019/5 step 6)"),
@@ -764,15 +775,6 @@ def chain_subclass_names(repo: Path, overrides: dict[str, set[str]] | None = Non
     return names
 
 
-def check_generated_override(row: Slot) -> None:
-    """Fail if the one reviewed interface override loses its signature or hand implementation."""
-    if row.port_kind == GENERATED_OVERRIDE and (
-            row.slot != 488 or row.declaration != "void DeathSound()"
-            or row.port_name != "DeathSound" or row.hand != "FElysiumNpc::DeathSound"):
-        raise SystemExit(f"gen_kernel_shape: generated override {row.slot} no longer matches "
-                         "the reviewed interface signature and hand body")
-
-
 def apply_verdict(row: Slot, ledger) -> None:
     """Read the overlay's verdict for `row.body` into the row's emission (default / hand)."""
     row.verdict, row.verdict_target, row.default, row.hand = "", "", "", ""
@@ -861,7 +863,8 @@ def split_layers(row: Slot, ledger, tables: dict[str, dict[int, str]]) -> None:
         layer.story = story_for(layer.layer) if layer.layer >= 0 else ""
         apply_verdict(layer, ledger)
         if row.slot in CHAIN_HAND and owner == CHAIN_PORT[retail] and owner in SLOT_SURFACES \
-                and owner not in LAYER_PORT.values():
+                and owner not in LAYER_PORT.values() \
+                and CHAIN_HAND_OWNER.get(row.slot, owner) == owner:
             layer.hand = f"{owner}::{row.port_name}"
         return layer
 
@@ -976,7 +979,6 @@ def build(repo: Path, module: str, depth: int) -> Model:
             if param_note:
                 row.notes.append(f"takes {param_note}")
         apply_verdict(row, ledger)
-        check_generated_override(row)
         split_layers(row, ledger, tables)
 
     # A slot the chain now declares below the NPC line is inherited by every entity class; a

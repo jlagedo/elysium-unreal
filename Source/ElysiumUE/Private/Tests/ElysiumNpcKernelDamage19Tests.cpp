@@ -2,13 +2,13 @@
 //
 // Test names carry `Elysium.Substrate.NpcKernelDamage19.` and the retail address. One case per
 // `rule` row at least, each assertion read off the listing (`vtmb_asm`) with the address beside it.
-// The walked prose is `docs/vtmb/npc-ai/story8/Damage19.md`.
+// The walked prose is `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".
 //
 // Two standing facts shape the cases:
-//   * `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) is still the generated 29e stub and
-//     answers 0, so every slot-142 chain answers 0 here; `CBaseCombatCharacter::OnTakeDamage_Alive`
-//     (`0x103302e0`) answers retail's only value, 1, through
-//     `FElysiumNpcBase::CombatCharacterOnTakeDamageAlive`, so the slot-390 chains run whole.
+//   * `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) and `OnTakeDamage_Alive` (`0x103302e0`)
+//     are hand bodies since story 8 wave 2 (`ElysiumCombatCharacter.cpp`): the slot-142 chains
+//     answer what `0x1032ef60` answers, and `0x103302e0` answers its one value, 1, so the slot-390
+//     chains run whole.
 //   * The see/unseen split of `0x10265ed0` is decided by the NPC's own slot 363 / slot 201. A case
 //     asks the same two virtuals first and asserts the arm that answer selects, rather than
 //     assuming a headless trace outcome.
@@ -154,13 +154,18 @@ namespace
 				Guard->Health = 100;
 				// "No damage yet": the retail stamp is float curtime, and the clock stands at 0.
 				Guard->BaseMemory.RepeatedDamageWindowStart = -1.0;
-				Guard->BaseMemory.RepeatedDamageAccumulated = 0;
+				Guard->BaseMemory.RepeatedDamageAccumulated = 0.f;
 				// The type-0 stat list the species floors read: cap 20, no wounds.
 				Guard->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
 				Guard->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 0);
 				Guard->RecomputeSheet();
 				Guard->MaxHealth = 100;
 				Guard->Health = 100;
+				// `DAMAGE_EVENTS_ONLY`: the cases exercise the NPC bodies ABOVE the combat character's
+				// commit. Since story 8 wave 2 `0x103302e0` is a hand body, and on this setting it
+				// commits nothing (`m_takedamage == 1`), so the health and ceiling a case sets stand;
+				// every gate of `0x1032ef60` still passes (it refuses only `DAMAGE_NO`).
+				Guard->TakeDamageMode = 1;
 			}
 		}
 
@@ -245,15 +250,22 @@ bool FElysiumNpcKernelDamage19BaseOnTakeDamageTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Guard;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::LightDamage);
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
+	N.LastTakeDamageInfo.Damage = -1.f;
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 10.f);
 	const int32 Result = N.FElysiumNpcBase::OnTakeDamage(&Info);
-	TestEqual(TEXT("10265e99 CBaseCombatCharacter::OnTakeDamage runs first"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
-	TestEqual(TEXT("10265eae returns what 0x1032ef60 answered (the 29e stub's 0)"), Result, 0);
+	// `0x1032ef60`'s alive arm dispatches slot 390; the Troika's `0x102beda0` caches the packet
+	// (`0x102bedab`), which is the witness that the chain ran.
+	TestEqual(TEXT("10265e99 CBaseCombatCharacter::OnTakeDamage runs first (its slot 390 cached the packet)"),
+		N.LastTakeDamageInfo.Damage, 10.f);
+	TestEqual(TEXT("10265eae returns what 0x1032ef60 answered (slot 390's 1, 0x1032f0bf)"), Result, 1);
 	// 10265ea4 slot 459 runs unconditionally; outside NPC_STATE_SCRIPT 0x1026d7f0 writes nothing.
 	TestTrue(TEXT("10265ea4 RemoveIgnoredConditions outside SCRIPT leaves conditions alone"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::LightDamage));
+	// `DAMAGE_NO`: `0x1032ef60` answers 0 at its first test, and this body returns that 0.
+	N.TakeDamageMode = 0;
+	N.LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("1032efa9 m_takedamage == DAMAGE_NO answers 0"), N.FElysiumNpcBase::OnTakeDamage(&Info), 0);
+	TestEqual(TEXT("...and no slot 390 ran"), N.LastTakeDamageInfo.Damage, -1.f);
 	return true;
 }
 
@@ -309,14 +321,14 @@ bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 	TestFalse(TEXT("10266282 20 is not HEAVY_DAMAGE"), N.Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage));
 	TestFalse(TEXT("1026631d 20 of 100 is not REPEATED_DAMAGE"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
-	TestEqual(TEXT("102662ec the first hit RESETS the sum"), N.BaseMemory.RepeatedDamageAccumulated, 20);
+	TestEqual(TEXT("102662ec the first hit RESETS the sum"), N.BaseMemory.RepeatedDamageAccumulated, 20.f);
 	TestTrue(TEXT("102661de m_bCondTookDamage"), N.Cognition.bCondTookDamage);
 	TestTrue(TEXT("102661cc m_hLastDamageEnt = the attacker"), N.BaseMemory.LastDamageAttacker == F.Other->Handle);
 	// 21 on the same tick: heavy, and the sum 41 > 100 * 0.3.
 	FElysiumNpcBase::FElysiumTakeDamageInfo TwentyOne = Damage19Packet(F.Other, 21.f);
 	N.FElysiumNpcBase::OnTakeDamage_Alive(&TwentyOne);
 	TestTrue(TEXT("10266293 HEAVY_DAMAGE on 21"), N.Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage));
-	TestEqual(TEXT("102662c6 inside 1.0 s the sum ACCUMULATES"), N.BaseMemory.RepeatedDamageAccumulated, 41);
+	TestEqual(TEXT("102662c6 inside 1.0 s the sum ACCUMULATES"), N.BaseMemory.RepeatedDamageAccumulated, 41.f);
 	TestTrue(TEXT("1026632e REPEATED_DAMAGE when the sum exceeds 30 % of m_iMaxHealth"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
 	// A full second later the sum resets to the new hit.
@@ -324,7 +336,7 @@ bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 	N.Cognition.Conditions.Reset();
 	FElysiumNpcBase::FElysiumTakeDamageInfo Three = Damage19Packet(F.Other, 3.f);
 	N.FElysiumNpcBase::OnTakeDamage_Alive(&Three);
-	TestEqual(TEXT("102662b3 curtime - m_flLastDamageTime >= 1.0 resets"), N.BaseMemory.RepeatedDamageAccumulated, 3);
+	TestEqual(TEXT("102662b3 curtime - m_flLastDamageTime >= 1.0 resets"), N.BaseMemory.RepeatedDamageAccumulated, 3.f);
 	TestFalse(TEXT("...and 3 of 100 raises no REPEATED_DAMAGE"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
 	// Zero damage is not light (0x10266630: `0.0 < damage`).
@@ -454,23 +466,25 @@ bool FElysiumNpcKernelDamage19TroikaOnTakeDamageTest::RunTest(const FString&)
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 10.f);
 
 	// Not invincible: tail to CAI_BaseNPC::OnTakeDamage, whose answer is returned.
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("102bed6d not invincible: the base's answer"), N.OnTakeDamage(&Info), 0);
-	TestEqual(TEXT("...through 0x10265e90 -> 0x1032ef60"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+	N.LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("102bed6d not invincible: the base's answer (0x1032ef60's slot-390 1)"), N.OnTakeDamage(&Info), 1);
+	TestEqual(TEXT("...through 0x10265e90 -> 0x1032ef60 -> slot 390 (the packet cached, 0x102bedab)"),
+		N.LastTakeDamageInfo.Damage, 10.f);
 	F.Deliver();
-	TestEqual(TEXT("...which fires no output here"), F.World.Counter(TEXT("damaged")), 0.f);
+	TestEqual(TEXT("...whose 0x10265ed0 fires m_OnDamaged (0x10265f26)"), F.World.Counter(TEXT("damaged")), 1.f);
 
 	// Invincible: refused with 0, but m_OnDamaged fires at most once a tick and the stamp is written.
+	// A later tick, so the stamp `0x10266310` just wrote differs from curtime.
+	F.World.Advance(F.Now() + 1.0);
+	N.LastTakeDamageInfo.Damage = -1.f;
 	N.bInvincible = true;
 	TestEqual(TEXT("102bed68 invincible answers 0"), N.OnTakeDamage(&Info), 0);
 	TestEqual(TEXT("102bed56 m_flLastDamageTime = curtime"), N.BaseMemory.RepeatedDamageWindowStart, F.Now());
 	N.OnTakeDamage(&Info);
 	F.Deliver();
 	TestEqual(TEXT("102bed63 m_OnDamaged once per tick however many packets land"),
-		F.World.Counter(TEXT("damaged")), 1.f);
-	TestEqual(TEXT("...and the chain never ran"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+		F.World.Counter(TEXT("damaged")), 2.f);
+	TestEqual(TEXT("...and the chain never ran"), N.LastTakeDamageInfo.Damage, -1.f);
 	return true;
 }
 
@@ -1154,10 +1168,10 @@ bool FElysiumNpcKernelDamage19WerewolfTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcBase::FElysiumTakeDamageInfo Info = Damage19Packet(F.Other, 13.f, 0x80u);
-	const int32 Before = Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage"));
-	TestEqual(TEXT("103ccd55 returns 0x102bed30's answer"), W->OnTakeDamage(&Info), 0);
-	TestEqual(TEXT("...which reached the base chain"),
-		Damage19StubCount(TEXT("CBaseCombatCharacter::OnTakeDamage")), Before + 1);
+	W->LastTakeDamageInfo.Damage = -1.f;
+	TestEqual(TEXT("103ccd55 returns 0x102bed30's answer (the chain's slot-390 1)"), W->OnTakeDamage(&Info), 1);
+	TestEqual(TEXT("...which reached the base chain (slot 390 cached the packet)"),
+		W->LastTakeDamageInfo.Damage, 13.f);
 	TestEqual(TEXT("103ccd4d the werewolf does NOT modify the damage"), Info.Damage, 13.f);
 	TestEqual(TEXT("...or its bits"), Info.DamageBits, 0x80u);
 	return true;
@@ -1177,12 +1191,15 @@ bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 	Z->bZombieShouldGib = false;
 	Z->bZombieShouldRagdoll = false;
 	Z->bZombieHeadHit = false;
+	// `DAMAGE_NO` makes `0x1032ef60` answer 0 at its first test, so the Troika chain's answer is 0 —
+	// the arm these two cases exercise.
+	Z->TakeDamageMode = 0;
 	FElysiumNpcBase::FElysiumTakeDamageInfo Fifteen = Damage19Packet(nullptr, 15.f);
 	const int32 Before = Z->SetScheduleRetailCalls;
 	const int32 EmittersBefore = Z->EmitterCalls.Num();
 	const int32 Result = Z->OnTakeDamage(&Fifteen);
 	TestFalse(TEXT("103e07ff 15 is not above the head threshold 20"), Z->bZombieShouldGib);
-	TestEqual(TEXT("103e080b the Troika chain's answer (the 29e stub's 0)"), Result, 0);
+	TestEqual(TEXT("103e080b the Troika chain's answer (0x1032ef60's DAMAGE_NO 0)"), Result, 0);
 	TestEqual(TEXT("103e0857 a zero answer takes the fallback program"), Z->SetScheduleRetailCalls, Before + 1);
 	TestEqual(TEXT("103e086d ...0x162"), Z->LastSetScheduleRetail, 0x162);
 	TestTrue(TEXT("103e0861 ...FORCED"), Z->bLastSetScheduleForce);
@@ -1198,6 +1215,59 @@ bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 	TestTrue(TEXT("103e08ac a zero answer with a head hit: the DEATH emitter"),
 		Z->EmitterCalls.Num() == EmittersBefore + 1
 			&& Z->EmitterCalls.Last().Name == TEXT("zombie_headshot_death_emitter"));
+	return true;
+}
+
+// =================================================================================================
+// 0x1032ef60 / 0x103302e0 — `BeginVampHeal_HOT` and the Kindred frenzy arm (L13 review row 9).
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19CombatAliveFrenzyTest,
+	"Elysium.Substrate.NpcKernelDamage19.CombatAliveFrenzy_103302e0", GDamage19TestFlags)
+bool FElysiumNpcKernelDamage19CombatAliveFrenzyTest::RunTest(const FString&)
+{
+	FDamage19Fixture F;
+	if (!TestNotNull(TEXT("the guard stands"), F.Guard) || !TestNotNull(TEXT("the enemy stands"), F.Enemy))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Guard;
+	// A Kindred body that commits (`DAMAGE_YES`), with a ceiling no hit here reaches.
+	N.bHasKindredTemplate = true;
+	N.bKindredTemplate = true;
+	N.TakeDamageMode = 2;
+	N.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 1000);
+	N.RecomputeSheet();
+	const TCHAR* const Hot = TEXT("CBaseCombatCharacter::BeginVampHeal_HOT");
+	const TCHAR* const Frenzy = TEXT("CBaseCombatCharacter::FrenzyCheck");
+
+	// 0x1032f17a: every alive packet asks the heal-over-time seam after the two stat reads.
+	const int32 HotBefore = Damage19StubCount(Hot);
+	const int32 FrenzyBefore = Damage19StubCount(Frenzy);
+	FElysiumNpcBase::FElysiumTakeDamageInfo Small = Damage19Packet(F.Enemy, 10.f);
+	N.OnTakeDamage(&Small);
+	TestEqual(TEXT("0x1032f17a BeginVampHeal_HOT is asked on the alive arm"), Damage19StubCount(Hot), HotBefore + 1);
+	TestEqual(TEXT("0x10330a50: 10 is below Dmg_Amount 0x39 and not aggravated: no FrenzyCheck"),
+		Damage19StubCount(Frenzy), FrenzyBefore);
+
+	// 0x10330a3a / 0x10330a50: at or above `VampFrenzy_Info/Dmg_Amount` (image default 0x39) the check runs.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Heavy = Damage19Packet(F.Enemy, 60.f);
+	N.OnTakeDamage(&Heavy);
+	TestEqual(TEXT("0x10330aa9 FrenzyCheck on a heavy hit from a live attacker"),
+		Damage19StubCount(Frenzy), FrenzyBefore + 1);
+
+	// 0x10330a78 / 0x10330a90: at or above AggrDmg_Amount (0x1d) only an aggravated hit checks.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Mid = Damage19Packet(F.Enemy, 30.f);
+	N.OnTakeDamage(&Mid);
+	TestEqual(TEXT("0x10330a9a: a plain 30 does not check"), Damage19StubCount(Frenzy), FrenzyBefore + 1);
+	FElysiumNpcBase::FElysiumTakeDamageInfo MidAggravated = Damage19Packet(F.Enemy, 30.f, 0x8u);
+	N.OnTakeDamage(&MidAggravated);
+	TestEqual(TEXT("0x10330a90: an aggravated (0xc8000008) 30 checks"), Damage19StubCount(Frenzy), FrenzyBefore + 2);
+
+	// 0x103309fb: no attacker, no check, however heavy.
+	FElysiumNpcBase::FElysiumTakeDamageInfo Anonymous = Damage19Packet(nullptr, 60.f);
+	N.OnTakeDamage(&Anonymous);
+	TestEqual(TEXT("0x10330a00: an attacker-less packet never checks"), Damage19StubCount(Frenzy), FrenzyBefore + 2);
 	return true;
 }
 

@@ -130,7 +130,7 @@ float NavPathScalar20 = 0.f;
 
 /** `CBaseEntity::m_lifeState` (`+0x200`), which `TASK_DIE`'s start arm (`0x1028680c`) and the Troika's
  *  `TASK_SET_DYING` (`0x102a778e`) write 1 (LIFE_DYING) into, is family Misc19's
- *  `AnimEventLifeStateWord` (`ElysiumNpcBaseMisc19.inl`): one word. */
+ *  the entity's `LifeState` (`ElysiumEntity.h`): one word. */
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`) as the StartTask arms drive it, onto this runtime's
  *  navigator (`IElysiumNpcMotor`). `SetGoalFlags` is the call's second argument (0, 2, or 4). On a

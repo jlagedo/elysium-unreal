@@ -47,6 +47,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 namespace
 {
@@ -82,7 +83,7 @@ namespace
 	// `CNPC_VZombie`'s programs and trace lines (`hl2_dll\NPC_VZombie.cpp`).
 	constexpr int32 GDamage19ZombieHurtSchedule = 0x164;
 	constexpr int32 GDamage19ZombieHurtLine = 0x469;
-	constexpr int32 GDamage19ZombieFallbackSchedule = 0x162;
+	constexpr int32 GDamage19ZombieFallbackSchedule = ElysiumSched::SCHED_VZOMBIE_ANIMATED_DEATH;   // 0x162
 	constexpr int32 GDamage19ZombieFallbackLine = 0x46e;
 	constexpr int32 GDamage19ZombieExemptSchedule = 0x161;
 	const TCHAR* const GDamage19ZombieHeadshotDamage = TEXT("zombie_headshot_dmg_emitter");   // 0x106655f8

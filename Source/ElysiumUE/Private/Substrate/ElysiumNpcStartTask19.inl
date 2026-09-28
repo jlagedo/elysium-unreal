@@ -13,7 +13,7 @@
 // Lane L01 (story 8 pass I) owns the dispatch prologue and the arms whose start address lies in
 // `[0x102a1943, 0x102a5046)`; lane L02 owns `StartTaskTroikaTail` (the arms from `0x102a5046`, in
 // `ElysiumNpcStartTask19_2.cpp`), whose `default:` is the base forward. Walked prose:
-// `docs/vtmb/npc-ai/story8/StartTask19-TroikaA.md`.
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "StartTask `0x102a1910` — the dispatch".
 
 // --- The dispatch ----------------------------------------------------------------------------------
 

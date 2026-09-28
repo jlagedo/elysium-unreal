@@ -125,13 +125,6 @@ namespace ElysiumSchedule
 }
 #endif
 
-enum class EElysiumTaskResult : uint8
-{
-	Running,     // still working; ask again on the next think
-	Complete,    // advance to the next task
-	Failed,      // end the schedule through its fail schedule
-};
-
 // `AIScheduleState_t::fTaskStatus` (`+0x5c44`). Retail carries five values, and
 // `TaskMovementComplete` distinguishes all four non-complete values. The old pair of booleans
 // could not represent status 2 versus 3 and therefore could not host that body.
@@ -146,16 +139,6 @@ enum class EElysiumTaskStatus : int32
 
 struct FElysiumScheduleState;
 
-// What `TASK_WAIT_FOR_MOVEMENT` sees when it samples the outstanding request. Three answers rather
-// than a bool, because "still travelling" and "the body gave up" take different routes out of the
-// schedule: one holds the task, the other fails it into the fail schedule.
-enum class EElysiumMoveWatch : uint8
-{
-	Moving,
-	Arrived,
-	Failed,
-};
-
 // What a task body needs from whoever owns the body. Implemented by the NPC; the recording double
 // in the tests implements it too, which is what makes a whole task program assertable with no
 // engine.
@@ -164,31 +147,27 @@ class IElysiumScheduleRunner
 public:
 	virtual ~IElysiumScheduleRunner() = default;
 
-	// `TASK_SPECIAL_IDLE_ACTIVITY` -- run one disposition stance selection. Returns the chosen
-	// clip's length in seconds, or a negative value when this body has no stance machine.
-	virtual float RunSpecialIdleActivity(double Now) = 0;
-	// Is the body visible to the player right now? (The renderer's answer; not a task body.)
-	virtual bool IsBodyVisible() const = 0;
-	// `TASK_WAIT_PVS`'s `RunTask` arm (`0x102aacf0`, task 5). True completes the task. A runner
-	// with a Troika clock re-bases it on the way out; the default is the plain visibility answer
-	// so a fixture without one keeps its old shape.
-	virtual bool WaitPvs() { return IsBodyVisible(); }
-	// `TASK_SET_ACTIVITY` -- request a named ACT_*. Returns its length, or negative when
-	// unresolvable. Either answer starts the task: Troika RunTask decides completion by whether the
-	// body's CURRENT base-channel clip identity reached the resolved IDEAL identity, with a one-second
-	// watchdog when it did not.
-	virtual float PlayActivity(const FString& Activity) = 0;
-	// The current base-channel clip is the resolved ideal clip this task requested. False also covers
-	// a resolver/play miss and a body whose channel is held by another producer; neither is a task
-	// failure, and the kernel completes on its recovered watchdog instead.
-	virtual bool IsIdealActivityCurrent() const { return false; }
-	// `TASK_FACE_SAVEPOSITION` / `TASK_MOVE_AWAY_PATH` -- the door-obstruction motor verbs. Both
-	// answer false where there is no motor, which fails the task rather than pretending it ran.
-	virtual bool FaceSavePosition() { return false; }
-	virtual bool StepAwayFromSavePosition(float DistanceCm) { return false; }
-	// `RandomFloat(0.1, Max)` from the NPC schedule stream: `0.1 + (Max - 0.1) * frac`, the
-	// `TASK_WAIT_RANDOM` arm's draw (`0x10283dae`). Not clamped; a `Max` below 0.1 draws in `[Max, 0.1]`.
-	virtual float RandomSeconds(float Max) = 0;
+	// Slot 442 `StartTask(pTask)` and slot 444 `RunTask(pTask)` on the body being run -- the retail
+	// dispatch `MaintainSchedule` (`0x102817c0`) makes at `0x10281e10` / `0x1028202c`. The task body
+	// writes the task's status itself (`TaskComplete`, slot 448 `TaskFail`, `SetSchedule`). A runner
+	// with no body runs no task: the step stays running. `State` is the program state being run --
+	// the body's own `Schedule` on an NPC -- and `Now` the kernel's clock; an NPC's bodies read the
+	// world's `curtime` themselves, a test runner scripts its status from both.
+	// (Story 8 wave 2: these replace the port's `EElysiumTaskOp` switch and its per-op verbs.)
+	virtual void StartTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step,
+		double Now)
+	{
+		(void)State;
+		(void)Step;
+		(void)Now;
+	}
+	virtual void RunTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step,
+		double Now)
+	{
+		(void)State;
+		(void)Step;
+		(void)Now;
+	}
 	// One trace row, so a decision is readable without a rebuild.
 	virtual void RecordScheduleEvent(const FString& Row) {}
 	// Read-only observability hook. The gameplay owner may attach a Visual Logger event after the
@@ -207,90 +186,6 @@ public:
 	virtual int32 LocalScheduleId(int32 GlobalId) const;
 	virtual const FElysiumLocalIdSpace* ConditionIdSpace() const;
 
-	// The combat verbs.
-	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
-	// default to refusing, which fails their task by name. StopMoving is the immediate motor
-	// command; the task's Start/Run pair below additionally reads the native traversal state.
-
-	virtual void StopMoving() {}
-	// Issue the path to the committed enemy. `ToleranceUnits` is the schedule's own operand, in
-	// Source units. False means no enemy, no body, or a body that would not take the request — all
-	// three fail the task, and the runner names which.
-	virtual bool GetPathToEnemy(float ToleranceUnits) { return false; }
-	// Put running locomotion on the body. It cannot fail the schedule: a model whose bank carries no
-	// run clip still travels, and refusing the chase over a missing animation would be a
-	// presentation defect deciding a behaviour. The runner records the miss.
-	virtual void RunPath() {}
-	virtual EElysiumMoveWatch WaitForMovement() { return EElysiumMoveWatch::Failed; }
-	virtual bool FaceEnemy() { return false; }
-	// `TASK_ANNOUNCE_ATTACK` — the incoming-attack notice the aimed enemy receives. False only when
-	// there is no enemy to announce to.
-	virtual bool AnnounceAttack(float Param) { return false; }
-	// Press the active weapon's primary attack at the committed enemy. False for a missing or
-	// ineligible weapon, which is what fails the swing into its melee-idle fail schedule.
-	virtual bool MeleeAttack1() { return false; }
-	virtual bool RangeAttack1() { return false; }
-	// `TASK_REMEMBER` (`0x10288e1e`). The operand is a `Memory:` word -- one of the seventeen
-	// resolved prefixes, and one of the fourteen that store a signed-converted float rather than a
-	// raw one. SEAM, traced and otherwise inert: nothing in this runtime reads the memory word yet.
-	virtual void RememberFact(uint32 MemoryMask) { (void)MemoryMask; }
-
-	// `TASK_FIND_COVER_FROM_ENEMY`. New with the corpus -- the witness text
-	// `SCHED_TROIKA_CHASE_ENEMY_FAILED` is the fifth of its twelve tasks and the port carried no
-	// body for it, because it carried no program that named it. Refusing fails the task by name.
-	virtual bool FindCoverFromEnemy(float MoveWait) { return false; }
-
-	// `TASK_PLAY_DEATH_SEQUENCE`'s one rung — try ONE activity on the body and answer with its
-	// authored length, or a negative value when this body's vocabulary does not carry it. The kernel
-	// owns the ladder that calls this up to three times; the runner owns only "can this body play
-	// that, and for how long".
-	//
-	// Deliberately not `PlayActivity`: a death pose has to REPLACE whatever owns the base channel and
-	// hold it, where an idle-schedule activity is an ambient claim any locomotion publish outranks.
-	virtual float PlayDeathActivity(const FString& Activity) { return -1.f; }
-
-	// `TASK_SOUND_DIE`'s whole body -- the death-sound hook, vtable slot 488. The base body
-	// (`0x101a6880`) is EMPTY; Troika's (`0x10293ec0`) walks the vdata sound table once for the entry
-	// named "Death", caches its index in `DAT_10924d64` under the one-shot guard `DAT_10923f0d`, and
-	// plays it as sound type 2 at volume 1.0 and pitch 1.25.
-	//
-	// Retail fires this same hook from `Event_Killed` (`0x10265cb8`) under no life-state guard, so a
-	// single death plays it more than once. That is retail's behaviour, not a defect to smooth here.
-	virtual void DeathSound() {}
-
-	// `TASK_DIE`'s start half (`0x10286801`): clear the navigator goal through `0x102ee270` and write
-	// `m_lifeState = 1`. The arm does NOT complete the task -- it falls off the dispatch without
-	// touching `TaskComplete`, which is what leaves the program parked on this task.
-	virtual void BeginDying() {}
-
-	// `TASK_DIE`'s Troika `RunTask` gate (`0x102abb90`):
-	//   (IsActivityFinished() [slot 251] && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE
-	// The second arm is load-bearing: a body with no death performance running is already idle, so it
-	// commits on the first think instead of waiting for a clip that will never play.
-	virtual bool IsDeathPerformanceFinished() const { return true; }
-
-	// `TASK_DIE`'s commit. Retail sets the damage target to the NPC ITSELF, writes `m_lifeState` 1 ->
-	// 0, and calls `CBaseCombatCharacter::Die` (`0x103392c0`, reached only through thunk
-	// `0x100034f9` -- which is why the decompiler reports it with no callers at all).
-	//
-	// `Die` guards on `m_lifeState != 2`, builds a synthetic 1.0-damage packet sourced from the NPC,
-	// and dispatches `Event_Killed` (slot 144) and `Event_Dying` (slot 403). So the commit RE-ENTERS
-	// the kill path; it is the second `Event_Killed` whose `CreateCorpse` makes the corpse.
-	virtual void CommitDeath() {}
-
-	// `TASK_GET_PATH_TO_GOAL` — issue the next leg of the scripted order this NPC was pushed, at the
-	// order's own gait. False means no order, no body, an exhausted route or a body that would not
-	// take the request; all four fail the task, and the runner names which.
-	virtual void RunPatrolPathTask() {}
-
-	// `TASK_MAKE_OBLIVIOUS` (0x131, `StartTask` arm `0x102a72e3`). The operand is a float the schedule
-	// compiler writes from `TRUE`/`ON` -> 1.0 and `FALSE`/`OFF` -> 0.0 (`0x1030e65f`); all 35 shipped
-	// operands are `TRUE`, so `bOblivious=false` is a path no registered program takes.
-	virtual void MakeOblivious(bool bOblivious) {}
-
-	// `TASK_SET_NPC_FLAG` (0x100, `StartTask` arm `0x102a585d`). One bit of the NPC flag word.
-	virtual void SetNpcFlag(uint32 EncodedFlag) {}
-
 	// Discard every gathered condition, because a schedule was just installed.
 	//
 	// Retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) zeroes all 192 condition bits before it
@@ -301,11 +196,7 @@ public:
 	virtual void ClearConditions() {}
 	virtual void TaskFail(int32 Reason) {}
 	virtual void ScheduleDone() {}
-	virtual int32 TaskFailureReason() const { return 0; }
 	virtual void TaskStarting() {}
-	virtual void SetGoalTolerance(float Units) {}
-	virtual EElysiumTaskResult BeginStopMovingTask() { return StopMovingTask(); }
-	virtual EElysiumTaskResult StopMovingTask() { StopMoving(); return EElysiumTaskResult::Complete; }
 
 	// Retail's schedule-change virtual, slot 435 — `CAI_BaseNPCTroika::OnScheduleChange`
 	// (`0x102a0940`), which `ForceScheduleChange` (`0x102ae490`) dispatches at the tail of every
@@ -547,36 +438,4 @@ namespace ElysiumSchedule
 	bool HasInterruptCondition(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner,
 		const FElysiumNpcConditions& Conditions, EElysiumNpcCond Cond);
 
-	// `TASK_MOVE_AWAY_PATH`, whole.
-	// Where the step back wants to land, whether the world will have it, and whether what the world
-	// handed back is still a retreat. It lives here rather than inside the NPC leaf for the reason
-	// the rest of this file does: the leaf class is file-local, so a rule spelled out there is a
-	// rule no Substrate test can drive. Every branch below is one this kernel's fail path depends
-	// on being distinguishable.
-	enum class ERetreat : uint8
-	{
-		Moving,         // navigable, still a retreat, and the body took the request
-		NoMotor,        // no body to ask -- the supported headless/backdrop case
-		Degenerate,     // the NPC is standing ON the save position; there is no direction to leave in
-		Unprojectable,  // the world carries no navigable surface at the extrapolated point
-		NotARetreat,    // navigable, but the projection put it no further from what it was leaving
-		MotorRefused,   // a good destination the body would not path to
-	};
-	const TCHAR* RetreatResultName(ERetreat Result);
-
-	// A retreat that has gained less than this much ground has gained none: the margin is what a
-	// projection sliding the point along a wall costs, and a step that only slid sideways is not a
-	// step back.
-	inline constexpr double RetreatMarginCm = 8.0;
-
-	// Extrapolate `DistanceCm` directly away from `SavePosition` in the horizontal plane, project
-	// that point onto the navigable surface through the motor, RE-TEST the projection against the
-	// retreat rule, and issue the move.
-	//
-	// The re-test is the point of the task: projection answers "where can someone stand", not "is
-	// this still away from the door", so a point pulled back through the doorway is a navigable
-	// point that must fail the schedule rather than walk the NPC into the swing it was told to
-	// leave. `OutDestination` receives the projected point on every result that got that far.
-	ERetreat StepAwayFromSavePosition(IElysiumNpcMotor* Motor, const FVector& Origin,
-		const FVector& SavePosition, float DistanceCm, FVector& OutDestination);
 }

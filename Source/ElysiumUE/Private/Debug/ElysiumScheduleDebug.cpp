@@ -30,7 +30,7 @@ namespace
 
 	FAutoConsoleCommandWithWorldArgsAndOutputDevice SchedulesCommand(
 		TEXT("elysium.schedules"),
-		TEXT("Schedule corpus and unported task coverage, largest reference count first. Optional task-name filter."),
+		TEXT("Schedule corpus and the task-arm census (tasks no slot 442/444 switch has an arm for), largest reference count first. Optional task-name filter."),
 		FConsoleCommandWithWorldArgsAndOutputDeviceDelegate::CreateStatic(&DescribeSchedules));
 }
 #endif

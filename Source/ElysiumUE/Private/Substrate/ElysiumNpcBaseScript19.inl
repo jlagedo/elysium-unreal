@@ -18,11 +18,8 @@
  *  `CancelScript` (`0x101a8c30`) on a live `m_hCine` and answers TRUE, the no-script case included. */
 bool ExitScriptedSequence();
 
-/** `m_lifeState (+0x200) == LIFE_DYING (1)`. This runtime has no `m_lifeState` word (see
- *  `FElysiumEntity::IsAlive`, slot 158): it spells the same fact as the death transaction's latches.
- *  DYING is the window between `Event_Killed` (the combat character's `bDeathReported`, retail's
- *  `m_lifeState = 1`) and `TASK_DIE`'s commit (`bDeathCommitted`, retail's `m_lifeState = 2`), with
- *  the entity not yet removed. */
+/** `m_lifeState (+0x200) == LIFE_DYING (1)`, read off the word (`LifeState`), with the
+ *  entity not yet removed. */
 bool LifeStateIsDying() const;
 
 /** The selector-trace source line `0x1027d0a0` stamps into `+0x1b40` (`AI_BaseNPC.cpp`). */

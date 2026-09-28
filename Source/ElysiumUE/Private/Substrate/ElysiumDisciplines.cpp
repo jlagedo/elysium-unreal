@@ -1139,25 +1139,24 @@ namespace
 		// --- Health buffer (the Bloodshield join, §5.1/§5.3) ------------------------------------
 		if (Hit.HealthBuffer.bAuthored)
 		{
-			const int32 Amount = ResolveAmount(Hit.HealthBuffer);
-			// `-1` is the authored clear (`OnEnd { "Health_Buffer" "-1" }`).
-			Target.Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer,
-				Amount < 0 ? 0 : Amount);
+			int32 Amount = ResolveAmount(Hit.HealthBuffer);
+			// `0x101de660`: a resolved amount outside [0, 500] is written as 0 -- which is also how
+			// the authored clear (`OnEnd { "Health_Buffer" "-1" }`) lands.
+			if (Amount < 0 || Amount > 500)
+			{
+				Amount = 0;
+			}
+			Target.Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, Amount);
 			Target.RecomputeSheet();
 			bCommitted = true;
-			if (Hit.HealthBufferBlockPercent != INDEX_NONE)
-			{
-				// **SEAM** — `Health_Buffer_Block_Percent` says what FRACTION of an incoming hit the
-				// buffer absorbs; the one typed health commit absorbs the whole hit until the buffer
-				// is exhausted, which is the recovered commit order. Splitting it needs the retail
-				// split point, which is not recovered.
-				ReportOnce(FString::Printf(TEXT("hit.%s.blockpct"), *Record.InternalName),
-					FString::Printf(TEXT("`%s` authors Health_Buffer_Block_Percent %d%% — parsed and "
-						"carried; CommitDamage absorbs the whole hit until the buffer is exhausted, "
-						"which is the recovered commit order"),
-						*Record.InternalName, Hit.HealthBufferBlockPercent));
-			}
 		}
+		// `_DAT_10739a68 = record+0x30` -- unconditionally for every applied hit record, buffer or
+		// not (`0x101de660`, after the `Health_Buffer` block): the last record applied anywhere decides
+		// what fraction of a hit every character's buffer absorbs (`0x103302e0` at `0x10330746`). A
+		// record chain that never authors the key carries the parse default, which this runtime spells
+		// `INDEX_NONE`; the record constructor's word is not read, so it is written as 0 (named).
+		HealthBufferBlockPercent() =
+			Hit.HealthBufferBlockPercent != INDEX_NONE ? Hit.HealthBufferBlockPercent : 0;
 
 		// --- Blood ------------------------------------------------------------------------------
 		if (Hit.HealBlood.bAuthored)
@@ -1583,6 +1582,12 @@ namespace
 			RemoveTargetEffect(Char, i, true);
 		}
 	}
+}
+
+int32& HealthBufferBlockPercent()
+{
+	static int32 Percent = 0;   // `DAT_10739a68`, in `.bss`
+	return Percent;
 }
 
 void NotifyDamaged(FElysiumCombatCharacter& Char)

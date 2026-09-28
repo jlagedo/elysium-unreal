@@ -57,7 +57,7 @@ void OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcState NewState);
 
 // --- The alternate-AI door transaction ------------------------------------------------------------
 //
-// `RunAlternateAi` (public, `ElysiumNpc.h`) is `CAI_BaseNPCTroika::RunAlternateAI`'s DISPATCHER
+// `RunAlternateAI` (`ElysiumNpcRunAi19.inl`, `0x1028fd80`) is the DISPATCHER
 // (`0x1028fd80`). The two bodies below are its mode-1 arm and the producer that enters mode 1.
 
 /** `FUN_10298800` — enter alternate-AI mode 1: `m_bShouldMove = false`, stop the motor
@@ -65,7 +65,7 @@ void OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcState NewState);
 void EnterAlternateAi();
 
 /** `FUN_10290040` — `RunAlternateAI`'s **mode 1** arm, the door-opening transaction. NAMED for what
- *  it does rather than `RunAlternateAi`, which is the dispatcher above and is already ported.
+ *  it does rather than `RunAlternateAI`, which is the dispatcher above.
  *  Returns retail's own byte: false only when the door handle went stale (which also resets the
  *  mode to 0) or when the door refused a facing point. */
 bool RunAlternateAiOpeningDoor(double Now);

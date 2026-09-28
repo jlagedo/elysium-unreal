@@ -338,16 +338,18 @@ int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	{
 		CacheInterruptConditionsForMaintenance(Now); // 0x102814de
 	}
-	if (Cognition.GatheredAt != Now)
+	// `if (!m_bConditionsGathered) GatherConditions()` (slot 433): the byte `RunAI` clears at
+	// `0x1026f1ad` and slot 433 sets (`0x1026eca9`), in the stamp form (negative = not gathered).
+	if (Cognition.GatheredAt < 0.0)
 	{
-		ElysiumNpcEnemy::GatherConditions(*this, Now); // 0x102814d0 slot 433
+		GatherConditions(); // 0x102814d0 slot 433
 	}
 	const int32 Selected = SelectSchedule(); // 0x102814d0 slot 438
-	if (Selected == ElysiumScheduleId::None && (bPatrolActive || bUseInteresting))
+	if (Selected == ElysiumScheduleId::None && bUseInteresting)
 	{
-		// Retail's patrol/interesting answers are schedules. This runtime already represents those
-		// two programs as external executors, so their slot-438 null adapter returns control at the
-		// selection edge rather than flowing into the missing-ID fallback below.
+		// Retail's interesting-place answer is a schedule. This runtime still represents that
+		// program as an external executor (the named survivor), so its slot-438 null adapter returns
+		// control at the selection edge rather than flowing into the missing-ID fallback below.
 		OutIdealScheduleRetail = 0;
 		bReturnToExternalExecutorAfterSchedule = true;
 		return ElysiumScheduleId::None;

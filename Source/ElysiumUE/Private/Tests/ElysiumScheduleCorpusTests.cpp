@@ -360,11 +360,14 @@ bool FElysiumScheduleCorpusDeployedTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The measurement pass P's plan wanted: how much of the shipped task vocabulary this runtime
-	// actually runs. It is expected to be small; what must hold is that it is MEASURED.
+	// The measurement: how much of the shipped task vocabulary has a slot 442/444 arm (the arm
+	// census since story 8 wave 2; the old 26-op table was "expected to be small"). What must hold is
+	// that it is MEASURED and that it partitions the task namespace.
+	AddInfo(FString::Printf(TEXT("task census: %d armed, %d unarmed, %d unarmed steps"),
+		Census.PortedTasks, Census.UnportedTasks, Census.UnportedSteps));
 	TestTrue(TEXT("some task identities bind to a body"), Census.PortedTasks > 0);
-	TestTrue(TEXT("and most do not, which is the work queue"),
-		Census.UnportedTasks > Census.PortedTasks);
+	TestEqual(TEXT("armed plus unarmed is the task namespace"),
+		Census.PortedTasks + Census.UnportedTasks, Census.TaskNames);
 	TestTrue(TEXT("the unported set is reached by real steps"), Census.UnportedSteps > 0);
 
 	// Every class the image places, placed here too -- including the ones with no init body.
@@ -462,12 +465,11 @@ bool FElysiumScheduleWitnessTest::RunTest(const FString&)
 	TestTrue(TEXT("the activity operand round-trips to its name"),
 		Activity != nullptr && Activity->Equals(TEXT("ACT_IDLE")));
 
-	// Eleven of the twelve identities have a body; `TASK_FIND_COVER_FROM_ENEMY` is new in pass C
-	// and its runner verb refuses by default, so the step fails by name.
+	// Every identity has a slot 442/444 arm (the arm census, story 8 wave 2).
 	int32 Ported = 0;
 	for (const FElysiumScheduleStep& Step : Program->Tasks)
 	{
-		Ported += (Corpus.TaskOps().Find(Step.TaskId) != EElysiumTaskOp::Unknown) ? 1 : 0;
+		Ported += Corpus.TaskOps().HasArm(Step.TaskId) ? 1 : 0;
 	}
 	TestEqual(TEXT("every one of the witness's tasks has a body"), Ported, Program->Tasks.Num());
 

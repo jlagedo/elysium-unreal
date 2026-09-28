@@ -142,6 +142,17 @@ namespace ElysiumNpcKernelBindings
 		// shipped map authors the key
 	}
 
+	void AddBaseEntitySaveFields(FElysiumClassDesc& D)
+	{
+		// Retail's persistence, and only that: a `SAVE` row with no external name is
+		// reachable by no keyvalue, no input and no Python attribute, so each registers
+		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
+		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
+		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_lifeState"), &FElysiumEntity::LifeState,
+			EElysiumField::Save);  // +0x200 int
+	}
+
 	void AddToggleFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
@@ -1215,9 +1226,10 @@ namespace ElysiumNpcKernelBindings
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x6578 m_nEyeFidgetStep (int) — the port carries this concern on the entity
 		// chain BELOW the NPC, and the class that owns the member is the class that persists it
-		// NOT SAVED +0x658c m_sppPatrolPath (custom) — the port member exists but its owner keeps
-		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
-		// it, which is where it stays until that struct exposes an accessor
+		// NOT SAVED +0x658c m_sppPatrolPath (custom) — `m_sppPatrolPath` is a FIELD_CUSTOM row (the
+		// pooled path record `BuildPatrolPath` `0x1029f460` builds), and this port's
+		// `FElysiumNpc::PatrolPathCell` is carried with the hunt cell by the NPC's own typed patrol
+		// block (`SerializePatrolBlock`), which writes the node records rather than a pointer
 		// NOT SAVED +0x6594 m_sppPatrolPathHunt (custom) — a FIELD_EMBEDDED row: retail's datamap
 		// points at a second `datamap_t` and recurses, and this port's matching member carries its
 		// own typed `Serialize`, which is the same shape
@@ -2991,7 +3003,7 @@ namespace ElysiumNpcKernelBindings
 		switch (Class)
 		{
 			case EClass::BaseEntity:
-				return {27, 11, 2, 10, 0};
+				return {27, 11, 2, 10, 1};
 			case EClass::Toggle:
 				return {0, 9, 2, 4, 0};
 			case EClass::Animating:

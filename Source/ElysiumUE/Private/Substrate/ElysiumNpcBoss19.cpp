@@ -15,7 +15,9 @@
 // Story 8, lane L12. The three Troika-line rows (`0x102b52a0`, `0x102c51a0`, `0x102c5310`) are here;
 // the species rows are on their classes (`ElysiumNpcMingXiao.cpp`, `ElysiumNpcMingXiaoTentacle.cpp`,
 // `ElysiumNpcHengeyokai.cpp`, `ElysiumNpcBoss19Species.cpp`). Arms carry the instruction address
-// they came from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`. The
+// they came from (`vtmb_asm`); walked prose in
+// `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
+// The
 // `+0x1b3c`/`+0x1b40` ideal-state trace stamps are the mind's transition trace
 // (`RequestIdealStateRetail`, retail source line carried).
 
@@ -82,16 +84,7 @@ void FElysiumNpc::ResetAiState(bool bReapplyRelationships, bool bSetIdleIdeal)
 	BaseScheduleHost.MemoryBits &= GBoss19MemoryKeepMask;                   // 0x102b52c5 +0x5d8c
 	if (bReapplyRelationships)                                              // 0x102b52cb
 	{
-		// `0x10273760`: `InputSetRelationship(this, m_RelationshipString ?: "", 0)`.
-		const FString Line = AuthoredRelationshipString();
-		if (!Line.IsEmpty())
-		{
-			// The port's `InputSetRelationship` warns on an empty line, which retail's parser passes
-			// silently; an empty line changes nothing on either side, so it is not dispatched.
-			FElysiumInputArgs Args;
-			Args.Param = FElysiumVariant::String(Line);
-			InputSetRelationship(Args);                                     // 0x102b52cf
-		}
+		ReapplyRelationshipString();                                        // 0x102b52cf 0x10273760
 	}
 	// `UTIL_VarArgs("%s(%d) :", __FILE__, 0x5626)` (`0x101d3730`), handed to the enemy store's
 	// clear-all (`0x102dfc10`) on slot 541 `GetEnemies()`.
@@ -104,6 +97,29 @@ void FElysiumNpc::ResetAiState(bool bReapplyRelationships, bool bSetIdleIdeal)
 		// `OnStateChange` runs and `m_NPCState` is left alone.
 		RequestIdealStateRetail(GBoss19StateIdle, GBoss19ResetAiStateIdealLine);   // 0x102b5305..0x102b5319
 	}
+}
+
+void FElysiumNpc::ReapplyRelationshipString()
+{
+	// `0x10273760`: `InputSetRelationship(this, m_RelationshipString ?: "", 0)`.
+	const FString Line = AuthoredRelationshipString();
+	if (!Line.IsEmpty())
+	{
+		// The port's `InputSetRelationship` warns on an empty line, which retail's parser passes
+		// silently; an empty line changes nothing on either side, so it is not dispatched.
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(Line);
+		InputSetRelationship(Args);
+	}
+}
+
+void FElysiumNpc::NpcInitThink()
+{
+	// `0x10273aa0` (story 8 wave 2, L13: the entity think dispatches it; `NPCInit` has always
+	// installed it by name, `ThinkSet(NpcInitThinkFunction())`, but nothing ran it).
+	ReapplyRelationshipString();                                            // 0x10273aa3 0x10273760
+	StartNPC();                                                             // 0x10273aac slot 422
+	PostNPCInit();                                                          // 0x10273ab7 JMP slot 421
 }
 
 FString FElysiumNpc::AuthoredRelationshipString() const

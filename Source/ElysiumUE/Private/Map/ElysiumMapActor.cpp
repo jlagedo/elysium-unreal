@@ -2526,9 +2526,9 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	// cone in, and the bone transforms the eye pass reads, are only stable once the frame's parallel
 	// animation evaluation has completed, which at this tick group it has.
 	//
-	// The gaze runs from this pass rather than from NextThink deliberately: NextThink is a
-	// single-slot scheduler already shared with patrol, ambient and scripted move on FElysiumNpc,
-	// and a per-frame gaze update would fight ThinkPatrol's 0.05 s cadence for the slot.
+	// The gaze runs from this pass rather than from NextThink deliberately: NextThink is the
+	// single-slot scheduler of the NPC's retail think (slot 431, every schedule program including the
+	// patrol's), and a per-frame gaze update would fight that cadence for the slot.
 	TickGaze(DeltaSeconds);
 	if (Bodies)
 	{

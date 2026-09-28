@@ -71,11 +71,13 @@ bool FElysiumNpcKernelLifecycleIsAliveTest::RunTest(const FString&)
 	// dead arms.
 	TestTrue(TEXT("a standing NPC is alive"), Fix.Npc->IsAlive());
 
-	// The death transaction's own latch is the port's `m_lifeState != LIFE_ALIVE`.
-	Fix.Npc->SetDeathReportedForRestore(true);
-	TestFalse(TEXT("a body whose death was reported is not alive"), Fix.Npc->IsAlive());
-	Fix.Npc->SetDeathReportedForRestore(false);
-	TestTrue(TEXT("and clearing it brings it back"), Fix.Npc->IsAlive());
+	// Corrected to retail (story 8 wave 2): the word itself, `m_lifeState` (`+0x200`).
+	Fix.Npc->LifeState = 1;
+	TestFalse(TEXT("a LIFE_DYING body is not alive"), Fix.Npc->IsAlive());
+	Fix.Npc->LifeState = 2;
+	TestFalse(TEXT("...nor a LIFE_DEAD one"), Fix.Npc->IsAlive());
+	Fix.Npc->LifeState = 0;
+	TestTrue(TEXT("...and LIFE_ALIVE is alive again"), Fix.Npc->IsAlive());
 
 	// `Kill` is the other half of the same word.
 	Fix.Npc->Kill();
@@ -344,14 +346,21 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 	TestEqual(TEXT("+0x66d8 is zeroed"), Wolf->WerewolfMorphTimerC, 0.f);
 
 	// `CNPC_VGhoulCroucher::ScriptUnhide` (0x1037c2f0): the handle is NOT cleared — retail only
-	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing. On a ghoul.
-	FLifecycleFixture GhoulFix(TEXT("npc_VGhoulCroucher"));
-	FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulFix.Npc);
-	if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul))
+	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing. On a ghoul, with a
+	// particle stand-in that is NOT the ghoul: slot 78 is virtual (story 8 wave 2), so a ghoul that
+	// names itself as its own particle re-enters `0x1037c2f0` without end — in retail as here.
+	FElysiumNpcWorldBuilder GhoulBuilder(TEXT("lifecycle_ghoul"), 20260913);
+	GhoulBuilder.AddNpc(TEXT("subject"), FVector(100.0, 0.0, 0.0), TEXT("npc_VGhoulCroucher"));
+	GhoulBuilder.AddEntity(TEXT("info_target"), TEXT("fire"), FVector(0.f, 0.f, 50.f));
+	FElysiumNpcWorldFixture GhoulWorld(MoveTemp(GhoulBuilder));
+	FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulWorld.Npc(TEXT("subject")));
+	FElysiumEntity* Fire = GhoulWorld.World.FindByName(TEXT("fire"));
+	if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul) || !TestNotNull(TEXT("the particle spawned"), Fire))
 	{
 		return false;
 	}
-	Ghoul->BurningParticle = Ghoul->Handle;
+	FElysiumNpcWorldFixture::Quiet({ Ghoul });
+	Ghoul->BurningParticle = Fire->Handle;
 	Ghoul->GhoulCroucherScriptUnhideTail();
 	TestTrue(TEXT("m_hBurningParticle survives its own unhide"), Ghoul->BurningParticle.IsSet());
 	Ghoul->BurningParticle = FElysiumEntityHandle::Invalid();
@@ -1193,8 +1202,8 @@ bool FElysiumNpcKernelLifecycleSenseGateTest::RunTest(const FString&)
 	// close the player is standing. The ON path is the `Elysium.Substrate.NpcSenses.*` suite's own
 	// subject and is not re-asserted here.
 	N.Senses.bCanPerformSenses = false;
-	N.Senses.Tick(N, 1.0);
-	N.Senses.Tick(N, 2.0);
+	N.Senses.PerformSensing(N, 1.0);   // `CAI_Senses::PerformSensing` 0x10310710 (the old `Tick` twin is gone)
+	N.Senses.PerformSensing(N, 2.0);
 	TestEqual(TEXT("a gated-off pass sights nothing"), N.Senses.Sighted().Num(), 0);
 	// The tuning resolve is NOT behind the gate — it is the port's own pre-step, and retail's gate
 	// sits inside `CAI_Senses::PerformSensing`, below `InitPerceptionDistances`.

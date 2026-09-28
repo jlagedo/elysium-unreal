@@ -319,6 +319,9 @@ namespace
 			Record.AoE.Tables.Add(MakeCatchAll(TEXT("Hit_Player_Human")));
 			FElysiumDiscHit Hit = MakeHit(TEXT("Hit_Player_Human"));
 			Hit.HealthBuffer.Parse(TEXT("80"));
+			// The shipped row (`disciplinetgt_004.txt`, `Hit_Player_Human`) authors 50 %; the hit
+			// applier `0x101de660` copies it into the process-global `DAT_10739a68`.
+			Hit.HealthBufferBlockPercent = 50;
 			Hit.Duration.Parse(TEXT("-1"));
 			Hit.TraitEffects.Add(TEXT("Discipline (Thaumaturgy-Bloodshield)"));
 			Record.Hits.Add(MoveTemp(Hit));
@@ -1182,20 +1185,25 @@ bool FElysiumDisciplineBloodshieldTest::RunTest(const FString&)
 	TestTrue(TEXT("...with the authored infinite duration"),
 		Player->Disciplines.TargetEffects[0].IsInfinite());
 
-	// A partial absorption only reduces the buffer.
-	Player->TakeDamage(30.0f);
-	TestEqual(TEXT("the buffer absorbs first"),
-		Trait(*Player, EC::Attributes, ElysiumSlot::HealthBuffer), 50);
-	TestEqual(TEXT("...and no damage reaches the health counter"),
-		Trait(*Player, EC::Attributes, ElysiumSlot::Health), 0);
+	TestEqual(TEXT("0x101de660: the applied hit wrote its block percentage into DAT_10739a68"),
+		ElysiumDisciplines::HealthBufferBlockPercent(), 50);
+
+	// Corrected (L13 wave-2 fixes) to `0x103302e0`: the buffer absorbs `trunc(50 * 31 * 0.01)` = 15
+	// of the hit (`0x10330746..0x10330756`) and only reduces (`0x10330847`); the other 16 land.
+	Player->TakeDamage(31.0f);
+	TestEqual(TEXT("0x10330847: the buffer absorbs its percentage and is only reduced"),
+		Trait(*Player, EC::Attributes, ElysiumSlot::HealthBuffer), 65);
+	TestEqual(TEXT("0x1033076f: ...and the rest of the hit reaches the health counter"),
+		Trait(*Player, EC::Attributes, ElysiumSlot::Health), 16);
 	TestEqual(TEXT("...leaving the effect tracked"), Player->Disciplines.TargetEffects.Num(), 1);
 
-	// Exhausting it ends the power and reconciles the tracking.
-	Player->TakeDamage(70.0f);
+	// Exhausting it ends the power and reconciles the tracking: `trunc(50 * 141 * 0.01)` = 70 is
+	// past the buffer of 65 (`0x103307d9` / `0x103307e9`), and the hit loses all 70.
+	Player->TakeDamage(141.0f);
 	TestEqual(TEXT("the exhausted buffer clears"),
 		Trait(*Player, EC::Attributes, ElysiumSlot::HealthBuffer), 0);
-	TestEqual(TEXT("...and the remainder lands on the health counter"),
-		Trait(*Player, EC::Attributes, ElysiumSlot::Health), 20);
+	TestEqual(TEXT("0x1033076f: ...and 141 - 70 lands on the health counter"),
+		Trait(*Player, EC::Attributes, ElysiumSlot::Health), 87);
 	TestFalse(TEXT("...ending the Bloodshield trait group"),
 		HasEffect(*Player, TEXT("Discipline (Thaumaturgy-Bloodshield)")));
 	TestEqual(TEXT("...and retiring its tracked effect with it"),
@@ -1405,7 +1413,16 @@ bool FElysiumDisciplineInterruptionTest::RunTest(const FString&)
 			return false;
 		}
 		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
-		Victim->TakeDamage(5.0f);
+		// With an attacker: an NPC's `NPC_TAKE_DAMAGE` is `0x10265ed0`'s tail (`0x10266352`), which
+		// a packet with no attacker never reaches (`0x10265f64` answers 1 first). Corrected to
+		// retail (story 8 wave 2): the scalar, attacker-less hit this case used makes no sound.
+		FElysiumDmg Hit;
+		Hit.Family = EElysiumDmgFamily::Bashing;
+		Hit.Flags = ElysiumDamage::FlagDirectInput;
+		Hit.ExtraInput = 5;
+		Hit.ForcedSoak = 0;
+		Hit.Source = Player->Handle;
+		Victim->TakeDamage(Hit, Player);
 		// The bus delivers nothing; the poll happens on the owner's think. `Tick` runs every OTHER
 		// entity's think — `RunThinks` skips the player, whose think the map actor drives from the
 		// pre-move pass — so the player's own poll is reached through that same entry.

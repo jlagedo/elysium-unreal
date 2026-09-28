@@ -1,8 +1,5 @@
 #include "Substrate/ElysiumSchedule.h"
 
-#include "ElysiumAnimationIntent.h"        // the one `ACT_*` vocabulary the death ladder's rungs come off
-#include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
-#include "Substrate/ElysiumNpcGait.h"      // the authored travel speed a retreat step commands
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
 #include "Substrate/ElysiumScheduleCorpus.h"   // the loaded programs, the id spaces and the activity names
 #include "Substrate/ElysiumScheduleNumbers.h"  // the handful of local ids this kernel itself has to name
@@ -66,29 +63,30 @@ FString ElysiumScheduleLabel(int32 GlobalId, const IElysiumScheduleRunner* Runne
 FString ElysiumTaskOperandLabel(const FElysiumScheduleStep& Step)
 {
 	const FElysiumScheduleCorpus& Loaded = Corpus();
-	switch (Loaded.TaskOps().Find(Step.TaskId))
+	// The operand's prefix by the task's retail name: an `ACTIVITY:` word, a class-local `SCHEDULE:`
+	// number, a raw `NPCFlag:` word, a `Memory:` word (the parser's own keying).
+	const FString& Name = Loaded.TaskOps().NameOf(Step.TaskId);
+	if (Name.Equals(TEXT("TASK_SET_ACTIVITY"), ESearchCase::IgnoreCase)
+		|| Name.Equals(TEXT("TASK_PLAY_DEATH_SEQUENCE"), ESearchCase::IgnoreCase))
 	{
-	case EElysiumTaskOp::SetActivity:
-	case EElysiumTaskOp::PlayDeathSequence:
-	{
-		const FString* Name = Loaded.Activities().NameOf(static_cast<int32>(Step.Data));
-		return Name != nullptr ? FString::Printf(TEXT("ACTIVITY:%s"), **Name) : FString();
+		const FString* Activity = Loaded.Activities().NameOf(static_cast<int32>(Step.Data));
+		return Activity != nullptr ? FString::Printf(TEXT("ACTIVITY:%s"), **Activity) : FString();
 	}
-	case EElysiumTaskOp::SetFailSchedule:
-	case EElysiumTaskOp::SetSchedule:
+	if (Name.Equals(TEXT("TASK_SET_FAIL_SCHEDULE"), ESearchCase::IgnoreCase)
+		|| Name.Equals(TEXT("TASK_SET_SCHEDULE"), ESearchCase::IgnoreCase))
 	{
 		const int32 Local = static_cast<int32>(Step.Data);
 		const FElysiumLocalIdSpace* Space = FallbackScheduleSpace();
 		const int32 Global = Space != nullptr ? Space->LocalToGlobal(Local) : INDEX_NONE;
 		return FString::Printf(TEXT("SCHEDULE:%s (0x%x)"), ElysiumScheduleName(Global), Local);
 	}
-	case EElysiumTaskOp::SetNpcFlag:
+	if (Name.Equals(TEXT("TASK_SET_NPC_FLAG"), ESearchCase::IgnoreCase))
+	{
 		return FString::Printf(TEXT("NPCFlag:0x%x"), Step.RawWord());
-	case EElysiumTaskOp::Remember:
-		return FString::Printf(TEXT("Memory:0x%x"),
-			static_cast<uint32>(static_cast<int32>(Step.Data)));
-	default:
-		break;
+	}
+	if (Name.Equals(TEXT("TASK_REMEMBER"), ESearchCase::IgnoreCase))
+	{
+		return FString::Printf(TEXT("Memory:0x%x"), static_cast<uint32>(static_cast<int32>(Step.Data)));
 	}
 	return FMath::IsNearlyZero(Step.Data) ? FString() : FString::Printf(TEXT("%.3f"), Step.Data);
 }
@@ -117,420 +115,6 @@ const FElysiumLocalIdSpace* IElysiumScheduleRunner::ConditionIdSpace() const
 
 namespace
 {
-	/** The op this runtime runs for a step, or `Unknown` -- the coverage meter's row. */
-	EElysiumTaskOp OpOf(const FElysiumScheduleStep& Step)
-	{
-		return Corpus().TaskOps().Find(Step.TaskId);
-	}
-
-	/** The retail name the step's identity was registered under. Always available, op or no op:
-	 *  naming an unported task is the whole point of carrying the identity rather than an enum. */
-	const TCHAR* TaskNameOf(const FElysiumScheduleStep& Step)
-	{
-		const FString& Name = Corpus().TaskOps().NameOf(Step.TaskId);
-		return Name.IsEmpty() ? TEXT("TASK_?") : *Name;
-	}
-
-	/** `Activity:`'s operand, back as the name `PlayActivity` takes.
-	 *
-	 *  The two-word task record stores the activity's id in the data word (`0x1025d760` over
-	 *  `DAT_1090fbe0`), and this is the reverse lookup that makes it a string again -- the one
-	 *  consumer any of the three interning registries has. */
-	FString ActivityOf(const FElysiumScheduleStep& Step)
-	{
-		const FString* Name = Corpus().Activities().NameOf(static_cast<int32>(Step.Data));
-		return Name != nullptr ? *Name : FString();
-	}
-
-	/** A schedule operand: the class-LOCAL id the parser stored, exactly as retail stores it. */
-	int32 ScheduleOperandOf(const FElysiumScheduleStep& Step)
-	{
-		return static_cast<int32>(Step.Data);
-	}
-
-	/** `TASK_FAILED`'s reason where the runner named none (`0x10288780`'s table). One body, called
-	 *  from both the StartTask and the RunTask failure arms, which used to carry it twice. */
-	int32 TaskFailureReasonFor(EElysiumTaskOp Op, int32 RunnerReason)
-	{
-		if (RunnerReason != 0)
-		{
-			return RunnerReason;
-		}
-		switch (Op)
-		{
-		case EElysiumTaskOp::GetPathToEnemy:
-		case EElysiumTaskOp::FaceEnemy:           return 0x06;
-		case EElysiumTaskOp::MeleeAttack1:
-		case EElysiumTaskOp::RangeAttack1:        return 0x03;
-		case EElysiumTaskOp::SpecialIdleActivity: return 0x15;
-		case EElysiumTaskOp::FindCoverFromEnemy:  return 0x08;
-		default:                                  return 0x0c;
-		}
-	}
-
-	// Start one task. Returns its first result, so a task that completes immediately (a wait of
-	// zero, a PVS test that already passes) does not cost a whole think.
-	EElysiumTaskResult BeginTask(const FElysiumScheduleStep& Step, FElysiumScheduleState& State,
-		IElysiumScheduleRunner& Runner, double Now)
-	{
-		switch (OpOf(Step))
-		{
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a49bc (task 0xbc) at wave 2
-		case EElysiumTaskOp::SpecialIdleActivity:
-		{
-			const float Seconds = Runner.RunSpecialIdleActivity(Now);
-			if (Seconds < 0.f)
-			{
-				return EElysiumTaskResult::Failed;
-			}
-			// The clip's own length is the task's duration: retail re-requests `ACT_DISPOSITION`
-			// only once the current sequence has finished, so the task is "hold until this pose is
-			// done" rather than a fixed wait.
-			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.25f, Seconds));
-			return EElysiumTaskResult::Running;
-		}
-		// STORY8-TWIN: replaced by Troika 0x102a1910 tail 0x102a77ea / base 0x102827f0 arm 0x03 0x10286f7d (task 5) at wave 2
-		case EElysiumTaskOp::WaitPvs:
-			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a1c0f / base arm 0x40 0x10284311 (task 0x4b) at wave 2
-		case EElysiumTaskOp::SetActivity:
-		{
-			const FString Activity = ActivityOf(Step);
-			const float Seconds = Runner.PlayActivity(Activity);
-			if (Seconds < 0.f)
-			{
-				// Troika `StartTask` arm 0x102a1c0f sets the ideal activity and its one-second
-				// watchdog. It has neither a TaskComplete nor a TaskFail branch; `RunTask`
-				// 0x102aad1f completes when current reaches ideal or that watchdog expires.
-				// Keep the body's negative availability result visible without turning it into a
-				// schedule failure.
-				Runner.RecordScheduleEvent(FString::Printf(
-					TEXT("TASK_SET_ACTIVITY %s unresolved (PlayActivity=%.3f); completing (0x102a1c0f)"),
-					*Activity, Seconds));
-			}
-			// Troika stamps m_flWaitFinished to curtime + 1.0 in StartTask. RunTask then completes when
-			// current sequence equals ideal, or when this watchdog expires; neither path TaskFails.
-			State.TaskEndsAt = Now + 1.0;
-			// `MaintainSchedule` invokes RunTask immediately after a still-running StartTask in the same
-			// loop iteration. Mirror that first probe here, so a body already standing on the resolved
-			// identity advances this think; a miss stays running until a later phase or the watchdog.
-			return Runner.IsIdealActivityCurrent() ? EElysiumTaskResult::Complete
-				: EElysiumTaskResult::Running;
-		}
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x01 0x10286505 (task 2; Werewolf 0x103ccda0 under schedule 0x158) at wave 2
-		case EElysiumTaskOp::Wait:
-			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.f, Step.Data));
-			return Step.Data > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x57 0x10283dae (task 0x67) at wave 2
-		case EElysiumTaskOp::WaitRandom:
-		{
-			// `m_flWaitFinished = curtime + RandomFloat(0.1, arg)`: the operand goes to the draw as
-			// authored, so `WAIT_RANDOM 0.00` still holds up to 0.1 s.
-			const float Seconds = Runner.RandomSeconds(Step.Data);
-			State.TaskEndsAt = Now + static_cast<double>(Seconds);
-			return Seconds > 0.f ? EElysiumTaskResult::Running : EElysiumTaskResult::Complete;
-		}
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72a7 at wave 2
-		case EElysiumTaskOp::FaceSavePosition:
-			return Runner.FaceSavePosition() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x08 0x1028611a (TASK_MOVE_AWAY_PATH 0x0c) at wave 2
-		case EElysiumTaskOp::MoveAwayFromSavePosition:
-			return Runner.StepAwayFromSavePosition(Step.Data)
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// The combat vocabulary.
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x42 0x10286c45 (task 0x4d) at wave 2
-		case EElysiumTaskOp::SetFailSchedule:
-			// Bookkeeping, not work: it redirects this run's failure route and completes. The
-			// operand is stored LOCAL, which is what `m_failSchedule` holds.
-			State.FailScheduleOverride = ScheduleOperandOf(Step);
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4289 / base arm 0x43 0x10286c69 (task 0x4e; Werewolf, FrenzyShadow 0x10375f50) at wave 2
-		case EElysiumTaskOp::SetToleranceDistance:
-			State.ToleranceUnits = Step.Data;
-			Runner.SetGoalTolerance(Step.Data);
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x58 0x10282d71 (task 0x69) at wave 2
-		case EElysiumTaskOp::StopMoving:
-			return Runner.BeginStopMovingTask();
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x5b 0x102829bd (task 0x6c) at wave 2
-		case EElysiumTaskOp::Remember:
-			// `Memory:` resolves through the signed-converted path, so the word comes back out of
-			// the float the same way it went in.
-			Runner.RememberFact(static_cast<uint32>(static_cast<int32>(Step.Data)));
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a72e3 (task 0x131) at wave 2
-		case EElysiumTaskOp::MakeOblivious:
-			// The operand is the compiler's float: `TRUE`/`ON` -> 1.0, `FALSE`/`OFF` -> 0.0. Retail
-			// compares against 0.0 exactly and takes the clear branch on equality.
-			Runner.MakeOblivious(Step.Data != 0.f);
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a585d (task 0x100) at wave 2
-		case EElysiumTaskOp::SetNpcFlag:
-			// One of the three prefixes that store the raw 32-bit word rather than a converted
-			// float, which is why this reads `RawWord` and its neighbours read `Data`.
-			Runner.SetNpcFlag(Step.RawWord());
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a33f9 / base arm 0x0b 0x1028509b (task 0x0f) at wave 2
-		case EElysiumTaskOp::GetPathToEnemy:
-			return Runner.GetPathToEnemy(State.ToleranceUnits)
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a594d -> 0x102a5904 (task 0x105) at wave 2
-		case EElysiumTaskOp::PatrolPath:
-			Runner.RunPatrolPathTask();
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x48 0x10283558 (task 0x58) at wave 2
-		case EElysiumTaskOp::FindCoverFromEnemy:
-		{
-			const bool bFound = Runner.FindCoverFromEnemy(Step.Data);
-			// SetGoal can already have called TaskFail while testing an earlier lateral point.
-			// A later successful point must not erase that write or complete over it.
-			if (Runner.HasMaintenanceCondition(EElysiumNpcCond::TaskFailed))
-				return EElysiumTaskResult::Running;
-			return bFound ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-		}
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x1e 0x102863f1 (task 0x22) at wave 2
-		case EElysiumTaskOp::RunPath:
-			Runner.RunPath();
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a1dcc / base arm 0x5d 0x10286749 (task 0x6e) at wave 2
-		case EElysiumTaskOp::WaitForMovement:
-		{
-			// Sampled on the first ask too: a body already standing on its goal must not cost the
-			// schedule a whole think before the attack task that follows it can run.
-			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
-			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
-				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
-					: EElysiumTaskResult::Running);
-		}
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4417 / base arm 0x2a 0x10283c66 (task 0x2e) at wave 2
-		case EElysiumTaskOp::FaceEnemy:
-			// A turn-in-place completes the task rather than holding it. Retail's own melee approach
-			// puts `TASK_STOP_MOVING` after the face and transfers straight to the swing, so the
-			// program does not wait on alignment -- and the swing's own opponent acquisition is what
-			// decides whether the NPC was pointed at anything.
-			return Runner.FaceEnemy() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x02 0x10286cd9 (task 3) at wave 2
-		case EElysiumTaskOp::AnnounceAttack:
-			return Runner.AnnounceAttack(Step.Data)
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a45c6 / base arm 0x32 0x1028423d (task 0x36; species 0x36/0x37 overrides) at wave 2
-		case EElysiumTaskOp::MeleeAttack1:
-			return Runner.MeleeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a4505 / base arm 0x30 0x10284286 (task 0x34; species overrides) at wave 2
-		case EElysiumTaskOp::RangeAttack1:
-			return Runner.RangeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x41 0x10282e27 (task 0x4c) at wave 2
-		case EElysiumTaskOp::SetSchedule:
-			// Handled by the caller: a transfer replaces the running program, which is a change to
-			// the state this function only advances.
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by Troika 0x102a1910 arm 0x102a779d at wave 2
-		case EElysiumTaskOp::PlayDeathSequence:
-		{
-			// The recovered ladder, in order: "try the argument as an activity, then `ACT_DIESIMPLE`,
-			// then `ACT_IDLE`, and pass the surviving choice to `SetIdealActivity`"
-			// (`docs/vtmb/animation_and_movers.md`). Walked here rather than in the leaf so it is a
-			// kernel rule a content-free case can drive; the leaf only answers "can this body play
-			// that, and for how long".
-			// The two fixed rungs come off the one activity vocabulary rather than being respelled
-			// here: `ElysiumAnimIntent::ActivityName` is where this runtime's `ACT_*` literals live.
-			const TCHAR* const DieSimple =
-				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieSimple);
-			const TCHAR* const Idle =
-				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Idle);
-			const FString Argument = ActivityOf(Step);
-			const TCHAR* const Rungs[] = { *Argument, DieSimple, Idle };
-			float Seconds = -1.f;
-			const TCHAR* Chosen = nullptr;
-			for (const TCHAR* Rung : Rungs)
-			{
-				if (Rung == nullptr || *Rung == TEXT('\0'))
-				{
-					continue;   // the program named no argument — a rung that is not there, not a miss
-				}
-				Seconds = Runner.PlayDeathActivity(FString(Rung));
-				if (Seconds >= 0.f)
-				{
-					Chosen = Rung;
-					break;
-				}
-			}
-			// Verbose, not a warning: `ACT_DIESIMPLE` is absent from the ENTIRE shipped corpus, so the
-			// ladder falling to `ACT_IDLE` is retail's own outcome on every body rather than a
-			// resolution that went wrong. An authored absence is not a failure.
-			Runner.RecordScheduleEvent(FString::Printf(
-				TEXT("TASK_PLAY_DEATH_SEQUENCE arg='%s' -> %s"),
-				Argument.IsEmpty() ? TEXT("(none)") : *Argument,
-				Chosen != nullptr ? Chosen : TEXT("(nothing resolved)")));
-			UE_LOG(LogElysiumNpcEnt, Verbose,
-				TEXT("TASK_PLAY_DEATH_SEQUENCE: argument '%s', ACT_DIESIMPLE, ACT_IDLE -> %s"),
-				Argument.IsEmpty() ? TEXT("(none)") : *Argument,
-				Chosen != nullptr ? Chosen : TEXT("(nothing resolved)"));
-			if (Chosen == nullptr)
-			{
-				// A body whose vocabulary carries none of the three. The program still COMPLETES —
-				// the ragdoll handoff that follows it is what death is, and a failed task would send
-				// a corpse to a fail schedule instead.
-				return EElysiumTaskResult::Complete;
-			}
-			// CHOSEN, NOT RECOVERED — how long the task holds. The ladder's floor is retail saying
-			// "this body has no death performance", and its ragdoll supersedes the choice at once, so
-			// waiting out an idle would be waiting on a clip that is not a death. A rung ABOVE the
-			// floor is a real death clip and is played through, which is what leaves the handoff the
-			// clip's own last frame.
-			if (FCString::Stricmp(Chosen, Idle) == 0 || Seconds <= 0.f)
-			{
-				return EElysiumTaskResult::Complete;
-			}
-			State.TaskEndsAt = Now + static_cast<double>(Seconds);
-			return EElysiumTaskResult::Running;
-		}
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x3e 0x10286843 (task 0x49) at wave 2
-		case EElysiumTaskOp::SoundDie:
-			// `0x10286843`, whole. The operand is authored `0` on both texts that name the task and the
-			// arm never reads it. `TaskComplete` follows the hook with no gate, so the task is done on
-			// the think that begins it and has no `RunTask` arm at all -- base `RunTask` maps `0x49` to
-			// the no-entry handler `0x102896f5`, which normal execution never reaches.
-			Runner.DeathSound();
-			return EElysiumTaskResult::Complete;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 arm 0x4f 0x10286801 (task 0x5f) at wave 2
-		case EElysiumTaskOp::Die:
-			// `0x10286801`, whole -- and then nothing. Retail's arm clears the navigator goal, writes
-			// `m_lifeState = 1`, and RETURNS: no `TaskComplete`, no `TaskFail`, no wait deadline. The
-			// program parks here and the Troika `RunTask` arm below decides when the NPC actually dies.
-			Runner.BeginDying();
-			return EElysiumTaskResult::Running;
-
-		// STORY8-TWIN: replaced by base 0x102827f0 default 0x10286f63 (DevMsg, the task left running) at wave 2
-		case EElysiumTaskOp::Unknown:
-			break;
-		}
-
-		// The corpus named a task this runtime carries no body for. This is the coverage meter's
-		// dynamic half: the identity is named, the stub is tallied, and the task fails by name --
-		// which is exactly what the old closed enum could not do, because a task outside it could
-		// not be represented at all.
-		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s has no body in this runtime"),
-			TaskNameOf(Step)));
-		ElysiumStub::Fired(TEXT("schedule-task"), TaskNameOf(Step), FString(),
-			FString::Printf(TEXT("%d"), Step.TaskId),
-			TEXT("the story that builds the task body; the step fails by name"));
-		return EElysiumTaskResult::Failed;
-	}
-
-	// The corpse chain `TASK_DIE`'s commit reaches in retail, and that this runtime has not built.
-	//
-	// None of these is a divergence -- the port does not choose to do something else here, it does
-	// not do this yet. Each row is a real body with a recovered address, tallied once per death so
-	// `elysium.stubs` answers "what does dying still not do" with the same readout every other
-	// unported surface uses.
-	// STORY8-TWIN: the SUB_StartFadeOut / SOUND_CARCASS rows replaced by 0x10288fc4 (base TASK_DIE,
-	// `StartFadeOut` 0x102890bb / `InsertAiSound` 0x102890e1) at wave 2
-	void DeathChainStubs(IElysiumScheduleRunner& Runner)
-	{
-		struct FRow { const TCHAR* Surface; const TCHAR* Address; const TCHAR* What; };
-		static const FRow Rows[] =
-		{
-			{ TEXT("CreateCorpse"),       TEXT("0x1032c0e0"),
-			  TEXT("slot 301: keeps the ragdoll as the corpse, or spawns a static one and removes this") },
-			{ TEXT("SpawnStaticCorpse"),  TEXT("0x1032be80"),
-			  TEXT("the second entity a no-ragdoll body leaves behind") },
-			{ TEXT("Event_Dying"),        TEXT("0x10339413"),
-			  TEXT("slot 403, dispatched by Die right after Event_Killed") },
-			// STORY8-TWIN: replaced by 0x10265ad0 at wave 2 -- the next three rows are `CAI_BaseNPC::Event_Killed`'s
-			// arms (`0x10265d66` slot 552, `0x10265d72` fade, `0x10265d90` carcass sound), ported in Spawn19;
-			// they leave this list when the death path runs slot 144 instead of `FElysiumNpc::OnKilled` (L13).
-			{ TEXT("ShouldFadeOnDeath"),  TEXT("0x1027a400"),
-			  TEXT("slot 552: spawnflag bit 9, choosing SUB_StartFadeOut over the carcass sound") },
-			{ TEXT("SUB_StartFadeOut"),   TEXT("0x102695d0"),
-			  TEXT("not-solid, relink, and the SUB_FadeOut think at 0x100152b2") },
-			{ TEXT("SOUND_CARCASS"),      TEXT("0x101babc0"),
-			  TEXT("AI sound type 0x20 at the body, volume 384, for 30 seconds") },
-			{ TEXT("corpse removal"),     TEXT("0x1032c0e0"),
-			  TEXT("curtime + 10.0 ordinary and burning, curtime + 0.5 static no-ragdoll") },
-		};
-		for (const FRow& Row : Rows)
-		{
-			ElysiumStub::Fired({ TEXT("npc-death"), Row.Surface, Row.Address, TEXT("0019/3") },
-				FString(), FString(), Row.What);
-		}
-		Runner.RecordScheduleEvent(
-			TEXT("TASK_DIE committed; the corpse chain (CreateCorpse and below) is not built"));
-	}
-
-	// Re-ask a task that reported Running. Only the timed tasks, the PVS hold and the movement watch
-	// get here.
-	EElysiumTaskResult ContinueTask(const FElysiumScheduleStep& Step, FElysiumScheduleState& State,
-		IElysiumScheduleRunner& Runner, double Now)
-	{
-		switch (OpOf(Step))
-		{
-		// STORY8-TWIN: replaced by 0x102aad7e (Troika idx 2) / 0x10288b7b (base) at wave 2
-		case EElysiumTaskOp::WaitPvs:
-			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
-		// STORY8-TWIN: replaced by 0x102888d4 (base 0x69) at wave 2
-		case EElysiumTaskOp::StopMoving:
-			return Runner.StopMovingTask();
-		// STORY8-TWIN: replaced by 0x102aaf2e (Troika idx 0x0b) / 0x10288f43 (base 0x6e/0x6f) at wave 2
-		case EElysiumTaskOp::WaitForMovement:
-		{
-			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
-			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
-				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
-					: EElysiumTaskResult::Running);
-		}
-		// STORY8-TWIN: replaced by 0x102aad1f (Troika idx 8) / 0x102889a2 (base 0x4b) at wave 2
-		case EElysiumTaskOp::SetActivity:
-			return Runner.IsIdealActivityCurrent() || Now >= State.TaskEndsAt
-				? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
-		// STORY8-TWIN: replaced by 0x102abb90 (Troika idx 0x0a) / 0x10288fc4 (base 0x5f) at wave 2
-		case EElysiumTaskOp::Die:
-		{
-			// Troika's `RunTask` arm `0x102abb90`. This is the body that runs on every VtMB NPC: they
-			// are all `CAI_BaseNPCTroika`, and Troika's dispatch table maps `0x5f` to this arm rather
-			// than to its default forwarder, so the base arm `0x10288fc4` -- which writes
-			// `m_lifeState = 2` and runs the fade/carcass policy -- is NOT the death a player sees.
-			if (!Runner.IsDeathPerformanceFinished())
-			{
-				return EElysiumTaskResult::Running;
-			}
-			Runner.CommitDeath();
-			// Retail calls `Die` and returns. It never completes the task, so nothing ends the `DIE`
-			// program: what ends the NPC is `CreateCorpse` dissolving the entity underneath it. This
-			// runtime has none of that chain, so the task stays parked and the bodies below are tallied
-			// at the one moment they would have run.
-			DeathChainStubs(Runner);
-			return EElysiumTaskResult::Running;
-		}
-		default:
-			break;
-		}
-		// STORY8-TWIN: the timed default (TASK_WAIT / TASK_WAIT_RANDOM) replaced by 0x102aad61 (Troika
-		// idx 0) / 0x10288bb6 (base) at wave 2
-		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
-	}
-
 	// The fail route, `0x10281730`: `GetFailSchedule` (slot 439, `0x1028abe0`, no override on any of
 	// 79 classes) answers `m_failSchedule ? m_failSchedule : 0x43 FAIL`, and `SetSchedule(int)`
 	// (`0x102cc1f0`) then runs slot 440 on it before the lookup. Both numbers are class-LOCAL, which
@@ -865,27 +449,13 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			State.TaskStatus = EElysiumTaskStatus::Running;                    // 0x10281d91
 			Runner.TaskStarting();                                            // +0x5c50 = 0
 			State.TaskStartedAt = Now;                                        // 0x10281da2, +0x5c4c
-			const EElysiumTaskResult Result = BeginTask(Step, State, Runner, Now); // 0x10281e10
-			const bool bClearedByStartTask = Runner.TakeClearScheduleRequest();
-			if (bClearedByStartTask)
+			// Slot 442 `StartTask(pTask)` on the body (`0x10281e10`). The task body writes the task's
+			// status itself -- `TaskComplete` (`0x10273e80`), slot 448 `TaskFail`, a program change
+			// through `SetSchedule` -- as retail's arms do; the kernel only reads it back.
+			Runner.StartTaskForMaintenance(State, Step, Now);                             // 0x10281e10 slot 442
+			if (Runner.TakeClearScheduleRequest())
 			{
 				ClearSchedule(State, Runner);
-			}
-			else if (Result == EElysiumTaskResult::Complete)
-			{
-				if (OpOf(Step) == EElysiumTaskOp::SetSchedule)
-				{
-					Start(State, ScheduleOperandOf(Step), Runner);
-					Conditions = nullptr;
-					continue;
-				}
-				State.TaskStatus = EElysiumTaskStatus::Complete;
-			}
-			else if (Result == EElysiumTaskResult::Failed)
-			{
-				Runner.TaskFail(TaskFailureReasonFor(OpOf(Step), Runner.TaskFailureReason()));
-				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
-					TaskNameOf(Step), *ElysiumScheduleLabel(State.Current, &Runner)));
 			}
 			const bool bRunning = State.TaskStatus != EElysiumTaskStatus::Complete
 				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
@@ -904,28 +474,18 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			{
 				break;                                                          // 0x102821ae
 			}
-			const FElysiumScheduleStep& Step = Schedule->Tasks[State.TaskIndex];
-			const EElysiumTaskResult Result = ContinueTask(Step, State, Runner, Now); // 0x1028202c
-			const bool bClearedByRunTask = Runner.TakeClearScheduleRequest();
-			if (bClearedByRunTask)
+			// A `StartTask` above may have installed another program (`TASK_SET_SCHEDULE`, base arm
+			// 0x41 `0x10282e27`); retail's `GetCurTask()` reads the CURRENT program, so re-read it.
+			const FElysiumScheduleProgram* Running = ElysiumScheduleFor(State.Current);
+			if (Running == nullptr || !Running->Tasks.IsValidIndex(State.TaskIndex))
+			{
+				break;
+			}
+			const FElysiumScheduleStep& Step = Running->Tasks[State.TaskIndex];
+			Runner.RunTaskForMaintenance(State, Step, Now);                               // 0x1028202c slot 444
+			if (Runner.TakeClearScheduleRequest())
 			{
 				ClearSchedule(State, Runner);
-			}
-			else if (Result == EElysiumTaskResult::Complete)
-			{
-				if (OpOf(Step) == EElysiumTaskOp::SetSchedule)
-				{
-					Start(State, ScheduleOperandOf(Step), Runner);
-					Conditions = nullptr;
-					continue;
-				}
-				State.TaskStatus = EElysiumTaskStatus::Complete;
-			}
-			else if (Result == EElysiumTaskResult::Failed)
-			{
-				Runner.TaskFail(TaskFailureReasonFor(OpOf(Step), Runner.TaskFailureReason()));
-				Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
-					TaskNameOf(Step), *ElysiumScheduleLabel(State.Current, &Runner)));
 			}
 			const bool bStillRunning = State.TaskStatus != EElysiumTaskStatus::Complete
 				&& State.TaskStatus != EElysiumTaskStatus::RunningMovement;
@@ -961,68 +521,6 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	}
 	State.bDidMaintainSchedule = true;                                   // 0x10282342
 	return State.IsRunning();
-}
-
-// `TASK_MOVE_AWAY_PATH`.
-
-const TCHAR* ElysiumSchedule::RetreatResultName(ERetreat Result)
-{
-	switch (Result)
-	{
-	case ERetreat::Moving:        return TEXT("moving");
-	case ERetreat::NoMotor:       return TEXT("no motor");
-	case ERetreat::Degenerate:    return TEXT("no direction to retreat in");
-	case ERetreat::Unprojectable: return TEXT("off the navmesh");
-	case ERetreat::NotARetreat:   return TEXT("projected point is no longer a retreat");
-	case ERetreat::MotorRefused:  return TEXT("the body refused the path");
-	}
-	return TEXT("unknown");
-}
-
-// STORY8-TWIN: replaced by base 0x102827f0 arm 0x08 0x1028611a at wave 2
-ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcMotor* Motor,
-	const FVector& Origin, const FVector& SavePosition, float DistanceCm, FVector& OutDestination)
-{
-	if (Motor == nullptr)
-	{
-		return ERetreat::NoMotor;
-	}
-	// A step back, not a path to a goal: retail's near-door schedules repeat a short retreat rather
-	// than choosing a destination, which is what keeps the NPC out of the swing without it walking
-	// off somewhere.
-	FVector Away = Origin - SavePosition;
-	Away.Z = 0.0;
-	if (Away.IsNearlyZero())
-	{
-		return ERetreat::Degenerate;
-	}
-	Away.Normalize();
-	const FVector Desired = Origin + Away * static_cast<double>(DistanceCm);
-
-	// The extrapolated point is a guess about the world, so the world is asked (S11) instead of the
-	// guess being handed straight to MoveTo.
-	FVector Destination = Desired;
-	if (!Motor->ProjectToNavigable(Desired, Destination))
-	{
-		return ERetreat::Unprojectable;
-	}
-	OutDestination = Destination;
-
-	// The re-test, in the horizontal plane the retreat was computed in.
-	const double StandingDistance = FVector::Dist2D(Origin, SavePosition);
-	const double ProjectedDistance = FVector::Dist2D(Destination, SavePosition);
-	if (ProjectedDistance <= StandingDistance + RetreatMarginCm)
-	{
-		return ERetreat::NotARetreat;
-	}
-
-	// A retreat is a walk backwards out of the swing, so it commands the body's own authored walk
-	// like every other travel request. Naming no speed is not an option the motor has: it clamps to
-	// 1 cm/s, and the step never completes.
-	return Motor->MoveTo(Destination, /*AcceptanceRadiusCm=*/16.f,
-		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
-		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk)
-		? ERetreat::Moving : ERetreat::MotorRefused;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS

@@ -22,10 +22,14 @@ bool CandidateIsStandable(const FElysiumEntity* Candidate) const;
 struct FElysiumTakeDamageInfo
 {
 	FElysiumDmg* Dmg = nullptr;                 // +0x00  the CVDmg_t*, may be null
-	FElysiumEntityHandle Attacker;              // +0x28  the attacking entity
+	FElysiumEntityHandle Attacker;              // +0x2c  m_hAttacker (`param_1[0xb]` in 0x1032ef60)
 	float Damage = 0.f;                         // +0x30  m_flDamage, the scalar fallback
 	uint32 DamageBits = 0;                      // +0x38  m_bitsDamageType
 	int32 AmmoType = INDEX_NONE;                // +0x40  m_iAmmoType (0x101c2a10's one field)
+	// Port-only, not a packet word: the attacker's active weapon record's
+	// `Disallow_FirearmsToBashing`, which `CVDmg_t::Apply` inside `0x103302e0` reads off the attacker
+	// the packet names (`info+0x2c`). The dispatcher (`DispatchTakeDamagePacket`) fills it.
+	bool bDisallowFirearmsToBashing = false;
 };
 
 /** SEAM for `thunk_FUN_102699e0` — `SpawnBlood(ptr->endpos, BloodColor(), damage)`, the surface

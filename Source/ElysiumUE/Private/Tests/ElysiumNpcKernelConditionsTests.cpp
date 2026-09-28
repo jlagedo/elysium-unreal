@@ -340,7 +340,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 	F.Npc->NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
 	F.Npc->bGoToIdleState = true;
 	F.Npc->Cognition.bCondTookDamage = true;
-	F.Npc->HuntPatrolPoints = { FVector::ZeroVector, FVector::OneVector };
+	{ const int32 HuntIds[] = { 0, -1 }; F.Npc->BuildPatrolPath(&F.Npc->PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 
 	F.Npc->OnStateChangeTroika(EElysiumNpcState::Idle, EElysiumNpcState::Alert);
 
@@ -355,7 +355,7 @@ bool FElysiumNpcKernelCondStateChangeTroikaTest::RunTest(const FString&)
 		F.Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
 	TestFalse(TEXT("m_bGoToIdleState is cleared"), F.Npc->bGoToIdleState);
 	TestFalse(TEXT("m_bCondTookDamage is cleared"), F.Npc->Cognition.bCondTookDamage);
-	TestEqual(TEXT("the hunt patrol route is released"), F.Npc->HuntPatrolPoints.Num(), 0);
+	TestNull(TEXT("the hunt patrol route is released (0x1029f5d0)"), F.Npc->PatrolPathHuntCell.Path);
 
 	// --- COMBAT arms it too; every other reachable state does NOT ---
 	F.Npc->bReturnToInitialPos = false;
@@ -853,18 +853,18 @@ bool FElysiumNpcKernelCondAlternateAiTest::RunTest(const FString&)
 		F.Npc->OpeningDoorFacingPoint(*F.Npc, false, Point));
 
 	// The SECOND term, `FacingIdeal` (`0x10278c80`), is family Facing's real body and is NOT a
-	// refusal: `|CAI_Motor::DeltaIdealYaw()| <= 0.006` with the equal bit carried, over a motor seam
-	// that stands at retail's "already facing the ideal" answer of 0. So an untouched body IS facing
-	// ideal, and the gate this transaction sits behind is OPEN.
-	TestEqual(TEXT("the motor's yaw-delta seam stands at retail's aligned 0"),
-		F.Npc->MotorIdealYawDelta, 0.f);
+	// refusal: `|CAI_Motor::DeltaIdealYaw()| <= 0.006` with the equal bit carried. `NPCInit` seeds
+	// the motor's ideal yaw from the body's own (`0x10273390`), so an untouched body IS facing ideal,
+	// and the gate this transaction sits behind is OPEN.
+	TestEqual(TEXT("an untouched body's yaw delta is retail's aligned 0"),
+		F.Npc->MotorDeltaIdealYaw(), 0.f);
 	TestTrue(TEXT("so FacingIdeal answers TRUE on a body that has not turned"), F.Npc->FacingIdeal());
-	F.Npc->MotorIdealYawDelta = 0.006f;
+	F.Npc->Angles.Y = 0.0; F.Npc->MotorIdealYaw = 0.006f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	TestTrue(TEXT("and at exactly the tolerance too: the compare carries the equal bit"),
 		F.Npc->FacingIdeal());
-	F.Npc->MotorIdealYawDelta = 0.007f;
+	F.Npc->Angles.Y = 0.0; F.Npc->MotorIdealYaw = 0.007f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 	TestFalse(TEXT("past 0.006 degrees it answers false"), F.Npc->FacingIdeal());
-	F.Npc->MotorIdealYawDelta = 0.f;
+	F.Npc->Angles.Y = 0.0; F.Npc->MotorIdealYaw = 0.f;   // `DeltaIdealYaw` 0x102e1f90: AngleDiff(ideal, AngleMod(0))
 
 	// RECOVERED FACT, asserted rather than worked around: the advance is unreachable anyway. Even
 	// facing ideal, and even on the `m_bOpeningDoorWait` arm — which in retail needs nothing more

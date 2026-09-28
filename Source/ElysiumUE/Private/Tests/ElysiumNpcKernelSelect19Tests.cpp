@@ -430,6 +430,23 @@ bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102af690 busy with a discipline -> 0x6b first"), N.TroikaSelectSchedule(), 0x6b);
 	TestTrue(TEXT("and the return flag is untouched"), N.bReturnToInitialPos);
 	N.NpcFlags.Clear(EElysiumNpcFlag::D_IS_BUSY);
+	N.bReturnToInitialPos = false;
+	// The patrol arm (0x102af6b6..0x102af758): a path object with a schedule draws `0x1029f650`
+	// on the patrol cell (0x102af738), which resets `m_bPatrolPathUseHint` (+0x65a0) before its roll
+	// -- no interest record stands here, so the flag ends cleared -- then answers the path's +0x4.
+	{
+		const int32 Ids[] = { 0, -1 };
+		N.BuildPatrolPath(&N.PatrolPathCell, 0, 0, 0, Ids, FElysiumNpc::EPatrolPathBuild::Replace);
+		if (TestNotNull(TEXT("the patrol cell holds a path"), N.PatrolPathCell.Path))
+		{
+			N.PatrolPathCell.Path->Schedule = 0x42;
+			N.ScheduleHost.bPatrolPathUseHint = true;
+			TestEqual(TEXT("0x102af758 the path's schedule word"), N.TroikaSelectSchedule(), 0x42);
+			TestFalse(TEXT("0x102af738 0x1029f650 reset m_bPatrolPathUseHint (no interest record)"),
+				N.ScheduleHost.bPatrolPathUseHint);
+		}
+		N.ReleasePatrolPath(&N.PatrolPathCell);
+	}
 	N.bUseInteresting = true;
 	TestEqual(TEXT("0x102af711 use_interesting with no place -> 0xff"), N.TroikaSelectSchedule(), 0xff);
 	return true;
@@ -581,7 +598,7 @@ bool FElysiumNpcKernelSelect19TroikaHuntTest::RunTest(const FString&)
 	N.NpcFlags.Set(EElysiumNpcFlag::MADE_HUNT_PATH);
 	TestEqual(TEXT("0x102afab2 no hunt path clears MADE_HUNT_PATH first"), N.TroikaSelectSchedule(), 0x7d);
 	TestFalse(TEXT("0x102afab5"), N.NpcFlags.Has(EElysiumNpcFlag::MADE_HUNT_PATH));
-	N.HuntPatrolPoints.Add(FVector::ZeroVector);
+	{ const int32 HuntIds[] = { 0, -1 }; N.BuildPatrolPath(&N.PatrolPathHuntCell, 0, 0, 0, HuntIds, FElysiumNpc::EPatrolPathBuild::Replace); }
 	N.NpcFlags.Set(EElysiumNpcFlag::MADE_HUNT_PATH);
 	TestEqual(TEXT("0x102afb63 a made hunt path -> 0x7e HUNT"), N.TroikaSelectSchedule(), 0x7e);
 	return true;

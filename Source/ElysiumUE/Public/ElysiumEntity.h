@@ -98,6 +98,15 @@ struct FElysiumFlexWrite
 // contract (python_bridge.md), the whole-entity dormancy switch, and the three base
 // inputs (Kill/ScriptHide/ScriptUnhide) that reach every subclass through the class chain.
 // Leaf classes derive from this and register their own inputs/fields.
+// `m_lifeState`'s values (`LIFE_ALIVE` .. `LIFE_RESPAWNABLE`), as the `int` retail stores.
+namespace ElysiumLifeState
+{
+	inline constexpr int32 Alive = 0;
+	inline constexpr int32 Dying = 1;
+	inline constexpr int32 Dead = 2;
+	inline constexpr int32 Respawnable = 3;
+}
+
 class FElysiumEntity
 {
 public:
@@ -140,7 +149,20 @@ public:
 	int32   SpawnFlags = 0;
 	int32   Health = 0;
 	int32   MaxHealth = 0;
+	// `m_lifeState` (`+0x200`, `CBaseEntity`, datamap `SAVE int`) -- THE life-state word, one per
+	// entity as retail's is (`ElysiumLifeState`). Slot 158 `IsAlive` reads it, `0x1032ef60` splits
+	// on it, `CBaseCombatCharacter::Event_Killed` (`0x1032ba31`) writes LIFE_DYING, `NPCInit` and the
+	// player's `Spawn` write LIFE_ALIVE, the death arms and the player's death think walk it. The
+	// generated SAVE walk carries it (`m_lifeState`, `AddBaseEntitySaveFields`).
+	int32   LifeState = ElysiumLifeState::Alive;
 	int32   Flags = 0;
+	// `m_fFlags2` (`+0x438`, `CBaseEntity`), the second flag word beside `Flags` (`+0x434`).
+	// `AddFlag2` (`0x100b3840`) ORs, `RemoveFlag2` (`0x100b3900`) clears; `GetFlags2` reads it.
+	// Lifted here at story 8 wave 2 from the four per-class spellings (the NPC's, the director's,
+	// the controller's and the Tzimisce runner's). The meaning of bits 4 / 0x10 / 0x20 is unrecovered.
+	uint32  EntityFlags2Word = 0;
+	void AddFlag2(uint32 Bits) { EntityFlags2Word |= Bits; }
+	void RemoveFlag2(uint32 Bits) { EntityFlags2Word &= ~Bits; }
 	FVector Velocity = FVector::ZeroVector;
 	FVector AngularVelocity = FVector::ZeroVector;   // avelocity
 	FVector BaseVelocity = FVector::ZeroVector;      // basevelocity
@@ -230,8 +252,10 @@ public:
 
 	// --- Base inputs (reach every class through the chain) ---
 	void Kill();          // terminal: mark dead + go inert (world reaps the slot)
-	void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
-	void ScriptUnhide();  // the exact inverse
+	// Slots 77 / 78, virtual as retail's (`vt+0x134` / `+0x138`): a species replaces them
+	// (`CNPC_VGhoulCroucher` `0x1037c1c0` / `0x1037c2f0`), and every dispatch reaches that body.
+	virtual void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
+	virtual void ScriptUnhide();  // the exact inverse
 	void PlayDialogFile(const FString& AuthoredPath);
 	void SetSoundOverrideEnt(const FString& EntityName);
 	void SetFakeSilence(bool bEnabled);

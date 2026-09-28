@@ -155,20 +155,7 @@ namespace
 	struct FKernelRunner final : IElysiumScheduleRunner
 	{
 		TArray<FString> Calls;
-		bool bVisible = false;   // WAIT_PVS holds, so a program stays mid-flight
-
-		virtual float RunSpecialIdleActivity(double) override
-		{
-			Calls.Add(TEXT("SpecialIdleActivity"));
-			return 2.f;
-		}
-		virtual bool IsBodyVisible() const override { return bVisible; }
-		virtual float PlayActivity(const FString& Activity) override
-		{
-			Calls.Add(FString::Printf(TEXT("SetActivity %s"), *Activity));
-			return 1.f;
-		}
-		virtual float RandomSeconds(float Max) override { return Max; }
+		bool bVisible = false;
 		virtual void RecordScheduleEvent(const FString& Row) override
 		{
 			Calls.Add(FString::Printf(TEXT("trace: %s"), *Row));
@@ -180,10 +167,8 @@ namespace
 	};
 }
 
-
 // The recovered `GatherConditions` order: a stale enemy's death is seen by ChooseEnemy in
 // the SAME pass, and the committed-enemy conditions describe the enemy that pass chose.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyGatherOrderTest,
 	"Elysium.Substrate.NpcEnemy.GatherOrder", GElysiumTestFlags)
@@ -201,9 +186,12 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	F.Hate(F.ThugA, 5);
 	F.Hate(F.Player, 5);
 	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
-	F.ThugA->bDead = true;
+	// Corrected to retail (story 8 wave 2): a dead enemy is `m_lifeState != 0` while its handle
+	// still resolves (slot 158 `IsAlive` false); the port's `bDead` is `UTIL_Remove`, after which the
+	// handle resolves nothing and no ENEMY_DEAD can be raised off it.
+	F.ThugA->LifeState = 1;
 
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 
 	const FElysiumNpcConditions& Cond = F.Guard->Cognition.Conditions;
 	TestTrue(TEXT("the dead committed enemy raises ENEMY_DEAD in the same pass"),
@@ -213,10 +201,8 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("...raising NEW_ENEMY"), Cond.Has(EElysiumNpcCond::NewEnemy));
 	// `SetEnemy` (`0x10279a50`) hands the old enemy to the last-enemy helper `0x10279b70` ONLY when
 	// its handle is still live (`0x10279a96` -1, `0x10279ab2` serial, `0x10279ab7` null entry). A
-	// killed-and-removed entity (`bDead`, `EFL_KILLME`) no longer resolves, so retail writes no last
-	// enemy; the port's old unconditional transfer asserted here was port-invented. Corrected to
-	// retail (story 8 L11 integration).
-	TestFalse(TEXT("a removed old enemy does not reach the last-enemy path"),
+	// DYING enemy (`m_lifeState` 1, not yet removed) still resolves, so it does reach it.
+	TestTrue(TEXT("a dying old enemy, still resolving, reaches the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.ThugA->Handle);
 
 	// Step 5 gathers the committed enemy's own conditions AFTER the choice, so they describe the
@@ -226,14 +212,13 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestFalse(TEXT("...and ENEMY_UNREACHABLE is never set — it has no producer"),
 		Cond.Has(EElysiumNpcCond::EnemyUnreachable));
 
-	// The pass clock advanced, which is what makes a stimulus edge-triggered.
-	TestTrue(TEXT("the pass stamps its own clock"), F.Guard->Cognition.GatheredAt == 10.0);
+	// `m_bConditionsGathered` latched (`0x1026eca9`), in the stamp form: the pass's own `curtime`.
+	TestTrue(TEXT("the pass latches m_bConditionsGathered at curtime"),
+		F.Guard->Cognition.GatheredAt == F.World.NowSeconds());
 	return true;
 }
 
-
 // `ShouldChooseNewEnemy`: the trigger set, and the deliberate SEE_FEAR omission.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyShouldChooseTest,
 	"Elysium.Substrate.NpcEnemy.ShouldChoose", GElysiumTestFlags)
@@ -283,10 +268,8 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The starvation rule: the active schedule's interrupt mask is consulted BEFORE any
 // search, and an uninterested schedule keeps ownership of the enemy it has.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyScheduleGateTest,
 	"Elysium.Substrate.NpcEnemy.ScheduleGate", GElysiumTestFlags)
@@ -391,9 +374,7 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 	return true;
 }
 
-
 // `BestEnemy`: eligibility and the four arbitration rules.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyBestEnemyTest,
 	"Elysium.Substrate.NpcEnemy.BestEnemy", GElysiumTestFlags)
@@ -518,7 +499,6 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-
 // CAI_Memory is admission, not a relationship-world scan. The tutorial's thug is about 2380
 // Source units from Jack's dialogue; its 540-unit sight admission leaves a hostile player absent
 // from both the store and selection until an actual sight pass writes the record.
@@ -537,7 +517,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 
 	F.Guard->Senses.TickSight(*F.Guard, 10.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 	TestFalse(TEXT("the unseen hostile tutorial-distance player has no memory record"),
 		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
 	TestFalse(TEXT("...and relationship alone cannot select it"),
@@ -562,7 +542,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	F.Player->Origin = FVector(Cm(500.f), 0.0, 0.0);
 	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
 	F.Guard->Senses.TickSight(*F.Guard, 11.0);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 11.0);
+	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 11.0);
 	TestTrue(TEXT("a seen hostile player gains the actor record"),
 		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
 	TestTrue(TEXT("...and can now be selected"),
@@ -593,58 +573,8 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageMemoryTest,
-	"Elysium.Substrate.NpcEnemy.DamageMemory", GElysiumTestFlags)
-bool FElysiumNpcEnemyDamageMemoryTest::RunTest(const FString&)
-{
-	auto Damage = [](FElysiumNpc& Npc, const FElysiumEntityHandle& Source, const FVector& Position)
-	{
-		FElysiumDmg Dmg;
-		Dmg.Source = Source;
-		Dmg.AttackPosition = Position;
-		Dmg.bHasAttackPosition = true;
-		return ElysiumNpcEnemy::RememberDamage(Npc, Dmg, 10.0);
-	};
-	// Unknown, unseen attacker writes only an anonymous position record.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		TestTrue(TEXT("unknown unseen damage enters the producer"),
-			Damage(*F.Guard, F.Player->Handle, FVector(77.f, 0.f, 0.f)));
-		TestFalse(TEXT("unknown damage does not manufacture an actor record"),
-			F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
-		TestTrue(TEXT("...but retains its position-only record"),
-			F.Guard->EnemyMemory.Records()[0].bPositionOnly);
-	}
-	// A known attacker refreshes its actor record at the packet attack position.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 0.0);
-		Damage(*F.Guard, F.Player->Handle, FVector(88.f, 0.f, 0.f));
-		TestEqual(TEXT("known damage updates that actor's position"),
-			F.Guard->EnemyMemory.Find(F.Player->Handle)->LastPosition, FVector(88.f, 0.f, 0.f));
-	}
-	// An unknown attacker with a current unseen enemy refreshes that committed target instead.
-	{
-		FEnemyFixture F;
-		if (!F.Guard || !F.Player || !F.ThugA) return false;
-		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
-		F.Guard->EnemyMemory.Update(*F.Guard, F.ThugA->Handle, 0.0);
-		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
-		Damage(*F.Guard, F.Player->Handle, FVector(99.f, 0.f, 0.f));
-		TestEqual(TEXT("current enemy receives the unknown attack position"),
-			F.Guard->EnemyMemory.Find(F.ThugA->Handle)->LastPosition, FVector(99.f, 0.f, 0.f));
-	}
-	return true;
-}
-
-
 // `SetEnemy` and the `ChooseEnemy` effects: the last-enemy transfer, NEW_ENEMY, the
 // forgotten LOS claim, and the two lost-the-actor outputs.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySetEnemyTest,
 	"Elysium.Substrate.NpcEnemy.SetEnemy", GElysiumTestFlags)
@@ -659,11 +589,12 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 
 	// One acquisition episode against the player: the found edge fires once and latches.
 	F.Guard->BaseMemory.Enemy = F.Player->Handle;
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
+	F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
 	F.Flush(1.0);
 	TestEqual(TEXT("the first committed-enemy LOS fires OnFoundEnemy"),
 		F.Counter(TEXT("c_foundenemy")), 1.f);
-	TestTrue(TEXT("...and latches"), F.Guard->Senses.Memory.bEnemyLosLatched);
+	TestTrue(TEXT("...and latches m_afMemory 0x20000 (0x10270d1e)"),
+		(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
 	// The LOS edge publishes detection; it does NOT count a sighting. Retail's two writers of
 	// `m_iEnemySightings` are both in the sense pass (see `LookaroundChance`).
 	const int32 SightingsAfterFirst = F.Guard->EnemySightings;
@@ -675,26 +606,22 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	// nothing else: the LOS episode is NOT reset here (the port's old body forgot the latch, the
 	// debounce and the occlusion flag -- port-invented; the episode belongs to
 	// `GatherEnemyConditions` `0x10270b20`, lane L07). Corrected to retail.
-	F.Guard->Senses.Memory.EnemyLosFailures = 3;
-	F.Guard->Senses.Memory.bEnemyOccluded = true;
+	F.Guard->BaseMemory.EnemyOccludedCheck = 3;
 	ElysiumNpcEnemy::SetEnemy(*F.Guard, F.ThugA->Handle);
 	TestTrue(TEXT("the old handle goes through the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.Player->Handle);
 	TestTrue(TEXT("the new handle is committed"),
 		F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
 	TestTrue(TEXT("the LOS latch is not SetEnemy's to clear"),
-		F.Guard->Senses.Memory.bEnemyLosLatched);
-	TestEqual(TEXT("...nor its debounce"), F.Guard->Senses.Memory.EnemyLosFailures, 3);
-	TestTrue(TEXT("...nor its occlusion flag"), F.Guard->Senses.Memory.bEnemyOccluded);
+		(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
+	TestEqual(TEXT("...nor its debounce (+0x5b98)"), F.Guard->BaseMemory.EnemyOccludedCheck, 3);
 	TestEqual(TEXT("the non-null write runs the discipline sweep (0x10279b0c)"),
 		F.Guard->SetEnemyDisciplineStripCalls, 1);
 	return true;
 }
 
-
 // The went-null / eluded transaction: `OnLostPlayer` and `OnLostEnemy`, once each, on the
 // real transition and not on losing sight.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLostOutputsTest,
 	"Elysium.Substrate.NpcEnemy.LostOutputs", GElysiumTestFlags)
@@ -766,11 +693,11 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		}
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 		F.Guard->BaseMemory.Enemy = F.Player->Handle;
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
+		F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
 		F.Services.bLineOfSightClear = false;
 		for (int32 i = 0; i <= ElysiumNpcSense::EnemyLosFailureLimit; ++i)
 		{
-			F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
+			F.Guard->GatherEnemyConditions(F.Player);
 		}
 		F.Flush(20.0);
 		TestEqual(TEXT("a full LOS debounce fires neither lost-the-actor output"),
@@ -781,17 +708,16 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 	return true;
 }
 
-
-// The damage conditions, and the recovered 15%-in-one-second repeated-damage window.
-//
-// STORY8-TWIN: this case pins `ElysiumNpcCond::AccumulateDamage` / `GatherDamage`, the damage twin
-// that still runs from the typed commit (no live path reaches slots 142/390 yet). Its 20 % heavy
-// and 15 % repeated fractions are the twin's, not retail's: `0x10265ed0` raises HEAVY through slot
-// 577 (`> 20.0`, `_DAT_1044eb0c`) at `0x10266293` and REPEATED at `m_iMaxHealth * 0.3
-// (_DAT_1047b868) < m_flSumDamage`, reset when `curtime - m_flLastDamageTime >= 1.0` (`0x1026632e`,
-// `0x102662a8`) — pinned by `Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_*`.
-// Delete this case with the twin at wave 2 (L13).
-
+// The damage conditions from the live damage entry (story 8 wave 2, L13). `TakeDamage` builds
+// retail's packet and dispatches slot 142 on the body (Troika `0x102bed30` -> `0x10265e90` ->
+// `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60` -> slot 390 -> `0x102beda0` -> `0x10265ed0`),
+// which raises the three conditions itself, on the packet, with no gather in between:
+//   LIGHT_DAMAGE  slot 576 `0.0 < damage` (`0x10266630`), set at `0x10266239`;
+//   HEAVY_DAMAGE  slot 577 `20.0 < damage` (`_DAT_1044eb0c`, `0x10266660`), set at `0x10266293`;
+//   REPEATED      `m_iMaxHealth * 0.3 (_DAT_1047b868) < m_flSumDamage`, set at `0x1026632e`, the sum
+//                 RESET to the hit when `curtime - m_flLastDamageTime >= 1.0` (`0x102662a8`).
+// Corrected to retail: the port's deleted twin (`AccumulateDamage` / `GatherDamage`) raised HEAVY at
+// a chosen 20 % of max health and REPEATED at 15 %, and rebuilt the edge from a gather timestamp.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,
 	"Elysium.Substrate.NpcEnemy.DamageConditions", GElysiumTestFlags)
@@ -802,84 +728,60 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcMemory& Mem = F.Guard->Senses.Memory;
-
-	auto Hit = [&Mem, &F](int32 Amount, double At)
+	if (F.Player == nullptr)
 	{
-		Mem.LastDamageAmount = Amount;
-		F.Guard->BaseMemory.LastDamageTime = At;
-		ElysiumNpcCond::AccumulateDamage(F.Guard->BaseMemory, Amount, At);
+		return false;
+	}
+	FElysiumNpc& Guard = *F.Guard;
+	if (!TestEqual(TEXT("the fixture guard carries the default Max_Health"), Guard.MaxHealth, 100))
+	{
+		return false;
+	}
+	// A packet WITH an attacker: `0x10265ed0` answers 1 before any condition when `info+0x2c` is null
+	// (`0x10265f64`). The descriptor is direct input with a forced soak of 0, so the resolver's
+	// answer is the amount.
+	auto Hit = [&F, &Guard](int32 Amount, double At)
+	{
+		F.Flush(At);
+		Guard.Cognition.Conditions.Reset();
+		FElysiumDmg Dmg;
+		Dmg.Family = EElysiumDmgFamily::Bashing;
+		Dmg.Flags = ElysiumDamage::FlagDirectInput;
+		Dmg.ExtraInput = Amount;
+		Dmg.ForcedSoak = 0;
+		Dmg.Source = F.Player->Handle;
+		Guard.TakeDamage(Dmg, F.Player);
 	};
+	auto Has = [&Guard](EElysiumNpcCond Cond) { return Guard.Cognition.Conditions.Has(Cond); };
 
-	// A small hit inside the pass window is LIGHT and nothing else. 5 of 100 is below both the
-	// chosen 20% heavy threshold and the recovered 15% repeated sum.
-	Hit(5, 10.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, /*PreviousGatherTime=*/9.0, C);
-		TestTrue(TEXT("any committed packet raises LIGHT_DAMAGE"),
-			C.Has(EElysiumNpcCond::LightDamage));
-		TestFalse(TEXT("...but a small one is not HEAVY_DAMAGE"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-		TestFalse(TEXT("...and one hit is not REPEATED_DAMAGE"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
+	// 20 is light and NOT heavy (strict `20.0 < damage`); 20 of 100 is not over 30.
+	Hit(20, 10.0);
+	TestTrue(TEXT("0x10266239 LIGHT_DAMAGE on 20"), Has(EElysiumNpcCond::LightDamage));
+	TestFalse(TEXT("0x10266660 20 is not HEAVY_DAMAGE (20.0 < damage, strict)"), Has(EElysiumNpcCond::HeavyDamage));
+	TestFalse(TEXT("0x1026631d a sum of 20 is not over 100 * 0.3"), Has(EElysiumNpcCond::RepeatedDamage));
+	TestTrue(TEXT("0x102661de m_bCondTookDamage"), Guard.Cognition.bCondTookDamage);
 
-	// The same memory read by a LATER pass is not a new packet: the condition lives for one pass.
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, /*PreviousGatherTime=*/10.0, C);
-		TestFalse(TEXT("a packet already consumed by a pass is not gathered twice"),
-			C.Has(EElysiumNpcCond::LightDamage));
-	}
+	// 10 more inside the second: the sum 30 is NOT over 30 (strict `<`).
+	Hit(10, 10.5);
+	TestEqual(TEXT("0x102662c6 inside 1.0 s the sum ACCUMULATES"), Guard.BaseMemory.RepeatedDamageAccumulated, 30.f);
+	TestFalse(TEXT("0x1026631d a sum of exactly 30 % is not REPEATED_DAMAGE"), Has(EElysiumNpcCond::RepeatedDamage));
 
-	// A second hit inside the one-second window carries the sum past 15 of 100.
-	Hit(12, 10.5);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 10.4, C);
-		TestEqual(TEXT("the window accumulates rather than replacing"),
-			F.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
-		TestTrue(TEXT("a window sum over 15% of Source max health raises REPEATED_DAMAGE"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
+	// 21 inside the window: heavy, and the sum 51 is over 30.
+	Hit(21, 10.9);
+	TestTrue(TEXT("0x10266293 HEAVY_DAMAGE on 21"), Has(EElysiumNpcCond::HeavyDamage));
+	TestTrue(TEXT("...and LIGHT_DAMAGE with it"), Has(EElysiumNpcCond::LightDamage));
+	TestTrue(TEXT("0x1026632e REPEATED_DAMAGE when the sum exceeds 30 % of m_iMaxHealth"),
+		Has(EElysiumNpcCond::RepeatedDamage));
 
-	// A hit past the window RESETS it rather than decaying it, so the sum starts over.
-	Hit(12, 12.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 11.9, C);
-		TestEqual(TEXT("an expired window is reset, not decayed"),
-			F.Guard->BaseMemory.RepeatedDamageAccumulated, 12);
-		TestFalse(TEXT("...so the sum no longer clears the threshold"),
-			C.Has(EElysiumNpcCond::RepeatedDamage));
-	}
-
-	// A single big packet is HEAVY. The threshold itself is CHOSEN, NOT RECOVERED; what is asserted
-	// here is that the predicate reads the Source max-health pool and not a bare number.
-	Hit(25, 20.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 19.0, C);
-		TestTrue(TEXT("a packet at or over the heavy fraction raises HEAVY_DAMAGE"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-		TestTrue(TEXT("...and LIGHT_DAMAGE with it"), C.Has(EElysiumNpcCond::LightDamage));
-	}
-
-	// A body with no health ceiling cannot answer the heavy question and does not guess.
-	F.Guard->MaxHealth = 0;
-	Hit(25, 30.0);
-	{
-		FElysiumNpcConditions C;
-		ElysiumNpcCond::GatherDamage(*F.Guard, 29.0, C);
-		TestTrue(TEXT("a body with no Source ceiling still takes light damage"),
-			C.Has(EElysiumNpcCond::LightDamage));
-		TestFalse(TEXT("...but the heavy predicate declines rather than inventing a pool"),
-			C.Has(EElysiumNpcCond::HeavyDamage));
-	}
+	// A full second after the last stamp the sum RESETS to the new hit rather than decaying.
+	Hit(5, 11.9);
+	TestEqual(TEXT("0x102662a8 curtime - m_flLastDamageTime >= 1.0 resets the sum"),
+		Guard.BaseMemory.RepeatedDamageAccumulated, 5.f);
+	TestFalse(TEXT("...so the sum no longer clears the threshold"), Has(EElysiumNpcCond::RepeatedDamage));
+	TestEqual(TEXT("0x10266310 m_flLastDamageTime = curtime"), Guard.BaseMemory.RepeatedDamageWindowStart,
+		F.World.NowSeconds());
 	return true;
 }
-
 
 // `SelectIdealState`, both layers. Corrected to retail: `CAI_BaseNPCTroika::SelectIdealState`
 // (`0x102ad660`) gates every arm but four on `HasInterruptCondition` (`0x10269d30`), whose FIRST
@@ -887,7 +789,6 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 // committed enemy does NOT take combat from idle and idle damage does not promote. The exceptions
 // are the four flee arms (`0x21` at `0x452b`/`0x456b`, `0x1f` at `0x4532`/`0x4573`) and case
 // `0xe`'s damage arms (`0x45f0`), which call the bare `HasCondition` (`0x10269aa0`) instead.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
 	"Elysium.Substrate.NpcEnemy.IdealState", GElysiumTestFlags)
@@ -1082,10 +983,8 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The state machine end to end on a real NPC: Alert and Combat are admitted, the mind
 // records the transitions, and combat selects a real fight program.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyStateMachineTest,
 	"Elysium.Substrate.NpcEnemy.StateMachine", GElysiumTestFlags)
@@ -1117,9 +1016,10 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	Sound.TypeMask = ElysiumGameSounds::Combat;
 	Sound.Position = F.Guard->EyePosition();
 	F.World.GameSounds().Emit(Sound, 3.0);
-	F.Guard->Senses.TickHearing(*F.Guard, 3.0);
-	F.Guard->Senses.TickHearing(*F.Guard, 3.91);
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 3.91);
+	// Two retail passes: slot 433's `PerformSensing` (`0x1026ee04`) hears at 3.0 and promotes the
+	// delayed sound on the pass at 3.91, whose `OnListened` merge raises the HEAR bit.
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 3.0);
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 3.91);
 	TestTrue(TEXT("the heard stimulus raises HEAR_COMBAT"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::HearCombat));
 	{
@@ -1156,7 +1056,11 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	// The guard is unarmed — a content-free fixture installs no item catalogue. Story 8 L06
 	// integration (corrected to retail): `CNPC_VHuman::SelectSchedule` then reads weapon word 0
 	// (`0x10385008`) and asks the RANGED slot 605 (`0x10385022`), not the melee one.
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 4.0);
+	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Guard, 4.0);
+	// NEW_ENEMY, set above for the promotion, stands until `SetSchedule` (`0x10280e50`) zeroes the
+	// word -- the retail pass clears nothing it does not own -- and the Troika combat ladder answers
+	// its own NEW_ENEMY arm first. The next program install clears it; stated here.
+	F.Guard->Cognition.Conditions.Clear(EElysiumNpcCond::NewEnemy);
 	TestTrue(TEXT("a distant committed enemy raises TOO_FAR_TO_ATTACK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
 	// The recovered slot-605 body's own answer, a loaded program.
@@ -1170,9 +1074,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The alert-lookaround chance and its new producer.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLookaroundChanceTest,
 	"Elysium.Substrate.NpcEnemy.LookaroundChance", GElysiumTestFlags)
@@ -1208,13 +1110,14 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 
 		// The committed-enemy LOS edge is NOT a writer, however many times it fires.
 		F.Guard->BaseMemory.Enemy = F.Player->Handle;
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
-		TestTrue(TEXT("the found edge latched"), F.Guard->Senses.Memory.bEnemyLosLatched);
+		F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`
+		TestTrue(TEXT("the found edge latched (m_afMemory 0x20000)"),
+			(F.Guard->BaseScheduleHost.MemoryBits & 0x20000u) != 0);
 		TestEqual(TEXT("...but the LOS edge does not count a sighting: retail has no writer there"),
 			F.Guard->EnemySightings, 0);
 		for (int32 i = 0; i < 5; ++i)
 		{
-			F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
+			F.Guard->GatherEnemyConditions(F.Player);
 		}
 		TestEqual(TEXT("...nor does staying in sight"), F.Guard->EnemySightings, 0);
 
@@ -1272,10 +1175,8 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The interrupt mask on the kernel: a masked condition aborts into reselection, and an
 // empty mask finishes despite the same conditions.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyInterruptTest,
 	"Elysium.Substrate.NpcEnemy.Interrupts", GElysiumTestFlags)
@@ -1390,9 +1291,7 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	return true;
 }
 
-
 // The bitset itself, and what a save carries of the new memory.
-
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyConditionSetTest,
 	"Elysium.Substrate.NpcEnemy.ConditionSet", GElysiumTestFlags)
@@ -1470,7 +1369,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 		Record->AnchorNavNode = 12;
 	}
 	F.Guard->BaseMemory.RepeatedDamageWindowStart = 12.5;
-	F.Guard->BaseMemory.RepeatedDamageAccumulated = 17;
+	F.Guard->BaseMemory.RepeatedDamageAccumulated = 17.f;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
 
 	ElysiumRoundTripSnapshot(F.World, G.World);
@@ -1492,7 +1391,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	TestEqual(TEXT("...velocity and nav identities"), RestoredRecord->LastNavNode, 11);
 	TestEqual(TEXT("...and its anchor nav identity"), RestoredRecord->AnchorNavNode, 12);
 	TestEqual(TEXT("the repeated-damage window sum survives"),
-		G.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
+		G.Guard->BaseMemory.RepeatedDamageAccumulated, 17.f);
 	TestTrue(TEXT("...with its window root"),
 		FMath::IsNearlyEqual(G.Guard->BaseMemory.RepeatedDamageWindowStart, 12.5, 0.001));
 
@@ -1500,9 +1399,9 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	// load, which is what the recovered pass does on every think anyway.
 	TestTrue(TEXT("the gathered conditions do not travel in the payload"),
 		G.Guard->Cognition.Conditions.IsEmpty());
-	// ...and the pass clock is stamped rather than left at "nothing has ever run", so a remembered
-	// stimulus from before the save cannot read as new.
-	TestTrue(TEXT("the pass clock is stamped on restore"), G.Guard->Cognition.GatheredAt >= 0.0);
+	// `m_bConditionsGathered` (+0x5ca4) is not a datamap row: a restored body has not gathered. (The
+	// port's old stamp-the-load-time edge served its re-deriving gather, deleted at story 8 wave 2.)
+	TestTrue(TEXT("m_bConditionsGathered is clear on restore"), G.Guard->Cognition.GatheredAt < 0.0);
 
 	// The hook's own half: a record whose actor the restored world no longer carries is dropped
 	// rather than left naming a dead index (`FElysiumNpcEnemyMemory::Rebase`).

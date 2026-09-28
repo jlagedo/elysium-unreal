@@ -43,7 +43,13 @@ bool FElysiumScheduleFlagIntegrationTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 0.0);
 	TestTrue(TEXT("TASKS_FACE_ENEMY written to word two"), Npc->NpcFlags.Has(EElysiumNpcFlag2::TASKS_FACE_ENEMY));
 	TestFalse(TEXT("word one's FINDING_BODY is untouched"), Npc->NpcFlags.Has(EElysiumNpcFlag::FINDING_BODY));
-	Npc->SetNpcFlag(0x00080000u);
+	// `TASK_SET_NPC_FLAG` (0x100)'s Troika arm `0x102a585d` with a word-one operand (story 8 wave 2:
+	// the port's `SetNpcFlag` verb deleted; the arm is reached through slot 442).
+	FElysiumScheduleStep SetFlag;
+	const FElysiumLocalIdSpace* TaskSpace = Npc->IdSpace(EElysiumIdCategory::Task);
+	SetFlag.TaskId = TaskSpace != nullptr ? TaskSpace->LocalToGlobal(0x100) : INDEX_NONE;
+	SetFlag.SetRawWord(0x00080000u);
+	Npc->StartTaskSlot442(&SetFlag);
 	TestTrue(TEXT("word-one operands still work"), Npc->NpcFlags.Has(EElysiumNpcFlag::NO_DIALOG));
 	return true;
 }
@@ -70,10 +76,6 @@ bool FElysiumScheduleConditionSpaceIntegrationTest::RunTest(const FString&)
 		const FElysiumLocalIdSpace* Space = nullptr;
 		bool bInterrupted = false;
 		virtual const FElysiumLocalIdSpace* ConditionIdSpace() const override { return Space; }
-		virtual float RunSpecialIdleActivity(double) override { return 1.f; }
-		virtual bool IsBodyVisible() const override { return true; }
-		virtual float PlayActivity(const FString&) override { return 1.f; }
-		virtual float RandomSeconds(float Max) override { return Max; }
 		virtual void RecordScheduleEvent(const FString& Text) override
 		{
 			bInterrupted |= Text.Contains(TEXT("interrupted by"));
@@ -118,37 +120,52 @@ bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 		SightPoints.Add(Point);
 		return Point.Y >= -1.0; // origin exposed, first left candidate in cover
 	};
+	// Story 8 wave 2: the witness runs through the real slot 442 / 444 arms, which read the world's
+	// `curtime`; each pass ticks the (quiet) world to its time first, then runs the interpreter.
+	auto Maintain = [&F, Npc](double T, const FElysiumNpcConditions* Conditions = nullptr)
+	{
+		if (F.World.NowSeconds() < T)
+		{
+			F.World.Tick(T);
+		}
+		return ElysiumSchedule::Tick(Npc->Schedule, *Npc, T, Conditions);
+	};
+	const double Start = F.World.NowSeconds();
 	ElysiumSchedule::Start(Npc->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY_FAILED, *Npc);
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 0.0);
+	Maintain(Start);
 	TestEqual(TEXT("retail 0.2s wait runs first"), Npc->Schedule.TaskIndex, 1);
-	// The authored operand is float 0.2, then widened to double by the clock. Use the actual
-	// deadline rather than a double literal which lies just below that float's value.
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, Npc->Schedule.TaskEndsAt);
+	// `m_flWaitFinished` (+0x5db4), the base TASK_WAIT arm's stamp (`0x10286511`); the RunTask arm
+	// completes at an ordered `curtime >= m_flWaitFinished` (`0x10288c2a`).
+	Maintain(Npc->BaseScheduleHost.WaitFinished);
 	TestEqual(TEXT("retail witness reaches WAIT_FOR_MOVEMENT"), Npc->Schedule.TaskIndex, 7);
 	TestEqual(TEXT("origin then first left candidate, no right query"), SightPoints.Num(), 2);
 	TestTrue(TEXT("48 Source units to the left"), FMath::IsNearlyEqual(Motor->RequestedFeet.Y, -48.0 * ElysiumMove::U, 0.01));
 	TestTrue(TEXT("FORCE_RELAXED_ANIMS runs after finding cover"), Npc->NpcFlags.Has(EElysiumNpcFlag::FORCE_RELAXED_ANIMS));
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 0.3);
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, 1.4);
+	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
+	// `OnNavComplete` (`0x102eea90`) and the owner's `TaskMovementComplete` (`0x10273ec0`).
+	Npc->NavigatorMoveStep();
+	// One pass: the arrival completes WAIT_FOR_MOVEMENT and the remaining tasks run in the same
+	// `MaintainSchedule` loop up to the authored final wait.
+	Maintain(Npc->BaseScheduleHost.WaitFinished + 0.1);
 	TestEqual(TEXT("all twelve tasks reached, final authored wait running"), Npc->Schedule.TaskIndex, 11);
 	TestTrue(TEXT("INCOVER remembered"), (Npc->BaseScheduleHost.MemoryBits & 2u) != 0);
 	TestFalse(TEXT("no task failed along the successful witness"), Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 	const int32 WitnessId = Npc->Schedule.Current;
-	const double LastWaitEnd = Npc->Schedule.TaskEndsAt;
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, LastWaitEnd - 0.01);
+	const double LastWaitEnd = Npc->BaseScheduleHost.WaitFinished;
+	Maintain(LastWaitEnd - 0.01);
 	TestEqual(TEXT("final wait holds until its authored deadline"), Npc->Schedule.Current, WitnessId);
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, LastWaitEnd + 0.01);
+	Maintain(LastWaitEnd + 0.01);
 	TestNotEqual(TEXT("the complete witness returns to selection"), Npc->Schedule.Current, WitnessId);
 
 	// Failure is the other authored arm, not the old whitelist's IDLE_STAND fallback.
 	F.Services.LineOfSightQuery = [](const FVector&, const FVector&) { return true; };
 	ElysiumSchedule::Start(Npc->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY_FAILED, *Npc);
 	const double FailureStart = LastWaitEnd + 1.0;
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart);
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart + 0.3);
+	Maintain(FailureStart);
+	Maintain(FailureStart + 0.3);
 	TestEqual(TEXT("no cover has retail failure 8"), Npc->BaseScheduleHost.FailureReason, 8);
-	ElysiumSchedule::Tick(Npc->Schedule, *Npc, FailureStart + 0.4, &Npc->Cognition.Conditions);
+	Maintain(FailureStart + 0.4, &Npc->Cognition.Conditions);
 	TestEqual(TEXT("STANDOFF translates to the loaded Troika program"), Npc->LocalScheduleId(Npc->Schedule.Current), 0xc1);
 	return true;
 }

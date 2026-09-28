@@ -29,6 +29,7 @@
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
 #include "Substrate/ElysiumLaw.h"           // FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumNpc.h"           // FElysiumNpcBase::GetMind — the cast body's own state
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumReactions.h"     // the damage flinch's pure rules
 #include "Substrate/ElysiumRulebook.h"
@@ -1095,15 +1096,33 @@ bool FElysiumCombatCharacter::IsKindred() const
 void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
 	bool bDisallowFirearmsToBashing)
 {
-	// STORY8-TWIN (NPC half): `RejectsAllDamage` is replaced for NPCs by 0x102bed30 (the Troika
-	// slot-142 body, which also fires OnDamaged once per tick) at wave 2 (L13), once slot 142 is the
-	// NPC entry.
-	if (IsInert() || HasReportedDeath() || RejectsAllDamage())
+	if (IsInert())
 	{
-		return;   // invincible: retail refuses ahead of life state, the resolver and the commit
+		return;
 	}
-	// Incoming damage while paired tears the feed down BEFORE the damage commits, whichever
-	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
+	if (AsNpcBase() != nullptr)
+	{
+		// Story 8 wave 2 (L13): an NPC's damage is retail's slot-142 transaction. The packet goes to
+		// `OnTakeDamage` on the body (Troika `0x102bed30` -> `CAI_BaseNPC::OnTakeDamage`
+		// `0x10265e90` -> `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60`), whose alive arm runs
+		// slot 390 and the resolver inside `0x103302e0`. The feed break and the held-use drop below
+		// are the PLAYER's (`CBasePlayer::OnTakeDamage` 0x10163020 is the damage caller of
+		// `FeedInterrupt` 0x1033a9e0 and of the `+use` drop 0x10163126); no NPC body calls either.
+		// A corpse takes packets too: `BecomeClientRagdoll` (`0x10090180`) only makes it non-solid,
+		// sets render FX 0x17 and clears its think, and `m_lifeState` stays LIFE_DYING, so
+		// `0x1032ef60`'s dying arm (`[+0x61c]`) is what a packet meets.
+		FElysiumDmg Packet = Dmg;
+		DispatchTakeDamagePacket(&Packet, 0.f,
+			Attacker != nullptr ? Attacker->Handle : Dmg.Source, bDisallowFirearmsToBashing);
+		return;
+	}
+	if (HasReportedDeath())
+	{
+		return;
+	}
+	// Incoming damage while paired tears the feed down BEFORE the damage commits
+	// (`docs/vtmb/feeding.md` § "Interruption, completion and outputs"; `CBasePlayer::OnTakeDamage`
+	// 0x10163020 -> `FeedInterrupt` 0x1033a9e0).
 	BreakFeed();
 	// And the same position is where retail's player drops a held `+use` session (`0x10163126`).
 	OnDamageEntered();
@@ -1119,94 +1138,547 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 
 void FElysiumCombatCharacter::TakeDamage(float Amount)
 {
-	// STORY8-TWIN (NPC half): 0x102bed30 at wave 2 (L13), as above.
-	if (Amount <= 0.f || IsInert() || RejectsAllDamage())
+	if (IsInert())
 	{
-		return;   // invincible: the scalar input reaches the same virtual in retail
+		return;
+	}
+	if (AsNpcBase() != nullptr)
+	{
+		// The scalar packet (word 0 null, `+0x30` the amount) into slot 142, as above. No amount
+		// gate: retail's zero tests are `0x103302e0`'s `<= 0.0` and the Troika's zero-damage arm
+		// (`0x102bef4d`), both inside the transaction.
+		DispatchTakeDamagePacket(nullptr, Amount, FElysiumEntityHandle::Invalid(), false);
+		return;
+	}
+	if (Amount <= 0.f)
+	{
+		return;
 	}
 	BreakFeed();
 	OnDamageEntered();
+	CommitDamage(ElysiumDamage::ScalarDescriptor(Amount));
+}
 
-	// The scalar fallback: retail's alive path takes its positive damage EITHER from the descriptor
-	// apply callback or from here, so this route does not enter the resolver at all. The descriptor
-	// exists so the commit has one shape to spend: direct input, no mask (hence no aggravated
-	// tracking and no soak bypass), and a forced soak of zero, which is what "the number as given"
-	// means in descriptor terms.
-	FElysiumDmg Dmg;
-	Dmg.Family = EElysiumDmgFamily::Bashing;
-	Dmg.Flags = ElysiumDamage::FlagDirectInput;
-	Dmg.ExtraInput = FMath::TruncToInt(Amount);
-	Dmg.ForcedSoak = 0;
-	Dmg.RolledSuccesses = Dmg.ExtraInput;
-	Dmg.Remainder = Dmg.ExtraInput;
-	Dmg.AppliedDamage = Dmg.ExtraInput;
-	Dmg.bResolved = true;
-	CommitDamage(Dmg);
+void FElysiumCombatCharacter::DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar,
+	const FElysiumEntityHandle& AttackerHandle, bool bDisallowFirearmsToBashing)
+{
+	FElysiumNpcBase::FElysiumTakeDamageInfo Info;
+	Info.Dmg = Dmg;                                      // +0x00, null on the scalar route
+	Info.Attacker = AttackerHandle;                      // +0x2c
+	Info.Damage = Scalar;                                // +0x30
+	Info.bDisallowFirearmsToBashing = bDisallowFirearmsToBashing;
+	(void)OnTakeDamage(&Info);                           // slot 142
+	// The Troika's slot-390 body cached the packet verbatim (`+0x660c`, `0x102bedab`); its word 0
+	// named this dispatch's stack, so it is not kept.
+	if (FElysiumNpc* Troika = AsNpc())
+	{
+		Troika->LastTakeDamageInfo.Dmg = nullptr;
+	}
+}
+
+// =================================================================================================
+// Slot 142 — `CBaseCombatCharacter::OnTakeDamage` `0x1032ef60`.
+// =================================================================================================
+
+namespace
+{
+	// `m_TeamSymbol` (`+0x10b0`) as `0x10323a70` reads it. The team registry `AddToTeam`
+	// (`0x103239a0`) fills is not carried (`Spawn19AddToTeam` is a counted seam), so every character
+	// answers the constructor's `0xffff` (`0x10326de0`), which is "no team".
+	constexpr uint16 GNoTeamSymbol = 0xffff;
+	uint16 CombatTeamSymbolOf(const FElysiumCombatCharacter& /*Character*/)
+	{
+		return GNoTeamSymbol;
+	}
+
+	// A retail body this substrate does not carry, called at its retail position: the stub tally
+	// (`elysium.stubs`) records the call, and nothing else happens -- the seam answers "nothing".
+	void CombatFireSeam(const FElysiumCombatCharacter& Self, const TCHAR* Surface, const TCHAR* Address,
+		const FString& Params)
+	{
+		ElysiumStub::FSurface Row;
+		Row.Kind = TEXT("method");
+		Row.Surface = Surface;
+		Row.Address = Address;
+		ElysiumStub::Fired(Row, Self.DebugString(), Params, TEXT("the NPC kernel"));
+	}
+
+	// `_DAT_1044e664`, a float 10.0: the corpse's removal think delay in `CreateCorpse`'s tail.
+	constexpr float GCombatCorpseThinkDelaySeconds = 10.f;
+
+	// `CBaseCombatCharacter::SpawnStaticCorpse` `0x1032be80`: `CreateNoSpawn("prop_base", origin,
+	// angles)` (slots 219 / 218), `CopyAnimationDataFrom(this)` twice around its slot 103 `Spawn`,
+	// `SetOccludesSound(0)`, `SetSolid(SOLID_NONE)`, `SetSolidFlags(0)`, `m_fEffects = this->m_fEffects
+	// | 0xb0`, `ForceTransmit`, and the act store's corpse registration `0x102ca6c0(DAT_109253f8, this,
+	// corpse)`. Here: a runtime `prop_base` record at this body's origin, angles and model. NAMED GAPS:
+	// no class answers `prop_base`, so the record carries no body and no think (the pose copy and the
+	// render words are visual-only); the act-store registration is the same unported store the
+	// corpse query seam (`ElysiumNpcConditions19.inl`) stands for, and answers nothing.
+	FElysiumEntity* CombatSpawnStaticCorpse(FElysiumCombatCharacter& Self)
+	{
+		if (Self.World == nullptr)
+		{
+			return nullptr;
+		}
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("prop_base");
+		Def.Origin = Self.Origin;
+		FElysiumEntity* const Corpse = Self.World->Resolve(Self.World->SpawnRuntimeEntity(MoveTemp(Def)));
+		if (Corpse != nullptr)
+		{
+			Corpse->Angles = Self.Angles;
+			Corpse->Model = Self.Model;
+		}
+		return Corpse;
+	}
+
+	// `0x10207df0`: the character's template (`0x101d5f10` over `DAT_10738d10`) authors
+	// `General/Has_Burning_Death` (`+0x98`), OR the character is Kindred (`0x10337f30`) and the
+	// template does not author `General/Disallow_Kindred_Death` (`+0x9d`) -- the parse is `0x101d4520`.
+	bool CombatCorpseBurnsAway(FElysiumCombatCharacter& Self)
+	{
+		bool bHasBurningDeath = false;
+		bool bDisallowKindredDeath = false;
+		const FElysiumNpc* const Npc = Self.AsNpc();
+		UElysiumSessionSubsystem* const GameState = Self.World != nullptr ? Self.World->GetGameState() : nullptr;
+		UElysiumRulebookSubsystem* const Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+		FElysiumClanTemplate Resolved;
+		if (Npc != nullptr && Rules != nullptr && !Npc->StatTemplate.IsEmpty()
+			&& Rules->Clans().Resolve(Npc->StatTemplate, Resolved))
+		{
+			bHasBurningDeath = Resolved.GeneralInt(TEXT("Has_Burning_Death")) != 0;
+			bDisallowKindredDeath = Resolved.GeneralInt(TEXT("Disallow_Kindred_Death")) != 0;
+		}
+		if (bHasBurningDeath)
+		{
+			return true;
+		}
+		return Self.IsKindred() && !bDisallowKindredDeath;
+	}
+
+	// `Rules.txt` `VampFrenzy_Info`, which `0x101e6310` loads into the process-global `CVFeatList_t`
+	// (`0x10739d08`); the defaults are that loader's immediates (`0x101e644d` / `0x101e6457` /
+	// `0x101e647b`): `Dmg_Amount` 0x39 (`+0x348`, getter `0x101e8dc0`), `AggrDmg_Amount` 0x1d
+	// (`+0x34c`, `0x101e8de0`), `Default_Difficulty` 5 (`+0x35c`, `0x101e8e60`).
+	int32 CombatVampFrenzyRule(const FElysiumCombatCharacter& Self, const TCHAR* Key, int32 ImageDefault)
+	{
+		UElysiumSessionSubsystem* GameState = Self.World != nullptr ? Self.World->GetGameState() : nullptr;
+		UElysiumRulebookSubsystem* Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+		return Rules != nullptr ? Rules->Rules().Int(TEXT("VampFrenzy_Info"), Key, ImageDefault) : ImageDefault;
+	}
+
+	// `0x10323930`: both characters on the same team (a non-`0xffff` symbol, equal on both).
+	bool CombatSameTeam(const FElysiumCombatCharacter& Self, const FElysiumCombatCharacter* Other)
+	{
+		const uint16 Mine = CombatTeamSymbolOf(Self);
+		if (Mine == GNoTeamSymbol || Other == nullptr)
+		{
+			return false;
+		}
+		const uint16 Theirs = CombatTeamSymbolOf(*Other);
+		return Theirs != GNoTeamSymbol && Theirs == Mine;
+	}
+}
+
+int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	FInfo* const Info = static_cast<FInfo*>(InInfo);
+	// Crash guard (named divergence): retail reads the packet without a test.
+	if (Info == nullptr)
+	{
+		return 0;
+	}
+
+	// 1. `m_takedamage == DAMAGE_NO` answers 0 with nothing run.
+	if (TakeDamageMode == 0)
+	{
+		return 0;
+	}
+
+	// 2. A teammate's packet is refused (`0x10323930` against the attacker's `+0x9c`
+	//    combat-character self-cast), unless the attacker is this body itself.
+	FElysiumEntity* const AttackerEntity =
+		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
+	const FElysiumCombatCharacter* const AttackerCharacter =
+		AttackerEntity != nullptr ? AttackerEntity->AsCombatCharacter() : nullptr;
+	if (CombatSameTeam(*this, AttackerCharacter) && AttackerEntity != this)
+	{
+		return 0;
+	}
+
+	// 3. `0x101e3cf0` on the effect manager `DAT_10739a4c`: every active effect whose record's
+	//    `+0x31` byte (`ShouldRemove_OnTakeDamage`) is set is removed — BEFORE the life-state split,
+	//    so it runs on every packet past the two gates, whatever the packet commits.
+	ElysiumDisciplines::NotifyDamaged(*this);
+
+	// 4. The life-state split on `m_lifeState` (`+0x200`).
+	if (LifeState != ElysiumLifeState::Alive)
+	{
+		if (LifeState == ElysiumLifeState::Dying)
+		{
+			return OnTakeDamage_Dying(Info);                                     // slot 391 (+0x61c)
+		}
+		const int32 Result = OnTakeDamage_Dead(Info);                            // slot 392 (+0x620)
+		// A corpse at or below zero health gibs on a `DMG_GIB_CORPSE`-family (`0xe1`) hit, and the
+		// body answers 0 then.
+		const uint32 Bits = Info->Dmg != nullptr ? (Info->Dmg->DmgMask | Info->DamageBits) : Info->DamageBits;
+		if (Health < 1 && (Bits & 0xe1u) != 0)
+		{
+			(void)Event_Gibbed();                                                // slot 402 (+0x648)
+			return 0;
+		}
+		return Result;
+	}
+
+	// 5. Alive: slot 390 `OnTakeDamage_Alive` (+0x618); its answer is what the body returns.
+	const int32 Result = OnTakeDamage_Alive(Info);
+
+	// 6. `Health` (stat 0xf, damage taken) against `Max_Health` (0x11) off the stat list, both read
+	//    before the heal-over-time starts.
+	using EC = EElysiumTraitContainer;
+	const int32 Taken = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);       // GetValue(0xf)
+	const int32 Ceiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);  // GetValue(0x11)
+	// `CBaseCombatCharacter::BeginVampHeal_HOT` `0x10324ba0` (`0x1032f17a`, after both stat reads):
+	// `CanVampHeal_HOT` then `m_flLastBloodHealHOTUpdate = now + VampHeal_HOT_Delay`. SEAM: the vampire
+	// heal-over-time is not carried by this substrate (no `+0xa84` clock, no HOT update), so the call
+	// is tallied and nothing is written.
+	CombatFireSeam(*this, TEXT("CBaseCombatCharacter::BeginVampHeal_HOT"), TEXT("0x10324ba0"), FString());
+
+	// 7. Still standing: `CreatePotenceHitEffect` (graded 1/2/3 by the damage bands) when a player
+	//    attacker (`+0xa8`) holding a weapon whose slot-360 flags carry `0x18000` has Potence
+	//    (stat 9) >= 1. Visual only (a particle and a sound on this body); not carried, named.
+	// A body with no health track (`Max_Health` 0, a record that never seeded a sheet) cannot die of
+	// the compare: the port's guard, as in the commit (`CommitDamageHealth`).
+	if (Ceiling <= 0 || Taken < Ceiling)
+	{
+		return Result;
+	}
+
+	// 8. The kill: slot 144 `Event_Killed(info)`, then slot 399 (`ShouldGib`) — or, when it answers
+	//    false, a `DMG_ALWAYSGIB` (0x2000) hit without `DMG_NEVERGIB` (0x1000) — takes slot 402
+	//    `Event_Gibbed`, whose answer is what the body returns; a false answer (or no gib) takes
+	//    slot 403 `Event_Dying`.
+	Event_Killed(Info);                                                          // slot 144 (+0x240)
+	const uint32 Bits = Info->Dmg != nullptr ? (Info->Dmg->DmgMask | Info->DamageBits) : Info->DamageBits;
+	const bool bGib = Slot399()                                                  // slot 399 (+0x63c)
+		|| ((Bits & 0x2000u) != 0 && (Bits & 0x1000u) == 0);
+	if (bGib)
+	{
+		const bool bGibbed = Event_Gibbed();                                     // slot 402 (+0x648)
+		if (bGibbed)
+		{
+			return 1;
+		}
+		Event_Dying();                                                           // slot 403 (+0x64c)
+		return 0;
+	}
+	Event_Dying();                                                               // slot 403 (+0x64c)
+	return Result;
+}
+
+// =================================================================================================
+// Slot 144 — `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`.
+// =================================================================================================
+
+void FElysiumCombatCharacter::Event_Killed(void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	FInfo* const Info = static_cast<FInfo*>(InInfo);
+
+	// Port bookkeeping, ahead of retail's body: a held reaction claim is released by a predicate its
+	// producer re-checks, and a dying character re-checks nothing (the body-claim arbiter).
+	ReleaseHeldReaction();
+
+	// 1. `m_lifeState = LIFE_DYING` (`0x1032ba31 MOV [ESI+0x200],EBP`).
+	LifeState = ElysiumLifeState::Dying;
+
+	// 2. Slot 385 `Weapon_Drop(active weapon)` (`+0x604`) — the drop of the held weapon.
+	FElysiumEntity* const ActiveWeaponEntity =
+		(World != nullptr && Inventory.ActiveWeapon.IsSet()) ? World->Resolve(Inventory.ActiveWeapon) : nullptr;
+	Weapon_Drop(ActiveWeaponEntity, nullptr, false);
+
+	// 3. A grapple VICTIM (`+0x1538` resolving, `+0x153c == 1`) tears its partner's feed down:
+	//    slot 353 `FeedInterrupt` on the partner.
+	if (Grapple.Role == EElysiumGrappleRole::Victim)
+	{
+		if (FElysiumCombatCharacter* const Partner = ResolveGrapplePartner())
+		{
+			Partner->FeedInterrupt();
+		}
+	}
+
+	// 4. `RemoveDisciplineVisuals` and `RemoveFromPresenceList` — UNRECOVERED here (the discipline
+	//    visual list and the presence list are not carried); `RemoveFromComfortList` is.
+	RemoveFromComfortList();
+	// 5. The engine interface call `(*DAT_1070b248)->vfunc6(entindex, 1)` — UNRECOVERED here.
+
+	// 6. The owner's slot 139 `DeathNotice(this)` — the maker's child-died notice.
+	NotifyOwnerOfTermination(EElysiumOwnedEntityTermination::Died);
+
+	// 7. The ragdoll force (the packet's force, else `CalcDamageForceVector`, plus the absolute
+	//    velocity, clamped) — UNRECOVERED on the port's packet, which carries no force: the corpse
+	//    takes none, as `CompleteDeathHandoff` has always stated. Then slot 301 `CreateCorpse`.
+	CreateCorpse(FVector::ZeroVector, Info);
+
+	// 8. `m_iCurFrenzyCount = 0` (`0x1032bcba MOV [ESI+0x146c],0`).
+	CurFrenzyCount = 0;
+
+	// 9. The attacker's (`info+0x2c`, its `+0x9c` combat character) slot 300 `Event_TookLife(this,
+	//    ...)`.
+	if (Info != nullptr && World != nullptr && Info->Attacker.IsSet())
+	{
+		if (FElysiumEntity* const Attacker = World->Resolve(Info->Attacker))
+		{
+			if (FElysiumCombatCharacter* const Killer = Attacker->AsCombatCharacter())
+			{
+				// Retail passes the packet's two bytes `+0x48` / `+0x49` (`0x1032bcd9` -> `0x101c2af0`,
+				// `0x1032bce3` -> `0x101c2ab0`); the port's packet carries neither (unrecovered words,
+				// no current body reads them), so both go as false.
+				Killer->Event_TookLife(this, false, false);                      // 0x1032bcec slot 300
+			}
+		}
+	}
+	UE_LOG(LogElysiumPlayer, Log, TEXT("%s died"), *DebugString());
+}
+
+// =================================================================================================
+// Slot 301 — `CBaseCombatCharacter::CreateCorpse` `0x1032c0e0`.
+// =================================================================================================
+
+void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	const FInfo* const Info = static_cast<const FInfo*>(InInfo);
+	(void)Force;
+	(void)Info;
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	FElysiumNpcBase* const NpcBase = AsNpcBase();
+
+	// 1. `OnDeath` once more through the Troika self-cast (`+0x98`, `0x10265a90`), crediting the
+	//    self-cast's `m_hLastEnemy` (`+0x1a94`, `0x1032c1aa..0x1032c1d9`) -- not the packet's attacker.
+	//    Latched by the first fire in `CAI_BaseNPC::Event_Killed`, so a no-op on that path.
+	if (NpcBase != nullptr)
+	{
+		NpcBase->FireOnDeathOnce(NpcBase->BaseMemory.LastEnemy);
+	}
+	// 2. The ragdoll seed bone (`0x101c2a30`: the packet's hit bone, else `Bip01 Spine2`) and the
+	//    force are the client ragdoll's; neither reaches this runtime's physics handoff.
+
+	// 3. The corpse, by three arms (`0x1032c22d..0x1032c2e4`).
+	FElysiumEntity* Corpse = nullptr;
+	const bool bIsPlayer = World != nullptr && Handle == World->PlayerHandle();   // `+0xa8`, the player self-cast
+	if (bIsPlayer)                                                             // 0x1032c22d / 0x1032c237 JZ
+	{
+		// A player's body leaves a static corpse (`0x1032c23a`), and its 18 body-fire particle
+		// handles (`m_hBodyFireParticles`) are each `UTIL_Remove`d (`0x1032c24c..0x1032c283`) -- the
+		// player carries no such handles here, so the loop has nothing to take.
+		Corpse = CombatSpawnStaticCorpse(*this);
+	}
+	else if ((MiscFlags & 0x80000u) != 0)                                      // 0x1032c288 HasMiscFlag(0x80000)
+	{
+		Corpse = CombatSpawnStaticCorpse(*this);                               // 0x1032c2af 0x10001c03
+		Hide();                                                                // 0x1032c2ba slot 66
+		// `ThinkSet(SUB_Remove)` (`0x10015b68` -> `0x101c0b10`), `m_flNextThink = curtime + 0.5`
+		// (`_DAT_104454d0`): the body is removed and the static corpse stays.
+		if (NpcBase != nullptr)
+		{
+			NpcBase->ThinkSet(TEXT("0x101c0b10"), 0.0);                        // 0x1032c2cb
+		}
+		NextThink = static_cast<float>(Now + static_cast<double>(ElysiumNpcTunables::Half));
+	}
+	else
+	{
+		BecomeClientRagdoll();                                                 // 0x1032c29c 0x10090180
+		Corpse = this;                                                         // 0x1032c2a5 slot 137 answers `this`
+	}
+
+	// 4. The corpse's own removal (`0x1032c2e4..0x1032c423`), for a non-player corpse. A corpse that
+	//    burns away (`0x10207df0`) is removed outright at +10 s with the burning-death visuals and
+	//    sound; any other is `SUB_PVSRemove`d at +10 s -- removed once no player can see it.
+	if (Corpse != nullptr)
+	{
+		const bool bCorpseIsPlayer = World != nullptr && Corpse->Handle == World->PlayerHandle();   // corpse `+0xa8`
+		FElysiumNpcBase* const CorpseNpc = Corpse->AsNpcBase();
+		const bool bBurns = CombatCorpseBurnsAway(*this);                     // 0x1032c2f6 0x10207df0
+		if (!bCorpseIsPlayer)
+		{
+			if (bBurns)
+			{
+				// `0x1032c30f..0x1032c3fe`: the corpse's slot 243 takes this body's slot 244(1) (the
+				// burn material, visual), `ThinkSet(SUB_Remove)` at +10 s, and the
+				// `"character/vampire burning death.wav"` emission (`0x1061fff0`, volume 1.0,
+				// attenuation 0.8) -- the render and the sound are not carried (visual/audio only).
+				if (CorpseNpc != nullptr)
+				{
+					CorpseNpc->ThinkSet(TEXT("0x101c0b10"), 0.0);              // 0x1032c33c
+				}
+			}
+			else if (CorpseNpc != nullptr)
+			{
+				CorpseNpc->ThinkSet(TEXT("0x102696f0"), 0.0);                  // 0x1032c40f ThinkSet(0x10009c9b SUB_PVSRemove)
+			}
+			// `curtime + _DAT_1044e664` (10.0) on either arm (`0x1032c347`, `0x1032c41a..0x1032c423`).
+			// A static `prop_base` corpse is a record-only entity here (no class answers
+			// `prop_base`), so it carries no think: its SUB_PVSRemove is not run (named gap).
+			if (CorpseNpc != nullptr)
+			{
+				Corpse->NextThink = static_cast<float>(Now + static_cast<double>(GCombatCorpseThinkDelaySeconds));
+			}
+		}
+		// `UTIL_Remove(m_hAnimFollowModel)` and the handle reset (`0x1032c429..0x1032c45e`): the
+		// ornament an animation event hung on this body goes with the death.
+		if (!AnimFollowModel.IsEmpty())
+		{
+			IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+			if (Embodiment != nullptr && Visual != nullptr)
+			{
+				Embodiment->DetachOrnamentModel(Visual);
+			}
+			AnimFollowModel.Reset();
+		}
+		// `ForceTransmit(this)` / `ForceTransmit(corpse)`: network transmission, nothing to do here.
+	}
+}
+
+// `CBaseAnimating::BecomeClientRagdoll` `0x10090180` for a character: the pose goes to physics,
+// the entity stops being solid and stops thinking. The base keeps its body.
+void FElysiumCombatCharacter::BecomeClientRagdoll()
+{
+}
+
+
+
+// =================================================================================================
+// Slot 390 — `CBaseCombatCharacter::OnTakeDamage_Alive` `0x103302e0`.
+// =================================================================================================
+
+int32 FElysiumCombatCharacter::OnTakeDamage_Alive(void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	FInfo* const Info = static_cast<FInfo*>(InInfo);
+	// Crash guard (named divergence): retail reads the packet without a test. Every exit answers 1
+	// (the one exit, `0x10330abe`).
+	if (Info == nullptr)
+	{
+		return 1;
+	}
+
+	// UNRECOVERED here, in retail order, each named rather than guessed:
+	//  - `InPrayer(this)` -> slot 358 (`+0x598`), the prayer interrupt;
+	//  - `0x103300c0` / `0x10330220`, the hit render-FX flash (`m_nRenderFX` 0x1a / 0x25) and the
+	//    random one-of-three hit sound off the sound table `DAT_1074e098` (visual/audio only);
+	//  - `0x101cebc0` on a player attacker (`+0xa8`) with the whole damage, and `0x101c2b30` /
+	//    `0x1023e4b0`, the victim-side write gated on the Troika's `m_bInvincible`;
+	//  - `m_bitsDamageType` (the combined bits) and the death-throw direction `_DAT_1070ba40..48`
+	//    from the inflictor: the port has no `m_bitsDamageType` word and no inflictor on its packet;
+	//  - the global `DAT_10936de4` gate (its slot 1 false and its `+0x2c` non-zero skips the commit).
+
+	// Slot 299 `CreateDamageEffects(info, &bSkip)` (`+0x4ac`): a raised byte ends the body.
+	bool bSkipCommit = false;
+	CreateDamageEffects(Info, &bSkipCommit);
+	if (bSkipCommit)
+	{
+		return 1;
+	}
+
+	// `m_takedamage == DAMAGE_EVENTS_ONLY` commits nothing.
+	if (TakeDamageMode == 1)
+	{
+		return 1;
+	}
+
+	// The amount: `CVDmg_t::Apply` on word 0 (the resolver), else the packet's scalar `+0x30`;
+	// nothing at or below 0.0 is committed.
+	// `CVDmg_t::Apply` takes its attacker from the packet (`0x103306a6 CALL 0x100140b5` ->
+	// `0x101c29b0`, `info+0x2c`), so every producer that builds its own packet resolves the same way.
+	FElysiumEntity* const PacketAttacker =
+		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
+	FElysiumCombatCharacter* const AttackerCharacter =
+		PacketAttacker != nullptr ? PacketAttacker->AsCombatCharacter() : nullptr;
+	FElysiumDmg Scalar;
+	const FElysiumDmg* Committed = nullptr;
+	if (Info->Dmg != nullptr)
+	{
+		if (!ElysiumDamage::Apply(*Info->Dmg, AttackerCharacter, *this,
+			FElysiumDamageContext::FromCharacter(*this), Info->bDisallowFirearmsToBashing))   // 0x103306b0
+		{
+			return 1;   // a family-less descriptor: Apply reported why
+		}
+		Committed = Info->Dmg;
+	}
+	else
+	{
+		Scalar = ElysiumDamage::ScalarDescriptor(Info->Damage);
+		Committed = &Scalar;
+	}
+	if (Committed->CommittedDamage() <= 0)
+	{
+		return 1;
+	}
+
+	// The arithmetic: HealthBuffer (0x19), the unkillable `0x4b` cap, `AddBase(0xf)`, Kindred
+	// aggravated (0x10) and `m_iHealth = HealthToPercent()` (slot 348). The aggravated test reads
+	// `m_bitsDamageType` (+0xe98), the descriptor's mask OR'd with the packet's bits
+	// (`0x1033059a..0x103305a7`).
+	FElysiumDmg BitsDamageType = *Committed;
+	BitsDamageType.DmgMask |= Info->DamageBits;
+	if (!CommitDamageHealth(BitsDamageType))
+	{
+		return 1;
+	}
+
+	// The Kindred frenzy arm (`0x103309fb..0x10330aa9`), past the aggravated add: a live attacker
+	// whose `+0x9c` combat character stands (`0x103309fb` / `0x10330a06`), and the hit measured as
+	// the descriptor's `GetDmg()` or else the packet's float (`0x10330a14..0x10330a31`). At or above
+	// `VampFrenzy_Info/Dmg_Amount` (`0x10330a3a`, `FCOMP; TEST AH,0x41; JNP`) the check runs; else at
+	// or above `AggrDmg_Amount` (`0x10330a78`, `JP` skips) it runs only for an aggravated hit
+	// (`0x10330a90 TEST [+0xe98],0xc8000008`). The check is `FrenzyCheck(Default_Difficulty)`
+	// (`0x10330aa1` / `0x10330aa9`).
+	if (IsKindred() && AttackerCharacter != nullptr)                             // 0x10330979 / 0x10330a0e
+	{
+		const float Measured = Info->Dmg != nullptr ? static_cast<float>(Info->Dmg->GetDmg()) : Info->Damage;
+		bool bFrenzyCheck = false;
+		if (static_cast<float>(CombatVampFrenzyRule(*this, TEXT("Dmg_Amount"), 0x39)) <= Measured)          // 0x10330a50 JNP
+		{
+			bFrenzyCheck = true;
+		}
+		else if (static_cast<float>(CombatVampFrenzyRule(*this, TEXT("AggrDmg_Amount"), 0x1d)) <= Measured // 0x10330a8e JP
+			&& (BitsDamageType.DmgMask & ElysiumDamage::NoSoakMask) != 0)                                  // 0x10330a90
+		{
+			bFrenzyCheck = true;
+		}
+		if (bFrenzyCheck)
+		{
+			// `CBaseCombatCharacter::FrenzyCheck` `0x1033eb60` (1,270 bytes) -- SEAM: the frenzy roll
+			// and its outcome are not carried by this substrate; the call is tallied with the
+			// difficulty it was handed and nothing is written.
+			const int32 Difficulty = CombatVampFrenzyRule(*this, TEXT("Default_Difficulty"), 5);          // 0x10330aa1 0x101e8e60
+			CombatFireSeam(*this, TEXT("CBaseCombatCharacter::FrenzyCheck"), TEXT("0x1033eb60"),
+				FString::Printf(TEXT("difficulty=%d"), Difficulty));                                      // 0x10330aa9
+		}
+	}
+
+	// The damage flinch. NAMED EVENT-ORDER DIVERGENCE, not a modernization (L13 review row 8,
+	// deferred): `0x103302e0..0x10330ad4` calls no slot 292; retail reaches `DamageFlinch` from
+	// `CAI_BaseNPC::TraceAttack` (`0x10266780`, ported) BEFORE the transaction, and only for a
+	// traced hit. The port's hit producers dispatch no slot 141 (they carry no trace and there is no
+	// multi-damage accumulator to take `AddMultiDamage`'s packet), so the flinch stands here, after
+	// the commit and for every packet, until that wire is built.
+	StartDamageFlinch(*Committed);
+	return 1;
 }
 
 void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 {
-	using EC = EElysiumTraitContainer;
-
-	int32 Remaining = Dmg.CommittedDamage();
-	if (Remaining <= 0)
+	if (!CommitDamageHealth(Dmg))
 	{
 		return;
 	}
-	if (MaxHealth <= 0)
-	{
-		// No health track: the rulebook did not load, or the character was built without a sheet.
-		// Damage is recorded rather than applied — a character with no health model must not die of
-		// arithmetic.
-		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s took %d damage with no health track"),
-			*DebugString(), Remaining);
-		return;
-	}
 
-	// 1. HealthBuffer absorbs first. Exhausting it clears the counter and ends Bloodshield, which
-	//    is the discipline that filled it; a partial absorption only reduces it.
-	const int32 Buffer = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::HealthBuffer);
-	if (Buffer > 0)
-	{
-		const int32 Absorbed = FMath::Min(Buffer, Remaining);
-		Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, Buffer - Absorbed);
-		Remaining -= Absorbed;
-		if (Buffer - Absorbed <= 0)
-		{
-			EndBloodshield();
-		}
-		RecomputeSheet();
-	}
-
-	if (Remaining > 0)
-	{
-		const int32 Taken = Sheet.GetBase(EC::Attributes, ElysiumSlot::Health);
-		// 2. Unkillable caps the damage-TAKEN counter at the retail literal. It is not a one-hit-
-		//    point floor and not a percentage: with the default Max_Health of 100 it leaves 25.
-		const int32 Cap = bUnkillable ? ElysiumDamage::UnkillableDamageCap : MaxHealth;
-		// 3. The remainder lands on the damage counter. The authored ceiling is `Max_Health`, which
-		//    the sheet's own clamp applies whenever the rules table is loaded; the clamp here keeps
-		//    a bare (rulebook-less) world reading the same numbers.
-		const int32 Committed = FMath::Clamp(Taken + Remaining, 0, FMath::Max(Cap, 0));
-		Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, Committed);
-
-		// 4. A Kindred victim also accumulates aggravated damage for the mask that takes no soak.
-		if (IsKindred() && Dmg.TakesNoSoak())
-		{
-			const int32 Aggravated = Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthAggDmg);
-			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthAggDmg,
-				Aggravated + (Committed - Taken));
-		}
-		// 5. `HealthToPercent` — the sheet pair projected back onto the engine-space keyfields.
-		RecomputeSheet();
-	}
-
-	// STORY8-TWIN (NPC half): for NPCs this emit, and the OnDamaged / OnHalfHealth pair below, are
-	// 0x10265ed0 steps 3, 4 and 17 (activator the NPC itself, not `Dmg.Source`) at wave 2 (L13);
-	// the player path keeps them.
 	// `NPC_TAKE_DAMAGE`, from its real producer: the noise a body makes when it is hit, emitted only
-	// once damage has actually landed on this character. The two early returns above — nothing to
-	// commit, and no health track — make no sound, which is right: neither is a hit.
+	// once damage has actually landed on this character. Nothing to commit, and no health track,
+	// make no sound, which is right: neither is a hit.
 	if (World != nullptr)
 	{
 		World->EmitGameSound(Origin, ElysiumGameSounds::NpcTakeDamage(),
@@ -1214,12 +1686,9 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 			ElysiumStealth::HearingReductionCmFor(this), ElysiumGameSounds::Combat, 0.2);
 	}
 
-	// The senses/memory record the schedule kernel reads. A no-op on the base.
 	OnDamageCommitted(Dmg);
 
-	// The generic damage flinch, from the one commit and BEFORE the death test below. A killing blow
-	// still flinches: death is `TASK_PLAY_DEATH_SEQUENCE`, a schedule task, so the death family's own
-	// later claim replaces this one on the base channel rather than racing it here.
+	// The generic damage flinch, from the one commit and BEFORE the death test below.
 	StartDamageFlinch(Dmg);
 
 	// `ShouldRemove_OnTakeDamage`, from the one typed health commit. It also reconciles
@@ -1227,10 +1696,9 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	// exhausts, and this is where the tracked targeted effect that installed it is retired with it.
 	ElysiumDisciplines::NotifyDamaged(*this);
 
-	// 6. The outputs, from their real producer. Retail fires them from the NPC alive commit and the
-	//    player wires neither, but FireOutput is inert for an output an entity did not wire, so the
-	//    shared commit is where they belong. OnHalfHealth is OFFERED on every damaging hit while the
-	//    projected health sits at or below half, not only on the crossing edge.
+	// The outputs. The player wires neither, but FireOutput is inert for an output an entity did not
+	// wire. OnHalfHealth is OFFERED on every damaging hit while the projected health sits at or
+	// below half, not only on the crossing edge.
 	static const FName OnDamaged(TEXT("OnDamaged"));
 	static const FName OnHalfHealth(TEXT("OnHalfHealth"));
 	FireOutput(OnDamaged, Dmg.Source);
@@ -1239,14 +1707,118 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 		FireOutput(OnHalfHealth, Dmg.Source);
 	}
 
-	// 7. Death is the RPG comparison, not the engine-space projection: the damage counter reaching
-	//    the ceiling is what selects it.
+	// Death is the RPG comparison, not the engine-space projection: the damage counter reaching
+	// the ceiling is what selects it.
+	using EC = EElysiumTraitContainer;
 	const int32 Taken = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
 	const int32 Ceiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);
 	if (!bUnkillable && Ceiling > 0 && Taken >= Ceiling)
 	{
 		OnKilled();
 	}
+}
+
+bool FElysiumCombatCharacter::CommitDamageHealth(const FElysiumDmg& Dmg)
+{
+	using EC = EElysiumTraitContainer;
+
+	int32 Remaining = Dmg.CommittedDamage();
+	if (Remaining <= 0)
+	{
+		return false;
+	}
+	// An NPC's commit is `0x103302e0`'s: its ceiling is the sheet's `Max_Health` (stat 0x11) and its
+	// engine-space projection is slot 348 `HealthToPercent` into `m_iHealth` alone — `m_iMaxHealth`
+	// stays `NPCInit`'s 100 (`0x1027344f`). The player keeps the sheet-derived pair.
+	const bool bRetailNpcCommit = AsNpcBase() != nullptr;
+	const int32 SheetCeiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);
+	auto Project = [this, bRetailNpcCommit]()
+	{
+		if (bRetailNpcCommit)
+		{
+			Sheet.RecomputeCurrent(SheetRules(), SheetEffects());
+			Health = HealthToPercent();                                          // slot 348
+		}
+		else
+		{
+			RecomputeSheet();
+		}
+	};
+	if ((bRetailNpcCommit ? SheetCeiling : MaxHealth) <= 0)
+	{
+		// No health track: the rulebook did not load, or the character was built without a sheet.
+		// Damage is recorded rather than applied — a character with no health model must not die of
+		// arithmetic.
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s took %d damage with no health track"),
+			*DebugString(), Remaining);
+		return false;
+	}
+
+	// `0x103302e0`'s commit, arm by arm (`0x10330733..0x10330ab8`). The amount is the float retail
+	// carries in `[ESP+0x14]`; the descriptor's committed integer here.
+	float Amount = static_cast<float>(Remaining);
+
+	// 1. HealthBuffer (stat 0x19, the CURRENT value, `0x10330737 GetValue`): a non-zero buffer
+	//    (`0x10330740 JZ`, not `> 0`) absorbs `trunc(DAT_10739a68 * amount * 0.01)` -- the
+	//    process-global Bloodshield block percentage (`0x10330746 FILD`, `0x1033074c`/`0x10330750`
+	//    FMUL, `0x10330756 __ftol`) -- and the amount loses exactly that, uncapped by the buffer
+	//    (`0x1033076f FSUBR`). Less than the buffer spends it (`0x10330847 SubBase(0x19, absorbed)`);
+	//    otherwise the buffer is zeroed (`0x103307d9 SetBase(0x19, 0)`) and Bloodshield ends
+	//    (`0x103307e9`, `"Thaumaturgy_Bloodshield"`). No projection runs here.
+	const int32 Buffer = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::HealthBuffer);
+	if (Buffer != 0)                                                                   // 0x10330740
+	{
+		// Evaluated in single precision, the port's convention for the x87 chain (the precision-control
+		// word retail runs under is not recovered, so a product that lands a hair under an integer
+		// -- `0.01f` is 0.0099999998 -- is not guaranteed to truncate the way retail's did).
+		const int32 Absorbed = static_cast<int32>(static_cast<float>(ElysiumDisciplines::HealthBufferBlockPercent())
+			* Amount * 0.01f);                                                         // 0x10330746..0x10330756
+		Amount -= static_cast<float>(Absorbed);                                        // 0x1033076f
+		if (Absorbed < Buffer)                                                         // 0x1033076d / 0x10330777 JL
+		{
+			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer,
+				Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthBuffer) - Absorbed);   // 0x10330847 SubBase
+		}
+		else
+		{
+			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, 0);             // 0x103307d9 SetBase(0x19, 0)
+			EndBloodshield();                                                          // 0x103307e9
+		}
+	}
+	// 2. Nothing left at or below 0.0 ends the body (`0x1033084c FCOMP 0.0` -> `0x10330abe`), before
+	//    `m_iHealth` is projected.
+	if (Amount <= 0.f)
+	{
+		Sheet.RecomputeCurrent(SheetRules(), SheetEffects());
+		return false;
+	}
+	// 3. Unkillable (`+0xfc8`): the damage TAKEN, read as its current value (`0x103308cd GetValue(0xf)`),
+	//    plus the truncated amount may not pass the retail literal `0x4b`; past it the amount becomes
+	//    `0x4b - taken` (`0x103308e9..0x103308fd`). Not a one-hit-point floor and not a percentage.
+	const int32 TakenCurrent = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
+	if (bUnkillable && static_cast<int32>(Amount) + TakenCurrent > ElysiumDamage::UnkillableDamageCap)
+	{
+		Amount = static_cast<float>(ElysiumDamage::UnkillableDamageCap - TakenCurrent);
+	}
+	// 4. `AddBase(0xf, trunc(amount))` (`0x1033096b`, `CVStatList_t::AddBase` `0x10200fc0`): no clamp
+	//    here -- the sheet's own rules-table clamp is whatever `AddBase` meets.
+	const int32 Committed = static_cast<int32>(Amount);                                // 0x1033095f __ftol
+	Sheet.SetBase(EC::Attributes, ElysiumSlot::Health,
+		Sheet.GetBase(EC::Attributes, ElysiumSlot::Health) + Committed);
+	// 5. A Kindred victim (`0x10330972 IsKindred`) whose `m_bitsDamageType` (+0xe98, the descriptor
+	//    mask OR'd with the packet's bits, `0x1033059a..0x103305a7`) carries `0xc8000008` also takes
+	//    the SAME amount as aggravated damage (`0x103309f6 AddBase(0x10, EBX)`).
+	if (IsKindred() && (Dmg.DmgMask & ElysiumDamage::NoSoakMask) != 0)                   // 0x1033097f TEST 0xc8000008
+	{
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthAggDmg,
+			Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthAggDmg) + Committed);
+	}
+	// 6. `m_iHealth = HealthToPercent()` (slot 348, `0x10330ab2`) -- the sheet pair projected back.
+	//    (The Kindred frenzy arm `0x103309fb..0x10330aa9` runs between 5 and 6 in retail; it is the
+	//    caller's, `OnTakeDamage_Alive`, because it reads the packet's attacker. `FrenzyCheck` is a
+	//    seam that writes nothing, so nothing observes the projection landing first.)
+	Project();
+	return true;
 }
 
 void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
@@ -1855,10 +2427,9 @@ void FElysiumCombatCharacter::EndBloodshield()
 	}
 }
 
-// STORY8-TWIN: replaced by 0x10265a90 (`FElysiumNpcBase::FireOnDeathOnce`, the attacker as activator)
-// and 0x1032b9b0 (`CBaseCombatCharacter::Event_Killed`, still the stub at
-// `ElysiumCombatCharacterSlots.cpp`) at wave 2, for the NPC leaf. Its `OnDeath` fires with this
-// entity as activator where retail passes the damage packet's attacker (`0x10265cc8`).
+// The PLAYER's death tail (and any non-NPC character's). An NPC's death is slot 144 since story 8
+// wave 2: the Troika / `CAI_BaseNPC::Event_Killed` bodies fire `OnDeath` with the packet's attacker
+// (`0x10265a90`) and reach `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` above.
 void FElysiumCombatCharacter::OnKilled()
 {
 	if (bDeathReported)

@@ -180,9 +180,8 @@ void FElysiumNpcBase::GatherAttackConditions(FElysiumEntity* Enemy, float Distan
 	// and weapon-switch block IN FRONT of this body and changes nothing it gathers; it is
 	// `FElysiumNpcBach`'s override (story 5 step 3), which then calls this body directly.
 	(void)DistanceUnits;
-	// The gather pass's own clock when the pass dispatched this slot (`GatherPassNow`, set by
-	// `ElysiumNpcEnemy::GatherConditions` around the call), else the world's `curtime`.
-	const double Now = GatherPassNow >= 0.0 ? GatherPassNow
-		: (World != nullptr ? World->NowSeconds() : 0.0);
+	// `curtime`. (The port's old gather staged its own clock here through `GatherPassNow`; that
+	// gather and the word went at story 8 wave 2.)
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	ElysiumNpcCond::GatherAttackConditions(*this, Now, Cognition.Conditions);
 }

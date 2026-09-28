@@ -108,7 +108,7 @@ bool FElysiumNpcKernelDirectorSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("SetMoveType(MOVETYPE_NONE)"), Named->RetailMoveType, 0);
 	TestFalse(TEXT("m_bIsBCCTargetable = 0"), Named->bIsBccTargetable);
 	TestFalse(TEXT("m_bIsAlive = 0"), Named->bNpcIsAlive);
-	TestEqual(TEXT("AddFlag2(0x10)"), Named->Flags2Added, 0x10u);
+	TestEqual(TEXT("AddFlag2(0x10)"), Named->EntityFlags2Word, 0x10u);
 	TestFalse(TEXT("m_hNextCine = -1"), Named->NextCine.IsSet());
 
 	// The think: an unnamed cine, or spawnflag 0x10, arms CineThink at +1.0; only a NAMED one that
@@ -751,11 +751,20 @@ bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 		return false;
 	}
 	Beat->Delay = 3;
+	// Corrected to retail (story 8 wave 2): the kill is slot 144, and `CAI_BaseNPC::Event_Killed`
+	// (`0x10265ad0`) DEFERS it for an NPC in NPC_STATE_SCRIPT whose live cine has started a sequence
+	// and whose spawnflags do not read exactly 0x80 of 0x2080 (`0x10265b2f` / `0x10265b51`): the
+	// packet is copied into `m_DeferredDeathInfo` and the body returns with the NPC alive and still
+	// owned. (No function in the image reads `m_DeferredDeathInfo` back — `vtmb_grep` finds only its
+	// two writers — so the deferred death is never replayed; reproduced.) The port's retired
+	// transaction cancelled the beat outright.
+	(void)Oblivious;
+	TestEqual(TEXT("the beat's NPC is in NPC_STATE_SCRIPT"), Jack->NpcStateRetail(), 4);
 	Jack->OnKilled();
-	TestFalse(TEXT("the kill releases the NPC at once, not at the clip's end"), Jack->ScriptOwner.IsSet());
-	TestTrue(TEXT("the beat stand-in ended with it"), Beat->Phase == FElysiumScriptedSequence::EBeatPhase::None);
-	TestEqual(TEXT("ScriptEntityCancel zeroed m_iDelay"), Beat->Delay, 0);
-	TestEqual(TEXT("and CineCleanup gave the oblivious count back"), Jack->ObliviousCount, Oblivious);
+	TestTrue(TEXT("0x10265c04 the death is deferred: the NPC stays owned by the beat"),
+		Jack->ScriptOwner.IsSet() && Beat->Phase == FElysiumScriptedSequence::EBeatPhase::Play);
+	TestTrue(TEXT("...alive (0x1032b9b0 never ran)"), Jack->IsAlive());
+	TestEqual(TEXT("...and m_iDelay untouched"), Beat->Delay, 3);
 	return true;
 }
 

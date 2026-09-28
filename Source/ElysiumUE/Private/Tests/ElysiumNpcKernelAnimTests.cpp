@@ -575,8 +575,11 @@ bool FElysiumNpcKernelAnimActivityCommitTest::RunTest(const FString&)
 	Guard->SetIdealActivity(0x3b);
 	TestEqual(TEXT("and any other activity stores m_IdealActivity"), Guard->IdealActivityNumber,
 		0x3b);
-	TestEqual(TEXT("and re-resolves the ideal sequence beside it — sequence zero, the ladder's "
-		"floor, because every lookup here is a seam"), Guard->IdealSequence, 0);
+	// Corrected to retail (story 8 wave 2): this body resolves no clip for 0x3b, so the ladder's
+	// ACT_DISPOSITION retry reaches slot 611, whose no-stance fallback is `m_nSequence`
+	// (`0x102c12a0`) — the 21 the forced commit above left playing.
+	TestEqual(TEXT("and re-resolves the ideal sequence beside it — slot 611's fallback, the playing "
+		"sequence"), Guard->IdealSequence, 21);
 
 	// `ShouldMaintainActivity` `0x102bf510`, slot 466 — three arms in order.
 	Guard->bForceMaintainActivity = false;
@@ -623,14 +626,17 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	int32 Translated = -99;
 	Weapon = -99;
 
-	// An ordinary activity: the weighted draw misses (the seam), the run-to-walk rung does not apply,
-	// the whole request is retried as ACT_DISPOSITION (0xf1), the Troika disposition resolver misses
-	// too, and SEQUENCE ZERO is the floor. Every rung of the ladder is walked to get there.
+	// An ordinary activity: the weighted draw misses (this body resolves no clip for it), the
+	// run-to-walk rung does not apply, and the whole request is retried as ACT_DISPOSITION (0xf1).
+	// Corrected to retail (story 8 wave 2, the sequence bridge): the Troika disposition resolver
+	// `0x10295a80` answers slot 611, whose own fallback for "no stance sequence" is `m_nSequence`
+	// (`0x102c12a0`: `return seq == -1 ? m_nSequence : seq`) — never -1 — so the disposition rung
+	// answers the PLAYING sequence (0 here) and the floor rung is not reached.
 	Guard->ResolveActivityToSequence(0x3b, Sequence, Translated, Weapon);
-	TestEqual(TEXT("the ladder ends on retail's own floor, sequence 0"), Sequence, 0);
-	TestEqual(TEXT("and the rung that answered says so"),
+	TestEqual(TEXT("the ladder ends on the playing sequence, 0"), Sequence, 0);
+	TestEqual(TEXT("and the rung that answered says so: the disposition resolver (0x10295a80)"),
 		static_cast<int32>(Guard->LastResolveActivityRung),
-		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::SequenceZero));
+		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::DispositionTable));
 	TestEqual(TEXT("with the translated activity left at the retry's own 0xf1"), Translated, 0xf1);
 
 	// ACT_RUN (0x13): the SAME floor, but the run-to-walk rung is reached on the way — retail rewrites
@@ -639,13 +645,13 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	Guard->ResolveActivityToSequence(0x13, Sequence, Translated, Weapon);
 	TestEqual(TEXT("ACT_RUN falls to the same floor"), Sequence, 0);
 
-	// ACT_DISPOSITION asked for DIRECTLY takes the Troika resolver and, on its miss, goes straight to
-	// sequence zero — there is no second retry, because the request already IS 0xf1.
+	// ACT_DISPOSITION asked for DIRECTLY takes the Troika resolver, which answers the playing
+	// sequence (slot 611's fallback).
 	Guard->ResolveActivityToSequence(0xf1, Sequence, Translated, Weapon);
-	TestEqual(TEXT("ACT_DISPOSITION lands on sequence 0 without retrying itself"), Sequence, 0);
+	TestEqual(TEXT("ACT_DISPOSITION lands on the playing sequence 0"), Sequence, 0);
 	TestEqual(TEXT("through the disposition rung"),
 		static_cast<int32>(Guard->LastResolveActivityRung),
-		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::SequenceZero));
+		static_cast<int32>(FElysiumNpcBase::EResolveActivityRung::DispositionTable));
 
 	// ACT_SCRIPT_CUSTOM_MOVE (0x18) with no cine is NOT the custom-move arm: retail's guard is the
 	// cine handle, and without one the request takes the ordinary weighted rung.
@@ -655,14 +661,16 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	Guard->ResolveActivityToSequence(0x18, Sequence, Translated, Weapon);
 	TestEqual(TEXT("so ACT_SCRIPT_CUSTOM_MOVE walks the ordinary ladder to the floor"), Sequence, 0);
 
-	// The disposition resolver's own refusal, asserted directly: it answers no sequence and leaves
-	// the translated activity at 0xf1, which is what makes the ladder fall through.
+	// The disposition resolver, asserted directly: a body with no stance set answers slot 611's
+	// fallback, `m_nSequence`. Corrected (L13 wave-2 fixes, review note 43): `0x10295a80` writes
+	// `*param_2` alone (`0x10295a88..0x10295a8e`, `RET 0x10`), so the translated activity is left as
+	// the caller held it.
 	int32 DispSequence = 7;
 	int32 DispActivity = 7;
+	Guard->SequenceNumber = 5;
 	Guard->ResolveDispositionActivity(DispSequence, DispActivity);
-	TestEqual(TEXT("the Troika disposition resolver has no sequence index to give"), DispSequence,
-		INDEX_NONE);
-	TestEqual(TEXT("and names ACT_DISPOSITION"), DispActivity, 0xf1);
+	TestEqual(TEXT("0x102c12a0 no stance sequence: slot 611 answers m_nSequence"), DispSequence, 5);
+	TestEqual(TEXT("0x10295a8e: the translated activity is not written"), DispActivity, 7);
 	return true;
 }
 

@@ -1000,19 +1000,24 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 	TestEqual(TEXT("and forces the owner's +0x1fc to 2"), Npc->Field_0x01fc, 2);
 
 	// `0x102c7960` / `0x102c79a0` — byte-identical bodies. With no program the first test refuses;
-	// with one, the behaviour-local schedule seam answers None and the compare fails.
+	// with one, `0x102cc1f0(0x17)` names the program the compare needs (story 8 wave 2: the lookup is
+	// `Spawn19ScheduleOfType`, hoisted; it was a seam answering None).
 	Npc->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 	Npc->Schedule.Current = ElysiumScheduleId::None;
 	Npc->StandoffVfunc20();
 	TestTrue(TEXT("vfunc20 clears nothing with no program installed"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND);
+	const int32 Standoff = Npc->StandoffScheduleForLocalId(0x17);
+	TestTrue(TEXT("0x102cc1f0(0x17) answers a program"), Standoff != ElysiumScheduleId::None);
+	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND) != Standoff
+		? ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND) : ElysiumScheduleId::None;
 	Npc->StandoffVfunc21();
-	TestTrue(TEXT("vfunc21 clears nothing while the behaviour-local id space is a seam"),
+	TestTrue(TEXT("vfunc21 clears nothing while another program runs"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	TestEqual(TEXT("and the seam is what refuses"),
-		static_cast<int32>(Npc->StandoffScheduleForLocalId(0x17)),
-		static_cast<int32>(ElysiumScheduleId::None));
+	Npc->Schedule.Current = Standoff;
+	Npc->StandoffVfunc21();
+	TestFalse(TEXT("0x10269f30 vfunc21 clears NEW_ENEMY while 0x102cc1f0(0x17)'s program runs"),
+		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
 	Npc->Schedule.Current = ElysiumScheduleId::None;
 
 	// `0x102b6120` — no hint node ZEROES the caller's point and answers false. That is the arm, not

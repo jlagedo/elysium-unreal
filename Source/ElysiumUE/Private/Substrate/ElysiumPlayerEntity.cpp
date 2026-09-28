@@ -73,7 +73,7 @@ bool FElysiumPlayer::CanAttemptStealthKill() const
 	// both through the world's controller handle); then the other handles (`+0xfe8`, `+0x1040`,
 	// `+0x1eb8`, `+0x19c0`, `+0x19cc`), which have no producer here and answer not-busy; then the
 	// active cine camera; then the menu `0x1023bd00`, also not-busy here.
-	if (LifeState != EElysiumLifeState::Alive || IsInert())
+	if (LifeState != ElysiumLifeState::Alive || IsInert())
 	{
 		return false;
 	}
@@ -154,7 +154,7 @@ void FElysiumPlayer::Spawn()
 	// what it resets is `m_lifeState`, `m_fEffects`, `m_afPhysicsFlags` and `m_iFOV` (it writes the
 	// same 0 `Event_Killed` does, which is why VtMB's ordinary play lens is the latched 60). Here it
 	// is a load or a level change, since this runtime's saves are the only way back.
-	LifeState = EElysiumLifeState::Alive;
+	LifeState = ElysiumLifeState::Alive;
 	DeathFrames = 0.f;
 	DeathAnimEndTime = -1.0;
 	// The once-only latch on the death commit goes with it, for the same reason: a run that comes
@@ -1324,7 +1324,7 @@ void FElysiumPlayer::OnKilled()
 	}
 
 	// Step 6 — `m_lifeState = LIFE_DYING`, and `pl.deadflag = 1` beside it.
-	LifeState = EElysiumLifeState::Dying;
+	LifeState = ElysiumLifeState::Dying;
 	DeathFrames = 0.f;
 
 	// Step 10 — `m_iFOV (+0x1e78) = 0`, **the only camera-visible write in the whole death path**.
@@ -1376,7 +1376,7 @@ void FElysiumPlayer::PlayerDeathThink()
 	// ends it early, and 60 frames ends it whatever the animation is doing. A body that plays no
 	// death performance at all (`DeathAnimEndTime < 0`) has a finished sequence by this test and
 	// falls straight through, which is retail's `GetModelIndex() == 0` arm.
-	if (LifeState == EElysiumLifeState::Dying && DeathAnimEndTime >= 0.0 && Now < DeathAnimEndTime)
+	if (LifeState == ElysiumLifeState::Dying && DeathAnimEndTime >= 0.0 && Now < DeathAnimEndTime)
 	{
 		DeathFrames += 1.0f;   // `_DAT_104454c0` = 1.0, added to a FLOAT counter
 		if (DeathFrames < 60.0f)   // `_DAT_104492a4` = 60.0
@@ -1385,12 +1385,12 @@ void FElysiumPlayer::PlayerDeathThink()
 		}
 	}
 
-	if (LifeState == EElysiumLifeState::Dying)
+	if (LifeState == ElysiumLifeState::Dying)
 	{
 		// `LIFE_DYING -> LIFE_DEAD`, with the one cue the whole sequence has:
 		// `interface/final_death.wav` (`0x10586440`) on channel 2, volume 1.0, attenuation 0.8,
 		// pitch 100, through a `CPASAttenuationFilter` built at the player's own ear position.
-		LifeState = EElysiumLifeState::Dead;
+		LifeState = ElysiumLifeState::Dead;
 		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
 		{
 			FElysiumAudioRequest Request;
@@ -1412,7 +1412,7 @@ void FElysiumPlayer::PlayerDeathThink()
 	// the port has no client ragdoll to put in the model's place, so neither is applied — see
 	// `OnKilled` above.
 
-	if (LifeState == EElysiumLifeState::Dead)
+	if (LifeState == ElysiumLifeState::Dead)
 	{
 		// `LIFE_DEAD -> LIFE_RESPAWNABLE` on the first frame with no button held. Retail's mask is
 		// `buttons & ~IN_SCORE` (`0x10000`, the multiplayer scoreboard), and this runtime has no
@@ -1424,7 +1424,7 @@ void FElysiumPlayer::PlayerDeathThink()
 		}
 		// `g_pGameRules->FPlayerCanRespawn(this)` — `CHalfLife2` slot 37 (`0x101abee0`), whose whole
 		// body is `return 1`. A constant, so there is no rules object to ask.
-		LifeState = EElysiumLifeState::Respawnable;
+		LifeState = ElysiumLifeState::Respawnable;
 
 		// **The port's game-over screen goes up HERE**, on the transition into retail's terminal
 		// state, because that is the state it expresses: a run that will not advance again and whose
@@ -1653,7 +1653,7 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		static const TCHAR* const StateNames[] = { TEXT("alive"), TEXT("dying"), TEXT("dead"),
 			TEXT("respawnable") };
 		const int32 Index = FMath::Clamp(static_cast<int32>(LifeState), 0, 3);
-		Out.Emplace(TEXT("Life state"), LifeState == EElysiumLifeState::Alive
+		Out.Emplace(TEXT("Life state"), LifeState == ElysiumLifeState::Alive
 			? FString(StateNames[Index])
 			: FString::Printf(TEXT("%s (%.0f death-think frames)"), StateNames[Index], DeathFrames));
 	}

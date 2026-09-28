@@ -2,7 +2,9 @@
 //
 // Test names carry `Elysium.Substrate.NpcKernelConditions19.` and the retail address. Every
 // assertion is read off the listing (`vtmb_asm`) or the decompiled C of the body it names; the
-// walked prose is `docs/vtmb/npc-ai/story8/Conditions19.md`. The bodies are driven directly (the
+// walked prose is
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
+// The bodies are driven directly (the
 // virtual on the NPC), with the NPCs quiet so no think competes with the pass a case drives.
 //
 // Owns (Conditions19's `rule` rows): 0x10270b20 CAI_BaseNPC::GatherEnemyConditions, 0x1026ec30
@@ -562,7 +564,8 @@ bool FCond19EnemyDeadTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	F.Other->SetDeathReportedForRestore(true);
+	// (Story 8 wave 2: slot 158 reads the life-state word itself, `LifeState`; `Event_Killed` `0x1032b9b0` writes 1 LIFE_DYING.)
+	F.Other->LifeState = 1;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::SeeEnemy);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyTooFar);
 	N.GatherEnemyConditions(F.Other);
@@ -697,7 +700,8 @@ bool FCond19TroikaClearsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102b2730 clears neither squad condition"), Cond19Has(N, EElysiumNpcCond::SquadSeeEnemy));
 
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
-	F.Other->SetDeathReportedForRestore(true);
+	// (Story 8 wave 2: slot 158 reads the life-state word itself, `LifeState`; `Event_Killed` `0x1032b9b0` writes 1 LIFE_DYING.)
+	F.Other->LifeState = 1;
 	N.GatherConditions();
 	TestTrue(TEXT("102b28f6 a dead slot-168 enemy: ENEMY_DEAD"), Cond19Has(N, EElysiumNpcCond::EnemyDead));
 	TestFalse(TEXT("102b28ff SEE_ENEMY cleared"), Cond19Has(N, EElysiumNpcCond::SeeEnemy));

@@ -3,7 +3,7 @@
 //
 // Declarations are in `ElysiumNpcConditions19.inl` (included inside `class FElysiumNpc`) or
 // generated in `ElysiumNpcSlots.inl` for a slot body. Walked prose:
-// `docs/vtmb/npc-ai/story8/Conditions19.md`.
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 //
 // Owns (Conditions19's `rule` rows): 0x102b27f0 CAI_BaseNPCTroika::GatherConditions; and the Troika
 // half of `CAI_BaseNPC::GatherConditions` (`0x1026ec30`, `1026eec1..1026efa4`) with its two uncatalogued

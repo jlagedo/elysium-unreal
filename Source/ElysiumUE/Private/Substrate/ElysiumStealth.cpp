@@ -256,10 +256,13 @@ void PublishObservers(FElysiumPlayer& Player, double Now)
 		{
 			const FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
 			if (!Npc || Npc->IsInert() || Npc->IsOblivious()) continue;
-			const auto& Memory = Npc->Senses.Memory;
 			const bool EnemyIsPlayer = Npc->BaseMemory.Enemy == Player.Handle;
 			if (!EnemyIsPlayer && Npc->Relationships.Resolve(Player.Handle, TEXT("player")) != EElysiumRelationship::Hate) continue;
-			const bool Detected = EnemyIsPlayer && Memory.bEnemyLosLatched && !Memory.bEnemyOccluded;
+			// Slot 481's words (`0x10270b20`): the found edge's memory bit `m_afMemory & 0x20000` and the
+			// `+0x5b98` occlusion count below its limit of ten.
+			const bool Detected = EnemyIsPlayer
+				&& (Npc->BaseScheduleHost.MemoryBits & 0x20000u) != 0
+				&& !(Npc->BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit);
 			if (!Detected && !Npc->Senses.Sighted().Contains(Player.Handle)) continue;
 			Player.OfferStealthObserver(Npc->Handle, FVector::Dist(Npc->Origin, Player.Origin),
 				Npc->Senses.Perception.VisionDistanceCm * Player.Stealth.VisionScalar, Detected, Now);

@@ -220,6 +220,19 @@ public:
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual void NPCThink() override;
 	virtual void RunAI(bool Arg0) override;
+
+	// --- RunAi19 (story 0019/8 lane L13a): what slot 432 `0x103bdef0` calls ---------------------
+	/** The reaction half of `0x103bdef0` (`0x103bdf00`..`0x103bdf2a`): a null blocker does nothing;
+	 *  kind 1 takes the step-up `0x103c0860` -- UNREACHABLE in retail, the sweep `0x103c0160` only
+	 *  ever writes 0 -- and any other kind the push `0x103c05e0`. */
+	void RunAi19TzimisceReact(FElysiumEntity* Blocker, int32 Kind);
+	/** SEAMS for the three `CNPC_VTzimisce` ConVars the sweep and the push read (`IsCommand ? 0 :
+	 *  m_fValue`, flags 0, no console variable stands for them): `tzimisce_obstruction_lookahead`
+	 *  (object `0x1093cd28`, default "24"), `tzimisce_obstruction_scalar` (`0x1093cb18`, "5") and
+	 *  `tzimisce_obstruction_z` (`0x1093cb60`, "75"). Mutable, as a ConVar is. */
+	static float& TzimisceObstructionLookaheadConVar();
+	static float& TzimisceObstructionScalarConVar();
+	static float& TzimisceObstructionZConVar();
 	virtual void GatherConditions() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;

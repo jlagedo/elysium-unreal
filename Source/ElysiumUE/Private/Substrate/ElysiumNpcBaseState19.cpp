@@ -77,8 +77,6 @@ void FElysiumNpcBase::SetState(int32 NewRetail)
 	{
 		LastOnStateChangeOldRetail = OldAtEntry;
 		LastOnStateChangeNewRetail = NewRetail;
-		LastStateChange = Mind.State();
-		bStateChangeSeen = true;
 		OnStateChange(NpcKernelState19Shared::State19TypedFromRetail(OldAtEntry, Mind.State()),
 			NpcKernelState19Shared::State19TypedFromRetail(NewRetail, Mind.State()));
 	}

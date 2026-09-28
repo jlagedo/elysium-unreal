@@ -843,7 +843,7 @@ bool FElysiumStealthObserverTest::RunTest(const FString&)
 	TestFalse(TEXT("sight without enemy commitment is searching"), F.Player->Observer.bDetected);
 	const int32 Searching = F.Player->Observer.Generation;
 	F.Guard->BaseMemory.Enemy = F.Player->Handle;
-	F.Guard->Senses.GatherEnemyLos(*F.Guard, .2);
+	F.Guard->GatherEnemyConditions(F.Player);   // slot 481 `0x10270b20`: the found edge sets m_afMemory 0x20000
 	TestFalse(TEXT("the committed enemy edge still waits for snapshot publication"), F.Player->Observer.bDetected);
 	ElysiumStealth::PublishObservers(*F.Player, .2);
 	TestTrue(TEXT("snapshot follows the committed enemy LOS edge"), F.Player->Observer.bDetected);

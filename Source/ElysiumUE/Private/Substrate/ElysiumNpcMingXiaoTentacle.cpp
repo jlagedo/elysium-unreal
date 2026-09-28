@@ -35,6 +35,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
 
@@ -375,16 +376,17 @@ void FElysiumNpcMingXiaoTentacle::FUN_1039e800(FElysiumEntity* Arg)
 
 // =================================================================================================
 // Story 8, lane L12 — Boss19's `CNPC_VMingXiaoTentacle` rows. Arms carry the instruction address
-// they came from (`vtmb_asm`); walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
+// they came from (`vtmb_asm`); walked prose in
+// `docs/vtmb/npc-ai/lifecycle.md` § "Story 8, family Boss19".
 // =================================================================================================
 
 namespace NpcKernelBoss19Tentacle
 {
 	// The three death programs `0x1039e970` chooses between, and their `NPC_VMingXiaoTentacle.cpp`
 	// trace lines.
-	constexpr int32 GBoss19TentacleDieA = 0x16a;
-	constexpr int32 GBoss19TentacleDieDefault = 0x16b;
-	constexpr int32 GBoss19TentacleDieNoSequence = 0x16c;
+	constexpr int32 GBoss19TentacleDieA = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_DELAYED_DIE;        // 0x16a
+	constexpr int32 GBoss19TentacleDieDefault = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_EXPLODE_DIE;  // 0x16b
+	constexpr int32 GBoss19TentacleDieNoSequence = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_SIMPLE_DIE; // 0x16c
 	constexpr int32 GBoss19TentacleLineDefault = 0x589;
 	constexpr int32 GBoss19TentacleLinePhase2 = 0x590;
 	constexpr int32 GBoss19TentacleLinePhase3Sequence = 0x598;
@@ -432,7 +434,7 @@ void FElysiumNpcMingXiaoTentacle::MingXiaoTentacleEnterDeath()
 	// `+0x1b30`/`+0x1b34` := `NPC_VMingXiaoTentacle.cpp`, line — absent in the shape map; recorded.
 	RecordScheduleEvent(FString::Printf(TEXT("EnterDeath trace NPC_VMingXiaoTentacle.cpp:%d"), Line));   // 0x1039e9aa / 0x1039e9f2
 	SetSchedule(Program, true);                                              // 0x1039e9fc 0x102ae750, FORCED
-	AnimEventLifeStateWord = GBoss19TentacleLifeDying;                              // 0x1039ea01 +0x200
+	LifeState = GBoss19TentacleLifeDying;                              // 0x1039ea01 +0x200
 	bTentaclePlayedDeathAnim = true;                                         // 0x1039ea0b +0x6699
 	bInvincible = true;                                                      // 0x1039ea12 +0x63d8
 }

@@ -20,7 +20,7 @@
 #include "Substrate/ElysiumNpcLog.h"
 
 // Story 8, lane L12. Arms carry the instruction address they came from (`vtmb_asm`); walked prose in
-// `docs/vtmb/npc-ai/story8/Werewolf19.md`.
+// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 
 // -------------------------------------------------------------------------------------------------
 // 0x102c44e0 SetFollowerBoss

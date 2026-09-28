@@ -254,8 +254,10 @@ FElysiumPlayer* FElysiumNpc::SelectResolvePlayer(const FElysiumEntityHandle& Pla
 
 bool FElysiumNpc::SelectPatrolPathObject(int32& OutScheduleRetail) const
 {
-	OutScheduleRetail = 0;
-	return false;
+	// `+0x6590 != 0` and its `+0x4` schedule word (`0x102af6b6` / `0x102af6c7`).
+	const FPatrolPathRecord* Path = PatrolPathCell.Path;
+	OutScheduleRetail = Path != nullptr ? Path->Schedule : 0;
+	return Path != nullptr;
 }
 
 // =================================================================================================
@@ -585,12 +587,17 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 		{
 			if (PatrolSchedule != 0)                               // 0x102af6c7
 			{
-				++SelectPatrolPathDraws;                           // 0x102af738 CALL 0x1029f650
+				// `0x1029f650(this, this+0x658c)` -- the patrol node's interesting-place draw: it
+				// resets `m_bPatrolPathUseHint` (+0x65a0) first and rolls `ip_percent` against the
+				// node the patrol cell points at, exactly as `BuildPatrolPath`'s own call (0x1029f547).
+				++SelectPatrolPathDraws;
+				FUN_1029f650(PatrolCurrentNode(PatrolPathCell));   // 0x102af731 LEA / 0x102af738 CALL 0x100151f4
 				return SelectTrace(GTroikaFile, 0x498d, PatrolSchedule);   // 0x102af743
 			}
 			UE_LOG(LogElysiumNpcEnt, Log, TEXT("WARNING:  Patrol path for '%s' has no schedule."),
 				*DebugString());                                   // 0x102af6c9 GetDebugName / 0x102af6d4 DevMsg
 			++SelectPatrolPathReleases;                            // 0x102af6e6 CALL 0x1029f5d0
+			ReleasePatrolPath(&PatrolPathCell);
 		}
 		if (bUseInteresting)                                       // 0x102af6f3
 		{
@@ -981,7 +988,7 @@ int32 FElysiumNpc::TroikaSelectSchedule()
 				return Source;
 			}
 		}
-		if (HuntPatrolPoints.IsEmpty())                            // 0x102afaa2 / 0x102afaaa m_sppPatrolPathHunt.m_pPath (+0x6598)
+		if (PatrolPathHuntCell.Path == nullptr)                   // 0x102afaa2 / 0x102afaaa m_sppPatrolPathHunt.m_pPath (+0x6598)
 		{
 			NpcFlags.Clear(EElysiumNpcFlag::MADE_HUNT_PATH);       // 0x102afab2 AND AH,0xef
 		}

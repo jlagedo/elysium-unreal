@@ -47,6 +47,35 @@ void FElysiumNpcBase::TaskMovementComplete()
 
 bool FElysiumNpcBase::MaintainSchedule(double Now, bool bReduced)
 {
+	// `0x102817c0`, as `RunAI` (`0x1026f302`) calls it. A Troika body goes through the port's owner
+	// routing first (`FElysiumNpc::RouteScheduleMaintenance`, its STORY8-TWIN survivors named there),
+	// which reaches the interpreter below for every body the schedule owns.
+	if (FElysiumNpc* const Troika = AsNpc())
+	{
+		return Troika->RouteScheduleMaintenance(Now, bReduced);
+	}
+	return MaintainScheduleRetail(Now, bReduced);
+}
+
+void FElysiumNpcBase::StartTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step, double Now)
+{
+	(void)State;   // this body's own `Schedule`, which the task body writes through `TaskComplete`
+	(void)Now;     // the bodies read `curtime` themselves
+	// `MaintainSchedule` `0x10281e10`: `(this->*vtable[442])(pTask)`. The slot takes the task by
+	// pointer and reads it only; the step belongs to the loaded program.
+	StartTaskSlot442(const_cast<FElysiumScheduleStep*>(&Step));
+}
+
+void FElysiumNpcBase::RunTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step, double Now)
+{
+	(void)State;
+	(void)Now;
+	// `MaintainSchedule` `0x1028202c`: `(this->*vtable[444])(pTask)`.
+	RunTaskSlot444(const_cast<FElysiumScheduleStep*>(&Step));
+}
+
+bool FElysiumNpcBase::MaintainScheduleRetail(double Now, bool bReduced)
+{
 	return ElysiumSchedule::Tick(Schedule, *this, Now, &Cognition.Conditions, bReduced); // 0x102817c0
 }
 

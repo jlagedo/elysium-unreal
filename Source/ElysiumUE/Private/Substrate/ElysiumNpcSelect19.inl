@@ -54,10 +54,8 @@ FElysiumPlayer* SelectResolvePlayer(const FElysiumEntityHandle& Handle) const;
 
 // --- Seams (no port surface for the retail input; each answers retail's admitting "nothing") --------
 
-/** SEAM for `m_sppPatrolPath.m_pPath` (`+0x6590`, a pooled `CAI_PatrolPath`) and its `m_iSchedule`
- *  (`+0x4`), read by `SelectSchedule` case 1. The port stands no patrol-path object (story 10g, the
- *  `ThinkPatrol` executor is the port's route walker and has no schedule id), so this answers
- *  "no path object": the case-1 patrol arm is skipped, as retail skips it for an NPC with no path. */
+/** `m_sppPatrolPath.m_pPath` (`+0x6590`, a pooled `CAI_PatrolPath`) and its `m_iSchedule` (`+0x4`),
+ *  read by `SelectSchedule` case 1 (story 8 wave 2: the path object is the port's route). */
 bool SelectPatrolPathObject(int32& OutScheduleRetail) const;
 
 /** How many times the patrol arm ran `0x1029f650` (the interest-hint draw) and `0x1029f5d0` (the

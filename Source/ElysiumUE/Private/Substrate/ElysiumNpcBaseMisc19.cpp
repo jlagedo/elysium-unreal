@@ -223,7 +223,7 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		{
 			return true;
 		}
-		AnimEventLifeStateWord = 1;                                       // 0x10274e78 m_lifeState := LIFE_DYING
+		LifeState = 1;                                       // 0x10274e78 m_lifeState := LIFE_DYING
 		Health = 0;                                                       // 0x10274e82 m_iHealth
 		return true;
 	case 0x3e9:
@@ -297,7 +297,7 @@ bool FElysiumNpcBase::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		{
 			return true;
 		}
-		AnimEventLifeStateWord = 0;                                       // 0x10274ea8 m_lifeState := LIFE_ALIVE
+		LifeState = 0;                                       // 0x10274ea8 m_lifeState := LIFE_ALIVE
 		Health = MaxHealth;                                               // 0x10274ea2 / 0x10274eb2
 		return true;
 	case 0x7d1:                                                           // 0x1027516d

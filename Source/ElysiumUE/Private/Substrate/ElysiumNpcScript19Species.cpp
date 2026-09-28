@@ -12,7 +12,8 @@
 // CNPC_VManBat::OverrideMove and its body 0x1038b1a0. The director rows the shape commit listed here
 // (0x101a7140, 0x101a7880, 0x101a9080, 0x101a82d0, 0x101a9510, 0x101a9790) are the directors' own
 // class files (`ElysiumScriptedSequence.cpp`, `ElysiumAiScriptedSequence.cpp`,
-// `ElysiumAiScriptedSchedule.cpp`). Walked prose: `docs/vtmb/npc-ai/story8/Script19.md`.
+// `ElysiumAiScriptedSchedule.cpp`). Walked prose:
+// `docs/vtmb/npc-ai/schedule-kernel.md` § "family Script19, the Troika's movement helpers".
 
 #include "Substrate/ElysiumNpcManBat.h"
 #include "ElysiumEntityWorld.h"
@@ -213,11 +214,10 @@ void FElysiumNpcManBat::ManBatWingTurnSelect(const FVector& VelocityUnits)
 // `0x1037c2a5`) is debugger bookkeeping and stays absent.
 void FElysiumNpcGhoulCroucher::GhoulCroucherScriptHide()
 {
-	// `0x1037c229` calls `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`) DIRECT. That Troika body (the
-	// cine-cancel gate, forced schedule `0x6b`, the active weapon's slot 77) is family Damaged19's row
-	// and unported; the base half it ends in (`CBaseEntity::ScriptHide 0x100a8710`) stands for it,
-	// called qualified so a species-level `ScriptHide` never shadows it.
-	FElysiumEntity::ScriptHide();                             // 0x1037c229 -> 0x102c1ce0 (base half only)
+	// `0x1037c229 CALL 0x10006d11`, the thunk of `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`),
+	// DIRECT: the Troika body (the cine gate and cancel, forced schedule `0x6b`, the active weapon's
+	// slot 77), called qualified so this override never re-enters itself.
+	FElysiumNpc::ScriptHide();                                // 0x1037c229 -> 0x102c1ce0
 	if (World == nullptr || !BurningParticle.IsSet())         // 0x1037c22e / 0x1037c237 m_hBurningParticle == -1
 	{
 		return;                                               // 0x1037c29f..0x1037c2a7
