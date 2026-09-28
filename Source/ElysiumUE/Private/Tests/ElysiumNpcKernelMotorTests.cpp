@@ -728,8 +728,12 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	TestEqual(TEXT("once"), Guard->MotorSeams.PerformMovement, 1);
 	Guard->PostRun();
 	TestEqual(TEXT("PostRun ran its pair once"), Guard->MotorSeams.PostRunWeaponUpdates, 1);
+	// The interval is `RunAnimation`'s answer, i.e. `CBaseAnimating::StudioFrameAdvance(0)`
+	// `0x1008f120`: on this fresh clock (`m_flPrevAnimTime == curtime`'s re-seed, `0x1008f192..
+	// 0x1008f1b3`) a zero argument becomes `0x3dcccccd` (`0x1008f1ca`) and the interval is
+	// `(0.1 + curtime) - m_flAnimTime` = 0.1. (The earlier 0 was the stubbed seam's answer.)
 	TestEqual(TEXT("with the interval the animating seam gave it"),
-		Guard->MotorSeams.PostRunInterval, 0.f);
+		Guard->MotorSeams.PostRunInterval, 0.1f);
 	return true;
 }
 
