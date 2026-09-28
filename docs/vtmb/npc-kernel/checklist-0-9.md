@@ -23,7 +23,7 @@ One row per *core* function (a family or helper class method, or a body touching
 | … `unsettled` | 3 |
 | … no verdict yet | 0 |
 | … damaged decompilation | 19 |
-| … cited by the port | 1067 |
+| … cited by the port | 1069 |
 | … cited by the oracle | 964 |
 | … cited by neither and unverdicted | 0 |
 

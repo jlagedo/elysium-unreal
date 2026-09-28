@@ -11,9 +11,9 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the port | 2617 |
-| … cited by the oracle | 2585 |
-| … cited by neither | 2176 |
+| … cited by the port | 2631 |
+| … cited by the oracle | 2613 |
+| … cited by neither | 2161 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -25,13 +25,13 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the port | 690 |
+| … cited by the port | 695 |
 | … with a guessed port member | 450 |
 | Closure edges | 17596 |
 | Build layers | 30 |
-| Port-cited addresses inside a function body | 13048 |
-| Port-cited addresses that are globals / strings / vtables | 136 / 266 / 0 |
-| Stale port citations (address the corpus does not know) | 709 |
+| Port-cited addresses inside a function body | 13744 |
+| Port-cited addresses that are globals / strings / vtables | 138 / 276 / 0 |
+| Stale port citations (address the corpus does not know) | 713 |
 
 ## Verdicts by layer band
 
@@ -39,10 +39,10 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1468 | 656 | 215 | 106 | 488 | 3 | 0 | 851 | 744 | **0** |
-| 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 216 | 220 | **0** |
+| 0–4 | 1468 | 656 | 215 | 106 | 488 | 3 | 0 | 852 | 744 | **0** |
+| 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 217 | 220 | **0** |
 | 10–18 | 355 | 178 | 105 | 9 | 63 | 0 | 0 | 280 | 279 | **0** |
-| 19–29 | 479 | 390 | 13 | 4 | 71 | 0 | 1 | 424 | 328 | **0** |
+| 19–29 | 479 | 390 | 13 | 4 | 71 | 0 | 1 | 424 | 344 | **0** |
 
 ## Tunables
 
@@ -56,7 +56,7 @@ Spec 0019 story 4. `kernel_tunables.tsv` holds each retail number a kernel body 
 | `convar_f32` | 22 |
 | `convar_i32` | 26 |
 | **All** | **102** |
-| Outstanding inline cells (files) | 431 (211) |
+| Outstanding inline cells (files) | 433 (216) |
 
 ## `CAI_BaseNPC` slots without a name
 
@@ -375,9 +375,10 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100010f0` | thunk_FUN_101d9610 | Source/ElysiumUE/Private/Player/ElysiumCameraSolve.cpp:541, Source/ElysiumUE/Public/ElysiumCameraSolve.h:108 |
 | `0x1000134d` | thunk_FUN_101d2850 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10.cpp:68 |
 | `0x1000136b` | CNPC_VSabbatLeader::SpawnBloodPoolEmitter | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2755 |
-| `0x100015cd` | SetCineCamera | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:139, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1401 |
+| `0x100015cd` | SetCineCamera | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.h:139, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1410 |
 | `0x1000194c` | CNPC_VSabbatLeader::SelectDiveInPoint | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2648 |
 | `0x100019ab` | thunk_FUN_101b99d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:310 |
+| `0x10001a50` | CBaseEntity::SetAbsoluteAttackExtents | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:159 |
 | `0x10001adc` | CAI_BaseNPCTroika::IRelationType | Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:175 |
 | `0x10001afa` | thunk_FUN_1034b430 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:643 |
 | `0x10001b45` | CAI_BaseNPCTroika::OnTakeDamage | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage19Species.cpp:8 |
@@ -386,6 +387,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10001d57` | CAI_BaseNPC::SelectSchedule | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:1040 |
 | `0x10001f28` | CPointEntity::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:157 |
 | `0x10001f50` | CAI_BaseNPCTroika::IsAreaClear | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:184, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2442 |
+| `0x10002095` | thunk_FUN_1042bff0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:101 |
 | `0x10002216` | CNPC_VAndreiBlood::SelectTeleportNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:697 |
 | `0x10002310` | thunk_FUN_10139610 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1310 |
 | `0x100023a1` | thunk_FUN_1027d990 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2623 |
@@ -394,12 +396,12 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100026b7` | thunk_FUN_102b8320 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:151 |
 | `0x10002720` | CAI_BaseNPCTroika::thunk_FUN_1029a070 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:260 |
 | `0x100027bb` | CBaseEntity::AddFlag2 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:86 |
-| `0x10002a7c` | CAI_BaseNPCTroika::NPCThink | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:316 |
+| `0x10002a7c` | CAI_BaseNPCTroika::NPCThink | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:314 |
 | `0x10002b71` | CNPC_VAnimal::SelectSchedule | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:314, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:398 |
 | `0x1000306c` | GetActiveCameraEntity | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:152 |
 | `0x10003116` | thunk_FUN_1017e740 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:337 |
 | `0x1000312f` | CNPC_VVampireBoss::ClearBodyEmitterNames | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1165 |
-| `0x10003229` | CBaseEntity::SetName | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:98 |
+| `0x10003229` | CBaseEntity::SetName | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:96 |
 | `0x100034f9` | CBaseCombatCharacter::Die | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:274 |
 | `0x1000389b` | thunk_FUN_100fbc90 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:593 |
 | `0x10003981` | thunk_FUN_102c41d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2222, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2383 |
@@ -418,7 +420,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100050d3` | thunk_FUN_1026d130 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1776 |
 | `0x10005353` | thunk_FUN_102a1650 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:551 |
 | `0x1000566e` | thunk_FUN_10144a30 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:742, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:758, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDebugTests.cpp:896, +1 more |
-| `0x1000577c` | CBaseAnimating::MatchOriginAnglesToAnimation | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2998, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3376, Source/ElysiumUE/Private/Substrate/ElysiumNpcVampireBoss.h:152 |
+| `0x1000577c` | CBaseAnimating::MatchOriginAnglesToAnimation | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2998, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3376, Source/ElysiumUE/Private/Substrate/ElysiumNpcVampireBoss.h:163 |
 | `0x10005849` | CBaseCombatCharacter::AddEntityRelationship | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:331, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19.cpp:97, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelWerewolf19Tests.cpp:500 |
 | `0x10005aba` | thunk_FUN_1039ef10 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2397 |
 | `0x10005b87` | thunk_FUN_1005f190 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:1937 |
@@ -429,12 +431,12 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000612c` | thunk_FUN_101d2c70 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:241 |
 | `0x100061ae` | SetFollowerBoss | Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:224 |
 | `0x10006613` | thunk_FUN_10379000 | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:152 |
-| `0x100067f3` | thunk_FUN_101d3730 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:183, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:672, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:195 |
+| `0x100067f3` | thunk_FUN_101d3730 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:183, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:672, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:193 |
 | `0x10006992` | thunk_FUN_102d1220 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:400 |
 | `0x10006a1e` | CNPC_VAsianVampire::SelectJumpbaseNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:757 |
 | `0x10006a8c` | ClearSchedule | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:369 |
 | `0x10006bc2` | thunk_FUN_1017e720 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:362, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:446 |
-| `0x10006c4e` | CTraceFilterManBatNoIBeamEntity::ShouldHitEntity | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:254, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:280, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossesTests.cpp:764 |
+| `0x10006c4e` | CTraceFilterManBatNoIBeamEntity::ShouldHitEntity | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:262, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:288, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossesTests.cpp:764 |
 | `0x10006d16` | thunk_FUN_103dc520 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:522 |
 | `0x10006d70` | CNPC_VChangBros::CheckJumpPathToHintNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1182 |
 | `0x10006e15` | CVDmg_t::GetDmg | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2301 |
@@ -448,12 +450,12 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10007c7a` | CNPC_VZombie::CreateCorpse | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:342 |
 | `0x10007e19` | CBaseCombatCharacter::GetActiveWeapon | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:538 |
 | `0x100085f8` | thunk_FUN_102d12e0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:798 |
-| `0x1000886e` | aiscripted_sequence | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:5, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:456 |
+| `0x1000886e` | aiscripted_sequence | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:5, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:457 |
 | `0x10008de6` | thunk_FUN_102d61b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:465 |
 | `0x10008e7c` | thunk_FUN_101e8da0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1113, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1117 |
 | `0x10008f80` | thunk_FUN_1028a260 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:650, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:654 |
 | `0x100090f2` | thunk_FUN_1042fe90 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:355 |
-| `0x10009408` | thunk_FUN_1042fde0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:94 |
+| `0x10009408` | thunk_FUN_1042fde0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:91 |
 | `0x10009575` | thunk_FUN_103bf440 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3126 |
 | `0x100097d2` | CAI_BaseNPC::SetIdealActivity | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:108 |
 | `0x10009813` | CBaseAnimating::SequenceDuration | Source/ElysiumUE/Private/Substrate/ElysiumFlexSlotBodies.cpp:235, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc.cpp:108 |
@@ -461,7 +463,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10009b06` | CNPC_VAnimal::StartTask | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:21 |
 | `0x10009b8d` | thunk_FUN_100f7b20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1925 |
 | `0x10009c14` | thunk_FUN_10295460 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:538, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:541 |
-| `0x10009c8c` | thunk_FUN_100290c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1186, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1289 |
+| `0x10009c8c` | thunk_FUN_100290c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1186, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1289 |
 | `0x10009caf` | CBaseEntity::StartTouch | Source/ElysiumUE/Private/Substrate/ElysiumNpcGhoulCroucher.cpp:185 |
 | `0x10009d1d` | thunk_FUN_103dc280 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:945, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:523 |
 | `0x10009db3` | thunk_FUN_1038c250 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1710 |
@@ -477,7 +479,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000b186` | CBaseEntity::IsFloating | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:470 |
 | `0x1000b36b` | thunk_FUN_1038b370 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1715 |
 | `0x1000b4f6` | CBaseAnimating::GetSeqDesc | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug.cpp:449, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:186 |
-| `0x1000b5cd` | CBaseEntity::GetDebugName | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:111, Source/ElysiumUE/Private/Substrate/ElysiumNpcDebug10Shared.h:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:194 |
+| `0x1000b5cd` | CBaseEntity::GetDebugName | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:111, Source/ElysiumUE/Private/Substrate/ElysiumNpcDebug10Shared.h:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:192 |
 | `0x1000b6a9` | thunk_FUN_1022dea0 | Source/ElysiumUE/Private/Substrate/ElysiumLaw.cpp:618 |
 | `0x1000b74e` | thunk_FUN_10376c10 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:212 |
 | `0x1000bca8` | CSoundEnt::InsertSound | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:870, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:914 |
@@ -488,7 +490,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000c1b7` | thunk_FUN_101cdba0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:488 |
 | `0x1000c257` | CNPC_VSheriffMan::SelectCenterNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3010 |
 | `0x1000c392` | thunk_FUN_102c42a0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2003 |
-| `0x1000c531` | CAI_BaseNPCTroika::NPCInit | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:288 |
+| `0x1000c531` | CAI_BaseNPCTroika::NPCInit | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:286 |
 | `0x1000c61c` | CNPC_VAsianVampire::SelectLedgeNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:749 |
 | `0x1000c6da` | thunk_FUN_101a8930 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc.cpp:299 |
 | `0x1000c838` | thunk_FUN_1017e6f0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:565, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:617 |
@@ -502,9 +504,11 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000d585` | CNPC_VSabbatLeader::SelectTeleportArchway | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2657 |
 | `0x1000d774` | CNPC_VSabbatLeader::SelectDiveOutPoint | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2661 |
 | `0x1000d9fe` | thunk_FUN_10395ce0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2083 |
+| `0x1000da76` | thunk_FUN_1003e4b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn19.cpp:59 |
 | `0x1000dc06` | thunk_FUN_1042fe90 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:440, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:916 |
 | `0x1000de7c` | CNPC_VVampireBoss::StartTask | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:727, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:767, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1243, +2 more |
-| `0x1000df2b` | CAI_BaseNPCTroika::PreSelectSchedule | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:328, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:335, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:257 |
+| `0x1000df2b` | CAI_BaseNPCTroika::PreSelectSchedule | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:326, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:333, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:257 |
+| `0x1000df44` | CBaseEntity::RemoveFlag2 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:162 |
 | `0x1000df6c` | thunk_FUN_103828a0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1405 |
 | `0x1000e35e` | CNPC_VChangBros::SelectTeleportNode | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1128 |
 | `0x1000e3ea` | thunk_FUN_103dc260 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:523 |
@@ -516,7 +520,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000ec46` | CNPC_VSheriffMan::SetupJump | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3041 |
 | `0x1000ecd2` | thunk_FUN_101d2f40 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask19.cpp:2413, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:251 |
 | `0x1000ed6d` | thunk_FUN_10383130 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1411 |
-| `0x1000ede0` | CBaseAnimating::RemoveExtraAnimationModels | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:162 |
+| `0x1000ede0` | CBaseAnimating::RemoveExtraAnimationModels | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:160 |
 | `0x1000ee8a` | thunk_FUN_10382bb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1530 |
 | `0x1000f03d` | thunk_FUN_101e56e0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1037 |
 | `0x1000f263` | CBaseAnimating::GetBonePosition01 | Source/ElysiumUE/Private/Substrate/ElysiumNpcDebug10.cpp:605, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:527 |
@@ -526,7 +530,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1000f673` | CNPC_VVampireBoss::KillBodyEmitters | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2607 |
 | `0x1000f6aa` | thunk_FUN_103be8e0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3181 |
 | `0x1000f754` | CBaseVampireSkillEntity::vfunc42 | Source/ElysiumUE/Private/Substrate/ElysiumSkillClasses.h:33 |
-| `0x1000fa33` | thunk_FUN_1017e150 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:196 |
+| `0x1000fa33` | thunk_FUN_1017e150 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:194 |
 | `0x100101c7` | thunk_FUN_100f8580 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:487, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:511 |
 | `0x100101ea` | CBaseCombatCharacter::Weapon_SetActivity | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc19.cpp:408 |
 | `0x10010258` | thunk_FUN_102f47b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask19.cpp:2395 |
@@ -553,7 +557,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10011e46` | CVStatList_t::SetBase | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:805 |
 | `0x10011eb4` | thunk_FUN_1039ef60 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2531 |
 | `0x10012116` | thunk_FUN_102e1560 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:347 |
-| `0x100123af` | thunk_FUN_1028d610 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:421 |
+| `0x100123af` | thunk_FUN_1028d610 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:422 |
 | `0x10012530` | CBaseAnimating::GetNumFlexControllers | Source/ElysiumUE/Private/Substrate/ElysiumFlexSlotBodies.cpp:260 |
 | `0x100125bc` | thunk_FUN_102c1400 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:305 |
 | `0x10012611` | CAI_BaseNPCTroika::OnTakeDamage | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage19Species.cpp:8 |
@@ -571,7 +575,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1001395d` | thunk_FUN_10146190 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1354, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1538, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTask19Tests_2.cpp:605 |
 | `0x10013aca` | CNPC_VSabbatLeader::PlayerInNoJumpZone | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2698 |
 | `0x10013b24` | CNPC_VVampireBoss::CausePlayerAOEDamage | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1237 |
-| `0x10013cf5` | CBaseCombatCharacter::AddClassRelationship | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:46 |
+| `0x10013cf5` | CBaseCombatCharacter::AddClassRelationship | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss19Species.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:237 |
 | `0x10013f2f` | CAI_BaseNPCTroika::GatherConditions | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions19Species.cpp:4, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:291 |
 | `0x1001402e` | thunk_FUN_102ee1c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:551, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:607, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:2052, +2 more |
 | `0x10014371` | thunk_FUN_1017d630 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:150 |
@@ -579,7 +583,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10014614` | thunk_FUN_101cd940 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:718 |
 | `0x100146e1` | CAI_BaseNPCTroika::HandleAnimEvent | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:61, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:205, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:116 |
 | `0x1001482b` | HasInterruptCondition | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:305 |
-| `0x10014876` | CNPC_VVampire::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:80 |
+| `0x10014876` | CNPC_VVampire::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:80, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:84 |
 | `0x10014a10` | CNPC_VHumanCombatant::OnStateChange | Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:42 |
 | `0x10014a6a` | thunk_FUN_10167fd0 | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1567, Source/ElysiumUE/Public/ElysiumPlayer.h:1765 |
 | `0x10014ad3` | thunk_FUN_1017d680 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:151 |
@@ -595,7 +599,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100155cd` | thunk_FUN_1038e720 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1715 |
 | `0x100156d6` | thunk_FUN_1038e9c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1872 |
 | `0x100156e5` | thunk_FUN_103dc3c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:523 |
-| `0x10015708` | thunk_FUN_100cd2d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:417 |
+| `0x10015708` | thunk_FUN_100cd2d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:418 |
 | `0x10015839` | thunk_FUN_10269b50 | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:295 |
 | `0x100158a7` | thunk_FUN_102b8980 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:1146 |
 | `0x100158f7` | thunk_FUN_1038c170 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1720 |
@@ -636,7 +640,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10088d70` | FUN_10088d70 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:63 |
 | `0x1008d8b0` | CBaseAnimating::InputSpawnTempParticle | Source/ElysiumUE/Private/Substrate/ElysiumPlayerClasses.cpp:223, Source/ElysiumUE/Private/Substrate/ElysiumPlayerClasses.cpp:232 |
 | `0x1008fbe0` | CBaseAnimating::GetSequenceMoveDist | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:130, Source/ElysiumUE/Public/Visual/ElysiumBlendGrids.h:186 |
-| `0x100a8220` | FUN_100a8220 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:350, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:17, Source/ElysiumUE/Public/ElysiumEntity.h:194 |
+| `0x100a8220` | FUN_100a8220 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:359, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:17, Source/ElysiumUE/Public/ElysiumEntity.h:194 |
 | `0x100b52a0` | FUN_100b52a0 | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:1071 |
 | `0x100c5d10` | FUN_100c5d10 | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:131, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:877, Source/ElysiumUE/Private/Visual/ElysiumBlendGrids.cpp:635, +2 more |
 | `0x100c67b0` | FUN_100c67b0 | Source/ElysiumUE/Private/Editor/ElysiumAnimGraphLibrary.cpp:934, Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp:1236, Source/ElysiumUE/Private/Visual/ElysiumBankRemap.cpp:59 |
@@ -655,16 +659,16 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x100e61d0` | CDialog::read_line_data | Source/ElysiumUE/Private/Scripting/ElysiumDlg.cpp:194, Source/ElysiumUE/Public/ElysiumDlg.h:43 |
 | `0x100e7f70` | FUN_100e7f70 | Source/ElysiumUE/Private/Scripting/ElysiumDlg.cpp:1358, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:424, Source/ElysiumUE/Public/ElysiumDlg.h:183 |
 | `0x100e9290` | CDialogDependency::ParseDep | Source/ElysiumUE/Public/ElysiumDlg.h:299 |
-| `0x100e9760` | CDialogDependency::TestSimple | Source/ElysiumUE/Private/Scripting/ElysiumDlg.cpp:664, Source/ElysiumUE/Private/Tests/ElysiumDialogueTests.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:93, +4 more |
+| `0x100e9760` | CDialogDependency::TestSimple | Source/ElysiumUE/Private/Scripting/ElysiumDlg.cpp:664, Source/ElysiumUE/Private/Tests/ElysiumDialogueTests.cpp:747, Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:94, +4 more |
 | `0x100e9ff0` | CDialogDependency::TestPython | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:337 |
 | `0x100ef060` | CBaseDoor::Spawn | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:93 |
 | `0x100efc90` | CBaseDoor::Use | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:853, Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:920 |
 | `0x100f7e30` | FUN_100f7e30 | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:626, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:639, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:271 |
 | `0x100f7f70` | FUN_100f7f70 | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:652, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:271 |
 | `0x100f8700` | FUN_100f8700 | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:363 |
-| `0x100f9fc0` | FUN_100f9fc0 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:346, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:16 |
+| `0x100f9fc0` | FUN_100f9fc0 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:355, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:16 |
 | `0x100fd0b0` | staticinit_100fd0b0 | Source/ElysiumUE/Private/Player/ElysiumPlayerCameraManager.cpp:181 |
-| `0x1011aaf0` | CServerGameDLL::vfunc4 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:341, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:11 |
+| `0x1011aaf0` | CServerGameDLL::vfunc4 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:350, Source/ElysiumUE/Private/Tests/ElysiumEntityActivatePassTests.cpp:11 |
 | `0x1011d7e0` | FUN_1011d7e0 | Source/ElysiumUE/Private/Player/ElysiumCommandBus.cpp:55, Source/ElysiumUE/Public/ElysiumFootstepTuning.h:31 |
 | `0x1011e0d0` | FUN_1011e0d0 | Source/ElysiumUE/Public/ElysiumMoveSolve.h:69 |
 | `0x1011e430` | CGameMovement::vfunc16 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:216, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:230, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:343, +2 more |
@@ -683,11 +687,11 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10125db0` | CheckFalling | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:419, Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:933, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:216, +8 more |
 | `0x101265d0` | CanUnduck | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:665 |
 | `0x10126fd0` | CGameMovement::Duck | Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp:708, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:289, Source/ElysiumUE/Public/ElysiumMovementComponent.h:298 |
-| `0x101274a0` | CGameMovement::PlayerMove | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1783, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:442, Source/ElysiumUE/Private/Tests/ElysiumPlayerFootstepTests.cpp:493, +2 more |
+| `0x101274a0` | CGameMovement::PlayerMove | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1792, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:442, Source/ElysiumUE/Private/Tests/ElysiumPlayerFootstepTests.cpp:493, +2 more |
 | `0x10136650` | FUN_10136650 | Source/ElysiumUE/Public/ElysiumEntityWorld.h:737 |
 | `0x101370b0` | staticinit_101370b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:270 |
 | `0x101413e0` | CMultiplayRules::vfunc20 | Source/ElysiumUE/Public/ElysiumPlayer.h:829 |
-| `0x10147690` | FUN_10147690 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1778, Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:11, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1168, +8 more |
+| `0x10147690` | FUN_10147690 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1787, Source/ElysiumUE/Private/Substrate/ElysiumMiscFlags.h:11, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1173, +8 more |
 | `0x1014f8d0` | CBaseCombatCharacter::FUN_1014f8d0 | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:953, Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:757 |
 | `0x1015a5c0` | FUN_1015a5c0 | Source/ElysiumUE/Private/Substrate/ElysiumLaw.cpp:566 |
 | `0x1015d7c0` | FUN_1015d7c0 | Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:194 |
@@ -708,9 +712,9 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10167320` | PlayerStealthKillEligibility | Source/ElysiumUE/Public/ElysiumPlayer.h:2082 |
 | `0x10167370` | PlayerTryStealthKill | Source/ElysiumUE/Private/Substrate/ElysiumGrapple.cpp:95, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:547, Source/ElysiumUE/Public/ElysiumPlayer.h:338 |
 | `0x10167470` | FUN_10167470 | Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp:1285 |
-| `0x10167850` | CBasePlayer::PlayerUse | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:722, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:789, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3212, +8 more |
+| `0x10167850` | CBasePlayer::PlayerUse | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:722, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldInteraction.cpp:789, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3217, +8 more |
 | `0x10168320` | CBasePlayer::Replenish | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:376, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:107, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:601, +1 more |
-| `0x10168700` | CBasePlayer::BeFedOnByZombie | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:4007, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.h:111, Source/ElysiumUE/Public/ElysiumPlayer.h:343 |
+| `0x10168700` | CBasePlayer::BeFedOnByZombie | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:4007, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.h:112, Source/ElysiumUE/Public/ElysiumPlayer.h:343 |
 | `0x101695f0` | CBasePlayer::EnterGrappleState | Source/ElysiumUE/Public/ElysiumPlayer.h:1512 |
 | `0x10169660` | CBasePlayer::LeaveGrappleState | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1766, Source/ElysiumUE/Private/Tests/ElysiumCameraCinematicTests.cpp:863, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:625, +2 more |
 | `0x1016a030` | FUN_1016a030 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1262 |
@@ -719,8 +723,8 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1016aaf0` | CBasePlayer::ProcessUsercmds | Source/ElysiumUE/Private/Player/ElysiumPlayerController.cpp:151, Source/ElysiumUE/Public/ElysiumMoveSolve.h:227, Source/ElysiumUE/Public/ElysiumPlayer.h:1918 |
 | `0x1016b480` | FUN_1016b480 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:442, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:428, Source/ElysiumUE/Private/Substrate/ElysiumGameSound.h:81, +6 more |
 | `0x1016bd50` | FUN_1016bd50 | Source/ElysiumUE/Public/ElysiumEntityWorld.h:57, Source/ElysiumUE/Public/ElysiumPlayer.h:2131 |
-| `0x1016be10` | CBasePlayer::PostThink | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1727, Source/ElysiumUE/Public/ElysiumEntityWorld.h:228, Source/ElysiumUE/Public/ElysiumPlayer.h:2129 |
-| `0x1016d260` | CBasePlayer::Spawn | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1728, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:152, +4 more |
+| `0x1016be10` | CBasePlayer::PostThink | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1736, Source/ElysiumUE/Public/ElysiumEntityWorld.h:228, Source/ElysiumUE/Public/ElysiumPlayer.h:2129 |
+| `0x1016d260` | CBasePlayer::Spawn | Source/ElysiumUE/Private/Player/ElysiumCameraComponent.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1737, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:152, +4 more |
 | `0x1016e820` | CBasePlayer::Precache | Source/ElysiumUE/Private/Substrate/ElysiumNpcUsedHullBits.h:8 |
 | `0x1016eec0` | CBasePlayer::RetrieveGlobalEmailFlags | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1034, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1046, Source/ElysiumUE/Public/ElysiumPlayer.h:1963 |
 | `0x1016f0f0` | CBasePlayer::StoreGlobalEmailFlags | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1067, Source/ElysiumUE/Private/Tests/ElysiumTerminalEmailTests.cpp:701, Source/ElysiumUE/Public/ElysiumPlayer.h:1968 |
@@ -732,7 +736,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10178170` | FUN_10178170 | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:98, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.cpp:237, Source/ElysiumUE/Private/Tests/ElysiumDialogueEntryTests.cpp:7, +2 more |
 | `0x10178280` | CBasePlayer::FUN_10178280 | Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:276, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:301, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:335, +9 more |
 | `0x10178400` | CBasePlayer::FUN_10178400 | Source/ElysiumUE/Private/Player/ElysiumCameraService.cpp:99, Source/ElysiumUE/Private/Player/ElysiumDialogueCamera.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumDialogueSession.h:291, +5 more |
-| `0x10178590` | FUN_10178590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:823, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1170 |
+| `0x10178590` | FUN_10178590 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:832, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1170 |
 | `0x10178a10` | CBasePlayer::HandleAnimEvent | Source/ElysiumUE/Private/Substrate/ElysiumCameraCinematic.h:354, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:595, Source/ElysiumUE/Private/Tests/ElysiumCameraFindBestShotTests.cpp:3, +2 more |
 | `0x1017d0b0` | FUN_1017d0b0 | Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.cpp:235, Source/ElysiumUE/Private/Substrate/ElysiumCameraOverride.cpp:238 |
 | `0x101803a0` | FUN_101803a0 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Public/ElysiumEntityWorld.h:777 |
@@ -757,7 +761,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x101a7600` | FUN_101a7600 | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:719, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:80, +3 more |
 | `0x101a7760` | FUN_101a7760 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:389, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:753, +2 more |
 | `0x101a8070` | FUN_101a8070 | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:16, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:320, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:588, +3 more |
-| `0x101a96b0` | FUN_101a96b0 | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:6, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:455 |
+| `0x101a96b0` | FUN_101a96b0 | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:6, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:456 |
 | `0x101a9b30` | CCineAISchedule::InputStartSchedule | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:136, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:15, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:37, +1 more |
 | `0x101aa550` | FUN_101aa550 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:5 |
 | `0x101abcc0` | FUN_101abcc0 | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1274, Source/ElysiumUE/Public/ElysiumPlayer.h:1935 |
@@ -766,7 +770,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x101b3a10` | FUN_101b3a10 | Source/ElysiumUE/Private/Substrate/ElysiumAnimEvents.h:69 |
 | `0x101be1f0` | CStealthKillRules::FindVictim | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:419, Source/ElysiumUE/Private/Substrate/ElysiumStealthKillRules.h:26, Source/ElysiumUE/Private/Tests/ElysiumStealthKillTests.cpp:1, +2 more |
 | `0x101bedb0` | CStealthKillRules::LoadKey | Source/ElysiumUE/Private/Substrate/ElysiumStealthKillRules.h:10 |
-| `0x101c0b10` | FUN_101c0b10 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:878, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:219, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1435, +6 more |
+| `0x101c0b10` | FUN_101c0b10 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:887, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:219, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1435, +6 more |
 | `0x101c0b60` | FUN_101c0b60 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:116, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:22, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:104, +3 more |
 | `0x101c7ff0` | FUN_101c7ff0 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldPersistence.cpp:115 |
 | `0x101ccbf0` | CEdtEntitiesEnum::vfunc0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19.cpp:56, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc19Tests.cpp:441 |
@@ -855,14 +859,14 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1027dd10` | FUN_1027dd10 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:43 |
 | `0x1027dfb0` | FUN_1027dfb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:182 |
 | `0x1028d230` | FUN_1028d230 | Source/ElysiumUE/Private/Substrate/ElysiumNpcDebug10_2.cpp:459, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:15, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19.cpp:57, +1 more |
-| `0x1028d820` | FUN_1028d820 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:2027, Source/ElysiumUE/Private/Substrate/ElysiumLogicClasses.cpp:641, +7 more |
+| `0x1028d820` | FUN_1028d820 | Source/ElysiumUE/Private/Player/ElysiumCommands.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:2036, Source/ElysiumUE/Private/Substrate/ElysiumLogicClasses.cpp:641, +7 more |
 | `0x1029ea40` | CAI_BaseNPCTroika::InputTweakParam | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:172, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClassFactoryTests.cpp:230, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:316 |
-| `0x1029eb30` | CAI_BaseNPCTroika::InputSetupPatrolType | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:488 |
-| `0x1029ed90` | CAI_BaseNPCTroika::InputFollowPatrolPath | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:496, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:60 |
-| `0x1029ef80` | CAI_BaseNPCTroika::InputStartPlayerDialog | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3210, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3288 |
-| `0x1029f060` | CAI_BaseNPCTroika::InputStartPlayerDialogRemote | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3211 |
-| `0x1029f120` | CAI_BaseNPCTroika::InputStartPlayerDialogUnforced | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3211 |
-| `0x1029f2a0` | CAI_BaseNPCTroika::InputDisableThink | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1906, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:555, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:169, +1 more |
+| `0x1029eb30` | CAI_BaseNPCTroika::InputSetupPatrolType | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:493 |
+| `0x1029ed90` | CAI_BaseNPCTroika::InputFollowPatrolPath | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:501, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:60 |
+| `0x1029ef80` | CAI_BaseNPCTroika::InputStartPlayerDialog | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3215, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3293 |
+| `0x1029f060` | CAI_BaseNPCTroika::InputStartPlayerDialogRemote | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3216 |
+| `0x1029f120` | CAI_BaseNPCTroika::InputStartPlayerDialogUnforced | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:3216 |
+| `0x1029f2a0` | CAI_BaseNPCTroika::InputDisableThink | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1911, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:555, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:169, +1 more |
 | `0x102ae8e0` | FUN_102ae8e0 | Source/ElysiumUE/Private/Substrate/ElysiumSchedule.h:371 |
 | `0x102c2890` | CAI_BaseNPCTroika::InputPlayDialogFile | Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp:168 |
 | `0x102c7eb0` | FUN_102c7eb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc.cpp:115 |
@@ -874,7 +878,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x102d0a50` | CAI_Hint::InputWalk | Source/ElysiumUE/Private/Substrate/ElysiumHint.h:73 |
 | `0x102d0a80` | CAI_Hint::InputDontWalk | Source/ElysiumUE/Private/Substrate/ElysiumHint.h:73 |
 | `0x102d2840` | FUN_102d2840 | Source/ElysiumUE/Private/Debug/ElysiumCastRun.cpp:496, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:60, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:313, +7 more |
-| `0x102d2900` | FUN_102d2900 | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:550, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:60 |
+| `0x102d2900` | FUN_102d2900 | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:555, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:60 |
 | `0x102d2e30` | FUN_102d2e30 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:210, Source/ElysiumUE/Private/Tests/ElysiumHintTests.cpp:22, Source/ElysiumUE/Private/Tests/ElysiumHintTests.cpp:140, +1 more |
 | `0x102d3f50` | FUN_102d3f50 | Source/ElysiumUE/Private/Substrate/ElysiumScheduleOperands.cpp:69, Source/ElysiumUE/Private/Substrate/ElysiumScheduleOperands.cpp:139, Source/ElysiumUE/Private/Substrate/ElysiumScheduleOperands.h:41, +1 more |
 | `0x102d4060` | CAI_Hint::InputSetUserData | Source/ElysiumUE/Private/Substrate/ElysiumHint.h:80, Source/ElysiumUE/Private/Tests/ElysiumHintTests.cpp:208 |
@@ -887,7 +891,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x102e2730` | FUN_102e2730 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1262 |
 | `0x102e9fe0` | FUN_102e9fe0 | Source/ElysiumUE/Private/Substrate/ElysiumIdNamespace.cpp:5, Source/ElysiumUE/Private/Substrate/ElysiumIdNamespace.h:4, Source/ElysiumUE/Private/Substrate/ElysiumIdNamespace.h:28, +1 more |
 | `0x102ea070` | FUN_102ea070 | Source/ElysiumUE/Private/Substrate/ElysiumIdNamespace.h:4, Source/ElysiumUE/Private/Substrate/ElysiumIdNamespace.h:38, Source/ElysiumUE/Private/Substrate/ElysiumScheduleId.h:19 |
-| `0x102ea090` | FUN_102ea090 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:154, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:39, Source/ElysiumUE/Private/Substrate/ElysiumNpcAsianVampire.cpp:265, +41 more |
+| `0x102ea090` | FUN_102ea090 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:155, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:39, Source/ElysiumUE/Private/Substrate/ElysiumNpcAsianVampire.cpp:265, +41 more |
 | `0x102ea0e0` | FUN_102ea0e0 | Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.cpp:8, Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.h:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug.cpp:522, +5 more |
 | `0x102ea130` | FUN_102ea130 | Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.cpp:63, Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.h:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug.cpp:520, +2 more |
 | `0x102ea240` | FUN_102ea240 | Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumLocalIdSpace.h:73, Source/ElysiumUE/Private/Tests/ElysiumScheduleIdSpaceTests.cpp:9, +1 more |
@@ -924,7 +928,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10316ff0` | FUN_10316ff0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug.cpp:539, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug.cpp:572, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:312, +1 more |
 | `0x1031a600` | datamap_CBaseCombatCharacter_builder | Source/ElysiumUE/Public/ElysiumNpcFlags.h:10 |
 | `0x10326de0` | FUN_10326de0 | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1694, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:195, Source/ElysiumUE/Public/ElysiumPlayer.h:348 |
-| `0x103285a0` | CBaseCombatCharacter::CanStartGrappleAttack | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:505, Source/ElysiumUE/Private/Substrate/ElysiumGrapple.cpp:66, Source/ElysiumUE/Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp:472, +2 more |
+| `0x103285a0` | CBaseCombatCharacter::CanStartGrappleAttack | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:505, Source/ElysiumUE/Private/Substrate/ElysiumGrapple.cpp:66, Source/ElysiumUE/Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp:477, +2 more |
 | `0x10328df0` | CBaseCombatCharacter::StartGrappleAttack | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldDialogue.cpp:491, Source/ElysiumUE/Public/ElysiumPlayer.h:317, Source/ElysiumUE/Public/ElysiumPlayer.h:1492 |
 | `0x103322e0` | CBaseCombatCharacter::SetAsCameraTarget | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:662 |
 | `0x103323d0` | CBaseCombatCharacter::InputFadeHeadAsCameraTarget | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:688 |
@@ -946,12 +950,12 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x1034bbf0` | FUN_1034bbf0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:110, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:589, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:650, +8 more |
 | `0x1034c8b0` | FUN_1034c8b0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:583, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:21, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:106, +9 more |
 | `0x1034c980` | FUN_1034c980 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:263 |
-| `0x1034cf20` | FUN_1034cf20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:670, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:53 |
+| `0x1034cf20` | FUN_1034cf20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:648, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:53 |
 | `0x1034d000` | FUN_1034d000 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:56 |
 | `0x1034d050` | FUN_1034d050 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:56 |
 | `0x1034d2d0` | FUN_1034d2d0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:583, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:21, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:107, +7 more |
 | `0x10350270` | CHL2_Player::MaintainEyeDirection | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:180, Source/ElysiumUE/Public/ElysiumPlayer.h:2366 |
-| `0x10350830` | CHL2_Player::vfunc436 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1715, Source/ElysiumUE/Public/ElysiumPlayer.h:2435 |
+| `0x10350830` | CHL2_Player::vfunc436 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1724, Source/ElysiumUE/Public/ElysiumPlayer.h:2435 |
 | `0x10351090` | CHL2_Player::vfunc462 | Source/ElysiumUE/Private/Player/ElysiumPlayerController.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1240, +5 more |
 | `0x103516e0` | FUN_103516e0 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
 | `0x10351770` | FUN_10351770 | Source/ElysiumUE/Private/Substrate/ElysiumStealth.h:43 |
@@ -1001,7 +1005,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x10389c50` | FUN_10389c50 | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:5 |
 | `0x10389cc0` | FUN_10389cc0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:30, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:163 |
 | `0x1038fa50` | CNPC_VManBat::InputManBatStun | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:308, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:195 |
-| `0x1038fa90` | CNPC_VManBat::InputManBatFlyBegin | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:380 |
+| `0x1038fa90` | CNPC_VManBat::InputManBatFlyBegin | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:310, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:367 |
 | `0x10390d00` | FUN_10390d00 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:422 |
 | `0x10390e70` | FUN_10390e70 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:5 |
 | `0x10390ee0` | FUN_10390ee0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:201, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:29, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:175 |
@@ -1012,11 +1016,11 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x103a1cb0` | FUN_103a1cb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.h:6 |
 | `0x103a1d20` | FUN_103a1d20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.h:6 |
 | `0x103a3a20` | FUN_103a3a20 | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlaceholder.h:6 |
-| `0x103a4470` | FUN_103a4470 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:719, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:6 |
+| `0x103a4470` | FUN_103a4470 | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:728, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:6 |
 | `0x103a4ab0` | FUN_103a4ab0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcProneDialog.h:5 |
 | `0x103a4b30` | FUN_103a4b30 | Source/ElysiumUE/Private/Substrate/ElysiumNpcProneDialog.h:6 |
 | `0x103a4ff0` | FUN_103a4ff0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSabbatGunman.h:6 |
-| `0x103a5870` | staticinit_103a5870 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:216, Source/ElysiumUE/Private/Substrate/ElysiumNpcSabbatLeader.h:174 |
+| `0x103a5870` | staticinit_103a5870 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:216, Source/ElysiumUE/Private/Substrate/ElysiumNpcSabbatLeader.h:178 |
 | `0x103a5ae0` | FUN_103a5ae0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSabbatLeader.h:6 |
 | `0x103aba00` | FUN_103aba00 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.h:5 |
 | `0x103abb00` | FUN_103abb00 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.h:20, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:165 |
@@ -1025,7 +1029,7 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x103ae3e0` | FUN_103ae3e0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSheriffMan.cpp:67, Source/ElysiumUE/Private/Substrate/ElysiumNpcSheriffMan.h:17, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:168 |
 | `0x103b1470` | CNPC_VSheriffMan::StartAttacking | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:332 |
 | `0x103b15e0` | CNPC_VSheriffMan::StartTransformation | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:334 |
-| `0x103b1860` | CNPC_VSheriffMan::SetTeleportVelocity | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:562 |
+| `0x103b1860` | CNPC_VSheriffMan::SetTeleportVelocity | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:540 |
 | `0x103b2ed0` | FUN_103b2ed0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTaxiDriver.h:6 |
 | `0x103b6bf0` | FUN_103b6bf0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:5 |
 | `0x103b6c60` | FUN_103b6c60 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:181, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:42, Source/ElysiumUE/Private/Substrate/ElysiumRetailHullTable.h:178 |
@@ -1043,13 +1047,13 @@ Cited by `Source/**`, present in the corpus, not reached by the walk: either the
 | `0x103d3bb0` | FUN_103d3bb0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp:110 |
 | `0x103d8b10` | FUN_103d8b10 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:122 |
 | `0x103d8ba0` | FUN_103d8ba0 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:206, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:219 |
-| `0x103d99a0` | CNPC_VWerewolf::InputToggleDoorState | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:346 |
+| `0x103d99a0` | CNPC_VWerewolf::InputToggleDoorState | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:347 |
 | `0x103dc6c0` | FUN_103dc6c0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.h:5 |
 | `0x103dcf90` | FUN_103dcf90 | Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.h:5 |
 | `0x103dd000` | FUN_103dd000 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19.cpp:58 |
 | `0x103ddd70` | FUN_103ddd70 | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.h:5 |
-| `0x103e0cd0` | FUN_103e0cd0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:350 |
-| `0x103e0e30` | CNPC_VZombie::InputSetZombieAIType | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:350, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:353 |
+| `0x103e0cd0` | FUN_103e0cd0 | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:351 |
+| `0x103e0e30` | CNPC_VZombie::InputSetZombieAIType | Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:351, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:354 |
 | `0x103e8be0` | CWeaponMelee_TzimisceMelee::vfunc370 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:245 |
 | `0x103e9ac0` | FUN_103e9ac0 | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:646 |
 | `0x103ea5b0` | CWeaponMelee::Operator_HandleAnimEvent | Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:475, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp:1258, Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h:235, +2 more |
@@ -1123,7 +1127,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1008bfe0` CBaseAnimating::ShouldIgnoreCollision | `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x10213fe0` CPropHaunted::ShouldIgnoreCollision |
 | `0x1008d990` CBaseAnimating::GetSeqDesc | `0x10090e30` CBaseAnimating::IsValidSequence, `0x10092460` CBaseAnimating::HasPoseParameter02, `0x100938a0` CBaseAnimating::GetEntryNode, `0x10093970` CBaseAnimating::GetExitNode, +9 more |
 | `0x1008dac0` CBaseAnimating::GetSequencesForActivity | `0x10160f90` CBasePlayer::ChooseMeleeAttackSequence, `0x103e9e00` CWeaponMelee::RequestActivity, `0x103ea7e0` FUN_103ea7e0 ‼ |
-| `0x1008df10` CBaseAnimating::OnRestore | `0x10154fa0` CRagdollProp::FUN_10154fa0, `0x101ee7b0` CDisciplineProjectile::FUN_101ee7b0, `0x1020ac70` CBaseTerminal::FUN_1020ac70, `0x1020e100` CPropSwitch::vfunc130, +1 more |
 | `0x1008e770` CBaseAnimating::CalcPose | `0x10095fe0` CBaseAnimating::GetSkeleton, `0x10328df0` CBaseCombatCharacter::StartGrappleAttack |
 | `0x1008eec0` CBaseAnimating::MatchOriginAnglesToAnimation | `0x100821f0` FUN_100821f0 |
 | `0x1008fe80` CBaseAnimating::GetSequenceName | `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100ed030` FUN_100ed030, `0x10161460` CBasePlayer::DrawDebugTextOverlays |
@@ -1185,7 +1188,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100a9ab0` CBaseEntity::CreateNoSpawn | `0x10056ba0` FUN_10056ba0, `0x10084ab0` FUN_10084ab0, `0x100f59e0` CEnvShooter::vfunc242, `0x100fbd50` FUN_100fbd50, +4 more |
 | `0x100a9c90` CBaseEntity::GetOwnerEntity | `0x100baf00` CBeam::Precache, `0x101716b0` CSprayCan::Remove, `0x10171aa0` CBloodSplat::Remove, `0x1024f0e0` CBaseCombatWeapon::FUN_1024f0e0 |
 | `0x100a9eb0` CBaseEntity::GetSoundEmissionOrigin | `0x1002a960` CPhysConstraint::InputBreak, `0x1002ad60` CPhysConstraint::InputConstraintBroken, `0x1003f4d0` CBaseEntity::PhysicsCheckWaterTransition, `0x10102030` CMessage::InputShowMessage, +13 more |
-| `0x100aa140` CBaseEntity::Restore | `0x10057510` CFireSmoke::Restore, `0x1018d340` CPointAngleSensor::vfunc127, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101ba840` CSoundEnt::Restore |
 | `0x100aa4e0` CBaseEntity::OnSave | `0x10154f70` CRagdollProp::FUN_10154f70, `0x1022a350` CSoundScheme::vfunc129 |
 | `0x100aa680` CBaseEntity::ShouldSavePhysics | `0x10045790` CPhysObjSaveRestoreOps::vfunc0 |
 | `0x100aa7b0` FUN_100aa7b0 | `0x10027690` CPhysForce::vfunc5, `0x10028c00` CPhysMotor::vfunc5, `0x10029680` CKeepUpright::vfunc5, `0x10029b50` CPhysThruster::vfunc5, +411 more |
@@ -1216,7 +1218,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
 | `0x100b3580` CBaseEntity::AddFlag | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040220` CBaseEntity::UpdateBaseVelocity, `0x10071220` FUN_10071220, `0x10071660` FUN_10071660, +37 more |
 | `0x100b3640` CBaseEntity::RemoveFlag | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x10071550` FUN_10071550, +33 more |
-| `0x100b3840` CBaseEntity::AddFlag2 | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, `0x10191450` CPhysicsProp::Spawn ‼, +5 more |
 | `0x100b3900` CBaseEntity::RemoveFlag2 | `0x1004f900` CSimplePhysicsBrush::Spawn, `0x1004fcb0` CSimplePhysicsProp::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, +2 more |
 | `0x100b39c0` CBaseEntity::GetFlags2 | `0x1004e3e0` CPhysBox::ShouldIgnoreCollision, `0x10082520` FUN_10082520, `0x101914a0` CPhysicsProp::ShouldIgnoreCollision, `0x101ccf10` CTraceFilterPlayerMovement::ShouldHitEntity, +1 more |
 | `0x100b3b00` CBaseEntity::Relink | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1006e8e0` FUN_1006e8e0, +73 more |
@@ -1250,7 +1251,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x100dd990` FUN_100dd990 | `0x100b87a0` CBatSwarm::Spawn, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100dda20` FUN_100dda20 | `0x100b51b0` FUN_100b51b0, `0x100b8b50` FUN_100b8b50, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100ddd20` FUN_100ddd20 | `0x100b52a0` FUN_100b52a0 |
-| `0x100ddd90` FUN_100ddd90 | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100dbd70` CDirtySpatialPartitionEntityList::vfunc0, `0x100dc220` FUN_100dc220, `0x10154e40` CRagdollProp::Spawn, +5 more |
 | `0x100df010` FUN_100df010 | `0x100dfd30` CDialog::CheckNameCollisions, `0x100dffa0` CDialog::LogAutoendFloats, `0x100e0290` CDialog::LogScriptProblems, `0x100e2ad0` CDialog::accumulate_stats, +3 more |
 | `0x100df030` FUN_100df030 | `0x100e15c0` FUN_100e15c0, `0x100e2ad0` CDialog::accumulate_stats, `0x100e3180` FUN_100e3180, `0x100e4240` CDialog::dump_dialog |
 | `0x100df120` FUN_100df120 | `0x100dffa0` CDialog::LogAutoendFloats |
@@ -1294,7 +1294,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1012c7f0` FUN_1012c7f0 | `0x1012c900` FUN_1012c900 |
 | `0x1012c840` FUN_1012c840 | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100a0b20` CBaseEntity::ClearParent, `0x100ad100` CBaseEntity::InputClearParent |
 | `0x1012c9c0` FUN_1012c9c0 | `0x1002f1e0` CCollisionEvent::ShouldCollide, `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x10037380` CPushBlockerEnum::vfunc0, `0x101d13a0` FUN_101d13a0 |
-| `0x10136580` FUN_10136580 ‼ | `0x1004ff40` FUN_1004ff40, `0x10086380` FUN_10086380, `0x10086910` FUN_10086910, `0x100aff90` FUN_100aff90, +31 more |
 | `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::ParseMapData |
 | `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +119 more |
 | `0x10137e40` FUN_10137e40 | `0x100c3240` FUN_100c3240, `0x100c3ce0` FUN_100c3ce0, `0x1019c810` FUN_1019c810 |
@@ -1518,7 +1517,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10206140` FUN_10206140 | `0x101d6520` FUN_101d6520, `0x101d6590` FUN_101d6590, `0x101d6a50` FUN_101d6a50 |
 | `0x10206300` FUN_10206300 | `0x102064b0` FUN_102064b0, `0x10258670` FUN_10258670, `0x10324190` FUN_10324190 |
 | `0x10206400` FUN_10206400 | `0x102066d0` FUN_102066d0, `0x10258670` FUN_10258670, `0x10324190` FUN_10324190 |
-| `0x10206aa0` FUN_10206aa0 | `0x100d6210` FUN_100d6210, `0x10206c70` FUN_10206c70 |
 | `0x10207c70` FUN_10207c70 | `0x100da040` FUN_100da040 |
 | `0x1020a0a0` FUN_1020a0a0 | `0x1010a130` CFire::Spawn |
 | `0x10217080` FUN_10217080 | `0x1020fad0` FUN_1020fad0 |
@@ -1565,7 +1563,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x102652d0` FUN_102652d0 | `0x10309230` FUN_10309230, `0x1030bfd0` CAI_SaveRestoreBlockHandler::vfunc2, `0x1030c210` CAI_SaveRestoreBlockHandler::vfunc7 |
 | `0x102652f0` FUN_102652f0 | `0x10309230` FUN_10309230, `0x1030bfd0` CAI_SaveRestoreBlockHandler::vfunc2, `0x1030c210` CAI_SaveRestoreBlockHandler::vfunc7 |
 | `0x102699e0` FUN_102699e0 | `0x10162c30` CBasePlayer::TraceAttack, `0x10162fa0` CBasePlayer::FUN_10162fa0 |
-| `0x1026dc00` CAI_BaseNPC::CapabilitiesAdd | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
 | `0x1026dc30` CAI_BaseNPC::CapabilitiesRemove | `0x102c3540` CAI_BaseNPCTroika::InputAllowOpenDoors |
 | `0x1027f610` FUN_1027f610 | `0x1027c300` FUN_1027c300 |
 | `0x1027f990` FUN_1027f990 | `0x1027f770` _08__UUnreachableEnt_t__V__CUtlMemory__UUnreachableEnt_t__V__CUtlVector____CUtlVectorDataOps::vfunc1 |
@@ -1607,8 +1604,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10323210` CBaseCombatCharacter::GetPresenceBenefit | `0x102387b0` CWeaponRanged::Shot ‼ |
 | `0x103232b0` CBaseCombatCharacter::GetShakyHandsPenalty | `0x102387b0` CWeaponRanged::Shot ‼ |
 | `0x10323930` FUN_10323930 | `0x103426b0` FUN_103426b0 |
-| `0x103239a0` CBaseCombatCharacter::AddToTeam | `0x1016d260` CBasePlayer::Spawn, `0x1016ebd0` CBasePlayer::Restore |
-| `0x10323a90` CBaseCombatCharacter::Spawn | `0x1016d260` CBasePlayer::Spawn, `0x10209350` CItemContainer::Spawn |
 | `0x10323c20` CBaseCombatCharacter::GetMaxInvenSlotsPerSection | `0x10335780` CBaseCombatCharacter::Inventory_MoveToFront, `0x10336b90` CBaseCombatCharacter::HasRangedWeapon |
 | `0x10327960` CBaseCombatCharacter::SetBloodColor | `0x10150380` CPhysicsCannister::Spawn |
 | `0x1032b960` FUN_1032b960 | `0x1040f940` FUN_1040f940 |
@@ -1648,7 +1643,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x1033ccd0` CBaseCombatCharacter::RemovePreDisciplineEffects | `0x10182500` CBasePlayer::RemovePreDisciplineEffects |
 | `0x1033cd70` CBaseCombatCharacter::AddDisciplineEffect | `0x101824e0` CBasePlayer::AddDisciplineEffect |
 | `0x1033cef0` CBaseCombatCharacter::RemoveDisciplineEffects | `0x10182530` CBasePlayer::RemoveDisciplineEffects |
-| `0x1033df80` CBaseCombatCharacter::ApplyDisciplineSpawnFlags | `0x1016d260` CBasePlayer::Spawn |
 | `0x1033e4a0` CBaseCombatCharacter::DrawDebugTextOverlays | `0x10161460` CBasePlayer::DrawDebugTextOverlays |
 | `0x1033eb60` CBaseCombatCharacter::FrenzyCheck | `0x1033e960` FUN_1033e960, `0x1033ea90` CBaseCombatCharacter::InputFrenzyCheck, `0x1033f1a0` CBaseCombatCharacter::FrenzyComparison, `0x1033f3f0` CBaseCombatCharacter::InputHungerCheck, +1 more |
 | `0x103411c0` CBaseCombatCharacter::BarterBegin | `0x10208c90` CItemContainer::InputUse, `0x10208fc0` CItemContainer::InputBarterBegin, `0x10209090` CItemContainer::FUN_10209090 |
@@ -1659,7 +1653,6 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | `0x10345f10` CBaseCombatCharacter::GetBlockReactionActivity | `0x10160d00` CBasePlayer::PlayerAttackerBlockedReaction |
 | `0x10346070` CBaseCombatCharacter::GetRawAttackValue | `0x101600a0` FUN_101600a0, `0x10236130` FUN_10236130, `0x102397b0` CWeaponRanged::Kick, `0x103455a0` FUN_103455a0 |
 | `0x10346910` CBaseCombatCharacter::MeleeRollAndSendNotice | `0x10346830` MeleeRollAndSendNotice |
-| `0x10348890` CBaseCombatCharacter::Restore | `0x1016ebd0` CBasePlayer::Restore |
 | `0x10348980` CBaseCombatCharacter::Save | `0x1016ea00` CBasePlayer::Save |
 | `0x10349970` FUN_10349970 | `0x10345ab0` CBaseCombatCharacter::WasMeleeBlocked |
 | `0x103499a0` FUN_103499a0 | `0x10345ab0` CBaseCombatCharacter::WasMeleeBlocked |
@@ -1888,7 +1881,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:87 | ``// `CBaseCombatCharacter::HasMiscFlag(0x40000)` — name 18 of the 22 at `0x10619ec8`,`` |
 | Source/ElysiumUE/Private/Tests/ElysiumScheduleTextTests.cpp:568 | ``TestEqual(TEXT("the table is the 22 at 0x10619ec8"), ElysiumMiscFlags::NumNames(), 22);`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:794 | ``// (the section's raw data ends at `0x106b9000`) and no corpus function writes them, so the`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:2117 | ``// (`vampire.dll FUN_100ce210`, epsilon qword at 0x10454050; `docs/vtmb/game_runtime.md` → "Queue`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:2126 | ``// (`vampire.dll FUN_100ce210`, epsilon qword at 0x10454050; `docs/vtmb/game_runtime.md` → "Queue`` |
 | Source/ElysiumUE/Private/Tests/ElysiumEntityIOTests.cpp:428 | ``// Retail's backward-clock guard (`vampire.dll FUN_100ce210`; epsilon qword at 0x10454050 == 0.005;`` |
 | Source/ElysiumUE/Private/Tests/ElysiumEntityIOTests.cpp:480 | ``const double RetailEpsilon = 0.005;   // vampire.dll 0x10454050 (research/.../claim-verification.md …`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumEventClasses.cpp:11 | ``//                  datamap_t 0x105b28c0 -> records 0x105b2904, 36 fields; the leading 14 are`` |
@@ -1938,8 +1931,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:339 | ``inline constexpr float kHearingDecayUnitsPerSecond = 250.0f;   // `0x104704b8``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumLaw.cpp:567 | ``// string `0x105399a0`), read as `!IsCommand() && m_nValue != 0`. Shipped "0": the witness stamp arm`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumLogicClasses.cpp:768 | ``// The other two of the datamap's four records (dataDesc 0x10568c54): both keyable, so a`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:154 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093a470`, left empty by `0x102ea090(isRoot = false)`:`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:157 | ``TEXT("CNPC_VAndreiBlood"), TEXT("0x1035c460"), TEXT("0x1093a470") };`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:155 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093a470`, left empty by `0x102ea090(isRoot = false)`:`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:158 | ``TEXT("CNPC_VAndreiBlood"), TEXT("0x1035c460"), TEXT("0x1093a470") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:39 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093a4f4`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:42 | ``TEXT("CNPC_VAnimal"), TEXT("0x1035edb0"), TEXT("0x1093a4f4") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcAsianVampire.cpp:265 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093a578`, left empty by `0x102ea090(isRoot = false)`:`` |
@@ -1963,7 +1956,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:311 | ``// The delta is normalised in place through `0x1057966c` and the UNIT direction stored out, which`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:225 | ``// in 3-D (`0x1057966c`). Source's normalise answers (0, 0, 1) for a zero vector where this`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp:1129 | ``// `Delta.z = 0`, normalise (`0x1057966c`), `DotProduct2D(delta, m_vecRight)` (`0x102a9540`).`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:2042 | ``// `103d72cf`: the delta, normalised (`0x1057966c`) and converted to a yaw (`0x101d2c70`).`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:2044 | ``// `103d72cf`: the delta, normalised (`0x1057966c`) and converted to a yaw (`0x101d2c70`).`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp:162 | ``const float CurTime = static_cast<float>(Now);                          // [0x1070b228]+0xc`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp:227 | ``// (`PUSH 0x1070d1b0`, `0x10266124` / `0x10266156`); the port's body does not read it.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask19.cpp:838 | ``LastPosition = FVector::ZeroVector;                              // 0x10282b63  vec3_origin 0x1070d1…`` |
@@ -2130,6 +2123,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:348 | ``/** `FUN_101e8da0(0x10739d08)+0x2c`, the melee-spread chance `0x103952b0` draws against: the`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask19Species.cpp:1199 | ``// `thunk_FUN_101e8da0(0x10739d08)`, MingXiao's tuning record: no table stands here, every field`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19Species.cpp:1007 | ``// `thunk_FUN_101e8da0(0x10739d08)` is `LEA EAX,[ECX+0x2bc]` — the `Ming_Xiao_Info/General` slice`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:575 | ``// `thunk_FUN_101e8da0(0x10739d08)`, the Ming Xiao tuning record, is `Select19MingXiaoTuningField``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1975 | ``/** `thunk_FUN_101e8da0(0x10739d08)` -- `CNPC_VMingXiao`'s tuning record, read by field offset. The`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:3994 | ``/** `CVFeatList_t` (`0x10739d08`) fields, loaded by `0x101e6310` from `Rules.txt` with`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossesTests.cpp:35 | ``// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s tuning record, read by field offset.`` |
@@ -2158,7 +2152,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:100 | ``const TCHAR* const GHengeyokaiStomps[] = {   // 0x1063bd94, to 0x10`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc19Species.cpp:79 | ``// `CNPC_VHengeyokai` slot 617 `0x103817f0` (`0x1063bd94`).`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:106 | ``const TCHAR* const GHengeyokaiExerts[] = {   // 0x1063bda4, to 0xc`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:197 | ``*  `0x1063bda4`). `StartTask` `0x103805d0` tasks `0x36`/`0x37` reach it through `CALL [EAX+0x9a8]`. …`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:204 | ``*  `0x1063bda4`). `StartTask` `0x103805d0` tasks `0x36`/`0x37` reach it through `CALL [EAX+0x9a8]`. …`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1356 | ``// The hengeyokai's three exerts, `0x1063bda4`, the table slot 618 `0x10381960` indexes.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:346 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093b27c`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:349 | ``TEXT("CNPC_VHengeyokai"), TEXT("0x1037ea60"), TEXT("0x1093b27c") };`` |
@@ -2217,7 +2211,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:57 | ``// `0x106477c8` then `0x106477cc`, both pinned by the listing's own annotation.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:57 | ``// `0x106477c8` then `0x106477cc`, both pinned by the listing's own annotation.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:395 | ``// The one-entry table at `0x106477cc` (the directory name carries a SPACE): the flop LOOP that`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:125 | ``*  `RandomInt(0, 0)` of the one-entry table at `0x106477cc`. */`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:133 | ``*  `RandomInt(0, 0)` of the one-entry table at `0x106477cc`. */`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:260 | ``// The class's own block over ids 0x77..0x79, read from `.rdata` `0x1064a42c`, `0x1064a430`,`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:260 | ``// The class's own block over ids 0x77..0x79, read from `.rdata` `0x1064a42c`, `0x1064a430`,`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:261 | ``// `0x1064a434`. Note the ADDRESSES ascend here where every other block descends.`` |
@@ -2321,7 +2315,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript19Species.cpp:114 | ``// `cvar_manbat_stun`: `(*0x1093b85c)->IsCommand()` (`0x1038b1af` vtable +4; `0x1038b1b4 JNZ``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:73 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093c4e0`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:76 | ``TEXT("CNPC_VScurrying"), TEXT("0x103abd40"), TEXT("0x1093c4e0") };`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.h:80 | ``*  flees from. Its producer is `GatherConditions` `0x103ac4f0` (family Conditions19's row, which`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.h:85 | ``*  flees from. Its producer is `GatherConditions` `0x103ac4f0` (family Conditions19's row, which`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:410 | ``switch (Mode)                                      // 0x102aee9e table 0x102af3a0`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:567 | ``switch (NpcStateRetail())                                      // 0x102af676 DEC / 0x102af67a JA / 0…`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect19.cpp:1012 | ``switch (SubState)                                          // 0x102b0abc / 0x102b0ac5 JA / 0x102b0ac…`` |
@@ -2344,6 +2338,9 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:393 | ``// `0x10294870`, slot 498. The second concept the corpus left unnamed (`0x105d8cd0`), read out`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:264 | ``// cell past the three-byte placeholder `"???"` at `0x105d8ccc` — through `DAT_10923dd5` /`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:394 | ``// of the pinned image as `"Flee"` — one cell past the placeholder `"???"` at `0x105d8ccc`.`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19.cpp:65 | ``FElysiumEntityHandle::Invalid());                                        // 0x102bf3fa [0x109f36fc]`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:122 | ``const TCHAR* const GSpawn19TemplateRat = TEXT("Rat");                              // `0x10650370``` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn19Species.cpp:184 | ``// `vstdlib RandomFloat` / `RandomInt` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:205 | ``constexpr float HintSearchPadUnits = 8192.0f; // `0x1049ae70``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp:221 | ``constexpr float FollowerWalkPadUnits = 10.0f;      // `0x1044e664``` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:1906 | ``Lifted.Z += GSpecies19ManBatLift * ElysiumMove::U;                // 0x1038cc2f / 0x1038cc32 FADD [0…`` |
@@ -2363,7 +2360,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:53 | ``// Three CONTIGUOUS tables at `0x1065ca68` / `0x1065ca70` / `0x1065ca78`: the fat guy's four`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.h:69 | ``*  (`TC_FatGuy/Exert_Heavy_1..3`, table `0x1065ca78`, `RandomInt(0, 2)`, channel 4, volume 1.0,`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:271 | ``// The runner's three exerts, `0x1065d6a0` (`TC_Runner`), the table slot 618 `0x103c3ff0` indexes.`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.h:86 | ``*  table `0x1065d6a0`). `StartTask` `0x103c35d0` reaches it through `CALL [EAX+0x9a8]`. */`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.h:85 | ``*  table `0x1065d6a0`). `StartTask` `0x103c35d0` reaches it through `CALL [EAX+0x9a8]`. */`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:616 | ``// tolerance -1.0 (`0x104a8730`), flags 0; accepted -> `TaskComplete`, refused -> line 0x199,`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:647 | ``*  0, 0, 1, 0)` (`0x1070b248` slot 3 over `0x1070b22c` slot `+0x8c`). */`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp:647 | ``*  0, 0, 1, 0)` (`0x1070b248` slot 3 over `0x1070b22c` slot `+0x8c`). */`` |
@@ -2396,8 +2393,8 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:289 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093d1ac`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:292 | ``TEXT("CNPC_VTzimisceHeadClaw"), TEXT("0x103c0c90"), TEXT("0x1093d1ac") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:46 | ``// Four contiguous tables at `0x1065d680` / `…688` / `…690` / `…6a0`. The port's footstep table`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:276 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093d224`, left empty by `0x102ea090(isRoot = false)`:`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:279 | ``TEXT("CNPC_VTzimisceRunner"), TEXT("0x103c2a60"), TEXT("0x1093d224") };`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:277 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093d224`, left empty by `0x102ea090(isRoot = false)`:`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:280 | ``TEXT("CNPC_VTzimisceRunner"), TEXT("0x103c2a60"), TEXT("0x1093d224") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcVampire.cpp:31 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093d2a4`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcVampire.cpp:34 | ``TEXT("CNPC_VVampire"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcVampireBoss.cpp:73 | ``// The class's `CAI_ClassScheduleIdSpace` `0x1093d30c`, left empty by `0x102ea090(isRoot = false)`:`` |
@@ -2417,7 +2414,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:356 | ``// The class's `CAI_ClassScheduleIdSpace` `0x109403e0`, left empty by `0x102ea090(isRoot = false)`:`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:359 | ``TEXT("CNPC_VZombie"), TEXT("0x103de4d0"), TEXT("0x109403e0") };`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumProp.h:33 | ``// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is`` |
-| Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:464 | ``TEXT("not-solid, relink, and the SUB_FadeOut think at 0x100152b2") },`` |
+| Source/ElysiumUE/Private/Substrate/ElysiumSchedule.cpp:467 | ``TEXT("not-solid, relink, and the SUB_FadeOut think at 0x100152b2") },`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumScheduleNumbers.h:71 | ``*  The decompiler leaves it unnamed; it is `0x10608410`, cell 0 of the base's text table. */`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumScheduleTokenizer.h:16 | ``// literal `":"` (`0x106142ec`) rather than by splitting a token itself.`` |
 | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:408 | ``// `m_fMoveTo` (`+0x5f60`) through the six-entry table at `0x101a7eac`; above 5 skips the switch`` |
@@ -2438,7 +2435,7 @@ Closure functions with an outside caller that neither the port nor the oracle me
 | Source/ElysiumUE/Private/Tests/ElysiumContentsSignatureTests.cpp:139 | ``const uint32 Window = 0x10000002;     // WINDOW ¦ DETAIL`` |
 | Source/ElysiumUE/Private/Tests/ElysiumContentsSignatureTests.cpp:159 | ``EnumHasAnyFlags(ElysiumContents::SignatureOf(0x10000008),`` |
 | Source/ElysiumUE/Private/Tests/ElysiumContentTests.cpp:1155 | ``// Character methods — table 0x1058f868, 24 entries.`` |
-| Source/ElysiumUE/Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp:777 | ``// `0x1049e0b8`, `acos = 29.9995 degrees`) about the head bone's LIVE forward. A refusal falls to`` |
+| Source/ElysiumUE/Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp:786 | ``// `0x1049e0b8`, `acos = 29.9995 degrees`) about the head bone's LIVE forward. A refusal falls to`` |
 | Source/ElysiumUE/Private/Tests/ElysiumHUDTests.cpp:509 | ``// The upper arm, `CMP EDI,0xf / JGE 0x100504d4`. Retail's own quirk: a critter standing at the`` |
 | Source/ElysiumUE/Public/ElysiumViewState.h:92 | ``//       `iValue >= 15` -> percent 0 and SetVisible(0)      (`CMP EDI,0xf / JGE 0x100504d4`)`` |
 | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage19Tests.cpp:559 | ``// In range: 50 Source units, inside the 100-unit pad (0x1049e048).`` |
