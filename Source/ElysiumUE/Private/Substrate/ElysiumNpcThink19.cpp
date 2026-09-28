@@ -124,7 +124,9 @@ void FElysiumNpc::Think19CombatCharacterUpdateCharacter(float IntervalSeconds)
 	++Think19CombatUpdateCharacterCalls;
 }
 
-// Slot 312: `0x10298070`, 574 bytes.
+// Slot 312: `0x10298070`, 574 bytes. The prologue's profiler-scope name (`this == NULL` ->
+// "NULL ENTITY" `0x10298079`, a NULL classname -> "" `0x10298083`) is the engine's VPROF budget
+// label; it reaches no state the bytecode observes.
 void FElysiumNpc::UpdateCharacterRetail(float IntervalSeconds)
 {
 	if (bIsBossMonster)                                                     // 0x102980de / 0x102980e6
@@ -156,12 +158,13 @@ void FElysiumNpc::UpdateCharacterRetail(float IntervalSeconds)
 			{
 				continue;
 			}
-			if (Entry == this)                                              // 0x1029818f..0x102981b5
+			if (Entry == this)                                              // 0x1029818f..0x102981b5 (serial check 0x102981ab)
 			{
 				continue;
 			}
 			// The entity's own `GetRefEHandle()` appended (`0x102981de`, `0x102981f2`/`0x102981fe`,
-			// the store `0x1029820e`); `-1` when the second resolve failed (`0x102981ba`..`0x102981da`),
+			// the store `0x1029820e` behind the element-pointer null test `0x1029820c`); `-1` when the second
+			// resolve failed (`0x102981ba`..`0x102981da`, its serial check `0x102981d4`),
 			// which cannot happen between two resolves on one thread.
 			Survivors.Add(Entry->Handle);
 		}
@@ -183,7 +186,8 @@ void FElysiumNpc::UpdateCharacterRetail(float IntervalSeconds)
 			}
 		}
 		bInBossRegistry = false;                                            // 0x10298260
-		// `0x102c6d40` + `Plat_Free` (`0x1029826f`..`0x1029828a`): the vector's release.
+		// `0x102c6d40` + `Plat_Free` (`0x1029826f`..`0x1029828a`): the vector's release, skipped for an
+		// external buffer (`0x10298283`, allocator count -1) or a null one (`0x10298287`).
 	}
 	Think19CombatCharacterUpdateCharacter(IntervalSeconds);                 // 0x1029829a 0x103246d0
 }
@@ -209,8 +213,9 @@ void FElysiumNpc::Think19EnemyTriple()
 	ScheduleHost.EnemyHeightDiffUnits =
 		static_cast<float>(FMath::Abs(MyOrigin.Z - EnemyOrigin.Z)) / ElysiumMove::U;  // 0x10292fbf FABS / 0x10292fc1
 	ScheduleHost.EnemyLastKnownDistUnits =
-		static_cast<float>(FVector::Dist(Origin, LastKnown)) / ElysiumMove::U;       // 0x10292fc9 / 0x10293003
-	// `debug_allow_move_facing` (`*0x10924f74`, `IsCommand() ? 0 : +0x2c`) and `MOVE_FACE_ENEMY`.
+		static_cast<float>(FVector::Dist(Origin, LastKnown)) / ElysiumMove::U;       // 0x10292fc9 / 0x10292ffd sqrt / 0x10293003
+	// `debug_allow_move_facing` (`*0x10924f74`, `IsCommand() ? 0 : +0x2c`; the `IsCommand` call
+	// `0x10293014`) and `MOVE_FACE_ENEMY`.
 	if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing) != 0  // 0x10293019 / 0x10293025
 		&& NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY))                  // 0x10293039
 	{
@@ -234,7 +239,8 @@ void FElysiumNpc::Think19HintUpkeep()
 	}
 	else if (!bStayEntrenched)                                              // 0x102930e5 / 0x102930ed
 	{
-		// `m_hHintCoverObject` (+0x6448), NULL when `-1` or stale (`0x102930fc`..`0x1029311f`).
+		// `m_hHintCoverObject` (+0x6448), NULL when `-1` or stale (`0x102930fc`..`0x1029311f`,
+		// the serial check `0x10293119`).
 		const FElysiumEntity* Cover =
 			World != nullptr ? World->Resolve(ScheduleHost.HintCoverObject) : nullptr;
 		// Compared with slot 167. RETAIL DEFECT reproduced: NO cover object and NO enemy compare
@@ -293,7 +299,9 @@ void FElysiumNpc::Think19ScreamDeathRoll()
 	if (!GThink19ScreamDeathSearched)                                       // 0x102931f5 / 0x102931fc
 	{
 		GThink19ScreamDeathSearched = true;                                 // 0x1029320c
-		// The `__strcmpi` walk of the VSound concept table (`0x10293214`..`0x10293249`).
+		// The `__strcmpi` walk of the VSound concept table (`0x10293214`..`0x10293249`):
+		// an empty table skips it (`0x10293212` JLE, -1); a NULL name compares as "" (`0x10293224`);
+		// `__strcmpi` `0x10293231`, and a match (`0x1029323b` JZ -> `0x1029338d`) stores that concept's id.
 		GThink19ScreamDeathIndex = VSoundConceptId(TEXT("Scream_Death"));   // 0x1029324e
 	}
 	SpeakVSound(TEXT("Scream_Death"), GThink19ScreamDeathIndex, GThink19ScreamChannel,
@@ -326,7 +334,7 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 	{
 		// `0x102bfdf0(interval)` -- an empty `RET 4` in the image (0x10293321).
 	}
-	if (Think19DebugTrackUnderGroundConVar() != 0)                          // 0x10293333 / 0x1029333f
+	if (Think19DebugTrackUnderGroundConVar() != 0)                          // 0x1029332e IsCommand / 0x10293333 / 0x1029333f
 	{
 		Think19TrackUnderGround(NormalInterval);                            // 0x10293344 0x102bfe10
 	}
@@ -334,7 +342,8 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 	SetPoseParameter(TEXT("move_yaw"), ScheduleHost.DesiredMoveYaw, false); // 0x1029334c
 	if (NpcFlags.Has(EElysiumNpcFlag2::DISAPPEAR))                          // 0x10293351 / 0x1029335b
 	{
-		// `m_hClosestPlayer` (+0x628c), NULL when `-1` or stale -- resolved separately for each test.
+		// `m_hClosestPlayer` (+0x628c), NULL when `-1` or stale -- resolved separately for each test
+		// (PVS: `0x1029336a` -1 / `0x10293387` serial; FVisible: `0x102933b6` -1 / `0x102933d3` serial).
 		FElysiumEntity* Player =
 			World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;   // 0x10293361..0x1029339d
 		if (!Think19InPlayerPvs(Player)                                     // 0x102933a1 / 0x102933ab
@@ -395,6 +404,18 @@ void FElysiumNpc::Think19Tail(double Now, bool bUpdateDue, float UpdateInterval)
 }
 
 // Slot 431: `0x10292de0`, 2552 bytes; 44 classes fill the slot with it.
+// The engine profiler's bookkeeping has no port counterpart (it writes only `g_VProfCurrentProfile`
+// and the budget-label stack, which nothing the bytecode reads observes; Unreal's stats stand in):
+// - budget labels (`this == NULL` / NULL classname -> "NULL ENTITY" / ""): `0x10292df0`, `0x10292dfa`,
+//   Set1 `0x10292ea5`, Set2 `0x102932b8`;
+// - `VPROF_BUDGET("CAI_BaseNPC_NPCThink")` enter `0x10292e86`;
+// - the refused path's scope exit: `0x1029343d`, `0x1029345a`, `0x10293465`, `0x10293470`, `0x10293491`;
+// - the move scope's enter (label by move-due `0x102934b7`): `0x102934cc`, `0x102934d6`, `0x102934e4`,
+//   `0x102934ee`, `0x10293512`, `0x10293548`, `0x1029354d`, `0x10293552`, `0x10293556`;
+// - its exit: `0x102935b1`, `0x102935bb`, `0x102935ca`, `0x102935d1`, `0x102935d8`, `0x102935f8`,
+//   `0x10293603`;
+// - the tail's scope exit: `0x102936f3`, `0x102936fd`, `0x10293710`, `0x1029371d`, `0x10293783`,
+//   `0x10293788`, `0x1029378d`, `0x10293790`, `0x1029379e`.
 void FElysiumNpc::NPCThink()
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;

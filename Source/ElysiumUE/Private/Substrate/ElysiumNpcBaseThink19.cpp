@@ -103,7 +103,9 @@ bool FElysiumNpcBase::Think19AiConsoleGate()
 void FElysiumNpcBase::NPCThink()
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	// 0x1026caf1..0x1026cb03: `m_bDumpDebugBuffer` (+0x5b55) set -> clear it and dump the ring
+	// 0x1026ca8c / 0x1026ca96: the debug name-stack push (`this` null -> "NULL ENTITY", else the
+	// classname at +0x26c or ""), popped at 0x1026cbec / 0x1026ccfd: instrumentation, absent.
+	// 0x1026caf1..0x1026cb03 (0x1026caf9): `m_bDumpDebugBuffer` (+0x5b55) set -> clear it and dump the ring
 	// `0x1027efb0`. The byte is an ABSENT word (story 29b; the shape map's ABSENT row), so the arm
 	// cannot fire here; the dump body is `DumpDebugLogRing`.
 	Think19BaseCacheInterruptConditions();                                  // 0x1026cb0a 0x1026a0f0
@@ -114,11 +116,16 @@ void FElysiumNpcBase::NPCThink()
 		return;
 	}
 	// VProf "CAI_BaseNPC_NPCThink" enter/exit (0x1026cb3c..0x1026cb89, 0x1026cc48..): absent.
+	// Enter: 0x1026cb48 / 0x1026cb50 (profiler off), 0x1026cb5e (node already current), 0x1026cb6b
+	// (GetSubNode), 0x1026cb7d (EnterScope).
 	if (!Think19AiConsoleGate())                                            // 0x1026cb8b / 0x1026cb92
 	{
+		// VProf exit on this return (absent): 0x1026cba0 / 0x1026cba8, 0x1026cbb4 (ExitScope),
+		// 0x1026cbbc (pop to parent node).
 		return;
 	}
 	// `m_GrapplePartner` (+0x1538) resolving AND `m_GrappleRole` (+0x153c) == 1 skips slot 432.
+	// The handle resolve: 0x1026cbfb (handle == -1), 0x1026cc16 (serial mismatch), 0x1026cc1a (slot empty).
 	const FElysiumEntity* Partner = World != nullptr ? World->Resolve(Grapple.Partner) : nullptr;  // 0x1026cbf2..0x1026cc1a
 	if (Partner == nullptr || Grapple.Role != EElysiumGrappleRole::Victim)  // 0x1026cc1c / 0x1026cc23
 	{
@@ -128,4 +135,6 @@ void FElysiumNpcBase::NPCThink()
 	// re-pick) and the anim events, and answers the interval (`0x1026cc37 FSTP`).
 	const float Interval = PostRun();                                       // 0x1026cc32 0x1026c7c0
 	PerformMovement(Interval, 0);                                           // 0x1026cc43 0x1026c120
+	// VProf exit (absent): 0x1026cc54 / 0x1026cc5c (profiler off), 0x1026cc6f / 0x1026cc74 (outermost
+	// scope with a timer: RDTSC accumulate), 0x1026ccc4 (the node's exit call), 0x1026cccd (pop).
 }

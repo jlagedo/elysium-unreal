@@ -190,7 +190,8 @@ void FElysiumNpcGhoulCroucher::NPCThink()
 	{
 		return;
 	}
-	// `m_hBurningParticle` (+0x6670): `-1`, stale, or a null entry returns (`0x1037b410`..`0x1037b43a`).
+	// `m_hBurningParticle` (+0x6670): `-1` (`0x1037b410`), stale serial (`0x1037b431`), or a null entry
+	// (`0x1037b43a`) returns.
 	FElysiumEntity* Particle = World != nullptr ? World->Resolve(BurningParticle) : nullptr;
 	if (Particle == nullptr)
 	{
@@ -199,13 +200,13 @@ void FElysiumNpcGhoulCroucher::NPCThink()
 	// `rate = 1.0 - 0x101beed0(m_flPlayerDist, 200.0, 600.0)` (Source units).
 	float Rate = ElysiumNpcTunables::One - Think19GhoulRemapClamped(
 		Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U,
-		GThink19GhoulFullRateUnits, GThink19GhoulFloorRateUnits);          // 0x1037b43c..0x1037b452
+		GThink19GhoulFullRateUnits, GThink19GhoulFloorRateUnits);          // 0x1037b43c..0x1037b452 (0x1037b44d)
 	// `FCOMP double 0.1` / `TEST AH,5` / `JP`: an ordered rate BELOW 0.1 becomes 0.1f; equal or NaN keeps.
 	if (static_cast<double>(Rate) < ElysiumNpcTunables::TenthDouble)       // 0x1037b45f / 0x1037b46a
 	{
 		Rate = GThink19GhoulRateFloor;                                      // 0x1037b46c
 	}
-	// The handle is re-resolved (`0x1037b474`..`0x1037b49a`); its failure arm calls the setter with a
+	// The handle is re-resolved (`0x1037b474`..`0x1037b49a`: `-1` at `0x1037b47d`); its failure arm calls the setter with a
 	// NULL receiver (`0x1037b4b2`), unreachable after the first resolve on one thread.
 	GhoulSetParticleRateScale(Particle, Rate);                              // 0x1037b4a3 0x100fb980
 }
@@ -213,7 +214,12 @@ void FElysiumNpcGhoulCroucher::NPCThink()
 // Slot 431: `0x10394990`, 926 bytes. ALL of Ming Xiao's work runs BEFORE the Troika body.
 void FElysiumNpcMingXiao::NPCThink()
 {
-	// Scope trace "CNPC_VMingXiao::NPCThink" and VProf node "CNPC_VMingXiao_NPCThink": absent.
+	// Scope trace "CNPC_VMingXiao::NPCThink" and VProf node "CNPC_VMingXiao_NPCThink": absent. The
+	// name-stack push `0x1039499a` / `0x103949a4`; VProf enter `0x10394a0d` / `0x10394a17` (profiler off),
+	// `0x10394a25` (node current), `0x10394a33` (GetSubNode), `0x10394a57` / `0x10394a75` (first entry:
+	// RDTSC + EnterScope); VProf exit after the Troika pass `0x10394c71` / `0x10394c7b` (profiler off),
+	// `0x10394c8e` / `0x10394c95` / `0x10394ced` (outermost exit: accumulate + ExitScope), `0x10394cf8`
+	// (pop to parent).
 	// `switch (m_eThrowableObjectMode)` through the table `0x10394d30`; `> 4` unsigned is the default.
 	switch (static_cast<uint32>(MingXiaoThrowableObjectMode))              // 0x10394a82 / 0x10394a8b / 0x10394a8d
 	{
@@ -364,7 +370,8 @@ void FElysiumNpcZombie::ZombieReacquireEnemy()
 // Slot 431: `0x103dfa20`, 197 bytes.
 void FElysiumNpcZombie::NPCThink()
 {
-	// Scope trace "CNPC_VZombie::NPCThink": absent.
+	// Scope trace "CNPC_VZombie::NPCThink": absent (the name-stack push: `this` null `0x103dfa25`,
+	// classname null `0x103dfa2f`; popped at `0x103dfae2`).
 	if (IsAiDisabled())                                                     // 0x103dfa89 0x1029f2e0 / 0x103dfa90
 	{
 		return;   // neither the base pass nor slot 614

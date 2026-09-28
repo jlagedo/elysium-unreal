@@ -61,7 +61,9 @@ void FElysiumNpcWerewolf::WerewolfDrawHintOverlay()
 // the tick-mod-5 round robin through the five-dword table `0x103cb754`; every arm rejoins `0x103cb6cf`.
 void FElysiumNpcWerewolf::NPCThink()
 {
-	// Scope trace "CNPC_VWerewolf::NPCThink" (`0x10661ac4`): absent.
+	// Scope trace "CNPC_VWerewolf::NPCThink" (`0x10661ac4`): absent, with the entity-name pick that
+	// feeds it (`0x103cb595 JZ` this null -> "NULL ENTITY", `0x103cb59f JNZ` +0x26c name null -> the
+	// empty default); neither reaches AI state.
 	// `werewolf_show_debug` (`*0x1093f73c`, `IsCommand() ? 0 : +0x2c`) -> `EnableDebugStuff(this)`; the
 	// think falls through.
 	if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug) != 0)  // 0x103cb602 / 0x103cb607 / 0x103cb613

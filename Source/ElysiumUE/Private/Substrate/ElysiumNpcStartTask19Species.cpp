@@ -410,15 +410,15 @@ int32 FElysiumNpcCop::StartTaskSlot442(void* Task)
 {
 	const FElysiumScheduleStep* Step = static_cast<const FElysiumScheduleStep*>(Task);
 	const int32 TaskLocal = Species19TaskLocal(*this, Step);
-	if (TaskLocal == 0x107)                                              // 0x10371b76 SUB 0x107; JZ 0x10371bc8
+	if (TaskLocal == 0x107)                                              // 0x10371b76 SUB 0x107; 0x10371b7b JZ 0x10371bc8
 	{
 		TaskComplete(false);                                              // 0x10371bc8 / 0x10371bd0 (tail jump)
 		return 0;
 	}
-	if (TaskLocal == 0x14a)                                              // 0x10371b7d SUB 0x43; JZ 0x10371b8b
+	if (TaskLocal == 0x14a)                                              // 0x10371b7d SUB 0x43; 0x10371b80 JZ 0x10371b8b
 	{
 		// `m_hClosestPlayer` (+0x628c) resolved (null when stale), handed to slot 598 by TAIL JUMP.
-		FElysiumEntity* Closest = World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;   // 0x10371b8b..0x10371bba
+		FElysiumEntity* Closest = World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;   // 0x10371b8b..0x10371bba (0x10371b94 JZ handle -1, 0x10371bb4 JNZ serial stale -> null)
 		Slot598(Closest);                                                 // 0x10371bc2 JMP [EDX+0x958]
 		return 0;
 	}

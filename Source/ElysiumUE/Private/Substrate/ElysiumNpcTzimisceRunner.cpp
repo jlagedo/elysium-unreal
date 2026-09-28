@@ -282,7 +282,9 @@ const TCHAR* FElysiumNpcTzimisceRunner::SquadSlotName(int32 SlotEn)
 }
 
 // Slot 259: `0x103c32c0`, the footstep body of `docs/vtmb/footsteps.md` §1.7; an id it does not
-// claim is a direct call into the base body.
+// claim is a direct call into the base body. Listing: `0x103c32cb JZ` event 0x802 -> `0x103c32f3 JMP
+// [vtbl+0x9ac]` (slot 619, arg 1); `0x103c32ce JZ` 0x803 -> `0x103c32e3 JMP [vtbl+0x9ac]` (arg 0);
+// anything else `0x103c32d4 JMP 0x100146e1` (the base body). The row of `SpeciesFor` carries both arms.
 bool FElysiumNpcTzimisceRunner::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
 	return SpeciesFootstepAnimEvent(TEXT("npc_VTzimisceRunner"), Event);

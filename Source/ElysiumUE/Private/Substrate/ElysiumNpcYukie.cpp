@@ -144,8 +144,8 @@ bool FElysiumNpcYukie::Slot602()
 // `0x103dd800`
 void FElysiumNpcYukie::NPCInit()
 {
-	HumanCombatantNPCInit();
-	HideActiveWeaponIfAny();
+	HumanCombatantNPCInit();  // 0x103dd803 CALL 0x1000dcba CNPC_VHumanCombatant::NPCInit
+	HideActiveWeaponIfAny();  // 0x103dd80a GetActiveWeapon, 0x103dd811 JZ null, 0x103dd815, 0x103dd81f JMP slot 66 (a second Hide)
 }
 
 // Slot 461: `0x103dd780`, the selector tag 0x2a and then a direct call into the combatant's `0x10387380`.

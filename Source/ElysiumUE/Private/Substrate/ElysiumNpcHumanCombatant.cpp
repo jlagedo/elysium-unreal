@@ -81,8 +81,8 @@ const TCHAR* FElysiumNpcHumanCombatant::SquadSlotName(int32 SlotEn)
 void FElysiumNpcHumanCombatant::HumanCombatantNPCInit()
 {
 	// `0x10387140`. Listing: Troika then Hide on the active weapon (slot 66 tail JMP).
-	TroikaNPCInit();
-	HideActiveWeaponIfAny();                                             // 1038715f JMP [weapon+0x108]
+	TroikaNPCInit();                                                     // 0x10387143 CALL 0x1000c531
+	HideActiveWeaponIfAny();                                             // 0x1038714a GetActiveWeapon, 0x10387151 JZ null, 0x10387155, 0x1038715f JMP [weapon+0x108]
 }
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---

@@ -67,9 +67,9 @@ void FElysiumNpcGuard1::NPCInit()
 	bGuard1HatesPlayer = false;                                          // 1037e24a +0x6660 FIRST
 	FElysiumInputArgs Args;
 	Args.Param = FElysiumVariant::String(TEXT("player D_NU 0"));
-	InputSetRelationship(Args);
-	TroikaNPCInit();
-	HideActiveWeaponIfAny();
+	InputSetRelationship(Args);                                          // 0x1037e251 CALL 0x1000421e
+	TroikaNPCInit();                                                     // 0x1037e258 CALL 0x1000c531
+	HideActiveWeaponIfAny();  // 0x1037e25f GetActiveWeapon, 0x1037e266 JZ null, 0x1037e26a, 0x1037e274 JMP slot 66
 }
 
 // Slot 463: `0x1037d020`, the enemy-is-the-player pre-step, its own copy of the holster/draw
@@ -346,7 +346,7 @@ void FElysiumNpcGuard1::Guard1HatePlayer()
 	Args.Activator = World != nullptr ? World->PlayerHandle() : FElysiumEntityHandle::Invalid();
 	Args.Caller = Handle;
 	Args.Input = FName(TEXT("SetRelationship"));
-	InputSetRelationship(Args);
+	InputSetRelationship(Args);                                          // 0x1037e251 CALL 0x1000421e
 }
 
 // --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---

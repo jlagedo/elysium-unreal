@@ -1558,14 +1558,15 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		// transaction rather than writing the handle, so the last-enemy transfer and everything else
 		// `SetEnemy` (`0x10279a50`) does all happen exactly once and in one place.
 		FElysiumEntity* Goal = World ? World->Resolve(Order.Goal) : nullptr;
-		ElysiumNpcEnemy::SetEnemy(*this, Order.Goal);
+		ElysiumNpcEnemy::SetEnemy(*this, Order.Goal);                // 0x101a9a5c 0x1000b974
 		if (Goal != nullptr)
 		{
-			UpdateEnemyMemory(Goal, Goal->Origin, nullptr); // 0x101a99d0, slot 544
+			// `0x101a9a6e` the goal's slot 217 (its position, from goal+0x3d4), then `0x101a9a78` slot 544.
+			UpdateEnemyMemory(Goal, Goal->Origin, nullptr);
 		}
 		// `(*DAT_10924a6c)->vfunc1()` (`0x101a9a86`): a global object's slot 1, no argument, answer
 		// discarded -- the same unrecovered call `Event_Killed` `0x10265d18` names; nothing answers.
-		// The injected condition, by its recovered number: `NEW_ENEMY` is 0x54.
+		// The injected condition, by its recovered number: `NEW_ENEMY` is 0x54 (`0x101a9a8d` SetCondition).
 		Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
 		// No schedule replacement: the standing program decides whether NEW_ENEMY interrupts it.
 		RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode 3: enemy := %s"),
@@ -1612,7 +1613,7 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		// translated by slot 440), `m_pGoalEnt`, and a type-4 `SetGoal` at 128 units.
 		int32 Activity = static_cast<EMode>(Order.Mode) == EMode::MoveToGoalA ? 9 : 0x13;   // 0x101a9960 / 0x101a9963
 		if (GetMoveType() == 5 || GetMoveType() == 6)                                        // 0x101a996a / 0x101a9979
-		{
+		{                                                                                    // 0x101a9973 JZ / 0x101a9982 JNZ
 			Activity = 0x22;
 		}
 		FElysiumEntity* const Goal = World != nullptr ? World->Resolve(Order.Goal) : nullptr;
@@ -1621,7 +1622,8 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		if (!bGoalSet && !Order.bSuppressRouteWarning)                                        // 0x101a9996 / 0x101a99a5 spawnflags & 0x800
 		{
 			// `DevMsg(1, ...)` in retail; a Warning here, as the goal-miss line is, because it fires on
-			// shipped content whose route this runtime's mover refuses.
+			// shipped content whose route this runtime's mover refuses. `0x101a99b5` JNZ ("" for a
+			// null goal name), `0x101a99be` GetDebugName.
 			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("ScheduledMoveToGoalEntity to goal entity %s failed\nCan't execute script %s"),
 				Goal != nullptr ? *Goal->TargetName : TEXT(""),
 				World != nullptr ? *World->DescribeHandle(Order.Source) : TEXT("(no world)"));   // 0x101a99c5 0x10595230
@@ -1644,7 +1646,10 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 	// waits; neither a synthetic GET_PATH_TO_GOAL nor a SET_SCHEDULE loop belongs to it.
 	if (!GetPathToScriptedGoal())
 	{
-		// Retail's own failure line for the follow-path modes (`0x101a9a42`, spawnflag 0x800 silences it).
+		// Retail's own failure line for the follow-path modes (`0x101a9a42`, spawnflag 0x800 silences it):
+		// `0x101a9a14` ScheduledFollowPath's AL, `0x101a9a1b` JNZ on success, `0x101a9a26` JNZ on
+		// spawnflags & 0x800, `0x101a9a32` JNZ ("" for a null name), `0x101a9a3b` GetDebugName,
+		// `0x101a9a49` DevMsg.
 		if (ElysiumAiScriptedSchedule::IsFollowPath(Order.Mode) && !Order.bSuppressRouteWarning)
 		{
 			FElysiumEntity* const Goal = World != nullptr ? World->Resolve(Order.Goal) : nullptr;
@@ -1730,6 +1735,8 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 	TranslateEnemyChasePosition(World ? World->Resolve(ScriptedScheduleOrder.Goal) : nullptr,
 		Destination, &ToleranceCm, &UnusedTolerance);
 	ScheduleHost.GoalToleranceCm = ToleranceCm;
+	// Modes 4/5 in `0x101a98c0`: `(-(mode != 4) & 10) + 9` at `0x101a99dc`, ACT_FLY when slot 94
+	// (`0x101a99ef` / `0x101a99fe`) answers 5 or 6 (`0x101a99f8` JZ / `0x101a9a07` JNZ).
 	ScheduleHost.NavigationActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
 	if (GetMoveType() == 5 || GetMoveType() == 6)
 	{
