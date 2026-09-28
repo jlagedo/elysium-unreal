@@ -242,14 +242,14 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 	TestEqual(TEXT("102ae790 ideal DEAD independently refuses"), N.WerewolfScheduleStack.Num(), 0);
 
 	N.WriteIdealStateRetail(1);
-	// `IsAlive 0x100b4dc0` reads the life-state transaction, not Troika's separate m_bIsAlive byte.
-	N.SetDeathReportedForRestore(true);
+	// `IsAlive 0x100b4dc0` reads `m_lifeState`, not Troika's separate m_bIsAlive byte.
+	N.AnimEventLifeStateWord = 1;
 	N.SetSchedule(1, false);
 	TestEqual(TEXT("102ae7aa dead/dying refuses without force"), N.WerewolfScheduleStack.Num(), 0);
 	N.SetSchedule(1, true);
 	TestEqual(TEXT("102ae7ae force bypasses IsAlive and dispatches both changes"),
 		N.WerewolfScheduleStack.Num(), 2);
-	N.SetDeathReportedForRestore(false);
+	N.AnimEventLifeStateWord = 0;
 
 	FElysiumRecordingNpcMotor* Motor = F.World.Services.NpcMotors.IsEmpty()
 		? nullptr

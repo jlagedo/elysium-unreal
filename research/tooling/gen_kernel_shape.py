@@ -348,6 +348,10 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
               "life-state split into slots 390/391/392 and the death arm (story 8 wave 2, L13)"),
     390: ("", "`CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed "
               "health commit (story 8 wave 2, L13)"),
+    144: ("", "`CBaseCombatCharacter::Event_Killed` 0x1032b9b0: LIFE_DYING, the weapon drop, the "
+              "grapple partner's feed teardown, the owner notice and slot 301 (story 8 wave 2, L13)"),
+    301: ("", "`CBaseCombatCharacter::CreateCorpse` 0x1032c0e0: the ragdoll corpse, "
+              "`BecomeClientRagdoll` (story 8 wave 2, L13)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
@@ -355,6 +359,8 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
 CHAIN_HAND_OWNER: dict[int, str] = {
     142: "FElysiumCombatCharacter",
     390: "FElysiumCombatCharacter",
+    144: "FElysiumCombatCharacter",
+    301: "FElysiumCombatCharacter",
 }
 
 

@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 139 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 20 are defined by hand in the substrate, and 100 are still stubs — 63 29c, 27 29d, 5
+// recovered, 22 are defined by hand in the substrate, and 98 are still stubs — 63 29c, 25 29d, 5
 // 29e, 5 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -248,11 +248,10 @@ int32 FElysiumCombatCharacter::TakeHealth(float, int32)
 // slot 144 0x1032b9b0 (sdk) `void Event_Killed(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
 //   layer 15, story 29d
-void FElysiumCombatCharacter::Event_Killed(void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::Event_Killed"), TEXT("0x1032b9b0"),
-		TEXT("29d"), DebugString());
-}
+// the body is `FElysiumCombatCharacter::Event_Killed`, written by hand in the substrate:
+// `CBaseCombatCharacter::Event_Killed` 0x1032b9b0: LIFE_DYING, the weapon drop, the grapple
+// partner's feed teardown, the owner notice and slot 301 (story 8 wave 2, L13). Declared here,
+// defined there.
 
 // slot 145 0x1014fa10 (walked) `int BloodColor()`
 //   layer 0, story 29c
@@ -401,11 +400,9 @@ void FElysiumCombatCharacter::Event_TookLife(FElysiumEntity*, bool, bool)
 // slot 301 0x1032c0e0 (walked) `void CreateCorpse(const Vector&, const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
 //   layer 14, story 29d
-void FElysiumCombatCharacter::CreateCorpse(const FVector&, void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::CreateCorpse"), TEXT("0x1032c0e0"),
-		TEXT("29d"), DebugString());
-}
+// the body is `FElysiumCombatCharacter::CreateCorpse`, written by hand in the substrate:
+// `CBaseCombatCharacter::CreateCorpse` 0x1032c0e0: the ragdoll corpse, `BecomeClientRagdoll` (story
+// 8 wave 2, L13). Declared here, defined there.
 
 // slot 302 0x10335f60 (walked) `bool Inventory_ShouldAllow_Autopickup(CBaseCombatWeapon*, bool)`
 //   layer 0, story 29c
@@ -1296,7 +1293,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(float, int32)>::Test(&FElysiumCombatCharacter::TakeHealth),
 				nullptr },
 			{ 144, TEXT("0x1032b9b0"), TEXT("CBaseCombatCharacter"), TEXT("Event_Killed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(void*)>::Test(&FElysiumCombatCharacter::Event_Killed),
 				nullptr },
 			{ 145, TEXT("0x1014fa10"), TEXT("CBaseCombatCharacter"), TEXT("BloodColor"),
@@ -1373,7 +1370,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(FElysiumEntity*, bool, bool)>::Test(&FElysiumCombatCharacter::Event_TookLife),
 				nullptr },
 			{ 301, TEXT("0x1032c0e0"), TEXT("CBaseCombatCharacter"), TEXT("CreateCorpse"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(const FVector&, void*)>::Test(&FElysiumCombatCharacter::CreateCorpse),
 				nullptr },
 			{ 302, TEXT("0x10335f60"), TEXT("CBaseCombatCharacter"),

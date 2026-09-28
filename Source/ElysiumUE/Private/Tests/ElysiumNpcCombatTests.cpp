@@ -1664,11 +1664,21 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	F.Services.Calls.Reset();
 
 	// --- The transaction itself -------------------------------------------------------------------
+	// Corrected to retail (story 8 wave 2): the kill is slot 144 — Troika `0x102bf340` ->
+	// `CAI_BaseNPC::Event_Killed` `0x10265ad0` -> `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`,
+	// which ends in slot 301 `CreateCorpse` (`0x1032c0e0`) -> `BecomeClientRagdoll`: the corpse is
+	// made INSIDE the transaction, from the current pose, and its think stops. No `DIE` program runs
+	// for it (the port's retired transaction started `DIE` and handed over at its end — the named
+	// divergence `CompleteDeathHandoff` used to carry).
+	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
+	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
 	F.Fighter->OnKilled();
 
 	TestTrue(TEXT("every animation-channel claim the character held goes back"),
 		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
-	TestTrue(TEXT("the mind is dead, current and ideal both"),
+	TestEqual(TEXT("0x1032b9b0 m_lifeState = LIFE_DYING"), F.Fighter->AnimEventLifeStateWord, 1);
+	TestFalse(TEXT("...so slot 158 IsAlive answers false"), F.Fighter->IsAlive());
+	TestTrue(TEXT("the mind is dead, current (0x10265dba SetState(7)) and ideal (0x10265d06) both"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Dead
 			&& F.Fighter->GetMind().IdealState() == EElysiumNpcState::Dead);
 	TestTrue(TEXT("...and it owns nothing"),
@@ -1682,46 +1692,15 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestFalse(TEXT("nothing disabled the body"),
 		F.Services.Saw(TEXT("NpcMotor SetEnabled 0")));
 	TestFalse(TEXT("the entity is not killed or hidden by dying"), F.Fighter->IsInert());
-
-	TestTrue(TEXT("the death schedule is selected from the death commit itself"),
-		F.Fighter->Schedule.IsRunning());
-	// Retail's BASE schedule names carry no `SCHED_` prefix -- only Troika's do. The corpus spells
-	// this one `DIE`, and the port reads the name off the loaded program rather than its own table.
-	TestEqual(TEXT("...and it is base DIE"),
-		FString(ElysiumScheduleName(F.Fighter->Schedule.Current)), FString(TEXT("DIE")));
-
-	// --- The program runs, and it is retail's three tasks -----------------------------------------
-	// `DIE` (`0x2b`) is `TASK_STOP_MOVING`, `TASK_SOUND_DIE`, `TASK_DIE`. It names NO activity task,
-	// so nothing in this program plays a death clip and nothing here draws from the Reaction stream.
-	// Retail's only ordinary death pose is the `ACT_DIERAGDOLL` seed inside `BecomeClientRagdoll`
-	// (`0x10090180`), which is the handoff below, not a task.
-	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
-	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
-
-	F.Services.Calls.Reset();
-	F.World.Tick(0.0);
-
-	TestEqual(TEXT("base DIE draws from the Reaction stream not at all"),
-		Reaction.GetCurrentSeed(), ReactionSeedBefore);
-	TestFalse(TEXT("...and plays no death clip, because it names no activity task"),
-		F.Services.Saw(TEXT("ResolveNpcActivityClip")));
-
-	// --- TASK_DIE's commit ------------------------------------------------------------------------
-	// The Troika `RunTask` gate (`0x102abb90`) is
-	// `(IsActivityFinished() && m_flCycle >= 1.0) || m_IdealActivity == ACT_IDLE`. With no death
-	// performance running the second arm is already open, so the whole program -- stop, sound, die,
-	// commit -- resolves inside the first dead think rather than waiting out a clip.
-	TestTrue(TEXT("the body is offered to physics, seeded from its current pose"),
+	TestTrue(TEXT("0x1032c0e0 the body is offered to physics, seeded from its current pose"),
 		F.Services.Saw(TEXT("StartBodyRagdoll -> 0")));
 	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
 		F.Services.Saw(TEXT("HoldBodyFinalPose")));
-	// Retail's task is STILL RUNNING here and stays running forever: the commit calls `Die` and
-	// returns without completing. What ends the NPC there is `CreateCorpse` (`0x1032c0e0`) taking the
-	// entity out of the world -- unbuilt here, so the commit tears the program down in its place.
-	TestFalse(TEXT("the program is torn down by the commit, standing in for the corpse swap"),
-		F.Fighter->Schedule.IsRunning());
-	TestEqual(TEXT("and nothing on a dead NPC schedules work again"),
-		F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestFalse(TEXT("no death program runs: the corpse's think is gone"), F.Fighter->Schedule.IsRunning());
+	TestEqual(TEXT("BecomeClientRagdoll leaves no think"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("the death draws from the Reaction stream not at all"),
+		Reaction.GetCurrentSeed(), ReactionSeedBefore);
+	TestFalse(TEXT("...and plays no death clip"), F.Services.Saw(TEXT("PlayNpcClip")));
 
 	// --- No reselection, however hard the world ticks ---------------------------------------------
 	F.Services.Calls.Reset();

@@ -239,20 +239,24 @@ public:
 
 
 	/**
-	 * `CAI_BaseNPC::Event_Killed`'s NPC override (`0x10265ad0`) plus the Troika one over it
-	 * (`0x102bf340`) — the whole death transaction, run once (`docs/vtmb/combat-and-damage.md` ->
-	 * "NPC and player death transaction").
-	 *
-	 * The shared body's output, owner notification and log are the base's and stay there. What this
-	 * adds is everything the recovered override does with the BODY and the MIND: every animation
-	 * channel claim goes back, every body-owner token is vacated, current and ideal state become
-	 * dead, the body is frozen where it stands and stops answering the character channel, and the
-	 * death schedule starts. Nothing after this selects, senses or attacks.
-	 *
-	 * A duplicate kill is ignored, which is retail's own first clause — the base's `bDeathReported`
-	 * latch is the same guard reached through one door.
+	 * A kill with no damage packet — the feed drain, a script, a test — enters the NPC's death
+	 * transaction where retail's does: slot 144 `Event_Killed` (Troika `0x102bf340` ->
+	 * `CAI_BaseNPC::Event_Killed` `0x10265ad0` -> `CBaseCombatCharacter::Event_Killed`
+	 * `0x1032b9b0` -> slot 301 `CreateCorpse`) with an empty packet. A corpse is killed once.
 	 */
 	virtual void OnKilled() override;
+
+	/** Slot 144 with a packet naming the attacker (`OnDeath`'s activator, `0x10265cc8`). */
+	void KilledBy(const FElysiumEntityHandle& Attacker);
+
+	/**
+	 * `BecomeClientRagdoll` `0x10090180`, `CreateCorpse`'s tail: the pose goes to physics (the
+	 * handoff), the body stops being solid, and the think stops. What this runtime keeps that retail
+	 * does not — the entity itself — is what `bDeathCommitted` marks, and the port's arbiter (every
+	 * body-owner token, the mind) is vacated with it.
+	 */
+	virtual void BecomeClientRagdoll() override;
+	virtual bool IsCorpse() const override { return bDeathCommitted; }
 
 	/**
 	 * `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the FOOTSTEP arm of it, and nothing else yet.
@@ -503,9 +507,7 @@ public:
 	// through `vt+0x998`. Every class in the image fills the slot with `0x102c23f0`, so this one body
 	// is every dispatch's target.
 	virtual void ResetThinkTimers(double Now);
-	// The entity think alone (`m_flNextThink := curtime`), no stamp. The death handoff's entry:
-	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
-	// arms the entity think and nothing else.
+	// The entity think alone (`m_flNextThink := curtime`), no stamp.
 	void ArmThinkNow(double Now);
 	// Slot 584 `0x1028d910`: slot 614 and then every `Last` mirror := now. The broadcast form
 	// (`SetAIEnabled(true)`, the node-graph rebuild) and `TASK_WAIT_PVS`'s completion use it.
@@ -1031,12 +1033,6 @@ public:
 protected:
 	// --- Think(): the port's lifecycle around slot 431 `NPCThink` (`0x10292de0`) -----------------
 
-	// A dead NPC's whole think. FIRST in the pass and outside the cadence entirely, because a
-	// corpse in retail carries no think function at all -- there is no clock a stamp could name
-	// for it, and routing one through the distance laws would delay the ragdoll handoff by up to
-	// six seconds for a body the player is not near.
-	enum class EDeadThink : uint8 { NotDead, Running, Terminal };
-	EDeadThink ThinkDead();
 
 	// The activation barrier: the mind is admitted on its first frozen-time think (retail's
 	// `NPCInit` home; see `Think`). Returns true on the think that admitted.

@@ -1073,6 +1073,15 @@ public:
 	// it (story 8 wave 2). `Dmg` may be null (the scalar route: `Scalar` is the packet's `+0x30`).
 	void DispatchTakeDamagePacket(FElysiumDmg* Dmg, float Scalar, FElysiumCombatCharacter* Attacker,
 		const FElysiumEntityHandle& AttackerHandle, bool bDisallowFirearmsToBashing);
+
+	// `CBaseAnimating::BecomeClientRagdoll` `0x10090180`, the tail of slot 301 `CreateCorpse`: the
+	// pose goes to physics, the entity stops being solid and stops thinking. The NPC leaf carries the
+	// body; the base does nothing.
+	virtual void BecomeClientRagdoll();
+
+	// Whether `CreateCorpse` has taken this body out of the living world (retail removes the entity
+	// into a client ragdoll; this runtime keeps it). The base is never a corpse.
+	virtual bool IsCorpse() const { return false; }
 	// Player mode-3 completion (0x10165d90): SetBaseToStatValue(Health, MaxHealth),
 	// Event_Killed, Event_Dying. It bypasses OnTakeDamage and its soak/buffer/flinch path.
 	void CommitStealthDeath(const FElysiumEntityHandle& Attacker);

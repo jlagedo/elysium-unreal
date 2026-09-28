@@ -1107,9 +1107,9 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 		// slot 390 and the resolver inside `0x103302e0`. The feed break and the held-use drop below
 		// are the PLAYER's (`CBasePlayer::OnTakeDamage` 0x10163020 is the damage caller of
 		// `FeedInterrupt` 0x1033a9e0 and of the `+use` drop 0x10163126); no NPC body calls either.
-		// STORY8-TWIN (group f): a reported death refuses here until slot 144 writes `m_lifeState`
-		// and 0x1032ef60's dying/dead arms (slots 391/392) take a corpse's packets.
-		if (HasReportedDeath())
+		// A corpse (`CreateCorpse` ran) is out of the world in retail: nothing can hand it a packet.
+		// A DYING body still takes them, through `0x1032ef60`'s life-state split.
+		if (IsCorpse())
 		{
 			return;
 		}
@@ -1149,9 +1149,9 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 		// The scalar packet (word 0 null, `+0x30` the amount) into slot 142, as above. No amount
 		// gate: retail's zero tests are `0x103302e0`'s `<= 0.0` and the Troika's zero-damage arm
 		// (`0x102bef4d`), both inside the transaction.
-		if (HasReportedDeath())
+		if (IsCorpse())
 		{
-			return;   // STORY8-TWIN (group f), as above
+			return;   // as above
 		}
 		DispatchTakeDamagePacket(nullptr, Amount, nullptr, FElysiumEntityHandle::Invalid(), false);
 		return;
@@ -1287,14 +1287,124 @@ int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
 		return Result;
 	}
 
-	// 8. The kill: slot 144 `Event_Killed(info)`, then slot 399 (`ShouldGib`) — or a
-	//    `DMG_ALWAYSGIB` (0x2000) hit without `DMG_NEVERGIB` (0x1000) — takes slot 402
-	//    `Event_Gibbed`, whose false answer (or no gib) takes slot 403 `Event_Dying`.
-	// STORY8-TWIN (group f): the port's `OnKilled` stands for the kill arm until
-	// `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` is ported and the kill enters slot 144.
-	OnKilled();
+	// 8. The kill: slot 144 `Event_Killed(info)`, then slot 399 (`ShouldGib`) — or, when it answers
+	//    false, a `DMG_ALWAYSGIB` (0x2000) hit without `DMG_NEVERGIB` (0x1000) — takes slot 402
+	//    `Event_Gibbed`, whose answer is what the body returns; a false answer (or no gib) takes
+	//    slot 403 `Event_Dying`.
+	Event_Killed(Info);                                                          // slot 144 (+0x240)
+	const uint32 Bits = Info->Dmg != nullptr ? (Info->Dmg->DmgMask | Info->DamageBits) : Info->DamageBits;
+	const bool bGib = Slot399()                                                  // slot 399 (+0x63c)
+		|| ((Bits & 0x2000u) != 0 && (Bits & 0x1000u) == 0);
+	if (bGib)
+	{
+		const bool bGibbed = Event_Gibbed();                                     // slot 402 (+0x648)
+		if (bGibbed)
+		{
+			return 1;
+		}
+		Event_Dying();                                                           // slot 403 (+0x64c)
+		return 0;
+	}
+	Event_Dying();                                                               // slot 403 (+0x64c)
 	return Result;
 }
+
+// =================================================================================================
+// Slot 144 — `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`.
+// =================================================================================================
+
+void FElysiumCombatCharacter::Event_Killed(void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	FInfo* const Info = static_cast<FInfo*>(InInfo);
+
+	// Port bookkeeping, ahead of retail's body: a held reaction claim is released by a predicate its
+	// producer re-checks, and a dying character re-checks nothing (the body-claim arbiter).
+	ReleaseHeldReaction();
+
+	// 1. `m_lifeState = LIFE_DYING` (`+0x200`), the NPC's raw word.
+	if (FElysiumNpcBase* const NpcBase = AsNpcBase())
+	{
+		NpcBase->AnimEventLifeStateWord = 1;
+	}
+
+	// 2. Slot 385 `Weapon_Drop(active weapon)` (`+0x604`) — the drop of the held weapon.
+	FElysiumEntity* const ActiveWeaponEntity =
+		(World != nullptr && Inventory.ActiveWeapon.IsSet()) ? World->Resolve(Inventory.ActiveWeapon) : nullptr;
+	Weapon_Drop(ActiveWeaponEntity, nullptr, false);
+
+	// 3. A grapple VICTIM (`+0x1538` resolving, `+0x153c == 1`) tears its partner's feed down:
+	//    slot 353 `FeedInterrupt` on the partner.
+	if (Grapple.Role == EElysiumGrappleRole::Victim)
+	{
+		if (FElysiumCombatCharacter* const Partner = ResolveGrapplePartner())
+		{
+			Partner->FeedInterrupt();
+		}
+	}
+
+	// 4. `RemoveDisciplineVisuals` and `RemoveFromPresenceList` — UNRECOVERED here (the discipline
+	//    visual list and the presence list are not carried); `RemoveFromComfortList` is.
+	RemoveFromComfortList();
+	// 5. The engine interface call `(*DAT_1070b248)->vfunc6(entindex, 1)` — UNRECOVERED here.
+
+	// 6. The owner's slot 139 `DeathNotice(this)` — the maker's child-died notice.
+	NotifyOwnerOfTermination(EElysiumOwnedEntityTermination::Died);
+
+	// 7. The ragdoll force (the packet's force, else `CalcDamageForceVector`, plus the absolute
+	//    velocity, clamped) — UNRECOVERED on the port's packet, which carries no force: the corpse
+	//    takes none, as `CompleteDeathHandoff` has always stated. Then slot 301 `CreateCorpse`.
+	CreateCorpse(FVector::ZeroVector, Info);
+
+	// 8. `m_iCurFrenzyCount = 0` (`+0xec0`).
+	CurFrenzyCount = 0;
+
+	// 9. The attacker's (`info+0x2c`, its `+0x9c` combat character) slot 300 `Event_TookLife(this,
+	//    ...)`.
+	if (Info != nullptr && World != nullptr && Info->Attacker.IsSet())
+	{
+		if (FElysiumEntity* const Attacker = World->Resolve(Info->Attacker))
+		{
+			if (FElysiumCombatCharacter* const Killer = Attacker->AsCombatCharacter())
+			{
+				Killer->Event_TookLife(this, false, false);
+			}
+		}
+	}
+	UE_LOG(LogElysiumPlayer, Log, TEXT("%s died"), *DebugString());
+}
+
+// =================================================================================================
+// Slot 301 — `CBaseCombatCharacter::CreateCorpse` `0x1032c0e0`.
+// =================================================================================================
+
+void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
+{
+	using FInfo = FElysiumNpcBase::FElysiumTakeDamageInfo;
+	const FInfo* const Info = static_cast<const FInfo*>(InInfo);
+	(void)Force;
+	// `OnDeath` once more through the Troika self-cast (`+0x98`, `0x10265a90` with the `+0x1a94`
+	// handle): latched by the first fire in `CAI_BaseNPC::Event_Killed`, so a no-op on that path.
+	if (FElysiumNpcBase* const NpcBase = AsNpcBase())
+	{
+		NpcBase->FireOnDeathOnce(Info != nullptr ? Info->Attacker : FElysiumEntityHandle::Invalid());
+	}
+	// The ragdoll seed bone (the packet's hit bone, else `Bip01 Spine2`) and the force are the
+	// client ragdoll's; neither reaches this runtime's physics handoff (UNRECOVERED here).
+	// A non-player body with `MiscFlag 0x80000` spawns a STATIC corpse (`SpawnStaticCorpse`) and
+	// thinks on; every other one becomes a client ragdoll. The static corpse is UNRECOVERED here: the
+	// ragdoll arm is taken. The corpse entity's fade/burn think, the burning-death sound and the
+	// `m_hAnimFollowModel` removal are UNRECOVERED here as well.
+	BecomeClientRagdoll();
+}
+
+// `CBaseAnimating::BecomeClientRagdoll` `0x10090180` for a character: the pose goes to physics,
+// the entity stops being solid and stops thinking. The base keeps its body.
+void FElysiumCombatCharacter::BecomeClientRagdoll()
+{
+}
+
+
 
 // =================================================================================================
 // Slot 390 — `CBaseCombatCharacter::OnTakeDamage_Alive` `0x103302e0`.
@@ -2108,10 +2218,9 @@ void FElysiumCombatCharacter::EndBloodshield()
 	}
 }
 
-// STORY8-TWIN: replaced by 0x10265a90 (`FElysiumNpcBase::FireOnDeathOnce`, the attacker as activator)
-// and 0x1032b9b0 (`CBaseCombatCharacter::Event_Killed`, still the stub at
-// `ElysiumCombatCharacterSlots.cpp`) at wave 2, for the NPC leaf. Its `OnDeath` fires with this
-// entity as activator where retail passes the damage packet's attacker (`0x10265cc8`).
+// The PLAYER's death tail (and any non-NPC character's). An NPC's death is slot 144 since story 8
+// wave 2: the Troika / `CAI_BaseNPC::Event_Killed` bodies fire `OnDeath` with the packet's attacker
+// (`0x10265a90`) and reach `CBaseCombatCharacter::Event_Killed` `0x1032b9b0` above.
 void FElysiumCombatCharacter::OnKilled()
 {
 	if (bDeathReported)

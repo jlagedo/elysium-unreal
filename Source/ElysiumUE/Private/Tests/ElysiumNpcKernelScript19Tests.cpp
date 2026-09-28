@@ -300,8 +300,8 @@ bool FElysiumNpcKernelScript19ExitScriptTest::RunTest(const FString&)
 
 	// LIFE_DYING: ideal DEAD, FALSE, the script stays installed (0x1027d0a9..0x1027d0c9).
 	Script19Own(*S1, *Jack);
-	Jack->SetDeathReportedForRestore(true);
-	TestTrue(TEXT("Event_Killed's latch reads as LIFE_DYING"), Jack->LifeStateIsDying());
+	Jack->AnimEventLifeStateWord = 1;   // `Event_Killed` `0x1032b9b0`'s LIFE_DYING
+	TestTrue(TEXT("the life-state word reads as LIFE_DYING"), Jack->LifeStateIsDying());
 	TestFalse(TEXT("0x1027d0c7 a dying NPC answers FALSE"), Jack->ExitScriptedSequence());
 	TestEqual(TEXT("0x1027d0bd m_IdealNPCState := 7"), Jack->IdealStateRetail(), 7);
 	TestTrue(TEXT("and keeps its m_hCine"), Jack->ScriptOwner == S1->Handle);

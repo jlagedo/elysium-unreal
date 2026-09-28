@@ -136,7 +136,8 @@ void FElysiumNpcBase::NPCInit()
 		}
 	}
 	MaxHealth = 100;                                                     // 102733xx
-	bDead = false;                                                       // m_lifeState = 0
+	AnimEventLifeStateWord = 0;                                          // 0x10273459 m_lifeState = LIFE_ALIVE
+	bDead = false;                                                       // (the port's removal flag, cleared with it)
 	SetDeathReportedForRestore(false);
 	// +0x1b3c/+0x1b40 provenance ABSENT (shape map). Line 0x1af1 is not stored.
 	WriteIdealStateRetail(1);                                            // m_IdealNPCState = IDLE

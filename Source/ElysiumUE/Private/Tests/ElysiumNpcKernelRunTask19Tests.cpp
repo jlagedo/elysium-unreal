@@ -941,7 +941,10 @@ bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 	Reset(N);
 	FinishActivity(N);
 	N.RunTaskSlot444(&S);
-	TestTrue(TEXT("0x103e0204 completes"), Completed(N));
+	// 0x103e0204 completes, then 0x103e0225 `CreateCorpse` (a hand body since story 8 wave 2) takes
+	// the body out of the world: the corpse's program is cleared with its think, so the witness of
+	// the arm is the corpse itself.
+	TestTrue(TEXT("0x103e0204 completes and 0x103e0225 CreateCorpse makes the corpse"), N.IsCorpse());
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (N.MiscFlags & 0x80000u) != 0);
 	S = Step(*F.Npc, 0x151);
 	Reset(N);

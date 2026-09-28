@@ -342,9 +342,10 @@ bool FElysiumNpcKernelMisc19ChooseEnemyDeadTest::RunTest(const FString&)
 	N.Schedule.Clear();
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
 	// Retail's dead enemy is `m_lifeState != 0` (slot 158 false) while its handle still resolves.
-	// The port's `Kill()` is `UTIL_Remove` (the handle stops resolving); the death transaction's latch
-	// is what slot 158 reads (`FElysiumEntity::IsAlive`), so the case stands that latch.
-	F.Other->SetDeathReportedForRestore(true);
+	// The port's `Kill()` is `UTIL_Remove` (the handle stops resolving); the life-state word is what
+	// slot 158 reads (`FElysiumEntity::IsAlive`), so the case stands the word (LIFE_DYING, as
+	// `Event_Killed` `0x1032b9b0` writes it).
+	F.Other->AnimEventLifeStateWord = 1;
 	if (!TestNotNull(TEXT("the dead enemy still resolves this frame"),
 			static_cast<const FElysiumNpcBase&>(N).GetEnemy()))
 	{

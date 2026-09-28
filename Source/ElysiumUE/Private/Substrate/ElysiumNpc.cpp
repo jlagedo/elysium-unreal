@@ -262,89 +262,50 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 	return true;
 }
 
-// STORY8-TWIN: replaced by 0x102bf340 / 0x10265ad0 (slot 144 `Event_Killed`, Spawn19) at wave 2. The
-// callers (`ElysiumCombatCharacter.cpp` damage commit, `ElysiumFeed.cpp` drain, `ElysiumGrapple.cpp`)
-// move to slot 144 with an `FElysiumTakeDamageInfo` once `CBaseCombatCharacter::Event_Killed`
-// `0x1032b9b0` is ported and the loop (L13) selects the DEAD schedule from `SetState(DEAD)`: this
-// body starts `DIE` itself, which the retail chain leaves to the think.
 void FElysiumNpc::OnKilled()
 {
-	// Retail's own first clause: "an NPC already in the death schedule ignores a duplicate kill". The
-	// base's one-shot latch is the same guard, so it is read here rather than counted twice.
-	if (HasReportedDeath())
+	KilledBy(FElysiumEntityHandle::Invalid());
+}
+
+void FElysiumNpc::KilledBy(const FElysiumEntityHandle& Attacker)
+{
+	// A corpse is out of the world in retail; nothing reaches it to kill it twice.
+	if (bDeathCommitted)
 	{
 		return;
 	}
-	// `CAI_BaseNPC::Event_Killed` (`0x10265ad0`), its head: an NPC in NPC_STATE_SCRIPT with a live
-	// `m_hCine` runs `CancelScript` (`0x101a8c30`) on that cine at once, while the mind is still in
-	// SCRIPT (the cancel's own gate). **Named divergence:** retail first DEFERS the death when the
-	// cine's sequence has started and its spawnflags do not read exactly `0x80` of `0x2080` (the
-	// damage info is stored at `+0x1a48 m_DeferredDeathInfo` and the NPC dies when the sequence ends);
-	// the port's death transaction cannot be deferred, so the beat is always cancelled.
-	if (NpcStateRetail() == 4)
-	{
-		if (FElysiumScriptedSequence* Cine = ResolveCine())
-		{
-			Cine->CancelScript();
-		}
-	}
-	// The shared body first — the `OnDeath` output, the owner/maker notification and the log. Its
-	// producer order is already settled there and death does not reorder it.
-	FElysiumCombatCharacter::OnKilled();
+	FElysiumTakeDamageInfo Info;
+	Info.Attacker = Attacker;
+	Event_Killed(&Info);                                                      // slot 144
+}
 
-	// 1. Every animation-channel claim this character holds goes back. Ahead of the mind and the
-	//    body, because a claim outliving its producer is what parks a channel: the executors below
-	//    are about to stop existing, and none of them will come back with its handle.
+void FElysiumNpc::BecomeClientRagdoll()
+{
+	if (bDeathCommitted)
+	{
+		return;
+	}
+	bDeathCommitted = true;
+	// Every animation-channel claim goes back ahead of the physics handoff: a claim outliving its
+	// producer parks a channel. (The body-owner tokens and the mind are vacated at the end of the
+	// Troika `Event_Killed`, after retail's own state change.)
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (Embodiment != nullptr && Visual != nullptr && !bStealthDeathCommitted)
 	{
 		Embodiment->ReleaseBodyAnimClaims(Visual);
 	}
-
-	// 2. Every body-owner token, the running program, the pushed order and an open conversation, all
-	//    vacated together — "strategy and squad claims are vacated" plus the Troika override's hint
-	//    and feed/claim releases. `Mind.Invalidate(..., bDead=true)` is what makes current and ideal
-	//    state 7 (dead), and a dead mind refuses every later acquisition.
-	ReleaseAllBodyOwnership(TEXT("killed"), /*bDeadMind=*/true);
-
-	// 3. The solid-body policy. Frozen rather than hidden: a corpse stays on screen and stops
-	//    moving, which is VtMB's own SOLID_NONE + FSOLID_NOT_SOLID and NOT ScriptHide.
-	//    `SetIgnoreCharacterCollision` is stated beside it even though freezing already makes the
-	//    body non-solid, because the two are separate switches with separate lifetimes: whatever
-	//    later un-freezes a body must not also make a corpse start blocking the player again.
+	// `FSOLID_NOT_SOLID` / `MOVETYPE_NONE`: frozen rather than hidden — a corpse stays on screen.
+	// `SetIgnoreCharacterCollision` is stated beside it because the two are separate switches with
+	// separate lifetimes: whatever later un-freezes a body must not make a corpse block the player.
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
-	// A body killed under a silent think gives the hold back: the death clip has to advance, and
-	// `ThinkDead` runs above both gates, so a corpse is never held again.
 	SetBodyHeld(false);
 	SetBodyAnimationHeld(false);
-
-	// 4. The death schedule, selected from the death commit itself — "death sound/solid-body policy
-	//    leads to the death schedule". It is started directly rather than through `SelectSchedule`,
-	//    which is right and is also the only way: the mind is already dead, and a dead mind selects
-	//    nothing.
-	bDeathHandoffDone = false;
-	bDeathCommitted = false;
-	if (bStealthDeathCommitted)
-	{
-		// The paired death already supplied its terminal pose. The existing corpse handoff
-		// consumes that pose now; a second generic death clip would overwrite the action.
-		ClearSchedule();
-		CompleteDeathHandoff();
-		ArmThinkNow(World ? World->NowSeconds() : 0.0);
-		return;
-	}
-	if (!ElysiumSchedule::Start(Schedule, ElysiumSched::DIE, *this))
-	{
-		// Unreachable in a correct build: `Start` falls back to `IDLE_STAND` and answers false only
-		// when that program itself is missing. The handoff still has to happen, and the dead think
-		// below is what runs it.
-		ClearSchedule();
-	}
-	// No clock reset: `Event_Killed` (`0x10265ad0`) is not a slot-614 site. A corpse is on no
-	// clock -- `ThinkDead` polls the death program at its own 0.1 s ahead of the cadence -- and
-	// that poll has to be entered from here, so the entity think alone is armed.
-	ArmThinkNow(World ? World->NowSeconds() : 0.0);
+	// The pose goes to physics (`ACT_DIERAGDOLL`'s seed in retail; this runtime's current pose).
+	CompleteDeathHandoff();
+	// The think stops: `BecomeClientRagdoll` leaves the entity no think function.
+	ThinkSet(nullptr, 0.0);
+	NextThink = ELYSIUM_NEVER_THINK;
 }
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
@@ -734,8 +695,9 @@ void FElysiumNpc::Think()
 	// the port's own, each piece named:
 	//
 	//  - `IsInert`: an entity the world has not activated or has removed (port lifecycle).
-	//  - `ThinkDead`: the death program's runner. STORY8-TWIN: replaced by the live death path through
-	//    slot 144 and the TASK_DIE arms (group f) at wave 2.
+	//  - The corpse: `CreateCorpse` (`BecomeClientRagdoll`) leaves the entity no think in retail and
+	//    takes it out of the world; this runtime keeps it, so a think that still arrives (a feed
+	//    pair's release re-arms one) re-freezes the body and turns the think off again.
 	//  - The three lifecycle one-shots retail runs in `NPCInit` and this runtime cannot run at spawn
 	//    (an item entity created inside the world's spawn pass invalidates the array being iterated;
 	//    admission establishes idle and would wipe a director's forced state applied ahead of it).
@@ -749,9 +711,11 @@ void FElysiumNpc::Think()
 	{
 		return;
 	}
-	const EDeadThink Dead = ThinkDead();
-	if (Dead != EDeadThink::NotDead)
+	if (bDeathCommitted)
 	{
+		SetBodyFrozen(true);
+		SetIgnoreCharacterCollision(true);
+		NextThink = ELYSIUM_NEVER_THINK;
 		return;
 	}
 	if (!bDisableAi && IsNormalThinkDue())
@@ -783,67 +747,6 @@ void FElysiumNpc::Think()
 	SetBodyAnimationHeld(bDisableAi);
 	// (The refused gate's slot 310 `SetActivity(ACT_IDLE)` puts the idle on the body through the
 	// sequence bridge; the by-name play that stood in for it is gone.)
-}
-
-FElysiumNpc::EDeadThink FElysiumNpc::ThinkDead()
-{
-	if (Mind.State() != EElysiumNpcState::Dead)
-	{
-		return EDeadThink::NotDead;
-	}
-	const double Now = World ? World->NowSeconds() : 0.0;
-	// Gathering is suppressed for a corpse and the death program declares no interrupts, so the set
-	// passed here carries nothing a mask could fire on. It is passed all the same for the one bit
-	// `TaskFail` writes into it: a rung of the death ladder that fails routes on the next poll, as
-	// every other program's failure does, instead of re-running the failed rung.
-	// The poll is a named constant rather than a stamp: a corpse is on none of the four clocks, and
-	// putting it on the distance laws would let the ragdoll handoff arrive up to six seconds after
-	// the death clip ended for a body the player is not standing next to.
-	struct FDeathClipRunner final : IElysiumScheduleRunner
-	{
-		explicit FDeathClipRunner(FElysiumNpc& InNpc) : Npc(InNpc) {}
-
-		FElysiumNpc& Npc;
-		// The death program's tasks run through the body's own slots 442 / 444, as every program's do.
-		virtual void StartTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step, double Now) override
-		{
-			Npc.StartTaskForMaintenance(State, Step, Now);
-		}
-		virtual void RunTaskForMaintenance(FElysiumScheduleState& State, const FElysiumScheduleStep& Step, double Now) override
-		{
-			Npc.RunTaskForMaintenance(State, Step, Now);
-		}
-		virtual void TaskFail(int32 Reason) override { Npc.TaskFail(Reason); }
-		virtual void TaskStarting() override { Npc.TaskStarting(); }
-		virtual bool TakeClearScheduleRequest() override { return Npc.TakeClearScheduleRequest(); }
-	};
-	FDeathClipRunner DeathRunner(*this);
-	if (Schedule.IsRunning()
-		&& ElysiumSchedule::Tick(Schedule, DeathRunner, Now, &Cognition.Conditions)
-		&& !bDeathCommitted)
-	{
-		NextThink = static_cast<float>(Now + ElysiumNpcThink::DeadProgramPollSeconds);
-		return EDeadThink::Running;
-	}
-	// `bDeathCommitted` is the second half of that test because retail's `DIE` program NEVER ENDS.
-	// `TASK_DIE` holds forever: its Troika arm (`0x102abb90`) calls `Die` and returns without
-	// completing, and what stops the NPC thinking is `CreateCorpse` (`0x1032c0e0`) taking the entity
-	// out of the world -- a body this runtime has not built. So the commit stands in for the removal,
-	// and the program is torn down here rather than by finishing.
-	ClearSchedule();
-	// The solid-body policy, re-asserted on EVERY terminal pass rather than once with the handoff.
-	// Anything that hands a corpse's body back un-freezes it and re-arms this think — the feed
-	// pair's release is the live one, and it runs `EndFeedVictimRole` on a victim the same
-	// transaction has just killed — so the pass that turns the think off again is also the pass
-	// that takes the body back. Both setters early-return on a state that has not moved, so the
-	// ordinary single pass pays nothing.
-	SetBodyFrozen(true);
-	SetIgnoreCharacterCollision(true);
-	CompleteDeathHandoff();
-	// Nothing on a dead NPC schedules work — no selection, no executor, no stance machine — so the
-	// think is not rescheduled at all rather than being parked on a slow cadence.
-	NextThink = ELYSIUM_NEVER_THINK;
-	return EDeadThink::Terminal;
 }
 
 bool FElysiumNpc::RunAdmissionBarrier()
@@ -2957,18 +2860,13 @@ void FElysiumNpc::RestoreDeathBodyState()
 	// there is no think to arm: the snapshot applier restamps the saved `NextThink` after this
 	// returns and is the authoritative one there. The body already exists -- `Spawn` builds it, and a
 	// snapshot is applied over a fully-spawned world.
+	// A dead mind is a corpse: `CreateCorpse` ran inside the death transaction (story 8 wave 2), so
+	// the handoff is the load's own work and the corpse mark comes back with it.
 	bDeathHandoffDone = false;
-	bDeathCommitted = false;
+	bDeathCommitted = true;
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
-	if (!Schedule.IsRunning())
-	{
-		// The death program had already finished when the save was taken, so nothing is coming to
-		// end it: the handoff is the load's own work.
-		CompleteDeathHandoff();
-	}
-	// Otherwise `SCHED_DIE` came back with the record through `FElysiumNpcBase::OnRestore`, the saved think that
-	// was carrying it comes back too, and `ThinkDead` ends it exactly as it would have.
+	CompleteDeathHandoff();
 }
 
 // The patrol route and the ambient spot, as words. Every decision they feed is in

@@ -186,7 +186,10 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	F.Hate(F.ThugA, 5);
 	F.Hate(F.Player, 5);
 	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
-	F.ThugA->bDead = true;
+	// Corrected to retail (story 8 wave 2): a dead enemy is `m_lifeState != 0` while its handle
+	// still resolves (slot 158 `IsAlive` false); the port's `bDead` is `UTIL_Remove`, after which the
+	// handle resolves nothing and no ENEMY_DEAD can be raised off it.
+	F.ThugA->AnimEventLifeStateWord = 1;
 
 	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Guard, 10.0);
 
@@ -198,10 +201,8 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("...raising NEW_ENEMY"), Cond.Has(EElysiumNpcCond::NewEnemy));
 	// `SetEnemy` (`0x10279a50`) hands the old enemy to the last-enemy helper `0x10279b70` ONLY when
 	// its handle is still live (`0x10279a96` -1, `0x10279ab2` serial, `0x10279ab7` null entry). A
-	// killed-and-removed entity (`bDead`, `EFL_KILLME`) no longer resolves, so retail writes no last
-	// enemy; the port's old unconditional transfer asserted here was port-invented. Corrected to
-	// retail (story 8 L11 integration).
-	TestFalse(TEXT("a removed old enemy does not reach the last-enemy path"),
+	// DYING enemy (`m_lifeState` 1, not yet removed) still resolves, so it does reach it.
+	TestTrue(TEXT("a dying old enemy, still resolving, reaches the last-enemy path"),
 		F.Guard->BaseMemory.LastEnemy == F.ThugA->Handle);
 
 	// Step 5 gathers the committed enemy's own conditions AFTER the choice, so they describe the

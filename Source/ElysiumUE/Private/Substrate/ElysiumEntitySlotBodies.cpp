@@ -737,15 +737,15 @@ bool FElysiumEntity::IsMarkedForDeletion()
 // slot 158 `bool IsAlive()` — 0x100b4dc0
 bool FElysiumEntity::IsAlive()
 {
-	// `return this->m_lifeState == 0;` — `LIFE_ALIVE`, the int at `+0x0200`.
-	//
-	// This runtime has no `m_lifeState` word: it spells the same fact as two latches, and a body is
-	// alive when NEITHER stands. `bDeathReported` is the death transaction's own one-shot
-	// (`OnKilled` ran; the mind is dead and the death schedule is running), and `bDead` is `Kill`'s
-	// terminal flag. `UpdateEnemyDistances` already reads `m_lifeState` through `IsDead()` for its
-	// own arm, which is why the second term is spelled the same way here. The death transaction's
-	// latch lives on the combat character (story 5 step 6 moved this body to the entity): an entity
-	// that is not one has only `bDead`.
+	// `return this->m_lifeState == 0;` — `LIFE_ALIVE`, the int at `+0x0200`. An NPC carries the word
+	// (`AnimEventLifeStateWord`, story 8 wave 2); `Kill`'s terminal flag (`bDead`) is the removal
+	// retail's `UTIL_Remove` makes, after which no handle resolves the entity at all. Any other
+	// combat character spells the word as its death latch (the player overrides with its own
+	// `LifeState`); an entity that is neither has only `bDead`.
+	if (const FElysiumNpcBase* const Npc = AsNpcBase())
+	{
+		return Npc->AnimEventLifeStateWord == 0 && !IsDead();
+	}
 	const FElysiumCombatCharacter* const Character = AsCombatCharacter();
 	return !(Character != nullptr && Character->HasReportedDeath()) && !IsDead();
 }

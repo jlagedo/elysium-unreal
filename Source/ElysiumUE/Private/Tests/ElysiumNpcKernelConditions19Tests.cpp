@@ -562,7 +562,8 @@ bool FCond19EnemyDeadTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *F.Guard;
-	F.Other->SetDeathReportedForRestore(true);
+	// (Story 8 wave 2: slot 158 reads the life-state word itself, `AnimEventLifeStateWord`; `Event_Killed` `0x1032b9b0` writes 1 LIFE_DYING.)
+	F.Other->AnimEventLifeStateWord = 1;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::SeeEnemy);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyTooFar);
 	N.GatherEnemyConditions(F.Other);
@@ -697,7 +698,8 @@ bool FCond19TroikaClearsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102b2730 clears neither squad condition"), Cond19Has(N, EElysiumNpcCond::SquadSeeEnemy));
 
 	ElysiumNpcEnemy::SetEnemy(N, F.Other->Handle);
-	F.Other->SetDeathReportedForRestore(true);
+	// (Story 8 wave 2: slot 158 reads the life-state word itself, `AnimEventLifeStateWord`; `Event_Killed` `0x1032b9b0` writes 1 LIFE_DYING.)
+	F.Other->AnimEventLifeStateWord = 1;
 	N.GatherConditions();
 	TestTrue(TEXT("102b28f6 a dead slot-168 enemy: ENEMY_DEAD"), Cond19Has(N, EElysiumNpcCond::EnemyDead));
 	TestFalse(TEXT("102b28ff SEE_ENEMY cleared"), Cond19Has(N, EElysiumNpcCond::SeeEnemy));
