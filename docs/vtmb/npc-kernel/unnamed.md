@@ -1666,7 +1666,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1657 | `0x10432520` | — | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDebug2.cpp:212 | `CRT: the bytes of __CIacos, __CIasin, __CIatan, __CIcos, __C…` |
 | 1658 | `0x10026a10` | `CAISound#63`, `CAI_BaseHumanoid#63`, +495 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:133, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:175, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:150, +2 more | `CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1659 | `0x10026c70` | `CAISound#134`, `CAI_BaseHumanoid#134`, +468 more | 0 | 0 | 2 | `CBaseEntity::Think`, `NULL ENTITY` | — | `CAI_BaseNPC#134 slot identity: CBaseEntity#134 is Remove, bu…` |
-| 1660 | `0x10026e70` | `CAISound#153`, `CAI_ChangeHintGroup#153`, +417 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:61, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:270, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:1094, +5 more |  |
+| 1660 | `0x10026e70` | `CAISound#153`, `CAI_ChangeHintGroup#153`, +417 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:61, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:270, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:1098, +5 more |  |
 | 1661 | `0x1003c1c0` | — | 1 | 1 | 0 | — | — |  |
 | 1662 | `0x10055000` | — | 1 | 0 | 1 | — | — |  |
 | 1663 | `0x1006ca50` | — | 1 | 0 | 1 | — | — |  |
@@ -2669,7 +2669,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2660 | `0x102e1110` | `CAI_HumanoidMotor#5`, `CAI_Motor#5` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:409 |  |
 | 2661 | `0x102e1180` | `CAI_HumanoidMotor#6`, `CAI_Motor#6` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:179, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:864 |  |
 | 2662 | `0x102e1270` | `CAI_HumanoidMotor#8`, `CAI_Motor#8` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:201, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:856 |  |
-| 2663 | `0x102e1300` | `CAI_HumanoidMotor#16`, `CAI_Motor#16` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:203, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:1070, Source/ElysiumUE/Public/ElysiumWorldServices.h:305 |  |
+| 2663 | `0x102e1300` | `CAI_HumanoidMotor#16`, `CAI_Motor#16` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:203, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:1074, Source/ElysiumUE/Public/ElysiumWorldServices.h:305 |  |
 | 2664 | `0x102e1d10` | — | 1 | 0 | 0 | — | — |  |
 | 2665 | `0x102e20f0` | `CAI_HumanoidMotor#14`, `CAI_Motor#14` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:60 |  |
 | 2666 | `0x102e2120` | `CAI_HumanoidMotor#13`, `CAI_Motor#13` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:77 |  |
@@ -3039,7 +3039,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3030 | `0x1027c7f0` | `CAI_BaseNPC#5` | 0 | 0 | 0 | — | — | `CAI_BaseNPC#5 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
 | 3031 | `0x1027d000` | `CAI_Pathfinder#0` | 0 | 0 | 0 | — | — |  |
 | 3032 | `0x1027d9d0` | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#514 no SDK twin: stretch #513-#516 holds 2 retai…` |
-| 3033 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:477, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:216, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:755 | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 3033 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:477, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:216, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:759 | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
 | 3034 | `0x1028b0f0` | `CAI_BaseHumanoid#547`, `CAI_BaseNPC#547`, +75 more | 0 | 0 | 0 | `ERROR! Subclass missing GetSlotSchedule …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSchedule.cpp:157 | `CAI_BaseNPC#547 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 3035 | `0x1028cd10` | `CAI_BaseNPCTroika#82`, `CGeneric_NPC#82`, +3 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:179, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:204, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:178, +1 more |  |
 | 3036 | `0x1028d5e0` | `CAI_BaseNPCTroika#5` | 0 | 0 | 0 | — | — |  |

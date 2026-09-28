@@ -426,4 +426,7 @@ def test_no_slot_is_an_accepted_hide():
     # is a real override of it.
     kinds = {kind for kind, _, _ in gks.SLOT_PORT_MAP.values()}
     assert "accepted" not in kinds
-    assert {s for s, (k, _, _) in gks.SLOT_PORT_MAP.items() if k == gks.OVERRIDDEN_BELOW} == {66, 67, 86, 123, 133, 153, 158}
+    # Slot 158 left the set: retail's CBasePlayer and CHL2_Player fill slot 158 with the base
+    # CBaseEntity::IsAlive 0x100b4dc0 (vtmb_slot 158), so the player's override is gone and the one
+    # base body reads m_lifeState (+0x200) for every class.
+    assert {s for s, (k, _, _) in gks.SLOT_PORT_MAP.items() if k == gks.OVERRIDDEN_BELOW} == {66, 67, 86, 123, 133, 153}
