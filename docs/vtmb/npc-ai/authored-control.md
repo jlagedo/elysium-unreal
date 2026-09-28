@@ -560,3 +560,219 @@ verbatim; ANIMATION). None appears in any vdata pack; they are map-only.
   as a named divergence; that divergence is closed, and the consequence is retail's: the 1005
   shipped NPCs that author `"0"` do not wander to interesting places at all.
   `Elysium.Substrate.NpcGroupMask` asserts the zero-mask case by name.
+
+## Story 8, family Script19, the script directors — `CCineNPC`, `CCineAI`, `CCineAISchedule` and the Troika's scripted exits (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L10, integrated as `576a06fc`._
+
+The director half of family Script19's 20 `rule` rows (§ "Scripted control and authority" above
+is the authored side). Source of truth: the packet
+`$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/Script19-READING.md` and the
+listings (`vtmb_asm`). The family's movement helpers are in `schedule-kernel.md` § "Story 8,
+family Script19, the Troika's movement helpers". Port: `ElysiumScriptedSequence.cpp`,
+`ElysiumAiScriptedSequence.cpp`, `ElysiumAiScriptedSchedule.cpp`, `ElysiumNpcBaseScript19.cpp`,
+`ElysiumNpcScript19.cpp`, `ElysiumNpcScript19Species.cpp`; tests
+`Elysium.Substrate.NpcKernelScript19.*`.
+
+`0x101a7140 CCineNPC::UpdateOnRemove` (19 bytes) has no section: base `UpdateOnRemove 0x1027ca30`
+direct (`0x101a7143`), then `ScriptEntityCancel 0x101a7170(this)` (`0x101a7149`).
+
+### `0x101a8c30` CancelScript (130 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. `DevMsg(2, "Cancelling script: %s\n", m_iszPlay ?: "")` (`0x101a8c34..0x101a8c4b`).
+2. `m_iName` (`+0x26c`, the cine's OWN targetname — not `m_target +0x20c`) null → `ScriptEntityCancel(this)`
+   and return (`0x101a8c5c` / `0x101a8c5f` / `0x101a8c69`).
+3. Otherwise `FindEntityByName(NULL, m_iName)` and every next match (`0x101a8c76`, `0x101a8ca4`),
+   `ScriptEntityCancel` on each (`0x101a8c82`); the name is re-read each pass, the empty string
+   substituted when null (`0x101a8c92`).
+
+Reads `+0x5f48`, `+0x26c`. Writes nothing itself (the cancel zeroes each cine's `+0x5f70`).
+**Unrecovered:** none.
+
+### `0x101a8640` Finish / PostIdleDone (396 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. Hold arm: `m_iszPostIdle (+0x5f4c)` set (`0x101a864d`) AND spawnflag `0x100` (`0x101a865c`) AND
+   `m_hNextCine (+0x5f94)` not live (`0x101a8671..0x101a8690`) → `DevMsg(2, "Post Idle %s finished\n")`
+   with the post-idle of the NPC's OWN `m_hCine` re-resolved from `npc+0x5d74` (`0x101a8696..0x101a86d5`;
+   a stale handle reads `[NULL+0x5f4c]` and faults — the port prints the empty string), `0x1027f270(2)`
+   (empty), `npc->m_scriptState := 2` (`0x101a86e7`), slot 584 `(npc, m_iszPostIdle, 0)` (`0x101a86ff`),
+   RETURN (`0x101a8708`) before any cleanup.
+2. Spawnflag 4 clear (`0x101a8712`) → `ThinkSet(SUB_Remove)` and `m_flNextThink = curtime + 0.1`
+   (`0x101a871f` / `0x101a8733`).
+3. `CineCleanup 0x1027d170(npc)` (`0x101a873f`), slot 586 `FixScriptNPCSchedule(npc)` (`0x101a8749`).
+4. `m_hNextCine` live (`0x101a8758..0x101a877d`) and either not `this` or spawnflag 4 set
+   (`0x101a87a9` / `0x101a87b2`) → `SetTarget(next, npc)` (`0x101a87b7`) and next's slot 583 (`0x101a87c0`).
+
+**Unrecovered:** none.
+
+### `0x1027d0a0` ExitScriptedSequence (153 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. `m_lifeState (+0x200) == 1 LIFE_DYING` (`0x1027d0a0` / `0x1027d0a7`) → `+0x1b3c/+0x1b40 =
+   AI_BaseNPC.cpp:0x2a70`, `m_IdealNPCState (+0x5cc4) := 7` (`0x1027d0a9..0x1027d0bd`), answer FALSE
+   (`0x1027d0c7`); `m_hCine` stays.
+2. `m_hCine (+0x5d74)` -1 / stale / null → answer TRUE with nothing cancelled (`0x1027d0d4` /
+   `0x1027d0f6` / `0x1027d0fc` → `0x1027d135`).
+3. Live → `CancelScript` on it (`0x1027d125`), TRUE (`0x1027d12a`). The re-read's null-call arm
+   (`0x1027d12e` / `0x1027d130`, `CancelScript(NULL)`) is unreachable: nothing runs between the reads.
+
+Port: `m_lifeState` has no word; DYING is the death transaction between `Event_Killed`
+(`bDeathReported`) and `TASK_DIE`'s commit (`bDeathCommitted`). **Unrecovered:** none.
+
+### `0x101a7880` CCineNPC PossessEntity (1577 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. `m_hTargetEnt (+0x5ce4)` → entity → `+0x94`; any miss returns (`0x101a7891..0x101a78ca`).
+2. NPC `m_bRanAI (+0x1b4c)` clear → the eleven-line `DevMsg` block with the "that has not run it's AI
+   yet....." line (`0x101a78da..0x101a794f`).
+3. NPC `m_hCine (+0x5d74)` live (`0x101a795d..0x101a7987`) → queue arm: the current cine's live
+   `m_hNextCine` is kicked (`SetTarget(kicked, NULL)` `0x101a7af7`, `DevMsg(2, "script \"%s\" kicking
+   script \"%s\" out of the queue\n")` `0x101a7b13`), our handle goes into its `+0x5f94`
+   (`0x101a7b5a`), return. The `Msg`s under the debug ConVar `DAT_1072bb84` are dead.
+4. The take: `0x100b5190` (`+0xf4`) → `0x101a77a0` (`0x101a7c30`); `m_interruptable (+0x5f90)` clear →
+   `0x1026d130` (`0x101a7c41`); empty `m_iszNextScript (+0x5f58)` → `m_hNextCine := -1` (`0x101a7c50`);
+   `m_pGoalEnt`, `m_hCine`, `SetTarget(npc, this)` (`0x101a7c5a..0x101a7c72`); the save block `+0x5f78`
+   movetype, `+0x5f7c` movecollide, `+0x5f80` solid, `+0x5f84` solid flags, `+0x5f88` effects
+   (`0x101a7c7b..0x101a7cbd`; the effects word is the NPC's `m_fEffects +0x19c`, which `CineCleanup
+   0x1027d170` writes back at `0x1027d271` / `0x1027d279`); NPC `+0x98` → slot 614, `+0x5f8c := npc+0x14b8`, OR `0x40` under spawnflag
+   `0x1000` (`0x101a7cc3..0x101a7cf6`); `npc->m_fEffects |= ours` (`0x101a7d0a`).
+5. `m_fMoveTo (+0x5f60)`, table `0x101a7eac`: 1/2/3 → state 4/5/6 each with `DelayStart(1)`; 4 →
+   teleport (slot 181 to our origin with NULL angles and a zero velocity; `0x102e0b40`; the motor's
+   ideal yaw from our yaw with the `+0x28` flip; `SetLocalAngularVelocity(0)`; `EF_NOINTERP`; NPC yaw :=
+   ours, pitch/roll kept) and FALLS THROUGH; 0/5 → state 1; above 5 skips.
+6. `AI scripted.cpp:0x2c8`, `m_IdealNPCState := 4` (`0x101a7e84..0x101a7e98`).
+
+**Unrecovered:** the director's own `m_fEffects` (no port word; spec 0003), so the OR at `0x101a7d0a` adds
+nothing here.
+
+### `0x101a8460` SequenceDone (371 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. Debug-ConVar `Msg` and `0x101a6ec0` (`0x101a8463..0x101a850b`) — dead.
+2. `m_iszPostIdle` empty OR `m_hNextCine` live (`0x101a8518..0x101a8545`) → `Finish` (`0x101a857b`);
+   else `0x1027f270(2)`, `npc->m_scriptState := 2` (`0x101a8554`), slot 584 `(npc, m_iszPostIdle, 0)`
+   (`0x101a856c`).
+3. `m_OnEndSequence (+0x5fb4)` through `0x100cd660` LAST and unconditionally, activator `+0x10c` or NULL,
+   caller `this` (`0x101a8580..0x101a85c9`).
+
+**Unrecovered:** none.
+
+### `0x101a8890` AllowInterrupt (123 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+1. Spawnflag `0x20` → return (`0x101a889a`).
+2. No target or no `+0x94` → `+0x5f90 := arg` (`0x101a88aa..0x101a88d7` → `0x101a8900`).
+3. Latch 1, arg 0 → `0x1026d130`, latch 0, return (`0x101a88e7..0x101a88f4`); latch 0, arg 1 →
+   `0x10007ea0` (`0x101a88fb`); then `+0x5f90 := arg` (`0x101a8900`).
+
+**Unrecovered:** its caller's arm (`HandleAnimEvent 0x10274e30`, spec 0003).
+
+### `0x101a9080` CCineAI PossessEntity (899 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+`0x101a7880`'s order without the queue arm (a standing cine is overwritten), without the `m_hNextCine`
+clear and without `DelayStart`; the warning block skips the "has not run" line (`0x101a90d9..0x101a9147`).
+Switch (`0x101a9404`): 0/5 → state 1; 1/2/3 → 4/5/6; 4 → the teleport, state 1 and `RemoveFlag(FL_ONGROUND)`
+(`0x101a9388..0x101a939b`); above 5 → `DevWarning(2, "aiscript:  invalid Move To Position value!")`
+(`0x101a93a9`). Then `DevMsg(2, "\"%s\" found and used\n")` (`0x101a93c1`), read `m_NPCState` BEFORE
+writing `scripted.cpp:0x554` and ideal 4 (`0x101a93c7..0x101a93e7`); a state that was already 4 →
+`0x10280de0(0x2e)` (`0x101a93f8`). **Unrecovered:** the Troika slot-440 translation of `0x2e` (spec 0003).
+
+### `0x101a9790` CCineAISchedule PossessEntity (233 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+Target → `+0x94` or return (`0x101a979d..0x101a97d5`); `m_bRanAI` clear → the warning block without the
+"has not run" line (`0x101a97e6..0x101a9854`); `m_interruptable` clear → `0x1026d130` (`0x101a9866`); slot
+586 `(npc)` (`0x101a9870`). Writes nothing on either object itself. **Unrecovered:** none.
+
+### `0x101a82d0` StartSequence (315 bytes) and `0x101a9510` CCineAI StartSequence (139 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+`m_sequenceStarted (+0x5f91) := 1` FIRST (`0x101a82da` / `0x101a9517`). A null name with
+`completeOnEmpty` → `SequenceDone(npc)` and answer 0 (`0x101a82f0..0x101a82f9`) — `CCineAI` answers 1
+(`0x101a9532`); a null name without it continues with `""`. `LookupSequence` into `m_nSequence`; -1 →
+`Warning("%s: unknown scripted sequence \"%s\"\n")` / `"...aiscripted..."` and sequence 0; `m_flCycle :=
+0`; `ResetSequenceInfo`; the `CCineNPC` body's debug `Msg` tail (`0x101a8358..0x101a83fe`) is dead;
+answer 1. **Unrecovered:** none (the port plays the clip by name — no studio header).
+
+### `0x1037c1c0` CNPC_VGhoulCroucher::ScriptHide (232 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L10)._
+
+Scope-trace push keyed on `m_iName` (`0x1037c1c5..0x1037c227`); `CAI_BaseNPCTroika::ScriptHide
+0x102c1ce0` direct (`0x1037c229`); `m_hBurningParticle (+0x6670)` live (`0x1037c237..0x1037c25e`) →
+slot 77 on the particle (`0x1037c286`); the re-validation's null-receiver arm (`0x1037c295`) is dead; the
+handle is not cleared. **Unrecovered:** none.
+
+## Story 8, family Boss19, the discipline helpers — `ResetAiState` `0x102b52a0`, `DoPossession` `0x102c51a0`, `DoFrenzy` `0x102c5310` (2026-09-27)
+
+_Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
+
+The Troika helpers the possession and frenzy discipline effects call (§ "Disciplines that
+possess or frenzy an NPC; the `AI_NPCFlag` payload" above). Port: `ElysiumNpcBoss19.cpp`,
+declared in `ElysiumNpcBoss19.inl`.
+
+`0x102ae750` is `SetSchedule(id, force)`: translate (slot 440), resolve (slot 446, fallback 1), refuse
+in state 7, and — unless `force` — refuse when slot 158 `IsAlive` is false. The `+0x1b30`/`+0x1b34`
+and `+0x1b3c`/`+0x1b40` file/line stamps are recorded in the schedule / mind traces.
+
+### `0x102b52a0` `ResetAiState(bool, bool)` (135 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+`SetEnemy(NULL)` (`0x102b52a5`); `SetLastEnemy(NULL)` (`0x10279b70`, `+0x1a94` = -1, `0x102b52ae`);
+`m_afMemory &= 0xf7fc7fff` (`0x102b52c5`); with the first argument, `0x10273760` (`0x102b52cf`); the
+enemy store's clear-all `0x102dfc10` on slot 541 `GetEnemies()` with `UTIL_VarArgs("%s(%d) :",
+"E:\Vampire\main\dlls\AI_BaseNPCTroika.cpp", 0x5626)` (`0x102b52e3`..`0x102b52f8`); with the second,
+the ideal-state stamp at line `0x562a` and `m_IdealNPCState = 1` DIRECTLY (`0x102b5319`) — no
+`SetState`, no `OnStateChange`.
+
+**Correction to the checklist:** `0x10273760` is not a hint release. Its whole body is
+`InputSetRelationship(this, m_RelationshipString (+0x1584) ?: "", 0)` — the authored relationship
+line re-applied. The format string is `"%s(%d) :"` (the packet's correction stands).
+`0x102dfc10` pops the list head until empty; for a store that is not squad-shared (`+8 == 0`) with
+an owner it calls the owner's slot 56 (`[owner]+0xe0`, `0x102b5120`) with the resolved record entity,
+the record's two vectors (`+0xc..+0x20`) and the reason, then frees the record (`0x102df1b0`); a
+squad-shared store calls `0x103169a0` instead. The port empties its store and runs slot 56 per popped
+record (integration review; the lane dispatched no callback).
+**Unrecovered:** which record words the two vectors are (the port hands `LastPosition` / `Anchor`);
+the squad arm (no squad-shared store stands).
+
+### `0x102c51a0` `DoPossession(CBaseEntity* caster)` (281 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+Null caster: nothing (`0x102c51aa`). A current enemy that slot 404 `IRelationType` calls `D_HT`, then
+the caster the same: `AddMiscFlag(0x800)` each (`0x102c51dd` / `0x102c51f9`). `DisconnectFromSquad`
+(`0x102c5200`); `ResetAiState(1, 1)` (`0x102c520b`); slot 304 `GiveBaseFightingItems` (`0x102c5214`);
+`m_bfAINPCFlags2 |= 0x80840000` (`0x102c5226`); a player caster: `InputSetRelationship("player D_LI
+99")` (`0x102c523f`); `SetFollowerBossName(caster)` (`0x102c4470`, `0x102c5247`);
+`SetFollowerType("Combat")` (`0x102c5253`); the ideal-state stamp at line `0x6e42`, `m_IdealNPCState` =
+1, `SetState(1)` (`0x102c525c`..`0x102c527a`); `SetTarget(caster)` (`0x102c5282`); `m_hFriendPlayer`
+(`+0x60ac`) = caster (`0x102c5292`); slot 614 `ResetThinkTimers` (`0x102c529a`); `m_bfNPCFrenziedFlags`
+= `0x3b1c` (`0x102c52a4`); slot 595 `AcquireNearestHatedTarget` last (`0x102c52ae`).
+**Unrecovered:** the discipline effect that calls it is not wired in the port.
+
+### `0x102c5310` `DoFrenzy(CBaseEntity* caster)` (260 bytes)
+
+_Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
+
+As `DoPossession` up to `ResetAiState(1, 1)` (`0x102c537b`), then slot 595 FIRST (`0x102c5384`) and slot
+304 (`0x102c538e`); `m_bfAINPCFlags2 |= 0x80820000` (D_INSANE, `0x102c53a0`); the player line
+(`0x102c53b9`); the stamp at line `0x6e7f`, `m_IdealNPCState` = `0xb` HUNT, `SetState(0xb)`
+(`0x102c53c2`..`0x102c53e0`); `m_eInvestigateMode` = `m_eInvestigateModeCombat` = 6 (`0x102c53ec` /
+`0x102c53f2`); `m_hFriendPlayer` = caster (`0x102c53ff`); `m_bfNPCFrenziedFlags` = `0x9fbd`
+(`0x102c5405`). No `SetTarget`, no follower boss, no slot 614.
+
+**Unrecovered:** nothing named by the walk.
