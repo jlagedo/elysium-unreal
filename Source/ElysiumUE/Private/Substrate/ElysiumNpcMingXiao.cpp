@@ -1918,7 +1918,7 @@ void FElysiumNpcMingXiao::CoordinateTroops()
 	}
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcKernelBosses2.cpp` (story 5 step 4) ---
 
@@ -2287,7 +2287,7 @@ uint32 FElysiumNpcMingXiao::MingXiaoWeaponSlot360(const FElysiumEntity* Weapon) 
 {
 	// Slot 360 (`+0x5a0`) on the weapon, of which the router keeps only `& 0x18000`. The port's reading
 	// of those bits is the weapon record's family, the same read `0x10395650`'s melee test makes
-	// (`Damage19SpeciesWeaponIsMelee`, `ElysiumNpcDamage19Species.cpp`): a controllable melee weapon
+	// (`Damage19SpeciesWeaponIsMelee`, `ElysiumNpcDamage3Species.cpp`): a controllable melee weapon
 	// answers the mask, anything else 0.
 	const FElysiumItem* Item = Weapon != nullptr ? Weapon->AsItem() : nullptr;
 	const FElysiumItemDef* Record = Item != nullptr ? Item->Data() : nullptr;

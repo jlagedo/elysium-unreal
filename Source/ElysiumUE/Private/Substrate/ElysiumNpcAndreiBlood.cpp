@@ -23,14 +23,14 @@
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -422,5 +422,5 @@ void FElysiumNpcAndreiBlood::DestroyAndreiBlood()
 	// `1035ce51 JMP 0x100123af` — `~CAI_BaseNPCTroika`. This runtime's teardown is the world's reap.
 }
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---
 

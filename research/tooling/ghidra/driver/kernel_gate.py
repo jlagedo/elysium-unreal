@@ -25,7 +25,7 @@ tree and the branch diff:
 4. **hot** — the diff does not touch the frozen hot headers and generated census files.
 5. **residue** — a fresh `kernel_shape --unported` carries none of the family's `rule` addresses,
    and no row that the committed `docs/vtmb/npc-kernel/unported.tsv` lacks (nothing rose).
-6. **tests** — `Tests/ElysiumNpcKernel<Family>Tests*.cpp` exist, register at least as many
+6. **tests** — `Tests/<family_stem>Tests*.cpp` (`ElysiumNpcKernel<Family less 19>`) exist, register at least as many
    automation tests as the family has `rule` rows, and either every test name carries a retail
    address or the tests cite every `rule` address. A citation in another (non-census) test file
    counts and is listed: a rule tested beside its sibling family is still tested, so it also counts
@@ -103,6 +103,26 @@ HOT_FILES = tuple(str(SUBSTRATE / n).replace("\\", "/") for n in (
     "ElysiumNpcKernelShapeMap.cpp", "ElysiumNpcBaseSlots.cpp", "ElysiumNpcSlots.cpp",
 ))
 HOT_PREFIXES = ("research/tooling/gen_kernel_shape.py",)
+# A family `<F>19`'s files dropped the `19` in story 8 pass C (`pass-i/rename-table.md`): they are
+# `ElysiumNpcBase<F>`, `ElysiumNpc<F>` (+ `Species`, `_2`) and `ElysiumNpcKernel<F>Tests`, with the
+# lowest free numbered part where that stem already held an older concern's file.
+FILE_PARTS = {
+    ("ElysiumNpcBase", "Boss19"): "Boss2", ("ElysiumNpcBase", "Conditions19"): "Conditions2",
+    ("ElysiumNpcBase", "Damage19"): "Damage2", ("ElysiumNpcBase", "Lifecycle19"): "Lifecycle2",
+    ("ElysiumNpcBase", "Misc19"): "Misc2",
+    ("ElysiumNpc", "Conditions19"): "Conditions2", ("ElysiumNpc", "Damage19"): "Damage3",
+    ("ElysiumNpc", "Lifecycle19"): "Lifecycle2", ("ElysiumNpc", "Misc19"): "Misc2",
+    ("ElysiumNpc", "Werewolf19"): "Werewolf2",
+    ("ElysiumNpcKernel", "Conditions19"): "Conditions2", ("ElysiumNpcKernel", "Damage19"): "Damage2",
+    ("ElysiumNpcKernel", "Lifecycle19"): "Lifecycle2", ("ElysiumNpcKernel", "Misc19"): "Misc2",
+}
+
+
+def family_stem(prefix: str, family: str) -> str:
+    """The file stem of `family` (`Think19`) under `prefix` (ElysiumNpcBase / ElysiumNpc / ElysiumNpcKernel)."""
+    return prefix + FILE_PARTS.get((prefix, family), family.removesuffix("19"))
+
+
 # Lanes that preset `--allow-hot`: lane -> the allowed hot files ([] = every one).
 LANES = {"wave2-integrator": []}
 
@@ -766,9 +786,9 @@ def check_residue(fam: Family, residue: Residue | None) -> Check:
 
 
 def check_tests(fam: Family, src: SourceIndex) -> Check:
-    c = Check("tests", f"Tests/ElysiumNpcKernel{fam.name}Tests*.cpp: registrations >= rule rows; "
+    prefix = family_stem("ElysiumNpcKernel", fam.name) + "Tests"
+    c = Check("tests", f"Tests/{prefix}*.cpp: registrations >= rule rows; "
                        "names carry 0x addresses or the tests cite every rule address")
-    prefix = f"ElysiumNpcKernel{fam.name}Tests"
     files = [rel for rel in src.files
              if under(rel, TESTS) and rel.rsplit("/", 1)[-1].startswith(prefix) and rel.endswith(".cpp")]
     if not files:

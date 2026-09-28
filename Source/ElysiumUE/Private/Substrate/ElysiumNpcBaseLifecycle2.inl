@@ -1,6 +1,6 @@
 // `CAI_BaseNPC`'s declarations of the `Lifecycle19` family (story 5 step 5),
 // moved from `ElysiumNpcLifecycle19*.inl`. Included inside `class FElysiumNpcBase`
-// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseLifecycle19.cpp`.
+// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseLifecycle2.cpp`.
 
 static constexpr double MapFirstSecond = ElysiumNpcTunables::OneDouble;
 

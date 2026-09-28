@@ -75,7 +75,7 @@ public:
 	 *  as a seam answering null; this is the word its writer needs, so that seam now resolves it. */
 	FElysiumEntityHandle CopPursuitHandle;
 
-	// From `ElysiumNpcState19.inl`.
+	// From `ElysiumNpcState.inl`.
 	/** `CNPC_VCop::m_bWasEverInCombat` (`+0x6670`). */
 	bool bWasEverInCombat = false;
 	void CopOnStateChange(int32 OldRetail, int32 NewRetail);

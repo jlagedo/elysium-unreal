@@ -1,6 +1,6 @@
 #pragma once
 
-// Story 5 step 4: the file-scope locals of `ElysiumNpcState19.cpp` that its staying bodies share with
+// Story 5 step 4: the file-scope locals of `ElysiumNpcState.cpp` that its staying bodies share with
 // bodies moved to their species classes. Qualified at every use (`NpcKernelState19Shared::`) because a unity
 // build concatenates translation units and an anonymous namespace is not file-local there.
 

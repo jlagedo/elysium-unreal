@@ -18,7 +18,7 @@
 #include "Substrate/ElysiumNpcCombat10Shared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"

@@ -46,7 +46,7 @@ public:
 	 *  `m_flNextThink` at `curtime + 3.0 (+0.01)` and clear `m_bCamperFlag` (+0x66a0). */
 	void ThrowGrenade(const FString& GrenadeTargetName, float Force);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`, Bach's
 
 	// From `ElysiumNpcMisc.inl`.
@@ -82,7 +82,7 @@ public:
 	bool bBachShieldActive = false;          // +0x66a5 `m_bShieldActive`
 	bool bBachShieldFlagB = false;           // +0x66a6, cleared on BOTH arms; retail name unrecovered
 
-	// From `ElysiumNpcState19.inl`.
+	// From `ElysiumNpcState.inl`.
 	/** `CNPC_VBach::m_bCanFightYet` (`+0x66a8`). Default 0, so Bach snaps ALERT/COMBAT back. */
 	bool bCanFightYet = false;
 	/** `CNPC_VBach::OnStateChange` (`0x103639b0`) and `CNPC_VCop::OnStateChange` (`0x10371c20`).
@@ -95,7 +95,7 @@ public:
 	// --- Story 8 lane L11: the camper pass `0x10365a90` and its words ------------------------
 	/** `0x10365a90` (retail name unrecovered), the tail `CNPC_VBach::GatherConditions`
 	 *  (`0x10365a70`) jumps to after the Troika gather: Bach's camper detector and grenade
-	 *  dispenser. Body in `ElysiumNpcMisc19Species.cpp`. */
+	 *  dispenser. Body in `ElysiumNpcMisc2Species.cpp`. */
 	void BachGatherCamperConditions();
 	FVector BachLastOccludeOriginUnits = FVector::ZeroVector;  // +0x6664 m_vecLastOccludeOrigin, SOURCE units
 	double BachOccludeEnterTime = 0.0;       // +0x6670 m_flOccludeEnterTime, an absolute stamp

@@ -19,7 +19,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	bool bTaxiFirstThink = false;
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---

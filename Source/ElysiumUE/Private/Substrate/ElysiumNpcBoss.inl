@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcBoss19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBoss.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Boss19's `rule` rows): 0x102b52a0 FUN_102b52a0, 0x102c51a0 DoPossession, 0x102c5310
 // DoFrenzy, 0x103830e0 FUN_103830e0, 0x10395c70 FUN_10395c70, 0x1039e970 FUN_1039e970, 0x10397410
@@ -14,7 +14,7 @@
 
 // --- Story 8, lane L12: the Troika-line helpers of Boss19 ----------------------------------------
 //
-// No slot holds these. Bodies in `ElysiumNpcBoss19.cpp`; walked prose in
+// No slot holds these. Bodies in `ElysiumNpcBoss.cpp`; walked prose in
 // `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
 // The two bools of `ResetAiState` are retail's two `char`
 // arguments, kept as the codebase's other retail helpers keep theirs (`SetSchedule`, `SetMoveHint`).

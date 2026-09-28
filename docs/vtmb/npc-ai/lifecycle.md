@@ -2783,7 +2783,7 @@ at the VSnd variant resolver `0x101f4600`; the death-force envelope composed in 
 ### `0x10265ad0` `CAI_BaseNPC::Event_Killed`, arm by arm (slot 144, 759 bytes)
 
 _Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Walked
-from the listing with `families-19-29/Spawn19-READING.md` beside it. Port: `ElysiumNpcBaseSpawn19.cpp`.
+from the listing with `families-19-29/Spawn19-READING.md` beside it. Port: `ElysiumNpcBaseSpawn.cpp`.
 It extends step 2 and step 4 of "The ordered chain" above.
 
 1. `0x10265adf`/`0x10265aee` -- `m_pSchedule` is non-null and equals `0x102cc1f0(0x3a)`. That call
@@ -2832,7 +2832,7 @@ scalar words have no slot on the port's `FElysiumDmg`.
 ### `0x102bf340` `CAI_BaseNPCTroika::Event_Killed` (slot 144, 261 bytes)
 
 _Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
-`ElysiumNpcSpawn19.cpp`.
+`ElysiumNpcSpawn.cpp`.
 
 1. `0x102bf34d`/`0x102bf354` -- `0x101c2af0(info)` answers `info+0x49`. A zero answer broadcasts the
    death act through `0x102ca2a0` on `DAT_109253f8`, with type 1 (criminal), source this, the slot-217
@@ -2855,7 +2855,7 @@ and trailing flag have no port field; the Python import behind `[0x109f36fc]` is
 ### The species `Event_Killed` bodies over 64 bytes (slot 144) — `0x1038e8c0`, `0x10395ba0`, `0x1039e900`
 
 _Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
-`ElysiumNpcSpawn19Species.cpp`. The Ming Xiao death entries are Boss19's bodies (§ "Story 8, family
+`ElysiumNpcSpawnSpecies.cpp`. The Ming Xiao death entries are Boss19's bodies (§ "Story 8, family
 Boss19" below), bound at the integration.
 
 #### `CNPC_VManBat::Event_Killed` `0x1038e8c0` (159 bytes)
@@ -2887,7 +2887,7 @@ notify its head yet.
 ### `0x103dfbb0` `CNPC_VZombie::CreateCorpse` (slot 301, 363 bytes)
 
 _Recovered 2026-09-27, 0019 story 8 pass I (lane L08, Spawn19), integrated as `14697e2b`._ Port:
-`ElysiumNpcSpawn19Species.cpp`.
+`ElysiumNpcSpawnSpecies.cpp`.
 
 1. `0x103dfbd7..0x103dfc86` -- COPY first. `m_vecDeathForceVector` (`+0x6680`) takes the force.
    The whole `0x13`-dword `CTakeDamageInfo` goes into `m_DeathDamageInfo` (`+0x668c..+0x66d6`)
@@ -2915,7 +2915,7 @@ _Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
 Each section is one `rule` row of `families-19-29/Boss19-READING.md` (and Damaged19's
 `0x103c43b0`), walked arm by arm off the decompiled C and the listing. Port:
 `ElysiumNpcMingXiao.cpp`, `ElysiumNpcMingXiaoTentacle.cpp`, `ElysiumNpcHengeyokai.cpp`,
-`ElysiumNpcBoss19Species.cpp` (SabbatLeader), `ElysiumNpcDamaged19Species.cpp` (TzimisceRunner).
+`ElysiumNpcBossSpecies.cpp` (SabbatLeader), `ElysiumNpcDamagedSpecies.cpp` (TzimisceRunner).
 The family's three Troika discipline helpers are in `authored-control.md` § "Story 8, family
 Boss19, the discipline helpers".
 
@@ -3036,7 +3036,7 @@ _Recovered 2026-09-27, 0019 story 8 pass I: lane L08, integrated as `14697e2b`._
 
 Each section is one `rule` row of `families-19-29/Spawn19-READING.md`, walked arm by arm off the
 listing (`vtmb_asm`), every body over 64 bytes, arms in retail order. Port:
-`ElysiumNpcBaseSpawn19.cpp`, `ElysiumNpcSpawn19.cpp`, `ElysiumNpcSpawn19Species.cpp`. The family's
+`ElysiumNpcBaseSpawn.cpp`, `ElysiumNpcSpawn.cpp`, `ElysiumNpcSpawnSpecies.cpp`. The family's
 slot-144 death bodies and `CNPC_VZombie::CreateCorpse` are walked under § "The death chain, kill to
 corpse" above, because that section already owns `0x10265ad0`. `CNPC_VGhoulCroucher::ScriptHide`
 `0x1037c1c0` is Script19's row (`authored-control.md` § "Story 8, family Script19, the script

@@ -6,20 +6,20 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcStartTask19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcStartTask.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (StartTask19's `rule` rows): 0x102a1910 CAI_BaseNPCTroika::StartTask.
 //
 // Lane L01 (story 8 pass I) owns the dispatch prologue and the arms whose start address lies in
 // `[0x102a1943, 0x102a5046)`; lane L02 owns `StartTaskTroikaTail` (the arms from `0x102a5046`, in
-// `ElysiumNpcStartTask19_2.cpp`), whose `default:` is the base forward. Walked prose:
+// `ElysiumNpcStartTask_2.cpp`), whose `default:` is the base forward. Walked prose:
 // `docs/vtmb/npc-ai/schedule-kernel.md` § "StartTask `0x102a1910` — the dispatch".
 
 // --- The dispatch ----------------------------------------------------------------------------------
 
 /** The second half of `0x102a1910`'s one `switch`: every in-range task id whose arm starts at or past
  *  `0x102a5046`, and the base forward (`0x102a77e2`, `CAI_BaseNPC::StartTask 0x102827f0`) as its
- *  `default:`. DEFINED by lane L02 in `ElysiumNpcStartTask19_2.cpp`. `Task` is the
+ *  `default:`. DEFINED by lane L02 in `ElysiumNpcStartTask_2.cpp`. `Task` is the
  *  `const FElysiumScheduleStep*` slot 442 received. */
 int32 StartTaskTroikaTail(void* Task);
 
@@ -60,7 +60,7 @@ static constexpr float StartTask19DefaultTolerance = -1.f;
 static constexpr float StartTask19HullTolerance = -2.f;
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`): this half's goal literal (SOURCE units) handed to the ONE
- *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`), which carries every
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask.cpp`), which carries every
  *  arm of `0x102ecd20` and its route build `0x102f1dc0` (the task's complete through the navigator's
  *  slot 2, `OnNavFailed(0xc)` on a refusal). This converts the record and records the call for the
  *  tests; nothing else. An entity goal (types 1, 2, 7) leaves `+0x04` at the default triple. */

@@ -15,7 +15,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcPlayerController.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcWolfMorph.h"

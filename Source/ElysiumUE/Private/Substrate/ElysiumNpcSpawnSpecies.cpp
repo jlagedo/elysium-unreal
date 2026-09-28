@@ -31,7 +31,7 @@
 // CNPC_VPlayerController::Spawn, 0x103a6c80 CNPC_VSabbatLeader::Spawn, 0x103ad630 CNPC_VRat::Spawn,
 // 0x103ae630 CNPC_VSheriffMan::Spawn, 0x103dd620 CNPC_VYukie::Spawn, 0x10375c50
 // CNPC_VFrenzyShadow::Spawn. (`0x1037c1c0 CNPC_VGhoulCroucher::ScriptHide` is Script19's body,
-// `GhoulCroucherScriptHide` in `ElysiumNpcScript19Species.cpp`; the lane's duplicate was folded.)
+// `GhoulCroucherScriptHide` in `ElysiumNpcScriptSpecies.cpp`; the lane's duplicate was folded.)
 
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"

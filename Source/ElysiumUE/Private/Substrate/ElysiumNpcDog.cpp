@@ -18,8 +18,8 @@
 #include "Substrate/ElysiumNpcAnim10Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
@@ -244,7 +244,7 @@ const TCHAR* FElysiumNpcDog::SquadSlotName(int32 SlotEn)
 	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---
 
 void FElysiumNpcDog::DogCombatShortCircuit()
 {

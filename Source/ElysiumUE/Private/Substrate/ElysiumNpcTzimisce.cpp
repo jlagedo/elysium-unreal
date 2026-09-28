@@ -31,15 +31,15 @@
 #include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSoundsShared.h"
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -925,11 +925,11 @@ int32 FElysiumNpcTzimisce::SelectTzimisceHintNode(const FElysiumEntity* Anchor)
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
@@ -1455,7 +1455,7 @@ void FElysiumNpcTzimisce::FUN_103bf560()
 // `CNPC_VTzimisce`'s slots 488 and the two `CNPC_VCamera` empties.
 // -------------------------------------------------------------------------------------------------
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

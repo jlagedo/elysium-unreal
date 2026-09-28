@@ -2,7 +2,7 @@
 // declarations.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseConditions19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseConditions2.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Conditions19's `rule` rows): 0x10270b20 CAI_BaseNPC::GatherEnemyConditions, 0x1026ec30
 // CAI_BaseNPC::GatherConditions. Walked prose:

@@ -1,5 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
@@ -15,7 +15,7 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 
 // Story 29e, family **State19** — `SetState`, slot 460's base body, slot 461's Troika line and
-// dispatcher. Species SelectIdealState bodies live in `ElysiumNpcState19_2.cpp`.
+// dispatcher. Species SelectIdealState bodies live in `ElysiumNpcState_2.cpp`.
 
 namespace
 {

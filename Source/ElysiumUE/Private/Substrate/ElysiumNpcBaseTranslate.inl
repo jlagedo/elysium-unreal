@@ -1,6 +1,6 @@
 // `CAI_BaseNPC`'s declarations of the `Translate19` family (story 5 step 5),
 // moved from `ElysiumNpcTranslate19*.inl`. Included inside `class FElysiumNpcBase`
-// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseTranslate19.cpp`.
+// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseTranslate.cpp`.
 
 /** `CCineNPC::m_fMoveTo` (`cine +0x5f60`), the jump-table selector `0x102cc080`'s live arm switches
  *  on: the resolved director's own word (story 5 fold A3), 0 with no director. */

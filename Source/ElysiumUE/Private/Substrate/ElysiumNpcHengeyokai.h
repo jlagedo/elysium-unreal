@@ -132,7 +132,7 @@ public:
 	 *  generated stub owned by another story; answers the empty string, which is retail's null arm. */
 	FString HengeyokaiSlot9String() const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
 	/** `CNPC_VHengeyokai` species words; `m_iShunnedFindFish` (`+0x6678`) is `HengeyokaiShunnedFindFish`. */
 	bool bHengeyokaiJustFoundFish = false;       // +0x667c

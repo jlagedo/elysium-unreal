@@ -21,7 +21,7 @@
 #include "Substrate/ElysiumNpcBossesShared.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcDebug10Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -602,7 +602,7 @@ FString FElysiumNpcHengeyokai::HengeyokaiSlot9String() const
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
@@ -633,7 +633,7 @@ void FElysiumNpcHengeyokai::ClearLinkActivity()
 
 // --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 
 
 // --- Story 8, lane L12: Boss19 `0x103830e0` ----------------------------------------------------

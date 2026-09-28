@@ -1,5 +1,5 @@
 // `CAI_BaseNPC`'s bodies of the `Lifecycle19` family (story 5 step 5): the base layer's half of
-// what the Troika family files held. Declarations are in `ElysiumNpcBaseLifecycle19.inl` (included inside
+// what the Troika family files held. Declarations are in `ElysiumNpcBaseLifecycle2.inl` (included inside
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
@@ -12,7 +12,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -20,7 +20,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 5) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 5) ---
 
 const TCHAR* FElysiumNpcBase::NpcInitThinkFunction()
 {

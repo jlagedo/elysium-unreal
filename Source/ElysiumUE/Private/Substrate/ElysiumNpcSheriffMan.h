@@ -42,7 +42,7 @@ public:
 	 *  before relinking it — the sword goes invisible and non-solid rather than being removed. */
 	void KillSheriff();
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexSheriffMan = 0x15;   // `0x103ae6c0`
 	static constexpr float SheriffManJumpGravity = 2.f;      // `_DAT_104c6148`
 	/** SheriffMan flags written before the VampireBoss chain. `SheriffLastTeleportPosition` exists. */

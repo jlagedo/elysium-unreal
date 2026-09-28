@@ -25,7 +25,7 @@
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
@@ -1047,5 +1047,5 @@ FElysiumEntity* FElysiumNpcChangBros::SelectUnitedNode() const
 	return nullptr;
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

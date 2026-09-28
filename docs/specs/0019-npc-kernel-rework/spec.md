@@ -154,7 +154,7 @@ green, and `coverage.md` shows the change.
   here rather than from the lists: `0x102e1560` and `0x102efd50` (`mechanism`,
   `ElysiumNpcKernelMotor10.cpp`), the scrambler pair `0x1042fde0` / `0x1042fe90` (`dead`,
   `ElysiumNpcKernelSenses.cpp:97`, `ElysiumNpcKernelCombat10.cpp:82`,
-  `ElysiumNpcKernelLifecycle19.cpp:251`), and the `.sch` loader `0x1030f220` (`dead`, never
+  `ElysiumNpcLifecycle2.cpp:126`), and the `.sch` loader `0x1030f220` (`dead`, never
   ported). Of the dead-by-content inputs, the climb is whole rows (`CAI_Motor` slots 3–5 and
   `MoveClimb 0x102eebc0`, `dead`); the rest are ARMS inside bodies that stay `rule`. Two are named
   dead in their row's tag — `COND_KNOCKBACK`'s two arms in `PreSelectSchedule 0x102ae920` and the
@@ -274,7 +274,7 @@ green, and `coverage.md` shows the change.
   `FElysiumNpcWitness::Serialize` had 12 duplicated words and **no** port-only word, so it is gone
   entirely; the other three keep only what the walk cannot reach.
   *The post-restore hook did not have to be built — it had to be WIRED.* The whole of retail's slot
-  130 was already ported at `ElysiumNpcKernelLifecycle19.cpp:1059-1233` — `FElysiumNpc::OnRestore`
+  130 was already ported at `ElysiumNpcLifecycle2.cpp:551` — `FElysiumNpc::OnRestore`
   → `SpeciesOnRestore` → `TroikaOnRestore` → `BaseOnRestore`, walked arm by arm against
   `0x102998c0` and `0x1027bf50`, its unrecoverable inputs already marked `SEAM` — and **every
   caller was a test**. The port's persistence had never once run it. Pass C adds

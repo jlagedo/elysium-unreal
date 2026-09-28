@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcBaseThink19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseThink.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 //
 // Owns (Think19's `rule` rows): 0x1026ca80 CAI_BaseNPC::NPCThink. Also the AI console gate

@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseStartTask19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseStartTask.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (StartTask19's `rule` rows): 0x102827f0 CAI_BaseNPC::StartTask.
 //
@@ -225,7 +225,7 @@ bool StartTaskTestLateralCover(const FVector& ThreatEyeCm, const FVector& PointC
 	const FElysiumEntity* Ignore);
 
 /** `CAI_Enemies::GetLastKnownPosition` (`0x102dfed0`) is family Conditions19's
- *  `Conditions19LastKnownPosition` (`ElysiumNpcBaseConditions19.inl`): one body for every caller. */
+ *  `Conditions19LastKnownPosition` (`ElysiumNpcBaseConditions2.inl`): one body for every caller. */
 
 /** `CAI_BaseNPC::GetFlinchActivity` (`0x10265970`): the last hit group (`+0x1594`) picks
  *  `0x66/0x68/0x69/0x6a/0x6b/0x6c` for groups 1/3/4/5/6/7, else `0x49`; a model with no sequence for

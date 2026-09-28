@@ -61,12 +61,12 @@ public:
 	 *  "spawned after links have been..." arm. */
 	static FString CameraPrecacheModel(const FString& AuthoredModel);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr float CameraOccludedDelayNormal = 3.4f;
 	static constexpr float CameraOccludedDelayCover = 10.f;
 	static constexpr float CameraEnemyStoreInterval = 0.5f;
 	/** Slot 74 of `DAT_1070ba0c` (`g_pGameRules->FAllowNPCs()`, `0x103692f8`) is the base's
-	 *  `Spawn19GameRulesAllowNpcs` seam (`ElysiumNpcBaseSpawn19.inl`), the same call `0x10273272`
+	 *  `Spawn19GameRulesAllowNpcs` seam (`ElysiumNpcBaseSpawn.inl`), the same call `0x10273272`
 	 *  makes; the camera's own answer word was folded into it. Counted here. */
 	int32 CameraEngineQueries = 0;
 	int32 CameraSelfRemovals = 0;

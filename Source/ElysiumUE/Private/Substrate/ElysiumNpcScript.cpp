@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcScript19.inl` (included inside `class FElysiumNpc`) or generated
+// Declarations are in `ElysiumNpcScript.inl` (included inside `class FElysiumNpc`) or generated
 // in `ElysiumNpcSlots.inl` for a slot body. A `STORY8-FORWARD` block is the generated stub moved
 // here unchanged (its overlay row reads `hand:`); the porter replaces the body and drops the
 // marker.
@@ -13,7 +13,7 @@
 // (`TryMoveToHiddenPosition`), 0x102800c0 ScheduledMoveToGoalEntity, 0x102801e0 ScheduledFollowPath,
 // 0x102aa640 / 0x102aa860 (`IssuePatrolMoveStart` / `IssuePatrolMoveRun`). The director rows the
 // shape commit listed here live in `ElysiumScriptedSequence.cpp`, 0x1027d0a0 in
-// `ElysiumNpcBaseScript19.cpp`, 0x1038b1a0 in `ElysiumNpcScript19Species.cpp`. Walked prose:
+// `ElysiumNpcBaseScript.cpp`, 0x1038b1a0 in `ElysiumNpcScriptSpecies.cpp`. Walked prose:
 // `docs/vtmb/npc-ai/schedule-kernel.md` § "family Script19, the Troika's movement helpers".
 
 #include "Substrate/ElysiumNpc.h"
@@ -463,7 +463,7 @@ bool FElysiumNpc::Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFla
 
 // --- `0x10278220` ----------------------------------------------------------------------------------
 // `TestLateralCover` is `CAI_BaseNPC`'s, ported once as `FElysiumNpcBase::StartTaskTestLateralCover`
-// (`ElysiumNpcBaseStartTask19.cpp`), with this file's listing notes folded into it.
+// (`ElysiumNpcBaseStartTask.cpp`), with this file's listing notes folded into it.
 
 // --- `0x102800c0` / `0x102801e0` -------------------------------------------------------------------
 

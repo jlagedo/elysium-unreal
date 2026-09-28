@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcRunAi19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcRunAi.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (RunAi19's `rule` rows): 0x1028fd80 CAI_BaseNPCTroika::RunAlternateAI, 0x1028fcc0
 // CAI_BaseNPCTroika::RunAI.

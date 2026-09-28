@@ -23,7 +23,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	/** `CNPC_VPedestrian::m_bFirstThink` (`+0x6678`) and `CNPC_VTaxiDriver::m_bFirstThink` (`+0x6660`).
 	 *  Different offsets, two members. */
 	bool bPedestrianFirstThink = false;

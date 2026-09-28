@@ -1,5 +1,5 @@
 // Story 29e, family Maintain19 — the schedule-change door and the one retail interpreter loop.
-// Included inside `class FElysiumNpc`; definitions are in ElysiumNpcMaintain19.cpp.
+// Included inside `class FElysiumNpc`; definitions are in ElysiumNpcMaintain.cpp.
 
 /** `ForceScheduleChange` (`0x102ae490`) and the translate/lookup entry `0x102ae750` feeding
  *  Troika `SetSchedule(CAI_Schedule*, bool)` (`0x102ae780`). */

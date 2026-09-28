@@ -336,7 +336,7 @@ static void AddSpeciesPendingInputs(FElysiumClassDesc& D, const TCHAR* RetailCla
 	else if (Is(TEXT("CNPC_VVampireBoss")))
 	{
 		// `CNPC_VVampireBoss::InputTransformModel` (datamap INPUT, slot 617 `0x103c75f0`), the protean
-		// swap's trigger -- ported in Spawn19 (`ElysiumNpcSpawn19Species.cpp`), virtual so the Sabbat
+		// swap's trigger -- ported in Spawn19 (`ElysiumNpcSpawnSpecies.cpp`), virtual so the Sabbat
 		// leader's descriptor dispatches to its own class.
 		D.Input(TEXT("TransformModel"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 			{ static_cast<FElysiumNpcVampireBoss&>(E).InputTransformModel(Args); });
@@ -533,7 +533,7 @@ struct FElysiumNpcRegistrar
 		// `default_camera` and `WillTalk`, the opener takes their dialogue body session, and the arm
 		// it runs instead of the camera is `StartGrappleAttack(this, npc, 5)`, whose state lives on
 		// the combat character. Its own `EnterGrappleState` override (`CPayphone::vfunc379`
-		// `0x101aade0`) is `FElysiumNpcPayphone::EnterGrappleState` (`ElysiumNpcMisc19Species.cpp`).
+		// `0x101aade0`) is `FElysiumNpcPayphone::EnterGrappleState` (`ElysiumNpcMisc2Species.cpp`).
 		//
 		// A classname registered here supersedes its `ElysiumStubClasses.cpp` row, whichever
 		// registers first (`RegisterStub` answers null once an implementation owns the name).

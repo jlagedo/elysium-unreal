@@ -116,7 +116,7 @@ public:
 	 *  choosing between the two schedule ids. Answers false. */
 	bool IsTzimisceHintUsable(int32 HintNode, const FElysiumEntity* Anchor) const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	/** `CNPC_VTzimisce` species words; `PickupTarget` (`+0x6670`), `PathMode` (`+0x668c`) and
 	 *  `TzimisceShunnedFindBody` (`+0x66b8`) are declared with the class's other words. */
 	bool bTzimisceFirstEnemy = false;            // +0x6689

@@ -20,7 +20,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcBossesShared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -817,7 +817,7 @@ void FElysiumNpcManBat::ManBatStartScreechCone(FElysiumEntity* ConeTarget)
 	// `1038ea60`: `UTIL_ScreenShake(slot 220 GetOrigin(), 2.5, 0.2, 3.0, 0.0, 0, 0)` around MY OWN
 	// origin — `vt+0x370` is slot 220 on `this`, not on the target.
 	// The one `UTIL_ScreenShake` (`0x101cdba0`) recorder, `RecordAnimEventShake`
-	// (`ElysiumNpcMisc19.inl`); `(…, 0, 0)` is no air shake.
+	// (`ElysiumNpcMisc2.inl`); `(…, 0, 0)` is no air shake.
 	RecordAnimEventShake(Origin / ElysiumMove::U, GManBatShakeAmplitude, GManBatShakeFrequency,
 		GManBatShakeDuration, GManBatShakeRadius, false);
 

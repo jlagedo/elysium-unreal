@@ -16,7 +16,7 @@
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcSenses10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
@@ -204,5 +204,5 @@ void FElysiumNpcHunter::HunterHatePlayer()
 	++PlayerHateRelationshipSets;
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

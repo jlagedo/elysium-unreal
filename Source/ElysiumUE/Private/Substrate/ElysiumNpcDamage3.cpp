@@ -1,6 +1,6 @@
 // Story 0019/8 (29e under the strict verdict), family **Damage19** -- `CAI_BaseNPCTroika`'s bodies.
 //
-// Declarations are in `ElysiumNpcDamage19.inl` (included inside `class FElysiumNpc`) or generated
+// Declarations are in `ElysiumNpcDamage3.inl` (included inside `class FElysiumNpc`) or generated
 // in `ElysiumNpcSlots.inl` for a slot body. Every arm carries the address of the retail instruction
 // it came from (`vampire.dll`, read off `vtmb_asm`); the walked prose is
 // `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Damage19".

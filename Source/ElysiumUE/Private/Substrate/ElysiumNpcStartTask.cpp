@@ -5,10 +5,10 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcStartTask19.inl` (included inside `class FElysiumNpc`) or
+// Declarations are in `ElysiumNpcStartTask.inl` (included inside `class FElysiumNpc`) or
 // generated in `ElysiumNpcSlots.inl` for a slot body.
 //
-// `0x102a1910` is shared with `ElysiumNpcStartTask19_2.cpp`: the cut follows the packet's chunk
+// `0x102a1910` is shared with `ElysiumNpcStartTask_2.cpp`: the cut follows the packet's chunk
 // boundaries, one `switch`, retail's default arm once. This file carries the dispatch prologue and
 // the arms whose start address lies in `[0x102a1943, 0x102a5046)` (packet chunks 1-3, 68 arms,
 // lane L01); every other in-range id goes to `StartTaskTroikaTail` (lane L02), whose `default:` is

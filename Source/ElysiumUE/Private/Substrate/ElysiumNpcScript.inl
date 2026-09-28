@@ -6,14 +6,14 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcScript19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcScript.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Script19's `rule` rows) on this class: 0x1029f460 FUN_1029f460 (`BuildPatrolPath`),
 // 0x10278220 FUN_10278220 (`TryMoveToHiddenPosition`), 0x102800c0 ScheduledMoveToGoalEntity,
 // 0x102801e0 ScheduledFollowPath, 0x102aa640 / 0x102aa860 (`IssuePatrolMove`, the StartTask and
 // RunTask patrol-point arms). The `CCineNPC` rows the shape header lists here (0x101a8c30,
 // 0x101a8640, 0x101a8460, 0x101a8890) are the director's own bodies and live in
-// `ElysiumScriptedSequence.cpp`; 0x1027d0a0 is a `CAI_BaseNPC` body (`ElysiumNpcBaseScript19.inl`);
+// `ElysiumScriptedSequence.cpp`; 0x1027d0a0 is a `CAI_BaseNPC` body (`ElysiumNpcBaseScript.inl`);
 // 0x1038b1a0 is `CNPC_VManBat`'s (`ElysiumNpcManBat.h`).
 
 // --- `CAI_PatrolPath`, the pooled patrol record ---------------------------------------------------
@@ -142,19 +142,19 @@ struct FScript19NavGoal
 	int32 Flags = 0;
 	FElysiumEntityHandle Target;
 };
-/** `CAI_Path +0x28` is `FElysiumNpcBase::NavPathToleranceCm` (`ElysiumNpcBaseStartTask19.inl`): the
+/** `CAI_Path +0x28` is `FElysiumNpcBase::NavPathToleranceCm` (`ElysiumNpcBaseStartTask.inl`): the
  *  navigator lives on `CAI_BaseNPC`, and `SetGoal 0x102ecd20` has one body there. */
 /** `0x102ecd20`'s tolerance sentinels, `_DAT_1049d980` and `_DAT_1049d97c`. */
 static constexpr float NavGoalToleranceHull = -2.0f;
 static constexpr float NavGoalToleranceKeep = -1.0f;
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`): the Script19 builders' goal record handed to the ONE
- *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`). This only converts the
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask.cpp`). This only converts the
  *  record (centimetres, the tolerance sentinels passed through) and names the caller for the body
  *  claim; every retail arm of `0x102ecd20` / `0x102f1dc0` is in that body. */
 bool Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFlags, const TCHAR* Reason);
 
 /** `0x10278220` (`TryMoveToHiddenPosition` in the port's earlier comments) is `CAI_BaseNPC::
- *  TestLateralCover`, `FElysiumNpcBase::StartTaskTestLateralCover` (`ElysiumNpcBaseStartTask19.inl`):
+ *  TestLateralCover`, `FElysiumNpcBase::StartTaskTestLateralCover` (`ElysiumNpcBaseStartTask.inl`):
  *  one body, on the class retail defines it on. */
 
 /** `0x102800c0` -- `SetSchedule(Schedule)`, `m_pGoalEnt := Goal`, and a type-4 goal at the goal's

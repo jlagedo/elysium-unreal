@@ -3,7 +3,7 @@
 // `[0x102a5046, 0x102a77f7]`).
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`, next to
-// `ElysiumNpcStartTask19.inl`; the definitions are in `ElysiumNpcStartTask19_2.cpp`. Every name
+// `ElysiumNpcStartTask.inl`; the definitions are in `ElysiumNpcStartTask_2.cpp`. Every name
 // carries the `TaskTail` prefix so it can never collide with the first part's helpers.
 //
 // A SEAM below answers "nothing" (or retail's admitting value) and names the retail call or word
@@ -42,7 +42,7 @@ uint32 TaskTailLastNavGoalFlags = 0;
 int32 TaskTailNavGoalCalls = 0;
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`): this half's goal literal (SOURCE units) handed to the ONE
- *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask19.cpp`). The goal is recorded
+ *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask.cpp`). The goal is recorded
  *  first and converted; the body carries every arm (the route build `0x102f1dc0`, its complete through
  *  the navigator's slot 2 and its `OnNavFailed(0xc)`). The navigator services this half calls are the
  *  base's too: `StartTaskMotorHoldYaw` (`0x102e0b40`), `StartTaskMotorSetIdealYaw(ToTarget)`

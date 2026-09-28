@@ -62,7 +62,7 @@ public:
 	 *  sector 4" and so does not block a jump retail would have allowed. */
 	int32 JumpPathSector(const FVector& PositionCm) const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	void ChangBrosNPCInit();            // `0x1036b050`
 
 	// From `ElysiumNpcMisc.inl`.

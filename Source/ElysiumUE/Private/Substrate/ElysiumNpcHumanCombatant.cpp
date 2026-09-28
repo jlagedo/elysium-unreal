@@ -13,10 +13,10 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
@@ -87,7 +87,7 @@ void FElysiumNpcHumanCombatant::HumanCombatantNPCInit()
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---
 
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`), the shared tail BOTH of `0x10371c20`'s
 // arms chain with `(old, new)` — read from the listing (`10371db3 CMP EBP,0x1` then `PUSH EBP`),
@@ -116,7 +116,7 @@ void FElysiumNpcHumanCombatant::CopHumanCombatantOnStateChange(int32 NewRetail)
 	}
 }
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 
 int32 FElysiumNpcHumanCombatant::HumanCombatPatrolSelectIdealState()
 {

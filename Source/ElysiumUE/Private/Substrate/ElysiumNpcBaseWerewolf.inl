@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseWerewolf19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseWerewolf.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Werewolf19's `rule` rows): 0x10271d10 CAI_BaseNPC::CheckTarget.
 

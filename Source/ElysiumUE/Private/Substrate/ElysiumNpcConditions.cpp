@@ -1180,5 +1180,5 @@ bool ElysiumNpcCond::HasDetectedAttack(const FElysiumNpc& Npc, double Now)
 //
 // Story 29e, family State19 replaced this file's two-layer summary with slot 461's retail bodies.
 // `FElysiumNpcBase::BaseSelectIdealState` (`0x1026f660`), `FElysiumNpc::TroikaSelectIdealState`
-// (`0x102ad660`) and the twelve species arms live in `Substrate/ElysiumNpcState19.cpp` and
-// `ElysiumNpcState19_2.cpp`.
+// (`0x102ad660`) and the twelve species arms live in `Substrate/ElysiumNpcState.cpp` and
+// `ElysiumNpcState_2.cpp`.

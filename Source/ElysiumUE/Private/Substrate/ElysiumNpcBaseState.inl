@@ -1,6 +1,6 @@
 // `CAI_BaseNPC`'s declarations of the `State19` family (story 5 step 5),
 // moved from `ElysiumNpcState19*.inl`. Included inside `class FElysiumNpcBase`
-// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseState19.cpp`.
+// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseState.cpp`.
 
 /** Slot 461's raw answer, kept beside the typed virtual because this runtime's
  *  `EElysiumNpcState` has no member for retail 8 / 0xb / 0xe. */
@@ -31,7 +31,7 @@ int32 SelectIdealStateScriptExitCalls = 0;
  *  record carries a non-zero byte at `+0x32`. `FElysiumDisciplines` has no "strip the effects that
  *  break on notice" accessor — the break flag itself is unrecovered — so the sweep is counted and
  *  strips nothing. Its only other retail caller is `SetEnemy` (`0x10279a50`), counted there as
- *  `SetEnemyDisciplineStripCalls` (`ElysiumNpcBaseMisc19.inl`). */
+ *  `SetEnemyDisciplineStripCalls` (`ElysiumNpcBaseMisc2.inl`). */
 int32 SelectIdealStateDisciplineStripCalls = 0;
 
 /** `m_NPCState` (`+0x5cc0`) as retail's raw id. Maps the typed mind when `SetState` has not
@@ -65,6 +65,6 @@ virtual int32 SelectIdealStateRetail() { return BaseSelectIdealState(); }
 /** Slots 460 / 461 as this runtime's typed state: the census names, wrapping the two `Retail`
  *  virtuals above. 0019/8's shape commit mapped the slots to the `Retail` virtuals (the ones the
  *  species override and `0x1026f4d0` dispatches), so the generated surface stopped declaring these;
- *  the bodies are unchanged (`ElysiumNpcBaseState19.cpp`). */
+ *  the bodies are unchanged (`ElysiumNpcBaseState.cpp`). */
 virtual EElysiumNpcState PreSelectIdealState();
 virtual EElysiumNpcState SelectIdealState();

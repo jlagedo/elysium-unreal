@@ -2,10 +2,10 @@
 // helper declarations.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcConditions19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcConditions2.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Conditions19's `rule` rows): 0x102b27f0 CAI_BaseNPCTroika::GatherConditions. The named
-// condition constants the family pushes by number are in `ElysiumNpcBaseConditions19.inl` (the base
+// condition constants the family pushes by number are in `ElysiumNpcBaseConditions2.inl` (the base
 // class), which this class inherits. Walked prose:
 // `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 

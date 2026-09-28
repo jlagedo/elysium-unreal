@@ -1,5 +1,5 @@
 // `CAI_BaseNPC`'s bodies of the `State19` family (story 5 step 5): the base layer's half of
-// what the Troika family files held. Declarations are in `ElysiumNpcBaseState19.inl` (included inside
+// what the Troika family files held. Declarations are in `ElysiumNpcBaseState.inl` (included inside
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
@@ -14,7 +14,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
@@ -36,7 +36,7 @@ namespace
 	}
 }
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 5) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 5) ---
 
 int32 FElysiumNpcBase::NpcStateRetail() const
 {

@@ -3,7 +3,7 @@
 // Created by the story-8 shape commit (`uv run elysium research kernel_story8_shape`, spec 0019
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2); ported by lane L11.
 //
-// Declarations are in `ElysiumNpcBaseMisc19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseMisc2.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 //
 // Owns (Misc19's `rule` rows): 0x10279dd0 CAI_BaseNPC::ChooseEnemy (its body lives in

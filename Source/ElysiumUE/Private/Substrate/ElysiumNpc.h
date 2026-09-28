@@ -260,7 +260,7 @@ public:
 
 	/** Slot 77 `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`, family Damaged19): the live-cine
 	 *  warning and cancel, `m_iForcedSchedule := 0x6b` unless DEAD, then `CBaseEntity::ScriptHide`
-	 *  and slot 77 on the active weapon. Body in `ElysiumNpcDamaged19.cpp`. */
+	 *  and slot 77 on the active weapon. Body in `ElysiumNpcDamaged.cpp`. */
 	virtual void ScriptHide() override;
 
 	/**
@@ -1010,24 +1010,24 @@ public:
 	#include "Substrate/ElysiumNpcSpeciesLifecycle10.inl"
 	#include "Substrate/ElysiumNpcSpeciesMisc10.inl"
 	#include "Substrate/ElysiumNpcSquad.inl"
-	#include "Substrate/ElysiumNpcState19.inl"
-	#include "Substrate/ElysiumNpcTranslate19.inl"
-	#include "Substrate/ElysiumNpcLifecycle19.inl"
-	#include "Substrate/ElysiumNpcMaintain19.inl"
-	#include "Substrate/ElysiumNpcConditions19.inl"
-	#include "Substrate/ElysiumNpcRunAi19.inl"
-	#include "Substrate/ElysiumNpcStartTask19.inl"
-	#include "Substrate/ElysiumNpcStartTask19_2.inl"
-	#include "Substrate/ElysiumNpcRunTask19.inl"
-	#include "Substrate/ElysiumNpcSelect19.inl"
-	#include "Substrate/ElysiumNpcThink19.inl"
-	#include "Substrate/ElysiumNpcSpawn19.inl"
-	#include "Substrate/ElysiumNpcDamage19.inl"
-	#include "Substrate/ElysiumNpcScript19.inl"
-	#include "Substrate/ElysiumNpcBoss19.inl"
-	#include "Substrate/ElysiumNpcWerewolf19.inl"
-	#include "Substrate/ElysiumNpcMisc19.inl"
-	#include "Substrate/ElysiumNpcDamaged19.inl"
+	#include "Substrate/ElysiumNpcState.inl"
+	#include "Substrate/ElysiumNpcTranslate.inl"
+	#include "Substrate/ElysiumNpcLifecycle2.inl"
+	#include "Substrate/ElysiumNpcMaintain.inl"
+	#include "Substrate/ElysiumNpcConditions2.inl"
+	#include "Substrate/ElysiumNpcRunAi.inl"
+	#include "Substrate/ElysiumNpcStartTask.inl"
+	#include "Substrate/ElysiumNpcStartTask_2.inl"
+	#include "Substrate/ElysiumNpcRunTask.inl"
+	#include "Substrate/ElysiumNpcSelect.inl"
+	#include "Substrate/ElysiumNpcThink.inl"
+	#include "Substrate/ElysiumNpcSpawn.inl"
+	#include "Substrate/ElysiumNpcDamage3.inl"
+	#include "Substrate/ElysiumNpcScript.inl"
+	#include "Substrate/ElysiumNpcBoss.inl"
+	#include "Substrate/ElysiumNpcWerewolf2.inl"
+	#include "Substrate/ElysiumNpcMisc2.inl"
+	#include "Substrate/ElysiumNpcDamaged.inl"
 	#include "Substrate/ElysiumNpcTroikaHelpers.inl"
 
 // Protected, not private: the species classes (`Substrate/ElysiumNpc<X>.h`) are the retail

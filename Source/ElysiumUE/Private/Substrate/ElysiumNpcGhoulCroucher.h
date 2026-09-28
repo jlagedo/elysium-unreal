@@ -75,7 +75,7 @@ public:
 	 *  decoded, the row lands here and both readers come right. */
 	static int32 UnawareTableEntry(const TCHAR* RetailTable, int32 Index);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	/** `CNPC_VGhoulCroucher::m_bSpawnDisturbed` (`+0x6664`). `bGhoulSpawnBurning` is Damage's. */
 	bool bGhoulSpawnDisturbed = false;
 	int32 GhoulBurningParticleCreates = 0;

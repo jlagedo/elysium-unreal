@@ -570,8 +570,8 @@ is the authored side). Source of truth: the packet
 `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/Script19-READING.md` and the
 listings (`vtmb_asm`). The family's movement helpers are in `schedule-kernel.md` § "Story 8,
 family Script19, the Troika's movement helpers". Port: `ElysiumScriptedSequence.cpp`,
-`ElysiumAiScriptedSequence.cpp`, `ElysiumAiScriptedSchedule.cpp`, `ElysiumNpcBaseScript19.cpp`,
-`ElysiumNpcScript19.cpp`, `ElysiumNpcScript19Species.cpp`; tests
+`ElysiumAiScriptedSequence.cpp`, `ElysiumAiScriptedSchedule.cpp`, `ElysiumNpcBaseScript.cpp`,
+`ElysiumNpcScript.cpp`, `ElysiumNpcScriptSpecies.cpp`; tests
 `Elysium.Substrate.NpcKernelScript19.*`.
 
 `0x101a7140 CCineNPC::UpdateOnRemove` (19 bytes) has no section: base `UpdateOnRemove 0x1027ca30`
@@ -744,8 +744,8 @@ No jump table: the "indirect jump" is the tail `JMP [vtbl+0x134]` (`0x102c1e48`)
 _Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
 
 The Troika helpers the possession and frenzy discipline effects call (§ "Disciplines that
-possess or frenzy an NPC; the `AI_NPCFlag` payload" above). Port: `ElysiumNpcBoss19.cpp`,
-declared in `ElysiumNpcBoss19.inl`.
+possess or frenzy an NPC; the `AI_NPCFlag` payload" above). Port: `ElysiumNpcBoss.cpp`,
+declared in `ElysiumNpcBoss.inl`.
 
 `0x102ae750` is `SetSchedule(id, force)`: translate (slot 440), resolve (slot 446, fallback 1), refuse
 in state 7, and — unless `force` — refuse when slot 158 `IsAlive` is false. The `+0x1b30`/`+0x1b34`

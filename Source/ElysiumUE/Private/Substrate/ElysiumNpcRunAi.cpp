@@ -1,6 +1,6 @@
 // Story 0019/8 (29e under the strict verdict), family **RunAi19** -- `CAI_BaseNPCTroika`'s bodies.
 //
-// Declarations are in `ElysiumNpcRunAi19.inl` (included inside `class FElysiumNpc`) or generated in
+// Declarations are in `ElysiumNpcRunAi.inl` (included inside `class FElysiumNpc`) or generated in
 // `ElysiumNpcSlots.inl` for a slot body. Walked prose:
 // `docs/vtmb/npc-ai/schedule-kernel.md` § "Story 8, family RunAi19".
 //

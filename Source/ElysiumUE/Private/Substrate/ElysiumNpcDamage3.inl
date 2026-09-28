@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcDamage19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcDamage3.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Damage19's `rule` rows): 0x1029fa50 CAI_BaseNPCTroika::FUN_1029fa50, 0x1029fcf0
 // CAI_BaseNPCTroika::PlayerDefenderBlockReaction, 0x102a01b0

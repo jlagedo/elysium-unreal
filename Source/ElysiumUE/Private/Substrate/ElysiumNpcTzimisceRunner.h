@@ -40,7 +40,7 @@ public:
 	// latch `CNPCMaker_Fleshpile::DeathNotice` (`0x1034c8e0`) sets on a runner it has counted.
 	bool bRunnerDeathNoticeProcessed = false;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr float RunnerAttackExtentX = 50.f;
 	static constexpr float RunnerAttackExtentY = 50.f;
 	static constexpr float RunnerAttackExtentZ = 82.f;

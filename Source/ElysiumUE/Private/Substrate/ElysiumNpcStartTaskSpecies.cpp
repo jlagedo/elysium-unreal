@@ -3995,7 +3995,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 
 /** `CVFeatList_t` (`0x10739d08`) fields, loaded by `0x101e6310` from `Rules.txt` with
  *  `KeyValues::GetFloat(key, default)`; the default is the loader's immediate. The same read
- *  `ElysiumNpcLifecycle19.cpp`'s file-local `Lifecycle19RulesFloat` makes for `+0x27c..+0x28c`. */
+ *  `ElysiumNpcLifecycle2.cpp`'s file-local `Lifecycle19RulesFloat` makes for `+0x27c..+0x28c`. */
 static float Species19RulesFloat(const FElysiumNpc& Npc, const TCHAR* Section, const TCHAR* Key,
 	float ImageDefault)
 {

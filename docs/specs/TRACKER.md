@@ -42,7 +42,7 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   Landed 2026-09-21. The overlap measured **62 words in three components**, not ~104 in seven — the
   other four answer retail `FIELD_EMBEDDED` rows and stay; `save_walk_overlap` holds it at 0.
   `FElysiumNpcWitness::Serialize` is gone entirely. **The hook did not have to be built:** retail's
-  slot 130 was already ported whole (`ElysiumNpcKernelLifecycle19.cpp:1059`) with only tests calling
+  slot 130 was already ported whole (`ElysiumNpcLifecycle2.cpp:551`) with only tests calling
   it, so pass C wired it — `FElysiumEntity::OnPostRestore`, dispatched by `ApplyEntityRecord` — and
   the schedule re-find by name and task CRC is live for the first time. The nine blocks are four,
   every dead version gate is deleted (schema 39, floor raised), and retail's `AIExtendedSaveHeader_t`

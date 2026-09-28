@@ -86,7 +86,7 @@ void FElysiumNpcAndreiBlood::GatherConditions()
 
 // =================================================================================================
 // 0x10365a70 CNPC_VBach::GatherConditions, 16 bytes (its tail 0x10365a90 is Misc19's row, landed by
-// lane L11 as `BachGatherCamperConditions` in `ElysiumNpcMisc19Species.cpp`)
+// lane L11 as `BachGatherCamperConditions` in `ElysiumNpcMisc2Species.cpp`)
 // =================================================================================================
 
 void FElysiumNpcBach::GatherConditions()

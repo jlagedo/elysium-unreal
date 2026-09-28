@@ -1,6 +1,6 @@
 // Story 0019/8 (29e under the strict verdict), family **Conditions19** -- `CAI_BaseNPC`'s bodies.
 //
-// Declarations are in `ElysiumNpcBaseConditions19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseConditions2.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Walked prose:
 // `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Conditions19".
 //

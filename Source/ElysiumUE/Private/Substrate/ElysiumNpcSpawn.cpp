@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcSpawn19.inl` (included inside `class FElysiumNpc`) or generated in
+// Declarations are in `ElysiumNpcSpawn.inl` (included inside `class FElysiumNpc`) or generated in
 // `ElysiumNpcSlots.inl` for a slot body.
 //
 // Owns (Spawn19's `rule` rows): 0x102bf340 CAI_BaseNPCTroika::Event_Killed, 0x10298d30

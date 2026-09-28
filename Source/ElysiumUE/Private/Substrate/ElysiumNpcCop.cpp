@@ -25,12 +25,12 @@
 #include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcDebug10_2Shared.h"
 #include "Substrate/ElysiumNpcEntityChainShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcSenses10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -458,7 +458,7 @@ void FElysiumNpcCop::CopSlot597Prologue(FElysiumEntity* Other)
 	InputSetRelationship(Args);
 }
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---
 
 void FElysiumNpcCop::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 {
@@ -537,7 +537,7 @@ void FElysiumNpcCop::CopOnStateChange(int32 OldRetail, int32 NewRetail)
 	}
 }
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

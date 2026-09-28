@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcBaseStartTask19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseStartTask.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 //
 // Owns (StartTask19's `rule` rows): 0x102827f0 CAI_BaseNPC::StartTask.

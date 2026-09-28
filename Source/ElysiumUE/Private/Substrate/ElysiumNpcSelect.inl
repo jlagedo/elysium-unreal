@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcSelect19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcSelect.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Select19's `rule` rows): 0x102ae920 CAI_BaseNPCTroika::PreSelectSchedule, 0x102af660
 // CAI_BaseNPCTroika::SelectSchedule.

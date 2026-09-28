@@ -18,12 +18,12 @@
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcSensesBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -287,7 +287,7 @@ const TCHAR* FElysiumNpcPedestrian::SquadSlotName(int32 SlotEn)
 
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
@@ -332,5 +332,5 @@ void FElysiumNpcPedestrian::PedestrianCreateCorpse()
 	PedestrianCorpseSolid = 0;
 }
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 

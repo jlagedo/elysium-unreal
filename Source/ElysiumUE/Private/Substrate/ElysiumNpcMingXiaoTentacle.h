@@ -53,7 +53,7 @@ public:
 	void NotifyOwnerOfMyMove();
 
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	/** `DAT_1093bd34` — Ming Xiao tentacle cached handle, invalidated on restore. */
 	static FElysiumEntityHandle& MingXiaoTentacleCache();
 

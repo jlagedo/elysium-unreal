@@ -1,5 +1,5 @@
 // `CAI_BaseNPC`'s bodies of the `Maintain19` family (story 5 step 5): the base layer's half of
-// what the Troika family files held. Declarations are in `ElysiumNpcBaseMaintain19.inl` (included inside
+// what the Troika family files held. Declarations are in `ElysiumNpcBaseMaintain.inl` (included inside
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
@@ -10,7 +10,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLog.h"
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 5) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 5) ---
 
 void FElysiumNpcBase::TaskMovementComplete()
 {

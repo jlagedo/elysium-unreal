@@ -19,17 +19,19 @@ a. A **forwarding override** per `no-override` rule row, declared on the port cl
    class that owns the body (the most-base port class up the port chain whose retail class fills
    the slot with the same address, which is the class `override_rows` credits), spelled as
    `override_rows` expects -- the slot's bare port name and its lowered signature -- in a marked
-   section of the class header, and defined in `ElysiumNpc<Family>19Species.cpp` as a call to the
+   section of the class header, and defined in `ElysiumNpc<Family>Species.cpp` as a call to the
    explicit port base (the species classes define no `Super`). Behaviour is unchanged: the
    override calls exactly what the inherited dispatch reached.
 b. For every `stub` rule row on `FElysiumNpcBase` / `FElysiumNpc` (the spine slots) the overlay
    target becomes `hand:<Owner>::<slot virtual>` and the definition moves to the family's spine
-   file (`ElysiumNpcBase<Family>19.cpp` / `ElysiumNpc<Family>19.cpp`) with a body that tallies
+   file (`ElysiumNpcBase<Family>.cpp` / `ElysiumNpc<Family>.cpp`) with a body that tallies
    `elysium.stubs` exactly as the generated stub did (same surface, address, story). Run
    `gen_kernel_shape` afterwards so the generated files drop those definitions.
 c. Per family, the empty files a porter needs: the two spine `.cpp`/`.inl` pairs (the `.inl`s are
    included inside the class bodies of `ElysiumNpcBase.h` / `ElysiumNpc.h`), the species part file,
    the family test file (and a second part of each for StartTask19's Troika body).
+   File stems are `kernel_gate.family_stem`: the family name less its `19`, numbered where the
+   stem already held an older concern's file (`ElysiumNpcDamage3.cpp`).
 d. The pin `docs/vtmb/npc-kernel/story8-forwarding.tsv`: one row per `STORY8-FORWARD` body, read
    back from the markers; it must only fall to 0 as porters replace bodies.
 
@@ -60,6 +62,7 @@ sys.path.insert(0, str(_HERE.parents[1]))
 import gen_kernel_shape as g  # noqa: E402
 import kernel_ledger as kl  # noqa: E402
 import kernel_shape as ks  # noqa: E402
+from kernel_gate import family_stem  # noqa: E402
 
 from elysium_pipeline.paths import repo_root  # noqa: E402
 
@@ -509,8 +512,8 @@ def plan(repo: Path) -> tuple[dict[Path, str], list[str], list[Forward], list[Sp
         troika_rows = [a for a in rows if a not in base_rows and a not in species_rows]
         split = SPLIT.get(family)
 
-        for owner, stem, owned in (("FElysiumNpcBase", f"ElysiumNpcBase{family}", base_rows),
-                                   ("FElysiumNpc", f"ElysiumNpc{family}", troika_rows)):
+        for owner, stem, owned in (("FElysiumNpcBase", family_stem("ElysiumNpcBase", family), base_rows),
+                                   ("FElysiumNpc", family_stem("ElysiumNpc", family), troika_rows)):
             header = "Substrate/ElysiumNpcBase.h" if owner == "FElysiumNpcBase" else "Substrate/ElysiumNpc.h"
             retail = BASE_RETAIL[owner]
             inl = SUBSTRATE / f"{stem}.inl"
@@ -560,7 +563,7 @@ def plan(repo: Path) -> tuple[dict[Path, str], list[str], list[Forward], list[Sp
 
         # Species part file.
         mine = [f for f in forwards if f.family == family]
-        species = SUBSTRATE / f"ElysiumNpc{family}Species.cpp"
+        species = SUBSTRATE / f"{family_stem('ElysiumNpc', family)}Species.cpp"
         head = file_header(family, "the species classes' bodies.", owned_list(species_rows, labels),
                            labels,
                            ["A `" + MARK + "` block is a forwarding override declared on its class "
@@ -582,7 +585,7 @@ def plan(repo: Path) -> tuple[dict[Path, str], list[str], list[Forward], list[Sp
         for suffix, what in (("", "the family's tests."), ("_2", "the family's tests, second part.")):
             if suffix and not split:
                 continue
-            test = TESTS / f"ElysiumNpcKernel{family}Tests{suffix}.cpp"
+            test = TESTS / f"{family_stem('ElysiumNpcKernel', family)}Tests{suffix}.cpp"
             if current(test) is None:
                 owns = owned_list(rows, labels) if not suffix else f"{split} (the arms past the cut)"
                 put(test, "\n".join(file_header(
@@ -619,11 +622,11 @@ def plan(repo: Path) -> tuple[dict[Path, str], list[str], list[Forward], list[Sp
         put(path, text)
 
     # The two class headers include the family `.inl`s next to the State19 ones.
-    for header, anchor, stem in (("ElysiumNpcBase.h", "ElysiumNpcBaseTranslate19.inl", "ElysiumNpcBase"),
-                                 ("ElysiumNpc.h", "ElysiumNpcMaintain19.inl", "ElysiumNpc")):
+    for header, anchor, stem in (("ElysiumNpcBase.h", "ElysiumNpcBaseTranslate.inl", "ElysiumNpcBase"),
+                                 ("ElysiumNpc.h", "ElysiumNpcMaintain.inl", "ElysiumNpc")):
         path = SUBSTRATE / header
         text = current(path)
-        want = [f'\t#include "Substrate/{stem}{family}.inl"' for family in FAMILIES]
+        want = [f'\t#include "Substrate/{family_stem(stem, family)}.inl"' for family in FAMILIES]
         missing = [w for w in want if w not in text]
         if missing:
             line = f'\t#include "Substrate/{anchor}"\n'
@@ -657,6 +660,17 @@ TEST_PRELUDE = [
 ]
 
 
+def file_family(name: str) -> str:
+    """The family whose spine, `_2` or species part file `name` is."""
+    stem = name.rsplit(".", 1)[0]
+    for family in FAMILIES:
+        for prefix in ("ElysiumNpcBase", "ElysiumNpc"):
+            own = family_stem(prefix, family)
+            if stem in (own, f"{own}_2", f"{own}Species"):
+                return family
+    raise SystemExit(f"kernel_story8_shape: {name} carries a {MARK} marker but is no family's file")
+
+
 def render_pin(repo: Path) -> str:
     """The pin, read back from the markers on disk (so `--check` diffs it against the tree)."""
     rows = []
@@ -664,7 +678,7 @@ def render_pin(repo: Path) -> str:
         for line in path.read_text(encoding="utf-8-sig").splitlines():
             m = MARK_RE.match(line)
             if m:
-                family = re.match(r"ElysiumNpc(?:Base)?(\w+?19)", path.name).group(1)
+                family = file_family(path.name)
                 rows.append((family, m.group(3), m.group(1), f"0x{m.group(2)}",
                              (SUBSTRATE / path.name).as_posix()))
     rows.sort(key=lambda r: (r[0], r[1], int(r[2]), r[3]))

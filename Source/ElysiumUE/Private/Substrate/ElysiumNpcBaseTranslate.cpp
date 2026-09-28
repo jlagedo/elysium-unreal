@@ -1,5 +1,5 @@
 // `CAI_BaseNPC`'s bodies of the `Translate19` family (story 5 step 5): the base layer's half of
-// what the Troika family files held. Declarations are in `ElysiumNpcBaseTranslate19.inl` (included inside
+// what the Troika family files held. Declarations are in `ElysiumNpcBaseTranslate.inl` (included inside
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
@@ -13,7 +13,7 @@
 #include "Substrate/ElysiumScriptedSequence.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 5) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 5) ---
 
 int32 FElysiumNpcBase::TranslateSchedule(int32 ScheduleNumber)
 {

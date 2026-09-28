@@ -289,7 +289,7 @@ int32 FElysiumNpc::SpeciesSelectSchedule()
 	// Slot 438 on the bare Troika line (`CAI_BaseNPCTroika`, `CNPCMaker*`, `CNPC_VBaseBoss`,
 	// `CNPC_VNewscaster` and every class that inherits the slot unchanged) is
 	// `CAI_BaseNPCTroika::SelectSchedule` `0x102af660`, ported as `TroikaSelectSchedule`
-	// (`ElysiumNpcSelect19.cpp`, story 8 Select19). Species bodies override this virtual.
+	// (`ElysiumNpcSelect.cpp`, story 8 Select19). Species bodies override this virtual.
 	return TroikaSelectSchedule();
 }
 

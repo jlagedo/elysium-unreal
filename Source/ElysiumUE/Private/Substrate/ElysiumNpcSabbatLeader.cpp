@@ -26,7 +26,7 @@
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
@@ -34,7 +34,7 @@
 #include "Substrate/ElysiumNpcSoundsShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -379,7 +379,7 @@ const TCHAR* FElysiumNpcSabbatLeader::SquadSlotName(int32 SlotEn)
 // `RandomInt(0, 6)` (`PUSH 0x6` at `103aa6c9`) over the seven step wavs `0x1064c480`, one
 // `EmitSound` at volume 1.0 on `CHAN_BODY` (`PUSH 0x4` at `103aa6dd`). Its callers are the class's
 // `HandleAnimEvent` (`0x103a7000`, anim events 0x802/0x803 at `0x103a7066`,
-// `ElysiumNpcMisc19Species.cpp`) and the schedule tasks `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` /
+// `ElysiumNpcMisc2Species.cpp`) and the schedule tasks `TASK_VSABBATLEADER_PLAY_FOOTSTEP_SOUND` /
 // `..._STOP_FOOTSTEP_SOUND`.
 void FElysiumNpcSabbatLeader::FootstepSound()
 {
@@ -625,7 +625,7 @@ float FElysiumNpcSabbatLeader::DistToHintCenterLine2D(const FHintWords& Hint, co
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcSabbatLeader::SabbatLeaderTaskFail(int32 Reason)
 {
@@ -1028,7 +1028,7 @@ bool FElysiumNpcSabbatLeader::PlayerDamagedEnoughThisRound() const
 	return GSabbatRoundDamageThreshold <= Risen;
 }
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

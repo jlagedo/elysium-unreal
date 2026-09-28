@@ -22,7 +22,7 @@
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -302,7 +302,7 @@ void FElysiumNpcMingXiaoTentacle::NotifyOwnerOfMyMove()
 	}
 }
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 FElysiumEntityHandle& FElysiumNpcMingXiaoTentacle::MingXiaoTentacleCache()
 {
@@ -456,7 +456,7 @@ void FElysiumNpcMingXiaoTentacle::MingXiaoTentacleDeathSound()
 	// (`0x1039f390`..`0x1039f3bf`, flags `PUSH 0x4` at `0x1039f399`): it STOPS the flop loop the
 	// tentacle's `0x1039f1a0` started (review of lane L12: the lane played it). `RandomInt(0, 0)` is
 	// drawn and can only answer 0. `StopEntitySounds` is the port's stop-by-entity verb, as
-	// `ElysiumNpcMisc19.cpp`'s `SND_STOP` arm uses it.
+	// `ElysiumNpcMisc2.cpp`'s `SND_STOP` arm uses it.
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
 	const int32 Pick = Stream.RandRange(0, 0);                               // 0x1039f3b0
 	(void)GBoss19TentacleDeathSounds[Pick];                                  // 0x1039f3b3

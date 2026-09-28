@@ -1,5 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"

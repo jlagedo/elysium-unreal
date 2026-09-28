@@ -1,6 +1,6 @@
 // Story 0019/8 (29e under the strict verdict), family **Damage19** -- `CAI_BaseNPC`'s bodies.
 //
-// Declarations are in `ElysiumNpcBaseDamage19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseDamage2.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. Every arm carries the address of the
 // retail instruction it came from (`vampire.dll`, image base `0x10000000`, read off `vtmb_asm`); the
 // walked prose is

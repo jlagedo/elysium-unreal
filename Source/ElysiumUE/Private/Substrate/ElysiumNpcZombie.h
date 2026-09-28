@@ -72,7 +72,7 @@ public:
 	 *  of the schedule block's six words with no port member of its own; answers false for every id. */
 	bool ZombieConditionBit(int32 ConditionId) const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 ZombieCrawlScheduleRetailId = 0x161;
 	/** `CNPC_VZombie`. */
 	bool bZombieNeedsCrawlOutOfGround = false;   // +0x667c

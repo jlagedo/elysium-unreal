@@ -7,9 +7,9 @@
 // arms the slot dispatchers run, and the seams that stand for retail inputs this substrate has no
 // source for.
 //
-// The definitions are in `Substrate/ElysiumNpcState19.cpp` (the Troika line and `SetState`)
-// and `ElysiumNpcState19_2.cpp` (the species line); the tests are
-// `Tests/ElysiumNpcKernelState19Tests.cpp`. The walked prose is `docs/vtmb/npc-ai/conditions-and-states.md`
+// The definitions are in `Substrate/ElysiumNpcState.cpp` (the Troika line and `SetState`)
+// and `ElysiumNpcState_2.cpp` (the species line); the tests are
+// `Tests/ElysiumNpcKernelStateTests.cpp`. The walked prose is `docs/vtmb/npc-ai/conditions-and-states.md`
 // § "Story 29e, family State19 — …".
 //
 // THREE STANDING FACTS OF THIS FAMILY, stated once here rather than at thirty call sites.
@@ -64,7 +64,7 @@ int32 TroikaSelectIdealState();
 /** Slot 461 in retail's own ordinals — the method species classes override (story 5 step 3); the
  *  typed `SelectIdealState()` records its answer and converts it. */
 int32 SelectIdealStateRetail() override;
-/** The Troika's typed slot-460 / 461 wrappers (`ElysiumNpcCombat10.cpp`, `ElysiumNpcState19.cpp`),
+/** The Troika's typed slot-460 / 461 wrappers (`ElysiumNpcCombat10.cpp`, `ElysiumNpcState.cpp`),
  *  declared here since 0019/8 mapped the slots to the `Retail` virtuals; bodies unchanged. */
 EElysiumNpcState PreSelectIdealState() override;
 EElysiumNpcState SelectIdealState() override;

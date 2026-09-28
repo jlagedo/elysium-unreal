@@ -6,14 +6,14 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcWerewolf19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcWerewolf2.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Werewolf19's `rule` rows): 0x102c44e0 SetFollowerBoss, 0x103cac20 FUN_103cac20, 0x102c4430
 // FUN_102c4430, 0x10397380 FUN_10397380.
 
 // --- Story 8, lane L12: the Troika-line helpers of Werewolf19 -----------------------------------
 //
-// No slot holds these. Bodies in `ElysiumNpcWerewolf19.cpp`; walked prose in
+// No slot holds these. Bodies in `ElysiumNpcWerewolf2.cpp`; walked prose in
 // `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 
 /** `0x102c44e0` `SetFollowerBoss(const char*)`: slot 559 `FindNamedEntity` resolves the name into

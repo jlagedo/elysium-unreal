@@ -15,7 +15,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -341,7 +341,7 @@ void FElysiumNpcGargoyle::TouchSpecies(FElysiumEntity* Other)
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
@@ -387,5 +387,5 @@ bool FElysiumNpcGargoyle::FUN_10379ef0(FElysiumEntity* Enemy)
 
 // --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

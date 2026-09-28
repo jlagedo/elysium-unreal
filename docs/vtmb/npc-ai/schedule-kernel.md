@@ -2049,10 +2049,10 @@ below are what the integration recovered across the lanes; the four after them a
 
 | part | rows | port | tests |
 |---|---|---|---|
-| `CAI_BaseNPC::StartTask` `0x102827f0` (lane L03) | 107 arm-table entries | `ElysiumNpcBaseStartTask19.cpp` | `NpcKernelStartTask19.Base.*` |
-| `CAI_BaseNPCTroika::StartTask` `0x102a1910`, first part (lane L01) | the prologue, arms `[0x102a1943, 0x102a5046)` | `ElysiumNpcStartTask19.cpp` | `NpcKernelStartTask19.*` |
-| `0x102a1910`, second part (lane L02) | arms `[0x102a5046, 0x102a77f7]`, the two shared tails, the base forward | `ElysiumNpcStartTask19_2.cpp` | `NpcKernelStartTask19.TroikaTail.*` |
-| the species overrides (lane L04) | the 25 species bodies, `CNPC_VCop` `0x10371b70`, FrenzyShadow `0x10375f50` | `ElysiumNpcStartTask19Species.cpp`, `ElysiumNpcFrenzyShadow.cpp` | `NpcKernelStartTask19.Species.*` |
+| `CAI_BaseNPC::StartTask` `0x102827f0` (lane L03) | 107 arm-table entries | `ElysiumNpcBaseStartTask.cpp` | `NpcKernelStartTask19.Base.*` |
+| `CAI_BaseNPCTroika::StartTask` `0x102a1910`, first part (lane L01) | the prologue, arms `[0x102a1943, 0x102a5046)` | `ElysiumNpcStartTask.cpp` | `NpcKernelStartTask19.*` |
+| `0x102a1910`, second part (lane L02) | arms `[0x102a5046, 0x102a77f7]`, the two shared tails, the base forward | `ElysiumNpcStartTask_2.cpp` | `NpcKernelStartTask19.TroikaTail.*` |
+| the species overrides (lane L04) | the 25 species bodies, `CNPC_VCop` `0x10371b70`, FrenzyShadow `0x10375f50` | `ElysiumNpcStartTaskSpecies.cpp`, `ElysiumNpcFrenzyShadow.cpp` | `NpcKernelStartTask19.Species.*` |
 
 ### The dispatch, checked against the image — `0x102827f0`, `0x102a1910`
 
@@ -2150,8 +2150,8 @@ the node network (`0x102f3c10`, `0x102f41b0`, `0x102fd240`, `0x102f46d0`, `0x102
 _Recovered 2026-09-28, 0019 story 8 pass I (lane L03)._
 
 Slot 442 on the base line; port body `FElysiumNpcBase::StartTaskSlot442`
-(`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask19.cpp`), helpers in
-`ElysiumNpcBaseStartTask19.inl`.
+(`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp`), helpers in
+`ElysiumNpcBaseStartTask.inl`.
 
 18330 bytes, 4992 instructions. Callers: `MaintainSchedule` (`0x102817c0`) through slot 442, and
 `CAI_BaseNPCTroika::StartTask` (`0x102a1910`) from its own default arm.
@@ -2324,8 +2324,8 @@ operand (the port interns names); `motor+0x28`'s retail name.
 _Recovered 2026-09-28, 0019 story 8 pass I (lane L01)._
 
 Slot 442 on the Troika line (`FElysiumNpc::StartTaskSlot442`,
-`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19.cpp`). The arms from `0x102a5046` on are
-the next section's (`StartTaskTroikaTail`, `ElysiumNpcStartTask19_2.cpp`). Every statement cites the
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp`). The arms from `0x102a5046` on are
+the next section's (`StartTaskTroikaTail`, `ElysiumNpcStartTask_2.cpp`). Every statement cites the
 listing; the per-arm long form is `walk-19-29-pack-13.md` in the research tree, corrected where
 listed at the end.
 
@@ -2678,8 +2678,8 @@ arguments' meaning beyond a debug box.
 _Recovered 2026-09-28, 0019 story 8 pass I (lane L02)._
 
 Port: `FElysiumNpc::StartTaskTroikaTail`
-(`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19_2.cpp`), reached from the first part's
-switch default. Helpers and seams: `ElysiumNpcStartTask19_2.inl`. Tests:
+(`Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp`), reached from the first part's
+switch default. Helpers and seams: `ElysiumNpcStartTask_2.inl`. Tests:
 `Elysium.Substrate.NpcKernelStartTask19.TroikaTail.*`.
 
 The dispatch (`id - 5 > 0x144` → base; byte table `0x102a7ab8` → dword table `0x102a77f8`) is the
@@ -2902,9 +2902,9 @@ This walks every species `StartTask` override the retail
 `vampire.dll` ships, plus `CNPC_VCop::StartTask` (family Damaged19). It also covers the
 verification of `CNPC_VFrenzyShadow::StartTask`.
 
-- **Port:** `Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask19Species.cpp`. FrenzyShadow is
+- **Port:** `Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp`. FrenzyShadow is
   in `ElysiumNpcFrenzyShadow.cpp`.
-- **Tests:** `Tests/ElysiumNpcKernelStartTask19Tests_4.cpp`, suite
+- **Tests:** `Tests/ElysiumNpcKernelStartTaskTests_4.cpp`, suite
   `Elysium.Substrate.NpcKernelStartTask19.Species.*`.
 - **Packet:** `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/StartTask19-READING.md`.
   VCop is in `Damaged19-READING.md`.
@@ -3600,8 +3600,8 @@ Walked from the listings (`vtmb_asm`) with the pass-R packet
 the task's status is what it writes (`TaskComplete` `0x10273e80` = `fTaskStatus 4`, `TaskFail`
 slot 448 = `m_bShouldMove 0`, `+0x5c50`, `COND_TASK_FAILED`). A body that returns without either
 leaves the task **running**. Only `TaskFail` sites stamp the `+0x1b44`/`+0x1b48` file/line trace;
-completions never do. Port: `ElysiumNpcBaseRunTask19.cpp`, `ElysiumNpcRunTask19.cpp`,
-`ElysiumNpcRunTask19Species.cpp`.
+completions never do. Port: `ElysiumNpcBaseRunTask.cpp`, `ElysiumNpcRunTask.cpp`,
+`ElysiumNpcRunTaskSpecies.cpp`.
 
 Shared vocabulary: `0x102e0b40` writes `motor+0x2c = -1.0` (the yaw clock); `0x102e1c10(yaw, speed)`
 stores the ideal yaw `motor+0x34` (flipped 180 under the `+0x28` latch; direct store when
@@ -4185,8 +4185,8 @@ The movement half of family Script19: the patrol-path builder and its moves, the
 probe, the two scheduled moves the `aiscripted_schedule` director issues, and the ManBat's flight
 override. Every one reaches `SetGoal` `0x102ecd20` (§ "`CAI_Navigator::SetGoal` `0x102ecd20` (one body), with `0x102f1dc0` and `0x102f28a0`" above). The
 director bodies of the same family are in `authored-control.md` § "Story 8, family Script19, the
-script directors". Port: `ElysiumNpcBaseScript19.cpp`, `ElysiumNpcScript19.cpp`,
-`ElysiumNpcScript19Species.cpp`; tests `Elysium.Substrate.NpcKernelScript19.*`.
+script directors". Port: `ElysiumNpcBaseScript.cpp`, `ElysiumNpcScript.cpp`,
+`ElysiumNpcScriptSpecies.cpp`; tests `Elysium.Substrate.NpcKernelScript19.*`.
 
 ### `0x1029f460` BuildPatrolPath (277 bytes)
 
@@ -4308,8 +4308,8 @@ refused route still fails the task inside `SetGoal` (`OnNavFailed(0xc)`, above).
 _Recovered 2026-09-28, 0019 story 8 pass I: lane L13a, integrated with the wave-2 rewire (lane L13)._
 
 Each section is one `rule` row of `families-19-29/RunAi19-READING.md`, walked arm by arm off the
-listing (`vtmb_asm`) with the decompiled C as a second reader. Port: `ElysiumNpcBaseRunAi19.cpp`
-(`CAI_BaseNPC`), `ElysiumNpcRunAi19.cpp` (`CAI_BaseNPCTroika`), `ElysiumNpcRunAi19Species.cpp` (the
+listing (`vtmb_asm`) with the decompiled C as a second reader. Port: `ElysiumNpcBaseRunAi.cpp`
+(`CAI_BaseNPC`), `ElysiumNpcRunAi.cpp` (`CAI_BaseNPCTroika`), `ElysiumNpcRunAiSpecies.cpp` (the
 species slot-432 overrides). Every scope-trace push/pop (`g_ScopeTraceStack`, the `"NULL ENTITY"` name
 pick) and every VProf scope / RDTSC bracket in these bodies is absent by convention: none has an
 observable.
@@ -4624,8 +4624,8 @@ _Recovered 2026-09-28, 0019 story 8 pass I: lane L13b (with Damaged19's `0x103cb
 `0x103a4700`), integrated with the wave-2 rewire (lane L13)._
 
 Each section is one `rule` row of `families-19-29/Think19-READING.md`, walked arm by arm off the
-listing. Port: `ElysiumNpcBaseThink19.cpp` (`CAI_BaseNPC`), `ElysiumNpcThink19.cpp`
-(`CAI_BaseNPCTroika`), `ElysiumNpcThink19Species.cpp`, `ElysiumNpcDamaged19Species.cpp` (Werewolf),
+listing. Port: `ElysiumNpcBaseThink.cpp` (`CAI_BaseNPC`), `ElysiumNpcThink.cpp`
+(`CAI_BaseNPCTroika`), `ElysiumNpcThinkSpecies.cpp`, `ElysiumNpcDamagedSpecies.cpp` (Werewolf),
 `ElysiumNpcFrenzyShadow.cpp` / `ElysiumNpcPlayerController.cpp` (landed earlier, reviewed here). The
 think cadence these bodies sit in is `lifecycle.md` § "The think cadence".
 

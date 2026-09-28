@@ -650,7 +650,7 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 
 		// Story 8 lane L11 ported `CNPC_VMingXiao 0x10392a70`, `CNPC_VHengeyokai 0x1037fb60` and
 		// `CNPC_VTzimisceHeadClaw 0x103c1540` whole as their classes' slot-259 overrides
-		// (`ElysiumNpcMisc19Species.cpp`, `Elysium.Substrate.NpcKernelMisc19.SpeciesHandleAnimEvent`).
+		// (`ElysiumNpcMisc2Species.cpp`, `Elysium.Substrate.NpcKernelMisc19.SpeciesHandleAnimEvent`).
 		// Their rows here were port guesses retail contradicts: the Hengeyokai sends 0x804/0x805 to the
 		// Troika body (`0x1037fb6e`) rather than claiming the run pair, and the head claw emits its own
 		// sounds, not the runner's `+0x9ac` pools. The rows are gone; only the runner's remains.

@@ -135,7 +135,7 @@ public:
 	 *  POINTER against zero, so an unnamed hint matches and a named one does not. */
 	bool ManBatValidateHintType(const FHintWords& Hint) const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexManBat = 0x14;       // `0x1038b070`
 	static constexpr double ManBatFlapDelaySeconds = 2.3;    // `_DAT_104bc690`
 	/** `CNPC_VManBat` species words. `ManBatFlapTimer` and `bHasPlayedFlyBySound` already exist. */
@@ -177,7 +177,7 @@ public:
 	 *  bodies' writes are observable and paired. */
 	bool bPlayerScreechConeBit = false;
 
-	// --- Story 0019/8, family Script19 (`ElysiumNpcScript19Species.cpp`) ---------------------------
+	// --- Story 0019/8, family Script19 (`ElysiumNpcScriptSpecies.cpp`) ---------------------------
 	/** `0x1038b1a0` (`ManBatOverrideMoveFly`, name coined), slot 525's body at navigator state 2: the
 	 *  `manbat_stun` bail into schedule `0x15b`, else the interval clamp, the `0x1038b370` velocity
 	 *  through `SetAbsVelocity`, and -- outside four activities -- the motor yaw, the velocity pitch and

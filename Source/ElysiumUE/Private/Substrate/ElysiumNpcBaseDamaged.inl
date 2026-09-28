@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseDamaged19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseDamaged.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Damaged19's `rule` rows): none.
 

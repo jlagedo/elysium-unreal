@@ -57,7 +57,7 @@ void OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcState NewState);
 
 // --- The alternate-AI door transaction ------------------------------------------------------------
 //
-// `RunAlternateAI` (`ElysiumNpcRunAi19.inl`, `0x1028fd80`) is the DISPATCHER
+// `RunAlternateAI` (`ElysiumNpcRunAi.inl`, `0x1028fd80`) is the DISPATCHER
 // (`0x1028fd80`). The two bodies below are its mode-1 arm and the producer that enters mode 1.
 
 /** `FUN_10298800` — enter alternate-AI mode 1: `m_bShouldMove = false`, stop the motor

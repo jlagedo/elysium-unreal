@@ -1,5 +1,5 @@
 #include "Substrate/ElysiumNpc.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -16,7 +16,7 @@
 #include "Substrate/ElysiumSchedule.h"
 
 // Story 29e, family **State19** — species SelectIdealState bodies. Unity-build names in this
-// file are prefixed `State19_2` so they cannot collide with `ElysiumNpcState19.cpp`.
+// file are prefixed `State19_2` so they cannot collide with `ElysiumNpcState.cpp`.
 
 namespace
 {

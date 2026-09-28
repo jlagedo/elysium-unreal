@@ -10,14 +10,14 @@
 // Damaged19's other eight `rule` rows are species bodies whose full tests live beside the family that
 // owns the species' sibling bodies; the gate's `tests` check credits a rule cited in another
 // (non-census) test file, so they are not duplicated here:
-//   0x103c43b0 CNPC_VTzimisceRunner::vfunc330     -> ElysiumNpcKernelBoss19Tests.cpp
-//   0x1037e240 CNPC_VGuard1::NPCInit              -> ElysiumNpcKernelLifecycle19Tests.cpp
-//   0x10387140 CNPC_VHumanCombatant::NPCInit      -> ElysiumNpcKernelLifecycle19Tests.cpp
-//   0x103dd800 CNPC_VYukie::NPCInit               -> ElysiumNpcKernelLifecycle19Tests.cpp
+//   0x103c43b0 CNPC_VTzimisceRunner::vfunc330     -> ElysiumNpcKernelBossTests.cpp
+//   0x1037e240 CNPC_VGuard1::NPCInit              -> ElysiumNpcKernelLifecycle2Tests.cpp
+//   0x10387140 CNPC_VHumanCombatant::NPCInit      -> ElysiumNpcKernelLifecycle2Tests.cpp
+//   0x103dd800 CNPC_VYukie::NPCInit               -> ElysiumNpcKernelLifecycle2Tests.cpp
 //   0x103c32c0 CNPC_VTzimisceRunner::HandleAnimEvent -> ElysiumNpcFootstepTests.cpp
 //   0x103a4700 CNPC_VPlayerController::NPCThink   -> ElysiumNpcKernelPlayerControllerTests.cpp
-//   0x103cb590 CNPC_VWerewolf::NPCThink           -> ElysiumNpcKernelThink19Tests.cpp
-//   0x10371b70 CNPC_VCop::StartTask               -> ElysiumNpcKernelStartTask19Tests_4.cpp
+//   0x103cb590 CNPC_VWerewolf::NPCThink           -> ElysiumNpcKernelThinkTests.cpp
+//   0x10371b70 CNPC_VCop::StartTask               -> ElysiumNpcKernelStartTaskTests_4.cpp
 //
 // Owns (Damaged19's `rule` rows): 0x102c1ce0 CAI_BaseNPCTroika::ScriptHide ‼.
 

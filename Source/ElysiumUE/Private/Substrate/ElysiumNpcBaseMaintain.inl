@@ -1,6 +1,6 @@
 // `CAI_BaseNPC`'s declarations of the `Maintain19` family (story 5 step 5),
 // moved from `ElysiumNpcMaintain19*.inl`. Included inside `class FElysiumNpcBase`
-// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseMaintain19.cpp`.
+// (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseMaintain.cpp`.
 
 /** `CAI_BaseNPC::MaintainSchedule` (`0x102817c0`) through the engine-neutral schedule kernel. */
 bool MaintainSchedule(double Now, bool bReduced);

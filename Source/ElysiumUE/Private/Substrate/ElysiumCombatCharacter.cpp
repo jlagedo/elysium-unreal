@@ -1213,7 +1213,7 @@ namespace
 	// corpse)`. Here: a runtime `prop_base` record at this body's origin, angles and model. NAMED GAPS:
 	// no class answers `prop_base`, so the record carries no body and no think (the pose copy and the
 	// render words are visual-only); the act-store registration is the same unported store the
-	// corpse query seam (`ElysiumNpcConditions19.inl`) stands for, and answers nothing.
+	// corpse query seam (`ElysiumNpcConditions2.inl`) stands for, and answers nothing.
 	FElysiumEntity* CombatSpawnStaticCorpse(FElysiumCombatCharacter& Self)
 	{
 		if (Self.World == nullptr)

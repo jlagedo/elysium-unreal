@@ -81,10 +81,10 @@ def tree(tmp_path: Path) -> dict:
     write(repo, "research/tooling/ghidra/driver/kernel_verdicts.tsv", VERDICTS)
     write(data, "families-19-29/Fake19.tsv", FAMILY)
     write(data, "skeletons-19-29/Fake19.json", json.dumps(SKELETON))
-    write(repo, f"{SUB}/ElysiumNpcFake19.cpp", PORT)
+    write(repo, f"{SUB}/ElysiumNpcFake.cpp", PORT)
     write(repo, f"{SUB}/ElysiumNpcKernelShape.cpp", CENSUS)
     write(repo, f"{SUB}/ElysiumNpcBase.h", "class FElysiumNpcBase {};\n")
-    write(repo, f"{TST}/ElysiumNpcKernelFake19Tests.cpp", TESTS)
+    write(repo, f"{TST}/ElysiumNpcKernelFakeTests.cpp", TESTS)
     return {"repo": repo, "families": data / "families-19-29", "skeletons": data / "skeletons-19-29",
             "verdicts": repo / "research/tooling/ghidra/driver/kernel_verdicts.tsv"}
 
@@ -114,7 +114,7 @@ def test_addresses_fail_when_only_the_census_cites(tree):
 
 
 def test_addresses_pass_when_a_body_cites(tree):
-    write(tree["repo"], f"{SUB}/ElysiumNpcFake19b.cpp", "// 10000020 Beta, bare digits\n")
+    write(tree["repo"], f"{SUB}/ElysiumNpcFake2.cpp", "// 10000020 Beta, bare digits\n")
     c = kg.check_addresses(family(tree), index(tree))
     assert c.status == kg.PASS, c.lines
 
@@ -153,7 +153,7 @@ def test_parse_threshold():
 
 
 def test_hot_pass_and_fail():
-    ok = kg.check_hot([f"{SUB}/ElysiumNpcFake19.cpp"], None)
+    ok = kg.check_hot([f"{SUB}/ElysiumNpcFake.cpp"], None)
     assert ok.status == kg.PASS
     bad = kg.check_hot([f"{SUB}/ElysiumNpcBase.h", "research/tooling/gen_kernel_shape.py"], None)
     assert bad.status == kg.FAIL and bad.data["touched"] == [
@@ -170,7 +170,7 @@ def test_hot_allow():
 
 
 def test_tests_pass_on_count_and_citation(tree):
-    write(tree["repo"], f"{TST}/ElysiumNpcKernelFake19Tests2.cpp", "// covers 0x10000020\n")
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelFakeTests2.cpp", "// covers 0x10000020\n")
     c = kg.check_tests(family(tree), index(tree))
     assert c.status == kg.PASS, c.lines
     assert c.data["tests"] == 2 and len(c.data["files"]) == 2
@@ -183,23 +183,23 @@ def test_tests_fail_on_uncited_rule_and_unnamed_test(tree):
 
 
 def test_tests_pass_when_every_name_carries_an_address(tree):
-    write(tree["repo"], f"{TST}/ElysiumNpcKernelFake19Tests.cpp",
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelFakeTests.cpp",
           TESTS.replace("NpcKernelFake19.Beta", "NpcKernelFake19.Beta 0x10000020"))
     assert kg.check_tests(family(tree), index(tree)).status == kg.PASS
 
 
 def test_tests_fail_on_count_and_missing_file(tree):
-    write(tree["repo"], f"{TST}/ElysiumNpcKernelFake19Tests.cpp", TESTS.split("IMPLEMENT_CUSTOM")[0]
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelFakeTests.cpp", TESTS.split("IMPLEMENT_CUSTOM")[0]
           + "// 0x10000020\n")
     c = kg.check_tests(family(tree), index(tree))
     assert c.status == kg.FAIL and c.data["tests"] == 1
-    os.remove(tree["repo"] / f"{TST}/ElysiumNpcKernelFake19Tests.cpp")
+    os.remove(tree["repo"] / f"{TST}/ElysiumNpcKernelFakeTests.cpp")
     assert kg.check_tests(family(tree), index(tree)).status == kg.FAIL
 
 
 def test_tests_count_a_rule_tested_beside_its_sibling_family(tree):
-    write(tree["repo"], f"{TST}/ElysiumNpcKernelFake19Tests.cpp", TESTS.split("IMPLEMENT_CUSTOM")[0])
-    write(tree["repo"], f"{TST}/ElysiumNpcKernelSibling19Tests.cpp", "// Beta 0x10000020, full test\n")
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelFakeTests.cpp", TESTS.split("IMPLEMENT_CUSTOM")[0])
+    write(tree["repo"], f"{TST}/ElysiumNpcKernelSiblingTests.cpp", "// Beta 0x10000020, full test\n")
     c = kg.check_tests(family(tree), index(tree))
     assert c.status == kg.PASS, c.lines
     assert c.data["tests"] == 1 and c.data["tested_beside"] == ["0x10000020"]
@@ -226,7 +226,7 @@ def git(repo: Path, *args: str) -> None:
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 def test_driver_end_to_end(tree, capsys):
     repo = tree["repo"]
-    write(repo, f"{SUB}/ElysiumNpcFake19.inl", "int32 Existing = 0; // m_iExisting +0x5bb0\n")
+    write(repo, f"{SUB}/ElysiumNpcFake.inl", "int32 Existing = 0; // m_iExisting +0x5bb0\n")
     write(repo, f"{SUB}/ElysiumNpcKernelShapeMap.cpp", "\tELYSIUM_NPC_WORD(0x5bb0, FElysiumNpcBase, Existing),\n")
     write(repo, "docs/vtmb/npc-kernel/unported.tsv",
           "# pin\nclass\tslot\taddress\tverdict\tkind\tport_class\n"
@@ -236,13 +236,13 @@ def test_driver_end_to_end(tree, capsys):
     git(repo, "commit", "-q", "-m", "base")
     git(repo, "checkout", "-q", "-b", "story")
     # The branch: a seam beside the existing accessor, a hot-header touch, Beta ported and cited.
-    write(repo, f"{SUB}/ElysiumNpcFake19.inl",
+    write(repo, f"{SUB}/ElysiumNpcFake.inl",
           "int32 Existing = 0; // m_iExisting +0x5bb0\n"
           "/** `m_iExisting` (`+0x5bb0`), read by `0x10000010`; its body is `0x10000099`. */\n"
           "int32 ExistingAgain() const;\n")
     write(repo, f"{SUB}/ElysiumNpcBase.h", "class FElysiumNpcBase { int32 X = 0; };\n")
-    write(repo, f"{SUB}/ElysiumNpcFake19b.cpp", "// 0x10000020 0x10000024 0x10000028\n// 0x10000099\n")
-    write(repo, f"{TST}/ElysiumNpcKernelFake19Tests.cpp",
+    write(repo, f"{SUB}/ElysiumNpcFake2.cpp", "// 0x10000020 0x10000024 0x10000028\n// 0x10000099\n")
+    write(repo, f"{TST}/ElysiumNpcKernelFakeTests.cpp",
           TESTS.replace("NpcKernelFake19.Beta", "NpcKernelFake19.Beta 0x10000020"))
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "story")
@@ -271,10 +271,10 @@ def test_driver_end_to_end(tree, capsys):
     hits = {s["command"]: s["hits"] for s in decl["searches"]}
     assert any("10000010" in cmd and hits[cmd] for cmd in hits)          # (a) the address elsewhere
     ours = next(s for s in decl["searches"] if "10000099" in s["command"])
-    assert ours["hits"] == [] and ours["this_diff"] == [f"{SUB}/ElysiumNpcFake19b.cpp:2"]
+    assert ours["hits"] == [] and ours["this_diff"] == [f"{SUB}/ElysiumNpcFake2.cpp:2"]
     assert any("5bb0" in cmd and hits[cmd] == [f"{SUB}/ElysiumNpcKernelShapeMap.cpp:1"]
                for cmd in hits)                                          # (b) the offset in the map
-    assert any("m_iExisting" in cmd and hits[cmd] == [f"{SUB}/ElysiumNpcFake19.inl:1"]
+    assert any("m_iExisting" in cmd and hits[cmd] == [f"{SUB}/ElysiumNpcFake.inl:1"]
                for cmd in hits)                                          # (c) the name in the .inl
     report = capsys.readouterr().out
     assert "TOUCHED Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h" in report
@@ -365,7 +365,7 @@ def test_all_families_in_one_run(tree, capsys, monkeypatch):
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "base")
     git(repo, "checkout", "-q", "-b", "story")
-    write(repo, f"{SUB}/ElysiumNpcFake19.inl", "/** `m_iNew` +0x10. */\nint32 NewSeam = 0;\n")
+    write(repo, f"{SUB}/ElysiumNpcFake.inl", "/** `m_iNew` +0x10. */\nint32 NewSeam = 0;\n")
     fresh = write(repo.parent, "fresh.tsv", "class\tslot\taddress\tverdict\tkind\tport_class\n")
     common = ["--repo", str(repo), "--families", str(tree["families"]), "--skeletons", str(tree["skeletons"]),
               "--verdicts", str(tree["verdicts"]), "--fresh-unported", str(fresh)]

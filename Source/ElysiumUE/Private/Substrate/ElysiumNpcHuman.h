@@ -60,7 +60,7 @@ public:
 	 *  chains it. */
 	int32 HumanSelectScheduleRangedCombat(int32 Arg);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	int32 HideActiveWeaponCalls = 0;         // slot 66 Hide on the ACTIVE WEAPON
 	void HideActiveWeaponIfAny();
 

@@ -49,7 +49,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexGargoyle = 0x0e;     // `0x103785f0`
 	/** `CNPC_VGargoyle` species words at `NPCInit`. */
 	FElysiumEntityHandle GargoylePillarTarget;   // +0x667c

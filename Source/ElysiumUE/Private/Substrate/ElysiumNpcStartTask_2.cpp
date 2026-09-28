@@ -9,7 +9,7 @@
 // body shared across the cut. Unity-build names here are prefixed `StartTask19_2`.
 //
 // Owns (StartTask19's `rule` rows): 0x102a1910 CAI_BaseNPCTroika::StartTask (the arms past the cut;
-// the first part is `ElysiumNpcStartTask19.cpp`).
+// the first part is `ElysiumNpcStartTask.cpp`).
 //
 // Lane L02: every arm whose start lies in `[0x102a5046, 0x102a77f7]` (packet chunks 4-6, 108 arms,
 // the two shared tails `0x102a66d7` / `0x102a77ea` and the base forward `0x102a77e2` included), read
@@ -308,7 +308,7 @@ namespace
 }
 
 // =================================================================================================
-// The helpers (`ElysiumNpcStartTask19_2.inl`).
+// The helpers (`ElysiumNpcStartTask_2.inl`).
 // =================================================================================================
 
 bool FElysiumNpc::TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoalFlags)

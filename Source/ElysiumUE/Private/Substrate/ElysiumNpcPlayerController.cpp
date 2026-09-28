@@ -4,7 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumLaw.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -80,7 +80,7 @@ void FElysiumNpcPlayerController::Spawn()
 	//   1. `CALL 0x10014876` -> `CNPC_VVampire::Spawn` `0x103c4ef0` (DIRECT). That body is
 	//      `AddClassRelationship(1, 1, 0)` then `CNPC_VHuman::Spawn` `0x10384690` (which runs the
 	//      Troika `Spawn` `0x10298d30`, `NPCInit` included) then `CapabilitiesAdd(0x40)`; both are
-	//      ported (Spawn19, `ElysiumNpcSpawn19Species.cpp`).
+	//      ported (Spawn19, `ElysiumNpcSpawnSpecies.cpp`).
 	FElysiumNpcVampire::Spawn();                                           // 0x103a4514 -> 0x10014876
 
 	//   2. `AddClassRelationship(1, 3, 0)` — the player's class, liked. It REPLACES the `(1, 1, 0)`

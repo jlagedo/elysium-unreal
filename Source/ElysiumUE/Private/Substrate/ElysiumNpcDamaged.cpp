@@ -5,7 +5,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcDamaged19.inl` (included inside `class FElysiumNpc`) or generated
+// Declarations are in `ElysiumNpcDamaged.inl` (included inside `class FElysiumNpc`) or generated
 // in `ElysiumNpcSlots.inl` for a slot body. A `STORY8-FORWARD` block is the generated stub moved
 // here unchanged (its overlay row reads `hand:`); the porter replaces the body and drops the
 // marker.
@@ -33,7 +33,7 @@ namespace
 // the third and the fourth, so the re-resolves' failure arms are dead: the `GetDebugName(NULL)` name
 // (`0x102c1d5c` / `0x102c1d73` -> `0x102c1d7e` / `0x102c1d80`) and `CancelScript(NULL)`
 // (`0x102c1de5` / `0x102c1dfc` -> `0x102c1e07` / `0x102c1e09`). The two warnings print through
-// `[0x109f364c]` (`0x102c1d94`), the tier0 import `ElysiumNpcDamage19.cpp` names DevWarning.
+// `[0x109f364c]` (`0x102c1d94`), the tier0 import `ElysiumNpcDamage3.cpp` names DevWarning.
 void FElysiumNpc::ScriptHide()
 {
 	FElysiumEntity* const CineEntity =

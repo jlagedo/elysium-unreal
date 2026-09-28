@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcBaseScript19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseScript.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body. A `STORY8-FORWARD` block is the generated
 // stub moved here unchanged (its overlay row reads `hand:`); the porter replaces the body and drops
 // the marker.
@@ -19,7 +19,7 @@
 namespace
 {
 	// `NPC_STATE_DEAD`, the ideal state `0x1027d0a0` writes (`0x1027d0bd`). Named apart from
-	// `ElysiumNpcScript19.cpp`'s twin constant: both files share one unity blob.
+	// `ElysiumNpcScript.cpp`'s twin constant: both files share one unity blob.
 	constexpr int32 GScript19BaseNpcStateDead = 7;
 }
 

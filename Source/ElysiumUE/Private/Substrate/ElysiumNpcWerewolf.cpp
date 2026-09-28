@@ -33,8 +33,8 @@
 #include "Substrate/ElysiumNpcDebug2Shared.h"
 #include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcLifecycleShared.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
@@ -46,7 +46,7 @@
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcState19_2Shared.h"
+#include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
@@ -1503,7 +1503,7 @@ bool FElysiumNpcWerewolf::ReportSearchTimer(bool bPassThrough)
 	return bPassThrough;
 }
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcWerewolf::WerewolfResetHuntState()
 {
@@ -1554,7 +1554,7 @@ void FElysiumNpcWerewolf::WerewolfResetHuntState()
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcMaintain19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 
@@ -2702,9 +2702,9 @@ void FElysiumNpcWerewolf::SnapToAnimationPoint()
 	RandomMoveHintNodeZone = INDEX_NONE;
 }
 
-// --- Moved from `ElysiumNpcState19_2.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
 

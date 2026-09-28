@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcSpawn19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcSpawn.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Spawn19's `rule` rows): 0x102bf340 CAI_BaseNPCTroika::Event_Killed, 0x10298d30
 // CAI_BaseNPCTroika::Spawn.

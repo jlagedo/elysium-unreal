@@ -72,7 +72,7 @@ public:
 	 *  `+0x5d9c`; the body lands under the elapsed-form name instead and the report says so. */
 	bool LastAttackTimeElapsed(float ThresholdSeconds) const;
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	void VampireBossNPCInit();          // `0x103c5840`
 
 	// From `ElysiumNpcMotor.inl`.

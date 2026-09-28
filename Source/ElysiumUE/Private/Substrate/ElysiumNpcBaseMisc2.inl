@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseMisc19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseMisc2.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Misc19's `rule` rows): 0x10279dd0 CAI_BaseNPC::ChooseEnemy, 0x1026cdc0
 // CAI_BaseNPC::EnterGrappleState, 0x1026cec0 CAI_BaseNPC::FUN_1026cec0, 0x10274e30
@@ -29,7 +29,7 @@ void SetLastEnemy(FElysiumEntity* Entity);
  *  non-null enemy write: the discipline manager's break-on-notice sweep (`RemoveEffect`
  *  `0x101e3af0` on every discipline whose record carries a non-zero byte at `+0x32`). The same
  *  sweep's other site is `SelectIdealState` case 3 (`SelectIdealStateDisciplineStripCalls`,
- *  `ElysiumNpcBaseState19.inl`); the break flag is unrecovered and `FElysiumDisciplines` has no
+ *  `ElysiumNpcBaseState.inl`); the break flag is unrecovered and `FElysiumDisciplines` has no
  *  "strip the notice-breaking effects" accessor, so it is counted and strips nothing. */
 int32 SetEnemyDisciplineStripCalls = 0;
 

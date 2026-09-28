@@ -2492,7 +2492,7 @@ void FElysiumNpc::SeedSheet()
 void FElysiumNpc::Spawn()
 {
 	// Slot 103 is `CAI_BaseNPCTroika::Spawn` (`0x10298d30`), every arm in `TroikaSpawnBody`
-	// (`ElysiumNpcSpawn19.cpp`): the stat template, `Precache`, `SetModel`, the Troika words, the
+	// (`ElysiumNpcSpawn.cpp`): the stat template, `Precache`, `SetModel`, the Troika words, the
 	// collision, `CAI_BaseNPC::Spawn` (`0x10299006`), the initial position, `NPCInit` (`0x10299057`),
 	// the police-level repair, the occluded ladder and `AddFlag2(4)`. Every species body that retail
 	// chains to `0x10298d30` calls this qualified.

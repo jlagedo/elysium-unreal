@@ -20,7 +20,7 @@
 // CNPC_VManBat::vfunc390, 0x10395ae0 CNPC_VMingXiao::vfunc390, 0x1039e890
 // CNPC_VMingXiaoTentacle::vfunc390, 0x103aa480 CNPC_VSabbatLeader::OnTakeDamage_Alive, 0x103b0e90
 // CNPC_VSheriffMan::OnTakeDamage_Alive, 0x103cccc0 CNPC_VWerewolf::OnTakeDamage, 0x103e06d0
-// CNPC_VZombie::OnTakeDamage. (0x102bed30, slot 142's Troika-line body, is `ElysiumNpcDamage19.cpp`'s.)
+// CNPC_VZombie::OnTakeDamage. (0x102bed30, slot 142's Troika-line body, is `ElysiumNpcDamage3.cpp`'s.)
 
 #include "Substrate/ElysiumNpcAndreiBlood.h"
 #include "Substrate/ElysiumNpcAnimal.h"

@@ -2640,10 +2640,10 @@ the crime level of the player's active weapon at `weaponData +0x3c4` (`0x102517e
 _Recovered 2026-09-27, 0019 story 8 pass I: lane L07, integrated as `617497a1` and `72b64eca`._
 
 Every body below is ported arm by arm into
-`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions19.cpp` (the two `CAI_BaseNPC` bodies),
-`ElysiumNpcConditions19.cpp` (the Troika body and the Troika half of the base body) and
-`ElysiumNpcConditions19Species.cpp` (the species overrides); the tests are
-`Tests/ElysiumNpcKernelConditions19Tests.cpp`, suite `Elysium.Substrate.NpcKernelConditions19.`.
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp` (the two `CAI_BaseNPC` bodies),
+`ElysiumNpcConditions2.cpp` (the Troika body and the Troika half of the base body) and
+`ElysiumNpcConditions2Species.cpp` (the species overrides); the tests are
+`Tests/ElysiumNpcKernelConditions2Tests.cpp`, suite `Elysium.Substrate.NpcKernelConditions19.`.
 Condition names are the base registrar's (§ "The base condition table"); addresses are
 `vampire.dll`.
 
@@ -2936,8 +2936,8 @@ _Recovered 2026-09-27, 0019 story 8 pass I: lane L09, integrated as `414545a6`._
 The bodies of the NPC damage entry: slot 142 (`OnTakeDamage`), slot 390 (`OnTakeDamage_Alive`), the
 three Troika melee-reaction slots 316 / 318 / 320, the species `UpdatePresenceEffect` (slot 313)
 and every species override of 142 / 320 / 390. Read off the `vampire.dll` listing (`vtmb_asm`); the
-port is `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage19.cpp`, `ElysiumNpcDamage19.cpp`
-and `ElysiumNpcDamage19Species.cpp`, the cases `Tests/ElysiumNpcKernelDamage19Tests.cpp`.
+port is `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage2.cpp`, `ElysiumNpcDamage3.cpp`
+and `ElysiumNpcDamage3Species.cpp`, the cases `Tests/ElysiumNpcKernelDamage2Tests.cpp`.
 
 **The chain.** `CBaseEntity::TakeDamage` → slot 142. The Troika-line slot 142 (`0x102bed30`) is
 the invincibility gate and tails to `CAI_BaseNPC::OnTakeDamage` (`0x10265e90`), which runs
@@ -3160,8 +3160,8 @@ _Recovered 2026-09-27, 0019 story 8 pass I: lane L11, integrated as `a17ed6a9`._
 
 The `rule` bodies of family Misc19 over 64 bytes. Source of truth:
 `$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist/families-19-29/Misc19-READING.md` and the
-listings it cites. Port bodies: `ElysiumNpcEnemy.cpp`, `ElysiumNpcBaseMisc19.cpp`,
-`ElysiumNpcMisc19.cpp`, `ElysiumNpcMisc19Species.cpp`, `ElysiumLaw.cpp`. The anim-event bands the
+listings it cites. Port bodies: `ElysiumNpcEnemy.cpp`, `ElysiumNpcBaseMisc2.cpp`,
+`ElysiumNpcMisc2.cpp`, `ElysiumNpcMisc2Species.cpp`, `ElysiumLaw.cpp`. The anim-event bands the
 two `HandleAnimEvent` bodies claim are catalogued in `../animation_events.md`.
 
 ### `CAI_BaseNPC::SetEnemy` `0x10279a50`
@@ -3487,8 +3487,8 @@ _Recovered 2026-09-27, 0019 story 8 pass I: lane L12, integrated as `2eca094a`._
 
 Each section is one `rule` row of `families-19-29/Werewolf19-READING.md` over 64 bytes,
 walked arm by arm off the decompiled C and the listing (`vtmb_code` / `vtmb_asm`). Port:
-`Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf19Species.cpp` (species),
-`ElysiumNpcWerewolf19.cpp` (Troika line), `ElysiumNpcBaseWerewolf19.cpp` (`CAI_BaseNPC`),
+`Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf2Species.cpp` (species),
+`ElysiumNpcWerewolf2.cpp` (Troika line), `ElysiumNpcBaseWerewolf.cpp` (`CAI_BaseNPC`),
 `ElysiumNpcWerewolf.cpp` (`0x103cac20`, walked in `lifecycle.md` § "`CNPC_VWerewolf::NPCInit`
 `0x103caef0` and re-arm `0x103cac20`"). This file's § "Hints10 — `FValidateHintType` and the
 Werewolf's hint endpoints" holds the validators these finders call.

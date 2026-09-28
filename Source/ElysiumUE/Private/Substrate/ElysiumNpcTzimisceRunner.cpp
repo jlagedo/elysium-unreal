@@ -18,7 +18,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcAnim10Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
@@ -304,7 +304,7 @@ bool FElysiumNpcTzimisceRunner::AllowsKnockbackBypass()
 
 // --- Moved from `ElysiumNpcAnim10.cpp` (story 5 step 4) ---
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
@@ -383,5 +383,5 @@ void FElysiumNpcTzimisceRunner::TzimisceRunnerNotifyChangeSizeNormal()
 	bWantsLargeHull = true;
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

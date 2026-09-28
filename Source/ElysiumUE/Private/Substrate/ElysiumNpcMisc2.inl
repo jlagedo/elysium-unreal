@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcMisc19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcMisc2.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Misc19's `rule` rows): 0x10279a50 SetEnemy, 0x102b4f60 CAI_BaseNPCTroika::FUN_102b4f60,
 // 0x102b4fe0 CAI_BaseNPCTroika::FUN_102b4fe0, 0x10365a90 FUN_10365a90, 0x102b4cc0

@@ -22,7 +22,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	void HumanCombatantNPCInit();       // `0x10387140` — helper for Cop / Hunter / Yukie
 
 	// From `ElysiumNpcSenses10.inl`.
@@ -34,7 +34,7 @@ public:
 	 *  arms are the readers; this family is the writer. The window is 30 seconds. */
 	static constexpr float SpeciesSuspectWindowSeconds = ElysiumNpcTunables::Thirty;
 
-	// From `ElysiumNpcState19.inl`.
+	// From `ElysiumNpcState.inl`.
 	/** Map name `gpGlobals->mapname` as the 12-byte compare in `0x10387380` reads it. Tests set
 	 *  `World->MapName()`; this override is for a fixture that has no world map name. */
 	FString SelectIdealStateMapNameOverride;

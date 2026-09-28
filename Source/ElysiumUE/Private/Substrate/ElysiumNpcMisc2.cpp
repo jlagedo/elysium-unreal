@@ -3,12 +3,12 @@
 // Created by the story-8 shape commit (`uv run elysium research kernel_story8_shape`, spec 0019
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2); ported by lane L11.
 //
-// Declarations are in `ElysiumNpcMisc19.inl` (included inside `class FElysiumNpc`) or generated in
+// Declarations are in `ElysiumNpcMisc2.inl` (included inside `class FElysiumNpc`) or generated in
 // `ElysiumNpcSlots.inl` for a slot body.
 //
 // Owns (Misc19's `rule` rows): 0x10279a50 SetEnemy (its body lives in `ElysiumNpcEnemy.cpp`),
 // 0x102b4f60 CAI_BaseNPCTroika::FUN_102b4f60 (slot 596), 0x102b4fe0 CAI_BaseNPCTroika::FUN_102b4fe0
-// (slot 598), 0x10365a90 FUN_10365a90 (Bach's camper pass, `ElysiumNpcMisc19Species.cpp`),
+// (slot 598), 0x10365a90 FUN_10365a90 (Bach's camper pass, `ElysiumNpcMisc2Species.cpp`),
 // 0x102b4cc0 CAI_BaseNPCTroika::FUN_102b4cc0 (slot 595), 0x10395ce0 FUN_10395ce0, 0x1039ea60
 // FUN_1039ea60, 0x102b5c00 CAI_BaseNPCTroika::EnterGrappleState, 0x1017f4a0
 // PlayerSupernaturalIncident (`ElysiumLaw.cpp`), 0x1029b290 CAI_BaseNPCTroika::HandleAnimEvent.

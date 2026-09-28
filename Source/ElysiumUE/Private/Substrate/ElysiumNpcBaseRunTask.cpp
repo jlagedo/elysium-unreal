@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcBaseRunTask19.inl` (included inside `class FElysiumNpcBase`) or
+// Declarations are in `ElysiumNpcBaseRunTask.inl` (included inside `class FElysiumNpcBase`) or
 // generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 //
 // Owns (RunTask19's `rule` rows): 0x10288780 CAI_BaseNPC::RunTask.
@@ -22,7 +22,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumScheduleText.h"
 #include "Substrate/ElysiumScriptedSequence.h"
@@ -136,7 +136,7 @@ namespace RunTask19Base
 	constexpr int32 NavClimb = 3;
 }
 
-// --- The motor and navigator primitives (`ElysiumNpcBaseRunTask19.inl`) ------------------------------
+// --- The motor and navigator primitives (`ElysiumNpcBaseRunTask.inl`) ------------------------------
 
 void FElysiumNpcBase::MotorMoveStop()
 {
@@ -212,7 +212,7 @@ void FElysiumNpcBase::NavSetMovementActivity(int32 Activity)
 
 void FElysiumNpcBase::NavClearGoal()
 {
-	// `0x102ee270`, the landed idiom (`ElysiumNpcBaseLifecycle19.cpp` `NPCInit`).
+	// `0x102ee270`, the landed idiom (`ElysiumNpcBaseLifecycle2.cpp` `NPCInit`).
 	if (Motor != nullptr)
 	{
 		Motor->ClearNavigationGoal();

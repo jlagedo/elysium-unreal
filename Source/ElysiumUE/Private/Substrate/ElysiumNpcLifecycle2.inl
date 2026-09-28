@@ -5,8 +5,8 @@
 // declared by the generator; this family DEFINES them. What lands here is the base-line bodies
 // beneath the Troika overrides, every species arm, and the words and seams those arms need.
 //
-// Definitions: `Substrate/ElysiumNpcLifecycle19.cpp` (spine and dispatchers),
-// `…Lifecycle19_2.cpp` (species `NPCInit`). Tests: `Tests/ElysiumNpcKernelLifecycle19Tests.cpp`.
+// Definitions: `Substrate/ElysiumNpcLifecycle2.cpp` (spine and dispatchers),
+// `…Lifecycle19_2.cpp` (species `NPCInit`). Tests: `Tests/ElysiumNpcKernelLifecycle2Tests.cpp`.
 // Walked prose: `docs/vtmb/npc-ai/lifecycle.md` § "Story 29e, family Lifecycle19".
 //
 // --- What this family is ---------------------------------------------------------------------------

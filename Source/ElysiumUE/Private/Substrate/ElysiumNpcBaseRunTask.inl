@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseRunTask19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseRunTask.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (RunTask19's `rule` rows): 0x10288780 CAI_BaseNPC::RunTask.
 //

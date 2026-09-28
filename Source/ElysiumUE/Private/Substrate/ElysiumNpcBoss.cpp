@@ -4,7 +4,7 @@
 // story 8, `docs/specs/0019-npc-kernel-rework/story-8-execution-plan.md` R1/R2), before any body is
 // ported, so that the family's lane owns this file alone.
 //
-// Declarations are in `ElysiumNpcBoss19.inl` (included inside `class FElysiumNpc`) or generated in
+// Declarations are in `ElysiumNpcBoss.inl` (included inside `class FElysiumNpc`) or generated in
 // `ElysiumNpcSlots.inl` for a slot body. A `STORY8-FORWARD` block is the generated stub moved here
 // unchanged (its overlay row reads `hand:`); the porter replaces the body and drops the marker.
 //
@@ -14,7 +14,7 @@
 //
 // Story 8, lane L12. The three Troika-line rows (`0x102b52a0`, `0x102c51a0`, `0x102c5310`) are here;
 // the species rows are on their classes (`ElysiumNpcMingXiao.cpp`, `ElysiumNpcMingXiaoTentacle.cpp`,
-// `ElysiumNpcHengeyokai.cpp`, `ElysiumNpcBoss19Species.cpp`). Arms carry the instruction address
+// `ElysiumNpcHengeyokai.cpp`, `ElysiumNpcBossSpecies.cpp`). Arms carry the instruction address
 // they came from (`vtmb_asm`); walked prose in
 // `docs/vtmb/npc-ai/authored-control.md` § "Story 8, family Boss19, the discipline helpers".
 // The

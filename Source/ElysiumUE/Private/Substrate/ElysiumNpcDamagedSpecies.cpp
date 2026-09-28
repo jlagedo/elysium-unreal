@@ -136,4 +136,4 @@ void FElysiumNpcWerewolf::NPCThink()
 }
 
 // `0x10371b70 CNPC_VCop::StartTask` (slot 442) is ported by lane L04 in
-// `ElysiumNpcStartTask19Species.cpp`, beside the other species StartTask bodies.
+// `ElysiumNpcStartTaskSpecies.cpp`, beside the other species StartTask bodies.

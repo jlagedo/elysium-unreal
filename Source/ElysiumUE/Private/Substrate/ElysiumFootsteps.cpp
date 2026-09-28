@@ -111,10 +111,10 @@ namespace
 	// The table. One row: `CNPC_VTzimisceRunner`'s. The three other event-driven species bodies
 	// (`CNPC_VMingXiao 0x10392a70`, `CNPC_VHengeyokai 0x1037fb60`, `CNPC_VTzimisceHeadClaw
 	// 0x103c1540`) are ported whole as their classes' slot-259 overrides in
-	// `ElysiumNpcMisc19Species.cpp` (story 8 lane L11) and read no row here.
+	// `ElysiumNpcMisc2Species.cpp` (story 8 lane L11) and read no row here.
 	//
 	// `CNPC_VSabbatLeader::FootstepSound 0x103aa5e0` is not a row either: its anim-event caller is the
-	// class's own slot-259 body (`0x103a7000`, 0x802/0x803), also in `ElysiumNpcMisc19Species.cpp`.
+	// class's own slot-259 body (`0x103a7000`, 0x802/0x803), also in `ElysiumNpcMisc2Species.cpp`.
 	const FElysiumFootstepSpecies GSpeciesTable[] = {
 		// `CNPC_VTzimisceRunner::HandleAnimEvent 0x103c32c0` — 2050/2051 only, NO shake, the `+0x9ac`
 		// pools. The run pair falls through to the base handler.

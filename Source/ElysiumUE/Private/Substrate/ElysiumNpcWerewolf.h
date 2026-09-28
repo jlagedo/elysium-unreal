@@ -226,7 +226,7 @@ public:
 	static void StartSearchTimer();
 	static bool ReportSearchTimer(bool bPassThrough);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr double WerewolfTeleportFloorSquare = 512.0; // `_DAT_104704c0`
 	static constexpr float HullCentreHalf = ElysiumNpcTunables::Half;
 	static constexpr double WerewolfFieldOfViewRadians = 2.0943951023931953; // `_DAT_104d0080`
@@ -440,7 +440,7 @@ public:
 	/** `CNPC_VWerewolf::CheckAllMoveHints` (`0x103cfc50`), story 8 lane L11 — the move-hint search:
 	 *  the four move-hint programs answer TRUE at once, a refused pursuit FALSE, a held hint with a
 	 *  path TRUE; otherwise the global hint walk, first imperative or first valid hint passing the four
-	 *  distance/path tests taken. Body in `ElysiumNpcMisc19Species.cpp`. */
+	 *  distance/path tests taken. Body in `ElysiumNpcMisc2Species.cpp`. */
 	bool CheckAllMoveHints();
 	/** `CNPC_VWerewolf::HasPath` (`0x103d0db0`). 120 of its 138 bytes are the scope-trace frame; the
 	 *  body is one call, `0x102ee380(m_pNavigator, start, end)`, which stamps the navigator cache twice
@@ -506,7 +506,7 @@ public:
 	// `StartTask` (`0x103ccda0`), `RunTask` (`0x103cdfb0`) and `SelectSchedule` (`0x103cee70`), other
 	// lanes' rows. Each takes retail's own arguments: a `CAI_Hint*` is the hint's words (`FHintWords`,
 	// resolved through `HintWords`), and every answer is retail's `bool`/`void`. Bodies in
-	// `ElysiumNpcWerewolf19Species.cpp`; walked prose in
+	// `ElysiumNpcWerewolf2Species.cpp`; walked prose in
 	// `docs/vtmb/npc-ai/conditions-and-states.md` § "Story 8, family Werewolf19".
 	//
 	// The words these bodies share, and what the listings say they are (the port's older names stay

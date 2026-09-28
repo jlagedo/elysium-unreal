@@ -20,7 +20,7 @@
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcGeometryShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
@@ -606,5 +606,5 @@ int32 FElysiumNpcAsianVampire::GetJumpSchedule(FElysiumEntity* Enemy) const
 	return 0;
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

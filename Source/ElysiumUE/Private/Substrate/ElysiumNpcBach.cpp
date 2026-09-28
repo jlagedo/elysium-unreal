@@ -19,11 +19,11 @@
 #include "Substrate/ElysiumNpcAnim10_2Shared.h"
 #include "Substrate/ElysiumNpcCombat10_2Shared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19_2Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
-#include "Substrate/ElysiumNpcState19Shared.h"
+#include "Substrate/ElysiumNpcStateShared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -643,7 +643,7 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 	// that, so nothing else happens here.
 }
 
-// --- Moved from `ElysiumNpcState19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcBach::BachOnStateChange(int32 OldRetail, int32 NewRetail)
 {
@@ -655,5 +655,5 @@ bool FElysiumNpcBach::BachOnStateChange(int32 OldRetail, int32 NewRetail)
 	return false;
 }
 
-// --- Moved from `ElysiumNpcTranslate19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

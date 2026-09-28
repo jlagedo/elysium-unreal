@@ -44,7 +44,7 @@ public:
 	 *  the two-slot ring at `m_vLastJumpPosition`, then advance and wrap `m_iLastJumpPositionIdx`. */
 	void AddHintToStoredJumpPositions(const FHintWords& Hint);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr float AsianVampireJumpGravity = 2.f;    // `_DAT_104a9300`
 	/** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`): cleared by `NPCInit` `0x10360ce0`, raised by
 	 *  `TaskFail` `0x10362390` on failure codes 12..15. (`m_bSuppressRanged` `+0x66e8` is family

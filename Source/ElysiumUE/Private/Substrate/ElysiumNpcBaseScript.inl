@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpcBase` by `Substrate/ElysiumNpcBase.h`; the definitions are in
-// `ElysiumNpcBaseScript19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcBaseScript.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Script19's `rule` rows): 0x1027d0a0 FUN_1027d0a0 (the checklist names it on
 // `FElysiumNpc`; its every read is a `CAI_BaseNPC` word, so it lands on the base).

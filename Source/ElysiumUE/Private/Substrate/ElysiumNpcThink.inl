@@ -6,7 +6,7 @@
 // ported, so that the family's lane owns this file alone.
 //
 // Included inside `class FElysiumNpc` by `Substrate/ElysiumNpc.h`; the definitions are in
-// `ElysiumNpcThink19.cpp`, or generated in the slot files for a slot body.
+// `ElysiumNpcThink.cpp`, or generated in the slot files for a slot body.
 //
 // Owns (Think19's `rule` rows): 0x10298070 CAI_BaseNPCTroika::UpdateCharacter, 0x10292de0
 // CAI_BaseNPCTroika::NPCThink.

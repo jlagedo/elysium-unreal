@@ -60,7 +60,7 @@ public:
 	 *  the hint's own origin and facing, flattened to 2D. */
 	static float DistToHintCenterLine2D(const FHintWords& Hint, const FVector& PointCm);
 
-	// From `ElysiumNpcLifecycle19.inl`.
+	// From `ElysiumNpcLifecycle2.inl`.
 	/** SabbatLeader words Damage / Misc / Schedule already carry some of; these are the rest.
 	 *  `bSabbatLeaderActivated` (`+0x66b8`) is family State19's. */
 	int32 SabbatLeaderRouteFailCount = 0;        // +0x66bc — Schedule already has FailureType at +0x66c0
@@ -70,7 +70,7 @@ public:
 	bool bSabbatLeaderLastAttackWasNova = false;
 	bool bSabbatLeaderTrackPlayer = false;
 
-	// From `ElysiumNpcMaintain19.inl`.
+	// From `ElysiumNpcMaintain.inl`.
 	/** `CNPC_VSabbatLeader::TaskFail` (`0x103a9400`). True means its flip path returned without the
 	 *  Troika chain and the caller must stop. */
 	bool SabbatLeaderTaskFail(int32 Reason);
@@ -142,7 +142,7 @@ public:
 	 *  `0x4c3ce0` of the pinned image) `<= (float)(stat0x0f - m_LastPlayerHealth)`. */
 	bool PlayerDamagedEnoughThisRound() const;
 
-	// From `ElysiumNpcState19.inl`.
+	// From `ElysiumNpcState.inl`.
 	/** `CNPC_VSabbatLeader::m_bActivated` (`+0x66b8`). Default 0, so an unactivated leader is IDLE. */
 	bool bSabbatLeaderActivated = false;
 
@@ -150,7 +150,7 @@ public:
 	/** `CNPC_VSabbatLeader::StartTransformation` (`0x103aa3b0`): `m_bActivated` (`+0x66b8`) = 1 FIRST,
 	 *  the class-wide `AddClassRelationship(CLASS_PLAYER 1, D_HT, 10)`, then stamp
 	 *  `NPC_VSabbatLeader.cpp:0x549` and install `0x163` (not forced). Its retail argument is unread.
-	 *  Body in `ElysiumNpcBoss19Species.cpp`. Reached from `RunTask` `0x103a8990` (lane L05) and from
+	 *  Body in `ElysiumNpcBossSpecies.cpp`. Reached from `RunTask` `0x103a8990` (lane L05) and from
 	 *  the pending `StartTransformation` input (`ElysiumNpcClasses.cpp`), which the integrator binds. */
 	void SabbatLeaderStartTransformation();
 	// --- 0019/8 Spawn19 (lane L08): words and helpers the family's bodies need (three searches each

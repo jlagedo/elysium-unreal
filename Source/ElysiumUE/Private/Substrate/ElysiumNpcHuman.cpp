@@ -35,7 +35,7 @@
 #include "Substrate/ElysiumNpcAnim10Shared.h"
 #include "Substrate/ElysiumNpcAnim10_2Shared.h"
 #include "Substrate/ElysiumNpcCombat10_2Shared.h"
-#include "Substrate/ElysiumNpcLifecycle19Shared.h"
+#include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -701,7 +701,7 @@ int32 FElysiumNpcHuman::HumanSelectScheduleRangedCombat(int32 Arg)
 	return 0xb9;
 }
 
-// --- Moved from `ElysiumNpcLifecycle19.cpp` (story 5 step 4) ---
+// --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHuman::HideActiveWeaponIfAny()
 {
