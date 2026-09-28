@@ -267,22 +267,22 @@ int32 FElysiumNpcFrenzyShadow::HostileRecountOver(TConstArrayView<FElysiumEntity
 void FElysiumNpcFrenzyShadow::NPCThink()
 {
 	// `CALL 0x10012c6f` -> the controller's `NPCThink` `0x103a4700`, DIRECT (Troika think + slot 614).
-	FElysiumNpcPlayerController::NPCThink();
+	FElysiumNpcPlayerController::NPCThink();                               // 0x10375e54 0x103a4700
 	// Then: `enemy = GetEnemy()` (slot 167, `+0x29c`); when `m_NPCState == 2` AND there is an enemy
 	// AND NOT `HasCondition(0x46 COND_SEE_ENEMY)`, slot 544 `UpdateEnemyMemory(enemy,
 	// enemy->GetAbsOrigin(), &enemy->field_0x3d4)` — VIRTUAL. The third argument is an ADDRESS inside
 	// the enemy (`LEA ECX,[EDI+0x3d4]`, `0x10375e83`) whose meaning is unrecovered; the port passes
 	// no informer, which the base body does not read.
-	FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();
-	if (NpcStateRetail() != GShadowRetailStateCombat || Enemy == nullptr)
+	FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x10375e5d slot 167
+	if (NpcStateRetail() != GShadowRetailStateCombat || Enemy == nullptr)   // 0x10375e6e / 0x10375e72
 	{
 		return;
 	}
-	if (Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))
+	if (Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))               // 0x10375e78 / 0x10375e7f
 	{
 		return;
 	}
-	UpdateEnemyMemory(Enemy, Enemy->Origin, nullptr);
+	UpdateEnemyMemory(Enemy, Enemy->Origin, nullptr);                      // 0x10375e8f slot 217 / 0x10375e99 slot 544
 }
 
 // Slot 433: `0x10375ed0`.

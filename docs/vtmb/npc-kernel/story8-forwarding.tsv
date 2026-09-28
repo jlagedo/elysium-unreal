@@ -1,6 +1,5 @@
 # Story 8's forwarding bodies (`uv run elysium research kernel_story8_shape`): one row per `STORY8-FORWARD` marker under Source/. A porter replaces the body and drops the marker; the set must only fall to 0.
 family	class	slot	address	file
-Damaged19	CNPC_VWerewolf	431	0x103cb590	Source/ElysiumUE/Private/Substrate/ElysiumNpcDamaged19Species.cpp
 RunAi19	CAI_BaseNPC	432	0x1026f110	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi19.cpp
 RunAi19	CAI_BaseNPCTroika	432	0x1028fcc0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19.cpp
 RunAi19	CNPC_VAndreiBlood	432	0x1035e980	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
@@ -17,16 +16,3 @@ RunAi19	CNPC_VSheriffMan	432	0x103aebd0	Source/ElysiumUE/Private/Substrate/Elysi
 RunAi19	CNPC_VTzimisce	432	0x103bdef0	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
 RunAi19	CNPC_VTzimisceHeadClaw	432	0x103c1d20	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
 RunAi19	CNPC_VZombie	432	0x103df850	Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi19Species.cpp
-Think19	CAI_BaseNPC	431	0x1026ca80	Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseThink19.cpp
-Think19	CAI_BaseNPCTroika	431	0x10292de0	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19.cpp
-Think19	CNPC_VAndreiBlood	431	0x1035db20	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VAsianVampire	431	0x10361490	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VCamera	431	0x10369120	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VChangBros	431	0x1036c6c0	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VGhoulCroucher	431	0x1037b3f0	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VMingXiao	431	0x10394990	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VNewscaster	431	0x103a05b0	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VSheriffMan	431	0x103af830	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VTzimisce	431	0x103b9040	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VVampireBoss	431	0x103c6000	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp
-Think19	CNPC_VZombie	431	0x103dfa20	Source/ElysiumUE/Private/Substrate/ElysiumNpcThink19Species.cpp

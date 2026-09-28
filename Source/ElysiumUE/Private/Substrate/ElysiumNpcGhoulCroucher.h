@@ -96,4 +96,14 @@ public:
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
+
+	// --- Story 8 lane L13b (Think19): the burning emitter's rate, `NPCThink` 0x1037b3f0 -------------
+	/** SEAM for `0x100fb980` on the burning particle (`m_hBurningParticle` +0x6670): a negative rate
+	 *  warns (`"%s rate scale set to %.2f must be ..."`) and becomes 0, the emitter's `+0x48c` takes the
+	 *  rate (times the ConVar `DAT_107083dc` when its `+0x4a1` byte), and `+0x494` the engine tick. No
+	 *  port particle carries that direct setter (`FElysiumEnvParticle::InputSetRateScale` is the ramped
+	 *  INPUT, a different body); the rate is recorded here, which is what a test reads. */
+	void GhoulSetParticleRateScale(FElysiumEntity* Particle, float Rate);
+	float GhoulLastParticleRateScale = -1.f;
+	int32 GhoulParticleRateScaleCalls = 0;
 };

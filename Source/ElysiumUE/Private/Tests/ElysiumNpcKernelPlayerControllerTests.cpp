@@ -97,19 +97,21 @@ namespace
 		return 0;
 	}
 
-	// A controller whose slot 614 records how many times the Troika think stub had fired at the
-	// moment it ran, so `0x103a4700`'s ORDER (the direct think, THEN the virtual reset) is observable.
+	// A controller whose slot 614 records whether the Troika think had already run when it did, so
+	// `0x103a4700`'s ORDER (the direct think, THEN the virtual reset) is observable. Story 8 lane
+	// L13b ported `0x10292de0`, which no longer tallies a stub: the witness is its first write,
+	// `m_bfAINPCFlags2 &= 0x7ffffffb` (`0x10292e5e`), which runs before its `m_bDisableAI` return.
 	class FControllerThinkOrderProbe final : public FElysiumNpcPlayerController
 	{
 	public:
 		virtual void ResetThinkTimers(double Now) override
 		{
 			++Resets;
-			TroikaThinksAtReset = StubFires(TEXT("CAI_BaseNPCTroika::NPCThink"));
+			bScheduleChangedAtReset = NpcFlags.Has(EElysiumNpcFlag2::SCHEDULE_CHANGED);
 			FElysiumNpcPlayerController::ResetThinkTimers(Now);
 		}
 		int32 Resets = 0;
-		int32 TroikaThinksAtReset = -1;
+		bool bScheduleChangedAtReset = true;
 	};
 }
 
@@ -225,11 +227,13 @@ bool FElysiumNpcKernelPlayerControllerThinkOrderTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Probe });
-	const int32 Before = StubFires(TEXT("CAI_BaseNPCTroika::NPCThink"));
+	Probe->NpcFlags.Set(EElysiumNpcFlag2::SCHEDULE_CHANGED);
 	Probe->Resets = 0;
 	Probe->NPCThink();
 	TestEqual(TEXT("slot 614 ran once"), Probe->Resets, 1);
-	TestEqual(TEXT("AFTER the direct Troika think had run"), Probe->TroikaThinksAtReset, Before + 1);
+	// `0x10292e5e`: the Troika think clears SCHEDULE_CHANGED first; slot 614 saw it clear.
+	TestFalse(TEXT("AFTER the direct Troika think had run (0x10292e5e cleared the bit)"),
+		Probe->bScheduleChangedAtReset);
 	return true;
 }
 
