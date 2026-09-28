@@ -154,7 +154,7 @@ namespace
 				Guard->Health = 100;
 				// "No damage yet": the retail stamp is float curtime, and the clock stands at 0.
 				Guard->BaseMemory.RepeatedDamageWindowStart = -1.0;
-				Guard->BaseMemory.RepeatedDamageAccumulated = 0;
+				Guard->BaseMemory.RepeatedDamageAccumulated = 0.f;
 				// The type-0 stat list the species floors read: cap 20, no wounds.
 				Guard->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 20);
 				Guard->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 0);
@@ -321,14 +321,14 @@ bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 	TestFalse(TEXT("10266282 20 is not HEAVY_DAMAGE"), N.Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage));
 	TestFalse(TEXT("1026631d 20 of 100 is not REPEATED_DAMAGE"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
-	TestEqual(TEXT("102662ec the first hit RESETS the sum"), N.BaseMemory.RepeatedDamageAccumulated, 20);
+	TestEqual(TEXT("102662ec the first hit RESETS the sum"), N.BaseMemory.RepeatedDamageAccumulated, 20.f);
 	TestTrue(TEXT("102661de m_bCondTookDamage"), N.Cognition.bCondTookDamage);
 	TestTrue(TEXT("102661cc m_hLastDamageEnt = the attacker"), N.BaseMemory.LastDamageAttacker == F.Other->Handle);
 	// 21 on the same tick: heavy, and the sum 41 > 100 * 0.3.
 	FElysiumNpcBase::FElysiumTakeDamageInfo TwentyOne = Damage19Packet(F.Other, 21.f);
 	N.FElysiumNpcBase::OnTakeDamage_Alive(&TwentyOne);
 	TestTrue(TEXT("10266293 HEAVY_DAMAGE on 21"), N.Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage));
-	TestEqual(TEXT("102662c6 inside 1.0 s the sum ACCUMULATES"), N.BaseMemory.RepeatedDamageAccumulated, 41);
+	TestEqual(TEXT("102662c6 inside 1.0 s the sum ACCUMULATES"), N.BaseMemory.RepeatedDamageAccumulated, 41.f);
 	TestTrue(TEXT("1026632e REPEATED_DAMAGE when the sum exceeds 30 % of m_iMaxHealth"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
 	// A full second later the sum resets to the new hit.
@@ -336,7 +336,7 @@ bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 	N.Cognition.Conditions.Reset();
 	FElysiumNpcBase::FElysiumTakeDamageInfo Three = Damage19Packet(F.Other, 3.f);
 	N.FElysiumNpcBase::OnTakeDamage_Alive(&Three);
-	TestEqual(TEXT("102662b3 curtime - m_flLastDamageTime >= 1.0 resets"), N.BaseMemory.RepeatedDamageAccumulated, 3);
+	TestEqual(TEXT("102662b3 curtime - m_flLastDamageTime >= 1.0 resets"), N.BaseMemory.RepeatedDamageAccumulated, 3.f);
 	TestFalse(TEXT("...and 3 of 100 raises no REPEATED_DAMAGE"),
 		N.Cognition.Conditions.Has(EElysiumNpcCond::RepeatedDamage));
 	// Zero damage is not light (0x10266630: `0.0 < damage`).

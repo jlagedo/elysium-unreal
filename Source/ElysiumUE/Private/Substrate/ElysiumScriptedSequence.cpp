@@ -170,7 +170,7 @@ void FElysiumScriptedSequence::Spawn()
 	bSequenceStarted = false;
 	NextCine = FElysiumEntityHandle::Invalid();
 	LastFoundEntity = FElysiumEntityHandle::Invalid();
-	Flags2Added |= GCineFlags2;
+	AddFlag2(GCineFlags2);                                  // 0x101a70bb m_fFlags2 (+0x438)
 }
 
 // Slot 113: `0x101a8de0`. Plays NOTHING: retail's pre-idle belongs to `TASK_WAIT_FOR_SCRIPT`.

@@ -179,10 +179,6 @@ public:
 	// `0x101a7760` under spawnflag `0x400`.
 	FElysiumEntityHandle LastFoundEntity;
 
-	/** SEAM for `AddFlag2(0x10)` (`Spawn`, `0x101a70bb`) — `CBaseEntity::m_fFlags2` (`+0x438`), a word
-	 *  with no port owner (the controller line carries the same seam, fold A2). The meaning of bit
-	 *  `0x10` is unrecovered. */
-	uint32 Flags2Added = 0;
 
 	// `m_scriptState` (`+0x5d70`) — an NPC word, held here on the director that owns the NPC
 	// (`m_hCine`). It has no meaning without one: `CineCleanup` zeroes it in the same pass that clears

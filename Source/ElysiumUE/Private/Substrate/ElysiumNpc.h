@@ -1144,10 +1144,6 @@ protected:
 	bool bScriptBodyHeld = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
-	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is
-	// a HOLD, not a cadence -- it used to be spelled as a `NextThink` write, which the think
-	// cadence now owns. Session state, the same posture `AmbientNextActivityAt` beside it takes.
-	double StanceTransitionUntil = 0.0;
 	// The interesting-place visit's phase machine and the state riding on it.
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

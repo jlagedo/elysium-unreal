@@ -136,7 +136,7 @@ struct FElysiumNpcBaseMemory
 	// (`0x102bed56`) stamps it too.
 	double RepeatedDamageWindowStart = -1.0;
 
-	int32 RepeatedDamageAccumulated = 0;
+	float RepeatedDamageAccumulated = 0.f;
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
 	//

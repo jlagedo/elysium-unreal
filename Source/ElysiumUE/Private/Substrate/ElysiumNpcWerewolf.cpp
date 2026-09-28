@@ -60,6 +60,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
 
@@ -1049,15 +1050,16 @@ int32 FElysiumNpcWerewolf::SelectScheduleForHint(const FHintWords* Hint, float D
 	}
 	switch (Hint->HintType)
 	{
-	case 0x3aa4:  return 0x15f;   // 15012
-	case 0x3aa5:  return 0x160;   // 15013
+	case 0x3aa4:  return ElysiumSched::SCHED_VWEREWOLF_DO_JUMP_HINT;    // 15012
+	case 0x3aa5:  return ElysiumSched::SCHED_VWEREWOLF_DO_DEATH_HINT;   // 15013
 	case 0x3aaa:  return 0x164;   // 15018
 	default:      break;
 	}
 	// The tail: `sqrt(|m_vSavePosition - GetAbsOrigin()|^2) > m_flGoalTolerance`. Retail takes the
 	// square root and compares the DISTANCE, not the squared distance, so the threshold is in the
 	// same units as `m_flGoalTolerance` — reproduced rather than optimised into a squared compare.
-	return DistToSavePositionUnits > GoalToleranceUnits ? 0x15a : 0x15b;
+	return DistToSavePositionUnits > GoalToleranceUnits ? ElysiumSched::SCHED_VWEREWOLF_RUN_TO_SPECIAL_MOVEMENT
+		: ElysiumSched::SCHED_VWEREWOLF_DO_SPECIAL_MOVEMENT;
 }
 
 int32 FElysiumNpcWerewolf::SelectScheduleForHint(int32 HintNode) const
@@ -1598,12 +1600,8 @@ void FElysiumNpcWerewolf::TriggerWerewolfZone()
 
 uint32 FElysiumNpcWerewolf::RetailFlags2(const FElysiumEntity& Entity)
 {
-	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`). An NPC carries the word as
-	// `FElysiumNpc::EntityFlags2Word`; **SEAM** for every other entity: `FElysiumEntity::Flags` is
-	// the first word (+0x434) only, so a non-NPC answers 0 (lifting the word to `FElysiumEntity`
-	// is listed for L13, with `FElysiumScriptedSequence::Flags2Added`).
-	const FElysiumNpc* const Npc = const_cast<FElysiumEntity&>(Entity).AsNpc();
-	return Npc != nullptr ? Npc->EntityFlags2Word : 0u;
+	// `CBaseEntity::GetFlags2()` (+0x438 `m_fFlags2`), on every entity.
+	return Entity.EntityFlags2Word;
 }
 
 // --- Moved from `ElysiumNpcKernelMotor2.cpp` (story 5 step 4) ---

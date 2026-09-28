@@ -49,6 +49,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
 
@@ -59,7 +60,7 @@ namespace
 	constexpr float Bosses2One = ElysiumNpcTunables::One;
 	// `0x10398030`'s distance bands against `m_flClosestPlayerDistance` (+0x6264), SOURCE units.
 	constexpr float MingXiaoNearBand = ElysiumNpcTunables::Hundred;
-	constexpr float MingXiaoFarBand300 = 300.0f;      // _DAT_10462b84
+	constexpr float MingXiaoFarBand300 = ElysiumNpcTunables::ThreeHundred;      // _DAT_10462b84
 	constexpr float MingXiaoFarBand200 = 200.0f;      // _DAT_104492b8
 	constexpr float MingXiaoReachBand = 150.0f;       // _DAT_10457f60
 	// `0x10398030`'s tentacle schedule ids, slots 0..3.
@@ -77,7 +78,7 @@ namespace
 	constexpr float PedestalForwardHi = ElysiumNpcTunables::Half;
 	// `0x10398b20`'s search radius, its stationary tolerance and its name prefix.
 	constexpr float PedestalSearchRadius = 257.0f;
-	constexpr float PedestalStationaryTolerance = 0.1f;   // _DAT_104491b4
+	constexpr float PedestalStationaryTolerance = ElysiumNpcTunables::Tenth;   // _DAT_104491b4
 	constexpr const TCHAR* PedestalNamePrefix = TEXT("Pedestal");
 	constexpr int32 PedestalNamePrefixLength = 8;         // retail's `__strnicmp(..., 8)`
 	// `VectorNormalize` `0x10137220`: `1.0 / (FLT_EPSILON + length)`, so a zero vector normalizes to
@@ -1950,11 +1951,11 @@ void FElysiumNpcMingXiao::SeverTentacle(int32 TentacleId)
 namespace NpcKernelBoss19MingXiao
 {
 	// The death programs: `0x16d` for the head, `0x16e` for a proxy (`0x10398870`).
-	constexpr int32 GBoss19MingXiaoDieSchedule = 0x16d;
-	constexpr int32 GBoss19MingXiaoDieProxySchedule = 0x16e;
+	constexpr int32 GBoss19MingXiaoDieSchedule = ElysiumSched::SCHED_VMING_XIAO_DIE;               // 0x16d
+	constexpr int32 GBoss19MingXiaoDieProxySchedule = ElysiumSched::SCHED_VMING_XIAO_DIE_PROXY;    // 0x16e
 	// The lost-limb and head-hit programs.
-	constexpr int32 GBoss19MingXiaoLostLimbSchedule = 0x16c;
-	constexpr int32 GBoss19MingXiaoHeadHitSchedule = 0x16b;
+	constexpr int32 GBoss19MingXiaoLostLimbSchedule = ElysiumSched::SCHED_VMING_XIAO_HIT_IN_TENTACLE;   // 0x16c
+	constexpr int32 GBoss19MingXiaoHeadHitSchedule = ElysiumSched::SCHED_VMING_XIAO_HIT_IN_HEAD;        // 0x16b
 	// `NPC_VMingXiao.cpp` trace lines.
 	constexpr int32 GBoss19MingXiaoDeathLine = 0x916;
 	constexpr int32 GBoss19MingXiaoSpawnLine = 0xcac;
@@ -1988,11 +1989,11 @@ namespace NpcKernelBoss19MingXiao
 	constexpr float GBoss19TentacleLaunchJitter = 10.0f;
 	constexpr float GBoss19TentacleLaunchLiftMin = 5.0f;
 	constexpr float GBoss19TentacleLaunchLiftMax = 20.0f;
-	constexpr float GBoss19TentacleLaunchScale = 0.1f;          // `_DAT_104491b4`
+	constexpr float GBoss19TentacleLaunchScale = ElysiumNpcTunables::Tenth;          // `_DAT_104491b4`
 	// `0x103986b0`'s two cells: `_DAT_1046bad0` (400.0) for limbs 0 and 1, `_DAT_10462b84` (300.0)
 	// for limbs 2 and 3 and for the none-connected answer.
-	constexpr float GBoss19IdealRangeNear = 400.0f;
-	constexpr float GBoss19IdealRangeFar = 300.0f;
+	constexpr float GBoss19IdealRangeNear = ElysiumNpcTunables::FourHundred;
+	constexpr float GBoss19IdealRangeFar = ElysiumNpcTunables::ThreeHundred;
 	// The router's weapon mask and its tuning cells (`FUN_101e8da0(0x10739d08)` +0x28 / +0x24, the
 	// `Ming_Xiao_Info/General` "MeleeDamageScalar" / "NohitDamageDivide" rows, `0x101e73f8` / `0x101e73e1`).
 	constexpr uint32 GBoss19RouterMeleeMask = 0x18000u;

@@ -346,14 +346,21 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 	TestEqual(TEXT("+0x66d8 is zeroed"), Wolf->WerewolfMorphTimerC, 0.f);
 
 	// `CNPC_VGhoulCroucher::ScriptUnhide` (0x1037c2f0): the handle is NOT cleared — retail only
-	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing. On a ghoul.
-	FLifecycleFixture GhoulFix(TEXT("npc_VGhoulCroucher"));
-	FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulFix.Npc);
-	if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul))
+	// dispatches slot 78 on the particle and leaves `m_hBurningParticle` standing. On a ghoul, with a
+	// particle stand-in that is NOT the ghoul: slot 78 is virtual (story 8 wave 2), so a ghoul that
+	// names itself as its own particle re-enters `0x1037c2f0` without end — in retail as here.
+	FElysiumNpcWorldBuilder GhoulBuilder(TEXT("lifecycle_ghoul"), 20260913);
+	GhoulBuilder.AddNpc(TEXT("subject"), FVector(100.0, 0.0, 0.0), TEXT("npc_VGhoulCroucher"));
+	GhoulBuilder.AddEntity(TEXT("info_target"), TEXT("fire"), FVector(0.f, 0.f, 50.f));
+	FElysiumNpcWorldFixture GhoulWorld(MoveTemp(GhoulBuilder));
+	FElysiumNpcGhoulCroucher* Ghoul = ElysiumTestAsSpecies<FElysiumNpcGhoulCroucher>(GhoulWorld.Npc(TEXT("subject")));
+	FElysiumEntity* Fire = GhoulWorld.World.FindByName(TEXT("fire"));
+	if (!TestNotNull(TEXT("the ghoul spawned"), Ghoul) || !TestNotNull(TEXT("the particle spawned"), Fire))
 	{
 		return false;
 	}
-	Ghoul->BurningParticle = Ghoul->Handle;
+	FElysiumNpcWorldFixture::Quiet({ Ghoul });
+	Ghoul->BurningParticle = Fire->Handle;
 	Ghoul->GhoulCroucherScriptUnhideTail();
 	TestTrue(TEXT("m_hBurningParticle survives its own unhide"), Ghoul->BurningParticle.IsSet());
 	Ghoul->BurningParticle = FElysiumEntityHandle::Invalid();

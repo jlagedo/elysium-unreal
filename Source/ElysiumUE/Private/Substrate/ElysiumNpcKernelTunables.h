@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 54 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
+// 62 cells and immediates, 52 ConVars; image sha256 `c546f4de2003624d…`.
 
 #pragma once
 
@@ -215,6 +215,40 @@ namespace ElysiumNpcTunables
 	// component
 	inline constexpr float StandOnHeadSpringNegative = -0.707f;
 
+	// `0x104491b4` f32 — the pooled float 0.1; `_DAT_104491b4` in `ComputeKnockbackVelocity`'s
+	// raw-attack scale, ManBat's probe scale, Ming Xiao's pedestal tolerance and tentacle launch scale
+	// (story 8 wave 2)
+	inline constexpr float Tenth = 0.1f;
+
+	// `0x104aaac4` f32 — the pooled float 0.15; `_DAT_104aaac4` in Werewolf `FindTeleportHint`'s retry
+	// delay and Bach's `0x1036544f` wait (story 8 wave 2)
+	inline constexpr float FifteenHundredths = 0.15f;
+
+	// `0x1044bef8` f32 — the pooled float 0.25; `_DAT_1044bef8` in `BodyTarget`'s anchor drop, slot
+	// 467's cowering hearing scale, Payphone `101aacae`, Werewolf's random-hint retry (story 8 wave 2)
+	inline constexpr float Quarter = 0.25f;
+
+	// `0x10462b70` f32 — the pooled float 1500.0; `_DAT_10462b70`, Werewolf's random-hint reach (story
+	// 8 wave 2)
+	inline constexpr float FifteenHundred = 1500.0f;
+
+	// `0x103d2bc6` imm_f32 — `0x103d2bc6 MOV [ESP+..], 0x451c4000`; Werewolf's move-hint search seeds
+	// its best distance (`fStack_28`) with it
+	inline constexpr float WerewolfMoveHintSeedDistance = 2500.0f;
+
+	// `0x1046bad0` f32 — the pooled float 400.0; `_DAT_1046bad0`, `0x103986b0`'s ideal range for limbs
+	// 0 and 1 (story 8 wave 2)
+	inline constexpr float FourHundred = 400.0f;
+
+	// `0x10462b84` f32 — the pooled float 300.0; `_DAT_10462b84`, `0x103986b0`'s ideal range for limbs
+	// 2 and 3, Ming Xiao's far band (story 8 wave 2)
+	inline constexpr float ThreeHundred = 300.0f;
+
+	// `0x1044eb0c` f32 — the pooled float 20.0; `_DAT_1044eb0c` in `IsHeavyDamage 0x10266660`,
+	// `OnDoorBlocked`'s long retry, the witness timer, Ming Xiao's aim-point Z bonus and many species
+	// cones (story 8 wave 2)
+	inline constexpr float Twenty = 20.0f;
+
 	// --- ConVars -------------------------------------------------------------------------------
 	//
 	// Retail reads a ConVar as `cv->vtable[4]() ? 0 : cv->m_fValue` (`+0x28`) or `… : cv->m_nValue`
@@ -271,6 +305,10 @@ namespace ElysiumNpcTunables
 		DebugShowNpcSkeletons, // `debug_show_npc_skeletons` "0", object `0x10924358`
 		DebugShowBodyTargets, // `debug_show_body_targets` "0", object `0x10924f20`
 		EntTraceConditions, // `ent_trace_conditions` "1", object `0x10924a68`
+		MingXiaoGrubDeath, // `ming_xiao_grub_death` "1", object `0x1093b9b0`
+		WerewolfForceTeleportInTime, // `werewolf_force_teleport_in_time` "25.0", object `0x1093d458`
+		WerewolfTeleportFullPathCheck, // `werewolf_teleport_full_path_check` "1", object `0x1093fa38`
+		WerewolfTeleportIgnoreViewcone, // `werewolf_teleport_ignore_viewcone` "1", object `0x1093f780`
 		Count
 	};
 

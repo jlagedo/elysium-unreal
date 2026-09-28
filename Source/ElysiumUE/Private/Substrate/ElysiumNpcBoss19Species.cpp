@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // Story 8, lane L12. Walked prose in `docs/vtmb/npc-ai/story8/Boss19.md`.
 
@@ -25,7 +26,7 @@ namespace NpcKernelBoss19Species
 	const TCHAR* const GBoss19SpeciesPlayerClass = TEXT("player");
 	constexpr int32 GBoss19SpeciesTransformHatePriority = 10;
 	// The program and the trace line (`NPC_VSabbatLeader.cpp`, `0x1064ed7c`).
-	constexpr int32 GBoss19SpeciesTransformSchedule = 0x163;
+	constexpr int32 GBoss19SpeciesTransformSchedule = ElysiumSched::SCHED_VSABBATLEADER_TRANSFORM_TO_BEAST;   // 0x163
 	constexpr int32 GBoss19SpeciesTransformLine = 0x549;
 }
 

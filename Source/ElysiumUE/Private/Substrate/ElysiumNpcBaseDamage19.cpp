@@ -290,12 +290,10 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 		const bool bAccumulate = Elapsed < ElysiumNpcTunables::OneDouble;  // 0x102662a8 / 0x102662b3
 		const float Sum = bAccumulate
 			? Damage19BaseMagnitude(*Info)
-				+ static_cast<float>(BaseMemory.RepeatedDamageAccumulated)  // 0x102662c6 / 0x102662d1
+				+ BaseMemory.RepeatedDamageAccumulated                      // 0x102662c6 / 0x102662d1
 			: Damage19BaseMagnitude(*Info);                                 // 0x102662e6 / 0x102662ec
-		// `m_flSumDamage` is a float in retail and an int on the port's word (`+0x5d94`,
-		// `FElysiumNpcBaseMemory::RepeatedDamageAccumulated`); the stored sum truncates, the compare
-		// below reads the float exactly as retail's `FSTP`/`FLD` round trip does.
-		BaseMemory.RepeatedDamageAccumulated = static_cast<int32>(Sum);    // 0x102662ef
+		// `m_flSumDamage` (`+0x5d94`), a float word as retail's.
+		BaseMemory.RepeatedDamageAccumulated = Sum;                        // 0x102662ef
 		BaseMemory.RepeatedDamageWindowStart = Now;                        // 0x10266310
 
 		// 16. REPEATED_DAMAGE (0x4e) when `m_iMaxHealth * 0.3 < m_flSumDamage` (strict; `FCOMPP` +

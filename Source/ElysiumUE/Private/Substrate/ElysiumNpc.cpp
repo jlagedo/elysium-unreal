@@ -1293,14 +1293,6 @@ bool FElysiumNpc::SetDisposition(const FString& NewDisposition, int32 NewLevel)
 					TEXT("%s disposition transition '%s' taken"), *DebugString(), *Clip);
 				Mind.RecordExternal(FString::Printf(TEXT("disposition %s L%d -> %s L%d via %s"),
 					*OldRow.Name, OldRow.Level, *NewRow.Name, NewRow.Level, *Clip));
-				// A HOLD, not a cadence: do not re-decide the stance until the transition clip has
-				// played out. It used to be spelled as a `NextThink` write, which the cadence now
-				// owns; the selector consults the deadline instead, like `AmbientNextActivityAt`.
-				if (World)
-				{
-					StanceTransitionUntil =
-						World->NowSeconds() + FMath::Max(0.05, static_cast<double>(Seconds));
-				}
 				return true;
 			};
 			bPlayedTransition = TryTransition(StanceNumber)
@@ -3006,7 +2998,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			*Mem.LastHeardPosition.ToString(), Mem.LastHeardTime));
 	Out.Emplace(TEXT("Last damage"), !BaseMemory.LastDamageAttacker.IsSet()
 		? TEXT("(none)")
-		: FString::Printf(TEXT("from %s, m_flLastDamageTime t=%.2f (m_flSumDamage %d, packet %.1f)"),
+		: FString::Printf(TEXT("from %s, m_flLastDamageTime t=%.2f (m_flSumDamage %.1f, packet %.1f)"),
 			*BaseMemory.LastDamageAttacker.ToString(), BaseMemory.RepeatedDamageWindowStart,
 			BaseMemory.RepeatedDamageAccumulated, LastTakeDamageInfo.Damage));
 

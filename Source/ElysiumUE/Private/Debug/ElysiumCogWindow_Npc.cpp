@@ -919,7 +919,7 @@ void FElysiumCogWindow_Npc::RenderSenses(FElysiumEntityWorld& World, FElysiumNpc
 				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		Row(TEXT("repeated-damage window"), Npc.BaseMemory.RepeatedDamageWindowStart < 0.0
 			? FString(TEXT("closed"))
-			: FString::Printf(TEXT("%d accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,
+			: FString::Printf(TEXT("%.1f accumulated, opened %s"), Npc.BaseMemory.RepeatedDamageAccumulated,
 				*AgeOf(Npc.BaseMemory.RepeatedDamageWindowStart, Now)));
 		// The incoming-attack notice: written by `TASK_ANNOUNCE_ATTACK`, and read by the diagnostics
 		// only — its four `SHOULD_*` consumers are a policy the survey does not decode. Shown so the

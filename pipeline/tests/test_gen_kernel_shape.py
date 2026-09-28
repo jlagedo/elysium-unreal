@@ -117,23 +117,6 @@ def test_comment_and_row_wrapping_hold_the_hundred_column_rule():
         assert cell in joined
 
 
-def test_generated_runner_override_keeps_its_declaration_and_hand_body():
-    row = gks.Slot(slot=488, cls="", method="DeathSound", ret="void", params="",
-                   const=False, tier="walked", words="0")
-    row.port_kind, row.port_name, row.port_why = gks.SLOT_PORT_MAP[488]
-    row.hand = "FElysiumNpc::DeathSound"
-    gks.check_generated_override(row)
-    assert row.port_kind == gks.GENERATED_OVERRIDE
-    assert row.generated
-    row.params = "int"
-    with pytest.raises(SystemExit, match="interface signature"):
-        gks.check_generated_override(row)
-    row.params = ""
-    row.hand = ""
-    with pytest.raises(SystemExit, match="hand body"):
-        gks.check_generated_override(row)
-
-
 def test_digest_changes_when_a_row_changes():
     word = gks.Word(table="CAI_BaseNPCTroika", offset=0x5CC0, member="m_NPCState", type="int",
                     field_type="FIELD_INTEGER", layer="CAI_BaseNPC", tier="datamap", size=4,
@@ -326,10 +309,7 @@ def test_every_slot_has_a_port_callable_and_no_two_share_a_name(model):
 
 def test_no_generated_slot_shadows_the_port_chain(model):
     for row in model.slots:
-        if row.port_kind == gks.GENERATED_OVERRIDE:
-            gks.check_generated_override(row)
-            assert row.port_name in model.reserved
-        elif row.port_kind != gks.PORT:
+        if row.port_kind != gks.PORT:
             assert row.port_name not in model.reserved, \
                 f"slot {row.slot} would shadow `{row.port_name}` in the port's entity chain"
 

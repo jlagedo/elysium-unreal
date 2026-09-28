@@ -141,6 +141,13 @@ public:
 	int32   Health = 0;
 	int32   MaxHealth = 0;
 	int32   Flags = 0;
+	// `m_fFlags2` (`+0x438`, `CBaseEntity`), the second flag word beside `Flags` (`+0x434`).
+	// `AddFlag2` (`0x100b3840`) ORs, `RemoveFlag2` (`0x100b3900`) clears; `GetFlags2` reads it.
+	// Lifted here at story 8 wave 2 from the four per-class spellings (the NPC's, the director's,
+	// the controller's and the Tzimisce runner's). The meaning of bits 4 / 0x10 / 0x20 is unrecovered.
+	uint32  EntityFlags2Word = 0;
+	void AddFlag2(uint32 Bits) { EntityFlags2Word |= Bits; }
+	void RemoveFlag2(uint32 Bits) { EntityFlags2Word &= ~Bits; }
 	FVector Velocity = FVector::ZeroVector;
 	FVector AngularVelocity = FVector::ZeroVector;   // avelocity
 	FVector BaseVelocity = FVector::ZeroVector;      // basevelocity
@@ -230,8 +237,10 @@ public:
 
 	// --- Base inputs (reach every class through the chain) ---
 	void Kill();          // terminal: mark dead + go inert (world reaps the slot)
-	void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
-	void ScriptUnhide();  // the exact inverse
+	// Slots 77 / 78, virtual as retail's (`vt+0x134` / `+0x138`): a species replaces them
+	// (`CNPC_VGhoulCroucher` `0x1037c1c0` / `0x1037c2f0`), and every dispatch reaches that body.
+	virtual void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
+	virtual void ScriptUnhide();  // the exact inverse
 	void PlayDialogFile(const FString& AuthoredPath);
 	void SetSoundOverrideEnt(const FString& EntityName);
 	void SetFakeSilence(bool bEnabled);

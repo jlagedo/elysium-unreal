@@ -84,8 +84,8 @@ public:
 	FString LastTookLifeReason;
 
 	// `AddFlag2(0x10)` (`0x100027bb` at `0x103a454d`) writes `CBaseEntity::m_fFlags2` (`+0x438`),
-	// which is `FElysiumNpc::EntityFlags2Word` (`ElysiumNpcSpawn19.inl`); the class's own seam word
-	// was folded into it (story 8 L08 integration). The meaning of bit `0x10` is unrecovered.
+	// which is `FElysiumEntity::EntityFlags2Word` (lifted to the entity at story 8 wave 2). The
+	// meaning of bit `0x10` is unrecovered.
 
 	/** The `+0x6360` / `+0x6361` bytes and the `+0x6364` word `NPCInit` writes after the five law
 	 *  thresholds: story 1's dead `SecureType` scrambler (`0x10009408` over 0, XOR/AND-mixed into

@@ -763,7 +763,7 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 
 	// 10 more inside the second: the sum 30 is NOT over 30 (strict `<`).
 	Hit(10, 10.5);
-	TestEqual(TEXT("0x102662c6 inside 1.0 s the sum ACCUMULATES"), Guard.BaseMemory.RepeatedDamageAccumulated, 30);
+	TestEqual(TEXT("0x102662c6 inside 1.0 s the sum ACCUMULATES"), Guard.BaseMemory.RepeatedDamageAccumulated, 30.f);
 	TestFalse(TEXT("0x1026631d a sum of exactly 30 % is not REPEATED_DAMAGE"), Has(EElysiumNpcCond::RepeatedDamage));
 
 	// 21 inside the window: heavy, and the sum 51 is over 30.
@@ -776,7 +776,7 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	// A full second after the last stamp the sum RESETS to the new hit rather than decaying.
 	Hit(5, 11.9);
 	TestEqual(TEXT("0x102662a8 curtime - m_flLastDamageTime >= 1.0 resets the sum"),
-		Guard.BaseMemory.RepeatedDamageAccumulated, 5);
+		Guard.BaseMemory.RepeatedDamageAccumulated, 5.f);
 	TestFalse(TEXT("...so the sum no longer clears the threshold"), Has(EElysiumNpcCond::RepeatedDamage));
 	TestEqual(TEXT("0x10266310 m_flLastDamageTime = curtime"), Guard.BaseMemory.RepeatedDamageWindowStart,
 		F.World.NowSeconds());
@@ -1369,7 +1369,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 		Record->AnchorNavNode = 12;
 	}
 	F.Guard->BaseMemory.RepeatedDamageWindowStart = 12.5;
-	F.Guard->BaseMemory.RepeatedDamageAccumulated = 17;
+	F.Guard->BaseMemory.RepeatedDamageAccumulated = 17.f;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
 
 	ElysiumRoundTripSnapshot(F.World, G.World);
@@ -1391,7 +1391,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	TestEqual(TEXT("...velocity and nav identities"), RestoredRecord->LastNavNode, 11);
 	TestEqual(TEXT("...and its anchor nav identity"), RestoredRecord->AnchorNavNode, 12);
 	TestEqual(TEXT("the repeated-damage window sum survives"),
-		G.Guard->BaseMemory.RepeatedDamageAccumulated, 17);
+		G.Guard->BaseMemory.RepeatedDamageAccumulated, 17.f);
 	TestTrue(TEXT("...with its window root"),
 		FMath::IsNearlyEqual(G.Guard->BaseMemory.RepeatedDamageWindowStart, 12.5, 0.001));
 

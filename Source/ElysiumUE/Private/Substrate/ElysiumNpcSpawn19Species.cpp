@@ -70,6 +70,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // The retail constants these bodies push, each once, named after the instruction that pushes it.
 // File-static and `GSpawn19`-prefixed because a unity build concatenates this file with the
@@ -133,10 +134,10 @@ namespace
 	// The occluded-reaction keyfields the Tzimisce creations are born with: 0 / 0 / 0 / 0 / 100.
 	constexpr int32 GSpawn19OccludedChaseOnly = 100;
 	// Schedules the species bodies install through `0x102ae750`, class-local numbers.
-	constexpr int32 GSpawn19SchedGargoyleDeath = 0x15c;       // `0x10378dc6 PUSH 0x15c`
-	constexpr int32 GSpawn19SchedZombieCollapse = 0x162;      // `0x103dfcbc PUSH 0x162`
-	constexpr int32 GSpawn19SchedBossTransform = 0x158;       // `0x103c61f1 PUSH 0x158`
-	constexpr int32 GSpawn19SchedBossMorph = 0x159;           // `0x103c765d PUSH 0x159`
+	constexpr int32 GSpawn19SchedGargoyleDeath = ElysiumSched::SCHED_VGARGOYLE_DEATH;       // `0x10378dc6 PUSH 0x15c`
+	constexpr int32 GSpawn19SchedZombieCollapse = ElysiumSched::SCHED_VZOMBIE_ANIMATED_DEATH;      // `0x103dfcbc PUSH 0x162`
+	constexpr int32 GSpawn19SchedBossTransform = ElysiumSched::SCHED_VVAMPIREBOSS_TRANSFORM;       // `0x103c61f1 PUSH 0x158`
+	constexpr int32 GSpawn19SchedBossMorph = ElysiumSched::SCHED_VVAMPIREBOSS_TRANSFORM_TO_BEAST;           // `0x103c765d PUSH 0x159`
 	// The selector-trace lines the bodies stamp (`+0x1b30/+0x1b34`, absent words).
 	constexpr int32 GSpawn19LineGargoyle = 0x248;             // NPC_VGargoyle.cpp
 	constexpr int32 GSpawn19LineZombie = 0x2eb;               // NPC_VZombie.cpp
@@ -169,10 +170,8 @@ namespace
 	constexpr double GSpawn19TentacleIgnoreSeconds = ElysiumNpcTunables::Five;
 	// `m_lifeState = LIFE_DYING` (`0x1039e92e` / `0x10395c29`).
 	constexpr int32 GSpawn19LifeDying = 1;
-	// `ming_xiao_grub_death` (`cvar_ming_xiao_grub_death` `0x1093b9b0`, read through `+4`), default "1"
-	// (`DAT_10539978`, read out of the pinned image); `ElysiumNpcKernelTunables.h` has no row for it
-	// yet (listed for the integrator), so it is read here as retail reads an unset ConVar.
-	constexpr int32 GSpawn19MingXiaoGrubDeathDefault = 1;
+	// `ming_xiao_grub_death` (`0x1093b9b0`, default "1") is the tunables table's `MingXiaoGrubDeath`
+	// (story 8 wave 2), read at its one use.
 	// The Hengeyokai's release window (`0x102c43b0(0.75)`).
 	constexpr float GSpawn19HengeyokaiReleaseSeconds = 0.75f;
 
@@ -787,7 +786,7 @@ void FElysiumNpcMingXiao::Event_Killed(void* Arg0)
 		}
 	}
 	// `ming_xiao_grub_death` read as `IsCommand() ? 0 : m_nValue`; only the HEAD tears its grubs down.
-	if (GSpawn19MingXiaoGrubDeathDefault != 0)                                           // 0x10395bea IsCommand / 0x10395bef / 0x10395bfc
+	if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::MingXiaoGrubDeath) != 0)                                           // 0x10395bea IsCommand / 0x10395bef / 0x10395bfc
 	{
 		if (!IsMingXiaoProxy())                                                          // 0x10395c00 -> 0x10398870 / 0x10395c07
 		{
@@ -917,11 +916,7 @@ void FElysiumNpcVampireBoss::TransformationStart()
 	New->ProteanTransformOther = Handle;                                                 // 0x103c61d9 / 0x103c61e0 +0x155c
 	const double Now = Spawn19SpeciesNow(*this);                                         // 0x103c61e6 / 0x103c61f6
 	ProteanTransformStartTime = Now;                                                     // 0x103c61fe US
-	FElysiumNpcVampireBoss* const NewBoss = New->AsSpecies<FElysiumNpcVampireBoss>();
-	if (NewBoss != nullptr)
-	{
-		NewBoss->ProteanTransformStartTime = Now;                                        // 0x103c6204 the new body
-	}
+	New->ProteanTransformStartTime = Now;                                                // 0x103c6204 the new body
 	New->WriteNpcStateRetail(GSpawn19BossNewState);                                      // 0x103c620a +0x5cc0 = 5
 	New->WriteIdealStateRetail(GSpawn19BossNewState);                                    // 0x103c6210 +0x5cc4 = 5
 	New->bIsBccTargetable = true;                                                        // 0x103c6218 +0x1480
@@ -943,6 +938,7 @@ void FElysiumNpcVampireBoss::TransformationStart()
 	// `__RTDynamicCast(new, CNPC_VVampireBoss)` (descriptor `0x1062a654`, `0x103c62ca`), then
 	// `+0x66b0` `m_hTransformPartner`; the cast is null on a non-boss body, which skips the write --
 	// retail's own gate, not a crash guard.
+	FElysiumNpcVampireBoss* const NewBoss = New->AsSpecies<FElysiumNpcVampireBoss>();     // 0x103c62ca
 	if (NewBoss != nullptr)                                                              // 0x103c62ca / 0x103c62d6
 	{
 		NewBoss->TransformPartner = Handle;                                              // 0x103c62dc / 0x103c62e1 +0x66b0

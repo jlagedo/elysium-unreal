@@ -259,9 +259,6 @@ void FElysiumNpcBaseMemory::Serialize(FElysiumSaveArchive& Ar)
 
 void FElysiumNpcBaseMemory::Rebase(const FElysiumEntityWorld& World)
 {
-	// A value another build wrote is refused rather than trusted: a negative damage accumulator
-	// would make the tests that read it unfalsifiable rather than merely wrong.
-	RepeatedDamageAccumulated = FMath::Max(0, RepeatedDamageAccumulated);
 	// Every remembered handle goes through the one rebase path. A handle that no longer resolves
 	// becomes invalid rather than pointing at whichever entity now occupies its slot.
 	Enemy = World.RebaseSavedHandle(Enemy);

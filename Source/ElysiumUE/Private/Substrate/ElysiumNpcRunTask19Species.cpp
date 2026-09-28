@@ -176,21 +176,37 @@ void FElysiumNpcManBat::ManBatKillSpotlight(FElysiumEntity& Light)
 
 void FElysiumNpcHengeyokai::HengeyokaiTask14b()
 {
-	// `0x10383470` -- SEAM. The body is recovered: when `m_flProteanTransformStartTime (+0x1560)
-	// + 2.0 (_DAT_104b6808) < curtime` (`10383489 TEST AH,5` / `1038348c JP`: ordered), the type-0
-	// stat list (`+0x13bc/+0x13c0`, else the global `0x109f0b40`) `Set(0xf, 0)` (`0x1000ccd9`),
-	// `+0x6694 m_bInSharkForm = 1`, `TaskComplete(0)`. It stays a counter because `+0x1560` is a
-	// Troika word the port carries on `FElysiumNpcVampireBoss` only (`ProteanTransformStartTime`),
-	// and moving it is a hot-header change (listed for L13).
+	// `0x10383470` (story 8 wave 2: was a counted seam, blocked on `+0x1560`, now the Troika word
+	// `ProteanTransformStartTime`). Nothing until `m_flProteanTransformStartTime + 2.0`
+	// (`_DAT_104b6808`) `< curtime` (`10383489 TEST AH,5` / `1038348c JP`: ordered, strict); then the
+	// type-0 stat list (`+0x13bc/+0x13c0`, else the global `0x109f0b40`) `Set(0xf, 0)`
+	// (`103834e8 CALL 0x1000ccd9`), `+0x6694 m_bInSharkForm = 1` (`103834f1`), `TaskComplete(0)`
+	// (`103834f8 CALL 0x1000ac68`).
+	constexpr double TransformWaitSeconds = 2.0;   // `_DAT_104b6808`
 	++HengeyokaiTask14bCalls;
+	if (!(ProteanTransformStartTime + TransformWaitSeconds < RunTask19Species::NowOf(*this)))
+	{
+		return;
+	}
+	TypedStatSet(/*ListType*/ 0, /*stat 0x0f, the wound counter*/ 0x0f, 0);
+	bHengeyokaiInSharkForm = true;
+	TaskComplete(/*bIgnoreTaskFailed=*/false);
 }
 
 void FElysiumNpcMingXiao::MingXiaoTask14b()
 {
-	// `0x1039aa20` -- SEAM. Recovered: the same body as Hengeyokai's `0x10383470` without the
-	// `+0x6694` write (`+0x1560 + 2.0 (_DAT_10452dc4) < curtime`, `Set(0xf, 0)`, `TaskComplete(0)`).
-	// Blocked on `+0x1560`, as there.
+	// `0x1039aa20` (story 8 wave 2: was a counted seam, blocked on `+0x1560`). Hengeyokai's
+	// `0x10383470` without the `+0x6694` write: `+0x1560 + 2.0 (_DAT_10452dc4) < curtime`
+	// (`1039aa39 TEST AH,5` / `1039aa3c JP`), `Set(0xf, 0)` (`1039aaa0`), `TaskComplete(0)`
+	// (`1039aaa9`).
+	constexpr double TransformWaitSeconds = 2.0;   // `_DAT_10452dc4`
 	++MingXiaoTask14bCalls;
+	if (!(ProteanTransformStartTime + TransformWaitSeconds < RunTask19Species::NowOf(*this)))
+	{
+		return;
+	}
+	TypedStatSet(/*ListType*/ 0, /*stat 0x0f, the wound counter*/ 0x0f, 0);
+	TaskComplete(/*bIgnoreTaskFailed=*/false);
 }
 
 void FElysiumNpcMingXiao::MingXiaoTentacleGrab()

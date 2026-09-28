@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 54 cells and immediates, 48 ConVars; image sha256 `c546f4de2003624d…`.
+// 62 cells and immediates, 52 ConVars; image sha256 `c546f4de2003624d…`.
 
 #include "Substrate/ElysiumNpcKernelTunables.h"
 
@@ -63,6 +63,10 @@ namespace
 		{ TEXT("debug_show_npc_skeletons"), 0x10924358u, TEXT("0"), 0.0f, 0 },
 		{ TEXT("debug_show_body_targets"), 0x10924f20u, TEXT("0"), 0.0f, 0 },
 		{ TEXT("ent_trace_conditions"), 0x10924a68u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("ming_xiao_grub_death"), 0x1093b9b0u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("werewolf_force_teleport_in_time"), 0x1093d458u, TEXT("25.0"), 25.0f, 25 },
+		{ TEXT("werewolf_teleport_full_path_check"), 0x1093fa38u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("werewolf_teleport_ignore_viewcone"), 0x1093f780u, TEXT("1"), 1.0f, 1 },
 	};
 	static_assert(UE_ARRAY_COUNT(GConVarRows) == static_cast<int32>(EConVar::Count),
 		"one row per EConVar enumerator");

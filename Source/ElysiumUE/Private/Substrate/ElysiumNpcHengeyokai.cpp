@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 #include "Visual/ElysiumActionTables.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
@@ -644,9 +645,9 @@ void FElysiumNpcHengeyokai::HengeyokaiEnterMorph()
 	// written BEFORE the target skin, so both land on the same think and the swap is instant.
 	// `+0x1b30`/`+0x1b34` := `NPC_VHengeyokai.cpp`, 0x985 — absent in the shape map; recorded.
 	RecordScheduleEvent(TEXT("EnterMorph trace NPC_VHengeyokai.cpp:2437"));  // 0x103830ea / 0x103830f4
-	// `0x16e`, the morph program — the same class-local id this class's `TranslateScheduleRetail`
-	// gates its skin test on above.
-	constexpr int32 MorphSchedule = 0x16e;
+	// `0x16e`, the morph program (the corpus registers it as `SCHED_VHENGEYOKAI_STUNNED`) — the same
+	// class-local id this class's `TranslateScheduleRetail` gates its skin test on above.
+	constexpr int32 MorphSchedule = ElysiumSched::SCHED_VHENGEYOKAI_STUNNED;
 	SetSchedule(MorphSchedule, false);                                       // 0x103830e5 / 0x103830fe 0x102ae750
 	// `CBaseAnimating::SetSkinFadeTime(0.0)` (`0x1008d5f0`): a time at or below `_DAT_1044fab0`
 	// (a DOUBLE, 0.0 in the image) stores the floor, so the fade time is 0.0 (`0x1008d61f FCOMP` /

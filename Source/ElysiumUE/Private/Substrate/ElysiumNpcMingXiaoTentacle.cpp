@@ -35,6 +35,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with this class's bodies (story 5 step 4) ---
 
@@ -382,9 +383,9 @@ namespace NpcKernelBoss19Tentacle
 {
 	// The three death programs `0x1039e970` chooses between, and their `NPC_VMingXiaoTentacle.cpp`
 	// trace lines.
-	constexpr int32 GBoss19TentacleDieA = 0x16a;
-	constexpr int32 GBoss19TentacleDieDefault = 0x16b;
-	constexpr int32 GBoss19TentacleDieNoSequence = 0x16c;
+	constexpr int32 GBoss19TentacleDieA = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_DELAYED_DIE;        // 0x16a
+	constexpr int32 GBoss19TentacleDieDefault = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_EXPLODE_DIE;  // 0x16b
+	constexpr int32 GBoss19TentacleDieNoSequence = ElysiumSched::SCHED_VMING_XIAO_TENTACLE_SIMPLE_DIE; // 0x16c
 	constexpr int32 GBoss19TentacleLineDefault = 0x589;
 	constexpr int32 GBoss19TentacleLinePhase2 = 0x590;
 	constexpr int32 GBoss19TentacleLinePhase3Sequence = 0x598;

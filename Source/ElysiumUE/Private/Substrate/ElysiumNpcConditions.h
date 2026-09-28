@@ -423,12 +423,10 @@ struct FElysiumNpcCognition
 	// the load time so an hour-old remembered gunshot does not promote a restored NPC to alert.
 	double GatheredAt = -1.0;
 
-	// One report each, per NPC.
 	// Story 29e, family State19: there is no `bWarnedCombatWithoutEnemy` latch. Retail's
 	// `DevWarning(2, "***Combat state with no enemy!")` (`105cc04c`) is emitted unlatched by all
 	// five bodies that carry it — `0x1026f660`, `0x1035fe80`, `0x103851e0`, `0x103b4ff0`,
 	// `0x103bd690` — and `CNPC_VAnimal`'s fires even on the passes where its arm did not take.
-	bool bReportedAlertRefusal = false;
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
 	int32 StarvedScheduleNumber = -1;

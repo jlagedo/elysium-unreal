@@ -311,13 +311,12 @@ def lower_type(retail: str, family: set[str]) -> tuple[str, str]:
 #
 # A retail slot name the port's entity chain already declares is a decision. `PORT` says the
 # existing method IS that slot's body and no virtual is generated for it; `SUFFIX` says the
-# collision is accidental and the slot takes `<Name>Slot<N>`. `GENERATED_OVERRIDE` retains the
-# generated declaration that deliberately overrides a runner interface; it is not a second
-# implementation or an inherited base body. The last column records why.
+# collision is accidental and the slot takes `<Name>Slot<N>`. The last column records why. (The one
+# `generated-override` row, slot 488 over the schedule runner's `DeathSound` hook, retired with that
+# hook at story 8 wave 2: slot 488 is an ordinary generated slot now.)
 
 PORT = "port"
 SUFFIX = "suffix"
-GENERATED_OVERRIDE = "generated-override"
 # A stub whose body is dead, uncalled and overridden nowhere (0019/5 step 6): no virtual is
 # generated, and the census row stays with an empty port callable.
 DELETED = "deleted"
@@ -430,9 +429,6 @@ def _load_slot_map() -> None:
         (461, PORT, "FElysiumNpcBase::SelectIdealStateRetail",
          "0019/8 shape: the typed `SelectIdealState()` wrapper keeps the census name; the slot's "
          "virtual is the Retail one"),
-        (488, GENERATED_OVERRIDE, "DeathSound",
-         "IElysiumScheduleRunner's void DeathSound() is implemented by the generated declaration "
-         "and hand body for Troika 0x10293ec0; TASK_SOUND_DIE and Event_Killed call the same hook"),
         (534, PORT, "FElysiumCombatCharacter::EyeLookTargetHandle",
          "the gaze cascade's chosen subject; `EyeLookTarget` beside it is the point it resolved to"),
         # --- Slots a class below the NPC line overrides (0019/5 commit B) ---------------------
@@ -781,15 +777,6 @@ def chain_subclass_names(repo: Path, overrides: dict[str, set[str]] | None = Non
     return names
 
 
-def check_generated_override(row: Slot) -> None:
-    """Fail if the one reviewed interface override loses its signature or hand implementation."""
-    if row.port_kind == GENERATED_OVERRIDE and (
-            row.slot != 488 or row.declaration != "void DeathSound()"
-            or row.port_name != "DeathSound" or row.hand != "FElysiumNpc::DeathSound"):
-        raise SystemExit(f"gen_kernel_shape: generated override {row.slot} no longer matches "
-                         "the reviewed interface signature and hand body")
-
-
 def apply_verdict(row: Slot, ledger) -> None:
     """Read the overlay's verdict for `row.body` into the row's emission (default / hand)."""
     row.verdict, row.verdict_target, row.default, row.hand = "", "", "", ""
@@ -994,7 +981,6 @@ def build(repo: Path, module: str, depth: int) -> Model:
             if param_note:
                 row.notes.append(f"takes {param_note}")
         apply_verdict(row, ledger)
-        check_generated_override(row)
         split_layers(row, ledger, tables)
 
     # A slot the chain now declares below the NPC line is inherited by every entity class; a

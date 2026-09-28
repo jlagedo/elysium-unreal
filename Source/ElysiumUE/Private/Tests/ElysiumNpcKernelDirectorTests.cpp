@@ -108,7 +108,7 @@ bool FElysiumNpcKernelDirectorSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("SetMoveType(MOVETYPE_NONE)"), Named->RetailMoveType, 0);
 	TestFalse(TEXT("m_bIsBCCTargetable = 0"), Named->bIsBccTargetable);
 	TestFalse(TEXT("m_bIsAlive = 0"), Named->bNpcIsAlive);
-	TestEqual(TEXT("AddFlag2(0x10)"), Named->Flags2Added, 0x10u);
+	TestEqual(TEXT("AddFlag2(0x10)"), Named->EntityFlags2Word, 0x10u);
 	TestFalse(TEXT("m_hNextCine = -1"), Named->NextCine.IsSet());
 
 	// The think: an unnamed cine, or spawnflag 0x10, arms CineThink at +1.0; only a NAMED one that
