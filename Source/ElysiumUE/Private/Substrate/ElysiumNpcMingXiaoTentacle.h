@@ -134,6 +134,19 @@ public:
 	virtual void Event_Killed(void* Arg0) override;
 	virtual int32 OnTakeDamage_Alive(void* Arg0) override;
 	virtual void RunAI(bool Arg0) override;
+
+	// --- RunAi19 (story 0019/8 lane L13a): what slot 432 `0x1039e3d0` reads and calls ----------
+	// `m_flIgnoreCollisionTimer` (+0x6684) and `m_bHitGroundSound` (+0x6698), both `CNPC_VMingXiaoTentacle`
+	// datamap words the species shape map still lists ABSENT (integrator: flip the two rows, and the
+	// stale `+0x667c` row, to these members).
+	double TentacleIgnoreCollisionTimer = 0.0;   // +0x6684 m_flIgnoreCollisionTimer (datamap)
+	bool bTentacleHitGroundSound = false;        // +0x6698 m_bHitGroundSound (datamap)
+	/** `0x1039f030` -- the landing thud: `EmitSound(CPASAttenuationFilter(slot 222, 0.8), entindex,
+	 *  CHAN_BODY 4, table 0x106477c8[RandomInt(0, 0)], 1.0, 0.8, 0, 100)` -- `tentacle_hit_ground.wav`. */
+	void TentacleHitGroundSound();
+	/** `0x1039f1a0` -- the flop loop's start: the same emit on `CHAN_VOICE` 2 over the one-entry table
+	 *  `0x106477cc`, `tentacle_flopping_loop.wav`, flags 0 (`0x1039f310` stops it at death). */
+	void TentacleFloppingSound();
 	virtual void GatherConditions() override;
 	virtual int32 StartTaskSlot442(void* Arg0) override;
 	virtual int32 RunTaskSlot444(void* Arg0) override;
