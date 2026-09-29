@@ -3,6 +3,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumNpcBase.h"
 
 namespace ElysiumNpcSight
 {
@@ -22,7 +23,8 @@ namespace ElysiumNpcSight
 	{
 		if (Probe == ProbeCentre)
 		{
-			return (MinsCm + MaxsCm) * 0.5 + OriginCm;                       // 100a7360
+			const FVector Offset = (MinsCm + MaxsCm) * 0.5;                    // 100a7360
+			return FVector(OriginCm.X + Offset.X, OriginCm.Y - Offset.Y, OriginCm.Z + Offset.Z);
 		}
 		if (Probe < ProbeFirstTopCorner || Probe > ProbeLastCorner)
 		{
@@ -32,7 +34,9 @@ namespace ElysiumNpcSight
 		const bool bBottom = Probe >= ProbeFirstBottomCorner;
 		const int32 Corner = Index & 3;                                       // mm, mM, Mm, MM
 		const double CornerX = ((Corner & 2) != 0 ? MaxsCm.X : MinsCm.X) + OriginCm.X;
-		const double CornerY = ((Corner & 1) != 0 ? MaxsCm.Y : MinsCm.Y) + OriginCm.Y;
+		// The box is retail's (Source axes); the origin is the port's (Y mirrored). The corner is
+		// chosen in retail's axes, then its Y offset is negated into the port's.
+		const double CornerY = OriginCm.Y - ((Corner & 1) != 0 ? MaxsCm.Y : MinsCm.Y);
 		const double CornerZ = (bBottom ? MinsCm.Z : MaxsCm.Z) + OriginCm.Z;
 		const double CentreZ = (MinsCm.Z + MaxsCm.Z) * 0.5 + OriginCm.Z;
 		return FVector(CornerX, CornerY, CentreZ + CornerPull * (CornerZ - CentreZ));
@@ -82,6 +86,21 @@ namespace ElysiumNpcSight
 			{
 				continue;
 			}
+			// Then `CTraceFilterSimple::ShouldHitEntity 0x101d31c0`'s own gates, which the kernel's
+			// trace filters share (`FElysiumNpcBase::KernelTraceKeepsCharacter`, R2 section 1 step 4):
+			// MONSTER, a combat character with `m_bIsBCCTargetable == 0` or script-hidden skipped, and
+			// slot 68 in either direction. They belong to `FVisible`'s filter only: `TwoEnt` has none.
+			// A looker that is not an NPC has no slot 68 to ask, and is answered by transparency alone.
+			if (!Query.bNpcsBlock)
+			{
+				const FElysiumEntity* LookerEntity =
+					Query.World != nullptr ? Query.World->Resolve(Query.Looker) : nullptr;
+				const FElysiumNpcBase* LookerNpc = LookerEntity != nullptr ? LookerEntity->AsNpcBase() : nullptr;
+				if (LookerNpc != nullptr && !LookerNpc->KernelTraceKeepsCharacter(Character.Entity, Query.Mask))
+				{
+					continue;
+				}
+			}
 			Kept = &Character;
 			break;
 		}
@@ -102,5 +121,42 @@ namespace ElysiumNpcSight
 			*OutBlocker = Hit;                                               // Invalid: the static world
 		}
 		return false;
+	}
+}
+
+namespace ElysiumNpcSight
+{
+	bool RayReaches(const FElysiumNpcBase& Tester, const FVector& FromCm, const FVector& ToCm, int32 Mask,
+		const FElysiumEntity* Target)
+	{
+		const IElysiumEmbodiment* Embodiment = Tester.World != nullptr ? Tester.World->Embodiment() : nullptr;
+		if (Embodiment == nullptr)
+		{
+			return true;
+		}
+		FElysiumRetailTrace Trace;
+		Trace.StartCm = FromCm;
+		Trace.EndCm = ToCm;
+		Trace.RetailMask = Mask;
+		Trace.Ignore.Add(Tester.Handle);
+		FElysiumRetailTraceResult Result;
+		if (!Embodiment->TraceRetail(Trace, Result))
+		{
+			return Embodiment->QueryLineOfSight(FromCm, ToCm);
+		}
+		if (Result.Fraction < 1.f || Result.bAllSolid || Result.bStartSolid)
+		{
+			return false;
+		}
+		// Nearest first: the first character the filter keeps decides.
+		for (const FElysiumRetailTraceCharacter& Character : Result.Characters)
+		{
+			if (!Tester.KernelTraceKeepsCharacter(Character.Entity, Mask))
+			{
+				continue;
+			}
+			return Target != nullptr && Character.Entity == Target->Handle;
+		}
+		return true;
 	}
 }

@@ -1,7 +1,9 @@
 #include "Visual/ElysiumEntityBodies.h"
 
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumFog.h"          // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
 #include "Visual/ElysiumPreparedPropModels.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "ElysiumCharacterProvenance.h"
@@ -367,6 +369,10 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	// prop_dynamic is visual-only; prop_physics owns collision. The baked mesh carries
 	// collision geometry for the props that do need it, so it is switched off here per component.
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// An entity prop's body (0018 story 6): whichever leaf later switches its collision on, a retail
+	// trace meets it only under MONSTER (`StandardFilterRules 0x101d3080`, R2 § 2). The leaf that
+	// enables it also sets its sight response (`ElysiumProp.cpp`'s `ElysiumPropTraceBody`).
+	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
 	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
@@ -420,6 +426,11 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 	// Collide as a physics body (blocks the world's BlockAll hull colliders). Simulation, mass and
 	// the elysium.PhysicsProps gate are the leaf's call — the body stands here inert until it decides.
 	Comp->SetCollisionProfileName(TEXT("PhysicsActor"));
+	// An entity prop's body (0018 story 6): `StandardFilterRules 0x101d3080` (R2 § 2) admits it to a
+	// retail trace only under MONSTER -- `PropMaskBit` -- and, admitted, it blocks `FVisible`'s
+	// `0x2804091`, which `PhysicsActor` would ignore: the sight response is set on this body alone.
+	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+	Comp->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
 	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh
 	// blown up 16x overlaps the whole playable space, the canonical HWRT overlap cost).

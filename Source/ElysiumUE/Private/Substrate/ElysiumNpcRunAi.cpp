@@ -163,13 +163,19 @@ FElysiumEntity* FElysiumNpc::RunAi19ObstructionSweep(float LookaheadUnits, bool 
 {
 	// Tzimisce `0x103c0160` addresses; Gargoyle `0x103796a0` and Hengeyokai `0x10380fc0` are the same
 	// arms (`0x103796ac`..`0x103798a2` / `0x10380fcc`..`0x103811c2`) plus the re-trace below.
-	FVector StartUnits = NpcKernelMotorShared::SourceOf(GetOrigin());        // 0x103c016d slot 220
+	// `KernelHullTrace`'s frame: Source units in the PORT's axes (`Origin / U`, Y not negated), so
+	// the retail-axes forward `0x10139610` answers has its Y negated into it, as
+	// `Combat10AngleVectors` does.
+	FVector StartUnits = GetOrigin() / ElysiumMove::U;                        // 0x103c016d slot 220
 	StartUnits.Z += RunAi19SweepRaiseUnits;                                   // 0x103c0189
-	const FVector SweepForward = AngleVectorsForward(RetailGetAnglesDegrees());   // 0x103c01a2 slot 221 / 0x103c01a9 0x10139610
+	FVector SweepForward = AngleVectorsForward(RetailGetAnglesDegrees());     // 0x103c01a2 slot 221 / 0x103c01a9 0x10139610
+	SweepForward.Y = -SweepForward.Y;                                         // retail axes -> the port's
 	FVector EndUnits = StartUnits + SweepForward * LookaheadUnits;                // 0x103c01ae..0x103c01ce the lookahead ConVar
 	// `CTraceFilterSimpleTwoEnt(this, GetIgnoreCollisionEntity(), m_CollisionGroup)`
-	// (`0x103c01d7`..`0x103c0227`): `KernelHullTrace` takes no filter and the port has no
-	// `+0x368` word -- named, the trace is the family Motor seam.
+	// (`0x103c01d7`..`0x103c0227`): family Motor's `KernelHullTrace` (0018 story 6) ignores this NPC
+	// and applies the simple filter's character rule; the second pass entity
+	// (`m_hIgnoreCollisionEntity`, which nothing in this runtime writes) and the `+0x368` group are
+	// not carried -- named.
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
 	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);                      // 0x103c023a / 0x103c0243 m_Collision
@@ -252,8 +258,12 @@ void FElysiumNpc::RunAi19ObstructionPush(FElysiumEntity* Blocker, float Scalar, 
 	// The angular impulse is (0, 0, 0) (`0x103c060e`); THIS body's own velocity, slot 199.
 	FVector OwnVelocity = FVector::ZeroVector;
 	GetVelocity(&OwnVelocity, nullptr);                                       // 0x103c0626 [0x103814a6] slot 199
-	FVector Push(OwnVelocity.Y, -OwnVelocity.X, OwnVelocity.Z);               // rotated -90 degrees, not normalised
-	const FVector BlockerUnits = NpcKernelMotorShared::SourceOf(Blocker->GetOrigin());   // 0x103c0642 [0x103814c2] slot 220
+	// Rotated -90 degrees in retail's axes, not normalised: `(v.y, -v.x, v.z)`. The trace below is in
+	// `KernelHullTrace`'s frame (the port's axes, Y negated from retail's), where the same rotation
+	// reads `(-v.y, v.x, v.z)`; slot 199's velocity is taken in that frame (its body is still a
+	// generated stub that leaves it zero).
+	FVector Push(-OwnVelocity.Y, OwnVelocity.X, OwnVelocity.Z);
+	const FVector BlockerUnits = Blocker->GetOrigin() / ElysiumMove::U;       // 0x103c0642 [0x103814c2] slot 220
 	// A world-only line (`CTraceFilterWorldOnly`) from the blocker along the push.
 	FKernelHullTrace Line;
 	KernelHullTrace(BlockerUnits, BlockerUnits + Push, FVector::ZeroVector, FVector::ZeroVector,

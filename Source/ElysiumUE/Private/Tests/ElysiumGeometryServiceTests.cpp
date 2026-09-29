@@ -13,7 +13,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
+#include "Substrate/ElysiumNpc.h"
 #include "Tests/ElysiumGeometryFixture.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 
 static constexpr EAutomationTestFlags GElysiumGeometryServiceFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -128,6 +130,54 @@ namespace
 				&& ViaServices.HitSignature == Direct.HitSignature);
 		return true;
 	}
+	// The first PNS- convex (by index) with a horizontal top face at least 2 m square: a floor.
+	const FElysiumGeometryConvex* FindLargeFloor(const FElysiumGeometryFixture& Fixture)
+	{
+		for (const FElysiumGeometryConvex& Candidate : Fixture.Convexes(ElysiumGeometrySignatures::SolidToAll))
+		{
+			if (Candidate.TopVertexCount >= 3 && Candidate.TopHalfCm.X >= 100.0
+				&& Candidate.TopHalfCm.Y >= 100.0)
+			{
+				return &Candidate;
+			}
+		}
+		return nullptr;
+	}
+
+	// The first large PNS- floor top (by index) whose HUMAN_HULL volume standing on it is clear of
+	// every other NPC-blocking box: nothing but the floor itself intersects the column from 0.5 cm
+	// above the top (so a coplanar neighbour slab is not a blocker) up the full hull height.
+	const FElysiumGeometryConvex* FindClearFloor(const FElysiumGeometryFixture& Fixture)
+	{
+		FVector HullMins;
+		FVector HullMaxs;
+		FElysiumGeometryFixture::HumanHullCm(HullMins, HullMaxs);
+		for (const FElysiumGeometryConvex& Candidate : Fixture.Convexes(ElysiumGeometrySignatures::SolidToAll))
+		{
+			if (Candidate.TopVertexCount < 3 || Candidate.TopHalfCm.X < 100.0
+				|| Candidate.TopHalfCm.Y < 100.0)
+			{
+				continue;
+			}
+			const FVector Top = Candidate.TopCentreCm;
+			const FBox Volume(FVector(Top.X + HullMins.X, Top.Y + HullMins.Y, Top.Z + 0.5),
+				FVector(Top.X + HullMaxs.X, Top.Y + HullMaxs.Y, Top.Z + HullMaxs.Z + 1.0));
+			bool bClear = true;
+			for (const FBox& Blocker : Fixture.NpcBlockerBoxes)
+			{
+				if (!Blocker.Equals(Candidate.BoundsCm, 0.01) && Blocker.Intersect(Volume))
+				{
+					bClear = false;
+					break;
+				}
+			}
+			if (bClear)
+			{
+				return &Candidate;
+			}
+		}
+		return nullptr;
+	}
 }
 
 // --S-: stops a sight trace and neither pawn.
@@ -221,8 +271,67 @@ bool FElysiumGeometryTutorialEmbeddedHullTest::RunTest(const FString&)
 	return true;
 }
 
-// The ledge: a downward foot-box sweep from just above a floor passes down onto it, and the same
-// sweep from beside the floor's edge, over open space, finds nothing.
+// Contact: a human box resting ON a floor top is not start-solid, and one sunk into it is. Source's
+// hull trace stops `DIST_EPSILON` short of a surface it touches, so retail's "the box stands here"
+// probes (`IsAreaClear 0x102a0fb0`: start == end, `MASK_NPCSOLID`) read a resting box as clear; the
+// world lane's contact tolerance is what this pins, from both sides.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryTutorialContactTest,
+	"Elysium.Content.Geometry.Tutorial.Contact", GElysiumGeometryServiceFlags)
+bool FElysiumGeometryTutorialContactTest::RunTest(const FString&)
+{
+	FElysiumGeometryFixture Fixture;
+	if (!Fixture.Init(*this))
+	{
+		return false;
+	}
+	const FElysiumGeometryConvex* Floor = FindClearFloor(Fixture);
+	if (!TestNotNull(TEXT("the payload carries a large PNS- floor top with a clear human-hull volume above it"),
+		Floor))
+	{
+		return false;
+	}
+	AddInfo(FString::Printf(TEXT("contact: PNS- index %d top %s"), Floor->Index,
+		*GeometryVectorText(Floor->TopCentreCm)));
+
+	FElysiumRetailTrace Request;
+	Request.RetailMask = ElysiumGeometryMasks::NpcSolid;
+	FElysiumGeometryFixture::HumanHullCm(Request.MinsCm, Request.MaxsCm);   // HUMAN_HULL, full row
+	const double U = ElysiumMove::U;
+	struct FContactRow
+	{
+		const TCHAR* Label;
+		double LiftUnits;
+		bool bStartSolid;
+	};
+	const FContactRow Rows[] =
+	{
+		{ TEXT("bottom exactly on the floor top (+0)"), 0.0, false },
+		{ TEXT("bottom 1/32 Source unit above the floor top"), 1.0 / 32.0, false },
+		{ TEXT("box sunk 1 Source unit into the floor"), -1.0, true },
+		{ TEXT("control: box 8 Source units above the floor top"), 8.0, false },
+	};
+	for (const FContactRow& Row : Rows)
+	{
+		Request.StartCm = Floor->TopCentreCm + FVector(0.0, 0.0, Row.LiftUnits * U);
+		Request.EndCm = Request.StartCm;
+		const FElysiumRetailTraceResult Result = Fixture.Trace(Request);
+		TestTrue(*FString::Printf(TEXT("a collision world answers: %s"), Row.Label), Fixture.bLastAnswered);
+		TestEqual(*FString::Printf(TEXT("human box %s is %sstart-solid"), Row.Label,
+			Row.bStartSolid ? TEXT("") : TEXT("NOT ")), Result.bStartSolid, Row.bStartSolid);
+		if (Row.LiftUnits >= 8.0)
+		{
+			TestTrue(TEXT("the control overlap reads fraction 1"), Result.Fraction >= 1.f);
+		}
+	}
+	return true;
+}
+
+// The ledge, asked of the KERNEL on real geometry: `MoveProbeCheckStandPosition`
+// (`CAI_MoveProbe::CheckStandPosition 0x102e7270`: the spot lifted 0.1, dropped slot 523 -- 36 Source
+// units on the Troika line -- under the 0.75/0.25 foot box, `MASK_NPCSOLID`) over the tutorial's
+// payload. A kernel NPC stands in its own headless entity world; its recording services' `TraceRetail`
+// forwards into the fixture, so the probe's one hull trace meets the shipped brushes. Over a large
+// PNS- floor top the probe finds ground; past the floor's edge over open space it does not.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryTutorialLedgeTest,
 	"Elysium.Content.Geometry.Tutorial.Ledge", GElysiumGeometryServiceFlags)
 bool FElysiumGeometryTutorialLedgeTest::RunTest(const FString&)
@@ -232,76 +341,62 @@ bool FElysiumGeometryTutorialLedgeTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FVector HullMins;
-	FVector HullMaxs;
-	FElysiumGeometryFixture::HumanHullCm(HullMins, HullMaxs);
-	// The foot-box: the human footprint, one Source unit thick. The sweep only has to find the floor
-	// under the feet, and a full-height box would meet every ceiling and wall the room has.
-	const FVector FootMins(HullMins.X, HullMins.Y, 0.0);
-	const FVector FootMaxs(HullMaxs.X, HullMaxs.Y, ElysiumMove::U);
-	constexpr double Above = 0.1;
-	constexpr double Drop = 10.0;
-
-	const TArray<FElysiumGeometryConvex>& Solids =
-		Fixture.Convexes(ElysiumGeometrySignatures::SolidToAll);
-	if (!TestTrue(TEXT("the payload carries PNS- convexes"), Solids.Num() > 0))
+	FElysiumNpcWorldBuilder Builder(TEXT("geometry_ledge_stand"), 6001);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Npcs(MoveTemp(Builder));
+	FElysiumNpc* Guard = Npcs.Npc(TEXT("guard"));
+	if (!TestNotNull(TEXT("the kernel NPC"), Guard))
 	{
 		return false;
 	}
-
-	// The floor: the first PNS- convex (by index) with a horizontal top face at least 2 m square.
-	const FElysiumGeometryConvex* Floor = nullptr;
-	for (const FElysiumGeometryConvex& Candidate : Solids)
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	// Both fixtures live on this stack frame and the knob is cleared before it unwinds, so the
+	// reference capture cannot dangle.
+	Npcs.Services.TraceRetailQuery = [&Fixture](const FElysiumRetailTrace& Request,
+		FElysiumRetailTraceResult& Out)
 	{
-		if (Candidate.TopVertexCount >= 3 && Candidate.TopHalfCm.X >= 100.0
-			&& Candidate.TopHalfCm.Y >= 100.0)
-		{
-			Floor = &Candidate;
-			break;
-		}
-	}
+		Out = Fixture.Trace(Request);
+		return Fixture.bLastAnswered;
+	};
+
+	const FElysiumGeometryConvex* Floor = FindLargeFloor(Fixture);
 	if (!TestNotNull(TEXT("the payload carries a PNS- convex with a large horizontal top"), Floor))
 	{
+		Npcs.Services.TraceRetailQuery = nullptr;
 		return false;
 	}
-	const FVector FaceCentreCm = Floor->TopCentreCm;
+	const double U = ElysiumMove::U;
 	AddInfo(FString::Printf(TEXT("ledge: PNS- index %d top %s half %.1f x %.1f"), Floor->Index,
-		*GeometryVectorText(FaceCentreCm), Floor->TopHalfCm.X, Floor->TopHalfCm.Y));
+		*GeometryVectorText(Floor->TopCentreCm), Floor->TopHalfCm.X, Floor->TopHalfCm.Y));
 
-	// Passes: from 0.1 above the top's centre, swept down, the feet meet the floor.
-	{
-		FElysiumRetailTrace Down;
-		Down.StartCm = FaceCentreCm + FVector(0.0, 0.0, Above);
-		Down.EndCm = Down.StartCm - FVector(0.0, 0.0, Drop);
-		Down.MinsCm = FootMins;
-		Down.MaxsCm = FootMaxs;
-		Down.RetailMask = ElysiumGeometryMasks::NpcSolid;
-		const FElysiumRetailTraceResult Result = Fixture.Trace(Down);
-		TestTrue(TEXT("a collision world answers the sweep"), Fixture.bLastAnswered);
-		TestTrue(*FString::Printf(TEXT("the foot-box sweep from 0.1 above the floor top meets it "
-			"(fraction %.3f)"), Result.Fraction), Result.Fraction != 1.f);
-	}
+	// Stands: the feet on the floor top's centre.
+	TestTrue(TEXT("the stand probe finds ground on a PNS- floor top"),
+		Guard->MoveProbeCheckStandPosition(Floor->TopCentreCm / U, ElysiumGeometryMasks::NpcSolid,
+			nullptr, nullptr));
+	TestTrue(TEXT("and it asked the geometry through the forwarder"),
+		Npcs.Services.Saw(TEXT("TraceRetail")));
 
-	// Misses: past the floor's edge, where the payload itself holds nothing that stops an NPC across
-	// the swept column. The point is chosen from the payload's boxes, never from a trace.
-	const FVector Directions[] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0),
-		FVector(0, -1, 0) };
-	const double Clear = 5.0;
-	bool bMissTested = false;
-	for (const FElysiumGeometryConvex& Candidate : Solids)
+	// Falls: past the floor's edge where the payload holds nothing that stops an NPC across the probe's
+	// column (0.1 above the spot down the slot-523 drop, 36 Source units). The point is chosen from
+	// the payload's boxes, never from a trace; the footprint used is wider than the foot box.
+	const double Above = 0.1 * U;
+	const double Drop = 36.0 * U;
+	const double Footprint = 13.0 * U;
+	const FVector Directions[] = { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) };
+	bool bFallTested = false;
+	for (const FElysiumGeometryConvex& Candidate : Fixture.Convexes(ElysiumGeometrySignatures::SolidToAll))
 	{
-		const FVector Centre = Candidate.TopCentreCm;
-		const FVector2D Half = Candidate.TopHalfCm;
-		if (Candidate.TopVertexCount < 3 || Half.X < 100.0 || Half.Y < 100.0)
+		if (Candidate.TopVertexCount < 3 || Candidate.TopHalfCm.X < 100.0 || Candidate.TopHalfCm.Y < 100.0)
 		{
 			continue;
 		}
 		for (const FVector& Direction : Directions)
 		{
-			const double Reach = (Direction.X != 0.0 ? Half.X : Half.Y) + FootMaxs.X + Clear;
-			const FVector Point = Centre + Direction * Reach;
-			const FBox Column(FVector(Point.X - FootMaxs.X, Point.Y - FootMaxs.Y, Centre.Z - Drop - 1.0),
-				FVector(Point.X + FootMaxs.X, Point.Y + FootMaxs.Y, Centre.Z + Above + FootMaxs.Z + 1.0));
+			const double Reach = (Direction.X != 0.0 ? Candidate.TopHalfCm.X : Candidate.TopHalfCm.Y)
+				+ Footprint + 5.0;
+			const FVector Point = Candidate.TopCentreCm + Direction * Reach;
+			const FBox Column(FVector(Point.X - Footprint, Point.Y - Footprint, Point.Z - Drop - 1.0),
+				FVector(Point.X + Footprint, Point.Y + Footprint, Point.Z + Above + 1.0));
 			bool bOpen = true;
 			for (const FBox& Blocker : Fixture.NpcBlockerBoxes)
 			{
@@ -315,27 +410,21 @@ bool FElysiumGeometryTutorialLedgeTest::RunTest(const FString&)
 			{
 				continue;
 			}
-			FElysiumRetailTrace Down;
-			Down.StartCm = FVector(Point.X, Point.Y, Centre.Z + Above);
-			Down.EndCm = Down.StartCm - FVector(0.0, 0.0, Drop);
-			Down.MinsCm = FootMins;
-			Down.MaxsCm = FootMaxs;
-			Down.RetailMask = ElysiumGeometryMasks::NpcSolid;
-			const FElysiumRetailTraceResult Result = Fixture.Trace(Down);
 			AddInfo(FString::Printf(TEXT("ledge: open column past PNS- index %d at %s"), Candidate.Index,
 				*GeometryVectorText(Point)));
-			TestTrue(TEXT("a collision world answers the open-space sweep"), Fixture.bLastAnswered);
-			TestTrue(*FString::Printf(TEXT("the foot-box sweep past the floor's edge finds nothing "
-				"(fraction %.3f)"), Result.Fraction), Result.Fraction == 1.f);
-			bMissTested = true;
+			TestFalse(TEXT("the stand probe finds no ground past the floor's edge over open space"),
+				Guard->MoveProbeCheckStandPosition(Point / U, ElysiumGeometryMasks::NpcSolid, nullptr,
+					nullptr));
+			bFallTested = true;
 			break;
 		}
-		if (bMissTested)
+		if (bFallTested)
 		{
 			break;
 		}
 	}
-	TestTrue(TEXT("the payload has open space beside a large PNS- top to sweep over"), bMissTested);
+	TestTrue(TEXT("the payload has open space beside a large PNS- top to probe over"), bFallTested);
+	Npcs.Services.TraceRetailQuery = nullptr;
 	return true;
 }
 

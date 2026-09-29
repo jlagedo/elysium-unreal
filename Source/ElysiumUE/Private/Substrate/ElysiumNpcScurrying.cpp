@@ -239,8 +239,9 @@ bool FElysiumNpcScurrying::ScurryingFindFleeDestination(const FVector& ThreatPos
 		const bool bTraced = KernelHullTrace(StartCm / ElysiumMove::U, EndCm / ElysiumMove::U,
 			HullMinsUnits(false), HullMaxsUnits(false), 0x202400b, Trace);
 		// `103aceb9`..`103acee1`: BLOCKED while the fraction is below `_DAT_104454c0` (1.0 — `TEST
-		// AH,0x5 / JNP`), or `allsolid` (`+0x36`), or `startsolid` (`+0x37`). The seam reports a
-		// clear trace, which is the arm that returns the endpoint.
+		// AH,0x5 / JNP`), or `allsolid` (`+0x36`), or `startsolid` (`+0x37`). Family Motor's
+		// `KernelHullTrace` answers them (0018 story 6); a world with no collision answers the clear
+		// trace, which is the arm that returns the endpoint.
 		const bool bBlocked = bTraced
 			&& (Trace.Fraction < GFleeDistanceFloor || Trace.bAllSolid || Trace.bStartSolid);
 		if (!bBlocked)

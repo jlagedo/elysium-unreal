@@ -7,6 +7,7 @@
 
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
@@ -30,19 +31,27 @@ static TAutoConsoleVariable<float> CVarElysiumGeomBudgetLogSeconds(
 namespace ElysiumWorldGeometryDetail
 {
 	// A rejected world hit is excluded and the query asked again: Unreal's single and multi traces
-	// both stop at the FIRST blocking hit, so a hit the recipe does not admit (a prop without
-	// MONSTER, an ignored entity's brush) cannot be skipped by reading further down one result list.
-	// Bounded so a pathological pile of props cannot spin; past the bound the trace answers clear.
+	// both stop at the FIRST blocking hit, so a hit the recipe does not admit (an ignored entity's
+	// body, a character missing its mask bit) cannot be skipped by reading further down one result
+	// list. Bounded so a pathological pile cannot spin; past the bound the trace answers clear.
 	constexpr int32 MaxWorldRetraces = 32;
 
-	// The profile the bake applies to a solid static prop (`pipeline/unreal/bake_map_v2.py`: the
-	// prop component and the placed model's collision proxy). It is WorldStatic like the
-	// brush-signature bodies, so no channel tells a prop from a wall; the profile name does.
-	const FName& PropSolidProfile()
-	{
-		static const FName Name(TEXT("ElysiumPropSolid"));
-		return Name;
-	}
+	// The contact tolerance: Source's `DIST_EPSILON`, 1/32 unit (0.079375 cm). Source's box trace
+	// stops that far short of a plane, so a box resting on a floor top does not start in solid.
+	// Unreal's sweep with `bFindInitialOverlaps` can report zero-separation contact as
+	// `bStartPenetrating`, which would read as `startsolid` and refuse every stand, cover and fit
+	// test on flat ground. So the box is asked SHRUNK by this much on every side: a body within
+	// DIST_EPSILON of the box (touching it, or up to 1/32 unit into it) is contact, not solid. A hit
+	// the shrunk box makes is backed off along the ray until the full box stands DIST_EPSILON off the
+	// surface again, which is where Source's endpos stands. A line has no box and is asked as is.
+	//
+	// The shrink alone does not settle it: Chaos can still report a shrunk box on cooked convex
+	// bodies as overlapping. So every start-in-solid candidate is measured as well: the component's
+	// own penetration test (`ComputePenetration`, the deepest penetration over ALL its shapes) with
+	// the FULL box. At most DIST_EPSILON deep is contact, not solid; deeper is solid. Retail's own
+	// box-in-brush test calls any positive depth solid (and a zero-depth touch clear); the 1/32-unit
+	// allowance over that absorbs cooking and float noise and is named as that.
+	constexpr double ContactToleranceCm = 0.03125 * 2.54;
 
 	// The retail ray, as Unreal sweeps it. Source's `Ray_t(start, end, mins, maxs)` places the box
 	// RELATIVE to the traced point; Unreal's shapes are centred on it. So the query runs from
@@ -53,6 +62,8 @@ namespace ElysiumWorldGeometryDetail
 		FVector End = FVector::ZeroVector;
 		FVector Centre = FVector::ZeroVector;
 		FCollisionShape Shape;
+		// The unshrunk box, for the penetration measure (a point-sized box for a zero box).
+		FCollisionShape FullShape;
 		// A zero box: a line.
 		bool bLine = true;
 		// `start == end`: an overlap (`IsAreaClear 0x102a0fb0` traces `pos -> pos`).
@@ -68,10 +79,14 @@ namespace ElysiumWorldGeometryDetail
 		Out.End = Request.EndCm + Out.Centre;
 		Out.bLine = Extent.IsNearlyZero();
 		Out.bOverlap = Request.StartCm.Equals(Request.EndCm);
+		// The box, less the contact tolerance on every side (never below a point).
+		const FVector Asked = Out.bLine
+			? Extent : (Extent - FVector(ContactToleranceCm)).ComponentMax(FVector::ZeroVector);
 		// An overlap needs a volume to ask about: a zero box at one point is asked as a point-sized
 		// box. No recovered retail caller traces a zero box from a point to itself.
 		Out.Shape = FCollisionShape::MakeBox(
-			Out.bOverlap ? Extent.ComponentMax(FVector(0.01)) : Extent);
+			Out.bOverlap ? Asked.ComponentMax(FVector(0.01)) : Asked);
+		Out.FullShape = FCollisionShape::MakeBox(Extent.ComponentMax(FVector(0.01)));
 		return Out;
 	}
 
@@ -105,14 +120,6 @@ namespace ElysiumWorldGeometryDetail
 		{
 			return EAdmit::RejectActor;
 		}
-		// Props by profile -- the named mapping. R2 § 2: `StandardFilterRules 0x101d3080` rejects
-		// every entity that is not a solid brush model unless the mask carries MONSTER. A solid
-		// prop is known here by the `ElysiumPropSolid` profile it wears, not by a mask bit.
-		if (!Recipe.bProps && Component != nullptr
-			&& Component->GetCollisionProfileName() == PropSolidProfile())
-		{
-			return EAdmit::RejectComponent;
-		}
 		// The filter's pass entity and its second (`CTraceFilterSimpleTwoEnt`), whichever body
 		// they stand in.
 		const FElysiumEntityHandle Entity = HandleOf(Component, Actor, ToHandle);
@@ -136,11 +143,31 @@ namespace ElysiumWorldGeometryDetail
 		}
 	}
 
-	// The first admitted blocking body overlapping `Shape` centred at `Centre`, or null.
+	// Whether `Component`'s overlap with the full box centred at `Centre` is contact only: nowhere
+	// deeper than the contact tolerance. `ComputePenetration` reports the deepest penetration over
+	// every shape of the body, so a body that holds the box anywhere reads as solid.
+	bool IsContactOnly(UPrimitiveComponent* Component, const FCollisionShape& FullShape,
+		const FVector& Centre)
+	{
+		if (Component == nullptr)
+		{
+			return false;
+		}
+		FMTDResult Penetration;
+		if (!Component->ComputePenetration(Penetration, FullShape, Centre, FQuat::Identity))
+		{
+			return true;   // the exact test finds no overlap at all
+		}
+		return Penetration.Distance <= ContactToleranceCm;
+	}
+
+	// The first admitted blocking body overlapping `Shape` centred at `Centre`, or null. A body the
+	// full box only touches (`IsContactOnly`) is not solid and is passed over.
 	const FOverlapResult* FirstAdmittedOverlap(UWorld& World, const FVector& Centre,
-		const FCollisionShape& Shape, ECollisionChannel Channel, const FCollisionQueryParams& Params,
-		const FElysiumRetailMaskRecipe& Recipe, const FElysiumRetailTrace& Request,
-		TFunctionRef<FElysiumEntityHandle(const AActor*)> ToHandle, TArray<FOverlapResult>& Scratch)
+		const FCollisionShape& Shape, const FCollisionShape& FullShape, ECollisionChannel Channel,
+		const FCollisionQueryParams& Params, const FElysiumRetailMaskRecipe& Recipe,
+		const FElysiumRetailTrace& Request, TFunctionRef<FElysiumEntityHandle(const AActor*)> ToHandle,
+		TArray<FOverlapResult>& Scratch)
 	{
 		Scratch.Reset();
 		World.OverlapMultiByChannel(Scratch, Centre, FQuat::Identity, Channel, Shape, Params);
@@ -148,7 +175,8 @@ namespace ElysiumWorldGeometryDetail
 		{
 			if (Overlap.bBlockingHit
 				&& AdmitWorldHit(Overlap.GetComponent(), Overlap.GetActor(), Recipe, Request, ToHandle)
-					== EAdmit::Admit)
+					== EAdmit::Admit
+				&& !IsContactOnly(Overlap.GetComponent(), FullShape, Centre))
 			{
 				return &Overlap;
 			}
@@ -176,7 +204,7 @@ namespace ElysiumWorldGeometryDetail
 			// The fraction stays 1 (retail `IsAreaClear` reads the flags beside it, R2 § 4); a body
 			// that holds the whole zero-length trace holds its end too, so both flags go together.
 			if (const FOverlapResult* Solid = FirstAdmittedOverlap(World, Q.Start, Q.Shape,
-					Recipe.Channel, Params, Recipe, Request, ToHandle, Scratch))
+					Q.FullShape, Recipe.Channel, Params, Recipe, Request, ToHandle, Scratch))
 			{
 				Out.bStartSolid = true;
 				Out.bAllSolid = true;
@@ -197,7 +225,7 @@ namespace ElysiumWorldGeometryDetail
 			{
 				return;
 			}
-			const UPrimitiveComponent* Component = Hit.GetComponent();
+			UPrimitiveComponent* Component = Hit.GetComponent();
 			const AActor* Actor = Hit.GetActor();
 			const EAdmit Verdict = AdmitWorldHit(Component, Actor, Recipe, Request, ToHandle);
 			if (Verdict != EAdmit::Admit)
@@ -205,9 +233,37 @@ namespace ElysiumWorldGeometryDetail
 				Exclude(Verdict, Component, Actor, Params);
 				continue;
 			}
+			// A box that starts merely touching a body is not in solid (`ContactToleranceCm`).
+			// Moving into the contact, it is stopped where it stands: fraction 0, not start-solid,
+			// as Source's box resting DIST_EPSILON off a plane and swept into it. Moving off or
+			// along it, the contact is not in the way: asked again without initial overlaps (an
+			// initially-overlapping shape is then passed over, the rest of the body still met).
+			const bool bContact = Hit.bStartPenetrating && !Q.bLine
+				&& IsContactOnly(Component, Q.FullShape, Q.Start);
+			if (bContact && FVector::DotProduct(Q.End - Q.Start, Hit.Normal) >= 0.0)
+			{
+				if (!Params.bFindInitialOverlaps)
+				{
+					return;   // already asked without them: nothing further blocks
+				}
+				Params.bFindInitialOverlaps = false;
+				continue;
+			}
 
-			Out.Fraction = Hit.Time;
-			Out.EndPosCm = Hit.Location - Q.Centre;
+			// The shrunk box met the surface with the full box DIST_EPSILON into it: back off along
+			// the ray until the full box stands DIST_EPSILON off it (twice the tolerance along the
+			// normal), never behind the start. A line hit stands as reported.
+			double Time = Hit.Time;
+			const FVector Delta = Q.End - Q.Start;
+			const double Length = Delta.Size();
+			if (!Q.bLine && !Hit.bStartPenetrating && Length > UE_KINDA_SMALL_NUMBER)
+			{
+				const double Cosine = FMath::Abs(FVector::DotProduct(Delta / Length, Hit.ImpactNormal));
+				const double BackOffCm = 2.0 * ContactToleranceCm / FMath::Max(Cosine, 0.1);
+				Time = FMath::Max(0.0, Time - BackOffCm / Length);
+			}
+			Out.Fraction = static_cast<float>(Time);
+			Out.EndPosCm = Request.StartCm + (Request.EndCm - Request.StartCm) * Time;
 			Out.Normal = Hit.ImpactNormal;
 			Out.HitEntity = HandleOf(Component, Actor, ToHandle);
 			Out.HitSignature = SignatureOf(Component);
@@ -218,13 +274,17 @@ namespace ElysiumWorldGeometryDetail
 			// `startsolid`, and as `allsolid` too when the trace's end also stands in admitted solid
 			// -- the sweep found no exit. A solid the trace leaves and a second one it ends in read as
 			// all-solid here where Source would say start-solid only.
-			if (Hit.bStartPenetrating)
+			if (Hit.bStartPenetrating && !bContact)
 			{
 				Out.bStartSolid = true;
 				const FCollisionShape EndShape = Q.bLine
 					? FCollisionShape::MakeBox(FVector(0.01)) : Q.Shape;
-				Out.bAllSolid = FirstAdmittedOverlap(World, Q.End, EndShape, Recipe.Channel, Params,
-					Recipe, Request, ToHandle, Scratch) != nullptr;
+				const FCollisionShape EndFullShape = Q.bLine
+					? FCollisionShape::MakeBox(FVector(0.01)) : Q.FullShape;
+				FCollisionQueryParams EndParams = Params;
+				EndParams.bFindInitialOverlaps = true;
+				Out.bAllSolid = FirstAdmittedOverlap(World, Q.End, EndShape, EndFullShape,
+					Recipe.Channel, EndParams, Recipe, Request, ToHandle, Scratch) != nullptr;
 			}
 			return;
 		}
@@ -374,10 +434,15 @@ namespace ElysiumWorldGeometry
 			Params.AddIgnoredActor(IgnoreSelf);
 		}
 		// Characters never; movers only under MOVEABLE (R2 § 2: `StandardFilterRules` rejects
-		// movetype 8 without it). The two bits are worn by the bodies themselves: the NPC capsule
-		// and the player's hull carry `CharacterMaskBit`, every brush-entity body `MoverMaskBit`.
+		// movetype 8 without it); entity props only under MONSTER (the same function rejects every
+		// entity that is not a solid brush model unless the mask carries MONSTER). STATIC props are
+		// always met: the engine hands them to no entity filter (R2 § 2, engine `2006aabe..2006aae5`),
+		// and they wear no bit. The bits are worn by the bodies themselves: the NPC capsule and the
+		// player's hull carry `CharacterMaskBit`, every brush-entity body `MoverMaskBit`, every
+		// entity prop's body `PropMaskBit`.
 		Params.IgnoreMask = static_cast<FMaskFilter>(ElysiumRetailMask::CharacterMaskBit
-			| (Recipe.bMovers ? 0 : ElysiumRetailMask::MoverMaskBit));
+			| (Recipe.bMovers ? 0 : ElysiumRetailMask::MoverMaskBit)
+			| (Recipe.bProps ? 0 : ElysiumRetailMask::PropMaskBit));
 
 		ElysiumWorldGeometryDetail::TraceWorld(World, Q, Recipe, Request, Params, ToHandle, Out);
 		if (Recipe.bCharacters)

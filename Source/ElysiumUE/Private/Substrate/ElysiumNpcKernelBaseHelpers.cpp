@@ -109,9 +109,9 @@ bool FElysiumNpc::FUN_1028ebc0(const FVector& PointCm) const
 	{
 		return false;
 	}
-	// Family Motor's `KernelHullTrace` is the kernel-tier seam for `(*DAT_1070b254)->TraceRay`. It
-	// answers false with `Fraction == 1.0`, which IS retail's clear line — so this gate passes
-	// today and the refusal above it is what decides.
+	// Family Motor's `KernelHullTrace` is the kernel tier's `(*DAT_1070b254)->TraceRay` (0018 story
+	// 6). The mask handed here is 0, which traces nothing and answers `Fraction == 1.0` -- retail's
+	// clear line -- so this gate passes and the refusal above it is what decides.
 	FKernelHullTrace Trace;
 	KernelHullTrace(Eye / ElysiumMove::U, PointCm / ElysiumMove::U, FVector::ZeroVector,
 		FVector::ZeroVector, 0, Trace);

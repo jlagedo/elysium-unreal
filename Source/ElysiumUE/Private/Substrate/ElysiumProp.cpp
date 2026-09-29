@@ -1,11 +1,13 @@
 #include "Substrate/ElysiumProp.h"
 
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/BoxComponent.h"
@@ -16,6 +18,21 @@
 #include "HAL/IConsoleManager.h"
 #include "Math/BoxSphereBounds.h"
 #include "Misc/Paths.h"
+
+namespace ElysiumPropTraceBody
+{
+	// An entity prop's body, as the retail trace meets it (0018 story 6). `StandardFilterRules
+	// 0x101d3080` (R2 § 2) admits a solid non-brush entity only under MONSTER: `PropMaskBit` keeps it
+	// out of every other mask's world answer. Admitted, it blocks `FVisible`'s `0x2804091` too, and
+	// `PhysicsActor` ignores the sight channel by default, so the sight response is set on this body
+	// alone rather than on the shared profile. Re-applied after every profile change (a profile
+	// resets responses; the mask filter survives it).
+	void Apply(UPrimitiveComponent* Body)
+	{
+		Body->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+		Body->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
+	}
+}
 
 DEFINE_LOG_CATEGORY(LogElysiumProp);
 
@@ -662,6 +679,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 			if (Solid != 0 && Solid != 2)
 			{
 				Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
+				ElysiumPropTraceBody::Apply(Visual);
 			}
 			else
 			{
@@ -697,6 +715,7 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	UBoxComponent* Box = NewObject<UBoxComponent>(Owner);
 	Box->SetBoxExtent(LocalBounds.BoxExtent);
 	Box->SetCollisionProfileName(TEXT("PhysicsActor"));
+	ElysiumPropTraceBody::Apply(Box);
 	Box->SetupAttachment(Mesh);
 	Box->SetRelativeLocation(LocalBounds.Origin);
 	Box->RegisterComponent();
@@ -720,6 +739,10 @@ void FElysiumProp::GateVisual()
 		if (SolidValue != 0 && SolidValue != 2)
 		{
 			Visual->SetCollisionProfileName(bShown ? TEXT("PhysicsActor") : TEXT("NoCollision"));
+			if (bShown)
+			{
+				ElysiumPropTraceBody::Apply(Visual);   // the profile reset the sight response
+			}
 		}
 	}
 	if (AnimatedVisual)

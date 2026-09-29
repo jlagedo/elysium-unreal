@@ -864,9 +864,10 @@ bool FElysiumCombatCharacter::FInAimCone(FElysiumEntity* AimTarget)
 	// Slot 197 is declared on `FElysiumNpc` only — this runtime stands the Troika line's
 	// `BodyTarget` (`0x102789c0`) and no `CBaseEntity` tier below it. For a non-NPC target the base
 	// `CBaseEntity::BodyTarget` is `WorldSpaceCenter()`, i.e. `GetAbsOrigin() + (mins+maxs)/2`, and
-	// family Motor's `RetailCollisionExtents` — the only source for those extents — is a seam that
-	// answers a zero box, so the centre reduces to the origin. That is a consequence of the extents
-	// seam, not a value invented here.
+	// family Motor's `RetailCollisionExtents` — the only source for those extents — answers the
+	// player's `CGameMovement` hull and nothing for any other non-NPC entity. This arm does not ask it
+	// yet: the aim point is the origin, which is the centre only for a box symmetric about it -- a
+	// named gap, not a value invented here.
 	FElysiumNpc* TargetNpc = AimTarget->AsNpc();
 	const FVector AimPointCm = TargetNpc != nullptr
 		? TargetNpc->BodyTarget(EyeCm, true, false) : AimTarget->Origin;

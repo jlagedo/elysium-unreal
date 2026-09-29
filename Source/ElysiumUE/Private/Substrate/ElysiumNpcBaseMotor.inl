@@ -282,9 +282,10 @@ bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUn
  *  `0x100dc830`) — an entity's OBB mins and maxs, SOURCE units (retail axes), relative to its origin.
  *  For an NPC it is what `UTIL_SetSize` last wrote: the standing hull `m_eHull` (`+0x1568`, the box
  *  word, `HullKind`)'s FULL row (`SetHullSizeNormal 0x10273070`), or its SMALL row while
- *  `m_fIsUsingSmallHull` (`+0x5f2d`) stands (`SetHullSizeSmall 0x10273180`). **SEAM** for every other
- *  entity (the player, props, brush entities): their `+0x274` / `+0x280` words have no source here;
- *  answers false with both left at zero. */
+ *  `m_fIsUsingSmallHull` (`+0x5f2d`) stands (`SetHullSizeSmall 0x10273180`). For the player it is the
+ *  `CGameMovement` hull (`0x1011e0d0`): `(-16,-16,0)..(16,16,72)` standing, `..(16,16,36)` ducked.
+ *  **SEAM** for every other entity (props, brush entities): their `+0x274` / `+0x280` words have no
+ *  source here; answers false with both left at zero. */
 static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits);
 

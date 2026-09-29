@@ -190,35 +190,39 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSightProbeTest,
 	"Elysium.Substrate.Geometry.Sight.Probe", GElysiumTestFlags)
 bool FElysiumNpcSightProbeTest::RunTest(const FString&)
 {
-	// `FVisibleTargetOrigin 0x100a72e0`: a box 20 x 40 x 180 with its feet on the origin.
+	// `FVisibleTargetOrigin 0x100a72e0`: a box 20 x 50 x 180 with its feet on the origin. The box is
+	// retail's (Source axes) and ASYMMETRIC in Y, the origin is the port's (Y mirrored): the corner is
+	// picked in retail's axes and its Y offset negated, so retail's max-Y side lies at origin.Y - maxs.Y.
 	const FVector Eye(100.0, 200.0, 170.0);
 	const FVector Origin(100.0, 200.0, 50.0);
 	const FVector Mins(-10.0, -20.0, 0.0);
-	const FVector Maxs(10.0, 20.0, 180.0);
-	const FVector Centre(100.0, 200.0, 140.0);
+	const FVector Maxs(10.0, 30.0, 180.0);
+	const FVector Centre(100.0, 195.0, 140.0);   // y: origin.Y - (mins.Y + maxs.Y) / 2
 	auto At = [&](int32 Probe)
 	{
 		return ElysiumNpcSight::VisibleTargetOrigin(Probe, Eye, Origin, Mins, Maxs);
 	};
+	const double MinY = 220.0;   // retail's min-Y corner: origin.Y - mins.Y
+	const double MaxY = 170.0;   // retail's max-Y corner: origin.Y - maxs.Y
 
 	TestTrue(TEXT("probe 0 aims at the target's eye"), At(0).Equals(Eye));
 	TestTrue(TEXT("probe 10 aims at the target's eye"), At(10).Equals(Eye));
 	TestTrue(TEXT("a probe above 10 aims at the target's eye"), At(11).Equals(Eye));
-	TestTrue(TEXT("probe 1 aims at the OBB centre"), At(1).Equals(Centre));
+	TestTrue(TEXT("probe 1 aims at the OBB centre, in the port's Y"), At(1).Equals(Centre, 1e-6));
 
-	// Bottom corner mm (probe 6): x, y at the mins, z pulled to cz + 0.9 * (corner.z - cz).
+	// Bottom corner mm (probe 6): z pulled to cz + 0.9 * (corner.z - cz).
 	const double BottomZ = Centre.Z + 0.9 * (Origin.Z + Mins.Z - Centre.Z);
-	TestTrue(TEXT("probe 6 aims at the bottom mm corner, pulled 0.9 toward the centre"),
-		At(6).Equals(FVector(90.0, 180.0, BottomZ), 1e-6));
-	TestTrue(TEXT("probe 9 is the bottom MM corner"),
-		At(9).Equals(FVector(110.0, 220.0, BottomZ), 1e-6));
 	const double TopZ = Centre.Z + 0.9 * (Origin.Z + Maxs.Z - Centre.Z);
-	TestTrue(TEXT("probe 2 is the top mm corner"), At(2).Equals(FVector(90.0, 180.0, TopZ), 1e-6));
-	TestTrue(TEXT("probe 3 is the top mM corner"), At(3).Equals(FVector(90.0, 220.0, TopZ), 1e-6));
-	TestTrue(TEXT("probe 4 is the top Mm corner"), At(4).Equals(FVector(110.0, 180.0, TopZ), 1e-6));
-	TestTrue(TEXT("probe 5 is the top MM corner"), At(5).Equals(FVector(110.0, 220.0, TopZ), 1e-6));
-	TestTrue(TEXT("probe 7 is the bottom mM corner"), At(7).Equals(FVector(90.0, 220.0, BottomZ), 1e-6));
-	TestTrue(TEXT("probe 8 is the bottom Mm corner"), At(8).Equals(FVector(110.0, 180.0, BottomZ), 1e-6));
+	TestTrue(TEXT("probe 2 is the top mm corner"), At(2).Equals(FVector(90.0, MinY, TopZ), 1e-6));
+	TestTrue(TEXT("probe 3 is the top mM corner (retail's max Y, mirrored)"),
+		At(3).Equals(FVector(90.0, MaxY, TopZ), 1e-6));
+	TestTrue(TEXT("probe 4 is the top Mm corner"), At(4).Equals(FVector(110.0, MinY, TopZ), 1e-6));
+	TestTrue(TEXT("probe 5 is the top MM corner"), At(5).Equals(FVector(110.0, MaxY, TopZ), 1e-6));
+	TestTrue(TEXT("probe 6 is the bottom mm corner, pulled 0.9 toward the centre"),
+		At(6).Equals(FVector(90.0, MinY, BottomZ), 1e-6));
+	TestTrue(TEXT("probe 7 is the bottom mM corner"), At(7).Equals(FVector(90.0, MaxY, BottomZ), 1e-6));
+	TestTrue(TEXT("probe 8 is the bottom Mm corner"), At(8).Equals(FVector(110.0, MinY, BottomZ), 1e-6));
+	TestTrue(TEXT("probe 9 is the bottom MM corner"), At(9).Equals(FVector(110.0, MaxY, BottomZ), 1e-6));
 	return true;
 }
 }

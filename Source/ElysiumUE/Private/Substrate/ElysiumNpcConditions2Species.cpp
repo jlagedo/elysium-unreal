@@ -44,6 +44,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
@@ -278,7 +279,7 @@ bool FElysiumNpcHengeyokai::HengeyokaiThrowLosTest(FElysiumEntity* Enemy)
 	const FVector EndCm = Enemy->EyePosition();                          // 103820c0 slot 193
 	// `TraceRay` mask `0x600400b` (`10382182` / `103821a3`), `fraction == 1.0` against the double
 	// `0x10449280` (`103821e9..103821fb`): the family's live world ray.
-	return Conditions19RayReaches(StartCm, EndCm);
+	return ElysiumNpcSight::RayReaches(*this, StartCm, EndCm, 0x600400b, Enemy);
 }
 
 void FElysiumNpcHengeyokai::GatherConditions()
@@ -571,7 +572,7 @@ bool FElysiumNpcTzimisce::TzimisceThrowLosTest(FElysiumEntity* Enemy)
 		- RightVec * (static_cast<double>(TzimisceThrowPosYConVar()) * ElysiumMove::U);   // slot 193 minus right * cvar
 	const FVector EndCm = Enemy->EyePosition();                          // the enemy's slot 193
 	// `TraceRay` mask `0x400b`, `fraction == 1.0` (double `0x10449280`): the family's live world ray.
-	return Conditions19RayReaches(StartCm, EndCm);
+	return ElysiumNpcSight::RayReaches(*this, StartCm, EndCm, 0x400b, Enemy);
 }
 
 bool FElysiumNpcTzimisce::TzimiscePounceTest()

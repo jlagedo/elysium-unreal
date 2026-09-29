@@ -146,10 +146,8 @@ bool SecCameraInViewCone(const FElysiumEntity* Camera, const FElysiumEntity* Tar
 
 // --- `CNPC_VScurrying` ---------------------------------------------------------------------------
 
-/** SEAM for `CAI_BaseNPCTroika::IsAreaClear(pos, mask, 0, 0)` — the jitter arm's acceptance test.
- *  This runtime has no hull sweep; answers true, which admits the jittered point, and the march arm
- *  below is the one a test can drive end to end. */
-bool IsAreaClear(const FVector& PositionCm, int32 Mask) const;
+// The jitter arm's acceptance test is `CAI_BaseNPCTroika::IsAreaClear(pos, 0x202400b, 0, 0)`
+// (`0x102a0fb0`), family Positions' `IsAreaClear` (0018 story 6); no second body stands for it here.
 
 // --- `CNPC_VWerewolf` ----------------------------------------------------------------------------
 

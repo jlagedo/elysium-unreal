@@ -38,8 +38,12 @@ namespace ElysiumRetailMask
 	//   CharacterMaskBit: every character body -- set by lane A on the NPC body's capsule, and by
 	//     lane B on the player pawn's hull.
 	//   MoverMaskBit: every mover -- set by lane A on the mover brush component.
+	//   PropMaskBit: every ENTITY prop's body (`prop_physics`, `prop_dynamic`, their box proxy) --
+	//     met only under MONSTER. Static (GAME_LUMP) props wear no bit: retail's engine never hands
+	//     them to the entity filter (R2 § 2), so every mask meets them.
 	inline constexpr uint8 CharacterMaskBit = 1;
 	inline constexpr uint8 MoverMaskBit = 2;
+	inline constexpr uint8 PropMaskBit = 4;
 
 	// The recipe for one retail mask.
 	//   channel: SIGHT when the mask carries OPAQUE `0x80` or `0x800000` and no MONSTERCLIP;
@@ -47,6 +51,19 @@ namespace ElysiumRetailMask
 	//            else `ECC_Pawn` (MONSTERCLIP `0x20000`: `0x2400b`, `0x202400b`, `0x2000b`).
 	//   bCharacters = bProps = MONSTER; bMovers = MOVEABLE; mask 0 = bNothing.
 	// A mask outside the retail set R1/R2 name is logged once, then answered by the same rules.
+	//
+	// UNPORTED ARMS of `StandardFilterRules 0x101d3080` (R2 § 2). The recipe carries its MONSTER
+	// gate (`101d30f2`) and its MOVEABLE gate; these arms are named here and built nowhere:
+	//   - render mode: an entity with `m_nRenderMode != 0` is rejected unless the mask carries
+	//     WINDOW `0x2` (`101d3112`), so a render-transparent prop or brush entity does not stop
+	//     `0x2804091`. The port meets it.
+	//   - solid flag `0x20` (`101d30b6`): an entity carrying it is rejected under every mask. The
+	//     port does not model solid flags on props or brush entities.
+	//   - `blocks_traces` (`m_bBlocksTraces +0xfd`, the keyfield): admits a non-brush entity even
+	//     without MONSTER (`101d30f2`). The port reads no such keyfield; such an entity prop is met
+	//     only under MONSTER.
+	//   - `npc_transparent` (the keyfield; `SetNPCTransparent`): a prop or brush entity carrying it
+	//     is skipped by `FVisible`'s NPC-transparency test. The port meets it.
 	FElysiumRetailMaskRecipe Recipe(int32 RetailMask);
 
 	// True for the masks the recipe was written against (0018 story 6, R1/R2).

@@ -1068,13 +1068,9 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	Player->Origin = PortUnits(20.0, 0.0, 0.0);
 	Leader->Senses.Memory.ClosestPlayer = Player->Handle;
 
-	// `CheckStuck` `0x103ab580` — both boxes come from `m_Collision`'s OBB slots. The leader's is its
-	// standing hull's row (0018 story 6); the PLAYER's `+0x274` / `+0x280` are still a seam, so the
-	// body refuses before it tests anything and the leader is not moved.
-	const FVector Before = Leader->Origin;
-	Leader->CheckStuck();
-	TestEqual(TEXT("CheckStuck moves nobody while the player's extent seam refuses"),
-		Leader->Origin, Before);
+	// `CheckStuck` `0x103ab580` — both boxes come from `m_Collision`'s OBB slots: the leader's is its
+	// standing hull's row (HUMAN_HULL, `(-13,-13,0)..(13,13,72)`), the player's the `CGameMovement`
+	// standing hull (`0x1011e0d0`, `(-16,-16,0)..(16,16,72)`).
 	FVector Mins(1.0, 1.0, 1.0);
 	FVector Maxs(2.0, 2.0, 2.0);
 	FVector RowMins = FVector::ZeroVector;
@@ -1088,9 +1084,23 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	TestTrue(TEXT("and its SMALL row while m_fIsUsingSmallHull stands (0x10273180)"),
 		Mins == RowMins && Maxs == RowMaxs);
 	Leader->bIsUsingSmallHull = false;
-	TestFalse(TEXT("the player's extents are still the seam"),
-		FElysiumNpcBase::RetailCollisionExtents(*Player, Mins, Maxs));
-	TestEqual(TEXT("and zero the mins"), Mins, FVector::ZeroVector);
+	TestTrue(TEXT("the player's box answers"), FElysiumNpcBase::RetailCollisionExtents(*Player, Mins, Maxs));
+	TestEqual(TEXT("0x1011e0d0: standing mins"), Mins, FVector(-16.0, -16.0, 0.0));
+	TestEqual(TEXT("0x1011e0d0: standing maxs"), Maxs, FVector(16.0, 16.0, 72.0));
+	Fixture.Services.bPlayerDucking = true;
+	FElysiumNpcBase::RetailCollisionExtents(*Player, Mins, Maxs);
+	TestEqual(TEXT("ducked: the same footprint at half the height"), Maxs, FVector(16.0, 16.0, 36.0));
+	Fixture.Services.bPlayerDucking = false;
+
+	// The body, 20 units apart on X, both on z 0: the Z spans overlap (the leader's span is built from
+	// the PLAYER's extents -- the reproduced retail bug), the 2-D centre distance 20 is under the radii
+	// sum `|(32,32)|/2 + |(26,26)|/2`, and the push is `d * (sum + 1)`, NOT normalised, from the
+	// player's centre, lifted 5.0 (`_DAT_10454110`).
+	Leader->CheckStuck();
+	const double SumRadius = FMath::Sqrt(2.0 * 32.0 * 32.0) * 0.5 + FMath::Sqrt(2.0 * 26.0 * 26.0) * 0.5;
+	const FVector Expected(20.0 + -20.0 * (SumRadius + 1.0), 0.0, 36.0 + 5.0);
+	TestTrue(TEXT("0x103ab580: the leader is pushed off the player's centre by d * (sum + 1)"),
+		Leader->Origin.Equals(PortUnits(Expected.X, Expected.Y, Expected.Z), 0.05));
 
 	// `PlayerInNoJumpZone` `0x103a9e70` — the hint list is empty, so nobody is ever inside one.
 	TestFalse(TEXT("no player is in a no-jump zone"), Leader->PlayerInNoJumpZone());

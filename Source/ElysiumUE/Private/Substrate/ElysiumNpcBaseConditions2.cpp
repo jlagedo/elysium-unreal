@@ -27,6 +27,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // =================================================================================================
@@ -361,11 +362,11 @@ bool FElysiumNpcBase::Conditions19NavNotOnNetwork() const
 
 bool FElysiumNpcBase::Conditions19RayReaches(const FVector& FromCm, const FVector& ToCm) const
 {
-	// The family's plain world ray: brush-only, no character listed, and not `FVisible`'s. Its
-	// callers name their own retail masks (`0x600400b`, `0x400b`, ...) at their sites; `ElysiumNpcSight`
-	// is the sight trace and carries the character rule.
-	const IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
+	// No caller remains: every site names its own retail mask and goes through
+	// `ElysiumNpcSight::RayReaches` (the wall probe `0x2000b`, the species throw lines `0x600400b` /
+	// `0x400b`, the eluded-enemy ray `0x2804091`). The declaration is `ElysiumNpcBaseConditions2.inl`'s;
+	// this stays as the sight-mask form of that call.
+	return ElysiumNpcSight::RayReaches(*this, FromCm, ToCm, Cond19EnemyVisibleMask, nullptr);
 }
 
 void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
@@ -601,7 +602,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	{
 		// `Ray_t::Init` (`m_IsSwept` from the delta's length, 10271414), `CTraceFilterSimple`
 		// 10271485, `TraceRay` 102714a6.
-		if (!Conditions19RayReaches(EyePosition(), LastKnownCm))   // 102713c9..102714fe (fraction != 1.0)
+		if (!ElysiumNpcSight::RayReaches(*this, EyePosition(), LastKnownCm, Cond19EnemyVisibleMask, nullptr))   // 102713c9..102714fe (mask 0x2804091 at 102714a0, fraction != 1.0)
 		{
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{

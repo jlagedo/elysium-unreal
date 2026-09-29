@@ -582,16 +582,15 @@ bool FElysiumNpc::TraceMoveClearanceAtYaw(int32 UnusedArg, float YawDegrees, flo
 	Mutable->LastYawClearanceSweep = FYawClearanceSweep{ StartUnits, EndUnits, YawDegrees, Reach,
 		GYawSweepTraceMask };
 
-	// `102a17f0`: a 14-word `trace_t` is zeroed and `m_pMoveProbe` (`+0x5d40`) sweeps it through
-	// `0x102e6d70` with mask `0x202400b` and the literal `100.0`; `RET 0xc` returns whatever the
-	// probe left in `AL`, which is why all four call sites read the byte.
-	//
-	// **SEAM**: family Motor's `KernelHullTrace` is the standing hull seam and reports a CLEAR
-	// sweep (`Fraction == 1.0`, no hit entity), so this answers TRUE — the admitting arm, the one
-	// that lets the task run. `100.0` (`_DAT_…`, the literal at `102a17e6`) is the probe's own
-	// argument and has no counterpart in the port's hull call; it is carried in the record above.
-	FKernelHullTrace Trace;
-	KernelHullTrace(StartUnits, EndUnits, HullMinsUnits(false), HullMaxsUnits(false),
-		GYawSweepTraceMask, Trace);
-	return Trace.Fraction >= 1.f && !Trace.HitEntity.IsSet();
+	// `102a17f0`: a 14-word move trace is zeroed and `m_pMoveProbe` (`+0x5d40`) runs `MoveLimit
+	// 0x102e6d70` on it -- the ground arm, mask `0x202400b`, `pct` 100.0 (the literal at `102a17e6`:
+	// the whole leg is stand-tested) -- and `RET 0xc` returns whatever the probe left in `AL`
+	// (`fStatus >= 0`), which is why all four call sites read the byte. A walk, not a hull sweep:
+	// `TestGroundMove 0x102e4f50` steps over what a 16-unit step clears. Family Motor10's
+	// `MotorMoveTraceSweep` is that call; its ground arm is the body's NavMesh raycast (the named
+	// modernization it states), and a motor with no NavMesh keeps the admitting record, so the task
+	// runs.
+	FMotorMoveTrace Trace;
+	return MotorMoveTraceSweep(0, StartUnits, EndUnits, GYawSweepTraceMask, GYawSweepTraceArg, nullptr,
+		Trace);
 }

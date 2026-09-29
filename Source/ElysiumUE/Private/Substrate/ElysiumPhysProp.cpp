@@ -1,8 +1,10 @@
 #include "Substrate/ElysiumPhysProp.h"
 
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumWorldServices.h"
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
 #include "Substrate/ElysiumProp.h"
 
 #include "Components/SkeletalMeshComponent.h"
@@ -277,6 +279,12 @@ void FElysiumPhysProp::GateBody()
 	else if (bSimulating)
 	{
 		Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
+		// 0018 story 6: the profile reset the body's responses. A moving prop is still an entity
+		// prop to `StandardFilterRules 0x101d3080` (R2 section 2): met only under MONSTER
+		// (`PropMaskBit`), and then it blocks `FVisible`'s `0x2804091`, which `PhysicsActor`
+		// ignores -- so the sight Block is set again on this body alone.
+		Visual->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+		Visual->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 		Visual->SetSimulatePhysics(true);
 	}
 }

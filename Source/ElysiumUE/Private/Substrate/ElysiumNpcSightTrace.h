@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "ElysiumEntityHandle.h"
 
+class FElysiumEntity;
 class FElysiumEntityWorld;
+class FElysiumNpcBase;
 class IElysiumEmbodiment;
 
 // `CBaseEntity::FVisible 0x100a6fa0` (Troika slot 201 `0x102b4630` passes through unchanged), the
@@ -61,9 +63,24 @@ namespace ElysiumNpcSight
 	//   2..9: the eight OBB corners, x/y from mins/maxs and z pulled toward the centre to
 	//         `cz + 0.9 * (corner.z - cz)` (`0x10450a9c`); 2..5 the top four, 6..9 the bottom four,
 	//         each in the order (min x, min y), (min x, max y), (max x, min y), (max x, max y).
-	// The box is in the same frame as the origin: centimetres, mins / maxs relative to it.
+	// Frames: `OriginCm` and the result are the port's (centimetres, Unreal axes, Y mirrored relative to
+	// Source); `MinsCm` / `MaxsCm` are retail's OBB (`RetailCollisionExtents` scaled to cm, Source axes),
+	// relative to the origin. The corner is picked in retail's axes (so probe 3 is the box's max-Y side as
+	// retail sees it) and its Y offset is then negated into the port's, as `KernelHullTrace` does for a box.
 	FVector VisibleTargetOrigin(int32 Probe, const FVector& TargetEyeCm, const FVector& OriginCm,
 		const FVector& MinsCm, const FVector& MaxsCm);
+
+	// The kernel's plain world ray, the trace the non-sight callers make (`WEAPON_THROUGH_WALL`'s
+	// `0x2000b`, the species throw lines `0x600400b` / `0x400b`, the eluded-enemy ray `0x2804091`):
+	// `CTraceFilterSimple(tester, 0)`, so the tester is the only pass entity and NO NPC is transparent.
+	// True = the ray reached its end: the world answer has `Fraction >= 1` with neither `allsolid` nor
+	// `startsolid`, and no character the tester's filter keeps (`KernelTraceKeepsCharacter`: MONSTER,
+	// BCC-targetable, script-hidden, slot 68) stands on it. A character that is `Target` is exempt --
+	// UNRECOVERED: the throw lines end at the enemy's eye inside its own box, and retail's shipped
+	// throws work, so the enemy cannot have been a hit. Headless (`TraceRetail` false) answers
+	// `QueryLineOfSight`, as before; no embodiment reads clear.
+	bool RayReaches(const FElysiumNpcBase& Tester, const FVector& FromCm, const FVector& ToCm, int32 Mask,
+		const FElysiumEntity* Target);
 
 	// True = visible. On false, `*OutBlocker` (when non-null) is what stopped the ray: the entity, or
 	// Invalid for the static world (and Invalid on true).
@@ -72,7 +89,8 @@ namespace ElysiumNpcSight
 	// (headless) is `QueryLineOfSight`'s brush-only verdict. (2) The world hit (`Fraction < 1`) is one
 	// candidate; the other is the nearest KEPT character -- `Characters` is walked nearest first, an
 	// unresolved handle is dropped, and unless `bNpcsBlock` so is every entity with `bNpcTransparent`,
-	// which leaves the player. (3) Neither -> visible; the nearer one is `Target` -> visible (a hit on
+	// and every one the looker's `KernelTraceKeepsCharacter` gates refuse (BCC-targetable, script-hidden,
+	// slot 68), which leaves the player. (3) Neither -> visible; the nearer one is `Target` -> visible (a hit on
 	// the target is clear, `100a71ab`); else the blocker is that one, not visible. A tie goes to the
 	// world.
 	bool Visible(const IElysiumEmbodiment& Embodiment, const FVisibleQuery& Query,

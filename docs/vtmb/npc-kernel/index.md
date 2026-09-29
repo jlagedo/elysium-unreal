@@ -140,6 +140,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x100a47d0` | CBaseEntity::UpdateOnRemove | docs/vtmb/camera-view-modes.md § The entity's own class surface — `spawnflags`, the nine overridden slots, `camera_showdebug` (2026-09-07), docs/vtmb/stealth.md § Retail defect: removing an occupied stealth volume leaves its bonus behind |
 | `0x100a55b0` | CBaseEntity::VPhysicsUpdatePusher | docs/vtmb/camera-view-modes.md § 5. What the mode affects |
 | `0x100a6640` | CBaseEntity::VPhysicsCollision | docs/vtmb/retail-defects.md § 2.8 History-test crash — `client.dll` `FUN_10057dc0` |
+| `0x100a6fa0` | CBaseEntity::FVisible | docs/vtmb/npc-ai/senses.md § `FVisible` `0x102b4630` |
 | `0x100a7d00` | CBaseEntity::DispatchTraceAttack | docs/vtmb/combat-and-damage.md § Reverse-engineered mechanics (RE40) |
 | `0x100a8060` | CBaseEntity::MakeDormant | docs/vtmb/npc-ai/lifecycle.md § Map creation, spawn, activation, and first AI admission |
 | `0x100a8710` | CBaseEntity::ScriptHide | docs/vtmb/audio_pipeline.md § Hide, unhide, Kill, docs/vtmb/entity_io.md § Hidden state: StartHidden / ScriptHide / ScriptUnhide, docs/vtmb/npc-ai/authored-control.md § `0x102c1ce0` CAI_BaseNPCTroika::ScriptHide (369 bytes, slot 77), docs/vtmb/npc-ai/conditions-and-states.md § `CPayphone::CanTalk` — `0x101aaee0` (2026-09-13), +2 more |
@@ -172,6 +173,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x100b4c00` | CAISound::FUN_100b4c00 | docs/vtmb/npc-ai/senses.md § Slot 196 `EarPosition` — `0x100b4c00` (2026-09-13) |
 | `0x100b4c30` | CAISound::FUN_100b4c30 | docs/vtmb/npc-ai/shape.md § Slots 192 and 215 `WorldSpaceCenter` — `0x10027160`, `0x100b4c30` |
 | `0x100b4dc0` | CAISound::FUN_100b4dc0 | docs/vtmb/npc-ai/programs.md § The boss transformation programs — task `0x14e` `TASK_VVAMPIREBOSS_SET_AS_MONSTER` (2026-09-20), docs/vtmb/npc-ai/shape.md § The tables, docs/vtmb/stealth.md § Victim selection and per-frame cache (`FindVictim` @ `0x101be1f0`) |
+| `0x100b4de0` | CAISound::FUN_100b4de0 | docs/vtmb/npc-ai/senses.md § `FVisible` `0x102b4630` |
 | `0x100b4ea0` | CAISound::FUN_100b4ea0 | docs/vtmb/combat-and-damage.md § `CBaseEntity::DamageDecal` — `0x100b4ea0`, docs/vtmb/npc-ai/shape.md § The damaged bodies of layers 0–9, read from the listing (2026-09-13) |
 | `0x100b4f30` | CAISound::FUN_100b4f30 | docs/vtmb/npc-ai/shape.md § Slot 226 `VPhysicsUpdate` — the per-movetype physics tick — `0x100b4f30` |
 | `0x100b50a0` | CAISound::FUN_100b50a0 | docs/vtmb/npc-ai/shape.md § Standability is two predicates, not one — `0x100b50a0`, `0x100b5110`, `0x10026f20`, `0x10026fb0`, docs/vtmb/npc-ai/shape.md § `CanStandOn` and `GetGroundVelocityToApply` — `0x10026f80`, `0x1039ebd0`, `0x10027370` |
@@ -273,6 +275,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10106e20` | CBaseCombatCharacter::CalcExpressionIntensity | docs/vtmb/facial_animation.md § The expression stack, and its blend |
 | `0x10107050` | CBaseCombatCharacter::SetDialogPartner | docs/vtmb/npc-ai/social.md § Dialogue does not gate bystanders (2026-09-08) |
 | `0x101072b0` | CBaseCombatCharacter::AddExpressionForEvent | docs/vtmb/npc-ai/schedule-kernel.md § The arms, ascending task id |
+| `0x101075e0` | FUN_101075e0 | docs/vtmb/npc-ai/senses.md § `FVisible` `0x102b4630` |
 | `0x1010e530` | FUN_1010e530 | docs/vtmb/npc-ai/schedule-kernel.md § The arms |
 | `0x10119750` | FUN_10119750 | docs/vtmb/npc-ai/shape.md § The four debug output channels — `0x10119750` and its three siblings (2026-09-13) |
 | `0x10119940` | FUN_10119940 | docs/vtmb/npc-ai/shape.md § The four debug output channels — `0x10119750` and its three siblings (2026-09-13) |
@@ -464,6 +467,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x101c4dd0` | FUN_101c4dd0 | docs/vtmb/audio_pipeline.md § 4. DSP / reverb bank |
 | `0x101cca80` | FUN_101cca80 | docs/vtmb/entity_io.md § State and admission, docs/vtmb/npc-ai/lifecycle.md § `0x1034c2d0` — slot 617 `MakeNPC` |
 | `0x101ccc80` | FUN_101ccc80 | docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPCTroika` slot 595 `0x102b4cc0` |
+| `0x101ccd70` | FUN_101ccd70 | docs/vtmb/npc-ai/senses.md § `FVisible` `0x102b4630` |
 | `0x101ccf50` | FUN_101ccf50 | docs/vtmb/npc-ai/shape.md § `CTraceFilterManBatNoIBeamEntity` — `0x1038fb20` |
 | `0x101cd110` | FUN_101cd110 | docs/vtmb/npc-ai/shape.md § Slots 102 and 184, the two trace-shaped mechanisms — `0x100ab450`, `0x10267260` |
 | `0x101cd8c0` | FUN_101cd8c0 | docs/vtmb/entity_io.md § `OnStartTouch` still fires inside the `wait == -1` removal window, docs/vtmb/entity_io.md § `logic_relay` spawnflags and refire, docs/vtmb/stealth.md § Retail defect: removing an occupied stealth volume leaves its bonus behind |
@@ -683,7 +687,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1026e4f0` | CAI_BaseNPC::PerformSensing | docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPC::GatherConditions` — `0x1026ec30` (slot 433, 987 bytes), docs/vtmb/npc-ai/schedule-kernel.md § `TASK_MAKE_OBLIVIOUS` and `m_iIsOblivious`, docs/vtmb/npc-ai/senses.md § The sense pass for a hated player, walked (2026-09-08), docs/vtmb/stealth.md § HUD publication and input commitment |
 | `0x1026e5c0` | CAI_BaseNPC::ClearSenseConditions | docs/vtmb/npc-ai/conditions-and-states.md § The condition clears — `0x1026dc80`, `0x1026e5c0`, `0x1026d7f0`, `0x101a89a0` (2026-09-13) |
 | `0x1026e5e0` | CAI_BaseNPC::CheckOnGround | docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPC::GatherConditions` — `0x1026ec30` (slot 433, 987 bytes), docs/vtmb/npc-ai/shape.md § `CheckOnGround`, `CanStandAt` and `GetGroundpoint` — `0x1026e5e0`, `0x102a0ed0`, `0x103d6a40` |
-| `0x1026e940` | FUN_1026e940 | docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12) |
+| `0x1026e940` | FUN_1026e940 | docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/npc-ai/shape.md § `CheckOnGround`, `CanStandAt` and `GetGroundpoint` — `0x1026e5e0`, `0x102a0ed0`, `0x103d6a40` |
 | `0x1026ec30` | CAI_BaseNPC::GatherConditions | docs/vtmb/npc-ai/conditions-and-states.md § Story 8, family Conditions19 — slot 433 `GatherConditions` `0x1026ec30` / `0x102b27f0`, slot 481 `GatherEnemyConditions` `0x10270b20`, the species gathers (2026-09-27), docs/vtmb/npc-ai/conditions-and-states.md § The comfort sweep `0x102b1a20`, walked, docs/vtmb/npc-ai/conditions-and-states.md § The port's NPC-core guesses, settled (2026-09-21), docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPC::GatherConditions` — `0x1026ec30` (slot 433, 987 bytes), +6 more |
 | `0x1026f110` | CAI_BaseNPC::RunAI | docs/vtmb/npc-ai/README.md § NPC AI — The NPC AI oracle, docs/vtmb/npc-ai/conditions-and-states.md § `DELAY_INTERRUPTS`, decoded, docs/vtmb/npc-ai/lifecycle.md § AI update loop, docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), +11 more |
 | `0x1026f4d0` | FUN_1026f4d0 | docs/vtmb/npc-ai/schedule-kernel.md § The kernel's failure route and the base programs, walked (2026-09-12, story 25) |
@@ -754,7 +758,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10278090` | CAI_BaseNPC::FUN_10278090 | docs/vtmb/npc-ai/shape.md § Slot 482 `CanPlaySequence`'s Troika-line body — `0x10278090`, docs/vtmb/npc-ai/shape.md § Slot 482 `CanPlaySequence`, the species half — `0x103850a0`, `0x10396e90`, docs/vtmb/npc-ai/shape.md § Slot 482 — the species copies, `0x1035fd40`, `0x103bd270` |
 | `0x102781a0` | FUN_102781a0 | docs/vtmb/npc-ai/social.md § `0x102781a0` — same-squad test |
 | `0x102781e0` | FUN_102781e0 | docs/vtmb/npc-ai/lifecycle.md § `0x1034c2d0` — slot 617 `MakeNPC`, docs/vtmb/npc-ai/shape.md § `PlayHintIdleActivity` `0x102aaa60` and the five hint-node activity lookups |
-| `0x10278220` | FUN_10278220 | docs/vtmb/navigation-jump-links.md § 2. Goal-flag `0x2` (explicit node route, `SetGoal 0x102ecd20`; test at `0x102ecf27`, taken at `0x102ecf2e`), docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The goal types, their issuers and the goal record (2026-09-21, 0018 story 5), docs/vtmb/npc-ai/schedule-kernel.md § Helpers the lanes shared — `0x10289ee0`, `0x1028a150`, `0x102dfed0`, `0x102d1180`, `0x10278220`, `0x102784a0`, +3 more |
+| `0x10278220` | FUN_10278220 | docs/vtmb/navigation-jump-links.md § 2. Goal-flag `0x2` (explicit node route, `SetGoal 0x102ecd20`; test at `0x102ecf27`, taken at `0x102ecf2e`), docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The goal types, their issuers and the goal record (2026-09-21, 0018 story 5), docs/vtmb/npc-ai/schedule-kernel.md § Helpers the lanes shared — `0x10289ee0`, `0x1028a150`, `0x102dfed0`, `0x102d1180`, `0x10278220`, `0x102784a0`, +4 more |
 | `0x102784a0` | FUN_102784a0 | docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/schedule-kernel.md § Helpers the lanes shared — `0x10289ee0`, `0x1028a150`, `0x102dfed0`, `0x102d1180`, `0x10278220`, `0x102784a0`, docs/vtmb/npc-ai/schedule-kernel.md § Schedule seam integration (0019/3 D–E, 2026-09-22), docs/vtmb/npc-ai/schedule-kernel.md § The arms, +1 more |
 | `0x10278650` | FUN_10278650 | docs/vtmb/npc-ai/rdata-cells.md § `.rdata` cells the NPC oracle had left unread, docs/vtmb/npc-ai/schedule-kernel.md § `CAI_BaseNPC::GetShootTarget` `0x10278650`, docs/vtmb/npc-ai/senses.md § `GetShootEnemyDir` `0x10278900`, docs/vtmb/npc-ai/shape.md § `CAI_BaseNPCTroika::NPCThinkDebugPre` — `0x10292500`, +1 more |
 | `0x10278900` | CAI_BaseNPC::FUN_10278900 | docs/vtmb/npc-ai/senses.md § `GetShootEnemyDir` `0x10278900` |
@@ -1103,7 +1107,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102b4090` | CommitBestSound | docs/vtmb/npc-ai/senses.md § Hearing, walked (2026-09-08), docs/vtmb/npc-ai/senses.md § `CommitBestSound 0x102b4090` — the priority ladder and the ninth record (2026-09-21, 0018 story 13) |
 | `0x102b4520` | CAI_BaseNPCTroika::FUN_102b4520 | docs/vtmb/npc-ai/conditions-and-states.md § Story 29e, family State19 — `SetState` `0x1026e340`, `SelectIdealState` `0x1026f660` / `0x102ad660` (2026-09-14), docs/vtmb/npc-ai/senses.md § Hearing, walked (2026-09-08), docs/vtmb/npc-ai/senses.md § The sound and scent memory readers — `0x102b4520`, `0x1026aef0`, `0x1026af30`, docs/vtmb/npc-ai/senses.md § `CommitBestSound 0x102b4090` — the priority ladder and the ninth record (2026-09-21, 0018 story 13) |
 | `0x102b4540` | CAI_BaseNPCTroika::FInViewCone | docs/vtmb/npc-ai/conditions-and-states.md § The sound sweep `0x102b1cd0`, walked, docs/vtmb/npc-ai/senses.md § Slot 362 `CAI_BaseNPC::FInViewCone(const Vector&)` — `0x10326a20`, docs/vtmb/npc-ai/senses.md § The sense pass for a hated player, walked (2026-09-08) |
-| `0x102b4630` | CAI_BaseNPCTroika::FVisible | docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/conditions-and-states.md § The sound sweep `0x102b1cd0`, walked, docs/vtmb/npc-ai/senses.md § R6 integration corrections from raw bodies (2026-09-08), docs/vtmb/npc-ai/senses.md § The sense pass for a hated player, walked (2026-09-08), +2 more |
+| `0x102b4630` | CAI_BaseNPCTroika::FVisible | docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/conditions-and-states.md § The sound sweep `0x102b1cd0`, walked, docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPC::GatherEnemyConditions` — `0x10270b20` (slot 481, 2807 bytes), docs/vtmb/npc-ai/senses.md § R6 integration corrections from raw bodies (2026-09-08), +3 more |
 | `0x102b4760` | CAI_BaseNPCTroika::FUN_102b4760 | docs/vtmb/combat-and-damage.md § NPC damage response and stagger boundaries, docs/vtmb/npc-ai/senses.md § Sense and investigate leftovers, closed (2026-09-08), docs/vtmb/npc-ai/senses.md § The sense pass for a hated player, walked (2026-09-08), docs/vtmb/npc-ai/senses.md § The species sense overrides — `0x103cb810`, `0x103ddaf0`, `0x103ddaa0`, `0x1036a030` (2026-09-13), +2 more |
 | `0x102b4ab0` | CAI_BaseNPCTroika::FUN_102b4ab0 | docs/vtmb/npc-ai/population.md § hint, docs/vtmb/npc-ai/shape.md § Slot 533 `EyeOffset` — `0x10274db0`, `0x102b4ab0` |
 | `0x102b4c10` | CAI_BaseNPCTroika::FUN_102b4c10 | docs/vtmb/npc-ai/conditions-and-states.md § The sound gate — `0x1027a5c0`, `0x102b4c10`, `0x1027a640`, `0x102b4c40`, `0x103b9f10` |
@@ -1304,7 +1308,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102d8bc0` | FUN_102d8bc0 | docs/vtmb/npc-ai/shape.md § CAI_Motor's unnamed bodies `0x102e0ea0`, `0x102e0f90`, `0x102e1180`, `0x102e1270`, `0x102e19e0`, `0x102e2180`, `0x102e2580` |
 | `0x102d9c20` | CAI_InterestingPlace::Spawn | docs/vtmb/npc-ai/authored-control.md § The navigation and reaction keyfields (2026-09-08), docs/vtmb/npc-ai/lifecycle.md § `CAI_InterestingPlace`'s spawn and restore — `0x102d9c20`, `0x102d9dd0`, `0x102dbbc0` (2026-09-13), docs/vtmb/npc-ai/programs.md § Interesting places: the selector, the programs, the wait (2026-09-08) |
 | `0x102d9dd0` | CAI_InterestingPlace::vfunc130 | docs/vtmb/npc-ai/lifecycle.md § `CAI_InterestingPlace`'s spawn and restore — `0x102d9c20`, `0x102d9dd0`, `0x102dbbc0` (2026-09-13) |
-| `0x102da0d0` | PickSpotFor | docs/vtmb/navigation-jump-links.md § Task readers of network data (2026-09-17), docs/vtmb/npc-ai/programs.md § Interesting-place eligibility, docs/vtmb/npc-ai/schedule-kernel.md § The arms, ascending task id |
+| `0x102da0d0` | PickSpotFor | docs/vtmb/navigation-jump-links.md § Task readers of network data (2026-09-17), docs/vtmb/npc-ai/programs.md § Interesting-place eligibility, docs/vtmb/npc-ai/schedule-kernel.md § The arms, ascending task id, docs/vtmb/npc-ai/shape.md § `IsValidCover`, `IsValidShootPosition` and `IsAreaClear` — `0x1028af20`, `0x1028b0b0`, `0x102a0fb0` |
 | `0x102da600` | FUN_102da600 | docs/vtmb/entity_io.md § The place-side leftovers, closed (2026-09-19, 0018 story 10), docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::UpdateOnRemove` — `0x1028d6e0`, docs/vtmb/npc-ai/population.md § place, docs/vtmb/npc-ai/programs.md § Patrol paths, walked (2026-09-12, story 10g), +1 more |
 | `0x102da7c0` | ClaimMarker | docs/vtmb/entity_io.md § The place-side leftovers, closed (2026-09-19, 0018 story 10), docs/vtmb/npc-ai/population.md § place, docs/vtmb/npc-ai/programs.md § Interesting places: the selector, the programs, the wait (2026-09-08), docs/vtmb/npc-ai/shape.md § The interesting-place wait and its loop — `0x102a9f40`, `0x102aa210`, `0x1029f780` |
 | `0x102da9e0` | FUN_102da9e0 | docs/vtmb/entity_io.md § The place-side leftovers, closed (2026-09-19, 0018 story 10) |
@@ -1379,17 +1383,18 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102e2840` | FUN_102e2840 | docs/vtmb/npc-ai/shape.md § CAI_Motor's unnamed bodies `0x102e0ea0`, `0x102e0f90`, `0x102e1180`, `0x102e1270`, `0x102e19e0`, `0x102e2180`, `0x102e2580` |
 | `0x102e2b10` | FUN_102e2b10 | docs/vtmb/npc-ai/shape.md § CAI_Motor's unnamed bodies `0x102e0ea0`, `0x102e0f90`, `0x102e1180`, `0x102e1270`, `0x102e19e0`, `0x102e2180`, `0x102e2580` |
 | `0x102e2d70` | FUN_102e2d70 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
+| `0x102e3290` | FUN_102e3290 | docs/vtmb/npc-ai/shape.md § `CheckOnGround`, `CanStandAt` and `GetGroundpoint` — `0x1026e5e0`, `0x102a0ed0`, `0x103d6a40` |
 | `0x102e3450` | FUN_102e3450 | docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise |
-| `0x102e4160` | FUN_102e4160 | docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise |
+| `0x102e4160` | FUN_102e4160 | docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise, docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
 | `0x102e4f50` | FUN_102e4f50 | docs/vtmb/navigation-jump-links.md § 1. What "the flag word `& 8`" is: a route-control literal, NOT the goal flags, docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4), docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise, +6 more |
 | `0x102e5d00` | FUN_102e5d00 | docs/vtmb/navigation-jump-links.md § The navigator's words and getters — CAI_Navigator, walked (2026-09-29, 0018 story 5), docs/vtmb/navigation-jump-links.md § `MoveEnact` and what it hands the motor |
 | `0x102e5d80` | FUN_102e5d80 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
 | `0x102e6090` | FUN_102e6090 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
-| `0x102e6290` | FUN_102e6290 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760` |
+| `0x102e6290` | FUN_102e6290 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760`, +1 more |
 | `0x102e6be0` | FUN_102e6be0 | docs/vtmb/navigation-jump-links.md § 5. `0x102e2d70` and doors, docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
 | `0x102e6d70` | FUN_102e6d70 | docs/vtmb/combat-and-damage.md § `FUN_102a1650` — the yaw clearance sweep, docs/vtmb/navigation-jump-links.md § How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4), docs/vtmb/navigation-jump-links.md § The cover search, walked — `0x102edc80` → `0x10301720`, twin `0x102edd50` → `0x10302320` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), +7 more |
 | `0x102e7060` | FUN_102e7060 | docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760` |
-| `0x102e7270` | FUN_102e7270 | docs/vtmb/navigation-jump-links.md § Endpoint binding and the link predicate, walked (2026-09-19; engine record, 0018 story 5), docs/vtmb/navigation-jump-links.md § How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4), docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5), +4 more |
+| `0x102e7270` | FUN_102e7270 | docs/vtmb/navigation-jump-links.md § Endpoint binding and the link predicate, walked (2026-09-19; engine record, 0018 story 5), docs/vtmb/navigation-jump-links.md § How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4), docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The place set, landed — the node binding, `GetPosition`, the nearest node and the wander pick (2026-09-29, 0018 story 4), +6 more |
 | `0x102e7880` | FUN_102e7880 | docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPC::StartNPC` `0x10273ad0`, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VCamera::StartNPC` `0x10369930`, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VPedestrian::OnRestore` `0x103a25a0`, docs/vtmb/npc-ai/schedule-kernel.md § The arms, ascending task id |
 | `0x102e7ba0` | FUN_102e7ba0 | docs/vtmb/navigation-jump-links.md § The flying movers, walked — Crow and ManBat (2026-09-21, 0018 story 12), docs/vtmb/navigation-jump-links.md § The route gates, walked — `SetGoal` to the two builders (2026-09-19, 0018 story 5) |
 | `0x102e7e00` | FUN_102e7e00 | docs/vtmb/navigation-jump-links.md § Q3 - the step-height rise |
@@ -1500,6 +1505,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102f9780` | FUN_102f9780 | docs/vtmb/navigation-jump-links.md § `TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked (2026-09-21, 0018 story 4) |
 | `0x102f9920` | FUN_102f9920 | docs/vtmb/npc-ai/schedule-kernel.md § `CAI_TestHull::Spawn` `0x102d72f0` |
 | `0x102f9950` | FUN_102f9950 | docs/vtmb/navigation-jump-links.md § How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4), docs/vtmb/npc-ai/schedule-kernel.md § `CAI_TestHull::Spawn` `0x102d72f0` |
+| `0x102f99d0` | FUN_102f99d0 | docs/vtmb/navigation-jump-links.md § The navigator's words and getters — CAI_Navigator, walked (2026-09-29, 0018 story 5) |
 | `0x102f9c70` | FUN_102f9c70 | docs/vtmb/npc-ai/shape.md § `ValidateNavGoal` and `MoveDone` — `0x10280360`, `0x101c1720`, `0x10026c50` |
 | `0x102fb0d0` | CAI_Node::GetPosition | docs/vtmb/navigation-jump-links.md § Endpoint binding and the link predicate, walked (2026-09-19; engine record, 0018 story 5), docs/vtmb/navigation-jump-links.md § Route selection and node identity: correction (2026-09-17), docs/vtmb/navigation-jump-links.md § Serialized connection, docs/vtmb/navigation-jump-links.md § Task readers of network data (2026-09-17), +9 more |
 | `0x102fcbd0` | FUN_102fcbd0 | docs/vtmb/navigation-jump-links.md § The two hull words — `m_eHull` `+0x1568` and the pathing hull `+0x156c` (2026-09-20, 0018 story 3), docs/vtmb/navigation-jump-links.md § `TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked (2026-09-21, 0018 story 4), docs/vtmb/npc-ai/conditions-and-states.md § The pedestrian crosswalk — `0x102a0d20`, `0x102a0bc0`, `0x102a0b90` (2026-09-13) |
@@ -2172,6 +2178,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103908c0` | FUN_103908c0 | docs/vtmb/npc-ai/schedule-kernel.md § `CNPC_VManBat::StartTask` `0x1038c390`, docs/vtmb/npc-ai/shape.md § `CNPC_VManBat`'s flight velocity — `0x1038b370`, `0x1038bec0`, and the four flap timers |
 | `0x10390fd0` | CNPC_VBaseBoss::GiveBaseFightingItems | docs/vtmb/combat-and-damage.md § `CNPC_VWerewolf::GiveBaseFightingItems` `0x103cc9b0` and `::RemoveBaseFightingItems` `0x103cca80` |
 | `0x10391030` | CNPC_VMingXiao::StepHeight | docs/vtmb/navigation-jump-links.md § What the shipped graphs and maps actually use (2026-09-19, 0018 stories 3 and 4) |
+| `0x10391050` | CNPC_VMingXiao::GetMaxJumpSpeed | docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760` |
 | `0x10391230` | CNPC_VMingXiao::UpdateOnRemove | docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::UpdateOnRemove` — `0x1028d6e0` |
 | `0x10392660` | CNPC_VMingXiao::Precache | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao` — `0x10392660` |
 | `0x103927a0` | CNPC_VMingXiao::Spawn | docs/vtmb/npc-ai/lifecycle.md § `0x10395750` `MingXiaoApplyTentacleDamage(index, info, weapon)` (696 bytes), docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Spawn` `0x103927a0` (436 bytes), docs/vtmb/npc-ai/shape.md § The tables |
@@ -2208,10 +2215,10 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10396dc0` | FUN_10396dc0 | docs/vtmb/npc-ai/shape.md § `CNPC_VMingXiao`'s tentacle rules — `0x10396dc0`, `0x10397a50`, `0x10397f70`, `0x10398030`, `0x103983d0` |
 | `0x10396e90` | CNPC_VMingXiao::vfunc482 | docs/vtmb/npc-ai/shape.md § Slot 482 `CanPlaySequence`'s Troika-line body — `0x10278090`, docs/vtmb/npc-ai/shape.md § Slot 482 `CanPlaySequence`, the species half — `0x103850a0`, `0x10396e90`, docs/vtmb/npc-ai/shape.md § Slot 482 — the species copies, `0x1035fd40`, `0x103bd270` |
 | `0x10396fd0` | CNPC_VMingXiao::NavIgnoreCollision | docs/vtmb/npc-ai/shape.md § The collision-ignore chains — `0x1029afc0`, `0x1029b180` and their seven species arms |
-| `0x10397000` | CNPC_VMingXiao::vfunc166 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao`'s slot 166 and slot 100 — `0x10397000`, `0x10399fe0` (2026-09-13) |
+| `0x10397000` | CNPC_VMingXiao::vfunc166 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao`'s slot 166 and slot 100 — `0x10397000`, `0x10399fe0` (2026-09-13), docs/vtmb/npc-ai/shape.md § `CanStandOn` and `GetGroundVelocityToApply` — `0x10026f80`, `0x1039ebd0`, `0x10027370` |
 | `0x103970d0` | CNPC_VMingXiao::vfunc348 | docs/vtmb/combat-and-damage.md § `CNPC_VMingXiao::vfunc348` `0x103970d0` |
 | `0x10397380` | FUN_10397380 | docs/vtmb/npc-ai/conditions-and-states.md § `0x10397380` `ShareEnemyWithAlly(CBaseEntity* ally)` (98 bytes), docs/vtmb/npc-ai/social.md § Squads, decoded (2026-09-08) |
-| `0x10397410` | FUN_10397410 | docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/lifecycle.md § `0x10395750` `MingXiaoApplyTentacleDamage(index, info, weapon)` (696 bytes), docs/vtmb/npc-ai/lifecycle.md § `0x10397410` `MingXiaoSpawnTentacle(index)` (981 bytes), docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Spawn` `0x103927a0` (436 bytes), +1 more |
+| `0x10397410` | FUN_10397410 | docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/lifecycle.md § `0x10395750` `MingXiaoApplyTentacleDamage(index, info, weapon)` (696 bytes), docs/vtmb/npc-ai/lifecycle.md § `0x10397410` `MingXiaoSpawnTentacle(index)` (981 bytes), docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Spawn` `0x103927a0` (436 bytes), +2 more |
 | `0x10397930` | FUN_10397930 | docs/vtmb/npc-ai/lifecycle.md § `0x10395750` `MingXiaoApplyTentacleDamage(index, info, weapon)` (696 bytes), docs/vtmb/npc-ai/shape.md § `CNPC_VMingXiao`'s tentacle rules — `0x10396dc0`, `0x10397a50`, `0x10397f70`, `0x10398030`, `0x103983d0` |
 | `0x103979d0` | FUN_103979d0 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiaoTentacle::Event_Killed` `0x1039e900` (65 bytes) |
 | `0x10397a50` | FUN_10397a50 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Event_Killed` `0x10395ba0` (156 bytes), docs/vtmb/npc-ai/shape.md § `CNPC_VMingXiao`'s tentacle rules — `0x10396dc0`, `0x10397a50`, `0x10397f70`, `0x10398030`, `0x103983d0` |
@@ -2248,6 +2255,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1039ab30` | FUN_1039ab30 | docs/vtmb/npc-ai/shape.md § Slot 465's species overrides — `0x10357b30`, `0x103947b0`, `0x103a56f0`, `0x103d5f60` |
 | `0x1039aca0` | FUN_1039aca0 | docs/vtmb/npc-ai/shape.md § Slot 465's species overrides — `0x10357b30`, `0x103947b0`, `0x103a56f0`, `0x103d5f60` |
 | `0x1039b050` | CNPC_VMingXiaoTentacle::StepHeight | docs/vtmb/navigation-jump-links.md § What the shipped graphs and maps actually use (2026-09-19, 0018 stories 3 and 4) |
+| `0x1039b070` | CNPC_VMingXiaoTentacle::GetMaxJumpSpeed | docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760` |
 | `0x1039c220` | CNPC_VMingXiaoTentacle::Precache | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiaoTentacle` — `0x1039c220` |
 | `0x1039c380` | CNPC_VMingXiaoTentacle::Spawn | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiaoTentacle::Spawn` `0x1039c380` (134 bytes) |
 | `0x1039c480` | CNPC_VMingXiaoTentacle::GetUsedHullBits | docs/vtmb/npc-ai/shape.md § Slot 337 `GetUsedHullBits` — `0x10341710`, `0x10270820`, `0x1029a050` and fourteen replacements |
@@ -2272,7 +2280,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1039ed50` | CNPC_VMingXiaoTentacle::Save | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiao::Save` — `0x10395f80` |
 | `0x1039eda0` | CNPC_VMingXiaoTentacle::vfunc127 | docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::Restore` — `0x10299700` |
 | `0x1039ede0` | FUN_1039ede0 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VMingXiaoTentacle::Event_Killed` `0x1039e900` (65 bytes), docs/vtmb/npc-ai/shape.md § The remaining species one-liners, docs/vtmb/npc-ai/shape.md § `CanStandOn` and `GetGroundVelocityToApply` — `0x10026f80`, `0x1039ebd0`, `0x10027370` |
-| `0x1039ee20` | FUN_1039ee20 | docs/vtmb/npc-ai/schedule-kernel.md § The species `RunTask` overrides (slot 444) — `0x1035f940` … `0x103cdfb0`, docs/vtmb/npc-ai/schedule-kernel.md § `0x1035d010`, `0x1038e340`, `0x1039de20` — three species `SelectSchedule` bodies |
+| `0x1039ee20` | FUN_1039ee20 | docs/vtmb/npc-ai/schedule-kernel.md § The species `RunTask` overrides (slot 444) — `0x1035f940` … `0x103cdfb0`, docs/vtmb/npc-ai/schedule-kernel.md § `0x1035d010`, `0x1038e340`, `0x1039de20` — three species `SelectSchedule` bodies, docs/vtmb/npc-ai/shape.md § `IsValidCover`, `IsValidShootPosition` and `IsAreaClear` — `0x1028af20`, `0x1028b0b0`, `0x102a0fb0` |
 | `0x1039eee0` | FUN_1039eee0 | docs/vtmb/npc-ai/schedule-kernel.md § `0x1035d010`, `0x1038e340`, `0x1039de20` — three species `SelectSchedule` bodies |
 | `0x1039ef10` | FUN_1039ef10 | docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/schedule-kernel.md § What stays unrecovered across the species bodies, docs/vtmb/npc-ai/schedule-kernel.md § `CNPC_VMingXiaoTentacle::StartTask` `0x1039c4c0` |
 | `0x1039ef60` | FUN_1039ef60 | docs/vtmb/npc-ai/shape.md § `CNPC_VMingXiao`'s severed-tentacle scatter — `0x10397e00`, `0x103998d0`, `0x1039ef60`, `0x1039ef90` |
@@ -2366,7 +2374,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103ac740` | CNPC_VScurrying::StartTask | docs/vtmb/navigation-jump-links.md § 2. Goal-flag `0x2` (explicit node route, `SetGoal 0x102ecd20`; test at `0x102ecf27`, taken at `0x102ecf2e`), docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/navigation-jump-links.md § The goal types, their issuers and the goal record (2026-09-21, 0018 story 5), docs/vtmb/npc-ai/schedule-kernel.md § `CNPC_VScurrying::StartTask` `0x103ac740`, +1 more |
 | `0x103aca80` | FUN_103aca80 | docs/vtmb/npc-ai/conditions-and-states.md § Species overrides of slot 433 — `0x1035d180` … `0x103d0410` |
 | `0x103acac0` | FUN_103acac0 | docs/vtmb/npc-ai/senses.md § `ScurryingShouldDetect` `0x103acac0` |
-| `0x103acba0` | FUN_103acba0 | docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/schedule-kernel.md § `CNPC_VScurrying::StartTask` `0x103ac740`, docs/vtmb/npc-ai/senses.md § `ScurryingFindFleeDestination` `0x103acba0` |
+| `0x103acba0` | FUN_103acba0 | docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/schedule-kernel.md § `CNPC_VScurrying::StartTask` `0x103ac740`, docs/vtmb/npc-ai/senses.md § `ScurryingFindFleeDestination` `0x103acba0`, docs/vtmb/npc-ai/shape.md § `IsValidCover`, `IsValidShootPosition` and `IsAreaClear` — `0x1028af20`, `0x1028b0b0`, `0x102a0fb0` |
 | `0x103ad0a0` | FUN_103ad0a0 | docs/vtmb/npc-ai/senses.md § `ScurryingShouldDetect` `0x103acac0` |
 | `0x103ad0f0` | FUN_103ad0f0 | docs/vtmb/npc-ai/senses.md § `ScurryingShouldDetect` `0x103acac0` |
 | `0x103ad540` | FUN_103ad540 | docs/vtmb/npc-ai/shape.md § `0x1027cae0` and the six component factories — slots 424–430 |
@@ -2420,6 +2428,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103b4bd0` | CNPC_VTest::vfunc494 | docs/vtmb/npc-ai/shape.md § The species vocalization table — slots 488–508, 620, 621 |
 | `0x103b4d40` | CNPC_VTest::vfunc495 | docs/vtmb/npc-ai/shape.md § The species vocalization table — slots 488–508, 620, 621 |
 | `0x103b6dd0` | CNPC_VTzimisce::StepHeight | docs/vtmb/navigation-jump-links.md § What the shipped graphs and maps actually use (2026-09-19, 0018 stories 3 and 4) |
+| `0x103b6df0` | CNPC_VTzimisce::GetMaxJumpSpeed | docs/vtmb/navigation-jump-links.md § The back-away and shoot-node searches, walked — `0x10300b50`, `0x10302e50` (2026-09-19, 0018 story 9), docs/vtmb/npc-ai/shape.md § The movement tunables and `IsJumpLegal` — `0x101a6b40`, `0x101a6b60`, `0x101aa670`, `0x101a6b80`, `0x10280880`, `0x10280790`, `0x102d72b0`, `0x102d72d0`, `0x102d7760` |
 | `0x103b8fa0` | CNPC_VTzimisce::Precache | docs/vtmb/footsteps.md § 4. Unrecovered, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VTzimisce` — `0x103b8fa0` |
 | `0x103b9040` | CNPC_VTzimisce::NPCThink | docs/vtmb/npc-ai/conditions-and-states.md § `CNPC_VHengeyokai::TaskFail` `0x10380510`, docs/vtmb/npc-ai/schedule-kernel.md § `0x10394990` `CNPC_VMingXiao::NPCThink()` (926 bytes), docs/vtmb/npc-ai/schedule-kernel.md § `0x103b9040` `CNPC_VTzimisce::NPCThink()` (16 bytes) |
 | `0x103b9060` | CNPC_VTzimisce::Spawn | docs/vtmb/facial_animation.md § Gaze — the server behaviour, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VTzimisce::Spawn` `0x103b9060` (132 bytes) |
@@ -2715,8 +2724,8 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | Address | Where |
 |---|---|
 | `0x10000000` | docs/vtmb/animation_and_movers.md:11, docs/vtmb/animation_and_movers.md:1833, docs/vtmb/audio_pipeline.md:12, +57 more |
-| `0x10000002` | docs/vtmb/navigation-jump-links.md:1079 |
-| `0x10000008` | docs/vtmb/navigation-jump-links.md:1079 |
+| `0x10000002` | docs/vtmb/navigation-jump-links.md:1093 |
+| `0x10000008` | docs/vtmb/navigation-jump-links.md:1093 |
 | `0x10000020` | docs/vtmb/water.md:310, docs/vtmb/water.md:414 |
 | `0x10001330` | docs/vtmb/sky-ambience.md:1505 |
 | `0x10001910` | docs/vtmb/sky-ambience.md:1589 |
@@ -2724,21 +2733,21 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10001c10` | docs/vtmb/camera-view-modes.md:2661 |
 | `0x10001e60` | docs/vtmb/shader_combos.md:260, docs/vtmb/sky-ambience.md:1589 |
 | `0x10001e64` | docs/vtmb/camera-view-modes.md:1304 |
-| `0x100022d0` | docs/vtmb/navigation-jump-links.md:916 |
+| `0x100022d0` | docs/vtmb/navigation-jump-links.md:930 |
 | `0x100028dd` | docs/vtmb/entity_io.md:2544 |
 | `0x10002cd4` | docs/vtmb/entity_io.md:647 |
 | `0x10003a71` | docs/vtmb/audio_pipeline.md:223 |
-| `0x10004656` | docs/vtmb/navigation-jump-links.md:2367 |
+| `0x10004656` | docs/vtmb/navigation-jump-links.md:2389 |
 | `0x1000572c` | docs/vtmb/npc-ai/lifecycle.md:2115 |
 | `0x10006429` | docs/vtmb/python_bridge.md:491 |
 | `0x1000696a` | docs/vtmb/entity_io.md:1750, docs/vtmb/npc-ai/lifecycle.md:1231, docs/vtmb/npc-ai/lifecycle.md:2113 |
 | `0x10008bde` | docs/vtmb/entity_io.md:469 |
 | `0x10009557` | docs/vtmb/entity_io.md:398 |
-| `0x10009cc0` | docs/vtmb/navigation-jump-links.md:917 |
-| `0x1000a006` | docs/vtmb/navigation-jump-links.md:788 |
+| `0x10009cc0` | docs/vtmb/navigation-jump-links.md:931 |
+| `0x1000a006` | docs/vtmb/navigation-jump-links.md:802 |
 | `0x1000a443` | docs/vtmb/python_bridge.md:188 |
 | `0x1000c496` | docs/vtmb/activity_enum.md:43, docs/vtmb/animation_and_movers.md:855 |
-| `0x1000c554` | docs/vtmb/navigation-jump-links.md:2367 |
+| `0x1000c554` | docs/vtmb/navigation-jump-links.md:2389 |
 | `0x1000d6c0` | docs/vtmb/entity_io.md:2314 |
 | `0x10010dd4` | docs/vtmb/npc-ai/lifecycle.md:2125 |
 | `0x10010f0f` | docs/vtmb/entity_io.md:2566, docs/vtmb/entity_io.md:2588, docs/vtmb/npc-ai/lifecycle.md:42 |
@@ -2808,6 +2817,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1009ddc0` | docs/vtmb/animation_and_movers.md:3373 |
 | `0x100a53cf` | docs/vtmb/animation_and_movers.md:688 |
 | `0x100a5a80` | docs/vtmb/feeding.md:579 |
+| `0x100a78c4` | docs/vtmb/npc-ai/senses.md:1122 |
 | `0x100a7a50` | docs/vtmb/camera-view-modes.md:127, docs/vtmb/camera-view-modes.md:386, docs/vtmb/npc-ai/lifecycle.md:1101 |
 | `0x100a99b0` | docs/vtmb/camera-view-modes.md:388 |
 | `0x100aef40` | docs/vtmb/camera-view-modes.md:386 |
@@ -2861,159 +2871,161 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x102352ec` | docs/vtmb/camera-view-modes.md:29 |
 | `0x10266a24` | docs/vtmb/combat-and-damage.md:1891 |
 | `0x1027ba58` | docs/vtmb/camera-view-modes.md:30 |
-| `0x10280bf0` | docs/vtmb/navigation-jump-links.md:2068 |
+| `0x10280bf0` | docs/vtmb/navigation-jump-links.md:2086 |
 | `0x10286f8c` | docs/vtmb/npc-ai/lifecycle.md:2656, docs/vtmb/npc-ai/schedule-kernel.md:387, docs/vtmb/npc-ai/schedule-kernel.md:2073, +1 more |
-| `0x10287138` | docs/vtmb/navigation-jump-links.md:2699, docs/vtmb/npc-ai/lifecycle.md:2656, docs/vtmb/npc-ai/schedule-kernel.md:387, +2 more |
-| `0x10287156` | docs/vtmb/navigation-jump-links.md:2699 |
+| `0x10287138` | docs/vtmb/navigation-jump-links.md:2721, docs/vtmb/npc-ai/lifecycle.md:2656, docs/vtmb/npc-ai/schedule-kernel.md:387, +2 more |
+| `0x10287156` | docs/vtmb/navigation-jump-links.md:2721 |
 | `0x10287258` | docs/vtmb/npc-ai/schedule-kernel.md:2220 |
 | `0x10289724` | docs/vtmb/npc-ai/schedule-kernel.md:3628 |
 | `0x10289794` | docs/vtmb/npc-ai/schedule-kernel.md:3628 |
-| `0x102897b1` | docs/vtmb/navigation-jump-links.md:2712 |
+| `0x102897b1` | docs/vtmb/navigation-jump-links.md:2734 |
 | `0x1028a9f4` | docs/vtmb/npc-ai/schedule-kernel.md:3946 |
-| `0x1028fb20` | docs/vtmb/npc-ai/conditions-and-states.md:2789 |
+| `0x1028fb20` | docs/vtmb/npc-ai/conditions-and-states.md:2798 |
 | `0x1028fedc` | docs/vtmb/npc-ai/schedule-kernel.md:4401 |
 | `0x1028ff90` | docs/vtmb/npc-ai/schedule-kernel.md:4405 |
 | `0x10290604` | docs/vtmb/npc-ai/conditions-and-states.md:1883 |
 | `0x102a77f7` | docs/vtmb/npc-ai/schedule-kernel.md:2065, docs/vtmb/npc-ai/schedule-kernel.md:2687, docs/vtmb/npc-ai/schedule-kernel.md:2698 |
-| `0x102a77f8` | docs/vtmb/navigation-jump-links.md:1834, docs/vtmb/npc-ai/lifecycle.md:2654, docs/vtmb/npc-ai/programs.md:1176, +5 more |
-| `0x102a7ab8` | docs/vtmb/navigation-jump-links.md:1834, docs/vtmb/npc-ai/lifecycle.md:2653, docs/vtmb/npc-ai/programs.md:1176, +5 more |
-| `0x102a7ad2` | docs/vtmb/navigation-jump-links.md:2700 |
+| `0x102a77f8` | docs/vtmb/navigation-jump-links.md:1849, docs/vtmb/npc-ai/lifecycle.md:2654, docs/vtmb/npc-ai/programs.md:1176, +5 more |
+| `0x102a7ab8` | docs/vtmb/navigation-jump-links.md:1849, docs/vtmb/npc-ai/lifecycle.md:2653, docs/vtmb/npc-ai/programs.md:1176, +5 more |
+| `0x102a7ad2` | docs/vtmb/navigation-jump-links.md:2722 |
 | `0x102a7c00` | docs/vtmb/npc-ai/schedule-kernel.md:2571, docs/vtmb/npc-ai/schedule-kernel.md:2666 |
 | `0x102ac760` | docs/vtmb/npc-ai/lifecycle.md:2672, docs/vtmb/npc-ai/schedule-kernel.md:221, docs/vtmb/npc-ai/schedule-kernel.md:3722 |
 | `0x102ac840` | docs/vtmb/npc-ai/programs.md:764, docs/vtmb/npc-ai/schedule-kernel.md:707 |
 | `0x102ac844` | docs/vtmb/npc-ai/lifecycle.md:2671, docs/vtmb/npc-ai/schedule-kernel.md:221, docs/vtmb/npc-ai/schedule-kernel.md:3722 |
 | `0x102b0bf0` | docs/vtmb/npc-ai/schedule-kernel.md:3974 |
 | `0x102bf738` | docs/vtmb/npc-ai/schedule-kernel.md:1013 |
-| `0x102e6f98` | docs/vtmb/navigation-jump-links.md:516 |
-| `0x102f01d4` | docs/vtmb/navigation-jump-links.md:1536 |
-| `0x102f1f80` | docs/vtmb/navigation-jump-links.md:1356 |
+| `0x102e6f98` | docs/vtmb/navigation-jump-links.md:517 |
+| `0x102f01d4` | docs/vtmb/navigation-jump-links.md:1551 |
+| `0x102f1f80` | docs/vtmb/navigation-jump-links.md:1371 |
 | `0x103293c4` | docs/vtmb/stealth.md:585 |
 | `0x1038e5c0` | docs/vtmb/npc-ai/conditions-and-states.md:2443 |
 | `0x10394d30` | docs/vtmb/npc-ai/schedule-kernel.md:4814 |
-| `0x10398598` | docs/vtmb/npc-ai/shape.md:2308 |
+| `0x10398598` | docs/vtmb/npc-ai/shape.md:2347 |
 | `0x103cb72b` | docs/vtmb/npc-ai/schedule-kernel.md:4943 |
 | `0x103cb734` | docs/vtmb/npc-ai/schedule-kernel.md:4944 |
 | `0x103cb73d` | docs/vtmb/npc-ai/schedule-kernel.md:4944 |
 | `0x103cb746` | docs/vtmb/npc-ai/schedule-kernel.md:4945 |
-| `0x103cb754` | docs/vtmb/navigation-jump-links.md:846, docs/vtmb/npc-ai/lifecycle.md:223, docs/vtmb/npc-ai/schedule-kernel.md:4942 |
-| `0x10445000` | docs/vtmb/animation_rig_resolution.md:763, docs/vtmb/npc-ai/lifecycle.md:1698, docs/vtmb/npc-ai/shape.md:3423, +1 more |
-| `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/navigation-jump-links.md:1770, docs/vtmb/npc-ai/conditions-and-states.md:1486, +1 more |
+| `0x103cb754` | docs/vtmb/navigation-jump-links.md:860, docs/vtmb/npc-ai/lifecycle.md:223, docs/vtmb/npc-ai/schedule-kernel.md:4942 |
+| `0x10445000` | docs/vtmb/animation_rig_resolution.md:763, docs/vtmb/npc-ai/lifecycle.md:1698, docs/vtmb/npc-ai/shape.md:3462, +1 more |
+| `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/navigation-jump-links.md:1785, docs/vtmb/npc-ai/conditions-and-states.md:1486, +1 more |
 | `0x104454c4` | docs/vtmb/footsteps.md:95, docs/vtmb/footsteps.md:966, docs/vtmb/npc-ai/conditions-and-states.md:2695, +6 more |
 | `0x104454d0` | docs/vtmb/camera-view-modes.md:667, docs/vtmb/entity_io.md:2193, docs/vtmb/footsteps.md:490, +4 more |
 | `0x10445e08` | docs/vtmb/entity_io.md:2388 |
 | `0x10447ee0` | docs/vtmb/footsteps.md:278, docs/vtmb/footsteps.md:986, docs/vtmb/source_movement.md:402 |
-| `0x10447ee8` | docs/vtmb/navigation-jump-links.md:2045, docs/vtmb/npc-ai/schedule-kernel.md:35 |
+| `0x10447ee8` | docs/vtmb/navigation-jump-links.md:2063, docs/vtmb/npc-ai/schedule-kernel.md:35 |
 | `0x10449148` | docs/vtmb/footsteps.md:104, docs/vtmb/footsteps.md:969, docs/vtmb/npc-ai/senses.md:934 |
 | `0x10449154` | docs/vtmb/npc-ai/rdata-cells.md:16 |
-| `0x10449198` | docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, docs/vtmb/navigation-jump-links.md:2575, +2 more |
-| `0x104491a8` | docs/vtmb/navigation-jump-links.md:266, docs/vtmb/navigation-jump-links.md:1770, docs/vtmb/source_movement.md:580 |
-| `0x104491b4` | docs/vtmb/animation_and_movers.md:2160, docs/vtmb/animation_events.md:46, docs/vtmb/navigation-jump-links.md:1679, +3 more |
+| `0x10449198` | docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, docs/vtmb/navigation-jump-links.md:2597, +2 more |
+| `0x104491a8` | docs/vtmb/navigation-jump-links.md:267, docs/vtmb/navigation-jump-links.md:1785, docs/vtmb/source_movement.md:580 |
+| `0x104491b4` | docs/vtmb/animation_and_movers.md:2160, docs/vtmb/animation_events.md:46, docs/vtmb/navigation-jump-links.md:1694, +3 more |
 | `0x10449258` | docs/vtmb/camera-view-modes.md:701, docs/vtmb/entity_io.md:411 |
-| `0x10449260` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998, docs/vtmb/navigation-jump-links.md:1320, +2 more |
+| `0x10449260` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998, docs/vtmb/navigation-jump-links.md:1335, +2 more |
 | `0x10449270` | docs/vtmb/entity_io.md:409, docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, +7 more |
-| `0x10449280` | docs/vtmb/footsteps.md:372, docs/vtmb/footsteps.md:1003, docs/vtmb/navigation-jump-links.md:1521, +8 more |
-| `0x104492a8` | docs/vtmb/navigation-jump-links.md:1033, docs/vtmb/source_movement.md:130 |
+| `0x10449280` | docs/vtmb/footsteps.md:372, docs/vtmb/footsteps.md:1003, docs/vtmb/navigation-jump-links.md:1536, +8 more |
+| `0x104492a8` | docs/vtmb/navigation-jump-links.md:1047, docs/vtmb/npc-ai/shape.md:1407, docs/vtmb/source_movement.md:130 |
 | `0x104492ac` | docs/vtmb/footsteps.md:123, docs/vtmb/footsteps.md:974 |
-| `0x104492b8` | docs/vtmb/footsteps.md:491, docs/vtmb/footsteps.md:1032, docs/vtmb/navigation-jump-links.md:2526, +1 more |
-| `0x104492d0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:999, docs/vtmb/navigation-jump-links.md:1022, +3 more |
+| `0x104492b8` | docs/vtmb/footsteps.md:491, docs/vtmb/footsteps.md:1032, docs/vtmb/navigation-jump-links.md:2548, +1 more |
+| `0x104492d0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:999, docs/vtmb/navigation-jump-links.md:1036, +3 more |
 | `0x104492dc` | docs/vtmb/npc-ai/social.md:1066 |
 | `0x104492e0` | docs/vtmb/npc-ai/rdata-cells.md:19 |
-| `0x104493c0` | docs/vtmb/npc-ai/conditions-and-states.md:2871 |
-| `0x104493d0` | docs/vtmb/choreographed_scenes.md:840, docs/vtmb/entity_io.md:2361, docs/vtmb/navigation-jump-links.md:711, +11 more |
-| `0x104493f0` | docs/vtmb/navigation-jump-links.md:2965 |
-| `0x10449400` | docs/vtmb/camera-view-modes.md:2081, docs/vtmb/navigation-jump-links.md:486 |
+| `0x104493c0` | docs/vtmb/npc-ai/conditions-and-states.md:2880 |
+| `0x104493d0` | docs/vtmb/choreographed_scenes.md:840, docs/vtmb/entity_io.md:2361, docs/vtmb/navigation-jump-links.md:725, +11 more |
+| `0x104493f0` | docs/vtmb/navigation-jump-links.md:2994 |
+| `0x10449400` | docs/vtmb/camera-view-modes.md:2081, docs/vtmb/navigation-jump-links.md:487 |
 | `0x10449e10` | docs/vtmb/npc-ai/rdata-cells.md:20 |
 | `0x1044a2bc` | docs/vtmb/source_movement.md:403 |
-| `0x1044bef8` | docs/vtmb/navigation-jump-links.md:784, docs/vtmb/npc-ai/senses.md:231, docs/vtmb/npc-ai/senses.md:445 |
-| `0x1044c3a4` | docs/vtmb/navigation-jump-links.md:1034 |
-| `0x1044c3a8` | docs/vtmb/entity_io.md:2193, docs/vtmb/navigation-jump-links.md:1851, docs/vtmb/npc-ai/conditions-and-states.md:1566, +2 more |
+| `0x1044bef8` | docs/vtmb/navigation-jump-links.md:798, docs/vtmb/npc-ai/senses.md:231, docs/vtmb/npc-ai/senses.md:445 |
+| `0x1044c3a4` | docs/vtmb/navigation-jump-links.md:1048 |
+| `0x1044c3a8` | docs/vtmb/entity_io.md:2193, docs/vtmb/navigation-jump-links.md:1866, docs/vtmb/npc-ai/conditions-and-states.md:1566, +2 more |
 | `0x1044dcf0` | docs/vtmb/npc-ai/schedule-kernel.md:4259 |
 | `0x1044ddb0` | docs/vtmb/npc-ai/conditions-and-states.md:1566 |
-| `0x1044e658` | docs/vtmb/navigation-jump-links.md:1977, docs/vtmb/npc-ai/rdata-cells.md:22, docs/vtmb/npc-ai/schedule-kernel.md:1889 |
-| `0x1044e664` | docs/vtmb/navigation-jump-links.md:855, docs/vtmb/navigation-jump-links.md:1695 |
+| `0x1044e658` | docs/vtmb/navigation-jump-links.md:1993, docs/vtmb/npc-ai/rdata-cells.md:22, docs/vtmb/npc-ai/schedule-kernel.md:1889 |
+| `0x1044e664` | docs/vtmb/navigation-jump-links.md:869, docs/vtmb/navigation-jump-links.md:1710 |
 | `0x1044eb0c` | docs/vtmb/npc-ai/conditions-and-states.md:1588 |
 | `0x1044f020` | docs/vtmb/entity_io.md:1152 |
 | `0x1044f030` | docs/vtmb/source_movement.md:426 |
 | `0x1044fab0` | docs/vtmb/footsteps.md:319, docs/vtmb/npc-ai/rdata-cells.md:23 |
 | `0x1044ffdc` | docs/vtmb/npc-ai/rdata-cells.md:24, docs/vtmb/npc-ai/rdata-cells.md:59 |
-| `0x10450010` | docs/vtmb/animation_and_movers.md:3902, docs/vtmb/navigation-jump-links.md:2525 |
+| `0x1044ffe8` | docs/vtmb/npc-ai/shape.md:1407 |
+| `0x10450010` | docs/vtmb/animation_and_movers.md:3902, docs/vtmb/navigation-jump-links.md:2547 |
 | `0x1045001c` | docs/vtmb/animation_and_movers.md:3899 |
 | `0x10450564` | docs/vtmb/combat-and-damage.md:975, docs/vtmb/footsteps.md:341, docs/vtmb/footsteps.md:992, +2 more |
+| `0x10450a9c` | docs/vtmb/npc-ai/senses.md:1125 |
 | `0x10450aa0` | docs/vtmb/npc-ai/senses.md:275 |
 | `0x10450aa4` | docs/vtmb/npc-ai/rdata-cells.md:26, docs/vtmb/npc-ai/schedule-kernel.md:4737 |
 | `0x10451acc` | docs/vtmb/npc-ai/conditions-and-states.md:1565, docs/vtmb/npc-ai/rdata-cells.md:27 |
-| `0x10451f78` | docs/vtmb/navigation-jump-links.md:477, docs/vtmb/navigation-jump-links.md:1319, docs/vtmb/navigation-jump-links.md:1563 |
-| `0x104528c8` | docs/vtmb/navigation-jump-links.md:1994 |
-| `0x104528d4` | docs/vtmb/navigation-jump-links.md:2958 |
+| `0x10451f78` | docs/vtmb/navigation-jump-links.md:478, docs/vtmb/navigation-jump-links.md:1334, docs/vtmb/navigation-jump-links.md:1578 |
+| `0x104528c8` | docs/vtmb/navigation-jump-links.md:2012 |
+| `0x104528d4` | docs/vtmb/navigation-jump-links.md:2987 |
 | `0x10452918` | docs/vtmb/npc-ai/schedule-kernel.md:4260 |
-| `0x10452dc4` | docs/vtmb/camera-view-modes.md:701, docs/vtmb/navigation-jump-links.md:2141, docs/vtmb/npc-ai/conditions-and-states.md:227, +2 more |
+| `0x10452dc4` | docs/vtmb/camera-view-modes.md:701, docs/vtmb/navigation-jump-links.md:2163, docs/vtmb/npc-ai/conditions-and-states.md:227, +2 more |
 | `0x10453b74` | docs/vtmb/camera-view-modes.md:617, docs/vtmb/camera-view-modes.md:988 |
 | `0x10453b78` | docs/vtmb/camera-view-modes.md:647, docs/vtmb/camera-view-modes.md:3288 |
 | `0x10453b88` | docs/vtmb/camera-view-modes.md:647, docs/vtmb/camera-view-modes.md:3286 |
-| `0x10453b94` | docs/vtmb/navigation-jump-links.md:1032, docs/vtmb/navigation-jump-links.md:1770, docs/vtmb/npc-ai/shape.md:1386, +1 more |
-| `0x10454028` | docs/vtmb/navigation-jump-links.md:2518 |
+| `0x10453b94` | docs/vtmb/navigation-jump-links.md:1046, docs/vtmb/navigation-jump-links.md:1785, docs/vtmb/npc-ai/shape.md:1403, +1 more |
+| `0x10454028` | docs/vtmb/navigation-jump-links.md:2540 |
 | `0x10454110` | docs/vtmb/animation_and_movers.md:1149, docs/vtmb/npc-ai/rdata-cells.md:28, docs/vtmb/player-entity.md:646 |
 | `0x10454b8c` | docs/vtmb/source_movement.md:397 |
 | `0x10455050` | docs/vtmb/npc-ai/rdata-cells.md:29, docs/vtmb/npc-ai/rdata-cells.md:59 |
 | `0x1045597c` | docs/vtmb/footsteps.md:531, docs/vtmb/footsteps.md:1037, docs/vtmb/npc-ai/senses.md:93 |
-| `0x10457ac4` | docs/vtmb/navigation-jump-links.md:2642, docs/vtmb/navigation-jump-links.md:2962 |
+| `0x10457ac4` | docs/vtmb/navigation-jump-links.md:2664, docs/vtmb/navigation-jump-links.md:2991 |
 | `0x10457f54` | docs/vtmb/computer-terminals.md:524 |
-| `0x10457f5c` | docs/vtmb/navigation-jump-links.md:2526 |
+| `0x10457f5c` | docs/vtmb/navigation-jump-links.md:2548 |
 | `0x1045a3f0` | docs/vtmb/footsteps.md:363, docs/vtmb/footsteps.md:999 |
-| `0x1045d650` | docs/vtmb/navigation-jump-links.md:1713, docs/vtmb/npc-ai/conditions-and-states.md:1565, docs/vtmb/npc-ai/conditions-and-states.md:1692 |
-| `0x10462868` | docs/vtmb/navigation-jump-links.md:2524 |
+| `0x1045d650` | docs/vtmb/navigation-jump-links.md:1728, docs/vtmb/npc-ai/conditions-and-states.md:1565, docs/vtmb/npc-ai/conditions-and-states.md:1692 |
+| `0x10462868` | docs/vtmb/navigation-jump-links.md:2546 |
 | `0x10462914` | docs/vtmb/footsteps.md:300, docs/vtmb/source_movement.md:277 |
 | `0x10462918` | docs/vtmb/footsteps.md:370, docs/vtmb/footsteps.md:1001 |
 | `0x10462928` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998 |
-| `0x10462950` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:965, docs/vtmb/navigation-jump-links.md:1036, +2 more |
-| `0x10462958` | docs/vtmb/footsteps.md:437, docs/vtmb/footsteps.md:1028, docs/vtmb/navigation-jump-links.md:2099 |
-| `0x10462968` | docs/vtmb/navigation-jump-links.md:615 |
+| `0x10462950` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:965, docs/vtmb/navigation-jump-links.md:1050, +2 more |
+| `0x10462958` | docs/vtmb/footsteps.md:437, docs/vtmb/footsteps.md:1028, docs/vtmb/navigation-jump-links.md:2117 |
+| `0x10462968` | docs/vtmb/navigation-jump-links.md:629 |
 | `0x104629d8` | docs/vtmb/footsteps.md:530, docs/vtmb/footsteps.md:1037 |
 | `0x104629e4` | docs/vtmb/footsteps.md:480, docs/vtmb/footsteps.md:1029 |
 | `0x10463584` | docs/vtmb/npc-ai/conditions-and-states.md:288 |
 | `0x1046a51c` | docs/vtmb/npc-ai/rdata-cells.md:30, docs/vtmb/npc-ai/rdata-cells.md:59 |
-| `0x1046bac4` | docs/vtmb/navigation-jump-links.md:866 |
-| `0x1046bacc` | docs/vtmb/navigation-jump-links.md:2642, docs/vtmb/navigation-jump-links.md:2963 |
+| `0x1046bac4` | docs/vtmb/navigation-jump-links.md:880 |
+| `0x1046bacc` | docs/vtmb/navigation-jump-links.md:2664, docs/vtmb/navigation-jump-links.md:2992 |
 | `0x104704a8` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:964 |
 | `0x104704b4` | docs/vtmb/npc-ai/rdata-cells.md:31, docs/vtmb/npc-ai/rdata-cells.md:59 |
 | `0x104704b8` | docs/vtmb/footsteps.md:578, docs/vtmb/footsteps.md:1050 |
 | `0x10471720` | docs/vtmb/npc-ai/rdata-cells.md:32 |
-| `0x1047a3ac` | docs/vtmb/navigation-jump-links.md:1870, docs/vtmb/npc-ai/schedule-kernel.md:1030 |
+| `0x1047a3ac` | docs/vtmb/navigation-jump-links.md:1885, docs/vtmb/npc-ai/schedule-kernel.md:1030 |
 | `0x1047aa18` | docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:963 |
-| `0x1047b868` | docs/vtmb/combat-and-damage.md:1663, docs/vtmb/npc-ai/conditions-and-states.md:1591, docs/vtmb/npc-ai/conditions-and-states.md:2987, +2 more |
+| `0x1047b868` | docs/vtmb/combat-and-damage.md:1663, docs/vtmb/npc-ai/conditions-and-states.md:1591, docs/vtmb/npc-ai/conditions-and-states.md:2996, +2 more |
 | `0x10483aac` | docs/vtmb/npc-ai/conditions-and-states.md:1566, docs/vtmb/npc-ai/rdata-cells.md:33, docs/vtmb/npc-ai/senses.md:89 |
 | `0x104902c9` | docs/vtmb/vtmb-animation-reverse-engineering.md:2271 |
 | `0x10496f58` | docs/vtmb/npc-ai/rdata-cells.md:34 |
-| `0x10497530` | docs/vtmb/navigation-jump-links.md:1636, docs/vtmb/npc-ai/rdata-cells.md:35 |
+| `0x10497530` | docs/vtmb/navigation-jump-links.md:1651, docs/vtmb/npc-ai/rdata-cells.md:35 |
 | `0x10497c80` | docs/vtmb/npc-ai/senses.md:175 |
 | `0x10497cb0` | docs/vtmb/npc-ai/rdata-cells.md:36 |
-| `0x1049949c` | docs/vtmb/navigation-jump-links.md:1840, docs/vtmb/npc-ai/rdata-cells.md:37, docs/vtmb/npc-ai/schedule-kernel.md:2408 |
-| `0x104994a0` | docs/vtmb/navigation-jump-links.md:2052 |
+| `0x1049949c` | docs/vtmb/navigation-jump-links.md:1855, docs/vtmb/npc-ai/rdata-cells.md:37, docs/vtmb/npc-ai/schedule-kernel.md:2408 |
+| `0x104994a0` | docs/vtmb/navigation-jump-links.md:2070 |
 | `0x104994e0` | docs/vtmb/npc-ai/rdata-cells.md:38 |
-| `0x10499568` | docs/vtmb/navigation-jump-links.md:1885, docs/vtmb/npc-ai/shape.md:437 |
-| `0x1049a148` | docs/vtmb/navigation-jump-links.md:356, docs/vtmb/navigation-jump-links.md:2841 |
+| `0x10499568` | docs/vtmb/navigation-jump-links.md:1900, docs/vtmb/npc-ai/shape.md:437 |
+| `0x1049a148` | docs/vtmb/navigation-jump-links.md:357, docs/vtmb/navigation-jump-links.md:2863 |
 | `0x1049a160` | docs/vtmb/npc-ai/programs.md:438, docs/vtmb/npc-ai/programs.md:711, docs/vtmb/npc-ai/schedule-kernel.md:2191, +1 more |
 | `0x1049a164` | docs/vtmb/npc-ai/schedule-kernel.md:2189 |
 | `0x1049a170` | docs/vtmb/npc-ai/programs.md:724, docs/vtmb/npc-ai/schedule-kernel.md:2247 |
 | `0x1049a1ac` | docs/vtmb/npc-ai/programs.md:209, docs/vtmb/npc-ai/programs.md:337, docs/vtmb/npc-ai/programs.md:578, +2 more |
-| `0x1049a1b0` | docs/vtmb/navigation-jump-links.md:1863, docs/vtmb/npc-ai/programs.md:1204, docs/vtmb/npc-ai/schedule-kernel.md:2369, +1 more |
+| `0x1049a1b0` | docs/vtmb/navigation-jump-links.md:1878, docs/vtmb/npc-ai/programs.md:1204, docs/vtmb/npc-ai/schedule-kernel.md:2369, +1 more |
 | `0x1049a1d8` | docs/vtmb/combat-and-damage.md:1354 |
 | `0x1049a1e4` | docs/vtmb/combat-and-damage.md:1354 |
-| `0x1049adfc` | docs/vtmb/navigation-jump-links.md:2956 |
+| `0x1049adfc` | docs/vtmb/navigation-jump-links.md:2985 |
 | `0x1049ae28` | docs/vtmb/npc-ai/rdata-cells.md:39, docs/vtmb/npc-ai/rdata-cells.md:58 |
-| `0x1049ae70` | docs/vtmb/navigation-jump-links.md:1854, docs/vtmb/npc-ai/schedule-kernel.md:2494 |
-| `0x1049ae78` | docs/vtmb/npc-ai/conditions-and-states.md:2798 |
-| `0x1049ae8c` | docs/vtmb/navigation-jump-links.md:1841, docs/vtmb/navigation-jump-links.md:1973, docs/vtmb/npc-ai/rdata-cells.md:40 |
-| `0x1049ae90` | docs/vtmb/navigation-jump-links.md:1841, docs/vtmb/npc-ai/rdata-cells.md:41 |
+| `0x1049ae70` | docs/vtmb/navigation-jump-links.md:1869, docs/vtmb/npc-ai/schedule-kernel.md:2494 |
+| `0x1049ae78` | docs/vtmb/npc-ai/conditions-and-states.md:2807 |
+| `0x1049ae8c` | docs/vtmb/navigation-jump-links.md:1856, docs/vtmb/navigation-jump-links.md:1988, docs/vtmb/npc-ai/rdata-cells.md:40 |
+| `0x1049ae90` | docs/vtmb/navigation-jump-links.md:1856, docs/vtmb/npc-ai/rdata-cells.md:41 |
 | `0x1049ae94` | docs/vtmb/npc-ai/programs.md:1117 |
 | `0x1049aea0` | docs/vtmb/npc-ai/rdata-cells.md:42 |
 | `0x1049b998` | docs/vtmb/npc-ai/rdata-cells.md:43, docs/vtmb/npc-ai/rdata-cells.md:59 |
 | `0x1049bf28` | docs/vtmb/procedural_bones.md:253 |
 | `0x1049bf2c` | docs/vtmb/procedural_bones.md:253 |
-| `0x1049d8e0` | docs/vtmb/navigation-jump-links.md:525 |
-| `0x1049d988` | docs/vtmb/navigation-jump-links.md:1687 |
-| `0x1049da5c` | docs/vtmb/navigation-jump-links.md:2955 |
-| `0x1049df14` | docs/vtmb/navigation-jump-links.md:2949 |
+| `0x1049d8e0` | docs/vtmb/navigation-jump-links.md:526 |
+| `0x1049d988` | docs/vtmb/navigation-jump-links.md:1702 |
+| `0x1049da5c` | docs/vtmb/navigation-jump-links.md:2984 |
+| `0x1049df14` | docs/vtmb/navigation-jump-links.md:2978 |
 | `0x1049df18` | docs/vtmb/npc-ai/schedule-kernel.md:1629 |
 | `0x1049df1c` | docs/vtmb/npc-ai/schedule-kernel.md:1629 |
 | `0x1049df20` | docs/vtmb/npc-ai/programs.md:467, docs/vtmb/npc-ai/programs.md:547, docs/vtmb/npc-ai/programs.md:1413 |
@@ -3032,7 +3044,8 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x104c3cf4` | docs/vtmb/npc-ai/schedule-kernel.md:3901 |
 | `0x104c3cf8` | docs/vtmb/npc-ai/schedule-kernel.md:3901 |
 | `0x104c6120` | docs/vtmb/npc-ai/schedule-kernel.md:4903 |
-| `0x104cc4fc` | docs/vtmb/navigation-jump-links.md:1035 |
+| `0x104cc4fc` | docs/vtmb/navigation-jump-links.md:1049 |
+| `0x104cc500` | docs/vtmb/npc-ai/shape.md:1408 |
 | `0x104ce8b8` | docs/vtmb/npc-ai/schedule-kernel.md:4857 |
 | `0x104ce8c0` | docs/vtmb/npc-ai/rdata-cells.md:46 |
 | `0x104cf004` | docs/vtmb/retail-defects.md:256 |
@@ -3073,7 +3086,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10553f34` | docs/vtmb/entity_io.md:1855 |
 | `0x10553f60` | docs/vtmb/entity_visuals.md:289 |
 | `0x10554f28` | docs/vtmb/npc-ai/senses.md:997 |
-| `0x1055b298` | docs/vtmb/navigation-jump-links.md:814 |
+| `0x1055b298` | docs/vtmb/navigation-jump-links.md:828 |
 | `0x1055ceac` | docs/vtmb/camera-view-modes.md:584 |
 | `0x1055d090` | docs/vtmb/camera-view-modes.md:584 |
 | `0x1055d20c` | docs/vtmb/camera-view-modes.md:577 |
@@ -3088,16 +3101,16 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10561fc0` | docs/vtmb/npc-ai/senses.md:1004 |
 | `0x10562f54` | docs/vtmb/camera-view-modes.md:2306 |
 | `0x10562f58` | docs/vtmb/camera-view-modes.md:2306 |
-| `0x10566458` | docs/vtmb/navigation-jump-links.md:1634, docs/vtmb/npc-ai/lifecycle.md:2680, docs/vtmb/npc-ai/social.md:861 |
+| `0x10566458` | docs/vtmb/navigation-jump-links.md:1649, docs/vtmb/npc-ai/lifecycle.md:2680, docs/vtmb/npc-ai/social.md:861 |
 | `0x10566a1c` | docs/vtmb/entity_io.md:1860 |
 | `0x10568c54` | docs/vtmb/entity_io.md:2642 |
 | `0x1057254c` | docs/vtmb/footsteps.md:339, docs/vtmb/footsteps.md:995 |
 | `0x1057909c` | docs/vtmb/entity_io.md:1129 |
-| `0x10579660` | docs/vtmb/npc-ai/shape.md:3943 |
-| `0x1057966c` | docs/vtmb/navigation-jump-links.md:1253, docs/vtmb/navigation-jump-links.md:2962, docs/vtmb/npc-ai/conditions-and-states.md:536, +2 more |
+| `0x10579660` | docs/vtmb/npc-ai/shape.md:3982 |
+| `0x1057966c` | docs/vtmb/navigation-jump-links.md:1268, docs/vtmb/navigation-jump-links.md:2991, docs/vtmb/npc-ai/conditions-and-states.md:536, +2 more |
 | `0x10579690` | docs/vtmb/combat-and-damage.md:186 |
-| `0x1057ae88` | docs/vtmb/npc-ai/shape.md:4299 |
-| `0x1057ba50` | docs/vtmb/npc-ai/shape.md:1342 |
+| `0x1057ae88` | docs/vtmb/npc-ai/shape.md:4338 |
+| `0x1057ba50` | docs/vtmb/npc-ai/shape.md:1359 |
 | `0x10580f24` | docs/vtmb/player-entity.md:676, docs/vtmb/script_api.md:428 |
 | `0x1058283c` | docs/vtmb/camera-view-modes.md:3053 |
 | `0x10582858` | docs/vtmb/camera-view-modes.md:3054 |
@@ -3124,7 +3137,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1059d5b4` | docs/vtmb/entity_io.md:720 |
 | `0x1059d834` | docs/vtmb/entity_io.md:385 |
 | `0x105a0c78` | docs/vtmb/npc-ai/social.md:847 |
-| `0x105a1518` | docs/vtmb/npc-ai/shape.md:4573 |
+| `0x105a1518` | docs/vtmb/npc-ai/shape.md:4612 |
 | `0x105a1814` | docs/vtmb/npc-ai/conditions-and-states.md:2394 |
 | `0x105a1cb0` | docs/vtmb/npc-ai/lifecycle.md:616 |
 | `0x105a3060` | docs/vtmb/npc-ai/conditions-and-states.md:2048 |
@@ -3145,17 +3158,17 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x105ba680` | docs/vtmb/activity_enum.md:472, docs/vtmb/animation_and_movers.md:2646 |
 | `0x105c7638` | docs/vtmb/wielded_weapons.md:819 |
 | `0x105c8ed8` | docs/vtmb/npc-ai/shape.md:505 |
-| `0x105c979c` | docs/vtmb/npc-ai/conditions-and-states.md:1091, docs/vtmb/npc-ai/senses.md:129, docs/vtmb/npc-ai/senses.md:1181 |
+| `0x105c979c` | docs/vtmb/npc-ai/conditions-and-states.md:1091, docs/vtmb/npc-ai/senses.md:129, docs/vtmb/npc-ai/senses.md:1228 |
 | `0x105c97b4` | docs/vtmb/npc-ai/conditions-and-states.md:239, docs/vtmb/npc-ai/conditions-and-states.md:2704, docs/vtmb/npc-ai/senses.md:233 |
 | `0x105c97dc` | docs/vtmb/npc-ai/conditions-and-states.md:239, docs/vtmb/npc-ai/conditions-and-states.md:1086, docs/vtmb/npc-ai/conditions-and-states.md:2667 |
 | `0x105c9cf0` | docs/vtmb/npc-ai/schedule-kernel.md:335 |
-| `0x105cc508` | docs/vtmb/npc-ai/shape.md:4816 |
-| `0x105cc510` | docs/vtmb/npc-ai/shape.md:4816 |
-| `0x105cc518` | docs/vtmb/npc-ai/shape.md:4816 |
-| `0x105cc520` | docs/vtmb/npc-ai/shape.md:4815 |
-| `0x105cc8b4` | docs/vtmb/npc-ai/shape.md:4474 |
-| `0x105cc8fc` | docs/vtmb/npc-ai/shape.md:4524 |
-| `0x105cd440` | docs/vtmb/navigation-jump-links.md:2505 |
+| `0x105cc508` | docs/vtmb/npc-ai/shape.md:4855 |
+| `0x105cc510` | docs/vtmb/npc-ai/shape.md:4855 |
+| `0x105cc518` | docs/vtmb/npc-ai/shape.md:4855 |
+| `0x105cc520` | docs/vtmb/npc-ai/shape.md:4854 |
+| `0x105cc8b4` | docs/vtmb/npc-ai/shape.md:4513 |
+| `0x105cc8fc` | docs/vtmb/npc-ai/shape.md:4563 |
+| `0x105cd440` | docs/vtmb/navigation-jump-links.md:2527 |
 | `0x105cd454` | docs/vtmb/npc-ai/conditions-and-states.md:1741 |
 | `0x105cd458` | docs/vtmb/npc-ai/conditions-and-states.md:1742 |
 | `0x105cd62c` | docs/vtmb/npc-ai/conditions-and-states.md:1741 |
@@ -3168,9 +3181,9 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x105d8c6c` | docs/vtmb/npc-ai/senses.md:876 |
 | `0x105d8ccc` | docs/vtmb/npc-ai/senses.md:878 |
 | `0x105d8cd0` | docs/vtmb/npc-ai/senses.md:878 |
-| `0x105d9028` | docs/vtmb/npc-ai/shape.md:1343 |
-| `0x105d9bb0` | docs/vtmb/npc-ai/shape.md:4564 |
-| `0x105d9bb8` | docs/vtmb/npc-ai/shape.md:4563 |
+| `0x105d9028` | docs/vtmb/npc-ai/shape.md:1360 |
+| `0x105d9bb0` | docs/vtmb/npc-ai/shape.md:4603 |
+| `0x105d9bb8` | docs/vtmb/npc-ai/shape.md:4602 |
 | `0x105e8138` | docs/vtmb/retail-defects.md:107 |
 | `0x105f9990` | docs/vtmb/camera-view-modes.md:785, docs/vtmb/camera-view-modes.md:2461, docs/vtmb/camera-view-modes.md:3132 |
 | `0x105fb298` | docs/vtmb/effects.md:533 |
@@ -3182,10 +3195,10 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x106035b4` | docs/vtmb/npc-ai/schedule-kernel.md:534, docs/vtmb/npc-ai/schedule-kernel.md:1369, docs/vtmb/npc-ai/schedule-kernel.md:1455 |
 | `0x10608410` | docs/vtmb/npc-ai/schedule-kernel.md:1381 |
 | `0x10608528` | docs/vtmb/npc-ai/schedule-kernel.md:1381 |
-| `0x1060e654` | docs/vtmb/navigation-jump-links.md:1595 |
-| `0x1060fcc4` | docs/vtmb/navigation-jump-links.md:1531 |
-| `0x1060fcd8` | docs/vtmb/navigation-jump-links.md:1688 |
-| `0x1060fce8` | docs/vtmb/navigation-jump-links.md:1689 |
+| `0x1060e654` | docs/vtmb/navigation-jump-links.md:1610 |
+| `0x1060fcc4` | docs/vtmb/navigation-jump-links.md:1546 |
+| `0x1060fcd8` | docs/vtmb/navigation-jump-links.md:1703 |
+| `0x1060fce8` | docs/vtmb/navigation-jump-links.md:1704 |
 | `0x106142ec` | docs/vtmb/npc-ai/schedule-kernel.md:1211 |
 | `0x106152b0` | docs/vtmb/npc-ai/schedule-kernel.md:350, docs/vtmb/npc-ai/social.md:565 |
 | `0x10618b4c` | docs/vtmb/sky-ambience.md:446 |
@@ -3197,7 +3210,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1062a000` | docs/vtmb/npc-ai/lifecycle.md:1472 |
 | `0x1062a004` | docs/vtmb/npc-ai/lifecycle.md:1470 |
 | `0x1062d210` | docs/vtmb/npc-ai/schedule-kernel.md:3127 |
-| `0x10636728` | docs/vtmb/npc-ai/shape.md:4817 |
+| `0x10636728` | docs/vtmb/npc-ai/shape.md:4856 |
 | `0x10639480` | docs/vtmb/npc-ai/lifecycle.md:1515 |
 | `0x10639490` | docs/vtmb/npc-ai/lifecycle.md:1516 |
 | `0x10640ce0` | docs/vtmb/npc-ai/lifecycle.md:1534, docs/vtmb/npc-ai/lifecycle.md:1674 |
@@ -3209,7 +3222,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10652194` | docs/vtmb/npc-ai/lifecycle.md:1591 |
 | `0x106530fc` | docs/vtmb/npc-ai/lifecycle.md:1599 |
 | `0x10653114` | docs/vtmb/npc-ai/lifecycle.md:1600 |
-| `0x10653120` | docs/vtmb/npc-ai/conditions-and-states.md:3442 |
+| `0x10653120` | docs/vtmb/npc-ai/conditions-and-states.md:3451 |
 | `0x1065ca68` | docs/vtmb/npc-ai/lifecycle.md:1607 |
 | `0x1065ca70` | docs/vtmb/npc-ai/lifecycle.md:1607 |
 | `0x1065ca78` | docs/vtmb/npc-ai/lifecycle.md:1608 |
@@ -3223,11 +3236,11 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x106ac3a0` | docs/vtmb/animation_and_movers.md:884 |
 | `0x106c994c` | docs/vtmb/npc-ai/schedule-kernel.md:1187, docs/vtmb/npc-ai/shape.md:264 |
 | `0x106e7e91` | docs/vtmb/choreographed_scenes.md:480, docs/vtmb/choreographed_scenes.md:1070 |
-| `0x106eb5d8` | docs/vtmb/entity_io.md:1968, docs/vtmb/navigation-jump-links.md:1780, docs/vtmb/navigation-jump-links.md:1805 |
+| `0x106eb5d8` | docs/vtmb/entity_io.md:1968, docs/vtmb/navigation-jump-links.md:1795, docs/vtmb/navigation-jump-links.md:1820 |
 | `0x107091bc` | docs/vtmb/facial_animation.md:1079 |
 | `0x10709200` | docs/vtmb/facial_animation.md:1079 |
 | `0x1070b22c` | docs/vtmb/footsteps.md:148, docs/vtmb/stealth.md:674 |
-| `0x1070b244` | docs/vtmb/activity_enum.md:318, docs/vtmb/footsteps.md:153, docs/vtmb/navigation-jump-links.md:2739, +3 more |
+| `0x1070b244` | docs/vtmb/activity_enum.md:318, docs/vtmb/footsteps.md:153, docs/vtmb/navigation-jump-links.md:2761, +3 more |
 | `0x1070b248` | docs/vtmb/entity_io.md:2208 |
 | `0x1070b250` | docs/vtmb/npc-ai/lifecycle.md:2702 |
 | `0x1070b898` | docs/vtmb/footsteps.md:344, docs/vtmb/footsteps.md:664, docs/vtmb/footsteps.md:996 |
@@ -3235,7 +3248,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1070d1b0` | docs/vtmb/camera-view-modes.md:1798, docs/vtmb/npc-ai/schedule-kernel.md:2231 |
 | `0x1070d9d0` | docs/vtmb/npc-ai/schedule-kernel.md:2231 |
 | `0x1071a278` | docs/vtmb/footsteps.md:406, docs/vtmb/source_movement.md:271 |
-| `0x10723944` | docs/vtmb/footsteps.md:49, docs/vtmb/footsteps.md:146, docs/vtmb/source_movement.md:272 |
+| `0x10723944` | docs/vtmb/footsteps.md:49, docs/vtmb/footsteps.md:146, docs/vtmb/npc-ai/shape.md:1246, +1 more |
 | `0x1072b370` | docs/vtmb/python_bridge.md:585, docs/vtmb/savegame_format.md:617 |
 | `0x1072b374` | docs/vtmb/python_bridge.md:585, docs/vtmb/savegame_format.md:617 |
 | `0x1072bc20` | docs/vtmb/footsteps.md:594, docs/vtmb/footsteps.md:609, docs/vtmb/npc-ai/programs.md:1054 |
@@ -3250,11 +3263,11 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10738964` | docs/vtmb/computer-terminals.md:652 |
 | `0x10739194` | docs/vtmb/dice-system.md:83 |
 | `0x10739a4c` | docs/vtmb/animation_events.md:426 |
-| `0x10739d08` | docs/vtmb/npc-ai/conditions-and-states.md:3140, docs/vtmb/npc-ai/lifecycle.md:2430, docs/vtmb/npc-ai/lifecycle.md:3144, +10 more |
+| `0x10739d08` | docs/vtmb/npc-ai/conditions-and-states.md:3149, docs/vtmb/npc-ai/lifecycle.md:2430, docs/vtmb/npc-ai/lifecycle.md:3144, +10 more |
 | `0x1073dc28` | docs/vtmb/npc-ai/programs.md:456 |
 | `0x1074f028` | docs/vtmb/footsteps.md:47 |
 | `0x107532e8` | docs/vtmb/entity_io.md:1097 |
-| `0x10800008` | docs/vtmb/navigation-jump-links.md:2028 |
+| `0x10800008` | docs/vtmb/navigation-jump-links.md:2046 |
 | `0x1090fc0c` | docs/vtmb/npc-ai/convars.md:68 |
 | `0x1090fc9c` | docs/vtmb/npc-ai/convars.md:69 |
 | `0x1090fe68` | docs/vtmb/npc-ai/schedule-kernel.md:4355 |
@@ -3271,11 +3284,11 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10923c68` | docs/vtmb/npc-ai/schedule-kernel.md:647 |
 | `0x10923d3c` | docs/vtmb/npc-ai/convars.md:29 |
 | `0x10923dd7` | docs/vtmb/npc-ai/schedule-kernel.md:4715 |
-| `0x10923e84` | docs/vtmb/npc-ai/convars.md:52, docs/vtmb/npc-ai/shape.md:1345, docs/vtmb/npc-ai/shape.md:1363 |
+| `0x10923e84` | docs/vtmb/npc-ai/convars.md:52, docs/vtmb/npc-ai/shape.md:1362, docs/vtmb/npc-ai/shape.md:1380 |
 | `0x10923f14` | docs/vtmb/npc-ai/convars.md:34 |
 | `0x10923f5c` | docs/vtmb/npc-ai/convars.md:65 |
 | `0x10924034` | docs/vtmb/npc-ai/convars.md:66 |
-| `0x1092411c` | docs/vtmb/npc-ai/shape.md:1343 |
+| `0x1092411c` | docs/vtmb/npc-ai/shape.md:1360 |
 | `0x109241fc` | docs/vtmb/npc-ai/convars.md:61 |
 | `0x10924248` | docs/vtmb/npc-ai/schedule-kernel.md:1400, docs/vtmb/npc-ai/schedule-kernel.md:1416, docs/vtmb/npc-ai/schedule-kernel.md:1418, +2 more |
 | `0x10924260` | docs/vtmb/npc-ai/programs.md:1346, docs/vtmb/npc-ai/schedule-kernel.md:1418, docs/vtmb/npc-ai/schedule-kernel.md:1442, +1 more |
@@ -3286,23 +3299,23 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x109248f4` | docs/vtmb/npc-ai/convars.md:31 |
 | `0x10924a1c` | docs/vtmb/npc-ai/convars.md:30 |
 | `0x10924a6c` | docs/vtmb/npc-ai/schedule-kernel.md:4707, docs/vtmb/npc-ai/schedule-kernel.md:4741 |
-| `0x10924c94` | docs/vtmb/npc-ai/convars.md:49, docs/vtmb/npc-ai/shape.md:1335, docs/vtmb/npc-ai/shape.md:1362 |
+| `0x10924c94` | docs/vtmb/npc-ai/convars.md:49, docs/vtmb/npc-ai/shape.md:1352, docs/vtmb/npc-ai/shape.md:1379 |
 | `0x10924d24` | docs/vtmb/npc-ai/schedule-kernel.md:4723, docs/vtmb/npc-ai/schedule-kernel.md:4741 |
 | `0x10924d6c` | docs/vtmb/npc-ai/convars.md:64 |
-| `0x10924e94` | docs/vtmb/npc-ai/shape.md:1342 |
+| `0x10924e94` | docs/vtmb/npc-ai/shape.md:1359 |
 | `0x10924f74` | docs/vtmb/npc-ai/convars.md:43, docs/vtmb/npc-ai/schedule-kernel.md:4694, docs/vtmb/npc-ai/schedule-kernel.md:4741, +4 more |
 | `0x10925398` | docs/vtmb/npc-ai/schedule-kernel.md:1457 |
 | `0x109253b0` | docs/vtmb/npc-ai/schedule-kernel.md:1457 |
 | `0x109253c8` | docs/vtmb/npc-ai/schedule-kernel.md:1457 |
 | `0x1092541c` | docs/vtmb/entity_io.md:2068 |
-| `0x10934014` | docs/vtmb/navigation-jump-links.md:2309 |
+| `0x10934014` | docs/vtmb/navigation-jump-links.md:2331 |
 | `0x1093404c` | docs/vtmb/npc-ai/schedule-kernel.md:2108, docs/vtmb/npc-ai/schedule-kernel.md:2130, docs/vtmb/npc-ai/schedule-kernel.md:2154, +1 more |
 | `0x10934060` | docs/vtmb/npc-ai/schedule-kernel.md:2155, docs/vtmb/npc-ai/schedule-kernel.md:2187 |
 | `0x1093407c` | docs/vtmb/entity_io.md:2082 |
-| `0x10934088` | docs/vtmb/navigation-jump-links.md:1777, docs/vtmb/npc-ai/schedule-kernel.md:4752 |
-| `0x1093408c` | docs/vtmb/navigation-jump-links.md:1776, docs/vtmb/npc-ai/schedule-kernel.md:4741 |
+| `0x10934088` | docs/vtmb/navigation-jump-links.md:1792, docs/vtmb/npc-ai/schedule-kernel.md:4752 |
+| `0x1093408c` | docs/vtmb/navigation-jump-links.md:1791, docs/vtmb/npc-ai/schedule-kernel.md:4741 |
 | `0x10934158` | docs/vtmb/npc-ai/programs.md:545, docs/vtmb/npc-ai/schedule-kernel.md:4227 |
-| `0x10936b68` | docs/vtmb/navigation-jump-links.md:1784, docs/vtmb/npc-ai/schedule-kernel.md:1337 |
+| `0x10936b68` | docs/vtmb/navigation-jump-links.md:1799, docs/vtmb/npc-ai/schedule-kernel.md:1337 |
 | `0x10936c68` | docs/vtmb/entity_io.md:2025, docs/vtmb/npc-ai/social.md:492, docs/vtmb/npc-ai/social.md:568 |
 | `0x10936f74` | docs/vtmb/npc-ai/convars.md:39, docs/vtmb/npc-ai/programs.md:1164, docs/vtmb/npc-ai/senses.md:54 |
 | `0x10937a8c` | docs/vtmb/npc-ai/convars.md:36, docs/vtmb/npc-ai/programs.md:1161, docs/vtmb/npc-ai/senses.md:333 |
@@ -3373,7 +3386,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1093acd8` | docs/vtmb/npc-ai/schedule-kernel.md:1471 |
 | `0x1093acf0` | docs/vtmb/npc-ai/schedule-kernel.md:1471 |
 | `0x1093ad08` | docs/vtmb/npc-ai/schedule-kernel.md:1471 |
-| `0x1093ad24` | docs/vtmb/npc-ai/convars.md:50, docs/vtmb/npc-ai/shape.md:1354, docs/vtmb/npc-ai/shape.md:1362 |
+| `0x1093ad24` | docs/vtmb/npc-ai/convars.md:50, docs/vtmb/npc-ai/shape.md:1371, docs/vtmb/npc-ai/shape.md:1379 |
 | `0x1093ad64` | docs/vtmb/npc-ai/schedule-kernel.md:1471, docs/vtmb/npc-ai/social.md:620 |
 | `0x1093ae28` | docs/vtmb/npc-ai/schedule-kernel.md:1472, docs/vtmb/npc-ai/social.md:621 |
 | `0x1093ae48` | docs/vtmb/npc-ai/schedule-kernel.md:1472 |
@@ -3426,7 +3439,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1093b778` | docs/vtmb/npc-ai/schedule-kernel.md:1484 |
 | `0x1093b790` | docs/vtmb/npc-ai/schedule-kernel.md:1484 |
 | `0x1093b7a8` | docs/vtmb/npc-ai/schedule-kernel.md:1484 |
-| `0x1093b7cc` | docs/vtmb/navigation-jump-links.md:2525, docs/vtmb/navigation-jump-links.md:2583, docs/vtmb/npc-ai/convars.md:28 |
+| `0x1093b7cc` | docs/vtmb/navigation-jump-links.md:2547, docs/vtmb/navigation-jump-links.md:2605, docs/vtmb/npc-ai/convars.md:28 |
 | `0x1093b89c` | docs/vtmb/npc-ai/schedule-kernel.md:1484, docs/vtmb/npc-ai/social.md:625 |
 | `0x1093b918` | docs/vtmb/npc-ai/schedule-kernel.md:1485 |
 | `0x1093b930` | docs/vtmb/npc-ai/schedule-kernel.md:1485 |
@@ -3499,7 +3512,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1093c998` | docs/vtmb/npc-ai/schedule-kernel.md:1500 |
 | `0x1093c9b0` | docs/vtmb/npc-ai/schedule-kernel.md:1500 |
 | `0x1093c9c8` | docs/vtmb/npc-ai/schedule-kernel.md:1500, docs/vtmb/npc-ai/social.md:631 |
-| `0x1093c9fc` | docs/vtmb/npc-ai/convars.md:51, docs/vtmb/npc-ai/shape.md:1356, docs/vtmb/npc-ai/shape.md:1362 |
+| `0x1093c9fc` | docs/vtmb/npc-ai/convars.md:51, docs/vtmb/npc-ai/shape.md:1373, docs/vtmb/npc-ai/shape.md:1379 |
 | `0x1093ca44` | docs/vtmb/npc-ai/convars.md:63 |
 | `0x1093ca8c` | docs/vtmb/npc-ai/convars.md:62 |
 | `0x1093cbac` | docs/vtmb/npc-ai/convars.md:58 |
@@ -3562,7 +3575,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x109d306c` | docs/vtmb/activity_enum.md:34 |
 | `0x109d3080` | docs/vtmb/activity_enum.md:32 |
 | `0x109ef28c` | docs/vtmb/source_movement.md:598 |
-| `0x109ef2d4` | docs/vtmb/navigation-jump-links.md:602 |
+| `0x109ef2d4` | docs/vtmb/navigation-jump-links.md:616 |
 | `0x109f0b40` | docs/vtmb/npc-ai/schedule-kernel.md:4526 |
 | `0x109f364c` | docs/vtmb/npc-ai/authored-control.md:729, docs/vtmb/npc-ai/schedule-kernel.md:2592, docs/vtmb/npc-ai/schedule-kernel.md:2676 |
 | `0x109f3658` | docs/vtmb/npc-ai/schedule-kernel.md:2592, docs/vtmb/npc-ai/schedule-kernel.md:2676 |

@@ -19,6 +19,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -359,7 +360,7 @@ void FElysiumNpc::GatherConditions()
 			* (static_cast<double>(Cond19WallTraceLengthUnits) * ElysiumMove::U);   // 102b2e34..102b2e74
 		// `fraction < 1.0 || allsolid (tr+0x36) || startsolid (tr+0x37)` (102b2fa4 / 102b2faf): each
 		// is "the ray did not reach".
-		if (!Conditions19RayReaches(EyeCm, EndCm))                       // 102b2f4f TraceRay / 102b2f92..102b2fba
+		if (!ElysiumNpcSight::RayReaches(*this, EyeCm, EndCm, Cond19WallTraceMask, nullptr))   // 102b2f4f TraceRay / 102b2f92..102b2fba
 		{
 			C.Set(EElysiumNpcCond::WeaponThroughWall);                   // 102b2fcb 0x3c
 		}

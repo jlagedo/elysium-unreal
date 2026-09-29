@@ -179,7 +179,9 @@ def test_the_player_profile_is_a_pawn_on_the_players_own_channel():
     block = gen.emit_ini_block(LETTERS)
     assert f'+Profiles=(Name="{gen.PLAYER_PROFILE}",CollisionEnabled=QueryAndPhysics,' in block
     assert 'ObjectTypeName="ElysiumPlayer"' in block
-    # The player occludes an NPC's sight, as MONSTER does in retail's own sight mask.
+    # The player hull itself ignores ElysiumSight (retail's MONSTER half is the character list
+    # ElysiumNpcSight::Visible filters, not a channel response); the block still carries sight
+    # blockers for the brush signatures.
     assert '(Channel="ElysiumSight",Response=ECR_Block)' in block
 
 

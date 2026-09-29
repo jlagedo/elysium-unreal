@@ -456,8 +456,9 @@ void FElysiumNpc::ComputeTargetLeadPoint(const FVector& AimFromUnits, const FEly
 					TargetLeadPredictedWeight, TargetLeadCurrentWeight, TargetLeadWeightScale);
 				// The hull sweep from the fallback to the blend, with THIS entity's own collision
 				// box and retail's mask `0x2000b` and world-only filter. Family **Motor**'s
-				// `KernelHullTrace` and `RetailCollisionExtents` are the two seams and both answer
-				// nothing, so the sweep reads CLEAR — `fraction == 1.0` — and the blend stands.
+				// `RetailCollisionExtents` (this NPC's hull row) and `KernelHullTrace` (0018 story 6)
+				// answer them; `0x2000b` carries no MONSTER, so no character is ever in the way. A
+				// world with no collision reads CLEAR — `fraction == 1.0` — and the blend stands.
 				FVector MinsUnits = FVector::ZeroVector;
 				FVector MaxsUnits = FVector::ZeroVector;
 				RetailCollisionExtents(*this, MinsUnits, MaxsUnits);

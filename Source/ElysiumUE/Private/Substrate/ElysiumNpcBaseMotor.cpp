@@ -331,8 +331,24 @@ bool FElysiumNpcBase::RetailCollisionExtents(const FElysiumEntity& Entity, FVect
 			Npc->bIsUsingSmallHull ? EElysiumHullExtents::Small : EElysiumHullExtents::Full,
 			OutMinsUnits, OutMaxsUnits);
 	}
-	// **SEAM** for every other entity: the player's, a prop's or a brush entity's `+0x274` / `+0x280`
-	// have no source in this runtime. The bodies below refuse rather than box a point.
+	// The player: `CBasePlayer::Spawn` sizes the box from the mover's hulls, the `CGameMovement`
+	// constructor's literals (`0x1011e0d0`; `GetPlayerMins 0x1011e310` / `GetPlayerMaxs 0x1011e350`,
+	// `docs/vtmb/source_movement.md` § "The hulls and the view offsets"): standing
+	// `(-16,-16,0)..(16,16,72)`, ducked `(-16,-16,0)..(16,16,36)`, selected by `m_bDucked`
+	// (`player+0x1edd`), which this runtime answers through `IElysiumEmbodiment::IsPlayerDucking`.
+	const FElysiumPlayer* const Player = Entity.World != nullptr ? Entity.World->FindPlayer() : nullptr;
+	if (Player != nullptr && static_cast<const FElysiumEntity*>(Player) == &Entity)
+	{
+		const IElysiumEmbodiment* const Embodiment = Entity.World->Embodiment();
+		const bool bDucked = Embodiment != nullptr && Embodiment->IsPlayerDucking();
+		const double HalfWidthUnits = ElysiumMove::HullHalfWidth / ElysiumMove::U;
+		const double HeightUnits = (bDucked ? ElysiumMove::DuckHeight : ElysiumMove::StandHeight) / ElysiumMove::U;
+		OutMinsUnits = FVector(-HalfWidthUnits, -HalfWidthUnits, 0.0);
+		OutMaxsUnits = FVector(HalfWidthUnits, HalfWidthUnits, HeightUnits);
+		return true;
+	}
+	// **SEAM** for every other entity: a prop's or a brush entity's `+0x274` / `+0x280` have no
+	// source in this runtime. The bodies below refuse rather than box a point.
 	OutMinsUnits = FVector::ZeroVector;
 	OutMaxsUnits = FVector::ZeroVector;
 	return false;
@@ -452,24 +468,25 @@ bool FElysiumNpcBase::OverrideMove(float Interval)
 
 bool FElysiumNpcBase::ValidateNavGoal()
 {
-	// slot 528. `CAI_BaseNPC::FUN_10280360` `0x10280360` — retail's `IsCoverPosition` check on the
-	// goal the navigator is holding:
+	// slot 528. `CAI_BaseNPC::FUN_10280360` `0x10280360` (R2 §6, from the listing) — retail's
+	// is-this-still-cover check on the goal the navigator is holding:
 	//
-	//     if (GetNavigator()->GetGoalType() != 6) return true;
-	//     if (!GetEnemy()) return true;
-	//     Vector goal = GetNavigator()->GetGoalPos();  goal.z = FUN_102f9c70(goal);
-	//     Vector eye  = goal + GetViewOffset();        // vtable +0x854
-	//     Ray_t  ray  = { eye -> GetEnemy()->EyePosition() (vtable +0x304) };
-	//     TraceRay(ray, 0x2804091, filter(this, 0), &tr);
+	//     if (GetNavigator()->GetGoalType() != 6) return true;           // 0x102ee620
+	//     if (!GetEnemy()) return true;                                   // slot 167
+	//     Vector p = GetNavigator()->GetGoalPos();
+	//     p.z = 0x102f99d0(p, 384.0);                                     // the floor probe
+	//     p += EyeOffset(GetCoverActivity(m_pHintNode));                  // slot 533 of slot 569
+	//     UTIL_TraceLine(p, GetEnemy()->EyePosition() /* slot 193 */, 0x2804091,
+	//                    CTraceFilterSimple(this, 0), &tr);               // mask at 102804f1
 	//     if (tr.fraction == 1.0f) {                   // NOTHING blocks -> this is not cover
 	//         if (!ConditionInterruptsCurrentSchedule(0x39)) {
 	//             m_failText/-Line = "…AI_BaseNPC…", 0xbc;
-	//             TaskFail(0x1b);                      // slot 448, already ported
+	//             TaskFail(0x1b);                      // slot 448
 	//             return false;
 	//         }
 	//         SetCondition(0x39);
 	//     }
-	//     return true;
+	//     return true;                                 // blocked -> the cover hides
 	//
 	// `NavGoalState()` is the navigator's goal type (`path+0x5c`), so the gate opens for a cover
 	// goal (`SetGoal` type 6) and answers true for every other type, as retail does.
@@ -489,19 +506,51 @@ bool FElysiumNpcBase::ValidateNavGoal()
 	{
 		return true;
 	}
-	// `NavGoalPosition` answers Source units in the port's axes, which is `KernelHullTrace`'s frame;
-	// the enemy is brought into it the same way (`Origin / U`).
+	// `NavGoalPosition` answers Source units in the port's axes, which is `KernelHullTrace`'s frame.
 	//
-	// **NOT retail's endpoints, stated (R2 §6)**: retail's start is the goal with its z replaced by
-	// the floor probe `0x102f99d0(goal, 384)` plus slot 533 `EyeOffset` of the hint's cover activity
-	// (slot 569), and its end is the enemy's slot 193 EYE. The port traces goal to enemy ORIGIN; the
-	// floor probe's miss answer and the eye pair are this body's owed port. The mask (`0x2804091`)
-	// and the filter (`CTraceFilterSimple(this, 0)`: NPCs are NOT transparent to it, so the
-	// character rule is the kernel trace's) are retail's.
+	// The floor probe `0x102f99d0(goal, 384)` (R2 §6): two LINES from the goal straight down 384
+	// units, filter `(NULL, 0)`, masks `0x2400b` then `0x202400b` (`102f9b58`); the second's z wins
+	// only when it hit EARLIER than the first on an entity carrying flag `0x1000000`. That flag's name
+	// and its word are unrecovered and no port entity carries it, so the second trace can never win:
+	// it is still run, and its entity test answers "no flag" (a SEAM, named here). The z taken is the
+	// first trace's `endpos` -- R2 calls it the floor z; a probe that finds no floor answers its own
+	// end, 384 under the goal, which is what a clear trace's `endpos` is. Filter divergence: the
+	// kernel trace always passes this NPC as the pass entity, where retail's floor probe has none.
+	constexpr double GFloorProbeUnits = 384.0;
+	constexpr int32 GFloorProbeMaskWorld = 0x2400b;
+	constexpr int32 GFloorProbeMaskNpcSolid = 0x202400b;
+	const FVector FloorEndUnits(GoalUnits.X, GoalUnits.Y, GoalUnits.Z - GFloorProbeUnits);
+	FKernelHullTrace FloorWorld;
+	KernelHullTrace(GoalUnits, FloorEndUnits, FVector::ZeroVector, FVector::ZeroVector,
+		GFloorProbeMaskWorld, FloorWorld);
+	FKernelHullTrace FloorSolid;
+	KernelHullTrace(GoalUnits, FloorEndUnits, FVector::ZeroVector, FVector::ZeroVector,
+		GFloorProbeMaskNpcSolid, FloorSolid);
+	// SEAM: flag `0x1000000`'s word is unrecovered, so no hit entity carries it.
+	auto CarriesFlag0x1000000 = [](const FElysiumEntityHandle& /*HitEntity*/) { return false; };
+	const bool bSecondWins = FloorSolid.Fraction < FloorWorld.Fraction
+		&& CarriesFlag0x1000000(FloorSolid.HitEntity);
+	const double FloorZUnits = bSecondWins ? FloorSolid.EndPosUnits.Z : FloorWorld.EndPosUnits.Z;
+
+	// Slot 533 `EyeOffset` of slot 569 `GetCoverActivity(m_pHintNode)`: both are dispatched (the
+	// Troika line's bodies are `0x102b4ab0` / `0x10297560`); the hint argument is the non-null marker
+	// both bodies read the held hint through. `EyeOffset` answers centimetres.
+	void* const HeldHint = BaseScheduleHost.HintNode != INDEX_NONE
+		? static_cast<void*>(&BaseScheduleHost.HintNode) : nullptr;
+	const int32 CoverActivity = GetCoverActivity(HeldHint);
+	const FVector EyeOffsetUnits = EyeOffset(CoverActivity, CoverActivity) / ElysiumMove::U;
+	const FVector StartUnits(GoalUnits.X + EyeOffsetUnits.X, GoalUnits.Y + EyeOffsetUnits.Y,
+		FloorZUnits + EyeOffsetUnits.Z);
+	// The enemy's slot 193 eye. `CTraceFilterSimple(this, 0)` passes only this NPC: the ENEMY is not
+	// ignored and NPCs are not transparent to it, so under `0x2804091`'s MONSTER half a line that ends
+	// inside the enemy's own box meets that box first and reads BLOCKED -- the cover is kept. That is
+	// retail's filter, reproduced; the character rule is the kernel trace's.
+	const FVector EnemyEyeUnits = Enemy->EyePosition() / ElysiumMove::U;
 	FKernelHullTrace Trace;
-	if (!KernelHullTrace(GoalUnits, Enemy->Origin / ElysiumMove::U, FVector::ZeroVector,
-		FVector::ZeroVector, GCoverTraceMask, Trace))
+	if (!KernelHullTrace(StartUnits, EnemyEyeUnits, FVector::ZeroVector, FVector::ZeroVector,
+		GCoverTraceMask, Trace))
 	{
+		// No collision world: nothing can be asked, and the goal stands (the answer before 0018/6).
 		return true;
 	}
 	if (Trace.Fraction == GTraceClearFraction)

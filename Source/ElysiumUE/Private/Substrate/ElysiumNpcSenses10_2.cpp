@@ -46,14 +46,3 @@ bool FElysiumNpc::SecCameraInViewCone(const FElysiumEntity* Camera,
 	(void)SeenTarget;
 	return false;
 }
-
-// =================================================================================================
-// `CNPC_VScurrying` — `0x103acac0` and `0x103acba0`.
-// =================================================================================================
-
-bool FElysiumNpc::IsAreaClear(const FVector& /*PositionCm*/, int32 /*Mask*/) const
-{
-	// SEAM for `CAI_BaseNPCTroika::IsAreaClear(pos, 0x202400b, 0, 0)`. This runtime has no hull
-	// sweep; answers true, which ADMITS the jittered point — retail's own answer for open ground.
-	return true;
-}
