@@ -44,7 +44,8 @@ places and crosswalk hints, cops, makers cycling. Authored places, hints, patrol
 are selectable baked actors; special traversal uses native navigation links. Compact navigation
 records are inspectable in a cooked asset. Their queries are exercised independently of NPC
 programs, with native movement tests for the pathfinding and traversal boundary.
-Graph counts are those of the patch install's own graphs, the ones retail loads (story 4).
+Graph counts are those of the patch install's own graphs, the ones retail loads (resolved by 3,
+21-2 and 21-8; staged as places by 4).
 
 ## Scope
 Everything an NPC queries but does not own: Unreal navigation and the retail node data its
@@ -243,8 +244,9 @@ records must accept them as retail's float parse does. `info_node_patrol_point` 
 `target_name` and `ip_percent`: 0002/27's interest record. The query surface (§ "The query
 surface of the helper classes") is 43 address-backed helper operations in seven object tables;
 every row has a recovered caller and an explicit retail answer, including unnamed `FUN_`
-bodies. The graph figures of this paragraph are the packed exports'; story 4 re-exports from the
-graphs retail loads (97 non-empty: 11,558 nodes, 29,523 links).
+bodies. The graph figures of this paragraph are the packed exports'. The graphs retail loads —
+the patch's loose AINs, resolved since 3, 21-2 and 21-8 — are 97 non-empty: 11,558 nodes (11,517
+ground, 37 type 1, 4 climb, no air; story 4's census, 2026-09-29), 29,523 links.
 
 **Story 2's bake pins (2026-09-19, from the V2 entity units).** The census counts a patrol
 point as a hint *and* a patrol point, so its two columns are not a sum: the baked families
@@ -683,14 +685,15 @@ its recovery is written in the oracle section it names.
   the only one without it — which is 7's door rule.)
   Size: L. Effort: Opus / high (exporter, payload, editor bake, nav config, verify).
 
-- [ ] **4. The place set.**
+- [x] **4. The place set.** Landed 2026-09-29.
   Retail: a node is where a patrol, a hint, a cover search and a hunt point. `CAI_Hint::
   GetPosition 0x102d1180` answers the hint's NETWORK NODE at hull height when `m_nNodeID != -1`
   and the hint's own origin otherwise; the patrol lookup answers the node (`+0x5e4`), not the
   hint. `CNodeEnt::Spawn 0x102d78d0` pairs BSP node rows with graph nodes POSITIONALLY, in
   spawn order, through the running counter `DAT_10926a3c`; an out-of-range counter keeps its
   id and attaches nothing. The install loads the patch's own loose graphs (mod directory, then
-  base directory, then packs): `sp_tutorial_1` 203 nodes / 429 links, `sm_hub_1` 578 / 1,862.
+  base directory, then packs; the port's resolve had already landed with 3, 21-2 and 21-8):
+  `sp_tutorial_1` 203 nodes / 429 links, `sm_hub_1` 578 / 1,862.
   What behaviour reads of a node: position, yaw, type, the per-hull Z offset
   (`node+0x14+4*hull`), its hint (`+0xa0`) and the run-time cooldown (`+0x9c`). Links, zones,
   the neighbour bitvector, link info and the 22 motion words are the engine's road network —
@@ -699,22 +702,24 @@ its recovery is written in the oracle section it names.
   answers the hint entity and the patrol walks to its origin; `NavNearestNodeTo`,
   `NavAllHintNodes` and `GatherHintNodes` answer nothing. The spec's old pins (116 / 234) were
   the packed graph, which pairs with the unpatched BSP only.
-  Job: the exporter resolves the graph retail would load and names the row fields (`tail` =
-  type, flags, neighbour bitvector; `lead` = zone, link count). The bake writes one cooked
+  Job: the exporter names the row fields (`tail` = type, flags, neighbour bitvector; `lead` =
+  zone, link count) of the graph retail would load — resolving that graph is not this story's
+  job: it landed with 3, 21-2 and 21-8 (corrected 2026-09-29). The bake writes one cooked
   `UDataAsset` per map, referenced by the baked map content: a place row per node — network
-  index, type, position, yaw, the Z offset of each agent the map bakes, the hint association
-  by positional pairing with its unresolved and out-of-range outcomes kept, the authored
+  index, type, position, yaw, all 22 hull Z offsets (retail's own row: `GetPosition` may be
+  asked for any hull; corrected 2026-09-29 from "the Z offset of each agent the map bakes"), the
+  hint association by positional pairing with its unresolved and out-of-range outcomes kept, the authored
   `nodeid` as provenance — and the crosswalk pairs (two type-11000 hint nodes a link joins).
   No links, zones or masks. One number per baked agent rides beside the rows: the WANDER CAP
   (decided below). At run time a registry keyed by network index carries the
   cooldown; hints get their `NodeId`; a hint's stand position and a patrol point resolve to
   the node at hull height; `TASK_GET_PATH_TO_RANDOM_NODE` draws from the set. **"At hull height"
-  is two questions, and the row carries both offsets** — retail's `CAI_Node::GetPosition
+  is two questions, and the row carries every offset** — retail's `CAI_Node::GetPosition
   0x102fb0d0` is reached with the PATHING hull `+0x156c` from every routing site and with the
   STANDING hull `m_eHull` from seven others (patrol anchoring, the zombie's patrol arm,
   extrapolated routes, debug drawing; 3's § "The two hull words"). The two agree for every species
-  but the Sheriff, Hengeyokai and Ming Xiao, so the asset keeps the per-agent Z offsets it already
-  writes and each caller names which word it is asking with. The bake reports
+  but the Sheriff, Hengeyokai and Ming Xiao, so the asset keeps all 22 Z offsets and each caller
+  names which word it is asking with. The bake reports
   every hint, patrol point and interesting place that sits off an agent's mesh, and every one
   no node covers, so reach that changes against retail is seen, not discovered. **Handed over by 3:**
   the AIN-zones-against-mesh-connectivity report, pinned -- retail's zones are its own partition
@@ -723,18 +728,24 @@ its recovery is written in the oracle section it names.
   observation made for every zone pair, beside the per-agent projection of every place.
   Acceptance: both witness levels load the asset with no external export access; the pairing
   reproduces retail's on the patch graphs (standalone hints, duplicate authored ids, the
-  out-of-range arm); the thug's `pt1..pt3` resolve to node positions; the seams above answer
-  from the registry. The wander draw, called as the task arm calls it: an order of 200 on the hub
+  out-of-range arm); the thug's patrol points `A1..A3` resolve to node positions (corrected
+  2026-09-29: `pt1..pt3` are interesting places, not patrol hints, `programs.md:1476`; the
+  patrol points reaching them are `A1`/`A2`/`A3`, BSP rows 433–435, network nodes 15/16/17); the
+  seams above answer from the registry. The wander draw, called as the task arm calls it: an order of 200 on the hub
   picks a place within 200 units and ahead of the body; an order of 4096 never picks beyond the
   cap; a type-4 place is never picked; a cooling place is picked only when no expired one stands;
   no place in range is `0x18` inside `StartTask`; the installed path carries no goal type and no
   tolerance. Pins, patch graphs: tutorial 203 places, all ground; hub 578, all ground; each
   agent's wander cap equal to `census_link_lengths`' `20xmed` for that map and hull (human:
   hub 3,113, tutorial 2,942).
-  Provides: places to 7–12. Consumes: 2, 3.
+  Provides: places to 5, 7, 8, 9 and 11 (corrected 2026-09-29 from "7–12": 10 and 12 consume no
+  place — their own lines read 2, 5, 8 and 5, 6, 8 — and 6 asks geometry, not places).
+  Consumes: 2, 3; and two surfaces of 5 and 6 that do not stand yet, built here as narrow seams
+  for their owners to absorb (added 2026-09-29): the path-no-goal install `InstallPathNoGoal` (5)
+  and the route length `IElysiumNpcMotor::RouteLengthTo` (6).
   Oracle: `navigation-jump-links.md` § "The loader, walked", § "Which graph the patched install
   runs on", § "What the shipped graphs and maps actually use",
-  § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked".
+  § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked", § "The place set, landed".
   **Raised 2026-09-21 and DECIDED the same day (below): the read this story owed came back against
   the "no links" decision.** `TASK_GET_PATH_TO_RANDOM_NODE` is task `0x1f` (`0x10316ff0`), and it is
   **not a draw from a set of places**. Its arm `0x10285d7f` runs a random WALK over the AIN
@@ -817,6 +828,54 @@ its recovery is written in the oracle section it names.
   *(For the avoidance of the doubt this paragraph caused once: "links, zones … never run-time
   data" above is a statement about the PORT's cooked asset, not about retail — retail plainly
   reads them, as `0x102ff960` shows.)*
+  **Landed 2026-09-29 (box open until the smoke is recorded).** Pipeline: the nav-graph node
+  fields named (`type`, `flags`, `neighbourBits`, `zone`, `linkCount`; 461febc8);
+  `importers/map_places.py` stages the `places` block (manifest 16 → 17) with `CNodeEnt::Spawn`'s
+  counter rule, the crosswalk pairs and one wander cap per declared hull;
+  `pipeline/unreal/bake_places.py` cooks `/ElysiumBaked/<map>/DA_<map>_Places`
+  (`UElysiumMapPlaces`), which the travel gate `HasBakedMap` now requires. Runtime:
+  `FElysiumPlaceSet`, owned by the entity world — the rows, `GetPositionCm` (`0x102fb0d0`, all
+  three arms, the climb arm included), the node cooldown `+0x9c` (storage and read), the attached
+  hint `+0xa0`, the counter `DAT_10926a3c` and the out-of-range count `DAT_106c994c`; the counter
+  runs in `FElysiumEntityWorld::Load` and writes `FElysiumHint::NodeId`, retiring every node row
+  that makes no hint; `CAI_Hint::OnRestore 0x102d3ec0` relinks as `FElysiumHint::OnPostRestore`
+  (retail saves no node state). The seams answer from the registry: the patrol (`PatrolNodeIdFor`
+  is the hint's `m_nNodeID`, `PatrolNodePosition` the node at the caller's hull word), the hint's
+  node arms `0x102f46d0` / `0x102f47b0`, `NavNearestNodeTo 0x102f41b0`, `0x102f3c10`, slot 527,
+  and `NavAllHintNodes` on the live hint list. `0x102c7600` writes the NODE's `+0x9c`, settling
+  the lifecycle comment that said `+0x9c` and wrote `+0x5ec`. The wander is the capped point pick
+  in `StartTaskSetRandomGoal`, with the port constants `kWanderDetourRatio` 2.0 and
+  `kWanderMaxDraws` 5; a dropped pick leaves the pool, and tier and band are re-taken. The bake's
+  gate writes three observation reports, unpinned: places off mesh, uncovered points, zone pairs.
+  Numbers (census over the 108 maps; oracle § "The place set, landed"): 11,517 type-2 nodes, 37
+  type 1, 4 type 4, never type 3; `flags` 1 on 4 nodes (writer unrecovered); every map stages with
+  0 out-of-range hints and 0 `nodeid` disagreements; tutorial 203 places / 49 bound hints, hub
+  578 / 274; caps human 2,942.141 (tutorial) / 3,113.326 (hub), rat 3,097.891 / 3,185.672; `A1..A3`
+  are nodes 15/16/17; the hub's crosswalk rows (BSP 1613–1618) are nodes 258–263, 8 pairs. The
+  reports: 0 places off mesh on both witnesses; 0 uncovered points (coverage is `0x102f41b0`'s
+  ±2048 box); zone pairs joined on the human mesh, tutorial 2 of 45 (`4/7`, and `11/12` = the
+  `146–184` barrel pair), hub 3 of 6 (`1/5` at a 9,978 cm path, `1/6`, `5/6`); rat mesh tutorial 2,
+  hub 1; same zone unjoined 0. Tests: `Elysium.Substrate.PlaceSet.*`,
+  `Elysium.Substrate.PlaceSeams.*`, `Elysium.Content.Places.{Tutorial,Hub,WanderHub}`,
+  `test_map_places.py`, `test_bake_places.py`.
+  Named modernization: the capped point pick (decided 2026-09-21, above). Named divergences:
+  `0x102f46d0` / `0x102f47b0` test `id <= count`, and the port answers the origin / `0.0` for
+  `id == count` instead of reading past the node array; `TASK_WANDER 0x76`'s fallback
+  `SetRandomGoal(1.0, …)` fails `0x18` under the pick where retail's walk takes one hop (no shipped
+  schedule issues `0x76`); the Werewolf's nearest-node cache (`FUN_103d0bf0`) holds an index, not
+  a pointer, so a nearest node 0 re-queries; the 20-entry nearest-node cache `0x102f4520` /
+  `0x102f45f0` is not ported.
+  Stays open: the hint searches, claims and `IsHintAvailableToMe` (8); the cooldown's claim write
+  (9); the crosswalk link over the baked pairs (7); `SetGoal`'s goal-flag-2 node route
+  (`ElysiumNpcBaseStartTask.cpp` ~:1976) and the radial probe `0x102ed610` (5);
+  `CheckStandPosition` and the hull trace inside `CanFitAtNode` (6); pins for the new reports
+  (21-9); rat-mesh noise in them (21-10).
+  **Smoke (2026-09-29, `sm_hub_1` then `sp_tutorial_1`):**
+  - *Hub load.* The hub adopts 578 places (hulls `0x80001`, 2 caps), and hints read their nodes (`s3` → 453).
+  - *The wander pick.* `SCHED_VCOP_WANDER_PATROL_SHORT` was forced on both `copcar` cops. The pick answered (no `0x18`) and each walked ~3 m, then ended `Blocked` against the other and failed `0x0c`. That is crowd blocking, which is row 08's. At idle nothing on the hub issues the task: pedestrians run the ambient loop, and the patrol cops run `0x67`.
+  - *Tutorial.* `A1..A3` are bound to nodes 15/16/17. `sentry2` loops, and the monk loops up to its wrap leg, both as in run 3 (`5b0a5a40` holds).
+  - *The hub patrol cops still stall, as they did in run 3 before this story, so this is not a regression.* Unreal routes `patrol_cop`'s `s2 → s3` over AIN jump link 731 (151 ↔ 160, 247.9 units, motion 2). Retail's link predicate `0x102ff960` refuses that link through `IsJumpLegal` (slot 521, `0x10280880`: 80 up / 250 down / 160 across). The jump service cannot begin it, and the move aborts `InvalidPath` → `0x0c` → `FAIL 0x43`. The bake places jump links without that legality test, both ways (hub: 95 of 117 fail it both ways; tutorial: 17 of 25). The gate's path lengths use the default filter, so a ground link that paths only over a jump link passes. Separately, the jump service refuses LEGAL jumps too (hub link 88, the tutorial's 390). All of this is routed to **7** (the jump links carry retail's legality, per direction) and **5** (the jump seam).
+  - *New line.* `monk_upstairs_podium TaskFail 0x1d` fires between `SetupPatrolType` and `FollowPatrolPath` after a cold `map_load`. It is unproven whether this is new; story 4 does not touch the patrol cells.
   Size: M. Effort: Opus / high.
 
 - [ ] **5. The navigator and the movement seam.**
@@ -853,7 +912,7 @@ its recovery is written in the oracle section it names.
   `local_20 = RandomInt(5, 10)` once per request and applies it as
   `cost = cost * local_20` on a link whose flag is set, then relaxes a node only when the new
   total is SMALLER -- so the multiply is a penalty. The pedestrian keeps to the pavement and pays
-  5-10x to enter the roadway; `FUN_103055b0` passes the flag byte as `' '` and everyone else
+  5-10x to enter the roadway; `FUN_103055b0` passes the flag byte as `'\0'` and everyone else
   pays the unpenalised cost, so the road is never a wall. `ElysiumNavAreas.h` said "priced to
   prefer" and now says what it does.
 

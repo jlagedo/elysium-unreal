@@ -501,7 +501,10 @@ hunt-list builders `0x10306700` / `0x10306f60` into the hunt cell (`TASK_CREATE_
 0xae` / `TASK_FIND_HUNT_PATROL_TARGET 0xaf`, story 10h). `sp_tutorial_1` sends `SetupPatrolType`
 then `FollowPatrolPath` 0.1 s later to `sentry2` and `monk_upstairs_podium` (the Society hub;
 the packed AIN has no nearby node, but the selected install's loaded/rebuilt network and
-patrol binding must be confirmed before predicting each task's refusal — 0018 story 4).
+patrol binding must be confirmed before predicting each task's refusal — 0018 story 4). **Settled
+2026-09-29 (0018 story 4):** retail loads the patch's loose AIN (203 nodes) and binds patrol
+points positionally by the node-row counter (`navigation-jump-links.md` § "The place set,
+landed"); the port binds them the same way.
 
 **Lookup correction, 2026-09-17:** `0x102d2840` compares bytes directly, not `stricmp`.
 `A1` and `a1` are distinct patrol tokens. On a lookup result of `-1`, `InputFollowPatrolPath`

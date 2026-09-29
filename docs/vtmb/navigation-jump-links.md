@@ -309,10 +309,13 @@ for the first 0.8 s of a map on a loaded graph, 1.8 s on a rebuilt one.
 
 **The loaded branch of `CNodeEnt::Spawn`**, for the hint association: the hint is created with
 `m_nNodeID` = the running counter; it is attached (`node+0xa0 = hint`) iff `0 <= counter <
-NumNodes`; otherwise `DAT_106c994c++` and the hint keeps the out-of-range id. The counter
-advances once per node-typed authoring entity in BSP spawn order either way. So the pairing of
+NumNodes`; otherwise `DAT_106c994c++` and the hint keeps the out-of-range id. So the pairing of
 BSP node rows to AIN nodes is positional, and it is only right when the AIN was built from that
-BSP.
+BSP. **Which rows move the counter is closed (2026-09-29, 0018 story 4; § "The place set,
+landed" below):** not every node-typed row — the four standalone classes (`info_hint`,
+`info_node_kick_over`, `info_node_kick_at`, `info_node_shoot_at`) never advance it and take id
+-1; every other node row advances it exactly once, whether or not it makes a hint, and
+`DAT_106c994c` counts only a hint that was made.
 
 ### Endpoint binding and the link predicate, walked (2026-09-19; engine record, 0018 story 5)
 
@@ -2129,6 +2132,143 @@ the order's distance — capped at `20 x` the map's median hop, in place of the 
 lets Unreal route there. The contract above is kept where a place draw can keep it: fail `0x18`,
 synchronous completion, a path and no goal, no type-4 endpoint, the two-tier cooldown, the draw on
 the engine stream. The spec's story 4 carries the rule and names what it gives up.
+
+### The place set, landed — the node binding, `GetPosition`, the nearest node and the wander pick (2026-09-29, 0018 story 4)
+
+_The reads story 4 made to land, each re-read from the listing and cited at its line in the port:
+`Substrate/ElysiumPlaceSet.{h,cpp}` (the network as the runtime stands it), `ElysiumNodeEntity`,
+`ElysiumHint::OnPostRestore`, `ElysiumNpcPositions.cpp` (`NavNearestNodeTo`),
+`ElysiumNpcBaseStartTask.cpp` (the pick). The cooked side is `UElysiumMapPlaces`
+(`/ElysiumBaked/<map>/DA_<map>_Places`), staged by `importers/map_places.py` and baked by
+`pipeline/unreal/bake_places.py`._
+
+**`CNodeEnt::Spawn 0x102d78d0`, the counter rule entire (loaded branch).**
+
+- **The four standalone classes** — `info_hint`, `info_node_kick_over`, `info_node_kick_at`,
+  `info_node_shoot_at` — never touch `DAT_10926a3c`. With a non-zero (class-forced, `0x102d7d30`)
+  hint type they make a hint with `m_nNodeID` -1 (`0x102d7ba5`); with type 0 they print
+  `WARNING: Hint node with no hint type!` (`0x102d7bde`) and make nothing.
+- **Every other node row** (`info_node_tzimisce` is `info_node` by then; `info_node_link` is
+  `CAI_DynamicLink`, not a `CNodeEnt`) makes a hint iff its hint type is non-zero OR it authored a
+  `Group` (`0x102d79b8`), and advances the counter exactly once on the loaded branch whether or not
+  it made one (`0x102d7a28 INC EDX`). The hint's `m_nNodeID` (`+0x5e4`) is the counter, written by
+  `FUN_102d2f30` at `0x102d2fce` before the hint's own `Spawn` — **even out of range**. It is
+  attached at `node+0xa0` iff `0 <= counter < NumNodes` (`0x102d7a04 JL` / `0x102d7a0f JGE`);
+  otherwise `DAT_106c994c++` (`0x102d7a3b`), and only when a hint was made (`0x102d79fa TEST
+  EBX,EBX`): a row with no hint moves the counter and counts nothing.
+- **Every node authoring entity is removed** on every arm (`0x1000e255` → `0x101cd970`).
+
+The port walks the def array in BSP order inside `FElysiumEntityWorld::Load`, after
+`BeginMapSpawn` (`0x102f6690`'s zeroing), ahead of construction: only a node row can move the
+counter and no map entity's `Spawn` creates one, so walking the node rows first lands every id
+where retail's interleaving does. A row that makes no hint is retired and gets no entity. The
+unloaded arm (each row ADDS a node, `0x102f47f0`, for the rebuild) is never taken: every shipped
+map carries its AIN, and the bake is the only producer.
+
+**`CAI_Node::GetPosition 0x102fb0d0`, every arm.**
+
+| type | answer |
+|---|---|
+| 4 (climb), `0x102fb0d9 CMP EAX,4` | `s = width(hull) * 0.5 + 8.0` — `0x102d6180` is the hull row's `maxs.x - mins.x`, the constants two doubles (`0x10449270`, `0x1049a148`), the sum stored as a float; the yaw `+0x6c` scaled by `_DAT_1044eb08`; then, first bit set wins: `4` (`0x102fb0f8`) `origin + fwd*s`; `8` (`0x102fb166`) `origin - right*2s - fwd*s`; `0x10` (`0x102fb20b`) `origin + right*2s - fwd*s`; none `origin - fwd*s` |
+| 2 (ground), `0x102fb2f6 CMP EAX,2` | the origin with `zoffset[hull]` (`+0x14 + 4*hull`, `0x102fb303`) added to Z |
+| any other | the raw origin (`0x102fb31f`) |
+
+The hull argument can be any of the 22 — the pathing word `+0x156c` from the routing sites, the
+standing word `m_eHull` from seven others (§ "The two hull words") — so **a place row carries all
+22 offsets**, retail's own row, not one per baked agent. Retail indexes node and hull blind; no
+caller passes either out of range, and the port answers "no position" for one.
+
+**Save: retail saves no node.** There is no datamap for `CAI_Node` or the network (the
+`ai_network` entity's `CAI_NetworkManager` map is two function-table rows), so a restored map
+starts every node at its constructor words (`0x102fc5d0`: `+0x9c` 0, `+0xa0` null) and the hints
+relink themselves through their SAVED `m_nNodeID`: `CAI_Hint::OnRestore 0x102d3ec0` (slot 130)
+runs the base `0x100aa5a0`, then the node lookup `0x102d3e60` (-1 answers no node and counts
+nothing; an id inside the network answers it; any other id bumps `DAT_106c994c`), then teleports
+the hint to the node's RAW origin (vtable `+0x2d4`) and sets `node+0xa0`. Ported as
+`FElysiumHint::OnPostRestore`; the place set saves nothing.
+
+**The hint's node arms, `0x102f46d0` / `0x102f47b0`.** The network halves of `CAI_Hint::
+GetPosition 0x102d1180` and of the hint yaw `0x102d12e0`: `vec3_origin` / `0.0f`
+(`_DAT_104454c4`) for a network with no node array or an id outside `-1 < id <= count`, else
+`GetPosition(node, npc+0x156c)` / the node's `+0x6c`. The bound is `<=`, so `id == count` reads
+the slot past the last node of `m_pAInode` (a `new[MAX_NODES]` whose tail is unwritten).
+**Named divergence:** the port answers the origin / `0.0` for `id == count` instead of reading past
+the array.
+
+**`0x102f41b0`, the network's nearest node to a point** (no NPC, no hull):
+
+```
+if (*network == 0) return -1;
+cached = 0x102f4520(network, pos); if (cached != -2) return cached;       // not ported
+list = ListNodesInBox(10, pos - 2048, pos + 2048, CNodePosFilter(pos));    // 0x102f32f0, _DAT_1046bacc
+for (node : list, nearest first)
+    if (0x102f39a0(NULL, pos, node->origin, &flag)) { 0x102f45f0(network, pos, node, 0x17); return node; }
+0x102f45f0(network, pos, -1, 0x17); return -1;
+```
+
+`CNodePosFilter` (`0x102f44b0` / `0x102f44d0`) admits every node and scores the squared distance
+to the RAW origin. The trace `0x102f39a0` is a line (no extents) under mask `0x202400b`, clear
+exactly at `fraction == 1.0` (`_DAT_10449280`), and its filter `CTraceFilterNearestNode`
+(`0x102f37d0`) admits as a blocker only an entity whose `GetMoveType()` (slot 94) is 0 — the world
+and static brushes, never a character. `ListNodesInBox` orders BOTH its queues with `0x102f3770`
+(`Less(a, b) = b.dist < a.dist`), so the head is the NEAREST; once the queue is full a candidate
+enters only when strictly nearer than the head, which it evicts — the list always holds the
+nearest in-box node beside the first-admitted others. The port keeps that quirk verbatim. The
+20-entry cache `0x102f4520` / `0x102f45f0` is engine machinery in front of the search and is not
+ported: the search runs every call.
+
+**`GatherHintNodes`' selectors read the hint's own origin.** `CNPC_VSheriffMan::SelectTeleportNode
+0x103b0630` and `CNPC_VSabbatLeader::SelectTeleportArchway 0x103a9540` walk the live hint list
+(`DAT_10925450`, next at `+0x5d8`) and score `GetAbsOrigin()` (vtable `+0x364`), not the node.
+
+**The node cooldown `+0x9c`.** `0x102ff3e0` counts a node's cooldown expired when `+0x9c <=
+curtime`, and refuses a distance `<= 0` outright. `CAI_StandoffBehavior::vfunc13 0x102c7600`
+writes the NODE's `+0x9c` (through `0x102d3e60`), not the hint's `+0x5ec`. The claim-time write
+(`+1.0`) is story 9's; the place set holds the storage and the read.
+
+**`0x102ed430`, the install.** Path type 4 at `0x102ed4a6` (`0x1030ba50(path, 4)`) and the
+endpoint distance² at `navigator+0x14` at `0x102ed4e9`; `SetGoal` is never called (§ above).
+
+**`TASK_WANDER 0x76` → `SetWanderGoal 0x102ed540`.** Five tries of `RandomFloat(min, max)` for the
+distance and `RandomFloat(0, 359.99)` (`0x43b3feb8`) for the heading, each handed to the radial
+probe `0x102ed610`; all five failing, `SetRandomGoal(1.0, vec3_origin)` (`0x102ed5c2`). **No
+shipped schedule issues it** — it is only registered in `cai_basenpc`. Retail's walk always takes
+one hop (it stops only AFTER a step), so the fallback reaches a neighbouring node.
+
+**The port, as landed.** `StartTaskSetRandomGoal` is the capped point pick decided 2026-09-21
+(named modernization; the spec's story 4 carries the rule), with two port constants of no retail
+source: a route longer than `kWanderDetourRatio` **2.0** × the resolved distance is a detour, and
+at most `kWanderMaxDraws` **5** draws are made. A dropped pick leaves the pool, and tier and band
+are taken again from what remains. `TASK_WANDER`'s draws are made and its radial probe is story
+5's seam (false), so it always reaches the pick, where an order of 1.0 finds no place and fails
+`0x18` — **named divergence**, unreached by content. The route length is
+`IElysiumNpcMotor::RouteLengthTo` (a synchronous Unreal path test on the body's agent; story 6
+absorbs it) and the install `InstallPathNoGoal` (path type 4, `navigator+0x14`, no goal record,
+no tolerance; story 5 absorbs it). One more **named divergence**: the Werewolf's
+`GetNearestNodeToPlayer` (`FUN_103d0bf0`) caches a node POINTER keyed on zero; the port caches the
+node INDEX, so a nearest node 0 re-queries on the next call.
+
+**The census over the graphs retail loads (2026-09-29, `map_places`).** 11,517 type-2 nodes, 37
+type 1, 4 type 4 (climb), never type 3 (air); `flags` 1 on 4 nodes, its writer unrecovered. All
+108 maps stage with 0 out-of-range hints and 0 disagreements between a node's `wcId` and its
+bound row's authored `nodeid`. The witnesses: `sp_tutorial_1` 203 places / 49 bound hints,
+`sm_hub_1` 578 / 274. Wander caps (`20 x` the median link length, Source units): human
+tutorial 2,942.141 / hub 3,113.326; rat 3,097.891 / 3,185.672. The thug's patrol points `A1..A3`
+(BSP rows 433–435, authored `nodeid` 39/40/41) are network nodes 15/16/17; the hub's six
+crosswalk rows (BSP 1613–1618) are nodes 258–263, joined in 8 pairs.
+
+**The reports (2026-09-29; observations in `verify/nav/report.json`, never counted by the gate;
+21-9 owns pins).** Places off mesh: 0 on both witnesses. Uncovered points (a hint, patrol point
+or interesting place with no node inside `0x102f41b0`'s ±2048 box): 0. Zone pairs joined on the
+HUMAN mesh: tutorial 2 of 45 — `4/7`, and `11/12`, which is the `146–184` barrel pair (§ "The
+`146-184` pair, closed") — hub 3 of 6 (`1/5` at a 9,978 cm path, `1/6`, `5/6`); on the rat mesh
+tutorial 2, hub 1 (rat-mesh noise is 21-10's). Same zone, no mesh path: 0. Per story 3's lesson,
+none of the joined pairs is a defect claim until a hull sweep against props reproduces it.
+
+**Still open.** The hint searches, claims and `IsHintAvailableToMe` (0018/8); the cooldown's
+claim write (0018/9); the crosswalk link over the baked pairs (0018/7); `SetGoal`'s goal-flag-2
+node route and the radial probe `0x102ed610` (0018/5); `CheckStandPosition` and the hull trace
+inside `CanFitAtNode 0x102f1900` (0018/6); the `flags` 1 writer.
 
 ### How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4)
 

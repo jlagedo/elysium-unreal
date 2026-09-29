@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 06 closed 2026-09-28; row 07, 0018/4, is next -- its decision was taken 2026-09-21, see "Decision owed"). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 07 closed 2026-09-29; row 08, 0018/5, is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 06 closed 2026-09-28).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -251,7 +251,21 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 ## B — the movement base 0019/6 stands on
 
-- [ ] **07 · 0018/4** — The place set. M · Opus/high. **Needs the decision above.**
+- [x] **07 · 0018/4** — The place set. M · Opus/high. **Landed 2026-09-29.**
+  - *The asset.* One `DA_<map>_Places` per map holds a row per AIN node with all 22 hull offsets,
+    the positional hint pairing, the crosswalk pairs and one wander cap per hull. All 108 maps stage;
+    the tutorial has 203 places / 49 bound hints, the hub 578 / 274, 0 out of range.
+  - *The runtime.* `FElysiumPlaceSet` carries the cooldown `+0x9c` and the attached hint `+0xa0`.
+    The `CNodeEnt::Spawn` counter binds `m_nNodeID`, and every node seam answers from the set:
+    patrol, the hint node arms, the nearest node, slot 527 and the live hint list.
+  - *The wander.* `TASK_GET_PATH_TO_RANDOM_NODE` runs the decided capped point pick through two
+    narrow seams, `InstallPathNoGoal` and `RouteLengthTo`, which rows 08 and 09 absorb.
+  - *The reports.* The gate carries three observation reports: places off mesh 0, uncovered 0,
+    and zone pairs joined on the mesh (tutorial 2, hub 3).
+  - *Handed on.* The smoke found the hub patrol cops' stall pre-existing: Unreal routes a leg over
+    jump link 731, which retail's `IsJumpLegal` (`0x10280880`) refuses. Row 13 is to carry retail's
+    jump legality per direction; row 08 the jump seam, which also refuses legal jumps (hub 88,
+    tutorial 390). Detail: the spec's story 4 "Landed 2026-09-29" paragraph.
 - [ ] **08 · 0018/5** — The navigator and the movement seam. L · Opus/high.
   21-8 corrected its pedestrian price (an AVOIDANCE, not a preference) and handed it an exact
   acceptance set: the 1,331 links over 40 maps carrying `m_LinkInfo & 0x2000`.
@@ -267,6 +281,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 ## D — the rest of the world (0018, in its listed order)
 
 - [ ] **13 · 0018/7** — Traversals: jumps, doors, crosswalks. L · Opus/high.
+  Row 07 handed it the jump links' legality. The bake places every motion-2 link both ways without
+  `IsJumpLegal` (`0x10280880`); 95 of the hub's 117 and 17 of the tutorial's 25 fail it both ways.
+  Unreal then routes the hub patrol cop over link 731, which retail never plans.
 - [ ] **14 · 0018/8** — Hint nodes. M · Opus/high.
 - [ ] **15 · 0018/9** — The goal selectors. L · Opus/high.
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.

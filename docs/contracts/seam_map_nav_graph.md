@@ -147,16 +147,16 @@ ever takes in the corpus -- 1,331 links across the 108 graphs carry it and nothi
 A* at `FUN_102fe9f0` reads it once:
 
 ```c
-if (param_3 != ' ') { local_20 = rand(5, 10); }
+if (param_3 != '\0') { local_20 = rand(5, 10); }
 ...
-if ((param_3 != ' ') && ((local_1c[0x19] & 0x2000) != 0))  // local_1c[0x19] is link+0x64
+if ((param_3 != '\0') && ((local_1c[0x19] & 0x2000) != 0))  // local_1c[0x19] is link+0x64
     fVar16 = extraout_ST0 * (float10)local_20;               // edge cost x 5..10
 ```
 
 The flag multiplies that edge's cost by a random integer in `[5, 10]`, and only when `param_3` is
 set -- which `FUN_102f2060` passes as the navigation goal's own flag byte
 (`*(char *)(this->+0x30 + 1)`), so it is a per-route mode rather than a global one; `FUN_103055b0`
-passes `' '` and gets the unpenalised cost. A marked link is always traversable; retail merely
+passes `'\0'` and gets the unpenalised cost. A marked link is always traversable; retail merely
 prices it up. `sm_pier_1`'s link 97 is the corpus's cleanest single example -- the only marked link
 in that map -- and is pinned in `validation/nav_known_findings.py` with the measurement that
 settled it.

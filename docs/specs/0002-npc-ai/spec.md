@@ -1444,8 +1444,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `COND_PLAYER_ON_HEAD` as an interrupt (the interest, patrol, alert and follower families).
   Gap: no `PlayerOnHead` condition, producer, program or task in the port.
   Job: the condition and its producer, the ConVar, the three programs, `TASK_ATTEMPT_DIVE_SIDE
-  0x108` / `_FORWARD 0x109` / `GET_PATH_TO_RANDOM_NODE 0x1f` (shared with 10k/21b), the
-  interrupt on the fourteen programs that name it.
+  0x108` / `_FORWARD 0x109`, the interrupt on the fourteen programs that name it.
+  `GET_PATH_TO_RANDOM_NODE 0x1f` (shared with 10k/21b) is consumed, not built: its body landed
+  with 0018/4 on 2026-09-29 (the capped point pick, `StartTaskSetRandomGoal`).
   Consumes: 26 (the arm), 0004 (the dialogue partner). Oracle: § "`GetSchedule` `0x102ae920`
   runs ahead of `SelectSchedule`" (Story 26 recovery). Unrecovered: nothing on this story's path.
   (Closed 2026-09-21, `conditions-and-states.md` § "`COND_PLAYER_ON_HEAD 0x3b`: the producer and
@@ -1695,7 +1696,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   task, no `0x8a/0x89/0x84` program.
   Job: the damage selector at 10d's and 10h's sites; the three programs; the tasks
   `FIND_COVER_FROM_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION`, `GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK`,
-  `FACE_PATH`, `GET_PATH_TO_RANDOM_NODE 0x1f`; `m_vecLastDamagePosition` from 0005's damage.
+  `FACE_PATH`; `m_vecLastDamagePosition` from 0005's damage. `GET_PATH_TO_RANDOM_NODE 0x1f` is
+  consumed, not built: its body landed with 0018/4 on 2026-09-29 (the capped point pick).
   Consumes: 10d (the site), 12b (the cover search the find task shares), 0005 (the damage
   position), 26 (`m_fSavePositionWalk`). Oracle: § "The alert programs, verbatim".
   Unrecovered: nothing. (Closed 2026-09-21, `programs.md` § "The saved-position arms and the
@@ -1919,7 +1921,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   and `ElysiumNpcSenses.cpp:857`; no `CowerAnimOffset`; `Disoriented`/`Lost` have no schedule
   identity; the 0xe1/0xe3 completion branch is at `ElysiumNpc.cpp:2779`.
   Job: the fourteen programs and their tasks: `SUGGEST_STATE` 0x06, `GET_PATH_TO_RANDOM_NODE`
-  0x1f, `FACE_HINTNODE` 0x2f, `GET_PATH_TO_COWER_NODE` 0x84, `_SAVE_POS` 0x85, `PAUSE_MOVING`
+  0x1f (consumed, not built: its body landed with 0018/4 on 2026-09-29, the capped point pick),
+  `FACE_HINTNODE` 0x2f, `GET_PATH_TO_COWER_NODE` 0x84, `_SAVE_POS` 0x85, `PAUSE_MOVING`
   0xa6, `PLAY_COWER` 0xe6, `SET_COWER` 0xe7, `LOOK_AT_PLAYER` 0xfb, `RUN_PATH_FLEE` 0x103,
   `FLIP_NEXT_IDEAL_YAW` 0x106, `WAIT_PVS`; the 0xe1/0xe3 completion branch 8 left waiting.
   Consumes: 21a (the state and chain), 25 (the `Idle_Stand` route for `DISORIENTED`/`LOST`,

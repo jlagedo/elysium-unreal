@@ -1024,7 +1024,8 @@ green, and `coverage.md` shows the change.
     - A zero, NaN or `vec3_origin` where retail reads uninitialised stack.
     - Bounds on the round-robin hint walks and the tentacle spot search.
     - A refused body claim in `SetGoal` counts as "no route attempted".
-    - Goal flag 2's node route takes the location arm; there is no node graph.
+    - Goal flag 2's node route takes the location arm; there was no node graph. (0018/4 landed
+      the place set 2026-09-29; the node route itself stays 0018/5's, so the divergence stands.)
     - The CRT `rand()` draw uses the port's `NpcSchedule` stream.
     - The Tentacle clock is `curtime`.
     - The SabbatLeader prologue measures from the origin.

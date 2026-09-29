@@ -755,14 +755,15 @@ patrol tokens resolve to the later rows.
 applies the entry gate to the hint's own inputs (the gate is not global in this substrate yet — a
 named seam), and keeps the list on `FElysiumEntityWorld::HintList`. A hint reference is the hint's
 entity index: `FHintWords::HintIndex`, which the Werewolf's rows and end-entity walks compare where
-retail compares the `CAI_Hint*`. `m_nNodeID` stays -1 until 0018 story 4.
+retail compares the `CAI_Hint*`. `m_nNodeID` is the node-row counter since 0018 story 4 (2026-09-29;
+`navigation-jump-links.md` § "The place set, landed"): -1 for a standalone hint, else the counter.
 
 **Caller audit of the live `HintWords`.** Every reader gets its hint index from one of these
 sources, so turning the words on made only the Werewolf's list walks answer:
 
 | Source of the index | Readers | Answers now? |
 |---|---|---|
-| The searches `0x102d1af0`, `0x102d24b0`, `0x102d2980`, `NavAllHintNodes`, `ClaimHintNode`, `NthHintOfType` — still seams (story 4) | `ScheduleHost.HintNode` / `ShootAtHintNode` readers: `IsHintUnusable`, the validators `0x10295ed0` / `0x102961a0` / `0x10296c40`, slot 566, `SelectScheduleForHint`, the cover validators `0x10297430` / `0x102974f0`, `PlayHintIdleActivity`, `TranslateSchedule` case 0x77, `ClosureHintTypeOf`, `SelectCoverOrKickSchedule`, `TeleportIn`, `CacheFloorHeights`, `EyeOffset`, `GatherHintNodes` | No: no index reaches them |
+| The searches `0x102d1af0`, `0x102d24b0`, `0x102d2980`, `ClaimHintNode`, `NthHintOfType` — still seams (0018 story 8; `NavAllHintNodes` answers the live list since 0018/4, 2026-09-29, so `GatherHintNodes` now gathers) | `ScheduleHost.HintNode` / `ShootAtHintNode` readers: `IsHintUnusable`, the validators `0x10295ed0` / `0x102961a0` / `0x10296c40`, slot 566, `SelectScheduleForHint`, the cover validators `0x10297430` / `0x102974f0`, `PlayHintIdleActivity`, `TranslateSchedule` case 0x77, `ClosureHintTypeOf`, `SelectCoverOrKickSchedule`, `TeleportIn`, `CacheFloorHeights`, `EyeOffset`, `GatherHintNodes` | No: no index reaches them |
 | `SetMoveHint` / `SetTeleportHint` (`0x103d44e0` / `0x103d45c0`) | the Werewolf endpoint readers | No: their selectors are not wired |
 | `GlobalHintList()` | `InitializeHintData` (`0x103d7710`), `GetForwardHintForHint` (`0x103d7090`) | Yes — retail's own walks, Werewolf only (`sp_observatory_2`) |
 | `FindHintByName` (name lookup + `CAI_Hint` cast) | `FindHintEndEntity` (`0x103d6520`) | Yes — retail's |

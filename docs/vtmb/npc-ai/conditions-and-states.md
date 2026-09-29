@@ -260,8 +260,9 @@ and `0x109` share the run arm `0x102ab7d8`.
   (`NPCThink`, `0x102930a7`; inferred from the flag's reader, not from the arms).
 - `0x7b SCHED_TROIKA_PLAYER_ON_HEAD_RUN` (`0x105f90e8`): `GET_PATH_TO_RANDOM_NODE 256; RUN_PATH 0;
   WAIT_FOR_MOVEMENT 0`, **no interrupts at all** — one of the fifteen issuers of task `0x1f`
-  (`navigation-jump-links.md` § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked"), so this answer
-  too depends on 0018 story 4's open question.
+  (`navigation-jump-links.md` § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked"). Its wander is
+  0018 story 4's capped point pick (decided 2026-09-21, landed 2026-09-29; § "The place set,
+  landed"): an order of 256 draws a retail place within 256 units, ahead of the body first.
 
 **Unrecovered:** `TASK_ATTEMPT_DIVE 0x107`'s arm (no shipped on-head program names it).
 
@@ -1707,7 +1708,8 @@ sets or clears all four at once, and no shipped AIN carries any, so the 64-secon
 changes an answer — the cycle is the map's `logic_timer` (`sm_hub_1`, `hw_hub_1`: 40 s).
 
 `DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19). **Not built:** this runtime has no
-navigator path type, no node graph and no navigation link, so all three bodies refuse at the seam
+navigator path type, no route over graph nodes (0018 story 4's place set, landed 2026-09-29,
+carries the crosswalk pairs but no links; the link is story 7's) and no navigation link, so all three bodies refuse at the seam
 that answers for them, and `RunAI` (slot 432) is still a generated stub, so nothing calls the rule.
 
 ### Naming a condition, long and short — `0x102cc300`, `0x1027ede0`, `0x1027e7f0` (2026-09-13)

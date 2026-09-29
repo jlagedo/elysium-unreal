@@ -42,8 +42,9 @@ submission's task completion/failure, as documented below.
 
 The lateral arm is wired and the witness executes its twelve tasks, including movement and the
 final wait; a second run exercises no-cover failure and translated standoff. **Unimplemented
-world input:** `IElysiumNpcMotor::FindNodeCover` answers nothing until 0018/4–5 supply retail
-places, cooldowns and hint claims. No invented point replaces a node. Task-body coverage does
+world input:** `IElysiumNpcMotor::FindNodeCover` answers nothing until 0018/9 ports the cover
+search over 0018/4's place set (places and the cooldown storage landed 2026-09-29) and 0018/8's
+hint claims. No invented point replaces a node. Task-body coverage does
 not claim every world input is implemented.
 
 **Named geometry modernization:** lateral stand/movement probes use Unreal's current NPC
@@ -4311,7 +4312,9 @@ m_eHull), activity -1, tolerance -1.0, flags 0}` through `SetGoal(goal, 2)`: TRU
 out of range → `++DAT_106c994c` and a NULL node into `GetPosition` (a retail fault; the port returns);
 goal `{4, position, -1, NAI_Hull::Width(m_eHull), 0}` through `SetGoal(goal, 0)`, answer ignored — but a
 refused route still fails the task inside `SetGoal` (`OnNavFailed(0xc)`, above).
-**Unrecovered:** the AI network (0018 story 4); the port stands a node id as a patrol hint's entity index.
+**Unrecovered:** nothing on this path since 0018 story 4 (2026-09-29): the node id is the hint's
+`m_nNodeID` from the node-row counter and the position is `GetPosition 0x102fb0d0` over the
+place set, where the port had stood a patrol hint's entity index.
 
 ## Story 8, family RunAi19 — slot 432 `RunAI`: base `0x1026f110`, Troika `0x1028fcc0`, `RunAlternateAI` `0x1028fd80`, the species overrides (2026-09-28)
 
