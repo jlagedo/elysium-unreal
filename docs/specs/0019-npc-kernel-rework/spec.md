@@ -17,6 +17,7 @@ table); the class tree; the deletions and the mechanism seams; the reach cut tha
 
 Owned elsewhere: the world's AI objects — **0018**; the mind and its programs' task bodies —
 **0002**. This spec finishes and then closes: once story 7 lands, nothing remains here.
+**Closed 2026-09-29** — story 7 landed; every story is ticked.
 
 The rule every story applies, from `docs/vision.md` § "The three adjudication tests", restated
 for the kernel on 2026-09-15 after the session that found the DRM:
@@ -846,7 +847,7 @@ green, and `coverage.md` shows the change.
     and banked here) and the per-row moves behind RE-BACKLOG 43's service map (0002). The skill
     level is a seam answering 1 until a difficulty setting exists.
 
-- [ ] **7. The reach cut.**
+- [x] **7. The reach cut.** (2026-09-29)
   Retail: none — a query over the ledger.
   Job: `kernel_ledger --reach <map>`: seeded from the map's population (classnames → retail
   classes → their `SelectSchedule`, `TranslateSchedule`, `StartTask`, `RunTask` overrides and
@@ -856,6 +857,51 @@ green, and `coverage.md` shows the change.
   `sp_tutorial_1`'s list first and `sm_hub_1`'s second.
   Consumes: 3 (the programs say which tasks a class reaches). Provides: 0002's scope.
   Size: S–M. Effort: Sonnet / medium.
+  **Landed 2026-09-29.** `kernel_reach.py` beside the ledger; `kernel_ledger --reach <map>` writes
+  `docs/vtmb/npc-kernel/reach/<map>.md` + `.tsv`, and `coverage.md`'s band table carries one
+  "Reached by" column per committed map, read from the TSV so the gate needs no exports. The seed is
+  the published `<map>.entities.glb` (placed classnames plus every maker's `NPCType`) through
+  `kernel_factories.tsv`; the texts come from the deployed corpus's `space.json` chains
+  (`parentUnit`), parsed by the pipeline's own parser; the functions from the ledger's walk
+  re-run from the map classes' vtables, `walk_from(seeds, classes)` fanning a `this` dispatch out
+  to the map's classes only. Two over-approximations stated on every page: a class reaches every
+  text its chain registers (selection is not simulated), and a slot-candidate edge is a candidate.
+  - *The two cuts.* Tutorial: 6 retail classes (`CNPC_VHumanCombatant`, `CNPC_VVampire`,
+    `CNPC_VPedestrian`, `CNPC_VRat`, `CNPCMaker`, `CCineNPC`), 359 of 691 texts, 243 task
+    identities, 70 conditions, 3,367 of 5,187 functions (1,062 core), 141 species rows. Hub: 12
+    classes, 390 texts, 244 tasks, 3,465 functions, 214 species rows. Both leave **2** task
+    identities without a port arm, `TASK_TEST3` and `TASK_TEST4` — retail's test schedules
+    `SCHED_TASK_TEST3/4`, which no selector returns (dead by selection). Two more were census
+    omissions this cut found and fixed: `GTaskArms` had no row for Troika `0x11f`
+    (`TASK_GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK`; the port's constant renamed to the corpus name)
+    nor for `CNPC_VScurrying` `0x14a` (`TASK_VSCURRYING_FIND_EVADE_PATH`, the rat's flee arm at
+    `StartTaskSlot442`), though both arms exist. The generator behind the table
+    (`pass-i/L13-scratch/task_arms.py`, out of repo) missed both; a whole-table check of every
+    species arm against its row is owed (row 12's hand-on).
+  - *What the cut says.* Reach barely narrows 0002: the twelve human-line classes share the
+    `CAI_BaseNPC` / Troika bodies, so the tutorial reaches nearly every address and task the open
+    stories cite; the only species narrowing is 25b's (3 of 22 slot-440 bodies). The sizes were
+    out of date for a different reason — rows 06 and 06b had already ported most of what the
+    stories name — so the cut was applied as an audit of each story against the port (five
+    readers over 23 stories, each cited address checked in `Source/`), recorded per story in
+    0002's spec as a *Reach cut* clause with the re-read size. Net: 23 stories from ~L median to
+    XS–S; four of them (10j, 21b, 25b, 27) are done bar their record; the real remaining work is
+    a short list (11's ambient executor still live, 12b's cover search wired to a stub, 16a's
+    `DIST:ACCUM` never reading the accumulator, 10h's hunt builders answering false, 28's
+    player-side producer, 21a's two inputs and two typed-state reads, 16c's apply-path calls,
+    16b's two flat-table consumers, 10d's `+0x60dc` mirror).
+  - *Gate.* `kernel --check` 7 of 7 (19.8 s, `coverage.md` with the new column); `kernel_ledger
+    --reach sp_tutorial_1 --reach sm_hub_1 --check` 17 of 17; `Elysium.Substrate.Schedule` 32 / 0
+    after the census row; pytest `test_kernel_reach.py` 5 new cases; the reach pages are excluded
+    from the oracle citation scan (they are the ledger's own reflection).
+  - *Handed on.* RE-BACKLOG 44: the reached functions the stories name that carry no verdict.
+    Two findings no open story owns, recorded in the tracker under row 12: the NPC input surface
+    (19 of retail's 33 NPC inputs are not registered; none fired on the two maps, but the corpus
+    fires `SetInvestigateModeCombat` 69×, `StayEntrenched` 67×, `SetInvestigateMode` 66×,
+    `FleeAndDie` 27×, `MakeInvincible` 19×, `SetFollowerBoss` 15× across the 108 maps and the
+    scripts), and the VSound table (`SpeakVSound` is a seam, so every `PLAY_SOUND` step is silent;
+    `0x101f5950` carries no verdict and no spec loads the table). **This closes 0019**: nothing
+    remains in this spec.
 
 - [x] **8. 29e closes under the strict verdict.** (2026-09-28)
   Job: the 19–29 checklist re-verdicted by 1 before the twelve remaining families land; each

@@ -1183,7 +1183,18 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `Elysium.Substrate.NpcKernelSpeciesMisc10.TroikaEnterGrappleState`;
   `OnRestore`'s `DiscardScheduleState` keep-rules; `npc_reset` reloads nothing; the CopGenerator
   chain to `+0x63e0`; `0x10084260` and `0x102c6ff0` are dead. The port work is the wiring above.
-  Size: S. Effort: Sonnet / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Every retail
+  caller is wired at its site: `NPCInit` `ElysiumNpcBaseLifecycle2.cpp:223`, the give-up restore
+  `:128`, the Troika grapple `ElysiumNpcMisc2.cpp:289`, the two slot-586 bodies
+  (`ElysiumScriptedSequence.cpp:527`, `ElysiumAiScriptedSequence.cpp:170`), `StartScript`
+  `ElysiumScriptedSequence.cpp:1071`, base `RunTask` `ElysiumNpcBaseRunTask.cpp:710`, the Camera
+  `ElysiumNpcCamera.cpp:97`; the kernel body `ElysiumSchedule.cpp:207-221` with both honouring
+  points (`:456`, `:486`; tests `ElysiumScheduleTests.cpp:675-735`). Tutorial: out of reach — the
+  two unwired callers are the cop spawner `0x102ae8e0` (the law story's seam,
+  `ElysiumLaw.cpp:840-855`) and the dev command `npc_reset`. Left: delete the dead
+  `RequestClearSchedule` seam (`ElysiumNpc.h:473`, no callers) and its comment
+  `ElysiumSchedule.h:254-264`; one test for the RunTask cine clear.
+  Size: XS (re-read 2026-09-29 by 0019/7; was S). Effort: Sonnet / medium.
 - [ ] **25b. Species `TranslateSchedule` overrides and the frenzied pre-table.**
   Absorbed by 29e (slot 440 and its twenty overrides are layer-21/22 bodies); this story keeps
   the index below and the registration of `0xc9`/`0xcc`/`0xf0` with their melee family.
@@ -1203,7 +1214,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   story; the frenzied targets `0xc9`/`0xcc`/`0xf0` registered with the melee family that owns
   them.
   Consumes: 25. Oracle: § "Species slot-435 overrides all chain" gains a slot-440 twin.
-  Size: XS now (the index), grows per species. Effort: Sonnet / low.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** All twenty
+  slot-440 overrides are bodies on their classes (e.g. Cop `ElysiumNpcCop.cpp:249`, Werewolf's
+  `0x43` arm `ElysiumNpcWerewolf.cpp:399-410`, Scurrying `ElysiumNpcScurrying.cpp:50-56`); the
+  census is `ElysiumNpcKernelOverrideCensus.cpp` (46 slot-440 rows) and the row tests
+  `ElysiumNpcKernelTranslateTests.cpp:107-215`; the pre-table `0x102b11c0` is
+  `ElysiumNpcTranslate.cpp:19-42`. The three frenzied targets are corpus texts reached by every
+  tutorial class. Tutorial: `CNPC_VRat` → Scurrying `0x103ac490`, ported. Left: named constants and
+  `CheckedRows` for `0xc9`/`0xcc`/`0xf0` in `ElysiumScheduleNumbers.h` (`0xf0` is a local at
+  `ElysiumNpcSelect.cpp:139`); the stale comment `ElysiumScheduleTests.cpp:738`.
+  Size: XS (re-read 2026-09-29 by 0019/7; was XS). Effort: Sonnet / low.
 - [ ] **25c. `MaintainSchedule`'s other exits.**
   Absorbed by 29e (`MaintainSchedule 0x102817c0` is walked whole there); this story keeps the
   door-block gate, which waits on 11's door selector.
@@ -1290,7 +1310,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Unrecovered: the upstream route expected by the `0x46` program's `WAIT_FOR_MOVEMENT`.
   Use 0018/4's place set and 0018/11's logical path state; I/O/Python and the task loop
   must share the same live state. Evidence: `navigation-jump-links.md` § "Task readers of network data".
-  Size: L. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The path
+  object (`ElysiumNpcScript.inl:30`), `BuildPatrolPath` with the immediate `SetSchedule`
+  (`ElysiumNpcScript.cpp:212-292`), the two inputs plus `ClearPatrolPath` registered
+  (`ElysiumNpcClasses.cpp:133-137`, bodies `ElysiumNpc.cpp:431-515`), `GET_PATH_TO_PATROL_POINT`
+  start/run (`ElysiumNpcScript.cpp:392-470`), `NEXT_PATROL_POINT` with the roll
+  (`ElysiumNpcTroikaHelpers2.cpp:602-619`), idle step 3 (`ElysiumNpcSelect.cpp:577-591`),
+  `WALK_PATH_HUNT` and `TASK_PATROL_PATH` per the 2026-09-17 correction; the old executor is gone.
+  Tutorial: `sentry2` and the monk run on this (row 06's smoke). Left: the `WalkToNode` input
+  `0x1029e840` is not registered (named only at `ElysiumNpcKernelBindings.cpp:2619`).
+  Size: XS (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Rework (2026-09-15): the registry, the visitor walk and the entry / loop / release trio
   are 0018 story 10; the programs load from the schedule seam (0019 story 3). This story
@@ -1337,7 +1366,24 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `0x6b IDLE_DISPOSITION` (25's "what a consumer observes").
   Oracle: § "Interesting places: the selector, the programs, the wait" (incl. "The failed
   walk, walked"), § "Interesting-place eligibility". Provides: the entry/loop/release trio to 27.
-  Size: L. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The selector
+  arms `0xff`/`0x100`/`0x102`/`0x105`/`0x106` (`ElysiumNpcSelect.cpp:592-611`; rat
+  `ElysiumNpcSelectSpecies.cpp:200-207`), every task an arm (`FIND_INTERESTING_PLACE`
+  `ElysiumNpcStartTask.cpp:1523`, `GET_PATH_TO_INTERESTING_PLACE` `:1542`, `FACE_INTEREST` /
+  `DO_INTEREST_ACTIVITY` `ElysiumNpcStartTask_2.cpp:610-669` + `ElysiumNpcRunTask.cpp:1039-1114`),
+  entry/loop `0x102a9f40`/`0x102aa210` as `ClaimInterestingPlace` / `RunInterestingPlaceLoop`
+  (`ElysiumNpcHints.cpp:293-366`), eligibility `0x102dad60` (`ElysiumNpc.cpp:1177-1233`), the four
+  programs (`_SETUP`, `WALK_TO`, `_FAILED`, `WAIT_AT_CROSSWALK`) loaded from the corpus. Tutorial:
+  all of it reached (`Jack`, `mercenary_upstairs`). Left: **the ambient executor is still the live
+  path** — `ThinkAutonomous` routes every `use_interesting` body with no patrol path to
+  `ThinkAmbient` (`ElysiumNpc.cpp:993-1007`, `:2124-2232`), with `EAmbientPhase`,
+  `Begin/FinishAmbientUse`, `FailedSpotIndices`, the `Ambient` body owner and the
+  `bReturnToExternalExecutorAfterSchedule` latch (`ElysiumNpcMaintain.cpp:348-356`); the place's
+  disable/kill walk `0x102daac0` (`DISAPPEAR` → `flags2 |= 0x80000008`, else `TaskFail(0x23)`, then
+  slot 614) has no body; the executor-shaped tests (`ElysiumNpcMindTests.cpp`,
+  `ElysiumNpcTests.cpp`) and debug readers must be rewritten; one interpreter-driven end-to-end
+  test.
+  Size: M (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **27. Patrol-point interest records.**
   Rework (2026-09-15): the node record is 0018 story 11; this story keeps the roll and the
   two task arms.
@@ -1363,7 +1409,17 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `calloc`ed and no ctor writes it), so an absent `ip_percent` never takes the interest. (Closed 2026-09-21, `programs.md` § "The patrol-point interest record and the path
   object": the keys are `target_name` and `ip_percent`, authored on all 582 rows, 60 of them
   naming a place; the roll is `RandomInt(0, 99)` strictly `<` `+0x46c`.)
-  Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Keys
+  `ip_percent` / `target_name` on the hint record (`ElysiumHint.h:31`), the roll `0x1029f650` and
+  its cached read (`ElysiumNpcKernelBaseHelpers.cpp:207-244`), the resolve `0x1029f780`
+  (`ElysiumNpcHints.cpp:264-291`), both roll sites, `FACE_PATROL_INTEREST`
+  (`ElysiumNpcStartTask_2.cpp:632-654`, `ElysiumNpcRunTask.cpp:1054-1072`) and
+  `DO_PATROL_INTEREST_ACTIVITY` (`:672-689`, `:1117-1155`); tests
+  `ElysiumPlaceSeamTests.cpp:203-259`, `ElysiumNpcKernelBaseHelpersTests.cpp:568-612`. Tutorial:
+  both tasks armed (6 steps). Left: a record-arm end-to-end test (a patrol node naming a live
+  place); record two unrecovered notes — the found entity's `+0xb0` (`ElysiumNpcHints.cpp:284-286`)
+  and the hint argument dropped at `ElysiumNpcStartTask_2.cpp:682-686`.
+  Size: XS (re-read 2026-09-29 by 0019/7; was S–M). Effort: Fable / medium; corpus pass on the node keys first.
 - [ ] **26. `GetSchedule`, the pre-selector.**
   Absorbed by 29e for its eight layer-19+ bodies (`0x102ae920`, base `0x1028a380`, the ideal-state
   arms); this story keeps the six leaf helpers (29c's verdicts) and the arms' consumer wiring.
@@ -1457,7 +1513,17 @@ the retail contract the code must match, the job, what it consumes or provides, 
   tries right then left over 60 units, `DIVE_FORWARD` 96 units, each a ground `MoveLimit` then a
   root-motion clip under `ANIM_MOVEMENT`, `TaskFail(0x0e)` when blocked; `0x7b` has no interrupts.
   The port needs a player-side producer seam: the ground entity is the player's, not the NPC's.)
-  Size: M. Effort: Fable / medium; corpus pass on the producer first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The
+  `GetSchedule` arm with the ConVar and the 80 % roll (`ElysiumNpcSelect.cpp:395-419`), the three
+  programs as corpus texts with their fourteen interrupts, the dive tasks
+  (`ElysiumNpcStartTask_2.cpp:1098-1182`, `ElysiumNpcRunTask.cpp:1335`), the NPC-side
+  `ResolveStandingOnHead 0x102bf820` (`ElysiumNpcGeometry.cpp:208`). Tutorial: reached — every
+  population class carries the programs. Left: **the producer** — `CBasePlayer::PostThink
+  0x1016be10` raising `COND_PLAYER_ON_HEAD` on the player's ground entity at most every 2.0 s has no
+  port; the seam half exists (`FElysiumEntity::RetailGroundEntity` / `SetGroundEntity`,
+  `ElysiumEntitySlotBodies.inl:254`) but only the NPC motor writes it — the pawn's floor facts into
+  `SetGroundEntity`, the 2.0 s stamp, the raise, one test.
+  Size: S (re-read 2026-09-29 by 0019/7; was M). Effort: Fable / medium; corpus pass on the producer first.
 - [ ] **10i. The comfort program.**
   Retail: `SCHED_TROIKA_COMFORT` 0x12f (blob `0x105df9d0`), selected by 26 on `COMFORT` in
   idle: `SET_NPC_FLAG DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG; SET_FAIL_SCHEDULE Idle_Stand;
@@ -1494,7 +1560,18 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `0x102a51e8` is `SetIdealActivity(m_Activity + 1)` over consecutive ids — `INTO 0x106a`, `IDLE
   0x106b`, `OUTOF 0x106c`, the second trio `0x106d`–`0x106f` — and `PLAY_COMFORT_INTO` draws
   `0x106a + 3 × RandomInt(0, 1)`. The oracle had dropped the `INC` and invented a switch.)
-  Size: M. Effort: Fable / medium; corpus pass on the transition switch first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):**
+  `SCHED_TROIKA_COMFORT` is a loaded corpus program selected on `COND_COMFORT`
+  (`ElysiumNpcSelect.cpp:502-504`); `PLAY_COMFORT_INTO` / `DO_COMFORT_LOOP` / `PLAY_COMFORT_OUTOF`
+  (`ElysiumNpcStartTask_2.cpp:783-800`, `ElysiumNpcRunTask.cpp:785-794`); the sweep `0x102b1a20`
+  with both `TaskComplete(false)` arms (`ElysiumNpcConditions.cpp:601-679`); the two `0x12f` readers
+  (`ComfortSound` slot 503 `ElysiumNpcBaseConditions2.cpp:214-218`, weight 20
+  `ElysiumNpcBaseSounds.cpp:240-261`); `GIVE_WAY 0x68` an identity with no producer. Tutorial:
+  program and all three tasks reached. Left: the stale "until 10i registers" comment and test
+  (`ElysiumNpcBaseSounds.cpp:209-214`, `ElysiumNpcKernelSoundsTests.cpp:516-528` asserting
+  `GetLocalScheduleId(0x12f) == -1`, false since the corpus loads whole) and one corpus-driven
+  integration test.
+  Size: XS (re-read 2026-09-29 by 0019/7; was M). Effort: Fable / medium; corpus pass on the transition switch first.
 - [ ] **10j. `CheckTarget`.**
   Retail: `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), after `ChooseEnemy`, on a live
   `m_hTargetEnt`: `CAI_Memory::CheckTarget` `0x10271d10` clears `HAVE_TARGET_LOS` 0x4b and
@@ -1513,7 +1590,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `UpdateTargetPos 0x10271b10`; none of the 15 `SetGoal` callers sets it). Closed 2026-09-21: the
   comfort sweep's distance reads **slot 220** (`+0x370`) on both endpoints, 3-D, against a running
   nearest that starts at 1024.0; `0x100113d8` returns the goal TYPE.
-  Size: S. Effort: Sonnet / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** `CheckTarget
+  0x10271d10` verbatim (`ElysiumNpcBaseWerewolf.cpp:35-48`) from `GatherConditions` on a live
+  `m_hTargetEnt` (`ElysiumNpcBaseConditions2.cpp:252-260`); `0x4b`/`0x49` as `Cond19HaveTargetLos` /
+  `Cond19TargetOccluded` (`ElysiumNpcBaseConditions2.inl:27-28`), `0x49` feeding the occlusion lane;
+  tests `ElysiumNpcKernelConditions2Tests.cpp:390-421`, `ElysiumNpcKernelWerewolfTests.cpp:651-668`.
+  Tutorial: reached. Left: `UpdateTargetPos 0x10271b10`'s body past its gates (the 80-unit re-path,
+  the re-point) is a named seam (`ElysiumNpcBaseWerewolf.cpp:65-67`), verdicted `mechanism →
+  UPathFollowingComponent` and owned by 0018/5, not here; goal flag 4 still has no writer. Tick with
+  the record.
+  Size: XS (re-read 2026-09-29 by 0019/7; was S). Effort: Sonnet / medium.
 - [ ] **10d. The alert selectors and the ladder.**
   Absorbed by 29e for `SelectSchedule` case 3; this story keeps the alert programs' blobs and
   the ladder's registration.
@@ -1566,7 +1652,19 @@ the retail contract the code must match, the job, what it consumes or provides, 
   ends, so the stance selector `0x102c12a0` is re-asked — and completes at the deadline. No
   condition, yaw or look write; no fail exit. `0xbb` is the same with a `RandomFloat(0, operand)`
   deadline. Operands shipped: 4, 5, 30.)
-  Size: L. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Case-3 order
+  `ElysiumNpcSelect.cpp:776-801`, the see-unknown ladder `:1042-1090`, the sound ladder `:1096-1158`
+  with the `HEAR_WORLD` direct write and `CommitBestSound` at every rung, the tail `:1164-1211`, the
+  rung ladder `ElysiumNpcTroikaHelpers2.cpp:250-285`; `AlertLevel +0x63f4` saved and zeroed only in
+  `NPCInit`; the four programs are corpus texts and all five tasks are arms (`RUN_DISPOSITION`
+  `ElysiumNpcStartTask.cpp:1685`, `ALERT_LOOK_AT_DETECTED_ATTACK` `ElysiumNpcStartTask_2.cpp:973`,
+  `WALK_PATH_TIMED` `ElysiumNpcBaseStartTask.cpp:1004`). Tutorial: reached by every alert combatant,
+  vampire and pedestrian. Left — one divergence: retail `CommitBestSound 0x102b4090` ends by
+  mirroring `+0x60b0` into `+0x60dc` (`thunk_FUN_102b3d90`); the port `ElysiumNpcSenses.cpp:815-833`
+  writes `BestSound`/`BestSoundSource` only, so `Memory.InvestigateSound` is never mirrored
+  (unobservable today: no port reader; `Bindings.cpp:1167` marks `+0x60dc` unsaved where
+  `senses.md:446` says saved — verify against the datamap). One program-level test.
+  Size: XS–S (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **10e. The sound-investigation programs.**
   Retail: 0x50, 0x51, 0x52, 0x53, 0x54, 0x58 with their task lists and interrupt sets; 0x53
   and 0x54 are dead in code, reachable by name only. No `INVESTIGATE` program declares
@@ -1597,7 +1695,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   sound is `TaskFail(0x12)` before `SetGoal` is reached. `PLAY_COWER`'s run arm `0x102ab83c` is
   `AutoMovement` plus sequence-finished and nothing else, and its start draws the cower variant
   `RandomInt(0,2) × 3` into `+0x6414` — `programs.md` § "The look arms, walked".)
-  Size: M–L. Effort: Fable / medium; corpus pass on the base `RunTask` path arm first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** All six texts
+  are corpus programs; `LastPosition +0x5db8` / `LastFacing +0x5dc4` bound; every task is an arm
+  (`STORE/CLEAR_LASTPOSITION` `ElysiumNpcBaseStartTask.cpp:840`, `GET_PATH_TO_BESTSOUND` `:950`,
+  `REMEMBER`/`FORGET` `:1691` over the memory table `ElysiumScheduleOperands.cpp:30-47`,
+  `PLAY_COWER` `ElysiumNpcStartTask_2.cpp:757`, `ALERT_LOOK_AT_BEST_SOUND` `:900`, `FACE_LASTANGLE`
+  `:1534`, `PLAY_SOUND` `:1540`). Tutorial: reached (18 `PLAY_SOUND` steps, 31 `REMEMBER`). Left:
+  `SpeakVSound` is a seam (`ElysiumNpcSounds10.cpp:115-140`, "this runtime loads no VSound table"),
+  so `PLAY_SOUND Target_Suspect` / `SUSPECT_GIVEUP` are silent — the sound story's, not this one's;
+  one program-level test.
+  Size: XS (re-read 2026-09-29 by 0019/7; was M–L). Effort: Fable / medium; corpus pass on the base `RunTask` path arm first.
 - [ ] **10f. The unknown-investigation programs.**
   Retail: 0x59–0x63 with their task lists and interrupt sets; 0x61 and 0x63 dead in code;
   0x5b from `GetSchedule` (`0x102ae920`) in combat only under `ATTACK_UNKNOWN`; 0x62 and 0x58
@@ -1620,7 +1727,15 @@ the retail contract the code must match, the job, what it consumes or provides, 
   is slot 251 `IsActivityFinished`, and the task ends on (timer OR clip finished) AND
   `FacingIdeal`; the eight tasks `0xf8`–`0xff` share it. The path-completion arm does not exist —
   see 10e.)
-  Size: L. Effort: Fable / high; corpus pass on the two look arms first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** All eleven
+  `INVESTIGATE_UNKNOWN*` texts reached; the selector `ElysiumNpcSelect.cpp:1042-1090` and the `0x5b`
+  arm with `NO_UNKNOWN_ATTACK` `:380-385`; the three flags `ElysiumNpcFlags.h:79,83,107` with their
+  readers; `LOOK_AT_BEST_UNKNOWN` `ElysiumNpcStartTask_2.cpp:954` + the shared look run arm
+  `ElysiumNpcRunTask.cpp:1313-1330`, `WALK_PATH_HUNT` `:1062`, `GET_PATH_TO_BESTUNKNOWN`
+  `ElysiumNpcStartTask.cpp:1002`. Tutorial: reached (34 `CLEAR_NPC_FLAG`, 14 `WALK_PATH_HUNT`
+  steps). Left: tests for the `WALK_PATH_HUNT` start arm and `CLEAR_NPC_FLAG`'s negative-mask word-2
+  arm; one program-level test.
+  Size: XS (re-read 2026-09-29 by 0019/7; was L). Effort: Fable / high; corpus pass on the two look arms first.
 - [ ] **12a. The reaction keyfields.**
   Rework (2026-09-15): the parse is 0019 story 2, generated from the datamap; this story
   keeps the normalization and the readers.
@@ -1640,7 +1755,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   combat leftovers". Unrecovered: nothing. (Closed 2026-09-21, `programs.md`: NOTHING authors
   hint type 800 — zero of 71,096 shipped entity rows, no classname maps to it, no FGD lists it;
   its one use is the patrol lookup's `|| 0x320` compare, dead by content.)
-  Size: S–M. Effort: Sonnet / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** All seven keys
+  bound (`ElysiumNpcKernelBindings.cpp:769-824`; `hint_groups` via `SetHintGroups`
+  `ElysiumNpc.cpp:1205`), the spawn ladder `ElysiumNpcSpawn.cpp:158-182`, the one roll site
+  `ElysiumNpcTroikaHelpers.cpp:641-651`, eight `stay_entrenched` readers, `combat_start_activity`
+  resolved and read, `bright_route_penalty` read by nobody (retail's truth). Tutorial: reached,
+  content-conditional (`stay_entrenched 1` must be authored). Left: the interest predicate's arm 2
+  (`ElysiumNpcConditions.cpp:263`, one `if`; the header comment at `.h:466` is stale) and the
+  `StayEntrenched` / `AllowKickHintUse` inputs, which are not registered (`ElysiumNpcClasses.cpp`
+  has no `D.Input` for them).
+  Size: XS (re-read 2026-09-29 by 0019/7; was S–M). Effort: Sonnet / medium.
 - [ ] **12b. The cover and kick chooser.**
   Retail: `0x102b7690` gated on `CanSeekCover` slot 592 and `allow_kick_hint_use`; the
   physics-prop kick 0xa9 with its 10° predicate and the one-shot `npc_kickable` byte; the kick
@@ -1677,7 +1801,20 @@ the retail contract the code must match, the job, what it consumes or provides, 
   plain `.rdata` floats — `0x1049a1b0` −2.0 the goal tolerance, `_DAT_10451ad0` 16.0 the kick's z
   lift, `_DAT_10447ee0` 1000.0 the mass-term cap, `_DAT_10457f60` 150.0 added to the impulse's z
   — `programs.md` § "The cover and kick chooser, and the combat leftovers".)
-  Size: M–L. Effort: Fable / medium; corpus pass on the two hint arms and the cells first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The chooser
+  `0x102b7690` whole (`ElysiumNpcSchedule.cpp:403-559`), the think-time hint upkeep with
+  `COND_HINT_INVALID` and the null==null defect (`ElysiumNpcThink.cpp:229-265`), tasks `0x10f-0x113`
+  (`ElysiumNpcStartTask_2.cpp:1262-1365`), the kickable byte in `TaskFail` (`ElysiumNpc.cpp:1784`),
+  the three programs as corpus texts, the hint search `0x102b7110` as `FindTacticalHintNode`
+  (`ElysiumNpcTroikaHelpers2.cpp:166-230`). Tutorial: the programs and tasks are reached by every
+  Troika class; `0xa9` is dead by content (`npc_kickable` only on `sm_junkyard_1` /
+  `sm_warehouse_1`); the cover-hint arms matter for every combatant fight near a hint. Left: **the
+  chooser's step C calls the stub `SearchForCoverHint` (`ElysiumNpcSchedule.cpp:448`, `:573-581`)
+  while the real body is called only from a test** — rewire; `FindKickPhysicsProp` (`:565-571`)
+  returns null, so `0x102b6650`'s sweep and the 10° predicate `0x102b62e0` are unbuilt; the kick
+  impulse `0x102b6890` is a counter seam (`ElysiumNpcStartTask_2.inl:139`) waiting on 0005's physics
+  seam; the ranged-threat bits `0x6000` seam (`:487-494`); no test drives `0xa9`/`0xa7`.
+  Size: S–M (re-read 2026-09-29 by 0019/7; was M–L). Effort: Fable / medium; corpus pass on the two hint arms and the cells first.
 - [ ] **10k. The saved-position programs: shot by unknown, run to saved.**
   Retail: `FUN_102b8c40` (alert step 2, hunt step 2): `HasInterruptCondition(LIGHT_DAMAGE 0x4c
   || HEAVY_DAMAGE 0x4d)` → `m_bCondTookDamage = 0`, `m_vSavePosition = m_vecLastDamagePosition
@@ -1710,7 +1847,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `FACE_PATH` faces the CURRENT WAYPOINT, done within 15°. `+0x5b9c` is `m_vecLastDamageAttackPos`,
   written only by `OnTakeDamage_Alive 0x10265ed0`: the INFLICTOR's origin, or with none the
   victim's origin + the attack direction × 64 — never the attacker's origin, never a hit point.)
-  Size: M. Effort: Fable / medium; corpus pass on the four arms first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):**
+  `CacheDamagePosition` `0x102b8c40` (`ElysiumNpcDamage.cpp:287-303`) at both selector sites
+  (`ElysiumNpcSelect.cpp:782`, `:940`), `0x89` from the consumed walk flag `:538-541`, `+0x5b9c`
+  written only by `OnTakeDamage_Alive` (`ElysiumNpcBaseDamage2.cpp:198-221`), the three programs as
+  corpus texts, every task an arm (`FIND_COVER_FROM_SAVEPOSITION` `ElysiumNpcStartTask.cpp:1444`,
+  `_LOS_NOATTACK` `ElysiumNpcStartTask_2.cpp:1548`, `FACE_PATH` `ElysiumNpcBaseStartTask.cpp:1080`).
+  Tutorial: reached by every Troika class. The cut's one "unported" task here was a census omission
+  — `GTaskArms` had no row for Troika `0x11f`, fixed with the cut (row added, constant renamed to
+  the corpus name). Left: one interpreter-level test of `0x8a` / `0x89`.
+  Size: XS (re-read 2026-09-29 by 0019/7; was M). Effort: Fable / medium; corpus pass on the four arms first.
 - [ ] **10h. The hunt-investigation programs.**
   Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
   there, unlike alert); the expiry chain after the sound arms: `+0x6598 == 0` clears
@@ -1744,12 +1890,32 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `0x85 HUNT_FINISH`, raising no condition; `WALK_PATH_HUNT` only prefers `ACT_HUNT_WALK`;
   `+0x6598` is the hunt path POINTER; the builders' endpoint filter reads no node type, hint,
   cooldown or zone — so 0018/9's hunt target over the place set loses nothing by having none.)
-  Size: M–L. Effort: Fable / medium; corpus pass on the list builders first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Case `0xb`
+  verbatim (`ElysiumNpcSelect.cpp:933-999`), the expiry timer's one writer
+  (`ElysiumNpcConditionsBodies.cpp:172-176`), `SelectIdealState` case `0xb` and `CNPC_VHuman`'s
+  cvar-gated entry (`ElysiumNpcState_2.cpp:33-50`), `DoFrenzy` (`ElysiumNpcBoss.cpp:202-221`), the
+  hunt cell over 10g's object, `0xae`/`0xaf` arms (`ElysiumNpcStartTask.cpp:1609-1644`),
+  `GET_PATH_TO_LASTENEMY_LKP` (`ElysiumNpcStartTask_2.cpp:1368`), every hunt program a corpus text.
+  Tutorial: every program reached; entry only by `DoFrenzy` / script (the cvar ships `"0"`). Left:
+  both list builders are seams answering false (`ElysiumNpcStartTask.cpp:493-507`, `0x10306700` /
+  `0x10306f60`, no verdict), so `FIND_HUNT_PATROL_TARGET` always fails and `HUNT_SETUP` →
+  `HUNT_FAILED` — build `0xaf` over 0018/9's hunt target as decided, leave `0xae`; wire
+  `HuntConVarRawWord` / `IsCommand` (`ElysiumNpcState.inl:38-39`) to the registered tunable;
+  `EElysiumNpcState` has no Hunt member (`0xb` lives in the mind's raw overlay,
+  `ElysiumNpcMind.cpp:102-125`, and typed readers such as `ElysiumNpc.cpp:981,1961` see the previous
+  state during a hunt) — audit or add the member; two tests.
+  Size: S–M (re-read 2026-09-29 by 0019/7; was M–L). Effort: Fable / medium; corpus pass on the list builders first.
 - [ ] **13b. The leak in the defect catalogue.**
   Job: the `TaskFail` obliviousness leak as an entry in `docs/vtmb/retail-defects.md`, from
   the oracle section above. Gap: the file carries no "oblivious", "MADE_OBLIVIOUS" or
   "m_iIsOblivious" today (2026-09-12).
-  Size: XS. Effort: Haiku / low.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The leak is
+  reproduced (`FElysiumNpcFlags::OnTaskFail`, `ElysiumNpcFlags.cpp:118-124`; tests
+  `ElysiumNpcScheduleHostTests.cpp:182`, `ElysiumScheduleTests.cpp:50`) and walked in the oracle
+  (`schedule-kernel.md:330-344`); `docs/vtmb/retail-defects.md` still has no entry. Left: the entry
+  (mask `0x7fffe24f` vs `OnScheduleChange`'s `0x77fff14f`, the `FTYPEDESC_SAVE` persistence, the
+  reachability corner, the port's reproduction). Unchanged.
+  Size: XS (re-read 2026-09-29 by 0019/7; was XS). Effort: Haiku / low.
 - [ ] **16a. Followers.**
   Retail: keyfields `follower_boss` (+0x6478 → `m_hFollowerBoss` +0x647c) and `follower_type`
   (+0x6480); `SetFollowerBoss` (`0x102c44e0`, refuses self and squad members) through the
@@ -1791,7 +1957,26 @@ the retail contract the code must match, the job, what it consumes or provides, 
   tested against `GetFollowerBoss()`, 3-D, strict; the radii come from `rules.txt`
   `Npc_Follower_Info` by follower type, clamped 10 apart; `TASKS_FACE_TARGET` is flags2 `0x20`,
   read only by the wait tasks' `0x102aab70`, motor yaw at `-2.0`.)
-  Size: L–XL. Effort: Fable / high; corpus pass on the `DIST:` tasks first.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):**
+  `SetFollowerBoss 0x102c44e0` whole (`ElysiumNpcWerewolf2.cpp:29-65`), the type clamp
+  (`ElysiumNpcSquad.cpp:195-228`), slot 293 and the slot-607 ladder
+  (`ElysiumNpcTroikaHelpers.cpp:659-720`) with its idle-selector step
+  (`ElysiumNpcSelect.cpp:573-576`), conditions `0x14-0x19` and their `_F` producer
+  (`ElysiumNpcConditions2.cpp:218-270`), the three find tasks (`ElysiumNpcStartTask.cpp:1282-1341`),
+  the five accumulator tasks (`ElysiumNpcStartTask_2.cpp:1712-1734`), `DIST:` vocabulary and slot
+  418, `TASKS_FACE_TARGET` and its reader; the twelve `sched_troika_follower_*` texts loaded.
+  Tutorial: programs and tasks registered for every Troika class; the follower programs proper need
+  an authored boss or a possession. Left: **`DIST:ACCUM` does not read the accumulator** — `ACCUM`
+  maps to -1000000 (`ElysiumScheduleOperands.cpp:93`), which `ResolveTaskDistance`
+  (`ElysiumNpcSchedule.cpp:221-229`) sends to the base `0x102702d0` arm, a stub verdicted
+  `unsettled`; 18 corpus programs use it, including `melee_advance*` (reached now by every tutorial
+  combatant with no follower at all); the `Npc_Follower_Info` reader is a seam
+  (`ElysiumNpcSquad.cpp:205-207`; the rulebook already serves `Npc_Combat_Info`), so the ladder is
+  degenerate at 0/10/20; the `SetFollowerBoss` input `0x102c3350` has no dispatch; 6b's arm 4
+  (`ElysiumNpcConditions.cpp:263-264`) is one line now that `FollowerBoss` exists;
+  `EElysiumBodyOwner::Follower` (`ElysiumNpcMind.cpp:222-227`) looks vestigial; tests for the idle
+  step, a follower program end to end, and `ACCUM`.
+  Size: S–M (re-read 2026-09-29 by 0019/7; was L–XL). Effort: Fable / high; corpus pass on the `DIST:` tasks first.
 - [ ] **16b. The composed relationship and the human ideal state.**
   Absorbed by 29e for `SelectIdealState` (`0x1026f660` / `0x102ad660` / VHuman `0x103851e0`);
   this story keeps the composed relationship and its consumers.
@@ -1814,7 +1999,20 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "`m_hFollowerBoss` — the follower controller", § "Relationship table, exactly
   decoded" (incl. "Story 16b recovery"). Unrecovered: nothing on the composition; the ally
   read `0x101755d0` keeps its summary.
-  Size: M. Effort: Opus / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** `IRelationType
+  0x10299da0` whole with the `D_INSANE`, boss and inherit-upgrade arms
+  (`ElysiumNpcConditions10.cpp:87-233`; tests `:120-412`), the five species arms on their classes,
+  `IRelationTypeOf` through the slot (`ElysiumNpcSenses10.cpp:61-68`), consumed by `BestEnemy`, the
+  door blocker, the fear arm, the disciplines; `CNPC_VHuman::SelectIdealState 0x103851e0` with the
+  follower and hunt arms (`ElysiumNpcState_2.cpp:62-87`). Tutorial: reached; the divergence below is
+  latent until a boss or `D_INSANE` exists. Left: **the two named consumers still read the flat
+  table** — the feed guard (`ElysiumFeedSchedules.cpp:39-47`) and `GatherSight`
+  (`ElysiumNpcConditions.cpp:295,330`); also `ShouldInvestigate` (`:275`), `GatherSounds` (`:816`)
+  and stealth `PublishObservers` (`ElysiumStealth.cpp:241,260`), each a one-line switch after a
+  per-site retail check; wire `HuntConVarRawWord` / `IsCommand` to the tunable (10h shares this);
+  the player's ally read `0x101755d0` stays a named HUD seam (`ElysiumNpcThink.inl:91-93`); tests
+  for the `0x3b0`/`0x3b4` follower arm and a composed relation through the two consumers.
+  Size: S (re-read 2026-09-29 by 0019/7; was M). Effort: Opus / medium.
 - [ ] **17. Squads.**
   Rework (2026-09-15): the squad object, membership, the cap and the disconnect refcount are
   0018 story 14; this story keeps the condition producer, the two tasks and the overlay's
@@ -1846,7 +2044,20 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "Squads, decoded" (unrecovered list closed 2026-09-12). Unrecovered: nothing — the
   six `CAI_Squad` wrappers were closed 2026-09-19 (`social.md`, "The six wrappers"): member
   fan-outs to NPC slots 54–58, of which only 54 and 56 do anything.
-  Size: L–XL. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The producer
+  `0x102b2730` (`ElysiumNpcConditions2.cpp:157-181`), `TASK_DISCONNECT_FROM_SQUAD` with the refcount
+  and no flag write (`ElysiumNpcStartTask_2.cpp:859`, `ElysiumNpcBase.cpp:158-192`),
+  `TASK_SQUAD_NEW_ENEMY`'s shape gated on `ConnectedSquad()` (`:1780-1787`), `GetEnemies()`
+  diverting to `GDisconnectedEnemies` (`ElysiumNpcBaseSenses.cpp:79-98`), `squadname` bound
+  (`ElysiumNpcKernelBindings.cpp:571`; the spec's "no keyfield" was stale). Tutorial:
+  `squad_warehouse` (`thug_2`/`thug_3`) is the witness; every undone piece is reached but dead until
+  0018/14 — `ConnectedSquad()` is a constant `nullptr` (`ElysiumNpcBase.h:377`). Left here,
+  independent of 0018/14: drop the `IGNORE_SQUAD_SEE_ENEMY` clear (`ElysiumNpc.cpp:1974-1977`). Left
+  after 0018/14: the producer's set arm over the shared store, `SquadNewEnemy 0x103161a0` (a
+  `CAI_Squad` method — 0018/14's), `SquadSeesPlayer` off its stub
+  (`ElysiumScriptNatives.cpp:528-531`), one test each. Stale note at
+  `ElysiumNpcBaseSquad.cpp:126-128` (`CapabilitiesGet` is a real body now).
+  Size: XS (re-read 2026-09-29 by 0019/7; was L–XL). Effort: Opus / high.
 - [ ] **16c. Possession and frenzy.**
   Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
   `SetEnemy(NULL)`, `flags2 |= D_POSSESSED | D_DISCONNECT_SQUAD`, `"player D_LI 99"`,
@@ -1867,7 +2078,15 @@ the retail contract the code must match, the job, what it consumes or provides, 
   614). Provides: `D_INSANE` to 16b, the frenzied word to 6a/10a/10d's gates.
   Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
   Settled as not in the image: the `m_bfNPCFrenziedFlags` bit names.
-  Size: M. Effort: Opus / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** `DoPossession
+  0x102c51a0` and `DoFrenzy 0x102c5310` whole (`ElysiumNpcBoss.cpp:138-221`), `ResetAiState`,
+  `AcquireNearestHatedTarget`, the frenzied word with its readers (`ElysiumNpcBase.h:425-443`; the 1
+  % `Scream_Death` roll `ElysiumNpcThink.cpp:307-309`), `D_INSANE` readers; tests
+  `ElysiumNpcKernelBossTests.cpp:106-165`. Tutorial: the bodies are on every Troika class but the
+  only producer is a player discipline cast — outside the NPC-population cut on both maps. Left:
+  **the apply path never calls them** — `ElysiumDisciplines.cpp:962-968` still reports the two
+  HitGroup keys "parsed and carried, not executed"; two calls and one test.
+  Size: XS (re-read 2026-09-29 by 0019/7; was M). Effort: Opus / medium.
 - [ ] **21a. The flee state.**
   Retail: `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::SelectIdealState`
   (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL` 0x21 or
@@ -1908,7 +2127,25 @@ the retail contract the code must match, the job, what it consumes or provides, 
   writer `0x1028ea60` copies out of its own frame — a retail defect, `senses.md`; `0x1042fde0` is
   SafeDisc's `CSecureType` scrambler over a plain integer, `dead` under 0019 § Witness data, so
   the port keeps the level plain.)
-  Size: L. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Ideal-state
+  entry from idle/alert on the two flee levels with `INITIAL_FLEE` and the terminal case 8
+  (`ElysiumNpcState.cpp:89-100,143-154,212-214`), the slot-460 flee arms
+  (`ElysiumNpcConditionsBodies.cpp:231-250`), raw state 8 in the mind's overlay
+  (`ElysiumNpcMind.h:88-95`) and `OnStateFleeing`, the whole case-8 chain
+  (`ElysiumNpcSelect.cpp:803-931`: cover failure, the stimulus re-arm, the flee sound with
+  `NextFleeSoundTime`, the supernatural / criminal arms through `ElysiumLaw`, the 512 / 80 % roll),
+  both translate arms (`ElysiumNpcTranslate.cpp:65-94`), `0x48` and the ten flee texts loaded;
+  witness tests `ElysiumNpcWitnessTests.cpp:487-496,782-792`. Tutorial: reached by every pedestrian
+  and vampire witnessing a discipline or crime (the cut lists no `COND_*_FLEE_LEVEL` because it
+  reads program interrupts, not the slot-453 mask `ElysiumNpc.cpp:1952`). Left: the `FleeAndDie` /
+  `Faint` inputs `0x1029f210` / `0x1029f250` (slot 614 then `SetSchedule(0x6f)` / `(0xfa)`) are not
+  registered; the scream `InsertSound(SOUND_DANGER, …)` is a counter seam
+  (`ElysiumNpcSelect.inl:66-70`) that the `NPC_FLEE` row of the volume table would retire (0018/13);
+  two typed-state reads predate the raw overlay and diverge while fleeing —
+  `ElysiumNpcConditionsBodies.cpp:244` tests the typed state `!= 8` (never 8, so `INITIAL_FLEE`
+  re-arms every pass) and `NpcStateFlags()` (`ElysiumNpcBase.cpp:122-139`) answers the previous byte
+  instead of `0x85` to six consumers; tests for both.
+  Size: S (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **21b. The cower, disoriented and lost programs.**
   Retail: 0x70/0x71 `FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)`, 0x72 `_SCREAM`, 0x73
   `FLEE_AND_COWER`, 0x74/0x75 `_STALL(_FAILED)`, 0x76 `_NO_ENEMY`, 0x77/0x78 `COWER(_HINT)`,
@@ -1937,7 +2174,17 @@ the retail contract the code must match, the job, what it consumes or provides, 
   beside it.) (Closed 2026-09-19: the cower-node query —
   slot 418 `+0x688` resolves the task operand's sentinel to a distance and the search is walked in
   `navigation-jump-links.md` § "The hint-path, snap and cower arms, walked".)
-  Size: L. Effort: Opus / high.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** Every program
+  is a loaded corpus text (`sched_troika_cower*`, `disoriented`, `flee_and_cower*`, `laughing`),
+  every task an arm — `PLAY_COWER` / `SET_COWER` with `CowerAnimOffset = RandomInt(0,2)*3`
+  (`ElysiumNpcStartTask_2.cpp:756-771`), `RUN_PATH_FLEE`, `FLIP_NEXT_IDEAL_YAW` over the motor byte,
+  `LOOK_AT_PLAYER`, `GET_PATH_TO_COWER_NODE(_SAVE_POS)` (`ElysiumNpcStartTask.cpp:1183-1280`),
+  `SUGGEST_STATE`, `FACE_HINTNODE`, `WAIT_PVS`, `GET_PATH_TO_RANDOM_NODE`; `CowerAnimOffset` bound
+  and reset. The `0xe1`/`0xe3` branch: retail's cases `0x24`/`0x26` in `0x102aacf0` have no state-8
+  arm — the port (`ElysiumNpcRunTask.cpp:1266-1279`) is verbatim and the spec's "left waiting" line
+  was stale. Tutorial: nothing undone to reach. **Done**; tick with this record (optionally one
+  end-to-end `FLEE_AND_COWER` run once 21a's raw-state reads land).
+  Size: XS (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **21c. The incapacitated victim's consumers.**
   Absorbed by 29e for its seventeen loop-side bodies (`SetState`, `GatherConditions`, `RunAI`,
   the task arms, `NPCThink`); this story keeps the victim-side consumers and the `ONE_HIT_KILL`
@@ -1958,7 +2205,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   0005's damage.
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
   feed; Flags the family writes); `feeding.md` § "Step 4, decoded". Unrecovered: nothing.
-  Size: S. Effort: Sonnet / medium.
+  **Reach cut (2026-09-29, 0019/7 · `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md`):** The
+  `ONE_HIT_KILL` read in `OnTakeDamage_Alive` (`ElysiumNpcDamage3.cpp:346-351`; test
+  `ElysiumNpcKernelDamage2Tests.cpp:540-548`); `COWERING` withholding `COMFORT` and the hearing
+  quarter; the writers are the corpus programs. Tutorial: reached — the maker-spawned pedestrians
+  cower and are fed on. Left: `IsFeedAutoAcceptState` (`ElysiumFeed.cpp:222-244`) still answers from
+  `SCHED_TROIKA_MESMERIZED` plus the disposition-name stand-in; the retail read is answerable now —
+  `IdealActivityNumber` is `+0xff0` (`ElysiumNpcBaseAnim.cpp:332`) and the four ids are registered
+  (`ElysiumRetailActivities.cpp:4160-4234`: 4174, 4200, 4201, 4248) — rewrite and test beside
+  `ElysiumFeedTranceTests.cpp:335`.
+  Size: XS (re-read 2026-09-29 by 0019/7; was S). Effort: Sonnet / medium.
 
 ## Build order
 Reworked 2026-09-15. The 29-series' order — bottom-up by call layer — stays; its scope — the
@@ -2010,6 +2266,29 @@ The open stories, re-scoped. A story keeps its number and its retail text; what 
 
 Sizes are re-read after 0019/7: a story's size is the task identities and selector arms the
 reach cut leaves it, not the programs it once listed.
+
+### The reach cut, applied (2026-09-29)
+
+0019/7's `docs/vtmb/npc-kernel/reach/sp_tutorial_1.md` and `sm_hub_1.md` measured, and each
+open story above carries a **Reach cut** clause with its re-read `Size:`. What the cut found:
+
+- **Reach barely narrows this spec.** The tutorial's six classes and the hub's twelve share the
+  `CAI_BaseNPC` / Troika bodies, so both maps reach nearly every address and identity the open
+  stories cite (tutorial: 359 of 691 texts, 243 tasks, 3,367 functions). The species narrowing
+  is real only for 25b. Out of the tutorial's reach: 25a's cop spawner (the law story's), 16c's
+  producer (a player discipline), 12b's `0xa9` (`npc_kickable` is authored on two other maps).
+- **The sizes were stale for another reason**: 0019 rows 06 and 06b ported the class tree and
+  most `rule` bodies the stories name, and every story's `Gap:` line predates that. The clauses
+  cite the port body for each piece. Four stories are done bar their record (10j, 21b, 25b, 27).
+- **What actually remains**, in the tracker's order: 25a's dead seam; 10d's `+0x60dc` mirror;
+  12a's predicate arm and two inputs; 12b's cover-search rewire and two seams; 10g's
+  `WalkToNode`; 10h's `0xaf` builder over 0018/9; 11's ambient executor (still the live path) and
+  `0x102daac0`; 10i's stale `-1` test; 16a's `DIST:ACCUM` arm and the `Npc_Follower_Info` row;
+  17's overlay clear now, the rest after 0018/14; 16c's two apply-path calls; 16b's two
+  flat-table consumers; 21a's two inputs, the scream row and two raw-state reads; 21c's
+  `IsFeedAutoAcceptState` rewrite; 28's player-side producer; 13b's catalogue entry.
+- **Programs are never built here**: all 691 retail texts load from the deployed corpus, so every
+  "program → seam" arrow in the table above is already answered by 0019/3.
 
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,

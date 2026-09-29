@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 11 closed 2026-09-29; row 12 is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 12 closed 2026-09-29 and 0019 with it; row 13 is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29) · 0019/6 (row 11 closed 2026-09-29).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29) · 0019/6 (row 11 closed 2026-09-29) · 0019/7 (row 12 closed 2026-09-29; **0019 is closed**).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -324,8 +324,40 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   the `FVisible` blocker cell; the trace cost (~0.5 ms each on the hub, measured, not capped); the
   closed-room fixture, live-only; the Werewolf fake-hull check (local box, not world bounds) and the
   slot-523 accessor's `GetMaxJumpSpeed` name (generated from `signatures.tsv`).
-- [ ] **12 · 0019/7** — The reach cut: `kernel_ledger --reach <map>`. S–M · Sonnet/medium.
-  **0019 closes here.** Re-read the sizes of rows 26–48 from the tutorial's reach list.
+- [x] **12 · 0019/7** — The reach cut: `kernel_ledger --reach <map>`. S–M · Sonnet/medium. **Landed 2026-09-29; 0019 is closed.**
+  - *The tool:* `kernel_reach.py`; `reach/<map>.md` + `.tsv` per map, a "Reached by" column per map in
+    `coverage.md` (read from the committed TSV, so `kernel --check` needs no exports). Tutorial: 6 classes,
+    359 texts, 243 tasks, 3,367 functions, 141 species rows; hub: 12 / 390 / 244 / 3,465 / 214. Two task
+    identities lack an arm on both maps (`TASK_TEST3/4`, retail's test schedules, selected by nothing); two
+    more were `GTaskArms` census omissions (Troika `0x11f`, the rat's `0x14a`), fixed.
+  - *The cut:* reach barely narrows section E — the human line shares the base/Troika bodies — and the
+    sizes were stale because rows 06/06b had already ported most of what the stories name. Applied as an
+    audit of all 23 stories against the port (five readers, every cited address checked); each story in
+    0002's spec now carries a *Reach cut* clause and a re-read `Size:`. Rows 26–48 below are re-sized from
+    those clauses; four are done bar their record.
+  - *Gate:* `kernel --check` 7/7; `kernel_ledger --reach … --check` 17/17; `Elysium.Substrate.Schedule`
+    32/0; `test_kernel_reach.py` 5 new. *Handed on:* RE-BACKLOG 44 (the reached no-verdict functions).
+  - *Found, owned by no open story* (needs a home before section E starts):
+    - **The NPC input surface.** Retail registers 33 NPC inputs (`GNpcInputFuncs`); the port registers 14
+      (`ElysiumNpcClasses.cpp`). The 19 missing: `AllowAlertLookaround`, `AllowKickHintUse`,
+      `AllowOpenDoors`, `Faint`, `FleeAndDie`, `MakeInvincible`, `SetBloodShieldDiscipline`,
+      `SetBossMonster`, `SetDefaultDialogCamera`, `SetDontFacePlayerInDialog`, `SetFallToGround`,
+      `SetFollowerBoss`, `SetFollowerType`, `SetInvestigateMode`, `SetInvestigateModeCombat`,
+      `SetMovementMultiplier`, `SetSpeechVolume`, `StayEntrenched`, `WalkToNode`. None is fired on
+      `sp_tutorial_1` or `sm_hub_1`; over the 108 maps' I/O: `SetInvestigateModeCombat` 69, `StayEntrenched`
+      67, `SetInvestigateMode` 66, `FleeAndDie` 27, `MakeInvincible` 19, `SetFollowerBoss` 15, and the
+      scripts fire six of them. Five are named inside stories (10g, 12a, 16a, 21a); the other fourteen — the
+      investigate-mode pair above all — are nobody's. One story: the retail handler behind each (the datamap
+      replay names them), its verdict, the registration.
+    - **The VSound table.** `SpeakVSound` is a seam (`ElysiumNpcSounds10.cpp:115-140`); every `PLAY_SOUND`
+      step in the corpus is silent and the flee / death vocalisations with it. `0x101f5950` (the play) and
+      `CVSoundActivityTable_t` carry no verdict, and no spec loads the table. Not 0018/13 (that is
+      `CSoundEnt`, the AI sound list).
+    - **`GTaskArms` is hand-checked, not generated in-repo.** Two arms that exist had no row; a check that
+      every `case` / `== 0x..` local id in the species 442/444 bodies has a row belongs beside the meter.
+    - **`DIST:ACCUM` is a live combat defect today**, not a follower one: 18 programs, the melee-advance
+      family among them, run it on every tutorial combatant (16a's clause). Row 40 is far down; pull the
+      `0x102702d0` arm forward or give it to 0005.
 
 ## D — the rest of the world (0018, in its listed order)
 
@@ -363,35 +395,64 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 ## E — the mind (0002), cut to `sp_tutorial_1`'s reach
 
-Task bodies and selector arms only; programs come from row 04. Sizes below predate the reach cut.
+Task bodies and selector arms only; programs come from row 04. **Sizes re-read 2026-09-29 by row 12** (the
+reach cut applied as an audit against the port; each story's *Reach cut* clause in 0002's spec is the
+evidence, `was` is the pre-cut size). "record" = done, needs only its tick and record.
 
-- [ ] **26 · 0002/25a** — The `ClearSchedule` producers. S · Sonnet/medium.
-- [ ] **27 · 0002/25b** — Species `TranslateSchedule` bodies, on their classes. XS, grows per species · Sonnet/low.
-- [ ] **28 · 0002/10d** — The alert selectors and the ladder. L · Opus/high.
-- [ ] **29 · 0002/10e** — The sound-investigation task arms. M–L · Fable/medium.
-- [ ] **30 · 0002/10f** — The unknown-investigation task arms. L · Fable/high.
-- [ ] **31 · 0002/12a** — The reaction keyfields: normalization and readers. S–M · Sonnet/medium.
-- [ ] **32 · 0002/12b** — The cover and kick chooser. M–L · Fable/medium.
-- [ ] **33 · 0002/10k** — The saved-position task arms. M · Fable/medium.
-- [ ] **34 · 0002/10g** — The patrol roll sites and task arms. L · Opus/high.
-- [ ] **35 · 0002/10h** — The hunt-investigation task arms. M–L · Fable/medium.
-- [ ] **36 · 0002/11** — Interesting places: the three selector arms; retires the ambient executor. L · Opus/high.
-- [ ] **37 · 0002/27** — Patrol-point interest: the roll and the two task arms. S–M · Fable/medium.
-- [ ] **38 · 0002/10j** — `CheckTarget`. S · Sonnet/medium.
-- [ ] **39 · 0002/10i** — The comfort program's task arms. M · Fable/medium.
-- [ ] **40 · 0002/16a** — Followers. L–XL · Fable/high.
-- [ ] **41 · 0002/17** — Squads: the condition producer and the two tasks. L–XL · Opus/high.
-- [ ] **42 · 0002/16c** — Possession and frenzy. M · Opus/medium.
-- [ ] **43 · 0002/16b** — The composed relationship. M · Opus/medium.
-- [ ] **44 · 0002/21a** — The flee state. L · Opus/high.
-- [ ] **45 · 0002/21b** — Cower, disoriented, lost. L · Opus/high.
-- [ ] **46 · 0002/21c** — The incapacitated victim's consumers. S · Sonnet/medium.
-- [ ] **47 · 0002/28** — The player-on-head answer. M · Fable/medium.
+- [ ] **26 · 0002/25a** — The `ClearSchedule` producers. XS (was S) · Sonnet/medium.
+  delete the dead `RequestClearSchedule` seam, one cine-clear test; out of tutorial reach otherwise.
+- [ ] **27 · 0002/25b** — Species `TranslateSchedule` bodies, on their classes. XS, record (was XS, grows per species) · Sonnet/low.
+  all twenty bodies landed with 06b; three named constants left.
+- [ ] **28 · 0002/10d** — The alert selectors and the ladder. XS–S (was L) · Opus/high.
+  one divergence: `CommitBestSound`'s `+0x60dc` mirror; one program test.
+- [ ] **29 · 0002/10e** — The sound-investigation task arms. XS (was M–L) · Fable/medium.
+  done; `PLAY_SOUND` silent behind the VSound seam (no story owns the table — row 12's findings).
+- [ ] **30 · 0002/10f** — The unknown-investigation task arms. XS (was L) · Fable/high.
+  two arm tests, one program test.
+- [ ] **31 · 0002/12a** — The reaction keyfields: normalization and readers. XS (was S–M) · Sonnet/medium.
+  the predicate's `stay_entrenched` arm; register `StayEntrenched` / `AllowKickHintUse`.
+- [ ] **32 · 0002/12b** — The cover and kick chooser. S–M (was M–L) · Fable/medium.
+  the chooser's cover search is wired to a stub; the prop finder / predicate and the impulse are seams.
+- [ ] **33 · 0002/10k** — The saved-position task arms. XS (was M) · Fable/medium.
+  done (the census row landed with row 12); one interpreter test.
+- [ ] **34 · 0002/10g** — The patrol roll sites and task arms. XS (was L) · Opus/high.
+  register `WalkToNode`.
+- [ ] **35 · 0002/10h** — The hunt-investigation task arms. S–M (was M–L) · Fable/medium.
+  the `0xaf` builder over 0018/9; the cvar wire; the typed Hunt state.
+- [ ] **36 · 0002/11** — Interesting places: the three selector arms; retires the ambient executor. M (was L) · Opus/high.
+  arms and bodies landed; the executor is still the live path; `0x102daac0` unported.
+- [ ] **37 · 0002/27** — Patrol-point interest: the roll and the two task arms. XS, record (was S–M) · Fable/medium.
+  one record-arm test.
+- [ ] **38 · 0002/10j** — `CheckTarget`. XS, record (was S) · Sonnet/medium.
+  done; `UpdateTargetPos`'s body is 0018/5's mechanism seam.
+- [ ] **39 · 0002/10i** — The comfort program's task arms. XS (was M) · Fable/medium.
+  the stale `-1` test and comment; one integration test.
+- [ ] **40 · 0002/16a** — Followers. S–M (was L–XL) · Fable/high.
+  `DIST:ACCUM` never reads the accumulator (18 programs, melee-advance included); the rulebook row; the input; 6b's arm 4.
+- [ ] **41 · 0002/17** — Squads: the condition producer and the two tasks. XS (was L–XL) · Opus/high.
+  drop the overlay clear now; the set arm, `SquadNewEnemy` and `SquadSeesPlayer` after 0018/14.
+- [ ] **42 · 0002/16c** — Possession and frenzy. XS (was M) · Opus/medium.
+  two apply-path calls in `ElysiumDisciplines.cpp`; out of the population cut (a player cast).
+- [ ] **43 · 0002/16b** — The composed relationship. S (was M) · Opus/medium.
+  the feed guard and `GatherSight` still read the flat table (three more sites to check).
+- [ ] **44 · 0002/21a** — The flee state. S (was L) · Opus/high.
+  `FleeAndDie` / `Faint` inputs; the scream's `NPC_FLEE` row; two typed-state reads that miss raw state 8.
+- [ ] **45 · 0002/21b** — Cower, disoriented, lost. XS, record (was L) · Opus/high.
+  done; the spec's `0xe1`/`0xe3` line was stale.
+- [ ] **46 · 0002/21c** — The incapacitated victim's consumers. XS (was S) · Sonnet/medium.
+  `IsFeedAutoAcceptState` over the ideal activity ids.
+- [ ] **47 · 0002/28** — The player-on-head answer. S (was M) · Fable/medium.
+  the player-side producer into the existing ground-entity seam.
 - [ ] **48 · 0002/13b** — The leak in the defect catalogue. XS · Haiku/low.
+  unchanged.
 
 ## F — the hub
 
 - [ ] **49 · 0002, the hub's reach** — rows 26–47 again at `sm_hub_1`'s reach list, idle families first.
+  Row 12 cut the hub too (`reach/sm_hub_1.md`): it adds `CNPC_VCop`, `CNPC_VHuman`, `CNPC_VHunter`,
+  `CNPC_VTaxiDriver`, `CCineAI` and `CCineAISchedule`, 31 more texts and 65 unported `rule` rows (the
+  tutorial's 47 plus the four classes' `Classify`, slot 434/473/580 bodies and the taxi driver's damage
+  chain); no story's undone piece differs between the two maps, so this row is those species rows.
 - [ ] **50 · 0018/20** — The hub at idle, the second witness: scene tests per map, the cook (four
   files need editor guards first), then played. M · Sonnet/medium. Its scene tests and the cook
   guards need nothing past row 25 and can be pulled up to there.
