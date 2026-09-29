@@ -121,7 +121,12 @@ namespace ElysiumWorldGeometryDetail
 			return EAdmit::RejectActor;
 		}
 		// The filter's pass entity and its second (`CTraceFilterSimpleTwoEnt`), whichever body
-		// they stand in.
+		// they stand in. Named only when there is someone to ignore: `ToHandle` may walk the entity
+		// world for an actor it does not recognise.
+		if (Request.Ignore.IsEmpty())
+		{
+			return EAdmit::Admit;
+		}
 		const FElysiumEntityHandle Entity = HandleOf(Component, Actor, ToHandle);
 		if (Entity.IsSet() && Request.Ignore.Contains(Entity))
 		{
@@ -336,7 +341,8 @@ namespace ElysiumWorldGeometryDetail
 		FCollisionObjectQueryParams Objects;
 		Objects.AddObjectTypesToQuery(ECC_Pawn);
 		Objects.AddObjectTypesToQuery(ElysiumCollision::PlayerChannel);
-		FCollisionQueryParams Params(FName(TEXT("ElysiumRetailTraceCharacters")), /*bTraceComplex*/ false);
+		static const FName TraceTag(TEXT("ElysiumRetailTraceCharacters"));
+		FCollisionQueryParams Params(TraceTag, /*bTraceComplex*/ false);
 		Params.bFindInitialOverlaps = true;
 		Params.bReturnPhysicalMaterial = false;
 		if (IgnoreSelf != nullptr)
@@ -426,7 +432,8 @@ namespace ElysiumWorldGeometry
 		const ElysiumWorldGeometryDetail::FBudgetScope Budget(FElysiumGeometryBudget::EKind::Trace);
 		const ElysiumWorldGeometryDetail::FRetailShape Q = ElysiumWorldGeometryDetail::ShapeOf(Request);
 
-		FCollisionQueryParams Params(FName(TEXT("ElysiumRetailTrace")), /*bTraceComplex*/ false);
+		static const FName TraceTag(TEXT("ElysiumRetailTrace"));
+		FCollisionQueryParams Params(TraceTag, /*bTraceComplex*/ false);
 		Params.bFindInitialOverlaps = true;
 		Params.bReturnPhysicalMaterial = false;
 		if (IgnoreSelf != nullptr)
@@ -473,19 +480,16 @@ namespace ElysiumWorldGeometry
 			FromOnMesh.Location, DestOnMesh.Location, Filter);
 		PathQuery.SetAllowPartialPaths(Query.bAcceptPartial);
 		PathQuery.SetNavAgentProperties(Agent);
+		// From here the mesh has answered, so the answer is TRUE whatever it says: false is kept
+		// for "no mesh to ask" (no nav data, no agent, an end that does not project). A search that
+		// finds no path, or only a partial one the query refuses, is `bReachable = false` with
+		// `bPartial` and the length as found.
 		const FPathFindingResult Found = NavData.FindPath(Agent, PathQuery);
-		if (!Found.IsSuccessful() || !Found.Path.IsValid())
-		{
-			return false;
-		}
-		const bool bPartial = Found.Path->IsPartial();
-		if (bPartial && !Query.bAcceptPartial)
-		{
-			return false;
-		}
-		Out.bReachable = true;
+		const bool bHavePath = Found.IsSuccessful() && Found.Path.IsValid();
+		const bool bPartial = bHavePath && Found.Path->IsPartial();
+		Out.bReachable = bHavePath && (!bPartial || Query.bAcceptPartial);
 		Out.bPartial = bPartial;
-		Out.LengthCm = static_cast<float>(Found.Path->GetLength());
+		Out.LengthCm = bHavePath ? static_cast<float>(Found.Path->GetLength()) : 0.f;
 		return true;
 	}
 

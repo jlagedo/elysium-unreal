@@ -24,7 +24,9 @@ namespace ElysiumWorldGeometry
 		const AActor* IgnoreSelf, TFunctionRef<FElysiumEntityHandle(const AActor*)> ToHandle);
 
 	// A synchronous path query on `NavData` for `Agent` from `FromCm` to `Query.DestCm` under
-	// `Filter` (null = the nav data's default). False = no route (or a partial one the query refused).
+	// `Filter` (null = the nav data's default). False = the mesh could not be asked (an end that will
+	// not project); "no complete route" is true with `Out.bReachable == false`, a refused partial the
+	// same with `Out.bPartial` set.
 	bool Route(const ANavigationData& NavData, const FNavAgentProperties& Agent,
 		FSharedConstNavQueryFilter Filter, const FVector& FromCm, const FElysiumNpcRouteQuery& Query,
 		FElysiumNpcRouteAnswer& Out);

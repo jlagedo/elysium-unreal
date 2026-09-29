@@ -52,6 +52,19 @@ namespace
 		return Att;
 	}
 
+	// The game-thread mirror of the gate in `FAudioDevice::AddNewActiveSound`: a sound no longer
+	// than `au.SoundDistanceOptimizationLength` that is not audible where it starts is dropped
+	// before an active sound exists. Looping waves report an indefinite duration and never match.
+	// The engine re-evaluates on the audio thread, so this is a prediction used only to name the
+	// completion, never to decide one.
+	bool IsCulledOutOfRange(const UAudioComponent* Comp, const USoundWave* Wave)
+	{
+		static const IConsoleVariable* CVarLength =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("au.SoundDistanceOptimizationLength"));
+		const float MaxLength = CVarLength ? FMath::Max(0.f, CVarLength->GetFloat()) : 1.f;
+		return Wave->GetDuration() <= MaxLength && !Comp->IsInAudibleRange(nullptr);
+	}
+
 	const TCHAR* DomainFolder(EElysiumAudioSourceDomain Domain)
 	{
 		switch (Domain)
@@ -559,9 +572,10 @@ void UElysiumAudioSubsystem::RealizeVoice(
 	}
 	else
 	{
-		// Create without a location first so UE's short-sound distance optimization cannot
-		// discard the component before the request ledger can observe a completion. Apply all
-		// spatial policy before Play so virtualization sees the authored attenuation from frame 0.
+		// Apply all spatial policy before Play so virtualization sees the authored attenuation from
+		// frame 0. UE's short-sound distance optimization still reads the placed location at Play:
+		// a one-shot no longer than `au.SoundDistanceOptimizationLength` that starts out of reach is
+		// never created and never reports OnAudioFinished (see `bOutOfRangeAtPlay` below).
 		Comp = UGameplayStatics::CreateSound2D(World, Wave, StartGain, Request.Pitch,
 			Request.StartOffsetSeconds, Concurrency, false, false);
 		if (Comp)
@@ -592,6 +606,7 @@ void UElysiumAudioSubsystem::RealizeVoice(
 			{
 				Comp->SetWorldLocation(Request.Placement.Location);
 			}
+			Voice.bOutOfRangeAtPlay = IsCulledOutOfRange(Comp, Wave);
 			Comp->Play(Request.StartOffsetSeconds);
 		}
 	}
@@ -937,6 +952,11 @@ void UElysiumAudioSubsystem::CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletio
 			static_cast<int32>(Completion), *Voice.Event.ResolvedPath,
 			*Voice.Request.Owner.StableId, Voice.Request.Owner.MapEpoch);
 	}
+	else if (Completion == EElysiumVoiceCompletion::OutOfRange)
+	{
+		UE_LOG(LogElysiumAudio, Verbose, TEXT("voice culled out of range source='%s' owner='%s'"),
+			*Voice.Event.ResolvedPath, *Voice.Request.Owner.StableId);
+	}
 	Transition(Voice, TerminalState, Completion);
 	if (Comp)
 	{
@@ -1019,16 +1039,18 @@ void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 			Voice.Event.State == EElysiumVoiceState::Playing &&
 			!Voice.Comp->IsPlaying())
 		{
-			// UE suppresses OnAudioFinished when an active sound fails to start (for example
-			// due to an engine-level playback rejection). Give a normal completion callback
-			// one game-thread grace window, then retire the otherwise orphaned request.
+			// UE suppresses OnAudioFinished when an active sound fails to start (an engine-level
+			// playback rejection, or the short-sound distance cull). Give a normal completion
+			// callback one game-thread grace window, then retire the otherwise orphaned request.
 			if (Voice.InactiveSinceAudioClock < 0.0)
 			{
 				Voice.InactiveSinceAudioClock = Now;
 			}
 			else if (Now - Voice.InactiveSinceAudioClock >= 0.1)
 			{
-				CompleteAt(Index, EElysiumVoiceCompletion::PlaybackRejected);
+				CompleteAt(Index, Voice.bOutOfRangeAtPlay
+					? EElysiumVoiceCompletion::OutOfRange
+					: EElysiumVoiceCompletion::PlaybackRejected);
 				continue;
 			}
 		}

@@ -431,9 +431,12 @@ public:
 	// walk. The wander pick (`TASK_GET_PATH_TO_RANDOM_NODE`, 0018 story 4) never sets the
 	// pedestrian byte and asks with 0. A partial path answers only under `bAcceptPartial`.
 	//
-	// **False means no route**, and that is also the default: a motor with no navigation behind it
-	// (a headless world, a recording double that has not opted in) cannot answer, and the caller must
-	// drop the candidate rather than walk to a guess. `Out` is untouched on false.
+	// **False means the motor could not ask**: no nav data or agent behind it (a headless world, a
+	// recording double that has not opted in), or an end that will not project onto the mesh. That is
+	// also the default, and `Out` is untouched on it. A mesh that answers "no complete route" is TRUE
+	// with `bReachable == false` (`bPartial` and `LengthCm` as found), so a caller must test
+	// `bReachable` and never the return alone; either way it drops the candidate rather than walk to
+	// a guess.
 	virtual bool QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpcRouteAnswer& Out) const
 	{
 		return false;

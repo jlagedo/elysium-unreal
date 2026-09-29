@@ -2657,8 +2657,12 @@ bool FElysiumNpcBase::StartTaskSetRandomGoal(float DistanceUnits, const FVector&
 		RouteAsked.DestCm = Candidate.PositionCm;
 		RouteAsked.PedestrianCostMultiplier = Navigator.bPedestrian && Navigator.bHeadLegRequestSet
 			? Navigator.HeadLegRequest.PedestrianCostMultiplier : 0;
+		// `QueryRoute` answers false only when it cannot ask (no mesh, no agent, no projection); a mesh
+		// with no complete route answers true with `bReachable` false (and a length of 0), so the pick
+		// is kept only when the route is reachable AND no longer than the detour cap.
 		FElysiumNpcRouteAnswer RouteFound;
-		if (Motor != nullptr && Motor->QueryRoute(RouteAsked, RouteFound) && RouteFound.LengthCm <= LongestRouteCm)
+		if (Motor != nullptr && Motor->QueryRoute(RouteAsked, RouteFound) && RouteFound.bReachable
+			&& RouteFound.LengthCm <= LongestRouteCm)
 		{
 			if (!InstallPathNoGoal(Candidate.PositionCm))
 			{

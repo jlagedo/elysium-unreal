@@ -77,6 +77,10 @@ enum class EElysiumVoiceCompletion : uint8
 	PlaybackRejected,
 	DeadlineMiss,
 	Underflow,
+	// The engine declined to create the active sound because a short one-shot started beyond its
+	// attenuation reach (`FAudioDevice::AddNewActiveSound`, `au.SoundDistanceOptimizationLength`).
+	// A cull, not a failure: the listener could not have heard it.
+	OutOfRange,
 };
 
 enum class EElysiumAudioRouting : uint16
@@ -242,6 +246,9 @@ struct FElysiumAudioVoice
 	// True once the intro half has handed over to the loop body, so the chained finish is not read
 	// as the voice's natural end.
 	bool bLoopChained = false;
+	// Set at Play when the engine's short-sound distance cull predicts the start will be dropped.
+	// Only names the watchdog's completion; the watchdog still decides that the voice never started.
+	bool bOutOfRangeAtPlay = false;
 };
 
 // One row of the loaded/pending/retained ledger the audio debugger and `elysium_audio_state` read:
