@@ -1,6 +1,6 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 06 closed 2026-09-28; row 07, 0018/4, is next and needs the decision noted on it). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 06 closed 2026-09-28; row 07, 0018/4, is next -- its decision was taken 2026-09-21, see "Decision owed"). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
@@ -197,8 +197,13 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     rename commit (`ccefc765` moves, `6376f797` references) and the map smoke, twice: the first run
     found late `NPCInit 0x10273390` never starting its NPC (maker children and every travelled-to
     hub NPC stood on FLT_MAX), fixed as `2fcc21cb`; the second run on `main` confirms it, hub
-    pedestrians walk, 0 ensure/assert. Open questions (patrol stalls under `0x67`, think cadence,
-    the per-level clock, `SetAttackExtentsForSequence 0x10090c80`) are in the spec's smoke paragraph.
+    pedestrians walk, 0 ensure/assert. The remaining observations were verdicted against the
+    listing: the patrol stalls were one more divergence, `TASK_NEXT_PATROL_POINT`'s helper
+    `0x102aa9e0` ported without `NextPoint 0x10307b80`, fixed as `5b0a5a40` and confirmed by a third
+    run (the monk loops its five nodes, `sentry2` patrols under `0x67`); think cadence and the
+    "gathered" display are faithful. Routed on: route failures over jump link 390 and unconnected
+    type-0 nodes (rows 08/09), the per-level clock (world/session), `SetAttackExtentsForSequence
+    0x10090c80` (animation), a script reading `.classname` (scripts). Detail: the spec's smoke paragraph.
     Content note: the four gitignored trees were deleted twice by `git worktree remove` recursing
     through junctions; restored from `exports_v2`, 102 of 108 maps baked (six refused by the pipeline
     on retail data: five zero-width ropes, one missing `particles/flare3` sprite).
