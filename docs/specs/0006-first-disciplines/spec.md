@@ -1,5 +1,7 @@
 # 0006 first-disciplines — downstairs in the tutorial the player activates disciplines for the first time
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 The `sp_tutorial_1` downstairs beat: the player activates a discipline offered to the clan
 chosen at genesis, holds it through its expiry window, and the game resolves a targeted cast

@@ -1,5 +1,7 @@
 # 0018 world-ai-infrastructure — The world's AI infrastructure: Unreal navigation, authored places, the sound world and the groups every NPC queries
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 **Revised 2026-09-17:** Unreal owns movement pathfinding and locomotion; no actor per graph
 node or edge; the universal nearest-component gate is withdrawn. (That revision also kept the
 graph's topology at run time for the goal searches; 2026-09-20 below supersedes it.)

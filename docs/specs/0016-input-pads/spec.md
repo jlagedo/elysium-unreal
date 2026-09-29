@@ -1,5 +1,7 @@
 # 0016 input-pads — the tutorial is playable on keyboard, Xbox and DualSense, and every action rebinds
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 `sp_tutorial_1` played start to finish on keyboard+mouse and on an Xbox *and* a DualSense pad
 with no third-party driver; every action rebindable to primary / alternate / gamepad and

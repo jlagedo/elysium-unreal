@@ -1,5 +1,7 @@
 # 0019 npc-kernel-rework — The kernel as data plus a class tree: extract what Troika typed, port what the bytecode observes, delete what nothing can see
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 The tutorial's stealth lessons, unchanged: the same `sp_tutorial_1` witness tests green on both
 sides of every story here. And one new witness: `SCHED_TROIKA_CHASE_ENEMY_FAILED` runs from

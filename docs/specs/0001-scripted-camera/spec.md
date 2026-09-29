@@ -1,5 +1,7 @@
 # 0001 scripted-camera — VtMB's scripted-camera subsystem: camera_cinematic, the override channel and its five witnesses
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 Five witnesses, each a disjoint slice of the subsystem: `sp_tutorial_1` (the `logic_scene_1`
 authored track, the feed camera's Start/EndShot pair, both Jack `StartPlayerDialogRemote`

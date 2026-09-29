@@ -1,5 +1,7 @@
 # 0003 scripted-sequence — the cutscene beat as the NPC's own schedule
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 `sp_theatre`'s courtroom walk-out: `scene_over_relay` → `walk_out_relay` starts seven
 `scripted_sequence` beats (`walk_out_people_walk`, `_1`, `_2`, `_3`; `m_fMoveTo 1`) that send

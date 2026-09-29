@@ -1,5 +1,7 @@
 # 0012 camera-director — every scoped camera returns to the exact chosen view: input scopes, prop focus, the sequencer bridge, the last direct producers
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 A scoped camera request (inspect, dialogue, cinematic, feed, death, an authored Level Sequence)
 takes the frame and returns it to the exact view the player had, with input integrating only

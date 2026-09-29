@@ -1,5 +1,7 @@
 # 0004 jack-arrival — the Jack cutscene ends with Jack grounded and the first conversation runs on the conversation UI
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 On `sp_tutorial_1`: the second cutscene with Jack ends, Jack stands on the ground, and using him
 opens the conversation UI; the player talks through Jack's tutorial dialogue to its end. Played

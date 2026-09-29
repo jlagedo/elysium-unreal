@@ -1,5 +1,7 @@
 # 0017 save-game — complete save/load and import a VtMB run
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 The player issues `elysium.save <slot>` and `elysium.load <slot>` and resumes the saved run,
 including its next observable actions, across processes and map travel; a separate offline

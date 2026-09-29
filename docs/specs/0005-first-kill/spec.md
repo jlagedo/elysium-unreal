@@ -1,5 +1,7 @@
 # 0005 first-kill — Jack sends the player back to kill the park patrol: melee combat, the enemy transaction, death
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 On `sp_tutorial_1`, from real input, the player draws a melee weapon and kills the patrol NPC:
 weapon visible in hand in third person, the NPC's combat AI closes and swings back, the blow

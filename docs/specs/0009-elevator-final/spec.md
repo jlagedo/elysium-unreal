@@ -1,5 +1,7 @@
 # 0009 elevator-final — the elevator, the final fight, the last Jack conversation and the transition to sm_hub_1
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 `sp_tutorial_1`'s closing beat, played start to finish: the player rides the tutorial elevator
 (`func_elevator` + `prop_button`), fights through the encounter on the behaviour 0002–0008

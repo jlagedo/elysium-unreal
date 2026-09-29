@@ -1,5 +1,7 @@
 # 0013 first-person-viewmodel — the hands and the weapon in first person
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 On `sp_tutorial_1`'s shooting range the first-person view draws the clan's hands and the packed
 weapon: draw, idle, fidget, fire, dry-fire, the ordinary reload, the switch-driven `lower` and

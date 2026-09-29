@@ -1,5 +1,7 @@
 # 0008 ranged-bottles — pick up the gun and shoot the beer bottles: firearms, pickup, breakables
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 `sp_tutorial_1`'s shooting-range beat: the player picks the weapon up off the ground, fires, and
 a hit registers on a bottle backed by `func_breakable`'s damage surface, which breaks as retail

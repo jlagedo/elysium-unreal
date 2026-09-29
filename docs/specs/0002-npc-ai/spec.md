@@ -1,5 +1,7 @@
 # 0002 npc-ai — NPC AI: what an NPC senses, remembers, decides, schedules and walks, witnessed by the tutorial's stealth lessons
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 **Reworked 2026-09-15.** This spec is now the mind alone. The world's AI objects — graph,
 hints, places, patrol paths, the sound list, squads, the coordinator, makers, the law bus — are
 **0018**; the data seams, the strict verdict pass, the class tree and the reach cut are **0019**.

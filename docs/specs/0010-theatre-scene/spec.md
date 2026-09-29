@@ -1,5 +1,7 @@
 # 0010 theatre-scene — the sheriff-versus-Sabbat choreography in the theatre plays clean: scene timeline, gestures, face, eyes, lipsync
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 The `sp_theatre` choreographed scene (the sheriff / Sabbat execution) plays start to finish with
 correct actor motion, facial flex, eyes and lipsync, then the following Jack scene starts. Played

@@ -1,5 +1,7 @@
 # 0011 theatre-audio — the intro cutscene plays with every sound starting, stopping and clearing as retail does
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 New Game runs the `sp_theatre` intro cutscene start to finish, then the player is handed to the
 first `sp_tutorial_1` scene, with no looping or stuck sound at any transition: every voice line,

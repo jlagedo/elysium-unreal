@@ -1,5 +1,7 @@
 # 0014 ragdoll — the corpse falls under simulation and stays lootable where it died
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 On `sp_tutorial_1` the park patrol killed in 0005 falls under ragdoll simulation with the
 recovered death impulse, comes to rest, and its use/feed/loot anchor stays at the death origin;

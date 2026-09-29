@@ -1,5 +1,7 @@
 # 0007 tuna-distraction — grab and throw tuna cans to draw the guard off the door: the physics hands and the physics world the tutorial touches
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 `sp_tutorial_1`'s tuna-can beat: the player picks up a sardine can (`fish_can`-class prop,
 0.30 kg) with the physics hands, carries it and throws it; the impact is a sound the guard NPC

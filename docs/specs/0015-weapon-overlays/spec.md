@@ -1,5 +1,7 @@
 # 0015 weapon-overlays — an armed body composes every channel retail's overlay stack pushes
 
+**Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
+
 ## Witness
 An armed body's four-slot `FElysiumOverlayStack` composes what retail's `CBaseAnimatingOverlay`
 composes: every `_attack_layer`, `_attack_delta` and `_reload_layer` across the five weapon
