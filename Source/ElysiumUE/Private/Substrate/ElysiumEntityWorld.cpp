@@ -180,6 +180,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	// node rows first lands every id where retail's interleaving would.
 	TArray<ElysiumNodeEntity::FSpawnResult> NodeSpawns;
 	NodeSpawns.SetNum(Defs.Defs.Num());
+	const int32 NodeMissesBefore = ElysiumAiNetwork::NodeMissCounter();
 	for (int32 i = 0; i < Defs.Defs.Num(); ++i)
 	{
 		NodeSpawns[i] = ElysiumNodeEntity::SpawnNodeRow(Defs.Defs[i], *PlaceSet, FElysiumEntityHandle(i, Epoch));
@@ -190,12 +191,13 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 				i, *Defs.Defs[i].Classname);
 		}
 	}
-	if (PlaceSet->OutOfRangeCount() > 0 && PlaceSet->IsAdopted())
+	const int32 SpawnMisses = ElysiumAiNetwork::NodeMissCounter() - NodeMissesBefore;
+	if (SpawnMisses > 0 && PlaceSet->IsAdopted())
 	{
 		// Retail counts these and says nothing; the map's bake reports the same rows (`pairing`).
 		UE_LOG(LogElysiumWorld, Log,
 			TEXT("world '%s': %d hint(s) took a node id past the network's %d nodes (DAT_106c994c)"),
-			*Defs.MapName, PlaceSet->OutOfRangeCount(), PlaceSet->NumNodes());
+			*Defs.MapName, SpawnMisses, PlaceSet->NumNodes());
 	}
 	Hints.Reset();
 	for (const FElysiumEntityDef& Def : Defs.Defs)

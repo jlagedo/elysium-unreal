@@ -60,13 +60,18 @@ void FElysiumPlaceSet::AdoptRows(TArray<FElysiumPlaceRow> InRows, int32 InUsedHu
 	Attached.Init(FElysiumEntityHandle::Invalid(), Rows.Num());
 }
 
+int32& ElysiumAiNetwork::NodeMissCounter()
+{
+	static int32 Count = 0;                                                    // DAT_106c994c
+	return Count;
+}
+
 void FElysiumPlaceSet::BeginMapSpawn()
 {
 	// `0x102f6690`: `DAT_10926a3c = 0`, beside a fresh `ai_network` whose nodes the ctor
-	// `0x102fc5d0` builds with `+0x9c = 0` and `+0xa0 = 0`. `DAT_106c994c` is the fresh network's
-	// count of hints that missed it.
+	// `0x102fc5d0` builds with `+0x9c = 0` and `+0xa0 = 0`. `DAT_106c994c` is not touched: nothing
+	// in the image zeroes it.
 	Counter = 0;
-	OutOfRange = 0;
 	Cooldowns.Init(0.0f, Rows.Num());
 	Attached.Init(FElysiumEntityHandle::Invalid(), Rows.Num());
 }
@@ -303,7 +308,7 @@ int32 FElysiumPlaceSet::ResolveHintNode(int32 NodeId)
 	{
 		return NodeId;
 	}
-	++OutOfRange;
+	++ElysiumAiNetwork::NodeMissCounter();
 	return INDEX_NONE;
 }
 
@@ -320,7 +325,7 @@ int32 FElysiumPlaceSet::SpawnNodeRow(const FElysiumEntityHandle& Hint)
 		}
 		else
 		{
-			++OutOfRange;
+			++ElysiumAiNetwork::NodeMissCounter();
 		}
 	}
 	++Counter;                                                                 // 0x102d7a28 INC EDX

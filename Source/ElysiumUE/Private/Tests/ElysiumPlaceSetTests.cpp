@@ -139,6 +139,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 	AddNode(Defs, TEXT("info_node_cover_low"), TEXT("cover"), {});                                        // 5
 	AddNode(Defs, TEXT("info_node_crosswalk"), TEXT("past"), {});                                         // 6
 	AddNode(Defs, TEXT("info_target"), TEXT("bystander"), {});                                            // 7
+	const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                      // DAT_106c994c, never reset
 	World.Load(MoveTemp(Defs));
 
 	const FElysiumPlaceSet& Places = World.Places();
@@ -179,7 +180,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("...its id is the counter even past the network (0x102d2fce)"), Past->NodeId, 3);
 	}
-	TestEqual(TEXT("...and it counted out (DAT_106c994c)"), Places.OutOfRangeCount(), 1);
+	TestEqual(TEXT("...and it counted out (DAT_106c994c)"), ElysiumAiNetwork::NodeMissCounter() - Misses, 1);
 	TestNotNull(TEXT("a non-node row is untouched"), World.Entities()[7].Get());
 	TestEqual(TEXT("the counter stands after the last node row"), Places.SpawnCounter(), 4);
 	TestEqual(TEXT("five live hints on the list"), World.HintList().Num(), 5);
@@ -193,7 +194,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("...taking the next id"), Made->NodeId, 4);
 	}
-	TestEqual(TEXT("...past the network, so it counts out"), World.Places().OutOfRangeCount(), 2);
+	TestEqual(TEXT("...past the network, so it counts out"), ElysiumAiNetwork::NodeMissCounter() - Misses, 2);
 	FElysiumEntityDef RuntimePlain;
 	RuntimePlain.Classname = TEXT("info_node");
 	TestFalse(TEXT("a runtime node row with no hint builds nothing"),
@@ -208,7 +209,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 	// `0x102f6690`: a fresh map load zeroes the counter and the node words.
 	World.Places().BeginMapSpawn();
 	TestEqual(TEXT("BeginMapSpawn zeroes the counter"), World.Places().SpawnCounter(), 0);
-	TestEqual(TEXT("...and the out-of-range count"), World.Places().OutOfRangeCount(), 0);
+	TestEqual(TEXT("...but not DAT_106c994c, which nothing in the image zeroes"), ElysiumAiNetwork::NodeMissCounter() - Misses, 2);
 	TestFalse(TEXT("...and detaches every hint"), World.Places().AttachedHint(0).IsSet());
 	return true;
 }
@@ -231,6 +232,7 @@ bool FElysiumPlaceSetStorageTest::RunTest(const FString&)
 	Places.AdoptRows({ Place(2, FVector::ZeroVector), Place(2, FVector::ZeroVector) }, (1 << 0) | (1 << 19),
 		{ Human, Rat }, { FIntPoint(0, 1) });
 	Places.BeginMapSpawn();
+	const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                      // DAT_106c994c, never reset
 	TestTrue(TEXT("adopted"), Places.IsAdopted());
 	TestTrue(TEXT("rows are indexed by position"), Places.Row(1).NetworkIndex == 1);
 	TestTrue(TEXT("IsValidNode bounds"), Places.IsValidNode(1) && !Places.IsValidNode(2) && !Places.IsValidNode(-1));
@@ -249,12 +251,12 @@ bool FElysiumPlaceSetStorageTest::RunTest(const FString&)
 
 	// `0x102d3e60`.
 	TestEqual(TEXT("-1 resolves to no node"), Places.ResolveHintNode(INDEX_NONE), static_cast<int32>(INDEX_NONE));
-	TestEqual(TEXT("...uncounted"), Places.OutOfRangeCount(), 0);
+	TestEqual(TEXT("...uncounted"), ElysiumAiNetwork::NodeMissCounter() - Misses, 0);
 	TestEqual(TEXT("an id in the network resolves to itself"), Places.ResolveHintNode(1), 1);
 	TestEqual(TEXT("an id past it resolves to no node"), Places.ResolveHintNode(2), static_cast<int32>(INDEX_NONE));
-	TestEqual(TEXT("...and counts out"), Places.OutOfRangeCount(), 1);
+	TestEqual(TEXT("...and counts out"), ElysiumAiNetwork::NodeMissCounter() - Misses, 1);
 	TestEqual(TEXT("a negative id other than -1 counts out too"), Places.ResolveHintNode(-5), static_cast<int32>(INDEX_NONE));
-	TestEqual(TEXT("...twice now"), Places.OutOfRangeCount(), 2);
+	TestEqual(TEXT("...twice now"), ElysiumAiNetwork::NodeMissCounter() - Misses, 2);
 	Places.BeginMapSpawn();
 	TestEqual(TEXT("a new map spawn zeroes the cooldowns"), Places.NodeCooldown(1), 0.0f);
 	return true;
@@ -283,13 +285,14 @@ bool FElysiumPlaceSetRestoreTest::RunTest(const FString&)
 	// Nothing about a node is saved: a restored map starts from a fresh network and the hint's own
 	// `OnRestore` finds its node again by its restored `m_nNodeID`.
 	World.Places().BeginMapSpawn();
+	const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                      // DAT_106c994c, never reset
 	Hint->OnPostRestore(World);
 	TestEqual(TEXT("the restored hint relinks onto its node (+0xa0)"), World.Places().AttachedHint(0), Hint->Handle);
 	TestEqual(TEXT("...and stands at the node's raw origin (Teleport, vtable +0x2d4)"), Hint->Origin, NodeOrigin);
 	const FVector LooseOrigin = Loose->Origin;
 	Loose->OnPostRestore(World);
 	TestEqual(TEXT("a standalone hint takes the no-node arm and stays put"), Loose->Origin, LooseOrigin);
-	TestEqual(TEXT("...counting nothing"), World.Places().OutOfRangeCount(), 0);
+	TestEqual(TEXT("...counting nothing"), ElysiumAiNetwork::NodeMissCounter() - Misses, 0);
 	return true;
 }
 
@@ -371,6 +374,7 @@ namespace ElysiumPlaceSetTests
 		FElysiumPlaceSet Places;
 		Places.Adopt(Asset);
 		Places.BeginMapSpawn();
+		const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                  // DAT_106c994c, never reset
 		TArray<FIntPoint> OutOfRange;
 		for (int32 Index = 0; Index < Defs.Defs.Num(); ++Index)
 		{
@@ -403,7 +407,7 @@ namespace ElysiumPlaceSetTests
 		Test.TestTrue(*FString::Printf(TEXT("%s: the out-of-range rows match the bake (%d at run time, %d baked)"), Map,
 			OutOfRange.Num(), Baked.Num()), OutOfRange == Baked);
 		Test.TestEqual(*FString::Printf(TEXT("%s: DAT_106c994c counts exactly those"), Map),
-			Places.OutOfRangeCount(), Baked.Num());
+			ElysiumAiNetwork::NodeMissCounter() - Misses, Baked.Num());
 	}
 
 	void CheckContent(FAutomationTestBase& Test, const FContentPins& Pins)

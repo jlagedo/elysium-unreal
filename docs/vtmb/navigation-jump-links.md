@@ -2155,7 +2155,11 @@ _The reads story 4 made to land, each re-read from the listing and cited at its 
   `FUN_102d2f30` at `0x102d2fce` before the hint's own `Spawn` — **even out of range**. It is
   attached at `node+0xa0` iff `0 <= counter < NumNodes` (`0x102d7a04 JL` / `0x102d7a0f JGE`);
   otherwise `DAT_106c994c++` (`0x102d7a3b`), and only when a hint was made (`0x102d79fa TEST
-  EBX,EBX`): a row with no hint moves the counter and counts nothing.
+  EBX,EBX`): a row with no hint moves the counter and counts nothing. `DAT_106c994c` is one DLL
+  global shared by every node reader (the hint lookup `0x102d3e60`, the patrol readers, `0x1027db30`)
+  and nothing in the image zeroes it: `0x102f6690` zeroes only `DAT_10926a3c`, the patrol-pool reset
+  `0x10307d00` only its cursor `DAT_109363f8`. The port keeps it as one process static
+  (`ElysiumAiNetwork::NodeMissCounter`); nothing reads it for behaviour.
 - **Every node authoring entity is removed** on every arm (`0x1000e255` → `0x101cd970`).
 
 The port walks the def array in BSP order inside `FElysiumEntityWorld::Load`, after

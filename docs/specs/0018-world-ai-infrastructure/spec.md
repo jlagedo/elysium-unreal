@@ -836,7 +836,9 @@ its recovery is written in the oracle section it names.
   (`UElysiumMapPlaces`), which the travel gate `HasBakedMap` now requires. Runtime:
   `FElysiumPlaceSet`, owned by the entity world — the rows, `GetPositionCm` (`0x102fb0d0`, all
   three arms, the climb arm included), the node cooldown `+0x9c` (storage and read), the attached
-  hint `+0xa0`, the counter `DAT_10926a3c` and the out-of-range count `DAT_106c994c`; the counter
+  hint `+0xa0` and the counter `DAT_10926a3c` (the out-of-range count `DAT_106c994c` is one
+  process-wide word, `ElysiumAiNetwork::NodeMissCounter`, never reset -- `0x102f6690` and the
+  patrol-pool reset `0x10307d00` zero only their own words); the counter
   runs in `FElysiumEntityWorld::Load` and writes `FElysiumHint::NodeId`, retiring every node row
   that makes no hint; `CAI_Hint::OnRestore 0x102d3ec0` relinks as `FElysiumHint::OnPostRestore`
   (retail saves no node state). The seams answer from the registry: the patrol (`PatrolNodeIdFor`

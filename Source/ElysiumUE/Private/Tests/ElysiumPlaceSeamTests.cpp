@@ -402,6 +402,7 @@ bool FElysiumPlaceSeamStandoffCooldownTest::RunTest(const FString&)
 	Row.Type = 2;
 	Places.AdoptRows({ Row });
 	Places.SetNodeCooldown(0, 50.0f);
+	const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                      // DAT_106c994c, never reset
 	FElysiumNpcBase::FHintWords Hint;
 	Hint.bValid = true;
 	Hint.NodeId = 0;
@@ -421,7 +422,7 @@ bool FElysiumPlaceSeamStandoffCooldownTest::RunTest(const FString&)
 	Words.ReactionsLeft = 3;
 	FElysiumNpcBase::StandoffSelect(Words, Conditions, true, true, &Hint, &Places, 1.0);
 	TestEqual(TEXT("an id past the network writes nothing"), Places.NodeCooldown(0), 10.0f);
-	TestEqual(TEXT("...and 0x102d3e60 counts it once"), Places.OutOfRangeCount(), 1);
+	TestEqual(TEXT("...and 0x102d3e60 counts it once"), ElysiumAiNetwork::NodeMissCounter() - Misses, 1);
 	return true;
 }
 

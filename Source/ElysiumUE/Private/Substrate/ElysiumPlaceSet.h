@@ -9,8 +9,8 @@
 // 0018 story 4's place set. One per entity world (`FElysiumEntityWorld::Places`).
 //
 // The rows are the map's baked nodes (`UElysiumMapPlaces`), copied in at map activation and never
-// changed after. Beside them the place set owns the node's two run-time words and the two globals
-// `CNodeEnt::Spawn` (`0x102d78d0`) counts with:
+// changed after. Beside them the place set owns the node's two run-time words and the global
+// `CNodeEnt::Spawn` (`0x102d78d0`) numbers node rows with:
 //
 //   node `+0x9c`   the node cooldown (float, 0 from the ctor `0x102fc5d0`). Story 9 writes it;
 //                  this holds the storage and the read.
@@ -18,8 +18,10 @@
 //                  entity handle.
 //   `DAT_10926a3c` the node-row spawn counter, zeroed by `0x102f6690` at `CWorld::Precache` before
 //                  any BSP entity spawns (`BeginMapSpawn`).
-//   `DAT_106c994c` the out-of-range count: a hint whose node id is past the network, counted by
-//                  `CNodeEnt::Spawn`'s loaded arm and by the node lookup `0x102d3e60`.
+//
+// The other global `CNodeEnt::Spawn` touches, `DAT_106c994c` (a node id outside the network), is
+// not the place set's: it is ONE DLL-wide word every node reader bumps and nothing ever zeroes
+// (`0x102f6690` zeroes only `DAT_10926a3c`), so it lives outside any world -- `NodeMissCounter`.
 //
 // Nothing here is saved. Retail has no datamap for `CAI_Node` or the network (the `ai_network`
 // entity's `CAI_NetworkManager` map is two function-table rows), so a restored map starts every node
@@ -29,6 +31,16 @@
 // (`0x102f47f0`) for the rebuild -- is never taken here: every shipped map carries its AIN and the
 // bake is its only producer. A world with no adopted asset (a headless test world, or a map the
 // travel gate would have refused) is a loaded network of zero nodes, whose hints all count out.
+
+namespace ElysiumAiNetwork
+{
+	// `DAT_106c994c`: the count of node ids met outside the network -- by `CNodeEnt::Spawn`'s loaded
+	// arm, the hint node lookup `0x102d3e60`, the patrol readers (`0x102aa640`, `0x102aa860`,
+	// `0x102a3a4e`, `0x1029f6c0`, `0x10307ac0`) and `0x1027db30`. A process static, as retail's is a
+	// DLL global: never reset by a map load or a new network. Nothing reads it for behaviour.
+	int32& NodeMissCounter();
+}
+
 class FElysiumPlaceSet
 {
 public:
@@ -44,8 +56,8 @@ public:
 	bool IsAdopted() const { return bAdopted; }
 	const FString& MapName() const { return AdoptedMapName; }
 
-	// `0x102f6690` at `CWorld::Precache`: a fresh network for this map load. The counter back to 0,
-	// the out-of-range count back to 0, and every node's run-time words to their ctor values.
+	// `0x102f6690` at `CWorld::Precache`: a fresh network for this map load. The counter back to 0
+	// and every node's run-time words to their ctor values (`NodeMissCounter` is left alone).
 	void BeginMapSpawn();
 
 	// --- The nodes ------------------------------------------------------------------------------
@@ -119,9 +131,6 @@ public:
 	// not a hint was made. Answers the counter the row took -- the hint's `m_nNodeID`.
 	int32 SpawnNodeRow(const FElysiumEntityHandle& Hint);
 
-	// `DAT_106c994c`.
-	int32 OutOfRangeCount() const { return OutOfRange; }
-
 	// --- Map-wide words -------------------------------------------------------------------------
 
 	// The OR of `1 << hull` over every hull a link of this map's graph declares. 0 when unadopted.
@@ -142,7 +151,6 @@ private:
 	FString AdoptedMapName;
 	int32 HullBits = 0;
 	int32 Counter = 0;                               // DAT_10926a3c
-	int32 OutOfRange = 0;                            // DAT_106c994c
 	bool bAdopted = false;
 
 	const FElysiumPlaceWanderCap* FindWanderCap(int32 Hull) const;

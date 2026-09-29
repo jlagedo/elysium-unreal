@@ -82,7 +82,6 @@ namespace
 		FElysiumNpc::FPatrolPathRecord Slots[FElysiumNpc::PatrolPathPoolSize];
 		bool bInUse[FElysiumNpc::PatrolPathPoolSize] = {};
 		int32 Cursor = 0;
-		int32 NodeMisses = 0;   // DAT_106c994c
 	};
 
 	FScript19PatrolPool& Script19PatrolPool()
@@ -158,8 +157,7 @@ void FElysiumNpc::ResetPatrolPathPool()
 		Pool.bInUse[Index] = false;   // 0x10307e00
 		Pool.Slots[Index] = FPatrolPathRecord();
 	}
-	Pool.Cursor = 0;
-	Pool.NodeMisses = 0;
+	Pool.Cursor = 0;              // 0x10307d00: DAT_109363f8 = 0 -- and nothing else (DAT_106c994c stands)
 }
 
 // `0x10307c20`.
@@ -206,7 +204,7 @@ bool FElysiumNpc::PatrolPathNextPoint(FPatrolPathRecord& Path)
 
 int32& FElysiumNpc::PatrolNodeMissCounter()
 {
-	return Script19PatrolPool().NodeMisses;
+	return ElysiumAiNetwork::NodeMissCounter();                // DAT_106c994c, the one global
 }
 
 // --- `0x1029f460` ----------------------------------------------------------------------------------

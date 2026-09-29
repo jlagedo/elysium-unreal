@@ -831,6 +831,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		Row.Type = 2;
 		Places.AdoptRows({ Row, Row });
 		Places.BeginMapSpawn();
+		const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                  // DAT_106c994c, never reset
 		const FElysiumEntityHandle HintHandle(7, 3);
 
 		FElysiumNpcBase::FHintWords Standalone = MakeHint(15000);   // m_nNodeID -1
@@ -839,13 +840,13 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		TestFalse(TEXT("a hint with no node id finds no node"), None.bNodeFound);
 		TestFalse(TEXT("so no node was claimed"), None.bClaimedNode);
 		TestTrue(TEXT("and nothing was teleported"), None.NodeOriginCm.IsNearlyZero());
-		TestEqual(TEXT("...and -1 is not counted out (0x102d3e60)"), Places.OutOfRangeCount(), 0);
+		TestEqual(TEXT("...and -1 is not counted out (0x102d3e60)"), ElysiumAiNetwork::NodeMissCounter() - Misses, 0);
 
 		FElysiumNpcBase::FHintWords Past = MakeHint(15000);
 		Past.NodeId = 2;
 		TestFalse(TEXT("an id past the network finds no node"),
 			FElysiumNpcBase::HintOnRestore(Past, HintHandle, Places).bNodeFound);
-		TestEqual(TEXT("...and counts out (DAT_106c994c)"), Places.OutOfRangeCount(), 1);
+		TestEqual(TEXT("...and counts out (DAT_106c994c)"), ElysiumAiNetwork::NodeMissCounter() - Misses, 1);
 
 		FElysiumNpcBase::FHintWords Bound = MakeHint(15000);
 		Bound.NodeId = 1;

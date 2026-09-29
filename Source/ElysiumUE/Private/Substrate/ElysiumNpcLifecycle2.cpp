@@ -79,7 +79,7 @@ int32& FElysiumNpc::NodeGraphHullIndex()
 int32& FElysiumNpc::NodeIndexErrorCount()
 {
 	// `DAT_106c994c` is ONE global: the ped-link restore, the node-network validation `0x10307ac0`
-	// and the patrol steps all bump the same word, which family Script19 carries in the patrol pool.
+	// and the patrol steps all bump the same word (`ElysiumAiNetwork::NodeMissCounter`).
 	return PatrolNodeMissCounter();
 }
 
