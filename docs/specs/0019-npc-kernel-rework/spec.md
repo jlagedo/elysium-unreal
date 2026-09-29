@@ -1119,14 +1119,22 @@ green, and `coverage.md` shows the change.
       TaskFails are three `0xc` "Don't have a route" on `patrol_cop_north`. Stub tally against the
       60-surface baseline: one new surface, `CBaseAnimating::SetAttackExtentsForSequence 0x10090c80`
       (fires at every spawn); 54 baseline surfaces unreached because the smoke has no combat or death.
-      Open questions, recorded for the RE backlog and the navigator/place stories (0018/4, 0018/5):
-      patrols stall (the interesting-place loop takes `sentry2` after node 1 of `FOLLOW_PATROL_PATH_WALK
-      0x67`; `monk_upstairs_podium` parks at node 5/5 re-issuing a zero-length move; the type-0
-      `info_node_patrol_point` route of `patrol_cop_north` never builds); the think cadence of
-      `NPCThink 0x10292de0`'s `CalcNextUpdateThink`/`CalcNextNormalThink` minimum (dialogue NPCs think
-      every frame, distant ones every 12–16 s); `NPCInit` compares `gpGlobals->curtime` against 1.0,
-      which restarts per level, while the port's clock does not; `GatherConditions` never observed on
-      three thinking NPCs (`bAI = IsThinkDue(m_flNextAIThink)` at `0x10290700`).
+      The open observations were verdicted against the listing (`pass-i/L13-smoke-verdicts.md`): the
+      patrol stalls were one story-8 divergence -- `TASK_NEXT_PATROL_POINT`'s helper `0x102aa9e0` had been
+      ported without `NextPoint 0x10307b80`, the path release `0x1029f5d0` and the interest draw
+      `0x1029f650`, so no patrol index ever advanced, and the port handed a `use_interesting` body to the
+      ambient loop where retail's selector tests the patrol arm `0x102af6b6` before the interest arm
+      `0x102af6f3`. Fixed as `5b0a5a40` (three tests). A third run on `main` at `5b0a5a40`
+      (`pass-i/L13-smoke-r3.md`): the monk walks 5→1 and wraps (repeat 999→992), `sentry2` walks 1→2→3
+      and back under `0x67` and is never handed to the interesting-place loop; the earlier passes hold.
+      The think cadence and the "gathered t=-1" display are faithful (`0x102936a1..c0`, `0x1026f1ad`).
+      Left with other rows: the monk's wrap leg and the hub cops' legs fail `0xc` "Don't have a route"
+      over jump link 390 / unconnected type-0 nodes (navigator row 08, geometry row 09); the mover reports
+      success ~83 units short of a node under tolerance 20 (row 08); `NPCInit` compares a per-level
+      `curtime` while the port's clock does not restart (world/session); `SetAttackExtentsForSequence
+      0x10090c80` is a `CBaseAnimating` stub reached at every spawn (animation); a hub script reads
+      `prostitute_1.classname`, which the port's entity wrapper does not expose (scripts); retiring the
+      ambient loop's case-1 arms stays with 0002/11.
   - *Tests:* `Elysium.Substrate` **1,326 → 1,613, 0 failed**, at StartTask19
     (`reports/tests/20260928T032303.105515Z-elysium-substrate`). Family suites: Misc19 31, Script19
     23, Conditions19 32, Damage19 28, Select19 32, RunTask19 46, Werewolf19 17, Boss19 12, StartTask19
