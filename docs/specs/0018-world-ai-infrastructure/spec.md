@@ -882,7 +882,7 @@ its recovery is written in the oracle section it names.
   - *New line.* `monk_upstairs_podium TaskFail 0x1d` fires between `SetupPatrolType` and `FollowPatrolPath` after a cold `map_load`. It is unproven whether this is new; story 4 does not touch the patrol cells.
   Size: M. Effort: Opus / high.
 
-- [ ] **5. The navigator and the movement seam.**
+- [x] **5. The navigator and the movement seam.** Landed 2026-09-29.
   Retail, the behaviour kept: `SetGoal 0x102ecd20` — goal types 1 target entity, 2 the enemy's
   last known position, 3 the goal-entity chain, 4 a position, 6 a cover position, 7, 8 an
   interesting place (the pedestrian walk), 9; the tolerance rules (`-2.0` the hull's width, 26
@@ -987,6 +987,138 @@ its recovery is written in the oracle section it names.
   and the interesting-place cache `+0x6300` and patrol-interest cache `+0x659c` both wiped. So
   "the goal and the pedestrian byte survive a schedule change mid-traversal" is true; "the
   schedule's tolerance survives" is not.
+  **Corrected 2026-09-29 (wave 0 reads; oracle `navigation-jump-links.md` § "The navigator's words
+  and getters", "Route-control flags, their issuers and the blocked-move arms",
+  "`CAI_Navigator::Move 0x102eff40`, walked", "The think gate, the path-corner chain and the step
+  rise").** *"Port today" was stale:* the retry window, `SetGoal`'s tolerance rules and
+  `OnScheduleChange`'s `PRESERVE_PATH` / Jump / Climb handling were ported before this story.
+  *Correction (c)'s "goal flag `0x8`" is a misread:* the `& 8` word is `BuildLocalRoute`'s FOURTH
+  ARGUMENT, a route-control literal meaning "this leg ends at the goal" (waypoint `+0x28`), not
+  goal word `+0x24`. Blocked-move acceptance (mask `0x100` + that literal) applies only to walkers'
+  local attempt and the node-route exit leg; the NPC-blocked `D_LI` re-probe (mask `0x10`) only in
+  the local attempt. *Goal flag `0x2` has ONE shipped issuer:* Troika task `0xc7
+  GET_PATH_TO_ENEMY_CLOSEST`, schedule `SCHED_VTZIMISCE_ATTACK_CLOSEST`; flags `0x4` and `0x8` have
+  none. *`nav+0x44`, the retry interval, is never written non-zero:* the constructor skips
+  `+0x40..+0x4c`, so retail retries every think until the deadline and the port's 0 is right.
+  *Arrival is NOT `path+0x28`:* a waypoint arrives at a constant `0.0625` (0.25 under the vphysics
+  cvar), 2-D for ground nav and 3-D otherwise; `path+0x28` is read only by the completion test
+  (`+ 0.1`). *`Move` never re-paths* (the re-path-on-move arm is dead by content), and *door `0x0e`
+  is not `Move`'s:* `SimplifyPath 0x102f13d0 -> 0x102f06e0 -> slot 531` raises it. *The census
+  above is the wrong graphs:* "1,331 links over 40 maps, hub 450" is the BASE `Vampire/` set
+  (1,320 / 40) mixed with the patch hub count; the patch graphs the game runs on carry **1,277
+  flagged links over 32 maps, hub 461**, and the gate judges those. *The 0.8 s gate is relative*
+  to `CWorld::Precache` (re-run on a restore), not to a map-absolute clock; Troika's `NPCThink`
+  gates only on the loader byte `DAT_1093408c` and re-arms at 0.1 s, and `manager+0x658` is read
+  only by the base body `0x1026ca80`. Port mislabels found on the way: `0x102ee620` is the goal
+  TYPE (`path+0x5c`; `ValidateNavGoal`'s 6 is a cover goal), `0x102ee680` is `IsGoalSet` (type
+  `!= 0`) and `IsGoalActive` is `0x102ee6a0` (`path+0x24`, a current waypoint exists),
+  `0x102ee2e0` reads `path+0x10` `m_bPaused`, `CalcIdealYaw` reads the movement activity
+  `path+0x2c` (`0x102ee3f0`), and `NavigatorGoalType` (`0x1027d990`) is the NAV type `nav+0x18`
+  (ManBat's `!= 2` is "not flying"). Type 3 (the goal-entity chain): `AdvancePath 0x102f0400`
+  fires each corner's `OnPass` with the NPC as activator and copies the corner's `speed` onto the
+  NPC; `wait` is never read. A step rise of 18-40 is refused by the probe (`-2`), stale-marked for
+  4 s and failed `0x0c`: a pin, not code.
+  **Landed 2026-09-29.** Runtime: `FElysiumNpcNavigator` (`ElysiumNpcNavigator.h`) holds the path
+  and goal words by their retail offsets (type `path+0x5c`, flags `+0x24`, paused `+0x10`, the
+  activity `+0x2c`, the completion distance `+0x28`; the nav type `nav+0x18`, the retry pair
+  `nav+0x40/0x44`), every writer and reader recovered, `ResetPath` clearing retail's four words
+  (`0x1030bb30`: flags, target, paused, `+0x20`). The seam is `FElysiumNpcMoveRequest` /
+  `FElysiumNpcMoveFacts` on `IElysiumNpcMotor`: the body reports FACTS (a request finished, how,
+  what stopped it, the blocker's class, the 2-D and 3-D distance left, the snap offset) and never
+  a verdict; the outcomes are the substrate's. `NavigatorMoveStep` is `CAI_Navigator::Move
+  0x102eff40` row for row: the gates (paused, `m_bShouldMove`, no goal type -> `0x0d`, no head
+  waypoint -> `0x0c`, `m_flMoveWaitFinished`), arrival at the constant `0.0625`, the world block
+  (`0x0c` with the 4.0 s stale mark `0x102f1fa0`), the stale-mark seam for the marks the port has
+  no source for, the NPC-blocker hold (`NavBlockerHold 0x102ef3e0`) and its head-leg re-issue
+  (the port re-issues the leg because Unreal's follower has already ended the request), the
+  second-contact window, the within-goal-tolerance acceptance (`0x102ef760`), the `path+0x28 + 0.1`
+  completion and the target-hit completion (`NotifyHit` honours `bSelfMoved`; the player pawn is
+  named as a blocker). `TaskMovementComplete`'s `AdvancePath` and the path-corner chain (`OnPass`,
+  `speed`; modes 4/5 lay the chain through `ScheduledFollowPath`; every corner arrives at
+  0.0625) stand, as does the goal-flag-2 node route (`SetGoal`'s arm at
+  `ElysiumNpcBaseStartTask.cpp` ~:1976, refusing with no network or no node near the goal). The
+  goal projects at the engine's DEFAULT extent (retail never snaps; the snap offset is a fact,
+  91 x 91 x 91 cm). The pedestrian filter `ElysiumNavQueryFilter_Pedestrian` prices 3's area by
+  the ONE `RandomInt(5, 10)` per request, goal type 8 only (type 9's animal walk and plain
+  requests take the default filter); `pipeline/.../validation/pedestrian_link_census.py` judges it
+  link by link against the published units: **1,277 flagged links over 32 maps, hub 461 flagged
+  against 1,185 unflagged hull-0 ground links**, none flagged on the other 76. The 0.8 s gate:
+  one per-world timestamp, `FElysiumEntityWorld::BuildStamp` (`BuildStampSeconds()`), stamped at
+  build; `Think19` reads `now - BuildStamp >= 0.8` for the base body only; Troika gates on the
+  loader byte, which answers false only while a map's place set is pending
+  (`SetPlaceSetPending`, wired in `AdoptMapPlaces`; a bare world thinks, as retail's rebuild arm
+  sets the byte too); a restore re-stamps it (`ElysiumEntityWorldPersistence.cpp`). The seams
+  the story left to others answer "nothing" and name the retail field. *Found outside the
+  list:* `ChangeSchedule 0x10280de0` installed UNTRANSLATED ids; retail's `SetSchedule(int)
+  0x102cc1f0` runs slot 440 `TranslateSchedule` first. Fixed in `ElysiumNpcBaseSchedule.cpp`.
+  **Acceptance, each line answered.** *Each goal type issued, its tolerance observed at arrival:*
+  `Elysium.Substrate.Navigator.SetGoal.WritesTheWords`, `...MoveStep.Arrived.{GoalWaypoint,
+  NonGoalHead,LastCornerInPass}`, `...MoveStep.Blocked.WithinGoalTolerance`,
+  `...CornerChain.{ThreeCorners,SingleCornerIsGoal,NullNextCornerEndsSilently,
+  PathcornerTask_0x120}`, `...GoalFlag2.{NodeRoute,NoNetworkRefuses,NoNodeNearGoalRefuses}`; live,
+  the unblocked cops ARRIVE (below). *A refused route raises `0x0c` at once, and at the deadline
+  with the retry word:* `...RetryWindow.NoIntervalRetriesEveryThink` (the interval is never
+  non-zero in retail, so the "with it" arm has no shipped case), `...MoveStep.Gates.
+  {NoGoalType,NoHeadWaypoint}`, `Elysium.Visual.NpcBody.MoveFacts.{RefusedRequest,
+  NoController,AlreadyAtGoal,EndsAndNewRequest,BlockerAndPartial}`, `...MoveRequest.
+  FollowerRequest`. *A schedule change drops the goal and the pedestrian byte, `PRESERVE_PATH`
+  keeps them:* `...Navigator.Reset.Values`, `...Pedestrian.ByteAndMultiplier`, and the
+  `ChangeSchedule` translation fix (the `PRESERVE_PATH` / Jump / Climb handling itself pre-dates
+  the story). *A pedestrian request prices the hub's roadway and a plain one does not:*
+  `Elysium.Content.NavArea.{Hub,Tutorial,PedestrianFilter}`, `test_pedestrian_link_census.py`,
+  and the smoke. The rest of the suite: `...MoveStep.Gates.{Paused,ShouldMoveClear,MoveWait}`,
+  `...MoveStep.Blocked.{NpcHoldResumes,NpcHoldExhaustedFails,SecondContactWindow,NpcWhileWalking,
+  WorldFailsWithStaleMark}`, `...MoveStep.OnNavFailed.ResetsBlockerMemory`,
+  `...MoveStep.LegacyMotor.StatusFallback`, `...Navigator.{Getters.NoGoal,PathSample.
+  FromMoveFacts}`, `Elysium.Substrate.Think19.Gate.{BaseLine,RestoreRestamps,
+  TroikaIgnoresNetworkGate,LoaderByteFollowsPlaceSet,AiStepReadsPathHead}`.
+  **Smoke (2026-09-29, `sm_hub_1`, second pass at `998d85d1`; the first pass is superseded).**
+  An UNBLOCKED cop arrives: three of three wander walks of 45-50 m (40-52 s) ended `Move: arrived`
+  with 1.0, 1.0 and 14.8 cm left, no `TaskFail`. Pedestrian requests (goal type 8) carry x5..x9
+  and the pedestrian filter (9 first requests: x5 once, x6 once, x7 twice, x8 three times, x9
+  twice); every plain walk (cop wander, `patrol_cop`'s path-corner walk) is x0 with the default
+  filter, with no mixed case. 0 `ensure` / assertion / crash over ~153k log lines, 0
+  `TaskFail 0x0d`. Pedestrian outcomes seen: `arrived` (1.0 cm), `arrived (blocked inside the
+  goal tolerance, 0x102ef760)` (41.4 cm), `0x0c`, and the retail `0x22` arm.
+  **Named modernizations:** WHEN the NPC hold starts (after Unreal's follower gives the request
+  up, not at first contact); the body's Success end counts as arrival, and a partial-path end is
+  not arrival; the 1 cm follower floor (`FollowerArrivalFloorCm`) under retail's 0.0625-unit
+  arrival; Unreal's crowd avoidance stands for the local steer and `PrependLocalAvoidance`; the
+  flag-2 route is Unreal's between the two bound nodes; the pedestrian price is the filter's
+  area cost, drawn once per request as retail draws it; the re-issued leg's `Blocked` end is
+  judged as of the re-issue time (Unreal's follower takes ~5 s to give a request up, longer than
+  retail's 3.0 s window), with retail's own `distClear < 1.0` (`0x102ef0e0`, `0x10449280`) deciding
+  whether the leg walked on.
+  **Stays open / handed on.** (1) *The NPC hold's cadence* — found by the second smoke and fixed
+  the same day (`414ac129`): a cop held by an NPC re-armed `hold start` every ~14.8 s for 3 min,
+  because every think re-read the same `Blocked` end as a new contact. The 14.8 s is RETAIL's
+  cadence, kept: `CalcNextNormalThink 0x10290b60` gives `(dist − 2048) · 3 / 4096` s, ×10 out of
+  the player's PVS (`+0x6278`, `_DAT_1044e664`) capped at 16 s (`_DAT_10451ad0`), ported in
+  `ElysiumNpcThinkCadence.cpp`; the +0.1 s re-arm is only the refused-gate path (`0x10293411`).
+  The hold now reads a re-read end only for its hold test (`curtime − nav+0x58 <= −0.001`), a
+  hold over re-issues the leg, a lapsed window restarts from that think (`nav+0x60`), and the
+  re-issued leg's `Blocked` end by the same NPC with `< 1.0` unit walked is the exhausted hold →
+  `−3` → `0x0c`. Tests `…Blocked.NpcHoldRetailCadence` (0.1 s thinks, the −0.001 edge at 0.2485 /
+  0.2495) and `…Blocked.NpcHoldSlowCadence` (15 s thinks: Blocked → hold → re-issue → Blocked →
+  `0x0c` in three thinks). Third smoke (`smoke3.md`): cop `#2557`, both cops forced at spawn —
+  body `Blocked` → `hold start` +1.3 s → `hold over, head leg re-issued` +14.8 s → second
+  `Blocked` → `blocked by an NPC (−3), failed 0x0c` +10.2 s; three `hold start` / three `hold over`
+  in the whole run, no loop; two pedestrians held and then `arrived (blocked inside the goal
+  tolerance, 0x102ef760)`; the cop blocked by the car (not an NPC) failed `0x0c` with no hold, as
+  retail's `−1`. One more jump refusal seen (hub links 997 / 797, `cannot begin traversal`) →
+  row 13's list. (2) *The `copcar` pair's stall at spawn* is the police
+  car, a `prop_dynamic` the NavMesh does not carry: both stop at x~3861 after 2.3 m whether or not
+  the other moves, and moved off it they arrive. Nav obstacles for prop collision -> **3**'s
+  contents marking and row 13 (7). (3) *The jump seam's refusal of legal jumps* (hub link 88,
+  tutorial 390) and retail's legality per direction -> **7** (row 13); *the door policy* behind
+  slot 531 and `0x0e` -> **7**. (4) `RouteLengthTo` stays a seam -> **6** (the path-length
+  service). (5) *The rat links* 406 / 721 / 1472 -> **21-10**. (6) *`hw_hub_1`'s 124 of 513
+  UNFLAGGED ground links cross a `0x2000` box*: reported, not gated, cause uninvestigated ->
+  **21-9** (or 3's contents marking). (7) *The step-rise pin* (18-40, refused by the probe, `0x0c`
+  after the 4 s mark): story 3's harness report. (8) *Three 0.8 s-think tails are unwired:* the
+  `ai_node_graph_built` event and the dynamic-link initialisation `0x102cc900` -> **7**, the
+  per-NPC slot-584 pass `0x1028d8d0` -> `0019/6`. (9) `TaskMovementComplete` logs nothing; the
+  arrival is visible as `Move: arrived`.
   Size: L. Effort: Opus / high.
 
 - [ ] **6. Geometry services.**

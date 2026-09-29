@@ -627,6 +627,15 @@ pairs diffed, every disputed instruction re-read from the DLL).**
   `trace+0x28`, status left clear; else the last blocker, status `0x102e2d70(blocker)`,
   `+0x24 = |landing − cur|`.
 
+**Corrected 2026-09-29 (0018 story 5, the sections below):** (1) `nav+0x44` (`m_timePathRebuildDelay`), the retry
+interval `0x102f1dc0` adds to the next-try time, is NEVER written non-zero: its only store is the zero in the reset
+`0x102f28a0`, and the constructor `0x102eca50` skips `+0x40..+0x4c`, so a failed find retries on every later think until the
+`nav+0x40` deadline raises `0x0c`. (2) `0x102ee2e0` reads the byte `path+0x10` (`CAI_Path::m_bPaused`), not "goal active"
+(`IsGoalActive` is `0x102ee6a0`, `path+0x24 != 0`; `IsGoalSet` is `0x102ee680`, goal type non-zero). (3) The blocked-move rule's
+`& 8` in `0x10303850` is a route-control literal, `BuildLocalRoute`'s fourth argument stamped on each waypoint at `+0x28` ("this
+leg ends at the goal"), NOT goal word `+0x24`; story-5 correction *(c)*'s "goal flag `0x8`" was a misread, and the port needs no
+goal-flag input for it.
+
 **Unrecovered:** nothing in this section.
 
 ### The goal types, their issuers and the goal record (2026-09-21, 0018 story 5)
@@ -666,6 +675,13 @@ destination node, `0x102fd240`), bypassing the local / retry find; `0x4` — `Up
 0x10271b10` re-paths a type-1 goal when its target moves (and the comfort sweep's test,
 `conditions-and-states.md`); `0x8` — shifted into `0x102f1dc0`'s second argument
 (`0x102ed121`), where nothing recovered branches on it.
+
+**Corrected 2026-09-29 (0018 story 5, the sections below):** goal flag `0x2` has exactly ONE issuer, Troika task `0xc7
+`GET_PATH_TO_ENEMY_CLOSEST` (`0x102a4812`; `SetGoal` at `0x102a4921`), reached by shipped data through
+`SCHED_VTZIMISCE_ATTACK_CLOSEST`; flags `0x4` and `0x8` have no issuer (`0x8` is also inert end to end: `DoFindPath` never
+reads it). The goal-state word `0x102ee620` is the goal TYPE (`path+0x5c`), and `ValidateNavGoal`'s `== 6` is a cover goal, not a
+"goal state"; `nav+0x18` (`0x1027d990`) is the nav TYPE, a different word. See "Route-control flags, their issuers and the
+blocked-move arms" and "The navigator's words and getters" below.
 
 **Failure codes by type.** A refused route is `0x0c` for every type, through `0x102f1dc0` →
 `OnNavFailed 0x102eeae0` (`npc-ai/schedule-kernel.md` § "`SetGoal` DOES complete the task").
@@ -1138,6 +1154,655 @@ fires `crosswalk_south Walk` at +0, `DontWalk` +12, `crosswalk_east_west Walk` +
 +32; `hw_hub_1` `streetlight_timer_2` (40 s) fires `xwalk_4 Walk` +0 / `DontWalk` +20 and
 `xwalk_3 Walk` +20 / `DontWalk` +40. `sm_hub_2` and `sp_theatre` have crosswalk nodes and no
 timer: their pedestrians never wait.
+
+### The navigator's words and getters — CAI_Navigator, walked (2026-09-29, 0018 story 5)
+
+_Read from `vampire.dll` through the corpus (decompile, callers, datamap fields). Navigator words are
+`nav+N`; path words are `path+N` where `path = nav+0x30` (`m_pPath`); the NPC's navigator pointer is
+`npc+0x5d34` (`m_pNavigator`). Datamap names: `datamap_CAI_Navigator` (`0x102eca20`) and the `CAI_Path`
+datamap._
+
+**1. `nav+0x40` and `nav+0x44` — who writes them.**
+- `nav+0x40` (datamap `m_timePathRebuildMax`, float) has ONE non-zero writer: `SetRouteSearchTime
+  0x102886f0` (`MOV [ECX+0x40],EAX`), whose only caller is `CAI_BaseNPC::StartTask 0x102827f0` (the
+  `TASK_SET_ROUTE_SEARCH_TIME 0x50` arm, task string at `0x105d4dc4`, registered by `0x10316ff0`).
+- **`nav+0x44` (datamap `m_timePathRebuildDelay`, float) is NEVER written non-zero by any code.** Its
+  only store is the zero in the reset `0x102f28a0` (`+0x40`, `+0x44`, `+0x48`, `+0x4c` all `= 0`, then
+  clears memory bit `0x20` at `npc+0x5d8c`, then path reset `0x1030bb30`). No task, no ConVar, no
+  constructor default: the constructor `0x102eca50` stores `+0x04`, `+0x0c`, `+0x10`, `+0x18`, `+0x1c`,
+  `+0x20..+0x30`, `+0x34`, `+0x38`, `+0x50`, `+0x54..+0x64` and does NOT touch `+0x40..+0x4c`; the block is
+  `operator_new(0x68)` (`0x1027cf90`) / `(0x6c)` (humanoid, `0x10262430`) from the CRT heap
+  (`0x104312d5` -> `__nh_malloc`), which does not zero. So `+0x40..+0x4c` hold whatever the heap gave until
+  the first reset. The only other way a value reaches them is a save restore through the datamap fields
+  (the fields exist in `datamap_CAI_Navigator`, float-typed), which can only carry back what was written.
+  `+0x44` is therefore effectively the constant 0: the retry interval is a real WORD in the layout and a
+  real read in `0x102f1dc0`, but retail never gives it a value. (`vtmb_readers` resolves no typed access
+  for either offset; the reads found are all in `0x102f1dc0`.)
+- The reset `0x102f28a0` is reached from exactly two places: `SetGoal 0x102ecd20` when its flag argument
+  has bit `1` (`thunk 0x1000988b`), and `ClearGoal 0x102ee270` (which then calls slot 7 `0x102eea70`).
+  **A `SetGoal` with bit 1 zeroes the route search time `TASK_SET_ROUTE_SEARCH_TIME` wrote**, and every
+  `ClearGoal` does too. `SetGoal` itself never writes `nav+0x40` — the `+0x40` store in `0x102ecd20`
+  (`FLD hull; FMUL half`) is `path+0x40`, the waypoint tolerance.
+- Consequence for `0x102f1dc0`: on a failed find with `nav+0x40 != 0`, memory bit `0x20` is set,
+  `+0x48 = curtime + nav+0x40`, `+0x4c = curtime + nav+0x44`. With `+0x44 == 0` the next-try time is the
+  failing frame's own curtime, so the very next call (a later frame, the compare is `+0x4c < curtime`,
+  strict) retries; the retry runs every think until the find succeeds or `+0x48 < curtime` raises
+  `OnNavFailed(0xc, 1)`. A retry that fails again re-arms `+0x4c = curtime + nav+0x44` (i.e. curtime
+  again). A retry that succeeds clears bit `0x20` and, if the NPC's slot `+0x844` says not-`0x6e`-state, calls slot 2.
+  `path+0x44` is a different word: `-1` written on every find (`0x102f1dc0`, `0x102f2060`, `0x102f2330`)
+  and by the path constructor `0x1030bec0`.
+
+**2. The goal-state word `0x102ee620`.**
+- `0x102ee620` = `FUN_100113d8(nav+0x30)` = `*(path+0x5c)` = `CAI_Path::m_goalType` (datamap; guard byte
+  `m_bGoalTypeSet` at `path+0x58`). It is the goal TYPE, the SDK's `GetGoalType()`. Values: `0` none
+  (path constructor `0x1030bec0` and reset `0x1030bb30` both store 0); `1` target entity; `2` enemy; `3` path
+  corner / goal-entity chain; `4` location; `5` no issuer; `6` cover; `7` best-unknown; `8` interesting
+  place (pedestrian); `9` interesting place (animal) — the table in `navigation-jump-links.md` §"The goal
+  types" (`DoFindPath 0x102f2330` switch). `SetGoal` writes it through `0x1030ba50(path, goal+0)`.
+- `ValidateNavGoal 0x10280360` requires `== 6`: the goal is a COVER goal. With a non-null enemy (slot
+  `+0x29c`) it takes the goal position (`0x102ee140`), lifts it by the NPC's slot `+0x8e4` / `+0x854`
+  offsets, traces to the enemy (`+0x304` of the enemy, mask `0x2804091`), and if the trace fraction equals
+  `DAT_10449280` (a clear line — the "cover" does not cover) either sets condition `0x39` (when the
+  current schedule is interrupted by it) or `TaskFail(0x1b)` (`m_failLine 0xbc`, text
+  `AI_BaseNPC.cpp`). For any other type the body returns true untouched.
+- Readers of `0x102ee620` (the getter is called through `thunk 0x100037e2`; direct callers found by
+  `vtmb_grep`), with the value tested where the decompile shows it: `CAI_BaseNPC::SelectSchedule 0x1028a380`,
+  `CNPC_VAnimal::SelectSchedule 0x1035fb50`, `CNPC_VCombatman::SelectSchedule 0x10370230`,
+  `CNPC_VMoleman::SelectSchedule 0x1039fd20`, `CAI_BaseNPCTroika::SelectSchedule 0x102af660` (values not
+  read here); `CAI_BaseNPC::StartTask 0x102827f0`, `CAI_BaseNPCTroika::StartTask 0x102a1910`,
+  `CNPC_VWerewolf::StartTask 0x103ccda0` (values not read here); `CAI_BaseNPC::RunTask 0x10288780` (`!= 0`,
+  twice, plus a value passed on), `CAI_BaseNPCTroika::RunTask 0x102aacf0` (`== 0` test),
+  `CNPC_VWerewolf::RunTask 0x103cdfb0` (`== 0`), `CNPC_VZombie::RunTask 0x103e01d0` (`== 0`),
+  `CNPC_VMingXiaoTentacle::RunAI 0x1039e3d0` (`== 4` behind `0x102ee6a0`); `ValidateNavGoal 0x10280360`
+  (`== 6`); `CAI_BaseNPC::UpdateTargetPos 0x10271b10` (`== 1`); `CAI_BaseNPC::UpdateEnemyPos 0x10271900`
+  (`== 2`, and it also reads `3` / `1` from `nav+0x18`); `FUN_1028e480` (`== 7`); `FUN_1028e980` (`!= 0`,
+  behind a `nav+0x18` not-3-not-1 gate); `FUN_102729d0` `GetNavTargetEntity` (`2`, `1`, `7`, else
+  NULL); `FUN_102ecc40` (`2`, `1`, `7` — `pMoveTarget`); `CAI_BaseNPCTroika::UpdatePedestrianInfo
+  0x102a0d20` (`== 8`); `FUN_102a0bc0` (`== 8`); `FUN_102a0eb0` (bare read, result unused);
+  `CAI_BaseNPC::FUN_10280300` slot 153 -> `IsGoalSet` (`0x102ee680`); `CAI_BaseHumanoid::vfunc585
+  0x1025f1c0` and `FUN_102f02a0` (through `0x102ee680`). Also `CAI_Navigator::Move 0x102eff40` and
+  `DoFindPath 0x102f2330` read the word through `0x100113d8` directly.
+
+**3. `0x102ee140`, `0x102ee680`, and the two neighbours the port has crossed.**
+- `0x102ee140` (nav) -> `0x1000f89e(path)`: returns a pointer to a STATIC 3-float scratch
+  (`DAT_10936af0`, shared by every caller — copy it) holding `path+0x4c..+0x54` (`m_goalPos`) minus
+  `path+0x34..+0x3c` (`m_vecTargetOffset`), i.e. the SDK's `ActualGoalPosition`. There is no goal test: with
+  no goal it answers whatever the two triples hold. After the reset `0x1030bb30` both are `vec3_origin`
+  (`DAT_1070d1b0..b8` = 0,0,0 by `staticinit_101370b0`), so the answer is `(0,0,0)` — never "none". The path
+  constructor `0x1030bec0` sets goalPos to origin but does NOT write `+0x34..+0x3c` (heap garbage until
+  the first reset). `0x1030ba30` is the raw `&path.m_goalPos` (`path+0x4c`, no subtraction), read by `SetGoal`,
+  the route builder `0x102f2060` and the sink slot `0x102ef760`.
+- `0x102ee680` = `0x100113d8(path) != 0` (goal type non-zero): it is the SDK's `IsGoalSet`, NOT
+  `IsGoalActive`. The word `IsGoalActive` names is `0x102ee6a0`: `nav+0x30 != 0 && path+0x24 != 0` — a
+  CURRENT WAYPOINT exists (`path+0x24` = head of the waypoint list). `0x102ee2e0` is neither: it reads the
+  BYTE `path+0x10` (`CAI_Path::m_bPaused`), set to 1 by `0x102ee2a0` (`0x1030be80`) and cleared by `0x102ee2c0`
+  (`0x1030bea0`).
+- Other path words the NPC reads through the navigator: `0x102ee1a0` `path+0x28` goal tolerance (setter
+  `0x102ee1c0`); `0x102ee3f0` `path+0x2c` movement ACTIVITY (setter `0x102ee250`; path constructor and reset
+  store 1); `0x102ee640` `path+0x60` goal flags; `0x102ee160` `path+0x30` target handle resolved through the
+  entity table (NULL when `-1` or stale); `0x102ee5e0` -> `0x10012805` current waypoint position; `0x1027d990`
+  is `npc+0x5d34 -> nav+0x18`, the NAV TYPE.
+
+**4. `0x102eee40` — navigator vtable slot 17, the per-waypoint move-info block.**
+- It is the SDK's `MoveCalcBase(AILocalMoveGoal_t*)`: it fills a sixteen-word block `B` (the caller
+  zero-fills it first). Fields, in order:
+  `B[0..2]` target = current waypoint position, `0x10012805(path)` (`path+0x24` head waypoint's
+  `+0x00..+0x08`, or the static origin waypoint `DAT_10936afc` when `path+0x24 == 0`);
+  `B[3..5]` dir = target minus the NPC's origin (`npc` slot 220, vtable `+0x370`), then normalised IN PLACE:
+  `nav+0x18 == 0` (ground): `dir.z = 0` and `0x102e5d00` (2D normalise) ; otherwise the 3D normalise
+  (`PTR 0x1057966c`); `B[6..8]` facing = a copy of the normalised dir; `B[9]` speed = `0x102e12c0(nav+0x20)`
+  (motor -> NPC vtable `+0x3e0`, the ground speed); `B[10]` maxDist = the length the normalise returned;
+  `B[11]` curExpectedDist = `motor+0x30` (the move interval) times speed, clamped to `B[10]`;
+  `B[12]` navType = `nav+0x18`; `B[13]` pMoveTarget = `0x102ecc40(nav)` (goal type 2 / 1 / 7 -> the NPC's
+  `GetNavTargetEntity 0x102729d0`; any other type -> the `path+0x30` handle resolved); `B[14]` flags,
+  OR-ed: bit `1` (`TARGET_IS_GOAL`) when the head waypoint is the goal (`0x1030bd50`: `(wp+0x28 >> 3) & 1`,
+  0 for no head); else bit `4` (`TARGET_IS_TRANSITION`) when the head has a next waypoint (`wp+0x30`) whose
+  activity (`+0x2c`) differs from the head's; `B[15]` pPath = `nav+0x30`. It does not null-check
+  `path+0x24` on the flags arm (reads `*(0+0x30)` if the head is null and the goal bit is clear) — callers
+  reach it only behind the active-route gate `0x102efd50`.
+- Callers: `CAI_Navigator::MoveNormal 0x102efaa0` (`+0x44` dispatch after zeroing `0x1f` words and after slot 16
+  `0x102ef510` answered false) and `CAI_HumanoidNavigator::vfunc12 0x10264470` (its slot-12 override of
+  `MoveNormal`, `+0x44` dispatch with an extra argument). Slot 17 is `0x102eee40` in both the base and the
+  humanoid tables (`0x1049d9c4`, `0x10499444`). `MoveJump 0x102eece0` and `0x102eebc0` read the waypoint
+  through `0x10012805` directly.
+- **The SDK-style route sample the kernel asks for.** Waypoint COUNT and DISTANCE REMAINING have no getter
+  in the NPC-side navigator: nothing found reads `nav+0x30` to count the list or sum it; `0x102ee6d0
+  GetPointAlongPath(out, dist)` (walks `path+0x24` by `+0x30`, 2D length when `nav+0x18 == 0`, else 3D)
+  is read by `CAI_BaseHumanoid::vfunc585 0x1025f1c0` at 144.0; `0x102ef510` (slot 16) measures distance
+  to the head waypoint (3D unless ground) against `DAT_10451f78` / `DAT_10449260`; the debug overlay
+  `0x102f28e0` draws the list. Current waypoint position = `0x102ee5e0` (readers: `MaintainEyeDirection
+  0x1026b810`, `StartTask 0x102827f0`, `0x102ede30`, `0x102f1690`, `0x102f1500`); path type = goal type
+  `0x102ee620`; nav type = `nav+0x18` (`0x1027d990`, written by `0x102eeba0` / NPC-level `0x1027d9b0`:
+  `0` ground, `1` jump — `MoveJump`, `3` climb — `0x102eebc0`, `2` fly — `0x1038c170`, `0x103580d0`).
+
+**5. The port's nine kernel readers.** (`NavGoalState()` = family Motor's seam, answers -1;
+`NavGoalPosition` answers "none"; port names quoted from the comments.)
+
+| Port site | Retail word actually read | Shape it needs | Port stands for | Verdict |
+|---|---|---|---|---|
+| `ElysiumNpcBaseHelpers.cpp:155` `GetNavTargetEntity` (`0x102729d0`) | `0x102ee620` = `path+0x5c` goal type | int in 0..9; arms 2 (`m_hEnemy +0x5ce0`), 1 (`m_hTargetEnt +0x5ce4`), 7 (`(npc+0x98)` slot `+0x928` handle); else NULL | goal type | right getter; -1 -> NULL is retail's no-goal answer (0) |
+| `ElysiumNpcBaseHelpers.cpp:230` `CalcIdealYaw` (`0x10274b30`) | **`0x102ee3f0` = `path+0x2c` MOVEMENT ACTIVITY**, compared to `0x37` and `0x38` | int activity id, default 1 | port calls it `NavGoalState()` | **wrong getter**: not the goal type; the arm choice follows the path's activity |
+| `ElysiumNpcBaseMotor.cpp:322` `ValidateNavGoal` gate (`0x10280360`) | `0x102ee620` | int; `== 6` (cover) | goal type | right getter; 0 (none) also skips the body |
+| `ElysiumNpcBaseMotor.cpp:334` `NavGoalPosition` (`0x102ee140`) | `path+0x4c..+0x54` minus `path+0x34..+0x3c` | 3 floats, never "none"; `(0,0,0)` after a reset | actual goal position | only reached behind the type-6 gate, so "none" is unobservable here |
+| `ElysiumNpcBaseWerewolf.cpp:58` `UpdateTargetPos` (`0x10271b10`) | `nav+0x18` (`!= 3 && != 1`), then `0x102ee620 == 1` | int; body also reads `0x102ee160` (`path+0x30`), `0x102ee640` (`path+0x60 & 4`), `0x102ee140` | goal type (nav-type gate not in the port) | goal-type half right; the `nav+0x18` gate is a missing seam |
+| `ElysiumNpcRunAiSpecies.cpp:441` Tentacle RunAI (`0x1039e3d0`) | `0x102ee6a0` (`path+0x24 != 0`) then `0x102ee620 == 4` | bool, int | `NavigatorGoalIsActive()` = active route; `NavGoalState() == 4` | both right; `NavGoalState` -1 never opens the arm |
+| `ElysiumNpcStartTask.cpp:947` `TASK_WAIT_FOR_MOVEMENT` (`0x102a1dcc`) | `0x102ee2e0` = **`path+0x10` paused byte**; `0x102ee620 == 0`; `0x102ee6a0` | bool; int; bool | port `NavIsGoalSet()` (comment: "goal type `+0x10`") | **`0x102ee2e0` is mislabelled**: it answers `m_bPaused`, not goal-set; the port answers the goal latch. `NavIsGoalActive()` here stands for `0x102ee6a0` while the `.inl` says `0x102ee680` |
+| `ElysiumNpcStartTask.cpp:982` teleport rescue | `0x102ee140` | 3 floats | goal position | right getter |
+| `ElysiumNpcStartTask_2.cpp:1108` `TASK_ATTEMPT_DIVE` | `0x102ee140` | 3 floats; zero-initialised = the reset answer | goal position | right getter; `(0,0,0)` is retail's cleared-goal answer |
+| `ElysiumNpcSchedule.cpp:641` `NavigatorGoalType` (`0x1027d990`; caller `ElysiumNpcManBat.cpp:253`) | **`nav+0x18` = `m_navType`**, not the goal type | int `Navigation_t`: 0 ground, 1 jump, 2 fly, 3 climb; constructor default 0 | port: "goal type, anything but 2 is no active goal" | **wrong meaning**: `CNPC_VManBat::SelectSchedule 0x1038e340` tests `navType != 2` (not flying); the flyer's nav type is set to 2 by `0x1038c170` / `0x103580d0` through `0x1027d9b0` |
+
+Getter table (address · SDK name if it matches · words read · answer with no goal):
+
+| Address | SDK name | Words read | No-goal answer |
+|---|---|---|---|
+| `0x102ee620` (`0x100113d8`) | `GetGoalType` | `path+0x5c` | `0` |
+| `0x102ee680` | `IsGoalSet` (not `IsGoalActive`) | `path+0x5c != 0` | false |
+| `0x102ee6a0` | `IsGoalActive` | `nav+0x30`, `path+0x24 != 0` | false |
+| `0x102ee140` (`0x1000f89e`) | `ActualGoalPosition` | `path+0x4c..0x54` minus `path+0x34..0x3c`, static buffer `DAT_10936af0` | `(0,0,0)` after reset; else stale |
+| `0x1030ba30` | `&GoalPos` (raw) | `path+0x4c` | `(0,0,0)` |
+| `0x102ee5e0` (`0x10012805`) | `GetCurWaypointPos` | `path+0x24 -> wp+0x00..0x08` | origin waypoint `DAT_10936afc` = `(0,0,0)` |
+| `0x102ee6d0` | `GetPointAlongPath` | `path+0x24` list by `+0x30`, `nav+0x18`, NPC origin | false (no head) |
+| `0x102ee1a0` | `GetGoalTolerance` | `path+0x28` | 0.0 |
+| `0x102ee3f0` | `GetMovementActivity` | `path+0x2c` | `1` |
+| `0x102ee640` | `GetGoalFlags` | `path+0x60` | 0 |
+| `0x102ee160` | `GetTarget` | `path+0x30` handle | NULL |
+| `0x102ee2e0` | (`m_bPaused` getter) | `path+0x10` | 0 |
+| `0x102ee660` | `CurWaypointIsGoal` | `head+0x28 >> 3 & 1` (`0x1030bd50`) | 0 |
+| `0x1027d990` | `GetNavType` (NPC-level) | `nav+0x18` | `0` |
+| `0x102eee40` | `MoveCalcBase` (slot 17) | see 4 | — |
+
+**Unrecovered:** the value each `SelectSchedule` / `StartTask` / `RunTask` reader of `0x102ee620` compares
+against (only the arms listed were read); the activity names behind `0x37` / `0x38` in `0x10274b30`; who,
+if anyone, allocates the navigator block from zeroed memory (so whether `nav+0x40..+0x4c` can be non-zero
+before the first reset); a caller-by-caller census of slot 17 beyond `MoveNormal` and the humanoid override
+(the corpus lists 105 possible call sites at slot 17 of unrelated classes); a waypoint-count or
+distance-remaining getter (none found); what `0x102ef510`'s `DAT_10934070` and `0x10451f78` /
+`0x10449260` tunables are.
+
+### Route-control flags, their issuers and the blocked-move arms (2026-09-29, 0018 story 5)
+
+Read on `vampire.dll` (decompile plus listing). Names: **BLR** = `BuildLocalRoute 0x10304130`, **worker** =
+the ground/fly route worker `0x10303850`. Argument order of BLR, from the pushes at every call site
+(`__thiscall`, `this` = the pathfinder, `this+4` = the NPC): `(start, goal, target, FLAGS, node, MASK,
+tolerance, notrace-byte)`. The worker's is `(mode, start, goal, target, FLAGS, node, MASK, nodeType,
+tolerance, notrace-byte)`; `0x10304130` forwards `FLAGS` and `MASK` unchanged (`10304130`: `param_4` →
+worker `param_5`, `param_6` → `param_7`).
+
+**Callers of the worker.** Only two: `0x10303d10` (mode 0, a `CAI_Pathfinder_BuildGroundRoute` profiler
+wrapper, a sibling with no logic of its own) and `0x10303f80` (mode 2, the fly/swim twin). Both are
+reached only from BLR (`if (mask & 1)` → `0x10303d10`; `if (mask & 2)` → `0x10303f80`). BLR's own jump /
+climb arms (`0x10303c90`, `0x10303cd0`) need a node argument and never reach the worker.
+
+#### 1. What "the flag word `& 8`" is: a route-control literal, NOT the goal flags
+
+The worker's fifth argument is BLR's fourth, a literal each caller pushes. It never touches goal word
+`+0x24`. Proof in the worker itself: it is passed as the fifth argument of the waypoint constructor
+`0x10319df0` at all four places the worker builds a route (`10303850`; the ctor stores that argument at
+waypoint `+0x28` — `10319df0`: `*(this+0x28) = param_4`) and to the detour `0x10304020`. So it is the
+**waypoint flags word** the route builder stamps on every waypoint it lays (the same `+0x28` the
+simplifier `0x102f13d0` / `0x102f0fe0` / `0x102f0ab0` tests with `0x2a`, `0x4`; `DoFindPath 0x102f2330`
+stamps `2` on type-3 chain waypoints and ORs `8` onto the last one, `102f24d5`; the arc builder ORs `8`
+and `0x20`). The bit meanings observed: `1` the simplifier's detour, `2` pathcorner, `4` node, `8` the leg
+ends at the goal, `0x10`/`0x20` door / no-simplify (`0x30` at the door approach). These match the SDK's
+`bits_WP_*` (`TO_DETOUR 1, TO_PATHCORNER 2, TO_NODE 4, TO_GOAL 8, TO_DOOR 0x10, DONT_SIMPLIFY 0x20`) —
+corroboration only. So the blocked-move rule "flag word `& 8`" = "this leg ends at the goal"; the 0018
+story 5 correction *(c)* wording "goal flag `0x8`" is a misread. The port needs no goal-flag input for it.
+
+**Caller table** (`BLR` has exactly six caller functions; the grep on the address and the thunk
+`0x100132b9` finds no other):
+
+| Caller | Call site | Situation | FLAGS literal | MASK | `0x100` | `0x10` | `0x20` | `0x40` |
+|---|---|---|---|---|---|---|---|---|
+| `0x102f2060` (route build from `DoFindPath 0x102f2330`, itself from `SetGoal`'s `0x102f1dc0` and `0x102f1f80`) | `0x102f2154` | the LOCAL attempt; only if nav type != 3, `path+1 == 0`, `path+8 == 0.0` | `8` (`102f214b PUSH 8`) | caps `&4` or `&0x10` → `0x32`; else caps `&1` → `0x131`, `0x135` with `&2`; else 0 (`102f2119 MOV EBX,0x32`, `102f20fe MOV EBX,0x31`, `102f210f 0x35`, `102f2114 OR BH,1`) | walkers yes; fliers/swimmers NO | yes | yes | no (NPCs traced) |
+| `0x103005f0` (node-route ENTRY leg, start → node; called by `BuildNodeRoute 0x10304e00` and `HasPathOuter 0x102fdcc0`, both push `0x60`) | `0x103006a2` | node route, first leg | `0xc` (`10300696 PUSH 0xc`) | `0x60 \| bits` | no | yes when bits carry it | yes | **yes (NPCs not traced)** |
+| `0x103007e0` (node-route EXIT leg, node → goal; same two callers, both push `0x160`) | `0x10300893` | node route, last leg | `8` (`10300887 PUSH 8`) | `0x160 \| bits` | **yes** | yes | yes | **yes** |
+| `0x102f0fe0` (simplifier corner cut; from `0x102f13d0`) | `0x102f11e6`, `0x102f1241` | two segments npc → projected point → next waypoint | `1` (`102f11ce`, `102f122f PUSH 1`) | `0/1/5`: `1` if caps `&1`, `\|4` if caps `&2` | no | no | no | no |
+| `0x102984a0` (Troika `OnObstructingDoor`, slot 531) | `0x1029865e` | route to the door's approach point | `0x30` (`1029864a PUSH 0x30`) | `1` | no | no | no | no |
+| `0x10304670` (arc builder, from `0x102ed390`) | `0x103047d7` | each arc segment | `0` (`103047a7 PUSH 0`; the two literal zeros are target and flags) | `1`, or `2` when its byte arg is set (`103047a1 INC EDX`) | no | no | no | no |
+
+`bits` for the two node legs come from `0x10300700` (returns `8` when the leg endpoint is the NPC's own
+position and `0x1027d990() == 3`; else caps `&4` → `0x12`; else caps `&1` → `0x11`, `0x15` with caps `&2`,
+`|8` with caps `&8`; else 0). Note it tests caps `&4` and `&1` only — no `&0x10` — so a swimmer-only NPC
+gets `bits = 0` and BLR answers NULL untraced for its node legs. `HasPathOuter 0x102fdcc0` passes tolerance
+`0.0` and notrace `0` to both legs. The notrace byte (last argument, worker `param_10` → probe `param_9`,
+`0x102e4f50` returns "clear, end = goal" without tracing when non-zero) is `0` at every site read here
+except the arc builder's and `BuildNodeRoute`'s pass-through of `DoFindPath`, which is the literal `0`
+(`102f2661 PUSH 0` — `DoFindPath` ignores its own stack argument entirely).
+
+**Where each arm applies (shipped-data situations).**
+
+- **Blocked-move acceptance** — needs `MASK & 0x100` AND `FLAGS & 8` AND remaining distance `<=`
+  tolerance AND `|goal.z − end.z| < 2.0`; the waypoint goes at the probe's END position (not at the
+  goal). Both bits are present together in exactly two places: (a) the local attempt of `0x102f2060`
+  for every ground walker (caps `&1`, no `&4`/`&0x10`) whose goal is a normal route, tolerance = the
+  path's `+0x28` (goal tolerance as resolved in `SetGoal`); (b) the node route's EXIT leg
+  (`0x160 | bits`, `FLAGS 8`), tolerance = the same `path+0x28` when reached through `BuildNodeRoute`,
+  `0.0` through `HasPathOuter` (so it can never accept there: a blocked probe has a positive remainder).
+  It never applies to: fliers / swimmers' local attempt (`0x32` has no `0x100`), the ENTRY leg
+  (`FLAGS 0xc` has the 8 but `0x60` has no `0x100`), the simplifier, the arcs, the door approach.
+  Note it also holds in worker mode 2 for the `0x172`-style exit legs (mask carries `2` and `0x100`).
+- **NPC-blocked D_LI re-probe** — needs probe code `-3` AND `MASK & 0x10`. The `0x10` bit is set in
+  `0x131`/`0x135`/`0x32` (local attempt, walkers AND fliers/swimmers) and inside `bits` of both node
+  legs. It can only fire where the FIRST probe traces NPCs (`0x40` clear → contents `0x202400b`): the
+  local attempt. In the node legs `0x40` is set → contents `0x2400b` without `MONSTER`, so an NPC is not
+  expected to stop the first probe and the `0x10` bit there is inert (inference from the mask; the
+  engine's non-brush-entity rule that needs `CONTENTS_MONSTER` was not read in this corpus).
+- **Two-waypoint detour `0x10304020`** (→ `0x103059d0`) — needs `MASK & 0x20`, tried only after the
+  blocked-move acceptance fails or is not eligible: the local attempt (`0x131`/`0x135`/`0x32`) and both
+  node legs (`0x60`/`0x160` carry `0x20`). Never for the simplifier, arcs or door approach.
+
+Order inside the worker for a blocked probe (`10303850`): accept-at-end → detour → `-3` D-LI arm → NULL.
+
+#### 2. Goal-flag `0x2` (explicit node route, `SetGoal 0x102ecd20`; test at `0x102ecf27`, taken at `0x102ecf2e`)
+
+Census method: every function that calls `SetGoal` (through `0x1000ce64`) — 15 real functions plus twin
+thunks — and for each call the store to goal word 9 (`+0x24`), read from the listings (base = the `LEA`
+pushed as the record; word 9 = base + 0x24). Result for all 27 sites of `CAI_BaseNPC::StartTask 0x102827f0`,
+all 19 of `CAI_BaseNPCTroika::StartTask 0x102a1910`, and every other caller: word 9 is `0` except:
+
+- **`0x2` — ONE issuer: `CAI_BaseNPCTroika::StartTask 0x102a1910`, task `0xc7 TASK_GET_PATH_TO_ENEMY_CLOSEST`
+  (`0x102a4812`)**: store `MOV [ESP+0xd0],0x2` at `0x102a48f2`, `SetGoal` at `0x102a4921`. Record: type 4
+  at the enemy's origin (slot `+0x370` of `GetEnemy()`), activity `-1`, tolerance `DAT_1049a1ac`, target
+  `DAT_10923dd8`, call flags 0; a refusal is `DevWarning(2,"GetPathToEnemy failed!!\n")`, line `0x335a`,
+  `TaskFail(0xc)`. **Shipped data reaches it:** `Content/ElysiumCorpus/ai/schedules/cnpc_vtzimisce/
+  sched_vtzimisce_attack_closest.sch` (`SCHED_VTZIMISCE_ATTACK_CLOSEST`: `TASK_SET_TOLERANCE_DISTANCE 24`,
+  `TASK_GET_PATH_TO_ENEMY_CLOSEST`, `TASK_RUN_PATH` …); the only `.sch` naming the task (the string also
+  sits in `FUN_10316ff0`'s task table and in the inline schedule text loaded by `FUN_103b7120`). Species
+  shadow rows (`0xc7 → 0xc8` on `CNPC_VMingXiaoTentacle` / `TzimisceHeadClaw` / `TzimisceRunner`, the
+  frenzied `0xc7 → 0xc9`, `schedule-kernel.md`) translate the id before Troika sees it; whether the
+  Tzimisce boss is ever in a state that selects that schedule was not traced. So the arm is NOT dead:
+  one retail schedule can reach `0x102ecf2e`. (The base and Troika `GET_PATH_TO_ENEMY 0x0f` arms use
+  type 2 with flags 0; the doc's "goal flags 2" for `0xc7` is right.)
+- Flag `0x1` (`SetGoal` turns the motor toward the destination, `0x102ed161`) — three issuers:
+  `CAI_BaseNPC::StartTask` task `0x120 PATHCORNER` (`0x10285ff8`; store `MOV [ESP+0x5c],1` at `0x102860d4`,
+  call `0x102860f0`, type 3), `ScheduledMoveToGoalEntity 0x102800c0` (`uStack_1c = 1`) and
+  `ScheduledFollowPath 0x102801e0` (same).
+
+Everything else builds `AI_NavGoal_t` with flags `0`: the constructors `0x102a9c80` (type given) and
+`0x102a9d20` (type 4) — used only inside Troika `StartTask` — are called with flags argument `0` at every
+site (`102a61ad`, `102a65a6`, `102a7098`, `102a768c`); the wrapper `0x102ed610`, the patrol pair
+`0x102aa640` / `0x102aa860`, `CAI_StandoffBehavior::vfunc15 0x102c7bd0`, `0x10278220`, and the species
+arms (`CNPC_VZombie 0x103dfd80`, `CNPC_VScurrying 0x103ac740`, `CNPC_VMingXiao 0x10392d80`,
+`CNPC_VMingXiaoTentacle 0x1039c4c0` / `RunTask 0x1039d750`, `CNPC_VAnimal 0x1035f650`). No function
+writes the path's `+0x60` other than `SetGoal` (`*(path+0x60) = goal[9]`, the only match for that store).
+
+#### 3. Goal flags `0x8` and `0x4`
+
+- **`0x8`: no issuer** (no `SetGoal` site stores it; every word-9 value above is `0`, `1` or `2`) **and no
+  consumer**. `SetGoal` shifts it out (`0x102ed121`, per the existing doc: `(goal[9] >> 3) & 1`) into the stack argument of
+  `0x102f1dc0`, which forwards it to `DoFindPath` (`102f1e59`, `102f1eab`). `DoFindPath 0x102f2330`
+  (`RET 4`) never reads that argument (no `[ESP+0x34]` access anywhere in its listing) and calls
+  `0x102f2060` with a literal `PUSH 0` (`102f2661`). The `0x8` is inert end to end. Together with §1 this
+  closes the old "unrecovered `0x8`".
+- **`0x4`: no issuer.** Reader: `UpdateTargetPos 0x10271b10`, through the accessor `0x102ee640` (which
+  has that one caller): for a type-1 goal whose target moved it re-paths when `(path+0x60 & 4)` is set
+  and the target is farther than `_DAT_104454c8` from the stored point. No record with bit 4 is built
+  anywhere, so in retail data the re-path-on-move arm is dead by content (the port keeps it as a seam).
+
+#### 4. `0x10303fd0` walked (`this` = the pathfinder; args `start`, `goal` unused; third arg = the blocker)
+
+1. `npc = blocker[+0x94]` (the blocker's cached NPC pointer, `MyNPCPointer`); null → `false`.
+2. `npc[+0x2e0]` (`m_pEdict`) must be non-zero; zero → `false`.
+3. `rel = npc->vtable[+0x650 = slot 404 IRelationType](mover = pathfinder+4)`; answer `rel == 3`.
+
+Nothing else: no class test, no alive test, no `+0x94` of the mover. The BLOCKER, not the mover, is
+asked how it feels about the mover, and it is asked ONLY at the moment the first probe returned `-3`. The
+blocker pointer is the FIRST probe's (`probe+0x1c`, worker local `iStack_54`), not the re-probe's; the
+re-probe (`0x2400b`, no NPCs) only has to come back clear (`status >= 0`), then `0x10303fd0` decides, then
+a waypoint is laid at the goal (`10319df0(..., param_3, ...)`). Values of slot 404: `0` D_ER, `1` D_HT,
+`2` D_FR, `3` D_LI, `4` D_NU; only `3` passes. For the shipped classes slot 404 is
+`CAI_BaseNPCTroika::IRelationType 0x10299da0` (most), `CBaseCombatCharacter 0x10333340`, and species
+overrides (`CNPC_VCop 0x10372b70`, `CNPC_VHunter 0x10388bb0`, `CNPC_VNewscaster 0x103a01b0`,
+`CNPC_VPedestrian 0x103a2930`, `CNPC_VPlayerController 0x103a48b0` (also VFrenzyShadow, VWolfMorph),
+`CNPC_VYukie 0x103dd880`). The Troika body returns `3` outright when the blocker's owner slot
+(`this+0x647c`, an entity whose `+0x9c` combat pointer) equals the entity asked about (
+`if (pCVar3 == param_1) return 3`); otherwise `0` for self/null, `1` when the closest player or the
+owner hates the asker, else the `0x10333340` class table (not walked).
+
+#### 5. `0x102e2d70` and doors
+
+`0x102e2d70(blocker)`: `-3` iff `blocker[+0x94] != 0` (an NPC); else `engine slot 0x8c (35 = IndexOfEdict)`
+on `blocker[+0x2e0]`: non-zero → `-1` (an ordinary entity), zero → `-2` (the world). Confirmed. Callers:
+the four probe cores `0x102e4f50` (ground), `0x102e6090`, `0x102e6290`, `0x102e6be0`. `-2` is also written
+by `0x102e5d80` for a missing floor and by `0x102e4f50` for the final-z failure. `0x102e5d80` additionally
+turns a blocked result into CLEAR (`*param_7 = 0`) when the blocker is the goal's `target` argument
+(`param_4 != 0 && param_4 == probe[7]`) or the entity held at player `+0xa8 → +0x20f4/+0x20fc`.
+
+**No, the classifier does not distinguish a door.** A door has no `+0x94` so it is `-1` (or `-2`); it is
+found only afterwards through `CBaseDoor`'s self-pointer at entity `+0xa4` and NPC vtable slot 531
+(`OnObstructingDoor(goal, door, distClear, &result)`, `+0x84c`). There is no `prop_door_rotating` string in
+the image; the door classes are `func_door` (`CBaseDoor`), `func_door_rotating` (`CRotDoor`) and
+`momentary_door`. **Callers of slot 531 (both dispatch sites of `[obj+0x84c]`):**
+
+- `0x1027dc10` (the movement sink's base body, `1027dc3f CALL [+0x84c]` on `this-0x19b0`): reads the move
+  trace's obstruction (`goal+0x60`), then that entity's `+0xa4`; if non-null calls slot 531 with
+  `(goal, door, distClear, &result)` and answers its byte. Per `navigation-jump-links.md` (1682–1690) it is
+  the move-time dispatcher, which the Troika override tail-calls.
+- `0x102f06e0` (the path simplifier's shortcut test, called by `0x102f0ab0` and `0x102f0e80`): a hull trace
+  (mask `0x2400b`, `0x2600b` when `path+1` is set) toward a later waypoint; when it lands on an entity with
+  `+0xa4` and the lock test `0x100eec70` says the NPC could open it, it builds a zeroed goal with
+  `+0x28 = distance + _DAT_1044e664` and calls slot 531 (`102f08c3`); a true answer sets the caller's byte
+  and raises navigator failure `(0x0e, 1)` (`102f08e1`).
+
+Implementers: `CAI_BaseNPC 0x1027dc80` (declines when `goal+0x28 < distClear`; needs door toggle state 1 or
+3; `distClear < _DAT_104493d0` → result `-1`, else it stores `distClear` at `goal+0x28`, result `0`) and
+`CAI_BaseNPCTroika 0x102984a0` (77 classes fill slot 531; the Troika body owns the open/wait/approach
+route: its BLR call `0x1029865e` uses mask `1`, flags `0x30`).
+
+**Unrecovered:** which classes report `CapabilitiesGet` bits `4` / `0x10` (one body, `0x1026db30`, not
+walked — decides who takes `0x32` vs `0x131`); the `0x10333340` class-disposition table behind slot 404
+(so which mover/blocker pairs really answer `D_LI` beyond the Troika owner arm); whether the engine's
+standard filter really drops NPCs when `MONSTER` is absent from `0x2400b` (assumed, makes the node legs'
+`0x10` inert); whether the Tzimisce boss ever selects `SCHED_VTZIMISCE_ATTACK_CLOSEST` (the only shipped
+flag-`0x2` route); the caller of the movement sink's slot-1 body `0x1027dc10` beyond the existing doc; the
+source of the arc builder's notrace byte (callers of `0x102ed390` not censused).
+
+### CAI_Navigator::Move 0x102eff40, walked (2026-09-29, 0018 story 5; two readers diffed, disagreements re-read from the DLL)
+
+Sources: R3a.md (reader A) and R3b.md (reader B), merged. Every disagreement was re-read from the `vampire.dll` listing
+(`vtmb_asm`); constants marked (file) were read from the image bytes of `Vampire/dlls/vampire.dll`. Vocabulary: `nav` =
+`CAI_Navigator`; `path` = `nav+0x30` (`CAI_Path`: `+0x10 m_bPaused`, `+0x24` head waypoint, `+0x28 m_goalTolerance`, `+0x2c
+m_activity`, `+0x30 m_target`, `+0x40 m_waypointTolerance`, `+0x44` last node passed, `+0x5c m_goalType`); waypoint `+0x0`
+position, `+0x10` node id, `+0x20`/`+0x24` entity/door handle, `+0x28` flags (`0x2` InPass, `0x4` node, `0x8` goal, `0x10`
+door), `+0x2c` move type, `+0x30` next; `motor` = `nav+0x20`, `probe` = `nav+0x24`, `localnav` = `nav+0x28`; `sink` = the
+`IAI_MovementSink` sub-object at `nav+0x10` (`vftable_CAI_Navigator_at16`; its methods are called S1..S7 below by slot); the
+NPC-side sink at `npc+0x19b0` is consulted first by every S* (base table: slots 2..7 `return false`). Goal record (31 dwords,
+`AILocalMoveGoal`): `+0x0c` dir, `+0x24` speed, `+0x28` maxDist, `+0x2c` expected step, `+0x30` navType, `+0x34` target
+entity, `+0x38` flags (1 TARGET_IS_GOAL, 2 CONSUME_INTERVAL, 4 TRANSITION), `+0x44` MoveLimit trace (`+0x44` status, `+0x60`
+obstruction entity). `AIMoveResult`: 1 CHANGE_TYPE, 0 OK, -1 entity, -2 world, -3 NPC, -4 illegal. Signature `Move(this,
+float interval, arg2)`, `RET 8`.
+
+Correction to the brief (both readers): `0x102ee2e0` is `path.m_bPaused` (`MOV AL,[path+0x10]`), not "no active goal".
+
+#### Entry gate and order of tests
+
+All return-and-do-nothing unless stated (`0x102eff40` listing).
+
+1. `102eff57..102effa1`: `if (interval > 1.0) interval = 1.0f` (double `0x10449280` = 1.0, file).
+2. `102effab`: `0x102ee2e0` = `path.m_bPaused` non-zero -> return. No stop, no fail, `nav+0x1c` untouched.
+3. `102effc2`: NPC slot 525 `OverrideMove(interval)` (`+0x834`) true -> return. Base `0x1027da90` false; overrides
+   `CNPC_Crow 0x10357ba0`, `CNPC_VManBat 0x1038b120`, `CNPC_VVampireBoss 0x103c5fe0` (+ its subclasses), not walked.
+4. `102effd3`: `npc+0x1a40 m_bShouldMove == 0` (`102f0198`): `nav+0x18 == 3` (climb) -> motor slot 5 (`0x102e1110`),
+   `SetNavType(0)` (`0x102eeba0`); else `nav+0x18 != -1` -> motor slot 10 (`0x102e1440`, velocity 0). No failure raised.
+5. `102effe1..102f0069`: hull/frame stamps on five components (`nav`, `npc+0x5d3c` pathfinder, `localnav`, `probe`,
+   `npc+0x5d44`): `comp+8 = owner+0x156c`, `comp+0xc = gpGlobals+4`. `0x1000f240(path)` called, result dropped.
+6. `102f007b`: `motor+0x30 = interval` (the time budget the loop and the motor spend).
+7. `102f0081`: `m_goalType == 0` -> `Warning("AIError: Move requested with no route!\n")`, `OnNavFailed(table[1] = 0x0d, 1)`.
+   Table `0x1060fcc4` = `{0, 0x0d, 0x0c, 0x0e, 0x0f}` (file).
+8. `102f00bc`: head waypoint `== 0` -> `OnNavFailed(table[2] = 0x0c, 1)`, no warning, no stale mark.
+9. `102f00cd`: `0x10280a20(npc)` = `curtime < npc+0x5cf0 m_flMoveWaitFinished` -> return (silent wait).
+10. Loop (`102f00e9..102f0165`): result seeded `1`, `nav+0x1c = 0`, pass counter `EBP = 0`.
+    - top: `nav+0x1c` set -> exit if result `>= 0`, else failure tail; `motor+0x30 <= 0.0f` -> exit (`TEST AH,0x41; JNP`).
+    - dispatch on `0x1000f240(path)` = head waypoint `+0x2c` (-1 without head), jump table `0x102f01d4`: 0 and 2 -> slot 12
+      `MoveNormal 0x102efaa0`; 1 -> slot 14 `MoveJump 0x102eece0`; 3 -> slot 13 `0x102eebc0` (climb); other -> `DevMsg("Bogus
+      route move type!")`, `-4`.
+    - after: `INC EBP; CMP EBP,0x10; JG` -> the 17th dispatch prints `"ERROR: AI navigation not terminating. Possibly bad
+      cyclical solving?"` and jumps to `102f016e` (stale mark, then `0x0c`) whatever the result, even `>= 0` or `-3`;
+      otherwise result `>= 0` loops, `< 0` goes to the failure tail.
+    - failure tail `102f0169`: `CMP EAX,-3; JZ 102f017c` skips the stale mark; else `0x102f1fa0(nav, 4.0f, NULL)`
+      (`PUSH 0; PUSH 0x40800000`); then `OnNavFailed(0x0c, 1)` (`102f0180`, nav slot 10).
+
+No frozen test and no in-flight jump/climb test in `Move`; jump/climb state is `nav+0x18` (-1 none, 0 ground, 1 jump, 2 fly,
+3 climb) consulted inside the arms. `OnNavFailed 0x102eeae0`: `0x102eeb70` reset, `npc+0x1b44/+0x1b48` = source file / line
+`0x406`, NPC slot 448 `TaskFail(code)` (`+0x700`), stopped activity (`0x100097d2(npc, 0x1000b285(npc))`), `nav+0x1c = 1`;
+its second argument is not read. `0x102eeb70`: `nav+0x54 = -1`, `nav+0x58 = nav+0x60 = -1.0f`, then localnav reset
+`0x1000b550`.
+
+`MoveNormal` gate `0x102efd50`: route type 0 with `nav+0x18 != 0` -> `DevMsg("Warning: NPC appears to have wrong nav
+type...")`, jump (1) -> motor slot 8, climb (3) -> motor slot 5, `SetNavType(0)`; route type 2 with `nav+0x18 != 2` ->
+answers false and `MoveNormal` returns **-4** (no simplify); otherwise `SimplifyPath(nav, 0)` (`0x100053b7`, result
+ignored), `nav+0x51 = 0`, true. `MoveNormal` does NOT re-test `nav+0x1c` after the gate (see the door path).
+
+#### The arrival test and waypoint advance (`AdvancePath 0x102f0400`, `OnNavComplete`)
+
+Both readers agree; re-read constants from the file. Navigator slot 16 `0x102ef510`, called from `MoveNormal` at `102efb2f`
+before any step is built (result seeded `-4`; true -> `MoveNormal` returns the word):
+
+- NPC origin = NPC slot 220 `GetOrigin` (`+0x370`) against the head waypoint position. `nav+0x18 == 0` -> **2-D**
+  `sqrt(dx*dx+dy*dy)`; any other nav type -> **3-D**.
+- Tolerance is a constant, not `path+0x28`, not `path+0x40`, not a hull: double `0.0625` (`0x10451f78`, file), or `0.25`
+  (`0x10449260`, file) when ConVar `npc_vphysics` (`DAT_106bbaa4`, `+0x2c` int value) is non-zero; shipped default `"0"`.
+  Not reached iff `tol < dist` (NaN: not reached).
+- Dead second refusal: `DAT_10934070` (BSS, no writer) set, next waypoint of a different type, `dist >= 0.001` -> not
+  reached.
+- Reached, goal waypoint (`0x102ee660` -> `0x1030bd50`: flag `0x08`): `OnNavComplete 0x102eea90` (nav slot 8: `0x102eeb70`
+  reset, owner `TaskMovementComplete` via `0x102eccc0`, `nav+0x1c = 1`), `*result = 0`, true. `Move` exits at the next loop
+  top.
+- Reached, not the goal: `AdvancePath 0x102f0400`, `*result = 1`, true; the loop re-enters with the remaining budget.
+- Not reached: false; `MoveNormal` reads ideal speed, sets `path.m_activity` (slot 310), returns 0 when speed `<= 0` and
+  `m_Activity == 2`, else builds the step (slot 17 `0x102eee40`) and calls `MoveEnact`.
+
+Why 0.0625 suffices: slot 17 clamps the step to `min(motor+0x30 * speed, dist)` (`goal+0x2c`) and the motor moves exactly
+that, so the NPC lands on the waypoint and the leftover budget re-enters the loop.
+
+Other `OnNavComplete` callers under `Move`: `MoveJump` landing on the goal waypoint; S2's `distClear < 0.125` arm; S7 on
+motor code 4; `0x102ef760` (below).
+
+`AdvancePath 0x102f0400`, in order: (a) flag `0x02`: entity at `wp+0x20`, vtable `+0x1d8` `AcceptInput("InPass", npc)`;
+(b) not the goal and `npc+0x98` non-null: `0x102a0bc0(sub, wp)`; flag `0x10` (door): entity from `wp+0x24`, `+0xa4` door;
+`0x1027f550(npc, door)` and `door+0x4f8 == 1` -> `0x10298800` (`m_bShouldMove = 0`, `0x102ee2a0(nav)`, `npc+0x644c = 1`,
+door-transaction start, no fail code); null entity -> `DevMsg("%s trying to open a door that has been removed")`; (c) flag
+`0x02` with a next waypoint: `npc+0x5de8 = slot 172 (+0x2b0)`, then `DoFindPath 0x102f2330` (the only route re-find in
+this chain); else pop `0x1030ba90` (flag `0x04` -> `path+0x44 = wp+0x10`; no next -> `"ERROR: Force end of route without
+goal"` and flag `0x08` set on the last).
+
+#### The motor status table
+
+Motor execute `0x102e23a0` (`CAI_Motor_MoveNormalExecute`): `goal+0x30 == 0` -> motor slot 19 (`0x102e14a0` ->
+`0x102e1560` ground; `CAI_HumanoidMotor` fills slot 19 with `0x10264680`), else slot 20 (`0x102e1760`, fly/3-D). The
+executor code comes from `0x102e0bd0` (ground step; `MoveLimit` over mask `0x202400b`, 100.0 %):
+
+| motor code | condition in `0x102e0bd0` (asm) | table `0x1060e654` (file `{-4,0,-3,-2,-2}`) | what follows |
+|---|---|---|---|
+| 0 | trace status `< 0`, 4th arg (partial-move bool) false, not the target | -4 | never from the navigator: both callers (`0x102e1560`, `0x10264680`) pass 1; only `AutoMovement` can |
+| 1 | trace status `>= 0` | 0 | loop continues |
+| 2 | blocked, status `== -3` | -3 | S7 -> NPC-blocker hold (below) may rewrite to 0 |
+| 3 | blocked, status -1 / -2 / -4 | -2 | S7 leaves it; `Move` stale-marks and fails `0x0c` |
+| 4 | trace entity == goal target (`goal+0x34`, checked first) | -2 | S7 calls `OnNavComplete`, `*result = 0` |
+
+Any non-zero table answer calls the motor sink slot 7 (`motor+0x10`, `+0x1c` = S7 `0x102ef6d0`, args `(goal, trace, code,
+&result)`) and zeroes `motor+0x30` (`102e2419`), ending the budget. S7: NPC sink slot 7 first; code 4 -> `OnNavComplete`,
+0; code 2 -> `0x102ef3e0` true -> 0; returns true either way. Verdict: B's mapping holds on the navigator path (-1/-2/-4 ->
+-2; -3 -> -3), plus A's point that code 4 completes rather than fails.
+
+What `Move` does per status reaching the loop:
+
+| status | from | what `Move` does | code |
+|---|---|---|---|
+| 1 | arrival advance, S2 avoidance splice, `MoveJump` landing | loop while budget remains | none |
+| 0 | enact, holds, completions | loop while `motor+0x30 > 0` and `nav+0x1c == 0` | none (arrival: `OnNavComplete`) |
+| -1 | `MoveCalc` (base door hook `-1`; trace status propagated by S1/S4), `MoveJump` probe | stale mark 4.0 s, `OnNavFailed` | `0x0c` |
+| -2 | motor codes 3/4 (4 is rewritten), Troika door hook in the step | stale mark 4.0 s, `OnNavFailed` | `0x0c` |
+| -3 | motor code 2 after the hold, S1/S4 trace-status propagation | **no** stale mark, `OnNavFailed` | `0x0c` |
+| -4 | gate refusal, `MoveCalcDirect` speed `<= 0`, `MoveCalcRaw` tail, bogus route type | stale mark 4.0 s, `OnNavFailed` | `0x0c` |
+| 17th pass | loop | `DevMsg`, stale mark 4.0 s, `OnNavFailed` | `0x0c` |
+| no `m_goalType` / no head | entry 7 / 8 | Warning (7 only), no stale mark | `0x0d` / `0x0c` |
+
+Stale mark `0x102f1fa0(nav, 4.0, NULL)`: only when `nav+0x50 m_fRememberStaleNodes`, a path, a head, `path+0x44 != -1`
+and `wp+0x10 != -1`; looks the link up in `nav+0x2c` (out of range bumps `DAT_106c994c`), `link+0x64 |= 1`, `link+0x68 =
+curtime + 4.0`, `link+0 = -1`. Reader of the flag: `0x102fce80`. `Move` never calls `0x102f1dc0` (route re-find) or
+`PrependLocalAvoidance 0x102ede30` directly.
+
+#### The -3 arm as settled
+
+Verdict: **both readers are half right.** `Move` itself has no wait: `102f0169 CMP EAX,-3; JZ 102f017c` skips only the
+stale mark and fails `0x0c` at once (B). But a hold exists below `Move`, in the navigator's sink, and it rewrites the
+blocked status to 0 before `Move` ever sees it (A). It is not per-status; it is keyed on the obstruction being an NPC.
+
+`0x102ef3e0(nav, trace)` (thunk `0x1000856c`), instruction by instruction:
+- blocker = `trace+0x1c` (the obstruction entity, `goal+0x60`) `->+0x94` (non-null for an NPC); none -> return `nav+0x51`.
+- resolve `nav+0x54` (EHANDLE, serial `>> 0xd`, index `& 0x1fff` in the entity list `0x10566458`); not the blocker ->
+  **arm**.
+- same blocker and `curtime - nav+0x60 > -0.001` (double `0x10497530`, file) -> **arm**.
+- same blocker inside the window: `curtime - nav+0x58 <= -0.001` -> `nav+0x51 = 1`, return true (**hold**); else return
+  `nav+0x51` unchanged (0, since the `MoveNormal` gate cleared it this pass, unless an earlier hook in this pass set it).
+- **arm** (`102ef49a`): `nav+0x51 = 1`, `nav+0x54 = blocker handle` (vtable `+4`), `nav+0x58 = curtime + nav+0x5c`,
+  `nav+0x60 = curtime + nav+0x64`, return true.
+- `nav+0x5c = 0x3e800000` (0.25 s), `nav+0x64 = 0x40400000` (3.0 s), set by the ctor `0x102eca50`; `nav+0x58 = nav+0x60 =
+  -1.0f`, `nav+0x54 = -1` at ctor and by `0x102eeb70`, i.e. on every `OnNavFailed` and `OnNavComplete`.
+
+Its two callers:
+- **S3 `0x102ef350`** (sink slot 3), dispatched from `MoveCalcRaw 0x102de7b0` at `102de861`: NPC sink slot 3 first; then
+  `0x102ef3e0(nav, goal+0x44)` true -> `*result = 0`, `goal+0x28 = distClear` (walk up to the clearance), `goal+0x38 |= 2`
+  (consume the whole interval), true.
+- **S7 `0x102ef6d0`** on motor code 2 (above): true -> `*result = 0` (budget already zeroed).
+
+Where S3 sits in `MoveCalcRaw` (asm `102de7fe..102de99a`), for a probe that did not clear: `localnav` slot 5
+`MoveCalcDirect 0x102ddc80` (speed `<= 0` -> -4; clear, or goal/transition flag with the clearance past `maxDist` -> 0) ->
+S1 `0x102eefb0` (slot 1; tolerance `path+0x28` for the goal leg, `path+0x40` otherwise; a -3 whose blocker's slot 153
+`+0x264` is true skips the goal-inside-tolerance completion; else NPC sink slot 1 = door hook) -> `localnav` slot 6
+(`0x102de110`, steer) -> S2 `0x102ef1a0` (slot 2: goal-leg close arms; half-hull waypoint arm; then `distClear <
+goal.maxDist` -> `PrependLocalAvoidance(distClear, 0)`, success -> `*result = 1`, a local detour spliced at the head) ->
+**S3 hold** -> if motor slot 16 (`+0x40`, `0x102e1300`) `> distClear`: S4 `0x102ef0e0` (slot 4: `0x102efde0` true, a moving
+NPC going the same way -> 0, `maxDist = distClear`, flag 2; else `distClear < 1.0` -> `*result = trace status` (-3 for an
+NPC), `maxDist = 0`), then `localnav` slot 7 (`0x102de4a0`) -> tail: `distClear <= goal+0x2c` -> **-4**, else 0.
+
+So an NPC blocking the step, per blocker: (1) steering and a local-avoidance detour are tried first (S2 -> 1, the NPC walks
+around); (2) failing that, a **0.25 s hold** (walk up to the clearance, spend the interval, no fail); (3) once the 0.25 s
+has run, the status stands: follow a same-direction mover (S4 -> 0), else `-3` (S4, `distClear < 1.0`; motor code 2) ->
+`0x0c` without a stale mark, or the `MoveCalcRaw` tail `-4` -> `0x0c` **with** the 4.0 s stale mark. `0x102ef760` runs
+before `Move` sees any of these. The 3.0 s window only matters while the blocker memory survives: `OnNavFailed` resets it,
+so a schedule that retries the move against the same NPC gets a fresh 0.25 s hold; a second contact inside 3.0 s without
+an intervening fail/complete (e.g. after a successful detour) gets none. No re-path happens anywhere in this arm.
+
+#### `0x102ef760`
+
+Sink slot 5 (`OnMoveBlocked`), confirmed from the asm; B's reading holds, A's S5 note agrees. Reached only from `MoveEnact`
+(`102ef923`, `CALL [nav+0x10 vtbl +0x14]` when the result is `< 0`); its single direct thunk is `0x1000e5bb`. Statuses that
+reach it: every negative result leaving `MoveEnact`, i.e. from `MoveCalc` (-1..-4) and from the motor table (-4/-3/-2)
+after S7. Not reached by: the `MoveNormal` gate -4, the bogus-type -4, `MoveJump`/climb statuses, the 17-pass cap, entry
+failures.
+
+Body (`this = nav+0x10`): NPC sink slot 5 (`npc+0x19b0`, `+0x14`) true -> return true, result as that sink left it (base
+false; `CNPC_VZombie` override `0x103de330` not read). Else stopped activity (`0x100097d2(npc, 0x1000b285(npc))`),
+unconditionally; then distance from `GetOrigin` (slot 220) to the path's goal position (`0x1000f60a` -> `0x1030ba30`):
+**2-D when `nav+0x18 == 0`, 3-D otherwise**; tolerance `0x102ee1a0` = `path+0x28 m_goalTolerance` `+ 0.1f` (`0x104491b4`,
+file). `dist < tol + 0.1` strictly (`FCOMPP; TEST AH,5; JP`; equal or NaN fails) -> `OnNavComplete` (nav slot 8), `*result =
+0`, true. Else false, the status stands. This is the only "close enough to the goal" completion after a blocked step,
+on any leg.
+
+#### The door path (`SimplifyPath 0x102f13d0` -> `0x102f06e0` -> slot 531 -> `0x0e`)
+
+`SimplifyPath(nav, bForce)`: `nav+0x3c = bForce`; requires `nav+0x18 in {0, 2}` (`0x1027d990`), a head with a same-type
+next and `flags & 0x2a == 0`; if forced or `nav+0x38 <= curtime`: `nav+0x38 = curtime + 0.5f` (`0x1049d988`, file), forward
+pass `0x102f0e80` (look-ahead 384.0, `0x1060fcd8`; runs the door probe; true -> return true; door byte set -> return
+false), corner cut `0x102f0fe0`; then always the quick pass `0x102f13a0` -> `0x102f0e00` (143.9, `0x1060fce8`). `SetGoal`
+calls it with 1 after `0x102f1dc0`; the `MoveNormal` gate with 0 every pass.
+
+`0x102f06e0` (`__fastcall`, callers `0x102f0e80` and `0x102f0ab0`): trace from NPC slot 193 (`+0x304`) with mask `0x2400b`
+(`0x2600b` when `path+1`, pedestrian); fraction `== 1.0` -> `MoveLimit` to `path+0x30`, answers `status >= 0`. A hit whose
+entity has a door (`+0xa4`) not already passable (`0x100027d4` -> `0x100eec70(door, npc)`): zeroed goal with `+0x28 = dist +
+10.0f` (`0x1044e664`, file), then **NPC slot 531 (`+0x84c`)(goal, door, dist, &result)** at `102f08c3`. True -> `*outDoorSeen
+= 1`; **`result != 0` (`TEST EAX,EAX; JZ`) -> `OnNavFailed(0x0e, 1)` (`102f08e3..102f08e7`) then `0x1027de00(npc, door)`**
+(door notice; writes a stale mark `0x102f1fa0(nav, 5.0 or 20.0, door)` among others, not fully walked). Returns false on
+every door path.
+
+The result word, settled from both bodies (`vtmb_slot 531`: base on `CAI_BaseNPC`, `CGenericNPC`, `CCineAI*`, `CNPC_Crow`,
+`CScriptedTarget`, `CGeneric_NPC_bathack` etc.; Troika on every `CNPC_V*` and `CGeneric_NPC`):
+- base `0x1027dc80`: `goal+0x28 < dist` -> false; `door+0x4f8` not 1 or 3 -> false; `dist < 0.1` (double `0x104493d0`)
+  -> **`*result = -1`**, true; else `goal+0x28 = dist`, `*result = 0`, true.
+- Troika `0x102984a0`: null door -> `DevMsg`, false; `goal+0x28 < dist` -> false; `m_hOpeningDoor (+0x5d24)` is this door ->
+  0; squad-focus door -> **-2**; slot `+0x740 == 4` without the `0xd00` capability -> 0 (and may start alternate-AI 4);
+  `0x1027f550` unusable -> **-2**; capability branch: door route `0x10304130` spliced -> 0; no route, door neither 0 nor 2 and
+  `0x10298840` false -> **-2**; other arms false. Never -1.
+
+Verdict: the test is non-zero, so base `-1` (B) and Troika `-2` both raise `0x0e`; A's "-1 is never written" is true of
+Troika only. In the shipped game's NPC classes the raiser is effectively Troika `-2`.
+
+The second dispatch site, NPC sink slot 1 `0x1027dc10` (Troika wrapper `0x10298340` first tries `0x102a0bc0` and a squared
+distance `< 0x1045d650` `AdvancePath`), handles a door in the step's own trace (`goal+0x60 -> +0xa4`); its result becomes
+`MoveCalcRaw`'s status, so a refused door there surfaces as `-1`/`-2` -> stale mark 4.0 -> `0x0c`, not `0x0e` (A).
+
+Quirk kept verbatim: `OnNavFailed(0x0e)` from the gate's simplify pass sets `nav+0x1c` but does not clear the path, and
+`MoveNormal` does not re-test `nav+0x1c`; the pass goes on to arrival/enact, and a negative result in the same pass reaches
+`Move`'s tail and raises `OnNavFailed(0x0c)` as a second `TaskFail`. A result `>= 0` exits at the loop top.
+`0x10290570` (NPC slot 532) is a separate `0x0e` raiser (`TaskFail` only, reasons 2/4 with `m_eAlternateAI == 4`), outside
+the navigator chain.
+
+#### `MoveEnact` and what it hands the motor
+
+`MoveEnact 0x102ef870` (`"CAI_Navigator_MoveEnact"`, `RET 8`): copies the 31-dword goal (`102ef8a9`); `localnav` slot 3
+`MoveCalc 0x102debe0 (goalCopy, 0, &surface)` with `surface = 0` (`102ef8b7`) -> `MoveCalcRaw`. `surface != 0` ->
+`0x1000c897` -> `0x10270290`: `npc+0x5b90 = surface` (named `m_pSurfaceData` in the field ledger / `docs/vtmb/footsteps.md`
+1.5; no datamap entry), whether or not the move succeeds. Result 0 -> motor execute `0x102e23a0(motor, goalCopy, arg2)`,
+`arg2` = `MoveNormal`'s own stack argument = `Move`'s `arg2` (passed through `PerformMovement 0x1026c120` untouched),
+landing on `0x102e0bd0`'s trailing bool. Result neither 0 nor 1 -> motor slot 10 (stop). Result `< 0` -> `0x102ef760`
+(`&result`). Returns the (possibly rewritten) word.
+
+Goal filled by slot 17 `0x102eee40`: `[0..2]` head position, `[3..5]` direction (z dropped and `0x102e5d00` on ground, 3-D
+normalise otherwise), `[6..8]` copy, `[9]` ideal speed (`0x102e12c0` -> NPC slot 248), `[10]` distance, `[0xb]` `min(motor+0x30
+* speed, dist)`, `[0xc]` navType, `[0xd]` target (`0x102ecc40`), `[0xe]` flags (1 goal waypoint, else 4 if the next waypoint
+differs in type), `[0xf]` path. The motor's ground executor `0x102e1560` spends `motor+0x30`: clamped budget `<= maxDist` or
+flag 2 -> `motor+0x30 = 0`, else `motor+0x30 *= 1 - maxDist/projected`. `MoveNormal` restore arm (`102efc11..102efc80`):
+result 0, pre-activity speed `< 0.01` and displacement `< 0.01` -> `m_nSequence` and `m_Activity` restored; result 0 and
+`nav+0x51 == 0` -> nav slot 6 (`0x102eea50`, empty).
+
+**Port consequence.** In the Unreal port the body walks the route itself, so the substrate has no `MoveLimit`/motor to
+produce statuses; it must turn the body's facts into exactly these outcomes, in this order, per think: (1) entry gates
+before anything (`m_bPaused` return; `OverrideMove`; `m_bShouldMove` clear -> stop, no fail; no `m_goalType` -> Warning and
+`TaskFail(0x0d)`; no head waypoint -> `TaskFail(0x0c)`; `m_flMoveWaitFinished` -> return). (2) **Arrived**: the body within
+0.0625 (2-D on ground, 3-D otherwise; 0.25 under `npc_vphysics`) of a waypoint -> `AdvancePath` arms (InPass input, door
+flag `0x10` transaction start, pass-waypoint re-find, pop), or, on the goal waypoint, `OnNavComplete` (`TaskMovementComplete`,
+done byte, blocker memory reset). (3) **Blocked by an NPC** (the body's obstruction is an NPC): first a local-avoidance
+detour spliced at the head (result 1, keep walking); failing that, a 0.25 s hold per blocker (`nav+0x54/0x58/0x5c/0x60/0x64`,
+0.25 s / 3.0 s window, `-0.001` edges, reset by every `OnNavFailed`/`OnNavComplete`) during which the NPC stands at the
+clearance and nothing fails; after it, follow a same-direction mover, else the blocked result. (4) **Any blocked result**
+first passes the goal-tolerance completion: `dist(origin, goal position) < path+0x28 + 0.1` (2-D ground / 3-D else, strict)
+-> `OnNavComplete`, not a failure (stopped activity set either way). Hitting the goal's own target entity also completes.
+(5) **Failed `0x0c`**: blocked by an NPC -> no stale mark; blocked by world/entity/illegal or the 17-pass cap -> stale-mark
+the link 4.0 s (when `m_fRememberStaleNodes`) then `0x0c`. (6) **Door `0x0e`**: only from the simplify pass's straight-line
+door probe (every 0.5 s, or forced by `SetGoal`) when slot 531 answers true with a non-zero word (Troika `-2`: squad-focus
+door, unusable door, no door route and open refused; base `-1` within 0.1) -> `OnNavFailed(0x0e)` + door notice; a door met
+in the step itself fails `0x0c` with the stale mark. Where the body cannot yet report an input (steer slot 6, slot 7, motor
+slot 16, `0x102efde0`'s mover test), build the seam and answer "nothing" with a comment naming the retail word.
+
+**Unrecovered:** `localnav` slots 6 and 7 (`0x102de110`, `0x102de4a0`) and `MoveLimit`'s arms (who fills `surface`); motor
+slot 16 `0x102e1300` (the S4 gate distance) and `0x102efde0`'s constants; what obstruction `+0x94` is beyond "non-null for an
+NPC", and the Troika sink's `+0x98`/`+0x14b8 bit 2` test; `PrependLocalAvoidance 0x102ede30` success conditions; slot 525
+overrides `0x10357ba0`, `0x103c5fe0`, `0x1038b120`; NPC sink overrides (`CNPC_VZombie 0x103de330`); the meaning of `Move`'s
+`arg2`; `0x102f0fe0`, `0x102f0ab0`, `0x102f0e00` past their outline; `0x1027de00`'s writes and the `0x10298800`/`+0x644c`
+state machine beyond 1 -> 3; `TaskFail`'s overwrite rule for the `0x0e`-then-`0x0c` double fail; whether any writer besides
+the ctor touches `nav+0x5c`/`nav+0x64`; `DAT_10934070` (no code writer; data patch not excluded); which motor class
+(`CAI_Motor` or `CAI_HumanoidMotor 0x10264680`) each NPC uses for slot 19 (both pass the partial-move bool 1).
+
+### The think gate, the path-corner chain and the step rise (2026-09-29, 0018 story 5)
+
+_Read from `vampire.dll` listings and decompiles; constants read from the DLL image (`0x104491a8` = double 0.8, `0x104491b4` = float 0.1, `0x104493d0` = double 0.1, `0x104454c0` = 1.0, `0x10453b94` = 18.0, `0x10462950` = 40.0). Port files read: `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseThink.cpp` 25-120, `ElysiumEntityWorld.cpp` (clock hits), `Public/ElysiumGameClock.h`, `Public/ElysiumEntityWorld.h` 1165-1189._
+
+#### Q1 - the 0.8 s think gate
+
+**(a) The two reads test two different things, and the "built" flag `+0x658` is read by exactly one function.**
+
+- `DAT_1093408c` is a **byte**, not the network pointer (`MOV CL,byte ptr [0x1093408c]` in `0x1026c3d0`; `!= '\0'` everywhere). Meaning: "the node graph is loaded or built". Writers (all three, from the ledger): `0x102f5bd0` (the `.ain` loader, sets 1 after `WCLookup`), `0x102f6610` (the rebuild step: `if flag==0 { 0x102f51d0 build; flag=1 }`), and `0x102f65b0` (sets 0, and `DAT_1093407c = 0`), whose only caller is `CAI_SystemHook::LevelShutdownPostEntity 0x102cc410`.
+- `DAT_10934088` is the network **manager entity** pointer (written only by `0x102f6690`: `DAT_10934088 = this`, `DAT_1093407c = &this[1]+8`, the CAI_Network member). `manager+0x658` is the "built" byte; it has ONE writer, the manager's think `0x102f6a50` (`0x102f6a50: *(param_1+0x658) = 1`), and ONE reader, **`CAI_BaseNPC::NPCThink 0x1026ca80`** at `0x1026cb23..0x1026cb36` (`MOV EAX,[0x10934088]; JZ; CMP byte [EAX+0x658],0; JZ`). A whole-DLL grep for `+ 0x658)` finds no other reader.
+- Consequence the port's seam names got wrong: `Think19AiNetworkReady` (`manager && manager+0x658`) belongs ONLY to the base-class body `0x1026ca80`. The Troika body `0x10292de0` (the one the VtMB NPC classes run) never touches `+0x658`; it gates only through `0x1026c3d0`, which reads `DAT_1093408c` (and `DAT_1092053c` bit 0 = AI disabled, bit 1 = ai_step). So the 0.8 s think gates the base-class NPCs (per the port's own comment at `ElysiumNpcBaseThink.cpp:101`: `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_ExpressiveNPC`, `CAI_TestHull`, the Cine classes, `CGenericNPC`, `CGenericSabbat_NPC`) and nothing on the Troika line.
+- **`DAT_1093408c` is normally already 1 before the 0.8 s think ever fires.** `0x102f6690` itself does `if (0x102f67a0(mapname)) 0x102f5bd0(this)` (`0x102f6690`, before `ThinkSet`): `0x102f67a0` asks the engine (slot `0x170`) whether `maps/graphs/<map>.ain` is present and current versus the map; when it is, the loader runs at once (unless the engine's slot `0x30`, the Worldcraft edit-mode test, is set) and the flag becomes 1 during `CWorld::Precache`. A shipped map with a current `.ain` therefore has its Troika NPCs admitted from their first think. The flag stays 0 only when the file is missing/stale or the loader fails a check (version 0x1e, hull count 0x16, `TotalNumLinks`, `WCLookup`).
+- What the 0.8 s think does when the flag is already 1 (`0x102f6a50`, `+0x450 == 0` arm, flag set, not edit-mode, jump to `LAB_102f6ab3`): fire the engine event `ai_node_graph_built`, run `0x102cc900` (initialise every dynamic link `CAI_DynamicLink` on the list `DAT_1092541c`: resolve its two WC node ids through `0x102f6d10`, then `0x102ccce0`; a missing WC lookup prints "Trying initialize links..." and skips), run `0x102f6cd0` (frees the WC lookup at `network+0xc` outside edit-mode), set `+0x658 = 1`, clear its own think, then `0x1028d8d0`: for every entity in the class list at `0x106eb5d8` call vslot `0x920` (slot 584, `CAI_BaseNPCTroika::FUN_1028d910` `0x1028d910`) = `slot 614 (+0x998)` then stamp `m_flLastThink / LastUpdateThink / LastNormalThink / LastMoveThink / LastAIThink = curtime` (the port already has this as `ResetThinkTimers`, `ElysiumEntityWorld.cpp:844`). When the flag is 0 instead: prints "Node Graph out of Date. Rebuilding...", sets `+0x450 = 1` and re-arms at `curtime + 1.0` (`_DAT_104454c0`); the next think runs `0x102f6610` (build, flag = 1) and then the same "built" tail.
+
+**(b) `curtime` is `gpGlobals->curtime`** (`*(DAT_1070b228 + 0xc)`), the engine's per-map server clock. The first think is `m_flNextThink = curtime + (float)0.8` at the END of `0x102f6690`, so the gate is a stamp RELATIVE to the moment `0x102f6690` ran, not an absolute time. The engine side (whether `curtime` restarts at 0 on a map load, and what a restore rebases it to) is engine.dll and was not read; it does not matter to the gate, because the gate never compares against a map-absolute value.
+
+**(c) When it runs.** `0x102f6690` has one caller: `CWorld::Precache 0x1023c020` (via thunk `0x1000bd66`), immediately after the light styles and before `0x1030c560(0x10936b68)`. `Precache` is reached from `CWorld::Spawn 0x1023bba0` (its tail dispatches slot `0x1a0`) and, on a save RESTORE, from the entity restore pass `CEntitySaveRestoreBlockHandler` `0x101a2e40`: its second loop, per restored entity, calls `Restore` (`+0x1fc`) then `ObjectCaps` (`+0x1d4`): bit 4 set -> Spawn (slot `0x19c`), else Precache (slot `0x1a0`). The world entity (`worldspawn`, index 0, special-cased in that function's first loop) takes one of the two, and `CWorld::Spawn` calls Precache itself, so **a restored map re-runs `0x102f6690`**: it creates a fresh `ai_network`, reloads the `.ain` (flag 1 again after `LevelShutdownPostEntity` zeroed it), and arms a new `curtime + 0.8` think. A restored map does wait 0.8 s for the manager's think (only base-class NPCs feel it; Troika NPCs are admitted as soon as the loader ran). The manager entity is recreated, not restored (inference: it would otherwise be duplicated; its `ObjectCaps` was not read).
+
+**(d) A gated NPC.**
+- Base body `0x1026ca80`: writes `m_flNextThink = curtime + 0.1` (double `0x104493d0`) at `0x1026cb14..0x1026cb1d`, BEFORE any gate; then manager null or `+0x658 == 0` -> return (`0x1026ccf5`); then `0x1026c3d0` false -> return. So it re-arms at 0.1 s and does nothing else (the port's body at `ElysiumNpcBaseThink.cpp:113` already matches).
+- Troika body `0x10292de0`: the gate call is at `0x102933f9` (inside the "Set2" arm, after `ResolveStandingOnHead`, `0x102bfdf0`, `0x102bf310` and the closest-player LOS block). False -> skip `RunAlternateAI`/slot `0x6c0`/`PostRun`/`PerformMovement`/`CalcNextMoveThink`/`CalcNextAIThink` and skip the whole `LAB_1029364a` block (so no `CalcNextUpdateThink`/`CalcNextNormalThink`), and right after the gate call: `if (DAT_1093408c == 0) m_flNextThink = curtime + 0.1f` (`_DAT_104491b4`). When the flag is 1 but the gate is false (AI disabled or ai_step), the body does NOT write `m_flNextThink` on this path (whatever was there stays).
+- Inside `0x1026c3d0` a closed graph (flag 0) prints the throttled "A.I. Disabled..." overlay (5 s, `_DAT_10454110`) and calls `SetActivity(ACT_IDLE = 1)` (slot 310, `+0x4d8`) every think; flag 1 with `DAT_1092053c & 1` also does the `SetActivity(1)` without the overlay. The port's `Think19AiConsoleGate` reproduces this.
+
+**The port's clock question.** `FElysiumEntityWorld::NowSeconds()` (`ElysiumEntityWorld.cpp:140`) is `GameState->GameClock().GetNow()`, the session clock (`ElysiumGameClock.h`: "persists across map travel; only the entity world and its queue die with the map actor"; `Reset(StartSeconds)` restores a saved curtime). The world keeps NO map-start stamp: `Activate(double Now)` (`ElysiumEntityWorld.cpp:376`) writes `Now` only into `LastTickNow`, which every tick overwrites (`:1764`, `:1814`); a grep of `Source/ElysiumUE` for `MapStart|LevelStart|LoadedAt|LevelTime|MapTime` finds nothing relevant. **Verdict for story 5: no per-level clock is needed and none should be built.** The gate is "0.8 s after `Precache` ran", so it needs one new per-world field stamped when the world is built (`= NowSeconds()` at the `0x102f6690` equivalent, +0.8), which restore gets for free because the port rebuilds the world on load and restore exactly as retail re-runs `Precache`. Story 5 builds the seam: (1) `Think19NodeGraphBuilt` = "baked graph loaded for this world" (true from world load when the baked graph exists, false after teardown; today it returns constant true); (2) `Think19AiNetworkReady` = "manager exists and its 0.8 s think has fired", read ONLY by the base-class body; (3) the manager think's tail effects (dynamic-link init `0x102cc900`, `0x1028d8d0`'s per-NPC slot-584 reset) at that moment.
+
+#### Q2 - the type-3 path-corner chain
+
+**(a) Yes, arrival fires the corner's `OnPass` and copies its `speed`; `wait` is never read.** Arrival is `CAI_Navigator::FUN_102ef510` (slot 16, `MoveNormal`'s first probe at `0x102efaa0` `vt+0x40`): distance to the current waypoint (`path+0x24`) versus the tolerance; then, if `FUN_102ee660` (= `0x1030bd50`: current waypoint flag byte `+0x28` bit 3, "is the goal") is false, it calls **`AdvancePath 0x102f0400`**; if true, slot 8 `0x102eea90` (which resets the move state and calls `0x102eccc0` -> the NPC's `OnMovementComplete 0x10273ec0`). Other advance triggers, same function: the in-range test `0x102f1500` and the skip-ahead test `0x102f1690` (advance when a straight local probe to the next waypoint is clear), so an intermediate corner can be passed without touching it. `AdvancePath` step 1: if the waypoint flag `+0x28 & 2` (`bits_WP_TO_PATHCORNER`; the DoFindPath type-3 arm builds every waypoint with flags 2 via `0x10319df0(..., 2, -1)` and stores the corner's handle at waypoint `+0x20`) and its handle resolves, it calls `AcceptInput` (vslot `0x1d8`) on the corner with the input **`"InPass"`** (string `0x1057b630`), activator = the walking NPC, caller = the corner. `CPathCorner::InputInPass 0x10147d50` fires `m_OnPass` (`+0x454`, output `OnPass`) with that activator/caller and delay 0. The last corner is covered too: at the goal, slot 8 -> `OnMovementComplete 0x10273ec0` -> (`0x102ee6a0`: navigator still holds a waypoint) -> `AdvancePath` -> `InPass` on the goal corner; note the order in that function: `TaskComplete` for the waiting task (movement state 2) is written BEFORE the `InPass` fires, then the goal branch of `AdvancePath` skips everything else. `speed`: at chain build `0x102f2330` case 3 (`0x102f2393..0x102f23af`) reads the FIRST entity's `+0x164` (`CBaseEntity::m_flSpeed`, the `speed` key); if non-zero it stores it into the WALKER's `+0x164` through `0x102ecd00`; since `AdvancePath` rebuilds the chain from each new `m_pGoalEnt` (b), it re-applies at every corner passed. I found no reader of a walker's `+0x164` (only door/mover/`Dump` readers) so the copy is unconsumed as far as the corpus greps show. `wait` (`CPathCorner::m_flWait +0x450`, key `wait`): its only reader is the getter `0x10147b10` (slot 152), which has **zero callers** (direct, virtual and possible): no path corner pause exists. Also observable: `CPathCorner` has an input `SetNextPathCorner` (`0x10147d10`, rewrites the corner's `m_target`), which changes what `GetNextTarget` returns on later rebuilds.
+
+**(b) `m_pGoalEnt` advances on every non-goal corner, and the chain is rebuilt rather than popped.** `AdvancePath` after `InPass` and after the goal test: if the waypoint has a next (`+0x30`) and flag `& 2`, it does `m_pGoalEnt (+0x5de8) = m_pGoalEnt->GetNextTarget()` (vslot `0x2b0`, slot 172; note it is the CURRENT `m_pGoalEnt`'s next, not the waypoint's entity) and re-enters `DoFindPath 0x102f2330`, which clears the path and lays a fresh chain (up to `0x80`) from the new `m_pGoalEnt`. Otherwise it pops (`0x1030ba90`; a "Force end of route" DevMsg and goal flag `|= 8` when there is no next). At the goal corner `m_pGoalEnt` is NOT advanced (it stays on the last corner). Raw-offset ledger for `+0x5de8` (whole-DLL grep): readers/writers are `DoFindPath` (read), `AdvancePath` (rewrite), `ScheduledMoveToGoalEntity 0x102800c0` and `ScheduledFollowPath 0x102801e0` (write; the latter calls `0x10280de0(schedule)`, sets `+0x5de8`, builds the goal record with type 3 and calls `SetGoal(nav)`), `CAI_ChangeTarget::InputActivate 0x101c99c0` (writes 0), `ReadyNPC 0x10273ad0` (`m_pGoalEnt = FindByName(m_target)`, then `SetState(1)` + `0x10280de0(this,3)`), the base `StartTask 0x102827f0`, and `CNPC_VCamera 0x10369930`. The `aiscripted_schedule` modes 4/5 (`0x101a98c0`) reach it through `ScheduledFollowPath`; Troika task `0x120` reaches type 3 through its own `SetGoal` call (not re-read here). What a script can observe: `OnPass` per corner in order (activator = the NPC), the NPC's `m_pGoalEnt` moving corner to corner, and the schedule's `TASK_WAIT_FOR_MOVEMENT` ending on the last corner.
+
+**(c) Success vs failure.** Success: the goal waypoint (the last laid, `|= 8` set at `0x102f24d1..0x102f24d8` ONLY when the loop count is `< 0x80`, the `CMP EAX,0x80; JGE` at `0x102f24ca`) is reached -> `OnMovementComplete` -> `TaskComplete`. A null `GetNextTarget` ends the chain successfully at the last corner (`piVar7 == 0` breaks the loop); a chain of `0x80` or more is truncated and its last waypoint is NOT flagged goal (so the walker reaches waypoint 128 with `AdvancePath` still wanting a next, whose `+0x30` is 0: it falls to the pop, the "Force end of route" message, and sets the goal bit there). Failure: a null initial `m_pGoalEnt` builds nothing and returns 0 (`LAB_102f2614`) -> `SetGoal` refuses -> `OnNavFailed`, `TaskFail 0x0c`; a blocked corner-to-corner leg fails through `CAI_Navigator::Move` exactly like any leg (Q3). The type-3 arm never calls the route builder `0x102f2060`, so no node graph, link or stale bit is consulted for the chain: the legs between corners are straight local walks.
+
+#### Q3 - the step-height rise
+
+Confirmed, with one refinement. The ground arm walks the leg in 16-unit segments (`0x102e4f50`, segment cap 16.0, stop 0.001), each segment through `CAI_MoveProbe::CheckStep 0x102e4160` (name string `0x1060ec0c`), whose step record holds slot 522 (`StepHeight`, `+0x828`, read by `0x102e7e00`; 18.0 for every non-species class) as the up-step and slot 523 as the down-step; a wall taller than the raised trace is a blocker whose class through `0x102e2d70` is `-2` (world), `-1` (entity) or `-3` (NPC), and the final z is refused (`*param_6 = -2`, blocker set to the world entity) when `|final z - requested z| > max(hull height x 0.5, StepHeight + 0.1)` (36.0 on hull 0). So a discrete ledge of 18 to 40 (the graph builder's `CAI_TestHull` steps 40) is refused at run time by the NPC's own probe with status -2, while a continuous ramp reaching the same height is not limited by step height at all (there is no slope limit; `navigation-jump-links.md:997`). The navigator then treats the refusal as follows: the pathfinder never probes a non-stale link (the predicate `0x102ff960` accepts when `link info & 1` is clear), so the route is planned through the link and walked to the ledge; there `MoveEnact 0x102ef870` returns a negative status (and notifies the movement sink slot 5), `MoveNormal` returns it, `CAI_Navigator::Move 0x102eff40` leaves its loop and, unless the status is -3 (NPC blocker), calls `0x102f1fa0(nav, 4.0, 0)` (the stale-link mark: `link info |= 1`, `link+0x68 = curtime + 4.0`, blocker none; only when `nav+0x50 m_fRememberStaleNodes` is set, a path is live and both node ids are valid), then unconditionally `OnNavFailed 0x102eeae0(0x0c, 1)` -> `TaskFail 0x0c`. There is no re-path inside `Move`; the re-plan happens on the schedule's next request, where `0x102fce80` re-probes the stale link (`0x10304a40`) each new `curtime` until `link+0x68` passes and then clears the bit unprobed (so the ledge link is retried about every 4 s). For the port this is a pin, not code: the 18-unit NavMesh agents already exclude those rises, and the only divergence is timing, not code: retail fails `0x0c` after walking to the ledge and 4 s-marks the link, while the mesh either routes around from the start or refuses the route at request time with the same `0x0c`. Record it as a named modernization; build code only if a map script is found to observe the walk-to-the-ledge failure.
+
+**Unrecovered:** (1) the engine-side rebase of `curtime` at map load and at save restore (engine.dll was not read; the gate is relative so it does not matter here); (2) the `ObjectCaps` of `CAI_NetworkManager` (the "recreated, not restored" claim is inference; the restore-path `Precache`/`Spawn` selection is read at `0x101a2e40`, bit 4 of `ObjectCaps`); (3) slot 614 (`+0x998`) body called by `0x1028d910`, and what `0x101ce440` does at the two "Rebuilding" points; (4) which entities the class list `0x106eb5d8` walked by `0x1028d8d0` selects (flag `0x40` argument); (5) whether a walker's `+0x164` (`m_flSpeed`, written from the corner's `speed`) has any reader; (6) the Troika task `0x120` call site was taken from `navigation-jump-links.md:645`, not re-read; (7) the step-up decision inside `0x102e3450` (the trace helper `CheckStep` calls) and the exact `MoveEnact` negative-status mapping to `-2` were read structurally, not per-instruction; (8) the Troika `NPCThink` arm where the flag is 1 and the gate is false (AI disabled / ai_step) leaves `m_flNextThink` untouched, and what the think dispatcher does with an unchanged value was not read.
 
 ## Task readers of network data (2026-09-17)
 

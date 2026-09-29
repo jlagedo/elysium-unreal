@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 07 closed 2026-09-29; row 08, 0018/5, is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 08 closed 2026-09-29; row 09, 0018/6, is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -266,14 +266,31 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     jump link 731, which retail's `IsJumpLegal` (`0x10280880`) refuses. Row 13 is to carry retail's
     jump legality per direction; row 08 the jump seam, which also refuses legal jumps (hub 88,
     tutorial 390). Detail: the spec's story 4 "Landed 2026-09-29" paragraph.
-- [ ] **08 · 0018/5** — The navigator and the movement seam. L · Opus/high.
-  21-8 corrected its pedestrian price (an AVOIDANCE, not a preference) and handed it an exact
-  acceptance set: the 1,331 links over 40 maps carrying `m_LinkInfo & 0x2000`.
-  Row 07 handed it `InstallPathNoGoal` (the wander's path, no goal), whose arrival is still
-  unwitnessed: its move radius is 0, which the body clamps to 1 cm. In the smoke run the two forced
-  copcar wanderers blocked each other before arriving. It also handed the jump seam, which refuses
-  legal jumps (hub link 88, tutorial link 390).
+- [x] **08 · 0018/5** — The navigator and the movement seam. L · Opus/high. **Landed 2026-09-29.**
+  - *The seam.* `FElysiumNpcNavigator` holds the path and goal words by their retail offsets;
+    `FElysiumNpcMoveRequest` / `FElysiumNpcMoveFacts` on `IElysiumNpcMotor` carry the body's facts
+    and never a verdict. Wave 0 corrected the story's text: goal flag `0x2` has one issuer,
+    `nav+0x44` is never written, arrival is the constant 0.0625, `Move` never re-paths, door `0x0e`
+    comes from `SimplifyPath`.
+  - *The outcomes.* `NavigatorMoveStep` is `CAI_Navigator::Move 0x102eff40` row for row (`0x0d`,
+    `0x0c`, the stale mark, the NPC hold and its re-issue, both completions), with
+    `TaskMovementComplete`'s `AdvancePath`, the path-corner chain (`OnPass`, `speed`) and the
+    goal-flag-2 node route. `ChangeSchedule` now translates first (`0x102cc1f0`). An unblocked cop
+    arrives (1.0 cm left over 45-50 m, three of three).
+  - *The filter.* Pedestrian requests price ×5–9 through `ElysiumNavQueryFilter_Pedestrian`, plain
+    walks ×0; `pedestrian_link_census.py` gates the corrected census: 1,277 flagged links over 32
+    maps, hub 461 (the spec's 1,331 / 40 mixed the base graphs with the patch hub count).
+  - *The gate.* The 0.8 s think gate is one per-world stamp (`BuildStamp`), re-stamped on restore;
+    Troika gates only on the loader byte (`SetPlaceSetPending`). 0 ensure / assert / `0x0d`.
+  - *Handed on.* The NPC hold's cadence defect (a held cop re-armed every ~14.8 s and never
+    resumed) was fixed the same day (`414ac129`); the 14.8 s is retail's out-of-PVS think law,
+    kept. The `copcar` cops' spawn stall is the police car prop, which the
+    NavMesh does not carry (3's contents / row 13). `RouteLengthTo` goes to row 09, the jump
+    refusals, door policy and two 0.8 s tails to row 13, the slot-584 tail to row 11, the step-rise
+    pin to story 3's harness report. Detail: the spec's story 5 "Landed" paragraph.
 - [ ] **09 · 0018/6** — Geometry services (sight, hull sweep, stand test, reachability). M · Opus/high.
+  Row 08 left `RouteLengthTo` (the wander's path-length test, and the navigator's distance-left
+  sample) a seam answering nothing: the path-length service is this row's.
 
 ## C — close 0019
 
@@ -288,6 +305,11 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   Row 07 handed it the jump links' legality. The bake places every motion-2 link both ways without
   `IsJumpLegal` (`0x10280880`); 95 of the hub's 117 and 17 of the tutorial's 25 fail it both ways.
   Unreal then routes the hub patrol cop over link 731, which retail never plans.
+  Row 08 added: why `BeginNavigationJump` refuses LEGAL jumps (hub link 88, tutorial 390), the
+  door policy behind slot 531 and `SimplifyPath`'s `0x0e`, the `copcar` prop obstacle (a
+  `prop_dynamic` the NavMesh does not carry; shared with 3's contents marking), and two unwired
+  0.8 s-think tails: the `ai_node_graph_built` event and the dynamic-link initialisation
+  `0x102cc900`.
 - [ ] **14 · 0018/8** — Hint nodes. M · Opus/high.
 - [ ] **15 · 0018/9** — The goal selectors. L · Opus/high.
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.
@@ -352,11 +374,13 @@ Task bodies and selector arms only; programs come from row 04. Sizes below preda
   skips the green maps.
 - [ ] **0018/21-9** — The gate's judgement machinery: pins for bridging and jump-projection
   findings, which take none today. S · Sonnet/medium. Opened by 21-8; shape it against 21-8's
-  finding set.
+  finding set. Row 08 added one finding to shape against: `hw_hub_1`'s 124 of 513 UNFLAGGED
+  ground links cross a `0x2000` box (reported by the census, not gated, cause uninvestigated).
 - [ ] **0018/21-10** — The small hulls' cell size. M · Opus/high. Opened by 21-8 and **blocking
   it**: 855 of 1,154 findings are the rat and TinyCentered agents, whose Recast erosion exceeds
   retail's hull by 4.8 and 9.7 cm a side. One experiment settles it (re-cut `hw_hub_1`'s rat mesh
   at 2.54 cm cells and re-ask the 145 links); then a cost decision, a re-bake and a re-judge.
+  Row 08 handed on the hub's three rat links (406 / 721 / 1472), which path the long way round.
 
 ## Where this differs from the specs' stated orders
 
