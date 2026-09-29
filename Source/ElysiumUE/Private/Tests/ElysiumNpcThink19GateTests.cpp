@@ -236,13 +236,13 @@ bool FElysiumThink19GateAiStepTest::RunTest(const FString&)
 	N.MaintainDebugTaskIndex = 0;   // >= DAT_105c9798 (-1): the goal test decides
 
 	N.SequencePlaybackRate = 5.f;
-	Motor->Navigation.bActiveGoal = false;
+	N.Navigator.bHasHeadWaypoint = false;                     // path+0x24: no head waypoint
 	TestTrue(TEXT("0x102ee6a0 no path head"), !N.NavigatorGoalIsActive());
 	TestFalse(TEXT("0x1026c4e8 ai_step: the console gate refuses"), N.Think19AiConsoleGate());
 	TestEqual(TEXT("0x1026c4d5 with no path head +0x6f4 = 0"), N.SequencePlaybackRate, 0.f);
 
 	N.SequencePlaybackRate = 5.f;
-	Motor->Navigation.bActiveGoal = true;
+	N.Navigator.bHasHeadWaypoint = true;
 	TestTrue(TEXT("0x102ee6a0 a path head exists"), N.NavigatorGoalIsActive());
 	TestFalse(TEXT("0x1026c4e8 ai_step: the console gate refuses"), N.Think19AiConsoleGate());
 	TestEqual(TEXT("with a path head +0x6f4 is left alone"), N.SequencePlaybackRate, 5.f);

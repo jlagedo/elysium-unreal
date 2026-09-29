@@ -114,19 +114,19 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	auto StopStatus = [Npc]() { return Npc->Schedule.TaskStatus; };
 	Motor.Navigation.Type = EElysiumNpcNavType::Jump;
 	Npc->NavSetType(1);                                   // NAV_JUMP
-	Motor.Navigation.bActiveGoal = false;
+	Npc->Navigator.bHasHeadWaypoint = false;                 // path+0x24: no head waypoint
 	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
 	Npc->StartTaskSlot442(&Stop);
 	TestTrue(TEXT("0x10282dcc StopMoving with no goal completes without probing jump failure"),
 		StopStatus() == EElysiumTaskStatus::Complete);
-	Motor.Navigation.bActiveGoal = true;
+	Npc->Navigator.bHasHeadWaypoint = true;
 	Npc->Velocity = FVector(10, 0, 0);
 	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
 	Npc->StartTaskSlot442(&Stop);
 	TestTrue(TEXT("0x10282d86 StartTask clears the goal and keeps the moving jump running"),
 		StopStatus() == EElysiumTaskStatus::Running);
-	TestFalse(TEXT("the goal was cleared independently from nav type"), Motor.Navigation.bActiveGoal);
+	TestFalse(TEXT("the goal was cleared independently from nav type"), Npc->Navigator.IsGoalActive());
 	Npc->Velocity = FVector::ZeroVector;
 	Npc->RunTaskSlot444(&Stop);
 	TestTrue(TEXT("0x10288963 RunTask still detects a stuck jump after the goal clear"),

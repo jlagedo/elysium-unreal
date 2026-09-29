@@ -63,18 +63,14 @@ namespace ElysiumNpcBodyMove
 inline constexpr float FollowerArrivalFloorCm = 1.0f;
 }
 
-// What one `FElysiumNpcMoveRequest` becomes on the follower side. Pure: derived from the request and
-// the nav data's cell, so it can be asserted without a navmesh.
+// What one `FElysiumNpcMoveRequest` becomes on the follower side. Pure: derived from the request
+// alone, so it can be asserted without a navmesh.
 struct FElysiumNpcFollowerRequest
 {
 	// The request's tolerance exactly as stated (never below zero). `Sample`'s own reach test.
 	float ExactToleranceCm = 0.0f;
 	// What the follower is handed: the tolerance, or `FollowerArrivalFloorCm` where that is larger.
 	float AcceptanceRadiusCm = 0.0f;
-	// Half-extent of the box the destination is projected onto the navmesh with. Bounded by the
-	// tolerance, widened only to the nav data's own cell (the mesh cannot place a polygon finer
-	// than that, so a smaller box would refuse every goal sitting on it), never `INVALID_NAVEXTENT`.
-	float ProjectionExtentCm = 0.0f;
 	bool bAllowPartialPath = false;
 	// `PedestrianCostMultiplier > 0`: the search runs on the pedestrian filter at this price.
 	bool bUsePedestrianFilter = false;
@@ -167,9 +163,10 @@ public:
 	UPROPERTY()
 	FElysiumNpcAnimTickFunction AnimTickFunction;
 
-	// The request as the follower sees it. `NavCellCm` is the nav data's cell size, 0 when unknown.
-	static FElysiumNpcFollowerRequest ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request,
-		float NavCellCm);
+	// The request as the follower sees it. The destination is projected with the nav data's DEFAULT
+	// query extent (`INVALID_NAVEXTENT`), as `AAIController::MoveTo` does: retail never snaps a goal,
+	// so a refused projection is Unreal's "no path" and the snap offset is a fact, never a bound.
+	static FElysiumNpcFollowerRequest ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request);
 
 	using IElysiumNpcMotor::MoveTo;
 	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) override;
@@ -233,7 +230,11 @@ public:
 #endif
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	// Test-only reach into the move record (`ElysiumNpcBodyMoveFactsTests.cpp`); absent from a
+	// shipping build.
 	friend struct FElysiumNpcBodyMoveTestAccess;
+#endif
 	void ServiceNavigationJump();
 	void FinishNavigationJump(bool bSucceeded);
 	void ResetNavigationJump();
@@ -313,8 +314,7 @@ private:
 	// Why a request the controller refused outright (`EPathFollowingRequestResult::Failed`) had no
 	// route: the goal or this body off the navmesh, or the mesh not connecting them (a partial
 	// path only). Asked only on that branch, so it costs nothing on an accepted request.
-	FString DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination,
-		float ProjectionExtentCm) const;
+	FString DescribeRefusedRoute(const AAIController* AI, const FVector& FeetDestination) const;
 
 	// --- The facts `SampleMoveFacts` reports (0018 story 5). Engine state only, never a verdict. ---
 	// A new request opens the record: the ended facts and the recorded blocker of the last request
@@ -326,13 +326,18 @@ private:
 	// The engine finishes a request the follower never ran (already at goal: Success; refused:
 	// Invalid). The follower's own report is taken for it and `ExtraFlags` are the flags the engine
 	// leaves unset.
-	void FinishRequestImmediately(UPathFollowingComponent& Following,
+	void FinishRequestImmediately(UPathFollowingComponent* Following,
 		EElysiumNpcMoveResultCode Result, EElysiumNpcMoveResultFlags ExtraFlags);
 	// A request was issued since spawn. Before that the facts hold no destination to measure to.
 	bool bMoveIssued = false;
 	// Inside `MoveTo`, before the follower has answered with an id.
 	bool bMoveIssuing = false;
 	TOptional<uint32> MoveRequestId;
+	// The request's path was partial, and how far the goal projection moved it (`Projected -
+	// Requested`). Set when the request is issued, reset by `BeginMoveFacts`; published as facts.
+	bool bRequestPathPartial = false;
+	float RequestGoalSnap2DCm = 0.0f;
+	float RequestGoalSnapDzCm = 0.0f;
 	bool bMoveEnded = false;
 	EElysiumNpcMoveResultCode EndedCode = EElysiumNpcMoveResultCode::None;
 	EElysiumNpcMoveResultFlags EndedFlags = EElysiumNpcMoveResultFlags::None;

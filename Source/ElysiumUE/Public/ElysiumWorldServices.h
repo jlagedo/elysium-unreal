@@ -242,8 +242,23 @@ struct FElysiumNpcMoveFacts
 	// The follower holds a path; its next corner (world cm) and whether the corner being walked to
 	// is the path's last.
 	bool bHasPath = false;
+	// `NextCornerCm` / `bCurrentCornerIsLast` are real corners only when this is set. The crowd
+	// follower asks Recast to SKIP string pulling (`UCrowdFollowingComponent::OnPathfindingQuery`,
+	// `ERecastPathFlags::SkipStringPulling`), so its path is start -> end and the Detour corridor's
+	// own corners live inside `dtCrowd`, which the engine does not expose. Clear: both fields are
+	// left at their defaults and a reader must not treat them as a corner or a direction.
+	bool bHasNextCorner = false;
 	FVector NextCornerCm = FVector::ZeroVector;
 	bool bCurrentCornerIsLast = false;
+	// The path the follower took for this request is partial (`FNavigationPath::IsPartial`): it ends
+	// short of the goal. Kept after the request ends. A follower `Success` on such a path is the
+	// path's end, not the goal.
+	bool bPathPartial = false;
+	// How far the navmesh projection moved the goal (`Projected - Requested`) when the request was
+	// issued: horizontal distance and z, cm. The projection uses the nav data's default query extent
+	// and never refuses on this; zero when the goal did not project.
+	float GoalSnap2DCm = 0.f;
+	float GoalSnapDzCm = 0.f;
 };
 
 class IElysiumNpcMotor

@@ -87,10 +87,11 @@ void FElysiumNpcBase::ChangeSchedule(int32 Id)
 
 	// Then `SetSchedule(int)` (`0x102cc1f0`: slot 440 `TranslateSchedule`, slot 446
 	// `GetScheduleOfType`, the `"GetScheduleOfType(): No CASE for %d"` miss arm installing base 1)
-	// and `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`). Both halves are
-	// `ElysiumSchedule::Start`, which already carries the translate, the miss trace and the
-	// condition clear.
-	ElysiumSchedule::Start(Schedule, Id, *this);
+	// and `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`). The translate is this call's own
+	// (`0x102cc1f0` dispatches vtable +0x6e0 on the RAW id before `GetScheduleOfType`), so the
+	// scripted movers' IDLE_WALK (2) installs its translation, `0x46`, as retail's does; `Start` then
+	// carries the id-space resolve, the miss trace and the condition clear.
+	ElysiumSchedule::Start(Schedule, TranslateSchedule(Id), *this);
 }
 
 // 0x10280f40 `NextScheduledTask`

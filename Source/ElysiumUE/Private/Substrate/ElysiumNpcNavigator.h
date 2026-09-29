@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumWorldServices.h"
 
 // What the port's navigator last concluded about its route: the port's own word, not a retail one.
 // Retail raises its outcomes as calls (`OnNavComplete 0x102eea90`, `OnNavFailed 0x102eeae0`) and
@@ -77,22 +78,24 @@ struct FElysiumNpcNavigator
 	// compare is strict (`+0x4c < curtime`, `0x102f1f73`).
 	double RouteRetryTime = 0.0;
 
-	// `nav+0x50` -- `m_fRememberStaleNodes`, gate of the 4.0 s stale mark `0x102f1fa0` that `Move`'s
-	// failure tail writes (`0x102f016e`). Its writer was not read (R3); the port has no link table
-	// to mark, so nothing reads it yet.
-	bool bRememberStaleNodes = false;
+	// `nav+0x50` (`m_fRememberStaleNodes`, the stale mark's gate) has no port word: its writer is
+	// unrecovered (R3) and the port keeps no link table for `0x102f1fa0` to mark (`NavMarkStaleLink`).
 
 	// The NPC-blocker hold (`0x102ef3e0`, R3 "The -3 arm as settled"). `nav+0x51` the hold byte
 	// (cleared by the `MoveNormal` gate each pass); `nav+0x54` the remembered blocker (EHANDLE, -1 at
 	// the ctor and by `0x102eeb70`); `nav+0x58` hold-until and `nav+0x60` forget-at (-1.0 at the ctor
 	// and by `0x102eeb70`); `nav+0x5c` the hold (0.25 s) and `nav+0x64` the window (3.0 s), both
-	// ctor constants (`0x102eca50`). Nothing reads them until lane I's `NavigatorMoveStep`.
+	// ctor constants (`0x102eca50`). Read by `NavBlockerHold` inside `NavigatorMoveStep`.
 	bool bBlockerHold = false;
 	FElysiumEntityHandle BlockerEntity;
 	double BlockerHoldUntil = -1.0;
 	float BlockerHoldSeconds = 0.25f;
 	double BlockerForgetAt = -1.0;
 	float BlockerWindowSeconds = 3.0f;
+	// Port-only: the armed hold has already re-issued the head leg once (`NavMoveNormalPass`, the
+	// NAMED MODERNIZATION there). Cleared when the hold arms and by `0x102eeb70`; a second `Blocked`
+	// end inside the window with this set is the exhausted hold (`-3` -> `0x0c`).
+	bool bBlockerHoldReissued = false;
 
 	// --- Path words (`CAI_Path` at `nav+0x30`) ----------------------------------------------------
 
@@ -126,7 +129,8 @@ struct FElysiumNpcNavigator
 	int32 MovementActivity = 1;
 
 	// `path+0x30` -- `m_target`, the goal's target entity handle (`SetGoal` `[10]`, cleared by
-	// `SetGoal` flag 2 through `0x100a0ae0(.., NULL)`), read through `0x102ee160`.
+	// `SetGoal` flag 2 through `0x100a0ae0(.., NULL)` and by the path reset, `1030bb8c` := -1), read
+	// through `0x102ee160`.
 	FElysiumEntityHandle TargetEntity;
 
 	// `path+0x34..+0x3c` -- `m_vecTargetOffset` (`SetGoal` flag 2 stores `vec3_origin`); subtracted
@@ -138,7 +142,8 @@ struct FElysiumNpcNavigator
 	float WaypointToleranceCm = 0.f;
 
 	// `path+0x44` -- the last node passed (-1 on every find and at the path ctor; `AdvancePath`
-	// stores the popped node waypoint's `+0x10`).
+	// stores the popped node waypoint's `+0x10`). Its retail reader, the stale mark's gate
+	// (`0x102f1fa0`: `path+0x44 != -1`), is a seam with no link table, so nothing reads it yet.
 	int32 LastNodePassed = INDEX_NONE;
 
 	// `path+0x4c..+0x54` -- `m_goalPos`, the raw goal position (`0x1030ba30`). Centimetres.
@@ -150,9 +155,9 @@ struct FElysiumNpcNavigator
 	// `0x102ed430`'s goal-less install (4); read through `0x102ee620` / `0x100113d8`.
 	int32 GoalType = 0;
 
-	// `path+0x60` -- the goal flags `SetGoal` copies from word `[9]` (its only writer): 1 face the
-	// path, 2 node route (one issuer, Troika task `0xc7`), 4 re-path on target move (no issuer), 8
-	// (no issuer, inert). Read through `0x102ee640`.
+	// `path+0x60` -- the goal flags `SetGoal` copies from word `[9]` (its only writer; the path
+	// reset `0x1030bb30` zeroes it): 1 face the path, 2 node route (one issuer, Troika task `0xc7`),
+	// 4 re-path on target move (no issuer), 8 (no issuer, inert). Read through `0x102ee640`.
 	int32 GoalFlags = 0;
 
 	// `SetGoal`'s arrival words `[6]` / `[7]` (`0x1030b550` / `0x1030b5b0`) and destination node
@@ -164,6 +169,14 @@ struct FElysiumNpcNavigator
 	// --- The port's own words ---------------------------------------------------------------------
 
 	FElysiumNpcNavOutcome LastOutcome;
+
+	// The travel request the head waypoint's leg was issued with (`FElysiumNpcBase::NavIssueLeg`):
+	// destination, arrival radius, gait and speed, and the pedestrian multiplier as it was DRAWN --
+	// retail draws `RandomInt(5, 10)` once per route build (`0x102fe9f0`), so a re-issue of the same
+	// leg must not draw again. Read by the NPC-blocker hold's re-issue and the move step's log. The
+	// path reset empties it with the waypoint list.
+	FElysiumNpcMoveRequest HeadLegRequest;
+	bool bHeadLegRequestSet = false;
 
 	// `CAI_Navigator::vfunc3` (`0x102ecb50`) copies three of the owner NPC's own pointers —
 	// `m_pMotor` (+0x5d44), `m_pMoveProbe` (+0x5d40), `m_pLocalNavigator` (+0x5d38) — into
@@ -189,10 +202,12 @@ struct FElysiumNpcNavigator
 	// "none"; `(0,0,0)` after a reset. Centimetres.
 	FVector GetGoalPos() const;
 	// `0x1030bb30` -- the path reset both reset arms end on (`0x102f28a0`: `SetGoal` flag bit 1 and
-	// `ClearGoal 0x102ee270`): goal type 0, goal position and target offset to the origin, movement
-	// activity 1, goal tolerance 0; the pedestrian byte, the head waypoint and its goal bit cleared
-	// (the waypoint list is emptied). The goal flags (`path+0x60`), the target handle and the paused
-	// byte are not this reset's words.
+	// `ClearGoal 0x102ee270`): goal type 0, goal position and target offset to the origin, the goal
+	// flags (`path+0x60`) 0, movement activity 1, goal tolerance 0, the target handle (`path+0x30`)
+	// -1, the paused byte (`path+0x10`) 0; the pedestrian byte, the head waypoint and its goal bit
+	// cleared (the waypoint list is emptied, with the port's recorded head-leg request). The reset
+	// also zeroes `path+0x20` (`1030bb82`), which the port keeps on the NPC as `NavPathScalar20`: the
+	// caller (`NavClearRoute`) owns that word.
 	void ResetPath();
 	// `0x102ee3f0` -- `path+0x2c`. No goal: 1 (ACT_IDLE).
 	int32 GetMovementActivity() const;

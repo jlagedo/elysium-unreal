@@ -250,11 +250,9 @@ bool FElysiumNpcBase::NavigatorGoalIsActive() const
 	// `0x102aaf72`, base `0x10288f8a`), the interrupt-distance gates of `0x102b27f0` and save header
 	// bit `0x4`.
 	//
-	// The mover's navigation sample, as `NavIsGoalActive` answers it: the port's "a route is being
-	// followed" fact stands for the head waypoint (`path+0x24`) until the navigator's move step pops
-	// it at arrival (0018 story 5 lane I). `Navigator.IsGoalActive()` is the retail word. Retail's
-	// `0x102ee680` is a different question (`IsGoalSet`, `NavigatorIsGoalSet`).
-	return Motor != nullptr && Motor->SampleNavigation().bActiveGoal;
+	// The navigator's head waypoint (`path+0x24`), popped by the move step at arrival (0018 story 5).
+	// Retail's `0x102ee680` is a different question (`IsGoalSet`, `NavigatorIsGoalSet`).
+	return Navigator.IsGoalActive();
 }
 
 // The `AIExtendedSaveHeader_t` half of `CAI_BaseNPC::Save 0x1027bc60`, on its own so the two save

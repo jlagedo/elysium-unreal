@@ -1608,67 +1608,41 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		ScriptedScheduleOrder.Reset();
 		return false;
 	}
-	if (ElysiumAiScriptedSchedule::IsMoveToGoal(Order.Mode))
-	{
-		// Modes 1/2 are retail's own mover (`0x101a9960..0x101a99cc`): the activity is
-		// `(-(mode != 1) & 10) + 9` -- ACT_WALK 9 for mode 1, ACT_RUN 0x13 for mode 2 -- replaced by
-		// ACT_FLY 0x22 when slot 94 `GetMoveType` (+0x178, asked twice) answers 5 or 6; then
-		// `ScheduledMoveToGoalEntity(npc, 2, goal, activity)` (`0x102800c0`): program 2 (IDLE_WALK,
-		// translated by slot 440), `m_pGoalEnt`, and a type-4 `SetGoal` at 128 units.
-		int32 Activity = static_cast<EMode>(Order.Mode) == EMode::MoveToGoalA ? 9 : 0x13;   // 0x101a9960 / 0x101a9963
-		if (GetMoveType() == 5 || GetMoveType() == 6)                                        // 0x101a996a / 0x101a9979
-		{                                                                                    // 0x101a9973 JZ / 0x101a9982 JNZ
-			Activity = 0x22;
-		}
-		FElysiumEntity* const Goal = World != nullptr ? World->Resolve(Order.Goal) : nullptr;
-		const bool bGoalSet = ScheduledMoveToGoalEntity(ElysiumSched::IDLE_WALK, Goal, Activity);  // 0x101a998f
-		ScriptedScheduleOrder.Program = Schedule.Current;
-		if (!bGoalSet && !Order.bSuppressRouteWarning)                                        // 0x101a9996 / 0x101a99a5 spawnflags & 0x800
-		{
-			// `DevMsg(1, ...)` in retail; a Warning here, as the goal-miss line is, because it fires on
-			// shipped content whose route this runtime's mover refuses. `0x101a99b5` JNZ ("" for a
-			// null goal name), `0x101a99be` GetDebugName.
-			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("ScheduledMoveToGoalEntity to goal entity %s failed\nCan't execute script %s"),
-				Goal != nullptr ? *Goal->TargetName : TEXT(""),
-				World != nullptr ? *World->DescribeHandle(Order.Source) : TEXT("(no world)"));   // 0x101a99c5 0x10595230
-		}
-		RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode %d (%s, activity 0x%x) goal %s"),
-			Order.Mode, ElysiumAiScriptedSchedule::ModeName(Order.Mode), Activity,
-			World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
-		return bGoalSet;
+	// Modes 1/2 and 4/5 are retail's own movers (`0x101a9960..0x101a99cc`, `0x101a99dc..0x101a9a14`): the
+	// activity is `(-(mode != 1 | 4) & 10) + 9` -- ACT_WALK 9 for the lower mode of each pair, ACT_RUN 0x13
+	// for the upper -- replaced by ACT_FLY 0x22 when slot 94 `GetMoveType` (+0x178, asked twice) answers 5
+	// or 6; then modes 1/2 call `ScheduledMoveToGoalEntity(npc, 2, goal, activity)` (`0x102800c0`: program 2,
+	// IDLE_WALK translated by slot 440, `m_pGoalEnt`, a type-4 `SetGoal` at 128 units) and modes 4/5
+	// `ScheduledFollowPath(npc, 2, goal, activity)` (`0x102801e0`: the same program and `m_pGoalEnt`, a
+	// type-3 `SetGoal` whose `DoFindPath` lays the whole path_corner chain, `NavFindPathCorners`). The
+	// navigator walks the chain itself and `AdvancePath` passes each corner once, in order, the last
+	// included; no port-side leg list stands between the order and the navigator.
+	const bool bFollowPath = ElysiumAiScriptedSchedule::IsFollowPath(Order.Mode);
+	int32 Activity = Order.bRun ? 0x13 : 9;                                                 // 0x101a9960 / 0x101a99dc
+	if (GetMoveType() == 5 || GetMoveType() == 6)                                           // 0x101a996a / 0x101a99ef
+	{                                                                                       // 0x101a9973 JZ / 0x101a9982 JNZ
+		Activity = 0x22;
 	}
-
-	BaseScheduleHost.IdealScheduleRetail = ResolveScheduleId(Program); // 0x10280de0, before slot 440
-	if (!ElysiumSchedule::Start(Schedule, TranslateSchedule(Program), *this))
-	{
-		EndScriptedSchedule(TEXT("scripted program would not start"));
-		return false;
-	}
+	FElysiumEntity* const Goal = World != nullptr ? World->Resolve(Order.Goal) : nullptr;
+	const bool bGoalSet = bFollowPath
+		? ScheduledFollowPath(ElysiumSched::IDLE_WALK, Goal, Activity)                       // 0x101a9a0c
+		: ScheduledMoveToGoalEntity(ElysiumSched::IDLE_WALK, Goal, Activity);                // 0x101a998f
 	ScriptedScheduleOrder.Program = Schedule.Current;
-	BaseScheduleHost.GoalEnt = Order.Goal; // 0x102800c0 / 0x102801e0, after the schedule install
-	// The director builds the goal immediately. The text only selects a movement activity and
-	// waits; neither a synthetic GET_PATH_TO_GOAL nor a SET_SCHEDULE loop belongs to it.
-	if (!GetPathToScriptedGoal())
+	if (!bGoalSet && !Order.bSuppressRouteWarning)                                          // 0x101a9996 / 0x101a99a5 spawnflags & 0x800
 	{
-		// Retail's own failure line for the follow-path modes (`0x101a9a42`, spawnflag 0x800 silences it):
-		// `0x101a9a14` ScheduledFollowPath's AL, `0x101a9a1b` JNZ on success, `0x101a9a26` JNZ on
-		// spawnflags & 0x800, `0x101a9a32` JNZ ("" for a null name), `0x101a9a3b` GetDebugName,
-		// `0x101a9a49` DevMsg.
-		if (ElysiumAiScriptedSchedule::IsFollowPath(Order.Mode) && !Order.bSuppressRouteWarning)
-		{
-			FElysiumEntity* const Goal = World != nullptr ? World->Resolve(Order.Goal) : nullptr;
-			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("ScheduledFollowPath to goal entity %s failed\nCan't execute script %s"),
-				Goal != nullptr ? *Goal->TargetName : TEXT(""),
-				World != nullptr ? *World->DescribeHandle(Order.Source) : TEXT("(no world)"));   // 0x105951d8
-		}
-		TaskFail(0x0c);
-		return false;
+		// `DevMsg(1, ...)` in retail; a Warning here, as the goal-miss line is, because it fires on
+		// shipped content whose route this runtime's mover refuses. `0x101a99b5` JNZ ("" for a
+		// null goal name), `0x101a99be` GetDebugName. The follow-path modes' own line is
+		// `0x101a9a42` (`0x105951d8`), guarded the same way (`0x101a9a26`).
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s to goal entity %s failed\nCan't execute script %s"),
+			bFollowPath ? TEXT("ScheduledFollowPath") : TEXT("ScheduledMoveToGoalEntity"),
+			Goal != nullptr ? *Goal->TargetName : TEXT(""),
+			World != nullptr ? *World->DescribeHandle(Order.Source) : TEXT("(no world)"));   // 0x101a99c5 0x10595230
 	}
-	RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode %d (%s, %s) goal %s"),
-		Order.Mode, ElysiumAiScriptedSchedule::ModeName(Order.Mode),
-		Order.bRun ? TEXT("run") : TEXT("walk"),
+	RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode %d (%s, activity 0x%x) goal %s"),
+		Order.Mode, ElysiumAiScriptedSchedule::ModeName(Order.Mode), Activity,
 		World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
-	return true;
+	return bGoalSet;
 }
 
 void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
@@ -1689,102 +1663,6 @@ void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
 		ClearSchedule();
 	}
 	ReleaseScriptedScheduleBody(Reason);
-}
-
-// STORY8-TWIN (survivor, modes 4/5 only): retail's `CCineAISchedule::vfunc586` (`0x101a98c0`) hands
-// modes 4/5 to `ScheduledFollowPath` (`0x102801e0`), whose type-3 `SetGoal` makes the navigator walk
-// the `path_corner` chain itself. This runtime's navigator builds no path-corner goal, so the order
-// executor below walks the chain leg by leg instead, and writes `m_flGoalTolerance` (+0x6320) where
-// retail's SetGoal writes the path's +0x28. Modes 1/2 run retail's `ScheduledMoveToGoalEntity`
-// (`BeginScriptedSchedule`) and mode 3 retail's enemy arm; neither reaches this executor.
-bool FElysiumNpc::GetPathToScriptedGoal()
-{
-	if (!ScriptedScheduleOrder.IsSet())
-	{
-		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: no scripted order is in force"));
-		return false;
-	}
-	if (!ScriptedScheduleOrder.Route.IsValidIndex(ScriptedScheduleOrder.Leg))
-	{
-		// The route ran out, which is how a follow-path program ends: the transfer back to itself
-		// re-enters here, this fails, and the NPC returns to ordinary selection. It is not an error.
-		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL: the scripted route is complete"));
-		return false;
-	}
-	if (Motor == nullptr)
-	{
-		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: this NPC has no motor"));
-		return false;
-	}
-	if (!AcquireScriptedScheduleBody(TEXT("TASK_GET_PATH_TO_GOAL")))
-	{
-		Mind.RecordExternal(FString::Printf(TEXT("TASK_GET_PATH_TO_GOAL refused: %s owns the body"),
-			LexToString(Mind.Owner())));
-		return false;
-	}
-	FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
-	const EElysiumNpcGaitKind RouteGait = ScriptedScheduleOrder.bRun
-		? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
-	// 0x102800c0 authors 128; 0x102801e0 authors -1 (keep the current tolerance, or hull
-	// width if unset). Slot 563 gets the goal and tolerance before the navigator receives them.
-	float ToleranceCm = 128.f * ElysiumMove::U;
-	if (ElysiumAiScriptedSchedule::IsFollowPath(ScriptedScheduleOrder.Mode))
-	{
-		FVector Mins, Maxs;
-		RetailHullExtents(HullKind, EElysiumHullExtents::Full, Mins, Maxs);
-		ToleranceCm = ScheduleHost.GoalToleranceCm > 0.f ? ScheduleHost.GoalToleranceCm
-			: static_cast<float>(Maxs.Y - Mins.Y) * ElysiumMove::U;
-	}
-	float UnusedTolerance = ToleranceCm;
-	TranslateEnemyChasePosition(World ? World->Resolve(ScriptedScheduleOrder.Goal) : nullptr,
-		Destination, &ToleranceCm, &UnusedTolerance);
-	ScheduleHost.GoalToleranceCm = ToleranceCm;
-	// Modes 4/5 in `0x101a98c0`: `(-(mode != 4) & 10) + 9` at `0x101a99dc`, ACT_FLY when slot 94
-	// (`0x101a99ef` / `0x101a99fe`) answers 5 or 6 (`0x101a99f8` JZ / `0x101a9a07` JNZ).
-	Navigator.MovementActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
-	if (GetMoveType() == 5 || GetMoveType() == 6)
-	{
-		Navigator.MovementActivity = 0x22; // authored ACT_FLY; 0018/12 owns the flying mover
-		RecordScheduleEvent(TEXT("aiscripted_schedule ACT_FLY: the flying mover is not built"));
-		return false;
-	}
-	MoveGoal = Destination;
-	// The type-3 goal `ScheduledFollowPath` `0x102801e0` sets (`0x1030ba50`): the navigator's goal words
-	// answer the leg this executor stands for it, so `TASK_WAIT_FOR_MOVEMENT` (`0x102ee620 == 0` ends it)
-	// does not cut a walk short.
-	Navigator.GoalType = 3;
-	Navigator.GoalPosCm = Destination;
-	FElysiumNpcMoveRequest LegRequest;
-	LegRequest.DestinationCm = Destination;
-	LegRequest.AcceptanceToleranceCm = ToleranceCm;   // the order's own radius, as it was
-	LegRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, RouteGait);
-	LegRequest.GaitKind = RouteGait;
-	LegRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
-	bMoveIssued = Motor->MoveTo(LegRequest);
-	if (bMoveIssued)
-	{
-		Navigator.bHasHeadWaypoint = true;
-		Navigator.bHeadIsGoal = true;
-	}
-	if (!bMoveIssued)
-	{
-		// The recovered route-failure report, and the recovered switch that silences it: "spawn flag
-		// 0x800 suppresses the route-failure warning". Latched per pushed order either way — a body
-		// that could not take this leg will not take the next one.
-		if (!ScriptedScheduleOrder.bSuppressRouteWarning && !ScriptedScheduleOrder.bWarnedRoute)
-		{
-			ScriptedScheduleOrder.bWarnedRoute = true;
-			UE_LOG(LogElysiumNpcEnt, Warning,
-				TEXT("%s could not take the route an aiscripted_schedule pushed (goal %s): the "
-					 "program fails and the NPC returns to ordinary selection"),
-				*DebugString(),
-				World ? *World->DescribeHandle(ScriptedScheduleOrder.Goal) : TEXT("(no world)"));
-		}
-		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: the body would not take the route"));
-		return false;
-	}
-	bWalkingAnimation = StartWalkingAnimation(ScriptedScheduleOrder.bRun);
-	return true;
 }
 
 void FElysiumNpc::InputNamedSchedule(const FElysiumInputArgs& Args)

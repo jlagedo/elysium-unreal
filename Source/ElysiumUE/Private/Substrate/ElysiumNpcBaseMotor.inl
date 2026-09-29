@@ -138,6 +138,22 @@ ENavMoveResult NavMoveNormalPass(const FNavStepFacts& Step);
  *  nav+0x58 <= -0.001`; otherwise answer `nav+0x51`. True = hold (no fail this pass). */
 bool NavBlockerHold(const FElysiumEntityHandle& Blocker);
 
+/** Issues one leg of the navigator's route to the body (`IElysiumNpcMotor::MoveTo`) and records the
+ *  request as the head leg's (`Navigator.HeadLegRequest`), so the NPC-blocker hold can re-issue the
+ *  same leg without redrawing its pedestrian multiplier. A refused request clears the record. Every
+ *  navigator leg issue goes through here. Answers whether the body accepted it. */
+bool NavIssueLeg(const FElysiumNpcMoveRequest& Request);
+
+/** The NPC-blocker hold's resume (port-only, the NAMED MODERNIZATION in `NavMoveNormalPass`): the
+ *  recorded head-leg request handed to the body again, unchanged. False when no leg is recorded or the
+ *  body refuses it. */
+bool NavReissueHeadLeg();
+
+/** One `Verbose` line on `LogElysiumNpcEnt` per move-step outcome: the NPC, the outcome (with its
+ *  `TaskFail` code when non-zero), the head leg's destination (the goal position when no leg is
+ *  recorded) and the 2-D distance left to it. */
+void NavLogMoveStep(const TCHAR* Outcome, int32 FailCode = 0) const;
+
 /** `0x102efde0` (sink slot 4, S4): a moving NPC going the same way is followed. SEAM answering no:
  *  its constants and the motor slot 16 gate distance are unrecovered (R3). */
 bool NavFollowSameDirectionMover(const FElysiumEntityHandle& Blocker);
@@ -170,12 +186,12 @@ struct FNavMoveStepSeams
 	int32 NoRouteWarnings = 0;    // 0x102f0081 Warning("AIError: Move requested with no route!\n")
 	int32 ClimbMotorResets = 0;   // 0x102f0198 climb: motor slot 5 `0x102e1110` + `SetNavType(0)`
 	int32 VelocityStops = 0;      // 0x102f0198 motor slot 10 `0x102e1440` (velocity 0), SEAM
-	int32 PassCapErrors = 0;      // the 17th dispatch's DevMsg
 	int32 StaleMarkCalls = 0;     // 0x102f1fa0(nav, 4.0, NULL), SEAM
 	int32 SimplifyPasses = 0;     // 0x102f13d0(nav, 0) from the MoveNormal gate, SEAM
 	int32 LocalNavResets = 0;     // 0x1000b550 inside 0x102eeb70, SEAM
 	int32 MoverFollowTests = 0;   // 0x102efde0, SEAM answering no
 	int32 BlockerHoldArms = 0;    // 0x102ef49a
+	int32 BlockerHoldReissues = 0; // port: the hold's head-leg re-issue (NAMED MODERNIZATION)
 	int32 Passes = 0;             // dispatches of the last step's loop
 };
 FNavMoveStepSeams NavMoveStep;
@@ -186,14 +202,13 @@ FNavMoveStepSeams NavMoveStep;
  *  seam, defined in `ElysiumNpcBaseAdvancePath.cpp` (lane E); `NavMoveNormalPass` calls it (lane I). */
 bool NavAdvancePath();
 
-/** The port's "a route is being followed" fact, standing for `IsGoalActive` `0x102ee6a0` (a head
- *  waypoint exists). Not `0x102ee680` (`IsGoalSet`, `NavigatorIsGoalSet`). It answers the mover's
- *  own `SampleNavigation().bActiveGoal` until the navigator's move step pops the head at arrival
- *  (0018 story 5 lane I); `Navigator.IsGoalActive()` is the retail word. */
+/** `IsGoalActive` `0x102ee6a0` -- `nav+0x30 != 0 && path+0x24 != 0`, a head waypoint exists:
+ *  `Navigator.IsGoalActive()`. Not `0x102ee680` (`IsGoalSet`, `NavigatorIsGoalSet`). */
 bool NavIsGoalActive() const;
 
-/** `thunk_FUN_102ee2c0(m_pNavigator)` — SDK `CAI_Navigator::StopMoving()`. Wired to the mover's
- *  own `Stop()`. */
+/** `thunk_FUN_102ee2c0(m_pNavigator)` -> `0x1030bea0`: the paused byte's CLEAR, `path+0x10 := 0`
+ *  (R1 §3). The pair `0x102bf7e0` makes is `if (0x102ee2e0) 0x102ee2c0; m_bShouldMove = 1` -- an
+ *  un-pause, never a stop of the body. */
 void NavStopMoving();
 
 /** `thunk_FUN_102ee620(m_pNavigator)` — `GetGoalType()`, `path+0x5c` (`Navigator.GetGoalType()`):

@@ -5,10 +5,10 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DetourCrowdAIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavMesh/NavMeshPath.h"   // FNavMeshPath::IsStringPulled: is the next path point a corner
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "ElysiumCollisionChannels.h"
@@ -596,13 +596,11 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 	}
 }
 
-FElysiumNpcFollowerRequest AElysiumNpcBody::ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request,
-	float NavCellCm)
+FElysiumNpcFollowerRequest AElysiumNpcBody::ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request)
 {
 	FElysiumNpcFollowerRequest Out;
 	Out.ExactToleranceCm = FMath::Max(0.0f, Request.AcceptanceToleranceCm);
 	Out.AcceptanceRadiusCm = FMath::Max(ElysiumNpcBodyMove::FollowerArrivalFloorCm, Out.ExactToleranceCm);
-	Out.ProjectionExtentCm = FMath::Max(Out.ExactToleranceCm, FMath::Max(0.0f, NavCellCm));
 	Out.bAllowPartialPath = Request.PartialPath == EElysiumNpcPartialPath::Accept;
 	Out.PedestrianCostMultiplier = FMath::Max(0, Request.PedestrianCostMultiplier);
 	Out.bUsePedestrianFilter = Out.PedestrianCostMultiplier > 0;
@@ -612,11 +610,16 @@ FElysiumNpcFollowerRequest AElysiumNpcBody::ResolveFollowerRequest(const FElysiu
 bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 {
 	// 0018/5 lane B: the request is honoured as stated. The follower is handed the request's
-	// tolerance (or the named floor above it), the destination is projected with an extent bounded by
-	// it, the partial-path policy is the request's, and a pedestrian request searches on its own
-	// priced filter. `AAIController::MoveTo` cannot take a filter instance, so its steps are taken
-	// here in its order. No re-path is armed on the path (`EnableRecalculationOnInvalidation` stays
-	// off): retail's `CAI_Navigator::Move 0x102eff40` never re-paths inside a request.
+	// tolerance (or the named floor above it), the destination is projected with the nav data's
+	// DEFAULT query extent (retail never snaps a goal to anything; the tolerance is an arrival
+	// radius, not a snap bound, so a goal the mesh cannot project is Unreal's "no path"), the
+	// partial-path policy is the request's, and a pedestrian request searches on its own priced
+	// filter. `AAIController::MoveTo` cannot take a filter instance, so its steps are taken here in
+	// its order (`AIController.cpp` `MoveToLocation` -> `MoveTo` -> `BuildPathfindingQuery` ->
+	// `FindPathForMoveRequest` -> `RequestMove`). The one step skipped is `MoveTo`'s
+	// `bAllowStrafe = MoveRequest.CanStrafe()`: strafe is always false here and nothing else calls
+	// the engine `MoveTo`. No re-path is armed on the path (`EnableRecalculationOnInvalidation`
+	// stays off): retail's `CAI_Navigator::Move 0x102eff40` never re-paths inside a request.
 	const FVector& FeetDestination = Request.DestinationCm;
 	bFaceRequested = false;
 	if (!bRuntimeReady || !bRequestedEnabled || bFrozen || bNavigationJumpInProgress)
@@ -661,15 +664,13 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	const FNavAgentProperties& Agent = AI->GetNavAgentPropertiesRef();
 	const ANavigationData* NavData = NavSys ? NavSys->GetNavDataForProps(Agent, AI->GetNavAgentLocation()) : nullptr;
-	const ARecastNavMesh* Recast = Cast<ARecastNavMesh>(NavData);
-	const FElysiumNpcFollowerRequest Follower = ResolveFollowerRequest(Request,
-		Recast ? Recast->GetCellSize(ENavigationDataResolution::Default) : 0.0f);
+	const FElysiumNpcFollowerRequest Follower = ResolveFollowerRequest(Request);
 	RequestedAcceptanceCm = Follower.ExactToleranceCm;
 
 	FAIMoveRequest MoveReq(FeetDestination);
 	MoveReq.SetUsePathfinding(true);
 	MoveReq.SetAllowPartialPath(Follower.bAllowPartialPath);
-	MoveReq.SetProjectGoalLocation(false);   // projected below, with the bounded extent
+	MoveReq.SetProjectGoalLocation(false);   // projected below, with the default extent
 	MoveReq.SetAcceptanceRadius(Follower.AcceptanceRadiusCm);
 	MoveReq.SetReachTestIncludesAgentRadius(false);   // the agent's radius is never added to the reach
 	MoveReq.SetReachTestIncludesGoalRadius(false);
@@ -682,9 +683,13 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	FNavPathSharedPtr Path;
 	const bool bValidGoal = !FeetDestination.ContainsNaN() && FAISystem::IsValidLocation(FeetDestination);
 	FNavLocation Projected;
+	// The nav data's default query extent, as `AAIController::MoveTo` projects with. The offset it
+	// moved the goal is reported as a fact and never used to refuse.
 	if (bValidGoal && NavSys != nullptr && NavData != nullptr
-		&& NavSys->ProjectPointToNavigation(FeetDestination, Projected, FVector(Follower.ProjectionExtentCm), NavData))
+		&& NavSys->ProjectPointToNavigation(FeetDestination, Projected, INVALID_NAVEXTENT, NavData))
 	{
+		RequestGoalSnap2DCm = static_cast<float>((Projected.Location - FeetDestination).Size2D());
+		RequestGoalSnapDzCm = static_cast<float>(Projected.Location.Z - FeetDestination.Z);
 		MoveReq.UpdateGoalLocation(Projected.Location);
 		if (Following->HasReached(MoveReq))
 		{
@@ -704,15 +709,26 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 				if (Found.IsSuccessful() && Found.Path.IsValid())
 				{
 					Path = Found.Path;
+					bRequestPathPartial = Path->IsPartial();
 				}
 			}
 		}
 	}
 
+	UE_LOG(LogElysiumNpcEnt, Verbose,
+		TEXT("%s: MoveTo dest=%s tolerance=%.2f cm (follower radius %.2f) pedestrian x%d filter=%s partial-ok=%d snap=(%.1f cm 2-D, dz %.1f) path=%s%s"),
+		*GetName(), *FeetDestination.ToString(), Follower.ExactToleranceCm, Follower.AcceptanceRadiusCm,
+		Follower.PedestrianCostMultiplier,
+		*GetNameSafe(Follower.bUsePedestrianFilter ? UElysiumNavQueryFilter_Pedestrian::StaticClass()
+			: AI->GetDefaultNavigationFilterClass().Get()),
+		Follower.bAllowPartialPath ? 1 : 0, RequestGoalSnap2DCm, RequestGoalSnapDzCm,
+		bAlreadyAtGoal ? TEXT("already at goal") : (Path.IsValid() ? TEXT("found") : TEXT("none")),
+		bRequestPathPartial ? TEXT(" (partial)") : TEXT(""));
+
 	EPathFollowingRequestResult::Type Result = EPathFollowingRequestResult::Failed;
 	if (bAlreadyAtGoal)
 	{
-		FinishRequestImmediately(*Following, EElysiumNpcMoveResultCode::Success,
+		FinishRequestImmediately(Following, EElysiumNpcMoveResultCode::Success,
 			EElysiumNpcMoveResultFlags::AlreadyAtGoal);
 		Result = EPathFollowingRequestResult::AlreadyAtGoal;
 	}
@@ -730,7 +746,7 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 		}
 		else
 		{
-			FinishRequestImmediately(*Following, EElysiumNpcMoveResultCode::Invalid,
+			FinishRequestImmediately(Following, EElysiumNpcMoveResultCode::Invalid,
 				EElysiumNpcMoveResultFlags::None);
 		}
 	}
@@ -738,7 +754,7 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	{
 		// `RequestMoveWithImmediateFinish(Invalid)` already wrote `Invalid[]` above; the engine
 		// never says which of its refusals it was, so ask the navmesh directly.
-		const FString Why = DescribeRefusedRoute(*AI, FeetDestination, Follower.ProjectionExtentCm);
+		const FString Why = DescribeRefusedRoute(AI, FeetDestination);
 		LastMoveResult += TEXT(" -- ") + Why;
 		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request to %s refused: %s"),
 			*GetName(), *FeetDestination.ToString(), *Why);
@@ -792,6 +808,9 @@ void AElysiumNpcBody::BeginMoveFacts(const FElysiumNpcMoveRequest& Request)
 	EndedBlocker = FElysiumEntityHandle();
 	RecentBlocker = FElysiumEntityHandle();
 	RecentBlockerFrame = 0;
+	bRequestPathPartial = false;
+	RequestGoalSnap2DCm = 0.0f;
+	RequestGoalSnapDzCm = 0.0f;
 	RequestedFeet = Request.DestinationCm;
 	RequestedAcceptanceCm = FMath::Max(0.0f, Request.AcceptanceToleranceCm);
 }
@@ -805,12 +824,12 @@ void AElysiumNpcBody::EndMoveIssue(FAIRequestID RequestID)
 	}
 }
 
-void AElysiumNpcBody::FinishRequestImmediately(UPathFollowingComponent& Following,
+void AElysiumNpcBody::FinishRequestImmediately(UPathFollowingComponent* Following,
 	EElysiumNpcMoveResultCode Result, EElysiumNpcMoveResultFlags ExtraFlags)
 {
 	const EPathFollowingResult::Type EngineResult = Result == EElysiumNpcMoveResultCode::Success
 		? EPathFollowingResult::Success : EPathFollowingResult::Invalid;
-	const FAIRequestID RequestId = Following.RequestMoveWithImmediateFinish(EngineResult);
+	const FAIRequestID RequestId = Following->RequestMoveWithImmediateFinish(EngineResult);
 	EndMoveIssue(RequestId);
 	if (bMoveEnded)
 	{
@@ -818,32 +837,34 @@ void AElysiumNpcBody::FinishRequestImmediately(UPathFollowingComponent& Followin
 	}
 }
 
-FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination,
-	float ProjectionExtentCm) const
+FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController* AI, const FVector& FeetDestination) const
 {
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	if (NavSys == nullptr)
+	if (NavSys == nullptr || AI == nullptr)
 	{
 		return TEXT("no navigation system");
 	}
-	const FNavAgentProperties& Agent = AI.GetNavAgentPropertiesRef();
-	const ANavigationData* NavData = NavSys->GetNavDataForProps(Agent, AI.GetNavAgentLocation());
+	const FNavAgentProperties& Agent = AI->GetNavAgentPropertiesRef();
+	const ANavigationData* NavData = NavSys->GetNavDataForProps(Agent, AI->GetNavAgentLocation());
 	if (NavData == nullptr)
 	{
 		return TEXT("no nav data for this agent");
 	}
 	FNavLocation GoalOnMesh;
-	// The extent the request itself projected with, so the diagnosis agrees with the refusal.
-	if (!NavSys->ProjectPointToNavigation(FeetDestination, GoalOnMesh, FVector(ProjectionExtentCm), &Agent))
+	// The extent the request itself projected with (the default), so the diagnosis agrees with the
+	// refusal.
+	if (!NavSys->ProjectPointToNavigation(FeetDestination, GoalOnMesh, INVALID_NAVEXTENT, &Agent))
 	{
-		return FString::Printf(TEXT("the goal is off the navmesh (no polygon within %.1f cm)"), ProjectionExtentCm);
+		const FVector Extent = NavData->GetDefaultQueryExtent();
+		return FString::Printf(TEXT("the goal is off the navmesh (no polygon within the default extent %.0f x %.0f x %.0f cm)"),
+			Extent.X, Extent.Y, Extent.Z);
 	}
 	FNavLocation SelfOnMesh;
-	if (!NavSys->ProjectPointToNavigation(AI.GetNavAgentLocation(), SelfOnMesh, INVALID_NAVEXTENT, &Agent))
+	if (!NavSys->ProjectPointToNavigation(AI->GetNavAgentLocation(), SelfOnMesh, INVALID_NAVEXTENT, &Agent))
 	{
 		return TEXT("this body is off the navmesh");
 	}
-	FPathFindingQuery Query(&AI, *NavData, SelfOnMesh.Location, GoalOnMesh.Location);
+	FPathFindingQuery Query(AI, *NavData, SelfOnMesh.Location, GoalOnMesh.Location);
 	Query.SetAllowPartialPaths(true);
 	const FPathFindingResult Found = NavSys->FindPathSync(Agent, Query);
 	if (!Found.IsSuccessful() || !Found.Path.IsValid())
@@ -875,8 +896,9 @@ void AElysiumNpcBody::OnMoveRequestFinished(FAIRequestID RequestID, const FPathF
 	const UWorld* World = GetWorld();
 	LastMoveResult = FString::Printf(TEXT("%s (request %u, world time %.2fs)"), *Result.ToString(),
 		RequestID.GetID(), World ? World->GetTimeSeconds() : 0.0f);
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request finished: %s"), *GetName(),
-		*LastMoveResult);
+	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request finished: %s, %.1f cm (2-D) left to %s"),
+		*GetName(), *LastMoveResult, static_cast<float>(FVector::Dist2D(FeetLocation(), RequestedFeet)),
+		*RequestedFeet.ToString());
 
 	// The facts: only the CURRENT request's first end counts. Inside `MoveTo`, before the follower has
 	// answered with an id, a finish is the new request's own (a request the crowd follower ended
@@ -1287,6 +1309,9 @@ bool AElysiumNpcBody::SampleMoveFacts(FElysiumNpcMoveFacts& Out) const
 	const FVector Feet = FeetLocation();
 	Out.RemainingDistance2DCm = static_cast<float>(FVector::Dist2D(Feet, RequestedFeet));
 	Out.RemainingDzCm = static_cast<float>(RequestedFeet.Z - Feet.Z);
+	Out.bPathPartial = bRequestPathPartial;
+	Out.GoalSnap2DCm = RequestGoalSnap2DCm;
+	Out.GoalSnapDzCm = RequestGoalSnapDzCm;
 
 	// The path the follower holds now: gone once the request ends (the follower resets it).
 	const FNavPathSharedPtr Path = Following->GetPath();
@@ -1294,9 +1319,17 @@ bool AElysiumNpcBody::SampleMoveFacts(FElysiumNpcMoveFacts& Out) const
 	{
 		const TArray<FNavPathPoint>& Points = Path->GetPathPoints();
 		Out.bHasPath = Points.Num() > 0;
+		// The crowd follower asks Recast to skip string pulling (`UCrowdFollowingComponent::
+		// OnPathfindingQuery`), which leaves a navmesh path as start -> end: its "next corner" is the
+		// destination, a direction through walls. The Detour corridor's real corners live in
+		// `dtCrowdAgent`, and `UCrowdManager` keeps `DetourCrowd` protected with no corner accessor,
+		// so they cannot be read from here. Report a corner only when the path really has corners
+		// (a string-pulled navmesh path, or a non-navmesh path, whose points are as authored).
+		const FNavMeshPath* MeshPath = Path->CastPath<FNavMeshPath>();
 		const int32 NextIndex = static_cast<int32>(Following->GetNextPathIndex());
-		if (Points.IsValidIndex(NextIndex))
+		if ((MeshPath == nullptr || MeshPath->IsStringPulled()) && Points.IsValidIndex(NextIndex))
 		{
+			Out.bHasNextCorner = true;
 			Out.NextCornerCm = Points[NextIndex].Location;
 			Out.bCurrentCornerIsLast = NextIndex == Points.Num() - 1;
 		}
@@ -1336,10 +1369,16 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 		Stop();
 		return EElysiumNpcMoveStatus::Reached;
 	}
-	// The follower's own completion inside the radius it was handed (the named floor, where the
-	// request's tolerance is finer than the follower can land) is still the engine reporting the
-	// route done; Idle after it must not read as a lost request.
-	if (bMoveEnded && EndedCode == EElysiumNpcMoveResultCode::Success)
+	// NAMED MODERNIZATION, not a retail arm: a follower `Success` is read as arrival. Retail's
+	// arrival is the waypoint test above alone (0.0625 units, `0x102ef510`); Unreal's follower lands
+	// inside the radius it was handed (the named floor, where the tolerance is finer than it can
+	// land), and Idle after that must not read as a lost request. It is not only that, though. The
+	// crowd follower also reports `Success` (a) on `bMovedTooFar`, an overshoot past the goal
+	// (`CrowdFollowingComponent.cpp`), and (b) at the goal PROJECTION, up to `GoalSnap2DCm` from the
+	// requested point. This arm counts both as arrival. A partial path's end is NOT counted
+	// (`bRequestPathPartial`): that stays the follower's Idle -> Failed below, as before. The facts
+	// carry `bPathPartial` and the snap offset for the substrate to tell the cases apart.
+	if (bMoveEnded && EndedCode == EElysiumNpcMoveResultCode::Success && !bRequestPathPartial)
 	{
 		Stop();
 		return EElysiumNpcMoveStatus::Reached;
@@ -1503,16 +1542,27 @@ void AElysiumNpcBody::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other,
 	{
 		bPlayerContactPending = true;
 	}
-	// The one obstruction the engine lets the body name: the NPC its capsule swept into while a
-	// request stood. The follower and the crowd agent name none. Classification (NPC / other entity /
-	// world) is the substrate's; a non-NPC actor is not recorded, because the body has no
-	// actor-to-entity map to resolve it through.
-	if (bMoveRequested && Other != nullptr && Other != this)
+	// The obstruction the engine lets the body name: the NPC or the player its capsule swept into
+	// while a request stood. The follower and the crowd agent name none. Only this body's OWN move
+	// counts (`bSelfMoved`): retail's obstruction is the step probe's trace in the direction of
+	// travel, and another actor walking into this one is not it (`DispatchBlockingHit` reaches the
+	// struck actor too). Classification (NPC / player / world) is the substrate's; a non-NPC,
+	// non-player actor is not recorded, because the body has no actor-to-entity map to resolve it
+	// through. The player is one entity, reached through its pawn.
+	if (bMoveRequested && bSelfMoved && Other != nullptr && Other != this)
 	{
-		const AElysiumNpcBody* OtherBody = Cast<AElysiumNpcBody>(Other);
-		if (OtherBody != nullptr && OtherBody->GetOwningEntity().IsSet())
+		FElysiumEntityHandle Toucher;
+		if (const AElysiumNpcBody* OtherBody = Cast<AElysiumNpcBody>(Other))
 		{
-			RecentBlocker = OtherBody->GetOwningEntity();
+			Toucher = OtherBody->GetOwningEntity();
+		}
+		else if (const AElysiumPawn* PlayerPawn = Cast<AElysiumPawn>(Other))
+		{
+			Toucher = PlayerPawn->GetPlayerEntity();
+		}
+		if (Toucher.IsSet())
+		{
+			RecentBlocker = Toucher;
 			RecentBlockerFrame = GFrameCounter;
 		}
 	}
@@ -1527,10 +1577,10 @@ bool AElysiumNpcBody::ConsumePlayerContact()
 
 bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const
 {
-	// The same Recast graph `MoveTo` paths over, asked the narrower question. Extent and nav data
-	// are left at the navigation system's own defaults — which is exactly what
-	// `MoveToLocation`'s `bProjectDestinationToNavigation` uses — so a point this refuses is a point
-	// the move request would have refused too.
+	// A navigability probe, not the request's own projection. Extent and nav data are left at the
+	// navigation system's own defaults: the extent `MoveTo` projects with, but the DEFAULT nav data
+	// rather than this body's agent's, so on a multi-agent world a point this refuses is not
+	// necessarily one the move request would refuse. No production caller.
 	const UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld());
 	if (Nav == nullptr)
 	{
@@ -1547,10 +1597,12 @@ bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutPro
 
 bool AElysiumNpcBody::RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const
 {
-	// 0018 story 4's narrow seam (story 6's path-length service absorbs it): the route `MoveTo` would
-	// plan, asked synchronously and measured. The agent is this body's own -- the pathing hull's,
+	// 0018 story 4's narrow seam (story 6's path-length service absorbs it): a route on this body's
+	// own mesh, asked synchronously and measured. The agent is this body's own -- the pathing hull's,
 	// stated by `ApplyRetailHull` -- so the nav data is the mesh this body walks; no filter is
-	// passed, so the query runs under that nav data's DEFAULT filter.
+	// passed, so the query runs under that nav data's DEFAULT filter. It is NOT `MoveTo`'s route
+	// for a pedestrian request (that searches on the priced pedestrian filter); story 6's
+	// hand-off owns making the two agree.
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	const UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (NavSys == nullptr || Movement == nullptr)

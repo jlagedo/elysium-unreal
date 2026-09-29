@@ -574,8 +574,6 @@ public:
 	void ClearOwnedActivityCopyProps();
 	void EndDisciplineSchedule();
 
-	bool GetPathToScriptedGoal();
-
 	// --- The incapacitation task bodies and the install rules -----------------------------------
 
 	virtual void ClearConditions() override;

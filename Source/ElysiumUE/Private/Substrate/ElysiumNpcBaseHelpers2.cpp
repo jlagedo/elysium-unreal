@@ -415,8 +415,20 @@ FElysiumNpcBase::FNavPathSample FElysiumNpcBase::NavPathSample() const
 		return Sample;
 	}
 	Sample.bValid = true;
-	Sample.PointUnits = Facts.NextCornerCm / ElysiumMove::U;
-	Sample.bHeadIsGoal = Facts.bCurrentCornerIsLast;
+	// `path+0x24` is the waypoint being WALKED TO. The crowd follower's path is start -> end (no
+	// string pulling, `bHasNextCorner` false), so that waypoint is the goal itself and the route
+	// carries no corner between: the sample answers the navigator's goal position and says the head
+	// is the goal. A string-pulled path answers the follower's corner.
+	if (Facts.bHasNextCorner)
+	{
+		Sample.PointUnits = Facts.NextCornerCm / ElysiumMove::U;
+		Sample.bHeadIsGoal = Facts.bCurrentCornerIsLast;
+	}
+	else
+	{
+		Sample.PointUnits = Navigator.GetGoalPos() / ElysiumMove::U;
+		Sample.bHeadIsGoal = true;
+	}
 	return Sample;
 }
 

@@ -230,9 +230,11 @@ bool FElysiumNavigatorResetTest::RunTest(const FString&)
 	TestEqual(TEXT("nav+0x48 := 0"), Nav.RouteGiveUpTime, 0.0);
 	TestEqual(TEXT("nav+0x4c := 0"), Nav.RouteRetryTime, 0.0);
 	TestEqual(TEXT("memory bit 0x20 cleared"), Guard->BaseScheduleHost.MemoryBits & GNavMemoryPathFailed, 0u);
-	// What the reset does NOT touch: the goal flags (SetGoal's word) and the target handle.
-	TestEqual(TEXT("path+0x60 is not the reset's word"), Nav.GetGoalFlags(), 8);
-	TestTrue(TEXT("path+0x30 is not the reset's word"), Nav.GetTarget() == Guard->Handle);
+	// `0x1030bb30` clears the goal flags (`path+0x60`), the target handle (`path+0x30`) and the paused
+	// byte (`path+0x10`) too (review V1a #1, read off the listing).
+	TestEqual(TEXT("path+0x60 := 0"), Nav.GetGoalFlags(), 0);
+	TestFalse(TEXT("path+0x30 := -1"), Nav.GetTarget().IsSet());
+	TestFalse(TEXT("path+0x10 := 0"), Nav.IsPaused());
 
 	// `SetGoal` flag bit 1 is the other road into the reset, and it runs BEFORE the goal's own words:
 	// a standing activity does not survive it.
@@ -283,7 +285,7 @@ bool FElysiumNavigatorRetryWindowTest::RunTest(const FString&)
 	Nav.RouteSearchTime = 2.f;
 	Guard->BaseScheduleHost.MemoryBits &= ~GNavMemoryPathFailed;
 	const double T0 = F.World.NowSeconds();
-	TestFalse(TEXT("the first search fails"), Guard->NavBuildRoute(true, GNavDestCm, 0.f));
+	TestFalse(TEXT("the first search fails"), Guard->NavBuildRoute(true, GNavDestCm));
 	TestTrue(TEXT("0x102f1f12 the deferred-route bit is set"), (Guard->BaseScheduleHost.MemoryBits & GNavMemoryPathFailed) != 0);
 	TestEqual(TEXT("nav+0x44 is 0: retail never writes it"), Nav.RouteRetryInterval, 0.f);
 	TestEqual(TEXT("0x102f1f27 nav+0x4c := curtime + 0"), Nav.RouteRetryTime, T0, 1e-6);
@@ -293,23 +295,23 @@ bool FElysiumNavigatorRetryWindowTest::RunTest(const FString&)
 	// The compare is strict (`nav+0x4c < curtime`): the failing instant does not retry.
 	Motor->bAcceptMoves = true;
 	const int32 MovesBefore = F.Services.Count(TEXT("NpcMotor MoveTo"));
-	TestFalse(TEXT("0x102f1f73 the same instant does not retry"), Guard->NavBuildRoute(true, GNavDestCm, 0.f));
+	TestFalse(TEXT("0x102f1f73 the same instant does not retry"), Guard->NavBuildRoute(true, GNavDestCm));
 	TestEqual(TEXT("...and issued no request"), F.Services.Count(TEXT("NpcMotor MoveTo")), MovesBefore);
 
 	// The next think does, with no interval to wait out.
 	F.Advance(T0 + 0.5);
-	TestTrue(TEXT("0x102f1f80 the next think retries and finds the route"), Guard->NavBuildRoute(true, GNavDestCm, 0.f));
+	TestTrue(TEXT("0x102f1f80 the next think retries and finds the route"), Guard->NavBuildRoute(true, GNavDestCm));
 	TestEqual(TEXT("0x102f1f8d the bit is cleared by the retry"), Guard->BaseScheduleHost.MemoryBits & GNavMemoryPathFailed, 0u);
 	TestTrue(TEXT("...and the accepted request stands as the head"), Nav.IsGoalActive());
 
 	// Past nav+0x48 the next build fails the task with 0xc (`0x102f1f5a`).
 	Motor->bAcceptMoves = false;
 	const double T1 = F.World.NowSeconds();
-	TestFalse(TEXT("a second refused search opens a new window"), Guard->NavBuildRoute(true, GNavDestCm, 0.f));
+	TestFalse(TEXT("a second refused search opens a new window"), Guard->NavBuildRoute(true, GNavDestCm));
 	TestTrue(TEXT("...with the bit set again"), (Guard->BaseScheduleHost.MemoryBits & GNavMemoryPathFailed) != 0);
 	Guard->BaseScheduleHost.FailureReason = 0;
 	F.Advance(T1 + 3.0);
-	TestFalse(TEXT("past the give-up time the build fails"), Guard->NavBuildRoute(true, GNavDestCm, 0.f));
+	TestFalse(TEXT("past the give-up time the build fails"), Guard->NavBuildRoute(true, GNavDestCm));
 	TestEqual(TEXT("0x102f1f5a OnNavFailed(0xc): FAIL_NO_ROUTE"), Guard->BaseScheduleHost.FailureReason, 0xc);
 	return true;
 }
@@ -390,6 +392,7 @@ bool FElysiumNavigatorPathSampleTest::RunTest(const FString&)
 
 	// Ground nav, the corner being walked to is the last: z dropped, 2-D normalise, bit 0.
 	Scripted.Facts.bHasPath = true;
+	Scripted.Facts.bHasNextCorner = true;                     // a string-pulled path: a real corner
 	Scripted.Facts.NextCornerCm = FVector(100.0 * GNavU, 0.0, 50.0 * GNavU);
 	Scripted.Facts.bCurrentCornerIsLast = true;
 	Probe.Navigator.NavType = 0;

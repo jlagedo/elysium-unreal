@@ -33,14 +33,22 @@ int32 FElysiumNpcNavigator::GetMovementActivity() const
 
 void FElysiumNpcNavigator::ResetPath()
 {
-	GoalType = 0;                                                            // 0x1030bb30 path+0x5c
-	GoalPosCm = FVector::ZeroVector;                                         // path+0x4c..+0x54 := vec3_origin
-	TargetOffsetCm = FVector::ZeroVector;                                    // path+0x34..+0x3c := vec3_origin
-	MovementActivity = GPathResetMovementActivity;                           // path+0x2c := 1
-	GoalToleranceCm = 0.f;                                                   // path+0x28 := 0
-	bPedestrian = false;                                                     // path+0x1 := 0
-	bHasHeadWaypoint = false;                                                // the list emptied, path+0x24
+	// `0x1030bb30`, in the listing's order. `path+0x20` (`1030bb82`) is the NPC's `NavPathScalar20`,
+	// zeroed by the caller; the guard bytes `+0x48` / `+0x58`, `+0x0`, `+0x4..+0xc`, `+0x11` and the
+	// vector `+0x14..+0x1c` have no port word.
+	bHasHeadWaypoint = false;                                                // 1030bb36 the list emptied, path+0x24
 	bHeadIsGoal = false;
+	HeadLegRequest = FElysiumNpcMoveRequest();                               // port: the head leg's request
+	bHeadLegRequestSet = false;
+	GoalType = 0;                                                            // 1030bb3d path+0x5c
+	GoalPosCm = FVector::ZeroVector;                                         // 1030bb46 path+0x4c..+0x54 := vec3_origin
+	GoalFlags = 0;                                                           // 1030bb61 path+0x60
+	TargetOffsetCm = FVector::ZeroVector;                                    // 1030bb6a path+0x34..+0x3c := vec3_origin
+	GoalToleranceCm = 0.f;                                                   // 1030bb7f path+0x28 := 0
+	MovementActivity = GPathResetMovementActivity;                           // 1030bb85 path+0x2c := 1
+	TargetEntity = FElysiumEntityHandle::Invalid();                          // 1030bb8c path+0x30 := -1
+	bPedestrian = false;                                                     // 1030bbb3 path+0x1 := 0
+	bPaused = false;                                                         // 1030bbbf path+0x10 := 0
 }
 
 int32 FElysiumNpcNavigator::GetNavType() const

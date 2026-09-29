@@ -372,9 +372,10 @@ bool FElysiumNpc::CanWitnessSupernatural(int32 Level)
 
 void FElysiumNpc::NavigatorDoorCleanup()
 {
-	// `0x102bf7e0`: `if (nav->IsGoalSet()) nav->StopMoving(); m_bShouldMove = 1;`. The `IsGoalSet`
-	// test is made TWICE — once by the caller at `102905da` and once here — and both are kept.
-	if (NavIsGoalSet())
+	// `0x102bf7e0`: `if (nav->0x102ee2e0()) nav->StopMoving(); m_bShouldMove = 1;` — `0x102ee2e0` is
+	// the path's PAUSED byte (`path+0x10`, 0018 story 5 R1). The test is made TWICE — once by the
+	// caller at `102905da` and once here — and both are kept.
+	if (NavigatorIsPaused())
 	{
 		NavStopMoving();
 	}

@@ -42,6 +42,16 @@ bool FElysiumNpcBase::Think19AiNetworkReady() const
 	return World != nullptr && World->NowSeconds() >= World->BuildStampSeconds() + AiNetworkFirstThinkDelay;
 }
 
+// SEAMS, left answering "nothing": the tail of the manager's 0.8 s think `0x102f6a50` (R4 § Q1(a); V1b M3).
+// `Think19AiNetworkReady` above is only the clock compare against `+0x658`; the think that sets `+0x658` also does:
+//  - fires the engine event `ai_node_graph_built` (owner: 0018 story 7, the node-graph / link events);
+//  - `0x102cc900`, the dynamic-link init (`info_node_link` WC-id -> index via `0x102f6d10`, then `0x102ccce0`;
+//    `initialstate` takes effect here, docs/vtmb/entity_io.md:2072) (owner: 0018 story 7, the links);
+//  - `0x1028d8d0`, vslot 584 (`0x1028d910`) on every NPC, then re-bases `m_flLast{,Update,Normal,Move,AI}Think`
+//    to curtime, the Last* stamps the cadence laws read (owner: 0019 story 6, the mechanism seams; the port's
+//    `ResetThinkTimers`, ElysiumEntityWorld.cpp:844, is the existing re-base but is not tied to this moment).
+// None is wired to `BuildStampSeconds() + AiNetworkFirstThinkDelay`; nothing here fires or runs them.
+
 void FElysiumNpcBase::Think19BaseCacheInterruptConditions()
 {
 	// SEAM: `0x1026a0f0` on a non-Troika body (see the declaration).

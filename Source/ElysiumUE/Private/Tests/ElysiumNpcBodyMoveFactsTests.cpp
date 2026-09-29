@@ -5,6 +5,8 @@
 #include "AIController.h"
 #include "AITypes.h"
 #include "AbstractNavData.h"
+#include "Components/CapsuleComponent.h"
+#include "ElysiumPawn.h"
 #include "Engine/World.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Tests/ElysiumPlayerWorldFixture.h"
@@ -23,11 +25,15 @@ struct FElysiumNpcBodyMoveTestAccess
 	{
 		Body->BindMoveFinished(Following);
 	}
-	static void FinishImmediately(AElysiumNpcBody* Body, UPathFollowingComponent& Following,
+	static void FinishImmediately(AElysiumNpcBody* Body, UPathFollowingComponent* Following,
 		EElysiumNpcMoveResultCode Result, EElysiumNpcMoveResultFlags ExtraFlags)
 	{
 		Body->FinishRequestImmediately(Following, Result, ExtraFlags);
 	}
+	// `MoveTo` sets this once the follower has accepted the request; the abstract-path helper below
+	// bypasses `MoveTo`, so a case that needs the body's own "a request stands" gate sets it here.
+	static void SetMoveRequested(AElysiumNpcBody* Body, bool bRequested) { Body->bMoveRequested = bRequested; }
+	static void SetPathPartial(AElysiumNpcBody* Body, bool bPartial) { Body->bRequestPathPartial = bPartial; }
 	static void Deliver(AElysiumNpcBody* Body, uint32 RequestId, const FPathFollowingResult& Result)
 	{
 		Body->OnMoveRequestFinished(FAIRequestID(RequestId), Result);
@@ -100,36 +106,27 @@ bool FElysiumNpcBodyFollowerRequestTest::RunTest(const FString&)
 	const float RetailToleranceCm = 0.0625f * 2.54f;
 	FElysiumNpcMoveRequest Request = MakeRequest(FVector(100, 0, 0), RetailToleranceCm);
 
-	FElysiumNpcFollowerRequest Follower = AElysiumNpcBody::ResolveFollowerRequest(Request, 10.f);
+	FElysiumNpcFollowerRequest Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
 	TestEqual(TEXT("the request's tolerance is kept exactly for the body's own reach test"),
 		Follower.ExactToleranceCm, RetailToleranceCm);
 	TestEqual(TEXT("the follower is handed the named floor where the tolerance is finer than it lands"),
 		Follower.AcceptanceRadiusCm, ElysiumNpcBodyMove::FollowerArrivalFloorCm);
-	TestTrue(TEXT("the agent radius is not added: the follower radius is the tolerance or the floor"),
-		Follower.AcceptanceRadiusCm <= FMath::Max(RetailToleranceCm, ElysiumNpcBodyMove::FollowerArrivalFloorCm));
-	TestEqual(TEXT("the projection extent is the nav data's cell, not INVALID_NAVEXTENT"),
-		Follower.ProjectionExtentCm, 10.f);
-
-	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request, 0.f);
-	TestEqual(TEXT("with no cell known the projection extent is bounded by the tolerance alone"),
-		Follower.ProjectionExtentCm, RetailToleranceCm);
 
 	Request.AcceptanceToleranceCm = 30.f;
-	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request, 10.f);
+	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
 	TestEqual(TEXT("a tolerance above the floor reaches the follower unclamped"), Follower.AcceptanceRadiusCm, 30.f);
 	TestEqual(TEXT("and stays the exact reach test"), Follower.ExactToleranceCm, 30.f);
-	TestEqual(TEXT("and bounds the projection"), Follower.ProjectionExtentCm, 30.f);
 
 	Request.PartialPath = EElysiumNpcPartialPath::Refuse;
-	TestFalse(TEXT("Refuse: no partial path"), AElysiumNpcBody::ResolveFollowerRequest(Request, 0.f).bAllowPartialPath);
+	TestFalse(TEXT("Refuse: no partial path"), AElysiumNpcBody::ResolveFollowerRequest(Request).bAllowPartialPath);
 	Request.PartialPath = EElysiumNpcPartialPath::Accept;
-	TestTrue(TEXT("Accept: partial path"), AElysiumNpcBody::ResolveFollowerRequest(Request, 0.f).bAllowPartialPath);
+	TestTrue(TEXT("Accept: partial path"), AElysiumNpcBody::ResolveFollowerRequest(Request).bAllowPartialPath);
 
 	Request.PedestrianCostMultiplier = 0;
-	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request, 0.f);
+	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
 	TestFalse(TEXT("multiplier 0: the default filter"), Follower.bUsePedestrianFilter);
 	Request.PedestrianCostMultiplier = 7;
-	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request, 0.f);
+	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
 	TestTrue(TEXT("multiplier 7: the pedestrian filter"), Follower.bUsePedestrianFilter);
 	TestEqual(TEXT("at the drawn price"), Follower.PedestrianCostMultiplier, 7);
 	return true;
@@ -203,7 +200,7 @@ bool FElysiumNpcBodyMoveFactsAlreadyAtGoalTest::RunTest(const FString&)
 
 	FElysiumNpcBodyMoveTestAccess::Bind(Body, Following);
 	FElysiumNpcBodyMoveTestAccess::Begin(Body, MakeRequest(FVector::ZeroVector, 0.16f));
-	FElysiumNpcBodyMoveTestAccess::FinishImmediately(Body, *Following, EElysiumNpcMoveResultCode::Success,
+	FElysiumNpcBodyMoveTestAccess::FinishImmediately(Body, Following, EElysiumNpcMoveResultCode::Success,
 		EElysiumNpcMoveResultFlags::AlreadyAtGoal);
 	FElysiumNpcMoveFacts Facts;
 	if (!TestTrue(TEXT("facts"), Body->SampleMoveFacts(Facts))) return false;
@@ -245,6 +242,7 @@ bool FElysiumNpcBodyMoveFactsEndsTest::RunTest(const FString&)
 	TestTrue(TEXT("the request is alive"), Facts.bRequestAlive);
 	TestFalse(TEXT("and has not ended"), Facts.bRequestEnded);
 	TestTrue(TEXT("the follower holds a path"), Facts.bHasPath);
+	TestTrue(TEXT("a non-navmesh path's points are corners as authored"), Facts.bHasNextCorner);
 	TestTrue(TEXT("its next corner is the destination"), Facts.NextCornerCm.Equals(Destination));
 	TestTrue(TEXT("and that corner is the last"), Facts.bCurrentCornerIsLast);
 	TestTrue(TEXT("the 2-D distance is measured to the exact destination"),
@@ -295,6 +293,65 @@ bool FElysiumNpcBodyMoveFactsEndsTest::RunTest(const FString&)
 	TestEqual(TEXT("Aborted"), Facts.ResultCode, EElysiumNpcMoveResultCode::Aborted);
 	TestTrue(TEXT("with the abort details"), EnumHasAllFlags(Facts.ResultFlags,
 		EElysiumNpcMoveResultFlags::InvalidPath | EElysiumNpcMoveResultFlags::NewRequest));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsBlockerAndPartialTest,
+	"Elysium.Visual.NpcBody.MoveFacts.BlockerAndPartial", ElysiumNpcBodyMoveTests::Flags)
+bool FElysiumNpcBodyMoveFactsBlockerAndPartialTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcBodyMoveTests;
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	AElysiumNpcBody* Body = SpawnBodyWithController(Fixture);
+	if (!TestNotNull(TEXT("body"), Body)) return false;
+	AElysiumPawn* Player = Fixture.SpawnPawn(FVector(2000, 0, 0));
+	if (!TestNotNull(TEXT("player pawn"), Player)) return false;
+	const FElysiumEntityHandle PlayerHandle(9, 4);
+	Player->SetPlayerEntity(PlayerHandle);
+	AAIController* Controller = Cast<AAIController>(Body->GetController());
+	if (!TestNotNull(TEXT("controller"), Controller)) return false;
+	UPathFollowingComponent* Following = Controller->GetPathFollowingComponent();
+	if (!TestNotNull(TEXT("follower"), Following)) return false;
+	FElysiumNpcBodyMoveTestAccess::Bind(Body, Following);
+
+	const FVector Destination(300, 400, 50);
+	if (!TestTrue(TEXT("the follower took the request"),
+		IssueAbstractRequest(Body, Following, MakeRequest(Destination, 0.16f)).IsValid())) return false;
+	FElysiumNpcBodyMoveTestAccess::SetMoveRequested(Body, true);
+	UCapsuleComponent* Capsule = Body->GetCapsuleComponent();
+	FElysiumNpcMoveFacts Facts;
+
+	// Another actor walking into this body (`bSelfMoved` false) is not this body's obstruction.
+	Body->NotifyHit(Capsule, Player, nullptr, false, FVector::ZeroVector, FVector::UpVector,
+		FVector::ZeroVector, FHitResult());
+	Body->SampleMoveFacts(Facts);
+	TestFalse(TEXT("a toucher that walked into the body is not named"), Facts.BlockingEntity.IsSet());
+
+	// This body's own sweep into the player is, and the player's entity is the handle named.
+	Body->NotifyHit(Capsule, Player, nullptr, true, FVector::ZeroVector, FVector::UpVector,
+		FVector::ZeroVector, FHitResult());
+	Body->SampleMoveFacts(Facts);
+	TestTrue(TEXT("the player this body walked into is named by its entity"),
+		Facts.BlockingEntity == PlayerHandle);
+
+	// A partial path's end is the follower's, not an arrival at the goal.
+	FElysiumNpcBodyMoveTestAccess::SetPathPartial(Body, true);
+	Body->SampleMoveFacts(Facts);
+	TestTrue(TEXT("the partial path is a fact"), Facts.bPathPartial);
+	Following->OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);
+	FVector Feet;
+	float Yaw = 0.f;
+	TestEqual(TEXT("a Success at a partial path's end is not Reached"), Body->Sample(Feet, Yaw),
+		EElysiumNpcMoveStatus::Failed);
+
+	// The same end on a full path is the named modernization's arrival.
+	if (!TestTrue(TEXT("the follower took the second request"),
+		IssueAbstractRequest(Body, Following, MakeRequest(Destination, 0.16f)).IsValid())) return false;
+	FElysiumNpcBodyMoveTestAccess::SetMoveRequested(Body, true);
+	Following->OnPathFinished(EPathFollowingResult::Success, FPathFollowingResultFlags::None);
+	TestEqual(TEXT("a Success on a full path is Reached"), Body->Sample(Feet, Yaw),
+		EElysiumNpcMoveStatus::Reached);
 	return true;
 }
 

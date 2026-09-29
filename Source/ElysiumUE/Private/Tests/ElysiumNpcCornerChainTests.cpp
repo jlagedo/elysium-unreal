@@ -158,8 +158,10 @@ bool FElysiumCornerChainThreeCornersTest::RunTest(const FString&)
 	TestTrue(TEXT("a head waypoint stands"), Nav.IsGoalActive());
 	TestFalse(TEXT("0x102f24ca the head is not the goal: the goal bit rides the LAST corner"), Nav.CurWaypointIsGoal());
 	TestTrue(TEXT("the leg goes to the first corner"), Motor->RequestedFeet.Equals(GCorner0Cm, 0.01));
-	TestEqual(TEXT("a non-goal corner is passed at the waypoint tolerance (path+0x40)"),
-		Motor->LastMoveRequest.AcceptanceToleranceCm, Nav.WaypointToleranceCm, 1e-3f);
+	TestEqual(TEXT("a non-goal corner is passed at the waypoint constant 0.0625 (0x10451f78), not path+0x40"),
+		Motor->LastMoveRequest.AcceptanceToleranceCm, 0.0625f * GCornerU, 1e-4f);
+	TestTrue(TEXT("...and that is not the path's waypoint tolerance"),
+		Nav.WaypointToleranceCm > 0.0625f * GCornerU);
 	TestTrue(TEXT("nothing has been passed yet"), GCornerLog.Corners.Num() == 0);
 	TestTrue(TEXT("m_pGoalEnt is the first corner"), Guard->BaseScheduleHost.GoalEnt == C0->Handle);
 
@@ -173,8 +175,8 @@ bool FElysiumCornerChainThreeCornersTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102f2393 the re-find copies the NEW first corner's speed"), Guard->AuthoredSpeed == 222.f);
 	TestTrue(TEXT("the next leg goes to c1"), Motor->RequestedFeet.Equals(GCorner1Cm, 0.01));
 	TestFalse(TEXT("c1 is not the last corner"), Nav.CurWaypointIsGoal());
-	TestEqual(TEXT("...and is passed at the waypoint tolerance"),
-		Motor->LastMoveRequest.AcceptanceToleranceCm, Nav.WaypointToleranceCm, 1e-3f);
+	TestEqual(TEXT("...and is passed at the same waypoint constant (0x10451f78)"),
+		Motor->LastMoveRequest.AcceptanceToleranceCm, 0.0625f * GCornerU, 1e-4f);
 
 	// Corner 1 reached: the chain now holds only the last corner, which is the goal.
 	TestTrue(TEXT("a head still stands"), Guard->NavAdvancePath());

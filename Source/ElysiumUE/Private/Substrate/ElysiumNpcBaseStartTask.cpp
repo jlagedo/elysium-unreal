@@ -1978,15 +1978,14 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	// Goal flag 2 (`0x102ecf27`) returns BEFORE these stores (the `0x1030ba50(path, type)` write and
 	// `path+0x60 = goal[9]`, which follow the flag-2 block in the listing), so a node-route goal writes
 	// none of them: the path's type comes from the route's own install (4), `path+0x60` is left as it
-	// stood and the arrival words are never applied.
+	// stood and the arrival words are never applied. The arrival words `[6]` / `[7]` are written after a
+	// successful build only (`0x102ed190..0x102ed1cc`), below.
 	const bool bNodeRouteGoal = (Goal.GoalFlags & 2) != 0;
 	if (!bNodeRouteGoal)
 	{
 		Navigator.GoalType = Goal.Type;
 		Navigator.GoalFlags = Goal.GoalFlags;
 		Navigator.GoalNode = Goal.DestNode;
-		Navigator.ArrivalActivity = Goal.ArrivalActivity;
-		Navigator.ArrivalSequence = Goal.ArrivalSequence;
 		if (Goal.Type == GOALTYPE_PLACE_PEDESTRIAN)
 		{
 			Navigator.bPedestrian = true;
@@ -2112,17 +2111,23 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	{
 		Navigator.GoalPosCm = DestCm;
 	}
-	if (Goal.Target.IsSet())
+	// Types 1/2/7 overwrite `EBX` with the entity they resolved (`0x102ed05b..0x102ed0b9`), the goal's own
+	// `[10]` included; the word is written only for a non-null `EBX` (`0x102ed0fd..0x102ed112`), so a type
+	// that resolved nothing leaves `path+0x30` standing. Every other type carries `[10]` through.
+	if (Goal.Type == GOALTYPE_TARGETENT || Goal.Type == GOALTYPE_ENEMY || Goal.Type == GOALTYPE_BESTSEEUNKNOWN)
 	{
-		Navigator.TargetEntity = Goal.Target;
+		if (GoalEntity != nullptr)
+		{
+			Navigator.TargetEntity = GoalEntity->Handle;                 // 0x102ed112
+		}
 	}
-	else if (GoalEntity != nullptr)
+	else if (Goal.Target.IsSet())
 	{
-		Navigator.TargetEntity = GoalEntity->Handle;
+		Navigator.TargetEntity = Goal.Target;                            // 0x102ed112 [10]
 	}
 
 	// `0x102ed11e` `0x102f1dc0(this, goal flags bit 3)`.
-	const bool bRoute = NavBuildRoute(bHaveDest, DestCm, ToleranceCm);
+	const bool bRoute = NavBuildRoute(bHaveDest, DestCm);
 	StartTaskNav.bLastSetGoalResult = bRoute;
 	if (!bRoute)
 	{
@@ -2142,18 +2147,26 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	}
 	// `0x102ed168` `0x102f13d0(this, 1)` -- unrecovered, no port word. Then [6] / [7] / the default
 	// arrival activity 1 (`0x1030b550` / `0x1030b5b0`).
+	// The arrival words, after a built route only: `[6]` (`0x102ed19b`), else `[7]` (`0x102ed1b7`), else
+	// activity 1 (`0x102ed1cc`); a refused build leaves the words as they stood.
 	if (Goal.ArrivalActivity != INDEX_NONE)
 	{
+		Navigator.ArrivalActivity = Goal.ArrivalActivity;
 		StartTaskSetArrivalActivity(Goal.ArrivalActivity);
 	}
-	else if (Goal.ArrivalSequence == INDEX_NONE)
+	else if (Goal.ArrivalSequence != INDEX_NONE)
 	{
+		Navigator.ArrivalSequence = Goal.ArrivalSequence;
+	}
+	else
+	{
+		Navigator.ArrivalActivity = ACT_IDLE;
 		StartTaskSetArrivalActivity(ACT_IDLE);
 	}
 	return true;
 }
 
-bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float ToleranceCm)
+bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 {
 	using namespace ElysiumStartTask19Base;
 
@@ -2174,9 +2187,9 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			Troika->MoveGoal = DestCm;
 		}
 		// The request is filled from the navigator's goal words (`MakeNavigatorMoveRequest`): the
-		// arrival radius is retail's waypoint constant, not `ToleranceCm` (`path+0x28`, which retail
-		// applies to a blocked step only, `0x102ef760`).
-		bMoveIssued = Motor->MoveTo(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
+		// arrival radius is retail's waypoint constant, not the path's goal tolerance (`path+0x28`, which
+		// retail applies to a blocked step only, `0x102ef760`).
+		bMoveIssued = NavIssueLeg(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
 		if (bMoveIssued)
 		{
 			// An accepted request to the goal: the head waypoint stands and is the goal's own
@@ -2187,7 +2200,6 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 		}
 		return bMoveIssued;
 	};
-	(void)ToleranceCm;   // `path+0x28` is `Navigator.GoalToleranceCm`; the request does not carry it
 	// A pushed `aiscripted_schedule` order already holds the body for its own program (modes 1/2 set
 	// their goal through this very call, `ScheduledMoveToGoalEntity` `0x102800c0`), so the build runs
 	// under that claim rather than asking for an ordinary schedule one the director outranks.
@@ -2257,6 +2269,11 @@ void FElysiumNpcBase::NavClearRoute()
 	// `0x1030bb30(path)`: the path reset -- goal type 0, goal position and target offset to the origin,
 	// movement activity 1, tolerance `+0x28` 0, the pedestrian byte and the head waypoint cleared.
 	Navigator.ResetPath();
+	NavPathScalar20 = 0.f;                                                             // `0x1030bb82` path+0x20 := 0
+	if (FElysiumNpc* Troika = AsNpc())
+	{
+		Troika->NavHeadCorner = FElysiumEntityHandle::Invalid();                       // the head waypoint's `wp+0x20`
+	}
 	if (Motor != nullptr)
 	{
 		Motor->ClearNavigationGoal();
@@ -2488,7 +2505,7 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	}
 	// Retail's A* prices the search from the path's own words: the pedestrian byte (`path+0x1`) is not
 	// written here, so a byte a previous type-8 goal left set still prices this route, as it would.
-	bMoveIssued = Motor->MoveTo(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
+	bMoveIssued = NavIssueLeg(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
 	if (!bMoveIssued)
 	{
 		return false;

@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -93,14 +94,12 @@ void FElysiumNpcBase::NavSnapshotOwnerPointers(int32 Argument)
 
 bool FElysiumNpcBase::NavIsGoalActive() const
 {
-	// The port's "a route is being followed" fact, which stands for `IsGoalActive` `0x102ee6a0`
-	// (`nav+0x30 != 0 && path+0x24 != 0`, a head waypoint exists) -- NOT for `0x102ee680`, which is
-	// `IsGoalSet` (`path+0x5c != 0`, `NavigatorIsGoalSet`), and which `CAI_BaseNPC::IsMoving`
-	// (`0x10280300`, slot 153) forwards to. The retail word is `Navigator.IsGoalActive()`; it is set
-	// when the goal's request is accepted and cleared by the reset, but the pop at arrival is the
-	// navigator's move step (0018 story 5 lane I), so until that lands the mover's own sample is the
-	// one that goes false when the walk ends, and this answers it.
-	return Motor != nullptr && Motor->SampleNavigation().bActiveGoal;
+	// `IsGoalActive` `0x102ee6a0` (`nav+0x30 != 0 && path+0x24 != 0`, a head waypoint exists) -- NOT
+	// `0x102ee680`, which is `IsGoalSet` (`path+0x5c != 0`, `NavigatorIsGoalSet`). The head is the
+	// navigator's word: set when a leg is accepted, popped by `AdvancePath` / the arrival's
+	// `ClearGoal`, and left standing by `OnNavFailed` (the path is not cleared), which is what the
+	// kernel's readers must see after a failure.
+	return Navigator.IsGoalActive();
 }
 
 bool FElysiumNpcBase::NavigatorIsGoalSet() const
@@ -115,11 +114,9 @@ bool FElysiumNpcBase::NavigatorIsPaused() const
 
 void FElysiumNpcBase::NavStopMoving()
 {
-	// `thunk_FUN_102ee2c0(m_pNavigator)` — SDK `CAI_Navigator::StopMoving()`.
-	if (Motor != nullptr)
-	{
-		Motor->Stop();
-	}
+	// `thunk_FUN_102ee2c0(m_pNavigator)` -> `0x1030bea0`: `path+0x10 m_bPaused := 0` (R1 §3). The body
+	// is not stopped: the move step's paused gate (`0x102effab`) is what this lifts.
+	Navigator.bPaused = false;
 }
 
 int32 FElysiumNpcBase::NavGoalState() const
@@ -134,10 +131,12 @@ bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 {
 	// The pair `FUN_1027a6c0` reads off `m_pNavigator` (+0x5d34): `0x102ee6a0` is
 	// `CAI_Navigator::IsGoalActive` (`m_pPath` +0x30 and its current waypoint +0x24 both set,
-	// `NavigatorGoalIsActive`), and `0x102ee510` answers the path's movement activity
+	// `Navigator.IsGoalActive()`), and `0x102ee510` answers the path's movement activity
 	// (`0x1030b520(m_pPath)`), which this runtime carries as the navigator's
-	// `MovementActivity` (written by `SetGoal`'s activity word, `0x102ee250`; 1 after a reset).
-	if (!NavigatorGoalIsActive())                                        // 0x102ee6a0
+	// `MovementActivity` (written by `SetGoal`'s activity word, `0x102ee250`; 1 after a reset). The
+	// head stands at `TaskMovementComplete` (its `SetIdealActivity` runs before `ClearGoal`) and after
+	// `OnNavFailed`, so both write the path's movement activity, as retail's do.
+	if (!Navigator.IsGoalActive())                                       // 0x102ee6a0
 	{
 		return false;
 	}
@@ -287,12 +286,10 @@ float FElysiumNpcBase::MaxYawSpeedBase()
 bool FElysiumNpcBase::IsMoving()
 {
 	// slot 153. `CAI_BaseNPC::FUN_10280300` `0x10280300` is a one-line forward to
-	// `thunk_FUN_102ee680(m_pNavigator)`, which is `IsGoalSet` (`NavigatorIsGoalSet`, goal type
-	// != 0), not `IsGoalActive`. The port answers the mover's "a route is being followed" fact
-	// instead: retail's `TaskMovementComplete` ends a walk with `ClearGoal` (`0x102ee270`, the path
-	// reset), which the port does not yet route to `NavClearRoute`, so the goal type outlives the
-	// walk here and would answer "moving" for a body that has arrived.
-	return NavIsGoalActive();
+	// `thunk_FUN_102ee680(m_pNavigator)`, which is `IsGoalSet` (goal type != 0), not `IsGoalActive`.
+	// The goal type stands after `OnNavFailed` until the schedule clears it, so a failed walker still
+	// answers "moving" here, as retail's does.
+	return NavigatorIsGoalSet();
 }
 
 bool FElysiumNpcBase::BaseEntityIsMoving(const FElysiumEntity& Entity)
@@ -581,6 +578,7 @@ void FElysiumNpcBase::NavResetBlockerMemory()
 	Navigator.BlockerEntity = FElysiumEntityHandle::Invalid();
 	Navigator.BlockerHoldUntil = -1.0;
 	Navigator.BlockerForgetAt = -1.0;
+	Navigator.bBlockerHoldReissued = false;                                  // port: the hold's re-issue
 	++NavMoveStep.LocalNavResets;                                            // 0x1000b550, SEAM
 }
 
@@ -654,6 +652,7 @@ bool FElysiumNpcBase::NavBlockerHold(const FElysiumEntityHandle& Blocker)
 		Navigator.BlockerEntity = Blocker;                                   // nav+0x54
 		Navigator.BlockerHoldUntil = Now + Navigator.BlockerHoldSeconds;     // nav+0x58 = curtime + nav+0x5c
 		Navigator.BlockerForgetAt = Now + Navigator.BlockerWindowSeconds;    // nav+0x60 = curtime + nav+0x64
+		Navigator.bBlockerHoldReissued = false;                              // port: a fresh hold may re-issue
 		++NavMoveStep.BlockerHoldArms;
 		return true;
 	}
@@ -698,6 +697,7 @@ bool FElysiumNpcBase::NavBlockedStepCompletes()
 	const double ToleranceUnits = Navigator.GetGoalTolerance() / U + GMoveStepGoalSlackUnits;
 	if (DistUnits < ToleranceUnits)
 	{
+		NavLogMoveStep(TEXT("arrived (blocked inside the goal tolerance, 0x102ef760)"));
 		NavOnNavComplete();                                                  // nav slot 8, *result = 0
 		return true;
 	}
@@ -709,9 +709,58 @@ void FElysiumNpcBase::NavMarkStaleLink(float Seconds)
 	// `0x102f1fa0(nav, Seconds, NULL)`: gated inside on `nav+0x50 m_fRememberStaleNodes`, a path, a
 	// head, `path+0x44 != -1` and the head's node `wp+0x10 != -1`, it marks the link in `nav+0x2c`
 	// (`link+0x64 |= 1`, `link+0x68 = curtime + Seconds`, `link+0 = -1`). SEAM: the port routes on
-	// Unreal's navmesh and keeps no link table to mark, so the call is recorded and marks nothing.
+	// Unreal's navmesh and keeps no link table to mark, so the call is recorded and marks nothing; the
+	// gate's `nav+0x50` (writer unrecovered, R3) has no port word until a link table exists to gate.
 	(void)Seconds;
 	++NavMoveStep.StaleMarkCalls;
+}
+
+bool FElysiumNpcBase::NavIssueLeg(const FElysiumNpcMoveRequest& Request)
+{
+	// Port-only: the issue of one leg (`DoFindPath 0x102f2330`'s product, walked by the body) and the
+	// record of what was issued, which retail keeps in the path's waypoints themselves.
+	if (Motor == nullptr || !Motor->MoveTo(Request))
+	{
+		Navigator.HeadLegRequest = FElysiumNpcMoveRequest();
+		Navigator.bHeadLegRequestSet = false;
+		return false;
+	}
+	Navigator.HeadLegRequest = Request;
+	Navigator.bHeadLegRequestSet = true;
+	return true;
+}
+
+bool FElysiumNpcBase::NavReissueHeadLeg()
+{
+	// The recorded request, unchanged: same destination, arrival radius, gait and speed, and the
+	// pedestrian multiplier as drawn at the route build (`0x102fe9f0` draws once per build).
+	if (Motor == nullptr || !Navigator.bHeadLegRequestSet)
+	{
+		return false;
+	}
+	bMoveIssued = Motor->MoveTo(Navigator.HeadLegRequest);
+	return bMoveIssued;
+}
+
+void FElysiumNpcBase::NavLogMoveStep(const TCHAR* Outcome, int32 FailCode) const
+{
+	if (!UE_LOG_ACTIVE(LogElysiumNpcEnt, Verbose))
+	{
+		return;
+	}
+	const FVector DestCm = Navigator.bHeadLegRequestSet
+		? Navigator.HeadLegRequest.DestinationCm : Navigator.GetGoalPos();
+	const double Left2DCm = FVector::Dist2D(Origin, DestCm);
+	if (FailCode != 0)
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s Move: %s 0x%02x, dest (%.1f, %.1f, %.1f), %.1f cm 2-D left"),
+			*DebugString(), Outcome, FailCode, DestCm.X, DestCm.Y, DestCm.Z, Left2DCm);
+	}
+	else
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s Move: %s, dest (%.1f, %.1f, %.1f), %.1f cm 2-D left"),
+			*DebugString(), Outcome, DestCm.X, DestCm.Y, DestCm.Z, Left2DCm);
+	}
 }
 
 bool FElysiumNpcBase::NavSimplifyPathDoorRefused()
@@ -769,6 +818,7 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	// raises `OnNavFailed(0x0e)` and the pass goes on (`MoveNormal` does not re-test `nav+0x1c`).
 	if (NavSimplifyPathDoorRefused())
 	{
+		NavLogMoveStep(TEXT("door refused, failed"), GMoveStepFailDoor);
 		NavOnNavFailed(GMoveStepFailDoor);                                   // 0x102f08e7
 	}
 	Navigator.bBlockerHold = false;                                          // nav+0x51 = 0
@@ -778,11 +828,13 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	{
 		if (Navigator.CurWaypointIsGoal())                                   // 0x102ee660 -> 0x1030bd50
 		{
+			NavLogMoveStep(TEXT("arrived"));
 			NavOnNavComplete();                                              // *result = 0
 			return ENavMoveResult::Ok;
 		}
 		// `0x102f0400`, then `*result = 1` whatever it did. A failure it raised (`nav+0x1c` set) ends
 		// the loop at its top; it must not be turned into a completion below.
+		NavLogMoveStep(TEXT("waypoint passed"));
 		const bool bHeadStands = NavAdvancePath();
 		if (bHeadStands || Navigator.bNavFailed)
 		{
@@ -792,6 +844,7 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 		// no next waypoint it prints "ERROR: Force end of route without goal" and flags the last one
 		// as the goal, and the loop's next pass completes on it -- the same position, so the same
 		// arrival. The port reaches that completion here.
+		NavLogMoveStep(TEXT("arrived (forced end of route without goal)"));
 		NavOnNavComplete();
 		return ENavMoveResult::Ok;
 	}
@@ -812,6 +865,7 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	const FElysiumEntityHandle MoveTargetHandle = NavMoveTarget();
 	if (Step.Blocker.IsSet() && MoveTargetHandle.IsSet() && Step.Blocker == MoveTargetHandle)
 	{
+		NavLogMoveStep(TEXT("arrived (blocked by the move target, motor code 4)"));
 		NavOnNavComplete();
 		return ENavMoveResult::Ok;
 	}
@@ -833,9 +887,34 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	{
 		// S3 `0x102ef350` / S7 on motor code 2: the hold. True -> walk up to the clearance, spend the
 		// interval (`goal+0x38 |= 2`), `*result = 0`: nothing fails during the hold.
+		const int32 ArmsBefore = NavMoveStep.BlockerHoldArms;
 		if (NavBlockerHold(Step.Blocker))
 		{
+			if (NavMoveStep.BlockerHoldArms != ArmsBefore)
+			{
+				NavLogMoveStep(TEXT("NPC-blocker hold start"));
+			}
 			return ENavMoveResult::Ok;
+		}
+		// The hold has run (0.25 s) with the same blocker inside the 3.0 s window -- the only way
+		// `0x102ef3e0` answers false for an NPC. NAMED MODERNIZATION, of WHEN the hold starts, not of
+		// what it does: retail re-probes the step every think, so during the hold the NPC stands at the
+		// clearance and, the moment the blocker clears, the walk simply continues; only a probe still
+		// blocked once the hold has run reaches `Move` as `-3`. Unreal's path follower gives the request
+		// up on its own block detection (~5 s) BEFORE the substrate sees the blocker, so the port's hold
+		// runs on an ended request. To keep retail's outcome the hold, once run, hands the body the same
+		// leg again (`NavReissueHeadLeg`, the recorded request: no new route, no new pedestrian draw),
+		// once per armed hold: a clear path walks on; a second `Blocked` end inside the window is the
+		// exhausted hold and falls through to the `-3` below (`0x0c`, no stale mark).
+		if (!Navigator.bBlockerHoldReissued)
+		{
+			Navigator.bBlockerHoldReissued = true;
+			if (NavReissueHeadLeg())
+			{
+				++NavMoveStep.BlockerHoldReissues;
+				NavLogMoveStep(TEXT("NPC-blocker hold over, head leg re-issued"));
+				return ENavMoveResult::Ok;
+			}
 		}
 		// S4 `0x102ef0e0`: follow a same-direction mover (0), else the NPC status stands.
 		if (NavFollowSameDirectionMover(Step.Blocker))
@@ -898,11 +977,13 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		++NavMoveStep.NoRouteWarnings;
 		EmitDevMsg(TEXT("AIError: Move requested with no route!\n"),
 			TEXT("AIError: Move requested with no route!\n"));              // retail's Warning()
+		NavLogMoveStep(TEXT("no goal type, failed"), GMoveStepFailNoGoal);
 		NavOnNavFailed(GMoveStepFailNoGoal);
 		return;
 	}
 	if (!Navigator.IsGoalActive())                                           // 102f00bc head waypoint == 0
 	{
+		NavLogMoveStep(TEXT("no head waypoint, failed"), GMoveStepFailNoRoute);
 		NavOnNavFailed(GMoveStepFailNoRoute);                                // no warning, no stale mark
 		return;
 	}
@@ -939,10 +1020,10 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		// `INC EBP; CMP EBP,0x10; JG`: the 17th dispatch fails whatever it answered.
 		if (++NavMoveStep.Passes > GMoveStepMaxPasses)
 		{
-			++NavMoveStep.PassCapErrors;
 			EmitDevMsg(TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"),
 				TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"));
 			NavMarkStaleLink(GMoveStepStaleSeconds);                         // 102f016e
+			NavLogMoveStep(TEXT("17th pass, failed"), GMoveStepFailNoRoute);
 			NavOnNavFailed(GMoveStepFailNoRoute);                            // 102f0180
 			return;
 		}
@@ -959,6 +1040,8 @@ void FElysiumNpcBase::NavigatorMoveStep()
 	{
 		NavMarkStaleLink(GMoveStepStaleSeconds);                             // 0x102f1fa0(nav, 4.0, NULL)
 	}
+	NavLogMoveStep(Result == ENavMoveResult::BlockedNpc ? TEXT("blocked by an NPC (-3), failed")
+		: TEXT("blocked, failed"), GMoveStepFailNoRoute);
 	NavOnNavFailed(GMoveStepFailNoRoute);                                    // 102f0180 nav slot 10
 	if (Result == ENavMoveResult::BlockedNpc)
 	{

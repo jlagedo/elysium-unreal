@@ -558,9 +558,10 @@ namespace
 	// `DoFindPath`'s chain cap: `CMP EDI,0x80` at `0x102f24a5` ends the laying, and the goal flag goes
 	// on the last corner only for a count below it (`0x102f24ca`).
 	constexpr int32 GScript19CornerChainCap = 0x80;
-	// The goal waypoint's arrival radius, `0x10451f78` = 0.0625 units (the constant lane A's request
-	// fill states for the goal leg); a non-goal corner is passed at the path's waypoint tolerance
-	// (`path+0x40`, `Navigator.WaypointToleranceCm`, `SetGoal 0x102ececa`).
+	// Every waypoint's arrival radius, `0x10451f78` = 0.0625 units (`0x102ef510`, slot 16: "a constant, not
+	// `path+0x28`, not `path+0x40`, not a hull"). The corners are passed at it as the goal is; the goal
+	// bit only picks `OnNavComplete` over `AdvancePath`. `path+0x40` (`Navigator.WaypointToleranceCm`)
+	// is the blocked step's tolerance (`0x102eefb0`) and never a waypoint's.
 	constexpr float GScript19GoalArrivalUnits = 0.0625f;
 }
 
@@ -621,9 +622,9 @@ bool FElysiumNpc::NavFindPathCorners()
 	{
 		return false;                                                               // no follower: no leg
 	}
-	// The leg `SetGoal` already issued is this one when it went to the head's position and the head is
-	// the goal (same arrival radius): nothing to re-issue.
-	if (bMoveIssued && Navigator.bHeadIsGoal && MoveGoal.Equals(HeadCm, 0.01))
+	// The leg `SetGoal` already issued is this one when it went to the head's position (every waypoint
+	// arrives at the same radius): nothing to re-issue.
+	if (bMoveIssued && MoveGoal.Equals(HeadCm, 0.01))
 	{
 		Navigator.bHasHeadWaypoint = true;
 		return true;
@@ -641,14 +642,13 @@ bool FElysiumNpc::NavFindPathCorners()
 		: EElysiumNpcGaitKind::Walk;
 	FElysiumNpcMoveRequest Request;
 	Request.DestinationCm = HeadCm;
-	Request.AcceptanceToleranceCm = Navigator.bHeadIsGoal ? GScript19GoalArrivalUnits * ElysiumMove::U
-		: Navigator.WaypointToleranceCm;
+	Request.AcceptanceToleranceCm = GScript19GoalArrivalUnits * ElysiumMove::U;   // 0x10451f78, every waypoint
 	Request.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, Gait);
 	Request.GaitKind = Gait;
 	Request.PartialPath = EElysiumNpcPartialPath::Refuse;
 	Request.PedestrianCostMultiplier = 0;       // a chain is no A* search: `0x102f2060` is never reached
 	Request.MovementActivityName = FName(*FString::Printf(TEXT("ACT_0x%02x"), Activity));
-	bMoveIssued = Motor->MoveTo(Request);
+	bMoveIssued = NavIssueLeg(Request);
 	if (!bMoveIssued)
 	{
 		// The chain itself cannot fail in retail (its legs are straight local walks, so a blocked one

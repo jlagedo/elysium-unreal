@@ -468,8 +468,9 @@ void FElysiumNpc::ResumeScheduledMove()
 	// `FUN_102bf7e0` `0x102bf7e0`:
 	//     if (thunk_FUN_102ee2e0(m_pNavigator)) thunk_FUN_102ee2c0(m_pNavigator);
 	//     m_bShouldMove (+0x1a40) = 1;                // UNCONDITIONALLY, outside the if
-	// The target name is 29c's best guess; the body is exact.
-	if (NavIsGoalActive())
+	// The target name is 29c's best guess; the body is exact. `0x102ee2e0` reads the path's PAUSED
+	// byte (`path+0x10`, 0018 story 5 R1), not the goal.
+	if (NavigatorIsPaused())
 	{
 		NavStopMoving();
 	}

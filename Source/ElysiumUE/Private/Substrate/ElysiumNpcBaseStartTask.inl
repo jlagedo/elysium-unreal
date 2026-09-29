@@ -104,9 +104,9 @@ void NavClearRoute();
 /** `0x102f1dc0` — the route build `SetGoal` ends on, with its deferred-route window: a built route
  *  clears `m_afMemory` bit `0x20` and, unless slot 529 answers a continuous move, completes the task
  *  through the navigator's slot 2 (`0x102623c0` → `TaskComplete(false)`); a refused one fails the task
- *  (`OnNavFailed(0xc, 1)`) when `+0x40` is 0.0, else opens the window. `DestCm` / `ToleranceCm` are
+ *  (`OnNavFailed(0xc, 1)`) when `+0x40` is 0.0, else opens the window. `DestCm` is
  *  what the path was given; answers whether a route stands. */
-bool NavBuildRoute(bool bHaveDest, const FVector& DestCm, float ToleranceCm);
+bool NavBuildRoute(bool bHaveDest, const FVector& DestCm);
 
 /** `CAI_Path +0x20` — the scalar `0x102f2fc0` reads and `0x102f2fe0` writes around slot 563
  *  `TranslateEnemyChasePosition` in `TASK_GET_PATH_TO_ENEMY_LKP`. Retail name unrecovered. */
