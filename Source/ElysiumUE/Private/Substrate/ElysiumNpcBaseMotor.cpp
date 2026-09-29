@@ -78,10 +78,24 @@ void FElysiumNpcBase::NavSnapshotOwnerPointers(int32 Argument)
 
 bool FElysiumNpcBase::NavIsGoalActive() const
 {
-	// `thunk_FUN_102ee680(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`, which
-	// `CAI_BaseNPC::IsMoving` (`0x10280300`) is a one-line forward to. The port's mover answers the
-	// same question, so this is a wire and not a seam.
+	// The port's "a route is being followed" fact, which stands for `IsGoalActive` `0x102ee6a0`
+	// (`nav+0x30 != 0 && path+0x24 != 0`, a head waypoint exists) -- NOT for `0x102ee680`, which is
+	// `IsGoalSet` (`path+0x5c != 0`, `NavigatorIsGoalSet`), and which `CAI_BaseNPC::IsMoving`
+	// (`0x10280300`, slot 153) forwards to. The retail word is `Navigator.IsGoalActive()`; it is set
+	// when the goal's request is accepted and cleared by the reset, but the pop at arrival is the
+	// navigator's move step (0018 story 5 lane I), so until that lands the mover's own sample is the
+	// one that goes false when the walk ends, and this answers it.
 	return Motor != nullptr && Motor->SampleNavigation().bActiveGoal;
+}
+
+bool FElysiumNpcBase::NavigatorIsGoalSet() const
+{
+	return Navigator.IsGoalSet();                                        // 0x102ee680 path+0x5c != 0
+}
+
+bool FElysiumNpcBase::NavigatorIsPaused() const
+{
+	return Navigator.IsPaused();                                         // 0x102ee2e0 path+0x10 m_bPaused
 }
 
 void FElysiumNpcBase::NavStopMoving()
@@ -95,11 +109,10 @@ void FElysiumNpcBase::NavStopMoving()
 
 int32 FElysiumNpcBase::NavGoalState() const
 {
-	// `thunk_FUN_102ee620(m_pNavigator)` — the navigator's route/goal-state word, which
-	// `ValidateNavGoal` requires to be exactly 6. **SEAM**: `IElysiumNpcMotor` keeps no goal type,
-	// so this answers -1, which is "not that state" and is the arm retail takes for every other
-	// value.
-	return INDEX_NONE;
+	// `thunk_FUN_102ee620(m_pNavigator)` -- `GetGoalType()`, `path+0x5c`: 0 none, 1 target, 2 enemy,
+	// 3 path corner, 4 location, 6 cover, 7 best-unknown, 8 pedestrian place, 9 animal place.
+	// `ValidateNavGoal` requires exactly 6. No goal: 0 (the path constructor's and the reset's).
+	return Navigator.GetGoalType();
 }
 
 bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
@@ -108,14 +121,12 @@ bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 	// `CAI_Navigator::IsGoalActive` (`m_pPath` +0x30 and its current waypoint +0x24 both set,
 	// `NavigatorGoalIsActive`), and `0x102ee510` answers the path's movement activity
 	// (`0x1030b520(m_pPath)`), which this runtime carries as the navigator's
-	// `MovementActivity` (written by `SetGoal`'s activity word, `0x102ee250`). A base-only body has
-	// no host record and answers -1, which `0x1027a6c0` turns into ACT_IDLE.
+	// `MovementActivity` (written by `SetGoal`'s activity word, `0x102ee250`; 1 after a reset).
 	if (!NavigatorGoalIsActive())                                        // 0x102ee6a0
 	{
 		return false;
 	}
-	const FElysiumNpc* const Troika = AsNpc();
-	OutActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;   // 0x102ee510
+	OutActivity = Navigator.GetMovementActivity();                       // 0x102ee510 path+0x2c
 	return true;
 }
 
@@ -261,7 +272,11 @@ float FElysiumNpcBase::MaxYawSpeedBase()
 bool FElysiumNpcBase::IsMoving()
 {
 	// slot 153. `CAI_BaseNPC::FUN_10280300` `0x10280300` is a one-line forward to
-	// `thunk_FUN_102ee680(m_pNavigator)`.
+	// `thunk_FUN_102ee680(m_pNavigator)`, which is `IsGoalSet` (`NavigatorIsGoalSet`, goal type
+	// != 0), not `IsGoalActive`. The port answers the mover's "a route is being followed" fact
+	// instead: retail's `TaskMovementComplete` ends a walk with `ClearGoal` (`0x102ee270`, the path
+	// reset), which the port does not yet route to `NavClearRoute`, so the goal type outlives the
+	// walk here and would answer "moving" for a body that has arrived.
 	return NavIsGoalActive();
 }
 
@@ -316,9 +331,8 @@ bool FElysiumNpcBase::ValidateNavGoal()
 	//     }
 	//     return true;
 	//
-	// **SEAM**: `NavGoalState()` answers -1, so the gate never opens and the body answers true —
-	// which is retail's own answer for every goal type but 6. The rest is written out so the arm is
-	// here the day the mover carries a goal type.
+	// `NavGoalState()` is the navigator's goal type (`path+0x5c`), so the gate opens for a cover
+	// goal (`SetGoal` type 6) and answers true for every other type, as retail does.
 	if (NavGoalState() != 6)
 	{
 		return true;
@@ -335,6 +349,9 @@ bool FElysiumNpcBase::ValidateNavGoal()
 	{
 		return true;
 	}
+	// `NavGoalPosition` answers port axes in Source units; the trace below is in Source axes (Y
+	// negated), the same frame `SourceOf(Enemy->Origin)` is in.
+	GoalUnits.Y = -GoalUnits.Y;
 	FKernelHullTrace Trace;
 	if (!KernelHullTrace(GoalUnits, NpcKernelMotorShared::SourceOf(Enemy->Origin), FVector::ZeroVector,
 		FVector::ZeroVector, GCoverTraceMask, Trace))
@@ -577,10 +594,12 @@ void FElysiumNpcBase::NavigatorMoveStep()
 
 bool FElysiumNpcBase::NavGoalPosition(FVector& OutGoalUnits) const
 {
-	// `thunk_FUN_102ee140(m_pNavigator)` — the navigator's goal point. **SEAM**: the mover keeps no
-	// readable goal; the caller is left with its own untouched vector.
-	(void)OutGoalUnits;
-	return false;
+	// `thunk_FUN_102ee140(m_pNavigator)` -- `ActualGoalPosition`: `path+0x4c` minus `path+0x34`. Retail
+	// has no "none" answer (the reset leaves `(0,0,0)`), so this always writes and answers true; the
+	// bool is the port's old seam shape, kept for the callers that seed a fallback. Source units, in
+	// the port's axes (no Y reflection): the frame `Origin / U` is in.
+	OutGoalUnits = Navigator.GetGoalPos() / ElysiumMove::U;
+	return true;
 }
 
 bool FElysiumNpcBase::IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,

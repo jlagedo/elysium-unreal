@@ -17,13 +17,10 @@
 
 int32 FElysiumNpcBase::NavigatorPathType() const
 {
-	// **SEAM** for `0x102ee620`, which is `return path->+0x30` on `m_pNavigator` (`+0x5d34`) — the
-	// navigator's current path TYPE. The shape map routes `+0x5d34` to
-	// `FElysiumScriptedCharacter::Motor`, "the one motor seam this chain stands beside the body",
-	// and that motor carries no path object at all.
-	//
-	// Answers `-1`, which is neither the crosswalk type `8` nor any other retail type, so both
-	// bodies below take their own "not a pedestrian path" arm rather than being refused.
-	return NavigatorPathTypeWord;
+	// `0x102ee620` -- `GetGoalType()`, `path+0x5c` on `m_pNavigator` (`+0x5d34`): the navigator's
+	// current goal TYPE (the SDK's path type). `8` is the pedestrian/crosswalk type both crosswalk
+	// bodies gate on. No goal: 0 -- retail's value, where the port's old word defaulted to -1; so
+	// `BaseSelect`'s `NavigatorPathType() == 0` (`0x1028a44b`) now opens for a body with no goal.
+	return Navigator.GetGoalType();
 }
 

@@ -790,7 +790,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// kernel's SEAM answering -1, so this fixture's chase walks. The tolerance and gait words the old
 	// op verbs pinned here are the StartTask19 suite's (EnemyGoalArms / ToleranceArms).
 	TestTrue(TEXT("0x1028640e RUN_PATH wrote the path's movement activity"),
-		F.Fighter->Navigator.MovementActivity != INDEX_NONE);
+		F.Fighter->Navigator.MovementActivity != 1);   // 1 is the path constructor's and the reset's value
 
 	// Still travelling: the watch holds the task rather than advancing it.
 	TestTrue(TEXT("an in-flight path keeps the schedule open"),

@@ -570,11 +570,11 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 	TestFalse(TEXT("gate 4: the waypoint's own bit 2 (+0x28) clear refuses"),
 		F.Guard->ResolvePedestrianPathNode(&NoFlag));
 
-	// Gate 5 — the navigator's path type. The motor seam answers -1, which is the refusal this
-	// runtime honestly has, and no seam below it is reached.
+	// Gate 5 — the navigator's goal type (`0x102ee620`, `path+0x5c`). With no goal it is 0, not 8, and no
+	// seam below it is reached.
 	F.Guard->CrosswalkNodeQueries.Reset();
-	TestEqual(TEXT("the navigator path-type seam answers -1, not 8"),
-		F.Guard->NavigatorPathType(), -1);
+	TestEqual(TEXT("the navigator goal type answers 0 with no goal, not 8"),
+		F.Guard->NavigatorPathType(), 0);
 	TestFalse(TEXT("gate 5: a non-pedestrian path type refuses"),
 		F.Guard->ResolvePedestrianPathNode(&Waypoint));
 	TestEqual(TEXT("...and the node seam is never even asked"),
@@ -582,7 +582,7 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 
 	// With the path type driven to retail's 8, gate 6 is reached and the node seam IS asked — the
 	// refusal is the recovered one (no node graph in this runtime), not a dropped arm.
-	F.Guard->NavigatorPathTypeWord = 8;
+	F.Guard->Navigator.GoalType = 8;
 	TestFalse(TEXT("gate 6: the node seam answers nothing, so the body refuses"),
 		F.Guard->ResolvePedestrianPathNode(&Waypoint));
 	if (!TestEqual(TEXT("...but the seam WAS asked, with the waypoint's entity and the hint's link"),
@@ -594,14 +594,14 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 		FString(TEXT("node ent=4 link=77")));
 
 	// --- `0x102a0d20` — the per-think rule --------------------------------------------------------
-	F.Guard->NavigatorPathTypeWord = -1;
+	F.Guard->Navigator.GoalType = 0;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::CrosswalkWalk);
 	F.Guard->UpdatePedestrianInfo();
 	TestTrue(TEXT("0x102a0d20: a non-pedestrian path type returns BEFORE the three clears"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkWalk));
 
 	// The three clears run on every pedestrian pass, whether or not the NPC is at a crossing.
-	F.Guard->NavigatorPathTypeWord = 8;
+	F.Guard->Navigator.GoalType = 8;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::ShouldInteract);
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::CrosswalkDontWalk);
 	F.Guard->NpcFlags.Clear(EElysiumNpcFlag::AT_CROSSWALK);

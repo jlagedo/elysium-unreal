@@ -555,6 +555,8 @@ bool FElysiumNpcKernelThink19BaseThinkTest::RunTest(const FString&)
 		return false;
 	}
 	FThink19RunAiProbe& N = *F.Probe();
+	// The base line does not think before the network manager's first think (build + 0.8 s, 0x102f6690).
+	F.W.Advance(F.W.World.BuildStampSeconds() + FElysiumNpcBase::AiNetworkFirstThinkDelay + 0.05);
 	const double Now = F.Now();
 	const int32 CacheBefore = N.Think19BaseCacheInterruptCalls;
 	const int32 PostBefore = N.MotorSeams.PostRunWeaponUpdates;

@@ -15,6 +15,7 @@ class AAIController;
 
 class AElysiumMapActor;
 class AElysiumNpcBody;
+struct FElysiumNpcBodyMoveTestAccess;
 class ANavLinkProxy;
 class FElysiumEntityWorld;
 class FElysiumNpc;
@@ -47,6 +48,37 @@ struct TStructOpsTypeTraits<FElysiumNpcAnimTickFunction>
 	: public TStructOpsTypeTraitsBase2<FElysiumNpcAnimTickFunction>
 {
 	enum { WithCopy = false };
+};
+
+namespace ElysiumNpcBodyMove
+{
+// A NAMED MODERNIZATION, not a retail number: the smallest arrival radius Unreal's path follower is
+// handed. Retail lands on the point (its motor clamps the step onto the waypoint; `0x102ef510`
+// tests 0.0625 units) and Unreal's acceleration-driven follower does not, so a request stated at
+// 0.16 cm is given to the follower as this instead. It sizes only what the FOLLOWER is asked for:
+// the request's own radius is kept exactly, `RemainingDistance2DCm` is measured to the exact
+// destination, and the substrate applies retail's own completion arms from those.
+// Unmeasured: 1 cm is the radius this follower was already commissioned with (the clamp this
+// constant replaces), not a number found by running the follower at a smaller one.
+inline constexpr float FollowerArrivalFloorCm = 1.0f;
+}
+
+// What one `FElysiumNpcMoveRequest` becomes on the follower side. Pure: derived from the request and
+// the nav data's cell, so it can be asserted without a navmesh.
+struct FElysiumNpcFollowerRequest
+{
+	// The request's tolerance exactly as stated (never below zero). `Sample`'s own reach test.
+	float ExactToleranceCm = 0.0f;
+	// What the follower is handed: the tolerance, or `FollowerArrivalFloorCm` where that is larger.
+	float AcceptanceRadiusCm = 0.0f;
+	// Half-extent of the box the destination is projected onto the navmesh with. Bounded by the
+	// tolerance, widened only to the nav data's own cell (the mesh cannot place a polygon finer
+	// than that, so a smaller box would refuse every goal sitting on it), never `INVALID_NAVEXTENT`.
+	float ProjectionExtentCm = 0.0f;
+	bool bAllowPartialPath = false;
+	// `PedestrianCostMultiplier > 0`: the search runs on the pedestrian filter at this price.
+	bool bUsePedestrianFilter = false;
+	int32 PedestrianCostMultiplier = 0;
 };
 
 // The engine half of one mobile NPC. The imported skeletal component remains the visible body and
@@ -135,6 +167,10 @@ public:
 	UPROPERTY()
 	FElysiumNpcAnimTickFunction AnimTickFunction;
 
+	// The request as the follower sees it. `NavCellCm` is the nav data's cell size, 0 when unknown.
+	static FElysiumNpcFollowerRequest ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request,
+		float NavCellCm);
+
 	using IElysiumNpcMotor::MoveTo;
 	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) override;
 	virtual bool SampleMoveFacts(FElysiumNpcMoveFacts& Out) const override;
@@ -197,6 +233,7 @@ public:
 #endif
 
 private:
+	friend struct FElysiumNpcBodyMoveTestAccess;
 	void ServiceNavigationJump();
 	void FinishNavigationJump(bool bSucceeded);
 	void ResetNavigationJump();
@@ -276,7 +313,35 @@ private:
 	// Why a request the controller refused outright (`EPathFollowingRequestResult::Failed`) had no
 	// route: the goal or this body off the navmesh, or the mesh not connecting them (a partial
 	// path only). Asked only on that branch, so it costs nothing on an accepted request.
-	FString DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination) const;
+	FString DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination,
+		float ProjectionExtentCm) const;
+
+	// --- The facts `SampleMoveFacts` reports (0018 story 5). Engine state only, never a verdict. ---
+	// A new request opens the record: the ended facts and the recorded blocker of the last request
+	// are dropped, and the destination and exact tolerance the distance facts are measured to are set.
+	void BeginMoveFacts(const FElysiumNpcMoveRequest& Request);
+	// The request's id is known (invalid when the request was refused without one). A finish that
+	// arrived inside the request call was taken for this request; later ones must carry this id.
+	void EndMoveIssue(FAIRequestID RequestID);
+	// The engine finishes a request the follower never ran (already at goal: Success; refused:
+	// Invalid). The follower's own report is taken for it and `ExtraFlags` are the flags the engine
+	// leaves unset.
+	void FinishRequestImmediately(UPathFollowingComponent& Following,
+		EElysiumNpcMoveResultCode Result, EElysiumNpcMoveResultFlags ExtraFlags);
+	// A request was issued since spawn. Before that the facts hold no destination to measure to.
+	bool bMoveIssued = false;
+	// Inside `MoveTo`, before the follower has answered with an id.
+	bool bMoveIssuing = false;
+	TOptional<uint32> MoveRequestId;
+	bool bMoveEnded = false;
+	EElysiumNpcMoveResultCode EndedCode = EElysiumNpcMoveResultCode::None;
+	EElysiumNpcMoveResultFlags EndedFlags = EElysiumNpcMoveResultFlags::None;
+	// The NPC this body's capsule last swept into while a request stood (`NotifyHit`), and the frame.
+	// The engine's follower and crowd agent name no blocker of their own; this is the contact the
+	// capsule itself recorded. Latched into `EndedBlocker` when the follower reports Blocked.
+	FElysiumEntityHandle RecentBlocker;
+	uint64 RecentBlockerFrame = 0;
+	FElysiumEntityHandle EndedBlocker;
 	// A blocking contact with the player's hull since the last `ConsumePlayerContact`. Set by
 	// `NotifyHit`, read by the map actor's per-frame drain. Not gated on anything: retail's
 	// `Touch` fires on every solid contact, launched or walking.

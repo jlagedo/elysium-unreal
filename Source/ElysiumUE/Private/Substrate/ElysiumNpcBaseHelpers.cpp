@@ -145,8 +145,8 @@ FElysiumEntity* FElysiumNpcBase::GetNavTargetEntity() const
 	//   7 `GOALTYPE_COVER`     -> the handle behind `(this+0x98)->vtable+0x928`
 	//   anything else          -> NULL
 	// and every arm then resolves the handle through the global entity table, answering NULL for a
-	// stale one. `NavGoalState()` is family Motor's seam for the goal-type read and answers -1, so
-	// the default arm is what this takes today.
+	// stale one. `NavGoalState()` is the navigator's goal type (`path+0x5c`, 0 with no goal), so an
+	// unset goal takes the default arm.
 	if (World == nullptr)
 	{
 		return nullptr;
@@ -210,7 +210,8 @@ void FElysiumNpcBase::RememberUnreachable(FElysiumEntity* Entity)
 // slot 515 0x10274b30 `float CalcIdealYaw(const Vector&)`
 float FElysiumNpcBase::CalcIdealYaw(const FVector& TargetPos)
 {
-	// The navigator's state word (`thunk_FUN_102ee3f0(m_pNavigator)`) picks how the delta is built,
+	// The path's MOVEMENT ACTIVITY (`thunk_FUN_102ee3f0(m_pNavigator)`, `path+0x2c`, 1 by default and after
+	// a reset) picks how the delta is built,
 	// and the answer is always `VecToYaw(delta)` (`thunk_FUN_101d2c70`), which reads X and Y only:
 	//
 	//   0x37 -> ( -p.y - origin.x , p.x - origin.y )
@@ -221,13 +222,12 @@ float FElysiumNpcBase::CalcIdealYaw(const FVector& TargetPos)
 	// harmless because `VecToYaw` never reads Z, and the port simply does not build one.
 	//
 	// `GetOrigin()` is slot 220 (vtable `+0x370`), the raw `m_vecOrigin`, not `GetAbsOrigin`.
-	// `NavGoalState()` is family Motor's seam and answers -1, so the default arm is what runs.
 	//
 	// The arithmetic is retail's in SOURCE axes (this world's Y negated; the answer is a RETAIL yaw,
 	// the `motor+0x34` convention), then `VecToYaw` (`0x1000612c` -> `0x101d2c70`, `[0, 360)`).
 	// (Story 8 L05 integration: the body answered an Unreal-convention yaw in `(-180, 180]`; nothing
 	// called it until RunTask19's `0x102e20b0` / `0x102e2750` route did.)
-	const int32 NavState = NavGoalState();
+	const int32 NavState = Navigator.GetMovementActivity();
 	const double Px = TargetPos.X;
 	const double Py = -TargetPos.Y;
 	const double Ox = Origin.X;

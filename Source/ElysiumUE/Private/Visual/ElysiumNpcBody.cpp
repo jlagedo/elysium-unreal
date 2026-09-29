@@ -5,12 +5,14 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DetourCrowdAIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "ElysiumCollisionChannels.h"
+#include "Map/ElysiumNavQueryFilter_Pedestrian.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
@@ -30,6 +32,14 @@
 #endif
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
+
+namespace
+{
+// A recorded capsule contact counts as the blocker while it is this recent. The capsule sweep and
+// the follower run in no fixed order inside a frame, so a contact made on the frame before a read
+// is the same contact.
+constexpr uint64 BlockerContactFrameSlack = 2;
+}
 
 void FElysiumNpcAnimTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -586,15 +596,28 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 	}
 }
 
+FElysiumNpcFollowerRequest AElysiumNpcBody::ResolveFollowerRequest(const FElysiumNpcMoveRequest& Request,
+	float NavCellCm)
+{
+	FElysiumNpcFollowerRequest Out;
+	Out.ExactToleranceCm = FMath::Max(0.0f, Request.AcceptanceToleranceCm);
+	Out.AcceptanceRadiusCm = FMath::Max(ElysiumNpcBodyMove::FollowerArrivalFloorCm, Out.ExactToleranceCm);
+	Out.ProjectionExtentCm = FMath::Max(Out.ExactToleranceCm, FMath::Max(0.0f, NavCellCm));
+	Out.bAllowPartialPath = Request.PartialPath == EElysiumNpcPartialPath::Accept;
+	Out.PedestrianCostMultiplier = FMath::Max(0, Request.PedestrianCostMultiplier);
+	Out.bUsePedestrianFilter = Out.PedestrianCostMultiplier > 0;
+	return Out;
+}
+
 bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 {
-	// 0018/5 wave 1: the request form, behaviour unchanged -- the tolerance clamp, the partial-path
-	// bool and the default filter are the old signature's. Lane B honours the rest of the request.
+	// 0018/5 lane B: the request is honoured as stated. The follower is handed the request's
+	// tolerance (or the named floor above it), the destination is projected with an extent bounded by
+	// it, the partial-path policy is the request's, and a pedestrian request searches on its own
+	// priced filter. `AAIController::MoveTo` cannot take a filter instance, so its steps are taken
+	// here in its order. No re-path is armed on the path (`EnableRecalculationOnInvalidation` stays
+	// off): retail's `CAI_Navigator::Move 0x102eff40` never re-paths inside a request.
 	const FVector& FeetDestination = Request.DestinationCm;
-	const float AcceptanceRadiusCm = Request.AcceptanceToleranceCm;
-	const float SpeedCmPerSecond = Request.SpeedCmPerSecond;
-	const bool bAllowPartialPath = Request.PartialPath == EElysiumNpcPartialPath::Accept;
-	const TOptional<EElysiumNpcGaitKind> GaitKind = Request.GaitKind;
 	bFaceRequested = false;
 	if (!bRuntimeReady || !bRequestedEnabled || bFrozen || bNavigationJumpInProgress)
 	{
@@ -616,22 +639,106 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	Movement->Activate();
 	bNavigationJumpFailed = false;
 	bRequestAlreadyAtGoal = false;
-	Movement->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
-	RequestedFeet = FeetDestination;
-	RequestedAcceptanceCm = FMath::Max(1.0f, AcceptanceRadiusCm);
-	RequestedGaitKind = GaitKind;
+	Movement->MaxWalkSpeed = FMath::Max(1.0f, Request.SpeedCmPerSecond);
+	RequestedGaitKind = Request.GaitKind;
 	UPathFollowingComponent* Following = AI->GetPathFollowingComponent();
-	// Bound BEFORE the request: the finishes this exists to catch happen inside `MoveToLocation`.
+	// Bound BEFORE the request: the finishes this exists to catch happen inside the request call.
 	BindMoveFinished(Following);
-	const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
-		FeetDestination, RequestedAcceptanceCm, /*bStopOnOverlap=*/false,
-		/*bUsePathfinding=*/true, /*bProjectDestinationToNavigation=*/true,
-		/*bCanStrafe=*/false, nullptr, bAllowPartialPath);
+	if (Following == nullptr)
+	{
+		Stop();
+		return false;
+	}
+	// One request at a time, as `AAIController::MoveToLocation` keeps it. The old request's end is
+	// reported under its own id, before the new record opens.
+	if (Following->GetStatus() != EPathFollowingStatus::Idle)
+	{
+		Following->AbortMove(*this, FPathFollowingResultFlags::ForcedScript | FPathFollowingResultFlags::NewRequest,
+			FAIRequestID::CurrentRequest, EPathFollowingVelocityMode::Keep);
+	}
+	BeginMoveFacts(Request);
+
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const FNavAgentProperties& Agent = AI->GetNavAgentPropertiesRef();
+	const ANavigationData* NavData = NavSys ? NavSys->GetNavDataForProps(Agent, AI->GetNavAgentLocation()) : nullptr;
+	const ARecastNavMesh* Recast = Cast<ARecastNavMesh>(NavData);
+	const FElysiumNpcFollowerRequest Follower = ResolveFollowerRequest(Request,
+		Recast ? Recast->GetCellSize(ENavigationDataResolution::Default) : 0.0f);
+	RequestedAcceptanceCm = Follower.ExactToleranceCm;
+
+	FAIMoveRequest MoveReq(FeetDestination);
+	MoveReq.SetUsePathfinding(true);
+	MoveReq.SetAllowPartialPath(Follower.bAllowPartialPath);
+	MoveReq.SetProjectGoalLocation(false);   // projected below, with the bounded extent
+	MoveReq.SetAcceptanceRadius(Follower.AcceptanceRadiusCm);
+	MoveReq.SetReachTestIncludesAgentRadius(false);   // the agent's radius is never added to the reach
+	MoveReq.SetReachTestIncludesGoalRadius(false);
+	MoveReq.SetCanStrafe(false);
+	MoveReq.SetNavigationFilter(Follower.bUsePedestrianFilter
+		? TSubclassOf<UNavigationQueryFilter>(UElysiumNavQueryFilter_Pedestrian::StaticClass())
+		: AI->GetDefaultNavigationFilterClass());
+
+	bool bAlreadyAtGoal = false;
+	FNavPathSharedPtr Path;
+	const bool bValidGoal = !FeetDestination.ContainsNaN() && FAISystem::IsValidLocation(FeetDestination);
+	FNavLocation Projected;
+	if (bValidGoal && NavSys != nullptr && NavData != nullptr
+		&& NavSys->ProjectPointToNavigation(FeetDestination, Projected, FVector(Follower.ProjectionExtentCm), NavData))
+	{
+		MoveReq.UpdateGoalLocation(Projected.Location);
+		if (Following->HasReached(MoveReq))
+		{
+			bAlreadyAtGoal = true;
+		}
+		else
+		{
+			FPathFindingQuery Query;
+			if (AI->BuildPathfindingQuery(MoveReq, Query))
+			{
+				if (Follower.bUsePedestrianFilter)
+				{
+					Query.QueryFilter = ElysiumNavQueryFilterPedestrian::MakeFilter(*NavData, AI,
+						Follower.PedestrianCostMultiplier);
+				}
+				const FPathFindingResult Found = NavSys->FindPathSync(Query);
+				if (Found.IsSuccessful() && Found.Path.IsValid())
+				{
+					Path = Found.Path;
+				}
+			}
+		}
+	}
+
+	EPathFollowingRequestResult::Type Result = EPathFollowingRequestResult::Failed;
+	if (bAlreadyAtGoal)
+	{
+		FinishRequestImmediately(*Following, EElysiumNpcMoveResultCode::Success,
+			EElysiumNpcMoveResultFlags::AlreadyAtGoal);
+		Result = EPathFollowingRequestResult::AlreadyAtGoal;
+	}
+	else
+	{
+		FAIRequestID RequestId = FAIRequestID::InvalidRequest;
+		if (Path.IsValid())
+		{
+			RequestId = AI->RequestMove(MoveReq, Path);
+		}
+		if (RequestId.IsValid())
+		{
+			EndMoveIssue(RequestId);
+			Result = EPathFollowingRequestResult::RequestSuccessful;
+		}
+		else
+		{
+			FinishRequestImmediately(*Following, EElysiumNpcMoveResultCode::Invalid,
+				EElysiumNpcMoveResultFlags::None);
+		}
+	}
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		// `RequestMoveWithImmediateFinish(Invalid)` already wrote `Invalid[]` above; the engine
-		// never says which of its three refusals it was, so ask the navmesh directly.
-		const FString Why = DescribeRefusedRoute(*AI, FeetDestination);
+		// never says which of its refusals it was, so ask the navmesh directly.
+		const FString Why = DescribeRefusedRoute(*AI, FeetDestination, Follower.ProjectionExtentCm);
 		LastMoveResult += TEXT(" -- ") + Why;
 		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request to %s refused: %s"),
 			*GetName(), *FeetDestination.ToString(), *Why);
@@ -640,9 +747,9 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	}
 	if (Result == EPathFollowingRequestResult::AlreadyAtGoal)
 	{
-		// `AAIController::MoveTo` finished this one itself (`RequestMoveWithImmediateFinish(Success)`,
-		// `AIController.cpp`): the follower is Idle and there is nothing to pause or resume. The
-		// body stands inside the goal's reach, so the request is answered as arrived, not as lost.
+		// Finished inside the call (`RequestMoveWithImmediateFinish(Success)`): the follower is Idle
+		// and there is nothing to pause or resume. The body stands inside the goal's reach, so the
+		// request is answered as arrived, not as lost.
 		bMoveRequested = true;
 		bRequestAlreadyAtGoal = true;
 		return true;
@@ -653,8 +760,9 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	// crowd manager or a nav-data mismatch -- and hands back an Idle follower under a successful
 	// result. Reading that as "in flight" is how a route died within a frame with its whole
 	// distance left and nothing said why; a dead request is a refused one, and the caller decides
-	// what a refusal means (the beat's fallback today, a `TaskFail 0xc` under the schedule).
-	if (Following != nullptr && Following->GetStatus() == EPathFollowingStatus::Idle)
+	// what a refusal means (the beat's fallback today, a `TaskFail 0xc` under the schedule). The
+	// ended facts recorded inside the call stay for `SampleMoveFacts`.
+	if (Following->GetStatus() == EPathFollowingStatus::Idle)
 	{
 		UE_LOG(LogElysiumNpcEnt, Verbose,
 			TEXT("%s: move request to %s ended inside the request (%s); refused"),
@@ -673,7 +781,45 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	return true;
 }
 
-FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination) const
+void AElysiumNpcBody::BeginMoveFacts(const FElysiumNpcMoveRequest& Request)
+{
+	bMoveIssued = true;
+	bMoveIssuing = true;
+	MoveRequestId.Reset();
+	bMoveEnded = false;
+	EndedCode = EElysiumNpcMoveResultCode::None;
+	EndedFlags = EElysiumNpcMoveResultFlags::None;
+	EndedBlocker = FElysiumEntityHandle();
+	RecentBlocker = FElysiumEntityHandle();
+	RecentBlockerFrame = 0;
+	RequestedFeet = Request.DestinationCm;
+	RequestedAcceptanceCm = FMath::Max(0.0f, Request.AcceptanceToleranceCm);
+}
+
+void AElysiumNpcBody::EndMoveIssue(FAIRequestID RequestID)
+{
+	bMoveIssuing = false;
+	if (RequestID.IsValid())
+	{
+		MoveRequestId = RequestID.GetID();
+	}
+}
+
+void AElysiumNpcBody::FinishRequestImmediately(UPathFollowingComponent& Following,
+	EElysiumNpcMoveResultCode Result, EElysiumNpcMoveResultFlags ExtraFlags)
+{
+	const EPathFollowingResult::Type EngineResult = Result == EElysiumNpcMoveResultCode::Success
+		? EPathFollowingResult::Success : EPathFollowingResult::Invalid;
+	const FAIRequestID RequestId = Following.RequestMoveWithImmediateFinish(EngineResult);
+	EndMoveIssue(RequestId);
+	if (bMoveEnded)
+	{
+		EndedFlags |= ExtraFlags;
+	}
+}
+
+FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination,
+	float ProjectionExtentCm) const
 {
 	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	if (NavSys == nullptr)
@@ -687,9 +833,10 @@ FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController& AI, const FVe
 		return TEXT("no nav data for this agent");
 	}
 	FNavLocation GoalOnMesh;
-	if (!NavSys->ProjectPointToNavigation(FeetDestination, GoalOnMesh, INVALID_NAVEXTENT, &Agent))
+	// The extent the request itself projected with, so the diagnosis agrees with the refusal.
+	if (!NavSys->ProjectPointToNavigation(FeetDestination, GoalOnMesh, FVector(ProjectionExtentCm), &Agent))
 	{
-		return TEXT("the goal is off the navmesh");
+		return FString::Printf(TEXT("the goal is off the navmesh (no polygon within %.1f cm)"), ProjectionExtentCm);
 	}
 	FNavLocation SelfOnMesh;
 	if (!NavSys->ProjectPointToNavigation(AI.GetNavAgentLocation(), SelfOnMesh, INVALID_NAVEXTENT, &Agent))
@@ -730,6 +877,39 @@ void AElysiumNpcBody::OnMoveRequestFinished(FAIRequestID RequestID, const FPathF
 		RequestID.GetID(), World ? World->GetTimeSeconds() : 0.0f);
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request finished: %s"), *GetName(),
 		*LastMoveResult);
+
+	// The facts: only the CURRENT request's first end counts. Inside `MoveTo`, before the follower has
+	// answered with an id, a finish is the new request's own (a request the crowd follower ended
+	// synchronously); an earlier request's late end carries its own id and is ignored.
+	const bool bCurrent = MoveRequestId.IsSet() ? RequestID.GetID() == MoveRequestId.GetValue() : bMoveIssuing;
+	if (!bCurrent || bMoveEnded)
+	{
+		return;
+	}
+	bMoveEnded = true;
+	const EPathFollowingResult::Type EngineCode = Result.Code;
+	switch (EngineCode)
+	{
+	case EPathFollowingResult::Success: EndedCode = EElysiumNpcMoveResultCode::Success; break;
+	case EPathFollowingResult::Blocked: EndedCode = EElysiumNpcMoveResultCode::Blocked; break;
+	case EPathFollowingResult::OffPath: EndedCode = EElysiumNpcMoveResultCode::OffPath; break;
+	case EPathFollowingResult::Invalid: EndedCode = EElysiumNpcMoveResultCode::Invalid; break;
+	default: EndedCode = EElysiumNpcMoveResultCode::Aborted; break;
+	}
+	EndedFlags = EElysiumNpcMoveResultFlags::None;
+	if (Result.HasFlag(FPathFollowingResultFlags::InvalidPath)) EndedFlags |= EElysiumNpcMoveResultFlags::InvalidPath;
+	if (Result.HasFlag(FPathFollowingResultFlags::UserAbort)) EndedFlags |= EElysiumNpcMoveResultFlags::UserAbort;
+	if (Result.HasFlag(FPathFollowingResultFlags::OwnerFinished)) EndedFlags |= EElysiumNpcMoveResultFlags::OwnerFinished;
+	if (Result.HasFlag(FPathFollowingResultFlags::MovementStop)) EndedFlags |= EElysiumNpcMoveResultFlags::MovementStop;
+	if (Result.HasFlag(FPathFollowingResultFlags::NewRequest)) EndedFlags |= EElysiumNpcMoveResultFlags::NewRequest;
+	if (Result.HasFlag(FPathFollowingResultFlags::AlreadyAtGoal)) EndedFlags |= EElysiumNpcMoveResultFlags::AlreadyAtGoal;
+	// The blocker is latched at the moment the follower gives up: the body stops on this end, so its
+	// contact would age out before the substrate's next think reads it.
+	if (EndedCode == EElysiumNpcMoveResultCode::Blocked && RecentBlocker.IsSet()
+		&& GFrameCounter - RecentBlockerFrame <= BlockerContactFrameSlack)
+	{
+		EndedBlocker = RecentBlocker;
+	}
 }
 
 void AElysiumNpcBody::Face(float YawDegrees)
@@ -1072,10 +1252,56 @@ void AElysiumNpcBody::SampleTransform(FVector& OutFeetOrigin, float& OutYawDegre
 
 bool AElysiumNpcBody::SampleMoveFacts(FElysiumNpcMoveFacts& Out) const
 {
-	// 0018/5 wave 1 stub: lane B fills it from `OnMoveRequestFinished`, the follower and the crowd
-	// agent. False = "this motor reports no facts", `Out` untouched.
-	(void)Out;
-	return false;
+	// Facts only, no verdict (`FElysiumNpcMoveFacts`): the follower's own report of the current
+	// request, its path, and the geometry to the requested destination. False when this body has no
+	// follower to ask (never travelled, so no controller); `Out` is untouched then.
+	const AAIController* AI = Cast<AAIController>(GetController());
+	const UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
+	if (Following == nullptr)
+	{
+		return false;
+	}
+	Out = FElysiumNpcMoveFacts();
+	if (!bMoveIssued)
+	{
+		return true;   // a follower, but nothing was ever asked of it: no destination to measure to
+	}
+
+	const EPathFollowingStatus::Type Status = Following->GetStatus();
+	Out.bRequestAlive = (Status == EPathFollowingStatus::Moving || Status == EPathFollowingStatus::Waiting
+		|| Status == EPathFollowingStatus::Paused)
+		&& MoveRequestId.IsSet() && Following->GetCurrentRequestId().GetID() == MoveRequestId.GetValue();
+	Out.bRequestEnded = bMoveEnded;
+	Out.ResultCode = EndedCode;
+	Out.ResultFlags = EndedFlags;
+	if (bMoveEnded)
+	{
+		Out.BlockingEntity = EndedBlocker;
+	}
+	else if (Out.bRequestAlive && RecentBlocker.IsSet()
+		&& GFrameCounter - RecentBlockerFrame <= BlockerContactFrameSlack)
+	{
+		Out.BlockingEntity = RecentBlocker;
+	}
+
+	const FVector Feet = FeetLocation();
+	Out.RemainingDistance2DCm = static_cast<float>(FVector::Dist2D(Feet, RequestedFeet));
+	Out.RemainingDzCm = static_cast<float>(RequestedFeet.Z - Feet.Z);
+
+	// The path the follower holds now: gone once the request ends (the follower resets it).
+	const FNavPathSharedPtr Path = Following->GetPath();
+	if (Out.bRequestAlive && Path.IsValid())
+	{
+		const TArray<FNavPathPoint>& Points = Path->GetPathPoints();
+		Out.bHasPath = Points.Num() > 0;
+		const int32 NextIndex = static_cast<int32>(Following->GetNextPathIndex());
+		if (Points.IsValidIndex(NextIndex))
+		{
+			Out.NextCornerCm = Points[NextIndex].Location;
+			Out.bCurrentCornerIsLast = NextIndex == Points.Num() - 1;
+		}
+	}
+	return true;
 }
 
 EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& OutYawDegrees)
@@ -1103,7 +1329,17 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 
 	const float Horizontal = FVector::Dist2D(OutFeetOrigin, RequestedFeet);
 	const float Vertical = FMath::Abs(OutFeetOrigin.Z - RequestedFeet.Z);
-	if (Horizontal <= RequestedAcceptanceCm + 4.0f && Vertical <= 96.0f)
+	// The request's own tolerance, exactly: no slack added here (retail's arrival is the waypoint
+	// test alone; the path's goal tolerance is the substrate's arm, decided from the move facts).
+	if (Horizontal <= RequestedAcceptanceCm && Vertical <= 96.0f)
+	{
+		Stop();
+		return EElysiumNpcMoveStatus::Reached;
+	}
+	// The follower's own completion inside the radius it was handed (the named floor, where the
+	// request's tolerance is finer than the follower can land) is still the engine reporting the
+	// route done; Idle after it must not read as a lost request.
+	if (bMoveEnded && EndedCode == EElysiumNpcMoveResultCode::Success)
 	{
 		Stop();
 		return EElysiumNpcMoveStatus::Reached;
@@ -1266,6 +1502,19 @@ void AElysiumNpcBody::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other,
 	if (Other != nullptr && Other->IsA<AElysiumPawn>())
 	{
 		bPlayerContactPending = true;
+	}
+	// The one obstruction the engine lets the body name: the NPC its capsule swept into while a
+	// request stood. The follower and the crowd agent name none. Classification (NPC / other entity /
+	// world) is the substrate's; a non-NPC actor is not recorded, because the body has no
+	// actor-to-entity map to resolve it through.
+	if (bMoveRequested && Other != nullptr && Other != this)
+	{
+		const AElysiumNpcBody* OtherBody = Cast<AElysiumNpcBody>(Other);
+		if (OtherBody != nullptr && OtherBody->GetOwningEntity().IsSet())
+		{
+			RecentBlocker = OtherBody->GetOwningEntity();
+			RecentBlockerFrame = GFrameCounter;
+		}
 	}
 }
 

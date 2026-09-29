@@ -151,9 +151,9 @@ bool FElysiumNpcKernelSelect19BaseIdleTest::RunTest(const FString&)
 	N.Cognition.Conditions.Set(EElysiumNpcCond::GiveWay);
 	TestEqual(TEXT("0x1028a428 GIVE_WAY -> 0x38"), N.BaseSelectSchedule(), 0x38);
 	N.Cognition.Conditions.Reset();
-	N.NavigatorPathTypeWord = 0;
-	TestEqual(TEXT("0x1028a452 navigator path type 0 -> 1 IDLE_STAND"), N.BaseSelectSchedule(), 1);
-	N.NavigatorPathTypeWord = -1;
+	N.Navigator.GoalType = 0;
+	TestEqual(TEXT("0x1028a452 navigator goal type 0 -> 1 IDLE_STAND"), N.BaseSelectSchedule(), 1);
+	N.Navigator.GoalType = 4;
 	TestEqual(TEXT("0x1028a4ae otherwise 2 IDLE_WALK"), N.BaseSelectSchedule(), 2);
 	return true;
 }

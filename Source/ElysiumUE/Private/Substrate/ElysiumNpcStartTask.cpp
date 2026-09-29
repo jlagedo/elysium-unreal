@@ -935,23 +935,23 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 	case StartTask19A::TaskWaitForMovement:
 	{
 		// Arm `0x102a1dcc` (index 0x0f). The four-way on the navigator's path, then the teleport
-		// rescue, which runs after EVERY arm (each ends `JMP 0x102a1e6a`).
-		if (NavIsGoalSet())                                                   // 0x102a1dd2 0x102ee2e0 / 0x102a1dd9
+		// rescue, which runs after EVERY arm (each ends `JMP 0x102a1e6a`). The three reads: `0x102ee2e0`
+		// is the PAUSED byte (`NavigatorIsPaused`), `0x102ee620` the goal TYPE (`NavGoalState() == 0`,
+		// no goal), `0x102ee6a0` `IsGoalActive` (a head waypoint exists).
+		if (NavigatorIsPaused())                                              // 0x102a1dd2 0x102ee2e0 path+0x10 m_bPaused / 0x102a1dd9
 		{
 			// `0x102a1ddd 0x102bf7e0`, inline: `if (path+0x10) 0x102ee2c0` -- which is `0x1030bea0`,
 			// `MOV byte [path+0x10],0` (it clears a path byte, it does NOT stop the move; family
 			// Motor's `ResumeScheduledMove` reads it as `NavStopMoving` and is not called here) --
-			// then `m_bShouldMove = 1` (`0x102bf7fd`). The port stands no `path+0x10` byte to clear.
+			// then `m_bShouldMove = 1` (`0x102bf7fd`).
+			Navigator.bPaused = false;                                        // 0x102ee2c0 -> 0x1030bea0
 			BaseScheduleHost.bShouldMove = true;
 		}
 		if (NavGoalState() == 0)                                              // 0x102a1de8 0x102ee620 path+0x5c / 0x102a1df1
 		{
 			BaseScheduleHost.bShouldMove = false;                             // 0x102a1df6
 			TaskComplete(false);                                              // 0x102a1dfc
-			if (Motor != nullptr)
-			{
-				Motor->ClearNavigationGoal();                                 // 0x102a1e07 0x102ee270
-			}
+			StartTaskClearGoal();                                         // 0x102a1e07 0x102ee270 (the path reset, then slot 7)
 		}
 		else if (!NavIsGoalActive())                                          // 0x102a1e14 0x102ee6a0 / 0x102a1e1b
 		{
@@ -976,9 +976,9 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 		{
 			return 0;
 		}
-		// `0x102a1ea8 0x102ee140(nav)` -- the navigator's goal point. The port's navigator word is
-		// `MoveGoal`, written beside every `MoveTo`.
-		FVector ProbeUnits = StartTask19A::UnitsOf(MoveGoal);
+		// `0x102a1ea8 0x102ee140(nav)` -- the navigator's goal point (`ActualGoalPosition`; `(0,0,0)`
+		// after a reset, never 'none').
+		FVector ProbeUnits = FVector::ZeroVector;
 		(void)NavGoalPosition(ProbeUnits);
 		// `0x102a1eb0 0x102e7880(moveProbe, goal, 0x202400b, 1.0, -1024.0, &out, &hit)`. / 0x102a1eb7
 		(void)StartTask19A::TeleportProbeDownUnits;       // the probe's -1024 reach, the seam's own

@@ -3658,16 +3658,16 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 			TaskComplete(false);                                          // 0x103cd16b
 			return 0;
 		}
-		if (NavIsGoalSet())                                               // 0x103cd187 0x102ee2e0 / 0x103cd18e JZ
+		if (NavigatorIsPaused())                                          // 0x103cd187 0x102ee2e0 path+0x10 / 0x103cd18e JZ
 		{
 			// `0x102ee2c0` is `path+0x10 = 0` (`0x1030bea0`), NOT `StopMoving`: the motor keeps its
 			// route (the base arm 0x5d's reading of the same pair, `0x1028675e`).
+			Navigator.bPaused = false;                                    // 0x103cd196 0x102ee2c0
 			++StartTaskNav.PathGoalFlagClears;                            // 0x103cd196 0x102ee2c0
 		}
-		// `0x102ee620` (the goal type) and `0x102ee6a0` (path with a current waypoint): the mover
-		// carries ONE goal latch for both (the standing fact `NavIsGoalSet` states), which is
-		// `NavIsGoalActive` -- `0x102ee680`, the same `0x100113d8(path)` read `0x102ee620` makes.
-		if (!NavIsGoalActive())                                           // 0x103cd1a1 0x102ee620; 0x103cd1a8
+		// `0x102ee620` (the goal TYPE, `path+0x5c`) then `0x102ee6a0` (`IsGoalActive`, a head waypoint):
+		// two reads of two words. The first is `NavigatorIsGoalSet`; the second the port's route fact.
+		if (!NavigatorIsGoalSet())                                        // 0x103cd1a1 0x102ee620; 0x103cd1a8
 		{
 			BaseScheduleHost.bShouldMove = false;                         // 0x103cd1b3 +0x1a40
 			BaseScheduleHost.FailText = GSpecies19WerewolfPathOutOfSightText;

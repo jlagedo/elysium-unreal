@@ -744,6 +744,21 @@ public:
 	// binds every node row's hint through it. Never null.
 	FElysiumPlaceSet& Places() { return *PlaceSet; }
 	const FElysiumPlaceSet& Places() const { return *PlaceSet; }
+	// `DAT_1093408c`, the loader byte (`Think19NodeGraphBuilt`). Retail sets it on BOTH arms of the graph
+	// build: the `.ain` loader `0x102f5bd0` and the rebuild step `0x102f6610` (the `+0x450 == 0` /
+	// flag-clear arm of the manager's think `0x102f6a50`, "Node Graph out of Date. Rebuilding...", then
+	// flag = 1), so a map with no graph still thinks after its rebuild. Here: false ONLY while a map's
+	// place set is pending adoption (`SetPlaceSetPending(true)` and no `AdoptRows` yet); true for a world
+	// that was never given a map place set. Defined in the .cpp, where the place set's type is complete.
+	bool IsNodeGraphLoaded() const;
+	// A baked map's place set is being loaded and has not been adopted. The map actor sets it before it
+	// loads the asset and clears it if the load fails (retail's rebuild arm then sets the byte).
+	void SetPlaceSetPending(bool bPending) { bPlaceSetPending = bPending; }
+	// The world-seconds stamp (the `NowSeconds()` clock) of the map build: `CWorld::Precache`'s
+	// `0x102f6690`, which arms the network manager's first think at `curtime + 0.8`. Stamped when
+	// `Load` finishes and again when `ApplySnapshot` restores a save (retail re-runs `Precache` on a
+	// restore). The base-line think's `g_pAINetworkManager->+0x658` gate opens 0.8 s after it.
+	double BuildStampSeconds() const { return BuildStamp; }
 	const FElysiumEventQueue& Queue() const { return EventQueue; }
 	FElysiumEventQueue& Queue() { return EventQueue; }
 	const FElysiumRingBufferSink& RingBuffer() const { return *Ring; }
@@ -942,6 +957,10 @@ private:
 	TArray<int32> Hints;                              // `DAT_10925450`, head first (HintList)
 	// The place set (`Places`). Held by pointer so the substrate header stays out of this public one.
 	TUniquePtr<FElysiumPlaceSet> PlaceSet;
+	// `BuildStampSeconds`: the map build's `curtime`. Not saved: a restore re-stamps it.
+	double BuildStamp = 0.0;
+	// `SetPlaceSetPending`.
+	bool bPlaceSetPending = false;
 
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;

@@ -5,6 +5,7 @@
 #include "Substrate/ElysiumNpcBase.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
@@ -401,34 +402,46 @@ void FElysiumNpcBase::FUN_102eeac0()
 
 FElysiumNpcBase::FNavPathSample FElysiumNpcBase::NavPathSample() const
 {
-	// `m_pPath`'s four reads: the current point (`0x10012805`), the straight-line test
-	// (`0x1030bd50`), the navigator radius (`0x102ecc40`) and the next waypoint's kind against its
-	// owner's (`path+0x24` -> `+0x30` -> `+0x2c`). **SEAM**: family Motor's standing fact — no path
-	// object here. Everything false and zero.
-	return FNavPathSample();
+	// `m_pPath`'s reads for `0x102eee40`: the current point (`0x10012805`, `path+0x24`'s position), the
+	// head-is-goal test (`0x1030bd50`, `(wp+0x28 >> 3) & 1`) and the next waypoint's move type
+	// (`path+0x24 -> +0x30 -> +0x2c`). The follower is the body's, so the two it reports come from
+	// `SampleMoveFacts`: the next corner and whether the corner being walked to is the last. The move
+	// type of the waypoint after it is not a fact the follower has; it stays false. No facts, or a
+	// follower holding no path: an invalid sample.
+	FNavPathSample Sample;
+	FElysiumNpcMoveFacts Facts;
+	if (Motor == nullptr || !Motor->SampleMoveFacts(Facts) || !Facts.bHasPath)
+	{
+		return Sample;
+	}
+	Sample.bValid = true;
+	Sample.PointUnits = Facts.NextCornerCm / ElysiumMove::U;
+	Sample.bHeadIsGoal = Facts.bCurrentCornerIsLast;
+	return Sample;
 }
 
 FElysiumNpcBase::FNavMoveInfo FElysiumNpcBase::FUN_102eee40() const
 {
-	// `CAI_Navigator#17` `0x102eee40`, field by field:
+	// `CAI_Navigator#17` `0x102eee40` (`MoveCalcBase`), field by field:
 	//     out[12] = m_navType;                                           // +0x18
 	//     out[0..2] = CurrentPathPoint(m_pPath);
-	//     out[3] = out[0] - myPos.x;  out[4] = out[1] - myPos.y;         // slot 220 (+0x370)
-	//     if (m_navType == 0) { out[5] = 0; out[10] = Length2D(out+3); }
-	//     else                { out[5] = out[2] - myPos.z; out[10] = VectorNormalize(out+3); }
-	//     out[6..8] = out[3..5];
+	//     out[3..5] = out[0..2] - myPos;                                 // slot 220 (+0x370)
+	//     if (m_navType == 0) { out[5] = 0; out[10] = Normalize2D(out+3); }
+	//     else                { out[10] = VectorNormalize(out+3); }      // both normalise IN PLACE
+	//     out[6..8] = out[3..5];                                         // the NORMALISED direction
 	//     out[9]  = BaseSpeed(nav->+0x20);                               // thunk_FUN_102e12c0
 	//     out[11] = nav->+0x20->[+0x30] * out[9];
-	//     out[13] = NavRadius(this);                                     // 0x102ecc40
+	//     out[13] = pMoveTarget(this);                                   // 0x102ecc40
 	//     if (out[10] < out[11]) out[11] = out[10];
 	//     if (IsStraightLine(m_pPath)) { out[14] |= 1; out[15] = m_pPath; return; }
 	//     wp = m_pPath->+0x24; next = wp->+0x30;
 	//     if (next && next->+0x2c != wp->+0x2c) out[14] |= 4;
 	//     out[15] = m_pPath;
 	//
-	// **`out[10]` is computed BEFORE `out[11]`, and `out[3..5]` is normalised on the 3-D arm** — so
-	// `out[6..8]` is the NORMALISED direction at nav type != 0 and the RAW delta at nav type 0.
-	// That asymmetry is retail's and is reproduced.
+	// **`out[10]` is computed BEFORE `out[11]`**, and `out[3..5]` is normalised in place on both arms
+	// (ground: z dropped and a 2-D normalise, `0x102e5d00`; otherwise the 3-D one), so `out[6..8]` is
+	// always the normalised direction. `out[13]` is the move TARGET (an entity), not a radius: goal type
+	// 2 / 1 / 7 -> `GetNavTargetEntity` (`0x102729d0`), any other type -> the `path+0x30` handle.
 	//
 	// The goal tolerance is the MIN of the computed limit and the distance, which is why a body that
 	// is nearly there cannot overshoot its own tolerance.
@@ -453,6 +466,11 @@ FElysiumNpcBase::FNavMoveInfo FElysiumNpcBase::FUN_102eee40() const
 		Info.DistanceUnits = static_cast<float>(
 			FMath::Sqrt(Info.DeltaUnits.X * Info.DeltaUnits.X
 				+ Info.DeltaUnits.Y * Info.DeltaUnits.Y));
+		if (Info.DistanceUnits > 0.f)
+		{
+			Info.DeltaUnits.X /= Info.DistanceUnits;
+			Info.DeltaUnits.Y /= Info.DistanceUnits;
+		}
 	}
 	else
 	{
@@ -465,12 +483,26 @@ FElysiumNpcBase::FNavMoveInfo FElysiumNpcBase::FUN_102eee40() const
 	Info.BaseSpeedUnits = 0.f;
 	// `nav->+0x20->[+0x30]` is `CAI_Motor::m_flMoveInterval`, which this family carries.
 	Info.GoalToleranceUnits = TroikaMotor.MoveInterval * Info.BaseSpeedUnits;
-	Info.Radius = Path.RadiusUnits;
+	// `0x102ecc40`: goal type 2 / 1 / 7 -> `GetNavTargetEntity`, else the `path+0x30` handle resolved.
+	const int32 GoalType = Navigator.GetGoalType();
+	FElysiumEntity* MoveTargetEntity = nullptr;
+	if (GoalType == 2 || GoalType == 1 || GoalType == 7)
+	{
+		MoveTargetEntity = GetNavTargetEntity();
+	}
+	else if (World != nullptr)
+	{
+		MoveTargetEntity = const_cast<FElysiumEntityWorld*>(World)->Resolve(Navigator.GetTarget());
+	}
+	if (MoveTargetEntity != nullptr)
+	{
+		Info.MoveTarget = MoveTargetEntity->Handle;
+	}
 	if (Info.DistanceUnits < Info.GoalToleranceUnits)
 	{
 		Info.GoalToleranceUnits = Info.DistanceUnits;
 	}
-	if (Path.bStraightLine)
+	if (Path.bHeadIsGoal)
 	{
 		Info.Flags |= 1u;
 	}

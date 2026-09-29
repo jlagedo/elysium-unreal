@@ -93,22 +93,23 @@ void NavigatorMoveStep();
  *  seam, defined in `ElysiumNpcBaseAdvancePath.cpp` (lane E); `NavigatorMoveStep` calls it (lane I). */
 bool NavAdvancePath();
 
-/** `thunk_FUN_102ee680(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`. The port's mover
- *  answers the same question through `SampleNavigation().bActiveGoal`. */
+/** The port's "a route is being followed" fact, standing for `IsGoalActive` `0x102ee6a0` (a head
+ *  waypoint exists). Not `0x102ee680` (`IsGoalSet`, `NavigatorIsGoalSet`). It answers the mover's
+ *  own `SampleNavigation().bActiveGoal` until the navigator's move step pops the head at arrival
+ *  (0018 story 5 lane I); `Navigator.IsGoalActive()` is the retail word. */
 bool NavIsGoalActive() const;
 
 /** `thunk_FUN_102ee2c0(m_pNavigator)` — SDK `CAI_Navigator::StopMoving()`. Wired to the mover's
  *  own `Stop()`. */
 void NavStopMoving();
 
-/** `thunk_FUN_102ee620(m_pNavigator)` — the navigator's route/goal-state word, which
- *  `ValidateNavGoal` requires to be exactly 6. **SEAM**: `IElysiumNpcMotor` keeps no goal type, so
- *  this answers -1 and `ValidateNavGoal` takes retail's own "not that state" arm. */
+/** `thunk_FUN_102ee620(m_pNavigator)` — `GetGoalType()`, `path+0x5c` (`Navigator.GetGoalType()`):
+ *  0 none, 1 target, 2 enemy, 3 path corner, 4 location, 6 cover, 7 best-unknown, 8 pedestrian
+ *  place, 9 animal place. `ValidateNavGoal` requires exactly 6. No goal: 0. */
 int32 NavGoalState() const;
 
-/** `thunk_FUN_102ee6a0` (is the pending link valid) and `thunk_FUN_102ee510` (its cached activity)
- *  — the pair `FUN_1027a6c0` reads. **SEAM**: no link objects here; answers false. The link's
- *  retail identity is **unrecovered**. */
+/** `thunk_FUN_102ee6a0` (`IsGoalActive`) and `thunk_FUN_102ee510` (the path's movement activity,
+ *  `Navigator.GetMovementActivity()`) — the pair `FUN_1027a6c0` reads. False without an active goal. */
 bool NavLinkActivity(int32& OutActivity) const;
 
 /** `thunk_FUN_102e0bd0(m_pMotor, …)` — `CAI_Motor::MoveGroundExecute`'s apply of one interval's
@@ -199,9 +200,19 @@ static float MaxYawSpeedBase();
  *  cached activity when the link is valid and not -1, else 1 (`ACT_IDLE`). */
 int32 ResolveLinkActivity() const;
 
-/** `thunk_FUN_102ee140(m_pNavigator)` — the navigator's current goal position, SOURCE units.
- *  **SEAM**: the mover keeps no readable goal; answers false and leaves `OutGoal` untouched. */
+/** `thunk_FUN_102ee140(m_pNavigator)` — `ActualGoalPosition`, `path+0x4c` minus `path+0x34`, in
+ *  Source units and the port's axes (`Origin / U`, no Y reflection). Retail has no "none" answer:
+ *  the reset leaves `(0,0,0)`. Always writes `OutGoalUnits` and answers true. */
 bool NavGoalPosition(FVector& OutGoalUnits) const;
+
+/** `thunk_FUN_102ee680(m_pNavigator)` — SDK `IsGoalSet`, `Navigator.IsGoalSet()`: the goal TYPE
+ *  (`path+0x5c`) is non-zero. It is what `CAI_BaseNPC::IsMoving` (slot 153, `0x10280300`) forwards to
+ *  and the test the `== 0` readers of `0x102ee620` make. NOT `NavIsGoalActive`. */
+bool NavigatorIsGoalSet() const;
+
+/** `0x102ee2e0` — `path+0x10` `m_bPaused` (`Navigator.IsPaused()`), which is what the
+ *  `TASK_WAIT_FOR_MOVEMENT` arms and `0x102bf7e0` read as their first test. */
+bool NavigatorIsPaused() const;
 
 /** `CAI_BaseNPC::IsJumpLegal`'s shared geometry helper `FUN_10280790` `0x10280790`, as a pure
  *  function of the three points and the three thresholds, so both fills of slot 521 are one body. */

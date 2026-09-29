@@ -638,10 +638,11 @@ bool FElysiumNpc::ScheduleMeleeReachGate() const
 	return false;
 }
 
-int32 FElysiumNpc::NavigatorGoalType() const
+int32 FElysiumNpc::NavigatorNavType() const
 {
-	// SEAM for `0x1027d990`, the navigator probe `CNPC_VManBat::SelectSchedule` opens with. It reads
-	// the navigator at `+0x5d34`; the port's motor carries no goal-type word. Answering anything but
-	// 2 is retail's "no active goal" arm, and 0 is the value `GoalType_t` spells for it.
-	return 0;
+	// `0x1027d990` -- `m_pNavigator->+0x18`, `m_navType` (`FUN_1027d990`, the NPC-level `GetNavType`),
+	// the probe `CNPC_VManBat::SelectSchedule` (`0x1038e340`) opens with: 0 ground, 1 jump, 2 fly, 3
+	// climb (a flyer's type is set to 2 through `0x1027d9b0`). Not the goal type -- the port's old name
+	// for this word, `NavigatorGoalType`, misread it. Constructor default 0.
+	return NavGetType();
 }

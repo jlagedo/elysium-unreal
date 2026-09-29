@@ -1749,8 +1749,23 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 		return false;
 	}
 	MoveGoal = Destination;
-	bMoveIssued = Motor->MoveTo(Destination, ToleranceCm,
-		ElysiumNpcGait::TravelSpeed(Motor, RouteGait), /*bAllowPartialPath=*/false, RouteGait);
+	// The type-3 goal `ScheduledFollowPath` `0x102801e0` sets (`0x1030ba50`): the navigator's goal words
+	// answer the leg this executor stands for it, so `TASK_WAIT_FOR_MOVEMENT` (`0x102ee620 == 0` ends it)
+	// does not cut a walk short.
+	Navigator.GoalType = 3;
+	Navigator.GoalPosCm = Destination;
+	FElysiumNpcMoveRequest LegRequest;
+	LegRequest.DestinationCm = Destination;
+	LegRequest.AcceptanceToleranceCm = ToleranceCm;   // the order's own radius, as it was
+	LegRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, RouteGait);
+	LegRequest.GaitKind = RouteGait;
+	LegRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
+	bMoveIssued = Motor->MoveTo(LegRequest);
+	if (bMoveIssued)
+	{
+		Navigator.bHasHeadWaypoint = true;
+		Navigator.bHeadIsGoal = true;
+	}
 	if (!bMoveIssued)
 	{
 		// The recovered route-failure report, and the recovered switch that silences it: "spawn flag
@@ -2249,9 +2264,13 @@ void FElysiumNpc::ThinkAmbient(double Now)
 		}
 		AmbientPhase = EAmbientPhase::Moving;
 		MoveGoal = Spot->Origin;
-		bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f,
-			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
-			/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);
+		FElysiumNpcMoveRequest SpotRequest;
+		SpotRequest.DestinationCm = Spot->Origin;
+		SpotRequest.AcceptanceToleranceCm = 24.0f;
+		SpotRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk);
+		SpotRequest.GaitKind = EElysiumNpcGaitKind::Walk;
+		SpotRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
+		bMoveIssued = Motor->MoveTo(SpotRequest);
 		if (bMoveIssued)
 		{
 			bWalkingAnimation = StartWalkingAnimation();

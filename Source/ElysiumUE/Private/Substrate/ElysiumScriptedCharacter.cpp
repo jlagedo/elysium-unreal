@@ -119,8 +119,13 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	const TOptional<EElysiumNpcGaitKind> RequestedGait = Gait == EElysiumScriptGait::Run
 		? TOptional<EElysiumNpcGaitKind>(EElysiumNpcGaitKind::Run)
 		: TOptional<EElysiumNpcGaitKind>();
-	if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
-		/*bAllowPartialPath=*/true, RequestedGait))
+	FElysiumNpcMoveRequest MarkRequest;
+	MarkRequest.DestinationCm = Mark;
+	MarkRequest.AcceptanceToleranceCm = ElysiumNpcGait::ScriptAcceptanceCm;
+	MarkRequest.SpeedCmPerSecond = Speed;
+	MarkRequest.GaitKind = RequestedGait;
+	MarkRequest.PartialPath = EElysiumNpcPartialPath::Accept;   // a beat's transit is the point; the caller places the NPC on the mark
+	if (!Motor->MoveTo(MarkRequest))
 	{
 		ScriptPhase = EScriptPhase::None;
 		ReleaseScriptMove(TEXT("script path unavailable"));

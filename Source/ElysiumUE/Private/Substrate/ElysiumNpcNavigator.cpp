@@ -2,8 +2,8 @@
 
 namespace
 {
-	// `path+0x2c`'s constructor / reset value (`0x1030bec0`, `0x1030bb30`): ACT_IDLE.
-	constexpr int32 GPathDefaultMovementActivity = 1;
+	// `path+0x2c`'s reset value (`0x1030bb30`; the constructor `0x1030bec0` stores the same): ACT_IDLE.
+	constexpr int32 GPathResetMovementActivity = 1;
 }
 
 bool FElysiumNpcNavigator::IsGoalSet() const
@@ -28,8 +28,19 @@ FVector FElysiumNpcNavigator::GetGoalPos() const
 
 int32 FElysiumNpcNavigator::GetMovementActivity() const
 {
-	// The port's -1 is "never written"; retail's path always holds a value, 1 until one is set.
-	return MovementActivity != INDEX_NONE ? MovementActivity : GPathDefaultMovementActivity; // 0x102ee3f0
+	return MovementActivity;                                                 // 0x102ee3f0 path+0x2c
+}
+
+void FElysiumNpcNavigator::ResetPath()
+{
+	GoalType = 0;                                                            // 0x1030bb30 path+0x5c
+	GoalPosCm = FVector::ZeroVector;                                         // path+0x4c..+0x54 := vec3_origin
+	TargetOffsetCm = FVector::ZeroVector;                                    // path+0x34..+0x3c := vec3_origin
+	MovementActivity = GPathResetMovementActivity;                           // path+0x2c := 1
+	GoalToleranceCm = 0.f;                                                   // path+0x28 := 0
+	bPedestrian = false;                                                     // path+0x1 := 0
+	bHasHeadWaypoint = false;                                                // the list emptied, path+0x24
+	bHeadIsGoal = false;
 }
 
 int32 FElysiumNpcNavigator::GetNavType() const

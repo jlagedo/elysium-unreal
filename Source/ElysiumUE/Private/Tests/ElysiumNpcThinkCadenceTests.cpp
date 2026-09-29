@@ -490,7 +490,11 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 		return false;
 	}
 	// A leg in flight, so the hold has a request to keep.
-	Motor->MoveTo(FVector(500.0 * ElysiumMove::U, 0.0, 0.0), 16.f, 100.f);
+	FElysiumNpcMoveRequest HeldLeg;
+	HeldLeg.DestinationCm = FVector(500.0 * ElysiumMove::U, 0.0, 0.0);
+	HeldLeg.AcceptanceToleranceCm = 16.f;
+	HeldLeg.SpeedCmPerSecond = 100.f;
+	Motor->MoveTo(HeldLeg);
 	const int32 MovesBefore = F.Services.Count(TEXT("NpcMotor MoveTo"));
 
 	F.World.SetAiEnabled(false);

@@ -96,8 +96,9 @@ FStartTaskNavRecord StartTaskNav;
 // `Navigator.GoalToleranceCm` (`Substrate/ElysiumNpcNavigator.h`).
 
 /** `0x102f28a0` — the navigator's route clear: `+0x40`, `+0x44`, `+0x48`, `+0x4c` := 0, `m_afMemory`
- *  bit `0x20` cleared, then `0x1030bb30` resets the path (its tolerance `+0x28` among the words; the
- *  port's route clear is `IElysiumNpcMotor::ClearNavigationGoal`). */
+ *  bit `0x20` cleared, then `0x1030bb30` resets the path (`Navigator.ResetPath()`: goal type 0, goal
+ *  position and offset to the origin, activity 1, tolerance 0, pedestrian byte and head waypoint
+ *  cleared) and the mover's route is cleared (`IElysiumNpcMotor::ClearNavigationGoal`). */
 void NavClearRoute();
 
 /** `0x102f1dc0` — the route build `SetGoal` ends on, with its deferred-route window: a built route
@@ -122,7 +123,8 @@ float NavPathScalar20 = 0.f;
  *  `0xc` through `OnNavFailed` (`0x102eeae0`). */
 bool StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetGoalFlags);
 
-/** `CAI_Navigator::ClearGoal` (`0x102ee270`). */
+/** `CAI_Navigator::ClearGoal` (`0x102ee270`): the navigator reset `NavClearRoute` (`0x102f28a0`), then
+ *  slot 7. */
 void StartTaskClearGoal();
 
 /** `CAI_Navigator::SetMovementActivity` (`0x102ee250`): `path+0x2c = activity`. */

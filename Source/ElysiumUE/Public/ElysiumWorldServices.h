@@ -290,22 +290,6 @@ public:
 	// One travel request (`FElysiumNpcMoveRequest`). A refusal answers false; an accepted request is
 	// in flight until `Sample` / `SampleMoveFacts` report its end.
 	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) = 0;
-	// The pre-0018/5 signature, kept so the existing callers compile unchanged; it fills the request
-	// with the default filter and no activity name. 0018/5 lane A retires it. Non-virtual: an
-	// implementer overrides the request form and re-exposes this one with `using`.
-	bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm, float SpeedCmPerSecond,
-		bool bAllowPartialPath = false,
-		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>())
-	{
-		FElysiumNpcMoveRequest Request;
-		Request.DestinationCm = FeetDestination;
-		Request.AcceptanceToleranceCm = AcceptanceRadiusCm;
-		Request.SpeedCmPerSecond = SpeedCmPerSecond;
-		Request.GaitKind = GaitKind;
-		Request.PartialPath = bAllowPartialPath ? EElysiumNpcPartialPath::Accept
-			: EElysiumNpcPartialPath::Refuse;
-		return MoveTo(Request);
-	}
 	// The body's movement facts for the request in flight (or the one that last ended). Geometry and
 	// engine state only; the substrate's `NavigatorMoveStep` turns them into retail's outcomes.
 	// **False is the default and means "this motor reports no facts"** (a headless world, a double

@@ -742,7 +742,7 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		// same arm: 0x102aaf3c JNP
 				&& Limit < static_cast<float>(Now - Schedule.TaskStartedAt))       // 0x102aaf4d
 				// same arm: 0x102aaf57 JZ
-			|| !NavIsGoalActive())                                                 // 0x102aaf63 `0x102ee620`
+			|| !NavigatorIsGoalSet())                                              // 0x102aaf63 `0x102ee620` == 0: goal TYPE, not the head waypoint
 			// same arm: 0x102aaf6a JZ
 		{
 			BaseScheduleHost.bShouldMove = false;                                  // 0x102aafeb

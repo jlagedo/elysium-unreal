@@ -1053,9 +1053,10 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 	TestEqual(TEXT("#11 resets +0x54 to -1 too"), Npc->NavigatorWord0x54, -1);
 	TestEqual(TEXT("#11 clears the route once"), Npc->NavigatorRouteClears, Clears + 1);
 
-	// `CAI_Navigator#17` — the path is a seam, so the block comes back with `bHasPath` clear.
+	// `CAI_Navigator#17` — the recording motor reports no move facts, so the block comes back with
+	// `bHasPath` clear (the fact-fed arms are `Elysium.Substrate.Navigator.PathSample`).
 	const FElysiumNpcBase::FNavMoveInfo Info = Npc->FUN_102eee40();
-	TestFalse(TEXT("#17 answers no path while the path object is a seam"), Info.bHasPath);
+	TestFalse(TEXT("#17 answers no path while the motor reports no facts"), Info.bHasPath);
 	TestEqual(TEXT("but it still reports the nav type it read first"), Info.NavType,
 		Npc->NavGetType());
 	return true;

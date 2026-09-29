@@ -28,16 +28,18 @@ namespace
 	double GThink19AiDisabledOverlayAt = 0.0;
 }
 
-bool FElysiumNpcBase::Think19NodeGraphBuilt()
+bool FElysiumNpcBase::Think19NodeGraphBuilt() const
 {
-	// SEAM: `DAT_1093408c` -- no node-graph build step in this runtime; the admitting value.
-	return true;
+	// `DAT_1093408c` != 0: loaded or rebuilt (`0x102f5bd0` / `0x102f6610`); false only while the map's
+	// place set is pending adoption (0018 story 4).
+	return World != nullptr && World->IsNodeGraphLoaded();
 }
 
-bool FElysiumNpcBase::Think19AiNetworkReady()
+bool FElysiumNpcBase::Think19AiNetworkReady() const
 {
-	// SEAM: `g_pAINetworkManager && g_pAINetworkManager->+0x658` -- the admitting value.
-	return true;
+	// `g_pAINetworkManager && g_pAINetworkManager->+0x658`: the manager's think `0x102f6a50` sets the
+	// byte, armed at `curtime + 0.8` by `0x102f6690` inside `CWorld::Precache`.
+	return World != nullptr && World->NowSeconds() >= World->BuildStampSeconds() + AiNetworkFirstThinkDelay;
 }
 
 void FElysiumNpcBase::Think19BaseCacheInterruptConditions()
@@ -73,7 +75,7 @@ bool FElysiumNpcBase::Think19AiConsoleGate()
 				}
 				return true;                                                // LAB_1026c429
 			}
-			if (!NavIsGoalActive())                                         // 0x102ee6a0(+0x5d34)
+			if (!NavigatorGoalIsActive())                                   // 0x102ee6a0(+0x5d34)
 			{
 				if (Troika != nullptr)
 				{

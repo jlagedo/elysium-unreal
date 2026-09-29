@@ -526,8 +526,9 @@ bool FElysiumPlaceSeamWanderOrderTest::RunTest(const FString&)
 	FVector Last = FVector::ZeroVector;
 	F.World.World.Places().GetPositionCm(F.Picked(), F.Guard->PathingHullKind, Last);
 	TestTrue(TEXT("the mover walks to the picked place"), F.Motor->RequestedFeet.Equals(Last, 1e-3));
-	TestTrue(TEXT("...with no acceptance radius"), F.World.Services.Calls.ContainsByPredicate(
-		[](const FString& Call) { return Call.StartsWith(TEXT("NpcMotor MoveTo")) && Call.Contains(TEXT("radius=0.0")); }));
+	TestEqual(TEXT("...with retail's waypoint arrival radius, 0.0625 units (0x10451f78)"),
+		F.Motor->LastMoveRequest.AcceptanceToleranceCm, static_cast<float>(0.0625 * U), 1e-4f);
+	TestTrue(TEXT("...the goal-less install headed a path"), F.Guard->Navigator.IsGoalActive());
 	TestEqual(TEXT("nav +0x14 is the endpoint distance squared"), F.Guard->Navigator.EndpointDistanceSqrUnits,
 		static_cast<float>(FVector::DistSquared(F.Guard->Origin, Last) / (U * U)), 0.5f);
 

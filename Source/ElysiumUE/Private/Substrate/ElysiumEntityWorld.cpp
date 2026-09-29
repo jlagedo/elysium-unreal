@@ -146,6 +146,11 @@ double FElysiumEntityWorld::NowSeconds() const
 	return GameState ? GameState->GameClock().GetNow() : LastTickNow;
 }
 
+bool FElysiumEntityWorld::IsNodeGraphLoaded() const
+{
+	return !bPlaceSetPending || PlaceSet->IsAdopted();
+}
+
 // --- Load / spawn -----------------------------------------------------------------------
 
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
@@ -297,6 +302,9 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	{
 		CaptureBaseline(i);
 	}
+
+	// `CWorld::Precache` `0x102f6690`: the network manager's first think is armed at `curtime + 0.8`.
+	BuildStamp = NowSeconds();
 
 	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' built dormant: %d entities (%d brush bodies), epoch %u"),
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);

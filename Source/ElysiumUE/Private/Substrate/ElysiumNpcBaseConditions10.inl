@@ -10,9 +10,10 @@
 // Declared by the generated slot surface (`ElysiumNpcBaseSlots.inl`, slot 342); defined by hand as
 // `FElysiumCombatCharacter::CanBeFedUponBy`.
 
-/** `0x102ee2e0` — `CAI_Navigator::IsGoalSet()`, `m_pPath(+0x30)->GoalType(+0x10) != 0`. Distinct
- *  from `0x102ee680` (`IsGoalActive`, the current-waypoint test) which family Motor already wires.
- *  **SEAM**: this runtime's mover carries ONE goal latch and no separate goal-type word, so this
- *  answers that latch — the admitting value, since `IsGoalActive` implies `IsGoalSet`. The one case
- *  it under-admits is a goal set with no current waypoint, which the mover cannot represent. */
+/** `0x102ee2e0` — the navigator's PAUSED byte, `path+0x10` `m_bPaused` (`Navigator.IsPaused()`), which
+ *  `0x102bf7e0` and the `TASK_WAIT_FOR_MOVEMENT` arms read as `if (path+0x10)` before clearing it
+ *  (`0x102ee2c0` -> `0x1030bea0`). The name is the port's old one, from a misreading of `0x102ee2e0`
+ *  as `IsGoalSet`; the goal-type test is `NavigatorIsGoalSet` (`0x102ee680`). Kept for the callers
+ *  outside the navigator's files; it answers exactly `NavigatorIsPaused`. Nothing writes the byte
+ *  yet (the setter `0x102ee2a0`'s callers are not recovered), so it answers false. */
 bool NavIsGoalSet() const;

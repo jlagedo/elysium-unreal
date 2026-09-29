@@ -160,4 +160,5 @@ void SearchForCoverHint(uint32 SearchMask);
  *  Retail name unrecovered. Answers false, which is the arm that falls through. */
 bool ScheduleMeleeReachGate() const;
 
-int32 NavigatorGoalType() const;
+/** `0x1027d990`, `nav+0x18` `m_navType`: 0 ground, 1 jump, 2 fly, 3 climb (`NavGetType`). */
+int32 NavigatorNavType() const;

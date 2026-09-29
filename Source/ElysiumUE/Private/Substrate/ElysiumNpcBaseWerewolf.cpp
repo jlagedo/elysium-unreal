@@ -49,14 +49,20 @@ void FElysiumNpcBase::CheckTarget(FElysiumEntity* TargetEntity)
 
 void FElysiumNpcBase::UpdateTargetPos()
 {
-	// SEAM for `0x10271b10`; see the declaration. Retail's first gate reads the navigator's goal type
-	// (`m_pNavigator (+0x5d34) + 0x18`) and `GetGoalType` (`0x102ee620`); with no goal object the gate
-	// answers "not a target goal" and the body returns without touching the path.
+	// `0x10271b10`; see the declaration. Retail's first gate reads the navigator's NAV type
+	// (`m_pNavigator (+0x5d34) + 0x18`, `0x1027d990`): a jump (1) or climb (3) leaves the path alone; then
+	// `GetGoalType` (`0x102ee620`) must be 1 (a target-entity goal). Both are real reads now.
 	++UpdateTargetPosCalls;
-	// `navigator+0x18` has no port word; `0x102ee620` is family Motor's `NavGoalState()` (answers -1
-	// with no goal object): not a target goal, so the body returns here.
-	if (NavGoalState() != 1)
+	const int32 NavType = NavGetType();                                  // nav+0x18
+	if (NavType == 3 || NavType == 1)
 	{
 		return;
 	}
+	if (NavGoalState() != 1)                                             // 0x102ee620 path+0x5c
+	{
+		return;
+	}
+	// SEAM: the re-aim / re-path past the gate reads `path+0x30` (`GetTarget`), `path+0x60 & 4` (the
+	// re-path-on-target-move goal flag, no issuer) and `0x102ee140` (`ActualGoalPosition`); its body is
+	// not ported, so a target goal falls through here as it did.
 }

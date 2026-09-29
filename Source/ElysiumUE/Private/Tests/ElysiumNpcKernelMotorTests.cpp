@@ -604,16 +604,16 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestEqual(TEXT("an empty network answers 0 for any route step"), Guard->NavNodeWordAt(0), 0);
 	TestEqual(TEXT("including a negative one"), Guard->NavNodeWordAt(-1), 0);
 
-	// Slot 528 `0x10280360`. The gate is the navigator's goal state, a SEAM answering -1, so the
-	// body answers true — retail's own answer for every goal type but 6 — and the cover trace is
-	// never reached.
-	TestEqual(TEXT("the goal-state seam answers -1"), Guard->NavGoalState(), INDEX_NONE);
+	// Slot 528 `0x10280360`. The gate is the navigator's goal TYPE, 0 with no goal, so the body
+	// answers true — retail's own answer for every goal type but 6 — and the cover trace is never
+	// reached.
+	TestEqual(TEXT("with no goal the goal type is 0"), Guard->NavGoalState(), 0);
 	const int32 TracesBefore = Guard->MotorSeams.HullTraces;
 	TestTrue(TEXT("slot 528 validates"), Guard->ValidateNavGoal());
 	TestEqual(TEXT("and ran no trace"), Guard->MotorSeams.HullTraces, TracesBefore);
 	FVector Goal(1.0, 2.0, 3.0);
-	TestFalse(TEXT("the goal-position seam refuses"), Guard->NavGoalPosition(Goal));
-	TestEqual(TEXT("and leaves the caller's vector alone"), Goal, FVector(1.0, 2.0, 3.0));
+	TestTrue(TEXT("the goal position always answers"), Guard->NavGoalPosition(Goal));
+	TestEqual(TEXT("and with no goal it is retail's (0,0,0), never 'none'"), Goal, FVector::ZeroVector);
 	return true;
 }
 

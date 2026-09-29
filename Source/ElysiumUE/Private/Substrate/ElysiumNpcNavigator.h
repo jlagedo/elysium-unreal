@@ -120,10 +120,10 @@ struct FElysiumNpcNavigator
 	float GoalToleranceCm = 0.f;
 
 	// `path+0x2c` -- `m_movementActivity`, written by `0x102ee250` (`SetGoal`'s word `[5]`), read by
-	// `0x102ee3f0` / `0x102ee510`. Retail's ctor and reset store 1 (ACT_IDLE); the port's field was
-	// the Troika host's `NavigationActivity` until 0018 story 5 and keeps its -1 "unwritten" default
-	// this wave -- `GetMovementActivity` answers retail's 1 for it.
-	int32 MovementActivity = INDEX_NONE;
+	// `0x102ee3f0` / `0x102ee510`. The path constructor (`0x1030bec0`) and the reset (`0x1030bb30`)
+	// both store 1 (ACT_IDLE), so this is 1 from construction and after every reset, never
+	// "unwritten".
+	int32 MovementActivity = 1;
 
 	// `path+0x30` -- `m_target`, the goal's target entity handle (`SetGoal` `[10]`, cleared by
 	// `SetGoal` flag 2 through `0x100a0ae0(.., NULL)`), read through `0x102ee160`.
@@ -188,6 +188,12 @@ struct FElysiumNpcNavigator
 	// `0x102ee140` (`0x1000f89e`) -- `ActualGoalPosition`: `path+0x4c` minus `path+0x34`, never
 	// "none"; `(0,0,0)` after a reset. Centimetres.
 	FVector GetGoalPos() const;
+	// `0x1030bb30` -- the path reset both reset arms end on (`0x102f28a0`: `SetGoal` flag bit 1 and
+	// `ClearGoal 0x102ee270`): goal type 0, goal position and target offset to the origin, movement
+	// activity 1, goal tolerance 0; the pedestrian byte, the head waypoint and its goal bit cleared
+	// (the waypoint list is emptied). The goal flags (`path+0x60`), the target handle and the paused
+	// byte are not this reset's words.
+	void ResetPath();
 	// `0x102ee3f0` -- `path+0x2c`. No goal: 1 (ACT_IDLE).
 	int32 GetMovementActivity() const;
 	// `0x1027d990` -- `nav+0x18`. Default 0 (ground).

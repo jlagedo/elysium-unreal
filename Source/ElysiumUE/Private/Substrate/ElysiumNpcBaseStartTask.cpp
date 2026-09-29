@@ -191,6 +191,8 @@ namespace ElysiumStartTask19Base
 	constexpr int32 GOALTYPE_LOCATION = 4;
 	constexpr int32 GOALTYPE_LOCATION_NEAREST_NODE = 6;
 	constexpr int32 GOALTYPE_BESTSEEUNKNOWN = 7;
+	// 8 interesting place (pedestrian; sets the pedestrian byte `path+0x1`), 9 interesting place (animal).
+	constexpr int32 GOALTYPE_PLACE_PEDESTRIAN = 8;
 	// `0x1049a160` (-1.0, read 2026-09-27 off the image) — keep the path's tolerance.
 	constexpr float NavToleranceKeep = -1.0f;
 	// `0x1049a164` (-2.0) — the hull's tolerance.
@@ -1695,13 +1697,14 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		return 0;
 
 	case TASK_WAIT_FOR_MOVEMENT:                                         // arm 0x5d, 0x10286749
-		// `if (path+0x10) path+0x10 = 0` (`0x102ee2e0` / `0x102ee2c0`).
-		if (NavIsGoalSet())                                              // 0x1028674f 0x10286756
+		// `if (path+0x10) path+0x10 = 0` (`0x102ee2e0` reads the PAUSED byte; `0x102ee2c0` clears it).
+		if (NavigatorIsPaused())                                         // 0x1028674f 0x10286756
 		{
+			Navigator.bPaused = false;                                   // 0x102ee2c0 -> 0x1030bea0
 			++StartTaskNav.PathGoalFlagClears;                           // 0x1028675e
 		}
-		// `GetCurWaypoint()` (`0x102ee620` -> path+0x5c) non-null.
-		if (!NavIsGoalActive())                                          // 0x10286769
+		// `0x102ee620` -> `path+0x5c`, the goal TYPE: no goal completes the task and clears it.
+		if (!NavigatorIsGoalSet())                                       // 0x10286769
 		{
 			BaseScheduleHost.bShouldMove = false;                        // 0x10286775 0x10286770
 			TaskComplete(false);                                         // 0x1028677b
@@ -1719,8 +1722,9 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		return 0;
 
 	case TASK_WAIT_FOR_MOVEMENT_STEP:                                    // arm 0x5e, 0x102866bf
-		if (NavIsGoalSet())                                              // 0x102866c5 0x102866cc
+		if (NavigatorIsPaused())                                         // 0x102866c5 0x102ee2e0 path+0x10 / 0x102866cc
 		{
+			Navigator.bPaused = false;                                   // 0x102ee2c0 -> 0x1030bea0
 			++StartTaskNav.PathGoalFlagClears;                           // 0x102866d4
 		}
 		if (!NavIsGoalActive())                                          // 0x102866df
@@ -1889,6 +1893,40 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 // The navigator services `0x102827f0` drives
 // =================================================================================================
 
+namespace
+{
+	// The waypoint arrival radius retail's move applies to the goal waypoint (`0x102ef510`, slot 16):
+	// the constant `0x10451f78`, 0.0625 units (0.25, `0x10449260`, under `npc_vphysics`, which the
+	// port does not read). It is NOT the path's goal tolerance `path+0x28`, which retail uses only for
+	// a BLOCKED step (`0x102ef760`). Source units.
+	constexpr float GNavArrivalRadiusUnits = 0.0625f;
+	// `FUN_102fe9f0`'s per-search `RandomInt(5, 10)`, the pedestrian cost multiplier (`local_20`).
+	constexpr int32 GNavPedestrianCostMin = 5;
+	constexpr int32 GNavPedestrianCostMax = 10;
+
+	// One travel request, filled from the navigator's goal words: the path's movement activity picks
+	// the gait, the pedestrian byte (`path+0x1`, set by a type-8 goal) the pedestrian pricing with a
+	// multiplier drawn per request, and the arrival radius is retail's waypoint constant. A goal that
+	// is not a pedestrian goal draws nothing.
+	FElysiumNpcMoveRequest MakeNavigatorMoveRequest(const FElysiumNpcNavigator& Nav,
+		const IElysiumNpcMotor* Motor, const FVector& DestCm)
+	{
+		const int32 Activity = Nav.GetMovementActivity();
+		const EElysiumNpcGaitKind Gait = Activity == ElysiumStartTask19Base::ACT_RUN
+			? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+		FElysiumNpcMoveRequest Request;
+		Request.DestinationCm = DestCm;
+		Request.AcceptanceToleranceCm = GNavArrivalRadiusUnits * ElysiumMove::U;
+		Request.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, Gait);
+		Request.GaitKind = Gait;
+		Request.PartialPath = EElysiumNpcPartialPath::Refuse;
+		Request.PedestrianCostMultiplier = Nav.bPedestrian
+			? ElysiumNpcEngineRandom::RandomInt(GNavPedestrianCostMin, GNavPedestrianCostMax) : 0;
+		Request.MovementActivityName = FName(*FString::Printf(TEXT("ACT_0x%02x"), Activity));
+		return Request;
+	}
+}
+
 bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetGoalFlags)
 {
 	using namespace ElysiumStartTask19Base;
@@ -1911,13 +1949,32 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		NavClearRoute();                                                 // 0x102ecd74 0x102f28a0
 	}
 	// Flag 2 (`0x102ecd7b`): the path's target handle (`path+0x30`, `0x100a0ae0(.., NULL)`) and its
-	// dest words (`path+0x34..+0x3c` := `DAT_1070d1b0..b8`). The port's mover keeps neither; the goal
-	// below replaces whatever route it was on.
+	// dest words (`path+0x34..+0x3c` := `DAT_1070d1b0..b8`).
+	if ((SetGoalFlags & 2) != 0)
+	{
+		Navigator.TargetEntity = FElysiumEntityHandle::Invalid();
+		Navigator.TargetOffsetCm = FVector::ZeroVector;
+	}
 
 	// [5] -> `SetMovementActivity` (`0x102ecdaa` / `0x102ecdb2` `0x102ee250`).
 	if (Goal.MovementActivity != INDEX_NONE)
 	{
 		StartTaskSetMovementActivity(Goal.MovementActivity);
+	}
+
+	// The goal record's words onto the path: the type through `0x1030ba50` (`path+0x5c`), the flags
+	// `path+0x60 = goal[9]` (this store is their only writer), the destination node `[4]`
+	// (`0x102ee9c0`) and the arrival words `[6]` / `[7]`. A type-8 goal (interesting place,
+	// pedestrian -- NOT 9, the animal place) sets the pedestrian byte `path+0x1`, which only the
+	// path reset clears.
+	Navigator.GoalType = Goal.Type;
+	Navigator.GoalFlags = Goal.GoalFlags;
+	Navigator.GoalNode = Goal.DestNode;
+	Navigator.ArrivalActivity = Goal.ArrivalActivity;
+	Navigator.ArrivalSequence = Goal.ArrivalSequence;
+	if (Goal.Type == GOALTYPE_PLACE_PEDESTRIAN)
+	{
+		Navigator.bPedestrian = true;
 	}
 
 	// The goal entity by type (`0x102ecd20`'s two resolutions share it): 1 `m_hTargetEnt`
@@ -1974,9 +2031,11 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	}
 	const float ToleranceCm = Navigator.GoalToleranceCm;
 	StartTaskNav.LastSetGoalToleranceUnits = ToleranceCm / U;
-	// `0x102ececa`: path `+0x40` := hull * 0.5; `[11..13]` != `DAT_10934060..68` -> `0x1030be20`
-	// (arrival direction; every caller passes the sentinel); path `+0x8` / `+0x4` := `[14]` / `[15]`
-	// (zero at every caller). None has a port word.
+	// `0x102ececa`: path `+0x40` := the pathing hull * 0.5 (`FLD hull; FMUL half`; the hull's width is
+	// the figure the tolerance arms above use).
+	Navigator.WaypointToleranceCm = HullWidthUnits * ElysiumNpcTunables::Half * U;
+	// `[11..13]` != `DAT_10934060..68` -> `0x1030be20` (arrival direction; every caller passes the
+	// sentinel); path `+0x8` / `+0x4` := `[14]` / `[15]` (zero at every caller). None has a port word.
 	//
 	// Goal flag 2 (`0x102ecf2e TEST [goal+0x24],0x2`) builds a NODE route (`0x102f3c10` /
 	// `0x102f41b0` nearest nodes, `0x102fd240` the route) and returns without `0x102f1dc0`. This
@@ -2000,6 +2059,20 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		bHaveDest = true;
 	}
 	StartTaskNav.LastSetGoalDestCm = DestCm;
+	// The goal position (`path+0x4c..+0x54`, `0x1030ba30`) and, for an entity goal, the target handle
+	// (`path+0x30`, `[10]`, else the entity the type resolved).
+	if (bHaveDest)
+	{
+		Navigator.GoalPosCm = DestCm;
+	}
+	if (Goal.Target.IsSet())
+	{
+		Navigator.TargetEntity = Goal.Target;
+	}
+	else if (GoalEntity != nullptr)
+	{
+		Navigator.TargetEntity = GoalEntity->Handle;
+	}
 
 	// `0x102ed11e` `0x102f1dc0(this, goal flags bit 3)`.
 	const bool bRoute = NavBuildRoute(bHaveDest, DestCm, ToleranceCm);
@@ -2042,23 +2115,32 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 	// not a route failure -- no route was attempted and no retail word moves.
 	FElysiumNpc* Troika = AsNpc();
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	auto Build = [this, Troika, bHaveDest, &DestCm, ToleranceCm]() -> bool
+	auto Build = [this, Troika, bHaveDest, &DestCm]() -> bool
 	{
 		if (!bHaveDest || Motor == nullptr)
 		{
 			bMoveIssued = false;
 			return false;                                            // no target / no navigator: no route
 		}
-		const int32 MoveActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;
-		const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 		if (Troika != nullptr)
 		{
 			Troika->MoveGoal = DestCm;
 		}
-		bMoveIssued = Motor->MoveTo(DestCm, ToleranceCm, ElysiumNpcGait::TravelSpeed(Motor, Gait),
-			/*bAllowPartialPath=*/false, Gait);
+		// The request is filled from the navigator's goal words (`MakeNavigatorMoveRequest`): the
+		// arrival radius is retail's waypoint constant, not `ToleranceCm` (`path+0x28`, which retail
+		// applies to a blocked step only, `0x102ef760`).
+		bMoveIssued = Motor->MoveTo(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
+		if (bMoveIssued)
+		{
+			// An accepted request to the goal: the head waypoint stands and is the goal's own
+			// (`path+0x24` set, `(wp+0x28 >> 3) & 1`, `0x1030bd50`). The pop at arrival is the
+			// navigator's move step.
+			Navigator.bHasHeadWaypoint = true;
+			Navigator.bHeadIsGoal = true;
+		}
 		return bMoveIssued;
 	};
+	(void)ToleranceCm;   // `path+0x28` is `Navigator.GoalToleranceCm`; the request does not carry it
 	// A pushed `aiscripted_schedule` order already holds the body for its own program (modes 1/2 set
 	// their goal through this very call, `ScheduledMoveToGoalEntity` `0x102800c0`), so the build runs
 	// under that claim rather than asking for an ordinary schedule one the director outranks.
@@ -2069,7 +2151,11 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 	{
 		return false;
 	}
-	// `0x102f1de4` `0x10319ee0(path+0x24)`, `path+0x44 := -1`: the path's waypoint list, the mover's.
+	// `0x102f1de4` `0x10319ee0(path+0x24)`, `path+0x44 := -1`: the path's waypoint list is emptied at
+	// every entry, so a search that finds nothing leaves no head (`Navigator.bHasHeadWaypoint`).
+	Navigator.bHasHeadWaypoint = false;
+	Navigator.bHeadIsGoal = false;
+	Navigator.LastNodePassed = INDEX_NONE;
 	if ((BaseScheduleHost.MemoryBits & MemoryPathFailed) == 0)                  // 0x102f1e0a TEST [+0x5d8c],0x20
 	{
 		if (Build())                                                            // 0x102f1e15 0x102f2330
@@ -2121,8 +2207,9 @@ void FElysiumNpcBase::NavClearRoute()
 	Navigator.RouteRetryTime = 0.0;                                                    // +0x4c
 	Navigator.RouteRetryInterval = 0.f;                                                // +0x44
 	BaseScheduleHost.MemoryBits &= ~ElysiumStartTask19Base::MemoryPathFailed;   // +0x5d8c &= ~0x20
-	// `0x1030bb30(path)`: the path reset -- its tolerance `+0x28` with it; the port's route clear.
-	Navigator.GoalToleranceCm = 0.f;
+	// `0x1030bb30(path)`: the path reset -- goal type 0, goal position and target offset to the origin,
+	// movement activity 1, tolerance `+0x28` 0, the pedestrian byte and the head waypoint cleared.
+	Navigator.ResetPath();
 	if (Motor != nullptr)
 	{
 		Motor->ClearNavigationGoal();
@@ -2131,13 +2218,11 @@ void FElysiumNpcBase::NavClearRoute()
 
 void FElysiumNpcBase::StartTaskClearGoal()
 {
-	// `0x102ee270`: the path clear then the navigator's slot 7 reset. The port's mover clears its
-	// route and keeps any special traversal (`ClearNavigationGoal`).
+	// `0x102ee270`: the navigator reset `0x102f28a0` (route words zeroed, memory bit `0x20` cleared, the
+	// path reset `0x1030bb30`), then the navigator's slot 7. The port's mover clears its route and keeps
+	// any special traversal (`ClearNavigationGoal`, inside `NavClearRoute`).
 	++StartTaskNav.ClearGoalCalls;
-	if (Motor != nullptr)
-	{
-		Motor->ClearNavigationGoal();
-	}
+	NavClearRoute();
 	bMoveIssued = false;
 	FUN_102eea70();
 }
@@ -2145,14 +2230,11 @@ void FElysiumNpcBase::StartTaskClearGoal()
 void FElysiumNpcBase::StartTaskSetMovementActivity(int32 Activity)
 {
 	// `0x102ee250`: `m_pPath->m_movementActivity (+0x2c) = activity`. The word is the
-	// navigator's (`FElysiumNpcNavigator::MovementActivity`), written on the Troika line; the gait is
-	// pushed on to the route in flight (`SetTravelGait`), never a rebuild.
+	// navigator's (`FElysiumNpcNavigator::MovementActivity`) on every body; the gait is pushed on to the
+	// route in flight (`SetTravelGait`), never a rebuild.
 	++StartTaskNav.MovementActivitySets;
 	StartTaskNav.LastMovementActivity = Activity;
-	if (FElysiumNpc* Troika = AsNpc())
-	{
-		Troika->Navigator.MovementActivity = Activity;
-	}
+	Navigator.MovementActivity = Activity;
 	if (Motor != nullptr)
 	{
 		const EElysiumNpcGaitKind Gait = Activity == ElysiumStartTask19Base::ACT_RUN
@@ -2338,9 +2420,10 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	//     nav->+0x14 = |from - path goal|^2;       // 0x1000f89e(path), SOURCE units squared
 	//
 	// So no `AI_NavGoal_t`, no goal type, no tolerance (`path+0x28` keeps the reset's value), no
-	// movement or arrival activity. The port's route is the mover's: the move is issued here with no
-	// acceptance radius, under the same body arbitration `NavBuildRoute` runs (port-only) and with
-	// the gait the schedule's navigation activity names, and nothing of `StartTaskSetGoal`'s runs.
+	// movement or arrival activity. The port's route is the mover's: the move is issued here under the
+	// same body arbitration `NavBuildRoute` runs (port-only), as the same navigator request (the path's
+	// movement activity picks the gait, the waypoint arrival radius is retail's constant), and nothing of
+	// `StartTaskSetGoal`'s runs.
 	FElysiumNpc* Troika = AsNpc();
 	if (Motor == nullptr)
 	{
@@ -2352,19 +2435,25 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	{
 		return false;
 	}
-	const int32 MoveActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;
-	const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 	if (Troika != nullptr)
 	{
 		Troika->MoveGoal = DestCm;
 	}
-	bMoveIssued = Motor->MoveTo(DestCm, /*AcceptanceRadiusCm=*/0.0f, ElysiumNpcGait::TravelSpeed(Motor, Gait),
-		/*bAllowPartialPath=*/false, Gait);
+	// Retail's A* prices the search from the path's own words: the pedestrian byte (`path+0x1`) is not
+	// written here, so a byte a previous type-8 goal left set still prices this route, as it would.
+	bMoveIssued = Motor->MoveTo(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
 	if (!bMoveIssued)
 	{
 		return false;
 	}
 	Navigator.GoalType = PathTypeRandom;                                    // 0x102ed4a6 0x1030ba50(path, 4)
+	// `0x1030b4d0` / `0x1030b8e0` install the waypoints: the head stands, and the path's endpoint
+	// (`0x1000f89e(path)`, what `nav+0x14` measures to) is the route's end. The head is not the GOAL
+	// waypoint of a goal (no goal record), so the goal bit stays clear.
+	Navigator.bHasHeadWaypoint = true;
+	Navigator.bHeadIsGoal = false;
+	Navigator.GoalPosCm = DestCm;
+	Navigator.TargetOffsetCm = FVector::ZeroVector;
 	Navigator.EndpointDistanceSqrUnits = static_cast<float>(
 		FVector::DistSquared(Origin / ElysiumMove::U, DestCm / ElysiumMove::U)); // 0x102ed4e9 nav +0x14
 	++Navigator.PathNoGoalInstalls;

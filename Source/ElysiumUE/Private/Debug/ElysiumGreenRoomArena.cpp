@@ -491,9 +491,13 @@ void FElysiumGreenRoomRun::IssueNextArenaWalkLeg()
 	// Named rather than left to the fallback: a body that resolves no walk fan still gets a
 	// non-zero order, the way `ElysiumNpcGait::TravelSpeed` covers the same gap for a real order.
 	const float Speed = Body->GaitSpeed(EElysiumNpcGaitKind::Walk, 0.0f);
-	Body->MoveTo(ArenaWalkState.Route[ArenaWalkState.LegIndex], /*AcceptanceRadiusCm=*/32.0f,
-		Speed > 0.0f ? Speed : ElysiumMove::WalkSpeed, /*bAllowPartialPath=*/true,
-		EElysiumNpcGaitKind::Walk);
+	FElysiumNpcMoveRequest LegRequest;
+	LegRequest.DestinationCm = ArenaWalkState.Route[ArenaWalkState.LegIndex];
+	LegRequest.AcceptanceToleranceCm = 32.0f;
+	LegRequest.SpeedCmPerSecond = Speed > 0.0f ? Speed : ElysiumMove::WalkSpeed;
+	LegRequest.GaitKind = EElysiumNpcGaitKind::Walk;
+	LegRequest.PartialPath = EElysiumNpcPartialPath::Accept;
+	Body->MoveTo(LegRequest);
 	ArenaWalkState.bLegArmed = false;
 }
 

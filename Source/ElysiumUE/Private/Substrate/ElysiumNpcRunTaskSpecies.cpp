@@ -2001,7 +2001,7 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		const float Limit = Step->Data;
 		if ((Limit != ElysiumNpcTunables::Zero                                     // 0x103ce140 / 0x103ce14b
 				&& Limit < static_cast<float>(Now - Schedule.TaskStartedAt))       // 0x103ce15c / 0x103ce166
-			|| !NavIsGoalActive())                                                 // 0x103ce172 `0x102ee620`
+			|| !NavigatorIsGoalSet())                                              // 0x103ce172 `0x102ee620` == 0: goal TYPE, not the head waypoint
 			// same arm: 0x103ce179 JZ
 		{
 			BaseScheduleHost.bShouldMove = false;                                  // 0x103ce244

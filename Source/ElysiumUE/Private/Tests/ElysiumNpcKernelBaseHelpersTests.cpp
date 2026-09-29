@@ -215,10 +215,11 @@ bool FElysiumNpcKernelBaseHelpersGeometryTest::RunTest(const FString&)
 		return false;
 	}
 
-	// Slot 515 `CalcIdealYaw` (`0x10274b30`). The navigator's state word is family Motor's seam and
-	// answers -1, so the DEFAULT arm is the one every call takes: `VecToYaw(target - GetOrigin())`.
-	TestEqual(TEXT("the navigator seam answers -1, so the default delta form runs"),
-		F.Npc->NavGoalState(), INDEX_NONE);
+	// Slot 515 `CalcIdealYaw` (`0x10274b30`). The word it picks its arm by is the path's MOVEMENT
+	// ACTIVITY (`0x102ee3f0`, `path+0x2c`), 1 by default, so the DEFAULT arm is the one a fresh body
+	// takes: `VecToYaw(target - GetOrigin())`.
+	TestEqual(TEXT("the path's activity is 1, so the default delta form runs"),
+		F.Npc->Navigator.GetMovementActivity(), 1);
 	F.Npc->Origin = FVector::ZeroVector;
 	TestEqual(TEXT("+X is yaw 0"), F.Npc->CalcIdealYaw(FVector(100.0, 0.0, 0.0)), 0.f, 1.0e-3f);
 	// This world's +Y is Source's -Y, and `VecToYaw` (`0x101d2c70`) folds into [0, 360)

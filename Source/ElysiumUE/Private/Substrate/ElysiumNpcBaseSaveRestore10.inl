@@ -149,11 +149,9 @@ FAiExtendedSaveHeader BuildExtendedSaveHeader() const;
  *  four words through `FElysiumSaveArchive` when `Archive` is non-null, and records the call. */
 void SaveWriteFields(void* Archive, FAiExtendedSaveHeader& Header);
 
-/** SEAM for `0x102ee6a0` on `m_pNavigator` — "the navigator has an active goal", header bit `0x4`.
- *  Family Senses already stands `NavigatorHasNodeGraph()` for this substrate's missing node graph;
- *  this is the goal query beside it and answers **false**, because nothing in this runtime stands a
- *  `CAI_Navigator` goal object. Named rather than inlined so the day a navigator lands the bit
- *  moves with it. */
+/** `0x102ee6a0` on `m_pNavigator` — `IsGoalActive`, "a head waypoint exists", header bit `0x4`.
+ *  Answers the mover's navigation sample (see `NavIsGoalActive`) until the navigator's move step pops
+ *  the head at arrival; `Navigator.IsGoalActive()` is the retail word. */
 bool NavigatorGoalIsActive() const;
 
 /** Whether slot 106 has run, and the name it was handed. Retail passes the classname string; this

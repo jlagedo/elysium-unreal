@@ -850,10 +850,15 @@ bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigat
 void AElysiumMapActor::AdoptMapPlaces()
 {
 	const FString Path = FElysiumContentPaths::BakedMapPlaces(MapName);
+	// The loader byte `DAT_1093408c` is clear while the graph is being read and set by both the
+	// load and the rebuild arm (`0x102f6a50`): pending from here until the set is adopted, and
+	// cleared on a missing asset too, since a map with no graph rebuilds and then thinks.
+	EntityWorld->SetPlaceSetPending(true);
 	const UElysiumMapPlaces* Asset = Path.IsEmpty() ? nullptr
 		: LoadObject<UElysiumMapPlaces>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (Asset == nullptr || !Asset->IsValidPlaces())
 	{
+		EntityWorld->SetPlaceSetPending(false);
 		UE_LOG(LogElysium, Error,
 			TEXT("'%s': no valid places asset at %s -- every hint's node id falls outside an empty network; ")
 			TEXT("run: uv run elysium bake map --maps %s"),

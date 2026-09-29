@@ -248,9 +248,9 @@ void FElysiumNpcManBat::Precache()
 // Slot 438: `0x1038e340`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
 int32 FElysiumNpcManBat::SpeciesSelectSchedule()
 {
-	// CNPC_VManBat. `GetGoalType`-shaped navigator probe first; anything but 2 writes
-	// `m_iMoveGoalNodeID = 1` and answers 0x158.
-	if (NavigatorGoalType() != 2)
+	// CNPC_VManBat. The navigator's NAV type (`0x1027d990`, `nav+0x18`) first; anything but 2 (fly)
+	// writes `m_iMoveGoalNodeID = 1` and answers 0x158.
+	if (NavigatorNavType() != 2)
 	{
 		ManBatMoveGoalNodeId = 1;
 		return 0x158;

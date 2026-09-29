@@ -24,12 +24,11 @@
 
 bool FElysiumNpcBase::NavIsGoalSet() const
 {
-	// `0x102ee2e0` — `CAI_Navigator::IsGoalSet()`, `m_pPath(+0x30)->GoalType(+0x10) != 0`. DISTINCT
-	// from `0x102ee680` (`IsGoalActive`, the current-waypoint test) which family Motor wires to the
-	// same latch. **SEAM**: the mover keeps one goal latch and no goal-type word, so this answers
-	// that latch — the admitting value, since `IsGoalActive` implies `IsGoalSet`. The one case it
-	// under-admits is a goal set with no current waypoint, which the mover cannot represent.
-	return NavIsGoalActive();
+	// `0x102ee2e0` reads `path+0x10` `m_bPaused`, NOT the goal type (`0x102ee680` is `IsGoalSet`, see
+	// `NavigatorIsGoalSet`); the name is the port's old misreading, kept because callers outside the
+	// navigator's files spell it. Every caller cites `0x102ee2e0` / `0x102bf7e0` and so wants the
+	// paused byte.
+	return NavigatorIsPaused();
 }
 
 void FElysiumNpcBase::Slot532(int32 FailureBits)

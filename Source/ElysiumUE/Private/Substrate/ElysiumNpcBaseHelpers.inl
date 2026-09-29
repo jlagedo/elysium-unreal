@@ -94,36 +94,37 @@ struct FFacingQueueEntry
 
 mutable FTroikaMotorSeams TroikaMotor;
 
-/** `CAI_Navigator#17` `0x102eee40` — the move-info block built from the current path: the path
- *  point, the per-axis delta (2-D at nav type 0, 3-D otherwise), its length, the motor's base speed
- *  and the goal tolerance (the motor's `+0x30` scaled by it, floored at the length), the navigator
- *  radius, bit 0 for a straight-line path and bit 2 for a waypoint whose kind differs from its
- *  owner's. SOURCE units. */
+/** `CAI_Navigator#17` `0x102eee40` (`MoveCalcBase`) — the move-info block built from the current path:
+ *  the path point, the per-axis delta (nav type 0: z dropped and a 2-D normalise; otherwise a 3-D
+ *  one), its length, the motor's base speed and the goal tolerance (the motor's `+0x30` scaled by it,
+ *  floored at the length), the move target (`0x102ecc40`), bit 0 when the head waypoint is the goal
+ *  (`wp+0x28 & 8`), else bit 2 when the next waypoint's move type differs. SOURCE units. */
 struct FNavMoveInfo
 {
 	FVector TargetUnits = FVector::ZeroVector;   // out[0..2]  the path point
-	FVector DeltaUnits = FVector::ZeroVector;    // out[3..5]  target - my origin
-	FVector DirUnits = FVector::ZeroVector;      // out[6..8]  the same delta, copied
+	FVector DeltaUnits = FVector::ZeroVector;    // out[3..5]  target - my origin, normalised in place
+	FVector DirUnits = FVector::ZeroVector;      // out[6..8]  a copy of the normalised delta
 	float BaseSpeedUnits = 0.f;                  // out[9]
-	float DistanceUnits = 0.f;                   // out[10]
+	float DistanceUnits = 0.f;                   // out[10] the length the normalise returned
 	float GoalToleranceUnits = 0.f;              // out[11]
 	int32 NavType = 0;                           // out[12]
-	float Radius = 0.f;                          // out[13]
-	uint32 Flags = 0;                            // out[14] bit0 straight line, bit2 kind change
+	FElysiumEntityHandle MoveTarget;             // out[13] pMoveTarget (`0x102ecc40`), NOT a radius
+	uint32 Flags = 0;                            // out[14] bit0 head is the goal, bit2 move type changes
 	bool bHasPath = false;                       // out[15] — the path pointer retail stores
 };
 
-/** SEAM for the `CAI_Path` reads `0x102eee40` makes: the current path point (`0x10012805`), the
- *  straight-line test (`0x1030bd50`), the navigator radius (`0x102ecc40`) and the next waypoint's
- *  kind against its owner's (`path+0x24`, `+0x30`, `+0x2c`). There is no path object here; the
- *  whole block answers false and the move info comes back with `bHasPath` clear. */
+/** The `CAI_Path` reads `0x102eee40` makes, from `IElysiumNpcMotor::SampleMoveFacts`: the current
+ *  point (`0x10012805`, the follower's next corner) and the head-is-goal test (`0x1030bd50`, the
+ *  corner being walked to is the path's last). The next waypoint's move type (`path+0x24 -> +0x30 ->
+ *  +0x2c`) is not a fact the follower reports, so `bNextWaypointKindDiffers` is always false. No
+ *  facts (a motor that reports none, or a follower holding no path): `bValid` false and the move info
+ *  comes back with `bHasPath` clear. */
 struct FNavPathSample
 {
 	bool bValid = false;
 	FVector PointUnits = FVector::ZeroVector;
-	bool bStraightLine = false;
+	bool bHeadIsGoal = false;
 	bool bNextWaypointKindDiffers = false;
-	float RadiusUnits = 0.f;
 };
 
 /** `CAI_Hint::GetPosition` (`0x102d1180(hint, npc, &out)`) -- the ONE port body of the hint's

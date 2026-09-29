@@ -298,14 +298,16 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	{
 		return Conditions19LastKnownPosition(static_cast<const FElysiumNpcBase*>(this)->GetEnemy());
 	};
-	// `0x102ee140` (the goal point) with this body's origin standing in when the seam answers none.
+	// `0x102ee140` (the goal point). The arms below compare it with `Here` / `TargetUnits`, which are
+	// Source-frame (`MotorTailSourceOf`, Y reflected), while `NavGoalPosition` answers the port frame
+	// (`Origin / U`, no reflection); the Y is reflected here so the two agree (`0x10288cc1`, `0x102895dc`).
 	auto GoalUnits = [this]() -> FVector
 	{
-		FVector Goal = NpcKernelMotor2Shared::MotorTailSourceOf(Origin);
+		FVector Goal = FVector::ZeroVector;
 		NavGoalPosition(Goal);
+		Goal.Y = -Goal.Y;
 		return Goal;
 	};
-
 	// `[EDI]` is retail's `Task_t::iTask`, the CLASS-LOCAL id; the step carries the GLOBAL id (stated
 	// divergence, `ElysiumScheduleText.h`), translated once here through slot 450 `GetLocalTaskId`
 	// (`0x101a6640`) exactly as `StartTaskSlot442` does (the StartTask19 integration's fix).

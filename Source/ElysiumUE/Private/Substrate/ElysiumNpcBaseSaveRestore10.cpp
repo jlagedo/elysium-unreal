@@ -250,10 +250,10 @@ bool FElysiumNpcBase::NavigatorGoalIsActive() const
 	// `0x102aaf72`, base `0x10288f8a`), the interrupt-distance gates of `0x102b27f0` and save header
 	// bit `0x4`.
 	//
-	// Wired (story 8 L05 integration) to the mover's navigation sample, the same bit family Motor's
-	// `NavIsGoalActive` (`0x102ee680`, `m_pPath->+0x5c` goal type != 0) reads. The port's mover keeps
-	// one "a route is being followed" fact (`bActiveGoal`) and does not separate a set goal from a
-	// route with a current waypoint, so the two navigator queries answer alike here.
+	// The mover's navigation sample, as `NavIsGoalActive` answers it: the port's "a route is being
+	// followed" fact stands for the head waypoint (`path+0x24`) until the navigator's move step pops
+	// it at arrival (0018 story 5 lane I). `Navigator.IsGoalActive()` is the retail word. Retail's
+	// `0x102ee680` is a different question (`IsGoalSet`, `NavigatorIsGoalSet`).
 	return Motor != nullptr && Motor->SampleNavigation().bActiveGoal;
 }
 
