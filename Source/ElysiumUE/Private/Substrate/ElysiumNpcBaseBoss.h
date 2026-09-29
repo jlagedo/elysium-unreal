@@ -14,8 +14,6 @@ class FElysiumNpcBaseBoss : public FElysiumNpc
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VBaseBoss", FElysiumNpc)
 
-	virtual void DrawDebugStatOverlays() override;
-
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
 	// From `ElysiumNpcBosses.inl`.
@@ -25,10 +23,6 @@ public:
 	 *  pedestal — the permissive arm, and stated as such. */
 	bool BossBlacklistHolds(const FElysiumEntity* Candidate) const;
 
-	// From `ElysiumNpcDebug.inl`.
-	/** `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) — `"Dist to player: %.3f"` then
-	 *  `0x102775e0`. Thirty-six bytes, and the tail call is to the BASE and not to the Troika line. */
-	void BossDrawDebugStatOverlays();
 
 	// From `ElysiumNpcPositions.inl`.
 	static FEnemySightCandidates EnemySightCandidatesOf(const FVector& BoxMinCm, const FVector& BoxMaxCm,

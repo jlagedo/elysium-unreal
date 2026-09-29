@@ -120,9 +120,8 @@ namespace RunTask19Base
 	// `COND_NO_PRIMARY_AMMO` / `COND_NO_SECONDARY_AMMO`, cleared by `TASK_RELOAD`.
 	constexpr int32 CondNoSecondaryAmmo = 0x41;
 
-	// `_DAT_1044e664` f32 = 10.0 -- `TASK_FACE_PLAYER`'s remaining-yaw bound. Not in the tunables
-	// table (the table carries the pooled 5.0 and 30.0, not this cell).
-	constexpr float FacePlayerYawBound = 10.0f;
+	// `_DAT_1044e664` f32 = 10.0 -- `TASK_FACE_PLAYER`'s remaining-yaw bound.
+	constexpr float FacePlayerYawBound = ElysiumNpcTunables::Ten;
 	// `m_lifeState` `LIFE_DEAD`.
 	constexpr int32 LifeDead = 2;
 	// `TASK_DIE`'s hull (`0x1028901b..0x1028904c`): maxs `(4,4,1)`, mins `(-4,-4,0)`.
@@ -167,9 +166,24 @@ void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed
 			MotorYawSpeedWord = YawSpeed;   // `+0x38` (`0x102e1ca8`)
 		}
 	}
-	// With `-1.0` retail first runs `0x102e1cf0` (unrecovered; SEAM: nothing), then both arms end in
-	// `UpdateYaw(-1)`.
+	else
+	{
+		MotorStoreMaxYawSpeed();          // `0x102e1cf0`: `+0x38` := `MaxYawSpeed()`
+	}
+	// Both arms end in `UpdateYaw(-1)`.
 	MotorUpdateYaw(-1);
+}
+
+void FElysiumNpcBase::MotorStoreMaxYawSpeed()
+{
+	// `0x102e1cf0`: `(motor+0x10)->vfunc0()` -- the outer's slot 516 -- into `+0x38`.
+	MotorYawSpeedWord = MaxYawSpeed();
+}
+
+float FElysiumNpcBase::MotorYawRateDegPerS(float RetailYawSpeed)
+{
+	// `UpdateYaw(int yawSpeed)` -> `AI_ClampYaw(yawSpeed * 10.0, ...)` (see the declaration).
+	return static_cast<float>(static_cast<int32>(RetailYawSpeed)) * 10.0f;
 }
 
 void FElysiumNpcBase::MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float YawSpeed)
@@ -183,14 +197,15 @@ void FElysiumNpcBase::MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm,
 void FElysiumNpcBase::MotorUpdateYaw(int32 YawSpeed)
 {
 	// `0x102e1e20`. The clock restart below `0.0` and the stamp are retail's; the step is Unreal's
-	// (named modernization, see the declaration). `Face` takes this world's (negated) yaw.
-	(void)YawSpeed;
+	// (named modernization, see the declaration), at retail's rate: `-1` reads the stored `+0x38`.
+	// `Face` takes this world's (negated) yaw.
+	const float RetailYawSpeed = YawSpeed == -1 ? MotorYawSpeedWord : static_cast<float>(YawSpeed);
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	++MotorUpdateYawCalls;
 	MotorYawClock = static_cast<float>(Now);
 	if (Motor != nullptr)
 	{
-		Motor->Face(-MotorIdealYaw);
+		Motor->Face(-MotorIdealYaw, MotorYawRateDegPerS(RetailYawSpeed));
 	}
 }
 
@@ -518,9 +533,7 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 			if (Owner != this)                                                     // 0x102888b3
 			// same arm: 0x102888bb CALL
 			{
-				const FString Name = Words.Name.IsEmpty() ? FString(TEXT("ai_hint")) : Words.Name;
-				EmitDevMsg(TEXT("Hint node (%s) being used by non-owner!\n"),     // 0x102888c6
-					FString::Printf(TEXT("Hint node (%s) being used by non-owner!\n"), *Name));
+				// 0x102888c6: retail's DevMsg "Hint node (%s) being used by non-owner!" -- no output device.
 			}
 		}
 		if (IsActivityFinished())                                                  // 0x10289289
@@ -708,7 +721,6 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 			// same arm: 0x102893f6 JZ, 0x1028940d JNZ
 			return 0;
 		}
-		EmitDevMsg(TEXT("Cine died!\n"), TEXT("Cine died!\n"));                    // 0x1028941d
 		TaskComplete(false);                                                       // 0x1028942a
 		return 0;
 	}
@@ -882,9 +894,6 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	}
 
 	// `0x102896f5`: every id outside `2..0xb1` and every in-range id the byte table sends here.
-	const TCHAR* Name = TaskName(Id);                                              // 0x102896fa slot 449
-	EmitDevMsg(TEXT("No RunTask entry for %s\n"),                                  // 0x10289706
-		FString::Printf(TEXT("No RunTask entry for %s\n"), Name != nullptr ? Name : TEXT("")));
 	TaskComplete(false);                                                           // 0x10289713
 	return 0;
 }

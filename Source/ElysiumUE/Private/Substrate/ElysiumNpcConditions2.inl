@@ -12,19 +12,19 @@
 // --- The Troika half of `CAI_BaseNPC::GatherConditions` (`0x1026ec30`, `1026eec1..1026efa4`) --------
 
 /** `1026eec1..1026efa4`, run on `m_pBaseNPCTroika (+0x98)` after the target check: slot 586
- *  `GetBestSeeUnknown()` resolved (dead-inclusive, the handle-table test) feeds `0x1028e480`; the
- *  handle at `+0x6240` (`ScheduleHost.MoveTarget`) resolved feeds `0x1028e980`; then `0x1028e790`
+ *  `GetBestSeeUnknown()` resolved (dead-inclusive, the handle-table test) feeds the approach-goal
+ *  upkeep; the handle at `+0x6240` (`ScheduleHost.MoveTarget`) resolved feeds the goal refresh; then `0x1028e790`
  *  unconditionally. */
 void Conditions19TroikaGoalUpkeep();
 
-/** SEAM for `0x1028e480` (checklist-19-29 `mechanism`, "goal-actor tracking of
+/** SEAM for the approach-goal upkeep (checklist-19-29 `mechanism`, "goal-actor tracking of
  *  UPathFollowingComponent behind the 0018 nav seam"): re-points / re-aims a GOALTYPE 7 navigator goal
  *  at the see-unknown entity. The kernel has no navigator goal word (`m_pNavigator +0x5d34 +0x18`),
  *  so this records the call and moves nothing. */
 void Conditions19UpdateApproachGoalPos(FElysiumEntity* Target);
 int32 Conditions19ApproachGoalCalls = 0;
 
-/** SEAM for `0x1028e980` (checklist-19-29 `mechanism`): refreshes the navigator's goal position when
+/** SEAM for the goal refresh (checklist-19-29 `mechanism`): refreshes the navigator's goal position when
  *  the move-target entity moved farther than `_DAT_104454c8`. Same absence; records the call. */
 void Conditions19RefreshGoalPosition(FElysiumEntity* Target);
 int32 Conditions19RefreshGoalCalls = 0;
@@ -77,12 +77,12 @@ bool Conditions19FireParticleLive(const FElysiumEntity& Particle) const;
 
 /** The Troika body's constants. */
 static constexpr double Cond19StopBackupDot = 0.707;              // double `[0x1049ae78]`
-static constexpr double Cond19WallTraceInterval = 3.0;            // `_DAT_10449258`
-static constexpr float Cond19WallTraceLengthUnits = 32.0f;        // `_DAT_10462990`
+static constexpr double Cond19WallTraceInterval = ElysiumNpcTunables::InterestCubicThree;   // `_DAT_10449258`
+static constexpr float Cond19WallTraceLengthUnits = ElysiumNpcTunables::ThirtyTwo;        // `_DAT_10462990`
 static constexpr int32 Cond19WallTraceMask = 0x2000b;             // `PUSH 0x2000b` at `0x102b2f3b`
 static constexpr float Cond19DetectedAttackDelayMin = 0.9f;       // `PUSH 0x3f666666`
 static constexpr float Cond19DetectedAttackDelayMax = 1.3f;       // `PUSH 0x3fa66666`
 static constexpr float Cond19CorpseRetimeMin = 2.0f;              // `PUSH 0x40000000` at `0x1028fa7d`
 static constexpr float Cond19CorpseRetimeMax = 2.5f;              // `PUSH 0x40200000` at `0x1028fa78`
-static constexpr double Cond19SquadSeenWindow = 0.2;              // `_DAT_10451ab4`
+static constexpr double Cond19SquadSeenWindow = ElysiumNpcTunables::Fifth;              // `_DAT_10451ab4`
 

@@ -21,10 +21,12 @@ namespace
 	// of the same name would collide. Unit-prefixed for that reason.
 	constexpr float GChain2Zero = ElysiumNpcTunables::Zero;
 	constexpr float GChain2One = ElysiumNpcTunables::One;
-	constexpr float GChain2AutoaimNewWeight = 0.7f;   // _DAT_10457f54
+	constexpr float GChain2AutoaimNewWeight = ElysiumNpcTunables::SevenTenths;   // _DAT_10457f54
+	// `DAT_1070ba3c` is the skill level (1..3); skill 1 takes `GetAutoaimVector`'s scale arm.
+	constexpr int32 GChain2SkillEasy = 1;
 	constexpr float GChain2ClosestNpcReset = 99999.8984375f;   // MOV [+0x1cc4],0x47c34ff3 (0x101828f0 / 0x1018292a / 0x10182a0f)
 	constexpr float GChain2AutoaimDistance = 16384.0f;    // the 0x46800000 immediate
-	constexpr float GChain2AutoaimWrap = 360.0f;          // _DAT_10450568
+	constexpr float GChain2AutoaimWrap = ElysiumNpcTunables::HeadAngleRunawayLimit;          // _DAT_10450568
 	constexpr float GChain2AutoaimHalfWrap = ElysiumNpcTunables::OneEighty;   // negated, `_DAT_10462948`
 	constexpr float GChain2AutoaimPitchClamp = 25.0f;
 	constexpr float GChain2AutoaimYawClamp = 12.0f;
@@ -107,6 +109,8 @@ FVector FElysiumNpc::GetAutoaimVector(const FVector& ShootPosition)
 	//      retained `m_vecAutoAim` as `old * _DAT_10451ab8 + new * _DAT_10457f54`.
 	//   7. `AngleVectors(punch + v_angle + m_vecAutoAim)` -> forward.
 	//
+	// (Recovered from the image, 2026-09-29: `_DAT_10450a9c` = 0.9 and `_DAT_10451ab8` = 0.3, overlay rows
+	// `NineTenths` / `ThreeTenths`; the seam below is not wired to them.)
 	// **Unrecovered:** `DAT_1070ba3c` (the branch selector — the SDK's `m_fOldTargetTime + 2.0 <
 	// curtime` sticky-aim test sits here, so this is the "always use non-sticky autoaim" latch that
 	// shipped hard-coded to 1), `_DAT_10450a9c` (the scale, `0.9` in the SDK) and `_DAT_10451ab8`
@@ -165,13 +169,22 @@ float FElysiumNpc::AutoaimDelta() const
 
 bool FElysiumNpc::AutoaimBlendWeights(float& OutScale, float& OutOldWeight) const
 {
-	// **SEAM** for `DAT_1070ba3c`, `_DAT_10450a9c` and `_DAT_10451ab8` — see `GetAutoaimVector`.
-	// Answering TRUE with a scale of 0 is the shipped branch (`DAT_1070ba3c == 1`, the "always
-	// non-sticky" latch) with an unrecovered scale, so the retained autoaim is written as zero and
-	// `GetAutoaimVector` answers the unassisted direction. Nothing is invented.
-	OutScale = GChain2Zero;
-	OutOldWeight = GChain2Zero;
-	return true;
+	// `0x10176520` (read 2026-09-29): `DAT_1070ba3c` is the SKILL LEVEL. `0x101286f0` reads the
+	// engine `skill` cvar (absent -> 1), clamps it to 1..3 and runs `skill%d.cfg`. Skill 1 takes the
+	// scale arm: pitch, yaw and roll times `_DAT_10450a9c` = 0.9, written back as the retained
+	// autoaim. Skills 2 and 3 keep the previous sample: old * `_DAT_10451ab8` (0.3) + new *
+	// `_DAT_10457f54` (0.7). (`0x101764d0` refuses autoaim altogether at skill 3.)
+	OutScale = ElysiumNpcTunables::NineTenths;
+	OutOldWeight = ElysiumNpcTunables::ThreeTenths;
+	return SkillLevel() == GChain2SkillEasy;
+}
+
+int32 FElysiumNpc::SkillLevel() const
+{
+	// **SEAM** for `DAT_1070ba3c`. The substrate has no difficulty word yet; 1 is what `0x101286f0`
+	// writes when the `skill` cvar is absent and is the clamp's floor. Named divergence: the port
+	// plays at skill 1 until a settings word stands here.
+	return GChain2SkillEasy;
 }
 
 FRotator FElysiumNpc::AutoaimDeflection(const FVector& Src, float Distance, float Delta)

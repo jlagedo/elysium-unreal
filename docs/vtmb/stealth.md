@@ -402,7 +402,7 @@ On a miss, in this order:
      1. `m_bScriptHidden` (`+0xf4`) set → false.
      2. `m_iDialog` (`+0x128`, key `dialogname`) non-zero → false. NPCs with an authored conversation cannot be stealth-killed; tutorial `stealth_victim` has none.
      3. `m_bInvincible` (`+0x63d8`, key `invincible`) set → false. There is no `m_bNoStealthKill` at `+0x18f6`.
-     4. `GetNPCState` is `IDLE` (1) or `ALERT` (0xd). A debug ConVar at `DAT_10924afc` relaxes this to “not `DEAD` (7)”; shipping default is the IDLE/ALERT pair.
+     4. `GetNPCState` is `IDLE` (1) or `ALERT` (0xd) when the ConVar `debug_allow_non_idle_auto_sk` (object `0x10924af8`, read at `DAT_10924afc`) is 0; when it is non-zero the test relaxes to “not `DEAD` (7)”. **CORRECTED 2026-09-29 (0019/6):** the image's static initialiser gives it the default `"1"` (`kernel_tunables.tsv` `DebugAllowNonIdleAutoSk`, verified against the image), so the SHIPPING arm is the relaxed one: any state but 7 passes. The IDLE/ALERT pair is the ConVar-0 arm.
      5. `HasCondition(HEAR_PLAYER 0x6f)` → false.
      6. `HasCondition(SEE_PLAYER 0x5a)` → false. These are **not** `COND_SEE_PLAYER` at `0x6f` / `COND_IN_COMBAT` at `0x5a`.
      7. `m_lifeState == 0` (alive). Slot 158 (`0x100b4dc0`) is this test; it is **not** a species/`IsHuman` check.

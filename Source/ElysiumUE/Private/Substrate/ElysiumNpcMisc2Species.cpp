@@ -133,7 +133,7 @@ namespace
 	const TCHAR* const Misc19TzimisceExpressionNames[] = {
 		TEXT("normal"), TEXT("angry"), TEXT("scream"), TEXT("dead"),
 	};
-	constexpr double Misc19TzimisceExpressionLead = 0.3;     // _DAT_1047b868
+	constexpr double Misc19TzimisceExpressionLead = ElysiumNpcTunables::RepeatedDamageFraction;   // _DAT_1047b868
 	constexpr float Misc19TzimisceExpressionFade = 0.15f;    // 0x3e19999a
 	void Misc19TzimisceExpression(FElysiumNpc& Npc, int32 Index, float Seconds)
 	{
@@ -201,7 +201,6 @@ bool FElysiumNpcDog::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		return true;
 	}
 	++DogBiteCalls;                                                       // 0x103742a8 -> 0x10374f40 (SEAM)
-	EmitDebugMsg(TEXT("Gots a doggie bite!\n"), TEXT("Gots a doggie bite!")); // 0x103742ad / 0x103742b2 Msg
 	return true;
 }
 
@@ -328,11 +327,6 @@ bool FElysiumNpcMingXiao::HandleAnimEvent(const FElysiumAnimEvent& Event)
 			{
 				LaunchRagdollTowardTarget();                              // 0x10392b71 -> 0x103990c0
 			}
-			else
-			{
-				EmitDevMsg(TEXT("WARNING: Ming Xiao is getting EVENT_WEAPON_THROW but is not at VMING_XIAO_TO_MODE_THROWING.\n"),
-					TEXT("WARNING: Ming Xiao is getting EVENT_WEAPON_THROW but is not at VMING_XIAO_TO_MODE_THROWING.")); // 0x10392b80
-			}
 			return true;
 		}
 		if (Id == 0xbd7)                                                  // 0x10392b36
@@ -356,11 +350,6 @@ bool FElysiumNpcMingXiao::HandleAnimEvent(const FElysiumAnimEvent& Event)
 		if (MingXiaoThrowableObjectMode == 2)                             // 0x10392aab
 		{
 			++MingXiaoGrabCalls;                                          // 0x10392aaf -> 0x10398db0 (SEAM)
-		}
-		else
-		{
-			EmitDevMsg(TEXT("WARNING: Ming Xiao is getting NPC_EVENT_PICKUP but is not at VMING_XIAO_TO_MODE_GRABBING.\n"),
-				TEXT("WARNING: Ming Xiao is getting NPC_EVENT_PICKUP but is not at VMING_XIAO_TO_MODE_GRABBING.")); // 0x10392abe
 		}
 		return true;
 	case 0x802:
@@ -689,9 +678,9 @@ namespace
 	// `FVisible(target, 0x2804091, &blocker, attempt)` ten times (`0x10365ac7`-`0x10365ae9`).
 	constexpr int32 Misc19BachVisibleMask = 0x2804091;
 	constexpr int32 Misc19BachVisibleAttempts = 10;
-	constexpr float Misc19BachSmallMoveProduct = 20000.0f;   // `_DAT_104aaad0`
-	constexpr double Misc19BachOccludeWaitSeconds = 4.0;     // `_DAT_10450aa0`
-	constexpr float Misc19BachSmallMoveMax = 200.0f;          // `_DAT_104492b8`
+	constexpr float Misc19BachSmallMoveProduct = ElysiumNpcTunables::BachSmallMoveProductMin;   // `_DAT_104aaad0`
+	constexpr double Misc19BachOccludeWaitSeconds = ElysiumNpcTunables::Four;                   // `_DAT_10450aa0`
+	constexpr float Misc19BachSmallMoveMax = ElysiumNpcTunables::TwoHundred;                    // `_DAT_104492b8`
 	// `0x10365f91`/`0x10365f9b`: the schedule trace line (`NPC_VBach.cpp`) and `0x102ae750(0x15f, 0)`.
 	constexpr int32 Misc19BachReacquireTraceLine = 0x57b;
 	constexpr int32 Misc19BachReacquireScheduleRetailId = 0x15f;
@@ -889,7 +878,6 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 		}
 	}
 	// 4. The search.
-	StartSearchTimer();                                                   // 0x103cfdbb
 	// `0x103cfdc8`: the engine's frame count (`DAT_1070b22c` vtable `+0x1e0`).
 	WerewolfMorphTimerB = static_cast<float>(EngineFrameNumber());        // 0x103cfdce +0x66d4 m_iLastHintSearchTick
 	WerewolfMoveHintSearchStart = 0;                                      // 0x103cfddf +0x66b8
@@ -919,7 +907,7 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 		{
 			ClearMoveHint();                                              // 0x103d00c8
 			SetMoveHint(Node, false);                                     // 0x103d00d2
-			return ReportSearchTimer(true);                               // 0x103d00e0
+			return true;                                                  // 0x103d00e0
 		}
 		if (IsValidMoveHint(Hint, Now))                                   // 0x103cfe9a / 0x103cfea1
 		{
@@ -938,7 +926,7 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 				{
 					ClearMoveHint();                                      // 0x103d0105
 					SetMoveHint(Node, false);                             // 0x103d010f
-					return ReportSearchTimer(true);                       // 0x103d011d
+					return true;                                          // 0x103d011d
 				}
 			}
 		}
@@ -949,5 +937,5 @@ bool FElysiumNpcWerewolf::CheckAllMoveHints()
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("CNPC_VWerewolf::CheckAllMoveHints FAILED."));  // 0x103d0078 DevWarning
 	// Every exit through `0x103d00ab` frees the seen vector (`0x103d0095` / `0x103d009e` /
 	// `0x103d00af`; the success arms' own `0x103d00eb` / `0x103d00f4`, `0x103d0128` / `0x103d0131`).
-	return ReportSearchTimer(false);                                      // 0x103d008a
+	return false;                                                         // 0x103d008a
 }

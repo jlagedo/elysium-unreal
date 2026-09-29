@@ -14,7 +14,6 @@
 
 #include "Substrate/ElysiumNpc.h"
 #include "ElysiumEntityWorld.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumScheduleNumbers.h"
 #include "Substrate/ElysiumScriptedSequence.h"
@@ -23,7 +22,6 @@ namespace
 {
 	constexpr int32 GDamaged19NpcStateScript = 4;   // `NPC_STATE_SCRIPT`, `0x102c1cea CMP [+0x5cc0],4`
 	constexpr int32 GDamaged19NpcStateDead = 7;     // `NPC_STATE_DEAD`, `0x102c1e17 CMP [+0x5cc0],7`
-	constexpr TCHAR GDamaged19UnknownCine[] = TEXT("**UNKNOWN**");   // `0x105477a4`
 }
 
 // Slot 77 `CAI_BaseNPCTroika::ScriptHide` `0x102c1ce0`, 369 bytes, 112 instructions. No jump table:
@@ -42,16 +40,8 @@ void FElysiumNpc::ScriptHide()
 	// (`0x102c1cfc` -1 / `0x102c1d1a` serial / `0x102c1d23` null -> `0x102c1e29`, the base half).
 	if (NpcStateRetail() == GDamaged19NpcStateScript || CineEntity != nullptr)   // 0x102c1cf1 / 0x102c1d23
 	{
-		// The sequence's name: a live cine's `GetDebugName` (`0x102c1d77`), else the literal
-		// `**UNKNOWN**` (`0x102c1d32` / `0x102c1d4c` / `0x102c1d51` -> `0x102c1d87`), reached only
-		// in SCRIPT state with a dead handle.
-		const FString CineName = CineEntity != nullptr
-			? NpcKernelDebug10Shared::GDebug10DebugName(CineEntity)       // 0x102c1d77
-			: FString(GDamaged19UnknownCine);                             // 0x102c1d87
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("Attempting to ScriptHide an NPC (%s) playing a scripted sequence (%s).  Satan will eat your babies if you continue to do this.\n"),
-			*NpcKernelDebug10Shared::GDebug10DebugName(this), *CineName);  // 0x102c1d8f / 0x102c1d9b / 0x102c1da0
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Cancelling script...\n"));   // 0x102c1da2 / 0x102c1da7
+		// 0x102c1d32..0x102c1da7: two `Warning()` prints (the cine's `GetDebugName` or `**UNKNOWN**`,
+		// `0x105477a4`) -- dead, no output device (0019/6).
 		// The third resolve (`0x102c1da9..0x102c1dda`): a live cine is cancelled
 		// (`CancelScript` `0x101a8c30`), a dead handle cleans up THIS NPC (`CineCleanup` `0x1027d170`).
 		if (FElysiumScriptedSequence* Cine = ResolveCine())             // 0x102c1db5 / 0x102c1dd5 / 0x102c1dda

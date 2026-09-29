@@ -143,7 +143,7 @@ FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWo
 	const int32 Node = Places.ResolveHintNode(Hint.NodeId);                    // 0x102d3ecc
 	if (Node == INDEX_NONE)                                                    // 0x102d3ed3
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Warning: AI hint has incorrect origin"));
+		// Step 3's `DevMsg` has no output device in this port (0019/6): the arm only returns.
 		return Result;
 	}
 	Result.bNodeFound = true;
@@ -193,19 +193,6 @@ FVector FElysiumNpcBase::HintComparePosition(const FElysiumEntity* Entity) const
 	// squared-distance compare, so answering the origin keeps the comparison self-consistent even
 	// though the accessor itself is unidentified. **Unrecovered:** what slot 220 returns.
 	return Entity ? Entity->Origin : FVector::ZeroVector;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 568 `GetHintDelay` — the Troika-line body, filled by 77 classes with no override.
-// -------------------------------------------------------------------------------------------------
-
-float FElysiumNpcBase::GetHintDelay(int16)
-{
-	// `0x1026a910`. The whole function is two instructions:
-	//     1026a910  FLD float ptr [0x104454c4]
-	//     1026a916  RET 0x4
-	// `_DAT_104454c4` is the image's shared 0.0f. The `short` argument is not read.
-	return NpcKernelHintsShared::GHintsZero;
 }
 
 void FElysiumNpcBase::SetHintGroup(const FString& NewHintGroup)

@@ -68,9 +68,10 @@ namespace
 	// `CNPC_VMingXiao::NPCThink`: slot 518's `1.0, 0.5, 0.0` (`0x10394ab8`..`0x10394abf`), the slime
 	// roll `RandomInt(0, 99) < 10` (`0x10394b1b`..`0x10394b27`), the six regrow timers and their
 	// re-arm `0x7f7fffff` (`0x10394c0b`).
-	constexpr float GThink19MingPickupFaceDuration = 1.0f;
-	constexpr float GThink19MingPickupFaceRamp = 0.5f;
-	constexpr float GThink19MingPickupFaceTolerance = 0.f;
+	// Slot 518's floats are `(importance, duration, ramp)` (see `MotorAddFacingTarget`).
+	constexpr float GThink19MingPickupFaceImportance = 1.0f;
+	constexpr float GThink19MingPickupFaceDuration = 0.5f;
+	constexpr float GThink19MingPickupFaceRamp = 0.f;
 	constexpr int32 GThink19MingSlimeRollMax = 0x63;
 	constexpr int32 GThink19MingSlimeRollBelow = 10;
 	constexpr int32 GThink19MingRegrowTimers = 6;
@@ -92,13 +93,6 @@ namespace
 			return (Min - Min) / (Max - Min);
 		}
 		return (Value - Min) / (Max - Min);
-	}
-
-	// `newscaster_debug` (`ConVar` object `0x1093be88`, pointer `0x1093be8c`, constructed by `0x103a0540`
-	// with the shared default literal `DAT_105399a0`, "0"): not a row of the kernel ConVar table.
-	int32 Think19NewscasterDebugConVar()
-	{
-		return 0;
 	}
 
 	// `__ftol` (`0x10431320`): a 64-bit `FISTP qword` (truncating) whose LOW dword is `EAX`. A value
@@ -132,11 +126,6 @@ void FElysiumNpcAsianVampire::NPCThink()
 void FElysiumNpcCamera::NPCThink()
 {
 	const double Now = Think19SpeciesNow(*this);
-	if (DebugRingDumpRequested())                                           // 0x10369123 / 0x1036912b
-	{
-		ClearDebugRingDumpRequest();                                        // 0x1036912d
-		DumpDebugLogRing();                                                 // 0x10369134 0x1027efb0
-	}
 	if (IsAiDisabled())                                                     // 0x1036913b 0x1029f2e0 / 0x10369142
 	{
 		return;   // no stamp written
@@ -230,8 +219,8 @@ void FElysiumNpcMingXiao::NPCThink()
 		// saved pickup forward (Source units, carried as the sibling `+0x6720` word is).
 		NpcFlags.ClearRawWord2Bits(GThink19MingFaceEnemyBits);              // 0x10394a9c / 0x10394aa2
 		const FVector FaceTarget = Origin + MingXiaoPickupSavedForward * ElysiumMove::U;   // 0x10394aaa slot 217 / 0x10394ab0..0x10394adb
-		AddFacingTarget(FaceTarget, GThink19MingPickupFaceDuration, GThink19MingPickupFaceRamp,
-			GThink19MingPickupFaceTolerance);                               // 0x10394b03 slot 518
+		AddFacingTarget(FaceTarget, GThink19MingPickupFaceImportance, GThink19MingPickupFaceDuration,
+			GThink19MingPickupFaceRamp);                               // 0x10394b03 slot 518
 		break;
 	}
 	default:
@@ -251,7 +240,7 @@ void FElysiumNpcMingXiao::NPCThink()
 		MingXiaoEmitter(TEXT("Ming_xiao_slimetrail_emitter2"), TEXT("Bip01 Tail5"));     // 0x10394bb4
 		MingXiaoEmitter(TEXT("Ming_xiao_slimetrail_emitter2"), TEXT("Bip01 Tail6"));     // 0x10394bc8
 	}
-	if (!IsMingXiaoProxy())                                                 // 0x10394bcf 0x10398870 / 0x10394bd6
+	if (!IsMingXiaoProxy())                                                 // 0x10394bcf / 0x10394bd6
 	{
 		for (int32 Index = 0; Index < GThink19MingRegrowTimers; ++Index)   // 0x10394bd8..0x10394c3a
 		{
@@ -288,12 +277,7 @@ void FElysiumNpcNewscaster::NPCThink()
 	ScheduleHost.LastAI = Now;                                              // 0x103a05f1 / 0x103a05f6
 	FElysiumNpc::NPCThink();                                                // 0x103a05fc 0x10292de0
 	PlayNextNewscasterStory();                                              // 0x103a0603 0x103a0670
-	if (Think19NewscasterDebugConVar() != 0                                 // 0x103a0610 / 0x103a0615 / 0x103a0622
-		&& (DebugOverlays & 1) == 0)                                        // 0x103a0624 / 0x103a062b
-	{
-		TArray<FString> Lines;
-		(void)FUN_103a0ff0(0, Lines);                                       // 0x103a0631 0x103a0ff0
-	}
+	// 0x103a0610..0x103a0631 the `newscaster_debug` gate and its line lister: dead debug listing (0019/6)
 }
 
 // Slot 431: `0x103af830`, 114 bytes.

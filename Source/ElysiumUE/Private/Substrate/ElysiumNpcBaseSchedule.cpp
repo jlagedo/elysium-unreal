@@ -157,22 +157,6 @@ bool FElysiumNpcBase::IsUnusableNodeIndex(int32 NodeIndex) const
 }
 
 // -------------------------------------------------------------------------------------------------
-// slot 547 `GetSlotSchedule` — the stubbed slot.
-// -------------------------------------------------------------------------------------------------
-
-// slot 547 0x1028b0f0 `int GetSlotSchedule(int)`
-int32 FElysiumNpcBase::GetSlotSchedule(int32 SquadSlot)
-{
-	// The whole retail body: `DevMsg("ERROR: Subclass missing GetSlotSchedule()!\n"); return 0;`.
-	// No class in the family overrides it, so this warning IS the behaviour, and family Squad's
-	// recovery says why nothing ever reaches it usefully — every class registers zero squad slots.
-	(void)SquadSlot;
-	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s ERROR: Subclass missing GetSlotSchedule()!"),
-		*DebugString());
-	return 0;
-}
-
-// -------------------------------------------------------------------------------------------------
 // The pre-selector.
 // -------------------------------------------------------------------------------------------------
 

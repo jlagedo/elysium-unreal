@@ -44,12 +44,12 @@ void FElysiumNpcBase::CheckTarget(FElysiumEntity* TargetEntity)
 	Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(bVisible            // 0x10271d9c
 		? GBaseWerewolf19CondHaveTargetLos                                     // 0x10271dac
 		: GBaseWerewolf19CondTargetOccluded));                                 // 0x10271da3 / 0x10271db0
-	UpdateTargetPos();                                                         // 0x10271db7 0x10271b10
+	UpdateTargetPos();                                                         // 0x10271db7
 }
 
 void FElysiumNpcBase::UpdateTargetPos()
 {
-	// `0x10271b10`; see the declaration. Retail's first gate reads the navigator's NAV type
+	// `CAI_BaseNPC::UpdateTargetPos`; see the declaration. Retail's first gate reads the navigator's NAV type
 	// (`m_pNavigator (+0x5d34) + 0x18`, `0x1027d990`): a jump (1) or climb (3) leaves the path alone; then
 	// `GetGoalType` (`0x102ee620`) must be 1 (a target-entity goal). Both are real reads now.
 	++UpdateTargetPosCalls;

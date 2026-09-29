@@ -54,20 +54,6 @@ bool bField_0x30e9 = false;
  *  the same six as those two arrays'. */
 static constexpr int32 MingXiaoProxySlots = 6;
 
-// --- Slots 412/413/414: the three think stamps ----------------------------------------------------
-//
-// `CAI_BaseNPCTroika::GetLastUpdateThink` / `GetLastNormalThink` / `GetLastMoveThink`
-// (`0x101aa6d0`, `0x101aa6f0`, `0x101aa710`) each return one of the Troika's own think stamps
-// (`+0x6254..+0x625c`) of the four-clock bookkeeping the schedule/condition kernel times its
-// interrupts off. This runtime CARRIES those words — `FElysiumNpcScheduleHost::LastUpdate` /
-// `LastNormal` / `LastMove` / `LastAI` — so the bodies are that read and nothing else. The base
-// bodies beneath (`0x101a6440` / `60` / `80`) return `CBaseEntity::GetLastThink(NULL)` (`+0x178`)
-// instead; story 5 step 5 corrected these citations, which named the base addresses.
-
-float LastUpdateThink() const;   // 0x101aa6d0
-float LastNormalThink() const;   // 0x101aa6f0
-float LastMoveThink() const;     // 0x101aa710
-
 // --- Slot 77/78/119: dormancy, by species ---------------------------------------------------------
 
 /** `CAI_Hint::vfunc5` (`0x102d2f00`), the hint node's deleting destructor — `thunk_FUN_102d3040`
@@ -184,7 +170,7 @@ TArray<FElysiumEntityHandle> ConversationPlaceActivate(const FString& PlacesName
 // --- Slot 434 `PrescheduleThink`: the species bodies ----------------------------------------------
 
 // `CNPC_VCamera::PrescheduleThink` (`0x10369100`), shared with `CNPC_VCameraSecurity` — an EMPTY
-// body, `FElysiumNpcCamera`'s override. `CNPC_VSabbatLeader::PrescheduleThink` (`0x103a7650`) is the
+// body, `FElysiumNpcCamera`'s override. `CNPC_VSabbatLeader::PrescheduleThink` is the
 // retail scope-trace wrapper and an unconditional forward to `0x10385a30` (the body
 // `CNPC_VAndreiBlood` and 40-odd classes share), which has no port body: residue for story 8.
 
@@ -193,10 +179,6 @@ TArray<FElysiumEntityHandle> ConversationPlaceActivate(const FString& PlacesName
 /** `FUN_100e58b0` — `*(char*)(this+0x30e9) != 0 || *(int*)(this+0x2830) == 0`. Two threshold checks
  *  over unmapped offsets; no port or oracle citation. Verbatim, arm order preserved. */
 bool TestField_0x2830() const;
-
-/** The elapsed cycle count `ReportSearchTimer` left behind — the read side of the static pair, for
- *  a test and for a debug panel. */
-static uint64 SearchTimerElapsedCycles();
 
 // --- `CAI_StandoffBehavior::vfunc13` (`0x102c7600`) -------------------------------------------------
 //

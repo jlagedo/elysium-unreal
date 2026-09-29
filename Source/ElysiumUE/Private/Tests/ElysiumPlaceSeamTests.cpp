@@ -26,12 +26,11 @@
 //                                        yaw `0x102d12e0` / `0x102f47b0`, the hint's type and origin,
 //                                        the live hint list.
 //   Substrate.PlaceSeams.Patrol          `0x102d2900`'s node id, `PatrolNodePosition` at `m_eHull`,
-//                                        `0x102aa640` to the node, `0x1029f6c0` the node's hint,
+//                                        `0x102aa640` to the node, `PatrolNodeInterestRecord` the hint,
 //                                        `0x1029f610` / `0x10307ac0` over the network.
 //   Substrate.PlaceSeams.UnusableNode    `0x1027db30` -> slot 527 `0x10293e80`.
 //   Substrate.PlaceSeams.ListNodesInBox  `0x102f32f0`'s selection, its eviction quirk and its order.
 //   Substrate.PlaceSeams.NearestNode     `0x102f41b0`: the box, the order, the first clear line.
-//   Substrate.PlaceSeams.StandoffCooldown `0x102c7600`'s write goes to the NODE's `+0x9c`.
 //   Substrate.PlaceSeams.Wander.*        the pick, clause by clause, as the task arm `0x10285d7f`
 //                                        calls it.
 //   Content.Places.WanderHub             the pick on `sm_hub_1`'s baked place set, from a
@@ -245,7 +244,7 @@ bool FElysiumPlaceSeamPatrolTest::RunTest(const FString&)
 	TestTrue(*FString::Printf(TEXT("0x102aa640 routes to node 0 at m_eHull (%s)"), *Motor->RequestedFeet.ToString()),
 		Motor->RequestedFeet.Equals(Want, 1e-3));
 
-	// `0x1029f6c0`: the node's hint, bounds-checked; its `ip_percent` and `target_name`.
+	// `PatrolNodeInterestRecord`: the node's hint, bounds-checked; its `ip_percent` and `target_name`.
 	const FElysiumEntity* A1Hint = F.World.FindByName(TEXT("a1"));
 	TestEqual(TEXT("node 0 holds a1"), Npc->PatrolNodeInterestRecord(0), A1Hint != nullptr ? A1Hint->Handle.Index : -2);
 	TestEqual(TEXT("node 2 holds no hint"), Npc->PatrolNodeInterestRecord(2), static_cast<int32>(INDEX_NONE));
@@ -385,44 +384,6 @@ bool FElysiumPlaceSeamNearestNodeTest::RunTest(const FString&)
 	TestEqual(TEXT("every line blocked: -1"), Npc->NavNearestNodeTo(FVector::ZeroVector), -1);
 	F.Services.CameraHullBlockers.Reset();
 	TestEqual(TEXT("a point with no node inside ±2048: -1"), Npc->NavNearestNodeTo(Cm(-5000.0, 0.0, 0.0)), -1);
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CAI_StandoffBehavior::vfunc13` `0x102c7600`: the node cooldown.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamStandoffCooldownTest,
-	"Elysium.Substrate.PlaceSeams.StandoffCooldown", GElysiumPlaceSeamFlags)
-bool FElysiumPlaceSeamStandoffCooldownTest::RunTest(const FString&)
-{
-	using namespace ElysiumPlaceSeamTests;
-	FElysiumPlaceSet Places;
-	FElysiumPlaceRow Row;
-	Row.Type = 2;
-	Places.AdoptRows({ Row });
-	Places.SetNodeCooldown(0, 50.0f);
-	const int32 Misses = ElysiumAiNetwork::NodeMissCounter();                      // DAT_106c994c, never reset
-	FElysiumNpcBase::FHintWords Hint;
-	Hint.bValid = true;
-	Hint.NodeId = 0;
-	Hint.NextUseTime = 99.0;
-	FElysiumNpcBase::FStandoffWords Words;
-	Words.ReactionsLeft = 3;
-	Words.ChanceThreshold = 99;   // `RandomInt(0, 99) <= 99` always
-	FElysiumNpcBase::FStandoffConditions Conditions;
-	Conditions.bCond0x4c = true;
-	FElysiumNpcBase::StandoffSelect(Words, Conditions, true, true, &Hint, &Places, 10.0);
-	TestEqual(TEXT("the NODE's +0x9c is lowered to curtime"), Places.NodeCooldown(0), 10.0f);
-	TestEqual(TEXT("...the hint's m_flNextUseTime (+0x5ec) is not written"), Hint.NextUseTime, 99.0);
-	Words.ReactionsLeft = 3;
-	FElysiumNpcBase::StandoffSelect(Words, Conditions, true, true, &Hint, &Places, 20.0);
-	TestEqual(TEXT("a later curtime never raises it (a MIN)"), Places.NodeCooldown(0), 10.0f);
-	Hint.NodeId = 4;
-	Words.ReactionsLeft = 3;
-	FElysiumNpcBase::StandoffSelect(Words, Conditions, true, true, &Hint, &Places, 1.0);
-	TestEqual(TEXT("an id past the network writes nothing"), Places.NodeCooldown(0), 10.0f);
-	TestEqual(TEXT("...and 0x102d3e60 counts it once"), ElysiumAiNetwork::NodeMissCounter() - Misses, 1);
 	return true;
 }
 

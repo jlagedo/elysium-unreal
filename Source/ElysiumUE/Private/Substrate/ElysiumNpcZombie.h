@@ -26,15 +26,12 @@ public:
 	virtual void Slot26(FElysiumEntity* Victim) override;
 	virtual bool ShouldPlayFloatSound() override;
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual void SetModel(TCHAR* ModelName) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual bool FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
-	virtual int32 DrawDebugTextOverlays() override;
 	virtual void OnVictimHitByMe(FElysiumEntity* Victim) override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual bool ShouldPlayIdleSound() override;
 	virtual void TraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace) override;
 
@@ -67,10 +64,6 @@ public:
 	 *  function constructs them: **unrecovered**, and both answer 0, which is an unconstructed cvar's
 	 *  own answer. */
 	int32 ZombieGibAmmoTypeCvar(int32 Which) const;
-
-	/** `CNPC_VZombie`'s own condition bitfield at `+0x5c5c`, walked 0..0xbf. **SEAM**: `+0x5c5c` is one
-	 *  of the schedule block's six words with no port member of its own; answers false for every id. */
-	bool ZombieConditionBit(int32 ConditionId) const;
 
 	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 ZombieCrawlScheduleRetailId = 0x161;

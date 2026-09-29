@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 62 cells and immediates, 52 ConVars; image sha256 `c546f4de2003624d…`.
+// 273 cells and immediates, 77 ConVars; image sha256 `c546f4de2003624d…`.
 
 #pragma once
 
@@ -145,19 +145,19 @@ namespace ElysiumNpcTunables
 	inline constexpr float VampireBossSegmentLengthFloor = 1e-05f;
 
 	// `0x10453b94` f32 — `CAI_BaseNPC::StepHeight 0x101a6b40` (slot 522, the Troika line's body) and
-	// `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523, the step-down height `CheckStandPosition
+	// `CAI_BaseNPC::GetStepDownHeight 0x101a6b60` (slot 523, the step-down height `CheckStandPosition
 	// 0x102e7270` drops below the feet) both return it
 	inline constexpr float StepHeightBase = 18.0f;
 
-	// `0x1044faa8` f32 — `CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523, the stand test's
+	// `0x1044faa8` f32 — `CAI_BaseNPCTroika::GetStepDownHeight 0x101aa670` (slot 523, the stand test's
 	// step-down drop) returns it
 	inline constexpr float MaxJumpSpeedTroika = 36.0f;
 
 	// `0x10477ce8` f32 — `0x101a6b80`; the jump arc's gravity
 	inline constexpr float JumpGravity = 350.0f;
 
-	// `0x10462950` f32 — `CAI_TestHull::StepHeight 0x102d72b0` and `::GetMaxJumpSpeed 0x102d72d0` both
-	// return it
+	// `0x10462950` f32 — `CAI_TestHull::StepHeight 0x102d72b0` and `::GetStepDownHeight 0x102d72d0`
+	// both return it
 	inline constexpr float Forty = 40.0f;
 
 	// `0x102d7772` imm_f32 — `0x102d7772 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760`
@@ -182,8 +182,8 @@ namespace ElysiumNpcTunables
 	inline constexpr float YawSpeedRun = 160.0f;
 
 	// `0x104492a8` f32 — the yaw-speed ladder's crouch arm; also `CNPC_VMingXiao::StepHeight
-	// 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070` (slot 523, the stand test's
-	// step-down drop)
+	// 0x10391030` and `CNPC_VMingXiaoTentacle::GetStepDownHeight 0x1039b070` (slot 523, the stand
+	// test's step-down drop)
 	inline constexpr float Thirty = 30.0f;
 
 	// `0x10463584` f32 — the humanoid yaw-speed ladder's move arm
@@ -201,14 +201,14 @@ namespace ElysiumNpcTunables
 	// `0x104454c0` f32 — the clamp every turning arm of the yaw-speed ladders ends on (`0x10374130`)
 	inline constexpr float One = 1.0f;
 
-	// `0x1044ffe8` f32 — `CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` (slot 523, the stand test's
+	// `0x1044ffe8` f32 — `CNPC_VMingXiao::GetStepDownHeight 0x10391050` (slot 523, the stand test's
 	// step-down drop) returns it
 	inline constexpr float MingXiaoMaxJumpSpeed = 50.0f;
 
 	// `0x104cc4fc` f32 — `CNPC_VTzimisce::StepHeight 0x103b6dd0` returns it
 	inline constexpr float TzimisceStepHeight = 26.0f;
 
-	// `0x104cc500` f32 — `CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` (slot 523, the stand test's
+	// `0x104cc500` f32 — `CNPC_VTzimisce::GetStepDownHeight 0x103b6df0` (slot 523, the stand test's
 	// step-down drop) returns it
 	inline constexpr float TzimisceMaxJumpSpeed = 56.0f;
 
@@ -253,6 +253,1238 @@ namespace ElysiumNpcTunables
 	// `OnDoorBlocked`'s long retry, the witness timer, Ming Xiao's aim-point Z bonus and many species
 	// cones (story 8 wave 2)
 	inline constexpr float Twenty = 20.0f;
+
+	// `0x104a9300` f32 — `CNPC_VAsianVampire` jump gravity, read by its `GetJumpGravity` override
+	// (0019/6 lane P)
+	inline constexpr float AsianVampireJumpGravity = 2.0f;
+
+	// `0x104ada44` f32 — `CNPC_VChangBros` jump gravity, read by its `GetJumpGravity` override (0019/6
+	// lane P)
+	inline constexpr float ChangBrosJumpGravity = 2.3f;
+
+	// `0x104c6148` f32 — `CNPC_VSheriffMan` jump gravity, read by its `GetJumpGravity` override
+	// (0019/6 lane P)
+	inline constexpr float SheriffManJumpGravity = 2.0f;
+
+	// `0x104c3d14` f32 — `CNPC_VSabbatLeader` stuck-test degenerate-distance epsilon (0019/6 lane P)
+	inline constexpr float SabbatStuckDegenerate = 1e-06f;
+
+	// `0x10449148` f64 — `_DAT_10449148`; `CAI_BaseNPC::CheckOnGround 0x1026e5e0` traces 4.0 units
+	// below the hull; the floor-facts seam's distance is tested against it (0019/6 lane M)
+	inline constexpr double CheckOnGroundReach = 4.0;
+
+	// `0x104a6f80` f32 — `CNPC_VAndreiBlood::FacePlayerAdvance 0x1035e5f0` pushes it as the
+	// `0x102e20b0` speed argument; read by `FElysiumNpcAndreiBlood::FacePlayerAdvance` (0019/6 R3)
+	inline constexpr float AndreiFacePlayerYawSpeed = 10.0f;
+
+	// `0x10449258` f32 — the 3.0 of the interest cubic 3f^2 - 2f^3; read by
+	// CAI_BaseHumanoid::MaintainEyeDirection 0x1025fa50 pass 5 (shape.md, `_DAT_10449258` = 3.0); used
+	// by FElysiumNpcBase::MotorFacingEntryInterest (0x102d8bc0, whose own listing is unrecovered:
+	// confirm it reads the same cell); width f64 assumed from the neighbouring 0x10449270/0x10449280
+	// doubles, confirm by --check (an f32 read of an f64 3.0 is 0.0) (0019/6 fix3)
+	inline constexpr float InterestCubicThree = 3.0f;
+
+	// `0x104454c8` f32 — `_DAT_104454c8` = 80.0f; the turn-activity ladder (ACT_90_LEFT lower edge),
+	// `CAI_BaseNPC` turn-activity pick (0019/6 Q1)
+	inline constexpr float Eighty = 80.0f;
+
+	// `0x10446758` f32 — `_DAT_10446758` = 57.29578f; `CAI_BaseNPC::SetHeadDirection 0x1026af70`,
+	// radians to degrees (the port keeps FMath::RadiansToDegrees, a peripheral swap) (0019/6 Q1)
+	inline constexpr float RadiansToDegrees = 57.29578f;
+
+	// `0x10447ee8` f32 — `_DAT_10447ee8`; the enemy-elusion radius of the slot-513 condition gatherer
+	// `0x1026fb40` (0019/6 Q1)
+	inline constexpr float FortyEight = 48.0f;
+
+	// `0x104492b8` f32 — `_DAT_104492b8`; `RangeAttack1Conditions 0x1026d890` too-close-to-attack band
+	// and the Anim10_2 selectors far margin (0019/6 Q1)
+	inline constexpr float TwoHundred = 200.0f;
+
+	// `0x104492d0` f64 — `FCOMP double ptr [0x104492d0]`; `CAI_BaseNPC::MeleeAttack1Conditions
+	// 0x1026d9a0`, the facing-dot floor (0019/6 Q1)
+	inline constexpr double MeleeDotMin = 0.7;
+
+	// `0x104492dc` f32 — `_DAT_104492dc`; `CAI_BaseNPC` head probe `0x1026ab50`, the -1 extent scale
+	// (0019/6 Q1)
+	inline constexpr float MinusOne = -1.0f;
+
+	// `0x1044ddb0` f32 — `_DAT_1044ddb0` = 256.0f; `CAI_BaseNPC::MeleeAttack1Conditions 0x1026d9a0`,
+	// past it COND_TOO_FAR_FOR_MELEE (docs/vtmb/npc-ai/conditions-and-states.md, "The four cells")
+	// (0019/6 Q1)
+	inline constexpr float Melee1OuterBand = 256.0f;
+
+	// `0x1044e664` f32 — `_DAT_1044e664`; `GetSequenceCycleRate 0x10091230` zero-duration answer,
+	// `SUB_PVSRemove 0x102696f0` re-arm, `CreateCorpse` delay, `OnTakeDamage_Dead` Z drop,
+	// `TASK_FACE_PLAYER` yaw bound (0019/6 Q1)
+	inline constexpr float Ten = 10.0f;
+
+	// `0x1044eb08` f32 — `_DAT_1044eb08` = 0.017453292f; `AngleVectors 0x10139610` and the hint-angle
+	// cosine of `CAI_Hint::Spawn 0x102d0b60` (0019/6 Q1)
+	inline constexpr float DegreesToRadians = 0.017453292f;
+
+	// `0x1044f020` f64 — `_DAT_1044f020` (`FCOMP double ptr`); `StudioFrameAdvance 0x1008f120`, an
+	// advance at or under it answers 0 (0019/6 Q1)
+	inline constexpr double FrameAdvanceMinInterval = 0.001;
+
+	// `0x1044fac0` f64 — `_DAT_1044fac0`; `CAI_Motor::UpdateYaw 0x102e1c10` clamp cell (not run in the
+	// port: the mover turns the capsule) (0019/6 Q1)
+	inline constexpr double TenDouble = 10.0;
+
+	// `0x10450568` f32 — `_DAT_10450568` = 360.0f; `CAI_BaseNPC::SetHeadDirection 0x1026af70`, the
+	// one-sided guard on the filtered head yaw and pitch (0019/6 Q1)
+	inline constexpr float HeadAngleRunawayLimit = 360.0f;
+
+	// `0x10452dc4` f32 — `_DAT_10452dc4` = 2.0f; `CNPC_VAndreiBlood` runner cap `0x1035e920` /
+	// `0x1034c2d0` and the slot-513 weapon-search interval `0x1026fb40` (0019/6 Q1)
+	inline constexpr float Two = 2.0f;
+
+	// `0x1045597c` f32 — `_DAT_1045597c` = 8.0f; the slot-513 elusion window `0x1026fb40` (0019/6 Q1)
+	inline constexpr float Eight = 8.0f;
+
+	// `0x104563b0` f32 — `_DAT_104563b0`; the squared enemy-went-occluded distance (64 units),
+	// `0x10270180` (0019/6 Q1)
+	inline constexpr float FourThousandNinetySix = 4096.0f;
+
+	// `0x10457ac4` f32 — `_DAT_10457ac4` = 800.0f; the Werewolf `UpdateConditionCanTeleport`
+	// player-near distance that skips the view-cone test (0019/6 Q1)
+	inline constexpr float EightHundred = 800.0f;
+
+	// `0x1045d650` f32 — `_DAT_1045d650` = 1024.0f; `CAI_BaseNPC::CoverRadius 0x101a6c20` (slot 550)
+	// and `RangeAttack1Conditions 0x1026d890` too-far band (0019/6 Q1)
+	inline constexpr float OneThousandTwentyFour = 1024.0f;
+
+	// `0x10462978` f32 — `_DAT_10462978` = -2.0f; `CAI_Motor::UpdateYaw 0x102e1c10`, the
+	// keep-the-current-speed sentinel (0019/6 Q1)
+	inline constexpr float MinusTwo = -2.0f;
+
+	// `0x104629b8` f32 — `_DAT_104629b8` = 0.75f; `CAI_BaseNPC::SetDefaultEyeOffset 0x10274ca0`
+	// fallback scale on mins + maxs (0019/6 Q1)
+	inline constexpr float EyeOffsetFallbackScale = 0.75f;
+
+	// `0x1046bac0` f32 — `_DAT_1046bac0` = 6.0f; `CNPC_VBach::GatherAttackConditions 0x10363db0`, the
+	// shield duration (0019/6 Q1)
+	inline constexpr float Six = 6.0f;
+
+	// `0x1047049c` f32 — `_DAT_1047049c` = 0.8f; `CAI_BaseNPC::SetHeadDirection 0x1026af70`, the
+	// weight of the held head angle (0019/6 Q1)
+	inline constexpr float HeadFilterKeep = 0.8f;
+
+	// `0x104704d0` f32 — `_DAT_104704d0` = 72.0f; `CNPC_VBach::GatherAttackConditions 0x10363db0`, the
+	// weapon-switch distance split (COND 0x79 / 0x7a) (0019/6 Q1)
+	inline constexpr float SeventyTwo = 72.0f;
+
+	// `0x1047b868` f64 — `FMUL double ptr` at `0x10266307`; `CAI_BaseNPC` repeated-damage fraction of
+	// `m_iMaxHealth` (0019/6 Q1)
+	inline constexpr double RepeatedDamageFraction = 0.3;
+
+	// `0x1049954c` f32 — `_DAT_1049954c` = 0.2f; `CAI_BaseNPC::SetHeadDirection 0x1026af70`, the
+	// weight of the target head angle (0019/6 Q1)
+	inline constexpr float HeadFilterBlend = 0.19999999f;
+
+	// `0x10499560` f32 — `_DAT_10499560` = 14400.0f; `CAI_BaseNPC::IsUnreachable 0x102741e0`, the
+	// squared 120-unit moved distance (0019/6 Q1)
+	inline constexpr float UnreachableDistanceSquared = 14400.0f;
+
+	// `0x10499568` f64 — `FCOMP double ptr [0x10499568]`; `CAI_BaseNPC::FacingIdeal 0x10278c80`,
+	// `|DeltaIdealYaw| <= 0.006` (the port compares at float width and keeps the equal bit its tests
+	// pin) (0019/6 Q1)
+	inline constexpr double FacingIdealTolerance = 0.006;
+
+	// `0x1049a17c` f32 — `_DAT_1049a17c` = 190.0f; slot 571 walk/run activity pick, ACT_WALK below it
+	// and ACT_RUN at or beyond (0019/6 Q1)
+	inline constexpr float FollowRunDistance = 190.0f;
+
+	// `0x1049a180` f32 — `_DAT_1049a180` = -45.0f; the turn-activity ladder ACT_TURN_RIGHT edge and
+	// the `UpdatePoseParameters` aim clamp low (0019/6 Q1)
+	inline constexpr float MinusFortyFive = -45.0f;
+
+	// `0x1049a188` f64 — `_DAT_1049a188` (`FCOMP double ptr`); the turn-activity ladder ACT_180_LEFT
+	// edge (0019/6 Q1)
+	inline constexpr double OneSixtyDouble = 160.0;
+
+	// `0x1049a194` f32 — `_DAT_1049a194` = -100.0f; the turn-activity ladder ACT_90_RIGHT lower edge
+	// (0019/6 Q1)
+	inline constexpr float MinusHundred = -100.0f;
+
+	// `0x1049a198` f32 — `_DAT_1049a198` = -80.0f; the turn-activity ladder ACT_90_RIGHT upper edge
+	// (0019/6 Q1)
+	inline constexpr float MinusEighty = -80.0f;
+
+	// `0x1049ae9c` f32 — `_DAT_1049ae9c` = 7.5f; `UpdatePoseParameters` aim pitch bias added before
+	// the clamp (0019/6 Q1)
+	inline constexpr float AimPitchBias = 7.5f;
+
+	// `0x104a6f7c` f32 — `_DAT_104a6f7c` = 100.0f; `CNPC_VAndreiBlood` `PositionClearForTeleport`, the
+	// distance from the last teleport position (0019/6 Q1)
+	inline constexpr float AndreiTeleportRepeatDistance = 100.0f;
+
+	// `0x104a9308` f32 — `_DAT_104a9308` = 30.0f; `CNPC_VAsianVampire` jump-near test, `dist < 30`
+	// (0019/6 Q1)
+	inline constexpr float AsianJumpNearDistance = 30.0f;
+
+	// `0x104a9310` f32 — `_DAT_104a9310` = 100.0f; `CNPC_VAsianVampire::SetupJump 0x10361a70` rise
+	// (0019/6 Q1)
+	inline constexpr float AsianJumpRise = 100.0f;
+
+	// `0x104a9314` f32 — `_DAT_104a9314` = 40.0f; `CNPC_VAsianVampire` jump-down schedule pick, the
+	// player Z drop (0019/6 Q1)
+	inline constexpr float AsianJumpScheduleDrop = 40.0f;
+
+	// `0x104a9318` f32 — `_DAT_104a9318` = 3.0f; `CNPC_VAsianVampire` stationary test, `3.0 <= curtime
+	// - m_fMovedTimeStamp` (0019/6 Q1)
+	inline constexpr float AsianStationaryTime = 3.0f;
+
+	// `0x104a931c` f32 — `_DAT_104a931c` = 40.0f; `CNPC_VAsianVampire` moved test, exclusive (0019/6
+	// Q1)
+	inline constexpr float AsianMovedEpsilon = 40.0f;
+
+	// `0x104a9320` f32 — `_DAT_104a9320` = 150.0f; `CNPC_VAsianVampire::PositionClearForTeleport` and
+	// `SelectLedgeNode 0x103615c0` clearance (0019/6 Q1)
+	inline constexpr float AsianTeleportClearance = 150.0f;
+
+	// `0x1062d200` f32 — `DAT_1062d200[0]`; `CNPC_VBach::GatherAttackConditions 0x10363db0` teleport
+	// distance for `m_iBachTeleportState` 0 (0019/6 Q1)
+	inline constexpr float BachTeleportDistance0 = 768.0f;
+
+	// `0x1062d204` f32 — `DAT_1062d200[1]`; teleport distance for state 1 (0019/6 Q1)
+	inline constexpr float BachTeleportDistance1 = 768.0f;
+
+	// `0x1062d208` f32 — `DAT_1062d200[2]`; teleport distance for state 2 (0019/6 Q1)
+	inline constexpr float BachTeleportDistance2 = 384.0f;
+
+	// `0x1062d20c` f32 — `DAT_1062d200[3]`; teleport distance for state 3 (0019/6 Q1)
+	inline constexpr float BachTeleportDistance3 = 384.0f;
+
+	// `0x104454cc` f32 — `CBaseEntity` camera default `0x10026830` returns it (`return
+	// _DAT_104454cc`), slot 49 forward in Closure.cpp; also stated in
+	// `Substrate/ElysiumCameraOverride.h` (0019/6 Q2)
+	inline constexpr float SeventyFive = 75.0f;
+
+	// `0x10449198` f64 — pooled double 0.2 (`FMUL double ptr`); `CNPC_VFrenzyShadow` goal-tolerance
+	// scale `0x10375fb4` and the autoaim score term `0x10176930` (0019/6 Q2)
+	inline constexpr double FifthDouble = 0.2;
+
+	// `0x104491a8` f64 — double 0.8; `0x102f6690` arms the AI network manager's first think at
+	// `curtime + 0.8` at the end of `CWorld::Precache`'s network build (0019/6 Q2)
+	inline constexpr double EightTenthsDouble = 0.8;
+
+	// `0x10449260` f64 — double 0.25 (`FCOMP double ptr`); the tentacle scatter cone and the
+	// `npc_vphysics` arrival tolerance; read as a float it is 0.0 (0019/6 Q2)
+	inline constexpr double QuarterDouble = 0.25;
+
+	// `0x1044f02c` f32 — pooled 1.5f; the see-unknown sweep's `stopped seeing it` grace, `+0x6084 =
+	// curtime + 1.5` (0019/6 Q2)
+	inline constexpr float OneAndHalf = 1.5f;
+
+	// `0x1044f030` f32 — `0x102c4cc0` ballistic solver: `g = sv_gravity * m_flGravity(+0x3ec) *
+	// _DAT_1044f030` (0019/6 Q2)
+	inline constexpr float MinusHalf = -0.5f;
+
+	// `0x1044ffd0` f64 — double 5.0 at file offset `0x44ffd0`; `CNPC_VGhoulCroucher` touch-burn re-arm
+	// `m_flNextTouchBurnTime = curtime + 5.0` (0019/6 Q2)
+	inline constexpr double FiveDouble = 5.0;
+
+	// `0x10450a9c` f32 — `CBasePlayer::GetAutoaimVector 0x10176520` scale arm (`DAT_1070ba3c == 1`
+	// scales by the cell) (0019/6 Q2)
+	inline constexpr float NineTenths = 0.9f;
+
+	// `0x10450aa0` f32 — pooled 4.0f; `0x102c4cc0` ballistic discriminant `d = z*z - -(dz) * g * 4`
+	// (0019/6 Q2)
+	inline constexpr float Four = 4.0f;
+
+	// `0x10451ab4` f32 — pooled 0.2f; the squad sweep `0x102b2730` (`LastTimeSeen(enemy) + 0.2`,
+	// SQUAD_SEE_ENEMY 0x31) (0019/6 Q2)
+	inline constexpr float Fifth = 0.2f;
+
+	// `0x10451ab8` f32 — pooled 0.3f; MingXiao tentacle side-step half-width factor `0x10395035`
+	// (enemy OBB width * 0.3) and the autoaim old-sample weight `0x10176520` (0019/6 Q2)
+	inline constexpr float ThreeTenths = 0.3f;
+
+	// `0x104528d4` f32 — pooled 70.0f; the 90-degree turn rungs of the turn-activity ladder (family
+	// Facing) (0019/6 Q2)
+	inline constexpr float Seventy = 70.0f;
+
+	// `0x10457f54` f32 — the NEW-sample weight of the autoaim blend (`0x10176520`;
+	// `docs/vtmb/computer-terminals.md`, `npc-ai/senses.md`) (0019/6 Q2)
+	inline constexpr float SevenTenths = 0.7f;
+
+	// `0x10462948` f32 — pooled -180.0f; lower wrap bound of `UTIL_AngleDiff 0x1013d580`, the autoaim
+	// normalisation and the facing ladder (0019/6 Q2)
+	inline constexpr float MinusOneEighty = -180.0f;
+
+	// `0x10462990` f32 — pooled 32.0f; `0x102b2f3b` wall-trace length of the Troika stop-backup gate
+	// (0019/6 Q2)
+	inline constexpr float ThirtyTwo = 32.0f;
+
+	// `0x104629ec` f32 — pooled 2.5f; `CNPC_VTzimisce` pounce-check timer `0x103bd0c1`: `Now + 2.5`
+	// (0019/6 Q2)
+	inline constexpr float TwoAndHalf = 2.5f;
+
+	// `0x104994a0` f32 — pooled -1.0f; the tolerance argument the location-goal wrapper passes
+	// (StartTask: keep the path's own tolerance) (0019/6 Q2)
+	inline constexpr float MinusOneAt94A0 = -1.0f;
+
+	// `0x1049a1b8` f32 — blocked-reaction re-arm `(_DAT_1049a1bc - _DAT_1049a1b8) * t + _DAT_1049a1b8`
+	// (`0x1029fcf0` slot 318 neighbourhood, family Damage), low end (0019/6 Q2)
+	inline constexpr float BlockedReactionShort = 0.5f;
+
+	// `0x1049a1bc` f32 — the high end of the same lerp as `1049a1b8` (0019/6 Q2)
+	inline constexpr float BlockedReactionLong = 1.5f;
+
+	// `0x1049a1c0` f32 — slot 318 attack re-arm `FLD [0x1049a1c0]; FSUB [0x1049a1c4]; FADD
+	// [0x1049a1c4]; FADD curtime` (`0x1029fcf0`): the delay is the first cell (0019/6 Q2)
+	inline constexpr float AttackReArmShort = 0.3f;
+
+	// `0x1049a1c4` f32 — the second cell of the slot 318 attack re-arm (0019/6 Q2)
+	inline constexpr float AttackReArmLong = 1.5f;
+
+	// `0x1049a1c8` f32 — `0x102c4cc0` ballistic solver: a flight time at or below the cell answers a
+	// zero XY impulse (0019/6 Q2)
+	inline constexpr float FlightTimeFloor = 0.0001f;
+
+	// `0x1049a1d8` f32 — `ComputeKnockbackVelocity` XY blend, low end (family Combat10) (0019/6 Q2)
+	inline constexpr float KnockbackXyLow = 220.0f;
+
+	// `0x1049a1dc` f32 — the XY blend's high end (0019/6 Q2)
+	inline constexpr float KnockbackXyHigh = 400.0f;
+
+	// `0x1049a1e0` f32 — the Z blend's low end (0019/6 Q2)
+	inline constexpr float KnockbackZLow = 200.0f;
+
+	// `0x1049a1e4` f32 — the Z blend's high end (0019/6 Q2)
+	inline constexpr float KnockbackZHigh = 310.0f;
+
+	// `0x1049a1f4` f32 — `0x102bfa41..0x102bfaaf`: the Z lift applied to the trace start and
+	// subtracted back off the destination, source units (0019/6 Q2)
+	inline constexpr float StandingOnHeadLift = 0.1f;
+
+	// `0x1049a1f8` f32 — `0x102bfa56..0x102bfaaf`: the push speed, source units per second (0019/6 Q2)
+	inline constexpr float StandingOnHeadSpeed = 40.0f;
+
+	// `0x1049adfc` f32 — slot 583 `0x1028d860`: the squared source-unit radius (2048^2) a distance is
+	// compared against (0019/6 Q2)
+	inline constexpr float ClosureWakeRadiusSquared = 4194304.0f;
+
+	// `0x1049ae34` f32 — the -15 degree rung of the turn-activity ladder (family Facing) (0019/6 Q2)
+	inline constexpr float MinusFifteen = -15.0f;
+
+	// `0x1049ae38` f32 — the 140 degree rung of the turn-activity ladder (0019/6 Q2)
+	inline constexpr float OneForty = 140.0f;
+
+	// `0x1049ae3c` f32 — the -140 degree rung of the turn-activity ladder (0019/6 Q2)
+	inline constexpr float MinusOneForty = -140.0f;
+
+	// `0x1049ae40` f32 — the -70 degree rung of the turn-activity ladder (0019/6 Q2)
+	inline constexpr float MinusSeventy = -70.0f;
+
+	// `0x1049ae98` f32 — `0x103822a0` Hengeyokai pickup facing cone lower bound; the kick clamp
+	// `0x102b6890` lower bound (0019/6 Q2)
+	inline constexpr float MinusTwenty = -20.0f;
+
+	// `0x1049d97c` f32 — `0x102ecdc9..0x102ecdf1` goal tolerance sentinel: -1.0 keeps the path's own
+	// tolerance (0019/6 Q2)
+	inline constexpr float GoalToleranceKeep = -1.0f;
+
+	// `0x1049d980` f32 — `0x102ecdc9` goal tolerance sentinel: -2.0 takes the hull's width (0019/6 Q2)
+	inline constexpr float GoalToleranceHull = -2.0f;
+
+	// `0x1049e048` f32 — `0x10345818..0x10345837`: the pad the swinger's sequence reach is added to
+	// (family Damage3) (0019/6 Q2)
+	inline constexpr float MeleeReachPad = 100.0f;
+
+	// `0x104ad9f4` f32 — `CNPC_VChangBros` teleport-node clearance `0x1036d270`: nodes nearer than
+	// this to the last teleport position are skipped (0019/6 Q2)
+	inline constexpr float ChangBrosLastTeleportFloor = 100.0f;
+
+	// `0x104ad9f8` f32 — `1036caee`: `0x103c6a20 >= _DAT_104ad9f8`, the teleport health-loss threshold
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosTeleportHealthLoss = 0.1f;
+
+	// `0x104ad9fc` f32 — `CNPC_VChangBros::UpdateFacingTimer 0x1036d600`: `1e-05 < len` (0019/6 Q2)
+	inline constexpr float ChangBrosFacingLengthFloor = 1e-05f;
+
+	// `0x104ada00` f32 — `curtime - m_fLastJumpTime < 16.0` (`CNPC_VChangBros` jump gate) (0019/6 Q2)
+	inline constexpr float ChangBrosJumpCooldown = 16.0f;
+
+	// `0x104ada04` f32 — `0x1036d270`: `3.0 < curtime - m_fLastTeleportTime` (0019/6 Q2)
+	inline constexpr float ChangBrosTeleportPositionMaxAge = 3.0f;
+
+	// `0x104ada08` f32 — `GetFacingTimeToTeleport 0x1036dc60`: the lone-brother wait (0019/6 Q2)
+	inline constexpr float ChangBrosFacingWaitAlone = 7.0f;
+
+	// `0x104ada0c` f32 — `GetFacingTimeToTeleport 0x1036dc60`: the wait while the other brother stands
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosFacingWaitSquad = 21.0f;
+
+	// `0x104ada10` f32 — `UpdateFacingTimer 0x1036d600`: `|d.z| < 50` (0019/6 Q2)
+	inline constexpr float ChangBrosFacingHeightBand = 50.0f;
+
+	// `0x104ada14` f32 — `UpdateFacingTimer 0x1036d600`: `len < 150` (0019/6 Q2)
+	inline constexpr float ChangBrosFacingRange = 150.0f;
+
+	// `0x104ada18` f32 — `UpdateFacingTimer 0x1036d600`: `|AngleDiff| < 70` (0019/6 Q2)
+	inline constexpr float ChangBrosFacingYawBand = 70.0f;
+
+	// `0x104ada1c` f32 — super-jump height, `|dz| < 40` arm: `(near : far) + dz` (0019/6 Q2)
+	inline constexpr float ChangBrosSuperJumpNearRise = 50.0f;
+
+	// `0x104ada20` f32 — super-jump height, far arm (0019/6 Q2)
+	inline constexpr float ChangBrosSuperJumpFarRise = 150.0f;
+
+	// `0x104ada24` f32 — `CNPC_VChangBros::SpawnEnergyBall 0x1036dd20` offset triple, first component
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosEnergyBallUp = 50.0f;
+
+	// `0x104ada28` f32 — `SpawnEnergyBall 0x1036dd20` offset triple, second component (0019/6 Q2)
+	inline constexpr float ChangBrosEnergyBallForward = 40.0f;
+
+	// `0x104ada2c` f32 — `SpawnEnergyBall 0x1036dd20` offset triple, third component (0019/6 Q2)
+	inline constexpr float ChangBrosEnergyBallRight = -10.0f;
+
+	// `0x104ada30` f32 — `SpawnEnergyBall`: the speed pushed to the `+0x5d0` launch call (0019/6 Q2)
+	inline constexpr float ChangBrosEnergyBallSpeed = 800.0f;
+
+	// `0x104ada3c` f32 — super-jump split: `ABS(dz) < 40 ? near : far` (0019/6 Q2)
+	inline constexpr float ChangBrosSuperJumpSplit = 40.0f;
+
+	// `0x104ada48` f32 — `1036cc18`: `m_fLastUnitedAttackTime + 30.0 < curtime` (0019/6 Q2)
+	inline constexpr float ChangBrosUnitedAttackCooldown = 30.0f;
+
+	// `0x104ada4c` f32 — `1036cc4c`: true unless BOTH brothers' health percent is below the cell
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosUnitedHealthFraction = 0.5f;
+
+	// `0x104ada60` f32 — `CNPC_VChangBros::GetSector 0x1036e580`: sector 1 test, compared against a
+	// squared distance as retail does (0019/6 Q2)
+	inline constexpr float ChangBrosSectorOneDistSq = 270.0f;
+
+	// `0x104ada64` f32 — `GetSector 0x1036e580`: sector 2 radius, squared by static-init `0x1036e500`
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosSectorTwoRadius = 370.0f;
+
+	// `0x104ada68` f32 — `GetSector 0x1036e580`: sector 3 radius, squared by static-init `0x1036e550`
+	// (0019/6 Q2)
+	inline constexpr float ChangBrosSectorThreeRadius = 525.0f;
+
+	// `0x104ada6c` f32 — `GetSector 0x1036e580`: the pit height test `p.z - c.z >= 200` (0019/6 Q2)
+	inline constexpr float ChangBrosSectorZThreshold = 200.0f;
+
+	// `0x104b73e4` f32 — `103bf740..103bf75c`: the Tzimisce lead-position distance-squared floor (an
+	// ordered `d < 40000` refuses) (0019/6 Q2)
+	inline constexpr float TzimisceLeadDistSqMin = 40000.0f;
+
+	// `0x104cc530` f32 — `103bf740..103bf75c`: the Tzimisce lead-position distance-squared ceiling (an
+	// ordered `d > 360000` refuses) (0019/6 Q2)
+	inline constexpr float TzimisceLeadDistSqMax = 360000.0f;
+
+	// `0x105c9798` i32 — `.data` global `DAT_105c9798`, -1 in the pinned image: the `ai_step`
+	// debug-index floor `0x1026c3d0` compares `+0x5f40` against (family Maintain19 `FreezeForAiStep`
+	// reads the same cell) (0019/6 Q2)
+	inline constexpr int32 AiStepIndexFloor = -1;
+
+	// `0x10447ee0` f32 — `0x102a18d3 FADD float ptr`; `CBreakableSurface::vfunc141 0x10110da0`,
+	// `CBasePlayer::HandleAnimEvent 0x10178a10`, `Global::FUN_1002ea40 0x1002ea40` (33 refs); pooled
+	// 1000.0: the wait-duration default 0x102a18a0 substitutes and the MingXiao throw-speed floor
+	// (0019/6 Q3)
+	inline constexpr float Thousand = 1000.0f;
+
+	// `0x10450010` f64 — `0x1038bb70 FMUL double ptr`; `Global::FUN_1038b370 0x1038b370` (3 refs);
+	// pooled double 3.0: ManBat down-accel scale (0019/6 Q3)
+	inline constexpr double ThreeDouble = 3.0;
+
+	// `0x10457f60` f32 — `0x10262aaf FMUL float ptr`; `CBaseCombatCharacter::CalcDamageForceVector
+	// 0x1032b290`, `Global::FUN_103983d0 0x103983d0` (14 refs); pooled 150.0: MingXiao reach band and
+	// pedestal-search closest-player floor (0019/6 Q3)
+	inline constexpr float OneFifty = 150.0f;
+
+	// `0x10462868` f32 — `0x1038b9e5 FCOMP float ptr`; `Global::FUN_1038b370 0x1038b370`,
+	// `Global::FUN_103bfc20 0x103bfc20` (8 refs); ManBat slow-speed Z threshold (raw goal delta Z)
+	// (0019/6 Q3)
+	inline constexpr float MinusThirty = -30.0f;
+
+	// `0x1046bacc` f32 — `0x10290c68 FSUB float ptr`; `Global::FUN_102f41b0 0x102f41b0`,
+	// `Global::FUN_102f7e60 0x102f7e60` (23 refs); pooled 2048.0: the maker ground-trace depth, the
+	// nearest-node box, the fly box (0019/6 Q3)
+	inline constexpr float TwoThousandFortyEight = 2048.0f;
+
+	// `0x1046dcd0` f32 — `0x10260138 FMUL float ptr`; `CBasePlayer::vfunc451 0x10172e60`,
+	// `Global::FUN_10410bf0 0x10410bf0`, `CSprayCan::Remove 0x101716b0` (31 refs); pooled 128.0:
+	// special-idle player distance, MingXiao severed-tentacle scatter range (0019/6 Q3)
+	inline constexpr float OneTwentyEight = 128.0f;
+
+	// `0x1046eca8` f64 — `0x1038b7fc FADD double ptr`; `Global::FUN_1038b370 0x1038b370` (2 refs);
+	// ManBat chase-height pad added to the destination Z (0019/6 Q3)
+	inline constexpr double OneFiftyDouble = 150.0;
+
+	// `0x104704c0` f64 — `0x103cad65 FLD double ptr`; `Global::FUN_103cac20 0x103cac20` (2 refs);
+	// Werewolf teleport-distance floor accumulator constant (0019/6 Q3)
+	inline constexpr double FiveHundredTwelveDouble = 512.0;
+
+	// `0x1047a3b0` f32 — `0x101aafc6 FCOMP float ptr`; `CPayphone::PassesFindEntityFOVTrace
+	// 0x101aaf80` (1 refs); the payphone use test Manhattan distance limit, Source units (0019/6 Q3)
+	inline constexpr float PayphoneManhattanLimit = 85.0f;
+
+	// `0x1049a154` f32 — `0x10280231 FLD float ptr`; `Global::ScheduledFollowPath 0x102801e0` (1
+	// refs); tolerance -1.0 (keep) written into the path-corner goal record (0019/6 Q3)
+	inline constexpr float NavGoalToleranceKeepPathCorner = -1.0f;
+
+	// `0x1049a1ac` f32 — `0x102a1d03 FLD float ptr`; `CAI_BaseNPCTroika::StartTask 0x102a1910`,
+	// `Global::FUN_102aa640 0x102aa640` (13 refs); tolerance -1.0 (keep) written into the patrol-point
+	// goal record (0019/6 Q3)
+	inline constexpr float NavGoalToleranceKeepPatrol = -1.0f;
+
+	// `0x1049ae74` f32 — `0x102ac3e2 FMUL float ptr`; `CBaseCombatCharacter::Event_Killed 0x1032b9b0`,
+	// `CAI_BaseNPCTroika::RunTask 0x102aacf0` (7 refs); finishing-move force scale (0019/6 Q3)
+	inline constexpr float FiftyThousand = 50000.0f;
+
+	// `0x1049dfe4` f32 — `0x10310fce FCOMP float ptr`; `Global::FUN_10310d70 0x10310d70`,
+	// `CNPC_VMingXiaoTentacle::StartTask 0x1039c4c0`, `CNPC_VPedestrian::vfunc461 0x103a2e30` (3
+	// refs); squared 512: the pedestrian flee squared-separation bound (0019/6 Q3)
+	inline constexpr float FiveHundredTwelveSquared = 262144.0f;
+
+	// `0x1049ffac` f32 — `0x1034b692 FSUB float ptr`; `Global::FUN_1034b580 0x1034b580`,
+	// `Global::FUN_1034c2d0 0x1034c2d0` (8 refs); maker spawn-box half-extent (x and y) (0019/6 Q3)
+	inline constexpr float ThirtyFour = 34.0f;
+
+	// `0x104a6f84` f32 — `0x1035d934 FCOMP float ptr`; `CNPC_VAndreiBlood::RunTask 0x1035d8b0` (1
+	// refs); AndreiBlood RunTask case 0x151 sequence-cycle threshold (0019/6 Q3)
+	inline constexpr float AndreiTask151CycleThreshold = 0.5f;
+
+	// `0x104a6f88` f32 — `0x1035da28 FCOMP float ptr`; `CNPC_VAndreiBlood::RunTask 0x1035d8b0` (1
+	// refs); AndreiBlood teleport wait window (0019/6 Q3)
+	inline constexpr float AndreiTeleportWaitSeconds = 5.0f;
+
+	// `0x104a930c` f32 — `0x103613b6 FCOMP float ptr`; `CNPC_VAsianVampire::RunTask 0x103612e0` (1
+	// refs); AsianVampire RunTask case 0x13a: Z velocity ceiling under which the fall activity
+	// restarts (0019/6 Q3)
+	inline constexpr float AsianVampireRestartVelocityZ = 250.0f;
+
+	// `0x104aaac8` f32 — `0x10364671 FADD float ptr`; `CNPC_VBach::StartTask 0x103645a0`,
+	// `CNPC_VBach::RunTask 0x103652b0` (4 refs); Bach RunTask: the far-future offset added to the wait
+	// when warning is disarmed (0019/6 Q3)
+	inline constexpr float BachWarningWaitFar = 1000000000.0f;
+
+	// `0x104aaacc` f32 — `0x10365534 FADD float ptr`; `CNPC_VBach::RunTask 0x103652b0` (1 refs); Bach
+	// RunTask: the far-future offset added to the warning time after the snipe warning (0019/6 Q3)
+	inline constexpr float BachWarningTimeBump = 999999.0f;
+
+	// `0x104aaad0` f32 — `0x10365b42 FCOMP float ptr`; `Global::FUN_10365a90 0x10365a90` (1 refs);
+	// Bach occlusion small-move product floor (0019/6 Q3)
+	inline constexpr float BachSmallMoveProductMin = 20000.0f;
+
+	// `0x104ada38` f32 — `0x1036c1b3 FCOMP float ptr`; `CNPC_VChangBros::RunTask 0x1036bfc0` (1 refs);
+	// ChangBros RunTask case 0x157: sequence cycle that spawns the energy ball (0019/6 Q3)
+	inline constexpr float ChangEnergyBallCycle = 0.591f;
+
+	// `0x104ada50` f32 — `0x1036c409 FCOMP float ptr`; `CNPC_VChangBros::RunTask 0x1036bfc0` (1 refs);
+	// ChangBros RunTask: Z velocity ceiling under which the fall activity restarts (0019/6 Q3)
+	inline constexpr float ChangBrosRestartVelocityZ = 500.0f;
+
+	// `0x104ada5c` f32 — `0x1036bc9a FLD float ptr`; `CNPC_VChangBros::StartTask 0x1036b750`,
+	// `CNPC_VChangBros::RunTask 0x1036bfc0` (2 refs); ChangBros arena centre emitter Z offset (0019/6
+	// Q3)
+	inline constexpr float ChangCenterEmitterZOffset = 50.0f;
+
+	// `0x104b6808` f32 — `0x10383470 FLD float ptr`; `Global::FUN_10383470 0x10383470` (1 refs);
+	// Hengeyokai transform wait, FUN_10383470 (0019/6 Q3)
+	inline constexpr float ProteanTransformWait = 2.0f;
+
+	// `0x104b73ec` f32 — `0x10384bc4 FLD float ptr`; `CNPC_VHuman::RunTask 0x10384ab0` (1 refs); Human
+	// RunTask melee-roll end threshold when a roll exists (0019/6 Q3)
+	inline constexpr float MeleeRollOverArmed = 0.5f;
+
+	// `0x104b73f0` f32 — `0x10384bcc FLD float ptr`; `CNPC_VHuman::RunTask 0x10384ab0` (1 refs); Human
+	// RunTask melee-roll end threshold default (0019/6 Q3)
+	inline constexpr float MeleeRollOverDefault = 1.0f;
+
+	// `0x104bc690` f64 — `0x1038b078 FADD double ptr`; `CNPC_VManBat::NPCInit 0x1038b070`,
+	// `Global::FUN_1038e640 0x1038e640` (2 refs); ManBat flap delay: NPCInit stamp and the 0x22 flap
+	// timer (0019/6 Q3)
+	inline constexpr double ManBatFlapDelay = 2.3;
+
+	// `0x104bde64` f32 — `0x10398a39 FCOM float ptr`; `Global::FUN_103989b0 0x103989b0` (1 refs);
+	// MingXiao pedestal abeam forward-dot floor (0019/6 Q3)
+	inline constexpr float PedestalForwardFloor = -0.17f;
+
+	// `0x104bde70` f32 — `0x1039cb38 FLD float ptr`; `CNPC_VMingXiaoTentacle::StartTask 0x1039c4c0`,
+	// `CNPC_VMingXiaoTentacle::RunTask 0x1039d750` (4 refs); tolerance -1.0 (keep) in the tentacle
+	// shoot-hint goal record (0019/6 Q3)
+	inline constexpr float NavGoalToleranceKeepShootHint = -1.0f;
+
+	// `0x104bea38` f32 — `0x1039de7c FADD float ptr`; `CNPC_VMingXiaoTentacle::SelectSchedule
+	// 0x1039de20`, `Global::FUN_1040c080 0x1040c080` (2 refs); MingXiaoTentacle phase-3 expiry
+	// duration (SelectSchedule) (0019/6 Q3)
+	inline constexpr float TentaclePhase3Seconds = 9999.0f;
+
+	// `0x104c3cb8` f32 — `0x103aae4c FLD float ptr`; `CNPC_VSabbatLeader::SetJumpVelocityTowardPlayer
+	// 0x103aad40` (3 refs); SabbatLeader jump velocity toward the player lead scale (0019/6 Q3)
+	inline constexpr float SabbatLeadScale = 25.0f;
+
+	// `0x104c3cbc` f32 — `0x103a966b FCOMP float ptr`; `CNPC_VSabbatLeader::SelectTeleportArchway
+	// 0x103a9540` (1 refs); SabbatLeader archway node minimum flat distance to the player (0019/6 Q3)
+	inline constexpr float SabbatArchwayMinFlatDist = 24.0f;
+
+	// `0x104c3cc0` f32 — `0x103a9478 FCOMP float ptr`; `CNPC_VSabbatLeader::TaskFail 0x103a9400` (1
+	// refs); SabbatLeader TaskFail route-failure counter threshold (0019/6 Q3)
+	inline constexpr float SabbatRouteFailThreshold = 6.0f;
+
+	// `0x104c3cc4` f32 — `0x103a9e07 FCOMP float ptr`; `CNPC_VSabbatLeader::CheckForJumpCondition
+	// 0x103a9d90` (1 refs); SabbatLeader jump condition health-loss fraction (0019/6 Q3)
+	inline constexpr float SabbatJumpHealthLoss = 0.06666667f;
+
+	// `0x104c3cc8` f32 — no direct .text reader found; SabbatLeader jump condition idle window since
+	// the last attack (cell has no direct reader in .text; the argument of 0x103c67f0) (0019/6 Q3)
+	inline constexpr float SabbatJumpIdleSeconds = 8.0f;
+
+	// `0x104c3ccc` f32 — `0x103a9f1e FCOMP float ptr`; `CNPC_VSabbatLeader::PlayerInNoJumpZone
+	// 0x103a9e70` (2 refs); SabbatLeader no-jump-zone distance to the hint centre line (0019/6 Q3)
+	inline constexpr float SabbatNoJumpZoneDistance = 100.0f;
+
+	// `0x104c3cd0` f32 — `0x103a8a14 MOV r32 dword ptr`; `CNPC_VSabbatLeader::RunTask 0x103a8990` (1
+	// refs); SabbatLeader RunTask: player distance under which the transformation starts (0019/6 Q3)
+	inline constexpr float SabbatTransformRange = 500.0f;
+
+	// `0x104c3cd8` f32 — `0x103a8edc MOV r32 dword ptr`; `CNPC_VSabbatLeader::RunTask 0x103a8990` (1
+	// refs); SabbatLeader RunTask: FaceEnemyOrigin yaw-speed argument (0019/6 Q3)
+	inline constexpr float SabbatFaceEnemyYawSpeed = 10.0f;
+
+	// `0x104c3cdc` f32 — `0x103aa9cf FLD float ptr`; `CNPC_VSabbatLeader::UpdateBloodSplash
+	// 0x103aa960` (1 refs); SabbatLeader blood-splash repeat interval (0019/6 Q3)
+	inline constexpr float SabbatSplashInterval = 0.25f;
+
+	// `0x104c3ce0` f32 — `0x103aacbb FCOMP float ptr`;
+	// `CNPC_VSabbatLeader::PlayerDamagedEnoughThisRound 0x103aabc0` (1 refs); SabbatLeader
+	// wound-counter rise PlayerDamagedEnoughThisRound requires (0019/6 Q3)
+	inline constexpr float SabbatRoundDamageThreshold = 2.0f;
+
+	// `0x104c3ce4` f32 — `0x103a8c41 FCOMP float ptr`; `CNPC_VSabbatLeader::RunTask 0x103a8990`,
+	// `CNPC_VSabbatLeader::SelectDiveInPoint 0x103a9760`, `CNPC_VSabbatLeader::PlayerIsFacingMe
+	// 0x103aaf50` (3 refs); SabbatLeader vector-length epsilon (charge, dive, facing tests) (0019/6
+	// Q3)
+	inline constexpr float SabbatLengthEpsilon = 0.0001f;
+
+	// `0x104c3ce8` f32 — `0x103a8c58 FMUL float ptr`; `CNPC_VSabbatLeader::RunTask 0x103a8990` (3
+	// refs); SabbatLeader RunTask charge speed scale (0019/6 Q3)
+	inline constexpr float SabbatChargeSpeed = 100.0f;
+
+	// `0x104c3cec` f32 — no direct .text reader found; SabbatLeader RunTask ideal-yaw speed argument
+	// (cell has no direct reader in .text) (0019/6 Q3)
+	inline constexpr float SabbatChargeYawSpeed = 50.0f;
+
+	// `0x104c3cf0` f32 — `0x103ab07c FCOMP float ptr`; `CNPC_VSabbatLeader::PlayerIsFacingMe
+	// 0x103aaf50` (1 refs); SabbatLeader PlayerIsFacingMe cone dot (cos 70 degrees) (0019/6 Q3)
+	inline constexpr float SabbatFacingConeDot = 0.34202f;
+
+	// `0x104c3cfc` f32 — `0x103a98ff FCOMP float ptr`; `CNPC_VSabbatLeader::SelectDiveInPoint
+	// 0x103a9760`, `CNPC_VSabbatLeader::SelectDiveOutPoint 0x103a9ad0` (2 refs); SabbatLeader dive
+	// point minimum flat distance (0019/6 Q3)
+	inline constexpr float SabbatDiveMinFlatDist = 40.0f;
+
+	// `0x104c3d00` f32 — `0x103a983e FCOMP float ptr`; `CNPC_VSabbatLeader::SelectDiveInPoint
+	// 0x103a9760` (1 refs); SabbatLeader dive-in minimum leader-to-player distance (0019/6 Q3)
+	inline constexpr float SabbatDiveMinSelfDist = 45.0f;
+
+	// `0x104c3d08` f32 — `0x103a9063 FCOMP float ptr`; `CNPC_VSabbatLeader::RunTask 0x103a8990` (1
+	// refs); SabbatLeader RunTask case 0x162 wait before TaskComplete (0019/6 Q3)
+	inline constexpr float SabbatLeaderTaskWait = 1.0f;
+
+	// `0x104d0080` f64 — `0x103cafe8 FLD double ptr`; `CNPC_VWerewolf::NPCInit 0x103caef0` (1 refs);
+	// Werewolf NPCInit field-of-view angle, 120 degrees in radians (0019/6 Q3)
+	inline constexpr double TwoPiThirdsDouble = 2.0943951023931953;
+
+	// `0x1044a2bc` f32 — `0x1004ed4b FMUL float ptr`; 5 refs; the pooled float 0.4;
+	// `CNPC_VSheriffMan::SelectTeleportNode 0x103b0630` yaw-term weight (0019/6 Q4)
+	inline constexpr float FourTenths = 0.4f;
+
+	// `0x1044dcf0` f64 — `0x1005d3be FDIVR double ptr`; 3 refs; the pooled double 30.0; ManBat glide
+	// selector low turn bound (`0x1038e7c0 FCOM double`) (0019/6 Q4)
+	inline constexpr double ThirtyDouble = 30.0;
+
+	// `0x10450570` f64 — `0x10099e9c FLD double ptr`; 34 refs; the pooled double 360.0; ManBat glide
+	// selector full turn (0019/6 Q4)
+	inline constexpr double ThreeSixtyDouble = 360.0;
+
+	// `0x10450ab0` f32 — `0x100a9594 FCOMP float ptr`; 13 refs; the pooled float 16384.0 (128
+	// squared); MingXiao kick-prop maximum distance squared (`0x102a9594 FCOMP`) (0019/6 Q4)
+	inline constexpr float SixteenThousandThreeEightyFour = 16384.0f;
+
+	// `0x10452918` f64 — `0x100c41cb FADD double ptr`; 3 refs; the pooled double 180.0; ManBat glide
+	// selector split (`0x1038e7dc FCOMP double`) (0019/6 Q4)
+	inline constexpr double OneEightyDouble = 180.0;
+
+	// `0x10456854` f32 — `0x100fc2b7 FCOM float ptr`; 12 refs; the pooled float 600.0; MingXiao
+	// tentacle evade re-arm (0019/6 Q4)
+	inline constexpr float SixHundred = 600.0f;
+
+	// `0x10457f5c` f32 — `0x100fe375 FMUL float ptr`; 36 refs; the pooled float 500.0; ManBat scatter
+	// speed of task `0x14d`, Werewolf fake-hull damage force scale (0019/6 Q4)
+	inline constexpr float FiveHundred = 500.0f;
+
+	// `0x10462914` f32 — `0x1011e7ef FMUL float ptr`; 8 refs; the pooled float 1.25; Werewolf
+	// `UpdateFakeHull` extent scale (`0x103d954b FMUL`) (0019/6 Q4)
+	inline constexpr float OneAndQuarter = 1.25f;
+
+	// `0x10462958` f64 — `0x10120233 FMUL double ptr`; 14 refs; the pooled double 0.75; MingXiao
+	// circle max-range weight (0019/6 Q4)
+	inline constexpr double ThreeQuartersDouble = 0.75;
+
+	// `0x1046dcdc` f32 — `0x10151759 FCOM float ptr`; 3 refs; the pooled float 0.35; Bach non-rifle
+	// wait cut (`0x10364630`) (0019/6 Q4)
+	inline constexpr float ThirtyFiveHundredths = 0.35f;
+
+	// `0x1049a1b0` f32 — `0x102a2184 FLD float ptr`; 10 refs; AIN_HULL_TOLERANCE, -2.0; `0x102ecd20`
+	// compares the goal tolerance against it (0019/6 Q4)
+	inline constexpr float StartTaskGoalToleranceHull = -2.0f;
+
+	// `0x1049ae50` f64 — `0x102a5b04 FCOMP double ptr`; 1 refs; MingXiao dive left dodge dot bound,
+	// -0.98 (`0x102a5b04 FCOMP double ptr`) (0019/6 Q4)
+	inline constexpr double DiveLeftDot = -0.98;
+
+	// `0x1049ae60` f64 — `0x102a5aee FCOM double ptr`; 1 refs; MingXiao dive right dodge dot bound,
+	// 0.98 (`0x102a5aee FCOM double ptr`) (0019/6 Q4)
+	inline constexpr double DiveRightDot = 0.98;
+
+	// `0x1049ae6c` f32 — `0x102a5ab9 FCOMP float ptr`; 1 refs; MingXiao dive maximum distance squared,
+	// 12100 = 110 squared (`0x102a5ab9 FCOMP`) (0019/6 Q4)
+	inline constexpr float DiveMaxDistSqr = 12100.0f;
+
+	// `0x1049e0c8` f64 — `0x10326cbf FCOMP double ptr`; 1 refs; 0.994; `FInAimCone 0x10326bd0`,
+	// `0x10326cbf FCOMP double ptr` (read as a float it is 2.18e-25) (0019/6 Q4)
+	inline constexpr double AimConeDotThreshold = 0.994;
+
+	// `0x104aaac0` f32 — `0x1036474d FMUL float ptr`; 1 refs; Bach sniper aim per-stat-C term, 0.08
+	// (`0x1036474d FMUL`) (0019/6 Q4)
+	inline constexpr float BachAimPerStatC = 0.08f;
+
+	// `0x104ada40` f32 — `0x1036bbae FLD float ptr`; 1 refs; Chang brothers united delay, 4.0
+	// (`0x1036bbae FLD`) (0019/6 Q4)
+	inline constexpr float ChangBrosUnitedDelay = 4.0f;
+
+	// `0x104ada54` f32 — `0x1036b9fd FLD float ptr`; 1 refs; Chang brothers energy-charge delay, 1.5
+	// (`0x1036b9fd FLD`) (0019/6 Q4)
+	inline constexpr float ChangBrosEnergyChargeDelay = 1.5f;
+
+	// `0x104ada58` f32 — 1 refs; Chang brothers AOE blast radius, 1000.0 (`0x1036bd3a`, a dword
+	// operand) (0019/6 Q4)
+	inline constexpr float ChangBrosBlastRadius = 1000.0f;
+
+	// `0x104b73e8` f32 — `0x10382fd6 FCOM float ptr`; 2 refs; melee far distance squared, 160000 = 400
+	// squared (`0x10382fd6 FCOM`, `0x103bc8d5`) (0019/6 Q4)
+	inline constexpr float MeleeFarSquared = 160000.0f;
+
+	// `0x104bc6a0` f64 — `0x1038e7cd FCOM double ptr`; 1 refs; the double 330.0; ManBat glide selector
+	// high turn bound (`0x1038e7cd FCOM double ptr`) (0019/6 Q4)
+	inline constexpr double ThreeThirtyDouble = 330.0;
+
+	// `0x104c3cb0` f32 — `0x103a7d3f FLD float ptr`; 1 refs; Sabbat leader dive jump height, 200.0
+	// (`0x103a7d3f FLD`) (0019/6 Q4)
+	inline constexpr float SabbatDiveJumpHeight = 200.0f;
+
+	// `0x104c3cb4` f32 — 1 refs; Sabbat leader leap height, 35.0 (`0x103a7dca`, a dword operand)
+	// (0019/6 Q4)
+	inline constexpr float SabbatLeapHeight = 35.0f;
+
+	// `0x104c3cf4` f32 — `0x103a5820 FLD float ptr`; 2 refs; Sabbat dive flight time base, 33.0;
+	// `staticinit_103a5820` writes `_DAT_1093c340 = 33.0 * (1/30)` (`0x103a5820 FLD`) (0019/6 Q4)
+	inline constexpr float SabbatDiveFlightBase = 33.0f;
+
+	// `0x104c3d04` f32 — `0x103a8312 FLD float ptr`; 1 refs; Sabbat leader warning lead, 1.0
+	// (`0x103a8312 FLD`) (0019/6 Q4)
+	inline constexpr float SabbatWarningLead = 1.0f;
+
+	// `0x104c3d0c` f32 — `0x103a84e4 FLD float ptr`; 1 refs; Sabbat leader blast lift, 80.0
+	// (`0x103a84e4 FLD`) (0019/6 Q4)
+	inline constexpr float SabbatBlastLift = 80.0f;
+
+	// `0x104c3d10` f32 — 1 refs; Sabbat leader blast radius, 350.0 (`0x103a8533`, a dword operand)
+	// (0019/6 Q4)
+	inline constexpr float SabbatBlastRadius = 350.0f;
+
+	// `0x104c3d2c` f32 — `0x103a5826 FMUL float ptr`; 2 refs; one thirtieth, 0.033333335; the second
+	// factor of `staticinit_103a5820`'s dive flight time (`0x103a5826 FMUL`) (0019/6 Q4)
+	inline constexpr float SabbatDiveFlightUnit = 0.033333335f;
+
+	// `0x104c6124` f32 — `0x103b076e FCOMP float ptr`; 3 refs; Sheriff last-teleport minimum distance,
+	// 100.0 (`0x103b076e FCOMP`, `0x103b0d59`) (0019/6 Q4)
+	inline constexpr float SheriffLastTeleportFloor = 100.0f;
+
+	// `0x104c6140` f32 — `0x103aea11 FCOMP float ptr`; 1 refs; Sheriff health-lost floor, 0.05
+	// (`0x103aea11 FCOMP`) (0019/6 Q4)
+	inline constexpr float SheriffHealthLostFloor = 0.05f;
+
+	// `0x104c6144` f32 — `0x103b07e9 FCOMP float ptr`; 3 refs; Sheriff teleport-node score distance
+	// cap, 1000.0 (`0x103b07e9 FCOMP`, `0x103b0808 FDIV`) (0019/6 Q4)
+	inline constexpr float SheriffScoreDistCap = 1000.0f;
+
+	// `0x104c614c` f32 — `0x103b13fa FLD float ptr`; 1 refs; `CNPC_VSheriffMan::SetupJump 0x103b1300`
+	// rise, 400.0 (`0x103b13fa FLD`) (0019/6 Q4)
+	inline constexpr float SheriffJumpRise = 400.0f;
+
+	// `0x104c6150` f32 — 1 refs; Sheriff attack-idle seconds, 3.0 (`0x103aea20`, a dword operand)
+	// (0019/6 Q4)
+	inline constexpr float SheriffAttackIdleSeconds = 3.0f;
+
+	// `0x104c6154` f32 — 1 refs; Sheriff land-blast AOE radius, 300.0 (`0x103af4b1`, a dword operand)
+	// (0019/6 Q4)
+	inline constexpr float SheriffBlastRadius = 300.0f;
+
+	// `0x104c6d3c` f32 — `0x103b080e FMUL float ptr`; 4 refs; the pooled float 0.6; Sheriff
+	// teleport-node distance weight (`0x103b080e FMUL`) (0019/6 Q4)
+	inline constexpr float SixTenths = 0.6f;
+
+	// `0x104c6d40` f32 — `0x103b07df FMUL float ptr`; 1 refs; 1/180 as a float, 0.0055555556; Sheriff
+	// teleport-node yaw term (`0x103b07df FMUL`) (0019/6 Q4)
+	inline constexpr float InverseOneEighty = 0.0055555557f;
+
+	// `0x104cc508` f32 — `0x103bc726 FCOMP float ptr`; 1 refs; Tzimisce body near distance squared,
+	// 90000 = 300 squared (`0x103bc726 FCOMP`) (0019/6 Q4)
+	inline constexpr float TzimisceBodyNearSquared = 90000.0f;
+
+	// `0x104cc510` f64 — `0x103bc6d5 FCOMP double ptr`; 1 refs; Tzimisce body angle limit, 120.0
+	// (`0x103bc6d5 FCOMP double ptr`) (0019/6 Q4)
+	inline constexpr double TzimisceBodyAngleLimit = 120.0;
+
+	// `0x104cc51c` f32 — `0x103bcf0e FCOMP float ptr`; 2 refs; Tzimisce attach range squared, 25600 =
+	// 160 squared (`0x103bcf0e`, `0x103bef71 FCOMP`) (0019/6 Q4)
+	inline constexpr float TzimisceAttachRangeSquared = 25600.0f;
+
+	// `0x104cd108` f64 — `0x103c20dc FCOMP double ptr`; 1 refs; Tzimisce head-claw 2-D distance
+	// raising condition 0x35, 240.0 (`0x103c20dc FCOMP double ptr`) (0019/6 Q4)
+	inline constexpr double HeadClawConditionDistance = 240.0;
+
+	// `0x104cdce8` f64 — `0x103c3412 FCOMP double ptr`; 1 refs; runner advance distance, 256.0
+	// (`0x103c3412 FCOMP double ptr`) (0019/6 Q4)
+	inline constexpr double RunnerAdvanceDistance = 256.0;
+
+	// `0x104ce8bc` f32 — `0x103c6416 FLD float ptr`; 1 refs; Vampire boss protean transformation wait,
+	// 2.0 seconds (`0x103c6416 FLD`) (0019/6 Q4)
+	inline constexpr float ProteanTransformWaitAtE8BC = 2.0f;
+
+	// `0x104cf498` f32 — `0x103d1fd2 FCOMP float ptr`; 1 refs; Werewolf door weighted-distance
+	// threshold, 135.0 (`0x103d1fd2 FCOMP`) (0019/6 Q4)
+	inline constexpr float WerewolfDoorMaxDistance = 135.0f;
+
+	// `0x104d00ac` f32 — `0x103d6c00 FMUL float ptr`; 1 refs; the float -1000.0; Werewolf
+	// GetGroundpoint trace end drop, the negative twin of `Thousand` (`0x103d6c00 FMUL`) (0019/6 Q4)
+	inline constexpr float MinusThousand = -1000.0f;
+
+	// `0x1062d210` f32 — 2 refs; Bach skip-to-warning time, teleport state 0, 1.3; first entry of a
+	// four-float table in .data (0019/6 Q4)
+	inline constexpr float BachSkipToWarning0 = 1.3f;
+
+	// `0x1062d214` f32 — 0 refs; Bach skip-to-warning time, teleport state 1, 1.0; second table entry
+	// (0019/6 Q4)
+	inline constexpr float BachSkipToWarning1 = 1.0f;
+
+	// `0x1062d218` f32 — 0 refs; Bach skip-to-warning time, teleport state 2, 1.2; third table entry
+	// (0019/6 Q4)
+	inline constexpr float BachSkipToWarning2 = 1.2f;
+
+	// `0x1062d21c` f32 — 0 refs; Bach skip-to-warning time, teleport state 3, 1.2; fourth table entry
+	// (0019/6 Q4)
+	inline constexpr float BachSkipToWarning3 = 1.2f;
+
+	// `0x1049a160` f32 — `_DAT_1049a160` = -1.0; `CAI_BaseNPC::StartTask 0x102827f0`'s own
+	// keep-tolerance sentinel (read from `0x10282f71` on), distinct from the navigator's
+	// `GoalToleranceKeep 1049d97c` (0019/6 review 4)
+	inline constexpr float StartTaskToleranceKeep = -1.0f;
+
+	// `0x1049a164` f32 — `_DAT_1049a164` = -2.0; `CAI_BaseNPC::StartTask 0x102827f0`'s own
+	// hull-tolerance sentinel, distinct from the navigator's `GoalToleranceHull 1049d980` (0019/6
+	// review 4)
+	inline constexpr float StartTaskToleranceHull = -2.0f;
+
+	// --- Retail globals the kernel names but does not value (0019/6) -----------------------
+	//
+	// Each is an engine pointer, a table base, a class static or a string the port stands with a seam
+	// or a comment; recorded here so the ledger holds the address and no number is read from it.
+	// `0x10496f58` Crc32Table — the standard reflected CRC-32 table `FUN_1023f0c0` indexes (a table
+	// base, not a threshold); sites: ElysiumNpcBaseSaveRestore10.cpp:37,
+	// ElysiumNpcBaseSaveRestore10.inl:32, ElysiumNpcBaseSaveRestore10.inl:37 (0019/6 Q1)
+	// `0x10547e6c` QuotedPercentSString — a string constant `"%s"` passed to `0x101d3730`, whose
+	// result is discarded; sites: ElysiumNpcAnim.cpp:285 (0019/6 Q1)
+	// `0x10548ed4` Mp3Extension — the ".mp3" extension string of the directory precache pattern;
+	// sites: ElysiumNpcBasePrecache10.inl:46 (0019/6 Q1)
+	// `0x10598a30` WavExtension — the ".wav" extension string of the directory precache pattern;
+	// sites: ElysiumNpcBasePrecache10.inl:45 (0019/6 Q1)
+	// `0x105c7ed4` KeyvalueDelimiterSet — the `strtok` delimiter set (", ") of the
+	// repeat/type/schedule keyfield split; sites: ElysiumNpc.cpp:438 (0019/6 Q1)
+	// `0x10566458` EntityHandleTable — the global entity table base (`PTR_DAT_10566458`, sentinel
+	// 0xffffffff, serial in the top 19 bits); sites: ElysiumNpcBaseBoss.cpp:97,
+	// ElysiumNpcBaseMotor10.cpp:267 (0019/6 Q1)
+	// `0x1060a750` HullBitsTable — `NAI_Hull::Bits` table base (`PTR_DAT_1060a750[hull][0]`,
+	// `0x102d6210`); sites: ElysiumNpcBaseMotor10.cpp:217, ElysiumNpcBaseMotor10.inl:112 (0019/6 Q1)
+	// `0x10610be8` UsedHullMask — the global used-hull mask (`0x102f9950` / `0x102f9900` /
+	// `0x102f9920`); sites: ElysiumNpcBaseMotor10.inl:117 (0019/6 Q1)
+	// `0x106b8540` EmptyPrecacheName — the empty-name string cell the boss precache passes as an
+	// argument; sites: ElysiumNpcBasePrecache10.inl:40 (0019/6 Q1)
+	// `0x106c994c` HintNetworkBadIdCount — the global counter `0x102d0b60` bumps for a hint node id
+	// that is neither -1 nor inside the network; sites: ElysiumNpcBaseHints.cpp:134 (0019/6 Q1)
+	// `0x1070af4c` DeveloperConVar — the engine `developer` ConVar object pointer (`m_nValue != 0`);
+	// sites: ElysiumNpcBaseRunAi.cpp:50 (0019/6 Q1)
+	// `0x1070b22c` EngineServerInterface — the `IVEngineServer` pointer (`PrecacheModel` at +0x34,
+	// particle precache at +0x44); sites: ElysiumNpcBasePrecache10.inl:18,
+	// ElysiumNpcBasePrecache10.inl:23 (0019/6 Q1)
+	// `0x1070b244` EngineRandomStream — the `IUniformRandomStream` pointer (`RandomInt` at +8,
+	// `RandomFloat` at +4); sites: ElysiumNpcAndreiBlood.cpp:56, ElysiumNpcAndreiBlood.cpp:244,
+	// ElysiumNpcAndreiBlood.cpp:324, ElysiumNpcBaseBoss.cpp:240, ElysiumNpcBaseGeometry.cpp:103
+	// (0019/6 Q1)
+	// `0x1070b248` SoundEmitterSystem — the `CSoundEmitterSystem` pointer (`PrecacheScriptSound` at
+	// +0); sites: ElysiumNpcBasePrecache10.inl:21 (0019/6 Q1)
+	// `0x1070b254` EngineTraceInterface — the engine trace interface pointer (`TraceRay`); sites:
+	// ElysiumNpcBaseMotor.inl:30 (0019/6 Q1)
+	// `0x1070ba40` DeathThrowImpulse — the global death-throw impulse vector (three floats at
+	// 0x1070ba40 / 44 / 48) `OnTakeDamage_Dead` writes; sites: ElysiumNpcBaseDamage.cpp:227,
+	// ElysiumNpcBaseDamage.inl:49, ElysiumNpcBaseDamage2.cpp:200 (0019/6 Q1)
+	// `0x1070d1b0` Vec3Origin — `vec3_origin`, the engine shared zero vector (three floats at
+	// 0x1070d1b0 / b4 / b8); sites: ElysiumNpcAndreiBlood.cpp:67, ElysiumNpcBaseDamage.cpp:221,
+	// ElysiumNpcBaseDamage2.cpp:231, ElysiumNpcBaseHelpers.cpp:223, ElysiumNpcBaseLifecycle.cpp:333,
+	// ElysiumNpcBaseLifecycle.inl:40, ElysiumNpcBaseMotor10.cpp:43, ElysiumNpcBaseMotor10.inl:49,
+	// ElysiumNpcBaseSelect.inl:29, ElysiumNpcBaseSenses.cpp:247, ElysiumNpcBaseSenses.cpp:259 (0019/6
+	// Q1)
+	// `0x1072bc84` SoundEntCombatVolume — the volume cell `CSoundEnt::InsertSound` reads for the
+	// combat sound; filled at runtime, no corpus writer; sites: ElysiumNpcBaseDamage2.cpp:42,
+	// ElysiumNpcBaseDamage2.cpp:311 (0019/6 Q1)
+	// `0x1072bcc1` SoundEntCombatOcclusion — the occlusion cell `CSoundEnt::InsertSound` reads for the
+	// combat sound; filled at runtime, no corpus writer; sites: ElysiumNpcBaseDamage2.cpp:42,
+	// ElysiumNpcBaseDamage2.cpp:311 (0019/6 Q1)
+	// `0x10739a4c` DisciplineBreakOnNoticeRegistry — the registry `thunk_FUN_101e3d70` sweeps on every
+	// non-null `SetEnemy` write; sites: ElysiumNpcBaseMisc2.inl:28 (0019/6 Q1)
+	// `0x1073dc28` VocalizationRegistry — the registry `thunk_FUN_101f55a0` notifies on a
+	// vocalization; sites: ElysiumNpcAnim10.cpp:287 (0019/6 Q1)
+	// `0x1073dd58` ActivityChangeListener — the registry `thunk_FUN_101f6010` notifies on an activity
+	// change; sites: ElysiumNpcBaseAnim10.cpp:117, ElysiumNpcBaseAnim10.inl:54 (0019/6 Q1)
+	// `0x1090fdc4` SkNpcArmConVarPtr — ConVar pointer cell, arms (hitgroups 4 and 5); past .data raw
+	// size, object and default unrecovered; sites: ElysiumNpcBaseDamage.cpp:271,
+	// ElysiumNpcBaseDamage.inl:57 (0019/6 Q1)
+	// `0x1090fe10` AiList — the global AI list head `CAI_BaseNPC::Spawn` links into; sites:
+	// ElysiumNpcBase.h:56 (0019/6 Q1)
+	// `0x1090fe74` SkNpcChestConVarPtr — ConVar pointer cell, chest (hitgroup 2); past .data raw size,
+	// object and default unrecovered; sites: ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:56
+	// (0019/6 Q1)
+	// `0x1090ff08` BaseClassScheduleIdSpace — slot 580 base body `0x101a6d00`, the
+	// `CAI_ClassScheduleIdSpace` of the base line; sites: ElysiumNpcBaseEntityChain.cpp:112,
+	// ElysiumNpcBaseEntityChain.inl:5 (0019/6 Q1)
+	// `0x109201ac` SkNpcHeadConVarPtr — ConVar pointer cell, head (hitgroup 1); past .data raw size,
+	// object and default unrecovered; sites: ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:56
+	// (0019/6 Q1)
+	// `0x1092023c` SkNpcLegConVarPtr — ConVar pointer cell, legs (hitgroups 6 and 7); past .data raw
+	// size, object and default unrecovered; sites: ElysiumNpcBaseDamage.cpp:271,
+	// ElysiumNpcBaseDamage.inl:57 (0019/6 Q1)
+	// `0x109203f0` SharedDisconnectedEnemies — the one shared `CAI_Enemies` every squad-disconnected
+	// NPC is handed; sites: ElysiumNpcBaseSenses.cpp:50, ElysiumNpcBaseSenses.cpp:83 (0019/6 Q1)
+	// `0x109204a0` VProfRdtscBracket — the rdtsc bracket counters (0x109204a0 / a4) of the VProf scope
+	// pair in `GatherConditions`; sites: ElysiumNpcBaseConditions2.cpp:11 (0019/6 Q1)
+	// `0x109204f4` SkNpcStomachConVarPtr — ConVar pointer cell, stomach (hitgroup 3); past .data raw
+	// size, object and default unrecovered; sites: ElysiumNpcBaseDamage.cpp:271,
+	// ElysiumNpcBaseDamage.inl:56 (0019/6 Q1)
+	// `0x1092053c` AiStepDebugFlags — the debug flags word whose bit 2 is `ai_step` (`0x1026c5a6`);
+	// sites: ElysiumNpcBaseAnim.cpp:123 (0019/6 Q1)
+	// `0x10920558` RetiredSelfWarnCounterA — the rate-limit counter of the retired-name warning
+	// (module static); sites: ElysiumNpcBaseLifecycle.cpp:43 (0019/6 Q1)
+	// `0x1092055c` RetiredSelfWarnCounterB — the second rate-limit counter of the retired-name warning
+	// (module static); sites: ElysiumNpcBaseLifecycle.cpp:43 (0019/6 Q1)
+	// `0x10924248` TroikaClassScheduleIdSpace — the `CAI_ClassScheduleIdSpace` of the Troika line;
+	// sites: ElysiumNpcBaseEntityChain.cpp:113, ElysiumNpcBaseEntityChain.inl:7 (0019/6 Q1)
+	// `0x10925450` AiHintListHead — the hint list head `CAI_Hint` iterates; sites:
+	// ElysiumNpcBaseHints.cpp:55 (0019/6 Q1)
+	// `0x10925454` AiHintListCursor — the hint list cursor whose successor the iteration reads; sites:
+	// ElysiumNpcBaseHints.cpp:55 (0019/6 Q1)
+	// `0x1093407c` NodeNetwork — the process-wide node network the navigator of the map points at
+	// (`*(m_pNavigator + 0x2c)`); sites: ElysiumNpcBaseHelpers.cpp:369, ElysiumNpcBaseHelpers2.cpp:42,
+	// ElysiumNpcBaseHints.cpp:133, ElysiumNpcBaseHints.cpp:133, ElysiumNpcBaseLifecycle2.cpp:219
+	// (0019/6 Q1)
+	// `0x10937160` AuraColourTable — the Auspex aura colour table indexed by `idx + IsKindred * 8`;
+	// sites: ElysiumNpcAnim10.cpp:691 (0019/6 Q1)
+	// `0x109f0b40` EmptyStatList — the lazily-built empty typed-stat list whose `GetValue` answers 0;
+	// sites: ElysiumNpcBaseMotor10.cpp:236, ElysiumNpcBaseMotor10.inl:154 (0019/6 Q1)
+	// `0x1070d9d0` Vec3ZeroReturn — a second zero-vector global `DAT_1070d9d0..d8` returned through
+	// the hidden return pointer of `GetAutoaimVector`; sites: ElysiumNpcEntityChain2.cpp:182 (0019/6
+	// Q2)
+	// `0x10934060` NavGoalNoDirection — the zero-vector sentinel `DAT_10934060..68` compared against a
+	// path's arrival direction (`0x1030be20`); sites: ElysiumNpcBaseStartTask.cpp:2053 (0019/6 Q2)
+	// `0x1063abcc` UnawareActivityTableA — GhoulCroucher unaware-type to Activity id table, 4 dwords,
+	// read by `0x1037b870`; sites: ElysiumNpcGhoulCroucher.cpp:267 (0019/6 Q2)
+	// `0x1063abdc` UnawareActivityTableB — GhoulCroucher second unaware-type to Activity id table, 4
+	// dwords, read by `0x1037b890`; sites: ElysiumNpcGhoulCroucher.cpp:268 (0019/6 Q2)
+	// `0x106eb5d8` GEntityList — `g_pEntityList`, the global entity list object `AddListenerEntity
+	// 0x100f6d80` is called on; sites: ElysiumNpcEntityChain.cpp:352 (0019/6 Q2)
+	// `0x10724ef0` PlayerAnimNameBuffer — the 0x100-byte global buffer `0x10182c40` `strcpy`s the
+	// sound name into; `+0x1ca4` points at it; sites: ElysiumNpcEntityChain.inl:96 (0019/6 Q2)
+	// `0x10555f7c` AcceptInputName — the string-pointer input name `0x1017c6d0 AcceptInput` is called
+	// with (13 referrers); sites: ElysiumNpcEntityChain2.cpp:355 (0019/6 Q2)
+	// `0x1070b228` GpGlobals — `gpGlobals` (`CGlobalVars`), `curtime` at +0xc; sites:
+	// ElysiumNpcConditions10Shared.h:53 (0019/6 Q2)
+	// `0x1070ba0c` GGameRules — `g_pGameRules`; +0x58 `GetAutoAimMode`, +0x80 per-candidate admission,
+	// +0xa0 `AllowAutoTargetCrosshair`, slot 74 (+0x128) `FAllowNPCs`; sites:
+	// ElysiumNpcBaseSpawn.inl:54 (0019/6 Q2)
+	// `0x1070ba3c` SkillLevel — the skill level `DAT_1070ba3c`: `0x101286f0` reads the engine `skill`
+	// cvar (absent -> 1), clamps to 1..3 and runs `skill%d.cfg`; `GetAutoaimVector 0x10176520` scales
+	// the deflection by 0.9 at skill 1 and blends old 0.3 / new 0.7 at 2 and 3; `0x101764d0` refuses
+	// autoaim at skill 3 (read 2026-09-29); sites: ElysiumNpcEntityChain.inl:457 (0019/6 Q2)
+	// `0x1072608c` UserMessageIdNpcResponse — the user-message id `UserMessageBegin(filter,
+	// DAT_1072608c)` of the NPC response message (engine slot 65); sites:
+	// ElysiumNpcDialogueBodies.cpp:125 (0019/6 Q2)
+	// `0x10738d10` TemplateManager — the discipline template manager `0x101d5e80` is called over;
+	// sites: ElysiumNpcConditions10.cpp:500 (0019/6 Q2)
+	// `0x10739478` DisciplineMaskA — the first lazily cached discipline-10 mask of `FUN_101e3ff0`;
+	// sites: ElysiumNpcDamage3.inl:85 (0019/6 Q2)
+	// `0x10739484` DisciplineMaskB — the second lazily cached discipline-10 mask of `FUN_101e3ff0`;
+	// sites: ElysiumNpcDamage3.inl:86 (0019/6 Q2)
+	// `0x10739a25` DisciplineGuardByte — the guard byte whose bits 0 and 1 lazily construct the two
+	// discipline masks; sites: ElysiumNpcDamage3.inl:86 (0019/6 Q2)
+	// `0x10739f98` MeleeReactionAttackerCellA — `rules.txt` `Melee_Reactions` runtime-filled attacker
+	// cell (`<=` answers 2, `0x1034985e`); sites: ElysiumNpcDamage.cpp:243 (0019/6 Q2)
+	// `0x10739f9c` MeleeReactionAttackerCellB — `Melee_Reactions` runtime-filled attacker cell (`<=`
+	// answers 1, `0x10349874`); sites: ElysiumNpcDamage.cpp:244 (0019/6 Q2)
+	// `0x10739fa0` MeleeReactionDefenderCells — `Melee_Reactions` runtime-filled defender cells
+	// `_DAT_10739fa0..fac`; sites: ElysiumNpcDamage3.inl:74 (0019/6 Q2)
+	// `0x10920550` AiDisabledOverlayStamp — the process-wide throttle stamp of the `A.I. Disabled...`
+	// overlay; sites: ElysiumNpcBaseThink.cpp:103 (0019/6 Q2)
+	// `0x109253f8` CorpseRegistry — the corpse-query registry `0x102cabd0(DAT_109253f8, this, out, 4)`
+	// walks; sites: ElysiumNpcConditions2.inl:51 (0019/6 Q2)
+	// `0x10924fb9` NpcIgnorePlayer — byte global toggled by the `npc_ignore_player` console command;
+	// sites: ElysiumNpcClosure.cpp:289 (0019/6 Q2)
+	// `0x10924fba` NpcIgnoreSenses — byte global toggled by the `npc_ignore_senses` console command;
+	// sites: ElysiumNpcClosure.cpp:289 (0019/6 Q2)
+	// `0x10934088` GAiNetworkManager — `g_pAINetworkManager`; its `+0x658` byte gates the base think;
+	// sites: ElysiumNpcBaseThink.inl:31 (0019/6 Q2)
+	// `0x1093408c` NodeGraphBuiltByte — the loader byte set when the node graph is loaded or rebuilt
+	// (`0x102f5bd0` / `0x102f6610`); sites: ElysiumNpcBaseThink.cpp:68 (0019/6 Q2)
+	// `0x10937cf1` NpcInitLatch — the process-wide in-`NPCInit` latch byte a camera's refused spawn
+	// leaves set; sites: ElysiumNpcCamera.cpp:66 (0019/6 Q2)
+	// `0x1093ac3c` CopProvokerHandle — the `CNPC_VCop` shared provoker EHANDLE static; sites:
+	// ElysiumNpcCop.cpp:218 (0019/6 Q2)
+	// `0x1093aca8` CopProvokerExpiry — the `CNPC_VCop` shared provoker expiry stamp static; sites:
+	// ElysiumNpcCop.cpp:219 (0019/6 Q2)
+	// `0x1093acac` CopAliveCensus — the `CNPC_VCop` process-wide live-cop census static; sites:
+	// ElysiumNpcCop.h:60 (0019/6 Q2)
+	// `0x1093acb0` CopSecondCensus — the `CNPC_VCop` second process-wide census static; sites:
+	// ElysiumNpcCop.h:61 (0019/6 Q2)
+	// `0x1093ada8` FrenzyScratchList — the static scratch list (32 entries) `0x10376d00` fills for the
+	// Frenzy shadow sweep; sites: ElysiumNpcFrenzyShadow.cpp:224 (0019/6 Q2)
+	// `0x1093ae9c` FrenzyScratchCount — the count of `1093ada8`; sites: ElysiumNpcFrenzyShadow.cpp:224
+	// (0019/6 Q2)
+	// `0x1093b8b8` ManBatWatchdogPosition — the file-static stationary-watchdog position triple
+	// `_DAT_1093b8b8..c0` of `0x1038b370`; sites: ElysiumNpcBosses.inl:193 (0019/6 Q2)
+	// `0x1093b8c4` ManBatWatchdogStamp — the watchdog stamp of `0x1038b370`; sites:
+	// ElysiumNpcBosses.inl:194 (0019/6 Q2)
+	// `0x109f0b2a` EmptyTypedListGuard — the guard byte (bit 0) of the lazily built empty typed list
+	// `DAT_109f0b40` (`atexit 0x10012a8a`); sites: ElysiumNpcCombat10.inl:41 (0019/6 Q2)
+	// `0x109f0cc0` TempVectorRing — the temp-vector ring `allocTempVector` indexes `(i+1) & 0x7f`;
+	// sites: ElysiumNpcClosure.cpp:186 (0019/6 Q2)
+	// `0x10642d28` LBeamPattern — the `lbeam*` string `CTraceFilterManBatNoIBeamEntity` matches names
+	// against; sites: ElysiumNpcBosses.cpp:29 (0019/6 Q2)
+	// `0x1049df20` PatrolTypeTable — .rdata table base: the patrol-type table, stride 0x14, rows
+	// {type, name, startIndex, step, next}; read by 0x103079c0 (name match); sites:
+	// ElysiumNpcScript.cpp:36 (0019/6 Q3)
+	// `0x1049df28` PatrolTypeStartIndexColumn — .rdata table column: patrol-type start index (+0x08),
+	// read by 0x10307c20; sites: ElysiumNpcScript.cpp:38 (0019/6 Q3)
+	// `0x1049df2c` PatrolTypeStepColumn — .rdata table column: patrol-type step (+0x0c), read by
+	// 0x10307b80 NextPoint; sites: ElysiumNpcScript.cpp:39 (0019/6 Q3)
+	// `0x1049df30` PatrolTypeNextColumn — .rdata table column: patrol-type next type (+0x10), read by
+	// the patrol repeat arm; sites: ElysiumNpcScript.cpp:39 (0019/6 Q3)
+	// `0x105399a0` AuthoredNoneSentinelString — string pointer: the one-character string "0", the
+	// authored "none" sentinel the precache walk compares against (0x101d0f10 family); sites:
+	// ElysiumNpcPrecache10.inl:45 (0019/6 Q3)
+	// `0x105a040c` DirectoryRejectLiteral1 — string literal: 0x101d0f10 reject prefix compared over
+	// one character (bytes unrecovered); sites: ElysiumNpcPrecache10.cpp:36 (0019/6 Q3)
+	// `0x105a0410` DirectoryRejectLiteral3 — string literal: 0x101d0f10 reject prefix compared over
+	// three characters (bytes unrecovered); sites: ElysiumNpcPrecache10.cpp:35 (0019/6 Q3)
+	// `0x1062f278` ScheduleParseResult — .data global: the schedule-file parse result the flag of slot
+	// 452 answers; sites: ElysiumNpcSchedule.inl:17 (0019/6 Q3)
+	// `0x106c8a41` NoSpawnByte — .data byte: the global no-spawn flag (a scene holds the stage),
+	// CNPCMaker test 3; sites: ElysiumNpcMaker.cpp:317 (0019/6 Q3)
+	// `0x1070b238` EngineFileSystemPtr — engine interface pointer: the filesystem (slot 9 file-exists
+	// test); sites: ElysiumNpcMisc2.cpp:552 (0019/6 Q3)
+	// `0x1070b24c` EngineSpatialPartitionPtr — engine interface pointer: spatial-partition enumeration
+	// (+0x30); sites: ElysiumNpcMisc2.cpp:55 (0019/6 Q3)
+	// `0x1072bc8c` SoundDangerRadiusCell — .data cell: sound_volume_table row 27
+	// (NPC_DISCIPLINE_ALERT) radius, InsertSound argument; sites: ElysiumNpcRunAiSpecies.cpp:510
+	// (0019/6 Q3)
+	// `0x1072bcc3` SoundDangerOcclusionCell — .data byte: sound_volume_table row 27 occlusion flag,
+	// InsertSound argument; sites: ElysiumNpcRunAiSpecies.cpp:510 (0019/6 Q3)
+	// `0x107532e8` WorldEntityPtr — .data pointer: the world entity, written by CWorld::Precache,
+	// answered by 0x1023bd00; sites: ElysiumNpcRunAi.inl:60 (0019/6 Q3)
+	// `0x10923d80` SlotAcquireExtentGuard — .data guard word: bit 0 gates slot 595 one-time static
+	// half-extent init (0x102b4cd1); sites: ElysiumNpcMisc2.cpp:38 (0019/6 Q3)
+	// `0x10924324` AcquireHalfExtentX — .data float: slot 595 static half-extent X, initialised to
+	// 1024.0 behind DAT_10923d80 bit 0 and never written again; sites: ElysiumNpcMisc2.cpp:37 (0019/6
+	// Q3)
+	// `0x10924328` AcquireHalfExtentY — .data float: slot 595 static half-extent Y (1024.0, same
+	// init); sites: ElysiumNpcMisc2.cpp:37 (0019/6 Q3)
+	// `0x1092432c` AcquireHalfExtentZ — .data float: slot 595 static half-extent Z (128.0, same init);
+	// sites: ElysiumNpcMisc2.cpp:37 (0019/6 Q3)
+	// `0x10924984` DispositionSeedCell — .data int: source of m_nCurrDisposition at 0x1029a6a9; no
+	// writer in the image; sites: ElysiumNpcLifecycle2.cpp:424 (0019/6 Q3)
+	// `0x10924edc` EntTraceMeleeParent — `ent_trace_melee`'s parent pointer (object `0x10924ed8` + 4).
+	// Its 30 readers (`0x102b5650` family, `0x10385cf0`: `MOV ECX,[10924edc]; MOV EAX,[ECX]; CALL
+	// [EAX+4]`) call `IsCommand()` through it and drop the answer: the `IsCommand()` half of a
+	// `GetFloat()` whose value nothing uses. No event, no observable (read 2026-09-29); sites:
+	// ElysiumNpcHuman.cpp:529 (0019/6 Q3)
+	// `0x10925444` DebugNpcHandle — .data global: the ai_debug_npc handle; sites:
+	// ElysiumNpcHints10.cpp:104 (0019/6 Q3)
+	// `0x10925458` HintListCursor2 — .data global: a second hint-list walk cursor; sites:
+	// ElysiumNpcLifecycle.inl:80 (0019/6 Q3)
+	// `0x1092545c` HintListCursor3 — .data global: a third hint-list walk cursor; sites:
+	// ElysiumNpcLifecycle.inl:80 (0019/6 Q3)
+	// `0x10927194` InterestingPlaceListHead — .data global: the interesting-place list head (+0x540
+	// next); sites: ElysiumNpcLifecycle2.cpp:205 (0019/6 Q3)
+	// `0x109340d8` NodeGraphHullIndex — .data int: the node-graph hull index the last flyer spawned
+	// decides (four writers, no restore); sites: ElysiumNpcLifecycle2.inl:63 (0019/6 Q3)
+	// `0x109363d8` PatrolPathPoolInUse — table base: the in-use bytes of the 32-slot patrol path pool;
+	// sites: ElysiumNpcScript.cpp:78 (0019/6 Q3)
+	// `0x109363f8` PatrolPathPoolCursor — .data int: the patrol path pool allocation cursor; sites:
+	// ElysiumNpcScript.cpp:79 (0019/6 Q3)
+	// `0x10938040` FleshpileAndreiCache — .data pointer: the cached npc_VAndreiBlood the fleshpile
+	// maker fills; sites: ElysiumNpcLifecycle2.inl:84 (0019/6 Q3)
+	// `0x1093a740` BaseLocalIdSpace — .data object: the CAI_LocalIdSpace the schedule namespace is
+	// registered into (0x102ea0e0); sites: ElysiumNpcSchedule.cpp:108 (0019/6 Q3)
+	// `0x1093b650` HunterProvokerHandle — class static: the hunter shared handle, written only by
+	// 0x10387fd0; sites: ElysiumNpcHumanCombatant.h:29 (0019/6 Q3)
+	// `0x1093b658` HunterProvokerExpiry — class static: the hunter shared expiry; sites:
+	// ElysiumNpcHumanCombatant.h:30 (0019/6 Q3)
+	// `0x1093bb9c` TentacleGeneratorMakerRef — .data pointer: the static maker reference 0x10390d00
+	// binds to the TentacleGenerator maker; sites: ElysiumNpcMingXiao.h:421 (0019/6 Q3)
+	// `0x1093bd30` ShootGoalTargetWord — .data word: the tentacle-shoot goal target word
+	// (unrecovered); sites: ElysiumNpcRunTaskSpecies.cpp:1509 (0019/6 Q3)
+	// `0x1093bd34` TentacleHintCursor — .data handle: the cursor TASK 0x150 resumes its type-19000
+	// hint walk from (-1 at reset); sites: ElysiumNpcMingXiaoTentacle.cpp:87 (0019/6 Q3)
+	// `0x1093c33c` SabbatSplashCycle — .data float: 33.0/60.0 stored by static initialiser 0x103a5870
+	// (0.55), the cycle TASK 0x15c compares against; sites: ElysiumNpcRunTaskSpecies.cpp:242 (0019/6
+	// Q3)
+	// `0x1093d258` VampireLocalIdSpace — .data object: CNPC_VVampire CAI_LocalIdSpace parent; sites:
+	// ElysiumNpcSchedule.cpp:109 (0019/6 Q3)
+	// `0x1093d638` WerewolfSearchTimerA — .data cell: werewolf search-timer pair (removed with
+	// StartSearchTimer, 0019/6); sites: ElysiumNpcLifecycleShared.h:17 (0019/6 Q3)
+	// `0x1093d63c` WerewolfSearchTimerB — .data cell: werewolf search-timer pair, second word; sites:
+	// ElysiumNpcLifecycleShared.h:17 (0019/6 Q3)
+	// `0x10539978` StringOne — the shared ConVar default literal "1" (a string cell); sites:
+	// ElysiumNpcSelect.inl:88 (0019/6 Q4)
+	// `0x105da6d8` ExpressionNameFear — a string pointer: the fourth of slot 610's literal expression
+	// names; sites: ElysiumNpcTroikaHelpers.cpp:93 (0019/6 Q4)
+	// `0x10642c04` ClassnameCop — a string pointer: the entity name "Cop" task `0x160` searches for;
+	// sites: ElysiumNpcStartTaskSpecies.cpp:1924 (0019/6 Q4)
+	// `0x10713de0` Vec3Invalid — `vec3_invalid` (`staticinit_101371a0` fills the triple with
+	// 0x7f7fffff); sites: ElysiumNpcWerewolf.cpp:95 (0019/6 Q4)
+	// `0x10713de4` Vec3InvalidY — `vec3_invalid` .y, the second float of the triple at `10713de0`;
+	// sites: ElysiumNpcWerewolf.cpp:1449 (0019/6 Q4)
+	// `0x10713de8` Vec3InvalidZ — `vec3_invalid` .z, the third float of the triple at `10713de0`;
+	// sites: ElysiumNpcWerewolf.cpp:1449 (0019/6 Q4)
+	// `0x1072bc20` SoundInfoTable — the float-sound info row table (row 0x1b holds the danger sound's
+	// volume and flag); sites: ElysiumNpcStartTask_2.inl:118 (0019/6 Q4)
+	// `0x1072bc88` SoundEntInsertArgA — a global argument passed to `CSoundEnt::InsertSound` by the
+	// flee scream (`0x1000bca8`); sites: ElysiumNpcSelect.inl:66 (0019/6 Q4)
+	// `0x1072bcc2` SoundEntInsertArgB — a global argument passed to `CSoundEnt::InsertSound` by the
+	// flee scream (`0x1000bca8`); sites: ElysiumNpcSelect.inl:67 (0019/6 Q4)
+	// `0x1072c540` StealthKillRules — the `CStealthKillRules` object `InDeafZone` is called on; sites:
+	// ElysiumNpcSenses10.cpp:293 (0019/6 Q4)
+	// `0x10739d08` FollowerTypeTable — the follower-type table `0x101e8c90` fills backAway / walkTo /
+	// runTo from; sites: ElysiumNpcSquad.cpp:200 (0019/6 Q4)
+	// `0x10739d20` FeatListCount — `CVFeatList_t` row count; sites: ElysiumNpcStartTaskSpecies.cpp:796
+	// (0019/6 Q4)
+	// `0x10739d24` FeatListRows — `CVFeatList_t` row array; sites: ElysiumNpcStartTaskSpecies.cpp:796
+	// (0019/6 Q4)
+	// `0x1073dc3c` VSoundConceptCount — the global VSound concept list's entry count; sites:
+	// ElysiumNpcSounds10.cpp:104 (0019/6 Q4)
+	// `0x1073dc40` VSoundConceptList — the global VSound concept list (entries `{ int id; const char*
+	// name; }`); sites: ElysiumNpcSounds10.cpp:105 (0019/6 Q4)
+	// `0x1074f028` CharTemplateRegistry — the character-template registry `0x10206c30` is called on
+	// (`SetCharTemplate`); sites: ElysiumNpcSpawn.cpp:105 (0019/6 Q4)
+	// `0x1090fbec` AttackCoordinatorA — global attack-coordinator pointer 0 of the three slot 608
+	// walks; sites: ElysiumNpcTroikaHelpers.cpp:104 (0019/6 Q4)
+	// `0x1090fbf0` AttackCoordinatorB — global attack-coordinator pointer 1 of the three slot 608
+	// walks; sites: ElysiumNpcTroikaHelpers.cpp:104 (0019/6 Q4)
+	// `0x1090fbf4` AttackCoordinatorC — global attack-coordinator pointer 2 of the three slot 608
+	// walks; sites: ElysiumNpcTroikaHelpers.cpp:104 (0019/6 Q4)
+	// `0x10923dd5` FleeSoundGuardA — first-use guard byte of the flee-sound concept cache; sites:
+	// ElysiumNpcSounds10.cpp:250 (0019/6 Q4)
+	// `0x10923dd8` NullEntityHandle — the null entity handle every `AI_NavGoal_t` literal stores at
+	// +0x28; sites: ElysiumNpcStartTask.cpp:346 (0019/6 Q4)
+	// `0x10923ddd` IdleAgitatedGuard — first-use guard byte of the "Idle_Agitated" concept cache;
+	// sites: ElysiumNpcSounds10.cpp:258 (0019/6 Q4)
+	// `0x10923e2c` DominateBrainWipeGuard — first-use guard word of the `Dominate_BrainWipe`
+	// discipline id cache; sites: ElysiumNpcSenses10.cpp:161 (0019/6 Q4)
+	// `0x10923e30` IdleAgitatedConceptId — cached VSound concept id of "Idle_Agitated"; sites:
+	// ElysiumNpcSounds10.cpp:258 (0019/6 Q4)
+	// `0x10923f0c` SurprisedGuard — first-use guard byte of the "Surprised" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:242 (0019/6 Q4)
+	// `0x10923f0d` DeathGuard — first-use guard byte of the "Death" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:153 (0019/6 Q4)
+	// `0x10924074` DominateBrainWipeId — cached discipline id of `Dominate_BrainWipe`; sites:
+	// ElysiumNpcSenses10.cpp:160 (0019/6 Q4)
+	// `0x109240c0` IdleCalmGuard — first-use guard byte of the "Idle_Calm" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:171 (0019/6 Q4)
+	// `0x109240c8` FloatSoundGuardA — first-use guard of a float-sound concept cache (one of two
+	// caches); sites: ElysiumNpcSounds10.cpp:229 (0019/6 Q4)
+	// `0x109241f0` TargetSuspectConceptId — cached VSound concept id of "Target_Suspect"; sites:
+	// ElysiumNpcSounds10.cpp:164 (0019/6 Q4)
+	// `0x10924240` FloatSoundGuardB — first-use guard of the other float-sound concept cache; sites:
+	// ElysiumNpcSounds10.cpp:229 (0019/6 Q4)
+	// `0x10924242` UpsetGuard — first-use guard byte of the "Upset" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:272 (0019/6 Q4)
+	// `0x10924330` TargetSuspectGuard — first-use guard byte of the "Target_Suspect" concept cache;
+	// sites: ElysiumNpcSounds10.cpp:164 (0019/6 Q4)
+	// `0x1092442c` SleepingConceptId — cached VSound concept id used with `DAT_1092482c`; sites:
+	// ElysiumNpcSounds10.cpp:184 (0019/6 Q4)
+	// `0x10924504` IdleCalmConceptId — cached VSound concept id of "Idle_Calm"; sites:
+	// ElysiumNpcSounds10.cpp:171 (0019/6 Q4)
+	// `0x10924624` ComfortConceptId — cached VSound concept id of "Comfort"; sites:
+	// ElysiumNpcSounds10.cpp:265 (0019/6 Q4)
+	// `0x109247e0` BossTableSlot0 — slot 0 of the two-slot global boss table (-1 empty); sites:
+	// ElysiumNpcThink.cpp:82 (0019/6 Q4)
+	// `0x109247e4` BossTableSlot1 — slot 1 of the two-slot global boss table (-1 empty); sites:
+	// ElysiumNpcThink.cpp:82 (0019/6 Q4)
+	// `0x1092482c` SleepingGuard — first-use guard byte beside `DAT_1092442c`; sites:
+	// ElysiumNpcSounds10.cpp:184 (0019/6 Q4)
+	// `0x10924830` FloatSoundConceptIdB — cached VSound concept id of the second float-sound cache;
+	// sites: ElysiumNpcSounds10.cpp:229 (0019/6 Q4)
+	// `0x1092483c` FloatSoundDistanceCache — the cached "FloatSoundDistance" float, lazily loaded from
+	// the float-sound table (50.0); sites: ElysiumNpcSounds.cpp:56 (0019/6 Q4)
+	// `0x1092488d` FloatConceptGuard — guard bits; bit 0 guards the "Float" concept lookup; sites:
+	// ElysiumNpcSounds10.cpp:324 (0019/6 Q4)
+	// `0x10924934` FearStartGuard — first-use guard byte of the "Fear_Start" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:198 (0019/6 Q4)
+	// `0x1092497c` ComfortGuard — first-use guard byte of the "Comfort" concept cache; sites:
+	// ElysiumNpcSounds10.cpp:265 (0019/6 Q4)
+	// `0x10924980` DispositionExpressionTable — the table `0x100ec360` / `0x100ec2e0` / `0x100ec3d0`
+	// key on `m_nCurrDisposition`; sites: ElysiumNpcTroikaHelpers.cpp:192 (0019/6 Q4)
+	// `0x10924a14` FloatConceptIdA — cached VSound concept id of the first float-sound cache; sites:
+	// ElysiumNpcSounds10.cpp:229 (0019/6 Q4)
+	// `0x10924d1c` FloatSoundDistanceGuard — the magic-static guard word of `DAT_1092483c`; sites:
+	// ElysiumNpcSounds.cpp:57 (0019/6 Q4)
+	// `0x10924d64` DeathConceptId — cached VSound concept id of "Death"; sites:
+	// ElysiumNpcSounds10.cpp:153 (0019/6 Q4)
+	// `0x10924e84` FleeSoundConceptId — cached VSound concept id used by the flee sound; sites:
+	// ElysiumNpcSounds10.cpp:251 (0019/6 Q4)
+	// `0x10924e88` FearStartConceptId — cached VSound concept id of "Fear_Start"; sites:
+	// ElysiumNpcSounds10.cpp:198 (0019/6 Q4)
+	// `0x10924f64` SurprisedConceptId — cached VSound concept id of "Surprised"; sites:
+	// ElysiumNpcSounds10.cpp:242 (0019/6 Q4)
+	// `0x10924fb4` UpsetConceptId — cached VSound concept id of "Upset"; sites:
+	// ElysiumNpcSounds10.cpp:272 (0019/6 Q4)
+	// `0x10924fb8` BossTableCount — the signed-byte count of the global boss table; sites:
+	// ElysiumNpcThink.cpp:82 (0019/6 Q4)
+	// `0x1093404c` GoalToleranceGlobal — the static-init default tolerance an `AI_NavGoal_t` literal
+	// copies; sites: ElysiumNpcStartTask.cpp:740 (0019/6 Q4)
+	// `0x1093412c` UsedHullCompanion — the companion word `0x102f9900` clears with the used-hull mask;
+	// sites: ElysiumNpcUsedHullBits.cpp:9 (0019/6 Q4)
+	// `0x10936c74` SquadSlotNamespace — the one shared squad-slot id namespace; sites:
+	// ElysiumNpcSquad.inl:48 (0019/6 Q4)
+	// `0x10937cf2` DisciplineOffCooldownByte — slot 334's global "a discipline is off cooldown" byte;
+	// sites: ElysiumNpcTroikaHelpers.inl:97 (0019/6 Q4)
+	// `0x1093c340` SabbatDiveFlightTime — the dive flight time `staticinit_103a5820` writes (33.0 *
+	// 1/30 = 1.1); sites: ElysiumNpcStartTaskSpecies.cpp:2569 (0019/6 Q4)
+	// `0x1093d634` ScopeTraceGuard — the magic-static guard of a scope-trace concept cache; sites:
+	// ElysiumNpcSounds10.cpp:187 (0019/6 Q4)
+	// `0x1093d6ec` ScopeTraceCache — the cache guarded by `DAT_1093d634`; sites:
+	// ElysiumNpcSounds10.cpp:187 (0019/6 Q4)
+	// `0x1093fac4` WerewolfDebugWord — the process-wide debug word beside `werewolf_show_debug`;
+	// sites: ElysiumNpcSpeciesLifecycle10.inl:156 (0019/6 Q4)
+	// `0x10940495` FloatSoundInfoGuard — guard bits (1 and 2) of the Float_Sound_Info row 3 read;
+	// sites: ElysiumNpcZombie.cpp:96 (0019/6 Q4)
+	// `0x109f0ac0` EmptyFeatRow — the lazily built empty `CVFeatList_t` row; sites:
+	// ElysiumNpcStartTaskSpecies.cpp:797 (0019/6 Q4)
 
 	// --- ConVars -------------------------------------------------------------------------------
 	//
@@ -314,6 +1546,31 @@ namespace ElysiumNpcTunables
 		WerewolfForceTeleportInTime, // `werewolf_force_teleport_in_time` "25.0", object `0x1093d458`
 		WerewolfTeleportFullPathCheck, // `werewolf_teleport_full_path_check` "1", object `0x1093fa38`
 		WerewolfTeleportIgnoreViewcone, // `werewolf_teleport_ignore_viewcone` "1", object `0x1093f780`
+		DebugSlowIdleYawSpeed, // `debug_slow_idle_yaw_speed` "20", object `0x10924e90`
+		DebugSlowWalkYawSpeed, // `debug_slow_walk_yaw_speed` "25", object `0x10924118`
+		DebugAllowNonIdleAutoSk, // `debug_allow_non_idle_auto_sk` "1", object `0x10924af8`
+		NpcVphysics, // `npc_vphysics` "0", object `0x106bbaa0`
+		ParticleScale, // `particle_scale` "1.0", object `0x107083d8`
+		PlSupernaturalLevel, // `pl_supernatural_level` "-1", object `0x10724ff8`
+		PlInvestigateLevel, // `pl_investigate_level` "-1", object `0x107250d0`
+		PlCriminalLevel, // `pl_criminal_level` "-1", object `0x10725948`
+		DebugResponseTimerMin, // `debug_response_timer_min` "5.0", object `0x107257b8`
+		DebugResponseTimerMax, // `debug_response_timer_max` "7.5", object `0x10725890`
+		DebugShowCsActs, // `debug_show_cs_acts` "0", object `0x107258d8`
+		DebugHeightenedAlertExpireTime, // `debug_heightened_alert_expire_time` "40.0", object `0x10725f70`
+		EntTraceMelee, // `ent_trace_melee` "0", object `0x10924ed8`
+		ZombieGibAmt, // `zombie_gib_amt` "100", object `0x10940498`
+		MingXiaoThrowHds, // `ming_xiao_throw_hds` ".0005", object `0x1093b9f8`
+		MingXiaoThrowPower, // `ming_xiao_throw_power` ".0040", object `0x1093bbc8`
+		MingXiaoThrowBase, // `ming_xiao_throw_base` "150.0", object `0x1093bc10`
+		ManbatScreechAlways, // `manbat_screech_always` "0", object `0x1093b810`
+		DebugTestSwitch2, // `debug_test_switch2` "0", object `0x10924630`
+		DebugTestSwitch1, // `debug_test_switch1` "0", object `0x10924678`
+		ZombieMeleeMod, // `zombie_melee_mod` "1.0", object `0x10940400`
+		ZombieHeadshotMod, // `zombie_headshot_mod` "10.0", object `0x10940448`
+		DebugAllowNpcHunting, // `debug_allow_npc_hunting` "0", object `0x10924478`
+		WerewolfForceTeleport, // `werewolf_force_teleport` "0", object `0x1093f9a0`
+		WerewolfTeleportInTime, // `werewolf_teleport_in_time` "2.0", object `0x1093d6f0`
 		Count
 	};
 

@@ -182,7 +182,7 @@ void FElysiumNpcHengeyokai::HengeyokaiTask14b()
 	// type-0 stat list (`+0x13bc/+0x13c0`, else the global `0x109f0b40`) `Set(0xf, 0)`
 	// (`103834e8 CALL 0x1000ccd9`), `+0x6694 m_bInSharkForm = 1` (`103834f1`), `TaskComplete(0)`
 	// (`103834f8 CALL 0x1000ac68`).
-	constexpr double TransformWaitSeconds = 2.0;   // `_DAT_104b6808`
+	constexpr double TransformWaitSeconds = ElysiumNpcTunables::ProteanTransformWait;   // `_DAT_104b6808`
 	++HengeyokaiTask14bCalls;
 	if (!(ProteanTransformStartTime + TransformWaitSeconds < RunTask19Species::NowOf(*this)))
 	{
@@ -199,7 +199,7 @@ void FElysiumNpcMingXiao::MingXiaoTask14b()
 	// `0x10383470` without the `+0x6694` write: `+0x1560 + 2.0 (_DAT_10452dc4) < curtime`
 	// (`1039aa39 TEST AH,5` / `1039aa3c JP`), `Set(0xf, 0)` (`1039aaa0`), `TaskComplete(0)`
 	// (`1039aaa9`).
-	constexpr double TransformWaitSeconds = 2.0;   // `_DAT_10452dc4`
+	constexpr double TransformWaitSeconds = ElysiumNpcTunables::Two;   // `_DAT_10452dc4`
 	++MingXiaoTask14bCalls;
 	if (!(ProteanTransformStartTime + TransformWaitSeconds < RunTask19Species::NowOf(*this)))
 	{
@@ -261,7 +261,7 @@ int32 FElysiumNpcAndreiBlood::RunTaskSlot444(void* Arg0)
 		FacePlayerAdvance();                                                       // 0x1035d91e
 		return 0;
 	case 0x151:
-		if (0.5f <= SequenceCycle)                                                 // 0x1035d934 `_DAT_104a6f84`
+		if (ElysiumNpcTunables::AndreiTask151CycleThreshold <= SequenceCycle)      // 0x1035d934 `_DAT_104a6f84`
 		// same arm: 0x1035d941 JNZ
 		{
 			TakeDamageMode = 0;                                                    // 0x1035d943 `m_takedamage`
@@ -300,7 +300,7 @@ int32 FElysiumNpcAndreiBlood::RunTaskSlot444(void* Arg0)
 	case 0x156:
 		if (bAndreiForceTeleport                                                   // 0x1035da07
 			|| AndreiHitMax <= AndreiHitCounter                                    // 0x1035da17
-			|| 5.0f <= static_cast<float>(Now - AndreiTeleportWaitStartTime))      // 0x1035da28 `_DAT_104a6f88`
+			|| ElysiumNpcTunables::AndreiTeleportWaitSeconds <= static_cast<float>(Now - AndreiTeleportWaitStartTime)) // 0x1035da28 `_DAT_104a6f88`
 			// same arm: 0x1035da35 JNZ
 		{
 			TaskComplete(false);                                                   // 0x1035da3b
@@ -377,7 +377,7 @@ int32 FElysiumNpcAsianVampire::RunTaskSlot444(void* Arg0)
 		FElysiumNpcVampireBoss::RunTaskSlot444(Arg0);                              // 0x10361386
 		if (ActivityNumber != 0x2d                                                 // 0x1036138b
 		// same arm: 0x10361392 JZ
-			&& Velocity.Z / ElysiumMove::U <= 250.0f)                              // 0x10361398 slot 198 / 0x103613c1 `_DAT_104a930c`
+			&& Velocity.Z / ElysiumMove::U <= ElysiumNpcTunables::AsianVampireRestartVelocityZ) // 0x10361398 slot 198 / 0x103613c1 `_DAT_104a930c`
 		{
 			RestartIdealActivityId(0x2d);                                          // 0x103613c7
 		}
@@ -455,7 +455,7 @@ int32 FElysiumNpcBach::RunTaskSlot444(void* Arg0)
 				bBachCamperFlag = false;                                           // 0x10365455
 				BachReusedOccludeCount = 0;                                        // 0x1036545c
 				BaseScheduleHost.WaitFinished = Wait;
-				Warning = Wait + 1000000000.0;                                     // 0x1036546c `_DAT_104aaac8`
+				Warning = Wait + ElysiumNpcTunables::BachWarningWaitFar;           // 0x1036546c `_DAT_104aaac8`
 			}
 			else
 			{
@@ -468,7 +468,7 @@ int32 FElysiumNpcBach::RunTaskSlot444(void* Arg0)
 		// same arm: 0x1036549c CALL, 0x103654a8 CALL, 0x103654ba CALL, 0x103654d5 CALL, 0x103654e0 CALL
 		{
 			RunTask19Species::EmitWav(*this, 2, TEXT("Character/Boss/Bach/snipe_warn6.wav")); // 0x10365519 / 0x1036552b
-			BachWarningTime += 999999.0;                                           // 0x10365534 `_DAT_104aaacc`
+			BachWarningTime += ElysiumNpcTunables::BachWarningTimeBump;            // 0x10365534 `_DAT_104aaacc`
 			// same arm: 0x10365542 CALL, 0x10365550 JL, 0x10365559 CALL, 0x1036555f JNZ, 0x1036556d CALL
 			//   0x10365581 JZ, 0x10365585 JZ, 0x10365588 CALL
 			// `0x10365840` is a one-byte `RET`.
@@ -548,7 +548,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 		FElysiumNpcVampireBoss::RunTaskSlot444(Arg0);                              // 0x1036c3d9
 		if (ActivityNumber != 0x2d                                                 // 0x1036c3de
 		// same arm: 0x1036c3e5 JZ, 0x1036c3eb CALL
-			&& Velocity.Z / ElysiumMove::U <= 500.0f)                              // 0x1036c409 / 0x1036c414 `_DAT_104ada50`
+			&& Velocity.Z / ElysiumMove::U <= ElysiumNpcTunables::ChangBrosRestartVelocityZ) // 0x1036c409 / 0x1036c414 `_DAT_104ada50`
 		{
 			RestartIdealActivityId(0x2d);                                          // 0x1036c41a
 		}
@@ -574,7 +574,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	case 0x157:
-		if (!bChangEnergyBallSpawned && 0.591f <= SequenceCycle)                   // 0x1036c1ab / 0x1036c1c0 `_DAT_104ada38`
+		if (!bChangEnergyBallSpawned && ElysiumNpcTunables::ChangEnergyBallCycle <= SequenceCycle) // 0x1036c1ab / 0x1036c1c0 `_DAT_104ada38`
 		{
 			bChangEnergyBallSpawned = true;                                        // 0x1036c1c4
 			SpawnEnergyBall();                                                     // 0x1036c1cb
@@ -615,7 +615,7 @@ int32 FElysiumNpcChangBros::RunTaskSlot444(void* Arg0)
 		KillCenterEmitter();                                                       // 0x1036c10b
 		// `0x100fbc90("chang_center_emitter", m_vArenaCenter + (0, 0, 50.0), vec3_angle, -1.0)`.
 		FVector CenterUnits = ChangArenaCenter / ElysiumMove::U;
-		CenterUnits.Z += 50.0f;                                                    // 0x1036c11b `_DAT_104ada5c`
+		CenterUnits.Z += ElysiumNpcTunables::ChangCenterEmitterZOffset;            // 0x1036c11b `_DAT_104ada5c`
 		// `0x1036c14c CALL 0x1000389b` -> `0x100fbc90`, the named-emitter create (family Damage's
 		// `CreateNamedEmitter`; L05 integration: was the classname `CreateNamedEntity` seam, which
 		// made no particle). The port's emitter is an effect, not an entity, so no `GetRefEHandle`
@@ -861,11 +861,11 @@ int32 FElysiumNpcHuman::RunTaskSlot444(void* Arg0)
 		}
 		else
 		{
-			float Threshold = 1.0f;                                                // `_DAT_104b73f0`
+			float Threshold = ElysiumNpcTunables::MeleeRollOverDefault;            // `_DAT_104b73f0`
 			if (Roll != nullptr)                                                   // 0x10384bb5
 			{
 				bRollArmed = MeleeRollBand(*Roll) == 0;                            // 0x10384bb9 / 0x10384bc0
-				Threshold = 0.5f;                                                  // `_DAT_104b73ec`
+				Threshold = ElysiumNpcTunables::MeleeRollOverArmed;                // `_DAT_104b73ec`
 			}
 			// `Threshold <= m_flCycle` jumps straight to the finish (`0x10384bdd JNP`).
 			bOver = Threshold <= SequenceCycle || IsActivityFinished();            // 0x10384bd2 / 0x10384be3
@@ -1072,8 +1072,8 @@ int32 FElysiumNpcManBat::RunTaskSlot444(void* Arg0)
 		FVector Away = NpcKernelMotor2Shared::MotorTailSourceOf(Origin) - Pos;                              // 0x1038d59b..0x1038d5aa
 		Away.Z = 0.0;
 		Away.Normalize();                                                          // 0x1038d5c4 `VectorNormalize`
-		Pos.X += Away.X * 10.0f;                                                   // 0x1038d5d0 `_DAT_1044e664`
-		Pos.Y += Away.Y * 10.0f;                                                   // 0x1038d5f1
+		Pos.X += Away.X * ElysiumNpcTunables::Ten;                                 // 0x1038d5d0 `_DAT_1044e664`
+		Pos.Y += Away.Y * ElysiumNpcTunables::Ten;                                 // 0x1038d5f1
 		// same arm: 0x1038d5ff JZ, 0x1038d619 JNZ, 0x1038d630 JZ, 0x1038d647 JNZ
 		FVector Mins = FVector::ZeroVector;
 		FVector Maxs = FVector::ZeroVector;
@@ -1447,7 +1447,7 @@ int32 FElysiumNpcMingXiaoTentacle::RunTaskSlot444(void* Arg0)
 		float Blend = static_cast<float>(Now - Schedule.TaskStartedAt);           // 0x1039d8ed / 0x1039d8f3
 		// `1039d903 AND EAX,0x4100` / `1039d908 JNZ`: only an ordered `Blend > 4.0` clamps high; the low
 		// clamp is `TEST AH,5` / `JP` (an ordered `< 0.0`). A NaN blend passes both (L05 integration).
-		if (Blend > 4.0f)                                                          // 0x1039d8fb `_DAT_10450aa0`
+		if (Blend > ElysiumNpcTunables::Four)                                      // 0x1039d8fb `_DAT_10450aa0`
 		// same arm: 0x1039d908 JNZ
 		{
 			Blend = 4.0f;                                                          // 0x1039d90a
@@ -1566,7 +1566,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 	{
 		const FElysiumPlayer* Player = World != nullptr ? World->FindPlayer() : nullptr;
 		if (Player != nullptr
-			&& NpcKernelMotor2Shared::Length2D((Player->Origin - Origin) / ElysiumMove::U) <= 500.0f) // 0x103a8a28 `DAT_104c3cd0`
+			&& NpcKernelMotor2Shared::Length2D((Player->Origin - Origin) / ElysiumMove::U) <= ElysiumNpcTunables::SabbatTransformRange) // 0x103a8a28 `DAT_104c3cd0`
 			// same arm: 0x103a8a2f JZ
 		{
 			SabbatLeaderStartTransformation();                                        // 0x103a8a48
@@ -1650,14 +1650,14 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 				// same arm: 0x103a8b9e JZ, 0x103a8bbf JNZ, 0x103a8bdf CALL
 			if (Player != nullptr)
 			{
-				MotorSetIdealYawToTargetAndUpdate(Player->Origin, 50.0f);          // 0x103a8be8 `DAT_104c3cec`
+				MotorSetIdealYawToTargetAndUpdate(Player->Origin, ElysiumNpcTunables::SabbatChargeYawSpeed); // 0x103a8be8 `DAT_104c3cec`
 				FVector Dir = Player->Origin - Origin;                             // 0x103a8bf1..0x103a8c37
 				// same arm: 0x103a8bfd CALL
 				const float Length = static_cast<float>((Dir / ElysiumMove::U).Size()); // 0x103a8c3b `VectorNormalize`
-				if (Length > 9.999999747378752e-05f)                               // 0x103a8c41 / 0x103a8c4e `_DAT_104c3ce4`
+				if (Length > ElysiumNpcTunables::SabbatLengthEpsilon)              // 0x103a8c41 / 0x103a8c4e `_DAT_104c3ce4`
 				{
 					Dir.Normalize();
-					Velocity = Dir * (100.0f * ElysiumMove::U);                    // 0x103a8c54..0x103a8c9d `_DAT_104c3ce8`
+					Velocity = Dir * (ElysiumNpcTunables::SabbatChargeSpeed * ElysiumMove::U); // 0x103a8c54..0x103a8c9d `_DAT_104c3ce8`
 				}
 			}
 		}
@@ -1698,7 +1698,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 	case 0x160:
 		AutoMovement();                                                            // 0x103a8eac
 		// same arm: 0x103a8eb5 CALL, 0x103a8ebd JZ, 0x103a8ec3 CALL, 0x103a8ecd CALL
-		FaceEnemyOrigin(10.0f);                                                    // 0x103a8ef9 `DAT_104c3cd8`
+		FaceEnemyOrigin(ElysiumNpcTunables::SabbatFaceEnemyYawSpeed);              // 0x103a8ef9 `DAT_104c3cd8`
 		if (IsActivityFinished())                                                  // 0x103a8f02
 		// same arm: 0x103a8f0a JZ
 		{
@@ -1714,7 +1714,7 @@ int32 FElysiumNpcSabbatLeader::RunTaskSlot444(void* Arg0)
 		}
 		return 0;
 	case 0x162:
-		if (static_cast<float>(Now - SabbatLeaderTaskStartTime) > 1.0f)           // 0x103a9063 / 0x103a906b AND 0x4100 / 0x103a9070 `_DAT_104c3d08` (only ordered >)
+		if (static_cast<float>(Now - SabbatLeaderTaskStartTime) > ElysiumNpcTunables::SabbatLeaderTaskWait) // 0x103a9063 / 0x103a906b AND 0x4100 / 0x103a9070 `_DAT_104c3d08` (only ordered >)
 		{
 			TaskComplete(false);                                                   // 0x103a9079
 		}
@@ -1946,7 +1946,6 @@ int32 FElysiumNpcWerewolf::RunTaskSlot444(void* Arg0)
 		return 0;
 	}
 	const double Now = RunTask19Species::NowOf(*this);
-	(void)TaskName(RunTask19Species::LocalTaskOf(*this, Step));                                                  // 0x103ce029 slot 449, answer unused
 	// same arm: 0x103cdfb9 JZ, 0x103cdfc3 JNZ, 0x103ce039 JA
 	// `PUSH 0x10661dac` / slot 448: the SDK's text fail code (`MakeFailCode(const char*)`), the
 	// string's address standing as the reason. The port's text-fail accessor is family Misc19's

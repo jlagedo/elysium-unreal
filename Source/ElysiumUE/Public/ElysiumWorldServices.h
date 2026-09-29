@@ -173,7 +173,7 @@ struct FElysiumNpcMoveRequest
 	FVector DestinationCm = FVector::ZeroVector;
 	// The arrival radius at the destination, centimetres, exactly as the caller states it; the body
 	// neither clamps it nor pads it. For the navigator this is retail's goal-waypoint arrival test
-	// (`0x102ef510`): the constant 0.0625 units (`0x10451f78`; 0.25, `0x10449260`, under
+	// (navigator slot 16): the constant 0.0625 units (`0x10451f78`; 0.25, `0x10449260`, under
 	// `npc_vphysics`), 2-D on ground nav. It is NOT the path's goal tolerance (`path+0x28`), which
 	// retail applies only to a BLOCKED step (`0x102ef760`: `dist < path+0x28 + 0.1`) -- the
 	// substrate's arm, decided from `FElysiumNpcMoveFacts`.
@@ -194,6 +194,11 @@ struct FElysiumNpcMoveRequest
 	// The path's movement activity (`path+0x2c`) by name, for logging only. The body never decides on
 	// it.
 	FName MovementActivityName;
+	// The turn rate the body travels with, degrees per second: retail's `CAI_Motor::m_YawSpeed`
+	// (motor `+0x38`) as its writers last left it (`0x102e1cf0` stores slot 516 `MaxYawSpeed`; a task
+	// states its own speed) and `UpdateYaw` `0x102e1e20` turns by. The kernel states it (`FElysiumNpcBase::MotorYawRateDegPerS`);
+	// the body only applies it. **0 means "keep the body's current rate"**, the default.
+	float YawSpeedDegPerS = 0.f;
 };
 
 // How the engine's path follower ended a request: a mirror of `FPathFollowingResult::Code`, so no
@@ -276,6 +281,11 @@ struct FElysiumNpcRouteQuery
 	int32 PedestrianCostMultiplier = 0;
 	// False: a partial path is no route. True: a partial path answers, flagged `bPartial`.
 	bool bAcceptPartial = false;
+	// Where the route starts, world centimetres, projected like `DestCm`. **Unset means where the body
+	// stands** (its nav agent location), every caller's answer before 0019/6. Set for retail's
+	// two-point ask, `CAI_Navigator` `0x102ee380(start, end)` -> `0x102fdcc0` (`CNPC_VWerewolf::HasPath`
+	// `0x103d0db0`), which builds a route between two arbitrary points on this NPC's hull.
+	TOptional<FVector> StartCm;
 };
 
 // What `QueryRoute` found. Geometry only: whether the length is short enough is the caller's.
@@ -305,6 +315,45 @@ struct FElysiumNpcNavRaycastAnswer
 {
 	bool bHit = false;
 	FVector HitCm = FVector::ZeroVector;
+};
+
+// The floor under the body, as `CAI_BaseNPC::CheckOnGround` `0x1026e5e0` asks it: retail traces the
+// collision hull from `GetAbsOrigin() + (0,0,0.1)` to `GetAbsOrigin() - (0,0,4.0)` under
+// `MASK_NPCSOLID` (`0x202400b`) and reads `tr.fraction`, `tr.m_pEnt` and the plane
+// (`docs/vtmb/npc-ai/shape.md` § "CheckOnGround, CanStandAt and GetGroundpoint"). Centimetres.
+//
+// **Facts only, no verdict.** Whether this counts as on the ground for condition `0x73`, whether
+// the hit entity is adopted by `SetGroundEntity` (slot 209), and whether the distance is inside
+// retail's 4.0-unit reach are the kernel's calls, made from these facts. The engine's floor probe
+// reaches `MaxStepHeightCm` (plus its contact band) below the capsule, further than retail's 4.0
+// units, so a reader compares `FloorDistanceCm` to its own reach.
+struct FElysiumNpcFloorFacts
+{
+	// The probe hit a blocking surface under the hull (retail: `tr.fraction != 1.0`).
+	// `FFindFloorResult::bBlockingHit`.
+	bool bOnGround = false;
+	// That surface is standable under this body's `WalkableFloorZ` (retail's standable-normal test,
+	// `normal.z >= 0.7`). `FFindFloorResult::bWalkableFloor`. False when `bOnGround` is.
+	bool bWalkable = false;
+	// The entity the surface belongs to (retail `tr.m_pEnt`, the value `SetGroundEntity` writes into
+	// `m_hGroundEntity` `+0x0384`): an NPC's body, the player's hull, or a brush / prop entity's
+	// component. Unset for the static world -- retail's `worldspawn` -- and when `bOnGround` is false.
+	FElysiumEntityHandle GroundEntityHandle;
+	// The surface normal at the contact (retail `tr.plane.normal`; `FHitResult::ImpactNormal`).
+	// Up when `bOnGround` is false.
+	FVector FloorNormal = FVector::UpVector;
+	// The gap from the bottom of the hull to the surface, cm (`FFindFloorResult::FloorDist`). Zero
+	// when `bOnGround` is false.
+	float FloorDistanceCm = 0.f;
+	// The body's step height, cm: the number its mover climbs (`UCharacterMovementComponent::
+	// MaxStepHeight`). Retail slot 522 `StepHeight` (`CAI_BaseNPC::StepHeight` `0x101a6b40` returns
+	// `_DAT_10453b94` = 18.0 units; Ming Xiao, its tentacle and the Tzimisce override it).
+	float MaxStepHeightCm = 0.f;
+	// The body's standable floor: the minimum normal z (`UCharacterMovementComponent::
+	// GetWalkableFloorZ`) and the same limit as the max slope in degrees (`GetWalkableFloorAngle`).
+	// Retail's standable normal is 0.7 (`ElysiumMove::StandableZ`).
+	float WalkableFloorZ = 0.f;
+	float WalkableFloorAngleDegrees = 0.f;
 };
 
 class IElysiumNpcMotor
@@ -359,7 +408,12 @@ public:
 	// Turn in place toward a yaw without travelling — HL1 CCineMonster's TASK_FACE_SCRIPT, which a
 	// beat runs after reaching its mark and which `m_fMoveTo 5` runs on its own. Cancelled by
 	// Stop/Teleport/MoveTo like any other request.
-	virtual void Face(float YawDegrees) = 0;
+	//
+	// `YawSpeedDegPerS` is the rate of the turn, degrees per second: retail's `CAI_Motor::m_YawSpeed`
+	// (motor `+0x38`) as `UpdateYaw` `0x102e1e20` applies it, stated by the kernel from slot 516
+	// `MaxYawSpeed` (`FElysiumNpcBase::MotorYawRateDegPerS`). **0 means "keep the body's current
+	// rate"**, the default and the answer of every caller that is not a kernel NPC (a scripted beat).
+	virtual void Face(float YawDegrees, float YawSpeedDegPerS = 0.f) = 0;
 	virtual void Stop() = 0;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) = 0;
 	virtual void SetEnabled(bool bEnabled) = 0;
@@ -450,6 +504,64 @@ public:
 		return false;
 	}
 
+	// --- 0019 story 6: the floor, the move-ignore filter and the route-held fact ---
+
+	// The floor under this body now (`FElysiumNpcFloorFacts`), measured when asked: retail's
+	// `CheckOnGround` `0x1026e5e0` traces on its own half-second clock, so the answer must not be a
+	// cache from the last movement tick. Also the body's step height and standable floor, which the
+	// kernel's slot 522 `StepHeight` readers take from here.
+	//
+	// **False is the default and means no movement component behind this motor** (a headless world,
+	// a double that has not opted in); `Out` is untouched. A body with collision off (frozen,
+	// disabled) is a motor that answered: true with `bOnGround == false`.
+	virtual bool SampleFloor(FElysiumNpcFloorFacts& Out) const { return false; }
+
+	// Stop (`bIgnore`) or resume (`!bIgnore`) this body's own movement colliding with one entity's
+	// collision -- the NPC's body, the player's hull, or a brush / prop entity's component. Retail's
+	// word is `m_hIgnoreCollisionEntity` (`CBaseAnimating +0x055c`), written by
+	// `CBaseAnimating::StartIgnoringCollision` `0x1008bb70` and cleared by
+	// `StopIgnoringCollisionWithEntity` `0x1008bd30` (the Troika triple `0x102c4380` / `0x102c43b0` /
+	// `0x102c43f0` drives them), and the per-species `NavIgnoreCollision` answers (`0x10379490`,
+	// `0x10380f90`, `0x103bfa00`).
+	//
+	// A set, not a slot: retail holds ONE handle, and keeping it one (clear the old before setting a
+	// new one) is the kernel's rule. The filter covers this body's own sweeps and floor probes only;
+	// the other entity moving into this body is not filtered. An entity with no collision to name (a
+	// point entity, a dead handle) is a no-op. Default: nothing.
+	virtual void SetMoveIgnore(const FElysiumEntityHandle& Entity, bool bIgnore) {}
+
+	// Resize this body's collision hull, world centimetres, relative to the feet origin as retail's
+	// `UTIL_SetSize(this, mins, maxs)` states it: `CAI_BaseNPC::SetHullSizeNormal` `0x10273070` (the
+	// hull row's full box) and `SetHullSizeSmall` `0x10273180` (its small box). Which box, and when,
+	// is the kernel's; the body sizes its capsule from the box (`UCapsuleComponent::SetCapsuleSize`,
+	// radius from the X extent, half-height from the Z span, as `ApplyRetailHull` reads a row) and
+	// keeps its feet where they stand. Default: nothing (no capsule behind this motor).
+	virtual void SetHullSize(const FVector& MinsCm, const FVector& MaxsCm) {}
+
+	// The point this body faces while it travels, world centimetres; unset = face along the path
+	// (the default, `bOrientRotationToMovement`). Retail's word is `CAI_Motor::m_facingQueue`
+	// (motor `+0x54`), filled by the queued-facing overloads `0x102e2150` / `0x102e2120` /
+	// `0x102e20f0` (the NPC's slots 517 / 518 `AddFacingTarget` `0x10278d90` / `0x10278d20`); the
+	// KERNEL owns the queue -- entries, weights, expiry, an entity entry followed each think -- and
+	// hands the point slot 15 `0x102e2180` blends it to, every think (on a change), so the body only
+	// faces. A motor call rather than a move-request field because retail's queue outlives a request:
+	// `NPCThink` refreshes it every think while a route is already in flight. The body realises it
+	// as `AAIController` focus with `bUseControllerDesiredRotation`. Default: nothing.
+	virtual void SetFacingTarget(const TOptional<FVector>& TargetCm) {}
+
+	// The turn rate of the move in flight, degrees per second: retail's `CAI_Motor::m_YawSpeed`
+	// (motor `+0x38`) as `UpdateYaw(-1)` `0x102e1e20` re-reads it every step, re-stated by the kernel
+	// when a writer (`0x102e1cf0` at `SetActivityAndSequence`'s tail, a task's stated speed) changed
+	// it mid-leg. Same unit and rule as `FElysiumNpcMoveRequest::YawSpeedDegPerS`; the request is
+	// kept. Default: nothing.
+	virtual void SetYawSpeed(float YawSpeedDegPerS) {}
+
+	// The engine's path follower holds a request (moving, waiting or paused) with a valid path. The
+	// fact retail's `CAI_Navigator::IsGoalActive` `0x102ee6a0` reads (`path+0x24`, a head waypoint
+	// exists) and the moving-goal trackers `UpdateEnemyPos` / `UpdateTargetPos`
+	// gate on. **False is the default**: no follower, no route.
+	virtual bool HasPath() const { return false; }
+
 	// TestLateralCover 0x10278220: stand at the candidate, then MoveLimit with MASK_NPCSOLID
 	// (0x202400b). Geometry only; candidate order and the sight/hint tests belong to the NPC.
 	virtual bool CanReachLateralCover(const FVector& FeetDestination) const { return false; }
@@ -471,7 +583,7 @@ public:
 	// there is nothing to desynchronise against.
 	virtual FElysiumLocomotionSample SampleLocomotion() const = 0;
 
-	// `CAI_Motor`'s own vtable slot 16 (`0x102e1300`, story 29c-1 family Motor) — how far ahead of a
+	// `CAI_Motor`'s own vtable slot 16 (story 29c-1 family Motor) — how far ahead of a
 	// stop this body has to begin braking, SOURCE units, which is what retail's navigator asks its
 	// motor before it decides to slow for a goal. Retail's body, arm for arm:
 	//
@@ -557,6 +669,17 @@ struct FElysiumEffectHandle
 	bool IsValid() const { return Id != INDEX_NONE; }
 };
 
+// Which retail trace filter judges an entity the trace meets (0019/6, prop filter arms). The world
+// answer's entity-kind cull; the character list is still the kernel's to fold.
+enum class EElysiumRetailTraceFilter : uint8
+{
+	// `CTraceFilterSimple` -> `StandardFilterRules` `0x101d3080`: a solid entity blocks.
+	Simple,
+	// `CTraceFilterFVisible::ShouldHitEntity` `0x10107630`: also passes an entity whose
+	// `m_bNPCTransparent` (`+0xfc`, the `npc_transparent` keyfield) is set.
+	FVisible,
+};
+
 // One retail `UTIL_TraceLine` / `UTIL_TraceHull`, as the kernel states it to `TraceRetail`.
 // Centimetres at the seam (story 5's rule); a kernel body converts with `ElysiumMove::U`.
 struct FElysiumRetailTrace
@@ -574,6 +697,8 @@ struct FElysiumRetailTrace
 	// Entities the trace never meets: the filter's pass entity (the looker, the tester) and any
 	// second one (`CTraceFilterSimpleTwoEnt`). Applied to the world answer and the character list.
 	TArray<FElysiumEntityHandle, TInlineAllocator<2>> Ignore;
+	// The filter the retail call site constructs. `Simple` is every caller's answer before 0019/6.
+	EElysiumRetailTraceFilter Filter = EElysiumRetailTraceFilter::Simple;
 };
 
 // One character body the trace met, with where along the trace it met it.

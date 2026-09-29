@@ -146,7 +146,6 @@ bool FElysiumNpcKernelSelect19BaseIdleTest::RunTest(const FString&)
 	N.WriteNpcStateRetail(1);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
 	TestEqual(TEXT("0x1028a3e4 HEAR_COMBAT -> 6 ALERT_FACE"), N.BaseSelectSchedule(), 6);
-	TestEqual(TEXT("0x1028a389 selector id 1"), N.SelectScheduleSelector, 1);
 	N.Cognition.Conditions.Reset();
 	N.Cognition.Conditions.Set(EElysiumNpcCond::GiveWay);
 	TestEqual(TEXT("0x1028a428 GIVE_WAY -> 0x38"), N.BaseSelectSchedule(), 0x38);
@@ -269,7 +268,6 @@ bool FElysiumNpcKernelSelect19PreSelectForcedTest::RunTest(const FString&)
 	N.ScheduleHost.ForcedSchedule = 0x77;
 	TestEqual(TEXT("0x102ae94f the forced schedule is returned"), N.PreSelectSchedule(), 0x77);
 	TestEqual(TEXT("0x102ae943 and consumed"), N.ScheduleHost.ForcedSchedule, 0);
-	TestEqual(TEXT("0x102ae92a selector id 2"), N.SelectScheduleSelector, 2);
 	TestEqual(TEXT("0x102ae934 0x101b9880 reset m_InvestigateSound"),
 		static_cast<int32>(N.Senses.Memory.InvestigateSound.Serial), 0);
 	N.WriteNpcStateRetail(1);
@@ -421,7 +419,6 @@ bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	N.WriteNpcStateRetail(1);
 	TestEqual(TEXT("0x102af8dc nothing -> 0x6b IDLE_DISPOSITION"), N.TroikaSelectSchedule(), 0x6b);
-	TestEqual(TEXT("0x102af66c selector id 2"), N.SelectScheduleSelector, 2);
 	N.bReturnToInitialPos = true;
 	TestEqual(TEXT("0x102af8b5 m_bReturnToInitialPos -> 0x45"), N.TroikaSelectSchedule(), 0x45);
 	TestFalse(TEXT("0x102af8b7 and consumed"), N.bReturnToInitialPos);
@@ -594,7 +591,6 @@ bool FElysiumNpcKernelSelect19TroikaCombatTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("0x102afe15 the shoot-at-hint gate falls to 0x1028a380"),
 			Ask({ EElysiumNpcCond::SeeEnemy }), 0xf);
-		TestEqual(TEXT("the base wrote its own selector id"), N.SelectScheduleSelector, 1);
 	}
 	return true;
 }
@@ -783,7 +779,6 @@ bool FElysiumNpcKernelSelect19AnimalTest::RunTest(const FString&)
 	N.WriteNpcStateRetail(1);
 	N.NpcFlags.Set(EElysiumNpcFlag::DO_STARTLED);
 	TestEqual(TEXT("0x1035fb6b DO_STARTLED -> 0x15d"), N.SpeciesSelectSchedule(), 0x15d);
-	TestEqual(TEXT("selector 5"), N.SelectScheduleSelector, 5);
 	N.bUseInteresting = true;
 	TestEqual(TEXT("0x1035fbe3 use_interesting, no place -> 0x156"), N.SpeciesSelectSchedule(), 0x156);
 	N.bUseInteresting = false;
@@ -836,7 +831,6 @@ bool FElysiumNpcKernelSelect19ScurryingTest::RunTest(const FString&)
 	TestTrue(TEXT("m_flFrightEndTime = now + duration"), S->ScurryingFrightEndTime >= 4.0);
 	S->Cognition.Conditions.Reset();
 	TestEqual(TEXT("0x103ac630 inside the fright window -> 0x162"), S->SpeciesSelectSchedule(), 0x162);
-	TestEqual(TEXT("selector 0x20"), S->SelectScheduleSelector, 0x20);
 	return true;
 }
 
@@ -880,7 +874,6 @@ bool FElysiumNpcKernelSelect19HumanTest::RunTest(const FString&)
 	N.Cognition.bCondTookDamage = true;
 	N.Cognition.Conditions.Set(EElysiumNpcCond::DetectedAttack);
 	TestEqual(TEXT("0x10384f54 a detected attacker it has no memory of -> 0x56"), N.SpeciesSelectSchedule(), 0x56);
-	TestEqual(TEXT("0x10384ee9 selector 0x14"), N.SelectScheduleSelector, 0x14);
 	TestFalse(TEXT("0x10384efe clears m_bCondTookDamage"), N.Cognition.bCondTookDamage);
 	N.WriteNpcStateRetail(1);
 	N.Cognition.Conditions.Reset();
@@ -930,7 +923,6 @@ bool FElysiumNpcKernelSelect19Guard1Test::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	N.NpcFlags.Set(EElysiumNpcFlag::DO_STARTLED);
 	TestEqual(TEXT("0x1037d14b DO_STARTLED -> 0xf1"), N.SpeciesSelectSchedule(), 0xf1);
-	TestEqual(TEXT("selector 0x12"), N.SelectScheduleSelector, 0x12);
 	N.WriteNpcStateRetail(0xc);
 	TestEqual(TEXT("0x1037d1ee state 0xc without the interrupt -> SetState(1), then the chain"),
 		N.SpeciesSelectSchedule(), 0x6b);
@@ -961,7 +953,6 @@ bool FElysiumNpcKernelSelect19CopTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103720a5 a large census -> 0x16e WANDER_AND_VANISH"), Cop->SpeciesSelectSchedule(), 0x16e);
 	TestTrue(TEXT("0x10372093 the claim byte"), Cop->bCopCountedSecond);
 	TestEqual(TEXT("0x1037209a the second census counts it"), FElysiumNpcCop::CopSecondCensus(), 1);
-	TestEqual(TEXT("selector 0xc (the chain did not run)"), Cop->SelectScheduleSelector, 0xc);
 	FElysiumNpcCop::CopAliveCensus() = SavedAlive;
 	FElysiumNpcCop::CopSecondCensus() = SavedSecond;
 	return true;
@@ -1007,7 +998,6 @@ bool FElysiumNpcKernelSelect19VampireBossLineTest::RunTest(const FString&)
 			F.Npc->Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
 			FElysiumNpc::SetSelect19ConVar(FElysiumNpc::ESelect19ConVar::AsianVampForceJumpUp, 1);
 			TestEqual(TEXT("0x10360f75 asianvamp_force_jump_up -> 0x15a"), F.Npc->SpeciesSelectSchedule(), 0x15a);
-			TestEqual(TEXT("selector 6"), F.Npc->SelectScheduleSelector, 6);
 		}
 	}
 	{
@@ -1102,7 +1092,6 @@ bool FElysiumNpcKernelSelect19MingXiaoTest::RunTest(const FString&)
 	}
 	M->WriteNpcStateRetail(5);
 	TestEqual(TEXT("0x10394133 transforming -> 0x157"), M->PreSelectSchedule(), 0x157);
-	TestEqual(TEXT("selector 0x19"), M->SelectScheduleSelector, 0x19);
 	M->WriteNpcStateRetail(2);
 	TestEqual(TEXT("0x103941a3 otherwise 0 after the weapon switch"), M->PreSelectSchedule(), 0);
 	M->WriteNpcStateRetail(1);
@@ -1125,7 +1114,6 @@ bool FElysiumNpcKernelSelect19TzimisceLineTest::RunTest(const FString&)
 		{
 			T->NpcFlags.Set(EElysiumNpcFlag::DO_STARTLED);
 			TestEqual(TEXT("0x103bb7e0 DO_STARTLED -> 0x187"), T->SpeciesSelectSchedule(), 0x187);
-			TestEqual(TEXT("selector 0x26"), T->SelectScheduleSelector, 0x26);
 			T->WriteNpcStateRetail(0xb);
 			T->NpcFlags.Set(EElysiumNpcFlag::CARRYING_BODY);
 			TestEqual(TEXT("0x103bb850 hunting while carrying -> 0x198 DROP_BODY"), T->SpeciesSelectSchedule(), 0x198);
@@ -1169,7 +1157,6 @@ bool FElysiumNpcKernelSelect19WerewolfTest::RunTest(const FString&)
 	}
 	FElysiumNpc::SetSelect19ConVar(FElysiumNpc::ESelect19ConVar::WerewolfForceTeleport, 1);
 	TestEqual(TEXT("0x103cef07 werewolf_force_teleport -> 0x157"), F.Npc->SpeciesSelectSchedule(), 0x157);
-	TestEqual(TEXT("selector 0x29"), F.Npc->SelectScheduleSelector, 0x29);
 	return true;
 }
 

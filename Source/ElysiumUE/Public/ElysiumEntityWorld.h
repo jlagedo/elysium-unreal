@@ -882,6 +882,10 @@ private:
 	// The per-frame NPC record sync -- a named divergence, documented at the definition.
 	void SyncMovingNpcRecords();
 	void RunThinks(double Now);
+	// The network manager's one-shot think `0x102f6a50` at `BuildStampSeconds()` + 0.8 s: its call
+	// `0x1028d8d0` runs vslot 584 (`FElysiumNpc::Slot584`, the full think-stamp reset `0x1028d910`) on
+	// every NPC of the Troika line at the same curtime, once per build stamp.
+	void RunNetworkManagerFirstThink();
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
 	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);
 	// Resolve a due event's target string to live entities (skips dead), honouring !self/!activator.
@@ -959,6 +963,8 @@ private:
 	TUniquePtr<FElysiumPlaceSet> PlaceSet;
 	// `BuildStampSeconds`: the map build's `curtime`. Not saved: a restore re-stamps it.
 	double BuildStamp = 0.0;
+	// `RunNetworkManagerFirstThink` has run for the current `BuildStamp`; reset wherever it is stamped.
+	bool bNetworkManagerFirstThinkRun = false;
 	// `SetPlaceSetPending`.
 	bool bPlaceSetPending = false;
 

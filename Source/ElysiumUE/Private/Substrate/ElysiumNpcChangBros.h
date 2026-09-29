@@ -14,14 +14,11 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VChangBros", FElysiumNpcVampireBoss)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
-	virtual int32 Restore(void* Archive) override;
-	virtual int32 SelectIdealStateRetail() override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;   // `CNPC_VChangBros::Restore`'s load-side half
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual void TaskFail(int32 Reason) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
@@ -34,7 +31,8 @@ public:
 	/** `0x1036dd20` — `CNPC_VChangBros::SpawnEnergyBall`. Builds a spawn point by taking the muzzle
 	 *  attachment's basis (slot 219, `+0x36c` -> `AngleVectors` `0x10139610`) and pushing this NPC's
 	 *  origin along it by the retail offset triple `(_DAT_104ada24, _DAT_104ada28, _DAT_104ada2c)` =
-	 *  `(50, 40, -10)` — forward 50, right 40, up -10 — then creates `item_w_chang_energy_ball` there
+	 *  `(50, 40, -10)` — UP 50 (`ada24`), FORWARD 40 (`ada28`), RIGHT -10 (`ada2c`), per the listing's
+	 *  `up*ada24 + right*ada2c + forward*ada28` (CORRECTED 2026-09-29, 0019/6) — then creates `item_w_chang_energy_ball` there
 	 *  and, only when `m_hClosestPlayer` resolves, fires it at that player through the projectile's own
 	 *  `+0x5d0` with speed `DAT_104ada30` = 800. */
 	FElysiumEntityHandle SpawnEnergyBall();
@@ -116,7 +114,7 @@ public:
 	void FUN_1036c7f0(int32 InChangType);
 
 	/** `_DAT_104ada44` — **2.3f**, read at file offset `0x4ada44`. */
-	static constexpr float ChangBrosJumpGravity = 2.3f;
+	static constexpr float ChangBrosJumpGravity = ElysiumNpcTunables::ChangBrosJumpGravity;
 	/** `0x10630e54` and `0x10630e3c`, the two emitter-name literals. */
 	static const TCHAR* ChangPowerupEmitterName();
 	static const TCHAR* ChangSpineEmitterName();

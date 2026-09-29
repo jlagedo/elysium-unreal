@@ -261,7 +261,7 @@ void FireGlobalActsOutput(int32 RecordOffset);
 
 /** `DAT_10725894` / `DAT_107257bc` — the two ConVars `SetSpawnResponseCops` reads for the delay
  *  `(*DAT_1070b244 + 4)(lo, hi)` draws between, and `DAT_107258dc` — the developer ConVar
- *  `RemoveCopInPursuit` gates its `DevMsg` on. NAMES **unrecovered**. **SEAM**: both duration
+ *  `RemoveCopInPursuit` gates its `DevMsg` on. Names recovered: `debug_response_timer_max` / `_min` (7.5 / 5.0), `debug_show_cs_acts` (0). **SEAM**: both duration
  *  ConVars answer `IsCommand`, so the body takes retail's own `0`/`_DAT_104454c4` arms and the draw
  *  is `RandomFloat(0, 0)` = 0 — the response timer becomes curtime exactly. */
 bool SpawnResponseCopsDelayCvars(float& OutLow, float& OutHigh) const;
@@ -269,7 +269,7 @@ bool SpawnResponseCopsDelayCvars(float& OutLow, float& OutHigh) const;
 /** `DAT_10724ffc` / `DAT_1072594c` / `DAT_107250d4` — the three ConVars the three act-level getters
  *  override their stored field with. Each getter's shape is the same: `IsCommand()` true → 0;
  *  `IsCommand()` false and `m_nValue` (`+0x2c`, word 0xb) NEGATIVE → the stored field; otherwise
- *  `m_nValue`. NAMES **unrecovered**. **SEAM**: `IsCommand` answers FALSE and the value answers -1,
+ *  `m_nValue`. names recovered: `pl_supernatural_level` / `pl_criminal_level` / `pl_investigate_level`, default -1. **SEAM**: `IsCommand` answers FALSE and the value answers -1,
  *  which is the arm that reads the stored field — the shipped default behaviour. */
 bool ActLevelOverrideCvar(int32 CvarId, int32& OutValue) const;
 
@@ -423,11 +423,6 @@ int32 ClosestNpcSense() const;
  *  `_DAT_10471720`, then ORs bit 0 into `+0x1cac`. */
 void SetPlayerAnim(const TCHAR* Name, const TCHAR* Sound);
 
-/** `0x101aa730` — the Troika's stamp for the FOURTH (AI) think channel (+0x6260), beside family Lifecycle's
- *  `LastUpdateThink` / `LastNormalThink` / `LastMoveThink`. This runtime carries the word as
- *  `FElysiumNpcScheduleHost::LastAI`, so the body is that read and nothing else. */
-float LastAiThink() const;
-
 // --- Slot 135's own inputs ------------------------------------------------------------------------
 
 // --- The `CBasePlayer` bodies' own inputs ---------------------------------------------------------
@@ -459,10 +454,14 @@ bool AutoaimWaterLevelBlocks(const FElysiumEntity& Candidate) const;
  *  and 0 is the LOOSEST screen rather than a number invented from the SDK. */
 float AutoaimDelta() const;
 
-/** **SEAM** for `DAT_1070ba3c` (the branch selector), `_DAT_10450a9c` (the scale) and
- *  `_DAT_10451ab8` (the old-sample weight). Returns true for the SCALE arm — `DAT_1070ba3c == 1`,
- *  the shipped "always non-sticky autoaim" latch — with both numbers **unrecovered** and 0. */
+/** `GetAutoaimVector`'s blend words: the scale `_DAT_10450a9c` (0.9) and the old-sample weight
+ *  `_DAT_10451ab8` (0.3). Returns true for the SCALE arm, which retail takes at skill level 1
+ *  (`DAT_1070ba3c == 1`); skills 2 and 3 blend. */
 bool AutoaimBlendWeights(float& OutScale, float& OutOldWeight) const;
+
+/** **SEAM** for `DAT_1070ba3c`, the skill level `0x101286f0` writes from the engine `skill` cvar
+ *  (1..3, 1 when absent). Answers 1 until the substrate carries a difficulty setting. */
+int32 SkillLevel() const;
 
 /** **SEAM** for `candidate + 0x19c & 0x40`, the per-entity bit whose SET state refuses a
  *  closest-NPC candidate. Named by neither datamap; **unrecovered**. False admits. */

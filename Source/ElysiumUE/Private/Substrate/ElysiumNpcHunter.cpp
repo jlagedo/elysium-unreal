@@ -30,14 +30,6 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
-// Slot 420: `0x10388b30`.
-// `0x10388b30`
-void FElysiumNpcHunter::NPCInit()
-{
-	HumanCombatantNPCInit();                                             // hides once inside
-	HideActiveWeaponIfAny();                                             // second Hide
-}
-
 // Slot 463: `0x10388880`, the pursuit pre-step, then a direct call into
 // `CNPC_VHumanCombatant::OnStateChange` (`0x103871c0`, thunk `0x10014a10`).
 /** `CNPC_VHunter::OnStateChange` (`0x10388880`)'s pre-step, two independent arms in this order:
@@ -89,13 +81,6 @@ void FElysiumNpcHunter::OnStateChange(EElysiumNpcState OldState, EElysiumNpcStat
 	FElysiumNpcHumanCombatant::OnStateChange(OldState, NewState);
 }
 
-// Slot 461: `0x10388ab0`, the selector tag 0x17 and then a direct call into the combatant's `0x10387380`.
-int32 FElysiumNpcHunter::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0x17;
-	return HumanCombatPatrolSelectIdealState();
-}
-
 // Slot 472: `0x103887d0`
 void FElysiumNpcHunter::OnSeeEntity(FElysiumEntity* Seen)
 {
@@ -144,16 +129,6 @@ int32 FElysiumNpcHunter::TranslateScheduleRetail(int32 ScheduleNumber)
 	}
 	if (ScheduleNumber == 0x103) { return 0x15a; }
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
-}
-
-// Slot 546: `0x10388200`, the class's own schedule id space.
-const TCHAR* FElysiumNpcHunter::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b5e8`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VHunter"), TEXT("0x10388200"), TEXT("0x1093b5e8") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---

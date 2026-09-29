@@ -26,7 +26,7 @@ namespace
 	/** `MOV EAX,0x3f800000` at `0x1028fc90`: 1.0f, the neutral stealth scalar and cone. */
 	constexpr float RunAi19StealthNeutral = 1.0f;
 	/** `_DAT_10450aa0` = 4.0: the sweep's start raised off the origin (`0x103c0189`). */
-	constexpr float RunAi19SweepRaiseUnits = 4.0f;
+	constexpr float RunAi19SweepRaiseUnits = ElysiumNpcTunables::Four;
 	/** `PUSH 0x202400b`: `MASK_NPCSOLID`, the sweep's and the push line's mask. */
 	constexpr int32 RunAi19NpcSolidMask = 0x202400b;
 

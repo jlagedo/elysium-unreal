@@ -17,12 +17,11 @@
 //
 // Twelve rows, four shapes:
 //
-//   * **Two destructors** (`CNPC_VAndreiBlood` `0x1035cd00`, `CNPC_VWerewolf` `0x103ca7c0`). Almost
+//   * **Two destructors** (`CNPC_VAndreiBlood` `0x1035cd00`, `CNPC_VWerewolf`). Almost
 //     all of both is allocator teardown a garbage-collected runtime cannot observe; the observable
 //     halves are Andrei's two owned emitter entities, which do not outlive him, and the Werewolf's
 //     reset of the `werewolf_show_debug` ConVar and its global.
-//   * **Two species `Restore`s** (`CNPC_VAndreiBlood` `0x1035cf80`, the three Chang brothers
-//     `0x1036b170`), which are the last two arms family SaveRestore10 left routed to the base
+//   * **Two species `Restore`s** (`CNPC_VAndreiBlood`, the three Chang brothers), which are the last two arms family SaveRestore10 left routed to the base
 //     `CNPC_VVampireBoss::Restore` with a comment saying "the day the owning story lands their own
 //     halves, each row's `Body` moves to it". This is that story; the rows now point here.
 //   * **Three maker `Spawn`s** (`CNPCMaker` `0x1034afe0`, `_Fleshpile` `0x1034c020`, `_Zombie`

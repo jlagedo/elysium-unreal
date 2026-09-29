@@ -33,16 +33,6 @@ int32 FElysiumNpcAnimal::SelectIdealStateRetail()
 	return AnimalSelectIdealState();
 }
 
-// Slot 546: `0x1035edb0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcAnimal::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093a4f4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VAnimal"), TEXT("0x1035edb0"), TEXT("0x1093a4f4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 563: `0x1035f5c0`, the `OffsetOnly` shape; a replacement that does not chain.
 void FElysiumNpcAnimal::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm,
 	void* Tolerance, void* SecondTolerance)

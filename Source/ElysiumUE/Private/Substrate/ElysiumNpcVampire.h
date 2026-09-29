@@ -13,7 +13,6 @@ class FElysiumNpcVampire : public FElysiumNpcHuman
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VVampire", FElysiumNpcHuman)
 
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

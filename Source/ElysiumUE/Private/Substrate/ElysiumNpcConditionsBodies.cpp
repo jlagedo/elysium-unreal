@@ -42,7 +42,7 @@ namespace
 
 	// `FUN_102b2570`'s attack-period numerator: the re-raise window is
 	// `m_flLastMeleeStepbackTime + 3.0 / m_flSpeedScale`.
-	constexpr float GCondStepbackPeriodNumerator = 3.0f;          // `_DAT_10449258`
+	constexpr float GCondStepbackPeriodNumerator = ElysiumNpcTunables::InterestCubicThree;          // `_DAT_10449258`
 	// Its two draws, verbatim: `RandomInt(0,99) < 20` and `RandomInt(0,10) == 0`.
 	constexpr int32 GCondStepbackChancePercent = 20;
 	constexpr int32 GCondStepbackRareDenominator = 10;
@@ -87,10 +87,6 @@ namespace
 
 // =================================================================================================
 // Slot 459 — `RemoveIgnoredConditions` (`0x1026d7f0`, and the cine body `0x101a89a0`)
-// =================================================================================================
-
-// =================================================================================================
-// Slots 553 / 554 — the two ranged attack bands (`0x1026d890`, `0x1026d920`)
 // =================================================================================================
 
 // =================================================================================================

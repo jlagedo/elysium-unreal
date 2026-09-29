@@ -48,33 +48,14 @@ namespace
 	constexpr int32 AoeSoundDefault = 0x79;
 	constexpr int32 AoeSoundOne = 0x7a;
 	constexpr int32 AoeSoundThree = 0x7b;
-	// `s_npc_VVampireBoss_1065e8dc` — the literal `CNPC_VVampireBoss::Restore` resets
-	// `m_pszMonsterClassname` (`+0x6694`) to.
-	const TCHAR* const GVampireBossDefaultClassname = TEXT("npc_VVampireBoss");
 	// `_DAT_104ce8bc` = **2.0** s, the transformation wait.
-	constexpr double GTransformWaitSeconds = 2.0;
+	constexpr double GTransformWaitSeconds = ElysiumNpcTunables::ProteanTransformWaitAtE8BC;   // `_DAT_104ce8bc` = 2.0 (the boss line's own cell, not the Hengeyokai's)
 }
 
 // Slot 420: `0x103c5840`.
 void FElysiumNpcVampireBoss::NPCInit()
 {
 	VampireBossNPCInit();
-}
-
-// Slot 127: `0x103c5910`.
-int32 FElysiumNpcVampireBoss::Restore(void* Archive)
-{
-	return VampireBossRestore(Archive);
-}
-
-// Slot 546: `0x103c5270`, the class's own schedule id space.
-const TCHAR* FElysiumNpcVampireBoss::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093d30c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VVampireBoss"), TEXT("0x103c5270"), TEXT("0x1093d30c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcCombat10.cpp` (story 5 step 4) ---
@@ -282,24 +263,6 @@ void FElysiumNpcVampireBoss::SetupJumpRise(float Enabled, float Rise)
 	}
 	JumpHeight = Rise + (Top - static_cast<float>(SelfUnits.Z));
 	CommitSetupJump();
-}
-
-// --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 4) ---
-
-int32 FElysiumNpcVampireBoss::VampireBossRestore(void* Archive)
-{
-	// `CNPC_VVampireBoss::Restore` `0x103c5910`, inside a scope-trace frame (`"CNPC_VVampireBoss::
-	// Restore"` at `0x1065ec00`) this runtime does not stand. The three writes are in the listing's
-	// order: `103c5972` the model name, `103c597c` `ClearBodyEmitterNames`, `103c5981` the
-	// classname literal.
-	//
-	// It is a post-load reset, not a restore: a boss that was saved mid-transformation comes back
-	// wearing its default model name and its default classname, whatever the archive held.
-	const int32 Result = TroikaRestore(Archive);
-	VampireBossMonsterModelName.Reset();   // m_pMonsterModelName +0x6680 := 0
-	ClearBodyEmitterNames();               // 0x103c6eb0, family Damage's
-	VampireBossMonsterClassname = GVampireBossDefaultClassname;   // +0x6694
-	return Result;
 }
 
 // --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---

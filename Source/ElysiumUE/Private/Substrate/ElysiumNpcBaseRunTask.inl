@@ -27,7 +27,7 @@ float MotorYawClock = 0.f;
 
 /** `CAI_Motor` `+0x38` -- the per-call yaw speed `0x102e1c10` stores when its speed argument is
  *  neither `-1.0` nor the `-2.0` "keep the current speed" sentinel (`_DAT_10462978`). */
-float MotorYawSpeedWord = 0.f;   // (family Debug's `MotorYawSpeed()` reads it; the L05 integration renamed it off that accessor's name)
+float MotorYawSpeedWord = 0.f;   // read by `MotorUpdateYaw`, `PrepareMoveRequest` and `MotorThinkUpkeep` as the mover's turn rate (0019/6)
 
 /** How many times `0x102e1e20` ran; the tests assert the turn happened. */
 int32 MotorUpdateYawCalls = 0;
@@ -38,9 +38,23 @@ void MotorMoveStop();
 /** `FUN_102e1c10` `0x102e1c10` -- set the ideal yaw (`motor+0x34`) and update. The `+0x28`
  *  animation-movement latch (`BaseScheduleHost.bMotorAnimationMovement`) flips it by 180; the
  *  `+0x1c == 180.0` immediate-assign arm is taken (no port motor carries a clamped max-yaw word,
- *  `0x102e0a80`); a speed of `-1.0` runs `0x102e1cf0` (unrecovered, SEAM: nothing) and any other
+ *  `0x102e0a80`); a speed of `-1.0` runs `0x102e1cf0` (`MotorStoreMaxYawSpeed`) and any other
  *  speed but `-2.0` is stored at `+0x38`; both arms end in `UpdateYaw(-1)`. */
 void MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed);
+
+/** `FUN_102e1cf0` `0x102e1cf0` -- motor `+0x38` := the outer's slot 516 `MaxYawSpeed()` (the SDK's
+ *  `RecalculateYawSpeed`). Reached from `0x102e1c10`'s `-1.0` arm and from the tail of
+ *  `SetActivityAndSequence` `0x10272490` (`0x10272569` / `0x10272575`). */
+void MotorStoreMaxYawSpeed();
+
+/** The turn rate the mover is handed for a retail yaw speed, degrees per second. **Recovered from
+ *  the SDK, not from this binary** (the corpus was down at 0019/6): `CAI_Motor::UpdateYaw(int
+ *  yawSpeed)` takes the speed as an INT and turns by `AI_ClampYaw(yawSpeed * 10.0, ...)`, i.e. the
+ *  ladder is in degrees per tenth of a second -- the unit `Rules.txt`'s `Ming_Xiao_Info` names for
+ *  `TurnSpeedNormal` / `TurnSpeedAttack`, which slot 516 `0x10394930` returns verbatim. The turning
+ *  arm's 1.0 floor is why an int truncation never reaches 0. Whether `0x102e1e20` keeps both is
+ *  **unrecovered** until the corpus reads it. */
+static float MotorYawRateDegPerS(float RetailYawSpeed);
 
 /** `FUN_102e20b0` `0x102e20b0` -- `0x102e2750` (the yaw from this body to `TargetCm`) then
  *  `0x102e1c10(yaw, speed)`. */
@@ -48,8 +62,9 @@ void MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float YawSpeed);
 
 /** `FUN_102e1e20` `0x102e1e20` -- `UpdateYaw(speed)`: step the body's yaw toward `motor+0x34` and
  *  stamp the yaw clock. **Named modernization**: the step itself is Unreal's (`IElysiumNpcMotor::Face`
- *  turns the capsule at the character movement component's rate), so the substrate writes the
- *  clock and hands the ideal yaw to the mover; `_DAT_1044fac0` and `0x102e1d10`'s clamp are not run. */
+ *  turns the capsule at the rate it is handed), so the substrate writes the clock and hands the mover
+ *  the ideal yaw and retail's rate (`-1` = the stored `+0x38`, as `UpdateYaw(-1)` reads it);
+ *  `_DAT_1044fac0` and `0x102e1d10`'s clamp are not run. */
 void MotorUpdateYaw(int32 YawSpeed);
 
 // --- `CAI_Navigator` (`m_pNavigator`, `+0x5d34`) ------------------------------------------------------

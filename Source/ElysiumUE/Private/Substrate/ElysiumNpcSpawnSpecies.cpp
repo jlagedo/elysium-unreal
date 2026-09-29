@@ -750,7 +750,7 @@ void FElysiumNpcMingXiaoTentacle::Event_Killed(void* Arg0)
 		MingXiaoTentacleEnterDeath();                                                    // 0x1039e938 -> 0x1039e970
 		return;                                                                          // 0x1039e93e
 	}
-	if (FElysiumEntity* const Head = MingXiaoTentacleHead())                             // 0x1039e90d -> 0x1039ede0 / 0x1039e914
+	if (FElysiumEntity* const Head = MingXiaoTentacleHead())                             // 0x1039e90d / 0x1039e914
 	{
 		Spawn19NotifyHeadOfDeath(Head);                                                  // 0x1039e919 -> 0x103979d0
 	}
@@ -787,7 +787,7 @@ void FElysiumNpcMingXiao::Event_Killed(void* Arg0)
 	// `ming_xiao_grub_death` read as `IsCommand() ? 0 : m_nValue`; only the HEAD tears its grubs down.
 	if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::MingXiaoGrubDeath) != 0)                                           // 0x10395bea IsCommand / 0x10395bef / 0x10395bfc
 	{
-		if (!IsMingXiaoProxy())                                                          // 0x10395c00 -> 0x10398870 / 0x10395c07
+		if (!IsMingXiaoProxy())                                                          // 0x10395c00 / 0x10395c07
 		{
 			MingXiaoKillTentacles();                                                     // 0x10395c0b -> 0x10397e90
 			MingXiaoKillSpawnedBodies();                                                 // 0x10395c12 -> 0x10397f00

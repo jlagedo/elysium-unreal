@@ -186,7 +186,7 @@ enum class EElysiumNpcCond : uint8
 	// Read off the same registrar dump. They are spelled here because this family's bodies push them
 	// BY NUMBER — a `static_cast` at the call site would make the registry a comment. Producers:
 	//   `CAI_BaseNPC::RangeAttack1Conditions` (`0x1026d890`, slot 553) answers 0x08 / 0x5f / 0x60 /
-	//   0x61 / 0x4f, and `RangeAttack2Conditions` (`0x1026d920`, slot 554) answers 0x08 / 0x60 /
+	//   0x61 / 0x4f, and `RangeAttack2Conditions` (slot 554, dead in the port) answers 0x08 / 0x60 /
 	//   0x61 / 0x50; `GatherAttackConditions` (`0x1026dd10`, slot 561) is the ONE producer of 0x2e,
 	//   off `m_flExtendedBlockedByFriendTimer`; 0x62 / 0x64 / 0x65 have no producer here and are
 	//   carried because `ClearAttackConditions` (`0x1026dc80`, slot 560) clears all three by name;
@@ -480,12 +480,12 @@ namespace ElysiumNpcCond
 
 	// `_DAT_1044f02c`, the see-unknown sweep's "stopped seeing it" grace: `+0x6084 = curtime + 1.5`.
 	// Armed on the first miss, read as a deadline on every miss after.
-	inline constexpr double SeeUnknownGraceSeconds = 1.5;
+	inline constexpr double SeeUnknownGraceSeconds = ElysiumNpcTunables::OneAndHalf;
 	// `_DAT_1044eb0c`, the see-unknown sweep's 2-D closing-speed edge, in Source units per second (the
 	// sweep converts the player's cm/s velocity before comparing). Strictly below is retreating,
 	// strictly above is advancing, and the single point of exact equality is `UNKNOWN_HOLDING` --
 	// see its own comment on the enum identity.
-	inline constexpr double UnknownClosingSpeedThreshold = 20.0;
+	inline constexpr double UnknownClosingSpeedThreshold = ElysiumNpcTunables::Twenty;
 
 	/**
 	 * `FUN_102b15c0`, the first of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (before the
@@ -599,7 +599,7 @@ namespace ElysiumNpcCond
 
 	// `_DAT_104454d0`, the sound sweep's `SEE_SOUND_SOURCE` stranger-arm re-arm: `+0x6418 =
 	// curtime + 0.5`. Written and read only by that arm.
-	inline constexpr double SeeSoundSourceCadenceSeconds = 0.5;
+	inline constexpr double SeeSoundSourceCadenceSeconds = ElysiumNpcTunables::Half;
 
 	// --- Sound categories ---------------------------------------------------------------------------
 	// CHOSEN, NOT RECOVERED (stated once here because both hearing and the condition

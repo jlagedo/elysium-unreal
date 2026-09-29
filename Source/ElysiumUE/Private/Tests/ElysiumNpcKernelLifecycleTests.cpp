@@ -106,8 +106,7 @@ bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 	TestEqual(TEXT("slot 137 GetBaseAnimating answers itself"),
 		N.GetBaseAnimating(), static_cast<FElysiumEntity*>(&N));
 
-	// slot 3 `GetNetworkable` (0x10027630): `&this->field_0x2d4`. SEAM — no network property here.
-	TestNull(TEXT("slot 3 GetNetworkable has no sub-object to answer"), N.GetNetworkable());
+	// slot 3 `GetNetworkable` (0x10027630) closed at `Replication` in 0019/6; its case went with it.
 
 	// slot 0 `SetRefEHandle` (0x10027450): the four-byte handle word at +0x0448.
 	const FElysiumEntityHandle Original = N.Handle;
@@ -119,16 +118,6 @@ bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 	TestEqual(TEXT("and its epoch"), static_cast<int32>(N.Handle.Epoch), 7);
 	N.SetRefEHandle(Original);
 
-	// slot 423 `IsTemplate` (0x1027e120): `m_spawnflags >> 0xb & 1`.
-	N.SpawnFlags = 0;
-	TestFalse(TEXT("slot 423 is false with no spawnflags"), N.IsTemplate());
-	N.SpawnFlags = 0x400;
-	TestFalse(TEXT("slot 423 ignores bit 10"), N.IsTemplate());
-	N.SpawnFlags = 0x800;
-	TestTrue(TEXT("slot 423 reads bit 11"), N.IsTemplate());
-	N.SpawnFlags = 0x1000;
-	TestFalse(TEXT("slot 423 ignores bit 12"), N.IsTemplate());
-
 	// slot 552 `ShouldFadeOnDeath` (0x1027a400): `m_spawnflags >> 9 & 1` — the SAME word, bit 9.
 	N.SpawnFlags = 0x100;
 	TestFalse(TEXT("slot 552 ignores bit 8"), N.ShouldFadeOnDeath());
@@ -136,7 +125,6 @@ bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 	TestTrue(TEXT("slot 552 reads bit 9"), N.ShouldFadeOnDeath());
 	N.SpawnFlags = 0x800;
 	TestFalse(TEXT("and slot 552 is not slot 423's bit"), N.ShouldFadeOnDeath());
-	TestTrue(TEXT("while slot 423 still is"), N.IsTemplate());
 	N.SpawnFlags = 0;
 
 	// slot 91 `ShouldCollide` (0x100b4de0): true unless m_CollisionGroup == 1 AND bit 0x4000000 of
@@ -150,12 +138,6 @@ bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("and any other mask bit does not save it"), N.ShouldCollide(0, 0x2000000));
 	TestFalse(TEXT("the first argument changes nothing"), N.ShouldCollide(12345, 0));
 	N.CollisionGroup = 0;
-
-	// slot 152 `GetDelay` (0x1004fc10): a plain read of +0x0500. SEAM (declared, unwritten).
-	TestEqual(TEXT("slot 152 answers the delay word"), N.GetDelay(), 0.f);
-	N.EntityDelay = 2.5f;
-	TestEqual(TEXT("and reads it, not a constant"), N.GetDelay(), 2.5f);
-	N.EntityDelay = 0.f;
 
 	// slot 116 `IsMarkedForDeletion` (0x10027490): `m_iEFlags & 1`, EFL_KILLME.
 	TestFalse(TEXT("slot 116 is clear on a live NPC"), N.IsMarkedForDeletion());
@@ -256,7 +238,7 @@ bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slots 412/413/414 — the three think stamps.
+// Slot 614 — the four think stamps re-based together.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleThinkStampsTest,
@@ -268,20 +250,18 @@ bool FElysiumNpcKernelLifecycleThinkStampsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// 0x101aa6d0 / 0x101aa6f0 / 0x101aa710 each return the Troika's stamp for ONE
-	// channel. The three answers must be independent, which is the whole point of the bookkeeping.
+	// The four channels start independent; slot 614 re-bases all four at once. The getters
+	// (0x101aa6d0 / 0x101aa6f0 / 0x101aa710 / 0x101aa730) are dead (0019/6), so the stamps are read
+	// off the schedule host directly.
 	Fix.Npc->ScheduleHost.LastUpdate = 11.0;
 	Fix.Npc->ScheduleHost.LastNormal = 22.0;
 	Fix.Npc->ScheduleHost.LastMove = 33.0;
 	Fix.Npc->ScheduleHost.LastAI = 44.0;
-	TestEqual(TEXT("slot 412 reads the update channel"), Fix.Npc->LastUpdateThink(), 11.f);
-	TestEqual(TEXT("slot 413 reads the normal channel"), Fix.Npc->LastNormalThink(), 22.f);
-	TestEqual(TEXT("slot 414 reads the move channel"), Fix.Npc->LastMoveThink(), 33.f);
-	// Slot 614 re-bases all four at once, which is what these three then read back.
 	Fix.Npc->ResetAllThinkStamps(99.0);
-	TestEqual(TEXT("and slot 614 moves them together (update)"), Fix.Npc->LastUpdateThink(), 99.f);
-	TestEqual(TEXT("(normal)"), Fix.Npc->LastNormalThink(), 99.f);
-	TestEqual(TEXT("(move)"), Fix.Npc->LastMoveThink(), 99.f);
+	TestEqual(TEXT("slot 614 moves them together (update)"), Fix.Npc->ScheduleHost.LastUpdate, 99.0);
+	TestEqual(TEXT("(normal)"), Fix.Npc->ScheduleHost.LastNormal, 99.0);
+	TestEqual(TEXT("(move)"), Fix.Npc->ScheduleHost.LastMove, 99.0);
+	TestEqual(TEXT("(ai)"), Fix.Npc->ScheduleHost.LastAI, 99.0);
 	return true;
 }
 
@@ -384,10 +364,6 @@ bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 {
 	// `CCineNPC::Spawn` (0x101a6f10) is asserted on the real director since story 5 fold A3
 	// (`Elysium.Substrate.NpcKernelDirector.Spawn`).
-
-	// `CAI_StandoffGoal::Spawn` (0x102cd2d0) — the clock and nothing else.
-	TestEqual(TEXT("the standoff goal's think is curtime + _DAT_1044e658 (0.01)"),
-		FElysiumNpcBase::StandoffGoalSpawnNextThink(40.0), 40.01);
 
 	// `CAI_InterestingPlaceConverstation::Spawn` (0x102dbc80): its own init and then a TAIL JUMP to
 	// slot 104, so the precache is last.
@@ -614,45 +590,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleRestoreTest,
 	"Elysium.Substrate.NpcKernelLifecycle.Restore", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 {
-	// Slot 130 (0x100aa5a0): the argument is OVERWRITTEN with 0 before the tail jump to slot 6, so
+	// Slot 130 (`CBaseEntity::OnRestore`, closed at the save walk): the argument is OVERWRITTEN with 0 before the tail jump to slot 6, so
 	// a restore always lands as `SetCheckUntouch(false)` however it was called.
 	TestFalse(TEXT("OnRestore(true) forwards false"),
 		FElysiumNpcBase::OnRestoreForwardsCheckUntouch(true));
 	TestFalse(TEXT("OnRestore(false) forwards false too"),
 		FElysiumNpcBase::OnRestoreForwardsCheckUntouch(false));
 
-	// `CAI_BaseNPC::Restore` `0x1027c160` — CORRECTED by story 29d, family SaveRestore10: the second
-	// argument of `thunk_FUN_101cf2f0` is the sentinel MODE and not a count, so the body decodes
-	// exactly two stamps and performs no clock re-base at all. `1027c189 PUSH 0x4` on
-	// `m_flExtendedBlockedByFriendTimer` (`+0x5b8c`) and `1027c199 PUSH 0x3` on `m_flWaitFinished`
-	// (`+0x5db4`).
-	FLifecycleFixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Npc;
-	// Mode 4 catches the sentinel and writes FLT_MAX back; mode 3 writes 0.0 back.
-	N.ExtendedBlockedByFriendTimer = FElysiumNpcBase::SaveStampSentinel;
-	N.BaseScheduleHost.WaitFinished = FElysiumNpcBase::SaveStampSentinel;
-	// Neither neighbour is touched: the body names two fields and only two.
-	N.WeaponBlockedByFriendTimer = FElysiumNpcBase::SaveStampSentinel;
-	N.BaseScheduleHost.MoveWaitFinished = FElysiumNpcBase::SaveStampSentinel;
-	TestEqual(TEXT("the base body answers the chain's result"),
-		N.RestoreExtendedHeader(/*Archive=*/nullptr), 1);
-	TestEqual(TEXT("m_flExtendedBlockedByFriendTimer decodes at mode 4"),
-		N.ExtendedBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
-	TestEqual(TEXT("m_flWaitFinished decodes at mode 3"), N.BaseScheduleHost.WaitFinished, 0.0);
-	TestEqual(TEXT("the neighbour of the first is NOT one of the two fields"),
-		N.WeaponBlockedByFriendTimer, FElysiumNpcBase::SaveStampSentinel);
-	TestEqual(TEXT("nor is the neighbour of the second"),
-		N.BaseScheduleHost.MoveWaitFinished, FElysiumNpcBase::SaveStampSentinel);
-	// A stamp below the 1e+10 floor is left alone whatever its mode.
-	N.ExtendedBlockedByFriendTimer = 3.0;
-	N.BaseScheduleHost.WaitFinished = 7.0;
-	N.RestoreExtendedHeader(/*Archive=*/nullptr);
-	TestEqual(TEXT("an ordinary stamp survives the decode"), N.ExtendedBlockedByFriendTimer, 3.0);
-	TestEqual(TEXT("and so does the wait stamp"), N.BaseScheduleHost.WaitFinished, 7.0);
+	// `CAI_BaseNPC::Restore` (its two sentinel decodes and pointer re-links) closed at
+	// `FElysiumSaveArchive` in 0019/6; the header it read back is `SerializeExtendedHeader`'s on load.
 	return true;
 }
 
@@ -697,17 +643,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSpeciesTest,
 	"Elysium.Substrate.NpcKernelLifecycle.Species", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 {
-	// Slot 434, by species. `npc_VSabbatLeader` IS a registered spawn leaf and IS claimed by the
-	// census, so its row is exercised by spawning one.
-	{
-		FLifecycleFixture Sabbat(TEXT("npc_VSabbatLeader"));
-		if (TestNotNull(TEXT("the Sabbat leader spawned"), Sabbat.Npc))
-		{
-			TestEqual(TEXT("CNPC_VSabbatLeader fills slot 434 with its forwarding 0x103a7650"),
-				FString(ElysiumNpcTestCensus::BodyOf(Sabbat.Npc->RetailClass(), 434)),
-				FString(TEXT("0x103a7650")));
-		}
-	}
+	// Slot 434, by species. The Sabbat leader's forwarding body was deleted as dead in 0019/6 and its
+	// census row is no longer asserted.
 	FLifecycleFixture Fix;
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
 	{
@@ -716,8 +653,8 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 	FElysiumNpc& N = *Fix.Npc;
 	{
 		const FString CombatantBody(ElysiumNpcTestCensus::BodyOf(N.RetailClass(), 434));
-		TestTrue(TEXT("an ordinary combatant takes neither the camera's nor the Sabbat leader's body"),
-			CombatantBody != TEXT("0x10369100") && CombatantBody != TEXT("0x103a7650"));
+		TestTrue(TEXT("an ordinary combatant does not take the camera's body"),
+			CombatantBody != TEXT("0x10369100"));
 	}
 	// `CNPC_VCamera`'s row is exercised by retail class name — which is what the census answers.
 	// story 5 step 2: `npc_VCamera` is now a registered classname building it (population.md).
@@ -808,37 +745,6 @@ bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 	TestEqual(TEXT("the rows are adjacent: DAT_1063abcc[4] is DAT_1063abdc[0]"),
 		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abcc"), 4),
 		FElysiumNpcGhoulCroucher::UnawareTableEntry(TEXT("DAT_1063abdc"), 0));
-
-	// The werewolf search timer — a STATIC pair, shared by every instance rather than per NPC. That
-	// is the recovered fact, and this is what asserts it: the report passes its argument through and
-	// leaves the elapsed count behind for anybody.
-	FElysiumNpcWerewolf::StartSearchTimer();
-	TestTrue(TEXT("ReportSearchTimer passes its argument through"),
-		FElysiumNpcWerewolf::ReportSearchTimer(true));
-	TestFalse(TEXT("whatever it is"), FElysiumNpcWerewolf::ReportSearchTimer(false));
-	TestTrue(TEXT("and leaves the elapsed cycles in the shared pair"),
-		FElysiumNpc::SearchTimerElapsedCycles() != 0 || true);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleMotorResetTest,
-	"Elysium.Substrate.NpcKernelLifecycle.MotorReset", GLifecycleTestFlags)
-bool FElysiumNpcKernelLifecycleMotorResetTest::RunTest(const FString&)
-{
-	FLifecycleFixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
-	{
-		return false;
-	}
-	// `CAI_Motor::FUN_102e1110` — step 4 is `npc+0x3ec = 0x3f800000`, gravity back to 1.0, and it
-	// is the one step whose destination exists on this substrate.
-	Fix.Npc->Gravity = 0.25f;
-	Fix.Npc->MotorResetToDefault();
-	TestEqual(TEXT("gravity goes back to 1.0"), Fix.Npc->Gravity, 1.0f);
-	// It is a SET, not a scale: a body already at 1 stays there and a body above it comes down.
-	Fix.Npc->Gravity = 4.f;
-	Fix.Npc->MotorResetToDefault();
-	TestEqual(TEXT("from above as well as below"), Fix.Npc->Gravity, 1.0f);
 	return true;
 }
 
@@ -920,124 +826,6 @@ bool FElysiumNpcKernelLifecycleMingXiaoProxyGateTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `CAI_StandoffBehavior::vfunc13` (0x102c7600).
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleStandoffTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Standoff", GLifecycleTestFlags)
-bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
-{
-	using FWords = FElysiumNpcBase::FStandoffWords;
-	using FConds = FElysiumNpcBase::FStandoffConditions;
-
-	// 0. Not in COMBAT: the selector declines outright, whatever stands.
-	{
-		FWords W;
-		FConds C;
-		C.bCond0x40 = true;
-		TestEqual(TEXT("a standoff outside COMBAT falls through to the base"),
-			FElysiumNpcBase::StandoffSelect(W, C, /*bInCombatState=*/false, true, nullptr, nullptr, 0.0),
-			INDEX_NONE);
-	}
-	// 1. Conditions 0x40 and 0x3f share ONE answer, `0x29` minus the +0x24 byte.
-	{
-		FWords W;
-		FConds C;
-		C.bCond0x40 = true;
-		TestEqual(TEXT("condition 0x40 answers 0x29"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x29);
-		W.bCoverDirty = true;
-		TestEqual(TEXT("and 0x28 with the +0x24 byte set"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x28);
-		FConds D;
-		D.bCond0x3f = true;
-		FWords V;
-		TestEqual(TEXT("condition 0x3f takes the same arm"),
-			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, nullptr, 0.0), 0x29);
-	}
-	// 2. The +0x4c latch is CONSUMED on read, and only answers 0x17 with an enemy standing.
-	{
-		FWords W;
-		W.bSawNewEnemy = true;
-		W.ReactionsLeft = 5;
-		FConds C;
-		TestEqual(TEXT("a set latch with an enemy answers 0x17"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, /*bHasEnemy=*/true, nullptr, nullptr, 0.0), 0x17);
-		TestFalse(TEXT("and the latch is cleared by the read"), W.bSawNewEnemy);
-
-		FWords V;
-		V.bSawNewEnemy = true;
-		V.ReactionsLeft = 5;
-		FElysiumNpcBase::StandoffSelect(V, C, true, /*bHasEnemy=*/false, nullptr, nullptr, 0.0);
-		TestFalse(TEXT("a set latch with NO enemy is still cleared"), V.bSawNewEnemy);
-	}
-	// 6. An exhausted counter answers 0x17 and writes the posture off the hint's type: 0x65 is
-	//    posture 2, anything else posture 0.
-	{
-		FWords W;
-		W.ReactionsLeft = 0;
-		W.ReactionChanceMin = 0;
-		W.ReactionChanceMax = 0;   // the re-roll cannot lift it
-		FConds C;
-		FElysiumNpcBase::FHintWords Hint;
-		Hint.bValid = true;
-		Hint.HintType = 0x65;
-		TestEqual(TEXT("an exhausted counter answers 0x17"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, &Hint, nullptr, 10.0), 0x17);
-		TestEqual(TEXT("hint type 0x65 writes posture 2"), W.Posture, 2);
-
-		FWords V;
-		V.ReactionsLeft = 0;
-		Hint.HintType = 0x66;
-		TestEqual(TEXT("any other hint type writes posture 0"),
-			FElysiumNpcBase::StandoffSelect(V, C, true, true, &Hint, nullptr, 10.0), 0x17);
-		TestEqual(TEXT("which is 0"), V.Posture, 0);
-	}
-	// 7. Condition 0x48 promotes posture 2 to 3 and answers 0x25 — the one arm that changes posture
-	//    on the way out.
-	{
-		FWords W;
-		W.ReactionsLeft = 2;
-		W.Posture = 2;
-		FConds C;
-		C.bCond0x48 = true;
-		TestEqual(TEXT("condition 0x48 over posture 2 answers 0x25"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x25);
-		TestEqual(TEXT("and promotes the posture to 3"), W.Posture, 3);
-	}
-	// 8. 0x4f and 0x51 each SUPPRESS the 0x60 answer. That nesting is the arm order.
-	{
-		FConds C;
-		C.bCond0x60 = true;
-		FWords W;
-		W.ReactionsLeft = 2;
-		TestEqual(TEXT("condition 0x60 alone answers 0x21"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x21);
-		FConds D = C;
-		D.bCond0x4f = true;
-		FWords V;
-		V.ReactionsLeft = 2;
-		TestEqual(TEXT("condition 0x4f suppresses it"),
-			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
-		FConds E = C;
-		E.bCond0x51 = true;
-		FWords W51;
-		W51.ReactionsLeft = 2;
-		TestEqual(TEXT("and so does 0x51"),
-			FElysiumNpcBase::StandoffSelect(W51, E, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
-	}
-	// 9. Nothing standing: the base.
-	{
-		FWords W;
-		W.ReactionsLeft = 2;
-		FConds C;
-		TestEqual(TEXT("with nothing standing the selector declines"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
-	}
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
 // `FElysiumInterestingPlace` — slot 103, slot 130 and slot 5.
 // -------------------------------------------------------------------------------------------------
 
@@ -1106,22 +894,6 @@ bool FElysiumNpcKernelLifecycleInterestingPlaceTest::RunTest(const FString&)
 	TestTrue(TEXT("a place whose type does not resolve removes itself"), Place.IsDead());
 	TestEqual(TEXT("and nothing after the lookup runs"), Place.GroupMask, 0);
 	TestNull(TEXT("with no resolved type"), Place.ResolvedType);
-	// `OnRestore` runs the SAME lookup, which is the recovered half the two share.
-	TestFalse(TEXT("OnRestore takes the same self-destruct"), Place.OnRestoreResolveType());
-
-	// Slot 5 (0x102dbbc0) is MSVC's scalar deleting destructor, NOT a reset: bit 0 is "free the
-	// storage" and every other bit is ignored.
-	TestTrue(TEXT("bit 0 frees the storage"),
-		FElysiumInterestingPlace::ConversationPlaceDeletingDtor(1));
-	TestFalse(TEXT("a clear bit 0 does not"),
-		FElysiumInterestingPlace::ConversationPlaceDeletingDtor(0));
-	TestFalse(TEXT("and the other bits are ignored"),
-		FElysiumInterestingPlace::ConversationPlaceDeletingDtor(0xfe));
-	// The six `COutput`s it destroys, in destruction order.
-	TConstArrayView<const TCHAR*> Names = FElysiumInterestingPlace::ConversationPlaceOutputNames();
-	TestEqual(TEXT("six outputs are destroyed"), Names.Num(), 6);
-	TestEqual(TEXT("the first"), FString(Names[0]), FString(TEXT("OnPlayerLeftRadius")));
-	TestEqual(TEXT("the last"), FString(Names[5]), FString(TEXT("OnConversationStart")));
 	return true;
 }
 

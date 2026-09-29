@@ -1,0 +1,9 @@
+# Lane Q4 report · inline cells, files S–Z
+
+(Saved by the orchestrator from the lane's final answer. Nothing built or run.)
+
+494 `DAT_10…` mentions over 228 addresses in 53 files (most: `Werewolf.cpp` 55, `StartTaskSpecies.cpp` 44, `Tzimisce.cpp` 31). **Cells:** 81 rows, all 89 cell and ConVar rows verified against the pinned image; widths cross-checked against the reading instruction (`FCOMP` double vs float). **Code:** ~85 literals now read `ElysiumNpcTunables::<Name>`, ~24 more bound to held names. **ConVars:** 8 object rows (`DebugTestSwitch1/2`, `ZombieMeleeMod`, `ZombieHeadshotMod`, `ZombieGibAmt`, `WerewolfForceTeleport`, `DebugAllowNpcHunting`, `EntTraceMelee`). **Refs:** 90 rows. Stale "not in the tunables table" comments updated in `StartTaskSpecies`, `Select`, `SelectSpecies`, `ScriptSpecies`.
+
+**Findings.** `DAT_10924edc`, called "the global melee event" in 15 comments (Troika, Tzimisce, Yukie), is the `ent_trace_melee` ConVar (object `10924ed8`, built at `0x1028bf11`; the discarded `vfunc1()` matches `EntTraceConditions`). Cell `10457f60` reads 150.0 while `GScheduleTzimisceTaskDistance` in `Tzimisce.cpp` still answers 0.0 marked "UNRECOVERED" — left for the owner. The ConVar `werewolf_teleport_in_time` (object `0x1093d6f0`, default 2.0) has no overlay row (spelled without `DAT_`; `StartTaskSpecies.cpp:3424` asks for it). Sounds10 guard/cache pair names follow the source comment's order, unconfirmed. `Social10Tests:285` pins -1.0 against a literal; left.
+
+**Cross-lane clashes (resolved by the orchestrator's merge, first name per address wins, losers renamed in code):** `10447ee8` FortyEight vs Q2 LateralCoverStepUnits; `1044ddb0` TwoFiftySix vs Q1 Melee1OuterBand; `10450568` ThreeSixty vs Q1 HeadAngleRunawayLimit; `104b73e4` MeleeNearSquared vs Q2 TzimisceLeadDistSqMin; Q2's `MinusOne` at `104994a0` vs the real `104492dc`.

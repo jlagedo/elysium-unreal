@@ -212,11 +212,6 @@ bool GameRulesAllowsAmmo(int32 AmmoIndex) const;
  *  null, and the drop still happens with a null weapon exactly as retail's would. */
 FElysiumEntity* ActiveWeaponEntity() const;
 
-/** `DAT_1072b360`, the single global word slot 240 returns. It is the CPython interop side of the
- *  entity — whatever the embedded interpreter last stored there — and this runtime embeds no
- *  interpreter. **SEAM**: answers null, which is the global's own pre-interpreter value. */
-void* PythonInteropObject() const;
-
 void SetPoseParameterByName(const TCHAR* Name, float Value);
 
 /** SEAM for `thunk_FUN_101e1250(&DAT_10739a4c, disciplineId, arg)` and `thunk_FUN_101e11c0` — the

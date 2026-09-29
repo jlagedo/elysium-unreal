@@ -145,6 +145,63 @@ bool FElysiumNpcKernelSenses10FVisibleTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10FVisibleBlockerCellTest,
+	"Elysium.Substrate.NpcKernelSenses10.FVisibleBlockerCell", GElysiumNpcKernelSenses10Flags)
+bool FElysiumNpcKernelSenses10FVisibleBlockerCellTest::RunTest(const FString&)
+{
+	// `CBaseEntity::FVisible 0x100a6fa0`, the verdict at `100a71ab`: a blocked ray writes
+	// `*ppBlocker = tr.m_pEnt` when the caller passed a cell (the THIRD argument), and nothing
+	// otherwise. The world is scripted through the recording services' `TraceRetailQuery`.
+	FSenses10Fixture F;
+	if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr)
+	{
+		AddError(TEXT("no NPCs or no player"));
+		return false;
+	}
+	F.Guard->Senses.Perception.VisionDistanceCm = Senses10Cm(1000.f);
+	F.Guard->Senses.Perception.bResolved = true;
+	auto Script = [&F](float WorldFraction, const FElysiumEntityHandle& Character, float CharacterFraction)
+	{
+		F.World.Services.TraceRetailQuery =
+			[WorldFraction, Character, CharacterFraction](const FElysiumRetailTrace&, FElysiumRetailTraceResult& Out)
+		{
+			Out.Fraction = WorldFraction;
+			if (Character.IsSet())
+			{
+				FElysiumRetailTraceCharacter Body;
+				Body.Entity = Character;
+				Body.Fraction = CharacterFraction;
+				Out.Characters.Add(Body);
+			}
+			return true;
+		};
+	};
+
+	// The player between the guard and `other`: blocked, and the player is the blocker.
+	Script(1.f, F.Player->Handle, 0.4f);
+	const int32 Before = F.Guard->FVisibleBlockerWrites;
+	TestFalse(TEXT("the player between looker and target blocks"),
+		F.Guard->FVisible(F.Other, 0x2804091, F.Other, 0));
+	TestEqual(TEXT("...the passed cell is written once (100a71ab)"), F.Guard->FVisibleBlockerWrites, Before + 1);
+	TestTrue(TEXT("...with tr.m_pEnt, the player"), F.Guard->LastFVisibleBlockerTarget == F.Player->Handle);
+
+	// The same block with no cell: nothing is written.
+	TestFalse(TEXT("the same block with no cell"), F.Guard->FVisible(F.Other, 0x2804091, nullptr, 0));
+	TestEqual(TEXT("...writes nothing"), F.Guard->FVisibleBlockerWrites, Before + 1);
+
+	// A wall nearer than the player: the static world is the blocker (Invalid).
+	Script(0.2f, F.Player->Handle, 0.4f);
+	TestFalse(TEXT("a wall blocks"), F.Guard->FVisible(F.Other, 0x2804091, F.Other, 0));
+	TestEqual(TEXT("...the cell is written"), F.Guard->FVisibleBlockerWrites, Before + 2);
+	TestFalse(TEXT("...with the static world"), F.Guard->LastFVisibleBlockerTarget.IsSet());
+
+	// A clear ray: visible, the cell untouched.
+	Script(1.f, FElysiumEntityHandle::Invalid(), 1.f);
+	TestTrue(TEXT("a clear ray is visible"), F.Guard->FVisible(F.Other, 0x2804091, F.Other, 0));
+	TestEqual(TEXT("...and writes no blocker"), F.Guard->FVisibleBlockerWrites, Before + 2);
+	return true;
+}
+
 // =================================================================================================
 // Slot 594 — `0x102b4760`, the range/concealment test and the `+0x6081` far byte.
 // =================================================================================================

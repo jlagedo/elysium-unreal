@@ -407,10 +407,10 @@ bool FElysiumNpc::Slot599(int32)
 		MeleeMustLeaveTimer = Now + static_cast<double>(
 			ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
 				.FRandRange(TroikaMeleeMustLeaveMin, TroikaMeleeMustLeaveMax));
-		// The global melee event, `(*DAT_10924edc)->vfunc1()`. Family **Bosses** already counts this
-		// exact global through `MeleeEventFires`; the same counter is incremented here rather than a
-		// second one stood beside it. Retail fires it on BOTH entering (599, 600) and leaving (601),
-		// so it is one event object and not two.
+		// `(*DAT_10924edc)->IsCommand()`: `ent_trace_melee`'s parent asked `IsCommand()` with the
+		// answer dropped (read 2026-09-29) — no observable. Family **Bosses** counts the call through
+		// `MeleeEventFires`; the same counter is incremented here rather than a second one stood
+		// beside it. Retail makes the call on BOTH entering (599, 600) and leaving (601).
 		++MeleeEventFires;
 		return true;
 	}
@@ -480,7 +480,7 @@ void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 	// `+0x95c`); it arrives here already.
 
 	// `0x102b5880`, the Troika line, in retail's order and with the argument ignored:
-	//     (*DAT_10924edc)->vfunc1();                                   // the global melee event
+	//     (*DAT_10924edc)->IsCommand();                                // ent_trace_melee's parent; answer dropped
 	//     m_bInMelee = 0;
 	//     if (HasUsableRangedWeapon())                                 // slot 308 (+0x4d0)
 	//         m_flMeleeCanEnterTimer = curtime + RandomFloat(5.0, 10.0);
@@ -698,15 +698,16 @@ int32 FElysiumNpc::Slot607()
 		if (FacingTargetsEnabled())
 		{
 			FFacingTargetRequest Request;
-			// `MotorSlot` records which of `CAI_Motor`'s three queued-facing overloads was reached;
-			// this call comes in through the NPC's own slot 517 rather than through one of them, so
-			// it is left at 0 and named here instead of being attributed to an overload.
-			Request.MotorSlot = 0;
+			// Slot 517 tail-jumps to `CAI_Motor` slot 12 `0x102e2150` (shape.md "The facing-target
+			// queue"), the entity-plus-position form. The floats are `(importance, duration, ramp)`;
+			// the position is the boss origin in CENTIMETRES, the queue's unit (0019/6 fix 3; it was
+			// handed in Source units).
+			Request.MotorSlot = 12;
 			Request.Target = Boss->Handle;
-			Request.Position = BossOriginUnits;
+			Request.Position = Boss->Origin;
+			Request.Importance = 1.0f;
 			Request.Duration = 1.0f;
-			Request.Ramp = 1.0f;
-			Request.Tolerance = 0.f;
+			Request.Ramp = 0.f;
 			MotorAddFacingTarget(Request);
 		}
 		// `m_vSavePosition` is CENTIMETRES in this runtime — `FaceSavePosition` and

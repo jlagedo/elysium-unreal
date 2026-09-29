@@ -22,8 +22,6 @@ public:
 	float RemoveDistance = 0.0f;    // +0x76d8 m_flRemoveDist        remove_distance — the one word
 	                                //         `CanMakeNPC` compares, as a FLOAT
 
-	// Slot 82 `0x1034c9f0` — `&datamap_CNPCMaker_Zombie`.
-	virtual void* GetDataDescMap() override;
 	// Slot 103 `0x1034cc60`.
 	virtual void Spawn() override;
 	// Slot 104 `0x1034cde0`.
@@ -33,9 +31,6 @@ public:
 	virtual bool FInViewCone(FElysiumEntity* Candidate) override;
 	virtual bool FInAimCone(const FVector& TargetCm) override;
 	virtual bool FInAimCone(FElysiumEntity* AimTarget) override;
-	// Slots 370/371 `0x1034cad0` / `0x1034cb00`.
-	virtual FVector HeadDirection2D() override;
-	virtual FVector HeadDirection3D() override;
 	// Slot 617 `0x1034d140`.
 	virtual FElysiumNpc* MakeNPC(bool bBypass) override;
 	// Slot 618 `0x1034d0a0`.

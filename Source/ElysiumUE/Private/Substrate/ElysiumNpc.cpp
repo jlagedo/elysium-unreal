@@ -174,7 +174,7 @@ bool FElysiumNpc::NpcStep(int32 EventId, bool bHeavy)
 		FootstepTemplate.Get(), bHeavy, World->FootstepTuning());
 
 	// (d) Step 5 (`1026d597`): `if (!this->m_pSurfaceData /* +0x5b90 */) return;`. The motor's last
-	// published surface IS that field — written per move (`CAI_Navigator::MoveEnact 0x102ef870`) and
+	// published surface IS that field — written per move (`CAI_Navigator::MoveEnact`) and
 	// `NAME_None` until the body has travelled. This reads the cache the motor already publishes
 	// rather than tracing again.
 	const FName Surface = Motor != nullptr ? Motor->SampleLocomotion().GroundSurface : FName();
@@ -668,7 +668,7 @@ namespace
 	const TCHAR* NpcSubRemoveThinkName() { return TEXT("0x101c0b10"); }
 	const TCHAR* NpcSubPvsRemoveThinkName() { return TEXT("0x102696f0"); }
 	// `_DAT_1044e664`, a float 10.0: `SUB_PVSRemove`'s re-arm and `CreateCorpse`'s corpse delay.
-	constexpr float GNpcCorpseThinkDelaySeconds = 10.f;
+	constexpr float GNpcCorpseThinkDelaySeconds = ElysiumNpcTunables::Ten;
 
 	// `SUB_Remove` `0x101c0b10`: `if (m_iHealth > 0) { m_iHealth = 0; DevWarning(2, ...); }` then
 	// `UTIL_Remove(this)` (`0x101cd940`), whose first act is slot 180 `UpdateOnRemove`.
@@ -1487,6 +1487,7 @@ void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerT
 			&& Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
 		{
 			Motor->Stop();
+			ClearMoveIgnores();
 		}
 		bMoveIssued = false;
 		bWalkingAnimation = false;
@@ -2036,6 +2037,7 @@ void FElysiumNpc::BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now)
 	if (Motor)
 	{
 		Motor->Stop();
+		ClearMoveIgnores();
 		if (Spot.bMatchOrientation)
 		{
 			Motor->Teleport(Spot.Origin, -Spot.Angles.Y);
@@ -2086,6 +2088,7 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft, bool bStopMovement)
 	if (bStopMovement && AmbientPhase == EAmbientPhase::Moving && bMoveIssued && Motor)
 	{
 		Motor->Stop();
+		ClearMoveIgnores();
 	}
 	if (FElysiumInterestingPlace* Spot = CurrentAmbientSpot())
 	{
@@ -2148,13 +2151,14 @@ void FElysiumNpc::ThinkAmbient(double Now)
 		SpotRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk);
 		SpotRequest.GaitKind = EElysiumNpcGaitKind::Walk;
 		SpotRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
-		bMoveIssued = Motor->MoveTo(SpotRequest);
+		bMoveIssued = Motor->MoveTo(PrepareMoveRequest(SpotRequest));
 		if (bMoveIssued)
 		{
 			bWalkingAnimation = StartWalkingAnimation();
 		}
 		else
 		{
+			ClearMoveIgnores();   // the refused request registered for nothing
 			FailedSpotIndices.Add(Spot->Handle.Index);
 			FinishAmbientUse(/*bFireLeft=*/false);
 		}
@@ -2180,6 +2184,11 @@ void FElysiumNpc::ThinkAmbient(double Now)
 	if (AmbientPhase == EAmbientPhase::Moving)
 	{
 		const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+		if (Status == EElysiumNpcMoveStatus::Reached || Status == EElysiumNpcMoveStatus::Failed
+			|| Status == EElysiumNpcMoveStatus::Unavailable)
+		{
+			ClearMoveIgnores();   // the leg `PrepareMoveRequest` registered for is over
+		}
 		if (Status == EElysiumNpcMoveStatus::Reached)
 		{
 			BeginAmbientUse(*Spot, Now);
@@ -2579,8 +2588,8 @@ void FElysiumNpc::OnDormancyChanged()
 // the blocks happen to be written in.
 void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 {
-	// Troika `Save` `0x102993c0` calls the base's `0x1027bc60` first, and `Restore` runs the base's
-	// `0x1027c160` first: the base half of the record leads (story 5 step 5).
+	// Troika `Save` calls the base's `0x1027bc60` first, and `Restore` runs the base's `Restore`
+	// first: the base half of the record leads (story 5 step 5).
 	FElysiumNpcBase::Serialize(Ar);
 	SerializePatrolBlock(Ar);
 	SerializeMakerBlock(Ar);

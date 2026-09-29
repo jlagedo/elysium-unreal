@@ -31,21 +31,19 @@ namespace
 {
 	// `FCOMP double ptr [0x104492d0]` — a DOUBLE, and SDK 2013's `MeleeAttack1Conditions` reads the
 	// same arm as `if (flDot < 0.7)`. Recovered from the twin, not from the bytes.
-	constexpr double GDatMeleeDotMin = 0.7;                  // _DAT_104492d0, as a double
-	constexpr float GDatMelee2TooFarUnits = ElysiumNpcTunables::OneEighty;
-	// UNRECOVERED. `MeleeAttack1Conditions`'s outer band must exceed 64 for the `0x60` rung below
-	// it to be reachable at all, and nothing pins it. Standing it at +inf makes the `0x09` arm
-	// UNREACHABLE, which is a stated refusal rather than a guessed threshold; every other arm of
-	// the body is exact.
-	constexpr float GDatMelee1TooFarUnits = TNumericLimits<float>::Max();  // _DAT_1044ddb0
+	constexpr double GDatMeleeDotMin = ElysiumNpcTunables::MeleeDotMin;   // a double in retail
+	// `MeleeAttack1Conditions`'s outer band, `_DAT_1044ddb0` = 256.0f (read from the image and
+	// recorded in `docs/vtmb/npc-ai/conditions-and-states.md`, "The four cells"). The port stood it
+	// at +inf as "unrecovered" until 0019/6 lane Q1 moved the cell to the tunables.
+	constexpr float GDatMelee1TooFarUnits = ElysiumNpcTunables::Melee1OuterBand;
 	// SDK 2013 `SetDefaultEyeOffset`: `m_vDefaultEyeOffset *= 0.75`.
-	constexpr float GDatEyeOffsetFallbackScale = 0.75f;      // _DAT_104629b8
+	constexpr float GDatEyeOffsetFallbackScale = ElysiumNpcTunables::EyeOffsetFallbackScale;
 	// `docs/vtmb/npc-ai/conditions-and-states.md` (line 1010) and `entity_io.md` pin
 	// `_DAT_10449258 = 3.0f` — the unreachable record's retention.
-	constexpr float GDatUnreachableSeconds = 3.0f;           // _DAT_10449258
-	// UNRECOVERED literals. Each is named so the arm reads as retail's and the value is the one
+	constexpr float GDatUnreachableSeconds = ElysiumNpcTunables::InterestCubicThree;
+	// Named literals, every one now a tunables row read out of the image (0019/6). Each is named so the arm reads as retail's and the value is the one
 	// thing waiting; each site says what the stand-in does.
-	constexpr float GDatFollowRunDistanceUnits = 190.f;      // _DAT_1049a17c = 0x433e0000 (190.0f, .rdata; no writer) — slot 571's walk/run
+	constexpr float GDatFollowRunDistanceUnits = ElysiumNpcTunables::FollowRunDistance;   // slot 571's walk/run
 	constexpr int32 GBaseHelpersActWalk = 9;                // ACT_WALK
 	constexpr int32 GBaseHelpersActRun = 0x13;              // ACT_RUN
 	// `CBaseEntity::GetFlags()` bit 0.
@@ -67,8 +65,7 @@ int32 FElysiumNpcBase::MeleeAttack1Conditions(float Dot, float Dist)
 	const FElysiumCombatCharacter* EnemyCombatant =
 		Enemy != nullptr ? Enemy->AsCombatCharacter() : nullptr;
 
-	// `_DAT_1044ddb0` is UNRECOVERED, so this arm is stated unreachable rather than guessed. The
-	// rung IS recovered: past the outer band the answer is `COND_TOO_FAR_FOR_MELEE`.
+	// Past the outer band (`_DAT_1044ddb0`, 256.0f) the answer is `COND_TOO_FAR_FOR_MELEE`.
 	if (Dist > GDatMelee1TooFarUnits)
 	{
 		return static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 9
@@ -87,7 +84,7 @@ int32 FElysiumNpcBase::MeleeAttack1Conditions(float Dot, float Dist)
 	}
 	if (EnemyCombatant != nullptr)
 	{
-		// Slot 327 (vtable `+0x51c`) on the ENEMY's combat character; the base body `0x10345460`
+		// Slot 327 (vtable `+0x51c`) on the ENEMY's combat character; the base body
 		// is `return 1`. A non-NPC combat character (the player) has no port body for the slot,
 		// which is the same answer.
 		const FElysiumNpc* EnemyNpc = Enemy->AsNpc();
@@ -100,40 +97,6 @@ int32 FElysiumNpcBase::MeleeAttack1Conditions(float Dot, float Dist)
 	// enemy, and 0 otherwise. Retail computes it branchlessly (`-(flags & 1) & 0x51`).
 	return (Enemy->Flags & GFlOnGround) != 0
 		? static_cast<int32>(EElysiumNpcCond::CanMeleeAttack1) : 0;
-}
-
-// slot 556 0x1026da90 `int MeleeAttack2Conditions(float, float)`
-int32 FElysiumNpcBase::MeleeAttack2Conditions(float Dot, float Dist)
-{
-	// The sibling, and the three differences are the whole of it: a DIFFERENT outer band
-	// (`_DAT_1044c3a8`, 180 units), NO second `GetEnemy()` null gate, and NO ground test — a
-	// passing body answers `COND_CAN_MELEE_ATTACK2` outright.
-	const FElysiumEntity* Enemy = (World != nullptr && BaseMemory.Enemy.IsSet())
-		? World->Resolve(BaseMemory.Enemy) : nullptr;
-	const FElysiumCombatCharacter* EnemyCombatant =
-		Enemy != nullptr ? Enemy->AsCombatCharacter() : nullptr;
-
-	if (Dist > GDatMelee2TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 9
-	}
-	if (Dist > NpcKernelBaseHelpersShared::GDatAttackBandUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);   // 0x60
-	}
-	if (static_cast<double>(Dot) < GDatMeleeDotMin)
-	{
-		return static_cast<int32>(EElysiumNpcCond::None);
-	}
-	if (EnemyCombatant != nullptr)
-	{
-		const FElysiumNpc* EnemyNpc = Enemy->AsNpc();
-		if (EnemyNpc != nullptr && !const_cast<FElysiumNpc*>(EnemyNpc)->Slot327())
-		{
-			return static_cast<int32>(EElysiumNpcCond::None);
-		}
-	}
-	return static_cast<int32>(EElysiumNpcCond::CanMeleeAttack2);      // 0x52
 }
 
 // 0x102729d0 `CAI_BaseNPC::GetNavTargetEntity`

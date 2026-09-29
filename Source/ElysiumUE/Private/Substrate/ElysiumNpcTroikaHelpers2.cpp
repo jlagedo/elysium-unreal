@@ -492,7 +492,19 @@ void FElysiumNpc::FUN_102c4380(const FElysiumEntity* Other)
 	// Family **Motor** carries `IgnoreCollisionEntity` (`+0x055c`) and states that nothing writes
 	// it; the WRITE lands here, because that is what this body does. `IgnoreCollisionUntil` is a
 	// port member the shape map binds, so the sentinel is real and not recorded.
+	//
+	// The physical ignore is the movement seam's (0019/6, verdict `mechanism`: `IgnoreActorWhenMoving`
+	// behind `IElysiumNpcMotor::SetMoveIgnore`). Retail holds ONE handle, so the old one is released
+	// before the new one is registered.
+	if (Motor != nullptr && IgnoreCollisionEntity.IsSet())
+	{
+		Motor->SetMoveIgnore(IgnoreCollisionEntity, false);
+	}
 	IgnoreCollisionEntity = Other != nullptr ? Other->Handle : FElysiumEntityHandle();
+	if (Motor != nullptr && IgnoreCollisionEntity.IsSet())
+	{
+		Motor->SetMoveIgnore(IgnoreCollisionEntity, true);
+	}
 	IgnoreCollisionUntil = TroikaIgnoreCollisionNever;
 }
 
@@ -528,6 +540,11 @@ void FElysiumNpc::FUN_102c43f0()
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	if (IgnoreCollisionUntil <= Now)
 	{
+		// `StopIgnoringCollisionWithEntity` `0x1008bd30`: the movement seam drops the ignore.
+		if (Motor != nullptr && IgnoreCollisionEntity.IsSet())
+		{
+			Motor->SetMoveIgnore(IgnoreCollisionEntity, false);
+		}
 		IgnoreCollisionEntity = FElysiumEntityHandle();
 		IgnoreCollisionUntil = TroikaIgnoreCollisionNever;
 	}
@@ -590,7 +607,7 @@ void FElysiumNpc::FUN_102aa9e0(FPatrolPathCell* Cell)
 		{
 			ReleasePatrolPath(Cell);                          // 0x102aa9ff CALL 0x10009638 -> 0x1029f5d0
 		}
-		// 0x102aaa07 CALL 0x100151f4 -> 0x1029f650(this, cell): `0x1029f6c0` reads the cell's current
+		// 0x102aaa07 CALL 0x100151f4 -> 0x1029f650(this, cell): `PatrolNodeInterestRecord` reads the cell's current
 		// node, so a cell the release just emptied reads none and only the flag clear lands.
 		FUN_1029f650(PatrolCurrentNode(*Cell));
 		TaskComplete(false);                                  // 0x102aaa0c PUSH 0 / 0x102aaa10 CALL 0x1000ac68 -> 0x10273e80

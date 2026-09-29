@@ -32,7 +32,6 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcEntityChainShared.h"
@@ -146,16 +145,6 @@ float FElysiumCombatCharacter::SetPoseParameter(const TCHAR* Name, float Value, 
 	return SetPoseParameter(LookupPoseParameter(Name), Value, bUpdatePoseControls);
 }
 
-// --- Moved from `ElysiumNpcBaseClosure.cpp` (story 5 step 6) ---
-
-void* FElysiumCombatCharacter::GetPredDescMap()
-{
-	// `0x10321670` -> `&datamap_CBaseCombatCharacter_10619d10`. REFUSAL: no datamap; the port's
-	// save mechanism is `FElysiumSaveArchive`, a per-type `Serialize`, not a descriptor table.
-	++ClosureRefusals.PredDescMap;
-	return nullptr;
-}
-
 float FElysiumCombatCharacter::SetPoseParameter(int32 Index, float Value, bool bWrap)
 {
 	// `CBaseCombatCharacter::SetPoseParameter`, 413 bytes, 85 classes — the stock SDK LOOPING
@@ -169,10 +158,9 @@ float FElysiumCombatCharacter::SetPoseParameter(int32 Index, float Value, bool b
 	// **The fall-through is the arm this runtime can take, and it is retail's own.** The registry is
 	// filled from the model's studio header, this substrate's animating tier stands no
 	// `studiohdr_t` and therefore no pose-parameter descriptors, so no index is ever a registered
-	// looping parameter and every call takes the miss. That is a refusal of the WRAP, not of the
-	// write: the value still goes where retail sends it on a miss.
+	// looping parameter and every call takes the miss. The wrap is the anim instance's (the pose
+	// parameter's own range on the AnimGraph side); the write goes where retail sends it on a miss.
 	(void)bWrap;
-	++ClosureRefusals.LoopingPoseParameter;
 	return SetPoseParameter02(Index, Value);
 }
 
@@ -662,21 +650,6 @@ FElysiumEntity* FElysiumCombatCharacter::ActiveWeaponEntity() const
 
 // --- Moved from `ElysiumNpcBaseEntityChain.cpp` (story 5 step 6) ---
 
-void* FElysiumCombatCharacter::Slot240()
-{
-	// 0x1014f8b0, slot 240 — `return DAT_1072b360;`. One global word, not a literal, which is why
-	// the generator could not emit it as a `default:`.
-	return PythonInteropObject();
-}
-
-void* FElysiumCombatCharacter::PythonInteropObject() const
-{
-	// SEAM for `DAT_1072b360`, slot 240's whole body. The global is the CPython interop side of the
-	// entity — whatever the embedded interpreter last stored — and this runtime embeds none, so the
-	// answer is the global's own pre-interpreter value.
-	return nullptr;
-}
-
 // --- Moved from `ElysiumNpcBaseFacing.cpp` (story 5 step 6) ---
 
 void FElysiumCombatCharacter::SetPoseParameterByName(const TCHAR* Name, float Value)
@@ -764,36 +737,6 @@ int32 FElysiumCombatCharacter::CurrentRetailActivityId() const
 }
 
 // --- Moved from `ElysiumNpcBaseMisc.cpp` (story 5 step 6) ---
-
-// -------------------------------------------------------------------------------------------------
-// Slot 296 — `0x10348ba0`.
-// -------------------------------------------------------------------------------------------------
-
-bool FElysiumCombatCharacter::Slot296(int32 Argument)
-{
-	// `0x10348ba0`, arm by arm:
-	//     if (m_GrappleRole (+0x153c) == -1) return false;
-	//     if (m_GrapplePartner (+0x1538) == INVALID_EHANDLE) return false;
-	//     if (!resolve(m_GrapplePartner)) return false;           // PTR_DAT_10566458, & 0x1fff,
-	//                                                             // generation >> 0xd
-	//     return param_1 == 0xb;
-	//
-	// The three grapple terms are exactly `FElysiumGrappleState::IsPaired()` plus the world resolve
-	// its comment says every consumer that can reach a world must also do.
-	//
-	// **Unrecovered: what `0xb` is.** Slot 296 has no dispatch site anywhere in the image (0d/0v/0c),
-	// so nothing states the argument's domain; it is not a `m_GrappleType` value (those run 0..8).
-	// The literal is reproduced as the literal.
-	if (!Grapple.IsPaired())
-	{
-		return false;
-	}
-	if (World == nullptr || World->Resolve(Grapple.Partner) == nullptr)
-	{
-		return false;
-	}
-	return Argument == 0xb;
-}
 
 // --- Moved from `ElysiumNpcBaseSenses.cpp` (story 5 step 6) ---
 

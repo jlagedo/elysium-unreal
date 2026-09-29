@@ -133,16 +133,6 @@ int32 FElysiumNpcHuman::SelectScheduleRangedCombat(int32 Arg)
 	return HumanSelectScheduleRangedCombat(Arg);
 }
 
-// Slot 546: `0x10384200`, the class's own schedule id space.
-const TCHAR* FElysiumNpcHuman::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b3c4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VHuman"), TEXT("0x10384200"), TEXT("0x1093b3c4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 563: `0x10384760`, the `OffsetOnly` shape; a replacement that does not chain.
 void FElysiumNpcHuman::TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm,
 	void* Tolerance, void* SecondTolerance)
@@ -536,7 +526,7 @@ int32 FElysiumNpcHuman::SelectScheduleMeleeCombatHuman()
 void FElysiumNpcHuman::FUN_10385cf0()
 {
 	// `0x10385cf0`, in retail's order and with the argument ignored, as retail ignores it:
-	//     (*DAT_10924edc)->vfunc1();                          // the global melee-left event, FIRST
+	//     (*DAT_10924edc)->IsCommand();                       // ent_trace_melee's parent; answer dropped, FIRST
 	//     m_bInMelee = 0;                                     // +0x6078
 	//     if (HasUsableRangedWeapon())                        // slot 308 (+0x4d0)
 	//         m_flMeleeCanEnterTimer = curtime + RandomFloat(5.0, 10.0);   // +0x6070

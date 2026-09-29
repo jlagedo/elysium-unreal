@@ -18,7 +18,6 @@ public:
 	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

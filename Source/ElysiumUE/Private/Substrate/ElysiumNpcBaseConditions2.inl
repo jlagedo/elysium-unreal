@@ -104,7 +104,7 @@ int32 Conditions19WeaponFindUsableCalls = 0;
 
 /** The tunables `0x1026fb40` reads. */
 static constexpr int32 Cond19CapWeaponSearch = 0x200000;              // slot 513 bit, `TEST EAX,0x200000`
-static constexpr double Cond19WeaponSearchInterval = 2.0;             // `_DAT_10452dc4`
+static constexpr double Cond19WeaponSearchInterval = static_cast<double>(ElysiumNpcTunables::Two);
 static constexpr uint32 Cond19SpawnflagSenseAlways = 0x400;           // `m_spawnflags >> 10 & 1`
 
 // --- `CAI_BaseNPC::GatherEnemyConditions` (`0x10270b20`)'s callees --------------------------------
@@ -124,7 +124,7 @@ double Conditions19LastTimeSeen(const FElysiumEntity* Enemy) const;
  *  one. Centimetres. The no-match notifier calls (`vfunc 0xe8` / `0x10316bc0`) are unrecovered. */
 FVector Conditions19LastKnownPosition(const FElysiumEntity* Enemy) const;
 
-/** SEAM for `CAI_BaseNPC::UpdateEnemyPos` (`0x10271900`, checklist-19-29 `mechanism`: the
+/** SEAM for `CAI_BaseNPC::UpdateEnemyPos` (checklist-19-29 `mechanism`: the
  *  GOALTYPE_ENEMY moving-goal upkeep behind the 0018 nav seam). Records the call, moves nothing. */
 void Conditions19UpdateEnemyPos();
 int32 Conditions19UpdateEnemyPosCalls = 0;
@@ -149,5 +149,5 @@ static constexpr uint32 Cond19MemoryEnemyInSight = 0x20000u;
 static constexpr int32 Cond19EnemyOccludedLimit = 10;               // `CMP EAX,0xa` at `0x10270ba3` / `0x10270bbd`
 static constexpr int32 Cond19EnemyVisibleMask = 0x2804091;          // `PUSH 0x2804091` at `0x10270b86`
 static constexpr float Cond19EnemyLeadMin = -0.05f;                 // `PUSH 0xbd4ccccd` at `0x10270fb4`
-static constexpr double Cond19ElusionSeconds = 8.0;                 // `_DAT_1045597c`
-static constexpr float Cond19ElusionRadiusUnits = 48.0f;            // `_DAT_10447ee8`
+static constexpr double Cond19ElusionSeconds = static_cast<double>(ElysiumNpcTunables::Eight);
+static constexpr float Cond19ElusionRadiusUnits = ElysiumNpcTunables::FortyEight;

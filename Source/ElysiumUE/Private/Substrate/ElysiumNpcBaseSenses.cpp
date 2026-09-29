@@ -21,13 +21,13 @@ namespace
 {
 	// `_DAT_104563b0` = 4096.0f, compared against a SQUARED distance — so the occlusion edge trips
 	// once the enemy has moved 64 Source units from where it was when sight was lost.
-	constexpr float GEnemyWentOccludedDistanceSqUnits = 4096.0f;
+	constexpr float GEnemyWentOccludedDistanceSqUnits = ElysiumNpcTunables::FourThousandNinetySix;
 	// `_DAT_10454110` = 5.0f and `_DAT_1044eb0c` = 20.0f — `OnDoorBlocked`'s two retry windows. The
 	// 5.0 cell is also the detected-attack window.
 	constexpr float GDoorRetryShortSeconds = ElysiumNpcTunables::Five;
-	constexpr float GDoorRetryLongSeconds = 20.0f;
+	constexpr float GDoorRetryLongSeconds = ElysiumNpcTunables::Twenty;
 	// `_DAT_104454c0` = 1.0f — the alternate-AI hit-info window `OnDoorBlocked` re-arms.
-	constexpr float GDoorAlternateAiWindowSeconds = 1.0f;
+	constexpr float GDoorAlternateAiWindowSeconds = ElysiumNpcTunables::One;
 	// `_DAT_10463584` = 15.0f — `SetSquadFocus`'s own expiry (`squad+0x74`); slot 616's fire-immune
 	// window reads the same pooled cell.
 	constexpr float GSquadFocusLifetimeSeconds = ElysiumNpcTunables::Fifteen;

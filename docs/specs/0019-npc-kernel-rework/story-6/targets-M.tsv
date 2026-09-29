@@ -1,0 +1,25 @@
+0x101a6b80	-	GetJumpGravity body (BaseMotor.cpp) and its test assert; generated slot-524 declaration goes with regeneration
+0x10278cb0	-	AddFacingTarget entity-only overload (slot 519, no dispatch site) and its test calls
+0x10278e00	-	GetFacingDirection (slot 520) body and test
+0x1027d9f0	-	OverrideMoveFacing (slot 526) body and test
+0x1028b0b0	-	IsValidShootPosition (slot 549) body, BasePositions2.cpp; PositionsTests.cpp:564-579 needs its owner
+0x102c79e0	-	StandoffTranslateActivity with HintActivityForNode, StandoffLowAimActivitySmg/Pistol and its test
+0x102c87a0	-	StandoffInputActivate, GoalEntityInputActivate, StandoffClampAggressiveness, FStandoffGoalWords, tests
+0x102c8830	-	StandoffInputDeactivate, GoalEntityInputDeactivate, tests
+0x102cdc50	-	StandoffGoalUpdateOnRemove and test
+0x10026e70	-	BaseEntityIsMoving body, declaration and test (the mover line's own IsMoving stays)
+0x102e14a0	CMC	MoveGroundExecute and helper 0x102e1560 (MotorMoveGroundExecuteWalk, MotorStepToPoint, local-navigator and failure hooks, MotorCurSpeed) and tests
+0x102e1760	CMC	MotorMoveGroundStep and test
+0x102efaa0	UPathFollowingComponent	NavigatorMoveNormal with its gate 0x102efd50 (RouteNavType, teardowns, override/enact/tail stubs) and tests; live path is NavigatorMoveStep
+0x10280bb0	CMC	MaxYawSpeedBase removed; generated slot-516 stub stays
+0x10297ce0	CMC	Troika MaxYawSpeed ladder, MaxYawSpeedTurningArm, the yaw ConVar table and their tests
+0x103d0a30	CMC	Werewolf MaxYawSpeed override (scope-trace forward) and its declaration
+0x103ca7c0	CRT:operator delete	DestroyWerewolf body and declaration; SpeciesLifecycle10Tests.cpp DestroyWerewolf test needs its owner
+0x103cb2a0	Bake	Werewolf Precache: six precache calls removed; TroikaPrecache chain and the three VSoundGroup writes kept
+0x1026e5e0	hand:FElysiumNpcBase::CheckOnGround	rule kept; measurement is IElysiumNpcMotor::SampleFloor tested against retail's 4.0-unit reach
+0x10280a50	hand:FElysiumNpcBase::AutoMovement	gate kept; the 0x102e0bd0 apply (MotorApplyIntervalMovement) removed, root motion is the CMC's
+0x102eff40	hand:FElysiumNpcBase::NavigatorMoveStep	already forwards to the path follower; unchanged
+0x10280300	hand:FElysiumNpcBase::IsMoving	one-line forward to NavigatorIsGoalSet; unchanged
+0x102a0ed0	hand:FElysiumNpc::CanStandAt	stand probe runs through KernelHullTrace -> TraceRetail; unchanged
+0x103d6a40	hand:FElysiumNpcWerewolf::GetGroundpoint	trace through KernelHullTrace -> TraceRetail; blend and vec3_invalid kept
+0x103cb920	hand:FElysiumNpcWerewolf::WerewolfCheckStuck	hull sweeps through KernelHullTrace -> TraceRetail; unchanged

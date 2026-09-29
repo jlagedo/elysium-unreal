@@ -18,10 +18,8 @@ public:
 	virtual void Slot601(FElysiumEntity* Enemy) override;
 	virtual bool Slot602() override;
 	virtual void NPCInit() override;
-	virtual int32 SelectIdealStateRetail() override;
 	virtual bool FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4) override;
 	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

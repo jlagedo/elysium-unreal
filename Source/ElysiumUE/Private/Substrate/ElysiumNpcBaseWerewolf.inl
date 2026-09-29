@@ -17,7 +17,7 @@
  *  clear line or `0x49` otherwise, then `UpdateTargetPos` unconditionally. No debounce. */
 void CheckTarget(FElysiumEntity* Target);
 
-/** SEAM for `CAI_BaseNPC::UpdateTargetPos` (`0x10271b10`): re-aim or re-path the navigator's
+/** SEAM for `CAI_BaseNPC::UpdateTargetPos`: re-aim or re-path the navigator's
  *  target goal at `m_hTargetEnt` (`+0x5ce4`). It acts only when the navigator's nav type (`+0x5d34`
  *  `+0x18`, `NavGetType`) is neither 3 nor 1 AND `GetGoalType` (`0x102ee620`, `NavGoalState()`)
  *  answers 1. Both gates are read from the navigator; the body past them is not ported. Counted. */

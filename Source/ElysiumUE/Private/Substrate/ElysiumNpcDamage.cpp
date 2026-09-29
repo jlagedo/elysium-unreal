@@ -31,8 +31,8 @@
 
 namespace
 {
-	constexpr float BlockedReactionShort = 0.5f;  // _DAT_1049a1b8
-	constexpr float BlockedReactionLong = 1.5f;   // _DAT_1049a1bc
+	constexpr float BlockedReactionShort = ElysiumNpcTunables::BlockedReactionShort;  // _DAT_1049a1b8
+	constexpr float BlockedReactionLong = ElysiumNpcTunables::BlockedReactionLong;   // _DAT_1049a1bc
 	constexpr float EmitterFadeSeconds = 0.1f;    // `thunk_FUN_100fbbb0`'s second argument
 
 	// `0x102b8c40`'s schedule id and its selector-trace line.

@@ -7,16 +7,12 @@
 // No factory builds it by classname (`docs/vtmb/npc-ai/population.md`): retail builds one singleton
 // by code, and only graph-build code drives it — `CAI_Node::InitLinks 0x102fb4e0` and the hull
 // bumper `0x102f7a90` probe links with it (`docs/vtmb/navigation-jump-links.md`). No NPC path touches
-// it. This port builds no node graph at runtime (the pipeline bakes navigation), so **no port path
-// constructs a test hull**; tests construct the C++ type directly, and the class keeps the retail
-// contract of its six own bodies:
-//
-//   slot   5  `0x102d77d0`  the scalar deleting destructor — the C++ destructor's, not a body
-//   slot 103  `0x102d72f0`  `Spawn`
-//   slot 117  `0x102d7290`  `ObjectCaps`
-//   slot 521  `0x102d7760`  `IsJumpLegal`
-//   slot 522  `0x102d72b0`  `StepHeight`
-//   slot 523  `0x102d72d0`  `GetMaxJumpSpeed`
+// it. This port builds no node graph at runtime (the pipeline bakes navigation, spec 0018/3), so **no
+// port path constructs a test hull**; tests construct the C++ type directly. Of its six own bodies
+// only `Spawn` (slot 103, `0x102d72f0`) stays, because test fixtures stand the class as a base-only
+// NPC through it. `ObjectCaps` (117), `IsJumpLegal` (521), `StepHeight` (522) and
+// `GetStepDownHeight` (523) are the bake's hull probe, which the
+// pipeline models (step 40); slot 5 (`0x102d77d0`) is the C++ destructor.
 class FElysiumNpcTestHull : public FElysiumNpcBase
 {
 public:
@@ -24,14 +20,6 @@ public:
 
 	// Slot 103 `0x102d72f0`.
 	virtual void Spawn() override;
-	// Slot 117 `0x102d7290`.
-	virtual int32 ObjectCaps() const override;
-	// Slot 521 `0x102d7760`.
-	virtual bool IsJumpLegal(FVector& StartUnits, FVector& ApexUnits, FVector& EndUnits) const override;
-	// Slot 522 `0x102d72b0`.
-	virtual float StepHeight() const override;
-	// Slot 523 `0x102d72d0`.
-	virtual float GetMaxJumpSpeed() const override;
 
 	/** `CAI_TestHull::Spawn`'s hull pick, `0x102d72f5`–`0x102d732e`, as a PURE function so every arm is
 	 *  reachable from a test without a hull table. `HullBits` is `NAI_Hull::Bits`.

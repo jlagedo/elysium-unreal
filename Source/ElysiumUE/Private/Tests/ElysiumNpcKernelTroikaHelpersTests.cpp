@@ -951,14 +951,6 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 		return false;
 	}
 
-	// `CAI_Motor#3` `0x102e0ea0` — the activity dispatch is FIRST, before the state reset.
-	Npc->FUN_102e0ea0();
-	TestEqual(TEXT("#3 forces activity 0x33"), Npc->TroikaMotor.LastForcedActivity, 0x33);
-	TestEqual(TEXT("#3 resets the motor state once"), Npc->TroikaMotor.StateResets, 1);
-	TestEqual(TEXT("#3 sets solid once"), Npc->TroikaMotor.SolidSets, 1);
-	TestEqual(TEXT("#3 dispatches the owner's +0x340 once"), Npc->TroikaMotor.OwnerSlot208Dispatches,
-		1);
-
 	// `CAI_Motor#8` `0x102e1270` — the full stop: zero velocity, activity 0x30, no reissue.
 	const int32 ReissuesBefore = Npc->TroikaMotor.MoveReissues;
 	Npc->FUN_102e1270();
@@ -967,103 +959,19 @@ bool FElysiumNpcKernelTroikaHelpersMotorTest::RunTest(const FString&)
 		static_cast<float>(Npc->TroikaMotor.LastVelocityUnits.Size()), 0.f, 0.0001f);
 	TestEqual(TEXT("and reissues no move"), Npc->TroikaMotor.MoveReissues, ReissuesBefore);
 
-	// `CAI_Motor#6` `0x102e1180` — the goal vector goes straight into SetAbsVelocity, activity
-	// 0x2c, and the move is reissued at the goal's own yaw and speed -1.
-	Npc->FUN_102e1180(FVector(0.0, 10.0, 0.0));
-	TestEqual(TEXT("#6 hands the goal itself to SetAbsVelocity"),
-		static_cast<float>(Npc->TroikaMotor.LastVelocityUnits.Y), 10.f, 0.0001f);
-	TestEqual(TEXT("#6 forces activity 0x2c"), Npc->TroikaMotor.LastForcedActivity, 0x2c);
-	TestEqual(TEXT("#6 reissues at the goal's yaw"), Npc->TroikaMotor.LastReissueYaw, 90.0f, 0.01f);
-	TestEqual(TEXT("and at speed -1"), Npc->TroikaMotor.LastReissueSpeed, -1.0f, 0.0001f);
-
-	// `CAI_Motor#4` `0x102e0f90` — the bound is `m_flMoveInterval * 100` (`_DAT_10450564`), and the
-	// velocity, written on BOTH arms before the branch, is the UNIT direction times 100.
-	const FVector Goal4 = Npc->Origin / ElysiumMove::U + FVector(100.0, 0.0, 0.0);
-	Npc->TroikaMotor.MoveInterval = 0.5f;   // bound 50 < 100 units: the far arm
-	const int32 Reissues = Npc->TroikaMotor.MoveReissues;
-	TestFalse(TEXT("#4 takes the restart arm past the bound"), Npc->FUN_102e0f90(Goal4, 45.0f));
-	TestEqual(TEXT("#4 zeroes the move interval on that arm"), Npc->TroikaMotor.MoveInterval, 0.f,
-		0.0001f);
-	TestEqual(TEXT("#4 reissues once"), Npc->TroikaMotor.MoveReissues, Reissues + 1);
-	TestEqual(TEXT("at the caller's yaw"), Npc->TroikaMotor.LastReissueYaw, 45.0f, 0.0001f);
-	TestEqual(TEXT("and the velocity is the unit direction times 100"),
-		static_cast<float>(Npc->TroikaMotor.LastVelocityUnits.X), 100.f, 0.001f);
-	Npc->TroikaMotor.MoveInterval = 5.f;    // bound 500 > 100 units: the near arm
-	TestTrue(TEXT("#4 inside the bound keeps the move"), Npc->FUN_102e0f90(Goal4, 45.0f));
-	TestEqual(TEXT("and drains distance * 0.01 (`_DAT_10450aa4`) off the interval"),
-		Npc->TroikaMotor.MoveInterval, 4.f, 0.001f);
-
-	// `CAI_Motor#17` `0x102e2580` — BOTH bounds are floors, so a hull floor above the base speed
-	// wins. 29c's walk reads the first as an upper bound; it is not.
-	Npc->TroikaMotor.SpeedCeilingUnits = 0.f;
-	Npc->TroikaMotor.HullSpeedFloorUnits = 37.f;
-	TestEqual(TEXT("#17 floors against the hull table"), Npc->FUN_102e2580(), 37.f, 0.0001f);
-	Npc->TroikaMotor.SpeedCeilingUnits = 90.f;
-	TestEqual(TEXT("and against the motor's own +0x40, which RAISES rather than clamps"),
-		Npc->FUN_102e2580(), 90.f, 0.0001f);
-	Npc->TroikaMotor.SpeedCeilingUnits = 0.f;
-	Npc->TroikaMotor.HullSpeedFloorUnits = 0.f;
-
-	// `CAI_Motor#15` `0x102e2180`'s blend, as a pure function. One entry at full weight is the
-	// normalised delta; a zero-weight entry contributes nothing.
-	const FElysiumNpcBase::FFacingQueueEntry Entries[] = {
-		{ FVector(10.0, 0.0, 0.0), 1.0f },
-	};
-	const FVector Blend = FElysiumNpcBase::BlendFacingQueue(Entries, FVector::ZeroVector);
-	TestEqual(TEXT("#15 normalises the accumulator after every entry"),
-		static_cast<float>(Blend.X), 1.f, 0.0001f);
-	int32 Survivors = -1;
-	const FVector Empty = Npc->FUN_102e2180(Survivors);
-	TestEqual(TEXT("with no facing queue #15 answers the zero vector"),
-		static_cast<float>(Empty.Size()), 0.f, 0.0001f);
-	TestEqual(TEXT("and zero survivors"), Survivors, 0);
-
-	// `CAI_Motor#18` `0x102e19e0` — the clip test is a hard refusal, and without the `move_yaw`
-	// pose parameter the pseudo-yaw arm reissues and writes no desired yaw.
-	Npc->TroikaMotor.bSteerClipped = true;
-	const int32 PoseWrites = Npc->TroikaMotor.PoseParamWrites;
-	Npc->FUN_102e19e0(FVector(0.0, 10.0, 0.0));
-	TestEqual(TEXT("#18 refuses outright when the owner's clip test holds"),
-		Npc->TroikaMotor.PoseParamWrites, PoseWrites);
-	Npc->TroikaMotor.bSteerClipped = false;
-	Npc->TroikaMotor.bHasMoveYawPoseParam = false;
-	const int32 Before18 = Npc->TroikaMotor.MoveReissues;
-	Npc->FUN_102e19e0(FVector(0.0, 10.0, 0.0));
-	TestEqual(TEXT("#18 without the pose parameter reissues the move"),
-		Npc->TroikaMotor.MoveReissues, Before18 + 1);
-	TestEqual(TEXT("and writes no pose parameter"), Npc->TroikaMotor.PoseParamWrites, PoseWrites);
-	Npc->TroikaMotor.bHasMoveYawPoseParam = true;
-	Npc->FUN_102e19e0(FVector(0.0, 10.0, 0.0));
-	TestEqual(TEXT("#18 with it writes the desired yaw once"), Npc->TroikaMotor.PoseParamWrites,
-		PoseWrites + 1);
-
-	// `CAI_Navigator#7` and `#11` — byte-identical bodies at two distinct slots.
+	// `CAI_Navigator#7` `0x102eea70`.
 	Npc->Navigator.bNavFailed = false;
 	Npc->NavigatorWord0x54 = 0;
-	int32 Clears = Npc->NavigatorRouteClears;
+	const int32 Clears = Npc->NavigatorRouteClears;
 	Npc->FUN_102eea70();
 	TestTrue(TEXT("#7 sets the navigator's dirty latch"), Npc->Navigator.bNavFailed);
 	TestEqual(TEXT("#7 resets +0x54 to -1"), Npc->NavigatorWord0x54, -1);
 	TestEqual(TEXT("#7 clears the route once"), Npc->NavigatorRouteClears, Clears + 1);
-	Npc->Navigator.bNavFailed = false;
-	Npc->NavigatorWord0x54 = 0;
-	Clears = Npc->NavigatorRouteClears;
-	Npc->FUN_102eeac0();
-	TestTrue(TEXT("#11 is the same behaviour at a different slot"), Npc->Navigator.bNavFailed);
-	TestEqual(TEXT("#11 resets +0x54 to -1 too"), Npc->NavigatorWord0x54, -1);
-	TestEqual(TEXT("#11 clears the route once"), Npc->NavigatorRouteClears, Clears + 1);
-
-	// `CAI_Navigator#17` — the recording motor reports no move facts, so the block comes back with
-	// `bHasPath` clear (the fact-fed arms are `Elysium.Substrate.Navigator.PathSample`).
-	const FElysiumNpcBase::FNavMoveInfo Info = Npc->FUN_102eee40();
-	TestFalse(TEXT("#17 answers no path while the motor reports no facts"), Info.bHasPath);
-	TestEqual(TEXT("but it still reports the nav type it read first"), Info.NavType,
-		Npc->NavGetType());
 	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
-// `CAI_StandoffBehavior` and the two hint bodies.
+// The two hint bodies.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTroikaHelpersStandoffTest,
@@ -1080,52 +988,6 @@ bool FElysiumNpcKernelTroikaHelpersStandoffTest::RunTest(const FString&)
 		AddError(TEXT("fixture did not stand the NPC"));
 		return false;
 	}
-
-	// `0x102c7410`. A clear `+0x19` answers false WITHOUT touching anything else; a set one runs
-	// into the capability gate, which the seam closes — and THAT arm clears `+0x19`.
-	Npc->bStandoffRangedCache = false;
-	TestFalse(TEXT("vfunc3 refuses on a clear +0x19"), Npc->StandoffVfunc3());
-	Npc->bStandoffRangedCache = true;
-	TestFalse(TEXT("and refuses on the closed capability gate"), Npc->StandoffVfunc3());
-	TestFalse(TEXT("which is one of the two arms that CLEAR +0x19"), Npc->bStandoffRangedCache);
-	TestEqual(TEXT("the capability seam answers 0"),
-		static_cast<int32>(Npc->StandoffOwnerCapabilityWord()), 0);
-	TestEqual(TEXT("and the sequence seam INDEX_NONE"), Npc->SelectHeaviestSequence(8, INDEX_NONE),
-		static_cast<int32>(INDEX_NONE));
-
-	// `0x102c7530`. The hint is cleared UNCONDITIONALLY, the behaviour's `+0x50` lands in
-	// `m_flDistTooFar`, and `+0x1fc` is forced to 2.
-	Npc->BaseScheduleHost.HintNode = 4;
-	Npc->StandoffDistTooFar = 512.f;
-	Npc->DistTooFar = 0.f;
-	Npc->Field_0x01fc = 0;
-	Npc->StandoffVfunc5();
-	TestEqual(TEXT("vfunc5 clears the hint node unconditionally"), Npc->BaseScheduleHost.HintNode,
-		static_cast<int32>(INDEX_NONE));
-	TestEqual(TEXT("vfunc5 copies the behaviour's +0x50 into m_flDistTooFar"), Npc->DistTooFar,
-		512.f, 0.0001f);
-	TestEqual(TEXT("and forces the owner's +0x1fc to 2"), Npc->Field_0x01fc, 2);
-
-	// `0x102c7960` / `0x102c79a0` — byte-identical bodies. With no program the first test refuses;
-	// with one, `0x102cc1f0(0x17)` names the program the compare needs (story 8 wave 2: the lookup is
-	// `Spawn19ScheduleOfType`, hoisted; it was a seam answering None).
-	Npc->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
-	Npc->Schedule.Current = ElysiumScheduleId::None;
-	Npc->StandoffVfunc20();
-	TestTrue(TEXT("vfunc20 clears nothing with no program installed"),
-		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	const int32 Standoff = Npc->StandoffScheduleForLocalId(0x17);
-	TestTrue(TEXT("0x102cc1f0(0x17) answers a program"), Standoff != ElysiumScheduleId::None);
-	Npc->Schedule.Current = ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND) != Standoff
-		? ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND) : ElysiumScheduleId::None;
-	Npc->StandoffVfunc21();
-	TestTrue(TEXT("vfunc21 clears nothing while another program runs"),
-		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	Npc->Schedule.Current = Standoff;
-	Npc->StandoffVfunc21();
-	TestFalse(TEXT("0x10269f30 vfunc21 clears NEW_ENEMY while 0x102cc1f0(0x17)'s program runs"),
-		Npc->Cognition.Conditions.Has(EElysiumNpcCond::NewEnemy));
-	Npc->Schedule.Current = ElysiumScheduleId::None;
 
 	// `0x102b6120` — no hint node ZEROES the caller's point and answers false. That is the arm, not
 	// a refusal to write.

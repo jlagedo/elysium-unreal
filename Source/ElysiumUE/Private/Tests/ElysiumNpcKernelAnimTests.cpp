@@ -45,153 +45,29 @@ bool FElysiumNpcKernelAnimGestureLayersTest::RunTest(const FString&)
 	TestEqual(TEXT("the kernel's table is the same four slots the render stack carries"),
 		static_cast<int32>(UE_ARRAY_COUNT(Guard->AnimOverlay)), ElysiumOverlay::NumSlots);
 
-	// `SetLayer` `0x10099020`, field for field.
-	Guard->SetOverlayLayer(0, /*Activity*/ 0x3b, /*Sequence*/ 17, /*bAutoKill*/ true);
-	const FElysiumAnimatingOverlay::FAnimOverlayLayer& L0 = Guard->AnimOverlay[0];
-	TestEqual(TEXT("SetLayer seeds the weight at 0.1"), L0.Weight, ElysiumOverlay::SeedWeight);
-	TestEqual(TEXT("and the ceiling at 1.0"), L0.WeightMax, ElysiumOverlay::WeightMax);
-	TestEqual(TEXT("and 0.2 at both ends of the envelope"), L0.BlendIn,
-		ElysiumOverlay::DefaultBlendFraction);
-	TestEqual(TEXT("and 0.2 out"), L0.BlendOut, ElysiumOverlay::DefaultBlendFraction);
-	TestEqual(TEXT("and rate 1.0"), L0.PlaybackRate, 1.f);
-	TestEqual(TEXT("and the owner activity, which is the key every lookup searches by"), L0.Activity,
-		0x3b);
-	TestEqual(TEXT("and the sequence"), L0.Sequence, 17);
-	TestEqual(TEXT("and zeroes the cycle"), L0.Cycle, 0.f);
-	TestTrue(TEXT("and carries the auto-kill bit the pusher stated"), L0.bAutoKillWhenFinished);
-	TestEqual(TEXT("m_fFlags is NOT written by SetLayer"), L0.Flags, 0);
+	// Two live layers, armed by hand: the pushers (`SetLayer`, `AddGesture`) are 0015's
+	// gesture seam and have no port body. What stays is the lookup and the remover StartTask reads.
+	Guard->AnimOverlay[0].Activity = 0x3b;
+	Guard->AnimOverlay[0].Weight = ElysiumOverlay::SeedWeight;
+	Guard->AnimOverlay[2].Activity = 0x3d;
+	Guard->AnimOverlay[2].Weight = ElysiumOverlay::SeedWeight;
+	Guard->AnimOverlay[2].Sequence = 19;
 
 	// `FindGestureLayer` `0x100994c0`, three terms: live, owner != -1, owner == asked.
-	TestEqual(TEXT("the pushed layer is found by its owner"), Guard->FindGestureLayerByOwner(0x3b),
+	TestEqual(TEXT("the armed layer is found by its owner"), Guard->FindGestureLayerByOwner(0x3b),
 		0);
-	TestTrue(TEXT("HasLayer 0x10099540 is that lookup and a != -1"), Guard->HasLayer(0x3b));
-	TestFalse(TEXT("and answers false for an owner nothing holds"), Guard->HasLayer(0x3c));
+	TestEqual(TEXT("and an owner nothing holds answers -1"), Guard->FindGestureLayerByOwner(0x3c),
+		INDEX_NONE);
 
-	// `AllocateLayer` `0x10099470`: the lowest ZERO-WEIGHT slot, which is why the seed weight is
-	// load-bearing — slot 0 is occupied on the frame it was pushed.
-	TestEqual(TEXT("AllocateLayer skips the seeded slot"), Guard->AllocateGestureLayer(), 1);
-	Guard->SetOverlayLayer(1, 0x3c, 18, false);
-	Guard->SetOverlayLayer(2, 0x3d, 19, false);
-	Guard->SetOverlayLayer(3, 0x3e, 20, false);
-	TestEqual(TEXT("a full stack refuses outright — no eviction, no displacement"),
-		Guard->AllocateGestureLayer(), INDEX_NONE);
-
-	// `RestartGesture` `0x10099570`: the found arm rewinds the CYCLE and touches nothing else.
-	Guard->AnimOverlay[1].Cycle = 0.44f;
-	Guard->AnimOverlay[1].Weight = 0.9f;
-	Guard->RestartGesture(0x3c, /*bAddIfMissing*/ false, /*bAutoKill*/ false);
-	TestEqual(TEXT("RestartGesture rewinds the cycle"), Guard->AnimOverlay[1].Cycle, 0.f);
-	TestEqual(TEXT("and leaves the accumulated weight and the envelope alone"),
-		Guard->AnimOverlay[1].Weight, 0.9f);
-
-	// `RemoveLayer` `0x10099660`: weight then sequence, and NOT the owner activity — which is why a
-	// removed slot still carries the activity it was pushed for.
-	Guard->RemoveLayer(1);
-	TestEqual(TEXT("RemoveLayer zeroes the weight, which is what frees the slot"),
-		Guard->AnimOverlay[1].Weight, 0.f);
-	TestEqual(TEXT("and the sequence"), Guard->AnimOverlay[1].Sequence, 0);
-	TestEqual(TEXT("and leaves the owner activity standing"), Guard->AnimOverlay[1].Activity, 0x3c);
-	TestFalse(TEXT("so the owner lookup no longer finds it — the liveness term is what decides"),
-		Guard->HasLayer(0x3c));
-	TestEqual(TEXT("and the freed slot is the one AllocateLayer answers"),
-		Guard->AllocateGestureLayer(), 1);
-
-	// `RemoveLayerByOwner` `0x100995e0`: the same pair behind the lookup, and a silent no-op on a
-	// miss.
+	// `RemoveLayerByOwner` `0x100995e0`: weight then sequence behind the lookup, and a silent no-op
+	// on a miss. The owner activity is NOT written.
 	Guard->RemoveLayerByOwner(0x3d);
 	TestEqual(TEXT("RemoveLayerByOwner frees the slot its lookup found"),
 		Guard->AnimOverlay[2].Weight, 0.f);
+	TestEqual(TEXT("and zeroes its sequence"), Guard->AnimOverlay[2].Sequence, 0);
+	TestEqual(TEXT("and leaves the owner activity standing"), Guard->AnimOverlay[2].Activity, 0x3d);
 	Guard->RemoveLayerByOwner(0x99);   // nothing holds it
-
-	// `RemoveAllGestures` `0x10099630`: four iterations, sequence and weight only.
-	Guard->AnimOverlay[3].Cycle = 0.7f;
-	Guard->RemoveAllGestures();
-	for (int32 Index = 0; Index < ElysiumOverlay::NumSlots; ++Index)
-	{
-		TestEqual(TEXT("RemoveAllGestures zeroes every weight"), Guard->AnimOverlay[Index].Weight,
-			0.f);
-		TestEqual(TEXT("and every sequence"), Guard->AnimOverlay[Index].Sequence, 0);
-	}
-	TestEqual(TEXT("and touches no cycle"), Guard->AnimOverlay[3].Cycle, 0.7f);
-
-	// `RestartGesture`'s add arm: the sequence seam answers -1, which is below retail's own `< 1`
-	// refusal, so `AddGesture` (`0x100991b0`) drops the request and NOTHING is allocated. That is
-	// the recovered refusal, not a gap in the port.
-	TestEqual(TEXT("the weighted-sequence seam answers retail's own miss"),
-		Guard->SelectWeightedSequenceForActivity(0x3b), INDEX_NONE);
-	Guard->RestartGesture(0x77, /*bAddIfMissing*/ true, /*bAutoKill*/ true);
-	TestEqual(TEXT("so the add arm allocates nothing"), Guard->AllocateGestureLayer(), 0);
-	return true;
-}
-
-// --- The flinch table (slot 265) ----------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimFlinchTest,
-	"Elysium.Substrate.NpcKernelAnim.AddFlinchGesture", GElysiumNpcKernelAnimFlags)
-bool FElysiumNpcKernelAnimFlinchTest::RunTest(const FString&)
-{
-	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_flinch"), 5102);
-	Builder.AddNpc(TEXT("guard"));
-	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
-	TestNotNull(TEXT("the guard spawned"), Guard);
-	if (Guard == nullptr)
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Guard });
-
-	// Three records of 0x1c bytes at +0x07f4.
-	TestEqual(TEXT("m_Flinch is three records"),
-		static_cast<int32>(UE_ARRAY_COUNT(Guard->Flinch)), FElysiumAnimatingOverlay::NumFlinchRecords);
-
-	// `0x10099690` opens on two refusals in retail's order: `IsAlive()` (slot 158) then
-	// `m_bNoFlinch`. The second is the one a case can drive.
-	Guard->bNoFlinch = true;
-	Guard->Flinch[0].Latch = 0;
-	Guard->AddFlinchGesture(0x3b, 0.2f, 0.3f, nullptr, 0.f);
-	TestEqual(TEXT("m_bNoFlinch refuses the whole body — even the latch is untouched"),
-		Guard->Flinch[0].Latch, 0);
-	Guard->bNoFlinch = false;
-
-	// The sequence seam answers -1, so the write half cannot run: that is the recovered refusal and
-	// it is asserted rather than worked around. The VICTIM SCAN, which is the rule, is asserted
-	// directly through the same body's own reads below.
-	Guard->AddFlinchGesture(0x3b, 0.2f, 0.3f, nullptr, 0.f);
-	TestEqual(TEXT("a body with no clip for the flinch activity writes nothing"),
-		Guard->Flinch[0].Latch, 0);
-	TestEqual(TEXT("and leaves the stamp alone"), Guard->Flinch[0].ExpireTime, 0.f);
-
-	// The victim rule, stated as the body states it: scan records 1 and 2 against the running best,
-	// starting at 0, taking a STRICTLY earlier expiry. With three equal stamps record 0 wins.
-	auto PickVictim = [](const FElysiumNpc& Npc)
-	{
-		int32 Best = 0;
-		for (int32 Candidate = 1; Candidate < FElysiumAnimatingOverlay::NumFlinchRecords; ++Candidate)
-		{
-			if (Npc.Flinch[Candidate].ExpireTime < Npc.Flinch[Best].ExpireTime)
-			{
-				Best = Candidate;
-			}
-		}
-		return Best;
-	};
-	Guard->Flinch[0].ExpireTime = 5.f;
-	Guard->Flinch[1].ExpireTime = 5.f;
-	Guard->Flinch[2].ExpireTime = 5.f;
-	TestEqual(TEXT("three equal stamps reuse record 0"), PickVictim(*Guard), 0);
-	Guard->Flinch[2].ExpireTime = 1.f;
-	TestEqual(TEXT("the earliest-expiring record is the victim"), PickVictim(*Guard), 2);
-	Guard->Flinch[1].ExpireTime = 1.f;
-	TestEqual(TEXT("a tie keeps the EARLIER index, because the test is strict"), PickVictim(*Guard),
-		1);
-
-	// The pose-parameter tail is optional and last: the index is seeded 0x18 and a name that
-	// resolves to nothing leaves the seed standing. The lookup seam answers -1.
-	TestEqual(TEXT("the pose-parameter lookup seam answers retail's own miss"),
-		Guard->LookupPoseParameter(TEXT("flinch")), INDEX_NONE);
-	TestEqual(TEXT("and the normaliser seam is the identity"),
-		Guard->NormalizePoseParameter(3, 0.75f), 0.75f);
+	TestEqual(TEXT("a miss touches nothing"), Guard->AnimOverlay[0].Weight, ElysiumOverlay::SeedWeight);
 	return true;
 }
 
@@ -218,42 +94,9 @@ bool FElysiumNpcKernelAnimFlexTest::RunTest(const FString&)
 
 	// The studio seams, and what they refuse with.
 	TestEqual(TEXT("GetNumFlexControllers answers an empty table"), Guard->NumFlexControllers(), 0);
-	float Min = 1.f;
-	float Max = 2.f;
-	TestFalse(TEXT("and there is no controller range to read"),
-		Guard->FlexControllerRange(0, Min, Max));
+	// `LookupFlexController` `0x100b5d10` (its callers, slots 280 / 282 / 289, closed at 0010) was
+	// removed in 0019/6 with no caller left; its cases went with it.
 
-	// `LookupFlexController` `0x100b5d10`: **0 on a miss, not -1**. It is retail's own behaviour and
-	// the reason a misspelt flex name writes controller zero rather than being dropped.
-	TestEqual(TEXT("a name that matches nothing resolves to controller ZERO"),
-		Guard->LookupFlexController(TEXT("right_lip_raiser")), 0);
-	TestEqual(TEXT("and so does a null name"), Guard->LookupFlexController(nullptr), 0);
-
-	// `GetFlexWeight(int)` `0x100b5c50`, slot 281 — read off the listing. Every guard answers 0.
-	TestEqual(TEXT("a negative index answers 0"), Guard->GetFlexWeight(-1), 0.f);
-	Guard->FlexWeight[3] = 0.5f;
-	TestEqual(TEXT("and so does an index past the (empty) controller table"), Guard->GetFlexWeight(3),
-		0.f);
-
-	// The de-normalisation itself, which is the arithmetic the slot exists for: slot 279 stores
-	// `(v - min) / (max - min)` and slot 281 maps it back with `(max - min) * w + min`. The seam
-	// cannot supply a range, so the formula is asserted directly against the body's own two arms.
-	auto Denormalise = [](float Weight, float InMin, float InMax)
-	{
-		return InMax != InMin ? (InMax - InMin) * Weight + InMin : Weight;
-	};
-	TestEqual(TEXT("max != min de-normalises into the authored range"),
-		Denormalise(0.25f, -1.f, 3.f), 0.f);
-	TestEqual(TEXT("max == min passes the stored weight through untouched"),
-		Denormalise(0.25f, 1.f, 1.f), 0.25f);
-
-	// Slots 280 and 282 are two statements each: resolve the name, dispatch the INDEX overload.
-	// Slot 279 is still 29c's stub, so the write lands nowhere and the read comes back at the
-	// refusal — which is what the pair answers today, stated rather than hidden.
-	TCHAR Name[] = TEXT("brow_raiser");
-	Guard->SetFlexWeight(Name, 0.8f);
-	TestEqual(TEXT("slot 282 resolves the name and reads through slot 281's refusal"),
-		Guard->GetFlexWeight(Name), 0.f);
 	return true;
 }
 
@@ -263,7 +106,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSceneEventsTest,
 	"Elysium.Substrate.NpcKernelAnim.SceneEvents", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimSceneEventsTest::RunTest(const FString&)
 {
-	// `CUtlMemory::Grow`, as `0x100b5e60` inlines it. Pure arithmetic, so it is asserted with no
+	// `CUtlMemory::Grow`, as `CBaseFlex::AddSceneEvent` inlines it. Pure arithmetic, so it is asserted with no
 	// world at all.
 	using FNpc = FElysiumNpc;
 	TestEqual(TEXT("an empty buffer goes to 2 first"), FNpc::GrowSceneEventCapacity(0, 0, 1), 2);
@@ -332,61 +175,6 @@ bool FElysiumNpcKernelAnimSceneEventsTest::RunTest(const FString&)
 		Guard->LookupSequenceByName(TEXT("gesture_wave")), INDEX_NONE);
 	TestEqual(TEXT("so the gesture record is queued un-armed"), Guard->SceneEvents[1].Handle, -1);
 
-	// `ProcessGestureSceneEvent` `0x100b7040` — the guards ARE the behaviour, and the arithmetic
-	// behind them is what retail computes and discards.
-	Guard->SceneEvents[1].LastGestureCycle = -1.f;
-	Guard->ProcessGestureSceneEvent(&Guard->SceneEvents[1]);
-	TestEqual(TEXT("an un-armed record is refused by the +0x0c guard"),
-		Guard->SceneEvents[1].LastGestureCycle, -1.f);
-
-	// Armed by hand, so the cycle formula is reachable. Read off the listing at `0x100b7040`:
-	//     0x100b7064  CALL CChoreoEvent::GetDuration  -> FSTP [ESP+0x14]   (SAVED)
-	//     0x100b7073  CALL SequenceDuration(record[+0x10]) -> FSTP ST0     (DISCARDED)
-	//     FLD [this+0x174] ; FSUB [record+0x14] ; FADD 1e-4 ; FDIV [ESP+0x18]
-	// so the divisor is the EVENT's authored length and the sequence's is thrown away.
-	//
-	// The claim is falsifiable here because the two durations DIFFER: the event is 2 s and the
-	// sequence-duration seam answers 0, which the epsilon guard would turn into a number four
-	// orders of magnitude away. A fixture where they agreed would prove nothing.
-	Guard->SceneEvents[1].Handle = 0;
-	Guard->SceneEvents[1].Sequence = 12;
-	Guard->SceneEvents[1].StartTime = 0.5f;
-	Guard->AnimTime = 1.5f;
-	TestEqual(TEXT("the event's own duration is end minus start"), Gesture.GetDuration(), 2.f);
-	TestEqual(TEXT("and the sequence's is a different number entirely — the seam's own refusal"),
-		Guard->SequenceDurationOf(12), 0.f);
-	Guard->ProcessGestureSceneEvent(&Guard->SceneEvents[1]);
-	TestEqual(TEXT("the cycle is measured against the EVENT's length"),
-		Guard->SceneEvents[1].LastGestureCycle, static_cast<float>((1.5 - 0.5 + 0.0001) / 2.0),
-		1.e-6f);
-
-	// The same record against a DIFFERENT event length: only the divisor moved, so a body reading
-	// any other duration cannot satisfy both this and the assertion above.
-	Gesture.EndTime = 5.f;
-	TestEqual(TEXT("the event is now 4 s long"), Gesture.GetDuration(), 4.f);
-	Guard->ProcessGestureSceneEvent(&Guard->SceneEvents[1]);
-	TestEqual(TEXT("and the cycle halves with it"), Guard->SceneEvents[1].LastGestureCycle,
-		static_cast<float>((1.5 - 0.5 + 0.0001) / 4.0), 1.e-6f);
-	Gesture.EndTime = 3.f;
-
-	// `ProcessSequenceSceneEvent` `0x100b70e0` — the same four guards, and its one call's result is
-	// discarded too. An event with no authored ramp is at full intensity, which is `RampAt`'s own
-	// answer.
-	Guard->SceneEvents[0].Handle = 0;
-	Guard->ProcessSequenceSceneEvent(&Guard->SceneEvents[0]);
-	TestEqual(TEXT("the ramp of an un-ramped event is 1"), Guard->SceneEvents[0].LastIntensity, 1.f);
-	Guard->SceneEvents[2].Handle = -1;
-	Guard->SceneEvents[2].LastIntensity = -5.f;
-	Guard->ProcessSequenceSceneEvent(&Guard->SceneEvents[2]);
-	TestEqual(TEXT("and an un-armed record is refused"), Guard->SceneEvents[2].LastIntensity, -5.f);
-	Guard->ProcessSequenceSceneEvent(nullptr);
-
-	// `ProcessSceneEvents` `0x100b6250`, slot 283 — it does NOT walk the queue. It zeroes every flex
-	// controller through slot 279 and tail-jumps to slot 284. With an empty controller table the
-	// loop runs zero times and only the tail happens, which is the recovered shape.
-	Guard->ProcessSceneEvents();
-	TestEqual(TEXT("ProcessSceneEvents leaves the queue alone — it is a flex reset, not a walk"),
-		Guard->SceneEvents.Num(), 3);
 	return true;
 }
 
@@ -500,7 +288,7 @@ bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 	TestEqual(TEXT("named by the event's SECOND parameter"), Guard->PythonDialogCalls[0],
 		FString(TEXT("OnJackShrug")));
 
-	// Everything else forwards to the base body at `0x100b5e60`, which is what queues it.
+	// Everything else forwards to the base body `CBaseFlex::AddSceneEvent`, which is what queues it.
 	FElysiumSceneEvent Speak;
 	Speak.Type = EElysiumChoreoEvent::Speak;
 	Guard->AddSceneEvent(&Scene, &Speak);
@@ -730,13 +518,6 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("with it, but with no clip for activity 0x61, it still answers none — the "
 		"sequence probe is the second gate and it is a seam"), Guard->IdleSequenceGate(), 0);
 	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyDead);
-
-	// `PlayScene` `0x10279060`, slot 540: the scene seam cannot stand an `instanced_scripted_scene`,
-	// so the body takes retail's own "Unknown scene specified" arm and answers 0.
-	TestEqual(TEXT("the instanced-scene seam refuses"),
-		Guard->PlayInstancedScene(TEXT("jack/hello.vcd")), -1.f);
-	TestEqual(TEXT("so PlayScene answers retail's failure length"),
-		Guard->PlayScene(TEXT("jack/hello.vcd")), 0.f);
 
 	// Slot 345 `SetPoseParameter(name, value, bool)` — the write is recorded on family Facing's one
 	// pose-parameter surface, and the index the retail dispatch resolves is the seam's -1.

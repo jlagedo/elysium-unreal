@@ -177,48 +177,6 @@ bool FElysiumNpcKernelState19BaseSelectIdealStateTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19FifteenByteTest,
-	"Elysium.Substrate.NpcKernelState19.FifteenByteSpecies", GState19Flags)
-bool FElysiumNpcKernelState19FifteenByteTest::RunTest(const FString&)
-{
-	// Retail's twelve fifteen-byte bodies, less `CNPC_VBatSwarm`, `CNPC_VCombatman`,
-	// `CNPC_VMoleman` and `CNPC_VSheriffSwarm`, which have no instance and no port arm (0019
-	// story 5 step 1). Each row stands a fresh guard of its own class.
-	struct FRow { const TCHAR* Cls; const TCHAR* Addr; int32 Tag; };
-	const FRow Rows[] = {
-		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361060"), 6 },
-		{ TEXT("CNPC_VBach"),         TEXT("0x10363b40"), 0xe },
-		{ TEXT("CNPC_VChangBros"),    TEXT("0x1036b500"), 0xa },
-		{ TEXT("CNPC_VGargoyle"),     TEXT("0x10378b60"), 0x11 },
-		{ TEXT("CNPC_VHengeyokai"),   TEXT("0x10380100"), 0x13 },
-		{ TEXT("CNPC_VSheriffMan"),   TEXT("0x103aeac0"), 0x21 },
-		{ TEXT("CNPC_VHunter"),       TEXT("0x10388ab0"), 0x17 },
-		{ TEXT("CNPC_VYukie"),        TEXT("0x103dd780"), 0x2a },
-	};
-	for (const FRow& Row : Rows)
-	{
-		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Cls);
-		const FElysiumNpcClassSlot* Slot = ElysiumNpcTestCensus::OverrideOf(Cls, 461);
-		if (!TestNotNull(FString::Printf(TEXT("%s has a slot-461 override"), Row.Cls), Slot))
-		{
-			continue;
-		}
-		TestEqual(FString::Printf(TEXT("%s's body is %s"), Row.Cls, Row.Addr),
-			FString(Slot->Address), FString(Row.Addr));
-		FState19Fixture F(Row.Cls);
-		if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
-		{
-			continue;
-		}
-		FElysiumNpc& N = *F.Guard;
-		N.SelectIdealStateSelector = 0;
-		N.SelectIdealStateRetail();
-		TestTrue(FString::Printf(TEXT("%s wrote a selector (tag %d then the chain)"), Row.Cls, Row.Tag),
-			N.SelectIdealStateSelector != 0);
-	}
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19BachOnStateChangeTest,
 	"Elysium.Substrate.NpcKernelState19.BachOnStateChange", GState19Flags)
 bool FElysiumNpcKernelState19BachOnStateChangeTest::RunTest(const FString&)
@@ -293,12 +251,8 @@ bool FElysiumNpcKernelState19CameraPreSelectTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcCamera& N = *ElysiumTestAsSpecies<FElysiumNpcCamera>(F.Guard);
-	// The camera's own first think may already have run this body and left the tag at 9, so the
-	// tag is cleared first: the assertion below then sees this call's write and not the think's.
-	N.SelectIdealStateSelector = 0;
 	TestEqual(TEXT("10368f80 unconditionally writes ALERT"),
 		N.PreSelectIdealStateRetail(), 3);
-	TestEqual(TEXT("and the selector tag is 9"), N.SelectIdealStateSelector, 9);
 	return true;
 }
 
@@ -517,8 +471,6 @@ bool FElysiumNpcKernelState19TzimisceTest::RunTest(const FString&)
 	N.Senses.Memory.BestSound.TypeMask = ElysiumGameSounds::Carcass;
 	TestEqual(TEXT("...and a type outside {1, 4, 8, 0x10} falls to Troika, which has no type gate"),
 		State19TestsIdealUnderMask(N, EElysiumNpcCond::HearPlayer), 3);
-	TestEqual(TEXT("...and the selector tag is Troika's 2, not the Tzimisce's 0x26"),
-		N.SelectIdealStateSelector, 2);
 	N.Senses.Memory.BestSound.TypeMask = 0;
 
 	// `103bd95c`: combat with no enemy falls to HUNT 0xb, not ALERT — unless SEE_ENEMY stands.

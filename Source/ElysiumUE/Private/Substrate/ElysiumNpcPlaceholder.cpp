@@ -49,13 +49,3 @@ int32 FElysiumNpcPlaceholder::SpeciesSelectSchedule()
 	RecordScheduleEvent(TEXT("SelectSchedule trace 0x1e (CNPC_VPlaceholder 0x103a4410) -> 0x157"));
 	return 0x157;
 }
-
-// Slot 546: `0x103a3c50`, the class's own schedule id space.
-const TCHAR* FElysiumNpcPlaceholder::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c08c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VPlaceholder"), TEXT("0x103a3c50"), TEXT("0x1093c08c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}

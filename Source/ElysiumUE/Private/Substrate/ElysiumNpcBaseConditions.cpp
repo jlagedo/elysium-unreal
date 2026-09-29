@@ -26,12 +26,9 @@ namespace
 {
 	// `CAI_BaseNPC::RangeAttack1Conditions` (`0x1026d890`), in SOURCE UNITS.
 	constexpr float GCondRange1TooCloseForRangedUnits = ElysiumNpcTunables::Hundred;
-	constexpr float GCondRange1TooCloseToAttackUnits = 200.0f;    // `_DAT_104492b8`
-	constexpr float GCondRange1TooFarUnits = 1024.0f;             // `_DAT_1045d650`
-	// `CAI_BaseNPC::RangeAttack2Conditions` (`0x1026d920`).
-	constexpr float GCondRange2TooCloseForRangedUnits = ElysiumNpcTunables::SixtyFour;
-	constexpr float GCondRange2TooFarUnits = ElysiumNpcTunables::FiveHundredTwelve;
-	// The facing dot both bodies share (`FCOMP double ptr [0x10449270]`).
+	constexpr float GCondRange1TooCloseToAttackUnits = ElysiumNpcTunables::TwoHundred;
+	constexpr float GCondRange1TooFarUnits = ElysiumNpcTunables::OneThousandTwentyFour;
+	// The facing dot `RangeAttack1Conditions` compares (`FCOMP double ptr [0x10449270]`).
 	constexpr double GCondAttackFacingDot = ElysiumNpcTunables::HalfDouble;
 }
 
@@ -138,24 +135,6 @@ int32 FElysiumNpcBase::RangeAttack1Conditions(float FlDot, float FlDist)
 	}
 	return static_cast<double>(FlDot) >= GCondAttackFacingDot
 		? static_cast<int32>(EElysiumNpcCond::CanRangeAttack1)           // 0x4f
-		: static_cast<int32>(EElysiumNpcCond::NotFacingAttack);          // 0x61
-}
-
-int32 FElysiumNpcBase::RangeAttack2Conditions(float FlDot, float FlDist)
-{
-	// 0x1026d920. The same shape with its own numbers and ONE FEWER BAND: there is no
-	// `TOO_CLOSE_TO_ATTACK` rung, so anything past 64 units and inside 512 is a candidate. Same
-	// overrides, same forwards (`0x10367610`, `0x103b25c0`).
-	if (FlDist < GCondRange2TooCloseForRangedUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooCloseForRanged);   // 8
-	}
-	if (FlDist > GCondRange2TooFarUnits)
-	{
-		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);      // 0x60
-	}
-	return static_cast<double>(FlDot) >= GCondAttackFacingDot
-		? static_cast<int32>(EElysiumNpcCond::CanRangeAttack2)           // 0x50
 		: static_cast<int32>(EElysiumNpcCond::NotFacingAttack);          // 0x61
 }
 

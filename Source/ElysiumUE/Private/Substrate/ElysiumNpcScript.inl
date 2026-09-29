@@ -150,8 +150,8 @@ struct FScript19NavGoal
 /** `CAI_Path +0x28` is `FElysiumNpcBase::Navigator.GoalToleranceCm` (`ElysiumNpcBaseStartTask.inl`): the
  *  navigator lives on `CAI_BaseNPC`, and `SetGoal 0x102ecd20` has one body there. */
 /** `0x102ecd20`'s tolerance sentinels, `_DAT_1049d980` and `_DAT_1049d97c`. */
-static constexpr float NavGoalToleranceHull = -2.0f;
-static constexpr float NavGoalToleranceKeep = -1.0f;
+static constexpr float NavGoalToleranceHull = ElysiumNpcTunables::GoalToleranceHull;
+static constexpr float NavGoalToleranceKeep = ElysiumNpcTunables::GoalToleranceKeep;
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`): the Script19 builders' goal record handed to the ONE
  *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask.cpp`). This only converts the
  *  record (centimetres, the tolerance sentinels passed through) and names the caller for the body

@@ -1,0 +1,2 @@
+address	name	type	value	evidence
+0x10449258	InterestCubicThree	f64	3.0	the 3.0 of the interest cubic 3f^2 - 2f^3; read by CAI_BaseHumanoid::MaintainEyeDirection 0x1025fa50 pass 5 (shape.md, `_DAT_10449258` = 3.0); used by FElysiumNpcBase::MotorFacingEntryInterest (0x102d8bc0, whose own listing is unrecovered: confirm it reads the same cell); width f64 assumed from the neighbouring 0x10449270/0x10449280 doubles, confirm by --check (an f32 read of an f64 3.0 is 0.0)

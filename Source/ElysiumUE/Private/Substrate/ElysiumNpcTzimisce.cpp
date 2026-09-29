@@ -28,14 +28,11 @@
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcConditionsBodiesShared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
-#include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSoundsShared.h"
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
@@ -62,30 +59,6 @@ namespace
 	constexpr int32 GAnim10ActIdleBodyL = 0xfd;          // 253, `m_bHeavyBodyTarget` ZERO
 	constexpr int32 GAnim10ActWalkBody = 0xfe;           // 254
 	constexpr int32 GAnim10ActWalkBodyL = 0xff;          // 255
-	// `CNPC_VTzimisce::GetEventName` (`0x103bdd10`), anim-event ids 2..8. The body `strcpy`s the
-	// literal into the caller's buffer; ids outside the range fall through to
-	// `CBaseAnimating::GetEventName`, which is what a null answer means here.
-	const TCHAR* const GNpcKernelDebugTzimisceEventNames[] = {
-		TEXT("START_IDLE"),      // 2, 0x1065c87c
-		TEXT("START_FIDGET"),    // 3, 0x1065c86c
-		TEXT("START_RUN"),       // 4, 0x1065c860
-		TEXT("START_LANDHARD"),  // 5, 0x1065c84c
-		TEXT("START_ATTACK"),    // 6, 0x1065c83c
-		TEXT("START_ATTACKBIG"), // 7, 0x1065c828
-		TEXT("START_POUNCE"),    // 8, 0x1065c818
-	};
-	constexpr TCHAR GDebug10FmtTzimisceBody[] = TEXT("Body - %5.1f|%5.1f|%s"); // 0x1065c904
-	// `_DAT_104454c4` = 0.0, the floor every clamp in this band compares against.
-	constexpr float GDebug10Zero = 0.f;
-	// `_DAT_1047a3ac` = 160.0 — the distance the Tzimisce body line must exceed before it latches.
-	constexpr float GDebug10TzimisceLatchUnits = 160.f;
-	// `_DAT_1093d01c` and `DAT_1093cd70`: the cross-NPC latch pair `CNPC_VTzimisce#124` writes. They
-	// are CLASS statics in retail — every Tzimisce in the map shares one distance and one schedule
-	// name — so they are file statics here and not per-instance state. That is the recovery.
-	float GDebug10TzimisceLatchDistance = 0.f;
-	FString GDebug10TzimisceLatchSchedule;
-	constexpr float GYawTzimisceIdle = ElysiumNpcTunables::Five;
-	constexpr float GYawTzimisceDefault = ElysiumNpcTunables::YawSpeedTzimisceDefault;
 	// `AngleVectors` `0x10139550` — forward, right and up for Source `[pitch yaw roll]`, each
 	// returned in THIS world's axes (`bsp.source_to_unreal` negates Y). Family Facing carries the
 	// forward-only form in its own anonymous namespace; `CNPC_VTzimisce`'s aim override needs all
@@ -107,22 +80,10 @@ namespace
 		OutRight = FVector(-Sr * Sp * Cy + Cr * Sy, -(-Sr * Sp * Sy - Cr * Cy), -Sr * Cp);
 		OutUp = FVector(Cr * Sp * Cy + Sr * Sy, -(Cr * Sp * Sy - Sr * Cy), Cr * Cp);
 	}
-	const TCHAR* const GSpiderchickFootsteps[] = {   // 0x106530fc, to 0x18 — six
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_1.wav"),
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_2.wav"),
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_3.wav"),
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_4.wav"),
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_5.wav"),
-		TEXT("character/monster/spiderchick/spi_footstep_indiv_6.wav"),
-	};
-	const TCHAR* const GSpiderchickSwishes[] = {     // 0x10653114, to 0xc — three
-		TEXT("character/monster/spiderchick/spi_attack_swish_1.wav"),
-		TEXT("character/monster/spiderchick/spi_attack_swish_2.wav"),
-		TEXT("character/monster/spiderchick/spi_attack_swish_3.wav"),
-	};
-	const TCHAR* const GTzimisceWeapon = TEXT("item_w_tzimisce_melee");
-	// `_DAT_10457f60` — `CNPC_VTzimisce`'s answer for task distance sentinel -1000001. UNRECOVERED.
-	constexpr float GScheduleTzimisceTaskDistance = 0.0f;
+	// `_DAT_10457f60` = 150.0 (read 2026-09-29): `CNPC_VTzimisce::ResolveTaskDistance` `0x103b9120`
+	// answers it for the -1000001 sentinel, and task 0xd1 in `0x103ba7c0` squares `(distance + 150)`
+	// into `m_flInsideInterruptDistanceSqr` off the same cell.
+	constexpr float GScheduleTzimisceTaskDistance = ElysiumNpcTunables::OneFifty;
 	// `CNPC_VTzimisce::vfunc487` `0x103b9f10` draws `RandomFloat(0x3f000000, 0x3f400000)` — and,
 	// unlike both bodies above, writes NO squad copy.
 	constexpr float GSoundsTzimisceSoundWaitMin = 0.5f;
@@ -136,16 +97,16 @@ namespace
 	constexpr float GrabBoneRangeSqUnits = 1050625.0f;
 	// `0x103be8e0`'s two grab-distance bounds and `0x103bea90`'s nudge, all off the same two cells
 	// families Bosses and Damage read as the +-20 pickup cone.
-	constexpr float TzimisceGrabLowerBound = -20.0f;  // _DAT_1049ae98
-	constexpr float TzimisceGrabUpperBound = 20.0f;   // _DAT_1044eb0c
+	constexpr float TzimisceGrabLowerBound = ElysiumNpcTunables::MinusTwenty;  // _DAT_1049ae98
+	constexpr float TzimisceGrabUpperBound = ElysiumNpcTunables::Twenty;   // _DAT_1044eb0c
 	// `0x103bea90`'s aim height and its impulse floor.
-	constexpr float TzimisceThrowAimHeightUnits = 48.0f;   // _DAT_10447ee8
-	constexpr float TzimisceThrowSpeedFloor = 1000.0f;     // _DAT_10447ee0
+	constexpr float TzimisceThrowAimHeightUnits = ElysiumNpcTunables::FortyEight;   // _DAT_10447ee8
+	constexpr float TzimisceThrowSpeedFloor = ElysiumNpcTunables::Thousand;     // _DAT_10447ee0
 	constexpr float TzimisceThrowSpeedFloorImpulse = 1000.0f;   // 0x447a0000
 	// `thunk_FUN_102c43b0(this, 0.75)` — the collision-ignore renewal the release ends on.
 	constexpr float TzimisceReleaseIgnoreSeconds = 0.75f;
 	// `0x103bef20`'s attach range gate: `distSq <= 25600` units squared, i.e. **160 units**.
-	constexpr float TzimisceAttachRangeSqUnits = 25600.0f;   // _DAT_104cc51c
+	constexpr float TzimisceAttachRangeSqUnits = ElysiumNpcTunables::TzimisceAttachRangeSquared;   // _DAT_104cc51c
 	// `CNPC_VTzimisce`'s slot-488 script event.
 	constexpr const TCHAR* TzimisceDeathScriptEvent = TEXT("SPI_DIES");
 	// `0x103be3d0` walks a NULL-TERMINATED TABLE of bone names starting at
@@ -283,27 +244,10 @@ void FElysiumNpcTzimisce::NPCInit()
 	FUN_102c43b0(0.f);
 }
 
-// Slot 422: `0x103b9270`.
-// `0x103b9270`
-void FElysiumNpcTzimisce::StartNPC()
-{
-	TroikaStartNPC();                                                    // 1029a8b0
-	ThinkSet(StartNpcThinkFunction(), 0.0);                              // redundant re-arm
-	++TzimisceStartNpcRearms;
-}
-
-// Slot 104: `0x103b8fa0`.
-// 0x103b8fa0
-void FElysiumNpcTzimisce::Precache()
-{
-	// `CNPC_VTzimisce::Precache` `0x103b8fa0` — the six-entry spiderchick footstep table, the
-	// three-entry swish table, the melee weapon, and only then the Troika body. Base-last.
-	// Oracle: `docs/vtmb/footsteps.md`.
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GSpiderchickFootsteps, UE_ARRAY_COUNT(GSpiderchickFootsteps));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GSpiderchickSwishes, UE_ARRAY_COUNT(GSpiderchickSwishes));
-	NpcKernelPrecache10Shared::Precache10Other(*this, GTzimisceWeapon);
-	TroikaPrecache();
-}
+// Slot 104 `CNPC_VTzimisce::Precache` has no body here: before the Troika body it only
+// precached the spiderchick footstep / swish tables and `item_w_tzimisce_melee`, which the bake
+// resolves (0019 story 6, mechanism -> Bake; the base-last order is unobservable). The class
+// inherits `FElysiumNpc::Precache`.
 
 // Slot 375: `0x103bde40`, which calls the Troika body `0x10295590` directly.
 /** `CNPC_VTzimisce::NPC_EarlyTranslateActivity` (`0x103bde40`). Under the carry-body flag bit, a
@@ -364,7 +308,6 @@ void FElysiumNpcTzimisce::OnStateChange(EElysiumNpcState OldState, EElysiumNpcSt
 // than ALERT; and alert's hear arm answers HUNT. Everything it does not name chains Troika.
 int32 FElysiumNpcTzimisce::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x26;
 	switch (NpcStateRetail())
 	{
 	case 1:
@@ -597,30 +540,33 @@ int32 FElysiumNpcTzimisce::TranslateScheduleRetail(int32 ScheduleNumber)
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
-// Slot 516: `0x103ba020`, which replaces the Troika ladder.
+// Slot 516: `0x103ba020`, which replaces the Troika ladder (0019/6: restored as data).
 float FElysiumNpcTzimisce::MaxYawSpeed()
 {
-	// `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020` — a four-arm switch and the shared turning arm,
-	// with the Tzimisce's own cvar `0x1093c9fc`.
-	if ((BaseScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
+	// `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020`: the shared turning arm on its own cvar
+	// `0x1093c9fc`, then a four-arm switch.
+	using namespace NpcKernelMotorShared;
+	if ((BaseScheduleHost.MemoryBits & GMemoryTurning) != 0)
 	{
-		return MaxYawSpeedTurningArm(TEXT("0x1093c9fc"));
+		return MaxYawSpeedTurningArm(ElysiumNpcTunables::EConVar::TzimisceTurnScalar);
 	}
 	switch (ActivityNumber)
 	{
-	case NpcKernelMotorShared::GActIdle:
+	case GActIdle:
 	case 0xfc:
 	case 0xfd:
-		return GYawTzimisceIdle;      // _DAT_10454110 = 5.0
-	case NpcKernelMotorShared::GActRun:
-		return NpcKernelMotorShared::GYawCrouch;            // _DAT_104492a8 = 30.0
+		return ElysiumNpcTunables::Five;                      // `_DAT_10454110`
+	case GActRun:
+		return GYawCrouch;                                    // `_DAT_104492a8` = 30.0
 	default:
-		return GYawTzimisceDefault;   // _DAT_104cc504 = 11.0
+		return ElysiumNpcTunables::YawSpeedTzimisceDefault;   // `_DAT_104cc504` = 11.0
 	}
 }
 
 // Slot 69: `0x103bfa00` (byte-identical across Hengeyokai, MingXiao and Tzimisce): the `0x16` derived-type
 // gate, then a direct call into the Troika body `0x1029b180`.
+// Reached through `RegisterMoveIgnores` (0019/6), which states its answers to the mover's
+// `SetMoveIgnore` before each kernel move is issued.
 bool FElysiumNpcTzimisce::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	if (Other != nullptr && (RetailDerivedType(*Other) & 0x16) != 0)
@@ -632,56 +578,10 @@ bool FElysiumNpcTzimisce::NavIgnoreCollision(FElysiumEntity* Other)
 
 // Slot 523: `0x103b6df0`, one load of `_DAT_104cc500` = 56.0. The slot is the STEP-DOWN height
 // (R1 §5): `CheckStandPosition 0x102e7270`'s drop below the feet, whatever the SDK slot table calls
-// it. (Slot 522's own override `0x103b6dd0`, 26.0, is outside 0018 story 6 and not ported here.)
-float FElysiumNpcTzimisce::GetMaxJumpSpeed() const
+// it. (Slot 522's own override, 26.0, is outside 0018 story 6 and not ported here.)
+float FElysiumNpcTzimisce::GetStepDownHeight() const
 {
 	return ElysiumNpcTunables::TzimisceMaxJumpSpeed;
-}
-
-// Slot 124: `0x103c08d0`
-/** `CNPC_VTzimisce::DrawDebugTextOverlays` (`0x103c08d0`) — the Troika body, then one `Body - …`
- *  line under bit 0 built from a cross-NPC latch pair of globals. */
-int32 FElysiumNpcTzimisce::DrawDebugTextOverlays()
-{
-	// `0x103c08d0`, 387 bytes.
-	//
-	//     dist = 0.0;                                              // _DAT_104454c4
-	//     if (m_hPickupTarget (+0x6670) resolves)
-	//         dist = |target->GetAbsOrigin() - GetAbsOrigin()|;     // the full 3-D length
-	//     if (0x103be130() && _DAT_1047a3ac < dist) {               // 160.0
-	//         _DAT_1093d01c = dist;
-	//         if (m_pSchedule) strcpy(DAT_1093cd70, m_pSchedule->name);
-	//     }
-	//     Q_snprintf(buf, 512, "Body - %5.1f|%5.1f|%s", dist, _DAT_1093d01c, DAT_1093cd70);
-	//
-	// The two globals are a CROSS-NPC latch — every Tzimisce in the map writes and reads the same
-	// pair — so they are file statics here and not per-instance state. The checklist's walk spelled
-	// the format `"Body: %5.1f %5.1f %s"`; the image says `"Body - %5.1f|%5.1f|%s"`.
-	const int32 Base = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & NpcKernelDebug10Shared::GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-
-	float Distance = GDebug10Zero;
-	const FElysiumEntity* const Carried =
-		World != nullptr ? World->Resolve(PickupTarget) : nullptr;
-	if (Carried != nullptr)
-	{
-		Distance = static_cast<float>((Carried->Origin - Origin).Size() / ElysiumMove::U);
-	}
-	if (TzimisceCarryFormBit() && Distance > GDebug10TzimisceLatchUnits)   // 0x103be130 (bit 5 of +0x14b8)
-	{
-		GDebug10TzimisceLatchDistance = Distance;
-		if (Schedule.IsRunning())
-		{
-			const TCHAR* const Name = ElysiumScheduleName(Schedule.Current);
-			GDebug10TzimisceLatchSchedule = Name != nullptr ? Name : TEXT("");
-		}
-	}
-	EmitEntityText(Base, GDebug10FmtTzimisceBody, FString::Printf(GDebug10FmtTzimisceBody,
-		Distance, GDebug10TzimisceLatchDistance, *GDebug10TzimisceLatchSchedule));
-	return Base + 1;
 }
 
 // Slot 337: `0x103b9160`.
@@ -699,16 +599,6 @@ bool FElysiumNpcTzimisce::FValidateHintType(void* Hint)
 	// the slot that null-checks the hint.
 	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
 	return Words != nullptr && 13999 < Words->HintType && Words->HintType < 0x36b2;
-}
-
-// Slot 546: `0x103b70f0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcTzimisce::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093ccc4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VTzimisce"), TEXT("0x103b70f0"), TEXT("0x1093ccc4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 563: `0x103ba640`, the `GoalToleranceLead` shape; a replacement that does not chain.
@@ -853,23 +743,6 @@ void FElysiumNpcTzimisce::VGargoyleGibCleanup()
 }
 
 // --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
-
-const TCHAR* FElysiumNpcTzimisce::TzimisceEventName(int32 EventId)
-{
-	// `CNPC_VTzimisce::GetEventName` `0x103bdd10`, slot 241's only species override. Retail's
-	// signature is `void GetEventName(char* out, animevent_t* event)` and each arm `strcpy`s its
-	// literal into `out`; ids outside 2..8 tail into `CBaseAnimating::GetEventName`.
-	//
-	// Named `TzimisceEventName` and NOT `GetEventName`: slot 241's Troika-line body (`0x1008c170`)
-	// is still a generated stub owned by a later story, and it is what holds the `GetEventName`
-	// name. When that body lands it dispatches here for `CNPC_VTzimisce`.
-	const int32 Offset = EventId - 2;
-	if (Offset >= 0 && Offset < UE_ARRAY_COUNT(GNpcKernelDebugTzimisceEventNames))
-	{
-		return GNpcKernelDebugTzimisceEventNames[Offset];
-	}
-	return nullptr;
-}
 
 // --- Moved from `ElysiumNpcHints.cpp` (story 5 step 4) ---
 
@@ -1051,7 +924,7 @@ void FElysiumNpcTzimisce::FUN_103bf200(const FElysiumEntityHandle& Entity)
 	// `_DAT_1044eb0c`, read out of the pinned image as **20.0** — the same twenty seconds
 	// `CNPC_VHengeyokai`'s blacklist (family Bosses' `BlacklistSeconds`) and MingXiao's thrown-object
 	// skip use, off the same cell.
-	constexpr float TzimisceBlacklistSeconds = 20.0f;   // _DAT_1044eb0c
+	constexpr float TzimisceBlacklistSeconds = ElysiumNpcTunables::Twenty;   // _DAT_1044eb0c
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	TzimisceBlacklist.Emplace(
 		FBlacklistedEntity{ Entity, Now + static_cast<double>(TzimisceBlacklistSeconds) });
@@ -1059,18 +932,10 @@ void FElysiumNpcTzimisce::FUN_103bf200(const FElysiumEntityHandle& Entity)
 
 int32 FElysiumNpcTzimisce::FUN_103bf3c0(const FElysiumEntity* Candidate) const
 {
-	// `0x103bf3c0` — `0x10366490` written a second time over `+0x6690`/`+0x669c`. Instruction for
-	// instruction the same walk, the same sentinel and the same resolve-to-zero on a dead row.
-	for (int32 i = 0; i < TzimisceBlacklist.Num(); ++i)
-	{
-		const FElysiumEntity* Resolved = World != nullptr
-			? World->Resolve(TzimisceBlacklist[i].Entity) : nullptr;
-		if (Resolved == Candidate)
-		{
-			return i;
-		}
-	}
-	return INDEX_NONE;
+	// `0x103bf3c0` — `0x10366490` written a second time over `+0x6690`/`+0x669c`: the index of the
+	// row whose handle resolves to `Candidate`, -1 when none does (a dead row resolves to null).
+	return TzimisceBlacklist.IndexOfByPredicate([this, Candidate](const FBlacklistedEntity& Row)
+		{ return (World != nullptr ? World->Resolve(Row.Entity) : nullptr) == Candidate; });
 }
 
 bool FElysiumNpcTzimisce::FUN_103bf330(const FElysiumEntity* Candidate)

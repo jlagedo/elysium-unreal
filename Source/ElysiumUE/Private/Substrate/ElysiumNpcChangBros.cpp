@@ -30,7 +30,6 @@
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
@@ -53,7 +52,7 @@ namespace
 {
 	// `CNPC_VChangBros::TaskFail`'s write, `0x15d` (`1036d20a MOV dword ptr [ESI+0x5c54],0x15d`).
 	constexpr int32 GCond10ChangBrosFailSchedule = 0x15d;
-	constexpr float EnergyBallSpeed = 800.0f;       // DAT_104ada30
+	constexpr float EnergyBallSpeed = ElysiumNpcTunables::ChangBrosEnergyBallSpeed;       // DAT_104ada30
 	// `_DAT_104ada34` — the segment-distance threshold `CheckJumpPathToHintNode` (`0x1036df50`)
 	// tests against (`1036e04c FCOMP float ptr`), 100 SOURCE UNITS.
 	constexpr float GHintsJumpPathClearanceUnits = ElysiumNpcTunables::ChangBrosJumpPathThreshold;
@@ -63,41 +62,26 @@ namespace
 	constexpr float GHintsSegmentEpsilon = ElysiumNpcTunables::VampireBossSegmentLengthFloor;
 	// The hint type `CNPC_VChangBros::StoreArenaCenter` walks the global hint list for.
 	constexpr int32 GMiscArenaCenterHintType = 0x4651;
-	constexpr float GChangJumpCooldown = 16.0f;     // _DAT_104ada00
-	constexpr float GSuperJumpNearRise = 50.0f;     // _DAT_104ada1c
-	constexpr float GSuperJumpFarRise = 150.0f;     // _DAT_104ada20
-	constexpr float GSuperJumpSplit = 40.0f;        // _DAT_104ada3c
+	constexpr float GChangJumpCooldown = ElysiumNpcTunables::ChangBrosJumpCooldown;     // _DAT_104ada00
+	constexpr float GSuperJumpNearRise = ElysiumNpcTunables::ChangBrosSuperJumpNearRise;     // _DAT_104ada1c
+	constexpr float GSuperJumpFarRise = ElysiumNpcTunables::ChangBrosSuperJumpFarRise;     // _DAT_104ada20
+	constexpr float GSuperJumpSplit = ElysiumNpcTunables::ChangBrosSuperJumpSplit;        // _DAT_104ada3c
 	constexpr int32 GActSuperJump = 0x7b;
 	// `CNPC_VChangBros::GetSector` `0x1036e580`.
-	constexpr float SectorZThreshold = 200.0f;     // _DAT_104ada6c
-	constexpr float SectorOneDistSq = 270.0f;      // _DAT_104ada60 — compared to a SQUARED distance
-	constexpr float SectorTwoRadius = 370.0f;      // _DAT_104ada64, squared by staticinit 0x1036e500
-	constexpr float SectorThreeRadius = 525.0f;    // _DAT_104ada68, squared by staticinit 0x1036e550
+	constexpr float SectorZThreshold = ElysiumNpcTunables::ChangBrosSectorZThreshold;     // _DAT_104ada6c
+	constexpr float SectorOneDistSq = ElysiumNpcTunables::ChangBrosSectorOneDistSq;      // _DAT_104ada60 — compared to a SQUARED distance
+	constexpr float SectorTwoRadius = ElysiumNpcTunables::ChangBrosSectorTwoRadius;      // _DAT_104ada64, squared by staticinit 0x1036e500
+	constexpr float SectorThreeRadius = ElysiumNpcTunables::ChangBrosSectorThreeRadius;    // _DAT_104ada68, squared by staticinit 0x1036e550
 	// `CNPC_VChangBros::GetTeleportPosition` `0x1036d270`.
-	constexpr float ChangTeleportPositionMaxAge = 3.0f;   // _DAT_104ada04, seconds
-	constexpr float ChangLastTeleportFloor = 100.0f;      // DAT_104ad9f4
+	constexpr float ChangTeleportPositionMaxAge = ElysiumNpcTunables::ChangBrosTeleportPositionMaxAge;   // _DAT_104ada04, seconds
+	constexpr float ChangLastTeleportFloor = ElysiumNpcTunables::ChangBrosLastTeleportFloor;      // DAT_104ad9f4
 	constexpr int32 HintChangTeleport = 18000;
-	const TCHAR* const GChangEmitters[] = {
-		TEXT("chang_teleport_in_emitter"),
-		TEXT("chang_teleport_out_emitter"),
-		TEXT("chang_powerup_emitter"),
-		TEXT("chang_spine_emitter"),
-		TEXT("chang_center_emitter"),
-		TEXT("chang_blast_emitter"),
-		TEXT("chang_ball_charge_emitter"),
-	};
-	const TCHAR* const GChangWeapons[] = {
-		TEXT("item_w_chang_claw"),
-		TEXT("item_w_chang_blade"),
-		TEXT("item_w_chang_energy_ball"),
-		TEXT("item_w_chang_ghost"),
-	};
 	// `_DAT_104ad9f8` = **0.1**, `CNPC_VChangBros`'s teleport health-loss threshold.
-	constexpr float GChangTeleportHealthLoss = 0.1f;
+	constexpr float GChangTeleportHealthLoss = ElysiumNpcTunables::ChangBrosTeleportHealthLoss;
 	// `_DAT_104ada48` = **30.0** s and `_DAT_104ada4c` = **0.5**, the united-attack cooldown and the
 	// health fraction each brother is tested against.
-	constexpr double GChangUnitedCooldownSeconds = 30.0;
-	constexpr float GChangUnitedHealthFraction = 0.5f;
+	constexpr double GChangUnitedCooldownSeconds = ElysiumNpcTunables::ChangBrosUnitedAttackCooldown;
+	constexpr float GChangUnitedHealthFraction = ElysiumNpcTunables::ChangBrosUnitedHealthFraction;
 }
 
 // Slot 420: `0x1036b050`.
@@ -106,54 +90,26 @@ void FElysiumNpcChangBros::NPCInit()
 	ChangBrosNPCInit();
 }
 
-// Slot 104: `0x1036ae60`.
-// 0x1036ae60 — and the Blade and Claw forms
-void FElysiumNpcChangBros::Precache()
-{
-	// `CNPC_VChangBros::Precache` `0x1036ae60` — one body filling `CNPC_VChangBros#104`,
-	// `CNPC_VChangBrosBlade#104` and `CNPC_VChangBrosClaw#104`, which the address key makes one arm.
-	// Scope-trace frame, the Troika body, seven preload-1 emitters, four weapons.
-	TroikaPrecache();
-	for (const TCHAR* Emitter : GChangEmitters)
-	{
-		NpcKernelPrecache10Shared::Precache10Particle(*this, Emitter, /*Preload=*/1);
-	}
-	for (const TCHAR* Weapon : GChangWeapons)
-	{
-		NpcKernelPrecache10Shared::Precache10Other(*this, Weapon);
-	}
-}
+// Slot 127 is gone (story 0019/6): the generated SAVE walk carries the record, and the
+// four post-load writes are this class's `OnPostRestore` below. Slot 104 is gone too:
+// the seven `chang_*_emitter` and four `item_w_chang_*` references resolve at bake and load.
 
-// Slot 127: `0x1036b170`.
-/** `CNPC_VChangBros::Restore` (`0x1036b170`), shared by `CNPC_VChangBros`, `CNPC_VChangBrosBlade`
- *  and `CNPC_VChangBrosClaw`. `CNPC_VVampireBoss::Restore` first and ITS answer is kept
- *  (`1036b1e3 MOV EDI,EAX` … `1036b210 MOV EAX,EDI`), then four writes in the listing's order:
- *    `m_fJumpGravity` (`+0x64b8`) = `_DAT_104ada44` (**2.3f**);
- *    `SetBodyEmitterName(0, "chang_powerup_emitter")`;
- *    `SetBodyEmitterName(1, "chang_powerup_emitter")`;
- *    `SetBodyEmitterName(2, "chang_spine_emitter")`.
- *  The gravity store is issued between the `FLD` and the first `SetBodyEmitterName` call
- *  (`1036b1ce FLD` / `1036b1db FSTP float ptr [ESI + 0x64b8]` / `1036b1e5 CALL`), so it lands
- *  first. */
-int32 FElysiumNpcChangBros::Restore(void* Archive)
+/** `CNPC_VChangBros::Restore`'s load-side half, shared by `CNPC_VChangBros`,
+ *  `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw`. Retail runs `CNPC_VVampireBoss::Restore`
+ *  (`1036b1c9`) first, then four writes in the listing's order:
+ *    `m_fJumpGravity` (`+0x64b8`) = `_DAT_104ada44` (**2.3f**) (`1036b1ce FLD` / `1036b1db FSTP`);
+ *    `SetBodyEmitterName(0, "chang_powerup_emitter")` (`1036b1d9 PUSH 0x0`);
+ *    `SetBodyEmitterName(1, "chang_powerup_emitter")` (`1036b1ef PUSH 0x1`);
+ *    `SetBodyEmitterName(2, "chang_spine_emitter")` (`1036b1fd PUSH 0x2`).
+ *  All of it before any slot-130 `OnRestore`, which is where the chain's `OnPostRestore` starts. */
+void FElysiumNpcChangBros::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
-	// `CNPC_VChangBros::Restore` `0x1036b170`, shared by `CNPC_VChangBros`, `CNPC_VChangBrosBlade`
-	// and `CNPC_VChangBrosClaw`.
-	const int32 Result = VampireBossRestore(Archive);   // `1036b1c9`, and `EDI` keeps its answer
-	// `1036b1ce FLD float ptr [0x104ada44]` / `1036b1db FSTP float ptr [ESI + 0x64b8]` — the store
-	// is issued before the first emitter call.
+	VampireBossPostRestoreResets();                     // `CNPC_VVampireBoss::Restore`'s three resets
 	JumpGravity = ChangBrosJumpGravity;                 // +0x64b8, 2.3f
-	SetBodyEmitterName(0, ChangPowerupEmitterName());   // `1036b1d9 PUSH 0x0`
-	SetBodyEmitterName(1, ChangPowerupEmitterName());   // `1036b1ef PUSH 0x1`
-	SetBodyEmitterName(2, ChangSpineEmitterName());     // `1036b1fd PUSH 0x2`
-	return Result;                                      // `1036b210 MOV EAX,EDI`
-}
-
-// Slot 461: `0x1036b500`, the selector tag 0xa and then a direct call into the human line's `0x103851e0`.
-int32 FElysiumNpcChangBros::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0xa;
-	return HumanSelectIdealState();
+	SetBodyEmitterName(0, ChangPowerupEmitterName());
+	SetBodyEmitterName(1, ChangPowerupEmitterName());
+	SetBodyEmitterName(2, ChangSpineEmitterName());
+	FElysiumNpcVampire::OnPostRestore(InWorld);
 }
 
 // Slot 604: `0x1036d800`, which replaces the Troika body wholesale; its argument is read by no arm.
@@ -195,16 +151,6 @@ bool FElysiumNpcChangBros::FValidateHintType(void* Hint)
 	// `CNPC_VChangBrosClaw` fill the slot with this same body and inherit this override.
 	(void)Hint;
 	return true;
-}
-
-// Slot 546: `0x1036a3f0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcChangBros::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093aa70`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VChangBros"), TEXT("0x1036a3f0"), TEXT("0x1093aa70") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
@@ -257,9 +203,9 @@ float FElysiumNpcChangBros::GetFacingTimeToTeleport() const
 	{
 		// `thunk_FUN_103160a0(m_pSquad) > 1` — the squad's member count. **SEAM**, unreachable
 		// today.
-		return 21.0f;
+		return ElysiumNpcTunables::ChangBrosFacingWaitSquad;
 	}
-	return 7.0f;
+	return ElysiumNpcTunables::ChangBrosFacingWaitAlone;
 }
 
 void FElysiumNpcChangBros::UpdateFacingTimer()
@@ -295,12 +241,12 @@ void FElysiumNpcChangBros::UpdateFacingTimer()
 			FVector Flat(Delta.X, Delta.Y, 0.0);
 			const float Length = static_cast<float>(Flat.Size());
 			Flat = Flat.GetSafeNormal();
-			if (Length < 150.0f * ElysiumMove::U && 1e-05f * ElysiumMove::U < Length)
+			if (Length < ElysiumNpcTunables::ChangBrosFacingRange * ElysiumMove::U && ElysiumNpcTunables::ChangBrosFacingLengthFloor * ElysiumMove::U < Length)
 			{
 				const FVector FlatAngles = NpcKernelFacingShared::FacingRetailVectorAngles(Flat);
 				const float YawDelta = NpcKernelFacingShared::FacingRetailAngleDiff(static_cast<float>(Player->Angles.Y),
 					static_cast<float>(FlatAngles.Y));
-				if (FMath::Abs(YawDelta) < 70.0f)
+				if (FMath::Abs(YawDelta) < ElysiumNpcTunables::ChangBrosFacingYawBand)
 				{
 					return;
 				}
@@ -347,26 +293,14 @@ float FElysiumNpcChangBros::DistToSegment(const FVector& A, const FVector& B, co
 	//
 	// 3D throughout: `CheckJumpPathToHintNode` zeroes the Z of the two ENDPOINTS before calling and
 	// leaves the player's Z alone, so the Z difference does reach the answer.
-	const FVector D = B - A;
-	const float LenSq = static_cast<float>(D.SizeSquared());
-	if (LenSq < GHintsSegmentEpsilon)
+	// The degenerate guard is retail's and stays here; the clamped projection is
+	// `FMath::PointDistToSegment` (story 0019/6, the row's service), whose `t <= 0` / `t >= 1` arms are
+	// the same `|P-A|` / `|P-B|` retail answers.
+	if (static_cast<float>((B - A).SizeSquared()) < GHintsSegmentEpsilon)
 	{
 		return NpcKernelHintsShared::GHintsZero;
 	}
-	const FVector AP = P - A;
-	const float T = static_cast<float>(FVector::DotProduct(AP, D)) / LenSq;
-	float DistSq;
-	if (T > NpcKernelHintsShared::GHintsZero)
-	{
-		DistSq = T < 1.0f
-			? static_cast<float>((P - (A + D * T)).SizeSquared())
-			: static_cast<float>((P - B).SizeSquared());
-	}
-	else
-	{
-		DistSq = static_cast<float>(AP.SizeSquared());
-	}
-	return FMath::Sqrt(DistSq);
+	return static_cast<float>(FMath::PointDistToSegment(P, A, B));
 }
 
 bool FElysiumNpcChangBros::CheckJumpPathToHintNode(const FHintWords& Hint) const
@@ -834,8 +768,6 @@ bool FElysiumNpcChangBros::IsUnreachableChang(FElysiumEntity* Unreachable)
 	}
 	return IsUnreachable(Unreachable);
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 

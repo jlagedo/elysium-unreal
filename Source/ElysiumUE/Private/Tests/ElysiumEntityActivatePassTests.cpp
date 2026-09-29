@@ -12,7 +12,7 @@
 //
 //   for (e = NextEnt(NULL); e; e = NextEnt(e)) if (!(e->m_iEFlags & EFL_DORMANT)) e->Activate();
 //
-// `NextEnt` (`0x100f7060`) re-reads each node's next link and `CBaseEntityList::AddEntityAtSlot`
+// `NextEnt` re-reads each node's next link and `CBaseEntityList::AddEntityAtSlot`
 // (`0x100f9fc0`) appends a new entity at the tail, so what an earlier `Activate` creates is activated
 // later in the same pass. The only skip is `EFL_DORMANT` (`0x100a8220`); `EFL_KILLME` is never
 // tested, so an entity removed during the pass is still activated. Removals made before the pass are

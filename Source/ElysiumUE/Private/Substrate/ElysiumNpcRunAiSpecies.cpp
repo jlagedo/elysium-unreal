@@ -37,7 +37,6 @@
 #include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcSoundsShared.h"
@@ -68,13 +67,13 @@ namespace
 	/** `CMP EAX,0x80` at `0x10374806`: the one roll out of 256 that fidgets. */
 	constexpr int32 RunAi19DogFidgetRoll = 0x80;
 	/** `_DAT_1044e664` = 10.0 and `_DAT_1044ddb0` = 256.0: the flee sound's period and set-back. */
-	constexpr double RunAi19FleeSoundPeriodSeconds = 10.0;
-	constexpr float RunAi19FleeSoundBackUnits = 256.0f;
+	constexpr double RunAi19FleeSoundPeriodSeconds = ElysiumNpcTunables::Ten;
+	constexpr float RunAi19FleeSoundBackUnits = ElysiumNpcTunables::Melee1OuterBand;
 	/** `PUSH 0x40000000` / `PUSH 0x3f800000` at `0x1039e4b2`: `RandomFloat(1.0, 2.0)`. */
 	constexpr float RunAi19EvadeRearmMin = 1.0f;
 	constexpr float RunAi19EvadeRearmMax = 2.0f;
 	/** `_DAT_1044ddb0` = 256.0: the evade re-plan's enemy distance ceiling (`0x1039e518`). */
-	constexpr float RunAi19EvadeEnemyDistUnits = 256.0f;
+	constexpr float RunAi19EvadeEnemyDistUnits = ElysiumNpcTunables::Melee1OuterBand;
 	/** `PUSH 0x44000000` / `PUSH 0x46ea6000` at `0x1039e541` / `0x1039e53c`: 512.0 and 30000.0. */
 	constexpr float RunAi19EvadeNodeFleeUnits = 512.0f;
 	constexpr float RunAi19EvadeNodeSearchUnits = 30000.0f;
@@ -98,9 +97,6 @@ namespace
 	const TCHAR* const RunAi19TentacleFloppingWav[] = {
 		TEXT("character/monster/ming xiao/tentacle_flopping_loop.wav"),
 	};
-	/** `0x10665694`, verbatim. */
-	const TCHAR* const RunAi19ZombieTooFarFormat =
-		TEXT("zombie %s: player too far away, killing self (%.1f > %.1f)...\n");
 	/** `PUSH 0x16a` at `0x103df98c`: `CNPC_VZombie`'s class-local `SCHED_VZOMBIE_FEED_LUNGE`
 	 *  (registrar `0x103de500`), not in `ElysiumScheduleNumbers.h`. */
 	constexpr int32 RunAi19ZombieFeedLungeSchedule = 0x16a;
@@ -623,10 +619,6 @@ void FElysiumNpcZombie::RunAI(bool bReduced)
 	if (ZombieAiType == 1                                                     // 0x103df85a +0x6678
 		&& PlayerDistUnits > ZombieRemoveDistUnits)                           // 0x103df86f +0x66dc
 	{
-		EmitDevMsg(RunAi19ZombieTooFarFormat, FString::Printf(
-			TEXT("zombie %s: player too far away, killing self (%.1f > %.1f)...\n"),
-			*NpcKernelDebug10Shared::GDebug10DebugName(this), static_cast<double>(PlayerDistUnits),
-			static_cast<double>(ZombieRemoveDistUnits)));                     // 0x103df887 GetDebugName / 0x103df892
 		Kill();                                                               // 0x103df89f slot 119 0x1033cb90
 	}
 	// (2) The base pass, unconditionally.

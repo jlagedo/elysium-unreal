@@ -24,7 +24,6 @@
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -43,17 +42,17 @@
 namespace
 {
 	const TCHAR* const GAsianVampireFile = TEXT("NPC_AVampire.cpp");
-	constexpr float GMotorTailAsianJumpRise = 100.0f;        // _DAT_104a9310
-	constexpr float GAsianJumpScheduleDrop = 40.0f; // _DAT_104a9314
-	constexpr float GAsianJumpNear = 30.0f;         // _DAT_104a9308
-	constexpr float GAsianStationaryTime = 3.0f;    // _DAT_104a9318
-	constexpr float GAsianMovedEpsilon = 40.0f;     // _DAT_104a931c
-	constexpr float GJumpbaseClearance = 150.0f;    // DAT_104a9320
+	constexpr float GMotorTailAsianJumpRise = ElysiumNpcTunables::AsianJumpRise;
+	constexpr float GAsianJumpScheduleDrop = ElysiumNpcTunables::AsianJumpScheduleDrop;
+	constexpr float GAsianJumpNear = ElysiumNpcTunables::AsianJumpNearDistance;
+	constexpr float GAsianStationaryTime = ElysiumNpcTunables::AsianStationaryTime;
+	constexpr float GAsianMovedEpsilon = ElysiumNpcTunables::AsianMovedEpsilon;
+	constexpr float GJumpbaseClearance = ElysiumNpcTunables::AsianTeleportClearance;
 	constexpr int32 GJumpbaseHintType = 18000;
 	constexpr int32 GSchedJumpDown = 0x15b;
 	constexpr int32 GSchedJumpAcross = 0x15a;
 	// `CNPC_VAsianVampire::SelectLedgeNode` `0x103615c0`'s clearance.
-	constexpr float AsianLedgeClearance = 150.0f;         // DAT_104a9320
+	constexpr float AsianLedgeClearance = ElysiumNpcTunables::AsianTeleportClearance;
 }
 
 // Slot 420: `0x10360ce0`.
@@ -73,25 +72,12 @@ void FElysiumNpcAsianVampire::NPCInit()
 	JumpGravity = AsianVampireJumpGravity;                               // +0x64b8
 }
 
-// Slot 104: `0x10360bc0`.
-// 0x10360bc0
-void FElysiumNpcAsianVampire::Precache()
-{
-	// `CNPC_VAsianVampire::Precache` `0x10360bc0` — a scope-trace frame naming
-	// `"CNPC_VAsianVampire::Precache"` with two empty operands, the Troika body, exactly one
-	// `UTIL_PrecacheOther`, and the frame popped. That single weapon is the whole species payload.
-	//
-	// The scope-trace frame (`g_ScopeTraceStack`) is retail's VPROF-style profiling stack. It has no
-	// port and nothing the kernel reads depends on it; the four arms here that push one say so and
-	// carry no code for it.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10Other(*this, TEXT("item_w_avamp_blade"));
-}
+// Slot 104 is gone (story 0019/6): its one `UTIL_PrecacheOther("item_w_avamp_blade")`
+// resolves at bake and load, and the scope-trace frame around it is dead.
 
 // Slot 461: `0x10361060`, the selector tag 0x6 and then a direct call into the human line's `0x103851e0`.
 int32 FElysiumNpcAsianVampire::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x6;
 	return HumanSelectIdealState();
 }
 
@@ -259,21 +245,15 @@ bool FElysiumNpcAsianVampire::FValidateHintType(void* Hint)
 	return true;
 }
 
-// Slot 546: `0x10360610`, the class's own schedule id space.
-const TCHAR* FElysiumNpcAsianVampire::SquadSlotName(int32 SlotEn)
+/** `CNPC_VAsianVampire::restore`'s load-side half (story 0019/6): retail calls
+ *  `CNPC_VVampireBoss::Restore` and then writes `m_fJumpGravity` (`+0x64b8`) =
+ *  `_DAT_104a9300` (**2.0f**), the value `NPCInit` `0x10360ce0` writes too. The record half is the
+ *  generated SAVE walk; both writes land here, ahead of the chain's slot 130. */
+void FElysiumNpcAsianVampire::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093a578`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VAsianVampire"), TEXT("0x10360610"), TEXT("0x1093a578") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
-// Slot 127: `0x10360e10`, whose body is the `CNPC_VVampireBoss` restore (`0x103c5910`, family
-// SaveRestore10's `VampireBossRestore`) — the census's mechanism row for this class.
-int32 FElysiumNpcAsianVampire::Restore(void* Archive)
-{
-	return VampireBossRestore(Archive);
+	VampireBossPostRestoreResets();                                      // CNPC_VVampireBoss::Restore
+	JumpGravity = AsianVampireJumpGravity;                               // +0x64b8, 2.0f
+	FElysiumNpcVampire::OnPostRestore(InWorld);
 }
 
 // --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
@@ -593,8 +573,6 @@ bool FElysiumNpcAsianVampire::PositionClearForTeleportAsian(const FVector& Posit
 	}
 	return true;
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 

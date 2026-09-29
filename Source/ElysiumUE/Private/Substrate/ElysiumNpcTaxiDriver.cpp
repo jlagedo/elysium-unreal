@@ -23,15 +23,5 @@ void FElysiumNpcTaxiDriver::NPCInit()
 	Senses.bCanPerformSenses = true;
 }
 
-// Slot 546: `0x103b3170`, the class's own schedule id space.
-const TCHAR* FElysiumNpcTaxiDriver::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c7f0`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VTaxiDriver"), TEXT("0x103b3170"), TEXT("0x1093c7f0") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 

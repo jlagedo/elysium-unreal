@@ -24,8 +24,8 @@ namespace NpcKernelHintsShared
 	}
 	// `_DAT_104454c4` — the shared 0.0f float constant of `vampire.dll` (1,328 readers, no writer;
 	// `0x102961a0` compares a squared length against it to produce a "non-zero length" bool, and
-	// `0x1026a910`'s whole body is `FLD [0x104454c4] / RET 4`). It is what `GetHintDelay` answers
-	// and the Z scale `DistToHintCenterLine2D_3` multiplies the line direction's Z by — which is why
+	// the dead `GetHintDelay` (0019/6) was `FLD [0x104454c4] / RET 4`). It is
+	// the Z scale `DistToHintCenterLine2D_3` multiplies the line direction's Z by — which is why
 	// that body is a 2D distance despite carrying a Z term.
 	inline constexpr float GHintsZero = ElysiumNpcTunables::Zero;
 }

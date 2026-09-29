@@ -38,7 +38,7 @@ bool FElysiumNpc::TurningAnimsEnabled() const
 //
 // All three are the same 71-byte shape: the cvar gate, then a TAIL JUMP into `m_pMotor` (+0x5d44)
 // with `this` swapped for the motor and the arguments untouched. 29c's walk read the frame fix-up
-// after `POP ESI` as an argument shift; the listing (`0x10278cb0`) shows the four stack slots
+// after `POP ESI` as an argument shift; the listing of the dead debug twin (0019/6) shows the four stack slots
 // written back to themselves, so nothing shifts.
 
 // --- Slot 520 `GetFacingDirection`, slot 526 `OverrideMoveFacing` --------------------------------
@@ -57,15 +57,15 @@ FElysiumNpcBase::FTurnActivityPick FElysiumNpc::TurnActivityTroikaLadder(float Y
 	//
 	// `_DAT_1049ae40 = -70.0f`, `_DAT_1049ae3c = -140.0f`, `_DAT_104528d4 = 70.0f`,
 	// `_DAT_1049ae38 = 140.0f`, `_DAT_1049ae34 = -15.0f`, `_DAT_10463584 = 15.0f`.
-	if (YawDelta < -70.0f && -140.0f <= YawDelta && HasSequence(0xa2))
+	if (YawDelta < ElysiumNpcTunables::MinusSeventy && ElysiumNpcTunables::MinusOneForty <= YawDelta && HasSequence(0xa2))
 	{
 		return FTurnActivityPick{ 0xa2, true };   // ACT_90_RIGHT
 	}
-	if (70.0f <= YawDelta && YawDelta < 140.0f && HasSequence(0xa1))
+	if (ElysiumNpcTunables::Seventy <= YawDelta && YawDelta < ElysiumNpcTunables::OneForty && HasSequence(0xa1))
 	{
 		return FTurnActivityPick{ 0xa1, true };   // ACT_90_LEFT
 	}
-	if (YawDelta < -140.0f)
+	if (YawDelta < ElysiumNpcTunables::MinusOneForty)
 	{
 		if (HasSequence(0x9e))
 		{
@@ -76,7 +76,7 @@ FElysiumNpcBase::FTurnActivityPick FElysiumNpc::TurnActivityTroikaLadder(float Y
 			return FTurnActivityPick{ 0x9d, true };   // ACT_180_LEFT
 		}
 	}
-	if (140.0f < YawDelta)
+	if (ElysiumNpcTunables::OneForty < YawDelta)
 	{
 		if (HasSequence(0x9d))
 		{
@@ -87,11 +87,11 @@ FElysiumNpcBase::FTurnActivityPick FElysiumNpc::TurnActivityTroikaLadder(float Y
 			return FTurnActivityPick{ 0x9e, true };
 		}
 	}
-	if (YawDelta < -15.0f && HasSequence(0x3c))
+	if (YawDelta < ElysiumNpcTunables::MinusFifteen && HasSequence(0x3c))
 	{
 		return FTurnActivityPick{ 0x3c, true };   // ACT_TURN_RIGHT — tagged here, unlike the base
 	}
-	if (15.0f <= YawDelta && HasSequence(0x3b))
+	if (ElysiumNpcTunables::Fifteen <= YawDelta && HasSequence(0x3b))
 	{
 		return FTurnActivityPick{ 0x3b, true };   // ACT_TURN_LEFT
 	}

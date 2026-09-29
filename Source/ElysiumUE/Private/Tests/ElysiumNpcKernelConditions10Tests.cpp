@@ -35,7 +35,7 @@
 // slot 532's case 8 clears `m_eAlternateAI` for 1..3; `0x10379040` never clobbers `ECX` so the
 // Gargoyle arm is a plain `FINDING_BODY` clear and not a lost-`this` bug; `0x10382970` blacklists
 // the pickup target for twenty seconds rather than releasing it; `0x10398d90` is the throwable MODE
-// setter; `0x1028d990` renders TWO ladders and not three; and slot 419's pair is already bound.
+// setter; the dead condition-debug formatter (0019/6) is not ported; and slot 419's pair is already bound.
 
 static constexpr EAutomationTestFlags GElysiumNpcKernelConditions10Flags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -95,7 +95,6 @@ namespace
 			FElysiumNpcWorldFixture::Quiet(
 				{ Guard, Other, Boss, Pedestrian, Hunter, Cop, Newscaster, Troika });
 			FElysiumNpc::ResetSpeciesSuspectGlobals();
-			FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 			ElysiumNpcTunables::ResetConVars();
 		}
 	};
@@ -701,117 +700,6 @@ bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 	F.Guard->ResetFakeReloadCount();
 	TestEqual(TEXT("m_iFakeReloadCount is rerolled from the template range (+0x65f0)"),
 		F.Guard->FakeReloadCount, 0);
-	return true;
-}
-
-// =================================================================================================
-// `0x1028d990` — the condition/flag debug string.
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10DebugStringTest,
-	"Elysium.Substrate.NpcKernelConditions10.BuildConditionDebugString",
-	GElysiumNpcKernelConditions10Flags)
-bool FElysiumNpcKernelConditions10DebugStringTest::RunTest(const FString&)
-{
-	FCond10Fixture F;
-	if (F.Guard == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
-
-	// `1028d9a8`: a buffer size at or below zero writes NOTHING AT ALL.
-	TestTrue(TEXT("a zero-size buffer writes nothing (1028d9a8)"),
-		F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 0).IsEmpty());
-
-	// The shipped default: both debug bytes clear, so the third format string — the `DevMsg` arm
-	// with `GetDebugName()` in a 20-wide left-aligned field — and all four optional blocks built.
-	const FString Named = F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 512);
-	TestTrue(TEXT("the DevMsg arm is prefixed with GetDebugName (1028dcff)"),
-		Named.StartsWith(TEXT("guard")));
-	TestTrue(TEXT("the message is in it"), Named.Contains(TEXT("hello")));
-	TestTrue(TEXT("it ends in two newlines (0x105d8828)"), Named.EndsWith(TEXT("\n\n")));
-
-	// `1028d9c1` / `1028d9d4`: a null message becomes the empty string and a negative indent
-	// clamps to 0, so neither faults and neither changes the shape.
-	const FString NullMessage = F.Guard->BuildConditionDebugString(nullptr, -5, 512);
-	TestFalse(TEXT("a null message and a negative indent still build (1028d9c1)"),
-		NullMessage.IsEmpty());
-
-	// The indent is `%*s` over the empty string — `IndentLevel` spaces.
-	const FString Indented = F.Guard->BuildConditionDebugString(TEXT("x"), 3, 512);
-	TestTrue(TEXT("the indent is three spaces before the message (1028dcc4)"),
-		Indented.Contains(TEXT(":     x")));
-
-	// `1028dbd6`: `DAT_10920534` set and `DAT_10920535` clear selects the SHORT format, and that is
-	// also the one arm in which none of the optional blocks was built.
-	FElysiumNpc::SetDebugTraceByte(TEXT("DAT_10920534"), 1);
-	const FString Short = F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 512);
-	TestTrue(TEXT("the short arm ends in one newline (0x105d8854)"),
-		Short.EndsWith(TEXT("hello\n")));
-	TestFalse(TEXT("the short arm carries no GetDebugName prefix (1028dc57)"),
-		Short.StartsWith(TEXT("guard")));
-
-	// Both set selects the FULL format, which is the `DevMsg` arm without the name prefix.
-	FElysiumNpc::SetDebugTraceByte(TEXT("DAT_10920535"), 1);
-	const FString Full = F.Guard->BuildConditionDebugString(TEXT("hello"), 0, 512);
-	TestFalse(TEXT("the full arm carries no name prefix (1028dc3c)"),
-		Full.StartsWith(TEXT("guard")));
-	TestTrue(TEXT("the full arm ends in two newlines (0x105d8868)"), Full.EndsWith(TEXT("\n\n")));
-
-	// --- The two ladders (there are TWO, not three) ------------------------------------------------
-	// A clear word is all dots; a set bit takes the legend's character at that index.
-	TestEqual(TEXT("a clear mask is all dots (1028dadb)"),
-		FElysiumNpc::DebugMaskLadder(TEXT("ABCD"), 0u, 4), FString(TEXT("....")));
-	TestEqual(TEXT("bit 0 takes the legend's first character (1028dad1)"),
-		FElysiumNpc::DebugMaskLadder(TEXT("ABCD"), 1u, 4), FString(TEXT("A...")));
-	TestEqual(TEXT("bit 2 takes the third (1028dad1)"),
-		FElysiumNpc::DebugMaskLadder(TEXT("ABCD"), 4u, 4), FString(TEXT("..C.")));
-	// The memory ladder is 32 wide and the flags ladder 30 — `1028dae1` and `1028db3f`.
-	TestEqual(TEXT("the memory ladder is 32 glyphs (1028dae1)"),
-		FElysiumNpc::DebugMaskLadder(TEXT("PIS__PF_T_L__TTEPLM________ICCCC"), 0u, 0x20).Len(),
-		0x20);
-	TestEqual(TEXT("the flags ladder is 30 glyphs (1028db3f)"),
-		FElysiumNpc::DebugMaskLadder(TEXT("RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"), 0u, 0x1e).Len(),
-		0x1e);
-	// The real word: `m_bfAINPCFlags` bit 0 is `D_IS_BUSY` and the legend's first character is 'R'.
-	F.Guard->NpcFlags.Set(EElysiumNpcFlag::D_IS_BUSY);
-	TestTrue(TEXT("the flags ladder reads m_bfAINPCFlags (1028db18)"),
-		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("R.....")));
-	F.Guard->NpcFlags.Clear(EElysiumNpcFlag::D_IS_BUSY);
-
-	// --- The NAV pair -----------------------------------------------------------------------------
-	// `1028db72`: only nav types 3 and 1 build it at all.
-	F.Guard->NavSetType(0);
-	TestFalse(TEXT("a walking body prints no NAV pair (1028db83)"),
-		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("NAV ")));
-	F.Guard->NavSetType(3);
-	TestTrue(TEXT("nav type 3 prints CLIMB first (1028dbad)"),
-		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("NAV CLIMB     ")));
-	F.Guard->NavSetType(1);
-	TestTrue(TEXT("nav type 1 prints JUMP second, with the first field blank (1028db97)"),
-		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("NAV       JUMP")));
-	F.Guard->NavSetType(0);
-
-	// --- The `CONDS:` block, gated by `ent_trace_conditions` (`DAT_10924a6c`) alone ---------------
-	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::EntTraceConditions, 0);
-	TestFalse(TEXT("with the schedule-debug ConVar cleared (1028da14)"),
-		F.Guard->ScheduleDebugConditionsEnabled());
-	TestFalse(TEXT("no CONDS: block is built (1028da0d)"),
-		F.Guard->BuildConditionDebugString(TEXT("x"), 0, 512).Contains(TEXT("CONDS:")));
-	ElysiumNpcTunables::ResetConVars();
-	TestTrue(TEXT("it ships \"1\", so the block is built as shipped (1028da19)"),
-		F.Guard->ScheduleDebugConditionsEnabled());
-	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
-	const FString Conds = F.Guard->ConditionDebugList();
-	TestTrue(TEXT("the list opens with CONDS: (0x105d8908)"), Conds.StartsWith(TEXT("CONDS:")));
-	TestTrue(TEXT("each entry is ' %s' with a LEADING space (0x105a3060)"),
-		Conds.Contains(FString(TEXT(" ")) + F.Guard->GetShortConditionName(
-			static_cast<int32>(EElysiumNpcCond::TaskFailed))));
-	TestTrue(TEXT("the list ends in a newline (0x10547e40)"), Conds.EndsWith(TEXT("\n")));
-
-	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
-	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
 

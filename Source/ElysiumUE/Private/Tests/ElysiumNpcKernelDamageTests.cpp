@@ -795,19 +795,14 @@ bool FElysiumNpcKernelDamageAndreiIdealStateTest::RunTest(const FString&)
 	TestNotNull(TEXT("and the census claims it"), Andrei->RetailClass());
 	TestTrue(TEXT("as CNPC_VAndreiBlood"), Andrei->AsSpecies<FElysiumNpcAndreiBlood>() != nullptr);
 
-	// Twenty-five bytes: stamp the trace selector with 4, then answer 1 (IDLE) or 2 (ALERT).
-	Andrei->SelectIdealStateSelector = 0;
+	// Twenty-five bytes: answer 1 (IDLE) or 2 (ALERT).
 	Andrei->bAndreiActivated = false;
 	TestEqual(TEXT("an unactivated Andrei answers IDLE"),
 		Andrei->CNPC_VAndreiBlood_vfunc461(), EElysiumNpcState::Idle);
-	TestEqual(TEXT("and stamps the trace selector with 4"), Andrei->SelectIdealStateSelector, 4);
 
-	Andrei->SelectIdealStateSelector = 0;
 	Andrei->bAndreiActivated = true;
 	TestEqual(TEXT("an activated Andrei answers ALERT"),
 		Andrei->CNPC_VAndreiBlood_vfunc461(), EElysiumNpcState::Alert);
-	TestEqual(TEXT("and stamps the selector on that arm too"),
-		Andrei->SelectIdealStateSelector, 4);
 	return true;
 }
 
@@ -1003,13 +998,13 @@ bool FElysiumNpcKernelDamageEnergyBallTest::RunTest(const FString&)
 	// The pure offset rule, with an identity basis so each constant is readable on its own axis.
 	const FVector Spawn = FElysiumNpc::EnergyBallSpawnPoint(FVector::ZeroVector,
 		FVector(1.0, 0.0, 0.0), FVector(0.0, 1.0, 0.0), FVector(0.0, 0.0, 1.0));
-	TestEqual(TEXT("forward is pushed by _DAT_104ada24 = 50"), Spawn.X, 50.0, 0.001);
+	TestEqual(TEXT("forward is pushed by _DAT_104ada28 = 40 (listing 0x1036dd20, read 2026-09-29)"), Spawn.X, 40.0, 0.001);
 	TestEqual(TEXT("right is pushed by _DAT_104ada2c = -10"), Spawn.Y, -10.0, 0.001);
-	TestEqual(TEXT("up is pushed by _DAT_104ada28 = 40"), Spawn.Z, 40.0, 0.001);
+	TestEqual(TEXT("up is pushed by _DAT_104ada24 = 50"), Spawn.Z, 50.0, 0.001);
 	// And the origin is added, not replaced.
 	const FVector Offset = FElysiumNpc::EnergyBallSpawnPoint(FVector(100.0, 200.0, 300.0),
 		FVector(1.0, 0.0, 0.0), FVector(0.0, 1.0, 0.0), FVector(0.0, 0.0, 1.0));
-	TestEqual(TEXT("the origin is added"), Offset.X, 150.0, 0.001);
+	TestEqual(TEXT("the origin is added"), Offset.X, 140.0, 0.001);
 
 	FElysiumNpcWorldBuilder Builder(TEXT("damage_energyball"), 0x29c1d00f);
 	Builder.AddNpcOfClass(TEXT("chang"), FVector::ZeroVector, TEXT("CNPC_VChangBros"));

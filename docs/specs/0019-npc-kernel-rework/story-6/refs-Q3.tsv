@@ -1,0 +1,64 @@
+1049df20	PatrolTypeTable	.rdata table base: the patrol-type table, stride 0x14, rows {type, name, startIndex, step, next}; read by 0x103079c0 (name match)	ElysiumNpcScript.cpp:36
+1049df28	PatrolTypeStartIndexColumn	.rdata table column: patrol-type start index (+0x08), read by 0x10307c20	ElysiumNpcScript.cpp:38
+1049df2c	PatrolTypeStepColumn	.rdata table column: patrol-type step (+0x0c), read by 0x10307b80 NextPoint	ElysiumNpcScript.cpp:39
+1049df30	PatrolTypeNextColumn	.rdata table column: patrol-type next type (+0x10), read by the patrol repeat arm	ElysiumNpcScript.cpp:39
+105399a0	AuthoredNoneSentinelString	string pointer: the one-character string "0", the authored "none" sentinel the precache walk compares against (0x101d0f10 family)	ElysiumNpcPrecache10.inl:45
+10548ed4	PrecacheExtensionPatternB	string pointer: the second extension glob pattern 0x101d0f10 matches directory entries with	ElysiumNpcPrecache10Shared.h:14
+10566458	DebugNpcHandleTablePtr	PTR_DAT: pointer cell the ai_debug_npc handle is resolved through (0x10295cb8 debug-NPC test with DAT_10925444)	ElysiumNpcHints10.cpp:105
+10598a30	PrecacheExtensionPatternA	string pointer: the first extension glob pattern 0x101d0f10 matches directory entries with	ElysiumNpcPrecache10Shared.h:14
+105a040c	DirectoryRejectLiteral1	string literal: 0x101d0f10 reject prefix compared over one character (bytes unrecovered)	ElysiumNpcPrecache10.cpp:36
+105a0410	DirectoryRejectLiteral3	string literal: 0x101d0f10 reject prefix compared over three characters (bytes unrecovered)	ElysiumNpcPrecache10.cpp:35
+105c9798	DebugIndexFilter	.data int global, -1 in the pinned image: the maintain body debug index filter (every non-negative index passes)	ElysiumNpcMaintain.cpp:435
+1060a750	HullTablePtr	PTR_DAT table base: the hull-size record table, filled at run time	ElysiumNpcPositions.inl:27
+1062f278	ScheduleParseResult	.data global: the schedule-file parse result the flag of slot 452 answers	ElysiumNpcSchedule.inl:17
+106b8540	SharedEmptyLiteral	string pointer: the shared empty literal a null name is replaced by in the hint-name compare	ElysiumNpcManBat.cpp:673
+106c8a41	NoSpawnByte	.data byte: the global no-spawn flag (a scene holds the stage), CNPCMaker test 3	ElysiumNpcMaker.cpp:317
+106c994c	PatrolNodeMissCounter	.data int class static: out-of-range ped-link / patrol-node index tally (++ on a miss)	ElysiumNpcKernelBaseHelpers.cpp:179
+106eb5d8	HintByNameTable	.data global: the by-name hint lookup table passed to thunk_FUN_100f7770	ElysiumNpcHints.cpp:279
+1070af4c	DeveloperConVarObject	ConVar pointer: the `developer` cvar CNPCMaker::Precache gates its overlay arms on	ElysiumNpcMaker.h:159
+1070b22c	EngineModelPrecacherPtr	engine interface pointer: the model precacher (vtable +0x34 PrecacheModel)	ElysiumNpcLifecycle.inl:125
+1070b238	EngineFileSystemPtr	engine interface pointer: the filesystem (slot 9 file-exists test)	ElysiumNpcMisc2.cpp:552
+1070b244	EngineRandomPtr	engine interface pointer: RandomInt(lo, hi) at vtable +8	ElysiumNpcKernelBaseHelpers.cpp:218
+1070b248	EngineSoundPrecacherPtr	engine interface pointer: the sound precacher	ElysiumNpcLifecycle.inl:125
+1070b24c	EngineSpatialPartitionPtr	engine interface pointer: spatial-partition enumeration (+0x30)	ElysiumNpcMisc2.cpp:55
+1070b254	EngineTracePtr	engine interface pointer: enginetrace, TraceRay at vtable +8	ElysiumNpcKernelBaseHelpers.cpp:113
+1070d1b0	Vec3OriginTable	table base: vec3_origin (b0/b4/b8), filled with zeroes at run time	ElysiumNpcManBat.cpp:377
+1072bc8c	SoundDangerRadiusCell	.data cell: sound_volume_table row 27 (NPC_DISCIPLINE_ALERT) radius, InsertSound argument	ElysiumNpcRunAiSpecies.cpp:510
+1072bcc3	SoundDangerOcclusionCell	.data byte: sound_volume_table row 27 occlusion flag, InsertSound argument	ElysiumNpcRunAiSpecies.cpp:510
+10738d10	StatTemplateTablePtr	.data global: the stat template table 0x101d5f10 resolves a blood value through	ElysiumNpcLifecycle2.cpp:113
+10739fa0	DefenderThresholdTable	table base: the four rules.txt defender thresholds _DAT_10739fa0..fac (SuccessesForDefenderDodgeAttack .. BlockStagger), filled at run time	ElysiumNpcRunTask.cpp:373
+1073dc28	VSoundGroupTable	table base: the VSound group-table row thunk_FUN_101f55a0 fills	ElysiumNpcPrecache10.cpp:60
+107532e8	WorldEntityPtr	.data pointer: the world entity, written by CWorld::Precache, answered by 0x1023bd00	ElysiumNpcRunAi.inl:60
+1090fe10	AiListHead	.data global: the CAI_BaseNPC AI-list head the constructor chain adds to	ElysiumNpcMaker.h:14
+10923d80	SlotAcquireExtentGuard	.data guard word: bit 0 gates slot 595 one-time static half-extent init (0x102b4cd1)	ElysiumNpcMisc2.cpp:38
+10924248	TroikaLocalIdSpace	.data object: the Troika line CAI_LocalIdSpace slot 580 answers	ElysiumNpcSchedule.cpp:99
+10924324	AcquireHalfExtentX	.data float: slot 595 static half-extent X, initialised to 1024.0 behind DAT_10923d80 bit 0 and never written again	ElysiumNpcMisc2.cpp:37
+10924328	AcquireHalfExtentY	.data float: slot 595 static half-extent Y (1024.0, same init)	ElysiumNpcMisc2.cpp:37
+1092432c	AcquireHalfExtentZ	.data float: slot 595 static half-extent Z (128.0, same init)	ElysiumNpcMisc2.cpp:37
+10924984	DispositionSeedCell	.data int: source of m_nCurrDisposition at 0x1029a6a9; no writer in the image	ElysiumNpcLifecycle2.cpp:424
+10924edc	MeleeLeftEventPtr	.data pointer cell (30 virtual-call readers: 0x102b5650 family, 0x10385cf0): the global melee-left event, vfunc1 called through it. NOTE the image constructs ConVar ent_trace_melee at 0x10924ed8, so this cell is that object +4; the port body treats it as an event (see report)	ElysiumNpcHuman.cpp:529
+10925444	DebugNpcHandle	.data global: the ai_debug_npc handle	ElysiumNpcHints10.cpp:104
+10925450	HintListHead	.data global: the CAI_Hint list head (next link +0x5d8)	ElysiumNpcHints.inl:16
+10925454	HintSearchCursor	.data global: the rotating hint search cursor	ElysiumNpcHints.inl:16
+10925458	HintListCursor2	.data global: a second hint-list walk cursor	ElysiumNpcLifecycle.inl:80
+1092545c	HintListCursor3	.data global: a third hint-list walk cursor	ElysiumNpcLifecycle.inl:80
+10927194	InterestingPlaceListHead	.data global: the interesting-place list head (+0x540 next)	ElysiumNpcLifecycle2.cpp:205
+10934060	InvalidVectorSentinel	table base: the invalid-vector sentinel (10934060..68) in the Script19 nav-goal record	ElysiumNpcScript.inl:140
+109340d8	NodeGraphHullIndex	.data int: the node-graph hull index the last flyer spawned decides (four writers, no restore)	ElysiumNpcLifecycle2.inl:63
+109363d8	PatrolPathPoolInUse	table base: the in-use bytes of the 32-slot patrol path pool	ElysiumNpcScript.cpp:78
+109363f8	PatrolPathPoolCursor	.data int: the patrol path pool allocation cursor	ElysiumNpcScript.cpp:79
+10937cf1	InNpcInitFlag	.data byte: the in-NPCInit flag (process-wide)	ElysiumNpcLifecycle2.cpp:282
+10938040	FleshpileAndreiCache	.data pointer: the cached npc_VAndreiBlood the fleshpile maker fills	ElysiumNpcLifecycle2.inl:84
+1093a740	BaseLocalIdSpace	.data object: the CAI_LocalIdSpace the schedule namespace is registered into (0x102ea0e0)	ElysiumNpcSchedule.cpp:108
+1093ac3c	CopProvokerHandle	class static: the cop shared provoker handle	ElysiumNpcHumanCombatant.h:28
+1093aca8	CopProvokerExpiry	class static: the cop shared provoker expiry	ElysiumNpcHumanCombatant.h:29
+1093b650	HunterProvokerHandle	class static: the hunter shared handle, written only by 0x10387fd0	ElysiumNpcHumanCombatant.h:29
+1093b658	HunterProvokerExpiry	class static: the hunter shared expiry	ElysiumNpcHumanCombatant.h:30
+1093bb9c	TentacleGeneratorMakerRef	.data pointer: the static maker reference 0x10390d00 binds to the TentacleGenerator maker	ElysiumNpcMingXiao.h:421
+1093bd30	ShootGoalTargetWord	.data word: the tentacle-shoot goal target word (unrecovered)	ElysiumNpcRunTaskSpecies.cpp:1509
+1093bd34	TentacleHintCursor	.data handle: the cursor TASK 0x150 resumes its type-19000 hint walk from (-1 at reset)	ElysiumNpcMingXiaoTentacle.cpp:87
+1093c33c	SabbatSplashCycle	.data float: 33.0/60.0 stored by static initialiser 0x103a5870 (0.55), the cycle TASK 0x15c compares against	ElysiumNpcRunTaskSpecies.cpp:242
+1093d258	VampireLocalIdSpace	.data object: CNPC_VVampire CAI_LocalIdSpace parent	ElysiumNpcSchedule.cpp:109
+1093d638	WerewolfSearchTimerA	.data cell: werewolf search-timer pair (removed with StartSearchTimer, 0019/6)	ElysiumNpcLifecycleShared.h:17
+1093d63c	WerewolfSearchTimerB	.data cell: werewolf search-timer pair, second word	ElysiumNpcLifecycleShared.h:17
+109f0b40	GlobalStatList	.data global: the process-wide stat list an NPC without an attributes container falls back to	ElysiumNpcLifecycle2.cpp:107

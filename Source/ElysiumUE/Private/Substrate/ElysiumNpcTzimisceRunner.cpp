@@ -19,7 +19,6 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcAnim10Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -42,30 +41,6 @@ namespace
 	constexpr int32 GAnim10ActTzIdle2 = 0x1134;    // 4404
 	constexpr int32 GAnim10ActTzFidget2 = 0x1135;  // 4405
 	constexpr int32 GAnim10ActTzRun2 = 0x1137;     // 4407
-	//
-	// Four contiguous tables at `0x1065d680` / `…688` / `…690` / `…6a0`. The port's footstep table
-	// (`ElysiumFootsteps.cpp`) already carries the same 2+2 left/right split and the same four
-	// breaths.
-	const TCHAR* const GRunnerStepsA[] = {
-		TEXT("character/monster/TC_Runner/foot_steps_1.wav"),
-		TEXT("character/monster/TC_Runner/foot_steps_2.wav"),
-	};
-	const TCHAR* const GRunnerStepsB[] = {
-		TEXT("character/monster/TC_Runner/foot_steps_3.wav"),
-		TEXT("character/monster/TC_Runner/foot_steps_4.wav"),
-	};
-	const TCHAR* const GRunnerBreaths[] = {
-		TEXT("character/monster/TC_Runner/Breath1.wav"),
-		TEXT("character/monster/TC_Runner/Breath2.wav"),
-		TEXT("character/monster/TC_Runner/Breath3.wav"),
-		TEXT("character/monster/TC_Runner/Breath4.wav"),
-	};
-	const TCHAR* const GRunnerExerts[] = {
-		TEXT("character/monster/TC_Runner/Exert_Heavy_1.wav"),
-		TEXT("character/monster/TC_Runner/Exert_Heavy_2.wav"),
-		TEXT("character/monster/TC_Runner/Exert_Heavy_3.wav"),
-	};
-	const TCHAR* const GRunnerWeapon = TEXT("item_w_tzimisce3_claw");
 }
 
 // `CNPC_VTzimisceRunner`'s constructor `0x103c2fa0` writes both hull words at `0x103c2ff3`, after
@@ -162,19 +137,9 @@ void FElysiumNpcTzimisceRunner::OnRestore(bool bFromLoad)
 	RemoveFlag2(4u);                                                     // 0x103c3c78 -> 0x1000df44 RemoveFlag2(4)
 }
 
-// Slot 104: `0x103c31e0`.
-// 0x103c31e0
-void FElysiumNpcTzimisceRunner::Precache()
-{
-	// `CNPC_VTzimisceRunner::Precache` `0x103c31e0` — the Troika body, then four tables (2, 2, 4, 3)
-	// and the claw. No field writes.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GRunnerStepsA, UE_ARRAY_COUNT(GRunnerStepsA));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GRunnerStepsB, UE_ARRAY_COUNT(GRunnerStepsB));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GRunnerBreaths, UE_ARRAY_COUNT(GRunnerBreaths));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GRunnerExerts, UE_ARRAY_COUNT(GRunnerExerts));
-	NpcKernelPrecache10Shared::Precache10Other(*this, GRunnerWeapon);
-}
+// Slot 104 `CNPC_VTzimisceRunner::Precache` has no body here: after the Troika body it
+// only precached the four TC_Runner sound tables and `item_w_tzimisce3_claw`, with no field write,
+// which the bake resolves (0019 story 6, mechanism -> Bake).
 
 // Slot 310: `0x103c3d80`, which calls the Troika body `0x10295750` directly.
 /** `CNPC_VTzimisceRunner::SetActivity` (`0x103c3d80`). A five-entry request remap in front of the
@@ -269,16 +234,6 @@ int32 FElysiumNpcTzimisceRunner::GetUsedHullBits()
 	// The Troika body `0x1029a050` called directly, its 1 ORed with this class's bit.
 	// `OR AH,0x20` in the listing; the decompiled C drops the bit.
 	return FElysiumNpc::GetUsedHullBits() | 0x2000;
-}
-
-// Slot 546: `0x103c2a60`, the class's own schedule id space.
-const TCHAR* FElysiumNpcTzimisceRunner::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093d224`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VTzimisceRunner"), TEXT("0x103c2a60"), TEXT("0x1093d224") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 259: `0x103c32c0`, the footstep body of `docs/vtmb/footsteps.md` §1.7; an id it does not

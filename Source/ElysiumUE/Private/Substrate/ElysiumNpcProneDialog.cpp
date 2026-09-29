@@ -25,7 +25,7 @@ namespace
 bool FElysiumNpcProneDialog::ProneDialogPassesFindEntityFovTrace(const FVector& FromCm, const FVector& ToCm,
 	int32 Mask, bool& bOutRayIsValid) const
 {
-	// `0x103a4bb0`, `CNPC_ProneDialog#45`, 306 bytes, almost all of it filling an engine `Ray_t`:
+	// `CNPC_ProneDialog#45`, 306 bytes, almost all of it filling an engine `Ray_t`:
 	//
 	//     delta = to - from
 	//     ray.m_IsRay = (delta.LengthSquared() != 0.0)          (_DAT_104454c4, a byte at +0x?? )

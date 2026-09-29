@@ -24,6 +24,7 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
+#include "Tests/ElysiumTestServices.h"
 
 // Story 29c-1, family **Motor** — `CAI_Motor`, `CAI_Navigator` and everything the NPC asks of its
 // motor.
@@ -68,7 +69,7 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 	FElysiumNpcTestHull HullOnly;
 	FElysiumNpcBase& BaseLine = HullOnly;
 	TestEqual(TEXT("the base line's step height is 18"), BaseLine.FElysiumNpcBase::StepHeight(), 18.0f);
-	TestEqual(TEXT("and its jump speed is the same 18"), BaseLine.FElysiumNpcBase::GetMaxJumpSpeed(), 18.0f);
+	TestEqual(TEXT("and its jump speed is the same 18"), BaseLine.FElysiumNpcBase::GetStepDownHeight(), 18.0f);
 
 	// The Troika line: `0x101a6b40`'s 18 for the step height slot 522 carries, and Troika's own
 	// override of 523 (`0x101aa670`, `_DAT_1044faa8`) = 36.0 -- a DIFFERENT constant.
@@ -84,9 +85,7 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 
 	TestEqual(TEXT("slot 522 answers 18"), Guard->StepHeight(), 18.0f);
-	TestEqual(TEXT("slot 523 answers 36"), Guard->GetMaxJumpSpeed(), 36.0f);
-	// `0x101a6b80` `_DAT_10477ce8` = 350.0, and no class in the family overrides slot 524.
-	TestEqual(TEXT("slot 524 answers 350"), Guard->GetJumpGravity(), 350.0f);
+	TestEqual(TEXT("slot 523 answers 36"), Guard->GetStepDownHeight(), 36.0f);
 	return true;
 }
 
@@ -114,9 +113,9 @@ bool FElysiumNpcKernelMotorStandDropTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Tzimisce, Ming, Tentacle });
-	TestEqual(TEXT("0x103b6df0: the Tzimisce drops 56"), Tzimisce->GetMaxJumpSpeed(), 56.0f);
-	TestEqual(TEXT("0x10391050: Ming Xiao drops 50"), Ming->GetMaxJumpSpeed(), 50.0f);
-	TestEqual(TEXT("0x1039b070: the tentacle drops 30"), Tentacle->GetMaxJumpSpeed(), 30.0f);
+	TestEqual(TEXT("0x103b6df0: the Tzimisce drops 56"), Tzimisce->GetStepDownHeight(), 56.0f);
+	TestEqual(TEXT("0x10391050: Ming Xiao drops 50"), Ming->GetStepDownHeight(), 50.0f);
+	TestEqual(TEXT("0x1039b070: the tentacle drops 30"), Tentacle->GetStepDownHeight(), 30.0f);
 
 	// The drop is the one the stand trace takes: the end is `pos.z - slot 523`, dispatched on the
 	// species, and the foot box comes off the species' own `m_Collision` (TZIMISCE1, hull 10).
@@ -190,7 +189,7 @@ bool FElysiumNpcKernelMotorJumpLegalTest::RunTest(const FString&)
 	TestTrue(TEXT("a flat 160.1-unit jump is legal"), Legal(0.0, 0.0, 0.0, 160.1));
 	TestFalse(TEXT("a flat 160.2-unit jump is not"), Legal(0.0, 0.0, 0.0, 160.2));
 
-	// `CAI_TestHull::IsJumpLegal` `0x102d7760` — the same body with 1024 everywhere.
+	// `CAI_TestHull::IsJumpLegal` — the same body with 1024 everywhere.
 	TestTrue(TEXT("the test hull's 1024 rise admits what the base refuses"),
 		FElysiumNpcBase::IsJumpLegalGeometry(FVector::ZeroVector, FVector::ZeroVector,
 			FVector(0.0, 0.0, 300.0), 1024.0f, 1024.0f, 1024.0f));
@@ -200,55 +199,11 @@ bool FElysiumNpcKernelMotorJumpLegalTest::RunTest(const FString&)
 	return true;
 }
 
-// --- The yaw-speed ladders, slot 516 --------------------------------------------------------------
+// --- The yaw-speed ladders, slot 516 (0019/6: restored as data) ----------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorYawLaddersTest,
 	"Elysium.Substrate.NpcKernelMotor.MaxYawSpeedLadders", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
-{
-	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — one constant, `_DAT_1049949c`.
-	TestEqual(TEXT("the base line is 45 for everything"), FElysiumNpcBase::MaxYawSpeedBase(), 45.0f);
-
-	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` — the tuning record's +0x48 inside the
-	// (0x1129, 0x112e) band and +0x44 outside it. The SEAM answers 0 for every field, so the case
-	// stands the record to prove which offset each arm reaches.
-	auto Field = [](int32 Offset) { return Offset == 0x48 ? 7.0f : 3.0f; };
-	TestEqual(TEXT("mingxiao 0x112a reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112a, Field),
-		7.0f);
-	TestEqual(TEXT("mingxiao 0x112d reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112d, Field),
-		7.0f);
-	TestEqual(TEXT("mingxiao 0x1129 reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x1129, Field),
-		3.0f);
-	TestEqual(TEXT("mingxiao 0x112e reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112e, Field),
-		3.0f);
-	TestEqual(TEXT("and through the SEAM every arm answers 0"),
-		FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112a, ZeroTuning), 0.0f);
-
-	// The slot-516 overrides, each its class's own (story 5 step 4), by name with its retail
-	// address. `CAI_BaseHumanoid#516` (`0x102624b0`) and the three generic classes' `0x1035a810` /
-	// `0x1035b080` / `0x1035be80` have no instance since 0019 story 5 step 1.
-	const TCHAR* Expected[][2] = {
-		{ TEXT("CNPC_VDog"), TEXT("0x10374130") },
-		{ TEXT("CNPC_VMingXiao"), TEXT("0x10394930") },
-		{ TEXT("CNPC_VTzimisce"), TEXT("0x103ba020") },
-		{ TEXT("CNPC_VWerewolf"), TEXT("0x103d0a30") },
-	};
-	for (const TCHAR* const (&Row)[2] : Expected)
-	{
-		TestEqual(*FString::Printf(TEXT("%s's slot-516 body"), Row[0]),
-			FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(Row[0]), 516)),
-			FString(Row[1]));
-	}
-	// Every other class runs the Troika line's own `0x10297ce0`, which replaces `CAI_BaseNPC`'s
-	// `0x10280bb0` for the whole line.
-	TestEqual(TEXT("the Troika line's slot-516 body"),
-		FString(ElysiumNpcTestCensus::SlotRow(516)->Address), FString(TEXT("0x10297ce0")));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorYawTroikaTest,
-	"Elysium.Substrate.NpcKernelMotor.MaxYawSpeedTroika", GElysiumNpcKernelMotorFlags)
-bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_yaw"), 4302);
 	Builder.AddNpc(TEXT("guard"));
@@ -264,136 +219,222 @@ bool FElysiumNpcKernelMotorYawTroikaTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard, Dog, Tzim });
 
-	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, arm by arm on the activity word (+0x0fec).
-	Guard->ActivityNumber = 0x3b;
-	TestEqual(TEXT("0x3b is 30"), Guard->MaxYawSpeed(), 30.0f);
-	Guard->ActivityNumber = 0x3c;
-	TestEqual(TEXT("0x3c is 30"), Guard->MaxYawSpeed(), 30.0f);
-	Guard->ActivityNumber = 0x13;
-	TestEqual(TEXT("ACT_RUN is 160"), Guard->MaxYawSpeed(), 160.0f);
-	Guard->ActivityNumber = 0x1093;
-	TestEqual(TEXT("0x1093 is 160"), Guard->MaxYawSpeed(), 160.0f);
-	Guard->ActivityNumber = 0x1096;
-	TestEqual(TEXT("0x1096 is 160"), Guard->MaxYawSpeed(), 160.0f);
-	Guard->ActivityNumber = 0x1121;
-	TestEqual(TEXT("0x1121 is 30"), Guard->MaxYawSpeed(), 30.0f);
-	Guard->ActivityNumber = 0x1092;
-	TestEqual(TEXT("0x1092 falls to 45"), Guard->MaxYawSpeed(), 45.0f);
+	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0`: `_DAT_1049949c`.
+	TestEqual(TEXT("the base line is 45"), Guard->FElysiumNpcBase::MaxYawSpeed(), 45.0f);
 
-	// The idle and walk arms take the `debug_slow_*` cvars while the per-state capability byte's
-	// bit 7 is CLEAR, which it is for every state but combat (0x8f) and flee (0x85). The two cvars'
-	// names and defaults were read from the `ConVar` constructor's own argument strings at
-	// `0x105d902c` / `0x1057ba50` and `0x105d9008` / `0x105d9028`.
-	Guard->ActivityNumber = 1;
-	TestEqual(TEXT("idle out of combat is debug_slow_idle_yaw_speed's default, 20"),
-		Guard->MaxYawSpeed(), 20.0f);
-	Guard->ActivityNumber = 5;
-	TestEqual(TEXT("0x5 takes the same arm"), Guard->MaxYawSpeed(), 20.0f);
-	Guard->ActivityNumber = 9;
-	TestEqual(TEXT("walk out of combat is debug_slow_walk_yaw_speed's default, 25"),
-		Guard->MaxYawSpeed(), 25.0f);
-
-	// That gate is the per-state capability byte (+0x5b64), which is `ELYSIUM_NPC_WORD_IMPLICIT` —
-	// a pure function of the state here. Bit 7 is set only for the combat (0x8f) and flee (0x85)
-	// states, and a fixture-spawned guard is neither, which is why the two cvar arms above are the
-	// ones reached. The other side of that gate is the turning-anims branch, whose cvar
-	// `0x109247ec` is `debug_turning`, shipped "0".
+	// `CAI_BaseNPCTroika::MaxYawSpeed` `0x10297ce0`, on the activity word (+0x0fec).
+	const struct { int32 Activity; float Yaw; } Troika[] = {
+		{ 0x3b, 30.f }, { 0x3c, 30.f }, { 0x13, 160.f }, { 0x1093, 160.f }, { 0x1096, 160.f },
+		{ 0x1121, 30.f }, { 0x1092, 45.f },
+		// Out of combat (state byte bit 7 clear) the `debug_slow_*` cvars: "20" idle, "25" walk.
+		{ 1, 20.f }, { 5, 20.f }, { 9, 25.f },
+	};
+	for (const auto& Row : Troika)
+	{
+		Guard->ActivityNumber = Row.Activity;
+		TestEqual(*FString::Printf(TEXT("troika 0x%x"), Row.Activity), Guard->MaxYawSpeed(), Row.Yaw);
+	}
 	TestEqual(TEXT("an idle guard's state byte has bit 7 clear"),
 		static_cast<int32>(Guard->NpcStateFlags() & 0x80), 0);
-	TestFalse(TEXT("debug_turning ships off"), Guard->TurningAnimsEnabled());
-
-	// `PLAYING_FACE_ANIM` (word one, 0x8000000) suppresses the whole ladder.
+	// `PLAYING_FACE_ANIM` suppresses the whole ladder.
 	Guard->ActivityNumber = 0x13;
 	Guard->NpcFlags.Set(EElysiumNpcFlag::PLAYING_FACE_ANIM);
-	TestEqual(TEXT("a face anim suppresses even ACT_RUN's 160"), Guard->MaxYawSpeed(), 45.0f);
+	TestEqual(TEXT("a face anim answers 45 even on ACT_RUN"), Guard->MaxYawSpeed(), 45.0f);
 	Guard->NpcFlags.Clear(EElysiumNpcFlag::PLAYING_FACE_ANIM);
-
-	// The turning arm: `m_afMemory & 0x2000` beats every activity. `GetIdealYawSpeed()` is a
-	// generated slot stub answering 0, so the product with the ".15" scalar is 0 and the arm lands on
-	// retail's own floor `_DAT_104454c0` = 1.0.
+	// The turning arm beats every activity; `GetIdealYawSpeed()` answers 0, so it lands on 1.0.
 	Guard->BaseScheduleHost.MemoryBits |= 0x2000;
-	TestEqual(TEXT("the turning arm answers the recovered floor, 1.0"), Guard->MaxYawSpeed(), 1.0f);
-	TestEqual(TEXT("and that is what the arm itself answers for the Troika cvar"),
-		Guard->MaxYawSpeedTurningArm(TEXT("0x10924c94")), 1.0f);
-	TestEqual(TEXT("as it does for the Dog's"),
-		Guard->MaxYawSpeedTurningArm(TEXT("0x1093ad24")), 1.0f);
-	TestEqual(TEXT("and the Tzimisce's"),
-		Guard->MaxYawSpeedTurningArm(TEXT("0x1093c9fc")), 1.0f);
+	TestEqual(TEXT("the turning arm's floor, 1.0"), Guard->MaxYawSpeed(), 1.0f);
 	Guard->BaseScheduleHost.MemoryBits &= ~0x2000u;
 
-	// `CNPC_VDog` `0x10374130` and `CNPC_VTzimisce` `0x103ba020` replace the ladder wholesale; each
-	// is its class's slot, driven on an NPC of that class.
-	Dog->ActivityNumber = 0x13;
-	TestEqual(TEXT("the Dog's ACT_RUN is 40, not 160"), Dog->MaxYawSpeed(), 40.0f);
-	Dog->ActivityNumber = 0x3b;
-	TestEqual(TEXT("the Dog's 0x3b is 30"), Dog->MaxYawSpeed(), 30.0f);
-	Dog->ActivityNumber = 9;
-	TestEqual(TEXT("the Dog has no walk arm and answers 45"), Dog->MaxYawSpeed(), 45.0f);
-	// The Dog's idle arm has NO state gate in front of it, so it is the one place this suite can
-	// reach `0x10923e84` directly: with `TurningAnimsEnabled()` false it is consulted, and it is
-	// `debug_turning_speed`, shipped "90".
-	Dog->ActivityNumber = 1;
-	TestEqual(TEXT("the Dog's idle arm answers debug_turning_speed's 90"), Dog->MaxYawSpeed(), 90.0f);
-	Dog->ActivityNumber = 5;
-	TestEqual(TEXT("0x5 takes the same arm"), Dog->MaxYawSpeed(), 90.0f);
-	Tzim->ActivityNumber = 1;
-	TestEqual(TEXT("the Tzimisce's ACT_IDLE is 5"), Tzim->MaxYawSpeed(), 5.0f);
-	Tzim->ActivityNumber = 0xfc;
-	TestEqual(TEXT("0xfc takes the same arm"), Tzim->MaxYawSpeed(), 5.0f);
-	Tzim->ActivityNumber = 0x13;
-	TestEqual(TEXT("the Tzimisce's ACT_RUN is 30"), Tzim->MaxYawSpeed(), 30.0f);
-	Tzim->ActivityNumber = 9;
-	TestEqual(TEXT("and its default is 11, not 45"), Tzim->MaxYawSpeed(), 11.0f);
+	// `CNPC_VDog` `0x10374130`.
+	const struct { int32 Activity; float Yaw; } DogRows[] = {
+		{ 0x13, 40.f }, { 0x3b, 30.f }, { 9, 45.f }, { 1, 90.f }, { 5, 90.f },
+	};
+	for (const auto& Row : DogRows)
+	{
+		Dog->ActivityNumber = Row.Activity;
+		TestEqual(*FString::Printf(TEXT("dog 0x%x"), Row.Activity), Dog->MaxYawSpeed(), Row.Yaw);
+	}
+	// `CNPC_VTzimisce` `0x103ba020`.
+	const struct { int32 Activity; float Yaw; } TzimRows[] = {
+		{ 1, 5.f }, { 0xfc, 5.f }, { 0x13, 30.f }, { 9, 11.f },
+	};
+	for (const auto& Row : TzimRows)
+	{
+		Tzim->ActivityNumber = Row.Activity;
+		TestEqual(*FString::Printf(TEXT("tzimisce 0x%x"), Row.Activity), Tzim->MaxYawSpeed(), Row.Yaw);
+	}
+
+	// `CNPC_VMingXiao` `0x10394930`: +0x48 inside (0x1129, 0x112e), +0x44 outside.
+	auto Field = [](int32 Offset) { return Offset == 0x48 ? 7.0f : 3.0f; };
+	TestEqual(TEXT("mingxiao 0x112a reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112a, Field), 7.0f);
+	TestEqual(TEXT("mingxiao 0x112d reads +0x48"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112d, Field), 7.0f);
+	TestEqual(TEXT("mingxiao 0x1129 reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x1129, Field), 3.0f);
+	TestEqual(TEXT("mingxiao 0x112e reads +0x44"), FElysiumNpcMingXiao::MaxYawSpeedMingXiao(0x112e, Field), 3.0f);
+
+	// The rate the mover is handed: `UpdateYaw(int)` x 10 (degrees per tenth of a second).
+	TestEqual(TEXT("45 turns at 450 deg/s"), FElysiumNpcBase::MotorYawRateDegPerS(45.f), 450.0f);
+	TestEqual(TEXT("the int truncates 1.9 to 1"), FElysiumNpcBase::MotorYawRateDegPerS(1.9f), 10.0f);
 	return true;
 }
 
-// --- The console variables ------------------------------------------------------------------------
+// --- What the kernel states to the motor (0019/6 lane R3) -----------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorConVarsTest,
-	"Elysium.Substrate.NpcKernelMotor.ConVars", GElysiumNpcKernelMotorFlags)
-bool FElysiumNpcKernelMotorConVarsTest::RunTest(const FString&)
+namespace
 {
-	int32 Count = 0;
-	const FElysiumNpc::FRetailYawConVar* Rows = FElysiumNpc::RetailYawConVars(Count);
-	TestEqual(TEXT("six cvar rows"), Count, 6);
-	TestNotNull(TEXT("rows"), Rows);
-
-	// The two `MaxYawSpeed` constructs in its own body: name and default read from the `ConVar`
-	// constructor's argument strings.
-	TestEqual(TEXT("the idle cvar's default is 20"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x10924e94")), 20.0f);
-	TestEqual(TEXT("the walk cvar's default is 25"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x1092411c")), 25.0f);
-
-	// The other four are tunables-table rows (`docs/vtmb/npc-ai/convars.md`): the three turning
-	// scalars ship ".15" and `debug_turning_speed` ships "90".
-	TestEqual(TEXT("debug_turn_scalar is .15"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x10924c94")), 0.15f);
-	TestEqual(TEXT("debug_dog_turn_scalar is .15"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x1093ad24")), 0.15f);
-	TestEqual(TEXT("tzimisce_turn_scalar is .15"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x1093c9fc")), 0.15f);
-	TestEqual(TEXT("debug_turning_speed is 90"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x10923e84")), 90.0f);
-	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugTurningSpeed, 12.f);
-	TestEqual(TEXT("and a set value is what the ladder reads"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0x10923e84")), 12.0f);
-	ElysiumNpcTunables::ResetConVars();
-
-	int32 Tabled = 0;
-	for (int32 Index = 0; Index < Count; ++Index)
+	// The recording motor the services built for one NPC (its `Owner` is the NPC's handle).
+	FElysiumRecordingNpcMotor* KernelMotorR3RecordingMotorOf(const FElysiumRecordingServices& Services,
+		const FElysiumEntityHandle& Owner)
 	{
-		TestTrue(TEXT("every row carries its console name"), FCString::Strlen(Rows[Index].Name) > 0);
-		if (Rows[Index].Table != ElysiumNpcTunables::EConVar::Count)
+		for (const TUniquePtr<FElysiumRecordingNpcMotor>& Motor : Services.NpcMotors)
 		{
-			++Tabled;
-			TestEqual(TEXT("and a tabled row's name is the table's"), FString(Rows[Index].Name),
-				FString(ElysiumNpcTunables::ConVarRow(Rows[Index].Table).ConsoleName));
+			if (Motor.IsValid() && Motor->Owner == Owner)
+			{
+				return Motor.Get();
+			}
 		}
+		return nullptr;
 	}
-	TestEqual(TEXT("four of the six are read through the tunables table"), Tabled, 4);
-	TestEqual(TEXT("an address in no row answers 0"),
-		FElysiumNpc::RetailYawConVarValue(TEXT("0xdeadbeef")), 0.0f);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorRequestSeamsTest,
+	"Elysium.Substrate.NpcKernelMotor.RequestSeams", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorRequestSeamsTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_seams"), 4303);
+	FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
+	GuardDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	Builder.AddNpc(TEXT("other"), FVector(200.0, 0.0, 0.0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder), [](FElysiumRecordingServices& Services)
+		{
+			Services.bProvideNpcMotor = true;
+			Services.bNpcActivitiesResolve = true;
+		});
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
+	FElysiumRecordingNpcMotor* GuardMotor =
+		Guard != nullptr ? KernelMotorR3RecordingMotorOf(Fixture.Services, Guard->Handle) : nullptr;
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("other"), Other)
+		|| !TestNotNull(TEXT("the guard wears a recording motor"), GuardMotor))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard, Other });
+	FElysiumRecordingNpcMotor& Motor = *GuardMotor;
+
+	// The turn carries retail's rate: `0x102e1c10(yaw, -1)` stores `MaxYawSpeed()` (`0x102e1cf0`) and
+	// `UpdateYaw(-1)` turns by it, x10.
+	Guard->ActivityNumber = 0x13;
+	Guard->MotorSetIdealYawAndUpdate(90.f, -1.f);
+	TestEqual(TEXT("0x102e1cf0 stored ACT_RUN's 160"), Guard->MotorYawSpeedWord, 160.0f);
+	TestEqual(TEXT("and Face was handed 1600 deg/s"), Motor.RequestedYawSpeedDegPerS, 1600.0f);
+	Guard->MotorSetIdealYawAndUpdate(0.f, 10.f);
+	TestEqual(TEXT("a stated speed is stored and turned by"), Motor.RequestedYawSpeedDegPerS, 100.0f);
+
+	// A kernel move request carries the STORED word `+0x38` (the task's 10 above), not a fresh slot
+	// 516, and registers the slot 69 answers first.
+	Guard->NpcFlags.Set(EElysiumNpcFlag::NAV_IGNORE_NPC);
+	FElysiumNpcMoveRequest Leg;
+	Leg.DestinationCm = FVector(100.0, 0.0, 0.0);
+	TestTrue(TEXT("the leg is issued"), Guard->NavIssueLeg(Leg));
+	TestEqual(TEXT("the request carries the stored word x 10"), Motor.LastMoveRequest.YawSpeedDegPerS, 100.0f);
+	TestTrue(TEXT("NAV_IGNORE_NPC: the other NPC is registered with SetMoveIgnore"),
+		Motor.MoveIgnored.Contains(Other->Handle));
+	TestFalse(TEXT("never the NPC itself"), Motor.MoveIgnored.Contains(Guard->Handle));
+
+	// Mid-leg, a writer of `+0x38` (`0x102e1cf0`, as `SetActivityAndSequence`'s tail runs it) reaches
+	// the body's turn on the next think; an unchanged word states nothing.
+	const int32 YawCallsBefore = Motor.YawSpeedCalls;
+	Guard->MotorStoreMaxYawSpeed();
+	Guard->MotorThinkUpkeep();
+	TestEqual(TEXT("the re-stored word is handed mid-leg"), Motor.MidMoveYawSpeedDegPerS, 1600.0f);
+	TestEqual(TEXT("once"), Motor.YawSpeedCalls, YawCallsBefore + 1);
+	Guard->MotorThinkUpkeep();
+	TestEqual(TEXT("an unchanged word is not re-stated"), Motor.YawSpeedCalls, YawCallsBefore + 1);
+
+	// Slot 69 is asked every think while the move is live: an answer that changes mid-leg is seen.
+	Guard->NpcFlags.Clear(EElysiumNpcFlag::NAV_IGNORE_NPC);
+	Guard->MotorThinkUpkeep();
+	TestFalse(TEXT("a withdrawn answer is cleared within a think"), Motor.MoveIgnored.Contains(Other->Handle));
+	Guard->NpcFlags.Set(EElysiumNpcFlag::NAV_IGNORE_NPC);
+	Guard->MotorThinkUpkeep();
+	TestTrue(TEXT("a new answer is registered within a think"), Motor.MoveIgnored.Contains(Other->Handle));
+
+	// Every `Motor->Stop()` site clears the set and ends the upkeep.
+	Guard->StopMoving();
+	TestEqual(TEXT("a stop clears exactly what was registered"), Motor.MoveIgnored.Num(), 0);
+	Guard->MotorThinkUpkeep();
+	TestEqual(TEXT("and no think re-registers after it"), Motor.MoveIgnored.Num(), 0);
+	TestTrue(TEXT("a second leg registers again"), Guard->NavIssueLeg(Leg));
+	TestTrue(TEXT("with the answer standing"), Motor.MoveIgnored.Contains(Other->Handle));
+	Guard->ClearMoveIgnores();
+	TestEqual(TEXT("the move's end clears exactly what was registered"), Motor.MoveIgnored.Num(), 0);
+	Guard->NpcFlags.Clear(EElysiumNpcFlag::NAV_IGNORE_NPC);
+
+	// The hull resize reaches the capsule seam, in centimetres.
+	const int32 HullsBefore = Motor.HullSizes.Num();
+	Guard->SetHullSizeSmall(/*bForce=*/true);
+	if (TestEqual(TEXT("SetHullSizeSmall resizes through SetHullSize"), Motor.HullSizes.Num(), HullsBefore + 1))
+	{
+		TestTrue(TEXT("the box is the kernel's, in cm"), Motor.HullSizes.Last().Max.Z
+			== Guard->LastSetSizeMaxsUnits.Z * ElysiumMove::U);
+	}
+
+	// The facing-while-moving target: the queue's blend, handed on the think; slot 7 leaves it; the
+	// entry's end stamp drops it.
+	FElysiumNpcBase::FFacingTargetRequest Face;
+	Face.MotorSlot = 13;
+	Face.Position = FVector(0.0, 500.0, 0.0);
+	Face.Importance = 1.0f;
+	Face.Duration = 1.0f;
+	Guard->MotorAddFacingTarget(Face);
+	Guard->MotorThinkUpkeep();
+	TestTrue(TEXT("the queue's blend is the mover's facing target"),
+		Motor.FacingTarget.IsSet() && Motor.FacingTarget.GetValue().Equals(Face.Position, 0.01));
+	Guard->ClearFacingTarget();
+	Guard->MotorThinkUpkeep();
+	TestTrue(TEXT("0x102e11f0 does not touch the queue"), Motor.FacingTarget.IsSet());
+	Fixture.Advance(Guard->World->NowSeconds() + 2.0);
+	Guard->MotorThinkUpkeep();
+	TestFalse(TEXT("past its duration the entry expires and the body faces the path"),
+		Motor.FacingTarget.IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorWerewolfRouteTest,
+	"Elysium.Substrate.NpcKernelMotor.WerewolfHasPathRoute", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorWerewolfRouteTest::RunTest(const FString&)
+{
+	// `CNPC_VWerewolf::HasPath` `0x103d0db0` -> `0x102ee380(start, end)` -> `0x102fdcc0`: the motor's
+	// two-point route query, the start stated explicitly.
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_wolf_route"), 4304);
+	FElysiumEntityDef& WolfDef = Builder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
+	WolfDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder), [](FElysiumRecordingServices& Services)
+		{
+			Services.bProvideNpcMotor = true;
+			Services.bNpcActivitiesResolve = true;
+		});
+	FElysiumNpcWerewolf* Wolf = Fixture.NpcAs<FElysiumNpcWerewolf>(TEXT("wolf"));
+	FElysiumRecordingNpcMotor* WolfMotor =
+		Wolf != nullptr ? KernelMotorR3RecordingMotorOf(Fixture.Services, Wolf->Handle) : nullptr;
+	if (!TestNotNull(TEXT("wolf"), Wolf) || !TestNotNull(TEXT("the wolf wears a motor"), WolfMotor))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Wolf });
+	FElysiumRecordingNpcMotor& Motor = *WolfMotor;
+	const FVector StartUnits(10.0, 20.0, 0.0);
+	const FVector EndUnits(40.0, 20.0, 0.0);
+	TestFalse(TEXT("no mesh behind the motor: retail's no-path false"), Wolf->WerewolfHasPath(StartUnits, EndUnits));
+	Motor.RouteQuery = [](const FVector&, float& Length) { Length = 76.2f; return true; };
+	TestTrue(TEXT("a route between the two points: true"), Wolf->WerewolfHasPath(StartUnits, EndUnits));
+	if (TestTrue(TEXT("the start was stated"), Motor.RouteStarts.Num() > 0 && Motor.RouteStarts.Last().IsSet()))
+	{
+		TestEqual(TEXT("in centimetres"), Motor.RouteStarts.Last().GetValue(), StartUnits * ElysiumMove::U);
+	}
+	Motor.RouteQuery = [](const FVector&, float&) { return false; };
+	TestFalse(TEXT("the mesh answered no route: false"), Wolf->WerewolfHasPath(StartUnits, EndUnits));
 	return true;
 }
 
@@ -536,12 +577,7 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard, Other });
 
-	// Slot 210 `0x10027370` — the three shared statics `DAT_1070d1b0/b4/b8` sit in `.data`'s
-	// zero-initialised tail and nothing writes them, so the contribution is `vec3_origin`.
-	FVector GroundVelocity(1.0, 2.0, 3.0);
-	Guard->GetGroundVelocityToApply(GroundVelocity);
-	TestEqual(TEXT("slot 210 writes vec3_origin over whatever was there"), GroundVelocity,
-		FVector::ZeroVector);
+	// (Slot 210's body is the character movement component's since 0019/6: its case is gone.)
 
 	// Slot 166 `0x10026f80`: a null candidate is standable, a non-null one defers to its
 	// `IsStandable()` — a SEAM answering false.
@@ -560,13 +596,6 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("slot 153 answers false with no motor"), Guard->IsMoving());
 	TestFalse(TEXT("and so does the seam it forwards to"), Guard->NavIsGoalActive());
 
-	// Slot 133 `0x101c1720`. Neither the mover words nor `m_pfnMoveDone` exist here; what is
-	// asserted is that the dispatch was reached.
-	TestEqual(TEXT("no move-done dispatch yet"), Guard->MotorSeams.MoveDone, 0);
-	Guard->MoveDone();
-	Guard->MoveDone();
-	TestEqual(TEXT("two dispatches"), Guard->MotorSeams.MoveDone, 2);
-
 	// Slot 575 `0x102bf4a0`. The gate needs an enemy, `MOVE_FACE_ENEMY`, an active weapon AND the
 	// weapon's `0x6000` capability bits — the last of which is a SEAM answering 0, so the Troika
 	// gate closes before the base rung is ever reached.
@@ -584,11 +613,7 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	// `AutoMovement` `0x10280a50`. The recovered GATE is `GetMoveType() == 4` with `FL_FROZEN 0x400`
 	// clear; both fail here, so the apply is never reached — which is the whole point of porting the
 	// gate rather than the extraction.
-	TestEqual(TEXT("no interval movement applied yet"),
-		Guard->MotorSeams.IntervalMovementApplied, 0);
 	TestFalse(TEXT("AutoMovement refuses at move type != 4"), Guard->AutoMovement());
-	TestEqual(TEXT("and the motor was never asked"),
-		Guard->MotorSeams.IntervalMovementApplied, 0);
 	return true;
 }
 
@@ -634,10 +659,10 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestFalse(TEXT("0x102ee6a0: no active goal refuses"), Guard->NavLinkActivity(Activity));
 	TestEqual(TEXT("so the resolved activity is ACT_IDLE"), Guard->ResolveLinkActivity(), 1);
 
-	// `FUN_10382d20` `0x10382d20` — the cancel half of the same unrecovered link object.
-	TestEqual(TEXT("no cancels yet"), Heng->MotorSeams.LinkFacingCancels, 0);
+	// `FUN_10382d20` `0x10382d20` — `UpdateYaw(-1)`, a one-line forward since 0019/6.
+	const int32 YawUpdatesBefore = Heng->MotorUpdateYawCalls;
 	Heng->ClearLinkActivity();
-	TestEqual(TEXT("one cancel"), Heng->MotorSeams.LinkFacingCancels, 1);
+	TestEqual(TEXT("one yaw update"), Heng->MotorUpdateYawCalls, YawUpdatesBefore + 1);
 
 	// `CAI_Navigator::OnNavFailed` `0x102eeae0` — `TaskFail`, then the ideal activity from the link,
 	// then the failed latch. `CAI_Navigator#9` `0x102eeb50` is a tail-jump into the same body.
@@ -655,7 +680,7 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestTrue(TEXT("ResumeScheduledMove sets bShouldMove even with no active goal"),
 		Guard->BaseScheduleHost.bShouldMove);
 
-	// `FUN_1029f6c0` `0x1029f6c0` — the node-graph read. This world has no network, so every index
+	// `PatrolNodeInterestRecord` — the node-graph read. This world has no network, so every index
 	// is out of range, which is retail's own counted-refusal arm (the networked arms are
 	// `Elysium.Substrate.PlaceSeams.Patrol`).
 	TestEqual(TEXT("an empty network answers 0 for any route step"), Guard->NavNodeWordAt(0), 0);
@@ -758,23 +783,17 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	Fixture.Services.TraceRetailQuery = nullptr;
 
 	// `CAI_BaseNPC::CheckOnGround` `0x1026e5e0`. Without condition 0x73 and at nav type 0 the body
-	// stamps its deadline (`curtime + 0.5`, `_DAT_104454d0`) and then asks for the trace.
+	// stamps its deadline (`curtime + 0.5`, `_DAT_104454d0`) and then measures the floor through the
+	// floor facts seam (`IElysiumNpcMotor::SampleFloor`, story 6), which replaced its hull trace.
 	const EElysiumNpcCond OnGround = static_cast<EElysiumNpcCond>(0x73);
+	// This world stands no movement component: the deadline is stamped, the seam answers nothing and
+	// neither ground write runs. The floor arms are `NpcKernelMotor.CheckOnGroundFloor`'s.
 	TestEqual(TEXT("the deadline starts at 0"), Guard->CheckOnGroundTime, 0.0);
-	const int32 TracesBefore = Guard->MotorSeams.HullTraces;
 	Guard->CheckOnGround();
 	TestTrue(TEXT("CheckOnGround stamped its 0.5-second deadline"),
 		FMath::IsNearlyEqual(Guard->CheckOnGroundTime, Fixture.World.NowSeconds() + 0.5, 1e-6));
-	TestEqual(TEXT("and asked for one hull trace"), Guard->MotorSeams.HullTraces,
-		TracesBefore + 1);
-	TestFalse(TEXT("which the seam refused, so the ground condition is untouched"),
+	TestFalse(TEXT("a world with no movement component writes nothing"),
 		Guard->Cognition.Conditions.Has(OnGround));
-
-	// The deadline gate: a second call inside the window does nothing at all.
-	const int32 TracesAfterFirst = Guard->MotorSeams.HullTraces;
-	Guard->CheckOnGround();
-	TestEqual(TEXT("a second call inside the 0.5-second window traces nothing"),
-		Guard->MotorSeams.HullTraces, TracesAfterFirst);
 
 	// The `HasCondition(0x73)` arm: with the condition set and FL_ONGROUND clear and nav type 0 the
 	// body returns without clearing it; with either of those two false it clears it.
@@ -1207,7 +1226,7 @@ bool FElysiumNpcKernelMotorStoppingDistanceTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 
-	// `CAI_Motor#16` `0x102e1300`: `max(0.5 * v^2 / decel, 10.0)` when the deceleration source
+	// `CAI_Motor#16`: `max(0.5 * v^2 / decel, 10.0)` when the deceleration source
 	// answers a positive number, and `_DAT_1044e664` = 10.0 when it does not. With no motor at all
 	// the floor is the answer, and that floor is retail's own, not a port constant.
 	TestEqual(TEXT("no motor answers retail's floor, 10.0"),
@@ -1215,48 +1234,133 @@ bool FElysiumNpcKernelMotorStoppingDistanceTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Slot 153's other body: `CAISound::FUN_10026e70` ----------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorBaseIsMovingTest,
-	"Elysium.Substrate.NpcKernelMotor.BaseEntityIsMoving", GElysiumNpcKernelMotorFlags)
-bool FElysiumNpcKernelMotorBaseIsMovingTest::RunTest(const FString&)
+// `CAI_BaseNPC::CheckOnGround` `0x1026e5e0`'s measurement over the floor facts seam
+// (`IElysiumNpcMotor::SampleFloor`, story 6). The rule's gates are `NpcKernelMotor.Probes`'.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorCheckOnGroundFloorTest,
+	"Elysium.Substrate.NpcKernelMotor.CheckOnGroundFloor", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorCheckOnGroundFloorTest::RunTest(const FString&)
 {
-	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_ismoving"), 4312);
-	Builder.AddNpc(TEXT("guard"));
-	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_check_on_ground"), 4307);
+	// Without a model key the leaf builds no body, and without a body no motor.
+	FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
+	GuardDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder),
+		[](FElysiumRecordingServices& Services) { Services.bProvideNpcMotor = true; });
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
-	if (!TestNotNull(TEXT("guard"), Guard))
+	FElysiumPlayer* Player = Fixture.Player();
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("player"), Player))
 	{
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
+	Guard->CheckOnGroundTime = 0.0;
+	const EElysiumNpcCond OnGround = static_cast<EElysiumNpcCond>(0x73);
+	FElysiumRecordingNpcMotor* GuardMotor = nullptr;
+	for (const TUniquePtr<FElysiumRecordingNpcMotor>& Each : Fixture.Services.NpcMotors)
+	{
+		if (Each->Owner == Guard->Handle)
+		{
+			GuardMotor = Each.Get();
+		}
+	}
+	if (!TestNotNull(TEXT("the guard moves through a recording motor"), GuardMotor))
+	{
+		return false;
+	}
+	GuardMotor->bReportsFloor = true;
+	GuardMotor->Floor = FElysiumRecordingNpcMotor::RetailStandingFloor();
+	const int32 SamplesBefore = GuardMotor->FloorSamples;
+	Guard->CheckOnGround();
+	TestTrue(TEXT("CheckOnGround stamped its 0.5-second deadline"),
+		FMath::IsNearlyEqual(Guard->CheckOnGroundTime, Fixture.World.NowSeconds() + 0.5, 1e-6));
+	TestEqual(TEXT("and sampled the floor once"), GuardMotor->FloorSamples, SamplesBefore + 1);
+	TestFalse(TEXT("standing on the static world leaves the ground condition untouched"),
+		Guard->Cognition.Conditions.Has(OnGround));
 
-	// `0x10026e70`, all three components against `vec3_origin` (`DAT_1070d1b0..b8`).
-	Guard->Velocity = FVector::ZeroVector;
-	TestFalse(TEXT("0x10026e70: a zero velocity is not moving"),
-		FElysiumNpcBase::BaseEntityIsMoving(*Guard));
+	// The deadline gate: a second call inside the window does nothing at all.
+	Guard->CheckOnGround();
+	TestEqual(TEXT("a second call inside the 0.5-second window samples nothing"),
+		GuardMotor->FloorSamples, SamplesBefore + 1);
 
-	// One component differing is enough: retail's test is an AND of three equalities, so any
-	// inequality falls through to `return 1`.
-	Guard->Velocity = FVector(0.0, 0.0, 1.0);
-	TestTrue(TEXT("0x10026e70: Z alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
-	Guard->Velocity = FVector(0.0, 1.0, 0.0);
-	TestTrue(TEXT("0x10026e70: Y alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
-	Guard->Velocity = FVector(1.0, 0.0, 0.0);
-	TestTrue(TEXT("0x10026e70: X alone is moving"), FElysiumNpcBase::BaseEntityIsMoving(*Guard));
+	// A named floor entity is ground too (`tr.m_pEnt != GetGroundEntity()` -> slot 208; slots 208 /
+	// 209 are still generated stubs, so the write is not read back here).
+	Guard->CheckOnGroundTime = Fixture.World.NowSeconds();
+	GuardMotor->Floor.GroundEntityHandle = Player->Handle;
+	Guard->CheckOnGround();
+	TestFalse(TEXT("standing on an entity is ground"), Guard->Cognition.Conditions.Has(OnGround));
 
-	// EXACT equality, not a tolerance — a velocity retail calls moving must not be rounded away.
-	Guard->Velocity = FVector(0.0, 0.0, 1e-8);
-	TestTrue(TEXT("0x10026e70: the comparison is exact, so a tiny velocity is still moving"),
-		FElysiumNpcBase::BaseEntityIsMoving(*Guard));
+	// Retail's trace reaches 4.0 units below the feet (`_DAT_10449148`): a floor further than that
+	// is "fraction 1.0" -- condition 0x73 set (and slot 208 handed null).
+	Guard->CheckOnGroundTime = Fixture.World.NowSeconds();
+	GuardMotor->Floor = FElysiumRecordingNpcMotor::RetailStandingFloor();
+	GuardMotor->Floor.FloorDistanceCm = 4.5f * ElysiumMove::U;
+	Guard->CheckOnGround();
+	TestTrue(TEXT("no floor within 4.0 units sets condition 0x73"), Guard->Cognition.Conditions.Has(OnGround));
+	Guard->Cognition.Conditions.Clear(OnGround);
+	Guard->CheckOnGroundTime = Fixture.World.NowSeconds();
+	GuardMotor->Floor.FloorDistanceCm = 3.9f * ElysiumMove::U;
+	Guard->CheckOnGround();
+	TestFalse(TEXT("a floor inside the reach is ground"), Guard->Cognition.Conditions.Has(OnGround));
 
-	// This body is NOT the NPC's slot-153 answer: every class on the NPC line carries `0x10280300`,
-	// which is the navigator forward, and it answers independently of the velocity word above.
-	Guard->Velocity = FVector(1.0, 0.0, 0.0);
-	TestFalse(TEXT("slot 153 on an NPC is 0x10280300, the navigator forward, not this body"),
-		Guard->IsMoving());
-	Guard->Velocity = FVector::ZeroVector;
+	// No movement component: the seam answers nothing and neither write runs.
+	Guard->CheckOnGroundTime = Fixture.World.NowSeconds();
+	GuardMotor->bReportsFloor = false;
+	Guard->CheckOnGround();
+	TestFalse(TEXT("a headless motor writes nothing"), Guard->Cognition.Conditions.Has(OnGround));
+	GuardMotor->bReportsFloor = true;
+	GuardMotor->Floor = FElysiumRecordingNpcMotor::RetailStandingFloor();
 	return true;
 }
 
+// The character half of the kernel's trace filters (`KernelTraceKeepsCharacter`): the candidate's
+// slot 91 `ShouldCollide` (`0x100b4de0`) runs ahead of the slot-68 vetoes, as `CTraceFilterNav`
+// (`0x102e3110` / `0x102e32d0`) and `CTraceFilterSimple` run it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorTraceFilterShouldCollideTest,
+	"Elysium.Substrate.NpcKernelMotor.TraceFilterShouldCollide", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorTraceFilterShouldCollideTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_trace_filter"), 4308);
+	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpc(TEXT("other"), FVector(200.0, 0.0, 0.0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpc* Other = Fixture.Npc(TEXT("other"));
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("other"), Other))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard, Other });
+
+	FElysiumRetailTraceCharacter OtherHit;
+	OtherHit.Entity = Other->Handle;
+	OtherHit.Fraction = 0.4f;
+	Fixture.Services.TraceRetailQuery = [&OtherHit](const FElysiumRetailTrace& Asking,
+		FElysiumRetailTraceResult& Out)
+	{
+		Out.Fraction = 1.0f;
+		Out.EndPosCm = Asking.EndCm;
+		Out.Characters.Add(OtherHit);
+		return true;
+	};
+	auto Run = [Guard](int32 Mask)
+	{
+		FElysiumNpcBase::FKernelHullTrace Out;
+		Guard->KernelHullTrace(FVector(0.0, 0.0, 10.0), FVector(100.0, 0.0, 10.0), FVector::ZeroVector,
+			FVector::ZeroVector, Mask, Out);
+		return Out.Fraction;
+	};
+	constexpr int32 MaskNpcSolid = 0x202400b;       // MONSTER set, 0x4000000 clear
+	constexpr int32 DebrisOverride = 0x4000000;
+
+	Other->CollisionGroup = 0;
+	TestEqual(TEXT("a group-0 NPC is solid"), Run(MaskNpcSolid), 0.4f);
+	Other->CollisionGroup = 1;   // COLLISION_GROUP_DEBRIS
+	TestEqual(TEXT("slot 91 drops a debris-group NPC under a mask without 0x4000000"),
+		Run(MaskNpcSolid), 1.0f);
+	TestEqual(TEXT("and keeps it when the mask carries 0x4000000"), Run(MaskNpcSolid | DebrisOverride), 0.4f);
+	Other->CollisionGroup = 0;
+
+	Fixture.Services.TraceRetailQuery = nullptr;
+	return true;
+}
 #endif  // WITH_DEV_AUTOMATION_TESTS

@@ -77,7 +77,6 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumLocalIdSpace.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumNpcGait.h"
@@ -776,18 +775,19 @@ int32 FElysiumNpcAsianVampire::StartTaskSlot442(void* Task)
 static const TCHAR* const GSpecies19FileBach = TEXT("NPC_VBach.cpp");                     // 0x1062eadc
 static const TCHAR* const GSpecies19BachRifle = TEXT("item_w_rem_m_700_bach");            // 0x105c1c70
 static const TCHAR* const GSpecies19BachKatana = TEXT("item_w_katana");                   // 0x10587668
-// The sniper-wait constants, read out of the pinned image (none is in the tunables table):
-static constexpr float GSpecies19BachNonRifleWaitCut = 0.35f;         // `_DAT_1046dcdc`
-static constexpr float GSpecies19BachAimBase = 0.2f;                  // `_DAT_10451ab4`
-static constexpr float GSpecies19BachAimPerStatC = 0.08f;             // `_DAT_104aaac0`
-static constexpr float GSpecies19BachAimPerStat109 = 0.1f;            // `_DAT_104491b4`
-static constexpr float GSpecies19BachWarningLead = 1.5f;              // `_DAT_1044f02c`
-static constexpr float GSpecies19BachCamperShort = 0.15f;             // `_DAT_104aaac4`
-static constexpr float GSpecies19BachCamperNever = 1000000000.0f;     // `_DAT_104aaac8`
-static constexpr float GSpecies19BachShieldInterval = 6.0f;           // `_DAT_1046bac0`
-static constexpr float GSpecies19BachShieldDuration = 3.0f;           // `_DAT_10449258`
+// The sniper-wait constants, read out of the pinned image (each bound to its tunables row, 0019/6 Q4):
+static constexpr float GSpecies19BachNonRifleWaitCut = ElysiumNpcTunables::ThirtyFiveHundredths;         // `_DAT_1046dcdc`
+static constexpr float GSpecies19BachAimBase = ElysiumNpcTunables::Fifth;                  // `_DAT_10451ab4`
+static constexpr float GSpecies19BachAimPerStatC = ElysiumNpcTunables::BachAimPerStatC;             // `_DAT_104aaac0`
+static constexpr float GSpecies19BachAimPerStat109 = ElysiumNpcTunables::Tenth;            // `_DAT_104491b4`
+static constexpr float GSpecies19BachWarningLead = ElysiumNpcTunables::OneAndHalf;              // `_DAT_1044f02c`
+static constexpr float GSpecies19BachCamperShort = ElysiumNpcTunables::FifteenHundredths;             // `_DAT_104aaac4`
+static constexpr float GSpecies19BachCamperNever = ElysiumNpcTunables::BachWarningWaitFar;     // `_DAT_104aaac8`
+static constexpr float GSpecies19BachShieldInterval = ElysiumNpcTunables::Six;           // `_DAT_1046bac0`
+static constexpr float GSpecies19BachShieldDuration = ElysiumNpcTunables::InterestCubicThree;           // `_DAT_10449258`
 // `DAT_1062d210` -- the skip-to-warning time per teleport state, read out of the pinned image.
-static constexpr float GSpecies19BachSkipToWarning[4] = { 1.3f, 1.0f, 1.2f, 1.2f };
+static constexpr float GSpecies19BachSkipToWarning[4] = { ElysiumNpcTunables::BachSkipToWarning0, ElysiumNpcTunables::BachSkipToWarning1,
+	ElysiumNpcTunables::BachSkipToWarning2, ElysiumNpcTunables::BachSkipToWarning3 };
 // `CAI_BaseNPC::CapabilitiesAdd/Remove(1)` -- capability bit 0.
 static constexpr int32 GSpecies19BachCapabilityBit = 0x1;
 
@@ -1080,11 +1080,11 @@ int32 FElysiumNpcBach::StartTaskSlot442(void* Task)
 static const TCHAR* const GSpecies19FileChangBros = TEXT("NPC_VChangBros.cpp");           // 0x10630ff8
 // `_DAT_104ada54` -- 1.5, the energy-charge delay; `_DAT_104ada40` -- 4.0, the united delay;
 // `_DAT_104ada5c` -- 50.0, the blast point's lift; `DAT_104ada58` -- 1000.0 (`0x447a0000`), the AOE
-// radius. None is in the tunables table.
-static constexpr float GSpecies19ChangEnergyChargeDelay = 1.5f;
-static constexpr float GSpecies19ChangUnitedDelay = 4.0f;
-static constexpr float GSpecies19ChangBlastLift = 50.0f;
-static constexpr float GSpecies19ChangBlastRadius = 1000.0f;
+// radius. Each is a tunables row (0019/6 Q4).
+static constexpr float GSpecies19ChangEnergyChargeDelay = ElysiumNpcTunables::ChangBrosEnergyChargeDelay;
+static constexpr float GSpecies19ChangUnitedDelay = ElysiumNpcTunables::ChangBrosUnitedDelay;
+static constexpr float GSpecies19ChangBlastLift = ElysiumNpcTunables::ChangCenterEmitterZOffset;
+static constexpr float GSpecies19ChangBlastRadius = ElysiumNpcTunables::ChangBrosBlastRadius;
 // `m_bfAINPCFlags2` (+0x14bc) mask task `0x153` keeps (`AND EAX,0x7ffffffd`, `0x1036b8e2`).
 static constexpr uint32 GSpecies19ChangJumpFlags2 = 0x80000002u;
 
@@ -1256,8 +1256,8 @@ static const TCHAR* const GSpecies19GargoyleExerts[3] = {
 	TEXT("character/monster/gargoyle/exert_heavy_3.wav"),
 };
 
-// `_DAT_1046bad0` -- 400.0, the gib impulse's forward scale (not in the tunables table).
-static constexpr float GSpecies19GargoyleGibForwardScale = 400.0f;
+// `_DAT_1046bad0` -- 400.0, the gib impulse's forward scale (`ElysiumNpcTunables::FourHundred`).
+static constexpr float GSpecies19GargoyleGibForwardScale = ElysiumNpcTunables::FourHundred;
 
 void FElysiumNpcGargoyle::TransformationStartSlot618()
 {
@@ -1546,9 +1546,9 @@ int32 FElysiumNpcHengeyokai::StartTaskSlot442(void* Task)
 static constexpr int32 GSpecies19ManBatFlyHintType = 20000;           // `PUSH 0x4e20`
 static constexpr float GSpecies19ManBatFlyRadius = 5000.0f;           // `PUSH 0x459c4000`
 // `_DAT_10457f5c` -- 500.0, the scatter speed of task `0x14d`; `_DAT_1044e664` -- 10.0, the lift of
-// task `0x15d`. Read out of the pinned image; neither is in the tunables table.
-static constexpr float GSpecies19ManBatScatterSpeed = 500.0f;
-static constexpr float GSpecies19ManBatLift = 10.0f;
+// task `0x15d`. Read out of the pinned image; each is a tunables row (0019/6 Q4).
+static constexpr float GSpecies19ManBatScatterSpeed = ElysiumNpcTunables::FiveHundred;
+static constexpr float GSpecies19ManBatLift = ElysiumNpcTunables::Ten;
 // `0x3dcccccd` / `0x3f000000` -- the `RandomFloat(0.1, 0.5)` climb factor of task `0x14d`.
 static constexpr float GSpecies19ManBatClimbMin = 0.1f;
 static constexpr float GSpecies19ManBatClimbMax = 0.5f;
@@ -2207,7 +2207,7 @@ static constexpr float GSpecies19TentacleNodeLimit = 30000.0f;       // `PUSH 0x
 // The evade jitter bands (`0x42700000` 60.0, `0x42a00000` 80.0), the companion push (`_DAT_104492b8`
 // 200.0) and its jitter (`0x41a00000` 20.0), the evade re-arm (`_DAT_10456854` 600.0), the scatter
 // radius squared (`_DAT_1049dfe4` 262144.0 = 512^2), and the hide-ready draw (`0x40a00000` 5.0 ..
-// `0x41700000` 15.0). Read out of the pinned image; none is in the tunables table.
+// `0x41700000` 15.0). Read out of the pinned image; the `_DAT_` cells among them are tunables rows (0019/6 Q4).
 static constexpr float GSpecies19TentacleNarrowBand = 60.0f;
 static constexpr float GSpecies19TentacleWideBand = 80.0f;
 static constexpr float GSpecies19TentaclePush = 200.0f;
@@ -2251,7 +2251,7 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 	auto EvadeGoal = [this](const FVector& PointUnits, const TCHAR* Reason)
 	{
 		(void)Reason;
-		return Species19SetGoal(*this, 4, PointUnits * ElysiumMove::U, 0x13, -1.f, 0);
+		return Species19SetGoal(*this, 4, PointUnits * ElysiumMove::U, 0x13, ElysiumNpcTunables::NavGoalToleranceKeepShootHint, 0);
 	};
 
 	switch (TaskLocal)                                                   // 0x1039c4d5 ADD -0x8b; JA 0x1039d249 (0x1039c4df; 0x1039c4ed table jump)
@@ -2462,7 +2462,7 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 	{
 		// The hide behind the companion: 200 units beyond it along enemy -> companion, jittered by
 		// +-20 per axis (drawn z, then y, then x).
-		FElysiumEntity* Companion = MingXiaoTentacleCompanion();          // 0x1039cc3d 0x1001105e -> 0x1039ede0
+		FElysiumEntity* Companion = MingXiaoTentacleCompanion();          // 0x1039cc3d 0x1001105e
 		FElysiumEntity* Enemy = static_cast<const FElysiumNpc*>(this)->GetEnemy();   // 0x1039cc48 slot 167
 		if (Companion == nullptr || Enemy == nullptr)                     // 0x1039cc54 / 0x1039cc5c
 		{
@@ -2557,18 +2557,19 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 static const TCHAR* const GSpecies19FileSabbatLeader = TEXT("NPC_VSabbatLeader.cpp");     // 0x1064ed7c
 static const TCHAR* const GSpecies19SabbatAmbientRun =
 	TEXT("Character/Monster/Andrei_Transformed/ambient_run.wav");                         // 0x1064ea40
-// The constants the leader's arms read, out of the pinned image (none is in the tunables table):
-static constexpr float GSpecies19SabbatDiveJumpHeight = 200.0f;      // `_DAT_104c3cb0`
-static constexpr float GSpecies19SabbatLeapHeight = 35.0f;           // `DAT_104c3cb4`
-static constexpr float GSpecies19SabbatLeapBackoff = 25.0f;          // `DAT_104c3cb8`
-static constexpr float GSpecies19SabbatDiveOutFaceSpeed = 50.0f;     // `DAT_104c3cec`
-static constexpr float GSpecies19SabbatWarningLead = 1.0f;           // `_DAT_104c3d04`
-static constexpr float GSpecies19SabbatBlastLift = 80.0f;            // `_DAT_104c3d0c`
-static constexpr float GSpecies19SabbatBlastRadius = 350.0f;         // `DAT_104c3d10`
+// The constants the leader's arms read, out of the pinned image (each bound to its tunables row, 0019/6 Q4):
+static constexpr float GSpecies19SabbatDiveJumpHeight = ElysiumNpcTunables::SabbatDiveJumpHeight;      // `_DAT_104c3cb0`
+static constexpr float GSpecies19SabbatLeapHeight = ElysiumNpcTunables::SabbatLeapHeight;           // `DAT_104c3cb4`
+static constexpr float GSpecies19SabbatLeapBackoff = ElysiumNpcTunables::SabbatLeadScale;          // `DAT_104c3cb8`
+static constexpr float GSpecies19SabbatDiveOutFaceSpeed = ElysiumNpcTunables::SabbatChargeYawSpeed;     // `DAT_104c3cec`
+static constexpr float GSpecies19SabbatWarningLead = ElysiumNpcTunables::SabbatWarningLead;           // `_DAT_104c3d04`
+static constexpr float GSpecies19SabbatBlastLift = ElysiumNpcTunables::SabbatBlastLift;            // `_DAT_104c3d0c`
+static constexpr float GSpecies19SabbatBlastRadius = ElysiumNpcTunables::SabbatBlastRadius;         // `DAT_104c3d10`
 static constexpr float GSpecies19SabbatDiveGravity = 0.1f;           // `0x3dcccccd` into `m_flGravity`
 // `_DAT_1093c340`, the dive's flight time: `staticinit_103a5820` writes `_DAT_104c3cf4 * _DAT_104c3d2c`
 // = 33.0 * (1/30) = 1.1.
-static constexpr float GSpecies19SabbatDiveFlightTime = 33.0f * 0.033333335f;
+static constexpr float GSpecies19SabbatDiveFlightTime =
+	ElysiumNpcTunables::SabbatDiveFlightBase * ElysiumNpcTunables::SabbatDiveFlightUnit;
 // `m_bfAINPCFlags2` (+0x14bc) bits task `0x15f` raises (`OR ECX,0x80000800`, `0x103a8339`).
 static constexpr uint32 GSpecies19SabbatFlags2 = 0x80000800u;
 
@@ -2878,8 +2879,8 @@ int32 FElysiumNpcScurrying::StartTaskSlot442(void* Task)
 // =================================================================================================
 
 static const TCHAR* const GSpecies19FileSheriffMan = TEXT("npc_vsheriffman.cpp");         // 0x10651388
-// `DAT_104c6154` -- 300.0 (`0x43960000`), the land-blast AOE radius (not in the tunables table).
-static constexpr float GSpecies19SheriffBlastRadius = 300.0f;
+// `DAT_104c6154` -- 300.0 (`0x43960000`), the land-blast AOE radius (a tunables row).
+static constexpr float GSpecies19SheriffBlastRadius = ElysiumNpcTunables::SheriffBlastRadius;
 
 void FElysiumNpcSheriffMan::SheriffCreateEmitter(const TCHAR* Name, const FVector& PositionUnits)
 {
@@ -2996,7 +2997,7 @@ int32 FElysiumNpcSheriffMan::StartTaskSlot442(void* Task)
 		SolidFlagsWord &= ~0x4u;                                          // 0x103aefee AND AL,0xfb; 0x103aeff1 (its scope name test 0x103aef95 JNZ)
 		// `0x103aefff` ForceTransmit and `0x103af006` Relink: no transmit state or spatial partition.
 		SheriffChooseBestMeleeWeapon();                                   // 0x103af00d 0x1000600a
-		KillTeleportBats();                                               // 0x103af014 0x10012e0e
+		// 0x103af014 KillTeleportBats: dead, the swarm class is never instantiated (0019/6)
 		SheriffMatchOriginAnglesCalls.Add(FMatchOriginAnglesCall{ TEXT("bip01"), true, true });   // 0x103af024 0x1000577c("bip01", 1, 1)
 		bSheriffTeleporting = false;                                      // 0x103af034 +0x66e4 = 0
 		EffectsWord |= 0x10u;                                             // 0x103af031 / 0x103af03b
@@ -3055,8 +3056,8 @@ int32 FElysiumNpcSheriffMan::StartTaskSlot442(void* Task)
 // =================================================================================================
 
 static const TCHAR* const GSpecies19FileTzimisce = TEXT("NPC_VTzimisce.cpp");             // 0x1065c7e0
-// `_DAT_10457f60` -- 150.0, the inside-interrupt pad task `0xd1` adds (not in the tunables table).
-static constexpr float GSpecies19TzimisceInsidePad = 150.0f;
+// `_DAT_10457f60` -- 150.0, the inside-interrupt pad task `0xd1` adds (a tunables row).
+static constexpr float GSpecies19TzimisceInsidePad = ElysiumNpcTunables::OneFifty;
 
 void FElysiumNpcTzimisce::FUN_103bf440()
 {
@@ -3422,22 +3423,19 @@ int32 FElysiumNpcVampireBoss::StartTaskSlot442(void* Task)
 // =================================================================================================
 
 // `werewolf_teleport_in_time` (object `0x1093d6f0`, its parent pointer `0x1093d6f4`; name
-// `0x1065fb24`, default `"2.0"` at `0x1065fb44`, registered by `0x103c8470`). Task 2 inside schedule
-// `0x158` reads it `IsCommand() ? 0.0 : m_fValue`. The convar is missing from
-// `ElysiumNpcTunables::EConVar` (a hot header this lane may not edit), so the shipped default stands
-// here, file-local, and the report asks the integrator to move it into the table.
-static constexpr float GSpecies19WerewolfTeleportInTime = 2.0f;
+// `0x1065fb24`, default `"2.0"` at `0x1065fb44`, registered by `0x103c8470`) is
+// `EConVar::WerewolfTeleportInTime`; task 2 inside schedule `0x158` reads it `IsCommand() ? 0.0 : m_fValue`.
 // `_DAT_1044ffd0` (double 5.0) -- the 0x4e tolerance's constant term.
-static constexpr double GSpecies19WerewolfToleranceSlack = 5.0;
+static constexpr double GSpecies19WerewolfToleranceSlack = ElysiumNpcTunables::FiveDouble;
 // `_DAT_10449280` (double 1.0) -- task 0x14f's unseen-time floor.
-static constexpr double GSpecies19WerewolfTeleportOutUnseen = 1.0;
+static constexpr double GSpecies19WerewolfTeleportOutUnseen = ElysiumNpcTunables::OneDouble;
 // `0x40a00000` 5.0, `0x40400000` 3.0, `0x41700000` 15.0 -- the three blacklist lifetimes.
 static constexpr float GSpecies19WerewolfTeleportBlacklist = 5.0f;
 static constexpr float GSpecies19WerewolfMoveBlacklist = 3.0f;
 static constexpr float GSpecies19WerewolfLeapBlacklist = 15.0f;
 // `_DAT_10450564` 100.0 and `_DAT_1044bef8` 0.25 -- task 0x15a's jump-height terms.
-static constexpr float GSpecies19WerewolfJumpRise = 100.0f;
-static constexpr float GSpecies19WerewolfJumpRun = 0.25f;
+static constexpr float GSpecies19WerewolfJumpRise = ElysiumNpcTunables::Hundred;
+static constexpr float GSpecies19WerewolfJumpRun = ElysiumNpcTunables::Quarter;
 // `0x40000000` 2.0 / `0x3f800000` 1.0 -- `m_fJumpGravity` for the leap and after it.
 static constexpr float GSpecies19WerewolfLeapGravity = 2.0f;
 // The two hint types the arms test: `0x3aa9` (the teleport arm's "filthy cheater" hint that needs no
@@ -3575,7 +3573,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 		}
 		// `IsCommand()` answers false on a ConVar, so the `+0x28` float arm is the one that runs; the
 		// other arm (`0x103ccf31`) would add 0.0. No completion: the wait finishes in RunTask.
-		BaseScheduleHost.WaitFinished = Now + static_cast<double>(GSpecies19WerewolfTeleportInTime);   // 0x103ccf2a slot 1; 0x103ccf63 +0x28; 0x103ccf69 +0x5db4 (the IsCommand test 0x103ccf2f JZ)
+		BaseScheduleHost.WaitFinished = Now + static_cast<double>(ElysiumNpcTunables::ConVarFloat(EConVar::WerewolfTeleportInTime));   // 0x103ccf2a slot 1; 0x103ccf63 +0x28; 0x103ccf69 +0x5db4 (the IsCommand test 0x103ccf2f JZ)
 		return 0;                                                         // 0x103ccf7d
 	}
 	case 0x4e:
@@ -3616,11 +3614,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 				Slot600(Player);                                          // 0x103cd102 slot 600 (0x103cd0d8 JZ / 0x103cd0f5 JNZ)
 			}
 		}
-		if (static_cast<const FElysiumNpc*>(this)->GetEnemy() == nullptr) // 0x103cd10c slot 167; 0x103cd114
-		{
-			RecordScheduleEvent(FString::Printf(TEXT("%s could not find an enemy... oh well!\n"),
-				*NpcKernelDebug10Shared::GDebug10DebugName(this)));       // 0x103cd11c / 0x103cd127 DevWarning
-		}
+		// 0x103cd10c..0x103cd127: slot 167 `GetEnemy()` null -> a `DevWarning` print; dead, no output device (0019/6).
 		TaskComplete(false);                                              // 0x103cd133 / 0x103cd84e -- both arms
 		return 0;
 	}

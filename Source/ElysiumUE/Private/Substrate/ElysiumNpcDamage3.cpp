@@ -49,8 +49,8 @@ namespace
 	// the pinned image. The listing is `FLD [0x1049a1c0]; FSUB [0x1049a1c4]; FADD [0x1049a1c4];
 	// FADD curtime` — the folded remains of a lerp whose parameter the compiler fixed at 1, so the
 	// delay is the FIRST cell (0.3), not a random draw.
-	constexpr float GDamage19BlockReArmLo = 0.3f;
-	constexpr float GDamage19BlockReArmHi = 1.5f;
+	constexpr float GDamage19BlockReArmLo = ElysiumNpcTunables::AttackReArmShort;
+	constexpr float GDamage19BlockReArmHi = ElysiumNpcTunables::AttackReArmLong;
 	// `PUSH -0x1` at 0x102a01de: `SelectHeaviestSequence`'s second argument.
 	constexpr int32 GDamage19NoCurrentSequence = -1;
 	// `PUSH 0x0` at 0x102bee8a: `AddExpressionForEvent`'s event.
@@ -129,7 +129,7 @@ bool FElysiumNpc::MeleeSwingInRange(const FElysiumEntity& Swinger, const FVector
 	const float Dy = static_cast<float>(PointUnits.Y - SwingerUnits.Y);    // 0x103457dd
 	const float Distance = FMath::Sqrt(Dx * Dx + Dy * Dy);                 // 0x103457f4
 	// `_DAT_1049e048` = 100.0f, the pad the reach is added to.
-	const float Reach = ElysiumNpcTunables::Hundred + SequenceSwingReachUnits(Swinger); // 0x10345818 / 0x1034581e
+	const float Reach = ElysiumNpcTunables::MeleeReachPad + SequenceSwingReachUnits(Swinger); // 0x10345818 / 0x1034581e
 	return !(Reach < Distance);                                            // 0x10345824 / 0x10345837
 }
 

@@ -5,7 +5,7 @@
 #include "ElysiumWorldServices.h"
 
 // What the port's navigator last concluded about its route: the port's own word, not a retail one.
-// Retail raises its outcomes as calls (`OnNavComplete 0x102eea90`, `OnNavFailed 0x102eeae0`) and
+// Retail raises its outcomes as calls (`OnNavComplete`, `OnNavFailed 0x102eeae0`) and
 // keeps only the `+0x1c` latch; the port records WHICH outcome so the kernel's writers and the
 // tests can read it back. `Door` is `OnNavFailed(0x0e)` from the simplify pass's door probe
 // (`0x102f06e0` -> slot 531, `0x102f08e7`); `NpcBlocked` is a blocked step whose obstruction is an
@@ -54,7 +54,7 @@ struct FElysiumNpcNavigator
 	int32 NavType = 0;
 
 	// `nav+0x1c` -- set to 1 by `OnNavFailed` (`0x102eeae0`, `CAI_Navigator#10`) and by
-	// `OnNavComplete` (`0x102eea90`, `CAI_Navigator#8`): the "this route has ended" latch; `Move`
+	// `OnNavComplete` (`CAI_Navigator#8`): the "this route has ended" latch; `Move`
 	// zeroes it at its loop head (`0x102f00e9`) and exits the loop on it.
 	bool bNavFailed = false;
 

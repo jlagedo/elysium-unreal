@@ -80,23 +80,6 @@ bool MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 Mask,
  *  those gates falls through. What each remaining bit MEANS is **unrecovered**. */
 static int32 RetailDerivedType(const FElysiumEntity& Entity);
 
-// --- The console variables this family's ladders read --------------------------------------------
-//
-// The `ConVar*` globals the yaw ladders read, as `IsCommand() ? 0.0f : m_fValue` (the object's
-// `+0x28`). Two are constructed in `MaxYawSpeed`'s own body and carry their recovered name and
-// default here; the other four (the three turning scalars and `debug_turning_speed`) are rows of the
-// tunables table (`docs/vtmb/npc-ai/convars.md`) and are read through it.
-struct FRetailYawConVar
-{
-	const TCHAR* Name;
-	const TCHAR* Address;    // the `DAT_` pointer the ladder reads (object + 4)
-	float Default;           // the local default, when `Table` is `EConVar::Count`
-	ElysiumNpcTunables::EConVar Table;
-};
-static const FRetailYawConVar* RetailYawConVars(int32& OutCount);
-/** The value a retail `ConVar::GetFloat()` on one of the four answers today. */
-static float RetailYawConVarValue(const TCHAR* Address);
-
 // --- The species helpers the jump chain calls out to ---------------------------------------------
 
 /** The claimed hint's type word (`CAI_Hint+0x5dc m_nHintType`) and its `GetAbsOrigin()` (RETAIL
@@ -119,10 +102,10 @@ bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
 bool CanStandAt(const FVector& PositionUnits, int32 Mask, const FVector* MinsUnits = nullptr,
 	const FVector* MaxsUnits = nullptr);
 
-/** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
- *  `m_afMemory & 0x2000` (AT_COVER_HINT) is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0.
- *  The cvar differs per species and each names its own address. */
-float MaxYawSpeedTurningArm(const TCHAR* ConVarAddress);
+/** The arm `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` `MaxYawSpeed` take when
+ *  `m_afMemory & 0x2000` is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0. Each class names
+ *  its own turn-scalar cvar. */
+float MaxYawSpeedTurningArm(ElysiumNpcTunables::EConVar TurnScalar);
 
 /** `CAI_BaseNPCTroika::NavIgnoreCollision`'s and `ShouldIgnoreCollision`'s shared head: the
  *  `m_bForceNPCCheck` / `NAV_IGNORE_NPC` / `m_hKickPhysicsProp` / combat-weapon gates both chains run

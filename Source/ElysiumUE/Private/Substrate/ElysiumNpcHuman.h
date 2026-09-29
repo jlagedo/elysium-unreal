@@ -22,7 +22,6 @@ public:
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual int32 SelectScheduleRangedCombat(int32 Arg) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 	virtual bool HandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other) override;
 
@@ -49,8 +48,8 @@ public:
 
 	// From `ElysiumNpcBosses.inl`.
 	/** `0x10385cf0` — slot 601's `CNPC_VAndreiBlood`-line body (38 species). It differs from the
-	 *  Troika line's `0x102b5880` in two recovered ways, and both are ported: it fires the global
-	 *  melee-left event `DAT_10924edc+4` FIRST, and it forwards to the coordinator WITHOUT the
+	 *  Troika line's `0x102b5880` in two recovered ways, and both are ported: it asks
+	 *  `(*DAT_10924edc)->IsCommand()` (`ent_trace_melee`, answer dropped: no observable) FIRST, and it forwards to the coordinator WITHOUT the
 	 *  `m_pAttackCoordinator != 0` guard the Troika body puts in front of it. */
 	void FUN_10385cf0();
 

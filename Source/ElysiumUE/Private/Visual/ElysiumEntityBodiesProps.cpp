@@ -3,7 +3,7 @@
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumFog.h"          // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
-#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Visual/ElysiumPreparedPropModels.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "ElysiumCharacterProvenance.h"
@@ -371,8 +371,10 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	// An entity prop's body (0018 story 6): whichever leaf later switches its collision on, a retail
 	// trace meets it only under MONSTER (`StandardFilterRules 0x101d3080`, R2 § 2). The leaf that
-	// enables it also sets its sight response (`ElysiumProp.cpp`'s `ElysiumPropTraceBody`).
-	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+	// enables it also sets its sight response (`ElysiumProp.cpp`'s `ElysiumPropTraceBody`), and
+	// re-chooses these bits from the entity's `blocks_traces` / `npc_transparent` keyfields
+	// (0019/6, `PropBodyMaskBits`); the builder holds no def, so this is the no-keyfield default.
+	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropBodyMaskBits(false, false));
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
 	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
@@ -429,7 +431,9 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 	// An entity prop's body (0018 story 6): `StandardFilterRules 0x101d3080` (R2 § 2) admits it to a
 	// retail trace only under MONSTER -- `PropMaskBit` -- and, admitted, it blocks `FVisible`'s
 	// `0x2804091`, which `PhysicsActor` would ignore: the sight response is set on this body alone.
-	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+	// The no-keyfield default: the leaf (`FElysiumPhysProp::PropMaskBits`) re-chooses the bits from
+	// the entity's `blocks_traces` / `npc_transparent` keyfields (0019/6).
+	Comp->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropBodyMaskBits(false, false));
 	Comp->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
 	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh

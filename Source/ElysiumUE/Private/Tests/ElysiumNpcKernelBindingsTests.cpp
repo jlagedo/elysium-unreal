@@ -8,6 +8,10 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveTypes.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAsianVampire.h"
+#include "Substrate/ElysiumNpcChangBros.h"
+#include "Substrate/ElysiumNpcSheriffMan.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // The generated NPC field table, asserted rather than described.
@@ -243,7 +247,22 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 	// What the restore hook is SUPPOSED to overwrite, each with the reason it does. Retail's own
 	// slot 130 re-derives rather than trusts for exactly these, so a row here is the walk working
 	// and the hook working, not a leak. Anything not on this list must survive untouched.
-	struct FDerived { const TCHAR* Name; const TCHAR* Why; };
+	// `Applies`, when set, scopes a row to the subject classes whose own hook rewrites it; a row
+	// without one is re-derived for every class.
+	using FAppliesTo = bool (*)(const FElysiumNpc&);
+	struct FDerived { const TCHAR* Name; const TCHAR* Why; FAppliesTo Applies = nullptr; };
+	// The boss line: every class over `CNPC_VVampireBoss` runs its `CNPC_VVampireBoss::Restore` resets.
+	static const FAppliesTo BossLine = [](const FElysiumNpc& N)
+	{
+		return N.AsSpecies<FElysiumNpcVampireBoss>() != nullptr;
+	};
+	// The three boss species whose own slot 127 re-writes `m_fJumpGravity` after the archive.
+	static const FAppliesTo JumpGravityRewriters = [](const FElysiumNpc& N)
+	{
+		return N.AsSpecies<FElysiumNpcAsianVampire>() != nullptr
+			|| N.AsSpecies<FElysiumNpcChangBros>() != nullptr
+			|| N.AsSpecies<FElysiumNpcSheriffMan>() != nullptr;
+	};
 	static const FDerived Derived[] =
 	{
 		// --- The restart divergence, through retail's own slot 435 -------------------------------
@@ -299,12 +318,33 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 		  TEXT("`ResolveTuning` re-derives the perception pair from the restored keyfields") },
 		{ TEXT("m_flHearingScalarInspection"),
 		  TEXT("`ResolveTuning` re-derives the perception pair from the restored keyfields") },
+
+		// --- Retail's species slot 127, run around the archive (0019/6: `OnPostRestore`) --------
+		// `CNPC_VVampireBoss::Restore` resets these AFTER its archive read, so retail
+		// itself never restores the saved value; the port runs the resets from `OnPostRestore`.
+		{ TEXT("m_pMonsterModelName"),
+		  TEXT("+0x6680 := null by `CNPC_VVampireBoss::Restore` `103c5972` (Sabbat Leader / Sheriff re-seed it)"), BossLine },
+		{ TEXT("m_pBodyEmitterNames[0]"),
+		  TEXT("+0x6684 cleared by `ClearBodyEmitterNames` `0x103c6eb0` from `CNPC_VVampireBoss::Restore`"), BossLine },
+		{ TEXT("m_pBodyEmitterNames[1]"),
+		  TEXT("+0x6688 cleared by `ClearBodyEmitterNames` `0x103c6eb0` from `CNPC_VVampireBoss::Restore`"), BossLine },
+		{ TEXT("m_pBodyEmitterNames[2]"),
+		  TEXT("+0x668c cleared by `ClearBodyEmitterNames` `0x103c6eb0` from `CNPC_VVampireBoss::Restore`"), BossLine },
+		{ TEXT("m_pBodyEmitterNames[3]"),
+		  TEXT("+0x6690 cleared by `ClearBodyEmitterNames` `0x103c6eb0` from `CNPC_VVampireBoss::Restore`"), BossLine },
+		{ TEXT("m_fJumpGravity"),
+		  TEXT("+0x64b8 re-written by the species slot 127 (Asian Vampire 2.0, Chang 2.3, "
+		       "Sheriff 2.0)"), JumpGravityRewriters },
 	};
-	auto IsDerived = [](FName Row, const TCHAR*& OutWhy) -> bool
+	auto IsDerived = [](FName Row, const FElysiumNpc& Subject, const TCHAR*& OutWhy) -> bool
 	{
 		for (const FDerived& D : Derived)
 		{
-			if (Row == FName(D.Name)) { OutWhy = D.Why; return true; }
+			if (Row == FName(D.Name) && (D.Applies == nullptr || D.Applies(Subject)))
+			{
+				OutWhy = D.Why;
+				return true;
+			}
 		}
 		return false;
 	};
@@ -448,7 +488,7 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 		}
 
 		const TCHAR* Why = nullptr;
-		if (IsDerived(Row.Key, Why))
+		if (IsDerived(Row.Key, *Restored, Why))
 		{
 			++Rederived;
 			continue;

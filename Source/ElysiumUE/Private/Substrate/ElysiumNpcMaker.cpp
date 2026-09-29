@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcMaker.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
@@ -21,9 +22,9 @@ namespace
 	// `SetSolid(SOLID_NONE = 0)`, the one solidity write every maker `Spawn` makes.
 	constexpr int32 GMakerSolidNone = 0;
 	// `_DAT_1046bacc` = 2048.0 — the downward trace depth the ground cache uses.
-	constexpr float GMakerGroundTraceDepthUnits = 2048.0f;
+	constexpr float GMakerGroundTraceDepthUnits = ElysiumNpcTunables::TwoThousandFortyEight;
 	// `_DAT_1049ffac` = 34.0 — the spawn box half-extent (x and y).
-	constexpr float GMakerSpawnBoxHalfExtentUnits = 34.0f;
+	constexpr float GMakerSpawnBoxHalfExtentUnits = ElysiumNpcTunables::ThirtyFour;
 	// `MakeNPC`'s spawnflags: `4` (`SF_NPC_FALL_TO_GROUND`), `0x204` when `m_bFade`.
 	constexpr int32 GMakerChildSpawnFlags = 0x4;
 	constexpr int32 GMakerChildFadeSpawnFlags = 0x204;
@@ -67,19 +68,6 @@ const TCHAR* FElysiumNpcMaker::MakerThinkName(EMakerThink Think)
 bool FElysiumNpcMaker::Slot72(int32 Discipline)
 {
 	(void)Discipline;
-	return false;
-}
-
-// Slot 82: `0x1034ab50` returns `&datamap_CNPCMaker` (`0x10624718`).
-void* FElysiumNpcMaker::GetDataDescMap()
-{
-	return const_cast<FElysiumClassDesc*>(FElysiumClassRegistry::Get().Find(FName(RetailClassName)));
-}
-
-// Slot 86: `0x1034af10`, `XOR AL,AL; RET 0x14` — five arguments, none read.
-bool FElysiumNpcMaker::ShouldTransmit(int32 Arg1, void* Edict, void* CheckBits, int32 Arg4, int32 Arg5)
-{
-	(void)Arg1; (void)Edict; (void)CheckBits; (void)Arg4; (void)Arg5;
 	return false;
 }
 
@@ -131,12 +119,8 @@ void FElysiumNpcMaker::Precache()
 	{
 		return;
 	}
-	// `CAI_BaseNPC::Precache` `0x1027bb50` — DIRECT (`thunk_FUN_1027bb50`), not the Troika's
-	// `0x10298ad0`: the `m_spawnEquipment` precache, slot 452 `LoadedSchedules` and the
-	// `CBaseCombatCharacter` block, run on the MAKER.
-	FElysiumNpcBase::Precache();
-	// Nothing is tested after the chain: its reject arm `UTIL_Remove`s and returns, and this body
-	// carries on regardless (a removal is deferred in retail).
+	// Retail calls `CAI_BaseNPC::Precache` DIRECT here; that body is asset loading
+	// (0019 story 6: `Bake`), so the port carries no call.
 	// `m_iszNPCClassname` (`+0x665c`): ONLY the base arm checks it for emptiness.
 	if (NpcType.IsEmpty())
 	{
@@ -217,11 +201,6 @@ void FElysiumNpcMaker::Activate()
 {
 }
 
-// Slot 123: `0x1034bd30` — `RET`.
-void FElysiumNpcMaker::DrawDebugGeometryOverlays()
-{
-}
-
 // Slot 139: `0x1034bc90`.
 void FElysiumNpcMaker::DeathNotice(FElysiumEntity* Child)
 {
@@ -286,18 +265,6 @@ bool FElysiumNpcMaker::FInAimCone(FElysiumEntity* AimTarget)
 {
 	(void)AimTarget;
 	return false;
-}
-
-// Slot 370: `0x1034adf0`, a this-adjusting tail call through slot 368.
-FVector FElysiumNpcMaker::HeadDirection2D()
-{
-	return BodyDirection2D();
-}
-
-// Slot 371: `0x1034ae20`, through slot 369.
-FVector FElysiumNpcMaker::HeadDirection3D()
-{
-	return BodyDirection3D();
 }
 
 // Slot 587: `0x1034aed0`.
@@ -525,8 +492,8 @@ FElysiumNpc* FElysiumNpcMaker::MakeNPC(bool bBypass)
 		// slot for good. So the port returns null instead: no owner, no `m_cLiveChildren` /
 		// `m_iMaxNumNPCs` change, no depletion `ThinkSet(NULL)`, and `MakerThink` re-arms at
 		// `RandomFloat(1, 2)` rather than `+freq`. Unreachable in shipped content (the only removal
-		// arm in an NPC's own spawn is `Precache`'s `LoadedSchedules` refusal, which the port never
-		// takes).
+		// arm in an NPC's own spawn is `Precache`'s slot-452 `LoadedSchedules` refusal, whose gate
+		// the port does not carry).
 		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s Spawn: '%s' removed itself during Spawn"),
 			*DebugString(), *NpcType);
 		LastAttempt = EAttempt::InvalidChild;

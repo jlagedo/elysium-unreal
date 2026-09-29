@@ -20,7 +20,6 @@
 #include "Substrate/ElysiumNpcCombat10_2Shared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10_2Shared.h"
 #include "Substrate/ElysiumNpcStateShared.h"
@@ -84,26 +83,13 @@ namespace
 	const TCHAR* const GBachKatana = TEXT("item_w_katana");
 	const TCHAR* const GBachRifle = TEXT("item_w_rem_m_700_bach");
 	constexpr float GrenadeCooldown = ElysiumNpcTunables::Five;
-	constexpr float GrenadeThinkDelay = 3.0f;       // _DAT_10449258
+	constexpr float GrenadeThinkDelay = ElysiumNpcTunables::InterestCubicThree;
 	constexpr float GrenadeThinkSlack = ElysiumNpcTunables::Hundredth;
 	constexpr double GMiscHalfDouble = ElysiumNpcTunables::HalfDouble;
 	constexpr float GMiscYawHigh = ElysiumNpcTunables::OneTwenty;
 	// `CNPC_VBach`'s two answers per slot, and the shared refusal.
 	constexpr int32 GMiscBachRange1Answer = 0x4f;   // COND_CAN_RANGE_ATTACK1
-	constexpr int32 GMiscBachRange2Answer = 0x50;   // COND_CAN_RANGE_ATTACK2
 	constexpr int32 GMiscBachRefusal = 0x61;        // COND_NOT_FACING_ATTACK
-	const TCHAR* const GBachWeapons[] = {
-		TEXT("item_w_grenade_frag"),
-		TEXT("item_w_katana"),
-		TEXT("item_w_rem_m_700_bach"),
-	};
-	const TCHAR* const GBachSounds[] = {
-		TEXT("Character/Boss/Bach/bach_grenade.wav"),
-		TEXT("Character/Boss/Bach/bach_shield.wav"),
-		TEXT("Character/Boss/Bach/bach_camp_warn.wav"),
-		TEXT("Character/Boss/Bach/bach_holy_light.wav"),
-		TEXT("Character/Boss/Bach/snipe_warn6.wav"),
-	};
 	// The two `m_NPCState` values slot 609's species gate admits: `NPC_STATE_SCRIPT` (4) and 0xc,
 	// which this runtime's `EElysiumNpcState` has no member for. Both are compared as raw numbers.
 	constexpr int32 ShootAtHintStateScript = 4;
@@ -182,23 +168,6 @@ void FElysiumNpcBach::NPCInit()
 	DistTooFar = SwarmDistTooFar;                                        // 0x477fff00
 }
 
-// Slot 104: `0x103637b0`.
-// 0x103637b0
-void FElysiumNpcBach::Precache()
-{
-	// `CNPC_VBach::Precache` `0x103637b0` — the Troika body, then THREE weapons and then FIVE
-	// sounds. The weapons-before-sounds order is this arm's fact.
-	TroikaPrecache();
-	for (const TCHAR* Weapon : GBachWeapons)
-	{
-		NpcKernelPrecache10Shared::Precache10Other(*this, Weapon);
-	}
-	for (const TCHAR* Sound : GBachSounds)
-	{
-		NpcKernelPrecache10Shared::Precache10Sound(*this, Sound);
-	}
-}
-
 // Slot 463: `0x103639b0`. While `m_bCanFightYet` is 0, ALERT / COMBAT snap back through
 // `SetState(old)` and never reach the Troika body; otherwise a direct call into it.
 void FElysiumNpcBach::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState)
@@ -208,13 +177,6 @@ void FElysiumNpcBach::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState 
 		return;
 	}
 	OnStateChangeTroika(OldState, NewState);
-}
-
-// Slot 461: `0x10363b40`, the selector tag 0xe and then a direct call into the human line's `0x103851e0`.
-int32 FElysiumNpcBach::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0xe;
-	return HumanSelectIdealState();
 }
 
 // Slot 604: `0x10364080`, which replaces the Troika body wholesale; its argument is read by no arm.
@@ -439,16 +401,6 @@ bool FElysiumNpcBach::FValidateHintType(void* Hint)
 	return FElysiumNpc::FValidateHintType(Hint);
 }
 
-// Slot 546: `0x10362df0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcBach::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093a608`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VBach"), TEXT("0x10362df0"), TEXT("0x1093a608") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 561: `0x10363db0` — the shield, teleport and weapon-switch block, then
 // `CAI_BaseNPC::GatherAttackConditions` (`0x1026dd10`) directly. The distance argument IS read by the
 // Bach block, unlike the base, which takes the port's own committed enemy.
@@ -531,18 +483,6 @@ int32 FElysiumNpcBach::BachRangeAttack1Conditions(float Dot, float DistUnits) co
 		? GMiscBachRange1Answer : GMiscBachRefusal;
 }
 
-int32 FElysiumNpcBach::BachRangeAttack2Conditions(float Dot, float DistUnits) const
-{
-	// `CNPC_VBach::vfunc554` `0x10364550`, slot 554 `RangeAttack2Conditions(flDot, flDist)`. The
-	// SAME two thresholds in the same order; only the accepted answer differs — `0x50`
-	// (`COND_CAN_RANGE_ATTACK2`) instead of `0x4f`. One behaviour written twice, which is why the
-	// gate is not restated.
-	return BachRangeAttack1Conditions(Dot, DistUnits) == GMiscBachRange1Answer
-		? GMiscBachRange2Answer : GMiscBachRefusal;
-}
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
-
 // --- Moved from `ElysiumNpcSpecies.cpp` (story 5 step 4) ---
 
 // -------------------------------------------------------------------------------------------------
@@ -614,11 +554,11 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 				// lazily built global. Family Combat10's typed-stat seam is that walk.
 				TypedStatSet(/*ListType*/ 3, /*StatId*/ 0xd, 5);
 				// `10363eb3`: `m_flNextShieldTime = curtime + _DAT_1044eb0c` (**20.0**).
-				BachNextShieldTime = Now + 20.0;
+				BachNextShieldTime = Now + static_cast<double>(ElysiumNpcTunables::Twenty);
 				// `10363ecb`: `m_bShieldActive = 1` and `m_flShieldTime = curtime + _DAT_1046bac0`
 				// (**6.0**).
 				bBachShieldActive = true;
-				BachShieldTime = Now + 6.0;
+				BachShieldTime = Now + static_cast<double>(ElysiumNpcTunables::Six);
 				// `10363f3a`: the shield sound, through a `CPASAttenuationFilter` built from slot
 				// 222 at attenuation 0.8, on channel 2 at volume 1.0 and pitch 100.
 				EmitNamedWav(this, /*Channel*/ 2, TEXT("Character/Boss/Bach/bach_shield.wav"),
@@ -637,7 +577,7 @@ void FElysiumNpcBach::BachGatherAttackConditions(float DistanceUnits)
 	// past, condition `0x79` at or above `_DAT_104704d0` (**72.0**) and `0x7a` below it.
 	if (BachNextWeaponSwitchTime < NpcKernelSpeciesMisc10_2Shared::SpeciesMisc10_2Now(*this))
 	{
-		Conds.Set(static_cast<EElysiumNpcCond>(DistanceUnits >= 72.f ? 0x79 : 0x7a));
+		Conds.Set(static_cast<EElysiumNpcCond>(DistanceUnits >= ElysiumNpcTunables::SeventyTwo ? 0x79 : 0x7a));
 	}
 	// `10363fc5`: `CAI_BaseNPC::GatherAttackConditions` runs LAST and unmodified — the caller does
 	// that, so nothing else happens here.

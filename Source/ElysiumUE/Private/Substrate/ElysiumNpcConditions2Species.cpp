@@ -275,7 +275,7 @@ bool FElysiumNpcHengeyokai::HengeyokaiThrowLosTest(FElysiumEntity* Enemy)
 	}
 	const FVector RightVec = Conditions19SpeciesRightVector(*this);          // 1038204f slot 221 / 10382056 0x10139610
 	// `EyePosition() - right * _DAT_1049a198 (-80.0)`: 80 units to the NPC's right.
-	const FVector StartCm = EyePosition() - RightVec * (-80.0 * ElysiumMove::U);   // 1038205b..103820b3
+	const FVector StartCm = EyePosition() - RightVec * (ElysiumNpcTunables::MinusEighty * ElysiumMove::U);   // 1038205b..103820b3
 	const FVector EndCm = Enemy->EyePosition();                          // 103820c0 slot 193
 	// `TraceRay` mask `0x600400b` (`10382182` / `103821a3`), `fraction == 1.0` against the double
 	// `0x10449280` (`103821e9..103821fb`): the family's live world ray.
@@ -345,7 +345,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 		C.Set(Cond19MingXiaoMeleeHelpless);                              // 10394ef0 SetCondition(0x7e)
 	}
 	// `m_flPlayerDist (+0x6264) > 200.0` (`_DAT_104492b8`); less, equal or NaN returns.
-	if (!(Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U > 200.f))   // 10394ef5 / 10394f08
+	if (!(Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U > ElysiumNpcTunables::TwoHundred))   // 10394ef5 / 10394f08
 	{
 		return;
 	}
@@ -390,7 +390,7 @@ void FElysiumNpcMingXiao::GatherConditions()
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
 	RetailCollisionExtents(*Enemy, MinsUnits, MaxsUnits);               // 10395022 / 1039502b
-	const double HalfWidthCm = (MaxsUnits.X - MinsUnits.X) * 0.3 * ElysiumMove::U;   // 10395035
+	const double HalfWidthCm = (MaxsUnits.X - MinsUnits.X) * ElysiumNpcTunables::ThreeTenths * ElysiumMove::U;   // 10395035
 	const FVector LeftCm = TargetCm + Side * HalfWidthCm;                // 1039503b..10395095
 	const FVector RightCm = TargetCm - Side * HalfWidthCm;               // 103950ac..103950e5
 	if (!MingXiaoWeaponLosCondition(WeaponEntity, MyCm, LeftCm))         // 103950a1 weapon slot 364 / 103950aa
@@ -419,7 +419,7 @@ void FElysiumNpcMingXiaoTentacle::GatherConditions()
 	const FElysiumNpcBase* const ConstThis = this;
 	if (ConstThis->GetEnemy() != nullptr                                 // 1039ec2e / 1039ec36 slot 167
 		&& Now >= MingXiaoTentacleFailedEvadeTimer                       // 1039ec41 / 1039ec4e +0x6678 (ordered; NaN skips)
-		&& ScheduleHost.EnemyDistUnits <= 256.f)                         // 1039ec56 `_DAT_1044ddb0` / 1039ec61 JP
+		&& ScheduleHost.EnemyDistUnits <= ElysiumNpcTunables::Melee1OuterBand)                         // 1039ec56 `_DAT_1044ddb0` / 1039ec61 JP
 	{
 		C.Set(Cond19TentacleFlee);                                       // 1039ec72 SetCondition(0x77)
 	}
@@ -593,7 +593,7 @@ bool FElysiumNpcTzimisce::TzimiscePounceTest()
 	const double DistSq = Conditions19SpeciesDistSqUnits(MeCm, LeadCm);
 	// `103bf740..103bf75c`, `AND 0x4100 / JZ` twice: only an ordered `d < 40000` or `d > 360000`
 	// refuses, so a NaN distance passes.
-	if (40000.0 > DistSq || DistSq > 360000.0)                           // `_DAT_104b73e4` / `_DAT_104cc530`
+	if (ElysiumNpcTunables::TzimisceLeadDistSqMin > DistSq || DistSq > ElysiumNpcTunables::TzimisceLeadDistSqMax)                           // `_DAT_104b73e4` / `_DAT_104cc530`
 	{
 		return false;
 	}
@@ -667,7 +667,7 @@ void FElysiumNpcTzimisce::GatherConditions()
 	const double Now = Conditions19Now();
 	if (Now > TzimiscePounceCheckTimer)                                  // 103bd0ae (strict; NaN skips) +0x66ac
 	{
-		TzimiscePounceCheckTimer = Now + 2.5;                            // `_DAT_104629ec`, 103bd0c1
+		TzimiscePounceCheckTimer = Now + ElysiumNpcTunables::TwoAndHalf;                            // `_DAT_104629ec`, 103bd0c1
 		bool bPounce = false;
 		if (ElysiumSchedule::MaskHasCondition(Schedule, *this, Cond19CanPounce)   // 103bd0c7 0x10269c70 / 103bd0ce / 103bd0d0
 			&& ConstThis->GetEnemy() != nullptr)                         // 103bd0d4 slot 167 / 103bd0dc / 103bd0de
@@ -691,7 +691,7 @@ void FElysiumNpcTzimisce::GatherConditions()
 	if (Now > TzimisceShunnedBodyTimer)                                  // 103bd160 (strict) +0x66b0
 	{
 		TzimisceShunnedFindBody = 0;                                     // 103bd16b +0x66b8
-		TzimisceShunnedBodyTimer = Now + 10.0;                           // `_DAT_1044e664`, 103bd175
+		TzimisceShunnedBodyTimer = Now + ElysiumNpcTunables::Ten;                           // `_DAT_1044e664`, 103bd175
 	}
 }
 

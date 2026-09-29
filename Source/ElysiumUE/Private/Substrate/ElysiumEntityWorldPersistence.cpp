@@ -230,6 +230,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	// A restore re-runs `CWorld::Precache` (`0x101a2e40`), so the network manager's 0.8 s first
 	// think (`0x102f6690`) is armed afresh: the gate re-stamps here (0018 story 5, lane D).
 	BuildStamp = NowSeconds();
+	bNetworkManagerFirstThinkRun = false;
 
 	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
 	// defs that ride along, in index order, so every one lands back on its saved index. They do land

@@ -276,7 +276,7 @@ bool FElysiumNpcKernelBossesPickupChainTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `0x10382970` / `0x10382b30` / `0x10382aa0` — the expiring blacklist.
+// `0x10382970` / `FindBlacklistedEntity` / `0x10382aa0` — the expiring blacklist.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesBlacklistTest,
@@ -754,7 +754,7 @@ bool FElysiumNpcKernelBossesFlightVelocityTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `0x1038fb20` — `CNPC_VManBat`'s slot 102 trace filter.
+// `CNPC_VManBat`'s slot 102 trace filter.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBossesTraceFilterTest,
@@ -786,24 +786,8 @@ bool FElysiumNpcKernelBossesTraceFilterTest::RunTest(const FString&)
 	TestTrue(TEXT("and so matches an unnamed entity"),
 		FElysiumNpc::RetailNameMatches(FString(), TEXT("")));
 
-	FElysiumNpcWorldBuilder Builder(TEXT("bosses_filter"), 0x29c1b05e);
-	Builder.AddNpcOfClass(TEXT("bat"), FVector::ZeroVector, TEXT("CNPC_VManBat"));
-	Builder.AddNpc(TEXT("victim"), FVector(100.0 * U, 0.0, 0.0));
-	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpcManBat* Bat = Fixture.NpcAs<FElysiumNpcManBat>(TEXT("bat"));
-	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
-	FElysiumNpcWorldFixture::Quiet({ Bat, Victim });
-	if (Bat == nullptr || Victim == nullptr)
-	{
-		AddError(TEXT("fixture did not stand both NPCs"));
-		return false;
-	}
-	// The sweep is a seam and records the call; the vtable swap is the ported concern above.
-	Bat->PhysicsTraceEntityManBat(Victim, FVector(0.0, 0.0, 0.0), FVector(100.0, 0.0, 0.0),
-		0x202400b);
-	TestEqual(TEXT("the sweep seam recorded one call"), Bat->PhysicsTraceEntityCalls.Num(), 1);
-	TestEqual(TEXT("with retail's mask"),
-		static_cast<int32>(Bat->PhysicsTraceEntityCalls[0].Mask), 0x202400b);
+	// The sweep itself (slot 102) was deleted in 0019/6 (verdict `mechanism`, service
+	// `TraceRetail`); the filter rule above is what survives.
 	return true;
 }
 
@@ -868,7 +852,7 @@ bool FElysiumNpcKernelBossesMingXiaoRatesTest::RunTest(const FString&)
 		return false;
 	}
 
-	// `0x10398000` / `0x10398870`, the two one-line gates every MingXiao body reads.
+	// `0x10398000` / `IsMingXiaoProxy`, the two one-line gates every MingXiao body reads.
 	Ming->MingXiaoSeveredTentacleMask = 0;
 	TestTrue(TEXT("an empty severed mask leaves every tentacle connected"),
 		Ming->IsTentacleConnected(0) && Ming->IsTentacleConnected(5));

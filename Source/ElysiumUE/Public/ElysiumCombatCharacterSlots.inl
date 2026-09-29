@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 139 generated slot rows of `FElysiumCombatCharacter` (CBaseCombatCharacter): 106 it introduces
-// and 33 it overrides with a body of its own.
+// 136 generated slot rows of `FElysiumCombatCharacter` (CBaseCombatCharacter): 106 it introduces
+// and 30 it overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -49,14 +49,6 @@
 	// slot 74 0x103404f0 (walked) `bool ReceivesImpactDamage(CBaseEntity*)`
 	//   layer 0, story 29c
 	bool ReceivesImpactDamage(FElysiumEntity*) override;
-	// slot 79 0x10321670 (walked) `datamap_t* GetPredDescMap()`
-	//   returns `datamap_t*`
-	//   layer 0, story 29c
-	void* GetPredDescMap() override;
-	// slot 80 0x10321960 (walked) `ServerClass* GetServerClass()`
-	//   returns `ServerClass*`
-	//   layer 0, story 29c
-	void* GetServerClass() override;
 	// slot 81 0x10321980 (walked) `int YouForgotToImplementOrDeclareServerClass()`
 	//   layer 0, story 29c
 	int32 YouForgotToImplementOrDeclareServerClass() override;
@@ -118,10 +110,6 @@
 	//   takes `gamevcollisionevent_t*`
 	//   layer 1, story 29c
 	void VPhysicsShadowCollision(int32, void*) override;
-	// slot 240 0x1014f8b0 (walked) `PyObject* vfunc240()`
-	//   returns `PyObject*`
-	//   layer 0, story 29c
-	void* Slot240() override;
 	// slot 244 0x103408e0 (walked) `const char* GetSkeletonModelName()`
 	//   layer 12, story 29d
 	const TCHAR* GetSkeletonModelName() override;

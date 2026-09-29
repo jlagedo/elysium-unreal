@@ -123,6 +123,11 @@ GENERATED_CENSUS = ("ElysiumNpcKernelShape.cpp", "ElysiumNpcKernelTunables.h",
                     "ElysiumNpcKernelTunables.cpp", "ElysiumNpcKernelOverrideCensus.cpp",
                     *(f"{stem}Slots{ext}" for stem in GENERATED_SLOT_STEMS for ext in (".inl", ".cpp")))
 
+# Retail data transcribed by a generator (`gen_action_tables`): every vtable body of the activity
+# translation, keyed by address, for classes the port stands and classes it does not. A row there is
+# data, not a port body, so it is not a citation either (0019/6: `PreTranslate_Stalker 0x103b2e60`).
+GENERATED_DATA_TABLES = ("ElysiumNpcActivityTables.cpp", "ElysiumWeaponActivityTables.cpp")
+
 # The port and the oracle cite retail by these two spellings and nothing else.
 ADDRESS_RE = re.compile(r"\b0x(10[0-9a-f]{6})\b")
 OFFSET_RE = re.compile(r"\+0x([0-9a-f]{2,4})\b")
@@ -152,13 +157,93 @@ VERDICT_WORDS = ("rule", "mechanism", "present", "dead")
 UNSETTLED_VERDICT = "unsettled"
 VERDICTS_TSV = "kernel_verdicts.tsv"
 VERDICT_COLUMNS = ("address", "verdict", "band", "target", "evidence")
+# Spec 0019 story 6: the targets that CLOSE a row. A `dead` row is closed at `-` (its port body and
+# tests are gone); a `mechanism` row is closed at one of these service words (the body is gone and
+# the named Unreal service, or the spec/story that already built the seam, answers it). Any other
+# target on either verdict names the port body still owed deletion or a seam — the row is open.
+DEAD_CLOSED = "-"
+SERVICE_TARGETS = ("CMC", "UNavigationSystem", "UPathFollowingComponent", "TraceRetail", "Chaos",
+                   "Replication", "CRT:operator delete", "FElysiumSaveArchive", "Bake",
+                   "0010", "0015", "0018/3", "0018/16", "0002/28",
+                   # 0019/6 wave 3: a thunk that is only C++ virtual dispatch; an object the port
+                   # constructs as a UE component (retail's CreateComponents twins).
+                   "CppDispatch", "UEComponent",
+                   # 0019/6 wave 3, ledger-only closures of rows with no port body: Unreal reflection
+                   # (UStruct / UClass / FProperty / RTTI descriptors), a UE container or handle idiom
+                   # (TArray, INDEX_NONE, TWeakObjectPtr, memcpy), the port's entity handle, the audio
+                   # subsystem behind the voice seam.
+                   "UReflection", "UEContainer", "FElysiumEntityHandle", "UAudio",
+                   # A render-only effect Unreal draws its own way (a bullet tracer): the vision's
+                   # visual-only modernization, no port body.
+                   "Visual")
+# A target naming a port body (open: owed a deletion or a seam), as against a service word.
+PORT_TARGET_RE = re.compile(
+    r"^(hand:|seam:|default:|registry:|[FIU]?Elysium\w*(::|\.)|(Source/|Visual/)?\S*Elysium\w*\.(cpp|h|inl)\b)")
+# `mechanism` spellings written before story 6 fixed the closed set. They name neither a port body
+# nor a service word, so they are accepted as OPEN rows only (never counted closed) until the
+# overlay's owner re-spells each to a `SERVICE_TARGETS` word or a port target. The list only falls.
+LEGACY_MECHANISM_TARGETS = ("UStruct", "UClass", "FProperty", "RTTI:GetDataDescMap",
+                            "FElysiumEntityHandle", "TWeakObjectPtr", "TArray::IndexOfByPredicate",
+                            "INDEX_NONE", "IElysiumNpcMotor", "FElysiumNpcNavigator", "CRT:memcpy")
+
+
+def body_closed(verdict: str, target: str) -> bool:
+    """Whether a row's PORT BODY is gone (the generator's question): `dead` at `-`, `mechanism` at a
+    service word. A `default:` / `registry:` dead row keeps its generated literal and is not this."""
+    return ((verdict == "dead" and target == DEAD_CLOSED)
+            or (verdict == "mechanism" and target in SERVICE_TARGETS))
+
+
+def closed_target(verdict: str, target: str) -> bool:
+    """Whether a row is closed for the lists and the meter (0019/6): its body is gone, or it is a
+    `dead` row whose only port presence is the retail literal the generator answers (`default:`)
+    or the species constant the census carries (`registry:`) -- no hand body, no test, and the
+    literal is retail's own answer, which a `rule` body may still read (slot 327 is read by
+    `MeleeAttack2Conditions 0x1026da90`), so it stays generated rather than closed at `-`."""
+    return (body_closed(verdict, target)
+            or (verdict == "dead" and (target.startswith("default:") or target.startswith("registry:")))
+            # A mechanism row whose hand body is now a one-line forward into the service keeps the
+            # body and spells `seam:`; one whose port presence is a species constant the census
+            # carries spells `registry:` -- both closed, neither body-closed (0019/6 wave 3).
+            or (verdict == "mechanism" and (target.startswith("seam:") or target.startswith("registry:"))))
+
+
+def target_problem(verdict: str, target: str) -> str:
+    """Why `target` is not a valid spelling for a `verdict` row, or `""` when it is."""
+    if verdict == UNSETTLED_VERDICT:
+        return ""
+    if not target:
+        return (f"a `{verdict}` row needs a target"
+                + (f" (`{DEAD_CLOSED}` once its port body is gone)" if verdict == "dead" else ""))
+    if verdict == "dead":
+        if target == DEAD_CLOSED or PORT_TARGET_RE.match(target):
+            return ""
+        return (f"a `dead` row's target is `{DEAD_CLOSED}` (body removed) or the port body it is "
+                f"owed deletion from, not `{target}`")
+    if verdict == "mechanism":
+        if target in SERVICE_TARGETS or target in LEGACY_MECHANISM_TARGETS \
+                or PORT_TARGET_RE.match(target):
+            return ""
+        if target == DEAD_CLOSED:
+            return (f"a `mechanism` row is closed at its service word, not `{DEAD_CLOSED}` "
+                    f"({', '.join(SERVICE_TARGETS)})")
+        return (f"`{target}` is neither a port target nor a service word "
+                f"({', '.join(SERVICE_TARGETS)})")
+    if target == DEAD_CLOSED or target in SERVICE_TARGETS:
+        return (f"a `{verdict}` row names the port body that carries it; `{target}` closes only a "
+                "`dead` or `mechanism` row")
+    return ""
 # Spec 0019 story 4: the tunables overlay. One row per retail number a kernel body reads — an
 # `.rdata` / `.data` cell at its width, an instruction immediate, or a ConVar's shipped default —
 # rendered by `gen_kernel_tunables` into `ElysiumNpcKernelTunables.h/.cpp` and verified against the
 # pinned image by its `--check`. The ledger reads it only to count it into `coverage.md`.
 TUNABLES_TSV = "kernel_tunables.tsv"
 TUNABLE_COLUMNS = ("address", "name", "type", "value", "evidence")
-TUNABLE_TYPES = ("f32", "f64", "i32", "u32", "imm_f32", "imm_i32", "convar_f32", "convar_i32")
+TUNABLE_TYPES = ("f32", "f64", "i32", "u32", "imm_f32", "imm_i32", "convar_f32", "convar_i32",
+                 # 0019/6: a retail GLOBAL the kernel names but does not value -- an engine pointer, a
+                 # table base, a class static, a string. `value` is what it is; the checker only asks
+                 # that the address lies in the image; the header lists it as a comment.
+                 "ref")
 TUNABLE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 # A retail data cell as the port's comments spell it. What the overlay does not yet hold of these,
 # in the NPC substrate, is story 6's migration queue (`gen_kernel_tunables --report`).
@@ -372,8 +457,9 @@ def load_verdicts(path: Path) -> dict[str, Verdict]:
                              f"{', '.join(VERDICT_WORDS)} (or `{UNSETTLED_VERDICT}`)")
         if addr in table:
             raise SystemExit(f"{path}:{number}: {addr} already has a verdict")
-        if verdict != "dead" and not target:
-            raise SystemExit(f"{path}:{number}: a `{verdict}` row needs a target")
+        problem = target_problem(verdict, target)
+        if problem:
+            raise SystemExit(f"{path}:{number}: 0x{addr}: {problem}")
         if not evidence:
             raise SystemExit(f"{path}:{number}: every row needs its one-line evidence")
         table[addr] = Verdict(addr, verdict, band, target, evidence)
@@ -767,7 +853,7 @@ class Ledger:
         for path in sorted(source.rglob("*")):
             if path.suffix not in (".h", ".cpp"):
                 continue
-            if path.name in GENERATED_CENSUS:
+            if path.name in GENERATED_CENSUS or path.name in GENERATED_DATA_TABLES:
                 # The shape census (`gen_kernel_shape`) transcribes this ledger back into project
                 # source: it names every slot body and every species override by address. Reading
                 # it here would make the port "cite" the whole closure and empty the Port column of

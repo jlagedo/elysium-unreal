@@ -143,7 +143,7 @@ bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 	TestTrue(TEXT("FORCE_RELAXED_ANIMS runs after finding cover"), Npc->NpcFlags.Has(EElysiumNpcFlag::FORCE_RELAXED_ANIMS));
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
 	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
-	// `OnNavComplete` (`0x102eea90`) and the owner's `TaskMovementComplete` (`0x10273ec0`).
+	// `OnNavComplete` and the owner's `TaskMovementComplete` (`0x10273ec0`).
 	Npc->NavigatorMoveStep();
 	// One pass: the arrival completes WAIT_FOR_MOVEMENT and the remaining tasks run in the same
 	// `MaintainSchedule` loop up to the authored final wait.

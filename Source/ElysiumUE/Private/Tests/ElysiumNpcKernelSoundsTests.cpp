@@ -58,16 +58,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSoundsOverridesTest,
 bool FElysiumNpcKernelSoundsOverridesTest::RunTest(const FString&)
 {
 	// The census's own-body rows at the sound band on live classes are exactly the camera's
-	// nineteen (inherited by the security camera, 497/506 aside), the Tzimisce pair and the Sabbat
+	// thirteen (inherited by the security camera), the Tzimisce pair and the Sabbat
 	// leader's two branch hooks; `CGeneric_NPC`, `CGenericSabbat_NPC` and `CNPC_VTest` override
 	// sound hooks too but have no instance.
 	const TCHAR* const CameraBodies[] = { TEXT("0x103680b0"), TEXT("0x103680d0"), TEXT("0x103680f0"),
 		TEXT("0x10368110"), TEXT("0x10368130"), TEXT("0x10368150"), TEXT("0x10368170"),
-		TEXT("0x10368190"), TEXT("0x103681b0"), TEXT("0x103681f0"), TEXT("0x10368210"),
-		TEXT("0x10368230"), TEXT("0x10368250"), TEXT("0x10368270"), TEXT("0x10368290"),
-		TEXT("0x103682b0"), TEXT("0x103682d0"), TEXT("0x10368310"), TEXT("0x10368330") };
-	const int32 CameraSlots[] = { 488, 489, 490, 491, 492, 493, 494, 495, 496, 498, 499, 500, 501,
-		502, 503, 504, 505, 507, 508 };
+		TEXT("0x10368190"), TEXT("0x103681f0"), TEXT("0x10368210"), TEXT("0x10368290"),
+		TEXT("0x103682b0"), TEXT("0x10368310") };
+	const int32 CameraSlots[] = { 488, 489, 490, 491, 492, 493, 494, 495, 498, 499, 503, 504, 507 };
 	static_assert(UE_ARRAY_COUNT(CameraSlots) == UE_ARRAY_COUNT(CameraBodies), "one address per slot");
 	const FElysiumNpcClass* Camera = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
 	const FElysiumNpcClass* Security = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity"));
@@ -85,7 +83,7 @@ bool FElysiumNpcKernelSoundsOverridesTest::RunTest(const FString&)
 	TestEqual(TEXT("CNPC_VTzimisce fills 491 with 0x103b9500"),
 		FString(ElysiumNpcTestCensus::BodyOf(Tzimisce, 491)), FString(TEXT("0x103b9500")));
 
-	// The camera's nineteen are empty: the Troika body (which speaks a concept) never runs.
+	// The camera's thirteen are empty: the Troika body (which speaks a concept) never runs.
 	{
 		FSoundsFixture Cam(TEXT("npc_VCamera"));
 		if (TestNotNull(TEXT("the camera spawned"), Cam.Npc))
@@ -94,11 +92,10 @@ bool FElysiumNpcKernelSoundsOverridesTest::RunTest(const FString&)
 			Cam.Npc->VSoundSpeakCalls.Reset();
 			Cam.Npc->DeathSound(); Cam.Npc->AlertSound(); Cam.Npc->IdleSound(); Cam.Npc->PainSound();
 			Cam.Npc->FearSound(); Cam.Npc->LostEnemySound(); Cam.Npc->FoundEnemySound();
-			Cam.Npc->SurprisedSound(); Cam.Npc->TargetAcquiredSound(); Cam.Npc->FleeSound();
-			Cam.Npc->IdleAgitatedSound(); Cam.Npc->ExertHvySound(); Cam.Npc->ExertLightSound();
-			Cam.Npc->RiledSound(); Cam.Npc->ComfortSound(); Cam.Npc->UpsetSound();
-			Cam.Npc->TargetGiveUpSound(); Cam.Npc->FloatSound(); Cam.Npc->SpeakSentence(3);
-			TestEqual(TEXT("the camera's nineteen hooks speak nothing"), Cam.Npc->VSoundSpeakCalls.Num(), 0);
+			Cam.Npc->SurprisedSound(); Cam.Npc->FleeSound();
+			Cam.Npc->IdleAgitatedSound(); Cam.Npc->ComfortSound(); Cam.Npc->UpsetSound();
+			Cam.Npc->FloatSound();
+			TestEqual(TEXT("the camera's thirteen hooks speak nothing"), Cam.Npc->VSoundSpeakCalls.Num(), 0);
 			TestEqual(TEXT("and emit nothing"), Cam.World.Services.BodySounds.Num(), 0);
 		}
 	}
@@ -217,7 +214,7 @@ bool FElysiumNpcKernelSoundsEmitTest::RunTest(const FString&)
 	F.Npc->PainSound();
 	TestEqual(TEXT("...so its PainSound is the Troika body's concept speak"), F.Npc->VSoundSpeakCalls.Num(), 1);
 
-	// Story 5 step 3 correction: the camera's nineteen empty overrides take effect. A spawned
+	// Story 5 step 3 correction: the camera's thirteen empty overrides take effect. A spawned
 	// `npc_VCameraSecurity` inherits `FElysiumNpcCamera`'s, so its pain and death say nothing where
 	// the Troika body would speak a concept.
 	{

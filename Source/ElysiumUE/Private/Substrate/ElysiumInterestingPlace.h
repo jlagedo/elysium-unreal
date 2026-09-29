@@ -49,24 +49,10 @@ public:
 	// `CAI_InterestingPlace::Spawn` (`0x102d9c20`), slot 103.
 	virtual void Spawn() override;
 
-	// `CAI_InterestingPlace::OnRestore` (`0x102d9dd0`), slot 130 — the `CAISound` restore hook and
-	// then the SAME type lookup and self-destruct-on-miss `Spawn` runs, at `DevMsg` rather than
-	// `Warning` severity. Returns whether the place survived the restore.
-	bool OnRestoreResolveType();
-
-	// The half `Spawn` and `OnRestoreResolveType` share: resolve `m_sType` against the type table
-	// when it is non-empty, and answer false when the lookup misses (the arm that removes the
-	// entity). An EMPTY `m_sType` never looks up and never removes — retail's own first test.
+	// The half `Spawn` runs (retail's `OnRestore` ran it too): resolve `m_sType`
+	// against the type table when it is non-empty, and answer false when the lookup misses (the arm
+	// that removes the entity). An EMPTY `m_sType` never looks up and never removes — retail's own first test.
 	bool ResolveTypeOrRemove(bool bWarn);
-
-	// `CAI_InterestingPlaceConverstation::vfunc5` (`0x102dbbc0`). **29c read this as "best guess: the
-	// class constructor ... conditionally hides on bit 0 of param_1". It is not.** It is slot 5, the
-	// LIFETIME slot, and its body is MSVC's scalar deleting destructor verbatim: destroy the two
-	// sub-objects, destroy the six `COutput`s, chain the base destructor, and then
-	// `if (flags & 1) operator delete(this)` — bit 0 is the *free the memory* flag, not a hide.
-	// Answers whether the storage is freed. The six output names are below.
-	static bool ConversationPlaceDeletingDtor(uint8 DeleteFlags);
-	static TConstArrayView<const TCHAR*> ConversationPlaceOutputNames();
 
 	bool IsAvailable() const;
 	bool Claim(const FElysiumEntityHandle& Npc);

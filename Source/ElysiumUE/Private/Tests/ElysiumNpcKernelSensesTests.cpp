@@ -276,7 +276,7 @@ bool FElysiumNpcKernelSensesListenTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slot 45's two species bodies (`0x101aaf80`, `0x103a4bb0`) and `CAI_Hint#163` (`0x102d1320`)
+// Slot 45's two species bodies (`0x101aaf80`, `CNPC_ProneDialog`'s) and `CAI_Hint#163` (`0x102d1320`)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesFovTraceTest,
@@ -330,28 +330,26 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 	TestFalse(TEXT("0x101aaf80: inside the limit with boxes apart on X it refuses"),
 		Phone->PayphonePassesFindEntityFovTrace(*Caller));
 
-	// The census rows both slot-45 bodies came from.
+	// The census row the payphone's slot-45 body came from (the prone-dialog row closed at the trace
+	// service in 0019/6 and is not asserted).
 	const FElysiumNpcClass* Payphone = ElysiumNpcTestCensus::Find(TEXT("CPayphone"));
-	const FElysiumNpcClass* Prone = ElysiumNpcTestCensus::Find(TEXT("CNPC_ProneDialog"));
 	TestEqual(TEXT("CPayphone#45 is 0x101aaf80"),
 		FString(ElysiumNpcTestCensus::BodyOf(Payphone, 45)), FString(TEXT("0x101aaf80")));
-	TestEqual(TEXT("CNPC_ProneDialog#45 is 0x103a4bb0"),
-		FString(ElysiumNpcTestCensus::BodyOf(Prone, 45)), FString(TEXT("0x103a4bb0")));
 	TestEqual(TEXT("and npc_payphone resolves to CPayphone"),
 		FString(ElysiumNpcTestCensus::OfClassname(TEXT("npc_payphone"))->Name),
 		FString(TEXT("CPayphone")));
 
-	// `0x103a4bb0` — the prone-dialog ray, driven on an ordinary NPC. (`npc_VProneDialog` builds
+	// `CNPC_ProneDialog#45` — the prone-dialog ray, driven on an ordinary NPC. (`npc_VProneDialog` builds
 	// `CNPC_ProneDialog` since story 5 step 2, population.md; this case does not stand one.)
 	bool bRayValid = false;
-	TestTrue(TEXT("0x103a4bb0: a clear segment passes (the tr.m_pEnt == NULL arm)"),
+	TestTrue(TEXT("prone dialog: a clear segment passes (the tr.m_pEnt == NULL arm)"),
 		Caller->ProneDialogPassesFindEntityFovTrace(FVector::ZeroVector, FVector(100.f, 0.f, 0.f),
 			0x202400b, bRayValid));
-	TestTrue(TEXT("0x103a4bb0: and the ray's own IsRay byte is the != 0.0 squared length"),
+	TestTrue(TEXT("prone dialog: and the ray's own IsRay byte is the != 0.0 squared length"),
 		bRayValid);
 	Caller->ProneDialogPassesFindEntityFovTrace(FVector(7.f, 8.f, 9.f), FVector(7.f, 8.f, 9.f),
 		0x202400b, bRayValid);
-	TestFalse(TEXT("0x103a4bb0: a degenerate ray clears that byte"), bRayValid);
+	TestFalse(TEXT("prone dialog: a degenerate ray clears that byte"), bRayValid);
 
 	// `0x102d1320` — `CAI_Hint::IsViewable`, pure over the hint's own words.
 	FElysiumNpcBase::FHintWords Hint;
@@ -597,7 +595,7 @@ bool FElysiumNpcKernelSensesWitnessTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// `OnDoorBlocked` (`0x1027de00`) and slot 86 `ShouldTransmit` (`0x102c0420`)
+// `OnDoorBlocked` (`0x1027de00`)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesDoorTest,
@@ -662,12 +660,6 @@ bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 	F.Guard->OnDoorBlocked(*F.Other);
 	TestFalse(TEXT("0x1027de00: IsAlive() gates the whole body"), F.Guard->BlockedDoor.IsSet());
 	F.Guard->bDead = false;
-
-	// Slot 86 `ShouldTransmit` (`0x102c0420`). `0x102c1170` is NAMED `IsInDialog` and FORCES the
-	// transmit; the base body has no port counterpart and this substrate has no PVS culling, so
-	// both arms answer true.
-	TestTrue(TEXT("0x102c0420: an NPC not in dialog still transmits (no PVS here)"),
-		F.Guard->ShouldTransmit(0, nullptr, nullptr, 0, 0));
 	return true;
 }
 

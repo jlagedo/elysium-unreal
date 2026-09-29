@@ -42,34 +42,6 @@ int32 MeleeMoveRecordClears = 0;
 
 // --- Slot 590 `OkToInterruptForMelee` and slot 592 `CanSeekCover` ---------------------------------
 
-// --- The component factories, slots 424–430 -------------------------------------------------------
-//
-// **There is no `CAI_Senses`, `CAI_Motor`, `CAI_MoveProbe`, `CAI_LocalNavigator`, `CAI_Navigator` or
-// `CAI_Pathfinder` object in this runtime.** The shape map says so twice: `+0x5cdc` is bound to
-// `FElysiumNpc::Senses` (a struct on the NPC, not a component) and `+0x5d34`..`+0x5d44` are
-// `ELYSIUM_NPC_WORD_CHAIN` rows pointing at `FElysiumScriptedCharacter::Motor`, the one
-// `IElysiumNpcMotor` seam. So the six factories answer null and record the allocation retail would
-// have made, and `CreateComponents` (slot 424) runs retail's fail-fast chain over them and answers
-// false at the first refusal — which IS retail's answer when a factory returns null.
-
-/** One factory's recovered allocation: the slot, the class whose body fills it, the body's address,
- *  the byte size `operator new` is called with and the constructor the block is handed to. Every row
- *  is checkable against `docs/vtmb/npc-kernel/slots.md`. */
-struct FComponentFactory
-{
-	int32 Slot = 0;
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	int32 SizeBytes = 0;
-	const TCHAR* Constructor = nullptr;
-	// The vftable the body assigns after construction, empty when the constructor's own stands.
-	const TCHAR* VTable = nullptr;
-};
-
-/** The table: the six Troika-line factories plus the one live species override this family carries
- *  (`CNPC_VRat`'s local navigator). */
-static const FComponentFactory* ComponentFactoryRows(int32& OutCount);
-
 // --- The remaining non-slot bodies ----------------------------------------------------------------
 
 /** `0x10381c00` — the `CNPC_VHengeyokai` carry form bit. Sets or clears `m_bfAINPCFlags`
@@ -77,16 +49,6 @@ static const FComponentFactory* ComponentFactoryRows(int32& OutCount);
  *  (`+0x666c`) with `curtime + RandomFloat(5.0, 8.0)` and clears `m_bDidFakeThrow` (`+0x667d`).
  *  Family **Bosses**' `CallFormBit` seam stood for this and now forwards to it. */
 void FormBit(bool bSet);
-
-/** `CBaseCombatCharacter::GetExpressionEventParams` (`0x10014ba0`) — the base slot 347 body the
- *  Troika override forwards every event but `1` to. Fully recovered, so it is ported rather than
- *  seamed. */
-bool CombatCharacterExpressionEventParams(int32 Event, TCHAR* OutName, float* OutA, float* OutB,
-	float* OutC, float* OutD) const;
-
-/** The `Q_strncpy(buffer, "Knockback", 0x40)` both slot-347 bodies open their event-1 arm with —
- *  retail's fixed 64-character buffer, so the port's copy is bounded the same way. */
-static constexpr int32 ExpressionEventNameChars = 0x40;
 
 /** **SEAM** for `victim->vtable[+0x428]` (slot 266), the reaction `CNPC_VGargoyle`'s slot 24
  *  dispatches ON THE VICTIM (`MOV ECX,ESI` at `0x1037a54a`, `this` as the one argument). The victim

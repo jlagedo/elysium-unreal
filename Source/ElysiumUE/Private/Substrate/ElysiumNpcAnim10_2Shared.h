@@ -26,7 +26,7 @@ namespace NpcKernelAnim10_2Shared
 	// `DAT_10924a1c` is the melee-range ConVar every selector thresholds on,
 	// `debug_melee_advance_combatmove_dist` "100". `MeleeRangeUnits()` (family TroikaHelpers) reads
 	// it and is called here so the six bodies cannot drift.
-	inline constexpr float GAnim10_2FarMargin = 200.0f;       // _DAT_104492b8
+	inline constexpr float GAnim10_2FarMargin = ElysiumNpcTunables::TwoHundred;
 	inline constexpr float GAnim10_2HeightBand = ElysiumNpcTunables::SixtyFour;
 	inline constexpr double GAnim10_2TimerUnarmed = -1.0;     // 0xbf800000
 	inline constexpr float GAnim10_2RetryMin = 3.0f;          // RandomFloat(3.0, 4.0)

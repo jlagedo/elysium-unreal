@@ -15,7 +15,6 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VTaxiDriver", FElysiumNpcHuman)
 
 	virtual void NPCInit() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

@@ -23,7 +23,6 @@
 #include "Substrate/ElysiumNpcDamageShared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcLifecycleShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
 #include "Substrate/ElysiumNpcSpeciesMisc10Shared.h"
@@ -42,13 +41,6 @@ namespace
 {
 	// `CNPC_VGhoulCroucher::OnDisturbed`'s `AddEntityRelationship(player, D_HT, 10)`.
 	constexpr int32 GCondDisturbedHatePriority = 10;
-	const TCHAR* const GGhoulCroucherWeapon = TEXT("item_w_claws_ghoul");
-	// `0x1063b088` then `0x1063b028`, preload 0 — the two models that make the male/female split in
-	// its `SetModel` sibling (`0x1037b1f0`) reachable.
-	const TCHAR* const GGhoulCroucherModels[] = {
-		TEXT("models/character/npc/unique/Malkavian_mansion/Stalker/stalker.mdl"),
-		TEXT("models/character/npc/unique/Malkavian_mansion/Stalker_Female/stalker_female.mdl"),
-	};
 	// `CBaseEntity::field_0x94`, the cached `CAI_BaseNPC*` — non-null on exactly an NPC. Family
 	// Conditions reads it the same way for the comforter test (`ElysiumNpcConditions.cpp:683`).
 	bool SpeciesLifecycle10IsNpc(const FElysiumEntity* Candidate)
@@ -90,22 +82,6 @@ void FElysiumNpcGhoulCroucher::NPCInit()
 	NpcKernelLifecycle19_2Shared::Lifecycle19_2HatePlayerClass(*this);
 }
 
-// Slot 104: `0x1037b1a0`.
-// 0x1037b1a0
-void FElysiumNpcGhoulCroucher::Precache()
-{
-	// `CNPC_VGhoulCroucher::Precache` `0x1037b1a0` — 55 bytes, the shortest arm in the band: the
-	// Troika body, the claws, and the two Malkavian-mansion stalker models with preload 0. Those two
-	// models are what makes the male/female split in its `SetModel` sibling (`0x1037b1f0`)
-	// reachable.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10Other(*this, GGhoulCroucherWeapon);
-	for (const TCHAR* StalkerModel : GGhoulCroucherModels)
-	{
-		NpcKernelPrecache10Shared::Precache10Model(*this, StalkerModel, /*Preload=*/0);
-	}
-}
-
 // Slot 105: `0x1037b1f0`, the vocalization-group body shared with the zombie; it calls the Troika
 // body `0x10298ce0` directly.
 void FElysiumNpcGhoulCroucher::SetModel(TCHAR* ModelName)
@@ -129,16 +105,6 @@ void FElysiumNpcGhoulCroucher::OnVictimHitByMe(FElysiumEntity* Victim)
 		BurnPlayer(Victim, 10.f);
 	}
 	FElysiumNpc::OnVictimHitByMe(Victim);   // `0x1029f8d0`, direct
-}
-
-// Slot 546: `0x1037a950`, the class's own schedule id space.
-const TCHAR* FElysiumNpcGhoulCroucher::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b0e0`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VGhoulCroucher"), TEXT("0x1037a950"), TEXT("0x1093b0e0") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 615: `0x1037c420`, whose miss calls the Troika body `0x102ad0c0` directly.

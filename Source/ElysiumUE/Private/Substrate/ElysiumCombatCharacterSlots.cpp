@@ -6,9 +6,10 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 139 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 22 are defined by hand in the substrate, and 98 are still stubs — 63 29c, 25 29d, 5
-// 29e, 5 unassigned.
+// 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
+// recovered, 19 are defined by hand in the substrate, and 97 are still stubs — 62 29c, 25 29d, 5
+// 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
+// tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -103,22 +104,6 @@ bool FElysiumCombatCharacter::CausesImpactDamage(FElysiumEntity*)
 bool FElysiumCombatCharacter::ReceivesImpactDamage(FElysiumEntity*)
 {
 	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::ReceivesImpactDamage"), TEXT("0x103404f0"),
-		TEXT("29c"), DebugString());
-	return {};
-}
-
-// slot 79 0x10321670 (walked) `datamap_t* GetPredDescMap()`
-//   returns `datamap_t*`
-//   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumCombatCharacter::GetPredDescMap`, written by hand in
-// the substrate. Declared here, defined there.
-
-// slot 80 0x10321960 (walked) `ServerClass* GetServerClass()`
-//   returns `ServerClass*`
-//   layer 0, story 29c
-void* FElysiumCombatCharacter::GetServerClass()
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::GetServerClass"), TEXT("0x10321960"),
 		TEXT("29c"), DebugString());
 	return {};
 }
@@ -279,12 +264,6 @@ void FElysiumCombatCharacter::VPhysicsShadowCollision(int32, void*)
 		TEXT("0x10334a50"), TEXT("29c"), DebugString());
 }
 
-// slot 240 0x1014f8b0 (walked) `PyObject* vfunc240()`
-//   returns `PyObject*`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumCombatCharacter::Slot240`, written by hand in the substrate.
-// Declared here, defined there.
-
 // slot 244 0x103408e0 (walked) `const char* GetSkeletonModelName()`
 //   layer 12, story 29d
 const TCHAR* FElysiumCombatCharacter::GetSkeletonModelName()
@@ -359,8 +338,12 @@ bool FElysiumCombatCharacter::CanTalk(FElysiumEntity*)
 
 // slot 296 0x10348ba0 (walked) `bool vfunc296(int)`
 //   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumCombatCharacter::Slot296`, written by hand in the substrate.
-// Declared here, defined there.
+bool FElysiumCombatCharacter::Slot296(int32)
+{
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 297 0x10332ef0 (walked) `void AdjustDialogReaction(CBaseEntity*, int, const char*)`
 //   layer 15, story 29d
@@ -1227,14 +1210,6 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*)>::Test(&FElysiumCombatCharacter::ReceivesImpactDamage),
 				nullptr },
-			{ 79, TEXT("0x10321670"), TEXT("CBaseCombatCharacter"), TEXT("GetPredDescMap"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void*()>::Test(&FElysiumCombatCharacter::GetPredDescMap),
-				nullptr },
-			{ 80, TEXT("0x10321960"), TEXT("CBaseCombatCharacter"), TEXT("GetServerClass"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void*()>::Test(&FElysiumCombatCharacter::GetServerClass),
-				nullptr },
 			{ 81, TEXT("0x10321980"), TEXT("CBaseCombatCharacter"),
 				TEXT("YouForgotToImplementOrDeclareServerClass"), EElysiumNpcSlotBody::Default,
 				TEXT("0"), 0, false, true,
@@ -1309,10 +1284,6 @@ namespace ElysiumNpcKernelShape
 				true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(int32, void*)>::Test(&FElysiumCombatCharacter::VPhysicsShadowCollision),
 				nullptr },
-			{ 240, TEXT("0x1014f8b0"), TEXT("CBaseCombatCharacter"), TEXT("Slot240"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void*()>::Test(&FElysiumCombatCharacter::Slot240),
-				nullptr },
 			{ 244, TEXT("0x103408e0"), TEXT("CBaseCombatCharacter"), TEXT("GetSkeletonModelName"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, const TCHAR*()>::Test(&FElysiumCombatCharacter::GetSkeletonModelName),
@@ -1349,7 +1320,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*)>::Test(&FElysiumCombatCharacter::CanTalk),
 				nullptr },
 			{ 296, TEXT("0x10348ba0"), TEXT("CBaseCombatCharacter"), TEXT("Slot296"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(int32)>::Test(&FElysiumCombatCharacter::Slot296),
 				nullptr },
 			{ 297, TEXT("0x10332ef0"), TEXT("CBaseCombatCharacter"), TEXT("AdjustDialogReaction"),

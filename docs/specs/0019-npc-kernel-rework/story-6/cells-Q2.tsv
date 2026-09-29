@@ -1,0 +1,83 @@
+104454c8	Eighty	f32	80.0	pooled 80.0f; `_DAT_104454c8` in the move-target goal-refresh distance (Conditions2 `Conditions19RefreshGoalPosition`, checklist 19-29 mechanism seam)	ElysiumNpcConditions2.inl:28
+104454cc	SeventyFive	f32	75.0	`CBaseEntity` camera default `0x10026830` returns it (`return _DAT_104454cc`), slot 49 forward in Closure.cpp; also stated in `Substrate/ElysiumCameraOverride.h`	ElysiumNpcClosure.cpp:169
+10447ee8	LateralCoverStepUnits	f32	48.0	`CAI_BaseNPC::FindLateralCover 0x102784a0`: five pairs of lateral steps of 48 source units along the right vector	ElysiumNpcBaseStartTask.inl:217
+10449198	FifthDouble	f64	0.2	pooled double 0.2 (`FMUL double ptr`); `CNPC_VFrenzyShadow` goal-tolerance scale `0x10375fb4` and the autoaim score term `0x10176930`	ElysiumNpcFrenzyShadow.cpp:66
+104491a8	EightTenthsDouble	f64	0.8	double 0.8; `0x102f6690` arms the AI network manager's first think at `curtime + 0.8` at the end of `CWorld::Precache`'s network build	ElysiumNpcBaseThink.inl:27
+10449260	QuarterDouble	f64	0.25	double 0.25 (`FCOMP double ptr`); the tentacle scatter cone and the `npc_vphysics` arrival tolerance; read as a float it is 0.0	ElysiumNpcGeometry.cpp:21
+104492b8	TwoHundred	f32	200.0	pooled 200.0f; MingXiao melee-helpless player-distance gate `0x10394ef5` and the ranged-spacing margin `0x102b8620`/`0x102b8824` added to the melee-range ConVar	ElysiumNpcCombat10_2.cpp:29
+1044ddb0	TwoFiftySix	f32	256.0	`0x1039ec56 FCOMP`: the MingXiao tentacle-flee enemy-distance ceiling (Conditions2Species)	ElysiumNpcConditions2Species.cpp:422
+1044e664	Ten	f32	10.0	pooled 10.0f; `CNPC_VTzimisce` shunned-body timer `0x103bd175`: `Now + 10.0`	ElysiumNpcConditions2Species.cpp:694
+1044eb08	DegreesToRadians	f32	0.017453292	pi/180; the yaw sweep of `0x102a1650` (`0x102a1656` yaw times the cell, then `FSINCOS`)	ElysiumNpcCombat10.cpp:44
+1044f02c	OneAndHalf	f32	1.5	pooled 1.5f; the see-unknown sweep's `stopped seeing it` grace, `+0x6084 = curtime + 1.5`	ElysiumNpcConditions.h:481
+1044f030	MinusHalf	f32	-0.5	`0x102c4cc0` ballistic solver: `g = sv_gravity * m_flGravity(+0x3ec) * _DAT_1044f030`	ElysiumNpcBosses.cpp:118
+1044ffd0	FiveDouble	f64	5.0	double 5.0 at file offset `0x44ffd0`; `CNPC_VGhoulCroucher` touch-burn re-arm `m_flNextTouchBurnTime = curtime + 5.0`	ElysiumNpcGhoulCroucher.cpp:138
+10450568	ThreeSixty	f32	360.0	pooled 360.0f; whole-turn wrap of `UTIL_AngleDiff 0x1013d580` and the autoaim angle normalisation `0x10176520`	ElysiumNpcEntityChain2.cpp:27
+10450a9c	NineTenths	f32	0.9	`CBasePlayer::GetAutoaimVector 0x10176520` scale arm (`DAT_1070ba3c == 1` scales by the cell)	ElysiumNpcEntityChain.inl:311
+10450aa0	Four	f32	4.0	pooled 4.0f; `0x102c4cc0` ballistic discriminant `d = z*z - -(dz) * g * 4`	ElysiumNpcBosses.cpp:119
+10451ab4	Fifth	f32	0.2	pooled 0.2f; the squad sweep `0x102b2730` (`LastTimeSeen(enemy) + 0.2`, SQUAD_SEE_ENEMY 0x31)	ElysiumNpcConditions2.inl:87
+10451ab8	ThreeTenths	f32	0.3	pooled 0.3f; MingXiao tentacle side-step half-width factor `0x10395035` (enemy OBB width * 0.3) and the autoaim old-sample weight `0x10176520`	ElysiumNpcConditions2Species.cpp:389
+104528d4	Seventy	f32	70.0	pooled 70.0f; the 90-degree turn rungs of the turn-activity ladder (family Facing)	ElysiumNpcFacing.cpp:58
+10452dc4	Two	f32	2.0	pooled 2.0f; `CAI_BaseNPCTroika::MaintainEyeDirection 0x102bff20`: `m_flNextEyeLookTime = curtime + 2.0` with a live dialogue partner	ElysiumNpcClosure.cpp:57
+10457f54	SevenTenths	f32	0.7	the NEW-sample weight of the autoaim blend (`0x10176520`; `docs/vtmb/computer-terminals.md`, `npc-ai/senses.md`)	ElysiumNpcEntityChain2.cpp:24
+10462948	MinusOneEighty	f32	-180.0	pooled -180.0f; lower wrap bound of `UTIL_AngleDiff 0x1013d580`, the autoaim normalisation and the facing ladder	ElysiumNpcEntityChain2.cpp:28
+10462990	ThirtyTwo	f32	32.0	pooled 32.0f; `0x102b2f3b` wall-trace length of the Troika stop-backup gate	ElysiumNpcConditions2.inl:81
+104629ec	TwoAndHalf	f32	2.5	pooled 2.5f; `CNPC_VTzimisce` pounce-check timer `0x103bd0c1`: `Now + 2.5`	ElysiumNpcConditions2Species.cpp:670
+104994a0	MinusOne	f32	-1.0	pooled -1.0f; the tolerance argument the location-goal wrapper passes (StartTask: keep the path's own tolerance)	ElysiumNpcBaseStartTask.cpp:2843
+1049a198	MinusEighty	f32	-80.0	`0x1038204b..0x103820b3`: the MingXiao ray start is `EyePosition() - right * -80`, 80 units to the NPC's right	ElysiumNpcConditions2Species.cpp:277
+1049a1b8	BlockedReactionShort	f32	0.5	blocked-reaction re-arm `(_DAT_1049a1bc - _DAT_1049a1b8) * t + _DAT_1049a1b8` (`0x1029fcf0` slot 318 neighbourhood, family Damage), low end	ElysiumNpcDamage.cpp:34
+1049a1bc	BlockedReactionLong	f32	1.5	the high end of the same lerp as `1049a1b8`	ElysiumNpcDamage.cpp:35
+1049a1c0	AttackReArmShort	f32	0.3	slot 318 attack re-arm `FLD [0x1049a1c0]; FSUB [0x1049a1c4]; FADD [0x1049a1c4]; FADD curtime` (`0x1029fcf0`): the delay is the first cell	ElysiumNpcDamage3.cpp:48
+1049a1c4	AttackReArmLong	f32	1.5	the second cell of the slot 318 attack re-arm	ElysiumNpcDamage3.cpp:48
+1049a1c8	FlightTimeFloor	f32	0.0001	`0x102c4cc0` ballistic solver: a flight time at or below the cell answers a zero XY impulse	ElysiumNpcBosses.cpp:122
+1049a1d8	KnockbackXyLow	f32	220.0	`ComputeKnockbackVelocity` XY blend, low end (family Combat10)	ElysiumNpcCombat10.cpp:38
+1049a1dc	KnockbackXyHigh	f32	400.0	the XY blend's high end	ElysiumNpcCombat10.cpp:38
+1049a1e0	KnockbackZLow	f32	200.0	the Z blend's low end	ElysiumNpcCombat10.cpp:41
+1049a1e4	KnockbackZHigh	f32	310.0	the Z blend's high end	ElysiumNpcCombat10.cpp:41
+1049a1f4	StandingOnHeadLift	f32	0.1	`0x102bfa41..0x102bfaaf`: the Z lift applied to the trace start and subtracted back off the destination, source units	ElysiumNpcGeometry.cpp:49
+1049a1f8	StandingOnHeadSpeed	f32	40.0	`0x102bfa56..0x102bfaaf`: the push speed, source units per second	ElysiumNpcGeometry.cpp:50
+1049adfc	ClosureWakeRadiusSquared	f32	4194304.0	slot 583 `0x1028d860`: the squared source-unit radius (2048^2) a distance is compared against	ElysiumNpcClosure.cpp:52
+1049ae34	MinusFifteen	f32	-15.0	the -15 degree rung of the turn-activity ladder (family Facing)	ElysiumNpcFacing.cpp:59
+1049ae38	OneForty	f32	140.0	the 140 degree rung of the turn-activity ladder	ElysiumNpcFacing.cpp:59
+1049ae3c	MinusOneForty	f32	-140.0	the -140 degree rung of the turn-activity ladder	ElysiumNpcFacing.cpp:58
+1049ae40	MinusSeventy	f32	-70.0	the -70 degree rung of the turn-activity ladder	ElysiumNpcFacing.cpp:58
+1049ae98	MinusTwenty	f32	-20.0	`0x103822a0` Hengeyokai pickup facing cone lower bound; the kick clamp `0x102b6890` lower bound	ElysiumNpcHengeyokai.cpp:51
+1049d97c	GoalToleranceKeep	f32	-1.0	`0x102ecdc9..0x102ecdf1` goal tolerance sentinel: -1.0 keeps the path's own tolerance	ElysiumNpcBaseStartTask.cpp:2017
+1049d980	GoalToleranceHull	f32	-2.0	`0x102ecdc9` goal tolerance sentinel: -2.0 takes the hull's width	ElysiumNpcBaseStartTask.cpp:2016
+1049e048	MeleeReachPad	f32	100.0	`0x10345818..0x10345837`: the pad the swinger's sequence reach is added to (family Damage3)	ElysiumNpcDamage3.cpp:131
+104ad9f4	ChangBrosLastTeleportFloor	f32	100.0	`CNPC_VChangBros` teleport-node clearance `0x1036d270`: nodes nearer than this to the last teleport position are skipped	ElysiumNpcChangBros.cpp:77
+104ad9f8	ChangBrosTeleportHealthLoss	f32	0.1	`1036caee`: `0x103c6a20 >= _DAT_104ad9f8`, the teleport health-loss threshold	ElysiumNpcChangBros.cpp:79
+104ad9fc	ChangBrosFacingLengthFloor	f32	1e-05	`CNPC_VChangBros::UpdateFacingTimer 0x1036d600`: `1e-05 < len`	ElysiumNpcChangBros.cpp:221
+104ada00	ChangBrosJumpCooldown	f32	16.0	`curtime - m_fLastJumpTime < 16.0` (`CNPC_VChangBros` jump gate)	ElysiumNpcChangBros.cpp:65
+104ada04	ChangBrosTeleportPositionMaxAge	f32	3.0	`0x1036d270`: `3.0 < curtime - m_fLastTeleportTime`	ElysiumNpcChangBros.cpp:76
+104ada08	ChangBrosFacingWaitAlone	f32	7.0	`GetFacingTimeToTeleport 0x1036dc60`: the lone-brother wait	ElysiumNpcChangBros.cpp:197
+104ada0c	ChangBrosFacingWaitSquad	f32	21.0	`GetFacingTimeToTeleport 0x1036dc60`: the wait while the other brother stands	ElysiumNpcChangBros.cpp:196
+104ada10	ChangBrosFacingHeightBand	f32	50.0	`UpdateFacingTimer 0x1036d600`: `|d.z| < 50`	ElysiumNpcChangBros.cpp:218
+104ada14	ChangBrosFacingRange	f32	150.0	`UpdateFacingTimer 0x1036d600`: `len < 150`	ElysiumNpcChangBros.cpp:221
+104ada18	ChangBrosFacingYawBand	f32	70.0	`UpdateFacingTimer 0x1036d600`: `|AngleDiff| < 70`	ElysiumNpcChangBros.cpp:224
+104ada1c	ChangBrosSuperJumpNearRise	f32	50.0	super-jump height, `|dz| < 40` arm: `(near : far) + dz`	ElysiumNpcChangBros.cpp:66
+104ada20	ChangBrosSuperJumpFarRise	f32	150.0	super-jump height, far arm	ElysiumNpcChangBros.cpp:67
+104ada24	ChangBrosEnergyBallForward	f32	50.0	`CNPC_VChangBros::SpawnEnergyBall 0x1036dd20` offset triple, first component	ElysiumNpcDamage2.cpp:24
+104ada28	ChangBrosEnergyBallRight	f32	40.0	`SpawnEnergyBall 0x1036dd20` offset triple, second component	ElysiumNpcDamage2.cpp:25
+104ada2c	ChangBrosEnergyBallUp	f32	-10.0	`SpawnEnergyBall 0x1036dd20` offset triple, third component	ElysiumNpcDamage2.cpp:26
+104ada30	ChangBrosEnergyBallSpeed	f32	800.0	`SpawnEnergyBall`: the speed pushed to the `+0x5d0` launch call	ElysiumNpcChangBros.cpp:55
+104ada3c	ChangBrosSuperJumpSplit	f32	40.0	super-jump split: `ABS(dz) < 40 ? near : far`	ElysiumNpcChangBros.cpp:68
+104ada48	ChangBrosUnitedAttackCooldown	f32	30.0	`1036cc18`: `m_fLastUnitedAttackTime + 30.0 < curtime`	ElysiumNpcChangBros.cpp:81
+104ada4c	ChangBrosUnitedHealthFraction	f32	0.5	`1036cc4c`: true unless BOTH brothers' health percent is below the cell	ElysiumNpcChangBros.cpp:81
+104ada60	ChangBrosSectorOneDistSq	f32	270.0	`CNPC_VChangBros::GetSector 0x1036e580`: sector 1 test, compared against a squared distance as retail does	ElysiumNpcChangBros.cpp:72
+104ada64	ChangBrosSectorTwoRadius	f32	370.0	`GetSector 0x1036e580`: sector 2 radius, squared by static-init `0x1036e500`	ElysiumNpcChangBros.cpp:73
+104ada68	ChangBrosSectorThreeRadius	f32	525.0	`GetSector 0x1036e580`: sector 3 radius, squared by static-init `0x1036e550`	ElysiumNpcChangBros.cpp:74
+104ada6c	ChangBrosSectorZThreshold	f32	200.0	`GetSector 0x1036e580`: the pit height test `p.z - c.z >= 200`	ElysiumNpcChangBros.cpp:71
+104b73e4	TzimisceLeadDistSqMin	f32	40000.0	`103bf740..103bf75c`: the Tzimisce lead-position distance-squared floor (an ordered `d < 40000` refuses)	ElysiumNpcConditions2Species.cpp:596
+104cc530	TzimisceLeadDistSqMax	f32	360000.0	`103bf740..103bf75c`: the Tzimisce lead-position distance-squared ceiling (an ordered `d > 360000` refuses)	ElysiumNpcConditions2Species.cpp:596
+105c9798	AiStepIndexFloor	i32	-1	`.data` global `DAT_105c9798`, -1 in the pinned image: the `ai_step` debug-index floor `0x1026c3d0` compares `+0x5f40` against (family Maintain19 `FreezeForAiStep` reads the same cell)	ElysiumNpcBaseThink.cpp:79
+106bbaa0	NpcVphysics	convar_i32	0	`npc_vphysics` static initialiser, read through `DAT_106bbaa4` (object + 4): `+0x2c` int; non-zero selects the 0.25 arrival tolerance in the path advance (`docs/vtmb/navigation-jump-links.md`)	-
+107083d8	ParticleScale	convar_f32	1.0	`particle_scale` static initialiser, read through `DAT_107083dc` (object + 4): `+0x28` float; the ghoul-croucher burn effect rate multiplier	-
+10724ff8	PlSupernaturalLevel	convar_i32	-1	`pl_supernatural_level` static initialiser, read through `DAT_10724ffc` (object + 4): `+0x2c` int; negative means use the stored `m_LevelSupernaturalAct` (`0x1017dd80`)	-
+107250d0	PlInvestigateLevel	convar_i32	-1	`pl_investigate_level` static initialiser, read through `DAT_107250d4` (object + 4): `+0x2c` int; negative means use the stored `m_LevelInvestigateAct` (`0x1017de60`)	-
+10725948	PlCriminalLevel	convar_i32	-1	`pl_criminal_level` static initialiser, read through `DAT_1072594c` (object + 4): `+0x2c` int; negative means use the stored criminal act level	-
+107257b8	DebugResponseTimerMin	convar_f32	5.0	`debug_response_timer_min` static initialiser, read through `DAT_107257bc` (object + 4): `+0x28` float; the low bound `SetSpawnResponseCops` draws the police response delay from	-
+10725890	DebugResponseTimerMax	convar_f32	7.5	`debug_response_timer_max` static initialiser, read through `DAT_10725894` (object + 4): `+0x28` float; the high bound of the same draw	-
+107258d8	DebugShowCsActs	convar_i32	0	`debug_show_cs_acts` static initialiser, read through `DAT_107258dc` (object + 4): `+0x2c` int; gates `RemoveCopInPursuit`'s DevMsg (`conditions-and-states.md`)	-
+10725f70	DebugHeightenedAlertExpireTime	convar_f32	40.0	`debug_heightened_alert_expire_time` static initialiser, read through `DAT_10725f74` (object + 4): `+0x28` float; `BeginHeightenedAlert` adds it to curtime for the alert's expiry (`docs/vtmb/player-entity.md`)	-
+10924ed8	EntTraceMelee	convar_i32	0	`ent_trace_melee` static initialiser, read through `DAT_10924edc` (object + 4): touched by slot 1 (`->vfunc1()`) in the melee-entered arms of Bosses / Hengeyokai / FrenzyShadow / Gargoyle; no reader of the value	-
+10940498	ZombieGibAmt	convar_i32	100	`zombie_gib_amt` static initialiser, read through `DAT_1094049c` (object + 4): touched by slot 1 in the Damage3Species slot-313 body (unconstructed in this port, reads 0)	-

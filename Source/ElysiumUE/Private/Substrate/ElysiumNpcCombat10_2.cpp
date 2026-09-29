@@ -27,7 +27,7 @@ namespace
 {
 
 	// `_DAT_104492b8` — 200.0, the margin `0x102b8620` adds to the melee-range convar.
-	constexpr float GRangedSpacingMargin = 200.0f;
+	constexpr float GRangedSpacingMargin = ElysiumNpcTunables::TwoHundred;
 
 	constexpr int32 GSpacingRollThreshold = 0x18;    // 24 — `0x102b8620`'s `0xe5` gate (`> 0x18`)
 	constexpr int32 GTauntRollThreshold = 0x45;      // 69 — `0x102b7cf0`'s `0x8f` gate (`> 0x45`)

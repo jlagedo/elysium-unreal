@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 43 generated slot rows of `FElysiumAnimating` (CBaseAnimating, CBaseToggle): 23 it introduces and
-// 20 it overrides with a body of its own.
+// 38 generated slot rows of `FElysiumAnimating` (CBaseAnimating, CBaseToggle): 23 it introduces and
+// 15 it overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -63,12 +63,6 @@
 	// slot 105 0x10095030 (sdk) `void SetModel(char*)`
 	//   layer 0, story 29c
 	void SetModel(TCHAR*) override;
-	// slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
-	//   layer 11, story 29d
-	bool KeyValue(const TCHAR*, FVector) override;
-	// slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
-	//   layer 11, story 29d
-	bool KeyValue(const TCHAR*, float) override;
 	// slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
 	//   layer 10, story 29d
 	bool KeyValue(const TCHAR*, const TCHAR*) override;
@@ -77,18 +71,9 @@
 	// slot 130 0x1008df10 (walked) `void OnRestore(bool)`
 	//   layer 0, story 29c
 	void OnRestore(bool) override;
-	// slot 133 0x101c1720 (walked) `void MoveDone()`
-	//   layer 9, story 29c
-	void MoveDone() override;
-	// slot 135 0x101c10d0 (walked) `float vfunc135(float)`
-	//   layer 1, story 29c
-	float Slot135(float) override;
 	// slot 137 0x1004fc50 (walked) `CBaseAnimating* GetBaseAnimating()`
 	//   layer 0, story 29c
 	FElysiumEntity* GetBaseAnimating() override;
-	// slot 152 0x1004fc10 (walked) `float GetDelay()`
-	//   layer 0, story 29c
-	float GetDelay() override;
 	// slot 199 0x10095e50 (sdk) `void GetVelocity(Vector*, AngularImpulse*)`
 	//   takes `AngularImpulse*`
 	//   layer 0, story 29c
@@ -162,6 +147,3 @@
 	// slot 264 0x10096980 (walked) `void DrawServerHitboxes()`
 	//   layer 0, story 29c
 	virtual void DrawServerHitboxes();
-
-	// The inherited overloads of an overridden name stay visible.
-	using FElysiumEntity::KeyValue;

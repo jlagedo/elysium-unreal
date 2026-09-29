@@ -522,7 +522,7 @@ slot	class	method	return	params	const	tier	retail_words	sdk_words
 520		GetFacingDirection	float	Vector&		sdk	1	1
 521		IsJumpLegal	bool	Vector&, Vector&, Vector&	const	sdk	3	3
 522		StepHeight	float		const	sdk	0	0
-523		GetMaxJumpSpeed	float		const	sdk	0	0
+523		GetStepDownHeight	float		const	walked	0	0
 524		GetJumpGravity	float		const	sdk	0	0
 525		OverrideMove	bool	float		sdk	1	1
 526		OverrideMoveFacing	bool	AILocalMoveGoal_t&, float		sdk	2	2

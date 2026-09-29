@@ -1,0 +1,61 @@
+0x10026e70: `dead` row closed at `-` is still cited by ElysiumMover.h:61
+0x10027370: `mechanism` row closed at `CMC` is still cited by ElysiumNpcBaseLifecycle.cpp:378, ElysiumNpcKernelMotorTests.cpp:340
+0x10027630: `mechanism` row closed at `Replication` is still cited by ElysiumNpcKernelLifecycleTests.cpp:109
+0x10098a40: `mechanism` row closed at `0015` is still cited by ElysiumAnimatingOverlaySlotBodies.cpp:99
+0x10099020: `mechanism` row closed at `0015` is still cited by ElysiumNpcKernelAnimTests.cpp:48, ElysiumNpcKernelEntityChainTests.cpp:170
+0x100b5e60: `mechanism` row closed at `UEContainer` is still cited by ElysiumNpcAnim.cpp:170, ElysiumNpcBaseAnim.cpp:206, ElysiumNpcBaseAnim.cpp:233, ElysiumNpcKernelAnimTests.cpp:112, ElysiumNpcKernelAnimTests.cpp:294
+0x100f7060: `mechanism` row closed at `FElysiumEntityHandle` is still cited by ElysiumEntityWorld.cpp:402, ElysiumEntityActivatePassTests.cpp:15
+0x101618a0: `mechanism` row closed at `FElysiumEntityHandle` is still cited by ElysiumNpcBaseLifecycle.cpp:391, ElysiumPlayerEntity.cpp:72, ElysiumScriptedSequence.cpp:678, ElysiumNpcKernelPlayerControllerTests.cpp:554, ElysiumNpcKernelPlayerControllerTests.cpp:581
+0x1026a910: `dead` row closed at `-` is still cited by ElysiumNpcHintsShared.h:27
+0x1026d920: `dead` row closed at `-` is still cited by ElysiumNpcConditions.h:189, ElysiumNpcConditionsBodies.cpp:93, ElysiumNpcKernelConditionsTests.cpp:162
+0x1026da90: `dead` row closed at `-` is still cited by ElysiumNpcKernelBaseHelpersTests.cpp:80
+0x10270820: `mechanism` row closed at `UNavigationSystem` is still cited by ElysiumNpcGeometry.cpp:113, ElysiumNpcGeometry.cpp:117
+0x10271900: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumEntitySlotBodies.cpp:328, ElysiumNpcBaseConditions2.cpp:548, ElysiumWorldServices.h:520
+0x10271b10: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumEntitySlotBodies.cpp:328, ElysiumNpcBaseWerewolf.cpp:47, ElysiumNpcBaseWerewolf.cpp:52, ElysiumNpcKernelConditions2Tests.cpp:406, ElysiumWorldServices.h:521
+0x10278cb0: `dead` row closed at `-` is still cited by ElysiumNpcFacing.cpp:41, ElysiumNpcKernelFacingTests.cpp:197
+0x1027bb50: `mechanism` row closed at `Bake` is still cited by ElysiumNpcBasePrecache10.cpp:15, ElysiumNpcBasePrecache10.cpp:20, ElysiumNpcMaker.cpp:121, ElysiumNpcMaker.h:59, ElysiumNpcMakerFleshpile.cpp:60, ElysiumNpcMakerZombie.cpp:66, ElysiumNpcPrecache10.cpp:30, ElysiumNpcPrecache10.cpp:140 … +1
+0x1027c160: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpc.cpp:2583, ElysiumNpcBase.h:342, ElysiumNpcBaseLifecycle.cpp:279, ElysiumNpcKernelLifecycleTests.cpp:601
+0x1027cae0: `mechanism` row closed at `UEComponent` is still cited by ElysiumNpcBase.h:141
+0x1028b0b0: `dead` row closed at `-` is still cited by ElysiumNpcKernelPositionsTests.cpp:564
+0x1028e480: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcConditions2.cpp:81, ElysiumNpcKernelConditions2Tests.cpp:395, ElysiumNpcKernelConditions2Tests.cpp:412
+0x1028e980: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcConditions2.cpp:90, ElysiumNpcKernelConditions2Tests.cpp:395, ElysiumNpcKernelConditions2Tests.cpp:411, ElysiumNpcKernelConditions2Tests.cpp:418
+0x102993c0: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpc.cpp:2582, ElysiumNpcBase.cpp:264, ElysiumNpcSaveRestore10.cpp:13, ElysiumNpcKernelBaseSplitTests.cpp:156
+0x10299700: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcSaveRestore10.cpp:13
+0x1029f6c0: `mechanism` row closed at `UNavigationSystem` is still cited by ElysiumNpcKernelBaseHelpers.cpp:210, ElysiumNpcKernelBaseHelpers.cpp:231, ElysiumNpcKernelBaseHelpers.cpp:696, ElysiumNpcKernelBaseHelpers.cpp:706, ElysiumNpcKernelBaseHelpers.cpp:711, ElysiumNpcStartTask_2.cpp:472, ElysiumNpcTroikaHelpers2.cpp:610, ElysiumPlaceSet.h:39 … +4
+0x102d7290: `mechanism` row closed at `0018/3` is still cited by ElysiumNpcTestHull.h:13, ElysiumEntity.h:35
+0x102d72b0: `mechanism` row closed at `0018/3` is still cited by ElysiumNpcBaseMotor.cpp:389, ElysiumNpcTestHull.h:14, ElysiumRetailHullTable.h:38, ElysiumContentsSignature.h:49
+0x102d72d0: `mechanism` row closed at `0018/3` is still cited by ElysiumNpcBaseMotor.cpp:398, ElysiumNpcMotor.cpp:191, ElysiumNpcTestHull.h:14
+0x102d7760: `mechanism` row closed at `0018/3` is still cited by ElysiumNpcBaseMotor.cpp:412, ElysiumNpcTestHull.h:13, ElysiumNpcKernelMotorTests.cpp:191
+0x102d9dd0: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumInterestingPlace.cpp:9, ElysiumInterestingPlace.h:52
+0x102dbbc0: `mechanism` row closed at `CRT:operator delete` is still cited by ElysiumInterestingPlace.h:62
+0x102e1300: `mechanism` row closed at `CMC` is still cited by ElysiumNpcBaseMotor.cpp:369, ElysiumNpcBaseMotor.cpp:901, ElysiumNpcKernelMotorTests.cpp:994, ElysiumWorldServices.h:545
+0x102e1440: `mechanism` row closed at `CMC` is still cited by ElysiumNpcBaseMotor.cpp:1171
+0x102eea90: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcBaseMotor.cpp:755, ElysiumNpcNavigator.h:8, ElysiumNpcNavigator.h:57, ElysiumNpcCombatTests.cpp:805, ElysiumNpcNavigatorMoveStepTests.cpp:16, ElysiumNpcNavigatorMoveStepTests.cpp:331, ElysiumNpcNavigatorMoveStepTests.cpp:387, ElysiumNpcNavigatorMoveStepTests.cpp:474 … +1
+0x102eece0: `mechanism` row closed at `UNavigationSystem` is still cited by ElysiumNpcBodyNavigation.cpp:65, ElysiumNpcBodyNavigation.cpp:74
+0x102eee40: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcNavigatorTests.cpp:17
+0x102ef510: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcBaseMotor.cpp:53, ElysiumNpcBaseMotor.cpp:1023, ElysiumNpcBaseMotor.cpp:1063, ElysiumNpcBaseStartTask.cpp:1906, ElysiumNpcScript.cpp:561, ElysiumNpcNavigatorMoveStepTests.cpp:16, ElysiumNpcNavigatorMoveStepTests.cpp:321, ElysiumNpcBody.cpp:1378 … +2
+0x102ef870: `mechanism` row closed at `CMC` is still cited by ElysiumNpc.cpp:177, ElysiumFootstepSenseTests.cpp:5, ElysiumNpcBody.cpp:133, ElysiumNpcBody.cpp:581, ElysiumNpcBody.h:228, ElysiumNpcBody.h:374, ElysiumGroundSurface.h:15, ElysiumLocomotionSample.h:102
+0x102efaa0: `mechanism` row closed at `UPathFollowingComponent` is still cited by ElysiumNpcBaseMotor.cpp:1049
+0x1034adf0: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:391
+0x1034ae20: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:391
+0x1034be90: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:392
+0x1034bec0: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:392
+0x1034cad0: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:393
+0x1034cb00: `mechanism` row closed at `CppDispatch` is still cited by ElysiumNpcKernelFacingTests.cpp:393
+0x1035cb90: `mechanism` row closed at `Bake` is still cited by ElysiumNpcAndreiBlood.cpp:70
+0x1035cf80: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcAndreiBlood.cpp:70, ElysiumNpcVampireBoss.h:98, ElysiumNpcKernelLifecycle2Tests.cpp:1161, ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:313, ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:331
+0x10360bc0: `mechanism` row closed at `Bake` is still cited by ElysiumNpcAsianVampire.cpp:75
+0x10360e10: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcAsianVampire.cpp:248, ElysiumNpcAsianVampire.h:24, ElysiumNpcVampireBoss.h:98, ElysiumNpcKernelLifecycle2Tests.cpp:1179
+0x1036ae60: `mechanism` row closed at `Bake` is still cited by ElysiumNpcChangBros.cpp:94
+0x1036b170: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcChangBros.cpp:93, ElysiumNpcChangBros.cpp:97, ElysiumNpcChangBros.h:17, ElysiumNpcVampireBoss.h:99, ElysiumNpcKernelLifecycle2Tests.cpp:1161, ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:314, ElysiumNpcKernelSpeciesLifecycle10Tests.cpp:359
+0x10375280: `mechanism` row closed at `UReflection` is still cited by ElysiumNpcFrenzyShadow.h:15
+0x1037f960: `mechanism` row closed at `Bake` is still cited by ElysiumNpcHengeyokai.cpp:193
+0x10382b30: `mechanism` row closed at `UEContainer` is still cited by ElysiumNpcHengeyokai.cpp:475, ElysiumNpcHengeyokai.h:87, ElysiumNpcHengeyokai.h:114, ElysiumNpcKernelBossesTests.cpp:279
+0x1038aec0: `mechanism` row closed at `Bake` is still cited by ElysiumNpcManBat.cpp:185
+0x1038fb20: `mechanism` row closed at `TraceRetail` is still cited by ElysiumNpcBosses.cpp:257, ElysiumNpcBosses.cpp:293, ElysiumNpcManBat.cpp:574, ElysiumNpcKernelBossesTests.cpp:757
+0x10395f80: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcMingXiao.h:300, ElysiumNpcKernelLifecycle2Tests.cpp:1105
+0x10396000: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcKernelLifecycle2Tests.cpp:1105
+0x10398870: `mechanism` row closed at `UEContainer` is still cited by ElysiumNpcDamage3Species.cpp:588, ElysiumNpcMingXiao.cpp:650, ElysiumNpcMingXiao.cpp:815, ElysiumNpcMingXiao.cpp:897, ElysiumNpcMingXiao.cpp:1553, ElysiumNpcMingXiao.cpp:1800, ElysiumNpcMingXiao.h:115, ElysiumNpcSelectSpecies.cpp:1067 … +3
+0x1039ed50: `mechanism` row closed at `FElysiumSaveArchive` is still cited by ElysiumNpcKernelLifecycle2Tests.cpp:1105
+FAIL kernel_lists            0.0s  kernel_lists: 80 rows fail the strict rule or are closed but still cited
+kernel_lists: 80 rows fail the strict rule or are closed but still cited

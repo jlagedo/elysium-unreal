@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 20 generated slot rows of `FElysiumAnimatingOverlay` (CBaseAnimatingOverlay): 11 it introduces
-// and 9 it overrides with a body of its own.
+// 19 generated slot rows of `FElysiumAnimatingOverlay` (CBaseAnimatingOverlay): 11 it introduces
+// and 8 it overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -48,10 +48,6 @@
 	// slot 250 0x10098bb0 (walked) `float StudioFrameAdvance(float)`
 	//   layer 2, story 29c
 	float StudioFrameAdvance(float) override;
-	// slot 255 0x10098eb0 (walked) `void GetSkeleton(Vector*, Quaternion*, int)`
-	//   takes `Quaternion*`
-	//   layer 13, story 29d
-	void GetSkeleton(FVector*, void*, int32) override;
 	// slot 258 0x10098c80 (walked) `void DispatchAnimEvents(float, CBaseAnimating*)`
 	//   layer 2, story 29c
 	void DispatchAnimEvents(float, FElysiumEntity*) override;

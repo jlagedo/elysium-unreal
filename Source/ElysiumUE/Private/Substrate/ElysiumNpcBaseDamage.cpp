@@ -23,9 +23,9 @@ namespace
 {
 	constexpr double DamageBleedFloor = ElysiumNpcTunables::OneDouble;
 	constexpr float GearDamage = ElysiumNpcTunables::Hundredth;   // SDK 2013's HITGROUP_GEAR damage
-	constexpr float HeavyDamageThreshold = 20.0f; // _DAT_1044eb0c — `IsHeavyDamage`'s only number
+	constexpr float HeavyDamageThreshold = ElysiumNpcTunables::Twenty;   // `IsHeavyDamage`'s only number
 	constexpr double DeadDamageScale = ElysiumNpcTunables::TenthDouble;
-	constexpr float DeadImpulseZDrop = 10.0f;     // _DAT_1044e664, reused as a Z offset
+	constexpr float DeadImpulseZDrop = ElysiumNpcTunables::Ten;     // reused as a Z offset
 	// `CAI_BaseNPC::TraceAttack`'s own bit masks and ids.
 	constexpr uint32 DmgShock = 0x100u;           // the one bit that suppresses the bleed
 	constexpr int32 HitGroupGeneric = 0;

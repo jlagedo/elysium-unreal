@@ -246,8 +246,6 @@ bool FElysiumNpcMakerParticipationTest::RunTest(const FString&)
 	TestTrue(TEXT("the maker is not solid (SetSolid(SOLID_NONE))"), AsEntity.IsRetailNotSolid());
 	TestFalse(TEXT("an ordinary NPC is"), Human->IsRetailNotSolid());
 	TestNull(TEXT("the maker stands no skeletal body"), AsEntity.GetSkeletalBody());
-	TestFalse(TEXT("slot 86 ShouldTransmit 0x1034af10 answers false"),
-		AsEntity.ShouldTransmit(0, nullptr, nullptr, 0, 0));
 	TestFalse(TEXT("slot 72 0x1034aef0: no discipline targets it"), AsEntity.Slot72(0));
 	TestTrue(TEXT("while an ordinary NPC is a target"), Human->Slot72(0));
 	TestFalse(TEXT("slot 587 CanWitnessSupernatural 0x1034aed0 answers false"), Maker->CanWitnessSupernatural(1));

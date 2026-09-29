@@ -7,8 +7,8 @@ One row per primary-vtable slot of the family: the declaration every body at the
 
 | Tier | Slots |
 |---|---|
-| `sdk` | 135 |
-| `walked` | 522 |
+| `sdk` | 134 |
+| `walked` | 523 |
 | `evidence` | 0 |
 | `open` | 0 |
 
@@ -539,7 +539,7 @@ One row per primary-vtable slot of the family: the declaration every body at the
 | 520 |  | `GetFacingDirection` | `float GetFacingDirection(Vector&)` | sdk | 1/1 |  |  | SDK 2013 CAI_BaseNPC::GetFacingDirection (virtual there) |
 | 521 |  | `IsJumpLegal` | `bool IsJumpLegal(Vector&, Vector&, Vector&) const` | sdk | 3/3 | unused×2 |  | SDK 2013 CAI_BaseNPC::IsJumpLegal (virtual there) |
 | 522 |  | `StepHeight` | `float StepHeight() const` | sdk | 0/0 | float×4 |  | SDK 2013 CAI_BaseNPC::StepHeight (virtual there) |
-| 523 |  | `GetMaxJumpSpeed` | `float GetMaxJumpSpeed() const` | sdk | 0/0 |  |  | SDK 2013 CAI_BaseNPC::GetMaxJumpSpeed (virtual there) |
+| 523 |  | `GetStepDownHeight` | `float GetStepDownHeight() const` | walked | 0/0 |  |  | slot 523 is the STEP-DOWN height, not a jump speed: the ground test 0x102e4f50 loads it into the step record beside slot 522 StepHeight (navigation-jump-links.md, 0018/6 R1 2026-09-29); per class 18.0 base 0x101a6b60, 36.0 Troika 0x101aa670 (_DAT_1044faa8), 40.0 test hull 0x102d72d0, 50.0 Ming Xiao 0x10391050, 30.0 tentacle 0x1039b070, 56.0 Tzimisce 0x103b6df0; renamed from the SDK-order guess GetMaxJumpSpeed (0019/6) |
 | 524 |  | `GetJumpGravity` | `float GetJumpGravity() const` | sdk | 0/0 |  |  | SDK 2013 CAI_BaseNPC::GetJumpGravity (virtual there) |
 | 525 |  | `OverrideMove` | `bool OverrideMove(float)` | sdk | 1/1 |  |  | SDK 2013 CAI_BaseNPC::OverrideMove (virtual there) |
 | 526 |  | `OverrideMoveFacing` | `bool OverrideMoveFacing(AILocalMoveGoal_t&, float)` | sdk | 2/2 |  |  | SDK 2013 CAI_BaseNPC::OverrideMoveFacing (virtual there) |

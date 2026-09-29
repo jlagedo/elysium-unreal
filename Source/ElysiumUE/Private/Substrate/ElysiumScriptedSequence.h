@@ -46,9 +46,6 @@ public:
 	virtual void Activate() override;
 	// Slot 117 `0x101a6d20` — `CBaseEntity::ObjectCaps() & ~FCAP_ACROSS_TRANSITION`.
 	virtual int32 ObjectCaps() const override;
-	// Slot 175 `0x101a75a0` / slot 178 `0x101a7580` — both a bare `RET 4`.
-	virtual void Touch(FElysiumEntity* Other) override;
-	virtual void Blocked(FElysiumEntity* Other) override;
 	// Slot 180 `0x101a7140` — `CAI_BaseNPC::UpdateOnRemove` (direct), then `ScriptEntityCancel(this)`.
 	virtual void UpdateOnRemove() override;
 	// Slots 362–365 `0x101a6dc0` / `0x101a6da0` / `0x101a6e00` / `0x101a6de0` — every cone is false.

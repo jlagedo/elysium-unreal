@@ -1,0 +1,59 @@
+0x100b5b60	0010	Flex SetFlexWeight(name) refusal removed; caller RunTaskSpecies.cpp:1470 dispatches slot 280
+0x100b5ba0	0010	Flex SetFlexWeight(int) refusal removed (no studio header, count 0); SetFlexControllers needs a USkeletalMeshComponent the kernel lacks
+0x100b5c20	0010	Flex GetFlexWeight(name) refusal removed
+0x100b5c50	0010	Flex GetFlexWeight(int) refusal removed, with FlexControllerRange
+0x100b5d80	0010	ClearSceneEvents removed: no runtime caller, queue never filled at runtime
+0x100b6180	0010	RemoveSceneEvent removed (with ReleaseSceneEvent): no runtime caller
+0x100b6250	0010	ProcessSceneEvents removed: zero-controller loop plus a stub dispatch, no runtime caller
+0x100b6960	0010	AddFlexAnimation removed: no runtime caller
+0x100b6cf0	0010	AddFlexSetting refusal removed
+0x100b7040	0010	ProcessGestureSceneEvent removed: retail computes and discards, no runtime caller
+0x100b70e0	0010	ProcessSequenceSceneEvent removed: retail computes and discards, no runtime caller
+0x10099020	0015	SetLayer (and SetOverlayLayer) removed: no runtime pusher
+0x10099470	0015	AllocateLayer (and AllocateGestureLayer) removed: no runtime caller
+0x10099540	0015	HasLayer removed: no runtime caller
+0x10099570	0015	RestartGesture removed (with its AddGesture print): no runtime caller
+0x10099630	0015	RemoveAllGestures removed: no runtime caller
+0x10099660	0015	RemoveLayer removed: no runtime caller
+0x10099690	0015	AddFlinchGesture removed (with NormalizePoseParameter): the live flinch goes through PlayReactionActivity
+0x102d7290	0018/3	TestHull ObjectCaps override removed; class kept for fixtures
+0x102d72b0	0018/3	TestHull StepHeight override removed; tunable Forty no longer read by it
+0x102d72d0	0018/3	TestHull GetMaxJumpSpeed override removed
+0x102d7760	0018/3	TestHull IsJumpLegal override removed; tunables TestHullJumpMax* now unread
+0x1034ab50	FElysiumSaveArchive	CNPCMaker GetDataDescMap removed (UStruct row)
+0x1034bdc0	FElysiumSaveArchive	Fleshpile GetDataDescMap removed (UStruct row)
+0x1034c9f0	FElysiumSaveArchive	Zombie GetDataDescMap removed (UStruct row)
+0x1034af10	Replication	CNPCMaker ShouldTransmit removed
+0x1034adf0	C++ virtual dispatch	CNPCMaker HeadDirection2D removed
+0x1034ae20	C++ virtual dispatch	CNPCMaker HeadDirection3D removed
+0x1034be90	C++ virtual dispatch	Fleshpile HeadDirection2D removed
+0x1034bec0	C++ virtual dispatch	Fleshpile HeadDirection3D removed
+0x1034cad0	C++ virtual dispatch	Zombie HeadDirection2D removed
+0x1034cb00	C++ virtual dispatch	Zombie HeadDirection3D removed
+0x1034c260	FElysiumSaveArchive	Fleshpile OnRestore removed; FleshpileOwner resolves on demand
+0x102d9dd0	FElysiumSaveArchive	InterestingPlace OnRestoreResolveType removed: no runtime caller
+0x102dbbc0	CRT:operator delete	ConversationPlaceDeletingDtor (and its output-name table) removed
+0x1027cae0	UE component construction	CreateComponents removed; caller BaseSaveRestore10.cpp:358 (lane P)
+0x1027cc10	UE component construction	CreateSenses refusal removed
+0x1027cec0	CMC	CreateMotor refusal removed
+0x1027cef0	TraceRetail	CreateMoveProbe refusal removed
+0x1027cf60	CMC	CreateLocalNavigator (base) refusal removed; Rat 0x103ad6a0 is lane P's
+0x1027cf90	UPathFollowingComponent	CreateNavigator refusal removed
+0x1027cfc0	UNavigationSystem	CreatePathfinder refusal removed
+0x102c1c10	0010	GetExpressionEventParams and base 0x10014ba0 helper removed: no runtime caller
+0x102e1180	CMC	CAI_Motor#6 recorder removed: no runtime caller
+0x102e19e0	CMC	CAI_Motor#18 removed: no runtime caller
+0x102e2180	CMC	CAI_Motor#15 and BlendFacingQueue removed: no runtime caller
+0x102e2580	CMC	CAI_Motor#17 removed: no runtime caller
+0x102eeac0	UPathFollowingComponent	CAI_Navigator#11 removed: no dispatch
+0x102eee40	UPathFollowingComponent	CAI_Navigator#17 and NavPathSample removed: no runtime caller
+0x1026d920	-	RangeAttack2Conditions removed (residue)
+0x1026da90	-	MeleeAttack2Conditions removed (residue)
+0x10279060	-	PlayScene and PlayInstancedScene removed (residue)
+0x1027e120	-	IsTemplate removed (residue)
+0x1028b0f0	-	GetSlotSchedule removed with its print (residue)
+0x102947e0	-	Troika Slot497 removed (residue)
+0x1029f890	-	Troika Slot23 removed (residue)
+0x102c7600	-	StandoffSelect, its node-cooldown helper and the two views removed (residue)
+0x102cd2d0	-	StandoffGoalSpawnNextThink removed (residue)
+0x103a7650	-	SabbatLeader PrescheduleThink: no port body; comment corrected (residue)

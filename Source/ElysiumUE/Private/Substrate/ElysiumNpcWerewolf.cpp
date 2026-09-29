@@ -14,6 +14,7 @@
 #include "ElysiumStub.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
+#include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
@@ -30,8 +31,6 @@
 #include "Substrate/ElysiumNpcConditionsBodiesShared.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcDebug2Shared.h"
-#include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
@@ -77,16 +76,13 @@ namespace
 	{
 		return static_cast<EElysiumNpcCond>(RetailCondition);
 	}
-	// `_DAT_104454d0` = 0.5 — `DrawDebugHullAtPoint`'s hull midpoint scale.
-	constexpr float GNpcKernelDebug2Half = 0.5f;
-	const TCHAR* const GNpcKernelDebug2EntityBounds = TEXT("NDebugOverlay::EntityBounds");
 	constexpr double GFakeHullPushIntervalSeconds = static_cast<double>(ElysiumNpcTunables::One);
 	// `_DAT_10462914` = 1.25f — `UpdateFakeHull` scales the hull's own mins and maxs by it before it
 	// builds the box around the `Bip01` bone point.
-	constexpr float GFakeHullExtentScale = 1.25f;
+	constexpr float GFakeHullExtentScale = ElysiumNpcTunables::OneAndQuarter;
 	// `_DAT_10457f5c` = 500.0f — the force scale on the damage packet, applied to the bone point's
 	// movement since the previous call. SOURCE units.
-	constexpr float GFakeHullForceScale = 500.0f;
+	constexpr float GFakeHullForceScale = ElysiumNpcTunables::FiveHundred;
 	// The packet `UpdateFakeHull` builds: `CTakeDamageInfo(this, this, 20.0, 1, 0, 0, -1)` with
 	// `0x41a00000` = 20.0 as the scalar, then `0x101c2a10(2)`, `0x101c2b10(1)` and `0x101c2a50(1.0)`.
 	constexpr float GFakeHullDamage = 20.0f;
@@ -107,18 +103,11 @@ namespace
 	// `DAT_1070d1b0/b4/b8`, the triple `GetHintEndpoint` answers for a null hint.
 	// `staticinit_101370b0` writes zero into all three, so it is `vec3_origin`.
 	const FVector GHints10Vec3Origin = FVector::ZeroVector;
-	// The rdtsc stand-in. This runtime has no cycle counter seam; `FPlatformTime::Cycles64` is the
-	// same shape (a monotonic tick count) and the pair is a profiling aid with no game-visible
-	// consumer, so the swap changes no event order. Named modernization.
-	uint64 LifecycleCycles()
-	{
-		return FPlatformTime::Cycles64();
-	}
 	// The three hardcoded map entity names `0x103cade0` carries.
 	const TCHAR* const GMiscWerewolfZoneName = TEXT("trigger_werewolf_zone");
 	const TCHAR* const GMiscRotDoor1Name = TEXT("rotdoor1");
 	const TCHAR* const GMiscRotDoor2Name = TEXT("rotdoor2");
-	constexpr float GGroundpointDrop = 1000.0f;     // _DAT_10447ee0 / -_DAT_104d00ac
+	constexpr float GGroundpointDrop = ElysiumNpcTunables::Thousand;     // _DAT_10447ee0 / -_DAT_104d00ac
 	// `vec3_invalid` — `DAT_10713de0/de4/de8`, which `staticinit_101371a0` fills with `0x7f7fffff`.
 	// `GetGroundpoint`'s no-hit answer, and `CNPC_VWerewolf::GetForwardYawForHint`'s sentinel.
 	constexpr float GVecInvalid = 3.4028234663852886e+38f;
@@ -128,7 +117,7 @@ namespace
 	constexpr float NearestNodeRefreshSeconds = ElysiumNpcTunables::Hundredth;
 	constexpr float GPositionsTailRetailZero = ElysiumNpcTunables::Zero;
 	// `CNPC_VWerewolf::UpdateConditionCanTeleport` `0x103cc0d0`.
-	constexpr float WerewolfCloseEnough = 800.0f;   // _DAT_10457ac4, Source units
+	constexpr float WerewolfCloseEnough = ElysiumNpcTunables::EightHundred;   // _DAT_10457ac4, Source units
 	constexpr float WerewolfTeleportDistanceFloor = ElysiumNpcTunables::Hundred;
 	// `CNPC_VWerewolf::TeleportIn`/`TeleportOut`'s effects and solid bits.
 	constexpr uint32 GPositionsTailEffectNoDraw = 0x20;           // m_fEffects |= / &= ~
@@ -137,39 +126,22 @@ namespace
 	// story; the numeric value is retail's own and is what `SetCondition`/`ClearCondition`
 	// (`0x10269a20` / `0x10269b50`) index the 256-bit set with.
 	constexpr EElysiumNpcCond CondCanTeleport = EElysiumNpcCond::CanTeleport;
-	const TCHAR* const GWerewolfSoundDir = TEXT("sound/Character/Monster/Werewolf");
-	const TCHAR* const GObservatorySoundDir = TEXT("sound/Area/Special/Observatory");
 	const TCHAR* const GWerewolfSoundGroup = TEXT("Werewolf");
 	// `m_iVSoundTableIdx` takes the literal 2 before the group row is looked up.
 	constexpr int32 GWerewolfVSoundTableIndex = 2;
-	// `0x1065f4d0`, four entries — and the listing annotates them `character/monster/TC_FatGuy/
-	// Foot_Step1.wav` and `…Foot_Step2.wav`. The WEREWOLF precaches the Tzimisce fat guy's
-	// footsteps: its own steps come through the sound GROUP it binds three lines earlier, and this
-	// table is a retail copy-paste that is reproduced rather than corrected.
-	const TCHAR* const GWerewolfFootsteps[] = {
-		TEXT("character/monster/TC_FatGuy/Foot_Step1.wav"),
-		TEXT("character/monster/TC_FatGuy/Foot_Step2.wav"),
-		TEXT("character/monster/TC_FatGuy/Foot_Step3.wav"),
-		TEXT("character/monster/TC_FatGuy/Foot_Step4.wav"),
-	};
-	const TCHAR* const GWerewolfWeapon = TEXT("item_w_werewolf_attacks");
-	// `dev/ww_tele_out.wav` and `dev/ww_tele_in.wav` — a SLASH, not the underscore the checklist's
-	// walk spells, and the same two names `TeleportOut`/`TeleportIn` play.
-	const TCHAR* const GWerewolfTeleOut = TEXT("dev/ww_tele_out.wav");
-	const TCHAR* const GWerewolfTeleIn = TEXT("dev/ww_tele_in.wav");
 	// `_DAT_10450568` = **360.0**, the yaw wrap; `_DAT_104454c4` = **0.0**, its lower bound.
-	constexpr float GYawWrapDegrees = 360.0f;
+	constexpr float GYawWrapDegrees = ElysiumNpcTunables::HeadAngleRunawayLimit;
 	// `_DAT_104492a4` = **60.0** Source units, the Z lift `InitializeHintData` applies before it
 	// asks for a groundpoint.
-	constexpr float GHintGroundpointLiftUnits = 60.0f;
+	constexpr float GHintGroundpointLiftUnits = ElysiumNpcTunables::YawSpeedHumanoidCrouch;
 	// `_DAT_10452dc4` = **2.0** seconds, the random-move arm's last-seen window.
-	constexpr float GRandomMoveLastSeenWindow = 2.0f;
+	constexpr float GRandomMoveLastSeenWindow = ElysiumNpcTunables::Two;
 	// Both `CNPC_VWerewolf` arms push a literal `0` where the Troika body pushes `0x3fa00000`.
 	constexpr float GSounds10WerewolfAttenuation = 0.0f;
 	// `0x103d1e50`'s weighted distance and its threshold. The weighting is Source's classic
 	// octagonal approximation of a length: the largest axis plus a quarter of the other two.
-	constexpr float WerewolfDoorMinorAxisWeight = 0.25f;     // _DAT_1044bef8
-	constexpr float WerewolfDoorMaxDistanceUnits = 135.0f;   // _DAT_104cf498
+	constexpr float WerewolfDoorMinorAxisWeight = ElysiumNpcTunables::Quarter;     // _DAT_1044bef8
+	constexpr float WerewolfDoorMaxDistanceUnits = ElysiumNpcTunables::WerewolfDoorMaxDistance;   // _DAT_104cf498
 	// `0x103d1e50`'s two door-state numbers, read off family Hints' `WerewolfDoorState` (+0x6680).
 	constexpr int32 WerewolfDoorStateNone = 0;
 	constexpr int32 WerewolfDoorStateSettled = 2;
@@ -253,37 +225,30 @@ void FElysiumNpcWerewolf::OnRestore(bool bFromLoad)
 	WerewolfResetHuntState();                                            // 103cac20
 }
 
-// Slot 104: `0x103cb2a0`.
-// 0x103cb2a0
+// Slot 104.
 void FElysiumNpcWerewolf::Precache()
 {
-	// `CNPC_VWerewolf::Precache` `0x103cb2a0` — a scope-trace frame carrying `m_iName` (`+0x26c`,
+	// `CNPC_VWerewolf::Precache` — a scope-trace frame carrying `m_iName` (`+0x26c`,
 	// `"NULL ENTITY"` when `this` is null, which C++ cannot reach), the Troika body, TWO directory
 	// globs, THREE state writes, the footstep table, the attacks weapon and two singles.
 	TroikaPrecache();
 
-	// Both globs pass `.wav` only, `bStarPrefix` CLEAR and the precache flag **1** (`PUSH 0x1 /
-	// PUSH 0x0` — the reverse of the Troika body's pair). The observatory directory is precached by
-	// the werewolf because the Observatory fight is where one stands.
-	PrecacheDirectory(GWerewolfSoundDir, NpcKernelPrecache10Shared::GExtWav, /*bStarPrefix=*/false, /*Flag=*/1);
-	PrecacheDirectory(GObservatorySoundDir, NpcKernelPrecache10Shared::GExtWav, /*bStarPrefix=*/false, /*Flag=*/1);
+	// The two directory globs (`sound/Character/Monster/Werewolf`, `sound/Area/Special/Observatory`),
+	// the footstep table `0x1065f4d0` (the Tzimisce fat guy's four steps, a retail copy-paste), the
+	// `item_w_werewolf_attacks` precache and the two `dev/ww_tele_*.wav` singles are asset loading,
+	// resolved at bake and load in this port (story 6, target `Bake`). The three state writes are
+	// what a rule reads later, and stay.
 
 	// The sound-group binding, in retail's write order: the table index FIRST, then the group name,
 	// then the row the name resolves to. The same triple `CNPC_VZombie::SetModel` makes.
 	VSoundTableIndex = GWerewolfVSoundTableIndex;             // +0x00bc := 2
 	VSoundGroupName = GWerewolfSoundGroup;                    // +0x00c0 := "Werewolf"
 	VSoundGroupRow = VSoundGroupRowFor(*VSoundGroupName);     // +0x00b4 := 0x101f55a0(...)
-
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GWerewolfFootsteps, UE_ARRAY_COUNT(GWerewolfFootsteps));
-	NpcKernelPrecache10Shared::Precache10Other(*this, GWerewolfWeapon);
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GWerewolfTeleOut);
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GWerewolfTeleIn);
 }
 
 // Slot 461: `0x103d0820`, chaining the Troika body directly.
 int32 FElysiumNpcWerewolf::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x29;
 	GatherConditions();
 	if (!IsAlive() || NpcKernelState19_2Shared::State19_2HasCondition(*this, EElysiumNpcCond::WerewolfDead))
 	{
@@ -456,7 +421,7 @@ int32 FElysiumNpcWerewolf::TranslateScheduleRetail(int32 ScheduleNumber)
 }
 
 // Slot 516: `0x103d0a30`, a scope-trace push/pop (the trace words are ABSENT in the shape map)
-// around a direct call into the Troika body `0x10297ce0`.
+// around a direct call into the Troika body `0x10297ce0` (0019/6: restored with the ladder).
 float FElysiumNpcWerewolf::MaxYawSpeed()
 {
 	return FElysiumNpc::MaxYawSpeed();
@@ -481,6 +446,8 @@ bool FElysiumNpcWerewolf::ShouldIgnoreCollision(FElysiumEntity* Other)
 }
 
 // Slot 69: `0x103d9ba0`, the same two gates falling to the NAV base `0x1029b180`.
+// Reached through `RegisterMoveIgnores` (0019/6), which states its answers to the mover's
+// `SetMoveIgnore` before each kernel move is issued.
 bool FElysiumNpcWerewolf::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	if (Other != nullptr)
@@ -497,86 +464,6 @@ bool FElysiumNpcWerewolf::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
-// Slot 620: `0x103d5050`, a virtual `CNPC_VWerewolf` introduces (no Troika-line body holds the slot).
-/** `CNPC_VWerewolf::DrawBBoxOverlay` (`0x103d5050`) — slot 620, introduced by `CNPC_VWerewolf`
- *  alone: the body of `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual. */
-void FElysiumNpcWerewolf::DrawBBoxOverlay()
-{
-	// `0x103d5050`, slot 620, filled by `CNPC_VWerewolf` alone:
-	//
-	//     scope trace push { "CNPC_VWerewolf::DrawBBoxOverlay", m_iName ? m_iName : "", "" }
-	//     if (!ShouldPursueEnemy())
-	//         NDebugOverlay::EntityBounds(this, 50, 255, 50, 0, 0);     // 0x10142e20
-	//     else
-	//         CBaseEntity::DrawBBoxOverlay();
-	//     scope trace pop
-	//
-	// So a werewolf that is NOT pursuing gets a green box drawn for it here, and a pursuing one
-	// falls through to the ordinary whole-entity box. `WerewolfShouldPursueEnemy` is family Senses'
-	// port of `0x103cf5f0`.
-	//
-	// Slot 620 has no Troika-line body: `CNPC_VWerewolf` introduces it, so this is the body of
-	// `FElysiumNpcWerewolf::DrawBBoxOverlay`, that class's own virtual (story 5 step 3).
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawBBoxOverlay %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	if (!WerewolfShouldPursueEnemy())
-	{
-		EmitOverlayEntityBounds(GNpcKernelDebug2EntityBounds, 50, 255, 50, 0);
-		return;
-	}
-	EntityDrawBBoxOverlay();
-}
-
-// Slot 408: `0x103d0640`, whose miss calls `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-const TCHAR* FElysiumNpcWerewolf::GetShortConditionName(int32 ConditionId)
-{
-	// The one slot-408 body wrapped in a scope trace: `g_ScopeTraceStack[depth] = {
-	// "CNPC_VWerewolf::GetShortConditionName", m_iName ? m_iName : "", "" }` then `++depth`,
-	// popped on EVERY arm including the forward. The port has no scope-trace stack; the push is
-	// recorded so the arm is visible and the entity it names is the one retail names.
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::GetShortConditionName %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	// The class's own block over ids 0x77..0x7b, read from `.rdata` `0x106623d0` down to
-	// `0x106623c0`.
-	static const TCHAR* const Names[] = {
-		TEXT("ww0"), TEXT("ww1"), TEXT("ww2"), TEXT("ww3"), TEXT("ww4") };
-	const int32 Offset = ConditionId - 0x77;
-	if (Offset >= 0 && Offset < UE_ARRAY_COUNT(Names))
-	{
-		return Names[Offset];
-	}
-	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpcBase::GetShortConditionName(ConditionId);
-}
-
-// Slot 76: `0x103d5130`, which chains `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) directly.
-/** `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`) — the body of
- *  `FElysiumNpcWerewolf::DrawDebugStatOverlays`, chaining the boss body directly. */
-void FElysiumNpcWerewolf::DrawDebugStatOverlays()
-{
-	// `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`), the body of
-	// `FElysiumNpcWerewolf::DrawDebugStatOverlays`: it PREPENDS two lines, CHAINS
-	// `CNPC_VBaseBoss::DrawDebugStatOverlays` (`0x10366290`) directly, then APPENDS the zone word, the
-	// five conditions, the door state, the hint dump and the schedule stack.
-	TArray<FString> Lines;
-	WerewolfDrawDebugStatOverlays(Lines);
-	// `103d51ee`: the two prepended lines come out FIRST, then the boss body runs, then the rest.
-	// `WerewolfDrawDebugStatOverlays` builds the whole list in retail's order; the chain point is
-	// here, between line 2 and line 3.
-	for (int32 Index = 0; Index < Lines.Num(); ++Index)
-	{
-		if (Index == 2)
-		{
-			BossDrawDebugStatOverlays();
-		}
-		EmitDebugMsg(TEXT("%s"), Lines[Index]);
-	}
-	if (Lines.Num() < 3)
-	{
-		BossDrawDebugStatOverlays();
-	}
-}
-
 // Slot 465: `0x103d5f60`, ending in a direct call into `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`).
 // `0x103d5f60`
 void FElysiumNpcWerewolf::OnChangeActivity(int32 Activity)
@@ -588,7 +475,7 @@ void FElysiumNpcWerewolf::OnChangeActivity(int32 Activity)
 	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
 }
 
-// Slot 337: `0x103cab50`.
+// Slot 337.
 int32 FElysiumNpcWerewolf::GetUsedHullBits()
 {
 	// A bare `return 0x1000`: no call up the chain, so the Troika line's bit 0 is absent.
@@ -604,16 +491,6 @@ bool FElysiumNpcWerewolf::FValidateHintType(void* Hint)
 	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
 	const int32 HintType = Words != nullptr ? Words->HintType : 0;
 	return HintType != 0x3a9f && 14999 < HintType && HintType < 0x3aab;
-}
-
-// Slot 546: `0x103c8ed0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcWerewolf::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093d6d4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VWerewolf"), TEXT("0x103c8ed0"), TEXT("0x1093d6d4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 141: `0x103ccbf0`, a prologue ahead of a direct call into `CAI_BaseNPC::TraceAttack` (`0x10266780`).
@@ -720,46 +597,7 @@ void FElysiumNpcWerewolf::UpdateConditionDeathTriggered()
 
 // --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
 
-void FElysiumNpcWerewolf::EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B,
-	int32 A) const
-{
-	NpcKernelDebugShared::GNpcKernelDebugRecord(NpcKernelDebugShared::GNpcKernelDebugChannelOverlay, RetailCall,
-		FString::Printf(TEXT("%s rgba=(%d %d %d %d)"), *DebugString(), R, G, B, A), INDEX_NONE);
-}
-
 // --- Moved from `ElysiumNpcDebug2.cpp` (story 5 step 4) ---
-
-void FElysiumNpcWerewolf::DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const
-{
-	// `0x103d4820`. `RET 0x10`: a `Vector` by value and the overlay duration.
-	//
-	//     scope trace push { "CNPC_VWerewolf::DrawDebugHullAtPoint", m_iName ? m_iName : "", "" }
-	//     mins = NAI_Hull::Mins(m_eHull);   maxs = NAI_Hull::Maxs(m_eHull);
-	//     halfX = (maxs.x + mins.x) * 0.5;  halfY = (maxs.y + mins.y) * 0.5;   // _DAT_104454d0
-	//     NDebugOverlay::Box(point, mins, maxs, 255, 100, 0, 100, duration);
-	//     NDebugOverlay::Line?(…, sqrt(halfX*halfX + halfY*halfY), 5.0, 255, 255, 0, 20, 0);
-	//     scope trace pop
-	//
-	// The second call (`0x1000566e`) takes the hull's planar RADIUS and the constant `5.0`
-	// (`0x40a00000`) with colour (255, 255, 0) at alpha 20; which `NDebugOverlay` entry point it is
-	// remains **UNRECOVERED** — the argument shape fits a circle or a swept box and the listing does
-	// not name it. It is emitted under its address so the arm is visible.
-	//
-	// The extents are family Motor's `RetailHullExtents`, the replayed hull table's row for `m_eHull`
-	// (`+0x1568`); a hull id outside the table answers the zero box and a radius of 0.
-	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawDebugHullAtPoint %s"),
-		TargetName.IsEmpty() ? TEXT("") : *TargetName);
-	FVector HullMins = FVector::ZeroVector;
-	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
-	EmitOverlayBox(NpcKernelDebug2Shared::GNpcKernelDebug2Box, PointUnits, HullMins, HullMaxs, 255, 100, 0, 100);
-	const float HalfX = (HullMaxs.X + HullMins.X) * GNpcKernelDebug2Half;
-	const float HalfY = (HullMaxs.Y + HullMins.Y) * GNpcKernelDebug2Half;
-	const float Radius = FMath::Sqrt(HalfX * HalfX + HalfY * HalfY);
-	EmitOverlayLine(TEXT("0x1000566e"), PointUnits,
-		PointUnits + FVector(Radius, 0.f, 5.f), 255, 255, 0, false);
-	(void)Duration;
-}
 
 // --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
@@ -876,11 +714,14 @@ void FElysiumNpcWerewolf::UpdateFakeHull(double Now)
 		const FVector FakeMinUnits = HullMinsUnits * GFakeHullExtentScale + BonePosUnits;
 		const FVector FakeMaxUnits = HullMaxsUnits * GFakeHullExtentScale + BonePosUnits;
 
-		// `103d9604`..`103d963d`: the enemy's `m_Collision` slot `+0x3c` (its world-space
-		// surrounding bounds) against that box, through `FUN_10240250`.
-		FVector EnemyMinsUnits = FVector::ZeroVector;
-		FVector EnemyMaxsUnits = FVector::ZeroVector;
-		RetailCollisionExtents(*Enemy, EnemyMinsUnits, EnemyMaxsUnits);
+		// `103d9604`..`103d963d`: the enemy's `m_Collision` slot `+0x3c` (its WORLD-space
+		// surrounding bounds) against that box, through `FUN_10240250`. The port's surrounding
+		// bounds (`ElysiumCameraShots::SurroundingBounds`, the box `WorldSpaceCenter` is the centre
+		// of), in the bone point's frame; the local collision box (`RetailCollisionExtents`) was the
+		// wrong word.
+		const FBox EnemyBoundsCm = ElysiumCameraShots::SurroundingBounds(*Enemy);
+		const FVector EnemyMinsUnits = EnemyBoundsCm.Min / ElysiumMove::U;
+		const FVector EnemyMaxsUnits = EnemyBoundsCm.Max / ElysiumMove::U;
 
 		if (BoxesOverlap(FakeMinUnits, FakeMaxUnits, EnemyMinsUnits, EnemyMaxsUnits))
 		{
@@ -1484,23 +1325,6 @@ void FElysiumNpcWerewolf::WerewolfScriptUnhideTail(double Now)
 	WerewolfMorphTimerC = 0.f;   // +0x66d8
 	WerewolfMorphTimerB = 0.f;   // +0x66d4
 	WerewolfMorphTimerA = 0.f;   // +0x66a4
-}
-
-void FElysiumNpcWerewolf::StartSearchTimer()
-{
-	// `CNPC_VWerewolf::StartSearchTimer` (`0x103d1ca0`): `rdtsc` into the STATIC pair
-	// `DAT_1093d638`/`DAT_1093d63c`, shared by every werewolf on the map rather than kept per NPC.
-	// That is the recovered fact and is why this is a file static here too.
-	NpcKernelLifecycleShared::GSearchTimerCycles = LifecycleCycles();
-}
-
-bool FElysiumNpcWerewolf::ReportSearchTimer(bool bPassThrough)
-{
-	// `CNPC_VWerewolf::ReportSearchTimer` (`0x103d1d60`): `rdtsc` again, SUBTRACT the stored pair in
-	// place so the statics now hold the elapsed cycles, and pass the second argument through
-	// unchanged. Retail reports nothing else — the pair is the report.
-	NpcKernelLifecycleShared::GSearchTimerCycles = LifecycleCycles() - NpcKernelLifecycleShared::GSearchTimerCycles;
-	return bPassThrough;
 }
 
 // --- Moved from `ElysiumNpcLifecycle2.cpp` (story 5 step 4) ---
@@ -2317,9 +2141,9 @@ namespace
 	// `_DAT_10452dc4` (2.0), the up-probe's lift; `0x41200000` (10.0), the escalation's small-hull
 	// maxs.z; `_DAT_104454c0` (1.0), the clear fraction. `_DAT_10449154` (0.45) is
 	// `ElysiumNpcTunables::WerewolfStuckHullScale`.
-	constexpr double GWerewolfStuckLiftUnits = 2.0;
+	constexpr double GWerewolfStuckLiftUnits = ElysiumNpcTunables::Two;
 	constexpr double GWerewolfStuckEscalationTopUnits = 10.0;
-	constexpr float GWerewolfStuckClearFraction = 1.f;
+	constexpr float GWerewolfStuckClearFraction = ElysiumNpcTunables::One;
 	constexpr int32 GWerewolfStuckMask = 0x202400b;
 }
 
@@ -2564,35 +2388,6 @@ void FElysiumNpcWerewolf::FUN_103d9c90(FVector& OutPositionUnits)
 	OutPositionUnits = WerewolfChasePosUnits;
 }
 
-// --- Moved from `ElysiumNpcSpeciesLifecycle10.cpp` (story 5 step 4) ---
-
-void FElysiumNpcWerewolf::DestroyWerewolf()
-{
-	// `CNPC_VWerewolf::~CNPC_VWerewolf` `0x103ca7c0`.
-
-	// The one thing outside this object the body touches: the debug global, then the ConVar's
-	// `SetValue(0)` (slot 4).
-	NpcKernelSpeciesLifecycle10Shared::GWerewolfShowDebug = 0;
-	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::WerewolfShowDebug, 0.f);
-
-	// The five outputs, in the listing's order: `m_OnTeleportIn`, `m_OnTeleportOut`,
-	// `m_OnFinishCrushAnimation`, `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.
-	OutputListDestroys += 5;
-
-	// The hint-data vector (`+0x6714`, count `+0x6720`, stride 0x48), walked BACKWARDS from
-	// `count - 1` with `0x103dc5b0` on each record, then the count zeroed and `0x103dc220` run over
-	// the vector. The backwards walk is recorded because it is the recovered order.
-	WerewolfHintTeardownOrder.Reset();
-	for (int32 Index = WerewolfHintGroundpoints.Num() - 1; Index >= 0; --Index)
-	{
-		WerewolfHintTeardownOrder.Add(Index);
-	}
-	WerewolfHintGroundpoints.Reset();   // `*(undefined4 *)&this->field_0x6720 = 0`
-
-	// The three `CUtlMemory` teardowns under the "grow size is not -1" tests are allocator work with
-	// nothing a program can observe, and `~CAI_BaseNPCTroika` is the world's reap here.
-}
-
 // --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcWerewolf::WerewolfHasPath(const FVector& StartUnits, const FVector& EndUnits) const
@@ -2602,87 +2397,24 @@ bool FElysiumNpcWerewolf::WerewolfHasPath(const FVector& StartUnits, const FVect
 	// `nav+8` from the NPC's `+0x156c` hull and `nav+0xc` from the global frame word, repeats the
 	// pair on the path object `0x102ecc00`, and only then forwards both Vectors to `0x102fdcc0`.
 	//
-	// SEAM: this substrate stands no `CAI_Path` object, so `0x102fdcc0` answers **false** — retail's
-	// own answer for a navigator with no path — and the ask is recorded so a case can read that the
-	// forward happened.
+	// 0019/6: `0x102fdcc0`'s route build between the two points is the navigation system's, asked on
+	// this NPC's own agent through the motor's two-point route query; no motor or no mesh answers
+	// **false** -- retail's own answer for a navigator with no path. The ask is recorded so a case can
+	// read that the forward happened. (This family's `Units` are `Origin / U`, unflipped.)
 	HasPathQueries.Add(FHasPathQuery{ StartUnits, EndUnits });
-	// Story 8 (lane L12): a case may script the seam's answers (`WerewolfHasPathAnswers`, popped
-	// front first) to reach the arms behind a successful path; with no script this is retail's
-	// no-path `false`, exactly as before.
+	// Story 8 (lane L12): a case may script the answers (`WerewolfHasPathAnswers`, popped front first)
+	// to reach the arms behind a successful path without a mesh.
 	if (WerewolfHasPathAnswers.Num() > 0)
 	{
 		const bool bAnswer = WerewolfHasPathAnswers[0];
 		WerewolfHasPathAnswers.RemoveAt(0);
 		return bAnswer;
 	}
-	return false;
-}
-
-void FElysiumNpcWerewolf::WerewolfDrawDebugStatOverlays(TArray<FString>& OutLines) const
-{
-	// `103d51a1`: `Not Seen Time  : %3.1f` with `max(curtime - +0x66ec, 0.0)` — the clamp against
-	// `_DAT_104454c4` (0.0) at `103d51aa` is folded away by the decompiler and is reproduced here.
-	const double NotSeen = FMath::Max(NpcKernelSpeciesMisc10_2Shared::SpeciesMisc10_2Now(*this) - WerewolfLastSeenTime, 0.0);
-	OutLines.Add(FString::Printf(TEXT("Not Seen Time  : %3.1f"), NotSeen));
-	// `103d51d3`: `Player Distance: %3.1f` reads `+0x6264 m_flPlayerDist` — the CACHED distance, not
-	// a computed range.
-	OutLines.Add(FString::Printf(TEXT("Player Distance: %3.1f"),
-		Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U));
-	// `103d51ee`: the tail into `CNPC_VMingXiao`'s arm `0x10366290` — chained, not replaced. The
-	// port's slot-76 dispatcher owns that arm, so the caller runs it around this body.
-	// `103d51f3`: the zone word, bit by bit, in retail's order.
-	for (const FWerewolfZoneBit& Zone : GWerewolfZoneBits)
-	{
-		if ((WerewolfHintFlags & Zone.Bit) == Zone.Bit)
-		{
-			OutLines.Add(Zone.Name);
-		}
-	}
-	// `103d52dd`: the five conditions, `0x7b` BEFORE `0x7a`.
-	for (const FWerewolfCondLine& Line : GWerewolfCondLines)
-	{
-		if (Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(Line.Cond)))
-		{
-			OutLines.Add(Line.Name);
-		}
-	}
-	// `103d535f`: the door state. States 0..3 print; anything else prints NOTHING at all — retail
-	// has no `default:`.
-	switch (WerewolfDoorState)
-	{
-	case 0: OutLines.Add(FString::Printf(TEXT("door state: (%d)closed"), 0)); break;
-	case 1: OutLines.Add(FString::Printf(TEXT("door state: (%d)closing"), 1)); break;
-	case 2: OutLines.Add(FString::Printf(TEXT("door state: (%d)open"), 2)); break;
-	case 3: OutLines.Add(FString::Printf(TEXT("door state: (%d)opening"), 3)); break;
-	default: break;
-	}
-	// `103d539e`: the cvar-selected PLAYER hint dump — `UTIL_PlayerByIndex(1)` through
-	// `0x10172710` and an RTTI cast to `CAI_Hint`. SEAM: no hint store, no cvar; the block is
-	// recorded as unreachable rather than guessed at.
-	// `103d53ea`: the NPC's own hint, `m_pMoveHint` (+0x66bc) FIRST, then `m_pTeleportHint`
-	// (+0x66b0), then `m_pLastUsedTeleportHint` (+0x66b4) or `m_pLastUsedMoveHint` (+0x66c0) by two
-	// more cvars. The OFFSETS the checklist's walk gives for the first two are swapped; the NAMES
-	// are right.
-	int32 DumpHint = MoveHintNode;
-	if (DumpHint == INDEX_NONE)
-	{
-		DumpHint = TeleportHintNode;
-	}
-	if (DumpHint != INDEX_NONE)
-	{
-		OutLines.Add(FString::Printf(TEXT("hint %d"), DumpHint));
-	}
-	// `103d5450`: the LAST FIVE rows of the schedule stack (`+0x668c`, count `+0x6698`), a null row
-	// printing `INVALID SCHEDULE`. The start index is `max(count - 5, 0)` — the decompiler's
-	// `(count - 5) & ((count - 5 < 0) - 1)` is that clamp.
-	const int32 Count = WerewolfScheduleStack.Num();
-	const int32 First = FMath::Max(Count - 5, 0);
-	const int32 Last = FMath::Min(First + 5, Count);
-	for (int32 Index = First; Index < Last; ++Index)
-	{
-		const FString& Name = WerewolfScheduleStack[Index];
-		OutLines.Add(Name.IsEmpty() ? FString(TEXT("INVALID SCHEDULE")) : Name);
-	}
+	FElysiumNpcRouteQuery Query;
+	Query.StartCm = StartUnits * ElysiumMove::U;
+	Query.DestCm = EndUnits * ElysiumMove::U;
+	FElysiumNpcRouteAnswer Answer;
+	return Motor != nullptr && Motor->QueryRoute(Query, Answer) && Answer.bReachable;
 }
 
 void FElysiumNpcWerewolf::SnapToAnimationPoint()

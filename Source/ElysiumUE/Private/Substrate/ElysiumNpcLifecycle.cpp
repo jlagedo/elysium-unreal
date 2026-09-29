@@ -5,7 +5,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
-#include "ElysiumSaveArchive.h"   // story 29d: `RestoreExtendedHeader`'s `IRestore` is this archive
+#include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -33,29 +33,6 @@ namespace
 	constexpr int32 GEffectNoShadow = 0x20;
 	constexpr int32 GEffectNoReceiveShadow = 0x80;
 
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slots 412/413/414 — the three think stamps this runtime already carries.
-// -------------------------------------------------------------------------------------------------
-
-float FElysiumNpc::LastUpdateThink() const
-{
-	// 0x101aa6d0 — the Troika's update-think stamp (+0x6254). The base body `0x101a6440` would
-	// answer `CBaseEntity::GetLastThink(NULL)` instead.
-	return static_cast<float>(ScheduleHost.LastUpdate);
-}
-
-float FElysiumNpc::LastNormalThink() const
-{
-	// 0x101aa6f0 — the normal channel (+0x6258).
-	return static_cast<float>(ScheduleHost.LastNormal);
-}
-
-float FElysiumNpc::LastMoveThink() const
-{
-	// 0x101aa710 — the move channel (+0x625c).
-	return static_cast<float>(ScheduleHost.LastMove);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -271,7 +248,8 @@ TArray<FElysiumEntityHandle> FElysiumNpc::ConversationPlaceActivate(const FStrin
 
 // -------------------------------------------------------------------------------------------------
 // Slot 434 `PrescheduleThink` — `CNPC_VCamera`'s empty `0x10369100` is its class's override (story 5
-// step 3). `CNPC_VSabbatLeader`'s `0x103a7650` forwards to `0x10385a30`, which has no port body yet.
+// step 3). `CNPC_VSabbatLeader`'s (a scope-trace wrapper forwarding to `0x10385a30`) is
+// verdicted dead (0019/1) and has no port body.
 // -------------------------------------------------------------------------------------------------
 
 // -------------------------------------------------------------------------------------------------
@@ -287,10 +265,5 @@ bool FElysiumNpc::TestField_0x2830() const
 		return true;
 	}
 	return Field_0x2830 == 0;
-}
-
-uint64 FElysiumNpc::SearchTimerElapsedCycles()
-{
-	return NpcKernelLifecycleShared::GSearchTimerCycles;
 }
 

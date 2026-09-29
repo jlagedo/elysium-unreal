@@ -79,21 +79,11 @@ bool FElysiumNpcKernelEntityChainConstantsTest::RunTest(const FString&)
 	// `volume * sensitivity` is the bare volume.
 	TestEqual(TEXT("the base HearingSensitivity is 1.0"), Npc.FElysiumNpcBase::HearingSensitivity(), 1.f);
 
-	// 0x10026730 slot 38 — `return this;`, and the argument never reaches anything.
-	TestTrue(TEXT("slot 38 answers itself"),
-		Npc.Slot38(nullptr) == static_cast<FElysiumEntity*>(&Npc));
-	TestTrue(TEXT("slot 38 ignores the entity it is handed"),
-		Npc.Slot38(Fixture.Other) == static_cast<FElysiumEntity*>(&Npc));
-
 	// 0x101a6420 slot 410 — an identity passthrough, NOT a fixed literal.
 	const FVector Goal(12.f, 34.f, 56.f);
 	TestTrue(TEXT("slot 410 hands back the pointer it was given"),
 		Npc.TranslateNavGoalPosition(&Goal) == &Goal);
 	TestNull(TEXT("and a null goal comes back null"), Npc.TranslateNavGoalPosition(nullptr));
-
-	// 0x1014f8b0 slot 240 — one global word, the CPython interop side, which this runtime has none
-	// of. The seam is asked and refuses.
-	TestNull(TEXT("slot 240 answers the Python interop seam's nothing"), Npc.Slot240());
 
 	// 0x10178120 — a getter of `+0x1d24`, a word NOTHING in vampire.dll writes.
 	TestEqual(TEXT("FUN_10178120 answers the unwritten +0x1d24"), Npc.FUN_10178120(), 0);
@@ -101,7 +91,7 @@ bool FElysiumNpcKernelEntityChainConstantsTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slots 483 and 579 — the two wrappers around slot 158, and the arguments they drop.
+// Slot 483 — the wrapper around slot 158, and the argument it drops.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainAliveWrappersTest,
@@ -124,50 +114,11 @@ bool FElysiumNpcKernelEntityChainAliveWrappersTest::RunTest(const FString&)
 	TestEqual(TEXT("slot 483 drops its argument: true answers the same"), Npc.CanPlaySentence(true),
 		Npc.CanPlaySentence(false));
 
-	// 0x101a6ce0 slot 579 — the NEGATION of slot 158, with its int argument dropped the same way.
-	TestEqual(TEXT("slot 579 is the negation of IsAlive"), Npc.Slot579(0), !bAlive);
-	TestEqual(TEXT("slot 579 drops its argument too"), Npc.Slot579(7), Npc.Slot579(0));
 	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 89 — the network change-state flags.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainNetworkChangeTest,
-	"Elysium.Substrate.NpcKernelEntityChain.NetworkChangeState",
-	GElysiumNpcKernelEntityChainFlags)
-bool FElysiumNpcKernelEntityChainNetworkChangeTest::RunTest(const FString&)
-{
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& Npc = *Fixture.Guard;
-
-	// 0x10026b70 / 0x10146790 clear bytes +1 and +2 of the `m_NetworkChangeState` record at
-	// `+0x01b0` and NOTHING ELSE — byte +0 and the interval/countdown shorts at +4/+6 survive.
-	Npc.NetworkChangeState.bByte0 = true;
-	Npc.NetworkChangeState.bChanged = true;
-	Npc.NetworkChangeState.bByte2 = true;
-	Npc.NetworkChangeState.IntervalTicks = 5;
-	Npc.NetworkChangeState.CountdownTicks = 3;
-
-	Npc.Slot89();
-
-	TestFalse(TEXT("+0x1b1 m_bChanged is cleared"), Npc.NetworkChangeState.bChanged);
-	TestFalse(TEXT("+0x1b2 is cleared"), Npc.NetworkChangeState.bByte2);
-	TestTrue(TEXT("+0x1b0 byte 0 is NOT touched"), Npc.NetworkChangeState.bByte0);
-	TestEqual(TEXT("the interval survives"), static_cast<int32>(Npc.NetworkChangeState.IntervalTicks),
-		5);
-	TestEqual(TEXT("the countdown survives"),
-		static_cast<int32>(Npc.NetworkChangeState.CountdownTicks), 3);
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slots 159 / 164 / 165 — standability, and the asymmetry between the two.
+// Slots 164 / 166 — standability, and the floor rule over it.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainStandableTest,
@@ -186,115 +137,23 @@ bool FElysiumNpcKernelEntityChainStandableTest::RunTest(const FString&)
 	//   slot 164 `IsStandable` : no NOT_SOLID bit, and solid 0 is none of 1/6/2, so the helper runs,
 	//                            and the helper's own two arms both miss -> false.
 	//   0x100b5110             : false, for the same reason.
-	//   slot 159 `ReflectGauss`: false, because the FIRST term already refuses.
 	TestFalse(TEXT("the standability helper refuses a SOLID_NONE entity"), Npc.IsStandableSolid());
 	TestFalse(TEXT("slot 164 IsStandable refuses it too"), Npc.IsStandable());
 
-	// Slot 159's SECOND term is `m_takedamage == 0` — family Damage's `TakeDamageMode`, seeded 2
-	// (`DAMAGE_YES`) for a live NPC. Both terms refuse here, and setting the second alone does not
-	// rescue it, which is what makes the conjunction assertable against a one-term reading.
-	TestFalse(TEXT("slot 159 refuses while the solid term refuses"), Npc.ReflectGauss());
-	Npc.TakeDamageMode = 0;
-	TestFalse(TEXT("slot 159 still refuses with m_takedamage 0: the solid term is independent"),
-		Npc.ReflectGauss());
-	Npc.TakeDamageMode = 2;
-
-	// Slot 165 dispatches slot 166 on BOTH arms — a null edict is `CanStandOn(nullptr)`, not a
-	// refusal. The edict seam answers null, so both calls reach slot 166 with the same argument and
-	// must therefore answer the same thing.
-	TestEqual(TEXT("slot 165 with a null edict is CanStandOn(nullptr)"),
-		Npc.CanStandOn(static_cast<void*>(nullptr)),
+	// Slot 166 `0x10026f80`: a null candidate (the static world under the floor sample) is
+	// standable; a real one answers ITS slot 164, dispatched through the candidate.
+	TestTrue(TEXT("slot 166 stands on the world (null candidate)"),
 		Npc.CanStandOn(static_cast<FElysiumEntity*>(nullptr)));
-	int32 Dummy = 0;
-	TestEqual(TEXT("and so is slot 165 with an edict the seam cannot resolve"),
-		Npc.CanStandOn(static_cast<void*>(&Dummy)),
-		Npc.CanStandOn(static_cast<FElysiumEntity*>(nullptr)));
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 226 — the movetype switch and its call order.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainVPhysicsUpdateTest,
-	"Elysium.Substrate.NpcKernelEntityChain.VPhysicsUpdate", GElysiumNpcKernelEntityChainFlags)
-bool FElysiumNpcKernelEntityChainVPhysicsUpdateTest::RunTest(const FString&)
-{
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard))
+	if (Fixture.Other != nullptr)
 	{
-		return false;
+		TestEqual(TEXT("slot 166 on an entity is that entity's slot 164"),
+			Npc.CanStandOn(static_cast<FElysiumEntity*>(Fixture.Other)), Fixture.Other->IsStandable());
 	}
-	FElysiumNpc& Npc = *Fixture.Guard;
-
-	// SEAM: slot 94 `GetMoveType` is 29c's stub and answers 0, which is NONE of the three movetypes
-	// slot 226 acts on — so the recovered answer is that the body does nothing at all. That is the
-	// arm retail takes for every movetype outside {1, 7, 8}, and it is asserted rather than worked
-	// around.
-	int32 PhysicsObject = 0;
-	Npc.PhysicsUpdateCalls.Reset();
-	Npc.VPhysicsUpdate(&PhysicsObject);
-	TestEqual(TEXT("movetype 0 makes slot 226 call nothing"), Npc.PhysicsUpdateCalls.Num(), 0);
-
-	// The two arms' ORDER is the deliverable, so it is asserted through the seam directly: the
-	// pusher arm is one call, and the physics-read arm ends on PhysicsTouchTriggers then
-	// PhysicsRelinkChildren, in that order.
-	Npc.PhysicsUpdateCalls.Reset();
-	Npc.VPhysicsUpdatePusher(&PhysicsObject);
-	TestEqual(TEXT("the pusher arm is one call"), Npc.PhysicsUpdateCalls.Num(), 1);
-	TestEqual(TEXT("and it is VPhysicsUpdatePusher"), Npc.PhysicsUpdateCalls[0],
-		FString(TEXT("VPhysicsUpdatePusher")));
-
-	// The physics-object transform seam refuses, which is why the write half of the movetype-7 arm
-	// cannot run; the two trailing calls still must.
-	FVector SeamOrigin(1.f, 2.f, 3.f);
-	FRotator SeamAngles(4.f, 5.f, 6.f);
-	TestFalse(TEXT("the IPhysicsObject::GetPosition seam refuses"),
-		Npc.PhysicsObjectPosition(&PhysicsObject, SeamOrigin, SeamAngles));
-	TestEqual(TEXT("and it zeroes what it was going to write"), SeamOrigin, FVector::ZeroVector);
 	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 135 — the move-rebound easing.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainMoveReboundTest,
-	"Elysium.Substrate.NpcKernelEntityChain.MoveRebound", GElysiumNpcKernelEntityChainFlags)
-bool FElysiumNpcKernelEntityChainMoveReboundTest::RunTest(const FString&)
-{
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& Npc = *Fixture.Guard;
-
-	// The formula, on its own: `(t*t + 1)*t - (t/D)*(D*D + 1)*t`. Zero at both ends of the span,
-	// non-zero between them — a rebound that leaves and returns.
-	const float D = 2.f;
-	TestEqual(TEXT("the blend is zero at t = 0"), FElysiumAnimating::MoveReboundBlend(0.f, D), 0.f);
-	TestEqual(TEXT("the blend is zero at t = D"), FElysiumAnimating::MoveReboundBlend(D, D), 0.f);
-	// t = 1, D = 2: (1 + 1)*1 - (0.5)*(4 + 1)*1 = 2 - 2.5 = -0.5.
-	TestEqual(TEXT("the blend at the midpoint is the cubic minus the linear"),
-		FElysiumAnimating::MoveReboundBlend(1.f, D), -0.5f);
-
-	// The body ALWAYS answers its own interval, on every path including the refusal.
-	TestEqual(TEXT("slot 135 answers the interval it was given"), Npc.Slot135(0.25f), 0.25f);
-	TestEqual(TEXT("even for a zero interval, which the first gate refuses"), Npc.Slot135(0.f), 0.f);
-
-	// SEAM: none of the seven `CBaseEntity` mover words has a port member, so the state answers the
-	// resting one and the first gate refuses — the velocities are not touched.
-	FElysiumAnimating::FMoveRebound Rebound;
-	TestFalse(TEXT("the mover-word seam refuses"), Npc.MoveReboundState(Rebound));
-	Npc.Velocity = FVector(9.f, 9.f, 9.f);
-	Npc.Slot135(0.25f);
-	TestEqual(TEXT("and a refused rebound writes no velocity"), Npc.Velocity, FVector(9.f, 9.f, 9.f));
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slots 266 / 268 / 271 / 279 — the animating tables.
+// Slots 266 / 271 — the animating tables.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainAnimTablesTest,
@@ -308,27 +167,10 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 	}
 	FElysiumNpc& Npc = *Fixture.Guard;
 
-	// --- slot 268 `SetLayer` (0x10099020) ---
-	// Eleven writes and one conditional pair, over family Anim's `AnimOverlay`. `m_fFlags` (+0x00)
-	// is deliberately NOT written.
-	Npc.AnimOverlay[1].Flags = 0x77;
-	Npc.SetLayer(1, /*Activity*/ 0x42, /*Sequence*/ 9, /*bAutoKill*/ true);
-	const FElysiumAnimatingOverlay::FAnimOverlayLayer& Layer = Npc.AnimOverlay[1];
-	TestEqual(TEXT("SetLayer stores the owner activity"), Layer.Activity, 0x42);
-	TestEqual(TEXT("SetLayer stores the sequence"), Layer.Sequence, 9);
-	TestEqual(TEXT("SetLayer seeds the weight to 0.1"), Layer.Weight, ElysiumOverlay::SeedWeight);
-	TestEqual(TEXT("SetLayer sets the weight ceiling to 1.0"), Layer.WeightMax,
-		ElysiumOverlay::WeightMax);
-	TestEqual(TEXT("SetLayer sets the playback rate to 1.0"), Layer.PlaybackRate, 1.f);
-	TestEqual(TEXT("SetLayer zeroes the cycle"), Layer.Cycle, 0.f);
-	TestEqual(TEXT("SetLayer blends in over 0.2"), Layer.BlendIn,
-		ElysiumOverlay::DefaultBlendFraction);
-	TestEqual(TEXT("SetLayer blends out over 0.2"), Layer.BlendOut,
-		ElysiumOverlay::DefaultBlendFraction);
-	TestTrue(TEXT("SetLayer stores the auto-kill flag"), Layer.bAutoKillWhenFinished);
-	TestEqual(TEXT("SetLayer zeroes the finished marker"), Layer.SequenceFinished, 0);
-	TestEqual(TEXT("SetLayer zeroes the last event check"), Layer.LastEventCheck, 0.f);
-	TestEqual(TEXT("SetLayer does NOT write m_fFlags"), Layer.Flags, 0x77);
+	// A live layer, armed by hand: slot 268 `SetLayer` is 0015's gesture seam and has no
+	// port body.
+	Npc.AnimOverlay[1].Activity = 0x42;
+	Npc.AnimOverlay[1].Weight = ElysiumOverlay::SeedWeight;
 
 	// --- slot 271 `FindLayerByOwner` (0x100994c0) ---
 	// Three terms: live weight, owner not ACT_INVALID, owner matches. -1 on a miss, which is the
@@ -369,96 +211,6 @@ bool FElysiumNpcKernelEntityChainAnimTablesTest::RunTest(const FString&)
 		TestEqual(TEXT("the pose parameter survives"), Npc.Flinch[Index].PoseParamIndex, 0x18);
 	}
 
-	// --- slot 279 `SetFlexWeight(int, float)` (0x100b5ba0) ---
-	// SEAM: `GetNumFlexControllers` answers 0 with no studio header, so EVERY index is out of range
-	// and the write is dropped. That is the recovered refusal.
-	TestEqual(TEXT("the flex-controller seam answers an empty table"), Npc.NumFlexControllers(), 0);
-	Npc.FlexWeight[3] = 0.5f;
-	Npc.SetFlexWeight(3, 0.9f);
-	TestEqual(TEXT("slot 279 drops the write when the table is empty"), Npc.FlexWeight[3], 0.5f);
-	Npc.SetFlexWeight(-1, 0.9f);
-	TestEqual(TEXT("a negative index is refused first"), Npc.FlexWeight[3], 0.5f);
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slots 285 / 287 — the scene-event queue, and the difference between them.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelEntityChainSceneEventsTest,
-	"Elysium.Substrate.NpcKernelEntityChain.SceneEvents", GElysiumNpcKernelEntityChainFlags)
-bool FElysiumNpcKernelEntityChainSceneEventsTest::RunTest(const FString&)
-{
-	FEntityChainFixture Fixture;
-	if (!TestNotNull(TEXT("the guard spawned"), Fixture.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& Npc = *Fixture.Guard;
-
-	// Four records over two scenes and three events, one of which appears TWICE — which is what
-	// makes slot 287's stop-at-first observable.
-	int32 SceneA = 0;
-	int32 SceneB = 0;
-	int32 EventA = 0;
-	int32 EventB = 0;
-	auto Seed = [&Npc, &SceneA, &SceneB, &EventA, &EventB]()
-	{
-		Npc.SceneEvents.Reset();
-		Npc.SceneEventReleases = 0;
-		auto Add = [&Npc](void* Scene, void* Event)
-		{
-			FElysiumFlex::FSceneEventRecord Record;
-			Record.Scene = static_cast<const FElysiumSceneData*>(Scene);
-			Record.Event = static_cast<const FElysiumSceneEvent*>(Event);
-			Npc.SceneEvents.Add(Record);
-		};
-		Add(&SceneA, &EventA);
-		Add(&SceneB, &EventB);
-		Add(&SceneA, &EventB);   // the duplicate event, on the other scene
-		Add(&SceneB, &EventA);
-	};
-
-	// Slot 285 with a scene: EVERY record of that scene goes, in one pass — the cursor does not
-	// advance over a compacted-in record, which is what makes two non-adjacent matches both die.
-	Seed();
-	Npc.ClearSceneEvents(&SceneA);
-	TestEqual(TEXT("slot 285 removes every record of the named scene"), Npc.SceneEvents.Num(), 2);
-	TestEqual(TEXT("and releases each one it removed"), Npc.SceneEventReleases, 2);
-	for (const FElysiumFlex::FSceneEventRecord& Record : Npc.SceneEvents)
-	{
-		TestTrue(TEXT("no record of scene A survives"),
-			static_cast<const void*>(Record.Scene) != static_cast<const void*>(&SceneA));
-	}
-
-	// Slot 285 with NULL is a different body entirely: retail sets the COUNT to zero and does not
-	// release, zero or compact anything.
-	Seed();
-	Npc.ClearSceneEvents(nullptr);
-	TestEqual(TEXT("slot 285 with null clears the whole queue"), Npc.SceneEvents.Num(), 0);
-	TestEqual(TEXT("and releases NOTHING — it only stops counting"), Npc.SceneEventReleases, 0);
-
-	// Slot 287 keys on the EVENT and stops at the FIRST match, so the duplicate survives.
-	Seed();
-	Npc.RemoveSceneEvent(&EventB);
-	TestEqual(TEXT("slot 287 removes exactly one record"), Npc.SceneEvents.Num(), 3);
-	TestEqual(TEXT("and releases exactly one"), Npc.SceneEventReleases, 1);
-	int32 RemainingB = 0;
-	for (const FElysiumFlex::FSceneEventRecord& Record : Npc.SceneEvents)
-	{
-		if (static_cast<const void*>(Record.Event) == static_cast<const void*>(&EventB))
-		{
-			++RemainingB;
-		}
-	}
-	TestEqual(TEXT("the second record carrying the same event SURVIVES"), RemainingB, 1);
-
-	// An event the queue does not hold is a silent no-op.
-	Seed();
-	int32 Stranger = 0;
-	Npc.RemoveSceneEvent(&Stranger);
-	TestEqual(TEXT("slot 287 with an unknown event changes nothing"), Npc.SceneEvents.Num(), 4);
-	TestEqual(TEXT("and releases nothing"), Npc.SceneEventReleases, 0);
 	return true;
 }
 
@@ -1129,12 +881,15 @@ bool FElysiumNpcKernelEntityChainAutoaimTest::RunTest(const FString&)
 	Npc.WaterLevel = 0;
 	Fixture.Other->WaterLevel = 0;
 
-	// The three unrecovered blend words, asserted as seams so the gap is explicit.
+	// `0x10176520`'s blend words: skill 1 (`DAT_1070ba3c`, the seam's answer) takes the 0.9 scale arm;
+	// the old-sample weight is 0.3 for skills 2 and 3.
 	float Scale = 9.f;
 	float OldWeight = 9.f;
-	TestTrue(TEXT("the blend takes the DAT_1070ba3c == 1 scale arm"),
+	TestEqual(TEXT("the skill seam answers 1 (the value when the cvar is absent)"), Npc.SkillLevel(), 1);
+	TestTrue(TEXT("skill 1 takes the DAT_1070ba3c == 1 scale arm"),
 		Npc.AutoaimBlendWeights(Scale, OldWeight));
-	TestEqual(TEXT("with an unrecovered scale, answering 0"), Scale, 0.f);
+	TestEqual(TEXT("the scale is _DAT_10450a9c = 0.9"), Scale, 0.9f);
+	TestEqual(TEXT("the old-sample weight is _DAT_10451ab8 = 0.3"), OldWeight, 0.3f);
 	TestEqual(TEXT("the deflection delta is unrecovered too"), Npc.AutoaimDelta(), 0.f);
 
 	// `m_takedamage` reaches the autoaim trace through the NPC leaf only.
@@ -1222,16 +977,6 @@ bool FElysiumNpcKernelEntityChainAnglesAndThinkTest::RunTest(const FString&)
 	Npc.SetAngles(10.f, 20.f, 30.f);
 	Npc.SetAngles(FRotator(10.f, 20.f, 30.f));
 	TestTrue(TEXT("slot 65 is slot 64 with its arguments packed"), true);
-
-	// 0x101aa730 — the FOURTH think channel, beside family Lifecycle's other three.
-	Npc.ScheduleHost.LastAI = 12.5;
-	Npc.ScheduleHost.LastUpdate = 1.0;
-	Npc.ScheduleHost.LastNormal = 2.0;
-	Npc.ScheduleHost.LastMove = 3.0;
-	TestEqual(TEXT("0x101aa730 reads the AI channel"), Npc.LastAiThink(), 12.5f);
-	TestEqual(TEXT("and not the update channel"), Npc.LastUpdateThink(), 1.f);
-	TestEqual(TEXT("nor the normal channel"), Npc.LastNormalThink(), 2.f);
-	TestEqual(TEXT("nor the move channel"), Npc.LastMoveThink(), 3.f);
 	return true;
 }
 

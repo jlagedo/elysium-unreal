@@ -34,15 +34,15 @@ namespace
 	// `_DAT_104454c0` — 1.0, `ComputeKnockbackVelocity`'s blend parameter on the NULL-source path.
 	constexpr float GCombatOne = ElysiumNpcTunables::One;
 	// `_DAT_104491b4` — **0.1**, the scale applied to the source's raw attack value.
-	constexpr float GKnockbackRawAttackScale = 0.1f;
+	constexpr float GKnockbackRawAttackScale = ElysiumNpcTunables::Tenth;
 	// `_DAT_1049a1d8` / `_DAT_1049a1dc` — **220** and **400**, the XY factor's two ends.
-	constexpr float GKnockbackXyLow = 220.0f;
-	constexpr float GKnockbackXyHigh = 400.0f;
+	constexpr float GKnockbackXyLow = ElysiumNpcTunables::KnockbackXyLow;
+	constexpr float GKnockbackXyHigh = ElysiumNpcTunables::KnockbackXyHigh;
 	// `_DAT_1049a1e0` / `_DAT_1049a1e4` — **200** and **310**, the Z factor's two ends.
-	constexpr float GKnockbackZLow = 200.0f;
-	constexpr float GKnockbackZHigh = 310.0f;
+	constexpr float GKnockbackZLow = ElysiumNpcTunables::KnockbackZLow;
+	constexpr float GKnockbackZHigh = ElysiumNpcTunables::KnockbackZHigh;
 	// `_DAT_1044eb08` — pi/180, the degrees-to-radians scale the yaw sweep opens with.
-	constexpr float GDegreesToRadians = 0.01745329238474369f;
+	constexpr float GDegreesToRadians = ElysiumNpcTunables::DegreesToRadians;
 	// `_DAT_10462950` — the yaw sweep's FORWARD leg.
 	constexpr float GYawSweepForwardUnits = ElysiumNpcTunables::Forty;
 	// `_DAT_10451acc` — the yaw sweep's RIGHT leg; the same pooled 64.0f is family Schedule's melee
@@ -59,20 +59,6 @@ namespace
 	// `s_item_w_werewolf_attacks_10661a20`.
 	const TCHAR* const GItemFists = TEXT("item_w_fists");
 
-	// `CSecureType`'s scramble constants, verbatim from `0x1042fde0` / `0x1042fe90`. Restated here
-	// rather than shared because `ElysiumNpcSensesBodies.cpp` holds them as file statics; the two
-	// copies are checked against each other by this family's suite.
-	constexpr uint32 GSecureHashXor = 0x7e92476fu;
-	constexpr uint32 GSecureHashMaskA = 0xa0086435u;
-	constexpr uint32 GSecureHashXorA = 0x4814ade7u;
-	constexpr uint32 GSecureHashAddA = 0x8c4b7d1fu;
-	constexpr uint32 GSecureHashXorB = 0x16066412u;
-	constexpr uint32 GSecureHashMaskB = 0x5ff79bcau;
-	constexpr uint32 GSecureStoreMask = 0x068d8635u;
-	constexpr uint32 GSecureStoreXorRead = 0x0ce9f66au;
-	constexpr uint32 GSecureStoreAdd = 0x0ffa91d8u;
-	constexpr uint32 GSecureStoreMask2 = 0x197279cau;
-	constexpr uint32 GSecureStoreXorTail = 0xa641cacdu;
 
 	// `CAI_BaseNPC.cpp`'s own source file string, for the arms that stamp it.
 	const TCHAR* const GTroikaSourceFile = TEXT("AI_BaseNPCTroika.cpp");
@@ -286,22 +272,6 @@ void FElysiumNpc::SetScriptedDiscipline(int32 StatId, int32 Value)
 // Slot 460 `PreSelectIdealState` — `CAI_BaseNPCTroika::PreSelectIdealState` `0x102ad340`.
 // =================================================================================================
 
-uint32 FElysiumNpc::SecureUnhashLevel(uint32 Value)
-{
-	// `0x1042fe90`, verbatim. C precedence: `&` binds tighter than `^`.
-	return Value
-		^ ((((Value & GSecureHashMaskA) ^ GSecureHashXorA) + GSecureHashAddA) ^ GSecureHashXorB)
-			& GSecureHashMaskB
-		^ GSecureHashXor;
-}
-
-uint32 FElysiumNpc::SecureUnscrambleLevel(uint32 Stored)
-{
-	// `102ad4d9`'s inline unscramble of `+0x6364`, the argument `0x1042fe90` is handed.
-	return ((((Stored & GSecureStoreMask) ^ GSecureStoreXorRead) + GSecureStoreAdd)
-		& GSecureStoreMask2) ^ Stored ^ GSecureStoreXorTail;
-}
-
 int32 FElysiumNpc::ForcedNpcState() const
 {
 	// `m_eForcedState` (`+0x65cc`). See standing fact three: `0x102ae840` stores a raw `NPC_STATE`
@@ -407,10 +377,9 @@ int32 FElysiumNpc::PreSelectIdealStateRetail()
 	}
 
 	// `102ad4d9`: decode `m_iPLCriminalLevelWitnessed` (`+0x6364`) and compare it against the same
-	// decode of the literal `0x3cf445af`, which evaluates to **2**. This runtime stores the
-	// witnessed level PLAIN, so the decode is the identity on the port's word and the literal's
-	// recovered value is the bound.
-	const int32 Bound = static_cast<int32>(SecureUnhashLevel(0x3cf445afu));
+	// decode of the literal `0x3cf445af`. This runtime stores the witnessed level PLAIN, so the
+	// decode is the identity on the port's word.
+	const int32 Bound = 2; // retail: CSecureType<int> unhash of 0x3cf445af == 2 (SafeDisc), stored plain
 	const int32 Level =
 		Witness.Channel(ElysiumNpcWitness::EChannel::Criminal).Level;
 	const int32 RetailState = Combat10RetailStateId(Mind.State());
@@ -588,8 +557,8 @@ bool FElysiumNpc::TraceMoveClearanceAtYaw(int32 UnusedArg, float YawDegrees, flo
 	// (`fStatus >= 0`), which is why all four call sites read the byte. A walk, not a hull sweep:
 	// `TestGroundMove 0x102e4f50` steps over what a 16-unit step clears. Family Motor10's
 	// `MotorMoveTraceSweep` is that call; its ground arm is the body's NavMesh raycast (the named
-	// modernization it states), and a motor with no NavMesh keeps the admitting record, so the task
-	// runs.
+	// divergence it states: the per-step stand tests and the final z rule do not run), and a motor
+	// with no NavMesh keeps the admitting record, so the task runs.
 	FMotorMoveTrace Trace;
 	return MotorMoveTraceSweep(0, StartUnits, EndUnits, GYawSweepTraceMask, GYawSweepTraceArg, nullptr,
 		Trace);

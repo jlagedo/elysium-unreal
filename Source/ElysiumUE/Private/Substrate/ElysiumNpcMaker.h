@@ -54,13 +54,9 @@ public:
 	// Slot 72 `0x1034aef0` — `XOR AL,AL; RET 4`: the discipline target filter `0x101e1a60` asks it,
 	// so no discipline targets a maker. Inherited by both variants.
 	virtual bool Slot72(int32 Discipline) override;
-	// Slot 82 `0x1034ab50` — `&datamap_CNPCMaker`; this port's datamap is the class descriptor.
-	virtual void* GetDataDescMap() override;
-	// Slot 86 `0x1034af10` — `return false`: a maker is never transmitted, so it draws nothing.
-	virtual bool ShouldTransmit(int32 Arg1, void* Edict, void* CheckBits, int32 Arg4, int32 Arg5) override;
 	// Slot 103 `0x1034afe0`. Chains no base `Spawn`: no body, no model, no `NPCInit`.
 	virtual void Spawn() override;
-	// Slot 104 `0x1034b160`. Chains `CAI_BaseNPC::Precache` `0x1027bb50` DIRECT, not the Troika's.
+	// Slot 104 `0x1034b160`. Retail chains `CAI_BaseNPC::Precache` DIRECT (asset loading).
 	virtual void Precache() override;
 	// Slot 107 `0x1034b3c0`. `MapData` is this port's `CEntityMapData`: the entity's keyvalue TEXT,
 	// passed as `const FString*`.
@@ -68,8 +64,6 @@ public:
 	// Slot 113 `0x1034b140` — an EMPTY body; it does not even chain `CBaseEntity::Activate`, so the
 	// Troika `Activate` (disposition, relationship, senses, admission, `NPCInit`) never runs.
 	virtual void Activate() override;
-	// Slot 123 `0x1034bd30` — an empty body (the debug overlay slot; verdict dead).
-	virtual void DrawDebugGeometryOverlays() override;
 	// Slot 139 `0x1034bc90`. `CNPCMaker_Fleshpile` overrides it (`0x1034c8e0`) and calls this one.
 	virtual void DeathNotice(FElysiumEntity* Child) override;
 	// Slots 362-365 `0x1034ae70` / `0x1034ae50` / `0x1034aeb0` / `0x1034ae90` — every cone is false.
@@ -78,9 +72,6 @@ public:
 	virtual bool FInViewCone(FElysiumEntity* Candidate) override;
 	virtual bool FInAimCone(const FVector& TargetCm) override;
 	virtual bool FInAimCone(FElysiumEntity* AimTarget) override;
-	// Slots 370/371 `0x1034adf0` / `0x1034ae20` — this-adjusting forwards through slots 368/369.
-	virtual FVector HeadDirection2D() override;
-	virtual FVector HeadDirection3D() override;
 	// Slot 587 `0x1034aed0` — `return false`: a maker is never a masquerade witness.
 	virtual bool CanWitnessSupernatural(int32 Level) override;
 

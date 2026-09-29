@@ -111,7 +111,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 	TestEqual(TEXT("`1026ce30`: m_OnGrappleEnd fires with NO grapple-type gate"),
 		F.World.Counter(TEXT("grapple_ends")), Before + 1.f, 0.001f);
 	TestFalse(TEXT("`1026ce82`: slot 416 SetForceFrequentThink(false), which the port omitted"),
-		F.Guard->GetForceFrequentThink());
+		F.Guard->bForceFrequentThink);
 	TestFalse(TEXT("`10007ea0`: the oblivious count is decremented and clamped at 0"),
 		F.Guard->IsOblivious());
 
@@ -1251,7 +1251,7 @@ bool FElysiumSpeciesMisc10BodyEmittersTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// `CNPC_VWerewolf` — `0x103ce750`, `0x103d0db0`, `0x103d5130`, `0x103d9f90`.
+// `CNPC_VWerewolf` — `0x103ce750`, `0x103d0db0`, `0x103d9f90` (its dead debug twin is gone, 0019/6).
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfTaskFailTest,
@@ -1327,77 +1327,6 @@ bool FElysiumSpeciesMisc10WerewolfHasPathTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("the start"), Wolf->HasPathQueries[0].StartUnits.Equals(Start, 0.001));
 		TestTrue(TEXT("the end"), Wolf->HasPathQueries[0].EndUnits.Equals(End, 0.001));
-	}
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfOverlayTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfDrawDebugStatOverlays", GSpeciesMisc10Flags)
-bool FElysiumSpeciesMisc10WerewolfOverlayTest::RunTest(const FString&)
-{
-	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
-	if (F.Guard == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
-	FElysiumNpcWerewolf* Wolf = ElysiumTestAsSpecies<FElysiumNpcWerewolf>(F.Guard);
-	if (!TestNotNull(TEXT("the subject is a CNPC_VWerewolf"), Wolf))
-	{
-		return false;
-	}
-	// `103d51a1`: the clamp against `_DAT_104454c4` (0.0) the decompiler folded away — a last-seen
-	// stamp in the FUTURE must print 0.0, not a negative number.
-	Wolf->WerewolfLastSeenTime = F.World.World.NowSeconds() + 100.0;
-	Wolf->Senses.Memory.ClosestPlayerDistanceCm = SpeciesMisc10Cm(42.f);
-	Wolf->WerewolfHintFlags = 0x0001u | 0x0800u;
-	Wolf->Cognition.Conditions.Reset();
-	Wolf->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7b));
-	Wolf->Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x7a));
-	Wolf->WerewolfDoorState = 2;
-	Wolf->MoveHintNode = INDEX_NONE;
-	Wolf->TeleportHintNode = INDEX_NONE;
-	Wolf->WerewolfScheduleStack.Reset();
-	for (int32 i = 0; i < 7; ++i)
-	{
-		Wolf->WerewolfScheduleStack.Add(FString::Printf(TEXT("sched%d"), i));
-	}
-
-	TArray<FString> Lines;
-	Wolf->WerewolfDrawDebugStatOverlays(Lines);
-	if (Lines.Num() < 2)
-	{
-		AddError(TEXT("the overlay printed nothing"));
-		return false;
-	}
-	TestEqual(TEXT("`103d51a1`: Not Seen Time is clamped at 0.0"), Lines[0],
-		FString(TEXT("Not Seen Time  : 0.0")));
-	// `103d51d3`: `Player Distance` reads `+0x6264 m_flPlayerDist`, the CACHED distance.
-	TestEqual(TEXT("`103d51d3`: Player Distance reads the cached +0x6264"), Lines[1],
-		FString(TEXT("Player Distance: 42.0")));
-	TestTrue(TEXT("`103d51f3`: the set zone bits print"), Lines.Contains(TEXT("ZONE_NO_TALL_ANIMS")));
-	TestTrue(TEXT("and the wolf-inside bit"), Lines.Contains(TEXT("ZONE_WOLF_INSIDE")));
-	TestFalse(TEXT("and a clear bit does not"),
-		Lines.Contains(TEXT("ZONE_PLAYER_ON_BREAKABLE")));
-	// `103d532b`: `0x7b` is tested BEFORE `0x7a`, which is the order the two lines come out in.
-	const int32 BreakIdx = Lines.IndexOfByKey(FString(TEXT("COND_VWEREWOLF_SHOULD_BREAKHINT")));
-	const int32 DeathIdx = Lines.IndexOfByKey(FString(TEXT("COND_VWEREWOLF_DEATH_TRIGGERED")));
-	TestTrue(TEXT("`103d532b`: condition 0x7b prints before 0x7a"),
-		BreakIdx != INDEX_NONE && DeathIdx != INDEX_NONE && BreakIdx < DeathIdx);
-	TestTrue(TEXT("`103d537e`: door state 2 is 'open'"),
-		Lines.Contains(TEXT("door state: (2)open")));
-	// `103d5450`: the LAST FIVE rows of the schedule stack.
-	TestTrue(TEXT("`103d5450`: the last five schedule rows print"), Lines.Contains(TEXT("sched6")));
-	TestFalse(TEXT("and the first two do not"), Lines.Contains(TEXT("sched1")));
-
-	// `103d538b`: a door state outside 0..3 prints NOTHING — retail has no `default:`.
-	Wolf->WerewolfDoorState = 9;
-	Lines.Reset();
-	Wolf->WerewolfDrawDebugStatOverlays(Lines);
-	for (const FString& Line : Lines)
-	{
-		TestFalse(TEXT("`103d538b`: an out-of-range door state prints no line at all"),
-			Line.StartsWith(TEXT("door state")));
 	}
 	return true;
 }

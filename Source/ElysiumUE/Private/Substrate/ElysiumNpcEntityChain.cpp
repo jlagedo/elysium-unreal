@@ -39,7 +39,7 @@ namespace
 
 	// `_DAT_10457f54` = **0.7f** (`docs/vtmb/computer-terminals.md` lines 524 and 1729,
 	// `docs/vtmb/npc-ai/senses.md` line 401). The NEW-sample weight of the autoaim blend.
-	constexpr float GChainAutoaimNewWeight = 0.7f;
+	constexpr float GChainAutoaimNewWeight = ElysiumNpcTunables::SevenTenths;
 	// `0x47c34ff3` = **100000.0f**, the "nothing is near" distance `UpdateClosestNpc` resets
 	// `m_flClosestNPCDist` to. Read straight off the immediate in the decompilation.
 	constexpr float GChainClosestNpcReset = 100000.0f;
@@ -53,8 +53,8 @@ namespace
 	// The four clamps, read as literal floats out of the decompilation (`25.0` / `-25.0` are
 	// spelled as immediates; `_DAT_10450568` is `360.0` and `_DAT_1044c3a8` / `_DAT_10462948` are
 	// the `180.0` / `-180.0` the wrap tests against).
-	constexpr float GChainAutoaimWrap = 360.0f;
-	constexpr float GChainAutoaimHalfWrap = 180.0f;
+	constexpr float GChainAutoaimWrap = ElysiumNpcTunables::HeadAngleRunawayLimit;
+	constexpr float GChainAutoaimHalfWrap = ElysiumNpcTunables::OneEighty;
 	constexpr float GChainAutoaimPitchClamp = 25.0f;
 	constexpr float GChainAutoaimYawClamp = 12.0f;
 
@@ -247,7 +247,8 @@ void FElysiumNpc::FireGlobalActsOutput(int32 RecordOffset)
 bool FElysiumNpc::SpawnResponseCopsDelayCvars(float& OutLow, float& OutHigh) const
 {
 	// SEAM for `DAT_10725894` (the high bound) and `DAT_107257bc` (the low bound). Both NAMES
-	// **unrecovered**. Retail's `IsCommand()` arms write literal `0` and `_DAT_104454c4` = 0.0, so
+	// are now recovered from the image's static initialisers: `debug_response_timer_max` (7.5) and
+	// `debug_response_timer_min` (5.0), overlay rows `DebugResponseTimerMax` / `DebugResponseTimerMin`. Retail's `IsCommand()` arms write literal `0` and `_DAT_104454c4` = 0.0, so
 	// the draw is over an empty range.
 	OutLow = NpcKernelEntityChainShared::GChainZero;
 	OutHigh = NpcKernelEntityChainShared::GChainZero;
@@ -256,7 +257,9 @@ bool FElysiumNpc::SpawnResponseCopsDelayCvars(float& OutLow, float& OutHigh) con
 
 bool FElysiumNpc::ActLevelOverrideCvar(int32 CvarId, int32& OutValue) const
 {
-	// SEAM for `DAT_10724ffc` / `DAT_1072594c` / `DAT_107250d4`. All three NAMES **unrecovered**.
+	// SEAM for `DAT_10724ffc` / `DAT_1072594c` / `DAT_107250d4`. All three names are now recovered
+	// (image static initialisers): `pl_supernatural_level`, `pl_criminal_level`, `pl_investigate_level`, each
+	// default -1 (overlay rows `PlSupernaturalLevel` / `PlCriminalLevel` / `PlInvestigateLevel`).
 	// Retail's shape is `IsCommand()` false plus a NEGATIVE `m_nValue` (`+0x2c`, word 0xb) meaning
 	// "no override", which is the arm that reads the stored field. This answers that arm: the cvar
 	// is not a command and its value is -1.
@@ -277,15 +280,6 @@ int32 FElysiumNpc::LocalScheduleId(int32 GlobalId) const
 {
 	const FElysiumLocalIdSpace* Space = IdSpace(EElysiumIdCategory::Schedule);
 	return Space != nullptr ? Space->GlobalToLocal(GlobalId) : INDEX_NONE;
-}
-
-float FElysiumNpc::LastAiThink() const
-{
-	// 0x101aa730 — the Troika's stamp for the FOURTH think channel (+0x6260; the base body
-	// `0x101a64a0` answers `CBaseEntity::GetLastThink(NULL)`), beside family
-	// Lifecycle's `LastUpdateThink` / `LastNormalThink` / `LastMoveThink`. This runtime carries the
-	// word as `FElysiumNpcScheduleHost::LastAI`.
-	return static_cast<float>(ScheduleHost.LastAI);
 }
 
 // -------------------------------------------------------------------------------------------------

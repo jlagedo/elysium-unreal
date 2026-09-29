@@ -6,7 +6,7 @@
 
 bool FElysiumInterestingPlace::ResolveTypeOrRemove(bool bWarn)
 {
-	// The half `CAI_InterestingPlace::Spawn` (`0x102d9c20`) and its `OnRestore` (`0x102d9dd0`)
+	// The half `CAI_InterestingPlace::Spawn` (`0x102d9c20`) and its `OnRestore`
 	// share, transcribed from the first: `strcmp(m_sType, "")` — an EMPTY type never looks up and
 	// never removes — then `thunk_FUN_102dd9c0(m_sType)` into `field_0x548`, and a miss prints
 	// "Could not find InterestingPlaceT..." and `UTIL_Remove`s the entity.
@@ -79,40 +79,6 @@ void FElysiumInterestingPlace::Spawn()
 	{
 		Rating = 5;
 	}
-}
-
-bool FElysiumInterestingPlace::OnRestoreResolveType()
-{
-	// 0x102d9dd0, slot 130. `CAISound::OnRestore` (`0x100aa5a0`) first — which is
-	// `SetCheckUntouch(false)` whatever it was called with, family Lifecycle's
-	// `FElysiumNpcBase::OnRestoreForwardsCheckUntouch` — then the same lookup, at `DevMsg` severity.
-	//
-	// **Unrecovered:** the tail call `thunk_FUN_102d9eb0()`, which runs on the surviving arm only.
-	// It takes no argument in the listing and the corpus does not settle what it registers.
-	return ResolveTypeOrRemove(/*bWarn=*/false);
-}
-
-TConstArrayView<const TCHAR*> FElysiumInterestingPlace::ConversationPlaceOutputNames()
-{
-	// The six `COutput`s `0x102dbbc0` destroys, in the order it destroys them (`+0x046c`, `+0x0484`,
-	// `+0x049c`, `+0x04b4`, and the two beyond them).
-	static const TCHAR* const Names[] =
-	{
-		TEXT("OnPlayerLeftRadius"),
-		TEXT("OnOneOffSoundComplete"),
-		TEXT("OnPlayerTooClose"),
-		TEXT("OnConversationEnd"),
-		TEXT("OnNewTalker"),
-		TEXT("OnConversationStart"),
-	};
-	return TConstArrayView<const TCHAR*>(Names, UE_ARRAY_COUNT(Names));
-}
-
-bool FElysiumInterestingPlace::ConversationPlaceDeletingDtor(uint8 DeleteFlags)
-{
-	// 0x102dbbc0 — `if ((param_1 & 1) != 0) thunk_FUN_100aa7b0(this); return this;`. Bit 0 is
-	// MSVC's "and free the storage" flag; every other bit is ignored.
-	return (DeleteFlags & 1) != 0;
 }
 
 bool FElysiumInterestingPlace::IsAvailable() const

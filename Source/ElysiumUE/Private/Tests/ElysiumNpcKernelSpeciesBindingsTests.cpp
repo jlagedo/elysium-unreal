@@ -440,7 +440,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 	// What retail's own bodies rewrite on the way back, each with the body that does it and the value
 	// it leaves. The restore restarts the program (`NpcKernelBindings.SaveRoundTrip`'s restart
 	// divergence), and a restart runs slot 435; a Pedestrian's slot 130 re-inits it on every load.
-	enum class EDerived : uint8 { Decrement, Zero, False };
+	enum class EDerived : uint8 { Decrement, Zero, False, Reset };
 	struct FDerived { const TCHAR* Classname; const TCHAR* Row; EDerived Rule; const TCHAR* Why; };
 	static const FDerived Derived[] =
 	{
@@ -454,6 +454,54 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		  TEXT("cleared by the Tzimisce's slot 435 `0x103bf630` on the restart") },
 		{ TEXT("npc_VDialogPedestrian"), TEXT("m_bFirstThink"), EDerived::False,
 		  TEXT("`CNPC_VPedestrian::OnRestore` `0x103a25a0` re-runs `NPCInit` `0x103a2570` on a load") },
+		// 0019/6 (lane P): the boss line's `Restore` twins moved to `OnPostRestore` -- the model name and
+		// the four emitter names (+0x6680, +0x6684..+0x6690) are reset to the class constants on every load,
+		// and Asian / Chang / Sheriff re-seed the jump gravity (+0x64b8). A stamped value cannot survive.
+		{ TEXT("npc_VVampireBoss"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103c5910`") },
+		{ TEXT("npc_VVampireBoss"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103c5910`") },
+		{ TEXT("npc_VVampireBoss"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103c5910`") },
+		{ TEXT("npc_VVampireBoss"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103c5910`") },
+		{ TEXT("npc_VVampireBoss"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103c5910`") },
+		{ TEXT("npc_VAndreiBlood"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1035cf80 (inherits the boss resets)`") },
+		{ TEXT("npc_VAndreiBlood"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1035cf80 (inherits the boss resets)`") },
+		{ TEXT("npc_VAndreiBlood"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1035cf80 (inherits the boss resets)`") },
+		{ TEXT("npc_VAndreiBlood"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1035cf80 (inherits the boss resets)`") },
+		{ TEXT("npc_VAndreiBlood"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1035cf80 (inherits the boss resets)`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x10360e10`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x10360e10`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x10360e10`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x10360e10`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x10360e10`") },
+		{ TEXT("npc_VChangBros"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBros"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBros"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBros"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBros"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x1036b170`") },
+		{ TEXT("npc_VSabbatLeader"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103a6e80`") },
+		{ TEXT("npc_VSabbatLeader"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103a6e80`") },
+		{ TEXT("npc_VSabbatLeader"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103a6e80`") },
+		{ TEXT("npc_VSabbatLeader"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103a6e80`") },
+		{ TEXT("npc_VSabbatLeader"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103a6e80`") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_pMonsterModelName"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103ae7f0`") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_pBodyEmitterNames[0]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103ae7f0`") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_pBodyEmitterNames[1]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103ae7f0`") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_pBodyEmitterNames[2]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103ae7f0`") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_pBodyEmitterNames[3]"), EDerived::Reset, TEXT("reset by the boss line's post-restore `0x103ae7f0`") },
+		{ TEXT("npc_VAsianVampire"), TEXT("m_fJumpGravity"), EDerived::Reset, TEXT("re-seeded by the class's post-restore write (`0x10360e10`)") },
+		{ TEXT("npc_VChangBros"), TEXT("m_fJumpGravity"), EDerived::Reset, TEXT("re-seeded by the class's post-restore write (`0x1036b170`)") },
+		{ TEXT("npc_VChangBrosBlade"), TEXT("m_fJumpGravity"), EDerived::Reset, TEXT("re-seeded by the class's post-restore write (`0x1036b170`)") },
+		{ TEXT("npc_VChangBrosClaw"), TEXT("m_fJumpGravity"), EDerived::Reset, TEXT("re-seeded by the class's post-restore write (`0x1036b170`)") },
+		{ TEXT("npc_VSheriffMan"), TEXT("m_fJumpGravity"), EDerived::Reset, TEXT("re-seeded by the class's post-restore write (`0x103ae7f0`)") },
 	};
 	auto FindDerived = [](const TCHAR* Classname, FName Row) -> const FDerived*
 	{
@@ -644,6 +692,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 			case EDerived::Decrement: bExpected = Back.AsInt == W.Value.AsInt - 1; break;
 			case EDerived::Zero:      bExpected = Back.AsInt == 0; break;
 			case EDerived::False:     bExpected = !Back.AsBool; break;
+			case EDerived::Reset:     bExpected = !bSame; break;   // the class constant, never the stamp
 			}
 			if (bExpected)
 			{

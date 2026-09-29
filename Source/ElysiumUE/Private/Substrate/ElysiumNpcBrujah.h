@@ -13,5 +13,4 @@ class FElysiumNpcBrujah : public FElysiumNpcVampire
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VBrujah", FElysiumNpcVampire)
 
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 };

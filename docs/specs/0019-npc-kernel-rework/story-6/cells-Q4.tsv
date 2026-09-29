@@ -1,0 +1,90 @@
+address	name	type	value	evidence	file:line
+104454c8	Eighty	f32	80.0	`0x10026710 FLD float ptr`; 15 refs; the pooled float 80.0; MingXiao circle first yaw (StartTask_2 CircleFirstYaw), the evade jitter band	StartTask_2.cpp:247
+10446758	RadiansToDegrees	f32	57.29578	`0x100299fa FMUL float ptr`; 32 refs; radians to degrees, 57.29578; `0x101d2c70` / `0x101d2ce0` (port GScript19RadToDeg)	ScriptSpecies.cpp:52
+10447ee0	Thousand	f32	1000.0	`0x1002b8a6 FMUL float ptr`; 33 refs; the pooled float 1000.0; Tzimisce throw speed floor, Werewolf GetGroundpoint trace drop	Tzimisce.cpp:102,Tzimisce.cpp:1250,Werewolf.cpp:110,Werewolf.cpp:1442
+10447ee8	FortyEight	f32	48.0	`0x1002b935 FMUL float ptr`; 11 refs; the pooled float 48.0; the throw aim-point lift of the Tzimisce and Vampire release bodies	Tzimisce.cpp:101,Tzimisce.cpp:1228,Tzimisce.cpp:1252,Vampire.cpp:25,+1
+104492b8	TwoHundred	f32	200.0	`0x100323a1 FCOMP float ptr`; 23 refs; the pooled float 200.0; MingXiao tentacle evade companion push	StartTaskSpecies.cpp:2207
+104492dc	MinusOne	f32	-1.0	`0x10035235 FMUL float ptr`; 233 refs; the pooled float -1.0; TweakParam derive-it sentinel (`0x1029ab31 FCOMP`), MingXiao circle radius sentinel	ScriptSpecies.cpp:139,ScriptSpecies.cpp:147,Senses10.cpp:49,Social10.inl:156,+2
+1044a2bc	FourTenths	f32	0.4	`0x1004ed4b FMUL float ptr`; 5 refs; the pooled float 0.4; `CNPC_VSheriffMan::SelectTeleportNode 0x103b0630` yaw-term weight	SheriffMan.cpp:58
+1044dcf0	ThirtyDouble	f64	30.0	`0x1005d3be FDIVR double ptr`; 3 refs; the pooled double 30.0; ManBat glide selector low turn bound (`0x1038e7c0 FCOM double`)	ScriptSpecies.cpp:49
+1044ddb0	TwoFiftySix	f32	256.0	`0x1005f6c7 FADD float ptr`; 23 refs; the pooled float 256.0; pedestrian sound near test, compared SQUARED	SelectSpecies.cpp:94
+1044e664	Ten	f32	10.0	`0x1006bc3a FMUL float ptr`; 91 refs; the pooled float 10.0; squad follower-distance overlap, ManBat task `0x15d` lift	Squad.cpp:22,StartTaskSpecies.cpp:1548
+1044f02c	OneAndHalf	f32	1.5	`0x10077ec5 FLD float ptr`; 14 refs; the pooled float 1.5; Bach warning lead, Yukie melee-range multiplier	StartTaskSpecies.cpp:783,Yukie.cpp:37,Yukie.cpp:110,Yukie.cpp:119
+1044ffd0	FiveDouble	f64	5.0	`0x1008e551 FCOMP double ptr`; 11 refs; the pooled double 5.0; `0x1037c022 FADD double ptr` (`CNPC_VGhoulCroucher::StartTouch` touch-burn re-arm), Werewolf task `0x4e` tolerance constant term	SpeciesLifecycle10.inl:81,StartTaskSpecies.cpp:3431
+10450568	ThreeSixty	f32	360.0	`0x10099ec4 FADD float ptr`; 64 refs; the pooled float 360.0; the yaw wrap (Werewolf, Senses slots 467 / 594, `0x101d2c70`)	ScriptSpecies.cpp:52,Senses10.cpp:48,Werewolf.cpp:132,Werewolf.h:340
+10450570	ThreeSixtyDouble	f64	360.0	`0x10099e9c FLD double ptr`; 34 refs; the pooled double 360.0; ManBat glide selector full turn	ScriptSpecies.cpp:48
+10450ab0	SixteenThousandThreeEightyFour	f32	16384.0	`0x100a9594 FCOMP float ptr`; 13 refs; the pooled float 16384.0 (128 squared); MingXiao kick-prop maximum distance squared (`0x102a9594 FCOMP`)	StartTask_2.cpp:236
+10451ab4	Fifth	f32	0.2	`0x100b8c14 FCOMP float ptr`; 25 refs; the pooled float 0.2; Bach sniper aim base, Tzimisce body last-known-position fraction	SelectSpecies.cpp:99,SelectSpecies.cpp:1325,StartTaskSpecies.cpp:780
+10452918	OneEightyDouble	f64	180.0	`0x100c41cb FADD double ptr`; 3 refs; the pooled double 180.0; ManBat glide selector split (`0x1038e7dc FCOMP double`)	ScriptSpecies.cpp:51
+10452dc4	Two	f32	2.0	`0x100c8ef0 FSUB float ptr`; 60 refs; the pooled float 2.0; investigate-sound delay, Werewolf random-move last-seen window and stuck up-probe lift	Select.cpp:41,SelectSpecies.cpp:89,Senses10.cpp:47,Werewolf.cpp:137,+2
+104563b0	FourThousandNinetySix	f32	4096.0	`0x100fb42c FCOMP float ptr`; 20 refs; the pooled float 4096.0 (64 squared); MingXiao dive minimum distance squared (`0x102a5ab9`)	StartTask_2.cpp:227
+10456854	SixHundred	f32	600.0	`0x100fc2b7 FCOM float ptr`; 12 refs; the pooled float 600.0; MingXiao tentacle evade re-arm	StartTaskSpecies.cpp:2208
+10457ac4	EightHundred	f32	800.0	`0x100fd2d9 FCOM float ptr`; 7 refs; the pooled float 800.0; range step-back distance (`0x102aff07`), Werewolf close-enough (`0x103cc15d`)	Select.cpp:43,Werewolf.cpp:120,Werewolf.cpp:1693
+10457f54	SevenTenths	f32	0.7	`0x100fe280 FADD float ptr`; 18 refs; the pooled float 0.7; slot 594 far-band fraction (`0x102b483e`)	Senses10.cpp:35,Senses10.cpp:260,Senses10.inl:35
+10457f5c	FiveHundred	f32	500.0	`0x100fe375 FMUL float ptr`; 36 refs; the pooled float 500.0; ManBat scatter speed of task `0x14d`, Werewolf fake-hull damage force scale	StartTaskSpecies.cpp:1548,Werewolf.cpp:83,Werewolf.cpp:778
+10457f60	OneFifty	f32	150.0	`0x100fe348 FMUL float ptr`; 14 refs; the pooled float 150.0; Tzimisce inside-interrupt pad of task `0xd1`, `CNPC_VTzimisce::ResolveTaskDistance 0x103b9120` answer for -1000001	StartTaskSpecies.cpp:3059,Tzimisce.cpp:83,Tzimisce.cpp:471
+10462914	OneAndQuarter	f32	1.25	`0x1011e7ef FMUL float ptr`; 8 refs; the pooled float 1.25; Werewolf `UpdateFakeHull` extent scale (`0x103d954b FMUL`)	Werewolf.cpp:80,Werewolf.cpp:709
+10462948	MinusOneEighty	f32	-180.0	`0x1011fb8e FCOMP float ptr`; 14 refs; the pooled float -180.0; straight-up pitch of `0x101d2c70` / `0x101d2ce0`	ScriptSpecies.cpp:53
+10462958	ThreeQuartersDouble	f64	0.75	`0x10120233 FMUL double ptr`; 14 refs; the pooled double 0.75; MingXiao circle max-range weight	StartTask_2.cpp:251
+1046bac0	Six	f32	6.0	`0x1014247e FADD float ptr`; 21 refs; the pooled float 6.0; Bach shield interval	StartTaskSpecies.cpp:786
+1046dcd0	OneTwentyEight	f32	128.0	`0x10150b25 FADD float ptr`; 31 refs; the pooled float 128.0; sound-source look-ahead (`0x102b8ea4`)	Select.cpp:44
+1046dcdc	ThirtyFiveHundredths	f32	0.35	`0x10151759 FCOM float ptr`; 3 refs; the pooled float 0.35; Bach non-rifle wait cut (`0x10364630`)	StartTaskSpecies.cpp:779
+104704c0	FiveHundredTwelveDouble	f64	512.0	`0x1016b756 FLD double ptr`; 2 refs; the pooled double 512.0; Werewolf teleport floor squared (`0x103cad65 FLD double ptr`)	Werewolf.h:209
+1049a1ac	StartTaskGoalToleranceDefault	f32	-1.0	`0x102a1d03 FLD float ptr`; 13 refs; AIN_DEF_TOLERANCE, -1.0; `CAI_Navigator::SetGoal 0x102ecd20` compares the goal tolerance against it	StartTask.inl:57,StartTask_2.cpp:242
+1049a1b0	StartTaskGoalToleranceHull	f32	-2.0	`0x102a2184 FLD float ptr`; 10 refs; AIN_HULL_TOLERANCE, -2.0; `0x102ecd20` compares the goal tolerance against it	StartTask.inl:57,StartTask_2.cpp:243
+1049ae50	DiveLeftDot	f64	-0.98	`0x102a5b04 FCOMP double ptr`; 1 refs; MingXiao dive left dodge dot bound, -0.98 (`0x102a5b04 FCOMP double ptr`)	StartTask_2.cpp:230
+1049ae60	DiveRightDot	f64	0.98	`0x102a5aee FCOM double ptr`; 1 refs; MingXiao dive right dodge dot bound, 0.98 (`0x102a5aee FCOM double ptr`)	StartTask_2.cpp:229
+1049ae6c	DiveMaxDistSqr	f32	12100.0	`0x102a5ab9 FCOMP float ptr`; 1 refs; MingXiao dive maximum distance squared, 12100 = 110 squared (`0x102a5ab9 FCOMP`)	StartTask_2.cpp:228
+1049ae98	MinusTwenty	f32	-20.0	`0x102b6977 FCOM float ptr`; 5 refs; the pooled float -20.0; the pickup-cone lower bound of Tzimisce grab (`0x103be8e0`)	Tzimisce.cpp:98,Tzimisce.cpp:1104
+1049dfe4	TentacleScatterRadiusSquared	f32	262144.0	`0x10310fce FCOMP float ptr`; 3 refs; MingXiao tentacle evade scatter radius squared, 262144 = 512 squared (`0x10310fce`, `0x1039cf9f`, `0x103a3357 FCOMP`)	StartTaskSpecies.cpp:2209
+1049e0c8	AimConeDotThreshold	f64	0.994	`0x10326cbf FCOMP double ptr`; 1 refs; 0.994; `FInAimCone 0x10326bd0`, `0x10326cbf FCOMP double ptr` (read as a float it is 2.18e-25)	SensesBodies.cpp:25
+104aaac0	BachAimPerStatC	f32	0.08	`0x1036474d FMUL float ptr`; 1 refs; Bach sniper aim per-stat-C term, 0.08 (`0x1036474d FMUL`)	StartTaskSpecies.cpp:781
+104aaac8	BachCamperNever	f32	1000000000.0	`0x10364671 FADD float ptr`; 4 refs; Bach camper 'never' wait, 1e9 (`0x10364671`, `0x10365438 FADD`)	StartTaskSpecies.cpp:785
+104ad9f8	ChangBrosTeleportHealthLoss	f32	0.1	`0x1036cb14 FCOMP float ptr`; 1 refs; Chang brothers health-lost-since-mark threshold, 0.1 (`0x1036cb14 FCOMP`)	SpeciesMisc10.inl:31
+104ada40	ChangBrosUnitedDelay	f32	4.0	`0x1036bbae FLD float ptr`; 1 refs; Chang brothers united delay, 4.0 (`0x1036bbae FLD`)	StartTaskSpecies.cpp:1081
+104ada54	ChangBrosEnergyChargeDelay	f32	1.5	`0x1036b9fd FLD float ptr`; 1 refs; Chang brothers energy-charge delay, 1.5 (`0x1036b9fd FLD`)	StartTaskSpecies.cpp:1081
+104ada58	ChangBrosBlastRadius	f32	1000.0	1 refs; Chang brothers AOE blast radius, 1000.0 (`0x1036bd3a`, a dword operand)	StartTaskSpecies.cpp:1082
+104ada5c	ChangBrosBlastLift	f32	50.0	`0x1036bc9a FLD float ptr`; 2 refs; Chang brothers blast point lift, 50.0 (`0x1036bc9a FLD`, `0x1036c11b`)	StartTaskSpecies.cpp:1082
+104b73e4	MeleeNearSquared	f32	40000.0	`0x1038300c FCOMP float ptr`; 4 refs; melee near distance squared, 40000 = 200 squared (`0x1038300c FCOMP`, `0x103bc926`, `0x103bd054`, `0x103bf73a`)	SelectSpecies.cpp:96
+104b73e8	MeleeFarSquared	f32	160000.0	`0x10382fd6 FCOM float ptr`; 2 refs; melee far distance squared, 160000 = 400 squared (`0x10382fd6 FCOM`, `0x103bc8d5`)	SelectSpecies.cpp:95
+104bc6a0	ThreeThirtyDouble	f64	330.0	`0x1038e7cd FCOM double ptr`; 1 refs; the double 330.0; ManBat glide selector high turn bound (`0x1038e7cd FCOM double ptr`)	ScriptSpecies.cpp:50
+104bde70	EvadeGoalTolerance	f32	-1.0	`0x1039cb38 FLD float ptr`; 4 refs; -1.0; the tolerance the MingXiao tentacle's evade `SetGoal` pushes (`0x1039cb38 FLD`, `0x1039cdb8`, `0x1039d0b0`, `0x1039dae3`)	StartTaskSpecies.cpp:2250
+104c3cb0	SabbatDiveJumpHeight	f32	200.0	`0x103a7d3f FLD float ptr`; 1 refs; Sabbat leader dive jump height, 200.0 (`0x103a7d3f FLD`)	StartTaskSpecies.cpp:2561
+104c3cb4	SabbatLeapHeight	f32	35.0	1 refs; Sabbat leader leap height, 35.0 (`0x103a7dca`, a dword operand)	StartTaskSpecies.cpp:2562
+104c3cb8	SabbatLeapBackoff	f32	25.0	`0x103aae4c FLD float ptr`; 4 refs; Sabbat leader leap backoff, 25.0 (`0x103a7dc4`, `0x103aae4c FLD`)	StartTaskSpecies.cpp:2563
+104c3cc4	SabbatLeaderHealthLostFraction	f32	0.06666667	`0x103a9e07 FCOMP float ptr`; 1 refs; Sabbat leader health-lost-since-mark threshold, 0.0666667 (`0x103a9e07 FCOMP`)	SpeciesMisc10.inl:31
+104c3cec	SabbatDiveOutFaceSpeed	f32	50.0	2 refs; Sabbat leader dive-out face speed, 50.0 (`0x103a8104`, `0x103a8bce`, dword operands)	StartTaskSpecies.cpp:2564
+104c3cf4	SabbatDiveFlightBase	f32	33.0	`0x103a5820 FLD float ptr`; 2 refs; Sabbat dive flight time base, 33.0; `staticinit_103a5820` writes `_DAT_1093c340 = 33.0 * (1/30)` (`0x103a5820 FLD`)	StartTaskSpecies.cpp:2569
+104c3d04	SabbatWarningLead	f32	1.0	`0x103a8312 FLD float ptr`; 1 refs; Sabbat leader warning lead, 1.0 (`0x103a8312 FLD`)	StartTaskSpecies.cpp:2565
+104c3d0c	SabbatBlastLift	f32	80.0	`0x103a84e4 FLD float ptr`; 1 refs; Sabbat leader blast lift, 80.0 (`0x103a84e4 FLD`)	StartTaskSpecies.cpp:2566
+104c3d10	SabbatBlastRadius	f32	350.0	1 refs; Sabbat leader blast radius, 350.0 (`0x103a8533`, a dword operand)	StartTaskSpecies.cpp:2567
+104c3d2c	SabbatDiveFlightUnit	f32	0.033333335	`0x103a5826 FMUL float ptr`; 2 refs; one thirtieth, 0.033333335; the second factor of `staticinit_103a5820`'s dive flight time (`0x103a5826 FMUL`)	StartTaskSpecies.cpp:2569
+104c6124	SheriffLastTeleportFloor	f32	100.0	`0x103b076e FCOMP float ptr`; 3 refs; Sheriff last-teleport minimum distance, 100.0 (`0x103b076e FCOMP`, `0x103b0d59`)	SheriffMan.cpp:54,SheriffMan.cpp:468,SheriffMan.cpp:469,SheriffMan.cpp:547,+1
+104c6140	SheriffHealthLostFloor	f32	0.05	`0x103aea11 FCOMP float ptr`; 1 refs; Sheriff health-lost floor, 0.05 (`0x103aea11 FCOMP`)	SelectSpecies.cpp:91
+104c6144	SheriffScoreDistCap	f32	1000.0	`0x103b07e9 FCOMP float ptr`; 3 refs; Sheriff teleport-node score distance cap, 1000.0 (`0x103b07e9 FCOMP`, `0x103b0808 FDIV`)	SheriffMan.cpp:57
+104c614c	SheriffJumpRise	f32	400.0	`0x103b13fa FLD float ptr`; 1 refs; `CNPC_VSheriffMan::SetupJump 0x103b1300` rise, 400.0 (`0x103b13fa FLD`)	SheriffMan.cpp:52,SheriffMan.cpp:375
+104c6150	SheriffAttackIdleSeconds	f32	3.0	1 refs; Sheriff attack-idle seconds, 3.0 (`0x103aea20`, a dword operand)	SelectSpecies.cpp:92
+104c6154	SheriffBlastRadius	f32	300.0	1 refs; Sheriff land-blast AOE radius, 300.0 (`0x103af4b1`, a dword operand)	StartTaskSpecies.cpp:2882
+104c6d3c	SixTenths	f32	0.6	`0x103b080e FMUL float ptr`; 4 refs; the pooled float 0.6; Sheriff teleport-node distance weight (`0x103b080e FMUL`)	SheriffMan.cpp:59
+104c6d40	InverseOneEighty	f32	0.0055555557	`0x103b07df FMUL float ptr`; 1 refs; 1/180 as a float, 0.0055555556; Sheriff teleport-node yaw term (`0x103b07df FMUL`)	SheriffMan.cpp:53
+104cc508	TzimisceBodyNearSquared	f32	90000.0	`0x103bc726 FCOMP float ptr`; 1 refs; Tzimisce body near distance squared, 90000 = 300 squared (`0x103bc726 FCOMP`)	SelectSpecies.cpp:100,SelectSpecies.cpp:1338
+104cc510	TzimisceBodyAngleLimit	f64	120.0	`0x103bc6d5 FCOMP double ptr`; 1 refs; Tzimisce body angle limit, 120.0 (`0x103bc6d5 FCOMP double ptr`)	SelectSpecies.cpp:98,SelectSpecies.cpp:1319
+104cc51c	TzimisceAttachRangeSquared	f32	25600.0	`0x103bcf0e FCOMP float ptr`; 2 refs; Tzimisce attach range squared, 25600 = 160 squared (`0x103bcf0e`, `0x103bef71 FCOMP`)	Tzimisce.cpp:107
+104cd108	HeadClawConditionDistance	f64	240.0	`0x103c20dc FCOMP double ptr`; 1 refs; Tzimisce head-claw 2-D distance raising condition 0x35, 240.0 (`0x103c20dc FCOMP double ptr`)	TzimisceHeadClaw.cpp:50,TzimisceHeadClaw.cpp:224,TzimisceHeadClaw.cpp:277
+104cdce8	RunnerAdvanceDistance	f64	256.0	`0x103c3412 FCOMP double ptr`; 1 refs; runner advance distance, 256.0 (`0x103c3412 FCOMP double ptr`)	SelectSpecies.cpp:93
+104ce8bc	ProteanTransformWait	f32	2.0	`0x103c6416 FLD float ptr`; 1 refs; Vampire boss protean transformation wait, 2.0 seconds (`0x103c6416 FLD`)	VampireBoss.cpp:51,VampireBoss.cpp:278,VampireBoss.h:115
+104cf498	WerewolfDoorMaxDistance	f32	135.0	`0x103d1fd2 FCOMP float ptr`; 1 refs; Werewolf door weighted-distance threshold, 135.0 (`0x103d1fd2 FCOMP`)	Werewolf.cpp:144,Werewolf.cpp:2294
+104d0080	WerewolfFieldOfViewRadians	f64	2.0943951023931953	`0x103cafe8 FLD double ptr`; 1 refs; Werewolf field of view, 2.0943951 rad = 120 degrees (`0x103cafe8 FLD double ptr`)	Werewolf.h:211
+104d00ac	MinusThousand	f32	-1000.0	`0x103d6c00 FMUL float ptr`; 1 refs; the float -1000.0; Werewolf GetGroundpoint trace end drop, the negative twin of `Thousand` (`0x103d6c00 FMUL`)	Werewolf.cpp:110,Werewolf.cpp:1448
+1062d210	BachSkipToWarning0	f32	1.3	2 refs; Bach skip-to-warning time, teleport state 0, 1.3; first entry of a four-float table in .data	StartTaskSpecies.cpp:788
+1062d214	BachSkipToWarning1	f32	1.0	0 refs; Bach skip-to-warning time, teleport state 1, 1.0; second table entry	StartTaskSpecies.cpp:788
+1062d218	BachSkipToWarning2	f32	1.2	0 refs; Bach skip-to-warning time, teleport state 2, 1.2; third table entry	StartTaskSpecies.cpp:788
+1062d21c	BachSkipToWarning3	f32	1.2	0 refs; Bach skip-to-warning time, teleport state 3, 1.2; fourth table entry	StartTaskSpecies.cpp:788
+10924630	DebugTestSwitch2	convar_i32	0	`debug_test_switch2` ctor `0x1028b691`, read through `DAT_10924634` (object + 4); test-task toggle (StartTask.inl)	StartTask.inl:236
+10924678	DebugTestSwitch1	convar_i32	0	`debug_test_switch1` ctor `0x1028b601`, read through `DAT_1092467c` (object + 4); test-task toggle (StartTask.inl)	StartTask.inl:235
+10940400	ZombieMeleeMod	convar_f32	1.0	`zombie_melee_mod` ctor `0x103ddc7c`, read through `DAT_10940404` (object + 4); `CNPC_VZombie::TraceAttack` ammo-type cell (Zombie.cpp)	Zombie.cpp:397,Zombie.cpp:407,Zombie.h:62
+10940448	ZombieHeadshotMod	convar_f32	10.0	`zombie_headshot_mod` ctor `0x103ddbec`, read through `DAT_1094044c` (object + 4); `CNPC_VZombie::TraceAttack` ammo-type cell (Zombie.cpp)	Zombie.cpp:397,Zombie.cpp:408,Zombie.h:62
+10940498	ZombieGibAmt	convar_i32	100	`zombie_gib_amt` ctor `0x103ddd0c`, read through `DAT_1094049c` (object + 4); `CNPC_VZombie` gib-amount cell (Zombie.h)	Zombie.h:82
+10924478	DebugAllowNpcHunting	convar_i32	0	`debug_allow_npc_hunting` ctor `0x1028c851`, read through `DAT_1092447c` (object + 4); `CNPC_VHuman::SelectIdealState` hunt arm gate (State.inl)	State.inl:36
+10924ed8	EntTraceMelee	convar_i32	0	`ent_trace_melee` ctor `0x1028bf11`, read through `DAT_10924edc` (object + 4); slots 599 / 600 call `(*DAT_10924edc)->vfunc1()` and discard it, a ConVar call (Troika, Tzimisce, Yukie comments call it 'the global melee event')	TroikaHelpers.cpp:370,TroikaHelpers.cpp:410,TroikaHelpers.cpp:439,TroikaHelpers.cpp:483,+11
+1093f9a0	WerewolfForceTeleport	convar_i32	0	`werewolf_force_teleport` ctor `0x103c859c`, read through `DAT_1093f9a4` (object + 4); Werewolf task `0x14c` gate (Werewolf.h)	Werewolf.h:551

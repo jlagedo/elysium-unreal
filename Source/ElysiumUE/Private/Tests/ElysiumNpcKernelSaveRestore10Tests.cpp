@@ -24,9 +24,8 @@
 // off the listing — this family corrected the checklist's walk in five places and each correction
 // has a case that states the corrected fact.
 //
-// The suite is in five parts: the sentinel CODEC and the CRC32 the whole family turns on; slot 126
-// `Save` (the base, the Troika body, the four species arms); slot 127 `Restore` (the same shape plus
-// the vampire-boss reset); slot 180 `UpdateOnRemove` and slot 106 `PostConstructor`; and the
+// The suite is in four parts: the base layer's CRC32; the `AIExtendedSaveHeader_t` block of slot
+// 126 `Save` (`0x1027bc60`, `ElysiumNpcBaseSaveRestore10.cpp`); slot 180 `UpdateOnRemove`; and the
 // non-slot bodies — `RunAlternateAI` mode 4, the two maker helpers and the scripted sequence's
 // `Activate`.
 //
@@ -65,133 +64,12 @@ namespace
 			return Builder;
 		}
 	};
-
-	// The eleven stamps `0x102993c0` encodes, by the port member each lands on, so a case can set
-	// them all to one value and read them all back.
-	void SaveRestore10SetAllStamps(FElysiumNpc& N, double Value)
-	{
-		N.CanSeekCoverTimer = Value;
-		N.Senses.Memory.SeeUnknownGraceUntil = Value;
-		N.MeleeHeightDiffTimer = Value;
-		N.OccludedReportTimeE = Value;
-		N.OccludedReportTimeT = Value;
-		N.OccludedReportTimeW = Value;
-		N.ScheduleHost.InterruptTime = Value;
-		N.WeaponScareTime = Value;
-		N.IgnoreCollisionUntil = Value;
-		N.NextFidgetTime = static_cast<float>(Value);
-	}
-
-	// The archive log as one readable line per op, so an order mismatch reads as a diff.
-	TArray<FString> SaveRestore10LogText(const TArray<FElysiumNpcBase::FSaveArchiveOp>& Log)
-	{
-		TArray<FString> Out;
-		Out.Reserve(Log.Num());
-		for (const FElysiumNpcBase::FSaveArchiveOp& Op : Log)
-		{
-			const TCHAR* Kind = TEXT("?");
-			switch (Op.Kind)
-			{
-			case FElysiumNpcBase::FSaveArchiveOp::EKind::Fields:   Kind = TEXT("fields"); break;
-			case FElysiumNpcBase::FSaveArchiveOp::EKind::Bool:     Kind = TEXT("bool"); break;
-			case FElysiumNpcBase::FSaveArchiveOp::EKind::Int:      Kind = TEXT("int"); break;
-			case FElysiumNpcBase::FSaveArchiveOp::EKind::ReadBool: Kind = TEXT("readbool"); break;
-			case FElysiumNpcBase::FSaveArchiveOp::EKind::ReadInt:  Kind = TEXT("readint"); break;
-			}
-			Out.Add(FString::Printf(TEXT("%s:%s:%d"), Kind, *Op.Name, Op.Value));
-		}
-		return Out;
-	}
 }
 
 // -------------------------------------------------------------------------------------------------
-// The sentinel codec — `0x101cf250` and `0x101cf2f0`, and the CRC32 beside them.
+// The CRC32. The sentinel codec beside it (`0x101cf250` / `0x101cf2f0`) guarded retail's time
+// re-base around slots 126 / 127 and went with them in 0019/6 (`FElysiumSaveArchive`).
 // -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10CodecTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.Codec", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10CodecTest::RunTest(const FString&)
-{
-	using EMode = FElysiumNpcBase::ESaveStampMode;
-	const double Sentinel = FElysiumNpcBase::SaveStampSentinel;
-	const double FloatMax = FElysiumNpcBase::SaveStampFloatMax();
-
-	// `0x101cf250`, arm by arm. Mode 1 is `*p < 0.0` STRICTLY.
-	double V = -0.5;
-	TestTrue(TEXT("mode 1 encodes a value below 0.0"), FElysiumNpcBase::SaveStampEncode(V, EMode::BelowZero));
-	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
-	V = 0.0;
-	TestFalse(TEXT("mode 1 leaves exactly 0.0 alone"),
-		FElysiumNpcBase::SaveStampEncode(V, EMode::BelowZero));
-	TestEqual(TEXT("so 0.0 survives mode 1"), V, 0.0);
-
-	V = -1.0;
-	TestTrue(TEXT("mode 2 encodes exactly -1.0"), FElysiumNpcBase::SaveStampEncode(V, EMode::MinusOne));
-	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
-	V = -1.5;
-	TestFalse(TEXT("mode 2 is an EQUALITY, not a comparison"),
-		FElysiumNpcBase::SaveStampEncode(V, EMode::MinusOne));
-
-	V = 0.0;
-	TestTrue(TEXT("mode 3 encodes exactly _DAT_104454c4 (0.0)"),
-		FElysiumNpcBase::SaveStampEncode(V, EMode::Zero));
-	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
-
-	V = FloatMax;
-	TestTrue(TEXT("mode 4 encodes exactly FLT_MAX"), FElysiumNpcBase::SaveStampEncode(V, EMode::FloatMax));
-	TestEqual(TEXT("and writes 1e+11"), V, Sentinel);
-
-	// A mode outside 1..4 is retail's `default:` and writes nothing.
-	V = 0.0;
-	TestFalse(TEXT("mode 0 is retail's default: and does nothing"),
-		FElysiumNpcBase::SaveStampEncode(V, EMode::None));
-	TestEqual(TEXT("the stamp survives an unknown mode"), V, 0.0);
-
-	// The ROUND TRIP, one case per mode. `_DAT_10482fac` is 1e+10 and the sentinel 1e+11, so every
-	// encoded stamp clears the decode's floor.
-	const TPair<EMode, double> RoundTrips[] = {
-		{ EMode::BelowZero, -1.0 },   // mode 1 decodes to -1.0 — NOT its own inverse
-		{ EMode::MinusOne,  -1.0 },
-		{ EMode::Zero,       0.0 },
-		{ EMode::FloatMax,   FloatMax },
-	};
-	const double Seeds[] = { -0.5, -1.0, 0.0, FloatMax };
-	for (int32 Index = 0; Index < 4; ++Index)
-	{
-		double Stamp = Seeds[Index];
-		TestTrue(FString::Printf(TEXT("mode %d encodes its seed"), static_cast<int32>(RoundTrips[Index].Key)),
-			FElysiumNpcBase::SaveStampEncode(Stamp, RoundTrips[Index].Key));
-		TestEqual(TEXT("the encoded stamp is the sentinel"), Stamp, Sentinel);
-		TestTrue(TEXT("and the decode fires on it"),
-			FElysiumNpcBase::SaveStampDecode(Stamp, RoundTrips[Index].Key));
-		TestEqual(FString::Printf(TEXT("mode %d decodes to retail's value"),
-			static_cast<int32>(RoundTrips[Index].Key)), Stamp, RoundTrips[Index].Value);
-	}
-
-	// Mode 1's asymmetry, stated by name: `-0.5` goes in and `-1.0` comes back, because modes 1 and
-	// 2 share a `case` label in `0x101cf2f0`.
-	double Asymmetric = -0.5;
-	FElysiumNpcBase::SaveStampEncode(Asymmetric, EMode::BelowZero);
-	FElysiumNpcBase::SaveStampDecode(Asymmetric, EMode::BelowZero);
-	TestEqual(TEXT("mode 1 is not its own inverse: -0.5 returns as -1.0"), Asymmetric, -1.0);
-
-	// The decode's floor is `1e+10` inclusive, and anything under it survives.
-	double Floor = FElysiumNpcBase::SaveStampSentinelFloor;
-	TestTrue(TEXT("the decode fires AT the floor"), FElysiumNpcBase::SaveStampDecode(Floor, EMode::Zero));
-	double Under = FElysiumNpcBase::SaveStampSentinelFloor * 0.5;
-	TestFalse(TEXT("and not below it"), FElysiumNpcBase::SaveStampDecode(Under, EMode::Zero));
-	TestEqual(TEXT("an ordinary stamp survives the decode"),
-		Under, FElysiumNpcBase::SaveStampSentinelFloor * 0.5);
-
-	// `0x101b9840` / `0x101b9860` are mode 2 on a `CSound`'s `+0x10 m_flExpireTime`.
-	FElysiumGameSoundEvent Sound;
-	Sound.ExpireTime = -1.0;
-	FElysiumNpc::SaveSoundStampEncode(Sound);
-	TestEqual(TEXT("a sound's expiry encodes at mode 2"), Sound.ExpireTime, Sentinel);
-	FElysiumNpc::SaveSoundStampDecode(Sound);
-	TestEqual(TEXT("and comes back as -1.0"), Sound.ExpireTime, -1.0);
-	return true;
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10Crc32Test,
 	"Elysium.Substrate.NpcKernelSaveRestore10.Crc32", GSaveRestore10TestFlags)
@@ -230,397 +108,36 @@ bool FElysiumNpcKernelSaveRestore10BaseSaveTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *Fix.Species;
 
-	// `CAI_BaseNPC::Save` `0x1027bc60` encodes exactly TWO fields — the CORRECTION this family made:
-	// the second argument of `thunk_FUN_101cf250` is the sentinel MODE, not a count.
-	// `1027bc6c PUSH 0x4` on `+0x5b8c` and `1027bc80 PUSH 0x3` on `+0x5db4`.
-	N.ExtendedBlockedByFriendTimer = FElysiumNpcBase::SaveStampFloatMax();   // mode 4 catches it
-	N.BaseScheduleHost.WaitFinished = 0.0;                                  // mode 3 catches it
-	N.WeaponBlockedByFriendTimer = FElysiumNpcBase::SaveStampFloatMax();    // NOT one of the two
-	N.BaseScheduleHost.MoveWaitFinished = 0.0;                              // NOT one of the two
-	N.SaveArchiveLog.Reset();
-
-	TestEqual(TEXT("the base answers the chain's result"), N.FElysiumNpcBase::Save(nullptr), 1);
-	// The encode and the decode bracket the archive call, so the fields are back where they started.
-	TestEqual(TEXT("the extended-block timer round-trips"),
-		N.ExtendedBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
-	TestEqual(TEXT("the wait stamp round-trips"), N.BaseScheduleHost.WaitFinished, 0.0);
-	TestEqual(TEXT("the neighbour of the first is untouched"),
-		N.WeaponBlockedByFriendTimer, FElysiumNpcBase::SaveStampFloatMax());
-	TestEqual(TEXT("and so is the neighbour of the second"), N.BaseScheduleHost.MoveWaitFinished, 0.0);
-
-	// The archive call: one `WriteFields` of `AIExtendedSaveHeader_t` and nothing else.
-	TestEqual(TEXT("the base writes exactly one block"), N.SaveArchiveLog.Num(), 1);
-	TestEqual(TEXT("and it is the extended header"),
-		SaveRestore10LogText(N.SaveArchiveLog)[0], FString(TEXT("fields:AIExtendedSaveHeader_t:0")));
-	TestEqual(TEXT("the header's version is the literal 1"),
-		static_cast<int32>(N.LastSavedExtendedHeader.Version), 1);
+	// `CAI_BaseNPC::Save` `0x1027bc60`'s one hand block, `AIExtendedSaveHeader_t`, is built by
+	// `BuildExtendedSaveHeader` for the NPC record (`SerializeExtendedHeader`) and read back by
+	// `OnRestore` `0x1027bf50`. Its sentinel encodes and pointer fix-ups closed at
+	// `FElysiumSaveArchive` in 0019/6, with their cases.
+	using FHeader = FElysiumNpcBase::FAiExtendedSaveHeader;
+	FHeader H = N.BuildExtendedSaveHeader();
+	TestEqual(TEXT("the header's version is the literal 1"), static_cast<int32>(H.Version), 1);
 
 	// The three flag bits, in the order `0x1027bc60` ORs them.
-	TestEqual(TEXT("a quiet NPC sets no flag bit"), N.LastSavedExtendedHeader.Flags, 0u);
+	TestEqual(TEXT("a quiet NPC sets no flag bit"), H.Flags, 0u);
 	N.BaseMemory.Enemy = N.Handle;   // slot 0x29c `GetEnemy()` is non-null
-	N.FElysiumNpcBase::Save(nullptr);
-	TestEqual(TEXT("bit 0x1 is the committed enemy"), N.LastSavedExtendedHeader.Flags, 1u);
+	H = N.BuildExtendedSaveHeader();
+	TestEqual(TEXT("bit 0x1 is the committed enemy"), H.Flags, 1u);
 	N.SetTarget(N.Handle);              // `m_hTargetEnt` resolves onto a live entity
-	N.FElysiumNpcBase::Save(nullptr);
-	TestEqual(TEXT("bit 0x2 is m_hTargetEnt, and both stand together"),
-		N.LastSavedExtendedHeader.Flags, 3u);
+	H = N.BuildExtendedSaveHeader();
+	TestEqual(TEXT("bit 0x2 is m_hTargetEnt, and both stand together"), H.Flags, 3u);
 	// Bit 0x4 is the navigator goal, whose seam answers nothing (`NavigatorGoalIsActive`).
 	TestFalse(TEXT("the navigator-goal seam answers nothing"), N.NavigatorGoalIsActive());
 
 	// No running schedule: the name is cleared and the CRC is 0, which is what retail's own else arm
 	// writes (`1027bd76 MOV byte ptr [ESP+0x1c],0x0` and `MOV dword ptr [ESP+0x9c],0x0`).
-	TestTrue(TEXT("a scheduleless NPC writes an empty schedule name"),
-		N.LastSavedExtendedHeader.ScheduleName.IsEmpty());
-	TestEqual(TEXT("and a zero task checksum"), N.LastSavedExtendedHeader.ScheduleCrc, 0u);
+	TestTrue(TEXT("a scheduleless NPC writes an empty schedule name"), H.ScheduleName.IsEmpty());
+	TestEqual(TEXT("and a zero task checksum"), H.ScheduleCrc, 0u);
 
-	// The motor and move-and-shoot fix-ups: `0x102e0b60` is GUARDED on `m_pMotor` (`+0x5d44`) and
-	// `0x102e8aa0` on the overlay is NOT, so the overlay count moves on every pass and the motor
-	// count only when a motor stands. Both halves are paired around the archive call, which is the
-	// invariant that holds whatever the fixture provides.
-	const int32 OverlayBefore = N.MoveAndShootSaveFixups;
-	const int32 MotorBefore = N.MotorSaveFixups;
-	N.FElysiumNpcBase::Save(nullptr);
-	TestEqual(TEXT("the overlay fix-up is not guarded and runs every pass"),
-		N.MoveAndShootSaveFixups, OverlayBefore + 1);
-	TestTrue(TEXT("the motor fix-up is guarded, so it runs at most once per pass"),
-		N.MotorSaveFixups - MotorBefore <= 1);
-	TestEqual(TEXT("the overlay's post-archive half is paired with its pre half"),
-		N.MoveAndShootRestoreFixups, N.MoveAndShootSaveFixups);
-	TestEqual(TEXT("and so is the motor's"), N.MotorRestoreFixups, N.MotorSaveFixups);
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10TroikaSaveTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.TroikaSave", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10TroikaSaveTest::RunTest(const FString&)
-{
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Troika;
-	// The control is the bare Troika line (`AddTroikaNpc`): no species class stands over it.
-	TestNull(TEXT("the bare Troika line's RetailClass() is null"), N.RetailClass());
-
-	// Every stamp at the value its OWN mode encodes, so one pass fires all eleven.
-	N.CanSeekCoverTimer = 0.0;                            // mode 3
-	N.Senses.Memory.SeeUnknownGraceUntil = -1.0;          // mode 2
-	N.MeleeHeightDiffTimer = -1.0;                        // mode 2
-	N.OccludedReportTimeE = 0.0;                          // mode 3
-	N.OccludedReportTimeT = 0.0;                          // mode 3
-	N.OccludedReportTimeW = 0.0;                          // mode 3
-	N.ScheduleHost.InterruptTime = 0.0;                   // mode 3
-	N.WeaponScareTime = -1.0;                             // mode 2
-	N.IgnoreCollisionUntil = FElysiumNpcBase::SaveStampFloatMax();    // mode 4
-	N.NextFidgetTime = static_cast<float>(FElysiumNpcBase::SaveStampFloatMax());   // mode 4
-	N.Senses.Memory.BestSound.ExpireTime = -1.0;
-	N.Senses.Memory.LastSoundFlinch.ExpireTime = -1.0;
-	N.SaveArchiveLog.Reset();
-
-	TestEqual(TEXT("slot 126 answers the base body's result"), N.Save(nullptr), 1);
-
-	// Encode-then-decode is the whole shape: every stamp is back where it started.
-	TestEqual(TEXT("m_flCanSeekCoverTimer round-trips at mode 3"), N.CanSeekCoverTimer, 0.0);
-	TestEqual(TEXT("m_flSeeUnknownCheatVisionTime round-trips at mode 2"),
-		N.Senses.Memory.SeeUnknownGraceUntil, -1.0);
-	TestEqual(TEXT("m_flIgnoreCollisionTimer round-trips at mode 4"),
-		N.IgnoreCollisionUntil, FElysiumNpcBase::SaveStampFloatMax());
-	TestEqual(TEXT("m_flEyeFidgetTime is the one float-width stamp and round-trips too"),
-		N.NextFidgetTime, static_cast<float>(FElysiumNpcBase::SaveStampFloatMax()));
-	TestEqual(TEXT("m_BestSound's expiry round-trips at mode 2"),
-		N.Senses.Memory.BestSound.ExpireTime, -1.0);
-	TestEqual(TEXT("and so does m_LastSoundFlinch's"),
-		N.Senses.Memory.LastSoundFlinch.ExpireTime, -1.0);
-
-	// The archive pass, in retail's order: the base's header, then the pedestrian-link bool. The two
-	// ints are gated on the bool, which is false on an unbound link.
-	TestEqual(TEXT("an unbound pedestrian link writes the header and one bool"),
-		SaveRestore10LogText(N.SaveArchiveLog),
-		TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0"), TEXT("bool:m_pPedestrianLink:0") }));
-
-	N.SaveArchiveLog.Reset();
-	N.bCrosswalkLinkBound = true;
-	N.RestorePedLinkNode = 7;
-	N.RestorePedLinkDestNode = 11;
-	N.Save(nullptr);
-	TestEqual(TEXT("a bound link adds its two ints, in retail's order"),
-		SaveRestore10LogText(N.SaveArchiveLog),
-		TArray<FString>({
-			TEXT("fields:AIExtendedSaveHeader_t:0"),
-			TEXT("bool:m_pPedestrianLink:1"),
-			TEXT("int:m_pPedestrianLink+4:7"),
-			TEXT("int:m_pPedestrianLink+8:11") }));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10EncodeOrderTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.EncodeOrder", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10EncodeOrderTest::RunTest(const FString&)
-{
-	// The ORDER of the eleven encodes is observable through the save file, so it is pinned.
-	//
-	// The instrument: set every stamp to the SENTINEL first. `FElysiumNpcBase::Save` runs between the encode and
-	// the decode pass, and the header it writes is the one observable a body on the stack would see
-	// — but a stronger statement is available without an archive. Each mode fires on a different
-	// seed value, so seeding the eleven with a mode-matched value and checking that exactly the
-	// fields whose mode matches got rewritten pins WHICH mode each field carries, which is the half
-	// the checklist's aliased decode pass could have got wrong.
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Troika;
-
-	// Seed every stamp with `-1.0`. Only the mode-2 fields encode; the mode-3 and mode-4 ones do
-	// not, so after the encode pass the mode-2 fields hold the sentinel. The body's own decode would
-	// hide that, so the check is run against the codec on the same list rather than through `Save`.
-	SaveRestore10SetAllStamps(N, -1.0);
-	struct FStampProbe { const TCHAR* Field; double* Value; FElysiumNpcBase::ESaveStampMode Mode; };
-	using EMode = FElysiumNpcBase::ESaveStampMode;
-	const FStampProbe Probes[] = {
-		{ TEXT("m_flCanSeekCoverTimer"),         &N.CanSeekCoverTimer,                  EMode::Zero },
-		{ TEXT("m_flSeeUnknownCheatVisionTime"), &N.Senses.Memory.SeeUnknownGraceUntil, EMode::MinusOne },
-		{ TEXT("m_flMeleeHeightDiffTimer"),      &N.MeleeHeightDiffTimer,               EMode::MinusOne },
-		{ TEXT("m_flOccludedReportTimeE"),       &N.OccludedReportTimeE,                EMode::Zero },
-		{ TEXT("m_flOccludedReportTimeT"),       &N.OccludedReportTimeT,                EMode::Zero },
-		{ TEXT("m_flOccludedReportTimeW"),       &N.OccludedReportTimeW,                EMode::Zero },
-		{ TEXT("m_flInterruptTime"),             &N.ScheduleHost.InterruptTime,         EMode::Zero },
-		{ TEXT("m_flWeaponScareTime"),           &N.WeaponScareTime,                    EMode::MinusOne },
-		{ TEXT("m_flIgnoreCollisionTimer"),      &N.IgnoreCollisionUntil,               EMode::FloatMax },
-	};
-	// The listed modes ARE the listing's `PUSH` sequence `3,2,2,3,3,3,3,2,2,4,4`
-	// (`m_flNextInterestChangeTime` sits between `m_flInterruptTime` and `m_flWeaponScareTime` and
-	// `m_flEyeFidgetTime` after `m_flIgnoreCollisionTimer`; both are covered by the body case).
-	TArray<FString> ModeOrder;
-	for (const FStampProbe& Probe : Probes)
-	{
-		ModeOrder.Add(FString::FromInt(static_cast<int32>(Probe.Mode)));
-		const bool bFired = FElysiumNpcBase::SaveStampEncode(*Probe.Value, Probe.Mode);
-		TestEqual(FString::Printf(TEXT("%s fires at mode 2 only"), Probe.Field),
-			bFired, Probe.Mode == EMode::MinusOne);
-	}
-	TestEqual(TEXT("the nine listed modes are the listing's push sequence"),
-		FString::Join(ModeOrder, TEXT(",")), FString(TEXT("3,2,2,3,3,3,3,2,4")));
-	return true;
-}
-
-namespace
-{
-	// Stand a fresh fixture whose subject is built as `RetailClass` and clear its archive log, so a
-	// case can run slot 126 or 127 on it.
-	TUniquePtr<FSaveRestore10Fixture> SaveRestore10StandSpecies(const TCHAR* RetailClass)
-	{
-		TUniquePtr<FSaveRestore10Fixture> Fix = MakeUnique<FSaveRestore10Fixture>(RetailClass);
-		if (Fix->Species != nullptr)
-		{
-			Fix->Species->SaveArchiveLog.Reset();
-		}
-		return Fix;
-	}
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10SaveSpeciesTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.SaveSpecies", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10SaveSpeciesTest::RunTest(const FString&)
-{
-	const double FloatMax = FElysiumNpcBase::SaveStampFloatMax();
-
-	// `CNPC_VMingXiao::Save` `0x10395f80` — the six `m_rflRegrowTimers` at mode 4, ascending.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiao"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Fix->Species);
-		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
-		{
-			N.MingXiaoRegrowTimers[Index] = Index == 3 ? FloatMax : 5.0;
-		}
-		TestEqual(TEXT("the MingXiao arm answers the Troika body's result"), N.Save(nullptr), 1);
-		TestEqual(TEXT("a FLT_MAX regrow timer round-trips through the sentinel"),
-			N.MingXiaoRegrowTimers[3], FloatMax);
-		TestEqual(TEXT("and an ordinary one is untouched"), N.MingXiaoRegrowTimers[0], 5.0);
-		TestTrue(TEXT("the MingXiao arm ran the Troika body, which writes the link bool"),
-			SaveRestore10LogText(N.SaveArchiveLog).Contains(TEXT("bool:m_pPedestrianLink:0")));
-	}
-
-	// `CNPC_VMingXiaoTentacle::Save` `0x1039ed50` — `m_flPhaseExpireTimer` at mode 3.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiaoTentacle"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcMingXiaoTentacle& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix->Species);
-		N.MingXiaoTentaclePhaseExpireTimer = 0.0;
-		N.Save(nullptr);
-		TestEqual(TEXT("the tentacle's phase stamp round-trips at mode 3"),
-			N.MingXiaoTentaclePhaseExpireTimer, 0.0);
-	}
-
-	// `CNPC_VTzimisceHeadClaw::Save` `0x103c2810` — `m_flSlowedExpire` at mode 3.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VTzimisceHeadClaw"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(Fix->Species);
-		N.HeadClawSlowedExpire = 0.0;
-		N.Save(nullptr);
-		TestEqual(TEXT("the head claw's slow stamp round-trips at mode 3"), N.HeadClawSlowedExpire, 0.0);
-	}
-
-	// The control: a bare Troika NPC takes no species arm and runs the Troika body.
-	{
-		FSaveRestore10Fixture Fix;
-		if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
-		{
-			return false;
-		}
-		Fix.Troika->SaveArchiveLog.Reset();
-		Fix.Troika->Save(nullptr);
-		TestEqual(TEXT("the bare Troika line runs the Troika body"),
-			SaveRestore10LogText(Fix.Troika->SaveArchiveLog),
-			TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0"), TEXT("bool:m_pPedestrianLink:0") }));
-	}
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 127 `Restore`.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10RestoreTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.Restore", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10RestoreTest::RunTest(const FString&)
-{
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Troika;
-
-	// `CAI_BaseNPCTroika::Restore` `0x10299700`: the base's answer comes back unchanged, then one
-	// `ReadBool` gates two `ReadInt`s, then the eleven stamps and the nine sounds decode.
-	SaveRestore10SetAllStamps(N, FElysiumNpcBase::SaveStampSentinel);
-	N.Senses.Memory.BestSound.ExpireTime = FElysiumNpcBase::SaveStampSentinel;
-	N.SaveArchiveLog.Reset();
-
-	TestEqual(TEXT("slot 127 answers the base body's result"), N.Restore(nullptr), 1);
-	TestEqual(TEXT("the mode-3 stamps decode to 0.0"), N.CanSeekCoverTimer, 0.0);
-	TestEqual(TEXT("the mode-2 stamps decode to -1.0"),
-		N.Senses.Memory.SeeUnknownGraceUntil, -1.0);
-	TestEqual(TEXT("the mode-4 stamps decode to FLT_MAX"),
-		N.IgnoreCollisionUntil, FElysiumNpcBase::SaveStampFloatMax());
-	TestEqual(TEXT("the nine sounds decode at mode 2"),
-		N.Senses.Memory.BestSound.ExpireTime, -1.0);
-
-	// With no archive the `ReadBool` answers false, which is the arm that skips the two `ReadInt`s.
-	TestEqual(TEXT("the restore reads the header and one bool, and stops"),
-		SaveRestore10LogText(N.SaveArchiveLog),
-		TArray<FString>({ TEXT("fields:AIExtendedSaveHeader_t:0"),
-			TEXT("readbool:m_pPedestrianLink:0") }));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10RestoreSpeciesTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.RestoreSpecies", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10RestoreSpeciesTest::RunTest(const FString&)
-{
-	const double Sentinel = FElysiumNpcBase::SaveStampSentinel;
-
-	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base first, then the six regrow timers at mode 4.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiao"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcMingXiao& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Fix->Species);
-		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
-		{
-			N.MingXiaoRegrowTimers[Index] = Sentinel;
-		}
-		TestEqual(TEXT("the MingXiao restore answers the base's result"), N.Restore(nullptr), 1);
-		for (int32 Index = 0; Index < FElysiumNpcMingXiao::MingXiaoRegrowTimerCount; ++Index)
-		{
-			TestEqual(FString::Printf(TEXT("regrow timer %d decodes to FLT_MAX"), Index),
-				N.MingXiaoRegrowTimers[Index], FElysiumNpcBase::SaveStampFloatMax());
-		}
-	}
-
-	// `CNPC_VMingXiaoTentacle::vfunc127` `0x1039eda0` — mode 3 on one field.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VMingXiaoTentacle"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcMingXiaoTentacle& N = *ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fix->Species);
-		N.MingXiaoTentaclePhaseExpireTimer = Sentinel;
-		N.Restore(nullptr);
-		TestEqual(TEXT("the tentacle's phase stamp decodes to 0.0"),
-			N.MingXiaoTentaclePhaseExpireTimer, 0.0);
-	}
-
-	// `CNPC_VTzimisceHeadClaw::vfunc127` `0x103c2860`.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VTzimisceHeadClaw"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcTzimisceHeadClaw& N = *ElysiumTestAsSpecies<FElysiumNpcTzimisceHeadClaw>(Fix->Species);
-		N.HeadClawSlowedExpire = Sentinel;
-		N.Restore(nullptr);
-		TestEqual(TEXT("the head claw's slow stamp decodes to 0.0"), N.HeadClawSlowedExpire, 0.0);
-	}
-
-	// `CNPC_VVampireBoss::Restore` `0x103c5910` — a post-load RESET, not a restore.
-	{
-		const TUniquePtr<FSaveRestore10Fixture> Fix =
-			SaveRestore10StandSpecies(TEXT("CNPC_VVampireBoss"));
-		if (!TestNotNull(TEXT("the subject spawned"), Fix->Species))
-		{
-			return false;
-		}
-		FElysiumNpcVampireBoss& N = *ElysiumTestAsSpecies<FElysiumNpcVampireBoss>(Fix->Species);
-		N.VampireBossMonsterModelName = TEXT("models/monster.mdl");
-		N.VampireBossMonsterClassname = TEXT("npc_VSomethingElse");
-		N.BodyEmitterNames[0] = TEXT("blood_emitter");
-		TestEqual(TEXT("the boss restore answers the Troika body's result"), N.Restore(nullptr), 1);
-		TestTrue(TEXT("m_pMonsterModelName is nulled"), N.VampireBossMonsterModelName.IsEmpty());
-		TestTrue(TEXT("ClearBodyEmitterNames ran"), N.BodyEmitterNames[0].IsEmpty());
-		TestEqual(TEXT("and m_pszMonsterClassname is reset to the literal"),
-			N.VampireBossMonsterClassname, FString(TEXT("npc_VVampireBoss")));
-	}
-
-	// The control.
-	{
-		FSaveRestore10Fixture Fix;
-		if (!TestNotNull(TEXT("the control spawned"), Fix.Troika))
-		{
-			return false;
-		}
-		Fix.Troika->SaveArchiveLog.Reset();
-		Fix.Troika->CanSeekCoverTimer = Sentinel;
-		Fix.Troika->Restore(nullptr);
-		TestEqual(TEXT("the bare Troika line runs the Troika body, which decodes its stamps"),
-			Fix.Troika->CanSeekCoverTimer, 0.0);
-	}
-	return true;
-}
+// Slots 126 / 127 on the Troika line and the species `Save` / `Restore` twins were deleted in
+// 0019/6 (the generated SAVE walk carries the fields; load-side logic moved to `OnPostRestore`,
+// covered through `ElysiumRoundTripSnapshot` in `ElysiumNpcKernelLifecycle2Tests.cpp`).
 
 // -------------------------------------------------------------------------------------------------
 // Slot 180 `UpdateOnRemove` and slot 106 `PostConstructor`.
@@ -753,26 +270,8 @@ bool FElysiumNpcKernelSaveRestore10RemoveSpeciesTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10PostConstructorTest,
-	"Elysium.Substrate.NpcKernelSaveRestore10.PostConstructor", GSaveRestore10TestFlags)
-bool FElysiumNpcKernelSaveRestore10PostConstructorTest::RunTest(const FString&)
-{
-	FSaveRestore10Fixture Fix;
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *Fix.Species;
-	// `CAI_BaseNPC::PostConstructor` `0x1027bb20`: the base pass runs to completion, THEN slot
-	// `0x6a0` (424, `CreateComponents`). The order is the whole body.
-	const int32 Before = N.PostConstructorCalls;
-	TCHAR Name[] = TEXT("npc_VHumanCombatant");
-	N.PostConstructor(Name);
-	TestEqual(TEXT("slot 106 ran once"), N.PostConstructorCalls, Before + 1);
-	TestEqual(TEXT("and recorded the classname the base pass was handed"),
-		N.PostConstructorName, FString(TEXT("npc_VHumanCombatant")));
-	return true;
-}
+// Slot 106 `PostConstructor` is closed at UE component construction since 0019/6 (its slot-424 dispatch is
+// Unreal component construction); its case went with it.
 
 // -------------------------------------------------------------------------------------------------
 // `FUN_10290350` — `RunAlternateAI` mode 4.
@@ -823,22 +322,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10ArmCoverageTest,
 	"Elysium.Substrate.NpcKernelSaveRestore10.ArmCoverage", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 {
-	// Every class the census gives an override of 126, 127 or 180 must take a named arm — which is
+	// Every class the census gives an override of 180 must take a named arm — which is
 	// what stops a class this family does not know from silently falling through to the Troika
 	// body. The probe: stand as that class and run the slot; a claimed arm leaves a fingerprint the
 	// Troika body does not, and an unclaimed one is caught by the dispatcher's own fall-through
 	// returning false. The check here is that the census holds no override row this file has not
 	// listed. Classes with no instance (`CScriptedTarget`'s `0x1034e320` / `0x1034e370`) carry no
 	// arm and are skipped; every other class still fails loudly on an unlisted row.
-	const TCHAR* const KnownSave[] = {
-		TEXT("0x10395f80"), TEXT("0x1039ed50"), TEXT("0x103c2810") };
-	const TCHAR* const KnownRestore[] = {
-		TEXT("0x10396000"), TEXT("0x1039eda0"), TEXT("0x103c2860"), TEXT("0x103c5910"),
-		// The five other bosses' own slot-127 bodies. This family's briefs do not carry them, so
-		// each one's own half is unrecovered here and the arm routes to the base every one of them
-		// chains (`0x103c5910`); the table lists them so a census row is never unknown to this file.
-		TEXT("0x1035cf80"), TEXT("0x10360e10"), TEXT("0x1036b170"), TEXT("0x103a6e80"),
-		TEXT("0x103ae7f0") };
+	// Slots 126 / 127 carry no species arm since 0019/6 (the SAVE walk is the persistence; the
+	// species twins' load-side logic is each class's `OnPostRestore`), so only slot 180 is probed.
 	const TCHAR* const KnownRemove[] = {
 		TEXT("0x10371a90"), TEXT("0x10391230"), TEXT("0x103a03a0"),
 		// The three cine classes share `0x101a7140`, `FElysiumScriptedSequence::UpdateOnRemove`
@@ -857,8 +349,6 @@ bool FElysiumNpcKernelSaveRestore10ArmCoverageTest::RunTest(const FString&)
 		}
 		struct FSlotProbe { int32 Slot; const TCHAR* const* Known; int32 Count; };
 		const FSlotProbe Probes[] = {
-			{ 126, KnownSave,    UE_ARRAY_COUNT(KnownSave) },
-			{ 127, KnownRestore, UE_ARRAY_COUNT(KnownRestore) },
 			{ 180, KnownRemove,  UE_ARRAY_COUNT(KnownRemove) },
 		};
 		for (const FSlotProbe& Probe : Probes)

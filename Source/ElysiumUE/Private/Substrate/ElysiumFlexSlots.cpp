@@ -6,8 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 22 generated slot bodies of `FElysiumFlex`: 0 carry the retail default story 29c recovered, 12
-// are defined by hand in the substrate, and 10 are still stubs — 4 29c, 6 unassigned.
+// 21 generated slot bodies of `FElysiumFlex`: 0 carry the retail default story 29c recovered, 1 are
+// defined by hand in the substrate, and 9 are still stubs — 3 29c, 6 unassigned. 11 are closed
+// (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -115,28 +116,36 @@ void* FElysiumFlex::GetViewtarget() const
 
 // slot 279 0x100b5ba0 (walked) `void SetFlexWeight(int, float)`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::SetFlexWeight`, written by hand in the substrate.
-// Declared here, defined there.
+void FElysiumFlex::SetFlexWeight(int32, float)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 280 0x100b5b60 (walked) `void SetFlexWeight(char*, float)`
 //   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::SetFlexWeight`, written by hand in the substrate.
-// Declared here, defined there.
+void FElysiumFlex::SetFlexWeight(TCHAR*, float)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 281 0x100b5c50 (walked) `float GetFlexWeight(int)`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::GetFlexWeight`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 282 0x100b5c20 (walked) `float GetFlexWeight(char*)`
-//   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::GetFlexWeight`, written by hand in the substrate.
-// Declared here, defined there.
+float FElysiumFlex::GetFlexWeight(int32)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 283 0x100b6250 (walked) `void ProcessSceneEvents()`
 //   layer 9, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::ProcessSceneEvents`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::ProcessSceneEvents()
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 284 0x100b65b0 (walked) `void AddSceneExpressions()`
 void FElysiumFlex::AddSceneExpressions()
@@ -148,8 +157,11 @@ void FElysiumFlex::AddSceneExpressions()
 // slot 285 0x100b5d80 (walked) `void ClearSceneEvents(CChoreoScene*)`
 //   takes `CChoreoScene*`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::ClearSceneEvents`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::ClearSceneEvents(void*)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 286 0x100b5e60 (walked) `void AddSceneEvent(CChoreoScene*, CChoreoEvent*)`
 //   takes `CChoreoScene*`
@@ -157,40 +169,56 @@ void FElysiumFlex::AddSceneExpressions()
 //   layer 3, story 29c
 void FElysiumFlex::AddSceneEvent(void*, void*)
 {
-	FireFlexSlot(TEXT("CBaseFlex::AddSceneEvent"), TEXT("0x100b5e60"), TEXT("29c"), DebugString());
+	// verdict `mechanism`, closed at `UEContainer` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 287 0x100b6180 (walked) `void RemoveSceneEvent(CChoreoEvent*)`
 //   takes `CChoreoEvent*`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::RemoveSceneEvent`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::RemoveSceneEvent(void*)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 288 0x100b6cf0 (walked) `void AddFlexSetting(const char*, float, const flexsettinghdr_t*,
 // const flexsettinghdr_t*, bool)`
 //   takes `const flexsettinghdr_t*`
 //   takes `const flexsettinghdr_t*`
 //   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::AddFlexSetting`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::AddFlexSetting(const TCHAR*, float, void*, void*, bool)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 289 0x100b6960 (walked) `void AddFlexAnimation(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 7, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::AddFlexAnimation`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::AddFlexAnimation(void*)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 290 0x100b70e0 (walked) `void ProcessSequenceSceneEvent(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::ProcessSequenceSceneEvent`, written by hand in
-// the substrate. Declared here, defined there.
+void FElysiumFlex::ProcessSequenceSceneEvent(void*)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 291 0x100b7040 (walked) `void ProcessGestureSceneEvent(CSceneEventInfo*)`
 //   takes `CSceneEventInfo*`
 //   layer 3, story 29c
-// verdict `mechanism`: the body is `FElysiumFlex::ProcessGestureSceneEvent`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumFlex::ProcessGestureSceneEvent(void*)
+{
+	// verdict `mechanism`, closed at `0010` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 namespace ElysiumNpcKernelShape
 {
@@ -240,23 +268,19 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*() const>::Test(&FElysiumFlex::GetViewtarget),
 				nullptr },
 			{ 279, TEXT("0x100b5ba0"), TEXT("CBaseFlex"), TEXT("SetFlexWeight"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(int32, float)>::Test(&FElysiumFlex::SetFlexWeight),
 				nullptr },
 			{ 280, TEXT("0x100b5b60"), TEXT("CBaseFlex"), TEXT("SetFlexWeight"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(TCHAR*, float)>::Test(&FElysiumFlex::SetFlexWeight),
 				nullptr },
 			{ 281, TEXT("0x100b5c50"), TEXT("CBaseFlex"), TEXT("GetFlexWeight"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, float(int32)>::Test(&FElysiumFlex::GetFlexWeight),
 				nullptr },
-			{ 282, TEXT("0x100b5c20"), TEXT("CBaseFlex"), TEXT("GetFlexWeight"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, float(TCHAR*)>::Test(&FElysiumFlex::GetFlexWeight),
-				nullptr },
 			{ 283, TEXT("0x100b6250"), TEXT("CBaseFlex"), TEXT("ProcessSceneEvents"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void()>::Test(&FElysiumFlex::ProcessSceneEvents),
 				nullptr },
 			{ 284, TEXT("0x100b65b0"), TEXT("CBaseFlex"), TEXT("AddSceneExpressions"),
@@ -264,31 +288,31 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void()>::Test(&FElysiumFlex::AddSceneExpressions),
 				nullptr },
 			{ 285, TEXT("0x100b5d80"), TEXT("CBaseFlex"), TEXT("ClearSceneEvents"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ClearSceneEvents),
 				nullptr },
 			{ 286, TEXT("0x100b5e60"), TEXT("CBaseFlex"), TEXT("AddSceneEvent"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*, void*)>::Test(&FElysiumFlex::AddSceneEvent),
 				nullptr },
 			{ 287, TEXT("0x100b6180"), TEXT("CBaseFlex"), TEXT("RemoveSceneEvent"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::RemoveSceneEvent),
 				nullptr },
 			{ 288, TEXT("0x100b6cf0"), TEXT("CBaseFlex"), TEXT("AddFlexSetting"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(const TCHAR*, float, void*, void*, bool)>::Test(&FElysiumFlex::AddFlexSetting),
 				nullptr },
 			{ 289, TEXT("0x100b6960"), TEXT("CBaseFlex"), TEXT("AddFlexAnimation"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::AddFlexAnimation),
 				nullptr },
 			{ 290, TEXT("0x100b70e0"), TEXT("CBaseFlex"), TEXT("ProcessSequenceSceneEvent"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ProcessSequenceSceneEvent),
 				nullptr },
 			{ 291, TEXT("0x100b7040"), TEXT("CBaseFlex"), TEXT("ProcessGestureSceneEvent"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void(void*)>::Test(&FElysiumFlex::ProcessGestureSceneEvent),
 				nullptr },
 		};

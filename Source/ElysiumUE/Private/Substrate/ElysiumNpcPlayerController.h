@@ -51,7 +51,7 @@ public:
 	virtual void NPCThink() override;
 	// Slot 437 `0x103a46b0`, shared by both children.
 	virtual int32 PreSelectSchedule() override;
-	// Slots 488-497 `0x103a4730` .. `0x103a4850` (step `0x20`) — ten bare `RET`s, shared by both
+	// Slots 488-495 `0x103a4730` .. `0x103a4810` (step `0x20`) — eight bare `RET`s, shared by both
 	// children: the stand-in never voices a concept.
 	virtual void DeathSound() override;
 	virtual void AlertSound() override;
@@ -61,8 +61,6 @@ public:
 	virtual void LostEnemySound() override;
 	virtual void FoundEnemySound() override;
 	virtual void SurprisedSound() override;
-	virtual void TargetAcquiredSound() override;
-	virtual void Slot497() override;
 
 	// --- The bodies, callable by name ------------------------------------------------------------
 

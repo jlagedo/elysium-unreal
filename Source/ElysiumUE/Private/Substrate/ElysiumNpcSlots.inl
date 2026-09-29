@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 167 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 134 it
+// 138 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 105 it
 // overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -42,6 +42,10 @@
 // slot 78 0x102c1ec0 FElysiumEntity::ScriptUnhide — its exact inverse
 // slot 97 0x100a9c90 FElysiumEntity::GetOwnerEntity — the owner handle
 // slot 103 0x10298d30 FElysiumNpc::Spawn — the leaf's own spawn
+// slot 108 0x1004fbb0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 109 0x1004fbf0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
 // slot 113 0x1028e310 FElysiumNpc::Activate — the leaf's own activate
 // slot 117 0x100b4320 FElysiumEntity::ObjectCaps — the `FCAP_*` bitfield the port reads one bit of
 // slot 118 0x100abc90 FElysiumEntityWorld::AcceptInput — `CBaseEntity::AcceptInput` 0x100abc90 is
@@ -49,10 +53,16 @@
 // 6)
 // slot 119 0x1033cb90 FElysiumEntity::Kill — terminal: mark dead and go inert
 // slot 134 0x10026c70 FElysiumNpc::Think — `NPCThink` 0x10292de0, the whole pass
+// slot 159 0x10026f20 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 165 0x10026fb0 closed — closed at `CMC` (mechanism): no dispatch site and no other body at
+// the slot (0019/6)
 // slot 173 0x100a4e70 FElysiumEntity::Use — the `+use` door
 // slot 193 0x100b4b40 FElysiumEntity::EyePosition — origin plus the view offset
 // slot 202 0x100aab10 FElysiumEntity::SetOwnerEntity — the owner handle's writer
 // slot 259 0x1029b290 FElysiumNpc::HandleAnimEvent — `CAI_BaseNPC::HandleAnimEvent` 0x10274e30
+// slot 282 0x100b5c20 closed — closed at `0010` (mechanism): no dispatch site and no other body at
+// the slot (0019/6)
 // slot 294 0x102c2300 FElysiumNpc::IsValidStealthKillTarget — 0x102c2300
 // slot 312 0x10298070 FElysiumNpc::UpdateCharacter — `UpdateCharacter`, on the update clock
 // slot 351 0x10339d90 FElysiumCombatCharacter::FeedBegin — the feed transaction's entry
@@ -78,8 +88,29 @@
 // `SelectIdealState()` wrapper keeps the census name; the slot's virtual is the Retail one
 // slot 461 0x102ad660 FElysiumNpcBase::SelectIdealStateRetail — 0019/8 shape: the typed
 // `SelectIdealState()` wrapper keeps the census name; the slot's virtual is the Retail one
-// slot 534 0x1026b270 FElysiumCombatCharacter::EyeLookTargetHandle — the gaze cascade's chosen
-// subject; `EyeLookTarget` beside it is the point it resolved to
+// slot 519 0x10278cb0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 520 0x10278e00 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 524 0x101a6b80 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 534 0x1026b270 deleted — `CBaseCombatCharacter` slot 534 0x1026b270: dead (0019/1), closed
+// at `-`; the port's `FElysiumCombatCharacter::EyeLookTargetHandle` stays a plain method, no
+// virtual (0019/6)
+// slot 540 0x10279060 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 547 0x1028b0f0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 549 0x1028b0b0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 554 0x1026d920 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 556 0x1026da90 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 568 0x1026a910 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
+// slot 579 0x101a6ce0 closed — closed at `-` (dead): no dispatch site and no other body at the slot
+// (0019/6)
 // slot 580 0x101aa790 FElysiumNpcBase::ClassScheduleIdSpace — the typed id space: the base body
 // 0x101a6d00 and `FElysiumNpc`'s override, the Troika body 0x101aa790 (0019/5 step 6, the step-5
 // carried item); a `void*` beside it would be a second producer of the same answer
@@ -87,32 +118,12 @@
 // overridden nowhere (0019/5 step 6)
 // slot 614 0x102c23f0 FElysiumNpc::ResetThinkTimers — the four think stamps, ported in story 21
 
-	// slot 5 0x1028d5e0 (walked) `void* ~CBaseEntity(unsigned int)`
-	//   retail `~CBaseEntity` is a lifetime slot; declared by index
-	//   returns `void*`
-	//   layer 17, story 29d
-	void* Slot5(uint32) override;
-	// slot 17 0x1028de90 (walked) `void TraceMessage(const char*, int) const`
-	//   layer 12, story 29d
-	void TraceMessage(const TCHAR*, int32) const override;
-	// slot 18 0x1028de10 (walked) `void TraceMessage(const char*, int)`
-	//   layer 12, story 29d
-	void TraceMessage(const TCHAR*, int32) override;
-	// slot 19 0x1028dfb0 (walked) `void TraceMessageBare(const char*) const`
-	//   layer 1, story 29c
-	void TraceMessageBare(const TCHAR*) const override;
-	// slot 20 0x1028df30 (walked) `void TraceMessageBare(const char*)`
-	//   layer 12, story 29d
-	void TraceMessageBare(const TCHAR*) override;
 	// slot 21 0x1029f800 (walked) `void vfunc21(CBaseEntity*)`
 	//   layer 3, story 29c
 	void Slot21(FElysiumEntity*) override;
 	// slot 22 0x1029f850 (walked) `void vfunc22(CBaseEntity*)`
 	//   layer 3, story 29c
 	void Slot22(FElysiumEntity*) override;
-	// slot 23 0x1029f890 (walked) `void vfunc23(CBaseEntity*)`
-	//   layer 3, story 29c
-	void Slot23(FElysiumEntity*) override;
 	// slot 24 0x1029f8d0 (walked) `void OnVictimHitByMe(CBaseEntity*)`
 	//   layer 1, story 29c
 	void OnVictimHitByMe(FElysiumEntity*) override;
@@ -164,45 +175,15 @@
 	// slot 69 0x1029b180 (walked) `bool NavIgnoreCollision(CBaseEntity*)`
 	//   layer 1, story 29c
 	bool NavIgnoreCollision(FElysiumEntity*) override;
-	// slot 76 0x1029c010 (walked) `void DrawDebugStatOverlays()`
-	//   layer 7, story 29c
-	void DrawDebugStatOverlays() override;
-	// slot 80 0x102c5870 (walked) `ServerClass* GetServerClass()`
-	//   returns `ServerClass*`
-	//   layer 0, story 29c
-	void* GetServerClass() override;
 	// slot 81 0x102c5890 (walked) `int YouForgotToImplementOrDeclareServerClass()`
 	//   layer 0, story 29c
 	int32 YouForgotToImplementOrDeclareServerClass() override;
-	// slot 82 0x1028cd10 (walked) `datamap_t* GetDataDescMap()`
-	//   returns `datamap_t*`
-	//   layer 0, story 29c
-	void* GetDataDescMap() override;
-	// slot 86 0x102c0420 (walked) `bool ShouldTransmit(int, const edict_t*, const void*, int, int)`
-	//   takes `const edict_t*`
-	//   takes `const void*`
-	//   layer 2, story 29c
-	bool ShouldTransmit(int32, void*, void*, int32, int32) override;
 	// slot 104 0x10298ad0 (sdk) `void Precache()`
 	//   layer 14, story 29d
 	void Precache() override;
 	// slot 105 0x10298ce0 (sdk) `void SetModel(char*)`
 	//   layer 14, story 29d
 	void SetModel(TCHAR*) override;
-	// slot 123 0x1029ca50 (sdk) `void DrawDebugGeometryOverlays()`
-	//   layer 15, story 29d
-	void DrawDebugGeometryOverlays() override;
-	// slot 124 0x1029d4e0 (sdk) `int DrawDebugTextOverlays()`
-	//   layer 15, story 29d
-	int32 DrawDebugTextOverlays() override;
-	// slot 126 0x102993c0 (sdk) `int Save(ISave&)`
-	//   takes `ISave&`
-	//   layer 16, story 29d
-	int32 Save(void*) override;
-	// slot 127 0x10299700 (walked) `int Restore(IRestore&)`
-	//   takes `IRestore&`
-	//   layer 10, story 29d
-	int32 Restore(void*) override;
 	// slot 130 0x102998c0 (walked) `void OnRestore(bool)`
 	//   layer 22, story 29e
 	void OnRestore(bool) override;
@@ -291,14 +272,6 @@
 	// slot 342 0x102c4a60 (walked) `bool CanBeFedUponBy(CBaseCombatCharacter*)`
 	//   layer 15, story 29d
 	bool CanBeFedUponBy(FElysiumEntity*) override;
-	// slot 347 0x102c1c10 (walked) `bool GetExpressionEventParams(int, char*, float*, float*,
-	// float*, float*)`
-	//   takes `float*`
-	//   takes `float*`
-	//   takes `float*`
-	//   takes `float*`
-	//   layer 1, story 29c
-	bool GetExpressionEventParams(int32, TCHAR*, void*, void*, void*, void*) override;
 	// slot 359 0x1029e750 (walked) `int vfunc359(CBaseEntity*)`
 	//   layer 15, story 29d
 	int32 Slot359(FElysiumEntity*) override;
@@ -319,24 +292,9 @@
 	//   returns `Disposition_t`
 	//   layer 14, story 29d
 	int32 IRelationType(FElysiumEntity*) override;
-	// slot 412 0x101aa6d0 (walked) `float GetLastUpdateThink()`
-	//   layer 0, story 29c
-	float GetLastUpdateThink() override;
-	// slot 413 0x101aa6f0 (walked) `float GetLastNormalThink()`
-	//   layer 0, story 29c
-	float GetLastNormalThink() override;
-	// slot 414 0x101aa710 (walked) `float GetLastMoveThink()`
-	//   layer 0, story 29c
-	float GetLastMoveThink() override;
-	// slot 415 0x101aa730 (walked) `float GetLastAIThink()`
-	//   layer 0, story 29c
-	float GetLastAIThink() override;
 	// slot 416 0x101aa750 (walked) `void SetForceFrequentThink(bool)`
 	//   layer 0, story 29c
 	void SetForceFrequentThink(bool) override;
-	// slot 417 0x101aa770 (walked) `bool GetForceFrequentThink()`
-	//   layer 0, story 29c
-	bool GetForceFrequentThink() override;
 	// slot 418 0x102bf6e0 (walked) `float ResolveTaskDistance(float)`
 	//   layer 2, story 29c
 	float ResolveTaskDistance(float) override;
@@ -371,12 +329,6 @@
 	//   takes `Task_t*`
 	//   layer 23, story 29e
 	int32 RunTaskSlot444(void*) override;
-	// slot 451 0x101aa7b0 (sdk) `char* GetSchedulingErrorName()`
-	//   layer 0, story 29c
-	TCHAR* GetSchedulingErrorName() override;
-	// slot 452 0x102b97f0 (sdk) `bool LoadedSchedules()`
-	//   layer 0, story 29c
-	bool LoadedSchedules() override;
 	// slot 462 0x101aa6b0 (sdk) `bool ShouldGoToIdleState()`
 	//   layer 0, story 29c
 	bool ShouldGoToIdleState() override;
@@ -445,39 +397,18 @@
 	// slot 495 0x10294660 (walked) `void SurprisedSound()`
 	//   layer 14, story 29d
 	void SurprisedSound() override;
-	// slot 496 0x10294720 (walked) `void TargetAcquiredSound()`
-	//   layer 14, story 29d
-	void TargetAcquiredSound() override;
-	// slot 497 0x102947e0 (walked) `void vfunc497()`
-	//   layer 5, story 29c
-	void Slot497() override;
 	// slot 498 0x10294870 (walked) `void FleeSound()`
 	//   layer 14, story 29d
 	void FleeSound() override;
 	// slot 499 0x10294930 (walked) `void IdleAgitatedSound()`
 	//   layer 14, story 29d
 	void IdleAgitatedSound() override;
-	// slot 500 0x102949f0 (walked) `void ExertHvySound()`
-	//   layer 14, story 29d
-	void ExertHvySound() override;
-	// slot 501 0x10294ab0 (walked) `void ExertLightSound()`
-	//   layer 14, story 29d
-	void ExertLightSound() override;
-	// slot 502 0x10294b70 (walked) `void RiledSound()`
-	//   layer 14, story 29d
-	void RiledSound() override;
 	// slot 503 0x10294c30 (walked) `void ComfortSound()`
 	//   layer 14, story 29d
 	void ComfortSound() override;
 	// slot 504 0x10294cf0 (walked) `void UpsetSound()`
 	//   layer 14, story 29d
 	void UpsetSound() override;
-	// slot 505 0x10294db0 (walked) `void TargetGiveUpSound()`
-	//   layer 14, story 29d
-	void TargetGiveUpSound() override;
-	// slot 506 0x10294e70 (walked) `void vfunc506()`
-	//   layer 14, story 29d
-	void Slot506() override;
 	// slot 507 0x10294f40 (walked) `void FloatSound()`
 	//   layer 14, story 29d
 	void FloatSound() override;
@@ -490,9 +421,9 @@
 	// slot 516 0x10297ce0 (sdk) `float MaxYawSpeed()`
 	//   layer 8, story 29c
 	float MaxYawSpeed() override;
-	// slot 523 0x101aa670 (sdk) `float GetMaxJumpSpeed() const`
+	// slot 523 0x101aa670 (walked) `float GetStepDownHeight() const`
 	//   layer 0, story 29c
-	float GetMaxJumpSpeed() const override;
+	float GetStepDownHeight() const override;
 	// slot 527 0x10293e80 (walked) `bool IsUnusableNode(CAI_Node*)`
 	//   takes `CAI_Node*`
 	//   layer 1, story 29c
@@ -642,5 +573,3 @@
 	// The inherited overloads of an overridden name stay visible.
 	using FElysiumNpcBase::FInViewCone;
 	using FElysiumNpcBase::GetEnemy;
-	using FElysiumNpcBase::TraceMessage;
-	using FElysiumNpcBase::TraceMessageBare;

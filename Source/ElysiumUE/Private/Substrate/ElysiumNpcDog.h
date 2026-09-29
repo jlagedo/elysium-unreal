@@ -19,7 +19,6 @@ public:
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual float MaxYawSpeed() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

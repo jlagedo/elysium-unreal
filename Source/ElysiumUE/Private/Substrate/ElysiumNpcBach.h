@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Substrate/ElysiumNpcVampire.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 // `CNPC_VBach` (primary vtable `0x104a9f2c`), built by `npc_VBach` factory `0x10362ba0`.
 //
@@ -16,14 +17,11 @@ public:
 	virtual int32 Slot606(int32 Arg) override;
 	virtual void* Slot609(bool bForce) override;
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
-	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual int32 SelectScheduleRangedCombat(int32 Arg) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual void GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUnits) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
@@ -50,10 +48,8 @@ public:
 	static constexpr float SwarmDistTooFar = 65535.f;        // `0x477fff00`, Bach's
 
 	// From `ElysiumNpcMisc.inl`.
-	/** `CNPC_VBach::vfunc553` (`0x10364500`) and `::vfunc554` (`0x10364550`) — slots 553/554
-	 *  `RangeAttack1Conditions` / `RangeAttack2Conditions`. One shape, one differing answer. */
+	/** `CNPC_VBach::vfunc553` (`0x10364500`) — slot 553 `RangeAttack1Conditions`. */
 	int32 BachRangeAttack1Conditions(float Dot, float DistUnits) const;
-	int32 BachRangeAttack2Conditions(float Dot, float DistUnits) const;
 
 	// From `ElysiumNpcSpecies.inl`.
 	// `CNPC_VBach`'s fire gate — the one-shot arm slot 606 keeps around `COND_ENEMY_OCCLUDED`.
@@ -70,7 +66,9 @@ public:
 	void BachGatherAttackConditions(float DistanceUnits);
 	/** `CNPC_VBach`'s shield block. `m_iBachTeleportState` indexes `DAT_1062d200`, whose four cells read
 	 *  **768.0, 768.0, 384.0, 384.0** out of the pinned image at `0x62d200`. */
-	static constexpr float BachTeleportDistanceUnits[4] = { 768.f, 768.f, 384.f, 384.f };
+	static constexpr float BachTeleportDistanceUnits[4] = {
+		ElysiumNpcTunables::BachTeleportDistance0, ElysiumNpcTunables::BachTeleportDistance1,
+		ElysiumNpcTunables::BachTeleportDistance2, ElysiumNpcTunables::BachTeleportDistance3 };
 	int32 BachTeleportState = 0;             // `m_iBachTeleportState`
 	// +0x6690 `m_flNextHolyLightTime`, an absolute curtime stamp. The COND `0x7b` arms of the two
 	// selectors `0x10364080` and `0x103642f0` write it (`curtime + _DAT_10463584`, 15.0), and the

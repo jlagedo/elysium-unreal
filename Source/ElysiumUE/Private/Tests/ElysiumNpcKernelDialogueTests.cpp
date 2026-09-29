@@ -379,7 +379,7 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slot 366's `CNPC_VSabbatLeader` override (`0x103a76d0`)
+// Slot 366 `HandleInteraction` on the Sabbat leader
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueHandleInteractionTest,
@@ -389,11 +389,9 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 	FDialogueFixture F;
 	if (!TestNotNull(TEXT("sabbat spawned"), F.Sabbat)) { return false; }
 
-	// The two slot-366 fills, each checked against the census so `slots.md` and the port cannot
-	// drift: the Sabbat leader's own override and the human line's `return 0;`, which it tail-calls
-	// (story 5 step 4: both are overrides, `FElysiumNpcSabbatLeader` and `FElysiumNpcHuman`).
+	// The slot-366 fill checked against the census so `slots.md` and the port cannot drift: the
+	// human line's `return 0;` (the Sabbat leader's own scope-trace-only override is dead and inherits it).
 	const TCHAR* Fills[][2] = {
-		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a76d0") },
 		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x10385a70") },
 	};
 	for (const TCHAR* const (&Fill)[2] : Fills)
@@ -409,10 +407,8 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 	// `npc_VSabbatLeader` is a spawn leaf AND a census classname, so the body runs on a real one.
 	TestTrue(TEXT("the census resolves npc_VSabbatLeader to CNPC_VSabbatLeader"),
 		F.Sabbat->AsSpecies<FElysiumNpcSabbatLeader>() != nullptr);
-	// `0x103a76d0` is a scope-trace prologue and a tail call to `0x10385a70`, whose whole body is
-	// `return 0`. The answer is false for every argument, which is what "the override adds only a
-	// debug name" means.
-	TestFalse(TEXT("0x103a76d0 answers false"),
+	// The Sabbat leader inherits `0x10385a70`, whose whole body is `return 0`.
+	TestFalse(TEXT("the Sabbat leader answers false"),
 		F.Sabbat->HandleInteraction(0, nullptr, nullptr));
 	TestFalse(TEXT("...for any interaction id and any partner"),
 		F.Sabbat->HandleInteraction(0x2a, nullptr, F.Guard));

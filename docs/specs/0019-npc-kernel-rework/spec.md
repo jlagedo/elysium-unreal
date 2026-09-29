@@ -753,7 +753,7 @@ green, and `coverage.md` shows the change.
     stories 1–2). Records: the step and fold commits' messages; reports under
     `$ELYSIUM_WORK_ROOT/research/npc-kernel/story-5/` (`gateA/`, `smokeA/`, `B/`).
 
-- [ ] **6. The deletions and the mechanism seams.**
+- [x] **6. The deletions and the mechanism seams.**
   The species `dead` rows are deleted by story 5's step 1 instead: 228 hand-written bodies and
   195 census rows, moved there by the owner on 2026-09-24 so that nothing dead is re-homed.
   Job, dead: every other `dead` row's body and test removed — the Debug, Debug10 and Debug10_2
@@ -773,6 +773,78 @@ green, and `coverage.md` shows the change.
   boundary, 2026-09-20).
   Consumes: 1, 4, 0018 story 5. Provides: the smaller kernel 0002 continues on.
   Size: L. Effort: Opus / high.
+  **Landed 2026-09-29**, orchestrated as five waves of disjoint-file lanes on one checkout
+  (briefs, reports and reviews in `docs/specs/0019-npc-kernel-rework/story-6/`, the record until
+  the commit). The vtmb-corpus server was down for the whole run, so every retail claim below
+  rests on `docs/vtmb/`, the pinned image read directly, and the address comments already in the
+  port; what that could not settle is RE-BACKLOG 40–43.
+  - *The meter.* `kernel_verdicts.tsv` now spells a closed row: a `dead` row at `-` (body and tests
+    gone; a `default:` / `registry:` literal the generator answers stays, because slot 327 is read
+    by the rule `MeleeAttack2Conditions` and closing it changed the answer), a `mechanism` row at a
+    service word (`CMC`, `UNavigationSystem`, `UPathFollowingComponent`, `TraceRetail`, `Chaos`,
+    `Replication`, `FElysiumSaveArchive`, `Bake`, `UReflection`, `UEContainer`, `UAudio`, `Visual`,
+    `CppDispatch`, `UEComponent`, or the owning spec `0010` / `0015` / `0018/3` / `0018/16` /
+    `0002/28`) or at `seam:` (a hand body that is a one-line forward). `gen_kernel_shape` emits
+    nothing for a closed slot nothing reaches and a silent default for one still dispatched; the
+    census names the surviving layer. `kernel_lists --check` fails a body-closed row the port
+    still cites; `--closed` counts. Generated data tables are not port sites.
+  - *Dead: 653 of 653 closed.* The 16 Debug files and both Debug test files are gone; the ring, the
+    two stamp words (`+0x1b2c`, `+0x1b38`; ~290 `SelectTrace` sites and 23 species writes), the
+    scrambler (Combat10's bound is the literal 2), 39 `SquadSlotName` overrides, the slot-452
+    `LoadedSchedules` constants, the undispatched sound and keyvalue slots, the standoff bodies,
+    the think-stamp getters, the search timer, the Newscaster lister, the two `CAI_ScriptedSequence`
+    empties. Ten dead rows were misverdicts and are `rule` again: the ten species `GetUsedHullBits`
+    (each ORs its hull bit onto the Troika word, the listing's `OR AH,<bit>`), `GetLocalTaskId`
+    (three rule bodies read it), and `OnRestore 0x1027bf50` (slot 130 runs on every load).
+  - *Mechanism: 330 of 372 closed.* The retail ground step, walk execute, navigator move and
+    physics tick are gone; `CheckOnGround` measures through the new floor-facts seam and tests
+    retail's 4.0-unit reach; the save/restore twins are the generated walk, with the boss line's
+    load-side resets moved to `OnPostRestore`; Precache is bake-time; replication and physics are
+    nothing; Flex and Overlay bodies with no caller closed to 0010 and 0015; the test hull to
+    0018/3. New seams on `IElysiumNpcMotor`: `SampleFloor`, `SetMoveIgnore`, `HasPath`,
+    `SetHullSize`, `SetFacingTarget`, `SetYawSpeed`, `Face(yaw, rate)`, a route query with a start;
+    the `FVisible` blocker cell is delivered; the render-mode and solid-`0x20` filter arms and the
+    prop keyfields `blocks_traces` (21 authored) / `npc_transparent` (8,096) are carried; the
+    slot-584 pass is the entity world's one-shot at build stamp + 0.8 s. **Kept, not replaced (42
+    `hand:` rows):** the yaw ladders (slot 516) as data through the seam, the facing queue's
+    weighted, expiring blend (slot 15), `NavigatorMoveStep` (0018/5's row-for-row `Move`), the six
+    boss `OnPostRestore` bodies, and the 35 algorithms C3 lists (`report-C3.md`) whose service
+    cannot yet answer them without changing the observable — RE-BACKLOG 43.
+  - *Tunables: 438 inline cells → 0.* The overlay grew 114 → 526 rows (401 wave-4 rows plus the
+    lanes' cells), every one re-read out of the image; a `ref` type records the 240-odd retail
+    globals that are names, not values. Six stand-ins marked UNRECOVERED were plain `.rdata` cells
+    and now read retail (among them the melee outer band 256.0 and the ScheduleHost wait default
+    1000). The tunables checker learned function-local static ConVars.
+  - *Slot 523* is `GetStepDownHeight` (the SDK-order guess `GetMaxJumpSpeed` retired, per 0018/6 R1).
+  - *Read once the corpus reconnected (same day):* `UpdateYaw 0x102e1e20` truncates `m_YawSpeed` to an
+    int and multiplies by the double cell 10.0 (the port is retail; slot 516 is degrees per tenth of a
+    second, `shape.md` corrected); slot 7 `0x102e11f0` is the jump step, not a queue cancel; slot 18
+    never rewrites the yaw word; the three facing adders' replace rules (`0x102d8cf0` / `0x102d8e50` /
+    `0x102d8f20`) and the (importance, duration, ramp) order are in the port; `IsValidStealthKillTarget`
+    ships the relaxed arm (`stealth.md` corrected); the Chang energy ball spawns up 50 / forward 40 /
+    right -10 (the port had forward and up swapped; fixed). Second pass, same day: `DAT_10924edc` is
+    `ent_trace_melee`'s parent asked `IsCommand()` with the answer dropped (no event); the Tzimisce
+    task-distance sentinel answers 150.0; the MingXiao turn speeds 6 / 2 are the loader's immediates;
+    `DAT_1070ba3c` is the skill level and autoaim scales by 0.9 at skill 1, blends 0.3 / 0.7 above
+    (a `SkillLevel()` seam answering 1); `werewolf_teleport_in_time` is overlay row 527. RE-BACKLOG
+    40–43 are banked.
+  - *Named divergences:* slot 69 asked per think, not per contact; the ×10 yaw scaling (now read: retail's)
+    SDK; catalogue props block only MONSTER traces unless `blocks_traces`; a stub fire on a closed
+    slot is the falsifier and none fired in the live check.
+  - *Validation:* editor build green; `Elysium.Substrate` 490 + 1,202 with warnings / 0 failed (from 504 +
+    1,275: the dead families' tests went with them, 60-odd tests were added for the seams);
+    `Elysium.Content` 23 + 2 / 0; `Elysium.Visual.NpcBody` 10 / 0; `Elysium.Map` 4 + 1 / 0;
+    `kernel --check` 7 / 7; pytest 141; `unported.tsv` 450 → 393. Live, twice (`sp_tutorial_1` from a
+    new game, then `sm_hub_1` for three minutes): 0 ensure / assert, no closed slot fired (the only
+    stub fires were six open 29c chain surfaces, three of them — `GetMoveType`, `GetGroundEntity`,
+    `SetGroundEntity` — given their one-line bodies over the entity's own words after the first pass,
+    because the stub's 0 failed `CheckOnGround`'s `MOVETYPE_STEP` guard on every NPC), the hub's
+    pedestrians walk, a save of the hub freezes 331 records with 0 absent and reads back as a
+    payload, the two patrol cops fail `0xc` at link 731 as at row 09 (row 13's). A live load has no
+    console verb; the restore path is `SaveRoundTrip` and the species round trips.
+  - *Handed on:* RE-BACKLOG 42's port (0010 / 0015: the flinch records and the knockback tuples, read
+    and banked here) and the per-row moves behind RE-BACKLOG 43's service map (0002). The skill
+    level is a seam answering 1 until a difficulty setting exists.
 
 - [ ] **7. The reach cut.**
   Retail: none — a query over the ledger.

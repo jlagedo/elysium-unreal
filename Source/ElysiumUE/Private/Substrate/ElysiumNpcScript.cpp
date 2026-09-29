@@ -425,7 +425,7 @@ void FElysiumNpc::IssuePatrolMoveStart(FPatrolPathCell* Cell)
 	Goal.Type = GScript19GoalTypeLocation;                    // local_40 = 4
 	Goal.PositionCm = PositionCm;                             // 0x102aa6b6 GetPosition(node, m_eHull +0x1568)
 	Goal.Activity = -1;                                       // local_2c
-	Goal.Tolerance = NavGoalToleranceKeep;                    // local_20 = DAT_1049a1ac (-1.0)
+	Goal.Tolerance = ElysiumNpcTunables::NavGoalToleranceKeepPatrol;   // local_20 = DAT_1049a1ac (-1.0)
 	Goal.Flags = 0;                                           // local_1c
 	if (Script19SetGoal(Goal, 2, TEXT("patrol point (0x102aa640)")))  // 0x102aa735 SetGoal(goal, 2) / 0x102aa73f
 	{
@@ -540,7 +540,7 @@ bool FElysiumNpc::ScheduledFollowPath(int32 ScheduleId, FElysiumEntity* Goal, in
 	NavGoal.Type = GScript19GoalTypePathCorner;               // 0x10280205 [0] = 3
 	NavGoal.PositionCm = Goal->Origin;                        // 0x102801ff slot 220
 	NavGoal.Activity = Activity;                              // 0x10280227 [5] = param_3
-	NavGoal.Tolerance = NavGoalToleranceKeep;                 // 0x10280231 / 0x10280276 [8] = _DAT_1049a154 (-1.0)
+	NavGoal.Tolerance = ElysiumNpcTunables::NavGoalToleranceKeepPathCorner;   // 0x10280231 / 0x10280276 [8] = _DAT_1049a154 (-1.0)
 	NavGoal.Flags = GScript19ScheduledGoalFlags;              // [9] = 1
 	float Scratch = 0.f;
 	TranslateEnemyChasePosition(Goal, NavGoal.PositionCm, &NavGoal.Tolerance, &Scratch); // 0x10280295
@@ -558,7 +558,7 @@ namespace
 	// `DoFindPath`'s chain cap: `CMP EDI,0x80` at `0x102f24a5` ends the laying, and the goal flag goes
 	// on the last corner only for a count below it (`0x102f24ca`).
 	constexpr int32 GScript19CornerChainCap = 0x80;
-	// Every waypoint's arrival radius, `0x10451f78` = 0.0625 units (`0x102ef510`, slot 16: "a constant, not
+	// Every waypoint's arrival radius, `0x10451f78` = 0.0625 units (navigator slot 16: "a constant, not
 	// `path+0x28`, not `path+0x40`, not a hull"). The corners are passed at it as the goal is; the goal
 	// bit only picks `OnNavComplete` over `AdvancePath`. `path+0x40` (`Navigator.WaypointToleranceCm`)
 	// is the blocked step's tolerance (`0x102eefb0`) and never a waypoint's.

@@ -38,7 +38,7 @@ namespace
 	constexpr int32 GDamage19BaseVisibleMask = 0x2804091;
 	// `_DAT_1047b868`, a DOUBLE: the repeated-damage fraction of `m_iMaxHealth` (`FMUL double ptr`
 	// at `0x10266307`). Recovered fact 0019/4: repeated damage is `> 30 %`.
-	constexpr double GDamage19BaseRepeatedFraction = 0.3;
+	constexpr double GDamage19BaseRepeatedFraction = ElysiumNpcTunables::RepeatedDamageFraction;
 	// `CSoundEnt::InsertSound(1, origin, DAT_1072bc84, 0.2, DAT_1072bcc1, this)`: `PUSH 0x1`
 	// (`SOUND_COMBAT`, `0x10266359`) and `PUSH 0x3e4ccccd` (0.2 s, `0x1026634a`).
 	constexpr double GDamage19BaseSoundDuration = 0.2;

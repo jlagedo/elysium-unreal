@@ -159,7 +159,7 @@ bool FElysiumNpcKernelCondClearSenseTest::RunTest(const FString&)
 }
 
 // =================================================================================================
-// Slots 553 / 554 — the two ranged bands (`0x1026d890`, `0x1026d920`)
+// Slot 553 — the ranged band (`0x1026d890`); slot 554's body was deleted as dead in 0019/6
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondRangeBandsTest,
@@ -187,21 +187,6 @@ bool FElysiumNpcKernelCondRangeBandsTest::RunTest(const FString&)
 	for (const FCase& C : Range1)
 	{
 		TestEqual(C.Why, F.Npc->RangeAttack1Conditions(C.Dot, C.Dist), C.Expect);
-	}
-
-	// Slot 554. `_DAT_10451acc` = 64, `_DAT_10483aac` = 512, and NO close-to-attack rung at all.
-	const FCase Range2[] = {
-		{ 1.0f,  63.9f, 0x08, TEXT("inside 64 is TOO_CLOSE_FOR_RANGED") },
-		{ 1.0f,  64.0f, 0x50, TEXT("exactly 64 is already a candidate: there is no 0x5f rung") },
-		{ 1.0f, 199.0f, 0x50, TEXT("the band 553 calls TOO_CLOSE_TO_ATTACK is a hit for 554") },
-		{ 1.0f, 512.0f, 0x50, TEXT("exactly 512 is not too far") },
-		{ 1.0f, 512.1f, 0x60, TEXT("past 512 is TOO_FAR_TO_ATTACK") },
-		{ 0.5f, 300.0f, 0x50, TEXT("dot exactly 0.5 passes") },
-		{ 0.49f, 300.0f, 0x61, TEXT("below 0.5 is NOT_FACING_ATTACK") },
-	};
-	for (const FCase& C : Range2)
-	{
-		TestEqual(C.Why, F.Npc->RangeAttack2Conditions(C.Dot, C.Dist), C.Expect);
 	}
 
 	// `CNPC_VBatSwarm` (0x103675e0 / 0x10367610) and `CNPC_VSheriffSwarm` (0x103b2590 / 0x103b25c0)

@@ -19,11 +19,8 @@ public:
 
 	virtual void Slot21(FElysiumEntity* Attacker) override;
 	virtual void Slot22(FElysiumEntity* Attacker) override;
-	virtual void Slot23(FElysiumEntity* Attacker) override;
 	virtual void OnRestore(bool bFromLoad) override;
 	virtual void Precache() override;
-	virtual int32 Save(void* Archive) override;
-	virtual int32 Restore(void* Archive) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 PreSelectSchedule() override;
 	virtual int32 SpeciesSelectSchedule() override;
@@ -31,11 +28,9 @@ public:
 	virtual bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
 	virtual bool CanStandOn(FElysiumEntity* Other) override;
-	// Slot 523 `0x1039b070` (the stand test's drop, SDK-named `GetMaxJumpSpeed`): 30.0.
-	virtual float GetMaxJumpSpeed() const override;
-	virtual const TCHAR* GetShortConditionName(int32 ConditionId) override;
+	// Slot 523 `0x1039b070` (the stand test's drop, SDK-named `GetStepDownHeight`): 30.0.
+	virtual float GetStepDownHeight() const override;
 	virtual int32 GetUsedHullBits() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// +0x6660 m_iTentacleID (`CNPC_VMingXiaoTentacle`): the tentacle's own index, which the head
 	// (`CNPC_VMingXiao::m_iTentacleID` +0x6674, -1 on the head) reads through the tentacle. 0 is
@@ -47,7 +42,7 @@ public:
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
 	// From `ElysiumNpcGeometry.inl`.
-	/** `+0x665c CNPC_VMingXiaoTentacle::m_hMingXiao` — the owner `0x1039ede0` resolves before it can
+	/** `+0x665c CNPC_VMingXiaoTentacle::m_hMingXiao` — the owner `MingXiaoTentacleHead` resolves before it can
 	 *  notify the owner's other severed tentacles. Family Bosses owns `+0x665c` as
 	 *  `CNPC_VBaseBoss::m_BlacklistedEntities`; same situation as `m_vecScatterCenter` above. */
 	FElysiumEntityHandle TentacleMingXiao;
@@ -83,7 +78,7 @@ public:
 	// `PathMode`); the tentacle is a third class at the same offset. SOURCE units, as retail stores it.
 	FVector TentacleCoordinatePosUnits = FVector::ZeroVector;   // +0x668c/+0x6690/+0x6694 (walked)
 	/** SEAM for `thunk_FUN_1039ede0(this)` — the MingXiao HEAD a `CNPC_VMingXiaoTentacle` forwards its
-	 *  slots 21, 22 and 23 to. Family **Motor** already stands the same retail call
+	 *  slots 21 and 22 to. Family **Motor** already stands the same retail call
 	 *  (`ElysiumNpcMotor.cpp:543`) and found the tentacle proxy chain absent; this answers null,
 	 *  which is retail's "no companion" arm and the one that forwards nothing. */
 	FElysiumEntity* MingXiaoTentacleHead() const;
@@ -93,7 +88,7 @@ public:
 	int32 TentacleHeadForwards = 0;
 	/** `0x1039ef90` — `CNPC_VMingXiaoTentacle`: cache a coordinate point and raise condition 0x78. */
 	void FUN_1039ef90(const FVector& PositionUnits);
-	/** `0x1039e800` / `0x1039e830` / `0x1039e860` — `CNPC_VMingXiaoTentacle`'s slots 21, 22 and 23. */
+	/** `0x1039e800` / `0x1039e830` — `CNPC_VMingXiaoTentacle`'s slots 21 and 22. */
 	void FUN_1039e800(FElysiumEntity* Arg);
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------

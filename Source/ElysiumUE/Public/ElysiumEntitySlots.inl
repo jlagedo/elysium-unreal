@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 224 generated slot rows of `FElysiumEntity` (CBaseEntity): 224 it introduces and 0 it overrides
+// 220 generated slot rows of `FElysiumEntity` (CBaseEntity): 220 it introduces and 0 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -354,12 +354,6 @@
 	//   takes `CEntityMapData*`
 	//   layer 0, story 29c
 	virtual void ParseMapData(void*);
-	// slot 108 0x1009eca0 (walked) `bool KeyValue(const char*, Vector)`
-	//   layer 10, story 29d
-	virtual bool KeyValue(const TCHAR*, FVector);
-	// slot 109 0x1009ebb0 (walked) `bool KeyValue(const char*, float)`
-	//   layer 10, story 29d
-	virtual bool KeyValue(const TCHAR*, float);
 	// slot 110 0x1009e430 (walked) `bool KeyValue(const char*, const char*)`
 	//   layer 9, story 29c
 	virtual bool KeyValue(const TCHAR*, const TCHAR*);
@@ -506,9 +500,6 @@
 	// slot 158 0x100b4dc0 (walked) `bool IsAlive()`
 	//   layer 0, story 29c
 	virtual bool IsAlive();
-	// slot 159 0x10026f20 (walked) `bool ReflectGauss()`
-	//   layer 1, story 29c
-	virtual bool ReflectGauss();
 	// slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
 	//   layer 0, story 29c
 	virtual bool HasTarget(FName);
@@ -524,10 +515,6 @@
 	// slot 164 0x100b50a0 (walked) `bool IsStandable()`
 	//   layer 1, story 29c
 	virtual bool IsStandable();
-	// slot 165 0x10026fb0 (walked) `bool CanStandOn(edict_t*)`
-	//   takes `edict_t*`
-	//   layer 1, story 29c
-	virtual bool CanStandOn(void*);
 	// slot 166 0x10026f80 (walked) `bool CanStandOn(CBaseEntity*)`
 	//   layer 0, story 29c
 	virtual bool CanStandOn(FElysiumEntity*);

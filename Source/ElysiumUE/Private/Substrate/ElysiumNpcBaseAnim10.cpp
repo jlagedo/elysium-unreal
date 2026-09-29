@@ -130,8 +130,9 @@ void FElysiumNpcBase::SetActivityAndSequence(int32 Activity, int32 Sequence, int
 	// 7. `*(int *)((int)this + 0xfec) = param_1`, then the navigator.
 	ActivityNumber = Activity;
 	// `thunk_FUN_102e1cf0` on `m_pMotor` (`0x10272569 MOV ECX,[ESI+0x5d44]` / `0x10272575`; the
-	// declaration's `m_pNavigator` is a misreading): motor `+0x38` := `MaxYawSpeed`. SEAM, counted;
-	// no motor yaw-speed word stands here.
+	// declaration's `m_pNavigator` is a misreading): motor `+0x38` := `MaxYawSpeed`, read now that
+	// the new activity stands (the ladder switches on it). Counted as before.
+	MotorStoreMaxYawSpeed();
 	++NavigatorActivityNotices;
 }
 

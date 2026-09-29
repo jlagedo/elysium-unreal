@@ -136,18 +136,6 @@ struct FTeleportEmitterPlacement
 	FVector PositionUnits = FVector::ZeroVector;
 };
 
-/** SEAM for `0x1038fb20`'s tail — `CBaseEntity::GetCollideable()` (`+0x8`), its collision group
- *  (`+0x38`), the `CTraceFilterSimple` built from the pair, and `enginetrace->SweepCollideable`
- *  (`+0x14`). The FILTER is the recovered concern and is ported as `ManBatTraceFilterShouldHit`
- *  below; the sweep itself records the call and nothing else. */
-struct FPhysicsTraceEntityCall
-{
-	FElysiumEntityHandle Entity;
-	FVector StartUnits = FVector::ZeroVector;
-	FVector EndUnits = FVector::ZeroVector;
-	uint32 Mask = 0;
-};
-
 // --- The bodies ------------------------------------------------------------------------------------
 
 /** One row of the pickup species table: the class, the two retail bodies that fill the attach and
@@ -195,10 +183,12 @@ static int32 CanPlaySequenceStateArm(int32 Result, bool bDisregardState, int32 I
 // over the same read — the head of these four bodies is the head of the base body, and it has one
 // answer.
 
-/** SEAM for the two global melee events: `DAT_10924edc`'s `+0x4` (fired by `0x10385cf0`, by slot
- *  599's `0x10385ab0` and by slot 600's `0x10385c30`) and the attack coordinator's own
- *  `thunk_FUN_1025ddd0(m_pAttackCoordinator, this)` release. Neither has a home in this substrate —
- *  `AttackCoordinator` is a bare index of three globals — so both record the call. */
+/** Two counters. `MeleeEventFires` records `(*DAT_10924edc)->IsCommand()` (`0x10385cf0`, slot 599's
+ *  `0x10385ab0`, slot 600's `0x10385c30`): `DAT_10924edc` is `ent_trace_melee`'s parent pointer and
+ *  the call is the `IsCommand()` half of a `GetFloat()` whose value nothing uses (read 2026-09-29) —
+ *  no event, no observable, counted only so the call order is testable. `MeleeCoordinatorReleases`
+ *  records the attack coordinator's `thunk_FUN_1025ddd0(m_pAttackCoordinator, this)` release, which
+ *  has no home here — `AttackCoordinator` is a bare index of three globals. */
 int32 MeleeEventFires = 0;
 int32 MeleeCoordinatorReleases = 0;
 

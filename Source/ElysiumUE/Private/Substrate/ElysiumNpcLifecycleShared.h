@@ -14,9 +14,5 @@
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 
-namespace NpcKernelLifecycleShared
-{
-	// `DAT_1093d638` / `DAT_1093d63c` — `CNPC_VWerewolf`'s search-timer pair. FILE STATICS in retail,
-	// shared by every werewolf on the map, which is the recovered fact and not an accident.
-	inline uint64 GSearchTimerCycles = 0;
-}
+// `NpcKernelLifecycleShared::GSearchTimerCycles` (`DAT_1093d638` / `DAT_1093d63c`, the werewolf
+// search-timer pair) went with `StartSearchTimer` / `ReportSearchTimer` (dead, 0019/6); the includes above are what the includers still take from this header.

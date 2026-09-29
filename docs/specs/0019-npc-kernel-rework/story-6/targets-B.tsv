@@ -1,0 +1,2 @@
+0x10370ad0	-	CNPC_VCop::vfunc546 SquadSlotName override removed (declaration and body); only reader was the debug overlay text
+0x10372f00	-	CNPC_VCop::DrawDebugGeometryOverlays override removed (declaration, body, GDebug10_2* label constants, two Debug10 shared includes)

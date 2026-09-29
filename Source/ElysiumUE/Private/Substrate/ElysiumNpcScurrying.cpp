@@ -67,16 +67,6 @@ int32 FElysiumNpcScurrying::GetUsedHullBits()
 	return FElysiumNpc::GetUsedHullBits() | 0x80000;
 }
 
-// Slot 546: `0x103abd40`, the class's own schedule id space.
-const TCHAR* FElysiumNpcScurrying::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c4e0`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VScurrying"), TEXT("0x103abd40"), TEXT("0x1093c4e0") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcSenses10_2.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcScurrying::IsNosferatuTemplate(const FElysiumEntity& SeenTarget)

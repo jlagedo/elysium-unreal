@@ -173,7 +173,7 @@ namespace
 
 	// How many times the NPC asked to speak the VSound concept `Concept` since the last
 	// `VSoundSpeakCalls.Reset()`. Story **29d** (family Sounds10) ported the slot 488 and 506
-	// Troika-line bodies (`0x10293ec0`, `0x10294e70`), so the arm that ran is no longer told by an
+	// Troika-line bodies (`0x10293ec0` and slot 506's), so the arm that ran is no longer told by an
 	// `elysium.stubs` tally but by the concept the body actually asked for — which is the stronger
 	// question, because a tally could only say that *some* stub fired.
 	int32 SpeciesSpeaksConcept(const FElysiumNpc& Npc, const TCHAR* Concept)
@@ -230,9 +230,6 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 		FString(ElysiumNpcTestCensus::BodyOf(Fleshpile, 617)), FString(TEXT("0x1034c2d0")));
 	TestEqual(TEXT("CNPCMaker_Fleshpile inherits CNPCMaker's slot 618"),
 		FString(ElysiumNpcTestCensus::BodyOf(Fleshpile, 618)), FString(TEXT("0x1034b580")));
-	TestEqual(TEXT("CNPC_VCameraSecurity inherits CNPC_VCamera's slot 497"),
-		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 497)),
-		FString(TEXT("0x103681d0")));
 	TestEqual(TEXT("CNPC_VDog inherits CNPC_VAnimal's slot 482"),
 		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VDog")), 482)),
 		FString(TEXT("0x1035fd40")));
@@ -314,9 +311,6 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 	}
 	TestNotNull(TEXT("the census claims it"),
 		ElysiumNpcTestCensus::OfClassname(TEXT("npc_VCamera")));
-	TestEqual(TEXT("and its census slot-497 body is the camera's own 0x103681d0"),
-		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera")), 497)),
-		FString(TEXT("0x103681d0")));
 	return true;
 }
 
@@ -1216,53 +1210,6 @@ bool FElysiumNpcKernelSpeciesNewscasterTest::RunTest(const FString&)
 	Npc->NewscasterSideStories.Add({ TEXT("side_a") });
 	Npc->bNewscasterStoryActive = true;
 
-	// --- `0x103a0ff0`: the "not playing VCD" arm is taken off the DIALOG SCENE handle -------------
-	Npc->Dialogue.DialogScene = FElysiumEntityHandle();
-	TArray<FString> Lines;
-	TestEqual(TEXT("with no scene the listing is one line and advances the cursor by one"),
-		Npc->FUN_103a0ff0(10, Lines), 11);
-	TestEqual(TEXT("and it is the literal header"), Lines.Num(), 1);
-	if (Lines.Num() == 1)
-	{
-		TestEqual(TEXT("verbatim"), Lines[0], FString(TEXT("not playing VCD")));
-	}
-
-	// --- with a scene, both queues are listed under their verbatim headers ------------------------
-	Npc->Dialogue.DialogScene = Scene->Handle;
-	Lines.Reset();
-	const int32 End = Npc->FUN_103a0ff0(0, Lines);
-	TestEqual(TEXT("two headers plus three rows is five lines"), Lines.Num(), 5);
-	TestEqual(TEXT("and the cursor advanced by five"), End, 5);
-	if (Lines.Num() == 5)
-	{
-		TestEqual(TEXT("the main header carries the count"), Lines[0],
-			FString(TEXT("Main Stories (2)")));
-		TestEqual(TEXT("the side header carries its own"), Lines[3],
-			FString(TEXT("Side Stories (1)")));
-	}
-
-	// --- `+0x668c` selects WHICH queue is playing, and the two predicates are opposites ----------
-	Npc->NewscasterPlayingSide = 0;
-	Npc->NewscasterMainCursor = 1;
-	Npc->NewscasterSideCursor = 0;
-	Lines.Reset();
-	Npc->FUN_103a0ff0(0, Lines);
-	if (Lines.Num() == 5)
-	{
-		TestTrue(TEXT("with +0x668c == 0 the MAIN cursor row is highlighted"),
-			Lines[2].StartsWith(TEXT("* ")));
-		TestFalse(TEXT("and the side one is not"), Lines[4].StartsWith(TEXT("* ")));
-	}
-	Npc->NewscasterPlayingSide = 1;
-	Lines.Reset();
-	Npc->FUN_103a0ff0(0, Lines);
-	if (Lines.Num() == 5)
-	{
-		TestFalse(TEXT("with +0x668c != 0 the main row is not highlighted"),
-			Lines[2].StartsWith(TEXT("* ")));
-		TestTrue(TEXT("and the SIDE cursor row is"), Lines[4].StartsWith(TEXT("* ")));
-	}
-
 	// --- `0x103a0d50`: the teardown drains both queues and clears the active flag LAST ------------
 	Npc->FUN_103a0d50();
 	TestEqual(TEXT("the main queue is drained"), Npc->NewscasterMainStories.Num(), 0);
@@ -1318,21 +1265,18 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("and caches the three floats"), Tentacle->TentacleCoordinatePosUnits,
 		FVector(7.0, 8.0, 9.0));
 
-	// --- slots 21, 22 and 23: three slots, one body, and the head seam answers null ---------------
+	// --- slots 21 and 22: two slots, one body, and the head seam answers null --------------------
 	Tentacle->TentacleHeadForwards = 0;
 	Tentacle->FUN_1039e800(Other);
 	Tentacle->Slot22(Other);
-	Tentacle->Slot23(Other);
-	TestEqual(TEXT("all three tentacle slots ask for the head"), Tentacle->TentacleHeadForwards, 3);
+	TestEqual(TEXT("both tentacle slots ask for the head"), Tentacle->TentacleHeadForwards, 2);
 	TestNull(TEXT("and the seam answers null, so nothing is forwarded"),
 		Tentacle->MingXiaoTentacleHead());
 	const FElysiumNpcClass* TentacleClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiaoTentacle"));
 	TestEqual(TEXT("CNPC_VMingXiaoTentacle's slot 21 is 0x1039e800"),
 		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
-	TestEqual(TEXT("its slot 22 is 0x1039e830"),
+	TestEqual(TEXT("and its slot 22 is 0x1039e830"),
 		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 22)), FString(TEXT("0x1039e830")));
-	TestEqual(TEXT("and its slot 23 is 0x1039e860"),
-		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 23)), FString(TEXT("0x1039e860")));
 
 	// --- `0x103b9180`, slot 593: the base first, then five literals ------------------------------
 	Tzim->TargetLeadMin = 999.f;
@@ -1350,14 +1294,6 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 		1.0e-06f);
 
 	// `CScriptedTarget::Spawn` (`0x1034d6e0`) is on a class no map stands and carries no port body.
-
-	// --- `0x103681d0` / `0x103682f0`: two EMPTY bodies, and emptiness is the point ---------------
-	// The overrides exist so the base sound hooks do NOT run for a camera (`WiredSlot497` / `506`).
-	const FElysiumNpcClass* CameraClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VCamera"));
-	TestEqual(TEXT("CNPC_VCamera's slot 497 is 0x103681d0"),
-		FString(ElysiumNpcTestCensus::BodyOf(CameraClass, 497)), FString(TEXT("0x103681d0")));
-	TestEqual(TEXT("and its slot 506 is 0x103682f0"),
-		FString(ElysiumNpcTestCensus::BodyOf(CameraClass, 506)), FString(TEXT("0x103682f0")));
 
 	// --- `0x103c3fd0`, slot 588: the base's IsActivityFinished gate is GONE ----------------------
 	// The restart is unconditional; `RestartIdealActivityId` is family Hints' seam and records it.
@@ -1456,34 +1392,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot22Test::RunTest(const FString&)
 	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
 	Cop->Slot22(nullptr);
 	TestTrue(TEXT("slot 22 on a plain Troika NPC raises COND_BEING_ATTACKED"),
-		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot23Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot23", GElysiumNpcKernelSpeciesFlags)
-bool FElysiumNpcKernelSpeciesWiredSlot23Test::RunTest(const FString&)
-{
-	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
-	FElysiumNpcMingXiaoTentacle* Tentacle = ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Fixture.Species);
-	FElysiumNpc* Cop = Fixture.Troika;
-	if (Tentacle == nullptr || Cop == nullptr)
-	{
-		AddError(TEXT("fixture did not stand both sides"));
-		return false;
-	}
-
-	// `0x1039e860`, the third.
-	Tentacle->TentacleHeadForwards = 0;
-	Tentacle->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
-	Tentacle->Slot23(nullptr);
-	TestEqual(TEXT("slot 23 on a tentacle asks its head"), Tentacle->TentacleHeadForwards, 1);
-	TestFalse(TEXT("and the base's condition is not raised"),
-		Tentacle->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
-
-	Cop->Cognition.Conditions.Clear(EElysiumNpcCond::BeingAttacked);
-	Cop->Slot23(nullptr);
-	TestTrue(TEXT("slot 23 on a plain Troika NPC raises COND_BEING_ATTACKED"),
 		Cop->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
 	return true;
 }
@@ -1671,68 +1579,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
 	TestEqual(TEXT("slot 488 on a plain Troika NPC reaches the base, which speaks Death"),
 		SpeciesSpeaksConcept(*Cop, TEXT("Death")), 1);
 	TestEqual(TEXT("and fires no SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot497Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot497", GElysiumNpcKernelSpeciesFlags)
-bool FElysiumNpcKernelSpeciesWiredSlot497Test::RunTest(const FString&)
-{
-	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
-	FElysiumNpcCamera* Camera = ElysiumTestAsSpecies<FElysiumNpcCamera>(Fixture.Species);
-	FElysiumNpc* Cop = Fixture.Troika;
-	if (Camera == nullptr || Cop == nullptr)
-	{
-		AddError(TEXT("fixture did not stand both sides"));
-		return false;
-	}
-
-	// **Both arms are observationally empty here and that is the row's own fact**: `0x103681d0` is
-	// one byte of `ret`, and the Troika body's only effect is a once-only scan of retail's global
-	// response-concept table, which this runtime has no table for (the seam writes -1 into a global
-	// this substrate does not carry). So the assertion is the census body and that both terminate.
-	TestEqual(TEXT("a camera's slot 497 is 0x103681d0"),
-		FString(ElysiumNpcTestCensus::BodyOf(Camera->RetailClass(), 497)), FString(TEXT("0x103681d0")));
-	TestEqual(TEXT("and CNPC_VCameraSecurity inherits the same body"),
-		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VCameraSecurity")), 497)),
-		FString(TEXT("0x103681d0")));
-	Camera->Slot497();   // the empty species arm
-	Cop->Slot497();      // the once-only base arm
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot506Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot506", GElysiumNpcKernelSpeciesFlags)
-bool FElysiumNpcKernelSpeciesWiredSlot506Test::RunTest(const FString&)
-{
-	FSpeciesWiringFixture Fixture(TEXT("CNPC_VCamera"));
-	FElysiumNpcCamera* Camera = ElysiumTestAsSpecies<FElysiumNpcCamera>(Fixture.Species);
-	FElysiumNpc* Cop = Fixture.Troika;
-	if (Camera == nullptr || Cop == nullptr)
-	{
-		AddError(TEXT("fixture did not stand both sides"));
-		return false;
-	}
-
-	// The EMPTINESS of the camera's `0x103682f0` is observable through what the base would have
-	// said: `0x10294e70` speaks the concept `"Target_Reacquired"`, so a camera speaks nothing and
-	// a cop speaks once.
-	//
-	// The probe was the `elysium.stubs` tally when this case was written and slot 506's Troika arm
-	// was still generated; story **29d** (family Sounds10) ported `0x10294e70`, so it now reads the
-	// real body's output instead.
-	ElysiumStub::ClearTally();
-	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
-	Camera->VSoundSpeakCalls.Reset();
-	Cop->VSoundSpeakCalls.Reset();
-
-	Camera->Slot506();
-	TestEqual(TEXT("slot 506 on a camera is empty — the 29d base never runs"),
-		SpeciesSpeaksConcept(*Camera, TEXT("Target_Reacquired")), 0);
-
-	Cop->Slot506();
-	TestEqual(TEXT("slot 506 on a plain Troika NPC reaches the base"),
-		SpeciesSpeaksConcept(*Cop, TEXT("Target_Reacquired")), 1);
 	return true;
 }
 

@@ -3,19 +3,19 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"                  // ElysiumMove::U — the one Source-unit conversion
-#include "ElysiumSaveArchive.h"
-#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumSchedule.h"
 
-// Story 29d, family **SaveRestore10 + Lifecycle10** — slot 126 `Save`, slot 127 `Restore`, slot 180
-// `UpdateOnRemove`, slot 106 `PostConstructor`, the `CAI_BaseNPC` bodies beside them, their species
-// arms, and `RunAlternateAI`'s mode-4 door body.
+// Story 29d, family **SaveRestore10 + Lifecycle10** — slot 180 `UpdateOnRemove` and
+// `RunAlternateAI`'s mode-4 door body.
+//
+// Slots 126 `Save` / 127 `Restore` and their species twins are gone
+// (0019/6): the generated SAVE walk (`FElysiumSaveArchive`, 0019/2) carries every retail SAVE row,
+// and the load-side logic the species twins held runs from each class's `OnPostRestore` (slot 130).
 //
 // Every constant below was read off the decompiled C and, where the decompiler folded or aliased an
-// argument, off the listing — `0x102993c0`'s decode pass and `0x10371a90`'s two census bytes are
-// both listing reads. `ElysiumNpcSaveRestore10.inl` carries the family's reading notes; the
+// argument, off the listing. `ElysiumNpcSaveRestore10.inl` carries the family's reading notes; the
 // walked prose is `docs/vtmb/npc-ai/lifecycle.md`.
 
 namespace
@@ -35,14 +35,6 @@ namespace
 	// `m_toggle_state` (`CBaseDoor +0x4f8`) — the value mode 4's step 2 requires.
 	constexpr int32 GDoorToggleStateClosed = 0;
 
-	// `s_Leaving_interesting_place__UpdateO_105d87d4`, read off the listing at `1028d702`. It is what
-	// settles that `0x102b53d0` is the interesting-place release and not a grapple teardown.
-	const TCHAR* const GLeaveInterestingPlaceReason =
-		TEXT("Leaving interesting place (UpdateOnRemove)");
-
-	// `CBaseCombatCharacter::Restore`'s answer, on the same footing.
-	constexpr int32 GChainRestoreResult = 1;
-
 	// `CAI_BaseNPCTroika::IsInDialog` (`0x102c1170`), the gate `UpdateOnRemove` opens its dialogue
 	// arm with. Four terms: `m_bIsTalking` (`+0x64c0`), the queued dialogue string (`+0x64ec`), the
 	// dialogue partner handle (`+0xfe8`) and the bound speech scene (`+0x6554`). This runtime
@@ -55,225 +47,6 @@ namespace
 		return Npc.Dialogue.bInDialog || Npc.IsTalking(Now);
 	}
 
-}
-
-// -------------------------------------------------------------------------------------------------
-// The sentinel codec — `0x101cf250` and `0x101cf2f0`.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::SaveSoundStampEncode(FElysiumGameSoundEvent& Sound)
-{
-	// `FUN_101b9840` — `thunk_FUN_101cf250((float*)(sound + 0x10), 2)`. `CSound +0x10` is
-	// `m_flExpireTime`, `fieldType 15` (`FIELD_TIME`) in the class's datamap.
-	SaveStampEncode(Sound.ExpireTime, ESaveStampMode::MinusOne);
-}
-
-void FElysiumNpc::SaveSoundStampDecode(FElysiumGameSoundEvent& Sound)
-{
-	// `FUN_101b9860` — the same field at the same mode through `0x101cf2f0`.
-	SaveStampDecode(Sound.ExpireTime, ESaveStampMode::MinusOne);
-}
-
-// -------------------------------------------------------------------------------------------------
-// The CRC32 `AIExtendedSaveHeader_t`'s last word carries — `0x1023f040`, `0x1023f0c0`, `0x1023f060`.
-// -------------------------------------------------------------------------------------------------
-
-// -------------------------------------------------------------------------------------------------
-// The archive seam.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::SaveWriteBool(void* Archive, const TCHAR* Field, bool bValue)
-{
-	// `ISave` vtable `+0x30` — `WriteBool(&value, 1)`.
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::Bool, Field, bValue ? 1 : 0 });
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		bool bLocal = bValue;
-		*Ar << bLocal;
-	}
-}
-
-void FElysiumNpc::SaveWriteInt(void* Archive, const TCHAR* Field, int32 Value)
-{
-	// `ISave` vtable `+0x28` — `WriteInt(&value, 1)`.
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::Int, Field, Value });
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		int32 Local = Value;
-		*Ar << Local;
-	}
-}
-
-bool FElysiumNpc::RestoreReadBool(void* Archive, const TCHAR* Field)
-{
-	// `IRestore` vtable `+0x44` — `ReadBool(&value, 1, 0)`. With no archive the read answers
-	// **false**, which is the arm that skips the two `ReadInt`s; a runtime that never wrote the bool
-	// is a runtime whose pedestrian link was not bound, and that is the same answer.
-	bool bValue = false;
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		*Ar << bValue;
-	}
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::ReadBool, Field, bValue ? 1 : 0 });
-	return bValue;
-}
-
-void FElysiumNpc::RestoreReadInt(void* Archive, const TCHAR* Field, int32& Value)
-{
-	// `IRestore` vtable `+0x3c` — `ReadInt(&value, 1, 0)`. With no archive the destination is left
-	// as it stands, which is retail's own behaviour for a field the archive holds no record of.
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		*Ar << Value;
-	}
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::ReadInt, Field, Value });
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 126 `Save`.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::TroikaSave(void* Archive)
-{
-	// `CAI_BaseNPCTroika::Save` `0x102993c0`. The eleven stamps, in the listing's order, with the
-	// retail field and offset each port member stands for named on its own line. The DECODE pass
-	// walks the identical list: the decompiled C renders its pointers one slot out through EBX and
-	// stack aliasing, but the modes pushed at `1029956f`..`102995e9` read `3,2,2,3,3,3,3,2,2,4,4`,
-	// which is this list.
-	//
-	// Ten of the eleven are `double` on this runtime's leaf and one — `m_flEyeFidgetTime`
-	// (`+0x657c`) — lands on the entity chain as `FElysiumCombatCharacter::NextFidgetTime`, a
-	// `float`, which is why the codec carries both widths.
-	SaveStampEncode(CanSeekCoverTimer, ESaveStampMode::Zero);                    // +0x607c
-	SaveStampEncode(Senses.Memory.SeeUnknownGraceUntil, ESaveStampMode::MinusOne);  // +0x6084
-	SaveStampEncode(MeleeHeightDiffTimer, ESaveStampMode::MinusOne);            // +0x6274
-	SaveStampEncode(OccludedReportTimeE, ESaveStampMode::Zero);                 // +0x62cc
-	SaveStampEncode(OccludedReportTimeT, ESaveStampMode::Zero);                 // +0x62d0
-	SaveStampEncode(OccludedReportTimeW, ESaveStampMode::Zero);                 // +0x62d4
-	SaveStampEncode(ScheduleHost.InterruptTime, ESaveStampMode::Zero);          // +0x632c
-	// `m_flNextInterestChangeTime`. `ElysiumNpcKernelShapeMap.cpp` binds `+0x63d4` to
-	// `FElysiumNpc::AmbientNextActivityAt`, "the interesting-place activity clock".
-	SaveStampEncode(AmbientNextActivityAt, ESaveStampMode::MinusOne);           // +0x63d4
-	SaveStampEncode(WeaponScareTime, ESaveStampMode::MinusOne);                 // +0x63dc
-	SaveStampEncode(IgnoreCollisionUntil, ESaveStampMode::FloatMax);            // +0x6458
-	SaveStampEncode(NextFidgetTime, ESaveStampMode::FloatMax);                  // +0x657c
-
-	// The nine `CAISound` records, in the listing's order (`+0x60b0` up to `+0x6210`, stride 0x2c).
-	SaveSoundStampEncode(Senses.Memory.BestSound);
-	SaveSoundStampEncode(Senses.Memory.InvestigateSound);
-	SaveSoundStampEncode(Senses.Memory.LastSoundDanger);
-	SaveSoundStampEncode(Senses.Memory.LastSoundPhysicsDanger);
-	SaveSoundStampEncode(Senses.Memory.LastSoundCombat);
-	SaveSoundStampEncode(Senses.Memory.LastSoundBulletImpact);
-	SaveSoundStampEncode(Senses.Memory.LastSoundPlayer);
-	SaveSoundStampEncode(Senses.Memory.LastSoundWorld);
-	SaveSoundStampEncode(Senses.Memory.LastSoundFlinch);
-
-	// `CAI_BaseNPC::thunk_FUN_1027bc60(this, param_1)` — a DIRECT call, never a vtable dispatch, so
-	// no species arm can re-enter through it.
-	const int32 Result = FElysiumNpcBase::Save(Archive);
-
-	// `SETNZ AL` on `m_pPedestrianLink` (`+0x630c`), written through `ISave +0x30`; then, only when
-	// it is set, the two ints at `+0x630c+4` and `+0x630c+8`. The shape map records `+0x630c` as
-	// ABSENT in this runtime and family Dialogue stands `bCrosswalkLinkBound` for "is the link
-	// bound", so the bool is that flag and the two ints are the link's saved node pair, which this
-	// runtime already carries as `m_iRestorePedLinkNode` / `m_iRestorePedLinkDestNode` — the exact
-	// two fields slot 127 reads them back into.
-	SaveWriteBool(Archive, TEXT("m_pPedestrianLink"), bCrosswalkLinkBound);
-	if (bCrosswalkLinkBound)
-	{
-		SaveWriteInt(Archive, TEXT("m_pPedestrianLink+4"), RestorePedLinkNode);
-		SaveWriteInt(Archive, TEXT("m_pPedestrianLink+8"), RestorePedLinkDestNode);
-	}
-
-	// The decode pass: the same eleven in the same order with the same modes, then the same nine.
-	SaveStampDecode(CanSeekCoverTimer, ESaveStampMode::Zero);
-	SaveStampDecode(Senses.Memory.SeeUnknownGraceUntil, ESaveStampMode::MinusOne);
-	SaveStampDecode(MeleeHeightDiffTimer, ESaveStampMode::MinusOne);
-	SaveStampDecode(OccludedReportTimeE, ESaveStampMode::Zero);
-	SaveStampDecode(OccludedReportTimeT, ESaveStampMode::Zero);
-	SaveStampDecode(OccludedReportTimeW, ESaveStampMode::Zero);
-	SaveStampDecode(ScheduleHost.InterruptTime, ESaveStampMode::Zero);
-	SaveStampDecode(AmbientNextActivityAt, ESaveStampMode::MinusOne);
-	SaveStampDecode(WeaponScareTime, ESaveStampMode::MinusOne);
-	SaveStampDecode(IgnoreCollisionUntil, ESaveStampMode::FloatMax);
-	SaveStampDecode(NextFidgetTime, ESaveStampMode::FloatMax);
-
-	SaveSoundStampDecode(Senses.Memory.BestSound);
-	SaveSoundStampDecode(Senses.Memory.InvestigateSound);
-	SaveSoundStampDecode(Senses.Memory.LastSoundDanger);
-	SaveSoundStampDecode(Senses.Memory.LastSoundPhysicsDanger);
-	SaveSoundStampDecode(Senses.Memory.LastSoundCombat);
-	SaveSoundStampDecode(Senses.Memory.LastSoundBulletImpact);
-	SaveSoundStampDecode(Senses.Memory.LastSoundPlayer);
-	SaveSoundStampDecode(Senses.Memory.LastSoundWorld);
-	SaveSoundStampDecode(Senses.Memory.LastSoundFlinch);
-
-	// `MOV EAX,[ESP+0x60]` — the base body's answer, stashed before the write pass and reloaded
-	// last. The decompiled C's `return (int)local_4` is the same value under an aliased name.
-	return Result;
-}
-
-int32 FElysiumNpc::Save(void* Archive)
-{
-	// Slot 126, the Troika body. A species class's override replaces it outright (story 5 step 3),
-	// and the bodies that want the Troika body call `TroikaSave` directly — retail's non-virtual
-	// thunk.
-	//
-	// NOTHING IN THIS RUNTIME CALLS `Save()` YET — see the `.inl`'s archive-seam note.
-	return TroikaSave(Archive);
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 127 `Restore`.
-// -------------------------------------------------------------------------------------------------
-
-int32 FElysiumNpc::TroikaRestore(void* Archive)
-{
-	// `CAI_BaseNPCTroika::Restore` `0x10299700`. `CAI_BaseNPC::Restore` (`0x1027c160`) runs FIRST
-	// and its answer is stashed in EBX; everything after it is bookkeeping and the answer comes back
-	// unchanged at `10299851 MOV EAX,EBX`.
-	const int32 Result = RestoreExtendedHeader(Archive);
-
-	// `(**(code**)(*piVar1 + 0x44))(&local, 1, 0)` then, on a true, two `+0x3c` reads into `+0x6310`
-	// and `+0x6314`. The bool is the pedestrian-link flag `TroikaSave` wrote.
-	if (RestoreReadBool(Archive, TEXT("m_pPedestrianLink")))
-	{
-		RestoreReadInt(Archive, TEXT("m_iRestorePedLinkNode"), RestorePedLinkNode);
-		RestoreReadInt(Archive, TEXT("m_iRestorePedLinkDestNode"), RestorePedLinkDestNode);
-	}
-
-	// The same eleven stamps and nine sounds `TroikaSave` encodes, decoded in the same order with
-	// the same modes. Here the decompiled C is unaliased and reads them out field by field, which
-	// is the independent confirmation that `0x102993c0`'s decode list is this one.
-	SaveStampDecode(CanSeekCoverTimer, ESaveStampMode::Zero);
-	SaveStampDecode(Senses.Memory.SeeUnknownGraceUntil, ESaveStampMode::MinusOne);
-	SaveStampDecode(MeleeHeightDiffTimer, ESaveStampMode::MinusOne);
-	SaveStampDecode(OccludedReportTimeE, ESaveStampMode::Zero);
-	SaveStampDecode(OccludedReportTimeT, ESaveStampMode::Zero);
-	SaveStampDecode(OccludedReportTimeW, ESaveStampMode::Zero);
-	SaveStampDecode(ScheduleHost.InterruptTime, ESaveStampMode::Zero);
-	SaveStampDecode(AmbientNextActivityAt, ESaveStampMode::MinusOne);
-	SaveStampDecode(WeaponScareTime, ESaveStampMode::MinusOne);
-	SaveStampDecode(IgnoreCollisionUntil, ESaveStampMode::FloatMax);
-	SaveStampDecode(NextFidgetTime, ESaveStampMode::FloatMax);
-
-	SaveSoundStampDecode(Senses.Memory.BestSound);
-	SaveSoundStampDecode(Senses.Memory.InvestigateSound);
-	SaveSoundStampDecode(Senses.Memory.LastSoundDanger);
-	SaveSoundStampDecode(Senses.Memory.LastSoundPhysicsDanger);
-	SaveSoundStampDecode(Senses.Memory.LastSoundCombat);
-	SaveSoundStampDecode(Senses.Memory.LastSoundBulletImpact);
-	SaveSoundStampDecode(Senses.Memory.LastSoundPlayer);
-	SaveSoundStampDecode(Senses.Memory.LastSoundWorld);
-	SaveSoundStampDecode(Senses.Memory.LastSoundFlinch);
-	return Result;
-}
-
-int32 FElysiumNpc::Restore(void* Archive)
-{
-	// Slot 127, the same prologue shape as slot 126.
-	return TroikaRestore(Archive);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -297,7 +70,8 @@ void FElysiumNpc::LeaveInterestingPlaceOnRemove()
 	// `m_bInterestingPlaceArrived` whether or not a place was held.
 	bAmbientArrived = false;
 	++InterestingPlaceReleases;
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s %s"), *DebugString(), GLeaveInterestingPlaceReason);
+	// The reason string retail hands the release (`0x105d87d4`) only feeds a `DevMsg`, which has no
+	// output device in this port (0019/6).
 }
 
 void FElysiumNpc::StopDialogOnRemove()

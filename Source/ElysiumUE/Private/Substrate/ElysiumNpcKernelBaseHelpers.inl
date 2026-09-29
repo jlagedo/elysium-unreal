@@ -38,7 +38,7 @@
  *  weapon half of that `||` cannot be evaluated; the hint half still is, and the body says so. */
 bool ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const;
 
-/** `0x1029f6c0` — the patrol node's record: the hint the network node `PatrolNode` holds
+/** The patrol node's record: the hint the network node `PatrolNode` holds
  *  (`node+0xa0`, `FElysiumPlaceSet::AttachedHint`), as its entity index. Its `+0x46c` is the
  *  `ip_percent` chance `0x1029f650` rolls against, its pointer what `0x1029f730` caches at `+0x659c`
  *  and its `+0x468` the place name `0x1029f780` resolves. `INDEX_NONE` (retail's 0) for a -1 id, a
@@ -169,3 +169,9 @@ struct FFaceAnimPick
 };
 static FFaceAnimPick FaceAnimLadder(float YawDelta, TFunctionRef<bool(int32)> HasSequence);
 
+/** `CBaseAnimating::GetBonePosition01(name, &pos, &ang)` (`0x1000f263`), read for a value by the
+ *  RunTask, StartTask and Werewolf anim-event rules. **SEAM**: no skeleton is readable from the
+ *  kernel surface; answers false. Re-homed from the deleted Debug10 family (0019 story 6); the body
+ *  is in `ElysiumNpcGeometry.cpp`. */
+bool RetailBonePosition(const TCHAR* BoneName, FVector& OutPositionUnits,
+	FVector& OutAnglesDegrees) const;

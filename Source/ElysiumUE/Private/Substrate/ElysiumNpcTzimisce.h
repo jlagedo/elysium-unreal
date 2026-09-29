@@ -46,8 +46,6 @@ public:
 	virtual void DeathSound() override;
 	virtual void Slot593() override;
 	virtual void NPCInit() override;
-	virtual void StartNPC() override;
-	virtual void Precache() override;
 	virtual int32 NPC_EarlyTranslateActivity(int32 Activity) override;
 	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
 	virtual int32 SelectIdealStateRetail() override;
@@ -57,12 +55,10 @@ public:
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual float MaxYawSpeed() override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
-	// Slot 523 `0x103b6df0` (the stand test's drop, SDK-named `GetMaxJumpSpeed`): 56.0.
-	virtual float GetMaxJumpSpeed() const override;
-	virtual int32 DrawDebugTextOverlays() override;
+	// Slot 523 `0x103b6df0` (the stand test's drop, SDK-named `GetStepDownHeight`): 56.0.
+	virtual float GetStepDownHeight() const override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 	virtual void OnScheduleChange(int32 NewSchedule) override;
 	virtual void JustMadeSound() override;
@@ -102,12 +98,6 @@ public:
 	 *  retail's own unguarded call; then clear the carrying-body flag. */
 	void VGargoyleGibCleanup();
 
-	// From `ElysiumNpcDebug.inl`.
-	/** `CNPC_VTzimisce::GetEventName` (`0x103bdd10`) — slot 241's only species override. Answers the
-	 *  fixed name for anim-event ids 2..8 and null for everything else, which is the caller's signal to
-	 *  fall through to `CBaseAnimating::GetEventName`. */
-	static const TCHAR* TzimisceEventName(int32 EventId);
-
 
 	// From `ElysiumNpcHints.inl`.
 	/** `0x103bfa50` — `CNPC_VTzimisce`'s two-group hint pick (14000 vs 14001 within 200 units, nearer
@@ -125,7 +115,6 @@ public:
 	bool bTzimisceJustFoundBody = false;         // +0x66bc
 	double TzimiscePounceCheckTimer = 0.0;       // +0x66ac
 	double TzimisceShunnedBodyTimer = 0.0;       // +0x66b0
-	int32 TzimisceStartNpcRearms = 0;
 	int32 ExpressionMapResets = 0;           // `0x103b9f50`
 
 	// From `ElysiumNpcMotor.inl`.

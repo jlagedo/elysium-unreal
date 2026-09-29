@@ -1,0 +1,49 @@
+1070d1b0	Vec3Origin	`vec3_origin`, the engine's zero vector global (371 readers, one static-init writer); `DAT_1070d1b0`/`b4`/`b8`	ElysiumNpcBaseStartTask.cpp:1960
+1070d9d0	Vec3ZeroReturn	a second zero-vector global `DAT_1070d9d0..d8` returned through the hidden return pointer of `GetAutoaimVector`	ElysiumNpcEntityChain2.cpp:182
+10934060	NavGoalNoDirection	the zero-vector sentinel `DAT_10934060..68` compared against a path's arrival direction (`0x1030be20`)	ElysiumNpcBaseStartTask.cpp:2053
+1063abcc	UnawareActivityTableA	GhoulCroucher unaware-type to Activity id table, 4 dwords, read by `0x1037b870`	ElysiumNpcGhoulCroucher.cpp:267
+1063abdc	UnawareActivityTableB	GhoulCroucher second unaware-type to Activity id table, 4 dwords, read by `0x1037b890`	ElysiumNpcGhoulCroucher.cpp:268
+106eb5d8	GEntityList	`g_pEntityList`, the global entity list object `AddListenerEntity 0x100f6d80` is called on	ElysiumNpcEntityChain.cpp:352
+10724ef0	PlayerAnimNameBuffer	the 0x100-byte global buffer `0x10182c40` `strcpy`s the sound name into; `+0x1ca4` points at it	ElysiumNpcEntityChain.inl:96
+10566458	EntityHandleResolveTable	`PTR_DAT_10566458`, the handle-resolve table `0x100e49b0` reads a CDialog's first word through	ElysiumNpcEntityChain.inl:170
+10555f7c	AcceptInputName	the string-pointer input name `0x1017c6d0 AcceptInput` is called with (13 referrers)	ElysiumNpcEntityChain2.cpp:355
+1070b228	GpGlobals	`gpGlobals` (`CGlobalVars`), `curtime` at +0xc	ElysiumNpcConditions10Shared.h:53
+1070b22c	EngineServer	the engine server interface `(*DAT_1070b22c + n)` (PEntityOfEntIndex +0x98, entity index +0x8c, `Time()` +0x1dc)	ElysiumNpcBaseSounds.cpp:272
+1070b244	EngineRandomStream	the engine's `IUniformRandomStream`: `RandomFloat` +4, `RandomInt` +8	ElysiumNpcBaseStartTask.cpp:2707
+1070b248	EngineSoundInfo	the engine sound-info interface, `+0x30` the sound-duration query	ElysiumNpcEntityChain.cpp:105
+1070ba0c	GGameRules	`g_pGameRules`; +0x58 `GetAutoAimMode`, +0x80 per-candidate admission, +0xa0 `AllowAutoTargetCrosshair`, slot 74 (+0x128) `FAllowNPCs`	ElysiumNpcBaseSpawn.inl:54
+1070ba3c	AutoaimStickyLatch	the autoaim branch selector `DAT_1070ba3c` (== 1 scales, else blends); shipped hard-coded to 1	ElysiumNpcEntityChain.inl:457
+1070ba40	AutoaimStaticTriple	the file-static triple `_DAT_1070ba40`/`44`/`48` of the autoaim body: one per level	ElysiumNpcDamageShared.h:25
+1072608c	UserMessageIdNpcResponse	the user-message id `UserMessageBegin(filter, DAT_1072608c)` of the NPC response message (engine slot 65)	ElysiumNpcDialogueBodies.cpp:125
+10738d10	TemplateManager	the discipline template manager `0x101d5e80` is called over	ElysiumNpcConditions10.cpp:500
+10739478	DisciplineMaskA	the first lazily cached discipline-10 mask of `FUN_101e3ff0`	ElysiumNpcDamage3.inl:85
+10739484	DisciplineMaskB	the second lazily cached discipline-10 mask of `FUN_101e3ff0`	ElysiumNpcDamage3.inl:86
+10739a25	DisciplineGuardByte	the guard byte whose bits 0 and 1 lazily construct the two discipline masks	ElysiumNpcDamage3.inl:86
+10739a4c	DisciplineRecord	the unnamed discipline record `FUN_101e3ff0/101e3f50/101e3d70(&DAT_10739a4c, this)` operate on	ElysiumNpcDamage3Species.cpp:146
+10739f98	MeleeReactionAttackerCellA	`rules.txt` `Melee_Reactions` runtime-filled attacker cell (`<=` answers 2, `0x1034985e`)	ElysiumNpcDamage.cpp:243
+10739f9c	MeleeReactionAttackerCellB	`Melee_Reactions` runtime-filled attacker cell (`<=` answers 1, `0x10349874`)	ElysiumNpcDamage.cpp:244
+10739fa0	MeleeReactionDefenderCells	`Melee_Reactions` runtime-filled defender cells `_DAT_10739fa0..fac`	ElysiumNpcDamage3.inl:74
+1092053c	GAiDisabled	`g_AIDisabled`, the AI-disabled / ai-step bitfield (bit 0 disabled, bit 1 step mode)	ElysiumNpcBaseThink.cpp:64
+10920550	AiDisabledOverlayStamp	the process-wide throttle stamp of the `A.I. Disabled...` overlay	ElysiumNpcBaseThink.cpp:103
+109253f8	CorpseRegistry	the corpse-query registry `0x102cabd0(DAT_109253f8, this, out, 4)` walks	ElysiumNpcConditions2.inl:51
+10925450	HintListHead	the global CAI_Hint list head, walked through `+0x5d8`	ElysiumNpcChangBros.cpp:379
+10924fb9	NpcIgnorePlayer	byte global toggled by the `npc_ignore_player` console command	ElysiumNpcClosure.cpp:289
+10924fba	NpcIgnoreSenses	byte global toggled by the `npc_ignore_senses` console command	ElysiumNpcClosure.cpp:289
+1093407c	NodeNetwork	the loaded node network `*(m_pNavigator + 0x2c) = DAT_1093407c`	ElysiumNpcBaseStartTask.cpp:2878
+10934088	GAiNetworkManager	`g_pAINetworkManager`; its `+0x658` byte gates the base think	ElysiumNpcBaseThink.inl:31
+1093408c	NodeGraphBuiltByte	the loader byte set when the node graph is loaded or rebuilt (`0x102f5bd0` / `0x102f6610`)	ElysiumNpcBaseThink.cpp:68
+10937cf1	NpcInitLatch	the process-wide in-`NPCInit` latch byte a camera's refused spawn leaves set	ElysiumNpcCamera.cpp:66
+1093ac3c	CopProvokerHandle	the `CNPC_VCop` shared provoker EHANDLE static	ElysiumNpcCop.cpp:218
+1093aca8	CopProvokerExpiry	the `CNPC_VCop` shared provoker expiry stamp static	ElysiumNpcCop.cpp:219
+1093acac	CopAliveCensus	the `CNPC_VCop` process-wide live-cop census static	ElysiumNpcCop.h:60
+1093acb0	CopSecondCensus	the `CNPC_VCop` second process-wide census static	ElysiumNpcCop.h:61
+1093ada8	FrenzyScratchList	the static scratch list (32 entries) `0x10376d00` fills for the Frenzy shadow sweep	ElysiumNpcFrenzyShadow.cpp:224
+1093ae9c	FrenzyScratchCount	the count of `1093ada8`	ElysiumNpcFrenzyShadow.cpp:224
+1093b8b8	ManBatWatchdogPosition	the file-static stationary-watchdog position triple `_DAT_1093b8b8..c0` of `0x1038b370`	ElysiumNpcBosses.inl:193
+1093b8c4	ManBatWatchdogStamp	the watchdog stamp of `0x1038b370`	ElysiumNpcBosses.inl:194
+109f0b2a	EmptyTypedListGuard	the guard byte (bit 0) of the lazily built empty typed list `DAT_109f0b40` (`atexit 0x10012a8a`)	ElysiumNpcCombat10.inl:41
+109f0b40	EmptyTypedList	the lazily built empty typed list every failed type lookup answers	ElysiumNpcCombat10.inl:40
+109f0cc0	TempVectorRing	the temp-vector ring `allocTempVector` indexes `(i+1) & 0x7f`	ElysiumNpcClosure.cpp:186
+106b8540	EmptyString	the shared empty string `STRING()` substitutes for a null string pointer	ElysiumNpcBaseSpawn.cpp:224
+10642d28	LBeamPattern	the `lbeam*` string `CTraceFilterManBatNoIBeamEntity` matches names against	ElysiumNpcBosses.cpp:29
+106c994c	ErrorCounter	the global error counter an out-of-range navigator entity index bumps	ElysiumNpcDialogueBodies.cpp:379

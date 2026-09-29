@@ -15,32 +15,23 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VNewscaster", FElysiumNpc)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual void UpdateOnRemove() override;
 	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
-	virtual int32 DrawDebugTextOverlays() override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
-
-	/** `CNPC_VNewscaster`'s story-queue overlay (`0x103a0ff0`), whose lines the newscaster's slot-124
-	 *  body adds to the SAME budget — the return is a COUNT, not a line index. **SEAM**: the body is
-	 *  family Species' row (band 5–9, `FElysiumNpcNewscaster::FUN_103a0ff0`) and is already ported there; this
-	 *  answers 0 until the two are wired, so the newscaster's return is the Troika body's unchanged. */
-	int32 NewscasterStoryOverlayLines(int32 FirstLine);
 
 	// From `ElysiumNpcSpecies.inl`.
 	// The two queues and their cursors. `CNPC_VNewscaster` has no datamap in the corpus, so every name
 	// here is WALKED off the bodies that touch it (`0x103a0270`, `0x103a0670`, `0x103a0ab0`,
-	// `0x103a0d50`, `0x103a0ff0`) and says so.
+	// `0x103a0d50`) and says so.
 	TArray<FNewscasterStory> NewscasterMainStories;   // +0x665c, count +0x6668 (walked)
 	TArray<FNewscasterStory> NewscasterSideStories;   // +0x6670, count +0x667c (walked)
 	int32 NewscasterPlayingSide = 0;                  // +0x668c — non-zero selects the SIDE queue (walked)
 	int32 NewscasterMainCursor = INDEX_NONE;          // +0x6684 (walked)
 	int32 NewscasterSideCursor = INDEX_NONE;          // +0x6688 (walked)
 	bool bNewscasterStoryActive = false;              // +0x6690, cleared by the teardown (walked)
-	/** `0x103a0d50` / `0x103a0ff0` — `CNPC_VNewscaster`'s story-queue teardown and debug listing. */
+	/** `0x103a0d50` — `CNPC_VNewscaster`'s story-queue teardown. */
 	void FUN_103a0d50();
-	int32 FUN_103a0ff0(int32 FirstLine, TArray<FString>& OutLines) const;
 
 	// From `ElysiumNpcSpeciesMisc10.inl`.
 	/** `CNPC_VNewscaster::PlayNextNewscasterStory` (`0x103a0670`), 302 bytes, no slot.

@@ -1,0 +1,23 @@
+0x10280bb0	hand:FElysiumNpcBase::MaxYawSpeed	slot 516 base line restored as data (45, _DAT_1049949c); regenerate: drop the generated stub body in ElysiumNpcBaseSlots.cpp
+0x10297ce0	hand:FElysiumNpc::MaxYawSpeed	Troika ladder restored (ElysiumNpcMotor.cpp); regenerate: re-emit the slot 516 declaration in ElysiumNpcSlots.inl
+0x10374130	hand:FElysiumNpcDog::MaxYawSpeed	Dog ladder restored
+0x10394930	hand:FElysiumNpcMingXiao::MaxYawSpeed	MingXiao record +0x44/+0x48 (Rules TurnSpeedNormal/TurnSpeedAttack) restored
+0x103ba020	hand:FElysiumNpcTzimisce::MaxYawSpeed	Tzimisce ladder restored
+0x103d0a30	hand:FElysiumNpcWerewolf::MaxYawSpeed	one-line forward to the Troika body restored
+0x10273070	hand:FElysiumNpcBase::SetHullSizeNormal	UTIL_SetSize forwards to IElysiumNpcMotor::SetHullSize
+0x10273180	hand:FElysiumNpcBase::SetHullSizeSmall	UTIL_SetSize forwards to IElysiumNpcMotor::SetHullSize
+0x10278d20	hand:FElysiumNpcBase::AddFacingTarget	reaches IElysiumNpcMotor::SetFacingTarget through MotorAddFacingTarget
+0x10278d90	hand:FElysiumNpcBase::AddFacingTarget	reaches IElysiumNpcMotor::SetFacingTarget through MotorAddFacingTarget
+0x102e20f0	hand:FElysiumNpcBase::MotorAddFacingTarget	forwards the queue head to IElysiumNpcMotor::SetFacingTarget
+0x102e2120	hand:FElysiumNpcBase::MotorAddFacingTarget	forwards the queue head to IElysiumNpcMotor::SetFacingTarget
+0x102e2150	hand:FElysiumNpcBase::MotorAddFacingTarget	forwards the queue head to IElysiumNpcMotor::SetFacingTarget
+0x102e11f0	hand:FElysiumNpcBase::ClearFacingTarget	clears IElysiumNpcMotor::SetFacingTarget
+0x103d0db0	hand:FElysiumNpcWerewolf::WerewolfHasPath	0x102fdcc0 is IElysiumNpcMotor::QueryRoute with StartCm
+0x10379490	hand:FElysiumNpcGargoyle::NavIgnoreCollision	answers registered through SetMoveIgnore by FElysiumNpcBase::RegisterMoveIgnores before each kernel move
+0x10380f90	hand:FElysiumNpcHengeyokai::NavIgnoreCollision	as above
+0x103bfa00	hand:FElysiumNpcTzimisce::NavIgnoreCollision	as above
+0x1028d8d0	hand:FElysiumEntityWorld::RunNetworkManagerFirstThink	vslot 584 on every NPC once at BuildStamp + 0.8 (network manager think 0x102f6a50)
+0x103637b0	Bake	Bach Precache, its tables, declaration and test deleted
+0x1027c160	FElysiumSaveArchive	RestoreExtendedHeader and its test removed
+0x1027bc60	hand:FElysiumNpcBase::Save	one-line forward to SerializeExtendedHeader
+0x1027bb20	UE object construction	body emptied (seam-list word; not a README spelling); slot-106 declaration awaits regeneration as a default stub

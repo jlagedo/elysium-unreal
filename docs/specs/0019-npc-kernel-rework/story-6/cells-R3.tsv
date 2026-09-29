@@ -1,0 +1,4 @@
+address	name	type	value	evidence
+0x10924e94	DebugSlowIdleYawSpeed	convar f32 (EConVar row; object 0x10924e90)	20	debug_slow_idle_yaw_speed, constructed in CAI_BaseNPCTroika::MaxYawSpeed 0x10297ce0 (ctor strings 0x105d902c / 0x1057ba50); shape.md "The yaw-speed ladder"; read by FElysiumNpc::MaxYawSpeed
+0x1092411c	DebugSlowWalkYawSpeed	convar f32 (EConVar row; object 0x10924118)	25	debug_slow_walk_yaw_speed, same ctor pattern (0x105d9008 / 0x105d9028); shape.md; read by FElysiumNpc::MaxYawSpeed
+0x104a6f80	AndreiFacePlayerYawSpeed	f32	10.0	CNPC_VAndreiBlood::FacePlayerAdvance 0x1035e5f0 pushes it as 0x102e20b0 speed argument; read by FElysiumNpcAndreiBlood::FacePlayerAdvance

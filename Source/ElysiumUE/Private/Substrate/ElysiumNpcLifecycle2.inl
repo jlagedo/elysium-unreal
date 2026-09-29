@@ -89,7 +89,7 @@ static FElysiumEntityHandle& FleshpileAndreiSingleton();
 // -------------------------------------------------------------------------------------------------
 
 static constexpr float TeleportMoveTimerFloor = ElysiumNpcTunables::Zero;
-static constexpr float TeleportMoveTimerExtra = 4.f;     // `_DAT_10450aa0`
+static constexpr float TeleportMoveTimerExtra = ElysiumNpcTunables::Four;     // `_DAT_10450aa0`
 static constexpr float SpeciesShunWindowSeconds = 3.f;   // `_DAT_10449258`
 static constexpr float ShootAtHintRearmMin = 2.f;
 static constexpr float ShootAtHintRearmMax = 2.5f;

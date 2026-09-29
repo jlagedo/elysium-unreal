@@ -75,22 +75,16 @@ namespace
 	constexpr TCHAR GAnim10ZombieFemale[] = TEXT("Zombie_Female");  // 0x1063b140
 	constexpr int32 GAnim10ZombieVSoundTableIndex = 2;              // the literal written to +0x00bc
 
-	// `_DAT_104629b8` — the scale `SetDefaultEyeOffset`'s fallback applies to `mins + maxs`.
-	// **UNRECOVERED**: no reader outside `0x10274ca0` and the corpus does not hold the cell. 0.5 is
-	// the SDK's own midpoint of a bounding box and is what makes the fallback an eye at the centre;
-	// the arm is the recovered part, the number is not.
-	constexpr double GAnim10EyeOffsetFallbackScale = 0.5;
-
 	// `_DAT_1049ae9c` — the pitch bias `UpdatePoseParameters` adds before the clamp. **RECOVERED
 	// 2026-09-14** out of the pinned image's `.rdata` as a float: **7.5**. Story 29d's checklist left
 	// it unnamed.
-	constexpr float GAnim10AimPitchBias = 7.5f;
+	constexpr float GAnim10AimPitchBias = ElysiumNpcTunables::AimPitchBias;
 	// `_DAT_1049a180` = -45.0f and `_DAT_1049949c` = 45.0f — the clamp pair, recovered by family
 	// Facing for the turn ladder and read at the same two addresses here.
-	constexpr float GAnim10AimClampLow = -45.0f;
-	constexpr float GAnim10AimClampHigh = 45.0f;
+	constexpr float GAnim10AimClampLow = ElysiumNpcTunables::MinusFortyFive;
+	constexpr float GAnim10AimClampHigh = ElysiumNpcTunables::FortyFive;
 	// `_DAT_104454c4` = 0.0f, the value the no-aim arm writes into `+0x1064`.
-	constexpr float GAnim10Zero = 0.0f;
+	constexpr float GAnim10Zero = ElysiumNpcTunables::Zero;
 
 	// The Auspex aura indices `0x1029e750` answers, with the retail `m_NPCState` that reaches each.
 	constexpr int32 GAnim10AuraNone = -1;

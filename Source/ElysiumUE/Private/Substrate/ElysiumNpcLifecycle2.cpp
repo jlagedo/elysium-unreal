@@ -421,7 +421,7 @@ void FElysiumNpc::TroikaNPCInit()
 	Senses.Memory.SeeUnknownStartTimer = 0.0;                            // 1029a696 +0x60a0
 	MeleeHeightDiffTimer = -1.0;                                         // 1029a69e +0x6274
 	Senses.ResolveTuning(*this);                                         // 1029a6a4 1028fb70
-	// `1029a6a9`: `m_nCurrDisposition = DAT_10924984`. SEAM: that datum has NO writer in the image
+	// `1029a6a9`: `m_nCurrDisposition = DAT_10924984`, a `.bss` cell (`DispositionSeedCell`) with NO writer in the image, so retail seeds 0
 	// — its only reader is this body and its three thunks — so the index it holds is not recoverable
 	// from the corpus. This runtime's disposition is a NAME, applied by
 	// `ApplyDefaultDispositionOnActivate` immediately before this body runs, and is left standing.
@@ -467,7 +467,7 @@ void FElysiumNpc::TroikaStartNPC()
 
 void FElysiumNpc::StartNPC()
 {
-	// `CNPC_VCamera` (`0x10369930`) and `CNPC_VTzimisce` (`0x103b9270`) override slot 422 on their
+	// `CNPC_VCamera` (`0x10369930`) and `CNPC_VTzimisce` (dead body, 0019/6) override slot 422 on their
 	// C++ classes (story 5 step 3).
 	TroikaStartNPC();
 }

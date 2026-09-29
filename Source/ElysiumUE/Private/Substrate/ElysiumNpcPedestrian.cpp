@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcPedestrian.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -52,8 +53,8 @@ namespace
 	// the pinned `vampire.dll`'s `.rdata` (the corpus holds neither cell). `CNPC_VPedestrian`'s two
 	// distance terms are therefore the same 512 units, one against `m_flPlayerDist` and one against
 	// a squared separation.
-	constexpr float GState19_2PedestrianFleeUnits = 512.f;
-	constexpr float GState19_2PedestrianFleeUnitsSq = 262144.f;
+	constexpr float GState19_2PedestrianFleeUnits = ElysiumNpcTunables::FiveHundredTwelve;   // _DAT_10483aac
+	constexpr float GState19_2PedestrianFleeUnitsSq = ElysiumNpcTunables::FiveHundredTwelveSquared;   // _DAT_1049dfe4
 	/** `CNPC_VPedestrian::vfunc461`'s witness block (`0x103a2f1e`, repeated verbatim at
 	 *  `0x103a3068`): the pedestrian that flees a gunshot first REPORTS it —
 	 *  `RecordCriminalWitness` (`0x1028ea60`) with the active weapon's crime level and the player's
@@ -147,7 +148,6 @@ void FElysiumNpcPedestrian::OnRestore(bool bFromLoad)
 int32 FElysiumNpcPedestrian::SelectIdealStateRetail()
 {
 	const int32 State = NpcStateRetail();
-	SelectIdealStateSelector = 0x1d;
 	if (State != 1 && State != 3)
 	{
 		if (State != 8)
@@ -273,16 +273,6 @@ int32 FElysiumNpcPedestrian::IRelationType(FElysiumEntity* Candidate)
 		return NpcKernelConditions10Shared::GCond10_D_FR;
 	}
 	return TroikaIRelationType(Candidate);                               // 103a2960
-}
-
-// Slot 546: `0x103a1fa0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcPedestrian::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093bffc`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VPedestrian"), TEXT("0x103a1fa0"), TEXT("0x1093bffc") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---

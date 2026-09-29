@@ -87,7 +87,7 @@ static float MeleeRangeUnits();
  *  pooled 64.0f (family Schedule's melee height-difference threshold too). */
 static float MeleeHeightDiffLimitUnits();
 
-/** `(*DAT_10924edc)->vfunc1()` — the global melee-ENTERED event slots 599 and 600 fire. It is the
+/** `(*DAT_10924edc)->vfunc1()` — `ent_trace_melee`'s `IsCommand()`, answer dropped (no observable; RE-BACKLOG 41) slots 599 and 600 fire. It is the
  *  same global family **Bosses** counts through `MeleeEventFires`, and this family increments that
  *  counter rather than standing a second one. Declared here only to name the two call sites. */
 

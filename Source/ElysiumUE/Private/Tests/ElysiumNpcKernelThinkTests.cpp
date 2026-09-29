@@ -285,8 +285,9 @@ bool FElysiumNpcKernelThink19EnemyTripleTest::RunTest(const FString&)
 		FacingBefore + 1))
 	{
 		const FElysiumNpcBase::FFacingTargetRequest& Request = N.FacingTargetRequests.Last();
-		TestEqual(TEXT("1.0 (0x10293048)"), Request.Duration, 1.0f);
-		TestEqual(TEXT("0.8 (0x1029303f)"), Request.Ramp, 0.8f, 0.0001f);
+		TestEqual(TEXT("importance 1.0 (0x10293048)"), Request.Importance, 1.0f);
+		TestEqual(TEXT("duration 0.8 (0x1029303f)"), Request.Duration, 0.8f, 0.0001f);
+		TestEqual(TEXT("ramp 0 (0x1029303d)"), Request.Ramp, 0.0f);
 	}
 	return true;
 }
@@ -771,7 +772,7 @@ bool FElysiumNpcKernelThink19MingXiaoTest::RunTest(const FString&)
 	TestFalse(TEXT("0x10394aa2 and bit 31"), M->NpcFlags.HasRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31));
 	if (TestEqual(TEXT("0x10394b03 slot 518 once"), M->FacingTargetRequests.Num(), FacingBefore + 1))
 	{
-		TestEqual(TEXT("0.5 ramp (0x10394aba)"), M->FacingTargetRequests.Last().Ramp, 0.5f);
+		TestEqual(TEXT("0.5 s duration (0x10394aba)"), M->FacingTargetRequests.Last().Duration, 0.5f);
 	}
 	M->MingXiaoThrowableObjectMode = 7;
 	M->NPCThink();

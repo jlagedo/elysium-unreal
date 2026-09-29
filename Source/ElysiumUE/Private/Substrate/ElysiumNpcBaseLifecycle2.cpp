@@ -391,7 +391,7 @@ void FElysiumNpcBase::OnRestore(bool /*bFromLoad*/)
 			// `schedule+0x20` for `schedule+0x24 << 3` bytes, eight per task — compared against the
 			// checksum the save wrote at `+0x1a3c`. A schedule whose task list has CHANGED since
 			// the save is dropped (`1027c068`), which then takes the give-up arm below. This is the
-			// same checksum `SaveWriteFields` already computes through `ScheduleTaskBytes`.
+			// same checksum `BuildExtendedSaveHeader` computes through `ScheduleTaskBytes`.
 			TArray<uint8> TaskBytes;
 			ScheduleTaskBytes(TaskBytes);
 			uint32 Crc = SaveCrc32Init();

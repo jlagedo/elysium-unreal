@@ -440,7 +440,12 @@ out-vector straight to `CAI_Motor` slot 15 (`+0x3c`). `FacingIdeal` (`0x10278c80
 short circuit returning `0.0`, and `UTIL_AngleMod` the usual 16-bit quantisation
 `0.0054931640625f * (int(a * 65536/360) & 65535)` (`_DAT_1044ffdc`).
 
-`CAI_Motor` slot 7 (`0x102e11f0`, 95 bytes) cancels the queue's current entry: `SetIdealYaw(-1)`
+`CAI_Motor` slot 7 (`0x102e11f0`, 95 bytes) is the IN-FLIGHT JUMP STEP, not a facing-queue cancel
+(**CORRECTED 2026-09-29, 0019/6, from the listing**): `UpdateYaw(-1)` (`0x102e1e20`, the stored `m_YawSpeed`),
+then `0x102e26b0` fills three floats and the THIRD (the vertical velocity) is compared against
+`_DAT_104454c4 = 0.0f`; above it the motor dispatches `0x2d` `ACT_LEAP_ASCEND` through its outer NPC's
+vtable `+0x4d8`, else `0x2e` `ACT_LEAP_DESCEND`, and zeroes `+0x30` either way; it returns 0. The earlier
+reading below is kept for the record: it said the slot cancels the queue's current entry: `SetIdealYaw(-1)`
 (`0x102e1e20`), then `0x102e26b0` fills three floats and the second of them is compared against
 `_DAT_104454c4 = 0.0f`; above it the motor dispatches `0x2d` through its outer NPC's vtable `+0x4d8`
 (slot 342) and at or below it `0x2e`, and `motor+0x30` is zeroed either way.
@@ -1344,7 +1349,10 @@ unread. `0x101cda50`'s global entity has no recovered identity — the body take
 
 _Recovered 2026-09-13, story 29c-1._
 
-Slot 516, `MaxYawSpeed`, in degrees per second. The Troika body is what every spawnable species
+Slot 516, `MaxYawSpeed`, in degrees per TENTH of a second (**CORRECTED 2026-09-29, 0019/6**: `UpdateYaw`
+`0x102e1e20` truncates the stored `m_YawSpeed +0x38` to an int at `102e1e2f`, multiplies it by the double
+`_DAT_1044fac0` = 10.0 at `102e1ed2`, and clamps over `curtime - m_flLastYawTime +0x2c` through the engine's
+`AI_ClampYaw` import `0x10009ad9`; a first call takes `curtime - 0.1`. 45 is 450 deg/s.). The Troika body is what every spawnable species
 dispatches to; nine classes replace it.
 
 `CAI_BaseNPCTroika::MaxYawSpeed` (`0x10297ce0`, 471 bytes) tests `m_afMemory (+0x5d8c) & 0x2000`
@@ -2857,6 +2865,15 @@ direction — the owner's `+0x340(0)`, forced activity `0x2c`, then a reissue at
 `UTIL_VecToYaw(goal)` and speed `-1.0`. Slot 8 (`0x102e1270`) is the full stop: `SetAbsVelocity(0,
 0, 0)` and forced activity `0x30`, with no reissue.
 
+_Adders read 2026-09-29 (0019/6):_ slots 12/13/14 (`0x102e2150` both, `0x102e2120` position, `0x102e20f0` entity)
+forward to `0x102d8f20` / `0x102d8e50` / `0x102d8cf0`, all ending in `0x102d9040`, which appends a record
+`{kind, handle, pos[3], +0x14 curtime, +0x18 curtime + duration, +0x1c ramp / duration, +0x20 importance}` with
+the arguments in the order (importance, duration, ramp). Each first removes the FIRST record holding the
+same target: the entity adder only when that record's `+0x1c` is 0, the position adder by exact components,
+the both adder by entity with no ramp test; the two entity adders keep the larger importance when the
+replaced record was added this frame. An entity entry's point is refreshed each blend from the entity's
+slot 193 `EyePosition` (`0x102d8a90`).
+
 Slot 15 (`0x102e2180`) averages the facing queue (`motor+0x54`, stride `0x24`, count at `+0x3c`). It
 first compacts the queue in place, dropping every entry `0x102d8b50` marks expired through
 `0x102e2b10` without advancing the cursor, then walks the survivors accumulating `(target - self) *
@@ -3175,11 +3192,12 @@ screen in any case.
 **Unrecovered:** four things. The caller's `flDelta` (it arrives in the caller's frame); the score's
 three weights (`_DAT_10449198`, `_DAT_10449280` (= **1.0**, float64; read 2026-09-21, `rdata-cells.md`), `_DAT_10449270` (= **0.5**, float64; read 2026-09-21, `rdata-cells.md`), all shared `.rdata` words with no
 value in the corpus) and the frame-local divisor beside them, of which only the SHAPE is recovered —
-a distance term times an off-axis term, smaller is better; `DAT_1070ba3c`, the branch selector, which
-sits exactly where the SDK's sticky-aim test `m_fOldTargetTime + 2.0 < curtime` does; and the two
-blend weights `_DAT_10450a9c` and `_DAT_10451ab8`. Only `_DAT_10457f54 = 0.7` is settled, and it does
-**not** pair with the SDK's 0.4, so Troika retuned the blend and the other two cannot be taken from
-the SDK.
+a distance term times an off-axis term, smaller is better. Settled 2026-09-29: `DAT_1070ba3c`, the
+branch selector, is the **skill level** — `0x101286f0` reads the engine `skill` cvar (1 when absent),
+clamps it to 1..3 and runs `skill%d.cfg`; at skill 1 the deflection (pitch, yaw, roll) is scaled by
+`_DAT_10450a9c` = **0.9** and written back as the retained autoaim, at skills 2 and 3 it is blended
+`old * _DAT_10451ab8 (0.3) + new * _DAT_10457f54 (0.7)`, and `0x101764d0` refuses autoaim altogether
+at skill 3. The 0.7 does **not** pair with the SDK's 0.4: Troika retuned the blend.
 
 ### The held use entity — `0x1017c6d0`
 

@@ -319,7 +319,8 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 		{ TEXT("CNPC_VManBat"),           TEXT("0x1038b100"), 0x100000 },
 		{ TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039c480"), 0x38000 },
 		{ TEXT("CNPC_VSheriffMan"),       TEXT("0x103ae840"), 0x200000 },
-		{ TEXT("CNPC_VWerewolf"),         TEXT("0x103cab50"), 0x1000 },
+		// The Werewolf's row closed at the registry in 0019/6: its answer is asserted, its census body is not.
+		{ TEXT("CNPC_VWerewolf"),         nullptr,              0x1000 },
 	};
 
 	FElysiumNpcWorldBuilder Builder(TEXT("hull_bits_species"), 405);
@@ -343,8 +344,11 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("%s's slot 337 answer"), Row.Class), Npc->GetUsedHullBits(),
 			Row.Answer);
 		// The census cross-check: the override's address is the one `slots.md` records.
-		TestEqual(*FString::Printf(TEXT("%s's slot 337 body"), Row.Class),
-			FString(ElysiumNpcTestCensus::BodyOf(Cls, 337)), FString(Row.Body));
+		if (Row.Body != nullptr)
+		{
+			TestEqual(*FString::Printf(TEXT("%s's slot 337 body"), Row.Class),
+				FString(ElysiumNpcTestCensus::BodyOf(Cls, 337)), FString(Row.Body));
+		}
 	}
 
 	// A class the census gives no slot-337 override answers the Troika line's 1 and nothing else.
@@ -616,6 +620,25 @@ bool FElysiumNpcKernelGeometryFakeHullTest::RunTest(const FString&)
 	TestTrue(TEXT("no enemy resets the fake-hull cache to vec3_origin"),
 		Wolf->WerewolfFakeHullPosUnits.IsNearlyZero());
 	TestEqual(TEXT("and pushes no damage"), Wolf->FakeHullSeams.DamagePushes, 0);
+
+	// `103d9604`..`103d963d`: the enemy side of the overlap is its WORLD-space surrounding bounds
+	// (`m_Collision` `+0x3c`), not its local collision box. With no `Bip01` in this headless world
+	// the fake hull hangs off the zero point; an enemy 3 m away is outside it even though its LOCAL
+	// box (centred on zero) is not, and an enemy standing on the point is inside.
+	Wolf->BaseMemory.Enemy = Other->Handle;
+	Other->Origin = FVector(300.f, 0.f, 0.f);
+	const int32 KnockbacksBefore = Wolf->FakeHullSeams.KnockbackCalls;
+	Wolf->WerewolfFakeHullPosUnits = FVector(1.f, 2.f, 3.f);   // armed
+	Wolf->UpdateFakeHull(12.0);
+	TestEqual(TEXT("an enemy whose world bounds miss the fake hull is not pushed"),
+		Wolf->FakeHullSeams.KnockbackCalls, KnockbacksBefore);
+	Other->Origin = FVector::ZeroVector;
+	Wolf->WerewolfFakeHullPosUnits = FVector(1.f, 2.f, 3.f);   // armed
+	Wolf->UpdateFakeHull(13.0);
+	TestEqual(TEXT("an enemy whose world bounds meet it is knocked back"),
+		Wolf->FakeHullSeams.KnockbackCalls, KnockbacksBefore + 1);
+	Other->Origin = FVector(300.f, 0.f, 0.f);
+	Wolf->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 
 	// The bone seam: with an enemy the body asks for `Bip01`; with none it does not.
 	const int32 BoneCallsBefore = Wolf->BoneWorldPositionCalls;

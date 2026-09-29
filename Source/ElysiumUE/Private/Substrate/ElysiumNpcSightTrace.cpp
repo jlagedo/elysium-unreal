@@ -54,6 +54,10 @@ namespace ElysiumNpcSight
 		Trace.StartCm = Query.EyeCm;
 		Trace.EndCm = Query.TargetCm;
 		Trace.RetailMask = Query.Mask;
+		// `FVisible` constructs `CTraceFilterFVisible` (`0x101075e0`), whose `ShouldHitEntity
+		// 0x10107630` passes an `npc_transparent` entity -- in the world answer too, for a prop. The
+		// lateral pre-check's `CTraceFilterSimpleTwoEnt` (`bNpcsBlock`) has no such gate.
+		Trace.Filter = Query.bNpcsBlock ? EElysiumRetailTraceFilter::Simple : EElysiumRetailTraceFilter::FVisible;
 		if (Query.Looker.IsSet())
 		{
 			Trace.Ignore.Add(Query.Looker);

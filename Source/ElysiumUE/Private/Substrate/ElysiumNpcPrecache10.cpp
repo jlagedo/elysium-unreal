@@ -27,12 +27,9 @@
 
 namespace
 {
-	// --- The words `0x1027bb50` and `0x10298ad0` read -----------------------------------------
+	// --- The words the base and Troika `Precache` bodies read ----------------------------------
 	// `s_models_error_error_mdl_105d90c4` — the Troika body's model fallback.
 	const TCHAR* const GErrorModel = TEXT("models/error/error.mdl");
-	// `s_item_w_unarmed_1055f6bc`, the 15-byte compare (14 characters plus the NUL) the Troika body
-	// runs on `m_altEquipment` after the sentinel test.
-	const TCHAR* const GUnarmedItem = TEXT("item_w_unarmed");
 	// `s_Normal_105c89dc` — the attack-coordinator name slot 608 is dispatched with, last.
 	const TCHAR* const GNormalCoordinator = TEXT("Normal");
 	// `0x101d0f10`'s two reject literals. **UNRECOVERED**: `DAT_105a0410` is compared over three
@@ -80,36 +77,6 @@ FString FElysiumNpc::CharTemplateModelName() const
 // `CAI_BaseNPCTroika::Precache` — `0x10298ad0`, slot 104.
 // -------------------------------------------------------------------------------------------------
 
-FString FElysiumNpc::DialogueSoundDirectory(const FString& Dialog)
-{
-	// `Q_snprintf(buf, 0x104, "sound/character/%s", m_iDialog)` — `s_sound_character__s_105622e4`,
-	// spelled at the call site because `FString::Printf` requires a literal format.
-	FString Buffer = FString::Printf(TEXT("sound/character/%s"), *Dialog);
-
-	// `buf[strlen(buf) - 4] = 0`, read off the listing at `10298bf8`..`10298c04`:
-	//
-	//     LEA EDI,[ESP+0x1c]      ; EDI = buf
-	//     OR ECX,-1 / XOR EAX,EAX / REPNE SCASB / NOT ECX / DEC ECX     ; ECX = strlen(buf)
-	//     LEA EDX,[ESP+0x1c] / SUB EDX,0x4                              ; EDX = buf - 4
-	//     MOV byte ptr [ECX + EDX*1],AL                                 ; buf[strlen - 4] = 0
-	//
-	// **FOUR** characters, not the five the checklist's walk claims. For `m_iDialog` = `"foo.dlg"`
-	// the directory becomes `"sound/character/foo"` — the extension and the dot come off, which is
-	// what makes the glob land on the character's own conversation directory.
-	//
-	// DIVERGENCE, named: a dialog name shorter than four characters makes `strlen(buf) - 4` index
-	// BEFORE the buffer, and retail writes a NUL over its own stack. This port clamps at zero and
-	// answers the empty directory, which `PrecacheDirectory` then refuses on its own empty-name arm.
-	// The prefix is 16 characters long, so `strlen(buf)` is at least 16 for any dialog name at all
-	// and the clamp is unreachable for every authored `dialogname` — it exists so a fixture cannot
-	// corrupt the heap, not to change an answer.
-	const int32 Chop = Buffer.Len() - 4;
-	Buffer = Chop > 0 ? Buffer.Left(Chop) : FString();
-
-	// `Q_strnlwr(buf, strlen(buf))`, recomputed AFTER the chop.
-	return Buffer.ToLower();
-}
-
 void FElysiumNpc::PrecacheDirectory(const FString& Directory, const TCHAR* Extension,
 	bool bStarPrefix, int32 Flag)
 {
@@ -151,7 +118,8 @@ void FElysiumNpc::PrecacheDirectory(const FString& Directory, const TCHAR* Exten
 
 void FElysiumNpc::TroikaPrecache()
 {
-	// `0x10298ad0`, in retail's order.
+	// `0x10298ad0`, in retail's order: the three writes (model fallback, disposition row, attack
+	// coordinator). The precache requests between them are the bake's.
 	//
 	// The model keyfield is read through slot 9 `GetModelName` (vtable `+0x24`) three times to ask
 	// one question: "is it unset or empty". This runtime carries it as `FElysiumEntity::Model`
@@ -166,35 +134,12 @@ void FElysiumNpc::TroikaPrecache()
 		Model = GErrorModel;
 	}
 
-	// `PrecacheModel(model, 0)` and the returned index to slot 10 `SetModelIndex` (vtable `+0x28`).
-	// The index is the engine's; this runtime has no model-index space, so nothing is stored and the
-	// slot is named rather than dispatched — slot 10 is a generated `CBaseEntity` stub too.
-	NpcKernelPrecache10Shared::Precache10Model(*this, *Model, /*Preload=*/0);
-
-	// `m_altEquipment` (`+0x1a98`, this runtime's `AlternateEquipment`): precached unless it is the
-	// sentinel `"0"` or the literal `"item_w_unarmed"`. TWO exclusions here where the base body has
-	// one, and the unarmed exclusion is exact (a 15-byte compare, the string plus its NUL).
-	if (!AlternateEquipment.IsEmpty()
-		&& AlternateEquipment != NpcKernelPrecache10Shared::GNoneSentinel
-		&& AlternateEquipment != GUnarmedItem)
-	{
-		NpcKernelPrecache10Shared::Precache10Other(*this, AlternateEquipment);
-	}
-
-	// `CAI_BaseNPC::thunk_FUN_1027bb50(this)` — a DIRECT call with no argument (`MOV ECX,EBX /
-	// CALL 0x1000eaf7`; the decompiler's `param_1` is the dead `EAX` of the previous call).
-	FElysiumNpcBase::Precache();
-
-	// `m_iDialog` (`+0x0128`, this runtime's `DialogName`): the conversation directory, globbed
-	// twice — `.wav` first, then `.mp3`. Both with `bStarPrefix` SET and the precache flag 0, which
-	// is the opposite pair from `CNPC_VWerewolf`'s two calls to the same function.
-	const FString Dialog = DialogName;
-	if (!Dialog.IsEmpty())
-	{
-		const FString Directory = DialogueSoundDirectory(Dialog);
-		PrecacheDirectory(Directory, NpcKernelPrecache10Shared::GExtWav, /*bStarPrefix=*/true, /*Flag=*/0);
-		PrecacheDirectory(Directory, NpcKernelPrecache10Shared::GExtMp3, /*bStarPrefix=*/true, /*Flag=*/0);
-	}
+	// The acquisitions retail makes next are gone (0019/6, verdict `mechanism`, service `Bake`: this
+	// runtime's assets are baked package references resolved at bake and load, never per NPC):
+	// `PrecacheModel(model, 0)` and slot 10, `UTIL_PrecacheOther(m_altEquipment)` unless it is `"0"`
+	// or `"item_w_unarmed"`, the direct call into `CAI_BaseNPC::Precache` (which only
+	// precaches `m_spawnEquipment`), and the two `sound/character/<dialog>` globs (`.wav`, `.mp3`)
+	// through `0x101d0f10`. What survives is every WORD the body writes that a later rule reads.
 
 	// `*(int*)(this + 0x64e8) = thunk_FUN_100ec640(this)` — `CDispositionTable::PrecacheModel`
 	// (`0x100ec640`) on the singleton at `0x10924980`. Retail walks its rows for this entity's model
@@ -229,9 +174,8 @@ void FElysiumNpc::Precache()
 	// bodies are their classes' overrides (story 5 fold A4), each chaining `CAI_BaseNPC::Precache`.
 	//
 	// Its caller is slot 103: `CAI_BaseNPCTroika::Spawn` (`0x10298d9c`, `TroikaSpawnBody`) and
-	// `CNPC_VCamera::Spawn` (`0x10368b85`), live since story 8 (Spawn19). The body's writes (the
-	// error-model name, the disposition index) are retail's; the acquisition stays the seam
-	// (`IssuePrecache` records), because this substrate acquires assets for the whole map epoch before
-	// any NPC stands (`FElysiumMapActor::PreparePropAndWieldModels`).
+	// `CNPC_VCamera::Spawn` (`0x10368b85`), live since story 8 (Spawn19). What runs is the body's
+	// writes (the error-model name, the disposition index, the coordinator bind); every asset it
+	// names is the bake's (`FElysiumMapActor::PreparePropAndWieldModels` holds the map epoch's).
 	TroikaPrecache();
 }

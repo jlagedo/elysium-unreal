@@ -446,10 +446,11 @@ namespace ElysiumWorldGeometry
 		// always met: the engine hands them to no entity filter (R2 § 2, engine `2006aabe..2006aae5`),
 		// and they wear no bit. The bits are worn by the bodies themselves: the NPC capsule and the
 		// player's hull carry `CharacterMaskBit`, every brush-entity body `MoverMaskBit`, every
-		// entity prop's body `PropMaskBit`.
-		Params.IgnoreMask = static_cast<FMaskFilter>(ElysiumRetailMask::CharacterMaskBit
-			| (Recipe.bMovers ? 0 : ElysiumRetailMask::MoverMaskBit)
-			| (Recipe.bProps ? 0 : ElysiumRetailMask::PropMaskBit));
+		// entity prop's body `PropMaskBit` unless it is `blocks_traces`, and an `npc_transparent`
+		// prop `NpcTransparentMaskBit`, which the `FVisible` filter drops (0019/6,
+		// `CTraceFilterFVisible::ShouldHitEntity 0x10107630`).
+		Params.IgnoreMask = static_cast<FMaskFilter>(ElysiumRetailMask::QueryIgnoreMask(Recipe,
+			Request.Filter == EElysiumRetailTraceFilter::FVisible));
 
 		ElysiumWorldGeometryDetail::TraceWorld(World, Q, Recipe, Request, Params, ToHandle, Out);
 		if (Recipe.bCharacters)

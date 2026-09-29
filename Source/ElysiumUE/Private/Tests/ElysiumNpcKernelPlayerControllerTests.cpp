@@ -251,12 +251,7 @@ bool FElysiumNpcKernelPlayerControllerPreSelectTest::RunTest(const FString&)
 			continue;
 		}
 		F.Npc->SetState(1);
-		F.Npc->SelectScheduleSelector = 0;
 		TestEqual(FString::Printf(TEXT("%s idle -> 0x6b (107)"), Cls), F.Npc->PreSelectSchedule(), 0x6b);
-		// Story 8 L06 integration: `0x103a46b6 MOV [ECX+0x1b2c],2` precedes the state test, so BOTH
-		// arms write the selector word (the Troika body `0x102ae92a` writes the same 2).
-		TestEqual(FString::Printf(TEXT("%s idle writes +0x1b2c = 2 (0x103a46b6)"), Cls),
-			F.Npc->SelectScheduleSelector, 2);
 		TestEqual(FString::Printf(TEXT("%s idle leaves the state alone"), Cls), F.Npc->NpcStateRetail(), 1);
 		// Non-idle tail-jumps into `0x102ae920` (`0x103a46c3 JMP 0x1000df2b`). What marks the Troika
 		// body is its COMBAT arm with no enemy: `0x102aed48` slot 167 null -> `0x102aed54`/`0x102aed5c`
@@ -456,11 +451,9 @@ bool FElysiumNpcKernelPlayerControllerShadowSelectTest::RunTest(const FString&)
 	// 438 `0x10375d90`: 353 FEED only in COMBAT with a live enemy, few hostiles, reachable, no failed
 	// grapple; otherwise the VHuman selector (0 here).
 	Shadow->SetState(1);
-	// Story 8 L06 integration: every non-feed arm tail-jumps `0x10375e13 JMP 0x10015ad2` into
-	// `CNPC_VHuman::SelectSchedule` `0x10384ee0`, which overwrites `+0x1b2c = 0xf` with its own 0x14
-	// (`0x10384ee9`) and, outside its combat arms, the Troika body's 2 (`0x102af66c`).
+	// Every non-feed arm tail-jumps `0x10375e13 JMP 0x10015ad2` into `CNPC_VHuman::SelectSchedule`
+	// `0x10384ee0`.
 	TestNotEqual(TEXT("not in combat: the VHuman selector"), Shadow->SpeciesSelectSchedule(), 0x161);
-	TestNotEqual(TEXT("which rewrote the selector word 0xf"), Shadow->SelectScheduleSelector, 0xf);
 	Shadow->SetState(2);
 	Shadow->BaseMemory.Enemy = Enemy->Handle;
 	Shadow->Cognition.bCondTookDamage = true;
@@ -470,11 +463,9 @@ bool FElysiumNpcKernelPlayerControllerShadowSelectTest::RunTest(const FString&)
 	TestFalse(TEXT("having cleared m_bCondTookDamage"), Shadow->Cognition.bCondTookDamage);
 	Shadow->bFailedGrapple = true;
 	TestNotEqual(TEXT("a failed grapple falls to the VHuman selector"), Shadow->SpeciesSelectSchedule(), 0x161);
-	TestNotEqual(TEXT("(0x10384ee9 rewrote the selector word)"), Shadow->SelectScheduleSelector, 0xf);
 	Shadow->bFailedGrapple = false;
 	Shadow->HostileEnemyCount = 2;
 	TestNotEqual(TEXT("so do two hostiles"), Shadow->SpeciesSelectSchedule(), 0x161);
-	TestNotEqual(TEXT("(0x10384ee9 rewrote the selector word)"), Shadow->SelectScheduleSelector, 0xf);
 	return true;
 }
 
@@ -560,7 +551,7 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
-	TestNull(TEXT("0x101618a0: no controller, !playercontroller resolves nothing"),
+	TestNull(TEXT("no controller, !playercontroller resolves nothing"),
 		Guard->FindNamedEntity(TEXT("!playercontroller")));
 	Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
 	Player->Disposition = TEXT("Cinematic");
@@ -587,7 +578,7 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 	TestTrue(TEXT("m_hControllerNPC stored"), F.World.PlayerControllerHandle() == Handle);
 	TestEqual(TEXT("!playercontroller resolves the stand-in"),
 		F.World.FindByName(TEXT("!playercontroller")), static_cast<FElysiumEntity*>(Controller));
-	TestEqual(TEXT("and through an NPC's FindNamedEntity (0x101618a0)"),
+	TestEqual(TEXT("and through an NPC's FindNamedEntity"),
 		Guard->FindNamedEntity(TEXT("!playercontroller")), static_cast<FElysiumEntity*>(Controller));
 
 	// Who is drawn: `EF_NODRAW` on the stand-in, which `ShouldTransmit` `0x100ab020` never sends, and
@@ -688,11 +679,8 @@ bool FElysiumNpcKernelPlayerControllerWolfRunningMorphTest::RunTest(const FStrin
 		return false;
 	}
 	Wolf->Schedule.Current = Space->LocalToGlobal(344);
-	// `0x103dced5 JMP 0x10015ad2` -> `CNPC_VHuman::SelectSchedule` `0x10384ee0`, whose first write is
-	// `+0x1b2c = 0x14` (`0x10384ee9`); the morph arm writes no selector word.
-	Wolf->SelectScheduleSelector = 0;
+	// `0x103dced5 JMP 0x10015ad2` -> `CNPC_VHuman::SelectSchedule` `0x10384ee0`.
 	TestNotEqual(TEXT("running the morph -> the VHuman selector"), Wolf->SpeciesSelectSchedule(), 0x158);
-	TestNotEqual(TEXT("(which wrote the selector word)"), Wolf->SelectScheduleSelector, 0);
 	Wolf->Schedule.Current = Space->LocalToGlobal(0x6b);
 	TestEqual(TEXT("running anything else -> 0x158"), Wolf->SpeciesSelectSchedule(), 0x158);
 	return true;

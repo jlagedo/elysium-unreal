@@ -15,7 +15,6 @@ public:
 
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
 	virtual int32 SelectIdealStateRetail() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 
 	// Own datamap words (`CNPC_VAnimal`). The three keys a map authors on every animal leaf; no

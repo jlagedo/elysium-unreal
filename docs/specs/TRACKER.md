@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 09 closed 2026-09-29; row 10 is moved, row 11 is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 11 closed 2026-09-29; row 12 is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29) · 0019/6 (row 11 closed 2026-09-29).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -305,7 +305,18 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 ## C — close 0019
 
 - **10 · 0019/5** — moved to row 06b (2026-09-23).
-- [ ] **11 · 0019/6** — The deletions (dead rows) and the mechanism seams (Motor, Navigator, traces, push-outs). L · Opus/high.
+- [x] **11 · 0019/6** — The deletions (dead rows) and the mechanism seams (Motor, Navigator, traces, push-outs). L · Opus/high. **Landed 2026-09-29.**
+  - *Dead 653 / 653 closed; mechanism 330 / 372* (42 kept `hand:` bodies, RE-BACKLOG 43); inline cells 438 → 0
+    (the tunables overlay 114 → 526 rows, every one re-read from the image); `unported.tsv` 450 → 393.
+  - *The seams:* floor facts, move-ignore, has-path, hull size, facing target, yaw speed, a route query with a
+    start; the `FVisible` blocker cell; the render-mode / solid-`0x20` filter arms and the prop keyfields
+    `blocks_traces` / `npc_transparent`; the slot-584 one-shot. Slot 523 is `GetStepDownHeight`.
+  - *Re-verdicts:* ten species `GetUsedHullBits`, `GetLocalTaskId`, `OnRestore 0x1027bf50` are `rule`.
+  - *Live check:* tutorial and `sm_hub_1` idle, 0 ensure / assert, no closed slot fired, pedestrians walk, the
+    patrol cops fail 0xc at link 731 as at row 09 (row 13). Detail: the spec's story 6 "Landed" paragraph.
+  - *Handed on:* RE-BACKLOG 40–43 are read and banked (the motor's points, wave 4's reads incl. the skill-level
+    autoaim arm and the 150 Tzimisce sentinel, 0010 / 0015's flinch and knockback tuples, the kept bodies'
+    service map in `seam-list.md`); the ports behind 42 and 43 stay with 0010 / 0015 and 0002. Row 12 is next.
   Row 09 handed it: `MoveLimit`'s jump / fly / climb arms and `TestGroundMove`'s per-step stand
   chain (a NavMesh raycast stands in for the ground arm, named); the nav filter arms
   (`CNavPropertyDatabase`, slot 91, gamerules groups); the `StandardFilterRules` arms not carried

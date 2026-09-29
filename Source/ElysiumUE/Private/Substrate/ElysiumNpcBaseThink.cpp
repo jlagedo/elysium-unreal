@@ -22,7 +22,7 @@ namespace
 {
 	// `DAT_105c9798`, the `ai_step` debug-index floor `0x1026c3d0` compares `+0x5f40` against; -1 in
 	// the pinned image (family Maintain19 reads the same cell, `FElysiumNpc::FreezeForAiStep`).
-	constexpr int32 GThink19AiStepIndexFloor = -1;
+	constexpr int32 GThink19AiStepIndexFloor = ElysiumNpcTunables::AiStepIndexFloor;
 
 	// `_DAT_10920550`: the process-wide throttle stamp of the "A.I. Disabled..." overlay.
 	double GThink19AiDisabledOverlayAt = 0.0;
@@ -47,10 +47,9 @@ bool FElysiumNpcBase::Think19AiNetworkReady() const
 //  - fires the engine event `ai_node_graph_built` (owner: 0018 story 7, the node-graph / link events);
 //  - `0x102cc900`, the dynamic-link init (`info_node_link` WC-id -> index via `0x102f6d10`, then `0x102ccce0`;
 //    `initialstate` takes effect here, docs/vtmb/entity_io.md:2072) (owner: 0018 story 7, the links);
-//  - `0x1028d8d0`, vslot 584 (`0x1028d910`) on every NPC, then re-bases `m_flLast{,Update,Normal,Move,AI}Think`
-//    to curtime, the Last* stamps the cadence laws read (owner: 0019 story 6, the mechanism seams; the port's
-//    `ResetThinkTimers`, ElysiumEntityWorld.cpp:844, is the existing re-base but is not tied to this moment).
-// None is wired to `BuildStampSeconds() + AiNetworkFirstThinkDelay`; nothing here fires or runs them.
+// The think's third call, `0x1028d8d0` (vslot 584 on every Troika NPC), is WIRED: a world event, not a
+// per-NPC pass, so it runs from `FElysiumEntityWorld::RunNetworkManagerFirstThink` once per build stamp
+// (0019/6). The two above are not wired to `BuildStampSeconds() + AiNetworkFirstThinkDelay`.
 
 void FElysiumNpcBase::Think19BaseCacheInterruptConditions()
 {
@@ -119,7 +118,7 @@ void FElysiumNpcBase::NPCThink()
 	// classname at +0x26c or ""), popped at 0x1026cbec / 0x1026ccfd: instrumentation, absent.
 	// 0x1026caf1..0x1026cb03 (0x1026caf9): `m_bDumpDebugBuffer` (+0x5b55) set -> clear it and dump the ring
 	// `0x1027efb0`. The byte is an ABSENT word (story 29b; the shape map's ABSENT row), so the arm
-	// cannot fire here; the dump body is `DumpDebugLogRing`.
+	// cannot fire here and the dump body is not ported.
 	Think19BaseCacheInterruptConditions();                                  // 0x1026cb0a 0x1026a0f0
 	// `m_flNextThink = curtime + 0.1` (the DOUBLE at 0x104493d0), BEFORE every gate.
 	NextThink = static_cast<float>(Now + ElysiumNpcTunables::TenthDouble); // 0x1026cb14..0x1026cb1d

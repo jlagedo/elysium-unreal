@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Substrate/ElysiumNpcVampireBoss.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 // `CNPC_VAsianVampire` (primary vtable `0x104a935c`), built by `npc_VAsianVampire` factory
 // `0x103602f0`.
@@ -15,15 +16,13 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VAsianVampire", FElysiumNpcVampireBoss)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual void TaskFail(int32 Reason) override;
 	virtual int32 SelectScheduleRangedCombat(int32 Arg) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
-	virtual int32 Restore(void* Archive) override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;   // `CNPC_VAsianVampire::restore`'s load-side half
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
@@ -45,7 +44,7 @@ public:
 	void AddHintToStoredJumpPositions(const FHintWords& Hint);
 
 	// From `ElysiumNpcLifecycle2.inl`.
-	static constexpr float AsianVampireJumpGravity = 2.f;    // `_DAT_104a9300`
+	static constexpr float AsianVampireJumpGravity = ElysiumNpcTunables::AsianVampireJumpGravity;
 	/** `CNPC_VAsianVampire::m_bPathBlocked` (`+0x66d4`): cleared by `NPCInit` `0x10360ce0`, raised by
 	 *  `TaskFail` `0x10362390` on failure codes 12..15. (`m_bSuppressRanged` `+0x66e8` is family
 	 *  Schedule's `bSuppressRanged`.) */

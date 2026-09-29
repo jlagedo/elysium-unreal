@@ -62,7 +62,7 @@ bool AElysiumNpcBody::BeginNavigationJump(ANavLinkProxy* Link, const FVector& De
 		|| Velocity.Size2D() <= UE_SMALL_NUMBER)
 		return false;
 	const float FlightTime = float(FVector::Dist2D(Start, Destination) / Velocity.Size2D());
-	// Retail 0x102eece0 performs its directional move probe before SetNavType(Jump).
+	// Retail's `MoveJump` performs its directional move probe before SetNavType(Jump).
 	// Unreal supplies the trajectory points and capsule queries at this service boundary.
 	if (!CapsuleArcIsClear(this, Start, Destination, Velocity, FlightTime)) return false;
 
@@ -71,7 +71,7 @@ bool AElysiumNpcBody::BeginNavigationJump(ANavLinkProxy* Link, const FVector& De
 	bNavigationJumpInProgress = true;
 	bNavigationJumpLanded = false;
 	bNavigationJumpFailed = false;
-	NavigationType = EElysiumNpcNavType::Jump; // retail MoveJump 0x102eece0 -> 0x102eeba0(1)
+	NavigationType = EElysiumNpcNavType::Jump; // retail MoveJump -> 0x102eeba0(1)
 	Movement->Activate();
 	// Discard the walker's last requested acceleration without aborting the smart link.
 	// Detour's default bAffectFallingVelocity=false then leaves this flight to the capsule.

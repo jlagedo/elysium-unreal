@@ -6,9 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 20 generated slot bodies of `FElysiumAnimatingOverlay`: 1 carry the retail default story 29c
-// recovered, 10 are defined by hand in the substrate, and 9 are still stubs — 3 29c, 1 29d, 5
-// unassigned.
+// 19 generated slot bodies of `FElysiumAnimatingOverlay`: 1 carry the retail default story 29c
+// recovered, 3 are defined by hand in the substrate, and 8 are still stubs — 3 29c, 5 unassigned. 7
+// are closed (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -107,15 +107,6 @@ float FElysiumAnimatingOverlay::StudioFrameAdvance(float)
 	return {};
 }
 
-// slot 255 0x10098eb0 (walked) `void GetSkeleton(Vector*, Quaternion*, int)`
-//   takes `Quaternion*`
-//   layer 13, story 29d
-void FElysiumAnimatingOverlay::GetSkeleton(FVector*, void*, int32)
-{
-	FireAnimatingOverlaySlot(TEXT("CBaseAnimatingOverlay::GetSkeleton"), TEXT("0x10098eb0"),
-		TEXT("29d"), DebugString());
-}
-
 // slot 258 0x10098c80 (walked) `void DispatchAnimEvents(float, CBaseAnimating*)`
 //   layer 2, story 29c
 void FElysiumAnimatingOverlay::DispatchAnimEvents(float, FElysiumEntity*)
@@ -126,8 +117,11 @@ void FElysiumAnimatingOverlay::DispatchAnimEvents(float, FElysiumEntity*)
 
 // slot 265 0x10099690 (walked) `void AddFlinchGesture(Activity, float, float, const char*, float)`
 //   layer 6, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::AddFlinchGesture`, written by hand in
-// the substrate. Declared here, defined there.
+void FElysiumAnimatingOverlay::AddFlinchGesture(int32, float, float, const TCHAR*, float)
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 266 0x100997f0 (walked) `void vfunc266()`
 //   layer 0, story 29c
@@ -144,18 +138,28 @@ int32 FElysiumAnimatingOverlay::GetFirstGestureLayer()
 
 // slot 268 0x10099020 (walked) `void SetLayer(int, Activity, int, bool)`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::SetLayer`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumAnimatingOverlay::SetLayer(int32, int32, int32, bool)
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 269 0x10099660 (walked) `void RemoveLayer(int)`
 //   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::RemoveLayer`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumAnimatingOverlay::RemoveLayer(int32)
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 270 0x10099540 (walked) `bool HasLayer(Activity)`
 //   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::HasLayer`, written by hand in the
-// substrate. Declared here, defined there.
+bool FElysiumAnimatingOverlay::HasLayer(int32)
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 271 0x100994c0 (walked) `int FindLayerByOwner(Activity)`
 //   layer 1, story 29c
@@ -164,13 +168,20 @@ int32 FElysiumAnimatingOverlay::GetFirstGestureLayer()
 
 // slot 272 0x10099470 (walked) `int AllocateLayer()`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::AllocateLayer`, written by hand in
-// the substrate. Declared here, defined there.
+int32 FElysiumAnimatingOverlay::AllocateLayer()
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 273 0x10099570 (walked) `void RestartGesture(Activity, bool, bool)`
 //   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::RestartGesture`, written by hand in
-// the substrate. Declared here, defined there.
+void FElysiumAnimatingOverlay::RestartGesture(int32, bool, bool)
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 274 0x100995e0 (walked) `void RemoveLayerByOwner(Activity)`
 //   layer 2, story 29c
@@ -179,8 +190,11 @@ int32 FElysiumAnimatingOverlay::GetFirstGestureLayer()
 
 // slot 275 0x10099630 (walked) `void RemoveAllGestures()`
 //   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumAnimatingOverlay::RemoveAllGestures`, written by hand
-// in the substrate. Declared here, defined there.
+void FElysiumAnimatingOverlay::RemoveAllGestures()
+{
+	// verdict `mechanism`, closed at `0015` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 namespace ElysiumNpcKernelShape
 {
@@ -221,16 +235,12 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, float(float)>::Test(&FElysiumAnimatingOverlay::StudioFrameAdvance),
 				nullptr },
-			{ 255, TEXT("0x10098eb0"), TEXT("CBaseAnimatingOverlay"), TEXT("GetSkeleton"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(FVector*, void*, int32)>::Test(&FElysiumAnimatingOverlay::GetSkeleton),
-				nullptr },
 			{ 258, TEXT("0x10098c80"), TEXT("CBaseAnimatingOverlay"), TEXT("DispatchAnimEvents"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(float, FElysiumEntity*)>::Test(&FElysiumAnimatingOverlay::DispatchAnimEvents),
 				nullptr },
 			{ 265, TEXT("0x10099690"), TEXT("CBaseAnimatingOverlay"), TEXT("AddFlinchGesture"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, float, float, const TCHAR*, float)>::Test(&FElysiumAnimatingOverlay::AddFlinchGesture),
 				nullptr },
 			{ 266, TEXT("0x100997f0"), TEXT("CBaseAnimatingOverlay"), TEXT("Slot266"),
@@ -242,15 +252,15 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::GetFirstGestureLayer),
 				[](FElysiumAnimatingOverlay& Receiver) -> int64 { return static_cast<int64>(Receiver.GetFirstGestureLayer()); } },
 			{ 268, TEXT("0x10099020"), TEXT("CBaseAnimatingOverlay"), TEXT("SetLayer"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, int32, int32, bool)>::Test(&FElysiumAnimatingOverlay::SetLayer),
 				nullptr },
 			{ 269, TEXT("0x10099660"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveLayer"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32)>::Test(&FElysiumAnimatingOverlay::RemoveLayer),
 				nullptr },
 			{ 270, TEXT("0x10099540"), TEXT("CBaseAnimatingOverlay"), TEXT("HasLayer"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, bool(int32)>::Test(&FElysiumAnimatingOverlay::HasLayer),
 				nullptr },
 			{ 271, TEXT("0x100994c0"), TEXT("CBaseAnimatingOverlay"), TEXT("FindLayerByOwner"),
@@ -258,11 +268,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32(int32)>::Test(&FElysiumAnimatingOverlay::FindLayerByOwner),
 				nullptr },
 			{ 272, TEXT("0x10099470"), TEXT("CBaseAnimatingOverlay"), TEXT("AllocateLayer"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::AllocateLayer),
 				nullptr },
 			{ 273, TEXT("0x10099570"), TEXT("CBaseAnimatingOverlay"), TEXT("RestartGesture"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32, bool, bool)>::Test(&FElysiumAnimatingOverlay::RestartGesture),
 				nullptr },
 			{ 274, TEXT("0x100995e0"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveLayerByOwner"),
@@ -270,7 +280,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void(int32)>::Test(&FElysiumAnimatingOverlay::RemoveLayerByOwner),
 				nullptr },
 			{ 275, TEXT("0x10099630"), TEXT("CBaseAnimatingOverlay"), TEXT("RemoveAllGestures"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void()>::Test(&FElysiumAnimatingOverlay::RemoveAllGestures),
 				nullptr },
 		};

@@ -156,7 +156,7 @@ void EmitNamedWav(const FElysiumEntity* Emitter, int32 Channel, const TCHAR* Wav
 
 // --- `CNPC_VVampireBoss` — `0x103c63c0`, `0x103c6a00`, `0x103c6a20`, `0x103c6f40` ---------------
 
-// --- `CNPC_VWerewolf` — `0x103ce750` (slot 448), `0x103d0db0`, `0x103d5130` (slot 76), `0x103d9f90`
+// --- `CNPC_VWerewolf` — `0x103ce750` (slot 448), `0x103d0db0`, slot 76 (dead overlay, 0019/6), `0x103d9f90`
 
 /** Each `WerewolfHasPath` ask, with both endpoints, so a case can read that the forward happened
  *  while the seam refuses. */

@@ -45,7 +45,6 @@ namespace
 	constexpr EElysiumNpcCond GShadowCondTwoHostiles = static_cast<EElysiumNpcCond>(0x79);
 
 	// `SelectSchedule` `0x10375d90`.
-	constexpr int32 GShadowSelectTraceId = 0xf;               // `+0x1b2c = 0xf`
 	constexpr int32 GShadowSelectLine = 0x133;
 	constexpr int32 GShadowSchedFeed = 0x161;                 // 353 SCHED_VFRENZYSHADOW_FEED
 
@@ -64,7 +63,7 @@ namespace
 	constexpr int32 GShadowTaskTurnB = 0x124;
 	constexpr int32 GShadowTaskAttemptFeed = 0x14a;           // 330 TASK_VFRENZYSHADOW_ATTEMPT_FEED
 	constexpr uint32 GShadowMeleeWeaponBits = 0x18000u;       // `(uVar3 & 0x18000) != 0`
-	constexpr double GShadowGoalToleranceScale = 0.2;         // `_DAT_10449198` (a double: `FMUL double ptr`)
+	constexpr double GShadowGoalToleranceScale = ElysiumNpcTunables::FifthDouble;         // `_DAT_10449198` (a double: `FMUL double ptr`)
 	constexpr int32 GShadowWeaponDispatchArg0 = 0xf18;        // `0x10376052 PUSH 0xf18`
 	constexpr int32 GShadowActTurnPrimary = 0x13;             // the first activity the turn asks for
 	constexpr int32 GShadowActTurnFallback = 9;
@@ -321,7 +320,6 @@ int32 FElysiumNpcFrenzyShadow::SpeciesSelectSchedule()
 	//      `m_bFailedGrapple` -> trace `:0x133` and answer `0x161` (353 SCHED_VFRENZYSHADOW_FEED);
 	// every other arm tail-jumps `0x10375e13 JMP 0x10015ad2` -> `CNPC_VHuman::SelectSchedule`
 	// `0x10384ee0` (story 8 Select19).
-	SelectScheduleSelector = GShadowSelectTraceId;                 // 0x10375d99
 	if (NpcStateRetail() != GShadowRetailStateCombat)             // 0x10375da3 / 0x10375da6
 	{
 		return FElysiumNpcHuman::SpeciesSelectSchedule();          // 0x10375e13
@@ -709,21 +707,11 @@ FElysiumEntity* FElysiumNpcFrenzyShadow::BestEnemy()
 	return Best;
 }
 
-// Slot 546: `0x10375440`, the class's own squad-slot id space.
-const TCHAR* FElysiumNpcFrenzyShadow::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093ae28`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VFrenzyShadow"), TEXT("0x10375440"), TEXT("0x1093ae28") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 599: `0x10376b70`.
 bool FElysiumNpcFrenzyShadow::Slot599(int32 Arg)
 {
 	// The WHOLE body, twenty-six bytes:
-	//     (*DAT_10924edc)->vfunc1();      // the global melee-entered event, FIRST
+	//     (*DAT_10924edc)->IsCommand();      // ent_trace_melee's parent, answer dropped, FIRST
 	//     m_bInMelee = 1;
 	//     return <whatever was in EAX>;
 	// It drops EVERY gate the Troika line has — the frenzied bits, the melee-enter timer, the range

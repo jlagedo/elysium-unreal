@@ -29,10 +29,6 @@
 
 namespace
 {
-	// `0x105cde88` "E:\Vampire\main\dlls\AI_BaseNPC_Schedule.cpp", the `+0x1b30` file every exit of
-	// this body stamps.
-	const TCHAR* const GBaseSelectFile = TEXT("AI_BaseNPC_Schedule.cpp");
-
 	// `0x1049a1a0` f64 = 60.0 — the case-3 facing test's scale (`0x1028a5d1 FMUL double ptr`). Not a
 	// row of `ElysiumNpcKernelTunables.h` (its 60.0 is the f32 cell `0x104492a4`, a different cell);
 	// read out of the pinned image by the packet's Globals section.
@@ -67,14 +63,13 @@ namespace
 	constexpr int32 GBaseSchedDieRagdoll = ElysiumSched::SCHED_DIE_RAGDOLL;  // 0x2c
 	constexpr int32 GBaseSchedFail = ElysiumSched::FAIL;                     // 0x43
 
-}
+	// `m_flFieldOfView` (`+0x1574`), the cone half-angle cosine the case-3 facing test reads. Story 29c-1's
+	// view-cone arm answers this word from the sense layer's default cone, which is the same question.
+	float RetailFieldOfViewDot(const FElysiumNpc& Npc)
+	{
+		return Npc.FieldOfViewDot;
+	}
 
-int32 FElysiumNpcBase::SelectTrace(const TCHAR* File, int32 Line, int32 Answer)
-{
-	// `+0x1b30 = __FILE__`, `+0x1b34 = __LINE__` — ABSENT words; the account goes to the trace.
-	RecordScheduleEvent(FString::Printf(TEXT("SelectSchedule sel %d %s:0x%x -> 0x%x"),
-		SelectScheduleSelector, File, Line, Answer));
-	return Answer;
 }
 
 bool FElysiumNpcBase::SelectBecomeClientRagdoll()
@@ -89,7 +84,6 @@ bool FElysiumNpcBase::SelectBecomeClientRagdoll()
 
 int32 FElysiumNpcBase::SelectNewScheduleRetail()
 {
-	SelectScheduleSelector = 0;                     // 0x1028a263 MOV [ESI+0x1b2c],0
 	const int32 Pre = PreSelectSchedule();          // 0x1028a26d CALL [EAX+0x6d4], slot 437
 	if (Pre != 0)                                   // 0x1028a275 TEST EAX,EAX
 	{
@@ -110,7 +104,6 @@ int32 FElysiumNpcBase::SelectNewScheduleRetail()
 
 int32 FElysiumNpcBase::BaseSelectSchedule()
 {
-	SelectScheduleSelector = 1;                     // 0x1028a389 MOV [ESI+0x1b2c],1
 	const FElysiumNpcConditions& Cond = Cognition.Conditions;
 	const TCHAR* Warning = nullptr;
 	switch (NpcStateRetail())                       // 0x1028a383 / 0x1028a396 JA / 0x1028a39c table
@@ -125,28 +118,28 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			|| Cond.Has(EElysiumNpcCond::HearBulletImpact)  // 0x1028a3ff CALL / 0x1028a406
 			|| Cond.Has(EElysiumNpcCond::HearPlayer))       // 0x1028a410 CALL / 0x1028a417
 		{
-			return SelectTrace(GBaseSelectFile, 0xe5b, GBaseSchedAlertFace);   // 0x1028a4c9
+			return GBaseSchedAlertFace;   // 0x1028a4c9
 		}
 		if (Cond.Has(EElysiumNpcCond::GiveWay))             // 0x1028a421 CALL / 0x1028a428
 		{
-			return SelectTrace(GBaseSelectFile, 0xe60, GBaseSchedGiveWay);     // 0x1028a42a
+			return GBaseSchedGiveWay;     // 0x1028a42a
 		}
 		if (NavigatorPathType() == 0)                       // 0x1028a44b CALL 0x102ee620 / 0x1028a452
 		{
-			return SelectTrace(GBaseSelectFile, 0xe65, ElysiumSched::IDLE_STAND);  // 0x1028a454
+			return ElysiumSched::IDLE_STAND;  // 0x1028a454
 		}
 		if (Cond.Has(EElysiumNpcCond::LightDamage)          // 0x1028a473 CALL / 0x1028a47a
 			&& SelectWeightedSequenceForActivity(GBaseSelectActSmallFlinch) != INDEX_NONE)  // 0x1028a48a
 		{
 			Cognition.bCondTookDamage = false;              // 0x1028a48c
-			return SelectTrace(GBaseSelectFile, 0xe6b, ElysiumSched::SMALL_FLINCH);  // 0x1028a493
+			return ElysiumSched::SMALL_FLINCH;  // 0x1028a493
 		}
-		return SelectTrace(GBaseSelectFile, 0xe70, ElysiumSched::IDLE_WALK);   // 0x1028a4ae
+		return ElysiumSched::IDLE_WALK;   // 0x1028a4ae
 	case 2:                                         // 0x1028a639 — COMBAT
 	{
 		if (Cond.Has(EElysiumNpcCond::NewEnemy))                    // 0x1028a63d CALL / 0x1028a644
 		{
-			return SelectTrace(GBaseSelectFile, 0xe9d, GBaseSchedWakeAngry);   // 0x1028a646
+			return GBaseSchedWakeAngry;   // 0x1028a646
 		}
 		if (Cond.Has(EElysiumNpcCond::EnemyDead))           // 0x1028a665 CALL / 0x1028a66e
 		{
@@ -166,7 +159,7 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			&& SelectWeightedSequenceForActivity(GBaseSelectActSmallFlinch) != INDEX_NONE)  // 0x1028a6d1
 		{
 			Cognition.bCondTookDamage = false;              // 0x1028a6d3
-			return SelectTrace(GBaseSelectFile, 0xeb4, ElysiumSched::SMALL_FLINCH);  // 0x1028a6da
+			return ElysiumSched::SMALL_FLINCH;  // 0x1028a6da
 		}
 		FElysiumEntity* const Enemy = GetEnemy();           // 0x1028a6fa slot 167
 		if (IRelationType(Enemy) == GBaseSelectDispositionFear)   // 0x1028a703 slot 404 / 0x1028a711
@@ -175,11 +168,11 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 				&& !Cond.Has(EElysiumNpcCond::LightDamage)      // 0x1028a720 CALL / 0x1028a727
 				&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a72d CALL / 0x1028a734
 			{
-				return SelectTrace(GBaseSelectFile, 0xec5, GBaseSchedFearFace);   // 0x1028a736
+				return GBaseSchedFearFace;   // 0x1028a736
 			}
 			Cognition.bCondTookDamage = false;              // 0x1028a755
 			FearSound();                                    // 0x1028a75c slot 492
-			return SelectTrace(GBaseSelectFile, 0xec1, GBaseSchedRunFromEnemy);   // 0x1028a762
+			return GBaseSchedRunFromEnemy;   // 0x1028a762
 		}
 		if (!Cond.Has(EElysiumNpcCond::SeeEnemy))           // 0x1028a77d CALL / 0x1028a786
 		{
@@ -187,40 +180,40 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			// COMBAT_FACE).
 			if (!Cond.Has(EElysiumNpcCond::EnemyOccluded))  // 0x1028a78a CALL / 0x1028a79b
 			{
-				return SelectTrace(GBaseSelectFile, 0xecf, GBaseSchedCombatFace);   // 0x1028a79d
+				return GBaseSchedCombatFace;   // 0x1028a79d
 			}
-			return SelectTrace(GBaseSelectFile, 0xed4, GBaseSchedChaseEnemy);      // 0x1028a7ae
+			return GBaseSchedChaseEnemy;      // 0x1028a7ae
 		}
 		if (Cond.Has(EElysiumNpcCond::TooCloseToAttack))    // 0x1028a7c1 CALL / 0x1028a7c8
 		{
-			return SelectTrace(GBaseSelectFile, 0xed9, GBaseSchedBackAwayFromEnemy);         // 0x1028a7ca
+			return GBaseSchedBackAwayFromEnemy;         // 0x1028a7ca
 		}
 		if (Cond.Has(EElysiumNpcCond::CanRangeAttack1))     // 0x1028a7e9 CALL / 0x1028a7f0
 		{
-			return SelectTrace(GBaseSelectFile, 0xee0, GBaseSchedRangeAttack1);     // 0x1028a7f2
+			return GBaseSchedRangeAttack1;     // 0x1028a7f2
 		}
 		if (Cond.Has(EElysiumNpcCond::CanRangeAttack2))     // 0x1028a811 CALL / 0x1028a818
 		{
-			return SelectTrace(GBaseSelectFile, 0xee4, GBaseSchedRangeAttack2);     // 0x1028a81a
+			return GBaseSchedRangeAttack2;     // 0x1028a81a
 		}
 		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack1))     // 0x1028a839 CALL / 0x1028a840
 		{
-			return SelectTrace(GBaseSelectFile, 0xee8, GBaseSchedMeleeAttack1);     // 0x1028a842
+			return GBaseSchedMeleeAttack1;     // 0x1028a842
 		}
 		if (Cond.Has(EElysiumNpcCond::CanMeleeAttack2))     // 0x1028a861 CALL / 0x1028a868
 		{
-			return SelectTrace(GBaseSelectFile, 0xeec, GBaseSchedMeleeAttack2);     // 0x1028a86a
+			return GBaseSchedMeleeAttack2;     // 0x1028a86a
 		}
 		if (Cond.Has(EElysiumNpcCond::NotFacingAttack))     // 0x1028a889 CALL / 0x1028a890
 		{
-			return SelectTrace(GBaseSelectFile, 0xef0, GBaseSchedCombatFace);       // 0x1028a892
+			return GBaseSchedCombatFace;       // 0x1028a892
 		}
 		// 0x1028a8b8 / 0x1028a8c5 — re-tests 0x4f and 0x51, which the ladder above has already
 		// answered, so this pair is always false here: retail's own dead half, reproduced.
 		if (!Cond.Has(EElysiumNpcCond::CanRangeAttack1)     // 0x1028a8b1 CALL / 0x1028a8b8
 			&& !Cond.Has(EElysiumNpcCond::CanMeleeAttack1)) // 0x1028a8be CALL / 0x1028a8c5
 		{
-			return SelectTrace(GBaseSelectFile, 0xef6, GBaseSchedChaseEnemy);      // 0x1028a8c7
+			return GBaseSchedChaseEnemy;      // 0x1028a8c7
 		}
 		Warning = TEXT("No suitable combat schedule!\n");  // 0x1028a8e2
 		break;
@@ -229,7 +222,7 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 		if (Cond.Has(EElysiumNpcCond::EnemyDead)            // 0x1028a4e8 CALL / 0x1028a4ef
 			&& SelectWeightedSequenceForActivity(GBaseSelectActEnemyDead) != INDEX_NONE)  // 0x1028a4ff
 		{
-			return SelectTrace(GBaseSelectFile, 0xe79, GBaseSchedAlertScan);  // 0x1028a501
+			return GBaseSchedAlertScan;  // 0x1028a501
 		}
 		if (!Cond.Has(EElysiumNpcCond::LightDamage)         // 0x1028a520 CALL / 0x1028a527
 			&& !Cond.Has(EElysiumNpcCond::HeavyDamage))     // 0x1028a531 CALL / 0x1028a538
@@ -240,9 +233,9 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 				&& !Cond.Has(EElysiumNpcCond::HearBulletImpact) // 0x1028a565 CALL / 0x1028a56c
 				&& !Cond.Has(EElysiumNpcCond::HearCombat))      // 0x1028a572 CALL / 0x1028a579
 			{
-				return SelectTrace(GBaseSelectFile, 0xe95, GBaseSchedAlertStand);   // 0x1028a57b
+				return GBaseSchedAlertStand;   // 0x1028a57b
 			}
-			return SelectTrace(GBaseSelectFile, 0xe91, GBaseSchedAlertFace);        // 0x1028a596
+			return GBaseSchedAlertFace;        // 0x1028a596
 		}
 		{
 			Cognition.bCondTookDamage = false;              // 0x1028a5b7
@@ -252,44 +245,44 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			// base-only NPC stands no such word and never enters ALERT (CAI_TestHull and the cine
 			// directors), so it reads 0 — a crash guard, not a rule.
 			const FElysiumNpc* const Troika = AsNpc();
-			const double Fov = Troika != nullptr ? static_cast<double>(Troika->RetailFieldOfViewDot()) : 0.0;
+			const double Fov = Troika != nullptr ? static_cast<double>(RetailFieldOfViewDot(*Troika)) : 0.0;
 			const double Threshold = (ElysiumNpcTunables::OneDouble - Fov) * GBaseSelectFacingScale;
 			if (FMath::Abs(static_cast<double>(MotorDeltaIdealYaw())) < Threshold)   // 0x1028a5e0
 			{
-				return SelectTrace(GBaseSelectFile, 0xe82, ElysiumSched::TAKE_COVER_FROM_ORIGIN);  // 0x1028a5e2
+				return ElysiumSched::TAKE_COVER_FROM_ORIGIN;  // 0x1028a5e2
 			}
 			if (SelectWeightedSequenceForActivity(GBaseSelectActSmallFlinch) != INDEX_NONE)  // 0x1028a615
 			{
-				return SelectTrace(GBaseSelectFile, 0xe86, ElysiumSched::ALERT_SMALL_FLINCH);  // 0x1028a617
+				return ElysiumSched::ALERT_SMALL_FLINCH;  // 0x1028a617
 			}
-			return SelectTrace(GBaseSelectFile, 0xe89, GBaseSchedAlertFace);            // 0x1028a628
+			return GBaseSchedAlertFace;            // 0x1028a628
 		}
 	case 4:                                         // 0x1028a92c — SCRIPT
 		// 0x1028a935 / 0x1028a950 / 0x1028a955 — `m_hCine` (`+0x5d74`) resolves to a live entity.
 		if (ResolveCine() != nullptr)
 		{
-			return SelectTrace(GBaseSelectFile, 0xf13, GBaseSchedAiScript);         // 0x1028a991
+			return GBaseSchedAiScript;         // 0x1028a991
 		}
 		// 0x1028a959 GetClassname / 0x1028a966 DevWarning(2, ...)
 		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Script failed for %s"),   // 0x105ce0d4
 			Def != nullptr ? *Def->Classname : TEXT(""));
 		FElysiumScriptedSequence::CineCleanup(*this);   // 0x1028a971 CALL 0x1027d170
-		return SelectTrace(GBaseSelectFile, 0xf10, ElysiumSched::IDLE_STAND);       // 0x1028a976
+		return ElysiumSched::IDLE_STAND;       // 0x1028a976
 	case 6:                                         // 0x1028a3ad
-		return SelectTrace(GBaseSelectFile, 0xe51, ElysiumSched::IDLE_STAND);
+		return ElysiumSched::IDLE_STAND;
 	case 7:                                         // 0x1028a8ec — DEAD
 		if (SelectBecomeClientRagdoll())                    // 0x1028a8f7 / 0x1028a908
 		{
-			return SelectTrace(GBaseSelectFile, 0xf04, GBaseSchedDieRagdoll);       // 0x1028a90a
+			return GBaseSchedDieRagdoll;       // 0x1028a90a
 		}
-		return SelectTrace(GBaseSelectFile, 0xf06, GBaseSchedDie);                  // 0x1028a91b
+		return GBaseSchedDie;                  // 0x1028a91b
 	case 0xc:                                       // 0x1028a9ac
-		return SelectTrace(GBaseSelectFile, 0xf17, ElysiumSched::IDLE_STAND);
+		return ElysiumSched::IDLE_STAND;
 	default:                                        // 0x1028a9c7 (5, 8..0xb and > 0xc)
 		Warning = TEXT("Invalid State for SelectSchedule!\n");
 		break;
 	}
 	// 0x1028a9ce DevWarning(2, message), then line 0xf21 and FAIL.
 	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s"), Warning);
-	return SelectTrace(GBaseSelectFile, 0xf21, GBaseSchedFail);                     // 0x1028a9d7
+	return GBaseSchedFail;                     // 0x1028a9d7
 }

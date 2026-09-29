@@ -310,7 +310,10 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnZombieTest::RunTest(const FStr
 }
 
 // =================================================================================================
-// Slot 127 `Restore` — `CNPC_VAndreiBlood` `0x1035cf80` and `CNPC_VChangBros` `0x1036b170`.
+// Slot 127 `Restore`'s load-side half — `CNPC_VAndreiBlood` and `CNPC_VChangBros`,
+// over `CNPC_VVampireBoss::Restore`. Since 0019/6 the archive half is the
+// generated SAVE walk and these writes run from each class's `OnPostRestore`, so both cases drive
+// the real persistence path: `Freeze` on one world, `ApplySnapshot` on a second.
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest,
@@ -318,39 +321,31 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodR
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FString&)
 {
-	FSpeciesLifecycle10Fixture Fix(TEXT("CNPC_VAndreiBlood"));
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
+	FSpeciesLifecycle10Fixture From(TEXT("CNPC_VAndreiBlood"));
+	FSpeciesLifecycle10Fixture To(TEXT("CNPC_VAndreiBlood"));
+	if (!TestNotNull(TEXT("the source spawned"), From.Species)
+		|| !TestNotNull(TEXT("the destination spawned"), To.Species))
 	{
 		return false;
 	}
-	FElysiumNpcAndreiBlood& N = *ElysiumTestAsSpecies<FElysiumNpcAndreiBlood>(Fix.Species);
-
-	// The census row: `CNPC_VAndreiBlood#127` is `0x1035cf80`, and family SaveRestore10's arm table
-	// now names this body rather than routing the row to the base.
-	const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(TEXT("CNPC_VAndreiBlood"));
-	if (TestNotNull(TEXT("the census carries CNPC_VAndreiBlood"), Cls))
+	// Andrei's `Restore` has ONE call between its scope-frame push and pop, `CNPC_VVampireBoss::Restore`:
+	// the observable load-side half is the base's reset, and Andrei writes no datum of his own.
+	for (FSpeciesLifecycle10Fixture* Fix : { &From, &To })
 	{
-		TestEqual(TEXT("its slot 127 is 0x1035cf80"),
-			FString(ElysiumNpcTestCensus::BodyOf(Cls, 127)), FString(TEXT("0x1035cf80")));
+		FElysiumNpcAndreiBlood& N = *ElysiumTestAsSpecies<FElysiumNpcAndreiBlood>(Fix->Species);
+		N.VampireBossMonsterModelName = TEXT("models/character/monster/andrei.mdl");
+		N.VampireBossMonsterClassname = TEXT("npc_VAndreiBlood");
+		N.BodyEmitterNames[0] = TEXT("andrei_powerup_emitter");
+		N.JumpGravity = 9.0f;
 	}
+	ElysiumRoundTripSnapshot(From.World.World, To.World.World);
 
-	// `0x1035cf80` has ONE call between its scope-frame push and pop, and it is
-	// `CNPC_VVampireBoss::Restore`. So the whole observable body is the base's post-load reset, and
-	// this species row carries no restore-time datum of its own. That is the recovered fact — an
-	// EMPTY row, not an unwalked body.
-	N.VampireBossMonsterModelName = TEXT("models/character/monster/andrei.mdl");
-	N.VampireBossMonsterClassname = TEXT("npc_VAndreiBlood");
-	N.BodyEmitterNames[0] = TEXT("andrei_powerup_emitter");
-	N.JumpGravity = 9.0f;
-	const int32 Result = N.Restore(nullptr);
-
-	TestEqual(TEXT("the row answers the base body's result verbatim"), Result, 1);
-	TestTrue(TEXT("the base ran: m_pMonsterModelName is nulled"),
+	FElysiumNpcAndreiBlood& N = *ElysiumTestAsSpecies<FElysiumNpcAndreiBlood>(To.Species);
+	TestTrue(TEXT("the base reset ran: m_pMonsterModelName is nulled"),
 		N.VampireBossMonsterModelName.IsEmpty());
-	TestTrue(TEXT("the base ran: ClearBodyEmitterNames"), N.BodyEmitterNames[0].IsEmpty());
-	TestEqual(TEXT("the base ran: m_pszMonsterClassname reset to the literal"),
+	TestTrue(TEXT("the base reset ran: ClearBodyEmitterNames"), N.BodyEmitterNames[0].IsEmpty());
+	TestEqual(TEXT("the base reset ran: m_pszMonsterClassname reset to the literal"),
 		N.VampireBossMonsterClassname, FString(TEXT("npc_VVampireBoss")));
-	// And nothing of its own: Andrei's sibling bosses all write a jump gravity here; he does not.
 	TestEqual(TEXT("and Andrei's row writes NO datum of its own — m_fJumpGravity is untouched"),
 		N.JumpGravity, 9.0f);
 	return true;
@@ -361,44 +356,38 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10ChangBrosRes
 bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FString&)
 {
 	// One body, three classes — `CNPC_VChangBros`, `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw`
-	// all carry `0x1036b170` at slot 127. Each brother is its own NPC in its own world, spawned by
-	// its own classname, with the same fields stood before its `Restore`.
+	// all carry one `Restore` body. Each brother round-trips in its own pair of worlds.
 	const TCHAR* const Brothers[] = {
 		TEXT("CNPC_VChangBros"), TEXT("CNPC_VChangBrosBlade"), TEXT("CNPC_VChangBrosClaw") };
 	for (const TCHAR* Brother : Brothers)
 	{
-		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Brother);
-		if (!TestNotNull(FString::Printf(TEXT("the census carries %s"), Brother), Cls))
+		FSpeciesLifecycle10Fixture From(Brother);
+		FSpeciesLifecycle10Fixture To(Brother);
+		if (!TestNotNull(FString::Printf(TEXT("the %s source spawned"), Brother), From.Species)
+			|| !TestNotNull(FString::Printf(TEXT("the %s destination spawned"), Brother), To.Species))
 		{
 			continue;
 		}
-		TestEqual(FString::Printf(TEXT("%s's slot 127 is the shared 0x1036b170"), Brother),
-			FString(ElysiumNpcTestCensus::BodyOf(Cls, 127)), FString(TEXT("0x1036b170")));
-
-		FSpeciesLifecycle10Fixture Fix(Brother);
-		if (!TestNotNull(FString::Printf(TEXT("the %s subject spawned"), Brother), Fix.Species))
+		for (FSpeciesLifecycle10Fixture* Fix : { &From, &To })
 		{
-			continue;
+			FElysiumNpcChangBros& N = *ElysiumTestAsSpecies<FElysiumNpcChangBros>(Fix->Species);
+			N.VampireBossMonsterModelName = TEXT("models/character/monster/chang.mdl");
+			N.JumpGravity = 0.f;
+			N.BodyEmitterNames[0] = FString();
+			N.BodyEmitterNames[1] = FString();
+			N.BodyEmitterNames[2] = FString();
+			N.BodyEmitterNames[3] = TEXT("untouched");
 		}
-		FElysiumNpcChangBros& N = *ElysiumTestAsSpecies<FElysiumNpcChangBros>(Fix.Species);
-		N.VampireBossMonsterModelName = TEXT("models/character/monster/chang.mdl");
-		N.JumpGravity = 0.f;
-		N.BodyEmitterNames[0] = FString();
-		N.BodyEmitterNames[1] = FString();
-		N.BodyEmitterNames[2] = FString();
-		N.BodyEmitterNames[3] = TEXT("untouched");
+		ElysiumRoundTripSnapshot(From.World.World, To.World.World);
 
-		const int32 Result = N.Restore(nullptr);
-
-		// `1036b1e3 MOV EDI,EAX` … `1036b210 MOV EAX,EDI` — the base's answer is kept and returned.
-		TestEqual(FString::Printf(TEXT("%s returns the base's result"), Brother), Result, 1);
+		FElysiumNpcChangBros& N = *ElysiumTestAsSpecies<FElysiumNpcChangBros>(To.Species);
 		TestTrue(FString::Printf(TEXT("%s ran the base reset"), Brother),
 			N.VampireBossMonsterModelName.IsEmpty());
 		// `_DAT_104ada44` = 2.3f, read at file offset 0x4ada44 of the pinned vampire.dll.
-		TestEqual(FString::Printf(TEXT("%s sets m_fJumpGravity (+0x64b8) = 2.3f"), Brother),
+		TestEqual(FString::Printf(TEXT("%s re-seeds m_fJumpGravity (+0x64b8) = 2.3f"), Brother),
 			N.JumpGravity, 2.3f);
 		// Indices 0 and 1 BOTH take the powerup emitter; index 2 the spine one; index 3 is never
-		// written by this body, and `ClearBodyEmitterNames` inside the base is what empties it.
+		// written by this body, and `ClearBodyEmitterNames` inside the base reset empties it.
 		TestEqual(FString::Printf(TEXT("%s emitter 0"), Brother), N.BodyEmitterNames[0],
 			FString(TEXT("chang_powerup_emitter")));
 		TestEqual(FString::Printf(TEXT("%s emitter 1 is the SAME name as 0"), Brother),
@@ -850,7 +839,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 }
 
 // =================================================================================================
-// The two destructors — `CNPC_VAndreiBlood` `0x1035cd00` and `CNPC_VWerewolf` `0x103ca7c0`.
+// The two destructors — `CNPC_VAndreiBlood` `0x1035cd00` and `CNPC_VWerewolf`'s.
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest,
@@ -902,55 +891,6 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest::RunTest(const FS
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10WerewolfDestroyTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.DestroyWerewolf", GSpeciesLifecycle10TestFlags)
-bool FElysiumNpcKernelSpeciesLifecycle10WerewolfDestroyTest::RunTest(const FString&)
-{
-	FSpeciesLifecycle10Fixture Fix(TEXT("CNPC_VWerewolf"));
-	if (!TestNotNull(TEXT("the subject spawned"), Fix.Species))
-	{
-		return false;
-	}
-	FElysiumNpcWerewolf& N = *ElysiumTestAsSpecies<FElysiumNpcWerewolf>(Fix.Species);
-
-	// The one thing outside the object the body touches: `DAT_1093fac4` and the `werewolf_show_debug`
-	// ConVar behind it, both driven to 0.
-	FElysiumNpc::WerewolfShowDebug() = 1;
-	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::WerewolfShowDebug, 1.f);
-	N.OutputListDestroys = 0;
-
-	// `+0x6714` / `+0x6720` is the hint-data array, not an unnamed vector: `InitializeHintData`
-	// (`0x103d7710`) fills it and four `GetHint*` bodies read it, and family Hints already carries it
-	// as `WerewolfHintGroundpoints` with the 0x48-byte record the walk quotes.
-	N.WerewolfHintGroundpoints.SetNum(3);
-
-	N.DestroyWerewolf();
-
-	TestEqual(TEXT("DAT_1093fac4 is driven back to 0"), FElysiumNpc::WerewolfShowDebug(), 0);
-	TestEqual(TEXT("and so is the werewolf_show_debug ConVar"),
-		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::WerewolfShowDebug), 0);
-	ElysiumNpcTunables::ResetConVars();
-	// The five outputs: `m_OnTeleportIn`, `m_OnTeleportOut`, `m_OnFinishCrushAnimation`,
-	// `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.
-	TestEqual(TEXT("five output lists are torn down"), N.OutputListDestroys, 5);
-	TestEqual(TEXT("the hint-data vector is emptied"), N.WerewolfHintGroundpoints.Num(), 0);
-	// The walk is BACKWARDS from `count - 1`, which is the recovered order and not a `Reset()`.
-	if (TestEqual(TEXT("and three records were visited"), N.WerewolfHintTeardownOrder.Num(), 3))
-	{
-		TestEqual(TEXT("descending: 2, 1, 0"),
-			FString::Printf(TEXT("%d,%d,%d"), N.WerewolfHintTeardownOrder[0],
-				N.WerewolfHintTeardownOrder[1], N.WerewolfHintTeardownOrder[2]),
-			FString(TEXT("2,1,0")));
-	}
-
-	// An empty vector takes the loop zero times and still resets the debug pair.
-	FElysiumNpc::WerewolfShowDebug() = 1;
-	N.OutputListDestroys = 0;
-	N.DestroyWerewolf();
-	TestEqual(TEXT("an empty hint array visits nothing"), N.WerewolfHintTeardownOrder.Num(), 0);
-	TestEqual(TEXT("the debug reset is unconditional"), FElysiumNpc::WerewolfShowDebug(), 0);
-	TestEqual(TEXT("and the five outputs go either way"), N.OutputListDestroys, 5);
-	return true;
-}
+// `DestroyWerewolf` (the Werewolf destructor) was removed in 0019/6; its test went with it.
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

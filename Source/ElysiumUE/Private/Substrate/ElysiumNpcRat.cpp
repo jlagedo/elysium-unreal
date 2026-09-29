@@ -38,21 +38,6 @@ FVector FElysiumNpcRat::HeadDirection3D()
 	return BodyDirection3D();
 }
 
-// Slot 428: `0x103ad6a0`, a replacement that does not chain.
-/** `CNPC_VRat::vfunc428` (`0x103ad6a0`) — the body of `FElysiumNpcRat::CreateLocalNavigator`. */
-void* FElysiumNpcRat::CreateLocalNavigator()
-{
-	// `CNPC_VRat::vfunc428` `0x103ad6a0`, the body of `FElysiumNpcRat::CreateLocalNavigator`: the
-	// SAME SIZE as the base's (`operator new(0x20)`) with a different constructor (`0x103ad540`). A
-	// rat's local navigator is a different type of the same shape, which is why the size alone does
-	// not identify the row.
-	//
-	// SEAM: `+0x5d38` is folded into the same motor seam as the base body's.
-	LastComponentFactoryBody = TEXT("0x103ad6a0");
-	++ComponentFactoryRefusals;
-	return nullptr;
-}
-
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcRat::RatIgnoredGlobalEntity() const

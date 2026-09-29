@@ -48,8 +48,8 @@ namespace
 
 	// `_DAT_1049a1f4` = 0.1f SOURCE units, the Z lift applied to the trace start and subtracted back
 	// off the destination; `_DAT_1049a1f8` = 40.0f, the push speed in SOURCE units per second.
-	constexpr float GStandingOnHeadLiftUnits = 0.1f;
-	constexpr float GStandingOnHeadSpeedUnits = 40.0f;
+	constexpr float GStandingOnHeadLiftUnits = ElysiumNpcTunables::StandingOnHeadLift;
+	constexpr float GStandingOnHeadSpeedUnits = ElysiumNpcTunables::StandingOnHeadSpeed;
 
 	// Seconds — the ceiling `m_flStandingOnHeadTimer` ramps to.
 	constexpr float GStandingOnHeadTimerCeiling = ElysiumNpcTunables::Five;
@@ -110,11 +110,11 @@ int32 FElysiumNpc::GetUsedHullBits()
 {
 	// The Troika line, `0x1029a050`:
 	//
-	//     1029a050  CALL 0x10012c1a           ; CAI_BaseNPC::GetUsedHullBits, 0x10270820
+	//     1029a050  CALL 0x10012c1a           ; CAI_BaseNPC::GetUsedHullBits
 	//     1029a055  OR AL,0x1
 	//     1029a057  RET
 	//
-	// and `0x10270820` is the same two instructions over `CBaseCombatCharacter::GetUsedHullBits`
+	// and `CAI_BaseNPC::GetUsedHullBits` is the same two instructions over `CBaseCombatCharacter::GetUsedHullBits`
 	// (`0x10341710`), whose whole body past the breadcrumb pair is `return 1`. So the base answer is
 	// 1 and BOTH ORs are no-ops — recovered, not a transcription slip, and the reason 29c's walk of
 	// `0x1029a050` names `CBaseCombatCharacter` while the listing calls `CAI_BaseNPC`: the chain is
@@ -381,3 +381,14 @@ void FElysiumNpc::NotifyScatterCenter(FElysiumEntity* Tentacle, const FVector& P
 	TentacleNpc->TentacleScatterCenterUnits = PositionCm / ElysiumMove::U;
 }
 
+// Re-homed from the deleted `ElysiumNpcDebug10.cpp` (0019 story 6): a value the RunTask, StartTask
+// and Werewolf anim-event rules read. Declared in `ElysiumNpcKernelBaseHelpers.inl`.
+bool FElysiumNpc::RetailBonePosition(const TCHAR* BoneName, FVector& OutPositionUnits,
+	FVector& OutAnglesDegrees) const
+{
+	// SEAM for `CBaseAnimating::GetBonePosition01(name, &pos, &ang)` (`0x1000f263`).
+	(void)BoneName;
+	OutPositionUnits = FVector::ZeroVector;
+	OutAnglesDegrees = FVector::ZeroVector;
+	return false;
+}

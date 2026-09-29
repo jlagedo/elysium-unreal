@@ -29,7 +29,6 @@
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcSoundsShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -48,7 +47,7 @@
 
 namespace
 {
-	// The two wav tables `CNPC_VSabbatLeader::Precache` `0x103a6ab0` precaches, contiguous in
+	// The two wav tables `CNPC_VSabbatLeader::Precache` precached, contiguous in
 	// `.rdata`: `0x1064c480`, seven entries, and `0x1064c49c`, three.
 	const TCHAR* const GSabbatLeaderSteps[] = {
 		TEXT("character/monster/andrei_transformed/step1.wav"),
@@ -90,18 +89,18 @@ namespace
 	}
 	constexpr int32 GMaintainSabbatFailureFirst = 0x0c;
 	constexpr int32 GMaintainSabbatFailureLast = 0x0f;
-	constexpr float GMaintainSabbatRouteFailThreshold = 6.f; // _DAT_104c3cc0 = 00 00 c0 40
+	constexpr float GMaintainSabbatRouteFailThreshold = ElysiumNpcTunables::SabbatRouteFailThreshold; // _DAT_104c3cc0 = 00 00 c0 40
 	// `CNPC_VSabbatLeader`'s melee-interrupt exception activity (`0x103ab400`).
 	constexpr int32 GMiscSabbatLeaderMeleeActivity = 0x1141;
-	constexpr float GSabbatLeadScale = 25.0f;       // DAT_104c3cb8
-	constexpr float GNoJumpZoneDistance = 100.0f;   // DAT_104c3ccc
+	constexpr float GSabbatLeadScale = ElysiumNpcTunables::SabbatLeadScale;             // DAT_104c3cb8
+	constexpr float GNoJumpZoneDistance = ElysiumNpcTunables::SabbatNoJumpZoneDistance; // DAT_104c3ccc
 	constexpr int32 GNoJumpHintType = 0x3e84;
 	constexpr float NormalizeEpsilon = ElysiumNpcTunables::FloatEpsilon;
 	// `CNPC_VSabbatLeader`'s three node pickers.
-	constexpr float ArchwayMinFlatDist = 24.0f;           // _DAT_104c3cbc
-	constexpr float DiveMinFlatDist = 40.0f;              // _DAT_104c3cfc
-	constexpr float DiveMinSelfDist = 45.0f;              // _DAT_104c3d00
-	constexpr float DiveLengthEpsilon = 9.999999747378752e-05f;   // _DAT_104c3ce4
+	constexpr float ArchwayMinFlatDist = ElysiumNpcTunables::SabbatArchwayMinFlatDist;   // _DAT_104c3cbc
+	constexpr float DiveMinFlatDist = ElysiumNpcTunables::SabbatDiveMinFlatDist;         // _DAT_104c3cfc
+	constexpr float DiveMinSelfDist = ElysiumNpcTunables::SabbatDiveMinSelfDist;         // _DAT_104c3d00
+	constexpr float DiveLengthEpsilon = ElysiumNpcTunables::SabbatLengthEpsilon;         // _DAT_104c3ce4
 	constexpr int32 HintArchway = 0x3e82;
 	constexpr int32 HintDive = 0x3e85;
 	// `FUN_10137220` — Source's `VectorNormalize`, which divides by `length + _DAT_1046a51c` rather
@@ -115,49 +114,18 @@ namespace
 		InOutVector *= Scale;
 		return Length;
 	}
-	const TCHAR* const GSabbatLeaderModels[] = {
-		TEXT("models/character/monster/Andrei/andrei.mdl"),
-		TEXT("models/character/npc/unique/hollywood/andrei/andrei_no_mouth.mdl"),
-	};
-	const TCHAR* const GAndreiTransformedSteps[] = {   // 0x1064c480, to 0x1c — seven
-		TEXT("character/monster/andrei_transformed/step1.wav"),
-		TEXT("character/monster/andrei_transformed/step2.wav"),
-		TEXT("character/monster/andrei_transformed/step3.wav"),
-		TEXT("character/monster/andrei_transformed/step4.wav"),
-		TEXT("character/monster/andrei_transformed/step5.wav"),
-		TEXT("character/monster/andrei_transformed/step6.wav"),
-		TEXT("character/monster/andrei_transformed/step7.wav"),
-	};
-	const TCHAR* const GAndreiTransformedExerts[] = {  // 0x1064c49c, to 0xc — three
-		TEXT("character/monster/andrei_transformed/exert_heavy_1.wav"),
-		TEXT("character/monster/andrei_transformed/exert_heavy_2.wav"),
-		TEXT("character/monster/andrei_transformed/exert_heavy_3.wav"),
-	};
-	// The seven singles, in the body's own push order (`0x1064ea40` down to `0x1064e8b0`).
-	const TCHAR* const GAndreiTransformedSingles[] = {
-		TEXT("Character/Monster/Andrei_Transformed/ambient_run.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/Leap_Down_Attack_1.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/dive_in_splash.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/dive_out_splash.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/splash_warning.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/jump_retreat.wav"),
-		TEXT("Character/Monster/Andrei_Transformed/roar_1.wav"),
-	};
-	const TCHAR* const GAndreiPowerupEmitter = TEXT("Andrei_powerup_emitter");
-	const TCHAR* const GAndreiBlastEmitter = TEXT("Andrei_blast_emitter");
-	const TCHAR* const GSabbatLeaderWeapon = TEXT("item_w_sabbatleader_attack");
 	// `_DAT_104c3cd4` — `CNPC_VSabbatLeader`'s `TOO_FAR_TO_ATTACK` distance bound, 120 units
 	// (`103aa25f FCOMP float ptr`).
 	constexpr float GScheduleSabbatTooFarUnits = ElysiumNpcTunables::SabbatLeaderTooFarToAttack;
 	// `_DAT_104c3cc8` = **8.0** s — the idle window `0x103c67f0` is handed by
 	// `CheckForJumpCondition`, measured from `m_flLastAttackTime` (`+0x5d9c`).
-	constexpr float GSabbatJumpIdleSeconds = 8.f;
+	constexpr float GSabbatJumpIdleSeconds = ElysiumNpcTunables::SabbatJumpIdleSeconds;
 	// `_DAT_104c3cc4` = **0.0666667** — the health fraction lost since the mark that also allows it.
-	constexpr float GSabbatJumpHealthLoss = 0.06666667f;
+	constexpr float GSabbatJumpHealthLoss = ElysiumNpcTunables::SabbatJumpHealthLoss;
 	// `_DAT_104c3cdc` = **0.25** s — the blood-splash repeat interval.
-	constexpr double GSabbatSplashIntervalSeconds = 0.25;
+	constexpr double GSabbatSplashIntervalSeconds = ElysiumNpcTunables::SabbatSplashInterval;
 	// `_DAT_104c3ce0` = **2.0** — the wound-counter rise `PlayerDamagedEnoughThisRound` requires.
-	constexpr float GSabbatRoundDamageThreshold = 2.f;
+	constexpr float GSabbatRoundDamageThreshold = ElysiumNpcTunables::SabbatRoundDamageThreshold;
 }
 
 // Slot 420: `0x103a6d40`.
@@ -187,33 +155,12 @@ void FElysiumNpcSabbatLeader::NPCInit()
 	bSabbatLeaderLastAttackWasNova = false;
 }
 
-// Slot 104: `0x103a6ab0`.
-// 0x103a6ab0
-void FElysiumNpcSabbatLeader::Precache()
-{
-	// `CNPC_VSabbatLeader::Precache` `0x103a6ab0` — scope-trace frame, the Troika body, two models
-	// with preload 1, the seven-entry step table, the three-entry exert table, seven singles, two
-	// preload-1 emitters, and the attack weapon.
-	TroikaPrecache();
-	for (const TCHAR* AndreiModel : GSabbatLeaderModels)
-	{
-		NpcKernelPrecache10Shared::Precache10Model(*this, AndreiModel, /*Preload=*/1);
-	}
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GAndreiTransformedSteps, UE_ARRAY_COUNT(GAndreiTransformedSteps));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GAndreiTransformedExerts, UE_ARRAY_COUNT(GAndreiTransformedExerts));
-	for (const TCHAR* Single : GAndreiTransformedSingles)
-	{
-		NpcKernelPrecache10Shared::Precache10Sound(*this, Single);
-	}
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GAndreiPowerupEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GAndreiBlastEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Other(*this, GSabbatLeaderWeapon);
-}
+// Slot 104 is gone (story 0019/6): the two Andrei models, the step / exert tables,
+// the seven singles, the two emitters and `item_w_sabbatleader_attack` resolve at bake and load.
 
 // Slot 461: `0x103a7450`.
 int32 FElysiumNpcSabbatLeader::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x1f;
 	if (bSabbatLeaderActivated)
 	{
 		if (NpcStateRetail() == 2)
@@ -365,16 +312,6 @@ bool FElysiumNpcSabbatLeader::FValidateHintType(void* Hint)
 	return 15999 < HintType && HintType < 0x3e86;
 }
 
-// Slot 546: `0x103a5e50`, the class's own schedule id space.
-const TCHAR* FElysiumNpcSabbatLeader::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c3d4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VSabbatLeader"), TEXT("0x103a5e50"), TEXT("0x1093c3d4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 620: `0x103aa5e0`, a virtual `CNPC_VSabbatLeader` introduces, inside a VPROF scope:
 // `RandomInt(0, 6)` (`PUSH 0x6` at `103aa6c9`) over the seven step wavs `0x1064c480`, one
 // `EmitSound` at volume 1.0 on `CHAN_BODY` (`PUSH 0x4` at `103aa6dd`). Its callers are the class's
@@ -395,32 +332,22 @@ void FElysiumNpcSabbatLeader::AttackSound()
 		UE_ARRAY_COUNT(GSabbatLeaderExertHeavy), 1.0f, NpcKernelSoundsShared::GSoundsChanBody);
 }
 
-// Slot 127: `0x103a6e80`, whose body is the `CNPC_VVampireBoss` restore (`0x103c5910`, family
-// SaveRestore10's `VampireBossRestore`) — the census's mechanism row for this class.
-int32 FElysiumNpcSabbatLeader::Restore(void* Archive)
+/** `CNPC_VSabbatLeader::vfunc127`'s load-side half (story 0019/6;
+ *  `docs/vtmb/npc-ai/shape.md` § "The three species `Restore` bodies"). Retail calls
+ *  `CNPC_VVampireBoss::Restore` and then re-seeds four constants, the same data
+ *  `NPCInit` `0x103a6d40` writes: `m_pMonsterModelName` (`+0x6680`) = the andrei model
+ *  (`0x1064ead0`), `m_pszMonsterClassname` (`+0x6694`) = `"npc_VSabbatLeader"`, and
+ *  `SetBodyEmitterName(0 / 1, "Andrei_powerup_emitter")` — the same string twice. Without them the
+ *  VampireBoss reset would leave a restored leader with no model name for `TransformModel`'s guard
+ *  (`docs/vtmb/npc-ai/programs.md`, the boss transform arm). The record half is the SAVE walk. */
+void FElysiumNpcSabbatLeader::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
-	return VampireBossRestore(Archive);
-}
-
-// Slot 366: `0x103a76d0`, a scope-trace wrapper over a direct call into `CNPC_VAndreiBlood`'s
-// `0x10385a70` (`return 0;`).
-/** `CNPC_VSabbatLeader::HandleInteraction` (`0x103a76d0`, 111 bytes) — slot 366's `CNPC_VSabbatLeader`
- *  override. */
-bool FElysiumNpcSabbatLeader::HandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other)
-{
-	// 0x103a76d0 — `CNPC_VSabbatLeader::HandleInteraction`, 111 bytes, slot 366. The whole body past
-	// its scope-trace prologue and epilogue is one tail call:
-	//
-	//     CNPC_VAndreiBlood::HandleInteraction(this, interaction, data, other);   // 0x10385a70
-	//
-	// and `0x10385a70` is `return 0;` — nothing else. The override exists to put
-	// `"CNPC_VSabbatLeader::HandleInteraction"` on the scope-trace stack, which is a debug artifact
-	// this runtime has no counterpart for, so the observable answer is `false`.
-	//
-	// Slot 366's base body (`0x10326d40`, the SDK `CBaseCombatCharacter::HandleInteraction`) is
-	// story 29c's generated stub; the human line's `0x10385a70` is `FElysiumNpcHuman`'s override,
-	// called here directly as retail's tail call does.
-	return FElysiumNpcHuman::HandleInteraction(Interaction, Data, Other);   // `0x10385a70`, direct
+	VampireBossPostRestoreResets();                                      // CNPC_VVampireBoss::Restore
+	VampireBossMonsterModelName = TEXT("models/character/monster/Andrei/andrei.mdl");   // +0x6680
+	VampireBossMonsterClassname = TEXT("npc_VSabbatLeader");            // +0x6694
+	SetBodyEmitterName(0, TEXT("Andrei_powerup_emitter"));
+	SetBodyEmitterName(1, TEXT("Andrei_powerup_emitter"));
+	FElysiumNpcVampire::OnPostRestore(InWorld);
 }
 
 // --- From `FElysiumNpcWerewolf` (the move manifest's corrected owner) ---
@@ -569,7 +496,8 @@ bool FElysiumNpcSabbatLeader::PlayerIsFacingMe() const
 	FVector Delta = Origin - Player->Origin;
 	const float Length = static_cast<float>(Delta.Size());
 	Delta = Delta.GetSafeNormal();
-	if (Length > 0.0001f && static_cast<float>(FVector::DotProduct(PlayerForward, Delta)) < 0.34202f)
+	if (Length > ElysiumNpcTunables::SabbatLengthEpsilon                     // _DAT_104c3ce4
+		&& static_cast<float>(FVector::DotProduct(PlayerForward, Delta)) < ElysiumNpcTunables::SabbatFacingConeDot) // _DAT_104c3cf0
 	{
 		return false;
 	}
@@ -581,30 +509,17 @@ bool FElysiumNpcSabbatLeader::PlayerIsFacingMe() const
 float FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3(const FVector& LineStart, const FVector& LineDir,
 	const FVector& Point)
 {
-	// `CNPC_VVampireBoss::DistToHintCenterLine2D_3` (`0x103c6680`), transcribed from the listing
-	// (`103c6716`–`103c6781`) because the decompiler drops the final `sqrt` call's result.
-	//
-	//   t  = (P.x - S.x) * D.x + (P.y - S.y) * D.y + D.z * K
-	//   dx = (t * D.x + S.x) - P.x
-	//   dy = (t * D.y + S.y) - P.y
-	//   r  = sqrt(dx*dx + dy*dy + (t * D.z) * (t * D.z))
-	//
-	// `K` is `_DAT_104454c4`, the image's shared 0.0f, so the `D.z * K` term contributes nothing —
-	// and `DistToHintCenterLine2D` zeroes `D.z` before calling in, which kills the third term too.
-	// That is why this is a 2D distance. Both terms are kept because retail's arithmetic is the
-	// deliverable, not the algebra it simplifies to.
-	const float Sx = static_cast<float>(LineStart.X);
-	const float Sy = static_cast<float>(LineStart.Y);
-	const float Dx = static_cast<float>(LineDir.X);
-	const float Dy = static_cast<float>(LineDir.Y);
-	const float Dz = static_cast<float>(LineDir.Z);
-	const float Px = static_cast<float>(Point.X);
-	const float Py = static_cast<float>(Point.Y);
-
-	const float T = (Px - Sx) * Dx + (Py - Sy) * Dy + Dz * NpcKernelHintsShared::GHintsZero;
-	const float OffX = (T * Dx + Sx) - Px;
-	const float OffY = (T * Dy + Sy) - Py;
-	return FMath::Sqrt(OffX * OffX + OffY * OffY + (T * Dz) * (T * Dz));
+	// `CNPC_VVampireBoss::DistToHintCenterLine2D_3` (`0x103c6680`), a point-to-INFINITE-line distance
+	// (`t` is never clamped). Retail projects with `D.z * _DAT_104454c4` (the shared 0.0f), never reads
+	// either point's Z, and its one caller (`DistToHintCenterLine2D`, `0x103c6570`) hands it a
+	// flattened, re-normalised direction: so it is a 2-D distance, and the service is
+	// `FMath::PointDistToLine` over the flattened points (story 0019/6). Both flattenings are retail's
+	// 0.0 scale, kept here as the one retail fact the forward needs.
+	const float ZScale = NpcKernelHintsShared::GHintsZero;
+	return static_cast<float>(FMath::PointDistToLine(
+		FVector(Point.X, Point.Y, Point.Z * ZScale),
+		FVector(LineDir.X, LineDir.Y, LineDir.Z * ZScale),
+		FVector(LineStart.X, LineStart.Y, LineStart.Z * ZScale)));
 }
 
 float FElysiumNpcSabbatLeader::DistToHintCenterLine2D(const FHintWords& Hint, const FVector& PointCm)
@@ -932,8 +847,6 @@ int32 FElysiumNpcSabbatLeader::SelectDiveInPoint() const
 		static_cast<float>(Player->Angles.Y), Origin);
 	return Pick == INDEX_NONE ? INDEX_NONE : NodeIds[Pick];
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 

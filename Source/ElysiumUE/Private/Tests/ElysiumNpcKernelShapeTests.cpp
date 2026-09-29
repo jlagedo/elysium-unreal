@@ -149,9 +149,11 @@ bool FElysiumNpcKernelShapeCensusTest::RunTest(const FString&)
 		for (const FElysiumNpcSlot& Slot : Slots())
 		{
 			// A slot with no port callable is a dead stub deleted in story 5 step 6 (`SLOT_PORT_MAP`
-			// `DELETED`): its verdict is `dead`, and nothing else may lose its callable.
+			// `DELETED`), or a row 0019/6 closed with no dispatch site: its verdict is `dead` or
+			// `mechanism` (closed at a service word), and nothing else may lose its callable.
 			const bool bDeleted = Slot.PortMethod != nullptr && FCString::Strlen(Slot.PortMethod) == 0
-				&& Slot.Verdict != nullptr && FCString::Strcmp(Slot.Verdict, TEXT("dead")) == 0;
+				&& Slot.Verdict != nullptr && (FCString::Strcmp(Slot.Verdict, TEXT("dead")) == 0
+					|| FCString::Strcmp(Slot.Verdict, TEXT("mechanism")) == 0);
 			TestTrue(TEXT("every slot names its declaration and the port's callable"),
 				Slot.Declaration != nullptr && FCString::Strlen(Slot.Declaration) > 0
 					&& Slot.PortMethod != nullptr && (FCString::Strlen(Slot.PortMethod) > 0 || bDeleted));

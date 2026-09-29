@@ -129,7 +129,7 @@ void FElysiumHint::InputDontWalk(const FElysiumInputArgs&)
 
 void FElysiumHint::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
-	// `0x102d3ec0`: the base `CBaseEntity::OnRestore` first (`0x100aa5a0`), then the relink.
+	// `0x102d3ec0`: the base `CBaseEntity::OnRestore` first (slot 130, closed at the save walk 0019/6), then the relink.
 	FElysiumEntity::OnPostRestore(InWorld);
 	const FElysiumNpcBase::FHintRestoreResult Restore =
 		FElysiumNpcBase::HintOnRestore(ToWords(), Handle, InWorld.Places());

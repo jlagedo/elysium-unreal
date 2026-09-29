@@ -254,7 +254,7 @@ void FElysiumNpc::ResetManBatStationaryWatch()
 }
 
 // -------------------------------------------------------------------------------------------------
-// `CNPC_VManBat`'s slot 102 trace filter — `0x1038fb20`.
+// `CNPC_VManBat`'s slot 102 trace filter.
 // -------------------------------------------------------------------------------------------------
 
 bool FElysiumNpc::RetailNameMatches(const FString& EntityName, const TCHAR* NameOrWildcard)
@@ -289,6 +289,11 @@ bool FElysiumNpc::ManBatTraceFilterShouldHit(const FString& EntityName)
 	// (+0x26c) matches `"lbeam*"` (`DAT_10642d28`, read from the image) is NOT hit; anything else
 	// falls through to `CTraceFilterSimple::ShouldHitEntity`, whose own answer is the ordinary
 	// collision-group test and is true for the candidates this filter is asked about.
+	//
+	// The sweep that carried this filter (slot 102) is the collision service's since
+	// story 0019/6 and this is the rule it keeps. No move path consults it yet: the movement seam's
+	// ignore is a list (`IElysiumNpcMotor::SetMoveIgnore`), so the ManBat's move would register the
+	// `lbeam*` entities ahead of the sweep — a wire into the motor families, not built here.
 	return !RetailNameMatches(EntityName, ManBatNoHitName);
 }
 

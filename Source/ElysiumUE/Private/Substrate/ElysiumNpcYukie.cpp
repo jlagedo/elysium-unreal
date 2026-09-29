@@ -35,7 +35,7 @@ namespace
 	constexpr float GMiscYukieCanEnterMin = 5.f;
 	constexpr float GMiscYukieCanEnterMax = 10.f;
 	// `_DAT_1044f02c` = 1.5f — Yukie's melee-range multiplier.
-	constexpr float GYukieMeleeRangeScale = 1.5f;
+	constexpr float GYukieMeleeRangeScale = ElysiumNpcTunables::OneAndHalf;
 	// The weapon capability bits slots 600 and `CNPC_VYukie`'s flee gate require.
 	constexpr uint32 SpeciesMeleeWeaponCapabilityBits = 0x18000u;
 	// `CNPC_VYukie`'s flee window, `curtime + RandomFloat(22.5, 45.0)`. The immediates are
@@ -148,13 +148,6 @@ void FElysiumNpcYukie::NPCInit()
 	HideActiveWeaponIfAny();  // 0x103dd80a GetActiveWeapon, 0x103dd811 JZ null, 0x103dd815, 0x103dd81f JMP slot 66 (a second Hide)
 }
 
-// Slot 461: `0x103dd780`, the selector tag 0x2a and then a direct call into the combatant's `0x10387380`.
-int32 FElysiumNpcYukie::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0x2a;
-	return HumanCombatPatrolSelectIdealState();
-}
-
 // Slot 201: `0x103ddaf0`
 bool FElysiumNpcYukie::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4)
 {
@@ -180,16 +173,6 @@ int32 FElysiumNpcYukie::IRelationType(FElysiumEntity* Candidate)
 	return TroikaIRelationType(Candidate);
 }
 
-// Slot 546: `0x103dd1f0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcYukie::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x10940314`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VYukie"), TEXT("0x103dd1f0"), TEXT("0x10940314") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
@@ -199,7 +182,7 @@ const TCHAR* FElysiumNpcYukie::SquadSlotName(int32 SlotEn)
 bool FElysiumNpcYukie::YukieEnterMelee()
 {
 	// `CNPC_VYukie::vfunc599` `0x103dd8b0`, the whole body:
-	//     (*DAT_10924edc)->vfunc1();                                    // the global melee event
+	//     (*DAT_10924edc)->IsCommand();                                    // ent_trace_melee's parent, answer dropped
 	//     m_bInMelee = 1;                                               // +0x6078
 	//     m_flMeleeMustLeaveTimer = RandomFloat(22.5f, 45.0f) + curtime; // +0x6074
 	//     return true;
@@ -209,7 +192,7 @@ bool FElysiumNpcYukie::YukieEnterMelee()
 	// can-enter timer, no range term, no height term, no attack coordinator — she always enters
 	// melee, and her must-leave window (22.5–45 s) is three times the Troika line's (7.5–15 s).
 	//
-	// `(*DAT_10924edc)->vfunc1()` is the same global event object families Bosses and TroikaHelpers
+	// `(*DAT_10924edc)->vfunc1()` is the same `ent_trace_melee` `IsCommand()` (answer dropped, no observable) families Bosses and TroikaHelpers
 	// already count through `MeleeEventFires`; the same counter is incremented rather than a second
 	// one stood beside it.
 	++MeleeEventFires;
@@ -224,7 +207,7 @@ bool FElysiumNpcYukie::YukieEnterMelee()
 void FElysiumNpcYukie::YukieLeaveMelee()
 {
 	// `0x103dd9a0`, `CNPC_VYukie#601`, the whole body:
-	//     (*DAT_10924edc)->vfunc1();                                     // the global melee event
+	//     (*DAT_10924edc)->IsCommand();                                     // ent_trace_melee's parent, answer dropped
 	//     m_bInMelee = 0;                                                // +0x6078
 	//     if (HasUsableRangedWeapon())                                   // slot 308 (+0x4d0)
 	//         m_flMeleeCanEnterTimer = RandomFloat(5.0f, 10.0f) + curtime;  // +0x6070

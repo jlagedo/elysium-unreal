@@ -20,10 +20,8 @@
 #include "Substrate/ElysiumNpcAnim10Shared.h"
 #include "Substrate/ElysiumNpcBossesShared.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -50,15 +48,15 @@ namespace
 	constexpr float PickupGrabBoneRangeSq = 1050625.0f;
 	// `0x103822a0`'s facing cone, degrees. `_DAT_1049ae98` is the same cell the kick clamp
 	// (`0x102b6890`) uses as its lower bound and `_DAT_1044eb0c` its upper — a +-20 degree cone.
-	constexpr float PickupConeLo = -20.0f;         // _DAT_1049ae98
-	constexpr float PickupConeHi = 20.0f;          // _DAT_1044eb0c
+	constexpr float PickupConeLo = ElysiumNpcTunables::MinusTwenty;         // _DAT_1049ae98
+	constexpr float PickupConeHi = ElysiumNpcTunables::Twenty;          // _DAT_1044eb0c
 	// `UTIL_AngleDiff` `0x1013d580`'s two wrap bounds.
-	constexpr float AngleDiffLo = -180.0f;         // _DAT_10462948
+	constexpr float AngleDiffLo = ElysiumNpcTunables::MinusOneEighty;         // _DAT_10462948
 	constexpr float AngleDiffHi = ElysiumNpcTunables::OneEighty;
-	constexpr float DegreesPerTurn = 360.0f;       // _DAT_10450568
+	constexpr float DegreesPerTurn = ElysiumNpcTunables::HeadAngleRunawayLimit;       // _DAT_10450568
 	// `0x10382970`'s blacklist duration, seconds. The same 20.0 cell as the cone's upper bound;
 	// `shape.md` records MingXiao blacklisting a thrown object for the same 20 s at `+0x665c`.
-	constexpr float BlacklistSeconds = 20.0f;      // _DAT_1044eb0c
+	constexpr float BlacklistSeconds = ElysiumNpcTunables::Twenty;      // _DAT_1044eb0c
 	// `UTIL_AngleDiff` `0x1013d580`: `a - b` walked back into `[-180, 180]` by whole turns, wrapping
 	// only on the side the `a <= b` test selects. Families Facing and Positions each keep an
 	// identical private copy for the same reason: neither owns the other's file.
@@ -98,21 +96,6 @@ namespace
 		}
 		return Yaw;
 	}
-	const TCHAR* const GHengeyokaiStomps[] = {   // 0x1063bd94, to 0x10
-		TEXT("character/monster/hengeyokai/stomp_1.wav"),
-		TEXT("character/monster/hengeyokai/stomp_2.wav"),
-		TEXT("character/monster/hengeyokai/stomp_3.wav"),
-		TEXT("character/monster/hengeyokai/stomp_4.wav"),
-	};
-	const TCHAR* const GHengeyokaiExerts[] = {   // 0x1063bda4, to 0xc
-		TEXT("character/monster/hengeyokai/exert_heavy_1.wav"),
-		TEXT("character/monster/hengeyokai/exert_heavy_2.wav"),
-		TEXT("character/monster/hengeyokai/exert_heavy_3.wav"),
-	};
-	const TCHAR* const GHengeyokaiModel =
-		TEXT("models/character/monster/Hengeyokai/hengeyokai.mdl");
-	const TCHAR* const GHengeyokaiFreezeEmitter = TEXT("Hengeyokai_freeze_emitter");
-	const TCHAR* const GHengeyokaiWeapon = TEXT("item_w_hengeyokai_fist");
 }
 
 // `CNPC_VHengeyokai`'s pickup row (0019 story 5 commit B moved it onto the class: it was a row of a
@@ -126,7 +109,7 @@ const FElysiumNpc::FPickupSpecies& FElysiumNpcHengeyokai::PickupRow()
 }
 
 // Slot 599: `0x10381750`, `CNPC_VHengeyokai::vfunc599`, the whole body:
-//     (*DAT_10924edc)->vfunc1();      // the global melee-entered event, FIRST
+//     (*DAT_10924edc)->IsCommand();      // ent_trace_melee's parent, answer dropped, FIRST
 //     m_bInMelee = 1;                 // +0x6078
 //     return true;
 // Every gate of the Troika line's body is gone, as on `CNPC_VFrenzyShadow` `0x10376b70`,
@@ -207,20 +190,9 @@ void FElysiumNpcHengeyokai::NPCInit()
 	NodeGraphHullIndex() = HullIndexHengeyokai;
 }
 
-// Slot 104: `0x1037f960`.
-// 0x1037f960
-void FElysiumNpcHengeyokai::Precache()
-{
-	// `CNPC_VHengeyokai::Precache` `0x1037f960` — the Troika body, the 0x10-byte stomp table, the
-	// 0xc-byte exert table, its model with preload 0, the freeze emitter with preload **0** rather
-	// than the 1 Andrei, Chang and the ManBat use, and the fist.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GHengeyokaiStomps, UE_ARRAY_COUNT(GHengeyokaiStomps));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GHengeyokaiExerts, UE_ARRAY_COUNT(GHengeyokaiExerts));
-	NpcKernelPrecache10Shared::Precache10Model(*this, GHengeyokaiModel, /*Preload=*/0);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GHengeyokaiFreezeEmitter, /*Preload=*/0);
-	NpcKernelPrecache10Shared::Precache10Other(*this, GHengeyokaiWeapon);
-}
+// Slot 104 `CNPC_VHengeyokai::Precache` has no body here: after the Troika body it only
+// precached its stomp / exert tables, model, freeze emitter and fist, which the bake resolves
+// (0019 story 6, mechanism -> Bake). The class inherits `FElysiumNpc::Precache`.
 
 // Slot 375: `0x10381b50`, which calls the human line's `0x103854f0` directly.
 /** `CNPC_VHengeyokai::NPC_EarlyTranslateActivity` (`0x10381b50`). Under the carry-form bit, request
@@ -243,13 +215,6 @@ int32 FElysiumNpcHengeyokai::NPC_EarlyTranslateActivity(int32 Activity)
 	// Every other request, and the whole bit-clear case, tail-calls the HUMAN body — not the Troika
 	// one — which itself chains the Troika pre-translate.
 	return HumanNpcEarlyTranslateActivity(Activity);
-}
-
-// Slot 461: `0x10380100`, the selector tag 0x13 and then a direct call into the human line's `0x103851e0`.
-int32 FElysiumNpcHengeyokai::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0x13;
-	return HumanSelectIdealState();
 }
 
 // Slot 448: `0x10380510`, its own arm and then a direct call into the Troika body `0x1029adb0`.
@@ -306,6 +271,8 @@ int32 FElysiumNpcHengeyokai::TranslateScheduleRetail(int32 ScheduleNumber)
 
 // Slot 69: `0x10380f90` (byte-identical across Hengeyokai, MingXiao and Tzimisce): the `0x16` derived-type
 // gate, then a direct call into the Troika body `0x1029b180`.
+// Reached through `RegisterMoveIgnores` (0019/6), which states its answers to the mover's
+// `SetMoveIgnore` before each kernel move is issued.
 bool FElysiumNpcHengeyokai::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	if (Other != nullptr && (RetailDerivedType(*Other) & 0x16) != 0)
@@ -315,40 +282,11 @@ bool FElysiumNpcHengeyokai::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
-// Slot 124: `0x10383560`
-/** `CNPC_VHengeyokai::DrawDebugTextOverlays` (`0x10383560`) — the Troika body, then slot 9's string
- *  on one further line under bit 0. */
-int32 FElysiumNpcHengeyokai::DrawDebugTextOverlays()
-{
-	// `0x10383560`, 106 bytes: the Troika body, then slot 9's string on one further line under bit 0.
-	// The string is taken from slot 9's returned object's first word and the empty string
-	// (`DAT_106b8540`) substitutes for a null one; retail prints it with NO format string at all.
-	// The `+1` IS the contract: it is the budget every later overlay consumes.
-	const int32 Base = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & NpcKernelDebug10Shared::GDebug10BitText) == 0)
-	{
-		return Base;
-	}
-	const FString Slot9 = HengeyokaiSlot9String();
-	EmitEntityText(Base, TEXT("0x10383560"), Slot9);
-	return Base + 1;
-}
-
 // Slot 337: `0x1037fb20`.
 int32 FElysiumNpcHengeyokai::GetUsedHullBits()
 {
 	// A bare `return 0x40001`: no call up the chain, so the Troika line's bit 0 is absent.
 	return 0x40001;
-}
-
-// Slot 546: `0x1037ea60`, the class's own schedule id space.
-const TCHAR* FElysiumNpcHengeyokai::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b27c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VHengeyokai"), TEXT("0x1037ea60"), TEXT("0x1093b27c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 292: `0x103802a0` — no flinch from gunfire or a zero-magnitude hit; otherwise the base
@@ -534,7 +472,7 @@ void FElysiumNpcHengeyokai::AddBlacklistedEntity(const FElysiumEntity* Entity)
 
 int32 FElysiumNpcHengeyokai::FindBlacklistedEntity(const FElysiumEntity* Entity) const
 {
-	// `0x10382b30`: walk the store, resolve each row's EHANDLE and compare the POINTER against the
+	// Walk the store, resolve each row's EHANDLE and compare the POINTER against the
 	// candidate. A row whose handle no longer resolves compares as NULL, so a null candidate matches
 	// the first dead row — retail's behaviour, and reproduced.
 	if (World == nullptr)
@@ -593,13 +531,6 @@ bool FElysiumNpcHengeyokai::IsEntityBlacklisted(const FElysiumEntity* Entity)
 // The species arms of slot 124.
 // -------------------------------------------------------------------------------------------------
 
-FString FElysiumNpcHengeyokai::HengeyokaiSlot9String() const
-{
-	// SEAM for slot 9's string, which `CNPC_VHengeyokai#124` prints verbatim. Slot 9 is a generated
-	// stub owned by another story; the empty string is retail's null arm (`DAT_106b8540`).
-	return FString();
-}
-
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcMaintain.cpp` (story 5 step 4) ---
@@ -616,22 +547,13 @@ bool FElysiumNpcHengeyokai::FormBitTimerExpired() const
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
-void FElysiumNpcHengeyokai::MotorCancelLinkFacing()
-{
-	// `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s whole body: `CAI_Motor::UpdateYaw(-1)`,
-	// the per-pass turn toward the motor's ideal yaw (not a facing-queue cancel). Story 8 (L05
-	// integration): RunTask19's `MotorUpdateYaw` is that primitive; the ledger still counts the call.
-	++MotorSeams.LinkFacingCancels;
-	MotorUpdateYaw(-1);
-}
-
 void FElysiumNpcHengeyokai::ClearLinkActivity()
 {
-	// `FUN_10382d20` `0x10382d20`: `thunk_FUN_102e1e20(m_pMotor, -1)`.
-	MotorCancelLinkFacing();
+	// `FUN_10382d20` `0x10382d20`, whose whole body is `thunk_FUN_102e1e20(m_pMotor, -1)`:
+	// `CAI_Motor::UpdateYaw(-1)`, the per-pass turn toward the ideal yaw, run each pass of TASK
+	// 0x132/0x133. A one-line forward into the motor's yaw update (0019 story 6, mechanism).
+	MotorUpdateYaw(-1);
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcTranslate.cpp` (story 5 step 4) ---
 

@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcChangBros.h"
@@ -192,37 +193,35 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard, Subject });
 
-	// All three overloads are the same shape: a cvar gate, then a tail jump into the motor. The
-	// cvar at `0x10924f74` is `debug_allow_move_facing`, shipped "1", so all three reach the motor
-	// on their own overload (519 -> motor slot 14, 518 -> 13, 517 -> 12).
+	// Both live overloads are the same shape: a cvar gate, then a tail jump into the motor. The
+	// cvar at `0x10924f74` is `debug_allow_move_facing`, shipped "1", so both reach the motor on
+	// their own overload (518 -> motor slot 13, 517 -> 12). Slot 519 (no dispatch site in
+	// the DLL) is gone (story 6).
 	TestTrue(TEXT("debug_allow_move_facing ships on"), Guard->FacingTargetsEnabled());
 	Guard->FacingTargetRequests.Reset();
-	Guard->AddFacingTarget(Subject, 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(Subject, FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
-	TestEqual(TEXT("so slots 519, 518 and 517 each queue one"), Guard->FacingTargetRequests.Num(), 3);
-	if (Guard->FacingTargetRequests.Num() == 3)
+	TestEqual(TEXT("so slots 518 and 517 each queue one"), Guard->FacingTargetRequests.Num(), 2);
+	if (Guard->FacingTargetRequests.Num() == 2)
 	{
-		TestEqual(TEXT("519 reaches motor slot 14"), Guard->FacingTargetRequests[0].MotorSlot, 14);
-		TestEqual(TEXT("518 reaches motor slot 13"), Guard->FacingTargetRequests[1].MotorSlot, 13);
-		TestEqual(TEXT("517 reaches motor slot 12"), Guard->FacingTargetRequests[2].MotorSlot, 12);
+		TestEqual(TEXT("518 reaches motor slot 13"), Guard->FacingTargetRequests[0].MotorSlot, 13);
+		TestEqual(TEXT("517 reaches motor slot 12"), Guard->FacingTargetRequests[1].MotorSlot, 12);
 	}
-	// Cleared, all three add nothing — retail's refusal arm.
+	// Cleared, both add nothing — retail's refusal arm.
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing, 0.f);
 	Guard->FacingTargetRequests.Reset();
-	Guard->AddFacingTarget(Subject, 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
 	Guard->AddFacingTarget(Subject, FVector(1.0, 2.0, 3.0), 1.f, 2.f, 3.f);
-	TestEqual(TEXT("with the cvar cleared slots 517, 518 and 519 queue nothing"),
+	TestEqual(TEXT("with the cvar cleared slots 517 and 518 queue nothing"),
 		Guard->FacingTargetRequests.Num(), 0);
 	ElysiumNpcTunables::ResetConVars();
 
-	// The seam below them, exercised directly: which of the motor's three overloads each slot
-	// reaches is a recovered fact (519 -> motor slot 14, 518 -> 13, 517 -> 12) and is what the
-	// queue will carry the day one exists.
+	// The seam below them, exercised directly: slot 519 (gone) tail-jumped to motor slot 14, the
+	// ENTITY form; the queue still takes that form.
 	FElysiumNpcBase::FFacingTargetRequest Request;
 	Request.MotorSlot = 14;
 	Request.Target = Subject->Handle;
+	Request.Importance = 1.0f;
 	Request.Duration = 1.5f;
 	Guard->MotorAddFacingTarget(Request);
 	TestEqual(TEXT("the motor seam records the request"), Guard->FacingTargetRequests.Num(), 1);
@@ -230,23 +229,83 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 		Guard->FacingTargetRequests[0].MotorSlot, 14);
 	TestTrue(TEXT("carrying the entity it was asked to face"),
 		Guard->FacingTargetRequests[0].Target == Subject->Handle);
+	return true;
+}
 
-	// `ClearFacingTarget` `0x102e11f0` cancels the queue's current entry.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingQueueTest,
+	"Elysium.Substrate.NpcKernelFacing.FacingQueue", GElysiumNpcKernelFacingFlags)
+bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
+{
+	// `m_facingQueue` (motor +0x54) as slot 15 `0x102e2180` blends it (0019/6 fix 3).
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_queue_blend"), 4213);
+	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpc(TEXT("subject"), FVector(300.0, 0.0, 0.0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpc* Subject = Fixture.Npc(TEXT("subject"));
+	if (!TestNotNull(TEXT("the guard spawned"), Guard) || !TestNotNull(TEXT("the subject spawned"), Subject))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard, Subject });
+	const FVector G = Guard->Origin;
+	const double Tol = 1e-3;
+
+	// Two targets blended. A (importance 1) then B (importance 0.5), no ramp: `w` is the importance.
+	// `acc = (B - self) * 0.5 + acc * 0.5` with the delta RAW in Source units (its normalise is
+	// discarded), so the far-reaching B out-pulls A's unit accumulator.
+	Guard->FacingQueue.Reset();
+	const FVector A = G + FVector(1000.0, 0.0, 0.0);
+	const FVector B = G + FVector(0.0, 1000.0, 0.0);
+	Guard->AddFacingTarget(A, 1.0f, 10.0f, 0.0f);
+	Guard->AddFacingTarget(B, 0.5f, 1.0f, 0.0f);
+	TestEqual(TEXT("two entries queued"), Guard->FacingQueue.Num(), 2);
+	double RangeCm = 0.0;
+	const FVector Blend = Guard->MotorFacingQueueBlend(RangeCm);
+	const FVector Expected = FVector(0.5, 0.5 * 1000.0 / ElysiumMove::U, 0.0).GetSafeNormal();
+	TestTrue(TEXT("the blend is retail's raw-delta average"), Blend.Equals(Expected, Tol));
+	TestTrue(TEXT("not the normalised-delta average"), Blend.Y > Blend.X * 2.0);
+	TestEqual(TEXT("at the farthest contributing range"), RangeCm, 1000.0, Tol);
+	Guard->MotorHandFacingTarget();
+	TestTrue(TEXT("the body is handed the blended point"), Guard->FacingTargetHanded.IsSet()
+		&& Guard->FacingTargetHanded.GetValue().Equals(G + Expected * 1000.0, 0.01));
+
+	// A re-add of the same position replaces its record (the humanoid look queue's shape, a dead row).
+	Guard->AddFacingTarget(A, 1.0f, 10.0f, 0.0f);
+	TestEqual(TEXT("a re-added position replaces its record"), Guard->FacingQueue.Num(), 2);
+	TestTrue(TEXT("and moves it to the tail"), Guard->FacingQueue.Last().PositionCm == A);
+
+	// Slot 7 `0x102e11f0` never reads +0x54: every entry stands.
 	Guard->ClearFacingTarget();
-	TestEqual(TEXT("ClearFacingTarget empties it"), Guard->FacingTargetRequests.Num(), 0);
+	TestEqual(TEXT("slot 7 leaves the queue whole"), Guard->FacingQueue.Num(), 2);
 
-	// Slot 520 `0x10278e00` forwards to the motor's slot 15, which has nothing to answer with, so
-	// the out parameter is left where the caller put it.
-	FVector Direction(7.0, 8.0, 9.0);
-	TestEqual(TEXT("GetFacingDirection weighs nothing"), Guard->GetFacingDirection(Direction), 0.f);
-	TestEqual(TEXT("and leaves the caller's vector alone"), Direction, FVector(7.0, 8.0, 9.0));
+	// Expiry: past B's end stamp slot 15's compaction drops it and A alone is faced.
+	Fixture.Advance(Guard->World->NowSeconds() + 2.0);
+	const FVector AfterExpiry = Guard->MotorFacingQueueBlend(RangeCm);
+	TestEqual(TEXT("the expired entry is compacted away"), Guard->FacingQueue.Num(), 1);
+	TestTrue(TEXT("and the survivor is faced alone"), AfterExpiry.Equals(FVector(1.0, 0.0, 0.0), Tol));
 
-	// Slot 526 `0x1027d9f0` — the base declines, unconditionally, and that is the rule every
-	// species override is measured against.
-	TestFalse(TEXT("OverrideMoveFacing declines"), Guard->OverrideMoveFacing(nullptr, 0.1f));
-	TestFalse(TEXT("and declines again with a live interval"),
-		Guard->OverrideMoveFacing(nullptr, 10.f));
+	// One moving entity target: the ENTITY form (motor slot 14) follows its entity every blend.
+	Guard->FacingQueue.Reset();
+	FElysiumNpcBase::FFacingTargetRequest Follow;
+	Follow.MotorSlot = 14;
+	Follow.Target = Subject->Handle;
+	Follow.Importance = 1.0f;
+	Follow.Duration = 10.0f;
+	Guard->MotorAddFacingTarget(Follow);
+	const FVector Before = Guard->MotorFacingQueueBlend(RangeCm);
+	TestTrue(TEXT("faces the entity where it stands"),
+		Before.Equals((Subject->EyePosition() - G).GetSafeNormal(), Tol));
+	Subject->Origin = G + FVector(0.0, 800.0, 0.0);
+	const FVector After = Guard->MotorFacingQueueBlend(RangeCm);
+	TestTrue(TEXT("and where it moved to, on the next blend"),
+		After.Equals((Subject->EyePosition() - G).GetSafeNormal(), Tol));
+	TestTrue(TEXT("the bearing changed"), !After.Equals(Before, Tol));
 
+	// Empty queue: nothing is handed.
+	Guard->FacingQueue.Reset();
+	Guard->MotorHandFacingTarget();
+	TestFalse(TEXT("an empty queue hands no point"), Guard->FacingTargetHanded.IsSet());
 	return true;
 }
 
@@ -366,7 +425,7 @@ bool FElysiumNpcKernelFacingHeadDirectionTest::RunTest(const FString&)
 	{
 		const FVector Delta = Above - Guard->EyePosition();
 		const float Expected = -FMath::RadiansToDegrees(
-			FMath::Atan(static_cast<float>(Delta.Z) / static_cast<float>(Delta.Size()))) * 0.2f;
+			FMath::Atan(static_cast<float>(Delta.Z) / static_cast<float>(Delta.Size()))) * ElysiumNpcTunables::HeadFilterBlend;
 		Guard->SetHeadDirection(Above, 0.05f);
 		TestEqual(TEXT("one step is 0.2 of the pitch to the target, measured from the eye"),
 			Guard->HeadPitch, Expected, 0.01f);
@@ -402,10 +461,7 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 		{ TEXT("CCineNPC"),            TEXT("0x101a6d40"), TEXT("0x101a6d70") },
 		{ TEXT("CCineAI"),             TEXT("0x101a6d40"), TEXT("0x101a6d70") },
 		{ TEXT("CCineAISchedule"),     TEXT("0x101a6d40"), TEXT("0x101a6d70") },
-		{ TEXT("CPayphone"),           TEXT("0x101aa7f0"), TEXT("0x101aa820") },
-		{ TEXT("CNPCMaker"),           TEXT("0x1034adf0"), TEXT("0x1034ae20") },
-		{ TEXT("CNPCMaker_Fleshpile"), TEXT("0x1034be90"), TEXT("0x1034bec0") },
-		{ TEXT("CNPCMaker_Zombie"),    TEXT("0x1034cad0"), TEXT("0x1034cb00") },
+		// The three `CNPCMaker*` rows closed at C++ dispatch in 0019/6 and are no longer asserted.
 		{ TEXT("CNPC_VRat"),           TEXT("0x103ad7f0"), TEXT("0x103ad820") },
 	};
 	for (const FRow& Row : Rows)

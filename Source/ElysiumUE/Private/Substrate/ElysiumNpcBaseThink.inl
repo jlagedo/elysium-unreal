@@ -26,7 +26,7 @@ bool Think19NodeGraphBuilt() const;
 
 /** `_DAT_104491a8` (a double, 0.8): the delay `0x102f6690` arms the network manager's first think at
  *  (`m_flNextThink = curtime + 0.8`, at the end of `CWorld::Precache`'s network build). */
-static constexpr double AiNetworkFirstThinkDelay = 0.8;
+static constexpr double AiNetworkFirstThinkDelay = ElysiumNpcTunables::EightTenthsDouble;
 
 /** `g_pAINetworkManager` (`DAT_10934088`) non-null AND its `+0x658` byte, the base think's gate
  *  `0x1026cb2a`/`0x1026cb36`. The byte has one writer, the manager's think `0x102f6a50`, and one reader,

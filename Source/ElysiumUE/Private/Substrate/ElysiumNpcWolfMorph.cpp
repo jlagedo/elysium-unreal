@@ -65,16 +65,6 @@ int32 FElysiumNpcWolfMorph::SpeciesSelectSchedule()
 	return GWolfMorphSchedMorph;                                   // 0x103dceda
 }
 
-// Slot 546: `0x103dc950`, the class's own squad-slot id space.
-const TCHAR* FElysiumNpcWolfMorph::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1094028c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VWolfMorph"), TEXT("0x103dc950"), TEXT("0x1094028c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // Slot 588: `0x103dcf00`.
 void FElysiumNpcWolfMorph::Slot588()
 {

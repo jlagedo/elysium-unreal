@@ -29,28 +29,6 @@
 // and where retail's own refusal arm is the admitting one the seam answers the admitting value so
 // nothing is silently refused.
 
-// --- `AILocalMoveGoal_t`, the block the two `CAI_Motor` step bodies read --------------------------
-
-// --- The `CAI_Motor` seams this family adds ------------------------------------------------------
-
-// --- The `CAI_Navigator` seams this family adds --------------------------------------------------
-
-/** `thunk_FUN_102ee3f0(navigator)` = `navigator->+0x30->+0x2c` — the MOVEMENT activity of the
- *  current route, which `MoveNormal` pushes through owner slot 310 `SetActivity` before it enacts.
- *  Family TroikaHelpers stands `NavCurrentLinkActivity` over the same retail call for
- *  `StopScheduledMove`; this calls THAT rather than adding a second answer to one question. */
-
-// --- `CAI_StandoffGoal`, the goal ENTITY -----------------------------------------------------------
-//
-// Three of this family's rows fill slots on `CAI_StandoffGoal`'s own 246-slot `CBaseEntity`-line
-// table — 180 `UpdateOnRemove`, 241 `InputActivate`, 243 `InputDeactivate`. **There is no
-// `ai_goal_standoff` entity in this runtime**, exactly as there is no `CAI_StandoffBehavior`, so
-// these land the way family Lifecycle landed `StandoffSelect`: the goal's own words as a typed view
-// and the three bodies as PURE statics over it. Every threshold and every arm is then exercised
-// without inventing a goal-entity store.
-
-// --- `CAI_StandoffBehavior#22`, the activity translation -------------------------------------------
-
 // --- `CAI_TestHull`, the hull probe ----------------------------------------------------------------
 //
 // `CAI_TestHull::Spawn` `0x102d72f0` is its own class's slot 103, `FElysiumNpcTestHull::Spawn`

@@ -99,7 +99,7 @@ struct FElysiumLocomotionSample
 	//
 	// It is retail's cached `surfacedata_t*`, carried on the sample because BOTH producers cache one
 	// and both footstep consumers read it: `CAI_BaseNPC +0x5b90`, written only by
-	// `CAI_Navigator::MoveEnact 0x102ef870` through the setter `0x10270290` and cleared at
+	// `CAI_Navigator::MoveEnact` through the setter `0x10270290` and cleared at
 	// spawn/reset by `0x10273390` / `0x1027bf50`; and the player's, cached on `CGameMovement` by
 	// `CategorizePosition` and read as a `gamematerial` letter by `UpdateStepSound 0x1011e940`
 	// (`switch((char)mover[0x29])`).

@@ -13,13 +13,10 @@ class FElysiumNpcHunter : public FElysiumNpcHumanCombatant
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VHunter", FElysiumNpcHumanCombatant)
 
-	virtual void NPCInit() override;
 	virtual void OnStateChange(EElysiumNpcState OldState, EElysiumNpcState NewState) override;
-	virtual int32 SelectIdealStateRetail() override;
 	virtual void OnSeeEntity(FElysiumEntity* Seen) override;
 	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

@@ -30,9 +30,6 @@ public:
 	FElysiumNpcMingXiao();
 
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
-	virtual void Precache() override;
-	virtual int32 Save(void* Archive) override;
-	virtual int32 Restore(void* Archive) override;
 	virtual void UpdateOnRemove() override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual FVector GetShootEnemyDir(const FVector& ShootPositionCm, int32 A, int32 B) override;
@@ -44,13 +41,10 @@ public:
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual float MaxYawSpeed() override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
-	// Slot 523 `0x10391050` (the stand test's drop, SDK-named `GetMaxJumpSpeed`): 50.0.
-	virtual float GetMaxJumpSpeed() const override;
-	virtual void DrawDebugGeometryOverlays() override;
-	virtual const TCHAR* GetShortConditionName(int32 ConditionId) override;
+	// Slot 523 `0x10391050` (the stand test's drop, SDK-named `GetStepDownHeight`): 50.0.
+	virtual float GetStepDownHeight() const override;
 	virtual void OnChangeActivity(int32 Activity) override;
 	virtual int32 GetUsedHullBits() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 
@@ -119,7 +113,7 @@ public:
 	 *  "tentacle n is still there". Not a row of this family; two lines, and three of this family's
 	 *  bodies gate on it, so it is written rather than seamed. */
 	bool IsTentacleConnected(int32 TentacleId) const;
-	/** `0x10398870` — `m_iTentacleID != -1`, retail's "this MingXiao is a proxy, not the head". */
+	/** `m_iTentacleID != -1`, retail's "this MingXiao is a proxy, not the head". */
 	bool IsMingXiaoProxy() const;
 	/** `0x10397f70` — `CNPC_VMingXiao::Spawn`/`StartTask`'s rate pick: a proxy answers `Tuning[0x20]`
 	 *  flat; the head answers `max(Tuning[0x6c] + Tuning[0x70] * (6 - m_iConnectedTentacleCount), 0)`. */
@@ -302,12 +296,13 @@ public:
 	/** `0x1039aaf0` / `0x1039ab10` — `CNPC_VMingXiao::m_bBlockedByFriend`'s setter and getter. */
 	void SetBlockedByFriend(bool bBlocked);
 	bool BlockedByFriend() const;
-	/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` — the tuning record's +0x48 in the 0x112a–0x112d band
-	 *  and +0x44 elsewhere, read through the record seam. */
+	/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` -- the tuning record's +0x48 (`TurnSpeedAttack`)
+	 *  inside the half-open band `(0x1129, 0x112e)` and its +0x44 (`TurnSpeedNormal`) elsewhere. */
 	static float MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField);
 
-	/** `+0x66f4 CNPC_VMingXiao::m_rflRegrowTimers[6]` — the six tentacle regrow stamps
-	 *  `CNPC_VMingXiao::Save` brackets the archive with. SIX is the loop bound in both bodies
+	/** `+0x66f4 CNPC_VMingXiao::m_rflRegrowTimers[6]` — the six tentacle regrow stamps, carried by the
+	 *  generated SAVE walk (`CNPC_VMingXiao::Save`'s FLT_MAX sentinel bracket is gone with
+	 *  retail's `FIELD_TIME` rebase: this runtime stores the stamp verbatim). SIX is the loop bound in both bodies
 	 *  (`iVar1 = 6`), and `ElysiumNpcKernelShape.cpp` gives the array a 4-byte stride. */
 	static constexpr int32 MingXiaoRegrowTimerCount = 6;
 	double MingXiaoRegrowTimers[MingXiaoRegrowTimerCount] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };

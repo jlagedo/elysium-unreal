@@ -163,7 +163,13 @@ def convar_strings(image: PEImage, obj: int) -> tuple[str, str]:
     while at >= 0:
         p = start + at
         data = image.data
-        if data[p + 5] == 0xE8 and data[p - 5] == 0x68 and data[p - 10] == 0x68:
+        # `PUSH default; PUSH name; MOV ECX, obj; CALL ctor` is the static initialiser. A
+        # function-local static (`debug_slow_idle_yaw_speed` / `debug_slow_walk_yaw_speed`, built
+        # inside `CAI_BaseNPCTroika::MaxYawSpeed 0x10297ce0`) stores its guard byte first:
+        # `MOV ECX, obj; MOV [guard], DL; CALL ctor` -- the call sits six bytes later (0019/6).
+        call_at = p + 5 if data[p + 5] == 0xE8 else (
+            p + 11 if data[p + 5:p + 7] == bytes((0x88, 0x15)) and data[p + 11] == 0xE8 else -1)
+        if call_at > 0 and data[p - 5] == 0x68 and data[p - 10] == 0x68:
             name = image.read_cstring_va(struct.unpack_from("<I", data, p - 4)[0])
             default = image.read_cstring_va(struct.unpack_from("<I", data, p - 9)[0])
             hits.append((name, default))
@@ -187,6 +193,12 @@ def verify(image: PEImage, row: kl.Tunable) -> None:
         held = struct.unpack(fmt, _immediate(image, va))[0]
         if _bits(held, fmt) != _bits(_parse(row.type, row.value), fmt):
             raise Mismatch(f"the immediate is {held!r}, the row says {row.value}")
+    elif row.type == "ref":
+        # A named global may live in `.bss` (virtual size past the raw bytes: a run-time table
+        # pointer, a ConVar object cell), so the test is the section's VIRTUAL range, not its bytes.
+        rva = va - image.image_base
+        if not any(sec["rva"] <= rva < sec["rva"] + sec["size"] for sec in image.sections):
+            raise Mismatch("the global is not inside any section of the image")
     else:
         name, default = convar_strings(image, va)
         if name != console_name(row):
@@ -207,7 +219,7 @@ def _comment(text: str, indent: str = "") -> list[str]:
 
 
 def _header(rows: list[kl.Tunable]) -> list[str]:
-    cells = [r for r in rows if not r.type.startswith("convar_")]
+    cells = [r for r in rows if not r.type.startswith("convar_") and r.type != "ref"]
     convars = [r for r in rows if r.type.startswith("convar_")]
     return [
         BANNER,
@@ -234,7 +246,7 @@ def render_header(rows: list[kl.Tunable]) -> str:
     out.append("\t// --- Cells and immediates, in overlay order ---------------------------------"
                "--------------")
     for row in rows:
-        if row.type.startswith("convar_"):
+        if row.type.startswith("convar_") or row.type == "ref":
             continue
         kind = CPP_TYPES[row.type]
         value = _parse(row.type, row.value)
@@ -247,6 +259,15 @@ def render_header(rows: list[kl.Tunable]) -> str:
         out.append("")
         out += _comment(f"`0x{row.address}` {row.type} — {row.evidence}", "\t")
         out.append(f"\tinline constexpr {kind} {row.name} = {literal};")
+    refs = [row for row in rows if row.type == "ref"]
+    if refs:
+        out += ["", "	// --- Retail globals the kernel names but does not value (0019/6) -----------"
+                    "------------", "	//"]
+        out += _comment("Each is an engine pointer, a table base, a class static or a string the "
+                        "port stands with a seam or a comment; recorded here so the ledger holds "
+                        "the address and no number is read from it.", "	")
+        for row in refs:
+            out += _comment(f"`0x{row.address}` {row.name} — {row.value}; {row.evidence}", "	")
     out += ["", "\t// --- ConVars -------------------------------------------------------------"
                 "------------------", "\t//"]
     out += _comment("Retail reads a ConVar as `cv->vtable[4]() ? 0 : cv->m_fValue` (`+0x28`) or "

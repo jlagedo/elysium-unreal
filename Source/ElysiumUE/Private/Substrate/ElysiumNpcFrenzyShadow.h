@@ -12,7 +12,7 @@
 // and tests construct it by classname.
 //
 // Twenty-six own slots relative to the controller (the deleting destructor, slot 5 `0x10376f20`, is
-// the C++ destructor's; slot 82 `0x10375280` is the datamap accessor, which the generated bindings
+// the C++ destructor's; slot 82 is the datamap accessor, which the generated bindings
 // stand). It puts BACK the base view and aim cones the controller answers false for (362-365), and
 // inherits the controller's 72, 245, 246, 300, 404, 432, 437 and 488-497.
 class FElysiumNpcFrenzyShadow : public FElysiumNpcPlayerController
@@ -50,8 +50,6 @@ public:
 	virtual int32 StartTaskSlot442(void* Task) override;
 	// Slot 478 `0x103766d0`.
 	virtual FElysiumEntity* BestEnemy() override;
-	// Slot 546 `0x10375440` — the class's own squad-slot id space.
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	// Slots 599-602 `0x10376b70` / `0x10376ba0` / `0x10376bd0` / `0x10376bf0`.
 	virtual bool Slot599(int32 Arg) override;
 	virtual bool Slot600(FElysiumEntity* Enemy) override;

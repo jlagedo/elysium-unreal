@@ -10,20 +10,8 @@
 //
 // Owns (Select19's `rule` rows): 0x1028a380 CAI_BaseNPC::SelectSchedule.
 
-/** `+0x1b2c` `m_SelectScheduleTrace.m_iSelector` — the selector id every slot-437 / 438 body writes
- *  first (1 base, 2 Troika, a class tag for a species body; `0x1028a260` writes 0). The agreed
- *  visual-only modernization of pass I: the selector id is carried as a real word for the debugger
- *  to render; the `__FILE__` / `__LINE__` pair beside it (`+0x1b30` / `+0x1b34`) stays ABSENT and
- *  each retail exit's line is recorded through `RecordScheduleEvent` instead (`SelectTrace`). */
-int32 SelectScheduleSelector = 0;
-
 /** How many times `CAI_BaseNPC::SelectSchedule` case 7 asked `BecomeClientRagdoll` (`0x10090180`). */
 int32 SelectRagdollRequests = 0;
-
-/** `m_SelectScheduleTrace`'s file/line pair as a trace row, then `Schedule` back. `File` is the
- *  retail source file the exit stamps (`AI_BaseNPC.cpp`, `AI_BaseNPCTroika.cpp`, `NPC_V*.cpp`),
- *  `Line` its `__LINE__`. Returns `Schedule` so an exit reads `return SelectTrace(...)`. */
-int32 SelectTrace(const TCHAR* File, int32 Line, int32 Schedule);
 
 /** `CAI_BaseNPC::SelectSchedule` (`0x1028a380`), slot 438's base body: the per-state ladder the
  *  Troika switch's `default:` and every Troika state it does not own tail-jump into

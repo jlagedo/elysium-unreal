@@ -58,29 +58,6 @@ static const FScheduleIdSpace* ScheduleIdSpaceRows(int32& OutCount);
  *  the Troika line's own row. Never null — every chain ends at `CAI_BaseNPCTroika`. */
 const FElysiumLocalIdSpace* ClassScheduleIdSpace() const override;
 
-// --- Slot 452 `LoadedSchedules`: one method and a species table -----------------------------------
-//
-// The slot itself IS this story's (`0x102b97f0`, the `CAI_BaseNPCTroika` override), so
-// `FElysiumNpc::LoadedSchedules()` is defined in the family `.cpp` and reads the table below.
-
-/** One row of retail's slot-452 species table: the class, the body that fills the slot for it, and
- *  the global `bool` that body returns. Every one of those globals is written in exactly one place
- *  — the class's own `InitCustomSchedules` loop (`CNPC_VBrujah`'s is `0x10367a40`), which seeds the
- *  loop FROM the flag, breaks on the first parse failure and stores the parser's answer back. The
- *  flag therefore ships `true` and only a failed schedule-text parse clears it. */
-struct FScheduleLoadFlag
-{
-	const TCHAR* RetailClass = nullptr;
-	const TCHAR* Body = nullptr;
-	// The `bool` global, `0x10……`. `DAT_105d1058` for the Troika line.
-	const TCHAR* Flag = nullptr;
-};
-
-/** The table: the twelve species bodies of slot 452 across their census classes, plus the Troika
- *  line's own `0x102b97f0`. A record read only by tests: the live flag is the schedule corpus's
- *  parse result, per class. */
-static const FScheduleLoadFlag* LoadedSchedulesRows(int32& OutCount);
-
 // --- The schedule-change door ---------------------------------------------------------------------
 
 // --- Species words this family's bodies read ------------------------------------------------------

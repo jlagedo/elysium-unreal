@@ -28,8 +28,8 @@
 // 0x103d68d0, `GetHintEndpoint` 0x103d6650, `GetHintEndEntity` 0x103d6390, `IsValidMoveHint`
 // 0x103d8060, `IsValidRandomMoveHint` 0x103d7dc0, `IsValidTeleportHint` 0x103d8300,
 // `IsImperativeTeleportHint` 0x103d3360, `GetHintTeleportPriority` 0x103d3220, `SetMoveHint`
-// 0x103d44e0, `ClearMoveHint` 0x103d4690, `SetTeleportHint` 0x103d45c0, `StartSearchTimer`
-// 0x103d1ca0, `ReportSearchTimer` 0x103d1d60, `WerewolfShouldPursueEnemy` 0x103cf5f0, `FUN_103d1e50`,
+// 0x103d44e0, `ClearMoveHint` 0x103d4690, `SetTeleportHint` 0x103d45c0, `WerewolfShouldPursueEnemy`
+// 0x103cf5f0, `FUN_103d1e50`,
 // `FUN_103d9c90`, `WerewolfHasPath` 0x103d0db0 (the navigator seam), `CachedNearestNodeZone`
 // 0x103d0ad0 (seam) and `GetNearestNodeToPlayer` 0x103d0bf0.
 //
@@ -53,7 +53,7 @@ namespace NpcKernelWerewolf19Species
 	// Retail's condition numbers. `EElysiumNpcCond` names `0x59` (`EnemyUnreachable`) and `0x77`
 	// (`CanTeleport`); `0x78`, `0x79` and `0x7b` are the Werewolf-line registrar's
 	// (`COND_VWEREWOLF_CAN_SPECIAL_MOVE`, `_ENEMY_REACHABLE`, `_SHOULD_BREAKHINT` in the overlay table
-	// `0x103d5130` prints), above the base table and without enumerators, so they are cast.
+	// the dead debug overlay printed), above the base table and without enumerators, so they are cast.
 	inline EElysiumNpcCond Werewolf19Cond(int32 RetailCondition)
 	{
 		return static_cast<EElysiumNpcCond>(RetailCondition);
@@ -63,8 +63,8 @@ namespace NpcKernelWerewolf19Species
 	constexpr int32 GWerewolf19CondEnemyReachable = 0x79;
 	constexpr int32 GWerewolf19CondShouldBreakHint = 0x7b;
 
-	// `+0x66e8`'s bits, read off the listings. What each MEANS is the zone logic's (the overlay at
-	// `0x103d5130` prints the zone word, not this one); only the tests are recovered.
+	// `+0x66e8`'s bits, read off the listings. What each MEANS is the zone logic's (the dead debug overlay
+	// printed the zone word, not this one); only the tests are recovered.
 	constexpr uint32 GWerewolf19FlagBreakHintHeld = 0x2u;    // 0x103cc4c7 / 0x103d3e2e / 0x103d2c51
 	constexpr uint32 GWerewolf19FlagBit4 = 0x4u;             // 0x103d2101 / 0x103d235b
 	constexpr uint32 GWerewolf19FlagBit80 = 0x80u;           // 0x103d210a
@@ -522,7 +522,6 @@ bool FElysiumNpcWerewolf::FindTeleportHint()
 	// free.
 	using namespace NpcKernelWerewolf19Species;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	StartSearchTimer();                                                     // 0x103d3c94
 	if (WerewolfSearchStampedThisFrame())                                   // 0x103d3cad 0x103d3ca1 0x(frame 0xcount)
 	{
 		return false;                                                       // 0x103d3cc5
@@ -609,7 +608,7 @@ bool FElysiumNpcWerewolf::FindTeleportHint()
 					WerewolfTeleportGiveUpTries = Tries;
 					UE_LOG(LogElysiumNpcEnt, Verbose,
 						TEXT("Werewolf giving up after %d teleport searches!"), Tries);   // 0x103d42b9
-					return ReportSearchTimer(false);                        // 0x103d42ca 0xteardown 0x103d42d5 0x103d42de 0x103d42f2 0x103d42fb 0x103d4304 0x103d4315
+					return false;                                           // 0x103d42ca 0xteardown 0x103d42d5 0x103d42de 0x103d42f2 0x103d42fb 0x103d4304 0x103d4315
 				}
 				Winner = Best;
 				break;
@@ -697,7 +696,7 @@ bool FElysiumNpcWerewolf::FindTeleportHint()
 	{
 		SetTeleportHint(Winner);                                            // 0x103d4213
 	}
-	return ReportSearchTimer(Winner != INDEX_NONE);                         // 0x103d4224 0xteardown 0x103d4236 0x103d424a 0x103d4257 0x103d426b 0x103d426f 0x103d4272
+	return Winner != INDEX_NONE;                                            // 0x103d4224 0xteardown 0x103d4236 0x103d424a 0x103d4257 0x103d426b 0x103d426f 0x103d4272
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -789,7 +788,6 @@ bool FElysiumNpcWerewolf::FindMoveHint()
 	{
 		return false;                                                       // 0x103d2b27
 	}
-	StartSearchTimer();                                                     // 0x103d2b2a
 	WerewolfStampSearch(Now);                                               // 0x103d2b3d / 0x103d2b4b 0x103d2b37
 	const int32 Head = WerewolfHintListHead();
 	if (Head == INDEX_NONE)                                                 // 0x103d2b59
@@ -844,7 +842,7 @@ bool FElysiumNpcWerewolf::FindMoveHint()
 				if (Best == INDEX_NONE)                                     // 0x103d3011 / 0x103d3015
 				{
 					WerewolfMoveHintSearchStart = Node;                     // 0x103d3023 +0x66b8 = cursor
-					return ReportSearchTimer(false);                        // 0x103d3029 0xteardown 0x103d3034 0x103d303d 0x103d304e 0x103d3057 0x103d3060 0x103d3071
+					return false;                                           // 0x103d3029 0xteardown 0x103d3034 0x103d303d 0x103d304e 0x103d3057 0x103d3060 0x103d3071
 				}
 				Winner = Best;
 				break;
@@ -911,7 +909,7 @@ bool FElysiumNpcWerewolf::FindMoveHint()
 	{
 		SetMoveHint(Winner, false);                                         // 0x103d2f72
 	}
-	return ReportSearchTimer(bFound);                                       // 0x103d2f83 0xteardown 0x103d2f92 0x103d2fae 0x103d2fb2 0x103d2fb5 0x103d2fca 0x103d2fdd 0x103d2fe1 0x103d2fe4
+	return bFound;                                                          // 0x103d2f83 0xteardown 0x103d2f92 0x103d2fae 0x103d2fb2 0x103d2fb5 0x103d2fca 0x103d2fdd 0x103d2fe1 0x103d2fe4
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -972,7 +970,6 @@ bool FElysiumNpcWerewolf::CheckAllRandomMoveHints()
 		}
 		ClearMoveHint();                                                    // 0x103cf858
 	}
-	StartSearchTimer();                                                     // 0x103cf861
 	WerewolfMorphTimerB = static_cast<float>(EngineFrameNumber());          // 0x103cf874 +0x66d4 0x103cf86e
 	WerewolfMoveHintSearchStart = 0;                                        // 0x103cf885 +0x66b8 = NULL
 	WerewolfMorphTimerC = static_cast<float>(Now);                          // 0x103cf88b +0x66d8
@@ -982,14 +979,14 @@ bool FElysiumNpcWerewolf::CheckAllRandomMoveHints()
 	{
 		if (Node == INDEX_NONE)                                             // 0x103cf8c9
 		{
-			return ReportSearchTimer(false);                                // 0x103cfa48 0xteardown 0x103cfa53 0x103cfa5c 0x103cfa70 0x103cfa74 0x103cfa77
+			return false;                                                   // 0x103cfa48 0xteardown 0x103cfa53 0x103cfa5c 0x103cfa70 0x103cfa74 0x103cfa77
 		}
 		const FHintWords Candidate = WerewolfHintAt(Node);
 		if (IsImperativeRandomMoveHint(Candidate))                          // 0x103cf8d2 / 0x103cf8db
 		{
 			ClearMoveHint();                                                // 0x103cfa9c
 			SetMoveHint(Node, true);                                        // 0x103cfaa6
-			return ReportSearchTimer(true);                                 // 0x103cfab4 0xteardown 0x103cfabf 0x103cfac8 0x103cfad9
+			return true;                                                    // 0x103cfab4 0xteardown 0x103cfabf 0x103cfac8 0x103cfad9
 		}
 		if (IsValidRandomMoveHint(Candidate, Now))                          // 0x103cf8e2 / 0x103cf8e9
 		{
@@ -1006,7 +1003,7 @@ bool FElysiumNpcWerewolf::CheckAllRandomMoveHints()
 					{
 						ClearMoveHint();                                    // 0x103cfaf4
 						SetMoveHint(Node, true);                            // 0x103cfafe
-						return ReportSearchTimer(true);                     // 0x103cfb0c 0xteardown 0x103cfb17 0x103cfb20 0x103cfb31
+						return true;                                        // 0x103cfb0c 0xteardown 0x103cfb17 0x103cfb20 0x103cfb31
 					}
 				}
 			}
@@ -1039,7 +1036,6 @@ bool FElysiumNpcWerewolf::FindRandomMoveHint()
 	{
 		return true;                                                        // 0x103d15e5
 	}
-	StartSearchTimer();                                                     // 0x103d15e8
 	WerewolfStampSearch(Now);                                               // 0x103d15fb / 0x103d1609 0x103d15f5
 	const int32 Head = WerewolfHintListHead();
 	if (Head == INDEX_NONE)                                                 // 0x103d1616
@@ -1103,7 +1099,7 @@ bool FElysiumNpcWerewolf::FindRandomMoveHint()
 				if (Best == INDEX_NONE)                                     // 0x103d1a9c
 				{
 					WerewolfMoveHintSearchStart = Node;                     // 0x103d1aaa +0x66b8 = cursor
-					return ReportSearchTimer(false);                        // 0x103d1ab0 0xteardown 0x103d1abb 0x103d1ac4 0x103d1ad5 0x103d1ade 0x103d1ae7 0x103d1af8
+					return false;                                           // 0x103d1ab0 0xteardown 0x103d1abb 0x103d1ac4 0x103d1ad5 0x103d1ade 0x103d1ae7 0x103d1af8
 				}
 				Winner = Best;
 				break;
@@ -1166,7 +1162,7 @@ bool FElysiumNpcWerewolf::FindRandomMoveHint()
 	{
 		SetMoveHint(Winner, true);                                          // 0x103d19ef
 	}
-	return ReportSearchTimer(bFound);                                       // 0x103d1a00 0xteardown 0x103d1a0b 0x103d1a14 0x103d1a30 0x103d1a34 0x103d1a37 0x103d1a48 0x103d1a51 0x103d1a64 0x103d1a68 0x103d1a6b
+	return bFound;                                                          // 0x103d1a00 0xteardown 0x103d1a0b 0x103d1a14 0x103d1a30 0x103d1a34 0x103d1a37 0x103d1a48 0x103d1a51 0x103d1a64 0x103d1a68 0x103d1a6b
 }
 
 // -------------------------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcMakerFleshpile.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
@@ -16,9 +17,9 @@ namespace
 {
 	// `_DAT_10452dc4` = 2.0f — Andrei's live-runner cap (`CNPC_VAndreiBlood`'s own `0x1035e920` reads
 	// the same cell). The count is a datamap `FIELD_INTEGER` every body reads and writes as a float.
-	constexpr int32 GFleshpileMaxActiveRunners = 2;
+	constexpr int32 GFleshpileMaxActiveRunners = static_cast<int32>(ElysiumNpcTunables::Two);
 	// `_DAT_104454c0` = 1.0f — the step the runner count and the kill count move by.
-	constexpr int32 GFleshpileRunnerStep = 1;
+	constexpr int32 GFleshpileRunnerStep = static_cast<int32>(ElysiumNpcTunables::One);
 	// `s_npc_VAndreiBlood_1062525c`, the singleton search's classname.
 	const TCHAR* const GFleshpileOwnerClassname = TEXT("npc_VAndreiBlood");
 	// `s_npc_maker_fleshpile_106251f4` and case `0x154`'s search radius (`fVar8 = 1024.0`).
@@ -28,12 +29,6 @@ namespace
 	// base maker overwrites.
 	constexpr int32 GFleshpileChildSpawnFlags = 0x4;
 	constexpr int32 GFleshpileChildFadeSpawnFlags = 0x204;
-}
-
-// Slot 82: `0x1034bdc0` returns `&datamap_CNPCMaker_Fleshpile` (`0x106250f0`).
-void* FElysiumNpcMakerFleshpile::GetDataDescMap()
-{
-	return const_cast<FElysiumClassDesc*>(FElysiumClassRegistry::Get().Find(FName(RetailClassName)));
 }
 
 // Slot 103: `0x1034c020`.
@@ -63,10 +58,7 @@ void FElysiumNpcMakerFleshpile::Precache()
 	{
 		return;
 	}
-	// `CAI_BaseNPC::Precache` `0x1027bb50`, DIRECT.
-	FElysiumNpcBase::Precache();
-	// Nothing is tested after the chain: its reject arm `UTIL_Remove`s and returns, and this body
-	// carries on regardless (a removal is deferred in retail).
+	// Retail's DIRECT `CAI_BaseNPC::Precache` is asset loading (`Bake`): no call.
 	// `UTIL_PrecacheOther(m_iszNPCClassname)` with no emptiness check: an empty classname reaches
 	// `UTIL_PrecacheOther("")`, whose own warning is the diagnostic, and the maker stays.
 	NpcKernelPrecache10Shared::Precache10Other(*this, NpcType);
@@ -104,16 +96,6 @@ FElysiumNpcAndreiBlood* FElysiumNpcMakerFleshpile::FleshpileOwner() const
 		return Andrei;
 	}
 	return nullptr;
-}
-
-// Slot 130: `0x1034c260`.
-void FElysiumNpcMakerFleshpile::OnRestore(bool bFromLoad)
-{
-	// `DAT_10938040 = cast(FindEntityByClassname(NULL, "npc_VAndreiBlood"))` — unconditionally, null
-	// included — then `CAI_BaseNPCTroika::OnRestore` `0x102998c0`.
-	FElysiumNpc::FleshpileAndreiSingleton() = FElysiumEntityHandle::Invalid();
-	FleshpileOwner();
-	FElysiumNpc::OnRestore(bFromLoad);
 }
 
 // Slot 139: `0x1034c8e0`.
@@ -160,18 +142,6 @@ bool FElysiumNpcMakerFleshpile::FInAimCone(FElysiumEntity* AimTarget)
 {
 	(void)AimTarget;
 	return false;
-}
-
-// Slot 370: `0x1034be90`.
-FVector FElysiumNpcMakerFleshpile::HeadDirection2D()
-{
-	return BodyDirection2D();
-}
-
-// Slot 371: `0x1034bec0`.
-FVector FElysiumNpcMakerFleshpile::HeadDirection3D()
-{
-	return BodyDirection3D();
 }
 
 // Slot 619: `0x1034bf70`.

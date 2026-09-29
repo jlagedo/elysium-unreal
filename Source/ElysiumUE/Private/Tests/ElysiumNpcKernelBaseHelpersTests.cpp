@@ -76,8 +76,8 @@ namespace
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slots 555 / 556 — `MeleeAttack1Conditions` (`0x1026d9a0`) and `MeleeAttack2Conditions`
-// (`0x1026da90`).
+// Slot 555 — `MeleeAttack1Conditions` (`0x1026d9a0`); slot 556 `MeleeAttack2Conditions` was deleted
+// as dead in 0019/6.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersMeleeConditionsTest,
@@ -94,43 +94,33 @@ bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 
 	const int32 None = static_cast<int32>(EElysiumNpcCond::None);
 	const int32 TooFarToAttack = static_cast<int32>(EElysiumNpcCond::TooFarToAttack);   // 0x60
-	const int32 TooFarForMelee = static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 0x09
 	const int32 CanMelee1 = static_cast<int32>(EElysiumNpcCond::CanMeleeAttack1);       // 0x51
-	const int32 CanMelee2 = static_cast<int32>(EElysiumNpcCond::CanMeleeAttack2);       // 0x52
 
 	// Rung 2 of both ladders: past the shared 64-unit attack band (`_DAT_10451acc`) the answer is
 	// `COND_TOO_FAR_TO_ATTACK`, whatever the dot is.
 	TestEqual(TEXT("1: past 64 units answers COND_TOO_FAR_TO_ATTACK"),
 		F.Npc->MeleeAttack1Conditions(1.0f, 64.1f), TooFarToAttack);
-	TestEqual(TEXT("2: past 64 units answers COND_TOO_FAR_TO_ATTACK"),
-		F.Npc->MeleeAttack2Conditions(1.0f, 64.1f), TooFarToAttack);
 	TestEqual(TEXT("1: exactly 64 units is INSIDE the band (retail's compare is strictly greater)"),
 		F.Npc->MeleeAttack1Conditions(0.0f, 64.0f), None);
 
-	// The outer rung is where the two ladders differ first. `0x1026da90` reads
-	// `_DAT_1044c3a8 = 180.0f`; `0x1026d9a0` reads `_DAT_1044ddb0`, which is UNRECOVERED and stands
-	// at +inf, so its `COND_TOO_FAR_FOR_MELEE` arm is deliberately unreachable and says so.
-	TestEqual(TEXT("2: past 180 units answers COND_TOO_FAR_FOR_MELEE"),
-		F.Npc->MeleeAttack2Conditions(1.0f, 180.1f), TooFarForMelee);
-	TestEqual(TEXT("2: exactly 180 units falls through to the 64-unit band"),
-		F.Npc->MeleeAttack2Conditions(1.0f, 180.0f), TooFarToAttack);
-	TestEqual(TEXT("1: the unrecovered outer band leaves the 0x09 arm unreachable"),
-		F.Npc->MeleeAttack1Conditions(1.0f, 1.0e9f), TooFarToAttack);
+	// `0x1026d9a0`'s outer band reads `_DAT_1044ddb0` = 256.0f (`ElysiumNpcTunables::Melee1OuterBand`);
+	// past it the answer is `COND_TOO_FAR_FOR_MELEE` (0x09), at it the 0x60 rung still answers.
+	const int32 TooFarForMelee = static_cast<int32>(EElysiumNpcCond::TooFarForMelee);   // 0x09
+	TestEqual(TEXT("1: at the outer band the 0x60 rung still answers"),
+		F.Npc->MeleeAttack1Conditions(1.0f, ElysiumNpcTunables::Melee1OuterBand), TooFarToAttack);
+	TestEqual(TEXT("1: past the outer band answers COND_TOO_FAR_FOR_MELEE"),
+		F.Npc->MeleeAttack1Conditions(1.0f, 1.0e9f), TooFarForMelee);
 
 	// The dot gate, `flDot < 0.7` (`_DAT_104492d0`, read as a double; SDK 2013's twin states the
 	// literal). Shared by both bodies.
 	TestEqual(TEXT("1: a dot under 0.7 refuses"), F.Npc->MeleeAttack1Conditions(0.69f, 10.f), None);
-	TestEqual(TEXT("2: a dot under 0.7 refuses"), F.Npc->MeleeAttack2Conditions(0.69f, 10.f), None);
 
-	// THE SECOND DIFFERENCE: `0x1026d9a0` re-dispatches `GetEnemy()` as a null gate after the dot
-	// and `0x1026da90` does not — so with no committed enemy the two answer differently.
+	// `0x1026d9a0` re-dispatches `GetEnemy()` as a null gate after the dot.
 	F.Npc->BaseMemory.Enemy = FElysiumEntityHandle();
 	TestEqual(TEXT("1: no enemy refuses after the dot gate"),
 		F.Npc->MeleeAttack1Conditions(0.9f, 10.f), None);
-	TestEqual(TEXT("2: no enemy still answers COND_CAN_MELEE_ATTACK2 — there is no null gate"),
-		F.Npc->MeleeAttack2Conditions(0.9f, 10.f), CanMelee2);
 
-	// THE THIRD DIFFERENCE: the `FL_ONGROUND` read. Only `0x1026d9a0` has it.
+	// The `FL_ONGROUND` read.
 	F.Npc->BaseMemory.Enemy = F.Other->Handle;
 	F.Other->Flags &= ~1;
 	TestEqual(TEXT("1: an airborne enemy answers nothing"),
@@ -138,11 +128,6 @@ bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 	F.Other->Flags |= 1;
 	TestEqual(TEXT("1: a grounded enemy answers COND_CAN_MELEE_ATTACK1"),
 		F.Npc->MeleeAttack1Conditions(0.9f, 10.f), CanMelee1);
-	TestEqual(TEXT("2: the same enemy answers COND_CAN_MELEE_ATTACK2 either way"),
-		F.Npc->MeleeAttack2Conditions(0.9f, 10.f), CanMelee2);
-	F.Other->Flags &= ~1;
-	TestEqual(TEXT("2: and an airborne one too — no ground read in this body"),
-		F.Npc->MeleeAttack2Conditions(0.9f, 10.f), CanMelee2);
 
 	return true;
 }
@@ -510,12 +495,6 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 		F.Npc->HitBuildupCount, 1);
 
 	F.Npc->Cognition.Conditions.Reset();
-	F.Npc->Slot23(F.Other);
-	TestTrue(TEXT("slot 23 is byte-identical to slot 22"),
-		F.Npc->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
-	TestEqual(TEXT("counter still untouched"), F.Npc->HitBuildupCount, 1);
-
-	F.Npc->Cognition.Conditions.Reset();
 	F.Npc->Slot27(F.Other);
 	TestTrue(TEXT("slot 27 sets it too, and then asks slot 600 for a melee coordinator slot"),
 		F.Npc->Cognition.Conditions.Has(EElysiumNpcCond::BeingAttacked));
@@ -571,18 +550,6 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 		F.Npc->IsUnusableNode(F.Npc));
 	TestTrue(TEXT("because an absent hint is free"), F.Npc->IsHintAvailableToMe(0));
 
-	// Slot 497 (`0x102947e0`): the once-only latch is the observable half. A second call does
-	// nothing, which is `DAT_109249c4 & 1`.
-	F.Npc->Slot497();
-	F.Npc->Slot497();
-	TestTrue(TEXT("slot 497's once-latch tolerates a second call"), true);
-
-	// Slot 19 (`0x1028dfb0`): a null message does nothing at all; a message goes to the log,
-	// because the verbose-trace toggle `DAT_10920534` reads clear here.
-	F.Npc->TraceMessageBare(nullptr);
-	F.Npc->TraceMessageBare(TEXT("trace"));
-	TestTrue(TEXT("TraceMessageBare writes no member either way"), true);
-
 	// Slot 542 (`0x10273dd0`): the ownership move family Squad already stands. The port carries one
 	// enemy memory per NPC and no squad memory to point it at, so the move changes nothing — and
 	// retail's null-squad fault is not reproduced.
@@ -614,7 +581,7 @@ bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 	TestFalse(TEXT("the draw answers false with no interest record"), F.Npc->FUN_1029f650(3));
 	TestFalse(TEXT("and clears m_bPatrolPathUseHint (+0x65a0) on the way in"),
 		F.Npc->ScheduleHost.bPatrolPathUseHint);
-	// This world has no network, so node 3 is outside it: `0x1029f6c0` counts the miss and answers
+	// This world has no network, so node 3 is outside it: `PatrolNodeInterestRecord` counts the miss and answers
 	// no record (the networked arms are `Elysium.Substrate.PlaceSeams.*`).
 	const int32 Misses = FElysiumNpc::PatrolNodeMissCounter();
 	TestEqual(TEXT("because node 3 is outside the (empty) network, there is no record"),

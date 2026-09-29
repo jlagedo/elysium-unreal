@@ -24,16 +24,6 @@ void FElysiumNpcSabbatGunman::OnChangeActivity(int32 Activity)
 	FElysiumNpc::OnChangeActivity(Activity);   // `0x10295a60`, direct
 }
 
-// Slot 546: `0x103a5240`, the class's own schedule id space.
-const TCHAR* FElysiumNpcSabbatGunman::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c1d8`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VSabbatGunman"), TEXT("0x103a5240"), TEXT("0x1093c1d8") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
 FElysiumNpc::FMotionTrailPick FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(float GroundSpeed,

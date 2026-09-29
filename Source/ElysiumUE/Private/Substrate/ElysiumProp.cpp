@@ -7,7 +7,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
-#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/BoxComponent.h"
@@ -27,9 +27,22 @@ namespace ElysiumPropTraceBody
 	// `PhysicsActor` ignores the sight channel by default, so the sight response is set on this body
 	// alone rather than on the shared profile. Re-applied after every profile change (a profile
 	// resets responses; the mask filter survives it).
-	void Apply(UPrimitiveComponent* Body)
+	// 0019/6: the bits come from the prop's two authored keyfields (`PropBodyMaskBits`) --
+	// `blocks_traces` (`m_bBlocksTraces +0xfd`) admits it without MONSTER (`101d30f2`), so it wears
+	// no `PropMaskBit`; `npc_transparent` (`m_bNPCTransparent +0xfc`) is passed by `FVisible`'s
+	// filter (`0x10107630`). Read once, like `solid`: spawn-time only.
+	uint8 MaskBitsFor(const FElysiumEntityDef* Def)
 	{
-		Body->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+		const auto Flag = [Def](const TCHAR* Key)
+		{
+			return Def != nullptr && FCString::Atoi(*Def->Keys.FindRef(Key)) != 0;
+		};
+		return ElysiumRetailMask::PropBodyMaskBits(Flag(TEXT("blocks_traces")), Flag(TEXT("npc_transparent")));
+	}
+
+	void Apply(UPrimitiveComponent* Body, const FElysiumEntityDef* Def)
+	{
+		Body->SetMaskFilterOnBodyInstance(MaskBitsFor(Def));
 		Body->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 	}
 }
@@ -629,6 +642,15 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		VisualStem = AnimatedStem = PlacedBody.Stem;
 		// A static visual owns its collision directly; never double-own/destroy it as a proxy.
 		CollisionProxy = Visual ? nullptr : PlacedBody.PhysicsProxy;
+		// 0019/6: this is an ENTITY prop, so whichever component carries its collision wears the
+		// entity-prop bits (`PropBodyMaskBits`: `PropMaskBit` unless `blocks_traces`, plus the
+		// `npc_transparent` bit). The mask filter only -- the builder owns the sight response, and a
+		// non-solid body stays non-colliding.
+		if (UPrimitiveComponent* CollisionBody = Visual ? static_cast<UPrimitiveComponent*>(Visual)
+			: static_cast<UPrimitiveComponent*>(PlacedBody.PhysicsProxy))
+		{
+			CollisionBody->SetMaskFilterOnBodyInstance(ElysiumPropTraceBody::MaskBitsFor(Def));
+		}
 		if (Visual)
 		{
 			World->RegisterPropBody(Visual, IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
@@ -679,7 +701,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 			if (Solid != 0 && Solid != 2)
 			{
 				Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
-				ElysiumPropTraceBody::Apply(Visual);
+				ElysiumPropTraceBody::Apply(Visual, Def);
 			}
 			else
 			{
@@ -715,7 +737,7 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	UBoxComponent* Box = NewObject<UBoxComponent>(Owner);
 	Box->SetBoxExtent(LocalBounds.BoxExtent);
 	Box->SetCollisionProfileName(TEXT("PhysicsActor"));
-	ElysiumPropTraceBody::Apply(Box);
+	ElysiumPropTraceBody::Apply(Box, Def);
 	Box->SetupAttachment(Mesh);
 	Box->SetRelativeLocation(LocalBounds.Origin);
 	Box->RegisterComponent();
@@ -741,7 +763,7 @@ void FElysiumProp::GateVisual()
 			Visual->SetCollisionProfileName(bShown ? TEXT("PhysicsActor") : TEXT("NoCollision"));
 			if (bShown)
 			{
-				ElysiumPropTraceBody::Apply(Visual);   // the profile reset the sight response
+				ElysiumPropTraceBody::Apply(Visual, Def);   // the profile reset the sight response
 			}
 		}
 	}

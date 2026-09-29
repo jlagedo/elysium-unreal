@@ -1,0 +1,9 @@
+# Lane Q3 report · inline cells, files C
+
+(Saved by the orchestrator from the lane's final answer. Nothing built or run; corpus server down, the image and the local `corpus.sqlite` read directly.)
+
+291 unheld mentions over 177 addresses (368 counting held) in 57 files. **Cells:** 65 `.rdata` cells, widths from the reading opcode (D8/DC/SSE), every row passing `gen_kernel_tunables.verify`; ~60 code sites now read `ElysiumNpcTunables::<Name>`; `#include "Substrate/ElysiumNpcKernelTunables.h"` added to six files. **ConVars:** 4 object rows (`ming_xiao_throw_hds`, `ming_xiao_throw_power`, `ming_xiao_throw_base`, `manbat_screech_always`). **Refs:** 64 rows (60 `.data` globals, engine pointers and tables, 4 patrol-table columns in `.rdata`). Left: 295 mentions, all comments or ref sites. Most: RunTaskSpecies, SabbatLeader, MingXiao, Script.
+
+**Contradictions.** `0x10924edc` ("global melee-left event" in Human.h/.cpp) is the `ent_trace_melee` ConVar object `0x10924ed8` + 4, with 30 virtual-call readers — recorded as a ref; needs a re-verdict of those readers. Stand-ins marked UNRECOVERED whose cells are plain `.rdata`: `10447ee0` 1000.0, `1044ddb0` 256.0, `10450aa0` 4.0, `104bea38` 9999.0, `1044e664` 10.0, `1049ae40` -70.0. **Wired:** the ScheduleHost wait default from 0 to 1000 (retail's cell; `ScheduleTests` pins `10 + Thousand`) and the unused tentacle constants. **Left alone (behaviour, owner's call):** the MingXiao attack-timer stamp (`+ Ten`), the MingXiao pedestal aim offset (`MinusSeventy`), `MingXiaoThrowCvar` (its three ConVars now recovered), ManBat's `DAT_1093b814` = `manbat_screech_always` default 0. Zombie maker distance scale: retail's cell is f32 0.9 (the port had a double).
+
+**Notes.** `0x104c3cf4` / `0x104c3cf8` (33.0 / 60.0, the splash cycle) are spelled in hex only, not counted. `0x104c3cc8` / `0x104c3cec` have no direct `.text` reader; values as the port comments state.

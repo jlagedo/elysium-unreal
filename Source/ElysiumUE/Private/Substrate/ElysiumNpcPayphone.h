@@ -14,8 +14,6 @@ public:
 	ELYSIUM_NPC_CLASS("CPayphone", FElysiumNpc)
 
 	virtual void NPCInit() override;
-	virtual FVector HeadDirection2D() override;
-	virtual FVector HeadDirection3D() override;
 	virtual FVector EyePosition() const override;
 	virtual bool CanTalk(FElysiumEntity* Activator) override;
 	virtual void Think() override;

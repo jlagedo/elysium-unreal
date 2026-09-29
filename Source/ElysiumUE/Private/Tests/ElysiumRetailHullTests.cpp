@@ -98,10 +98,6 @@ bool FElysiumRetailHullSpeciesTest::RunTest(const FString&)
 	TestEqual(TEXT("a Tzimisce runner takes its own row"), Runner->HullKind, 13);
 	TestEqual(TEXT("both words alike"), Runner->PathingHullKind, 13);
 
-	// The alternate-hull seam is no longer a seam: it answers the pathing word, so retail's
-	// two-box debug arm is reachable for exactly the species retail reaches it for.
-	TestEqual(TEXT("the alternate hull IS the pathing word"),
-		Rat->RetailAlternateHullKind(), Rat->PathingHullKind);
 	return true;
 }
 

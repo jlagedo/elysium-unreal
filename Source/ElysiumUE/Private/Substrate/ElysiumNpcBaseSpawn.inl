@@ -77,8 +77,8 @@ int32 Spawn19AddToTeamCalls = 0;
 /** SEAM for the death impulse gate of `0x10265ad0` (`0x10265c1a..0x10265c3e`): the ConVar object at
  *  `DAT_106bbaa4` (SDK `npc_vphysics`; its console name and default are unrecovered in this image)
  *  read as `IsCommand() ? 0 : m_nValue`, AND `m_pPhysicsObject` (`+0x36c`). This runtime stands no
- *  `IPhysicsObject` (`FElysiumEntity::PhysicsObjectPosition` answers false for the same reason), so
- *  the gate answers FALSE and the slot-39 impulse is not dispatched. */
+ *  `IPhysicsObject` (the physics object is `Chaos`'s, 0019/6), so the gate answers FALSE and the
+ *  slot-39 impulse is not dispatched. */
 bool Spawn19DeathVPhysicsArmed() const;
 
 /** SEAM for `SUB_StartFadeOut` (`0x102695d0`, the `ShouldFadeOnDeath` arm at `0x10265d72`):

@@ -585,7 +585,7 @@ int32 FElysiumNpcMingXiao::MingXiaoHitTentacleIndex(const FElysiumEntity* Weapon
 
 int32 FElysiumNpcMingXiao::OnTakeDamage_Alive(void* Arg0)
 {
-	// 1. A proxy (`m_iTentacleID != -1`, `0x10398870`) chains with the packet unmodified.
+	// 1. A proxy (`m_iTentacleID != -1`) chains with the packet unmodified.
 	if (IsMingXiaoProxy())                                                  // 0x10395ae6 / 0x10395aed
 	{
 		return FElysiumNpc::OnTakeDamage_Alive(Arg0);                       // 0x10395af6

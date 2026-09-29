@@ -11,8 +11,8 @@
 // the class keeps the retail contract and tests construct it by classname.
 //
 // Eleven own slots (the deleting destructor, slot 5 `0x103dcf20`, is the C++ destructor's; slot 82
-// `0x103dc790` is the datamap accessor the generated bindings stand; slots 451 `0x103dc770` and 452
-// `0x103dc8f0` are the dead class-name and loaded-flag rows the corpus answers per class; slot 580
+// is the datamap accessor the generated bindings stand; slots 451, 452 and 546 are
+// the dead class-name, loaded-flag and squad-slot-id rows (0019/6); slot 580
 // `0x103dc750` returns the class's own schedule space `0x109402a8`, which the corpus loads as unit
 // `cnpc_vwolfmorph` keyed on this class). It inherits the controller's 72, 103, 245, 246, 300,
 // 362-365 (all false), 404, 431, 437 and 488-497.
@@ -30,8 +30,6 @@ public:
 	virtual void NPCInit() override;
 	// Slot 438 `0x103dceb0` — the species hook of the port's selector.
 	virtual int32 SpeciesSelectSchedule() override;
-	// Slot 546 `0x103dc950` — the class's own squad-slot id space.
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	// Slot 588 `0x103dcf00` — a bare `RET`.
 	virtual void Slot588() override;
 

@@ -19,27 +19,6 @@ bool SharesSquadWith(const FElysiumNpc* Other) const;
  *  unrecovered; 29c named the port method. */
 void VacateSquadSlot();
 
-/** One slot-546 id-space row, held by each species class's `SquadSlotName` override: the class,
- *  the body that fills the slot for it, and the `CAI_ClassScheduleIdSpace` that body translates through. The id-space fields are the state
- *  the static constructor left (`0x102ea090`) — every one of the 56 species spaces is constructed
- *  with `isRoot = false` and no class in the image ever registers a squad slot, so `LocalBase`
- *  keeps the 9999 "empty" sentinel and the translation answers -1. */
-struct FSquadSlotSpecies
-{
-	// The census class this row came from, `CNPC_VSabbatLeader` (`docs/vtmb/npc-kernel/slots.md`).
-	const TCHAR* RetailClass = nullptr;
-	// The retail body that fills slot 546 for it, `0x10……`; checkable against `slots.md`.
-	const TCHAR* Body = nullptr;
-	// The species `CAI_ClassScheduleIdSpace` global the body translates through, `0x10……`. Empty
-	// for the Troika line, which performs no translation at all.
-	const TCHAR* IdSpace = nullptr;
-	// `CAI_LocalIdSpace` `+0x00 m_globalBase`, `+0x04 m_localBase`, `+0x08 m_localTop`. 9999 in
-	// `LocalBase` is retail's "this space holds no ids" sentinel (`0x102ea2d0` tests it by name).
-	int32 GlobalBase = INDEX_NONE;
-	int32 LocalBase = 9999;
-	int32 LocalTop = INDEX_NONE;
-};
-
 /** `CAI_BaseNPC::FindCreateSquad(this, name)` (`0x10315800`) — the find-or-create half, and
  *  `FindSquad(name)` (`0x10315790`) when `bFindOnly`. No squad store exists, so it never finds and
  *  never creates: it answers null and `m_pSquad` stays unwritten. */
@@ -51,16 +30,6 @@ void RemoveFromSquad(void* Squad);
 
 /** The gates `0x10273d30` and `0x10369bd0` share, with the join arm each takes. */
 bool InitSquadLine(bool bCameraArm);
-
-/** `CAI_ClassScheduleIdSpace::SquadSlotLocalToGlobal` (`0x102ea2d0`): walk the id-space chain from
- *  `Species` upward and translate, or -1. A null `Species` is the Troika line, which does not
- *  translate and answers `LocalId` unchanged. */
-static int32 SquadSlotLocalToGlobal(const FSquadSlotSpecies* Species, int32 LocalId);
-
-/** `CAI_GlobalNamespace::IdToSymbol` over the one squad-slot namespace `DAT_10936c74`
- *  (`0x102ea020`), which `0x10316e80` seeds with exactly two symbols. `"<<null>>"` for -1, null for
- *  an id the namespace does not carry. */
-static const TCHAR* GlobalSquadSlotName(int32 GlobalId);
 
 /** The private enemy memory `CAI_BaseNPCTroika::SetSquad` frees or re-points (`m_pEnemies`
  *  `+0x5d88`, `AI_Enemies` dtor `0x102e0730` + `operator delete`, fresh `AI_Enemies`

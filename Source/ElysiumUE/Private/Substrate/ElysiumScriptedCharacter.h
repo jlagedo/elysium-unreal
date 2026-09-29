@@ -48,6 +48,9 @@ protected:
 
 	virtual bool ClaimScriptMove() { return true; }
 	virtual void ReleaseScriptMove(const TCHAR*) {}
+	// The kernel NPC's move-ignore set (`FElysiumNpcBase::ClearMoveIgnores`), dropped at every
+	// `Motor->Stop()` here: a stopped move keeps no slot-69 answers registered. Nothing below the NPC.
+	virtual void ClearMoveIgnores() {}
 
 	bool StartScriptWalkingAnimation(bool bRunning);
 

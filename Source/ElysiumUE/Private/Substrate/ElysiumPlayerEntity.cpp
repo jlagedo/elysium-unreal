@@ -69,7 +69,7 @@ bool FElysiumPlayer::CanAttemptStealthKill() const
 {
 	// `0x101681a0`, the "player is occupied" test, in retail's order: `0x10175180` FIRST — a frenzy
 	// shadow driving this body (`ControllerNpcBusy`) skips the WHOLE test and answers not-occupied;
-	// otherwise `0x101618a0`, a live `m_hControllerNPC` stand-in, is occupied (story 5 fold A2 wired
+	// otherwise the controller-handle read, a live `m_hControllerNPC` stand-in, is occupied (story 5 fold A2 wired
 	// both through the world's controller handle); then the other handles (`+0xfe8`, `+0x1040`,
 	// `+0x1eb8`, `+0x19c0`, `+0x19cc`), which have no producer here and answer not-busy; then the
 	// active cine camera; then the menu `0x1023bd00`, also not-busy here.

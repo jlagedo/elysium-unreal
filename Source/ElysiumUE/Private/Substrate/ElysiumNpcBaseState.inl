@@ -7,9 +7,8 @@
 int32 LastSelectIdealStateRetail = 0;
 
 // Retail stamps `m_SelectIdealStateTrace`'s `__FILE__` (`+0x1b3c`) and `__LINE__` (`+0x1b40`) at
-// every arm of every slot-461 body. The shape map calls that pair ABSENT; the mind's transition
-// trace carries the same account, so no member stands for it. Only `+0x1b38`, the selector tag,
-// is real here — 29d stood it as `SelectIdealStateSelector`.
+// every arm of every slot-461 body. The shape map calls that pair ABSENT, and so is the selector
+// tag `+0x1b38` (a dead debug stamp, spec 0019 story 6): no member stands for it.
 /** Slot 463's arguments as retail ids. `SetState` writes these before the typed virtual so Bach
  *  and Cop can switch on 8 / 0xb / 0xe which `EElysiumNpcState` cannot spell. */
 int32 LastOnStateChangeOldRetail = 0;

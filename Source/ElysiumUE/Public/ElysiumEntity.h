@@ -32,7 +32,7 @@ namespace ElysiumEntityCaps
 	inline constexpr int32 AcrossTransition = 0x2;
 
 	// The slot-117 overrides of the `CAI_BaseNPC` line's family are their classes' own
-	// (`FElysiumNpcTestHull` `0x102d7290`, `FElysiumScriptedSequence`); each chains
+	// (`FElysiumNpcTestHull`, `FElysiumScriptedSequence`); each chains
 	// `CBaseEntity::ObjectCaps` `0x100b4320` and clears this bit. `CAI_Hint`'s `0x102d2ee0` (the same
 	// `& 0xfffffffd`) is not ported: story 8 (story 5 commit B deleted the class-keyed row table
 	// that recorded it and no runtime path read).

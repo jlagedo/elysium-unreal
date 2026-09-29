@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 43 generated slot bodies of `FElysiumAnimating`: 0 carry the retail default story 29c recovered,
-// 7 are defined by hand in the substrate, and 36 are still stubs — 24 29c, 12 unassigned.
+// 38 generated slot bodies of `FElysiumAnimating`: 0 carry the retail default story 29c recovered,
+// 2 are defined by hand in the substrate, and 36 are still stubs — 24 29c, 12 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -136,16 +136,6 @@ void FElysiumAnimating::SetModel(TCHAR*)
 		DebugString());
 }
 
-// slot 108 0x1004fbb0 (walked) `bool KeyValue(const char*, Vector)`
-//   layer 11, story 29d
-// verdict `dead`: the body is `FElysiumAnimating::KeyValue`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 109 0x1004fbf0 (walked) `bool KeyValue(const char*, float)`
-//   layer 11, story 29d
-// verdict `dead`: the body is `FElysiumAnimating::KeyValue`, written by hand in the substrate.
-// Declared here, defined there.
-
 // slot 110 0x101c1480 (walked) `bool KeyValue(const char*, const char*)`
 //   layer 10, story 29d
 // verdict `rule`: the body is `FElysiumAnimating::KeyValue`, written by hand in the substrate.
@@ -167,25 +157,10 @@ void FElysiumAnimating::OnRestore(bool)
 		DebugString());
 }
 
-// slot 133 0x101c1720 (walked) `void MoveDone()`
-//   layer 9, story 29c
-// verdict `dead`: the body is `FElysiumAnimating::MoveDone`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 135 0x101c10d0 (walked) `float vfunc135(float)`
-//   layer 1, story 29c
-// verdict `dead`: the body is `FElysiumAnimating::Slot135`, written by hand in the substrate.
-// Declared here, defined there.
-
 // slot 137 0x1004fc50 (walked) `CBaseAnimating* GetBaseAnimating()`
 //   layer 0, story 29c
 // verdict `mechanism`: the body is `FElysiumAnimating::GetBaseAnimating`, written by hand in the
 // substrate. Declared here, defined there.
-
-// slot 152 0x1004fc10 (walked) `float GetDelay()`
-//   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumAnimating::GetDelay`, written by hand in the substrate.
-// Declared here, defined there.
 
 // slot 199 0x10095e50 (sdk) `void GetVelocity(Vector*, AngularImpulse*)`
 //   takes `AngularImpulse*`
@@ -445,14 +420,6 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void(TCHAR*)>::Test(&FElysiumAnimating::SetModel),
 				nullptr },
-			{ 108, TEXT("0x1004fbb0"), TEXT("CBaseToggle"), TEXT("KeyValue"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, bool(const TCHAR*, FVector)>::Test(&FElysiumAnimating::KeyValue),
-				nullptr },
-			{ 109, TEXT("0x1004fbf0"), TEXT("CBaseToggle"), TEXT("KeyValue"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, bool(const TCHAR*, float)>::Test(&FElysiumAnimating::KeyValue),
-				nullptr },
 			{ 110, TEXT("0x101c1480"), TEXT("CBaseToggle"), TEXT("KeyValue"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, bool(const TCHAR*, const TCHAR*)>::Test(&FElysiumAnimating::KeyValue),
@@ -465,21 +432,9 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void(bool)>::Test(&FElysiumAnimating::OnRestore),
 				nullptr },
-			{ 133, TEXT("0x101c1720"), TEXT("CBaseToggle"), TEXT("MoveDone"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void()>::Test(&FElysiumAnimating::MoveDone),
-				nullptr },
-			{ 135, TEXT("0x101c10d0"), TEXT("CBaseToggle"), TEXT("Slot135"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, float(float)>::Test(&FElysiumAnimating::Slot135),
-				nullptr },
 			{ 137, TEXT("0x1004fc50"), TEXT("CBaseAnimating"), TEXT("GetBaseAnimating"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, FElysiumEntity*()>::Test(&FElysiumAnimating::GetBaseAnimating),
-				nullptr },
-			{ 152, TEXT("0x1004fc10"), TEXT("CBaseToggle"), TEXT("GetDelay"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, float()>::Test(&FElysiumAnimating::GetDelay),
 				nullptr },
 			{ 199, TEXT("0x10095e50"), TEXT("CBaseAnimating"), TEXT("GetVelocity"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,

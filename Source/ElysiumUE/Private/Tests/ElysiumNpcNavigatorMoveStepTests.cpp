@@ -13,7 +13,7 @@
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // 0018 story 5 lane I -- `CAI_Navigator::Move 0x102eff40` as `FElysiumNpcBase::NavigatorMoveStep`: the
-// entry gates in retail's order, the arrival arms (`0x102ef510`, `OnNavComplete 0x102eea90`,
+// entry gates in retail's order, the arrival arms (navigator slot 16, `OnNavComplete`,
 // `AdvancePath 0x102f0400`), the NPC-blocker hold `0x102ef3e0` (0.25 s hold, 3.0 s window) with the
 // port's head-leg re-issue once it has run (at any think cadence), the goal-tolerance completion `0x102ef760`, and the
 // failure tail `0x102f0169` (stale mark unless `-3`, then `OnNavFailed(0x0c)`), each decided from the
@@ -49,7 +49,7 @@ namespace
 			MoveRequests.Add(Request);
 			return bAcceptMoves;
 		}
-		virtual void Face(float) override {}
+		virtual void Face(float, float) override {}
 		virtual void Stop() override { ++StopCalls; }
 		virtual void Teleport(const FVector&, float) override {}
 		virtual void SetEnabled(bool) override {}
@@ -243,7 +243,7 @@ bool FElysiumMoveStepShouldMoveTest::RunTest(const FString&)
 	TestEqual(TEXT("...motor slot 10 reached"), R.Guard->NavMoveStep.VelocityStops, Stops + 1);
 	TestTrue(TEXT("...the route stands"), R.Guard->Navigator.IsGoalActive());
 
-	// Climb: motor slot 5 `0x102e1110` and `SetNavType(0)`.
+	// Climb: the navigator's motor slot 5 and `SetNavType(0)`.
 	R.Guard->Navigator.NavType = 3;
 	const int32 Climbs = R.Guard->NavMoveStep.ClimbMotorResets;
 	R.Guard->NavigatorMoveStep();
@@ -318,7 +318,7 @@ bool FElysiumMoveStepArrivedGoalTest::RunTest(const FString&)
 	// Walking, 0.07 units out: outside the 0.0625 radius (`0x10451f78`), nothing ends.
 	R.Scripted.Walking(0.07f);
 	R.Guard->NavigatorMoveStep();
-	TestTrue(TEXT("0x102ef510 0.07 units is not reached"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::None);
+	TestTrue(TEXT("0.07 units is not reached"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::None);
 	TestTrue(TEXT("...the route stands"), R.Guard->Navigator.IsGoalActive());
 	TestTrue(TEXT("...m_bShouldMove stands"), R.Guard->BaseScheduleHost.bShouldMove);
 
@@ -328,7 +328,7 @@ bool FElysiumMoveStepArrivedGoalTest::RunTest(const FString&)
 	R.Guard->Navigator.BlockerForgetAt = R.Now() + 2.0;
 	R.Scripted.Walking(0.05f);
 	R.Guard->NavigatorMoveStep();
-	TestTrue(TEXT("0x102eea90 OnNavComplete"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
+	TestTrue(TEXT("OnNavComplete"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
 	TestTrue(TEXT("...nav+0x1c = 1"), R.Guard->Navigator.bNavFailed);
 	TestFalse(TEXT("...TaskMovementComplete cleared m_bShouldMove (0x10273ec9)"), R.Guard->BaseScheduleHost.bShouldMove);
 	TestEqual(TEXT("...the goal type does not outlive the arrival"), R.Guard->Navigator.GetGoalType(), 0);
@@ -384,7 +384,7 @@ bool FElysiumMoveStepLastCornerTest::RunTest(const FString&)
 	R.Guard->NavigatorMoveStep();
 	// `OnNavComplete` -> `TaskMovementComplete 0x10273ec0`: `IsGoalActive` -> `AdvancePath` (the goal
 	// corner's `InPass`), then `ClearGoal`.
-	TestTrue(TEXT("0x102eea90 the arrival completes"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
+	TestTrue(TEXT("OnNavComplete: the arrival completes"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
 	TestEqual(TEXT("0x10273f3a AdvancePath handed the last corner InPass once"), GMoveStepInPassActivators.Num(), 1);
 	if (GMoveStepInPassActivators.Num() == 1)
 	{
@@ -471,7 +471,7 @@ bool FElysiumMoveStepNpcHoldResumesTest::RunTest(const FString&)
 	R.F.Advance(T0 + 0.5);
 	R.Scripted.Walking(0.05f);
 	R.Guard->NavigatorMoveStep();
-	TestTrue(TEXT("0x102eea90 the walk completes"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
+	TestTrue(TEXT("OnNavComplete: the walk completes"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::Arrived);
 	TestEqual(TEXT("...never a failure"), R.Guard->BaseScheduleHost.FailureReason, 0);
 	TestFalse(TEXT("0x102eeb70 the re-issue mark is reset with the blocker memory"), R.Guard->Navigator.bBlockerHoldReissued);
 	return true;

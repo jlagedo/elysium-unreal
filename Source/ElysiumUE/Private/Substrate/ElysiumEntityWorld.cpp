@@ -305,6 +305,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 
 	// `CWorld::Precache` `0x102f6690`: the network manager's first think is armed at `curtime + 0.8`.
 	BuildStamp = NowSeconds();
+	bNetworkManagerFirstThinkRun = false;
 
 	UE_LOG(LogElysiumWorld, Log, TEXT("world '%s' built dormant: %d entities (%d brush bodies), epoch %u"),
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
@@ -399,7 +400,7 @@ void FElysiumEntityWorld::Activate(double Now)
 	//   for (e = NextEnt(NULL); e; e = NextEnt(e)) if (!(e->m_iEFlags & EFL_DORMANT)) e->Activate();
 	//
 	// * By index, not a ranged-for, because retail's pass visits what it creates. `NextEnt`
-	//   (`0x100f7060`) re-reads each node's next link and `CBaseEntityList::AddEntityAtSlot`
+	//   re-reads each node's next link and `CBaseEntityList::AddEntityAtSlot`
 	//   (`0x100f9fc0`) links a new entity at the TAIL, so an entity an earlier `Activate` creates
 	//   (an NPC's init granting items; first met standing `npc_VWerewolf`, story 5 step 2) is
 	//   activated later in the same pass, after every entity already listed. Its creator spawned it
@@ -1882,6 +1883,7 @@ void FElysiumEntityWorld::Tick(double Now)
 	AdvanceAnimEvents();
 	// SetAnimation's paired completion is per frame, not the player's 0.1-second rule heartbeat.
 	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->TickStealthKill();
+	RunNetworkManagerFirstThink();
 	RunThinks(Now);
 	ServiceEvents(Now);
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
@@ -2108,6 +2110,27 @@ void FElysiumEntityWorld::WakeNpcsNear(const FVector& PointCm)
 			{
 				Npc->ResetThinkTimers(Now);
 			}
+		}
+	}
+}
+
+void FElysiumEntityWorld::RunNetworkManagerFirstThink()
+{
+	// `0x102f6a50`'s one-shot arm, on the clock `Think19AiNetworkReady` compares (`NowSeconds`):
+	// `0x1028d8d0` walks the class list `0x106eb5d8` and, for every entity with a Troika pointer,
+	// calls vslot 584 with 0. Entity-list order stands for the class list's. The think's other
+	// work (`ai_node_graph_built`, the dynamic-link init `0x102cc900`) is 0018 story 7's.
+	if (bNetworkManagerFirstThinkRun
+		|| NowSeconds() < BuildStamp + FElysiumNpcBase::AiNetworkFirstThinkDelay)
+	{
+		return;
+	}
+	bNetworkManagerFirstThinkRun = true;
+	for (const TUniquePtr<FElysiumEntity>& Entry : EntityList)
+	{
+		if (FElysiumNpc* const Npc = Entry.IsValid() ? Entry->AsNpc() : nullptr)
+		{
+			Npc->Slot584(0);
 		}
 	}
 }

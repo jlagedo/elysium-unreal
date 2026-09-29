@@ -2,26 +2,11 @@
 // moved from `ElysiumNpcPrecache10*.inl`. Included inside `class FElysiumNpcBase`
 // (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBasePrecache10.cpp`.
 
-/** `CAI_BaseNPC::Precache` (`0x1027bb50`), slot 104's body on the nine `CAI_BaseNPC`-line classes
- *  and the tail `0x10298ad0` chains into. A DISTINCT retail function beside the Troika override, so
- *  it is ported under its own name.
- *
- *  Three steps, in order:
- *    1. `m_spawnEquipment` (`+0x5dec`) goes through `UTIL_PrecacheOther` when it is non-null AND is
- *       not the one-character sentinel `"0"` (`DAT_105399a0`).
- *    2. slot 452 `LoadedSchedules` (vtable `+0x710`) decides the rest. **False** prints
- *       `DevMsg("ERROR: Rejecting spawn of %s as error in NPC's schedules.\n", GetDebugName())`,
- *       `UTIL_Remove`s the entity and **returns without chaining the base at all**.
- *    3. True falls through to `CBaseCombatCharacter::Precache`.
- *
- *  The port answers `LoadedSchedules` **true always by design** (`ElysiumNpcSchedule.cpp:297`
- *  — nothing here parses schedule text, so no flag can be cleared), so the reject arm is
- *  UNREACHABLE in this runtime today. It is ported anyway, because the day a schedule parser lands
- *  the arm is what a malformed schedule reaches, and a test drives it through the same seam.
- *
- *  `CBaseCombatCharacter::Precache` (`0x10011324`) is `CBaseCombatCharacter::PrecacheOnce`'s
- *  once-guarded global block — the discipline, damage-effect and HUD emitters every character
- *  shares. It is NOT an NPC-kernel row and has no port body; see the definition. */
+/** `CAI_BaseNPC::Precache`, slot 104's body on the nine `CAI_BaseNPC`-line classes.
+ *  Retail precaches `m_spawnEquipment` (unless null or `"0"`), gates on slot 452 `LoadedSchedules`
+ *  (a closed `dead` row) and chains `CBaseCombatCharacter::Precache`, the once-per-map global emitter
+ *  block. Verdict `mechanism`, service `Bake` (0019/6): every step is an asset acquisition this
+ *  runtime resolves at bake and load, and none writes a word, so the port body is empty. */
 // Declared by the generated slot surface (`ElysiumNpcBaseSlots.inl`, slot 104); defined by hand as
 // `FElysiumNpcBase::Precache`.
 

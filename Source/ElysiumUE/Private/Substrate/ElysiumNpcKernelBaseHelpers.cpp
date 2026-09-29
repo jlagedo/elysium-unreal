@@ -6,6 +6,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
@@ -50,11 +51,11 @@ namespace
 	constexpr float GDatFaceAnimTurnYaw = ElysiumNpcTunables::Forty;
 	// Family Facing recovered the Troika turn ladder's own pair, and the top rung of `0x10297a20`
 	// reads the SAME two addresses: `_DAT_1049ae3c = -140.0f`, `_DAT_1049ae38 = 140.0f`.
-	constexpr float GDatFaceAnimYawLow = -140.0f;            // _DAT_1049ae3c
-	constexpr float GDatFaceAnimYawHigh = 140.0f;            // _DAT_1049ae38
+	constexpr float GDatFaceAnimYawLow = ElysiumNpcTunables::MinusOneForty;   // _DAT_1049ae3c
+	constexpr float GDatFaceAnimYawHigh = ElysiumNpcTunables::OneForty;       // _DAT_1049ae38
 	// The retail string of the arm that reads `_DAT_10451ab4` is
 	// `"Projection (%.2f) < 0.2"` — the literal is in the message.
-	constexpr float GDatProjectionMin = 0.2f;                // _DAT_10451ab4
+	constexpr float GDatProjectionMin = ElysiumNpcTunables::Fifth;        // _DAT_10451ab4
 
 	// Read 2026-09-21 (`docs/vtmb/npc-ai/rdata-cells.md`) and held by the tunables table since
 	// 0019/4; each stood at a 0.0 stand-in before. The height limit is `FCOMP double ptr`: a DOUBLE.
@@ -206,7 +207,7 @@ bool FElysiumNpc::FUN_1029f610(const FPatrolPathCell* Cell) const
 // 0x1029f650 — the patrol node's interesting-place draw
 bool FElysiumNpc::FUN_1029f650(int32 PatrolNode)
 {
-	// `m_bPatrolPathUseHint = 0; record = 0x1029f6c0(node); if (record && Random(0,99) <
+	// `m_bPatrolPathUseHint = 0; record = PatrolNodeInterestRecord(node); if (record && Random(0,99) <
 	// record->m_iIPPercent (+0x46c)) m_bPatrolPathUseHint = 1; return m_bPatrolPathUseHint;`
 	//
 	// The reset happens FIRST and unconditionally, so a node with no record clears a standing flag.
@@ -227,7 +228,7 @@ bool FElysiumNpc::FUN_1029f650(int32 PatrolNode)
 // 0x1029f730 — the cached read side of that draw
 int32 FElysiumNpc::FUN_1029f730(int32 PatrolNode)
 {
-	// `if (!m_bPatrolPathUseHint) return 0; if (!cache) cache = 0x1029f6c0(node); return cache;`
+	// `if (!m_bPatrolPathUseHint) return 0; if (!cache) cache = PatrolNodeInterestRecord(node); return cache;`
 	// The cache word is `+0x659c`, which 29b reserved as `ScheduleHost.Unknown659c` and both Troika
 	// teardown virtuals clear.
 	if (!ScheduleHost.bPatrolPathUseHint)
@@ -624,15 +625,6 @@ void FElysiumNpc::Slot22(FElysiumEntity* Attacker)
 	Cognition.Conditions.Set(EElysiumNpcCond::BeingAttacked);
 }
 
-// slot 23 0x1029f890 `void vfunc23(CBaseEntity*)`
-void FElysiumNpc::Slot23(FElysiumEntity* Attacker)
-{
-	// Byte-identical to slot 22. `signatures.md`: no dispatch site exists in the decompiled corpus,
-	// so what distinguishes the three is UNRECOVERED — they are three slots carrying one body.
-	AlertNearbyAlly(Attacker);
-	Cognition.Conditions.Set(EElysiumNpcCond::BeingAttacked);
-}
-
 // slot 27 0x1029f8f0 `void vfunc27(CBaseEntity*)`
 void FElysiumNpc::Slot27(FElysiumEntity* Attacker)
 {
@@ -670,24 +662,6 @@ bool FElysiumNpc::Slot317(FElysiumEntity*)
 // The remaining slots.
 // =================================================================================================
 
-// slot 19 0x1028dfb0 `void TraceMessageBare(const char*) const`
-void FElysiumNpc::TraceMessageBare(const TCHAR* Message) const
-{
-	// A null message does nothing at all. Otherwise the global dev byte `DAT_10920534` picks the
-	// channel: set copies up to 0x200 bytes onto the NPC's own trace ring (`thunk_FUN_1027ee20`),
-	// clear prints straight through `DevMsg`. No member is written either way.
-	//
-	// SEAM: `DAT_10920534` is retail's verbose-trace toggle and this runtime has no such console
-	// byte; the ring itself is `ELYSIUM_NPC_WORD_ABSENT(0x1b4e)` ("retail's 16 KB in-memory AI
-	// debug ring; this runtime logs through its own channels"). So the toggle reads CLEAR and the
-	// `DevMsg` arm is the one every call takes, onto `LogElysiumNpcEnt` — which is that channel.
-	if (Message == nullptr)
-	{
-		return;
-	}
-	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s"), Message);
-}
-
 // slot 588 0x10293e50 `void vfunc588()`
 void FElysiumNpc::Slot588()
 {
@@ -702,33 +676,6 @@ void FElysiumNpc::Slot588()
 	{
 		RestartIdealActivityId(GBaseHelpersActDisposition);
 	}
-}
-
-// slot 497 0x102947e0 `void vfunc497()`
-void FElysiumNpc::Slot497()
-{
-	// `CNPC_VCamera` (and `CNPC_VCameraSecurity` under it) overrides this slot with ONE BYTE, a
-	// bare `ret` (`FElysiumNpcCamera`, `0x103681d0`): the once-only concept cache below does not run
-	// for a camera.
-
-	// A ONCE-ONLY global cache, not per-NPC state: bit 0 of `DAT_109249c4` guards it, and the body
-	// linear-scans `DAT_1073dc40[0 .. DAT_1073dc3c)` comparing each entry's `+0x04` name
-	// case-insensitively against the fixed string at `DAT_105d8ccc`, caching the matching entry's
-	// `+0x00` id (or -1) into `_DAT_109247dc`.
-	//
-	// `signatures.md` reads that string as the PLACEHOLDER `"???"` and says the body "plays
-	// nothing" — the concept it caches is a placeholder, so the cached id is never used to speak.
-	//
-	// SEAM: the global table `DAT_1073dc40` is the response-system concept list, which this runtime
-	// does not carry. The once-latch is reproduced (it is the observable half — a second call does
-	// nothing) and the scan answers "not found", which writes -1.
-	static bool bConceptCached = false;   // DAT_109249c4 & 1
-	if (bConceptCached)
-	{
-		return;
-	}
-	bConceptCached = true;
-	// `_DAT_109247dc = -1`: no concept table to scan.
 }
 
 // =================================================================================================
@@ -746,7 +693,7 @@ bool FElysiumNpc::ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const
 
 int32 FElysiumNpc::PatrolNodeInterestRecord(int32 PatrolNode) const
 {
-	// `0x1029f6c0` — the patrol node's record, which is the hint the node holds (`node+0xa0`):
+	// The patrol node's record, which is the hint the node holds (`node+0xa0`):
 	//
 	//     id = path->+0x14[path->+0x10];              // the caller's `PatrolCurrentNode`
 	//     if (id == -1) return 0;
@@ -756,12 +703,12 @@ int32 FElysiumNpc::PatrolNodeInterestRecord(int32 PatrolNode) const
 	//
 	// The node's hint is `FElysiumPlaceSet::AttachedHint`, answered as its entity index; retail's
 	// null is `INDEX_NONE` here (`seam-list.md`). A hint that has since died is no record.
-	if (PatrolNode == INDEX_NONE)                                              // 0x1029f6e0 CMP -1
+	if (PatrolNode == INDEX_NONE)                                              // CMP -1
 	{
 		return INDEX_NONE;
 	}
 	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
-	if (Places == nullptr || !Places->IsValidNode(PatrolNode))                 // 0x1029f6f0 / 0x1029f6f4
+	if (Places == nullptr || !Places->IsValidNode(PatrolNode))                 // the network bounds test
 	{
 		++PatrolNodeMissCounter();                                             // DAT_106c994c++
 		return INDEX_NONE;
@@ -798,3 +745,184 @@ bool FElysiumNpc::IsHintDebugNpc() const
 	return false;
 }
 
+// =================================================================================================
+// `CAI_BaseNPC`'s value helpers, re-homed here when 0019 story 6 deleted the Debug family whose files
+// held them. Declared in `ElysiumNpcKernelBaseHelpersBase.inl` (inside `class FElysiumNpcBase`).
+// Each one answers a rule body a value; none of them prints. Bodies moved verbatim.
+// =================================================================================================
+
+bool FElysiumNpcBase::SequenceDescriptor(int32 Sequence, FString& OutLabel,
+	FString& OutActivityName) const
+{
+	// SEAM for `CBaseAnimating::GetSeqDesc(m_nSequence)` (`0x1000b4f6`) and the two string offsets
+	// off the returned `mstudioseqdesc_t` (`+0x00` the label, `+0x04` the activity name, both
+	// relative to the descriptor itself). No studio header stands here — family Anim records the
+	// same refusal — so this answers FALSE and both strings stay empty, which is retail's
+	// `"(INVALID)"` arm (the dead debug formatter, 0019/6).
+	(void)Sequence;
+	OutLabel.Reset();
+	OutActivityName.Reset();
+	return false;
+}
+
+bool FElysiumNpcBase::NavigatorNearestNodePositionUnits(FVector& OutUnits) const
+{
+	// The `0x2000` arm's three-step:
+	//
+	//     m_pNavigator->+0x08 = m_pNavigator->+0x04->+0x156c;   // the NPC's own +0x156c, stamped in
+	//     m_pNavigator->+0x0c = gpGlobals->+0x04;               // the frame counter
+	//     idx = CAI_Network::NearestNodeToNPC(m_pNavigator->+0x2c, this, GetOrigin());  0x102f3c10
+	//     if (idx != -1) node = network->+0x04[idx];
+	//     CAI_Node::GetPosition(node, out, m_eHull);            // 0x102fb0d0
+	//
+	// The two scratch writes land on navigator words the port's mover does not keep (the pathing
+	// hull is read straight off the NPC wherever retail reads `nav+8`). The final position is the
+	// STANDING hull's, `m_eHull`, not the pathing one the search measured with.
+	const int32 Node = NavNearestNodeToNpc(Origin);                            // slot 220 GetOrigin
+	FVector NodeCm = FVector::ZeroVector;
+	if (Node == INDEX_NONE || World == nullptr || !World->Places().GetPositionCm(Node, HullKind, NodeCm))
+	{
+		return false;
+	}
+	OutUnits = NodeCm / ElysiumMove::U;
+	return true;
+}
+
+namespace
+{
+	// `0x102f3c10`'s box: `local_28/24/20` = 800, 800, 200 units, or `_DAT_1046bacc` (2048) on X/Y
+	// and 2048.0 on Z when the capabilities carry `4`.
+	constexpr float GNearestNpcBoxXYUnits = 800.0f;
+	constexpr float GNearestNpcBoxZUnits = 200.0f;
+	constexpr float GNearestNpcFlyBoxUnits = ElysiumNpcTunables::TwoThousandFortyEight;   // _DAT_1046bacc
+	constexpr int32 GNearestNpcCapFly = 0x4;       // bits_CAP_MOVE_FLY: type-3 (air) nodes
+	constexpr int32 GNearestNpcCapGround = 0x1;    // bits_CAP_MOVE_GROUND: type-2 nodes
+	constexpr int32 GNearestNpcNodeGround = 2;
+	constexpr int32 GNearestNpcNodeAir = 3;
+	constexpr int32 GNearestNpcNodeClimb = 4;
+	// `ListNodesInBox`'s cap at both call sites (`PUSH 10`).
+	constexpr int32 GNearestNodeListCount = 10;
+	// `0x102f1900`: a climb node is probed only with one of the info bits `0x1d`.
+	constexpr int32 GCanFitClimbBits = 0x1d;
+	// The mask `0x102f3c10` hands `CanFitAtNode` (`PUSH 0x2400b`).
+	constexpr int32 GCanFitMask = 0x2400b;
+	// `0x102f1a20`'s trace end: the point raised by `_DAT_1044e658` (the double 0.01).
+	constexpr double GCanFitRiseUnits = 0.01;
+}
+
+int32 FElysiumNpcBase::NavNearestNodeToNpc(const FVector& PositionCm) const
+{
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || Places->NumNodes() == 0)                          // 0x102f3c3a *this == 0
+	{
+		return INDEX_NONE;
+	}
+	// The cache `0x102f4520` (20 recent answers, keyed by point and hull, reused inside a short
+	// window) and its write-back `0x102f45f0` are engine machinery -- a lookup shortcut in front of
+	// this body -- and are not ported: the search runs every call.
+	FElysiumNpcBase* Self = const_cast<FElysiumNpcBase*>(this);
+	const int32 Caps = Self->CapabilitiesGet();                                // slot 513, local_48
+	const int32 Hull = RetailPathingHull();                                    // +0x156c, local_44
+	const FVector P = PositionCm / ElysiumMove::U;
+	const FVector Half = (Caps & GNearestNpcCapFly) != 0
+		? FVector(GNearestNpcFlyBoxUnits, GNearestNpcFlyBoxUnits, GNearestNpcFlyBoxUnits)
+		: FVector(GNearestNpcBoxXYUnits, GNearestNpcBoxXYUnits, GNearestNpcBoxZUnits);
+	// `CNodeNPCFilter::vfunc0` (`0x102f40f0`): the node type against the capabilities, then slot 527.
+	auto IsValid = [Places, Caps, Self](int32 Node) -> bool
+	{
+		const int32 Type = Places->Row(Node).Type;
+		if (Type == GNearestNpcNodeAir && (Caps & GNearestNpcCapFly) == 0)
+		{
+			return false;
+		}
+		if (Type == GNearestNpcNodeGround && (Caps & GNearestNpcCapGround) == 0)
+		{
+			return false;
+		}
+		return !Self->IsUnusableNode(const_cast<FElysiumPlaceRow*>(&Places->Row(Node)));   // +0x83c
+	};
+	// `CNodeNPCFilter::vfunc1` (`0x102f4140`): the squared distance to the node at the pathing hull.
+	auto DistanceSqr = [Places, Hull, &P](int32 Node) -> float
+	{
+		FVector At = Places->Row(Node).OriginCm;
+		Places->GetPositionCm(Node, Hull, At);
+		return static_cast<float>(FVector::DistSquared(At / ElysiumMove::U, P));
+	};
+	const TArray<int32> Order = Places->ListNodesInBox(GNearestNodeListCount, P - Half, P + Half,
+		IsValid, DistanceSqr);                                                 // 0x102f32f0
+	const FVector ViewOffsetCm = EyePosition() - Origin;                       // npc +0x184..+0x18c
+	int32 Fallback = INDEX_NONE;                                               // local_10
+	for (const int32 Node : Order)
+	{
+		if (!NavCanFitAtNode(Node, Hull, GCanFitMask) || IsUnusableNodeIndex(Node))   // 0x102f1900, 0x1027db30
+		{
+			continue;
+		}
+		FVector NodeCm = Places->Row(Node).OriginCm;
+		Places->GetPositionCm(Node, Hull, NodeCm);                             // param_1[0x55b]
+		const ENavNodeTrace Trace = NavNearestNodeTrace(PositionCm, NodeCm + ViewOffsetCm, Handle);   // 0x102f3900
+		if (Trace == ENavNodeTrace::Clear)
+		{
+			return Node;
+		}
+		if (Trace == ENavNodeTrace::ClearPastFlagged && Fallback == INDEX_NONE)
+		{
+			Fallback = Node;
+		}
+	}
+	return Fallback;
+}
+
+bool FElysiumNpcBase::NavCanFitAtNode(int32 Node, int32 Hull, int32 Mask) const
+{
+	// `0x102f1900`: the node through the network (an id outside it bumps `DAT_106c994c` and reads a
+	// NULL node -- the one caller hands only listed ids), `GetPosition(node, nav+8)`, then the two
+	// geometry queries below.
+	FVector NodeCm = FVector::ZeroVector;
+	if (World == nullptr || !World->Places().GetPositionCm(Node, Hull, NodeCm))
+	{
+		return false;
+	}
+	const FElysiumPlaceRow& Row = World->Places().Row(Node);
+	const bool bProbe = Row.Type == GNearestNpcNodeGround
+		|| (Row.Type == GNearestNpcNodeClimb && (Row.Flags & GCanFitClimbBits) != 0);
+	const FVector PointUnits = NodeCm / ElysiumMove::U;
+	if (bProbe)
+	{
+		// `0x102e7270(m_pMoveProbe, pos, mask, 0, 0, 0, 0)` -- `CheckStandPosition` (R1 §4), with NO
+		// `m_bForceNPCCheck` bracket (that is `CanStandAt`'s): the foot box of `m_Collision`'s OBB
+		// dropped slot 523 under the node, standable iff it hit and slot 166 agrees. A base-only NPC
+		// has no Troika move probe here and refuses.
+		const FElysiumNpc* Troika = AsNpc();
+		if (Troika == nullptr || !Troika->MoveProbeCheckStandPosition(PointUnits, Mask))
+		{
+			return false;
+		}
+	}
+	// `0x102f1a20` (R1 §4): a trace from the point to the point raised by 0.01 (`0x1044e658`) on the
+	// FULL row of the navigator's hull (`nav+8`: `0x102d6100` / `0x102d6120`; the small pair is
+	// `+0x20` / `+0x2c`), `CTraceFilterSimple(npc, 0)`, the caller's mask; fits iff the trace does
+	// NOT start solid (`[ESP+0x8b]`, `102f1c44`) -- the fraction is ignored. Family Motor's
+	// `KernelHullTrace`; a world with no collision answers clear, which fits.
+	FVector Mins = FVector::ZeroVector;
+	FVector Maxs = FVector::ZeroVector;
+	RetailHullExtents(Hull, EElysiumHullExtents::Full, Mins, Maxs);
+	FKernelHullTrace Trace;
+	KernelHullTrace(PointUnits, PointUnits + FVector(0.0, 0.0, GCanFitRiseUnits), Mins, Maxs, Mask, Trace);
+	return !Trace.bStartSolid;
+}
+
+FElysiumNpcBase::ENavNodeTrace FElysiumNpcBase::NavNearestNodeTrace(const FVector& StartCm,
+	const FVector& EndCm, const FElysiumEntityHandle& Ignore) const
+{
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return ENavNodeTrace::Clear;                                           // no collision world
+	}
+	float Fraction = 1.0f;
+	bool bStartSolid = false;
+	Embodiment->TraceCameraHull(StartCm, EndCm, FVector::ZeroVector, Ignore, Fraction, bStartSolid);
+	// `0x102f3a5b`: clear at `fraction == 1.0` exactly (`_DAT_10449280`); startsolid is not read.
+	return Fraction == 1.0f ? ENavNodeTrace::Clear : ENavNodeTrace::Blocked;
+}

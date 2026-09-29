@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcMakerZombie.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
@@ -18,15 +19,10 @@ namespace
 	// `s_item_w_zombie_fists_10625644` — the classname `Precache` precaches and `MakeNPC` looks up.
 	const TCHAR* const GZombieFistsItem = TEXT("item_w_zombie_fists");
 	// `_DAT_10450a9c` = 0.9 — the scale `CanMakeNPC` multiplies its MANHATTAN distance by.
-	constexpr double GZombieMakerDistanceScale = 0.9;
+	// Retail's cell is an f32 (`FMUL float ptr`), so the scale is the double that f32 widens to.
+	constexpr double GZombieMakerDistanceScale = static_cast<double>(ElysiumNpcTunables::NineTenths);
 	// `1034d249 PUSH 0x41700000` — the spawn emitter's 15-second life.
 	constexpr float GZombieSpawnEmitterLifetimeSeconds = 15.0f;
-}
-
-// Slot 82: `0x1034c9f0` returns `&datamap_CNPCMaker_Zombie` (`0x106253e8`).
-void* FElysiumNpcMakerZombie::GetDataDescMap()
-{
-	return const_cast<FElysiumClassDesc*>(FElysiumClassRegistry::Get().Find(FName(RetailClassName)));
 }
 
 // Slot 103: `0x1034cc60`.
@@ -69,10 +65,7 @@ void FElysiumNpcMakerZombie::Precache()
 	// chain — so the base chain's `UTIL_PrecacheOther(m_spawnEquipment)` arm never fires here.
 	AlternateEquipment.Reset();
 	AdditionalEquipment.Reset();
-	// `CAI_BaseNPC::Precache` `0x1027bb50`, DIRECT.
-	FElysiumNpcBase::Precache();
-	// Nothing is tested after the chain: its reject arm `UTIL_Remove`s and returns, and this body
-	// carries on regardless (a removal is deferred in retail).
+	// Retail's DIRECT `CAI_BaseNPC::Precache` is asset loading (`Bake`): no call.
 	// The child class, unconditionally, then the fists.
 	NpcKernelPrecache10Shared::Precache10Other(*this, NpcType);
 	NpcKernelPrecache10Shared::Precache10Other(*this, GZombieFistsItem);
@@ -101,18 +94,6 @@ bool FElysiumNpcMakerZombie::FInAimCone(FElysiumEntity* AimTarget)
 {
 	(void)AimTarget;
 	return false;
-}
-
-// Slot 370: `0x1034cad0`.
-FVector FElysiumNpcMakerZombie::HeadDirection2D()
-{
-	return BodyDirection2D();
-}
-
-// Slot 371: `0x1034cb00`.
-FVector FElysiumNpcMakerZombie::HeadDirection3D()
-{
-	return BodyDirection3D();
 }
 
 // Slot 619: `0x1034cbb0`.

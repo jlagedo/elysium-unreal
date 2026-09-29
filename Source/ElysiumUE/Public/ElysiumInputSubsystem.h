@@ -72,7 +72,6 @@ private:
 
 	APlayerController* ResolveController() const;
 
-	void OnPostLoadMap(UWorld* LoadedWorld);
 	void OnInputMethodChanged(ECommonInputType InputType);
 	bool ResolveCursorVisible(EElysiumCursorPolicy Policy) const;
 

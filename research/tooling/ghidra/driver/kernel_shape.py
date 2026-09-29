@@ -1048,6 +1048,8 @@ def residue(shape: Shape, rows: list[Row], sigs: list[dict]) -> str:
 
 # The verdicts that name a live rule the port owes (0019/5 step 6): a body the pass read and judged
 # live. `dead` and `unsettled` are not owed; an unverdicted body is `--residue`'s, not this list's.
+# A `mechanism` row closed at a service word (0019/6, `kernel_ledger.closed_target`) is not owed
+# either: the service answers it, so it is neither a `stub` nor a `no-override` here.
 LIVE_VERDICTS = ("rule", "present", "mechanism")
 UNPORTED_COLUMNS = ("class", "slot", "address", "verdict", "kind", "port_class")
 
@@ -1171,7 +1173,8 @@ def override_rows(repo: Path, model) -> tuple[list[dict], list[tuple[str, ...]]]
     retail_of = {port: retail for retail, port in ports.items() if port.startswith("F")}
     for row in model.overrides:
         # A dead class's body is census, not a debt (its class stands no instance).
-        if row.verdict not in LIVE_VERDICTS or row.cls not in live or row.slot in lifetime:
+        if row.verdict not in LIVE_VERDICTS or row.cls not in live or row.slot in lifetime \
+                or row.closed:
             continue
         port = ports.get(row.cls, "-")
         introducer = branch_of(row.cls, row.slot)

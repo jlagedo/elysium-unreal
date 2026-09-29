@@ -246,18 +246,6 @@ int32 FElysiumScriptedSequence::ObjectCaps() const
 	return FElysiumEntity::ObjectCaps() & ~ElysiumEntityCaps::AcrossTransition;
 }
 
-// Slot 175: `0x101a75a0`.
-void FElysiumScriptedSequence::Touch(FElysiumEntity* Other)
-{
-	(void)Other;
-}
-
-// Slot 178: `0x101a7580` (verdict `dead`: no caller dispatches slot 178 on a director).
-void FElysiumScriptedSequence::Blocked(FElysiumEntity* Other)
-{
-	(void)Other;
-}
-
 // Slot 180: `0x101a7140` (`CCineNPC::UpdateOnRemove`, filled by all three director classes). 19
 // bytes, no branch.
 void FElysiumScriptedSequence::UpdateOnRemove()
@@ -687,7 +675,7 @@ FElysiumEntity* FElysiumScriptedSequence::ResolveProceduralName(const FString& N
 	}
 	if (Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
 	{
-		return World->FindPlayerController();   // the player's `m_hControllerNPC` (`0x101618a0`)
+		return World->FindPlayerController();   // the player's `m_hControllerNPC`
 	}
 	if (Name.Equals(TEXT("!pvsplayer"), ESearchCase::IgnoreCase))
 	{

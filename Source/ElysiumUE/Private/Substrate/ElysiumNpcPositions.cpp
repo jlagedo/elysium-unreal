@@ -174,7 +174,7 @@ int32 FElysiumNpc::NavNearestNodeTo(const FVector& PositionCm) const
 	{
 		return -1;
 	}
-	constexpr float BoxUnits = 2048.0f;                                        // _DAT_1046bacc
+	constexpr float BoxUnits = ElysiumNpcTunables::TwoThousandFortyEight;      // _DAT_1046bacc
 	constexpr int32 ListCount = 10;                                            // 0x102f4214 PUSH 10
 	const FVector P = PositionCm / ElysiumMove::U;
 	const FVector Half(BoxUnits, BoxUnits, BoxUnits);

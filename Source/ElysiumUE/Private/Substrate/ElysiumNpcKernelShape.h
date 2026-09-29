@@ -120,6 +120,9 @@ enum class EElysiumNpcSlotBody : uint8
 	Default,
 	// Declared by the generator, defined by hand in the substrate.
 	Hand,
+	// Closed by 0019/6 but still reached: answers the value-initialised default, tallies nothing,
+	// no probe.
+	Closed,
 };
 
 // One generated slot row of one port class (0019 story 5 step 6): a slot the class introduces, or

@@ -89,7 +89,6 @@ int32 FElysiumNpcBase::BasePreSelectIdealState()
 	// own flags2 `+0x14bc` and returns; a base-only NPC (the word is null) takes `SquadNewEnemy`
 	// `0x103161a0` on its squad (`1026f61c`). Story 5 step 5 correction: the port resolved
 	// `MoveParent` here.
-	SelectIdealStateSelector = 1;
 	if (SquadDisconnected < 1 && SquadWord() != 0
 		&& (NpcStateRetail() == 1 || NpcStateRetail() == 3)
 		&& NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::NewEnemy)
@@ -107,7 +106,6 @@ int32 FElysiumNpcBase::BasePreSelectIdealState()
 
 int32 FElysiumNpcBase::BaseSelectIdealState()
 {
-	SelectIdealStateSelector = 1;
 	switch (NpcStateRetail())
 	{
 	case 1:

@@ -29,8 +29,8 @@ namespace
 	// `_DAT_1044f020`) answers 0. `GetSequenceCycleRate`'s zero-duration answer is 10.0
 	// (`0x100912c8 FLD [0x1044e664]`).
 	constexpr float GAnimDefaultFrameInterval = 0.1f;
-	constexpr double GAnimMinFrameInterval = 0.001;
-	constexpr float GAnimZeroDurationCycleRate = 10.f;
+	constexpr double GAnimMinFrameInterval = ElysiumNpcTunables::FrameAdvanceMinInterval;
+	constexpr float GAnimZeroDurationCycleRate = ElysiumNpcTunables::Ten;
 }
 
 // --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 5) ---
@@ -203,7 +203,7 @@ float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 
 int32 FElysiumNpcBase::GrowSceneEventCapacity(int32 Current, int32 GrowSize, int32 Needed)
 {
-	// `CUtlMemory::Grow`, as `0x100b5e60` inlines it. A grow step of -1 is retail's "external memory,
+	// `CUtlMemory::Grow`, as `CBaseFlex::AddSceneEvent` inlines it. A grow step of -1 is retail's "external memory,
 	// do not grow" and the insert is skipped entirely rather than reallocating.
 	if (GrowSize == -1 || Current >= Needed)
 	{
@@ -230,7 +230,7 @@ int32 FElysiumNpcBase::GrowSceneEventCapacity(int32 Current, int32 GrowSize, int
 
 void FElysiumNpcBase::AddSceneEventBase(const FElysiumSceneData* Scene, const FElysiumSceneEvent* Event)
 {
-	// `CBaseFlex::AddSceneEvent` `0x100b5e60` — the base-line body of slot 286, reached from the
+	// `CBaseFlex::AddSceneEvent` — the base-line body of slot 286, reached from the
 	// Troika override's `default` arm.
 	if (Scene == nullptr || Event == nullptr)
 	{
@@ -509,40 +509,7 @@ int32 FElysiumNpcBase::CanPlaySequence(bool bDisregardState, int32 InterruptLeve
 	return Result;
 }
 
-// --- The scene (slot 540) -----------------------------------------------------------------------
-
-float FElysiumNpcBase::PlayScene(const TCHAR* SceneFile)
-{
-	// `0x10279060`, slot 540: nineteen bytes, a tail call into `CBaseFlex::PlayScene(this, name, 0)`
-	// (`0x10084b40`) with a NULL out-handle. That body stands an `instanced_scripted_scene`, points
-	// it at this NPC, loads the named scene and answers its play length; an unknown scene gets
-	// `Msg("Unknown scene specified: %s\n")` and 0, with -1 written to the out-handle the NPC does
-	// not pass.
-	const float Length = PlayInstancedScene(SceneFile);
-	if (Length < 0.f)
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Unknown scene specified: %s"),
-			SceneFile != nullptr ? SceneFile : TEXT(""));
-		return 0.f;
-	}
-	return Length;
-}
-
 // --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 5) ---
-
-float FElysiumNpcBase::PlayInstancedScene(const TCHAR* SceneFile)
-{
-	// `CBaseFlex::PlayScene`'s body (`0x10084b40`): `CreateNoSpawn("instanced_scripted_scene")`, set
-	// the scene file and the target handle, `Spawn()` (slot 103) and slot 242, then
-	// `LoadSceneFromFile`; on failure `Msg("Unknown scene specified: %s\n")` and 0, else the scene's
-	// own play length.
-	//
-	// **SEAM**: standing that entity needs the world's factory and the scene cache, neither of which
-	// the substrate's NPC reaches. -1 is this seam's "could not stand it" and `PlayScene` below turns
-	// it into retail's own failure arm.
-	(void)SceneFile;
-	return -1.f;
-}
 
 // --- The flex controllers (slots 280, 281, 282) -------------------------------------------------
 

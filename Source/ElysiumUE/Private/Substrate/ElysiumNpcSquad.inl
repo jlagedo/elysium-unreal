@@ -47,8 +47,9 @@ FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 // this class's `CAI_ClassScheduleIdSpace` (`0x102ea2d0 SquadSlotLocalToGlobal`), then look the
 // global id up in the one shared squad-slot namespace `DAT_10936c74`
 // (`0x102ea020 CAI_GlobalNamespace::IdToSymbol`). The Troika line skips the translation and looks
-// `slotEN` up directly (`FElysiumNpcBase::SquadSlotName`). Each species' override holds its own
-// id-space row (story 5 step 4; the controller line since fold A2).
+// `slotEN` up directly. Every one of the 57 bodies is a closed `dead` row (0019/6): the name
+// only reaches a debug print, so `FElysiumNpcBase::SquadSlotName` answers the default and the
+// species overrides are gone.
 
 // --- The bodies -----------------------------------------------------------------------------------
 

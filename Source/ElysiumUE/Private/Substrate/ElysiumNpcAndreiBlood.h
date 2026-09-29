@@ -15,12 +15,9 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VAndreiBlood", FElysiumNpcVampireBoss)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
-	virtual int32 Restore(void* Archive) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

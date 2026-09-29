@@ -21,8 +21,8 @@ struct FElysiumSaveArchive;
 // the routing marker, and every clear mask in the binary clears it again.
 //
 // The name tables below are the WHOLE recovered vocabulary, transcribed from `0x1030cbd0`. The bit
-// order of word one is independently confirmed by the AI debug overlay `0x1028d990`, which walks
-// bits 0-29 against the legend string `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO"` at `0x105d88b8`.
+// order of word one is independently confirmed by the legend string `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO"` at `0x105d88b8`
+// (read only by the dead AI debug overlay, 0019/6).
 //
 // Only the three bits `SCHED_TROIKA_MESMERIZED` writes have consumers in this runtime today
 // (`IsBusyWithDiscipline`, the dialogue gate and the interest predicate). The rest are enumerated
@@ -156,10 +156,8 @@ public:
 	// `0x80000100` and clears it again with `&= 0x7ffffeff`. So retail carries a real bit there
 	// whose NAME is unrecovered — the `0x1030cbd0` table has no entry that resolves to it. These two
 	// accessors let a recovered body write the word retail writes without inventing a name for it.
-	// `m_bfAINPCFlags` whole, for the ONE reader that walks it bit by bit rather than by name: the
-	// AI debug overlay `0x1028d990` (`1028db18 MOV EDX,[EBP+0x14b8]`), which renders bits 0..29
-	// against the legend `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` at `0x105d88b8` — the same string the
-	// comment at the top of this file cites as the bit order's independent confirmation. Story 29d,
+	// `m_bfAINPCFlags` whole, for the readers that take it as a word rather than by name (the
+	// scripted-sequence save/restore, the task clear masks, the lifecycle record). Story 29d,
 	// Conditions10.
 	uint32 RawWord1() const { return Word1; }
 

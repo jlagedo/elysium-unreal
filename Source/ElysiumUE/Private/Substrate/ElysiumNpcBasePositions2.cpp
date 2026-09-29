@@ -19,7 +19,7 @@ namespace
 {
 	constexpr double ValidCoverDrop = ElysiumNpcTunables::HundredthDouble;
 	// `CAI_BaseNPC::IsUnreachable` `0x102741e0`'s squared-distance threshold, Source units squared.
-	constexpr float UnreachableDistSq = 14400.0f;   // _DAT_10499560 — 120 units, squared
+	constexpr float UnreachableDistSq = ElysiumNpcTunables::UnreachableDistanceSquared;   // 120 units, squared
 	// The three trace masks, as retail spells them.
 	constexpr int32 MaskValidCover = 0x202400b;     // `IsValidCover`'s hull probe (MASK_NPCSOLID)
 }
@@ -115,25 +115,6 @@ bool FElysiumNpcBase::IsValidCover(const FVector& CoverCm, void* Hint)
 		return false;
 	}
 
-	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
-	if (!BaseScheduleHost.HintGroup.IsEmpty()
-		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != BaseScheduleHost.HintGroup))
-	{
-		return false;
-	}
-	return true;
-}
-
-bool FElysiumNpcBase::IsValidShootPosition(const FVector& PositionCm, void* Hint)
-{
-	// `0x1028b0b0`, 36 bytes and the whole body — the hint-group half of `IsValidCover` with no
-	// trace at all, and the position argument is never read:
-	//     if (m_strHintGroup != NULL_STRING &&
-	//         (pHint == NULL || pHint->m_strGroup != m_strHintGroup)) return false;
-	//     return true;
-	// An NPC with no hint group accepts every shoot position, which is what makes the base body a
-	// no-op for all but the hint-grouped cast.
-	(void)PositionCm;
 	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
 	if (!BaseScheduleHost.HintGroup.IsEmpty()
 		&& (HintNode == nullptr || !HintNode->bValid || HintNode->Group != BaseScheduleHost.HintGroup))

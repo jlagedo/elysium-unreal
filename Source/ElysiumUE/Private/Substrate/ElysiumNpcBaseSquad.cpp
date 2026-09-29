@@ -16,19 +16,6 @@ namespace
 {
 	// `bits_CAP_SQUAD`, the `CapabilitiesGet()` bit `InitSquad` gates on (`0x10273d30`).
 	constexpr int32 GNpcKernelSquadCapSquad = 0x4000000;
-	// The two symbols `0x10316e80` registers into the one squad-slot namespace `DAT_10936c74`, with
-	// the ids it registers them under. They are the ONLY squad-slot names in `vampire.dll`.
-	constexpr int32 GNpcKernelSquadSlotAttack1 = 1000000000;  // 0x3b9aca00
-	constexpr int32 GNpcKernelSquadSlotAttack2 = 1000000001;  // 0x3b9aca01
-	// `CAI_LocalIdSpace`'s "this space holds no ids" sentinel, tested by name in `0x102ea2d0`.
-	constexpr int32 GNpcKernelSquadEmptyIdSpace = 9999;
-	// The root `CAI_ClassScheduleIdSpace` (`DAT_10920484`), the only one in the image constructed
-	// with `isRoot = true` (`staticinit_10265660` → `0x102ea090('\x01')`): global base 0, local base
-	// 0, local top -1. A top of -1 matches no id, so the chain walk falls off the end and answers
-	// -1 for every species. Declared as a row so the walk below is the retail walk and not a
-	// hard-coded refusal.
-	constexpr FElysiumNpcBase::FSquadSlotSpecies GNpcKernelSquadRootIdSpace = {
-		TEXT("CAI_BaseNPC"), TEXT(""), TEXT("0x10920484"), 0, 0, INDEX_NONE };
 }
 
 // --- Moved from `ElysiumNpcSquad.cpp` (story 5 step 5) ---
@@ -55,17 +42,6 @@ void FElysiumNpcBase::ClearSquadSlotOccupied(void* Squad, int32 SquadSlot)
 	// SEAM: the write half of the bitmap above.
 	(void)Squad;
 	(void)SquadSlot;
-}
-
-// slot 546 0x101a6c00 `const char* SquadSlotName(int)`: `slotEN` straight to `IdToSymbol`, with no
-// id-space translation. Every live species class with a slot-546 body of its own overrides this
-// with its own id-space row (story 5 step 4; the controller line's `CNPC_VFrenzyShadow`
-// `0x10375440` and `CNPC_VWolfMorph` `0x103dc950` since fold A2, `CNPC_VPlayerController`
-// inheriting `CNPC_VVampire`'s `0x103c4a80`); a class with none (the makers, the directors, the
-// test hull, `CPayphone`, `CNPC_VNewscaster`) runs this body, as its vtable does.
-const TCHAR* FElysiumNpcBase::SquadSlotName(int32 SlotEn)
-{
-	return GlobalSquadSlotName(SlotEn);
 }
 
 // slot 545 0x10273d30 `bool InitSquad()`. `CNPC_VCamera` (`0x10369bd0`, inherited by
@@ -141,63 +117,6 @@ void FElysiumNpcBase::RemoveFromSquad(void* Squad)
 	// SEAM for `CAI_Squad::RemoveFromSquad` (`0x103158f0`): compacts `m_hMembers` and calls
 	// slot 578 (an empty virtual) on each survivor.
 	(void)Squad;
-}
-
-int32 FElysiumNpcBase::SquadSlotLocalToGlobal(const FSquadSlotSpecies* Species, int32 LocalId)
-{
-	// 0x102ea2d0 `CAI_ClassScheduleIdSpace::SquadSlotLocalToGlobal`, arm for arm:
-	//
-	//   if (id == -1) return -1;
-	//   do {
-	//     if (localBase != 9999 && localBase <= id && id <= localTop)
-	//       return (globalBase - localBase) + id;
-	//     space = space->parent;
-	//   } while (space);
-	//   return -1;
-	//
-	// A null `Species` is the Troika line (`0x101a6c00`), which performs no translation at all and
-	// hands `slotEN` straight to `IdToSymbol`.
-	if (Species == nullptr || Species->IdSpace == nullptr || *Species->IdSpace == TEXT('\0'))
-	{
-		return LocalId;
-	}
-	if (LocalId == INDEX_NONE)
-	{
-		return INDEX_NONE;
-	}
-	// The chain: this class's space, then its parent's, up to the root. Retail's parent link is
-	// per-class (`Init`'s third argument), and every level of every chain carries the same empty
-	// range, so the walk is modelled as species → root.
-	const FSquadSlotSpecies* Chain[2] = { Species, &GNpcKernelSquadRootIdSpace };
-	for (const FSquadSlotSpecies* Space : Chain)
-	{
-		if (Space->LocalBase != GNpcKernelSquadEmptyIdSpace && Space->LocalBase <= LocalId
-			&& LocalId <= Space->LocalTop)
-		{
-			return (Space->GlobalBase - Space->LocalBase) + LocalId;
-		}
-	}
-	return INDEX_NONE;
-}
-
-const TCHAR* FElysiumNpcBase::GlobalSquadSlotName(int32 GlobalId)
-{
-	// 0x102ea020 `CAI_GlobalNamespace::IdToSymbol`: -1 answers the literal `"<<null>>"`, anything
-	// else is looked up in the symbol table and answers NULL when it is not there
-	// (`0x10249c70`). `0x10316e80` puts exactly two symbols in this table.
-	if (GlobalId == INDEX_NONE)
-	{
-		return TEXT("<<null>>");
-	}
-	if (GlobalId == GNpcKernelSquadSlotAttack1)
-	{
-		return TEXT("SQUAD_SLOT_ATTACK1");
-	}
-	if (GlobalId == GNpcKernelSquadSlotAttack2)
-	{
-		return TEXT("SQUAD_SLOT_ATTACK2");
-	}
-	return nullptr;
 }
 
 bool FElysiumNpcBase::InitSquadLine(bool bCameraArm)

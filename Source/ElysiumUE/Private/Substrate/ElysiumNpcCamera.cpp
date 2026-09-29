@@ -22,7 +22,6 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLifecycle2Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcStateShared.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -52,21 +51,6 @@ FElysiumNpcCamera::FElysiumNpcCamera()
 {
 	HullKind = 7;
 	PathingHullKind = 7;
-}
-
-// Slots 497 / 506: `0x103681d0` / `0x103682f0`, one-byte `ret` bodies.
-/** `0x103681d0` / `0x103682f0` — `CNPC_VCamera`'s empty slots 497 and 506. */
-void FElysiumNpcCamera::Slot497()
-{
-	// `0x103681d0`, `CNPC_VCamera`'s slot 497 — ONE byte, a bare `ret`. The class replaces the
-	// sound hook with nothing, so a security camera makes none of whatever sound slot 497 plays.
-	// Reproduced as the empty body it is: the point of the row is that the base does NOT run.
-}
-
-void FElysiumNpcCamera::Slot506()
-{
-	// `0x103682f0`, `CNPC_VCamera`'s slot 506 — the same empty body at the other end of the same
-	// sound-hook cluster. `CNPC_VCameraSecurity` inherits both.
 }
 
 // Slot 420: `0x103692c0`.
@@ -306,34 +290,20 @@ void FElysiumNpcCamera::StartNPC()
 // 0x103689c0 — CNPC_VCamera / …Security, via `CameraPrecacheModel`
 void FElysiumNpcCamera::Precache()
 {
-	// `CNPC_VCamera::Precache` `0x103689c0`, shared with `CNPC_VCameraSecurity`. The model fallback
-	// is family Lifecycle's `CameraPrecacheModel` (`models/null.mdl` when the keyfield is unset or
-	// empty) and is called rather than re-recovered; the rest of the body is the TAIL that family
-	// explicitly left for "a later story", which is this one.
+	// `CNPC_VCamera::Precache` `0x103689c0`, shared with `CNPC_VCameraSecurity`, a replacement that
+	// does not chain. Only its two writes stand: the acquisition (`PrecacheModel`) is the bake's
+	// (Unreal asset loading of baked package references), and the AI-node link-table check
+	// (`0x102f9970` / `0x102f9920` / `0x102f9950`) is a `DevMsg` with no output device here.
+	//
+	// The model fallback is family Lifecycle's `CameraPrecacheModel` (`models/null.mdl` when the
+	// keyfield is unset or empty); `StartNPC` (`0x10369930`) reads it back for its drop-to-floor gate.
 	Model = CameraPrecacheModel(Model);
-	NpcKernelPrecache10Shared::Precache10Model(*this, *Model, /*Preload=*/0);
-
-	// The slot-452 reject arm, byte for byte the one `0x1027bb50` runs — except that retail reaches
-	// `Msg` here and `DevMsg` there, the same format string `0x105cd21c`. Unreachable for the same
-	// reason: `LoadedSchedules` answers true for every class in this runtime.
-	if (!LoadedSchedules())
-	{
-		UE_LOG(LogElysiumNpcEnt, Error,
-			TEXT("ERROR: Rejecting spawn of %s as error in NPC's schedules."), *DebugString());
-		Kill();
-		return;
-	}
 
 	// `m_iInterestingPlaceGroups = 0` (`+0x62dc`) — the camera clears its interesting-place group
 	// mask at precache, so `AcceptsAmbientGroup` answers false for every place and a camera never
 	// claims one. The authored STRING beside it is left alone: retail's write is to the parsed int,
 	// and `0x10298910` has already run off the keyvalue by now.
 	InterestingPlaceGroupMask = 0;
-
-	// SEAM, restated from family Lifecycle: the AI-node link-table integrity check
-	// (`0x102f9970` / `0x102f9920` / `0x102f9950`) and its five-line `"is being spawned after links
-	// have been..."` `DevMsg`. This substrate stands no AI node graph and no link table, so there is
-	// nothing to check and nothing the kernel reads changes.
 }
 
 // Slot 463: `0x10368ea0`, an EMPTY body that does not chain: a camera's state change writes nothing,
@@ -382,7 +352,6 @@ int32 FElysiumNpcCamera::SpeciesSelectSchedule()
  *  (`0x10374d80`). Reached from slot 460's species prologue. */
 int32 FElysiumNpcCamera::PreSelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 9;
 	if (SquadDisconnected < 1 && SquadWord() != 0)
 	{
 		if (NpcKernelState19Shared::State19HasCondition(*this, EElysiumNpcCond::NewEnemy)
@@ -405,16 +374,6 @@ int32 FElysiumNpcCamera::GetUsedHullBits()
 	// A bare `return 0x80`: no call up the chain, so the Troika line's bit 0 is absent.
 	// `CNPC_VCameraSecurity` inherits this body.
 	return 0x80;
-}
-
-// Slot 546: `0x10368550`, the class's own schedule id space.
-const TCHAR* FElysiumNpcCamera::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093a7bc`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VCamera"), TEXT("0x10368550"), TEXT("0x1093a7bc") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 545: `0x10369bd0`, a replacement that does not chain (inherited by `CNPC_VCameraSecurity`).
@@ -491,11 +450,6 @@ void FElysiumNpcCamera::SurprisedSound()
 {
 }
 
-// Slot 496: `0x103681b0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
-void FElysiumNpcCamera::TargetAcquiredSound()
-{
-}
-
 // Slot 498: `0x103681f0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FleeSound()
 {
@@ -503,21 +457,6 @@ void FElysiumNpcCamera::FleeSound()
 
 // Slot 499: `0x10368210`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::IdleAgitatedSound()
-{
-}
-
-// Slot 500: `0x10368230`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
-void FElysiumNpcCamera::ExertHvySound()
-{
-}
-
-// Slot 501: `0x10368250`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
-void FElysiumNpcCamera::ExertLightSound()
-{
-}
-
-// Slot 502: `0x10368270`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
-void FElysiumNpcCamera::RiledSound()
 {
 }
 
@@ -531,20 +470,9 @@ void FElysiumNpcCamera::UpsetSound()
 {
 }
 
-// Slot 505: `0x103682d0`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
-void FElysiumNpcCamera::TargetGiveUpSound()
-{
-}
-
 // Slot 507: `0x10368310`, an empty body — the camera is silent (inherited by `CNPC_VCameraSecurity`).
 void FElysiumNpcCamera::FloatSound()
 {
-}
-
-// Slot 508: `0x10368330`, three bytes that pop the argument — the camera never speaks a sentence.
-void FElysiumNpcCamera::SpeakSentence(int32 SentenceIndex)
-{
-	(void)SentenceIndex;
 }
 
 // --- Moved from `ElysiumNpcAnim.cpp` (story 5 step 4) ---
@@ -559,13 +487,8 @@ FString FElysiumNpcCamera::CameraPrecacheModel(const FString& AuthoredModel)
 	// through vtable `+0x350` (`SetModelName`) when it is unset OR empty — retail reads the key
 	// three times to decide, which is one question.
 	//
-	// **Not ported here:** the tail. After `PrecacheModel` the body dispatches slot 452 (`+0x710`),
-	// rejects the spawn outright (`Msg("ERROR: Rejecting spawn of %s as e...")` plus
-	// `thunk_FUN_101cd940`) when it answers false, zeroes `m_iInterestingPlaceGroups` (`+0x62dc`),
-	// and then runs the AI-node link-table integrity check (`0x102f9970` / `0x102f9920` /
-	// `0x102f9950`) that `DevMsg`s "is being spawned after links have been...". **Unrecovered here:**
-	// this substrate has no AI node graph and no link table, so there is nothing to check; the
-	// rejection arm needs slot 452, which is a later story's.
+	// The slot-452 reject arm (`Msg("ERROR: Rejecting spawn of %s as e...")` plus
+	// `thunk_FUN_101cd940`) is unrecovered here: slot 452 is a later story's.
 	return AuthoredModel.IsEmpty() ? FString(GCameraNullModel) : AuthoredModel;
 }
 

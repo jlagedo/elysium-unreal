@@ -74,7 +74,7 @@ struct FMotionTrailPick
 };
 
 // `CNPC_VMingXiao::OnChangeActivity` `0x103947b0`'s playback scalar, as a pure function of the
-// activity, the discipline gate (`0x10398870`, which the oracle names "+0x6674"), the tentacle
+// activity, the discipline gate (`IsMingXiaoProxy`, which the oracle names "+0x6674"), the tentacle
 // count (+0x670c) and the tuning record (`0x101e8da0(0x10739d08)`) read by field offset.
 struct FMingXiaoPlayback
 {

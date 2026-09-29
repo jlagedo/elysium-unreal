@@ -195,9 +195,9 @@ namespace ElysiumStartTask19Base
 	// 8 interesting place (pedestrian; sets the pedestrian byte `path+0x1`), 9 interesting place (animal).
 	constexpr int32 GOALTYPE_PLACE_PEDESTRIAN = 8;
 	// `0x1049a160` (-1.0, read 2026-09-27 off the image) — keep the path's tolerance.
-	constexpr float NavToleranceKeep = -1.0f;
+	constexpr float NavToleranceKeep = ElysiumNpcTunables::StartTaskToleranceKeep;
 	// `0x1049a164` (-2.0) — the hull's tolerance.
-	constexpr float NavToleranceHull = -2.0f;
+	constexpr float NavToleranceHull = ElysiumNpcTunables::StartTaskToleranceHull;
 
 	constexpr int32 FAIL_NO_TARGET = 0x01;
 	constexpr int32 FAIL_NO_WEAPON = 0x03;
@@ -232,7 +232,7 @@ namespace ElysiumStartTask19Base
 	constexpr int32 DropshipTraceMask = 0x46004003;      // pushed at `0x10284f2f`
 	constexpr float WeaponFindExtentUnits = 1000.0f;     // `0x447a0000` x3 at `0x10286d78`
 	constexpr int32 WanderSplit = 10000;                 // the `0x68db8bad` / `SAR 12` divide at `0x10286ecc`
-	constexpr float LateralCoverStepUnits = 48.0f;       // `0x10447ee8`
+	constexpr float LateralCoverStepUnits = ElysiumNpcTunables::FortyEight;       // `0x10447ee8`
 	constexpr int32 LateralCoverSteps = 5;               // `0x102784a0`'s `4 < i` exit
 	constexpr int32 LateralCoverSightMask = 0x2804091;   // `0x10278220`'s line (R2 §5)
 	constexpr int32 MemoryInCover = 0x2;                 // `m_afMemory &= 0xfffffffd` (`0x1028641b`)
@@ -1893,7 +1893,6 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 	default:                                                             // arm 0x6a, 0x10286f63
 		// `DevMsg("No StartTask entry for %s\n", TaskName(iTask))` (slot 449) and return WITHOUT
 		// completing or failing: an unhandled task does not fail the schedule.
-		StartTaskDevMessage(FString::Printf(TEXT("No StartTask entry for %s\n"), TaskName(TaskId))); // 0x10286f68 / 0x10286f74
 		return 0;
 	}
 }
@@ -1904,7 +1903,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 
 namespace
 {
-	// The waypoint arrival radius retail's move applies to the goal waypoint (`0x102ef510`, slot 16):
+	// The waypoint arrival radius retail's move applies to the goal waypoint (navigator slot 16):
 	// the constant `0x10451f78`, 0.0625 units (0.25, `0x10449260`, under `npc_vphysics`, which the
 	// port does not read). It is NOT the path's goal tolerance `path+0x28`, which retail uses only for
 	// a BLOCKED step (`0x102ef760`). Source units.
@@ -2841,7 +2840,7 @@ bool FElysiumNpcBase::StartTaskTestLateralCover(const FVector& ThreatEyeCm, cons
 	Goal.DestCm = PointCm;
 	Goal.bDestSet = true;
 	Goal.MovementActivity = ACT_RUN;
-	Goal.ToleranceUnits = NavToleranceKeep;                              // `_DAT_104994a0` = -1.0
+	Goal.ToleranceUnits = ElysiumNpcTunables::MinusOneAt94A0;                        // `_DAT_104994a0` = -1.0
 	return StartTaskSetGoal(Goal, 1);
 }
 

@@ -87,34 +87,6 @@ int32 FElysiumNpcTestHull::PickHull(int32 UsedHullBits, TFunctionRef<int32(int32
 	return 0;
 }
 
-// Slot 117: `0x102d7290`. A direct call to `CBaseEntity::ObjectCaps` `0x100b4320`, then
-// `& 0xfffffffd` — `& ~FCAP_ACROSS_TRANSITION`: a test hull is never carried across a level change.
-int32 FElysiumNpcTestHull::ObjectCaps() const
-{
-	return FElysiumEntity::ObjectCaps() & ~ElysiumEntityCaps::AcrossTransition;
-}
-
-// Slot 521: `0x102d7760`. The base's geometry helper `FUN_10280790` with three `PUSH 0x44800000`
-// (1024.0) bounds in place of the base's 80 / 250 / 160 (`0x10280880`).
-bool FElysiumNpcTestHull::IsJumpLegal(FVector& StartUnits, FVector& ApexUnits, FVector& EndUnits) const
-{
-	return IsJumpLegalGeometry(StartUnits, ApexUnits, EndUnits, ElysiumNpcTunables::TestHullJumpMaxRise,
-		ElysiumNpcTunables::TestHullJumpMaxDrop, ElysiumNpcTunables::TestHullJumpMaxDistance);
-}
-
-// Slot 522: `0x102d72b0` returns `_DAT_10462950` = 40.0, the step height the node graph's links
-// were laid down with (`docs/vtmb/navigation-jump-links.md`).
-float FElysiumNpcTestHull::StepHeight() const
-{
-	return ElysiumNpcTunables::Forty;
-}
-
-// Slot 523: `0x102d72d0` returns the same `_DAT_10462950` = 40.0 as slot 522.
-float FElysiumNpcTestHull::GetMaxJumpSpeed() const
-{
-	return ElysiumNpcTunables::Forty;
-}
-
 float FElysiumNpcTestHull::PlayActivity(const FString& Activity)
 {
 	// "Negative when unresolvable" (`IElysiumScheduleRunner`): a test hull has no model to play on.

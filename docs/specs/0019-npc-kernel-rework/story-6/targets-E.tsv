@@ -1,0 +1,32 @@
+0x10026b50	Replication	Slot88 change-tracker refusal removed (EntitySlotBodies); closure table row and Refusals test removed
+0x10026b70	Replication	Slot89 m_NetworkChangeState +0x1b0 clear removed; NetworkChangeState test removed; member now unwritten
+0x10027630	Replication	GetNetworkable removed; LifecycleTests.cpp:109-110 needs another owner
+0x102c5870	Replication	FElysiumNpc::GetServerClass removed (Closure.cpp); tests removed
+0x102c0420	Replication	FElysiumNpc::ShouldTransmit removed (SensesBodies); IsInDialog arm only fed transmit; test removed
+0x10321670	Replication	GetPredDescMap removed (CombatCharacterSlotBodies); prediction descriptor = client prediction, not save
+0x1028cd10	FElysiumSaveArchive	FElysiumNpc::GetDataDescMap removed (Closure.cpp); tests removed
+0x100ab450	TraceRetail	Physics_TraceEntity refusal removed; ManBat keeps its named PhysicsTraceEntityManBat
+0x10267260	hand:FElysiumEntity::EmitBulletTracer	MakeTracer refusal removed; FireBullets' tracer arm already reaches EmitBulletTracer (Niagara side); spelling for orchestrator
+0x100b5040	Chaos	VPhysicsDestroyObject refusal removed
+0x100b4f30	Chaos	VPhysicsUpdate, VPhysicsUpdatePusher, PhysicsObjectPosition removed with their test
+0x10026fb0	CMC	CanStandOn(edict_t*) removed: the floor facts hand an entity handle, no edict; test asserts removed
+0x10027370	CMC	GetGroundVelocityToApply (vec3_origin) removed: based movement is the CMC's; MotorTests.cpp:539-545 needs another owner
+0x10026f80	hand:FElysiumEntity::CanStandOn	rule kept (null = standable); always-false RetailIsStandable seam replaced by the candidate's slot 164 dispatch (+0x290)
+0x100b50a0	hand:FElysiumEntity::IsStandable	rule kept; VPHYSICS arm stays the Chaos seam PhysicsObjectIsStandable
+0x10026a10	hand:FElysiumEntity::SetOrigin	kept: one-line virtual forward, no own math
+0x10026a50	hand:FElysiumEntity::SetAngles	kept: one-line virtual forward
+0x10027160	hand:FElysiumEntity::WorldSpaceCenter	kept: forward to ElysiumCameraShots::SurroundingBounds
+0x100b4c30	hand:FElysiumEntity::WorldSpaceCenter	kept: same forward, cached address (named modernization)
+0x10027450	hand:FElysiumEntity::SetRefEHandle	kept: handle word write
+0x10027490	hand:FElysiumEntity::IsMarkedForDeletion	now return IsDead(); GEntityFlagKillMe constant removed
+0x10027650	hand:FElysiumEntity::GetBaseEntity	kept: return this
+0x1004fc50	hand:FElysiumAnimating::GetBaseAnimating	kept: return this
+0x100b4bc0	hand:FElysiumEntity::EyeAngles	kept: forward to GetAbsAngles
+0x100b4be0	hand:FElysiumEntity::LocalEyeAngles	kept: forward to GetAngles
+0x100b1890	hand:FElysiumEntity::SetSize	kept: SizeCm write read by slot 214; live callers Motor10/RunTask/Geometry
+0x100b4de0	hand:FElysiumEntity::ShouldCollide	kept: rule on the answer (group 1 vs 0x4000000), read by the nav filter
+0x1032fb80	hand:FElysiumCombatCharacter::SetPoseParameter	kept: lookup + slot 346 dispatch
+0x1032fc50	hand:FElysiumCombatCharacter::SetPoseParameter	now a one-line forward to SetPoseParameter02; LoopingPoseParameter counter dropped
+0x10026730	-	Slot38 body and test removed
+0x10026f20	-	ReflectGauss body and test asserts removed
+0x1009af00	-	DebugGetClassName body removed (no caller)

@@ -24,16 +24,11 @@ class FElysiumNpcMakerFleshpile : public FElysiumNpcMaker
 public:
 	ELYSIUM_NPC_CLASS("CNPCMaker_Fleshpile", FElysiumNpcMaker)
 
-	// Slot 82 `0x1034bdc0` — `&datamap_CNPCMaker_Fleshpile`.
-	virtual void* GetDataDescMap() override;
 	// Slot 103 `0x1034c020` — `CNPCMaker::Spawn` byte for byte but for the installed think.
 	virtual void Spawn() override;
 	// Slot 104 `0x1034c180` — the model half without the overlay, the base NPC chain, and the child
 	// class precached unconditionally (no emptiness check, no removal).
 	virtual void Precache() override;
-	// Slot 130 `0x1034c260` — re-find Andrei into `DAT_10938040`, then the Troika `OnRestore`
-	// `0x102998c0`, DIRECT.
-	virtual void OnRestore(bool bFromLoad) override;
 	// Slot 139 `0x1034c8e0` — the runner budget, then `CNPCMaker::DeathNotice` `0x1034bc90`, DIRECT.
 	virtual void DeathNotice(FElysiumEntity* Child) override;
 	// Slots 362-365 `0x1034bf10` / `0x1034bef0` / `0x1034bf50` / `0x1034bf30` — false, each the base
@@ -42,9 +37,6 @@ public:
 	virtual bool FInViewCone(FElysiumEntity* Candidate) override;
 	virtual bool FInAimCone(const FVector& TargetCm) override;
 	virtual bool FInAimCone(FElysiumEntity* AimTarget) override;
-	// Slots 370/371 `0x1034be90` / `0x1034bec0` — forwards through 368/369.
-	virtual FVector HeadDirection2D() override;
-	virtual FVector HeadDirection3D() override;
 	// Slot 617 `0x1034c2d0`.
 	virtual FElysiumNpc* MakeNPC(bool bBypass) override;
 	// Slots 619/620 `0x1034bf70` / `0x1034bf90` — `RET 4`.

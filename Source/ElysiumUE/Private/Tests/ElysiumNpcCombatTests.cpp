@@ -802,7 +802,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	// still too far, so the replacement is another chase rather than a caller-visible empty gap.
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
 	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
-	// `OnNavComplete` (`0x102eea90`) and `TaskMovementComplete` (`0x10273ec0`).
+	// `OnNavComplete` and `TaskMovementComplete` (`0x10273ec0`).
 	F.Fighter->NavigatorMoveStep();
 	TestTrue(TEXT("arrival completes and reselects in the same retail loop"),
 		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,

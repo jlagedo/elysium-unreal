@@ -1,0 +1,65 @@
+0x102993c0	FElysiumSaveArchive	CAI_BaseNPCTroika::Save deleted (TroikaSave + slot body, CSound stamp wrappers, ped-link archive calls)
+0x10299700	FElysiumSaveArchive	CAI_BaseNPCTroika::Restore deleted (TroikaRestore + slot body)
+0x10298ad0	hand:FElysiumNpc::Precache	TroikaPrecache trimmed to its writes (error-model fallback, +0x64e8 stance row, slot 608 Normal); requests -> Bake
+0x1027bb50	Bake	CAI_BaseNPC::Precache body emptied (only precached m_spawnEquipment); definition stays for the generated slot-104 decl and the maker direct calls
+0x102c4380	hand:FElysiumNpc::FUN_102c4380	StartIgnoringCollision now forwards to IElysiumNpcMotor::SetMoveIgnore(true), old handle released first; FLT_MAX pin kept
+0x102c43b0	hand:FElysiumNpc::FUN_102c43b0	renew-only-while-ignoring rule kept; physical ignore via 0x102c4380/0x102c43f0 forwards
+0x102c43f0	hand:FElysiumNpc::FUN_102c43f0	StopIgnoringCollisionWithEntity now forwards SetMoveIgnore(false); one-shot FLT_MAX re-pin kept
+0x1026a910	-	GetHintDelay (dead residue) body and test deleted
+0x10392660	Bake	MingXiao Precache override deleted
+0x10395f80	FElysiumSaveArchive	MingXiao Save deleted (FLT_MAX bracket only)
+0x10396000	FElysiumSaveArchive	MingXiao Restore deleted
+0x10394930	CMC	MingXiao MaxYawSpeed deleted (rates come from tuning record 0x10739d08 +0x44/+0x48, no DAT cell)
+0x1039ed50	FElysiumSaveArchive	Tentacle Save deleted
+0x1039eda0	FElysiumSaveArchive	Tentacle Restore deleted
+0x1039c220	hand:FElysiumNpcMingXiaoTentacle::Precache	trimmed to fallback model + three mode indices (+0x6664/8/c) read by the phase-change tasks
+0x10396fd0	hand:FElysiumNpcMingXiao::NavIgnoreCollision	0x16 gate kept; SetMoveIgnore registration needs lane M's move path
+0x1039eb90	hand:FElysiumNpcMingXiaoTentacle::NavIgnoreCollision	m_bIgnoreCollision gate kept
+0x1039eb50	hand:FElysiumNpcMingXiaoTentacle::ShouldIgnoreCollision	live via BaseMotor trace filter; rule kept
+0x10397000	hand:FElysiumNpcMingXiao::SeveredTentaclesCanStandOn	proxy/severed exclusions kept over the floor seam
+0x1039ebd0	hand:FElysiumNpcMingXiaoTentacle::CanStandOn	companion exclusion kept
+0x10391050	hand:FElysiumNpcMingXiao::GetMaxJumpSpeed	already a tunable
+0x1039b070	hand:FElysiumNpcMingXiaoTentacle::GetMaxJumpSpeed	already a tunable (Thirty)
+0x103b8fa0	Bake	Tzimisce Precache deleted
+0x103ba020	CMC	Tzimisce MaxYawSpeed deleted (cells already present)
+0x103bf3c0	hand:FElysiumNpcTzimisce::FUN_103bf3c0	TArray::IndexOfByPredicate, -1 not-found kept
+0x103bfa00	hand:FElysiumNpcTzimisce::NavIgnoreCollision	0x16 gate kept
+0x103b6df0	hand:FElysiumNpcTzimisce::GetMaxJumpSpeed	already a tunable
+0x103b6dd0	CMC	no port body; TzimisceStepHeight cell exists
+0x103c1400	Bake	HeadClaw Precache deleted
+0x103c2810	FElysiumSaveArchive	HeadClaw Save deleted (mode-3 codec on +0x6678 only)
+0x103c2860	FElysiumSaveArchive	HeadClaw Restore deleted
+0x103c31e0	Bake	Runner Precache deleted
+0x1037f960	Bake	Hengeyokai Precache deleted
+0x10380f90	hand:FElysiumNpcHengeyokai::NavIgnoreCollision	other-entity flag gate kept
+0x10382d20	hand:FElysiumNpcHengeyokai::ClearLinkActivity	now MotorUpdateYaw(-1) only
+0x103a03e0	Bake	Newscaster Precache deleted
+0x103a0d50	hand:FElysiumNpcNewscaster::FUN_103a0d50	two TArray::Reset + +0x6690 clear
+0x103a03a0	hand:FElysiumNpcNewscaster::UpdateOnRemove	live two-line forward
+0x10378470	Bake	Gargoyle Precache deleted
+0x10379490	hand:FElysiumNpcGargoyle::NavIgnoreCollision	classname rule kept
+0x103689c0	hand:FElysiumNpcCamera::Precache	trimmed to models/null.mdl fallback + InterestingPlaceGroupMask=0
+0x103ad6a0	UPathFollowingComponent	Rat slot-428 override deleted, base 0x1027cf60 inherited
+0x103ad6d0	hand:FElysiumNpcRat::ShouldIgnoreCollision	live via BaseMotor trace filter
+0x10374130	CMC	Dog MaxYawSpeed deleted (Forty/Thirty/FortyFive cells exist)
+0x1037b1a0	Bake	GhoulCroucher Precache deleted
+0x103df120	Bake	Zombie Precache deleted
+0x1035cb90	Bake	AndreiBlood Precache deleted
+0x10360bc0	Bake	AsianVampire Precache deleted
+0x1036ae60	Bake	ChangBros Precache deleted
+0x103a6ab0	Bake	SabbatLeader Precache deleted
+0x103ae540	Bake	SheriffMan Precache deleted
+0x1038aec0	Bake	ManBat Precache deleted
+0x103c5910	FElysiumSaveArchive	VampireBoss Restore -> VampireBossPostRestoreResets in OnPostRestore (VampireBoss.cpp body removal needs another owner)
+0x1035cf80	FElysiumSaveArchive	AndreiBlood Restore deleted; inherits VampireBoss OnPostRestore
+0x10360e10	FElysiumSaveArchive	AsianVampire OnPostRestore: resets, JumpGravity 2.0
+0x1036b170	FElysiumSaveArchive	ChangBros OnPostRestore: resets, JumpGravity 2.3, emitters 0/1 powerup, 2 spine
+0x103a6e80	FElysiumSaveArchive	SabbatLeader OnPostRestore: resets, andrei.mdl, npc_VSabbatLeader, emitters 0/1
+0x103ae7f0	FElysiumSaveArchive	SheriffMan OnPostRestore: resets, manbat.mdl, npc_VSheriffMan, JumpGravity 2.0, hull index 0x15
+0x103c6b70	hand:FElysiumNpcChangBros::DistToSegment	1e-5 guard + FMath::PointDistToSegment
+0x103c6680	hand:FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3	FMath::PointDistToLine over retail's 0.0-Z-flattened points
+0x1038fb20	TraceRetail	PhysicsTraceEntityManBat deleted (no live caller); lbeam* filter rule kept
+0x1035e1a0	hand:FElysiumNpcAndreiBlood::StartBloodEmitter	already the emitter seam
+0x1035e3c0	hand:FElysiumNpcAndreiBlood::StartSummonEmitter	already the emitter seam
+0x103ab110	hand:FElysiumNpcSabbatLeader::SpawnBloodPoolEmitter	already the emitter seam
+0x103ab580	hand:FElysiumNpcSabbatLeader::CheckStuck	retail rule over lane M's extents

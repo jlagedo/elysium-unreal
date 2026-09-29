@@ -90,7 +90,7 @@ FVector SpeciesWorldSpaceCenter() const;
 // --- Slot 337 `GetUsedHullBits` ------------------------------------------------------------------
 
 /** `CBaseCombatCharacter::GetUsedHullBits` (`0x10341710`), the bottom of the chain: a scope-trace
- *  pair and `return 1`. `CAI_BaseNPC` (`0x10270820`) ORs `0x1` onto it and `CAI_BaseNPCTroika`
+ *  pair and `return 1`. `CAI_BaseNPC`'s ORs `0x1` onto it and `CAI_BaseNPCTroika`
  *  (`0x1029a050`) ORs `0x1` onto THAT, so the Troika line's answer is 1 and the two ORs are a
  *  no-op over the base — a recovered fact, not a transcription slip. */
 static constexpr int32 BaseCombatCharacterHullBits = 1;
@@ -160,7 +160,7 @@ struct FFakeHullSeamLedger
 
 // --- `CNPC_VMingXiao`'s two severed-tentacle scatter notices -------------------------------------
 
-/** `FUN_1039ef90` — the notice itself: fire the global melee-ish event at `DAT_10924a6c + 4`, set
+/** `FUN_1039ef90` — the notice itself: ask `ent_trace_melee`'s `IsCommand()` (answer dropped) at `DAT_10924a6c + 4`, set
  *  condition `0x78` on the notified tentacle and write `m_vecScatterCenter` (`+0x668c`). The
  *  condition write and the scatter centre are real here; the global event has no home in this
  *  substrate and is counted. */

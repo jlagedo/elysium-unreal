@@ -67,7 +67,7 @@ public:
 	 * `__RTDynamicCast` type tests through `AsSpecies<T>()`. What reads the row: the census and
 	 * factory tests, logs and inspectors, and the schedule corpus, whose per-class id spaces and
 	 * parse flags are keyed by the class's own name exactly as retail's `InitCustomSchedules`
-	 * statics are one per class (`FElysiumNpcBase::IdSpace`, `FElysiumNpc::LoadedSchedules`).
+	 * statics are one per class (`FElysiumNpcBase::IdSpace`).
 	 */
 	const FElysiumNpcClass* RetailClass() const { return OwnRetailClass(); }
 
@@ -137,8 +137,8 @@ public:
 	// records, the player-LOS cache, the see-unknown clocks) are `FElysiumNpc::Senses.Memory`.
 	FElysiumNpcBaseMemory BaseMemory;
 
-	// `m_pSenses` (`+0x5cdc`), the `CAI_Senses` object. `CAI_BaseNPC::PostConstructor` (`0x1027bb20`)
-	// builds it through slot 424 (`CreateComponents`, `0x1027cae0`) for EVERY NPC-base instance, the
+	// `m_pSenses` (`+0x5cdc`), the `CAI_Senses` object. retail's NPC-base constructor order
+	// builds it through slot 424 (`CreateComponents`) for EVERY NPC-base instance, the
 	// scripted directors included (story 5 fold A3), so it lives here. Only the Troika line runs a
 	// sense pass over it; on a base-only NPC it stands idle, as retail's does (a director never runs
 	// `PerformSensing`). The Troika's own memory words ride inside it (`Senses.Memory`).
@@ -268,8 +268,7 @@ public:
 	#include "Substrate/ElysiumNpcBaseConditions.inl"
 	#include "Substrate/ElysiumNpcBaseConditions10.inl"
 	#include "Substrate/ElysiumNpcBaseDamage.inl"
-	#include "Substrate/ElysiumNpcBaseDebug.inl"
-	#include "Substrate/ElysiumNpcBaseDebug10.inl"
+	#include "Substrate/ElysiumNpcKernelBaseHelpersBase.inl"
 	#include "Substrate/ElysiumNpcBaseDialogue.inl"
 	#include "Substrate/ElysiumNpcBaseEntityChain.inl"
 	#include "Substrate/ElysiumNpcBaseFacing.inl"
@@ -340,7 +339,7 @@ public:
 	// `0x1029adb0` does its own resets and then calls this directly.
 	virtual void TaskFail(int32 Reason) override;
 
-	// The `CAI_BaseNPC` half of the NPC record (`0x1027bc60` / `0x1027c160`), written ahead of the
+	// The `CAI_BaseNPC` half of the NPC record (`0x1027bc60` and its `Restore` twin), written ahead of the
 	// Troika's: the extended header, the flag words, relationships, the base memory, the pending
 	// sounds, the enemy memory, the base schedule host and `m_hTargetEnt`.
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;

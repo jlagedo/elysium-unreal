@@ -12,7 +12,7 @@ struct FHitResult;
  *
  * Retail asks this once, in the ground trace it was already running: `CGameMovement::
  * CategorizePosition` caches the hit's `surfacedata_t` on the mover, and `CAI_Navigator::MoveEnact`
- * `0x102ef870` caches it on the NPC at `+0x5b90`. In Source the collision brush and the drawn
+ * caches it on the NPC at `+0x5b90`. In Source the collision brush and the drawn
  * brush are the same object, so one trace answers both "is there a floor" and "what is it made of".
  *
  * **This port split them, and that is why the rules below exist.** A map's solid body is the

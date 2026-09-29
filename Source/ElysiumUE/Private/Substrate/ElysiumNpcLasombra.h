@@ -14,7 +14,6 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VLasombra", FElysiumNpcVampire)
 
 	virtual bool CanSeekCover() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

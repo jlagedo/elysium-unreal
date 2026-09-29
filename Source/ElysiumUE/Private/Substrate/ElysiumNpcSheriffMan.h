@@ -18,7 +18,6 @@ public:
 	FElysiumNpcSheriffMan();
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual void TaskFail(int32 Reason) override;
@@ -26,8 +25,7 @@ public:
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
-	virtual int32 Restore(void* Archive) override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;   // `CNPC_VSheriffMan::vfunc127`'s load-side half
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
@@ -44,7 +42,7 @@ public:
 
 	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexSheriffMan = 0x15;   // `0x103ae6c0`
-	static constexpr float SheriffManJumpGravity = 2.f;      // `_DAT_104c6148`
+	static constexpr float SheriffManJumpGravity = ElysiumNpcTunables::SheriffManJumpGravity;      // `_DAT_104c6148`
 	/** SheriffMan flags written before the VampireBoss chain. `SheriffLastTeleportPosition` exists. */
 	bool bSheriffTeleporting = false;            // +0x66e4
 	bool bSheriffDead = false;                   // +0x66e5
@@ -86,8 +84,6 @@ public:
 	void CategorizeHeight(float Zcm, int32& OutCategory) const;
 	/** `CNPC_VSheriffMan::CategorizeHeights` `0x103b1680` — the player's height, then its own. */
 	void CategorizeHeights(int32& OutPlayer, int32& OutSelf) const;
-	/** `CNPC_VSheriffMan::KillTeleportBats` `0x103b0560`. */
-	void KillTeleportBats();
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---
 	virtual void Spawn() override;

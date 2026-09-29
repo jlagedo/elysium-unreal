@@ -21,14 +21,11 @@
 
 namespace
 {
-	constexpr float GJumpGravity = ElysiumNpcTunables::JumpGravity;   // `0x101a6b80`
 	// `CheckOnGround` `0x1026e5e0`.
 	constexpr float GCheckOnGroundInterval = ElysiumNpcTunables::Half;
 	constexpr double GCheckOnGroundSlack = ElysiumNpcTunables::MinusThousandthDouble;
-	constexpr float GCheckOnGroundUp = static_cast<float>(ElysiumNpcTunables::TenthDouble);
-	constexpr float GCheckOnGroundDown = 4.0f;      // _DAT_10449148
+	constexpr float GCheckOnGroundDown = static_cast<float>(ElysiumNpcTunables::CheckOnGroundReach);   // `_DAT_10449148`, f64
 	constexpr float GTraceClearFraction = static_cast<float>(ElysiumNpcTunables::OneDouble);
-	constexpr int32 GGroundTraceMask = 0x202400b;
 	constexpr int32 GCoverTraceMask = 0x2804091;    // `ValidateNavGoal`'s
 	// The retail contents bit the character half of the trace filters reads (`StandardFilterRules
 	// 0x101d3080` at `101d30f2`), and the one mask `CTraceFilterSimple` skips slot 68 under.
@@ -53,7 +50,7 @@ namespace
 	constexpr int32 GMoveStepClimbNavType = 3;                    // nav+0x18 == 3, 0x102f0198
 	constexpr int32 GMoveStepMaxPasses = 0x10;                    // `INC EBP; CMP EBP,0x10; JG`
 	constexpr float GMoveStepStaleSeconds = 4.0f;                 // `PUSH 0x40800000`, 0x102f016e
-	// `0x102ef510`: the waypoint arrival radius, 0.0625 units (`0x10451f78`); 0.25 (`0x10449260`) under
+	// Navigator slot 16's waypoint arrival radius, 0.0625 units (`0x10451f78`); 0.25 (`0x10449260`) under
 	// ConVar `npc_vphysics`, whose shipped value `"0"` the port keeps without reading.
 	constexpr float GMoveStepArrivalUnits = 0.0625f;
 	constexpr float GMoveStepGoalSlackUnits = 0.1f;               // 0x104491b4, 0x102ef760
@@ -150,19 +147,6 @@ bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 	}
 	OutActivity = Navigator.GetMovementActivity();                       // 0x102ee510 path+0x2c
 	return true;
-}
-
-bool FElysiumNpcBase::MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta)
-{
-	// `thunk_FUN_102e0bd0(m_pMotor, delta, yaw, …)` — the apply half of `AutoMovement`.
-	// **SEAM, and a named modernization**: Unreal's animation instance extracts and applies root
-	// motion itself, which is the visual-only half this port adopts freely. What the substrate owes
-	// retail is the GATE and the ORDER above it, and those are ported; the apply is recorded here
-	// and moves nothing.
-	(void)DeltaUnits;
-	(void)YawDelta;
-	++MotorSeams.IntervalMovementApplied;
-	return false;
 }
 
 bool FElysiumNpcBase::AnimIntervalMovement(float Interval, FVector& OutDeltaUnits,
@@ -265,6 +249,20 @@ bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Char
 	{
 		return false;
 	}
+	// Arm (a), the nav-ignore set `CNavPropertyDatabase` (`0x102eb170`, the RB-tree at `0x10934014`):
+	// its insert `0x102eaaf0` and remove `0x102eacf0` have no reference anywhere in the image
+	// (`navigation-jump-links.md` § "What the probe ignores"), so the set is always empty and the
+	// arm never drops anything. Nothing to port.
+	//
+	// Arm (c), the candidate's own slot 91 `ShouldCollide(group, mask)` (`0x100b4de0`, the chain
+	// body `FElysiumEntity::ShouldCollide`); the filter's group is the tester's `m_CollisionGroup`
+	// (`+0x368`), which that body ignores. Arm (d), `g_pGameRules->ShouldCollide(group, group)`:
+	// no game-rules object stands in the port (`RetailGameRulesShouldCollide` answers "collide").
+	if (!Other->ShouldCollide(CollisionGroup, Mask)
+		|| !RetailGameRulesShouldCollide(CollisionGroup, Other->CollisionGroup))
+	{
+		return false;
+	}
 	// Then, unless the mask is `0x46004003`, slot 68 `ShouldIgnoreCollision` in both directions: the
 	// candidate's own body asked about this NPC, and this NPC's asked about the candidate. The nav
 	// filters (`0x102e32d0` arm (e)) run the tester's direction first; the answer is the same OR.
@@ -276,10 +274,6 @@ bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Char
 	// ported. The player's (`CBaseCombatCharacter 0x10340650`) and a base-line NPC's are still
 	// generated stubs answering false; that answer is taken without firing the stub tally on every
 	// trace.
-	//
-	// NOT PORTED, stated: arms (a) the `CNavPropertyDatabase` set (`0x102eb170`, whose inserter is
-	// unrecovered), (c) slot 91 `ShouldCollide(group, mask)` and (d) the gamerules group pair --
-	// the port stands no collision-group word (`+0x368`).
 	if (Mask != GTraceMaskNoIgnoreCollision)
 	{
 		FElysiumNpc* const SelfTroika = const_cast<FElysiumNpcBase*>(this)->AsNpc();
@@ -293,6 +287,15 @@ bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Char
 			return false;
 		}
 	}
+	return true;
+}
+
+bool FElysiumNpcBase::RetailGameRulesShouldCollide(int32 GroupA, int32 GroupB)
+{
+	// **SEAM**: `CGameRules::ShouldCollide` (VtMB's body unrecovered). No game-rules object stands in
+	// the port; answers "collide", which drops nothing.
+	(void)GroupA;
+	(void)GroupB;
 	return true;
 }
 
@@ -363,7 +366,7 @@ uint32 FElysiumNpcBase::ActiveWeaponCapabilityWord() const
 
 float FElysiumNpcBase::MotorMinStoppingDistanceUnits() const
 {
-	// `CAI_Motor#16` `0x102e1300`, which lives on `IElysiumNpcMotor` itself
+	// `CAI_Motor#16`, which lives on `IElysiumNpcMotor` itself
 	// (`MinStoppingDistanceUnits`). With no motor at all the interface's own floor is the answer.
 	return Motor != nullptr ? Motor->MinStoppingDistanceUnits() : 10.0f;
 }
@@ -383,16 +386,16 @@ bool FElysiumNpcBase::IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) c
 float FElysiumNpcBase::StepHeight() const
 {
 	// slot 522. `CAI_BaseNPC::StepHeight` `0x101a6b40` returns `_DAT_10453b94` = 18.0 and IS the
-	// body slot 522 carries on the Troika line. `CAI_TestHull::StepHeight` `0x102d72b0` (40.0) and
+	// body slot 522 carries on the Troika line. `CAI_TestHull::StepHeight` (40.0) and
 	// three species override it on their own classes.
 	return NpcKernelMotorShared::GStepHeightBase;
 }
 
-float FElysiumNpcBase::GetMaxJumpSpeed() const
+float FElysiumNpcBase::GetStepDownHeight() const
 {
-	// slot 523. `CAI_BaseNPC::GetMaxJumpSpeed` `0x101a6b60` returns `_DAT_10453b94` = 18.0 — the
-	// SAME cell slot 522's `0x101a6b40` reads. The Troika (`0x101aa670`), `CAI_TestHull`
-	// (`0x102d72d0`), `CNPC_VMingXiao` (`0x10391050`), `CNPC_VMingXiaoTentacle` (`0x1039b070`) and
+	// slot 523. `CAI_BaseNPC::GetStepDownHeight` `0x101a6b60` returns `_DAT_10453b94` = 18.0 — the
+	// SAME cell slot 522's `0x101a6b40` reads. The Troika (`0x101aa670`), `CAI_TestHull`,
+	// `CNPC_VMingXiao` (`0x10391050`), `CNPC_VMingXiaoTentacle` (`0x1039b070`) and
 	// `CNPC_VTzimisce` (`0x103b6df0`) override it on their own classes. Until story 5 fold A1 this
 	// was a generated stub answering 0.
 	//
@@ -403,27 +406,20 @@ float FElysiumNpcBase::GetMaxJumpSpeed() const
 	return ElysiumNpcTunables::StepHeightBase;
 }
 
-float FElysiumNpcBase::GetJumpGravity() const
-{
-	// slot 524. `CAI_BaseNPC::GetJumpGravity` `0x101a6b80` returns `_DAT_10477ce8` = 350.0, and no
-	// class in the family overrides it. Zero dispatch sites in the closure, but the slot is filled,
-	// so the body is not dead.
-	return GJumpGravity;
-}
-
 bool FElysiumNpcBase::IsJumpLegal(FVector& StartUnits, FVector& ApexUnits, FVector& EndUnits) const
 {
 	// slot 521. `CAI_BaseNPC::IsJumpLegal` `0x10280880` forwards to the geometry helper with
-	// 80.0 / 250.0 / 160.0; `CAI_TestHull::IsJumpLegal` `0x102d7760` is its own class's override
+	// 80.0 / 250.0 / 160.0; `CAI_TestHull::IsJumpLegal` is its own class's override
 	// with 1024 / 1024 / 1024 (`FElysiumNpcTestHull`).
 	return IsJumpLegalGeometry(StartUnits, ApexUnits, EndUnits, NpcKernelMotorShared::GJumpLegalRise,
 		NpcKernelMotorShared::GJumpLegalDrop, NpcKernelMotorShared::GJumpLegalDistance);
 }
 
-float FElysiumNpcBase::MaxYawSpeedBase()
+float FElysiumNpcBase::MaxYawSpeed()
 {
-	// `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — one constant, `_DAT_1049949c` = 45.0, the same
-	// number every other ladder in the family falls through to.
+	// slot 516, `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` -- one constant, `_DAT_1049949c` = 45.0, the
+	// number every ladder of the family falls through to (0019/6: restored as data; the rate is retail's,
+	// the turn is the mover's).
 	return NpcKernelMotorShared::GYawDefault;
 }
 
@@ -434,22 +430,6 @@ bool FElysiumNpcBase::IsMoving()
 	// The goal type stands after `OnNavFailed` until the schedule clears it, so a failed walker still
 	// answers "moving" here, as retail's does.
 	return NavigatorIsGoalSet();
-}
-
-bool FElysiumNpcBase::BaseEntityIsMoving(const FElysiumEntity& Entity)
-{
-	// slot 153's OTHER body. `CAISound::FUN_10026e70` `0x10026e70`, whole:
-	//
-	//     if (DAT_1070d1b0 == this->m_vecVelocity[0] &&
-	//         DAT_1070d1b4 == this->m_vecVelocity[1] &&
-	//         DAT_1070d1b8 == this->m_vecVelocity[2]) return 0;
-	//     return 1;
-	//
-	// `DAT_1070d1b0` is `vec3_origin` — family Geometry's standing fact, 371 readers and one writer
-	// (the static initialiser `0x101370b0`). The comparison is component-wise and EXACT, not a
-	// tolerance, so this is written out rather than as `!Velocity.IsNearlyZero()`: a near-zero
-	// velocity answers MOVING in retail and must answer moving here.
-	return !(Entity.Velocity.X == 0.0 && Entity.Velocity.Y == 0.0 && Entity.Velocity.Z == 0.0);
 }
 
 bool FElysiumNpcBase::OverrideMove(float Interval)
@@ -594,7 +574,13 @@ bool FElysiumNpcBase::AutoMovement()
 	{
 		return false;
 	}
-	return MotorApplyIntervalMovement(DeltaUnits, YawDelta);
+	// The apply, `thunk_FUN_102e0bd0(m_pMotor, delta, …) == 1`, is Unreal's: the animation instance
+	// extracts the root motion and the character movement component moves the body (a named
+	// modernization, story 6). It answers the kernel no `AIMoveResult_t`, so the rule reads retail's
+	// not-moved answer, as the recording seam it replaced did.
+	(void)DeltaUnits;
+	(void)YawDelta;
+	return false;
 }
 
 float FElysiumNpcBase::PostRun()
@@ -658,26 +644,28 @@ void FElysiumNpcBase::CheckOnGround()
 	}
 	CheckOnGroundTime = Now + GCheckOnGroundInterval;
 
-	const FVector OriginUnits = Origin / ElysiumMove::U;                 // `KernelHullTrace`'s frame
-	const FVector StartUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z + GCheckOnGroundUp);
-	const FVector EndUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z - GCheckOnGroundDown);
-	FVector Mins = FVector::ZeroVector;
-	FVector Maxs = FVector::ZeroVector;
-	RetailCollisionExtents(*this, Mins, Maxs);
-	FKernelHullTrace Trace;
-	if (!KernelHullTrace(StartUnits, EndUnits, Mins, Maxs, GGroundTraceMask, Trace))
+	// The measurement is the floor facts seam (`IElysiumNpcMotor::SampleFloor`, the character
+	// movement component's floor sweep under the capsule); the rule above and the two writes below
+	// stay retail's. Retail's trace runs from `origin + 0.1` to `origin - 4.0` (`_DAT_10449148`), so
+	// "fraction 1.0" is no floor within 4.0 units of the feet: the probe reaches about the step
+	// height, which is further, so the reach is tested here against 4.0. A motor with no movement
+	// component answers nothing and neither write runs, as a world with no collision did.
+	FElysiumNpcFloorFacts Floor;
+	if (Motor == nullptr || !Motor->SampleFloor(Floor))
 	{
 		return;
 	}
-	if (Trace.Fraction == GTraceClearFraction)
+	if (!Floor.bOnGround || Floor.FloorDistanceCm > GCheckOnGroundDown * ElysiumMove::U)
 	{
 		Cognition.Conditions.Set(GCondOnGround);
 		SetGroundEntity(nullptr);
 		return;
 	}
-	if (Trace.HitEntity.IsSet() && World != nullptr)
+	// `tr.m_pEnt`: an unset handle is the static world, which retail's `GetGroundEntity` compare
+	// sees as worldspawn; the port writes only a named entity, as before.
+	if (Floor.GroundEntityHandle.IsSet() && World != nullptr)
 	{
-		FElysiumEntity* Hit = World->Resolve(Trace.HitEntity);
+		FElysiumEntity* Hit = World->Resolve(Floor.GroundEntityHandle);
 		if (Hit != nullptr && Hit != GetGroundEntity())
 		{
 			SetGroundEntity(Hit);
@@ -772,7 +760,7 @@ void FElysiumNpcBase::NavResetBlockerMemory()
 
 void FElysiumNpcBase::NavOnNavComplete()
 {
-	// `CAI_Navigator::OnNavComplete` `0x102eea90` (slot 8): the reset `0x102eeb70`, the owner's
+	// `CAI_Navigator::OnNavComplete` (slot 8): the reset `0x102eeb70`, the owner's
 	// `TaskMovementComplete` through `0x102eccc0`, `nav+0x1c = 1`.
 	NavResetBlockerMemory();                                                 // 0x102eeb70
 	// `TaskMovementComplete` advances the goal waypoint (`0x102f0400`, the last corner's `InPass`) and
@@ -918,7 +906,7 @@ bool FElysiumNpcBase::NavNpcBlockerStep(const FNavStepFacts& Step)
 
 bool FElysiumNpcBase::NavFollowSameDirectionMover(const FElysiumEntityHandle& Blocker)
 {
-	// `0x102efde0`, reached from S4 `0x102ef0e0` when motor slot 16 (`0x102e1300`) exceeds the
+	// `0x102efde0`, reached from S4 `0x102ef0e0` when motor slot 16 exceeds the
 	// clearance: a moving NPC going the same way is followed (result 0, `maxDist = distClear`, flag 2).
 	// SEAM answering no: its constants and the S4 gate distance are unrecovered (R3), so the blocked
 	// result stands, which is S4's own `distClear < 1.0` arm.
@@ -967,12 +955,99 @@ void FElysiumNpcBase::NavMarkStaleLink(float Seconds)
 	++NavMoveStep.StaleMarkCalls;
 }
 
-bool FElysiumNpcBase::NavIssueLeg(const FElysiumNpcMoveRequest& Request)
+FElysiumNpcMoveRequest FElysiumNpcBase::PrepareMoveRequest(const FElysiumNpcMoveRequest& Request)
+{
+	FElysiumNpcMoveRequest Out = Request;
+	if (Out.YawSpeedDegPerS <= 0.f)
+	{
+		// The stored `+0x38`, as `UpdateYaw(-1)` `0x102e1e20` reads it -- not a fresh slot 516: a
+		// task-stated speed (`0x102e1ca8`, Andrei's `AndreiFacePlayerYawSpeed`) stands until a writer
+		// replaces it. Whether `MoveFacing` (motor slot 18, closed at CMC) re-stores it each step through
+		// `0x102e1c10(yaw, -1.0)` (the SDK's `SetIdealYawAndUpdate` default) is **unrecovered**.
+		Out.YawSpeedDegPerS = MotorYawRateDegPerS(MotorYawSpeedWord);
+	}
+	bKernelMoveLive = true;
+	MotorYawRateHanded = Out.YawSpeedDegPerS;
+	RegisterMoveIgnores();
+	return Out;
+}
+
+void FElysiumNpcBase::MotorThinkUpkeep()
+{
+	if (bKernelMoveLive && Motor != nullptr)
+	{
+		RegisterMoveIgnores();                                              // slot 69, per think
+		const float Rate = MotorYawRateDegPerS(MotorYawSpeedWord);           // `UpdateYaw(-1)`'s read of +0x38
+		if (Rate > 0.f && Rate != MotorYawRateHanded)
+		{
+			Motor->SetYawSpeed(Rate);
+			MotorYawRateHanded = Rate;
+		}
+	}
+	MotorHandFacingTarget();                                                 // slot 15 `0x102e2180`
+}
+
+void FElysiumNpcBase::RegisterMoveIgnores()
+{
+	if (Motor == nullptr || World == nullptr)
+	{
+		ClearMoveIgnores();
+		return;
+	}
+	TArray<FElysiumEntityHandle> Answered;
+	for (const TUniquePtr<FElysiumEntity>& Entry : World->Entities())
+	{
+		FElysiumEntity* const Other = Entry.Get();
+		// A dead record is skipped; a HIDDEN one is still asked (a hidden solid still collides, and
+		// retail's filter sees every contact).
+		if (Other == nullptr || Other == this || Other->IsDead() || Other->Handle == IgnoreCollisionEntity)
+		{
+			continue;
+		}
+		if (NavIgnoreCollision(Other))                                       // slot 69
+		{
+			Answered.Add(Other->Handle);
+		}
+	}
+	for (const FElysiumEntityHandle& Held : MoveIgnoreRegistered)
+	{
+		if (!Answered.Contains(Held))
+		{
+			Motor->SetMoveIgnore(Held, false);
+		}
+	}
+	for (const FElysiumEntityHandle& Fresh : Answered)
+	{
+		if (!MoveIgnoreRegistered.Contains(Fresh))
+		{
+			Motor->SetMoveIgnore(Fresh, true);
+		}
+	}
+	MoveIgnoreRegistered = MoveTemp(Answered);
+}
+
+void FElysiumNpcBase::ClearMoveIgnores()
+{
+	if (Motor != nullptr)
+	{
+		for (const FElysiumEntityHandle& Ignored : MoveIgnoreRegistered)
+		{
+			Motor->SetMoveIgnore(Ignored, false);
+		}
+	}
+	MoveIgnoreRegistered.Reset();
+	bKernelMoveLive = false;
+	MotorYawRateHanded = 0.f;
+}
+
+bool FElysiumNpcBase::NavIssueLeg(const FElysiumNpcMoveRequest& InRequest)
 {
 	// Port-only: the issue of one leg (`DoFindPath 0x102f2330`'s product, walked by the body) and the
 	// record of what was issued, which retail keeps in the path's waypoints themselves.
+	const FElysiumNpcMoveRequest Request = PrepareMoveRequest(InRequest);
 	if (Motor == nullptr || !Motor->MoveTo(Request))
 	{
+		ClearMoveIgnores();
 		Navigator.HeadLegRequest = FElysiumNpcMoveRequest();
 		Navigator.bHeadLegRequestSet = false;
 		return false;
@@ -994,7 +1069,16 @@ bool FElysiumNpcBase::NavReissueHeadLeg()
 	{
 		return false;
 	}
+	// The move's per-think upkeep reopens: the rate the leg carried is what the body holds, and the
+	// next think re-reads `+0x38` against it (`MotorThinkUpkeep`).
+	bKernelMoveLive = true;
+	MotorYawRateHanded = Navigator.HeadLegRequest.YawSpeedDegPerS;
+	RegisterMoveIgnores();
 	bMoveIssued = Motor->MoveTo(Navigator.HeadLegRequest);
+	if (!bMoveIssued)
+	{
+		ClearMoveIgnores();
+	}
 	return bMoveIssued;
 }
 
@@ -1038,9 +1122,15 @@ FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
 	const bool bFacts = Motor->SampleMoveFacts(Facts);
 	// `GetOrigin` (slot 220) is the entity record; the body is its source.
 	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	// The move's end drops the ignores registered for it (`RegisterMoveIgnores`).
+	if ((bFacts && Facts.bRequestEnded) || Status == EElysiumNpcMoveStatus::Reached
+		|| Status == EElysiumNpcMoveStatus::Failed || Status == EElysiumNpcMoveStatus::Unavailable)
+	{
+		ClearMoveIgnores();
+	}
 	if (bFacts && (Facts.bRequestAlive || Facts.bRequestEnded))
 	{
-		// `0x102ef510`: the head waypoint against the constant radius, 2-D when `nav+0x18 == 0`,
+		// Navigator slot 16: the head waypoint against the constant radius, 2-D when `nav+0x18 == 0`,
 		// 3-D otherwise; not reached iff `tol < dist` (NaN: not reached). The body's request goes to
 		// the head waypoint, so its remaining distance is that test's. NAMED MODERNIZATION: the
 		// follower's own Success end (its arrival floor, `AlreadyAtGoal`) also counts as reached --
@@ -1066,7 +1156,7 @@ FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
 
 FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavStepFacts& Step)
 {
-	// `MoveNormal` `0x102efaa0`. Route types 0 and 2 dispatch here; the port's waypoint move types
+	// `MoveNormal`. Route types 0 and 2 dispatch here; the port's waypoint move types
 	// (jump 1, climb 3) are the body's own traversal, so every pass is this one.
 	//
 	// The gate `0x102efd50`: the route-type / nav-type checks read the head waypoint's move type
@@ -1080,7 +1170,7 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	}
 	Navigator.bBlockerHold = false;                                          // nav+0x51 = 0
 
-	// Navigator slot 16 `0x102ef510`, before any step is built (`102efb2f`).
+	// Navigator slot 16, before any step is built (`102efb2f`).
 	if (Step.bWaypointReached)
 	{
 		if (Navigator.CurWaypointIsGoal())                                   // 0x102ee660 -> 0x1030bd50
@@ -1184,12 +1274,11 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		if (Navigator.GetNavType() == GMoveStepClimbNavType)
 		{
 			++NavMoveStep.ClimbMotorResets;
-			MotorResetToDefault();                                           // motor slot 5 0x102e1110
 			NavSetType(0);                                                   // 0x102eeba0
 		}
 		else
 		{
-			// `nav+0x18 != -1` -> motor slot 10 `0x102e1440`, the velocity zeroed for this think with
+			// `nav+0x18 != -1` -> motor slot 10, the velocity zeroed for this think with
 			// the route kept. SEAM: the body integrates on its own tick and `IElysiumNpcMotor` has no
 			// velocity stop that keeps the request (`Stop` drops it), so the call is recorded.
 			++NavMoveStep.VelocityStops;
@@ -1202,8 +1291,6 @@ void FElysiumNpcBase::NavigatorMoveStep()
 	if (!Navigator.IsGoalSet())                                              // 102f0081 path+0x5c == 0
 	{
 		++NavMoveStep.NoRouteWarnings;
-		EmitDevMsg(TEXT("AIError: Move requested with no route!\n"),
-			TEXT("AIError: Move requested with no route!\n"));              // retail's Warning()
 		NavLogMoveStep(TEXT("no goal type, failed"), GMoveStepFailNoGoal);
 		NavOnNavFailed(GMoveStepFailNoGoal);
 		return;
@@ -1247,8 +1334,6 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		// `INC EBP; CMP EBP,0x10; JG`: the 17th dispatch fails whatever it answered.
 		if (++NavMoveStep.Passes > GMoveStepMaxPasses)
 		{
-			EmitDevMsg(TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"),
-				TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"));
 			NavMarkStaleLink(GMoveStepStaleSeconds);                         // 102f016e
 			NavLogMoveStep(TEXT("17th pass, failed"), GMoveStepFailNoRoute);
 			NavOnNavFailed(GMoveStepFailNoRoute);                            // 102f0180

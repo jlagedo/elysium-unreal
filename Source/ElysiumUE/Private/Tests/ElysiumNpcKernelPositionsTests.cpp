@@ -561,22 +561,11 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 		Npc->IsUnreachable(Target));
 	Npc->UnreachableEnts.Reset();
 
-	// `IsValidShootPosition` `0x1028b0b0`, slot 549 — the hint group and nothing else, and the
-	// position argument is never read.
-	Npc->BaseScheduleHost.HintGroup.Reset();
-	TestTrue(TEXT("an NPC with no hint group accepts every shoot position"),
-		Npc->IsValidShootPosition(FVector::ZeroVector, nullptr));
-	Npc->BaseScheduleHost.HintGroup = TEXT("rooftops");
-	TestFalse(TEXT("one with a hint group refuses a null hint"),
-		Npc->IsValidShootPosition(FVector::ZeroVector, nullptr));
+	// `IsValidShootPosition` `0x1028b0b0` (slot 549) was removed in 0019/6 as dead; its cases went with it.
 	FElysiumNpcBase::FHintWords Hint;
 	Hint.bValid = true;
-	Hint.Group = TEXT("alley");
-	TestFalse(TEXT("and refuses a hint from another group"),
-		Npc->IsValidShootPosition(FVector::ZeroVector, &Hint));
 	Hint.Group = TEXT("rooftops");
-	TestTrue(TEXT("and accepts one from its own"),
-		Npc->IsValidShootPosition(FVector::ZeroVector, &Hint));
+	Npc->BaseScheduleHost.HintGroup = TEXT("rooftops");
 
 	// `IsValidCover` `0x1028af20`, slot 548 — the same group rule behind a hull probe that a world
 	// with no collision answers clear, which reads as "not in solid" and admits the cover.
@@ -809,15 +798,6 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 	// The sound gate is `DAT_1093f73c` `werewolf_show_debug`, shipped "0": the arm that plays nothing.
 	TestFalse(TEXT("the ww_tele wav gate is werewolf_show_debug, shipped 0, and refuses"),
 		FElysiumNpcWerewolf::WerewolfTeleportSoundConVar());
-
-	// `KillTeleportBats` `0x103b0560`: the handle is invalidated whether or not it resolved.
-	Sheriff->SheriffTeleportSwarm = Swarm->Handle;
-	Sheriff->KillTeleportBats();
-	TestFalse(TEXT("KillTeleportBats invalidates m_hTeleportSwarm"),
-		Sheriff->SheriffTeleportSwarm.IsSet());
-	Sheriff->KillTeleportBats();
-	TestFalse(TEXT("and is idempotent on an already-dead handle"),
-		Sheriff->SheriffTeleportSwarm.IsSet());
 
 	// `UpdateConditionCanTeleport` `0x103cc0d0`: the condition is CLEARED at the top of every pass —
 	// 29c's one-line walk had that backwards — and set only at the end. `IsViewable()` (slot 163) is

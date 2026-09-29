@@ -14,7 +14,7 @@
 // --- What this family is -------------------------------------------------------------------------
 //
 // **Twenty-two species overrides of one slot.** The family's rows fill two
-// retail functions on the NPC line — `CAI_BaseNPC::Precache` `0x1027bb50` and
+// retail functions on the NPC line — `CAI_BaseNPC::Precache` and
 // `CAI_BaseNPCTroika::Precache` `0x10298ad0`, the latter owning slot 104 — plus the census's
 // twenty-five distinct species bodies of that one slot and three `CNPCMaker*` bodies, which are the
 // makers' own overrides (`Substrate/ElysiumNpcMaker*.h`, story 5 fold A4). Six of the
@@ -24,25 +24,24 @@
 //
 // Each arm is its class's `Precache` override (story 5 step 3; the makers' since fold A4), and a
 // subclass that shares its base's body inherits the override, which is what makes the three Chang
-// forms (`CNPC_VChangBros`, `…Blade`, `…Claw`, all three carrying `0x1036ae60`) and the two camera
+// forms (`CNPC_VChangBros`, `…Blade`, `…Claw`, all three carrying one body) and the two camera
 // forms (`CNPC_VCamera`, `CNPC_VCameraSecurity`, both `0x103689c0`) one override apiece.
 //
 // --- Three standing facts, stated once ------------------------------------------------------------
 //
 //   * **The chain is a chain, not a merge.** Most species bodies do their own work and then call
-//     `CAI_BaseNPCTroika::Precache` `0x10298ad0`, which itself calls `CAI_BaseNPC::Precache`
-//     `0x1027bb50`. Every one of those calls is a DIRECT `thunk_`, never a vtable dispatch, so it
+//     `CAI_BaseNPCTroika::Precache` `0x10298ad0`, which itself calls `CAI_BaseNPC::Precache`.
+//     Every one of those calls is a DIRECT `thunk_`, never a vtable dispatch, so it
 //     can never re-enter the species body; the port spells it as a direct call to `TroikaPrecache`
 //     (story 5 step 3). Six arms chain the base
 //     LAST rather than first and one chains it FIRST and then hard-codes a model; the order is the
 //     recovered fact and is reproduced per arm.
-//   * **A precache is asset acquisition, which Unreal owns.** This substrate has no per-entity
-//     precache entry point at all — residency is entity-derived for the whole map epoch
-//     (`FElysiumMapActor::PreparePropAndWieldModels`, "as retail's per-entity Precache was"). So
-//     every request is RECORDED in `PrecacheLog` in retail's own order, with the engine entry it
-//     went through and the flag it carried, and `IssuePrecache` is the seam that would acquire it.
-//     The recorded order and flags ARE the recovered body; the acquisition is the part Unreal has
-//     already done by the time an NPC stands.
+//   * **A precache is asset acquisition, which Unreal owns** (0019/6, verdict `mechanism`, service
+//     `Bake`). Residency is entity-derived for the whole map epoch
+//     (`FElysiumMapActor::PreparePropAndWieldModels`) and assets are baked package references, so
+//     a body that only requested assets is gone. What a body still carries is every word it WRITES
+//     that a later rule reads (a model name, a stored index, a coordinator bind). `IssuePrecache`
+//     / `PrecacheLog` remain only for the callers outside this family that still record a request.
 //   * **`DAT_105399a0` is the one-character string `"0"`.** The two-byte `REPE CMPSB` that 229
 //     bodies run against it is retail's "is this keyfield the authored none sentinel" test, and
 //     this runtime already spells it `ElysiumNpcLoadout::IsNoneSentinel`. `m_spawnEquipment` and
@@ -52,7 +51,7 @@
 //
 // `+0x00b4` / `+0x00bc` / `+0x00c0` are base words the port's shape map does not bind: family
 // **Sounds10** records that nothing in this runtime writes `m_iVSoundTableIdx` (`+0x00bc`) and that
-// the VSound concept list is never parsed. `CNPC_VWerewolf::Precache` (`0x103cb2a0`) is the one
+// the VSound concept list is never parsed. `CNPC_VWerewolf::Precache` is the one
 // body in the whole kernel closure that writes all three, so they are declared here — by offset and
 // retail name, the way family Lifecycle declares its unbound words.
 
@@ -77,25 +76,12 @@ FString VSoundGroupName;       // +0x00c0 m_iszVSoundGroup — `"Werewolf"`, NUL
  *  prologue. `Precache()` is the slot; this is what it runs on the Troika line, and what a species
  *  class's override calls directly.
  *
- *  In retail's order: the model keyfield falls back to `"models/error/error.mdl"` when unset or
- *  empty; the keyfield is `PrecacheModel`d and the returned index handed to slot 10
- *  `SetModelIndex`; `m_altEquipment` (`+0x1a98`) is `UTIL_PrecacheOther`d unless it is `"0"` or the
- *  literal `"item_w_unarmed"`; `CAI_BaseNPC::Precache` is chained; a set `m_iDialog` (`+0x0128`)
- *  builds `"sound/character/<dialog>"`, **chops FOUR characters off the end**, lowercases it and
- *  glob-precaches that directory twice, `.wav` then `.mp3`; `+0x64e8` takes the disposition-table
- *  row index; and slot 608 is dispatched with `"Normal"`. */
+ *  Since 0019/6 only the body's WRITES run, in retail's order: the model keyfield falls back to
+ *  `"models/error/error.mdl"` when unset or empty; `+0x64e8` takes the disposition-table row
+ *  (`EnsureStanceResolved`); slot 608 is dispatched with `"Normal"`. The requests between them
+ *  (`PrecacheModel` + slot 10, `m_altEquipment` unless `"0"` / `"item_w_unarmed"`, the chained
+ *  `CAI_BaseNPC::Precache`, the two `sound/character/<dialog>` globs) are the bake's. */
 void TroikaPrecache();
-
-/** `"sound/character/%s"` built from `m_iDialog`, chopped and lowercased — the directory
- *  `0x10298ad0` globs. Pure, so the chop is stated without standing a world.
- *
- *  The chop is `buffer[strlen(buffer) - 4] = 0`, read out of the listing at `10298bfc`
- *  (`NOT ECX / DEC ECX / SUB EDX,0x4 / MOV [ECX+EDX],AL`, with `EDX` the buffer): **four**
- *  characters, not the five the checklist's walk claims. `Q_strnlwr` then lowercases the chopped
- *  string over its NEW length. A dialog name shorter than four characters writes the NUL BEFORE the
- *  buffer — retail's own out-of-bounds write, which this port does not reproduce; see the
- *  definition. */
-static FString DialogueSoundDirectory(const FString& Dialog);
 
 /** `0x101d0f10`, the directory glob, spelled once for its three call sites (`0x10298ad0` twice,
  *  `CNPC_VNewscaster` twice, `CNPC_VWerewolf` twice).
@@ -134,17 +120,12 @@ FString CharTemplateModelName() const;
 
 // --- The species arms ----------------------------------------------------------------------------
 //
-// One per distinct retail body, named after the class the census names it on and carrying that
-// class's `0x10……` address at the definition. Each is the slot-104 override on its species' C++
-// class (story 5 step 3); a body that wants the base calls `TroikaPrecache()` (the Troika body,
-// the direct call retail makes into `0x10298ad0`) or `FElysiumNpcBase::Precache()` (`CAI_BaseNPC`'s, which a
-// `CAI_BaseNPC`-line class chains instead).
-//
-// WHERE EACH ONE CHAINS, because it is the fact that separates them: **first** for Andrei Blood,
-// the Asian Vampire, Bach, the Chang brothers, the Gargoyle, the Ghoul Croucher, the Hengeyokai,
-// the ManBat, Ming Xiao, the Newscaster, the Sabbat Leader, the Sheriff, the Tzimisce Head Claw,
-// the Tzimisce Runner, the Werewolf and the Zombie; **last** for `CNPC_VTzimisce`; and **after its
-// own model fallback** for `CNPC_VMingXiaoTentacle`.
+// Since 0019/6 a species override survives only where it WRITES a word a later rule reads:
+// `CNPC_VMingXiaoTentacle` (`0x1039c220`, its fallback model and the three mode indices) and
+// `CNPC_VCamera` (`0x103689c0`, the null-model fallback and the group clear). The override calls
+// `TroikaPrecache()` (the direct call retail makes into `0x10298ad0`). Every body that only
+// requested assets is gone (service `Bake`); `CNPC_VBach` and `CNPC_VWerewolf` sit outside this
+// family's files and still carry theirs.
 
 // --- The slot-104 arm story 29c-1 ported and left unwired ----------------------------------------
 //

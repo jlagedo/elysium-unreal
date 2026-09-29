@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 201 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 167 it introduces and 34 it overrides
+// 182 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 157 it introduces and 25 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -27,38 +27,10 @@
 // generator emits, or that the body is written by hand in the substrate, in which case no
 // definition is generated at all and the linker is what checks the claim.
 
-	// slot 5 0x1027c7f0 (walked) `void* ~CBaseEntity(unsigned int)`
-	//   retail `~CBaseEntity` is a lifetime slot; declared by index
-	//   returns `void*`
-	//   layer 7, story 29c
-	void* Slot5(uint32) override;
-	// slot 76 0x102775e0 (walked) `void DrawDebugStatOverlays()`
-	//   layer 6, story 29c
-	void DrawDebugStatOverlays() override;
-	// slot 82 0x1027a7c0 (walked) `datamap_t* GetDataDescMap()`
-	//   returns `datamap_t*`
-	//   layer 0, story 29c
-	void* GetDataDescMap() override;
-	// slot 104 0x1027bb50 (sdk) `void Precache()`
-	//   layer 13, story 29d
-	void Precache() override;
-	// slot 106 0x1027bb20 (sdk) `void PostConstructor(char*)`
-	//   layer 15, story 29d
-	void PostConstructor(TCHAR*) override;
-	// slot 123 0x10275760 (sdk) `void DrawDebugGeometryOverlays()`
-	//   layer 8, story 29c
-	void DrawDebugGeometryOverlays() override;
-	// slot 124 0x102767d0 (sdk) `int DrawDebugTextOverlays()`
-	//   layer 14, story 29d
-	int32 DrawDebugTextOverlays() override;
 	// slot 126 0x1027bc60 (sdk) `int Save(ISave&)`
 	//   takes `ISave&`
 	//   layer 15, story 29d
 	int32 Save(void*) override;
-	// slot 127 0x1027c160 (walked) `int Restore(IRestore&)`
-	//   takes `IRestore&`
-	//   layer 9, story 29c
-	int32 Restore(void*) override;
 	// slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 	//   layer 0, story 29c
 	bool ShouldSavePhysics() override;
@@ -110,9 +82,6 @@
 	// slot 333 0x1026b810 (walked) `void MaintainEyeDirection(float)`
 	//   layer 4, story 29c
 	void MaintainEyeDirection(float) override;
-	// slot 337 0x10270820 (walked) `int GetUsedHullBits()`
-	//   layer 1, story 29c
-	int32 GetUsedHullBits() override;
 	// slot 354 0x1026cec0 (walked) `void vfunc354()`
 	//   layer 21, story 29e
 	void Slot354() override;
@@ -489,24 +458,15 @@
 	// slot 518 0x10278d20 (walked) `void AddFacingTarget(const Vector&, float, float, float)`
 	//   layer 0, story 29c
 	virtual void AddFacingTarget(const FVector&, float, float, float);
-	// slot 519 0x10278cb0 (walked) `void AddFacingTarget(CBaseEntity*, float, float, float)`
-	//   layer 0, story 29c
-	virtual void AddFacingTarget(FElysiumEntity*, float, float, float);
-	// slot 520 0x10278e00 (sdk) `float GetFacingDirection(Vector&)`
-	//   layer 0, story 29c
-	virtual float GetFacingDirection(FVector&);
 	// slot 521 0x10280880 (sdk) `bool IsJumpLegal(Vector&, Vector&, Vector&) const`
 	//   layer 2, story 29c
 	virtual bool IsJumpLegal(FVector&, FVector&, FVector&) const;
 	// slot 522 0x101a6b40 (sdk) `float StepHeight() const`
 	//   layer 0, story 29c
 	virtual float StepHeight() const;
-	// slot 523 0x101a6b60 (sdk) `float GetMaxJumpSpeed() const`
+	// slot 523 0x101a6b60 (walked) `float GetStepDownHeight() const`
 	//   layer 0, story 29c
-	virtual float GetMaxJumpSpeed() const;
-	// slot 524 0x101a6b80 (sdk) `float GetJumpGravity() const`
-	//   layer 0, story 29c
-	virtual float GetJumpGravity() const;
+	virtual float GetStepDownHeight() const;
 	// slot 525 0x1027da90 (sdk) `bool OverrideMove(float)`
 	//   layer 0, story 29c
 	virtual bool OverrideMove(float);
@@ -554,9 +514,6 @@
 	// slot 539 0x1026b480 (walked) `void SetAim(const Vector&)`
 	//   layer 2, story 29c
 	virtual void SetAim(const FVector&);
-	// slot 540 0x10279060 (walked) `float PlayScene(const char*)`
-	//   layer 4, story 29c
-	virtual float PlayScene(const TCHAR*);
 	// slot 541 0x10273e10 (walked) `CAI_Enemies* GetEnemies()`
 	//   returns `CAI_Enemies*`
 	//   layer 0, story 29c
@@ -577,17 +534,10 @@
 	// slot 546 0x101a6c00 (walked) `const char* SquadSlotName(int)`
 	//   layer 3, story 29c
 	virtual const TCHAR* SquadSlotName(int32);
-	// slot 547 0x1028b0f0 (walked) `int GetSlotSchedule(int)`
-	//   layer 0, story 29c
-	virtual int32 GetSlotSchedule(int32);
 	// slot 548 0x1028af20 (walked) `bool IsValidCover(const Vector&, const CAI_Hint*)`
 	//   takes `const CAI_Hint*`
 	//   layer 4, story 29c
 	virtual bool IsValidCover(const FVector&, void*);
-	// slot 549 0x1028b0b0 (walked) `bool IsValidShootPosition(const Vector&, const CAI_Hint*)`
-	//   takes `const CAI_Hint*`
-	//   layer 0, story 29c
-	virtual bool IsValidShootPosition(const FVector&, void*);
 	// slot 550 0x101a6c20 (walked) `float CoverRadius()`
 	//   layer 0, story 29c
 	virtual float CoverRadius();
@@ -600,15 +550,9 @@
 	// slot 553 0x1026d890 (walked) `int RangeAttack1Conditions(float, float)`
 	//   layer 0, story 29c
 	virtual int32 RangeAttack1Conditions(float, float);
-	// slot 554 0x1026d920 (walked) `int RangeAttack2Conditions(float, float)`
-	//   layer 0, story 29c
-	virtual int32 RangeAttack2Conditions(float, float);
 	// slot 555 0x1026d9a0 (walked) `int MeleeAttack1Conditions(float, float)`
 	//   layer 1, story 29c
 	virtual int32 MeleeAttack1Conditions(float, float);
-	// slot 556 0x1026da90 (walked) `int MeleeAttack2Conditions(float, float)`
-	//   layer 1, story 29c
-	virtual int32 MeleeAttack2Conditions(float, float);
 	// slot 557 0x101a6c60 (walked) `bool OnBeginMoveAndShoot()`
 	//   layer 0, story 29c
 	virtual bool OnBeginMoveAndShoot();
@@ -646,9 +590,6 @@
 	// slot 567 0x1026a8f0 (walked) `Activity GetHintActivity(short)`
 	//   layer 0, story 29c
 	virtual int32 GetHintActivity(int16);
-	// slot 568 0x1026a910 (walked) `float GetHintDelay(short)`
-	//   layer 0, story 29c
-	virtual float GetHintDelay(int16);
 	// slot 569 0x10274aa0 (walked) `Activity GetCoverActivity(CAI_Hint*)`
 	//   takes `CAI_Hint*`
 	//   layer 1, story 29c
@@ -682,9 +623,6 @@
 	// slot 578 0x101a6cc0 (walked) `void NotifyDeadFriend(CBaseEntity*)`
 	//   layer 0, story 29c
 	virtual void NotifyDeadFriend(FElysiumEntity*);
-	// slot 579 0x101a6ce0 (walked) `bool vfunc579(int)`
-	//   layer 1, story 29c
-	virtual bool Slot579(int32);
 	// slot 581 0x102779a0 (walked) `void ReportAIState()`
 	//   layer 4, story 29c
 	virtual void ReportAIState();

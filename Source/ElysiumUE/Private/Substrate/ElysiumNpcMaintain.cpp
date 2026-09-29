@@ -144,7 +144,7 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 {
 	(void)NewSchedule;
 	// Base slot 435 (`0x1027a700`) first: navigator notification, move-wait zero, strategy reset.
-	// Navigator slot 4 is retail `0x102eea30`, a literal `RET 4`, so it has no state to carry.
+	// Navigator slot 4 is a literal retail `RET 4`, so it has no state to carry.
 	BaseScheduleHost.MoveWaitFinished = 0.0; // 0x1027a716
 	VacateSquadSlot();                       // 0x1027a71f -> 0x1028ae60
 	NpcFlags.BeginScheduleChange();					   // 0x102a095d

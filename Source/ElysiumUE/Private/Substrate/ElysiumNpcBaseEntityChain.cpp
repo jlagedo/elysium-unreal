@@ -19,7 +19,7 @@ namespace
 {
 	// `_DAT_1045d650` = **1024.0f** (`docs/vtmb/computer-terminals.md` line 1508,
 	// `docs/vtmb/npc-ai/conditions-and-states.md` line 885). Slot 550 `CoverRadius`'s answer.
-	constexpr float GChainCoverRadius = 1024.0f;
+	constexpr float GChainCoverRadius = ElysiumNpcTunables::OneThousandTwentyFour;
 }
 
 // --- Moved from `ElysiumNpcEntityChain.cpp` (story 5 step 5) ---
@@ -96,15 +96,6 @@ float FElysiumNpcBase::CoverRadius()
 	// `docs/vtmb/npc-ai/conditions-and-states.md` line 885 repeats it). `CNPC_VPedestrian` and
 	// `CNPC_VTzimisce` override it for real elsewhere; this is the line's own answer.
 	return GChainCoverRadius;
-}
-
-bool FElysiumNpcBase::Slot579(int32 Argument)
-{
-	// 0x101a6ce0, slot 579 — `return slot158() == 0;`, i.e. the NEGATION of `IsAlive`, with its own
-	// integer argument dropped exactly as slot 483 drops its bool. So slot 579 is "is this thing
-	// dead", spelled as a wrapper rather than as a field read.
-	(void)Argument;
-	return !IsAlive();
 }
 
 const FElysiumLocalIdSpace* FElysiumNpcBase::ClassScheduleIdSpace() const

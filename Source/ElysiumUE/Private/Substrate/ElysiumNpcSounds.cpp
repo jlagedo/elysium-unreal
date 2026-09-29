@@ -137,9 +137,9 @@ void FElysiumNpc::JustMadeSound()
 // Both were generated stub bodies until story 29c-1 needed a species prologue on them. They live in
 // THIS family's file because 497 and 506 are the same sound-hook band and 488 is the death
 // vocalization — the concern is sound, not dispatch — but the Troika-line bodies behind them
-// (`0x10293ec0` and `0x10294e70`) are layer 14 and belong to story **29d**, family **Sounds10**.
+// (`0x10293ec0` and slot 506's) are layer 14 and belong to story **29d**, family **Sounds10**.
 // Story 29d ported them: each definition below is the SPECIES PROLOGUE 29c-1 put here, and the arm
-// it falls through to is `TroikaDeathSound()` / `TroikaSlot506()` in
+// it falls through to is `TroikaDeathSound()` (slot 506's `TroikaSlot506` is dead, 0019/6) in
 // `Substrate/ElysiumNpcSounds10.cpp`, beside the other fifteen hooks of the same band.
 
 // slot 488 0x10293ec0 `void DeathSound()`
@@ -149,14 +149,6 @@ void FElysiumNpc::DeathSound()
 	// `SPI_DIES` at the script host and tail-calls slot 487, so a Tzimisce never reaches the base
 	// death sound; that tail call is the one part of its body still unported.
 	TroikaDeathSound();
-}
-
-// slot 506 0x10294e70 `void vfunc506()`
-void FElysiumNpc::Slot506()
-{
-	// `CNPC_VCamera` (and `CNPC_VCameraSecurity` under it) overrides this slot with an EMPTY body
-	// (`FElysiumNpcCamera`, `0x103682f0`), so a camera never reaches the Troika body below.
-	TroikaSlot506();
 }
 
 // ==================================================================================================

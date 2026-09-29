@@ -74,6 +74,8 @@ private:
 	// Hidden/broken → undrawn, non-colliding, not simulating. Live → restore draw + (if enabled)
 	// simulation. Mirrors the whole-entity dormancy switch onto the physics body.
 	void GateBody();
+	// 0019/6: the retail filter bits this entity prop's body wears (`ElysiumRetailMask::PropBodyMaskBits`).
+	uint8 PropMaskBits() const;
 };
 
 // The `phys_hinge` leaf: a Chaos hinge constraint (one free rotational DOF) between attach1's body

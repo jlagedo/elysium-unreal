@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
@@ -71,49 +72,15 @@ bool FElysiumNpcScheduleHost::IsTaskIndexCurrent(const FElysiumScheduleState& St
 	return Program != nullptr && State.TaskIndex == Program->Tasks.Num();
 }
 
-// `_DAT_10447ee0` — the wait duration `0x102a18a0` substitutes for an operand at or below zero.
-// UNRECOVERED: the corpus carries the address and 33 readers, not the float. 0.0 stands in, which
-// makes the substitution a same-frame deadline; one edit closes it.
-static constexpr float GScheduleDefaultWaitSeconds = 0.0f;
+// `_DAT_10447ee0` — the wait duration `0x102a18a0` substitutes for an operand at or below zero: the
+// pooled f32 1000.0 (33 readers; 0019/6 Q3 read the cell out of the pinned image, where the earlier
+// 0.0 stand-in made the substitution a same-frame deadline).
+static constexpr float GScheduleDefaultWaitSeconds = ElysiumNpcTunables::Thousand;
 
 void FElysiumNpcBaseScheduleHost::SetWaitFinished(float TaskSeconds, double Now)
 {
 	// `if (_DAT_104454c4 < task->flTaskData)` — the shared float zero, so "a positive operand".
 	WaitFinished = Now + (TaskSeconds > 0.0f ? TaskSeconds : GScheduleDefaultWaitSeconds);
-}
-
-const TCHAR* FElysiumNpcScheduleHost::SetScheduleTraceName(const TCHAR* RetailClass)
-{
-	if (RetailClass == nullptr)
-	{
-		return TEXT("");
-	}
-	// The class, the body that fills slot 619 for it, and the literal it pushes. Checkable against
-	// `docs/vtmb/npc-kernel/slots.md`; the literals are the `NameFromStrings` names the corpus
-	// records at the push site.
-	struct FRow
-	{
-		const TCHAR* Class;
-		const TCHAR* Body;
-		const TCHAR* Trace;
-	};
-	static const FRow Rows[] = {
-		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035dba0"), TEXT("CNPC_VAndreiBlood::SetSchedule") },
-		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361530"), TEXT("CNPC_VAsianVampire::SetSchedule") },
-		{ TEXT("CNPC_VChangBros"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a9fd0"), TEXT("CNPC_VSabbatLeader::SetSchedule") },
-		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103af8d0"), TEXT("CNPC_VSheriffMan::SetSchedule") },
-	};
-	for (const FRow& Row : Rows)
-	{
-		if (FCString::Strcmp(Row.Class, RetailClass) == 0)
-		{
-			return Row.Trace;
-		}
-	}
-	return TEXT("");
 }
 
 // Twenty-three of the words this block used to write are retail `SAVE` rows the generated datamap

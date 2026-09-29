@@ -706,11 +706,6 @@ bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Fighter;
 
-	// The literal `0x3cf445af` decodes to **2** through `0x1042fe90` — the bound the criminal arm
-	// compares against, and the one number in the body that is not written out.
-	TestEqual(TEXT("0x1042fe90(0x3cf445af) == 2"),
-		static_cast<int32>(FElysiumNpc::SecureUnhashLevel(0x3cf445afu)), 2);
-
 	// `102ad459`: no condition at all answers 0 WITHOUT touching the ideal state.
 	N.Cognition.Conditions.Reset();
 	TestEqual(TEXT("0x102ad340 with no condition the body answers 0"),

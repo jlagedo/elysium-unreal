@@ -33,10 +33,12 @@ namespace
 	constexpr float GThink19NoEnemyDistanceUnits = 20000.f;
 
 	// Slot 517's three floats at `0x1029303d`..`0x10293048`: `PUSH 0x3f800000` (1.0),
-	// `PUSH 0x3f4ccccd` (0.8), `PUSH 0x0` (0.0). Immediates, not table cells.
-	constexpr float GThink19FaceEnemyDuration = 1.0f;
-	constexpr float GThink19FaceEnemyRamp = 0.8f;
-	constexpr float GThink19FaceEnemyTolerance = 0.f;
+	// `PUSH 0x3f4ccccd` (0.8), `PUSH 0x0` (0.0). Immediates, not table cells: the SDK's `(importance, duration, ramp)` -- its own
+	// `AddFacingTarget(enemy, lastKnown, 1.0, 0.8)` (0019/6 fix 3; the port had read them as
+	// duration, ramp, tolerance).
+	constexpr float GThink19FaceEnemyImportance = 1.0f;
+	constexpr float GThink19FaceEnemyDuration = 0.8f;
+	constexpr float GThink19FaceEnemyRamp = 0.f;
 
 	// `ClearHintNode(5.0)` -- `PUSH 0x40a00000` at `0x10293149`, an immediate.
 	constexpr float GThink19HintClearReuseSeconds = 5.0f;
@@ -65,7 +67,7 @@ namespace
 
 	// The refused think's re-arm, `curtime + _DAT_104491b4` (0.1f, `0x10293419`) -- a float cell
 	// the kernel table does not carry.
-	constexpr float GThink19RefusedRearmSeconds = 0.1f;
+	constexpr float GThink19RefusedRearmSeconds = ElysiumNpcTunables::Tenth;
 
 	// Slot 464 `GetState() == 2` (`0x10298109`): retail 2 is COMBAT.
 	constexpr EElysiumNpcState GThink19BossRegisterState = EElysiumNpcState::Combat;
@@ -219,8 +221,8 @@ void FElysiumNpc::Think19EnemyTriple()
 	if (ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAllowMoveFacing) != 0  // 0x10293019 / 0x10293025
 		&& NpcFlags.Has(EElysiumNpcFlag2::MOVE_FACE_ENEMY))                  // 0x10293039
 	{
-		AddFacingTarget(Enemy, LastKnown, GThink19FaceEnemyDuration, GThink19FaceEnemyRamp,
-			GThink19FaceEnemyTolerance);                                    // 0x10293051 slot 517
+		AddFacingTarget(Enemy, LastKnown, GThink19FaceEnemyImportance, GThink19FaceEnemyDuration,
+			GThink19FaceEnemyRamp);                                    // 0x10293051 slot 517
 	}
 }
 
@@ -421,7 +423,6 @@ void FElysiumNpc::Think19Tail(double Now, bool bUpdateDue, float UpdateInterval)
 void FElysiumNpc::NPCThink()
 {
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	TroikaNPCThinkDebugPre();                                               // 0x10292e4d 0x10292500
 	// `m_bfAINPCFlags2 &= 0x7ffffffb`: SCHEDULE_CHANGED (0x4) AND bit 31, before the disable test.
 	NpcFlags.Clear(EElysiumNpcFlag2::SCHEDULE_CHANGED);                     // 0x10292e5e
 	NpcFlags.ClearRawWord2Bits(FElysiumNpcFlags::Word2UnnamedBit31);        // 0x10292e66

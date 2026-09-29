@@ -17,7 +17,6 @@
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpeciesLifecycle10Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -34,33 +33,6 @@
 
 namespace
 {
-	//
-	// Nine gib models, precached in DESCENDING `.rdata` address order (`0x1063a808` down to
-	// `0x1063a550`) — which is the order the body pushes them, not an artifact.
-	const TCHAR* const GGargoyleGibModels[] = {
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/garg_gibbs.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_head.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_L_foot.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_L_hand.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_L_torso.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_pelvis.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_R_foot.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_R_hand.mdl"),
-		TEXT("models/character/monster/gargoyle/gargoyle_gibbs/gargoyle_R_torso.mdl"),
-	};
-	const TCHAR* const GGargoyleStomps[] = {   // 0x10639480, to 0x10 — four
-		TEXT("character/monster/gargoyle/stomp_1.wav"),
-		TEXT("character/monster/gargoyle/stomp_2.wav"),
-		TEXT("character/monster/gargoyle/stomp_3.wav"),
-		TEXT("character/monster/gargoyle/stomp_4.wav"),
-	};
-	const TCHAR* const GGargoyleExerts[] = {   // 0x10639490, to 0xc — three
-		TEXT("character/monster/gargoyle/exert_heavy_1.wav"),
-		TEXT("character/monster/gargoyle/exert_heavy_2.wav"),
-		TEXT("character/monster/gargoyle/exert_heavy_3.wav"),
-	};
-	const TCHAR* const GGargoyleRoar = TEXT("character/monster/gargoyle/roar2.wav");
-	const TCHAR* const GGargoyleWeapon = TEXT("item_w_gargoyle_fist");
 	// `1037a3c1 CALL dword ptr [EDX + 0x238]` — slot 142, `OnTakeDamage`, dispatched on the PILLAR.
 	constexpr int32 GOnTakeDamageSlot = 142;
 }
@@ -104,31 +76,6 @@ void FElysiumNpcGargoyle::NPCInit()
 	GargoyleDoingGibDeath = 0;
 	GargoyleCanKnockback = 0;
 	NodeGraphHullIndex() = HullIndexGargoyle;
-}
-
-// Slot 104: `0x10378470`.
-// 0x10378470
-void FElysiumNpcGargoyle::Precache()
-{
-	// `CNPC_VGargoyle::Precache` `0x10378470` — the Troika body, nine gib models with preload 1 in
-	// descending `.rdata` order, the 0x10-byte stomp table, the 0xc-byte exert table, one roar and
-	// the fist.
-	TroikaPrecache();
-	for (const TCHAR* GibModel : GGargoyleGibModels)
-	{
-		NpcKernelPrecache10Shared::Precache10Model(*this, GibModel, /*Preload=*/1);
-	}
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GGargoyleStomps, UE_ARRAY_COUNT(GGargoyleStomps));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GGargoyleExerts, UE_ARRAY_COUNT(GGargoyleExerts));
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GGargoyleRoar);
-	NpcKernelPrecache10Shared::Precache10Other(*this, GGargoyleWeapon);
-}
-
-// Slot 461: `0x10378b60`, the selector tag 0x11 and then a direct call into the human line's `0x103851e0`.
-int32 FElysiumNpcGargoyle::SelectIdealStateRetail()
-{
-	SelectIdealStateSelector = 0x11;
-	return HumanSelectIdealState();
 }
 
 // Slot 448: `0x10379060`, its own arm and then a direct call into the Troika body `0x1029adb0`.
@@ -181,6 +128,9 @@ int32 FElysiumNpcGargoyle::TranslateScheduleRetail(int32 ScheduleNumber)
 // Slot 69: `0x10379490`. The `0x16` derived-type gate, then the three `FClassnameIs` compares
 // (`prop_dynamic`, `func_brush`, `func_door_rotating`); otherwise a direct call into the Troika body
 // `0x1029b180`.
+// The retail rule is kept here; the measurement is the movement seam's. `SetMoveIgnore` (report-S) is a
+// list, so the move path (lane M) must register these entities ahead of the move: slot 69 has no live
+// caller today.
 bool FElysiumNpcGargoyle::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	if (Other != nullptr)
@@ -231,16 +181,6 @@ void FElysiumNpcGargoyle::OnVictimHitByMe(FElysiumEntity* Victim)
 	{
 		DispatchVictimHitReaction(Victim);
 	}
-}
-
-// Slot 546: `0x10377cd0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcGargoyle::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b038`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VGargoyle"), TEXT("0x10377cd0"), TEXT("0x1093b038") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 292: `0x10378cb0` — no flinch from gunfire or a zero-magnitude hit; otherwise the base
@@ -375,7 +315,7 @@ bool FElysiumNpcGargoyle::FUN_10379ef0(FElysiumEntity* Enemy)
 	// `0x10379ef0`, `CNPC_VGargoyle`'s slot 599 — byte-identical to `CNPC_VFrenzyShadow`'s
 	// `0x10376b70`, verified against the decompiled C of both. Since story 5 fold A2 that body is
 	// `FElysiumNpcFrenzyShadow::Slot599`, on a sibling class, so it is restated here:
-	//     (*DAT_10924edc)->vfunc1();      // the global melee-entered event, FIRST
+	//     (*DAT_10924edc)->IsCommand();      // ent_trace_melee's parent, answer dropped, FIRST
 	//     m_bInMelee = 1;
 	//     return <EAX>;                   // true: m_bInMelee was set
 	// Every gate the Troika line has is dropped; `Enemy` is read by nothing.

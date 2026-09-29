@@ -1,0 +1,24 @@
+0x101a6660	-	BaseSchedulingErrorName helper (BaseDebug.cpp); generated slot-451 stub goes with the row
+0x101aa7b0	-	Troika GetSchedulingErrorName (Debug.cpp)
+0x10275760	-	base DrawDebugGeometryOverlays (BaseDebug2.cpp)
+0x102767d0	-	base DrawDebugTextOverlays (BaseDebug10.cpp)
+0x102775e0	-	base DrawDebugStatOverlays (BaseDebug.cpp)
+0x102779a0	-	ReportAIState (BaseDebug.cpp)
+0x1027e7d0	-	GetNavTypeName (BaseDebug.cpp)
+0x1027ede0	-	base GetShortConditionName (BaseDebug.cpp); species overrides 0x103951d0/0x1039ece0/0x103d0640 are lane C's
+0x1027ee00	-	GetLastSharedCondition: its only port reader (Conditions10 debug list) removed
+0x1027ef20	-	AppendDebugLogLine ring (BaseDebug10.cpp)
+0x1028d990	-	BuildConditionDebugString + helpers (Conditions10.cpp)
+0x1028de10	-	TraceMessage slot 18 (Debug10.cpp)
+0x1028de90	-	TraceMessage slot 17 (Debug10.cpp)
+0x1028df30	-	TraceMessageBare slot 20 (Debug10.cpp)
+0x1028dfb0	-	TraceMessageBare slot 19 (KernelBaseHelpers.cpp)
+0x10292500	-	TroikaNPCThinkDebugPre (Debug10_2.cpp) and its NPCThink call
+0x1029c010	-	Troika DrawDebugStatOverlays (Debug.cpp)
+0x1029ca50	-	Troika DrawDebugGeometryOverlays (Debug10_2.cpp)
+0x1029d4e0	-	Troika DrawDebugTextOverlays (Debug10.cpp)
+0x102cc300	-	ConditionName (BaseDebug.cpp)
+0x102cc350	-	TaskName (BaseDebug.cpp); three print callers cut
+0x102d1600	-	CAI_Hint DrawDebugTextOverlays (BaseDebug2.cpp)
+0x102e1110	-	MotorResetToDefault (BaseLifecycle.cpp) and its climb-arm call
+0x10366290	-	BaseBoss DrawDebugStatOverlays (BaseBoss.cpp)

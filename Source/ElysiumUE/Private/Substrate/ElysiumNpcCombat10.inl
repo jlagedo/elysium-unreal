@@ -109,15 +109,6 @@ int32 LastPreSelectIdealStateRetail = 0;
 int32 ForcedNpcState() const;
 void ClearForcedNpcState();
 
-/** `CSecureType`'s decode pair, `0x1042fe90` over the `+0x6364` unscramble — the two steps slot 460
- *  runs on `m_iPLCriminalLevelWitnessed` and on the literal `0x3cf445af`, which decodes to **2**.
- *  `ElysiumNpcSensesBodies.cpp` carries the same constants for the pedestrian's reader; they are
- *  restated here (file statics, not shared) and the literal's decode is pinned by a test.
- *
- *  This runtime stores the witnessed level PLAIN (`FElysiumNpcWitnessChannel::Level`), so the decode
- *  is the identity on the port's word and the bound is the recovered `2`. */
-static uint32 SecureUnhashLevel(uint32 Value);
-static uint32 SecureUnscrambleLevel(uint32 Stored);
 
 // --- Slot 589 `SetScriptedDiscipline` -------------------------------------------------------------
 //

@@ -195,19 +195,6 @@ struct FElysiumNpcScheduleHost
 	 */
 	static bool IsTaskIndexCurrent(const FElysiumScheduleState& State);
 
-	/**
-	 * Slot 619 `SetSchedule(int)`'s five species overrides — `CNPC_VAndreiBlood` (`0x1035dba0`),
-	 * `CNPC_VAsianVampire` (`0x10361530`), `CNPC_VChangBros` and its two leaves (`0x1036c760`),
-	 * `CNPC_VSabbatLeader` (`0x103a9fd0`) and `CNPC_VSheriffMan` (`0x103af8d0`).
-	 *
-	 * All five are 100-byte scope-trace wrappers around the shared `CAI_BaseNPC::SetSchedule(int)`
-	 * (`0x10280de0`, ported as `FElysiumNpcBase::ChangeSchedule`): push a literal name onto retail's
-	 * `g_ScopeTraceStack`, forward, pop. They carry NO class-specific logic, so the whole of what
-	 * they add over the shared body is the name they push — which is what this answers. Empty for a
-	 * class with no slot-619 override.
-	 */
-	static const TCHAR* SetScheduleTraceName(const TCHAR* RetailClass);
-
 	void ResetThinkTimers(double Now) { NextUpdate = NextNormal = NextMove = NextAI = Now; }
 	void Serialize(FElysiumSaveArchive& Ar);
 	void OnPostRestore();

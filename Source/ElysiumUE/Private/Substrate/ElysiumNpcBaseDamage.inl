@@ -2,11 +2,6 @@
 // moved from `ElysiumNpcDamage*.inl`. Included inside `class FElysiumNpcBase`
 // (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseDamage.cpp`.
 
-// `CNPC_VAndreiBlood`'s `SelectIdealState` tag. The port's mind transition trace does not carry
-// retail's `{selector, file, line}` triple — the shape map calls `+0x1b38` ABSENT — so the one word
-// `0x1035d150` writes is kept here so the arm is measurable.
-int32 SelectIdealStateSelector = 0;          // +0x1b38 m_SelectIdealStateTrace.m_iSelector (walked)
-
 /** SEAM for `CBaseEntity::IsStandable` (vtable `+0x290`, slot 164) on ANOTHER entity — the fallback
  *  `CNPC_VMingXiao`'s slot-166 override takes once the candidate is neither a proxy nor a severed
  *  tentacle. `0x100b50a0` reads `GetSolidFlags() & FSOLID_NOT_STANDABLE (0x10)`, then `GetSolid()`

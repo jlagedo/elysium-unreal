@@ -21,9 +21,8 @@
 //   * **`SetState` (`0x1026e340`) writes BOTH `+0x5cc0` and `+0x5cc4`, and slot 463 is dispatched
 //     with the value read at ENTRY** — the pre-write state is re-read after the `SetEnemy(NULL)`
 //     strip to decide whether to dispatch, but the arguments are `(oldAtEntry, new)`.
-//   * **`+0x1b38` is `SelectIdealStateSelector`.** The twelve fifteen-byte slot-461 species bodies
-//     write a class tag there and chain; they are data rows, not no-ops. The port carries the
-//     eight whose class has an instance; BatSwarm, Combatman, Moleman and SheriffSwarm have none.
+//   * **`+0x1b38` is a dead debug tag** (spec 0019 story 6). The slot-461 species bodies that only
+//     write a class tag there and chain are inherited, not ported.
 
 // --- Raw NPC_STATE words --------------------------------------------------------------------------
 

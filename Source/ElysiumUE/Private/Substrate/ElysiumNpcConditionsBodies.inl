@@ -10,12 +10,11 @@
 // `Tests/ElysiumNpcKernelConditionsTests.cpp`. One file per family rather than 915 declarations
 // appended to an already-oversized header: the family boundary is what this story ports by.
 //
-// The seven slots this family DEFINES (declared by the generator, defined in the `.cpp`):
+// The slots this family DEFINES (declared by the generator, defined in the `.cpp`):
 //   459 `RemoveIgnoredConditions`   0x1026d7f0
 //   463 `OnStateChange`             0x102ae140
 //   477 `ClearSenseConditions`      0x1026e5c0
 //   553 `RangeAttack1Conditions`    0x1026d890
-//   554 `RangeAttack2Conditions`    0x1026d920
 //   560 `ClearAttackConditions`     0x1026dc80
 //   564 `FCanCheckAttacks`          0x102953a0
 

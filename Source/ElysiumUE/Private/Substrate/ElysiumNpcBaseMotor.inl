@@ -90,7 +90,7 @@ void NavOnNavFailed(int32 FailReason);
  *  instead of stepping it. */
 void NavigatorMoveStep();
 
-/** `CAI_Navigator::OnNavComplete` `0x102eea90` (navigator slot 8): the reset `0x102eeb70`, the owner's
+/** `CAI_Navigator::OnNavComplete` (navigator slot 8): the reset `0x102eeb70`, the owner's
  *  `TaskMovementComplete` (`0x10273ec0`, through `0x102eccc0`: the goal waypoint's `AdvancePath`,
  *  then `ClearGoal` `0x102ee270`, so the goal type never outlives the arrival), `nav+0x1c = 1`. */
 void NavOnNavComplete();
@@ -114,14 +114,14 @@ enum class ENavMoveResult : int32
  *  motor that reports no facts). Facts, not a verdict: the pass decides. */
 struct FNavStepFacts
 {
-	// `0x102ef510` (navigator slot 16): the head waypoint is reached -- inside the constant 0.0625
+	// Navigator slot 16: the head waypoint is reached -- inside the constant 0.0625
 	// units (`0x10451f78`; 2-D on ground nav, 3-D otherwise), or the follower's own Success end.
 	bool bWaypointReached = false;
 	// The body gave the request up short of the waypoint (the follower ended it without Success).
 	bool bGaveUp = false;
 	// The obstruction the body names (`trace+0x1c`), unset for the world or an unnamed entity.
 	FElysiumEntityHandle Blocker;
-	// The body's distance left to the leg's destination, units (the `0x102ef510` distance: 2-D on
+	// The body's distance left to the leg's destination, units (navigator slot 16's distance: 2-D on
 	// ground nav, 3-D otherwise); 0 when the body reports no facts.
 	float RemainingUnits = 0.f;
 };
@@ -130,8 +130,8 @@ struct FNavStepFacts
  *  the entity record (`SampleMotorIntoEntity`, `GetOrigin` slot 220's source). */
 FNavStepFacts NavSampleStep();
 
-/** One `MoveNormal` pass (`0x102efaa0`) on the sampled facts: the gate `0x102efd50` (simplify pass,
- *  `nav+0x51 = 0`), the arrival test `0x102ef510` (`OnNavComplete` on the goal waypoint, else
+/** One `MoveNormal` pass on the sampled facts: the gate `0x102efd50` (simplify pass,
+ *  `nav+0x51 = 0`), the arrival test (navigator slot 16; `OnNavComplete` on the goal waypoint, else
  *  `AdvancePath`), the movement activity, then the blocked arms (motor code 4 on the move target,
  *  the NPC-blocker hold `0x102ef3e0`, the same-direction mover `0x102efde0`, the goal-tolerance
  *  completion `0x102ef760`). */
@@ -160,6 +160,44 @@ bool NavIssueLeg(const FElysiumNpcMoveRequest& Request);
  *  recorded head-leg request handed to the body again, unchanged. False when no leg is recorded or the
  *  body refuses it. */
 bool NavReissueHeadLeg();
+
+/** 0019/6: what every kernel move request carries that the body cannot know -- retail's turn rate,
+ *  the STORED word `m_YawSpeed` (motor `+0x38`, `MotorYawSpeedWord`) that `UpdateYaw(-1)`
+ *  `0x102e1e20` turns by, as its writers (`0x102e1cf0` from `0x102e1c10`'s `-1.0` arm and from
+ *  `SetActivityAndSequence`'s tail; a task's stated speed at `0x102e1ca8`) last left it -- and the
+ *  move-ignore registration below, run before the request is handed to `IElysiumNpcMotor::MoveTo`.
+ *  Every kernel `MoveTo` site goes through here. It opens the move's per-think upkeep
+ *  (`MotorThinkUpkeep`), which `ClearMoveIgnores` closes. */
+FElysiumNpcMoveRequest PrepareMoveRequest(const FElysiumNpcMoveRequest& Request);
+
+/** The motor's per-think upkeep, from `PerformMovement` (`0x1026c120`) ahead of the navigator step:
+ *  while a kernel move is live, slot 69 is asked again (`RegisterMoveIgnores`) and the word
+ *  `+0x38` is re-read into the body's turn rate (`IElysiumNpcMotor::SetYawSpeed`, on a change), so a
+ *  `SetActivityAndSequence` mid-leg reaches the turn; every think, slot 15's facing blend is handed
+ *  (`MotorHandFacingTarget`). */
+void MotorThinkUpkeep();
+
+/** The per-species slot 69 `NavIgnoreCollision` answers (Troika `0x1029b180`; Gargoyle
+ *  `0x10379490`, Hengeyokai `0x10380f90`, MingXiao / Tzimisce `0x103bfa00`-shape, Werewolf
+ *  `0x103d9ba0`, the tentacle `0x1039eb90`) stated to the mover through `SetMoveIgnore`. **Named
+ *  divergence:** retail asks slot 69 contact by contact inside the probe; the seam is a set, so every
+ *  entity of the world is asked when the move is issued and again every NPC think while it is live
+ *  (`MotorThinkUpkeep`) -- an answer that changes mid-leg (a kick-prop handle `0x1029b180` reads, a
+ *  flag bit `0x16`, an entity spawned mid-leg) is seen within one think, not at the contact. Only the
+ *  difference is stated: a handle newly answered true is set, one no longer answered is cleared.
+ *  `StartIgnoringCollision`'s own handle is never touched here. */
+void RegisterMoveIgnores();
+/** Undo `RegisterMoveIgnores` and close the move's per-think upkeep: at the move's end
+ *  (`NavSampleStep`, the ambient walk's end) and at every `Motor->Stop()` site. */
+virtual void ClearMoveIgnores() override;
+/** The handles `RegisterMoveIgnores` stated, so exactly those are cleared. Not saved: a restore
+ *  re-issues its move, which registers again. */
+TArray<FElysiumEntityHandle> MoveIgnoreRegistered;
+/** A kernel move is live: set by `PrepareMoveRequest`, cleared by `ClearMoveIgnores`. */
+bool bKernelMoveLive = false;
+/** The turn rate last handed to the body for the live move (degrees per second), so the per-think
+ *  re-read states a change only. */
+float MotorYawRateHanded = 0.f;
 
 /** One `Verbose` line on `LogElysiumNpcEnt` per move-step outcome: the NPC, the outcome (with its
  *  `TaskFail` code when non-zero), the head leg's destination (the goal position when no leg is
@@ -196,8 +234,8 @@ bool NavIsNpcBlocker(const FElysiumEntityHandle& Blocker) const;
 struct FNavMoveStepSeams
 {
 	int32 NoRouteWarnings = 0;    // 0x102f0081 Warning("AIError: Move requested with no route!\n")
-	int32 ClimbMotorResets = 0;   // 0x102f0198 climb: motor slot 5 `0x102e1110` + `SetNavType(0)`
-	int32 VelocityStops = 0;      // 0x102f0198 motor slot 10 `0x102e1440` (velocity 0), SEAM
+	int32 ClimbMotorResets = 0;   // 0x102f0198 climb: motor slot 5 (the reset-to-default, dead, 0019/6) + `SetNavType(0)`
+	int32 VelocityStops = 0;      // 0x102f0198 motor slot 10 (velocity 0), SEAM
 	int32 StaleMarkCalls = 0;     // 0x102f1fa0(nav, 4.0, NULL), SEAM
 	int32 SimplifyPasses = 0;     // 0x102f13d0(nav, 0) from the MoveNormal gate, SEAM
 	int32 LocalNavResets = 0;     // 0x1000b550 inside 0x102eeb70, SEAM
@@ -232,13 +270,6 @@ int32 NavGoalState() const;
  *  `Navigator.GetMovementActivity()`) — the pair `FUN_1027a6c0` reads. False without an active goal. */
 bool NavLinkActivity(int32& OutActivity) const;
 
-/** `thunk_FUN_102e0bd0(m_pMotor, …)` — `CAI_Motor::MoveGroundExecute`'s apply of one interval's
- *  root-motion delta, which `AutoMovement` (`0x10280a50`) calls under its gate. **SEAM**: Unreal's
- *  animation instance extracts and applies root motion itself, so this records that the gate was
- *  PASSED and applies nothing; the gate and the order above it are the retail contract this port
- *  keeps (see `docs/vtmb/npc-ai/shape.md` § `0x10280a50`). */
-bool MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta);
-
 /** `CBaseAnimating::GetIntervalMovement(flInterval, …)` — the per-frame root-motion delta
  *  `AutoMovement` blends. **SEAM**: the animating tier here publishes no interval movement to the
  *  kernel; answers false with the delta zeroed. */
@@ -267,8 +298,14 @@ bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const F
  *  character with `m_bIsBCCTargetable (+0x1480) == 0` or `m_bScriptHidden (+0xf4)` is skipped
  *  (`101d3284`), and -- unless the mask is `0x46004003` -- one whose own slot 68 ignores this NPC,
  *  or whom this NPC's slot 68 ignores, is skipped. This NPC's slot 68 is where `m_bForceNPCCheck`
- *  (`+0x63da`) acts (`IgnoreCollisionSharedHead`). True = the character blocks. */
+ *  (`+0x63da`) acts (`IgnoreCollisionSharedHead`). The candidate's slot 91 `ShouldCollide` and the
+ *  game rules' group pair run ahead of the slot-68 vetoes. True = the character blocks. */
 bool KernelTraceKeepsCharacter(const FElysiumEntityHandle& Character, int32 Mask) const;
+
+/** SEAM for `g_pGameRules->ShouldCollide(collisionGroup0, collisionGroup1)`, the group-pair test of
+ *  `PassServerEntityFilter` / `CTraceFilterSimple` (arm (d) of the nav filters). The port stands no
+ *  game-rules object and VtMB's body is unrecovered; answers true ("collide"), which drops nothing. */
+static bool RetailGameRulesShouldCollide(int32 GroupA, int32 GroupB);
 
 /** The shared hull table's mins and maxs for a hull id, in SOURCE units.
  *
@@ -289,34 +326,14 @@ bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUn
 static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits);
 
-/** `CBaseEntity`'s OWN slot-153 body (`0x10026e70`, spelled `CAISound::FUN_10026e70` because
- *  `CAISound` is the class the corpus attributes it to) — `m_vecVelocity` compared COMPONENT-WISE
- *  for EXACT equality against `DAT_1070d1b0`/`b4`/`b8`, the image's shared zero vector, answering 0
- *  when all three match and 1 otherwise.
- *
- *  Slot 153 has two bodies in this family and this is the other one: every class on the NPC line —
- *  `CAI_BaseNPC` through every `CNPC_V*` leaf — carries `0x10280300`, which is `IsMoving()` above
- *  and forwards to the navigator; the 497 classes that are NOT NPCs carry this, including the five
- *  the kernel's closure walks (`CAISound`, `CAI_Hint`, `CAI_InterestingPlace`,
- *  `CAI_InterestingPlaceConverstation`, `CAI_StandoffGoal`). It is therefore **not** a species
- *  override of the NPC's slot and does not belong in `IsMoving`'s dispatch; it is the base entity's
- *  answer, and it lands here beside its twin under the class it came from, exactly as `CanStandOn`
- *  carries `CAISound::FUN_10026f80`.
- *
- *  No port caller: nothing in this runtime stands a `CAI_Hint` or a `CAISound` as an entity with a
- *  vtable, so this is reached only by the test that pins it — the shape family BaseHelpers already
- *  uses for `FUN_1028ebc0`. Exact equality is retail's and is kept: a velocity of `-0.0` on any axis
- *  compares equal to `0.0` and answers "not moving", which is the shipped answer. */
-static bool BaseEntityIsMoving(const FElysiumEntity& Entity);
-
 /** The active weapon's capability word (weapon vtable +0x5a0, slot 360, retail body `0x1014f930`),
  *  which `ShouldMoveAndShoot` requires to carry `0x6000`. **SEAM**: `FElysiumWeapon` stands no such
  *  word; answers 0, so the Troika gate closes and the base rung is never reached. */
 uint32 ActiveWeaponCapabilityWord() const;
 
-/** `CAI_Motor`'s deceleration query (`0x102e1300`, `CAI_Motor#16`) lives on `IElysiumNpcMotor`
- *  itself as `MinStoppingDistance()`; this is the NPC-side read, so a body cites the address at the
- *  point of use. Answers the interface's own floor when there is no motor. */
+/** `CAI_Motor`'s deceleration query (`CAI_Motor#16`) lives on `IElysiumNpcMotor`
+ *  itself as `MinStoppingDistance()`; this is the NPC-side read, so a body reads it at the point of
+ *  use. Answers the interface's own floor when there is no motor. */
 float MotorMinStoppingDistanceUnits() const;
 
 /** `CBaseAnimating::IsIgnoreCollisionEntity(other)` (`0x1008be20`) — the tail of both
@@ -340,9 +357,6 @@ void CheckOnGround();
 
 bool OnObstructingDoorBase(float& InOutMoveGoalMaxDistance, int32 DoorState, float DistClear,
 	EObstructingDoorResult& OutResult) const;
-
-/** `CAI_BaseNPC::MaxYawSpeed` `0x10280bb0` — the base line's single constant. */
-static float MaxYawSpeedBase();
 
 /** `CAI_Navigator::OnNavFailed`'s activity resolution, `FUN_1027a6c0` `0x1027a6c0`: the link's
  *  cached activity when the link is valid and not -1, else 1 (`ACT_IDLE`). */

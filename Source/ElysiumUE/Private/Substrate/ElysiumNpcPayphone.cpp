@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumNpcPayphone.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
@@ -42,7 +43,7 @@ namespace
 	const TCHAR* const GPayphoneBoneName = TEXT("Phone_bone_01");
 	// `_DAT_1047a3b0` = 85.0f, also a single-reader cell: the payphone's MANHATTAN distance limit,
 	// in SOURCE units.
-	constexpr float GPayphoneManhattanLimitUnits = 85.0f;
+	constexpr float GPayphoneManhattanLimitUnits = ElysiumNpcTunables::PayphoneManhattanLimit;
 }
 
 // Slot 420: `0x101aab90`.
@@ -54,20 +55,6 @@ void FElysiumNpcPayphone::NPCInit()
 	bInvincible = true;                                                  // +0x63d8
 	bNpcIsAlive = false;                                                 // +0x1481
 	Senses.bCanPerformSenses = false;                                    // senses+0x80
-}
-
-// Slot 370: `0x101aa7f0`, a tail call through slot 368 — the head aim IS the body direction. Slot 368
-// (`FElysiumCombatCharacter::BodyDirection2D`) has no override on any port class, so the direct call
-// resolves exactly as retail's virtual one does.
-FVector FElysiumNpcPayphone::HeadDirection2D()
-{
-	return BodyDirection2D();
-}
-
-// Slot 371: `0x101aa820`, a tail call through slot 369.
-FVector FElysiumNpcPayphone::HeadDirection3D()
-{
-	return BodyDirection3D();
 }
 
 // Slot 193: `0x101aae60`, whose miss calls the Troika-line body `0x100b4b40` directly.

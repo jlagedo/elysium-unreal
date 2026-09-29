@@ -44,16 +44,16 @@ namespace
 
 	// `_DAT_10449280` (1.0, f64) is `ElysiumNpcTunables::OneDouble`; `_DAT_104492a8` (30.0, f32) is
 	// `ElysiumNpcTunables::Thirty`; `_DAT_1044fab0` (0.0, f64) is `ZeroDouble`. The selector's other
-	// four cells are not in the tunables table and were read out of the pinned image (f64):
-	constexpr double GScript19ManBatFullTurn = 360.0;       // _DAT_10450570
-	constexpr double GScript19ManBatTurnLow = 30.0;         // _DAT_1044dcf0
-	constexpr double GScript19ManBatTurnHigh = 330.0;       // _DAT_104bc6a0
-	constexpr double GScript19ManBatTurnSplit = 180.0;      // _DAT_10452918
+	// four cells are rows of the tunables table (0019/6 Q4), read out of the pinned image (f64):
+	constexpr double GScript19ManBatFullTurn = ElysiumNpcTunables::ThreeSixtyDouble;       // _DAT_10450570
+	constexpr double GScript19ManBatTurnLow = ElysiumNpcTunables::ThirtyDouble;         // _DAT_1044dcf0
+	constexpr double GScript19ManBatTurnHigh = ElysiumNpcTunables::ThreeThirtyDouble;       // _DAT_104bc6a0
+	constexpr double GScript19ManBatTurnSplit = ElysiumNpcTunables::OneEightyDouble;      // _DAT_10452918
 	// `0x101d2c70` / `0x101d2ce0`: `_DAT_10446758` (57.29578, f32) radians-to-degrees, `_DAT_10450568`
 	// (360.0, f32) the yaw wrap, `_DAT_10462948` (-180.0, f32) the straight-up pitch.
-	constexpr float GScript19RadToDeg = 57.29578f;
-	constexpr float GScript19YawWrap = 360.0f;
-	constexpr float GScript19PitchStraightUp = -180.0f;
+	constexpr float GScript19RadToDeg = ElysiumNpcTunables::RadiansToDegrees;
+	constexpr float GScript19YawWrap = ElysiumNpcTunables::HeadAngleRunawayLimit;
+	constexpr float GScript19PitchStraightUp = ElysiumNpcTunables::MinusOneEighty;
 }
 
 // --- `CNPC_VManBat` ------------------------------------------------------------------------------
@@ -147,6 +147,7 @@ void FElysiumNpcManBat::ManBatOverrideMoveFly(float Interval)
 	// Rate -1.0 == `_DAT_104492dc` (`0x1038b27d`) takes `0x102e1cf0` on the motor (`+0x38` := the
 	// outer's `MaxYawSpeed`): the SAME call on the same `m_pMotor` (`+0x5d44`) that
 	// `SetActivityAndSequence` ends in (`0x10272569` / `0x10272575`), counted by family Anim10's seam.
+	MotorStoreMaxYawSpeed();
 	++NavigatorActivityNotices;
 	ReleaseMotorHintYaw();                                    // 0x102e1e20(motor, -1)
 	FVector NewAngles = Angles;                               // 0x1038b296 slot 221 GetAngles

@@ -21,7 +21,6 @@
 #include "Substrate/ElysiumNpcBossesShared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSoundsShared.h"
@@ -46,13 +45,13 @@ namespace
 	// `_DAT_10449198` are DOUBLES in `.rdata` that the body converts to float at the point of use;
 	// the decompiled C's `(float)_DAT_…` cast is what says so.
 	constexpr double ManBatStationarySeconds = ElysiumNpcTunables::HalfDouble;
-	constexpr float ManBatChaseHeight = 150.0f;          // _DAT_1046eca8
+	constexpr float ManBatChaseHeight = static_cast<float>(ElysiumNpcTunables::OneFiftyDouble);   // _DAT_1046eca8
 	constexpr float ManBatFlyByHeightPad = static_cast<float>(ElysiumNpcTunables::OneDouble);
-	constexpr float ManBatDownAccelScale = 3.0f;         // _DAT_10450010
-	constexpr float ManBatOverspeedScale = 0.2f;         // _DAT_10449198
+	constexpr float ManBatDownAccelScale = static_cast<float>(ElysiumNpcTunables::ThreeDouble);      // _DAT_10450010
+	constexpr float ManBatOverspeedScale = static_cast<float>(ElysiumNpcTunables::FifthDouble);  // _DAT_10449198
 	constexpr float ManBatFastSpeed = 700.0f;
 	constexpr float ManBatSlowSpeed = 500.0f;
-	constexpr float ManBatSlowZThreshold = -30.0f;       // _DAT_10462868
+	constexpr float ManBatSlowZThreshold = ElysiumNpcTunables::MinusThirty;   // _DAT_10462868
 	constexpr float ManBatVelocityProbeZ = 10.0f;        // the literal 10.0 the probe's Z is seeded with
 	constexpr int32 ManBatMoveGoalNodeModeChase = 6;     // FUN_1042fbf0(0xfa0b069a)
 	constexpr int32 ManBatMoveGoalNodeModeFlyBy = 7;     // FUN_1042fbf0(0xfa0b069b)
@@ -105,40 +104,6 @@ namespace
 	// sanitiser only accepts a literal there. Each carries its `.rdata` address at the call.
 	const TCHAR* const GHints10ManBatLandpoint = TEXT("ManBat Landpoint");            // 0x10642c74
 	constexpr double GMiscZeroDouble = ElysiumNpcTunables::ZeroDouble;
-	//
-	// The model table at `0x10640ce0` is FOUR entries and the corpus pins only two of the four
-	// strings. Entries 2 and 3 are recorded by table index, the convention family Lifecycle used
-	// for `PTR_s_weapons_ar2_ar2_fire1_wav_106244c0`'s unnamed tail.
-	const TCHAR* const GManBatThrowModels[] = {
-		TEXT("models/character/monster/manbat/Throw_Objects/ThrowTaxi.mdl"),
-		TEXT("models/character/monster/manbat/Throw_Objects/supportb.mdl"),
-		TEXT("PTR_0x10640ce0[2]"),   // unrecovered
-		TEXT("PTR_0x10640ce0[3]"),   // unrecovered
-	};
-	const TCHAR* const GManBatEmitters[] = {
-		TEXT("Manbat_screechcone_emitter"),
-		TEXT("Manbat_player_emitter"),
-		TEXT("HUD_Manbat_emitter"),
-		TEXT("Manbat_blast_player"),   // the one of the four with no `_emitter` suffix
-	};
-	const TCHAR* const GManBatWingflaps[] = {   // 0x10640d10, to 0xc
-		TEXT("character/male/sheriff_manbat/wingflap_1.wav"),
-		TEXT("character/male/sheriff_manbat/wingflap_2.wav"),
-		TEXT("character/male/sheriff_manbat/wingflap_3.wav"),
-	};
-	const TCHAR* const GManBatExerts[] = {      // 0x10640d1c, to 0xc
-		TEXT("character/male/sheriff_manbat/exert_heavy_1.wav"),
-		TEXT("character/male/sheriff_manbat/exert_heavy_2.wav"),
-		TEXT("character/male/sheriff_manbat/exert_heavy_3.wav"),
-	};
-	const TCHAR* const GManBatFlyBys[] = {      // 0x10640d28, to 0xc
-		TEXT("character/male/sheriff_manbat/fly_by_1.wav"),
-		TEXT("character/male/sheriff_manbat/fly_by_2.wav"),
-		TEXT("character/male/sheriff_manbat/fly_by_3.wav"),
-	};
-	const TCHAR* const GManBatScreech = TEXT("character/male/sheriff_manbat/screech.wav");
-	const TCHAR* const GManBatFall = TEXT("character/male/sheriff_manbat/fall.wav");
-	const TCHAR* const GManBatWeapon = TEXT("item_w_manbat_claw");
 	// `_DAT_1044fab0` — a **DOUBLE**, `0.0` (`103c1db6` is `FCOMP double ptr [0x1044fab0]`). The "no
 	// slow running" sentinel the ManBat and the head claw both compare their expiry against.
 	constexpr double GSlowExpireSentinel = ElysiumNpcTunables::ZeroDouble;
@@ -217,32 +182,9 @@ void FElysiumNpcManBat::NPCInit()
 	NodeGraphHullIndex() = HullIndexManBat;
 }
 
-// Slot 104: `0x1038aec0`.
-// 0x1038aec0
-void FElysiumNpcManBat::Precache()
-{
-	// `CNPC_VManBat::Precache` `0x1038aec0` — 280 bytes, the longest arm here: the Troika body, the
-	// four-entry throw-object model table with preload 0, four preload-1 emitters (the exact four
-	// the screech-cone body `0x1038e9c0` spawns), three 0xc-byte sound tables, two singles,
-	// `sheriff_teleport_emitter` TWICE in a row — a retail duplicate that is kept — and the claw.
-	TroikaPrecache();
-	for (const TCHAR* ThrowModel : GManBatThrowModels)
-	{
-		NpcKernelPrecache10Shared::Precache10Model(*this, ThrowModel, /*Preload=*/0);
-	}
-	for (const TCHAR* Emitter : GManBatEmitters)
-	{
-		NpcKernelPrecache10Shared::Precache10Particle(*this, Emitter, /*Preload=*/1);
-	}
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GManBatWingflaps, UE_ARRAY_COUNT(GManBatWingflaps));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GManBatExerts, UE_ARRAY_COUNT(GManBatExerts));
-	NpcKernelPrecache10Shared::Precache10SoundTable(*this, GManBatFlyBys, UE_ARRAY_COUNT(GManBatFlyBys));
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GManBatScreech);
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GManBatFall);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, NpcKernelPrecache10Shared::GSheriffTeleportEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, NpcKernelPrecache10Shared::GSheriffTeleportEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Other(*this, GManBatWeapon);
-}
+// Slot 104 is gone (story 0019/6): the four throw-object models, the four cone
+// emitters, the wingflap / exert / fly-by tables, the two singles, the teleport emitter and
+// `item_w_manbat_claw` resolve at bake and load.
 
 // Slot 438: `0x1038e340`, which replaces the whole selector (the Troika selector's species hook).
 // Slot 438: `0x1038e340`, the body of its class's `SpeciesSelectSchedule` override (story 5 step 3).
@@ -307,16 +249,6 @@ bool FElysiumNpcManBat::FValidateHintType(void* Hint)
 	return Words != nullptr && ManBatValidateHintType(*Words);
 }
 
-// Slot 546: `0x10389f50`, the class's own schedule id space.
-const TCHAR* FElysiumNpcManBat::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b89c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VManBat"), TEXT("0x10389f50"), TEXT("0x1093b89c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 FElysiumEntity* FElysiumNpcManBat::ManBatFindMoveGoalHint(int32 HintType, float RadiusUnits)
@@ -365,10 +297,10 @@ const FElysiumNpc::FFlapActivity* FElysiumNpcManBat::FlapActivityRows(int32& Out
 	// timer.
 	static constexpr FFlapActivity Rows[] =
 	{
-		{ TEXT("0x1038e640"), 0x22, 2.3f },     // _DAT_104bc690
-		{ TEXT("0x1038e670"), 0x24, 4.0f },     // _DAT_10449148
-		{ TEXT("0x1038e6a0"), 0x116d, 0.2f },   // _DAT_10449198
-		{ TEXT("0x1038e6e0"), 0x116e, 0.2f },   // _DAT_10449198, the same cell
+		{ TEXT("0x1038e640"), 0x22, static_cast<float>(ElysiumNpcTunables::ManBatFlapDelay) },        // _DAT_104bc690
+		{ TEXT("0x1038e670"), 0x24, static_cast<float>(ElysiumNpcTunables::CheckOnGroundReach) },     // _DAT_10449148
+		{ TEXT("0x1038e6a0"), 0x116d, static_cast<float>(ElysiumNpcTunables::FifthDouble) },      // _DAT_10449198
+		{ TEXT("0x1038e6e0"), 0x116e, static_cast<float>(ElysiumNpcTunables::FifthDouble) },      // _DAT_10449198, the same cell
 	};
 	OutCount = UE_ARRAY_COUNT(Rows);
 	return Rows;
@@ -639,22 +571,11 @@ void FElysiumNpcManBat::FUN_1038b370(float Interval, FVector& OutVelocityUnits)
 	}
 }
 
-void FElysiumNpcManBat::PhysicsTraceEntityManBat(FElysiumEntity* Entity, const FVector& StartUnits,
-	const FVector& EndUnits, uint32 Mask)
-{
-	// `0x1038fb20`:
-	//     collideable = entity->GetCollideable();                      // +0x8
-	//     group       = collideable->GetCollisionGroup();              // +0x38
-	//     CTraceFilterSimple filter(entity, group);                    // 0x101ccf50
-	//     *(void**)&filter = &vftable_CTraceFilterManBatNoIBeamEntity; // the whole point
-	//     ray = collideable->SetupRay(0, end, &filter, out);           // +0x24
-	//     enginetrace->SweepCollideable(collideable, entity, start, ray);   // (*DAT_1070b254)+0x14
-	// The vtable swap is the recovered concern and `ManBatTraceFilterShouldHit` is its content; the
-	// sweep itself is a seam and records the call.
-	PhysicsTraceEntityCalls.Add(FPhysicsTraceEntityCall{
-		Entity != nullptr ? Entity->Handle : FElysiumEntityHandle::Invalid(),
-		StartUnits, EndUnits, Mask });
-}
+// Slot 102 (`CNPC_VManBat`'s `Physics_TraceEntity`) is gone (story 0019/6): the body
+// built `CTraceFilterSimple`, swapped in `vftable_CTraceFilterManBatNoIBeamEntity` and swept the
+// collideable, and nothing in this port reached it. The sweep is the collision service's; the one
+// retail rule it carried, the `lbeam*` targetname exclusion, stays as
+// `FElysiumNpc::ManBatTraceFilterShouldHit` (`ElysiumNpcBosses.cpp`).
 
 // --- Moved from `ElysiumNpcDamage2.cpp` (story 5 step 4) ---
 
@@ -667,8 +588,6 @@ bool FElysiumNpcManBat::ThrowModel(const FString& ModelName, const FString& Thro
 	{
 		return false;
 	}
-	// 2. `DevMsg("ManBat is throwing model %s", model)` — the literal that names the body.
-	UE_LOG(LogTemp, Verbose, TEXT("ManBat is throwing model %s"), *ModelName);
 	// 3. SetModel(model), Spawn(), LookupBone(model) — retail passes the SAME string to the bone
 	//    lookup that it passed to SetModel, which is a retail quirk and is reproduced as written.
 	const int32 Bone = LookupBoneByName(*ModelName);
@@ -774,8 +693,6 @@ bool FElysiumNpcManBat::SlowedExpire() const
 	// opposite for every ManBat whose slow has not been armed.
 	return static_cast<double>(ManBatSlowedExpire) > GMiscZeroDouble;
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 

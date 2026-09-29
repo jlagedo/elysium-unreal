@@ -18,8 +18,8 @@
  *  (`0x102beda0`) caches verbatim at `0x102bedab..0x102bee48` before anything else runs. The port's
  *  packet carries the words `FElysiumTakeDamageInfo` declares (`+0x00`, `+0x2c`, `+0x30`, `+0x38`,
  *  `+0x40`); the force/position vectors (`+0x04..+0x24`), `+0x28`, `+0x34`, `+0x3c`, `+0x44` and the
- *  three bytes `+0x48..+0x4a` have no port word and are not cached. `+0x40` is what
- *  `RetailLastDamageInfoWord40` (`0x101c2a30`, family Debug10) reads. */
+ *  three bytes `+0x48..+0x4a` have no port word and are not cached. `+0x40`'s only retail
+ *  reader was a debug accessor (`0x101c2a30`), not ported. */
 FElysiumTakeDamageInfo LastTakeDamageInfo;
 
 // `CBaseCombatCharacter`'s three Presence words, which the three species `UpdatePresenceEffect`

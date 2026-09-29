@@ -299,6 +299,9 @@ def test_every_slot_has_a_port_callable_and_no_two_share_a_name(model):
         if row.port_kind == gks.DELETED:
             assert row.verdict == "dead", f"deleted slot {row.slot} is not dead"
             continue   # a dead, uncalled, un-overridden stub deleted in 0019/5 step 6
+        if row.port_kind == gks.CLOSED:
+            assert row.closed and not row.layers, f"closed slot {row.slot} still emits"
+            continue   # every body closed at 0019/6 and nothing reaches it
         assert row.port_name, f"slot {row.slot} has no port callable"
         if row.port_kind == gks.PORT:
             continue   # a mapped slot names an existing method, which many slots may not do twice
@@ -321,6 +324,10 @@ def test_unsettled_rows_carry_over_as_recorded(model):
     unsettled = [row for row in model.slots if row.tier == "unsettled"]
     assert len(unsettled) == 7
     for row in unsettled:
+        if row.verdict_target == "-" and not row.port_name:
+            # 0019/6: an unsettled-signature slot whose verdict row is closed (`dead` at `-`) and
+            # that nothing reaches emits no port callable at all; the arity is still recorded.
+            continue
         assert row.port_name
         assert len(row.params_port) == len([p for p in row.params.split(",") if p.strip()])
 

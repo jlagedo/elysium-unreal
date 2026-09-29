@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 22 generated slot rows of `FElysiumFlex` (CBaseFlex): 16 it introduces and 6 it overrides with a
+// 21 generated slot rows of `FElysiumFlex` (CBaseFlex): 15 it introduces and 6 it overrides with a
 // body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -64,9 +64,6 @@
 	// slot 281 0x100b5c50 (walked) `float GetFlexWeight(int)`
 	//   layer 1, story 29c
 	virtual float GetFlexWeight(int32);
-	// slot 282 0x100b5c20 (walked) `float GetFlexWeight(char*)`
-	//   layer 6, story 29c
-	virtual float GetFlexWeight(TCHAR*);
 	// slot 283 0x100b6250 (walked) `void ProcessSceneEvents()`
 	//   layer 9, story 29c
 	virtual void ProcessSceneEvents();

@@ -14,7 +14,7 @@
 // Story 29c-1, family **Schedule** — the schedule host and the task surface of `order.md`
 // layers 0–9.
 //
-// 64 rows: the two species tables (slot 580 `GetClassScheduleIdSpace`, slot 452 `LoadedSchedules`),
+// 64 rows: the species table (slot 580 `GetClassScheduleIdSpace`),
 // the schedule-change door `0x10280de0`, the task surface (`NextScheduledTask`, `TaskComplete`, the
 // two `CAI_Motor` forwards, `IsTaskIndexCurrent`, `WaitFinished`), the two stubbed slots 418
 // `ResolveTaskDistance` and 547 `GetSlotSchedule`, and the selectors — slot 604
@@ -25,10 +25,9 @@
 // TWO STANDING FACTS OF THIS FAMILY.
 //
 //   1. **There is no per-class schedule id space.** Retail's `InitCustomSchedules` parses each
-//      class's schedule text into its `CAI_ClassScheduleIdSpace` and records the parse in the flag
-//      slot 452 answers; this runtime registers programs by identity and parses no text. Every
-//      species row below carries the retail globals so the tables are checkable, and the
-//      translation says what it cannot do rather than inventing a range.
+//      class's schedule text into its `CAI_ClassScheduleIdSpace`; this runtime registers programs by
+//      identity. Every species row below carries the retail globals so the tables are checkable, and
+//      the translation says what it cannot do rather than inventing a range.
 //
 //   2. **Most of what these selectors answer is not a registered program.** The species selectors
 //      answer raw retail schedule numbers (0x156, 0x15a–0x165, 0x9b–0xa9, 0xe4, 0xe7, 0xe9 …), and
@@ -49,26 +48,28 @@ namespace
 	constexpr int32 GScheduleEmptyIdSpace = 9999;
 
 	// `_DAT_104454c4` — the shared float zero, 1,328 readers.
-	constexpr float GScheduleZero = 0.0f;
+	constexpr float GScheduleZero = ElysiumNpcTunables::Zero;
 
 	// `_DAT_1044e664` — 10.0f, recovered by story 16a as the follower-distance overlap
 	// (`Substrate/ElysiumNpcSquad.cpp`). `ResolveTaskDistance`'s fourth table entry and the
 	// tentacle's phase-2 duration both read it.
-	constexpr float GScheduleFollowerOverlap = 10.0f;
+	constexpr float GScheduleFollowerOverlap = ElysiumNpcTunables::Ten;
 
 	// `_DAT_104492b8` — 200.0f, the same constant `ElysiumFootsteps.h` names as the fall-punch
 	// threshold. `CNPC_VChangBros` / `CNPC_VTzimisceRunner` add it to the melee-range convar.
-	constexpr float GScheduleChangMeleeMargin = 200.0f;
+	constexpr float GScheduleChangMeleeMargin = ElysiumNpcTunables::TwoHundred;
 
-	// `_DAT_1044ddb0` — `CNPC_VMingXiaoTentacle`'s enemy-distance split. UNRECOVERED.
-	constexpr float GScheduleTentacleEnemyDistUnits = 0.0f;
+	// `_DAT_1044ddb0` — `CNPC_VMingXiaoTentacle`'s enemy-distance split: the pooled f32 256.0 (0019/6 Q3
+	// read the cell out of the image; the earlier "UNRECOVERED" was the value, not the address).
+	constexpr float GScheduleTentacleEnemyDistUnits = ElysiumNpcTunables::Melee1OuterBand;
 
 	// `_DAT_10450aa0`, `_DAT_10449270`, `_DAT_104bea38` — the tentacle's phase-0/3, phase-1 and
 	// phase-3 expire durations. Phase 2's is `_DAT_1044e664` (10.0) and phase 1's the pooled double
-	// 0.5; the other two are UNRECOVERED.
-	constexpr float GScheduleTentaclePhase0Seconds = 0.0f;
+	// 0.5; phase 0 is the pooled f32 4.0 and phase 3 the f32 9999.0 (0019/6 Q3: both cells read out of
+	// the image).
+	constexpr float GScheduleTentaclePhase0Seconds = ElysiumNpcTunables::Four;
 	constexpr float GScheduleTentaclePhase1Seconds = static_cast<float>(ElysiumNpcTunables::HalfDouble);
-	constexpr float GScheduleTentaclePhase3Seconds = 0.0f;
+	constexpr float GScheduleTentaclePhase3Seconds = ElysiumNpcTunables::TentaclePhase3Seconds;
 
 	// The three hint types the cover selector's table splits on, the same three family Hints found
 	// on the five activity lookups.
@@ -146,58 +147,6 @@ const FElysiumLocalIdSpace* FElysiumNpc::ClassScheduleIdSpace() const
 	// the corpus's, keyed on this NPC's own retail class rather than on the slot-580 override row,
 	// because the sidecar already folds the classes that share one space.
 	return IdSpace(EElysiumIdCategory::Schedule);
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 452 `LoadedSchedules` — the stubbed slot, plus its species table.
-// -------------------------------------------------------------------------------------------------
-
-namespace
-{
-	constexpr FElysiumNpc::FScheduleLoadFlag GNpcKernelScheduleLoadFlags[] = {
-		// The Troika line's own override. `CAI_BaseNPC::LoadedSchedules` (`0x1027c2e0`) is the
-		// literal `true` this one replaces with a global.
-		{ TEXT("CAI_BaseNPCTroika"), TEXT("0x102b97f0"), TEXT("0x105d1058") },
-		{ TEXT("CNPC_VBrujah"), TEXT("0x103679b0"), TEXT("0x1062f278") },
-		{ TEXT("CNPC_VCamera"), TEXT("0x103684f0"), TEXT("0x1062f668") },
-		{ TEXT("CNPC_VCameraSecurity"), TEXT("0x103684f0"), TEXT("0x1062f668") },
-		{ TEXT("CNPC_VChangBros"), TEXT("0x1036a390"), TEXT("0x1062fe14") },
-		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036ec90"), TEXT("0x1062fe38") },
-		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036f490"), TEXT("0x1062fe5c") },
-		{ TEXT("CNPC_VCop"), TEXT("0x10370a70"), TEXT("0x10631ba8") },
-		{ TEXT("CNPC_VDog"), TEXT("0x10373670"), TEXT("0x106368a8") },
-		{ TEXT("CNPC_VFrenzyShadow"), TEXT("0x103753e0"), TEXT("0x10637b44") },
-		{ TEXT("CNPC_VGargoyle"), TEXT("0x10377c70"), TEXT("0x106395c0") },
-		// `CNPC_VWolfMorph`'s own `0x103dc8f0` over its flag byte (story 5 fold A2). The controller runs
-		// `CNPC_VVampire`'s `0x103c4a20`, which, like the other species rows outside this table, the
-		// corpus answers per class.
-		{ TEXT("CNPC_VWolfMorph"), TEXT("0x103dc8f0"), TEXT("0x10663bd4") },
-	};
-}
-
-const FElysiumNpc::FScheduleLoadFlag* FElysiumNpc::LoadedSchedulesRows(int32& OutCount)
-{
-	OutCount = UE_ARRAY_COUNT(GNpcKernelScheduleLoadFlags);
-	return GNpcKernelScheduleLoadFlags;
-}
-
-// slot 452 0x102b97f0 `bool LoadedSchedules()`, with the twelve species bodies
-bool FElysiumNpc::LoadedSchedules()
-{
-	// Every one of the thirteen bodies is `return <global bool>;`. Each of those globals is written
-	// in exactly ONE place — the owning class's `InitCustomSchedules` parse loop, which seeds itself
-	// from the flag (`uVar2 = DAT_1062f278`), breaks on the first parse failure and stores the
-	// parser's answer back — so the shipped value is `true` and only a malformed schedule text
-	// clears it. `CAI_BaseNPC::Precache` (`0x1027bb50`) is the reader: a false return is
-	// `"ERROR: Rejecting spawn of %s as error in NPC's schedules"`.
-	//
-	// The seam is CLOSED: this runtime parses the class's texts and records the parse, so the answer
-	// is the real one. It is `true` for all 56 loaded spaces today -- every shipped text parses --
-	// and it goes false the moment one does not, which is exactly what retail's `Precache` refusal
-	// (`"ERROR: Rejecting spawn of %s as error in NPC's schedules"`) reads.
-	const FElysiumScheduleSpaceUnit* Unit =
-		FElysiumScheduleCorpus::Get().UnitForClass(RetailClass() != nullptr ? FString(RetailClass()->Name) : FString());
-	return Unit == nullptr || Unit->bAllTextsLoaded;
 }
 
 // -------------------------------------------------------------------------------------------------

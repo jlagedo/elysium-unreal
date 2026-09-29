@@ -392,7 +392,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCond19BaseGatherTailTest,
 bool FCond19BaseGatherTailTest::RunTest(const FString&)
 {
 	// `1026ee6a..1026eebc` a live m_hTargetEnt reaches CheckTarget; `1026ef48..1026ef9d` the handle at
-	// +0x6240 reaches 0x1028e980; `1026eed8..1026ef43` a live best-see-unknown reaches 0x1028e480.
+	// +0x6240 reaches the goal refresh; `1026eed8..1026ef43` a live best-see-unknown reaches the
+	// approach-goal upkeep.
 	FCond19Fixture F;
 	if (!TestNotNull(TEXT("the guard constructs"), F.Guard))
 	{
@@ -403,19 +404,19 @@ bool FCond19BaseGatherTailTest::RunTest(const FString&)
 	N.SetTarget(FElysiumEntityHandle::Invalid());
 	N.ScheduleHost.MoveTarget = FElysiumEntityHandle::Invalid();
 	N.Senses.Memory.BestSeeUnknown = FElysiumEntityHandle::Invalid();
-	// `CheckTarget` `0x10271d10` ends in `UpdateTargetPos` `0x10271b10` unconditionally
+	// `CheckTarget` `0x10271d10` ends in `UpdateTargetPos` unconditionally
 	// (`0x10271db7`), so its counter witnesses the call.
 	const int32 UpdateTargetPosBefore = N.UpdateTargetPosCalls;
 	N.GatherConditions();
 	TestEqual(TEXT("1026ee6a no target, no CheckTarget"), N.UpdateTargetPosCalls, UpdateTargetPosBefore);
-	TestEqual(TEXT("1026ef51 no move target, no 0x1028e980"), N.Conditions19RefreshGoalCalls, 0);
-	TestEqual(TEXT("1026eee3 no see-unknown, no 0x1028e480"), N.Conditions19ApproachGoalCalls, 0);
+	TestEqual(TEXT("1026ef51 no move target, no goal refresh"), N.Conditions19RefreshGoalCalls, 0);
+	TestEqual(TEXT("1026eee3 no see-unknown, no approach-goal upkeep"), N.Conditions19ApproachGoalCalls, 0);
 
 	N.SetTarget(F.Other->Handle);
 	N.ScheduleHost.MoveTarget = F.Other->Handle;
 	N.GatherConditions();
 	TestEqual(TEXT("1026eebc CheckTarget(target)"), N.UpdateTargetPosCalls, UpdateTargetPosBefore + 1);
-	TestEqual(TEXT("1026ef9d 0x1028e980(move target)"), N.Conditions19RefreshGoalCalls, 1);
+	TestEqual(TEXT("1026ef9d goal refresh(move target)"), N.Conditions19RefreshGoalCalls, 1);
 	return true;
 }
 

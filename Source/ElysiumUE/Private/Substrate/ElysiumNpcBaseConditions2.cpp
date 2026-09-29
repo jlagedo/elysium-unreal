@@ -545,7 +545,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		ClearAttackConditions();                                         // 102711fa slot 560
 	}
 
-	Conditions19UpdateEnemyPos();                                        // 10271202 0x10271900
+	Conditions19UpdateEnemyPos();                                        // 10271202 UpdateEnemyPos
 
 	if (!Conditions19NavNotOnNetwork()                                   // 10271207..10271212 [[+0x5d34]+0x34]
 		&& IsUnreachable(ConstThis->GetEnemy()))                         // 10271218 slot 167 / 10271221 slot 530 / 10271229

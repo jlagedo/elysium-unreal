@@ -22,8 +22,6 @@
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcConditions10Shared.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
-#include "Substrate/ElysiumNpcDebug10_2Shared.h"
 #include "Substrate/ElysiumNpcEntityChainShared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcSenses10Shared.h"
@@ -45,19 +43,6 @@
 
 namespace
 {
-	constexpr int32 GDebug10_2BitText = 0x1;              // 0x10372f0b `TEST byte [+0x224],0x1`
-	constexpr float GDebug10_2CopLabelLiftUnits = 8.f;      // _DAT_1045597c
-	// `CNPC_VCop#123`'s five relationship labels, read out of `.rdata`.
-	constexpr TCHAR GDebug10_2CopLabelHate[] = TEXT("D_HT");     // 0x105cc520
-	constexpr TCHAR GDebug10_2CopLabelFear[] = TEXT("D_FR");     // 0x105cc518
-	constexpr TCHAR GDebug10_2CopLabelLike[] = TEXT("D_LI");     // 0x105cc510
-	constexpr TCHAR GDebug10_2CopLabelNeutral[] = TEXT("D_NU");  // 0x105cc508
-	constexpr TCHAR GDebug10_2CopLabelError[] = TEXT("D_ER");    // 0x10636728
-	constexpr TCHAR GDebug10_2CopSuspect[] = TEXT(" Suspect");   // 0x10636750
-	constexpr TCHAR GDebug10_2CopAlert[] = TEXT(" Alert");       // 0x10636748
-	constexpr TCHAR GDebug10_2CopCount[] = TEXT(" Count%d");     // 0x1063673c
-	constexpr TCHAR GDebug10_2CopPursuit[] = TEXT(" Pursuit");   // 0x10636730
-	constexpr TCHAR GDebug10_2CopTally[] = TEXT("  %d  %d");     // 0x1063671c
 	// `DAT_1093acac` and `DAT_1093acb0`, the two process-wide cop censuses. File statics because
 	// retail's are file statics — the same shape family Lifecycle gave the Werewolf's shared
 	// `rdtsc` pair.
@@ -154,7 +139,6 @@ void FElysiumNpcCop::OnStateChange(EElysiumNpcState OldState, EElysiumNpcState N
 int32 FElysiumNpcCop::SelectIdealStateRetail()
 {
 	const int32 State = NpcStateRetail();
-	SelectIdealStateSelector = 0xc;
 	if (State == 1 || State == 3)
 	{
 		const int32 PrePass = CopSelectIdealStatePrePass();
@@ -233,7 +217,8 @@ int32 FElysiumNpcCop::IRelationType(FElysiumEntity* Candidate)
 
 	// `10372b84`: the cop class's SHARED provoker handle `DAT_1093ac3c` and its expiry
 	// `_DAT_1093aca8`, written by `CNPC_VCop::OnSeeEntity`'s stamp (`0x10370560`, family Senses10)
-	// and read here and by `CNPC_VCop::DrawDebugGeometryOverlays`. One grudge for every cop in the
+	// and read here (its other retail reader, `CNPC_VCop::DrawDebugGeometryOverlays`, is a debug
+	// draw and is not ported). One grudge for every cop in the
 	// map, which is why it is a file static in family Senses10 and reached through its accessors.
 	if (World != nullptr)
 	{
@@ -282,90 +267,6 @@ int32 FElysiumNpcCop::TranslateScheduleRetail(int32 ScheduleNumber)
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
-// Slot 123: `0x10372f00`
-/** `CNPC_VCop::DrawDebugGeometryOverlays` (`0x10372f00`) — the relationship label above the cop's
- *  head, then the Troika body unconditionally. */
-void FElysiumNpcCop::DrawDebugGeometryOverlays()
-{
-	// `0x10372f00`, 1,020 bytes. Debug-only, but the arms are the recovered statement of what a cop
-	// knows about the player: the shared timed grudge, the heightened-alert window, the pursuit
-	// count and its own pursuit target, all rendered as one label above its head.
-	//
-	// Gates, in order: `m_debugOverlays & 1`, then `m_hClosestPlayer` must RESOLVE, then the
-	// collision OBB must not be degenerate. Each failure jumps straight to the Troika tail.
-	if ((DebugOverlays & GDebug10_2BitText) != 0)
-	{
-		const FElysiumEntity* const Player =
-			World != nullptr ? World->Resolve(Senses.Memory.ClosestPlayer) : nullptr;
-		FVector ObbMins = FVector::ZeroVector;
-		FVector ObbMaxs = FVector::ZeroVector;
-		const bool bHasObb = CollisionObbExtentsUnits(ObbMins, ObbMaxs);
-		const bool bDegenerate = !bHasObb
-			|| (ObbMins.X == ObbMaxs.X && ObbMins.Y == ObbMaxs.Y && ObbMins.Z == ObbMaxs.Z);
-		if (Player != nullptr && !bDegenerate)
-		{
-			// The label sits `(maxs.z - mins.z) + 8.0` above `GetAbsOrigin()`.
-			const float LiftUnits = (ObbMaxs.Z - ObbMins.Z) + GDebug10_2CopLabelLiftUnits;
-			FVector LabelUnits = Origin / ElysiumMove::U;
-			LabelUnits.Z += LiftUnits;
-
-			FString Label;
-			switch (IRelationType(const_cast<FElysiumEntity*>(Player)))
-			{
-			case 1:
-				// The `D_HT` arm re-runs the TROIKA `IRelationType` (`0x10299da0`) first and throws
-				// the answer away — an artefact of the species override calling its own base, and
-				// reproduced only as this comment because it writes nothing.
-				Label = GDebug10_2CopLabelHate;
-				if (CopSuspectIs(Player))
-				{
-					Label += GDebug10_2CopSuspect;
-				}
-				if (PlayerHeightenedAlert(Player))
-				{
-					Label += GDebug10_2CopAlert;
-				}
-				{
-					const int32 Pursuers = PlayerCopsInPursuitCount(Player);
-					if (Pursuers > 0)
-					{
-						// Retail asks `0x1017f770` a SECOND time for the printed number, after the
-						// `> 0` test; one read is the same answer.
-						Label += FString::Printf(GDebug10_2CopCount, Pursuers);
-					}
-				}
-				if (CopPursuitPlayer() == Player)
-				{
-					Label += GDebug10_2CopPursuit;
-				}
-				break;
-			case 2: Label = GDebug10_2CopLabelFear; break;
-			case 3: Label = GDebug10_2CopLabelLike; break;
-			case 4: Label = GDebug10_2CopLabelNeutral; break;
-			default: Label = GDebug10_2CopLabelError; break;
-			}
-
-			// `"  %d  %d"` with two further cop-class statics, `DAT_1093acac` and `DAT_1093acb0`.
-			// SEAM: neither is stood here and neither has a writer in this band; both read 0.
-			Label += FString::Printf(GDebug10_2CopTally, 0, 0);
-			EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Text, LabelUnits, Label);
-		}
-	}
-
-	// The Troika body ALWAYS runs, whichever gate turned the label off.
-	TroikaDrawDebugGeometryOverlays();
-}
-
-// Slot 546: `0x10370ad0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcCop::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093ac40`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VCop"), TEXT("0x10370ad0"), TEXT("0x1093ac40") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcConditions10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
@@ -377,6 +278,34 @@ FElysiumEntity* FElysiumNpcCop::CopPursuitPlayer() const
 	// resolves it. A cop that has not latched a pursuit still answers null, which is retail's own
 	// answer for the `0xffffffff` the latch writes when the seen entity carries no player record.
 	return World != nullptr ? World->Resolve(CopPursuitHandle) : nullptr;
+}
+
+bool FElysiumNpcCop::PlayerHeightenedAlert(const FElysiumEntity* Candidate) const
+{
+	// `0x1017f8d0`: `curtime < player->m_flHeightenedAlertExpireTimer (+0x1d1c)`, off the candidate's
+	// `+0xa8 m_pPlayer`. A non-player candidate is retail's null-`+0xa8` arm, which answers false.
+	// `m_pPlayer` is one of `CBaseEntity`'s cached downcasts; the port's question for the same thing
+	// is "is this entity the one `FindPlayer()` answers", exactly as story 29c-1's enemy-memory arm
+	// asks it.
+	FElysiumPlayer* const Player = World != nullptr ? World->FindPlayer() : nullptr;
+	if (Player == nullptr || Candidate != static_cast<const FElysiumEntity*>(Player))
+	{
+		return false;
+	}
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	return Now < Player->Police.HeightenedAlertExpiry;
+}
+
+int32 FElysiumNpcCop::PlayerCopsInPursuitCount(const FElysiumEntity* Candidate) const
+{
+	// `0x1017f770`: `player->m_iCopsInPursuitCount (+0x1d10)` -- the same word family Dialogue reads
+	// through `DialogThreatCount()`.
+	FElysiumPlayer* const Player = World != nullptr ? World->FindPlayer() : nullptr;
+	if (Player == nullptr || Candidate != static_cast<const FElysiumEntity*>(Player))
+	{
+		return 0;
+	}
+	return Player->Police.CopsInPursuit;
 }
 
 bool FElysiumNpcCop::CopSuspectIs(const FElysiumEntity* Candidate) const

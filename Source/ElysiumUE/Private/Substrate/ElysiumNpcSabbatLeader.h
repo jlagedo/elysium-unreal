@@ -15,7 +15,6 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VSabbatLeader", FElysiumNpcVampireBoss)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual int32 SelectScheduleMeleeCombat(int32 Unused) override;
 	virtual void TaskFail(int32 Reason) override;
@@ -23,13 +22,11 @@ public:
 	virtual void OnVictimHitByMe(FElysiumEntity* Victim) override;
 	virtual bool OkToInterruptForMelee() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	// Slot 620 (`0x103aa5e0`): introduced here.
 	virtual void FootstepSound();
 	// Slot 621 (`0x103aa7a0`): introduced here.
 	virtual void AttackSound();
-	virtual int32 Restore(void* Archive) override;
-	virtual bool HandleInteraction(int32 Interaction, void* Data, FElysiumEntity* Other) override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;   // `CNPC_VSabbatLeader::vfunc127`'s load-side half
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

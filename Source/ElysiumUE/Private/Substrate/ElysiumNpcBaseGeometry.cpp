@@ -19,7 +19,7 @@ namespace
 {
 	// `_DAT_1044bef8` = 0.25f. `BodyTarget`'s anchor drop: the fraction of the centre-to-origin
 	// delta subtracted from the bounds centre to get the point the blend starts at.
-	constexpr float GBodyTargetAnchorFraction = 0.25f;
+	constexpr float GBodyTargetAnchorFraction = ElysiumNpcTunables::Quarter;
 	// `BodyTarget`'s two noise draws, `RandomFloat(0, 0.5)` twice (`PUSH 0x3f000000; PUSH 0x0`). The
 	// arm adds BOTH, so the blend parameter spans 0..1 with a triangular distribution rather than
 	// the uniform 0..0.5 a single draw would give.

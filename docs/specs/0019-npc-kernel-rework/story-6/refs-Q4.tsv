@@ -1,0 +1,91 @@
+address	name	what it is	file:line
+10539978	StringOne	the shared ConVar default literal "1" (a string cell)	ElysiumNpcSelect.inl:88
+105399a0	StringZero	the shared ConVar default literal "0" (a string cell)	ElysiumNpcSelect.inl:88
+10566458	HandleResolveTable	the table pointer `thunk_FUN_100290c0` resolves an entity handle against (`PTR_DAT_10566458`)	ElysiumNpcSensesBodies.cpp:154
+105da6d8	ExpressionNameFear	a string pointer: the fourth of slot 610's literal expression names	ElysiumNpcTroikaHelpers.cpp:93
+10610be8	UsedHullMask	the process-wide used-hull bit mask (`0x102f9950` reads, `0x102f9900` clears, `0x102f9920` ORs)	ElysiumNpcUsedHullBits.cpp:7
+10642c04	ClassnameCop	a string pointer: the entity name "Cop" task `0x160` searches for	ElysiumNpcStartTaskSpecies.cpp:1924
+106b8540	NullStringDefault	the empty string `STRING()` substitutes for a null string pointer	ElysiumNpcSpawn.cpp:186
+106c994c	NavNodeBoundsBumpCounter	a global counter `0x102a3a4e` bumps when a network node index is out of range	ElysiumNpcStartTask.cpp:1055
+1070b228	GpGlobals	`gpGlobals`; `curtime` is at +0xc	ElysiumNpcSoundsShared.h:69
+1070b22c	EngineTimeInterface	the engine interface token whose vtable +0x1dc / +0x1e0 slots answer `Time()` and the frame number	ElysiumNpcSounds10.cpp:84
+1070b244	VstdlibRandomInterface	the vstdlib random-number interface; vtable +4 `RandomFloat`, +8 `RandomInt`	ElysiumNpcSoundsShared.h:39
+1070b248	EngineSoundInterface	`IEngineSound`; vtable slot 7 (+0x1c) `StopSound`	ElysiumNpcStartTaskSpecies.cpp:2578
+1070b254	EngineTraceInterface	the engine trace interface; vtable slot 4 is the world-only hull trace	ElysiumNpcStartTaskSpecies.cpp:2915
+1070d1b0	Vec3Origin	`vec3_origin` (`staticinit_101370b0` zeroes the triple at +0/+4/+8)	ElysiumNpcSelectSpecies.cpp:854
+10713de0	Vec3Invalid	`vec3_invalid` (`staticinit_101371a0` fills the triple with 0x7f7fffff)	ElysiumNpcWerewolf.cpp:95
+10713de4	Vec3InvalidY	`vec3_invalid` .y, the second float of the triple at `10713de0`	ElysiumNpcWerewolf.cpp:1449
+10713de8	Vec3InvalidZ	`vec3_invalid` .z, the third float of the triple at `10713de0`	ElysiumNpcWerewolf.cpp:1449
+1072bc20	SoundInfoTable	the float-sound info row table (row 0x1b holds the danger sound's volume and flag)	ElysiumNpcStartTask_2.inl:118
+1072bc88	SoundEntInsertArgA	a global argument passed to `CSoundEnt::InsertSound` by the flee scream (`0x1000bca8`)	ElysiumNpcSelect.inl:66
+1072bcc2	SoundEntInsertArgB	a global argument passed to `CSoundEnt::InsertSound` by the flee scream (`0x1000bca8`)	ElysiumNpcSelect.inl:67
+1072c540	StealthKillRules	the `CStealthKillRules` object `InDeafZone` is called on	ElysiumNpcSenses10.cpp:293
+10738d10	ObserverRecord	the observer record global (+0x97 flag, +0xac squared-distance bound) the cross predicate reads	ElysiumNpcSocial10.inl:57
+10739a4c	DisciplineManager	the discipline manager object whose record-byte +0x34 sweep `0x101e3df0` / `0x101e3ee0` walks	ElysiumNpcSelect.cpp:304
+10739d08	FollowerTypeTable	the follower-type table `0x101e8c90` fills backAway / walkTo / runTo from	ElysiumNpcSquad.cpp:200
+10739d20	FeatListCount	`CVFeatList_t` row count	ElysiumNpcStartTaskSpecies.cpp:796
+10739d24	FeatListRows	`CVFeatList_t` row array	ElysiumNpcStartTaskSpecies.cpp:796
+1073dc28	VSoundTable	the VSound table object `0x101f5950` plays an id on	ElysiumNpcSounds10.inl:25
+1073dc3c	VSoundConceptCount	the global VSound concept list's entry count	ElysiumNpcSounds10.cpp:104
+1073dc40	VSoundConceptList	the global VSound concept list (entries `{ int id; const char* name; }`)	ElysiumNpcSounds10.cpp:105
+1074f028	CharTemplateRegistry	the character-template registry `0x10206c30` is called on (`SetCharTemplate`)	ElysiumNpcSpawn.cpp:105
+1090fbec	AttackCoordinatorA	global attack-coordinator pointer 0 of the three slot 608 walks	ElysiumNpcTroikaHelpers.cpp:104
+1090fbf0	AttackCoordinatorB	global attack-coordinator pointer 1 of the three slot 608 walks	ElysiumNpcTroikaHelpers.cpp:104
+1090fbf4	AttackCoordinatorC	global attack-coordinator pointer 2 of the three slot 608 walks	ElysiumNpcTroikaHelpers.cpp:104
+10923dd5	FleeSoundGuardA	first-use guard byte of the flee-sound concept cache	ElysiumNpcSounds10.cpp:250
+10923dd8	NullEntityHandle	the null entity handle every `AI_NavGoal_t` literal stores at +0x28	ElysiumNpcStartTask.cpp:346
+10923ddd	IdleAgitatedGuard	first-use guard byte of the "Idle_Agitated" concept cache	ElysiumNpcSounds10.cpp:258
+10923e2c	DominateBrainWipeGuard	first-use guard word of the `Dominate_BrainWipe` discipline id cache	ElysiumNpcSenses10.cpp:161
+10923e30	IdleAgitatedConceptId	cached VSound concept id of "Idle_Agitated"	ElysiumNpcSounds10.cpp:258
+10923f0c	SurprisedGuard	first-use guard byte of the "Surprised" concept cache	ElysiumNpcSounds10.cpp:242
+10923f0d	DeathGuard	first-use guard byte of the "Death" concept cache	ElysiumNpcSounds10.cpp:153
+10924074	DominateBrainWipeId	cached discipline id of `Dominate_BrainWipe`	ElysiumNpcSenses10.cpp:160
+109240c0	IdleCalmGuard	first-use guard byte of the "Idle_Calm" concept cache	ElysiumNpcSounds10.cpp:171
+109240c8	FloatSoundGuardA	first-use guard of a float-sound concept cache (one of two caches)	ElysiumNpcSounds10.cpp:229
+109241f0	TargetSuspectConceptId	cached VSound concept id of "Target_Suspect"	ElysiumNpcSounds10.cpp:164
+10924240	FloatSoundGuardB	first-use guard of the other float-sound concept cache	ElysiumNpcSounds10.cpp:229
+10924242	UpsetGuard	first-use guard byte of the "Upset" concept cache	ElysiumNpcSounds10.cpp:272
+10924330	TargetSuspectGuard	first-use guard byte of the "Target_Suspect" concept cache	ElysiumNpcSounds10.cpp:164
+1092442c	SleepingConceptId	cached VSound concept id used with `DAT_1092482c`	ElysiumNpcSounds10.cpp:184
+10924504	IdleCalmConceptId	cached VSound concept id of "Idle_Calm"	ElysiumNpcSounds10.cpp:171
+10924624	ComfortConceptId	cached VSound concept id of "Comfort"	ElysiumNpcSounds10.cpp:265
+109247e0	BossTableSlot0	slot 0 of the two-slot global boss table (-1 empty)	ElysiumNpcThink.cpp:82
+109247e4	BossTableSlot1	slot 1 of the two-slot global boss table (-1 empty)	ElysiumNpcThink.cpp:82
+1092482c	SleepingGuard	first-use guard byte beside `DAT_1092442c`	ElysiumNpcSounds10.cpp:184
+10924830	FloatSoundConceptIdB	cached VSound concept id of the second float-sound cache	ElysiumNpcSounds10.cpp:229
+1092483c	FloatSoundDistanceCache	the cached "FloatSoundDistance" float, lazily loaded from the float-sound table (50.0)	ElysiumNpcSounds.cpp:56
+1092488d	FloatConceptGuard	guard bits; bit 0 guards the "Float" concept lookup	ElysiumNpcSounds10.cpp:324
+10924934	FearStartGuard	first-use guard byte of the "Fear_Start" concept cache	ElysiumNpcSounds10.cpp:198
+1092497c	ComfortGuard	first-use guard byte of the "Comfort" concept cache	ElysiumNpcSounds10.cpp:265
+10924980	DispositionExpressionTable	the table `0x100ec360` / `0x100ec2e0` / `0x100ec3d0` key on `m_nCurrDisposition`	ElysiumNpcTroikaHelpers.cpp:192
+10924a14	FloatConceptIdA	cached VSound concept id of the first float-sound cache	ElysiumNpcSounds10.cpp:229
+10924d1c	FloatSoundDistanceGuard	the magic-static guard word of `DAT_1092483c`	ElysiumNpcSounds.cpp:57
+10924d64	DeathConceptId	cached VSound concept id of "Death"	ElysiumNpcSounds10.cpp:153
+10924e84	FleeSoundConceptId	cached VSound concept id used by the flee sound	ElysiumNpcSounds10.cpp:251
+10924e88	FearStartConceptId	cached VSound concept id of "Fear_Start"	ElysiumNpcSounds10.cpp:198
+10924f64	SurprisedConceptId	cached VSound concept id of "Surprised"	ElysiumNpcSounds10.cpp:242
+10924fb4	UpsetConceptId	cached VSound concept id of "Upset"	ElysiumNpcSounds10.cpp:272
+10924fb8	BossTableCount	the signed-byte count of the global boss table	ElysiumNpcThink.cpp:82
+10924fb9	IgnorePlayerByte	the byte the `npc_ignore_player` toggle command flips	ElysiumNpcSenses.cpp:25
+10924fba	IgnoreSensesByte	the byte the `npc_ignore_senses` toggle command flips	ElysiumNpcSenses.cpp:25
+109253f8	ActStore	the act (law event) registry `0x102ca2a0` registers into	ElysiumNpcSpawn.cpp:31
+10925450	HintListHead	the global `CAI_Hint` list head (next link +0x5d8, `m_nHintType` +0x5dc)	ElysiumNpcSquad.cpp:49
+1093404c	GoalToleranceGlobal	the static-init default tolerance an `AI_NavGoal_t` literal copies	ElysiumNpcStartTask.cpp:740
+10934060	GoalArrivalDirectionGlobal	the static-init arrival-direction sentinel (+0x2c..+0x34) of an `AI_NavGoal_t` literal	ElysiumNpcStartTask.inl:41
+109340d8	NodeGraphHullIndex	the process-wide node-graph hull index (SheriffMan sets 0x15)	ElysiumNpcSheriffMan.cpp:309
+1093412c	UsedHullCompanion	the companion word `0x102f9900` clears with the used-hull mask	ElysiumNpcUsedHullBits.cpp:9
+10936c74	SquadSlotNamespace	the one shared squad-slot id namespace	ElysiumNpcSquad.inl:48
+10937cf2	DisciplineOffCooldownByte	slot 334's global "a discipline is off cooldown" byte	ElysiumNpcTroikaHelpers.inl:97
+1093ac3c	CopClassStaticA	a cop class static (the grudge every cop shares)	ElysiumNpcSenses10.cpp:573
+1093aca8	CopClassStaticB	a cop class static (the grudge every cop shares)	ElysiumNpcSenses10.cpp:573
+1093acac	CopAliveCensus	the process-wide cop alive census	ElysiumNpcSpawnSpecies.cpp:276
+1093acb0	CopCensusWord	the process-wide cop census word (last writer wins)	ElysiumNpcSpeciesLifecycle10Shared.h:18
+1093b650	HunterClassStaticA	a hunter class static (the hunter twin of the cop grudge)	ElysiumNpcSenses10Shared.h:26
+1093b658	HunterClassStaticB	a hunter class static (the hunter twin of the cop grudge)	ElysiumNpcSenses10Shared.h:26
+1093c340	SabbatDiveFlightTime	the dive flight time `staticinit_103a5820` writes (33.0 * 1/30 = 1.1)	ElysiumNpcStartTaskSpecies.cpp:2569
+1093d634	ScopeTraceGuard	the magic-static guard of a scope-trace concept cache	ElysiumNpcSounds10.cpp:187
+1093d6ec	ScopeTraceCache	the cache guarded by `DAT_1093d634`	ElysiumNpcSounds10.cpp:187
+1093fac4	WerewolfDebugWord	the process-wide debug word beside `werewolf_show_debug`	ElysiumNpcSpeciesLifecycle10.inl:156
+10940495	FloatSoundInfoGuard	guard bits (1 and 2) of the Float_Sound_Info row 3 read	ElysiumNpcZombie.cpp:96
+109f0ac0	EmptyFeatRow	the lazily built empty `CVFeatList_t` row	ElysiumNpcStartTaskSpecies.cpp:797
+109f0b40	EmptyStatList	the lazily built empty stat list	ElysiumNpcSelectSpecies.cpp:770

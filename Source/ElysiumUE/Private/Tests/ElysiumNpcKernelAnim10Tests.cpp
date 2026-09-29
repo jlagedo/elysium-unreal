@@ -95,7 +95,6 @@ namespace
 			Other = World.Npc(TEXT("other"));
 			FElysiumNpcWorldFixture::Quiet({ Npc, Cop, Other });
 			// Every case drives one slot on a standing body; the ConVars start at their shipped defaults.
-			FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 			ElysiumNpcTunables::ResetConVars();
 		}
 
@@ -650,7 +649,6 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 2);
 	TestEqual(TEXT("0x10295590 step 1: gait 2 rewrites ACT_RUN to ACT_WALK"),
 		N.NPC_EarlyTranslateActivity(GTActRun), GTActWalk);
-	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 	ElysiumNpcTunables::ResetConVars();
 
 	// 2. The frenzy word. Bit 0x40 wins OUTRIGHT over bit 0x20 — they are an `else if`.
@@ -770,7 +768,6 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAlertAggressive, 1);
 	TestTrue(TEXT("0x103854f0 step 3: a LIVE non-zero cvar is the SET side of the polarity"),
 		ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::DebugAlertAggressive) != 0);
-	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 	ElysiumNpcTunables::ResetConVars();
 	return true;
 }
@@ -1140,7 +1137,6 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 		Ask(ENpcPredicate::GaitOverrideWalk));
 	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugForceAnim, 2);
 	TestTrue(TEXT("GaitOverrideWalk reads value 2"), Ask(ENpcPredicate::GaitOverrideWalk));
-	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 	ElysiumNpcTunables::ResetConVars();
 
 	N.SetFrenziedWord(0x40);
@@ -1294,7 +1290,6 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 		WalkVisual(TEXT("ACT_WALK")).Activity, FString(TEXT("ACT_RUN")));
 	TestEqual(TEXT("gait 1: and slot 375 agrees"), N.NPC_EarlyTranslateActivity(GTActWalk),
 		GTActRun);
-	FElysiumNpc::SetDebugTraceByte(nullptr, 0);
 	ElysiumNpcTunables::ResetConVars();
 
 	// 4. The two capability-gated delegates, which the table left ungated before this story.

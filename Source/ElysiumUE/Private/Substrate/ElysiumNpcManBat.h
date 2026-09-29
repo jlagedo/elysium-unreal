@@ -31,11 +31,9 @@ public:
 	FElysiumNpcManBat();
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual int32 SpeciesSelectSchedule() override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
@@ -74,7 +72,6 @@ public:
 	 *  by. Family Motor states the same navigator gap. Answers false, which is retail's REFUSAL arm —
 	 *  `TaskFail(0x1a)` and the plain velocity fallback. */
 	bool NavigatorCanReach(const FVector& PositionUnits) const;
-	TArray<FPhysicsTraceEntityCall> PhysicsTraceEntityCalls;
 	/** `0x1038b370` — `CNPC_VManBat`'s velocity producer, the biggest body in this family (2,274 bytes).
 	 *  Three shapes, chosen by `m_pFlyNode` and the decoded `m_iMoveGoalNodeMode`: the animation-driven
 	 *  velocity steered by the obstacle probe; the fly-node / fly-by-target homing with its 700 and 500
@@ -94,12 +91,6 @@ public:
 	void SetFlapActivity(int32 InActivityNumber, float Seconds);
 	static const FFlapActivity* FlapActivityRows(int32& OutCount);
 	static const FFlapActivity* FlapActivityOf(const TCHAR* Body);
-	/** `0x1038fb20` — `CNPC_VManBat`'s slot 102 `Physics_TraceEntity`. The recovered concern is the
-	 *  FILTER: the body builds the ordinary `CTraceFilterSimple` and then overwrites its vtable pointer
-	 *  with `vftable_CTraceFilterManBatNoIBeamEntity` before sweeping. Slot 102's Troika-line body
-	 *  (`0x100ab450`) is another story's, so this lands as a named method. */
-	void PhysicsTraceEntityManBat(FElysiumEntity* Entity, const FVector& StartUnits,
-		const FVector& EndUnits, uint32 Mask);
 	/** The `DAT_1093b7cc` cvar `0x1038b370` multiplies by the think interval to get its per-axis
 	 *  acceleration clamp (retail's inlined `ConVar::GetFloat`): `manbat_delta`, shipped "600.0". */
 	float ManBatAccelerationCvar() const;
@@ -137,7 +128,7 @@ public:
 
 	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexManBat = 0x14;       // `0x1038b070`
-	static constexpr double ManBatFlapDelaySeconds = 2.3;    // `_DAT_104bc690`
+	static constexpr double ManBatFlapDelaySeconds = ElysiumNpcTunables::ManBatFlapDelay;    // `_DAT_104bc690`
 	/** `CNPC_VManBat` species words. `ManBatFlapTimer` and `bHasPlayedFlyBySound` already exist. */
 	bool bManBatHasScaredMinions = false;        // +0x66b0
 	double ManBatFlyTimer = 0.0;                 // +0x667c

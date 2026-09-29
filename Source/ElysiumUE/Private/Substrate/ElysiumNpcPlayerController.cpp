@@ -36,9 +36,7 @@ namespace
 	// class row, the same mapping the Werewolf/Zombie/GhoulCroucher `NPCInit` ports use.
 	const TCHAR* const GControllerPlayerClass = TEXT("player");
 	constexpr int32 GControllerPlayerClassPriority = 0;
-	// `PreSelectSchedule`'s selector trace: `+0x1b2c = 2` on both arms, and on the idle arm the file
-	// `0x1064bc7c` and line `0xe6` into `+0x1b30` / `+0x1b34`.
-	constexpr int32 GControllerPreSelectTraceId = 2;
+	// `PreSelectSchedule`'s idle-arm trace line `0xe6`.
 	constexpr int32 GControllerPreSelectLine = 0xe6;
 	// `mov eax,0x6b` — schedule 107, `SCHED_TROIKA_IDLE_DISPOSITION` once the controller's space
 	// (`CNPC_VVampire`'s) resolves it up the parent chain.
@@ -327,7 +325,6 @@ int32 FElysiumNpcPlayerController::PreSelectSchedule()
 	//                    DIRECT (a tail jump);
 	//   state == IDLE -> trace `NPC_VPlayerController.cpp:0xe6` and answer `0x6b` (107).
 	const int32 State = NpcStateRetail();                         // 0x103a46b0
-	SelectScheduleSelector = GControllerPreSelectTraceId;         // 0x103a46b6 MOV [ECX+0x1b2c],2
 	if (State != GControllerRetailStateIdle)                       // 0x103a46c0 DEC / 0x103a46c1 JZ
 	{
 		return FElysiumNpc::PreSelectSchedule();                   // 0x103a46c3 JMP 0x1000df2b
@@ -338,7 +335,7 @@ int32 FElysiumNpcPlayerController::PreSelectSchedule()
 	return GControllerIdleSchedule;
 }
 
-// Slots 488-497: `0x103a4730` .. `0x103a4850`, each a bare `RET`.
+// Slots 488-495: `0x103a4730` .. `0x103a4810`, each a bare `RET`.
 void FElysiumNpcPlayerController::DeathSound() {}           // 488 `0x103a4730`
 void FElysiumNpcPlayerController::AlertSound() {}           // 489 `0x103a4750`
 void FElysiumNpcPlayerController::IdleSound() {}            // 490 `0x103a4770`
@@ -347,8 +344,6 @@ void FElysiumNpcPlayerController::FearSound() {}            // 492 `0x103a47b0`
 void FElysiumNpcPlayerController::LostEnemySound() {}       // 493 `0x103a47d0`
 void FElysiumNpcPlayerController::FoundEnemySound() {}      // 494 `0x103a47f0`
 void FElysiumNpcPlayerController::SurprisedSound() {}       // 495 `0x103a4810`
-void FElysiumNpcPlayerController::TargetAcquiredSound() {}  // 496 `0x103a4830`
-void FElysiumNpcPlayerController::Slot497() {}              // 497 `0x103a4850`
 
 // --- The port's own presentation (named modernization) ---------------------------------------------
 

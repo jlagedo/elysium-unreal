@@ -159,66 +159,6 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 				T.TestEqual(L + TEXT(" tallies no stub"), ClosureTallyCountForAddress(TEXT("0x100b2be0")),
 					Before);
 			} },
-		{ 79, TEXT("0x10321670"), TEXT("GetPredDescMap"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.PredDescMap;
-				T.TestNull(*L, F.Guard->GetPredDescMap());
-				T.TestEqual(L + TEXT(" asked the seam"), F.Guard->ClosureRefusals.PredDescMap,
-					Before + 1);
-			} },
-		{ 80, TEXT("0x102c5870"), TEXT("GetServerClass"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.ServerClass;
-				T.TestNull(*L, F.Guard->GetServerClass());
-				T.TestEqual(L + TEXT(" asked the seam"), F.Guard->ClosureRefusals.ServerClass,
-					Before + 1);
-			} },
-		{ 82, TEXT("0x1028cd10"), TEXT("GetDataDescMap"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.DataDescMap;
-				T.TestNull(*L, F.Guard->GetDataDescMap());
-				T.TestEqual(L + TEXT(" asked the seam"), F.Guard->ClosureRefusals.DataDescMap,
-					Before + 1);
-			} },
-		{ 88, TEXT("0x10026b50"), TEXT("Slot88"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.ChangeTracker;
-				// `0x10146700`'s own answer for a zero-initialised tracker.
-				T.TestFalse(*L, F.Guard->Slot88());
-				T.TestEqual(L + TEXT(" asked the seam"), F.Guard->ClosureRefusals.ChangeTracker,
-					Before + 1);
-			} },
-		{ 102, TEXT("0x100ab450"), TEXT("Physics_TraceEntity"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				// A sentinel `trace_t` stand-in: the refusal must not write into a buffer whose
-				// layout it does not know.
-				uint8 Sentinel[32];
-				FMemory::Memset(Sentinel, 0xAB, sizeof(Sentinel));
-				F.Guard->Physics_TraceEntity(F.Victim, FVector(1, 2, 3), FVector(4, 5, 6), 0x4600u,
-					Sentinel);
-				bool bUntouched = true;
-				for (uint8 Byte : Sentinel)
-				{
-					bUntouched &= (Byte == 0xAB);
-				}
-				T.TestTrue(*L, bUntouched);
-				T.TestEqual(L + TEXT(" recorded the endpoints"),
-					F.Guard->ClosureRefusals.TraceEndCm, FVector(4, 5, 6));
-			} },
-		{ 184, TEXT("0x10267260"), TEXT("MakeTracer"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.MakeTracer;
-				F.Guard->MakeTracer(FVector(7, 8, 9), nullptr, /*TRACER_LINE*/ 1);
-				T.TestEqual(*L, F.Guard->ClosureRefusals.MakeTracer, Before + 1);
-				T.TestEqual(L + TEXT(" recorded TRACER_LINE"), F.Guard->ClosureRefusals.TracerType,
-					1);
-			} },
 		{ 192, TEXT("0x10027160"), TEXT("WorldSpaceCenter"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
@@ -235,13 +175,6 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 					T.TestEqual(L + TEXT(" is slot 192's value"), *Answer,
 						F.Guard->WorldSpaceCenter());
 				}
-			} },
-		{ 225, TEXT("0x100b5040"), TEXT("VPhysicsDestroyObject"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				const int32 Before = F.Guard->ClosureRefusals.VPhysicsDestroyObject;
-				F.Guard->VPhysicsDestroyObject();
-				T.TestEqual(*L, F.Guard->ClosureRefusals.VPhysicsDestroyObject, Before + 1);
 			} },
 		{ 333, TEXT("0x102bff20"), TEXT("MaintainEyeDirection"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
@@ -289,52 +222,12 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 				F.Guard->NpcFlags.Clear(EElysiumNpcFlag2::D_MILDLY_CRAZY);
 				T.TestEqual(L, F.Guard->NPC_TranslateActivity(1), 1);
 			} },
-		{ 406, TEXT("0x1027e740"), TEXT("GetStateName"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				T.TestEqual(L, FString(F.Guard->GetStateName(EElysiumNpcState::Combat)),
-					FString(LexToString(EElysiumNpcState::Combat)));
-			} },
-		{ 412, TEXT("0x101aa6d0"), TEXT("GetLastUpdateThink"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				F.Guard->ScheduleHost.LastUpdate = 12.5;
-				T.TestEqual(L, F.Guard->GetLastUpdateThink(),
-					static_cast<float>(F.Guard->ScheduleHost.LastUpdate));
-			} },
-		{ 413, TEXT("0x101aa6f0"), TEXT("GetLastNormalThink"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				F.Guard->ScheduleHost.LastNormal = 13.25;
-				T.TestEqual(L, F.Guard->GetLastNormalThink(),
-					static_cast<float>(F.Guard->ScheduleHost.LastNormal));
-			} },
-		{ 414, TEXT("0x101aa710"), TEXT("GetLastMoveThink"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				F.Guard->ScheduleHost.LastMove = 14.125;
-				T.TestEqual(L, F.Guard->GetLastMoveThink(),
-					static_cast<float>(F.Guard->ScheduleHost.LastMove));
-			} },
-		{ 415, TEXT("0x101aa730"), TEXT("GetLastAIThink"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				F.Guard->ScheduleHost.LastAI = 15.0625;
-				T.TestEqual(L, F.Guard->GetLastAIThink(),
-					static_cast<float>(F.Guard->ScheduleHost.LastAI));
-			} },
 		{ 416, TEXT("0x101aa750"), TEXT("SetForceFrequentThink"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
 				F.Guard->bForceFrequentThink = false;
 				F.Guard->SetForceFrequentThink(true);
 				T.TestTrue(*L, F.Guard->bForceFrequentThink);
-			} },
-		{ 417, TEXT("0x101aa770"), TEXT("GetForceFrequentThink"),
-			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
-			{
-				F.Guard->bForceFrequentThink = true;
-				T.TestEqual(L, F.Guard->GetForceFrequentThink(), F.Guard->bForceFrequentThink);
 			} },
 		{ 439, TEXT("0x1028abe0"), TEXT("SelectFailSchedule"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
@@ -431,7 +324,7 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 			} },
 	};
 
-	static_assert(UE_ARRAY_COUNT(Rows) == 41, "family Closure carries 41 slots");
+	static_assert(UE_ARRAY_COUNT(Rows) == 28, "family Closure carries 28 slots (41 less the six dead rows deleted by 0019/6 -- slot 406 GetStateName, the think-stamp getters and their kin -- and the seven mechanism rows 0019/6 lane E closed: slots 79, 80, 82 (descriptors), 88 (change tracker), 102, 184, 225 (physics))");
 
 	FElysiumClosureFixture F;
 	if (!TestNotNull(TEXT("the guard spawned"), F.Guard)
@@ -524,79 +417,6 @@ bool FElysiumNpcKernelClosureWorldSpaceCenterTest::RunTest(const FString&)
 	// must agree on a combatant.
 	TestTrue(TEXT("SpeciesWorldSpaceCenter falls through to slot 192"),
 		F.Guard->SpeciesWorldSpaceCenter().Equals(F.Guard->WorldSpaceCenter(), 0.001));
-	return true;
-}
-
-// =================================================================================================
-// Slots 79, 80, 82, 88, 102, 184, 225 — the seven refusals
-// =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClosureRefusalTest,
-	"Elysium.Substrate.NpcKernelClosure.Refusals", GElysiumNpcKernelClosureFlags)
-bool FElysiumNpcKernelClosureRefusalTest::RunTest(const FString&)
-{
-	FElysiumClosureFixture F;
-	if (!TestNotNull(TEXT("the guard spawned"), F.Guard))
-	{
-		return false;
-	}
-	FElysiumNpc& N = *F.Guard;
-
-	// Slots 79 / 80 / 82 — the datamap and server-class descriptors. There is no `datamap_t` and no
-	// `ServerClass` in this substrate: the save surface is `FElysiumSaveArchive`, a per-type
-	// `Serialize`, and there is no client to replicate to. Answering a fabricated pointer would be
-	// worse than answering none, because the one legitimate consumer of a datamap pointer walks it.
-	TestNull(TEXT("slot 79 `0x10321670` GetPredDescMap refuses"), N.GetPredDescMap());
-	TestNull(TEXT("slot 80 `0x102c5870` GetServerClass refuses"), N.GetServerClass());
-	TestNull(TEXT("slot 82 `0x1028cd10` GetDataDescMap refuses"), N.GetDataDescMap());
-	TestEqual(TEXT("each of the three was asked once"),
-		N.ClosureRefusals.PredDescMap + N.ClosureRefusals.ServerClass
-			+ N.ClosureRefusals.DataDescMap, 3);
-
-	// Slot 88 — the change tracker at `this+0x1b0`. `false` is `0x10146700`'s OWN answer for a
-	// zero-initialised tracker: with the interval word `+0x4` zero the countdown arm never runs,
-	// `+0x0` is clear, and the function takes its `(interval == 0)` exit and returns 0. Repeated
-	// dispatches keep answering it, because nothing here ever dirties the tracker.
-	TestFalse(TEXT("slot 88 `0x10026b50` answers no change pending"), N.Slot88());
-	TestFalse(TEXT("...and again"), N.Slot88());
-	TestEqual(TEXT("both dispatches reached the seam"), N.ClosureRefusals.ChangeTracker, 2);
-
-	// Slot 102 — `Physics_TraceEntity`. The refusal is forced by the OUT parameter: retail's fifth
-	// argument is a `trace_t*` this substrate stands no counterpart for, so the generator typed it
-	// `void*` and there is nowhere to put a fraction, an endpos or a hit entity. The buffer comes
-	// back exactly as it went in.
-	uint8 Trace[48];
-	FMemory::Memset(Trace, 0x5C, sizeof(Trace));
-	N.Physics_TraceEntity(F.Victim, FVector(10, 20, 30), FVector(40, 50, 60), 0x4600u, Trace);
-	bool bUntouched = true;
-	for (uint8 Byte : Trace)
-	{
-		bUntouched &= (Byte == 0x5C);
-	}
-	TestTrue(TEXT("slot 102 `0x100ab450` writes nothing into the trace buffer"), bUntouched);
-	TestEqual(TEXT("...and it was asked once"), N.ClosureRefusals.PhysicsTraceEntity, 1);
-	TestEqual(TEXT("...with retail's own start"), N.ClosureRefusals.TraceStartCm,
-		FVector(10, 20, 30));
-	TestEqual(TEXT("...its own end"), N.ClosureRefusals.TraceEndCm, FVector(40, 50, 60));
-	TestEqual(TEXT("...and its own content mask"), static_cast<int32>(N.ClosureRefusals.TraceMask),
-		0x4600);
-
-	// Slot 184 — `MakeTracer`. A pure visual effect (a `CPASFilter` plus, for `TRACER_LINE` only,
-	// the bullet-tracer temp entity), refused for the same two reasons: the endpos it would draw to
-	// lives in the same unreproduced `trace_t`, and the PAS broadcast has no counterpart here.
-	N.MakeTracer(FVector(1, 1, 1), nullptr, /*TRACER_LINE*/ 1);
-	N.MakeTracer(FVector(2, 2, 2), nullptr, /*some other tracer type*/ 4);
-	TestEqual(TEXT("slot 184 `0x10267260` was asked twice"), N.ClosureRefusals.MakeTracer, 2);
-	TestEqual(TEXT("...the last type recorded"), N.ClosureRefusals.TracerType, 4);
-	TestEqual(TEXT("...the last start recorded"), N.ClosureRefusals.TracerStartCm,
-		FVector(2, 2, 2));
-
-	// Slot 225 — `VPhysicsDestroyObject`. Retail's whole body is guarded on `m_pPhysicsObject`
-	// (`+0x36c`); with the pointer null it is `return;`, which is what an NPC that never got a
-	// physics object does in retail too. No port member stands `+0x36c`.
-	N.VPhysicsDestroyObject();
-	TestEqual(TEXT("slot 225 `0x100b5040` was asked once"), N.ClosureRefusals.VPhysicsDestroyObject,
-		1);
 	return true;
 }
 

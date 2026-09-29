@@ -1,0 +1,125 @@
+0x10026a10	seam:FElysiumEntity::SetOrigin	float overload packs a FVector and forwards to slot 62 SetOrigin
+0x10026a50	seam:FElysiumEntity::SetAngles	float overload packs an FRotator and forwards to slot 64 SetAngles
+0x10026f80	seam:FElysiumEntity::CanStandOn	null answers standable, else forwards to IsStandable
+0x10027160	seam:FElysiumEntity::WorldSpaceCenter	forward to ElysiumCameraShots::SurroundingBounds centre
+0x10027450	seam:FElysiumEntity::SetRefEHandle	one handle write
+0x10027490	seam:FElysiumEntity::IsMarkedForDeletion	forward to IsDead
+0x10027650	seam:FElysiumEntity::GetBaseEntity	returns this
+0x1004fc50	seam:FElysiumAnimating::GetBaseAnimating	returns this
+0x100994c0	seam:FElysiumAnimatingOverlay::FindLayerByOwner	forwards to FindGestureLayerByOwner; the -1 scan lives in that helper
+0x100995e0	hand:FElysiumAnimatingOverlay::RemoveLayerByOwner	writes retail overlay record fields (Weight/Sequence) after a lookup; wants the UAnimInstance gesture-layer seam
+0x100997f0	hand:FElysiumAnimatingOverlay::Slot266	loop over the flinch records writing Sequence/ExpireTime with retail constants; wants the UAnimInstance additive flinch layer
+0x100aa5a0	seam:FElysiumNpc::OnRestore	forwards to TroikaOnRestore
+0x100b1890	seam:FElysiumEntity::SetSize	one SizeCm write
+0x100b4bc0	seam:FElysiumEntity::EyeAngles	forwards to GetAbsAngles
+0x100b4be0	seam:FElysiumEntity::LocalEyeAngles	forwards to GetAngles
+0x100b4c30	seam:FElysiumEntity::WorldSpaceCenter	forward to SurroundingBounds centre (const overload)
+0x100b4de0	hand:FElysiumEntity::ShouldCollide	collision-group == debris and ContentsMask bit compare; wants TraceRetail / collision channel responses
+0x100b4ea0	hand:FElysiumEntity::DamageDecal	ladder on RenderMode and GameMaterial, then a random pick; wants a decal/effects service
+0x100b50a0	hand:FElysiumEntity::IsStandable	ladder over solid flags and solid type; wants CMC floor test (0018/5 movement seam)
+0x100b5b00	seam:FElysiumFlex::SetViewtarget	one Viewtarget write
+0x100f6d80	seam:FElysiumNpc::AddListenerEntity	TArray Contains/Add idiom (plus debug block bookkeeping)
+0x100f6e40	seam:FElysiumNpc::RemoveListenerEntity	TArray Find/RemoveAt idiom
+0x10183120	hand:FElysiumPlayer::RescaleActiveDisciplineDurations	loop over ClientDisciplineDurations rescaling remaining*scale/divisor; the client-side mirror wants no port body (HUD reads authoritative durations)
+0x101a5db0	seam:FElysiumScriptedSequence::GetDataDescMap	forward to FElysiumClassRegistry::Find
+0x101a6b40	seam:FElysiumNpcBase::StepHeight	returns the step-height tunable
+0x101a6b60	seam:FElysiumNpcBase::GetMaxJumpSpeed	returns a tunable
+0x101a9620	seam:FElysiumAiScriptedSchedule::GetDataDescMap	forward to FElysiumClassRegistry::Find
+0x101aa670	seam:FElysiumNpc::GetMaxJumpSpeed	returns a tunable
+0x101aadb0	seam:FElysiumNpcPayphone::PayphoneSpeechSoundFlags	ternary selecting one of two retail flag constants
+0x10267260	seam:FElysiumEntity::EmitBulletTracer	pushes the tracer call onto the recording list
+0x10268ef0	hand:FElysiumEntity::TraceBleed	ladder over blood colour, damage mask and thresholds before spawning; wants a decal/blood FX service plus TraceRetail
+0x1026ab50	hand:FElysiumNpcBase::HeadProbe	hull-state guard then own probe-centre math and an InnateWeaponLosTrace; wants TraceRetail
+0x1026af70	hand:FElysiumNpcBase::SetHeadDirection	capability guard then a 0.8/0.2 smoothing loop on HeadYaw; wants FMath::FInterp / pose-parameter seam
+0x1026b480	seam:FElysiumNpcBase::SetAim	two SetPoseParameterByName calls after a vector-to-angle conversion
+0x1026b4f0	hand:FElysiumNpcBase::AimGun	enemy guard then Weapon_ShootPosition, GetShootEnemyDir and SetAim; small orchestration of retail aim rules; wants the pose-parameter seam
+0x1026c120	seam:FElysiumAnimating::PerformMovement	records the interval and forwards to NavigatorMoveStep
+0x1026e5e0	hand:FElysiumNpcBase::CheckOnGround	ladder over OnGround condition, nav type, move type and floor; wants CMC / SampleFloor
+0x102729d0	hand:FElysiumNpcBase::GetNavTargetEntity	ladder mapping nav goal type (1/2/7) to entity; wants UPathFollowingComponent goal actor
+0x10273070	hand:FElysiumNpcBase::SetHullSizeNormal	small-hull state machine (force flag, extents, counters, motor call, physics rebuild); wants CMC capsule resize
+0x10273180	hand:FElysiumNpcBase::SetHullSizeSmall	small-hull state machine (force flag, extents, counters, motor call, physics rebuild); wants CMC capsule resize
+0x10273720	seam:FElysiumNpcBase::CreateVPhysics	single guard then BuildVPhysicsShadow, answers true
+0x10273e40	seam:FElysiumNpcBase::RemoveMemory	guard on squad ownership then resets the memory struct
+0x10274b30	hand:FElysiumNpcBase::CalcIdealYaw	nav-state ladder with own dx/dy yaw math; wants FMath / FindLookAtRotation
+0x10278d20	seam:FElysiumNpcBase::AddFacingTarget	single enabled guard, packs a request and forwards to MotorAddFacingTarget
+0x10278d90	seam:FElysiumNpcBase::AddFacingTarget	single enabled guard, packs a request and forwards to MotorAddFacingTarget
+0x1027bc60	seam:FElysiumNpcBase::Save	forwards to SerializeExtendedHeader on the archive, null guard
+0x1027caa0	seam:FElysiumNpcBase::StopLoopingSounds	forwards to audio StopEntitySounds
+0x1027da90	seam:FElysiumNpcBase::OverrideMove	constant false
+0x10280300	seam:FElysiumNpcBase::IsMoving	forwards to NavigatorIsGoalSet
+0x10280880	seam:FElysiumNpcBase::IsJumpLegal	forwards to IsJumpLegalGeometry with three tunables
+0x10280a50	hand:FElysiumNpcBase::AutoMovement	StudioFrameAdvance + AnimIntervalMovement then MoveType/flag branches that all answer false; wants root-motion (CMC) seam
+0x10280bb0	seam:FElysiumNpcBase::MaxYawSpeed	returns a tunable
+0x10297ce0	hand:FElysiumNpc::MaxYawSpeed	ladder over memory bits, face-anim flag, combat state and activity; wants CMC RotationRate
+0x10298ad0	seam:FElysiumNpc::Precache	forwards to TroikaPrecache
+0x10298ce0	seam:FElysiumNpc::SetModel	forwards to TroikaSetModel
+0x102998c0	seam:FElysiumNpc::OnRestore	forwards to TroikaOnRestore
+0x1029a050	seam:FElysiumNpc::GetUsedHullBits	returns the hull-bits word
+0x1029afc0	hand:FElysiumNpc::ShouldIgnoreCollision	hint-node type window and derived-type mask ladder before the base; wants TraceRetail collision responses
+0x1029b180	hand:FElysiumNpc::NavIgnoreCollision	shared head, derived-type mask, physics-props flag ladder; wants TraceRetail collision responses
+0x1029f610	hand:FElysiumNpc::FUN_1029f610	loop over a patrol path revalidating each node against the place set; wants the generated SAVE walk fixup
+0x102a0ed0	seam:FElysiumNpc::CanStandAt	brackets MoveProbeCheckStandPosition with bForceNpcCheck
+0x102a0fb0	seam:FElysiumNpc::IsAreaClear	one KernelHullTrace call, result converted to a clear answer
+0x102a1650	hand:FElysiumNpc::TraceMoveClearanceAtYaw	own cos/sin sweep endpoint math and trace; wants TraceRetail / FMath
+0x102bf070	hand:FElysiumNpc::UpdatePoseParameters	long pose-parameter update ladder (target, oblivious, aim smoothing); wants the pose-parameter seam
+0x102bf820	hand:FElysiumNpc::ResolveStandingOnHead	ground-entity extents test with a stand-on-head timer; wants CMC floor / TraceRetail
+0x102c04b0	seam:FElysiumNpc::Slot612	ternary selecting a priority constant, none without a live partner
+0x102c4380	seam:FElysiumNpc::FUN_102c4380	swaps the ignored handle through Motor SetMoveIgnore
+0x102c43b0	seam:FElysiumNpc::FUN_102c43b0	guard, stamps deadline, forwards to FUN_102c43f0
+0x102c43f0	hand:FElysiumNpc::FUN_102c43f0	time-vs-deadline compare then SetMoveIgnore off and re-pin; wants IgnoreActorWhenMoving timer seam
+0x102d2ee0	seam:FElysiumEntity::ObjectCaps	constant caps answer (ScriptedSequence clears the transition bit on the base answer)
+0x102d2f00	hand:FElysiumNpc::HintDeletingDestructor	sets a condition and calls ClearScheduleHint(reuse delay), an owner-side effect other hint users can observe; wants CRT:operator delete for the rest
+0x102d3ec0	hand:FElysiumNpcBase::HintOnRestore	resolves the hint node, relinks the attached hint and fills a result; wants the generated SAVE walk
+0x102d72f0	hand:FElysiumNpcTestHull::Spawn	spawn writes: hull pick, solid, move type, health, flags; wants nav-bake hull probe setup
+0x102dbc80	seam:FElysiumNpc::Spawn	forwards to TroikaSpawnBody
+0x102dbcb0	seam:FElysiumNpc::Precache	forwards to TroikaPrecache
+0x102e11f0	seam:FElysiumNpcBase::ClearFacingTarget	resets the request list and clears the motor facing target
+0x102e1270	seam:FElysiumNpcBase::FUN_102e1270	zeroes velocity and forces an activity on the recording motor
+0x102e20f0	seam:FElysiumNpcBase::MotorAddFacingTarget	stamps expiry and forwards to Motor SetFacingTarget
+0x102e2120	seam:FElysiumNpcBase::MotorAddFacingTarget	stamps expiry and forwards to Motor SetFacingTarget
+0x102e2150	seam:FElysiumNpcBase::MotorAddFacingTarget	stamps expiry and forwards to Motor SetFacingTarget
+0x102ecb50	seam:FElysiumNpcBase::NavSnapshotOwnerPointers	two field writes (snapshot flag and argument)
+0x102eea70	seam:FElysiumNpcBase::FUN_102eea70	forwards to NavStopAndMarkDirty
+0x102eff40	hand:FElysiumNpcBase::NavigatorMoveStep	move-step ladder: interval clamp, pause, override, should-move latch, goal/route gates, result codes; wants UPathFollowingComponent
+0x1032fb80	seam:FElysiumCombatCharacter::SetPoseParameter	forwards to SetPoseParameterByName and the indexed overload
+0x1032fc50	seam:FElysiumCombatCharacter::SetPoseParameter	forwards to SetPoseParameter02
+0x1035e1a0	seam:FElysiumNpcAndreiBlood::StartBloodEmitter	empty-name guard, swap the emitter handle, forward to CreateNamedEmitter
+0x1035e3c0	seam:FElysiumNpcAndreiBlood::StartSummonEmitter	empty-name guard, swap the emitter handle, forward to CreateNamedEmitter
+0x10366490	seam:FElysiumNpcBaseBoss::FUN_10366490	linear find over the blacklist by resolved entity (container idiom)
+0x103689c0	seam:FElysiumNpcCamera::Precache	forwards to CameraPrecacheModel, one field zeroed
+0x10374130	hand:FElysiumNpcDog::MaxYawSpeed	ladder over memory bits, face-anim flag and activity; wants CMC RotationRate
+0x10379490	seam:FElysiumNpcGargoyle::NavIgnoreCollision	derived-type mask and classname predicate ORed onto the base answer
+0x10380f90	seam:FElysiumNpcHengeyokai::NavIgnoreCollision	derived-type mask ORed onto the base answer
+0x10382d20	seam:FElysiumNpcHengeyokai::ClearLinkActivity	forwards to MotorUpdateYaw(-1)
+0x10391050	seam:FElysiumNpcMingXiao::GetMaxJumpSpeed	returns a tunable
+0x10394930	seam:FElysiumNpcMingXiao::MaxYawSpeed	forwards to the MaxYawSpeedMingXiao helper (the activity ladder lives there)
+0x10396fd0	seam:FElysiumNpcMingXiao::NavIgnoreCollision	derived-type mask ORed onto the base answer
+0x10397000	hand:FElysiumNpcMingXiao::SeveredTentaclesCanStandOn	loop over six proxy and severed-tentacle handles; wants FElysiumEntity::CanStandOn exclusion list seam
+0x1039b070	seam:FElysiumNpcMingXiaoTentacle::GetMaxJumpSpeed	returns a tunable
+0x1039c220	seam:FElysiumNpcMingXiaoTentacle::Precache	sequence of Precache10Model forwards, fallback model when empty
+0x1039eb50	seam:FElysiumNpcMingXiaoTentacle::ShouldIgnoreCollision	species predicate ORed onto the base answer
+0x1039eb90	seam:FElysiumNpcMingXiaoTentacle::NavIgnoreCollision	species predicate ORed onto the base answer
+0x1039ebd0	seam:FElysiumNpcMingXiaoTentacle::CanStandOn	companion exclusion ORed onto the base CanStandOn
+0x1039f000	seam:FElysiumNpc::OnRestore	forwards to TroikaOnRestore
+0x103a03a0	seam:FElysiumNpcNewscaster::UpdateOnRemove	forwards to FUN_103a0d50 and TroikaUpdateOnRemove
+0x103a0d50	seam:FElysiumNpcNewscaster::FUN_103a0d50	resets two story arrays and a flag
+0x103a49c0	seam:FElysiumNpcPlayerController::AddExtraAnimationModels	packs a request and forwards to the master list; the ownership warning is a debug log for the dead pass
+0x103a4a60	seam:FElysiumNpcPlayerController::RemoveExtraAnimationModels	resets the list, guard, forwards to the player
+0x103ab110	seam:FElysiumNpcSabbatLeader::SpawnBloodPoolEmitter	position conversion, CreateNamedEmitter and StartNamedEmitter
+0x103ab580	hand:FElysiumNpcSabbatLeader::CheckStuck	player extents, trace and unstick ladder; wants TraceRetail / NavRaycast
+0x103ac4e0	seam:FElysiumNpc::GetUsedHullBits	returns the hull-bits word
+0x103ad6d0	seam:FElysiumNpcRat::ShouldIgnoreCollision	species entity predicate ORed onto the base answer
+0x103b6df0	seam:FElysiumNpcTzimisce::GetMaxJumpSpeed	returns a tunable
+0x103ba020	hand:FElysiumNpcTzimisce::MaxYawSpeed	ladder over memory bits and activity; wants CMC RotationRate
+0x103bf3c0	seam:FElysiumNpcTzimisce::FUN_103bf3c0	IndexOfByPredicate over the blacklist (container idiom)
+0x103bfa00	seam:FElysiumNpcTzimisce::NavIgnoreCollision	derived-type mask ORed onto the base answer
+0x103c3c40	seam:FElysiumNpc::OnRestore	forwards to TroikaOnRestore
+0x103c6680	seam:FElysiumNpcSabbatLeader::DistToHintCenterLine2D_3	FMath::PointDistToLine with a Z-scale conversion
+0x103c6b70	seam:FElysiumNpcChangBros::DistToSegment	degenerate-segment guard then FMath::PointDistToSegment
+0x103cb920	hand:FElysiumNpcWerewolf::WerewolfCheckStuck	lift probe with KernelHullTrace and an escape ladder; wants TraceRetail / NavRaycast
+0x103d0a30	seam:FElysiumNpcWerewolf::MaxYawSpeed	forwards to FElysiumNpc::MaxYawSpeed
+0x103d0bf0	hand:FElysiumNpcWerewolf::GetNearestNodeToPlayer	refresh-timer cache plus nearest-node lookup for the closest player; wants UNavigationSystem
+0x103d0db0	seam:FElysiumNpcWerewolf::WerewolfHasPath	records the query and forwards to Motor QueryRoute
+0x103d6a40	hand:FElysiumNpcWerewolf::GetGroundpoint	own hull trace with a fraction threshold and invalid-vector answer; wants SampleFloor / TraceRetail
+0x103d9ab0	seam:FElysiumNpcWerewolf::ShouldIgnoreCollision	derived-type mask and flags2 bit ORed onto the base answer
+0x103d9ba0	seam:FElysiumNpcWerewolf::NavIgnoreCollision	derived-type mask and flags2 bit ORed onto the base answer

@@ -54,10 +54,10 @@ struct FStartTask19NavGoal
 	FElysiumEntityHandle Target;                 // +0x28 (`DAT_10923dd8` in every literal here)
 };
 
-/** `DAT_1049a1ac` = -1.0 and `DAT_1049a1b0` = -2.0, the two tolerance sentinels `0x102ecd20`
+/** `DAT_1049d97c` = -1.0 and `DAT_1049d980` = -2.0 (`GoalToleranceKeep` / `GoalToleranceHull`), the two tolerance sentinels `0x102ecd20`
  *  compares `+0x20` against. */
-static constexpr float StartTask19DefaultTolerance = -1.f;
-static constexpr float StartTask19HullTolerance = -2.f;
+static constexpr float StartTask19DefaultTolerance = ElysiumNpcTunables::NavGoalToleranceKeepPatrol;
+static constexpr float StartTask19HullTolerance = ElysiumNpcTunables::StartTaskGoalToleranceHull;
 
 /** `CAI_Navigator::SetGoal` (`0x102ecd20`): this half's goal literal (SOURCE units) handed to the ONE
  *  body, `FElysiumNpcBase::StartTaskSetGoal` (`ElysiumNpcBaseStartTask.cpp`), which carries every

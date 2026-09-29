@@ -73,12 +73,12 @@ enum class EResolveActivityRung : uint8
 
 mutable EResolveActivityRung LastResolveActivityRung = EResolveActivityRung::None;
 
-// `CUtlMemory::Grow` as `0x100b5e60` inlines it: 0 becomes 2, then a zero grow step DOUBLES and a
+// `CUtlMemory::Grow` as `CBaseFlex::AddSceneEvent` inlines it: 0 becomes 2, then a zero grow step DOUBLES and a
 // non-zero one ADDS, until the capacity covers `Needed`. Static so the arithmetic is assertable on
 // its own; returns the new capacity, or `Current` when the grow step is -1 (external memory).
 static int32 GrowSceneEventCapacity(int32 Current, int32 GrowSize, int32 Needed);
 
-// `CBaseFlex::AddSceneEvent` `0x100b5e60` — the base-line body of slot 286. Slot 286 ITSELF is
+// `CBaseFlex::AddSceneEvent` — the base-line body of slot 286. Slot 286 ITSELF is
 // `CAI_BaseNPCTroika`'s override (`0x102c1680`), which forwards here for every event type it does
 // not claim, so this is a named method rather than the slot.
 void AddSceneEventBase(const struct FElysiumSceneData* Scene, const struct FElysiumSceneEvent* Event);
@@ -136,9 +136,3 @@ float PrevAnimTime = 0.f;
 // front of a second director (story 5 fold A3). An owner that is not a director (the port's
 // choreographed scene also stands in `ScriptOwner`) answers true, the arm that lets the cine stand.
 bool CineAllowsDynamicInteraction() const;
-
-// `CBaseFlex::PlayScene`'s `instanced_scripted_scene` (`0x10084b40`). **SEAM**: standing a scene
-// entity from the kernel needs the world's entity factory and the scene cache, neither of which the
-// substrate's NPC reaches; it answers -1, the "unknown scene" length, and `PlayScene` then takes
-// retail's own `Msg("Unknown scene specified: %s")` arm.
-float PlayInstancedScene(const TCHAR* SceneFile);

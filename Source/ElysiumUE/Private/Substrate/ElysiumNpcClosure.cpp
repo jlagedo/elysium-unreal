@@ -38,9 +38,9 @@
 //     The `WorldSpaceCenter` pair IS one retail body compiled twice (see below); the `FInViewCone`
 //     pair is two DIFFERENT bodies on two class lines and the difference is the Troika override's
 //     two ConVar gates and its follower bypass. Neither needed a species arm.
-//   * **A refusal is counted, not tallied.** Seven rows are Source plumbing this substrate has no
-//     counterpart for. Each answers retail's answer for the zero state, names the retail call, and
-//     increments `ClosureRefusals` so its case can assert the seam was asked. `ElysiumStub` is for
+//   * **A refusal is counted, not tallied.** Slot 333's eye-maintenance arms stand for seams this
+//     substrate has no counterpart for. Each names the retail call and increments
+//     `ClosureRefusals` so its case can assert the seam was asked. `ElysiumStub` is for
 //     a surface with no implementation; these have one.
 //   * **Distances are SOURCE UNITS in retail and CENTIMETRES here.** `ElysiumMove::U` bridges them
 //     at the point of use so the recovered number stays visible.
@@ -52,11 +52,10 @@ namespace
 	// `_DAT_1049adfc` = 4194304.0f = 2048², the SQUARED Source-unit radius slot 583 (`0x1028d860`)
 	// compares a distance against. The comparison is the decompiler's
 	// `(d < c) != (d == c)` spelling of `<=`, so a body exactly on the radius IS woken.
-	constexpr double GClosureWakeRadiusUnits = 2048.0;
 
 	// `_DAT_10452dc4` = 2.0f — the seconds `CAI_BaseNPCTroika::MaintainEyeDirection` (`0x102bff20`)
 	// pushes the gaze re-scan stamp `+0x5d6c` out by on every think with a live dialogue partner.
-	constexpr float GClosureDialogueReScanSeconds = 2.0f;
+	constexpr float GClosureDialogueReScanSeconds = ElysiumNpcTunables::Two;
 
 	// `CAI_BaseNPCTroika::NPC_TranslateActivity` (`0x10295710`): `ACT_IDLE` becomes `ACT_LAUGH_IDLE`
 	// under `m_bfAINPCFlags2 & 0x80000`. The two ids are carried by the port's own
@@ -176,54 +175,6 @@ float FElysiumNpc::GetStealthHearingDist()
 // =================================================================================================
 
 // =================================================================================================
-// Slots 79, 80, 82 — the three RTTI/save descriptors, `0x10321670`, `0x102c5870`, `0x1028cd10`
-// =================================================================================================
-//
-// Each is one instruction: `return &datamap_CBaseCombatCharacter_10619d10`, `return &DAT_109248d4`
-// and `return &datamap_CAI_BaseNPCTroika`. They are Source's reflection surface — the datamap a
-// save/restore pass and the prediction copier walk, and the `ServerClass` the networking table is
-// built from.
-//
-// **REFUSAL.** This substrate has neither. Its save surface is `FElysiumSaveArchive`, a visitor each
-// type serializes ITSELF through (`FElysiumNpcSenses::Serialize`, `FElysiumNpcFlags`, …), so there
-// is no descriptor table to hand out and no address to answer with; its entity replication surface
-// is nothing at all, because it is single-player and there is no client. Answering a fabricated
-// pointer would be worse than answering none: the one legitimate consumer of a datamap pointer is a
-// walker, and a walker handed a lie corrupts a save.
-
-void* FElysiumNpc::GetServerClass()
-{
-	// `0x102c5870` -> `&DAT_109248d4`, `CAI_BaseNPCTroika`'s `ServerClass` record. REFUSAL: this
-	// runtime has no networked entity table.
-	++ClosureRefusals.ServerClass;
-	return nullptr;
-}
-
-void* FElysiumNpc::GetDataDescMap()
-{
-	// `0x1028cd10` -> `&datamap_CAI_BaseNPCTroika`. REFUSAL, as slot 79.
-	//
-	// The datamap ITSELF is not lost — `docs/vtmb/npc-kernel/layout.md` is the whole of it, read out
-	// of the image, and `Substrate/ElysiumNpcKernelShape.cpp` carries it as census rows with
-	// `ElysiumNpcKernelShapeMap.cpp` binding every offset to the member that holds it. What has no
-	// counterpart is a RUNTIME pointer to a `datamap_t`.
-	++ClosureRefusals.DataDescMap;
-	return nullptr;
-}
-
-// =================================================================================================
-// Slot 88 — the change tracker, `0x10026b50`
-// =================================================================================================
-
-// =================================================================================================
-// Slot 102 — `Physics_TraceEntity`, `0x100ab450`
-// =================================================================================================
-
-// =================================================================================================
-// Slot 184 — `MakeTracer`, `0x10267260`
-// =================================================================================================
-
-// =================================================================================================
 // Slots 192 and 215 — `WorldSpaceCenter`, `0x10027160` and `0x100b4c30`
 // =================================================================================================
 //
@@ -253,10 +204,6 @@ void* FElysiumNpc::GetDataDescMap()
 //
 // This is also the body `FElysiumNpc::SpeciesWorldSpaceCenter()` (family Geometry) answers for
 // every class.
-
-// =================================================================================================
-// Slot 225 — `VPhysicsDestroyObject`, `0x100b5040`
-// =================================================================================================
 
 // =================================================================================================
 // Slot 333 — `MaintainEyeDirection(float)`, `0x102bff20`
@@ -387,47 +334,7 @@ int32 FElysiumNpc::NPC_TranslateActivity(int32 Activity)
 }
 
 // =================================================================================================
-// Slot 406 — `GetStateName(NPC_STATE)`, `0x1027e740`
-// =================================================================================================
-
-// =================================================================================================
-// Slots 412–415 — the four think-clock `Last` mirrors, `0x101aa6d0`..`0x101aa730`
-// =================================================================================================
-//
-// One instruction each: `return m_flLastUpdateThink / m_flLastNormalThink / m_flLastMoveThink /
-// m_flLastAIThink`. `+0x6254`, `+0x6258`, `+0x625c`, `+0x6260`, all bound to
-// `FElysiumNpcScheduleHost` by the shape map.
-//
-// The port carries them as DOUBLES, as it carries every absolute stamp, and retail's slot is a
-// `float`. The narrowing is at the slot boundary and not in the store, which is the right place for
-// it: the interval a `Calc*` reports is computed in double and only the reported answer rounds.
-
-float FElysiumNpc::GetLastUpdateThink()
-{
-	// `0x101aa6d0` -> `FElysiumNpcScheduleHost::LastUpdate` (`+0x6254`).
-	return static_cast<float>(ScheduleHost.LastUpdate);
-}
-
-float FElysiumNpc::GetLastNormalThink()
-{
-	// `0x101aa6f0` -> `FElysiumNpcScheduleHost::LastNormal` (`+0x6258`).
-	return static_cast<float>(ScheduleHost.LastNormal);
-}
-
-float FElysiumNpc::GetLastMoveThink()
-{
-	// `0x101aa710` -> `FElysiumNpcScheduleHost::LastMove` (`+0x625c`).
-	return static_cast<float>(ScheduleHost.LastMove);
-}
-
-float FElysiumNpc::GetLastAIThink()
-{
-	// `0x101aa730` -> `FElysiumNpcScheduleHost::LastAI` (`+0x6260`).
-	return static_cast<float>(ScheduleHost.LastAI);
-}
-
-// =================================================================================================
-// Slots 416 and 417 — `m_bForceFrequentThink`, `0x101aa750` and `0x101aa770`
+// Slot 416 — `m_bForceFrequentThink`, `0x101aa750`
 // =================================================================================================
 
 void FElysiumNpc::SetForceFrequentThink(bool bEnabled)
@@ -436,12 +343,6 @@ void FElysiumNpc::SetForceFrequentThink(bool bEnabled)
 	// word's ONLY writer in the image, which is what `ElysiumNpc.h` already records beside the
 	// member.
 	bForceFrequentThink = bEnabled;
-}
-
-bool FElysiumNpc::GetForceFrequentThink()
-{
-	// `0x101aa770`: `return m_bForceFrequentThink` (`+0x63f0`).
-	return bForceFrequentThink;
 }
 
 // =================================================================================================
@@ -633,7 +534,7 @@ void FElysiumNpc::Slot583(const FVector& PointCm)
 	// the same radius, ending in the same `ResetThinkTimers`. The two are asserted equal by name in
 	// `Elysium.Substrate.NpcKernelClosure.Slot583ProximityWake`.
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const double RadiusCm = GClosureWakeRadiusUnits * ElysiumMove::U;
+	const double RadiusCm = FMath::Sqrt(static_cast<double>(ElysiumNpcTunables::ClosureWakeRadiusSquared)) * ElysiumMove::U;   // 2048 units, `_DAT_1049adfc` is the SQUARED radius
 	if (FVector::DistSquared(Origin, PointCm) <= RadiusCm * RadiusCm)
 	{
 		ResetThinkTimers(Now);

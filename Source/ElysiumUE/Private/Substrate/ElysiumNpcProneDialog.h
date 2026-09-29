@@ -18,7 +18,7 @@ public:
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
 	// From `ElysiumNpcSensesBodies.inl`.
-	/** `0x103a4bb0`, `CNPC_ProneDialog#45` — the prone-dialog body. A ray from `FromCm` toward `ToCm`
+	/** `CNPC_ProneDialog#45` — the prone-dialog body. A ray from `FromCm` toward `ToCm`
 	 *  with the caller's mask; the answer is TRUE only when the trace hit THIS NPC, or hit nothing at
 	 *  all with `fraction == _DAT_10449280` (**1.0**). The `!= 0.0` squared-length byte retail packs
 	 *  into the ray request is the engine's "this ray has a direction" flag and is carried as

@@ -58,7 +58,7 @@ public:
 	void AngularMove(const FRotator& DestRelRot, float SpeedDegPerSec);
 
 	EMoveKind MoveKind() const { return CurrentMove; }
-	// Slot 153, `CBaseEntity::IsMoving` `0x10026e70`: `m_vecVelocity != vec3_origin`. A mover's
+	// Slot 153, `CBaseEntity::IsMoving`: `m_vecVelocity != vec3_origin`. A mover's
 	// velocity is non-zero exactly while `LinearMove` / `AngularMove` has a move in flight (retail's
 	// `CBaseToggle` sets `m_vecVelocity` / `m_vecAngVelocity` for the move and zeroes them at
 	// `MoveDone`), which is what `CurrentMove` records. The slot's override on the mover line (it hid

@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 62 cells and immediates, 52 ConVars; image sha256 `c546f4de2003624d…`.
+// 273 cells and immediates, 77 ConVars; image sha256 `c546f4de2003624d…`.
 
 #include "Substrate/ElysiumNpcKernelTunables.h"
 
@@ -67,6 +67,31 @@ namespace
 		{ TEXT("werewolf_force_teleport_in_time"), 0x1093d458u, TEXT("25.0"), 25.0f, 25 },
 		{ TEXT("werewolf_teleport_full_path_check"), 0x1093fa38u, TEXT("1"), 1.0f, 1 },
 		{ TEXT("werewolf_teleport_ignore_viewcone"), 0x1093f780u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("debug_slow_idle_yaw_speed"), 0x10924e90u, TEXT("20"), 20.0f, 20 },
+		{ TEXT("debug_slow_walk_yaw_speed"), 0x10924118u, TEXT("25"), 25.0f, 25 },
+		{ TEXT("debug_allow_non_idle_auto_sk"), 0x10924af8u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("npc_vphysics"), 0x106bbaa0u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("particle_scale"), 0x107083d8u, TEXT("1.0"), 1.0f, 1 },
+		{ TEXT("pl_supernatural_level"), 0x10724ff8u, TEXT("-1"), -1.0f, -1 },
+		{ TEXT("pl_investigate_level"), 0x107250d0u, TEXT("-1"), -1.0f, -1 },
+		{ TEXT("pl_criminal_level"), 0x10725948u, TEXT("-1"), -1.0f, -1 },
+		{ TEXT("debug_response_timer_min"), 0x107257b8u, TEXT("5.0"), 5.0f, 5 },
+		{ TEXT("debug_response_timer_max"), 0x10725890u, TEXT("7.5"), 7.5f, 7 },
+		{ TEXT("debug_show_cs_acts"), 0x107258d8u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("debug_heightened_alert_expire_time"), 0x10725f70u, TEXT("40.0"), 40.0f, 40 },
+		{ TEXT("ent_trace_melee"), 0x10924ed8u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("zombie_gib_amt"), 0x10940498u, TEXT("100"), 100.0f, 100 },
+		{ TEXT("ming_xiao_throw_hds"), 0x1093b9f8u, TEXT(".0005"), 0.0005f, 0 },
+		{ TEXT("ming_xiao_throw_power"), 0x1093bbc8u, TEXT(".0040"), 0.004f, 0 },
+		{ TEXT("ming_xiao_throw_base"), 0x1093bc10u, TEXT("150.0"), 150.0f, 150 },
+		{ TEXT("manbat_screech_always"), 0x1093b810u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("debug_test_switch2"), 0x10924630u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("debug_test_switch1"), 0x10924678u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("zombie_melee_mod"), 0x10940400u, TEXT("1.0"), 1.0f, 1 },
+		{ TEXT("zombie_headshot_mod"), 0x10940448u, TEXT("10.0"), 10.0f, 10 },
+		{ TEXT("debug_allow_npc_hunting"), 0x10924478u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("werewolf_force_teleport"), 0x1093f9a0u, TEXT("0"), 0.0f, 0 },
+		{ TEXT("werewolf_teleport_in_time"), 0x1093d6f0u, TEXT("2.0"), 2.0f, 2 },
 	};
 	static_assert(UE_ARRAY_COUNT(GConVarRows) == static_cast<int32>(EConVar::Count),
 		"one row per EConVar enumerator");

@@ -10,7 +10,6 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -29,12 +28,6 @@ namespace
 	constexpr float RetailHalf = ElysiumNpcTunables::Half;
 }
 
-// Slot 76: `0x10366290`, which chains `CAI_BaseNPC::DrawDebugStatOverlays` (`0x102775e0`) directly.
-void FElysiumNpcBaseBoss::DrawDebugStatOverlays()
-{
-	BossDrawDebugStatOverlays();
-}
-
 // --- Moved from `ElysiumNpcBosses.cpp` (story 5 step 4) ---
 
 bool FElysiumNpcBaseBoss::BossBlacklistHolds(const FElysiumEntity* Candidate) const
@@ -45,26 +38,6 @@ bool FElysiumNpcBaseBoss::BossBlacklistHolds(const FElysiumEntity* Candidate) co
 	// permissive arm was standing in for. `const_cast` because the retail body prunes expired rows
 	// as it walks, which is a write this query has always made.
 	return const_cast<FElysiumNpcBaseBoss*>(this)->FUN_10366400(Candidate);
-}
-
-// --- Moved from `ElysiumNpcDebug.cpp` (story 5 step 4) ---
-
-void FElysiumNpcBaseBoss::BossDrawDebugStatOverlays()
-{
-	// `0x10366290`, thirty-six bytes and all of `CNPC_VBaseBoss#76`:
-	//
-	//     Msg("Dist to player: %.3f", *(float *)(this + 0x6264));
-	//     JMP CAI_BaseNPC::DrawDebugStatOverlays;     // 0x102775e0, a TAIL call
-	//
-	// The tail call is to the BASE body and not to `CAI_BaseNPCTroika`'s, so a boss never gets the
-	// expression/gesture dump even when it has a dialogue. That is the recovered dispatch and it is
-	// reproduced.
-	//
-	// `+0x6264` is `FElysiumNpcMemory::ClosestPlayerDistanceCm` in the shape map; retail's word is
-	// SOURCE units, so the print divides.
-	EmitDebugMsg(TEXT("Dist to player: %.3f"), FString::Printf(TEXT("Dist to player: %.3f"),
-		Senses.Memory.ClosestPlayerDistanceCm / ElysiumMove::U));
-	FElysiumNpcBase::DrawDebugStatOverlays();
 }
 
 // --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---

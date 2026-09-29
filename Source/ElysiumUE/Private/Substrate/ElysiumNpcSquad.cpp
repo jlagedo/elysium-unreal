@@ -8,9 +8,7 @@
 
 // Story 29c-1, family **Squad** — the squad and follower surface of `order.md` layers 0–9.
 //
-// 74 rows: the 57 slot-546 `SquadSlotName` bodies (the base body and each species' own id-space row
-// in its override), the
-// squad join/leave/share/vacate set, the follower pair, and the `CNPC_VChangBros` /
+// The squad join/leave/share/vacate set, the follower pair, and the `CNPC_VChangBros` /
 // `CNPC_VMingXiao` coordination helpers. The walked prose is `docs/vtmb/npc-ai/social.md`.
 //
 // THE STANDING FACT OF THIS FAMILY: there is no squad object here. `m_pSquad` (`+0x5da4`) is
@@ -23,7 +21,7 @@ namespace
 
 	// `_DAT_1044e664` — the follower-distance overlap, recovered by story 16a
 	// (`docs/vtmb/npc-ai/social.md` § "`m_hFollowerBoss` — the follower controller").
-	constexpr float GNpcKernelSquadFollowerOverlap = 10.0f;
+	constexpr float GNpcKernelSquadFollowerOverlap = ElysiumNpcTunables::Ten;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -54,37 +52,6 @@ FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 	(void)Ordinal;
 	return nullptr;
 }
-
-// -------------------------------------------------------------------------------------------------
-// Slot 546 `SquadSlotName`.
-// -------------------------------------------------------------------------------------------------
-//
-// Every row was read from the decompiled C, not from a summary. All 56 species bodies are
-// byte-identical but for their id-space global:
-//
-//     iVar1 = SquadSlotLocalToGlobal(&DAT_<species>, slotEN);   // 0x102ea2d0
-//     return IdToSymbol(&DAT_10936c74, iVar1);                  // 0x102ea020
-//
-// and the Troika line (`0x101a6c00`) is the same without the first line.
-//
-// THE ID SPACE EACH SPECIES ANSWERS IS EMPTY, and that is a recovered fact, not a gap:
-//
-//   * every species space is constructed with `isRoot = false` (`0x102ea090`), which leaves
-//     `m_globalBase = -1`, `m_localBase = 9999` (the "empty" sentinel) and `m_localTop = -1`;
-//   * `CAI_ClassScheduleIdSpace::Init` (`0x102ea0e0`) only rewrites those three when the space has
-//     already been filled (`+0x0c != -1`), which at static-init time it has not, so `Init` binds
-//     the namespace and the parent and leaves the range empty;
-//   * the only way a range becomes non-empty is `ADD_CUSTOM_SQUADSLOT`, which registers the name
-//     into the global namespace as well — and `vampire.dll` contains exactly TWO squad-slot name
-//     strings, `SQUAD_SLOT_ATTACK1` and `SQUAD_SLOT_ATTACK2`, both referenced only by
-//     `0x10316e80`, the seeder of the GLOBAL namespace. No class registers one;
-//   * the chain ends at the root space `DAT_10920484` (global base 0, local base 0, local top -1),
-//     which matches no id either.
-//
-// So `SquadSlotName(n)` answers `"<<null>>"` for every `n` on every one of the 56 species, and on
-// the Troika line answers `SQUAD_SLOT_ATTACK1`/`2` for ids 1000000000/1000000001, `"<<null>>"` for
-// -1 and null for anything else. This agrees with `docs/vtmb/npc-ai/social.md` § "Squads, decoded
-// (2026-09-08)" — "Strategy slots ship dead … every class registers zero squadslots".
 
 // -------------------------------------------------------------------------------------------------
 // The squad bodies.

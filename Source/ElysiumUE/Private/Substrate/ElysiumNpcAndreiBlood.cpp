@@ -25,7 +25,6 @@
 #include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSpecies2Shared.h"
@@ -47,26 +46,13 @@
 
 namespace
 {
-	// `CNPC_VAndreiBlood::SelectIdealState`'s trace tag. The base writes 1, `CNPC_VAnimal` 5,
-	// `CNPC_VHengeyokai` 0x13 and `CNPC_VHunter` 0x17 (`docs/vtmb/npc-kernel/layout.md` +0x1b38).
-	constexpr int32 AndreiIdealStateSelector = 4;
 	// The four `PositionClearForTeleport` last-teleport floors, one per species.
-	constexpr float AndreiLastTeleportFloor = 100.0f;     // DAT_104a6f7c
+	constexpr float AndreiLastTeleportFloor = ElysiumNpcTunables::AndreiTeleportRepeatDistance;
 	constexpr int32 HintTeleport17001 = 0x4269;
-	//
-	// The three emitters carry a HYPHEN before `Emitter`, not the underscore the checklist's walk
-	// spells: `0x1062b04c`, `0x1062b02c`, `0x1062b010`, each also named by
-	// `CNPC_VAndreiBlood::StartTask`.
-	const TCHAR* const GAndreiTeleportOutSound = TEXT("Character/Boss/Andrei/TeleportOut.wav");
-	const TCHAR* const GAndreiTeleportInSound = TEXT("Character/Boss/Andrei/TeleportIn.wav");
-	const TCHAR* const GAndreiSummonSound = TEXT("Character/Boss/Andrei/Summon.wav");
-	const TCHAR* const GAndreiTeleportOutEmitter = TEXT("Andrei_Teleport_Out-Emitter");
-	const TCHAR* const GAndreiTeleportInEmitter = TEXT("Andrei_Teleport_In-Emitter");
-	const TCHAR* const GAndreiSummonEmitter = TEXT("Andrei_Summon-Emitter");
 	// `CNPC_VAndreiBlood`'s runner cap, `_DAT_10452dc4`. TWO bodies threshold on it and both read
 	// it as a float against `m_iActiveRunnerCount`: `0x1035e920` (`count < 2`) and `0x1034c2d0`
 	// (`2 <= count` refuses).
-	constexpr int32 AndreiMaxActiveRunners = 2;      // _DAT_10452dc4 = 2.0f
+	constexpr int32 AndreiMaxActiveRunners = static_cast<int32>(ElysiumNpcTunables::Two);   // a float 2.0 in retail
 	// `0x1035e950`'s draw — `(*DAT_1070b244 + 8)(2, 4)` is `IUniformRandomStream::RandomInt`,
 	// inclusive at both ends, the same object and slot family Sounds and Damage read.
 	constexpr int32 AndreiHitMaxMin = 2;
@@ -81,34 +67,10 @@ void FElysiumNpcAndreiBlood::NPCInit()
 	AndreiLastTeleportPosition = FVector::ZeroVector;                    // DAT_1070d1b0 origin
 }
 
-// Slot 104: `0x1035cb90`.
-// 0x1035cb90
-void FElysiumNpcAndreiBlood::Precache()
-{
-	// `CNPC_VAndreiBlood::Precache` `0x1035cb90` — the Troika body FIRST, then three sounds and
-	// three preload-1 emitters. The sound-before-emitter split and the preload flag are the data.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GAndreiTeleportOutSound);
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GAndreiTeleportInSound);
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GAndreiSummonSound);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GAndreiTeleportOutEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GAndreiTeleportInEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GAndreiSummonEmitter, /*Preload=*/1);
-}
-
-// Slot 127: `0x1035cf80`.
-/** `CNPC_VAndreiBlood::Restore` (`0x1035cf80`), `CNPC_VAndreiBlood#127`. A scope-trace push, a bare
- *  `CNPC_VVampireBoss::Restore(archive)` and a pop: **no restore-time datum of its own**. Every
- *  sibling boss writes something here and Andrei writes nothing, which is a fact rather than an
- *  unwalked body — the listing has exactly one `CALL` between the frame pushes (`1035cfd4`) and the
- *  base's `EAX` survives to the `RET 0x4` unchanged, so the answer is the base's too. */
-int32 FElysiumNpcAndreiBlood::Restore(void* Archive)
-{
-	// `CNPC_VAndreiBlood::Restore` `0x1035cf80`. One call between the scope-frame push and pop, and
-	// its `EAX` survives to the `RET 0x4`: the base's answer IS this body's answer, and there is no
-	// restore-time datum of its own. An empty species row is a fact, not an unwalked body.
-	return VampireBossRestore(Archive);
-}
+// Slot 104 (three sounds, three preload-1 emitters) and slot 127 (one call to
+// `CNPC_VVampireBoss::Restore`, no datum of its own) are gone (story 0019/6): the references
+// resolve at bake and load, and the load-side half is `FElysiumNpcVampireBoss::OnPostRestore`, which
+// this class inherits unchanged — retail's empty species row.
 
 // Slot 461: `CNPC_VAndreiBlood::vfunc461`, whose typed answer is written back as retail 2 or 1.
 /** The species SelectIdealState bodies, each the `SelectIdealStateRetail` override of its class. */
@@ -149,16 +111,6 @@ bool FElysiumNpcAndreiBlood::FValidateHintType(void* Hint)
 	return true;
 }
 
-// Slot 546: `0x1035c460`, the class's own schedule id space.
-const TCHAR* FElysiumNpcAndreiBlood::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093a470`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VAndreiBlood"), TEXT("0x1035c460"), TEXT("0x1093a470") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---
 
 const TCHAR* FElysiumNpcAndreiBlood::SummonEmitterBoneName()
@@ -168,11 +120,9 @@ const TCHAR* FElysiumNpcAndreiBlood::SummonEmitterBoneName()
 
 EElysiumNpcState FElysiumNpcAndreiBlood::CNPC_VAndreiBlood_vfunc461()
 {
-	// Twenty-five bytes: stamp the trace selector, then answer 1 or 2.
-	//     this->field_0x1b38 = 4;
+	// Twenty-five bytes: answer 1 or 2 (the debug selector stamp `+0x1b38 = 4` is dead).
 	//     return (m_bActivated != 0) + 1;
 	// Retail's `NPC_STATE_IDLE` is 1 and `NPC_STATE_ALERT` is 2.
-	SelectIdealStateSelector = AndreiIdealStateSelector;
 	return bAndreiActivated ? EElysiumNpcState::Alert : EElysiumNpcState::Idle;
 }
 
@@ -231,15 +181,15 @@ void FElysiumNpcAndreiBlood::FacePlayerAdvance()
 	{
 		return;
 	}
-	// **SEAM**: `IElysiumNpcMotor::Face` takes a yaw, not a target, and no turn RATE crosses it, so
-	// the recovered 10.0 has nowhere to land yet. The commanded yaw is retail's own — the yaw from
-	// this body to the player's origin.
+	// The commanded yaw is retail's own -- the yaw from this body to the player's origin -- and the
+	// rate is `0x102e1c10`'s stored speed argument (`+0x38`), which `UpdateYaw(-1)` then turns by.
+	MotorYawSpeedWord = ElysiumNpcTunables::AndreiFacePlayerYawSpeed;   // `DAT_104a6f80` = 10.0
 	if (IElysiumNpcMotor* Mover = Motor)
 	{
 		const float TargetYaw =
 			NpcKernelFacingShared::RetailYawOf(Player->Origin - Origin, static_cast<float>(Angles.Y));
 		// `Face` is in this world's yaw, which is the negated Source one.
-		Mover->Face(-TargetYaw);
+		Mover->Face(-TargetYaw, MotorYawRateDegPerS(MotorYawSpeedWord));
 	}
 }
 
@@ -334,8 +284,6 @@ bool FElysiumNpcAndreiBlood::PositionClearForTeleportAndrei(const FVector& Posit
 	}
 	return true;
 }
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 

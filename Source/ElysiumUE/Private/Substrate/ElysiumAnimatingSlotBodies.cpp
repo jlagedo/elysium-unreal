@@ -34,104 +34,6 @@
 
 // --- Moved from `ElysiumNpcBaseEntityChain.cpp` (story 5 step 6) ---
 
-float FElysiumAnimating::Slot135(float Interval)
-{
-	// 0x101c10d0, slot 135 — retail's named MOVE-REBOUND easing, and the whole body.
-	//
-	// Five gates, all of them in retail's order and all of them strict:
-	//   Interval > 0, m_flMoveDoneTime > 0, m_flMoveReboundStartTime > 0,
-	//   m_flMoveReboundStartTime < m_flMoveDoneTime, m_flMoveReboundDuration > 0.
-	// Then `t = (Interval + m_flLocalTime) - m_flMoveReboundStartTime`, clamped ABOVE at the
-	// duration and refused at or below zero (the early `return Interval`).
-	//
-	// The blend is `f(t) = (t*t + 1)*t - (t/D)*(D*D + 1)*t` — a cubic minus a linear, with the
-	// linear term scaled so `f(D) == 0`. It is applied to the rebound velocity to produce an
-	// OFFSET from the final destination, and the velocity written is that offset over `Interval`:
-	//
-	//   SetLocalVelocity((m_vecFinalDest + f(t)*m_flMoveReboundVelocity - GetLocalOrigin()) / Interval)
-	//
-	// and the same shape again for the angular half against `m_vecFinalAngle`, slot 221 and
-	// `SetLocalAngularVelocity`. Each half runs only when its rebound triple is not all zero.
-	//
-	// The answer is ALWAYS `Interval`, on every path.
-	//
-	// SEAM: `m_flMoveDoneTime`, `m_flMoveReboundStartTime`, `m_flMoveReboundDuration`,
-	// `m_flMoveReboundVelocity`, `m_flMoveReboundAngVelocity`, `m_vecFinalDest` and
-	// `m_vecFinalAngle` are `CBaseEntity`'s mover words and no port member claims one
-	// (`docs/vtmb/npc-kernel/layout.md`); they are read through `MoveReboundState()` below, which
-	// answers the resting state and makes the first gate refuse. The arithmetic is stood as a static
-	// so the formula is assertable without inventing a mover.
-	FMoveRebound Rebound;
-	if (!MoveReboundState(Rebound))
-	{
-		return Interval;
-	}
-	if (!(Interval > NpcKernelEntityChainShared::GChainZero && Rebound.MoveDoneTime > NpcKernelEntityChainShared::GChainZero
-		&& Rebound.StartTime > NpcKernelEntityChainShared::GChainZero && Rebound.StartTime < Rebound.MoveDoneTime
-		&& Rebound.Duration > NpcKernelEntityChainShared::GChainZero))
-	{
-		return Interval;
-	}
-	float T = (Interval + Rebound.LocalTime) - Rebound.StartTime;
-	if (T <= NpcKernelEntityChainShared::GChainZero)
-	{
-		return Interval;
-	}
-	if (T > Rebound.Duration)
-	{
-		T = Rebound.Duration;
-	}
-	const float Blend = MoveReboundBlend(T, Rebound.Duration);
-
-	if (Rebound.Velocity != FVector::ZeroVector)
-	{
-		const FVector Destination = Rebound.FinalDest + Blend * Rebound.Velocity;
-		SetLocalVelocity((Destination - Rebound.LocalOrigin) * (NpcBaseEntityChainShared::GChainOne / Interval));
-	}
-	if (Rebound.AngVelocity != FVector::ZeroVector)
-	{
-		const FVector Destination = Rebound.FinalAngle + Blend * Rebound.AngVelocity;
-		SetLocalAngularVelocity((Destination - Rebound.LocalAngle) * (NpcBaseEntityChainShared::GChainOne / Interval));
-	}
-	return Interval;
-}
-
-float FElysiumAnimating::MoveReboundBlend(float T, float Duration)
-{
-	// The easing inside `0x101c10d0`, on its own so the formula is assertable:
-	//     (t*t + 1) * t   -   (t / D) * (D*D + 1) * t
-	// `f(0) == 0` and `f(D) == 0`, and it peaks between them — a rebound that leaves and returns.
-	return (T * T + NpcBaseEntityChainShared::GChainOne) * T - (T / Duration) * (Duration * Duration + NpcBaseEntityChainShared::GChainOne) * T;
-}
-
-bool FElysiumAnimating::MoveReboundState(FMoveRebound& Out) const
-{
-	// SEAM: `CBaseEntity`'s mover words (`m_flMoveDoneTime`, `m_flMoveReboundStartTime`,
-	// `m_flMoveReboundDuration`, `m_flMoveReboundVelocity`, `m_flMoveReboundAngVelocity`,
-	// `m_vecFinalDest`, `m_vecFinalAngle`) have no port member — nothing in this substrate stands a
-	// `CBaseToggle`-style mover on the NPC line. The resting state is all zeroes, which makes slot
-	// 135's first gate refuse, and refusing is what retail does for an NPC that is not rebounding.
-	Out = FMoveRebound();
-	Out.LocalTime = static_cast<float>(LocalTime);
-	Out.LocalOrigin = Origin;
-	Out.LocalAngle = Angles;
-	return false;
-}
-
-void FElysiumAnimating::SetLocalVelocity(const FVector& NewVelocity)
-{
-	// `CBaseEntity::SetLocalVelocity`, the write slot 135's linear half ends on. The port's
-	// `FElysiumEntity::Velocity` IS that word.
-	Velocity = NewVelocity;
-}
-
-void FElysiumAnimating::SetLocalAngularVelocity(const FVector& NewAngularVelocity)
-{
-	// `CBaseEntity::SetLocalAngularVelocity`, the angular half's write. `AngularVelocity` is
-	// `avelocity`.
-	AngularVelocity = NewAngularVelocity;
-}
-
 // --- Moved from `ElysiumNpcBaseLifecycle.cpp` (story 5 step 6) ---
 
 // slot 137 `CBaseAnimating* GetBaseAnimating()` — 0x1004fc50
@@ -140,15 +42,6 @@ FElysiumEntity* FElysiumAnimating::GetBaseAnimating()
 	// `return this;` — retail's default answers itself. This leaf IS on the animating chain
 	// (`FElysiumAnimating`), so the answer is the same entity.
 	return this;
-}
-
-// slot 152 `float GetDelay()` — 0x1004fc10
-float FElysiumAnimating::GetDelay()
-{
-	// `return (float10)*(float *)(param_1 + 0x500);` — a plain read of the `CBaseDelay` field below
-	// the NPC word table. SEAM (declared, unwritten): this runtime carries an output's delay on the
-	// WIRE (`FElysiumOutputDef`) rather than on the entity, so nothing writes `EntityDelay`.
-	return EntityDelay;
 }
 
 FElysiumNpcBase::EKeyValueArm FElysiumAnimating::ClassifyKeyValue(const FString& Key, FString& OutKey)
@@ -211,26 +104,6 @@ FElysiumNpcBase::EKeyValueArm FElysiumAnimating::ClassifyKeyValue(const FString&
 
 // --- Moved from `ElysiumNpcBaseMotor.cpp` (story 5 step 6) ---
 
-void FElysiumAnimating::MoveDone()
-{
-	// slot 133. `CAI_BaseNPC::FUN_101c1720` `0x101c1720` (read from the listing — the decompiler
-	// could not recover the tail's jump table):
-	//     MoverData_CurrPos = MoverData_TargetPos;          // +0x498 <- +0x494
-	//     if (m_movementType == 1) LinearMoveDone();        // +0x558
-	//     else if (m_movementType == 2) AngularMoveDone();
-	//     m_movementType = 0;
-	//     if (m_pfnMoveDone) (this->*m_pfnMoveDone)();      // +0x114
-	//
-	// The base slot-133 body `0x10026c50` is the last line alone, a tail JMP through `+0x114`.
-	//
-	// **SEAM.** None of the four words is an NPC's: +0x494/+0x498 and +0x558 are `CBaseEntity`'s
-	// func_-mover state, which this runtime carries on `FElysiumMover` and which an NPC is never a
-	// party to, and +0x114 is a member-function-pointer think vocabulary this runtime does not have.
-	// What is recorded is that the dispatch was reached, which is the whole of what slot 133 does
-	// for an NPC.
-	++MotorSeams.MoveDone;
-}
-
 void FElysiumAnimating::PerformMovement(float Interval, int32 MoveFlags)
 {
 	// `CAI_BaseNPC::PerformMovement` `0x1026c120` — VProf push/pop and an `rdtsc` pair around ONE
@@ -247,58 +120,14 @@ void FElysiumAnimating::PerformMovement(float Interval, int32 MoveFlags)
 	// NPC: the route's end reaches the task that waits on it (story 8 wave 2).
 	if (FElysiumNpcBase* const Npc = AsNpcBase())
 	{
+		// The motor's per-think upkeep first (0019/6 fix 3): slot 69 re-asked and `+0x38` re-read
+		// while a kernel move is live, and slot 15's facing blend handed to the body.
+		Npc->MotorThinkUpkeep();
 		Npc->NavigatorMoveStep();
 	}
 }
 
 // --- Moved from `ElysiumNpcBaseSounds10.cpp` (story 5 step 6) ---
-
-FString FElysiumAnimating::FormatKeyValueVector(const FVector& Value)
-{
-	// `CAISound::FUN_1009eca0` (`0x1009eca0`), 212 bytes. Past the `CBaseEntity::KeyValue`
-	// scope-trace push (`s_CBaseEntity__KeyValue_105555f4`, the entity's `m_iName`, or
-	// `"NULL ENTITY"` when `this` is null and the empty string when unnamed — this runtime has no
-	// scope-trace stack, and family Facing already recorded that the push is a crash-report
-	// breadcrumb with no game-visible effect), the WHOLE body is
-	// `Q_snprintf(buf, 256, "%f %f %f", (double)x, (double)y, (double)z)` with the literal at
-	// `0x10555584`, then a dispatch of this object's OWN slot 110 (`vtable +0x1b8`) with the buffer.
-	//
-	// The three floats are widened to `double` by the varargs call, and `%f` is C's six-decimal
-	// default; `FString::Printf` matches both. The 256-byte buffer is retail's stack frame and has
-	// no observable effect for three finite floats.
-	return FString::Printf(TEXT("%f %f %f"), static_cast<float>(Value.X),
-		static_cast<float>(Value.Y), static_cast<float>(Value.Z));
-}
-
-FString FElysiumAnimating::FormatKeyValueFloat(float Value)
-{
-	// `CAISound::FUN_1009ebb0` (`0x1009ebb0`), 190 bytes and the same shape with the format at
-	// `0x10554f28`, which is `"%f"`.
-	return FString::Printf(TEXT("%f"), Value);
-}
-
-// `CAI_BaseNPC::FUN_1004fbb0` (`0x1004fbb0`), slot 108, and CAI_BaseNPCTroika shares it. THIRTY-EIGHT
-// bytes: the whole body is a tail call into `CAISound::FUN_1009eca0` — it does not format anything
-// itself. The checklist's walk described the callee's body as this one's; the correction is that
-// slot 108 on the NPC line is a pure forward and the formatting plus the slot-110 dispatch both
-// belong to `0x1009eca0`.
-//
-// The forward is a `__thiscall` to a DIFFERENT class's body on the same object, so the slot 110 it
-// reaches is THIS object's — `FElysiumAnimating::KeyValue(const TCHAR*, const TCHAR*)` below.
-bool FElysiumAnimating::KeyValue(const TCHAR* Key, FVector Value)
-{
-	return KeyValue(Key, *FormatKeyValueVector(Value));
-}
-
-// `CAI_BaseNPC::FUN_1004fbf0` (`0x1004fbf0`), slot 109. THIRTEEN bytes — the same pure forward, into
-// `CAISound::FUN_1009ebb0`.
-//
-// Both `0x1009eca0` and `0x1009ebb0` return `void` in retail and both of these slots are declared
-// `bool`; the forwarded value is whatever slot 110 answered, which is what this returns.
-bool FElysiumAnimating::KeyValue(const TCHAR* Key, float Value)
-{
-	return KeyValue(Key, *FormatKeyValueFloat(Value));
-}
 
 // `CAI_BaseNPC::FUN_101c1480` (`0x101c1480`), slot 110 on the Troika line (77 classes). 114 bytes,
 // three arms, read off the LISTING because the decompiled C loses which store is which:

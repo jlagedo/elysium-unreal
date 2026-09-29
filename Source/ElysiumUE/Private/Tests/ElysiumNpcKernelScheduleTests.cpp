@@ -188,75 +188,6 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 452 `LoadedSchedules`.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleLoadedTest,
-	"Elysium.Substrate.NpcKernelSchedule.LoadedSchedules", GElysiumNpcKernelScheduleFlags)
-bool FElysiumNpcKernelScheduleLoadedTest::RunTest(const FString&)
-{
-	int32 Count = 0;
-	const FElysiumNpc::FScheduleLoadFlag* Rows = FElysiumNpc::LoadedSchedulesRows(Count);
-	// Eleven until story 5 fold A2 added `CNPC_VWolfMorph`'s `0x103dc8f0`.
-	TestEqual(TEXT("the slot-452 table carries twelve rows"), Count, 12);
-
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		const FElysiumNpc::FScheduleLoadFlag& Row = Rows[Index];
-		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.RetailClass);
-		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.RetailClass), Cls);
-		if (Cls != nullptr)
-		{
-			TestEqual(*FString::Printf(TEXT("%s fills slot 452 with %s"), Row.RetailClass, Row.Body),
-				FString(ElysiumNpcTestCensus::BodyOf(Cls, 452)), FString(Row.Body));
-		}
-		TestTrue(*FString::Printf(TEXT("%s names its flag global"), Row.RetailClass),
-			Row.Flag != nullptr && FCString::Strlen(Row.Flag) > 0);
-	}
-	TestEqual(TEXT("the Troika line's flag is DAT_105d1058"),
-		FString(ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CAI_BaseNPCTroika"))->Flag),
-		FString(TEXT("0x105d1058")));
-	TestEqual(TEXT("CNPC_VBrujah's is DAT_1062f278, the one 0x10367a40 writes"),
-		FString(ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VBrujah"))->Flag),
-		FString(TEXT("0x1062f278")));
-	TestNull(TEXT("a class with no row answers nothing"),
-		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNotAClass")));
-	TestNull(TEXT("CNPC_VCombatman, a class with no instance, has no row"),
-		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VCombatman")));
-	TestNull(TEXT("nor does CNPC_VGangrel"),
-		ScheduleRowOf(FElysiumNpc::LoadedSchedulesRows, TEXT("CNPC_VGangrel")));
-
-	// The slot itself. Its only writer is the class's own schedule-text parse loop, and this runtime
-	// RUNS that loop now -- so the answer is the real parse result rather than the shipped `true`
-	// standing in for one. It is true for all 56 loaded spaces, because every shipped text parses.
-	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_loaded"), 4102);
-	Builder.AddNpc(TEXT("vampire"), FVector::ZeroVector, TEXT("npc_VVampire"));
-	Builder.AddNpc(TEXT("combatant"), FVector(200.0, 0.0, 0.0), TEXT("npc_VHumanCombatant"));
-	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
-	FElysiumNpc* Vampire = Fixture.Npc(TEXT("vampire"));
-	FElysiumNpc* Combatant = Fixture.Npc(TEXT("combatant"));
-	FElysiumNpcWorldFixture::Quiet({ Vampire, Combatant });
-	if (Vampire == nullptr || Combatant == nullptr)
-	{
-		return false;
-	}
-	// A class with its own slot-452 body and one that inherits the Troika line's answer the same
-	// thing, because every one of the corpus's 691 texts parses.
-	TestTrue(TEXT("a species whose own texts all parsed answers true"),
-		Vampire->LoadedSchedules());
-	TestTrue(TEXT("and so does a class on the Troika line"), Combatant->LoadedSchedules());
-	// The answer is the UNIT's, not a literal: the corpus carries a parse result per space, and the
-	// two NPCs above read two different ones.
-	const FElysiumScheduleCorpus& Loaded = FElysiumScheduleCorpus::Get();
-	TestNotNull(TEXT("CNPC_VVampire has a loaded unit"),
-		Loaded.UnitForClass(TEXT("CNPC_VVampire")));
-	TestEqual(TEXT("no space in the shipped corpus failed a text"),
-		Loaded.Census().ParseFailures, 0);
-
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
 // The schedule-change door, the task surface and the host's three rows.
 // -------------------------------------------------------------------------------------------------
 
@@ -374,63 +305,17 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 	TestEqual(TEXT("a positive operand stamps curtime + operand"), Guard->BaseScheduleHost.WaitFinished,
 		12.5, 1e-6);
 	Guard->BaseScheduleHost.SetWaitFinished(0.0f, 10.0);
-	TestEqual(TEXT("a zero operand takes the retail default instead (UNRECOVERED, 0.0 here)"),
-		Guard->BaseScheduleHost.WaitFinished, 10.0, 1e-6);
+	TestEqual(TEXT("a zero operand takes the retail default instead (`_DAT_10447ee0` = 1000.0)"),
+		Guard->BaseScheduleHost.WaitFinished, 10.0 + ElysiumNpcTunables::Thousand, 1e-6);
 	Guard->BaseScheduleHost.SetWaitFinished(-3.0f, 10.0);
 	TestEqual(TEXT("and so does a negative one — not a same-frame deadline"),
-		Guard->BaseScheduleHost.WaitFinished, 10.0, 1e-6);
+		Guard->BaseScheduleHost.WaitFinished, 10.0 + ElysiumNpcTunables::Thousand, 1e-6);
 
 	// --- `0x1027db30` -----------------------------------------------------------------------------
 	TestFalse(TEXT("every node index is out of range with no node list (the seam)"),
 		Guard->IsUnusableNodeIndex(0));
 	TestFalse(TEXT("and a negative one is retail's own refusal"), Guard->IsUnusableNodeIndex(-1));
 
-	// --- slot 547 `GetSlotSchedule` ---------------------------------------------------------------
-	AddExpectedError(TEXT("ERROR: Subclass missing GetSlotSchedule"),
-		EAutomationExpectedErrorFlags::Contains, 0);
-	TestEqual(TEXT("slot 547 warns and answers 0, on every class"), Guard->GetSlotSchedule(0), 0);
-
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
-// Slot 619 `SetSchedule` — the five scope-trace wrappers.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleSetScheduleTest,
-	"Elysium.Substrate.NpcKernelSchedule.SetScheduleTraceNames", GElysiumNpcKernelScheduleFlags)
-bool FElysiumNpcKernelScheduleSetScheduleTest::RunTest(const FString&)
-{
-	struct FExpect
-	{
-		const TCHAR* Class;
-		const TCHAR* Body;
-		const TCHAR* Trace;
-	};
-	static const FExpect Expected[] = {
-		{ TEXT("CNPC_VAndreiBlood"), TEXT("0x1035dba0"), TEXT("CNPC_VAndreiBlood::SetSchedule") },
-		{ TEXT("CNPC_VAsianVampire"), TEXT("0x10361530"), TEXT("CNPC_VAsianVampire::SetSchedule") },
-		{ TEXT("CNPC_VChangBros"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VChangBrosBlade"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VChangBrosClaw"), TEXT("0x1036c760"), TEXT("CNPC_VChangBros::SetSchedule") },
-		{ TEXT("CNPC_VSabbatLeader"), TEXT("0x103a9fd0"), TEXT("CNPC_VSabbatLeader::SetSchedule") },
-		{ TEXT("CNPC_VSheriffMan"), TEXT("0x103af8d0"), TEXT("CNPC_VSheriffMan::SetSchedule") },
-	};
-	for (const FExpect& Row : Expected)
-	{
-		TestEqual(*FString::Printf(TEXT("%s pushes its own trace name"), Row.Class),
-			FString(FElysiumNpcScheduleHost::SetScheduleTraceName(Row.Class)), FString(Row.Trace));
-		const FElysiumNpcClass* Cls = ElysiumNpcTestCensus::Find(Row.Class);
-		TestNotNull(*FString::Printf(TEXT("%s is a census class"), Row.Class), Cls);
-		if (Cls != nullptr)
-		{
-			TestEqual(*FString::Printf(TEXT("and fills slot 619 with %s"), Row.Body),
-				FString(ElysiumNpcTestCensus::BodyOf(Cls, 619)), FString(Row.Body));
-		}
-	}
-	TestEqual(TEXT("a class with no slot-619 override pushes nothing"),
-		FString(FElysiumNpcScheduleHost::SetScheduleTraceName(TEXT("CNPC_VHumanCombatant"))),
-		FString());
 	return true;
 }
 

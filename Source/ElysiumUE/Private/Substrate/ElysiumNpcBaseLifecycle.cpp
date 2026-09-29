@@ -23,19 +23,12 @@ namespace
 	// `_DAT_104454c4` — the shared `0.0f` constant of `vampire.dll`, and the "unset" SENTINEL every
 	// `CAI_Hint::Spawn` default test compares a hint float against. Family **Hints** recovered the
 	// same global; it is repeated here rather than exported because it is one float.
-	constexpr float GLifeZero = 0.0f;
+	constexpr float GLifeZero = ElysiumNpcTunables::Zero;
 	// `RandomFloat(0.2, 0.9)` — slot 471 `GetReactionDelay` (`0x1026a8a0`). `0x3e4ccccd` / `0x3f666666`.
 	constexpr float GReactionDelayMin = 0.2f;
 	constexpr float GReactionDelayMax = 0.9f;
-	// `m_spawnflags` bits slot 423 `IsTemplate` (`0x1027e120`) and slot 552 `ShouldFadeOnDeath`
-	// (`0x1027a400`) test — bit 11 and bit 9 of the same word.
-	constexpr int32 GSpawnFlagTemplate = 1 << 11;      // 0x800
+	// `m_spawnflags` bit 9, which slot 552 `ShouldFadeOnDeath` (`0x1027a400`) tests.
 	constexpr int32 GSpawnFlagFadeOnDeath = 1 << 9;    // 0x200
-	// `CAI_StandoffGoal::Spawn` (`0x102cd2d0`): `m_flNextThink = curtime + _DAT_1044e658`.
-	constexpr double GStandoffGoalThinkDelaySeconds = ElysiumNpcTunables::HundredthDouble;
-	// `CAI_StandoffBehavior::vfunc13` (`0x102c7600`): the elapsed-seconds threshold the reaction
-	// re-roll and the blocked latch both compare against.
-	constexpr double GStandoffElapsedThresholdSeconds = ElysiumNpcTunables::MinusThousandthDouble;
 	// `CAI_BaseNPC::FindNamedEntity` (`0x10279090`): the selector names, verbatim from `.rdata`, and
 	// the two retired literals with their own rate-limit counters.
 	const TCHAR* const GSelPlayer = TEXT("!player");                    // 0x10549184
@@ -74,7 +67,7 @@ namespace
 	constexpr float GHintAngleRangeScale = ElysiumNpcTunables::Half;
 	constexpr float GHintAngleRangeBias = ElysiumNpcTunables::HintType27d8AngleBias;
 	// `_DAT_1044eb08` — the degrees-to-radians factor the `fcos` is taken in. Recovered by its use.
-	const float GHintDegToRad = PI / 180.f;
+	constexpr float GHintDegToRad = ElysiumNpcTunables::DegreesToRadians;
 	constexpr FHintSpawnDefaults GHintSpawnRows[] =
 	{
 		// 100..0x65 (100..101) — the cover band. 0x42700000 = 60, 0x43800000 = 256, 0x7f7fffff =
@@ -98,13 +91,6 @@ namespace
 }
 
 // --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 5) ---
-
-// slot 423 `bool IsTemplate()` — 0x1027e120
-bool FElysiumNpcBase::IsTemplate()
-{
-	// `return (uint)this->m_spawnflags >> 0xb & 1;`
-	return (SpawnFlags & GSpawnFlagTemplate) != 0;
-}
 
 // slot 471 `float GetReactionDelay()` — 0x1026a8a0
 float FElysiumNpcBase::GetReactionDelay()
@@ -224,14 +210,6 @@ void FElysiumNpcBase::HintKill(FHintWords& Hint)
 	HintScriptHide(Hint);
 }
 
-double FElysiumNpcBase::StandoffGoalSpawnNextThink(double Now)
-{
-	// 0x102cd2d0 — `ThinkSet(&LAB_10006672, 0, NULL)` and then
-	// `m_flNextThink = curtime + _DAT_1044e658`. The think function is a stub label with no body in
-	// the corpus, so what is recovered is the CLOCK and nothing else.
-	return Now + GStandoffGoalThinkDelaySeconds;
-}
-
 void FElysiumNpcBase::HintSpawn(FHintWords& Hint)
 {
 	// 0x102d0b60, per `docs/vtmb/npc-ai/authored-control.md` -> "The navigation and reaction
@@ -296,53 +274,10 @@ FString FElysiumNpcBase::RewriteAngleKey(float AngleValue, const FVector& Curren
 		static_cast<float>(CurrentAngles.X), AngleValue, static_cast<float>(CurrentAngles.Z));
 }
 
-int32 FElysiumNpcBase::RestoreExtendedHeader(void* Archive)
-{
-	// 0x1027c160, slot 127 on the `CAI_BaseNPC` line, read off the LISTING — see the `.inl` for what
-	// story 29d corrected here. In retail's order:
-	//
-	//   1. `1027c178 CALL [IRestore + 0x8]` reads `AIExtendedSaveHeader_t` (datamap `0x105cabd0`)
-	//      into `field_0x19b4`. This runtime's header is `FElysiumNpcBase::FAiExtendedSaveHeader` and
-	//      `LastSavedExtendedHeader` is `+0x19b4`; the four words come back through the same seam
-	//      `FElysiumNpcBase::Save` wrote them through (`ElysiumNpcSaveRestore10.cpp`).
-	//   2. `1027c17e CALL CBaseCombatCharacter::Restore` — and EDI keeps its answer, which is this
-	//      body's return value.
-	//   3. `1027c189 PUSH 0x4 / LEA EDX,[ESI+0x5b8c]` and `1027c199 PUSH 0x3 / LEA EAX,[ESI+0x5db4]`
-	//      — TWO sentinel decodes, `m_flExtendedBlockedByFriendTimer` at mode 4 and
-	//      `m_flWaitFinished` at mode 3. Not a clock re-base and not seven fields.
-	//   4. `thunk_FUN_102e0b80(m_pMotor)` when a motor stands, and `thunk_FUN_102e8ac0` on the
-	//      move-and-shoot overlay — both re-link a saved pointer. This runtime rebuilds the motor
-	//      from the def on load and binds no overlay at all
-	//      (`ElysiumNpcKernelShapeMap.cpp` `+0x5cf4` ABSENT), so neither has a pointer to re-link;
-	//      family SaveRestore10 counts both.
-	FAiExtendedSaveHeader Header;
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		*Ar << Header.Version;
-		*Ar << Header.Flags;
-		*Ar << Header.ScheduleName;
-		*Ar << Header.ScheduleCrc;
-		LastSavedExtendedHeader = Header;
-	}
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::Fields, TEXT("AIExtendedSaveHeader_t"),
-		static_cast<int32>(Header.Flags) });
-
-	const int32 ChainResult = 1;   // `CBaseCombatCharacter::Restore`; see `GChainRestoreResult`.
-
-	SaveStampDecode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
-	SaveStampDecode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
-
-	if (Motor != nullptr)
-	{
-		++MotorRestoreFixups;
-	}
-	++MoveAndShootRestoreFixups;
-	return ChainResult;
-}
-
 bool FElysiumNpcBase::OnRestoreForwardsCheckUntouch(bool bCallerValue)
 {
-	// 0x100aa5a0. The whole body, from the listing:
+	// Slot 130, `CBaseEntity::OnRestore` (the row is closed at the save walk, 0019/6; this helper keeps
+	// retail's one observable effect). The whole body, from the listing:
 	//
 	//     MOV EAX, [ECX]
 	//     MOV dword ptr [ESP + 0x4], 0x0
@@ -396,165 +331,10 @@ bool FElysiumNpcBase::HasNonDefaultVelocity() const
 {
 	// `CAISound::FUN_10026e70`, slot 153 for the five AI-helper classes: compare `m_vecVelocity`
 	// (`+0x03d4`) component-wise against `DAT_1070d1b0/b4/b8` and answer 1 when ANY component
-	// differs. That global triple is the always-zero vector `GetGroundVelocityToApply` (slot 210,
-	// `0x10027370`) answers, so the comparison is against the zero vector and this is "am I moving".
+	// differs. That global triple is the always-zero vector `GetGroundVelocityToApply` (slot 210)
+	// answers, so the comparison is against the zero vector and this is "am I moving".
 	// Retail compares exactly, with no epsilon, and so does this.
 	return Velocity.X != 0.0 || Velocity.Y != 0.0 || Velocity.Z != 0.0;
-}
-
-void FElysiumNpcBase::MotorResetToDefault()
-{
-	// `CAI_Motor::FUN_102e1110` (`0x102e1110`), in retail's order:
-	//
-	//   1. Resolve the navigator (`thunk_FUN_102e2610`) and its move type (`thunk_FUN_102ee3f0`),
-	//      then push that move type onto the OUTER NPC through vtable `+0x4d8` (slot 310).
-	//   2. Reset the motor's own state (`thunk_FUN_102e2840`).
-	//   3. Zero the facing/move vector (`thunk_FUN_102e2690` against `DAT_1070d1b0`, the same
-	//      always-zero global `HasNonDefaultVelocity` above compares to).
-	//   4. `npc+0x3ec = 0x3f800000` — gravity back to 1.0.
-	//
-	// **The target `FElysiumNpcMotor::ResetToDefault` names a struct this runtime does not stand:**
-	// the motor here is `FElysiumScriptedCharacter::Motor`, a movement solver with no retail-shaped
-	// state object, and the shape map already records `+0x5d34`..`+0x5d44` as `CHAIN` rows into it.
-	// So the body lands on the leaf that owns the motor, and the two steps whose inputs exist here
-	// are the ones that run.
-	if (Motor != nullptr)
-	{
-		// Steps 1–3 are the motor's own: this runtime's motor carries no retail move-type word and
-		// no separate facing vector, so `StopMoving` is the whole of what it can be told. The
-		// navigator move-type push (slot 310) has no receiver here.
-		StopMoving();
-	}
-	Gravity = 1.0f;   // step 4, verbatim
-}
-
-// -------------------------------------------------------------------------------------------------
-// `CAI_StandoffBehavior::vfunc13` (`0x102c7600`).
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpcBase::StandoffLowerHintNodeCooldown(const FHintWords* Hint, FElysiumPlaceSet* Places,
-	double Now)
-{
-	// The shape both arms of `0x102c7600` write, verbatim:
-	//
-	//     if (hint && 0x102d3e60(hint) && curtime < 0x102d3e60(hint)->+0x9c)
-	//         0x102d3e60(hint)->+0x9c = curtime;
-	//
-	// `0x102d3e60` is the hint's node lookup (`FElysiumPlaceSet::ResolveHintNode`): -1 answers no node
-	// silently, an id outside the network bumps `DAT_106c994c` and answers none -- on the FIRST of
-	// the three calls, which then short-circuits, so one call here counts exactly as retail does.
-	// The word is the NODE's run-time cooldown, not the hint's `m_flNextUseTime` (`+0x5ec`): the
-	// listing indexes the node pointer `0x102d3e60` returns, never the hint.
-	if (Hint == nullptr || !Hint->bValid || Places == nullptr)
-	{
-		return;
-	}
-	const int32 Node = Places->ResolveHintNode(Hint->NodeId);
-	if (Node == INDEX_NONE)
-	{
-		return;
-	}
-	const float Curtime = static_cast<float>(Now);                             // gpGlobals->curtime
-	if (Curtime < Places->NodeCooldown(Node))
-	{
-		Places->SetNodeCooldown(Node, Curtime);
-	}
-}
-
-int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffConditions& Conditions,
-	bool bInCombatState, bool bHasEnemy, const FHintWords* Hint, FElysiumPlaceSet* Places, double Now)
-{
-	// The selector, arm by arm. Every `return` below is a retail code: `0x17`, `0x25`, `0x21`,
-	// `0x29`/`0x28`, or `INDEX_NONE` for the fall-through to `CAI_Behavior::vfunc13`.
-
-	// 0. `m_NPCState != 2` (`+0x5cc0`) falls through immediately. A standoff that is not in COMBAT
-	//    selects nothing of its own.
-	if (!bInCombatState)
-	{
-		return INDEX_NONE;
-	}
-	// 1. Condition 0x40 or condition 0x3f: the answer is `0x29` minus the `+0x24` byte — so `0x29`
-	//    with the byte clear and `0x28` with it set. Both gates share the one answer.
-	if (Conditions.bCond0x40 || Conditions.bCond0x3f)
-	{
-		return 0x29 - (Words.bCoverDirty ? 1 : 0);
-	}
-	// 2. The `+0x4c` latch, consumed on read: a set latch is cleared, and with an enemy standing the
-	//    answer is `0x17` at once.
-	if (Words.bSawNewEnemy)
-	{
-		Words.bSawNewEnemy = false;
-		if (bHasEnemy)
-		{
-			return 0x17;
-		}
-	}
-	// 3. Condition 0x4c, gated on `RandomInt(0, 99) <= m_iChanceThreshold` (`+0x38`) — note `<=`,
-	//    not `<`. With an enemy standing, the claimed hint's NODE cooldown (`0x102d3e60(hint)+0x9c`)
-	//    is MIN-ed down to curtime and the reaction counter becomes `m_iReactionsLeft > 1 ? 1 : 0`.
-	if (Conditions.bCond0x4c && ElysiumNpcEngineRandom::RandomInt(0, 99) <= Words.ChanceThreshold && bHasEnemy)
-	{
-		StandoffLowerHintNodeCooldown(Hint, Places, Now);                              // 0x102c76a0..0x102c76d4
-		Words.ReactionsLeft = Words.ReactionsLeft > 1 ? 1 : 0;
-	}
-	// 4. The re-roll: an exhausted counter that has been idle longer than `_DAT_10497530` re-draws
-	//    `RandomInt(0, max - min) + min` from the `+0x30`/`+0x34` pair.
-	if (Words.ReactionsLeft == 0
-		&& (Now - Words.NextReactionAt) > GStandoffElapsedThresholdSeconds)
-	{
-		Words.ReactionsLeft = ElysiumNpcEngineRandom::RandomInt(0, Words.ReactionChanceMax - Words.ReactionChanceMin)
-			+ Words.ReactionChanceMin;
-	}
-	// 5. A counter of exactly ONE re-stamps the next-reaction clock: `+0x44 == 0.0` means "no
-	//    range", and the delay is then `+0x40` alone; otherwise it is `RandomFloat(+0x40, +0x44)`.
-	if (Words.ReactionsLeft == 1)
-	{
-		Words.NextReactionAt = Words.ReactionDelayMax == GLifeZero
-			? Now + Words.ReactionDelayMin
-			: Now + LifecycleRandomFloat(Words.ReactionDelayMin, Words.ReactionDelayMax);
-	}
-	// 6. A counter at or below ZERO answers `0x17`, and on the way out writes the posture from the
-	//    hint's type (`+0x5dc == 0x65` -> posture 2, else 0) and, on a `RandomInt(0,99) < 0x50`
-	//    roll, min-s the hint's NODE cooldown (`+0x9c`) down to curtime.
-	if (Words.ReactionsLeft < 1)
-	{
-		if (Hint != nullptr && Hint->bValid)
-		{
-			Words.Posture = Hint->HintType == 0x65 ? 2 : 0;
-			if (ElysiumNpcEngineRandom::RandomInt(0, 99) < 0x50)
-			{
-				StandoffLowerHintNodeCooldown(Hint, Places, Now);                      // 0x102c7780..0x102c77b4
-			}
-		}
-		return 0x17;
-	}
-	// 7. Condition 0x48: posture 2 is promoted to 3 and answers `0x25`; otherwise a blocked-since
-	//    stamp older than `_DAT_10497530` sets the `+0x54` byte.
-	if (Conditions.bCond0x48)
-	{
-		if (Words.Posture == 2)
-		{
-			Words.Posture = 3;
-			return 0x25;
-		}
-		if ((Now - Words.BlockedSince) > GStandoffElapsedThresholdSeconds)
-		{
-			Words.bBlockedLongEnough = true;
-		}
-	}
-	// 8. Conditions 0x4f and 0x51 both SUPPRESS the 0x60 arm below — retail's nesting is
-	//    `if (!0x4f) { if (!0x51) { if (0x60) { ... } } }`.
-	if (!Conditions.bCond0x4f && !Conditions.bCond0x51 && Conditions.bCond0x60)
-	{
-		// With 0x48 also standing, a `RandomInt(0,99) > 0x31` falls through to the base instead.
-		if (Conditions.bCond0x48 && ElysiumNpcEngineRandom::RandomInt(0, 99) > 0x31)
-		{
-			return INDEX_NONE;
-		}
-		return 0x21;
-	}
-	// 9. Everything else: `CAI_Behavior::vfunc13`, the base this runtime does not carry.
-	return INDEX_NONE;
 }
 
 // --- Moved from `ElysiumNpcLifecycle.cpp` (story 5 step 5) ---
@@ -565,7 +345,7 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 
 FElysiumEntity* FElysiumNpcBase::PlayerControllerOf(FElysiumEntity* Player) const
 {
-	// `0x101618a0`, the whole body: `m_hControllerNPC (+0x1db0) == -1` or a stale serial -> NULL,
+	// Retail's controller-handle accessor, the whole body: `m_hControllerNPC (+0x1db0) == -1` or a stale serial -> NULL,
 	// else the entity. **RETAIL CORRECTION (fold A2):** this was a seam answering the PLAYER itself
 	// ("the player holds no pointer to its duplicate"); the port does hold it — the world's
 	// controller handle, the stand-in `CreatePlayerControllerEntity` builds — so the selector now

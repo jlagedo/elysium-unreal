@@ -51,20 +51,6 @@ void FElysiumNpcBase::Slot355()
 	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
 }
 
-const TCHAR* FElysiumNpcBase::GetStateName(EElysiumNpcState State)
-{
-	// `0x1027e740` is a bare forward to `0x1027e660`, which is the NPC_STATE name table: None,
-	// Idle, Combat, Alert, Script, Playdead, Prone, ?, Fleeing, Retreating, Cowering, Hunting,
-	// Dialog, Oblivious, CriminalSuspicion, and `__UNKNOWN__` for anything past the end.
-	//
-	// -> `LexToString(EElysiumNpcState)` (`Public/ElysiumNpcMindTypes.h`), the same table. The port's
-	// state vocabulary is the SUBSET of retail's whose transitions have landed (`ElysiumNpcMind.h`
-	// says so), and its default answers `"unknown"` where retail answers `__UNKNOWN__` — the same
-	// role for the same reason. A state retail names that this enum does not carry cannot be asked
-	// for here, because there is no value to ask with.
-	return LexToString(State);
-}
-
 int32 FElysiumNpcBase::SelectFailSchedule(int32 FailedSchedule, int32 FailedTask, int32 TaskFailCode)
 {
 	// `CAI_BaseNPC::SelectFailSchedule`, and the whole of it:

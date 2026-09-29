@@ -10,7 +10,6 @@
 #include "ElysiumOverlayStack.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
-#include "ElysiumSaveArchive.h"
 #include "ElysiumSchedule.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumStub.h"
@@ -31,9 +30,7 @@
 #include "Substrate/ElysiumNpcConditions10Shared.h"
 #include "Substrate/ElysiumNpcDamage2Shared.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcDebug10_2Shared.h"
 #include "Substrate/ElysiumNpcMotorShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcMaker.h"
@@ -61,8 +58,8 @@ namespace
 	// `0x10398030`'s distance bands against `m_flClosestPlayerDistance` (+0x6264), SOURCE units.
 	constexpr float MingXiaoNearBand = ElysiumNpcTunables::Hundred;
 	constexpr float MingXiaoFarBand300 = ElysiumNpcTunables::ThreeHundred;      // _DAT_10462b84
-	constexpr float MingXiaoFarBand200 = 200.0f;      // _DAT_104492b8
-	constexpr float MingXiaoReachBand = 150.0f;       // _DAT_10457f60
+	constexpr float MingXiaoFarBand200 = ElysiumNpcTunables::TwoHundred;      // _DAT_104492b8
+	constexpr float MingXiaoReachBand = ElysiumNpcTunables::OneFifty;         // _DAT_10457f60
 	// `0x10398030`'s tentacle schedule ids, slots 0..3.
 	constexpr int32 MingXiaoTentacleSchedules[4] = { 0x112a, 0x112b, 0x112c, 0x112d };
 	// `0x10396dc0`'s two conditions and the two schedules they answer.
@@ -74,7 +71,7 @@ namespace
 	constexpr float MingXiaoThrowDefault = 20.0f;     // _DAT_1044eb0c
 	// `0x103989b0`'s abeam test.
 	constexpr float PedestalHeightTolerance = static_cast<float>(ElysiumNpcTunables::SixtyFourDouble);
-	constexpr float PedestalForwardLo = -0.17f;       // _DAT_104bde64
+	constexpr float PedestalForwardLo = ElysiumNpcTunables::PedestalForwardFloor;   // _DAT_104bde64
 	constexpr float PedestalForwardHi = ElysiumNpcTunables::Half;
 	// `0x10398b20`'s search radius, its stationary tolerance and its name prefix.
 	constexpr float PedestalSearchRadius = 257.0f;
@@ -97,9 +94,9 @@ namespace
 	constexpr int32 GCond10ThrowModeMotorB = 4;
 	constexpr float GCond10MingXiaoSteeringYaw = 180.f;
 	constexpr float ThrowLeadZScale = ElysiumNpcTunables::Half;
-	constexpr float ThrowConeLo = -20.0f;           // _DAT_1049ae98
-	constexpr float ThrowConeHi = 20.0f;            // _DAT_1044eb0c
-	constexpr float ThrowSpeedFloor = 1000.0f;      // _DAT_10447ee0
+	constexpr float ThrowConeLo = ElysiumNpcTunables::MinusTwenty;   // _DAT_1049ae98
+	constexpr float ThrowConeHi = ElysiumNpcTunables::Twenty;        // _DAT_1044eb0c
+	constexpr float ThrowSpeedFloor = ElysiumNpcTunables::Thousand;  // _DAT_10447ee0
 	// `0x103937d0`'s TaskFail code when there is no active weapon.
 	constexpr int32 MingXiaoNoWeaponFailure = 0x1f;
 	// `0x10396bc0`'s schedule id and its selector-trace line.
@@ -139,10 +136,6 @@ namespace
 		}
 		return static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(-Delta.Y, Delta.X)));
 	}
-	constexpr float GDebug10_2MingXiaoRingHeightUnits = 8.f;// 0x41000000
-	// The four MingXiao ring radii, in SOURCE units, in the order `0x10399d40` draws them. These are
-	// the reason the body is worth porting at all: they are the recovered range bands.
-	constexpr float GDebug10_2MingXiaoRadiiUnits[] = { 100.f, 150.f, 200.f, 300.f };
 	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s own playback-tuning record, read by
 	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0 and the
 	// non-discipline arm's blend lands on its floor.
@@ -153,11 +146,11 @@ namespace
 	// `_DAT_1046dcd0` = 128.0f SOURCE units — the range gate on `CoordinateTroops`' severed-tentacle
 	// scatter. Compared against the LENGTH `VectorNormalize` answers, inclusively (`AND EAX,0x4100`
 	// keeps both the below and the equal flags).
-	constexpr float GScatterRangeUnits = 128.0f;
+	constexpr float GScatterRangeUnits = ElysiumNpcTunables::OneTwentyEight;
 	// `_DAT_10449260`, a **DOUBLE** (`1039997d  FCOMP double ptr [0x10449260]`) = 0.25. The 2-D dot
 	// floor on the same gate: a 75.5-degree half-angle in front of `m_vecForward`. Read as a float
 	// the cell is 0.0 and the gate becomes the whole forward half-plane.
-	constexpr double GScatterForwardDotFloor = 0.25;
+	constexpr double GScatterForwardDotFloor = ElysiumNpcTunables::QuarterDouble;
 	// The two forced-schedule ids `0x103998d0` refuses to scatter a tentacle out of. What each one
 	// IS is not a fact of this family's rows; they are carried by number, as retail compares them.
 	constexpr int32 GScatterRefusedScheduleA = 0x163;
@@ -167,34 +160,6 @@ namespace
 	// `m_rhSeveredTentacles` is a fixed SIX-entry array in retail and both scatter bodies walk all
 	// six unconditionally (`iVar4 = 6; do { … } while (--iVar4)`).
 	constexpr int32 GSeveredTentacleCount = 6;
-	// `thunk_FUN_101e8da0(0x10739d08)` — `CNPC_VMingXiao`'s playback/turn tuning record, read by
-	// field offset. **SEAM**: this substrate holds no such table, so every field answers 0. The
-	// Facing family records the same gap for the same record; the two are deliberately separate
-	// file-local helpers rather than one shared member, because neither family owns the other's file.
-	float MingXiaoTuningField(int32)
-	{
-		return 0.f;
-	}
-	const TCHAR* const GMingXiaoEmitters[] = {
-		TEXT("Ming_xiao_slimetrail_emitter"),
-		TEXT("Ming_xiao_slimetrail_emitter2"),
-		TEXT("Ming_xiao_tentacle_damage_emitter"),
-		TEXT("Ming_xiao_tentacle_burst_emitter"),
-		TEXT("Ming_xiao_death_emitter"),
-		TEXT("Ming_xiao_death_emitter2"),
-		TEXT("Ming_xiao_death_proxy_emitter"),
-		TEXT("Ming_xiao_death_proxy_emitter2"),
-		TEXT("Ming_xiao_vomit_emitter"),
-		TEXT("Ming_xiao_transform_emitter"),
-		TEXT("Ming_xiao_transform_emitter2"),
-	};
-	// `PTR_..._1064339c`, one entry: the directory name carries a SPACE, not an underscore.
-	const TCHAR* const GMingXiaoMoveSound = TEXT("character/monster/ming xiao/movement.wav");
-	const TCHAR* const GMingXiaoWeapons[] = {
-		TEXT("item_w_mingxiao_melee"),
-		TEXT("item_w_mingxiao_tentacle"),
-		TEXT("item_w_mingxiao_spit"),
-	};
 	// `_DAT_1044eb0c` = **20.0** Source units, Ming Xiao's aim-point Z bonus.
 	constexpr float GMingXiaoAimZBonusUnits = 20.0f;
 }
@@ -212,62 +177,6 @@ FElysiumNpcMingXiao::FElysiumNpcMingXiao()
 int32 FElysiumNpcMingXiao::CanPlaySequence(bool bDisregardState, int32 InterruptLevel)
 {
 	return CanPlaySequenceSpecies(bDisregardState, InterruptLevel);
-}
-
-// Slot 104: `0x10392660`.
-// 0x10392660
-void FElysiumNpcMingXiao::Precache()
-{
-	// `CNPC_VMingXiao::Precache` `0x10392660` — the Troika body, ELEVEN emitters all with preload
-	// **0**, one move sound, three weapons.
-	TroikaPrecache();
-	for (const TCHAR* Emitter : GMingXiaoEmitters)
-	{
-		NpcKernelPrecache10Shared::Precache10Particle(*this, Emitter, /*Preload=*/0);
-	}
-	NpcKernelPrecache10Shared::Precache10Sound(*this, GMingXiaoMoveSound);
-	for (const TCHAR* Weapon : GMingXiaoWeapons)
-	{
-		NpcKernelPrecache10Shared::Precache10Other(*this, Weapon);
-	}
-}
-
-// Slot 126: `0x10395f80`.
-/** `CNPC_VMingXiao::Save` (`0x10395f80`) — the six `m_rflRegrowTimers` (`+0x66f4`) encoded at mode
- *  **4** ascending, the Troika body, then the same six decoded ascending. */
-int32 FElysiumNpcMingXiao::Save(void* Archive)
-{
-	// `CNPC_VMingXiao::Save` `0x10395f80`. `pfVar2 = m_rflRegrowTimers; iVar1 = 6; do { encode(p, 4);
-	// ++p; } while (--iVar1);` — ascending, mode 4, then the Troika body, then the identical
-	// descending-count/ascending-pointer decode loop over the SAME six.
-	//
-	// Mode 4 is the fact: an exactly-`FLT_MAX` regrow timer is a tentacle that will never regrow,
-	// and without the sentinel retail's `FIELD_TIME` rebase on load would shift it.
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampEncode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	const int32 Result = TroikaSave(Archive);   // the Troika body, directly
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	return Result;
-}
-
-// Slot 127: `0x10396000`.
-/** `CNPC_VMingXiao::vfunc127` (`0x10396000`) — the Troika body, then the six `m_rflRegrowTimers`
- *  decoded at mode **4** ascending. */
-int32 FElysiumNpcMingXiao::Restore(void* Archive)
-{
-	// `CNPC_VMingXiao::vfunc127` `0x10396000` — the base FIRST, then the six regrow timers decoded
-	// ascending at mode 4. The decode twin of `0x10395f80`.
-	const int32 Result = TroikaRestore(Archive);
-	for (int32 Index = 0; Index < MingXiaoRegrowTimerCount; ++Index)
-	{
-		SaveStampDecode(MingXiaoRegrowTimers[Index], ESaveStampMode::FloatMax);
-	}
-	return Result;
 }
 
 // Slot 180: `0x10391230`, which ends in `TroikaUpdateOnRemove`.
@@ -707,17 +616,10 @@ int32 FElysiumNpcMingXiao::TranslateScheduleRetail(int32 ScheduleNumber)
 	return ScheduleNumber == 0x147 ? 0x16f : TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
-// Slot 516: `0x10394930`, which replaces the Troika ladder.
-/** `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own words: the body of its override. */
-float FElysiumNpcMingXiao::MaxYawSpeed()
-{
-	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930` on this NPC's own activity and tuning words — the
-	// body of `FElysiumNpcMingXiao::MaxYawSpeed`.
-	return MaxYawSpeedMingXiao(ActivityNumber, MingXiaoTuningField);
-}
-
 // Slot 69: `0x10396fd0` (byte-identical across Hengeyokai, MingXiao and Tzimisce): the `0x16` derived-type
-// gate, then a direct call into the Troika body `0x1029b180`.
+// gate, then a direct call into the Troika body `0x1029b180`. The kept rule is the gate; no live
+// caller of slot 69 exists today: the move path (lane M) must register these entities ahead of the
+// move through the `IElysiumNpcMotor::SetMoveIgnore` list seam.
 bool FElysiumNpcMingXiao::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	if (Other != nullptr && (RetailDerivedType(*Other) & 0x16) != 0)
@@ -727,54 +629,26 @@ bool FElysiumNpcMingXiao::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
+// Slot 516: `0x10394930`, which replaces the Troika ladder (0019/6: restored as data).
+float FElysiumNpcMingXiao::MaxYawSpeed()
+{
+	return MaxYawSpeedMingXiao(ActivityNumber,
+		[this](int32 Offset) { return Select19MingXiaoTuningField(Offset); });
+}
+
+float FElysiumNpcMingXiao::MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField)
+{
+	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930`: the tuning record `0x101e8da0(0x10739d08)`'s +0x48
+	// inside `(0x1129, 0x112e)`, its +0x44 everywhere else.
+	return (0x1129 < Activity && Activity < 0x112e) ? TuningField(0x48) : TuningField(0x44);
+}
+
 // Slot 523: `0x10391050`, one load of `_DAT_1044ffe8` = 50.0. The slot is the STEP-DOWN height
 // (R1 §5): `CheckStandPosition 0x102e7270`'s drop below the feet and `TestGroundMove 0x102e4f50`'s
 // down-step, whatever the SDK slot table calls it.
-float FElysiumNpcMingXiao::GetMaxJumpSpeed() const
+float FElysiumNpcMingXiao::GetStepDownHeight() const
 {
 	return ElysiumNpcTunables::MingXiaoMaxJumpSpeed;
-}
-
-// Slot 123: `0x10399d40`
-/** `CNPC_VMingXiao::DrawDebugGeometryOverlays` (`0x10399d40`) — four range rings under
- *  `m_debugOverlays & 0x20000000` (NOT bit 0 like its siblings), then the Troika body. */
-void FElysiumNpcMingXiao::DrawDebugGeometryOverlays()
-{
-	// `0x10399d40`, 328 bytes. Gated on `m_debugOverlays & 0x20000000` — the WEAPON-RING bit, not
-	// bit 0 like its siblings — so MingXiao's bands and the Troika body's two weapon rings appear
-	// together and are meant to be read against each other.
-	//
-	// Four rings about `(1, 0, 0)` at 100, 150, 200 and 300 source units, height 8.0, colour
-	// (255, 32, 32) at alpha 128, no depth test, duration 0. The four radii are the recovered range
-	// bands and are the reason to port the body at all.
-	if ((DebugOverlays & NpcKernelDebug10_2Shared::GDebug10_2BitWeaponRings) != 0)
-	{
-		const FVector OriginUnits = Origin / ElysiumMove::U;
-		for (const float RadiusUnits : GDebug10_2MingXiaoRadiiUnits)
-		{
-			EmitOverlayText(NpcKernelDebug10_2Shared::GDebug10_2Circle, OriginUnits,
-				FString::Printf(TEXT("axis=(1.0 0.0 0.0) r=%.1f h=%.1f rgba=(255 32 32 128)"),
-					RadiusUnits, GDebug10_2MingXiaoRingHeightUnits));
-		}
-	}
-	TroikaDrawDebugGeometryOverlays();
-}
-
-// Slot 408: `0x103951d0`, whose miss calls `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-const TCHAR* FElysiumNpcMingXiao::GetShortConditionName(int32 ConditionId)
-{
-	// The class's own block over ids 0x77..0x7e — the id straight above the base table's last —
-	// read from `.rdata` `0x10647194` down to `0x10647178`.
-	static const TCHAR* const Names[] = {
-		TEXT("xfr"), TEXT("xfl"), TEXT("xmr"), TEXT("xml"),
-		TEXT("xbr"), TEXT("xbl"), TEXT("xsp"), TEXT("xmh") };
-	const int32 Offset = ConditionId - 0x77;
-	if (Offset >= 0 && Offset < UE_ARRAY_COUNT(Names))
-	{
-		return Names[Offset];
-	}
-	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpcBase::GetShortConditionName(ConditionId);
 }
 
 // Slot 465: `0x103947b0`, ending in a direct call into `CAI_BaseNPCTroika::OnChangeActivity` (`0x10295a60`).
@@ -787,7 +661,7 @@ const TCHAR* FElysiumNpcMingXiao::GetShortConditionName(int32 ConditionId)
 void FElysiumNpcMingXiao::OnChangeActivity(int32 Activity)
 {
 	// `CNPC_VMingXiao::OnChangeActivity`, 303 bytes. **SEAM** on all three inputs: the gate
-	// `0x10398870`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)
+	// `IsMingXiaoProxy`, the tuning record `0x101e8da0(0x10739d08)` and the tentacle count (+0x670c)
 	// have no port source, so the discipline arm is false, every field answers 0 and the blend
 	// lands on its 0.1 floor. The two tails `0x1039ab30` and `0x1039aca0` are MingXiao's own and
 	// are named here rather than invented.
@@ -804,16 +678,6 @@ int32 FElysiumNpcMingXiao::GetUsedHullBits()
 {
 	// The Troika body `0x1029a050` called directly, its 1 ORed with this class's bit.
 	return FElysiumNpc::GetUsedHullBits() | 0x38000;
-}
-
-// Slot 546: `0x10391390`, the class's own schedule id space.
-const TCHAR* FElysiumNpcMingXiao::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093bacc`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VMingXiao"), TEXT("0x10391390"), TEXT("0x1093bacc") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 563: `0x10392c40`, the `GoalToleranceLead` shape; a replacement that does not chain.
@@ -962,7 +826,7 @@ bool FElysiumNpcMingXiao::IsTentacleConnected(int32 TentacleId) const
 
 bool FElysiumNpcMingXiao::IsMingXiaoProxy() const
 {
-	// `0x10398870`: `m_iTentacleID != -1`.
+	// `m_iTentacleID != -1`.
 	return MingXiaoTentacleId != INDEX_NONE;
 }
 
@@ -1044,7 +908,7 @@ void FElysiumNpcMingXiao::FUN_10397a50(const FElysiumEntity* Proxy,
 float FElysiumNpcMingXiao::FUN_10397f70(TFunctionRef<float(int32)> TuningField) const
 {
 	// `0x10397f70`:
-	//     if (m_iTentacleID != -1) return Tuning[0x20];                 // 0x10398870
+	//     if (m_iTentacleID != -1) return Tuning[0x20];                 // IsMingXiaoProxy
 	//     f = Tuning[0x6c] + Tuning[0x70] * (6 - m_iConnectedTentacleCount);
 	//     if (f <= 0.0) f = 0.0;
 	//     return f;
@@ -1700,7 +1564,7 @@ FElysiumNpc::FMingXiaoPlayback FElysiumNpcMingXiao::MingXiaoPlaybackScalar(int32
 	bool bDisciplineArm, int32 TentacleCount, TFunctionRef<float(int32)> TuningField)
 {
 	// `CNPC_VMingXiao::OnChangeActivity` `0x103947b0`. Two arms of three rows each, selected by
-	// `0x10398870` — the gate `docs/vtmb/animation_and_movers.md` names "+0x6674". The activity
+	// `IsMingXiaoProxy` — the gate `docs/vtmb/animation_and_movers.md` names "+0x6674". The activity
 	// numbers are the listing's raw words read as floats: 9 (`ACT_WALK`), 0x13 (`ACT_RUN`), 0x4b and
 	// 0x1132.
 	FMingXiaoPlayback Out;
@@ -1857,17 +1721,6 @@ void FElysiumNpcMingXiao::FUN_103998d0(FElysiumEntity* Tentacle)
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 4) ---
 
-float FElysiumNpcMingXiao::MaxYawSpeedMingXiao(int32 Activity, TFunctionRef<float(int32)> TuningField)
-{
-	// `CNPC_VMingXiao::MaxYawSpeed` `0x10394930`: the tuning record `0x101e8da0(0x10739d08)`'s
-	// +0x48 inside the half-open band `(0x1129, 0x112e)` and its +0x44 everywhere else.
-	if (0x1129 < Activity && Activity < 0x112e)
-	{
-		return TuningField(0x48);
-	}
-	return TuningField(0x44);
-}
-
 void FElysiumNpcMingXiao::SetBlockedByFriend(bool bBlocked)
 {
 	// `FUN_1039aaf0` `0x1039aaf0`: `this->+0x6750 = param_1`.
@@ -1958,7 +1811,7 @@ void FElysiumNpcMingXiao::SeverTentacle(int32 TentacleId)
 
 namespace NpcKernelBoss19MingXiao
 {
-	// The death programs: `0x16d` for the head, `0x16e` for a proxy (`0x10398870`).
+	// The death programs: `0x16d` for the head, `0x16e` for a proxy (`IsMingXiaoProxy`).
 	constexpr int32 GBoss19MingXiaoDieSchedule = ElysiumSched::SCHED_VMING_XIAO_DIE;               // 0x16d
 	constexpr int32 GBoss19MingXiaoDieProxySchedule = ElysiumSched::SCHED_VMING_XIAO_DIE_PROXY;    // 0x16e
 	// The lost-limb and head-hit programs.
@@ -1982,12 +1835,12 @@ namespace NpcKernelBoss19MingXiao
 		TEXT("Bip01 L ForearmThrowing"),
 	};
 	// The spawn search: the hull `0x11`, the mask `0x2400b`, the radius seeded 20.0 and grown by
-	// `_DAT_1044eb0c` (20.0) after each full compass, and the `DevMsg` threshold `0x20` tries.
+	// `_DAT_1044eb0c` (20.0) after each full compass. (Retail's `DevMsg` past `0x20` tries is a
+	// print with no output device here, deleted in 0019/6.)
 	constexpr int32 GBoss19TentacleHull = 0x11;
 	constexpr int32 GBoss19TentacleSpotMask = 0x2400b;
 	constexpr float GBoss19TentacleSearchRadiusSeed = 20.0f;   // 0x10397517 `0x41a00000`
 	constexpr float GBoss19TentacleSearchRadiusStep = 20.0f;   // `_DAT_1044eb0c`
-	constexpr int32 GBoss19TentacleSearchWarnTries = 0x20;
 	// NAMED CRASH GUARD: retail's search never gives up (it `DevMsg`s past 32 tries and loops); a
 	// substrate whose area test never clears would hang the frame, so the port stops here and answers
 	// retail's own "no tentacle" null. A clearing area test is reached long before.
@@ -2216,11 +2069,6 @@ FElysiumNpc* FElysiumNpcMingXiao::MingXiaoSpawnTentacle(int32 TentacleIndex)
 			Direction = 0;                                                   // 0x103975ed
 		}
 		++Tries;                                                             // 0x103975f7
-		if (Tries >= GBoss19TentacleSearchWarnTries)                         // 0x103975f8 / 0x103975ff
-		{
-			UE_LOG(LogElysiumNpcEnt, Verbose,
-				TEXT("ERROR:  FAILED TO FIND SPAWN LOC FOR TENTACLE."));      // 0x10397606
-		}
 		if (Tries >= GBoss19TentacleSearchGuardTries)
 		{
 			return nullptr;   // the named crash guard (see its constant)
@@ -2235,14 +2083,11 @@ FElysiumNpc* FElysiumNpcMingXiao::MingXiaoSpawnTentacle(int32 TentacleIndex)
 	FElysiumNpcMaker* Maker = MakerNpc != nullptr ? MakerNpc->AsSpecies<FElysiumNpcMaker>() : nullptr;
 	if (Maker == nullptr)
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Could not find NPCMaker( %s )"), GBoss19TentacleMaker);
 		return nullptr;                                                      // 0x10397659 -> 0x103977da
 	}
 	FElysiumNpc* Tentacle = Maker->MakeNPC(true);
 	if (Tentacle == nullptr)
 	{
-		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Failed to spawn with NPCMaker( %s )"),
-			GBoss19TentacleMaker);
 		return nullptr;                                                      // 0x10397659 -> 0x103977da
 	}
 	Tentacle->SetOrigin(SpotUnits * ElysiumMove::U);                         // 0x10397650 (slot 62 inside)

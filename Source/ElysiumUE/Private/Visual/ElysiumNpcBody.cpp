@@ -130,7 +130,7 @@ void AElysiumNpcBody::InitializeAtFeet(const FVector& FeetOrigin, float YawDegre
 	Teleport(FeetOrigin, YawDegrees);
 	// The spawn is where retail clears its cached `surfacedata_t` (`CAI_BaseNPC +0x5b90`):
 	// `NPCInit 0x10273390` and `OnRestore 0x1027bf50`, both of which this body's construction stands
-	// for. Nothing else clears it — `MoveEnact 0x102ef870` overwrites it on the next move step.
+	// for. Nothing else clears it — `MoveEnact` overwrites it on the next move step.
 	GroundSurface = FName();
 	ApplyEnabledState();
 }
@@ -578,7 +578,7 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 		return;
 	}
 	// Retail refreshes the NPC's ground surface once per move step and nowhere else
-	// (`CAI_Navigator::MoveEnact 0x102ef870` -> `0x10270290` -> `+0x5b90`), so a body that is not
+	// (`CAI_Navigator::MoveEnact` -> `0x10270290` -> `+0x5b90`), so a body that is not
 	// travelling pays for no trace and keeps the answer its last leg left — which is also what
 	// makes the cache a cache rather than a per-frame query.
 	if (bMoveRequested)
@@ -648,6 +648,10 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	bNavigationJumpFailed = false;
 	bRequestAlreadyAtGoal = false;
 	Movement->MaxWalkSpeed = FMath::Max(1.0f, Request.SpeedCmPerSecond);
+	// The kernel's turn rate for this leg (retail `m_YawSpeed`, what `MoveFacing` turns by), and
+	// the facing target the controller now exists to carry.
+	ApplyYawSpeed(Request.YawSpeedDegPerS);
+	ApplyFacingTarget();
 	RequestedGaitKind = Request.GaitKind;
 	UPathFollowingComponent* Following = AI->GetPathFollowingComponent();
 	// Bound BEFORE the request: the finishes this exists to catch happen inside the request call.
@@ -939,14 +943,91 @@ void AElysiumNpcBody::OnMoveRequestFinished(FAIRequestID RequestID, const FPathF
 	}
 }
 
-void AElysiumNpcBody::Face(float YawDegrees)
+void AElysiumNpcBody::Face(float YawDegrees, float YawSpeedDegPerS)
 {
 	if (!bRuntimeReady || !bRequestedEnabled)
 	{
 		return;   // the caller reads Idle back from Sample and treats the facing as already settled
 	}
+	// The turn-in-place step reads `RotationRate.Yaw`: set it before the turn (retail's
+	// `UpdateYaw` `0x102e1e20` turns by the motor's `m_YawSpeed`).
+	ApplyYawSpeed(YawSpeedDegPerS);
 	RequestedYaw = FRotator::ClampAxis(YawDegrees);
 	bFaceRequested = true;
+}
+
+void AElysiumNpcBody::ApplyYawSpeed(float YawSpeedDegPerS)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement != nullptr && YawSpeedDegPerS > 0.0f)
+	{
+		Movement->RotationRate.Yaw = YawSpeedDegPerS;
+	}
+}
+
+void AElysiumNpcBody::SetYawSpeed(float YawSpeedDegPerS)
+{
+	// The kernel's re-read of `m_YawSpeed` (motor `+0x38`) mid-move: the rate only, the request stands.
+	ApplyYawSpeed(YawSpeedDegPerS);
+}
+
+void AElysiumNpcBody::SetFacingTarget(const TOptional<FVector>& TargetCm)
+{
+	// The point the kernel's `m_facingQueue` (motor `+0x54`) blends to (slot 15 `0x102e2180`): held,
+	// then stated to the controller.
+	FacingTargetCm = TargetCm;
+	ApplyFacingTarget();
+}
+
+void AElysiumNpcBody::ApplyFacingTarget()
+{
+	// With a target the mover turns toward the controller's desired rotation (the focal point) at
+	// `RotationRate`, instead of along its velocity; without one, back to facing along the path.
+	// No controller yet (the body has never travelled) = nothing to focus: the target is held and
+	// stated by the first `MoveTo`, which is the only time a facing-while-moving target turns
+	// anything.
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	AAIController* AI = Cast<AAIController>(GetController());
+	if (Movement == nullptr)
+	{
+		return;
+	}
+	const bool bFace = FacingTargetCm.IsSet() && AI != nullptr;
+	Movement->bOrientRotationToMovement = !bFace;
+	Movement->bUseControllerDesiredRotation = bFace;
+	if (AI != nullptr)
+	{
+		if (bFace)
+		{
+			AI->SetFocalPoint(FacingTargetCm.GetValue(), EAIFocusPriority::Gameplay);
+		}
+		else
+		{
+			AI->ClearFocus(EAIFocusPriority::Gameplay);
+		}
+	}
+}
+
+void AElysiumNpcBody::SetHullSize(const FVector& MinsCm, const FVector& MaxsCm)
+{
+	// `UTIL_SetSize(this, mins, maxs)` from `SetHullSizeNormal` `0x10273070` / `SetHullSizeSmall`
+	// `0x10273180`: the capsule reads the box the way `ApplyRetailHull` reads a hull row (radius =
+	// the X extent, half-height = half the Z span). Retail's box hangs off the feet origin, the
+	// capsule off its centre, so the actor moves by the half-height change and the feet stay put.
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (Capsule == nullptr)
+	{
+		return;
+	}
+	const float Radius = static_cast<float>(FMath::Max(FMath::Abs(MaxsCm.X), FMath::Abs(MinsCm.X)));
+	const float HalfHeight = static_cast<float>((MaxsCm.Z - MinsCm.Z) * 0.5);
+	if (Radius <= 0.0f || HalfHeight <= 0.0f)
+	{
+		return;
+	}
+	const float OldHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
+	Capsule->SetCapsuleSize(Radius, HalfHeight, /*bUpdateOverlaps=*/true);
+	AddActorWorldOffset(FVector(0.0, 0.0, HalfHeight - OldHalfHeight));
 }
 
 void AElysiumNpcBody::Stop()
@@ -1375,7 +1456,7 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 		return EElysiumNpcMoveStatus::Reached;
 	}
 	// NAMED MODERNIZATION, not a retail arm: a follower `Success` is read as arrival. Retail's
-	// arrival is the waypoint test above alone (0.0625 units, `0x102ef510`); Unreal's follower lands
+	// arrival is the waypoint test above alone (0.0625 units, the navigator's slot 16); Unreal's follower lands
 	// inside the radius it was handed (the named floor, where the tolerance is finer than it can
 	// land), and Idle after that must not read as a lost request. It is not only that, though. The
 	// crowd follower also reports `Success` (a) on `bMovedTooFar`, an overshoot past the goal

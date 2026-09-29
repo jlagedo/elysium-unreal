@@ -3,39 +3,16 @@
 // (`ElysiumEntity.h`), after its generated slot surface; the definitions are in
 // `Private/Substrate/ElysiumEntitySlotBodies.cpp`.
 
-/** What this family's `mechanism` slots were asked for and refused.
- *
- *  Seven of the 41 rows are Source engine plumbing with no counterpart in this substrate. The brief
- *  requires such a body to answer nothing and to NAME the retail call it stands for; the counters
- *  here are what lets `Elysium.Substrate.NpcKernelClosure.*` assert the second half — that the slot
- *  reached the seam and that the refusal is the recovered one — instead of asserting only that the
- *  call returned. Same posture as family Facing's `PoseParameterWrites`: **read by the test and by
- *  nothing else**, written by no rule, and never saved.
- *
- *  A counter here is NOT a stub tally. `ElysiumStub` is for a surface with no implementation; these
- *  slots have their implementation, and it is a refusal with a recovered reason. */
+/** What slot 333's eye-maintenance arms asked of the seams they stand for (`Elysium.Substrate.
+ *  NpcKernelClosure.*` asserts the seam was reached). Read by the tests and by nothing else, written
+ *  by no rule, and never saved. The plumbing refusals it also counted (slots 79, 80, 82, 88, 102,
+ *  184, 225, 346) were closed in 0019/6 (to a service or a one-line forward), and their counters
+ *  went with them. */
 struct FClosureRefusals
 {
-	int32 PredDescMap = 0;             // slot 79  `0x10321670` -> `&datamap_CBaseCombatCharacter`
-	int32 ServerClass = 0;             // slot 80  `0x102c5870` -> `&DAT_109248d4`
-	int32 DataDescMap = 0;             // slot 82  `0x1028cd10` -> `&datamap_CAI_BaseNPCTroika`
-	int32 ChangeTracker = 0;           // slot 88  `0x10026b50` -> `0x10146700` on `this+0x1b0`
-	int32 PhysicsTraceEntity = 0;      // slot 102 `0x100ab450` -> `0x101cd110`
-	int32 MakeTracer = 0;              // slot 184 `0x10267260` -> the `TRACER_LINE` temp entity
-	int32 VPhysicsDestroyObject = 0;   // slot 225 `0x100b5040` -> `m_pPhysicsObject +0x36c`
-	int32 LoopingPoseParameter = 0;    // slot 346 `0x1032fc50` -> the model's pose-param bounds
 	int32 BlinkCadence = 0;            // slot 333 `0x102bff20` arm 1 -> `FElysiumBlinkSchedule`
 	int32 EyeFidgetDriver = 0;         // slot 333 `0x102c0010` -> the saccade layer
 	int32 BaseEyeMaintainer = 0;       // slot 333 tail `0x1026b810` -> `TickGaze`
-
-	// The endpoints the last `Physics_TraceEntity` was asked for, and the last `MakeTracer` start
-	// and tracer type. Kept so the refusal cases can assert the slot was reached WITH retail's own
-	// arguments rather than merely reached.
-	FVector TraceStartCm = FVector::ZeroVector;
-	FVector TraceEndCm = FVector::ZeroVector;
-	uint32 TraceMask = 0;
-	FVector TracerStartCm = FVector::ZeroVector;
-	int32 TracerType = 0;
 };
 
 /** Retail's `trace_t` as the same bodies read it. `+0x0c` is `endpos`, `+0x44` the hitgroup,
@@ -60,21 +37,6 @@ struct FTraceBleedPass
 	int32 TraceCount = 0;
 	FVector LastStartUnits = FVector::ZeroVector;
 	FVector LastEndUnits = FVector::ZeroVector;
-};
-
-// +0x01b0 `m_NetworkChangeState` (`CEntityNetworkChangeState`, `layout.md` `+0x01b0`) — an
-// 8-byte record the SDK does not declare: a bool at +0, `m_bChanged` at +1, a second bool at +2, a
-// short interval at +4 and a short countdown at +6. Slot 88 (`0x10026b50`) asks whether a send is
-// due; slot 89 — this family's — clears the two flag bytes. SEAM-ADJACENT: nothing in this runtime
-// networks an entity, so the interval/countdown stand at 0 and only the two flags are written, by
-// the one body that writes them in retail.
-struct FNetworkChangeState
-{
-	bool bByte0 = false;       // +0x00 — set by the static prop/brush Spawns through 0x101466e0
-	bool bChanged = false;     // +0x01 m_bChanged — SetAbsOrigin/SetModel/SetLocalVelocity set it
-	bool bByte2 = false;       // +0x02 — the second flag 0x10146790 clears; its writer is unrecovered
-	int16 IntervalTicks = 0;   // +0x04
-	int16 CountdownTicks = 0;  // +0x06
 };
 
 /** Retail's `FireBulletsInfo_t` as `0x10268900` reads it, each word at its retail offset. The
@@ -174,14 +136,6 @@ TArray<FTraceBleedPass> TraceBleedPasses;
  *  toucher — so it is carried as the recorded write rather than wired to a consumer. */
 FElysiumEntityHandle UseActivator;   // +0x8c
 
-FNetworkChangeState NetworkChangeState;   // +0x01b0
-
-/** `CBaseEntity::PhysicsTouchTriggers(0)` (`0x100b0f30`) and `CBaseEntity::PhysicsRelinkChildren`,
- *  the two calls slot 226's movetype-7 arm ends on, IN THAT ORDER. **SEAM**: this runtime's overlap
- *  routing is the world's, not the entity's, and it carries no child relink. Recorded so the ORDER
- *  is assertable; read by the test and by nothing else. */
-TArray<FString> PhysicsUpdateCalls;
-
 /** `+0x038c m_vecSize` and the two words after it — the box `CBaseEntity::SetSize` (`0x100b1890`,
  *  slot 213) writes. A `CBaseEntity` word, below 29b's band, and written by this one body and read
  *  by `GetSize` (slot 214) alone in layers 0–9. CENTIMETRES, like every other length on this
@@ -214,16 +168,6 @@ TArray<FBulletTracerCall> BulletTracerCalls;
 
 TArray<FRangedDamagePerVictimCall> RangedDamagePerVictimCalls;
 
-/** `IPhysicsObject::GetPosition(&origin, &angles)` — the physics object's own transform, which slot
- *  226's movetype-7 arm reads and writes back through slots 216/218. **SEAM**: this runtime stands
- *  no `IPhysicsObject`; the pointer arrives through the generated `void*` and nothing can be read
- *  off it, so this answers false and the arm writes nothing. */
-bool PhysicsObjectPosition(const void* PhysicsObject, FVector& OutOrigin, FRotator& OutAngles) const;
-
-/** `CBaseEntity::VPhysicsUpdatePusher(physicsObject)` — the arm movetypes 1 and 8 take. **SEAM**:
- *  the same missing physics object. Recorded into `PhysicsUpdateCalls`. */
-void VPhysicsUpdatePusher(const void* PhysicsObject);
-
 /** `edict_t + 0x40`'s `IServerNetworkable::GetBaseEntity()` (`+0x10`) — the hop slot 165 makes
  *  before dispatching slot 166. **SEAM**: there are no edicts here. The generated signature hands
  *  the edict in as `void*`; this answers null, which takes retail's own "no networkable" arm and
@@ -244,13 +188,6 @@ bool IsStandableSolid() const;
  *  slot, and neither the field's retail name nor the constant's value is pinned. The constant is
  *  named at the definition and the scaling is the whole body. */
 float ScaleField_0x1ddc() const;
-
-/** `CBaseEntity::IsStandable()` (slot 164, `0x100b50a0`) — solid flag `0x10` clear, then move type
- *  1 / 6 / 2, else `thunk_FUN_100b5110`. **SEAM**: this substrate carries no solid flags and no
- *  move type, so it answers FALSE, and `CanStandOn` therefore refuses every non-null candidate.
- *  That is the conservative refusal, stated rather than guessed: retail's own answer for an entity
- *  with `0x10` set is also false. */
-static bool RetailIsStandable(const FElysiumEntity& Entity);
 
 /** `+0x00a8 m_pPlayer` — retail's "this entity is the player" self-pointer. Never set on this leaf,
  *  which is what makes `FireBullets`' spread gate read "spread unless the `0x2000000` bit is set",
@@ -311,12 +248,16 @@ void SetAttackExtents(const FVector& MarginCm) { AttackExtentsCm = MarginCm; }
 // writes. **SEAM**: this runtime moves no entity by movetype; the words are carried so the one
 // retail writer records what it was asked, and nothing reads them but the tests.
 int32 RetailMoveType = 0;
+// `m_hGroundEntity` (`+0x384`): the entity the last ground test found under this one. Slot 208
+// `SetGroundEntity` 0x100b1420 writes it, slot 209 `GetGroundEntity` 0x100b1510 resolves it; the
+// floor-facts seam's `GroundEntityHandle` lands here through `CheckOnGround` (0019/6).
+FElysiumEntityHandle RetailGroundEntity;
 int32 RetailMoveCollide = 0;
 
 // SEAM for `m_Collision` (`+0x270`, `CCollisionProperty`) and its solid-flag word `+0x2b4` — the
 // `CBaseEntity` words `SetSolid` / `SetSolidFlags` / `AddSolidFlags` write, each under a
 // `"CBaseEntity::SetSolid"`-style scope-trace frame. This substrate carries no solid type and no
-// solid flags (family Motor's `RetailIsStandable`), so these three record what was asked:
+// solid flags, so these three record what was asked:
 // `RetailSolidType` the last `SetSolid` value, `RetailSolidFlags` the flag word as the
 // read-OR-pass-back writers leave it, `RetailSolidSets` how many `SetSolid` calls ran. Writers:
 // `CAI_TestHull::Spawn` `0x102d72f0`, `CNPC_VPedestrian::OnRestore` `0x103a25a0`, `CNPCMaker::Spawn`

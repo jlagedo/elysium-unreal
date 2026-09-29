@@ -1,0 +1,7 @@
+0x101a75a0	-	FElysiumScriptedSequence::Touch override removed (bare RET 4); slot 175 now falls to the FElysiumEntity base
+0x101a7580	-	FElysiumScriptedSequence::Blocked override removed (bare RET 4); slot 178 now falls to the FElysiumEntity base
+0x1027e740	-	FElysiumNpcBase::GetStateName body and closure test row removed; generated slot-406 declaration goes with regeneration
+0x103b0560	-	KillTeleportBats body, declaration, test and the 0x103af014 call removed (npc_VBatSwarm never instantiated)
+0x103a0ff0	-	Newscaster debug listing, its newscaster_debug gate in NPCThink (0x103a0610..0x103a0631) and tests removed
+0x103d1ca0	-	StartSearchTimer static and its five call statements (Misc2Species, Werewolf2Species) removed
+0x103d1d60	-	ReportSearchTimer static removed; its twelve return sites now return the passed-through value

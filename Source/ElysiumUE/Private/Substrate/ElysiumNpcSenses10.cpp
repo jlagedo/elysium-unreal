@@ -34,11 +34,11 @@ namespace
 
 	// `_DAT_10457f54` = **0.7**, the far-band fraction slot 594 compares against
 	// (`docs/vtmb/computer-terminals.md`; `ElysiumNpcEntityChain2.cpp` carries the same cell).
-	constexpr float GFarBandFraction = 0.7f;
+	constexpr float GFarBandFraction = ElysiumNpcTunables::SevenTenths;
 
 	// `_DAT_1044bef8` = **0.25**, the cowering/sleeping hearing scale in slot 467
 	// (`docs/vtmb/computer-terminals.md` line 1186).
-	constexpr float GCoweringHearingScale = 0.25f;
+	constexpr float GCoweringHearingScale = ElysiumNpcTunables::Quarter;
 
 	// `m_bfAINPCFlags & 0x20400` — `COWERING` (`0x400`) and `SLEEPING` (`0x20000`), the one gate that
 	// lets slot 467's distance arm run at all (`102b3734`).
@@ -47,10 +47,10 @@ namespace
 	// `_DAT_10452dc4` = **2.0**, `_DAT_104492a4` = **60.0**, `_DAT_104454d0` = **0.5**,
 	// `_DAT_104454c0` = **1.0**, `_DAT_10449270` = **0.5**, `_DAT_10450568` = **360.0**,
 	// `_DAT_1044eb0c` = **20.0**, `_DAT_104492dc` = **-1.0**.
-	constexpr float GTwo = 2.0f;
-	constexpr float GGroundpointZLift = 60.0f;
-	constexpr float GYawWrap = 360.0f;
-	constexpr float GMingXiaoAimZBonus = 20.0f;
+	constexpr float GTwo = ElysiumNpcTunables::Two;
+	constexpr float GGroundpointZLift = ElysiumNpcTunables::YawSpeedHumanoidCrouch;
+	constexpr float GYawWrap = ElysiumNpcTunables::HeadAngleRunawayLimit;
+	constexpr float GMingXiaoAimZBonus = ElysiumNpcTunables::Twenty;
 
 }
 
@@ -80,9 +80,16 @@ namespace
 	//      target's OBB (`RetailCollisionExtents`, SOURCE units, scaled here to the seam's cm).
 	//      With no extents to read (the seam answers false) the end is the target's eye, probe 0's.
 	//   4. `ElysiumNpcSight::Visible` -- the LINE under `CTraceFilterFVisible` and the verdict order.
-	// The blocker cell (`*ppBlocker = tr.m_pEnt`) cannot be delivered: the slot's third parameter is
-	// a value (`ElysiumNpcSenses10.inl`), so the entity the ray stopped at is dropped here.
-	bool BaseFVisible(const FElysiumNpc& Looker, const FElysiumEntity& Target, int32 Mask, int32 Probe)
+	//   5. the blocker cell (`100a71ab`): on a block, `*ppBlocker = tr.m_pEnt` when the caller passed a
+	//      cell -- `FVisible`'s THIRD argument (`CBaseEntity**`); the fourth is `Probe`. The generated
+	//      slot takes that argument by value, so "a cell was passed" is its nullness and the cell is
+	//      the NPC's own `LastFVisibleBlockerTarget` (`WriteFVisibleBlocker`). `CellOwner` is that
+	//      NPC, null when no cell was passed. What stopped the ray is `ElysiumNpcSight::Visible`'s
+	//      out-blocker over `TraceRetail`: the kept character, or Invalid for the static world (retail's
+	//      `tr.m_pEnt` there is the world entity). The gates above write nothing, as retail's return
+	//      before the trace.
+	bool BaseFVisible(const FElysiumNpc& Looker, const FElysiumEntity& Target, int32 Mask, int32 Probe,
+		FElysiumNpc* CellOwner = nullptr)
 	{
 		if (FElysiumNpcBase::HasNoTargetFlag(Target))                            // 100a7017
 		{
@@ -117,7 +124,16 @@ namespace
 		Query.Looker = Looker.Handle;
 		Query.Target = Target.Handle;
 		Query.World = Looker.World;
-		return ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);
+		FElysiumEntityHandle Blocker = FElysiumEntityHandle::Invalid();
+		if (ElysiumNpcSight::Visible(*Embodiment, Query, &Blocker))
+		{
+			return true;
+		}
+		if (CellOwner != nullptr)                                                  // 100a71ab
+		{
+			CellOwner->WriteFVisibleBlocker(Looker.World->Resolve(Blocker));
+		}
+		return false;
 	}
 }
 
@@ -180,8 +196,9 @@ bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntit
 	{
 		return false;
 	}
-	// `102b46b1`: the base `CBaseEntity::FVisible` does the trace itself.
-	return BaseFVisible(*this, *SeenTarget, Mask, Arg4);
+	// `102b46b1`: the base `CBaseEntity::FVisible` does the trace itself, all four arguments passed
+	// through (`102b46fa..102b4708`), the blocker cell with them.
+	return BaseFVisible(*this, *SeenTarget, Mask, Arg4, Blocker != nullptr ? this : nullptr);
 }
 
 // =================================================================================================

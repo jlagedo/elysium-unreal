@@ -18,17 +18,21 @@
 
 namespace NpcKernelMotorShared
 {
-	// The yaw-speed ladder's constants. `GYawFloor` is also the clamp every "turning" arm ends on.
-	inline constexpr float GYawDefault = ElysiumNpcTunables::FortyFive;
-	inline constexpr float GYawCrouch = ElysiumNpcTunables::Thirty;
-	// Retail activity numbers the yaw ladders switch on. Named so the switch reads like the binary.
+	// The slot 516 `MaxYawSpeed` ladders' constants (0019/6: restored as data -- the rate is how fast
+	// an NPC turns, a player-visible timing; the turning itself is the mover's).
+	inline constexpr float GYawDefault = ElysiumNpcTunables::FortyFive;   // `_DAT_1049949c`
+	inline constexpr float GYawCrouch = ElysiumNpcTunables::Thirty;       // `_DAT_104492a8`
+	inline constexpr float GYawRun = ElysiumNpcTunables::YawSpeedRun;     // `_DAT_1047a3ac`
+	inline constexpr float GYawFloor = ElysiumNpcTunables::One;           // `_DAT_104454c0`, the turning arm's floor
+	// Retail's ACT_IDLE (1), and the activity numbers the yaw ladders switch on.
 	inline constexpr int32 GActIdle = 1;
 	inline constexpr int32 GActIdleAngry = 5;
+	inline constexpr int32 GActWalk = 9;
 	inline constexpr int32 GActRun = 0x13;
 	inline constexpr int32 GActCrouchIdle = 0x3b;
 	inline constexpr int32 GActCrouchWalk = 0x3c;
-	// `m_afMemory` (+0x5d8c) bit 0x2000 — the "turning" tag the turn ladder writes (the Facing
-	// family's `bTagsTurnMemory`) and all three of the yaw-speed overrides branch on.
+	// `m_afMemory` (+0x5d8c) bit 0x2000 -- the "turning" tag the turn ladder writes (the Facing
+	// family's `bTagsTurnMemory`) and the Troika / Dog / Tzimisce yaw ladders branch on first.
 	inline constexpr uint32 GMemoryTurning = 0x2000;
 	// This world's centimetres into retail's Source units. `Origin` is Unreal's axes, where
 	// `bsp.source_to_unreal` negated Y; every retail body reads `GetAbsOrigin()`, so the sign comes

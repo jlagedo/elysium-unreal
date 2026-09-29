@@ -224,33 +224,33 @@ namespace StartTask19_2Consts
 	inline constexpr int32 DangerSoundRow = 0x1b;                 // `0x102a53d4 PUSH 0x1b`
 	inline constexpr uint32 SoundTypeDanger = 0x8;                // `0x102a5406 PUSH 0x8`
 	inline constexpr float RandomLookHalfExtent = 100.0f;         // `0x102a5565`/`0x102a556a`
-	inline constexpr float DiveMinDistSqr = 4096.0f;              // `_DAT_104563b0`, 64 squared
-	inline constexpr float DiveMaxDistSqr = 12100.0f;             // `_DAT_1049ae6c`, 110 squared
-	inline constexpr double DiveRightDot = 0.98;                  // `_DAT_1049ae60`
-	inline constexpr double DiveLeftDot = -0.98;                  // `_DAT_1049ae50`
+	inline constexpr float DiveMinDistSqr = ElysiumNpcTunables::FourThousandNinetySix;              // `_DAT_104563b0`, 64 squared
+	inline constexpr float DiveMaxDistSqr = ElysiumNpcTunables::DiveMaxDistSqr;             // `_DAT_1049ae6c`, 110 squared
+	inline constexpr double DiveRightDot = ElysiumNpcTunables::DiveRightDot;                  // `_DAT_1049ae60`
+	inline constexpr double DiveLeftDot = ElysiumNpcTunables::DiveLeftDot;                  // `_DAT_1049ae50`
 	inline constexpr float DiveSideReach = 60.0f;                 // `0x102a5b6d PUSH 0x42700000`
 	inline constexpr float DiveForwardReach = 96.0f;              // `0x102a5d09 PUSH 0x42c00000`
 	inline constexpr float DiveProbeExtent = 100.0f;              // `0x102a5be0 PUSH 0x42c80000`
 	inline constexpr int32 MaskNpcSolid = 0x202400b;              // `0x102a5bee PUSH 0x202400b`
 	inline constexpr float StepBackReach = 50.0f;                 // `0x102a69d6 PUSH 0x42480000`
-	inline constexpr float KickPropMaxDistSqr = 16384.0f;         // `_DAT_10450ab0`, 128 squared
+	inline constexpr float KickPropMaxDistSqr = ElysiumNpcTunables::SixteenThousandThreeEightyFour;         // `_DAT_10450ab0`, 128 squared
 	inline constexpr float KickHintReuseDelay = 60.0f;            // `0x102a60e4 PUSH 0x42700000`
 	inline constexpr float KickPropGoalReach = 64.0f;             // `0x102a61cb PUSH 0x42800000`
 	inline constexpr int32 GoalTypeLocation = 4;                  // `0x102a61b4` / `0x102a9d27`
 	inline constexpr int32 GoalTypeKickProp = 10;                 // `0x102a61a2 PUSH 0xa`
 	inline constexpr int32 GoalTypeCover = 6;                     // `0x102a675f PUSH 0x6`
-	inline constexpr float GoalToleranceDefault = -1.0f;          // `DAT_1049a1ac`, AIN_DEF_TOLERANCE
-	inline constexpr float GoalToleranceHull = -2.0f;             // `DAT_1049a1b0`, AIN_HULL_TOLERANCE
+	inline constexpr float GoalToleranceDefault = ElysiumNpcTunables::NavGoalToleranceKeepPatrol;          // `DAT_1049a1ac`, AIN_DEF_TOLERANCE
+	inline constexpr float GoalToleranceHull = ElysiumNpcTunables::StartTaskGoalToleranceHull;             // `DAT_1049a1b0`, AIN_HULL_TOLERANCE
 	inline constexpr uint32 SetGoalFlagsLkp = 2;                  // `0x102a65e4 PUSH 0x2`
 	inline constexpr float LosMaxDist = 4096.0f;                  // `0x102a705d PUSH 0x45800000`
 	inline constexpr float UnknownCoverMinDist = 32.0f;           // `0x102a7656 PUSH 0x42000000`
-	inline constexpr float CircleFirstYaw = 80.0f;                // `_DAT_104454c8`
+	inline constexpr float CircleFirstYaw = ElysiumNpcTunables::Eighty;                // `_DAT_104454c8`
 	inline constexpr float CircleSecondYaw = ElysiumNpcTunables::OneTwenty;   // `_DAT_1044f00c`
 	inline constexpr int32 CircleTries = 2;                       // `0x102a6b2d CMP EBP,0x2`
 	inline constexpr int32 CircleFailSuppressed = 1000;           // `0x102a6aeb MOV EBP,0x3e8`
-	inline constexpr double CircleMaxRangeWeight = 0.75;          // `_DAT_10462958`
-	inline constexpr float CircleMinRangeWeight = 0.25f;          // `_DAT_1044bef8`
-	inline constexpr float CircleRadiusSentinel = -1.0f;          // `_DAT_104492dc`
+	inline constexpr double CircleMaxRangeWeight = ElysiumNpcTunables::ThreeQuartersDouble;          // `_DAT_10462958`
+	inline constexpr float CircleMinRangeWeight = ElysiumNpcTunables::Quarter;          // `_DAT_1044bef8`
+	inline constexpr float CircleRadiusSentinel = ElysiumNpcTunables::MinusOne;          // `_DAT_104492dc`
 	inline constexpr float SleepExtentsXY = 60.0f;                // `0x102a7124 PUSH 0x42700000`
 	inline constexpr float SleepExtentsZ = 80.0f;                 // `0x102a711f PUSH 0x42a00000`
 	inline constexpr float SleepExtentsCleared = -1.0f;           // `0x102a7151 PUSH 0xbf800000`
@@ -273,12 +273,6 @@ namespace StartTask19_2Consts
 
 namespace
 {
-	// The two kick-hint `DevMsg` formats (`0x105da298`, `0x105da228`), verbatim.
-	const TCHAR* const GStartTask19_2KickNotFound =
-		TEXT("Warning: Kick hint (%s) is trying to find a physics object (%s) that is not found.\n ");
-	const TCHAR* const GStartTask19_2KickTooFar =
-		TEXT("Warning: Kick hint (%s) is trying to kick a physics object (%s) that is too far away.\n ");
-
 	// `(int)flTaskData` -- `__ftol` (`0x10431320`), truncation toward zero.
 	int32 StartTask19_2Ftol(float Value)
 	{
@@ -475,7 +469,7 @@ void FElysiumNpc::TaskTailLookAt(const FVector& PositionUnits, float TaskSeconds
 
 int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 {
-	// `0x1029f730` / `0x1029f780` are handed `&m_sppPatrolPath` (`+0x658c`); their reader `0x1029f6c0`
+	// `0x1029f730` / `0x1029f780` are handed `&m_sppPatrolPath` (`+0x658c`); their reader
 	// (a seam, `PatrolNodeInterestRecord`) takes the path's current node.
 	auto TaskTailPatrolNode = [this]() -> int32
 	{
@@ -884,7 +878,6 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	{
 		if (!NavigatorGoalIsActive())                             // 0x102a542f 0x102ee6a0 / 0x102a5436 / 0x102a5428 GetNavigator
 		{
-			EmitDevMsg(TEXT("No route to face!\n"), TEXT("No route to face!\n"));   // 0x102a543f DevWarning(2, ...)
 			StartTask19Fail(0x3599, 0xc);                         // 0x102a5462
 			return 0;
 		}
@@ -1290,12 +1283,6 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		if (!HintTargetName.IsEmpty())                                // 0x102a5ff1 / 0x102a5ff4
 		{
 			ScheduleHost.KickProp = TaskTailFindEntityByName(HintTargetName);   // 0x102a6013 / 0x102a601b / 0x102a6006
-			if (World == nullptr || World->Resolve(ScheduleHost.KickProp) == nullptr)   // 0x102a6024 0x102c63b0(h, 0) / 0x102a602b JZ
-			{
-				// RETAIL DEFECT, reproduced: `0x102a602d` pushes the format and NO arguments, so the
-				// two `%s` read whatever the stack holds. Transcribed as the bare format.
-				EmitDevMsg(GStartTask19_2KickNotFound, GStartTask19_2KickNotFound);   // 0x102a6032
-			}
 		}
 		if (FElysiumEntity* Prop =
 				World != nullptr ? World->Resolve(ScheduleHost.KickProp) : nullptr)   // 0x102a6045 / 0x102a604c
@@ -1308,10 +1295,6 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			{
 				++TaskTailKicks;                                     // 0x102a60ba 0x102b6890(this, prop) / 0x102a60b2 the handle's entity
 				TaskTailLastKicked = Prop->Handle;
-			}
-			else
-			{
-				EmitDevMsg(GStartTask19_2KickTooFar, GStartTask19_2KickTooFar);   // 0x102a60c1, no arguments either / 0x102a60c6
 			}
 			ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();   // 0x102a60d3 0x1028ac80(h, 0)
 		}
@@ -1413,7 +1396,6 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		// here; a refused one is failed by `OnNavFailed(0xc)` and then again here -- both retail.
 		if (!TaskTailNavSetGoal(Goal, SetGoalFlagsLkp))           // 0x102a65f0 / 0x102a65f7 / 0x102a65e9 GetNavigator
 		{
-			EmitDevMsg(TEXT("GetPathToLastEnemyLKP failed!!\n"), TEXT("GetPathToLastEnemyLKP failed!!\n"));   // 0x102a6629 DevWarning(2, ...)
 			RememberUnreachable(EnemyEntity);                          // 0x102a6635 0x10274080
 			StartTask19Fail(0x38d8, 0xc);                         // 0x102a6654
 			return 0;

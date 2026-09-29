@@ -15,8 +15,12 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VVampireBoss", FElysiumNpcVampire)
 
 	virtual void NPCInit() override;
-	virtual int32 Restore(void* Archive) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
+	/** Slot 127 `CNPC_VVampireBoss::Restore`'s load-side half (story 0019/6): the resets below, then the chain. */
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override
+	{
+		VampireBossPostRestoreResets();
+		FElysiumNpcVampire::OnPostRestore(InWorld);
+	}
 
 	// +0x667c m_MorphModelName (`CNPC_VVampireBoss`), KEY MorphModel: the model the protean swap
 	// (`InputTransformModel` `0x103c75f0`, story 8) morphs into.
@@ -82,18 +86,23 @@ public:
 	void CommitSetupJump();
 	void SetupJumpRise(float Enabled, float Rise);
 
-	// From `ElysiumNpcSaveRestore10.inl`.
-	/** `CNPC_VVampireBoss::Restore` (`0x103c5910`) — the Troika body, then a post-load reset of the
-	 *  monster-model override: `m_pMonsterModelName` (`+0x6680`) := null, `ClearBodyEmitterNames()`
-	 *  (family Damage's, `0x103c6eb0`), and `m_pszMonsterClassname` (`+0x6694`) := the literal
-	 *  `"npc_VVampireBoss"`. The write order is the listing's (`103c5972` the model name, `103c597c`
-	 *  the emitter names, `103c5981` the classname).
+	/** `CNPC_VVampireBoss::Restore`'s three writes after the Troika body, a post-load
+	 *  reset of the monster-model override in the listing's order: `103c5972` `m_pMonsterModelName`
+	 *  (`+0x6680`) := null, `103c597c` `ClearBodyEmitterNames()` (`0x103c6eb0`), `103c5981`
+	 *  `m_pszMonsterClassname` (`+0x6694`) := `"npc_VVampireBoss"` (`0x1065e8dc`). A boss saved
+	 *  mid-transformation comes back wearing its default model name and classname.
 	 *
-	 *  This is also the body the other bosses' own slot-127 overrides call as their base
-	 *  (`CNPC_VAndreiBlood` `0x1035cf80`, `CNPC_VAsianVampire` `0x10360e10`, the Chang brothers
-	 *  `0x1036b170`, `CNPC_VSabbatLeader` `0x103a6e80`, `CNPC_VSheriffMan` `0x103ae7f0`), so it sits
-	 *  between the Troika body and those rows: each of them calls this directly, as retail does. */
-	int32 VampireBossRestore(void* Archive);
+	 *  The slot-127 record half is the generated SAVE walk now (story 0019/6); what retail did after
+	 *  the archive read is this, run from `OnPostRestore` ahead of the chain's slot 130. The other
+	 *  bosses' own slot-127 overrides call it first, as retail calls it directly
+	 *  (`CNPC_VAndreiBlood`, `CNPC_VAsianVampire`, the Chang brothers,
+	 *  `CNPC_VSabbatLeader`, `CNPC_VSheriffMan`). */
+	void VampireBossPostRestoreResets()
+	{
+		VampireBossMonsterModelName.Reset();                           // +0x6680 := 0
+		ClearBodyEmitterNames();                                       // 0x103c6eb0
+		VampireBossMonsterClassname = TEXT("npc_VVampireBoss");        // +0x6694, s_npc_VVampireBoss_1065e8dc
+	}
 	/** `+0x6680 CNPC_VVampireBoss::m_pMonsterModelName` and `+0x6694 m_pszMonsterClassname` — the two
 	 *  words `CNPC_VVampireBoss::Restore` resets. Neither had a carrier before this story. */
 	FString VampireBossMonsterModelName;

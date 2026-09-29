@@ -25,6 +25,7 @@
 #include "ElysiumSurfaceSounds.h" // A2: FElysiumSurfaceSounds (held by value in the table below)
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumSignData.h"
+#include "Substrate/ElysiumNpcKernelTunables.h" // the recording motor's retail step height
 #include "ElysiumWorldServices.h"
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
@@ -87,9 +88,12 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// Every query's filter multiplier is recorded, in call order.
 	TFunction<bool(const FVector&, float&)> RouteQuery;
 	mutable TArray<int32> RouteMultipliers;
+	// Every query's explicit start (unset = from the body), in call order.
+	mutable TArray<TOptional<FVector>> RouteStarts;
 	virtual bool QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpcRouteAnswer& Out) const override
 	{
 		RouteMultipliers.Add(Query.PedestrianCostMultiplier);
+		RouteStarts.Add(Query.StartCm);
 		float Length = 0.0f;
 		const bool bRoute = RouteQuery ? RouteQuery(Query.DestCm, Length) : false;
 		Record(FString::Printf(TEXT("NpcMotor QueryRoute %s x%d -> %s"), *Query.DestCm.ToString(),
@@ -116,6 +120,81 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 			*Query.ToCm.ToString(), Query.PedestrianCostMultiplier,
 			!bAnswered ? TEXT("headless") : (Out.bHit ? *FString::Printf(TEXT("hit %s"), *Out.HitCm.ToString()) : TEXT("clear"))));
 		return bAnswered;
+	}
+	// The floor (0019 story 6, `SampleFloor`). What the next sample answers; a case moves it to state
+	// its world. The default is a body standing on the static world's floor under retail's own
+	// numbers: step height `_DAT_10453b94` (`ElysiumNpcTunables::StepHeightBase`, 18 units) and the
+	// standable normal 0.7. Clearing `bReportsFloor` is the headless answer: no movement component.
+	static FElysiumNpcFloorFacts RetailStandingFloor()
+	{
+		FElysiumNpcFloorFacts Facts;
+		Facts.bOnGround = true;
+		Facts.bWalkable = true;
+		Facts.MaxStepHeightCm = ElysiumNpcTunables::StepHeightBase * ElysiumMove::U;
+		Facts.WalkableFloorZ = ElysiumMove::StandableZ;
+		Facts.WalkableFloorAngleDegrees = FMath::RadiansToDegrees(FMath::Acos(ElysiumMove::StandableZ));
+		return Facts;
+	}
+	bool bReportsFloor = true;
+	FElysiumNpcFloorFacts Floor = RetailStandingFloor();
+	// Counted, not recorded: a per-think sample (as `SampleBallistic`) would flood every call trace.
+	mutable int32 FloorSamples = 0;
+	virtual bool SampleFloor(FElysiumNpcFloorFacts& Out) const override
+	{
+		++FloorSamples;
+		if (!bReportsFloor)
+		{
+			return false;
+		}
+		Out = Floor;
+		return true;
+	}
+	// The move-ignore filter (`SetMoveIgnore`): the set it holds now, and every call recorded.
+	TArray<FElysiumEntityHandle> MoveIgnored;
+	virtual void SetMoveIgnore(const FElysiumEntityHandle& Entity, bool bIgnore) override
+	{
+		if (bIgnore)
+		{
+			MoveIgnored.AddUnique(Entity);
+		}
+		else
+		{
+			MoveIgnored.Remove(Entity);
+		}
+		Record(FString::Printf(TEXT("NpcMotor SetMoveIgnore %d %d"), Entity.Index, bIgnore ? 1 : 0));
+	}
+	// The hull resizes (`SetHullSize`), each box as stated, in call order.
+	TArray<FBox> HullSizes;
+	virtual void SetHullSize(const FVector& MinsCm, const FVector& MaxsCm) override
+	{
+		HullSizes.Add(FBox(MinsCm, MaxsCm));
+		Record(FString::Printf(TEXT("NpcMotor SetHullSize %s %s"), *MinsCm.ToString(), *MaxsCm.ToString()));
+	}
+	// The facing-while-moving target (`SetFacingTarget`): the one held now, and how many calls.
+	TOptional<FVector> FacingTarget;
+	int32 FacingTargetCalls = 0;
+	virtual void SetFacingTarget(const TOptional<FVector>& TargetCm) override
+	{
+		FacingTarget = TargetCm;
+		++FacingTargetCalls;
+		Record(FacingTarget.IsSet()
+			? FString::Printf(TEXT("NpcMotor SetFacingTarget %s"), *FacingTarget->ToString())
+			: FString(TEXT("NpcMotor SetFacingTarget none")));
+	}
+	// The mid-move turn rate (`SetYawSpeed`): the last one stated, and how many calls.
+	float MidMoveYawSpeedDegPerS = 0.f;
+	int32 YawSpeedCalls = 0;
+	virtual void SetYawSpeed(float YawSpeedDegPerS) override
+	{
+		MidMoveYawSpeedDegPerS = YawSpeedDegPerS;
+		++YawSpeedCalls;
+		Record(FString::Printf(TEXT("NpcMotor SetYawSpeed %.1f"), YawSpeedDegPerS));
+	}
+	// The route-held fact (`HasPath`): a case states it; unset follows the stub's own request.
+	TOptional<bool> HasPathOverride;
+	virtual bool HasPath() const override
+	{
+		return HasPathOverride.IsSet() ? HasPathOverride.GetValue() : bMoving;
 	}
 	virtual bool CanReachLateralCover(const FVector& Point) const override
 	{
@@ -177,9 +256,12 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 			bAllowPartialPath ? 1 : 0, GaitKindName));
 		return bMoving;
 	}
-	virtual void Face(float YawDegrees) override
+	// The rate the last `Face` stated (0 = keep the body's); a move's rate is on `LastMoveRequest`.
+	float RequestedYawSpeedDegPerS = 0.f;
+	virtual void Face(float YawDegrees, float YawSpeedDegPerS = 0.f) override
 	{
 		RequestedYaw = YawDegrees;
+		RequestedYawSpeedDegPerS = YawSpeedDegPerS;
 		bFacing = bEnabled;
 		Record(FString::Printf(TEXT("NpcMotor Face yaw=%.1f"), YawDegrees));
 	}

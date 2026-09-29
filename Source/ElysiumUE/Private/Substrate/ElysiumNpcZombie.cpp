@@ -23,9 +23,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcAnim10_2Shared.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcDebug10Shared.h"
 #include "Substrate/ElysiumNpcLifecycle2_2Shared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -48,13 +46,6 @@ namespace
 	constexpr int32 GAnim10_2ZombieIdleWeight = 999;
 	constexpr int32 GAnim10_2ZombieComfortWeight = 0x14;
 	constexpr int32 GAnim10_2ScheduleComfort = 0x12f;   // SCHED_TROIKA_COMFORT
-	constexpr int32 GDebug10BitZombieConds = 0x40000;  // 0x103e0e9a
-	constexpr TCHAR GDebug10FmtZombieCond[] = TEXT("Cond: %s\n");        // 0x10665864
-	const TCHAR* const GZombieEmitters[] = {
-		TEXT("zombie_headshot_death_emitter"),
-		TEXT("zombie_headshot_dmg_emitter"),
-	};
-	const TCHAR* const GZombieWeapon = TEXT("item_w_zombie_fists");
 	// `0x103e1080`'s two literals. `0x20000` is `m_bfAINPCFlags` `SLEEPING`, which
 	// `Substrate/ElysiumNpcFlags.h` names.
 	constexpr int32 ZombieFloatSoundFrequency = 9;
@@ -186,21 +177,6 @@ void FElysiumNpcZombie::NPCInit()
 	SetSchedule(ZombieCrawlScheduleRetailId, false);                      // 0x103df04b -> 0x102ae750
 }
 
-// Slot 104: `0x103df120`.
-// 0x103df120
-void FElysiumNpcZombie::Precache()
-{
-	// `CNPC_VZombie::Precache` `0x103df120` — the Troika body, the two headshot emitters with
-	// preload **0**, and the fists. The two emitters are the assets the zombie head-damage arm
-	// (`CNPC_VZombie::OnTakeDamage` `0x103e06d0`) names.
-	TroikaPrecache();
-	for (const TCHAR* Emitter : GZombieEmitters)
-	{
-		NpcKernelPrecache10Shared::Precache10Particle(*this, Emitter, /*Preload=*/0);
-	}
-	NpcKernelPrecache10Shared::Precache10Other(*this, GZombieWeapon);
-}
-
 // Slot 105: `0x103e0540`, the same vocalization-group body as the ghoul croucher's.
 void FElysiumNpcZombie::SetModel(TCHAR* ModelName)
 {
@@ -210,7 +186,6 @@ void FElysiumNpcZombie::SetModel(TCHAR* ModelName)
 // Slot 461: `0x103df5f0`, chaining the animal line's `0x1035fe80` directly.
 int32 FElysiumNpcZombie::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x2b;
 	const int32 State = NpcStateRetail();
 	if (State == 1)
 	{
@@ -292,41 +267,6 @@ int32 FElysiumNpcZombie::TranslateScheduleRetail(int32 ScheduleNumber)
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
-// Slot 124: `0x103e0e80`
-/** `CNPC_VZombie::DrawDebugTextOverlays` (`0x103e0e80`) — the Troika body, then one `Cond: %s` line
- *  per set bit of the 0..0xbf condition bitfield at `+0x5c5c`, under `m_debugOverlays & 0x40000`. */
-int32 FElysiumNpcZombie::DrawDebugTextOverlays()
-{
-	// `0x103e0e80`, 224 bytes. The Troika body, then — under `m_debugOverlays & 0x40000`, which is
-	// NOT bit 0 — one line per set bit of the 0..0xbf bitfield at `+0x5c5c`:
-	//
-	//     global = (id == -1) ? -1 : id + 1000000000;
-	//     local  = ConditionGlobalToLocal(GetClassScheduleIdSpace() + 0x30, global);   // 0x102ea280
-	//     Q_snprintf(buf, 512, "Cond: %s\n", ConditionName(local));                    // slot 458
-	//
-	// The `id == -1` arm is unreachable (the loop starts at 0) and is recorded rather than written.
-	// The 1e9 offset is the same script-range constant slot 458 tests against, so the pair
-	// global-to-local then local-to-global is the identity for every base condition, which is what
-	// `ConditionName` is handed here.
-	int32 Line = TroikaDrawDebugTextOverlays();
-	if ((DebugOverlays & GDebug10BitZombieConds) == 0)
-	{
-		return Line;
-	}
-	for (int32 Id = 0; Id < 0xc0; ++Id)
-	{
-		if (!ZombieConditionBit(Id))
-		{
-			continue;
-		}
-		const TCHAR* const Name = ConditionName(Id);
-		EmitEntityText(Line, GDebug10FmtZombieCond,
-			FString::Printf(GDebug10FmtZombieCond, Name != nullptr ? Name : TEXT("")));
-		++Line;
-	}
-	return Line;
-}
-
 // Slot 24: `0x103e1280`, the Troika body `0x1029f8d0` directly FIRST, then the output.
 // `0x103e1280`
 void FElysiumNpcZombie::OnVictimHitByMe(FElysiumEntity* Victim)
@@ -348,16 +288,6 @@ bool FElysiumNpcZombie::FValidateHintType(void* Hint)
 	// The whole body is `return 0;`: the hint is never read.
 	(void)Hint;
 	return false;
-}
-
-// Slot 546: `0x103de4d0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcZombie::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x109403e0`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VZombie"), TEXT("0x103de4d0"), TEXT("0x109403e0") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // Slot 509: `0x103e0fa0`, a replacement that does not chain.
@@ -501,14 +431,6 @@ bool FElysiumNpcZombie::ZombieTraceAttackPrologue(int32 HitGroup, bool bAttacker
 }
 
 // --- Moved from `ElysiumNpcDebug10.cpp` (story 5 step 4) ---
-
-bool FElysiumNpcZombie::ZombieConditionBit(int32 ConditionId) const
-{
-	// SEAM for `CNPC_VZombie`'s bitfield at `+0x5c5c`, walked 0..0xbf. It is one of the schedule
-	// block's six words and no port member carries it.
-	(void)ConditionId;
-	return false;
-}
 
 // --- Moved from `ElysiumNpcSpecies2.cpp` (story 5 step 4) ---
 

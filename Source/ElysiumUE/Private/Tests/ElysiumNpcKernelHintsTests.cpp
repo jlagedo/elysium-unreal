@@ -325,11 +325,6 @@ bool FElysiumNpcKernelHintsRulesTest::RunTest(const FString&)
 		TestEqual(TEXT("and so does 0x3aa5"), Act(0x3aa5, true, true), INDEX_NONE);
 	}
 
-	// Slot 568 `GetHintDelay` (`0x1026a910`): `FLD [0x104454c4] / RET 4`, the shared 0.0f.
-	TestEqual(TEXT("GetHintDelay answers _DAT_104454c4, which is 0.0"), Npc->GetHintDelay(700),
-		0.0f);
-	TestEqual(TEXT("for every hint type, because the argument is not read"),
-		Npc->GetHintDelay(12345), 0.0f);
 	return true;
 }
 

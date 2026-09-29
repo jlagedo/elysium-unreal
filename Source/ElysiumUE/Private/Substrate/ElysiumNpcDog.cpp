@@ -16,8 +16,8 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcAnim10Shared.h"
-#include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcStateShared.h"
 #include "Substrate/ElysiumNpcState_2Shared.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -48,7 +48,6 @@ int32 FElysiumNpcDog::NPC_EarlyTranslateActivity(int32 Activity)
 // Slot 461: `0x103743c0`, chaining the animal line's `0x1035fe80` directly.
 int32 FElysiumNpcDog::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0xd;
 	const int32 State = NpcStateRetail();
 	if (State == 1)
 	{
@@ -176,51 +175,40 @@ int32 FElysiumNpcDog::TranslateScheduleRetail(int32 ScheduleNumber)
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
 }
 
-// Slot 516: `0x10374130`, which replaces the Troika ladder.
-/** `CNPC_VDog::MaxYawSpeed` `0x10374130` and `CNPC_VTzimisce::MaxYawSpeed` `0x103ba020` — the two
- *  species that replace the Troika ladder wholesale rather than adding an arm to it. Both take the
- *  same "turning" arm at `m_afMemory & 0x2000`; that arm is shared with the Troika body and lives in
- *  `MaxYawSpeedTurningArm` below. */
+// Slot 516: `0x10374130`, which replaces the Troika ladder (0019/6: restored as data).
 float FElysiumNpcDog::MaxYawSpeed()
 {
-	// `CNPC_VDog::MaxYawSpeed` `0x10374130`. The Troika ladder with three differences: the fall-out
-	// for a recognised activity is 40.0 rather than 45.0, there is no `debug_slow_*` arm at all, and
-	// the turning cvar is the Dog's own `0x1093ad24`.
-	if ((BaseScheduleHost.MemoryBits & NpcKernelMotorShared::GMemoryTurning) != 0)
+	// `CNPC_VDog::MaxYawSpeed` `0x10374130`: the Troika ladder with three differences -- the
+	// fall-out for a RECOGNISED activity is 40.0 rather than 45.0, there is no `debug_slow_*` arm,
+	// and the turning cvar is the Dog's own `0x1093ad24`.
+	using namespace NpcKernelMotorShared;
+	if ((BaseScheduleHost.MemoryBits & GMemoryTurning) != 0)
 	{
-		return MaxYawSpeedTurningArm(TEXT("0x1093ad24"));
+		return MaxYawSpeedTurningArm(ElysiumNpcTunables::EConVar::DebugDogTurnScalar);
 	}
 	if (NpcFlags.Has(EElysiumNpcFlag::PLAYING_FACE_ANIM))
 	{
-		return NpcKernelMotorShared::GYawDefault;
+		return GYawDefault;
 	}
-	const int32 Activity = ActivityNumber;
-	if (Activity < NpcKernelMotorShared::GActCrouchWalk + 1)
+	switch (ActivityNumber)
 	{
-		if (NpcKernelMotorShared::GActCrouchIdle - 1 < Activity)
-		{
-			return NpcKernelMotorShared::GYawCrouch;        // _DAT_104492a8 = 30.0
-		}
-		if (Activity == NpcKernelMotorShared::GActIdle || Activity == NpcKernelMotorShared::GActIdleAngry)
-		{
-			// `m_bAllowTurningAnims` ORed with the cvar the Facing family recorded (`0x109247ec`):
-			// when neither is on, `debug_turning_speed` (`0x10923e84`, 90) decides; when either is, 30.0.
-			if (!TurningAnimsEnabled())
-			{
-				return RetailYawConVarValue(TEXT("0x10923e84"));
-			}
-			return NpcKernelMotorShared::GYawCrouch;
-		}
-		if (Activity != NpcKernelMotorShared::GActRun)
-		{
-			return NpcKernelMotorShared::GYawDefault;
-		}
+	case GActCrouchIdle:
+	case GActCrouchWalk:
+		return GYawCrouch;
+	case GActIdle:
+	case GActIdleAngry:
+		// `m_bAllowTurningAnims` or the cvar `0x109247ec`: neither gives `debug_turning_speed`.
+		return TurningAnimsEnabled() ? GYawCrouch
+			: ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::DebugTurningSpeed);
+	case GActRun:
+	case 0x1093:
+	case 0x1094:
+	case 0x1095:
+	case 0x1096:
+		return ElysiumNpcTunables::Forty;   // `_DAT_10462950`
+	default:
+		return GYawDefault;
 	}
-	else if (Activity != 0x1093 && (Activity < 0x1094 || 0x1096 < Activity))
-	{
-		return NpcKernelMotorShared::GYawDefault;
-	}
-	return ElysiumNpcTunables::Forty;                       // _DAT_10462950 = 40.0
 }
 
 // Slot 566: `0x10374aa0`, a replacement that does not chain.
@@ -232,16 +220,6 @@ bool FElysiumNpcDog::FValidateHintType(void* Hint)
 	const FHintWords* Words = static_cast<const FHintWords*>(Hint);
 	const int32 HintType = Words != nullptr ? Words->HintType : 0;
 	return HintType == 12000;
-}
-
-// Slot 546: `0x103736d0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcDog::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093ad64`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VDog"), TEXT("0x103736d0"), TEXT("0x1093ad64") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcState.cpp` (story 5 step 4) ---

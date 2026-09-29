@@ -22,6 +22,8 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcMingXiaoTentacle.h"
+#include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcVampireBoss.h"
 #include "Substrate/ElysiumNpcCamera.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "ElysiumNpcFlags.h"
@@ -902,18 +904,6 @@ bool FElysiumNpcKernelLifecycle19StartNpcTest::RunTest(const FString&)
 	}
 	F.Npc->StartNPC();                                                   // 0x1029a8b0
 	TestTrue(TEXT("10273ad0 ThinkSet on both first-second arms"), F.Npc->ThinkSetCalls >= 2);
-	FLifecycle19Fixture Tzimisce(TEXT("CNPC_VTzimisce"));
-	if (Tzimisce.Npc == nullptr)
-	{
-		AddError(TEXT("no Tzimisce"));
-		return false;
-	}
-	// The map-start think already ran `NPCInitThink` (`0x10273aa0` -> slot 422) once (story 8 wave 2:
-	// the entity think dispatches it), so the explicit call is the second re-arm.
-	const int32 RearmsBefore = Tzimisce.As<FElysiumNpcTzimisce>()->TzimisceStartNpcRearms;
-	Tzimisce.Npc->StartNPC();                                            // 0x103b9270
-	TestEqual(TEXT("Tzimisce redundant re-arm"), Tzimisce.As<FElysiumNpcTzimisce>()->TzimisceStartNpcRearms,
-		RearmsBefore + 1);
 	return true;
 }
 
@@ -1022,7 +1012,7 @@ bool FElysiumNpcKernelLifecycle19ArmCoverageTest::RunTest(const FString&)
 		TEXT("0x103673b0"), TEXT("0x103692c0"), TEXT("0x1036b050"), TEXT("0x1036f100"),
 		TEXT("0x1036f900"), TEXT("0x10372b00"), TEXT("0x10375c80"), TEXT("0x103785f0"),
 		TEXT("0x1037b290"), TEXT("0x1037e240"), TEXT("0x1037fa70"), TEXT("0x10387140"),
-		TEXT("0x10388b30"), TEXT("0x1038b070"), TEXT("0x103a0420"), TEXT("0x103a2570"),
+		TEXT("0x1038b070"), TEXT("0x103a0420"), TEXT("0x103a2570"),
 		TEXT("0x103a4350"), TEXT("0x103a4580"), TEXT("0x103a6d40"), TEXT("0x103ae6c0"),
 		TEXT("0x103b2360"), TEXT("0x103b35c0"), TEXT("0x103b91d0"), TEXT("0x103c1c80"),
 		TEXT("0x103c5840"), TEXT("0x103caef0"), TEXT("0x103dce00"), TEXT("0x103dd800"),
@@ -1112,6 +1102,126 @@ bool FElysiumNpcKernelLifecycle19MingXiaoRestoreTest::RunTest(const FString&)
 	return true;
 }
 
+// 0019/6: `CNPC_VMingXiao::Save` / `vfunc127` and the tentacle's `Save` / `Restore` pair only bracketed two FIELD_TIME stamps (modes 4 and 3) around the archive. The
+// generated SAVE walk stores the stamps itself; this pins that an unset stamp survives the real
+// persistence path (`Freeze` / `ApplySnapshot`) unchanged.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest,
+	"Elysium.Substrate.NpcKernelLifecycle19.MingXiaoStampRoundTrip", GLifecycle19Flags)
+bool FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest::RunTest(const FString&)
+{
+	{
+		FLifecycle19Fixture From(TEXT("CNPC_VMingXiao"));
+		FLifecycle19Fixture To(TEXT("CNPC_VMingXiao"));
+		if (From.Npc == nullptr || To.Npc == nullptr)
+		{
+			AddError(TEXT("no NPC"));
+			return false;
+		}
+		FElysiumNpcMingXiao* Src = From.As<FElysiumNpcMingXiao>();
+		Src->MingXiaoRegrowTimers[0] = static_cast<double>(FLT_MAX);
+		Src->MingXiaoRegrowTimers[1] = 12.5;
+		ElysiumRoundTripSnapshot(From.World.World, To.World.World);
+		FElysiumNpc* Back = To.World.NpcOfClass(TEXT("CNPC_VMingXiao"));
+		FElysiumNpcMingXiao* Dst = Back != nullptr ? ElysiumTestAsSpecies<FElysiumNpcMingXiao>(Back) : nullptr;
+		if (!TestNotNull(TEXT("ming xiao restores"), Dst))
+		{
+			return false;
+		}
+		TestEqual(TEXT("m_rflRegrowTimers[0] stays parked at FLT_MAX (mode 4)"),
+			Dst->MingXiaoRegrowTimers[0], static_cast<double>(FLT_MAX));
+		TestEqual(TEXT("m_rflRegrowTimers[1] keeps its stamp"), Dst->MingXiaoRegrowTimers[1], 12.5);
+	}
+	{
+		FLifecycle19Fixture From(TEXT("CNPC_VMingXiaoTentacle"));
+		FLifecycle19Fixture To(TEXT("CNPC_VMingXiaoTentacle"));
+		if (From.Npc == nullptr || To.Npc == nullptr)
+		{
+			AddError(TEXT("no NPC"));
+			return false;
+		}
+		From.As<FElysiumNpcMingXiaoTentacle>()->MingXiaoTentaclePhaseExpireTimer = 0.0;
+		ElysiumRoundTripSnapshot(From.World.World, To.World.World);
+		FElysiumNpc* Back = To.World.NpcOfClass(TEXT("CNPC_VMingXiaoTentacle"));
+		FElysiumNpcMingXiaoTentacle* Dst =
+			Back != nullptr ? ElysiumTestAsSpecies<FElysiumNpcMingXiaoTentacle>(Back) : nullptr;
+		if (!TestNotNull(TEXT("tentacle restores"), Dst))
+		{
+			return false;
+		}
+		TestEqual(TEXT("m_flPhaseExpireTimer 0 stays unarmed (mode 3)"),
+			Dst->MingXiaoTentaclePhaseExpireTimer, 0.0);
+	}
+	return true;
+}
+
+// Slot 127's load-side halves on the boss line (0019/6): `CNPC_VVampireBoss::Restore`
+// and the species rows that run it first, now each class's `OnPostRestore` after the SAVE walk. Both
+// worlds hold the same off-retail values first, so each expectation holds whatever the walk
+// carries. Andrei and the Chang brothers are
+// `NpcKernelSpeciesLifecycle10.AndreiBloodRestore` / `.ChangBrosRestore`.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19BossPostRestoreTest,
+	"Elysium.Substrate.NpcKernelLifecycle19.BossPostRestore", GLifecycle19Flags)
+bool FElysiumNpcKernelLifecycle19BossPostRestoreTest::RunTest(const FString&)
+{
+	struct FRow
+	{
+		const TCHAR* Class;
+		const TCHAR* Model;
+		const TCHAR* Classname;
+		const TCHAR* E0;
+		const TCHAR* E1;
+		float Gravity;
+		int32 Hull;
+	};
+	const FRow Rows[] = {
+		{ TEXT("CNPC_VVampireBoss"), TEXT(""), TEXT("npc_VVampireBoss"), TEXT(""), TEXT(""), 9.f, 0 },
+		{ TEXT("CNPC_VAsianVampire"), TEXT(""), TEXT("npc_VVampireBoss"), TEXT(""), TEXT(""), 2.f, 0 },  // CNPC_VAsianVampire::restore
+		{ TEXT("CNPC_VSabbatLeader"), TEXT("models/character/monster/Andrei/andrei.mdl"),
+			TEXT("npc_VSabbatLeader"), TEXT("Andrei_powerup_emitter"), TEXT("Andrei_powerup_emitter"),
+			9.f, 0 },                                                                                    // vfunc127
+		{ TEXT("CNPC_VSheriffMan"), TEXT("models/character/monster/manbat/manbat.mdl"),
+			TEXT("npc_VSheriffMan"), TEXT(""), TEXT(""), 2.f, 0x15 },                                    // vfunc127
+	};
+	// `DAT_109340d8` is a process global; the case puts it back the way it found it.
+	const int32 HullBefore = FElysiumNpc::NodeGraphHullIndex();
+	for (const FRow& Row : Rows)
+	{
+		FLifecycle19Fixture From(Row.Class);
+		FLifecycle19Fixture To(Row.Class);
+		if (!TestNotNull(*FString::Printf(TEXT("%s stood"), Row.Class), From.Npc)
+			|| !TestNotNull(*FString::Printf(TEXT("%s stood twice"), Row.Class), To.Npc))
+		{
+			continue;
+		}
+		for (FElysiumNpcVampireBoss* Boss : { From.As<FElysiumNpcVampireBoss>(), To.As<FElysiumNpcVampireBoss>() })
+		{
+			Boss->VampireBossMonsterModelName = TEXT("models/saved_mid_transform.mdl");
+			Boss->VampireBossMonsterClassname = TEXT("npc_saved");
+			for (FString& Name : Boss->BodyEmitterNames)
+			{
+				Name = TEXT("saved_emitter");
+			}
+			Boss->JumpGravity = 9.f;
+		}
+		FElysiumNpc::NodeGraphHullIndex() = 0;
+		ElysiumRoundTripSnapshot(From.World.World, To.World.World);
+		const FElysiumNpcVampireBoss* B = To.As<FElysiumNpcVampireBoss>();
+		TestEqual(*FString::Printf(TEXT("%s +0x6680"), Row.Class), B->VampireBossMonsterModelName,
+			FString(Row.Model));
+		TestEqual(*FString::Printf(TEXT("%s +0x6694"), Row.Class), B->VampireBossMonsterClassname,
+			FString(Row.Classname));
+		TestEqual(*FString::Printf(TEXT("%s emitter 0"), Row.Class), B->BodyEmitterNames[0], FString(Row.E0));
+		TestEqual(*FString::Printf(TEXT("%s emitter 1"), Row.Class), B->BodyEmitterNames[1], FString(Row.E1));
+		TestTrue(*FString::Printf(TEXT("%s emitter 3 cleared (0x103c6eb0)"), Row.Class),
+			B->BodyEmitterNames[3].IsEmpty());
+		TestEqual(*FString::Printf(TEXT("%s +0x64b8"), Row.Class), B->JumpGravity, Row.Gravity);
+		TestEqual(*FString::Printf(TEXT("%s DAT_109340d8"), Row.Class), FElysiumNpc::NodeGraphHullIndex(),
+			Row.Hull);
+	}
+	FElysiumNpc::NodeGraphHullIndex() = HullBefore;
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19RunnerRestoreTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.TzimisceRunnerOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19RunnerRestoreTest::RunTest(const FString&)
@@ -1161,7 +1271,7 @@ bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 		{ TEXT("CNPC_VGuard1"), TEXT("0x1037e240") },
 		{ TEXT("CNPC_VHengeyokai"), TEXT("0x1037fa70") },
 		{ TEXT("CNPC_VHumanCombatant"), TEXT("0x10387140") },
-		{ TEXT("CNPC_VHunter"), TEXT("0x10388b30") },
+		{ TEXT("CNPC_VHunter"), TEXT("0x10387140") },
 		{ TEXT("CNPC_VManBat"), TEXT("0x1038b070") },
 		{ TEXT("CNPC_VNewscaster"), TEXT("0x103a0420") },
 		{ TEXT("CNPC_VPedestrian"), TEXT("0x103a2570") },

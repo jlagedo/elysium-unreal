@@ -85,49 +85,6 @@ FElysiumEntity* FElysiumNpc::GetEnemy()
 }
 
 // =================================================================================================
-// Slots 541 / 543 — the `CAI_Enemies` store, `0x10273e10` and `0x10273e40`
-// =================================================================================================
-
-namespace
-{
-}
-
-// =================================================================================================
-// Slot 86 — `ShouldTransmit`, `0x102c0420`
-// =================================================================================================
-
-bool FElysiumNpc::ShouldTransmit(int32 Param1, void* Edict, void* Info, int32 Param4, int32 Param5)
-{
-	// `0x102c0420`, 54 bytes:
-	//
-	//     if (IsInDialog(this)) return true;                       // 0x102c1170
-	//     return CBaseCombatCharacter::ShouldTransmit(...);        // the base, all five arguments
-	//
-	// `0x102c1170` is NAMED in the corpus — `IsInDialog` — and is four tests in order:
-	// `+0x64c0` set, `+0x64ec` set, a live handle at `+0xfe8`, a live handle at `+0x6554`. So the
-	// gate is "this NPC is mid-conversation", and its effect is to FORCE the NPC onto the network
-	// whatever the base body would have said. It is not a hidden-from-network test, which is how
-	// 29c's walk reads it, and the polarity matters: reading it the other way would cull the actor
-	// the player is talking to.
-	//
-	// **SEAM**: this runtime has no networking and no `edict_t`. `FElysiumNpcDialogue`'s live
-	// session is the port's answer for the four dialog words, and the base
-	// `CBaseCombatCharacter::ShouldTransmit` — PVS plus the always-transmit flags — has no port
-	// body either, so the fall-through answers TRUE: everything is transmitted in a single-player
-	// substrate with no PVS culling, which is the arm that can never hide a live actor.
-	(void)Param1;
-	(void)Edict;
-	(void)Info;
-	(void)Param4;
-	(void)Param5;
-	if (HasLiveDialogPartner())
-	{
-		return true;
-	}
-	return true;
-}
-
-// =================================================================================================
 // Slot 470 — `OnListened`, `0x102b39e0`
 // =================================================================================================
 

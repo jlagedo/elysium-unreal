@@ -22,8 +22,7 @@ int32 ResolveIdealScheduleStamp(int32 RawRetailId) const;
 
 /** `CAI_BaseNPC::SetSchedule(int)` (`0x10280de0`) whole, and the body all five slot-619 species
  *  overrides forward to (`0x1035dba0`, `0x10361530`, `0x1036c760`, `0x103a9fd0`, `0x103af8d0` —
- *  each a scope-trace wrapper with no logic of its own; their trace names are
- *  `FElysiumNpcScheduleHost::SetScheduleTraceName`).
+ *  each a scope-trace wrapper with no logic of its own).
  *
  *  Stamp raw `BaseScheduleHost.IdealScheduleRetail`, then run `SetSchedule(int)` (`0x102cc1f0`) →
  *  `CAI_BaseNPC::SetSchedule(CAI_Schedule*)` (`0x10280e50`), which is `ElysiumSchedule::Start`. */

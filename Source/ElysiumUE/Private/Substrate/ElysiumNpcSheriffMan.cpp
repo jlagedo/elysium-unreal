@@ -25,7 +25,6 @@
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumNpcPositions2Shared.h"
 #include "Substrate/ElysiumNpcPositionsShared.h"
-#include "Substrate/ElysiumNpcPrecache10Shared.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -50,18 +49,17 @@ namespace
 	// `CNPC_VSheriffMan::KillSheriff`'s two named entities.
 	constexpr const TCHAR* SheriffRelayName = TEXT("logic_zap_player");
 	constexpr const TCHAR* SheriffSelfName = TEXT("sheriff");
-	constexpr float GMotorTailSheriffJumpRise = 400.0f;      // _DAT_104c614c
-	constexpr float DegreesPerTurnRecip = 0.0055555556900799274f; // _DAT_104c6d40, 1/180
-	constexpr float SheriffLastTeleportFloor = 100.0f;    // DAT_104c6124
+	constexpr float GMotorTailSheriffJumpRise = ElysiumNpcTunables::SheriffJumpRise;      // _DAT_104c614c
+	constexpr float DegreesPerTurnRecip = ElysiumNpcTunables::InverseOneEighty; // _DAT_104c6d40, 1/180
+	constexpr float SheriffLastTeleportFloor = ElysiumNpcTunables::SheriffLastTeleportFloor;    // DAT_104c6124
 	// `CNPC_VSheriffMan::SelectTeleportNode` `0x103b0630`.
 	constexpr float SheriffTeleportZScale = ElysiumNpcTunables::Hundred;   // a DIMENSIONLESS weight
-	constexpr float SheriffScoreDistCap = 1000.0f;        // DAT_104c6144
-	constexpr float SheriffScoreYawWeight = 0.4f;         // _DAT_1044a2bc
-	constexpr float SheriffScoreDistWeight = 0.6f;        // _DAT_104c6d3c
+	constexpr float SheriffScoreDistCap = ElysiumNpcTunables::SheriffScoreDistCap;        // DAT_104c6144
+	constexpr float SheriffScoreYawWeight = ElysiumNpcTunables::FourTenths;         // _DAT_1044a2bc
+	constexpr float SheriffScoreDistWeight = ElysiumNpcTunables::SixTenths;        // _DAT_104c6d3c
 	constexpr int32 HintCenter = 0x4651;
+	// `0x10651230`, the model name `NPCInit` `0x103ae6c0` and `Restore` both write.
 	const TCHAR* const GSheriffModel = TEXT("models/character/monster/manbat/manbat.mdl");
-	const TCHAR* const GSheriffLandblastEmitter = TEXT("sheriff_landblast_emitter");
-	const TCHAR* const GSheriffWeapon = TEXT("item_w_sheriff_sword");
 }
 
 // `CNPC_VSheriffMan`'s constructor `0x103ae3e0` writes the standing hull word at `0x103ae463`,
@@ -96,26 +94,12 @@ void FElysiumNpcSheriffMan::NPCInit()
 	NodeGraphHullIndex() = HullIndexSheriffMan;
 }
 
-// Slot 104: `0x103ae540`.
-// 0x103ae540
-void FElysiumNpcSheriffMan::Precache()
-{
-	// `CNPC_VSheriffMan::Precache` `0x103ae540` — scope-trace frame, the Troika body, the manbat
-	// model with preload 1, the landblast emitter once and `sheriff_teleport_emitter` TWICE from the
-	// identical `.rdata` cell `0x10642adc` (the same retail duplicate the ManBat arm keeps), and the
-	// sword.
-	TroikaPrecache();
-	NpcKernelPrecache10Shared::Precache10Model(*this, GSheriffModel, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, GSheriffLandblastEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, NpcKernelPrecache10Shared::GSheriffTeleportEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Particle(*this, NpcKernelPrecache10Shared::GSheriffTeleportEmitter, /*Preload=*/1);
-	NpcKernelPrecache10Shared::Precache10Other(*this, GSheriffWeapon);
-}
+// Slot 104 is gone (story 0019/6): the manbat model, the landblast and teleport emitters
+// and `item_w_sheriff_sword` resolve at bake and load; the precache had no observable step or order.
 
 // Slot 461: `0x103aeac0`, the selector tag 0x21 and then a direct call into the human line's `0x103851e0`.
 int32 FElysiumNpcSheriffMan::SelectIdealStateRetail()
 {
-	SelectIdealStateSelector = 0x21;
 	return HumanSelectIdealState();
 }
 
@@ -317,21 +301,21 @@ bool FElysiumNpcSheriffMan::FValidateHintType(void* Hint)
 	return true;
 }
 
-// Slot 546: `0x103adcb0`, the class's own schedule id space.
-const TCHAR* FElysiumNpcSheriffMan::SquadSlotName(int32 SlotEn)
+/** `CNPC_VSheriffMan::vfunc127`'s load-side half (story 0019/6;
+ *  `docs/vtmb/npc-ai/shape.md` § "The three species `Restore` bodies"). Retail calls
+ *  `CNPC_VVampireBoss::Restore` and then writes, in order: `m_pMonsterModelName`
+ *  (`+0x6680`) = the manbat model (`0x10651230`), `m_pszMonsterClassname` (`+0x6694`) =
+ *  `"npc_VSheriffMan"`, `m_fJumpGravity` (`+0x64b8`) = `_DAT_104c6148` (**2.0f**, `103ae811 FLD
+ *  dword`), and last the process-wide `DAT_109340d8` (the node-graph hull index) = `0x15` — the same
+ *  data `NPCInit` `0x103ae6c0` writes. The record half is the generated SAVE walk. */
+void FElysiumNpcSheriffMan::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093c568`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VSheriffMan"), TEXT("0x103adcb0"), TEXT("0x1093c568") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
-// Slot 127: `0x103ae7f0`, whose body is the `CNPC_VVampireBoss` restore (`0x103c5910`, family
-// SaveRestore10's `VampireBossRestore`) — the census's mechanism row for this class.
-int32 FElysiumNpcSheriffMan::Restore(void* Archive)
-{
-	return VampireBossRestore(Archive);
+	VampireBossPostRestoreResets();                                      // CNPC_VVampireBoss::Restore
+	VampireBossMonsterModelName = GSheriffModel;                         // +0x6680
+	VampireBossMonsterClassname = TEXT("npc_VSheriffMan");              // +0x6694
+	JumpGravity = SheriffManJumpGravity;                                 // +0x64b8, 2.0f
+	NodeGraphHullIndex() = HullIndexSheriffMan;                          // DAT_109340d8 := 0x15
+	FElysiumNpcVampire::OnPostRestore(InWorld);
 }
 
 // --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---
@@ -647,27 +631,6 @@ void FElysiumNpcSheriffMan::CategorizeHeights(int32& OutPlayer, int32& OutSelf) 
 }
 
 // --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 4) ---
-
-// --- `CNPC_VSheriffMan::KillTeleportBats` `0x103b0560` ------------------------------------------
-
-void FElysiumNpcSheriffMan::KillTeleportBats()
-{
-	//     CBaseEntity* swarm = m_hTeleportSwarm;           // +0x66d0
-	//     if (swarm resolves) thunk_FUN_101cd940( swarm ); // UTIL_Remove
-	//     m_hTeleportSwarm = INVALID_EHANDLE;
-	//
-	// The handle is invalidated whether or not it resolved, which is what makes this idempotent and
-	// safe to call from a death or a state change as well as from the teleport itself.
-	FElysiumEntity* Swarm = World != nullptr ? World->Resolve(SheriffTeleportSwarm) : nullptr;
-	if (Swarm != nullptr)
-	{
-		// `thunk_FUN_101cd940` — `UTIL_Remove`. This runtime's equivalent is the entity's own Kill.
-		Swarm->Kill();
-	}
-	SheriffTeleportSwarm = FElysiumEntityHandle();
-}
-
-// --- Moved from `ElysiumNpcPrecache10.cpp` (story 5 step 4) ---
 
 // --- Moved from `ElysiumNpcSchedule.cpp` (story 5 step 4) ---
 

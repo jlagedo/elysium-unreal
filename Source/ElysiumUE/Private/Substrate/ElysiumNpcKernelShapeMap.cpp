@@ -47,9 +47,8 @@ namespace
 	ELYSIUM_NPC_WORD(0x1b24, FElysiumNpcBaseScheduleHost, CacheInterruptTime),
 	ELYSIUM_NPC_WORD_PRIVATE(0x1b28, "FElysiumNpcMind::bForceStateChange",
 		"private to its owner: m_bForceStateChange"),
-	ELYSIUM_NPC_WORD_NOTED(0x1b2c, FElysiumNpcBase, SelectScheduleSelector,
-		"m_SelectScheduleTrace.m_iSelector only (story 8 Select19, visual-only modernization); the "
-			"file/line pair +0x1b30/+0x1b34 stays absent, each exit's line goes to the schedule trace"),
+	ELYSIUM_NPC_WORD_ABSENT(0x1b2c,
+		"m_SelectScheduleTrace {tag, file, line}: the selector debug stamp, dead (0019/1), its word and its ~290 writers deleted (0019/6)"),
 	ELYSIUM_NPC_WORD_ABSENT(0x1b38,
 		"retail's file/line ideal-state trace; the mind's transition trace carries the same "
 			"account"),
@@ -142,7 +141,7 @@ namespace
 		"an activity enum with no port counterpart, so the registered number"),
 	ELYSIUM_NPC_WORD(0x5cd8, FElysiumNpcBase, bKeepSound),
 	ELYSIUM_NPC_WORD_NOTED(0x5cdc, FElysiumNpcBase, Senses,
-		"m_pSenses, the CAI_Senses object every NPC-base instance carries (PostConstructor 0x1027bb20 -> "
+		"m_pSenses, the CAI_Senses object every NPC-base instance carries (the retail constructor order, closed at UE component construction 0019/6 -> "
 		"slot 424); directors hold it idle"),
 	ELYSIUM_NPC_WORD(0x5ce0, FElysiumNpcBaseMemory, Enemy),
 	ELYSIUM_NPC_WORD_PRIVATE(0x5ce4, "FElysiumNpcBase::TargetEnt",

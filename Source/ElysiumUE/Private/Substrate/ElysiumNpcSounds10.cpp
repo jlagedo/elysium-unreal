@@ -5,9 +5,8 @@
 //   * the **seventeen sound hooks** of slots 488–507 on the Troika line (`0x10293ec0` …
 //     `0x10294f40`) — nineteen slots, of which 497 is another family's and 496/500 are reached only
 //     through the vtable;
-//   * the **three `KeyValue` overloads**, slots 108 (`0x1004fbb0`), 109 (`0x1004fbf0`) and 110
-//     (`0x101c1480`), with the two `CBaseEntity` formatters they forward through (`0x1009eca0`,
-//     `0x1009ebb0`);
+//   * the `KeyValue` overload of slot 110 (`0x101c1480`); the other two overloads (slots 108, 109)
+//     and their `CBaseEntity` formatters are dead (0019/6);
 //   * slot 185 **`FireBullets`** (`0x10268900`), the shared bullet pass;
 //   * the **species arms** `CNPC_VWerewolf#500` (`0x103d8660`) and `CNPC_VWerewolf#491`
 //     (`0x103d87a0`). `CNPC_Crow#511` (`0x10357800`) carries no arm: no map stands that class.
@@ -53,15 +52,11 @@ namespace
 	const TCHAR* const GSounds10ConceptTargetLost = TEXT("Target_Lost");            // 0x105d8c84
 	const TCHAR* const GSounds10ConceptTargetReacquired = TEXT("Target_Reacquired");// 0x105d8c94
 	const TCHAR* const GSounds10ConceptSurprised = TEXT("Surprised");               // 0x105d8cac
-	const TCHAR* const GSounds10ConceptTargetAcquired = TEXT("Target_Acquired");    // 0x105d8cb8
 	const TCHAR* const GSounds10ConceptFlee = TEXT("Flee");                         // 0x105d8cd0
 	const TCHAR* const GSounds10ConceptIdleAgitated = TEXT("Idle_Agitated");        // 0x105d8cd8
-	const TCHAR* const GSounds10ConceptRiled = TEXT("Riled");                       // 0x105d8ce8
 	const TCHAR* const GSounds10ConceptComfort = TEXT("Comfort");                   // 0x105d8cf0
 	const TCHAR* const GSounds10ConceptUpset = TEXT("Upset");                       // 0x105d8cfc
-	const TCHAR* const GSounds10ConceptTargetGiveUp = TEXT("Target_GiveUp");        // 0x105d8d04
 	const TCHAR* const GSounds10ConceptFloat = TEXT("Float");                       // 0x105d8d14
-	const TCHAR* const GSounds10ConceptExertLight = TEXT("Exert_Light");            // 0x1057a1b0
 
 	// Source's `CHAN_VOICE`. Every hook in this family passes `2` as `0x101f5950`'s third argument.
 	constexpr int32 GSounds10ChanVoice = 2;
@@ -230,7 +225,7 @@ void FElysiumNpc::LostEnemySound()
 //     if (IsBusyWithDiscipline()) return;        // `CBaseCombatCharacter::IsBusyWithDiscipline`
 //     <the plain shape, concept "Target_Reacquired" (0x105d8c94)>
 //
-// Slot 506 (`0x10294e70`) is the same gate over the same concept through a DIFFERENT cache
+// Slot 506 is the same gate over the same concept through a DIFFERENT cache
 // (`DAT_10924240` / `DAT_10924830` rather than `DAT_109240c8` / `DAT_10924a14`). Two caches, one
 // concept: with the lookup pure, the two are the same answer, which is why this port re-resolves
 // instead of carrying two cells.
@@ -250,15 +245,6 @@ void FElysiumNpc::SurprisedSound()
 	SpeakSoundConcept(GSounds10ConceptSurprised, GSounds10Attenuation);
 }
 
-// `CAI_BaseNPCTroika::FUN_10294720` (`0x10294720`), slot 496 `TargetAcquiredSound`. 138 bytes,
-// concept `"Target_Acquired"` (`0x105d8cb8`) through `DAT_10923dde` / `DAT_1092423c`. No caller of
-// any kind in the image, and it fills slot 496 on 57 census classes, so it is reached through the
-// vtable and is not dead.
-void FElysiumNpc::TargetAcquiredSound()
-{
-	SpeakSoundConcept(GSounds10ConceptTargetAcquired, GSounds10Attenuation);
-}
-
 // `CAI_BaseNPCTroika::FUN_10294870` (`0x10294870`), slot 498 `FleeSound`. 138 bytes, concept
 // `"Flee"` — the second string the corpus left unnamed (`0x105d8cd0`), read out of the image, one
 // cell past the three-byte placeholder `"???"` at `0x105d8ccc` — through `DAT_10923dd5` /
@@ -275,32 +261,6 @@ void FElysiumNpc::IdleAgitatedSound()
 	SpeakSoundConcept(GSounds10ConceptIdleAgitated, GSounds10Attenuation);
 }
 
-// `CAI_BaseNPCTroika::FUN_102949f0` (`0x102949f0`), slot 500 `ExertHvySound`. 138 bytes, concept
-// `"Exert_Heavy"` (`0x1057a1a0`, NOT in the `0x105d8c30` block with the other sixteen) through
-// `DAT_109241ec` / `DAT_109240bc`.
-//
-// SPECIES ARM: `CNPC_VWerewolf::vfunc500` (`0x103d8660`), 245 bytes — the same concept through its
-// own guard `DAT_1093f99c` and cache `DAT_1093fa30`, inside a `"CNPC_VWerewolf::ExertHvySound"`
-// scope-trace frame, with `0` as the fifth argument. It does not chain to the base.
-void FElysiumNpc::ExertHvySound()
-{
-	SpeakSoundConcept(NpcKernelSounds10Shared::GSounds10ConceptExertHeavy, GSounds10Attenuation);
-}
-
-// `CAI_BaseNPCTroika::FUN_10294ab0` (`0x10294ab0`), slot 501 `ExertLightSound`. 138 bytes, concept
-// `"Exert_Light"` (`0x1057a1b0`) through `DAT_10923f0f` / `DAT_10924838`.
-void FElysiumNpc::ExertLightSound()
-{
-	SpeakSoundConcept(GSounds10ConceptExertLight, GSounds10Attenuation);
-}
-
-// `CAI_BaseNPCTroika::FUN_10294b70` (`0x10294b70`), slot 502 `RiledSound`. 138 bytes, concept
-// `"Riled"` (`0x105d8ce8`) through `DAT_10924aac` / `DAT_10924244`.
-void FElysiumNpc::RiledSound()
-{
-	SpeakSoundConcept(GSounds10ConceptRiled, GSounds10Attenuation);
-}
-
 // `CAI_BaseNPCTroika::FUN_10294c30` (`0x10294c30`), slot 503 `ComfortSound`. 138 bytes, concept
 // `"Comfort"` (`0x105d8cf0`) through `DAT_1092497c` / `DAT_10924624`.
 void FElysiumNpc::ComfortSound()
@@ -313,28 +273,6 @@ void FElysiumNpc::ComfortSound()
 void FElysiumNpc::UpsetSound()
 {
 	SpeakSoundConcept(GSounds10ConceptUpset, GSounds10Attenuation);
-}
-
-// `CAI_BaseNPCTroika::FUN_10294db0` (`0x10294db0`), slot 505 `TargetGiveUpSound`. 138 bytes, concept
-// `"Target_GiveUp"` (`0x105d8d04`) through `DAT_10923dd6` / `DAT_10923d7c`.
-void FElysiumNpc::TargetGiveUpSound()
-{
-	SpeakSoundConcept(GSounds10ConceptTargetGiveUp, GSounds10Attenuation);
-}
-
-// `CAI_BaseNPCTroika::FUN_10294e70` (`0x10294e70`), slot 506's Troika-line body. 147 bytes and
-// byte-for-byte slot 494's shape: the `IsBusyWithDiscipline` gate, then the SAME concept
-// `"Target_Reacquired"` through its own guard and cache.
-//
-// The dispatch in front (`CNPC_VCamera` `0x103682f0`, an empty body) is `FElysiumNpc::Slot506` in
-// family **Sounds**' file.
-void FElysiumNpc::TroikaSlot506()
-{
-	if (IsBusyWithDiscipline())
-	{
-		return;
-	}
-	SpeakSoundConcept(GSounds10ConceptTargetReacquired, GSounds10Attenuation);
 }
 
 float FElysiumNpc::FloatSoundAttenuation(bool bHasDialogName)
@@ -351,7 +289,7 @@ float FElysiumNpc::FloatSoundAttenuation(bool bHasDialogName)
 	if (Term + 0x42 <= 0x32)
 	{
 		// Retail's `_DAT_10449148`, 4.0 — read out of the pinned image, and unreachable.
-		return 4.0f;
+		return static_cast<float>(ElysiumNpcTunables::CheckOnGroundReach);
 	}
 	return static_cast<float>(0x14 / (Term + 0x10));
 }

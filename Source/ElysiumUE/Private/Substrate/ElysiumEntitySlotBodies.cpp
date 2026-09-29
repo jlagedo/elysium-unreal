@@ -29,7 +29,6 @@
 #include "Substrate/ElysiumNpcBaseEntityChainShared.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
-#include "Substrate/ElysiumNpcDebugShared.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
@@ -75,14 +74,6 @@ namespace
 	constexpr int32 GChainSolidBbox = 2;      // SOLID_BBOX
 	// `FSOLID_NOT_SOLID`, the `GetSolidFlags()` bit slot 164 refuses on.
 	constexpr int32 GChainSolidNotSolid = 0x10;
-	// `MoveType_t` as slot 226 switches on it. 7 takes the read-back-from-physics arm; 1 and 8 take
-	// `VPhysicsUpdatePusher`. Troika's enum is NOT stock Source's here, so the numbers are carried
-	// as numbers and the names are not claimed.
-	constexpr int32 GChainMoveTypePhysicsRead = 7;
-	constexpr int32 GChainMoveTypePusherA = 1;
-	constexpr int32 GChainMoveTypePusherB = 8;
-	// `m_iEFlags` bit 0, `EFL_KILLME` — slot 116 `IsMarkedForDeletion` (`0x10027490`).
-	constexpr int32 GEntityFlagKillMe = 1 << 0;
 	// Slot 91 `ShouldCollide` (`0x100b4de0`): the one collision group it refuses for, and the
 	// contents mask bit that overrides the refusal. `1` is Source's `COLLISION_GROUP_DEBRIS`.
 	constexpr int32 GCollisionGroupDebris = 1;
@@ -142,76 +133,6 @@ void FElysiumEntity::SetOrigin(float X, float Y, float Z)
 	SetOrigin(FVector(X, Y, Z));
 }
 
-bool FElysiumEntity::Slot88()
-{
-	// `0x10026b50` is a bare tail jump into `0x10146700` on the eight-byte tracker at `this+0x1b0`
-	// (interval word `+0x4`, countdown `+0x6`, flag bytes `+0x0`/`+0x1`/`+0x2`). `0x10146700` runs
-	// the countdown down by the frame delta, re-arms it and raises `+0x2` when it lapses, and
-	// answers "a change is pending". Slot 89 (`0x10026b70`) zeroes `+0x1`/`+0x2`, and
-	// `SetOrigin` (`0x100b2be0`) sets `+0x1b1`. The tracker's retail NAME is **unrecovered** — no
-	// datamap names it and no corpus body declares it.
-	//
-	// **REFUSAL.** Roughly 80 unrelated non-NPC classes (props, triggers, items) fill this slot with
-	// the same body, which is what says it is engine plumbing rather than an NPC rule; it is the
-	// networked-edict dirty flag, and this substrate has no replication to dirty. No port member
-	// stands `+0x1b0` — the shape map has no row for it, and no other family declared one.
-	//
-	// `false` is not a placeholder: it is what `0x10146700` itself answers for a ZERO-INITIALISED
-	// tracker. With `+0x4` zero the countdown arm never runs, `+0x0` is clear, and the function
-	// takes its `(sVar1 == 0)` exit and returns 0. An NPC that never dirtied has no change pending.
-	++ClosureRefusals.ChangeTracker;
-	return false;
-}
-
-void FElysiumEntity::Physics_TraceEntity(FElysiumEntity* Entity, const FVector& StartCm,
-	const FVector& EndCm, uint32 Mask, void* OutTrace)
-{
-	// `0x100ab450`, 121 bytes of which 100 are the crash-report breadcrumb push and pop: the body
-	// writes `"Physics_TraceEntity"` into the scope-trace stack, calls `thunk_FUN_101cd110` with all
-	// five arguments unchanged, and pops. `0x101cd110` issues the trace through the engine trace
-	// service's own vtable (`DAT_1070b254 + 0x14`). There is nothing else in the body, which is 29c's
-	// `mechanism` verdict and why it names `UWorld::LineTraceSingleByChannel`.
-	//
-	// **REFUSAL, and it is the out parameter that forces it.** The port HAS a trace seam — the
-	// embodiment's `QueryLineOfSight` — but retail's fifth argument is a `trace_t*`, a Source
-	// structure (fraction, endpos, plane, surface, hit entity, hitbox, physics bone) that this
-	// substrate stands no counterpart for, so the generator could only type it `void*`. Filling a
-	// buffer whose layout is not the caller's would be worse than filling none, and answering only
-	// the boolean half would silently drop the fraction and the endpos that every retail consumer
-	// of this slot reads. So the trace is NOT issued and `OutTrace` is left exactly as the caller
-	// handed it in — which the case asserts by passing a sentinel-filled buffer.
-	//
-	// What it takes to close: a port `trace_t` and the world trace behind it. Then this becomes a
-	// forward, and the `Mask` (Source's `MASK_*` content flags) becomes a channel choice.
-	(void)Entity;
-	(void)OutTrace;
-	++ClosureRefusals.PhysicsTraceEntity;
-	ClosureRefusals.TraceStartCm = StartCm;
-	ClosureRefusals.TraceEndCm = EndCm;
-	ClosureRefusals.TraceMask = Mask;
-}
-
-void FElysiumEntity::MakeTracer(const FVector& StartCm, void* Trace, int32 TracerType)
-{
-	// `0x10267260`, 186 bytes and 497 classes deep — the stock SDK body. It builds a `CPASFilter`
-	// around `param_1` (the tracer's start), and when `param_3 == 1` (`TRACER_LINE`) fires the
-	// bullet-tracer temp entity from that point to the trace's `endpos` (`param_2 + 0xc`) with this
-	// entity's index as the attachment owner, then unwinds the filter's heap. Every other tracer
-	// type builds the filter and fires nothing. A pure visual effect: no condition, no state, no
-	// stamp, and nothing downstream reads anything it writes.
-	//
-	// **REFUSAL, for the same two reasons as slot 102.** `param_2` is a `trace_t&` this substrate
-	// has no type for, so the endpos the tracer would be drawn TO cannot be read; and the PAS filter
-	// is Source's potentially-audible-set broadcast, whose counterpart here is Niagara plus the
-	// engine's own relevance, not a recipient list. 29c's `mechanism` target
-	// (`UGameplayStatics::SpawnEmitterAtLocation`) is the right eventual home and the effect is
-	// visual-only, so adopting it changes no event order — but it needs the endpos first.
-	(void)Trace;
-	++ClosureRefusals.MakeTracer;
-	ClosureRefusals.TracerStartCm = StartCm;
-	ClosureRefusals.TracerType = TracerType;
-}
-
 FVector FElysiumEntity::WorldSpaceCenter()
 {
 	// `0x10027160` -> `ElysiumCameraShots::SurroundingBounds`, the port's one bounds accessor.
@@ -226,22 +147,6 @@ void* FElysiumEntity::WorldSpaceCenter() const
 	// member's declaration in `Substrate/ElysiumNpcClosure.inl`.
 	WorldSpaceCentreCacheCm = ElysiumCameraShots::SurroundingBounds(*this).GetCenter();
 	return &WorldSpaceCentreCacheCm;
-}
-
-void FElysiumEntity::VPhysicsDestroyObject()
-{
-	// `0x100b5040`, 47 bytes, 497 classes: when `m_pPhysicsObject` (`+0x36c`) is set, unregister it
-	// from the physics-object list (`thunk_FUN_1002ee60`), destroy it (`thunk_FUN_10158520`) and
-	// null the pointer. Stock SDK teardown with no VtMB-specific rule.
-	//
-	// **REFUSAL.** There is no `m_pPhysicsObject` here. This substrate stands no rigid body: the
-	// shape map has no row for `+0x36c`, the collision surface it would tear down is Unreal's own
-	// (`UPrimitiveComponent::DestroyPhysicsState`, which the engine calls on component destruction
-	// without being asked), and no port system holds a physics handle to release. With the pointer
-	// null retail's body is `return;` — so answering nothing is not merely the port's answer, it is
-	// retail's for an NPC that never got a physics object, which is every NPC that was never
-	// ragdolled.
-	++ClosureRefusals.VPhysicsDestroyObject;
 }
 
 // --- Moved from `ElysiumNpcBaseDamage.cpp` (story 5 step 6) ---
@@ -379,22 +284,6 @@ void FElysiumEntity::TraceBleed(void* InDmg, const FVector& DirUnits, void* InTr
 	TraceBleedPasses.Add(Pass);
 }
 
-// --- Moved from `ElysiumNpcBaseDebug.cpp` (story 5 step 6) ---
-
-const TCHAR* FElysiumEntity::DebugGetClassName()
-{
-	// slot 14, `CAISound::FUN_1009af00` — four bytes, `return (int)&this->field_0x24;`, the ADDRESS
-	// of the embedded classname buffer at `CBaseEntity+0x0024`. The shape map binds that word as
-	// `FElysiumEntity::Class`, "retail's debug copy of the classname; the registry descriptor
-	// carries it", so the answer is the classname the registry resolved.
-	//
-	// Note this is the address of a fixed-size char array, not a pointer read out of it: retail
-	// answers a non-null string even for an entity whose classname was never written, because the
-	// buffer is always there. Reproduced by answering the empty string rather than null when the
-	// def carries no classname.
-	return Def != nullptr ? *Def->Classname : TEXT("");
-}
-
 // --- Moved from `ElysiumNpcBaseDialogue.cpp` (story 5 step 6) ---
 
 void FElysiumEntity::OnUseBegin(FElysiumEntity* Activator)
@@ -431,37 +320,16 @@ void FElysiumEntity::OnUseEnd(FElysiumEntity* Activator)
 
 // --- Moved from `ElysiumNpcBaseEntityChain.cpp` (story 5 step 6) ---
 
-bool FElysiumEntity::PhysicsObjectPosition(const void* PhysicsObject, FVector& OutOrigin,
-	FRotator& OutAngles) const
-{
-	// SEAM for `IPhysicsObject::GetPosition(&origin, &angles)` (the `+0x94` dispatch inside
-	// `0x100b4f30`). No `IPhysicsObject` in this substrate; the generated slot signature hands the
-	// pointer in as `void*` and nothing can be read off it.
-	(void)PhysicsObject;
-	OutOrigin = FVector::ZeroVector;
-	OutAngles = FRotator::ZeroRotator;
-	return false;
-}
-
 float FElysiumEntity::Slot37()
 {
 	// 0x10026710 — the whole body is `return (float10)_DAT_104454c8;`.
 	//
 	// The ledger's `checklist-0-9.md` records the value as unrecovered and names where it would be
-	// recovered ("UpdateEnemyPos 0x10271900 and UpdateTargetPos 0x10271b10 read the same constant").
+	// recovered (`UpdateEnemyPos` and `UpdateTargetPos` read the same constant).
 	// It is **80.0f**: `docs/vtmb/npc-ai/conditions-and-states.md` line 460 reads the same word as
 	// "farther than `_DAT_104454c8 = 80.0` units from the goal point", and
 	// `docs/vtmb/computer-terminals.md` line 475 as `CPropDoorknob`'s 80-unit break-off.
 	return GChainSlot37;
-}
-
-FElysiumEntity* FElysiumEntity::Slot38(FElysiumEntity* Other)
-{
-	// 0x10026730 — `return this;`, ignoring the argument. The declared signature really is
-	// `CBaseEntity* vfunc38(CBaseEntity*)`, so this is a genuine always-answers-itself default and
-	// not a decompiler artefact: what the caller passes never reaches anything.
-	(void)Other;
-	return this;
 }
 
 void FElysiumEntity::SetAngles(float Pitch, float Yaw, float Roll)
@@ -471,24 +339,6 @@ void FElysiumEntity::SetAngles(float Pitch, float Yaw, float Roll)
 	// hop is retail's, so a species that replaced slot 64 is reached through it, and this is the
 	// same body on 501 classes.
 	SetAngles(FRotator(Pitch, Yaw, Roll));
-}
-
-void FElysiumEntity::Slot89()
-{
-	// 0x10026b70 — tail-jumps into `0x10146790`, which clears bytes +1 and +2 of the
-	// `m_NetworkChangeState` record at `+0x01b0` (`docs/vtmb/npc-kernel/layout.md`): `m_bChanged`
-	// and the second flag. The interval and the countdown at +4/+6 are NOT touched, and neither is
-	// byte +0, which the static prop/brush Spawns own.
-	NetworkChangeState.bChanged = false;
-	NetworkChangeState.bByte2 = false;
-}
-
-bool FElysiumEntity::ReflectGauss()
-{
-	// 0x10026f20, slot 159 — `IsStandableSolid() && m_takedamage == 0`. Both terms, in retail's
-	// order; `m_takedamage` is `+0x01fc`, family Damage's `TakeDamageMode`, and `0` is `DAMAGE_NO`.
-	// So the answer is "a solid I could stand on that takes no damage" — world brush, not a body.
-	return IsStandableSolid() && TakeDamageMode == 0;
 }
 
 bool FElysiumEntity::IsStandable()
@@ -520,68 +370,6 @@ bool FElysiumEntity::IsStandable()
 		return true;
 	}
 	return IsStandableSolid();
-}
-
-bool FElysiumEntity::CanStandOn(void* Edict)
-{
-	// 0x10026fb0, slot 165 — the `edict_t*` overload. It selects an ARGUMENT and dispatches slot 166
-	// (`+0x298`), which is the `CBaseEntity*` overload and family Motor's body: the networkable at
-	// `edict+0x40` if the edict and the networkable are both non-null, else literal 0. Retail
-	// dispatches slot 166 on BOTH arms — a null edict is not a refusal, it is `CanStandOn(nullptr)`.
-	if (Edict != nullptr)
-	{
-		return CanStandOn(EntityOfEdict(Edict));
-	}
-	return CanStandOn(static_cast<FElysiumEntity*>(nullptr));
-}
-
-void FElysiumEntity::VPhysicsUpdate(void* PhysicsObject)
-{
-	// 0x100b4f30, slot 226 — retail's per-movetype physics-tick ordering, on slot 94's answer.
-	//
-	//   movetype 7 : read the object's transform back (`IPhysicsObject +0x94`), warn on any
-	//                component whose exponent field is all-ones (`& 0x7f800000 == 0x7f800000`,
-	//                i.e. inf or NaN), then SetAbsOrigin (slot 216), SetAbsAngles (slot 218),
-	//                PhysicsTouchTriggers(0) and PhysicsRelinkChildren — IN THAT ORDER.
-	//   movetype 1 or 8 : `CBaseEntity::VPhysicsUpdatePusher(object)`.
-	//   anything else   : nothing at all.
-	//
-	// The warn is `Msg("Infinite values from vphysics!...")` and it does NOT abort the arm: retail
-	// prints and then writes the bad transform anyway, which is a fact a program can observe.
-	const int32 MoveType = GetMoveType();
-	if (MoveType == GChainMoveTypePhysicsRead)
-	{
-		FVector PhysOrigin = FVector::ZeroVector;
-		FRotator PhysAngles = FRotator::ZeroRotator;
-		if (PhysicsObjectPosition(PhysicsObject, PhysOrigin, PhysAngles))
-		{
-			if (!FMath::IsFinite(PhysOrigin.X) || !FMath::IsFinite(PhysOrigin.Y)
-				|| !FMath::IsFinite(PhysOrigin.Z))
-			{
-				// `Msg(s_Infinite_values_from_vphysics__105591dc)` — and then the write anyway.
-				UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Infinite values from vphysics! (%s)"),
-					*DebugString());
-			}
-			SetAbsOrigin(PhysOrigin);
-			SetAbsAngles(PhysAngles);
-		}
-		// The two calls run on this arm whether or not the transform read answered; retail's read
-		// cannot fail, and the seam's refusal must not remove them from the sequence.
-		PhysicsUpdateCalls.Add(TEXT("PhysicsTouchTriggers"));
-		PhysicsUpdateCalls.Add(TEXT("PhysicsRelinkChildren"));
-		return;
-	}
-	if (MoveType == GChainMoveTypePusherA || MoveType == GChainMoveTypePusherB)
-	{
-		VPhysicsUpdatePusher(PhysicsObject);
-	}
-}
-
-void FElysiumEntity::VPhysicsUpdatePusher(const void* PhysicsObject)
-{
-	// SEAM for `CBaseEntity::VPhysicsUpdatePusher(physicsObject)`, the arm movetypes 1 and 8 take.
-	(void)PhysicsObject;
-	PhysicsUpdateCalls.Add(TEXT("VPhysicsUpdatePusher"));
 }
 
 FElysiumEntity* FElysiumEntity::EntityOfEdict(const void* Edict) const
@@ -695,16 +483,6 @@ void FElysiumEntity::SetRefEHandle(const FElysiumEntityHandle& InHandle)
 	Handle = InHandle;
 }
 
-// slot 3 `IServerNetworkable* GetNetworkable()` — 0x10027630
-void* FElysiumEntity::GetNetworkable()
-{
-	// Retail's whole body is `return &this->field_0x2d4;`, the address of the embedded
-	// `CServerNetworkProperty` sub-object. SEAM: this runtime has no network property and no
-	// networkable interface — entities are plain C++ objects with no edict behind them — so there is
-	// no sub-object whose address could be answered. Answers null and names the retail word.
-	return nullptr;
-}
-
 // slot 4 `CBaseEntity* GetBaseEntity()` — 0x10027650
 FElysiumEntity* FElysiumEntity::GetBaseEntity()
 {
@@ -730,8 +508,8 @@ bool FElysiumEntity::IsMarkedForDeletion()
 {
 	// `return this->m_iEFlags & 1;` — bit 0 of the entity-flags word at `+0x0268`, `EFL_KILLME`.
 	// This runtime spells "killed, and the world will reap the slot" as `FElysiumEntity::bDead`,
-	// which `Kill()` is the sole writer of; that IS the killme bit.
-	return (IsDead() ? GEntityFlagKillMe : 0) != 0;
+	// which `Kill()` is the sole writer of; that IS the killme bit (the entity world's pending kill).
+	return IsDead();
 }
 
 // slot 158 `bool IsAlive()` — 0x100b4dc0
@@ -754,39 +532,20 @@ float FElysiumEntity::ScaleField_0x1ddc() const
 
 // --- Moved from `ElysiumNpcBaseMotor.cpp` (story 5 step 6) ---
 
-bool FElysiumEntity::RetailIsStandable(const FElysiumEntity& Entity)
-{
-	// `CBaseEntity::IsStandable()` slot 164 `0x100b50a0`:
-	//     if (GetSolidFlags() & 0x10) return false;
-	//     int mt = GetMoveType();
-	//     if (mt == 1 || mt == 6 || mt == 2) return true;
-	//     return thunk_FUN_100b5110(this);
-	// **SEAM**: no solid flags and no move type here. It answers FALSE, which is retail's own answer
-	// for the first arm, and `CanStandOn` therefore refuses every non-null candidate.
-	(void)Entity;
-	return false;
-}
-
 bool FElysiumEntity::CanStandOn(FElysiumEntity* Other)
 {
 	// slot 166, `CAISound::FUN_10026f80` `0x10026f80`, the body slot 166 carries for the whole family
 	// (`CNPC_VMingXiaoTentacle::vfunc166` `0x1039ebd0` overrides it on its C++ class, story 5 step 3):
 	//     if (other && !other->IsStandable()) return false;
 	//     return true;
-	if (Other != nullptr && !RetailIsStandable(*Other))
+	// A rule on the floor answer: the measurement is the movement component's (`SampleFloor`, whose
+	// `GroundEntityHandle` is `tr.m_pEnt`; unset = the static world, which is this null arm). The
+	// candidate's standability is its own slot 164 (`+0x290`), dispatched as retail does.
+	if (Other != nullptr && !Other->IsStandable())
 	{
 		return false;
 	}
 	return true;
-}
-
-void FElysiumEntity::GetGroundVelocityToApply(FVector& OutVelocity)
-{
-	// slot 210. `CAISound::FUN_10027370` `0x10027370` copies the three shared statics
-	// `DAT_1070d1b0/b4/b8` into the out-parameter. All three sit in `.data`'s zero-initialised tail
-	// (the section's raw data ends at `0x106b9000`) and no corpus function writes them, so the
-	// contribution is exactly `vec3_origin`.
-	OutVelocity = FVector::ZeroVector;
 }
 
 // --- Moved from `ElysiumNpcBaseSenses.cpp` (story 5 step 6) ---
@@ -1062,12 +821,31 @@ void FElysiumEntity::SetOrigin(const FVector& NewOrigin)
 	// `CBaseEntity::SetOrigin` `0x100b2be0`, slot 62: past its scope-trace push it acts only when the
 	// vector differs from `m_vecOrigin` (+0x41c) -- then it invalidates (`0x100b5340(this, 0x10800,
 	// 0)`, `0x100b52a0`), copies, and sets the change-tracker byte `+0x1b1`. The port has one origin,
-	// so the write is `SetRuntimeOrigin`, which moves the body with it. The change-tracker byte stays
-	// the refusal `Slot88`/`Slot89` record (no entity is networked here).
+	// so the write is `SetRuntimeOrigin`, which moves the body with it. The change-tracker byte is
+	// network state (`m_NetworkChangeState +0x1b0`, slots 88 / 89): Unreal replication, nothing here.
 	if (NewOrigin != Origin)
 	{
 		SetRuntimeOrigin(NewOrigin);
 	}
+}
+
+// slot 94 `CBaseEntity::GetMoveType` 0x100aac30 -- `return m_MoveType` (`+0x158`), the word slot 93 writes.
+int32 FElysiumEntity::GetMoveType() const
+{
+	return RetailMoveType;
+}
+
+// slot 208 `CBaseEntity::SetGroundEntity` 0x100b1420 -- `m_hGroundEntity = ent` (`+0x384`); retail also
+// re-links the ground entity's "standing on me" list, which is engine bookkeeping this runtime does not keep.
+void FElysiumEntity::SetGroundEntity(FElysiumEntity* Ground)
+{
+	RetailGroundEntity = Ground != nullptr ? Ground->Handle : FElysiumEntityHandle::Invalid();
+}
+
+// slot 209 `CBaseEntity::GetGroundEntity` 0x100b1510 -- `m_hGroundEntity.Get()`, a serial-checked resolve.
+FElysiumEntity* FElysiumEntity::GetGroundEntity()
+{
+	return World != nullptr && RetailGroundEntity.IsSet() ? World->Resolve(RetailGroundEntity) : nullptr;
 }
 
 void FElysiumEntity::SetMoveType(int32 MoveType, int32 MoveCollide)

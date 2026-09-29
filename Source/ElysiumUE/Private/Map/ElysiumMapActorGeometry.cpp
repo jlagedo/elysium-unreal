@@ -1,9 +1,11 @@
 #include "ElysiumMapActor.h"
 
 #include "ElysiumEntity.h"
+#include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumWorldCollisionActor.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
 #include "Map/ElysiumWorldGeometry.h"
 #include "Visual/ElysiumNpcBody.h"
 
@@ -29,8 +31,27 @@ bool AElysiumMapActor::TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRet
 	// again, the second entity, and a brush entity whose body is a component of THIS actor and so
 	// has no actor of its own -- is also refused per hit by handle inside the trace.
 	const AActor* IgnoreSelf = Trace.Ignore.Num() > 0 ? ResolveQueryActor(Trace.Ignore[0]) : nullptr;
-	return ElysiumWorldGeometry::Trace(*World, Trace, Out, IgnoreSelf,
-		[this](const AActor* Actor) { return HandleForActor(Actor); });
+	// `StandardFilterRules 0x101d3080`'s solid-flag `0x20` (`101d30b6`) and render-mode
+	// (`101d3112`) arms, per hit on an entity the hit names: a refused entity joins the ignore list
+	// and the line is traced again (`ElysiumRetailMask::TraceSkippingRefusedEntities`). The words are
+	// the entity record's: `RetailSolidFlags`, and the authored `rendermode` keyfield.
+	return ElysiumRetailMask::TraceSkippingRefusedEntities(Trace, Out,
+		[this, World, IgnoreSelf](const FElysiumRetailTrace& Request, FElysiumRetailTraceResult& Result)
+		{
+			return ElysiumWorldGeometry::Trace(*World, Request, Result, IgnoreSelf,
+				[this](const AActor* Actor) { return HandleForActor(Actor); });
+		},
+		[this, &Trace](const FElysiumEntityHandle& Hit)
+		{
+			const FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(Hit) : nullptr;
+			if (Entity == nullptr)
+			{
+				return false;
+			}
+			const FString* RenderMode = Entity->Def != nullptr ? Entity->Def->Keys.Find(TEXT("rendermode")) : nullptr;
+			return ElysiumRetailMask::EntityArmsReject(Trace.RetailMask,
+				RenderMode != nullptr ? FCString::Atoi(**RenderMode) : 0, Entity->RetailSolidFlags);
+		});
 }
 
 AActor* AElysiumMapActor::ResolveQueryActor(const FElysiumEntityHandle& Entity) const

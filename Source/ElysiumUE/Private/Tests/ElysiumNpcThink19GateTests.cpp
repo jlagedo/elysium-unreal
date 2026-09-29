@@ -32,7 +32,16 @@ namespace
 		{
 			++RunAiCalls;
 		}
+		// Vslot 584, counted with the curtime it ran at, then the Troika body.
+		virtual void Slot584(int32 Arg) override
+		{
+			++Slot584Calls;
+			LastSlot584At = World != nullptr ? World->NowSeconds() : 0.0;
+			FElysiumNpc::Slot584(Arg);
+		}
 		int32 RunAiCalls = 0;
+		int32 Slot584Calls = 0;
+		double LastSlot584At = -1.0;
 	};
 
 	enum class EThink19GateMotor : uint8
@@ -120,6 +129,30 @@ bool FElysiumThink19GateBaseLineTest::RunTest(const FString&)
 	TestEqual(TEXT("0x1026cb1d the stamp is written up front either way"), N.NextThink, Think19GateTenthAhead(Now));
 	TestEqual(TEXT("0x1026cc2a open: slot 432 runs"), N.RunAiCalls, 1);
 	TestEqual(TEXT("0x1026cc32 open: PostRun runs"), N.MotorSeams.PostRunWeaponUpdates, PostBefore + 1);
+	return true;
+}
+
+// --- The network manager's one-shot: slot 584 on every NPC at build + 0.8 (0019/6) --------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateSlot584OneShotTest,
+	"Elysium.Substrate.Think19.Gate.Slot584OneShot", GThink19GateTestFlags)
+bool FElysiumThink19GateSlot584OneShotTest::RunTest(const FString&)
+{
+	FThink19GateFixture F;
+	if (!TestNotNull(TEXT("the probe stands"), F.Guard))
+	{
+		return false;
+	}
+	FThink19GateProbe& N = *F.Guard;
+	const double Stamp = F.W.World.BuildStampSeconds();
+	F.W.Advance(Stamp + FElysiumNpcBase::AiNetworkFirstThinkDelay - 0.05);
+	TestEqual(TEXT("0x102f6a50 not yet: no slot 584 before build + 0.8"), N.Slot584Calls, 0);
+	F.W.Advance(Stamp + FElysiumNpcBase::AiNetworkFirstThinkDelay + 0.05);
+	TestEqual(TEXT("0x1028d8d0 slot 584 runs once at build + 0.8"), N.Slot584Calls, 1);
+	TestTrue(TEXT("on the first tick past the stamp"),
+		N.LastSlot584At >= Stamp + FElysiumNpcBase::AiNetworkFirstThinkDelay);
+	F.W.Advance(F.Now() + 2.0);
+	TestEqual(TEXT("a one-shot: no second pass on the same stamp"), N.Slot584Calls, 1);
 	return true;
 }
 

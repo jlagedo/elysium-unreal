@@ -16,7 +16,7 @@
 //
 // Twenty rows: slot 404 `IRelationType` (`0x10299da0`) and its four species arms, `CanBeFedUponBy`
 // (slot 342) with the `CBaseCombatCharacter` body it chains, the seven `TaskFail` species arms in
-// front of story 13's slot-448 body, the condition-debug string builder (`0x1028d990`),
+// front of story 13's slot-448 body, the condition-debug string builder (dead, deleted 0019/6),
 // `CanWitnessSupernatural` (slot 587), the door-failure slot 532, slot 35's gendered id,
 // `UpdateBurstShootPause` (slot 419) and `ResetFakeReloadCount` (`0x102c54c0`).
 //
@@ -77,7 +77,7 @@ int32 BaseCombatCharacterIRelationType(const FElysiumEntity* Candidate) const;
  *  `m_FailedPickupTargets` at `+0x6690`) — byte-identical `CUtlVector<BlacklistedEntity_t>` appends
  *  of `(handle, curtime + 20.0)`, the 20.0 being `_DAT_1044eb0c`. **NOT a release**: the target is
  *  SHUNNED for twenty seconds, which is this family's second correction to the walk. */
-static constexpr float SpeciesBlacklistSeconds = 20.f;   // _DAT_1044eb0c
+static constexpr float SpeciesBlacklistSeconds = ElysiumNpcTunables::Twenty;   // _DAT_1044eb0c
 struct FSpeciesBlacklistEntry
 {
 	FElysiumEntityHandle Entity;
@@ -140,43 +140,3 @@ void ResetFakeReloadCount();
  *  write would be a refusal this row does not have. `RandomInt(0, 0)` is 0. */
 bool CharTemplateFakeReloadRange(int32& OutMin, int32& OutMax) const;
 
-// --- `0x1028d990` — the condition/flag debug string -------------------------------------------
-
-/** `0x1028d990`, 906 bytes — the formatter slots 17 and 18 push every trace message through, and
- *  family **Debug10**'s `TraceMessageFormat` seam's real body.
- *
- *  Retail writes into a caller-supplied `(char* out, int size)` pair and answers nothing; this
- *  returns the string, because the size-clamp is `Q_snprintf`'s and the port's `FString` carries no
- *  fixed buffer. The `param_3 == NULL || param_4 <= 0` guard is therefore spelled as an explicit
- *  argument so retail's "write nothing at all" arm stays reachable and testable.
- *
- *  Three format strings, selected by the two debug BYTES `DAT_10920534` and `DAT_10920535`:
- *    both set        -> `"%6.2f : %*s %s\n%s%s %s%s %s\n\n"`            (`0x105d8868`)
- *    534 set only    -> `"%6.2f : %*s %s\n"`                            (`0x105d8854`)
- *    534 clear       -> `"%-20s  %6.2f : %*s %s\n%s%s %s%s %s\n\n"`     (`0x105d8828`)
- *  and the four optional blocks are built when `534 == 0 || 535 != 0`, which is exactly the two
- *  arms that consume them. */
-FString BuildConditionDebugString(const TCHAR* Message, int32 IndentLevel, int32 BufferSize) const;
-
-/** The `CONDS:` list — `"CONDS:"` (`0x105d8908`) then `" %s"` (`0x105a3060`) per condition whose
- *  `HasCondition` stands, walking `[0, GetLastSharedCondition())` (slot 409, `vtable +0x664`, which
- *  is RE-READ every iteration) and naming each through `GetShortConditionName` (slot 408,
- *  `vtable +0x660`), then a trailing `"\n"` (`0x10547e40`). Gated by the schedule-debug ConVar
- *  `DAT_10924a6c`, whose `vtable[4]()` must answer 0 and whose `+0x2c` int must be `> 0`. */
-FString ConditionDebugList() const;
-
-/** One bitmask-to-glyph ladder: a set bit takes the template's character at that index, a clear bit
- *  takes `'.'` (`0x2e`), and the result is NUL-terminated at `Count`. Retail builds two — 32 glyphs
- *  of `"PIS__PF_T_L__TTEPLM________ICCCC"` (`0x105d88e0`) over `m_afMemory` (`+0x5d8c`) and 30 of
- *  `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` (`0x105d88b8`) over `m_bfAINPCFlags` (`+0x14b8`). */
-static FString DebugMaskLadder(const TCHAR* Template, uint32 Mask, int32 Count);
-
-/** The `"NAV %s %s"` pair (`0x105d888c`): built only when `GetNavType()` is 3 or 1, with the first
- *  `%s` `"CLIMB"` (`0x105d88a0`) on nav type 3 and five spaces (`0x105d8898`) otherwise, and the
- *  second `"JUMP"` (`0x105d88b0`) on nav type 1 and four spaces (`0x105d88a8`) otherwise. Retail
- *  calls `GetNavType()` FIVE times building it. */
-FString NavDebugPair() const;
-
-/** `DAT_10924a6c` — `ent_trace_conditions`, the ConVar the `CONDS:` block gates on (`> 0`). It ships
- *  "1" (`ElysiumNpcTunables::EConVar::EntTraceConditions`). */
-bool ScheduleDebugConditionsEnabled() const;

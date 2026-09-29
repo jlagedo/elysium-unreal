@@ -66,7 +66,7 @@ bool FElysiumNpcKernelBaseSplitTypeWordsTest::RunTest(const FString&)
 	FBaseOnlyNpc Base;
 	TestTrue(TEXT("a base-only NPC answers +0x94 with itself"), Base.AsNpcBase() == &Base);
 	TestNull(TEXT("and +0x98 with null"), Base.AsNpc());
-	// `PostConstructor` (`0x1027bb20`) builds `m_pSenses` for every NPC-base instance (story 5 fold A3).
+	// retail's constructor order (slot 106, closed 0019/6) builds `m_pSenses` for every NPC-base instance (story 5 fold A3).
 	TestTrue(TEXT("it carries its own CAI_Senses object"), Base.SensesObject() == &Base.Senses);
 
 	FBaseSplitFixture Fix;
@@ -153,7 +153,7 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 	TestEqual(TEXT("which writes the failure code"), Npc.BaseScheduleHost.FailureReason, 0x1d);
 	TestEqual(TEXT("after the Troika half's own reset"), Npc.ScheduleHost.PendingFailureReason, 0);
 
-	// `0x102993c0` calls `0x1027bc60` first: the record's base half leads, so a base-only reader
+	// The Troika `Save` calls `0x1027bc60` first: the record's base half leads, so a base-only reader
 	// recovers the base words from a Troika NPC's record.
 	Npc.BaseScheduleHost.FailureReason = 0x2a;
 	Npc.AttackExtentsCm = FVector(3.0, 4.0, 5.0);

@@ -21,8 +21,6 @@ public:
 	virtual void OnSeeEntity(FElysiumEntity* Seen) override;
 	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
-	virtual void DrawDebugGeometryOverlays() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
@@ -35,6 +33,12 @@ public:
 	 *  are the readers. **SEAM**: neither global is stood here; answers false, which drops the
 	 *  ` Suspect` suffix. */
 	bool CopSuspectIs(const FElysiumEntity* Candidate) const;
+	/** `0x1017f8d0` (`curtime < player->m_flHeightenedAlertExpireTimer`, `+0x1d1c`) and `0x1017f770`
+	 *  (`player->m_iCopsInPursuitCount`, `+0x1d10`) off the candidate's `+0x00a8 m_pPlayer`. Both words
+	 *  exist on `FElysiumPlayer`; a non-player candidate answers false / 0, which is retail's
+	 *  null-`+0xa8` arm. The two value reads `IRelationType` and `SpeciesSelectSchedule` take. */
+	bool PlayerHeightenedAlert(const FElysiumEntity* Candidate) const;
+	int32 PlayerCopsInPursuitCount(const FElysiumEntity* Candidate) const;
 
 	/** `+0x6671 CNPC_VCop::m_bCountedAlive` and `+0x6672`, its unnamed twin. The census row names only
 	 *  the first; the second is read and written by the same body at the same width and has no

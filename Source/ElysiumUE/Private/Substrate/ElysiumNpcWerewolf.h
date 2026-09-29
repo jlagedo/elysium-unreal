@@ -29,17 +29,12 @@ public:
 	virtual void GiveBaseFightingItems() override;
 	virtual void RemoveBaseFightingItems() override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
-	virtual float MaxYawSpeed() override;
 	virtual bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	virtual float MaxYawSpeed() override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
-	// Slot 620 (`0x103d5050`): introduced here; no Troika-line body holds the slot.
-	virtual void DrawBBoxOverlay();
-	virtual const TCHAR* GetShortConditionName(int32 ConditionId) override;
-	virtual void DrawDebugStatOverlays() override;
 	virtual void OnChangeActivity(int32 Activity) override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual void TraceAttack(void* InInfo, const FVector& DirUnits, void* InTrace) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;
 	virtual void OnScheduleChange(int32 NewSchedule) override;
@@ -57,14 +52,6 @@ public:
 	 *  Condition `0x7a` belongs to a Werewolf-line registrar the census has not decoded, so it is spelled
 	 *  as the raw number. */
 	void UpdateConditionDeathTriggered();
-
-	// From `ElysiumNpcDebug.inl`.
-	/** `NDebugOverlay::EntityBounds` (`0x10142e20`) — the whole-entity box `CBaseEntity::DrawBBoxOverlay`
-	 *  draws, which `CNPC_VWerewolf#620` recolours. */
-	void EmitOverlayEntityBounds(const TCHAR* RetailCall, int32 R, int32 G, int32 B, int32 A) const;
-	/** `CNPC_VWerewolf::DrawDebugHullAtPoint` (`0x103d4820`) — the hull box plus one line, at a point.
-	 *  `RET 0x10`: a `Vector` by value and one more dword, the overlay duration. */
-	void DrawDebugHullAtPoint(const FVector& PointUnits, float Duration) const;
 
 	// From `ElysiumNpcGeometry.inl`.
 	/** `+0x66dc`/`+0x66e0`/`+0x66e4` — `CNPC_VWerewolf`'s cached fake-hull point, the world position of
@@ -217,19 +204,11 @@ public:
 	/** `CNPC_VWerewolf::ScriptUnhide` (`0x103d4a20`) — the base, then `+0x66ec := curtime` and
 	 *  `+0x66d8`/`+0x66d4`/`+0x66a4 := 0`, in that write order. */
 	void WerewolfScriptUnhideTail(double Now);
-	/** `CNPC_VWerewolf::StartSearchTimer` (`0x103d1ca0`) and `ReportSearchTimer` (`0x103d1d60`) — a
-	 *  profiling pair over `rdtsc`, stamped into the STATIC pair `DAT_1093d638`/`DAT_1093d63c` and so
-	 *  **shared across every instance** rather than kept per NPC. The report subtracts and leaves the
-	 *  elapsed cycles in the same pair, and passes its second argument through unchanged.
-	 *
-	 *  Ported as file statics for exactly that reason. `ReportSearchTimer` answers its passthrough. */
-	static void StartSearchTimer();
-	static bool ReportSearchTimer(bool bPassThrough);
 
 	// From `ElysiumNpcLifecycle2.inl`.
-	static constexpr double WerewolfTeleportFloorSquare = 512.0; // `_DAT_104704c0`
+	static constexpr double WerewolfTeleportFloorSquare = ElysiumNpcTunables::FiveHundredTwelveDouble; // `_DAT_104704c0`
 	static constexpr float HullCentreHalf = ElysiumNpcTunables::Half;
-	static constexpr double WerewolfFieldOfViewRadians = 2.0943951023931953; // `_DAT_104d0080`
+	static constexpr double WerewolfFieldOfViewRadians = ElysiumNpcTunables::TwoPiThirdsDouble; // `_DAT_104d0080`
 	static constexpr float WerewolfSeekDistBaseUnits = 4096.f;
 	static constexpr float WerewolfHearingScalarBase = 3.f;
 	/** `CNPC_VWerewolf` words `0x103cac20` clears that no earlier family declared. */
@@ -413,25 +392,6 @@ public:
 	void FUN_103d9c90(FVector& OutPositionUnits);
 
 	// From `ElysiumNpcSpeciesLifecycle10.inl`.
-	/** `CNPC_VWerewolf::~CNPC_VWerewolf` (`0x103ca7c0`). Retail, in order:
-	 *    1. The two vftable restores (not portable, not observable).
-	 *    2. Under the scope frame: `DAT_1093fac4 = 0`, then `werewolf_show_debug`'s ConVar slot 4
-	 *       (`SetValue`) with 0. The ONE thing outside this object the body touches.
-	 *    3. Destroy five outputs in this order: `m_OnTeleportIn`, `m_OnTeleportOut`,
-	 *       `m_OnFinishCrushAnimation`, `m_OnBeginCrushAnimation`, `m_OnConditionDeathTriggered`.
-	 *    4. Walk the hint-data vector (`+0x6714`, count `+0x6720`, stride **0x48**) BACKWARDS from
-	 *       `count - 1`, destroying each record with `0x103dc5b0`; zero the count; then `0x103dc220`
-	 *       over the vector.
-	 *    5. The `CUtlMemory` teardowns of the `+0x6714`, `+0x668c` and `+0x665c` blocks, each under a
-	 *       "grow size is not -1" test (allocator only).
-	 *    6. `~CAI_BaseNPCTroika`.
-	 *  `+0x6714`/`+0x6720` is the array family Hints carries as `WerewolfHintGroundpoints`, so step 4 is
-	 *  a real clear here and the backwards walk is the recovered order rather than a `Reset()`. */
-	void DestroyWerewolf();
-	/** How many hint-data records the destructor above tore down, and in what order they were visited.
-	 *  Retail walks descending; the list records the index of each visit so the ORDER is assertable. */
-	TArray<int32> WerewolfHintTeardownOrder;
-
 	int32 WerewolfBreakHintNode = INDEX_NONE;       // +0x66c4 `m_pBreakHint`
 	int32 WerewolfLastUsedTeleportHint = INDEX_NONE; // +0x66b4 `m_pLastUsedTeleportHint`
 	int32 WerewolfLastUsedMoveHint = INDEX_NONE;     // +0x66c0 `m_pLastUsedMoveHint`
@@ -448,19 +408,11 @@ public:
 	 *  pair on the path object `0x102ecc00` — before forwarding both Vectors to `0x102fdcc0`.
 	 *
 	 *  CORRECTION: the stamping is inside `0x102ee380`, not in this body, and the body itself neither
-	 *  reads nor writes anything of its own. `0x102fdcc0` is the seam: this substrate stands no path
-	 *  object, so it answers **false** — retail's own answer for a navigator with no path. */
+	 *  reads nor writes anything of its own. `0x102fdcc0` is the motor's two-point `QueryRoute`
+	 *  (0019/6): no motor or no mesh answers **false** — retail's own answer for a navigator with no
+	 *  path. */
 	bool WerewolfHasPath(const FVector& StartUnits, const FVector& EndUnits) const;
 	mutable TArray<FHasPathQuery> HasPathQueries;
-	/** `CNPC_VWerewolf::DrawDebugStatOverlays` (`0x103d5130`), slot 76's species arm. PREPENDS
-	 *  `Not Seen Time` and `Player Distance`, CHAINS `CNPC_VMingXiao`'s arm (`0x10366290`), then APPENDS
-	 *  the zone word bit by bit, five conditions, the door state, a cvar-selected hint dump and the last
-	 *  five rows of the schedule stack.
-	 *
-	 *  `Not Seen Time` is `max(curtime - +0x66ec, 0.0)` — the clamp at `103d51aa` is against
-	 *  `_DAT_104454c4` = 0.0 and the decompiler drops it — and `Player Distance` is `+0x6264`
-	 *  (`m_flPlayerDist`), NOT a computed range. */
-	void WerewolfDrawDebugStatOverlays(TArray<FString>& OutLines) const;
 	/** `+0x668c` (the schedule-stack array) and `+0x6698` (its count) — the last five rows the overlay
 	 *  prints, a null row printing `INVALID SCHEDULE`. Carried as the names the overlay reads because
 	 *  that is every observable the body produces. */
@@ -554,8 +506,7 @@ public:
 
 	/** `0x102cc1f0` — slot 446 `GetScheduleOfType(TranslateSchedule(id))` with the `DevMsg` and the
 	 *  `GetScheduleOfType(1)` fallback on a miss: the PROGRAM `0x103cc5c0` compares `m_pSchedule`
-	 *  against. The port's other stand for this address, `StandoffScheduleForLocalId`
-	 *  (`ElysiumNpcBaseHelpers2.cpp`), reads it as a behaviour-local id and answers `None`. */
+	 *  against. */
 	const void* WerewolfScheduleOfType(int32 RawRetailId);
 	/** Slot 167 `GetEnemy() const` (`vtable +0x29c`), which every body here calls — NOT the Troika
 	 *  slot-168 overload that falls back to `m_hLastEnemy`. */

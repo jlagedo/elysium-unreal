@@ -53,5 +53,5 @@ namespace NpcKernelCombat10_2Shared
 	}
 	// `_DAT_10463584` — **15.0**, read out of the pinned `vampire.dll` at file offset `0x463584`.
 	// The amount `0x102b7cf0`'s `0x8f` arm advances `m_flNextDodgeTime` (`+0x65a4`) by.
-	inline constexpr float GTauntTimerAdvance = 15.0f;
+	inline constexpr float GTauntTimerAdvance = ElysiumNpcTunables::Fifteen;
 }

@@ -27,7 +27,6 @@ namespace
 
 int32 FElysiumNpc::HumanSelectIdealState()
 {
-	SelectIdealStateSelector = 0x14;
 	const int32 State = NpcStateRetail();
 	if (State != 2)
 	{
@@ -92,7 +91,6 @@ int32 FElysiumNpc::HumanSelectIdealState()
 
 int32 FElysiumNpc::AnimalSelectIdealState()
 {
-	SelectIdealStateSelector = 5;
 	const int32 State = NpcStateRetail();
 	if (State == 2)
 	{

@@ -1,0 +1,125 @@
+0x1004fbb0	-	KeyValue(Vector) forwarder removed
+0x1004fbf0	-	KeyValue(float) forwarder removed
+0x1004fc10	-	slot 152 GetDelay field read has no dispatch site in the module and one body in the family
+0x1009ebb0	-	FormatKeyValueFloat removed
+0x1009eca0	-	FormatKeyValueVector removed
+0x1014f8b0	-	slot 240 has one body in the family, no caller, and only returns the CPython interop globa
+0x101a6c00	-	base SquadSlotName body and SquadSlotLocalToGlobal/GlobalSquadSlotName helpers removed; BaseSquad.inl decls remain (unowned)
+0x101aa6d0	-	Closure.cpp body removed; duplicate FElysiumNpc::LastUpdateThink in Lifecycle.cpp:42 (unowned) remains
+0x101aa6f0	-	Closure.cpp body removed; duplicate LastNormalThink in Lifecycle.cpp:49 (unowned) remains
+0x101aa710	-	Closure.cpp body removed; duplicate LastMoveThink in Lifecycle.cpp:55 (unowned) remains
+0x101aa730	-	Closure.cpp body removed; duplicate LastAiThink in EntityChain.cpp:282 (unowned) remains
+0x101aa770	-	plain getter of m_bForceFrequentThink; no caller, the think-rate rule reads +0x63f0 direct
+0x101aa7f0	-	payphone head direction forwarded to body direction; its view and aim cones are constant f
+0x101aa820	-	payphone HeadDirection3D forwarded to BodyDirection3D; nothing observable asks where a pho
+0x101c10d0	-	Slot135 + MoveReboundBlend/State + SetLocalVelocity/AngularVelocity removed
+0x101c1720	-	CBaseEntity mover MoveDone inherited at slot 133; m_movementType +0x558 and m_pfnMoveDone 
+0x1027c2e0	-	LoadedSchedules table + body removed; Precache read cut (BasePrecache10.cpp, Camera.cpp)
+0x1027ede0	-	MingXiao/Tentacle/Werewolf overrides removed (base body is lane A)
+0x10294720	-	slot 496 TargetAcquiredSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7c0 ca
+0x102949f0	-	base ExertHvySound removed; the werewolf arm 0x103d8660 keeps slot 500 live (generated default stub for base)
+0x10294ab0	-	slot 501 ExertLightSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d4 call);
+0x10294b70	-	slot 502 RiledSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d8 call); Rile
+0x10294db0	-	slot 505 TargetGiveUpSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7e4 call
+0x10294e70	-	Troika slot 506 body + Sounds.cpp Slot506 forwarder removed
+0x102b97f0	-	LoadedSchedules Troika body + species flag table removed; Precache read cut
+0x102c7410	-	CAI_Standoff* body removed (never hosted)
+0x102c7490	-	CAI_Standoff* body removed (never hosted)
+0x102c7530	-	CAI_Standoff* body removed (never hosted)
+0x102c7960	-	CAI_Standoff* body removed (never hosted)
+0x102c79a0	-	CAI_Standoff* body removed (never hosted)
+0x102c7dd0	-	CAI_Standoff* body removed (never hosted)
+0x102c7ef0	-	CAI_Standoff* body removed (never hosted)
+0x102e0ea0	-	CAI_Motor climb start body removed (BaseHelpers2.cpp)
+0x102e0f90	-	CAI_Motor climb execute body removed
+0x10348ba0	-	slot 296 has one body and no dispatch site in the image (oracle shape.md); the 0xb argumen
+0x1034bd30	-	debug overlay body removed
+0x1035c460	-	SquadSlotName override removed
+0x1035dba0	-	SetScheduleTraceName table removed (ScheduleHost.cpp/.h)
+0x1035edb0	-	SquadSlotName override removed
+0x10360610	-	SquadSlotName override removed
+0x10361530	-	SetScheduleTraceName table removed
+0x10362df0	-	SquadSlotName override removed
+0x10363b40	-	stamp-only SelectIdealState override removed; class inherits
+0x10364550	-	Bach RangeAttack2Conditions removed
+0x103679b0	-	LoadedSchedules species body removed
+0x10367a10	-	SquadSlotName override removed
+0x103681b0	-	empty override of slot 496 TargetAcquiredSound, and the slot ledger records no dispatch si
+0x103681d0	-	empty override of the unnamed sound hook slot 497, and the slot ledger records no dispatch
+0x10368230	-	camera's empty slot 500 override; the slot's only dispatch is the werewolf's own 0x103d8df
+0x10368250	-	empty override of slot 501 ExertLightSound, and the slot ledger records no dispatch site f
+0x10368270	-	empty override of slot 502 RiledSound, and the slot ledger records no dispatch site for sl
+0x103682d0	-	empty override of slot 505 TargetGiveUpSound, and the slot ledger records no dispatch site
+0x103682f0	-	empty override of the unnamed sound hook slot 506, and the slot ledger records no dispatch
+0x10368330	-	empty slot 508 SpeakSentence override over an equally empty base 0x101a6b00; no effect eit
+0x103684f0	-	LoadedSchedules species body removed
+0x10368550	-	SquadSlotName override removed
+0x1036a390	-	LoadedSchedules species body removed
+0x1036a3f0	-	SquadSlotName override removed
+0x1036b500	-	whole species content is debug tag 10 in +0x1b38; it tail-calls CNPC_VHuman::SelectIdealSt
+0x1036c760	-	SetScheduleTraceName table removed
+0x1036ec90	-	LoadedSchedules species body removed
+0x1036ecf0	-	SquadSlotName override removed
+0x1036f490	-	LoadedSchedules species body removed
+0x1036f4f0	-	SquadSlotName override removed
+0x10370a70	-	LoadedSchedules species body removed
+0x10373670	-	LoadedSchedules species body removed
+0x103736d0	-	SquadSlotName override removed
+0x103753e0	-	LoadedSchedules species body removed
+0x10375440	-	SquadSlotName override removed
+0x10377c70	-	LoadedSchedules species body removed
+0x10377cd0	-	SquadSlotName override removed
+0x10378b60	-	stamp-only SelectIdealState override removed; class inherits
+0x1037a950	-	SquadSlotName override removed
+0x1037c800	-	SquadSlotName override removed
+0x1037ea60	-	SquadSlotName override removed
+0x10380100	-	stamp-only SelectIdealState override removed; class inherits
+0x10383560	-	debug overlay body removed
+0x10384200	-	SquadSlotName override removed
+0x10386c80	-	SquadSlotName override removed
+0x103878b0	-	SquadSlotName override removed
+0x10388200	-	SquadSlotName override removed
+0x10388ab0	-	own effect is only the +0x1b38 ideal-state trace stamp 0x17; the forward to 0x10387380 is 
+0x10388b30	-	Hunter NPCInit override removed; inherits HumanCombatant
+0x10388f80	-	SquadSlotName override removed
+0x10389f50	-	SquadSlotName override removed
+0x10391390	-	SquadSlotName override removed
+0x103951d0	-	GetShortConditionName override removed
+0x10399d40	-	debug overlay body removed
+0x1039b230	-	SquadSlotName override removed
+0x1039e860	-	slot 23 override; slot 23 has no dispatch site in the decompiled corpus, so the forward to
+0x1039ece0	-	GetShortConditionName override removed
+0x103a1250	-	debug overlay body removed
+0x103a1fa0	-	SquadSlotName override removed
+0x103a3c50	-	SquadSlotName override removed
+0x103a4830	-	empty override of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the who
+0x103a4850	-	empty override of slot 497, a slot with zero dispatch sites in the whole module
+0x103a5240	-	SquadSlotName override removed
+0x103a5e50	-	SquadSlotName override removed
+0x103a76d0	-	SabbatLeader HandleInteraction override removed; inherits Human
+0x103a9fd0	-	SetScheduleTraceName table removed
+0x103abd40	-	SquadSlotName override removed
+0x103adcb0	-	SquadSlotName override removed
+0x103af8d0	-	SetScheduleTraceName table removed
+0x103b3170	-	SquadSlotName override removed
+0x103b70f0	-	SquadSlotName override removed
+0x103b9270	-	Tzimisce StartNPC override removed; TzimisceStartNpcRearms counter gone
+0x103bdd10	-	slot 241 GetEventName, anim-event id to START_* name strings for debug prints; no dispatch
+0x103c08d0	-	debug overlay body removed
+0x103c0c90	-	SquadSlotName override removed
+0x103c2a60	-	SquadSlotName override removed
+0x103c4a20	-	LoadedSchedules species body removed
+0x103c4a80	-	SquadSlotName override removed
+0x103c5270	-	SquadSlotName override removed
+0x103c8ed0	-	SquadSlotName override removed
+0x103d0640	-	GetShortConditionName override removed
+0x103d4820	-	debug overlay body removed
+0x103d5050	-	debug overlay body removed
+0x103d5130	-	debug overlay body removed
+0x103dc770	-	slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug p
+0x103dc8f0	-	LoadedSchedules species body removed
+0x103dc950	-	SquadSlotName override removed
+0x103dd1f0	-	SquadSlotName override removed
+0x103dd780	-	stamp-only SelectIdealState override removed; class inherits
+0x103de4d0	-	SquadSlotName override removed
+0x103e0e80	-	debug overlay body removed

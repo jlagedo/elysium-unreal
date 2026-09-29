@@ -50,20 +50,10 @@ static constexpr int32 NumFlexWeightSlots = 128;
 
 float FlexWeight[NumFlexWeightSlots] = {};
 
-/** How many times that release ran, which is the only observable it has here. */
-int32 SceneEventReleases = 0;
-
 // +0x0848 m_viewtarget — the world point `SetViewtarget` (slot 277) copies in. Retail networks it
 // to the client, which is the hop this runtime makes with `FElysiumCombatCharacter::CurEyeTarget`;
 // this is retail's own word, written by the kernel and read by nothing in this substrate yet.
 FVector Viewtarget = FVector::ZeroVector;
-
-// The studio flex-controller descriptor's `min`/`max` pair (`studiohdr + 0x164 + index * 0x14`,
-// fields +0xc and +0x10), which slot 279 normalises a written weight through and slot 281
-// de-normalises a read one through. **SEAM** — no studio header here, so it answers false and both
-// slots take their own `min == max` arm, which passes the stored weight through untouched.
-// This is 29c's named target for `0x100b5c50`; slot 281 is where its body actually lands.
-bool FlexControllerRange(int32 Index, float& OutMin, float& OutMax) const;
 
 // `CChoreoScene::GetTime()` (`0x1007dfa0`), one float at scene+0x7c. **SEAM**: `FElysiumSceneData`
 // is the PARSED file and holds no clock — the clock lives on `FElysiumScenePlayer`, which the
@@ -74,19 +64,5 @@ float SceneTimeOf(const struct FElysiumSceneData& Scene) const;
 float SequenceDurationOf(int32 Sequence) const;
 
 // `CBaseAnimating::GetNumFlexControllers`. **SEAM** — this substrate's animating tier stands no
-// studio header, so it answers 0 and every name lookup below walks an empty table.
+// studio header, so it answers 0.
 int32 NumFlexControllers() const;
-
-// `CBaseAnimating::GetFlexControllerName(int)`. **SEAM**, answering an empty name.
-FString FlexControllerName(int32 Index) const;
-
-// `LookupFlexController` `0x100b5d10` — the real body: a linear `__strcmpi` scan over
-// `GetNumFlexControllers()`, re-reading the count every iteration. **It answers 0, not -1, when
-// nothing matches**, which is retail's own behaviour and the reason a misspelt flex name writes
-// controller zero rather than being dropped. Ported verbatim; the two sub-calls are the seams above.
-int32 LookupFlexController(const TCHAR* Name) const;
-
-/** `thunk_FUN_10075b70(record.event)` — the release both scene-event removers call before they
- *  compact. **SEAM**: the port's scene events are parsed data owned by the scene asset and are not
- *  reference-counted; the call is recorded so the SEQUENCE is assertable. */
-void ReleaseSceneEvent(const FSceneEventRecord& Record);

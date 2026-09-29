@@ -6,8 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 224 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
-// 44 are defined by hand in the substrate, and 128 are still stubs — 124 29c, 2 29d, 2 unassigned.
+// 220 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
+// 35 are defined by hand in the substrate, and 115 are still stubs — 113 29c, 2 unassigned. 18 are
+// closed (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -72,8 +73,12 @@ void* FElysiumEntity::GetCollideable()
 // slot 3 0x10027630 (walked) `IServerNetworkable* GetNetworkable()`
 //   returns `IServerNetworkable*`
 //   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::GetNetworkable`, written by hand in the
-// substrate. Declared here, defined there.
+void* FElysiumEntity::GetNetworkable()
+{
+	// verdict `mechanism`, closed at `Replication` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 4 0x10027650 (walked) `CBaseEntity* GetBaseEntity()`
 //   layer 0, story 29c
@@ -158,8 +163,12 @@ void FElysiumEntity::DebugSetClassName(const TCHAR*)
 
 // slot 14 0x1009af00 (walked) `const char* DebugGetClassName()`
 //   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumEntity::DebugGetClassName`, written by hand in the
-// substrate. Declared here, defined there.
+const TCHAR* FElysiumEntity::DebugGetClassName()
+{
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 16 0x1009b030 (walked) `Vector GetAttackExtents()`
 //   layer 0, story 29c
@@ -170,32 +179,32 @@ void FElysiumEntity::DebugSetClassName(const TCHAR*)
 //   layer 1, story 29c
 void FElysiumEntity::TraceMessage(const TCHAR*, int32) const
 {
-	FireEntitySlot(TEXT("CBaseEntity::TraceMessage"), TEXT("0x1009b380"), TEXT("29c"),
-		DebugString());
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 18 0x1009b2c0 (walked) `void TraceMessage(const char*, int)`
 //   layer 1, story 29c
 void FElysiumEntity::TraceMessage(const TCHAR*, int32)
 {
-	FireEntitySlot(TEXT("CBaseEntity::TraceMessage"), TEXT("0x1009b2c0"), TEXT("29c"),
-		DebugString());
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 19 0x1009b5a0 (walked) `void TraceMessageBare(const char*) const`
 //   layer 1, story 29c
 void FElysiumEntity::TraceMessageBare(const TCHAR*) const
 {
-	FireEntitySlot(TEXT("CBaseEntity::TraceMessageBare"), TEXT("0x1009b5a0"), TEXT("29c"),
-		DebugString());
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 20 0x1009b500 (walked) `void TraceMessageBare(const char*)`
 //   layer 1, story 29c
 void FElysiumEntity::TraceMessageBare(const TCHAR*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::TraceMessageBare"), TEXT("0x1009b500"), TEXT("29c"),
-		DebugString());
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 21 0x10026530 (walked) `void vfunc21(CBaseEntity*)`
@@ -325,8 +334,12 @@ const TCHAR* FElysiumEntity::Slot36()
 
 // slot 38 0x10026730 (walked) `CBaseEntity* vfunc38(CBaseEntity*)`
 //   layer 0, story 29c
-// verdict `dead`: the body is `FElysiumEntity::Slot38`, written by hand in the substrate. Declared
-// here, defined there.
+FElysiumEntity* FElysiumEntity::Slot38(FElysiumEntity*)
+{
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 39 0x100a4fe0 (walked) `void OnUseBegin(CBaseEntity*)`
 //   layer 8, story 29c
@@ -579,8 +592,9 @@ void FElysiumEntity::DrawDebugStatOverlays()
 //   layer 0, story 29c
 void* FElysiumEntity::GetPredDescMap()
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetPredDescMap"), TEXT("0x1009e100"), TEXT("29c"),
-		DebugString());
+	// verdict `mechanism`, closed at `FElysiumSaveArchive` (0019/6): nothing observes this body,
+	// but the slot is still reached, so it answers the value-initialised default and tallies
+	// nothing.
 	return {};
 }
 
@@ -658,13 +672,20 @@ void FElysiumEntity::SetTransmit(void*)
 
 // slot 88 0x10026b50 (walked) `bool vfunc88()`
 //   layer 2, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::Slot88`, written by hand in the substrate.
-// Declared here, defined there.
+bool FElysiumEntity::Slot88()
+{
+	// verdict `mechanism`, closed at `Replication` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
+	return {};
+}
 
 // slot 89 0x10026b70 (walked) `void vfunc89()`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::Slot89`, written by hand in the substrate.
-// Declared here, defined there.
+void FElysiumEntity::Slot89()
+{
+	// verdict `mechanism`, closed at `Replication` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 90 0x100aa840 (sdk) `bool IsTransparent() const`
 //   layer 0, story 29c
@@ -700,12 +721,10 @@ int32 FElysiumEntity::GetSolid() const
 // slot 94 0x100aac30 (sdk) `MoveType_t GetMoveType() const`
 //   returns `MoveType_t`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetMoveType() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetMoveType"), TEXT("0x100aac30"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetMoveType`, written by hand in the substrate:
+// `CBaseEntity::GetMoveType` 0x100aac30: reads the `RetailMoveType` word slot 93 writes. Live check
+// 0019/6: the counting stub answered 0 and failed `CheckOnGround`'s `!= MOVETYPE_STEP` guard on
+// every NPC, every think. Declared here, defined there.
 
 // slot 95 0x100aacd0 (sdk) `MoveCollide_t GetMoveCollide() const`
 //   returns `MoveCollide_t`
@@ -770,8 +789,12 @@ void FElysiumEntity::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 // Vector&, unsigned int, trace_t*)`
 //   takes `trace_t*`
 //   layer 3, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::Physics_TraceEntity`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumEntity::Physics_TraceEntity(FElysiumEntity*, const FVector&, const FVector&, uint32,
+	void*)
+{
+	// verdict `mechanism`, closed at `TraceRetail` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 104 0x10026b90 (sdk) `void Precache()`
 //   layer 0, story 29c
@@ -802,22 +825,6 @@ void FElysiumEntity::ParseMapData(void*)
 {
 	FireEntitySlot(TEXT("CBaseEntity::ParseMapData"), TEXT("0x1009e280"), TEXT("29c"),
 		DebugString());
-}
-
-// slot 108 0x1009eca0 (walked) `bool KeyValue(const char*, Vector)`
-//   layer 10, story 29d
-bool FElysiumEntity::KeyValue(const TCHAR*, FVector)
-{
-	FireEntitySlot(TEXT("CBaseEntity::KeyValue"), TEXT("0x1009eca0"), TEXT("29d"), DebugString());
-	return {};
-}
-
-// slot 109 0x1009ebb0 (walked) `bool KeyValue(const char*, float)`
-//   layer 10, story 29d
-bool FElysiumEntity::KeyValue(const TCHAR*, float)
-{
-	FireEntitySlot(TEXT("CBaseEntity::KeyValue"), TEXT("0x1009ebb0"), TEXT("29d"), DebugString());
-	return {};
 }
 
 // slot 110 0x1009e430 (walked) `bool KeyValue(const char*, const char*)`
@@ -951,7 +958,9 @@ void FElysiumEntity::OnSave()
 //   layer 1, story 29c
 void FElysiumEntity::OnRestore(bool)
 {
-	FireEntitySlot(TEXT("CBaseEntity::OnRestore"), TEXT("0x100aa5a0"), TEXT("29c"), DebugString());
+	// verdict `mechanism`, closed at `FElysiumSaveArchive` (0019/6): nothing observes this body,
+	// but the slot is still reached, so it answers the value-initialised default and tallies
+	// nothing.
 }
 
 // slot 131 0x10026c10 (walked) `int RequiredEdictIndex()`
@@ -973,7 +982,8 @@ void FElysiumEntity::Slot132()
 //   layer 0, story 29c
 void FElysiumEntity::MoveDone()
 {
-	FireEntitySlot(TEXT("CBaseEntity::MoveDone"), TEXT("0x10026c50"), TEXT("29c"), DebugString());
+	// verdict `mechanism`, closed at `CppDispatch` (0019/6): nothing observes this body, but the
+	// slot is still reached, so it answers the value-initialised default and tallies nothing.
 }
 
 // slot 135 0x10026d10 (walked) `float vfunc135(float)`
@@ -1129,7 +1139,8 @@ float FElysiumEntity::GetDelay()
 //   layer 0, story 29c
 bool FElysiumEntity::IsMoving()
 {
-	FireEntitySlot(TEXT("CBaseEntity::IsMoving"), TEXT("0x10026e70"), TEXT("29c"), DebugString());
+	// verdict `dead`, closed at `-` (0019/6): nothing observes this body, but the slot is still
+	// reached, so it answers the value-initialised default and tallies nothing.
 	return {};
 }
 
@@ -1165,11 +1176,6 @@ bool FElysiumEntity::OnControls(FElysiumEntity*)
 //   layer 0, story 29c
 // verdict `rule`: the body is `FElysiumEntity::IsAlive`, written by hand in the substrate. Declared
 // here, defined there.
-
-// slot 159 0x10026f20 (walked) `bool ReflectGauss()`
-//   layer 1, story 29c
-// verdict `dead`: the body is `FElysiumEntity::ReflectGauss`, written by hand in the substrate.
-// Declared here, defined there.
 
 // slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
 //   layer 0, story 29c
@@ -1207,12 +1213,6 @@ bool FElysiumEntity::IsViewable()
 // slot 164 0x100b50a0 (walked) `bool IsStandable()`
 //   layer 1, story 29c
 // verdict `mechanism`: the body is `FElysiumEntity::IsStandable`, written by hand in the substrate.
-// Declared here, defined there.
-
-// slot 165 0x10026fb0 (walked) `bool CanStandOn(edict_t*)`
-//   takes `edict_t*`
-//   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::CanStandOn`, written by hand in the substrate.
 // Declared here, defined there.
 
 // slot 166 0x10026f80 (walked) `bool CanStandOn(CBaseEntity*)`
@@ -1344,8 +1344,11 @@ void FElysiumEntity::NotifySystemEvent(FElysiumEntity*, int32, void*)
 // slot 184 0x10267260 (walked) `void MakeTracer(const Vector&, const trace_t&, int)`
 //   takes `const trace_t&`
 //   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::MakeTracer`, written by hand in the substrate.
-// Declared here, defined there.
+void FElysiumEntity::MakeTracer(const FVector&, void*, int32)
+{
+	// verdict `mechanism`, closed at `Visual` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 185 0x10268900 (walked) `void FireBullets(const FireBulletsInfo_t&)`
 //   takes `const FireBulletsInfo_t&`
@@ -1510,25 +1513,24 @@ bool FElysiumEntity::IsCurrentlyTouching() const
 
 // slot 208 0x100b1420 (sdk) `void SetGroundEntity(CBaseEntity*)`
 //   layer 0, story 29c
-void FElysiumEntity::SetGroundEntity(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetGroundEntity"), TEXT("0x100b1420"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetGroundEntity`, written by hand in the substrate:
+// `CBaseEntity::SetGroundEntity` 0x100b1420: writes the `RetailGroundEntity` handle word
+// (`m_hGroundEntity +0x384`); the floor-facts seam's ground entity lands here (0019/6). Declared
+// here, defined there.
 
 // slot 209 0x100b1510 (walked) `CBaseEntity* GetGroundEntity()`
 //   layer 0, story 29c
-FElysiumEntity* FElysiumEntity::GetGroundEntity()
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetGroundEntity"), TEXT("0x100b1510"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetGroundEntity`, written by hand in the substrate:
+// `CBaseEntity::GetGroundEntity` 0x100b1510: resolves the `RetailGroundEntity` handle word
+// (0019/6). Declared here, defined there.
 
 // slot 210 0x10027370 (walked) `void GetGroundVelocityToApply(Vector&)`
 //   layer 0, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::GetGroundVelocityToApply`, written by hand in
-// the substrate. Declared here, defined there.
+void FElysiumEntity::GetGroundVelocityToApply(FVector&)
+{
+	// verdict `mechanism`, closed at `CMC` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 211 0x100274d0 (sdk) `int GetSolidFlags() const`
 //   layer 0, story 29c
@@ -1631,14 +1633,20 @@ bool FElysiumEntity::ForceVPhysicsCollide(FElysiumEntity*)
 
 // slot 225 0x100b5040 (walked) `void VPhysicsDestroyObject()`
 //   layer 4, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::VPhysicsDestroyObject`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumEntity::VPhysicsDestroyObject()
+{
+	// verdict `mechanism`, closed at `Chaos` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
 //   takes `IPhysicsObject*`
 //   layer 1, story 29c
-// verdict `mechanism`: the body is `FElysiumEntity::VPhysicsUpdate`, written by hand in the
-// substrate. Declared here, defined there.
+void FElysiumEntity::VPhysicsUpdate(void*)
+{
+	// verdict `mechanism`, closed at `Chaos` (0019/6): nothing observes this body, but the slot is
+	// still reached, so it answers the value-initialised default and tallies nothing.
+}
 
 // slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -1786,7 +1794,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetCollideable),
 				nullptr },
 			{ 3, TEXT("0x10027630"), TEXT("CBaseEntity"), TEXT("GetNetworkable"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetNetworkable),
 				nullptr },
 			{ 4, TEXT("0x10027650"), TEXT("CBaseEntity"), TEXT("GetBaseEntity"),
@@ -1830,7 +1838,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const TCHAR*)>::Test(&FElysiumEntity::DebugSetClassName),
 				nullptr },
 			{ 14, TEXT("0x1009af00"), TEXT("CBaseEntity"), TEXT("DebugGetClassName"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, const TCHAR*()>::Test(&FElysiumEntity::DebugGetClassName),
 				nullptr },
 			{ 16, TEXT("0x1009b030"), TEXT("CBaseEntity"), TEXT("GetAttackExtents"),
@@ -1838,19 +1846,19 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FVector()>::Test(&FElysiumEntity::GetAttackExtents),
 				nullptr },
 			{ 17, TEXT("0x1009b380"), TEXT("CBaseEntity"), TEXT("TraceMessage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const TCHAR*, int32) const>::Test(&FElysiumEntity::TraceMessage),
 				nullptr },
 			{ 18, TEXT("0x1009b2c0"), TEXT("CBaseEntity"), TEXT("TraceMessage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const TCHAR*, int32)>::Test(&FElysiumEntity::TraceMessage),
 				nullptr },
 			{ 19, TEXT("0x1009b5a0"), TEXT("CBaseEntity"), TEXT("TraceMessageBare"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const TCHAR*) const>::Test(&FElysiumEntity::TraceMessageBare),
 				nullptr },
 			{ 20, TEXT("0x1009b500"), TEXT("CBaseEntity"), TEXT("TraceMessageBare"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const TCHAR*)>::Test(&FElysiumEntity::TraceMessageBare),
 				nullptr },
 			{ 21, TEXT("0x10026530"), TEXT("CBaseEntity"), TEXT("Slot21"),
@@ -1922,7 +1930,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::Slot37),
 				nullptr },
 			{ 38, TEXT("0x10026730"), TEXT("CBaseEntity"), TEXT("Slot38"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*(FElysiumEntity*)>::Test(&FElysiumEntity::Slot38),
 				nullptr },
 			{ 39, TEXT("0x100a4fe0"), TEXT("CBaseEntity"), TEXT("OnUseBegin"),
@@ -2062,7 +2070,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::DrawDebugStatOverlays),
 				nullptr },
 			{ 79, TEXT("0x1009e100"), TEXT("CBaseEntity"), TEXT("GetPredDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetPredDescMap),
 				nullptr },
 			{ 80, TEXT("0x1009a660"), TEXT("CBaseEntity"), TEXT("GetServerClass"),
@@ -2099,11 +2107,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::SetTransmit),
 				nullptr },
 			{ 88, TEXT("0x10026b50"), TEXT("CBaseEntity"), TEXT("Slot88"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::Slot88),
 				nullptr },
 			{ 89, TEXT("0x10026b70"), TEXT("CBaseEntity"), TEXT("Slot89"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Slot89),
 				nullptr },
 			{ 90, TEXT("0x100aa840"), TEXT("CBaseEntity"), TEXT("IsTransparent"),
@@ -2123,7 +2131,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32, int32)>::Test(&FElysiumEntity::SetMoveType),
 				nullptr },
 			{ 94, TEXT("0x100aac30"), TEXT("CBaseEntity"), TEXT("GetMoveType"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetMoveType),
 				nullptr },
 			{ 95, TEXT("0x100aacd0"), TEXT("CBaseEntity"), TEXT("GetMoveCollide"),
@@ -2151,7 +2159,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, FVector*)>::Test(&FElysiumEntity::ComputeWorldSpaceSurroundingBox),
 				[](FElysiumEntity& Receiver) -> int64 { FVector* Arg0{}; FVector* Arg1{}; Receiver.ComputeWorldSpaceSurroundingBox(Arg0, Arg1); return 0; } },
 			{ 102, TEXT("0x100ab450"), TEXT("CBaseEntity"), TEXT("Physics_TraceEntity"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*, const FVector&, const FVector&, uint32, void*)>::Test(&FElysiumEntity::Physics_TraceEntity),
 				nullptr },
 			{ 104, TEXT("0x10026b90"), TEXT("CBaseEntity"), TEXT("Precache"),
@@ -2169,14 +2177,6 @@ namespace ElysiumNpcKernelShape
 			{ 107, TEXT("0x1009e280"), TEXT("CBaseEntity"), TEXT("ParseMapData"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::ParseMapData),
-				nullptr },
-			{ 108, TEXT("0x1009eca0"), TEXT("CBaseEntity"), TEXT("KeyValue"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(const TCHAR*, FVector)>::Test(&FElysiumEntity::KeyValue),
-				nullptr },
-			{ 109, TEXT("0x1009ebb0"), TEXT("CBaseEntity"), TEXT("KeyValue"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(const TCHAR*, float)>::Test(&FElysiumEntity::KeyValue),
 				nullptr },
 			{ 110, TEXT("0x1009e430"), TEXT("CBaseEntity"), TEXT("KeyValue"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
@@ -2243,7 +2243,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::OnSave),
 				nullptr },
 			{ 130, TEXT("0x100aa5a0"), TEXT("CBaseEntity"), TEXT("OnRestore"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(bool)>::Test(&FElysiumEntity::OnRestore),
 				nullptr },
 			{ 131, TEXT("0x10026c10"), TEXT("CBaseEntity"), TEXT("RequiredEdictIndex"),
@@ -2255,7 +2255,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Slot132),
 				[](FElysiumEntity& Receiver) -> int64 { Receiver.Slot132(); return 0; } },
 			{ 133, TEXT("0x10026c50"), TEXT("CBaseEntity"), TEXT("MoveDone"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::MoveDone),
 				nullptr },
 			{ 135, TEXT("0x10026d10"), TEXT("CBaseEntity"), TEXT("Slot135"),
@@ -2331,7 +2331,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::GetDelay),
 				nullptr },
 			{ 153, TEXT("0x10026e70"), TEXT("CBaseEntity"), TEXT("IsMoving"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsMoving),
 				nullptr },
 			{ 154, TEXT("0x100b4ea0"), TEXT("CBaseEntity"), TEXT("DamageDecal"),
@@ -2354,10 +2354,6 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsAlive),
 				nullptr },
-			{ 159, TEXT("0x10026f20"), TEXT("CBaseEntity"), TEXT("ReflectGauss"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::ReflectGauss),
-				nullptr },
 			{ 160, TEXT("0x100a1b40"), TEXT("CBaseEntity"), TEXT("HasTarget"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FName)>::Test(&FElysiumEntity::HasTarget),
@@ -2377,10 +2373,6 @@ namespace ElysiumNpcKernelShape
 			{ 164, TEXT("0x100b50a0"), TEXT("CBaseEntity"), TEXT("IsStandable"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsStandable),
-				nullptr },
-			{ 165, TEXT("0x10026fb0"), TEXT("CBaseEntity"), TEXT("CanStandOn"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(void*)>::Test(&FElysiumEntity::CanStandOn),
 				nullptr },
 			{ 166, TEXT("0x10026f80"), TEXT("CBaseEntity"), TEXT("CanStandOn"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
@@ -2451,7 +2443,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*, int32, void*)>::Test(&FElysiumEntity::NotifySystemEvent),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; int32 Arg1{}; void* Arg2{}; Receiver.NotifySystemEvent(Arg0, Arg1, Arg2); return 0; } },
 			{ 184, TEXT("0x10267260"), TEXT("CBaseEntity"), TEXT("MakeTracer"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const FVector&, void*, int32)>::Test(&FElysiumEntity::MakeTracer),
 				nullptr },
 			{ 185, TEXT("0x10268900"), TEXT("CBaseEntity"), TEXT("FireBullets"),
@@ -2539,15 +2531,15 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool() const>::Test(&FElysiumEntity::IsCurrentlyTouching),
 				nullptr },
 			{ 208, TEXT("0x100b1420"), TEXT("CBaseEntity"), TEXT("SetGroundEntity"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::SetGroundEntity),
 				nullptr },
 			{ 209, TEXT("0x100b1510"), TEXT("CBaseEntity"), TEXT("GetGroundEntity"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*()>::Test(&FElysiumEntity::GetGroundEntity),
 				nullptr },
 			{ 210, TEXT("0x10027370"), TEXT("CBaseEntity"), TEXT("GetGroundVelocityToApply"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector&)>::Test(&FElysiumEntity::GetGroundVelocityToApply),
 				nullptr },
 			{ 211, TEXT("0x100274d0"), TEXT("CBaseEntity"), TEXT("GetSolidFlags"),
@@ -2607,11 +2599,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::ForceVPhysicsCollide),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.ForceVPhysicsCollide(Arg0) ? 1 : 0; } },
 			{ 225, TEXT("0x100b5040"), TEXT("CBaseEntity"), TEXT("VPhysicsDestroyObject"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::VPhysicsDestroyObject),
 				nullptr },
 			{ 226, TEXT("0x100b4f30"), TEXT("CBaseEntity"), TEXT("VPhysicsUpdate"),
-				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::VPhysicsUpdate),
 				nullptr },
 			{ 227, TEXT("0x100a1580"), TEXT("CBaseEntity"), TEXT("VPhysicsTakeDamage"),

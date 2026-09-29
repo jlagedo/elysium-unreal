@@ -62,108 +62,6 @@ namespace
 
 // --- Moved from `ElysiumNpcSaveRestore10.cpp` (story 5 step 5) ---
 
-double FElysiumNpcBase::SaveStampFloatMax()
-{
-	// `3.4028235e+38` in the decompiled C, which is `FLT_MAX` exactly. The compare retail makes is a
-	// 32-bit one; a `double` stamp only matches when it holds the widened constant, which is what
-	// every port writer of an "infinite" stamp stores (family Bosses' `IgnoreCollisionUntil` is the
-	// one this family meets).
-	return static_cast<double>(TNumericLimits<float>::Max());
-}
-
-bool FElysiumNpcBase::SaveStampEncode(double& Stamp, ESaveStampMode Mode)
-{
-	// `FUN_101cf250`, switch arm for switch arm. A mode outside 1..4 falls through retail's
-	// `default:` and writes nothing.
-	switch (Mode)
-	{
-	case ESaveStampMode::BelowZero:
-		// `case 1: if (*param_1 < _DAT_104454c4)` — STRICTLY below 0.0. A stamp of exactly 0.0 is
-		// not encoded by this mode, which is why mode 3 exists beside it.
-		if (Stamp < SaveStampZero)
-		{
-			Stamp = SaveStampSentinel;
-			return true;
-		}
-		return false;
-	case ESaveStampMode::MinusOne:
-		// `case 2: bVar1 = *param_1 == -1.0;` then the shared `LAB_101cf2ab`.
-		if (Stamp == -1.0)
-		{
-			Stamp = SaveStampSentinel;
-			return true;
-		}
-		return false;
-	case ESaveStampMode::Zero:
-		// `case 3: if (*param_1 == _DAT_104454c4)` — exactly 0.0.
-		if (Stamp == SaveStampZero)
-		{
-			Stamp = SaveStampSentinel;
-			return true;
-		}
-		return false;
-	case ESaveStampMode::FloatMax:
-		// `case 4: bVar1 = *param_1 == 3.4028235e+38;` then `LAB_101cf2ab`.
-		if (Stamp == SaveStampFloatMax())
-		{
-			Stamp = SaveStampSentinel;
-			return true;
-		}
-		return false;
-	default:
-		return false;
-	}
-}
-
-bool FElysiumNpcBase::SaveStampDecode(double& Stamp, ESaveStampMode Mode)
-{
-	// `FUN_101cf2f0`. Every arm shares one guard — `_DAT_10482fac <= *param_1`, which is `1e+10` —
-	// and differs only in what it writes. Modes 1 and 2 share a `case` label, so mode 1 is NOT its
-	// own inverse: a `-0.5` that mode 1 encoded comes back as `-1.0`. That is retail's, and the
-	// suite states it by name.
-	if (Stamp < SaveStampSentinelFloor)
-	{
-		return false;
-	}
-	switch (Mode)
-	{
-	case ESaveStampMode::BelowZero:
-	case ESaveStampMode::MinusOne:
-		Stamp = -1.0;
-		return true;
-	case ESaveStampMode::Zero:
-		Stamp = SaveStampZero;
-		return true;
-	case ESaveStampMode::FloatMax:
-		Stamp = SaveStampFloatMax();
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool FElysiumNpcBase::SaveStampEncode(float& Stamp, ESaveStampMode Mode)
-{
-	double Widened = static_cast<double>(Stamp);
-	const bool bChanged = SaveStampEncode(Widened, Mode);
-	if (bChanged)
-	{
-		Stamp = static_cast<float>(Widened);
-	}
-	return bChanged;
-}
-
-bool FElysiumNpcBase::SaveStampDecode(float& Stamp, ESaveStampMode Mode)
-{
-	double Widened = static_cast<double>(Stamp);
-	const bool bChanged = SaveStampDecode(Widened, Mode);
-	if (bChanged)
-	{
-		Stamp = static_cast<float>(Widened);
-	}
-	return bChanged;
-}
-
 uint32 FElysiumNpcBase::SaveCrc32Init()
 {
 	// `FUN_1023f040` — `*param_1 = 0xffffffff;`
@@ -221,24 +119,6 @@ void FElysiumNpcBase::ScheduleTaskBytes(TArray<uint8>& OutBytes) const
 		const uint32 TaskData = Step.RawWord();
 		OutBytes.Append(reinterpret_cast<const uint8*>(&TaskId), sizeof(int32));
 		OutBytes.Append(reinterpret_cast<const uint8*>(&TaskData), sizeof(uint32));
-	}
-}
-
-void FElysiumNpcBase::SaveWriteFields(void* Archive, FAiExtendedSaveHeader& Header)
-{
-	// `(**(code **)(*param_1 + 8))(&header, &datamap_AIExtendedSaveHeader_t)` — `ISave::WriteFields`.
-	// The datamap is `0x105cabd0`, which `CAI_BaseNPC::Restore` reads the same block back through.
-	SaveArchiveLog.Add({ FSaveArchiveOp::EKind::Fields, TEXT("AIExtendedSaveHeader_t"),
-		static_cast<int32>(Header.Flags) });
-	LastSavedExtendedHeader = Header;
-	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive))
-	{
-		// The four words in the block's own layout order (`+0x00` version, `+0x04` flags, `+0x08`
-		// the 128-byte name, `+0x88` the CRC).
-		*Ar << Header.Version;
-		*Ar << Header.Flags;
-		*Ar << Header.ScheduleName;
-		*Ar << Header.ScheduleCrc;
 	}
 }
 
@@ -304,56 +184,13 @@ FElysiumNpcBase::FAiExtendedSaveHeader FElysiumNpcBase::BuildExtendedSaveHeader(
 
 int32 FElysiumNpcBase::Save(void* Archive)
 {
-	// `CAI_BaseNPC::Save` `0x1027bc60`, read off the listing because the checklist's walk read the
-	// two MODE arguments as counts. `1027bc6c PUSH 0x4 / LEA EBP,[ESI+0x5b8c]` and
-	// `1027bc80 PUSH 0x3 / LEA EBX,[ESI+0x5db4]`: exactly two encode calls.
-	SaveStampEncode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);   // +0x5b8c, mode 4
-	SaveStampEncode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);          // +0x5db4, mode 3
-
-	// `if (m_pMotor +0x5d44) thunk_FUN_102e0b60(m_pMotor);` — the motor's pre-archive pointer
-	// fix-up, GUARDED; then `thunk_FUN_102e8aa0(&m_MoveAndShootOverlay +0x5cf4)`, which is NOT.
-	if (Motor != nullptr)
-	{
-		++MotorSaveFixups;
-	}
-	++MoveAndShootSaveFixups;
-
-	// `AIExtendedSaveHeader_t`, built on the stack at `ESP+0x14`.
-	FAiExtendedSaveHeader Header = BuildExtendedSaveHeader();
-	SaveWriteFields(Archive, Header);
-
-	// `uVar3 = CBaseCombatCharacter::Save(this, param_1);` — the chain's answer, and this body's.
-	const int32 ChainResult = GChainSaveResult;
-
-	// The decode, in the same order as the encode, then the two post-fixups.
-	SaveStampDecode(ExtendedBlockedByFriendTimer, ESaveStampMode::FloatMax);
-	SaveStampDecode(BaseScheduleHost.WaitFinished, ESaveStampMode::Zero);
-	if (Motor != nullptr)
-	{
-		++MotorRestoreFixups;
-	}
-	++MoveAndShootRestoreFixups;
-	return ChainResult;
+	// `CAI_BaseNPC::Save` `0x1027bc60`, forwarded to the NPC record (0019/6, service
+	// `FElysiumSaveArchive`). Its one hand block, `AIExtendedSaveHeader_t`, is what
+	// `SerializeExtendedHeader` writes (built by `BuildExtendedSaveHeader` above). The rest has no
+	// work here: the two sentinel encodes (`0x101cf250`, modes 4 and 3 on `+0x5b8c` / `+0x5db4`)
+	// guard retail's time re-base, which this walk does not do, and the motor / move-and-shoot
+	// fix-ups (`0x102e0b60`, `0x102e8aa0`) re-link raw pointers this record never saves.
+	if (FElysiumSaveArchive* Ar = static_cast<FElysiumSaveArchive*>(Archive)) { SerializeExtendedHeader(*Ar); }
+	return GChainSaveResult;
 }
 
-// -------------------------------------------------------------------------------------------------
-// Slot 106 `PostConstructor`.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpcBase::PostConstructor(TCHAR* Name)
-{
-	// `CAI_BaseNPC::PostConstructor` `0x1027bb20`, 27 bytes whose entire content is an ORDER:
-	//
-	//     1027bb28  CALL CBaseCombatCharacter::PostConstructor(name)
-	//     1027bb31  CALL [this->vtable + 0x6a0]        ; 0x6a0 / 4 = slot 424 CreateComponents
-	//
-	// The base pass runs to completion first, so the NPC-side pass observes everything it built and
-	// nothing it has not. No state is written here directly.
-	//
-	// The base half is `FElysiumEntity::Construct`'s classname bind in this runtime and has already
-	// run by the time any NPC stands, so the name is RECORDED rather than applied — applying it a
-	// second time would be a second event retail's order does not have.
-	PostConstructorName = Name != nullptr ? FString(Name) : FString();
-	++PostConstructorCalls;
-	CreateComponents();   // slot 424, family Lifecycle's
-}

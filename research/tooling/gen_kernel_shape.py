@@ -65,6 +65,28 @@ a verdict stops being an undifferentiated stub:
 * ``dead`` with either spelling (spec 0019 story 1) — the same emission as above.  A
   ``dead`` row keeps its port target until 0019/6 deletes the body and writes ``-``,
   so judging a slot dead changes nothing the runtime does.
+* a **closed** row (0019/6: ``dead`` at ``-``, ``mechanism`` at a service word of
+  ``kernel_ledger.SERVICE_TARGETS``) — the port body is gone and nothing may tally for it:
+
+  ======================  ==========================================  ===========================
+  layer                   the slot is dispatched, or another body     neither
+                          at it stays (a live layer, a species
+                          body not closed, an overridden-below row)
+  ======================  ==========================================  ===========================
+  introducer (virtual)    declared, with the generated ``default:``   **nothing**: no virtual,
+                          body — retail's literal where its whole     no table row; the census
+                          body is one (a probed ``Default`` row),     row stays with an empty
+                          else the value-initialised answer           port callable (``CLOSED``)
+                          (``Closed``); never a stub
+  override (per owner)    **nothing**: the class inherits             the same
+  ======================  ==========================================  ===========================
+
+  "Dispatched" is the ledger's ``slot_dispatch_sites`` — the *Sites* column of ``slots.md``, the
+  fact story 1 wrote "no dispatch site" from.  A species own body at ``-`` / a service word emits
+  no override either (``kernel_shape.override_rows`` drops it; the class inherits).  A closed row
+  never emits a stub: a firing stub is for an open ``rule`` / ``present`` / ``mechanism`` row.
+  A ``CHAIN_HAND`` body or a ``SLOT_PORT_MAP`` ``PORT`` row over a closed body is a
+  contradiction; the first fails generation, the second needs a ``DELETED`` row.
 * anything else — the stub stays, and the verdict travels in its comment.
 
 Usage::
@@ -170,6 +192,17 @@ SLOT_SURFACES = {
 # The verdict overlay's target spellings that change what the generator emits (story 29c).
 DEFAULT_PREFIX = "default:"
 HAND_PREFIX = "hand:"
+# 0019/6: a mechanism row whose hand body is a one-line forward into its service. Generated exactly
+# like `hand:` (declaration only, definition in the substrate); the ledger counts it closed.
+SEAM_PREFIX = "seam:"
+
+
+def hand_target(target: str) -> str:
+    """The hand body a `hand:` or `seam:` target names, else ""."""
+    for prefix in (HAND_PREFIX, SEAM_PREFIX):
+        if target.startswith(prefix):
+            return target[len(prefix):].strip()
+    return ""
 # A retail default the generator will emit. Anything else in a `default:` target is a reading that
 # has not settled — a `DAT_`, a `param_1`, a `this` — and generation fails rather than inventing.
 DEFAULT_LITERAL_RE = re.compile(r"^(?:void|-?\d+(?:\.\d+)?|0x[0-9a-fA-F]+)$")
@@ -320,6 +353,9 @@ SUFFIX = "suffix"
 # A stub whose body is dead, uncalled and overridden nowhere (0019/5 step 6): no virtual is
 # generated, and the census row stays with an empty port callable.
 DELETED = "deleted"
+# Not a map row: the kind `close_layers` gives a slot whose every body is closed (0019/6) and that
+# nothing dispatches. Emitted exactly as `DELETED`: no virtual, an empty census port callable.
+CLOSED = "closed"
 # A slot a class below the NPC line overrides (0019/5 commit B): the virtual is generated under its
 # retail name and every class below the NPC line that declares the name declares it `override`, so
 # the member IS the slot's body on that class. A same-name member without `override` (a hide under
@@ -335,6 +371,13 @@ SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 CHAIN_HAND: dict[int, tuple[str, str]] = {
     62: ("", "`CBaseEntity::SetOrigin` 0x100b2be0: writes through `SetRuntimeOrigin` when the origin "
              "differs; the change-tracker byte `+0x1b1` stays the Slot88/89 refusal"),
+    94: ("", "`CBaseEntity::GetMoveType` 0x100aac30: reads the `RetailMoveType` word slot 93 writes. Live check "
+             "0019/6: the counting stub answered 0 and failed `CheckOnGround`'s `!= MOVETYPE_STEP` guard "
+             "on every NPC, every think"),
+    208: ("", "`CBaseEntity::SetGroundEntity` 0x100b1420: writes the `RetailGroundEntity` handle word "
+              "(`m_hGroundEntity +0x384`); the floor-facts seam's ground entity lands here (0019/6)"),
+    209: ("", "`CBaseEntity::GetGroundEntity` 0x100b1510: resolves the `RetailGroundEntity` handle word "
+              "(0019/6)"),
     93: ("", "`CBaseEntity::SetMoveType` 0x100aad70: the `RetailMoveType`/`RetailMoveCollide` seam, "
              "written only when the type differs; the physics-object notify is a refusal"),
     194: ("const FVector&", "`EyeAngles` 0x100b4bc0: slot 219's answer (hand body, verdict overlay)"),
@@ -447,6 +490,9 @@ def _load_slot_map() -> None:
         (582, DELETED, "",
          "`CAI_BaseNPC::ReportOverThinkLimit` 0x10277d90: dead, no caller, overridden nowhere "
          "(0019/5 step 6)"),
+        (534, DELETED, "",
+         "`CBaseCombatCharacter` slot 534 0x1026b270: dead (0019/1), closed at `-`; the port's "
+         "`FElysiumCombatCharacter::EyeLookTargetHandle` stays a plain method, no virtual (0019/6)"),
         (614, PORT, "FElysiumNpc::ResetThinkTimers", "the four think stamps, ported in story 21"),
         # `ClearSchedule` is not a slot: retail's 0x10280d30 is a non-virtual the kernel calls
         # directly. `FElysiumNpc::ClearSchedule` stands for it and is declared by hand.
@@ -522,12 +568,18 @@ class Slot:
 
     @property
     def generated(self) -> bool:
-        return self.port_kind not in (PORT, DELETED)
+        return self.port_kind not in (PORT, DELETED, CLOSED)
+
+    @property
+    def closed(self) -> bool:
+        """The overlay closes this row's body (0019/6): `dead` at `-`, `mechanism` at a service word."""
+        return kl.body_closed(self.verdict, self.verdict_target)
 
     @property
     def stubbed(self) -> bool:
-        """A generated virtual with no recovered body and no hand-written definition."""
-        return self.generated and not self.default and not self.hand
+        """A generated virtual with no recovered body, no hand-written definition, and a body the
+        overlay has not closed (a closed body answers silently; it never tallies)."""
+        return self.generated and not self.default and not self.hand and not self.closed
 
     @property
     def declaration(self) -> str:
@@ -619,6 +671,8 @@ class OverrideRow:
     method: str
     verdict: str = ""
     default: str = ""
+    # The overlay closes this own body (0019/6): no override is emitted or owed; the class inherits.
+    closed: bool = False
 
 
 def constant_return(code: str) -> str:
@@ -806,8 +860,8 @@ def apply_verdict(row: Slot, ledger) -> None:
                     f"`default:{literal}` but the body returns `{read}`")
             row.default = literal
             default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
-        elif row.verdict_target.startswith(HAND_PREFIX):
-            row.hand = row.verdict_target[len(HAND_PREFIX):].strip()
+        elif hand_target(row.verdict_target):
+            row.hand = hand_target(row.verdict_target)
 
 
 def chain_tables(ledger) -> dict[str, dict[int, str]]:
@@ -876,6 +930,60 @@ def split_layers(row: Slot, ledger, tables: dict[str, dict[int, str]]) -> None:
             row.hand = row.layers[-1].hand
     else:
         row.layers.append(layer_row(row.body, LAYER_PORT[BASE_TABLE], BASE_TABLE, False))
+
+
+def close_layers(row: Slot, ledger) -> None:
+    """Apply 0019/6's closed rows to a generated slot's layers (the table in the module doc).
+
+    A closed override layer is dropped: its class inherits. A closed introducer is kept only while
+    something can still reach the virtual — a dispatch site at the slot, a layer that stays, a
+    species own body the overlay has not closed, or a class below the NPC line overriding it — and
+    then answers the generated `default:` body instead of a stub. Otherwise the slot emits nothing.
+    """
+    if not row.generated or not row.layers:
+        return
+    for layer in row.layers:
+        if layer.closed and layer.hand and not hand_target(layer.verdict_target):
+            raise SystemExit(f"gen_kernel_shape: slot {row.slot} ({layer.address}) is closed at "
+                             f"`{layer.verdict_target}` but `CHAIN_HAND` still names its hand body "
+                             f"`{layer.hand}`; retire the `CHAIN_HAND` row with the body")
+    kept = [layer for index, layer in enumerate(row.layers) if index == 0 or not layer.closed]
+    first = kept[0]
+    if first.closed:
+        closed_bodies = {layer.body for layer in row.layers if layer.closed}
+        species_live = any(
+            addr not in closed_bodies and not (addr in ledger.verdicts and kl.body_closed(
+                ledger.verdicts[addr].verdict, ledger.verdicts[addr].target))
+            for addr in ledger.slot_bodies.get(row.slot, {}).values())
+        reached = (ledger.slot_dispatch_sites.get(row.slot, 0) > 0 or len(kept) > 1 or species_live
+                   or row.port_kind == OVERRIDDEN_BELOW)
+        if not reached:
+            row.layers = []
+            row.port_kind, row.port_name = CLOSED, ""
+            row.port_why = (f"closed at `{first.verdict_target}` ({first.verdict}): no dispatch site "
+                            "and no other body at the slot (0019/6)")
+            return
+        body = ledger.functions.get(first.body)
+        literal = constant_return(body.code or "") if body is not None else ""
+        if literal and DEFAULT_LITERAL_RE.match(literal):
+            first.default = literal
+            try:
+                default_body(first)
+            except SystemExit:
+                first.default = ""   # a constant the probe cannot lower: the silent body instead
+    if len(kept) < len(row.layers):
+        # The census row names the body a Troika instance RUNS. With a closed override dropped, that
+        # is the deepest surviving layer, not the holder's retail body (0019/6: slot 17's
+        # `CAI_BaseNPC::TraceMessage 0x1028de90` is gone; the NPC runs `CBaseEntity`'s 0x1009b380).
+        survivor = kept[-1]
+        row.body = survivor.body
+        row.address = f"0x{survivor.body}" if survivor.body else ""
+        row.layer = getattr(ledger, "layer_of", {}).get(survivor.body, row.layer)
+        row.story = story_for(row.layer) if row.layer >= 0 else row.story
+        verdict = getattr(ledger, "verdicts", {}).get(survivor.body)
+        if verdict is not None:
+            row.verdict, row.verdict_target = verdict.verdict, verdict.target
+    row.layers = kept
 
 
 def build(repo: Path, module: str, depth: int) -> Model:
@@ -980,6 +1088,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
                 row.notes.append(f"takes {param_note}")
         apply_verdict(row, ledger)
         split_layers(row, ledger, tables)
+        close_layers(row, ledger)
 
     # A slot the chain now declares below the NPC line is inherited by every entity class; a
     # same-name member on one of them is a decision, not a default (story 0019/5 step 6).
@@ -998,7 +1107,16 @@ def build(repo: Path, module: str, depth: int) -> Model:
         if not row.generated or row.slot in SLOT_PORT_MAP:
             continue
         if any(layer.owner not in LAYER_PORT.values() for layer in row.layers)                 and row.port_name in subclass_names:
-            row.notes.append("declared by " + ", ".join(sorted(subclass_names[row.port_name])))
+            # A declaration that carries `override` is an override of the generated virtual, not a
+            # hide: a suite-local or world class standing a retail class the maps never place
+            # (0019/6: `FCornerChainTestCorner::GetNextTarget`, slot 172). Only a same-name member
+            # WITHOUT `override` is the collision that needs a `SLOT_PORT_MAP` decision.
+            declaring = subclass_names[row.port_name]
+            hiding = declaring - subclass_overrides.get(row.port_name, set())
+            if not hiding:
+                row.notes.append("overridden by " + ", ".join(sorted(declaring)))
+                continue
+            row.notes.append("declared by " + ", ".join(sorted(hiding)))
             collisions.append(row)
 
     if collisions:
@@ -1042,6 +1160,7 @@ def build(repo: Path, module: str, depth: int) -> Model:
                               method=(fn.name if fn else ""))
             if verdict is not None:
                 row.verdict = verdict.verdict
+                row.closed = kl.body_closed(verdict.verdict, verdict.target)
                 if verdict.target.startswith(REGISTRY_PREFIX) and fn is not None:
                     row.default = constant_return(fn.code or "")
             overrides.append(row)
@@ -1413,6 +1532,8 @@ def render_slots_inl(model: Model, module: str, owner: str) -> str:
                                 f"{row.port_why}")
             elif row.port_kind == DELETED:
                 out += _comment(f"  slot {row.slot:>3}  {row.address}  deleted — {row.port_why}")
+            elif row.port_kind == CLOSED:
+                out += _comment(f"  slot {row.slot:>3}  {row.address}  closed — {row.port_why}")
     out.append("")
     for row in rows:
         out += _slot_comment(row)
@@ -1477,9 +1598,11 @@ def _slot_table_row(row: Slot, owner: str) -> list[str]:
     `&Owner::Method` for exactly the row's signature, and a slot declared on a base instead would
     deduce the base. A default row carries the probe that calls the virtual on a receiver typed to
     the owner; a stub or hand row carries none (a stub fired here would tally, and a hand body
-    reaches state a bare receiver does not have).
+    reaches state a bare receiver does not have). A closed introducer with no literal is `Closed`
+    (0019/6): it answers the value-initialised default and carries no probe.
     """
-    kind = "Default" if row.default else ("Hand" if row.hand else "Stub")
+    kind = ("Default" if row.default else "Hand" if row.hand else "Closed" if row.closed
+            else "Stub")
     declared = (f"ElysiumNpcKernelShape::TDeclaredOn<{owner}, {_signature(row)}>::Test("
                 f"&{owner}::{row.port_name})")
     if row.default:
@@ -1513,6 +1636,10 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
               f"substrate, and {len(stubbed)} are still stubs"
               + (" — " + ", ".join(f"{count} {story}" for story, count in sorted(stories.items()))
                  if stories else "") + ".")
+    silent = [r for r in generated if r.closed and not r.default and not r.hand]
+    if silent:
+        counts += (f" {len(silent)} are closed (0019/6) and answer the value-initialised default "
+                   "without tallying.")
     fire = surface.fire
     out = _header(module, model.meta, counts)
     out += [
@@ -1554,7 +1681,7 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         if row.hand:
             out += _slot_comment(row, "")
             why = (f"verdict `{row.verdict}`: the body is `{row.hand}`, written by hand in the "
-                   "substrate." if row.verdict_target.startswith(HAND_PREFIX) else
+                   "substrate." if hand_target(row.verdict_target) else
                    f"the body is `{row.hand}`, written by hand in the substrate: "
                    f"{CHAIN_HAND.get(row.slot, ('', 'see spec.md story 5, the generated slot bodies'))[1]}.")
             out += _comment(f"{why} Declared here, defined there.", "")
@@ -1571,6 +1698,13 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         if row.default:
             if statement:
                 out.append(f"\t{statement}")
+        elif row.closed:
+            out += _comment(f"verdict `{row.verdict}`, closed at `{row.verdict_target}` (0019/6): "
+                            "nothing observes this body, but the slot is still reached, so it "
+                            "answers the value-initialised default and tallies nothing.", "\t")
+            tail = _default_return(row.ret_port)
+            if tail:
+                out.append(tail)
         else:
             out += _wrapped(f"{fire}({_literal(f'{row.retail}::{row.port_name}')}, "
                             f"{_literal(row.address)}, {_literal(row.story)}, DebugString());", "\t")
@@ -1734,6 +1868,15 @@ def report(model: Model) -> None:
     print(f"slots:      {len(model.slots):5d}  Troika line, {len(model.branch)} per-branch")
     print(f"  ported    {len([r for r in model.slots if r.port_kind == PORT]):5d}")
     print(f"  generated {len([r for r in model.slots if r.generated]):5d}")
+    print(f"  closed    {len([r for r in model.slots if r.port_kind == CLOSED]):5d}  "
+          "every body closed and nothing reaches it: no virtual (0019/6)")
+    silent = [layer for r in model.slots for layer in r.layers if layer.closed]
+    print(f"    reached {len(silent):5d}  closed layer rows still declared "
+          f"({len([layer for layer in silent if layer.default])} answer retail's literal)")
+    owed = [r for r in model.slots if r.port_kind == PORT and r.closed]
+    if owed:
+        print("  PORT rows over a closed body (each needs a `SLOT_PORT_MAP` DELETED row): "
+              + ", ".join(f"{r.slot} {r.address} {r.port_name}" for r in owed))
     for story, count in sorted(collections.Counter(
             r.story or "unassigned" for r in model.slots if r.generated).items()):
         print(f"    {story:<10} {count:5d}")
@@ -1758,7 +1901,8 @@ def report(model: Model) -> None:
         print(f"    {story:<10} {len(rows):5d}  {detail}")
     print(f"classes:    {len(model.classes):5d}  "
           f"{sum(len(c.classnames) for c in model.classes)} entity classnames")
-    print(f"overrides:  {len(model.overrides):5d}  species slot bodies")
+    print(f"overrides:  {len(model.overrides):5d}  species slot bodies "
+          f"({len([r for r in model.overrides if r.closed])} closed: no override owed)")
     print(f"  verdicted {len([r for r in model.overrides if r.verdict]):5d}  "
           f"{len([r for r in model.overrides if r.default])} carry a registry value")
 

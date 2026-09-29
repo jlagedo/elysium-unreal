@@ -53,8 +53,8 @@ struct TStructOpsTypeTraits<FElysiumNpcAnimTickFunction>
 namespace ElysiumNpcBodyMove
 {
 // A NAMED MODERNIZATION, not a retail number: the smallest arrival radius Unreal's path follower is
-// handed. Retail lands on the point (its motor clamps the step onto the waypoint; `0x102ef510`
-// tests 0.0625 units) and Unreal's acceleration-driven follower does not, so a request stated at
+// handed. Retail lands on the point (its motor clamps the step onto the waypoint; its arrival
+// test is 0.0625 units) and Unreal's acceleration-driven follower does not, so a request stated at
 // 0.16 cm is given to the follower as this instead. It sizes only what the FOLLOWER is asked for:
 // the request's own radius is kept exactly, `RemainingDistance2DCm` is measured to the exact
 // destination, and the substrate applies retail's own completion arms from those.
@@ -171,7 +171,7 @@ public:
 	using IElysiumNpcMotor::MoveTo;
 	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) override;
 	virtual bool SampleMoveFacts(FElysiumNpcMoveFacts& Out) const override;
-	virtual void Face(float YawDegrees) override;
+	virtual void Face(float YawDegrees, float YawSpeedDegPerS = 0.f) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;
 	virtual void SetEnabled(bool bEnabled) override;
@@ -191,6 +191,14 @@ public:
 	// The path-length service and the navmesh raycast (`ElysiumNpcBodyGeometry.cpp`).
 	virtual bool QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpcRouteAnswer& Out) const override;
 	virtual bool NavRaycast(const FElysiumNpcNavRaycast& Query, FElysiumNpcNavRaycastAnswer& Out) const override;
+	// 0019 story 6's floor, move-ignore and route-held facts (`ElysiumNpcBodyGeometry.cpp`).
+	virtual bool SampleFloor(FElysiumNpcFloorFacts& Out) const override;
+	virtual void SetMoveIgnore(const FElysiumEntityHandle& Entity, bool bIgnore) override;
+	virtual bool HasPath() const override;
+	// The hull resize and the facing-while-moving target (`ElysiumNpcBody.cpp`).
+	virtual void SetHullSize(const FVector& MinsCm, const FVector& MaxsCm) override;
+	virtual void SetFacingTarget(const TOptional<FVector>& TargetCm) override;
+	virtual void SetYawSpeed(float YawSpeedDegPerS) override;
 	virtual bool CanReachLateralCover(const FVector& FeetDestination) const override;
 	virtual void SetTravelGait(EElysiumNpcGaitKind Gait, float SpeedCmPerSecond) override;
 	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override;
@@ -221,7 +229,7 @@ public:
 	// one of its own.
 	//
 	// Called from `Tick` while a move request is in flight, which is where retail writes its own
-	// cache: `CAI_Navigator::MoveEnact 0x102ef870` is the ONLY writer of `CAI_BaseNPC +0x5b90`
+	// cache: `CAI_Navigator::MoveEnact` is the ONLY writer of `CAI_BaseNPC +0x5b90`
 	// (through the setter `0x10270290`), so a standing body never pays for a trace and never
 	// changes its answer. Public so an engine-tier test can drive it without a navmesh, a
 	// controller and a crowd agent standing between it and one trace.
@@ -237,6 +245,11 @@ private:
 	// shipping build.
 	friend struct FElysiumNpcBodyMoveTestAccess;
 #endif
+	// The collision that stands for one entity, for `SetMoveIgnore`: its NPC body or the player's
+	// pawn (an actor), or a brush / prop entity's component on the owning map actor. Both null when
+	// the entity has none in this world.
+	void ResolveEntityCollision(const FElysiumEntityHandle& Entity, AActor*& OutActor,
+		UPrimitiveComponent*& OutComponent) const;
 	void ServiceNavigationJump();
 	void FinishNavigationJump(bool bSucceeded);
 	void ResetNavigationJump();
@@ -293,6 +306,13 @@ private:
 	// distance test alone could not, because the engine's reach test adds the agent radius.
 	bool bRequestAlreadyAtGoal = false;
 	bool bFaceRequested = false;
+	// `SetFacingTarget`'s point, held because the controller that carries the focus is spawned
+	// lazily by the first accepted `MoveTo`; `ApplyFacingTarget` states it whenever both exist.
+	TOptional<FVector> FacingTargetCm;
+	void ApplyFacingTarget();
+	// A kernel-stated turn rate (`FElysiumNpcMoveRequest::YawSpeedDegPerS`, `Face`'s rate) onto the
+	// mover's `RotationRate.Yaw`; 0 keeps the current rate.
+	void ApplyYawSpeed(float YawSpeedDegPerS);
 	bool bRequestedEnabled = true;
 	bool bRuntimeReady = false;
 	// Borrowed by a cutscene and given back: a frozen body cannot move or be touched but stays on
@@ -362,7 +382,7 @@ private:
 	mutable uint8 WarnedSpeedFallback = 0;
 	// The surfaceprop under this body's feet — `CAI_BaseNPC +0x5b90`, the cached `surfacedata_t*`
 	// the NPC footfall arm at `0x1026d460` returns silently on when it is null. Written only by
-	// `RefreshGroundSurface` (per move step, as `CAI_Navigator::MoveEnact 0x102ef870` writes the
+	// `RefreshGroundSurface` (per move step, as `CAI_Navigator::MoveEnact` writes the
 	// retail one) and cleared only at spawn (`InitializeAtFeet`, which is where `NPCInit 0x10273390`
 	// and `OnRestore 0x1027bf50` clear retail's). It SURVIVES `Stop()` — an arrival, a freeze, a
 	// disable and a teleport — exactly as retail's does: a footfall record landing on a body in its

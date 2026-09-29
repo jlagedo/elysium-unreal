@@ -105,13 +105,10 @@ bool FElysiumNpcKernelStartTask19BaseDispatchTest::RunTest(const FString&)
 	// sides of the (iTask - 1) <= 0x11f guard. Each DevMsgs and leaves the task running.
 	for (const int32 TaskId : { 0x45, 0x4f, 0x78, 0x11f, 0x121, 0 })
 	{
-		const int32 Before = F.Guard->StartTaskNav.DevMessages;
 		F.Run(TaskId);
 		TestFalse(FString::Printf(TEXT("0x%x does not complete"), TaskId), F.Completed());
 		TestFalse(FString::Printf(TEXT("0x%x does not fail"), TaskId), F.Failed());
-		TestEqual(FString::Printf(TEXT("0x%x DevMsgs once"), TaskId), F.Guard->StartTaskNav.DevMessages, Before + 1);
-		TestTrue(FString::Printf(TEXT("0x%x names the no-entry message"), TaskId),
-			F.Guard->StartTaskNav.LastDevMessage.StartsWith(TEXT("No StartTask entry for ")));
+		// Retail's "No StartTask entry for %d" `DevMsg` is a print with no output device: dead, deleted (0019/6).
 	}
 	// The epilogue arm: no start work at all.
 	for (const int32 TaskId : { 0x05, 0x68, 0x74 })

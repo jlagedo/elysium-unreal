@@ -157,7 +157,7 @@ static constexpr float TweakParamNegativeFloor = ElysiumNpcTunables::Zero;
  *  (`1029ab31 FCOMP dword ptr [0x104492dc]`). The sentinel that exempts a negative `VISION` or
  *  `HEARING` from the error: `-1` means "derive it", which is what
  *  `ElysiumNpcSense::DerivedSentinel` already is. */
-static constexpr float TweakParamDeriveSentinel = -1.0f;    // _DAT_104492dc
+static constexpr float TweakParamDeriveSentinel = ElysiumNpcTunables::MinusOne;    // _DAT_104492dc
 
 /** The `NPCPERCEPTION` clamp band, `1029aa93 CMP EAX,1` and `1029aac3 CMP EAX,0xa`. */
 static constexpr int32 TweakParamPerceptionMin = 1;

@@ -44,6 +44,7 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	bScriptMoveClaimed = true;
 
 	Motor->Stop();
+	ClearMoveIgnores();
 	const double Now = World ? World->NowSeconds() : 0.0;
 	ScriptMark = Mark;
 	ScriptMarkAngles = MarkAngles;
@@ -263,6 +264,7 @@ void FElysiumScriptedCharacter::EndScriptMove()
 	if (Motor)
 	{
 		Motor->Stop();
+		ClearMoveIgnores();
 	}
 	ReleaseScriptMove(TEXT("EndScriptMove"));
 	bScriptMoveClaimed = false;

@@ -89,7 +89,6 @@ void FElysiumNpcGuard1::OnStateChange(EElysiumNpcState OldState, EElysiumNpcStat
 int32 FElysiumNpcGuard1::SelectIdealStateRetail()
 {
 	using EChannel = ElysiumNpcWitness::EChannel;
-	SelectIdealStateSelector = 0x12;
 	switch (NpcStateRetail())
 	{
 	case 1:
@@ -243,16 +242,6 @@ int32 FElysiumNpcGuard1::TranslateScheduleRetail(int32 ScheduleNumber)
 	}
 	if (ScheduleNumber == 0x103) { return 0x159; }
 	return TroikaTranslateScheduleRetail(ScheduleNumber);
-}
-
-// Slot 546: `0x1037c800`, the class's own schedule id space.
-const TCHAR* FElysiumNpcGuard1::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b1b4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VGuard1"), TEXT("0x1037c800"), TEXT("0x1093b1b4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---

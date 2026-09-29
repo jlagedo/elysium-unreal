@@ -4,7 +4,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumWorldServices.h"
-#include "Map/ElysiumRetailMaskRecipe.h"   // PropMaskBit -- an entity prop meets MONSTER traces only
+#include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Substrate/ElysiumProp.h"
 
 #include "Components/SkeletalMeshComponent.h"
@@ -202,6 +202,10 @@ void FElysiumPhysProp::BuildBody()
 	{
 		return;
 	}
+	// 0019/6: an entity prop's retail filter bits, from its two authored keyfields, on whichever
+	// builder stood the body (the catalogue's physics proxy wears none of its own). The mask
+	// filter survives every later profile change.
+	Visual->SetMaskFilterOnBodyInstance(PropMaskBits());
 	World->RegisterPropBody(Visual);
 	if (PosedVisual)
 	{
@@ -257,6 +261,18 @@ void FElysiumPhysProp::BuildBody()
 	}
 }
 
+uint8 FElysiumPhysProp::PropMaskBits() const
+{
+	// `blocks_traces` (`m_bBlocksTraces +0xfd`): admitted without MONSTER (`101d30f2`);
+	// `npc_transparent` (`m_bNPCTransparent +0xfc`): passed by `FVisible` (`0x10107630`). Authored
+	// keyfields, read like `override_mass`; spawn-time only.
+	const auto Flag = [this](const TCHAR* Key)
+	{
+		return Def != nullptr && FCString::Atoi(*Def->Keys.FindRef(Key)) != 0;
+	};
+	return ElysiumRetailMask::PropBodyMaskBits(Flag(TEXT("blocks_traces")), Flag(TEXT("npc_transparent")));
+}
+
 void FElysiumPhysProp::GateBody()
 {
 	if (!Visual)
@@ -281,9 +297,10 @@ void FElysiumPhysProp::GateBody()
 		Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
 		// 0018 story 6: the profile reset the body's responses. A moving prop is still an entity
 		// prop to `StandardFilterRules 0x101d3080` (R2 section 2): met only under MONSTER
-		// (`PropMaskBit`), and then it blocks `FVisible`'s `0x2804091`, which `PhysicsActor`
-		// ignores -- so the sight Block is set again on this body alone.
-		Visual->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropMaskBit);
+		// (`PropMaskBit`, unless `blocks_traces`), and then it blocks `FVisible`'s `0x2804091`
+		// (unless `npc_transparent`), which `PhysicsActor` ignores -- so the sight Block is set
+		// again on this body alone.
+		Visual->SetMaskFilterOnBodyInstance(PropMaskBits());
 		Visual->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 		Visual->SetSimulatePhysics(true);
 	}

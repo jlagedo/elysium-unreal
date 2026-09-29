@@ -261,8 +261,8 @@ void FElysiumNpcBase::TaskFail(int32 Reason)
 
 void FElysiumNpcBase::Serialize(FElysiumSaveArchive& Ar)
 {
-	// The `CAI_BaseNPC` half of the NPC record, written ahead of the Troika's (`0x102993c0` calls
-	// `0x1027bc60` first): retail's one hand block (`AIExtendedSaveHeader_t`), then the base words no
+	// The `CAI_BaseNPC` half of the NPC record, written ahead of the Troika's (the Troika `Save`
+	// calls `0x1027bc60` first): retail's one hand block (`AIExtendedSaveHeader_t`), then the base words no
 	// retail datamap row reaches through the generated walk.
 	SerializeExtendedHeader(Ar);
 	// The combat character's flag words travel with the record and not with the walk: retail's
@@ -315,6 +315,7 @@ void FElysiumNpcBase::StopMoving()
 	if (Motor != nullptr)
 	{
 		Motor->Stop();
+		ClearMoveIgnores();
 	}
 	bMoveIssued = false;
 	bWalkingAnimation = false;

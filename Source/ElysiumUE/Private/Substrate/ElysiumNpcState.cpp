@@ -55,7 +55,6 @@ void FElysiumNpc::SetCopCensusCount(int32 Value)
 
 int32 FElysiumNpc::TroikaSelectIdealState()
 {
-	SelectIdealStateSelector = 2;
 	switch (NpcStateRetail())
 	{
 	case 1:

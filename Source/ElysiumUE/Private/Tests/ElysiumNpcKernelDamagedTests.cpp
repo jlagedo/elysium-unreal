@@ -197,11 +197,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideLiveCineTest::RunTest(const FString&)
 
 	C.Cine->Delay = 5;
 
-	// 0x102c1d9b / 0x102c1da2: the two warnings, once each, the cine named by GetDebugName (0x102c1d77).
-	// One pattern per line: the framework matches a log line against one expected message only.
-	AddExpectedError(TEXT("playing a scripted sequence .s1..  Satan will eat your babies"),
-		EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("Cancelling script"), EAutomationExpectedErrorFlags::Contains, 1);
+	// 0x102c1d9b / 0x102c1da2: two `Warning()` prints, dead (no output device), deleted by 0019/6.
 	C.Jack->ScriptHide();
 	// `CancelScript 0x101a8c30` -> `ScriptEntityCancel` (`0x101a8c82`) zeroes the cine's `m_iDelay`
 	// and releases the target only in SCRIPT state (`0x101a7149`): an IDLE NPC keeps its `m_hCine`.
@@ -232,8 +228,6 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptStateTest::RunTest(const FString&
 	const int32 SolidSets = C.Jack->RetailSolidSets;
 
 	// 0x102c1cf1 SCRIPT enters the warn arm; 0x102c1d32 -> 0x102c1d87 names the cine **UNKNOWN**.
-	AddExpectedError(TEXT("UNKNOWN"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("Cancelling script"), EAutomationExpectedErrorFlags::Contains, 1);
 	C.Jack->ScriptHide();
 	TestEqual(TEXT("0x102c1e12 CineCleanup ran on this NPC (the dead-cine SetSolid)"),
 		C.Jack->RetailSolidSets, SolidSets + 1);
@@ -261,8 +255,6 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptCineTest::RunTest(const FString&)
 	C.Jack->WriteNpcStateRetail(GDamaged19TestStateScript);
 	C.Own();
 
-	AddExpectedError(TEXT("playing a scripted sequence .s1."), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("Cancelling script"), EAutomationExpectedErrorFlags::Contains, 1);
 	C.Jack->ScriptHide();
 	TestFalse(TEXT("0x102c1e00 CancelScript -> ScriptEntityCancel released the SCRIPT-state NPC"),
 		C.Jack->ScriptOwner.IsSet());
@@ -290,8 +282,6 @@ bool FElysiumNpcKernelDamaged19ScriptHideDeadTest::RunTest(const FString&)
 	C.Own();
 	C.Cine->Delay = 5;
 
-	AddExpectedError(TEXT("Satan will eat your babies"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("Cancelling script"), EAutomationExpectedErrorFlags::Contains, 1);
 	C.Jack->ScriptHide();
 	TestEqual(TEXT("0x102c1e00 CancelScript still runs (m_iDelay := 0)"), C.Cine->Delay, 0);
 	TestEqual(TEXT("0x102c1e1e JZ 0x102c1e29: DEAD skips the 0x6b write"),

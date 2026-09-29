@@ -78,7 +78,7 @@ void FElysiumNpc::Conditions19TroikaGoalUpkeep()
 			const FElysiumEntity* const AgainEntity = Again.IsSet()      // 1026ef1b / 1026ef38
 				? ElysiumNpcCond::ResolveEnemyHandle(*World, Again)
 				: nullptr;
-			Conditions19UpdateApproachGoalPos(const_cast<FElysiumEntity*>(AgainEntity));   // 1026ef43 0x1028e480
+			Conditions19UpdateApproachGoalPos(const_cast<FElysiumEntity*>(AgainEntity));   // 1026ef43
 		}
 		const FElysiumEntityHandle MoveTargetHandle = ScheduleHost.MoveTarget;   // 1026ef48 +0x6240
 		// The handle re-read for the argument (1026ef7b `-1`, 1026ef92 serial): the same entity.
@@ -87,7 +87,7 @@ void FElysiumNpc::Conditions19TroikaGoalUpkeep()
 			: nullptr;
 		if (MoveTargetEntity != nullptr)                                 // 1026ef51 / 1026ef71 / 1026ef76
 		{
-			Conditions19RefreshGoalPosition(const_cast<FElysiumEntity*>(MoveTargetEntity));   // 1026ef9d 0x1028e980
+			Conditions19RefreshGoalPosition(const_cast<FElysiumEntity*>(MoveTargetEntity));   // 1026ef9d
 		}
 	}
 	Conditions19OcclusionReportUpkeep();                                 // 1026efa4 0x1028e790

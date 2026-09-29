@@ -15,10 +15,8 @@ public:
 	ELYSIUM_NPC_CLASS("CNPC_VGhoulCroucher", FElysiumNpcHumanCombatant)
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual void SetModel(TCHAR* ModelName) override;
 	virtual void OnVictimHitByMe(FElysiumEntity* Victim) override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual bool CanBeSetOnFire() override;
 	virtual void StartTouchSpecies(FElysiumEntity* Other) override;
 
@@ -83,7 +81,7 @@ public:
 	/** `m_flNextTouchBurnTime` (`+0x666c`, `CNPC_VGhoulCroucher`) — the touch-burn re-arm stamp. */
 	double GhoulNextTouchBurnTime = 0.0;
 	/** `_DAT_1044ffd0` — **5.0**, a DOUBLE, read at file offset `0x44ffd0`. */
-	static constexpr double GhoulTouchBurnIntervalSeconds = 5.0;
+	static constexpr double GhoulTouchBurnIntervalSeconds = ElysiumNpcTunables::FiveDouble;
 	/** `1037c028 PUSH 0x40a00000` — the touch burn's damage, **5.0**, against the **10.0**
 	 *  (`0x41200000`) this class's own `OnVictimHitByMe` (`0x1037be80`) passes to the same body. */
 	static constexpr float GhoulTouchBurnDamage = 5.0f;

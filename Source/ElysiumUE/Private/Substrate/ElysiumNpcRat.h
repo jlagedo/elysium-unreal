@@ -16,7 +16,6 @@ public:
 	virtual bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
 	virtual FVector HeadDirection2D() override;
 	virtual FVector HeadDirection3D() override;
-	virtual void* CreateLocalNavigator() override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

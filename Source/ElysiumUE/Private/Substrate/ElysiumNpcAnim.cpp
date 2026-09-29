@@ -33,11 +33,6 @@
 //     (no instance).
 //
 // The walked prose is `docs/vtmb/npc-ai/shape.md`.
-//
-// One fact governs the flex half and is stated once: `LookupFlexController` (`0x100b5d10`) answers
-// **0**, not -1, for a name it cannot find. Every caller in this file therefore writes or reads
-// controller zero on a miss rather than dropping the request, and that is retail's behaviour, not
-// an oversight in the port.
 
 namespace
 {
@@ -167,7 +162,7 @@ void FElysiumNpc::CallPythonDialogFunction(const FString& FunctionName)
 void FElysiumNpc::AddSceneEvent(void* Scene, void* Event)
 {
 	// `CAI_BaseNPCTroika::AddSceneEvent` `0x102c1680`, slot 286. A five-way dispatch on the choreo
-	// event type, and the `default` arm is the base at `0x100b5e60`. The port's own
+	// event type, and the `default` arm is the base `CBaseFlex::AddSceneEvent`. The port's own
 	// `EElysiumChoreoEvent` carries retail's numbering unchanged, which is why the arms read as names
 	// here and as `2 / 7 / 0xd / 0xe / 0xf` in the listing.
 	const FElysiumSceneData* const SceneData = static_cast<const FElysiumSceneData*>(Scene);

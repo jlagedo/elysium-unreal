@@ -66,16 +66,6 @@ void FElysiumNpcHumanCombatant::BuildScheduleTestBits(FElysiumNpcConditions& InO
 	}
 }
 
-// Slot 546: `0x10386c80`, the class's own schedule id space.
-const TCHAR* FElysiumNpcHumanCombatant::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b47c`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VHumanCombatant"), TEXT("0x10386c80"), TEXT("0x1093b47c") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcLifecycle19_2.cpp` (story 5 step 4) ---
 
 void FElysiumNpcHumanCombatant::HumanCombatantNPCInit()
@@ -120,7 +110,6 @@ void FElysiumNpcHumanCombatant::CopHumanCombatantOnStateChange(int32 NewRetail)
 
 int32 FElysiumNpcHumanCombatant::HumanCombatPatrolSelectIdealState()
 {
-	SelectIdealStateSelector = 0x15;
 	if (NpcStateRetail() == 1)
 	{
 		if (!bNoAlertState

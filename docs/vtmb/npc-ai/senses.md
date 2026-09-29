@@ -1153,8 +1153,8 @@ Port: `ElysiumNpcSight::Visible` (the filter and the verdict over `TraceRetail`;
 `FElysiumNpc::FVisible` -> `BaseFVisible` (`ElysiumNpcSenses10.cpp`: the two gates, the target's
 `RetailCollisionExtents`, then the trace). "Is an NPC" is retail's own test, `bNpcTransparent`.
 
-**Unrecovered:** the blocker cell is not delivered (the port's slot 201 takes the third parameter by
-value); the player's and NPCs' studio `$contents` (assumed SOLID); the name of solid flag `0x20`; the
+**Unrecovered:** the blocker cell IS delivered since 0019/6 (`*ppBlocker = tr.m_pEnt` at `100a71ab`, the THIRD
+argument, reaches `LastFVisibleBlockerTarget`; a static-world block writes Invalid); the player's and NPCs' studio `$contents` (assumed SOLID); the name of solid flag `0x20`; the
 water level's producer (nothing writes `FElysiumEntity::WaterLevel`, so the gate never closes).
 
 ### `Slot594` `0x102b4760`

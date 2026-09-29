@@ -188,9 +188,9 @@ namespace RunTask19Troika
 	constexpr int32 UpdateYawDefault = -1;
 
 	// `_DAT_1046dcd0` f32 = 128.0 -- the special-idle player distance (Source units).
-	constexpr float SpecialIdlePlayerDistance = 128.0f;
+	constexpr float SpecialIdlePlayerDistance = ElysiumNpcTunables::OneTwentyEight;
 	// `_DAT_1049ae74` f32 = 50000.0 -- the finishing-move force scale.
-	constexpr float FinishingMoveForceScale = 50000.0f;
+	constexpr float FinishingMoveForceScale = ElysiumNpcTunables::FiftyThousand;
 	// `CVStatList_t::SetBaseToStatValue(0xf, 0x11)` on stat list 0 (`0x102ac46b`).
 	constexpr int32 FinishingMoveStatList = 0;
 	constexpr int32 FinishingMoveStatTarget = 0xf;

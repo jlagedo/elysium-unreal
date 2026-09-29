@@ -21,9 +21,9 @@
 
 namespace
 {
-	constexpr float EnergyBallForward = 50.0f;      // _DAT_104ada24
-	constexpr float EnergyBallRight = 40.0f;        // _DAT_104ada28
-	constexpr float EnergyBallUp = -10.0f;          // _DAT_104ada2c
+	constexpr float EnergyBallForward = ElysiumNpcTunables::ChangBrosEnergyBallForward;      // _DAT_104ada28 = 40
+	constexpr float EnergyBallRight = ElysiumNpcTunables::ChangBrosEnergyBallRight;        // _DAT_104ada2c = -10
+	constexpr float EnergyBallUp = ElysiumNpcTunables::ChangBrosEnergyBallUp;          // _DAT_104ada24 = 50
 
 }
 
@@ -37,10 +37,10 @@ FVector FElysiumNpc::EnergyBallSpawnPoint(const FVector& OriginUnits, const FVec
 	// The listing's three accumulations, each a dot of one basis row with the same constant triple:
 	//     p.x = origin.x + fwd.x*50 + up.x*40 + right.x*(-10)
 	//     p.y = origin.y + fwd.y*50 + up.y*40 + right.y*(-10)
-	//     p.z = origin.z + fwd.z*50 + up.z*40 + right.z*(-10)
+	//     p.z = origin.z + up.z*50 + fwd.z*40 + right.z*(-10)   (CORRECTED 2026-09-29 from the listing)
 	// `_DAT_104ada24` = 50.0, `_DAT_104ada28` = 40.0, `_DAT_104ada2c` = -10.0, all read out of
 	// `.rdata`. `AngleVectors` (`0x10139610`) fills forward/right/up from the muzzle attachment's
 	// angles (slot 219, `+0x36c`).
-	return OriginUnits + FwdAxis * EnergyBallForward + UpAxis * EnergyBallRight
-		+ RightAxis * EnergyBallUp;
+	return OriginUnits + FwdAxis * EnergyBallForward + UpAxis * EnergyBallUp
+		+ RightAxis * EnergyBallRight;   // 0x1036dd20 read 2026-09-29: up*_DAT_104ada24 (50) + right*_DAT_104ada2c (-10) + forward*_DAT_104ada28 (40)
 }

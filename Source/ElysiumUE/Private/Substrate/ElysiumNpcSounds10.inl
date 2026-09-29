@@ -14,10 +14,9 @@
 // and the two `CNPC_VWerewolf` species arms over them**. It is NOT family
 // **Sounds** (story 29c-1), which owns the layer 0–9 gates in front of these hooks — slot 486
 // `FOkToMakeSound`, slot 487 `JustMadeSound`, slots 509/510 and the per-species vocalization table
-// — and whose `ElysiumNpcSounds.cpp` still carries the two slot definitions (488 and 506)
-// that 29c-1 moved out of the generated file so their species prologue had somewhere to live.
-// Those two definitions now call `TroikaDeathSound()` / `TroikaSlot506()` below, which is this
-// family's body for them.
+// — and whose `ElysiumNpcSounds.cpp` still carries the slot-488 definition that 29c-1 moved out
+// of the generated file so its species prologue had somewhere to live. That definition calls
+// `TroikaDeathSound()` below, which is this family's body for it (slot 506 is dead, 0019/6).
 //
 // THREE STANDING FACTS OF THIS FAMILY, stated once here rather than at nineteen call sites.
 //
@@ -97,11 +96,6 @@ void SpeakSoundConcept(const TCHAR* ConceptName, float Attenuation);
  *  called from `FElysiumNpc::DeathSound` in family **Sounds**' file; `CNPC_VTzimisce` (`0x103b92a0`)
  *  and `CNPC_VCamera` (`0x103680b0`) override that slot on their C++ classes (story 5 step 3). */
 void TroikaDeathSound();
-
-/** `CAI_BaseNPCTroika::FUN_10294e70` (`0x10294e70`), slot 506's Troika-line body, for the same
- *  reason — `FElysiumNpc::Slot506` in family **Sounds**' file carries `CNPC_VCamera`'s empty
- *  override in front of it. */
-void TroikaSlot506();
 
 /** Slot 507's fifth argument, computed (`10294f9f`..`10294fdc`) rather than a constant:
  *

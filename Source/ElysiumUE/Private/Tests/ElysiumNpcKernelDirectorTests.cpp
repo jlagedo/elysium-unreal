@@ -842,11 +842,6 @@ bool FElysiumNpcKernelDirectorSlotsTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Jack });
 
-	// Slots 175 / 178: bare returns; a touch or a block changes nothing on either side.
-	Seq->Touch(Jack);
-	Seq->Blocked(Jack);
-	TestFalse(TEXT("slots 175/178 take no NPC"), Jack->ScriptOwner.IsSet());
-	TestNull(TEXT("and set no target"), Seq->TargetNpc());
 	// Slots 363 / 365: the entity cones are false.
 	TestFalse(TEXT("slot 363 0x101a6da0"), Seq->FInViewCone(static_cast<FElysiumEntity*>(Jack)));
 	TestFalse(TEXT("slot 365 0x101a6de0"), Seq->FInAimCone(static_cast<FElysiumEntity*>(Jack)));

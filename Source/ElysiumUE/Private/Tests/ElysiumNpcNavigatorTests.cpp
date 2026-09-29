@@ -8,14 +8,13 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcNavigator.h"
-#include "Substrate/ElysiumNpcTestHull.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 
 // 0018 story 5 lane A -- `CAI_Navigator` / `CAI_Path` as the object the kernel reads and writes:
 // the getters' no-goal answers (R1), what `SetGoal` `0x102ecd20` writes onto the path, the reset
 // `0x102f28a0` / `0x1030bb30`, the deferred-route window with `nav+0x44 == 0`, the pedestrian byte
 // and its per-request cost multiplier, the request's arrival radius (`0x10451f78`), and the route
-// sample `0x102eee40` takes from the body's move facts.
+// sample the navigator takes from the body's move facts.
 
 static constexpr EAutomationTestFlags GNavigatorTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -47,33 +46,6 @@ namespace
 		Goal.bDestSet = true;
 		return Goal;
 	}
-
-	// A motor that reports only the move facts a case scripts. Nothing here moves: the substrate's
-	// reads of the route (`NavPathSample`, `FUN_102eee40`) are what is under test.
-	struct FNavigatorFactsMotor final : IElysiumNpcMotor
-	{
-		FElysiumNpcMoveFacts Facts;
-		bool bReportsFacts = true;
-		virtual bool MoveTo(const FElysiumNpcMoveRequest&) override { return false; }
-		virtual void Face(float) override {}
-		virtual void Stop() override {}
-		virtual void Teleport(const FVector&, float) override {}
-		virtual void SetEnabled(bool) override {}
-		virtual void SetFrozen(bool) override {}
-		virtual void SetIgnoreCharacterCollision(bool) override {}
-		virtual EElysiumNpcMoveStatus Sample(FVector&, float&) override { return EElysiumNpcMoveStatus::Idle; }
-		virtual void SampleTransform(FVector&, float&) const override {}
-		virtual FElysiumLocomotionSample SampleLocomotion() const override { return FElysiumLocomotionSample(); }
-		virtual bool SampleMoveFacts(FElysiumNpcMoveFacts& Out) const override
-		{
-			if (!bReportsFacts)
-			{
-				return false;
-			}
-			Out = Facts;
-			return true;
-		}
-	};
 }
 
 // --- The getters' no-goal answers ------------------------------------------------------------------
@@ -361,66 +333,6 @@ bool FElysiumNavigatorPedestrianTest::RunTest(const FString&)
 	TestFalse(TEXT("path+0x1 stays clear for type 9"), Guard->Navigator.bPedestrian);
 	TestEqual(TEXT("...and the request carries no multiplier"), Motor->LastMoveRequest.PedestrianCostMultiplier, 0);
 	TestEqual(TEXT("NavigatorPathType reads 9"), Guard->NavigatorPathType(), 9);
-	return true;
-}
-
-// --- NavPathSample / FUN_102eee40 from the body's move facts ---------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorPathSampleTest,
-	"Elysium.Substrate.Navigator.PathSample.FromMoveFacts", GNavigatorTestFlags)
-bool FElysiumNavigatorPathSampleTest::RunTest(const FString&)
-{
-	// A base-only NPC with no world: `Motor` is protected, so a probe subclass hands it the scripted
-	// motor. Nothing in the two reads under test needs a world.
-	struct FNavProbeNpc : FElysiumNpcTestHull
-	{
-		void SetMotor(IElysiumNpcMotor* InMotor) { Motor = InMotor; }
-	};
-	FNavProbeNpc Probe;
-	FNavigatorFactsMotor Scripted;
-	Probe.SetMotor(&Scripted);
-	Probe.Origin = FVector::ZeroVector;
-
-	// No facts: today's zeros.
-	Scripted.bReportsFacts = false;
-	TestFalse(TEXT("a motor that reports nothing gives no sample"), Probe.NavPathSample().bValid);
-	const FElysiumNpcBase::FNavMoveInfo None = Probe.FUN_102eee40();
-	TestFalse(TEXT("...and the move info holds no path"), None.bHasPath);
-	TestEqual(TEXT("...with zeros"), None.DeltaUnits, FVector::ZeroVector);
-	Scripted.bReportsFacts = true;
-	TestFalse(TEXT("a follower holding no path gives no sample"), Probe.NavPathSample().bValid);
-
-	// Ground nav, the corner being walked to is the last: z dropped, 2-D normalise, bit 0.
-	Scripted.Facts.bHasPath = true;
-	Scripted.Facts.bHasNextCorner = true;                     // a string-pulled path: a real corner
-	Scripted.Facts.NextCornerCm = FVector(100.0 * GNavU, 0.0, 50.0 * GNavU);
-	Scripted.Facts.bCurrentCornerIsLast = true;
-	Probe.Navigator.NavType = 0;
-	const FElysiumNpcBase::FNavPathSample Sample = Probe.NavPathSample();
-	TestTrue(TEXT("the sample is valid"), Sample.bValid);
-	TestTrue(TEXT("its point is the next corner, in units"), Sample.PointUnits.Equals(FVector(100.0, 0.0, 50.0), 1e-3));
-	TestTrue(TEXT("its head-is-goal bit is the follower's last-corner fact"), Sample.bHeadIsGoal);
-	FElysiumNpcBase::FNavMoveInfo Info = Probe.FUN_102eee40();
-	TestTrue(TEXT("the move info holds a path"), Info.bHasPath);
-	TestEqual(TEXT("nav type 0"), Info.NavType, 0);
-	TestEqual(TEXT("out[10] is the 2-D length the normalise returned"), Info.DistanceUnits, 100.f, 1e-3f);
-	TestTrue(TEXT("out[3..5] is normalised in place with z dropped"), Info.DeltaUnits.Equals(FVector(1.0, 0.0, 0.0), 1e-4));
-	TestTrue(TEXT("out[6..8] is the normalised direction"), Info.DirUnits.Equals(Info.DeltaUnits, 1e-6));
-	TestEqual(TEXT("out[14] bit 1: the head is the goal"), Info.Flags & 1u, 1u);
-	TestFalse(TEXT("out[13] pMoveTarget is unset with no goal target"), Info.MoveTarget.IsSet());
-
-	// Flying nav (3-D), the corner is not the last: the 3-D normalise, and neither flag bit (bit 4
-	// needs the next waypoint's move type, which the follower does not report).
-	Scripted.Facts.NextCornerCm = FVector(0.0, 0.0, 200.0);
-	Scripted.Facts.bCurrentCornerIsLast = false;
-	Probe.Navigator.NavType = 2;
-	Info = Probe.FUN_102eee40();
-	TestEqual(TEXT("out[10] is the 3-D length"), Info.DistanceUnits, 200.f / GNavU, 1e-3f);
-	TestTrue(TEXT("out[3..5] is the 3-D unit vector"), Info.DeltaUnits.Equals(FVector(0.0, 0.0, 1.0), 1e-4));
-	TestEqual(TEXT("out[12] is the nav type"), Info.NavType, 2);
-	TestEqual(TEXT("out[14] has neither bit"), Info.Flags, 0u);
-
-	Probe.SetMotor(nullptr);
 	return true;
 }
 

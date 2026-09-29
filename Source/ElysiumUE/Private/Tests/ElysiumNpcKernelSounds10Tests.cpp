@@ -60,28 +60,8 @@ namespace
 }
 
 // =================================================================================================
-// Slots 108 / 109 / 110 `KeyValue` — `0x1004fbb0`, `0x1004fbf0`, `0x101c1480`, and the two
-// `CBaseEntity` formatters `0x1009eca0` / `0x1009ebb0`.
+// Slot 110 `KeyValue` — `0x101c1480`.
 // =================================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10KeyValueFormattersTest,
-	"Elysium.Substrate.NpcKernelSounds10.KeyValueFormatters", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10KeyValueFormattersTest::RunTest(const FString&)
-{
-	// `0x1009eca0` — `Q_snprintf(buf, 256, "%f %f %f", (double)x, (double)y, (double)z)` with the
-	// literal at `0x10555584`. Six decimals, C's `%f` default, and the three floats widened by the
-	// varargs call.
-	TestEqual(TEXT("0x1009eca0 formats \"%f %f %f\""),
-		FElysiumAnimating::FormatKeyValueVector(FVector(1.0, -2.5, 3.25)),
-		FString(TEXT("1.000000 -2.500000 3.250000")));
-
-	// `0x1009ebb0` — the same shape with the format at `0x10554f28`, which is `"%f"`.
-	TestEqual(TEXT("0x1009ebb0 formats \"%f\""), FElysiumAnimating::FormatKeyValueFloat(0.5f),
-		FString(TEXT("0.500000")));
-	TestEqual(TEXT("...and a whole number still carries six decimals"),
-		FElysiumAnimating::FormatKeyValueFloat(7.f), FString(TEXT("7.000000")));
-	return true;
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10KeyValueStringTest,
 	"Elysium.Substrate.NpcKernelSounds10.KeyValueString", GElysiumNpcKernelSounds10Flags)
@@ -124,37 +104,6 @@ bool FElysiumNpcKernelSounds10KeyValueStringTest::RunTest(const FString&)
 	// `origin`.
 	TestTrue(TEXT("...and the `#` truncation runs first, so \"origin#2\" is \"origin\""),
 		F.Npc->KeyValue(TEXT("origin#2"), TEXT("0 0 0")));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10KeyValueForwardsTest,
-	"Elysium.Substrate.NpcKernelSounds10.KeyValueForwards", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10KeyValueForwardsTest::RunTest(const FString&)
-{
-	FSounds10Fixture F;
-	if (F.Npc == nullptr)
-	{
-		AddError(TEXT("no NPC"));
-		return false;
-	}
-
-	// `0x1004fbb0` (slot 108) is 38 bytes and is a PURE forward into `0x1009eca0`, which formats and
-	// dispatches slot 110. So a vector-typed `distance` lands as `atof("1.000000 2.000000
-	// 3.000000")` = 1.0 — the first component only, which is `atof`'s own stopping rule.
-	TestTrue(TEXT("slot 108 forwards and slot 110 claims the key"),
-		F.Npc->KeyValue(TEXT("distance"), FVector(1.0, 2.0, 3.0)));
-	TestEqual(TEXT("...atof of \"1.000000 2.000000 3.000000\" is 1.0"), F.Npc->MoveDistance, 1.f);
-
-	// `0x1004fbf0` (slot 109) is 13 bytes and forwards into `0x1009ebb0`.
-	TestTrue(TEXT("slot 109 forwards and slot 110 claims the key"),
-		F.Npc->KeyValue(TEXT("lip"), 9.5f));
-	TestEqual(TEXT("...atof of \"9.500000\" is 9.5"), F.Npc->Lip, 9.5f);
-
-	// Both slots return what slot 110 answered, so an unknown key is refused through the forward.
-	TestFalse(TEXT("slot 108 returns slot 110's refusal verbatim"),
-		F.Npc->KeyValue(TEXT("no_such_keyfield_anywhere"), FVector::ZeroVector));
-	TestFalse(TEXT("slot 109 returns slot 110's refusal verbatim"),
-		F.Npc->KeyValue(TEXT("no_such_keyfield_anywhere"), 1.f));
 	return true;
 }
 
@@ -372,20 +321,6 @@ bool FElysiumNpcKernelSounds10SurprisedSoundTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10TargetAcquiredSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.TargetAcquiredSound", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10TargetAcquiredSoundTest::RunTest(const FString&)
-{
-	// `0x10294720`, slot 496. `"Target_Acquired"` (`0x105d8cb8`). No caller in the image, 57 census
-	// classes fill the slot: it is reached through the vtable and is not dead.
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-	F.Npc->TargetAcquiredSound();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 496 TargetAcquiredSound"),
-		{ TEXT("Target_Acquired"), 1.25f });
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FleeSoundTest,
 	"Elysium.Substrate.NpcKernelSounds10.FleeSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FleeSoundTest::RunTest(const FString&)
@@ -412,19 +347,6 @@ bool FElysiumNpcKernelSounds10IdleAgitatedSoundTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10ExertHvySoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.ExertHvySound", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10ExertHvySoundTest::RunTest(const FString&)
-{
-	// `0x102949f0`, slot 500. `"Exert_Heavy"` (`0x1057a1a0`), which is NOT in the `0x105d8c30`
-	// block with the other sixteen.
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-	F.Npc->ExertHvySound();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 500 ExertHvySound"), { TEXT("Exert_Heavy"), 1.25f });
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest,
 	"Elysium.Substrate.NpcKernelSounds10.ExertHvySoundWerewolf", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest::RunTest(const FString&)
@@ -437,37 +359,6 @@ bool FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest::RunTest(const FString&)
 		F.Npc->ExertHvySound();
 		CheckPlainHook(*this, *F.Npc, TEXT("CNPC_VWerewolf#500"), { TEXT("Exert_Heavy"), 0.0f });
 	}
-	{
-		FSounds10Fixture F(nullptr, TEXT("CAI_BaseNPCTroika"));
-		if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-		F.Npc->ExertHvySound();
-		CheckPlainHook(*this, *F.Npc, TEXT("a bare Troika NPC at slot 500"),
-			{ TEXT("Exert_Heavy"), 1.25f });
-	}
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10ExertLightSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.ExertLightSound", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10ExertLightSoundTest::RunTest(const FString&)
-{
-	// `0x10294ab0`, slot 501. `"Exert_Light"` (`0x1057a1b0`).
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-	F.Npc->ExertLightSound();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 501 ExertLightSound"), { TEXT("Exert_Light"), 1.25f });
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10RiledSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.RiledSound", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10RiledSoundTest::RunTest(const FString&)
-{
-	// `0x10294b70`, slot 502. `"Riled"` (`0x105d8ce8`).
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-	F.Npc->RiledSound();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 502 RiledSound"), { TEXT("Riled"), 1.25f });
 	return true;
 }
 
@@ -492,38 +383,6 @@ bool FElysiumNpcKernelSounds10UpsetSoundTest::RunTest(const FString&)
 	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
 	F.Npc->UpsetSound();
 	CheckPlainHook(*this, *F.Npc, TEXT("slot 504 UpsetSound"), { TEXT("Upset"), 1.25f });
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10TargetGiveUpSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.TargetGiveUpSound", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10TargetGiveUpSoundTest::RunTest(const FString&)
-{
-	// `0x10294db0`, slot 505. `"Target_GiveUp"` (`0x105d8d04`).
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-	F.Npc->TargetGiveUpSound();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 505 TargetGiveUpSound"),
-		{ TEXT("Target_GiveUp"), 1.25f });
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10Slot506Test,
-	"Elysium.Substrate.NpcKernelSounds10.Slot506", GElysiumNpcKernelSounds10Flags)
-bool FElysiumNpcKernelSounds10Slot506Test::RunTest(const FString&)
-{
-	// `0x10294e70`, slot 506 — byte-for-byte slot 494's shape, over the SAME concept string
-	// (`0x105d8c94`) through its own guard and cache.
-	FSounds10Fixture F;
-	if (F.Npc == nullptr) { AddError(TEXT("no NPC")); return false; }
-
-	F.Npc->NpcFlags.Set(EElysiumNpcFlag::D_IS_BUSY);
-	F.Npc->Slot506();
-	TestEqual(TEXT("a body busy with a discipline says nothing"), F.Npc->VSoundSpeakCalls.Num(), 0);
-
-	F.Npc->NpcFlags.Clear(EElysiumNpcFlag::D_IS_BUSY);
-	F.Npc->Slot506();
-	CheckPlainHook(*this, *F.Npc, TEXT("slot 506"), { TEXT("Target_Reacquired"), 1.25f });
 	return true;
 }
 

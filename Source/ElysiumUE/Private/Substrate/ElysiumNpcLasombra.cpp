@@ -31,15 +31,5 @@ bool FElysiumNpcLasombra::CanSeekCover()
 	return FElysiumNpc::CanSeekCover();   // `0x102953e0`, direct
 }
 
-// Slot 546: `0x10388f80`, the class's own schedule id space.
-const TCHAR* FElysiumNpcLasombra::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093b680`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VLasombra"), TEXT("0x10388f80"), TEXT("0x1093b680") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
-}
-
 // --- Moved from `ElysiumNpcMisc.cpp` (story 5 step 4) ---
 

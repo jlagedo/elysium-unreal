@@ -22,7 +22,6 @@ public:
 
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual int32 GetUsedHullBits() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 
 	// Own datamap words (`CNPC_VScurrying`): the fright pair. No retail constructor writes them;
 	// `StartTask` (`0x103ac740`, TASK 0x14a) reads the distance and `SelectSchedule` (`0x103ac610`)

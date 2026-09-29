@@ -22,17 +22,7 @@
 namespace
 {
 	// The release bodies' aim offset above the target's origin.
-	constexpr float ThrowAimHeight = 48.0f;        // _DAT_10447ee8
-}
-
-// Slot 546: `0x103c4a80`, the class's own schedule id space.
-const TCHAR* FElysiumNpcVampire::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093d2a4`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VVampire"), TEXT("0x103c4a80"), TEXT("0x1093d2a4") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
+	constexpr float ThrowAimHeight = ElysiumNpcTunables::FortyEight;        // _DAT_10447ee8
 }
 
 // --- Moved from `ElysiumNpcDamage.cpp` (story 5 step 4) ---

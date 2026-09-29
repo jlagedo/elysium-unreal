@@ -36,7 +36,7 @@ namespace ElysiumAiNetwork
 {
 	// `DAT_106c994c`: the count of node ids met outside the network -- by `CNodeEnt::Spawn`'s loaded
 	// arm, the hint node lookup `0x102d3e60`, the patrol readers (`0x102aa640`, `0x102aa860`,
-	// `0x102a3a4e`, `0x1029f6c0`, `0x10307ac0`) and `0x1027db30`. A process static, as retail's is a
+	// `0x102a3a4e`, `PatrolNodeInterestRecord`, `0x10307ac0`) and `0x1027db30`. A process static, as retail's is a
 	// DLL global: never reset by a map load or a new network. Nothing reads it for behaviour.
 	int32& NodeMissCounter();
 }

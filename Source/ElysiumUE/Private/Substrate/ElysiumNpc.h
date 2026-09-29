@@ -981,8 +981,6 @@ public:
 	#include "Substrate/ElysiumNpcConditionsBodies.inl"
 	#include "Substrate/ElysiumNpcConditions10.inl"
 	#include "Substrate/ElysiumNpcDamage.inl"
-	#include "Substrate/ElysiumNpcDebug.inl"
-	#include "Substrate/ElysiumNpcDebug10.inl"
 	#include "Substrate/ElysiumNpcDialogueBodies.inl"
 	#include "Substrate/ElysiumNpcEntityChain.inl"
 	#include "Substrate/ElysiumNpcFacing.inl"

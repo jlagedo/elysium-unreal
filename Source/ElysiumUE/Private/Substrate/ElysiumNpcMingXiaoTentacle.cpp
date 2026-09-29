@@ -8,7 +8,6 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
-#include "ElysiumSaveArchive.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
@@ -50,16 +49,6 @@ namespace
 		TEXT("models/character/monster/MingXiao/MingXiao_baby/MingXiao_baby.mdl");
 	const TCHAR* const GTentacleTransformModel =
 		TEXT("models/character/monster/MingXiao/MingXiao_transformation.mdl");
-	const TCHAR* const GTentacleEmitters[] = {
-		TEXT("Ming_xiao_tentacle_transform_emitter"),
-		TEXT("Ming_xiao_baby_transform_emitter"),
-		TEXT("Ming_xiao_baby_death_emitter"),
-	};
-	// `0x106477c8` then `0x106477cc`, both pinned by the listing's own annotation.
-	const TCHAR* const GTentacleSounds[] = {
-		TEXT("character/monster/ming xiao/tentacle_hit_ground.wav"),
-		TEXT("character/monster/ming xiao/tentacle_flopping_loop.wav"),
-	};
 	// `CNPC_VMingXiaoTentacle`'s condition. `0x1039ef90` raises **0x78**, which is one past the
 	// base registrar's dense `0x00..0x76` namespace and has NO NAME in `EElysiumNpcCond` — family
 	// Conditions enumerated every identity it could name and this one is not among them. It is
@@ -77,7 +66,7 @@ FElysiumNpcMingXiaoTentacle::FElysiumNpcMingXiaoTentacle()
 	PathingHullKind = 17;
 }
 
-// Slots 21-23: `0x1039e800` / `0x1039e830` / `0x1039e860`, each forwarding to the head.
+// Slots 21-22: `0x1039e800` / `0x1039e830`, each forwarding to the head.
 void FElysiumNpcMingXiaoTentacle::Slot21(FElysiumEntity* Attacker)
 {
 	FUN_1039e800(Attacker);
@@ -87,12 +76,6 @@ void FElysiumNpcMingXiaoTentacle::Slot22(FElysiumEntity* Attacker)
 {
 	// `0x1039e830`, slot 22 — byte-identical to `0x1039e800`, verified against the decompiled C of
 	// both. Three consecutive slots, one body written three times.
-	FUN_1039e800(Attacker);
-}
-
-void FElysiumNpcMingXiaoTentacle::Slot23(FElysiumEntity* Attacker)
-{
-	// `0x1039e860`, slot 23 — the same body a third time.
 	FUN_1039e800(Attacker);
 }
 
@@ -110,6 +93,11 @@ void FElysiumNpcMingXiaoTentacle::Precache()
 {
 	// `CNPC_VMingXiaoTentacle::Precache` `0x1039c220` — the model fallback runs BEFORE the chain,
 	// which no other arm does, and three `PrecacheModel` indices are STORED.
+	//
+	// 0019/6: asset acquisition is the bake's (`Bake`); what survives is the two kinds of write a
+	// later rule reads — the fallback model name and the three mode indices the phase-change task
+	// (`StartTaskSpecies`, `0x1039c74f` / `0x1039c7bf` / `0x1039c840`, slot 10) hands on. The three
+	// emitter and two sound precaches that followed are gone.
 	if (Model.IsEmpty())
 	{
 		Model = GTentacleFallbackModel;   // slot 212, `0x1064a340`
@@ -128,39 +116,6 @@ void FElysiumNpcMingXiaoTentacle::Precache()
 	ModeIndexGrub = ModeIndexTentacleToGrub;   // retail: the same model, so the same index
 	NpcKernelPrecache10Shared::Precache10Model(*this, GTentacleTransformModel, /*Preload=*/0);
 	ModeIndexGrubToProxy = PrecacheLog.Num() - 1;
-
-	for (const TCHAR* Emitter : GTentacleEmitters)
-	{
-		NpcKernelPrecache10Shared::Precache10Particle(*this, Emitter, /*Preload=*/0);
-	}
-	for (const TCHAR* Sound : GTentacleSounds)
-	{
-		NpcKernelPrecache10Shared::Precache10Sound(*this, Sound);
-	}
-}
-
-// Slot 126: `0x1039ed50`.
-/** `CNPC_VMingXiaoTentacle::Save` (`0x1039ed50`) — `m_flPhaseExpireTimer` (`+0x6674`) at mode
- *  **3** around the Troika body. */
-int32 FElysiumNpcMingXiaoTentacle::Save(void* Archive)
-{
-	// `CNPC_VMingXiaoTentacle::Save` `0x1039ed50` — one field, `m_flPhaseExpireTimer` (`+0x6674`),
-	// at mode 3 around the Troika body.
-	SaveStampEncode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	const int32 Result = TroikaSave(Archive);
-	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	return Result;
-}
-
-// Slot 127: `0x1039eda0`.
-/** `CNPC_VMingXiaoTentacle::vfunc127` (`0x1039eda0`) — the Troika body, then `m_flPhaseExpireTimer`
- *  at mode **3**. */
-int32 FElysiumNpcMingXiaoTentacle::Restore(void* Archive)
-{
-	// `CNPC_VMingXiaoTentacle::vfunc127` `0x1039eda0`.
-	const int32 Result = TroikaRestore(Archive);
-	SaveStampDecode(MingXiaoTentaclePhaseExpireTimer, ESaveStampMode::Zero);
-	return Result;
 }
 
 // Slot 461: `0x1039e310`, a complete replacement: DEAD stays DEAD, else `GetEnemy() ? COMBAT : IDLE`.
@@ -232,7 +187,9 @@ bool FElysiumNpcMingXiaoTentacle::ShouldIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::ShouldIgnoreCollision(Other);
 }
 
-// Slot 69: `0x1039eb90`, the same shape as its slot 68 falling to the NAV base `0x1029b180`.
+// Slot 69: `0x1039eb90`, the same shape as its slot 68 falling to the NAV base `0x1029b180`. No live
+// caller of slot 69 exists today: the move path (lane M) must register these entities ahead of the
+// move through the `IElysiumNpcMotor::SetMoveIgnore` list seam.
 bool FElysiumNpcMingXiaoTentacle::NavIgnoreCollision(FElysiumEntity* Other)
 {
 	const bool bFallToBase = Other != nullptr
@@ -246,7 +203,7 @@ bool FElysiumNpcMingXiaoTentacle::NavIgnoreCollision(FElysiumEntity* Other)
 
 // Slot 523: `0x1039b070`, one load of `_DAT_104492a8` = 30.0 (the cell the yaw ladder's crouch arm
 // shares). The slot is the STEP-DOWN height (R1 §5): the stand test's drop below the feet.
-float FElysiumNpcMingXiaoTentacle::GetMaxJumpSpeed() const
+float FElysiumNpcMingXiaoTentacle::GetStepDownHeight() const
 {
 	return ElysiumNpcTunables::Thirty;
 }
@@ -262,36 +219,11 @@ bool FElysiumNpcMingXiaoTentacle::CanStandOn(FElysiumEntity* Other)
 	return FElysiumEntity::CanStandOn(Other);
 }
 
-// Slot 408: `0x1039ece0`, whose miss calls `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-const TCHAR* FElysiumNpcMingXiaoTentacle::GetShortConditionName(int32 ConditionId)
-{
-	// The class's own block over ids 0x77..0x79, read from `.rdata` `0x1064a42c`, `0x1064a430`,
-	// `0x1064a434`. Note the ADDRESSES ascend here where every other block descends.
-	static const TCHAR* const Names[] = { TEXT("tfl"), TEXT("tsc"), TEXT("tpe") };
-	const int32 Offset = ConditionId - 0x77;
-	if (Offset >= 0 && Offset < UE_ARRAY_COUNT(Names))
-	{
-		return Names[Offset];
-	}
-	// The `default:` arm: `CAI_BaseNPC::GetShortConditionName` (`0x1027ede0`) directly.
-	return FElysiumNpcBase::GetShortConditionName(ConditionId);
-}
-
 // Slot 337: `0x1039c480`.
 int32 FElysiumNpcMingXiaoTentacle::GetUsedHullBits()
 {
 	// A bare `return 0x38000`: no call up the chain, so the Troika line's bit 0 is absent.
 	return 0x38000;
-}
-
-// Slot 546: `0x1039b230`, the class's own schedule id space.
-const TCHAR* FElysiumNpcMingXiaoTentacle::SquadSlotName(int32 SlotEn)
-{
-	// The class's `CAI_ClassScheduleIdSpace` `0x1093bd80`, left empty by `0x102ea090(isRoot = false)`:
-	// `SlotEn` translates to -1 and names `<<null>>`.
-	static constexpr FSquadSlotSpecies IdSpace = {
-		TEXT("CNPC_VMingXiaoTentacle"), TEXT("0x1039b230"), TEXT("0x1093bd80") };
-	return GlobalSquadSlotName(SquadSlotLocalToGlobal(&IdSpace, SlotEn));
 }
 
 // --- Moved from `ElysiumNpcGeometry.cpp` (story 5 step 4) ---
@@ -362,7 +294,7 @@ void FElysiumNpcMingXiaoTentacle::FUN_1039ef90(const FVector& PositionUnits)
 void FElysiumNpcMingXiaoTentacle::FUN_1039e800(FElysiumEntity* Arg)
 {
 	// `0x1039e800`, `CNPC_VMingXiaoTentacle`'s slot 21, twenty-nine bytes:
-	//     head = GetHead(this);                        // thunk 0x1039ede0
+	//     head = GetHead(this);                        // thunk, `MingXiaoTentacleHead`
 	//     if (head) TellHead(head, this, param_1);      // thunk 0x10397dd0
 	//
 	// Slot 21's base across the family is `CAISound::FUN_10026530`, a no-op, and

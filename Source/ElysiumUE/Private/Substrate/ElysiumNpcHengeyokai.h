@@ -46,15 +46,11 @@ public:
 	FElysiumNpcHengeyokai();
 
 	virtual void NPCInit() override;
-	virtual void Precache() override;
 	virtual int32 NPC_EarlyTranslateActivity(int32 Activity) override;
-	virtual int32 SelectIdealStateRetail() override;
 	virtual void TaskFail(int32 Reason) override;
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
-	virtual int32 DrawDebugTextOverlays() override;
 	virtual int32 GetUsedHullBits() override;
-	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual bool SuppressesDamageFlinch(const FElysiumDmg& Dmg) const override;
 	virtual void OnScheduleChange(int32 NewSchedule) override;
@@ -88,7 +84,7 @@ public:
 	// `+0x2fc` and `+0x424`; nothing in layers 0–9 writes it but the constructor `0x1037e680`.
 	int32 HengeyokaiPickupParam = 0;
 	/** `+0x66a4 CNPC_VHengeyokai::m_BlacklistedEntities` — the store `0x10382970` appends to and
-	 *  `0x10382aa0`/`0x10382b30` walk. `+0x66a8` (allocation count), `+0x66ac` (grow size), `+0x66b0`
+	 *  `0x10382aa0` and `FindBlacklistedEntity` walk. `+0x66a8` (allocation count), `+0x66ac` (grow size), `+0x66b0`
 	 *  (size) and `+0x66b4` (element pointer) are `CUtlMemory`'s own bookkeeping and have no counterpart
 	 *  on a `TArray`; the constructor's reserve of 8 rows is not observable and is not reproduced. */
 	TArray<FBlacklistedEntity> HengeyokaiBlacklist;
@@ -115,7 +111,7 @@ public:
 	 *  size) and the zero-length `memmove` it always performs are bookkeeping with no observable effect
 	 *  and are not reproduced; the APPEND and the STAMP are. */
 	void AddBlacklistedEntity(const FElysiumEntity* Entity);
-	/** `0x10382b30` — the index of `Entity` in `m_BlacklistedEntities`, or `INDEX_NONE`. Retail resolves
+	/** The index of `Entity` in `m_BlacklistedEntities`, or `INDEX_NONE`. Retail resolves
 	 *  each stored `EHANDLE` and compares the POINTER, so a dead handle matches a null candidate. */
 	int32 FindBlacklistedEntity(const FElysiumEntity* Entity) const;
 	/** `0x10382aa0` — is `Entity` still blacklisted? Found and not yet expired answers true; found and
@@ -126,11 +122,6 @@ public:
 	/** The pure rule over any such store, so both species' arrays are measurable without a world.
 	 *  `Index` is what `FindBlacklistedEntity` answered. */
 	static bool BlacklistTestAndExpire(TArray<FBlacklistedEntity>& Store, int32 Index, double Now);
-
-	/** Slot 9's string, the one line `CNPC_VHengeyokai#124` adds. Retail takes the FIRST word of
-	 *  whatever slot 9 returns and substitutes the empty string for null. **SEAM**: slot 9 is a
-	 *  generated stub owned by another story; answers the empty string, which is retail's null arm. */
-	FString HengeyokaiSlot9String() const;
 
 	// From `ElysiumNpcLifecycle2.inl`.
 	static constexpr int32 HullIndexHengeyokai = 0x12;   // `0x1037fa70`
@@ -146,11 +137,8 @@ public:
 	bool FormBitTimerExpired() const;
 
 	// From `ElysiumNpcMotor.inl`.
-	/** `thunk_FUN_102e1e20(m_pMotor, -1)` — `FUN_10382d20`'s cancel of the motor's queued facing/link
-	 *  state. **SEAM**: shares the Facing family's finding that this mover keeps no facing queue. */
-	void MotorCancelLinkFacing();
-	/** `FUN_10382d20` `0x10382d20` — the other half of the same unrecovered link object: cancel the
-	 *  motor's queued facing/link state with -1. */
+	/** `FUN_10382d20` `0x10382d20` — `CAI_Motor::UpdateYaw(-1)` (`0x102e1e20`), forwarded to the
+	 *  motor's yaw update. */
 	void ClearLinkActivity();
 
 	/** `CNPC_VHengeyokai` thaw side-effect count (`0x10383130`). */

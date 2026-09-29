@@ -1,0 +1,41 @@
+address	name	what it is	sites
+10496f58	Crc32Table	the standard reflected CRC-32 table `FUN_1023f0c0` indexes (a table base, not a threshold)	ElysiumNpcBaseSaveRestore10.cpp:37, ElysiumNpcBaseSaveRestore10.inl:32, ElysiumNpcBaseSaveRestore10.inl:37
+10547e6c	QuotedPercentSString	a string constant `"%s"` passed to `0x101d3730`, whose result is discarded	ElysiumNpcAnim.cpp:285
+10548ed4	Mp3Extension	the ".mp3" extension string of the directory precache pattern	ElysiumNpcBasePrecache10.inl:46
+10598a30	WavExtension	the ".wav" extension string of the directory precache pattern	ElysiumNpcBasePrecache10.inl:45
+105c7ed4	KeyvalueDelimiterSet	the `strtok` delimiter set (", ") of the repeat/type/schedule keyfield split	ElysiumNpc.cpp:438
+10566458	EntityHandleTable	the global entity table base (`PTR_DAT_10566458`, sentinel 0xffffffff, serial in the top 19 bits)	ElysiumNpcBaseBoss.cpp:97, ElysiumNpcBaseMotor10.cpp:267
+1060a750	HullBitsTable	`NAI_Hull::Bits` table base (`PTR_DAT_1060a750[hull][0]`, `0x102d6210`)	ElysiumNpcBaseMotor10.cpp:217, ElysiumNpcBaseMotor10.inl:112
+10610be8	UsedHullMask	the global used-hull mask (`0x102f9950` / `0x102f9900` / `0x102f9920`)	ElysiumNpcBaseMotor10.inl:117
+106b8540	EmptyPrecacheName	the empty-name string cell the boss precache passes as an argument	ElysiumNpcBasePrecache10.inl:40
+106c994c	HintNetworkBadIdCount	the global counter `0x102d0b60` bumps for a hint node id that is neither -1 nor inside the network	ElysiumNpcBaseHints.cpp:134
+1070af4c	DeveloperConVar	the engine `developer` ConVar object pointer (`m_nValue != 0`)	ElysiumNpcBaseRunAi.cpp:50
+1070b22c	EngineServerInterface	the `IVEngineServer` pointer (`PrecacheModel` at +0x34, particle precache at +0x44)	ElysiumNpcBasePrecache10.inl:18, ElysiumNpcBasePrecache10.inl:23
+1070b244	EngineRandomStream	the `IUniformRandomStream` pointer (`RandomInt` at +8, `RandomFloat` at +4)	ElysiumNpcAndreiBlood.cpp:56, ElysiumNpcAndreiBlood.cpp:244, ElysiumNpcAndreiBlood.cpp:324, ElysiumNpcBaseBoss.cpp:240, ElysiumNpcBaseGeometry.cpp:103
+1070b248	SoundEmitterSystem	the `CSoundEmitterSystem` pointer (`PrecacheScriptSound` at +0)	ElysiumNpcBasePrecache10.inl:21
+1070b254	EngineTraceInterface	the engine trace interface pointer (`TraceRay`)	ElysiumNpcBaseMotor.inl:30
+1070ba40	DeathThrowImpulse	the global death-throw impulse vector (three floats at 0x1070ba40 / 44 / 48) `OnTakeDamage_Dead` writes	ElysiumNpcBaseDamage.cpp:227, ElysiumNpcBaseDamage.inl:49, ElysiumNpcBaseDamage2.cpp:200
+1070d1b0	Vec3Origin	`vec3_origin`, the engine shared zero vector (three floats at 0x1070d1b0 / b4 / b8)	ElysiumNpcAndreiBlood.cpp:67, ElysiumNpcBaseDamage.cpp:221, ElysiumNpcBaseDamage2.cpp:231, ElysiumNpcBaseHelpers.cpp:223, ElysiumNpcBaseLifecycle.cpp:333, ElysiumNpcBaseLifecycle.inl:40, ElysiumNpcBaseMotor10.cpp:43, ElysiumNpcBaseMotor10.inl:49, ElysiumNpcBaseSelect.inl:29, ElysiumNpcBaseSenses.cpp:247, ElysiumNpcBaseSenses.cpp:259
+1072bc84	SoundEntCombatVolume	the volume cell `CSoundEnt::InsertSound` reads for the combat sound; filled at runtime, no corpus writer	ElysiumNpcBaseDamage2.cpp:42, ElysiumNpcBaseDamage2.cpp:311
+1072bcc1	SoundEntCombatOcclusion	the occlusion cell `CSoundEnt::InsertSound` reads for the combat sound; filled at runtime, no corpus writer	ElysiumNpcBaseDamage2.cpp:42, ElysiumNpcBaseDamage2.cpp:311
+10739a4c	DisciplineBreakOnNoticeRegistry	the registry `thunk_FUN_101e3d70` sweeps on every non-null `SetEnemy` write	ElysiumNpcBaseMisc2.inl:28
+1073dc28	VocalizationRegistry	the registry `thunk_FUN_101f55a0` notifies on a vocalization	ElysiumNpcAnim10.cpp:287
+1073dd58	ActivityChangeListener	the registry `thunk_FUN_101f6010` notifies on an activity change	ElysiumNpcBaseAnim10.cpp:117, ElysiumNpcBaseAnim10.inl:54
+1090fdc4	SkNpcArmConVarPtr	ConVar pointer cell, arms (hitgroups 4 and 5); past .data raw size, object and default unrecovered	ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:57
+1090fe10	AiList	the global AI list head `CAI_BaseNPC::Spawn` links into	ElysiumNpcBase.h:56
+1090fe74	SkNpcChestConVarPtr	ConVar pointer cell, chest (hitgroup 2); past .data raw size, object and default unrecovered	ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:56
+1090ff08	BaseClassScheduleIdSpace	slot 580 base body `0x101a6d00`, the `CAI_ClassScheduleIdSpace` of the base line	ElysiumNpcBaseEntityChain.cpp:112, ElysiumNpcBaseEntityChain.inl:5
+109201ac	SkNpcHeadConVarPtr	ConVar pointer cell, head (hitgroup 1); past .data raw size, object and default unrecovered	ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:56
+1092023c	SkNpcLegConVarPtr	ConVar pointer cell, legs (hitgroups 6 and 7); past .data raw size, object and default unrecovered	ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:57
+109203f0	SharedDisconnectedEnemies	the one shared `CAI_Enemies` every squad-disconnected NPC is handed	ElysiumNpcBaseSenses.cpp:50, ElysiumNpcBaseSenses.cpp:83
+109204a0	VProfRdtscBracket	the rdtsc bracket counters (0x109204a0 / a4) of the VProf scope pair in `GatherConditions`	ElysiumNpcBaseConditions2.cpp:11
+109204f4	SkNpcStomachConVarPtr	ConVar pointer cell, stomach (hitgroup 3); past .data raw size, object and default unrecovered	ElysiumNpcBaseDamage.cpp:271, ElysiumNpcBaseDamage.inl:56
+1092053c	AiStepDebugFlags	the debug flags word whose bit 2 is `ai_step` (`0x1026c5a6`)	ElysiumNpcBaseAnim.cpp:123
+10920558	RetiredSelfWarnCounterA	the rate-limit counter of the retired-name warning (module static)	ElysiumNpcBaseLifecycle.cpp:43
+1092055c	RetiredSelfWarnCounterB	the second rate-limit counter of the retired-name warning (module static)	ElysiumNpcBaseLifecycle.cpp:43
+10924248	TroikaClassScheduleIdSpace	the `CAI_ClassScheduleIdSpace` of the Troika line	ElysiumNpcBaseEntityChain.cpp:113, ElysiumNpcBaseEntityChain.inl:7
+10925450	AiHintListHead	the hint list head `CAI_Hint` iterates	ElysiumNpcBaseHints.cpp:55
+10925454	AiHintListCursor	the hint list cursor whose successor the iteration reads	ElysiumNpcBaseHints.cpp:55
+1093407c	NodeNetwork	the process-wide node network the navigator of the map points at (`*(m_pNavigator + 0x2c)`)	ElysiumNpcBaseHelpers.cpp:369, ElysiumNpcBaseHelpers2.cpp:42, ElysiumNpcBaseHints.cpp:133, ElysiumNpcBaseHints.cpp:133, ElysiumNpcBaseLifecycle2.cpp:219
+10937160	AuraColourTable	the Auspex aura colour table indexed by `idx + IsKindred * 8`	ElysiumNpcAnim10.cpp:691
+109f0b40	EmptyStatList	the lazily-built empty typed-stat list whose `GetValue` answers 0	ElysiumNpcBaseMotor10.cpp:236, ElysiumNpcBaseMotor10.inl:154
