@@ -54,6 +54,10 @@ namespace
 	constexpr float GMoveStepArrivalUnits = 0.0625f;
 	constexpr float GMoveStepGoalSlackUnits = 0.1f;               // 0x104491b4, 0x102ef760
 	constexpr double GMoveStepTimeSlack = ElysiumNpcTunables::MinusThousandthDouble; // 0x10497530
+	// S4 `0x102ef0e0`: `distClear < 1.0` (`FCOMP double [0x10449280]; TEST AH,5; JP`, strictly; NaN
+	// fails) is the blocked probe that keeps the trace status (`-3`). The port's post-hold probe is the
+	// re-issued leg: a `Blocked` end that closed less than this on the destination is that probe's `-3`.
+	constexpr float GMoveStepProbeClearUnits = 1.0f;
 }
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 5) ---
@@ -578,7 +582,10 @@ void FElysiumNpcBase::NavResetBlockerMemory()
 	Navigator.BlockerEntity = FElysiumEntityHandle::Invalid();
 	Navigator.BlockerHoldUntil = -1.0;
 	Navigator.BlockerForgetAt = -1.0;
-	Navigator.bBlockerHoldReissued = false;                                  // port: the hold's re-issue
+	Navigator.bBlockerHoldStanding = false;                                  // port: the hold's probe words
+	Navigator.bBlockerHoldReissued = false;
+	Navigator.BlockerProbeAt = -1.0;
+	Navigator.BlockerProbeRemainingUnits = 0.f;
 	++NavMoveStep.LocalNavResets;                                            // 0x1000b550, SEAM
 }
 
@@ -626,7 +633,7 @@ bool FElysiumNpcBase::NavIsNpcBlocker(const FElysiumEntityHandle& Blocker) const
 	return Entity != nullptr && Entity->AsNpcBase() != nullptr;
 }
 
-bool FElysiumNpcBase::NavBlockerHold(const FElysiumEntityHandle& Blocker)
+bool FElysiumNpcBase::NavBlockerHold(const FElysiumEntityHandle& Blocker, double CurTime)
 {
 	// `0x102ef3e0(nav, trace)` (thunk `0x1000856c`), instruction by instruction (R3):
 	//     blocker = trace+0x1c -> +0x94;  none -> return nav+0x51;
@@ -641,27 +648,91 @@ bool FElysiumNpcBase::NavBlockerHold(const FElysiumEntityHandle& Blocker)
 		return Navigator.bBlockerHold;
 	}
 	const FElysiumEntityWorld* ConstWorld = World;
-	const double Now = ConstWorld->NowSeconds();
 	// `nav+0x54` is resolved through the entity list (`>> 0xd` serial, `& 0x1fff` index): a handle that
 	// no longer names a live entity is "not the blocker".
 	const FElysiumEntity* Remembered = ConstWorld->Resolve(Navigator.BlockerEntity);
 	const FElysiumEntity* Current = ConstWorld->Resolve(Blocker);
-	if (Remembered != Current || Now - Navigator.BlockerForgetAt > GMoveStepTimeSlack)
+	if (Remembered != Current || CurTime - Navigator.BlockerForgetAt > GMoveStepTimeSlack)
 	{
 		Navigator.bBlockerHold = true;                                       // nav+0x51
 		Navigator.BlockerEntity = Blocker;                                   // nav+0x54
-		Navigator.BlockerHoldUntil = Now + Navigator.BlockerHoldSeconds;     // nav+0x58 = curtime + nav+0x5c
-		Navigator.BlockerForgetAt = Now + Navigator.BlockerWindowSeconds;    // nav+0x60 = curtime + nav+0x64
-		Navigator.bBlockerHoldReissued = false;                              // port: a fresh hold may re-issue
+		Navigator.BlockerHoldUntil = CurTime + Navigator.BlockerHoldSeconds; // nav+0x58 = curtime + nav+0x5c
+		Navigator.BlockerForgetAt = CurTime + Navigator.BlockerWindowSeconds; // nav+0x60 = curtime + nav+0x64
 		++NavMoveStep.BlockerHoldArms;
 		return true;
 	}
-	if (Now - Navigator.BlockerHoldUntil <= GMoveStepTimeSlack)
+	if (CurTime - Navigator.BlockerHoldUntil <= GMoveStepTimeSlack)
 	{
 		Navigator.bBlockerHold = true;
 		return true;
 	}
 	return Navigator.bBlockerHold;
+}
+
+bool FElysiumNpcBase::NavNpcBlockerStep(const FNavStepFacts& Step)
+{
+	// Retail, per think (0.1 s in view): S3 `0x102ef350` / S7 on motor code 2 ask `0x102ef3e0` with a
+	// FRESH probe of the step. The first contact arms a 0.25 s hold (stand at the clearance, no fail);
+	// the first think past it re-probes; a probe still blocked by the same NPC inside the 3.0 s window
+	// gets `false`, S4 `0x102ef0e0` finds `distClear < 1.0` and the `-3` reaches `Move` -> `0x0c`.
+	//
+	// NAMED MODERNIZATION, of the probe only (the words and edges are retail's): Unreal's path follower
+	// gives the request up on its own block detection (~5 s) BEFORE the substrate sees the blocker, and
+	// the ended request is re-read by every think until a leg is issued again -- at any think cadence
+	// (the Normal law `0x10290b60` spaces an out-of-PVS NPC's moves up to 16 s apart). So:
+	//  - the end the hold was armed on is ONE contact, not one per think: re-reading it asks only the
+	//    hold test (`curtime - nav+0x58 <= -0.001`);
+	//  - once the hold has run, retail's re-probe is the recorded leg handed back (`NavReissueHeadLeg`:
+	//    no new route, no new pedestrian draw), dated at this think's `curtime`. A think arriving after
+	//    the window has lapsed meets the probe with a fresh window, in retail's words for a contact
+	//    then (`nav+0x60 = curtime + nav+0x64`); the hold it stood on the ended request is served;
+	//  - that leg's `Blocked` end is the probe's verdict when the body closed less than S4's 1.0 unit on
+	//    the destination: it is judged at the probe's `curtime` (retail's probe answers inside the think
+	//    that sends it), so a re-probe still blocked by the same NPC is the exhausted hold -> `-3`,
+	//    whatever the cadence. A leg that walked on and met the NPC again is a new contact at `curtime`.
+	const FElysiumEntityWorld* ConstWorld = World;
+	const double Now = ConstWorld->NowSeconds();
+	const bool bSameBlocker = ConstWorld->Resolve(Navigator.BlockerEntity) == ConstWorld->Resolve(Step.Blocker);
+	if (Navigator.bBlockerHoldStanding && bSameBlocker)
+	{
+		if (Now - Navigator.BlockerHoldUntil <= GMoveStepTimeSlack)          // 0x102ef3e0 the hold test
+		{
+			Navigator.bBlockerHold = true;                                   // nav+0x51 = 1
+			return true;
+		}
+		Navigator.bBlockerHoldStanding = false;
+		if (Now - Navigator.BlockerForgetAt > GMoveStepTimeSlack)            // curtime - nav+0x60 > -0.001
+		{
+			Navigator.BlockerForgetAt = Now + Navigator.BlockerWindowSeconds; // nav+0x60 = curtime + nav+0x64
+		}
+		if (NavReissueHeadLeg())
+		{
+			Navigator.bBlockerHoldReissued = true;
+			Navigator.BlockerProbeAt = Now;
+			Navigator.BlockerProbeRemainingUnits = Step.RemainingUnits;
+			++NavMoveStep.BlockerHoldReissues;
+			NavLogMoveStep(TEXT("NPC-blocker hold over, head leg re-issued"));
+			return true;
+		}
+		// A body that refuses the leg cannot probe: the blocked status stands (S4).
+		return NavFollowSameDirectionMover(Step.Blocker);
+	}
+	// A new end: the post-hold probe's verdict, or a fresh contact.
+	const bool bProbeVerdict = Navigator.bBlockerHoldReissued && bSameBlocker
+		&& Navigator.BlockerProbeRemainingUnits - Step.RemainingUnits < GMoveStepProbeClearUnits;
+	Navigator.bBlockerHoldReissued = false;
+	const int32 ArmsBefore = NavMoveStep.BlockerHoldArms;
+	if (NavBlockerHold(Step.Blocker, bProbeVerdict ? Navigator.BlockerProbeAt : Now))
+	{
+		Navigator.bBlockerHoldStanding = true;
+		if (NavMoveStep.BlockerHoldArms != ArmsBefore)
+		{
+			NavLogMoveStep(TEXT("NPC-blocker hold start"));
+		}
+		return true;
+	}
+	// S4 `0x102ef0e0`: follow a same-direction mover (0), else the NPC status stands.
+	return NavFollowSameDirectionMover(Step.Blocker);
 }
 
 bool FElysiumNpcBase::NavFollowSameDirectionMover(const FElysiumEntityHandle& Blocker)
@@ -727,6 +798,10 @@ bool FElysiumNpcBase::NavIssueLeg(const FElysiumNpcMoveRequest& Request)
 	}
 	Navigator.HeadLegRequest = Request;
 	Navigator.bHeadLegRequestSet = true;
+	// A new leg is a new probe: an end still standing under the hold, or a post-hold probe out, is
+	// superseded (the retail words `nav+0x54..+0x60` stand, as retail's do across a waypoint advance).
+	Navigator.bBlockerHoldStanding = false;
+	Navigator.bBlockerHoldReissued = false;
 	return true;
 }
 
@@ -798,6 +873,7 @@ FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
 		Step.bWaypointReached = DistUnits <= GMoveStepArrivalUnits || bSucceeded;
 		Step.bGaveUp = Facts.bRequestEnded && !bSucceeded;
 		Step.Blocker = Facts.BlockingEntity;
+		Step.RemainingUnits = static_cast<float>(DistUnits);
 		return Step;
 	}
 	// A motor that reports no facts (a double, a headless world): its own verdict, read as the facts
@@ -885,39 +961,9 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	ENavMoveResult Result = ENavMoveResult::BlockedWorld;                    // motor code 3: -1/-2/-4 -> -2
 	if (NavIsNpcBlocker(Step.Blocker))
 	{
-		// S3 `0x102ef350` / S7 on motor code 2: the hold. True -> walk up to the clearance, spend the
-		// interval (`goal+0x38 |= 2`), `*result = 0`: nothing fails during the hold.
-		const int32 ArmsBefore = NavMoveStep.BlockerHoldArms;
-		if (NavBlockerHold(Step.Blocker))
-		{
-			if (NavMoveStep.BlockerHoldArms != ArmsBefore)
-			{
-				NavLogMoveStep(TEXT("NPC-blocker hold start"));
-			}
-			return ENavMoveResult::Ok;
-		}
-		// The hold has run (0.25 s) with the same blocker inside the 3.0 s window -- the only way
-		// `0x102ef3e0` answers false for an NPC. NAMED MODERNIZATION, of WHEN the hold starts, not of
-		// what it does: retail re-probes the step every think, so during the hold the NPC stands at the
-		// clearance and, the moment the blocker clears, the walk simply continues; only a probe still
-		// blocked once the hold has run reaches `Move` as `-3`. Unreal's path follower gives the request
-		// up on its own block detection (~5 s) BEFORE the substrate sees the blocker, so the port's hold
-		// runs on an ended request. To keep retail's outcome the hold, once run, hands the body the same
-		// leg again (`NavReissueHeadLeg`, the recorded request: no new route, no new pedestrian draw),
-		// once per armed hold: a clear path walks on; a second `Blocked` end inside the window is the
-		// exhausted hold and falls through to the `-3` below (`0x0c`, no stale mark).
-		if (!Navigator.bBlockerHoldReissued)
-		{
-			Navigator.bBlockerHoldReissued = true;
-			if (NavReissueHeadLeg())
-			{
-				++NavMoveStep.BlockerHoldReissues;
-				NavLogMoveStep(TEXT("NPC-blocker hold over, head leg re-issued"));
-				return ENavMoveResult::Ok;
-			}
-		}
-		// S4 `0x102ef0e0`: follow a same-direction mover (0), else the NPC status stands.
-		if (NavFollowSameDirectionMover(Step.Blocker))
+		// S3 `0x102ef350` / S7 on motor code 2: the hold (`0x102ef3e0`). True -> walk up to the
+		// clearance, spend the interval (`goal+0x38 |= 2`), `*result = 0`: nothing fails this pass.
+		if (NavNpcBlockerStep(Step))
 		{
 			return ENavMoveResult::Ok;
 		}

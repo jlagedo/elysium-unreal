@@ -120,6 +120,9 @@ struct FNavStepFacts
 	bool bGaveUp = false;
 	// The obstruction the body names (`trace+0x1c`), unset for the world or an unnamed entity.
 	FElysiumEntityHandle Blocker;
+	// The body's distance left to the leg's destination, units (the `0x102ef510` distance: 2-D on
+	// ground nav, 3-D otherwise); 0 when the body reports no facts.
+	float RemainingUnits = 0.f;
 };
 
 /** Samples the body for one pass: the move facts first (`Sample` consumes a terminal status), then
@@ -135,8 +138,16 @@ ENavMoveResult NavMoveNormalPass(const FNavStepFacts& Step);
 
 /** `0x102ef3e0` -- the NPC-blocker hold (R3 "The -3 arm as settled"): arm when the blocker is not the
  *  remembered one or the 3.0 s window has run (`curtime - nav+0x60 > -0.001`), hold while `curtime -
- *  nav+0x58 <= -0.001`; otherwise answer `nav+0x51`. True = hold (no fail this pass). */
-bool NavBlockerHold(const FElysiumEntityHandle& Blocker);
+ *  nav+0x58 <= -0.001`; otherwise answer `nav+0x51`. True = hold (no fail this pass). `CurTime` is the
+ *  contact's `curtime`: the think's clock, or the post-hold probe's when the verdict is that probe's
+ *  (`NavMoveNormalPass`). */
+bool NavBlockerHold(const FElysiumEntityHandle& Blocker, double CurTime);
+
+/** The NPC-blocked arm of `NavMoveNormalPass` (S3 `0x102ef350` / S7 on motor code 2 -> `0x102ef3e0`,
+ *  then S4 `0x102ef0e0`), with the port's probe words (`FElysiumNpcNavigator::bBlockerHoldStanding`):
+ *  true = the pass answers 0 (held, or the head leg re-issued as the post-hold probe); false = the
+ *  NPC status stands (`-3`). */
+bool NavNpcBlockerStep(const FNavStepFacts& Step);
 
 /** Issues one leg of the navigator's route to the body (`IElysiumNpcMotor::MoveTo`) and records the
  *  request as the head leg's (`Navigator.HeadLegRequest`), so the NPC-blocker hold can re-issue the

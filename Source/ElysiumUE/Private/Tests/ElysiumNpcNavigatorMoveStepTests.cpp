@@ -15,7 +15,7 @@
 // 0018 story 5 lane I -- `CAI_Navigator::Move 0x102eff40` as `FElysiumNpcBase::NavigatorMoveStep`: the
 // entry gates in retail's order, the arrival arms (`0x102ef510`, `OnNavComplete 0x102eea90`,
 // `AdvancePath 0x102f0400`), the NPC-blocker hold `0x102ef3e0` (0.25 s hold, 3.0 s window) with the
-// port's head-leg re-issue once it has run, the goal-tolerance completion `0x102ef760`, and the
+// port's head-leg re-issue once it has run (at any think cadence), the goal-tolerance completion `0x102ef760`, and the
 // failure tail `0x102f0169` (stale mark unless `-3`, then `OnNavFailed(0x0c)`), each decided from the
 // body's scripted move facts (R3).
 
@@ -566,6 +566,144 @@ bool FElysiumMoveStepWindowTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepHoldRetailCadenceTest,
+	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldRetailCadence", GMoveStepTestFlags)
+bool FElysiumMoveStepHoldRetailCadenceTest::RunTest(const FString&)
+{
+	FMoveStepRig R(TEXT("movestep_hold_fast"), 18617);
+	if (!TestTrue(TEXT("rig"), R.Ready())) return false;
+	const FElysiumEntityHandle Blocker = R.Blocker->Handle;
+	const int32 Stale = R.Guard->NavMoveStep.StaleMarkCalls;
+	const int32 Moves = R.Scripted.MoveRequests.Num();
+
+	// Thinks 0.1 s apart (`0x10292de0` in view). Contact at T0: `0x102ef49a` arms.
+	const double T0 = R.Now();
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 300.f);
+	R.Guard->NavigatorMoveStep();
+	const int32 Arms = R.Guard->NavMoveStep.BlockerHoldArms;
+	TestEqual(TEXT("T0: the hold arms, nothing fails"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	TestEqual(TEXT("...nav+0x58 = curtime + 0.25"), R.Guard->Navigator.BlockerHoldUntil, T0 + 0.25, 1e-4);
+	TestEqual(TEXT("...nav+0x60 = curtime + 3.0"), R.Guard->Navigator.BlockerForgetAt, T0 + 3.0, 1e-4);
+
+	// +0.1 and +0.2: `curtime - nav+0x58 <= -0.001`, held; the same end is one contact, never re-armed.
+	for (const double At : { 0.1, 0.2 })
+	{
+		R.F.Advance(T0 + At);
+		R.Guard->NavigatorMoveStep();
+		TestEqual(TEXT("inside 0.25 s: held, no fail"), R.Guard->BaseScheduleHost.FailureReason, 0);
+		TestEqual(TEXT("...no re-arm"), R.Guard->NavMoveStep.BlockerHoldArms, Arms);
+		TestEqual(TEXT("...no re-issue"), R.Scripted.MoveRequests.Num(), Moves);
+	}
+
+	// +0.3, the first think past the hold: retail's re-probe, the head leg handed back. The window
+	// stands, so its words are untouched.
+	R.F.Advance(T0 + 0.3);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("+0.3: the leg is re-issued"), R.Scripted.MoveRequests.Num(), Moves + 1);
+	TestEqual(TEXT("...no fail"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	TestEqual(TEXT("...the probe dated at this curtime"), R.Guard->Navigator.BlockerProbeAt, T0 + 0.3, 1e-4);
+	TestEqual(TEXT("...nav+0x58 untouched"), R.Guard->Navigator.BlockerHoldUntil, T0 + 0.25, 1e-4);
+	TestEqual(TEXT("...nav+0x60 untouched"), R.Guard->Navigator.BlockerForgetAt, T0 + 3.0, 1e-4);
+
+	// The follower pushes against the same NPC (no ground closed) and gives the leg up ~5 s later, past
+	// the window's clock: the verdict is the +0.3 probe's, inside the window -> `-3` -> `0x0c`.
+	double At = 0.4;
+	for (; At < 5.3; At += 0.1)
+	{
+		R.F.Advance(T0 + At);
+		R.Scripted.Walking(300.f);
+		R.Guard->NavigatorMoveStep();
+	}
+	TestEqual(TEXT("the re-issued leg walks: no fail"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	R.F.Advance(T0 + At);
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 299.5f);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("the probe still blocked by the same NPC: 0x0c"), R.Guard->BaseScheduleHost.FailureReason, 0x0c);
+	TestTrue(TEXT("...as NPC-blocked (-3)"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::NpcBlocked);
+	TestEqual(TEXT("...with no second hold"), R.Guard->NavMoveStep.BlockerHoldArms, Arms);
+	TestEqual(TEXT("...no second re-issue"), R.Scripted.MoveRequests.Num(), Moves + 1);
+	TestEqual(TEXT("...no stale mark (CMP EAX,-3)"), R.Guard->NavMoveStep.StaleMarkCalls, Stale);
+
+	// The -0.001 edge of the hold test (double 0x10497530).
+	R.Arm();
+	const int32 EdgeMoves = R.Scripted.MoveRequests.Num();
+	const double T1 = R.Now();
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 300.f);
+	R.Guard->NavigatorMoveStep();
+	R.F.Advance(T1 + 0.2485);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("curtime - nav+0x58 = -0.0015 <= -0.001: held"), R.Scripted.MoveRequests.Num(), EdgeMoves);
+	R.F.Advance(T1 + 0.2495);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("curtime - nav+0x58 = -0.0005 > -0.001: the hold has run, re-issued"),
+		R.Scripted.MoveRequests.Num(), EdgeMoves + 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepHoldSlowCadenceTest,
+	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldSlowCadence", GMoveStepTestFlags)
+bool FElysiumMoveStepHoldSlowCadenceTest::RunTest(const FString&)
+{
+	FMoveStepRig R(TEXT("movestep_hold_slow"), 18618);
+	if (!TestTrue(TEXT("rig"), R.Ready())) return false;
+	const FElysiumEntityHandle Blocker = R.Blocker->Handle;
+	const int32 Stale = R.Guard->NavMoveStep.StaleMarkCalls;
+	const int32 Moves = R.Scripted.MoveRequests.Num();
+	const int32 Reissues = R.Guard->NavMoveStep.BlockerHoldReissues;
+
+	// Thinks 15 s apart (the Normal law `0x10290b60` out of the player's PVS: x10, cap 16 s). Think 1:
+	// the body's `Blocked` end naming an NPC -> the hold arms.
+	const double T0 = R.Now();
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 300.f);
+	R.Guard->NavigatorMoveStep();
+	const int32 Arms = R.Guard->NavMoveStep.BlockerHoldArms;
+	TestEqual(TEXT("think 1: Blocked -> hold, no fail"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	TestTrue(TEXT("...the hold stands on the ended request"), R.Guard->Navigator.bBlockerHoldStanding);
+	TestEqual(TEXT("...nothing re-issued yet"), R.Scripted.MoveRequests.Num(), Moves);
+
+	// Think 2, +15 s, the same ended request re-read: no new contact (no re-arm), the hold and the
+	// window have both run -> the re-probe goes out with a fresh window at this curtime.
+	R.F.Advance(T0 + 15.0);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("think 2: no fail"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	TestEqual(TEXT("...no re-arm on the same end"), R.Guard->NavMoveStep.BlockerHoldArms, Arms);
+	TestEqual(TEXT("...the head leg re-issued"), R.Scripted.MoveRequests.Num(), Moves + 1);
+	TestEqual(TEXT("...counted"), R.Guard->NavMoveStep.BlockerHoldReissues, Reissues + 1);
+	TestEqual(TEXT("...nav+0x60 = curtime + nav+0x64 (a fresh window)"),
+		R.Guard->Navigator.BlockerForgetAt, T0 + 18.0, 1e-4);
+	TestEqual(TEXT("...the served hold's nav+0x58 untouched"), R.Guard->Navigator.BlockerHoldUntil, T0 + 0.25, 1e-4);
+
+	// Think 3, +30 s: the re-issued leg ended Blocked by the same NPC with no ground closed -- the
+	// probe's verdict, judged at its +15 s curtime inside the fresh window: the exhausted hold.
+	R.F.Advance(T0 + 30.0);
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 300.f);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("think 3: Blocked again -> 0x0c"), R.Guard->BaseScheduleHost.FailureReason, 0x0c);
+	TestTrue(TEXT("...as NPC-blocked (-3)"), R.Guard->Navigator.LastOutcome.Kind == EElysiumNpcNavOutcomeKind::NpcBlocked);
+	TestEqual(TEXT("...no re-arm"), R.Guard->NavMoveStep.BlockerHoldArms, Arms);
+	TestEqual(TEXT("...no second re-issue"), R.Scripted.MoveRequests.Num(), Moves + 1);
+	TestEqual(TEXT("...no stale mark"), R.Guard->NavMoveStep.StaleMarkCalls, Stale);
+	TestFalse(TEXT("0x102eeb70 cleared the probe words"),
+		R.Guard->Navigator.bBlockerHoldStanding || R.Guard->Navigator.bBlockerHoldReissued);
+
+	// A re-issued leg that walked on (closed >= 1.0 unit) and met the same NPC 15 s later is a new
+	// contact at that curtime: the window has lapsed, so it arms a fresh hold rather than failing.
+	R.Arm();
+	const double T1 = R.Now();
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 300.f);
+	R.Guard->NavigatorMoveStep();
+	R.F.Advance(T1 + 15.0);
+	R.Guard->NavigatorMoveStep();
+	const int32 ArmsWalked = R.Guard->NavMoveStep.BlockerHoldArms;
+	R.F.Advance(T1 + 30.0);
+	R.Scripted.Ended(EElysiumNpcMoveResultCode::Blocked, Blocker, 120.f);
+	R.Guard->NavigatorMoveStep();
+	TestEqual(TEXT("a leg that walked on and was blocked past the window re-arms"),
+		R.Guard->NavMoveStep.BlockerHoldArms, ArmsWalked + 1);
+	TestEqual(TEXT("...and nothing fails"), R.Guard->BaseScheduleHost.FailureReason, 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepSteerTest,
 	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcWhileWalking", GMoveStepTestFlags)
 bool FElysiumMoveStepSteerTest::RunTest(const FString&)
@@ -646,11 +784,15 @@ bool FElysiumMoveStepOnNavFailedTest::RunTest(const FString&)
 	Nav.BlockerHoldUntil = R.Now() + 0.25;
 	Nav.BlockerForgetAt = R.Now() + 3.0;
 	Nav.bBlockerHoldReissued = true;
+	Nav.bBlockerHoldStanding = true;
+	Nav.BlockerProbeAt = R.Now();
 	const int32 LocalNavResets = R.Guard->NavMoveStep.LocalNavResets;
 	R.Guard->NavOnNavFailed(0x0c);
 	TestFalse(TEXT("0x102eeb70 nav+0x54 := -1"), Nav.BlockerEntity.IsSet());
 	TestEqual(TEXT("0x102eeb70 then the local navigator's reset 0x1000b550"), R.Guard->NavMoveStep.LocalNavResets, LocalNavResets + 1);
 	TestFalse(TEXT("...and the port's hold re-issue mark"), Nav.bBlockerHoldReissued);
+	TestFalse(TEXT("...and its standing mark"), Nav.bBlockerHoldStanding);
+	TestEqual(TEXT("...and its probe time"), Nav.BlockerProbeAt, -1.0);
 	TestEqual(TEXT("0x102eeb70 nav+0x58 := -1.0"), Nav.BlockerHoldUntil, -1.0);
 	TestEqual(TEXT("0x102eeb70 nav+0x60 := -1.0"), Nav.BlockerForgetAt, -1.0);
 	TestEqual(TEXT("TaskFail(0x0c)"), R.Guard->BaseScheduleHost.FailureReason, 0x0c);

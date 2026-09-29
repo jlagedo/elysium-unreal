@@ -92,10 +92,18 @@ struct FElysiumNpcNavigator
 	float BlockerHoldSeconds = 0.25f;
 	double BlockerForgetAt = -1.0;
 	float BlockerWindowSeconds = 3.0f;
-	// Port-only: the armed hold has already re-issued the head leg once (`NavMoveNormalPass`, the
-	// NAMED MODERNIZATION there). Cleared when the hold arms and by `0x102eeb70`; a second `Blocked`
-	// end inside the window with this set is the exhausted hold (`-3` -> `0x0c`).
+	// Port-only, the hold's probe words (`NavMoveNormalPass`, the NAMED MODERNIZATION there). Retail
+	// re-probes the step every think, so each `0x102ef3e0` call is a fresh contact at `curtime`; the
+	// port's probe is the body's leg, whose one `Blocked` end is re-read by every think until a leg is
+	// issued again. `bBlockerHoldStanding`: a hold was armed (or held) on the body's current ended
+	// request -- re-reading that same end is no new contact, only "has the hold run?".
+	// `bBlockerHoldReissued`: the hold has run and re-issued the head leg, retail's post-hold probe;
+	// `BlockerProbeAt` is that probe's `curtime` and `BlockerProbeRemainingUnits` the body's distance
+	// left when it was sent. All four are cleared by `0x102eeb70` and by a new leg (`NavIssueLeg`).
+	bool bBlockerHoldStanding = false;
 	bool bBlockerHoldReissued = false;
+	double BlockerProbeAt = -1.0;
+	float BlockerProbeRemainingUnits = 0.f;
 
 	// --- Path words (`CAI_Path` at `nav+0x30`) ----------------------------------------------------
 
