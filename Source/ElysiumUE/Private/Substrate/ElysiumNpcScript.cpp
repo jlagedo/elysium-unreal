@@ -544,5 +544,119 @@ bool FElysiumNpc::ScheduledFollowPath(int32 ScheduleId, FElysiumEntity* Goal, in
 	NavGoal.Flags = GScript19ScheduledGoalFlags;              // [9] = 1
 	float Scratch = 0.f;
 	TranslateEnemyChasePosition(Goal, NavGoal.PositionCm, &NavGoal.Tolerance, &Scratch); // 0x10280295
-	return Script19SetGoal(NavGoal, 0, TEXT("ScheduledFollowPath (0x102801e0)")); // 0x102802a8, AL out
+	const bool bRoute = Script19SetGoal(NavGoal, 0, TEXT("ScheduledFollowPath (0x102801e0)")); // 0x102802a8, AL out
+	// The type-3 route build is `DoFindPath`'s chain arm (`0x102f2330`), not a location search: the
+	// speed copy, the chain laid from `m_pGoalEnt` and the head leg. `SetGoal` issued the leg to the
+	// first corner; this lays the rest of the chain over it.
+	return bRoute && NavFindPathCorners();
+}
+
+// --- `0x102f2330`, goal type 3 --------------------------------------------------------------------
+
+namespace
+{
+	// `DoFindPath`'s chain cap: `CMP EDI,0x80` at `0x102f24a5` ends the laying, and the goal flag goes
+	// on the last corner only for a count below it (`0x102f24ca`).
+	constexpr int32 GScript19CornerChainCap = 0x80;
+	// The goal waypoint's arrival radius, `0x10451f78` = 0.0625 units (the constant lane A's request
+	// fill states for the goal leg); a non-goal corner is passed at the path's waypoint tolerance
+	// (`path+0x40`, `Navigator.WaypointToleranceCm`, `SetGoal 0x102ececa`).
+	constexpr float GScript19GoalArrivalUnits = 0.0625f;
+}
+
+bool FElysiumNpc::NavFindPathCorners()
+{
+	// `0x102f2359` `0x10319ee0(path+0x24)`: the waypoint list is emptied first, `path+0x44 := -1`.
+	Navigator.bHasHeadWaypoint = false;
+	Navigator.bHeadIsGoal = false;
+	Navigator.LastNodePassed = INDEX_NONE;
+	NavHeadCorner = FElysiumEntityHandle::Invalid();
+
+	// `m_pGoalEnt` (`+0x5de8`); a null one lays nothing and answers 0 (`0x102f238d` -> `0x102f2614`).
+	FElysiumEntity* First = World != nullptr ? World->Resolve(BaseScheduleHost.GoalEnt) : nullptr;
+	if (First == nullptr)
+	{
+		return false;
+	}
+	// `0x102f2393..0x102f23af`: the first corner's `m_flSpeed` (`+0x164`, the `speed` key), when it is not
+	// 0.0 (`_DAT_104454c4`), goes onto the WALKER's `+0x164` (`0x102ecd00`). Re-applied on every re-find,
+	// so it follows the corner being walked to. No reader of a walker's `+0x164` is known (R4): unconsumed.
+	// The corner's `wait` (`m_flWait +0x450`) is never read: its only reader is slot 152 with no callers.
+	if (First->AuthoredSpeed != 0.f)
+	{
+		AuthoredSpeed = First->AuthoredSpeed;
+	}
+
+	// `0x102f23b8..0x102f24ad`: one waypoint per corner (flag `2`, the corner's handle at `wp+0x20`),
+	// its position `GetAbsOrigin` (slot 220) through slot 563 with the path's tolerance (`+0x28`) and
+	// scalar (`+0x20`) as the by-reference operands, which are written back after EVERY corner
+	// (`0x102f2443..0x102f2458`).
+	int32 Laid = 0;
+	FVector HeadCm = FVector::ZeroVector;
+	for (FElysiumEntity* Corner = First; Corner != nullptr;)
+	{
+		FVector PositionCm = Corner->Origin;
+		float ToleranceCm = Navigator.GoalToleranceCm;
+		float ScalarCm = NavPathScalar20 * ElysiumMove::U;
+		TranslateEnemyChasePosition(Corner, PositionCm, &ToleranceCm, &ScalarCm);   // 0x102f2431 slot 563
+		Navigator.GoalToleranceCm = ToleranceCm;                                    // 0x102f244b
+		NavPathScalar20 = ScalarCm / ElysiumMove::U;                                // 0x102f2458
+		if (Laid == 0)
+		{
+			HeadCm = PositionCm;
+		}
+		++Laid;
+		Corner = Corner->GetNextTarget();                                           // 0x102f249f slot 172
+		if (Laid >= GScript19CornerChainCap)
+		{
+			break;
+		}
+	}
+	// The goal bit (`|= 8`) rides the LAST waypoint, and only for a chain shorter than the cap
+	// (`0x102f24ca CMP EAX,0x80; JGE`); the head is that waypoint only for a one-corner chain.
+	Navigator.bHeadIsGoal = Laid == 1;
+	NavHeadCorner = First->Handle;                                                  // wp+0x20
+
+	if (Motor == nullptr)
+	{
+		return false;                                                               // no follower: no leg
+	}
+	// The leg `SetGoal` already issued is this one when it went to the head's position and the head is
+	// the goal (same arrival radius): nothing to re-issue.
+	if (bMoveIssued && Navigator.bHeadIsGoal && MoveGoal.Equals(HeadCm, 0.01))
+	{
+		Navigator.bHasHeadWaypoint = true;
+		return true;
+	}
+	const bool bScriptedOrderHolds = ScriptedScheduleOrder.IsSet()
+		&& GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
+	if (!bScriptedOrderHolds && !AcquireScheduleBody(TEXT("AdvancePath 0x102f0400")))
+	{
+		bMoveIssued = false;                    // a refused claim is not a route failure: nothing was attempted
+		return false;
+	}
+	MoveGoal = HeadCm;
+	const int32 Activity = Navigator.GetMovementActivity();
+	const EElysiumNpcGaitKind Gait = Activity == GScript19ActRun ? EElysiumNpcGaitKind::Run
+		: EElysiumNpcGaitKind::Walk;
+	FElysiumNpcMoveRequest Request;
+	Request.DestinationCm = HeadCm;
+	Request.AcceptanceToleranceCm = Navigator.bHeadIsGoal ? GScript19GoalArrivalUnits * ElysiumMove::U
+		: Navigator.WaypointToleranceCm;
+	Request.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, Gait);
+	Request.GaitKind = Gait;
+	Request.PartialPath = EElysiumNpcPartialPath::Refuse;
+	Request.PedestrianCostMultiplier = 0;       // a chain is no A* search: `0x102f2060` is never reached
+	Request.MovementActivityName = FName(*FString::Printf(TEXT("ACT_0x%02x"), Activity));
+	bMoveIssued = Motor->MoveTo(Request);
+	if (!bMoveIssued)
+	{
+		// The chain itself cannot fail in retail (its legs are straight local walks, so a blocked one
+		// fails through `Move`); Unreal's route to the corner is the port's, and a refusal is the same
+		// `OnNavFailed(0xc, 1)` a blocked leg raises.
+		NavOnNavFailed(GScript19FailNoRoute);
+		return false;
+	}
+	Navigator.bHasHeadWaypoint = true;
+	return true;
 }

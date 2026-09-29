@@ -72,25 +72,118 @@ void NavSnapshotOwnerPointers(int32 Argument);
 /** `CAI_Navigator#10 OnNavFailed` `0x102eeae0`, and `CAI_Navigator#9` `0x102eeb50`, whose whole body
  *  is a tail-jump to slot 10 with its second argument shifted down one stack word — so slot 9 IS
  *  `OnNavFailed` under another index, which the 29c walk recorded as unrecovered and the listing
- *  settles. Writes the file/line marker at owner+0x1b44/+0x1b48 (ABSENT in the shape map), calls
- *  `TaskFail` (slot 448) with the caller's reason, re-plays the resolved link activity through
- *  `SetIdealActivity`, and sets the failed latch. */
+ *  settles. Runs the navigator's reset `0x102eeb70` first (the NPC-blocker memory), writes the
+ *  file/line marker at owner+0x1b44/+0x1b48 (ABSENT in the shape map), calls `TaskFail` (slot 448)
+ *  with the caller's reason, re-plays the resolved link activity through `SetIdealActivity`, and sets
+ *  the failed latch. It does NOT clear the path: the head waypoint and the goal type stand. */
 void NavOnNavFailed(int32 FailReason);
 
 /** `CAI_Navigator::Move` (`0x102eff40`, navigator slot 5), which `PerformMovement` (`0x1026c120`)
- *  dispatches from `NPCThink`. NAMED DIVERGENCE: this runtime's mover integrates the route on the
- *  actor tick, so what the think still owes the route is its END, sampled here: an arrival runs
- *  `OnNavComplete` (navigator slot 8 `0x102eea90`: the reset `0x102eeb70`, the owner's
- *  `TaskMovementComplete` `0x10273ec0` through `0x102eccc0`, `+0x1c = 1`); a route the mover gave up
- *  runs `OnNavFailed(0xc)` (slot 10, `Move`'s own `(0xc, 1)` at `0x102f0180`). No active goal, no
- *  work (`Move`'s `0x102ee2e0` gate). Story 8 wave 2 (L13): the retail task arms now read the
- *  navigator's goal words, so the route's end has to reach them. */
+ *  dispatches from `NPCThink` (R3, 0018 story 5 lane I). The entry gates in retail's order (paused,
+ *  slot 525 `OverrideMove`, `m_bShouldMove`, no goal type `0x0d`, no head waypoint `0x0c`,
+ *  `m_flMoveWaitFinished`), then the pass loop: each pass is `MoveNormal`'s arms decided from the
+ *  body's move facts (`IElysiumNpcMotor::SampleMoveFacts`), result `1` re-enters, `0` ends the
+ *  think's budget, a negative result reaches the failure tail (`0x102f0169`: the stale mark unless
+ *  `-3`, then `OnNavFailed(0x0c)`), and the 17th dispatch fails `0x0c` whatever it answered.
+ *  NAMED DIVERGENCE: the body walks the route on the actor tick, so a pass samples what the body did
+ *  instead of stepping it. */
 void NavigatorMoveStep();
+
+/** `CAI_Navigator::OnNavComplete` `0x102eea90` (navigator slot 8): the reset `0x102eeb70`, the owner's
+ *  `TaskMovementComplete` (`0x10273ec0`, through `0x102eccc0`: the goal waypoint's `AdvancePath`,
+ *  then `ClearGoal` `0x102ee270`, so the goal type never outlives the arrival), `nav+0x1c = 1`. */
+void NavOnNavComplete();
+
+/** `0x102eeb70` -- the navigator's reset on every `OnNavFailed` and `OnNavComplete`: `nav+0x54 = -1`,
+ *  `nav+0x58 = nav+0x60 = -1.0f`, then the local navigator's reset `0x1000b550` (a seam). */
+void NavResetBlockerMemory();
+
+/** `AIMoveResult_t`, what one pass hands `Move`'s loop (R3 "The motor status table"). */
+enum class ENavMoveResult : int32
+{
+	ChangeType = 1,      // a waypoint advance (or a spliced detour): the loop re-enters
+	Ok = 0,              // walked, held, or completed: the think's budget is spent
+	BlockedEntity = -1,
+	BlockedWorld = -2,
+	BlockedNpc = -3,     // the only negative the failure tail does not stale-mark
+	Illegal = -4,
+};
+
+/** One pass's reading of the body (`FElysiumNpcMoveFacts`, or the legacy `Sample` status from a
+ *  motor that reports no facts). Facts, not a verdict: the pass decides. */
+struct FNavStepFacts
+{
+	// `0x102ef510` (navigator slot 16): the head waypoint is reached -- inside the constant 0.0625
+	// units (`0x10451f78`; 2-D on ground nav, 3-D otherwise), or the follower's own Success end.
+	bool bWaypointReached = false;
+	// The body gave the request up short of the waypoint (the follower ended it without Success).
+	bool bGaveUp = false;
+	// The obstruction the body names (`trace+0x1c`), unset for the world or an unnamed entity.
+	FElysiumEntityHandle Blocker;
+};
+
+/** Samples the body for one pass: the move facts first (`Sample` consumes a terminal status), then
+ *  the entity record (`SampleMotorIntoEntity`, `GetOrigin` slot 220's source). */
+FNavStepFacts NavSampleStep();
+
+/** One `MoveNormal` pass (`0x102efaa0`) on the sampled facts: the gate `0x102efd50` (simplify pass,
+ *  `nav+0x51 = 0`), the arrival test `0x102ef510` (`OnNavComplete` on the goal waypoint, else
+ *  `AdvancePath`), the movement activity, then the blocked arms (motor code 4 on the move target,
+ *  the NPC-blocker hold `0x102ef3e0`, the same-direction mover `0x102efde0`, the goal-tolerance
+ *  completion `0x102ef760`). */
+ENavMoveResult NavMoveNormalPass(const FNavStepFacts& Step);
+
+/** `0x102ef3e0` -- the NPC-blocker hold (R3 "The -3 arm as settled"): arm when the blocker is not the
+ *  remembered one or the 3.0 s window has run (`curtime - nav+0x60 > -0.001`), hold while `curtime -
+ *  nav+0x58 <= -0.001`; otherwise answer `nav+0x51`. True = hold (no fail this pass). */
+bool NavBlockerHold(const FElysiumEntityHandle& Blocker);
+
+/** `0x102efde0` (sink slot 4, S4): a moving NPC going the same way is followed. SEAM answering no:
+ *  its constants and the motor slot 16 gate distance are unrecovered (R3). */
+bool NavFollowSameDirectionMover(const FElysiumEntityHandle& Blocker);
+
+/** `0x102ef760` (sink slot 5, `OnMoveBlocked`), past the NPC sink's slot 5 (false): the stopped
+ *  activity, unconditionally, then `dist(origin, 0x1030ba30 raw goal) < path+0x28 + 0.1` (2-D when
+ *  `nav+0x18 == 0`, 3-D else, strict, units) -> `OnNavComplete`. True = completed. */
+bool NavBlockedStepCompletes();
+
+/** `0x102f1fa0(nav, seconds, NULL)` -- the stale mark `Move`'s failure tail writes. SEAM: gated inside
+ *  on `nav+0x50 m_fRememberStaleNodes`, a head, `path+0x44 != -1` and the waypoint's node, it marks
+ *  the node link (`link+0x64 |= 1`, `link+0x68 = curtime + seconds`); the port has no link table. */
+void NavMarkStaleLink(float Seconds);
+
+/** `SimplifyPath 0x102f13d0` -> `0x102f06e0` -> NPC slot 531, the only raiser of `OnNavFailed(0x0e)`.
+ *  SEAM answering "no door refused": the door policy is 0018/7's. */
+bool NavSimplifyPathDoorRefused();
+
+/** `0x102ecc40` -- the move goal's target (`goal+0x34`): goal type 2 / 1 / 7 -> `GetNavTargetEntity`,
+ *  any other type -> the `path+0x30` handle. Unset when it resolves to nothing. */
+FElysiumEntityHandle NavMoveTarget() const;
+
+/** `0x102e2d70`'s `+0x94` test: the obstruction is an NPC (the `-3` class). */
+bool NavIsNpcBlocker(const FElysiumEntityHandle& Blocker) const;
+
+/** The move step's retail calls the port reaches but cannot perform, and its pass count, so a case
+ *  can assert which arm ran. */
+struct FNavMoveStepSeams
+{
+	int32 NoRouteWarnings = 0;    // 0x102f0081 Warning("AIError: Move requested with no route!\n")
+	int32 ClimbMotorResets = 0;   // 0x102f0198 climb: motor slot 5 `0x102e1110` + `SetNavType(0)`
+	int32 VelocityStops = 0;      // 0x102f0198 motor slot 10 `0x102e1440` (velocity 0), SEAM
+	int32 PassCapErrors = 0;      // the 17th dispatch's DevMsg
+	int32 StaleMarkCalls = 0;     // 0x102f1fa0(nav, 4.0, NULL), SEAM
+	int32 SimplifyPasses = 0;     // 0x102f13d0(nav, 0) from the MoveNormal gate, SEAM
+	int32 LocalNavResets = 0;     // 0x1000b550 inside 0x102eeb70, SEAM
+	int32 MoverFollowTests = 0;   // 0x102efde0, SEAM answering no
+	int32 BlockerHoldArms = 0;    // 0x102ef49a
+	int32 Passes = 0;             // dispatches of the last step's loop
+};
+FNavMoveStepSeams NavMoveStep;
 
 /** `CAI_Navigator::AdvancePath` `0x102f0400` — a non-goal head waypoint was reached: its arms (flag
  *  `0x02` InPass input and the pass-waypoint re-find, flag `0x10` door transaction, flag `0x04` node
  *  pop into `path+0x44`) and the pop. Answers whether a head waypoint still stands. 0018/5 wave 1
- *  seam, defined in `ElysiumNpcBaseAdvancePath.cpp` (lane E); `NavigatorMoveStep` calls it (lane I). */
+ *  seam, defined in `ElysiumNpcBaseAdvancePath.cpp` (lane E); `NavMoveNormalPass` calls it (lane I). */
 bool NavAdvancePath();
 
 /** The port's "a route is being followed" fact, standing for `IsGoalActive` `0x102ee6a0` (a head

@@ -168,3 +168,18 @@ bool Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFlags, const TCH
 bool ScheduledMoveToGoalEntity(int32 Schedule, FElysiumEntity* Goal, int32 Activity);
 /** `0x102801e0` -- the path-corner twin: slot 220's origin and the `-1.0` "keep" tolerance. */
 bool ScheduledFollowPath(int32 Schedule, FElysiumEntity* Goal, int32 Activity);
+
+/** `CAI_Navigator::DoFindPath` `0x102f2330`, goal type 3 (`GOALTYPE_PATHCORNER`, `0x102f2380..0x102f24e5`):
+ *  from `m_pGoalEnt` (`BaseScheduleHost.GoalEnt`) copy the corner's `speed` onto this NPC (`+0x164`,
+ *  `0x102f2393..0x102f23af`), lay the chain (`GetNextTarget`, slot 172, up to `0x80` corners, each
+ *  position through slot 563), flag the LAST corner goal only when the chain is shorter than `0x80`
+ *  (`0x102f24ca`), and issue the leg to the head. The port's follower walks one leg at a time, so the
+ *  head is the first corner; `NavAdvancePath` (`0x102f0400`) re-enters here for the next one. Answers
+ *  whether a head corner stands; a corner the follower refuses is `OnNavFailed(0xc)`. Troika line only:
+ *  a base-only NPC keeps the single leg `SetGoal` issued. */
+bool NavFindPathCorners();
+
+/** The head waypoint's `+0x20` entity handle (the corner it walks to), which `AdvancePath`'s first arm
+ *  hands `"InPass"` (`0x102f0400`). It is `m_pGoalEnt` when the chain is laid, and stays the corner
+ *  actually being walked to if a script re-aims `m_pGoalEnt` meanwhile. */
+FElysiumEntityHandle NavHeadCorner;

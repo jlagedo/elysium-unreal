@@ -1877,6 +1877,13 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		{
 			StartTaskDevMessage(TEXT("Can't Create Route!\n"));          // 0x10286104  DevWarning(2, ...)
 		}
+		else if (FElysiumNpc* Troika = AsNpc())
+		{
+			// The type-3 route build is `DoFindPath`'s chain arm (`0x102f2330`): the corner's `speed`
+			// copy, the chain laid from `m_pGoalEnt`, the head leg. `SetGoal` issued the leg to the
+			// first corner; this lays the chain over it (`NavFindPathCorners`, Troika line).
+			(void)Troika->NavFindPathCorners();
+		}
 		// Neither path completes.
 		return 0;
 	}
@@ -1967,14 +1974,23 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	// (`0x102ee9c0`) and the arrival words `[6]` / `[7]`. A type-8 goal (interesting place,
 	// pedestrian -- NOT 9, the animal place) sets the pedestrian byte `path+0x1`, which only the
 	// path reset clears.
-	Navigator.GoalType = Goal.Type;
-	Navigator.GoalFlags = Goal.GoalFlags;
-	Navigator.GoalNode = Goal.DestNode;
-	Navigator.ArrivalActivity = Goal.ArrivalActivity;
-	Navigator.ArrivalSequence = Goal.ArrivalSequence;
-	if (Goal.Type == GOALTYPE_PLACE_PEDESTRIAN)
+	//
+	// Goal flag 2 (`0x102ecf27`) returns BEFORE these stores (the `0x1030ba50(path, type)` write and
+	// `path+0x60 = goal[9]`, which follow the flag-2 block in the listing), so a node-route goal writes
+	// none of them: the path's type comes from the route's own install (4), `path+0x60` is left as it
+	// stood and the arrival words are never applied.
+	const bool bNodeRouteGoal = (Goal.GoalFlags & 2) != 0;
+	if (!bNodeRouteGoal)
 	{
-		Navigator.bPedestrian = true;
+		Navigator.GoalType = Goal.Type;
+		Navigator.GoalFlags = Goal.GoalFlags;
+		Navigator.GoalNode = Goal.DestNode;
+		Navigator.ArrivalActivity = Goal.ArrivalActivity;
+		Navigator.ArrivalSequence = Goal.ArrivalSequence;
+		if (Goal.Type == GOALTYPE_PLACE_PEDESTRIAN)
+		{
+			Navigator.bPedestrian = true;
+		}
 	}
 
 	// The goal entity by type (`0x102ecd20`'s two resolutions share it): 1 `m_hTargetEnt`
@@ -2037,11 +2053,42 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	// `[11..13]` != `DAT_10934060..68` -> `0x1030be20` (arrival direction; every caller passes the
 	// sentinel); path `+0x8` / `+0x4` := `[14]` / `[15]` (zero at every caller). None has a port word.
 	//
-	// Goal flag 2 (`0x102ecf2e TEST [goal+0x24],0x2`) builds a NODE route (`0x102f3c10` /
-	// `0x102f41b0` nearest nodes, `0x102fd240` the route) and returns without `0x102f1dc0`. This
-	// runtime keeps the places (0018 story 4) but no links: routing is Unreal's (the Navigation
-	// boundary), so the goal takes the location arm below and the mover plans it (named divergence;
-	// the node route's goal handling is 0018 story 5's).
+	// Goal flag 2 (`0x102ecf27 TEST [goal+0x24],0x2`, taken at `0x102ecf2e`): an explicit NODE route,
+	// returned WITHOUT the route build `0x102f1dc0`. One shipped issuer: Troika task `0xc7
+	// TASK_GET_PATH_TO_ENEMY_CLOSEST`, reached by `SCHED_VTZIMISCE_ATTACK_CLOSEST`. In retail's order:
+	//
+	//     start = NearestNodeToNPC(net, npc, GetAbsOrigin);   -1 -> return false      0x102f3c10
+	//     goal  = NearestNode(net, goal[1..3]);               -1 -> return false      0x102f41b0
+	//     route = 0x102fd240(pathfinder, start, goal);        NULL -> return false
+	//     path.type = 4; path.install(route); path.finalise();  return true           0x1030ba50 / 0x1030b4d0 / 0x1030b8e0
+	//
+	// No `OnNavFailed`, no `MotorTaskComplete`, no memory bit `0x20`, no face-the-path and no arrival
+	// activity: every refusal is a plain `false` for the issuing arm to fail on. The install tail is the
+	// one `SetRandomGoal` runs (`0x102ed430`), so it is the same body here (`InstallPathNoGoal`).
+	//
+	// NAMED DIVERGENCE: this runtime keeps the places (0018 story 4) but no links, so `0x102fd240`'s
+	// route is Unreal's, asked of the follower (a refused request is the third refusal). The goal-side
+	// nearest node (`NavNearestNodeTo`, no NPC and no hull, a clear line to one of the ten nearest nodes
+	// within 2048 units) is retail's own and refuses exactly. The NPC-side one is gated by
+	// `CanFitAtNode`'s stand check (`0x102f1900` -> `0x102e7270`), a seam answering false until 0018
+	// story 6, so it cannot refuse yet: only an EMPTY network does (`0x102f3c3a`, `*network == 0`).
+	if (bNodeRouteGoal)
+	{
+		// Flip when the move probe's stand check is real (0018 story 6): then a live network with no
+		// node standable near the NPC is retail's refusal as well.
+		constexpr bool bNodeStandCheckIsLive = false;
+		const bool bNetworkEmpty = World == nullptr || World->Places().NumNodes() == 0;
+		bool bRouted = false;
+		StartTaskNav.LastSetGoalDestCm = Goal.DestCm;
+		const int32 StartNode = NavNearestNodeToNpc(Origin);                        // 0x102f3c10
+		if (!bNetworkEmpty && (StartNode != INDEX_NONE || !bNodeStandCheckIsLive))
+		{
+			const int32 GoalNode = Troika != nullptr ? Troika->NavNearestNodeTo(Goal.DestCm) : INDEX_NONE; // 0x102f41b0
+			bRouted = GoalNode != INDEX_NONE && InstallPathNoGoal(Goal.DestCm);     // 0x102fd240 + install
+		}
+		StartTaskNav.bLastSetGoalResult = bRouted;
+		return bRouted;
+	}
 
 	// The destination: an entity goal routes to the entity (`path+0x30`), its dest words written
 	// only when the goal's own dest is not the default triple; a location goal takes `[1..3]`, or

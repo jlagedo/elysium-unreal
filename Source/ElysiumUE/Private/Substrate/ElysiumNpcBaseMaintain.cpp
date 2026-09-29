@@ -35,14 +35,16 @@ void FElysiumNpcBase::TaskMovementComplete()
 	{
 		SetIdealActivity(ResolveLinkActivity()); // 0x10273f20
 	}
-	if (NavIsGoalActive()) // 0x10273f2b
+	// `if (0x102ee6a0(nav)) 0x102f0400(nav);` -- `IsGoalActive` is the navigator's head waypoint
+	// (`path+0x24`), and the call is `AdvancePath`, not a stop: on the goal waypoint it hands a
+	// path corner its `InPass` (the last corner of a chain) and pops nothing. Its answer is dropped.
+	if (Navigator.IsGoalActive()) // 0x10273f2b 0x102ee6a0
 	{
-		NavStopMoving(); // 0x10273f3a
+		(void)NavAdvancePath(); // 0x10273f3a 0x102f0400
 	}
-	if (Motor != nullptr)
-	{
-		Motor->ClearNavigationGoal(); // 0x10273f46
-	}
+	// `0x102ee270(nav)` -- `ClearGoal`, unconditionally: the route words, memory bit 0x20, the path
+	// reset `0x1030bb30` (goal type, head waypoint), the mover's clear, then navigator slot 7.
+	StartTaskClearGoal(); // 0x10273f46 0x102ee270
 }
 
 bool FElysiumNpcBase::MaintainSchedule(double Now, bool bReduced)

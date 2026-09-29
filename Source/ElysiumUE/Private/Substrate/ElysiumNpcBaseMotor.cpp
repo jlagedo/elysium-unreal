@@ -38,6 +38,21 @@ namespace
 	// `TaskFail`'s reason on the `ValidateNavGoal` failure (`0x10280360`, `vtable+0x700` slot 448).
 	constexpr int32 GFailNoCover = 0x1b;
 	constexpr float GJumpApexScale = static_cast<float>(ElysiumNpcTunables::JumpApexScale);
+
+	// `CAI_Navigator::Move` `0x102eff40` and the pass it dispatches (R3). The failure codes are the
+	// table `0x1060fcc4` = `{0, 0x0d, 0x0c, 0x0e, 0x0f}`.
+	constexpr float GMoveStepMaxInterval = 1.0f;                  // 0x10449280 (double 1.0)
+	constexpr int32 GMoveStepFailNoGoal = 0x0d;                   // table[1], 0x102f0081
+	constexpr int32 GMoveStepFailNoRoute = 0x0c;                  // table[2], 0x102f00bc / 0x102f0180
+	constexpr int32 GMoveStepFailDoor = 0x0e;                     // table[3], 0x102f08e7
+	constexpr int32 GMoveStepClimbNavType = 3;                    // nav+0x18 == 3, 0x102f0198
+	constexpr int32 GMoveStepMaxPasses = 0x10;                    // `INC EBP; CMP EBP,0x10; JG`
+	constexpr float GMoveStepStaleSeconds = 4.0f;                 // `PUSH 0x40800000`, 0x102f016e
+	// `0x102ef510`: the waypoint arrival radius, 0.0625 units (`0x10451f78`); 0.25 (`0x10449260`) under
+	// ConVar `npc_vphysics`, whose shipped value `"0"` the port keeps without reading.
+	constexpr float GMoveStepArrivalUnits = 0.0625f;
+	constexpr float GMoveStepGoalSlackUnits = 0.1f;               // 0x104491b4, 0x102ef760
+	constexpr double GMoveStepTimeSlack = ElysiumNpcTunables::MinusThousandthDouble; // 0x10497530
 }
 
 // --- Moved from `ElysiumNpcMotor.cpp` (story 5 step 5) ---
@@ -546,47 +561,409 @@ void FElysiumNpcBase::NavOnNavFailed(int32 FailReason)
 	//
 	// The file/line pair is `ELYSIUM_NPC_WORD_ABSENT(0x1b44)` — the named failure reason and the
 	// schedule trace rows carry that account here. `SetIdealActivity` is the Facing family's
-	// `SetIdealActivityNumber`, reused rather than duplicated.
-	TaskFail(FailReason);
-	SetIdealActivityNumber(ResolveLinkActivity());
-	Navigator.bNavFailed = true;
+	// `SetIdealActivityNumber`, reused rather than duplicated. The path is NOT cleared: the head
+	// waypoint and the goal type stand for the schedule's own reaction to the failure.
+	NavResetBlockerMemory();                                                 // 0x102eeb70
+	TaskFail(FailReason);                                                    // slot 448 (+0x700)
+	SetIdealActivityNumber(ResolveLinkActivity());                           // 0x100097d2(npc, 0x1000b285(npc))
+	Navigator.bNavFailed = true;                                             // +0x1c = 1
+	Navigator.LastOutcome = FElysiumNpcNavOutcome();
+	Navigator.LastOutcome.Kind = FailReason == GMoveStepFailDoor
+		? EElysiumNpcNavOutcomeKind::Door : EElysiumNpcNavOutcomeKind::Failed;
+	Navigator.LastOutcome.FailCode = FailReason;
 }
 
-void FElysiumNpcBase::NavigatorMoveStep()
+void FElysiumNpcBase::NavResetBlockerMemory()
 {
-	if (Motor == nullptr || !NavigatorGoalIsActive())                        // 0x102eff7c 0x102ee2e0
+	// `0x102eeb70`: `nav+0x54 = -1`, `nav+0x58 = nav+0x60 = -1.0f`, then `0x1000b550` (the local
+	// navigator's reset; the port's steering is the crowd's, so the call is recorded). `nav+0x51`
+	// is not this reset's word.
+	Navigator.BlockerEntity = FElysiumEntityHandle::Invalid();
+	Navigator.BlockerHoldUntil = -1.0;
+	Navigator.BlockerForgetAt = -1.0;
+	++NavMoveStep.LocalNavResets;                                            // 0x1000b550, SEAM
+}
+
+void FElysiumNpcBase::NavOnNavComplete()
+{
+	// `CAI_Navigator::OnNavComplete` `0x102eea90` (slot 8): the reset `0x102eeb70`, the owner's
+	// `TaskMovementComplete` through `0x102eccc0`, `nav+0x1c = 1`.
+	NavResetBlockerMemory();                                                 // 0x102eeb70
+	// `TaskMovementComplete` advances the goal waypoint (`0x102f0400`, the last corner's `InPass`) and
+	// ends with `ClearGoal` (`0x10273f46` -> `0x102ee270`), so the goal type (`path+0x5c`) and the head
+	// waypoint never outlive an arrival.
+	TaskMovementComplete();                                                  // 0x102eccc0 -> 0x10273ec0
+	Navigator.bNavFailed = true;                                             // +0x1c = 1
+	Navigator.LastOutcome = FElysiumNpcNavOutcome();
+	Navigator.LastOutcome.Kind = EElysiumNpcNavOutcomeKind::Arrived;
+}
+
+FElysiumEntityHandle FElysiumNpcBase::NavMoveTarget() const
+{
+	// `0x102ecc40`, the move goal's `+0x34` (slot 17's word `[0xd]`, the body `FUN_102eee40` also
+	// transcribes): goal type 2 / 1 / 7 -> `GetNavTargetEntity` (`0x102729d0`), else `path+0x30`.
+	const int32 GoalType = Navigator.GetGoalType();
+	const FElysiumEntity* TargetEntity = nullptr;
+	if (GoalType == 2 || GoalType == 1 || GoalType == 7)
 	{
-		return;
+		TargetEntity = GetNavTargetEntity();
 	}
-	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
-	// The goal's move step (`0x102ef760`, slot 5 of the move goal under `CAI_Navigator::Move`).
-	// First the owner's movement sink (`[npc+0x19b0]`, `CAI_DefMovementSink`) is asked through its
-	// slot 5 (`+0x14`): a true answer returns 1 with no activity written (0x102ef771..0x102ef781).
-	// `CAI_DefMovementSink`'s slot 5 is `0x101a63c0`, `XOR AL,AL; RET 4`, and no port class replaces
-	// that secondary table, so the sink answers false and the step goes on.
+	else if (World != nullptr)
+	{
+		TargetEntity = static_cast<const FElysiumEntityWorld*>(World)->Resolve(Navigator.GetTarget());
+	}
+	return TargetEntity != nullptr ? TargetEntity->Handle : FElysiumEntityHandle::Invalid();
+}
+
+bool FElysiumNpcBase::NavIsNpcBlocker(const FElysiumEntityHandle& Blocker) const
+{
+	// `0x102e2d70`: `-3` iff `blocker[+0x94]` (the cached NPC pointer) is non-null; else `-1` for an
+	// ordinary entity, `-2` for the world (R2 §5). The body names only NPC obstructions, so anything
+	// else it reports reaches the pass unnamed.
+	if (!Blocker.IsSet() || World == nullptr)
+	{
+		return false;
+	}
+	const FElysiumEntity* Entity = static_cast<const FElysiumEntityWorld*>(World)->Resolve(Blocker);
+	return Entity != nullptr && Entity->AsNpcBase() != nullptr;
+}
+
+bool FElysiumNpcBase::NavBlockerHold(const FElysiumEntityHandle& Blocker)
+{
+	// `0x102ef3e0(nav, trace)` (thunk `0x1000856c`), instruction by instruction (R3):
+	//     blocker = trace+0x1c -> +0x94;  none -> return nav+0x51;
+	//     if (resolve(nav+0x54) != blocker || curtime - nav+0x60 > -0.001) goto arm;
+	//     if (curtime - nav+0x58 <= -0.001) { nav+0x51 = 1; return true; }       // hold
+	//     return nav+0x51;
+	//   arm (0x102ef49a):
+	//     nav+0x51 = 1; nav+0x54 = blocker; nav+0x58 = curtime + nav+0x5c; nav+0x60 = curtime + nav+0x64;
+	//     return true;
+	if (!NavIsNpcBlocker(Blocker))
+	{
+		return Navigator.bBlockerHold;
+	}
+	const FElysiumEntityWorld* ConstWorld = World;
+	const double Now = ConstWorld->NowSeconds();
+	// `nav+0x54` is resolved through the entity list (`>> 0xd` serial, `& 0x1fff` index): a handle that
+	// no longer names a live entity is "not the blocker".
+	const FElysiumEntity* Remembered = ConstWorld->Resolve(Navigator.BlockerEntity);
+	const FElysiumEntity* Current = ConstWorld->Resolve(Blocker);
+	if (Remembered != Current || Now - Navigator.BlockerForgetAt > GMoveStepTimeSlack)
+	{
+		Navigator.bBlockerHold = true;                                       // nav+0x51
+		Navigator.BlockerEntity = Blocker;                                   // nav+0x54
+		Navigator.BlockerHoldUntil = Now + Navigator.BlockerHoldSeconds;     // nav+0x58 = curtime + nav+0x5c
+		Navigator.BlockerForgetAt = Now + Navigator.BlockerWindowSeconds;    // nav+0x60 = curtime + nav+0x64
+		++NavMoveStep.BlockerHoldArms;
+		return true;
+	}
+	if (Now - Navigator.BlockerHoldUntil <= GMoveStepTimeSlack)
+	{
+		Navigator.bBlockerHold = true;
+		return true;
+	}
+	return Navigator.bBlockerHold;
+}
+
+bool FElysiumNpcBase::NavFollowSameDirectionMover(const FElysiumEntityHandle& Blocker)
+{
+	// `0x102efde0`, reached from S4 `0x102ef0e0` when motor slot 16 (`0x102e1300`) exceeds the
+	// clearance: a moving NPC going the same way is followed (result 0, `maxDist = distClear`, flag 2).
+	// SEAM answering no: its constants and the S4 gate distance are unrecovered (R3), so the blocked
+	// result stands, which is S4's own `distClear < 1.0` arm.
+	(void)Blocker;
+	++NavMoveStep.MoverFollowTests;
+	return false;
+}
+
+bool FElysiumNpcBase::NavBlockedStepCompletes()
+{
+	// `0x102ef760` (sink slot 5, `OnMoveBlocked`, `this = nav+0x10`). The owner's movement sink
+	// (`[npc+0x19b0]`, `CAI_DefMovementSink`) is asked first through its slot 5 (`+0x14`): a true
+	// answer returns with the result as the sink left it. `CAI_DefMovementSink`'s slot 5 is
+	// `0x101a63c0`, `XOR AL,AL; RET 4`, and no port class replaces that secondary table
+	// (`CNPC_VZombie 0x103de330` is unread), so the sink answers false.
 	constexpr bool bMovementSinkHandled = false;                             // 0x102ef777 CALL [EAX+0x14]
-	if (!bMovementSinkHandled)                                               // 0x102ef77a / 0x102ef77c JZ
+	if (bMovementSinkHandled)                                                // 0x102ef77a / 0x102ef77c JZ
 	{
-		// `SetIdealActivity(0x1027a6c0())` — `ResolveLinkActivity`, the one body of `0x1027a6c0`: the
-		// path's movement activity while the navigator's goal is active (`0x102ee6a0`) and it names
-		// one, else ACT_IDLE (1). This is what walks a body in its WALK/RUN clip: the maintained ideal
-		// activity commits the movement sequence (the sequence bridge plays it).
-		SetIdealActivity(ResolveLinkActivity());                             // 0x102ef78a 0x1027a6c0 / 0x102ef793
+		return false;
 	}
+	// The stopped activity, unconditionally: `SetIdealActivity(0x1027a6c0())`.
+	SetIdealActivity(ResolveLinkActivity());                                 // 0x102ef78a / 0x102ef793
+	// `dist(GetOrigin() (slot 220), 0x1030ba30 raw goal)` -- 2-D on ground nav, 3-D otherwise --
+	// against `0x102ee1a0` `path+0x28` + 0.1, strictly (`FCOMPP; TEST AH,5; JP`: equal or NaN fails).
+	const float U = ElysiumMove::U;
+	const FVector Delta = (Navigator.GoalPosCm - Origin) / U;
+	const double DistUnits = Navigator.GetNavType() == 0 ? Delta.Size2D() : Delta.Size();
+	const double ToleranceUnits = Navigator.GetGoalTolerance() / U + GMoveStepGoalSlackUnits;
+	if (DistUnits < ToleranceUnits)
+	{
+		NavOnNavComplete();                                                  // nav slot 8, *result = 0
+		return true;
+	}
+	return false;
+}
+
+void FElysiumNpcBase::NavMarkStaleLink(float Seconds)
+{
+	// `0x102f1fa0(nav, Seconds, NULL)`: gated inside on `nav+0x50 m_fRememberStaleNodes`, a path, a
+	// head, `path+0x44 != -1` and the head's node `wp+0x10 != -1`, it marks the link in `nav+0x2c`
+	// (`link+0x64 |= 1`, `link+0x68 = curtime + Seconds`, `link+0 = -1`). SEAM: the port routes on
+	// Unreal's navmesh and keeps no link table to mark, so the call is recorded and marks nothing.
+	(void)Seconds;
+	++NavMoveStep.StaleMarkCalls;
+}
+
+bool FElysiumNpcBase::NavSimplifyPathDoorRefused()
+{
+	// `SimplifyPath(nav, 0)` `0x102f13d0` from the `MoveNormal` gate `0x102efd50` (every 0.5 s,
+	// `nav+0x38`): its forward pass runs the door probe `0x102f06e0`, whose NPC slot 531 answer with a
+	// non-zero word raises `OnNavFailed(0x0e)` (`0x102f08e7`) and the door notice `0x1027de00`. SEAM
+	// answering "no door refused": the door policy behind slot 531 is 0018/7's.
+	++NavMoveStep.SimplifyPasses;
+	return false;
+}
+
+FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
+{
+	FNavStepFacts Step;
+	// The facts first: `Sample` below consumes a terminal status (it stops the body), and the facts
+	// are what survive that.
+	FElysiumNpcMoveFacts Facts;
+	const bool bFacts = Motor->SampleMoveFacts(Facts);
+	// `GetOrigin` (slot 220) is the entity record; the body is its source.
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
+	if (bFacts && (Facts.bRequestAlive || Facts.bRequestEnded))
+	{
+		// `0x102ef510`: the head waypoint against the constant radius, 2-D when `nav+0x18 == 0`,
+		// 3-D otherwise; not reached iff `tol < dist` (NaN: not reached). The body's request goes to
+		// the head waypoint, so its remaining distance is that test's. NAMED MODERNIZATION: the
+		// follower's own Success end (its arrival floor, `AlreadyAtGoal`) also counts as reached --
+		// Unreal's path follower lands a body where retail's clamped step did.
+		const float U = ElysiumMove::U;
+		const double Dist2D = Facts.RemainingDistance2DCm / U;
+		const double DistUnits = Navigator.GetNavType() == 0
+			? Dist2D
+			: FMath::Sqrt(Dist2D * Dist2D + FMath::Square(Facts.RemainingDzCm / U));
+		const bool bSucceeded = Facts.bRequestEnded && Facts.ResultCode == EElysiumNpcMoveResultCode::Success;
+		Step.bWaypointReached = DistUnits <= GMoveStepArrivalUnits || bSucceeded;
+		Step.bGaveUp = Facts.bRequestEnded && !bSucceeded;
+		Step.Blocker = Facts.BlockingEntity;
+		return Step;
+	}
+	// A motor that reports no facts (a double, a headless world): its own verdict, read as the facts
+	// it stands for -- arrived, or given up with no obstruction named.
+	Step.bWaypointReached = Status == EElysiumNpcMoveStatus::Reached;
+	Step.bGaveUp = Status == EElysiumNpcMoveStatus::Failed || Status == EElysiumNpcMoveStatus::Unavailable;
+	return Step;
+}
+
+FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavStepFacts& Step)
+{
+	// `MoveNormal` `0x102efaa0`. Route types 0 and 2 dispatch here; the port's waypoint move types
+	// (jump 1, climb 3) are the body's own traversal, so every pass is this one.
+	//
+	// The gate `0x102efd50`: the route-type / nav-type checks read the head waypoint's move type
+	// (`+0x2c`), which the follower does not report, so they are not ported; then `SimplifyPath(nav,
+	// 0)` (result ignored) and `nav+0x51 = 0`. Quirk kept: a door refusal inside the simplify pass
+	// raises `OnNavFailed(0x0e)` and the pass goes on (`MoveNormal` does not re-test `nav+0x1c`).
+	if (NavSimplifyPathDoorRefused())
+	{
+		NavOnNavFailed(GMoveStepFailDoor);                                   // 0x102f08e7
+	}
+	Navigator.bBlockerHold = false;                                          // nav+0x51 = 0
+
+	// Navigator slot 16 `0x102ef510`, before any step is built (`102efb2f`).
+	if (Step.bWaypointReached)
+	{
+		if (Navigator.CurWaypointIsGoal())                                   // 0x102ee660 -> 0x1030bd50
+		{
+			NavOnNavComplete();                                              // *result = 0
+			return ENavMoveResult::Ok;
+		}
+		// `0x102f0400`, then `*result = 1` whatever it did. A failure it raised (`nav+0x1c` set) ends
+		// the loop at its top; it must not be turned into a completion below.
+		const bool bHeadStands = NavAdvancePath();
+		if (bHeadStands || Navigator.bNavFailed)
+		{
+			return ENavMoveResult::ChangeType;
+		}
+		// No head stands after the advance. Retail's pop (`0x1030ba90`) never empties the list: with
+		// no next waypoint it prints "ERROR: Force end of route without goal" and flags the last one
+		// as the goal, and the loop's next pass completes on it -- the same position, so the same
+		// arrival. The port reaches that completion here.
+		NavOnNavComplete();
+		return ENavMoveResult::Ok;
+	}
+
+	// Not reached: `MoveNormal` reads the ideal speed and sets the path's activity (slot 310) before
+	// building the step. The port's landed form of that write is the ideal activity from
+	// `ResolveLinkActivity` (`0x1027a6c0`: the path's movement activity while a head stands), which
+	// is what walks the body in its WALK/RUN clip.
+	SetIdealActivity(ResolveLinkActivity());
 	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
 	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken
 	// through `UTIL_AngleMod` as the motor stores it (named divergence: the mover's, not the path's).
 	MotorIdealYaw = StartTaskAngleMod(static_cast<float>(Angles.Y));
-	if (Status == EElysiumNpcMoveStatus::Reached)
+
+	// Motor code 4 (`0x102e0bd0`, checked first): the obstruction is the move goal's own target
+	// (`goal+0x34`) -> S7 `0x102ef6d0` runs `OnNavComplete`, `*result = 0`. The probe's own
+	// `0x102e5d80` already clears a block by that target.
+	const FElysiumEntityHandle MoveTargetHandle = NavMoveTarget();
+	if (Step.Blocker.IsSet() && MoveTargetHandle.IsSet() && Step.Blocker == MoveTargetHandle)
 	{
-		// `OnNavComplete` (`0x102eea90`): `0x102eeb70` (the goal words and the path's reset -- the
-		// mover's own clear inside `TaskMovementComplete`), then the owner's `TaskMovementComplete`.
-		TaskMovementComplete();                                              // 0x102eccc0 -> 0x10273ec0
-		Navigator.bNavFailed = true;                                         // +0x1c = 1
+		NavOnNavComplete();
+		return ENavMoveResult::Ok;
 	}
-	else if (Status == EElysiumNpcMoveStatus::Failed || Status == EElysiumNpcMoveStatus::Unavailable)
+
+	if (!Step.bGaveUp)
 	{
-		NavOnNavFailed(0xc);                                                 // 0x102f0180 slot 10 (FAIL_NO_ROUTE, 1)
+		// The step walked (`MoveEnact` -> the motor, `motor+0x30` spent). An NPC named in the way
+		// while the request still stands is being steered round: NAMED MODERNIZATION -- Unreal's crowd
+		// avoidance stands for the local navigator's steer (`localnav` slot 6 `0x102de110`) and S2's
+		// `PrependLocalAvoidance 0x102ede30` (result 1, the detour walked). Retail's order is kept
+		// (steer and detour first; the 0.25 s hold only once they fail, i.e. once the follower gives
+		// the request up) and so is the outcome: keep walking, nothing fails, no hold is armed.
+		return ENavMoveResult::Ok;
+	}
+
+	// The body gave the request up. The obstruction's class decides the status (`0x102e2d70`).
+	ENavMoveResult Result = ENavMoveResult::BlockedWorld;                    // motor code 3: -1/-2/-4 -> -2
+	if (NavIsNpcBlocker(Step.Blocker))
+	{
+		// S3 `0x102ef350` / S7 on motor code 2: the hold. True -> walk up to the clearance, spend the
+		// interval (`goal+0x38 |= 2`), `*result = 0`: nothing fails during the hold.
+		if (NavBlockerHold(Step.Blocker))
+		{
+			return ENavMoveResult::Ok;
+		}
+		// S4 `0x102ef0e0`: follow a same-direction mover (0), else the NPC status stands.
+		if (NavFollowSameDirectionMover(Step.Blocker))
+		{
+			return ENavMoveResult::Ok;
+		}
+		Result = ENavMoveResult::BlockedNpc;                                 // motor code 2: -3
+	}
+	// Every negative result leaving `MoveEnact` passes `0x102ef760` first.
+	if (NavBlockedStepCompletes())
+	{
+		return ENavMoveResult::Ok;
+	}
+	return Result;
+}
+
+void FElysiumNpcBase::NavigatorMoveStep()
+{
+	// `CAI_Navigator::Move` `0x102eff40` (R3 "Entry gate and order of tests"). The interval is the
+	// one `PerformMovement` (`0x1026c120`) was handed; `102eff57`: clamped to 1.0.
+	float Interval = MotorSeams.PerformMovementInterval;
+	if (Interval > GMoveStepMaxInterval)
+	{
+		Interval = GMoveStepMaxInterval;
+	}
+	// `102effab`: `path+0x10 m_bPaused` -> return. No stop, no fail, `nav+0x1c` untouched.
+	if (Navigator.IsPaused())                                                // 0x102ee2e0
+	{
+		return;
+	}
+	// `102effc2`: NPC slot 525 `OverrideMove(interval)` true -> return. The base `0x1027da90` declines;
+	// the ManBat's flight (`0x1038b120`) is the species body that answers true.
+	if (OverrideMove(Interval))
+	{
+		return;
+	}
+	// `102effd3` / `102f0198`: `m_bShouldMove == 0` -> no move this think and no failure.
+	if (!BaseScheduleHost.bShouldMove)                                       // npc+0x1a40
+	{
+		if (Navigator.GetNavType() == GMoveStepClimbNavType)
+		{
+			++NavMoveStep.ClimbMotorResets;
+			MotorResetToDefault();                                           // motor slot 5 0x102e1110
+			NavSetType(0);                                                   // 0x102eeba0
+		}
+		else
+		{
+			// `nav+0x18 != -1` -> motor slot 10 `0x102e1440`, the velocity zeroed for this think with
+			// the route kept. SEAM: the body integrates on its own tick and `IElysiumNpcMotor` has no
+			// velocity stop that keeps the request (`Stop` drops it), so the call is recorded.
+			++NavMoveStep.VelocityStops;
+		}
+		return;
+	}
+	// `102effe1..102f0069`: the hull / frame stamps on five components and `0x1000f240(path)` with its
+	// result dropped -- words the port's navigator does not keep. `102f007b`: `motor+0x30 = interval`,
+	// the budget the pass loop below stands for.
+	if (!Navigator.IsGoalSet())                                              // 102f0081 path+0x5c == 0
+	{
+		++NavMoveStep.NoRouteWarnings;
+		EmitDevMsg(TEXT("AIError: Move requested with no route!\n"),
+			TEXT("AIError: Move requested with no route!\n"));              // retail's Warning()
+		NavOnNavFailed(GMoveStepFailNoGoal);
+		return;
+	}
+	if (!Navigator.IsGoalActive())                                           // 102f00bc head waypoint == 0
+	{
+		NavOnNavFailed(GMoveStepFailNoRoute);                                // no warning, no stale mark
+		return;
+	}
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	if (Now < BaseScheduleHost.MoveWaitFinished)                             // 102f00cd 0x10280a20 npc+0x5cf0
+	{
+		return;
+	}
+	if (Motor == nullptr)
+	{
+		return;                                                              // port: no body to sample
+	}
+
+	// The loop (`102f00e9..102f0165`): result seeded 1, `nav+0x1c = 0`, pass counter 0.
+	Navigator.bNavFailed = false;
+	NavMoveStep.Passes = 0;
+	ENavMoveResult Result = ENavMoveResult::ChangeType;
+	FElysiumEntityHandle LastBlocker;
+	bool bBudgetSpent = false;
+	for (;;)
+	{
+		// Loop top: the latch exits (a failure result goes on to the tail); a spent budget exits.
+		if (Navigator.bNavFailed || bBudgetSpent)
+		{
+			if (static_cast<int32>(Result) >= 0)
+			{
+				return;
+			}
+			break;
+		}
+		const FNavStepFacts Step = NavSampleStep();
+		LastBlocker = Step.Blocker;
+		Result = NavMoveNormalPass(Step);
+		// `INC EBP; CMP EBP,0x10; JG`: the 17th dispatch fails whatever it answered.
+		if (++NavMoveStep.Passes > GMoveStepMaxPasses)
+		{
+			++NavMoveStep.PassCapErrors;
+			EmitDevMsg(TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"),
+				TEXT("ERROR: AI navigation not terminating. Possibly bad cyclical solving?"));
+			NavMarkStaleLink(GMoveStepStaleSeconds);                         // 102f016e
+			NavOnNavFailed(GMoveStepFailNoRoute);                            // 102f0180
+			return;
+		}
+		if (static_cast<int32>(Result) < 0)
+		{
+			break;
+		}
+		// 0 spends the think's budget (the motor zeroes `motor+0x30`, or the step walked it); 1 re-enters
+		// with what is left.
+		bBudgetSpent = Result == ENavMoveResult::Ok;
+	}
+	// The failure tail `102f0169`: `CMP EAX,-3; JZ` skips the stale mark.
+	if (Result != ENavMoveResult::BlockedNpc)
+	{
+		NavMarkStaleLink(GMoveStepStaleSeconds);                             // 0x102f1fa0(nav, 4.0, NULL)
+	}
+	NavOnNavFailed(GMoveStepFailNoRoute);                                    // 102f0180 nav slot 10
+	if (Result == ENavMoveResult::BlockedNpc)
+	{
+		Navigator.LastOutcome.Kind = EElysiumNpcNavOutcomeKind::NpcBlocked;
+		Navigator.LastOutcome.Blocker = LastBlocker;
 	}
 }
 

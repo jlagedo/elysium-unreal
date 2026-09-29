@@ -1764,7 +1764,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 		{
 			return StartTask19Complete();                                     // 0x102a4928 -> 0x102a4e51
 		}
-		RecordScheduleEvent(TEXT("GetPathToEnemy failed!!\n"));                 // 0x102a4935 DevWarning(2, ...)
+		StartTaskDevMessage(TEXT("GetPathToEnemy failed!!\n"));                 // 0x102a4935 DevWarning(2, ...)
 		return StartTask19Fail(StartTask19A::LinePathToEnemyClosestNoRoute, StartTask19A::FailNoRoute);  // 0x102a4942..4958 / 0x102a4958
 	}
 	// ---------------------------------------------------------------------------------------------
