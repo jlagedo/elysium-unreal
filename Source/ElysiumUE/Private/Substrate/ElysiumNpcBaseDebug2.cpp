@@ -191,17 +191,21 @@ bool FElysiumNpcBase::NavCanFitAtNode(int32 Node, int32 Hull, int32 Mask) const
 	const FVector PointUnits = NodeCm / ElysiumMove::U;
 	if (bProbe)
 	{
-		// `0x102e7270(m_pMoveProbe, pos, mask, 0, 0, 0, 0)` -- CheckStandPosition. **SEAM**: family
-		// Motor's `MoveProbeCheckStandPosition` (no hull probe here: false); a base-only NPC has no
-		// probe at all.
+		// `0x102e7270(m_pMoveProbe, pos, mask, 0, 0, 0, 0)` -- `CheckStandPosition` (R1 §4), with NO
+		// `m_bForceNPCCheck` bracket (that is `CanStandAt`'s): the foot box of `m_Collision`'s OBB
+		// dropped slot 523 under the node, standable iff it hit and slot 166 agrees. A base-only NPC
+		// has no Troika move probe here and refuses.
 		const FElysiumNpc* Troika = AsNpc();
 		if (Troika == nullptr || !Troika->MoveProbeCheckStandPosition(PointUnits, Mask))
 		{
 			return false;
 		}
 	}
-	// `0x102f1a20`: the navigator hull's box traced from the point to the point raised by 0.01; fits
-	// unless the trace starts solid. **SEAM**: `KernelHullTrace` (the clear answer).
+	// `0x102f1a20` (R1 §4): a trace from the point to the point raised by 0.01 (`0x1044e658`) on the
+	// FULL row of the navigator's hull (`nav+8`: `0x102d6100` / `0x102d6120`; the small pair is
+	// `+0x20` / `+0x2c`), `CTraceFilterSimple(npc, 0)`, the caller's mask; fits iff the trace does
+	// NOT start solid (`[ESP+0x8b]`, `102f1c44`) -- the fraction is ignored. Family Motor's
+	// `KernelHullTrace`; a world with no collision answers clear, which fits.
 	FVector Mins = FVector::ZeroVector;
 	FVector Maxs = FVector::ZeroVector;
 	RetailHullExtents(Hull, EElysiumHullExtents::Full, Mins, Maxs);
@@ -249,10 +253,12 @@ int32 FElysiumNpcBase::EntityDrawDebugTextOverlays() const
 
 bool FElysiumNpcBase::CollisionObbExtentsUnits(FVector& OutMinsUnits, FVector& OutMaxsUnits) const
 {
-	// SEAM for `m_Collision`'s vtable `+0x4` `OBBMins()` and `+0x8` `OBBMaxs()` (`+0x0270`). Family
-	// Motor's `RetailCollisionExtents` records the same absence. Answering false takes the arm
-	// retail takes for an entity whose OBB mins and maxs are EQUAL on all three axes — the default
-	// ±5 box — which is also what an unset collision property gives retail.
+	// SEAM for `m_Collision`'s vtable `+0x4` `OBBMins()` and `+0x8` `OBBMaxs()` (`+0x0270`), as the
+	// DEBUG overlays read it. Answering false takes the arm retail takes for an entity whose OBB mins
+	// and maxs are EQUAL on all three axes — the default ±5 box. Family Motor's
+	// `RetailCollisionExtents` answers the same words for an NPC since 0018 story 6 (its `m_eHull`
+	// row); this developer-overlay copy is left on the degenerate arm, and folding it onto that body
+	// is the overlays' own change (their cases, `NpcKernelDebug` / `NpcKernelDebug10`, pin this arm).
 	(void)OutMinsUnits;
 	(void)OutMaxsUnits;
 	return false;

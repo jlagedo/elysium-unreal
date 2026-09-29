@@ -29,33 +29,43 @@ namespace
 
 // --- `CAI_BaseNPCTroika::IsAreaClear` `0x102a0fb0` ----------------------------------------------
 
-bool FElysiumNpc::IsAreaClear(const FVector& FromCm, int32 Mask)
+bool FElysiumNpc::IsAreaClear(const FVector& FromCm, int32 Mask, const FVector* MinsUnits,
+	const FVector* MaxsUnits)
 {
-	// The whole body past the VProf scaffolding:
+	// `CAI_BaseNPCTroika::IsAreaClear(pos, mask, mins, maxs)` `0x102a0fb0` (`RET 0x10`, R2 §4), the
+	// whole body past the VProf scaffolding:
 	//
-	//     if (!mins) mins = m_Collision.OBBMins();
-	//     if (!maxs) maxs = m_Collision.OBBMaxs();
+	//     if (!mins) mins = m_Collision.OBBMins();                  // slot 1
+	//     if (!maxs) maxs = m_Collision.OBBMaxs();                  // slot 2
 	//     m_bForceNPCCheck = 1;                                     // +0x63da
-	//     CAI_MoveProbe::TraceHull( from, from, mins, maxs, mask, m_pMoveProbe, &tr, true );
+	//     UTIL_TraceHull( from, from, mins, maxs, mask, CTraceFilterNav(m_pMoveProbe->npc, +0x368),
+	//                     &tr, 1 );                                 // 0x1026e940, cylinder flag 1
 	//     m_bForceNPCCheck = 0;
-	//     return tr.fraction >= 1.0 && !tr.allsolid && !tr.startsolid;
+	//     return tr.fraction >= 1.0 && !tr.allsolid && !tr.startsolid;   // 102a110a..102a1134
 	//
 	// Start AND end are the same point, so it is a stationary hull test: "is anything already
 	// standing where I want to be". `m_bForceNPCCheck` is raised for exactly the duration of the
 	// trace, which is what makes the probe count OTHER NPCS as blockers for this one query and for
-	// no other — the flag is the whole reason the body is not just a trace call.
+	// no other — the flag is the whole reason the body is not just a trace call. The fraction test is
+	// `>=` with NaN passing, as the listing's flag test has it; `>= 1.0` on a float is the same set.
+	// Masks at retail's callers: `0x202400b` (`PickSpotFor 0x102da0d0`, `0x103acba0`, `0x1039ee20`)
+	// and `0x2400b` (`0x10397410`), the latter listing no character at all.
 	FVector ObbMins = FVector::ZeroVector;
 	FVector ObbMaxs = FVector::ZeroVector;
 	RetailCollisionExtents(*this, ObbMins, ObbMaxs);
+	const FVector& Mins = MinsUnits != nullptr ? *MinsUnits : ObbMins;
+	const FVector& Maxs = MaxsUnits != nullptr ? *MaxsUnits : ObbMaxs;
 
 	bForceNpcCheck = true;
 	FKernelHullTrace Trace;
-	KernelHullTrace(FromCm / NpcKernelPositions2Shared::GPositionsTailU, FromCm / NpcKernelPositions2Shared::GPositionsTailU, ObbMins, ObbMaxs, Mask, Trace);
+	const FVector AtUnits = FromCm / NpcKernelPositions2Shared::GPositionsTailU;
+	KernelHullTrace(AtUnits, AtUnits, Mins, Maxs, Mask, Trace);
 	bForceNpcCheck = false;
 
-	// The seam answers `Fraction = 1` when it cannot trace and carries neither solid flag, so an
-	// unanswered query reads CLEAR — retail's own answer for a trace that hit nothing.
-	return Trace.Fraction >= NpcKernelPositions2Shared::GPositionsTailRetailOne;
+	// A world with no collision answers `Fraction = 1` and neither solid flag, so an unanswered query
+	// reads CLEAR — retail's own answer for a trace that hit nothing.
+	return !(Trace.Fraction < NpcKernelPositions2Shared::GPositionsTailRetailOne) && !Trace.bAllSolid
+		&& !Trace.bStartSolid;
 }
 
 // --- Slot 563 `TranslateEnemyChasePosition`, eight bodies ---------------------------------------

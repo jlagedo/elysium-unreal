@@ -300,7 +300,8 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 	{
 		// Retail's second refusal is `ground->m_Collision == 0` (`+0x9c` on the resolved entity),
 		// and the body reads the ground entity's origin THROUGH that collision object. Family
-		// Motor's extents seam is the same absent collision property; a false answer is the refusal.
+		// Motor's `RetailCollisionExtents` answers an NPC's OBB and nothing for any other entity, so a
+		// false answer (a non-NPC ground) is the refusal.
 		StandingOnHeadTimer = 0.f;
 		return;
 	}
@@ -323,9 +324,14 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 	FVector MyMaxsUnits = FVector::ZeroVector;
 	RetailCollisionExtents(*this, MyMinsUnits, MyMaxsUnits);
 
+	// `KernelHullTrace` is in SOURCE units (the port's axes); the step is in centimetres, so both
+	// ends are converted at the call (0018 story 6: until then the trace was a seam that never read
+	// them, and the centimetres went unnoticed).
+	const double U = ElysiumMove::U;
 	FVector EndCm = Step.StartCm + Step.DeltaCm;
 	FKernelHullTrace Trace;
-	KernelHullTrace(Step.StartCm, EndCm, MyMinsUnits, MyMaxsUnits, GStandingOnHeadTraceMask, Trace);
+	KernelHullTrace(Step.StartCm / U, EndCm / U, MyMinsUnits, MyMaxsUnits, GStandingOnHeadTraceMask,
+		Trace);
 
 	// `102bfb7a`: a blocked or solid first trace and retail tries the OPPOSITE direction — the same
 	// start, the delta SUBTRACTED. It does not renormalise and it does not redraw; it simply pushes
@@ -333,7 +339,7 @@ void FElysiumNpc::ResolveStandingOnHead(float IntervalSeconds)
 	if (Trace.Fraction < GGeometryTraceClearFraction)
 	{
 		EndCm = Step.StartCm - Step.DeltaCm;
-		KernelHullTrace(Step.StartCm, EndCm, MyMinsUnits, MyMaxsUnits, GStandingOnHeadTraceMask,
+		KernelHullTrace(Step.StartCm / U, EndCm / U, MyMinsUnits, MyMaxsUnits, GStandingOnHeadTraceMask,
 			Trace);
 	}
 

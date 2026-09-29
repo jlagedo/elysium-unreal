@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -54,6 +55,34 @@ namespace
 	{
 		const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 		return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
+	}
+
+	// `SetPlayerLOS 0x10291610`'s mask (no MONSTER: no character is listed), and the `FVisible` mask
+	// (`0x2804091`) every sight caller in the kernel closure passes, which the sense pass's own
+	// `COND_SEE_PLAYER` reconstruction stands in for.
+	constexpr int32 PlayerLosMask = 0x4091;
+	constexpr int32 SightSeeMask = 0x2804091;
+
+	// The looker's eye to the target's eye under a retail mask, through the one sight trace
+	// (`ElysiumNpcSight::Visible`, retail's `CBaseEntity::FVisible` filter: NPCs are transparent, the
+	// player and solid props block, a hit on the target is clear). No embodiment is a headless run
+	// and reads clear, for the reason above.
+	bool SightClear(const FElysiumEntityWorld* World, const FElysiumEntity& Looker,
+		const FElysiumEntity& Target, int32 RetailMask)
+	{
+		const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment == nullptr)
+		{
+			return true;
+		}
+		ElysiumNpcSight::FVisibleQuery Query;
+		Query.EyeCm = Looker.EyePosition();
+		Query.TargetCm = Target.EyePosition();
+		Query.Mask = RetailMask;
+		Query.Looker = Looker.Handle;
+		Query.Target = Target.Handle;
+		Query.World = World;
+		return ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);
 	}
 
 	// The TARGET's own committed stealth surface (§5.9 -> `docs/vtmb/stealth.md` "Visual observer
@@ -508,10 +537,11 @@ void FElysiumNpcSenses::SetPlayerLos(FElysiumNpc& Npc, double Now)
 				}
 				else
 				{
-					// The eye-to-eye trace, retail's mask `0x4091`. The engine seam answers the
-					// one world term; the mask itself is the embodiment's business.
+					// The eye-to-eye trace, retail's mask `0x4091`. `SetPlayerLOS 0x10291610`'s
+					// line has no MONSTER bit, so no character is listed and only the world (and the props
+					// the mask admits) can stop it.
 					Memory.bPlayerLos =
-						SegmentClear(World, Npc.EyePosition(), Player->EyePosition());
+						SightClear(World, Npc, *Player, PlayerLosMask);
 					if (Memory.bPlayerLos)
 					{
 						Memory.PlayerLosLastClearTime = Now;
@@ -562,7 +592,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		// the enemy memory record, not the sighting.
 		Memory.bPlayerVisible = Memory.bPlayerInCone && Memory.bPlayerInRange
 			&& (DistanceCm <= NearBypassCm
-				|| SegmentClear(World, Npc.EyePosition(), Player->EyePosition()));
+				|| SightClear(World, Npc, *Player, SightSeeMask));
 	}
 
 	SeenThisPass.Reset();

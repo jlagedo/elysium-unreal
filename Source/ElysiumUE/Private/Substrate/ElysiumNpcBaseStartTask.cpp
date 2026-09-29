@@ -31,6 +31,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcGait.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
@@ -233,6 +234,7 @@ namespace ElysiumStartTask19Base
 	constexpr int32 WanderSplit = 10000;                 // the `0x68db8bad` / `SAR 12` divide at `0x10286ecc`
 	constexpr float LateralCoverStepUnits = 48.0f;       // `0x10447ee8`
 	constexpr int32 LateralCoverSteps = 5;               // `0x102784a0`'s `4 < i` exit
+	constexpr int32 LateralCoverSightMask = 0x2804091;   // `0x10278220`'s line (R2 §5)
 	constexpr int32 MemoryInCover = 0x2;                 // `m_afMemory &= 0xfffffffd` (`0x1028641b`)
 	constexpr uint32 MemoryPathFailed = 0x20;            // `0x102f1dc0`'s deferred-route bit
 	constexpr int32 ScriptStateCustomMove = 6;           // `m_scriptState == 6` (`0x102869bd`, `0x10286bdf`)
@@ -2644,9 +2646,17 @@ bool FElysiumNpcBase::StartTaskSetRandomGoal(float DistanceUnits, const FVector&
 		const int32 Pick = Band[ElysiumNpcEngineRandom::RandomInt(0, Band.Num() - 1)];
 		const FCandidate Candidate = Tier[Pick];
 		++StartTaskNav.LastRandomGoalDraws;
+		// The route is asked under the filter the walk will be searched under: the navigator's
+		// pedestrian pricing when the current request carries one (a type-8 goal's `path+0x1` byte,
+		// left standing: `InstallPathNoGoal` does not clear it), else the default filter (0). Retail
+		// never sets the byte for this task -- `SetRandomGoal 0x102ed430` writes no goal record -- so a
+		// pedestrian price here is only ever a previous goal's. Named gap: the walked leg then draws its
+		// own `RandomInt(5, 10)` (`MakeNavigatorMoveRequest`), so a stale pedestrian byte can price the
+		// asked route and the walked one differently; retail's single A* search has one draw.
 		FElysiumNpcRouteQuery RouteAsked;
 		RouteAsked.DestCm = Candidate.PositionCm;
-		RouteAsked.PedestrianCostMultiplier = 0;   // the default filter, as today
+		RouteAsked.PedestrianCostMultiplier = Navigator.bPedestrian && Navigator.bHeadLegRequestSet
+			? Navigator.HeadLegRequest.PedestrianCostMultiplier : 0;
 		FElysiumNpcRouteAnswer RouteFound;
 		if (Motor != nullptr && Motor->QueryRoute(RouteAsked, RouteFound) && RouteFound.LengthCm <= LongestRouteCm)
 		{
@@ -2674,12 +2684,14 @@ bool FElysiumNpcBase::StartTaskSetWanderGoal(float MinUnits, float MaxUnits)
 	//     }
 	//     return SetRandomGoal(1.0, vec3_origin);                               // 0x102ed940
 	//
-	// The ten draws are the engine stream's and are made. The radial probe `0x102ed610` is a SEAM
-	// (0018 story 5's navigator), answering false, so every call reaches the fallback -- which is the
-	// capped point pick above, called as retail calls it. Under the pick an order of `1.0` unit finds
-	// no place (retail's walk always takes one hop, because it stops only AFTER a step), so the
-	// fallback fails `0x18` where retail would reach a neighbouring node: part of the named
-	// modernization, and unreached by any shipped schedule.
+	// The ten draws are the engine stream's and are made. The radial probe `0x102ed610` is
+	// `StartTaskWanderRadialProbe` (0018 story 6), handed the drawn distance and the task MIN as its
+	// `minDist` (listing `102ed59a`; the decompiler shows min twice); the MIN reaches it through
+	// `StartTaskNav.LastSearchMinUnits`, written above. When all five fail the fallback is the capped
+	// point pick above, called as retail calls it. Under the pick an order of `1.0` unit finds no
+	// place (retail's walk always takes one hop, because it stops only AFTER a step), so the fallback
+	// fails `0x18` where retail would reach a neighbouring node: part of the named modernization, and
+	// unreached by any shipped schedule.
 	++StartTaskNav.WanderGoalRequests;
 	StartTaskNav.LastSearchMinUnits = MinUnits;
 	StartTaskNav.LastSearchMaxUnits = MaxUnits;
@@ -2701,11 +2713,50 @@ bool FElysiumNpcBase::StartTaskSetWanderGoal(float MinUnits, float MaxUnits)
 
 bool FElysiumNpcBase::StartTaskWanderRadialProbe(float YawDegrees, float DistanceUnits)
 {
-	// **SEAM** for `0x102ed610` -- the wander's radial probe along one heading (0018 story 5's
-	// navigator). Answers false: no probe stands here.
-	(void)YawDegrees;
-	(void)DistanceUnits;
-	return false;
+	using namespace ElysiumStartTask19Base;
+	// `0x102ed610(dir, dist, minDist, skip)` (R1 §6), the wander's radial probe along one heading:
+	//
+	//     end = GetOrigin() (slot 220) + dist * dir;
+	//     MoveLimit(nav+0x18, origin, end, 0x2400b, NULL, 100.0, 0, &tr, skip, NULL);   // NPCs not solid
+	//     if (blocked && dist - tr.flDistObstructed <= minDist) return false;          // 102ed6df
+	//     SetGoal(AI_NavGoal_t(GOALTYPE_LOCATION, tr.vEndPosition), 0);                 // flags 0
+	//
+	// The walk is the named modernization `MotorMoveTraceSweep` states for the ground arm: the body's
+	// NavMesh raycast (`IElysiumNpcMotor::NavRaycast`, default filter -- the ground test prices
+	// nothing). A hit is where the walk left the mesh; `flDistObstructed` is the 2-D distance still to
+	// go from there, so `dist - flDistObstructed` is how far the heading got. A motor with no NavMesh
+	// answers nothing, and the probe refuses (this seam's answer before 0018 story 6), so the caller
+	// reaches its fallback pick.
+	const double U = ElysiumMove::U;
+	const float MinDistUnits = StartTaskNav.LastSearchMinUnits;             // SetWanderGoal's task MIN
+	// `0x101d2f40(yaw)`: the 2-D heading `(cos, sin, 0)` in retail's axes; the port's Y is negated.
+	const double Radians = FMath::DegreesToRadians(static_cast<double>(YawDegrees));
+	const FVector Heading(FMath::Cos(Radians), -FMath::Sin(Radians), 0.0);
+	const FVector EndCm = Origin + Heading * (static_cast<double>(DistanceUnits) * U);
+	FElysiumNpcNavRaycast Ray;
+	Ray.FromCm = Origin;
+	Ray.ToCm = EndCm;
+	FElysiumNpcNavRaycastAnswer Answer;
+	if (Motor == nullptr || !Motor->NavRaycast(Ray, Answer))
+	{
+		return false;
+	}
+	FVector ReachedCm = EndCm;
+	if (Answer.bHit)
+	{
+		ReachedCm = Answer.HitCm;
+		const double ObstructedUnits = FVector::Dist2D(ReachedCm, EndCm) / U;
+		if (static_cast<double>(DistanceUnits) - ObstructedUnits <= static_cast<double>(MinDistUnits))
+		{
+			return false;
+		}
+	}
+	FStartTaskNavGoal Goal;
+	Goal.Type = GOALTYPE_LOCATION;
+	Goal.DestCm = ReachedCm;
+	Goal.bDestSet = true;
+	Goal.GoalFlags = 0;
+	return StartTaskSetGoal(Goal, 0);
 }
 
 bool FElysiumNpcBase::StartTaskFindLateralCover(const FVector& ThreatEyeCm, const FElysiumEntity* Ignore)
@@ -2741,16 +2792,33 @@ bool FElysiumNpcBase::StartTaskTestLateralCover(const FVector& ThreatEyeCm, cons
 	const FElysiumEntity* Ignore)
 {
 	using namespace ElysiumStartTask19Base;
-	(void)Ignore;   // the trace filter's ignore entity (`0x10278239` CTraceFilterSimple(this, param_3));
-	                // the port's sight service takes none
 	++StartTaskNav.LateralCoverTests;
-	// The ray from the threat's eye to the point at THIS NPC's eye height (`0x10278294` Ray_t::Init
-	// with point + view offset +0x184..+0x18c; `0x102782b8` enginetrace slot 4 TraceRay), mask
-	// `0x2804091`: a clear ray (`fraction == 1.0`) is not cover. No collision world means no cover.
-	// `0x102782c0` ConVar 0x10738960 test / `0x102782c7` JZ / `0x102782e9` the debug-overlay line of
-	// the trace: not ported (a developer overlay, nothing the bytecode observes).
+	// The LINE from the threat's eye to the point at THIS NPC's standing eye height (`0x10278294`
+	// Ray_t::Init with point + `m_vecViewOffset` +0x184..+0x18c; `0x102782b8` enginetrace slot 4
+	// TraceRay), mask `0x2804091`, filter `CTraceFilterSimpleTwoEnt(this, ignore, 0)` (`0x101ccd70`):
+	// the line must be BLOCKED -- `fraction == 1.0` rejects (`102782f8`). R2 §5: `TwoEnt`'s
+	// `ShouldHitEntity 0x101ccda0` has no `StandardFilterRules`, no BCC/hidden gate and no
+	// NPC-transparent gate, so third-party NPCs block this line (`bNpcsBlock`), unlike `FVisible`.
+	// No collision world means no cover. `0x102782c0` ConVar 0x10738960 test / `0x102782c7` JZ /
+	// `0x102782e9` the debug-overlay line of the trace: not ported (a developer overlay).
+	//
+	// `TwoEnt`'s two pass entities onto `ElysiumNpcSight::Visible`: THIS NPC (`Looker`) and
+	// `ignore` (`SecondIgnore`, `0x10278239`). There is no target: the verdict is only clear or
+	// blocked.
 	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Embodiment->QueryLineOfSight(ThreatEyeCm, PointCm + (EyePosition() - Origin)))
+	if (Embodiment == nullptr)
+	{
+		return false;
+	}
+	ElysiumNpcSight::FVisibleQuery Line;
+	Line.EyeCm = ThreatEyeCm;
+	Line.TargetCm = PointCm + (EyePosition() - Origin);
+	Line.Mask = LateralCoverSightMask;
+	Line.Looker = Handle;
+	Line.SecondIgnore = Ignore != nullptr ? Ignore->Handle : FElysiumEntityHandle::Invalid();
+	Line.World = World;
+	Line.bNpcsBlock = true;
+	if (ElysiumNpcSight::Visible(*Embodiment, Line, nullptr))
 	{
 		return false;
 	}

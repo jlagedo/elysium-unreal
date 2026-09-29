@@ -57,6 +57,8 @@ public:
 	virtual int32 TranslateScheduleRetail(int32 ScheduleNumber) override;
 	virtual float MaxYawSpeed() override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
+	// Slot 523 `0x103b6df0` (the stand test's drop, SDK-named `GetMaxJumpSpeed`): 56.0.
+	virtual float GetMaxJumpSpeed() const override;
 	virtual int32 DrawDebugTextOverlays() override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;

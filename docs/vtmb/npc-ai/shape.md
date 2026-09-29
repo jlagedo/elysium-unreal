@@ -1232,11 +1232,27 @@ hull from `GetAbsOrigin() + (0,0,0.1)` (`_DAT_104493d0`) to `GetAbsOrigin() - (0
 that is not already `GetGroundEntity()` (slot 209), it adopts it. The deadline is stamped BEFORE the
 trace, so a refused probe still costs half a second.
 
-`CAI_BaseNPCTroika::CanStandAt` (`0x102a0ed0`, 167 bytes) is three statements:
-`m_bForceNPCCheck (+0x63da) = 1`, `m_pMoveProbe (+0x5d40)->CheckStandPosition(pos, …, 0, 0)`
-(`0x102e7270`), `m_bForceNPCCheck = 0`. The BRACKET is the behaviour — for the duration of the probe
-both collision-ignore chains below skip their NPC/player/sleeping arm, so the probe sees other NPCs
-as solid.
+`CAI_BaseNPCTroika::CanStandAt` (`0x102a0ed0`, 167 bytes, `RET 0x10`) is three statements:
+`m_bForceNPCCheck (+0x63da) = 1`, `m_pMoveProbe (+0x5d40)->CheckStandPosition(pos, mask, mins, maxs,
+0, 0)` (`0x102e7270`), `m_bForceNPCCheck = 0`. The BRACKET is the behaviour — for the duration of the
+probe both collision-ignore chains below skip their NPC/player/sleeping arm, so the probe sees other
+NPCs as solid.
+
+**`CheckStandPosition 0x102e7270` — the arguments and the box (2026-09-29, 0018 story 6, R1 §1).**
+`RET 0x18`: a1 `pos*`; **a2 is the collision MASK**, forwarded to the trace; a3 / a4 `mins*` /
+`maxs*`, NULL at every retail caller, which takes the NPC's `m_Collision` (`+0x270`) slots 1 / 2 =
+`+0x274` / `+0x280` (`0x100dc810` / `0x100dc830`) — **the current collision box, not a hull-table
+row**; **a5 is never read** (no `[ESP+0xc0]` access; `0x102e6290` and `CheckStep` pass values into
+it); a6 is a `surfacedata_t**` out, filled on a pass from `physprops(0x10723944)->slot5(tr.surface.
+surfaceProps)` (`102e7455`). One `UTIL_TraceHull 0x1026e940` from `pos + (0,0,0.1)` (`102e72af`)
+to `(x, y, pos.z − slot 523)` (`102e72b9`), box x/y `0.75·mins + 0.25·maxs … 0.25·mins +
+0.75·maxs`, z = `mins.z` both ends, filter `CTraceFilterNavGround 0x102e3290` (the NPC, its
+`+0x368` group). Standable iff `fraction != 1.0` (`102e741a`) AND slot 166 `CanStandOn(tr.m_pEnt)`.
+**`startsolid` / `allsolid` are never tested: a trace that starts inside a body is a hit (fraction 0)
+and goes to `CanStandOn` as standing on it.** Nothing is written. Port: `FElysiumNpc::
+MoveProbeCheckStandPosition(pos, mask, mins*, maxs*)` over family Motor's `KernelHullTrace`;
+`FElysiumNpcBase::RetailCollisionExtents` answers an NPC's OBB (its `m_eHull` row, full or small as
+`m_fIsUsingSmallHull` stands) and nothing for any other entity.
 
 `CNPC_VWerewolf::GetGroundpoint` (`0x103d6a40`, 553 bytes) traces the `m_eHull` (`+0x1568`) extents
 (`0x102d6140` / `0x102d6160`) straight down `_DAT_10447ee0 = 1000.0` units from the caller's point,
@@ -1252,7 +1268,8 @@ readers use as `vec3_origin`.
 
 **Unrecovered:** what `GetMoveType() == 7` names (retail's move-type numbering is not itemised
 here); what condition `0x73` is called — it sits in the unnamed tail of `CAI_BaseNPC`'s 0x00..0x76
-registrar; and `CheckStandPosition`'s flags argument.
+registrar. (`CheckStandPosition`'s "flags argument", listed here until 2026-09-29, does not exist:
+argument 2 is the mask and argument 5 is dead — R1 §1, above.)
 
 ## `ValidateNavGoal` and `MoveDone` — `0x10280360`, `0x101c1720`, `0x10026c50`
 
@@ -1385,6 +1402,12 @@ SAME 18.0, while `CAI_BaseNPCTroika` (`0x101aa670`) overrides it with `_DAT_1044
 (Port, 2026-09-27, 0019 story 5 fold A1: `FElysiumNpcBase::GetMaxJumpSpeed` had been a generated
 stub answering 0 for `0x101a6b60`; it now answers the `0x10453b94` cell, 18.0 — the listing is
 `FLD float ptr [0x10453b94]; RET`.)
+**Slot 523's full fill (2026-09-29, 0018 story 6, R1 §5):** `CAI_BaseNPC 0x101a6b60` 18.0; Troika
+`0x101aa670` 36.0; `CAI_TestHull 0x102d72d0` 40.0; **`CNPC_VMingXiao 0x10391050` 50.0**
+(`0x1044ffe8`); **`CNPC_VMingXiaoTentacle 0x1039b070` 30.0** (`0x104492a8`); **`CNPC_VTzimisce
+0x103b6df0` 56.0** (`0x104cc500`); no other fill. The three species rows are ported on their own
+classes; the slot keeps the generated table's SDK name `GetMaxJumpSpeed` until
+`npc-kernel/signatures.tsv` row 523 is renamed.
 **Jump gravity** (slot 524, `0x101a6b80`) is `_DAT_10477ce8 = 350.0` and nothing overrides it — zero
 dispatch sites in the closure, but the slot is filled, so the body is not dead. `CAI_TestHull`
 answers 522 and 523 with one constant, `_DAT_10462950 = 40.0` (`0x102d72b0`, `0x102d72d0`).
@@ -1451,7 +1474,11 @@ Slot 166 (`0x10026f80`, 28 bytes) is two lines: a null candidate is standable, a
 answers its own `IsStandable()` (slot 164, `0x100b50a0` — solid flags `0x10` clear, then move type
 1 / 6 / 2, else `0x100b5110`). `CNPC_VMingXiaoTentacle#166` (`0x1039ebd0`) adds one arm in front:
 its own companion (`0x1039ede0`) is never standable, which excludes the tentacle's head from its own
-test.
+test. **The base is not the only other fill (2026-09-29, 0018 story 6, R1):** `CNPC_VMingXiao#166`
+(`0x10397000`) refuses its twelve tentacle handles — `m_rhProxies` (`+0x668c`) and
+`m_rhSeveredTentacles` (`+0x66a8`), six each — before falling to the base; and the tentacle's refused
+entity is `0x1001105e`'s answer, whose identity is unrecovered. Slot 166 is what
+`CheckStandPosition 0x102e7270` asks of the trace's `m_pEnt`.
 
 Slot 210 (`0x10027370`, 33 bytes) writes the three shared statics `DAT_1070d1b0/b4/b8` into its
 `Vector&` out-parameter. `staticinit_101370b0` zeroes all three and nothing else writes them, and
@@ -1767,8 +1794,13 @@ if (m_strHintGroup && (!pHint || pHint->m_strGroup (+0x5f0) != m_strHintGroup)) 
 return true;
 ```
 
-The trace's end is barely below its start — the hull's own `mins.z` plus a hundredth of a unit — so
-it is a STANDING hull test at the spot rather than a drop test. `IsValidShootPosition` (slot 549) is
+**CORRECTED 2026-09-29 (0018 story 6, R2 §3):** the trace's end is `0.01 − NAI_Hull::Mins(m_eHull).z`
+ABOVE its start, not below: HUMAN_HULL's mins are `(−13,−13,0)` (static init `0x102d4440`), so for
+every hull whose mins.z is 0 the end sits a hundredth of a unit UP. It is a near-zero-length
+STANDING hull probe at the spot rather than a drop test. The extents are `m_Collision`'s OBB slots
+(`1028af87`, `1028af90`) — the hull enum feeds only the end's z — and `Ray_t::Init(p, end, mins,
+maxs, 1, 0)` asks the engine's cylinder test. The only `trace_t` word read is `startsolid`
+(`+0x37`, `1028b00c`); the fraction is not. `IsValidShootPosition` (slot 549) is
 36 bytes: the hint-group half alone, with no trace and with its position argument never read, so an
 NPC that has been given no hint group accepts every shoot position.
 
@@ -1780,11 +1812,18 @@ move probe count other NPCs as blockers for this one query and for no other.
 
 The hull table `PTR_DAT_1060a750` all three reach (`FUN_102d6100` is `table[hull] + 8`, the mins;
 `FUN_102d6120` is `+0x14`, the maxs; `FUN_102d61b0` is `maxs.y - mins.y`, the width) points at
-records that live past `.data`'s raw size in the pinned image: they are filled at runtime and are not
-readable from the file.
+records that live past `.data`'s raw size in the pinned image: they are filled at runtime. Their
+contents were since replayed from the image's own static initialisers (`docs/vtmb/data/
+hull_table.json`, `Substrate/ElysiumRetailHullTable.h`).
 
-**Unrecovered:** the hull table's contents, and therefore every number derived from `m_eHull`
-(`+0x1568`).
+`IsAreaClear 0x102a0fb0` in full (2026-09-29, 0018 story 6, R2 §4): `(pos, mask, mins, maxs)`,
+`RET 0x10`; null mins / maxs take `m_Collision` slots 1 / 2; `UTIL_TraceHull(pos, pos, mins, maxs,
+mask, CTraceFilterNav(m_pMoveProbe->npc, +0x368), &tr, 1)` — start == end, cylinder flag 1 —
+inside the `m_bForceNPCCheck` bracket; true iff `fraction >= 1.0` (NaN passes) and neither
+`allsolid` (`+0x36`) nor `startsolid` (`+0x37`) (`102a110a..102a1134`). Masks at the callers:
+`0x202400b` (`PickSpotFor 0x102da0d0`, `0x103acba0`, `0x1039ee20`), `0x2400b` (`0x10397410`).
+Port: `FElysiumNpc::IsAreaClear(pos, mask, mins*, maxs*)`, and `IsValidCover` now reads the trace's
+`startsolid`.
 
 ## `EnemyCouldSeeHull` — `0x10366510`, `0x103da230`
 

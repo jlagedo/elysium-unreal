@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 
@@ -28,10 +29,26 @@ namespace
 	// Named distinctly from `ElysiumNpcSenses.cpp`'s identical anonymous-namespace helper: a unity
 	// build can place both files in the same translation unit, where two same-named anonymous
 	// namespaces collide as one true redefinition rather than two internally-linked ones.
-	bool WitnessSegmentClear(const FElysiumEntityWorld* World, const FVector& FromCm, const FVector& ToCm)
+	//
+	// CHOSEN, NOT RECOVERED: the recovered acceptance says "an unobstructed trace" and names no mask,
+	// so this asks the sight mask `0x2804091` every `FVisible` caller uses, through the one sight
+	// trace (`ElysiumNpcSight::Visible`): the witness NPC is the looker and the record's offender the
+	// target, so NPCs are transparent, the player's body blocks, and a hit on the offender is clear.
+	bool WitnessSegmentClear(const FElysiumEntityWorld* World, const FElysiumEntity& Witness,
+		const FVector& ToCm, const FElysiumEntityHandle& Offender)
 	{
 		const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
+		if (Embodiment == nullptr)
+		{
+			return true;
+		}
+		ElysiumNpcSight::FVisibleQuery Query;
+		Query.EyeCm = Witness.EyePosition();
+		Query.TargetCm = ToCm;
+		Query.Looker = Witness.Handle;
+		Query.Target = Offender;
+		Query.World = World;
+		return ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);
 	}
 
 	// `nosferatu_tolerrant`, off the world's own policy leaf. The SEAM this reads under is stated at
@@ -420,7 +437,7 @@ namespace
 			{
 				continue;
 			}
-			if (!WitnessSegmentClear(World, Npc.EyePosition(), Record.Origin))
+			if (!WitnessSegmentClear(World, Npc, Record.Origin, Record.Offender))
 			{
 				continue;
 			}

@@ -630,6 +630,14 @@ bool FElysiumNpcTzimisce::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
+// Slot 523: `0x103b6df0`, one load of `_DAT_104cc500` = 56.0. The slot is the STEP-DOWN height
+// (R1 §5): `CheckStandPosition 0x102e7270`'s drop below the feet, whatever the SDK slot table calls
+// it. (Slot 522's own override `0x103b6dd0`, 26.0, is outside 0018 story 6 and not ported here.)
+float FElysiumNpcTzimisce::GetMaxJumpSpeed() const
+{
+	return ElysiumNpcTunables::TzimisceMaxJumpSpeed;
+}
+
 // Slot 124: `0x103c08d0`
 /** `CNPC_VTzimisce::DrawDebugTextOverlays` (`0x103c08d0`) — the Troika body, then one `Body - …`
  *  line under bit 0 built from a cross-NPC latch pair of globals. */

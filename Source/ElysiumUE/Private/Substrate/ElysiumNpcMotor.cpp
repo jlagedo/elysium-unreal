@@ -53,6 +53,14 @@ namespace
 	// The active weapon's capability mask `CAI_BaseNPCTroika::ShouldMoveAndShoot` requires.
 	constexpr uint32 GWeaponMoveShootMask = 0x6000;
 
+	// `CheckStandPosition 0x102e7270`'s constants, all three doubles in `.rdata`: the start's lift
+	// (`0x104493d0`, `102e72af`) and the foot box's two blend weights (`0x10462958`, `0x10449260`).
+	constexpr double GStandLiftUnits = ElysiumNpcTunables::TenthDouble;
+	constexpr double GStandFootNear = 0.75;
+	constexpr double GStandFootFar = 0.25;
+	// `102e741a` `TEST AH,0x44 / JNP`: the trace hit iff its fraction is not exactly 1.0.
+	constexpr float GStandClearFraction = 1.0f;
+
 	// --- The movement-tunables table ------------------------------------------------------------
 
 	// The `ConVar*` globals this family's ladders read, as `IsCommand() ? 0.0f : m_fValue`. The two
@@ -99,14 +107,51 @@ int32 FElysiumNpc::NavNodeWordAt(int32 RouteStepIndex) const
 // The motor seams.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 ProbeFlags) const
+bool FElysiumNpc::MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 Mask,
+	const FVector* MinsUnits, const FVector* MaxsUnits) const
 {
-	// `thunk_FUN_102e7270(m_pMoveProbe, pos, …, 0, 0)` — `CAI_MoveProbe::CheckStandPosition`.
-	// **SEAM**: `m_pMoveProbe` (+0x5d40) is a CHAIN row onto a mover that answers no hull probe.
-	(void)PositionUnits;
-	(void)ProbeFlags;
+	// `CAI_MoveProbe::CheckStandPosition` `0x102e7270` (R1 §1), from the listing:
+	//
+	//     mins = a3 ? *a3 : npc->m_Collision.OBBMins();         // 0x100dc810, +0x274
+	//     maxs = a4 ? *a4 : npc->m_Collision.OBBMaxs();         // 0x100dc830, +0x280
+	//     start = pos + (0, 0, 0.1);                            // 102e72af
+	//     end   = (pos.x, pos.y, pos.z - npc->slot523());       // 102e72b9, JMP [EAX+0x82c]
+	//     boxMins = (0.75*mins.xy + 0.25*maxs.xy, mins.z);
+	//     boxMaxs = (0.25*mins.xy + 0.75*maxs.xy, mins.z);
+	//     UTIL_TraceHull(start, end, boxMins, boxMaxs, a2, CTraceFilterNavGround(npc, +0x368), &tr, 1);
+	//     if (tr.fraction == 1.0) return 0;                     // 102e741a
+	//     if (!npc->slot166(tr.m_pEnt)) return 0;               // CanStandOn, JMP [EAX+0x298]
+	//     if (a6) *a6 = physprops->slot5(tr.surface.surfaceProps);   // 102e7455
+	//     return 1;
+	//
+	// `startsolid` / `allsolid` are never read: a trace that starts inside a body has fraction 0 and
+	// goes to `CanStandOn` as a hit on it. Argument 5 is dead; argument 6 has no port reader. Nothing
+	// is written. The debug box pair (`npc+0x224 & 0x800000`) is a developer overlay, not ported.
 	++MotorSeams.MoveProbeChecks;
-	return false;
+	FVector ObbMins = FVector::ZeroVector;
+	FVector ObbMaxs = FVector::ZeroVector;
+	RetailCollisionExtents(*this, ObbMins, ObbMaxs);
+	const FVector Mins = MinsUnits != nullptr ? *MinsUnits : ObbMins;
+	const FVector Maxs = MaxsUnits != nullptr ? *MaxsUnits : ObbMaxs;
+	const FVector FootMins(GStandFootNear * Mins.X + GStandFootFar * Maxs.X,
+		GStandFootNear * Mins.Y + GStandFootFar * Maxs.Y, Mins.Z);
+	const FVector FootMaxs(GStandFootFar * Mins.X + GStandFootNear * Maxs.X,
+		GStandFootFar * Mins.Y + GStandFootNear * Maxs.Y, Mins.Z);
+	const FVector StartUnits(PositionUnits.X, PositionUnits.Y, PositionUnits.Z + GStandLiftUnits);
+	// Slot 523 -- the STEP-DOWN height, whatever the generated slot table calls it: 36.0 on the Troika
+	// line, 50.0 Ming Xiao, 30.0 the tentacle, 56.0 Tzimisce (R1 §5).
+	const FVector EndUnits(PositionUnits.X, PositionUnits.Y, PositionUnits.Z - GetMaxJumpSpeed());
+	FKernelHullTrace Trace;
+	// A world with no collision leaves the clear default (fraction 1.0), which refuses: the answer
+	// this seam gave before 0018 story 6.
+	KernelHullTrace(StartUnits, EndUnits, FootMins, FootMaxs, Mask, Trace);
+	if (Trace.Fraction == GStandClearFraction)
+	{
+		return false;
+	}
+	FElysiumEntity* const Ground = World != nullptr && Trace.HitEntity.IsSet()
+		? World->Resolve(Trace.HitEntity) : nullptr;
+	return const_cast<FElysiumNpc*>(this)->CanStandOn(Ground);        // slot 166
 }
 
 int32 FElysiumNpc::RetailDerivedType(const FElysiumEntity& Entity)
@@ -195,7 +240,14 @@ float FElysiumNpc::GetMaxJumpSpeed() const
 	// slot 523. `CAI_BaseNPCTroika::GetMaxJumpSpeed` `0x101aa670` returns `_DAT_1044faa8` = 36.0 —
 	// a DIFFERENT constant from the base's `0x101a6b60`, which returns the same 18.0 as its step
 	// height. `CAI_TestHull::GetMaxJumpSpeed` `0x102d72d0` is its own class's override
-	// (`FElysiumNpcTestHull`), on the `CAI_BaseNPC` line and never below this one.
+	// (`FElysiumNpcTestHull`), on the `CAI_BaseNPC` line and never below this one; Ming Xiao
+	// (`0x10391050`, 50.0), its tentacle (`0x1039b070`, 30.0) and the Tzimisce (`0x103b6df0`, 56.0)
+	// override it below this one.
+	//
+	// **Slot 523 is the STEP-DOWN height, not a jump speed** (R1 §5): its readers are the move
+	// probe's forwarder `0x102e7e20`, i.e. `CheckStandPosition 0x102e7270`'s drop below the feet
+	// (`MoveProbeCheckStandPosition`) and `TestGroundMove 0x102e4f50`'s down-step. The SDK name is the
+	// generated slot table's (`signatures.tsv` row 523) and is kept until that table is renamed.
 	return NpcKernelMotorShared::GMaxJumpSpeedTroika;
 }
 
@@ -447,17 +499,20 @@ bool FElysiumNpc::ShouldMoveAndShoot()
 // The non-slot bodies.
 // -------------------------------------------------------------------------------------------------
 
-bool FElysiumNpc::CanStandAt(const FVector& PositionUnits, int32 InFlags)
+bool FElysiumNpc::CanStandAt(const FVector& PositionUnits, int32 Mask, const FVector* MinsUnits,
+	const FVector* MaxsUnits)
 {
-	// `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0`:
+	// `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` (R1 §2):
+	//     ScopeTrace push { "CAI_BaseNPCTroika::CanStandAt", m_iName or "" };   // debug context only
 	//     m_bForceNPCCheck = 1;
-	//     result = m_pMoveProbe->CheckStandPosition(pos, …, 0, 0);
+	//     result = m_pMoveProbe->CheckStandPosition(pos, mask, mins, maxs, 0, 0);
 	//     m_bForceNPCCheck = 0;
-	// The bracket is the whole of the recovered behaviour: for the duration of the probe the two
-	// collision-ignore chains skip their NPC/player/sleeping arm, so the probe sees other NPCs as
-	// solid. `m_bForceNPCCheck` (+0x63da) is bound but was read by nothing in the port until now.
+	// The bracket is the whole of the recovered behaviour: for the duration of the probe this NPC's
+	// slot 68 skips its NPC/player/sleeping arm (`IgnoreCollisionSharedHead`), so the stand trace's
+	// character filter (`KernelTraceKeepsCharacter`) keeps other NPCs -- and, for an NPC carrying
+	// `NAV_IGNORE_NPC`, the player -- as solid.
 	bForceNpcCheck = true;
-	const bool bResult = MoveProbeCheckStandPosition(PositionUnits, InFlags);
+	const bool bResult = MoveProbeCheckStandPosition(PositionUnits, Mask, MinsUnits, MaxsUnits);
 	bForceNpcCheck = false;
 	return bResult;
 }

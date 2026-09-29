@@ -33,6 +33,7 @@
 #include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScheduleText.h"
@@ -45,6 +46,7 @@
 // one, so the unity build cannot collide it with L02's half.
 namespace StartTask19A
 {
+	constexpr int32 DieIfPlayerCantSeeMask = 0x4091;              // TASK_DIE_IF_PLAYER_CANT_SEE ray, 0x102a3294..0x102a32d3, no MONSTER
 	constexpr int32 TaskSuggestState = 0x06;                      // TASK_SUGGEST_STATE
 	constexpr int32 TaskGetPathToEnemy = 0x0f;                    // TASK_GET_PATH_TO_ENEMY
 	constexpr int32 TaskGetPathToHintNode = 0x16;                 // TASK_GET_PATH_TO_HINTNODE
@@ -1936,10 +1938,20 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 			// Own eye (`GetOrigin` slot 220 + `m_vecViewOffset`) to the player's eye, mask `0x4091`
 			// (`0x102a3294 0x1004f7a0`, `0x102a32a0 0x101d3190(&filter, this, 0)`, `0x102a32c4` / 0x102a32cc 0x102a32d3
 			// enginetrace `+0x10`). The debug line (`0x102a32f5`, gated by `0x10005b87(0x10738960)`)
-			// is debug drawing. The port's trace is the embodiment's line of sight.
+			// is debug drawing. The filter is `CTraceFilterSimple(this, 0)`: this NPC ignored, the
+			// player NOT (mask `0x4091` carries no MONSTER, so no character is listed and only the
+			// world can stop the line), which `ElysiumNpcSight::Visible` answers with the player as
+			// its target.
 			IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+			ElysiumNpcSight::FVisibleQuery Query;
+			Query.EyeCm = EyePosition();
+			Query.TargetCm = Player->EyePosition();
+			Query.Mask = StartTask19A::DieIfPlayerCantSeeMask;
+			Query.Looker = Handle;
+			Query.Target = Player->Handle;
+			Query.World = World;
 			const bool bClear = Embodiment != nullptr
-				&& Embodiment->QueryLineOfSight(EyePosition(), Player->EyePosition());  // 0x102a3242
+				&& ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);        // 0x102a3242
 			if (bClear)                                                       // 0x102a32fd FCOMP 1.0; JNP / 0x102a330f
 			{
 				return 0;

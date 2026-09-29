@@ -361,6 +361,9 @@ bool FElysiumNpcBase::Conditions19NavNotOnNetwork() const
 
 bool FElysiumNpcBase::Conditions19RayReaches(const FVector& FromCm, const FVector& ToCm) const
 {
+	// The family's plain world ray: brush-only, no character listed, and not `FVisible`'s. Its
+	// callers name their own retail masks (`0x600400b`, `0x400b`, ...) at their sites; `ElysiumNpcSight`
+	// is the sight trace and carries the character rule.
 	const IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
 }
@@ -400,6 +403,9 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 	// Slot 201 on THIS with the parameter, mask `0x2804091`, the blocker cell and the counter's
 	// current value. The port's slot takes the blocker by value, so no blocker comes back (SEAM,
 	// `ElysiumNpcSenses10.inl`), and the at-limit arm below records none.
+	// The counter IS the fourth argument (`FVisibleTargetOrigin 0x100a72e0`): each consecutive miss
+	// aims the ray at the next point, eye (0), OBB centre (1), then the eight corners (2..9), and the
+	// tenth miss is the occlusion. `FElysiumNpc::FVisible` reads it (`ElysiumNpcSight::VisibleTargetOrigin`).
 	if (FVisible(Enemy, Cond19EnemyVisibleMask, nullptr, BaseMemory.EnemyOccludedCheck))   // 10270b76..10270b93 / 10270b9b
 	{
 		BaseMemory.EnemyOccludedCheck = 0;                               // 10270bb1

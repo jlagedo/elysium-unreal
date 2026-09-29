@@ -7,6 +7,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumUseIcons.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
 #include "Visual/ElysiumNpcBody.h"
 
 #include "GameFramework/Pawn.h"
@@ -98,6 +99,15 @@ void UElysiumBrushComponent::FinishInit(const FElysiumEntityHandle& InOwner,
 	BuiltSolidity = Solidity;
 	BuiltSignature = ContentsSignature;
 	ApplySolidity(Solidity);
+	// A mover (0018 story 6). R2 section 2: `StandardFilterRules 0x101d3080` rejects a movetype-8
+	// (MOVETYPE_PUSH) entity unless the trace mask carries MOVEABLE `0x4000`, and the geometry seam
+	// drops this bit through `IgnoreMask` for such a mask. Worn by EVERY brush-entity body: each
+	// solid brush class the port builds (func_door*, func_button, func_brush, func_rotating,
+	// func_movelinear, trains, func_breakable) spawns MOVETYPE_PUSH in the Source lineage VtMB
+	// ships -- read from the Source SDK, not yet walked in `vampire.dll`. A trigger or a passable
+	// body blocks no retail trace channel, so the bit changes nothing for them. No other query in
+	// the port sets an ignore mask, so movement and overlaps are unchanged.
+	SetMaskFilterOnBodyInstance(ElysiumRetailMask::MoverMaskBit);
 
 	// The single overlap tap (bound once; events fire only after RegisterComponent).
 	OnComponentBeginOverlap.AddDynamic(this, &UElysiumBrushComponent::HandleBeginOverlap);

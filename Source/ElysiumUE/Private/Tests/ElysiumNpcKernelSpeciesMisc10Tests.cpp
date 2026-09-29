@@ -840,10 +840,15 @@ bool FElysiumSpeciesMisc10PedestrianCorpseTest::RunTest(const FString&)
 	TestTrue(TEXT("`103a391c`: ThinkSet(NULL, 0.0, NULL) — the think is stopped"),
 		Pedestrian->bPedestrianCorpseThinkStopped);
 	TestEqual(TEXT("`103a396b`: SetSolid(SOLID_NONE)"), Pedestrian->PedestrianCorpseSolid, 0);
-	// The snapshot itself reads family Motor's `RetailCollisionExtents` seam, which answers false
-	// with both vectors at zero — retail's own answer for an entity with no collision extents.
-	TestTrue(TEXT("`103a38c6`: the pre-death mins are the seam's answer"),
-		Pedestrian->PedestrianPreDeathMinsUnits.IsNearlyZero());
+	// The snapshot reads `m_Collision`'s OBB (`+4` mins / `+8` maxs) as it stands BEFORE the base
+	// resizes the hull: the pedestrian's standing hull `m_eHull` (`+0x1568`) FULL row, HUMAN_HULL
+	// (hull 0: `(-13,-13,0)..(13,13,72)`, static init `0x102d4440`).
+	TestEqual(TEXT("the pedestrian stands HUMAN_HULL"), Pedestrian->HullKind, 0);
+	TestFalse(TEXT("on its full box (no small hull before death)"), Pedestrian->bIsUsingSmallHull);
+	TestEqual(TEXT("`103a38c6`: the pre-death mins are HUMAN_HULL's full mins"),
+		Pedestrian->PedestrianPreDeathMinsUnits, FVector(-13.0, -13.0, 0.0));
+	TestEqual(TEXT("`103a38e8`: the pre-death maxs are HUMAN_HULL's full maxs"),
+		Pedestrian->PedestrianPreDeathMaxsUnits, FVector(13.0, 13.0, 72.0));
 	return true;
 }
 

@@ -27,11 +27,12 @@ int32 HullKind = 0;
 
 FNavigator Navigator;
 
-/** `thunk_FUN_1026e940` / `(*DAT_1070b254)->TraceRay` — the engine hull trace `CheckOnGround`
- *  (`0x1026e5e0`), `ValidateNavGoal` (`0x10280360`) and `GetGroundpoint` (`0x103d6a40`) run, all
- *  three with mask `0x202400b`. **SEAM**: nothing in this substrate traces a hull for the kernel;
- *  answers false, which every caller reads as retail's CLEAR trace (`fraction == 1.0`) and no hit
- *  entity. */
+/** `UTIL_TraceHull 0x1026e940` / `(*DAT_1070b254)->TraceRay` as the kernel reads its `trace_t`: the
+ *  engine hull trace `CheckOnGround` (`0x1026e5e0`), `CheckStandPosition` (`0x102e7270`),
+ *  `IsValidCover` (`0x1028af20`), `IsAreaClear` (`0x102a0fb0`), `ValidateNavGoal` (`0x10280360`)
+ *  and every other probe body run. Filled by `KernelHullTrace` from `IElysiumEmbodiment::
+ *  TraceRetail` (0018 story 6). The defaults are retail's CLEAR trace (`fraction == 1.0`, no hit
+ *  entity), which is also what a world with no collision answers. */
 struct FKernelHullTrace
 {
 	float Fraction = 1.f;                  // trace_t +0x2c — 1.0 is "nothing in the way"
@@ -243,8 +244,31 @@ bool MotorApplyIntervalMovement(const FVector& DeltaUnits, float YawDelta);
  *  kernel; answers false with the delta zeroed. */
 bool AnimIntervalMovement(float Interval, FVector& OutDeltaUnits, float& OutYawDelta) const;
 
+/** `UTIL_TraceHull 0x1026e940` under the kernel's trace filters (0018 story 6, R1 §3): one
+ *  `IElysiumEmbodiment::TraceRetail` from `StartUnits` to `EndUnits` with the box `HullMins` ..
+ *  `HullMaxs` (a zero box is a ray, `Start == End` an overlap) under the retail `Mask`, this NPC
+ *  ignored, and then the filter's CHARACTER rule applied to the seam's character list
+ *  (`KernelTraceKeepsCharacter`); the nearest kept character is folded into `Fraction` /
+ *  `HitEntity` / `bStartSolid` when it is nearer than the world hit.
+ *
+ *  **Frame**: SOURCE units in the PORT's axes -- a position is `Cm / ElysiumMove::U`, Y not negated
+ *  (the frame nearly every caller already hands in); the box is retail's own (Source axes), so its Y
+ *  pair is mirrored at the seam. `EndPosUnits` comes back in the same frame.
+ *
+ *  False = no collision world behind this NPC (headless, a double that has not opted in): `OutTrace`
+ *  keeps retail's clear defaults with `EndPosUnits = EndUnits`. Counted on `MotorSeams.HullTraces`. */
 bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const FVector& HullMins,
 	const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const;
+
+/** The character half of the kernel's trace filters, over one body `TraceRetail` listed (R1 §3,
+ *  R2 §1): `CTraceFilterNavGround 0x102e32d0` / `CTraceFilterNav 0x102e30d0` and the
+ *  `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` they end on. A character is considered at all
+ *  only when the mask carries MONSTER `0x2000000` (`StandardFilterRules 0x101d3080`); then a combat
+ *  character with `m_bIsBCCTargetable (+0x1480) == 0` or `m_bScriptHidden (+0xf4)` is skipped
+ *  (`101d3284`), and -- unless the mask is `0x46004003` -- one whose own slot 68 ignores this NPC,
+ *  or whom this NPC's slot 68 ignores, is skipped. This NPC's slot 68 is where `m_bForceNPCCheck`
+ *  (`+0x63da`) acts (`IgnoreCollisionSharedHead`). True = the character blocks. */
+bool KernelTraceKeepsCharacter(const FElysiumEntityHandle& Character, int32 Mask) const;
 
 /** The shared hull table's mins and maxs for a hull id, in SOURCE units.
  *
@@ -254,8 +278,12 @@ bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const F
 bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits) const;
 
-/** `m_Collision`'s slots +4 / +8 — an entity's OBB mins and maxs, SOURCE units, which `CheckStuck`
- *  (`0x103ab580`) builds both boxes from. **SEAM**: `FElysiumEntity` carries no collision extents;
+/** `m_Collision` (`+0x270`) slots 1 / 2 (`CCollisionProperty +0x4 / +0x10`, `0x100dc810` /
+ *  `0x100dc830`) — an entity's OBB mins and maxs, SOURCE units (retail axes), relative to its origin.
+ *  For an NPC it is what `UTIL_SetSize` last wrote: the standing hull `m_eHull` (`+0x1568`, the box
+ *  word, `HullKind`)'s FULL row (`SetHullSizeNormal 0x10273070`), or its SMALL row while
+ *  `m_fIsUsingSmallHull` (`+0x5f2d`) stands (`SetHullSizeSmall 0x10273180`). **SEAM** for every other
+ *  entity (the player, props, brush entities): their `+0x274` / `+0x280` words have no source here;
  *  answers false with both left at zero. */
 static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits);

@@ -87,14 +87,33 @@ void FElysiumNpcBase::ThinkSet(const TCHAR* Function, double Delay)
 
 bool FElysiumNpcBase::MoveProbeFloorDrop(FVector& InOutOriginUnits)
 {
-	// SEAM for `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe +0x5d40`, mask `0x202400b`,
-	// swept from `0.0` down to `-256.0`. Retail answers 1 when the sweep FOUND floor (fraction != 1)
-	// and writes `param_5 = trace.endpos`; it answers 0 — the "stuck in wall" warning — otherwise.
-	// Three searches: the address has no port body; `+0x5d40` is the CHAIN row onto Motor; the two
-	// probe bodies this runtime does carry are `MoveProbeCheckStandPosition` (`0x102e7270`) and
-	// `MotorMoveTraceSweep` (`0x102e6d70`), neither of which is this hull sweep. Answers the
-	// found-floor arm with a zero-length drop, so the origin is left where the caller put it.
-	(void)InOutOriginUnits;
+	// `CAI_MoveProbe::TraceHull` `0x102e7880` on `m_pMoveProbe +0x5d40`, mask `0x202400b`, swept
+	// from the origin (`0.0`) down to `-256.0`. Retail answers 1 when the sweep FOUND floor
+	// (fraction != 1) and writes `param_5 = trace.endpos`; it answers 0 — the "stuck in wall"
+	// warning — otherwise. The sweep is `UTIL_TraceHull 0x1026e940` under the move probe's
+	// `CTraceFilterNavGround`, the rule `CheckOnGround 0x1026e5e0` also traces by (R1 §6): the FULL
+	// `m_Collision` box (no foot box), no `CanStandOn`, no `m_bForceNPCCheck` bracket. Family
+	// Motor's `KernelHullTrace`, in its frame (Source units, the port's axes).
+	//
+	// A world with no collision answers nothing; the body then keeps the found-floor arm with a
+	// zero-length drop, so the origin is left where the caller put it (this seam's answer before
+	// 0018 story 6), rather than warning "stuck in wall" in every headless run.
+	constexpr double GFloorDropUnits = 256.0;
+	constexpr int32 GFloorDropMask = 0x202400b;
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
+	const FVector EndUnits(InOutOriginUnits.X, InOutOriginUnits.Y, InOutOriginUnits.Z - GFloorDropUnits);
+	FKernelHullTrace Trace;
+	if (!KernelHullTrace(InOutOriginUnits, EndUnits, MinsUnits, MaxsUnits, GFloorDropMask, Trace))
+	{
+		return true;
+	}
+	if (Trace.Fraction == 1.0f)
+	{
+		return false;
+	}
+	InOutOriginUnits = Trace.EndPosUnits;
 	return true;
 }
 

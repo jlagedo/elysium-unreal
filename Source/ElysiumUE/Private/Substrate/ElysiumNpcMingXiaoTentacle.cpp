@@ -244,6 +244,13 @@ bool FElysiumNpcMingXiaoTentacle::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
+// Slot 523: `0x1039b070`, one load of `_DAT_104492a8` = 30.0 (the cell the yaw ladder's crouch arm
+// shares). The slot is the STEP-DOWN height (R1 §5): the stand test's drop below the feet.
+float FElysiumNpcMingXiaoTentacle::GetMaxJumpSpeed() const
+{
+	return ElysiumNpcTunables::Thirty;
+}
+
 // Slot 166: `0x1039ebd0`. The tentacle's own companion is never standable; then a direct call into
 // the family body `0x10026f80`.
 bool FElysiumNpcMingXiaoTentacle::CanStandOn(FElysiumEntity* Other)

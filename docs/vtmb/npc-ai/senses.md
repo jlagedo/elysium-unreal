@@ -157,7 +157,7 @@ A non-player in the band sets `ATTACK_UNKNOWN` (flags1 `0x800000`). Outside the 
 **The numbers for `thug_1`.** `vision 540` is not the sentinel → `+0x63b8 = 540`, perception
 inert (it would have given `Inspection_Vision_Distances[3] = 440`). `StealthVisionScalarTable`
 spans `0.14 … 1.00`. Effective radius **75.6 … 540 units**; band `0.7×`; cone `0.2` × player cone
-scalar `0.50 … 1.00`; LOS mask `0x2804091` eye to eye. At 2380 units no retail sight path admits
+scalar `0.50 … 1.00`; LOS mask `0x2804091` (eye to eye for probe 0 only; see `FVisible` below). At 2380 units no retail sight path admits
 the player.
 
 ## The enemy memory — `CAI_Memory` (2026-09-08)
@@ -1108,7 +1108,54 @@ never hands slot 594 a blocker cell; this NPC carrying the `Dominate_BrainWipe` 
 
 The asymmetry of the three blocker writes is the reason this row is `rule` rather than `present`.
 
-**Unrecovered:** nothing.
+**`CBaseEntity::FVisible` `0x100a6fa0`, the trace itself** (recovered 2026-09-29, 0018 story 6, R2
+sections 1-2; slot 201 `0x102b4630` passes all four arguments through unchanged, `102b46fa..102b4708`).
+`bool FVisible(target, mask, CBaseEntity** blocker, int probe)`, `RET 0x10`.
+
+1. **Gates.** `target->GetFlags() & 0x8000` (`FL_NOTARGET`) answers false (`100a7017`); then the water
+   gate on `+0x3e0`: looker not 3 and target 3, or looker 3 and target 0, answers false.
+2. **The four arguments.** Start = the looker's slot 193 `+0x304` eye (`100a707a`). End =
+   `FVisibleTargetOrigin 0x100a72e0(target, probe)`. The mask is the caller's, verbatim. `probe` is
+   `m_eEnemyOccludedCheck (+0x5b98)` at the enemy call site (`GatherEnemyConditions`) and `0` at every
+   other caller; the blocker cell is written only on a block. **"Eye to eye" holds only for probe 0 and
+   10.**
+3. **The probe table** (jump table `0x100a78c4`): `0`, `10` and above `10` -> the target's own slot 193
+   eye (`100a7890`); `1` -> the OBB centre `(mins + maxs) / 2 + origin` (`100a7360`); `2..9` -> the eight
+   OBB corners (x/y from mins/maxs, origin = slot 220 `+0x370`), z pulled to `cz + 0.9 * (corner.z -
+   cz)` (`0x10450a9c` = 0.9). `2..5` are the top four in the order (min x, min y), (min x, max y), (max x,
+   min y), (max x, max y); `6..9` the bottom four in the same order. So each consecutive miss probes the
+   next point (eye, centre, then the eight corners) and the tenth miss declares the enemy occluded;
+   `NPCInit` seeds the counter to 10 (`102735fb`).
+4. **The ray.** LINE (extents 0, `IsRay = 1`), mask as passed, filter `CTraceFilterFVisible`
+   (`0x101075e0`, vtable `0x1045b1b0`) = `CTraceFilterSimple(looker, group 0)` plus one gate.
+   `ShouldHitEntity 0x10107630` **skips every entity with `m_bNPCTransparent (+0xfc)`**, then runs
+   `CTraceFilterSimple::ShouldHitEntity 0x101d31c0`: `StandardFilterRules 0x101d3080`; the pass entity
+   `0x101d2fc0` (the looker by pointer, plus its owner / owned, slot 97); slot 91 `ShouldCollide
+   0x100b4de0` (group 1 skipped without `0x4000000`); a combat character (`+0x9c`) with
+   `m_bIsBCCTargetable +0x1480 == 0` or script-hidden `+0xf4` skipped (`101d3284`); the game-rules
+   test `0x1042c0c0` -> `0x1042df70`; and, when the mask is not `0x46004003`, slot 68
+   `ShouldIgnoreCollision` in either direction.
+5. **The transparency gate.** `CAI_BaseNPC::NPCInit` calls `SetNPCTransparent(1)` as its first act,
+   unconditionally (`10273394`), so **no NPC ever blocks `FVisible`**. `CPropLargeHullIgnore::Spawn`
+   does the same (`101942fe`) and maps can set the `npc_transparent` keyfield. The **player blocks**
+   (not NPC-transparent; `CBasePlayer` ctor `0x1015d7c0` sets `+0x1480 = 1`; `Spawn` puts it in group 3),
+   and so do solid props (MONSTER's scope, see `conditions-and-states.md`).
+6. **The verdict**, in this order (`100a71ab`): `fraction == 1.0` -> true; `tr.m_pEnt == target` -> **true
+   (a hit on the target is clear)**; else `*blocker = tr.m_pEnt` (when a cell was passed), false, plus a
+   debug `DevMsg("DOH!")`. There is no point overload (slot 202 is `SetOwnerEntity`).
+
+The lateral pre-check `0x10278220` does NOT use this filter: it uses `CTraceFilterSimpleTwoEnt
+0x101ccd70` (`ShouldHitEntity 0x101ccda0`), which has no `StandardFilterRules`, no BCC / hidden gate and
+no NPC-transparent gate, so third-party NPCs block it, and it wants the line BLOCKED.
+
+Port: `ElysiumNpcSight::Visible` (the filter and the verdict over `TraceRetail`; `bNpcsBlock` picks
+`TwoEnt`'s rule), `ElysiumNpcSight::VisibleTargetOrigin` (the probe table), and
+`FElysiumNpc::FVisible` -> `BaseFVisible` (`ElysiumNpcSenses10.cpp`: the two gates, the target's
+`RetailCollisionExtents`, then the trace). "Is an NPC" is retail's own test, `bNpcTransparent`.
+
+**Unrecovered:** the blocker cell is not delivered (the port's slot 201 takes the third parameter by
+value); the player's and NPCs' studio `$contents` (assumed SOLID); the name of solid flag `0x20`; the
+water level's producer (nothing writes `FElysiumEntity::WaterLevel`, so the gate never closes).
 
 ### `Slot594` `0x102b4760`
 

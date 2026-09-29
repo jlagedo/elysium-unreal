@@ -145,10 +145,12 @@ namespace ElysiumNpcTunables
 	inline constexpr float VampireBossSegmentLengthFloor = 1e-05f;
 
 	// `0x10453b94` f32 — `CAI_BaseNPC::StepHeight 0x101a6b40` (slot 522, the Troika line's body) and
-	// `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523) both return it
+	// `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523, the step-down height `CheckStandPosition
+	// 0x102e7270` drops below the feet) both return it
 	inline constexpr float StepHeightBase = 18.0f;
 
-	// `0x1044faa8` f32 — `CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523) returns it
+	// `0x1044faa8` f32 — `CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523, the stand test's
+	// step-down drop) returns it
 	inline constexpr float MaxJumpSpeedTroika = 36.0f;
 
 	// `0x10477ce8` f32 — `0x101a6b80`; the jump arc's gravity
@@ -180,7 +182,8 @@ namespace ElysiumNpcTunables
 	inline constexpr float YawSpeedRun = 160.0f;
 
 	// `0x104492a8` f32 — the yaw-speed ladder's crouch arm; also `CNPC_VMingXiao::StepHeight
-	// 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070`
+	// 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070` (slot 523, the stand test's
+	// step-down drop)
 	inline constexpr float Thirty = 30.0f;
 
 	// `0x10463584` f32 — the humanoid yaw-speed ladder's move arm
@@ -198,13 +201,15 @@ namespace ElysiumNpcTunables
 	// `0x104454c0` f32 — the clamp every turning arm of the yaw-speed ladders ends on (`0x10374130`)
 	inline constexpr float One = 1.0f;
 
-	// `0x1044ffe8` f32 — `CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` returns it
+	// `0x1044ffe8` f32 — `CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` (slot 523, the stand test's
+	// step-down drop) returns it
 	inline constexpr float MingXiaoMaxJumpSpeed = 50.0f;
 
 	// `0x104cc4fc` f32 — `CNPC_VTzimisce::StepHeight 0x103b6dd0` returns it
 	inline constexpr float TzimisceStepHeight = 26.0f;
 
-	// `0x104cc500` f32 — `CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` returns it
+	// `0x104cc500` f32 — `CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` (slot 523, the stand test's
+	// step-down drop) returns it
 	inline constexpr float TzimisceMaxJumpSpeed = 56.0f;
 
 	// `0x1049aea8` f32 — `CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820`'s spring direction

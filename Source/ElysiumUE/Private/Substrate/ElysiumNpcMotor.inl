@@ -60,10 +60,18 @@ int32 NavNodeWordAt(int32 RouteStepIndex) const;
 
 // --- The motor seams -----------------------------------------------------------------------------
 
-/** `thunk_FUN_102e7270(m_pMoveProbe, …)` — `CAI_MoveProbe::CheckStandPosition`, the hull/pathfinder
- *  probe `CanStandAt` (`0x102a0ed0`) brackets with `m_bForceNPCCheck`. **SEAM**: the mover answers
- *  no hull probe; answers false. */
-bool MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 ProbeFlags) const;
+/** `CAI_MoveProbe::CheckStandPosition` `0x102e7270` (`RET 0x18`, R1 §1) on `m_pMoveProbe`
+ *  (`+0x5d40`), whose NPC is this one: ONE downward hull trace from `pos + (0,0,0.1)` to
+ *  `(pos.x, pos.y, pos.z - slot 523)` with the FOOT box (`0.75·mins + 0.25·maxs .. 0.25·mins +
+ *  0.75·maxs` in x/y, both z at `mins.z`) under `Mask` and `CTraceFilterNavGround`; standable iff
+ *  `fraction != 1.0` AND slot 166 `CanStandOn(tr.m_pEnt)` (a world hit hands it null, which is
+ *  standable). Start-solid is NOT tested: a trace that starts in a body is a hit on it.
+ *  `MinsUnits` / `MaxsUnits` null (every retail caller) takes `m_Collision`'s OBB
+ *  (`RetailCollisionExtents`), each independently. Retail's fifth argument is never read and its
+ *  sixth (the `surfacedata_t**` out, filled on a pass) has no port reader, so neither is carried.
+ *  Position in `KernelHullTrace`'s frame. Counted on `MotorSeams.MoveProbeChecks`. */
+bool MoveProbeCheckStandPosition(const FVector& PositionUnits, int32 Mask,
+	const FVector* MinsUnits = nullptr, const FVector* MaxsUnits = nullptr) const;
 
 /** `CBaseEntity::m_edtDerivedType` (+0x004c) — the derived-type word the collision-ignore chain
  *  tests bitwise (`& 0x2`, `& 0x12`, `& 0x14`, `& 0x16`) and the cover chooser tests as `& 4`
@@ -104,8 +112,12 @@ bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
 
 // --- The non-slot bodies of this family ----------------------------------------------------------
 
-/** `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` — `m_bForceNPCCheck` around the move probe. */
-bool CanStandAt(const FVector& PositionUnits, int32 Flags);
+/** `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` (`RET 0x10`, R1 §2) — `CanStandAt(pos, mask, mins,
+ *  maxs)`: `m_bForceNPCCheck` (`+0x63da`) raised around `CheckStandPosition(pos, mask, mins, maxs,
+ *  0, 0)`. Retail's one caller is the back-away DFS (`10300d33`: `(nodePos, 0x202400b, NULL,
+ *  NULL)`). */
+bool CanStandAt(const FVector& PositionUnits, int32 Mask, const FVector* MinsUnits = nullptr,
+	const FVector* MaxsUnits = nullptr);
 
 /** The arm all three of `CAI_BaseNPCTroika` / `CNPC_VDog` / `CNPC_VTzimisce` take when
  *  `m_afMemory & 0x2000` (AT_COVER_HINT) is set: `ABS(GetIdealYawSpeed()) * cvar`, floored at 1.0.

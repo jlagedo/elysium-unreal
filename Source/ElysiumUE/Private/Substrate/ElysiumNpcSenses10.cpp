@@ -10,10 +10,12 @@
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumSessionSubsystem.h"
+#include "ElysiumWorldServices.h"
 
 // Story 29d, family **Senses10** — the Troika-line bodies. The species line is in
 // `ElysiumNpcSenses10_2.cpp`; the declarations and this family's standing facts are in
@@ -65,6 +67,60 @@ int32 FElysiumNpc::IRelationTypeOf(const FElysiumEntity* Candidate) const
 	return const_cast<FElysiumNpc*>(this)->IRelationType(const_cast<FElysiumEntity*>(Candidate));
 }
 
+namespace
+{
+	// `CBaseEntity::FVisible 0x100a6fa0` -- the body slot 201 ends at (`102b46b1`) once its own gates
+	// have passed. `Probe` is `FVisible`'s fourth argument (`m_eEnemyOccludedCheck +0x5b98` at the
+	// enemy call site, 0 at every other), and this is the one place it is read.
+	//   1. `target->GetFlags() & 0x8000` (`FL_NOTARGET`) -> false (`100a7017`).
+	//   2. the water gate on `+0x3e0`: looker not 3 and target 3, or looker 3 and target 0 -> false.
+	//      The field is `FElysiumEntity::WaterLevel`; nothing in this runtime writes it yet, so both
+	//      read 0 and the gate never closes.
+	//   3. start = the looker's eye (slot 193), end = `ElysiumNpcSight::VisibleTargetOrigin` over the
+	//      target's OBB (`RetailCollisionExtents`, SOURCE units, scaled here to the seam's cm).
+	//      With no extents to read (the seam answers false) the end is the target's eye, probe 0's.
+	//   4. `ElysiumNpcSight::Visible` -- the LINE under `CTraceFilterFVisible` and the verdict order.
+	// The blocker cell (`*ppBlocker = tr.m_pEnt`) cannot be delivered: the slot's third parameter is
+	// a value (`ElysiumNpcSenses10.inl`), so the entity the ray stopped at is dropped here.
+	bool BaseFVisible(const FElysiumNpc& Looker, const FElysiumEntity& Target, int32 Mask, int32 Probe)
+	{
+		if (FElysiumNpcBase::HasNoTargetFlag(Target))                            // 100a7017
+		{
+			return false;
+		}
+		constexpr int32 WaterSubmerged = 3;
+		if ((Looker.WaterLevel != WaterSubmerged && Target.WaterLevel == WaterSubmerged)
+			|| (Looker.WaterLevel == WaterSubmerged && Target.WaterLevel == 0))
+		{
+			return false;
+		}
+
+		const IElysiumEmbodiment* Embodiment = Looker.World != nullptr ? Looker.World->Embodiment() : nullptr;
+		if (Embodiment == nullptr)
+		{
+			return true;   // headless: no collision world reads as clear, as `QueryLineOfSight`'s default does
+		}
+
+		FVector TargetPointCm = Target.EyePosition();
+		FVector MinsUnits = FVector::ZeroVector;
+		FVector MaxsUnits = FVector::ZeroVector;
+		if (FElysiumNpcBase::RetailCollisionExtents(Target, MinsUnits, MaxsUnits))
+		{
+			TargetPointCm = ElysiumNpcSight::VisibleTargetOrigin(Probe, Target.EyePosition(), Target.Origin,
+				MinsUnits * ElysiumMove::U, MaxsUnits * ElysiumMove::U);
+		}
+
+		ElysiumNpcSight::FVisibleQuery Query;
+		Query.EyeCm = Looker.EyePosition();
+		Query.TargetCm = TargetPointCm;
+		Query.Mask = Mask;
+		Query.Looker = Looker.Handle;
+		Query.Target = Target.Handle;
+		Query.World = Looker.World;
+		return ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);
+	}
+}
+
 // =================================================================================================
 // Slot 201 `FVisible` — `CAI_BaseNPCTroika::FVisible` `0x102b4630`, 232 bytes.
 // =================================================================================================
@@ -75,13 +131,11 @@ void FElysiumNpc::WriteFVisibleBlocker(const FElysiumEntity* SeenTarget)
 	LastFVisibleBlockerTarget = SeenTarget != nullptr ? SeenTarget->Handle : FElysiumEntityHandle::Invalid();
 }
 
-bool FElysiumNpc::BaseEntityFVisible(const FElysiumEntity& SeenTarget, int32 /*Mask*/) const
+bool FElysiumNpc::BaseEntityFVisible(const FElysiumEntity& SeenTarget, int32 Mask) const
 {
-	// `CBaseEntity::FVisible` — the eye-to-eye segment slot 201 ends at. The mask is the caller's;
-	// this runtime's embodiment answers one world term and takes no mask.
-	const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	return Embodiment == nullptr
-		|| Embodiment->QueryLineOfSight(EyePosition(), SeenTarget.EyePosition());
+	// The `FVisible` fourth argument is not on this declaration (`ElysiumNpcSenses10.inl`), so the
+	// body proper is `BaseFVisible` above and this is its probe-0 form.
+	return BaseFVisible(*this, SeenTarget, Mask, 0);
 }
 
 bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4)
@@ -127,7 +181,7 @@ bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntit
 		return false;
 	}
 	// `102b46b1`: the base `CBaseEntity::FVisible` does the trace itself.
-	return BaseEntityFVisible(*SeenTarget, Mask);
+	return BaseFVisible(*this, *SeenTarget, Mask, Arg4);
 }
 
 // =================================================================================================

@@ -21,7 +21,7 @@ namespace
 	// `CAI_BaseNPC::IsUnreachable` `0x102741e0`'s squared-distance threshold, Source units squared.
 	constexpr float UnreachableDistSq = 14400.0f;   // _DAT_10499560 — 120 units, squared
 	// The three trace masks, as retail spells them.
-	constexpr int32 MaskValidCover = 0x202400b;     // `IsValidCover`'s downward hull trace
+	constexpr int32 MaskValidCover = 0x202400b;     // `IsValidCover`'s hull probe (MASK_NPCSOLID)
 }
 
 // --- Moved from `ElysiumNpcPositions2.cpp` (story 5 step 5) ---
@@ -88,11 +88,14 @@ bool FElysiumNpcBase::IsValidCover(const FVector& CoverCm, void* Hint)
 	//
 	// What it actually asks is small and worth stating plainly: the cover spot must not be inside
 	// solid, and — only when this NPC has been given a hint group — the hint offered with it must
-	// belong to the same group. The trace's END is barely below its start (the hull's own mins.z
-	// plus a hundredth of a unit), so it is a STANDING hull test at the spot, not a drop test.
+	// belong to the same group. The trace's END is `0.01 - mins.z` ABOVE its start (R2 §3): HUMAN_HULL's
+	// mins.z is 0 (static init `0x102d4440`), so for every hull whose floor is at the origin the end
+	// sits a hundredth of a unit UP. It is a near-zero-length STANDING hull probe at the spot, not a
+	// drop. The hull enum (`m_eHull +0x1568`) feeds only that z; the box is `m_Collision`'s OBB
+	// (`1028af87` / `1028af90`), and `Ray_t::Init(.., 1, 0)` asks the engine's cylinder test.
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);   // family Motor's seam: the zero box
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);
 	const FVector EndCm(CoverCm.X, CoverCm.Y,
 		CoverCm.Z - HullMins.Z * NpcKernelPositions2Shared::GPositionsTailU + ValidCoverDrop * NpcKernelPositions2Shared::GPositionsTailU);
 
@@ -100,11 +103,17 @@ bool FElysiumNpcBase::IsValidCover(const FVector& CoverCm, void* Hint)
 	FVector ObbMaxs = FVector::ZeroVector;
 	RetailCollisionExtents(*this, ObbMins, ObbMaxs);
 
+	// Family Motor's `KernelHullTrace` (SOURCE units, port axes), mask `0x202400b`, filter
+	// `CTraceFilterSimple(this, 0)`: its character rule is the kernel trace's (BCC / hidden / slot 68
+	// either way; no force bracket here). The ONLY `trace_t` word read is `startsolid` (`+0x37`,
+	// `1028b00c`): the fraction is not, so a blocked-but-not-embedded hull passes. A world with no
+	// collision answers clear, which admits.
 	FKernelHullTrace Trace;
-	// **SEAM**, family Motor's `KernelHullTrace`, in SOURCE units. It carries a fraction and a hit
-	// entity and NOT retail's `startsolid`, so the start-solid arm below can never fire; a seam that
-	// cannot answer reads as "not in solid", which is the arm that admits the cover.
 	KernelHullTrace(CoverCm / NpcKernelPositions2Shared::GPositionsTailU, EndCm / NpcKernelPositions2Shared::GPositionsTailU, ObbMins, ObbMaxs, MaskValidCover, Trace);
+	if (Trace.bStartSolid)
+	{
+		return false;
+	}
 
 	const FHintWords* HintNode = static_cast<const FHintWords*>(Hint);
 	if (!BaseScheduleHost.HintGroup.IsEmpty()

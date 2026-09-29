@@ -7,6 +7,7 @@
 #include "ElysiumMovementComponent.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/PlayerController.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 AElysiumPawn::AElysiumPawn()
@@ -29,6 +30,11 @@ AElysiumPawn::AElysiumPawn()
 	// 3,775 carry PLAYERCLIP. NPCs keep ECC_Pawn, because Unreal reads navigation relevance off
 	// that channel and so "blocks an NPC" and "cuts the NavMesh" stay one fact.
 	Hull->SetCollisionProfileName(ElysiumCollision::PlayerPawnProfile);
+	// The player's hull is a character body (0018 story 6): the mask filter bit keeps it out of every
+	// world trace (`FCollisionQueryParams::IgnoreMask`) and lists it in the retail character sweep
+	// `TraceRetail` runs for a mask that carries MONSTER, where `FVisible` lets it block (the player is
+	// not NPC-transparent) and `FElysiumNpc`'s own filters decide the rest.
+	Hull->SetMaskFilterOnBodyInstance(ElysiumRetailMask::CharacterMaskBit);
 	// The hull must raise overlaps so trigger brush bodies see the player begin/end touch. Its
 	// Block-of-WorldDynamic is not a mutual block against a trigger's overlap response, so the
 	// player passes through and the overlap fires rather than being stopped.

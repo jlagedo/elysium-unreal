@@ -78,9 +78,11 @@ bool FElysiumNpcBase::MotorMoveTraceSweep(int32 Kind, const FVector& StartUnits,
 	const FVector& EndUnits, int32 Mask, float ExtentUnits, const void* Filter,
 	FMotorMoveTrace& OutTrace) const
 {
-	// `thunk_FUN_102e6d70(motor->+0x68, kind, start, end, mask, 0, extent, 0, &trace, filter, 0)`.
-	// Retail's own head, before it dispatches on `kind`, is the record's initialisation and it is
-	// ported here because it is the half that IS recovered:
+	// `MoveLimit 0x102e6d70(navType, start, end, mask, target, pct, flags, &trace, skip, surfaceOut)`
+	// (R1 §6). The port's `Kind` is retail's nav type, its `ExtentUnits` is `pct` -- the PERCENT of
+	// the leg `TestGroundMove 0x102e4f50` stand-tests (100 = the whole leg), not an extent -- and its
+	// `Filter` is `skip`. Retail's own head, before it dispatches on `kind`, is the record's
+	// initialisation:
 	//
 	//     trace[9] = 0;                       // +0x24 flTotalDist
 	//     trace[7] = 0;                       // +0x1c pObstruction
@@ -88,9 +90,8 @@ bool FElysiumNpcBase::MotorMoveTraceSweep(int32 Kind, const FVector& StartUnits,
 	//     trace[0] = 0;                       // +0x00 fStatus
 	//     trace[1..3] = *start;               // +0x04 vEndPosition, seeded to the START
 	//
-	// and every arm answers `trace.fStatus >= 0`.
-	(void)EndUnits;
-	(void)Filter;
+	// and every arm answers `trace.fStatus >= 0`. Positions in `KernelHullTrace`'s frame (Source
+	// units, the port's axes).
 	OutTrace = FMotorMoveTrace();
 	OutTrace.EndPositionUnits = StartUnits;
 
@@ -99,10 +100,57 @@ bool FElysiumNpcBase::MotorMoveTraceSweep(int32 Kind, const FVector& StartUnits,
 	Motor10Seams.LastMoveTraceMask = Mask;
 	Motor10Seams.LastMoveTraceExtent = ExtentUnits;
 
-	// **SEAM**: nothing in this substrate sweeps a hull for the kernel (family Motor's
-	// `KernelHullTrace` states the same for the other trace entry). The record keeps retail's own
-	// initialisation, which IS the clear result, and `fStatus >= 0` is therefore true — the
-	// admitting answer, so nothing downstream is silently refused.
+	// The ground arm (nav type 0 -> `0x102e5d80` -> `TestGroundMove 0x102e4f50`): a named
+	// modernization onto Unreal's NavMesh. Retail walks the leg in 16-unit `CheckStep 0x102e4160`
+	// segments -- a forward trace raised by slot 522, a drop of slot 523, `CanStandOn` and the stand
+	// probe -- and then refuses a final `|dz| > max(hull height / 2, slot 522 + 0.1)`; the port asks
+	// the body's own agent whether the straight walk stays on its mesh (`IElysiumNpcMotor::
+	// NavRaycast`, the default query filter: the ground test prices nothing), which was baked from
+	// the same step height and hull. Clear -> `fStatus` 0 and the end reached. A hit -> the world
+	// blocker `-2` (a mesh edge is world), `vEndPosition` where the walk left the mesh and
+	// `flDistObstructed` the 2-D distance still to go from there (the wander probe's `dist -
+	// flDistObstructed`); any z acceptance on the hit is the caller's. A motor with no NavMesh keeps
+	// retail's initialised record, which is the admitting answer.
+	//
+	// The jump, fly and climb arms (`0x102e6290`, `0x102e6090`, `0x102e6be0`) are not ported and keep
+	// the same admitting record; slot 20's own sweep (`MotorMoveGroundStep`, kind 2) lands there too.
+	constexpr int32 GMoveLimitNavGround = 0;
+	constexpr int32 GMoveLimitBlockedWorld = -2;
+	if (Kind != GMoveLimitNavGround)
+	{
+		return OutTrace.Status >= 0;
+	}
+	// `skip` non-zero: the ground test returns "clear, end = goal" without tracing (R1 §6,
+	// `navigation-jump-links.md` § "The route helpers").
+	const double LegUnits = FVector::Dist2D(StartUnits, EndUnits);     // ground: a 2-D distance
+	if (Filter != nullptr)
+	{
+		OutTrace.EndPositionUnits = EndUnits;
+		OutTrace.TotalDistUnits = static_cast<float>(LegUnits);
+		return true;
+	}
+	if (Motor == nullptr)
+	{
+		return OutTrace.Status >= 0;
+	}
+	const double U = ElysiumMove::U;
+	FElysiumNpcNavRaycast Ray;
+	Ray.FromCm = StartUnits * U;
+	Ray.ToCm = EndUnits * U;
+	FElysiumNpcNavRaycastAnswer Answer;
+	if (!Motor->NavRaycast(Ray, Answer))
+	{
+		return OutTrace.Status >= 0;
+	}
+	OutTrace.TotalDistUnits = static_cast<float>(LegUnits);
+	if (!Answer.bHit)
+	{
+		OutTrace.EndPositionUnits = EndUnits;
+		return true;
+	}
+	OutTrace.Status = GMoveLimitBlockedWorld;
+	OutTrace.EndPositionUnits = Answer.HitCm / U;
+	OutTrace.DistObstructedUnits = static_cast<float>(FVector::Dist2D(OutTrace.EndPositionUnits, EndUnits));
 	return OutTrace.Status >= 0;
 }
 
@@ -549,7 +597,7 @@ void FElysiumNpcBase::SetHullSizeNormal(bool bForce)
 	//    extents come off one table either way.
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
-	RetailHullExtents(HullKind, EElysiumHullExtents::Full, MinsUnits, MaxsUnits);      // family Motor's seam: the zero box
+	RetailHullExtents(HullKind, EElysiumHullExtents::Full, MinsUnits, MaxsUnits);      // the replayed hull table's row
 	LastSetSizeMinsUnits = MinsUnits;
 	LastSetSizeMaxsUnits = MaxsUnits;
 	++SetSizeCalls;

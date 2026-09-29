@@ -1770,15 +1770,18 @@ bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& To
 	// contents at all. Nothing could make glass transparent to an NPC or an opaque tool brush
 	// solid to it.
 	//
-	// NAMED DIVERGENCE (corrected 2026-09-20; the comment here previously claimed retail agreed,
-	// which it does not). Retail's `0x2804091` DOES carry `MONSTER 0x2000000`, so in retail a body
-	// standing between two points breaks the line. This trace does not: no pawn profile blocks the
-	// sight channel, so characters are not occluders here. It is the state of the port rather than
-	// a decision about retail — the sense layer has no per-body occluder filter yet
-	// (`ElysiumWorldServices.h`'s seam says the same) — and it stays a divergence until job 7
-	// wires the `0x2804091` arm, which is where `FVisible` and the cover and shoot-node traces
-	// come in. Complex tracing is off — the bodies are convex hulls and the query runs per NPC per
-	// sense pass.
+	// This is the BRUSH half only, by design, and no longer a divergence: retail's `0x2804091` carries
+	// `MONSTER 0x2000000`, and that half is built beside this call. `TraceRetail` lists the character
+	// bodies the same line meets (the player's hull and every NPC body wear the character mask bit,
+	// so this world trace never meets them), and `ElysiumNpcSight::Visible` applies retail's filter
+	// to that list: `CBaseEntity::FVisible`'s `CTraceFilterFVisible` skips every entity with
+	// `m_bNPCTransparent`, which `NPCInit` sets on every NPC, so NPCs never block a sight line while
+	// the player and solid props do (R2 sections 1-2, `0x100a6fa0`, `0x10107630`, `0x101d3080`).
+	// The lateral pre-check's `CTraceFilterSimpleTwoEnt` (`0x101ccda0`) has no such gate, and its
+	// caller asks for the NPCs to block. Sight callers therefore go through `ElysiumNpcSight::Visible`;
+	// this stays the headless-safe brush query it falls back to when `TraceRetail` has no world.
+	// Complex tracing is off -- the bodies are convex hulls and the query runs per NPC per sense
+	// pass.
 	FCollisionQueryParams Params(FName(TEXT("ElysiumLineOfSight")), /*bTraceComplex*/ false);
 	FHitResult Hit;
 	return !World->LineTraceSingleByChannel(Hit, FromCm, ToCm,

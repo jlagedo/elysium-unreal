@@ -24,13 +24,14 @@
 //     world's hint list since 0018 story 4). This family adds no third store. Each selector is
 //     split: a PURE rule over a candidate list, which is where the recovered decision lives and
 //     what the test drives, plus a thin member entry point that feeds it from those two reads.
-//   * **There is no NPC hull table.** `PTR_DAT_1060a750`'s records live past `.data`'s raw size in
-//     the pinned image — they are filled at runtime and are not readable from the file — so family
-//     Motor's `RetailHullExtents` answers nothing and the hull box is the zero box.
-//   * **The world trace goes through family Motor's `KernelHullTrace`**, the kernel-tier seam for
-//     `(*DAT_1070b254)->TraceRay`. It carries a fraction and a hit entity and NOT retail's
-//     `startsolid`/`allsolid` pair, so the two start-solid arms below read its "no answer" as
-//     not-solid, exactly as its own comment says every caller must.
+//   * **The hull table is the replayed one.** `PTR_DAT_1060a750`'s records are filled at runtime;
+//     family Motor's `RetailHullExtents` answers them from the replay of the image's own static
+//     initialisers (`Substrate/ElysiumRetailHullTable.h`), and `RetailCollisionExtents` answers an
+//     NPC's `m_Collision` OBB from its standing hull's row (0018 story 6).
+//   * **The world trace goes through family Motor's `KernelHullTrace`**, the kernel-tier port of
+//     `UTIL_TraceHull 0x1026e940` over `IElysiumEmbodiment::TraceRetail`. It carries retail's
+//     fraction, hit entity, `startsolid` and `allsolid`; a world with no collision answers the clear
+//     trace (fraction 1.0, neither flag), which the start-solid arms below read as not-solid.
 //
 // Retail distances here are **Source units** and this world is centimetres; `ElysiumMove::U` is the
 // 2.54 that bridges them, applied at the point of use so the recovered constant stays visible.
@@ -102,9 +103,12 @@ void SquadMembers(TArray<FElysiumNpc*>& OutMembers) const;
 
 // --- The world-trace bodies ---------------------------------------------------------------------
 
-/** `CAI_BaseNPCTroika::IsAreaClear` `0x102a0fb0` — the NPC's own collision hull swept from `FromCm`
- *  to its origin against `Mask`, with `m_bForceNPCCheck` (+0x63da) raised for the duration. */
-bool IsAreaClear(const FVector& FromCm, int32 Mask);
+/** `CAI_BaseNPCTroika::IsAreaClear(pos, mask, mins, maxs)` `0x102a0fb0` (R2 §4) — a stationary hull
+ *  test at `FromCm` (start == end) against `Mask`, with `m_bForceNPCCheck` (+0x63da) raised for the
+ *  duration; clear iff `fraction >= 1.0` and neither `allsolid` nor `startsolid`. Null `MinsUnits` /
+ *  `MaxsUnits` (SOURCE units, retail axes) take `m_Collision`'s OBB, each independently. */
+bool IsAreaClear(const FVector& FromCm, int32 Mask, const FVector* MinsUnits = nullptr,
+	const FVector* MaxsUnits = nullptr);
 
 /** The three sight candidates `EnemyCouldSeeHull` builds out of its box, in retail's order: the box
  *  CENTRE with a random Z drawn between the box's own min and max, then the min corner, then the max

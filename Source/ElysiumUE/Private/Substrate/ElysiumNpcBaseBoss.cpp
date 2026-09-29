@@ -23,6 +23,9 @@
 
 namespace
 {
+	// `EnemyCouldSeeHull 0x10366510`'s ray mask: SOLID | OPAQUE | MOVEABLE, no MONSTER.
+	constexpr int32 BossEnemySightMask = 0x4081;
+
 	constexpr float RetailHalf = ElysiumNpcTunables::Half;
 }
 
@@ -256,7 +259,7 @@ bool FElysiumNpcBaseBoss::EnemyCouldSeeHull(const FVector& OriginCm, bool bSkipV
 	{
 		FVector HullMins = FVector::ZeroVector;
 		FVector HullMaxs = FVector::ZeroVector;
-		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);   // family Motor's seam: the zero box
+		RetailHullExtents(HullKind, EElysiumHullExtents::Full, HullMins, HullMaxs);   // `NAI_Hull::Mins/Maxs(m_eHull)`, the replayed table, SOURCE units
 		BoxMin = OriginCm + HullMins * NpcKernelPositions2Shared::GPositionsTailU;
 		BoxMax = OriginCm + HullMaxs * NpcKernelPositions2Shared::GPositionsTailU;
 	}
@@ -277,13 +280,28 @@ bool FElysiumNpcBaseBoss::EnemyCouldSeeHull(const FVector& OriginCm, bool bSkipV
 		{
 			continue;
 		}
-		// The engine ray, mask `0x4081`. The port's one solid-world query is the embodiment's
-		// `QueryLineOfSight`, which traces the same semantics (world geometry only, characters not
-		// occluders) on `ELYSIUM_USE_CHANNEL` — a **named modernization** of the mask, kept because
-		// Source content masks are not portable to Unreal's channel set. Its headless answer is
-		// "clear", which is the arm that makes a boss believe it is seen.
+		// The engine ray, mask `0x4081` (SOLID | OPAQUE | MOVEABLE), under `CTraceFilterSimple(0)` with
+		// this boss and the enemy as its two ignores. Clear is retail's own three-part test:
+		// `fraction >= 1`, no `allsolid`, no `startsolid`. The mask has no MONSTER bit, so
+		// `TraceRetail` lists no character and no prop: only brushes and movers can stop this line,
+		// and a body standing in the way does not break it. Headless is "clear", which is the arm that
+		// makes a boss believe it is seen.
 		const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-		if (Embodiment == nullptr || Embodiment->QueryLineOfSight(EyeCm, Point))
+		if (Embodiment == nullptr)
+		{
+			return true;
+		}
+		FElysiumRetailTrace Trace;
+		Trace.StartCm = EyeCm;
+		Trace.EndCm = Point;
+		Trace.RetailMask = BossEnemySightMask;
+		Trace.Ignore.Add(Handle);
+		Trace.Ignore.Add(EnemyEntity->Handle);
+		FElysiumRetailTraceResult Result;
+		const bool bTraced = Embodiment->TraceRetail(Trace, Result);
+		// A headless world answers the brush-only verdict, as every sight caller's fallback does.
+		if (bTraced ? (Result.Fraction >= 1.f && !Result.bAllSolid && !Result.bStartSolid)
+					: Embodiment->QueryLineOfSight(EyeCm, Point))
 		{
 			return true;
 		}

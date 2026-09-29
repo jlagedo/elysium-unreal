@@ -16,6 +16,7 @@
 #include "Substrate/ElysiumNpcWerewolf.h"
 #include "Substrate/ElysiumNpcTzimisce.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
+#include "Substrate/ElysiumNpcMingXiaoTentacle.h"
 #include "Substrate/ElysiumNpcRat.h"
 #include "Substrate/ElysiumNpcDog.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -86,6 +87,62 @@ bool FElysiumNpcKernelMotorTunablesTest::RunTest(const FString&)
 	TestEqual(TEXT("slot 523 answers 36"), Guard->GetMaxJumpSpeed(), 36.0f);
 	// `0x101a6b80` `_DAT_10477ce8` = 350.0, and no class in the family overrides slot 524.
 	TestEqual(TEXT("slot 524 answers 350"), Guard->GetJumpGravity(), 350.0f);
+	return true;
+}
+
+// --- Slot 523 on the species, and the stand test's drop -------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorStandDropTest,
+	"Elysium.Substrate.NpcKernelMotor.StandDrop", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorStandDropTest::RunTest(const FString&)
+{
+	// Slot 523 is the STEP-DOWN height (R1 §5), whatever the SDK slot table calls it: the drop
+	// `CheckStandPosition 0x102e7270` traces below the feet. Three species fill it on their own class:
+	// `CNPC_VMingXiao` `0x10391050` 50.0 (`0x1044ffe8`), `CNPC_VMingXiaoTentacle` `0x1039b070` 30.0
+	// (`0x104492a8`), `CNPC_VTzimisce` `0x103b6df0` 56.0 (`0x104cc500`).
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_stand_drop"), 4311);
+	Builder.AddNpcOfClass(TEXT("tzimisce"), FVector::ZeroVector, TEXT("CNPC_VTzimisce"));
+	Builder.AddNpcOfClass(TEXT("ming"), FVector(2000.0, 0.0, 0.0), TEXT("CNPC_VMingXiao"));
+	Builder.AddNpcOfClass(TEXT("tentacle"), FVector(4000.0, 0.0, 0.0), TEXT("CNPC_VMingXiaoTentacle"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpcTzimisce* Tzimisce = Fixture.NpcAs<FElysiumNpcTzimisce>(TEXT("tzimisce"));
+	FElysiumNpcMingXiao* Ming = Fixture.NpcAs<FElysiumNpcMingXiao>(TEXT("ming"));
+	FElysiumNpcMingXiaoTentacle* Tentacle = Fixture.NpcAs<FElysiumNpcMingXiaoTentacle>(TEXT("tentacle"));
+	if (!TestNotNull(TEXT("tzimisce"), Tzimisce) || !TestNotNull(TEXT("ming"), Ming)
+		|| !TestNotNull(TEXT("tentacle"), Tentacle))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Tzimisce, Ming, Tentacle });
+	TestEqual(TEXT("0x103b6df0: the Tzimisce drops 56"), Tzimisce->GetMaxJumpSpeed(), 56.0f);
+	TestEqual(TEXT("0x10391050: Ming Xiao drops 50"), Ming->GetMaxJumpSpeed(), 50.0f);
+	TestEqual(TEXT("0x1039b070: the tentacle drops 30"), Tentacle->GetMaxJumpSpeed(), 30.0f);
+
+	// The drop is the one the stand trace takes: the end is `pos.z - slot 523`, dispatched on the
+	// species, and the foot box comes off the species' own `m_Collision` (TZIMISCE1, hull 10).
+	FElysiumRetailTrace Asked;
+	Fixture.Services.TraceRetailQuery = [&Asked](const FElysiumRetailTrace& Trace, FElysiumRetailTraceResult& Out)
+	{
+		Asked = Trace;
+		return true;   // a clear world: fraction 1.0
+	};
+	const double U = ElysiumMove::U;
+	TestFalse(TEXT("a clear drop is no ground"), Tzimisce->CanStandAt(FVector(0.0, 0.0, 10.0), 0x202400b));
+	TestTrue(TEXT("the Tzimisce's stand trace ends 56 below the spot"),
+		Asked.EndCm.Equals(FVector(0.0, 0.0, 10.0 - 56.0) * U, 1e-3));
+	FVector Mins = FVector::ZeroVector;
+	FVector Maxs = FVector::ZeroVector;
+	Tzimisce->RetailHullExtents(Tzimisce->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, Mins, Maxs);
+	TestTrue(TEXT("and its foot box is 0.75 / 0.25 of its own hull's x"),
+		FMath::IsNearlyEqual(Asked.MinsCm.X, (0.75 * Mins.X + 0.25 * Maxs.X) * U, 1e-3));
+	TestTrue(TEXT("at its own mins.z, zero height"),
+		FMath::IsNearlyEqual(Asked.MinsCm.Z, Mins.Z * U, 1e-3) && FMath::IsNearlyEqual(Asked.MaxsCm.Z, Mins.Z * U, 1e-3));
+	Asked = FElysiumRetailTrace();
+	Ming->CanStandAt(FVector(0.0, 0.0, 0.0), 0x202400b);
+	TestTrue(TEXT("Ming Xiao's ends 50 below"), Asked.EndCm.Equals(FVector(0.0, 0.0, -50.0) * U, 1e-3));
+	Tentacle->CanStandAt(FVector(0.0, 0.0, 0.0), 0x202400b);
+	TestTrue(TEXT("the tentacle's 30 below"), Asked.EndCm.Equals(FVector(0.0, 0.0, -30.0) * U, 1e-3));
+	Fixture.Services.TraceRetailQuery = nullptr;
 	return true;
 }
 
@@ -633,16 +690,72 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	}
 	FElysiumNpcWorldFixture::Quiet({ Guard });
 
-	// `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` — the whole recovered behaviour is the
-	// `m_bForceNPCCheck` bracket around the probe. The probe is a SEAM, so what is asserted is that
-	// it was asked and that the bracket closed.
+	// `CAI_BaseNPCTroika::CanStandAt` `0x102a0ed0` — the `m_bForceNPCCheck` bracket around the probe.
+	// With no collision world the stand trace answers the clear default, which refuses.
 	TestFalse(TEXT("bForceNpcCheck starts clear"), Guard->bForceNpcCheck);
 	const int32 ProbesBefore = Guard->MotorSeams.MoveProbeChecks;
-	TestFalse(TEXT("CanStandAt refuses while the move probe is a seam"),
-		Guard->CanStandAt(FVector(10.0, 0.0, 0.0), 0));
+	TestFalse(TEXT("CanStandAt refuses with no collision world"),
+		Guard->CanStandAt(FVector(10.0, 0.0, 0.0), 0x202400b));
 	TestEqual(TEXT("and the probe was asked exactly once"), Guard->MotorSeams.MoveProbeChecks,
 		ProbesBefore + 1);
 	TestFalse(TEXT("and the bracket closed"), Guard->bForceNpcCheck);
+
+	// `CheckStandPosition 0x102e7270` (R1 §1) over a stated world: the knob answers the one hull
+	// trace the probe makes and records what it was asked.
+	FElysiumPlayer* Player = Fixture.Player();
+	if (!TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+	FElysiumRetailTrace Asked;
+	FElysiumRetailTraceResult Stated;
+	bool bForcedDuringTrace = false;
+	Fixture.Services.TraceRetailQuery = [&Asked, &Stated, &bForcedDuringTrace, Guard](
+		const FElysiumRetailTrace& Trace, FElysiumRetailTraceResult& Out)
+	{
+		Asked = Trace;
+		bForcedDuringTrace = Guard->bForceNpcCheck;
+		Out = Stated;
+		return true;
+	};
+	const double U = ElysiumMove::U;
+	const FVector Spot(10.0, 0.0, 0.0);    // Source units, the port's axes
+	TestFalse(TEXT("102e741a: a clear drop (fraction exactly 1.0) is no ground"),
+		Guard->CanStandAt(Spot, 0x202400b));
+	TestTrue(TEXT("0x102a0ed0 holds m_bForceNPCCheck up during the trace"), bForcedDuringTrace);
+	TestTrue(TEXT("102e72af: the start is the spot lifted 0.1"),
+		Asked.StartCm.Equals(FVector(10.0, 0.0, 0.1) * U, 1e-3));
+	TestTrue(TEXT("102e72b9: the end drops slot 523, 36 on the Troika line"),
+		Asked.EndCm.Equals(FVector(10.0, 0.0, -36.0) * U, 1e-3));
+	TestTrue(TEXT("the foot box: 0.75 mins + 0.25 maxs of HUMAN_HULL's (-13..13) OBB"),
+		Asked.MinsCm.Equals(FVector(-6.5, -6.5, 0.0) * U, 1e-3));
+	TestTrue(TEXT("...to 0.25 mins + 0.75 maxs, zero height at mins.z"),
+		Asked.MaxsCm.Equals(FVector(6.5, 6.5, 0.0) * U, 1e-3));
+	TestEqual(TEXT("under the caller's mask"), Asked.RetailMask, 0x202400b);
+	TestTrue(TEXT("with the tester as the pass entity"), Asked.Ignore.Contains(Guard->Handle));
+
+	Stated.Fraction = 0.9999f;
+	TestTrue(TEXT("a world hit just below 1.0 is ground: slot 166 on a null entity stands"),
+		Guard->CanStandAt(Spot, 0x202400b));
+	Stated.Fraction = 0.f;
+	Stated.bStartSolid = true;
+	Stated.bAllSolid = true;
+	TestTrue(TEXT("start-solid is NOT tested: a trace starting in the floor is a hit and stands"),
+		Guard->CanStandAt(Spot, 0x202400b));
+	Stated = FElysiumRetailTraceResult();
+	Stated.Fraction = 0.5f;
+	Stated.HitEntity = Player->Handle;
+	TestFalse(TEXT("slot 166 refuses an entity IsStandable does not allow"),
+		Guard->CanStandAt(Spot, 0x202400b));
+	Stated = FElysiumRetailTraceResult();
+	FVector CallerMins(-2.0, -4.0, 5.0);
+	FVector CallerMaxs(2.0, 4.0, 9.0);
+	Guard->MoveProbeCheckStandPosition(Spot, 0x2400b, &CallerMins, &CallerMaxs);
+	TestTrue(TEXT("a caller's box replaces the OBB, the foot box built from it"),
+		Asked.MinsCm.Equals(FVector(-1.0, -2.0, 5.0) * U, 1e-3)
+			&& Asked.MaxsCm.Equals(FVector(1.0, 2.0, 5.0) * U, 1e-3));
+	TestEqual(TEXT("and the mask is the caller's"), Asked.RetailMask, 0x2400b);
+	Fixture.Services.TraceRetailQuery = nullptr;
 
 	// `CAI_BaseNPC::CheckOnGround` `0x1026e5e0`. Without condition 0x73 and at nav type 0 the body
 	// stamps its deadline (`curtime + 0.5`, `_DAT_104454d0`) and then asks for the trace.
@@ -679,8 +792,8 @@ bool FElysiumNpcKernelMotorProbesTest::RunTest(const FString&)
 	TestFalse(TEXT("so does a non-ground nav type"), Guard->Cognition.Conditions.Has(OnGround));
 	Guard->NavSetType(0);
 
-	// `CNPC_VWerewolf::GetGroundpoint` `0x103d6a40`. With no hull table and no trace the body lands
-	// on retail's own no-hit arm, which answers `DAT_10713de0/de4/de8` — and `staticinit_101371a0`
+	// `CNPC_VWerewolf::GetGroundpoint` `0x103d6a40`. With no collision world the trace answers no hit
+	// and the body lands on retail's own no-hit arm, which answers `DAT_10713de0/de4/de8` — and `staticinit_101371a0`
 	// fills all three with `0x7f7fffff`, so that fallback is **`vec3_invalid`, not `vec3_origin`**.
 	FElysiumNpcWorldBuilder WolfBuilder(TEXT("npc_kernel_motor_groundpoint"), 4306);
 	WolfBuilder.AddNpcOfClass(TEXT("wolf"), FVector::ZeroVector, TEXT("CNPC_VWerewolf"));
@@ -955,17 +1068,29 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	Player->Origin = PortUnits(20.0, 0.0, 0.0);
 	Leader->Senses.Memory.ClosestPlayer = Player->Handle;
 
-	// `CheckStuck` `0x103ab580` — both boxes come from `m_Collision`'s OBB slots, which is a SEAM,
-	// so the body refuses before it tests anything and the leader is not moved.
+	// `CheckStuck` `0x103ab580` — both boxes come from `m_Collision`'s OBB slots. The leader's is its
+	// standing hull's row (0018 story 6); the PLAYER's `+0x274` / `+0x280` are still a seam, so the
+	// body refuses before it tests anything and the leader is not moved.
 	const FVector Before = Leader->Origin;
 	Leader->CheckStuck();
-	TestEqual(TEXT("CheckStuck moves nobody while the collision-extent seam refuses"),
+	TestEqual(TEXT("CheckStuck moves nobody while the player's extent seam refuses"),
 		Leader->Origin, Before);
 	FVector Mins(1.0, 1.0, 1.0);
 	FVector Maxs(2.0, 2.0, 2.0);
-	TestFalse(TEXT("the extent seam refuses"),
-		FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs));
-	TestEqual(TEXT("and zeroes the mins"), Mins, FVector::ZeroVector);
+	FVector RowMins = FVector::ZeroVector;
+	FVector RowMaxs = FVector::ZeroVector;
+	Leader->RetailHullExtents(Leader->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, RowMins, RowMaxs);
+	TestTrue(TEXT("an NPC's m_Collision answers"), FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs));
+	TestTrue(TEXT("with its standing hull's FULL row (0x10273070)"), Mins == RowMins && Maxs == RowMaxs);
+	Leader->bIsUsingSmallHull = true;
+	Leader->RetailHullExtents(Leader->HullKind, FElysiumNpcBase::EElysiumHullExtents::Small, RowMins, RowMaxs);
+	FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs);
+	TestTrue(TEXT("and its SMALL row while m_fIsUsingSmallHull stands (0x10273180)"),
+		Mins == RowMins && Maxs == RowMaxs);
+	Leader->bIsUsingSmallHull = false;
+	TestFalse(TEXT("the player's extents are still the seam"),
+		FElysiumNpcBase::RetailCollisionExtents(*Player, Mins, Maxs));
+	TestEqual(TEXT("and zero the mins"), Mins, FVector::ZeroVector);
 
 	// `PlayerInNoJumpZone` `0x103a9e70` — the hint list is empty, so nobody is ever inside one.
 	TestFalse(TEXT("no player is in a no-jump zone"), Leader->PlayerInNoJumpZone());

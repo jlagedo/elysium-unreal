@@ -578,20 +578,81 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 	TestTrue(TEXT("and accepts one from its own"),
 		Npc->IsValidShootPosition(FVector::ZeroVector, &Hint));
 
-	// `IsValidCover` `0x1028af20`, slot 548 — the same group rule behind a downward hull trace whose
-	// seam answers nothing, which reads as "not in solid" and admits the cover.
-	TestTrue(TEXT("IsValidCover admits a matching hint with the trace seam silent"),
+	// `IsValidCover` `0x1028af20`, slot 548 — the same group rule behind a hull probe that a world
+	// with no collision answers clear, which reads as "not in solid" and admits the cover.
+	TestTrue(TEXT("IsValidCover admits a matching hint with no collision world"),
 		Npc->IsValidCover(FVector::ZeroVector, &Hint));
 	Hint.Group = TEXT("alley");
 	TestFalse(TEXT("and the hint-group arm still refuses"),
 		Npc->IsValidCover(FVector::ZeroVector, &Hint));
 	Npc->BaseScheduleHost.HintGroup.Reset();
 
-	// `IsAreaClear` `0x102a0fb0` — the flag is raised for exactly the trace and dropped after it.
+	// The probe itself over a stated world (R2 §3): the knob answers the one trace and records it.
+	FElysiumRetailTrace Asked;
+	FElysiumRetailTraceResult Stated;
+	bool bForcedDuringTrace = false;
+	Fixture.Services.TraceRetailQuery = [&Asked, &Stated, &bForcedDuringTrace, Npc](
+		const FElysiumRetailTrace& Trace, FElysiumRetailTraceResult& Out)
+	{
+		Asked = Trace;
+		bForcedDuringTrace = Npc->bForceNpcCheck;
+		Out = Stated;
+		return true;
+	};
+	const FVector CoverCm(100.0 * U, 50.0 * U, 10.0 * U);
+	TestTrue(TEXT("0x1028af20: a clear probe admits"), Npc->IsValidCover(CoverCm, nullptr));
+	TestTrue(TEXT("the end is 0.01 ABOVE the start for HUMAN_HULL (mins.z 0), not a drop"),
+		FMath::IsNearlyEqual(Asked.EndCm.Z - Asked.StartCm.Z, 0.01 * U, 1e-4));
+	TestTrue(TEXT("the box is m_Collision's OBB, HUMAN_HULL's full row"),
+		Asked.MinsCm.Equals(FVector(-13.0, -13.0, 0.0) * U, 1e-3)
+			&& Asked.MaxsCm.Equals(FVector(13.0, 13.0, 72.0) * U, 1e-3));
+	TestEqual(TEXT("mask 0x202400b"), Asked.RetailMask, 0x202400b);
+	TestFalse(TEXT("no m_bForceNPCCheck bracket around it"), bForcedDuringTrace);
+	Stated.Fraction = 0.5f;
+	TestTrue(TEXT("1028b00c: only startsolid is read -- a blocked, not embedded hull passes"),
+		Npc->IsValidCover(CoverCm, nullptr));
+	Stated.Fraction = 0.f;
+	Stated.bStartSolid = true;
+	TestFalse(TEXT("a start-solid probe refuses the cover"), Npc->IsValidCover(CoverCm, nullptr));
+	Stated = FElysiumRetailTraceResult();
+	FElysiumRetailTraceCharacter Standing;
+	Standing.Entity = Target->Handle;
+	Standing.Fraction = 0.f;
+	Standing.bStartSolid = true;
+	Stated.Characters.Add(Standing);
+	TestFalse(TEXT("so does another NPC standing on the spot: CTraceFilterSimple keeps NPCs"),
+		Npc->IsValidCover(CoverCm, nullptr));
+
+	// `IsAreaClear` `0x102a0fb0` (R2 §4) — start == end, the OBB by default, the flag raised for
+	// exactly the trace; clear iff fraction >= 1.0 and neither solid flag.
+	Stated = FElysiumRetailTraceResult();
 	Npc->bForceNpcCheck = false;
-	TestTrue(TEXT("IsAreaClear reads the silent trace seam as clear"),
-		Npc->IsAreaClear(FVector::ZeroVector, 0x202400b));
-	TestFalse(TEXT("and m_bForceNPCCheck is back down afterwards"), Npc->bForceNpcCheck);
+	TestTrue(TEXT("0x102a0fb0: a clear overlap is clear"), Npc->IsAreaClear(CoverCm, 0x202400b));
+	TestTrue(TEXT("start == end"), Asked.StartCm.Equals(Asked.EndCm, 1e-6));
+	TestTrue(TEXT("with m_bForceNPCCheck up during the trace"), bForcedDuringTrace);
+	TestFalse(TEXT("and back down afterwards"), Npc->bForceNpcCheck);
+	TestTrue(TEXT("on the OBB when no box is passed"),
+		Asked.MaxsCm.Equals(FVector(13.0, 13.0, 72.0) * U, 1e-3));
+	Stated.bAllSolid = true;
+	TestFalse(TEXT("102a110a: allsolid is not clear"), Npc->IsAreaClear(CoverCm, 0x202400b));
+	Stated = FElysiumRetailTraceResult();
+	Stated.bStartSolid = true;
+	TestFalse(TEXT("nor is startsolid"), Npc->IsAreaClear(CoverCm, 0x202400b));
+	Stated = FElysiumRetailTraceResult();
+	Stated.Fraction = 0.99f;
+	TestFalse(TEXT("nor a fraction under 1.0"), Npc->IsAreaClear(CoverCm, 0x202400b));
+	Stated = FElysiumRetailTraceResult();
+	Stated.Characters.Add(Standing);
+	TestFalse(TEXT("an NPC standing there blocks under the force bracket"),
+		Npc->IsAreaClear(CoverCm, 0x202400b));
+	TestTrue(TEXT("but not under 0x2400b, which carries no MONSTER"), Npc->IsAreaClear(CoverCm, 0x2400b));
+	Stated = FElysiumRetailTraceResult();
+	const FVector BoxMins(-26.0, -26.0, 0.0);
+	const FVector BoxMaxs(26.0, 26.0, 72.0);
+	Npc->IsAreaClear(CoverCm, 0x202400b, &BoxMins, &BoxMaxs);
+	TestTrue(TEXT("a caller's box replaces the OBB (0x1039ee20's doubled hull)"),
+		Asked.MaxsCm.Equals(FVector(26.0, 26.0, 72.0) * U, 1e-3));
+	Fixture.Services.TraceRetailQuery = nullptr;
 
 	return true;
 }

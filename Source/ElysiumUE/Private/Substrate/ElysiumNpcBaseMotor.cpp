@@ -30,6 +30,10 @@ namespace
 	constexpr float GTraceClearFraction = static_cast<float>(ElysiumNpcTunables::OneDouble);
 	constexpr int32 GGroundTraceMask = 0x202400b;
 	constexpr int32 GCoverTraceMask = 0x2804091;    // `ValidateNavGoal`'s
+	// The retail contents bit the character half of the trace filters reads (`StandardFilterRules
+	// 0x101d3080` at `101d30f2`), and the one mask `CTraceFilterSimple` skips slot 68 under.
+	constexpr int32 GTraceMaskMonster = 0x2000000;
+	constexpr int32 GTraceMaskNoIgnoreCollision = 0x46004003;
 	// Conditions this family touches that `EElysiumNpcCond` does not name. Retail's `CAI_BaseNPC`
 	// registrar is one dense namespace 0x00..0x76 and 0x73 sits in the unnamed tail of it; 0x7b is
 	// above the base band entirely, so it is a species registration. Both are carried as retail's
@@ -175,19 +179,121 @@ bool FElysiumNpcBase::AnimIntervalMovement(float Interval, FVector& OutDeltaUnit
 bool FElysiumNpcBase::KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits,
 	const FVector& HullMins, const FVector& HullMaxs, int32 Mask, FKernelHullTrace& OutTrace) const
 {
-	// `thunk_FUN_1026e940` and `(*DAT_1070b254)->TraceRay`, the engine hull trace the three probe
-	// bodies of this family run. **SEAM**: nothing traces a hull for the kernel here. `OutTrace`
-	// keeps its defaults — fraction 1.0, no entity — which is retail's own CLEAR result, and every
-	// caller below branches on the `false` return rather than on the defaults.
-	(void)StartUnits;
-	(void)HullMins;
-	(void)HullMaxs;
-	(void)Mask;
+	// `UTIL_TraceHull 0x1026e940(start, end, mins, maxs, mask, filter, &tr, 1)` and the engine
+	// `TraceRay` behind it, answered by `IElysiumEmbodiment::TraceRetail` (0018 story 6). The seam
+	// answers the WORLD (brushes, movers, props) on a channel no character answers and LISTS the
+	// characters the same box met; which of them retail's filter keeps is decided here.
+	//
 	// A clear trace ends where it was aimed; `endpos` is the one word of the clear answer a caller
 	// can read back (`CNPC_VWerewolf::CheckStuck`'s `SetAbsOrigin(tr.endpos)`).
 	OutTrace.EndPosUnits = EndUnits;
 	++MotorSeams.HullTraces;
-	return false;
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return false;
+	}
+	// Source units in the port's axes -> centimetres. The box is retail's (Source axes, Y up the
+	// other way), so its Y pair is mirrored: mins.y' = -maxs.y, maxs.y' = -mins.y. A hull row is
+	// symmetric in Y, so only an asymmetric box sees the difference.
+	const double U = ElysiumMove::U;
+	FElysiumRetailTrace Trace;
+	Trace.StartCm = StartUnits * U;
+	Trace.EndCm = EndUnits * U;
+	Trace.MinsCm = FVector(HullMins.X, -HullMaxs.Y, HullMins.Z) * U;
+	Trace.MaxsCm = FVector(HullMaxs.X, -HullMins.Y, HullMaxs.Z) * U;
+	Trace.RetailMask = Mask;
+	// The filter's pass entity (`PassServerEntityFilter 0x101d2fc0`): the tester itself.
+	Trace.Ignore.Add(Handle);
+	FElysiumRetailTraceResult Result;
+	if (!Embodiment->TraceRetail(Trace, Result))
+	{
+		return false;
+	}
+	OutTrace.Fraction = Result.Fraction;
+	OutTrace.HitEntity = Result.HitEntity;
+	OutTrace.PlaneNormal = Result.Normal;
+	OutTrace.bAllSolid = Result.bAllSolid;
+	OutTrace.bStartSolid = Result.bStartSolid;
+	OutTrace.EndPosUnits = Result.EndPosCm / U;
+
+	// The characters, nearest first: the first one the filter KEEPS is the only one that can stop
+	// the trace. It is folded in when it is nearer than the world hit, or when it starts solid and
+	// the world answer does not (a start-solid character is a hit at fraction 0: `CheckStandPosition`
+	// hands it to `CanStandOn`, `IsAreaClear` / `IsValidCover` refuse on it). The world's own
+	// `allsolid` stands: the seam reports no per-character `allsolid`.
+	for (const FElysiumRetailTraceCharacter& Character : Result.Characters)
+	{
+		if (!KernelTraceKeepsCharacter(Character.Entity, Mask))
+		{
+			continue;
+		}
+		const bool bNearer = Character.Fraction < OutTrace.Fraction;
+		const bool bSolidFirst = Character.bStartSolid && !Result.bStartSolid;
+		if (bNearer || bSolidFirst)
+		{
+			const float Fraction = Character.bStartSolid ? 0.f : Character.Fraction;
+			OutTrace.Fraction = Fraction;
+			OutTrace.HitEntity = Character.Entity;
+			OutTrace.PlaneNormal = FVector::ZeroVector;   // no per-character normal at the seam
+			OutTrace.bStartSolid = OutTrace.bStartSolid || Character.bStartSolid;
+			OutTrace.EndPosUnits = StartUnits + (EndUnits - StartUnits) * Fraction;
+		}
+		break;
+	}
+	return true;
+}
+
+bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Character, int32 Mask) const
+{
+	// `StandardFilterRules 0x101d3080` (`101d30f2`): a non-brush entity is rejected unless the mask
+	// carries MONSTER. `0x202400b` does; `0x2400b` / `0x2000b` do not, and the seam lists no
+	// character then either.
+	if ((Mask & GTraceMaskMonster) == 0 || World == nullptr)
+	{
+		return false;
+	}
+	FElysiumEntity* const Other = World->Resolve(Character);
+	if (Other == nullptr || Other == static_cast<const FElysiumEntity*>(this))
+	{
+		return false;
+	}
+	// `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` (`101d3284`): a combat character (`+0x9c`)
+	// with `m_bIsBCCTargetable (+0x1480) == 0` or `m_bScriptHidden (+0xf4)` is skipped. The
+	// script-hidden byte is `FElysiumEntity::IsHidden` (ScriptHide / StartHidden).
+	if (Other->IsHidden() || !IsBccTargetable(*Other))
+	{
+		return false;
+	}
+	// Then, unless the mask is `0x46004003`, slot 68 `ShouldIgnoreCollision` in both directions: the
+	// candidate's own body asked about this NPC, and this NPC's asked about the candidate. The nav
+	// filters (`0x102e32d0` arm (e)) run the tester's direction first; the answer is the same OR.
+	// This NPC's slot 68 is the one `m_bForceNPCCheck` (`+0x63da`) reaches: with the bracket up
+	// (`CanStandAt 0x102a0ed0`, `IsAreaClear 0x102a0fb0`) its NPC/player/sleeping arm is skipped
+	// and other NPCs are solid. Neither slot-68 body writes anything.
+	//
+	// Slot 68 is dispatched only on a Troika-line body (`FElysiumNpc` and its species), where it is
+	// ported. The player's (`CBaseCombatCharacter 0x10340650`) and a base-line NPC's are still
+	// generated stubs answering false; that answer is taken without firing the stub tally on every
+	// trace.
+	//
+	// NOT PORTED, stated: arms (a) the `CNavPropertyDatabase` set (`0x102eb170`, whose inserter is
+	// unrecovered), (c) slot 91 `ShouldCollide(group, mask)` and (d) the gamerules group pair --
+	// the port stands no collision-group word (`+0x368`).
+	if (Mask != GTraceMaskNoIgnoreCollision)
+	{
+		FElysiumNpc* const SelfTroika = const_cast<FElysiumNpcBase*>(this)->AsNpc();
+		if (SelfTroika != nullptr && SelfTroika->ShouldIgnoreCollision(Other))
+		{
+			return false;
+		}
+		FElysiumNpc* const OtherTroika = Other->AsNpc();
+		if (OtherTroika != nullptr && OtherTroika->ShouldIgnoreCollision(const_cast<FElysiumNpcBase*>(this)))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 bool FElysiumNpcBase::RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,
@@ -212,9 +318,21 @@ bool FElysiumNpcBase::RetailHullExtents(int32 Hull, EElysiumHullExtents Which, F
 bool FElysiumNpcBase::RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits)
 {
-	// `m_Collision` (+0x270) slots +4 / +8 — `OBBMins()` / `OBBMaxs()`. **SEAM**: `FElysiumEntity`
-	// carries no collision extents; the bodies below refuse rather than box a point.
-	(void)Entity;
+	// `m_Collision` (+0x270) slots 1 / 2 — `OBBMins()` / `OBBMaxs()` (`0x100dc810` / `0x100dc830`).
+	// An NPC's box is whatever `UTIL_SetSize` last wrote, and only the two hull bodies write it:
+	// `SetHullSizeNormal 0x10273070` the FULL row of `m_eHull` (`+0x1568`), `SetHullSizeSmall
+	// 0x10273180` the SMALL row, with `m_fIsUsingSmallHull` (`+0x5f2d`) saying which one stands.
+	// `+0x1568` is the box word; `+0x156c` (`PathingHullKind`) only picks the nav agent
+	// (`navigation-jump-links.md` § "The two hull words").
+	const FElysiumNpcBase* const Npc = Entity.AsNpcBase();
+	if (Npc != nullptr)
+	{
+		return Npc->RetailHullExtents(Npc->HullKind,
+			Npc->bIsUsingSmallHull ? EElysiumHullExtents::Small : EElysiumHullExtents::Full,
+			OutMinsUnits, OutMaxsUnits);
+	}
+	// **SEAM** for every other entity: the player's, a prop's or a brush entity's `+0x274` / `+0x280`
+	// have no source in this runtime. The bodies below refuse rather than box a point.
 	OutMinsUnits = FVector::ZeroVector;
 	OutMaxsUnits = FVector::ZeroVector;
 	return false;
@@ -257,9 +375,15 @@ float FElysiumNpcBase::StepHeight() const
 float FElysiumNpcBase::GetMaxJumpSpeed() const
 {
 	// slot 523. `CAI_BaseNPC::GetMaxJumpSpeed` `0x101a6b60` returns `_DAT_10453b94` = 18.0 — the
-	// SAME cell slot 522's `0x101a6b40` reads. The Troika (`0x101aa670`) and
-	// `CAI_TestHull` (`0x102d72d0`) override it on their own classes. Until story 5 fold A1 this was a
-	// generated stub answering 0.
+	// SAME cell slot 522's `0x101a6b40` reads. The Troika (`0x101aa670`), `CAI_TestHull`
+	// (`0x102d72d0`), `CNPC_VMingXiao` (`0x10391050`), `CNPC_VMingXiaoTentacle` (`0x1039b070`) and
+	// `CNPC_VTzimisce` (`0x103b6df0`) override it on their own classes. Until story 5 fold A1 this
+	// was a generated stub answering 0.
+	//
+	// **The SDK name is wrong** (R1 §5): slot 523 is the STEP-DOWN height -- the drop
+	// `CheckStandPosition 0x102e7270` traces below the feet (`102e72b9`, `JMP [EAX+0x82c]`) and the
+	// step record's down-step in `TestGroundMove 0x102e4f50`. The name is the generated slot table's
+	// (`docs/vtmb/npc-kernel/signatures.tsv` row 523), which this body does not own.
 	return ElysiumNpcTunables::StepHeightBase;
 }
 
@@ -365,11 +489,17 @@ bool FElysiumNpcBase::ValidateNavGoal()
 	{
 		return true;
 	}
-	// `NavGoalPosition` answers port axes in Source units; the trace below is in Source axes (Y
-	// negated), the same frame `SourceOf(Enemy->Origin)` is in.
-	GoalUnits.Y = -GoalUnits.Y;
+	// `NavGoalPosition` answers Source units in the port's axes, which is `KernelHullTrace`'s frame;
+	// the enemy is brought into it the same way (`Origin / U`).
+	//
+	// **NOT retail's endpoints, stated (R2 §6)**: retail's start is the goal with its z replaced by
+	// the floor probe `0x102f99d0(goal, 384)` plus slot 533 `EyeOffset` of the hint's cover activity
+	// (slot 569), and its end is the enemy's slot 193 EYE. The port traces goal to enemy ORIGIN; the
+	// floor probe's miss answer and the eye pair are this body's owed port. The mask (`0x2804091`)
+	// and the filter (`CTraceFilterSimple(this, 0)`: NPCs are NOT transparent to it, so the
+	// character rule is the kernel trace's) are retail's.
 	FKernelHullTrace Trace;
-	if (!KernelHullTrace(GoalUnits, NpcKernelMotorShared::SourceOf(Enemy->Origin), FVector::ZeroVector,
+	if (!KernelHullTrace(GoalUnits, Enemy->Origin / ElysiumMove::U, FVector::ZeroVector,
 		FVector::ZeroVector, GCoverTraceMask, Trace))
 	{
 		return true;
@@ -451,8 +581,10 @@ void FElysiumNpcBase::CheckOnGround()
 	//     if (tr.m_pEnt && tr.m_pEnt != GetGroundEntity()) SetGroundEntity(tr.m_pEnt);
 	//
 	// `m_flCheckOnGroundTime` is the ONE bound word of this body (`FElysiumNpcBase::CheckOnGroundTime`);
-	// the trace is a seam, so the two ground writes are unreachable today and the deadline is still
-	// stamped, exactly as retail stamps it before tracing.
+	// the deadline is stamped before the trace, exactly as retail stamps it. The trace (R1 §6): the
+	// move probe's `CTraceFilterNavGround`, the FULL collision box (no foot box), cylinder flag 1, no
+	// `CanStandOn` and no `m_bForceNPCCheck` bracket. A world with no collision answers nothing and
+	// neither ground write runs.
 	if (Cognition.Conditions.Has(GCondOnGround))
 	{
 		if ((Flags & 1) == 0 && NavGetType() == 0)
@@ -477,7 +609,7 @@ void FElysiumNpcBase::CheckOnGround()
 	}
 	CheckOnGroundTime = Now + GCheckOnGroundInterval;
 
-	const FVector OriginUnits = NpcKernelMotorShared::SourceOf(Origin);
+	const FVector OriginUnits = Origin / ElysiumMove::U;                 // `KernelHullTrace`'s frame
 	const FVector StartUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z + GCheckOnGroundUp);
 	const FVector EndUnits(OriginUnits.X, OriginUnits.Y, OriginUnits.Z - GCheckOnGroundDown);
 	FVector Mins = FVector::ZeroVector;

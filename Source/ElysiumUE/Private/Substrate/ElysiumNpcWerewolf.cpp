@@ -745,8 +745,8 @@ void FElysiumNpcWerewolf::DrawDebugHullAtPoint(const FVector& PointUnits, float 
 	// remains **UNRECOVERED** — the argument shape fits a circle or a swept box and the listing does
 	// not name it. It is emitted under its address so the arm is visible.
 	//
-	// **SEAM**: `RetailHullExtents` (family Motor) answers false with both extents at zero, so the
-	// box is degenerate and the radius is 0.
+	// The extents are family Motor's `RetailHullExtents`, the replayed hull table's row for `m_eHull`
+	// (`+0x1568`); a hull id outside the table answers the zero box and a radius of 0.
 	UE_LOG(LogElysiumNpcEnt, VeryVerbose, TEXT("CNPC_VWerewolf::DrawDebugHullAtPoint %s"),
 		TargetName.IsEmpty() ? TEXT("") : *TargetName);
 	FVector HullMins = FVector::ZeroVector;
@@ -1632,9 +1632,9 @@ FVector FElysiumNpcWerewolf::GetGroundpoint(const FVector& PointUnits) const
 	// `CNPC_VWerewolf::GetForwardYawForHint` (`0x103d7210`), which uses it as a sentinel. A no-hit
 	// ground snap therefore answers "there is no ground point", and a caller must test for it.
 	//
-	// **SEAM**: no hull table and no trace, so the body lands on that no-hit arm every time. That is
-	// a REAL answer of retail's, not a port refusal, and the caller must treat it the way retail's
-	// caller does.
+	// The trace is family Motor's `KernelHullTrace` (0018 story 6); a world with no collision lands on
+	// that no-hit arm every time. That is a REAL answer of retail's, not a port refusal, and the
+	// caller must treat it the way retail's caller does.
 	FVector Mins = FVector::ZeroVector;
 	FVector Maxs = FVector::ZeroVector;
 	RetailHullExtents(HullKind, EElysiumHullExtents::Full, Mins, Maxs);

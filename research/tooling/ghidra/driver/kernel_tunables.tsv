@@ -60,8 +60,8 @@ address	name	type	value	evidence
 104ada34	ChangBrosJumpPathThreshold	f32	100.0	`0x1036e04c FCOMP float ptr`; `CNPC_VChangBros::CheckJumpPathToHintNode 0x1036df50` (2 refs); jump-path point-to-segment threshold
 104c3cd4	SabbatLeaderTooFarToAttack	f32	120.0	`0x103aa25f FCOMP float ptr`; `CNPC_VSabbatLeader::SelectScheduleMeleeCombat 0x103aa060` (1 ref); the `TOO_FAR_TO_ATTACK` bound
 104ce8c0	VampireBossSegmentLengthFloor	f32	1e-05	`0x103c6c02 FCOMP float ptr`; `CNPC_VVampireBoss::DistToSegment 0x103c6b70` (4 refs); degenerate segment squared-length floor
-10453b94	StepHeightBase	f32	18.0	`CAI_BaseNPC::StepHeight 0x101a6b40` (slot 522, the Troika line's body) and `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523) both return it
-1044faa8	MaxJumpSpeedTroika	f32	36.0	`CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523) returns it
+10453b94	StepHeightBase	f32	18.0	`CAI_BaseNPC::StepHeight 0x101a6b40` (slot 522, the Troika line's body) and `CAI_BaseNPC::GetMaxJumpSpeed 0x101a6b60` (slot 523, the step-down height `CheckStandPosition 0x102e7270` drops below the feet) both return it
+1044faa8	MaxJumpSpeedTroika	f32	36.0	`CAI_BaseNPCTroika::GetMaxJumpSpeed 0x101aa670` (slot 523, the stand test's step-down drop) returns it
 10477ce8	JumpGravity	f32	350.0	`0x101a6b80`; the jump arc's gravity
 10462950	Forty	f32	40.0	`CAI_TestHull::StepHeight 0x102d72b0` and `::GetMaxJumpSpeed 0x102d72d0` both return it
 102d7772	TestHullJumpMaxRise	imm_f32	1024.0	`0x102d7772 PUSH 0x44800000`; `CAI_TestHull::IsJumpLegal 0x102d7760` (slot 521); the rise bound it passes `FUN_10280790` (the base's 80)
@@ -70,15 +70,15 @@ address	name	type	value	evidence
 104493d0	TenthDouble	f64	0.1	`FUN_10280790`'s slack, a qword load the x87 widens
 10460020	JumpApexScale	f64	1.25	`FUN_10280790`'s apex scale, a qword load the x87 widens
 1047a3ac	YawSpeedRun	f32	160.0	the yaw-speed ladder `0x10297ce0`'s run arm
-104492a8	Thirty	f32	30.0	the yaw-speed ladder's crouch arm; also `CNPC_VMingXiao::StepHeight 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070`
+104492a8	Thirty	f32	30.0	the yaw-speed ladder's crouch arm; also `CNPC_VMingXiao::StepHeight 0x10391030` and `CNPC_VMingXiaoTentacle::GetMaxJumpSpeed 0x1039b070` (slot 523, the stand test's step-down drop)
 10463584	Fifteen	f32	15.0	the humanoid yaw-speed ladder's move arm
 104492a4	YawSpeedHumanoidCrouch	f32	60.0	the humanoid yaw-speed ladder's crouch arm
 1044f00c	OneTwenty	f32	120.0	the generic yaw-speed ladder's crouch arm
 104cc504	YawSpeedTzimisceDefault	f32	11.0	`CNPC_VTzimisce::MaxYawSpeed 0x103ba020`'s default arm
 104454c0	One	f32	1.0	the clamp every turning arm of the yaw-speed ladders ends on (`0x10374130`)
-1044ffe8	MingXiaoMaxJumpSpeed	f32	50.0	`CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` returns it
+1044ffe8	MingXiaoMaxJumpSpeed	f32	50.0	`CNPC_VMingXiao::GetMaxJumpSpeed 0x10391050` (slot 523, the stand test's step-down drop) returns it
 104cc4fc	TzimisceStepHeight	f32	26.0	`CNPC_VTzimisce::StepHeight 0x103b6dd0` returns it
-104cc500	TzimisceMaxJumpSpeed	f32	56.0	`CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` returns it
+104cc500	TzimisceMaxJumpSpeed	f32	56.0	`CNPC_VTzimisce::GetMaxJumpSpeed 0x103b6df0` (slot 523, the stand test's step-down drop) returns it
 1049aea8	StandOnHeadSpringPositive	f32	0.707	`CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820`'s spring direction component
 1049aea4	StandOnHeadSpringNegative	f32	-0.707	`CAI_BaseNPCTroika::ResolveStandingOnHead 0x102bf820`'s spring direction component
 1093b7c8	ManbatDelta	convar_f32	600.0	`manbat_delta` ctor `0x1038ad30`, read through `DAT_1093b7cc` (object + 4); readers `0x1038b370 FUN_1038b370`: `+0x28` float

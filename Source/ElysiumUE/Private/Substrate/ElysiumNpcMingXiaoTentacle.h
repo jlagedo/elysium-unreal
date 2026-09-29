@@ -31,6 +31,8 @@ public:
 	virtual bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
 	virtual bool CanStandOn(FElysiumEntity* Other) override;
+	// Slot 523 `0x1039b070` (the stand test's drop, SDK-named `GetMaxJumpSpeed`): 30.0.
+	virtual float GetMaxJumpSpeed() const override;
 	virtual const TCHAR* GetShortConditionName(int32 ConditionId) override;
 	virtual int32 GetUsedHullBits() override;
 	virtual const TCHAR* SquadSlotName(int32 SlotEn) override;

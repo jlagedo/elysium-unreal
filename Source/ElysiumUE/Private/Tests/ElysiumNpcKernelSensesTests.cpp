@@ -301,15 +301,34 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 	// fails on distance whatever the boxes say.
 	TestFalse(TEXT("0x101aaf80: past the 85-unit Manhattan limit it refuses"),
 		Phone->PayphonePassesFindEntityFovTrace(*Distant));
-	// Inside the limit it reaches the AABB overlap, whose only source — family Motor's
-	// `RetailCollisionExtents` — is a seam, so the second half refuses. That refusal is the
-	// recovered seam, not the recovered rule.
-	TestFalse(TEXT("0x101aaf80: inside it, the OBB overlap's extents seam refuses"),
+	// Inside the limit it reaches the AABB overlap of the two `m_Collision` OBBs, each anchored at its
+	// own origin: six comparisons, `B1 >= A0 && B0 <= A1` per axis. Both boxes are the NPCs' standing
+	// hull rows (`m_eHull +0x1568`, full while no small hull stands).
+	FVector PhoneMins = FVector::ZeroVector;
+	FVector PhoneMaxs = FVector::ZeroVector;
+	FVector CallerMins = FVector::ZeroVector;
+	FVector CallerMaxs = FVector::ZeroVector;
+	TestTrue(TEXT("0x101aaf80: the phone's OBB is its hull row"),
+		FElysiumNpcBase::RetailCollisionExtents(*Phone, PhoneMins, PhoneMaxs));
+	TestTrue(TEXT("0x101aaf80: and so is the caller's"),
+		FElysiumNpcBase::RetailCollisionExtents(*Caller, CallerMins, CallerMaxs));
+	FVector RowMins = FVector::ZeroVector;
+	FVector RowMaxs = FVector::ZeroVector;
+	Caller->RetailHullExtents(Caller->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, RowMins, RowMaxs);
+	TestTrue(TEXT("the caller's OBB is exactly its m_eHull FULL row"), CallerMins == RowMins && CallerMaxs == RowMaxs);
+	TestTrue(TEXT("a real box, not a point"), CallerMaxs.X > CallerMins.X && CallerMaxs.Z > CallerMins.Z);
+	// 50 cm apart (~19.7 units) at the same height: the two boxes overlap on every axis.
+	TestTrue(TEXT("0x101aaf80: inside the limit with overlapping boxes it passes"),
 		Phone->PayphonePassesFindEntityFovTrace(*Caller));
-	FVector Mins = FVector::ZeroVector;
-	FVector Maxs = FVector::ZeroVector;
-	TestFalse(TEXT("0x101aaf80: and that seam is RetailCollisionExtents answering nothing"),
-		FElysiumNpcBase::RetailCollisionExtents(*Caller, Mins, Maxs));
+	// Still inside the Manhattan limit but past the two half-widths on X: the boxes are apart.
+	const double ApartUnits = PhoneMaxs.X - CallerMins.X + 4.0;
+	Caller->Origin = Phone->Origin + FVector(ApartUnits * ElysiumMove::U, 0.0, 0.0);
+	const double EyeManhattan = (FMath::Abs(Phone->EyePosition().X - Caller->EyePosition().X)
+		+ FMath::Abs(Phone->EyePosition().Y - Caller->EyePosition().Y)
+		+ FMath::Abs(Phone->EyePosition().Z - Caller->EyePosition().Z)) / ElysiumMove::U;
+	TestTrue(TEXT("(precondition: still inside the 85-unit Manhattan gate)"), EyeManhattan < 85.0);
+	TestFalse(TEXT("0x101aaf80: inside the limit with boxes apart on X it refuses"),
+		Phone->PayphonePassesFindEntityFovTrace(*Caller));
 
 	// The census rows both slot-45 bodies came from.
 	const FElysiumNpcClass* Payphone = ElysiumNpcTestCensus::Find(TEXT("CPayphone"));

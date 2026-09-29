@@ -727,6 +727,14 @@ bool FElysiumNpcMingXiao::NavIgnoreCollision(FElysiumEntity* Other)
 	return FElysiumNpc::NavIgnoreCollision(Other);
 }
 
+// Slot 523: `0x10391050`, one load of `_DAT_1044ffe8` = 50.0. The slot is the STEP-DOWN height
+// (R1 §5): `CheckStandPosition 0x102e7270`'s drop below the feet and `TestGroundMove 0x102e4f50`'s
+// down-step, whatever the SDK slot table calls it.
+float FElysiumNpcMingXiao::GetMaxJumpSpeed() const
+{
+	return ElysiumNpcTunables::MingXiaoMaxJumpSpeed;
+}
+
 // Slot 123: `0x10399d40`
 /** `CNPC_VMingXiao::DrawDebugGeometryOverlays` (`0x10399d40`) — four range rings under
  *  `m_debugOverlays & 0x20000000` (NOT bit 0 like its siblings), then the Troika body. */
@@ -2176,16 +2184,11 @@ FElysiumNpc* FElysiumNpcMingXiao::MingXiaoSpawnTentacle(int32 TentacleIndex)
 	// The search. The first test is at the bone itself; then the compass, one step per miss.
 	// `CAI_BaseNPCTroika::IsAreaClear(pos, 0x2400b, mins, maxs)` (`0x102a0fb0`) with the hull `0x11`
 	// box: `m_bForceNPCCheck` (`+0x63da`) raised for one stationary hull trace, clear when the
-	// fraction reaches 1.0 and neither all- nor start-solid. The port's `IsAreaClear` takes only the
-	// OBB, so the body is spelled here with the explicit box, as L05's `TentacleHintClear`
-	// (`0x1039ee20`) spells the same call (integration review: the lane dropped the box).
+	// fraction reaches 1.0 and neither all- nor start-solid. `0x2400b` carries no MONSTER, so no
+	// character can refuse the spot; only the world can.
 	auto IsSpotClear = [this, &HullMins, &HullMaxs](const FVector& AtUnits)
 	{
-		bForceNpcCheck = true;                                               // 0x102a0fb0 +0x63da = 1
-		FKernelHullTrace Trace;
-		KernelHullTrace(AtUnits, AtUnits, HullMins, HullMaxs, GBoss19TentacleSpotMask, Trace);
-		bForceNpcCheck = false;                                              // +0x63da = 0
-		return Trace.Fraction >= ElysiumNpcTunables::One && !Trace.bAllSolid && !Trace.bStartSolid;
+		return IsAreaClear(AtUnits * ElysiumMove::U, GBoss19TentacleSpotMask, &HullMins, &HullMaxs);   // 0x102a0fb0
 	};
 	FVector SpotUnits = BoneUnits;
 	float Radius = GBoss19TentacleSearchRadiusSeed;                          // 0x10397517

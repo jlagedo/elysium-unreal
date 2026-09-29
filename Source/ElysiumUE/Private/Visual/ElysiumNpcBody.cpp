@@ -13,6 +13,7 @@
 #include "Visual/ElysiumAnimGraph.h"
 #include "ElysiumCollisionChannels.h"
 #include "Map/ElysiumNavQueryFilter_Pedestrian.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
@@ -95,6 +96,10 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	// NPCs stay on ECC_Pawn: Unreal reads navigation relevance off that channel, so "blocks an
 	// NPC" and "cuts the NavMesh" stay the same fact. The player has its own object channel.
 	Capsule->SetCollisionProfileName(TEXT("Pawn"));
+	// A character body (0018 story 6): a retail trace's WORLD answer never meets it -- the geometry
+	// seam drops this bit through `IgnoreMask` and lists the body among the trace's characters
+	// instead. Nothing else in the port queries with an ignore mask, so movement is unchanged.
+	Capsule->SetMaskFilterOnBodyInstance(ElysiumRetailMask::CharacterMaskBit);
 	Capsule->SetCanEverAffectNavigation(false);
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();

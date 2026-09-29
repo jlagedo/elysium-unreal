@@ -8,6 +8,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcSensesBodiesShared.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumNpcSightTrace.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
 
@@ -35,18 +36,27 @@ bool FElysiumNpcProneDialog::ProneDialogPassesFindEntityFovTrace(const FVector& 
 	// So the answer is "the ray from `from` toward `to` reaches ME, or reaches nothing at all".
 	// `_DAT_10449280` is 1.0 as a double and is the engine's CLEAR fraction.
 	//
-	// **SEAM**: this runtime's embodiment answers `QueryLineOfSight(from, to)` — clear or blocked —
-	// and reports NO hit entity, so the `tr.m_pEnt == this` arm has no source and only the
-	// clear-segment arm can answer true. Named: `IElysiumEmbodiment::QueryLineOfSight` is the
-	// retail `TraceRay` this stands for, and `tr.m_pEnt` is the word it does not carry.
+	// The retail trace is `ElysiumNpcSight::Visible`'s shape and this is its caller: the caller's OWN
+	// mask goes through verbatim, the target is THIS body (a hit on it is the `tr.m_pEnt == this` arm,
+	// a hit on nothing is the `m_pEnt == NULL && fraction == 1.0` arm, anything else is blocked), and
+	// no one is ignored. **Unrecovered:** the filter the listing hands `TraceRay` (`this` stands in the
+	// decompile where a `CTraceFilterSimple` would be constructed), so nothing here makes an NPC
+	// transparent: `bNpcsBlock` is set, the plain simple filter's answer, which has no transparency
+	// gate (R2 section 6). The headless answer is the brush-only clear one.
 	const FVector Delta = ToCm - FromCm;
 	bOutRayIsValid = Delta.SizeSquared() != NpcKernelSensesShared::GSharedZero;
-	(void)Mask;
 	const IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	if (Embodiment == nullptr)
 	{
 		// A headless world traces nothing, which is the CLEAR arm — `fraction == 1.0`, no entity.
 		return GSensesTraceClearFraction == 1.0f;
 	}
-	return Embodiment->QueryLineOfSight(FromCm, ToCm);
+	ElysiumNpcSight::FVisibleQuery Query;
+	Query.EyeCm = FromCm;
+	Query.TargetCm = ToCm;
+	Query.Mask = Mask;
+	Query.Target = Handle;
+	Query.World = World;
+	Query.bNpcsBlock = true;
+	return ElysiumNpcSight::Visible(*Embodiment, Query, nullptr);
 }

@@ -1571,8 +1571,8 @@ weapon; `>=` sets, below clears (`0x10270b20`). The item files' `Range` key is N
 `m_fMaxRange1`.
 
 **4. Four traces, four conditions** (`ElysiumNpcConditions.cpp:1184` makes two of them agree).
-Enemy sight: `GatherEnemyConditions 0x10270b20` → slot 201 `FVisible` eye to eye, mask
-`0x2804091`; ten consecutive failures of `m_eEnemyOccludedCheck (+0x5b98)` flip `HAVE_ENEMY_LOS
+Enemy sight: `GatherEnemyConditions 0x10270b20` → slot 201 `FVisible` (eye to eye only at probe 0 / 10;
+the probe index walks the OBB), mask `0x2804091`; ten consecutive failures of `m_eEnemyOccludedCheck (+0x5b98)` flip `HAVE_ENEMY_LOS
 0x4a` to `ENEMY_OCCLUDED 0x48`. Weapon line: `WeaponLOSCondition 0x1026fbe0` → weapon slot 364
 (`0x1024f330`) → one line from `Weapon_ShootPosition` (slot 389) to the target, mask
 `0x46004003`, owner ignored (`0x1024f3d0`): clear or hitting the enemy passes, a hated character
@@ -2767,11 +2767,20 @@ Port: `FElysiumNpcBase::GatherEnemyConditions`. Reproduced: the found outputs fi
 below-limit pass while the bit is clear, not only on a cone admission; the dead enemy keeps
 `HAVE_ENEMY_LOS` and has already fired its outputs; the 48-unit arm is unreachable on the Troika line.
 
-**Unrecovered:** `CBaseEntity::FVisible`'s use of its fourth argument; the blocker cell (the port's
+**Recovered 2026-09-29 (0018 story 6):** `CBaseEntity::FVisible`'s fourth argument is the probe index into
+`FVisibleTargetOrigin 0x100a72e0` (eye, OBB centre, then the eight corners at 0.9; `senses.md` "`FVisible`
+`0x102b4630`"), and the ray's `CONTENTS_MONSTER` bit never makes an NPC block `FVisible`: `NPCInit`
+(`10273394`) makes every NPC `m_bNPCTransparent (+0xfc)` and `CTraceFilterFVisible::ShouldHitEntity
+0x10107630` skips those. MONSTER's only reader is `StandardFilterRules 0x101d3080` (`101d30f2`): it rejects
+every entity that is not a solid brush model unless the mask has MONSTER or the entity has `m_bBlocksTraces
+(`+0xfd`, keyfield `blocks_traces`), so the bit makes the PLAYER and solid props block, never an NPC
+(engine `TraceRay 0x2006a5c0`, `ClipRayToCollideable 0x20069730`).
+
+**Unrecovered:** the blocker cell (the port's
 slot 201 cannot return one, so the at-limit write is an invalid handle); `m_fMaxRange1` (the seam
 answers none, so the limit stays `m_flDistTooFar`); `m_pNavigator +0x34`; `UpdateEnemyPos` (a
 `mechanism` row behind the nav seam); the `CAI_Enemies` notifier calls (`vfunc 0xe4 / 0xe8`,
-`0x10316ab0 / 0x10316bc0`); the ray's `CONTENTS_MONSTER` bit (the embodiment's line query stands in).
+`0x10316ab0 / 0x10316bc0`).
 
 ### `CAI_BaseNPCTroika::GatherConditions` — `0x102b27f0` (slot 433, 2133 bytes)
 

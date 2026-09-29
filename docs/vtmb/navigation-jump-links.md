@@ -125,7 +125,8 @@ not establish which graph the patched game actually loads, or that every request
 (`0x102fb4e0`) runs every probe with trace mask **`0x2000b`** = `CONTENTS_SOLID 1 | WINDOW 2 |
 GRATE 8 | MONSTERCLIP 0x20000`: the per-hull fit test at both nodes (`0x102f1900`, `"Cannot
 fit at node %d"`), the ground stand test (`0x102e7270`, `"Failed to stand at %d"`), the walk
-test (`0x102e4f50`, step 2.0, `"Failed to walk between nodes"`), the fly/climb hull traces
+test (`0x102e4f50`, `"Failed to walk between nodes"`; its 2.0 is the PERCENT of the leg
+stand-tested, `pct`, not a step — R1 §6), the fly/climb hull traces
 (`ITraceFilter` slot 4 with `0x2000b`) and both jump probes (`0x102e6d70`, 100.0, `"Nodes
 connect for jumping"`). `MOVEABLE 0x4000` is not in the mask, so brush-entity doors do not
 block a link at build; and a hull-0 ground link additionally runs `0x102e7e80(start, end,
@@ -525,8 +526,21 @@ the step record and the disputed exits re-read from the DLL).**
   jump speed — and minimum landing = hull width × 0.3333 (`0x1049d8e0`, a double). Segments
   of **16.0**, stop under **0.001** (both doubles, strict), no step cap; the final z tolerance
   is `max(hull height × 0.5, StepHeight + 0.1)` (`102e565b`…`102e56aa`; 36 on hull 0) and the
-  move fails only on `|Δz| >` it, strictly. Flag 4 skips the final z check. Flag 8 runs the stand probe
-  `0x102e7270` at the start and at every step, but its answer only picks a debug draw.
+  move fails only on `|Δz| >` it, strictly. Flag 4 skips the final z check. Flag 8 only picks a debug
+  draw. **CORRECTED 2026-09-29 (0018 story 6, R1 §6): the stand probe is a real per-step gate on
+  every ground `MoveLimit`, not a debug choice.** `MoveLimit`'s ground arm maps its flags `&1 → 4`
+  (2-D) and `&2 → 8` (draw); TGM flags 1 / 2 are never set from there. Unless `flags & 1` or
+  `pct < 0.001`, `TestGroundMove` stand-tests the START (`0x102e7270`) to seed the step record's
+  ground word (1 valid / 2 invalid), cleared after `pct` % of the leg (100 → never). Each 16-unit
+  step `CheckStep 0x102e4160`: a forward trace raised by slot 522; a down trace to `z − slot 523 −
+  0.0625`, a second at `4 × slot 523` if the first finds nothing (none → fail, world);
+  `CanStandOn(ground)` must agree; and while the word is nonzero and the ground's `+0x4c & 0x16` is
+  clear, `CheckStandPosition` at the step end must pass unless the word is 2. `skip` (argument 9)
+  non-zero returns clear, end = goal, untraced; `surfaceOut` (argument 10) is the stand probe's a6.
+  Port (0018 story 6): `MotorMoveTraceSweep`'s ground arm asks the body's NavMesh raycast
+  (`IElysiumNpcMotor::NavRaycast`) instead — a **named modernization**: the mesh was baked from the
+  same step height and hull; a hit is the world blocker `-2` with `flDistObstructed` the 2-D
+  distance left. The jump / fly / climb arms stay unported (the admitting record).
 - **`0x10304a40` — the stale-link re-probe** (from the predicate, through `0x102fce80`):
   the link's motion bits are tried in the order ground (bit 0), fly (bit 2), jump (bit 1),
   climb (bit 3); ground and fly through `0x103048d0`, jump and climb through a bare
@@ -1012,8 +1026,8 @@ an unrecovered read; it does not exist, because an authored node graph never ask
 Two bodies decide whether an NPC may stand or walk somewhere, and neither reads a surface normal:
 `CAI_MoveProbe_TestGroundMove 0x102e4f50` clamps only on step height — `max(hull height × 0.5,
 StepHeight + 0.1)` at `102e565b`, 36.0 on hull 0 — and `CAI_MoveProbe_CheckStandPosition
-0x102e7270` accepts a downward hull trace iff it hit at all (`fraction != 1.0`) and the hit
-ENTITY's slot 164 allows standing, reached through slot 166, whose body `0x10026f80` is the base
+0x102e7270` accepts a downward hull trace iff it hit at all (`fraction != 1.0`; a start-solid trace
+is a hit — R1 §1) and the hit ENTITY's slot 164 allows standing, reached through slot 166, whose body `0x10026f80` is the base
 for every class but the two Ming Xiao overrides. Passability is the step height and the hull, end
 to end.
 
@@ -1201,7 +1215,8 @@ datamap._
   types" (`DoFindPath 0x102f2330` switch). `SetGoal` writes it through `0x1030ba50(path, goal+0)`.
 - `ValidateNavGoal 0x10280360` requires `== 6`: the goal is a COVER goal. With a non-null enemy (slot
   `+0x29c`) it takes the goal position (`0x102ee140`), lifts it by the NPC's slot `+0x8e4` / `+0x854`
-  offsets, traces to the enemy (`+0x304` of the enemy, mask `0x2804091`), and if the trace fraction equals
+  offsets, traces to the enemy (`+0x304` of the enemy, mask `0x2804091`; the `0x202400b` near it belongs to the floor probe
+  `0x102f99d0`, R2 §6), and if the trace fraction equals
   `DAT_10449280` (a clear line — the "cover" does not cover) either sets condition `0x39` (when the
   current schedule is interrupted by it) or `TaskFail(0x1b)` (`m_failLine 0xbc`, text
   `AI_BaseNPC.cpp`). For any other type the body returns true untouched.
@@ -1756,7 +1771,7 @@ door, unusable door, no door route and open refused; base `-1` within 0.1) -> `O
 in the step itself fails `0x0c` with the stale mark. Where the body cannot yet report an input (steer slot 6, slot 7, motor
 slot 16, `0x102efde0`'s mover test), build the seam and answer "nothing" with a comment naming the retail word.
 
-**Unrecovered:** `localnav` slots 6 and 7 (`0x102de110`, `0x102de4a0`) and `MoveLimit`'s arms (who fills `surface`); motor
+**Unrecovered:** `localnav` slots 6 and 7 (`0x102de110`, `0x102de4a0`) and `MoveLimit`'s non-ground arms (`surface` is RECOVERED 2026-09-29, R1 §1: `CheckStandPosition`'s a6, filled on a pass); motor
 slot 16 `0x102e1300` (the S4 gate distance) and `0x102efde0`'s constants; what obstruction `+0x94` is beyond "non-null for an
 NPC", and the Troika sink's `+0x98`/`+0x14b8 bit 2` test; `PrependLocalAvoidance 0x102ede30` success conditions; slot 525
 overrides `0x10357ba0`, `0x103c5fe0`, `0x1038b120`; NPC sink overrides (`CNPC_VZombie 0x103de330`); the meaning of `Move`'s
@@ -1973,9 +1988,12 @@ node is itself a candidate and skips the two enqueue gates below.
    NPC's collision extents × 1.4 (`0x1049ae8c`), the corner picked by which side of the threat
    the eye falls: `x > tx, y > ty` → `(maxs.x, mins.y)`; `x > tx, y <= ty` → `(maxs.x, maxs.y)`;
    `x <= tx, y > ty` → `(mins.x, mins.y)`; `x <= tx, y <= ty` → `(mins.x, maxs.y)`;
-4. the validator, slot 548 (`+0x890`, `0x1028af20`): the NPC's hull (`+0x1568`) traced from
-   the position to the same point raised by `0.01 − hullMins.z` (`0x1044e658`, a double) —
-   in effect a hull-fits-here test, mask `0x202400b`, filter = the NPC, collision group 0 —
+4. the validator, slot 548 (`+0x890`, `0x1028af20`): the NPC's `m_Collision` OBB (`+0x274` /
+   `+0x280`, `1028af87` / `1028af90`) traced from the position to the same point raised by
+   `0.01 − hullMins.z` (`0x1044e658`, a double) — the hull word `+0x1568` feeds ONLY that z
+   (CORRECTED 2026-09-29, R2 §3: the extents are not the hull row), and the end is 0.01 ABOVE the
+   start for every hull whose mins.z is 0 — in effect a hull-fits-here test, mask `0x202400b`,
+   filter = the NPC, collision group 0 —
    and the ONLY field read is `startsolid` (`1028b00c MOV AL,[ESP+0x5f]` = record `+0x37`):
    set rejects. The fraction is not read, so a blocked-but-not-embedded hull passes. Then an
    NPC with a hint group (`+0x5db0`) accepts only a node whose hint carries the same `Group`
@@ -2098,7 +2116,11 @@ predicate `0x102ff960`. For a far node at hull position `c`, with `d0 = |cur −
    18.0 base, 40.0 test hull), with a foot box of `0.75·mins + 0.25·maxs … 0.25·mins +
    0.75·maxs` in x / y (`0x10462958`, `0x10449260`, doubles) and zero height at `mins.z`;
    standable iff `fraction != 1.0` AND the entity's slot 166 (`+0x298`, the SDK's
-   `CanStandOn`) agrees. Slot 523 is the STEP-DOWN height — the ground test `0x102e4f50` loads
+   `CanStandOn`) agrees. **CORRECTED 2026-09-29 (0018 story 6, R1 §1):** `mins` / `maxs` are the
+   NPC's `m_Collision` OBB (`+0x274` / `+0x280`, the current collision box), not a hull-table row,
+   and `startsolid` is never tested — a trace that starts inside a body is a hit on it and goes to
+   `CanStandOn`. Slot 523 per class: 18.0 base, 36.0 Troika, 40.0 test hull, 50.0 Ming Xiao
+   (`0x10391050`), 30.0 its tentacle (`0x1039b070`), 56.0 Tzimisce (`0x103b6df0`). Slot 523 is the STEP-DOWN height — the ground test `0x102e4f50` loads
    it into the step record beside slot 522's step height (§ "The route helpers") — not the
    `GetMaxJumpSpeed` an earlier pass of `shape.md` called it.
 
@@ -2911,8 +2933,10 @@ at most `kWanderMaxDraws` **5** draws are made. A dropped pick leaves the pool, 
 are taken again from what remains. `TASK_WANDER`'s draws are made and its radial probe is story
 5's seam (false), so it always reaches the pick, where an order of 1.0 finds no place and fails
 `0x18` — **named divergence**, unreached by content. The route length is
-`IElysiumNpcMotor::RouteLengthTo` (a synchronous Unreal path test on the body's agent; story 6
-absorbs it) and the install `InstallPathNoGoal` (path type 4, `navigator+0x14`, no goal record,
+`IElysiumNpcMotor::QueryRoute` (a synchronous Unreal path test on the body's agent, 0018 story 6),
+asked under the pedestrian multiplier the navigator's current request carries when its `path+0x1`
+byte stands (a previous type-8 goal's; retail never sets it for this task), else the default filter,
+and the install `InstallPathNoGoal` (path type 4, `navigator+0x14`, no goal record,
 no tolerance; story 5 absorbs it). One more **named divergence**: the Werewolf's
 `GetNearestNodeToPlayer` (`FUN_103d0bf0`) caches a node POINTER keyed on zero; the port caches the
 node INDEX, so a nearest node 0 re-queries on the next call.
@@ -2936,8 +2960,13 @@ none of the joined pairs is a defect claim until a hull sweep against props repr
 
 **Still open.** The hint searches, claims and `IsHintAvailableToMe` (0018/8); the cooldown's
 claim write (0018/9); the crosswalk link over the baked pairs (0018/7); `SetGoal`'s goal-flag-2
-node route and the radial probe `0x102ed610` (0018/5); `CheckStandPosition` and the hull trace
-inside `CanFitAtNode 0x102f1900` (0018/6); the `flags` 1 writer.
+node route (0018/5); the `flags` 1 writer. Landed in 0018/6: `CheckStandPosition 0x102e7270` and
+the fit trace inside `CanFitAtNode 0x102f1900` over the kernel's `KernelHullTrace`, and the radial
+probe `0x102ed610` (R1 §6: `MoveLimit(nav+0x18, origin, origin + dist·dir, 0x2400b, 0, 100, 0,
+tr, skip, 0)`, NPCs not solid; fails iff blocked AND `dist − tr.flDistObstructed ≤ minDist`
+(`102ed6df`), else `SetGoal` type 4 at `tr.vEndPosition`, flags 0; `SetWanderGoal 0x102ed540`
+passes the drawn distance and the task MIN as `minDist`, listing `102ed59a`) over the body's NavMesh
+raycast.
 
 ### How the graph builder picks a node's links — `InitNeighbors` `0x102fac00`, walked (2026-09-21, 0018 story 4)
 
