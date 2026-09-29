@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcMind.h"
+#include "Substrate/ElysiumNpcNavigator.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
