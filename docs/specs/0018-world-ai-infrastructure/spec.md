@@ -744,7 +744,7 @@ its recovery is written in the oracle section it names.
   place — their own lines read 2, 5, 8 and 5, 6, 8 — and 6 asks geometry, not places).
   Consumes: 2, 3; and two surfaces of 5 and 6 that do not stand yet, built here as narrow seams
   for their owners to absorb (added 2026-09-29): the path-no-goal install `InstallPathNoGoal` (5)
-  and the route length `IElysiumNpcMotor::RouteLengthTo` (6).
+  and the route length `IElysiumNpcMotor::RouteLengthTo` (6; landed as `QueryRoute`).
   Oracle: `navigation-jump-links.md` § "The loader, walked", § "Which graph the patched install
   runs on", § "What the shipped graphs and maps actually use",
   § "`TASK_GET_PATH_TO_RANDOM_NODE` `0x1f`, walked", § "The place set, landed".
@@ -1112,7 +1112,7 @@ its recovery is written in the oracle section it names.
   contents marking and row 13 (7). (3) *The jump seam's refusal of legal jumps* (hub link 88,
   tutorial 390) and retail's legality per direction -> **7** (row 13); *the door policy* behind
   slot 531 and `0x0e` -> **7**. (4) `RouteLengthTo` stays a seam -> **6** (the path-length
-  service). (5) *The rat links* 406 / 721 / 1472 -> **21-10**. (6) *`hw_hub_1`'s 124 of 513
+  service; landed as `QueryRoute`). (5) *The rat links* 406 / 721 / 1472 -> **21-10**. (6) *`hw_hub_1`'s 124 of 513
   UNFLAGGED ground links cross a `0x2000` box*: reported, not gated, cause uninvestigated ->
   **21-9** (or 3's contents marking). (7) *The step-rise pin* (18-40, refused by the probe, `0x0c`
   after the 4 s mark): story 3's harness report. (8) *Three 0.8 s-think tails are unwired:* the
@@ -1121,11 +1121,13 @@ its recovery is written in the oracle section it names.
   arrival is visible as `Move: arrived`.
   Size: L. Effort: Opus / high.
 
-- [ ] **6. Geometry services.**
+- [x] **6. Geometry services.** Landed 2026-09-29.
   Retail: the questions behaviour asks of the world. Sight, mask `0x2804091` (3's sight
-  channel). The hull trace and the hull table's extents. The stand test `0x102a0ed0`: start
-  0.1 above the point, drop by slot 523 (36.0 on the Troika line), a foot box of the hull's
-  footprint shrunk a quarter each side, pass only on ground that slot 166 accepts. The cover
+  channel). The hull trace and the hull table's extents. The stand test `CheckStandPosition
+  0x102e7270` (`0x102a0ed0` is `CanStandAt`, its `m_bForceNPCCheck` wrapper; corrected at landing):
+  start 0.1 above the point, drop by slot 523 (36.0 on the Troika line), a foot box of the NPC's
+  `m_Collision` box (not a hull-table row) shrunk a quarter each side, pass only on ground that
+  slot 166 accepts. The cover
   validator slot 548: reject only a hull that starts embedded, and a hint of another group.
   "Can I walk straight there" — retail's local probe; "can I get there at all" — retail's
   node route.
@@ -1152,6 +1154,63 @@ its recovery is written in the oracle section it names.
   Oracle: `navigation-jump-links.md` § "The cover search, walked" (the validator),
   § "The back-away and shoot-node searches, walked" (the stand test); `senses.md` (the sight
   mask and weapon line of sight).
+  **Landed 2026-09-29** (`a3941ddc` seam, `fbd3f682` bodies, `17b55d99` review V1, `3ecdb573`, `5f48fe01` live
+  and V2 fixes; reads R1, R2). **Corrections to the "port today" text (survey, before code).** (1)
+  `QueryLineOfSight` has traced the sight channel since story 3, not the use channel; the stale comments are
+  rewritten. (2) `RetailHullExtents` was real (the 22-row table); the zero box was `RetailCollisionExtents`,
+  so `IsValidCover` and `IsAreaClear` swept a ray. (3) `RouteLengthTo` and `InstallPathNoGoal` were real, but
+  `RouteLengthTo` ran the DEFAULT filter while the pedestrian `MoveTo` prices the roadway. (4)
+  `PositionClearForTeleport` answered false only in the Asian-vampire body; four species rules were real. (5)
+  `0x102a0ed0` is `CanStandAt`; the stand test is `CheckStandPosition 0x102e7270` (R1 §1-2) and boxes the
+  NPC's `m_Collision` OBB, not a hull row. Latent, fixed: `ElysiumNpcGeometry .cpp:328/336` passed cm where
+  Source units were expected. **The seam.** `TraceRetail` takes retail's mask and returns the characters as a
+  list; each kernel caller applies its own retail filter, so no collision profile or generator changed.
+  `QueryRoute` replaces `RouteLengthTo`, under the navigator's pedestrian multiplier: `true` with `bReachable
+  = false` for "no route", `false` only for "no mesh" (found live, `3ecdb573`). `NavRaycast` is the ground
+  probe. The mask recipe maps bits to channels; MONSTER `0x2000000` has one reader, game-side
+  `StandardFilterRules 0x101d3080` (R2 §2). **The bodies.** Stand test: start +0.1, drop slot 523 (18 base, 36
+  Troika, 40 test hull, Ming Xiao 50, tentacle 30, Tzimisce 56; R1 §5), foot box 0.75/0.25 at z = mins.z, pass
+  iff `fraction != 1.0` and slot 166; start-solid is a HIT (R1 §1). `CanStandAt`'s `+0x63da` bracket (R1 §3).
+  `IsValidCover 0x1028af20`: end 0.01 ABOVE the start, OBB extents, `0x202400b`, `startsolid` only (R2 §3).
+  `IsAreaClear 0x102a0fb0`: start == end, `>= 1 && !allsolid && !startsolid`, bracket (R2 §4). `CanFitAtNode
+  0x102f1900`: stand test only for type 2 / type 4 `& 0x1d`, then a +0.01 full-row ray, `startsolid` only (R1
+  §4). Floor drop 256; wander probe `0x102ed610` through `MoveLimit` (R1 §6); the yaw sweep through
+  `MotorMoveTraceSweep`. `ValidateNavGoal 0x10280360`: floor probe `0x102f99d0` (384 down, `0x2400b` then
+  `0x202400b`), `EyeOffset`, line to the enemy's eye on `0x2804091` (R2 §6). `RetailCollisionExtents` answers
+  for NPCs and the player's `CGameMovement` hull. `FVisible 0x100a6fa0`, four arguments: probe 0/10 eye, 1 OBB
+  centre, 2..9 the corners at 0.9 z, Y mirrored into port axes; every NPC is skipped (`m_bNPCTransparent`),
+  the player and solid props block; verdict `== 1.0`, then hit == target (clear), then blocker (R2 §1). Props
+  by the MONSTER arm: entity props only under MONSTER, static props always (engine `2006aabe..2006aae5`).
+  Contact is not start-solid: hits back off to `DIST_EPSILON`. **Fixtures and the spike.** Five tutorial
+  fixtures pass on real geometry: sight-only `--S-` idx 0, window `PN--` 0, NPC clip `-N--` 0, embedded hull
+  `PNS-` 0, ledge `PNS-` 5. The NavMesh spike SKIPS (the baked level has no navigation system, 0 active
+  tiles): reachability, the nav raycast and the closed room are live-only. **Live check** (smoke.md).
+  Sightlane, thug eye to `pt1..pt3`, attributed: pt1 clear on both channels; pt2 / pt3 blocked on both by one
+  static prop (`junkedcar02`, sight fraction 0.591 / 0.391), 0 of 3 flipped. The player on the ray:
+  `blocked(entity #1868 '!player')`; an NPC on it: `visible`. Stand: floor stands; 3 m up, no ground; inside
+  the car stands (faithful: start-solid untested, a static prop is no entity, `CanStandOn(null)` accepts; R1
+  §1). Cover: floor valid; inside the car refused. Route: reachable, 901.4 cm against 870.8 straight; behind
+  the door cuts refused, 1224.3 cm partial when accepted. `sm_hub_1`, 3 min idle: 0 path tests, 450-1028
+  traces per 30 s (177-506 ms), 4790 queries in 2362 ms (~0.5 ms each), 0 ensure / assert. Both patrol cops
+  failed `0xc` after link 731: row 13's. Gate: Substrate 504 / 0 and Content 23 / 0. **Named divergences.**
+  (a) The target's own hull under a MONSTER ray (`RayReaches`, throw LOS) is EXEMPT, an inference:
+  `0x10382020` traces `0x600400b` and reads only `fraction == 1.0` (`103821e9`), so it rides on the player
+  model's `$contents` (RE-BACKLOG 39). (b) A NavMesh raycast stands for `MoveLimit`'s ground arm:
+  `TestGroundMove`, `CheckStep`'s per-step `CanStandOn` and the final delta-z rule do not run (R1 §6). (c)
+  `bStartPenetrating` unions startsolid and allsolid; a start-solid trace reads fraction 0 even when it exits.
+  (d) Characters are capsules, not cylinder-flagged bboxes. (e) `0x46004003` runs on `ECC_Pawn`, so NPC clips
+  block weapon LOS. (f) Nav filter arms (a) `CNavPropertyDatabase`, (c) slot 91, (d) gamerules groups not
+  ported. (g) `StandardFilterRules` arms not carried: render mode, solid `0x20`, `blocks_traces` /
+  `npc_transparent` keyfields. (h) A stale pedestrian byte can price the wander route. (i) The `FVisible`
+  blocker cell is not delivered. (j) The budget is measured, never enforced. **Handed on.** Row 13 (0018/7):
+  the jump refusals stalling both hub patrol cops. Row 19 (0018/13): the weapon LOS mask `0x46004003` has no
+  exact channel. Row 11 (0019/6): `MoveLimit`'s jump / fly / climb arms and `TestGroundMove`'s stand chain;
+  (f), (g), (i); trace cost (~0.5 ms each, one Chaos particle per signature body; measured, not capped); the
+  closed-room fixture; the Werewolf fake-hull check (compares the enemy's local box, not its world bounds);
+  the slot-523 accessor still named `GetMaxJumpSpeed` (the name comes from the generated `signatures.tsv`);
+  `0x4091` unlisted in the recipe (a one-time warning); the Witness ray's `0x2804091`, chosen, not
+  recovered. Unrecovered (RE-BACKLOG 39): the player `$contents`, `CTraceFilterNav`'s first gate
+  `0x102eb170`, flag `0x1000000`, ProneDialog's filter (chosen: NPCs block).
   Size: M. Effort: Opus / high.
 
 - [ ] **7. Traversals: jumps, doors, crosswalks.**

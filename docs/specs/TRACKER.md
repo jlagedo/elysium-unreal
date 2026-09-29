@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 08 closed 2026-09-29; row 09, 0018/6, is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 09 closed 2026-09-29; row 10 is moved, row 11 is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -259,7 +259,7 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
     The `CNodeEnt::Spawn` counter binds `m_nNodeID`, and every node seam answers from the set:
     patrol, the hint node arms, the nearest node, slot 527 and the live hint list.
   - *The wander.* `TASK_GET_PATH_TO_RANDOM_NODE` runs the decided capped point pick through two
-    narrow seams, `InstallPathNoGoal` and `RouteLengthTo`, which rows 08 and 09 absorb.
+    narrow seams, `InstallPathNoGoal` and `RouteLengthTo`, which rows 08 and 09 absorb (row 09: now `QueryRoute`).
   - *The reports.* The gate carries three observation reports: places off mesh 0, uncovered 0,
     and zone pairs joined on the mesh (tutorial 2, hub 3).
   - *Handed on.* The smoke found the hub patrol cops' stall pre-existing: Unreal routes a leg over
@@ -285,17 +285,34 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   - *Handed on.* The NPC hold's cadence defect (a held cop re-armed every ~14.8 s and never
     resumed) was fixed the same day (`414ac129`); the 14.8 s is retail's out-of-PVS think law,
     kept. The `copcar` cops' spawn stall is the police car prop, which the
-    NavMesh does not carry (3's contents / row 13). `RouteLengthTo` goes to row 09, the jump
+    NavMesh does not carry (3's contents / row 13). `RouteLengthTo` went to row 09 (landed as `QueryRoute`), the jump
     refusals, door policy and two 0.8 s tails to row 13, the slot-584 tail to row 11, the step-rise
     pin to story 3's harness report. Detail: the spec's story 5 "Landed" paragraph.
-- [ ] **09 · 0018/6** — Geometry services (sight, hull sweep, stand test, reachability). M · Opus/high.
-  Row 08 left `RouteLengthTo` (the wander's path-length test, and the navigator's distance-left
-  sample) a seam answering nothing: the path-length service is this row's.
+- [x] **09 · 0018/6** — Geometry services (sight, hull sweep, stand test, reachability). M · Opus/high. **Landed 2026-09-29.**
+  - *The seam.* `TraceRetail` (retail's mask, characters returned as a list, each caller applying its
+    own filter), `QueryRoute` in place of `RouteLengthTo`, `NavRaycast`, the mask recipe. Wave 0
+    corrected the story's text: sight was already on its own channel, `RetailCollisionExtents` was
+    the zero box, `0x102a0ed0` is `CanStandAt` (the stand test is `0x102e7270`).
+  - *The bodies.* The stand test, `IsValidCover`, `IsAreaClear`, `CanFitAtNode`, the floor drop, the
+    wander probe, `ValidateNavGoal`'s floor probe and enemy eye, and `FVisible`'s four arguments
+    (every NPC transparent, the player and solid props block).
+  - *Fixtures and live check.* Five tutorial fixtures pass; the NavMesh spike skips in a test, so
+    reachability is live: the stealth lane attributed (0 of 3 flipped), a player occludes and an
+    NPC does not, a sealed pocket refused, `sm_hub_1` 0 ensure / assert. Gate: 504 / 0 and 23 / 0.
+  - *Handed on.* Rows 11, 13 and 19 (below); the target's own hull under a MONSTER ray is exempt, an
+    inference (RE-BACKLOG 39). Detail: the spec's story 6 "Landed" paragraph.
 
 ## C — close 0019
 
 - **10 · 0019/5** — moved to row 06b (2026-09-23).
 - [ ] **11 · 0019/6** — The deletions (dead rows) and the mechanism seams (Motor, Navigator, traces, push-outs). L · Opus/high.
+  Row 09 handed it: `MoveLimit`'s jump / fly / climb arms and `TestGroundMove`'s per-step stand
+  chain (a NavMesh raycast stands in for the ground arm, named); the nav filter arms
+  (`CNavPropertyDatabase`, slot 91, gamerules groups); the `StandardFilterRules` arms not carried
+  (render mode without WINDOW, solid `0x20`, the `blocks_traces` / `npc_transparent` keyfields);
+  the `FVisible` blocker cell; the trace cost (~0.5 ms each on the hub, measured, not capped); the
+  closed-room fixture, live-only; the Werewolf fake-hull check (local box, not world bounds) and the
+  slot-523 accessor's `GetMaxJumpSpeed` name (generated from `signatures.tsv`).
 - [ ] **12 · 0019/7** — The reach cut: `kernel_ledger --reach <map>`. S–M · Sonnet/medium.
   **0019 closes here.** Re-read the sizes of rows 26–48 from the tutorial's reach list.
 
@@ -310,6 +327,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   `prop_dynamic` the NavMesh does not carry; shared with 3's contents marking), and two unwired
   0.8 s-think tails: the `ai_node_graph_built` event and the dynamic-link initialisation
   `0x102cc900`.
+  Row 09 added: the jump refusals stall both hub patrol cops (link 731 and friends, 28 refusals in
+  a 3-minute idle on `sm_hub_1`).
 - [ ] **14 · 0018/8** — Hint nodes. M · Opus/high.
 - [ ] **15 · 0018/9** — The goal selectors. L · Opus/high.
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.
@@ -322,6 +341,8 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   starts, 19 jump ends, 32 bridging), reported by the gate and owed an answer. One open read
   first: hull 20's links are move type GROUND on a flyer that never traverses links.
 - [ ] **19 · 0018/13** — The AI sound list and its volume table. M · Opus/high.
+  Row 09 handed it the weapon line-of-sight mask `0x46004003`: it has no exact channel and falls
+  back to `ECC_Pawn`, so NPC clips block shots.
 - [ ] **20 · 0018/14** — Squads (the object). M · Opus/high.
 - [ ] **21 · 0018/15** — The attack coordinator and the standoff goal. S–M · Opus/medium.
 - [ ] **22 · 0018/16** — Makers and templates. S–M · Sonnet/medium.
