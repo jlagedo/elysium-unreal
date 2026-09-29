@@ -133,7 +133,7 @@ namespace StartTask19_2Ids
 	inline constexpr int32 TASK_STEP_BACK_RUN = 0x11c;
 	inline constexpr int32 TASK_FACE_LASTANGLE = 0x11d;
 	inline constexpr int32 TASK_PLAY_SOUND = 0x11e;
-	inline constexpr int32 TASK_GET_PATH_TO_SAVEPOSITION_LOS = 0x11f;
+	inline constexpr int32 TASK_GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK = 0x11f;
 	inline constexpr int32 TASK_SLEEP_BOUNDING_BOX = 0x121;
 	inline constexpr int32 TASK_MELEE_CIRCLE_ENEMY = 0x122;
 	inline constexpr int32 TASK_CIRCLE_ENEMY = 0x123;
@@ -1544,8 +1544,8 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		StartTask19Complete();                                  // 0x102a7020 -> 0x102a66d7
 		return 0;
 
-	// --- index 0x8e: TASK_GET_PATH_TO_SAVEPOSITION_LOS -------------------------------------------
-	case TASK_GET_PATH_TO_SAVEPOSITION_LOS:
+	// --- index 0x8e: TASK_GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK -------------------------------------------
+	case TASK_GET_PATH_TO_SAVEPOSITION_LOS_NOATTACK:
 	{
 		const FVector FromCm = SavePosition;                      // 0x102a703b +0x5dd0
 		const FVector ToCm = FromCm + (EyePosition() - Origin);   // 0x102a7045 +0x184

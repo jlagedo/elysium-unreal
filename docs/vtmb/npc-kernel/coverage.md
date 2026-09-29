@@ -35,14 +35,14 @@ What the port and the oracle already cite, what nothing does, and what the corpu
 
 ## Verdicts by layer band
 
-The porting stories' own measure. *Core* is this band's slice of the core set; the four verdict columns are what `kernel_verdicts.tsv` records for it (`checklist-<band>.md` is the rendered table). A verdict is a citation: the row says the body was read and what was done with it. **Neither** — the acceptance measure of stories 29c–29e — counts a core function the port does not cite, the oracle does not walk, and no story has verdicted. `unsettled` is a recorded failure to reach a verdict and is listed apart, but it does count as read.
+The porting stories' own measure. *Core* is this band's slice of the core set; the four verdict columns are what `kernel_verdicts.tsv` records for it (`checklist-<band>.md` is the rendered table). A verdict is a citation: the row says the body was read and what was done with it. **Neither** — the acceptance measure of stories 29c–29e — counts a core function the port does not cite, the oracle does not walk, and no story has verdicted. `unsettled` is a recorded failure to reach a verdict and is listed apart, but it does count as read. *Reached by* a map (story 7, `reach/<map>.md`) is the band's core the map's population can execute, with its `rule` rows in brackets.
 
-| Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1468 | 667 | 208 | 106 | 484 | 3 | 0 | 652 | 754 | **0** |
-| 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 184 | 220 | **0** |
-| 10–18 | 355 | 178 | 105 | 9 | 63 | 0 | 0 | 219 | 281 | **0** |
-| 19–29 | 479 | 391 | 12 | 4 | 71 | 0 | 1 | 410 | 372 | **0** |
+| Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by port | Cited by oracle | **Neither** | Reached by `sm_hub_1` | Reached by `sp_tutorial_1` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0–4 | 1468 | 667 | 208 | 106 | 484 | 3 | 0 | 652 | 754 | **0** | 704 (309) | 671 (293) |
+| 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 184 | 220 | **0** | 131 (60) | 120 (53) |
+| 10–18 | 355 | 178 | 105 | 9 | 63 | 0 | 0 | 219 | 281 | **0** | 151 (91) | 139 (84) |
+| 19–29 | 479 | 391 | 12 | 4 | 71 | 0 | 1 | 410 | 372 | **0** | 159 (129) | 132 (109) |
 
 ## Tunables
 

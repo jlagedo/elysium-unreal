@@ -29,6 +29,9 @@ What it answers, once, for the whole kernel instead of once per story:
 * `checklist-<band>.md` — one row per core function of an `order.md` layer band with the verdict
                    a porting story recorded for it. The verdicts themselves live in
                    `kernel_verdicts.tsv` beside this file, so a regeneration never loses one.
+* `reach/<map>.md` — the reach cut (`--reach`, spec 0019 story 7, `kernel_reach.py`): the kernel
+                   cut to one map's NPC population — its schedule texts, task and condition
+                   identities, functions and species rows. `coverage.md` gains a column per map.
 
 Two caveats, stated in the tables' README: READ/WRITE is a regex over the decompiled C (the
 corpus stores which offsets a body touches, not the direction), and a `slot-candidate` edge is a
@@ -41,6 +44,7 @@ Usage::
     uv run elysium research kernel_ledger --out <dir> --depth 6
     uv run elysium research kernel_ledger --checklist 10-18     # one more band's checklist
     uv run elysium research kernel_ledger --bodies 0-9          # the work packs, out of repo
+    uv run elysium research kernel_ledger --reach sp_tutorial_1 # the reach cut, one map
 """
 
 from __future__ import annotations
@@ -522,6 +526,9 @@ class Ledger:
         self.stale_kinds: dict[str, str] = {}
         self.unsettled: dict[str, str] = {}   # addr -> why the naming pass left it unnamed
         self.verdicts: dict[str, Verdict] = load_verdicts(_HERE / VERDICTS_TSV)
+        # 0019 story 7: map -> the function addresses its reach cut lists. Read from the committed
+        # `reach/<map>.tsv` unless this run computed the map afresh (`--reach`).
+        self.reached: dict[str, set[str]] = {}
         # `cites()`'s memo: the citation tables are fixed once `citations()` has run, and the
         # render passes ask for the same function tens of thousands of times.
         self._cite_members: dict[int, set[Citation]] = {}   # id(table) -> every citation it holds
@@ -748,13 +755,20 @@ class Ledger:
     def walk(self) -> None:
         seeds = {self.resolve(f) for bodies in self.slot_bodies.values() for f in bodies.values()}
         for cls in self.helpers:
-            for row in self.db.execute(
-                    "SELECT func FROM vtables WHERE module = ? AND cls = ? AND sub = 0",
-                    (self.module, cls)):
-                seeds.add(self.resolve(row["func"]))
+            seeds.update(self.primary_table(cls).values())
         seeds.update(a for a in ROOT_FUNCTIONS if a in self.functions)
+        self.closure, self.closure_edges = self.walk_from(seeds, self.family)
+        for addr, d in self.closure.items():
+            self.functions[addr].depth = d
+
+    def walk_from(self, seeds: set[str], classes: list[str]) -> tuple[dict[str, int], set[tuple[str, str, str]]]:
+        """The breadth-first walk from `seeds`, `self.depth` calls deep, stopping at a boundary
+        class. A dispatch through `this` at a slot is a `slot-candidate` edge to every body of
+        `classes` at that slot: the whole family for the ledger, one map's classes for a reach cut
+        (0019 story 7). Answers the depth of each function reached and the edges inside the set."""
         seeds = {s for s in seeds if s in self.functions}
         depth = {s: 0 for s in seeds}
+        edges: set[tuple[str, str, str]] = set()
         frontier = sorted(seeds)
         while frontier:
             nxt = []
@@ -764,20 +778,19 @@ class Ledger:
                     continue
                 outs: set[tuple[str, str]] = set(self.edges.get(addr, ()))
                 for slot in self.this_dispatch.get(addr, ()):
-                    for body in self.slot_bodies.get(slot, {}).values():
-                        outs.add((body, "slot-candidate"))
+                    bodies = self.slot_bodies.get(slot, {})
+                    for cls in classes:
+                        if cls in bodies:
+                            outs.add((bodies[cls], "slot-candidate"))
                 for callee, kind in outs:
                     if callee not in self.functions:
                         continue
-                    self.closure_edges.add((addr, callee, kind))
+                    edges.add((addr, callee, kind))
                     if callee not in depth:
                         depth[callee] = depth[addr] + 1
                         nxt.append(callee)
             frontier = sorted(nxt)
-        self.closure = depth
-        for addr, d in depth.items():
-            self.functions[addr].depth = d
-        self.closure_edges = {e for e in self.closure_edges if e[1] in self.closure}
+        return depth, {e for e in edges if e[1] in depth}
 
     def directions(self) -> None:
         for addr in self.closure:
@@ -862,7 +875,8 @@ class Ledger:
                 continue
             self._scan_citations(path, self.port_addr, self.port_off, member=True)
         for path in sorted((self.repo / "docs" / "vtmb").rglob("*.md")):
-            if path.parent.name == DEFAULT_OUTPUT[-1]:
+            # The ledger's own tables, and the reach cuts it writes beneath them (`reach/`).
+            if DEFAULT_OUTPUT[-1] in (path.parent.name, path.parent.parent.name):
                 continue
             self._scan_citations(path, self.oracle_addr, self.oracle_off, sections=True)
         for path in sorted((self.repo / "docs" / "specs").rglob("*.md")):
@@ -1382,6 +1396,17 @@ class Ledger:
                            f"| {unw if self.unwritten.get(addr) else ''} |")
         return "\n".join(out) + "\n"
 
+    def reached_maps(self) -> dict[str, set[str]]:
+        """Every map with a reach cut: the committed `reach/*.tsv`, overlaid by this run's."""
+        import kernel_reach
+
+        maps: dict[str, set[str]] = {}
+        folder = self.repo.joinpath(*DEFAULT_OUTPUT, kernel_reach.REACH_DIR)
+        for path in sorted(folder.glob("*.tsv")) if folder.is_dir() else ():
+            maps[path.stem] = kernel_reach.read_reached(path)
+        maps.update(self.reached)
+        return dict(sorted(maps.items()))
+
     def _render_coverage(self) -> str:
         closure = sorted(self.closure)
         cited = [a for a in closure if self.cites(self.port_addr, a)]
@@ -1429,6 +1454,7 @@ class Ledger:
             f"| Port-cited addresses that are globals / strings / vtables | {kinds['global']} / {kinds['string']} / {kinds['vtable']} |",
             f"| Stale port citations (address the corpus does not know) | {len(self.stale_port)} |",
         ]
+        reached = self.reached_maps()
         out += ["", "## Verdicts by layer band", "",
                 "The porting stories' own measure. *Core* is this band's slice of the core set; "
                 "the four verdict columns are what `kernel_verdicts.tsv` records for it "
@@ -1436,16 +1462,24 @@ class Ledger:
                 "says the body was read and what was done with it. **Neither** — the acceptance "
                 "measure of stories 29c–29e — counts a core function the port does not cite, the "
                 "oracle does not walk, and no story has verdicted. `unsettled` is a recorded "
-                "failure to reach a verdict and is listed apart, but it does count as read.", "",
+                "failure to reach a verdict and is listed apart, but it does count as read. "
+                "*Reached by* a map (story 7, `reach/<map>.md`) is the band's core the map's "
+                "population can execute, with its `rule` rows in brackets.", "",
                 "| Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` "
-                "| No verdict | Cited by port | Cited by oracle | **Neither** |",
-                "|---|---|---|---|---|---|---|---|---|---|---|"]
+                "| No verdict | Cited by port | Cited by oracle | **Neither** |"
+                + "".join(f" Reached by `{m}` |" for m in reached),
+                "|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * len(reached)]
         top = len(self.layers) - 1
         for lo, hi in CORE_BANDS:
             s = self.band_stats(lo, hi)
+            cells = ""
+            for addrs in reached.values():
+                rows = [a for a in self.band_core(lo, hi) if a in addrs]
+                rule = sum(1 for a in rows if (v := self.verdicts.get(a)) and v.verdict == "rule")
+                cells += f" {len(rows)} ({rule}) |"
             out.append(f"| {lo}–{min(hi, top)} | {s['core']} | {s['rule']} | {s['mechanism']} "
                        f"| {s['present']} | {s['dead']} | {s['unsettled']} | {s['empty']} "
-                       f"| {s['port']} | {s['oracle']} | **{s['neither']}** |")
+                       f"| {s['port']} | {s['oracle']} | **{s['neither']}** |{cells}")
         tunables = load_tunables(Path(__file__).resolve().parent / TUNABLES_TSV)
         by_type = collections.Counter(t.type for t in tunables)
         queue = inline_cells(self.repo, tunables)
@@ -1658,8 +1692,8 @@ def emit(rendered: dict[str, str], out_dir: Path, check: bool) -> int:
             return 1
         print(f"kernel_ledger --check: {len(rendered)} files match {out_dir}")
         return 0
-    out_dir.mkdir(parents=True, exist_ok=True)
     for name, text in rendered.items():
+        (out_dir / name).parent.mkdir(parents=True, exist_ok=True)
         (out_dir / name).write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {len(rendered)} files to {out_dir}")
     return 0
@@ -1682,11 +1716,32 @@ def main(argv: list[str] | None = None) -> int:
                              "$ELYSIUM_WORK_ROOT/research/npc-kernel-checklist (never committed)")
     parser.add_argument("--pack", type=int, default=DEFAULT_PACK,
                         help="functions per `--bodies` pack")
+    parser.add_argument("--reach", action="append", default=[], metavar="MAP",
+                        help="also cut the kernel to MAP's population (0019 story 7): writes "
+                             "`reach/<map>.md` and `.tsv`; needs the published entities and the "
+                             "deployed schedule corpus")
     args = parser.parse_args(argv)
     repo = repo_root()
     out_dir = Path(args.out) if args.out else repo.joinpath(*DEFAULT_OUTPUT)
     ledger = build(args.module, args.depth, repo)
-    rendered = ledger.render(tuple(args.checklist))
+    reach_files: dict[str, str] = {}
+    if args.reach:
+        import kernel_reach
+
+        corpus_root = repo.joinpath(*kernel_reach.SCHEDULE_CORPUS)
+        schedules = kernel_reach.ScheduleCorpus(corpus_root)
+        factories = kernel_reach.forward_factories(repo / FACTORIES_TSV)
+        for map_name in args.reach:
+            cut = kernel_reach.compute(ledger, map_name, kernel_reach.read_map_entities(map_name),
+                                       schedules, factories)
+            ledger.reached[map_name] = set(cut.functions)
+            stem = f"{kernel_reach.REACH_DIR}/{map_name}"
+            reach_files[f"{stem}.md"] = kernel_reach.render_md(ledger, cut)
+            reach_files[f"{stem}.tsv"] = kernel_reach.render_tsv(ledger, cut)
+            print(f"reach {map_name}: {len(cut.pop.classes)} classes, {len(cut.schedules)} texts, "
+                  f"{len(cut.tasks)} tasks ({len(set(cut.tasks) - cut.armed)} unported), "
+                  f"{len(cut.functions)} functions, {len(cut.species)} species rows")
+    rendered = {**ledger.render(tuple(args.checklist)), **reach_files}
     print(f"family {len(ledger.family)} classes, {len(ledger.slot_bodies)} slots, "
           f"closure {len(ledger.closure)} functions, {len(ledger.closure_edges)} edges, "
           f"{len(ledger.fields)} fields, {len(ledger.layers)} layers, "

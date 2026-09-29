@@ -48,6 +48,20 @@ on demand:
     uv run elysium research merge_verdicts --from <dir>/verdicts-*.tsv --band 0-9
     uv run elysium research merge_verdicts --audit            # what each band still owes
 
+**The reach cut** (0019 story 7) is the third table not written from the corpus alone.
+`reach/<map>.md` and `.tsv` are the kernel cut to one map: seeded from the map's population
+(every placed classname and every maker's `NPCType`, through `kernel_factories.tsv`), it lists the
+schedule texts those classes' id-space chains register (from the deployed
+`Content/ElysiumCorpus/ai/schedules/`), the task identities — each armed or unported against
+`ElysiumTaskOps.cpp` — and conditions those texts name, the functions the ledger's walk reaches
+from the map classes' vtables (a `this` dispatch fans out to the map's classes only), and the
+species rows among them. Two over-approximations are stated in each page: selection is not
+simulated, and a slot-candidate edge is a candidate. `coverage.md` carries one "Reached by" column
+per committed map, read from the TSV, so `--check` needs no exports:
+
+    uv run elysium research kernel_ledger --reach sp_tutorial_1 --reach sm_hub_1   # needs exports_v2 + the corpus
+    uv run elysium research kernel_ledger --reach sp_tutorial_1 --check            # re-derive and diff
+
 A verdict is one word a porting story wrote against one retail function after reading its
 decompiled body, plus the port target and the one-line reason: **rule** (a formula, a threshold,
 an ordering or a state write; ported verbatim onto the port's virtual with a test), **mechanism**
@@ -153,6 +167,7 @@ Start from the question:
 | Which port bodies did the strict pass judge unobservable, and where do they stand? | `delete-list.md` |
 | Which port bodies are mechanisms owed an Unreal seam, and which service? | `seam-list.md` |
 | Which `docs/vtmb` section walks address `0x10……`? | `index.md` |
+| What can one map's NPC population execute — its schedule texts, task and condition identities, functions, species rows? | `reach/<map>.md` (+ `.tsv`) |
 | The raw call graph inside the closure | `graph.tsv` |
 
 **The closure** is every function filling a slot of a family class (a class whose primary vtable

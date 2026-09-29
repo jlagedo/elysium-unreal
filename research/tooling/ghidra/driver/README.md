@@ -52,7 +52,8 @@ section E), the script API surface, and the choreographed scenes.
 | `repair.py`      | ✅ | drives the repair passes: `boundaries`, `jumptables`, `thiscall`, `signatures`, each `report` then `apply` |
 | `pyapi.py`       | ✅ | extracts the CPython 2.1.2 C API from `Include/*.h` into the prototype file `ApplyPythonApi` applies |
 | `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
-| `kernel_ledger.py` | ✅ | the NPC kernel as tables (`docs/vtmb/npc-kernel/`): classes, slots, fields, functions, build order, coverage, and a porting checklist per layer band; `--bodies` writes the reading packs out of repo |
+| `kernel_ledger.py` | ✅ | the NPC kernel as tables (`docs/vtmb/npc-kernel/`): classes, slots, fields, functions, build order, coverage, and a porting checklist per layer band; `--bodies` writes the reading packs out of repo; `--reach <map>` the reach cut |
+| `kernel_reach.py` | ✅ | the reach cut (0019 story 7): one map's population → its retail classes → the schedule texts, task / condition identities, functions and species rows they can execute; `reach/<map>.md` + `.tsv`, and `coverage.md`'s per-map column |
 | `kernel_shape.py` + `kernel_fields.tsv` / `kernel_signatures.tsv` | ✅ | the same kernel's *shape*: `layout.md` and `signatures.md`, from the datamaps, SDK 2013's headers and the two reading overlays |
 | `kernel_verdicts.tsv` | ✅ | one row per retail function a porting story has read: `address / verdict / band / target / evidence`. The record `checklist-<band>.md` is rendered from, so a regeneration cannot lose a reading |
 | `merge_verdicts.py` | ✅ | folds reading batches into that overlay (later source wins, refuses an out-of-band address, idempotent); `--audit` prints every band's standing |

@@ -432,6 +432,8 @@ namespace
 	{ TEXT("CAI_BaseNPCTroika"), 0x11d, 442 },
 	{ TEXT("CAI_BaseNPCTroika"), 0x11d, 444 },
 	{ TEXT("CAI_BaseNPCTroika"), 0x11e, 442 },
+	// 0x11f: the generator missed the Troika StartTask arm at index 0x8e (found by 0019/7's reach cut).
+	{ TEXT("CAI_BaseNPCTroika"), 0x11f, 442 },
 	{ TEXT("CAI_BaseNPCTroika"), 0x121, 442 },
 	{ TEXT("CAI_BaseNPCTroika"), 0x122, 442 },
 	{ TEXT("CAI_BaseNPCTroika"), 0x122, 444 },
@@ -774,6 +776,8 @@ namespace
 	{ TEXT("CNPC_VSabbatLeader"), 0x163, 442 },
 	{ TEXT("CNPC_VSabbatLeader"), 0x163, 444 },
 	{ TEXT("CNPC_VScurrying"), 0xbc, 442 },
+	// 0x14a: the generator missed the flee arm of `StartTaskSlot442` (found by 0019/7's reach cut).
+	{ TEXT("CNPC_VScurrying"), 0x14a, 442 },
 	{ TEXT("CNPC_VScurrying"), 0x14b, 442 },
 	{ TEXT("CNPC_VSheriffMan"), 0x13b, 442 },
 	{ TEXT("CNPC_VSheriffMan"), 0x150, 442 },
