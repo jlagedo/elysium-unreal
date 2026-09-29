@@ -838,7 +838,7 @@ bool FElysiumNpcKernelScript19PatrolRunTest::RunTest(const FString&)
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
 	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
-	TestEqual(TEXT("0x102aa8d3 the tolerance is NAI_Hull::Width"), Guard->NavPathToleranceCm,
+	TestEqual(TEXT("0x102aa8d3 the tolerance is NAI_Hull::Width"), Guard->Navigator.GoalToleranceCm,
 		static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
 	FElysiumNpc::ResetPatrolPathPool();
 	return true;
@@ -883,16 +883,16 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 	TestTrue(TEXT("0x102783fb a hidden, valid, reachable spot: SetGoal's TRUE"),
 		Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr));
 	TestTrue(TEXT("0x102783f6 the goal is the candidate"), Motor->RequestedFeet.Equals(Candidate, 0.01));
-	TestEqual(TEXT("0x102783d2 activity ACT_RUN (0x13)"), Guard->ScheduleHost.NavigationActivity, 0x13);
+	TestEqual(TEXT("0x102783d2 activity ACT_RUN (0x13)"), Guard->Navigator.MovementActivity, 0x13);
 
 	// SetGoal flag 1 (`0x102ecd74` -> `0x102f28a0` -> `0x1030bb30`) zeroes the path tolerance before
 	// the -1.0 "keep" word is resolved: a standing one is NOT kept, the hull width is taken.
-	Guard->NavPathToleranceCm = 77.f;
+	Guard->Navigator.GoalToleranceCm = 77.f;
 	Guard->StartTaskTestLateralCover(Threat, Candidate, nullptr);
 	FVector HullMins = FVector::ZeroVector;
 	FVector HullMaxs = FVector::ZeroVector;
 	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
-	TestEqual(TEXT("0x102ecd74 flag 1 zeroes the path tolerance: keep -> hull width"), Guard->NavPathToleranceCm,
+	TestEqual(TEXT("0x102ecd74 flag 1 zeroes the path tolerance: keep -> hull width"), Guard->Navigator.GoalToleranceCm,
 		static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
 
 	Motor->bAcceptMoves = false;
@@ -929,9 +929,9 @@ bool FElysiumNpcKernelScript19MoveToGoalTest::RunTest(const FString&)
 		Guard->ResolveIdealScheduleStamp(ElysiumSched::IDLE_WALK));
 	TestTrue(TEXT("0x102800d6 m_pGoalEnt := goal"), Guard->BaseScheduleHost.GoalEnt == Goal->Handle);
 	TestTrue(TEXT("0x102800e6 the goal is its GetAbsOrigin"), Motor->RequestedFeet.Equals(Goal->Origin, 0.01));
-	TestEqual(TEXT("0x10280150 tolerance 128 units"), Guard->NavPathToleranceCm, 128.f * ElysiumMove::U);
+	TestEqual(TEXT("0x10280150 tolerance 128 units"), Guard->Navigator.GoalToleranceCm, 128.f * ElysiumMove::U);
 	TestEqual(TEXT("0x102ecd20 never writes m_flGoalTolerance (+0x6320)"), Guard->ScheduleHost.GoalToleranceCm, 0.f);
-	TestEqual(TEXT("0x10280126 the movement activity is the caller's"), Guard->ScheduleHost.NavigationActivity, 9);
+	TestEqual(TEXT("0x10280126 the movement activity is the caller's"), Guard->Navigator.MovementActivity, 9);
 
 	Motor->bAcceptMoves = false;
 	TestFalse(TEXT("an unroutable goal answers FALSE"), Guard->ScheduledMoveToGoalEntity(ElysiumSched::IDLE_WALK, Goal, 0x13));
@@ -958,7 +958,7 @@ bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 	FElysiumRecordingNpcMotor* Motor = F.Services.NpcMotors[0].Get();
 
 	// The `-1.0` tolerance keeps the path's; a zero one takes the hull width.
-	Guard->NavPathToleranceCm = 0.f;
+	Guard->Navigator.GoalToleranceCm = 0.f;
 	TestTrue(TEXT("0x102802a8 SetGoal's TRUE"), Guard->ScheduledFollowPath(ElysiumSched::IDLE_WALK, Corner, 0x13));
 	TestTrue(TEXT("0x102801f5 m_pGoalEnt := corner"), Guard->BaseScheduleHost.GoalEnt == Corner->Handle);
 	TestTrue(TEXT("0x102801ff the goal is its origin"), Motor->RequestedFeet.Equals(Corner->Origin, 0.01));
@@ -966,11 +966,11 @@ bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 	FVector HullMaxs = FVector::ZeroVector;
 	Guard->RetailHullExtents(Guard->HullKind, FElysiumNpcBase::EElysiumHullExtents::Full, HullMins, HullMaxs);
 	TestEqual(TEXT("0x10280231 -1.0 on a zero path tolerance takes the hull width"),
-		Guard->NavPathToleranceCm, static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
-	TestEqual(TEXT("0x10280227 ACT_RUN"), Guard->ScheduleHost.NavigationActivity, 0x13);
-	Guard->NavPathToleranceCm = 77.f;
+		Guard->Navigator.GoalToleranceCm, static_cast<float>(HullMaxs.Y - HullMins.Y) * ElysiumMove::U);
+	TestEqual(TEXT("0x10280227 ACT_RUN"), Guard->Navigator.MovementActivity, 0x13);
+	Guard->Navigator.GoalToleranceCm = 77.f;
 	Guard->ScheduledFollowPath(ElysiumSched::IDLE_WALK, Corner, 9);
-	TestEqual(TEXT("and a standing path tolerance is kept (flag 0)"), Guard->NavPathToleranceCm, 77.f);
+	TestEqual(TEXT("and a standing path tolerance is kept (flag 0)"), Guard->Navigator.GoalToleranceCm, 77.f);
 	return true;
 }
 

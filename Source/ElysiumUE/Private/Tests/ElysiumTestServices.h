@@ -124,10 +124,17 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		}
 	}
 
-	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false,
-		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) override
+	using IElysiumNpcMotor::MoveTo;
+	// The last request whole, for the 0018/5 cases that assert the request contract.
+	FElysiumNpcMoveRequest LastMoveRequest;
+	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) override
 	{
+		LastMoveRequest = Request;
+		const FVector& FeetDestination = Request.DestinationCm;
+		const float AcceptanceRadiusCm = Request.AcceptanceToleranceCm;
+		const float SpeedCmPerSecond = Request.SpeedCmPerSecond;
+		const bool bAllowPartialPath = Request.PartialPath == EElysiumNpcPartialPath::Accept;
+		const TOptional<EElysiumNpcGaitKind> GaitKind = Request.GaitKind;
 		RequestedFeet = FeetDestination;
 		RequestedSpeedCmPerSecond = SpeedCmPerSecond;
 		RequestedGaitKind = GaitKind;

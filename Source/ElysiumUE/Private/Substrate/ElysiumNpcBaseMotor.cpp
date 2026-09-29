@@ -107,15 +107,15 @@ bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 	// The pair `FUN_1027a6c0` reads off `m_pNavigator` (+0x5d34): `0x102ee6a0` is
 	// `CAI_Navigator::IsGoalActive` (`m_pPath` +0x30 and its current waypoint +0x24 both set,
 	// `NavigatorGoalIsActive`), and `0x102ee510` answers the path's movement activity
-	// (`0x1030b520(m_pPath)`), which this runtime's goal record carries as the Troika host's
-	// `NavigationActivity` (written by `SetGoal`'s activity word, `0x102ee250`). A base-only body has
+	// (`0x1030b520(m_pPath)`), which this runtime carries as the navigator's
+	// `MovementActivity` (written by `SetGoal`'s activity word, `0x102ee250`). A base-only body has
 	// no host record and answers -1, which `0x1027a6c0` turns into ACT_IDLE.
 	if (!NavigatorGoalIsActive())                                        // 0x102ee6a0
 	{
 		return false;
 	}
 	const FElysiumNpc* const Troika = AsNpc();
-	OutActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;   // 0x102ee510
+	OutActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;   // 0x102ee510
 	return true;
 }
 

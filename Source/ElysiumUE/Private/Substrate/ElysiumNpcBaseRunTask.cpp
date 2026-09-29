@@ -206,7 +206,7 @@ void FElysiumNpcBase::NavSetMovementActivity(int32 Activity)
 	// `0x102ee250`: `m_pPath->m_movementActivity = act`.
 	if (FElysiumNpc* Troika = AsNpc())
 	{
-		Troika->ScheduleHost.NavigationActivity = Activity;
+		Troika->Navigator.MovementActivity = Activity;
 	}
 }
 

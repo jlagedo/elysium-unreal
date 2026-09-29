@@ -503,7 +503,7 @@ bool FElysiumPlaceSeamWanderOrderTest::RunTest(const FString&)
 	}
 	const int32 SetGoalsBefore = F.Guard->StartTaskNav.SetGoalCalls;
 	const int32 GoalTypeBefore = F.Guard->StartTaskNav.LastGoal.Type;
-	const float ToleranceBefore = F.Guard->NavPathToleranceCm;
+	const float ToleranceBefore = F.Guard->Navigator.GoalToleranceCm;
 	TSet<int32> Seen;
 	for (int32 Round = 0; Round < 24; ++Round)
 	{
@@ -520,8 +520,8 @@ bool FElysiumPlaceSeamWanderOrderTest::RunTest(const FString&)
 	// The installed route: a PATH, no goal.
 	TestEqual(TEXT("SetGoal is never called"), F.Guard->StartTaskNav.SetGoalCalls, SetGoalsBefore);
 	TestEqual(TEXT("...so no goal type is recorded"), F.Guard->StartTaskNav.LastGoal.Type, GoalTypeBefore);
-	TestEqual(TEXT("...and no tolerance is written"), F.Guard->NavPathToleranceCm, ToleranceBefore);
-	TestEqual(TEXT("the path type word is 4 (0x1030ba50)"), F.Guard->Navigator.PathTypeWord, 4);
+	TestEqual(TEXT("...and no tolerance is written"), F.Guard->Navigator.GoalToleranceCm, ToleranceBefore);
+	TestEqual(TEXT("the path type word is 4 (0x1030ba50)"), F.Guard->Navigator.GoalType, 4);
 	TestEqual(TEXT("each pick installed one path"), F.Guard->Navigator.PathNoGoalInstalls, 24);
 	FVector Last = FVector::ZeroVector;
 	F.World.World.Places().GetPositionCm(F.Picked(), F.Guard->PathingHullKind, Last);

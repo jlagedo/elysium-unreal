@@ -288,13 +288,13 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 	// TASK_SET_TOLERANCE_DISTANCE `0x102a4289`: hull*0.5 + resolved, both navigator words.
 	F.Start(0x4e, 40.f);
 	TestEqual(TEXT("0x102a42c0 m_flGoalTolerance"), N.ScheduleHost.GoalToleranceCm, (HalfHull + Resolved) * ElysiumMove::U, 0.01f);
-	TestEqual(TEXT("0x102a42cd goal tolerance"), N.NavPathToleranceCm / ElysiumMove::U, HalfHull + Resolved, 0.001f);
+	TestEqual(TEXT("0x102a42cd goal tolerance"), N.Navigator.GoalToleranceCm / ElysiumMove::U, HalfHull + Resolved, 0.001f);
 	TestEqual(TEXT("0x102a42df arrival distance"), N.NavPathScalar20, HalfHull + Resolved, 0.001f);
 	TestTrue(TEXT("0x4e completes"), F.Completed());
 
 	// TASK_SET_TOLERANCE_DISTANCE_ABS `0x102a42fa`: resolved alone.
 	F.Start(0x4f, 40.f);
-	TestEqual(TEXT("0x102a4316"), N.NavPathToleranceCm / ElysiumMove::U, Resolved, 0.001f);
+	TestEqual(TEXT("0x102a4316"), N.Navigator.GoalToleranceCm / ElysiumMove::U, Resolved, 0.001f);
 	TestTrue(TEXT("0x4f completes"), F.Completed());
 
 	// TASK_SET_MELEE_TOLERANCE_DISTANCE `0x102a434a` with no enemy: hull 0, no weapon -> resolved.
@@ -304,14 +304,14 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 	// With a weapon the addend is `weapon+0x8c0 * data` (the range word answers 0.0); without, the
 	// resolved distance (`0x102a43fe`).
 	const float MeleeAddend = N.ActiveWeaponEntity() != nullptr ? 0.f : Resolved;
-	TestEqual(TEXT("0x102a4376 / 0x102a43e2 hull(0)*0.5 + addend"), N.NavPathToleranceCm / ElysiumMove::U, HalfHull0 + MeleeAddend, 0.001f);
+	TestEqual(TEXT("0x102a4376 / 0x102a43e2 hull(0)*0.5 + addend"), N.Navigator.GoalToleranceCm / ElysiumMove::U, HalfHull0 + MeleeAddend, 0.001f);
 	TestTrue(TEXT("0x9f completes"), F.Completed());
 
 	// TASK_SET_TOLERANCE_DIST_DLG `0x102a4c47`: 160 + resolved; HALF to the goal tolerance, full to
 	// the arrival distance.
 	F.Start(0xdb, 40.f);
 	TestEqual(TEXT("0x102a4c66 m_flGoalTolerance"), N.ScheduleHost.GoalToleranceCm, (160.f + Resolved) * ElysiumMove::U, 0.01f);
-	TestEqual(TEXT("0x102a42cd half"), N.NavPathToleranceCm / ElysiumMove::U, (160.f + Resolved) * 0.5f, 0.001f);
+	TestEqual(TEXT("0x102a42cd half"), N.Navigator.GoalToleranceCm / ElysiumMove::U, (160.f + Resolved) * 0.5f, 0.001f);
 	TestEqual(TEXT("0x102a42df full"), N.NavPathScalar20, 160.f + Resolved, 0.001f);
 	TestTrue(TEXT("0xdb completes"), F.Completed());
 	return true;
@@ -385,12 +385,12 @@ bool FElysiumNpcKernelStartTask19TimerArmsTest::RunTest(const FString&)
 	// ACT_WALK; `m_afMemory &= ~2`; complete.
 	N.BaseScheduleHost.MemoryBits = 0x3u;
 	F.Start(0xd6, 10.f);
-	TestEqual(TEXT("0x102a4bae movement activity ACT_WALK"), N.ScheduleHost.NavigationActivity, 9);
+	TestEqual(TEXT("0x102a4bae movement activity ACT_WALK"), N.Navigator.MovementActivity, 9);
 	TestTrue(TEXT("0x102a4bbb m_afMemory &= ~2"), N.BaseScheduleHost.MemoryBits == 0x1u);
 	TestTrue(TEXT("0xd6 completes"), F.Completed());
 	N.BaseScheduleHost.MemoryBits = 0x2u;
 	F.Start(0xd7);
-	TestEqual(TEXT("0x102a4c1d ACT_WALK"), N.ScheduleHost.NavigationActivity, 9);
+	TestEqual(TEXT("0x102a4c1d ACT_WALK"), N.Navigator.MovementActivity, 9);
 	TestTrue(TEXT("0x102a4c2a m_afMemory &= ~2"), N.BaseScheduleHost.MemoryBits == 0x0u);
 	TestTrue(TEXT("0xd7 completes"), F.Completed());
 	return true;

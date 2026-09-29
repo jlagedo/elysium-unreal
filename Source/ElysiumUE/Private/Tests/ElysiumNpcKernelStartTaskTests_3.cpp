@@ -163,7 +163,7 @@ bool FElysiumNpcKernelStartTask19BaseBookkeepingTest::RunTest(const FString&)
 	TestEqual(TEXT("CLEAR_FAIL_SCHEDULE zeroes"), F.Guard->Schedule.FailScheduleOverride, 0);
 
 	F.Run(0x50, 2.7f);                                                   // 0x10286d1a
-	TestEqual(TEXT("SET_ROUTE_SEARCH_TIME truncates to whole seconds"), F.Guard->NavRouteSearchTime, 2.f);
+	TestEqual(TEXT("SET_ROUTE_SEARCH_TIME truncates to whole seconds"), F.Guard->Navigator.RouteSearchTime, 2.f);
 	TestTrue(TEXT("SET_ROUTE_SEARCH_TIME completes"), F.Completed());
 
 	const int32 DevBefore = F.Guard->StartTaskNav.DevMessages;
@@ -211,18 +211,18 @@ bool FElysiumNpcKernelStartTask19BaseTimersTest::RunTest(const FString&)
 	F.Guard->BaseScheduleHost.bShouldMove = false;
 	F.Run(0x24, 2.f);                                                    // 0x102864f1
 	TestTrue(TEXT("WALK_PATH_TIMED sets m_bShouldMove"), F.Guard->BaseScheduleHost.bShouldMove);
-	TestEqual(TEXT("WALK_PATH_TIMED walks"), F.Guard->ScheduleHost.NavigationActivity, 0x09);
+	TestEqual(TEXT("WALK_PATH_TIMED walks"), F.Guard->Navigator.MovementActivity, 0x09);
 	TestEqual(TEXT("WALK_PATH_TIMED stamps the wait"), F.Guard->BaseScheduleHost.WaitFinished, Now + 2.0);
 	F.Run(0x27, 1.f);                                                    // 0x10286523
-	TestEqual(TEXT("RUN_PATH_TIMED runs"), F.Guard->ScheduleHost.NavigationActivity, 0x13);
+	TestEqual(TEXT("RUN_PATH_TIMED runs"), F.Guard->Navigator.MovementActivity, 0x13);
 	TestEqual(TEXT("RUN_PATH_TIMED stamps the wait"), F.Guard->BaseScheduleHost.WaitFinished, Now + 1.0);
 	F.Run(0x25);                                                         // 0x102864af
-	TestEqual(TEXT("WALK_PATH_WITHIN_DIST walks"), F.Guard->ScheduleHost.NavigationActivity, 0x09);
+	TestEqual(TEXT("WALK_PATH_WITHIN_DIST walks"), F.Guard->Navigator.MovementActivity, 0x09);
 	F.Run(0x26);                                                         // 0x102864d0
-	TestEqual(TEXT("RUN_PATH_WITHIN_DIST runs"), F.Guard->ScheduleHost.NavigationActivity, 0x13);
-	F.Guard->ScheduleHost.NavigationActivity = 0;
+	TestEqual(TEXT("RUN_PATH_WITHIN_DIST runs"), F.Guard->Navigator.MovementActivity, 0x13);
+	F.Guard->Navigator.MovementActivity = 0;
 	F.Run(0x72);                                                         // 0x102864d7
-	TestEqual(TEXT("WEAPON_RUN_PATH runs"), F.Guard->ScheduleHost.NavigationActivity, 0x13);
+	TestEqual(TEXT("WEAPON_RUN_PATH runs"), F.Guard->Navigator.MovementActivity, 0x13);
 	TestFalse(TEXT("none of the gait arms completes"), F.Completed());
 
 	F.Guard->BaseScheduleHost.MoveWaitFinished = 99.0;
@@ -254,20 +254,20 @@ bool FElysiumNpcKernelStartTask19BasePathGaitTest::RunTest(const FString&)
 	// ladder takes its fallback rung.
 	F.Guard->BaseScheduleHost.MemoryBits = 0x3;
 	F.Run(0x22);                                                         // 0x102863f1
-	TestEqual(TEXT("RUN_PATH falls back to ACT_WALK"), F.Guard->ScheduleHost.NavigationActivity, 0x09);
+	TestEqual(TEXT("RUN_PATH falls back to ACT_WALK"), F.Guard->Navigator.MovementActivity, 0x09);
 	TestEqual(TEXT("RUN_PATH forgets INCOVER"), F.Guard->BaseScheduleHost.MemoryBits, 0x1u);
 	TestTrue(TEXT("RUN_PATH completes"), F.Completed());
 
 	F.Guard->BaseScheduleHost.MemoryBits = 0x2;
 	F.Run(0x23);                                                         // 0x10286438
-	TestEqual(TEXT("WALK_PATH falls to ACT_RUN when ACT_WALK is missing"), F.Guard->ScheduleHost.NavigationActivity, 0x13);
+	TestEqual(TEXT("WALK_PATH falls to ACT_RUN when ACT_WALK is missing"), F.Guard->Navigator.MovementActivity, 0x13);
 	TestEqual(TEXT("WALK_PATH forgets INCOVER"), F.Guard->BaseScheduleHost.MemoryBits, 0x0u);
 	TestTrue(TEXT("WALK_PATH completes"), F.Completed());
 
 	F.Guard->BaseScheduleHost.bShouldMove = false;
 	F.Run(0x28);                                                         // 0x10286556
 	TestTrue(TEXT("STRAFE_PATH sets m_bShouldMove"), F.Guard->BaseScheduleHost.bShouldMove);
-	const int32 Strafe = F.Guard->ScheduleHost.NavigationActivity;
+	const int32 Strafe = F.Guard->Navigator.MovementActivity;
 	TestTrue(TEXT("STRAFE_PATH picks a strafe"), Strafe == 0x37 || Strafe == 0x38);
 	TestTrue(TEXT("STRAFE_PATH completes"), F.Completed());
 	return true;
@@ -564,7 +564,7 @@ bool FElysiumNpcKernelStartTask19BaseStoredGoalTest::RunTest(const FString&)
 	TestEqual(TEXT("SET_GOAL 0 stores the enemy origin"), F.Guard->BaseScheduleHost.StoredPathGoal, F.Other->Origin);
 	TestEqual(TEXT("... type 2"), F.Guard->BaseScheduleHost.StoredPathType, 2);
 	TestTrue(TEXT("... the enemy as the target"), F.Guard->BaseScheduleHost.StoredPathTarget == F.Other->Handle);
-	TestEqual(TEXT("... then runs"), F.Guard->ScheduleHost.NavigationActivity, 0x13);
+	TestEqual(TEXT("... then runs"), F.Guard->Navigator.MovementActivity, 0x13);
 	TestTrue(TEXT("... and completes"), F.Completed());
 
 	F.Guard->SetTarget(F.Other->Handle);
@@ -821,7 +821,7 @@ bool FElysiumNpcKernelStartTask19BaseSearchesTest::RunTest(const FString&)
 	// `0x10286c84` -> `0x102ee1c0`: `MOV EAX,[ECX+0x30]; MOV [EAX+0x28],ECX` -- the PATH's tolerance,
 	// not `m_flGoalTolerance` (`+0x6320`), which this arm never writes.
 	TestEqual(TEXT("SET_TOLERANCE_DISTANCE writes the path tolerance"),
-		F.Guard->NavPathToleranceCm, F.Guard->ResolveTaskDistance(120.f) * ElysiumMove::U);
+		F.Guard->Navigator.GoalToleranceCm, F.Guard->ResolveTaskDistance(120.f) * ElysiumMove::U);
 	TestTrue(TEXT("... and completes"), F.Completed());
 	return true;
 }

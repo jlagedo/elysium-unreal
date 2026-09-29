@@ -153,6 +153,99 @@ struct FElysiumNpcNavigationSample
 	FVector VelocityCmPerSecond = FVector::ZeroVector;
 };
 
+// What a travel request does with a destination the graph cannot fully reach.
+//
+// `Refuse`: no partial path -- a route point must never silently skip authored route data, and the
+// retail route build (`0x102f2330`) either lays a route to the goal or fails (`TaskFail 0x0c`).
+// `Accept`: take the best path the graph offers -- a scripted_sequence mark, whose transit is the
+// point of the beat and whose caller places the NPC on the mark when the walk ends short.
+enum class EElysiumNpcPartialPath : uint8
+{
+	Refuse,
+	Accept,
+};
+
+// One travel request, filled by the substrate from the navigator's goal (`SetGoal 0x102ecd20`) and
+// honoured by the body as stated -- the body adds no tolerance of its own.
+struct FElysiumNpcMoveRequest
+{
+	// Where the feet go, world centimetres.
+	FVector DestinationCm = FVector::ZeroVector;
+	// The arrival radius at the destination, centimetres, exactly as the caller states it; the body
+	// neither clamps it nor pads it. For the navigator this is retail's goal-waypoint arrival test
+	// (`0x102ef510`): the constant 0.0625 units (`0x10451f78`; 0.25, `0x10449260`, under
+	// `npc_vphysics`), 2-D on ground nav. It is NOT the path's goal tolerance (`path+0x28`), which
+	// retail applies only to a BLOCKED step (`0x102ef760`: `dist < path+0x28 + 0.1`) -- the
+	// substrate's arm, decided from `FElysiumNpcMoveFacts`.
+	float AcceptanceToleranceCm = 0.f;
+	// The opening speed command, cm/s.
+	float SpeedCmPerSecond = 0.f;
+	// Which of the body's authored fans `SpeedCmPerSecond` came from. Naming one hands the leg to the
+	// speed authority: the body's animation pass re-commands its mover every frame with the cell the
+	// selection record published, so `SpeedCmPerSecond` is only the opening command. **Unset means
+	// "the caller authored this exact number; never re-derive it"** -- the scripted Walk/Custom gaits
+	// hand over a resolved clip's own authored ground speed.
+	TOptional<EElysiumNpcGaitKind> GaitKind;
+	EElysiumNpcPartialPath PartialPath = EElysiumNpcPartialPath::Refuse;
+	// The pedestrian pricing (`path+0x1`, A* `FUN_102fe9f0`'s `local_20 = RandomInt(5, 10)` drawn per
+	// search): 0 = the nav data's default query filter; 5..10 = the pedestrian filter pricing
+	// `UElysiumNavArea_Pedestrian` at this multiplier.
+	int32 PedestrianCostMultiplier = 0;
+	// The path's movement activity (`path+0x2c`) by name, for logging only. The body never decides on
+	// it.
+	FName MovementActivityName;
+};
+
+// How the engine's path follower ended a request: a mirror of `FPathFollowingResult::Code`, so no
+// AI-module type crosses this seam. `None` = no end reported for the current request.
+enum class EElysiumNpcMoveResultCode : uint8
+{
+	None,
+	Success,
+	Blocked,
+	OffPath,
+	Aborted,
+	Invalid,
+};
+
+// A mirror of the `FPathFollowingResultFlags` bits the substrate can observe.
+enum class EElysiumNpcMoveResultFlags : uint16
+{
+	None = 0,
+	InvalidPath = 1 << 0,
+	AlreadyAtGoal = 1 << 1,
+	UserAbort = 1 << 2,
+	OwnerFinished = 1 << 3,
+	MovementStop = 1 << 4,
+	NewRequest = 1 << 5,
+};
+ENUM_CLASS_FLAGS(EElysiumNpcMoveResultFlags)
+
+// The body's facts about its travel request, sampled by the substrate once per think.
+//
+// **Geometry and engine state only — no verdict** (the rule `FElysiumBallisticSample` states).
+// Whether the NPC has arrived, is blocked by an NPC, or has failed its route is the navigator's
+// call (`CAI_Navigator::Move 0x102eff40`), made from these facts.
+struct FElysiumNpcMoveFacts
+{
+	// A request was accepted and the follower still carries it (moving, waiting or paused).
+	bool bRequestAlive = false;
+	// The follower reported an end for the current request (`OnRequestFinished`).
+	bool bRequestEnded = false;
+	EElysiumNpcMoveResultCode ResultCode = EElysiumNpcMoveResultCode::None;
+	EElysiumNpcMoveResultFlags ResultFlags = EElysiumNpcMoveResultFlags::None;
+	// The entity the crowd agent or the follower reports in the way, when it is one; unset otherwise.
+	FElysiumEntityHandle BlockingEntity;
+	// From the feet to the requested destination: horizontal distance and `dest.z - feet.z`, cm.
+	float RemainingDistance2DCm = 0.f;
+	float RemainingDzCm = 0.f;
+	// The follower holds a path; its next corner (world cm) and whether the corner being walked to
+	// is the path's last.
+	bool bHasPath = false;
+	FVector NextCornerCm = FVector::ZeroVector;
+	bool bCurrentCornerIsLast = false;
+};
+
 class IElysiumNpcMotor
 {
 public:
@@ -194,25 +287,30 @@ public:
 	// the engine's and will not agree frame-for-frame with retail's. What the player observes is
 	// the cell that plays and where the body ends up, and both are decided by the substrate.
 	virtual bool SampleBallistic(FElysiumBallisticSample& Out) const { return false; }
-	// `bAllowPartialPath` takes the best path the graph can offer instead of refusing the request.
-	// A route point wants the refusal — it must never silently skip authored route data. A
-	// scripted_sequence mark wants the partial walk: the transit is the point of the beat, and its
-	// caller places the NPC on the mark when the walk ends short.
-	//
-	// `GaitKind` names which of this body's own authored fans `SpeedCmPerSecond` came from. Naming
-	// one hands the leg to the speed authority: the body's own animation pass re-commands its mover
-	// every frame with the cell the selection record published that frame, so a leg that turns, or
-	// whose tables move under it on an equip, travels at the cycle it is playing rather than at the
-	// number this call happened to resolve. `SpeedCmPerSecond` is then only the opening command,
-	// before the first classification.
-	//
-	// **Unset is the default and means "the caller authored this exact number; never re-derive
-	// it."** The scripted Walk/Custom gaits hand this a resolved clip's own authored ground speed —
-	// not the gait fan's forward cell — and re-deriving it would silently overwrite a number the
-	// beat asked for by name.
-	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false,
-		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) = 0;
+	// One travel request (`FElysiumNpcMoveRequest`). A refusal answers false; an accepted request is
+	// in flight until `Sample` / `SampleMoveFacts` report its end.
+	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) = 0;
+	// The pre-0018/5 signature, kept so the existing callers compile unchanged; it fills the request
+	// with the default filter and no activity name. 0018/5 lane A retires it. Non-virtual: an
+	// implementer overrides the request form and re-exposes this one with `using`.
+	bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm, float SpeedCmPerSecond,
+		bool bAllowPartialPath = false,
+		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>())
+	{
+		FElysiumNpcMoveRequest Request;
+		Request.DestinationCm = FeetDestination;
+		Request.AcceptanceToleranceCm = AcceptanceRadiusCm;
+		Request.SpeedCmPerSecond = SpeedCmPerSecond;
+		Request.GaitKind = GaitKind;
+		Request.PartialPath = bAllowPartialPath ? EElysiumNpcPartialPath::Accept
+			: EElysiumNpcPartialPath::Refuse;
+		return MoveTo(Request);
+	}
+	// The body's movement facts for the request in flight (or the one that last ended). Geometry and
+	// engine state only; the substrate's `NavigatorMoveStep` turns them into retail's outcomes.
+	// **False is the default and means "this motor reports no facts"** (a headless world, a double
+	// that has not opted in); `Out` is untouched.
+	virtual bool SampleMoveFacts(FElysiumNpcMoveFacts& Out) const { return false; }
 	// Turn in place toward a yaw without travelling — HL1 CCineMonster's TASK_FACE_SCRIPT, which a
 	// beat runs after reaching its mark and which `m_fMoveTo 5` runs on its own. Cancelled by
 	// Stop/Teleport/MoveTo like any other request.

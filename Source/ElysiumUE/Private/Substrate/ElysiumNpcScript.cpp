@@ -484,8 +484,8 @@ void FElysiumNpc::IssuePatrolMoveRun(FPatrolPathCell* Cell)
 bool FElysiumNpc::Script19SetGoal(const FScript19NavGoal& Goal, int32 SetGoalFlags, const TCHAR* Reason)
 {
 	// `0x102ecd20` is `FElysiumNpcBase::StartTaskSetGoal`, the one body (every arm of it and of its
-	// route build `0x102f1dc0`: flag 1's `0x102f28a0`, the `[8]` resolution onto `NavPathToleranceCm`,
-	// the navigator's slot-2 complete, `OnNavFailed(0xc)` gated on `NavRouteSearchTime`). This converts
+	// route build `0x102f1dc0`: flag 1's `0x102f28a0`, the `[8]` resolution onto `Navigator.GoalToleranceCm`,
+	// the navigator's slot-2 complete, `OnNavFailed(0xc)` gated on `Navigator.RouteSearchTime`). This converts
 	// the record: centimetres to SOURCE units for `[8]` (the two sentinels pass through), `[4]` / `[6]`
 	// / `[7]` -1 as every Script19 builder writes them.
 	(void)Reason;   // the caller's name; the body claim names `SetGoal 0x102ecd20` itself

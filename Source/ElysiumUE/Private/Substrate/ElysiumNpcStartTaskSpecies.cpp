@@ -551,7 +551,7 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 	{
 		// With a weapon: `weapon->+0x8c0 * data + 2 * NAI_Hull::Width(m_eHull)` into the navigator's
 		// PATH tolerance (`0x1038485b` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator +0x5d34`:
-		// `path+0x28`, `NavPathToleranceCm`; `m_flGoalTolerance +0x6320` is not written), then
+		// `path+0x28`, `Navigator.GoalToleranceCm`; `m_flGoalTolerance +0x6320` is not written), then
 		// `TaskComplete`. Without one: line 0x138, `TaskFail(3)`.
 		if (ActiveWeaponEntity() == nullptr)                              // 0x1038481d GetActiveWeapon; 0x10384824
 		{
@@ -561,7 +561,7 @@ int32 FElysiumNpcHuman::StartTaskSlot442(void* Task)
 		const float Width = Species19HullWidthUnits(*this, HullKind);    // 0x10384833 0x102d61b0(m_eHull)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x10384843; 0x10384848 FLD [EAX+0x8c0]
-		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1038484e FMUL; 0x10384838 FADD ST0,ST0; 0x1038485b 0x102ee1c0
+		Navigator.GoalToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1038484e FMUL; 0x10384838 FADD ST0,ST0; 0x1038485b 0x102ee1c0
 		TaskComplete(false);                                              // 0x10384864
 		return 0;
 	}
@@ -607,7 +607,7 @@ int32 FElysiumNpcAnimal::StartTaskSlot442(void* Task)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x1035f6a3; 0x1035f6a8 FLD [EAX+0x8c0]
 		// `0x1035f6bb` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
-		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1035f6ae / 0x1035f698 / 0x1035f6bb
+		Navigator.GoalToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x1035f6ae / 0x1035f698 / 0x1035f6bb
 		TaskComplete(false);                                              // 0x1035f6c4
 		return 0;
 	}
@@ -2052,7 +2052,7 @@ int32 FElysiumNpcMingXiao::StartTaskSlot442(void* Task)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x10392dd5; 0x10392dda +0x8c0
 		// `0x10392ded` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
-		NavPathToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x10392de0 / 0x10392dca / 0x10392ded
+		Navigator.GoalToleranceCm = (WeaponRangeUnits * Step->Data + (Width + Width)) * ElysiumMove::U;   // 0x10392de0 / 0x10392dca / 0x10392ded
 		TaskComplete(false);                                              // 0x10392df6
 		return 0;
 	}
@@ -2298,7 +2298,7 @@ int32 FElysiumNpcMingXiaoTentacle::StartTaskSlot442(void* Task)
 		float WeaponRangeUnits = 0.f;
 		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);                      // 0x1039c556; 0x1039c55b +0x8c0
 		// `0x1039c575` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance.
-		NavPathToleranceCm = (static_cast<float>(MyMins.X + EnemyMins.X) + WeaponRangeUnits * Step->Data)
+		Navigator.GoalToleranceCm = (static_cast<float>(MyMins.X + EnemyMins.X) + WeaponRangeUnits * Step->Data)
 			* ElysiumMove::U;                                             // 0x1039c561 FMUL; 0x1039c569 / 0x1039c56c / 0x1039c570; 0x1039c575
 		TaskComplete(false);                                              // 0x1039c57e
 		return 0;

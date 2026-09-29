@@ -1,28 +1,169 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityHandle.h"
 
-// `CAI_Navigator`'s port-side record, moved verbatim from `ElysiumNpcBaseMotor.inl`
-// for 0018 story 5.
+// What the port's navigator last concluded about its route: the port's own word, not a retail one.
+// Retail raises its outcomes as calls (`OnNavComplete 0x102eea90`, `OnNavFailed 0x102eeae0`) and
+// keeps only the `+0x1c` latch; the port records WHICH outcome so the kernel's writers and the
+// tests can read it back. `Door` is `OnNavFailed(0x0e)` from the simplify pass's door probe
+// (`0x102f06e0` -> slot 531, `0x102f08e7`); `NpcBlocked` is a blocked step whose obstruction is an
+// NPC (the `-3` arm of `Move 0x102eff40`, `0x102f0169`).
+enum class EElysiumNpcNavOutcomeKind : uint8
+{
+	None,
+	Arrived,
+	Failed,
+	Door,
+	NpcBlocked,
+};
+
+struct FElysiumNpcNavOutcome
+{
+	EElysiumNpcNavOutcomeKind Kind = EElysiumNpcNavOutcomeKind::None;
+	// The `TaskFail` code the outcome raised: `0x0c` FAIL_NO_ROUTE, `0x0d` no goal type (`Move`
+	// entry, `0x102f0081`), `0x0e` the door. 0 for `None` / `Arrived`.
+	int32 FailCode = 0;
+	// The obstruction's entity for `NpcBlocked` (`trace+0x1c -> +0x94`, `0x102ef3e0`); unset else.
+	FElysiumEntityHandle Blocker;
+};
+
+// `CAI_Navigator` (`npc+0x5d34`, block `operator_new(0x68)` / `0x6c` humanoid) and the `CAI_Path` it
+// owns at `nav+0x30`, as far as the port's kernel reads them. Navigator words are `nav+N`, path words
+// `path+N`. Grown into the navigator object for 0018 story 5; the struct started as family Motor's
+// port-side record (moved verbatim out of `ElysiumNpcBaseMotor.inl`, commit `eadead74`).
 //
-// Retail's `CAI_Navigator` as much of it as this family's four rows reach. It is declared as a
-// nested type rather than a free `FElysiumNpcNavigator` in a file of its own because four one-line
-// retail bodies do not justify a new substrate class, and because the five navigator words are
-// already CHAIN rows onto the motor — a second owner for them would be a second answer to the same
-// question. **Named decision**, stated here and in the story report.
-// Superseded 2026-09-29: 0018 story 5 grows it into the navigator object, so it now has its own file.
+// **The route itself is not here.** The waypoint list (`path+0x24` and its `+0x30` chain) is the
+// Unreal body's path follower; this object keeps the words the kernel reads and writes, and the
+// movement facts come from `IElysiumNpcMotor::SampleMoveFacts`. Defaults are the path constructor's
+// (`0x1030bec0`) and the reset's (`0x1030bb30`) values unless a comment says otherwise.
 struct FElysiumNpcNavigator
 {
-	// `CAI_Navigator+0x18` — the native navigation type. `FUN_1027d990` reads it (29 direct callers,
-	// the widest read in this family) and `FUN_1027d9b0` writes it through `0x102eeba0`. The port's
-	// `EElysiumNpcNavType` is the same four-value vocabulary (Ground 0, Jump 1, Fly 2, Climb 3), so
-	// the write is pushed on to `IElysiumNpcMotor::SetNavigationType` as well as stored.
+	// --- Navigator words -------------------------------------------------------------------------
+
+	// `nav+0x14` -- the squared distance, SOURCE units², from the point the route was searched from
+	// to the installed path's endpoint (`0x102ed430`'s tail over `0x1000f89e(path)`). Written by
+	// `InstallPathNoGoal`; nothing in this substrate reads it yet.
+	float EndpointDistanceSqrUnits = 0.0f;
+
+	// `nav+0x18` -- `m_navType`, the native navigation type. `FUN_1027d990` reads it (29 direct
+	// callers) and `FUN_1027d9b0` writes it through `0x102eeba0`. Vocabulary: 0 ground, 1 jump, 2
+	// fly, 3 climb (`EElysiumNpcNavType`); constructor default 0. The write is also pushed on to
+	// `IElysiumNpcMotor::SetNavigationType`.
 	int32 NavType = 0;
 
-	// `CAI_Navigator+0x1c` — set to 1 by `OnNavFailed` (`0x102eeae0`, `CAI_Navigator#10`) and by
-	// `OnNavComplete` (`0x102eea90`, `CAI_Navigator#8`): the "this route has ended" latch; no
-	// consumer in this substrate reads it yet.
+	// `nav+0x1c` -- set to 1 by `OnNavFailed` (`0x102eeae0`, `CAI_Navigator#10`) and by
+	// `OnNavComplete` (`0x102eea90`, `CAI_Navigator#8`): the "this route has ended" latch; `Move`
+	// zeroes it at its loop head (`0x102f00e9`) and exits the loop on it.
 	bool bNavFailed = false;
+
+	// `nav+0x40` -- `m_timePathRebuildMax`, the route search time. One non-zero writer:
+	// `SetRouteSearchTime 0x102886f0` (`TASK_SET_ROUTE_SEARCH_TIME 0x50`). Read by the route build
+	// `0x102f1dc0`: 0 fails a missing route at once (`0x102f1f00` `OnNavFailed(0xc, 1)`), anything else
+	// defers it and sets `m_afMemory` bit `0x20`. Zeroed by `0x102f28a0`; the constructor
+	// `0x102eca50` does not touch `+0x40..+0x4c`. Seconds.
+	float RouteSearchTime = 0.f;
+
+	// `nav+0x44` -- `m_timePathRebuildDelay`, the retry interval `0x102f1dc0` adds to `curtime` for
+	// `+0x4c`. NEVER written non-zero by any code (only `0x102f28a0`'s zero), so retail retries every
+	// think until `+0x48` (R1 §1). Seconds; 0 is retail's.
+	float RouteRetryInterval = 0.f;
+
+	// `nav+0x48` -- the deferred route's give-up time (`curtime + +0x40`, `0x102f1f36`); past it the
+	// next build fails with `OnNavFailed(0xc, 1)` (`0x102f1f5a`).
+	double RouteGiveUpTime = 0.0;
+
+	// `nav+0x4c` -- the deferred route's next retry time (`curtime + +0x44`, `0x102f1f27`); the
+	// compare is strict (`+0x4c < curtime`, `0x102f1f73`).
+	double RouteRetryTime = 0.0;
+
+	// `nav+0x50` -- `m_fRememberStaleNodes`, gate of the 4.0 s stale mark `0x102f1fa0` that `Move`'s
+	// failure tail writes (`0x102f016e`). Its writer was not read (R3); the port has no link table
+	// to mark, so nothing reads it yet.
+	bool bRememberStaleNodes = false;
+
+	// The NPC-blocker hold (`0x102ef3e0`, R3 "The -3 arm as settled"). `nav+0x51` the hold byte
+	// (cleared by the `MoveNormal` gate each pass); `nav+0x54` the remembered blocker (EHANDLE, -1 at
+	// the ctor and by `0x102eeb70`); `nav+0x58` hold-until and `nav+0x60` forget-at (-1.0 at the ctor
+	// and by `0x102eeb70`); `nav+0x5c` the hold (0.25 s) and `nav+0x64` the window (3.0 s), both
+	// ctor constants (`0x102eca50`). Nothing reads them until lane I's `NavigatorMoveStep`.
+	bool bBlockerHold = false;
+	FElysiumEntityHandle BlockerEntity;
+	double BlockerHoldUntil = -1.0;
+	float BlockerHoldSeconds = 0.25f;
+	double BlockerForgetAt = -1.0;
+	float BlockerWindowSeconds = 3.0f;
+
+	// --- Path words (`CAI_Path` at `nav+0x30`) ----------------------------------------------------
+
+	// `path+0x1` -- the pedestrian byte: set when the path's route is built for a type-8 goal
+	// (interesting place, pedestrian), cleared by the path reset. Read by the local route attempt
+	// (`0x102f2060`: only when `path+1 == 0`) and the door probe's trace mask (`0x102f06e0`: `0x2600b`
+	// instead of `0x2400b`). In the port it selects the pedestrian query filter on the request.
+	bool bPedestrian = false;
+
+	// `path+0x10` -- `m_bPaused`, read by `0x102ee2e0` (`Move`'s first gate, `0x102effab`: paused ->
+	// return, no fail), set by `0x102ee2a0` (`0x1030be80`), cleared by `0x102ee2c0` (`0x1030bea0`).
+	bool bPaused = false;
+
+	// `path+0x24 != 0` -- a current (head) waypoint exists; what `IsGoalActive` `0x102ee6a0` reads.
+	// The waypoint list is the body's; this is the substrate's record that the route stands.
+	bool bHasHeadWaypoint = false;
+	// The head waypoint's goal bit, `(wp+0x28 >> 3) & 1` (`0x1030bd50`, read through `0x102ee660`
+	// `CurWaypointIsGoal`): the waypoint being walked to is the route's last. 0 with no head.
+	bool bHeadIsGoal = false;
+
+	// `path+0x28` -- `m_goalTolerance`, which `SetGoal 0x102ecd20` resolves from goal word `[8]` and
+	// writes (`0x102ecec7`), and whose -1.0 "keep" arm reads back. Also written by `0x102ee1c0` (the
+	// tolerance tails of `0x102a1910`); zeroed by the path reset `0x1030bb30`. Read through
+	// `0x102ee1a0`. NOT `m_flGoalTolerance` (`npc+0x6320`). Centimetres.
+	float GoalToleranceCm = 0.f;
+
+	// `path+0x2c` -- `m_movementActivity`, written by `0x102ee250` (`SetGoal`'s word `[5]`), read by
+	// `0x102ee3f0` / `0x102ee510`. Retail's ctor and reset store 1 (ACT_IDLE); the port's field was
+	// the Troika host's `NavigationActivity` until 0018 story 5 and keeps its -1 "unwritten" default
+	// this wave -- `GetMovementActivity` answers retail's 1 for it.
+	int32 MovementActivity = INDEX_NONE;
+
+	// `path+0x30` -- `m_target`, the goal's target entity handle (`SetGoal` `[10]`, cleared by
+	// `SetGoal` flag 2 through `0x100a0ae0(.., NULL)`), read through `0x102ee160`.
+	FElysiumEntityHandle TargetEntity;
+
+	// `path+0x34..+0x3c` -- `m_vecTargetOffset` (`SetGoal` flag 2 stores `vec3_origin`); subtracted
+	// from the goal position by `ActualGoalPosition` `0x102ee140`. Centimetres.
+	FVector TargetOffsetCm = FVector::ZeroVector;
+
+	// `path+0x40` -- `m_waypointTolerance`, `SetGoal` stores the pathing hull * 0.5 (`0x102ececa`).
+	// Centimetres.
+	float WaypointToleranceCm = 0.f;
+
+	// `path+0x44` -- the last node passed (-1 on every find and at the path ctor; `AdvancePath`
+	// stores the popped node waypoint's `+0x10`).
+	int32 LastNodePassed = INDEX_NONE;
+
+	// `path+0x4c..+0x54` -- `m_goalPos`, the raw goal position (`0x1030ba30`). Centimetres.
+	FVector GoalPosCm = FVector::ZeroVector;
+
+	// `path+0x5c` -- `m_goalType` (`GoalType_t`, guard byte `path+0x58`): 0 none, 1 target entity, 2
+	// enemy, 3 path corner, 4 location, 5 (no issuer), 6 cover, 7 best-unknown, 8 interesting place
+	// (pedestrian), 9 interesting place (animal). Written by `SetGoal` through `0x1030ba50` and by
+	// `0x102ed430`'s goal-less install (4); read through `0x102ee620` / `0x100113d8`.
+	int32 GoalType = 0;
+
+	// `path+0x60` -- the goal flags `SetGoal` copies from word `[9]` (its only writer): 1 face the
+	// path, 2 node route (one issuer, Troika task `0xc7`), 4 re-path on target move (no issuer), 8
+	// (no issuer, inert). Read through `0x102ee640`.
+	int32 GoalFlags = 0;
+
+	// `SetGoal`'s arrival words `[6]` / `[7]` (`0x1030b550` / `0x1030b5b0`) and destination node
+	// `[4]` (`0x102ee9c0`). Their path offsets are not in the story-5 reads (unrecovered).
+	int32 ArrivalActivity = INDEX_NONE;
+	int32 ArrivalSequence = INDEX_NONE;
+	int32 GoalNode = INDEX_NONE;
+
+	// --- The port's own words ---------------------------------------------------------------------
+
+	FElysiumNpcNavOutcome LastOutcome;
 
 	// `CAI_Navigator::vfunc3` (`0x102ecb50`) copies three of the owner NPC's own pointers —
 	// `m_pMotor` (+0x5d44), `m_pMoveProbe` (+0x5d40), `m_pLocalNavigator` (+0x5d38) — into
@@ -32,18 +173,33 @@ struct FElysiumNpcNavigator
 	bool bSnapshotTaken = false;
 	int32 SnapshotArgument = 0;
 
-	// `CAI_Path +0x5c` on the navigator's path (`+0x30`) -- the path's type word, which
-	// `0x1030ba50(path, 4)` sets to 4 when `0x102ed430` (`SetRandomGoal`'s body) installs a route
-	// with no goal. The port keeps it for the one install that writes it (`InstallPathNoGoal`); 0
-	// until then. No consumer in this substrate reads it yet.
-	int32 PathTypeWord = 0;
-
-	// `CAI_Navigator +0x14` -- the squared distance, SOURCE units², from the point the route was
-	// searched from to the installed path's endpoint (`0x102ed430`'s tail over `0x1000f89e(path)`).
-	// Written by `InstallPathNoGoal`; nothing in this substrate reads it yet.
-	float EndpointDistanceSqrUnits = 0.0f;
-
 	// Port-only: how many goal-less installs this navigator took (`InstallPathNoGoal`). The tests'
 	// witness that the wander pick installed a PATH and never went through `SetGoal`.
 	int32 PathNoGoalInstalls = 0;
+
+	// --- Getters (SDK names where R1 matched one), each answering retail's no-goal value ----------
+
+	// `0x102ee680` -- `GetGoalType() != 0`. No goal: false.
+	bool IsGoalSet() const;
+	// `0x102ee6a0` -- `nav+0x30 != 0 && path+0x24 != 0`. No goal: false.
+	bool IsGoalActive() const;
+	// `0x102ee620` (`0x100113d8`) -- `path+0x5c`. No goal: 0.
+	int32 GetGoalType() const;
+	// `0x102ee140` (`0x1000f89e`) -- `ActualGoalPosition`: `path+0x4c` minus `path+0x34`, never
+	// "none"; `(0,0,0)` after a reset. Centimetres.
+	FVector GetGoalPos() const;
+	// `0x102ee3f0` -- `path+0x2c`. No goal: 1 (ACT_IDLE).
+	int32 GetMovementActivity() const;
+	// `0x1027d990` -- `nav+0x18`. Default 0 (ground).
+	int32 GetNavType() const;
+	// `0x102ee1a0` -- `path+0x28`. No goal: 0.0.
+	float GetGoalTolerance() const;
+	// `0x102ee640` -- `path+0x60`. No goal: 0.
+	int32 GetGoalFlags() const;
+	// `0x102ee2e0` -- `path+0x10` `m_bPaused`. Default false.
+	bool IsPaused() const;
+	// `0x102ee160` -- `path+0x30` (the caller resolves it; unset = retail's NULL).
+	FElysiumEntityHandle GetTarget() const;
+	// `0x102ee660` -- the head waypoint's goal bit. No head: false.
+	bool CurWaypointIsGoal() const;
 };

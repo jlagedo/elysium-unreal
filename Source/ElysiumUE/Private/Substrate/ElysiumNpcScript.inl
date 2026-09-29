@@ -147,7 +147,7 @@ struct FScript19NavGoal
 	int32 Flags = 0;
 	FElysiumEntityHandle Target;
 };
-/** `CAI_Path +0x28` is `FElysiumNpcBase::NavPathToleranceCm` (`ElysiumNpcBaseStartTask.inl`): the
+/** `CAI_Path +0x28` is `FElysiumNpcBase::Navigator.GoalToleranceCm` (`ElysiumNpcBaseStartTask.inl`): the
  *  navigator lives on `CAI_BaseNPC`, and `SetGoal 0x102ecd20` has one body there. */
 /** `0x102ecd20`'s tolerance sentinels, `_DAT_1049d980` and `_DAT_1049d97c`. */
 static constexpr float NavGoalToleranceHull = -2.0f;

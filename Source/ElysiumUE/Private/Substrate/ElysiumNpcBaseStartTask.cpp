@@ -1333,12 +1333,12 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		return 0;
 
 	case TASK_SET_TOLERANCE_DISTANCE:                                    // arm 0x43, 0x10286c69
-		NavPathToleranceCm = ResolveTaskDistance(Data) * ElysiumMove::U; // 0x10286c71 slot 418 / 0x10286c84 0x102ee1c0 path+0x28, untruncated 0x10286c7d
+		Navigator.GoalToleranceCm = ResolveTaskDistance(Data) * ElysiumMove::U; // 0x10286c71 slot 418 / 0x10286c84 0x102ee1c0 path+0x28, untruncated 0x10286c7d
 		TaskComplete(false);                                             // 0x10286c8d
 		return 0;
 
 	case TASK_SET_ROUTE_SEARCH_TIME:                                     // arm 0x44, 0x10286d1a
-		NavRouteSearchTime = static_cast<float>(static_cast<int32>(Data)); // 0x10286d1d / 0x10286d3d  0x102886f0, truncated 0x10286d36
+		Navigator.RouteSearchTime = static_cast<float>(static_cast<int32>(Data)); // 0x10286d1d / 0x10286d3d  0x102886f0, truncated 0x10286d36
 		TaskComplete(false);                                             // 0x10286d46
 		return 0;
 
@@ -1825,7 +1825,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 		StartTaskWeaponRangeWords(*HeldWeapon, Words);
 		// `(float)(int)(weapon->+0x8c0 * flTaskData)` — the FMUL at `0x10286cb7` the decompiler drops. 0x10286cba
 		const float MeleeTolerance = static_cast<float>(static_cast<int32>(Words[2] * Data)); // 0x10286cb1..0x10286cca 0x10286caa 0x10286cac 0x10286ccd
-		NavPathToleranceCm = MeleeTolerance * ElysiumMove::U;                 // 0x10286cd4  0x102ee1c0 path+0x28
+		Navigator.GoalToleranceCm = MeleeTolerance * ElysiumMove::U;                 // 0x10286cd4  0x102ee1c0 path+0x28
 		TaskComplete(false);                                             // 0x10286cdd
 		return 0;
 	}
@@ -1940,7 +1940,7 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		}
 	}
 
-	// The tolerance (`path+0x28`, `NavPathToleranceCm`): -2.0 (`_DAT_1049d980`) the hull's width,
+	// The tolerance (`path+0x28`, `Navigator.GoalToleranceCm`): -2.0 (`_DAT_1049d980`) the hull's width,
 	// anything but -1.0 (`_DAT_1049d97c`) as given, -1.0 keeps the path's own unless that is 0.0,
 	// when the hull's is written -- and, for an entity goal whose entity is an NPC
 	// (`+0x9c` non-null), the average of the two hulls (`* _DAT_10449270` 0.5).
@@ -1953,26 +1953,26 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	const float HullWidthUnits = static_cast<float>(MaxsUnits.X - MinsUnits.X); // 0x102d61b0: row+0x18 - row+0xc
 	if (Goal.ToleranceUnits == NavToleranceHull)
 	{
-		NavPathToleranceCm = HullWidthUnits * U;                         // 0x102ecdc9 -> 0x102ecec7
+		Navigator.GoalToleranceCm = HullWidthUnits * U;                         // 0x102ecdc9 -> 0x102ecec7
 	}
 	else if (Goal.ToleranceUnits != NavToleranceKeep)
 	{
-		NavPathToleranceCm = Goal.ToleranceUnits * U;                    // 0x102ecde4 -> 0x102ecec7
+		Navigator.GoalToleranceCm = Goal.ToleranceUnits * U;                    // 0x102ecde4 -> 0x102ecec7
 	}
-	else if (NavPathToleranceCm == ElysiumNpcTunables::Zero)             // 0x102ecdf1 == _DAT_104454c4
+	else if (Navigator.GoalToleranceCm == ElysiumNpcTunables::Zero)             // 0x102ecdf1 == _DAT_104454c4
 	{
-		NavPathToleranceCm = HullWidthUnits * U;                         // 0x102ece0e
+		Navigator.GoalToleranceCm = HullWidthUnits * U;                         // 0x102ece0e
 		const FElysiumNpcBase* GoalNpc = GoalEntity != nullptr ? GoalEntity->AsNpcBase() : nullptr;
 		if (GoalNpc != nullptr)                                          // 0x102ece90 +0x9c
 		{
 			FVector OtherMins = FVector::ZeroVector;
 			FVector OtherMaxs = FVector::ZeroVector;
 			RetailHullExtents(GoalNpc->HullKind, EElysiumHullExtents::Full, OtherMins, OtherMaxs);
-			NavPathToleranceCm = (static_cast<float>(OtherMaxs.X - OtherMins.X) + HullWidthUnits)
+			Navigator.GoalToleranceCm = (static_cast<float>(OtherMaxs.X - OtherMins.X) + HullWidthUnits)
 				* ElysiumNpcTunables::Half * U;                          // 0x102ecebd FMUL 0.5
 		}
 	}
-	const float ToleranceCm = NavPathToleranceCm;
+	const float ToleranceCm = Navigator.GoalToleranceCm;
 	StartTaskNav.LastSetGoalToleranceUnits = ToleranceCm / U;
 	// `0x102ececa`: path `+0x40` := hull * 0.5; `[11..13]` != `DAT_10934060..68` -> `0x1030be20`
 	// (arrival direction; every caller passes the sentinel); path `+0x8` / `+0x4` := `[14]` / `[15]`
@@ -2049,7 +2049,7 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			bMoveIssued = false;
 			return false;                                            // no target / no navigator: no route
 		}
-		const int32 MoveActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
+		const int32 MoveActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;
 		const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 		if (Troika != nullptr)
 		{
@@ -2081,22 +2081,22 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			}
 			return true;
 		}
-		if (NavRouteSearchTime == ElysiumNpcTunables::Zero)                     // 0x102f1ee8 +0x40 == 0.0
+		if (Navigator.RouteSearchTime == ElysiumNpcTunables::Zero)                     // 0x102f1ee8 +0x40 == 0.0
 		{
 			NavOnNavFailed(FAIL_NO_ROUTE);                                      // 0x102f1f00 vtable+0x28 (0xc, 1)
 			return false;
 		}
 		BaseScheduleHost.MemoryBits |= MemoryPathFailed;                        // 0x102f1f12
-		NavRouteRetryTime = Now + NavRouteRetryInterval;                        // 0x102f1f27 +0x4c
-		NavRouteGiveUpTime = Now + NavRouteSearchTime;                          // 0x102f1f36 +0x48
+		Navigator.RouteRetryTime = Now + Navigator.RouteRetryInterval;                        // 0x102f1f27 +0x4c
+		Navigator.RouteGiveUpTime = Now + Navigator.RouteSearchTime;                          // 0x102f1f36 +0x48
 		return false;
 	}
-	if (NavRouteGiveUpTime < Now)                                               // 0x102f1f4d +0x48 < curtime
+	if (Navigator.RouteGiveUpTime < Now)                                               // 0x102f1f4d +0x48 < curtime
 	{
 		NavOnNavFailed(FAIL_NO_ROUTE);                                          // 0x102f1f5a (0xc, 1)
 		return false;
 	}
-	if (NavRouteRetryTime < Now)                                                // 0x102f1f73 +0x4c < curtime
+	if (Navigator.RouteRetryTime < Now)                                                // 0x102f1f73 +0x4c < curtime
 	{
 		if (Build())                                                            // 0x102f1f80 0x102f2330
 		{
@@ -2108,7 +2108,7 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 			}
 			return true;
 		}
-		NavRouteRetryTime = Now + NavRouteRetryInterval;                        // 0x102f1fc5 +0x4c
+		Navigator.RouteRetryTime = Now + Navigator.RouteRetryInterval;                        // 0x102f1fc5 +0x4c
 	}
 	return false;
 }
@@ -2116,13 +2116,13 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm, float
 void FElysiumNpcBase::NavClearRoute()
 {
 	// `0x102f28a0`.
-	NavRouteSearchTime = 0.f;                                                   // +0x40
-	NavRouteGiveUpTime = 0.0;                                                   // +0x48
-	NavRouteRetryTime = 0.0;                                                    // +0x4c
-	NavRouteRetryInterval = 0.f;                                                // +0x44
+	Navigator.RouteSearchTime = 0.f;                                                   // +0x40
+	Navigator.RouteGiveUpTime = 0.0;                                                   // +0x48
+	Navigator.RouteRetryTime = 0.0;                                                    // +0x4c
+	Navigator.RouteRetryInterval = 0.f;                                                // +0x44
 	BaseScheduleHost.MemoryBits &= ~ElysiumStartTask19Base::MemoryPathFailed;   // +0x5d8c &= ~0x20
 	// `0x1030bb30(path)`: the path reset -- its tolerance `+0x28` with it; the port's route clear.
-	NavPathToleranceCm = 0.f;
+	Navigator.GoalToleranceCm = 0.f;
 	if (Motor != nullptr)
 	{
 		Motor->ClearNavigationGoal();
@@ -2144,14 +2144,14 @@ void FElysiumNpcBase::StartTaskClearGoal()
 
 void FElysiumNpcBase::StartTaskSetMovementActivity(int32 Activity)
 {
-	// `0x102ee250`: `m_pPath->m_movementActivity (+0x2c) = activity`. The word lives on the Troika's
-	// host record in this runtime (`FElysiumNpcScheduleHost::NavigationActivity`); the gait is
+	// `0x102ee250`: `m_pPath->m_movementActivity (+0x2c) = activity`. The word is the
+	// navigator's (`FElysiumNpcNavigator::MovementActivity`), written on the Troika line; the gait is
 	// pushed on to the route in flight (`SetTravelGait`), never a rebuild.
 	++StartTaskNav.MovementActivitySets;
 	StartTaskNav.LastMovementActivity = Activity;
 	if (FElysiumNpc* Troika = AsNpc())
 	{
-		Troika->ScheduleHost.NavigationActivity = Activity;
+		Troika->Navigator.MovementActivity = Activity;
 	}
 	if (Motor != nullptr)
 	{
@@ -2352,7 +2352,7 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	{
 		return false;
 	}
-	const int32 MoveActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
+	const int32 MoveActivity = Troika != nullptr ? Troika->Navigator.MovementActivity : INDEX_NONE;
 	const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 	if (Troika != nullptr)
 	{
@@ -2364,7 +2364,7 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	{
 		return false;
 	}
-	Navigator.PathTypeWord = PathTypeRandom;                                    // 0x102ed4a6 0x1030ba50(path, 4)
+	Navigator.GoalType = PathTypeRandom;                                    // 0x102ed4a6 0x1030ba50(path, 4)
 	Navigator.EndpointDistanceSqrUnits = static_cast<float>(
 		FVector::DistSquared(Origin / ElysiumMove::U, DestCm / ElysiumMove::U)); // 0x102ed4e9 nav +0x14
 	++Navigator.PathNoGoalInstalls;

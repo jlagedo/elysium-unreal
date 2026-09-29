@@ -416,7 +416,7 @@ bool FElysiumNpc::StartTask19EnemyLkp(const FElysiumEntity& Enemy, FVector& OutL
 
 void FElysiumNpc::StartTask19SetNavTolerances(float GoalToleranceUnits, float ArrivalDistanceUnits)
 {
-	NavPathToleranceCm = GoalToleranceUnits * ElysiumMove::U;                 // 0x102ee1c0 path+0x28
+	Navigator.GoalToleranceCm = GoalToleranceUnits * ElysiumMove::U;                 // 0x102ee1c0 path+0x28
 	NavPathScalar20 = ArrivalDistanceUnits;                                   // 0x102f2fe0 path+0x20
 }
 

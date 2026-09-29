@@ -137,7 +137,8 @@ struct FElysiumNpcScheduleHost
 	uint32 Unknown6300 = 0, Unknown659c = 0; // cleared by both Troika teardown virtuals
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
-	int32 NavigationActivity = -1; // CAI_Navigator::m_pPath->m_movementActivity (+0x2c), 0x102ee250
+	// `m_pPath->m_movementActivity` (+0x2c) moved to `FElysiumNpcNavigator::MovementActivity`
+	// (0018 story 5).
 	FString HintGroups;  // +0x62e0 m_sHintGroups (datamap) — the authored hint-group allowlist, KEY
 	                     // key=hint_groups
 	// +0x62e4 m_iHintGroups (datamap) — the parsed allowlist, as retail carries it: a 32-bit SET,

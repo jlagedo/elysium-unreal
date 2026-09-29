@@ -586,9 +586,15 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 	}
 }
 
-bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-	float SpeedCmPerSecond, bool bAllowPartialPath, TOptional<EElysiumNpcGaitKind> GaitKind)
+bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 {
+	// 0018/5 wave 1: the request form, behaviour unchanged -- the tolerance clamp, the partial-path
+	// bool and the default filter are the old signature's. Lane B honours the rest of the request.
+	const FVector& FeetDestination = Request.DestinationCm;
+	const float AcceptanceRadiusCm = Request.AcceptanceToleranceCm;
+	const float SpeedCmPerSecond = Request.SpeedCmPerSecond;
+	const bool bAllowPartialPath = Request.PartialPath == EElysiumNpcPartialPath::Accept;
+	const TOptional<EElysiumNpcGaitKind> GaitKind = Request.GaitKind;
 	bFaceRequested = false;
 	if (!bRuntimeReady || !bRequestedEnabled || bFrozen || bNavigationJumpInProgress)
 	{
@@ -1062,6 +1068,14 @@ void AElysiumNpcBody::SampleTransform(FVector& OutFeetOrigin, float& OutYawDegre
 {
 	OutFeetOrigin = FeetLocation();
 	OutYawDegrees = GetActorRotation().Yaw;
+}
+
+bool AElysiumNpcBody::SampleMoveFacts(FElysiumNpcMoveFacts& Out) const
+{
+	// 0018/5 wave 1 stub: lane B fills it from `OnMoveRequestFinished`, the follower and the crowd
+	// agent. False = "this motor reports no facts", `Out` untouched.
+	(void)Out;
+	return false;
 }
 
 EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& OutYawDegrees)

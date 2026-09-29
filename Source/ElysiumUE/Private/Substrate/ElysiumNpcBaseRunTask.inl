@@ -65,7 +65,7 @@ int32 NavUpdateGoalCalls = 0;
 void NavUpdateGoalPos(const FVector& GoalCm);
 
 /** `FUN_102ee250` `0x102ee250` -- `m_pPath->m_movementActivity (+0x2c) = act`. The word is
- *  `FElysiumNpcScheduleHost::NavigationActivity` on the Troika line (every live NPC); a base-only
+ *  `FElysiumNpcNavigator::MovementActivity` on the Troika line (every live NPC); a base-only
  *  NPC (a director) has no navigator word here and the write is dropped. */
 void NavSetMovementActivity(int32 Activity);
 

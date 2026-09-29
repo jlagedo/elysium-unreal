@@ -1741,10 +1741,10 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 	ScheduleHost.GoalToleranceCm = ToleranceCm;
 	// Modes 4/5 in `0x101a98c0`: `(-(mode != 4) & 10) + 9` at `0x101a99dc`, ACT_FLY when slot 94
 	// (`0x101a99ef` / `0x101a99fe`) answers 5 or 6 (`0x101a99f8` JZ / `0x101a9a07` JNZ).
-	ScheduleHost.NavigationActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
+	Navigator.MovementActivity = ScriptedScheduleOrder.bRun ? 0x13 : 9;
 	if (GetMoveType() == 5 || GetMoveType() == 6)
 	{
-		ScheduleHost.NavigationActivity = 0x22; // authored ACT_FLY; 0018/12 owns the flying mover
+		Navigator.MovementActivity = 0x22; // authored ACT_FLY; 0018/12 owns the flying mover
 		RecordScheduleEvent(TEXT("aiscripted_schedule ACT_FLY: the flying mover is not built"));
 		return false;
 	}

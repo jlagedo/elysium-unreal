@@ -90,31 +90,10 @@ struct FStartTaskNavRecord
 
 FStartTaskNavRecord StartTaskNav;
 
-/** `CAI_Navigator +0x40` — the route search time `SetRouteSearchTime` (`0x102886f0`, reached from
- *  `TASK_SET_ROUTE_SEARCH_TIME`) writes and the route builder `0x102f1dc0` reads: 0 fails a missing
- *  route at once (`0x102f1f00` `OnNavFailed(0xc, 1)`), anything else defers it and sets `m_afMemory`
- *  bit `0x20`. Zeroed by `0x102f28a0`; the navigator constructor `0x102eca50` leaves it alone.
- *  Seconds. */
-float NavRouteSearchTime = 0.f;
-
-/** `CAI_Navigator +0x44` — the retry interval `0x102f1dc0` adds to `curtime` for `+0x4c`. Nothing in
- *  the image writes it but `0x102f28a0`'s zero, so it is always 0.0. Seconds. */
-float NavRouteRetryInterval = 0.f;
-
-/** `CAI_Navigator +0x48` — the deferred route's give-up time (`curtime + +0x40`, `0x102f1f36`); past
- *  it the next build fails with `OnNavFailed(0xc, 1)` (`0x102f1f5a`). */
-double NavRouteGiveUpTime = 0.0;
-
-/** `CAI_Navigator +0x4c` — the deferred route's next retry time (`curtime + +0x44`). */
-double NavRouteRetryTime = 0.0;
-
-/** `CAI_Path +0x28`, the goal tolerance of the navigator's path (`m_pNavigator +0x30`), which
- *  `SetGoal 0x102ecd20` resolves from goal word `[8]` and writes (`0x102ecec7`), and whose -1.0
- *  "keep" arm reads back. This runtime has no `CAI_Path` (0018 story 4); the word is NOT
- *  `m_flGoalTolerance` (`+0x6320`, `FElysiumNpcScheduleHost::GoalToleranceCm`), which `SetGoal` never
- *  touches. Written also by `0x102ee1c0` (the tolerance tails of `0x102a1910`); zeroed by the path
- *  reset `0x1030bb30` (through `0x102f28a0`). Centimetres. */
-float NavPathToleranceCm = 0.f;
+// The route words `CAI_Navigator +0x40/+0x44/+0x48/+0x4c` and the path's goal tolerance
+// (`CAI_Path +0x28`) moved onto the navigator object for 0018 story 5:
+// `Navigator.RouteSearchTime` / `RouteRetryInterval` / `RouteGiveUpTime` / `RouteRetryTime` and
+// `Navigator.GoalToleranceCm` (`Substrate/ElysiumNpcNavigator.h`).
 
 /** `0x102f28a0` — the navigator's route clear: `+0x40`, `+0x44`, `+0x48`, `+0x4c` := 0, `m_afMemory`
  *  bit `0x20` cleared, then `0x1030bb30` resets the path (its tolerance `+0x28` among the words; the

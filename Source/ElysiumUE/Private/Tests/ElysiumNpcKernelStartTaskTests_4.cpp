@@ -530,7 +530,7 @@ bool FElysiumNpcKernelStartTask19SpeciesHumanTest::RunTest(const FString&)
 		const float Width = StartTask19SpeciesHullWidth(*Human, Human->HullKind);
 		// `0x1038485b` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance
 		// (`path+0x28`), not `m_flGoalTolerance` (+0x6320).
-		TestEqual(TEXT("0x9f: the path tolerance is twice the hull width"), Human->NavPathToleranceCm,
+		TestEqual(TEXT("0x9f: the path tolerance is twice the hull width"), Human->Navigator.GoalToleranceCm,
 			(Width + Width) * ElysiumMove::U);
 		TestTrue(TEXT("0x9f with a weapon completes"), F.Completed());
 	}
@@ -1877,7 +1877,7 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 	TestEqual(TEXT("0x4e: the tolerance"), Wolf->ScheduleHost.GoalToleranceCm,
 		static_cast<float>(Expected) * ElysiumMove::U);
 	// `0x103ccece` `0x102ee1c0` and `0x103ccee0` `0x102f2fe0`: the same value into the navigator's path.
-	TestEqual(TEXT("0x4e: the path tolerance"), Wolf->NavPathToleranceCm, static_cast<float>(Expected) * ElysiumMove::U);
+	TestEqual(TEXT("0x4e: the path tolerance"), Wolf->Navigator.GoalToleranceCm, static_cast<float>(Expected) * ElysiumMove::U);
 	TestEqual(TEXT("0x4e: path +0x20"), Wolf->NavPathScalar20, static_cast<float>(Expected));
 	TestTrue(TEXT("0x4e completes"), F.Completed());
 	// 0x100: the base first, then m_bfAINPCFlags &= ~0x10000.
@@ -2095,7 +2095,7 @@ bool FElysiumNpcKernelStartTask19SpeciesZombieTest::RunTest(const FString&)
 	Zombie->BaseScheduleHost.bShouldMove = false;
 	F.Start(0x151);
 	TestTrue(TEXT("0x151: m_bShouldMove"), Zombie->BaseScheduleHost.bShouldMove);
-	TestEqual(TEXT("0x151: movement activity 0x1014"), Zombie->ScheduleHost.NavigationActivity, 0x1014);
+	TestEqual(TEXT("0x151: movement activity 0x1014"), Zombie->Navigator.MovementActivity, 0x1014);
 	TestTrue(TEXT("0x151: the wait is after curtime"), Zombie->BaseScheduleHost.WaitFinished >= F.Now());
 	TestTrue(TEXT("0x151 keeps running"), F.Running());
 	// 0x152: the player feeds the zombie when it is the closest player; complete either way.
@@ -2172,7 +2172,7 @@ bool FElysiumNpcKernelStartTask19SpeciesFrenzyShadowTest::RunTest(const FString&
 		TestEqual(FString::Printf(TEXT("0x%x: the tolerance carries the hull term"), Task),
 			Shadow->ScheduleHost.GoalToleranceCm, Expected * ElysiumMove::U);
 		// `0x10375fec` `0x102ee1c0` / `0x10375ffe` `0x102f2fe0`: the same word into the navigator's path.
-		TestEqual(FString::Printf(TEXT("0x%x: the path tolerance"), Task), Shadow->NavPathToleranceCm,
+		TestEqual(FString::Printf(TEXT("0x%x: the path tolerance"), Task), Shadow->Navigator.GoalToleranceCm,
 			Expected * ElysiumMove::U);
 		TestTrue(FString::Printf(TEXT("0x%x completes"), Task), F.Completed());
 	}

@@ -87,6 +87,12 @@ void NavOnNavFailed(int32 FailReason);
  *  navigator's goal words, so the route's end has to reach them. */
 void NavigatorMoveStep();
 
+/** `CAI_Navigator::AdvancePath` `0x102f0400` — a non-goal head waypoint was reached: its arms (flag
+ *  `0x02` InPass input and the pass-waypoint re-find, flag `0x10` door transaction, flag `0x04` node
+ *  pop into `path+0x44`) and the pop. Answers whether a head waypoint still stands. 0018/5 wave 1
+ *  seam, defined in `ElysiumNpcBaseAdvancePath.cpp` (lane E); `NavigatorMoveStep` calls it (lane I). */
+bool NavAdvancePath();
+
 /** `thunk_FUN_102ee680(m_pNavigator)` — SDK `CAI_Navigator::IsGoalActive()`. The port's mover
  *  answers the same question through `SampleNavigation().bActiveGoal`. */
 bool NavIsGoalActive() const;

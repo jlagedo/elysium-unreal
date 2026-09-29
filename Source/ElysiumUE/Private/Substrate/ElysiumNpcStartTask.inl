@@ -113,7 +113,7 @@ bool StartTask19TeleportProbe(FVector& InOutUnits, bool& bOutLandedOnNonNpc);
 bool StartTask19EnemyLkp(const FElysiumEntity& Enemy, FVector& OutLkpUnits, FVector& OutSeenUnits) const;
 
 /** The navigator's two tolerance words the tolerance tails write: `0x102ee1c0(nav, tol)` (the path's
- *  goal tolerance, `path+0x28` = `NavPathToleranceCm`, which `SetGoal`'s `-1` literal keeps) and
+ *  goal tolerance, `path+0x28` = `Navigator.GoalToleranceCm`, which `SetGoal`'s `-1` literal keeps) and
  *  `0x102f2fe0(nav, dist)` (`path+0x20` = `NavPathScalar20`). SOURCE units in. `m_flGoalTolerance`
  *  (`+0x6320`) is `ScheduleHost.GoalToleranceCm` and is written by the arms themselves. */
 void StartTask19SetNavTolerances(float GoalToleranceUnits, float ArrivalDistanceUnits);

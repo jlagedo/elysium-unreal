@@ -135,9 +135,9 @@ public:
 	UPROPERTY()
 	FElysiumNpcAnimTickFunction AnimTickFunction;
 
-	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false,
-		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) override;
+	using IElysiumNpcMotor::MoveTo;
+	virtual bool MoveTo(const FElysiumNpcMoveRequest& Request) override;
+	virtual bool SampleMoveFacts(FElysiumNpcMoveFacts& Out) const override;
 	virtual void Face(float YawDegrees) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;

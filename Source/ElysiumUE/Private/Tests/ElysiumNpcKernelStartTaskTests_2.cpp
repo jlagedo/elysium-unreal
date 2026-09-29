@@ -231,9 +231,9 @@ bool FElysiumNpcKernelStartTask19TailInterestTest::RunTest(const FString&)
 
 	// 0xb6 / 0xb7: the translated activity into the navigator (`0x102ee250`); no completion.
 	F.Run(0xb6);
-	TestEqual(TEXT("0x102a64f9 ACT_IDLE"), Npc.ScheduleHost.NavigationActivity, 1);
+	TestEqual(TEXT("0x102a64f9 ACT_IDLE"), Npc.Navigator.MovementActivity, 1);
 	F.Run(0xb7);
-	TestEqual(TEXT("0x102a64f9 ACT_WALK"), Npc.ScheduleHost.NavigationActivity, 9);
+	TestEqual(TEXT("0x102a64f9 ACT_WALK"), Npc.Navigator.MovementActivity, 9);
 	TestFalse(TEXT("0xb7 does not complete"), F.Completed());
 
 	// 0xb8 `0x102a650b`: -1 clears INTERESTING_INTO and completes; a stored activity restarts.
@@ -498,7 +498,7 @@ bool FElysiumNpcKernelStartTask19TailFlagsTest::RunTest(const FString&)
 	{
 		Npc.BaseScheduleHost.MemoryBits = 0x2u | 0x40u;
 		F.Run(Row.Task);
-		TestEqual(FString::Printf(TEXT("0x%x navigator activity"), Row.Task), Npc.ScheduleHost.NavigationActivity, Row.Activity);
+		TestEqual(FString::Printf(TEXT("0x%x navigator activity"), Row.Task), Npc.Navigator.MovementActivity, Row.Activity);
 		TestTrue(FString::Printf(TEXT("0x%x forgets INCOVER only"), Row.Task), Npc.BaseScheduleHost.MemoryBits == 0x40u);
 		TestTrue(FString::Printf(TEXT("0x%x completes"), Row.Task), F.Completed());
 	}
@@ -772,7 +772,7 @@ bool FElysiumNpcKernelStartTask19TailCirclesTest::RunTest(const FString&)
 	F.Run(0x127, 50.f);
 	const float Tolerance = Npc.ScheduleHost.GoalToleranceCm / ElysiumMove::U;
 	TestTrue(TEXT("0x102a59b3 100 <= tolerance <= 150"), Tolerance >= 100.f && Tolerance <= 150.f);
-	TestEqual(TEXT("0x102a59d1 path +0x28 in cm"), Npc.NavPathToleranceCm, Npc.ScheduleHost.GoalToleranceCm, 1e-3f);
+	TestEqual(TEXT("0x102a59d1 path +0x28 in cm"), Npc.Navigator.GoalToleranceCm, Npc.ScheduleHost.GoalToleranceCm, 1e-3f);
 	TestEqual(TEXT("0x102a42df path +0x20"), Npc.NavPathScalar20, Tolerance, 1e-3f);
 	TestTrue(TEXT("0x102a42e8 completes"), F.Completed());
 
