@@ -2786,3 +2786,40 @@ exactly the staged rows — each once, as its family's class and tag, with the s
 assert def parity against the entity table. Bake goals: `sp_tutorial_1` 112 actors (49 hints of
 which 37 patrol points, 29 places, 14 makers, 20 NPCs), `sm_hub_1` 436 (274/34, 76, 48, 38),
 `sp_soc_3` 70 (40/25, 13 places, 2 conversation places, 15 NPCs).
+
+## Import — the place set (0018 story 4)
+
+Retail's AI network nodes, one row per node of the graph retail loads, cooked as one data asset
+per map for the runtime's place registry.
+
+- **Stage:** `importers/map_places.py`, riding the map-geometry manifest as `places`
+  (`MANIFEST_VERSION` 17), from the published nav-graph unit (`map_nav_doors.load_graph_block`)
+  and the map's entity rows. The block: `version` 1, `map`, `numNodes`, `usedHullBits`;
+  `places[]` in network order — `index`, `type`, `flags`, `origin` (Unreal cm, the RAW node
+  origin, no hull offset), `yaw` (Unreal degrees, the negated Source yaw the hint actors'
+  rotation also carries), `zOffsets[22]` (cm, every hull: `CAI_Node::GetPosition 0x102fb0d0` may
+  be asked for any), `wcId` (the authored `nodeid` from `wcLookup`, -1 if none) and `hint` (BSP
+  index of the bound hint, -1 if none); `pairing` — `nodeRows` (rows that advanced the counter),
+  `outOfRange[] {bspIndex, counter}` and `standalone[]` (BSP indices of id -1 hints);
+  `crosswalkPairs[]` (links between two nodes bound to type-11000 hints, lower index first, link
+  order, once each); `wanderCaps[] {hull, capUnits, fromHuman}` (Source units, 20 x the median
+  raw-origin length of the links whose motion word for that hull is non-zero, for every hull in
+  `UsedHullBits`; a declared hull with no link borrows the human figure).
+- **Binding:** `CNodeEnt::Spawn 0x102d78d0`'s loaded branch, positional. Node-classname rows
+  (`map_ai_infra.NODE_CLASSNAMES`) in BSP order; `info_hint` and the kick/shoot trio never advance
+  the counter and make an id -1 hint iff their type is non-zero; `info_node_tzimisce` is renamed
+  `info_node`; every other row advances the counter once and, if it makes a hint
+  (`map_ai_infra.makes_hint`), binds it to `node[counter]` when in range, else is out of range. A
+  parented node row is refused.
+- **Bake:** `pipeline/unreal/bake_places.py` creates `/ElysiumBaked/<map>/DA_<map>_Places`
+  (`UElysiumMapPlaces`, `asset_paths.baked_map_places`), hands the block to `AuthorJson` verbatim,
+  stamps the recipe and saves; it runs beside the light-query asset. The level recipe keys on
+  `places` (a canonical-JSON digest of the block).
+- **Verification:** `verify_places` — the asset loads and holds one row per staged node.
+
+All 108 patch maps stage. On every one the counter's node rows equal `NumNodes`, nothing runs out
+of range, and every bound node's `wcId` equals its hint row's `nodeid` — the patch AINs were
+built from the patch BSPs. `sp_tutorial_1`: 203 places, all ground, 49 bound hints, human cap
+2,942 (rat 3,098); `A1`/`A2`/`A3` (BSP 433–435, nodeid 39/40/41) on nodes 15/16/17. `sm_hub_1`:
+578 places, all ground, 274 bound hints, human cap 3,113 (rat 3,186); the six
+`info_node_crosswalk` rows bind nodes 258–263, which 8 crosswalk pairs join.

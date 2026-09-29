@@ -901,6 +901,45 @@ def verify_ai_infra(actors, map_name):
     return errors
 
 
+def places_errors(map_name, asset_path, rows, num_nodes, staged):
+    """0018 story 4, pure: the cooked place set loads, holds one row per node of its own network,
+    and that network is the one staged. `rows` is the asset's row list (None when it does not
+    load), `num_nodes` its own count, `staged` the manifest's `places` block (None when absent)."""
+    if staged is None:
+        return ["%s: no staged place set to check %s against "
+                "(run: uv run elysium bake map --maps %s --force)" % (map_name, asset_path, map_name)]
+    if rows is None:
+        return ["%s: %s does not load" % (map_name, asset_path)]
+    errors = []
+    if len(rows) != int(num_nodes):
+        errors.append("%s: %s has %d rows for %d nodes" % (map_name, asset_path, len(rows), num_nodes))
+    if int(num_nodes) != int(staged["numNodes"]):
+        errors.append("%s: %s holds %d nodes, the staged graph %d"
+                      % (map_name, asset_path, num_nodes, staged["numNodes"]))
+    return errors
+
+
+def verify_places(map_name):
+    """0018 story 4, `DA_<map>_Places` stands and its rows are the staged network's
+    (`places_errors`)."""
+    from elysium_pipeline.asset_paths import baked_map_places
+    asset_path = baked_map_places(map_name)
+    manifest = _staged_manifest(map_name)
+    staged = manifest.get("places") if manifest else None
+    rows = num_nodes = None
+    if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
+        asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+        if asset is not None:
+            rows = list(asset.get_editor_property("rows"))
+            num_nodes = int(asset.get_editor_property("num_nodes"))
+    errors = places_errors(map_name, asset_path, rows, num_nodes, staged)
+    unreal.log("[verify] place set: %s, %s rows, %d problem(s)"
+               % (asset_path, "no" if rows is None else len(rows), len(errors)))
+    for message in errors:
+        unreal.log_error("[verify] " + message)
+    return errors
+
+
 def verify_water(actors, map_name):
     """R7.1, exactly one
     `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
@@ -2154,6 +2193,7 @@ def verify_map(map_name):
 
     if map_name == "sm_hub_1":
         errors.extend(verify_sm_hub_1_weather(package, map_name))
+    errors.extend(verify_places(map_name))
 
     level = "%s/%s" % (package, map_name)
     if unreal.EditorAssetLibrary.does_asset_exist(level):

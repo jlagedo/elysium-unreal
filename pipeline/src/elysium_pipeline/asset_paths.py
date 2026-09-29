@@ -107,6 +107,12 @@ def map_package(map_name: str) -> str:
     return BAKED_MOUNT + canonical.removeprefix(BAKED_MOUNT + "/Maps")
 
 
+def baked_map_places(map_name: str) -> str:
+    """`/ElysiumBaked/<map>/DA_<map>_Places`, the twin of `ElysiumContentPaths::BakedMapPlaces`:
+    the map's AIN place set (0018 story 4)."""
+    return f"{map_package(map_name)}/DA_{map_name}_Places"
+
+
 def baked_level_path(repo_root: Path, map_name: str) -> Path:
     """The `.umap` on disk for a baked map, the one file that says the map exists.
 

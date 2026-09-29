@@ -23,6 +23,11 @@ steps **40** units (`0x102d72b0`), while every NPC steps **18** (`CAI_BaseNPC::S
 between the two is unreachable for a real agent and is reported with its rise measured, not counted
 a mesh defect. Cutting the agents at 40 instead would let NPCs climb what retail's own motor
 refuses.
+
+Beside the checks the key carries the place reports' questions (`placeQueries`, 0018 story 4):
+which places and authored points sit off each agent's mesh, which authored points no node covers,
+and whether each agent's mesh joins what the graph's zones keep apart. Those are observations --
+they are reported and never fail the gate; their pins are 0018/21-9's.
 """
 
 from __future__ import annotations
@@ -225,13 +230,223 @@ def summarise(key: dict[str, Any]) -> dict[str, Any]:
 
 
 def stage(map_name: str, root: Path | None = None) -> dict[str, Any]:
-    """`manifest["navAcceptance"]` for one map, from its published nav-graph unit."""
+    """`manifest["navAcceptance"]` for one map, from its published nav-graph unit.
 
+    The place reports' queries ride the same key (`placeQueries`). They are observations and must
+    never stop the gate, so a map whose places cannot be staged carries the reason instead.
+    """
+
+    from elysium_pipeline.exporters import UE_map_sidecars as producer
+    from elysium_pipeline.importers import map_ai_infra, map_places
     from elysium_pipeline.importers.map_nav_doors import load_graph_block
 
-    key = project(load_graph_block(map_name, root), map_name)
+    block = load_graph_block(map_name, root)
+    key = project(block, map_name)
     key["summary"] = summarise(key)
+    try:
+        units = producer.read_units(map_name, root)
+        rows = units.entities["entities"]
+        sky = producer.SkyScope(units, producer.entity_pair_blocks(rows))
+        key["placeQueries"] = place_queries(
+            block, map_places.stage_rows(map_name, rows, block),
+            map_ai_infra.stage_rows(map_name, rows, sky), key["hulls"])
+    except (ValueError, KeyError, OSError) as error:
+        key["placeQueries"] = {"unavailable": f"{type(error).__name__}: {error}"}
     return key
+
+
+# --- The place reports (0018 story 4; observations only, pins are 0018/21-9's) -----------------
+
+#: Isolated nodes carry zone 1 and flood fills start at 4 (`0x102f49c0`); `IsConnected 0x102f48b0`
+#: answers 0 for a zone-1 node against anything, so zone 1 is a group of singletons, not a zone.
+ZONE_ISOLATED = 1
+
+#: `FUN_102f41b0`, the point search that binds a goal POSITION to a node on the navigator's node
+#: arm: an axis-aligned box of half extent `_DAT_1046bacc` = 2048 units on all three axes around
+#: the point, inclusive, over raw node origins; the ten nearest, the first whose ray `0x102f39a0`
+#: from the point clears. The ray is not reproduced offline, so "a node in the box" is the
+#: necessary half of retail's cover test and an uncovered count here is a lower bound.
+GOAL_NODE_BOX_UNITS = 2048.0
+
+#: How many node pairs stand for one zone pair. The nearest pair alone is one projection away from
+#: an unanswered question, so the next nearest pairs sharing no node with it ride beside it; the
+#: verdict takes the nearest that answers.
+ZONE_PAIR_CANDIDATES = 3
+
+#: Wider projection extents (cm, half extents X, Y, Z) asked after the gate's own
+#: (`verify_nav.PROJECT_EXTENT`, 60/60/250), so a point off the mesh is reported with how far off
+#: it is -- bracketed, because the verify library answers "lands" and not a distance.
+WIDER_PROJECT_EXTENTS_CM: tuple[tuple[float, float, float], ...] = (
+    (150.0, 150.0, 400.0), (400.0, 400.0, 800.0), (1000.0, 1000.0, 1500.0))
+
+
+def _raw_cm(node: dict) -> list[float]:
+    return list(source_to_unreal(*[float(value) for value in node["origin"]["source"]]))
+
+
+def _components(links: Sequence[dict], hull: int, motion: int) -> _Components:
+    joined = _Components()
+    for link in links:
+        if _motion(link, hull) & motion:
+            joined.union(int(link["src"]), int(link["dst"]))
+    return joined
+
+
+def _zone_groups(nodes: Sequence[dict]) -> dict[int, list[int]]:
+    """Zone id to its node indices, zone 1 (the isolated nodes) as one group, ascending."""
+    groups: dict[int, list[int]] = {}
+    for node in nodes:
+        groups.setdefault(int(node["zone"]), []).append(int(node["index"]))
+    return dict(sorted(groups.items()))
+
+
+def _candidate_pairs(a: Sequence[int], b: Sequence[int], raw: dict[int, list[float]],
+                     count: int = ZONE_PAIR_CANDIDATES) -> list[tuple[int, int, float]]:
+    """The nearest node pairs across two groups by raw origin, nearest first: pairs sharing no
+    node with an earlier pick first, then the nearest remaining ones if the groups are too small."""
+    ranked = sorted(((math.dist(raw[i], raw[j]), i, j) for i in a for j in b))
+    chosen: list[tuple[float, int, int]] = []
+    used: set[int] = set()
+    for row in ranked:
+        if len(chosen) == count:
+            break
+        if row[1] not in used and row[2] not in used:
+            chosen.append(row)
+            used.update(row[1:])
+    for row in ranked:
+        if len(chosen) == count:
+            break
+        if row not in chosen:
+            chosen.append(row)
+    chosen.sort()
+    return [(i, j, distance) for distance, i, j in chosen]
+
+
+def _segment(nodes: dict[int, dict], src: int, dst: int, hull: int) -> dict[str, Any]:
+    """Two nodes at `hull`'s own positions, as a path query row."""
+    start, end = _endpoint_cm(nodes[src], hull), _endpoint_cm(nodes[dst], hull)
+    return {"src": src, "dst": dst, "startCm": start, "endCm": end,
+            "straightCm": math.dist(start, end)}
+
+
+def _anchor(members: Sequence[int], nodes: dict[int, dict]) -> int:
+    """The zone's best-connected node (most links, lowest index on a tie)."""
+    return min(members, key=lambda index: (-int(nodes[index].get("linkCount") or 0), index))
+
+
+def place_queries(block: dict, places: dict, infra: dict,
+                  hulls: Sequence[int]) -> dict[str, Any]:
+    """The three place reports' questions for one map, and the answer that needs no editor.
+
+    * **Points** -- every node at its hull position (`CAI_Node::GetPosition 0x102fb0d0`: origin
+      plus `zoffset[hull]` for a ground node, the raw origin for every other type; the climb arm's
+      yaw shift is not mirrored and reads raw), then every staged hint, patrol point and
+      interesting place at its own origin. Each is asked to project onto each agent's mesh.
+    * **Coverage** -- answered here. A hint is covered iff `CNodeEnt::Spawn`'s pairing bound it to
+      a node. An unpaired hint and an interesting place are covered iff a node's raw origin lies
+      in `FUN_102f41b0`'s +-2048 box around it: `TASK_GET_PATH_TO_INTERESTING_PLACE` submits
+      `m_vecInterestingPlace` (a spot `PickSpotFor 0x102da0d0` samples inside the place's bounds
+      -- its origin stands for it here) as a type-8 goal with flags -1, whose node arm binds the
+      goal end through that search; an unpaired hint's `GetPosition 0x102d1180` is its own origin,
+      bound the same way.
+    * **Zones** -- per zone pair, the nearest node pairs across them, asked to PATH; and per zone,
+      its anchor to every other member, asked to path, for the converse.
+    """
+
+    nodes = {int(node["index"]): node for node in block["nodes"]}
+    raw = {index: _raw_cm(node) for index, node in nodes.items()}
+    links = _usable_links(block)
+    paired = {int(place["hint"]) for place in places["places"] if int(place["hint"]) >= 0}
+
+    points: list[dict[str, Any]] = [
+        {"kind": "node", "id": index, "zone": int(nodes[index]["zone"]),
+         "type": int(nodes[index]["type"])}
+        for index in sorted(nodes)]
+    authored: list[dict[str, Any]] = []
+    for row in infra["rows"]:
+        if row["family"] == "hint":
+            kind = "patrol" if row["classname"].lower() == "info_node_patrol_point" else "hint"
+        elif row["family"] == "place":
+            kind = "place"
+        else:
+            continue
+        authored.append({"kind": kind, "id": int(row["index"]), "name": row["targetname"],
+                         "classname": row["classname"],
+                         "originCm": [float(value) for value in row["originCm"]]})
+    points.extend({k: v for k, v in row.items() if k != "originCm"} for row in authored)
+
+    box_cm = GOAL_NODE_BOX_UNITS * UNITS_TO_CM
+    uncovered = []
+    farthest: dict[str, Any] | None = None
+    for row in authored:
+        if row["kind"] != "place" and row["id"] in paired:
+            continue
+        origin = row["originCm"]
+        if raw:
+            # The margin: how far the worst-served point stands from its nearest node, so a
+            # clean count can be read against the box it passed.
+            near = min(raw, key=lambda index: math.dist(raw[index], origin))
+            gap = math.dist(raw[near], origin)
+            if farthest is None or gap > farthest["nearestNodeCm"]:
+                farthest = {"kind": row["kind"], "id": row["id"], "name": row["name"],
+                            "nearestNode": near, "nearestNodeCm": round(gap, 1)}
+        in_box = [index for index, position in raw.items()
+                  if all(abs(position[axis] - origin[axis]) <= box_cm for axis in range(3))]
+        if in_box:
+            continue
+        nearest = min(raw, key=lambda index: math.dist(raw[index], origin)) if raw else -1
+        uncovered.append({
+            "kind": row["kind"], "id": row["id"], "name": row["name"],
+            "classname": row["classname"],
+            "why": "no node in the +-2048 box" + ("" if row["kind"] == "place"
+                                                   else " and not paired to a node"),
+            "nearestNode": nearest,
+            "nearestNodeCm": round(math.dist(raw[nearest], origin), 1) if raw else None,
+        })
+    coverage = {
+        "boxUnits": GOAL_NODE_BOX_UNITS,
+        "pairedHints": sum(1 for row in authored if row["kind"] != "place" and row["id"] in paired),
+        "unpairedHints": sum(1 for row in authored
+                             if row["kind"] != "place" and row["id"] not in paired),
+        "places": sum(1 for row in authored if row["kind"] == "place"),
+        "uncovered": uncovered,
+        "farthestFromANode": farthest,
+    }
+
+    groups = _zone_groups(block["nodes"])
+    zone_ids = list(groups)
+    pairs = [(a, b, _candidate_pairs(groups[a], groups[b], raw))
+             for position, a in enumerate(zone_ids) for b in zone_ids[position + 1:]]
+    anchors = {zone: _anchor(members, nodes) for zone, members in groups.items()
+               if zone != ZONE_ISOLATED and len(members) > 1}
+
+    per_hull: dict[str, Any] = {}
+    for hull in hulls:
+        ground = _components(links, hull, MOVE_GROUND)
+        linked = _components(links, hull, MOVE_GROUND | MOVE_JUMP)
+        per_hull[str(hull)] = {
+            "pointsCm": [_endpoint_cm(nodes[index], hull) for index in sorted(nodes)]
+                        + [row["originCm"] for row in authored],
+            "zonePairs": [
+                {"zoneA": a, "zoneB": b,
+                 "candidates": [_segment(nodes, i, j, hull) for i, j, _ in candidates]}
+                for a, b, candidates in pairs],
+            "sameZone": [
+                {"zone": zone, "anchor": anchor, "node": member,
+                 **_segment(nodes, anchor, member, hull),
+                 "groundLinked": ground.joined(anchor, member),
+                 "hullLinked": linked.joined(anchor, member)}
+                for zone, anchor in anchors.items()
+                for member in groups[zone] if member != anchor],
+        }
+
+    return {
+        "points": points,
+        "coverage": coverage,
+        "zones": {str(zone): len(members) for zone, members in groups.items()},
+        "widerExtentsCm": [list(extent) for extent in WIDER_PROJECT_EXTENTS_CM],
+        "perHull": per_hull,
+    }
 
 
 def agent_name(hull_name: str) -> str:

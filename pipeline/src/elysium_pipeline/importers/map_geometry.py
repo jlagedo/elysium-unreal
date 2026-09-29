@@ -104,7 +104,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: contract plus its R16 cover raster (`importers.map_weather`, which writes `rain_height.png`
 #: beside this file). They are the last two decoder-only products the BAKE opened from outside
 #: the project, so with them staged a map needs no legacy export directory at all.
-MANIFEST_VERSION = 16
+#: 17 (0018 story 4): `places` -- retail's AIN nodes as the place set, each bound to its hint by
+#: `CNodeEnt::Spawn`'s positional counter, plus the crosswalk pairs and the per-hull wander caps
+#: (`importers.map_places`), which the bake cooks into `DA_<map>_Places`.
+MANIFEST_VERSION = 17
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -2292,6 +2295,7 @@ def stage_map(map_name: str, root: Path | None = None,
     from elysium_pipeline.importers import map_light_query as light_query_lane
     from elysium_pipeline.importers import map_ai_infra as ai_infra_lane
     from elysium_pipeline.importers import map_jump_links as jump_link_lane
+    from elysium_pipeline.importers import map_places as places_lane
     from elysium_pipeline.importers import map_ropes as rope_lane
     from elysium_pipeline.importers import map_decals as decal_lane
     from elysium_pipeline.importers import map_weather as weather_lane
@@ -2376,6 +2380,7 @@ def stage_map(map_name: str, root: Path | None = None,
         "lightQuery": light_query_lane.stage_for_join(geometry.join, root),
         "jumpLinks": jump_link_lane.stage_map(map_name, root),
         "aiInfra": ai_infra_lane.stage_for_join(geometry.join, geometry.map_name),
+        "places": places_lane.stage_for_join(geometry.join, geometry.map_name, root),
         "ropes": rope_lane.stage_for_join(geometry.join, geometry.map_name),
         "decals": decal_lane.stage_for_join(
             geometry.join, geometry.map_name, materials=material_units),

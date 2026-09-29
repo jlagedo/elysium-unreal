@@ -25,7 +25,9 @@ def cmdline_arg(key, default=""):
 
 #: How far from a stated endpoint a projection may land. Retail states a node position at hull
 #: height; Recast's surface sits on the rasterised floor, which is not the same plane. Generous on
-#: Z for that, tight on X/Y so a point does not silently find a different room's floor.
+#: Z for that, tight on X/Y so a point does not silently find a different room's floor. The place
+#: reports ask it first; the wider extents they ask after it come from the key
+#: (`map_nav_acceptance.WIDER_PROJECT_EXTENTS_CM`).
 PROJECT_EXTENT = unreal.Vector(60.0, 60.0, 250.0)
 
 
@@ -98,6 +100,36 @@ def verify_map(key, agent_names):
         }
         log("%s: %d bridging link(s) asked of both %s and %s"
             % (key["map"], len(bridging), agent, base_agent))
+
+    # The place reports (0018 story 4): every place and authored point asked to project at the
+    # gate's own extent and then at each wider one, so an off-mesh point is answered with how far
+    # off it is; every zone pair's candidate node pairs and every zone's anchor-to-member pairs
+    # asked to path. Observations -- the verdicts never fail on them.
+    queries = key.get("placeQueries") or {}
+    answers["places"] = {}
+    extents = [PROJECT_EXTENT] + [unreal.Vector(float(e[0]), float(e[1]), float(e[2]))
+                                  for e in queries.get("widerExtentsCm", [])]
+    for hull, asked in queries.get("perHull", {}).items():
+        agent = agent_names.get(hull)
+        if agent is None:
+            continue
+        points = [unreal.Vector(float(p[0]), float(p[1]), float(p[2]))
+                  for p in asked["pointsCm"]]
+        candidates = [row for pair in asked["zonePairs"] for row in pair["candidates"]]
+        same_zone = asked["sameZone"]
+        answers["places"][hull] = {
+            "agent": agent,
+            "landed": [[bool(v) for v in unreal.ElysiumNavVerifyLibrary.project_points(
+                world, agent, points, extent)] for extent in extents],
+            "zonePairLengths": [float(v) for v in unreal.ElysiumNavVerifyLibrary.path_lengths(
+                world, agent, _vectors(candidates, "startCm"), _vectors(candidates, "endCm"),
+                PROJECT_EXTENT)],
+            "sameZoneLengths": [float(v) for v in unreal.ElysiumNavVerifyLibrary.path_lengths(
+                world, agent, _vectors(same_zone, "startCm"), _vectors(same_zone, "endCm"),
+                PROJECT_EXTENT)],
+        }
+        log("%s hull %s (%s): %d place point(s), %d zone-pair candidate(s), %d same-zone pair(s)"
+            % (key["map"], hull, agent, len(points), len(candidates), len(same_zone)))
     return answers
 
 

@@ -123,7 +123,9 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: stands an `ADecalActor` from -- and `weather`, the rain contract plus the name of the R16 cover
 #: raster staged beside the manifest. With both here the bake opens no file under
 #: `$ELYSIUM_EXPORT_ROOT/<map>/`.
-MANIFEST_VERSION = 16
+#: 17 (0018 story 4): `places` -- the AIN place set, its hint pairing, crosswalk pairs and wander
+#: caps, which `bake_places.author` cooks into `DA_<map>_Places`.
+MANIFEST_VERSION = 17
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -581,6 +583,9 @@ def _build_class():
             recipe["jump_links"] = self.geometry.manifest.get("jumpLinks", {}).get("sha256")
             recipe["ai_infra"] = self.geometry.manifest.get("aiInfra", {}).get("sha256")
             recipe["ai_infra_shape"] = _ai_infra_actor_shape()
+            # 0018 story 4: the block carries no digest of its own (its schema is the C++
+            # reader's), so the level is stamped against one taken here.
+            recipe["places"] = _places_digest(self.geometry.manifest.get("places"))
             recipe["ropes"] = self.geometry.manifest.get("ropes", {}).get("sha256")
             recipe["rope_shape"] = _rope_actor_shape()
             # 0018 story 21-4: the projector rows and the rain payload are staged inputs now, so
@@ -1407,6 +1412,13 @@ def _build_class():
             if query is None:
                 raise ValueError("map manifest has no gameplay light-query payload; stage the V2 map again")
             bake_light_query.author(query)
+            # 0018 story 4: the place set is authored beside the light service, one data asset
+            # per map, before any actor of the level exists.
+            from pipeline.unreal import bake_places
+            places = self.geometry.manifest.get("places")
+            if places is None:
+                raise ValueError("map manifest has no place set; stage the V2 map again")
+            bake_places.author(places)
             calibration = lighting_calibration()
             placed = sky_placed = 0
             sky_ambient = None
@@ -1759,6 +1771,12 @@ def _ai_infra_actor_shape():
     """`bake_ai_infra.INFRA_ACTOR_SHAPE`, read lazily: that module imports `unreal` itself."""
     from pipeline.unreal import bake_ai_infra
     return bake_ai_infra.INFRA_ACTOR_SHAPE
+
+
+def _places_digest(block):
+    """`bake_places.digest`, read lazily: that module imports `unreal` itself."""
+    from pipeline.unreal import bake_places
+    return bake_places.digest(block)
 
 
 def _rope_actor_shape():

@@ -217,3 +217,157 @@ def test_manbat_is_the_only_flying_hull():
     from elysium_pipeline.validation import nav_acceptance as verdicts
 
     assert verdicts.FLYING_HULLS == frozenset({20})
+
+
+# --- The place reports (0018 story 4): observations, never checks -----------------------------
+
+def _zoned(index, zone, *, links=0, node_type=key.NODE_GROUND, offset=0.0, x=None):
+    offsets = [0.0] * key.RETAIL_HULL_COUNT
+    offsets[0] = offset
+    return {"index": index, "origin": {"source": [index * 100.0 if x is None else x, 0.0, 0.0]},
+            "hullOffsets": offsets, "type": node_type, "zone": zone, "linkCount": links}
+
+
+def _infra(*rows):
+    return {"rows": [{"family": family, "classname": classname, "index": index,
+                      "targetname": f"e{index}", "originCm": origin}
+                     for family, classname, index, origin in rows]}
+
+
+def _places(nodes, bound=None):
+    bound = bound or {}
+    return {"places": [{"index": node["index"], "hint": bound.get(node["index"], -1)}
+                       for node in nodes]}
+
+
+def test_a_ground_place_stands_at_its_hull_offset_and_any_other_type_at_its_origin():
+    # CAI_Node::GetPosition 0x102fb0d0: the ground arm adds zoffset[hull], every other reads raw.
+    nodes = [_zoned(0, 4, offset=10.0), _zoned(1, 4, offset=10.0, node_type=4)]
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes), _infra(), [0])
+    ground, climb = queries["perHull"]["0"]["pointsCm"]
+    assert ground[2] == pytest.approx(10.0 * key.UNITS_TO_CM)
+    assert climb[2] == pytest.approx(0.0)
+
+
+def test_the_points_are_every_node_then_every_hint_patrol_point_and_interesting_place():
+    nodes = [_zoned(0, 4)]
+    infra = _infra(("hint", "info_node_patrol_point", 7, [0.0, 0.0, 0.0]),
+                   ("hint", "info_hint", 8, [0.0, 0.0, 0.0]),
+                   ("place", "intersting_place", 9, [0.0, 0.0, 0.0]),
+                   ("npc", "npc_VHuman", 10, [0.0, 0.0, 0.0]))
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes), infra, [0])
+    assert [(p["kind"], p["id"]) for p in queries["points"]] == [
+        ("node", 0), ("patrol", 7), ("hint", 8), ("place", 9)]
+    assert len(queries["perHull"]["0"]["pointsCm"]) == 4
+
+
+def test_a_paired_hint_is_covered_however_far_its_node_is():
+    far = 10 * key.GOAL_NODE_BOX_UNITS * key.UNITS_TO_CM
+    nodes = [_zoned(0, 4)]
+    infra = _infra(("hint", "info_node_patrol_point", 7, [far, 0.0, 0.0]))
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes, {0: 7}), infra, [0])
+    assert queries["coverage"]["uncovered"] == []
+    assert queries["coverage"]["pairedHints"] == 1
+
+
+def test_an_unpaired_point_is_covered_only_by_a_node_inside_the_2048_box():
+    # FUN_102f41b0: +-2048 units on every axis, inclusive, over raw node origins.
+    edge = key.GOAL_NODE_BOX_UNITS * key.UNITS_TO_CM
+    nodes = [_zoned(0, 4, x=0.0)]
+    infra = _infra(("place", "intersting_place", 9, [edge - 1.0, 0.0, 0.0]),
+                   ("place", "intersting_place", 10, [edge + 1.0, 0.0, 0.0]),
+                   ("hint", "info_hint", 11, [0.0, 0.0, edge + 1.0]))
+    coverage = key.place_queries(_block([], nodes, used=1), _places(nodes), infra, [0])["coverage"]
+    assert [(row["kind"], row["id"]) for row in coverage["uncovered"]] == [("place", 10),
+                                                                            ("hint", 11)]
+    assert coverage["uncovered"][0]["nearestNode"] == 0
+    assert coverage["farthestFromANode"]["id"] in (10, 11)
+
+
+def test_zone_one_is_one_group_against_every_zone_and_never_asked_the_converse():
+    # Isolated nodes carry zone 1 and IsConnected 0x102f48b0 answers 0 for them, so they make no
+    # same-zone claim; as a group they still face every real zone.
+    nodes = [_zoned(0, 1), _zoned(1, 1), _zoned(2, 4, links=1), _zoned(3, 4, links=2),
+             _zoned(4, 5)]
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes), _infra(), [0])
+    asked = queries["perHull"]["0"]
+    assert [(p["zoneA"], p["zoneB"]) for p in asked["zonePairs"]] == [(1, 4), (1, 5), (4, 5)]
+    # Zone 4's anchor is its best-connected node; zone 5 is a single node and asks nothing.
+    assert [(row["anchor"], row["node"]) for row in asked["sameZone"]] == [(3, 2)]
+
+
+def test_zone_pair_candidates_are_nearest_first_and_prefer_fresh_nodes():
+    nodes = [_zoned(0, 4, x=0.0), _zoned(1, 4, x=10.0), _zoned(2, 5, x=20.0),
+             _zoned(3, 5, x=500.0)]
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes), _infra(), [0])
+    candidates = queries["perHull"]["0"]["zonePairs"][0]["candidates"]
+    assert [(row["src"], row["dst"]) for row in candidates] == [(1, 2), (0, 2), (0, 3)]
+
+
+def test_the_converse_says_whether_the_hulls_own_ground_links_join_the_pair():
+    nodes = [_zoned(0, 4, links=2), _zoned(1, 4), _zoned(2, 4)]
+    links = [_link(0, 0, 1, {0: key.MOVE_GROUND}), _link(1, 0, 2, {19: key.MOVE_GROUND})]
+    queries = key.place_queries(_block(links, nodes), _places(nodes), _infra(), [0, 19])
+    human = {row["node"]: row["groundLinked"] for row in queries["perHull"]["0"]["sameZone"]}
+    rat = {row["node"]: row["groundLinked"] for row in queries["perHull"]["19"]["sameZone"]}
+    assert human == {1: True, 2: False}
+    assert rat == {1: False, 2: True}
+
+
+def test_an_off_mesh_point_is_reported_with_the_first_wider_extent_it_lands_in():
+    points = [{"kind": "node", "id": 0}, {"kind": "place", "id": 9}, {"kind": "hint", "id": 8}]
+    landed = [[True, False, False], [True, False, False], [True, True, False]]
+    wider = [[150.0, 150.0, 400.0], [400.0, 400.0, 800.0]]
+    row = verdicts.places_off_mesh(points, landed, wider, 0, "Human")
+    assert row["failed"] == 0 and row["observed"] == 2
+    assert row["listed"][0]["landsWithinCm"] == [400.0, 400.0, 800.0]
+    assert row["listed"][1]["landsWithinCm"] is None
+    assert row["byKind"] == {"place": 1, "hint": 1} and row["beyondWidest"] == 1
+
+
+def _pair(a, b, n):
+    return {"zoneA": a, "zoneB": b,
+            "candidates": [{"src": i, "dst": 100 + i, "straightCm": 100.0} for i in range(n)]}
+
+
+def test_the_nearest_candidate_that_answers_decides_a_zone_pair():
+    pairs = [_pair(4, 5, 2), _pair(4, 6, 2), _pair(5, 6, 2)]
+    lengths = [verdicts.OFF_MESH, 250.0,               # skips the hole, joined on the second
+               verdicts.NO_PATH, 300.0,                # the nearest answer is a wall: separate
+               verdicts.OFF_MESH, verdicts.OFF_MESH]   # nothing answered
+    row = verdicts.zone_pairs(pairs, lengths, 0, "Human")
+    assert row["failed"] == 0
+    assert (row["joined"], row["separate"], row["unanswered"]) == (1, 1, 1)
+    assert row["listed"][0]["observation"] == "joined-on-mesh-but-separate-zones"
+    assert row["listed"][0]["src"] == 1 and row["listed"][0]["pathCm"] == 250.0
+    assert "hull sweep against props" in row["caveat"]
+
+
+def test_a_same_zone_member_the_mesh_cannot_reach_is_observed_not_failed():
+    rows = [{"zone": 4, "anchor": 0, "node": n, "straightCm": 10.0,
+             "groundLinked": n == 1, "hullLinked": True} for n in (1, 2, 3)]
+    row = verdicts.same_zone_unjoined(rows, [verdicts.NO_PATH, verdicts.NO_PATH,
+                                             verdicts.OFF_MESH], 0, "Human")
+    assert row["failed"] == 0 and row["observed"] == 2
+    assert row["groundLinked"] == 1 and row["offMesh"] == 1
+
+
+def test_the_observations_never_reach_the_gates_verdict():
+    nodes = [_zoned(0, 4, links=1), _zoned(1, 4), _zoned(2, 5)]
+    queries = key.place_queries(_block([], nodes, used=1), _places(nodes),
+                                _infra(("place", "intersting_place", 9, [1.0e7, 0.0, 0.0])), [0])
+    asked = queries["perHull"]["0"]
+    answers = {"0": {"landed": [[False] * 4] * 4,
+                     "zonePairLengths": [120.0] * sum(len(p["candidates"])
+                                                      for p in asked["zonePairs"]),
+                     "sameZoneLengths": [verdicts.NO_PATH] * len(asked["sameZone"])}}
+    observations = verdicts.place_observations(queries, answers, {"0": "Human"})
+    assert all(row["failed"] == 0 for row in observations["rows"])
+    line = verdicts.place_summary(observations)
+    assert line == ("places off mesh: Human 4; uncovered: 1; zone pairs joined on mesh: "
+                    "Human 1/1; same zone, no mesh path: Human 1")
+
+
+def test_a_map_whose_places_cannot_be_staged_says_so_and_still_reports():
+    observations = verdicts.place_observations({"unavailable": "no entities"}, {}, {})
+    assert verdicts.place_summary(observations) == "place reports unavailable (no entities)"

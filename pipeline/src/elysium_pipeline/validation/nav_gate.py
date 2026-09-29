@@ -11,6 +11,11 @@ and only one of them is a command: `verify nav` asks on demand, and `bake map` a
 it has just built. The lane that builds the meshes must not be able to finish having built a
 wrong one -- a gate nobody runs is not a gate. Before 0018 story 21-2 the automatic caller was
 `import map-collision`, which the fold retired.
+
+Beside the checks it writes the place reports (0018 story 4) into each map's `observations`:
+places and authored points off each agent's mesh, authored points no node covers, and the AIN
+zones against each mesh's connectivity. They are asked in the same editor call and never fail the
+gate; pinning them is 0018/21-9's.
 """
 
 from __future__ import annotations
@@ -109,6 +114,12 @@ def judge(
                 rows.append(bridging)
         report = verdicts.report(rows)
         report["stepOutliers"] = len(excused)
+        # The place reports (0018 story 4): observations beside the checks, never counted by
+        # `report`, so nothing in them can fail the gate.
+        observations = verdicts.place_observations(
+            key.get("placeQueries") or {"unavailable": "the key carries no place queries"},
+            answer.get("places", {}), key["agentNames"])
+        report["observations"] = observations
         reports[key["map"]] = report
         failed += report["failed"]
         if on_line is not None:
@@ -120,6 +131,7 @@ def judge(
             if flight:
                 note += f", {flight} flight claim(s) reported"
             on_line(f"  {key['map']}: {'clean' if report['clean'] else line}  [{note}]")
+            on_line(f"    {verdicts.place_summary(observations)}  [observations, unpinned]")
     out = report_path(config.work_root)
     out.write_text(json.dumps(reports, indent=2), encoding="utf-8")
     # A per-map copy beside it, because `report.json` holds only the LAST run: `bake map` judges

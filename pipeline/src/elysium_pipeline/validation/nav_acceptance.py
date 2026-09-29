@@ -208,6 +208,171 @@ def mesh_errors(expected_agents: Sequence[str], meshes: Sequence[str]) -> dict[s
     return _row("agent-meshes", failures, expected=list(expected_agents), carried=carried)
 
 
+# --- The place reports (0018 story 4) -----------------------------------------------------------
+#
+# Observations, not checks: every row below carries `failed: 0` and lives in the report's
+# `observations`, never in `checks`, so nothing here can fail the gate. They say where reach changed
+# against retail so it is seen rather than discovered; pinning any of it is 0018/21-9's.
+
+#: Story 3's lesson, carried on every zone row: zones are a connected-components pass over LINKS
+#: (`0x102f49c0`), and a link is refused by `CAI_Node::InitLinks 0x102fb4e0`'s HULL sweep, which
+#: hits static props a ray against brushes misses (the `146-184` barrel). A mesh joining two zones
+#: is therefore not evidence they "should be joined".
+ZONE_CAVEAT = ("observation only: before any 'should be joined' claim, reproduce with a hull sweep "
+               "against props (InitLinks 0x102fb4e0), not a ray against brushes")
+
+
+def _observation(check: str, found: Sequence[dict[str, Any]], **extra: Any) -> dict[str, Any]:
+    return {
+        "check": check,
+        "failed": 0,
+        "observed": len(found),
+        "listed": list(found[:MAX_LISTED]),
+        "truncated": max(0, len(found) - MAX_LISTED),
+        **extra,
+    }
+
+
+def places_off_mesh(points: Sequence[dict[str, Any]], landed: Sequence[Sequence[bool]],
+                    wider_extents: Sequence[Sequence[float]], hull: int,
+                    agent: str) -> dict[str, Any]:
+    """Every place and authored point that does not project onto `agent`'s mesh within the gate's
+    own extent (`landed[0]`), with how far off it is: the first wider extent it lands within
+    (`landed[1:]`, `wider_extents`), or none -- the verify library answers "lands", not a distance.
+    """
+
+    off, by_kind = [], {}
+    for position, point in enumerate(points):
+        if landed[0][position]:
+            continue
+        within = next((list(extent) for extent, rung in zip(wider_extents, landed[1:])
+                       if rung[position]), None)
+        by_kind[point["kind"]] = by_kind.get(point["kind"], 0) + 1
+        off.append({**point, "landsWithinCm": within})
+    return _observation(f"places-off-mesh-hull-{hull}", off, hull=hull, agent=agent,
+                        points=len(points), byKind=by_kind,
+                        beyondWidest=sum(1 for row in off if row["landsWithinCm"] is None))
+
+
+def uncovered_points(coverage: dict[str, Any]) -> dict[str, Any]:
+    """The authored points no node covers; the key computed them (no editor is needed)."""
+
+    found = list(coverage["uncovered"])
+    by_kind: dict[str, int] = {}
+    for row in found:
+        by_kind[row["kind"]] = by_kind.get(row["kind"], 0) + 1
+    return _observation("uncovered-points", found, byKind=by_kind,
+                        boxUnits=coverage["boxUnits"], pairedHints=coverage["pairedHints"],
+                        unpairedHints=coverage["unpairedHints"], places=coverage["places"],
+                        farthestFromANode=coverage.get("farthestFromANode"))
+
+
+def zone_pairs(pairs: Sequence[dict[str, Any]], lengths: Sequence[float], hull: int,
+               agent: str) -> dict[str, Any]:
+    """Per AIN zone pair, whether `agent`'s mesh joins them.
+
+    `lengths` answers every pair's candidates in order, flattened. The nearest candidate that
+    answers decides: a length joins them; -1 (both ends on the mesh, no path) keeps them apart;
+    a pair whose every candidate is off the mesh is unanswered.
+    """
+
+    joined, separate, unanswered = [], [], []
+    cursor = 0
+    for pair in pairs:
+        candidates = pair["candidates"]
+        answers = list(lengths[cursor:cursor + len(candidates)])
+        cursor += len(candidates)
+        decided = next(((row, length) for row, length in zip(candidates, answers)
+                        if length != OFF_MESH), None)
+        head = {"zoneA": pair["zoneA"], "zoneB": pair["zoneB"]}
+        if decided is None:
+            unanswered.append(head)
+            continue
+        row, length = decided
+        entry = {**head, "src": row["src"], "dst": row["dst"],
+                 "straightCm": round(float(row["straightCm"]), 1)}
+        if length >= 0.0:
+            joined.append({**entry, "pathCm": round(float(length), 1),
+                           "observation": "joined-on-mesh-but-separate-zones"})
+        else:
+            separate.append(entry)
+    return _observation(f"zone-pairs-hull-{hull}", joined, hull=hull, agent=agent,
+                        pairs=len(pairs), joined=len(joined), separate=len(separate),
+                        unanswered=len(unanswered), unansweredPairs=unanswered[:MAX_LISTED],
+                        caveat=ZONE_CAVEAT)
+
+
+def same_zone_unjoined(rows: Sequence[dict[str, Any]], lengths: Sequence[float], hull: int,
+                       agent: str) -> dict[str, Any]:
+    """The converse: a zone member `agent`'s mesh cannot reach from its zone's anchor.
+
+    A zone is a component over EVERY hull's links, jumps included, and the mesh carries no jump,
+    so each finding says whether this hull's own ground links (`groundLinked`) or any of its links
+    (`hullLinked`) join the two -- only the first is the graph asserting a walk this agent's mesh
+    refuses. Off-mesh ends are counted, not listed: `places_off_mesh` lists them.
+    """
+
+    unjoined, off = [], 0
+    for row, length in zip(rows, lengths):
+        if length == OFF_MESH:
+            off += 1
+        elif length == NO_PATH:
+            unjoined.append({"zone": row["zone"], "anchor": row["anchor"], "node": row["node"],
+                             "straightCm": round(float(row["straightCm"]), 1),
+                             "groundLinked": bool(row["groundLinked"]),
+                             "hullLinked": bool(row["hullLinked"]),
+                             "observation": "same-zone-but-no-mesh-path"})
+    return _observation(f"same-zone-hull-{hull}", unjoined, hull=hull, agent=agent,
+                        members=len(rows), offMesh=off,
+                        groundLinked=sum(1 for row in unjoined if row["groundLinked"]),
+                        caveat=ZONE_CAVEAT)
+
+
+def place_observations(queries: dict[str, Any], answers: dict[str, Any],
+                       agent_names: dict[str, str]) -> dict[str, Any]:
+    """All three reports for one map, from the key's `placeQueries` and the editor's `places`."""
+
+    if "unavailable" in queries:
+        return {"unavailable": queries["unavailable"]}
+    rows: list[dict[str, Any]] = [uncovered_points(queries["coverage"])]
+    for hull, asked in queries["perHull"].items():
+        given = answers.get(hull)
+        if given is None:
+            continue
+        agent = agent_names.get(hull, hull)
+        found = [
+            places_off_mesh(queries["points"], given["landed"], queries["widerExtentsCm"],
+                            int(hull), agent),
+            zone_pairs(asked["zonePairs"], given["zonePairLengths"], int(hull), agent),
+            same_zone_unjoined(asked["sameZone"], given["sameZoneLengths"], int(hull), agent),
+        ]
+        if int(hull) in FLYING_HULLS:
+            for row in found:
+                row["flying"] = True
+        rows.extend(found)
+    return {"zones": queries["zones"], "rows": rows}
+
+
+def place_summary(observations: dict[str, Any]) -> str:
+    """The console line: `places off mesh: Human 3, Rat 12; uncovered: 5; ...`."""
+
+    if "unavailable" in observations:
+        return f"place reports unavailable ({observations['unavailable']})"
+
+    def per_agent(prefix: str, value) -> str:
+        cells = [f"{row['agent']} {value(row)}" for row in observations["rows"]
+                 if row["check"].startswith(prefix)]
+        return ", ".join(cells) or "none"
+
+    uncovered = next(row for row in observations["rows"] if row["check"] == "uncovered-points")
+    return (f"places off mesh: {per_agent('places-off-mesh-', lambda r: r['observed'])}; "
+            f"uncovered: {uncovered['observed']}; "
+            f"zone pairs joined on mesh: "
+            f"{per_agent('zone-pairs-', lambda r: str(r['joined']) + '/' + str(r['pairs']))}; "
+            f"same zone, no mesh path: "
+            f"{per_agent('same-zone-', lambda r: r['observed'])}")
+
+
 def report(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Every verdict for one map, and whether any of them failed."""
 
