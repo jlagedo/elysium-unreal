@@ -269,6 +269,10 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **08 · 0018/5** — The navigator and the movement seam. L · Opus/high.
   21-8 corrected its pedestrian price (an AVOIDANCE, not a preference) and handed it an exact
   acceptance set: the 1,331 links over 40 maps carrying `m_LinkInfo & 0x2000`.
+  Row 07 handed it `InstallPathNoGoal` (the wander's path, no goal), whose arrival is still
+  unwitnessed: its move radius is 0, which the body clamps to 1 cm. In the smoke run the two forced
+  copcar wanderers blocked each other before arriving. It also handed the jump seam, which refuses
+  legal jumps (hub link 88, tutorial link 390).
 - [ ] **09 · 0018/6** — Geometry services (sight, hull sweep, stand test, reachability). M · Opus/high.
 
 ## C — close 0019
@@ -288,6 +292,9 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 - [ ] **15 · 0018/9** — The goal selectors. L · Opus/high.
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.
 - [ ] **17 · 0018/11** — Patrol paths and the patrol-point interest record. S–M · Fable/medium. Corpus pass done 2026-09-21.
+  From row 07's smoke run, unattributed: after a cold MCP `map_load` of `sp_tutorial_1`,
+  `monk_upstairs_podium` ran `0x67` between `SetupPatrolType` and `FollowPatrolPath`, 0.1 s apart,
+  and failed `0x1d`. It needs a check on a normal boot.
 - [ ] **18 · 0018/12** — The flying mover. M · Opus/medium.
   21-8 handed it a work list: `la_ventruetower_3`'s 70 hull-20 flight claims (7 ground, 12 jump
   starts, 19 jump ends, 32 bridging), reported by the gate and owed an answer. One open read
