@@ -31,9 +31,9 @@ from elysium_pipeline.formats.unit_contract import (
 )
 from elysium_pipeline.validation import nav_graph_glb as validation
 
-# Two 2-hull nodes (a fixed origin/yaw/hullOffsets pair, then a variable "tail" plus the fixed
-# 2-token "lead"), one 25-token link, and a 2-entry WCLookup -- the smallest instance of every
-# stream the grammar declares.
+# Two 2-hull nodes (a fixed origin/yaw/hullOffsets pair, then the type -- one integer short of the
+# law, so no flags and no bitvector -- and the fixed zone / link-count pair), one 25-token link,
+# and a 2-entry WCLookup -- the smallest instance of every stream the grammar declares.
 AIN_LINES = [
     "Version\t30",
     "NumHulls:         2",
@@ -237,17 +237,36 @@ def test_a_dependency_warns_rather_than_fails_when_the_map_bsp_is_absent():
 # --- typedUnidentified rules ---------------------------------------------------------------------
 
 
-def test_each_node_publishes_a_typed_unidentified_tail_and_lead_row():
+def test_the_node_fields_are_named_and_no_longer_typed_unidentified():
+    # The loader `0x102f5bd0` reads type, flags, the neighbour bitvector, zone and a link count.
+    # This fixture's rows are one integer short of the law (see the width test below), so the
+    # middle holds the type alone: flags are absent and said so, never borrowed from the zone.
     model = _model()
-    by_field = {row["field"]: row for row in model.typed_unidentified}
-    assert by_field["nodes[0].tail"]["count"] == 1
-    assert by_field["nodes[0].lead"]["count"] == 2
-    assert by_field["nodes[1].tail"]["count"] == 1
-    assert by_field["nodes[1].lead"]["count"] == 2
-    assert model.nodes[0].tail == (7,)
-    assert model.nodes[0].lead == (8, 9)
-    assert model.nodes[1].tail == (12,)
-    assert model.nodes[1].lead == (13, 14)
+    assert not any(row["field"].startswith("nodes[") for row in model.typed_unidentified)
+    first, second = model.nodes
+    assert (first.node_type, first.flags, first.neighbour_bits) == (7, None, ())
+    assert (first.zone, first.link_count) == (8, 9)
+    assert (second.node_type, second.flags, second.neighbour_bits) == (12, None, ())
+    assert (second.zone, second.link_count) == (13, 14)
+
+
+def test_a_law_width_row_splits_into_type_flags_bits_zone_and_link_count():
+    # 2 hulls, 2 nodes: 2 + 6 + ceil(2 / 32) = 9 tokens a row.
+    tampered = AIN_BYTES.replace(
+        b"0.10 0.20 7 8 9", b"0.10 0.20 2 5 2 4 3").replace(
+        b"0.30 0.40 12 13 14", b"0.30 0.40 4 0 1 5 1")
+    model = _model(ain=tampered)
+    assert not any(a["role"] == "node-count-mismatch" for a in model.anomalies)
+    first, second = model.nodes
+    assert (first.node_type, first.flags, first.neighbour_bits, first.zone, first.link_count) == (
+        2, 5, (2,), 4, 3)
+    assert (second.node_type, second.flags, second.neighbour_bits, second.zone,
+            second.link_count) == (4, 0, (1,), 5, 1)
+    document, _ = exporter.build_document(model)
+    row = document["extensions"]["ELYSIUM_vtmb_nav_graph"]["nodes"][0]
+    assert {key: row[key] for key in ("type", "flags", "neighbourBits", "zone", "linkCount")} == {
+        "type": 2, "flags": 5, "neighbourBits": [2], "zone": 4, "linkCount": 3}
+    assert "tail" not in row and "lead" not in row
 
 
 def test_each_link_publishes_a_typed_unidentified_fields_row():
@@ -431,7 +450,7 @@ def test_a_node_region_not_divisible_by_num_nodes_is_an_anomaly_not_a_failure():
     assert anomaly["remainder"] == 1
     assert anomaly["derivedNodeWidth"] == 7
     assert len(model.nodes) == 2
-    assert model.nodes[0].tail == (7,) and model.nodes[1].tail == (12,)
+    assert model.nodes[0].node_type == 7 and model.nodes[1].node_type == 12
     row = model.byte_ledger[0]
     assert any(entry["owner"] == "nodes.residual[0]" for entry in row["ranges"])
     assert row["coveragePercent"] == 100.0

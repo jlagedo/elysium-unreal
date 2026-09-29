@@ -32,10 +32,9 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from elysium_pipeline.formats.bsp import source_to_unreal
+from elysium_pipeline.formats.nav_graph_glb.model import LINK_OFF, NODE_GROUND
 
 RETAIL_HULL_COUNT = 22
-LINK_OFF = 0x1000
-NODE_GROUND = 2
 
 #: `0x102ff960` reads a link's per-hull motion word; bit 0 is ground and bit 1 is jump.
 MOVE_GROUND = 1
@@ -54,8 +53,7 @@ def _node_position_units(node: dict, hull: int) -> list[float]:
     offsets = node.get("hullOffsets") or []
     if len(origin) != 3 or len(offsets) != RETAIL_HULL_COUNT:
         raise NavAcceptanceError("AIN node has an invalid position/hull-offset table")
-    tail = node.get("tail") or []
-    if tail and int(tail[0]) == NODE_GROUND:
+    if node.get("type") == NODE_GROUND:
         origin[2] += float(offsets[hull])
     if not all(math.isfinite(value) for value in origin):
         raise NavAcceptanceError("AIN node position is not finite")

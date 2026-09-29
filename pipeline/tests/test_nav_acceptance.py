@@ -20,7 +20,7 @@ def _link(index, src, dst, motions):
 
 def _node(index, z=0.0):
     return {"index": index, "origin": {"source": [index * 100.0, 0.0, z]},
-            "hullOffsets": [0.0] * key.RETAIL_HULL_COUNT, "tail": [key.NODE_GROUND]}
+            "hullOffsets": [0.0] * key.RETAIL_HULL_COUNT, "type": key.NODE_GROUND}
 
 
 def _block(links, nodes, used=(1 << 0) | (1 << 19)):

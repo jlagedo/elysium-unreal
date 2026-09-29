@@ -3,10 +3,10 @@
 The nav-graph seam's specification describes the node stream as a fixed 32 tokens per node, verified against
 `sp_tutorial_1` alone. Walking the full retail corpus (100 `.ain` files) shows the per-node width
 is a per-map constant that is *not* always 32 -- it ranges from 29 to 47 tokens once `NumHulls`
-per-hull floats are accounted for -- while the trailing 2-token `lead` pair and the 25-token link
-row stay exactly as documented on every file. This decoder derives the node width from the file
-itself (`tail` is carried as whatever is left over, `lead` stays the fixed trailing pair) rather
-than assuming 32; see the exporter's `specDeviations` for the corpus evidence.
+per-hull floats are accounted for -- while the trailing 2-token zone / link-count pair and the
+25-token link row stay exactly as documented on every file. This decoder derives the node width
+from the file itself (the middle of the row is whatever is left over between the hull offsets and
+that fixed trailing pair) rather than assuming 32.
 
 **The width is not arbitrary, and the law is exact** (recovered 2026-09-21, 0018 story 21-2, over
 the patch's 108 loose `.ain` files): `width = NumHulls + 6 + ceil(NumNodes / 32)`, on 97 of the 97
@@ -15,12 +15,12 @@ a bitset of `ceil(NumNodes / 32)` 32-bit words carrying ONE BIT PER NODE. 32 was
 of a graph with 97..128 nodes, which the base game's 116-node `sp_tutorial_1` is. The `Nodes:`
 label follows the same block size -- one per 32 nodes, `ceil(NumNodes / 32)` of them, 97 of 97.
 
-What the bitset SAYS is narrowed, not identified. Over all 11,558 nodes it never names a node
-that is not a link neighbour (0 cases), equals the neighbour set on 6,395 and is a strict subset
-on 5,163 -- so it selects among a node's own links. It is not derivable from the link rows: on
-`sm_pawnshop_1` node 0 names node 4 and node 4 does not name node 0, across a link row identical
-to the five it does name both ways. Whatever picks the subset is per-direction and lives in the
-reader, so it stays typed-unidentified until the retail loader is walked.
+**Every field is named** (0018 story 4) from the loader's walk, `0x102f5bd0`
+(`docs/vtmb/navigation-jump-links.md` § "The load"): the two integers are the node type (`+0x70`)
+and its flags (`+0x74`), the bitset is the node's neighbour bitvector (`+0x90`), and the trailing
+pair is the zone (`+0x94`) and a link count the loader reads and discards. The bitset never names a
+node that is not a link neighbour (0 cases over 11,558 nodes) and is a strict subset of the
+neighbour set on 5,163, per-direction; retail stores it as read, and so does the unit.
 """
 
 from __future__ import annotations
@@ -473,13 +473,19 @@ def decode_nav_graph(closure: NavGraphSourceClosure) -> NavGraphModel:
                     f"{closure.ain.path}: node {index} origin {origin_token.text!r} is not x,y,z"
                 )
             origin_source = tuple(float(part) for part in origin_parts)
+            # Between the hull offsets and the trailing zone / link-count pair: the type, the
+            # flags, then the neighbour bitvector (`0x102f5bd0`; see `Node`).
+            tail = tuple(_int(token, f"nodes[{index}].tail") for token in tail_tokens)
             node = Node(
                 index=index,
                 origin_source=origin_source,  # type: ignore[arg-type]
                 yaw=_float(yaw_token, f"nodes[{index}].yaw"),
                 hull_offsets=tuple(_float(token, f"nodes[{index}].hullOffsets") for token in hull_tokens),
-                tail=tuple(_int(token, f"nodes[{index}].tail") for token in tail_tokens),
-                lead=tuple(_int(token, f"nodes[{index}].lead") for token in lead_tokens),
+                node_type=tail[0] if len(tail) > 0 else None,
+                flags=tail[1] if len(tail) > 1 else None,
+                neighbour_bits=tail[2:],
+                zone=_int(lead_tokens[0], f"nodes[{index}].zone"),
+                link_count=_int(lead_tokens[1], f"nodes[{index}].linkCount"),
                 wc_id=None,
                 source_line=origin_token.line,
                 source_offset=origin_token.offset,
@@ -497,25 +503,6 @@ def decode_nav_graph(closure: NavGraphSourceClosure) -> NavGraphModel:
                     claims.append((token.offset, token.length, "mapped-text", f"nodes[{index}]"))
             else:
                 claims.append((node.offset, node.length, "mapped-text", f"nodes[{index}]"))
-            if tail_tokens:
-                typed_unidentified.append(
-                    {
-                        "field": f"nodes[{index}].tail",
-                        "index": index,
-                        "sourceOffset": tail_tokens[0].offset,
-                        "sourceLine": tail_tokens[0].line,
-                        "count": len(tail_tokens),
-                    }
-                )
-            typed_unidentified.append(
-                {
-                    "field": f"nodes[{index}].lead",
-                    "index": index,
-                    "sourceOffset": lead_tokens[0].offset,
-                    "sourceLine": lead_tokens[0].line,
-                    "count": len(lead_tokens),
-                }
-            )
         for residual_index, token in enumerate(residual_tokens):
             claims.append((token.offset, token.length, "mapped-text", f"nodes.residual[{residual_index}]"))
     elif node_region:

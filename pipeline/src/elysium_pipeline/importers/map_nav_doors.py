@@ -27,15 +27,11 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from elysium_pipeline.formats.bsp import source_to_unreal
+# `0x102ff960`'s link-off bit and the ground type `CAI_Node::GetPosition 0x102fb0d0` offsets.
+from elysium_pipeline.formats.nav_graph_glb.model import LINK_OFF, NODE_GROUND
 
 #: Retail's hull count; a link carries one motion word per hull.
 RETAIL_HULL_COUNT = 22
-
-#: `0x102ff960` refuses a link with this bit set; the later Source SDK uses a different one.
-LINK_OFF = 0x1000
-
-#: `CAI_Node::GetPosition 0x102fb0d0` adds the hull Z offset only for a ground node.
-NODE_GROUND = 2
 
 #: Door classnames. `func_door` slides and `func_door_rotating` swings; both answer `MOVEABLE`,
 #: which is what puts them outside the graph-build mask and inside every run-time probe.
@@ -47,8 +43,7 @@ def _node_position(node: dict, hull: int) -> tuple[float, float, float]:
     offsets = node.get("hullOffsets") or []
     if len(origin) != 3 or len(offsets) != RETAIL_HULL_COUNT:
         raise ValueError("AIN node has an invalid position/hull-offset table")
-    tail = node.get("tail") or []
-    if tail and int(tail[0]) == NODE_GROUND:
+    if node.get("type") == NODE_GROUND:
         origin[2] += float(offsets[hull])
     if not all(math.isfinite(value) for value in origin):
         raise ValueError("AIN node position is not finite")

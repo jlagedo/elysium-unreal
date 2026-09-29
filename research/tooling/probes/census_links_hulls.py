@@ -2,10 +2,10 @@
 """Census of the shipped node graphs BY HULL -- which hulls carry links, and where a rat differs.
 
 Reads the graphs **retail actually loads**: the patch's own loose `maps/graphs/*.ain`, which the
-engine resolves ahead of the packed copies in the VPKs. The pipeline's own index deliberately
-prunes that directory (`formats/install.RUNTIME_CACHE_DIRS`) because the running game rewrites
-`.loc` stamps there and would invalidate every export receipt, so this probe opens the files
-directly and decodes them with the seam's own reader rather than a second parser.
+engine resolves ahead of the packed copies in the VPKs. Since 0018 story 3 the pipeline's index
+walks that directory too (`formats/install.RUNTIME_CACHE_DIRS` no longer lists `graphs`), so the
+published nav-graph units carry the same graphs; this probe still opens the files directly, with
+the seam's own reader rather than a second parser, so it answers without an export on disk.
 
 Reports, over every graph that parses:
 
@@ -75,7 +75,7 @@ def graphs_dir() -> str:
 
 
 def read_graph(path: str):
-    """Decode one loose `.ain` with the seam's reader, bypassing the pruned install index."""
+    """Decode one loose `.ain` with the seam's reader, without building the install index."""
 
     with open(path, "rb") as handle:
         data = handle.read()

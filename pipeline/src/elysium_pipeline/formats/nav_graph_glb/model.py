@@ -15,10 +15,21 @@ KIND = "nav-graph"
 #: The extension every unit of this kind declares: `ELYSIUM_vtmb_nav_graph`.
 NAV_GRAPH_EXTENSION = extension_name(KIND)
 
-SCHEMA_VERSION = "1.0.0"
+#: 2.0.0 (0018 story 4): a node publishes `type`, `flags`, `neighbourBits`, `zone` and `linkCount`,
+#: named from the loader's own walk, in place of the typed-unidentified `tail` / `lead` lists.
+SCHEMA_VERSION = "2.0.0"
 
 #: Every retail `.ain` declares this; any other value is `anomalies[] version-not-30`.
 EXPECTED_VERSION = "30"
+
+#: `CAI_Node::m_eNodeType` (`node+0x70`) for a ground node. `CAI_Node::GetPosition 0x102fb0d0`
+#: adds the hull's Z offset only for this type; `CNodeEnt::Spawn 0x102d78d0` writes it for every
+#: node class but `info_node_air` / `info_node_air_hint` (3) and `info_node_climb` (4).
+NODE_GROUND = 2
+
+#: `m_LinkInfo` (`link+0x64`) bit `0x102ff960` refuses a link on; the later Source SDK uses a
+#: different bit.
+LINK_OFF = 0x1000
 
 
 def normalize_key(key: str) -> str:
@@ -89,20 +100,28 @@ class NodeLabel:
 
 @dataclass(frozen=True, slots=True)
 class Node:
-    """One node record: 2 fixed tokens (origin, yaw), `numHulls` hull offsets, then whatever the
-    file's own per-node width leaves over before the trailing 2-token `lead` pair.
+    """One node record, in the order the loader `0x102f5bd0` reads it
+    (`docs/vtmb/navigation-jump-links.md` § "The load"): origin, yaw, `numHulls` hull Z offsets,
+    the node type (`+0x70`), its flags (`+0x74`), the neighbour bitvector of
+    `(NumNodes + 31) >> 5` words (`+0x90`), the zone (`+0x94`) and a link count the loader reads
+    and discards.
 
-    `tail` is carried as the corpus's node width actually is: every shipped `.ain` outside
-    `sp_tutorial_1` widens it well past 6 ints (`specDeviations` in the exporter's manifest), so
-    it is a variable-length int list here, never a fixed 6-tuple.
+    The decoder splits the row from both ends -- origin, yaw and the hull offsets from the front,
+    zone and link count from the back -- so a row whose width departs from the law (flagged
+    `node-count-mismatch`) still decodes: whatever lies between is `node_type`, `flags` and then
+    `neighbour_bits`, and a row too short to carry a type or flags says `None` for it rather than
+    borrowing a neighbour's token.
     """
 
     index: int
     origin_source: tuple[float, float, float]
     yaw: float
     hull_offsets: tuple[float, ...]
-    tail: tuple[int, ...]
-    lead: tuple[int, ...]
+    node_type: int | None
+    flags: int | None
+    neighbour_bits: tuple[int, ...]
+    zone: int
+    link_count: int
     wc_id: int | None
     source_line: int
     source_offset: int

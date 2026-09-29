@@ -100,8 +100,13 @@ def _node_json(node) -> dict[str, Any]:
         "origin": {"source": list(node.origin_source)},
         "yaw": node.yaw,
         "hullOffsets": list(node.hull_offsets),
-        "tail": list(node.tail),
-        "lead": list(node.lead),
+        # Named from the loader `0x102f5bd0`: `type` +0x70, `flags` +0x74, `neighbourBits` +0x90
+        # (`(NumNodes + 31) >> 5` words), `zone` +0x94, `linkCount` read and discarded.
+        "type": node.node_type,
+        "flags": node.flags,
+        "neighbourBits": list(node.neighbour_bits),
+        "zone": node.zone,
+        "linkCount": node.link_count,
         "wcId": node.wc_id,
         "sourceLine": node.source_line,
         "sourceOffset": node.source_offset,

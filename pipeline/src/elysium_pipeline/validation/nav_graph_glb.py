@@ -250,10 +250,14 @@ def _check_against_decode(root: dict[str, Any], source_members: Sequence[SourceM
     for index, (declared, decoded) in enumerate(zip(root.get("nodes") or [], model.nodes)):
         if declared.get("wcId") != decoded.wc_id:
             raise NavGraphGlbValidationError(f"nodes[{index}].wcId disagrees with an independent re-decode")
-        if list(declared.get("tail") or []) != list(decoded.tail):
-            raise NavGraphGlbValidationError(f"nodes[{index}].tail disagrees with an independent re-decode")
-        if list(declared.get("lead") or []) != list(decoded.lead):
-            raise NavGraphGlbValidationError(f"nodes[{index}].lead disagrees with an independent re-decode")
+        for name, value in (("type", decoded.node_type), ("flags", decoded.flags),
+                            ("zone", decoded.zone), ("linkCount", decoded.link_count)):
+            if name not in declared or declared[name] != value:
+                raise NavGraphGlbValidationError(
+                    f"nodes[{index}].{name} disagrees with an independent re-decode")
+        if list(declared.get("neighbourBits") or []) != list(decoded.neighbour_bits):
+            raise NavGraphGlbValidationError(
+                f"nodes[{index}].neighbourBits disagrees with an independent re-decode")
         declared_origin = tuple((declared.get("origin") or {}).get("source") or ())
         if not _close(declared_origin, decoded.origin_source, tolerance=1e-9):
             raise NavGraphGlbValidationError(f"nodes[{index}].origin disagrees with an independent re-decode")

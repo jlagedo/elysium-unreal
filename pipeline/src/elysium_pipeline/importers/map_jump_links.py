@@ -13,15 +13,14 @@ from pathlib import Path
 
 from elysium_pipeline import paths
 from elysium_pipeline.formats.bsp import source_to_unreal
-from elysium_pipeline.formats.nav_graph_glb.model import NAV_GRAPH_EXTENSION, normalize_key
+from elysium_pipeline.formats.nav_graph_glb.model import (
+    LINK_OFF, NAV_GRAPH_EXTENSION, NODE_GROUND, normalize_key)
 from elysium_pipeline.formats.unit_contract import read_glb
 
 RECIPE_VERSION = 1
 HUMAN_HULL = 0
 RETAIL_HULL_COUNT = 22
 MOVE_JUMP = 2
-LINK_OFF = 0x1000  # VtMB 0x102ff960; the later Source SDK uses a different bit.
-NODE_GROUND = 2
 
 
 def _endpoint(node: dict, hull: int) -> list[float]:
@@ -29,7 +28,7 @@ def _endpoint(node: dict, hull: int) -> list[float]:
     origin = [float(value) for value in node["origin"]["source"]]
     if len(origin) != 3 or len(node.get("hullOffsets", [])) != RETAIL_HULL_COUNT:
         raise ValueError("AIN jump endpoint has an invalid position/hull-offset table")
-    if not node.get("tail") or int(node["tail"][0]) != NODE_GROUND:
+    if node.get("type") != NODE_GROUND:
         raise ValueError("AIN jump connection names a non-ground node")
     origin[2] += float(node["hullOffsets"][hull])
     if not all(math.isfinite(value) for value in origin):

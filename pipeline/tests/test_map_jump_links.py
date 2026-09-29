@@ -11,7 +11,7 @@ def _graph():
     return dict(header=dict(version=30, numHulls=22, usedHullBits=dict(value=1),
                             numNodes=2, totalNumLinks=1),
                 nodes=[dict(index=i, origin=dict(source=[i * 100, 20, 30]),
-                            hullOffsets=[-4.0] * 22, tail=[2]) for i in range(2)],
+                            hullOffsets=[-4.0] * 22, type=2) for i in range(2)],
                 links=[dict(index=0, src=0, dst=1, fields=[0, 2] + [0] * 21)])
 
 
@@ -60,7 +60,7 @@ def test_corrupt_graph_does_not_bake_a_plausible_but_wrong_edge(damage):
     if damage == "position": graph["nodes"][0]["origin"]["source"][0] = float("nan")
     if damage == "hull": graph["nodes"][0]["hullOffsets"].pop()
     if damage == "count": graph["header"]["totalNumLinks"] = 10
-    if damage == "node_type": graph["nodes"][0]["tail"][0] = 4
+    if damage == "node_type": graph["nodes"][0]["type"] = 4
     with pytest.raises(ValueError): jump.project_graph(graph, "fixture")
 
 
