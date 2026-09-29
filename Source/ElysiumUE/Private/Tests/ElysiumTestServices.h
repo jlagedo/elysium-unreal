@@ -80,21 +80,38 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	bool bProjectsToNavigable = true;
 	bool bLateralCoverReachable = true;
 	TFunction<bool(const FVector&)> LateralCoverQuery;
-	// The route-length seam (0018 story 4's wander pick). Unset is the headless answer -- no route --
-	// which every case written before the seam already assumes; a case states its world by setting
-	// `RouteQuery` (destination -> length in cm, false for "no route").
+	// The path-length service (0018 story 4's wander pick, story 6's `QueryRoute`). Unset is the
+	// headless answer -- no route -- which every case written before the seam already assumes; a case
+	// states its world by setting `RouteQuery` (destination -> length in cm, false for "no route").
+	// Every query's filter multiplier is recorded, in call order.
 	TFunction<bool(const FVector&, float&)> RouteQuery;
-	virtual bool RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const override
+	mutable TArray<int32> RouteMultipliers;
+	virtual bool QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpcRouteAnswer& Out) const override
 	{
+		RouteMultipliers.Add(Query.PedestrianCostMultiplier);
 		float Length = 0.0f;
-		const bool bRoute = RouteQuery ? RouteQuery(DestCm, Length) : false;
-		Record(FString::Printf(TEXT("NpcMotor RouteLengthTo %s -> %s"), *DestCm.ToString(),
+		const bool bRoute = RouteQuery ? RouteQuery(Query.DestCm, Length) : false;
+		Record(FString::Printf(TEXT("NpcMotor QueryRoute %s x%d -> %s"), *Query.DestCm.ToString(),
+			Query.PedestrianCostMultiplier,
 			bRoute ? *FString::Printf(TEXT("%.1f"), Length) : TEXT("none")));
 		if (bRoute)
 		{
-			OutLengthCm = Length;
+			Out.bReachable = true;
+			Out.bPartial = false;
+			Out.LengthCm = Length;
 		}
 		return bRoute;
+	}
+	// The navmesh raycast. Unset is the headless answer -- no NavMesh -- and a case states its mesh
+	// by setting `NavRaycastQuery` (fill the answer, true = the mesh answered).
+	TFunction<bool(const FElysiumNpcNavRaycast&, FElysiumNpcNavRaycastAnswer&)> NavRaycastQuery;
+	virtual bool NavRaycast(const FElysiumNpcNavRaycast& Query, FElysiumNpcNavRaycastAnswer& Out) const override
+	{
+		const bool bAnswered = NavRaycastQuery ? NavRaycastQuery(Query, Out) : false;
+		Record(FString::Printf(TEXT("NpcMotor NavRaycast %s -> %s x%d = %s"), *Query.FromCm.ToString(),
+			*Query.ToCm.ToString(), Query.PedestrianCostMultiplier,
+			!bAnswered ? TEXT("headless") : (Out.bHit ? *FString::Printf(TEXT("hit %s"), *Out.HitCm.ToString()) : TEXT("clear"))));
+		return bAnswered;
 	}
 	virtual bool CanReachLateralCover(const FVector& Point) const override
 	{
@@ -1666,6 +1683,21 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("QueryLineOfSight %s -> %s = %s"), *FromCm.ToString(),
 			*ToCm.ToString(), bLineOfSightClear ? TEXT("clear") : TEXT("blocked")));
 		return bLineOfSightClear;
+	}
+	// 0018 story 6's retail trace. Unset is the headless answer (`false`, the result left clear); a
+	// case states its world by setting `TraceRetailQuery`. Recorded on the same list as the sight
+	// query.
+	TFunction<bool(const FElysiumRetailTrace&, FElysiumRetailTraceResult&)> TraceRetailQuery;
+	virtual bool TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRetailTraceResult& Out) const override
+	{
+		Out.EndPosCm = Trace.EndCm;
+		const bool bAnswered = TraceRetailQuery ? TraceRetailQuery(Trace, Out) : false;
+		Record(FString::Printf(TEXT("TraceRetail %s -> %s mask=0x%x = %s"), *Trace.StartCm.ToString(),
+			*Trace.EndCm.ToString(), static_cast<uint32>(Trace.RetailMask),
+			!bAnswered ? TEXT("headless")
+				: *FString::Printf(TEXT("%.3f hit=%s characters=%d"), Out.Fraction,
+					*Out.HitEntity.ToString(), Out.Characters.Num())));
+		return bAnswered;
 	}
 	// Unset = the headless answer (`false`): FindVictim then tests NPC standing hulls itself.
 	// Set `bPlayerSolidAnswered` to force a miss or a scripted character hit.

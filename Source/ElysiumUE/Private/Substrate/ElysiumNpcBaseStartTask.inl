@@ -193,7 +193,7 @@ bool StartTaskFindLosPos(const FVector& ThreatCm, const FVector& ThreatEyeCm, fl
  *  modernization**, the capped point pick: a retail place within `min(order, wander cap)` (SOURCE
  *  units), never a climb node, usable by slot 527, expired cooldowns before cooling ones, ahead of
  *  `Direction` in the outer half of the range first; one engine-stream draw, checked against
- *  Unreal's route (`IElysiumNpcMotor::RouteLengthTo`) and installed as a path with no goal
+ *  Unreal's route (`IElysiumNpcMotor::QueryRoute`) and installed as a path with no goal
  *  (`InstallPathNoGoal`). False is the caller's `TaskFail(0x18)`. */
 bool StartTaskSetRandomGoal(float DistanceUnits, const FVector& Direction);
 

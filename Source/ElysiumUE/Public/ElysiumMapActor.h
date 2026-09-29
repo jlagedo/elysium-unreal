@@ -513,6 +513,10 @@ public:
 	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const override;
 	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
+	// 0018 story 6: one retail trace, the world answer plus the characters met
+	// (`ElysiumMapActorGeometry.cpp`, over `ElysiumWorldGeometry::Trace`).
+	virtual bool TraceRetail(const FElysiumRetailTrace& Trace,
+		FElysiumRetailTraceResult& Out) const override;
 	virtual bool TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
 		const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const override;
 	virtual bool CanStandForGrapple(const FVector& FeetCm,
@@ -673,6 +677,11 @@ private:
 	class APawn* ResolvePlayerPawn() const;
 	class UElysiumAudioSubsystem* GetAudioSubsystem() const;
 	class UElysiumMapSubsystem* GetMapSubsystem() const;
+	// The geometry seam's two translations (`ElysiumMapActorGeometry.cpp`): the actor that stands
+	// for an entity's collision (its body, its brush, the player's pawn), and the entity behind a hit
+	// actor. Null / Invalid when there is none.
+	AActor* ResolveQueryActor(const FElysiumEntityHandle& Entity) const;
+	FElysiumEntityHandle HandleForActor(const AActor* Actor) const;
 
 	UPROPERTY() TObjectPtr<USceneComponent> SceneRoot;
 	UPROPERTY() TObjectPtr<UElysiumMapVisuals> Visuals;

@@ -2548,7 +2548,7 @@ bool FElysiumNpcBase::StartTaskSetRandomGoal(float DistanceUnits, const FVector&
 	//      2`; that empty, every place ahead; that empty, every candidate. A zero direction skips the
 	//      ahead test;
 	//   5. one `RandomInt(0, count - 1)` on the engine stream;
-	//   6. Unreal's route to it on the body's own agent (`RouteLengthTo`): no route, or one longer
+	//   6. Unreal's route to it on the body's own agent (`QueryRoute`): no route, or one longer
 	//      than `kWanderDetourRatio x distance`, drops the pick from the pool and draws again over
 	//      what remains (tier and band re-taken), `kWanderMaxDraws` in all;
 	//   7. the route installed as a PATH, no goal (`InstallPathNoGoal`).
@@ -2644,8 +2644,11 @@ bool FElysiumNpcBase::StartTaskSetRandomGoal(float DistanceUnits, const FVector&
 		const int32 Pick = Band[ElysiumNpcEngineRandom::RandomInt(0, Band.Num() - 1)];
 		const FCandidate Candidate = Tier[Pick];
 		++StartTaskNav.LastRandomGoalDraws;
-		float RouteCm = 0.0f;
-		if (Motor != nullptr && Motor->RouteLengthTo(Candidate.PositionCm, RouteCm) && RouteCm <= LongestRouteCm)
+		FElysiumNpcRouteQuery RouteAsked;
+		RouteAsked.DestCm = Candidate.PositionCm;
+		RouteAsked.PedestrianCostMultiplier = 0;   // the default filter, as today
+		FElysiumNpcRouteAnswer RouteFound;
+		if (Motor != nullptr && Motor->QueryRoute(RouteAsked, RouteFound) && RouteFound.LengthCm <= LongestRouteCm)
 		{
 			if (!InstallPathNoGoal(Candidate.PositionCm))
 			{

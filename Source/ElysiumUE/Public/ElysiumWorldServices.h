@@ -261,6 +261,52 @@ struct FElysiumNpcMoveFacts
 	float GoalSnapDzCm = 0.f;
 };
 
+// One route question, asked synchronously on the body's OWN nav agent (the pathing hull `+0x156c`,
+// `AElysiumNpcBody::ApplyRetailHull`) from where it stands. Centimetres, as every seam here.
+struct FElysiumNpcRouteQuery
+{
+	// Where the route must end, world centimetres. Projected onto the agent's mesh at the nav data's
+	// default extent before the search, as `MoveTo` projects its goal.
+	FVector DestCm = FVector::ZeroVector;
+	// The pedestrian pricing, the same word `FElysiumNpcMoveRequest::PedestrianCostMultiplier`
+	// carries: 0 = the nav data's DEFAULT query filter, as `MoveTo` uses for 0; 5..10 = the
+	// pedestrian filter pricing `UElysiumNavArea_Pedestrian` at this multiplier. The route asked
+	// and the route walked must be searched under the same filter, so a caller passes the number
+	// its move request will carry.
+	int32 PedestrianCostMultiplier = 0;
+	// False: a partial path is no route. True: a partial path answers, flagged `bPartial`.
+	bool bAcceptPartial = false;
+};
+
+// What `QueryRoute` found. Geometry only: whether the length is short enough is the caller's.
+struct FElysiumNpcRouteAnswer
+{
+	bool bReachable = false;
+	// The path ends short of the goal (`FNavigationPath::IsPartial`); set only under
+	// `bAcceptPartial`.
+	bool bPartial = false;
+	// The path's length, centimetres.
+	float LengthCm = 0.f;
+};
+
+// One straight walk over the navmesh surface on the body's own agent, the Detour raycast: does the
+// polygon corridor from `FromCm` reach `ToCm` without leaving the mesh? Centimetres.
+struct FElysiumNpcNavRaycast
+{
+	FVector FromCm = FVector::ZeroVector;
+	FVector ToCm = FVector::ZeroVector;
+	// The filter, as `FElysiumNpcRouteQuery::PedestrianCostMultiplier` states it.
+	int32 PedestrianCostMultiplier = 0;
+};
+
+// What `NavRaycast` found. `HitCm` is where the ray left the mesh (a mesh edge), meaningful only
+// under `bHit`. Geometry only: any acceptance on the hit (retail's `|dz| < 2.0`) is kernel logic.
+struct FElysiumNpcNavRaycastAnswer
+{
+	bool bHit = false;
+	FVector HitCm = FVector::ZeroVector;
+};
+
 class IElysiumNpcMotor
 {
 public:
@@ -378,19 +424,28 @@ public:
 		return false;
 	}
 
-	// The length of the route this body would walk from where it stands to `DestCm`, centimetres: a
-	// synchronous path query on the body's OWN nav agent (the pathing hull `+0x156c`,
-	// `AElysiumNpcBody::ApplyRetailHull`) under the nav data's DEFAULT query filter -- the wander pick
-	// (`TASK_GET_PATH_TO_RANDOM_NODE`, 0018 story 4) never sets the pedestrian byte, so the roadway is
-	// not priced. Only a complete path answers; a partial one is no route.
-	//
-	// **The narrow seam 0018 story 6's path-length service absorbs.** It exists for one caller, the
-	// capped point pick's detour test, and answers nothing more than the one number.
+	// The path-length service: a synchronous path query on this body's OWN nav agent (the pathing
+	// hull `+0x156c`, `AElysiumNpcBody::ApplyRetailHull`) from where it stands to `Query.DestCm`,
+	// under the filter the query's `PedestrianCostMultiplier` names -- the same filter `MoveTo`
+	// searches under for the same number, so the route measured is the route a move request would
+	// walk. The wander pick (`TASK_GET_PATH_TO_RANDOM_NODE`, 0018 story 4) never sets the
+	// pedestrian byte and asks with 0. A partial path answers only under `bAcceptPartial`.
 	//
 	// **False means no route**, and that is also the default: a motor with no navigation behind it
 	// (a headless world, a recording double that has not opted in) cannot answer, and the caller must
-	// drop the candidate rather than walk to a guess. `OutLengthCm` is untouched on false.
-	virtual bool RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const { return false; }
+	// drop the candidate rather than walk to a guess. `Out` is untouched on false.
+	virtual bool QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpcRouteAnswer& Out) const
+	{
+		return false;
+	}
+
+	// The navmesh raycast on this body's own agent (`FElysiumNpcNavRaycast`). True means the mesh
+	// answered and `Out` holds its verdict. **False is the default and means no NavMesh behind this
+	// motor** (a headless world, a double that has not opted in); `Out` is untouched.
+	virtual bool NavRaycast(const FElysiumNpcNavRaycast& Query, FElysiumNpcNavRaycastAnswer& Out) const
+	{
+		return false;
+	}
 
 	// TestLateralCover 0x10278220: stand at the candidate, then MoveLimit with MASK_NPCSOLID
 	// (0x202400b). Geometry only; candidate order and the sight/hint tests belong to the NPC.
@@ -497,6 +552,62 @@ struct FElysiumEffectHandle
 {
 	int32 Id = INDEX_NONE;
 	bool IsValid() const { return Id != INDEX_NONE; }
+};
+
+// One retail `UTIL_TraceLine` / `UTIL_TraceHull`, as the kernel states it to `TraceRetail`.
+// Centimetres at the seam (story 5's rule); a kernel body converts with `ElysiumMove::U`.
+struct FElysiumRetailTrace
+{
+	FVector StartCm = FVector::ZeroVector;
+	FVector EndCm = FVector::ZeroVector;
+	// The box, relative to the trace line (Source's `Ray_t` mins/maxs). A zero box is a ray; a box
+	// with `StartCm == EndCm` is an overlap (`IsAreaClear 0x102a0fb0`'s shape).
+	FVector MinsCm = FVector::ZeroVector;
+	FVector MaxsCm = FVector::ZeroVector;
+	// The retail contents mask, verbatim (`0x2804091`, `0x202400b`, ...). The implementation turns
+	// it into a channel and a set of entity kinds through `ElysiumRetailMask::Recipe`; 0 traces
+	// nothing and answers clear.
+	int32 RetailMask = 0;
+	// Entities the trace never meets: the filter's pass entity (the looker, the tester) and any
+	// second one (`CTraceFilterSimpleTwoEnt`). Applied to the world answer and the character list.
+	TArray<FElysiumEntityHandle, TInlineAllocator<2>> Ignore;
+};
+
+// One character body the trace met, with where along the trace it met it.
+struct FElysiumRetailTraceCharacter
+{
+	FElysiumEntityHandle Entity;
+	// Source's `fraction` for this body alone: 0 at `StartCm`, 1 at `EndCm`.
+	float Fraction = 1.f;
+	// The trace starts inside this body.
+	bool bStartSolid = false;
+};
+
+// Retail's `trace_t`, split in two. **The world answer** -- brushes, movers, solid props -- is
+// `Fraction` .. `HitEntity`, traced on a channel no character answers. **The characters** the same
+// ray or box met are listed separately and are NOT folded into `Fraction`: which of them retail's
+// filter would have kept is the kernel's call (`FVisible` skips every NPC, the lateral pre-check's
+// `TwoEnt` filter keeps third-party NPCs, the nav filters make NPCs solid under
+// `m_bForceNPCCheck`), and the kernel folds the one it keeps. The defaults are a clear trace.
+struct FElysiumRetailTraceResult
+{
+	float Fraction = 1.f;
+	// Source's two flags, kept apart (Unreal's `bStartPenetrating` is their union): the trace starts
+	// in solid, and the whole trace is in solid.
+	bool bStartSolid = false;
+	bool bAllSolid = false;
+	// Where the world answer stopped (`tr.endpos`).
+	FVector EndPosCm = FVector::ZeroVector;
+	FVector Normal = FVector::ZeroVector;
+	// The brush entity, mover or prop the world answer hit (`tr.m_pEnt`); Invalid for the static
+	// world or no hit.
+	FElysiumEntityHandle HitEntity;
+	// Debug only, for the witness verb: the hit body's contents signature and element; -1 = none.
+	int32 HitSignature = -1;
+	int32 ElementIndex = -1;
+	// Every character body the same query meets, nearest first. Only when the mask carries MONSTER
+	// `0x2000000`; empty otherwise.
+	TArray<FElysiumRetailTraceCharacter, TInlineAllocator<4>> Characters;
 };
 
 class IElysiumEmbodiment
@@ -1155,20 +1266,38 @@ public:
 	// implementation that reported "blocked" there would blind every NPC in exactly the runs meant
 	// to prove they can see.
 	//
-	// Retail traces with content mask `0x4091` — SOLID, SLIME, OPAQUE, MOVEABLE — and since 0018
-	// story 3 the implementation answers it by CONTENTS rather than by adaptation: every body
-	// wears the collision profile its brushes' contents signature names, and this traces the
-	// dedicated sight channel those profiles answer on. The mask is not the movement mask, and the
-	// difference is visible: it names neither WINDOW nor GRATE, so an NPC sees through glass and
-	// grating, and it names OPAQUE without SOLID, so a `tools_shadow` brush that stops nothing
-	// still stops sight.
+	// Retail's sight mask is `0x2804091` (`FVisible`'s, the cover search's, the shoot node's); this
+	// answers its BRUSH half, `0x804091`, by CONTENTS: every body wears the collision profile its
+	// brushes' contents signature names, and this traces the dedicated SIGHT channel those profiles
+	// answer on (not the use channel). The mask is not the movement mask, and the difference is
+	// visible: it names neither WINDOW nor GRATE, so an NPC sees through glass and grating, and it
+	// names OPAQUE without SOLID, so a `tools_shadow` brush that stops nothing still stops sight.
 	//
-	// Divergence, named: characters are NOT occluders here. Retail's `0x4091` carries no character
-	// bit, so a body standing between two points does not break the line. (`FVisible`'s own
-	// `0x2804091` does carry MONSTER; the arms that want it are noted at their call sites.)
-	// Unwitnessed, and stated as such: that a sight-only brush stops a retail sight trace is read
-	// from the mask and the contents, not yet seen in a running retail game.
+	// Brush-only by design: no character is an occluder here. `0x2804091`'s MONSTER half is answered
+	// by `TraceRetail`'s character list, and retail's `FVisible` (`0x100a6fa0`) skips every NPC
+	// (`NPCInit` makes each one `m_bNPCTransparent`) while the player and solid props block it; that
+	// rule is `ElysiumNpcSight::Visible`'s, over `TraceRetail`. Unwitnessed, and stated as such: that
+	// a sight-only brush stops a retail sight trace is read from the mask and the contents, not yet
+	// seen in a running retail game.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
+
+	// One retail trace (`FElysiumRetailTrace`): a ray, a swept box or an overlap under a retail
+	// contents mask, answered as `FElysiumRetailTraceResult` splits it.
+	//
+	// `Fraction` .. `HitEntity` are the WORLD answer only -- brushes, and the movers and props the
+	// mask's recipe admits -- traced on a channel no character answers. `Characters` lists every
+	// character body the same query met, and is the CALLER's to filter: the per-caller rule for who
+	// among the characters counts as solid (`FVisible`'s NPC transparency, `TwoEnt`'s third parties,
+	// the nav filters' slot 68/69) is the kernel's, never this seam's.
+	//
+	// **False means no collision world** (a headless run, a double that has not opted in), and
+	// `Out` keeps its clear defaults, which every kernel caller already reads as retail's clear
+	// trace; `EndPosCm` is set to the trace's end so `tr.endpos` reads as a clear trace's.
+	virtual bool TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRetailTraceResult& Out) const
+	{
+		Out.EndPosCm = Trace.EndCm;
+		return false;
+	}
 
 	// `CStealthKillRules::FindVictim` `0x101be1f0`'s acquisition ray. Mask `0x201400b`
 	// (`MASK_PLAYERSOLID`: world and characters), `CTraceFilterSimple` skipping `Ignore`.
@@ -1212,9 +1341,9 @@ public:
 	// It is `MASK_PLAYERSOLID` (`0x201400b`, the mask `CanStartGrappleAttack`'s crouch trace uses)
 	// **minus `CONTENTS_MONSTER 0x2000000`**, so no character is an occluder at all and the subject
 	// filter is belt-and-braces on top of that. The port keeps the semantics rather than the number:
-	// the trace runs on `ELYSIUM_USE_CHANNEL`, this project's solid-world channel, exactly as
-	// `QueryLineOfSight` does and for the same reason (the `.hulls` walkable surface is
-	// material-less and answers only there).
+	// the trace runs on `ELYSIUM_USE_CHANNEL`, this project's solid-world channel (the `.hulls`
+	// walkable surface is material-less and answers only there). `QueryLineOfSight` does NOT share
+	// it: sight traces the sight channel.
 	//
 	// `OutStartSolid` carries **both** retail flags: Source distinguishes `startsolid` from
 	// `allsolid`, Unreal's `FHitResult::bStartPenetrating` is their union, and the predicate ORs the

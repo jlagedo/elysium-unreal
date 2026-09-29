@@ -1595,45 +1595,6 @@ bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutPro
 	return true;
 }
 
-bool AElysiumNpcBody::RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const
-{
-	// 0018 story 4's narrow seam (story 6's path-length service absorbs it): a route on this body's
-	// own mesh, asked synchronously and measured. The agent is this body's own -- the pathing hull's,
-	// stated by `ApplyRetailHull` -- so the nav data is the mesh this body walks; no filter is
-	// passed, so the query runs under that nav data's DEFAULT filter. It is NOT `MoveTo`'s route
-	// for a pedestrian request (that searches on the priced pedestrian filter); story 6's
-	// hand-off owns making the two agree.
-	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	const UCharacterMovementComponent* Movement = GetCharacterMovement();
-	if (NavSys == nullptr || Movement == nullptr)
-	{
-		return false;
-	}
-	const FNavAgentProperties& Agent = Movement->NavAgentProps;
-	const FVector Feet = GetNavAgentLocation();
-	const ANavigationData* NavData = NavSys->GetNavDataForProps(Agent, Feet);
-	if (NavData == nullptr)
-	{
-		return false;
-	}
-	FNavLocation SelfOnMesh;
-	FNavLocation GoalOnMesh;
-	if (!NavSys->ProjectPointToNavigation(Feet, SelfOnMesh, INVALID_NAVEXTENT, &Agent)
-		|| !NavSys->ProjectPointToNavigation(DestCm, GoalOnMesh, INVALID_NAVEXTENT, &Agent))
-	{
-		return false;
-	}
-	FPathFindingQuery Query(this, *NavData, SelfOnMesh.Location, GoalOnMesh.Location);
-	Query.SetAllowPartialPaths(false);
-	const FPathFindingResult Found = NavSys->FindPathSync(Agent, Query);
-	if (!Found.IsSuccessful() || !Found.Path.IsValid() || Found.Path->IsPartial())
-	{
-		return false;
-	}
-	OutLengthCm = static_cast<float>(Found.Path->GetLength());
-	return true;
-}
-
 bool AElysiumNpcBody::CanReachLateralCover(const FVector& FeetDestination) const
 {
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
